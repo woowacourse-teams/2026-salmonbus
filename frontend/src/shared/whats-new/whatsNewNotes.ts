@@ -1,6 +1,5 @@
 export interface WhatsNewNote {
   id: number;
-  version: string;
   publishedAt: string;
   features: readonly string[];
 }

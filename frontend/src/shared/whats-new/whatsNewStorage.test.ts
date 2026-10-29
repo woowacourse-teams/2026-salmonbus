@@ -7,8 +7,8 @@ const ROUTE_FIRST_SEEN_KEY = "salmonbus.routeFirstSeen";
 const NOV_14_MORNING = Date.parse("2026-11-14T08:00:00+09:00");
 
 const notes: readonly WhatsNewNote[] = [
-  { id: 2, version: "1.4.0", publishedAt: "2026-11-12", features: ["기능 2"] },
-  { id: 1, version: "1.3.0", publishedAt: "2026-11-02", features: ["기능 1"] },
+  { id: 2, publishedAt: "2026-11-12", features: ["기능 2"] },
+  { id: 1, publishedAt: "2026-11-02", features: ["기능 1"] },
 ];
 
 function createMemoryStorage(entries: Record<string, string> = {}) {

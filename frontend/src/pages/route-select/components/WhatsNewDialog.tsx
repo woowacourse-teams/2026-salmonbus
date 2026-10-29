@@ -21,7 +21,7 @@ export function WhatsNewDialog({ notes, onClose }: WhatsNewDialogProps) {
       <div className={styles.notes}>
         {notes.map((note) => (
           <section key={note.id} aria-labelledby={`whats-new-${note.id}`}>
-            <h3 id={`whats-new-${note.id}`} className={styles.version}>
+            <h3 id={`whats-new-${note.id}`} className={styles.noteDate}>
               {noteHeadingLabelOf(note)}
             </h3>
             <p className={styles.sectionTitle}>새로 추가된 기능</p>

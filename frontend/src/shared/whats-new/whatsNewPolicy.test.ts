@@ -3,7 +3,7 @@ import type { WhatsNewNote } from "./whatsNewNotes";
 import { closedRecordFor, firstRecordFor, notesToShowFor, shownRecordFor, type WhatsNewRecord } from "./whatsNewPolicy";
 
 function createNote(id: number, publishedAt: string): WhatsNewNote {
-  return { id, version: `1.${id}.0`, publishedAt, features: [`기능 ${id}`] };
+  return { id, publishedAt, features: [`기능 ${id}`] };
 }
 
 const note1 = createNote(1, "2026-11-02");

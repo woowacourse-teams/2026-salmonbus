@@ -31,7 +31,7 @@ export const notes = style({
   overflowY: "auto",
 });
 
-export const version = style({ margin: 0, color: vars.color.textSubtle, fontSize: 12, fontWeight: 600 });
+export const noteDate = style({ margin: 0, color: vars.color.textSubtle, fontSize: 12, fontWeight: 600 });
 
 export const sectionTitle = style({ margin: "8px 0 6px", color: vars.color.textBody, fontSize: 13, fontWeight: 700 });
 
