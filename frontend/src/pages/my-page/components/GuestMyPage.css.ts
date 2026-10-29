@@ -34,3 +34,4 @@ export const login = style({
   fontSize: 16,
   fontWeight: 700,
 });
+export const whatsNew = style({ marginTop: 20 });

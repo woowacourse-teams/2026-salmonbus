@@ -9,6 +9,7 @@ import { LoginPage } from "@/pages/login";
 import { MyPage } from "@/pages/my-page";
 import { FavoriteGroupPage } from "@/pages/favorite-group";
 import { NicknamePage } from "@/pages/nickname";
+import { WhatsNewPage } from "@/pages/whats-new";
 import { useFocusKeepingNavigation } from "./useFocusKeepingNavigation";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
 
@@ -27,6 +28,7 @@ const pagesWithNavigation = [
   { path: paths.mypage, title: "마이페이지", element: <MyPage /> },
   { path: paths.nickname, title: "닉네임 수정", element: <NicknamePage /> },
   { path: paths.favoriteGroup, title: "즐겨찾기 그룹 관리", element: <FavoriteGroupPage /> },
+  { path: paths.whatsNew, title: "새 소식", element: <WhatsNewPage /> },
 ];
 
 const pagesWithoutNavigation = [

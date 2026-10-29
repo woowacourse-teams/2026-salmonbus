@@ -8,6 +8,7 @@ export const paths = {
   mypage: "/mypage",
   nickname: "/mypage/nickname",
   favoriteGroup: "/mypage/groups/:groupId",
+  whatsNew: "/mypage/whats-new",
 } as const;
 
 export function boardPathFor(routeId: string): string {

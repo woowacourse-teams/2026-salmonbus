@@ -8,6 +8,7 @@ import { Notice } from "@/shared/components/Notice";
 import { GuestMyPage } from "./GuestMyPage";
 import { GroupList } from "./GroupList";
 import { PrivacySection } from "./PrivacySection";
+import { WhatsNewLink } from "./WhatsNewLink";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { withdrawAppleInApp } from "@/shared/native-auth/nativeSignIn";
 import { authErrorOf } from "@/shared/utils/authErrorOf";
@@ -99,6 +100,7 @@ export function MyPageScreen() {
             </p>
           </div>
           <GroupList />
+          <WhatsNewLink />
           <button
             className={styles.row}
             type="button"
@@ -139,6 +141,7 @@ export function MyPageScreen() {
             </>
           )}
           {state.status === "unavailable" && <p className={styles.caption}>로그인 기능을 준비 중이에요.</p>}
+          <WhatsNewLink />
         </>
       )}
       {typeof notice === "string" && <Notice key={notice} message={notice} />}
