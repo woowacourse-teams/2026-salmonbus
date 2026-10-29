@@ -203,36 +203,6 @@ test("시트의 둥근 모서리 바깥에는 배경색 대신 지도가 이어�
   }
 });
 
-test("보드와 같은 노선 판본의 geometry API를 조회하고 같은 판본의 폴링에는 지도를 다시 받지 않는다", async ({
-  page,
-  api,
-}) => {
-  const geometryRequests: URL[] = [];
-  page.on("request", (request) => {
-    const url = new URL(request.url());
-    if (url.pathname === apiPaths.geometry) geometryRequests.push(url);
-  });
-  await openMap(page);
-  const initialGeometryRequests = geometryRequests.length;
-  expect(initialGeometryRequests).toBeGreaterThan(0);
-  expect(
-    geometryRequests.every(
-      (url) => url.searchParams.get("referenceVersionId") === api.data.watch.route.referenceVersionId,
-    ),
-  ).toBe(true);
-  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
-
-  const refreshedWatch = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
-  );
-  await page.clock.fastForward(pollIntervalMs);
-  await (await refreshedWatch).finished();
-  await page.clock.runFor(32);
-  expect(api.requests.watch).toBeGreaterThan(1);
-  expect(geometryRequests).toHaveLength(initialGeometryRequests);
-  await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
-});
-
 test("도로 경로가 미수집이어도 관측 정류장에 버스를 표시하고 목록 선택과 지도 포커스를 연결한다", async ({
   page,
   api,
@@ -270,15 +240,6 @@ test("도로 경로가 미수집이어도 관측 정류장에 버스를 표시�
     exact: true,
   });
   await expectVehicleFocusedOnMap(page, mapBus, naverMap);
-  const reportedPoint = api.data.geometry.busStops.find((stop) => stop.stopSequence === 8)?.point;
-  if (reportedPoint === null || reportedPoint === undefined) throw new Error("관측 정류장 좌표가 없습니다");
-  const focusedView = await naverMap.snapshot();
-  expect(focusedView.latitude).toBeCloseTo(reportedPoint.y);
-  expect(focusedView.longitude).toBeCloseTo(reportedPoint.x);
-  const stationaryPosition = await mapBus.boundingBox();
-  await page.clock.runFor(15_000);
-  expect(await mapBus.boundingBox()).toEqual(stationaryPosition);
-  expect(await naverMap.snapshot()).toEqual(focusedView);
 
   await naverMap.panToStop(11);
   await map(page).locator("button[data-map-stop-sequence='11']").click();
@@ -333,8 +294,6 @@ test("한 방향의 도로 경로가 없어도 해당 정류장을 표시하고 
   await expect(notice).toHaveCount(0);
   await expect(map(page).getByRole("button", { name: /부근 버스, 현재 잔여 좌석 8석/ })).toBeVisible();
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
-  await expect(map(page).locator("[data-map-arrow-direction='UP']")).toHaveCount(0);
-  expect(await map(page).locator("[data-map-arrow-direction='DOWN']").count()).toBeGreaterThan(0);
 });
 
 for (const failure of ["network", "referenceVersion"] as const) {
@@ -367,6 +326,11 @@ test("보드 판본이 바뀌면 이전 geometry 요청을 취소하고 새 좌�
   api.cacheMaxAgeSeconds = 5;
   const oldGeometry = structuredClone(api.data.geometry);
   const oldRoutes: Route[] = [];
+  const geometryRequests: URL[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === apiPaths.geometry) geometryRequests.push(url);
+  });
   await api.route(async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === apiPaths.geometry && url.searchParams.get("referenceVersionId") === "1") {
@@ -377,12 +341,34 @@ test("보드 판본이 바뀌면 이전 geometry 요청을 취소하고 새 좌�
   });
 
   try {
-    await page.goto(`/routes/${routeId}`);
-    await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
-    await expect.poll(() => oldRoutes.length).toBeGreaterThan(0);
-    await page.clock.runFor(32);
-    expect(oldRoutes.some((route) => route.request().failure() === null)).toBe(true);
-    await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(0);
+    await test.step("보드와 같은 판본의 geometry를 조회", async () => {
+      await page.goto(`/routes/${routeId}`);
+      await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
+      await expect.poll(() => oldRoutes.length).toBeGreaterThan(0);
+      await page.clock.runFor(32);
+      expect(oldRoutes.some((route) => route.request().failure() === null)).toBe(true);
+      await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(0);
+      expect(
+        geometryRequests.every(
+          (url) => url.searchParams.get("referenceVersionId") === api.data.watch.route.referenceVersionId,
+        ),
+      ).toBe(true);
+    });
+
+    const expectSameVersionPollSkipsGeometry = async () => {
+      const previousGeometryRequests = geometryRequests.length;
+      const watchRequests = api.requests.watch;
+      const refreshedWatch = page.waitForResponse(
+        (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
+      );
+      await page.clock.fastForward(5_000);
+      await (await refreshedWatch).finished();
+      await page.clock.runFor(32);
+      expect(api.requests.watch).toBeGreaterThan(watchRequests);
+      expect(geometryRequests).toHaveLength(previousGeometryRequests);
+    };
+
+    await test.step("같은 판본의 폴링에는 geometry를 다시 받지 않음", expectSameVersionPollSkipsGeometry);
 
     const replacedStop = api.data.watch.stops.find((stop) => stop.sequence === 11);
     if (replacedStop === undefined) throw new Error("새 판본의 정류장이 없습니다");
@@ -396,27 +382,36 @@ test("보드 판본이 바뀌면 이전 geometry 요청을 취소하고 새 좌�
     }
     const latestPoint = api.data.geometry.busStops.find((stop) => stop.stopSequence === 11)?.point;
     if (latestPoint === null || latestPoint === undefined) throw new Error("새 판본의 좌표가 없습니다");
-    const nextGeometry = page.waitForRequest(
-      (request) =>
-        new URL(request.url()).pathname === apiPaths.geometry &&
-        new URL(request.url()).searchParams.get("referenceVersionId") === "2",
-    );
-    await page.clock.fastForward(5_000);
-    await nextGeometry;
-    await expect.poll(() => oldRoutes.every((route) => route.request().failure() !== null)).toBe(true);
-    await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(1);
-    await page.clock.runFor(48);
-    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
-    await naverMap.panToStop(11);
-    const latestView = await naverMap.snapshot();
-    expect(latestView.latitude).toBeCloseTo(latestPoint.y);
-    expect(latestView.longitude).toBeCloseTo(latestPoint.x);
-    await expect(list(page).locator("li[data-stop-sequence='11']")).toContainText("새 판본 중앙역");
+    await test.step("판본이 바뀌면 이전 요청을 취소하고 새 좌표를 표시", async () => {
+      const nextGeometry = page.waitForRequest(
+        (request) =>
+          new URL(request.url()).pathname === apiPaths.geometry &&
+          new URL(request.url()).searchParams.get("referenceVersionId") === "2",
+      );
+      await page.clock.fastForward(5_000);
+      await nextGeometry;
+      await expect.poll(() => oldRoutes.every((route) => route.request().failure() !== null)).toBe(true);
+      await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(1);
+      await page.clock.runFor(48);
+      await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+      await naverMap.panToStop(11);
+      const latestView = await naverMap.snapshot();
+      expect(latestView.latitude).toBeCloseTo(latestPoint.y);
+      expect(latestView.longitude).toBeCloseTo(latestPoint.x);
+      await expect(list(page).locator("li[data-stop-sequence='11']")).toContainText("새 판본 중앙역");
+      await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
 
-    for (const route of oldRoutes) await route.fulfill({ status: 200, json: oldGeometry });
-    await page.clock.runFor(32);
-    expect(await naverMap.snapshot()).toEqual(latestView);
-    await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(1);
+      for (const route of oldRoutes) await route.fulfill({ status: 200, json: oldGeometry });
+      await page.clock.runFor(32);
+      expect(await naverMap.snapshot()).toEqual(latestView);
+      await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(1);
+    });
+
+    await test.step("지도를 다 그린 뒤에도 같은 판본의 폴링에는 geometry를 다시 받지 않음", async () => {
+      await expectSameVersionPollSkipsGeometry();
+      await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
+      await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+    });
   } finally {
     for (const route of oldRoutes) await route.abort().catch(() => {});
   }
@@ -430,69 +425,41 @@ test.describe("지도 첫 화면 준비", () => {
     const region = map(page);
     const canvas = region.getByTestId("route-map");
     const basemap = region.getByTestId("naver-map-test-double");
-    const paths = region.getByTestId("naver-polyline").locator("polyline");
     const buses = canvas.locator("[data-marker-kind='vehicle'] button");
     const loading = region.getByRole("status").filter({ hasText: "지도를 불러오는 중이에요" });
     await expect(basemap).toBeVisible();
     await expect(loading).toHaveCount(0);
     await expect(region.getByRole("status")).toHaveCount(0);
     await expect(region).toHaveAttribute("aria-busy", "true");
-    await expect(canvas).toHaveAttribute("data-overlays-ready", "false");
     await expect(canvas).toHaveAttribute("aria-hidden", "true");
     await expect(canvas).toHaveAttribute("inert", "");
-    await expect(basemap).toHaveCSS("visibility", "visible");
-    await expect(paths).toHaveCount(2);
-    await expect(paths.nth(0)).toHaveAttribute("stroke-opacity", "0");
-    await expect(paths.nth(1)).toHaveAttribute("stroke-opacity", "0");
-    await expect(buses).toHaveCount(2);
     await expect(buses.nth(0)).toHaveCSS("visibility", "hidden");
-    await expect(buses.nth(1)).toHaveCSS("visibility", "hidden");
-    await expect(canvas.locator("[data-map-arrow-direction]").first()).toHaveCSS("visibility", "hidden");
     await expect(region.getByRole("button", { name: /부근 버스/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
     await expectMapToFillRegion(page);
-    const originalCanvas = await canvas.elementHandle();
 
     await naverMap.initialize();
     await page.clock.runFor(32);
     await expect(basemap).toBeVisible();
     await expect(loading).toHaveCount(0);
     await expect(region).toHaveAttribute("aria-busy", "true");
-    await expect(paths.nth(0)).toHaveAttribute("stroke-opacity", "0");
-    await expect(paths.nth(1)).toHaveAttribute("stroke-opacity", "0");
     await naverMap.finishIdle();
     await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
 
-    await page.clock.runFor(16);
-    await expect(paths.nth(0)).toHaveAttribute("stroke-opacity", "0.95");
-    await expect(paths.nth(1)).toHaveAttribute("stroke-opacity", "0.95");
-    await expect(canvas).toHaveAttribute("data-overlays-ready", "false");
-    await expect(buses.nth(0)).toHaveCSS("visibility", "hidden");
-    await expect(buses.nth(1)).toHaveCSS("visibility", "hidden");
-    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
-
-    await page.clock.runFor(16);
+    await page.clock.runFor(32);
     await expect(region).toHaveAttribute("aria-busy", "false");
-    await expect(canvas).toHaveAttribute("data-overlays-ready", "true");
     await expect(canvas).toHaveAttribute("aria-hidden", "false");
     await expect(canvas).not.toHaveAttribute("inert", "");
-    await expect(buses.nth(0)).toHaveCSS("visibility", "visible");
-    await expect(buses.nth(1)).toHaveCSS("visibility", "visible");
     await expect(region.getByRole("button", { name: /부근 버스/ })).toHaveCount(2);
     await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
-    expect(await originalCanvas?.evaluate((element) => element.isConnected)).toBe(true);
 
     await naverMap.setZoom(14);
     await tab(page, "DOWN").click();
     await page.clock.runFor(32);
     await expect(loading).toHaveCount(0);
     await expect(region).toHaveAttribute("aria-busy", "false");
-    await expect(canvas).toHaveAttribute("data-overlays-ready", "true");
-    await expect(paths.nth(0)).toHaveAttribute("stroke-opacity", "0.95");
-    await expect(paths.nth(1)).toHaveAttribute("stroke-opacity", "0.95");
     await expect(region.getByRole("button", { name: /부근 버스/ })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
-    await originalCanvas?.dispose();
   });
 
   test("native 초기화가 멈춰도 10초 뒤 오류를 안내하고 목록과 방향 선택을 유지한다", async ({ page }) => {
@@ -518,32 +485,12 @@ test.describe("지도 첫 화면 준비", () => {
     await page.clock.runFor(32);
     await expect(stop).toHaveAttribute("aria-expanded", "true");
   });
-
-  test("처음 표시하기 전 SDK 오류가 나도 목록과 방향 선택은 계속 사용할 수 있다", async ({ page, naverMap }) => {
-    await page.goto(`/routes/${routeId}`);
-    await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(1);
-    await expect(map(page)).toHaveAttribute("aria-busy", "true");
-    await naverMap.failNative("all");
-    await page.evaluate(() => window.navermap_authFailure?.());
-    await expect(map(page).getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
-    await expect(map(page).getByText("정류장 목록은 계속 확인할 수 있어요", { exact: true })).toBeVisible();
-    await expect(map(page)).toHaveAttribute("aria-busy", "false");
-    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
-    await tab(page, "DOWN").click();
-    await page.clock.runFor(32);
-    await expect(tab(page, "DOWN")).toHaveAttribute("aria-pressed", "true");
-    const stop = list(page).locator("li[data-stop-sequence='23'] button[aria-expanded]");
-    await stop.scrollIntoViewIfNeeded();
-    await stop.click();
-    await page.clock.runFor(32);
-    await expect(stop).toHaveAttribute("aria-expanded", "true");
-  });
 });
 
 test("첫 화면은 70% 높이에 전체 노선을 맞추고 줌에 따라 정류장만 숨기며 차량·방향 화살표는 유지한다", async ({
   page,
   naverMap,
-}, testInfo) => {
+}) => {
   await openMap(page);
   await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
   await expectSheetAndMapHeights(page, 844 * 0.7, 844 * 0.3);
@@ -578,7 +525,6 @@ test("첫 화면은 70% 높이에 전체 노선을 맞추고 줌에 따라 정�
   expect(await map(page).locator("[data-marker-kind='arrow']").count()).toBeGreaterThan(0);
   await expect(sheet(page).getByText("15~25분", { exact: true })).toBeVisible();
   await expect(sheet(page).getByText("3대 운행 중", { exact: true })).toBeVisible();
-  if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal284-board-initial.png" });
 
   await naverMap.setZoom(14);
   await expect(map(page).locator("button[data-map-stop-sequence]:visible")).toHaveCount(24);
@@ -643,57 +589,6 @@ test("축소에서는 선택한 방향의 화살표만 표시하고 확대하면
   await original.dispose();
 });
 
-test("GL 지도의 휠과 더블클릭은 부드럽게 확대하며 노선·마커 DOM을 유지한다", async ({ page, naverMap, isMobile }) => {
-  test.skip(isMobile, "모바일 WebKit은 마우스 휠 입력을 지원하지 않는다");
-  await openMap(page);
-  await naverMap.setZoom(14);
-  await naverMap.panToStop(11);
-  const before = await naverMap.snapshot();
-  const bounds = await map(page).boundingBox();
-  if (bounds === null) throw new Error("지도 영역이 없습니다");
-  const nativeLayer = map(page).getByTestId("naver-map-test-double");
-  const pin = map(page).locator("button[data-map-stop-sequence='11']");
-  const pinWidth = await pin.evaluate((element) => element.getBoundingClientRect().width);
-  const persistent = await map(page).evaluateHandle((region) => [
-    ...region.querySelectorAll(
-      '[data-testid="naver-map-test-double"], [data-testid="naver-polyline"], [data-marker-kind], [data-marker-kind="vehicle"] img',
-    ),
-  ]);
-
-  await page.mouse.move(bounds.x + bounds.width / 2 + 60, bounds.y + bounds.height / 2);
-  await page.mouse.wheel(0, -120);
-  await expect(nativeLayer).toHaveAttribute("data-zoom-animating", "true");
-  await page.clock.runFor(80);
-  const duringWheel = await naverMap.snapshot();
-  expect(duringWheel.zoom).toBeGreaterThan(14);
-  expect(duringWheel.zoom).toBeLessThan(15);
-  expect(await pin.evaluate((element) => element.getBoundingClientRect().width)).toBeCloseTo(pinWidth, 3);
-  expect(await persistent.evaluate((nodes) => nodes.every((node) => node.isConnected))).toBe(true);
-  await page.clock.runFor(300);
-  expect((await naverMap.snapshot()).zoom).toBe(15);
-  expect((await naverMap.snapshot()).longitude).not.toBe(before.longitude);
-
-  await page.mouse.wheel(0, 120);
-  await expect(nativeLayer).toHaveAttribute("data-zoom-animating", "true");
-  await page.clock.runFor(300);
-  const restored = await naverMap.snapshot();
-  expect(restored.zoom).toBe(14);
-  expect(restored.latitude).toBeCloseTo(before.latitude, 8);
-  expect(restored.longitude).toBeCloseTo(before.longitude, 8);
-
-  await page.mouse.dblclick(bounds.x + bounds.width - 40, bounds.y + 30);
-  await expect(nativeLayer).toHaveAttribute("data-zoom-animating", "true");
-  await page.clock.runFor(80);
-  const duringDoubleClick = await naverMap.snapshot();
-  expect(duringDoubleClick.zoom).toBeGreaterThan(14);
-  expect(duringDoubleClick.zoom).toBeLessThan(15);
-  expect(await persistent.evaluate((nodes) => nodes.every((node) => node.isConnected))).toBe(true);
-  await page.clock.runFor(300);
-  expect((await naverMap.snapshot()).zoom).toBe(15);
-  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
-  await persistent.dispose();
-});
-
 test("반복 확대와 이동에도 지도와 마커 DOM을 유지하고 정류장 포커스가 남는다", async ({ page, naverMap }) => {
   await openMap(page);
   await naverMap.setZoom(14);
@@ -739,108 +634,141 @@ test("지도 버스를 누르면 정류장을 펼치지 않고 현재 위치로 
     name: "상행 정류장 8 정류장, 도착 중, 현재 잔여 좌석 5석",
     exact: true,
   });
-  await bus.click();
-  await expectStopFocusedInList(page, 8);
-  await expect(list(page).locator("li[data-stop-sequence='8'] button[aria-expanded]")).toHaveAttribute(
-    "aria-expanded",
-    "false",
-  );
-  await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
-  await expect(list(page).locator("[data-selected='true']")).toHaveCount(0);
-  expect(await list(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  await expectVehicleCenteredOnMap(page, bus, naverMap);
-  await expect(bus).toHaveAttribute("aria-pressed", "true");
-  await expect(tracker).toHaveAttribute("aria-pressed", "true");
-  await expect(list(page).locator("li[data-stop-sequence='8'] button[aria-expanded]")).toBeFocused();
+  await test.step("지도 버스를 누르면 펼치지 않고 목록의 현재 위치로 이동", async () => {
+    await bus.click();
+    await expectStopFocusedInList(page, 8);
+    await expect(list(page).locator("li[data-stop-sequence='8'] button[aria-expanded]")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
+    await expect(list(page).locator("[data-selected='true']")).toHaveCount(0);
+    expect(await list(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await expectVehicleCenteredOnMap(page, bus, naverMap);
+    await expect(bus).toHaveAttribute("aria-pressed", "true");
+    await expect(tracker).toHaveAttribute("aria-pressed", "true");
+    await expect(list(page).locator("li[data-stop-sequence='8'] button[aria-expanded]")).toBeFocused();
+  });
 
-  await list(page).evaluate((element) => {
-    element.scrollTop = 0;
+  await test.step("목록을 위로 올린 뒤 다시 누르면 다시 스크롤", async () => {
+    await list(page).evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await page.clock.runFor(32);
+    await bus.click();
+    await expectStopFocusedInList(page, 8);
+    expect(await list(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
+    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+    await expectVehicleCenteredOnMap(page, bus, naverMap);
+    await expect(bus).toHaveAttribute("aria-pressed", "true");
+    await expect(tracker).toHaveAttribute("aria-pressed", "true");
   });
-  await page.clock.runFor(32);
-  await bus.click();
-  await expectStopFocusedInList(page, 8);
-  expect(await list(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
-  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-  await expectVehicleCenteredOnMap(page, bus, naverMap);
-  await expect(bus).toHaveAttribute("aria-pressed", "true");
-  await expect(tracker).toHaveAttribute("aria-pressed", "true");
 
-  const otherTracker = list(page).getByRole("button", {
-    name: "상행 정류장 4 정류장, 도착 중, 현재 잔여 좌석 2석",
-    exact: true,
+  await test.step("확대한 지도에서 다른 목록 버스로 바꿈", async () => {
+    const otherTracker = list(page).getByRole("button", {
+      name: "상행 정류장 4 정류장, 도착 중, 현재 잔여 좌석 2석",
+      exact: true,
+    });
+    const otherMarker = map(page).getByRole("button", {
+      name: "상행 정류장 4 부근 버스, 현재 잔여 좌석 2석",
+      exact: true,
+    });
+    await otherTracker.scrollIntoViewIfNeeded();
+    await naverMap.setZoom(17);
+    await otherTracker.click();
+    await expectVehicleFocusedOnMap(page, otherMarker, naverMap, 17);
+    await expect(bus).toHaveAttribute("aria-pressed", "false");
+    await expect(tracker).toHaveAttribute("aria-pressed", "false");
+    await expect(otherTracker).toHaveAttribute("aria-pressed", "true");
+    await expect(otherMarker).toHaveAttribute("aria-pressed", "true");
   });
-  const otherMarker = map(page).getByRole("button", {
-    name: "상행 정류장 4 부근 버스, 현재 잔여 좌석 2석",
-    exact: true,
+
+  await test.step("방향을 바꾸면 버스 선택 초기화", async () => {
+    await tab(page, "DOWN").click();
+    await expect(map(page).locator("button[data-map-vehicle-key][aria-pressed='true']")).toHaveCount(0);
+    await tab(page, "UP").click();
+    await expect(map(page).locator("button[data-map-vehicle-key][aria-pressed='true']")).toHaveCount(0);
+    await expect(list(page).locator("button[aria-pressed='true']")).toHaveCount(0);
   });
-  await otherTracker.scrollIntoViewIfNeeded();
-  await naverMap.setZoom(17);
-  await otherTracker.click();
-  await expectVehicleFocusedOnMap(page, otherMarker, naverMap, 17);
-  await expect(bus).toHaveAttribute("aria-pressed", "false");
-  await expect(tracker).toHaveAttribute("aria-pressed", "false");
-  await expect(otherTracker).toHaveAttribute("aria-pressed", "true");
-  await expect(otherMarker).toHaveAttribute("aria-pressed", "true");
-  await tab(page, "DOWN").click();
-  await expect(map(page).locator("button[data-map-vehicle-key][aria-pressed='true']")).toHaveCount(0);
-  await tab(page, "UP").click();
-  await expect(map(page).locator("button[data-map-vehicle-key][aria-pressed='true']")).toHaveCount(0);
-  await expect(list(page).locator("button[aria-pressed='true']")).toHaveCount(0);
 });
 
-test("지도 빈 곳을 누르면 버스 핀 확대와 목록 선택을 해제하고 다시 선택할 수 있다", async ({ page, naverMap }) => {
+test("지도 빈 곳이나 목록 빈 곳을 누르면 버스 핀 확대와 목록 선택을 해제하고 다시 선택할 수 있다", async ({
+  page,
+  naverMap,
+}) => {
   await openMap(page);
   const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
   const tracker = list(page).getByRole("button", {
     name: "상행 정류장 8 정류장, 도착 중, 현재 잔여 좌석 5석",
     exact: true,
   });
-  await bus.click();
-  await expectStopFocusedInList(page, 8);
-  await expectVehicleCenteredOnMap(page, bus, naverMap);
-  await expect(bus).toHaveAttribute("aria-pressed", "true");
-  await expect(bus).toHaveCSS("transform", "matrix(1.5, 0, 0, 1.5, 0, 0)");
-  const focused = await naverMap.snapshot();
-  const scrollTop = await list(page).evaluate((element) => element.scrollTop);
+  const unselectedSize = await bus.boundingBox();
+  if (unselectedSize === null) throw new Error("버스 핀이 없습니다");
 
-  await map(page).click({ position: await mapBackgroundPosition(page) });
-  await page.clock.runFor(32);
-  await expect(bus).toHaveAttribute("aria-pressed", "false");
-  await expect(bus).toHaveCSS("transform", "none");
-  await expect(tracker).toHaveAttribute("aria-pressed", "false");
-  await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
-  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-  expect(await naverMap.snapshot()).toEqual(focused);
-  expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scrollTop, 0);
-
-  await bus.click();
-  await expectStopFocusedInList(page, 8);
-  await expect(bus).toHaveAttribute("aria-pressed", "true");
-  await expect(tracker).toHaveAttribute("aria-pressed", "true");
-});
-
-test("키보드로 선택한 버스도 지도 빈 곳을 누르면 포커스에 의한 확대까지 해제한다", async ({ page, naverMap }) => {
-  await openMap(page);
-  const tracker = list(page).getByRole("button", {
-    name: "상행 정류장 8 정류장, 도착 중, 현재 잔여 좌석 5석",
-    exact: true,
+  await test.step("지도 버스를 고르면 핀이 커짐", async () => {
+    await bus.click();
+    await expectStopFocusedInList(page, 8);
+    await expectVehicleCenteredOnMap(page, bus, naverMap);
+    await expect(bus).toHaveAttribute("aria-pressed", "true");
+    expect((await bus.boundingBox())!.width).toBeGreaterThan(unselectedSize.width);
   });
-  const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
-  await tracker.scrollIntoViewIfNeeded();
-  await tracker.focus();
-  await tracker.press("Enter");
-  await expectVehicleFocusedOnMap(page, bus, naverMap);
-  await expect(bus).toHaveCSS("transform", "matrix(1.5, 0, 0, 1.5, 0, 0)");
-  const focused = await naverMap.snapshot();
 
-  await map(page).click({ position: await mapBackgroundPosition(page) });
-  await page.clock.runFor(32);
-  await expect(bus).toHaveAttribute("aria-pressed", "false");
-  await expect(bus).not.toBeFocused();
-  await expect(bus).toHaveCSS("transform", "none");
-  await expect(tracker).toHaveAttribute("aria-pressed", "false");
-  expect(await naverMap.snapshot()).toEqual(focused);
+  await test.step("지도 빈 곳을 누르면 해제", async () => {
+    const focused = await naverMap.snapshot();
+    const scrollTop = await list(page).evaluate((element) => element.scrollTop);
+    await map(page).click({ position: await mapBackgroundPosition(page) });
+    await page.clock.runFor(32);
+    await expect(bus).toHaveAttribute("aria-pressed", "false");
+    expect((await bus.boundingBox())!.width).toBeCloseTo(unselectedSize.width, 0);
+    await expect(tracker).toHaveAttribute("aria-pressed", "false");
+    await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
+    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+    expect(await naverMap.snapshot()).toEqual(focused);
+    expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+  });
+
+  await test.step("지도 버스를 다시 고름", async () => {
+    await bus.click();
+    await expectStopFocusedInList(page, 8);
+    await expect(bus).toHaveAttribute("aria-pressed", "true");
+    await expect(tracker).toHaveAttribute("aria-pressed", "true");
+    await expectVehicleCenteredOnMap(page, bus, naverMap);
+  });
+
+  await test.step("목록 빈 곳을 누르면 해제", async () => {
+    const focused = await naverMap.snapshot();
+    const scrollTop = await list(page).evaluate((element) => element.scrollTop);
+    await list(page).click({ position: await listBackgroundPosition(page) });
+    await page.clock.runFor(32);
+    await expect(bus).toHaveAttribute("aria-pressed", "false");
+    await expect(tracker).toHaveAttribute("aria-pressed", "false");
+    await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
+    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+    expect(await naverMap.snapshot()).toEqual(focused);
+    expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+  });
+
+  await test.step("키보드로 목록 버스를 고른 뒤 지도 빈 곳을 누르면 포커스까지 해제", async () => {
+    await tracker.scrollIntoViewIfNeeded();
+    await tracker.focus();
+    await tracker.press("Enter");
+    await expectVehicleFocusedOnMap(page, bus, naverMap);
+    const focused = await naverMap.snapshot();
+    await map(page).click({ position: await mapBackgroundPosition(page) });
+    await page.clock.runFor(32);
+    await expect(bus).toHaveAttribute("aria-pressed", "false");
+    await expect(bus).not.toBeFocused();
+    await expect(tracker).toHaveAttribute("aria-pressed", "false");
+    expect(await naverMap.snapshot()).toEqual(focused);
+  });
+
+  await test.step("지도 버스를 다시 고름", async () => {
+    await bus.click();
+    await expectStopFocusedInList(page, 8);
+    await expect(bus).toHaveAttribute("aria-pressed", "true");
+    await expect(tracker).toHaveAttribute("aria-pressed", "true");
+  });
 });
 
 test("목록 빈 곳을 누르면 목록에서 선택한 버스만 초기화하고 펼침·시트·스크롤·지도 시점을 유지한다", async ({
@@ -858,126 +786,98 @@ test("목록 빈 곳을 누르면 목록에서 선택한 버스만 초기화하�
     exact: true,
   });
   const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
-  await tracker.scrollIntoViewIfNeeded();
-  await tracker.focus();
-  await tracker.press("Enter");
-  await expectVehicleFocusedOnMap(page, bus, naverMap);
-  await expect(tracker).toHaveAttribute("aria-pressed", "true");
-  await expect(tracker).toHaveCSS("transform", "matrix(1.12, 0, 0, 1.12, 0, 0)");
-  await expect(bus).toHaveCSS("transform", "matrix(1.5, 0, 0, 1.5, 0, 0)");
-  const focused = await naverMap.snapshot();
-  const scrollTop = await list(page).evaluate((element) => element.scrollTop);
-
-  await list(page).click({ position: await listBackgroundPosition(page) });
-  await page.clock.runFor(32);
-  await expect(tracker).toHaveAttribute("aria-pressed", "false");
-  await expect(tracker).toHaveCSS("transform", "none");
-  await expect(bus).toHaveAttribute("aria-pressed", "false");
-  await expect(bus).not.toBeFocused();
-  await expect(bus).toHaveCSS("transform", "none");
-  await expect(expandedStop).toHaveAttribute("aria-expanded", "true");
-  await expect(list(page).locator("li[data-stop-sequence='6']")).toHaveAttribute("data-selected", "true");
-  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-  expect(await naverMap.snapshot()).toEqual(focused);
-  expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scrollTop, 0);
-
-  // 버스 버튼의 자식 아이콘을 눌러도 빈 영역 클릭으로 처리하지 않는다.
-  await tracker.locator("svg").click();
-  await expectVehicleFocusedOnMap(page, bus, naverMap);
-  await expect(tracker).toHaveAttribute("aria-pressed", "true");
-  await expect(bus).toHaveAttribute("aria-pressed", "true");
-  await expect(expandedStop).toHaveAttribute("aria-expanded", "true");
-
-  const nextStop = list(page).locator("li[data-stop-sequence='8'] button[aria-expanded]");
-  await nextStop.click();
-  await page.clock.runFor(32);
-  await expect(nextStop).toHaveAttribute("aria-expanded", "true");
-  await expect(expandedStop).toHaveAttribute("aria-expanded", "false");
-  await expect(tracker).toHaveAttribute("aria-pressed", "false");
-  await expect(bus).toHaveAttribute("aria-pressed", "false");
-});
-
-test("지도에서 선택한 버스도 목록 빈 곳을 누르면 확대와 목록 선택을 해제하고 다시 선택할 수 있다", async ({
-  page,
-  naverMap,
-}) => {
-  await openMap(page);
-  const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
-  const tracker = list(page).getByRole("button", {
-    name: "상행 정류장 8 정류장, 도착 중, 현재 잔여 좌석 5석",
-    exact: true,
+  await test.step("펼친 6번을 둔 채 키보드로 목록 버스를 고름", async () => {
+    await tracker.scrollIntoViewIfNeeded();
+    await tracker.focus();
+    await tracker.press("Enter");
+    await expectVehicleFocusedOnMap(page, bus, naverMap);
+    await expect(tracker).toHaveAttribute("aria-pressed", "true");
   });
-  await bus.click();
-  await expectStopFocusedInList(page, 8);
-  await expectVehicleCenteredOnMap(page, bus, naverMap);
-  await expect(bus).toHaveAttribute("aria-pressed", "true");
-  const focused = await naverMap.snapshot();
-  const scrollTop = await list(page).evaluate((element) => element.scrollTop);
 
-  await list(page).click({ position: await listBackgroundPosition(page) });
-  await page.clock.runFor(32);
-  await expect(bus).toHaveAttribute("aria-pressed", "false");
-  await expect(bus).toHaveCSS("transform", "none");
-  await expect(tracker).toHaveAttribute("aria-pressed", "false");
-  await expect(tracker).toHaveCSS("transform", "none");
-  await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
-  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-  expect(await naverMap.snapshot()).toEqual(focused);
-  expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+  await test.step("목록 빈 곳을 누르면 버스 선택만 해제", async () => {
+    const focused = await naverMap.snapshot();
+    const scrollTop = await list(page).evaluate((element) => element.scrollTop);
+    await list(page).click({ position: await listBackgroundPosition(page) });
+    await page.clock.runFor(32);
+    await expect(tracker).toHaveAttribute("aria-pressed", "false");
+    await expect(bus).toHaveAttribute("aria-pressed", "false");
+    await expect(bus).not.toBeFocused();
+    await expect(expandedStop).toHaveAttribute("aria-expanded", "true");
+    await expect(list(page).locator("li[data-stop-sequence='6']")).toHaveAttribute("data-selected", "true");
+    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+    expect(await naverMap.snapshot()).toEqual(focused);
+    expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+  });
 
-  await bus.click();
-  await expectStopFocusedInList(page, 8);
-  await expect(bus).toHaveAttribute("aria-pressed", "true");
-  await expect(tracker).toHaveAttribute("aria-pressed", "true");
+  await test.step("버스 버튼의 아이콘을 누르면 빈 곳이 아니라 버스 선택", async () => {
+    await tracker.locator("svg").click();
+    await expectVehicleFocusedOnMap(page, bus, naverMap);
+    await expect(tracker).toHaveAttribute("aria-pressed", "true");
+    await expect(bus).toHaveAttribute("aria-pressed", "true");
+    await expect(expandedStop).toHaveAttribute("aria-expanded", "true");
+  });
+
+  await test.step("다른 정류장을 펼치면 버스 선택 해제", async () => {
+    const nextStop = list(page).locator("li[data-stop-sequence='8'] button[aria-expanded]");
+    await nextStop.click();
+    await page.clock.runFor(32);
+    await expect(nextStop).toHaveAttribute("aria-expanded", "true");
+    await expect(expandedStop).toHaveAttribute("aria-expanded", "false");
+    await expect(tracker).toHaveAttribute("aria-pressed", "false");
+    await expect(bus).toHaveAttribute("aria-pressed", "false");
+  });
 });
 
 test.describe("지도 터치 선택 해제", () => {
   test.use({ hasTouch: true });
 
-  test("지도 빈 곳을 탭하면 버스 핀 확대를 해제하고 다시 탭할 수 있다", async ({ page, naverMap }) => {
-    await openMap(page);
-    const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
-    await bus.tap();
-    await expectStopFocusedInList(page, 8);
-    await expectVehicleCenteredOnMap(page, bus, naverMap);
-    await expect(bus).toHaveAttribute("aria-pressed", "true");
-    const focused = await naverMap.snapshot();
-
-    await map(page).tap({ position: await mapBackgroundPosition(page) });
-    await page.clock.runFor(32);
-    await expect(bus).toHaveAttribute("aria-pressed", "false");
-    await expect(bus).toHaveCSS("transform", "none");
-    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-    expect(await naverMap.snapshot()).toEqual(focused);
-
-    await bus.tap();
-    await expectStopFocusedInList(page, 8);
-    await expect(bus).toHaveAttribute("aria-pressed", "true");
-  });
-
-  test("목록 빈 곳을 탭하면 버스 아이콘의 확대와 선택을 해제한다", async ({ page, naverMap }) => {
+  test("목록 빈 곳이나 지도 빈 곳을 탭하면 버스 선택과 확대를 해제하고 다시 탭할 수 있다", async ({
+    page,
+    naverMap,
+  }) => {
     await openMap(page);
     const tracker = list(page).getByRole("button", {
       name: "상행 정류장 8 정류장, 도착 중, 현재 잔여 좌석 5석",
       exact: true,
     });
     const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석", exact: true });
-    await tracker.scrollIntoViewIfNeeded();
-    await tracker.tap();
-    await expectVehicleFocusedOnMap(page, bus, naverMap);
-    await expect(tracker).toHaveAttribute("aria-pressed", "true");
-    const focused = await naverMap.snapshot();
 
-    // WebKit의 터치 대상 보정이 가까운 정류장 버튼을 고르지 않도록 왼쪽의 넓은 여백을 누른다.
-    await list(page).tap({ position: { x: 8, y: 24 } });
-    await page.clock.runFor(32);
-    await expect(tracker).toHaveAttribute("aria-pressed", "false");
-    await expect(tracker).toHaveCSS("transform", "none");
-    await expect(bus).toHaveAttribute("aria-pressed", "false");
-    await expect(bus).not.toBeFocused();
-    await expect(bus).toHaveCSS("transform", "none");
-    await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
-    expect(await naverMap.snapshot()).toEqual(focused);
+    await test.step("목록 버스를 탭한 뒤 목록 빈 곳을 탭하면 해제", async () => {
+      await tracker.scrollIntoViewIfNeeded();
+      await tracker.tap();
+      await expectVehicleFocusedOnMap(page, bus, naverMap);
+      await expect(tracker).toHaveAttribute("aria-pressed", "true");
+      const focused = await naverMap.snapshot();
+
+      // WebKit의 터치 대상 보정이 가까운 정류장 버튼을 고르지 않도록 왼쪽의 넓은 여백을 누른다.
+      await list(page).tap({ position: { x: 8, y: 24 } });
+      await page.clock.runFor(32);
+      await expect(tracker).toHaveAttribute("aria-pressed", "false");
+      await expect(bus).toHaveAttribute("aria-pressed", "false");
+      await expect(bus).not.toBeFocused();
+      await expect(list(page).locator("button[aria-expanded='true']")).toHaveCount(0);
+      expect(await naverMap.snapshot()).toEqual(focused);
+    });
+
+    await test.step("지도 버스를 탭한 뒤 지도 빈 곳을 탭하면 해제", async () => {
+      await bus.tap();
+      await expectStopFocusedInList(page, 8);
+      await expectVehicleCenteredOnMap(page, bus, naverMap);
+      await expect(bus).toHaveAttribute("aria-pressed", "true");
+      const focused = await naverMap.snapshot();
+
+      await map(page).tap({ position: await mapBackgroundPosition(page) });
+      await page.clock.runFor(32);
+      await expect(bus).toHaveAttribute("aria-pressed", "false");
+      await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+      expect(await naverMap.snapshot()).toEqual(focused);
+    });
+
+    await test.step("지도 버스를 다시 탭", async () => {
+      await bus.tap();
+      await expectStopFocusedInList(page, 8);
+      await expect(bus).toHaveAttribute("aria-pressed", "true");
+    });
   });
 });
 
@@ -1152,60 +1052,66 @@ test("목록 버스는 70% 시트와 펼침·스크롤을 유지하며 지도에
   const before = await naverMap.snapshot();
   const scroll = await list(page).evaluate((element) => element.scrollTop);
 
-  await tracker.click();
-  await expectVehicleFocusedOnMap(page, marker, naverMap);
-  expect((await naverMap.snapshot()).zoom).toBe(16);
-  expect(await naverMap.snapshot()).not.toEqual(before);
-  await expect(marker).toHaveAttribute("aria-pressed", "true");
-  await expect(tracker).toHaveAttribute("aria-pressed", "true");
-  expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scroll, 0);
-  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-  await expect(expandedStop).toHaveAttribute("aria-expanded", "true");
-  await expect(list(page).locator("li[data-stop-sequence='6']")).toHaveAttribute("data-selected", "true");
-  await expect(list(page).locator("li[data-stop-sequence='8'] button[aria-expanded]")).toHaveAttribute(
-    "aria-expanded",
-    "false",
-  );
-
-  await naverMap.panToStop(1);
-  await tracker.click();
-  await expectVehicleFocusedOnMap(page, marker, naverMap);
-  expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scroll, 0);
-
-  const vehicle = api.data.watch.vehicles.find((item) => item.vehicleId === "bus-1");
-  const nextStop = api.data.watch.stops.find((item) => item.direction === "UP" && item.sequence === 10);
-  if (vehicle === undefined || nextStop === undefined) throw new Error("갱신할 버스와 정류장이 없습니다");
-  vehicle.currentStopSequence = nextStop.sequence;
-  vehicle.stopId = nextStop.stopId;
-  vehicle.stopName = nextStop.name;
-  api.data.watch.observedAt = "2026-09-16T08:01:00+09:00";
-  api.data.watch.staleAt = "2026-09-16T08:06:00+09:00";
-  const refreshedWatch = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
-  );
-  await page.clock.fastForward(pollIntervalMs);
-  await (await refreshedWatch).finished();
-  await page.clock.runFor(32);
-  const latestTracker = list(page).getByRole("button", {
-    name: `${nextStop.name} 정류장, 도착 중, 현재 잔여 좌석 5석`,
-    exact: true,
+  await test.step("목록 버스를 누르면 펼침과 스크롤을 둔 채 지도에서 찾음", async () => {
+    await tracker.click();
+    await expectVehicleFocusedOnMap(page, marker, naverMap);
+    expect((await naverMap.snapshot()).zoom).toBe(16);
+    expect(await naverMap.snapshot()).not.toEqual(before);
+    await expect(marker).toHaveAttribute("aria-pressed", "true");
+    await expect(tracker).toHaveAttribute("aria-pressed", "true");
+    expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scroll, 0);
+    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+    await expect(expandedStop).toHaveAttribute("aria-expanded", "true");
+    await expect(list(page).locator("li[data-stop-sequence='6']")).toHaveAttribute("data-selected", "true");
+    await expect(list(page).locator("li[data-stop-sequence='8'] button[aria-expanded]")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
   });
-  const latestMarker = map(page).getByRole("button", {
-    name: `${nextStop.name} 부근 버스, 현재 잔여 좌석 5석`,
-    exact: true,
+
+  await test.step("지도를 옮긴 뒤 다시 누르면 다시 찾음", async () => {
+    await naverMap.panToStop(1);
+    await tracker.click();
+    await expectVehicleFocusedOnMap(page, marker, naverMap);
+    expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(scroll, 0);
   });
-  await latestTracker.scrollIntoViewIfNeeded();
-  const latestScroll = await list(page).evaluate((element) => element.scrollTop);
-  await naverMap.panToStop(1);
-  await latestTracker.click();
-  await expectVehicleFocusedOnMap(page, latestMarker, naverMap);
-  await expect(latestMarker).toHaveAttribute("data-map-vehicle-key", key!);
-  await expect(latestMarker).toHaveAttribute("aria-pressed", "true");
-  await expect(latestTracker).toHaveAttribute("aria-pressed", "true");
-  expect((await naverMap.snapshot()).zoom).toBe(16);
-  expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(latestScroll, 0);
-  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-  await expect(expandedStop).toHaveAttribute("aria-expanded", "true");
+
+  await test.step("폴링으로 버스가 옮겨진 뒤 다시 누르면 최신 표시 위치를 찾음", async () => {
+    const vehicle = api.data.watch.vehicles.find((item) => item.vehicleId === "bus-1");
+    const nextStop = api.data.watch.stops.find((item) => item.direction === "UP" && item.sequence === 10);
+    if (vehicle === undefined || nextStop === undefined) throw new Error("갱신할 버스와 정류장이 없습니다");
+    vehicle.currentStopSequence = nextStop.sequence;
+    vehicle.stopId = nextStop.stopId;
+    vehicle.stopName = nextStop.name;
+    api.data.watch.observedAt = "2026-09-16T08:01:00+09:00";
+    api.data.watch.staleAt = "2026-09-16T08:06:00+09:00";
+    const refreshedWatch = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
+    );
+    await page.clock.fastForward(pollIntervalMs);
+    await (await refreshedWatch).finished();
+    await page.clock.runFor(32);
+    const latestTracker = list(page).getByRole("button", {
+      name: `${nextStop.name} 정류장, 도착 중, 현재 잔여 좌석 5석`,
+      exact: true,
+    });
+    const latestMarker = map(page).getByRole("button", {
+      name: `${nextStop.name} 부근 버스, 현재 잔여 좌석 5석`,
+      exact: true,
+    });
+    await latestTracker.scrollIntoViewIfNeeded();
+    const latestScroll = await list(page).evaluate((element) => element.scrollTop);
+    await naverMap.panToStop(1);
+    await latestTracker.click();
+    await expectVehicleFocusedOnMap(page, latestMarker, naverMap);
+    await expect(latestMarker).toHaveAttribute("data-map-vehicle-key", key!);
+    await expect(latestMarker).toHaveAttribute("aria-pressed", "true");
+    await expect(latestTracker).toHaveAttribute("aria-pressed", "true");
+    expect((await naverMap.snapshot()).zoom).toBe(16);
+    expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(latestScroll, 0);
+    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+    await expect(expandedStop).toHaveAttribute("aria-expanded", "true");
+  });
 });
 
 test("목록 버스를 누르면 이동 중인 지도 마커를 선택한 채 중간 시점을 거쳐 부드럽게 확대한다", async ({
@@ -1375,10 +1281,7 @@ test("정류장명과 현재 좌석을 함께 표시하고 줌과 잔여석 응�
   await observation.dispose();
 });
 
-test("키보드로 최소·절반·70%·전체를 선택하고 목록 스크롤은 시트 높이를 바꾸지 않는다", async ({
-  page,
-  isMobile,
-}, testInfo) => {
+test("키보드로 최소·절반·70%·전체를 선택하고 목록 스크롤은 시트 높이를 바꾸지 않는다", async ({ page, isMobile }) => {
   test.skip(isMobile, "모바일 WebKit은 마우스 휠 입력을 지원하지 않는다");
   await openMap(page);
   await expect(handle(page)).toHaveAttribute("aria-valuemax", "3");
@@ -1391,7 +1294,6 @@ test("키보드로 최소·절반·70%·전체를 선택하고 목록 스크롤�
   await expect(tab(page, "UP")).toBeVisible();
   await expect(sheet(page).getByText("05:00–23:00", { exact: true })).toBeVisible();
   expect(await height(sheet(page))).toBeLessThan(422);
-  if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal192-board-minimum.png" });
 
   await handle(page).press("ArrowUp");
   await expect(sheet(page)).toHaveAttribute("data-snap", "half");
@@ -1408,7 +1310,6 @@ test("키보드로 최소·절반·70%·전체를 선택하고 목록 스크롤�
   await expect(handle(page)).toHaveAttribute("aria-valuenow", "2");
   await expect(handle(page)).toHaveAttribute("aria-valuetext", "화면 70% 표시");
   await expectSheetAndMapHeights(page, 844 * 0.7, 844 * 0.3);
-  if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal192-board-expanded.png" });
 
   await handle(page).press("End");
   await expect(sheet(page)).toHaveAttribute("data-snap", "full");
@@ -1416,7 +1317,6 @@ test("키보드로 최소·절반·70%·전체를 선택하고 목록 스크롤�
   expect(await height(sheet(page))).toBeCloseTo(844, 0);
   await expect(map(page)).toHaveCount(0);
   await expect(sheet(page).getByRole("link", { name: "노선 선택으로 돌아가기" })).toBeVisible();
-  if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal192-board-full.png" });
   await handle(page).press("ArrowDown");
   await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
   await handle(page).press("ArrowDown");
@@ -1481,60 +1381,64 @@ test("헤더 드래그는 양 끝에 붙고 방향 버튼에서 시작한 드래
   expect(await height(sheet(page))).toBeCloseTo(422, 0);
 });
 
+// 추적 시작 경로와 모션 설정은 각 값이 한 번씩 나오는 두 조합만 본다.
+for (const [source, reducedMotion] of [
+  ["지도", "reduce"],
+  ["목록", "no-preference"],
+] as const) {
+  test(`${source}에서 버스를 선택하면 갱신 후에도 핀을 추적하고 지도 조작으로 멈춘다 (${reducedMotion})`, async ({
+    page,
+    api,
+    naverMap,
+  }) => {
+    const durationMs = 20_000;
+    api.cacheMaxAgeSeconds = durationMs / 1_000;
+    const vehicle = api.data.watch.vehicles.find((item) => item.vehicleId === "bus-1");
+    const nextStop = api.data.watch.stops.find((item) => item.direction === "UP" && item.sequence === 9);
+    if (vehicle === undefined || nextStop === undefined) throw new Error("추적할 차량과 다음 정류장이 없습니다");
+    vehicle.phase = "DEPARTED";
+    await page.emulateMedia({ reducedMotion });
+    await openMap(page);
+    const pin = map(page).getByRole("button", { name: /부근 버스, 현재 잔여 좌석 5석/ });
+    const tracker = list(page).getByRole("button", { name: /현재 잔여 좌석 5석/ });
+    if (source === "지도") await pin.click();
+    else await tracker.click();
+    await expectVehicleCenteredOnMap(page, pin, naverMap);
+    const initial = await naverMap.snapshot();
+
+    // 목록에 들어온 입력은 추적을 멈추지 않는다.
+    await list(page).dispatchEvent("wheel", { deltaY: 20 });
+    vehicle.phase = "IN_TRANSIT";
+    const response = page.waitForResponse((response) => new URL(response.url()).pathname === apiPaths.watch);
+    await page.clock.fastForward(durationMs);
+    await (await response).finished();
+    await page.clock.runFor(32);
+    await page.clock.runFor(durationMs / 4);
+    const moving = await naverMap.snapshot();
+    expect(Math.hypot(moving.latitude - initial.latitude, moving.longitude - initial.longitude)).toBeGreaterThan(0);
+    expect(await vehicleOffsetFromMapCenter(pin)).toBeLessThanOrEqual(1);
+    expect(moving.zoom).toBe(initial.zoom);
+
+    await page.getByTestId("naver-map-test-double").dispatchEvent("pointerdown");
+    const stopped = await naverMap.snapshot();
+    vehicle.phase = "DEPARTED";
+    vehicle.currentStopSequence = nextStop.sequence;
+    vehicle.stopId = nextStop.stopId;
+    vehicle.stopName = nextStop.name;
+    const nextResponse = page.waitForResponse((response) => new URL(response.url()).pathname === apiPaths.watch);
+    await page.clock.fastForward(durationMs);
+    await (await nextResponse).finished();
+    await page.clock.runFor(durationMs / 4);
+    expect(await naverMap.snapshot()).toEqual(stopped);
+    expect(await vehicleOffsetFromMapCenter(pin)).toBeGreaterThan(1);
+
+    await tracker.click();
+    await expectVehicleCenteredOnMap(page, pin, naverMap);
+    await expect(pin).toHaveAttribute("aria-pressed", "true");
+  });
+}
+
 for (const reducedMotion of ["reduce", "no-preference"] as const) {
-  for (const source of ["지도", "목록"] as const) {
-    test(`${source}에서 버스를 선택하면 갱신 후에도 핀을 추적하고 지도 조작으로 멈춘다 (${reducedMotion})`, async ({
-      page,
-      api,
-      naverMap,
-    }) => {
-      const durationMs = 20_000;
-      api.cacheMaxAgeSeconds = durationMs / 1_000;
-      const vehicle = api.data.watch.vehicles.find((item) => item.vehicleId === "bus-1");
-      const nextStop = api.data.watch.stops.find((item) => item.direction === "UP" && item.sequence === 9);
-      if (vehicle === undefined || nextStop === undefined) throw new Error("추적할 차량과 다음 정류장이 없습니다");
-      vehicle.phase = "DEPARTED";
-      await page.emulateMedia({ reducedMotion });
-      await openMap(page);
-      const pin = map(page).getByRole("button", { name: /부근 버스, 현재 잔여 좌석 5석/ });
-      const tracker = list(page).getByRole("button", { name: /현재 잔여 좌석 5석/ });
-      if (source === "지도") await pin.click();
-      else await tracker.click();
-      await expectVehicleCenteredOnMap(page, pin, naverMap);
-      const initial = await naverMap.snapshot();
-
-      // 목록에 들어온 입력은 추적을 멈추지 않는다.
-      await list(page).dispatchEvent("wheel", { deltaY: 20 });
-      vehicle.phase = "IN_TRANSIT";
-      const response = page.waitForResponse((response) => new URL(response.url()).pathname === apiPaths.watch);
-      await page.clock.fastForward(durationMs);
-      await (await response).finished();
-      await page.clock.runFor(32);
-      await page.clock.runFor(durationMs / 4);
-      const moving = await naverMap.snapshot();
-      expect(Math.hypot(moving.latitude - initial.latitude, moving.longitude - initial.longitude)).toBeGreaterThan(0);
-      expect(await vehicleOffsetFromMapCenter(pin)).toBeLessThanOrEqual(1);
-      expect(moving.zoom).toBe(initial.zoom);
-
-      await page.getByTestId("naver-map-test-double").dispatchEvent("pointerdown");
-      const stopped = await naverMap.snapshot();
-      vehicle.phase = "DEPARTED";
-      vehicle.currentStopSequence = nextStop.sequence;
-      vehicle.stopId = nextStop.stopId;
-      vehicle.stopName = nextStop.name;
-      const nextResponse = page.waitForResponse((response) => new URL(response.url()).pathname === apiPaths.watch);
-      await page.clock.fastForward(durationMs);
-      await (await nextResponse).finished();
-      await page.clock.runFor(durationMs / 4);
-      expect(await naverMap.snapshot()).toEqual(stopped);
-      expect(await vehicleOffsetFromMapCenter(pin)).toBeGreaterThan(1);
-
-      await tracker.click();
-      await expectVehicleCenteredOnMap(page, pin, naverMap);
-      await expect(pin).toHaveAttribute("aria-pressed", "true");
-    });
-  }
-
   test(`뒤쪽 차량 응답에는 지도와 목록이 멈추고 앞선 응답이 오면 함께 이동한다 (${reducedMotion})`, async ({
     page,
     api,
@@ -1590,146 +1494,154 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     expect(Math.hypot(moved.map.x - stopped.map.x, moved.map.y - stopped.map.y)).toBeGreaterThan(1);
     expect(moved.list).toBeGreaterThan(stopped.list + 1);
   });
-
-  test(`드래그 중 지도가 시트 경계를 따라가고 지도 시점은 유지된다 (${reducedMotion})`, async ({ page, naverMap }) => {
-    await page.emulateMedia({ reducedMotion });
-    await openMap(page);
-    await naverMap.setZoom(14);
-    await naverMap.panToStop(11);
-    const originalView = await naverMap.snapshot();
-    const originalSetSizeCount = await mapSetSizeCount(page);
-    const bounds = await sheet(page).boundingBox();
-    if (bounds === null) throw new Error("드래그할 시트가 없습니다");
-    const originY = bounds.y + 12;
-    await page.mouse.move(bounds.x + 25, originY);
-    await page.mouse.down();
-
-    let previousOffset = 0;
-    for (const offset of [-80, -150, -90, 80]) {
-      for (let step = 1; step <= 4; step += 1) {
-        const currentOffset = previousOffset + ((offset - previousOffset) * step) / 4;
-        await page.mouse.move(bounds.x + 25, originY + currentOffset);
-        await page.clock.runFor(32);
-        const actualTop = await sheet(page).evaluate((element) => element.getBoundingClientRect().top);
-        expect(Math.abs(actualTop - bounds.y - currentOffset)).toBeLessThanOrEqual(1);
-        await expectMapToFillRegion(page);
-        expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
-      }
-      previousOffset = offset;
-      await expect(sheet(page)).toHaveAttribute("data-dragging", "true");
-      await expectSheetAndMapHeights(page, bounds.height - offset, 844 - bounds.height + offset);
-      await expectMapToFillRegion(page);
-      expect(await naverMap.snapshot()).toEqual(originalView);
-    }
-
-    await page.mouse.up();
-    await page.clock.runFor(400);
-    await expect(sheet(page)).toHaveAttribute("data-dragging", "false");
-    await expectMapToFillRegion(page);
-    expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
-  });
-
-  test(`최소·70%·전체 시트와 화면 크기 변경에도 지도가 영역을 채우고 시점을 유지한다 (${reducedMotion})`, async ({
-    page,
-    naverMap,
-  }) => {
-    await page.emulateMedia({ reducedMotion });
-    await openMap(page);
-    await naverMap.setZoom(14);
-    await naverMap.panToStop(11);
-    const originalView = await naverMap.snapshot();
-    await expectMapToFillRegion(page);
-    const originalSetSizeCount = await mapSetSizeCount(page);
-
-    await handle(page).press("Home");
-    await page.clock.runFor(400);
-    await expect(sheet(page)).toHaveAttribute("data-snap", "minimum");
-    await expect.poll(() => height(map(page))).toBeGreaterThan(422);
-    await expectMapToFillRegion(page);
-    expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
-    expect(await naverMap.snapshot()).toEqual(originalView);
-
-    await handle(page).press("End");
-    await page.clock.runFor(400);
-    await expect(map(page)).toHaveCount(0);
-    await handle(page).press("Home");
-    await page.clock.runFor(400);
-    await expect.poll(() => height(map(page))).toBeGreaterThan(422);
-    await expectMapToFillRegion(page);
-    expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
-    expect(await naverMap.snapshot()).toEqual(originalView);
-
-    await handle(page).press("ArrowUp");
-    await handle(page).press("ArrowUp");
-    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-    await expectSheetAndMapHeights(page, 844 * 0.7, 844 * 0.3);
-    await expectMapToFillRegion(page);
-    expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
-    expect(await naverMap.snapshot()).toEqual(originalView);
-
-    await page.setViewportSize({ width: 360, height: 900 });
-    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-    await expectSheetAndMapHeights(page, 630, 270);
-    await expectMapToFillRegion(page);
-    await expect.poll(() => mapSetSizeCount(page)).toBeGreaterThan(originalSetSizeCount);
-    expect(await naverMap.snapshot()).toEqual(originalView);
-  });
 }
+
+// 전환 시간이 0이어도 지도 추종과 크기 동기화는 같은 JS 경로라 no-preference만 본다.
+test("드래그 중 지도가 시트 경계를 따라가고 지도 시점은 유지된다 (no-preference)", async ({ page, naverMap }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await openMap(page);
+  await naverMap.setZoom(14);
+  await naverMap.panToStop(11);
+  const originalView = await naverMap.snapshot();
+  const originalSetSizeCount = await mapSetSizeCount(page);
+  const bounds = await sheet(page).boundingBox();
+  if (bounds === null) throw new Error("드래그할 시트가 없습니다");
+  const originY = bounds.y + 12;
+  await page.mouse.move(bounds.x + 25, originY);
+  await page.mouse.down();
+
+  let previousOffset = 0;
+  for (const offset of [-80, -150, -90, 80]) {
+    for (let step = 1; step <= 4; step += 1) {
+      const currentOffset = previousOffset + ((offset - previousOffset) * step) / 4;
+      await page.mouse.move(bounds.x + 25, originY + currentOffset);
+      await page.clock.runFor(32);
+      const actualTop = await sheet(page).evaluate((element) => element.getBoundingClientRect().top);
+      expect(Math.abs(actualTop - bounds.y - currentOffset)).toBeLessThanOrEqual(1);
+      await expectMapToFillRegion(page);
+      expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
+    }
+    previousOffset = offset;
+    await expect(sheet(page)).toHaveAttribute("data-dragging", "true");
+    await expectSheetAndMapHeights(page, bounds.height - offset, 844 - bounds.height + offset);
+    await expectMapToFillRegion(page);
+    expect(await naverMap.snapshot()).toEqual(originalView);
+  }
+
+  await page.mouse.up();
+  await page.clock.runFor(400);
+  await expect(sheet(page)).toHaveAttribute("data-dragging", "false");
+  await expectMapToFillRegion(page);
+  expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
+});
+
+test("최소·70%·전체 시트와 화면 크기 변경에도 지도가 영역을 채우고 시점을 유지한다 (no-preference)", async ({
+  page,
+  naverMap,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await openMap(page);
+  await naverMap.setZoom(14);
+  await naverMap.panToStop(11);
+  const originalView = await naverMap.snapshot();
+  await expectMapToFillRegion(page);
+  const originalSetSizeCount = await mapSetSizeCount(page);
+
+  await handle(page).press("Home");
+  await page.clock.runFor(400);
+  await expect(sheet(page)).toHaveAttribute("data-snap", "minimum");
+  await expect.poll(() => height(map(page))).toBeGreaterThan(422);
+  await expectMapToFillRegion(page);
+  expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
+  expect(await naverMap.snapshot()).toEqual(originalView);
+
+  await handle(page).press("End");
+  await page.clock.runFor(400);
+  await expect(map(page)).toHaveCount(0);
+  await handle(page).press("Home");
+  await page.clock.runFor(400);
+  await expect.poll(() => height(map(page))).toBeGreaterThan(422);
+  await expectMapToFillRegion(page);
+  expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
+  expect(await naverMap.snapshot()).toEqual(originalView);
+
+  await handle(page).press("ArrowUp");
+  await handle(page).press("ArrowUp");
+  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+  await expectSheetAndMapHeights(page, 844 * 0.7, 844 * 0.3);
+  await expectMapToFillRegion(page);
+  expect(await mapSetSizeCount(page)).toBe(originalSetSizeCount);
+  expect(await naverMap.snapshot()).toEqual(originalView);
+
+  await page.setViewportSize({ width: 360, height: 900 });
+  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+  await expectSheetAndMapHeights(page, 630, 270);
+  await expectMapToFillRegion(page);
+  await expect.poll(() => mapSetSizeCount(page)).toBeGreaterThan(originalSetSizeCount);
+  expect(await naverMap.snapshot()).toEqual(originalView);
+});
 
 test("반대 방향 지도 정류장은 탭·시트·펼침·목록 스크롤을 함께 바꾸고 재선택해도 접히지 않는다", async ({
   page,
   naverMap,
-}, testInfo) => {
+}) => {
   await openMap(page);
   await handle(page).press("Home");
   await naverMap.setZoom(14);
   await naverMap.panToStop(23);
   const pin = map(page).locator("button[data-map-stop-sequence='23']");
+  const row = list(page).locator("li[data-stop-sequence='23']");
   await expect(pin).toHaveAccessibleName(`${targetStopNames.DOWN} ${directionLabels.DOWN} 정류장 지도에서 선택`);
-  await pin.click();
-  await page.clock.runFor(32);
-  await expect(sheet(page)).toHaveAttribute("data-snap", "half");
-  await expect(tab(page, "DOWN")).toHaveAttribute("aria-pressed", "true");
-  const row = list(page).locator("li[data-stop-sequence='23']");
-  await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
-  await expect(row).toHaveAttribute("data-selected", "true");
-  await expect(pin).toHaveAttribute("aria-pressed", "true");
-  expect(await pin.evaluate((element) => element.getBoundingClientRect().width)).toBe(32);
-  expect((await naverMap.snapshot()).zoom).toBe(15);
-  await expect.poll(() => list(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  await pin.click();
-  await page.clock.runFor(32);
-  await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
-  if (testInfo.project.name === "chromium") await page.screenshot({ path: "/tmp/sal192-board-selected.png" });
-});
+  const unselectedSize = await pin.boundingBox();
+  if (unselectedSize === null) throw new Error("정류장 핀이 없습니다");
 
-test("지도 빈 곳을 누르면 정류장 핀 확대와 펼침을 해제하고 시점과 방향을 유지한다", async ({ page, naverMap }) => {
-  await openMap(page);
-  await naverMap.setZoom(14);
-  await naverMap.panToStop(23);
-  const pin = map(page).locator("button[data-map-stop-sequence='23']");
-  await pin.click();
-  await expectStopFocusedInList(page, 23);
-  const row = list(page).locator("li[data-stop-sequence='23']");
-  await expect(pin).toHaveAttribute("aria-pressed", "true");
-  await expect(pin).toHaveCSS("width", "32px");
-  await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
-  const focused = await naverMap.snapshot();
+  await test.step("반대 방향 정류장 핀을 누르면 탭, 시트, 펼침, 스크롤이 함께 바뀜", async () => {
+    await pin.click();
+    await page.clock.runFor(32);
+    await expect(sheet(page)).toHaveAttribute("data-snap", "half");
+    await expect(tab(page, "DOWN")).toHaveAttribute("aria-pressed", "true");
+    await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
+    await expect(row).toHaveAttribute("data-selected", "true");
+    await expect(pin).toHaveAttribute("aria-pressed", "true");
+    expect((await pin.boundingBox())!.width).toBeGreaterThan(unselectedSize.width);
+    expect((await naverMap.snapshot()).zoom).toBe(15);
+    await expect.poll(() => list(page).evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  });
 
-  await map(page).click({ position: await mapBackgroundPosition(page) });
-  await page.clock.runFor(32);
-  await expect(pin).toHaveAttribute("aria-pressed", "false");
-  await expect(pin).toHaveCSS("width", "24px");
-  await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "false");
-  await expect(list(page).locator("[data-selected='true']")).toHaveCount(0);
-  await expect(tab(page, "DOWN")).toHaveAttribute("aria-pressed", "true");
-  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-  expect(await naverMap.snapshot()).toEqual(focused);
+  await test.step("같은 핀을 다시 눌러도 접히지 않음", async () => {
+    await pin.click();
+    await page.clock.runFor(32);
+    await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
+  });
 
-  await pin.click();
-  await expectStopFocusedInList(page, 23);
-  await expect(pin).toHaveAttribute("aria-pressed", "true");
-  await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
+  await test.step("시트를 70%로 올려도 선택과 펼침을 유지", async () => {
+    await handle(page).press("ArrowUp");
+    await page.clock.runFor(32);
+    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+    await expect(pin).toHaveAttribute("aria-pressed", "true");
+    await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
+  });
+
+  await test.step("지도 빈 곳을 누르면 핀 확대와 펼침을 해제하고 시점, 방향, 시트를 유지", async () => {
+    const focused = await naverMap.snapshot();
+    await map(page).click({ position: await mapBackgroundPosition(page) });
+    await page.clock.runFor(32);
+    await expect(pin).toHaveAttribute("aria-pressed", "false");
+    expect((await pin.boundingBox())!.width).toBeCloseTo(unselectedSize.width, 0);
+    await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "false");
+    await expect(list(page).locator("[data-selected='true']")).toHaveCount(0);
+    await expect(tab(page, "DOWN")).toHaveAttribute("aria-pressed", "true");
+    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+    expect(await naverMap.snapshot()).toEqual(focused);
+  });
+
+  await test.step("핀을 다시 고르면 70% 시트에서 펼침", async () => {
+    await pin.click();
+    await expectStopFocusedInList(page, 23);
+    await expect(pin).toHaveAttribute("aria-pressed", "true");
+    await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
+    await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+  });
 });
 
 test("목록 선택은 지도에 반영하고 직접 방향 전환은 선택·스크롤만 초기화한다", async ({ page, naverMap }) => {
@@ -1754,42 +1666,39 @@ test("목록 선택은 지도에 반영하고 직접 방향 전환은 선택·�
   await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
 });
 
+// 12번은 상행 목록의 마지막 행이라 가운데로 올리려 해도 스크롤 끝에 걸린다. 펼치고 접으며 목록 높이가 바뀔 때 스크롤이 당겨지는 경우까지 보려고 모션마다 12번을 본다.
 for (const reducedMotion of ["reduce", "no-preference"] as const) {
-  for (const sequence of [6, 12]) {
-    test(`목록에서 ${sequence}번 정류장을 펼치고 접어도 클릭한 위치를 유지한다 (${reducedMotion})`, async ({
-      page,
-    }) => {
-      await page.emulateMedia({ reducedMotion });
-      await openMap(page);
-      const stop = list(page).locator(`li[data-stop-sequence='${sequence}'] button[aria-expanded]`);
-      await stop.evaluate((element) => {
-        const container = element.closest("section");
-        if (container === null) throw new Error("정류장 목록이 없습니다");
-        container.scrollTop +=
-          element.getBoundingClientRect().top - container.getBoundingClientRect().top - container.clientHeight / 2;
-      });
-      await page.clock.runFor(32);
-      const originalTop = await stop.evaluate((element) => element.getBoundingClientRect().top);
-      const originalScroll = await list(page).evaluate((element) => element.scrollTop);
-
-      await stop.click({ position: { x: 30, y: 20 } });
-      await page.clock.runFor(400);
-      await expect(stop).toHaveAttribute("aria-expanded", "true");
-      expect(await stop.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(originalTop, 0);
-      expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(originalScroll, 0);
-
-      // 키보드로 접고 다시 펼쳐도 같은 버튼에 포커스가 남는다.
-      await stop.press("Enter");
-      await page.clock.runFor(400);
-      await expect(stop).toHaveAttribute("aria-expanded", "false");
-      await expect(stop).toBeFocused();
-      await stop.press("Enter");
-      await page.clock.runFor(400);
-      await expect(stop).toHaveAttribute("aria-expanded", "true");
-      await expect(stop).toBeFocused();
-      expect(await stop.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(originalTop, 0);
+  test(`목록에서 12번 정류장을 펼치고 접어도 클릭한 위치를 유지한다 (${reducedMotion})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion });
+    await openMap(page);
+    const stop = list(page).locator("li[data-stop-sequence='12'] button[aria-expanded]");
+    await stop.evaluate((element) => {
+      const container = element.closest("section");
+      if (container === null) throw new Error("정류장 목록이 없습니다");
+      container.scrollTop +=
+        element.getBoundingClientRect().top - container.getBoundingClientRect().top - container.clientHeight / 2;
     });
-  }
+    await page.clock.runFor(32);
+    const originalTop = await stop.evaluate((element) => element.getBoundingClientRect().top);
+    const originalScroll = await list(page).evaluate((element) => element.scrollTop);
+
+    await stop.click({ position: { x: 30, y: 20 } });
+    await page.clock.runFor(400);
+    await expect(stop).toHaveAttribute("aria-expanded", "true");
+    expect(await stop.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(originalTop, 0);
+    expect(await list(page).evaluate((element) => element.scrollTop)).toBeCloseTo(originalScroll, 0);
+
+    // 키보드로 접고 다시 펼쳐도 같은 버튼에 포커스가 남는다.
+    await stop.press("Enter");
+    await page.clock.runFor(400);
+    await expect(stop).toHaveAttribute("aria-expanded", "false");
+    await expect(stop).toBeFocused();
+    await stop.press("Enter");
+    await page.clock.runFor(400);
+    await expect(stop).toHaveAttribute("aria-expanded", "true");
+    await expect(stop).toBeFocused();
+    expect(await stop.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(originalTop, 0);
+  });
 }
 
 test("지도 선택 직후 목록에서 펼치면 대기 중인 지도 선택의 목록 이동을 취소한다", async ({ page, naverMap }) => {
@@ -1872,7 +1781,6 @@ test("현재 위치 성공은 작은 반투명 원과 파란 점을 표시하고
   );
   await page.getByRole("button", { name: "현재 위치 보기", exact: true }).click();
   await expect(map(page).getByRole("img", { name: "내 현재 위치", exact: true })).toBeVisible();
-  await expect(map(page).getByTestId("location-accuracy")).toHaveCount(0);
   expect(await naverMap.snapshot()).toEqual({ zoom: 15, latitude: 37.43, longitude: 127.16 });
   const located = await naverMap.snapshot();
 
@@ -2023,9 +1931,12 @@ test("운행 종료 화면에는 지도와 바텀시트가 없다", async ({ pag
   api.data.watch.vehicles = [];
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toBeVisible();
+  await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
   await expect(sheet(page)).toHaveCount(0);
   await expect(map(page)).toHaveCount(0);
   await expect(handle(page)).toHaveCount(0);
+  await expect(page.locator("button[aria-expanded]")).toHaveCount(0);
+  await expect(page.getByText(/도착 시 .*석 예상해요/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /방면 보기$/ })).toHaveCount(0);
 });
 

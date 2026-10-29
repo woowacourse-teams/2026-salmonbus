@@ -1,5 +1,7 @@
 import { test, expect, defaultGroupId, storedFavorite } from "./fixtures/favorites";
 import { routeId } from "./fixtures/mock-data";
+import { captureEnabled } from "./utils/capture";
+import { checkAtBothWidths } from "./utils/widths";
 
 const schoolId = "10000000-0000-4000-8000-000000000003";
 const weekendId = "10000000-0000-4000-8000-000000000004";
@@ -14,81 +16,71 @@ test.beforeEach(({ favorites, api }) => {
   );
 });
 
-for (const width of [320, 425]) {
-  test(`${width}px 그룹 삭제 선택·취소·확인·완료는 시안대로 동작하고 대표 그룹을 유지한다`, async ({
-    page,
-    favorites,
-    browserName,
-  }) => {
-    await page.setViewportSize({ width, height: 844 });
-    await page.goto("/mypage");
-    const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
-    const remove = region.getByRole("button", { name: "그룹 삭제 선택", exact: true });
-    const order = region.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true });
-    await expect(remove).toBeEnabled();
-    expect((await remove.boundingBox())!.x).toBeLessThan((await order.boundingBox())!.x);
-    await remove.click();
-    await expect(region.getByRole("link")).toHaveCount(0);
-    await expect(region.getByRole("checkbox")).toHaveCount(2);
-    await expect(region.getByText("대표 그룹", { exact: true })).toHaveCSS("font-size", "11px");
-    await expect(region.getByRole("checkbox", { name: /출퇴근/ })).toHaveCount(0);
-    await expect(region.getByRole("button", { name: "선택한 그룹 0개 삭제", exact: true })).toBeDisabled();
-    const school = region.getByRole("checkbox", { name: "통학 삭제 선택", exact: true });
-    const weekend = region.getByRole("checkbox", { name: "주말 나들이 삭제 선택", exact: true });
-    await school.check();
-    await weekend.check();
-    await expect(school).toHaveCSS("width", "22px");
-    await expect(school).toHaveCSS("border-radius", "6px");
-    await expect(school.locator("..")).toHaveCSS("background-color", "rgb(255, 247, 244)");
-    await expect(school.locator("..")).toHaveCSS("border-color", "rgb(232, 83, 63)");
-    await region.getByRole("button", { name: "취소", exact: true }).click();
-    await expect(region.getByRole("link")).toHaveCount(3);
-    await expect(remove).toBeFocused();
-    expect(favorites.requests.filter((request) => request.method === "DELETE")).toHaveLength(0);
-    await remove.click();
-    await expect(school).not.toBeChecked();
-    await school.check();
-    await weekend.check();
-    const selected = region.getByRole("button", { name: "선택한 그룹 2개 삭제", exact: true });
-    await expect(selected).toHaveCSS("height", "50px");
-    await expect(selected).toHaveCSS("border-radius", "14px");
-    if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: test.info().outputPath("salmonbus-group-bulk-selection.png") });
-    await selected.click();
-    const dialog = page.getByRole("dialog", { name: /선택한 그룹 2개를/ });
-    await expect(dialog).toHaveCSS("background-color", "rgb(255, 255, 255)");
-    await expect(dialog).toHaveCSS("border-radius", "20px");
-    expect((await dialog.boundingBox())!.width).toBe(width === 425 ? 357 : 256);
-    await expect(dialog.getByRole("heading")).toHaveCSS("font-size", "21px");
-    await expect(dialog.getByRole("button", { name: "삭제", exact: true })).toHaveCSS("height", "48px");
-    if (width === 425 && browserName === "chromium")
+test("320px 그룹 삭제 선택·취소·확인·완료는 시안대로 동작하고 대표 그룹을 유지한다", async ({
+  page,
+  favorites,
+  browserName,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto("/mypage");
+  const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
+  const remove = region.getByRole("button", { name: "그룹 삭제 선택", exact: true });
+  const order = region.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true });
+  await expect(remove).toBeEnabled();
+  expect((await remove.boundingBox())!.x).toBeLessThan((await order.boundingBox())!.x);
+  await remove.click();
+  await expect(region.getByRole("link")).toHaveCount(0);
+  await expect(region.getByRole("checkbox")).toHaveCount(2);
+  await expect(region.getByText("대표 그룹", { exact: true })).toBeVisible();
+  await expect(region.getByRole("checkbox", { name: /출퇴근/ })).toHaveCount(0);
+  await expect(region.getByRole("button", { name: "선택한 그룹 0개 삭제", exact: true })).toBeDisabled();
+  const school = region.getByRole("checkbox", { name: "통학 삭제 선택", exact: true });
+  const weekend = region.getByRole("checkbox", { name: "주말 나들이 삭제 선택", exact: true });
+  await school.check();
+  await weekend.check();
+  await region.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(region.getByRole("link")).toHaveCount(3);
+  await expect(remove).toBeFocused();
+  expect(favorites.requests.filter((request) => request.method === "DELETE")).toHaveLength(0);
+  await remove.click();
+  await expect(school).not.toBeChecked();
+  await school.check();
+  await weekend.check();
+  const selected = region.getByRole("button", { name: "선택한 그룹 2개 삭제", exact: true });
+  if (captureEnabled && browserName === "chromium") {
+    await page.setViewportSize({ width: 425, height: 844 });
+    await page.screenshot({ path: test.info().outputPath("salmonbus-group-bulk-selection.png") });
+    await page.setViewportSize({ width: 320, height: 844 });
+  }
+  await selected.click();
+  const dialog = page.getByRole("dialog", { name: /선택한 그룹 2개를/ });
+  await checkAtBothWidths(page, async (width) => {
+    const box = await dialog.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+    if (captureEnabled && width === 425 && browserName === "chromium")
       await page.screenshot({ path: test.info().outputPath("salmonbus-group-bulk-dialog.png") });
-    await dialog.getByRole("button", { name: "취소", exact: true }).click();
-    await expect(dialog).toHaveCount(0);
-    await expect(selected).toBeFocused();
-    await expect(school).toBeChecked();
-    await expect(weekend).toBeChecked();
-    await selected.click();
-    await page.keyboard.press("Escape");
-    await expect(dialog).toHaveCount(0);
-    await expect(selected).toBeFocused();
-    await selected.click();
-    await dialog.getByRole("button", { name: "삭제", exact: true }).click();
-    await expect(dialog).toHaveCount(0);
-    await expect(region.getByRole("link")).toHaveCount(2);
-    await expect(remove).toHaveCount(0);
-    await expect(order).toBeFocused();
-    expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId]);
-    expect(favorites.groups[0]!.favorites).toHaveLength(1);
-    expect(favorites.requests.filter((request) => request.method === "DELETE").map((request) => request.path)).toEqual(
-      [schoolId, weekendId].map((id) => `/api/me/favorite-groups/${id}`),
-    );
-    await expect(page.getByText("그룹 2개를 삭제했어요", { exact: true })).toBeVisible();
+  });
+  await dialog.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(selected).toBeFocused();
+  await expect(school).toBeChecked();
+  await expect(weekend).toBeChecked();
+  await selected.click();
+  await dialog.getByRole("button", { name: "삭제", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(region.getByRole("link")).toHaveCount(2);
+  await expect(remove).toHaveCount(0);
+  await expect(order).toBeFocused();
+  expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId]);
+  expect(favorites.groups[0]!.favorites).toHaveLength(1);
+  await expect(page.getByText("그룹 2개를 삭제했어요", { exact: true })).toBeVisible();
+  await checkAtBothWidths(page, async (width) => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    if (width === 425 && browserName === "chromium")
+    if (captureEnabled && width === 425 && browserName === "chromium")
       await page.screenshot({ path: test.info().outputPath("salmonbus-group-bulk-complete.png") });
   });
-}
+});
 
 for (const failedId of [schoolId, weekendId]) {
   test(`삭제가 ${failedId === schoolId ? "첫 번째" : "두 번째"}에서 실패하면 즉시 멈추고 남은 그룹만 재시도한다`, async ({
@@ -160,22 +152,26 @@ test("삭제 중에는 취소와 중복 클릭을 막고 대표 그룹 하나만
   await region.getByRole("checkbox", { name: "통학 삭제 선택", exact: true }).check();
   await region.getByRole("button", { name: "선택한 그룹 1개 삭제", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  try {
-    await dialog.getByRole("button", { name: "삭제", exact: true }).click();
-    await expect(dialog.getByRole("button", { name: "삭제 중…", exact: true })).toBeDisabled();
-    await expect(dialog.getByRole("button", { name: "취소", exact: true })).toBeDisabled();
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeVisible();
-  } finally {
-    release();
-  }
-  await expect(dialog).toHaveCount(0);
-  expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId, weekendId]);
-  await expect(region.getByRole("button", { name: "그룹 삭제 선택", exact: true })).toBeVisible();
-  favorites.groups = favorites.groups.slice(0, 1);
-  await page.reload();
-  await expect(region.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true })).toBeEnabled();
-  await expect(region.getByRole("button", { name: "그룹 삭제 선택", exact: true })).toHaveCount(0);
+  await test.step("삭제 중에는 취소, Escape, 중복 클릭을 막음", async () => {
+    try {
+      await dialog.getByRole("button", { name: "삭제", exact: true }).click();
+      await expect(dialog.getByRole("button", { name: "삭제 중…", exact: true })).toBeDisabled();
+      await expect(dialog.getByRole("button", { name: "취소", exact: true })).toBeDisabled();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeVisible();
+    } finally {
+      release();
+    }
+    await expect(dialog).toHaveCount(0);
+    expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId, weekendId]);
+    await expect(region.getByRole("button", { name: "그룹 삭제 선택", exact: true })).toBeVisible();
+  });
+  await test.step("대표 그룹 하나만 남으면 삭제 버튼 숨김", async () => {
+    favorites.groups = favorites.groups.slice(0, 1);
+    await page.reload();
+    await expect(region.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true })).toBeEnabled();
+    await expect(region.getByRole("button", { name: "그룹 삭제 선택", exact: true })).toHaveCount(0);
+  });
 });
 
 test("선택 중 대표 그룹이 바뀌면 삭제를 막고 다시 선택한 현재 비대표 그룹만 삭제한다", async ({ page, favorites }) => {

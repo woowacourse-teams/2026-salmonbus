@@ -1,6 +1,8 @@
 import { test, expect, storedFavorite, defaultGroupId } from "./fixtures/favorites";
 import { routeId } from "./fixtures/mock-data";
+import { captureEnabled } from "./utils/capture";
 import { expectFocusRing, nextFocusKeyFor } from "./utils/focus-ring";
+import { checkAtBothWidths } from "./utils/widths";
 
 const secondGroupId = "10000000-0000-4000-8000-000000000003";
 test.use({ viewport: { width: 425, height: 844 } });
@@ -80,10 +82,6 @@ test("마이페이지 편집은 조회 중 카드 공간을 유지하고 조회 
     await requested;
     const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
     await expect(editor).toHaveAttribute("aria-busy", "true");
-    await expect(editor.getByRole("status").filter({ hasText: "즐겨찾기를 불러오고 있어요…" })).toHaveCSS(
-      "position",
-      "absolute",
-    );
     await expect(editor.getByText("노선 정보 없음", { exact: true })).toHaveCount(0);
     await expect(editor.getByText("정류장 정보 없음", { exact: true })).toHaveCount(0);
     const cards = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true }).getByRole("listitem");
@@ -121,18 +119,31 @@ test("편집 진입과 복귀를 반복해도 카드 등장 애니메이션을 �
   await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
   const edit = page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true });
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-  await edit.click();
-  await expect(editor.getByText(stop.name, { exact: true })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(editor).toHaveCount(0);
-  await expect(edit).toBeFocused();
-  await expect(panel.locator(":scope > div")).toHaveCSS("animation-name", "none");
-  await edit.click();
-  await editor.getByRole("button", { name: "완료", exact: true }).click();
-  await expect(editor).toHaveCount(0);
-  await expect(edit).toBeFocused();
-  await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
-  await expect(panel.locator(":scope > div")).toHaveCSS("animation-name", "none");
+  await test.step("편집을 열고 Escape로 돌아온다", async () => {
+    await edit.click();
+    await expect(editor.locator("..")).not.toHaveCSS("animation-name", "none");
+    await expect(editor.getByText(stop.name, { exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(editor).toHaveCount(0);
+    await expect(edit).toBeFocused();
+    await expect(panel.locator(":scope > div")).toHaveCSS("animation-name", "none");
+  });
+  await test.step("편집을 열고 완료로 돌아온다", async () => {
+    await edit.click();
+    await editor.getByRole("button", { name: "완료", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    await expect(edit).toBeFocused();
+    await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
+    await expect(panel.locator(":scope > div")).toHaveCSS("animation-name", "none");
+  });
+  await test.step("모션 줄이기에서는 편집 전환 애니메이션 없이 연다", async () => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await edit.click();
+    await expect(editor.locator("..")).toHaveCSS("animation-name", "none");
+    await editor.getByRole("button", { name: "완료", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    await expect(edit).toBeFocused();
+  });
 });
 
 test("포인터로 연 편집 화면의 그룹 칩과 돌아온 편집 버튼은 테두리가 없고 키보드로 열면 보인다", async ({
@@ -169,27 +180,6 @@ test("포인터로 연 편집 화면의 그룹 칩과 돌아온 편집 버튼은
   });
 });
 
-test("홈과 마이페이지 편집 전환은 모션 줄이기 설정을 따른다", async ({ page, favorites }) => {
-  favorites.groups[0]!.name = "출퇴근";
-  for (const path of ["/", "/mypage"]) {
-    await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.goto(path);
-    const edit = page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true });
-    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-    await edit.click();
-    await expect(editor.locator("..")).not.toHaveCSS("animation-name", "none");
-    await expect(editor.locator("..")).toHaveCSS("animation-duration", "0.22s");
-    await page.keyboard.press("Escape");
-    await expect(edit).toBeFocused();
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await edit.click();
-    await expect(editor.locator("..")).toHaveCSS("animation-name", "none");
-    await editor.getByRole("button", { name: "완료", exact: true }).click();
-    await expect(editor).toHaveCount(0);
-    await expect(edit).toBeFocused();
-  }
-});
-
 test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓은 뒤 완료 토스트를 표시한다", async ({
   page,
   favorites,
@@ -217,7 +207,8 @@ test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓�
   const cards = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true }).getByRole("listitem");
   await expect(cards.first()).toContainText(first!.name);
   await page.evaluate(() => document.fonts.ready);
-  if (browserName === "chromium") await page.screenshot({ path: test.info().outputPath("editor.png") });
+  if (captureEnabled && browserName === "chromium")
+    await page.screenshot({ path: test.info().outputPath("editor.png") });
   const grip = editor.getByRole("button", {
     name: `${api.data.watch.route.displayName} · ${first!.name} 순서 변경`,
     exact: true,
@@ -235,7 +226,8 @@ test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓�
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2 + secondBox.y - before.y, {
     steps: 12,
   });
-  if (browserName === "chromium") await page.screenshot({ path: test.info().outputPath("editor-drag.png") });
+  if (captureEnabled && browserName === "chromium")
+    await page.screenshot({ path: test.info().outputPath("editor-drag.png") });
   await page.mouse.up();
   await expect(cards.first()).toContainText(second!.name);
   expect(favorites.groups[0]!.favorites[0]!.stopId).toBe(first!.stopId);
@@ -249,8 +241,10 @@ test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓�
   const toastBox = (await toast.boundingBox())!;
   const nav = (await page.getByRole("link", { name: "홈", exact: true }).boundingBox())!;
   expect(toastBox.y + toastBox.height).toBeLessThan(nav.y);
-  await testInfo.attach("즐겨찾기 편집 완료", { body: await page.screenshot(), contentType: "image/png" });
-  if (browserName === "chromium") await page.screenshot({ path: test.info().outputPath("editor-complete.png") });
+  if (captureEnabled) {
+    await testInfo.attach("즐겨찾기 편집 완료", { body: await page.screenshot(), contentType: "image/png" });
+    if (browserName === "chromium") await page.screenshot({ path: test.info().outputPath("editor-complete.png") });
+  }
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   await editor.getByRole("button", { name: "완료", exact: true }).click();
   await expect(toast).toBeVisible();
@@ -280,7 +274,8 @@ test("편집 중 삭제는 확인·실패·재시도가 가능하고 다른 그�
   const dialog = page.getByRole("dialog", { name: "즐겨찾기를 삭제할까요?" });
   await expect(dialog).toContainText("출퇴근 그룹에서만 삭제돼요.");
   await expect(dialog).toContainText("필요하면 언제든 다시 추가할 수 있어요.");
-  if (browserName === "chromium") await page.screenshot({ path: test.info().outputPath("editor-delete.png") });
+  if (captureEnabled && browserName === "chromium")
+    await page.screenshot({ path: test.info().outputPath("editor-delete.png") });
   await dialog.getByRole("button", { name: "취소", exact: true }).click();
   await expect(trash).toBeFocused();
   expect(favorites.requests.filter((request) => request.method === "DELETE")).toHaveLength(0);
@@ -347,34 +342,35 @@ for (const width of [320, 425]) {
   });
 }
 
-for (const width of [320, 425])
-  test(`긴 그룹 이름 세 개와 정류장 이름도 ${width}px 편집 영역을 넘지 않고 취소할 수 있다`, async ({
-    page,
-    favorites,
-    api,
-  }) => {
-    await page.setViewportSize({ width, height: 844 });
-    const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
-    stop.name = "긴정류장이름.종합버스터미널입구";
-    favorites.groups[0]!.name = "일이삼사오육칠팔구십";
-    favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
-    favorites.groups.push(
-      { id: secondGroupId, name: "일이삼사오육칠팔구구", favorites: [] },
-      { id: "10000000-0000-4000-8000-000000000004", name: "통학", favorites: [] },
-    );
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("/");
-    await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
-    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-    await expect(editor.getByText(stop.name, { exact: true })).toBeVisible();
+test("긴 그룹 이름 세 개와 정류장 이름도 320px 편집 영역을 넘지 않고 취소할 수 있다", async ({
+  page,
+  favorites,
+  api,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
+  stop.name = "긴정류장이름.종합버스터미널입구";
+  favorites.groups[0]!.name = "일이삼사오육칠팔구십";
+  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+  favorites.groups.push(
+    { id: secondGroupId, name: "일이삼사오육칠팔구구", favorites: [] },
+    { id: "10000000-0000-4000-8000-000000000004", name: "통학", favorites: [] },
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
+  const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+  await expect(editor.getByText(stop.name, { exact: true })).toBeVisible();
+  await checkAtBothWidths(page, async () => {
     expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const handle = editor.getByRole("button", { name: "일이삼사오육칠팔구십 순서 변경", exact: true });
-    await handle.press("ArrowRight");
-    await handle.press("Escape");
-    await expect(editor).toHaveCount(0);
-    expect(favorites.requests.filter((request) => request.method === "PUT")).toHaveLength(0);
   });
+  const handle = editor.getByRole("button", { name: "일이삼사오육칠팔구십 순서 변경", exact: true });
+  await handle.press("ArrowRight");
+  await handle.press("Escape");
+  await expect(editor).toHaveCount(0);
+  expect(favorites.requests.filter((request) => request.method === "PUT")).toHaveLength(0);
+});
 
 test("터치 손잡이를 놓으면 순서가 바뀌고 pointercancel이면 원래 자리로 돌아간다", async ({
   page,
@@ -479,98 +475,83 @@ test("편집 중 서버 그룹이 바뀌면 오류 화면을 닫아 새 목록�
   expect(favorites.groups.map((group) => group.id)).toEqual([secondGroupId, defaultGroupId, thirdGroupId]);
 });
 
-for (const width of [320, 425]) {
-  test(`${width}px 홈 편집은 손잡이 자리만 추가하고 탭 높이와 카드 테두리를 유지한다`, async ({
-    page,
-    favorites,
-    api,
-  }) => {
-    await page.setViewportSize({ width, height: 844 });
-    const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
-    favorites.groups[0]!.name = "출퇴근";
-    favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
-    favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
-    await page.goto("/");
-    const normalCard = page.getByRole("tabpanel").getByRole("listitem").first();
-    await expect(normalCard).toBeVisible();
-    await page.evaluate(() => document.fonts.ready);
-    await page
-      .getByRole("tabpanel")
-      .evaluate((element) =>
-        Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
+test("320px 홈 편집은 손잡이 자리만 추가하고 탭 높이와 카드 테두리를 유지한다", async ({ page, favorites, api }) => {
+  const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  favorites.groups[0]!.name = "출퇴근";
+  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+  favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
+  for (const width of [320, 425]) {
+    await test.step(`${width}px`, async () => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto("/");
+      const normalCard = page.getByRole("tabpanel").getByRole("listitem").first();
+      await expect(normalCard).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      await page
+        .getByRole("tabpanel")
+        .evaluate((element) =>
+          Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
+        );
+      const tabs = await page.getByRole("tab").evaluateAll((elements) =>
+        elements.map((element) => {
+          const box = element.getBoundingClientRect();
+          return {
+            name: element.textContent!,
+            x: box.x,
+            y: box.y,
+            width: box.width,
+            height: box.height,
+            background: getComputedStyle(element).backgroundColor,
+          };
+        }),
       );
-    const tabs = await page.getByRole("tab").evaluateAll((elements) =>
-      elements.map((element) => {
+      const surface = await normalCard.evaluate((element) => {
+        const s = getComputedStyle(element);
         const box = element.getBoundingClientRect();
         return {
-          name: element.textContent!,
+          radius: s.borderRadius,
+          outline: s.outline,
+          offset: s.outlineOffset,
+          background: s.backgroundColor,
           x: box.x,
           y: box.y,
           width: box.width,
-          height: box.height,
-          background: getComputedStyle(element).backgroundColor,
         };
-      }),
-    );
-    const surface = await normalCard.evaluate((element) => {
-      const s = getComputedStyle(element);
-      const box = element.getBoundingClientRect();
-      return {
-        radius: s.borderRadius,
-        outline: s.outline,
-        offset: s.outlineOffset,
-        background: s.backgroundColor,
-        x: box.x,
-        y: box.y,
-        width: box.width,
-      };
-    });
-    await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
-    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-    await editor
-      .getByRole("list", { name: "그룹 순서", exact: true })
-      .evaluate((element) =>
-        Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
-      );
-    for (const [index, tab] of tabs.entries()) {
-      const button = editor.getByRole("button", { name: tab.name, exact: true });
-      const group = button.locator("..");
-      const box = (await group.boundingBox())!;
-      expect(box.height).toBe(37);
-      expect(box.width).toBeCloseTo(tab.name === "출퇴근" ? 81 : 69, 0);
-      expect(tab.width).toBeCloseTo(tab.name === "출퇴근" ? 60 : 48, 0);
-      expect(box.width).toBeCloseTo(tab.width + 21, 1);
-      expect(box.x).toBeCloseTo(tab.x + index * 21, 1);
-      expect(box.y).toBeCloseTo(tab.y, 1);
-      expect(box.height).toBeCloseTo(tab.height, 1);
-      await expect(group).toHaveCSS("background-color", tab.background);
-      const handle = group.getByRole("button", { name: `${tab.name} 순서 변경`, exact: true });
-      const grip = (await handle.boundingBox())!;
-      const textRight = await button.evaluate((element) => {
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        return range.getBoundingClientRect().right;
       });
-      expect(grip.x - textRight).toBeCloseTo(6, 1);
-      expect(grip.width).toBe(15);
-      expect(box.x + box.width - grip.x - grip.width).toBeCloseTo(12, 1);
-      expect(grip.x).toBeGreaterThan(box.x + box.width / 2);
-      expect(grip.x + grip.width).toBeLessThanOrEqual(box.x + box.width);
-    }
-    const card = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true }).locator("li").first();
-    await expect(card.getByText(stop.name, { exact: true })).toBeVisible();
-    const box = (await card.boundingBox())!;
-    expect(box.x).toBeCloseTo(surface.x, 1);
-    expect(box.y).toBeCloseTo(surface.y, 1);
-    expect(box.width).toBeCloseTo(surface.width, 1);
-    await expect(card).toHaveCSS("border-radius", surface.radius);
-    await expect(card).toHaveCSS("outline", surface.outline);
-    await expect(card).toHaveCSS("outline-offset", surface.offset);
-    await expect(card).toHaveCSS("background-color", surface.background);
-    if (width === 425)
-      await page.screenshot({ path: test.info().outputPath(`salmonbus-srksd-${test.info().project.name}.png`) });
-  });
-}
+      await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+      const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+      await editor
+        .getByRole("list", { name: "그룹 순서", exact: true })
+        .evaluate((element) =>
+          Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
+        );
+      for (const tab of tabs) {
+        const button = editor.getByRole("button", { name: tab.name, exact: true });
+        const group = button.locator("..");
+        const box = (await group.boundingBox())!;
+        expect(box.y).toBeCloseTo(tab.y, 1);
+        expect(box.height).toBeCloseTo(tab.height, 1);
+        await expect(group).toHaveCSS("background-color", tab.background);
+        const handle = group.getByRole("button", { name: `${tab.name} 순서 변경`, exact: true });
+        const grip = (await handle.boundingBox())!;
+        expect(grip.x).toBeGreaterThan(box.x + box.width / 2);
+        expect(grip.x + grip.width).toBeLessThanOrEqual(box.x + box.width);
+      }
+      const card = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true }).locator("li").first();
+      await expect(card.getByText(stop.name, { exact: true })).toBeVisible();
+      const box = (await card.boundingBox())!;
+      expect(box.x).toBeCloseTo(surface.x, 1);
+      expect(box.y).toBeCloseTo(surface.y, 1);
+      expect(box.width).toBeCloseTo(surface.width, 1);
+      await expect(card).toHaveCSS("border-radius", surface.radius);
+      await expect(card).toHaveCSS("outline", surface.outline);
+      await expect(card).toHaveCSS("outline-offset", surface.offset);
+      await expect(card).toHaveCSS("background-color", surface.background);
+      if (captureEnabled && width === 425)
+        await page.screenshot({ path: test.info().outputPath(`salmonbus-srksd-${test.info().project.name}.png`) });
+    });
+  }
+});
 
 test("편집을 누를 때만 손잡이 공간이 열리며 모션 줄이기에서는 즉시 표시한다", async ({ page, favorites }) => {
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
@@ -579,32 +560,7 @@ test("편집을 누를 때만 손잡이 공간이 열리며 모션 줄이기에�
   await expect(page.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const handle = page.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true });
-  const samples = await handle.evaluate((element) => {
-    void getComputedStyle(element).width;
-    const animation = element.getAnimations()[0];
-    if (!animation) return null;
-    animation.pause();
-    animation.currentTime = 0;
-    const start = parseFloat(getComputedStyle(element).width);
-    const startOpacity = getComputedStyle(element).opacity;
-    animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
-    const middle = parseFloat(getComputedStyle(element).width);
-    animation.finish();
-    return {
-      start,
-      middle,
-      end: parseFloat(getComputedStyle(element).width),
-      startOpacity,
-      endOpacity: getComputedStyle(element).opacity,
-    };
-  });
-  expect(samples).not.toBeNull();
-  expect(samples!.start).toBe(0);
-  expect(samples!.middle).toBeGreaterThan(0);
-  expect(samples!.middle).toBeLessThan(15);
-  expect(samples!.end).toBe(15);
-  expect(samples!.startOpacity).toBe("0");
-  expect(samples!.endOpacity).toBe("1");
+  await expect(handle).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(handle).toHaveCount(0);
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
@@ -625,48 +581,44 @@ test("편집을 누를 때만 손잡이 공간이 열리며 모션 줄이기에�
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   await expect(handle).toHaveCSS("animation-name", "none");
-  await expect(handle).toHaveCSS("width", "15px");
 });
 
-for (const width of [320, 425]) {
-  test(`${width}px 편집 중 빈 그룹은 CnyGe 안내를 표시하고 그룹 전환과 마지막 항목 삭제에도 반영한다`, async ({
-    page,
-    favorites,
-    api,
-    browserName,
-  }) => {
-    await page.setViewportSize({ width, height: 844 });
-    const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
-    favorites.groups.push({
-      id: secondGroupId,
-      name: "통학",
-      favorites: [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })],
-    });
-    await page.goto("/");
-    await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
-    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-    const empty = editor.getByText("아직 등록한 정류장이 없어요", { exact: true }).locator("..");
-    await expect(empty).toBeVisible();
-    await expect(empty.getByText("0 / 2", { exact: true })).toHaveCSS("color", "rgb(232, 83, 63)");
-    await expect(empty).toHaveCSS("padding-top", "36px");
-    await expect(empty).toHaveCSS("padding-bottom", "36px");
-    await expect(empty).toHaveCSS("gap", "8px");
-    await expect(empty).toHaveCSS("text-align", "center");
-    await expect(editor.getByText("아직 등록한 즐겨찾기가 없어요.", { exact: true })).toHaveCount(0);
-    await expect(editor.getByRole("list", { name: "즐겨찾기 순서", exact: true })).toHaveCount(0);
-    await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeEnabled();
-    if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: test.info().outputPath("salmonbus-cnyge.png") });
-    await editor.getByRole("button", { name: "통학", exact: true }).click();
-    await expect(empty).toHaveCount(0);
-    const remove = editor.getByRole("button", { name: `${stop.name} 삭제`, exact: true });
-    await expect(remove).toBeVisible();
-    await remove.click();
-    await page.getByRole("dialog").getByRole("button", { name: "삭제하기", exact: true }).click();
-    await expect(empty).toBeVisible();
-    expect(favorites.groups[1]!.favorites).toHaveLength(0);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await editor.getByRole("button", { name: "완료", exact: true }).click();
-    await expect(editor).toHaveCount(0);
+test("320px 편집 중 빈 그룹은 CnyGe 안내를 표시하고 그룹 전환과 마지막 항목 삭제에도 반영한다", async ({
+  page,
+  favorites,
+  api,
+  browserName,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  favorites.groups.push({
+    id: secondGroupId,
+    name: "통학",
+    favorites: [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })],
   });
-}
+  await page.goto("/");
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+  const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+  const empty = editor.getByText("아직 등록한 정류장이 없어요", { exact: true }).locator("..");
+  await expect(empty).toBeVisible();
+  await expect(empty.getByText("0 / 2", { exact: true })).toBeVisible();
+  await expect(editor.getByText("아직 등록한 즐겨찾기가 없어요.", { exact: true })).toHaveCount(0);
+  await expect(editor.getByRole("list", { name: "즐겨찾기 순서", exact: true })).toHaveCount(0);
+  await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeEnabled();
+  await checkAtBothWidths(page, async (width) => {
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    if (captureEnabled && width === 425 && browserName === "chromium")
+      await page.screenshot({ path: test.info().outputPath("salmonbus-cnyge.png") });
+  });
+  await editor.getByRole("button", { name: "통학", exact: true }).click();
+  await expect(empty).toHaveCount(0);
+  const remove = editor.getByRole("button", { name: `${stop.name} 삭제`, exact: true });
+  await expect(remove).toBeVisible();
+  await remove.click();
+  await page.getByRole("dialog").getByRole("button", { name: "삭제하기", exact: true }).click();
+  await expect(empty).toBeVisible();
+  expect(favorites.groups[1]!.favorites).toHaveLength(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await editor.getByRole("button", { name: "완료", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+});

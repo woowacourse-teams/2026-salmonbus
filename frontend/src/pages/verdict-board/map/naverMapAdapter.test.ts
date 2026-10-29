@@ -1123,6 +1123,17 @@ describe("네이버 지도 adapter", () => {
     expect(native.map.center.lng()).toBeCloseTo(bus.options.position.lng(), 12);
   });
 
+  it("동작 줄이기를 사용하면 정류장 포커스도 프레임을 기다리지 않고 그 정류장으로 바로 확대한다", () => {
+    const { native, adapter, data, pendingFrames } = setup(true, { reducedMotion: true });
+    const stop = data.stops.find((item) => item.direction === "DOWN")!;
+    native.map.zoom = 13;
+    adapter.focus({ direction: stop.direction, sequence: stop.sequence }, { animate: true });
+    expect(native.map.center.lat()).toBeCloseTo(stop.coordinate.latitude, 6);
+    expect(native.map.center.lng()).toBeCloseTo(stop.coordinate.longitude, 6);
+    expect(native.map.zoom).toBe(15);
+    expect(pendingFrames.size).toBe(0);
+  });
+
   it("다른 버스로 추적을 전환하고 이동이 끝난 뒤에도 지도 입력과 차량 제거로 추적을 멈춘다", () => {
     for (const interruption of [
       "wheel",
