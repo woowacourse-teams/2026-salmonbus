@@ -2,6 +2,7 @@ import { useState, type SubmitEvent } from "react";
 import { useNavigate } from "react-router";
 import { createFavoriteGroup, renameFavoriteGroup } from "@/shared/api/favorites.api";
 import type { FavoriteGroup } from "@/shared/api/favorites.types";
+import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { groupNameError } from "@/shared/utils/favoritePolicy";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { useStillOnScreen } from "@/shared/routing/stillOnScreen";
@@ -36,7 +37,7 @@ export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
     }
   }
   return (
-    <form className={`amp-mask ${group ? styles.form : ""}`} onSubmit={(event) => void submit(event)}>
+    <form {...maskedPropsFor(group ? styles.form : undefined)} onSubmit={(event) => void submit(event)}>
       <label className={group ? styles.label : undefined} htmlFor="group-name">
         {group ? "변경할 그룹 이름" : "그룹 이름"}
       </label>

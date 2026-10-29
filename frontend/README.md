@@ -56,3 +56,44 @@ Playwright Test Agents의 healer가 실패한 E2E를 로컬에서 다시 돌려 
 - 개인 전역 지시(예: `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`)가 git 명령을 막으면 healer는 `AGENTS.md` 5번의 git 확인을 하지 못합니다. 이때 healer는 8번에 따라 테스트를 고치지 않고 `판단 못 함`으로 끝납니다.
 - healer는 커밋하지 않습니다. 고친 테스트는 사람이 diff를 리뷰하고 커밋합니다.
 - `npx playwright init-agents`를 다시 돌리면 두 healer 정의가 생성본으로 덮입니다. 다시 돌린 뒤에는 diff를 보고 `AGENTS.md`를 가리키는 문장, 실패한 테스트만 돌리라는 workflow 1번, Claude Code 정의의 `Bash` 도구를 되살리고, Codex 정의에 다시 생긴 `mcp_servers`는 지웁니다. Codex는 에이전트 파일의 `mcp_servers`를 쓰지 않아서 MCP 서버는 `.codex/config.toml`에 둡니다.
+
+## 푸시한 뒤 E2E 실패 지켜보기
+
+푸시하면 `pre-push` hook이 그 커밋의 FRONTEND-CI 실행을 백그라운드에서 지켜봅니다. E2E가 실패하면 CI가 올린 실패 기록(`playwright-results`)을 받아 healer를 부르고, 판정을 macOS 알림으로 보여 줍니다. healer가 지키는 규칙은 [AGENTS.md](AGENTS.md)에 있습니다.
+
+### 처음 한 번 설정
+
+리포 루트에서 실행합니다.
+
+1. hook 켜기: `git config core.hooksPath frontend/.githooks`
+2. healer 고르기: `git config salmonbus.e2eHealer claude` (또는 `codex`, `off`). 정하지 않으면 `claude`입니다.
+3. Codex를 고른 사람만: `mkdir -p ~/.codex-e2e-healer`를 먼저 실행한 뒤 `CODEX_HOME=~/.codex-e2e-healer codex login`. 폴더가 없으면 Codex가 `CODEX_HOME points to ... but that path does not exist`로 멈춥니다. 평소 Codex 설정의 개인 지시(예: git 명령 금지)가 healer에 섞이면 healer가 git으로 원인을 확인하지 못해 `판단 못 함`으로 끝나서, healer 전용 폴더에 따로 로그인합니다.
+4. 끄기: `git config --unset core.hooksPath` 또는 `git config salmonbus.e2eHealer off`
+
+Codex를 골랐는데 로그인하지 않았으면 healer를 부르지 않고 `E2E: 실패 N개, healer를 부르지 못함` 알림에 `Codex 로그인이 필요해요: mkdir -p ~/.codex-e2e-healer && CODEX_HOME=~/.codex-e2e-healer codex login`이 뜹니다.
+
+`core.hooksPath`는 이 clone의 모든 워크트리에 적용됩니다. hook은 각 워크트리에 체크아웃된 `frontend/.githooks/pre-push`를 쓰므로, 이 파일이 없는 브랜치에서는 아무것도 하지 않습니다. hook은 감시를 띄우고 바로 끝나서 푸시를 기다리게 하지 않습니다. 감시와 healer는 `node`, `pnpm`, `gh`를 쓰므로 VS Code에서 푸시할 때도 이 명령들이 PATH에 있어야 합니다.
+
+### 무엇을 하나
+
+1. 푸시한 브랜치와 커밋으로 FRONTEND-CI 실행을 찾습니다. 같은 커밋을 dev push가 이미 돌렸어도 그 실행을 이 브랜치 실행으로 잡지 않습니다. PR이 없거나 paths 필터에 걸려 10분 동안 실행이 생기지 않으면 조용히 끝납니다.
+2. 실행이 끝날 때까지 기다립니다. 성공한 실행과 새 푸시에 밀려 취소된 실행은 알리지 않습니다. job 시간 제한에 걸린 실행은 GitHub에서 `cancelled`로 끝나지만 `E2E: CI 시간 초과`로 알리고, 그 밖의 이유로 끝난 실행도 알립니다.
+3. 실패하면 실패 기록에서 실패한 테스트를 읽습니다. 재시도로 통과한 테스트는 실패로 세지 않습니다. 실패한 테스트가 없으면 `E2E: 실패 없음, 다른 CI 단계 실패`로 알립니다.
+4. 실패한 테스트 가운데 dev의 가장 최근 push 실행에서도 실패한 테스트는 healer에게 넘기지 않고 `dev 쪽 문제`로 따로 알리며, 이 브랜치에서만 실패한 테스트만 healer에게 넘깁니다. 모든 실패가 dev에서도 났으면 healer를 부르지 않습니다.
+5. 푸시한 커밋으로 임시 워크트리(`$TMPDIR/salmonbus-ci-watch`)를 만들고, 그 안에서 healer가 넘겨받은 실패의 프로젝트와 파일만 5593 포트로 다시 돌립니다. 작업 중인 폴더는 건드리지 않습니다.
+6. 판정(`테스트 수정`, `제품 버그 의심`, `판단 못 함`)과 바꾼 파일을 알리고 임시 워크트리를 지웁니다. 테스트마다 판정이 다르면 무거운 판정부터 모두 알립니다. healer는 커밋하지 않습니다.
+
+healer는 한 번에 하나만 돌고, 한 실행에 한 번만 돕니다. healer가 판정 없이 끝나면(종료 코드가 0이 아님, 30분 초과, 보고에 판정 없음) 결과를 저장하지 않아서, 원인을 고친 뒤 같은 run id로 다시 돌릴 수 있습니다. Codex를 고르면 임시 워크트리를 신뢰하는 설정 한 줄이 `~/.codex-e2e-healer/config.toml`에 더해집니다.
+
+### 결과 보기
+
+알림에 나온 명령으로 판정, 실패한 테스트, healer 보고를 봅니다. 이미 판정한 실행이면 healer를 다시 부르지 않고 앞의 판정을 보여 줍니다. 아직 판정하지 않은 실행이면 지금 판정합니다. 저장된 결과가 지금 형식과 맞지 않으면 어느 값이 틀렸는지와 다시 판정하는 방법을 알리고 멈춥니다.
+
+```sh
+pnpm ci:watch --run <run id>
+```
+
+- 기록은 `~/.local/state/salmonbus-ci-watch/<run id>/`에 남습니다(`XDG_STATE_HOME`을 정했으면 `$XDG_STATE_HOME/salmonbus-ci-watch/<run id>/`). `summary.md`(요약), `healer.diff`(healer가 바꾼 내용), `healer-output.jsonl`(healer 원문), `artifact/`(CI 실패 기록, `npx playwright show-report <폴더>/artifact/playwright-report`로 엽니다)입니다. hook으로 돈 감시의 로그는 `salmonbus-ci-watch/logs/<커밋>.log`에 있고, node가 감시를 시작하지 못했을 때의 오류도 같은 파일에 남습니다. 실패한 실행마다 20MB 안팎이 쌓이니 필요 없어진 폴더는 지워도 됩니다.
+- healer 정의가 들어오기 전에 갈라진 브랜치라 커밋에 정의가 없으면 `pnpm ci:watch --run <run id> --healer-from <정의가 있는 frontend 폴더>`로 그 폴더의 정의를 빌려 씁니다. 커밋에 정의가 있으면 커밋의 정의를 씁니다.
+- healer가 테스트를 고쳤으면 `summary.md`에 나온 `git apply` 명령을 리포 루트에서 실행해 가져온 뒤, 리뷰하고 커밋합니다.
+- Orca를 쓰면 푸시한 워크트리의 카드 문구가 `E2E:`로 시작하는 판정으로 바뀌고 읽지 않음 표시가 켜집니다. 바뀌기 전 문구는 그 실행 폴더의 `orca-previous-comment.txt`에 남습니다. 바뀌기 전 문구가 감시가 쓴 `E2E:` 판정이면 남기지 않으므로, 이 파일에는 감시가 덮어쓴 원래 문구만 남습니다. Orca를 쓰지 않거나 Orca에 없는 워크트리면 아무 일도 일어나지 않습니다.

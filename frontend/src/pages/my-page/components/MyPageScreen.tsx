@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
+import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { AccountLayout } from "@/shared/components/AccountLayout";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { LoginButton } from "@/shared/components/LoginButton";
 import { Notice } from "@/shared/components/Notice";
 import { GuestMyPage } from "./GuestMyPage";
 import { GroupList } from "./GroupList";
+import { PrivacySection } from "./PrivacySection";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { withdrawAppleInApp } from "@/shared/native-auth/nativeSignIn";
 import { authErrorOf } from "@/shared/utils/authErrorOf";
@@ -85,7 +87,7 @@ export function MyPageScreen() {
       <h1 className={styles.title}>마이페이지</h1>
       {state.status === "authenticated" ? (
         <>
-          <div className="amp-mask">
+          <div {...maskedPropsFor()}>
             <div className={styles.nickname}>
               <span>{state.member.nickname}님</span>
               <Link className={styles.nicknameEdit} to="/mypage/nickname" aria-label="닉네임 수정">
@@ -117,6 +119,7 @@ export function MyPageScreen() {
           >
             회원탈퇴<span aria-hidden="true">›</span>
           </button>
+          <PrivacySection />
         </>
       ) : state.status === "loading" ? (
         <p role="status" className={styles.caption}>

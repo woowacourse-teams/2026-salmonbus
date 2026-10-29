@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import * as styles from "./SortableList.css";
 
@@ -42,6 +42,7 @@ export function SortableList<T extends SortableItem>({
   onMove,
 }: SortableListProps<T>) {
   const list = useRef<HTMLUListElement>(null);
+  const labelIdPrefix = useId();
   const session = useRef<DragSession | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const previous = useRef<Map<string, DOMRect> | null>(null);
@@ -122,7 +123,7 @@ export function SortableList<T extends SortableItem>({
                   type="button"
                   className={horizontal ? styles.groupGrip : styles.grip}
                   disabled={disabled || items.length < 2}
-                  aria-label={`${label(item)} 순서 변경`}
+                  aria-labelledby={`${labelIdPrefix}${item.id}`}
                   aria-describedby="favorite-sort-help"
                   onKeyDown={(event) => {
                     if (event.key === "Escape" && session.current) {
@@ -204,7 +205,12 @@ export function SortableList<T extends SortableItem>({
                   onPointerUp={() => finish(true)}
                   onPointerCancel={() => finish(false)}
                   onLostPointerCapture={() => finish(false)}
-                />,
+                >
+                  {/* Session Replay는 속성 값을 가리지 못해서, 그룹 이름은 aria-label 대신 숨긴 글자로 둔다. */}
+                  <span id={`${labelIdPrefix}${item.id}`} hidden>
+                    {`${label(item)} 순서 변경`}
+                  </span>
+                </button>,
               )}
             </li>
           );

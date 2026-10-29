@@ -1,0 +1,23 @@
+#!/bin/sh
+# 푸시한 커밋의 FRONTEND-CI를 백그라운드에서 지켜본다. 푸시를 막거나 기다리게 하지 않는다.
+# 켜기: 리포 루트에서 git config core.hooksPath frontend/.githooks
+
+root=$(git rev-parse --show-toplevel) || exit 0
+if ! command -v node >/dev/null 2>&1; then
+  echo "ci-watch: node를 찾지 못해 CI 감시를 건너뜁니다." >&2
+  exit 0
+fi
+# scripts/ci-watch/state.ts의 stateRoot와 같은 위치를 쓴다.
+log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/salmonbus-ci-watch/logs"
+
+while read -r _ local_sha remote_ref _; do
+  case "$remote_ref" in refs/heads/*) ;; *) continue ;; esac
+  # 브랜치를 지우는 푸시는 SHA가 0으로만 채워져 온다.
+  case "$local_sha" in *[!0]*) ;; *) continue ;; esac
+  mkdir -p "$log_dir"
+  # 입출력을 이어 두면 터미널과 VS Code가 감시가 끝날 때까지 푸시를 기다린다.
+  # stderr는 node가 main.ts를 시작하지도 못한 오류까지 남도록 main.ts의 로그 파일에 붙인다.
+  nohup node "$root/frontend/scripts/ci-watch/main.ts" --sha "$local_sha" --branch "${remote_ref#refs/heads/}" \
+    </dev/null >/dev/null 2>>"$log_dir/$local_sha.log" &
+done
+exit 0

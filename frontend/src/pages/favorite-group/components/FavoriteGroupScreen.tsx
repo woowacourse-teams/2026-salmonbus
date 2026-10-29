@@ -1,4 +1,5 @@
 import { MAX_FAVORITE_GROUPS } from "@/shared/utils/favoritePolicy";
+import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { AccountLayout } from "@/shared/components/AccountLayout";
@@ -24,7 +25,7 @@ export function FavoriteGroupScreen() {
   return (
     <AccountLayout>
       <div className={styles.screen}>
-        <header className={`${styles.title} amp-mask`}>
+        <header {...maskedPropsFor(styles.title)}>
           {editing ? (
             <button
               type="button"

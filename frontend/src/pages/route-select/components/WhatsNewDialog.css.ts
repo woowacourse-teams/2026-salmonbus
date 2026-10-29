@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { POINTER_INPUT } from "@/shared/input-method/inputMethod";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const dialog = style({
@@ -29,6 +30,7 @@ export const notes = style({
   flex: "1 1 auto",
   minHeight: 0,
   overflowY: "auto",
+  selectors: { [`${POINTER_INPUT} &:focus`]: { outline: "none" } },
 });
 
 export const noteDate = style({ margin: 0, color: vars.color.textSubtle, fontSize: 12, fontWeight: 600 });

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useReducer, useRef, useState, type Keyboard
 import { Link } from "react-router";
 import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
+import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
 import { toSeatEstimate, toSeatLevel } from "@/shared/utils/seatGrade";
 import { seatLabelOf } from "@/shared/utils/seatLabelOf";
@@ -157,13 +158,13 @@ export function HomeFavorites() {
     resource.status === "loadingError" ? resource : group && summary.status === "loadingError" ? summary : null;
   if (loadingError) {
     return (
-      <section className="amp-mask" aria-label="내 즐겨찾기">
+      <section {...maskedPropsFor()} aria-label="내 즐겨찾기">
         <FavoritesNotice home resource={loadingError} onRetry={resource.status === "loadingError" ? reload : retry} />
       </section>
     );
   }
   return (
-    <section className={`${homeStyles.section} amp-mask`} aria-label="내 즐겨찾기">
+    <section {...maskedPropsFor(homeStyles.section)} aria-label="내 즐겨찾기">
       <FavoritesNotice resource={resource} onRetry={reload} />
       {groups.length > 0 && (
         <div className={homeStyles.tabs}>
