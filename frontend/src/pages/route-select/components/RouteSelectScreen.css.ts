@@ -76,3 +76,14 @@ export const searchIcon = style({
   strokeWidth: 2,
   strokeLinecap: "round",
 });
+
+export const footer = style({ padding: "0 32px 24px" });
+
+export const policyLink = style({
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 44,
+  color: vars.color.textSubtle,
+  fontSize: 12,
+  fontWeight: 700,
+});

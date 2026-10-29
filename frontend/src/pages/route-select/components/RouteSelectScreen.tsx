@@ -1,4 +1,4 @@
-import { useLocation } from "react-router";
+import { Link, useLocation } from "react-router";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
 import { Brand } from "@/shared/components/Brand";
@@ -62,6 +62,11 @@ export function RouteSelectScreen() {
             <GuestFavoritesCard />
           )}
         </section>
+        <footer className={styles.footer}>
+          <Link className={styles.policyLink} to={paths.privacy}>
+            개인정보 처리방침
+          </Link>
+        </footer>
       </main>
       <BottomNavigation />
       {typeof notice === "string" && <Notice key={notice} message={notice} />}

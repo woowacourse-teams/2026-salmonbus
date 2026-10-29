@@ -64,3 +64,5 @@ export const description = style({
   wordBreak: "keep-all",
   overflowWrap: "anywhere",
 });
+
+export const policyLink = style([row, { color: "inherit", textDecoration: "none" }]);

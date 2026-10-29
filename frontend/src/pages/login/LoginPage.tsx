@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { clearLoginReturn, saveLoginReturn } from "@/shared/routing/loginReturn";
 import { localReturnTo, boardReturnTo } from "@/shared/routing/loginReturnPolicy";
+import { paths } from "@/shared/routing/paths";
 import * as buttonStyles from "@/shared/styles/button.css";
 import { loginEntryOf } from "./analytics/loginEventPolicy";
 import * as styles from "./LoginPage.css";
@@ -128,6 +129,9 @@ export function LoginPage() {
           </p>
         )}
       </div>
+      <Link className={styles.policyLink} to={paths.privacy}>
+        개인정보 처리방침
+      </Link>
       {failed && (
         <ConfirmDialog title="로그인을 완료하지 못했어요" onCancel={dismissFailure}>
           <p className={styles.caption}>다시 로그인하거나 돌아가서 노선을 검색할 수 있어요.</p>

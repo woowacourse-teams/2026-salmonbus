@@ -49,3 +49,13 @@ globalStyle(`${login} button:focus-visible, ${login} a:focus-visible`, {
   outline: `3px solid ${vars.color.focusRing}`,
   outlineOffset: 4,
 });
+
+export const policyLink = style({
+  alignSelf: "center",
+  marginTop: 12,
+  padding: "12px 8px",
+  color: "white",
+  fontSize: 12,
+  textDecoration: "underline",
+  textUnderlineOffset: 3,
+});
