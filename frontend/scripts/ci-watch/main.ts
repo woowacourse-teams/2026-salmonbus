@@ -22,6 +22,7 @@ import {
   runDirFor,
   saveResult,
   stateRoot,
+  StoredResultError,
   withHealerLock,
   type Agent,
   type DevOverlap,
@@ -278,8 +279,12 @@ async function main() {
 try {
   await main();
 } catch (error) {
-  // gh를 설치하거나 로그인하면 풀리는 실패는 메시지에 할 일이 다 들어 있다.
-  log(error instanceof GhUnavailableError ? error.message : ((error as Error).stack ?? String(error)));
+  // gh 설치나 로그인, 저장된 결과 지우기처럼 할 일이 메시지에 다 들어 있는 실패는 메시지만 남긴다.
+  log(
+    error instanceof GhUnavailableError || error instanceof StoredResultError
+      ? error.message
+      : ((error as Error).stack ?? String(error)),
+  );
   notify({ title: "E2E: 감시가 멈췄어요", subtitle: path.basename(worktreeDir), message: (error as Error).message });
   process.exitCode = 1;
 }
