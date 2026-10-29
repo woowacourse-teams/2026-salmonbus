@@ -76,7 +76,7 @@ Codex를 골랐는데 로그인하지 않았으면 healer를 부르지 않고 `E
 
 ### 무엇을 하나
 
-1. 푸시한 커밋의 FRONTEND-CI 실행을 찾습니다. PR이 없거나 paths 필터에 걸려 10분 동안 실행이 생기지 않으면 조용히 끝납니다.
+1. 푸시한 브랜치와 커밋으로 FRONTEND-CI 실행을 찾습니다. 같은 커밋을 dev push가 이미 돌렸어도 그 실행을 이 브랜치 실행으로 잡지 않습니다. PR이 없거나 paths 필터에 걸려 10분 동안 실행이 생기지 않으면 조용히 끝납니다.
 2. 실행이 끝날 때까지 기다립니다. 성공한 실행과 새 푸시에 밀려 취소된 실행은 알리지 않습니다. job 시간 제한에 걸린 실행은 GitHub에서 `cancelled`로 끝나지만 `E2E: CI 시간 초과`로 알리고, 그 밖의 이유로 끝난 실행도 알립니다.
 3. 실패하면 실패 기록에서 실패한 테스트를 읽습니다. 재시도로 통과한 테스트는 실패로 세지 않습니다. 실패한 테스트가 없으면 `E2E: 실패 없음, 다른 CI 단계 실패`로 알립니다.
 4. 실패한 테스트 가운데 dev의 가장 최근 push 실행에서도 실패한 테스트는 healer에게 넘기지 않고 `dev 쪽 문제`로 따로 알리며, 이 브랜치에서만 실패한 테스트만 healer에게 넘깁니다. 모든 실패가 dev에서도 났으면 healer를 부르지 않습니다.
@@ -93,7 +93,7 @@ healer는 한 번에 하나만 돌고, 한 실행에 한 번만 돕니다. heale
 pnpm ci:watch --run <run id>
 ```
 
-- 기록은 `~/.local/state/salmonbus-ci-watch/<run id>/`에 남습니다. `summary.md`(요약), `healer.diff`(healer가 바꾼 내용), `healer-output.jsonl`(healer 원문), `artifact/`(CI 실패 기록, `npx playwright show-report <폴더>/artifact/playwright-report`로 엽니다)입니다. hook으로 돈 감시의 로그는 `logs/<커밋>.log`에 있습니다. 실패한 실행마다 20MB 안팎이 쌓이니 필요 없어진 폴더는 지워도 됩니다.
+- 기록은 `~/.local/state/salmonbus-ci-watch/<run id>/`에 남습니다(`XDG_STATE_HOME`을 정했으면 `$XDG_STATE_HOME/salmonbus-ci-watch/<run id>/`). `summary.md`(요약), `healer.diff`(healer가 바꾼 내용), `healer-output.jsonl`(healer 원문), `artifact/`(CI 실패 기록, `npx playwright show-report <폴더>/artifact/playwright-report`로 엽니다)입니다. hook으로 돈 감시의 로그는 `salmonbus-ci-watch/logs/<커밋>.log`에 있고, node가 감시를 시작하지 못했을 때의 오류도 같은 파일에 남습니다. 실패한 실행마다 20MB 안팎이 쌓이니 필요 없어진 폴더는 지워도 됩니다.
 - healer 정의가 들어오기 전에 갈라진 브랜치라 커밋에 정의가 없으면 `pnpm ci:watch --run <run id> --healer-from <정의가 있는 frontend 폴더>`로 그 폴더의 정의를 빌려 씁니다. 커밋에 정의가 있으면 커밋의 정의를 씁니다.
-- healer가 테스트를 고쳤으면 리포 루트에서 `git apply ~/.local/state/salmonbus-ci-watch/<run id>/healer.diff`로 가져와 리뷰한 뒤 커밋합니다.
-- Orca를 쓰면 푸시한 워크트리의 카드 문구가 `E2E:`로 시작하는 판정으로 바뀌고 읽지 않음 표시가 켜집니다. 바뀌기 전 문구는 `orca-previous-comment.txt`에 남습니다. Orca를 쓰지 않거나 Orca에 없는 워크트리면 아무 일도 일어나지 않습니다.
+- healer가 테스트를 고쳤으면 `summary.md`에 나온 `git apply` 명령을 리포 루트에서 실행해 가져온 뒤, 리뷰하고 커밋합니다.
+- Orca를 쓰면 푸시한 워크트리의 카드 문구가 `E2E:`로 시작하는 판정으로 바뀌고 읽지 않음 표시가 켜집니다. 바뀌기 전 문구는 그 실행 폴더의 `orca-previous-comment.txt`에 남습니다. 바뀌기 전 문구가 감시가 쓴 `E2E:` 판정이면 남기지 않으므로, 이 파일에는 감시가 덮어쓴 원래 문구만 남습니다. Orca를 쓰지 않거나 Orca에 없는 워크트리면 아무 일도 일어나지 않습니다.

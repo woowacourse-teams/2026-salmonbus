@@ -40,7 +40,7 @@ import {
 
 const usage = `사용법
   pnpm ci:watch --run <run id> [--agent claude|codex] [--healer-from <frontend 폴더>]
-  node scripts/ci-watch/main.ts --sha <커밋>   (pre-push hook이 부른다)`;
+  node scripts/ci-watch/main.ts --sha <커밋> --branch <원격 브랜치>   (pre-push hook이 부른다)`;
 
 // PR이 없거나 paths 필터에 걸려 실행이 생기지 않으면 이 시간 뒤 조용히 끝낸다.
 const runAppearMs = 10 * 60_000;
@@ -49,6 +49,7 @@ const runFinishMs = 90 * 60_000;
 const { values } = parseArgs({
   options: {
     sha: { type: "string" },
+    branch: { type: "string" },
     run: { type: "string" },
     agent: { type: "string" },
     "healer-from": { type: "string" },
@@ -102,7 +103,8 @@ function announce(notice: Notice, runId: number) {
   log(`${notice.title}. ${notice.message}`);
   notify(notice);
   const previousComment = markOrcaCard(worktreeDir, notice.title);
-  if (previousComment !== null) {
+  // 카드에 이미 감시의 판정이 있으면 그 판정으로 덮기 전의 문구는 앞선 알림이 남겼다.
+  if (previousComment !== null && !previousComment.startsWith("E2E:")) {
     mkdirSync(runDirFor(runId), { recursive: true });
     writeFileSync(path.join(runDirFor(runId), "orca-previous-comment.txt"), previousComment + "\n");
   }
@@ -234,9 +236,9 @@ async function main() {
     const saved = loadResult(Number(values.run));
     if (saved) return showSaved(saved);
     run = fetchRun(Number(values.run));
-  } else if (values.sha) {
-    const sha = values.sha;
-    run = await poll(() => fetchRunFor(sha), 20_000, runAppearMs);
+  } else if (values.sha && values.branch) {
+    const { sha, branch } = values;
+    run = await poll(() => fetchRunFor(sha, branch), 20_000, runAppearMs);
     if (!run) return log(`${sha}의 FRONTEND-CI 실행이 10분 동안 생기지 않아 끝냅니다.`);
   } else {
     console.error(usage);

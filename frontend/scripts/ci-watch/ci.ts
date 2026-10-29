@@ -32,9 +32,23 @@ function gh(args: string[]) {
   }
 }
 
-export function fetchRunFor(sha: string): CiRun | undefined {
+// 커밋만으로 찾으면 dev가 이미 돌린 커밋을 새 브랜치로 푸시했을 때 dev의 실행이 나온다.
+export function fetchRunFor(sha: string, branch: string): CiRun | undefined {
   const runs: CiRun[] = JSON.parse(
-    gh(["run", "list", "--workflow", workflow, "--commit", sha, "--limit", "1", "--json", runFields]),
+    gh([
+      "run",
+      "list",
+      "--workflow",
+      workflow,
+      "--branch",
+      branch,
+      "--commit",
+      sha,
+      "--limit",
+      "1",
+      "--json",
+      runFields,
+    ]),
   );
   return runs[0];
 }
