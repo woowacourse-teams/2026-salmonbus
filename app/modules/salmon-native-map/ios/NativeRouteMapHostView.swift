@@ -2,6 +2,7 @@ import CoreLocation
 import ExpoModulesCore
 import NMapsMap
 import UIKit
+import WebKit
 
 #if DEBUG
 private final class RouteNaverMapView: NMFMapView {
@@ -93,6 +94,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private var readySent = false
   private var failed = false
   #if DEBUG
+  private weak var webViewForVerification: WKWebView?
   private var previousCameraTarget: (latitude: Double, longitude: Double)?
   private var lastCameraChangeReason = NMFMapChangedByDeveloper
   private var gestureMoveCount = 0
@@ -235,6 +237,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     gate.webRects = []
     mapContainer.isHidden = true
     mapView.accessibilityElementsHidden = true
+    setWebTopEdgeEffectHidden(false, in: gate)
     updateVerificationSnapshot()
   }
 
@@ -421,6 +424,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
 
   private func applyLayout() {
     guard let layout = mapLayout, layout.valid, bounds.width > 0, bounds.height > 0 else { return }
+    setWebTopEdgeEffectHidden(true, in: gate)
     let rect = layout.nativeRect(layout.mapRect, in: bounds).intersection(bounds)
     gate.mapRect = rect
     gate.webRects = layout.webRects.map { layout.nativeRect($0, in: bounds) }
@@ -437,6 +441,18 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     updateVerificationSnapshot()
   }
 
+  private func setWebTopEdgeEffectHidden(_ hidden: Bool, in view: UIView) {
+    guard #available(iOS 26.0, *) else { return }
+    if let webView = view as? WKWebView {
+      webView.scrollView.topEdgeEffect.isHidden = hidden
+      #if DEBUG
+      webViewForVerification = webView
+      #endif
+      return
+    }
+    for child in view.subviews { setWebTopEdgeEffectHidden(hidden, in: child) }
+  }
+
   private func scheduleInitialFit() {
     guard readySent, !failed, initialFitPending || pendingCameraCommand != nil, !initialFitScheduled,
           mapContainer.bounds.width > 1, mapContainer.bounds.height > 1, window != nil else { return }
@@ -447,7 +463,10 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     DispatchQueue.main.async { [weak self] in
       guard let self, self.sessionId == expectedSession else { return }
       self.initialFitScheduled = false
-      guard self.readySent, !self.failed else { return }
+      // 검색 키보드와 웹 시트의 전환이 끝난 표시 영역으로 최초 카메라를 맞춘다.
+      guard self.readySent, !self.failed, let layout = self.mapLayout,
+            !layout.captureAll, !layout.transitioning,
+            abs(layout.viewport.height * self.bounds.width / layout.viewport.width - self.bounds.height) <= 1 else { return }
       self.mapContainer.layoutIfNeeded()
       self.mapView.setNeedsLayout()
       self.mapView.layoutIfNeeded()
@@ -474,12 +493,15 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       mapView.moveCamera(NMFCameraUpdate(scrollTo: first.naver, zoomTo: 13))
       return
     }
-    let visibleHeight = max(1, mapContainer.bounds.height)
-    let crop = max(0, (mapView.bounds.height - visibleHeight) / 2)
+    // 잘린 지도와 상태바 안전 영역을 함께 제외한 화면 안에 전체 경로를 맞춘다.
+    let visibleRect = mapView.convert(mapContainer.bounds, from: mapContainer)
+      .intersection(mapView.convert(safeAreaLayoutGuide.layoutFrame, from: self))
     let area = NMGLatLngBounds(southWest: NMGLatLng(lat: south, lng: west),
                               northEast: NMGLatLng(lat: north, lng: east))
     mapView.moveCamera(NMFCameraUpdate(fit: area,
-      paddingInsets: UIEdgeInsets(top: crop + 28, left: 12, bottom: crop + 28, right: 12)))
+      paddingInsets: UIEdgeInsets(top: visibleRect.minY + 28, left: visibleRect.minX + 12,
+                                 bottom: mapView.bounds.height - visibleRect.maxY + 28,
+                                 right: mapView.bounds.width - visibleRect.maxX + 12)))
     if mapView.cameraPosition.zoom > 13 {
       mapView.moveCamera(NMFCameraUpdate(scrollTo: mapView.cameraPosition.target, zoomTo: 13))
     }
@@ -517,6 +539,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       initialFitPending = false
       return
     }
+    pendingCameraCommand = nil
     initialFitPending = false
     let minimumZoom = command.command == "vehicle" ? 16.0 : 15.0
     let update = NMFCameraUpdate(scrollTo: coordinate, zoomTo: max(minimumZoom, mapView.cameraPosition.zoom))
@@ -632,7 +655,11 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   public func mapViewDidFinishLoadingMap(_ mapView: NMFMapView) { notifyReady() }
 
   public func mapView(_ mapView: NMFMapView, cameraWillChangeByReason reason: Int, animated: Bool) {
-    if reason == NMFMapChangedByGesture || reason == NMFMapChangedByControl { cancelVehicleFocus() }
+    if reason == NMFMapChangedByGesture || reason == NMFMapChangedByControl {
+      pendingCameraCommand = nil
+      initialFitPending = false
+      cancelVehicleFocus()
+    }
     #if DEBUG
     lastCameraChangeReason = reason
     NSLog("[SalmonNativeMap] camera willChange reason=%@ animated=%@",
@@ -696,7 +723,12 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private func updateVerificationSnapshot() {
     #if DEBUG
     guard uiTestingEnabled else { return }
-    let snapshot: [String: Any] = [
+    let route = scene.map { $0.fullPath.isEmpty ? $0.paths.flatMap(\.coordinates) : $0.fullPath } ?? []
+    let coordinates = route.isEmpty ? scene?.stops.map(\.coordinate) ?? [] : route
+    let visibleRect = mapView.convert(mapContainer.bounds, from: mapContainer)
+      .intersection(mapView.convert(safeAreaLayoutGuide.layoutFrame, from: self))
+    var snapshot: [String: Any] = [
+      "routeId": scene?.routeId ?? "",
       "ready": readySent && !failed && !initialFitPending && !initialFitScheduled,
       "zoom": mapView.cameraPosition.zoom,
       "gestureMoves": gestureMoveCount,
@@ -704,7 +736,13 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       "captureAll": gate.captureAll,
       "stops": stopMarkers.values.filter { $0.mapView === mapView }.count,
       "vehicles": vehicleMarkers.values.filter { $0.mapView === mapView }.count,
+      "routeFitsVisibleMap": !coordinates.isEmpty && coordinates.allSatisfy {
+        visibleRect.contains(mapView.projection.point(from: $0.naver))
+      },
     ]
+    if #available(iOS 26.0, *) {
+      snapshot["webTopEdgeEffectHidden"] = webViewForVerification?.scrollView.topEdgeEffect.isHidden == true
+    }
     guard let data = try? JSONSerialization.data(withJSONObject: snapshot),
           let value = String(data: data, encoding: .utf8) else { return }
     mapView.verificationValue = value

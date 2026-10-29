@@ -38,6 +38,8 @@ Simulator에서 로컬 웹 서버에 연결할 때는 `http://127.0.0.1:<port>`�
 
 `pnpm test`, `pnpm typecheck`, `pnpm lint`로 config plugin, bridge, TypeScript를 검사합니다. Swift와 SDK 연동은 Xcode Simulator build로 검사합니다. DEBUG build의 `[SalmonNativeMap]` 로그는 touch 대상, camera 이동 여부와 zoom, overlay 개수만 기록하며 클라이언트 키나 사용자 좌표를 기록하지 않습니다.
 
+`verification/NativeMapInteractionTests.swift`는 검색 화면에서 가상 3330 노선을 선택해 전체 경로가 상태바 안전 영역과 웹 시트 사이에 들어오는지, iOS 26 이상의 WebView 상단 효과가 지도를 흐리게 덮지 않는지, 지도 이동·시트 드래그·더블탭 확대가 동작하는지 확인합니다. 저장소의 `scripts/native-map-fixture-api.cjs`를 실행하고 웹 개발 서버의 `API_PROXY_TARGET`을 그 서버로 지정합니다. 앱의 `EXPO_PUBLIC_WEB_URL`은 웹 개발 서버의 `/search`로 설정하고, `verification/setup-ui-tests.rb`로 만든 `NativeMapVerification` scheme을 전용 iOS Simulator에서 실행합니다.
+
 마커 UI의 기준은 `frontend/src/pages/verdict-board/map/RouteMap.css.ts`와 `naverMapAdapter.ts`입니다. iOS의 `MapMarkerImages.swift`가 같은 치수·색상·글꼴로 이미지를 만들며, 정류장은 웹과 같은 원형 링(승차 가능)·점(경유)으로 직접 그립니다. `ios/Resources`의 버스 3x PNG는 웹의 원본 SVG에서 변환한 아이콘이므로 버스 아이콘 원본을 바꾸면 PNG도 함께 갱신합니다.
 
 `verification/MapMarkerImageChecks.swift`는 UIKit에서 정류장 8개 상태, 좌석 배지의 크기·중첩·줌아웃 상태를 검증하고 `/tmp/salmonbus-map-marker-preview.png`를 만듭니다. 부팅된 Apple Silicon iOS Simulator에서 `app` 디렉터리를 기준으로 실행합니다.
