@@ -1,6 +1,7 @@
 import { LoginButton } from "@/shared/components/LoginButton";
 import salmong from "@/shared/assets/images/salmong-logo/salmong-proud.png";
 import { PrivacySection } from "./PrivacySection";
+import { WhatsNewLink } from "./WhatsNewLink";
 import * as styles from "./GuestMyPage.css";
 
 export function GuestMyPage() {
@@ -19,6 +20,7 @@ export function GuestMyPage() {
         </p>
       </section>
       <LoginButton returnTo="/mypage" className={styles.login} />
+      <WhatsNewLink className={styles.whatsNew} />
       <PrivacySection />
     </div>
   );

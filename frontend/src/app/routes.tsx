@@ -8,6 +8,7 @@ import { LoginPage } from "@/pages/login";
 import { MyPage } from "@/pages/my-page";
 import { FavoriteGroupPage } from "@/pages/favorite-group";
 import { NicknamePage } from "@/pages/nickname";
+import { WhatsNewPage } from "@/pages/whats-new";
 import { useFocusKeepingNavigation } from "./useFocusKeepingNavigation";
 
 export function AppRoutes() {
@@ -24,6 +25,7 @@ export function AppRoutes() {
         <Route path={paths.mypage} element={<MyPage />} />
         <Route path={paths.nickname} element={<NicknamePage />} />
         <Route path={paths.favoriteGroup} element={<FavoriteGroupPage />} />
+        <Route path={paths.whatsNew} element={<WhatsNewPage />} />
       </Routes>
     </FocusKeepingNavigationContext>
   );
