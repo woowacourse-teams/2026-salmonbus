@@ -55,7 +55,7 @@ export const stop = style({
   letterSpacing: "-0.5px",
 });
 export const direction = style({
-  color: "#837B74",
+  color: vars.color.textSubtle,
   fontSize: 12,
   lineHeight: 1.4,
   wordBreak: "keep-all",
@@ -99,7 +99,7 @@ export const distance = style({
   whiteSpace: "nowrap",
 });
 export const seatBadge = styleVariants(
-  { ...vars.color.seat, low: { ...vars.color.seat.low, surface: "#F6EEDB", text: "#8C6A25" } },
+  { ...vars.color.seat, low: { ...vars.color.seat.low, surface: "#F6EEDB", text: "#806020" } },
   (tone) => ({
     selectors: {
       "&&": {
@@ -161,7 +161,7 @@ export const homeEmpty = style({
   justifyContent: "center",
   gap: 18,
   minHeight: 260,
-  color: "#837B74",
+  color: vars.color.textSubtle,
   textAlign: "center",
 });
 export const homeEmptyTitle = style({ margin: 0, fontSize: 16, fontWeight: 500 });

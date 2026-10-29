@@ -11,7 +11,7 @@ for (const width of [320, 425]) {
     await expect(page.getByRole("heading", { name: "즐겨찾기", exact: true })).toBeVisible();
     const empty = page.getByText("아직 등록한 정류장이 없어요", { exact: true }).locator("..");
     await expect(empty).toBeVisible();
-    await expect(empty.getByText("0 / 2", { exact: true })).toHaveCSS("color", "rgb(232, 83, 63)");
+    await expect(empty.getByText("0 / 2", { exact: true })).toHaveCSS("color", "rgb(194, 61, 43)");
     await expect(empty).toHaveCSS("padding-top", "36px");
     await expect(empty).toHaveCSS("padding-bottom", "36px");
     await expect(empty).toHaveCSS("gap", "8px");

@@ -10,4 +10,4 @@ export const empty = style({
   textAlign: "center",
 });
 export const emptyCount = style({ margin: 0, color: vars.color.liveBus, fontSize: 15, lineHeight: 1.6 });
-export const emptyDescription = style({ margin: 0, color: "#837B74", fontSize: 14, lineHeight: 1.6 });
+export const emptyDescription = style({ margin: 0, color: vars.color.textSubtle, fontSize: 14, lineHeight: 1.6 });

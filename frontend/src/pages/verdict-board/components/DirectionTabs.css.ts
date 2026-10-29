@@ -102,5 +102,12 @@ export const tab = styleVariants({
       },
     },
   ],
-  selected: [tabBase, { color: vars.color.onInk, cursor: "default" }],
+  selected: [
+    tabBase,
+    {
+      color: vars.color.onInk,
+      cursor: "default",
+      selectors: { "&:focus-visible": { outlineColor: vars.color.onInk } },
+    },
+  ],
 });

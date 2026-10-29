@@ -477,7 +477,7 @@ test("홈에서만 html 배경을 주황으로 칠한다", async ({ page }) => {
   const htmlBackground = () => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
   await page.goto("/");
 
-  await expect.poll(htmlBackground).toBe("rgb(232, 82, 63)");
+  await expect.poll(htmlBackground).toBe("rgb(194, 61, 43)");
 
   await openRouteSearch(page);
 

@@ -10,7 +10,7 @@ export const field = style({
   padding: "14px",
   margin: "12px 0",
   minHeight: 48,
-  border: "1px solid #E8E4DF",
+  border: `1px solid ${vars.color.iconMuted}`,
   borderRadius: 12,
   background: "white",
   font: "inherit",

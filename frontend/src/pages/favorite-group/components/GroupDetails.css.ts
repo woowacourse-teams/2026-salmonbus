@@ -1,4 +1,5 @@
 import { style } from "@vanilla-extract/css";
+import { vars } from "@/shared/styles/tokens.css";
 
 export const list = style({
   display: "flex",
@@ -20,7 +21,7 @@ export const card = style({
 export const info = style({ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 });
 export const cardHeading = style({ display: "flex", alignItems: "center", gap: 8 });
 export const stop = style({ minWidth: 0, overflowWrap: "anywhere", fontSize: 15, fontWeight: 600, lineHeight: "22px" });
-export const direction = style({ color: "#837B74", fontSize: 12, lineHeight: "17px" });
+export const direction = style({ color: vars.color.textSubtle, fontSize: 12, lineHeight: "17px" });
 export const remove = style({
   flexShrink: 0,
   width: 48,
@@ -29,7 +30,7 @@ export const remove = style({
   border: 0,
   borderRadius: 8,
   background: "#FFF0EB",
-  color: "#D65B46",
+  color: vars.color.brand,
   font: "inherit",
   fontSize: 12,
   fontWeight: 600,
@@ -48,7 +49,7 @@ export const deleteGroup = style({
   padding: 0,
   border: 0,
   background: "transparent",
-  color: "#D65B46",
+  color: vars.color.brand,
   font: "inherit",
   fontSize: 14,
   fontWeight: 600,
@@ -102,7 +103,7 @@ export const targetStop = style({
 });
 export const description = style({
   margin: 0,
-  color: "#837B74",
+  color: vars.color.textSubtle,
   fontSize: 14,
   lineHeight: 1.65,
   overflowWrap: "anywhere",
@@ -116,7 +117,7 @@ export const confirm = style({
   padding: 0,
   border: 0,
   borderRadius: 14,
-  background: "#E8533F",
+  background: vars.color.brand,
   color: "#FFFFFF",
   font: "inherit",
   fontSize: 14,

@@ -17,7 +17,7 @@ export const navigation = style({
   background: "white",
 });
 
-const selectTab = keyframes({ from: { color: "#858079" }, to: { color: vars.color.brand } });
+const selectTab = keyframes({ from: { color: vars.color.textSubtle }, to: { color: vars.color.brand } });
 
 export const tab = style({
   display: "flex",
@@ -27,7 +27,7 @@ export const tab = style({
   justifyContent: "center",
   gap: 4,
   minHeight: 66,
-  color: "#858079",
+  color: vars.color.textSubtle,
   fontSize: 10,
   textDecoration: "none",
   selectors: {

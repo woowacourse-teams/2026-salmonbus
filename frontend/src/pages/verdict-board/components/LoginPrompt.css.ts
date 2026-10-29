@@ -45,7 +45,7 @@ export const close = style({
 
 export const description = style({
   margin: "0 0 16px",
-  color: "#837B74",
+  color: vars.color.textSubtle,
   fontSize: 14,
   lineHeight: 1.65,
   wordBreak: "keep-all",

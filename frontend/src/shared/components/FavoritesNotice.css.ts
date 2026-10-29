@@ -9,7 +9,7 @@ export const homeError = style({
   gap: 18,
   minHeight: 260,
   marginTop: 41,
-  color: "#837B74",
+  color: vars.color.textSubtle,
   textAlign: "center",
 });
 export const homeErrorTitle = style({ margin: 0, fontSize: 16, fontWeight: 500, lineHeight: 1.5 });

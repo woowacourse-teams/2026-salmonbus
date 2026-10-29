@@ -46,6 +46,6 @@ export const caption = style({ color: "#68645F", fontSize: 12, lineHeight: 1.7, 
 export const actions = style({ display: "flex", gap: 10, marginTop: 20 });
 
 globalStyle(`${login} button:focus-visible, ${login} a:focus-visible`, {
-  outline: `3px solid ${vars.color.focusRing}`,
+  outline: "3px solid white",
   outlineOffset: 4,
 });

@@ -46,7 +46,7 @@ export const stop = style({
   lineHeight: 1.4,
   letterSpacing: "-0.5px",
 });
-export const direction = style({ color: "#837B74", fontSize: 12, lineHeight: 1.4, wordBreak: "keep-all" });
+export const direction = style({ color: vars.color.textSubtle, fontSize: 12, lineHeight: 1.4, wordBreak: "keep-all" });
 export const trash = style({
   display: "grid",
   placeItems: "center",

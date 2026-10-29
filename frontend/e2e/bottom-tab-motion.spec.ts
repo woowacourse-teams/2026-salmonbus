@@ -46,7 +46,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
       }
       const after = (await nav.boundingBox())!;
       for (const key of ["x", "y", "width", "height"] as const) expect(after[key]).toBeCloseTo(before[key], 1);
-      await expect(selected).toHaveCSS("color", "rgb(232, 82, 63)");
+      await expect(selected).toHaveCSS("color", "rgb(194, 61, 43)");
       await expect(main).toHaveCSS("opacity", "1");
       await expect(
         path === "/"

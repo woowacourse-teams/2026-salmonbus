@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { track } from "@/shared/analytics/track";
+import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import type { ApiFailure, ApiResult } from "@/shared/api/client";
 import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
 import { fetchRouteWatch } from "@/shared/api/routeForecast.api";
@@ -116,6 +117,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
       : null;
   return (
     <main className={styles.noticePage}>
+      <h1 className={visuallyHidden}>노선 판정보드</h1>
       <BoardBackLink />
       {status === "outOfService" ? (
         <div className={styles.outOfService}>
