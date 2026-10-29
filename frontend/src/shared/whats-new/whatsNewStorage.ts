@@ -38,6 +38,16 @@ export function recordWhatsNewClosed(
   recordWhatsNewWith((record) => closedRecordFor(record, shownNotes), openStorage);
 }
 
+// 목록에서 읽은 소식도 모달에서 닫은 소식처럼 본 것으로 적어 홈에 다시 띄우지 않는다.
+// 홈보다 목록을 먼저 연 기기는 기록이 없어서 먼저 만든다. 그러지 않으면 홈에서 기록을 처음 만들 때 읽은 소식이 다시 뜬다.
+export function recordWhatsNewListOpened(
+  notes: readonly WhatsNewNote[],
+  openStorage: () => WhatsNewStorage = openLocalStorage,
+): void {
+  loadWhatsNewRecord(notes, openStorage);
+  recordWhatsNewWith((record) => closedRecordFor(record, notes), openStorage);
+}
+
 function recordWhatsNewWith(
   nextRecordFor: (record: WhatsNewRecord) => WhatsNewRecord,
   openStorage: () => WhatsNewStorage,

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
 import type { WhatsNewNote } from "./whatsNewNotes";
-import { recordWhatsNewClosed, recordWhatsNewShown, loadWhatsNewRecord } from "./whatsNewStorage";
+import {
+  recordWhatsNewClosed,
+  recordWhatsNewListOpened,
+  recordWhatsNewShown,
+  loadWhatsNewRecord,
+} from "./whatsNewStorage";
 
 const STORAGE_KEY = "salmonbus.whatsNew";
 const ROUTE_FIRST_SEEN_KEY = "salmonbus.routeFirstSeen";
@@ -120,5 +125,24 @@ describe("recordWhatsNewClosed", () => {
     };
 
     expect(() => recordWhatsNewClosed(notes, () => storage)).not.toThrow();
+  });
+});
+
+describe("recordWhatsNewListOpened", () => {
+  it("목록을 열면 가장 큰 번호까지 본 것으로 적는다", () => {
+    const storage = createMemoryStorage({ [ROUTE_FIRST_SEEN_KEY]: "{}" });
+    loadWhatsNewRecord(notes, () => storage);
+
+    recordWhatsNewListOpened(notes, () => storage);
+
+    expect(storedRecordOf(storage)).toEqual({ lastSeenId: 2, lastShownDay: null });
+  });
+
+  it("홈보다 목록을 먼저 연 전부터 쓰던 기기도 가장 큰 번호까지 본 것으로 적는다", () => {
+    const storage = createMemoryStorage({ [ROUTE_FIRST_SEEN_KEY]: "{}" });
+
+    recordWhatsNewListOpened(notes, () => storage);
+
+    expect(storedRecordOf(storage)).toEqual({ lastSeenId: 2, lastShownDay: null });
   });
 });
