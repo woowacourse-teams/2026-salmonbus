@@ -6,6 +6,8 @@ import { Linking, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 import { LoadFailedView } from './LoadFailedView';
+import { AUTH_CAPABILITIES, SIGN_IN_RESULT, signInRequestFrom, type SignInResult } from './auth/authMessages';
+import { signInNatively } from './auth/signInNatively';
 import { appBootstrapScriptFor, bridgeEventScriptFor, bridgeMessageFrom, type BridgeMessage } from './bridge/bridge';
 import { HAPTIC_CAPABILITIES } from './haptic/hapticMessages';
 import { playHaptic } from './haptic/playHaptic';
@@ -25,7 +27,8 @@ function readWebUrl() {
 }
 
 const WEB_URL = readWebUrl();
-const IN_APP_ORIGINS = [new URL(WEB_URL).origin];
+const WEB_ORIGIN = new URL(WEB_URL).origin;
+const IN_APP_ORIGINS = [WEB_ORIGIN];
 const NAVIGABLE_ORIGINS = [...IN_APP_ORIGINS, ...LOGIN_PROVIDER_ORIGINS];
 // 모든 이동이 allowNavigation에 오게 한다. 허용 판단은 navigationDecisionFor가 origin을 정확히 비교해서 한다.
 const EVERY_URL = ['*'];
@@ -41,6 +44,7 @@ const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
   map: NativeRouteMap !== null ? NATIVE_MAP_CAPABILITIES : [],
   haptic: HAPTIC_CAPABILITIES,
   settings: SETTINGS_CAPABILITIES,
+  auth: AUTH_CAPABILITIES,
 });
 type BridgeDomain = keyof typeof CAPABILITIES_BY_DOMAIN;
 const APP_CAPABILITIES: readonly string[] = Object.values(CAPABILITIES_BY_DOMAIN).flat();
@@ -54,6 +58,7 @@ export default function App() {
   const nativeMapRef = useRef<NativeRouteMapRef>(null);
   const commandQueue = useRef(Promise.resolve());
   const documentEpoch = useRef(0);
+  const signingIn = useRef(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const showLoadFailed = () => {
@@ -89,7 +94,28 @@ export default function App() {
     settings: () => {
       Linking.openSettings().catch(() => undefined);
     },
+    auth: (message) => handleSignIn(message),
   };
+
+  // 로그인 창은 한 번에 하나만 연다. 결과는 웹 origin의 문서에만 넘긴다.
+  function handleSignIn(message: BridgeMessage) {
+    const request = signInRequestFrom(message.payload);
+    if (request === null) return;
+    if (signingIn.current) {
+      replySignIn({ id: request.id, provider: request.provider, status: 'failed', reason: 'busy' });
+      return;
+    }
+    signingIn.current = true;
+    signInNatively(request)
+      .then(replySignIn)
+      .finally(() => {
+        signingIn.current = false;
+      });
+  }
+
+  function replySignIn(result: SignInResult) {
+    webViewRef.current?.injectJavaScript(bridgeEventScriptFor({ type: SIGN_IN_RESULT, payload: { ...result } }, WEB_ORIGIN));
+  }
 
   function allowNavigation(request: ShouldStartLoadRequest) {
     const decision = navigationDecisionFor(request.url, request.isTopFrame, NAVIGABLE_ORIGINS);

@@ -1,4 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { AUTH_CAPABILITIES as APP_AUTH_CAPABILITIES } from "../../../../app/auth/authMessages";
 import { SETTINGS_CAPABILITIES as APP_SETTINGS_CAPABILITIES } from "../../../../app/settings/settingsMessages";
 import type { AppCommandType, BridgeMessage } from "./bridge.types";
 import { BRIDGE_EVENT, appHostFrom, bridgeMessageFrom, isSupportedInApp, sendToApp, subscribeToApp } from "./bridge";
@@ -14,6 +15,12 @@ function inAppWindow(capabilities: unknown[] = ["map.unmount"]) {
 describe("설정 메시지 목록", () => {
   it("앱의 app/settings/settingsMessages.ts와 같은 목록이다", () => {
     expect(APP_SETTINGS_CAPABILITIES).toEqual(["settings.open"] satisfies AppCommandType[]);
+  });
+});
+
+describe("로그인 메시지 목록", () => {
+  it("앱의 app/auth/authMessages.ts와 같은 목록이다", () => {
+    expect(APP_AUTH_CAPABILITIES).toEqual(["auth.signIn"] satisfies AppCommandType[]);
   });
 });
 
