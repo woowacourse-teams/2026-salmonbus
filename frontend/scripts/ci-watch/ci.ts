@@ -65,6 +65,30 @@ export function fetchLatestDevPushRun(): CiRun | undefined {
   return runs[0];
 }
 
+export type RunEnding = { kind: "quiet" } | { kind: "failure" } | { kind: "stopped"; title: string };
+
+// job 시간 제한에 걸린 실행도 conclusion은 cancelled로 와서, 새 푸시에 밀린 취소와는 job annotation으로 가른다.
+export function runEndingFor(conclusion: string, cancelMessages: string[]): RunEnding {
+  if (conclusion === "success") return { kind: "quiet" };
+  if (conclusion === "failure") return { kind: "failure" };
+  if (cancelMessages.some((message) => message.includes("higher priority waiting request"))) return { kind: "quiet" };
+  const timedOut =
+    conclusion === "timed_out" ||
+    cancelMessages.some((message) => message.includes("exceeded the maximum execution time"));
+  return { kind: "stopped", title: timedOut ? "CI 시간 초과" : `CI ${conclusion}` };
+}
+
+export function fetchCancelMessages(runId: number) {
+  const jobIds = gh(["api", `repos/{owner}/{repo}/actions/runs/${runId}/jobs`, "--jq", ".jobs[].id"])
+    .split("\n")
+    .filter(Boolean);
+  return jobIds.flatMap((jobId) =>
+    gh(["api", `repos/{owner}/{repo}/check-runs/${jobId}/annotations`, "--jq", ".[].message"])
+      .split("\n")
+      .filter(Boolean),
+  );
+}
+
 // E2E 단계까지 가지 못해 실패 기록이 없으면 null을 돌려준다.
 export function fetchFailures(runId: number, directory: string): FailedTest[] | null {
   const expired = gh([

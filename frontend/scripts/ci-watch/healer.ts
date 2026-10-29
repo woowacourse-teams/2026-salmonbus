@@ -11,7 +11,12 @@ import { configFile, frontendDir, healerPort, worktreeDir } from "./worktree.ts"
 export const codexHome = path.join(homedir(), ".codex-e2e-healer");
 
 const healerTimeoutMs = 30 * 60_000;
-const verdicts: Verdict[] = ["테스트 수정", "제품 버그 의심", "판단 못 함"];
+
+export interface HealerExit {
+  exitCode: number | null;
+  timedOut: boolean;
+}
+const verdictsHeaviestFirst: Verdict[] = ["제품 버그 의심", "판단 못 함", "테스트 수정"];
 
 const mcpServer = {
   command: "npx",
@@ -29,7 +34,7 @@ function healerEnvFor(agent: Agent) {
 
 function spawnLogged(command: string, args: string[], options: { env: NodeJS.ProcessEnv; output: string }) {
   const output = openSync(options.output, "a");
-  return new Promise<{ timedOut: boolean }>((resolve, reject) => {
+  return new Promise<HealerExit>((resolve, reject) => {
     // 프로세스 그룹을 따로 만들어 끝난 뒤 남은 MCP 서버와 웹 서버까지 정리한다.
     const child = spawn(command, args, {
       cwd: frontendDir,
@@ -54,10 +59,10 @@ function spawnLogged(command: string, args: string[], options: { env: NodeJS.Pro
       clearTimeout(timer);
       reject(error);
     });
-    child.on("exit", () => {
+    child.on("exit", (exitCode) => {
       clearTimeout(timer);
       stopGroup();
-      resolve({ timedOut });
+      resolve({ exitCode, timedOut });
     });
   }).finally(() => closeSync(output));
 }
@@ -184,7 +189,7 @@ export async function runHealer(agent: Agent, prompt: string, artifactDir: strin
   if (agent === "codex") trustWorktreeForCodex();
 
   const startedAt = Date.now();
-  const { timedOut } = await spawnLogged(
+  const exit = await spawnLogged(
     agent,
     agent === "claude" ? claudeArgsFor(prompt, artifactDir) : codexArgsFor(prompt, lastMessageFile),
     { env: healerEnvFor(agent), output },
@@ -195,22 +200,35 @@ export async function runHealer(agent: Agent, prompt: string, artifactDir: strin
       : existsSync(lastMessageFile)
         ? readFileSync(lastMessageFile, "utf8")
         : "";
-  return { finalMessage, seconds: Math.round((Date.now() - startedAt) / 1000), timedOut };
+  return { ...exit, finalMessage, seconds: Math.round((Date.now() - startedAt) / 1000) };
 }
 
-export function verdictFrom(report: string): Verdict | null {
+function verdictsFrom(report: string): Verdict[] {
   const plain = report.replaceAll(/[*`]/g, "");
-  const last = [...plain.matchAll(/판정\s*:\s*(테스트 수정|제품 버그 의심|판단 못 함)/g)].at(-1)?.[1];
-  return verdicts.find((verdict) => verdict === last) ?? null;
+  const found = new Set(
+    [...plain.matchAll(/판정\s*:\s*(테스트 수정|제품 버그 의심|판단 못 함)(?!\s*\|)/g)].map((match) => match[1]),
+  );
+  return verdictsHeaviestFirst.filter((verdict) => found.has(verdict));
 }
 
-export function warningsFor(verdict: Verdict | null, changedFiles: string[]) {
+export type HealerResult = { verdicts: [Verdict, ...Verdict[]] } | { failure: string };
+
+export function healerResultFor(exit: HealerExit, report: string): HealerResult {
+  if (exit.timedOut) return { failure: "healer가 30분 안에 끝나지 않아 멈췄어요." };
+  if (exit.exitCode !== 0) return { failure: `healer가 종료 코드 ${exit.exitCode}로 끝났어요.` };
+  const [heaviest, ...rest] = verdictsFrom(report);
+  return heaviest ? { verdicts: [heaviest, ...rest] } : { failure: "healer 보고에서 판정을 찾지 못했어요." };
+}
+
+export function warningsFor(foundVerdicts: Verdict[], changedFiles: string[]) {
   const warnings: string[] = [];
-  if (verdict === null) warnings.push("healer 보고에서 판정을 찾지 못했어요.");
   const outsideE2e = changedFiles.filter((file) => !file.startsWith("frontend/e2e/"));
   if (outsideE2e.length > 0) warnings.push(`e2e 밖의 파일을 바꿨어요: ${outsideE2e.join(", ")}`);
-  if (verdict !== "테스트 수정" && changedFiles.length > 0) {
-    warnings.push(`판정이 ${verdict ?? "없음"}인데 바뀐 파일이 있어요.`);
+  if (changedFiles.length === 0) return warnings;
+  if (!foundVerdicts.includes("테스트 수정")) {
+    warnings.push(`판정이 ${foundVerdicts.join(", ")}인데 바뀐 파일이 있어요.`);
+  } else if (foundVerdicts.length > 1) {
+    warnings.push("판정이 섞여 있어요. 바뀐 파일을 가져오기 전에 테스트마다 판정을 확인해 주세요.");
   }
   return warnings;
 }

@@ -18,7 +18,7 @@ export interface RunSummary {
 
 export interface HealerReport {
   agent: Agent;
-  verdict: Verdict | null;
+  verdicts: [Verdict, ...Verdict[]];
   seconds: number;
   changedFiles: string[];
   warnings: string[];

@@ -20,12 +20,12 @@ const summary: RunSummary = {
 };
 
 function createHealer(overrides: Partial<HealerReport>): HealerReport {
-  return { agent: "claude", verdict: "테스트 수정", seconds: 42, changedFiles: [], warnings: [], ...overrides };
+  return { agent: "claude", verdicts: ["테스트 수정"], seconds: 42, changedFiles: [], warnings: [], ...overrides };
 }
 
 describe("noticeFor", () => {
   it("healer 판정과 실패 수를 제목에 E2E:로 시작해 적는다", () => {
-    const notice = noticeFor({ ...summary, outcome: "healed", healer: createHealer({ verdict: "제품 버그 의심" }) });
+    const notice = noticeFor({ ...summary, outcome: "healed", healer: createHealer({ verdicts: ["제품 버그 의심"] }) });
 
     expect(notice.title).toBe("E2E: 실패 2개, 제품 버그 의심");
     expect(notice.subtitle).toBe("fe/test/SAL-265");
@@ -45,6 +45,30 @@ describe("noticeFor", () => {
 
     expect(noticeFor({ ...summary, outcome: "healed", healer }).message).toMatch(
       /^확인 필요: e2e 밖의 파일을 바꿨어요/,
+    );
+  });
+
+  it("판정이 섞이면 무거운 판정부터 모두 제목에 적는다", () => {
+    const healer = createHealer({ verdicts: ["제품 버그 의심", "테스트 수정"] });
+
+    expect(noticeFor({ ...summary, outcome: "healed", healer }).title).toBe(
+      "E2E: 실패 2개, 제품 버그 의심, 테스트 수정",
+    );
+  });
+
+  it("dev와 일부만 겹치면 이 브랜치에서만 실패한 수를 함께 알린다", () => {
+    const ownFailure: FailedTest = { ...failure, file: "route-select.spec.ts", titlePath: ["결과 없음을 알린다"] };
+    const notice = noticeFor({
+      ...summary,
+      failures: [failure, ownFailure],
+      outcome: "dev-problem",
+      devRunId: 1,
+      sharedFailures: [failure],
+    });
+
+    expect(notice.title).toBe("E2E: 실패 2개, dev와 겹침 1개");
+    expect(notice.message).toMatch(
+      /^dev push에서도 1개가 실패해요\. 이 브랜치에서만 실패한 1개는 healer를 부르지 않았어요\./,
     );
   });
 
@@ -70,7 +94,7 @@ describe("summaryFor", () => {
   });
 
   it("고친 파일이 없으면 적용 명령을 적지 않는다", () => {
-    const text = summaryFor({ ...summary, outcome: "healed", healer: createHealer({ verdict: "판단 못 함" }) });
+    const text = summaryFor({ ...summary, outcome: "healed", healer: createHealer({ verdicts: ["판단 못 함"] }) });
 
     expect(text).not.toContain("git apply");
     expect(text).toContain("(보고 없음)");

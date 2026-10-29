@@ -4,9 +4,18 @@ import path from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
-import { fetchFailures, fetchLatestDevPushRun, fetchRun, fetchRunFor, GhUnavailableError, type CiRun } from "./ci.ts";
+import {
+  fetchCancelMessages,
+  fetchFailures,
+  fetchLatestDevPushRun,
+  fetchRun,
+  fetchRunFor,
+  GhUnavailableError,
+  runEndingFor,
+  type CiRun,
+} from "./ci.ts";
 import { sharedFailuresFrom, type FailedTest } from "./failures.ts";
-import { promptFor, runHealer, verdictFrom, warningsFor, whyHealerCannotRun } from "./healer.ts";
+import { healerResultFor, promptFor, runHealer, warningsFor, whyHealerCannotRun } from "./healer.ts";
 import { markOrcaCard, noticeFor, notify, summaryFor, type Notice } from "./notify.ts";
 import {
   loadResult,
@@ -92,6 +101,7 @@ function announce(notice: Notice, runId: number) {
   notify(notice);
   const previousComment = markOrcaCard(worktreeDir, notice.title);
   if (previousComment !== null) {
+    mkdirSync(runDirFor(runId), { recursive: true });
     writeFileSync(path.join(runDirFor(runId), "orca-previous-comment.txt"), previousComment + "\n");
   }
 }
@@ -134,16 +144,31 @@ async function heal(runSummary: RunSummary, agent: Agent, artifactDir: string) {
       setupLog: path.join(runDir, "setup.log"),
     });
     const prompt = promptFor(agent, runSummary.failures, path.join(artifactDir, "playwright-report"));
-    const { finalMessage, seconds, timedOut } = await runHealer(agent, prompt, artifactDir, runDir);
+    const healerRun = await runHealer(agent, prompt, artifactDir, runDir);
     const { diff, changedFiles } = collectChanges(injected);
     writeFileSync(path.join(runDir, "healer.diff"), diff);
 
-    const verdict = verdictFrom(finalMessage);
-    const warnings = warningsFor(verdict, changedFiles);
-    if (timedOut) warnings.unshift("healer가 30분 안에 끝나지 않아 멈췄어요.");
+    const healerResult = healerResultFor(healerRun, healerRun.finalMessage);
+    if ("failure" in healerResult) {
+      announce(
+        {
+          title: `E2E: 실패 ${runSummary.failures.length}개, healer 판정 없음`,
+          subtitle: runSummary.branch,
+          message: `${healerResult.failure} 다시 돌리려면: pnpm ci:watch --run ${runSummary.runId}`,
+        },
+        runSummary.runId,
+      );
+      return;
+    }
+    const { verdicts } = healerResult;
+    const warnings = warningsFor(verdicts, changedFiles);
     finish(
-      { ...runSummary, outcome: "healed", healer: { agent, verdict, seconds, changedFiles, warnings } },
-      finalMessage,
+      {
+        ...runSummary,
+        outcome: "healed",
+        healer: { agent, verdicts, seconds: healerRun.seconds, changedFiles, warnings },
+      },
+      healerRun.finalMessage,
     );
   } finally {
     removeHealerWorktree(worktreeDir);
@@ -212,8 +237,23 @@ async function main() {
     runFinishMs,
   );
   if (!completed) return log(`실행 ${runId}가 90분 안에 끝나지 않아 감시를 멈춥니다.`);
-  if (completed.conclusion !== "failure") {
+  const ending = runEndingFor(
+    completed.conclusion,
+    completed.conclusion === "cancelled" ? fetchCancelMessages(runId) : [],
+  );
+  if (ending.kind === "quiet") {
     return log(`실행 ${runId}가 ${completed.conclusion}로 끝나 healer를 부르지 않습니다.`);
+  }
+  if (ending.kind === "stopped") {
+    announce(
+      {
+        title: `E2E: ${ending.title}`,
+        subtitle: completed.headBranch,
+        message: `실패 기록이 없어 healer를 부르지 않았어요. ${completed.url}`,
+      },
+      runId,
+    );
+    return;
   }
   await withHealerLock(() => handleFailure(completed, agent));
 }

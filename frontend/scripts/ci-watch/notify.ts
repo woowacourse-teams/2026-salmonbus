@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { testLabelOf } from "./failures.ts";
+import { testKeyOf, testLabelOf } from "./failures.ts";
 import { runDirFor, type WatchResult } from "./state.ts";
 
 export interface Notice {
@@ -16,14 +16,25 @@ export function titleFor(result: WatchResult) {
     case "not-e2e":
       return "E2E: 실패 없음, 다른 CI 단계 실패";
     case "dev-problem":
-      return `E2E: ${failures}, dev 쪽 문제`;
+      return branchOnlyFailuresOf(result).length > 0
+        ? `E2E: ${failures}, dev와 겹침 ${result.sharedFailures.length}개`
+        : `E2E: ${failures}, dev 쪽 문제`;
     case "healed":
-      return `E2E: ${failures}, ${result.healer.verdict ?? "판정 없음"}`;
+      return `E2E: ${failures}, ${result.healer.verdicts.join(", ")}`;
   }
 }
 
+function branchOnlyFailuresOf(result: Extract<WatchResult, { outcome: "dev-problem" }>) {
+  const sharedKeys = new Set(result.sharedFailures.map(testKeyOf));
+  return result.failures.filter((test) => !sharedKeys.has(testKeyOf(test)));
+}
+
 function leadFor(result: WatchResult) {
-  if (result.outcome === "dev-problem") return `dev push에서도 ${result.sharedFailures.length}개가 실패해요.`;
+  if (result.outcome === "dev-problem") {
+    const shared = `dev push에서도 ${result.sharedFailures.length}개가 실패해요.`;
+    const branchOnly = branchOnlyFailuresOf(result).length;
+    return branchOnly > 0 ? `${shared} 이 브랜치에서만 실패한 ${branchOnly}개는 healer를 부르지 않았어요.` : shared;
+  }
   if (result.outcome === "not-e2e") return "lint, 타입 검사, 빌드 같은 다른 단계를 확인해 주세요.";
 
   const [warning] = result.healer.warnings;
@@ -70,6 +81,15 @@ export function summaryFor(result: WatchResult, healerMessage = "") {
       "",
       "healer를 부르지 않았어요. dev가 고쳐지면 dev를 병합하고 다시 푸시해 주세요.",
     );
+    const branchOnlyFailures = branchOnlyFailuresOf(result);
+    if (branchOnlyFailures.length > 0) {
+      lines.push(
+        "",
+        "## 이 브랜치에서만 실패한 테스트",
+        "",
+        ...branchOnlyFailures.map((test) => `- ${testLabelOf(test)}`),
+      );
+    }
   }
   if (result.outcome === "healed") {
     const { healer } = result;
