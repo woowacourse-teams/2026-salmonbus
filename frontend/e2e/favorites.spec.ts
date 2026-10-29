@@ -553,8 +553,8 @@ test("손잡이를 끌어서 그룹 순서를 바꾸고 저장한다", async ({ 
   await expect
     .poll(async () => {
       const doneBounds = (await editor.getByRole("button", { name: "완료", exact: true }).boundingBox())!;
-      const logoutBounds = (await page.getByRole("button", { name: "로그아웃", exact: false }).boundingBox())!;
-      return logoutBounds.y - doneBounds.y - doneBounds.height;
+      const nextRowBounds = (await page.getByRole("link", { name: "새 소식", exact: true }).boundingBox())!;
+      return nextRowBounds.y - doneBounds.y - doneBounds.height;
     })
     .toBeCloseTo(24, 1);
   await editor
