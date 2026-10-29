@@ -16,6 +16,9 @@ struct MapMarkerImageChecks {
       }
     }
     for boarding in [true, false] {
+      precondition(MapMarkerImages.stop(selected: false, active: true, boardingAllowed: boarding).pngData()
+                   != MapMarkerImages.stop(selected: false, active: false, boardingAllowed: boarding).pngData(),
+                   "비선택 정류장은 활성 방향과 비활성 방향의 색상을 구분한다")
       precondition(MapMarkerImages.stop(selected: true, active: true, boardingAllowed: boarding).pngData()
                    == MapMarkerImages.stop(selected: true, active: false, boardingAllowed: boarding).pngData(),
                    "선택한 정류장은 활성 방향과 관계없이 같은 강조를 사용한다")
