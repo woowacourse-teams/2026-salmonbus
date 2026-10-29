@@ -3,16 +3,17 @@ import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import * as buttonStyles from "@/shared/styles/button.css";
 import { noteHeadingLabelOf } from "@/shared/whats-new/whatsNewCopy";
 import type { WhatsNewNote } from "@/shared/whats-new/whatsNewNotes";
+import type { WhatsNewCloseMethod } from "@/shared/whats-new/whatsNewPolicy";
 import * as styles from "./WhatsNewDialog.css";
 
 interface WhatsNewDialogProps {
   notes: readonly WhatsNewNote[];
-  onClose: () => void;
+  onClose: (closeMethod: WhatsNewCloseMethod) => void;
 }
 
 export function WhatsNewDialog({ notes, onClose }: WhatsNewDialogProps) {
   const notesList = useRef<HTMLDivElement>(null);
-  const closeFromBackdrop = useEffectEvent(onClose);
+  const closeFromBackdrop = useEffectEvent(() => onClose("backdrop"));
 
   useEffect(() => {
     const dialog = notesList.current?.closest("dialog");
@@ -42,7 +43,12 @@ export function WhatsNewDialog({ notes, onClose }: WhatsNewDialogProps) {
   }, []);
 
   return (
-    <ConfirmDialog title="새 소식이 있어요" className={styles.dialog} titleClassName={styles.title} onCancel={onClose}>
+    <ConfirmDialog
+      title="새 소식이 있어요"
+      className={styles.dialog}
+      titleClassName={styles.title}
+      onCancel={() => onClose("escape")}
+    >
       <div ref={notesList} className={styles.notes}>
         {notes.map((note) => (
           <section key={note.id} aria-labelledby={`whats-new-${note.id}`}>
@@ -59,7 +65,7 @@ export function WhatsNewDialog({ notes, onClose }: WhatsNewDialogProps) {
         ))}
       </div>
       <div className={styles.actions}>
-        <button className={buttonStyles.primary} type="button" onClick={onClose}>
+        <button className={buttonStyles.primary} type="button" onClick={() => onClose("closeButton")}>
           닫기
         </button>
       </div>
