@@ -19,19 +19,23 @@ export function GroupList() {
   const [mode, setMode] = useState<"view" | "order" | "delete">("view");
   const [selected, setSelected] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
-  const [deletedCount, setDeletedCount] = useState(0);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [notice, showNotice] = useState({ id: 0, message: "" });
   const { run, busy, error, setError } = useFavoriteAction();
   const editButton = useRef<HTMLButtonElement>(null);
   const deleteButton = useRef<HTMLButtonElement>(null);
   const selectionButton = useRef<HTMLButtonElement>(null);
   const deleting = mode === "delete";
-  const targets = groups.slice(1).filter((group) => selected.includes(group.id));
+  const removableGroups = groups.slice(1);
+  const targets = removableGroups.filter((group) => selected.includes(group.id));
   const changed = targets.length !== selected.length;
+  // 삭제 직후 목록을 다시 받기 전에도 지운 그룹은 남은 삭제 대상으로 세지 않는다.
+  const deletable = removableGroups.some((group) => !deletedIds.includes(group.id));
   useEffect(() => {
     if (mode === "view") return;
     const trigger = mode === "order" ? editButton : deleteButton;
-    return () => trigger.current?.focus();
+    const fallback = editButton;
+    return () => (trigger.current ?? fallback.current)?.focus();
   }, [mode]);
 
   function finishDeletion(count: number) {
@@ -59,8 +63,8 @@ export function GroupList() {
     // 중간 실패로 이미 삭제된 그룹도 목록에서 갱신하고 다시 요청하지 않는다.
     if (!ok) reload();
     setSelected((current) => current.filter((id) => !removed.includes(id)));
-    setDeletedCount((count) => count + removed.length);
-    if (ok) finishDeletion(deletedCount + removed.length);
+    setDeletedIds((ids) => [...ids, ...removed]);
+    if (ok) finishDeletion(deletedIds.length + removed.length);
   }
 
   if (mode === "order")
@@ -79,25 +83,27 @@ export function GroupList() {
       <h2 className={styles.heading}>
         <span>{`내 그룹  ${groups.length} / ${MAX_FAVORITE_GROUPS}`}</span>
         {deleting ? (
-          <button className={styles.cancelSelection} disabled={busy} onClick={() => finishDeletion(deletedCount)}>
+          <button className={styles.cancelSelection} disabled={busy} onClick={() => finishDeletion(deletedIds.length)}>
             취소
           </button>
         ) : (
           <span className={styles.tools}>
-            <button
-              ref={deleteButton}
-              className={`${styles.edit} ${styles.deleteTool}`}
-              disabled={groups.length === 0 || resource.status !== "success"}
-              aria-label="그룹 삭제 선택"
-              onClick={(event) => {
-                event.currentTarget.focus();
-                setSelected([]);
-                setDeletedCount(0);
-                setError(null);
-                setMode("delete");
-                reload();
-              }}
-            />
+            {deletable && (
+              <button
+                ref={deleteButton}
+                className={`${styles.edit} ${styles.deleteTool}`}
+                disabled={resource.status !== "success"}
+                aria-label="그룹 삭제 선택"
+                onClick={(event) => {
+                  event.currentTarget.focus();
+                  setSelected([]);
+                  setDeletedIds([]);
+                  setError(null);
+                  setMode("delete");
+                  reload();
+                }}
+              />
+            )}
             <button
               ref={editButton}
               className={styles.edit}
@@ -197,20 +203,20 @@ export function GroupList() {
         >
           {(error || changed) && (
             <p className={formStyles.error} role="alert">
-              {deletedCount > 0 && "일부 그룹은 삭제됐어요. 남은 그룹만 다시 삭제할 수 있어요. "}
+              {deletedIds.length > 0 && "일부 그룹은 삭제됐어요. 남은 그룹만 다시 삭제할 수 있어요. "}
               {changed ? "그룹 목록이 변경됐어요. 취소하고 다시 선택해 주세요." : error}
             </p>
           )}
           <div className={styles.dialogActions}>
+            <button className={styles.cancel} disabled={busy} onClick={() => setConfirming(false)}>
+              취소
+            </button>
             <button
               className={styles.confirm}
               disabled={busy || changed || selected.length === 0 || resource.status !== "success"}
               onClick={() => void removeSelected()}
             >
               {busy ? "삭제 중…" : "삭제"}
-            </button>
-            <button className={styles.cancel} disabled={busy} onClick={() => setConfirming(false)}>
-              취소
             </button>
           </div>
         </ConfirmDialog>

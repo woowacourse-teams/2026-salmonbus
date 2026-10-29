@@ -133,6 +133,9 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
               </button>
             ) : (
               <>
+                <button className={styles.cancel} disabled={busy} onClick={() => setDeleting(null)}>
+                  취소
+                </button>
                 <button
                   className={styles.confirm}
                   disabled={busy}
@@ -149,9 +152,6 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
                   }
                 >
                   {busy ? "삭제 중…" : "삭제"}
-                </button>
-                <button className={styles.cancel} disabled={busy} onClick={() => setDeleting(null)}>
-                  취소
                 </button>
               </>
             )}

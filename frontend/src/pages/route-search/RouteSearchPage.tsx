@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router";
 import { track } from "@/shared/analytics/track";
+import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, paths } from "@/shared/routing/paths";
 import { initialInputFrom } from "@/shared/routing/routeSearchEntry";
 import { routeSelectedPropertiesOf, unmatchedQueryOf } from "./analytics/searchEventPolicy";
@@ -7,6 +8,7 @@ import { useUnmatchedSearchEvent } from "./analytics/useUnmatchedSearchEvent";
 import { SearchForm } from "./components/SearchForm";
 import { SearchResults } from "./components/SearchResults";
 import { submitSelectionFor, type RouteSelection } from "./displayPolicy";
+import { newBadgeHopKeyFor } from "./new-route/newBadgeHopPolicy";
 import { BACK_LABEL } from "./routeSearchCopy";
 import { useRouteSearch } from "./useRouteSearch";
 import * as styles from "./RouteSearchPage.css";
@@ -20,14 +22,14 @@ export function RouteSearchPage() {
   // 판정 보드에서 뒤로 가면 검색 화면을 거치지 않고 홈으로 간다.
   // 검색 화면이 첫 기록이면 그 자리를 홈으로 바꾼 뒤 보드를 쌓아서, 보드 앞에 홈이 있게 한다.
   const handleSelect = (selection: RouteSelection) => {
-    track("route_selected", routeSelectedPropertiesOf(selection));
+    track("route_selected", routeSelectedPropertiesOf(selection, input));
     const boardPath = boardPathFor(selection.route.id);
     if (location.key === "default") {
       void navigate(paths.routeSelect, { replace: true });
-      void navigate(boardPath);
+      void navigate(boardPath, { state: boardEntryStateFor("search") });
       return;
     }
-    void navigate(boardPath, { replace: true });
+    void navigate(boardPath, { replace: true, state: boardEntryStateFor("search") });
   };
 
   const handleSubmit = () => {
@@ -48,7 +50,12 @@ export function RouteSearchPage() {
         />
       </header>
       <main className={styles.results}>
-        <SearchResults view={view} onSelect={handleSelect} onRetry={retry} />
+        <SearchResults
+          view={view}
+          onSelect={handleSelect}
+          onRetry={retry}
+          newBadgeHopKey={newBadgeHopKeyFor(view, input)}
+        />
       </main>
     </div>
   );

@@ -116,6 +116,12 @@ export function createApiData(): {
       ...route,
       referenceVersionId: "1",
       turnSequence: 12,
+      headways: {
+        weekday: { minMinutes: 15, maxMinutes: 25 },
+        saturday: { minMinutes: 20, maxMinutes: 30 },
+        sunday: { minMinutes: 25, maxMinutes: 35 },
+        holiday: null,
+      },
       directions: [
         {
           id: "UP",

@@ -67,14 +67,14 @@ export interface NativeMapCommands {
   layout: NativeMapLayout;
   camera: NativeCameraCommand;
   location: { requestId: number };
-  unmount: Record<string, never>;
+  unmount: Record<never, never>;
 }
 export interface NativeMapEvents {
-  ready: Record<string, never>;
-  ack: { revision: number };
+  ready: Record<never, never>;
+  ack: { appliedRevision: number };
   stopPress: { selection: NativeStopSelection };
   vehiclePress: { selection: NativeStopSelection; key: string };
-  mapPress: Record<string, never>;
+  mapPress: Record<never, never>;
   locationResult: {
     requestId: number;
     coordinate?: NativeCoordinate;
@@ -82,15 +82,17 @@ export interface NativeMapEvents {
   };
   error: { message: string };
 }
-export type NativeMapMessage<T extends keyof NativeMapCommands = keyof NativeMapCommands> = {
-  [K in T]: { v: 1; sessionId: string; revision: number; type: K; payload: NativeMapCommands[K] };
-}[T];
+/** 지도 메시지마다 payload에 함께 싣는 값. 앱은 지금 지도 세션의 revision이 늘어난 메시지만 적용한다. */
+export interface NativeMapSession {
+  sessionId: string;
+  revision: number;
+}
+export type NativeMapBridgeCommands = {
+  [K in keyof NativeMapCommands as `map.${K}`]: NativeMapSession & NativeMapCommands[K];
+};
+export type NativeMapBridgeEvents = {
+  [K in keyof NativeMapEvents as `map.${K}`]: NativeMapSession & NativeMapEvents[K];
+};
 export type NativeMapEvent = {
-  [K in keyof NativeMapEvents]: {
-    v: 1;
-    sessionId: string;
-    revision: number;
-    type: K;
-    payload: NativeMapEvents[K];
-  };
+  [K in keyof NativeMapEvents]: { type: K; payload: NativeMapEvents[K] };
 }[keyof NativeMapEvents];

@@ -22,11 +22,13 @@ import com.gustler.backend.api.route.domain.RouteStatus;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.IntStream;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -35,12 +37,14 @@ public class FavoriteOverviewService {
     private final DefaultFavoriteGroupService defaultGroupService;
     private final BoardQueryService boards;
     private final ArrivalQueryService arrivals;
+    private final Executor arrivalExecutor;
 
     public FavoriteOverviewService(DefaultFavoriteGroupService defaultGroupService, BoardQueryService boards,
-        ArrivalQueryService arrivals) {
+        ArrivalQueryService arrivals, @Qualifier("favoriteArrivalExecutor") Executor arrivalExecutor) {
         this.defaultGroupService = defaultGroupService;
         this.boards = boards;
         this.arrivals = arrivals;
+        this.arrivalExecutor = arrivalExecutor;
     }
 
     public FavoriteOverview get(UUID memberPublicId) {
@@ -50,27 +54,31 @@ public class FavoriteOverviewService {
     public FavoriteOverview get(UUID memberPublicId, UUID groupId) {
         MemberFavoriteGroups owned = defaultGroupService.ensure(memberPublicId);
         Map<String, BoardLoad> loadedBoards = new HashMap<>();
-        Map<String, Optional<StationArrivalsOverview>> loadedArrivals = new HashMap<>();
+        Map<String, CompletableFuture<StationArrivalsOverview>> loadedArrivals = new HashMap<>();
         List<FavoriteGroup> selectedGroups = selectedGroups(owned, groupId);
-        List<FavoriteOverview.Group> groups = selectedGroups.stream()
-            .map(group -> new FavoriteOverview.Group(
-                group.id().value(),
-                group.name().value(),
+        // 요청 내 중복 제거 Map은 요청 스레드에서만 다룬다. 모두 제출한 뒤 저장 순서로 결합한다.
+        List<PendingGroup> pending = selectedGroups.stream()
+            .map(group -> new PendingGroup(
+                group,
                 group.favorites().stream()
                 .map(favorite -> item(favorite, loadedBoards, loadedArrivals))
                 .toList()
             ))
             .toList();
+        List<FavoriteOverview.Group> groups = pending.stream()
+            .map(group -> new FavoriteOverview.Group(group.group().id().value(), group.group().name().value(),
+                group.items().stream().map(CompletableFuture::join).toList()))
+            .toList();
         return new FavoriteOverview(groups);
     }
 
-    private FavoriteOverview.Item item(Favorite favorite, Map<String, BoardLoad> loadedBoards,
-        Map<String, Optional<StationArrivalsOverview>> loadedArrivals) {
+    private CompletableFuture<FavoriteOverview.Item> item(Favorite favorite, Map<String, BoardLoad> loadedBoards,
+        Map<String, CompletableFuture<StationArrivalsOverview>> loadedArrivals) {
         String routeId = favorite.target().routeId();
         String stopId = favorite.target().stopId();
         BoardLoad load = loadedBoards.computeIfAbsent(routeId, this::loadBoard);
         if (load.board() == null) {
-            return unavailable(favorite, load.status(), load.reason());
+            return CompletableFuture.completedFuture(unavailable(favorite, load.status(), load.reason()));
         }
         Board board = load.board();
         List<StopState> matchingStops = board.stops().stream()
@@ -79,23 +87,31 @@ public class FavoriteOverviewService {
             .filter(stop -> stop.direction().name().equals(favorite.target().direction().name()))
             .toList();
         if (matchingStops.isEmpty()) {
-            return unavailable(
+            return CompletableFuture.completedFuture(unavailable(
                 favorite,
                 FavoriteOverview.ItemStatus.UNAVAILABLE,
                 FavoriteOverview.ItemReason.TARGET_NOT_IN_CURRENT_ROUTE
-            );
+            ));
         }
         if (matchingStops.size() > 1) {
-            return unavailable(
+            return CompletableFuture.completedFuture(unavailable(
                 favorite,
                 FavoriteOverview.ItemStatus.AMBIGUOUS,
                 FavoriteOverview.ItemReason.MULTIPLE_CURRENT_VISITS
-            );
+            ));
         }
         StopState stop = matchingStops.getFirst();
         List<ApproachingVehicle> approaching = stop.approachingVehicles().stream().limit(3).toList();
         FavoriteOverview.ItemStatus status = statusOf(board, approaching);
-        List<FavoriteOverview.Vehicle> vehicles = vehicles(board, stop, approaching, loadedArrivals);
+        CompletableFuture<StationArrivalsOverview> arrival = approaching.isEmpty()
+            ? CompletableFuture.completedFuture(null)
+            : loadedArrivals.computeIfAbsent(arrivalKey(board, stop), ignored -> loadArrival(board, stop));
+        return arrival.thenApply(result -> itemWithArrival(favorite, board, stop, approaching, status, result));
+    }
+
+    private FavoriteOverview.Item itemWithArrival(Favorite favorite, Board board, StopState stop,
+        List<ApproachingVehicle> approaching, FavoriteOverview.ItemStatus status, StationArrivalsOverview arrival) {
+        List<FavoriteOverview.Vehicle> vehicles = vehicles(board, stop, approaching, arrival);
         FavoriteOverview.Stop selectedStop = new FavoriteOverview.Stop(
             stop.stopId(),
             stop.name(),
@@ -107,17 +123,23 @@ public class FavoriteOverviewService {
     }
 
     private List<FavoriteOverview.Vehicle> vehicles(Board board, StopState stop, List<ApproachingVehicle> approaching,
-        Map<String, Optional<StationArrivalsOverview>> loadedArrivals) {
-        if (approaching.isEmpty()) {
-            return List.of();
-        }
-        String key = board.route().id() + ":" + stop.stopId() + ":" + stop.sequence();
-        StationArrivalsOverview arrival = loadedArrivals
-            .computeIfAbsent(key, ignored -> Optional.ofNullable(arrival(board, stop)))
-            .orElse(null);
-        return IntStream.range(0, approaching.size())
-            .mapToObj(index -> vehicle(approaching.get(index), index, arrival, board.route().id(), stop.sequence()))
+        StationArrivalsOverview arrival) {
+        return approaching.stream()
+            .map(source -> vehicle(source, arrival, board.route().id(), stop.sequence()))
             .toList();
+    }
+
+    private static String arrivalKey(Board board, StopState stop) {
+        return board.route().id() + ":" + stop.stopId() + ":" + stop.sequence();
+    }
+
+    private CompletableFuture<StationArrivalsOverview> loadArrival(Board board, StopState stop) {
+        try {
+            return CompletableFuture.supplyAsync(() -> arrival(board, stop), arrivalExecutor);
+        } catch (RejectedExecutionException full) {
+            // 대기열을 늘리거나 ETA를 버리지 않고 기존 요청 스레드에서 처리한다.
+            return CompletableFuture.completedFuture(arrival(board, stop));
+        }
     }
 
     private StationArrivalsOverview arrival(Board board, StopState stop) {
@@ -129,14 +151,8 @@ public class FavoriteOverviewService {
         }
     }
 
-    private FavoriteOverview.Vehicle vehicle(ApproachingVehicle source, final int index,
+    private FavoriteOverview.Vehicle vehicle(ApproachingVehicle source,
         StationArrivalsOverview arrival, String routeId, final int stopSequence) {
-        if (index >= 2) {
-            return new FavoriteOverview.Vehicle(
-                source,
-                FavoriteOverview.Eta.unavailable(FavoriteOverview.EtaReason.SOURCE_NOT_PROVIDED)
-            );
-        }
         FavoriteOverview.Eta eta = eta(source.vehicleId(), arrival, routeId, stopSequence);
         return new FavoriteOverview.Vehicle(source, eta);
     }
@@ -240,5 +256,8 @@ public class FavoriteOverviewService {
         FavoriteOverview.ItemStatus status,
         FavoriteOverview.ItemReason reason
     ) {
+    }
+
+    private record PendingGroup(FavoriteGroup group, List<CompletableFuture<FavoriteOverview.Item>> items) {
     }
 }

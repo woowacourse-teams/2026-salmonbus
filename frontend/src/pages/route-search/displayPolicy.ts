@@ -1,25 +1,42 @@
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import { matchingRoutesFor } from "./routeSearchPolicy";
+import { newRouteIdsFor, type FirstSeenTimes } from "./new-route/newRoutePolicy";
+import { isInService, matchingRoutesFor, numberOrderedRoutesFor, type InServiceRoute } from "./routeSearchPolicy";
 
-export type RoutesState = { status: "loading" } | { status: "error" } | { status: "ready"; routes: RouteSummary[] };
+export type RoutesState =
+  | { status: "loading"; routes?: never; firstSeenTimes?: never; checkedAt?: never }
+  | { status: "error"; routes?: never; firstSeenTimes?: never; checkedAt?: never }
+  | { status: "ready"; routes: RouteSummary[]; firstSeenTimes: FirstSeenTimes; checkedAt: number };
+
+export interface ListedRoute extends InServiceRoute {
+  isNew: boolean;
+}
 
 export type SearchView =
-  | { kind: "empty" }
-  | { kind: "loading" }
-  | { kind: "error" }
-  | { kind: "matched"; routes: RouteSummary[] }
-  | { kind: "unmatched" };
+  | { kind: "empty"; routes?: never }
+  | { kind: "loading"; routes?: never }
+  | { kind: "error"; routes?: never }
+  | { kind: "all"; routes: ListedRoute[] }
+  | { kind: "matched"; routes: ListedRoute[] }
+  | { kind: "unmatched"; routes?: never };
 
 export function searchViewFor(routesState: RoutesState, input: string): SearchView {
   if (routesState.status === "error") return { kind: "error" };
-  if (input.trim() === "") return { kind: "empty" };
   if (routesState.status === "loading") return { kind: "loading" };
-  const matched = matchingRoutesFor(routesState.routes, input);
+  const { routes, firstSeenTimes, checkedAt } = routesState;
+  const newRouteIds = newRouteIdsFor(firstSeenTimes, checkedAt);
+  const listedRoutes = numberOrderedRoutesFor(routes.filter(isInService)).map((route) => ({
+    ...route,
+    isNew: newRouteIds.has(route.id),
+  }));
+  if (input.trim() === "") {
+    return listedRoutes.length > 0 ? { kind: "all", routes: listedRoutes } : { kind: "empty" };
+  }
+  const matched = matchingRoutesFor(listedRoutes, input);
   return matched.length > 0 ? { kind: "matched", routes: matched } : { kind: "unmatched" };
 }
 
 export interface RouteSelection {
-  route: RouteSummary;
+  route: ListedRoute;
   position: number;
   listedCount: number;
 }

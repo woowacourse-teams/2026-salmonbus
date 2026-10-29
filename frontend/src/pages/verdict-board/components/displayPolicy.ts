@@ -1,5 +1,13 @@
 import type { ApiFailure } from "@/shared/api/client";
-import type { Board, Direction, DirectionInfo, StopState, Vehicle } from "@/shared/api/routeForecast.types";
+import type {
+  Board,
+  Direction,
+  DirectionInfo,
+  HeadwayRange,
+  StopState,
+  Vehicle,
+} from "@/shared/api/routeForecast.types";
+import { isPositiveInteger, isRecord } from "@/shared/utils/valueGuards";
 import {
   arrivalViewsFor,
   representativeArrival,
@@ -50,6 +58,26 @@ export interface DirectionView {
 // 관측 시각은 계약상 KST(+09:00)로 계산하여 보여준다.
 const KST_LOCAL_TIME = /T(\d{2}):(\d{2})[^Z]*\+09:00$/;
 const CLOCK_TIME = /^(\d{1,2}):(\d{2})$/;
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+export function headwayLabelFor(headways: Board["route"]["headways"], now: number): string {
+  const day = new Date(now + KST_OFFSET_MS).getUTCDay();
+  const range = headwayRangeFrom(headways?.[day === 0 ? "sunday" : day === 6 ? "saturday" : "weekday"]);
+  return range === null ? "정보 준비 중" : `${range.minMinutes}~${range.maxMinutes}분`;
+}
+
+function headwayRangeFrom(value: unknown): HeadwayRange | null {
+  if (
+    !isRecord(value) ||
+    !isPositiveInteger(value.minMinutes) ||
+    !isPositiveInteger(value.maxMinutes) ||
+    value.minMinutes > value.maxMinutes ||
+    value.maxMinutes > 1440
+  ) {
+    return null;
+  }
+  return { minMinutes: value.minMinutes, maxMinutes: value.maxMinutes };
+}
 
 export function serviceStateFor(
   board: Board,

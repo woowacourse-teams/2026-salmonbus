@@ -76,7 +76,8 @@ for (const width of [320, 425]) {
     await dialog.getByRole("button", { name: "삭제", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(region.getByRole("link")).toHaveCount(2);
-    await expect(remove).toBeFocused();
+    await expect(remove).toHaveCount(0);
+    await expect(order).toBeFocused();
     expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId]);
     expect(favorites.groups[0]!.favorites).toHaveLength(1);
     expect(favorites.requests.filter((request) => request.method === "DELETE").map((request) => request.path)).toEqual(
@@ -140,7 +141,11 @@ for (const failedId of [schoolId, weekendId]) {
   });
 }
 
-test("삭제 중에는 취소·중복 클릭을 막고 대표 그룹 하나만 있어도 선택할 수 없다", async ({ page, favorites, api }) => {
+test("삭제 중에는 취소와 중복 클릭을 막고 대표 그룹 하나만 남으면 삭제 버튼을 숨긴다", async ({
+  page,
+  favorites,
+  api,
+}) => {
   let release = () => {};
   const response = new Promise<void>((resolve) => {
     release = resolve;
@@ -166,12 +171,11 @@ test("삭제 중에는 취소·중복 클릭을 막고 대표 그룹 하나만 �
   }
   await expect(dialog).toHaveCount(0);
   expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId, weekendId]);
+  await expect(region.getByRole("button", { name: "그룹 삭제 선택", exact: true })).toBeVisible();
   favorites.groups = favorites.groups.slice(0, 1);
   await page.reload();
-  await region.getByRole("button", { name: "그룹 삭제 선택", exact: true }).click();
-  await expect(region.getByRole("checkbox")).toHaveCount(0);
-  await expect(region.getByText("대표 그룹", { exact: true })).toBeVisible();
-  await expect(region.getByRole("button", { name: "선택한 그룹 0개 삭제", exact: true })).toBeDisabled();
+  await expect(region.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true })).toBeEnabled();
+  await expect(region.getByRole("button", { name: "그룹 삭제 선택", exact: true })).toHaveCount(0);
 });
 
 test("선택 중 대표 그룹이 바뀌면 삭제를 막고 다시 선택한 현재 비대표 그룹만 삭제한다", async ({ page, favorites }) => {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
+import { trackBeforeLeaving } from "@/shared/analytics/track";
 import type { LoginProvider } from "@/shared/api/auth.types";
 import { Brand } from "@/shared/components/Brand";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
@@ -7,6 +8,7 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { clearLoginReturn, saveLoginReturn } from "@/shared/routing/loginReturn";
 import { localReturnTo, boardReturnTo } from "@/shared/routing/loginReturnPolicy";
 import * as buttonStyles from "@/shared/styles/button.css";
+import { loginEntryOf } from "./analytics/loginEventPolicy";
 import * as styles from "./LoginPage.css";
 
 export function LoginPage() {
@@ -36,11 +38,12 @@ export function LoginPage() {
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
-  function login(provider: LoginProvider) {
+  async function login(provider: LoginProvider) {
     if (pending) return;
     setLoginResult(null);
     saveLoginReturn(returnTo, provider);
     setPending(true);
+    await trackBeforeLeaving("login_started", { provider, entry: loginEntryOf(returnTo) });
     window.location.assign(
       `/api/auth/${provider.toLowerCase()}/start?${new URLSearchParams({ returnTo: boardReturnTo(returnTo) })}`,
     );
@@ -73,7 +76,7 @@ export function LoginPage() {
           type="button"
           className={styles.kakao}
           disabled={pending || state.status === "loading" || state.status === "unavailable" || state.status === "error"}
-          onClick={() => login("KAKAO")}
+          onClick={() => void login("KAKAO")}
         >
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 3C6.5 3 2 6.5 2 10.8c0 2.8 1.9 5.3 4.8 6.7L6 21l4-2.4h2c5.5 0 10-3.5 10-7.8S17.5 3 12 3Z" />
@@ -84,7 +87,7 @@ export function LoginPage() {
           type="button"
           className={styles.apple}
           disabled={pending || state.status === "loading" || state.status === "unavailable" || state.status === "error"}
-          onClick={() => login("APPLE")}
+          onClick={() => void login("APPLE")}
         >
           <span aria-hidden="true" style={{ fontSize: 23 }}>
             
@@ -129,9 +132,6 @@ export function LoginPage() {
         <ConfirmDialog title="로그인을 완료하지 못했어요" onCancel={dismissFailure}>
           <p className={styles.caption}>다시 로그인하거나 돌아가서 노선을 검색할 수 있어요.</p>
           <div className={styles.actions}>
-            <button className={buttonStyles.primary} type="button" onClick={dismissFailure}>
-              다시 로그인
-            </button>
             <button
               className={buttonStyles.secondary}
               type="button"
@@ -141,6 +141,9 @@ export function LoginPage() {
               }}
             >
               돌아가기
+            </button>
+            <button className={buttonStyles.primary} type="button" onClick={dismissFailure}>
+              다시 로그인
             </button>
           </div>
         </ConfirmDialog>

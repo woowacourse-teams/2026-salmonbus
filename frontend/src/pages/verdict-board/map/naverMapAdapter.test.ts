@@ -32,6 +32,7 @@ class ElementStub {
   children: ElementStub[] = [];
   attributes = new Map<string, string>();
   listeners = new Map<string, (event: Event) => void>();
+  captureListeners = new Map<string, (event: Event) => void>();
   focus = jest.fn<(options?: FocusOptions) => void>();
   constructor(tagName = "div") {
     this.tagName = tagName.toUpperCase();
@@ -48,11 +49,12 @@ class ElementStub {
   replaceChildren(...children: ElementStub[]) {
     this.children = children;
   }
-  addEventListener(name: string, listener: (event: Event) => void) {
-    this.listeners.set(name, listener);
+  addEventListener(name: string, listener: (event: Event) => void, options?: AddEventListenerOptions | boolean) {
+    const capture = typeof options === "boolean" ? options : options?.capture;
+    (capture ? this.captureListeners : this.listeners).set(name, listener);
   }
-  removeEventListener(name: string) {
-    this.listeners.delete(name);
+  removeEventListener(name: string, _listener: unknown, capture = false) {
+    (capture ? this.captureListeners : this.listeners).delete(name);
   }
   getBoundingClientRect() {
     return { left: 10, top: 20 };
@@ -678,7 +680,7 @@ describe("네이버 지도 adapter", () => {
   it("GL fallback에서도 터치 더블탭 뒤의 합성 더블클릭은 확대를 중복 실행하지 않는다", () => {
     const { native, element } = setup(false);
     const zoomBy = jest.spyOn(native.map as NaverMap, "zoomBy");
-    element.listeners.get("touchend")!({ timeStamp: 100 } as Event);
+    element.captureListeners.get("touchend")!({ timeStamp: 100 } as Event);
     const doubleClick = element.listeners.get("dblclick")!;
     const input = { clientX: 110, clientY: 120, target: null, preventDefault: jest.fn(), stopPropagation: jest.fn() };
     doubleClick({ ...input, timeStamp: 200 } as unknown as Event);
@@ -1044,7 +1046,7 @@ describe("네이버 지도 adapter", () => {
     expect(pin!.children[0]).toBe(image);
     expect(button.listeners.get("click")).toBe(click);
   });
-  it("이미 확대한 줌과 마커 DOM을 유지하며 이동 중인 핀의 최신 표시 좌표까지 부드럽게 이동한다", () => {
+  it("최초 이동이 끝나도 핀의 보간 좌표를 계속 추적하고 줌과 마커 DOM을 유지한다", () => {
     const { native, adapter, onSelect, onVehicleSelect, flushFrames, windowListeners } = setup();
     const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     adapter.update(null, "UP", [view]);
@@ -1090,6 +1092,12 @@ describe("네이버 지도 adapter", () => {
     expect(setIcon).not.toHaveBeenCalled();
     expect(setMap).not.toHaveBeenCalled();
     expect(windowListeners.size).toBe(0);
+
+    adapter.moveVehicles([{ key: view.key, sequencePosition: view.vehicle.currentStopSequence + 0.9 }]);
+    expect(native.map.center.lat()).toBeCloseTo(bus.options.position.lat(), 12);
+    expect(native.map.center.lng()).toBeCloseTo(bus.options.position.lng(), 12);
+    expect(native.map.zoom).toBe(17.25);
+    expect(button.focus).toHaveBeenCalledTimes(1);
   });
   it("동작 줄이기를 사용하면 현재 표시된 차량 위치로 즉시 이동하고 포커스한다", () => {
     const { native, adapter, pendingFrames, windowListeners } = setup(true, { reducedMotion: true });
@@ -1107,6 +1115,48 @@ describe("네이버 지도 adapter", () => {
     expect(button.focus).toHaveBeenCalledWith({ preventScroll: true });
     expect(pendingFrames.size).toBe(0);
     expect(windowListeners.size).toBe(0);
+    adapter.moveVehicles([{ key: view.key, sequencePosition: view.vehicle.currentStopSequence + 0.75 }]);
+    expect(native.map.center.lat()).toBeCloseTo(bus.options.position.lat(), 12);
+    expect(native.map.center.lng()).toBeCloseTo(bus.options.position.lng(), 12);
+  });
+
+  it("다른 버스로 추적을 전환하고 이동이 끝난 뒤에도 지도 입력과 차량 제거로 추적을 멈춘다", () => {
+    for (const interruption of [
+      "wheel",
+      "touchstart",
+      "pointerdown",
+      "keydown",
+      "null",
+      "remove",
+      "direction",
+      "destroy",
+    ]) {
+      const { native, adapter, element, pendingFrames } = setup(true, { reducedMotion: true });
+      const views = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP").slice(0, 2);
+      const [first, second] = views;
+      if (first === undefined || second === undefined) throw new Error("추적할 차량 두 대가 필요합니다");
+      adapter.update(null, "UP", views);
+      adapter.focusVehicle(first.key);
+      adapter.focusVehicle(second.key);
+      const center = native.map.center;
+      adapter.moveVehicles([{ key: first.key, sequencePosition: first.vehicle.currentStopSequence + 0.5 }]);
+      expect(native.map.center.lat()).toBe(center.lat());
+      expect(native.map.center.lng()).toBe(center.lng());
+      adapter.moveVehicles([{ key: second.key, sequencePosition: second.vehicle.currentStopSequence + 0.5 }]);
+      expect([native.map.center.lat(), native.map.center.lng()]).not.toEqual([center.lat(), center.lng()]);
+
+      if (interruption === "null") adapter.focusVehicle(null);
+      else if (interruption === "remove") adapter.update(null, "UP", [first]);
+      else if (interruption === "direction") adapter.update(null, "DOWN", views);
+      else if (interruption === "destroy") adapter.destroy();
+      else element.captureListeners.get(interruption)?.(new Event(interruption));
+      const stopped = native.map.center;
+      adapter.moveVehicles([{ key: second.key, sequencePosition: second.vehicle.currentStopSequence + 0.75 }]);
+      expect(native.map.center).toBe(stopped);
+      expect(element.captureListeners.size).toBe(0);
+      if (interruption !== "destroy") adapter.destroy();
+      expect(pendingFrames.size).toBe(0);
+    }
   });
   it("차량 선택은 포커스와 별개로 유지하고 폴링·선택 변경·해제에도 같은 마커를 사용한다", () => {
     const { native, adapter, onVehicleSelect } = setup(true, { reducedMotion: true });
@@ -1233,7 +1283,7 @@ describe("네이버 지도 adapter", () => {
       "destroy",
     ];
     for (const interruption of interruptions) {
-      const { native, adapter, flushFrames, windowListeners } = setup();
+      const { native, adapter, element, flushFrames, windowListeners } = setup();
       const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
       adapter.update(null, "UP", [view]);
       const bus = native.markers.find(
@@ -1250,7 +1300,7 @@ describe("네이버 지도 adapter", () => {
       else if (interruption === "location") adapter.showLocation({ latitude: 37.4, longitude: 127.1 });
       else if (interruption === "remove") adapter.update(null, "UP", []);
       else if (interruption === "destroy") adapter.destroy();
-      else windowListeners.get(interruption)!();
+      else element.captureListeners.get(interruption)?.(new Event(interruption));
       const center = native.map.center;
       const zoom = native.map.zoom;
       const centerUpdates = setCenter.mock.calls.length;

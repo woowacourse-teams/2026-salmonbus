@@ -21,6 +21,7 @@ export const vars = createGlobalTheme(":root", {
     rowDivider: "#E2DFD8",
     compactRowSurface: "#F7F8FA",
     searchFieldSurface: "#F2F4F6",
+    pressedRowSurface: "#F2F4F6",
     mutedChipSurface: "#EDEDEB",
     forecastCardSurface: "#F7F7F5",
     forecastCardBorder: "#E3E2DE",
@@ -95,8 +96,7 @@ export const vars = createGlobalTheme(":root", {
   layout: {
     axisX: "61px",
     nameX: "83px",
-    headHeight: "76px",
-    openHeadHeight: "48.5px",
+    headHeight: "64px",
     compactHeight: "48px",
     ring: "12px",
     ringCompact: "10px",

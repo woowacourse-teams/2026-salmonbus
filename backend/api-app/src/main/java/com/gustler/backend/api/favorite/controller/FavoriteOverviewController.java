@@ -40,7 +40,7 @@ public class FavoriteOverviewController {
             + "보내면 회원이 소유한 해당 그룹 하나만 groups 배열로 반환합니다. "
             + "회원이 정한 순서대로 현재 watch의 정류장 정보와 접근 차량을 반환합니다. "
             + "접근 차량의 필드 이름과 좌석 예보는 watch 계약을 유지하며 ETA만 추가합니다. "
-            + "세 번째 차량의 ETA는 UNAVAILABLE, SOURCE_NOT_PROVIDED입니다. "
+            + "표시 순서와 관계없이 같은 차량 ID의 유효한 ETA를 연결하며, ETA가 없어도 접근 차량은 최대 3대까지 유지합니다. "
             + "한 항목의 실패는 다른 항목을 숨기지 않습니다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "즐겨찾기 그룹별 노선 정류장 항목",

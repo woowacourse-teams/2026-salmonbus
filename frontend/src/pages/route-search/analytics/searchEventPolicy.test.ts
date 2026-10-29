@@ -1,23 +1,44 @@
 import { describe, expect, it } from "@jest/globals";
-import type { RouteSummary } from "@/shared/api/routeForecast.types";
+import type { ListedRoute } from "../displayPolicy";
 import { routeSelectedPropertiesOf, unmatchedQueryOf } from "./searchEventPolicy";
 
-const route: RouteSummary = {
+const route: ListedRoute = {
   id: "204000057",
   displayName: "3330",
   startStopName: "기점",
   endStopName: "종점",
   status: "FORECAST_READY",
+  isNew: false,
 };
 
 describe("routeSelectedPropertiesOf", () => {
-  it("고른 노선과 검색 결과 안 위치, 결과 개수를 담는다", () => {
-    expect(routeSelectedPropertiesOf({ route, position: 0, listedCount: 3 })).toEqual({
+  it("고른 노선과 목록 안 위치, 목록 개수, 친 숫자 자릿수를 담는다", () => {
+    expect(routeSelectedPropertiesOf({ route, position: 0, listedCount: 3 }, "33")).toEqual({
       route_id: "204000057",
       route_status: "FORECAST_READY",
+      is_new: false,
       result_position: 0,
       result_count: 3,
+      query_length: 2,
     });
+  });
+
+  it("새 노선을 고르면 새 노선이라고 담는다", () => {
+    expect(
+      routeSelectedPropertiesOf({ route: { ...route, isNew: true }, position: 1, listedCount: 3 }, "3").is_new,
+    ).toBe(true);
+  });
+
+  it("입력 전 목록에서 고르면 친 숫자 자릿수가 0이다", () => {
+    expect(routeSelectedPropertiesOf({ route, position: 7, listedCount: 20 }, "").query_length).toBe(0);
+  });
+
+  it("공백만 친 입력에서 고르면 친 숫자 자릿수가 0이다", () => {
+    expect(routeSelectedPropertiesOf({ route, position: 7, listedCount: 20 }, "  ").query_length).toBe(0);
+  });
+
+  it("번이 붙은 입력은 숫자만 센다", () => {
+    expect(routeSelectedPropertiesOf({ route, position: 0, listedCount: 1 }, "3330번").query_length).toBe(4);
   });
 });
 

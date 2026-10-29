@@ -2,6 +2,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { track } from "@/shared/analytics/track";
 import type { LatestSuccess } from "@/shared/api/polledResource";
 import type { Direction } from "@/shared/api/routeForecast.types";
+import type { BoardEntry } from "@/shared/routing/boardEntry";
 import type { BoardScreen, ExpandableStopView } from "../components/displayPolicy";
 import { nextBoardVisitStep, nextStopExpandStep, type BoardVisit } from "./boardVisitPolicy";
 
@@ -9,6 +10,7 @@ interface Params {
   routeId: string;
   screen: BoardScreen;
   latestSuccess: LatestSuccess<unknown> | null;
+  entry: BoardEntry;
 }
 
 function subscribeVisibility(onChange: () => void) {
@@ -20,7 +22,7 @@ function isDocumentVisible() {
   return document.visibilityState === "visible";
 }
 
-export function useBoardVisitEvents({ routeId, screen, latestSuccess }: Params) {
+export function useBoardVisitEvents({ routeId, screen, latestSuccess, entry }: Params) {
   const visible = useSyncExternalStore(subscribeVisibility, isDocumentVisible);
   const visitRef = useRef<BoardVisit | null>(null);
 
@@ -33,13 +35,14 @@ export function useBoardVisitEvents({ routeId, screen, latestSuccess }: Params) 
       serverNow: latestSuccess?.clock?.now() ?? Date.now(),
       elapsedNow: performance.now(),
       wallNow: Date.now(),
+      entry,
     });
     visitRef.current = step.visit;
 
     if (step.event !== null) {
       track(step.event.name, step.event.properties);
     }
-  }, [routeId, screen, latestSuccess, visible]);
+  }, [routeId, screen, latestSuccess, visible, entry]);
 
   function trackStopExpanded(stop: ExpandableStopView, direction: Direction, rowPosition: number) {
     const step = nextStopExpandStep(visitRef.current, { stop, direction, rowPosition });

@@ -57,7 +57,7 @@ for (const width of [320, 425]) {
       }
       const remove = dialog.getByRole("button", { name: "삭제", exact: true });
       const cancel = dialog.getByRole("button", { name: "취소", exact: true });
-      expect((await remove.boundingBox())!.x).toBeLessThan((await cancel.boundingBox())!.x);
+      expect((await cancel.boundingBox())!.x).toBeLessThan((await remove.boundingBox())!.x);
       expect((await remove.boundingBox())!.height).toBeCloseTo(48, 2);
       expect((await cancel.boundingBox())!.height).toBeCloseTo(48, 2);
       if (width === 425 && browserName === "chromium")

@@ -1,5 +1,6 @@
 import type { EventMap } from "@/shared/analytics/events";
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
+import type { BoardEntry } from "@/shared/routing/boardEntry";
 import { representativeArrival, type ArrivalTone } from "../components/arrivalPolicy";
 import { stopViewsFor, type ExpandableStopView } from "../components/displayPolicy";
 
@@ -7,6 +8,7 @@ interface BoardViewContext {
   routeId: string;
   now: number;
   loadMs: number;
+  entry: BoardEntry;
 }
 
 interface StopExpandContext {
@@ -19,7 +21,7 @@ interface StopExpandContext {
 export function boardViewedPropertiesOf(
   board: Board,
   direction: Direction,
-  { routeId, now, loadMs }: BoardViewContext,
+  { routeId, now, loadMs, entry }: BoardViewContext,
 ): EventMap["board_viewed"] {
   const stops = stopViewsFor(board, direction);
   const toneCounts: Record<ArrivalTone, number> = { high: 0, low: 0, veryLow: 0, unavailable: 0 };
@@ -42,6 +44,7 @@ export function boardViewedPropertiesOf(
     very_low_count: toneCounts.veryLow,
     unavailable_count: toneCounts.unavailable,
     load_ms: Math.round(loadMs),
+    entry,
   };
 }
 

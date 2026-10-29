@@ -3,7 +3,7 @@ import { expect } from "../fixtures/api";
 import { routeId } from "../fixtures/mock-data";
 
 export function routeButton(page: Page) {
-  return page.getByRole("button", { name: "3330번 노선, 테스트 기점부터 테스트 종점 구간", exact: true });
+  return page.getByRole("button", { name: /^3330번 노선, (새 노선, )?테스트 기점부터 테스트 종점 구간$/ });
 }
 
 export function routeSearchEntry(page: Page) {

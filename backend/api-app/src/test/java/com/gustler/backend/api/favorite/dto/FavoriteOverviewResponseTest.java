@@ -14,6 +14,7 @@ import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.route.domain.RouteStatus;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -21,6 +22,32 @@ import tools.jackson.databind.json.JsonMapper;
 class FavoriteOverviewResponseTest {
     private static final FavoriteTarget TARGET = new FavoriteTarget("204000057", "277102322", FavoriteDirection.UP);
     private final JsonMapper json = JsonMapper.builder().findAndAddModules().build();
+
+    @Test
+    void ETA가_없어도_세_차량을_JSON에_유지한다() {
+        BoardRoute route = new BoardRoute(TARGET.routeId(), "노선", "기점", "종점",
+            RouteStatus.FORECAST_READY, null, List.of(), "1", RouteHeadways.none());
+        List<FavoriteOverview.Vehicle> vehicles = IntStream.range(0, 3)
+            .mapToObj(index -> new FavoriteOverview.Vehicle(
+                new ApproachingVehicle("vehicle-" + index, index + 1,
+                    new VehicleForecast.Available(0.8, 12.0)),
+                FavoriteOverview.Eta.unavailable(FavoriteOverview.EtaReason.ARRIVAL_UNAVAILABLE)))
+            .toList();
+        FavoriteOverview.Item item = new FavoriteOverview.Item(UUID.randomUUID(), TARGET,
+            FavoriteOverview.ItemStatus.READY, null, new FavoriteOverview.BoardSlice(route,
+                new FavoriteOverview.Stop(TARGET.stopId(), "강남역", BoardDirection.UP, vehicles)));
+
+        JsonNode body = json.valueToTree(FavoriteOverviewResponse.from(new FavoriteOverview(
+            List.of(new FavoriteOverview.Group(UUID.randomUUID(), "출근", List.of(item))))));
+        JsonNode actual = body.at("/groups/0/favorites/0/approachingVehicles");
+
+        assertThat(actual.size()).isEqualTo(3);
+        assertThat(actual.get(2).path("vehicleId").asString()).isEqualTo("vehicle-2");
+        assertThat(actual.get(2).path("remainingStops").asInt()).isEqualTo(3);
+        assertThat(actual.get(2).at("/forecast/status").asString()).isEqualTo("AVAILABLE");
+        assertThat(actual.get(2).at("/eta/status").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(actual.get(2).at("/eta/reason").asString()).isEqualTo("ARRIVAL_UNAVAILABLE");
+    }
 
     @Test
     void watch_필드_이름을_유지하고_ETA를_추가한다() {

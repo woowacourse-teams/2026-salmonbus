@@ -27,6 +27,7 @@ function observed(overrides: Partial<BoardObservation>): BoardObservation {
     serverNow: Date.parse("2026-09-01T08:13:10+09:00"),
     elapsedNow: 0,
     wallNow: 0,
+    entry: "direct",
     ...overrides,
   };
 }
@@ -57,6 +58,15 @@ describe("nextBoardVisitStep", () => {
 
     expect(namesOf(events)).toEqual(["board_viewed"]);
     expect(events[0]?.properties).toMatchObject({ route_id: "R1", load_ms: 1_200 });
+  });
+
+  it("판정 보드를 연 경로를 board_viewed에 싣는다", () => {
+    const events = eventsOf([
+      observed({ screen: loading, entry: "favorite" }),
+      observed({ screen: forecast, receivedAt: 1_000, entry: "favorite" }),
+    ]);
+
+    expect(events[0]?.properties).toMatchObject({ entry: "favorite" });
   });
 
   it("폴링으로 예보가 여러 번 새로 와도 board_viewed는 한 번만 보낸다", () => {

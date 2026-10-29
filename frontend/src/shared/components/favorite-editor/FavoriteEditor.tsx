@@ -192,15 +192,20 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
                       <span className={styles.loadingDirection} aria-hidden="true" />
                     </>
                   ) : (
-                    <>
-                      <div className={styles.cardHeading}>
-                        <RouteBadge>{item?.route.displayName || "노선 정보 없음"}</RouteBadge>
+                    <div className={styles.cardHeading}>
+                      <RouteBadge
+                        size={item?.route.displayName ? "large" : "small"}
+                        className={item?.route.displayName ? styles.routeBadge : ""}
+                      >
+                        {item?.route.displayName || "노선 정보 없음"}
+                      </RouteBadge>
+                      <div className={styles.stopNameAndDirection}>
                         <span className={styles.stop}>{item?.stop.name || "정류장 정보 없음"}</span>
+                        <span className={styles.direction}>
+                          {directionLabelOf(item?.route.terminalStopName, favorite.direction)}
+                        </span>
                       </div>
-                      <span className={styles.direction}>
-                        {directionLabelOf(item?.route.terminalStopName, favorite.direction)}
-                      </span>
-                    </>
+                    </div>
                   )}
                 </div>
                 <button
