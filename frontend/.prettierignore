@@ -2,3 +2,4 @@ pnpm-lock.yaml
 .impeccable
 playwright-report/
 test-results/
+src/pages/privacy/editions/
