@@ -61,6 +61,25 @@ test("판정 보드 최초 조회 실패는 운행 없음이나 예측 없음과
   await expect(page.getByText("현재 예측할 수 있는 차량이 없습니다", { exact: true })).not.toBeVisible();
 });
 
+test("판정 보드 최초 조회가 503이면 Retry-After 뒤 다시 불러와 판정 보드를 보여 준다", async ({ page, api }) => {
+  api.mode.watch = { status: 503, retryAfterSeconds: 30 };
+  await page.goto("/");
+  await selectRoute(page);
+  await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).toBeVisible();
+
+  api.mode.watch = "success";
+  const retried = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
+  );
+  // Retry-After를 읽지 못하면 60초 뒤에 다시 불러오므로 30초 안에는 응답이 오지 않는다.
+  await page.clock.fastForward(30_000);
+  await retried;
+
+  await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
+  await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).toBeHidden();
+  expect(api.requests.watch).toBe(2);
+});
+
 test("유효기간 안의 자동 갱신 실패 시 마지막 예측을 유지한다 (현재 구현)", async ({ page, api }) => {
   await openBoard(page);
   const stop = targetStop(page, "UP");

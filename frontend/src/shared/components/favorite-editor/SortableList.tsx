@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
+import { playHaptic } from "@/shared/haptic/haptic";
 import * as styles from "./SortableList.css";
 
 interface SortableItem {
@@ -31,6 +32,7 @@ interface PositionBox {
 interface DragSession {
   pointerId: number;
   from: number;
+  to: number;
   start: number;
   crossStart: number;
   shift: number;
@@ -146,6 +148,7 @@ export function SortableList<T extends SortableItem>({
     session.current = {
       pointerId: event.pointerId,
       from: index,
+      to: index,
       start: horizontal ? event.clientX : event.clientY,
       crossStart: horizontal ? event.clientY : event.clientX,
       boxes,
@@ -155,6 +158,7 @@ export function SortableList<T extends SortableItem>({
       setDrag({ from: index, to: index, offset: 0, crossOffset: 0, shift });
       const item = items[index];
       if (item !== undefined) dropZone?.onDrag(item, false);
+      playHaptic("impact");
     }
     capture.setPointerCapture(event.pointerId);
   }
@@ -175,6 +179,7 @@ export function SortableList<T extends SortableItem>({
     );
     const crossOffset = dropZone ? (horizontal ? event.clientY : event.clientX) - current.crossStart : 0;
     if (horizontal && drag === null && Math.hypot(offset, crossOffset) < 4) return;
+    if (drag === null) playHaptic("impact");
     const position = origin.start + offset;
     let to = current.from;
     let distance = Math.abs(offset);
@@ -184,6 +189,10 @@ export function SortableList<T extends SortableItem>({
         to = i;
         distance = Math.abs(position - slot);
       }
+    }
+    if (to !== current.to) {
+      current.to = to;
+      playHaptic("selection");
     }
     setDrag({ from: current.from, to, offset, crossOffset, shift: current.shift });
     const item = items[current.from];

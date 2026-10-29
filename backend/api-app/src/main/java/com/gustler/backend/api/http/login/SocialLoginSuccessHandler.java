@@ -1,18 +1,11 @@
 package com.gustler.backend.api.http.login;
 
-import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.AuthCookies;
-import com.gustler.backend.api.favorite.application.DefaultFavoriteGroupService;
 import com.gustler.backend.api.monitoring.UserMonitoring;
 import com.gustler.backend.api.monitoring.UserMonitoring.LoginResult;
 import com.gustler.backend.api.monitoring.UserMonitoring.MemberKind;
-import com.gustler.backend.member.api.IssuedRefreshToken;
 import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.MemberIdentity;
-import com.gustler.backend.member.api.RefreshTokens;
-import com.gustler.backend.member.api.SignInWithSocialAccount;
-import com.gustler.backend.member.api.SignedInMember;
-import com.gustler.backend.member.api.SocialIdentity;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -54,30 +47,21 @@ final class SocialLoginSuccessHandler implements AuthenticationSuccessHandler {
     private static final String WITHDRAWN_PARAMETER = "withdrawn";
     private static final String WITHDRAW_PARAMETER = "withdraw";
 
-    private final SignInWithSocialAccount signIn;
-    private final RefreshTokens refreshTokens;
-    private final AccessTokens accessTokens;
+    private final LoginCompletion completion;
     private final AuthCookies authCookies;
-    private final DefaultFavoriteGroupService defaultGroups;
     private final AuthenticationFailureHandler failureHandler;
     private final Optional<AppleWithdrawal> withdrawal;
     private final UserMonitoring monitoring;
 
     SocialLoginSuccessHandler(
-        SignInWithSocialAccount signIn,
-        RefreshTokens refreshTokens,
-        AccessTokens accessTokens,
+        LoginCompletion completion,
         AuthCookies authCookies,
-        DefaultFavoriteGroupService defaultGroups,
         AuthenticationFailureHandler failureHandler,
         Optional<AppleWithdrawal> withdrawal,
         UserMonitoring monitoring
     ) {
-        this.signIn = signIn;
-        this.refreshTokens = refreshTokens;
-        this.accessTokens = accessTokens;
+        this.completion = completion;
         this.authCookies = authCookies;
-        this.defaultGroups = defaultGroups;
         this.failureHandler = failureHandler;
         this.withdrawal = withdrawal;
         this.monitoring = monitoring;
@@ -98,14 +82,9 @@ final class SocialLoginSuccessHandler implements AuthenticationSuccessHandler {
             completeWithdrawal(request, response, withdrawing.get(), new MemberIdentity(provider, user.getSubject()));
             return;
         }
-        HttpHeaders cookies = new HttpHeaders();
-        SignedInMember member;
+        LoginCompletion.Completed completed;
         try {
-            member = signIn.signIn(new SocialIdentity(provider, user.getSubject()));
-            ensureDefaultGroup(member.publicId());
-            String accessToken = accessTokens.issue(member.publicId());
-            IssuedRefreshToken refreshToken = refreshTokens.issue(member.publicId());
-            authCookies.write(cookies, accessToken, refreshToken);
+            completed = completion.complete(provider, user.getSubject());
         } catch (RuntimeException exception) {
             LOGGER.error("event=user_login status=FAILED provider={} phase=member_or_token cause={}",
                 provider.name().toLowerCase(Locale.ROOT), exception.getClass().getSimpleName());
@@ -119,16 +98,8 @@ final class SocialLoginSuccessHandler implements AuthenticationSuccessHandler {
         HttpSession session = request.getSession();
         String returnTo = LoginSessions.takeReturnTo(session);
         session.invalidate();
-        redirect(response, cookies, returnTo);
-        monitoring.login(provider, LoginResult.SUCCESS, member.registered() ? MemberKind.NEW : MemberKind.EXISTING);
-    }
-
-    private void ensureDefaultGroup(UUID memberPublicId) {
-        try {
-            defaultGroups.ensure(memberPublicId);
-        } catch (RuntimeException exception) {
-            LOGGER.warn("기본 즐겨찾기 그룹을 만들지 못했습니다. 다음 즐겨찾기 조회에서 다시 시도합니다.", exception);
-        }
+        redirect(response, completed.cookies(), returnTo);
+        monitoring.login(provider, LoginResult.SUCCESS, completed.registered() ? MemberKind.NEW : MemberKind.EXISTING);
     }
 
     private void completeWithdrawal(

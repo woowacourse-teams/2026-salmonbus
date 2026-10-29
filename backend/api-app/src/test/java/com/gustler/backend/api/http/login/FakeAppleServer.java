@@ -44,6 +44,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  */
 final class FakeAppleServer implements AutoCloseable {
     static final String CLIENT_ID = "com.salmonbus.test.web";
+    static final String APP_CLIENT_ID = "com.salmonbus.test.app";
     static final String TEAM_ID = "TEAMTEST01";
     static final String KEY_ID = "KEYTEST001";
     static final String ACCESS_TOKEN = "fake-apple-access-token";
@@ -159,7 +160,21 @@ final class FakeAppleServer implements AutoCloseable {
         MultiValueMap<String, String> query = UriComponentsBuilder.fromUriString(authorizationLocation)
             .build().getQueryParams();
         String code = UUID.randomUUID().toString();
-        grants.put(code, new Grant(query.getFirst("nonce"), mutation, signWithOtherKey));
+        grants.put(code, new Grant(CLIENT_ID, query.getFirst("nonce"), mutation, signWithOtherKey));
+        return code;
+    }
+
+    /**
+     * 앱의 Sign in with Apple 이 다시 인증했을 때 앱에 줄 인가 코드를 만든다. 이 코드는 앱 {@code client_id} 로만 교환되고,
+     * 교환하면 대상이 앱 번들 ID 인 ID 토큰을 준다.
+     */
+    String appAuthorizationCode(String sub) {
+        return appAuthorizationCode(claims -> claims.subject(sub), false);
+    }
+
+    String appAuthorizationCode(Consumer<JWTClaimsSet.Builder> mutation, boolean signWithOtherKey) {
+        String code = UUID.randomUUID().toString();
+        grants.put(code, new Grant(APP_CLIENT_ID, null, mutation, signWithOtherKey));
         return code;
     }
 
@@ -174,6 +189,10 @@ final class FakeAppleServer implements AutoCloseable {
             return;
         }
         Grant grant = grants.get(first(form, "code"));
+        if (grant != null && !grant.clientId().equals(first(form, "client_id"))) {
+            respond(exchange, HttpStatus.BAD_REQUEST.value(), "{\"error\":\"invalid_grant\"}");
+            return;
+        }
         if (grant == null || !clientSecretIsValid(form)) {
             respond(exchange, HttpStatus.BAD_REQUEST.value(), "{\"error\":\"invalid_client\"}");
             return;
@@ -193,7 +212,8 @@ final class FakeAppleServer implements AutoCloseable {
 
     private boolean clientSecretIsValid(Map<String, List<String>> form) {
         List<String> secrets = form.getOrDefault("client_secret", List.of());
-        if (secrets.size() != 1 || !CLIENT_ID.equals(first(form, "client_id"))) {
+        String clientId = first(form, "client_id");
+        if (secrets.size() != 1 || !(CLIENT_ID.equals(clientId) || APP_CLIENT_ID.equals(clientId))) {
             return false;
         }
         try {
@@ -203,7 +223,7 @@ final class FakeAppleServer implements AutoCloseable {
                 && JWSAlgorithm.ES256.equals(jwt.getHeader().getAlgorithm())
                 && KEY_ID.equals(jwt.getHeader().getKeyID())
                 && TEAM_ID.equals(claims.getIssuer())
-                && CLIENT_ID.equals(claims.getSubject())
+                && clientId.equals(claims.getSubject())
                 && claims.getAudience().equals(List.of("https://appleid.apple.com"))
                 && claims.getExpirationTime().toInstant().isAfter(Instant.now());
         } catch (ParseException | JOSEException exception) {
@@ -211,11 +231,34 @@ final class FakeAppleServer implements AutoCloseable {
         }
     }
 
+    /**
+     * 앱의 Sign in with Apple 이 받는 것과 같은 ID 토큰을 만든다. 대상은 앱 번들 ID 이고 nonce 는 앱이 SDK 에 넣은 값
+     * (발급값의 SHA-256) 그대로다. {@code mutation} 으로 클레임을 바꾸거나 다른 키로 서명해 거절 경우를 만든다.
+     */
+    String appIdToken(String sub, String nonceClaim, Consumer<JWTClaimsSet.Builder> mutation, boolean signWithOtherKey)
+        throws JOSEException {
+        Instant now = Instant.now();
+        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
+            .issuer(baseUrl())
+            .audience(APP_CLIENT_ID)
+            .subject(sub)
+            .issueTime(Date.from(now))
+            .expirationTime(Date.from(now.plusSeconds(300)))
+            .claim("nonce", nonceClaim)
+            .claim("nonce_supported", true);
+        mutation.accept(claims);
+        RSAKey key = signWithOtherKey ? otherKey : signingKey;
+        SignedJWT jwt = new SignedJWT(
+            new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(key.getKeyID()).build(), claims.build());
+        jwt.sign(new RSASSASigner(key));
+        return jwt.serialize();
+    }
+
     private String idToken(Grant grant) throws JOSEException {
         Instant now = Instant.now();
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
             .issuer(baseUrl())
-            .audience(CLIENT_ID)
+            .audience(grant.clientId())
             .issueTime(Date.from(now))
             .expirationTime(Date.from(now.plusSeconds(300)))
             .claim("nonce", grant.nonce())
@@ -279,6 +322,11 @@ final class FakeAppleServer implements AutoCloseable {
         }
     }
 
-    private record Grant(String nonce, Consumer<JWTClaimsSet.Builder> mutation, boolean signWithOtherKey) {
+    private record Grant(
+        String clientId,
+        String nonce,
+        Consumer<JWTClaimsSet.Builder> mutation,
+        boolean signWithOtherKey
+    ) {
     }
 }

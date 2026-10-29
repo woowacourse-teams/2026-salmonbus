@@ -3,9 +3,10 @@ import { describe, it } from 'node:test';
 import vm from 'node:vm';
 import { BRIDGE_EVENT, appBootstrapScriptFor, bridgeEventScriptFor, bridgeMessageFrom } from './bridge.ts';
 
-function webWindow() {
+function webWindow(origin = 'https://dev.salmonbus.com') {
   const events = [];
   const window = {
+    location: { origin },
     dispatchEvent: (event) => events.push(event),
   };
   class CustomEvent {
@@ -70,5 +71,16 @@ describe('웹에 메시지 넘기기', () => {
     vm.runInContext(bridgeEventScriptFor({ type: 'map.error', payload }), context);
     assert.equal(events[0].detail.payload.polluted, undefined);
     assert.ok(Object.hasOwn(events[0].detail.payload, '__proto__'));
+  });
+
+  it('받을 origin을 정하면 그 origin의 문서에만 넘긴다', () => {
+    const message = { type: 'auth.signInResult', payload: { id: 'a', provider: 'apple', status: 'cancelled' } };
+    const ours = webWindow('https://dev.salmonbus.com');
+    vm.runInContext(bridgeEventScriptFor(message, 'https://dev.salmonbus.com'), ours.context);
+    assert.equal(ours.events.length, 1);
+
+    const provider = webWindow('https://appleid.apple.com');
+    vm.runInContext(bridgeEventScriptFor(message, 'https://dev.salmonbus.com'), provider.context);
+    assert.equal(provider.events.length, 0);
   });
 });

@@ -69,6 +69,8 @@ springdoc:
     - /api/auth/session
     - /api/auth/refresh
     - /api/auth/logout
+    - /api/auth/{provider}/native/nonce
+    - /api/auth/{provider}/native
     - /api/me
     - /api/me/favorite-groups
     - /api/me/favorite-groups/{groupId}
@@ -80,6 +82,7 @@ springdoc:
     - /api/me/favorites
     - /api/me/sessions
     - /api/me/withdrawal/apple
+    - /api/me/withdrawal/apple/native
 
 # 오류 응답에 실어 보낸 requestId 로 서버 로그를 찾을 수 있게 한다.
 # 이 줄이 없으면 MDC 에 넣어도 로그 줄에 안 찍혀서, 클라이언트가 받은 ID 로 검색할 것이 없다.
@@ -118,6 +121,9 @@ auth:
     token-uri: https://appleid.apple.com/auth/token
     jwk-set-uri: https://appleid.apple.com/auth/keys
     revoke-uri: https://appleid.apple.com/auth/revoke
+  app:
+    apple-client-id: ${AUTH_APPLE_APP_ID:} # 앱 로그인 ID 토큰의 aud. iOS 번들 ID
+    kakao-app-key: ${AUTH_KAKAO_NATIVE_APP_KEY:} # 앱 로그인 ID 토큰의 aud. 웹과 같은 카카오 앱의 네이티브 앱 키
 
 arrivals:
   enabled: ${ARRIVALS_ENABLED:false}

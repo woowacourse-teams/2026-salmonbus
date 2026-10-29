@@ -728,6 +728,23 @@ class JdbcForecastEvaluationRepositoryTest {
     }
 
     @Test
+    void 관측별_예보를_읽어도_이미_정산한_정류장은_대기_목록에_섞이지_않는다() {
+        // given
+        saveForecasts(List.of(
+            forecastOf(TARGET_STOP_ORDER, STOPS_TO_TARGET, GENERATED_AT),
+            forecastOf(NEXT_TARGET_STOP_ORDER, STOPS_TO_NEXT_TARGET, NEXT_GENERATED_AT)));
+        evaluationRepository.settle(List.of(ForecastEvaluation.completed(
+            vehicleObservationId, TARGET_STOP_ORDER, new Skipped(), SCORED_AT)));
+
+        // then
+        assertThat(evaluationRepository.findPending(routeVersionId, 1)).containsExactly(
+            new PendingForecast(vehicleObservationId, NEXT_TARGET_STOP_ORDER, routeVersionId,
+                VEHICLE_204000206, STOPS_TO_NEXT_TARGET, RESPONSE_RECEIVED_AT.toInstant(), NEXT_GENERATED_AT, 0L));
+        assertThat(evaluationRepository.findPending(routeVersionId, READ_LIMIT))
+            .extracting(PendingForecast::targetStopOrder).containsExactly(NEXT_TARGET_STOP_ORDER);
+    }
+
+    @Test
     void 품질_보류_묶음_뒤의_공유_관측이_페이지에_걸쳐도_누락하거나_중복하지_않는다() {
         // when
         saveForecasts(List.of(

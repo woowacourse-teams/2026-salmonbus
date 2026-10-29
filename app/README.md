@@ -11,11 +11,21 @@
 
 `NAVER_MAP_KEY_ID`는 `app.config.ts`에서 iOS `Info.plist`의 `NMFNcpKeyId`로 들어갑니다. 키나 native 설정을 바꾸면 `pnpm exec expo prebuild --platform ios` 후 다시 빌드합니다. EAS에서도 같은 이름의 환경 변수를 설정합니다. `EXPO_PUBLIC_NAVER_MAP_KEY_ID`도 호환 이름으로 지원합니다.
 
+## 로그인
+
+앱 안 로그인은 Apple(`expo-apple-authentication`)과 카카오(`@react-native-kakao/user`) SDK로 합니다. 웹이 `auth.signIn`을 보내면 앱이 SDK로 받은 ID 토큰을 `auth.signInResult`로 돌려주고, 웹이 서버 네이티브 로그인 API(SAL-318)를 불러 WebView에 로그인 쿠키를 받습니다. 서버에 그 API가 없거나 앱이 그 제공자로 로그인할 수 없으면 웹은 WebView 안에서 제공자 로그인 화면을 엽니다. WebView는 웹과 제공자 로그인 화면(`navigation/navigationPolicy.ts`)만 안에서 열고 나머지 주소는 바깥 앱으로 넘깁니다.
+
+- `EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY`: 웹 로그인과 같은 카카오 앱의 네이티브 앱 키입니다. dev와 운영 카카오 앱이 다르므로 EAS에서는 `preview`, `production` 환경 변수로 따로 넣습니다. 키가 없으면 카카오 URL 스킴을 등록하지 않고, 카카오 로그인은 WebView로 합니다.
+- `usesAppleSignIn`이 Sign in with Apple entitlement를 넣습니다. App ID에도 같은 기능이 켜져 있어야 합니다.
+
+키를 바꾸면 `pnpm exec expo prebuild --platform ios` 후 다시 빌드합니다. 시뮬레이터에는 카카오톡과 Apple 계정이 없어서 카카오톡 왕복과 Apple 바텀시트는 실기기에서 확인합니다.
+
 Simulator에서 로컬 웹 서버에 연결할 때는 `http://127.0.0.1:<port>`를 사용합니다. 실제 iPhone에서는 Mac의 LAN 주소나 HTTPS 개발 서버가 필요합니다. native module은 Expo Go에 포함되지 않으므로 iOS native map 검증에는 development build를 사용합니다.
 
 ## 코드 위치
 
 - `bridge/bridge.ts`: 앱 정보(`window.__SALMONBUS_APP__`) 주입, 웹과 주고받는 envelope 검증, 웹으로 이벤트 전달
+- `auth/`: 로그인 메시지 검사(`authMessages.ts`)와 Apple, 카카오 SDK 호출(`signInNatively.ts`)
 - `native-map/NativeRouteMap.tsx`: native view의 TypeScript 계약
 - `native-map/nativeMapMessages.ts`: 앱이 받는 지도 메시지 목록(웹의 `NATIVE_MAP_CAPABILITIES`와 같음)
 - `haptic/playHaptic.ts`: 진동 종류를 iOS 진동에 연결하는 표. 종류 목록은 웹의 `HapticKind`를 import type으로 읽고, 다르면 `pnpm typecheck`가 실패

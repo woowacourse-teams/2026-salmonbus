@@ -56,11 +56,14 @@ function CreateGroupDialog({ onClose, onCreated }: CreateGroupDialogProps) {
     event.preventDefault();
     if (busy || invalid || full || resource.status !== "success") return;
     let created: FavoriteGroup | null = null;
-    const ok = await run(async () => {
-      const result = await createFavoriteGroup(name);
-      if (result.ok) created = result.body;
-      return result;
-    });
+    const ok = await run(
+      async () => {
+        const result = await createFavoriteGroup(name);
+        if (result.ok) created = result.body;
+        return result;
+      },
+      { resultHaptic: true },
+    );
     if (ok && created !== null) {
       onCreated?.(created);
       onClose();

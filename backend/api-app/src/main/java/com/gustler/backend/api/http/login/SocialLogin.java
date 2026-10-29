@@ -90,6 +90,8 @@ public final class SocialLogin {
         OAuth2AuthorizedClientRepository discardingTokens = new DiscardingAuthorizedClientRepository();
         SocialLoginFailureHandler failureHandler = new SocialLoginFailureHandler(monitoring);
         Optional<AppleWithdrawal> withdrawal = Optional.ofNullable(appleWithdrawal.getIfAvailable());
+        LoginCompletion completion = new LoginCompletion(
+            signIn, refreshTokens, accessTokens.getObject(), authCookies.getObject(), defaultGroups);
         http.oauth2Login(login -> login
             .clientRegistrationRepository(repository)
             .authorizedClientRepository(discardingTokens)
@@ -99,8 +101,7 @@ public final class SocialLogin {
             .redirectionEndpoint(endpoint -> endpoint.baseUri(CALLBACK_PATTERN))
             .tokenEndpoint(endpoint -> endpoint.accessTokenResponseClient(tokenClient()))
             .successHandler(new SocialLoginSuccessHandler(
-                signIn, refreshTokens, accessTokens.getObject(), authCookies.getObject(), defaultGroups,
-                failureHandler, withdrawal, monitoring))
+                completion, authCookies.getObject(), failureHandler, withdrawal, monitoring))
             .failureHandler(failureHandler));
         if (withdrawal.isPresent()) {
             http.addFilterBefore(

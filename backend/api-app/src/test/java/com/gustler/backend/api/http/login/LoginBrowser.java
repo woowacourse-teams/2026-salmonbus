@@ -47,6 +47,26 @@ final class LoginBrowser {
             .POST(HttpRequest.BodyPublishers.ofString(json)));
     }
 
+    /** {@link #postJson} 과 같되 {@code Origin} 헤더를 붙인다. */
+    HttpResponse<String> postJsonFrom(String origin, String path, String json)
+        throws IOException, InterruptedException {
+        if (!cookies.containsKey(CSRF_COOKIE)) {
+            get("/api/auth/session");
+        }
+        return send(request(path)
+            .header("X-XSRF-TOKEN", cookies.getOrDefault(CSRF_COOKIE, ""))
+            .header("Origin", origin)
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(json)));
+    }
+
+    /** CSRF 헤더 없이 보내는 JSON POST. 다른 사이트의 요청을 흉내 낸다. */
+    HttpResponse<String> postJsonWithoutCsrf(String path, String json) throws IOException, InterruptedException {
+        return send(request(path)
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(json)));
+    }
+
     static String location(HttpResponse<String> response) {
         return header(response, "Location");
     }

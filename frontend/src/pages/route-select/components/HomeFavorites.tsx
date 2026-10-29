@@ -13,6 +13,7 @@ import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
 import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, favoritePath, paths } from "@/shared/routing/paths";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
+import { playHaptic } from "@/shared/haptic/haptic";
 import { FavoritesNotice, FavoritesRetryButton } from "@/shared/components/FavoritesNotice";
 import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { Notice } from "@/shared/components/Notice";
@@ -63,6 +64,7 @@ export function HomeFavorites() {
     if (latest !== null) setPrevious({ groupId: group?.id, latest });
     setAnimateGroup(true);
     setSelected(id);
+    playHaptic("selection");
   };
   function handleGroupTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const next =

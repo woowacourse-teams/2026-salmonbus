@@ -5,6 +5,7 @@
   },
   "build": {
     "preview": {
+      "environment": "preview",
       "env": {
         "EXPO_PUBLIC_WEB_URL": "https://dev.salmonbus.com"
       },
@@ -13,6 +14,8 @@
       }
     },
     "production": {
+      "environment": "production",
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_WEB_URL": "https://www.salmonbus.com"
       }
@@ -21,6 +24,13 @@
       "extends": "production",
       "ios": {
         "simulator": true
+      }
+    },
+    "dev-testflight": {
+      "extends": "production",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_WEB_URL": "https://dev.salmonbus.com"
       }
     }
   }

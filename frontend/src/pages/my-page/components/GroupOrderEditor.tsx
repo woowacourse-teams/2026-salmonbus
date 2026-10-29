@@ -33,7 +33,11 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
   async function save() {
     if (busy) return;
     const ids = draft.map((group) => group.id);
-    if (ids.every((id, index) => saved[index]?.id === id) || (await run(() => saveGroupOrder(ids)))) onClose(true);
+    if (
+      ids.every((id, index) => saved[index]?.id === id) ||
+      (await run(() => saveGroupOrder(ids), { resultHaptic: true }))
+    )
+      onClose(true);
   }
   async function remove() {
     if (!deleting || protectedGroup || resource.status !== "success") return;

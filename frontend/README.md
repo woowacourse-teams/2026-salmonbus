@@ -97,3 +97,28 @@ pnpm ci:watch --run <run id>
 - healer 정의가 들어오기 전에 갈라진 브랜치라 커밋에 정의가 없으면 `pnpm ci:watch --run <run id> --healer-from <정의가 있는 frontend 폴더>`로 그 폴더의 정의를 빌려 씁니다. 커밋에 정의가 있으면 커밋의 정의를 씁니다.
 - healer가 테스트를 고쳤으면 `summary.md`에 나온 `git apply` 명령을 리포 루트에서 실행해 가져온 뒤, 리뷰하고 커밋합니다.
 - Orca를 쓰면 푸시한 워크트리의 카드 문구가 `E2E:`로 시작하는 판정으로 바뀌고 읽지 않음 표시가 켜집니다. 바뀌기 전 문구는 그 실행 폴더의 `orca-previous-comment.txt`에 남습니다. 바뀌기 전 문구가 감시가 쓴 `E2E:` 판정이면 남기지 않으므로, 이 파일에는 감시가 덮어쓴 원래 문구만 남습니다. Orca를 쓰지 않거나 Orca에 없는 워크트리면 아무 일도 일어나지 않습니다.
+
+## E2E 초안을 planner와 generator로 만들기
+
+Playwright Test Agents의 planner는 앱을 둘러보고 테스트 계획을 쓰고, generator는 계획의 단계를 브라우저에서 직접 해 본 기록으로 테스트 초안을 씁니다. 초안은 사람이 고쳐서 올립니다.
+
+- healer처럼 `frontend/`에서 실행해야 보입니다.
+  - Claude Code: `.claude/agents/playwright-test-planner.md`, `.claude/agents/playwright-test-generator.md`
+  - Codex: `.codex/agents/playwright_test_planner.toml`, `.codex/agents/playwright_test_generator.toml`
+  - MCP 서버 설정과 처음 실행할 때의 허용은 healer와 같습니다.
+- 두 에이전트는 seed 테스트 `e2e/seed.spec.ts`를 끝까지 돌린 페이지에서 시작합니다. seed는 `e2e/fixtures/api.ts`의 `test`를 써서 API 목과 지도 SDK 차단이 걸린 채로 홈을 열고, 끝에서 `page.clock.resume()`으로 시계를 다시 흐르게 합니다. seed는 CI에서도 돌아서 깨지면 바로 보입니다.
+- seed에서 시계를 다시 흐르게 하는 이유: 에이전트의 브라우저 도구는 클릭 같은 동작이 끝나기를 페이지 안의 `setTimeout`으로 기다립니다. fixture가 멈춘 시계 그대로 두면 이 타이머가 끝나지 않아 첫 동작부터 응답하지 않습니다. 새로 만든 테스트는 여전히 멈춘 시계로 시작하므로, 시간이 지나야 하는 단계는 `page.clock`으로 넘깁니다.
+- 브라우저 도구로는 `api.mode`를 바꾸거나 테스트의 `page.clock` 진행을 기록할 수 없습니다. 서버 오류나 시간 경과가 필요한 단계는 generator가 `TODO:` 주석으로 남기고, 사람이 채웁니다.
+- 처음 화면부터 특정 응답이 필요하면(예: 판정 보드 첫 조회가 503) `e2e/seed.spec.ts`를 복사해 `api.mode`를 바꾼 seed를 만들고, 계획의 `**Seed:**`에 그 경로를 적습니다. 다 쓴 seed는 지웁니다.
+- 부르는 예시
+  - Claude Code: `playwright-test-generator 에이전트로 아래 계획의 테스트를 만들어 줘` 다음에 계획(시나리오 이름, `**Seed:**` 경로, 단계)을 붙입니다.
+  - Codex: `playwright_test_generator 에이전트로 아래 계획의 테스트를 만들어 줘`
+  - planner: `playwright-test-planner 에이전트로 판정 보드 테스트 계획을 세워 줘`. 계획 파일은 커밋하지 않습니다.
+- 초안을 올리기 전에 사람이 할 일: 테스트를 둘 spec 파일로 옮기기, `e2e/utils/`의 함수로 바꾸기, `TODO:` 단계(목 설정, 시계 진행) 채우기, 기존 테스트가 이미 확인하는 내용 빼기, `pnpm lint`와 `pnpm typecheck` 통과.
+- 4173 포트가 이미 쓰이고 있으면 포트만 바꾼 Playwright 설정을 만들고 MCP 서버를 `npx playwright run-test-mcp-server -c <그 설정>`으로 띄웁니다. Claude Code는 `--mcp-config`로, Codex는 `-c 'mcp_servers.playwright-test.args=[...]'`로 커밋된 설정 대신 쓸 수 있습니다.
+- `npx playwright init-agents`를 다시 돌린 뒤에는 위 healer 절의 복구와 함께 다음을 합니다.
+  - 네 정의 파일의 `# Rules for this repository` 절을 되살립니다.
+  - 두 generator 정의의 예시 테스트에 `import { test, expect } from './fixtures/api';` 줄과 `async ({ page }) =>` 콜백을 되살립니다. 생성본 예시는 import가 없고 `async { page } =>`라서 문법이 틀립니다.
+  - Codex 정의에 다시 생긴 `[mcp_servers.playwright-test]`와 `enabled_tools`를 지웁니다.
+  - 새로 생긴 `specs/README.md`를 지웁니다. `e2e/seed.spec.ts`는 이름에 seed가 든 파일이 이미 있어서 새로 만들어지지 않습니다.
+  - `pnpm exec prettier --write .claude/agents`로 형식을 맞춥니다.
