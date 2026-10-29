@@ -43,8 +43,13 @@ async function appleCredentialFor(nonce: string): Promise<Credential | null> {
 // 카카오톡이 있으면 카카오톡 앱으로, 없거나 카카오톡 로그인이 안 되면 SDK가 카카오 계정 로그인으로 바꾼다.
 async function kakaoCredentialFor(nonce: string): Promise<Credential | null> {
   if (!KAKAO_NATIVE_APP_KEY) return null;
-  kakaoInitialization ??= initializeKakaoSDK(KAKAO_NATIVE_APP_KEY);
-  await kakaoInitialization;
+  // 초기화는 이 빌드에 카카오 네이티브 모듈이 없을 때만 실패한다. 다시 시도해도 같으니 WebView 로그인으로 보낸다.
+  try {
+    kakaoInitialization ??= initializeKakaoSDK(KAKAO_NATIVE_APP_KEY);
+    await kakaoInitialization;
+  } catch {
+    return null;
+  }
   const token = await loginWithKakao({ nonce });
   if (!token.idToken) {
     throw new Error('카카오가 ID 토큰을 주지 않았습니다. 카카오 앱의 OpenID Connect 설정을 확인해 주세요');
