@@ -217,7 +217,7 @@ class AppleNotificationFlowTest {
     static Stream<Arguments> 검증하지_못한_알림() {
         Instant hourAgo = Instant.now().minusSeconds(3600);
         return Stream.of(
-            args("알 수 없는 서명 키", claims -> { }, true),
+            args("애플 공개키와 맞지 않는 서명", claims -> { }, true),
             args("다른 발급자", claims -> claims.issuer("https://evil.example"), false),
             args("다른 대상", claims -> claims.audience("com.example.other"), false),
             args("만료", claims -> claims.issueTime(Date.from(hourAgo.minusSeconds(3600)))
