@@ -68,6 +68,7 @@ for (const width of [320, 425, 659]) {
     await page.setViewportSize({ width, height: 890 });
     await page.goto("/mypage");
     const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
+    await expect(region.getByRole("link")).toHaveCount(3);
     const before = await region.getByRole("link").evaluateAll((cards) =>
       cards.map((card) => {
         const { x, y, width, height } = card.getBoundingClientRect();
@@ -77,6 +78,7 @@ for (const width of [320, 425, 659]) {
     await region.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
     const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
     const cards = editor.getByRole("list", { name: "그룹 순서", exact: true }).getByRole("listitem");
+    await expect(cards).toHaveCount(3);
     for (const [index, card] of (await cards.all()).entries()) {
       const after = (await card.boundingBox())!;
       const original = before[index]!;
