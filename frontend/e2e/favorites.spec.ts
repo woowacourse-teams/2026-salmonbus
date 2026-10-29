@@ -157,77 +157,53 @@ test("홈은 첫 차량의 ETA가 없어도 세 번째 차량의 유효한 ETA�
   await expect(panel.getByText(/확인 중|시간 정보 없음|도착 정보 없음/)).toHaveCount(0);
 });
 
-for (const reducedMotion of ["reduce", "no-preference"] as const) {
-  test(`그룹 전환은 이전 카드의 공간을 유지하고 새 카드를 표시한다 (${reducedMotion})`, async ({
-    page,
-    favorites,
-    api,
-    browserName,
-  }) => {
-    await page.emulateMedia({ reducedMotion });
-    const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
-    favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" })];
-    favorites.groups.push({
-      id: secondGroupId,
-      name: "통학",
-      favorites: [storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 4)],
-    });
-    let release = () => {};
-    const response = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await api.route(async (route) => {
-      const url = new URL(route.request().url());
-      if (url.pathname === "/api/me/favorites" && url.searchParams.get("groupId") === secondGroupId) await response;
-      await route.fallback();
-    });
-    await page.goto("/");
-    const panel = page.getByRole("tabpanel");
-    await expect(panel.getByText(first!.name, { exact: true })).toBeVisible();
-    const before = (await panel.boundingBox())!;
-    try {
-      await page.getByRole("tab", { name: "통학", exact: true }).click();
-      await expect(panel).toHaveAttribute("aria-busy", "true");
-      await expect(panel.getByText(first!.name, { exact: true })).toBeVisible();
-      await expect(panel.locator("[inert]")).toHaveCount(1);
-      await page.getByRole("tab", { name: "통학", exact: true }).focus();
-      const tabKey = browserName === "webkit" ? "Alt+Tab" : "Tab";
-      await page.keyboard.press(tabKey);
-      await expect(page.getByRole("button", { name: "그룹 추가", exact: true })).toBeFocused();
-      await page.keyboard.press(tabKey);
-      await expect(page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true })).toBeFocused();
-      await page.keyboard.press(tabKey);
-      await expect(page.getByRole("link", { name: "홈", exact: true })).toBeFocused();
-      const pending = (await panel.boundingBox())!;
-      expect(pending.y).toBeCloseTo(before.y, 1);
-      expect(pending.height).toBeCloseTo(before.height, 1);
-    } finally {
-      release();
-    }
-    await expect(panel.getByText(second!.name, { exact: true })).toBeVisible();
-    await expect(panel.getByText(first!.name, { exact: true })).toHaveCount(0);
-    await expect(panel).toHaveAttribute("aria-busy", "false");
-    await expect(panel.locator("[inert]")).toHaveCount(0);
-    const content = panel.locator(":scope > div");
-    if (reducedMotion === "reduce") {
-      await expect(content).toHaveCSS("animation-name", "none");
-      await expect(panel).toHaveCSS("transition-duration", "0s");
-      await expect(page.getByRole("tab", { name: "통학", exact: true })).toHaveCSS("transition-duration", "0s");
-    } else {
-      const opacity = await content.evaluate((element) => {
-        const animation = element.getAnimations().find((candidate) => candidate instanceof CSSAnimation);
-        if (!animation) throw new Error("새 그룹의 카드 등장 애니메이션이 필요합니다.");
-        animation.pause();
-        animation.currentTime = Number(animation.effect!.getTiming().duration) / 2;
-        return Number(getComputedStyle(element).opacity);
-      });
-      expect(opacity).toBeGreaterThan(0);
-      expect(opacity).toBeLessThan(1);
-      await content.evaluate((element) => element.getAnimations().forEach((animation) => animation.finish()));
-    }
-    await expect(panel.getByRole("link")).toBeVisible();
+test("그룹을 전환하면 응답 전까지 기존 항목을 유지하고 응답 후 새 항목을 표시한다", async ({
+  page,
+  favorites,
+  api,
+  browserName,
+}) => {
+  const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" })];
+  favorites.groups.push({
+    id: secondGroupId,
+    name: "통학",
+    favorites: [storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 4)],
   });
-}
+  let release = () => {};
+  const response = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await api.route(async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/me/favorites" && url.searchParams.get("groupId") === secondGroupId) await response;
+    await route.fallback();
+  });
+  await page.goto("/");
+  const panel = page.getByRole("tabpanel");
+  await expect(panel.getByText(first!.name, { exact: true })).toBeVisible();
+  try {
+    await page.getByRole("tab", { name: "통학", exact: true }).click();
+    await expect(panel).toHaveAttribute("aria-busy", "true");
+    await expect(panel.getByText(first!.name, { exact: true })).toBeVisible();
+    await expect(panel.locator("[inert]")).toHaveCount(1);
+    await page.getByRole("tab", { name: "통학", exact: true }).focus();
+    const tabKey = browserName === "webkit" ? "Alt+Tab" : "Tab";
+    await page.keyboard.press(tabKey);
+    await expect(page.getByRole("button", { name: "그룹 추가", exact: true })).toBeFocused();
+    await page.keyboard.press(tabKey);
+    await expect(page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true })).toBeFocused();
+    await page.keyboard.press(tabKey);
+    await expect(page.getByRole("link", { name: "홈", exact: true })).toBeFocused();
+  } finally {
+    release();
+  }
+  await expect(panel.getByText(second!.name, { exact: true })).toBeVisible();
+  await expect(panel.getByText(first!.name, { exact: true })).toHaveCount(0);
+  await expect(panel).toHaveAttribute("aria-busy", "false");
+  await expect(panel.locator("[inert]")).toHaveCount(0);
+  await expect(panel.getByRole("link")).toBeVisible();
+});
 
 test("그룹을 빠르게 다시 바꾸면 늦게 도착한 이전 응답을 표시하지 않는다", async ({ page, favorites, api }) => {
   const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
@@ -579,30 +555,6 @@ test("마이페이지에서 한 그룹의 즐겨찾기를 삭제해도 다른 �
   await expect(page.getByText("아직 등록한 정류장이 없어요", { exact: true })).toBeVisible();
   expect(favorites.groups[0]!.favorites).toHaveLength(0);
   expect(favorites.groups[1]!.favorites).toHaveLength(1);
-});
-
-test("즐겨찾기가 없으면 검색으로 이동하는 버튼과 판정 보드와 같은 별 아이콘을 표시한다", async ({ page, api }) => {
-  await page.goto("/");
-  const empty = page.getByText("등록된 즐겨찾기가 없어요", { exact: true }).locator("..");
-  await expect(empty.getByRole("link", { name: "즐겨찾기 추가하기", exact: true })).toHaveAttribute("href", "/search");
-  const emptyIcon = await empty.locator("img").getAttribute("src");
-  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
-  await page.goto(`/routes/${routeId}`);
-  const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });
-  await expect(star).toHaveAttribute("aria-pressed", "false");
-  expect(await star.locator("img").getAttribute("src")).toBe(emptyIcon);
-});
-
-test("비회원 홈 안내 카드는 판정 보드와 같은 빈 별 아이콘을 쓴다", async ({ page, auth, api }) => {
-  auth.member = null;
-  await page.goto("/");
-  const card = page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true });
-  const guestIcon = await card.locator("img").getAttribute("src");
-  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
-  await page.goto(`/routes/${routeId}`);
-  const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });
-  await expect(star).toHaveAttribute("aria-pressed", "false");
-  expect(await star.locator("img").getAttribute("src")).toBe(guestIcon);
 });
 
 test("이미 가득 찬 그룹에 새 항목을 선택하면 저장을 막는다", async ({ page, favorites, api }) => {

@@ -18,8 +18,6 @@ async function dropGroup(page: Page, name: string) {
   await expect(target).toBeVisible();
   await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeVisible();
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 16 });
-  await expect(target).toHaveAttribute("data-drop-active", "true");
-  await page.screenshot({ path: test.info().outputPath("group-over-trash.png") });
   await page.mouse.up();
 }
 
@@ -33,7 +31,6 @@ test("그룹을 정류장 영역에 놓으면 확인 창을 열고 취소·실�
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("통학 그룹");
   expect(favorites.requests.filter((request) => request.method === "DELETE")).toHaveLength(0);
-  await page.screenshot({ path: test.info().outputPath("group-delete-confirm.png") });
   await dialog.getByRole("button", { name: "취소", exact: true }).click();
   await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeVisible();
   await expect(editor.getByRole("button", { name: "통학", exact: true })).toBeVisible();

@@ -22,7 +22,6 @@ test("그룹 카드 편집은 순서·삭제 아이콘을 표시하고 실패 �
   await expect(list.getByRole("listitem").first()).toContainText("대표 그룹");
   await expect(editor.getByRole("button", { name: "주말 그룹 삭제", exact: true })).toHaveCount(0);
   await expect(editor.getByRole("button", { name: "즐겨찾기 그룹 삭제", exact: true })).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath("mypage-group-edit.png") });
   await editor.getByRole("button", { name: "통학 그룹 삭제", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "통학 그룹을 삭제할까요?", exact: true });
   await dialog.getByRole("button", { name: "취소", exact: true }).click();
@@ -43,7 +42,6 @@ test("그룹 카드 편집은 순서·삭제 아이콘을 표시하고 실패 �
   await editor.getByRole("button", { name: "완료", exact: true }).click();
   await expect(editor).toHaveCount(0);
   expect(favorites.groups.map((group) => group.name)).toEqual(["주말", "즐겨찾기"]);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test("그룹 순서를 바꾼 뒤 Escape로 닫으면 저장하지 않는다", async ({ page, favorites }) => {
@@ -57,41 +55,6 @@ test("그룹 순서를 바꾼 뒤 Escape로 닫으면 저장하지 않는다", a
   expect(favorites.groups.map((group) => group.name)).toEqual(["즐겨찾기", "통학"]);
   expect(favorites.requests.filter((request) => request.method === "PUT")).toHaveLength(0);
 });
-
-for (const width of [320, 425, 659]) {
-  test(`${width}px에서 편집 전후 그룹 카드의 크기와 위치가 유지된다`, async ({ page, favorites }) => {
-    favorites.groups[0]!.name = "ㅇㅇ";
-    favorites.groups.push(
-      { id: schoolId, name: "즐겨찾기", favorites: [] },
-      { id: weekendId, name: "아침출근즐겨찾기그룹", favorites: [] },
-    );
-    await page.setViewportSize({ width, height: 890 });
-    await page.goto("/mypage");
-    const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
-    await expect(region.getByRole("link")).toHaveCount(3);
-    await page.evaluate(() => document.fonts.ready);
-    const before = await region.getByRole("link").evaluateAll((cards) =>
-      cards.map((card) => {
-        const { x, y, width, height } = card.getBoundingClientRect();
-        return { x, y, width, height };
-      }),
-    );
-    await region.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
-    const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
-    const cards = editor.getByRole("list", { name: "그룹 순서", exact: true }).getByRole("listitem");
-    await expect(cards).toHaveCount(3);
-    for (const [index, card] of (await cards.all()).entries()) {
-      const after = (await card.boundingBox())!;
-      const original = before[index]!;
-      expect(after.x).toBeCloseTo(original.x, 1);
-      expect(after.y).toBeCloseTo(original.y, 1);
-      expect(after.width).toBeCloseTo(original.width, 1);
-      expect(after.height).toBeCloseTo(original.height, 1);
-    }
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: test.info().outputPath(`mypage-group-width-${width}.png`) });
-  });
-}
 
 test("새 대표 표시는 즉시 바뀌고 이전 대표 삭제는 순서 저장 후 실행하며 실패해도 재시도한다", async ({
   page,

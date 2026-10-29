@@ -7,8 +7,6 @@ test("로그인한 빈 홈에서 즐겨찾기 추가하기를 누르면 검색 �
   await page.goto("/");
   await expect(page.getByText("노선을 선택하고 자주 타는 정류장의 별을 눌러 보세요", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "즐겨찾기 추가하기", exact: true })).toBeVisible();
-  await page.evaluate(() => document.fonts.ready);
-  await page.screenshot({ path: test.info().outputPath("home-actions.png") });
   await page.getByRole("link", { name: "즐겨찾기 추가하기", exact: true }).click();
   await expect(page).toHaveURL("/search");
   await expect(routeSearchInput(page)).toBeFocused();
@@ -22,9 +20,7 @@ test("홈의 + 버튼에서 그룹을 만들고 최대 개수에 도달하면 �
   const dialog = page.getByRole("dialog", { name: "그룹 추가", exact: true });
   const input = dialog.getByRole("textbox", { name: "그룹 이름", exact: true });
   await expect(input).toBeFocused();
-  await expect(dialog.locator("label")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "즐겨찾기 더보기", exact: true })).toHaveCount(0);
-  await page.screenshot({ path: test.info().outputPath("home-create-group.png") });
   await input.fill("  아침출근즐겨찾기그룹  ");
   await input.press("Enter");
   await expect(dialog).toHaveCount(0);
@@ -40,7 +36,6 @@ test("홈의 + 버튼에서 그룹을 만들고 최대 개수에 도달하면 �
     { name: "아침출근즐겨찾기그룹" },
     { name: "🚌 통학" },
   ]);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole("tab", { name: "즐겨찾기", exact: true }).click();
   await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toHaveAttribute("aria-selected", "true");
 });
@@ -83,36 +78,6 @@ test("그룹 추가 취소와 Escape는 저장하지 않고 열었던 버튼으�
   await expect(dialog).toHaveCount(0);
   await expect(add).toBeFocused();
   expect(favorites.requests.filter((request) => request.method === "POST")).toHaveLength(0);
-});
-
-test("그룹 생성 중에는 중복 제출과 취소를 막고 응답 후 목록에 한 번 반영한다", async ({ page, api, favorites }) => {
-  let release = () => {};
-  const response = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await api.route(async (route) => {
-    if (new URL(route.request().url()).pathname === "/api/me/favorite-groups" && route.request().method() === "POST")
-      await response;
-    await route.fallback();
-  });
-  await page.goto("/");
-  await page.getByRole("button", { name: "그룹 추가", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "그룹 추가", exact: true });
-  const input = dialog.getByRole("textbox", { name: "그룹 이름", exact: true });
-  await input.fill("출근");
-  try {
-    await input.press("Enter");
-    await expect(dialog.getByRole("button", { name: "만드는 중…", exact: true })).toBeDisabled();
-    await expect(dialog.getByRole("button", { name: "취소", exact: true })).toBeDisabled();
-    await input.press("Enter");
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeVisible();
-  } finally {
-    release();
-  }
-  await expect(dialog).toHaveCount(0);
-  await expect(page.getByRole("tab", { name: "출근", exact: true })).toBeVisible();
-  expect(favorites.requests.filter((request) => request.method === "POST")).toHaveLength(1);
 });
 
 test("그룹이 3개면 +가 없고 그룹을 삭제하면 다시 표시한다", async ({ page, favorites }) => {

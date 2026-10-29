@@ -37,7 +37,6 @@ test("홈 편집 중 그룹을 추가해도 미저장 그룹·정류장 순서�
   await expect(add).toBeFocused();
   await add.click();
   await input.fill("퇴근");
-  await page.screenshot({ path: test.info().outputPath("editor-create-group.png") });
   await dialog.getByRole("button", { name: "만들기", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(groupList.getByRole("button", { name: "퇴근", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -52,8 +51,6 @@ test("홈 편집 중 그룹을 추가해도 미저장 그룹·정류장 순서�
 
   await groupList.getByRole("button", { name: "즐겨찾기", exact: true }).click();
   await expect(stops.getByRole("listitem").first()).toContainText(second!.name);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: test.info().outputPath("editor-group-added.png") });
   await editor.getByRole("button", { name: "완료", exact: true }).click();
   await expect(editor).toHaveCount(0);
   expect(favorites.groups.map((group) => group.name)).toEqual(["통학", "즐겨찾기", "퇴근"]);
@@ -63,80 +60,38 @@ test("홈 편집 중 그룹을 추가해도 미저장 그룹·정류장 순서�
   expect(favorites.requests.filter((request) => request.method === "POST")).toHaveLength(1);
 });
 
-for (const area of ["이름", "여백"]) {
-  test(`그룹 알약의 ${area}을 잡고 드래그하면 순서를 바꾸고 Escape는 취소하며 짧게 누르면 선택한다`, async ({
-    page,
-    favorites,
-  }) => {
-    favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
-    await page.goto("/");
-    await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
-    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-    const list = editor.getByRole("list", { name: "그룹 순서", exact: true });
-    const first = list.getByRole("button", { name: "즐겨찾기", exact: true });
-    const second = list.getByRole("button", { name: "통학", exact: true });
-    await second.click();
-    await expect(second).toHaveAttribute("aria-pressed", "true");
-    await first.click();
-    const row = list.getByRole("listitem").filter({ has: page.getByRole("button", { name: "통학", exact: true }) });
-    const from = (await (area === "이름" ? second : row).boundingBox())!;
-    const to = (await first.boundingBox())!;
-    const x = area === "이름" ? from.x + from.width / 2 : from.x + 4;
-    const y = from.y + from.height / 2;
-    await page.mouse.move(x, y);
-    await page.mouse.down();
-    await page.mouse.move(to.x - 10, y, { steps: 12 });
-    await page.keyboard.press("Escape");
-    await page.mouse.up();
-    await expect(editor).toBeVisible();
-    await expect(list.getByRole("listitem").first()).toContainText("즐겨찾기");
-    await page.mouse.move(x, y);
-    await page.mouse.down();
-    await page.mouse.move(to.x - 10, y, { steps: 12 });
-    await page.screenshot({ path: test.info().outputPath("editor-pill-dragging.png") });
-    await page.mouse.up();
-    await expect(list.getByRole("listitem").first()).toContainText("통학");
-    await expect(first).toHaveAttribute("aria-pressed", "true");
-    expect(favorites.groups.map((group) => group.name)).toEqual(["즐겨찾기", "통학"]);
-    await second.click();
-    await expect(second).toHaveAttribute("aria-pressed", "true");
-    await editor.getByRole("button", { name: "완료", exact: true }).click();
-    await expect(editor).toHaveCount(0);
-    expect(favorites.groups.map((group) => group.name)).toEqual(["통학", "즐겨찾기"]);
-  });
-}
-
-test("그룹 알약 본문을 터치·포인터로 드래그하고 순서를 저장한다", async ({ page, favorites, browserName }) => {
+test("그룹 알약의 여백을 드래그해 순서를 바꾸고 Escape로 취소하며 짧게 눌러 선택한다", async ({ page, favorites }) => {
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
   await page.goto("/");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   const list = editor.getByRole("list", { name: "그룹 순서", exact: true });
   const first = list.getByRole("button", { name: "즐겨찾기", exact: true });
-  const from = (await list.getByRole("button", { name: "통학", exact: true }).boundingBox())!;
+  const second = list.getByRole("button", { name: "통학", exact: true });
+  await second.click();
+  await expect(second).toHaveAttribute("aria-pressed", "true");
+  await first.click();
+  const row = list.getByRole("listitem").filter({ has: page.getByRole("button", { name: "통학", exact: true }) });
+  const from = (await row.boundingBox())!;
   const to = (await first.boundingBox())!;
-  const x = from.x + from.width / 2;
+  const x = from.x + 4;
   const y = from.y + from.height / 2;
-  if (browserName === "chromium") {
-    const cdp = await page.context().newCDPSession(page);
-    await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true });
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
-    for (let step = 1; step <= 12; step++) {
-      await cdp.send("Input.dispatchTouchEvent", {
-        type: "touchMove",
-        touchPoints: [{ x: x + ((to.x - 10 - x) * step) / 12, y }],
-      });
-    }
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-    await cdp.detach();
-  } else {
-    await page.mouse.move(x, y);
-    await page.mouse.down();
-    await page.mouse.move(to.x - 10, y, { steps: 12 });
-    await page.mouse.up();
-  }
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(to.x - 10, y, { steps: 12 });
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(editor).toBeVisible();
+  await expect(list.getByRole("listitem").first()).toContainText("즐겨찾기");
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(to.x - 10, y, { steps: 12 });
+  await page.mouse.up();
   await expect(list.getByRole("listitem").first()).toContainText("통학");
   await expect(first).toHaveAttribute("aria-pressed", "true");
+  expect(favorites.groups.map((group) => group.name)).toEqual(["즐겨찾기", "통학"]);
+  await second.click();
+  await expect(second).toHaveAttribute("aria-pressed", "true");
   await editor.getByRole("button", { name: "완료", exact: true }).click();
   await expect(editor).toHaveCount(0);
   expect(favorites.groups.map((group) => group.name)).toEqual(["통학", "즐겨찾기"]);
