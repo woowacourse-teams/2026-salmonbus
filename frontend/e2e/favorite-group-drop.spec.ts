@@ -145,6 +145,9 @@ test("이전 대표 삭제 전에 새 순서를 저장하고 실패 후 재시�
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog.getByRole("alert")).toBeVisible();
   expect(favorites.groups[0]!.id).toBe(schoolId);
+  await expect(dialog.getByRole("status")).toHaveText(
+    "일부 순서는 저장됐어요. 아직 저장하지 못한 순서만 다시 저장할 수 있어요.",
+  );
   failDelete = false;
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog).toHaveCount(0);

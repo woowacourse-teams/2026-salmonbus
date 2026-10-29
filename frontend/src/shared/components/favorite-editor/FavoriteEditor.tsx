@@ -1,6 +1,6 @@
 import { directionLabelOf } from "@/shared/utils/directionLabelOf";
 import { useEffect, useRef, useState } from "react";
-import { deleteFavorite, deleteFavoriteGroup, saveFavoriteOrder, saveGroupOrder } from "@/shared/api/favorites.api";
+import { deleteFavorite, saveFavoriteOrder, saveGroupOrder } from "@/shared/api/favorites.api";
 import type { FavoriteGroup, HomeFavorite, SavedFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
@@ -10,10 +10,10 @@ import { RouteBadge } from "@/shared/components/RouteBadge";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
-import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { FavoritesNotice, PartialFavoriteOrderNotice } from "@/shared/components/FavoritesNotice";
 import { SortableList } from "./SortableList";
 import { moveItem } from "@/shared/utils/moveItem";
-import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
+import { useFavoriteGroupDeletion } from "@/shared/hooks/useFavoriteGroupDeletion";
 import trashIcon from "@/shared/assets/icons/trash.svg";
 import * as styles from "./FavoriteEditor.css";
 import * as common from "@/shared/styles/form.css";
@@ -44,7 +44,6 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   const [deletingGroup, setDeletingGroup] = useState<FavoriteGroup | null>(null);
   const [groupDrag, setGroupDrag] = useState<GroupDrag | null>(null);
   const protectedGroup = deletingGroup !== null && draft[0]?.id === deletingGroup.id;
-  const [partial, setPartial] = useState(false);
   const [revision, retry] = useState(0);
   const summaries = useHomeFavorites({ kind: "all" }, revision);
   const favorites =
@@ -52,7 +51,15 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   const hasGroupDetails =
     initialFavorites !== undefined &&
     group?.favorites.every((favorite) => favorites.some((item) => item.id === favorite.id));
-  const { busy, error, setError, run } = useFavoriteAction();
+  const {
+    busy,
+    error,
+    setError,
+    run,
+    partial,
+    setPartial,
+    removeGroup: deleteGroup,
+  } = useFavoriteGroupDeletion(saved, draft, setSaved);
   const editor = useRef<HTMLElement>(null);
   const doneButton = useRef<HTMLButtonElement>(null);
   const groupDropArea = useRef<HTMLDivElement>(null);
@@ -90,24 +97,11 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   }
   async function removeGroup() {
     if (!deletingGroup || protectedGroup || busy) return;
-    let orderSaved = false;
-    const ok = await run(async () => {
-      // 서버가 보호하는 이전 대표를 삭제할 때는 새 대표 순서를 먼저 반영한다.
-      if (saved[0]?.id === deletingGroup.id) {
-        const ids = idsOf(draft);
-        const result = await saveGroupOrder(ids);
-        if (!result.ok) return result;
-        orderSaved = true;
-        setSaved((current) => [...current].sort((left, right) => ids.indexOf(left.id) - ids.indexOf(right.id)));
-      }
-      return deleteFavoriteGroup(deletingGroup.id);
-    });
-    if (ok) {
+    if (await deleteGroup(deletingGroup.id)) {
       setSaved((current) => current.filter((candidate) => candidate.id !== deletingGroup.id));
       setDraft((current) => current.filter((candidate) => candidate.id !== deletingGroup.id));
       setDeletingGroup(null);
     } else {
-      if (orderSaved) setPartial(true);
       reload();
     }
   }
@@ -303,11 +297,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
           {error}
         </p>
       )}
-      {partial && (
-        <p className={common.subtle} role="status">
-          일부 순서는 저장됐어요. 아직 저장하지 못한 순서만 다시 저장할 수 있어요.
-        </p>
-      )}
+      {partial && deletingGroup === null && <PartialFavoriteOrderNotice />}
       <button
         ref={doneButton}
         type="button"
@@ -351,6 +341,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
               {error}
             </p>
           )}
+          {partial && <PartialFavoriteOrderNotice />}
           {protectedGroup ? (
             <button className={styles.cancel} onClick={() => setDeletingGroup(null)}>
               확인

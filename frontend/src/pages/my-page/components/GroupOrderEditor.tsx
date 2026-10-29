@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
 import type { FavoriteGroup } from "@/shared/api/favorites.types";
-import { deleteFavoriteGroup, saveGroupOrder } from "@/shared/api/favorites.api";
+import { saveGroupOrder } from "@/shared/api/favorites.api";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { SortableList } from "@/shared/components/favorite-editor/SortableList";
 import { useFavorites } from "@/shared/hooks/useFavorites";
-import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
+import { useFavoriteGroupDeletion } from "@/shared/hooks/useFavoriteGroupDeletion";
+import { PartialFavoriteOrderNotice } from "@/shared/components/FavoritesNotice";
 import { moveItem } from "@/shared/utils/moveItem";
 import { MAX_FAVORITE_GROUPS, MAX_FAVORITES_PER_GROUP } from "@/shared/utils/favoritePolicy";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
@@ -24,7 +25,8 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
   const [saved, setSaved] = useState(groups);
   const [draft, setDraft] = useState(groups);
   const [deleting, setDeleting] = useState<FavoriteGroup | null>(null);
-  const { busy, error, setError, run } = useFavoriteAction();
+  const { busy, error, setError, run, partial, removeGroup } = useFavoriteGroupDeletion(saved, draft, setSaved);
+  const labelIdPrefix = useId();
   const done = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     done.current?.focus();
@@ -41,17 +43,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
   }
   async function remove() {
     if (!deleting || protectedGroup || resource.status !== "success") return;
-    if (
-      await run(async () => {
-        // 서버는 저장된 첫 그룹을 보호하므로 이전 대표를 지우기 전에 새 순서를 반영한다.
-        if (saved[0]?.id === deleting.id) {
-          const result = await saveGroupOrder(draft.map((group) => group.id));
-          if (!result.ok) return result;
-          setSaved(draft);
-        }
-        return deleteFavoriteGroup(deleting.id);
-      })
-    ) {
+    if (await removeGroup(deleting.id)) {
       setSaved((current) => current.filter((group) => group.id !== deleting.id));
       setDraft((current) => current.filter((group) => group.id !== deleting.id));
       setDeleting(null);
@@ -96,14 +88,18 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
               {draft[0]?.id !== group.id ? (
                 <button
                   className={`${styles.cardDelete} ${styles.deleteTool}`}
-                  aria-label={`${group.name} 그룹 삭제`}
+                  aria-labelledby={`${labelIdPrefix}delete-${group.id}`}
                   disabled={busy || resource.status !== "success"}
                   onClick={(event) => {
                     event.currentTarget.focus();
                     setError(null);
                     setDeleting(group);
                   }}
-                />
+                >
+                  <span id={`${labelIdPrefix}delete-${group.id}`} hidden>
+                    {`${group.name} 그룹 삭제`}
+                  </span>
+                </button>
               ) : (
                 <span className={styles.deletePlaceholder} aria-hidden="true" />
               )}
@@ -117,6 +113,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
           {error}
         </p>
       )}
+      {partial && deleting === null && <PartialFavoriteOrderNotice />}
       {draft.length < MAX_FAVORITE_GROUPS && (
         <Link className={styles.add} to="/mypage/groups/new">
           <img src={plusIcon} width="18" height="18" alt="" />새 그룹 만들기
@@ -140,6 +137,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
               {error}
             </p>
           )}
+          {partial && <PartialFavoriteOrderNotice />}
           <div className={form.actions}>
             <button className={buttons.secondary} disabled={busy} onClick={() => setDeleting(null)}>
               취소
