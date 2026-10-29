@@ -9,6 +9,7 @@ import { GuestMyPage } from "./GuestMyPage";
 import { GroupList } from "./GroupList";
 import { PrivacySection } from "./PrivacySection";
 import { useAuth } from "@/shared/hooks/useAuth";
+import { withdrawAppleInApp } from "@/shared/native-auth/nativeSignIn";
 import { authErrorOf } from "@/shared/utils/authErrorOf";
 import * as buttonStyles from "@/shared/styles/button.css";
 import pencilIcon from "../assets/pencil.svg";
@@ -37,18 +38,39 @@ export function MyPageScreen() {
     setError(null);
     const result = await (action === "logout" ? signOut() : withdraw());
     if (!active.current) return;
+    if (result.ok && result.body !== undefined) {
+      await withdrawAppleMember(result.body.startUrl);
+      return;
+    }
     setBusy(false);
     if (!result.ok) {
       setError(authErrorOf(result.failure));
       return;
     }
-    if (result.body !== undefined) {
-      window.location.assign(result.body.startUrl);
-      return;
-    }
     void navigate("/", {
       replace: true,
       state: { notice: action === "logout" ? "로그아웃했어요" : "회원탈퇴가 완료됐어요" },
+    });
+  }
+
+  // 앱에서는 바텀시트로 다시 인증한다. 브라우저이거나 서버에 앱 탈퇴 API가 없으면 웹 Apple 재인증 화면으로 간다.
+  async function withdrawAppleMember(startUrl: string) {
+    const outcome = await withdrawAppleInApp();
+    if (!active.current) return;
+    if (outcome === "unsupported") {
+      window.location.assign(startUrl);
+      return;
+    }
+    setBusy(false);
+    if (outcome === "failed") {
+      setError("회원탈퇴를 완료하지 못했어요. 다시 시도해 주세요.");
+      return;
+    }
+    setAction(null);
+    if (outcome === "withdrawn") await reload();
+    void navigate(outcome === "withdrawn" ? "/" : "/mypage", {
+      replace: true,
+      state: { notice: outcome === "withdrawn" ? "회원탈퇴가 완료됐어요" : "회원탈퇴를 취소했어요" },
     });
   }
 

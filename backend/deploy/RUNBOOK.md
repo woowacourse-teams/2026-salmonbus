@@ -386,6 +386,7 @@ done
 | `AUTH_REFRESH_TOKEN_SECRET` | 리프레시 토큰 서명 비밀. 32바이트 이상. **바꾸면 모든 사용자가 다시 로그인해야 한다** |
 | `AUTH_KAKAO_ENABLED` · `AUTH_KAKAO_CLIENT_ID` · `AUTH_KAKAO_CLIENT_SECRET` · `AUTH_KAKAO_ADMIN_KEY` | 카카오 앱의 REST API 키, 클라이언트 시크릿, 어드민 키. 어드민 키는 탈퇴한 회원의 카카오 연결을 끊는 데 쓴다 |
 | `AUTH_APPLE_ENABLED` · `AUTH_APPLE_CLIENT_ID` · `AUTH_APPLE_TEAM_ID` · `AUTH_APPLE_KEY_ID` · `AUTH_APPLE_PRIVATE_KEY_PATH` | 애플 Services ID, Team ID, 키 ID, `.p8` 파일 경로. 키 내용은 env에 넣지 않는다 |
+| `AUTH_APPLE_APP_ID` · `AUTH_KAKAO_NATIVE_APP_KEY` | 앱 네이티브 로그인 ID 토큰의 대상. iOS 번들 ID(`com.salmonbus.app`)와, 웹 로그인과 **같은 카카오 앱**의 네이티브 앱 키. 비밀이 아니다. 비우면 그 제공자의 앱 로그인만 404이고 웹 로그인은 그대로다. 앱 애플 탈퇴는 `AUTH_APPLE_KEY_ID` 키가 이 번들 ID의 primary App ID 그룹에 묶여 있어야 한다(키 상세의 Sign In with Apple 설정이 `<Team ID>.com.salmonbus.app`) |
 
 두 서명 비밀은 서버에서 만들고 출력하지 않는다.
 
@@ -413,7 +414,7 @@ CloudFront에는 로그인 경로 동작을 `/api/*`보다 **앞 순서로** 추
 
 - 지금 `/api/*` 동작은 GET·HEAD만 허용해 POST가 `index.html` 200으로 샌다. 위 동작이 없으면 로그아웃·갱신·닉네임 변경·탈퇴가 조용히 실패한다
 - 오류 응답 403은 CloudFront가 `index.html`로 바꾸므로 API는 403을 쓰지 않는다. 로그인 경로도 401·400·409로만 거절한다
-- `/api/auth/*/start`는 익명 요청마다 10분짜리 임시 세션 행을 만든다. WAF에서 이 경로와 `/api/auth/refresh`에 IP별 요청 제한을 건다
+- `/api/auth/*/start`와 앱 로그인 nonce(`/api/auth/*/native/nonce`)는 익명 요청마다 10분짜리 임시 세션 행을 만든다. WAF에서 이 두 경로와 `/api/auth/refresh`, 앱 로그인(`/api/auth/*/native`)에 IP별 요청 제한을 건다
 
 켠 뒤 확인할 것:
 
@@ -429,6 +430,7 @@ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://127.0.0.1:8080/a
 - `auth.unlink{result=not_linked}`는 카카오가 "이미 연결되지 않은 사용자"라고 답한 경우다. 해제된 것으로 보지만, 이 값이 탈퇴마다 나오면 `AUTH_KAKAO_ADMIN_KEY`가 다른 앱(dev 등)의 키일 수 있다. 해제 결과를 DB에 기록하지 못해 다시 시도한 요청에서도 한 번씩 나오므로, 가끔 나오는 것은 정상이다
 - `auth.unlink{result=failed}`는 카카오 연결 해제 실패다. 서버가 5분마다 확인해 1분부터 두 배씩 늘어나는 간격으로 다시 시도하고, 10번 실패하면 멈춘다. 멈춘 요청은 `SELECT id, provider, attempts, last_error, updated_at FROM provider_unlink WHERE status = 'GAVE_UP'`으로 본다
 - `auth.withdraw{provider=APPLE,result=revoke_failed}`는 애플 토큰 취소 실패다. 이때는 회원을 지우지 않고 `withdraw=failed`로 돌려보내므로 회원과 로그인은 그대로 남고 사용자가 다시 시도한다. 탈퇴할 때마다 나오면 `AUTH_APPLE_*` 설정과 `.p8` 파일을 확인한다
+- `auth.withdraw{provider=APPLE,result=code_rejected}`는 앱 애플 탈퇴에서 애플이 인가 코드를 거절했거나 받은 ID 토큰이 맞지 않은 경우다. 사용자가 다시 인증하면 대개 해결된다. 앱 탈퇴마다 나오면 `AUTH_APPLE_APP_ID`와, 키가 그 번들 ID 그룹에 묶였는지 확인한다. `apple_unavailable`은 애플이 응답하지 않은 경우다
 - `GAVE_UP` 행은 서버가 다시 시도하기를 멈춘 카카오 해제 요청이다. 탈퇴한 회원의 제공자 식별자를 담고 있어 30일 뒤 서버가 지운다(매일 04:23). 그 전에 아래처럼 손으로 끊고 지울 수 있다. 어드민 키는 출력하지 않는다. `subject`는 해당 행에서 따로 조회한다
 
 ```bash

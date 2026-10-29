@@ -40,29 +40,24 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
               AND (vehicle_observation_id, target_stop_order) > (:afterObservationId, :afterStopOrder)
             ORDER BY vehicle_observation_id, target_stop_order
             LIMIT :limit
-        ), source_ids AS MATERIALIZED (
+        ), source_ids AS (
             SELECT DISTINCT vehicle_observation_id AS id FROM pending
         ), sources AS MATERIALIZED (
             SELECT source.id, source.vehicle_id, source.quality_direction, batch.response_received_at
             FROM source_ids keys
             JOIN forecast_eligible_observation source ON source.id = keys.id
             JOIN observation_batch batch ON batch.id = source.observation_batch_id
-        ), eligible_forecasts AS MATERIALIZED (
-            SELECT evaluation.vehicle_observation_id, evaluation.target_stop_order,
-                   forecast.route_version_id, source.vehicle_id, forecast.stops_to_target,
-                   source.response_received_at, forecast.generated_at, source.quality_direction
-            FROM pending evaluation
-            JOIN sources source ON source.id = evaluation.vehicle_observation_id
-            JOIN seat_forecast forecast ON forecast.vehicle_observation_id = evaluation.vehicle_observation_id
-             AND forecast.target_stop_order = evaluation.target_stop_order
         )
         SELECT evaluation.vehicle_observation_id, evaluation.target_stop_order,
-               detail.route_version_id, detail.vehicle_id, detail.stops_to_target,
-               detail.response_received_at, detail.generated_at, detail.quality_direction,
-               detail.vehicle_observation_id IS NOT NULL AS eligible
+               forecast.route_version_id, source.vehicle_id, forecast.stops_to_target,
+               source.response_received_at, forecast.generated_at, source.quality_direction,
+               forecast.vehicle_observation_id IS NOT NULL AS eligible
         FROM pending evaluation
-        LEFT JOIN eligible_forecasts detail ON detail.vehicle_observation_id = evaluation.vehicle_observation_id
-         AND detail.target_stop_order = evaluation.target_stop_order
+        LEFT JOIN (
+            sources source
+            JOIN seat_forecast forecast ON forecast.vehicle_observation_id = source.id
+        ) ON forecast.vehicle_observation_id = evaluation.vehicle_observation_id
+         AND forecast.target_stop_order = evaluation.target_stop_order
         ORDER BY evaluation.vehicle_observation_id, evaluation.target_stop_order
         """;
 

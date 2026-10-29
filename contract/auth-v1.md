@@ -2,12 +2,13 @@
 
 프론트와 서버가 함께 지키는 소셜 로그인(카카오·애플) 계약이다.
 
-fetch로 부르는 API 8개의 요청·응답·오류 코드는 [`auth-v1.openapi.json`](auth-v1.openapi.json)이 원본이다. 서버 시험(`AuthApiDocsContractTest`)이 앱이 만든 명세와 이 파일을 대조한다. 이 문서는 명세에 담기지 않는 브라우저 이동 흐름과 쿠키 규칙을 적는다. 모양을 바꾸면 두 파일을 같은 PR에서 고친다.
+fetch로 부르는 API 11개의 요청·응답·오류 코드는 [`auth-v1.openapi.json`](auth-v1.openapi.json)이 원본이다. 서버 시험(`AuthApiDocsContractTest`)이 앱이 만든 명세와 이 파일을 대조한다. 이 문서는 명세에 담기지 않는 브라우저 이동 흐름과 쿠키 규칙을 적는다. 모양을 바꾸면 두 파일을 같은 PR에서 고친다.
 
 ## 켜짐
 
 - 로그인은 `AUTH_ENABLED=true`일 때만 켜진다. 꺼져 있으면 `/api/auth/*`와 `/api/me` 아래 경로가 모두 404이고, Swagger 명세에도 나오지 않는다.
 - 제공자는 `AUTH_KAKAO_ENABLED`·`AUTH_APPLE_ENABLED`로 따로 켠다. 켜지 않은 제공자의 `start`는 404다.
+- 앱 네이티브 로그인은 그 제공자가 켜져 있고 앱용 값(`AUTH_APPLE_APP_ID`·`AUTH_KAKAO_NATIVE_APP_KEY`)이 있을 때만 켜진다. 아니면 그 제공자의 `/native` 경로와 앱 애플 탈퇴가 404다. 웹은 404를 받으면 브라우저 로그인 흐름으로 돌아간다.
 - 공개 조회 API는 로그인과 상관없이 그대로다. 만료되거나 깨진 액세스 토큰이 실려 와도 공개 조회와 `/api/auth/*`는 그 이유로 거절하지 않는다.
 
 ## API
@@ -22,6 +23,9 @@ fetch로 부르는 API 8개의 요청·응답·오류 코드는 [`auth-v1.openap
 | `DELETE /api/me` | 204. 카카오 회원 탈퇴, 인증 쿠키 삭제 | 400 `CSRF_REJECTED`, 401 `UNAUTHENTICATED`, 409 `REAUTH_REQUIRED`(애플 회원) |
 | `DELETE /api/me/sessions` | 204. 모든 기기에서 로그아웃, 인증 쿠키 삭제 | 400 `CSRF_REJECTED`, 401 `UNAUTHENTICATED` |
 | `POST /api/me/withdrawal/apple` | 200. 애플 재인증 탈퇴 시작 주소 | 400 `INVALID_REQUEST`(카카오 회원)·`CSRF_REJECTED`, 401 `UNAUTHENTICATED` |
+| `POST /api/auth/{provider}/native/nonce` | 200. 앱 로그인 nonce | 400 `CSRF_REJECTED`, 404 `ENDPOINT_NOT_FOUND`(앱 로그인 꺼짐) |
+| `POST /api/auth/{provider}/native` | 204. 앱 ID 토큰으로 로그인, 인증 쿠키 발급 | 400 `INVALID_REQUEST`·`CSRF_REJECTED`, 401 `UNAUTHENTICATED`, 404 `ENDPOINT_NOT_FOUND`, 503 `SERVICE_UNAVAILABLE` |
+| `POST /api/me/withdrawal/apple/native` | 204. 앱 애플 회원 탈퇴, 인증 쿠키 삭제 | 400 `INVALID_REQUEST`(카카오 회원·코드 없음)·`CSRF_REJECTED`, 401 `UNAUTHENTICATED`, 404 `ENDPOINT_NOT_FOUND`, 409 `REAUTH_REQUIRED`, 503 `SERVICE_UNAVAILABLE` |
 
 - 모든 응답은 `Cache-Control: no-store`다.
 - 오류 본문은 다른 API와 같은 `{code, message, requestId}`다. 클라이언트는 `code`로 분기한다.
@@ -44,6 +48,7 @@ fetch로 부르는 API 8개의 요청·응답·오류 코드는 [`auth-v1.openap
 - 인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 `GET`·`HEAD`·`OPTIONS` 밖의 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더가 있어야 한다. 값은 `__Host-XSRF-TOKEN` 쿠키 값 그대로다.
 - 헤더가 없거나 쿠키 값과 다르면 400 `CSRF_REJECTED`다. 폼 파라미터(`_csrf`)는 받지 않는다.
 - 인증 쿠키가 없거나 `Authorization: Bearer` 헤더로 인증하는 요청은 CSRF 토큰을 요구하지 않는다.
+- 예외: 앱 로그인 두 요청(`/api/auth/{provider}/native/nonce`·`/native`)은 인증 쿠키가 없어도 `X-XSRF-TOKEN`이 있어야 한다. 다른 사이트가 공격자 계정의 토큰으로 사용자를 로그인시키지 못하게 하려는 것이다. 앱 로그인 요청과 앱 애플 탈퇴는 `Origin` 헤더가 있으면 사이트 주소와 같아야 한다. 다르면 400 `CSRF_REJECTED`다.
 - CSRF 쿠키는 `GET /api/auth/session`이 발급한다. 상태를 바꾸는 요청 전에 한 번 호출해 둔다.
 
 ## 쿠키
@@ -53,7 +58,7 @@ fetch로 부르는 API 8개의 요청·응답·오류 코드는 [`auth-v1.openap
 | `__Host-sb_at` | 액세스 토큰 | `HttpOnly; Secure; SameSite=Lax; Path=/` | `Max-Age=900`(15분) |
 | `__Host-sb_rt` | 리프레시 토큰 | `HttpOnly; Secure; SameSite=Lax; Path=/` | 리프레시 토큰 만료까지. 갱신할 때마다 다시 30일, 처음 로그인한 뒤 최대 180일 |
 | `__Host-XSRF-TOKEN` | CSRF 토큰 | `Secure; SameSite=Lax; Path=/`. 스크립트가 읽을 수 있다 | 브라우저 세션 |
-| `__Host-sb_session` | 로그인 중 임시 세션 | `HttpOnly; Secure; SameSite=Lax; Path=/` | 10분. 로그인이 끝나면 지운다 |
+| `__Host-sb_session` | 로그인 중 임시 세션. 앱 로그인 nonce도 여기 둔다 | `HttpOnly; Secure; SameSite=Lax; Path=/` | 10분. 로그인이 끝나면 지운다 |
 
 - 모두 `__Host-` 접두사라 `Domain` 없이 호스트 전용이다. 형제 도메인(dev 등)이 같은 이름의 쿠키를 심지 못한다.
 - 인증 쿠키를 지울 때는 같은 이름에 `Max-Age=0`을 내려 준다.
@@ -87,6 +92,29 @@ fetch로 부르는 API 8개의 요청·응답·오류 코드는 [`auth-v1.openap
 - 노선 경로에는 쿼리 `direction`(`UP`|`DOWN`)과 `stopId`(영문·숫자·`_`·`-` 1~40자)만 붙을 수 있고, 각각 한 번만 쓸 수 있다.
 - 그 밖의 값(생략, 다른 경로, `//host`, `https://...` 같은 절대 주소, 허용하지 않는 쿼리)은 모두 `/`로 바뀐다.
 
+## 앱 네이티브 로그인 흐름
+
+iOS 앱이 애플·카카오 SDK로 로그인하고, 앱 WebView 안의 웹이 아래 API를 fetch로 부른다. 응답 쿠키가 WebView에 바로 저장되도록 앱 네이티브 코드가 아니라 웹이 부른다.
+
+1. `GET /api/auth/session`으로 CSRF 쿠키를 받는다(앱을 열 때 이미 불렀으면 생략).
+2. `POST /api/auth/{provider}/native/nonce`로 `{"nonce": "..."}`를 받는다. `provider`는 `apple` 또는 `kakao`다.
+3. 앱이 SDK에 nonce를 넣어 로그인한다.
+   - 애플: nonce의 SHA-256(UTF-8, 소문자 16진수)을 Sign in with Apple의 nonce로 넣는다.
+   - 카카오: nonce를 그대로 카카오 SDK의 nonce로 넣는다.
+4. 받은 ID 토큰으로 `POST /api/auth/{provider}/native`(본문 `{"idToken": "..."}`)를 부른다. 204면 인증 쿠키가 내려와 로그인된 것이다.
+
+| 결과 | 응답 | 다음 할 일 |
+| --- | --- | --- |
+| 로그인 성공(처음이면 가입) | 204, 인증 쿠키 발급, 임시 세션 삭제 | `GET /api/auth/session`으로 상태를 다시 읽는다 |
+| 토큰 검증 실패, nonce 없음·이미 씀 | 401 `UNAUTHENTICATED` | 2번부터 다시 한다 |
+| 제공자 공개키를 받지 못함 | 503 `SERVICE_UNAVAILABLE` | 잠시 뒤 2번부터 다시 한다 |
+| 앱 로그인이 켜지지 않음 | 404 `ENDPOINT_NOT_FOUND` | 브라우저 로그인 흐름(`start`)을 쓴다 |
+
+- 토큰은 서명(RS256)·발급자·대상·만료·nonce를 확인한다. 대상은 앱용 값(애플 번들 ID, 카카오 네이티브 앱 키)만 받는다.
+- 같은 계정이면 웹 로그인과 같은 회원이다. 회원은 제공자와 계정 식별자(`sub`)로 찾는다.
+- nonce는 이 브라우저의 임시 세션에 10분 동안 하나만 있다. 맞든 틀리든 한 번 쓰면 다시 쓸 수 없다. 같은 제공자로 다시 받으면 앞의 nonce는 못 쓴다.
+- 성공은 204만이다. 다른 상태 코드나 HTML이 오면 실패로 본다.
+
 ## 애플 회원 탈퇴 흐름
 
 애플 연결을 끊으려면 애플이 새로 발급한 토큰이 필요하고 서버는 애플 토큰을 저장하지 않는다. 그래서 애플 회원은 애플 계정으로 다시 인증해야 탈퇴할 수 있다.
@@ -108,6 +136,23 @@ fetch로 부르는 API 8개의 요청·응답·오류 코드는 [`auth-v1.openap
 
 - 티켓은 CSRF로 보호되는 2번 요청으로만 받을 수 있다. 다른 사이트가 링크 하나로 탈퇴 흐름을 열지 못하게 하려는 것이다.
 - 회원은 애플 토큰을 취소한 뒤에만 지운다. 취소에 실패하면 회원과 로그인이 그대로 남으므로 사용자는 2번부터 다시 시도할 수 있다.
+
+### 앱에서 애플 회원 탈퇴
+
+앱은 브라우저 이동 대신 Sign in with Apple로 다시 인증해 받은 `authorizationCode`로 탈퇴한다. 웹의 2~4번 대신 쓴다.
+
+1. `DELETE /api/me`가 409 `REAUTH_REQUIRED`면 앱에 애플 재인증을 요청한다.
+2. 받은 코드로 `POST /api/me/withdrawal/apple/native`(본문 `{"authorizationCode": "..."}`)를 부른다. CSRF로 보호된다.
+
+| 결과 | 응답 | 쿠키 |
+| --- | --- | --- |
+| 탈퇴함 | 204 | 인증 쿠키 삭제 |
+| 코드가 틀렸거나 만료됨(5분, 1회), 다른 애플 계정, 애플 토큰 취소 실패 | 409 `REAUTH_REQUIRED`. 회원은 지우지 않음 | 바꾸지 않음 |
+| 애플이 응답하지 않음 | 503 `SERVICE_UNAVAILABLE`. 회원은 지우지 않음 | 바꾸지 않음 |
+| 카카오 회원, 코드 없음 | 400 `INVALID_REQUEST` | 바꾸지 않음 |
+
+- 서버는 코드를 앱 `client_id`로 교환하고, 함께 받은 ID 토큰의 계정이 이 회원인지 확인한 뒤 애플 토큰을 취소하고 회원을 지운다.
+- 409면 다시 인증해 새 코드로 시도한다. 코드는 한 번만 쓸 수 있다.
 
 ## 프론트 권장 순서
 

@@ -88,7 +88,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
       onClose(true);
       return;
     }
-    const ok = await run(async () => {
+    const saveChanges = async () => {
       let completed = 0;
       const persist = async (change: FavoriteOrderChange) => {
         const result = await (change.groupId === null
@@ -119,8 +119,8 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
         result = await persist(change);
       }
       return result;
-    });
-    if (ok) onClose(true);
+    };
+    if (await run(saveChanges, { resultHaptic: true })) onClose(true);
   }
   return (
     <section

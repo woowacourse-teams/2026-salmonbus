@@ -3,7 +3,7 @@
   "info": {
     "title": "Salmonbus auth",
     "version": "1.0.0",
-    "description": "SAL-227 소셜 로그인의 fetch API 계약. 로그인이 켜졌을 때(AUTH_ENABLED=true)만 이 경로가 있다. 브라우저 이동 경로(/api/auth/{provider}/start, /callback), 쿠키, 결과 쿼리는 auth-v1.md에 적는다. 예시는 합성 자료다."
+    "description": "SAL-227 소셜 로그인과 SAL-318 앱 네이티브 로그인의 fetch API 계약. 로그인이 켜졌을 때(AUTH_ENABLED=true)만 이 경로가 있다. 브라우저 이동 경로(/api/auth/{provider}/start, /callback), 쿠키, 결과 쿼리, 앱 로그인 순서는 auth-v1.md에 적는다. 예시는 합성 자료다."
   },
   "paths": {
     "/api/auth/logout": {
@@ -263,6 +263,245 @@
                     "value": {
                       "authenticated": false,
                       "refreshable": false
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/{provider}/native": {
+      "post": {
+        "summary": "앱 ID 토큰으로 로그인",
+        "description": "앱이 애플·카카오 SDK로 받은 ID 토큰으로 로그인하고 204와 인증 쿠키 두 개를 내립니다. 처음 보는 계정이면 가입시킵니다.\n웹 로그인과 같은 계정이면 같은 회원입니다. 로그인하면 로그인 중 임시 세션을 지웁니다.\n\n토큰은 서명(RS256)·발급자·대상(앱용 값)·만료와 nonce를 확인합니다. nonce는 `POST /api/auth/{provider}/native/nonce`로\n이 브라우저가 받은 값이어야 하고, 맞든 틀리든 한 번 쓰면 다시 쓸 수 없습니다.\n어느 하나라도 맞지 않으면 이유와 관계없이 401 `UNAUTHENTICATED`입니다. 이때는 nonce부터 다시 받습니다.\n제공자 공개키를 받지 못하면 503 `SERVICE_UNAVAILABLE`입니다.\n\n앱 로그인 요청은 인증 쿠키가 없어도 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다. `Origin` 헤더가 있으면 사이트 주소와 같아야 합니다.",
+        "operationId": "loginWithAppIdToken",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "description": "apple 또는 kakao",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "description": "__Host-XSRF-TOKEN 쿠키 값. 앱 로그인 요청에는 늘 필수",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppLoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "로그인함. 본문 없음",
+            "headers": {
+              "Cache-Control": {
+                "description": "no-store",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "__Host-sb_at(Max-Age 900)과 __Host-sb_rt(Max-Age는 리프레시 토큰 만료까지). 둘 다 HttpOnly; Secure; SameSite=Lax; Path=/",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "본문에 idToken이 없음, CSRF 토큰 확인 실패 또는 사이트가 아닌 출처",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidRequest": {
+                    "description": "invalidRequest",
+                    "value": {
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 형식이 올바르지 않습니다.",
+                      "requestId": "example-request"
+                    }
+                  },
+                  "csrfRejected": {
+                    "description": "csrfRejected",
+                    "value": {
+                      "code": "CSRF_REJECTED",
+                      "message": "요청을 확인하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "토큰 검증 실패, nonce 없음 또는 이미 쓴 nonce",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthenticated": {
+                    "description": "unauthenticated",
+                    "value": {
+                      "code": "UNAUTHENTICATED",
+                      "message": "로그인이 필요합니다.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "앱 로그인이 켜지지 않은 제공자",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "endpointNotFound": {
+                    "description": "endpointNotFound",
+                    "value": {
+                      "code": "ENDPOINT_NOT_FOUND",
+                      "message": "요청한 경로를 찾을 수 없습니다.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "제공자 공개키를 받지 못함",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "serviceUnavailable": {
+                    "description": "serviceUnavailable",
+                    "value": {
+                      "code": "SERVICE_UNAVAILABLE",
+                      "message": "일시적인 서버 장애가 발생했습니다.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/{provider}/native/nonce": {
+      "post": {
+        "summary": "앱 로그인 nonce 발급",
+        "description": "앱 로그인에 한 번만 쓸 nonce를 발급합니다. 앱 WebView 안의 웹이 부릅니다.\nnonce는 이 브라우저의 로그인 중 임시 세션(`__Host-sb_session`, 10분)에 저장되므로 같은 WebView에서 로그인을 요청해야 합니다.\n- 애플: 이 값의 SHA-256(UTF-8, 소문자 16진수)을 Sign in with Apple의 nonce로 넘깁니다\n- 카카오: 이 값을 그대로 카카오 SDK의 nonce로 넘깁니다\n- 같은 제공자로 다시 받으면 앞의 nonce는 쓸 수 없습니다\n\n`provider`가 `apple`·`kakao`가 아니거나 그 제공자의 앱 로그인이 켜지지 않았으면 404 `ENDPOINT_NOT_FOUND`입니다.\n\n앱 로그인 요청은 인증 쿠키가 없어도 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다. `Origin` 헤더가 있으면 사이트 주소와 같아야 합니다.",
+        "operationId": "issueAppLoginNonce",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "description": "apple 또는 kakao",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "description": "__Host-XSRF-TOKEN 쿠키 값. 앱 로그인 요청에는 늘 필수",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "발급한 nonce",
+            "headers": {
+              "Cache-Control": {
+                "description": "no-store",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppLoginNonceResponse"
+                },
+                "examples": {
+                  "nonce": {
+                    "description": "nonce",
+                    "value": {
+                      "nonce": "example-nonce"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "CSRF 토큰 확인 실패 또는 사이트가 아닌 출처",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "csrfRejected": {
+                    "description": "csrfRejected",
+                    "value": {
+                      "code": "CSRF_REJECTED",
+                      "message": "요청을 확인하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "앱 로그인이 켜지지 않은 제공자",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "endpointNotFound": {
+                    "description": "endpointNotFound",
+                    "value": {
+                      "code": "ENDPOINT_NOT_FOUND",
+                      "message": "요청한 경로를 찾을 수 없습니다.",
+                      "requestId": "example-request"
                     }
                   }
                 }
@@ -756,6 +995,161 @@
           }
         }
       }
+    },
+    "/api/me/withdrawal/apple/native": {
+      "post": {
+        "summary": "회원 탈퇴(애플, 앱)",
+        "description": "앱의 애플 회원이 Sign in with Apple로 다시 인증해 받은 `authorizationCode`로 탈퇴합니다.\n서버가 코드를 앱 `client_id`로 교환해 다시 인증한 계정이 이 회원인지 확인하고, 애플 토큰을 취소한 뒤 회원을 지웁니다.\n탈퇴하면 인증 쿠키 두 개를 지우고 204로 답합니다.\n- 코드가 틀렸거나 만료됐거나(5분, 1회), 다른 애플 계정이거나, 애플 토큰을 취소하지 못하면 409 `REAUTH_REQUIRED`입니다.\n  회원과 인증 쿠키는 그대로이므로 다시 인증해 새 코드로 시도합니다\n- 애플이 응답하지 않으면 503 `SERVICE_UNAVAILABLE`이고 회원은 그대로입니다\n- 카카오 회원이거나 본문에 코드가 없으면 400 `INVALID_REQUEST`입니다. 카카오 회원은 `DELETE /api/me`로 탈퇴합니다\n- 애플 앱 로그인이 켜지지 않았으면 404 `ENDPOINT_NOT_FOUND`입니다\n\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 헤더가 없거나 토큰 값이 비어 있으면 `__Host-sb_at` 쿠키를 봅니다. 헤더에 토큰 값이 있으면 그 토큰이 검증에 실패해도 쿠키를 보지 않습니다. 인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
+        "operationId": "withdrawAppleFromApp",
+        "parameters": [
+          {
+            "name": "X-XSRF-TOKEN",
+            "in": "header",
+            "description": "__Host-XSRF-TOKEN 쿠키 값. 인증 쿠키가 실려 있고 Authorization: Bearer 헤더가 없으면 필수",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppleAppWithdrawalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "탈퇴함. 본문 없음",
+            "headers": {
+              "Cache-Control": {
+                "description": "no-store",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "__Host-sb_at과 __Host-sb_rt를 Max-Age=0으로 지움",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "카카오 회원, 코드 없음, CSRF 토큰 확인 실패 또는 사이트가 아닌 출처",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidRequest": {
+                    "description": "invalidRequest",
+                    "value": {
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 형식이 올바르지 않습니다.",
+                      "requestId": "example-request"
+                    }
+                  },
+                  "csrfRejected": {
+                    "description": "csrfRejected",
+                    "value": {
+                      "code": "CSRF_REJECTED",
+                      "message": "요청을 확인하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "액세스 토큰이 없거나 만료·위조됨, 또는 탈퇴한 회원",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthenticated": {
+                    "description": "unauthenticated",
+                    "value": {
+                      "code": "UNAUTHENTICATED",
+                      "message": "로그인이 필요합니다.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "애플 앱 로그인이 켜지지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "endpointNotFound": {
+                    "description": "endpointNotFound",
+                    "value": {
+                      "code": "ENDPOINT_NOT_FOUND",
+                      "message": "요청한 경로를 찾을 수 없습니다.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "다시 인증한 코드로 탈퇴하지 못함. 회원은 그대로",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "reauthRequired": {
+                    "description": "reauthRequired",
+                    "value": {
+                      "code": "REAUTH_REQUIRED",
+                      "message": "애플 계정으로 한 번 더 인증해야 탈퇴할 수 있습니다.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "애플이 응답하지 않음. 회원은 그대로",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "serviceUnavailable": {
+                    "description": "serviceUnavailable",
+                    "value": {
+                      "code": "SERVICE_UNAVAILABLE",
+                      "message": "일시적인 서버 장애가 발생했습니다.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -913,6 +1307,40 @@
         },
         "required": [
           "startUrl"
+        ]
+      },
+      "AppLoginRequest": {
+        "type": "object",
+        "properties": {
+          "idToken": {
+            "type": "string",
+            "description": "제공자 SDK가 발급한 ID 토큰(JWT)"
+          }
+        },
+        "required": [
+          "idToken"
+        ]
+      },
+      "AppLoginNonceResponse": {
+        "type": "object",
+        "properties": {
+          "nonce": {
+            "type": "string",
+            "description": "제공자 SDK에 넘길 nonce. 애플은 이 값의 SHA-256(소문자 16진수)을, 카카오는 이 값 그대로를 넘긴다. 10분 동안 한 번만 쓸 수 있고 같은 제공자로 다시 받으면 앞의 값은 못 쓴다",
+            "example": "q9V8Zf1xT0yY2sJm3kQwR5uE7iO4pA6dL1nB8cV0hGs"
+          }
+        }
+      },
+      "AppleAppWithdrawalRequest": {
+        "type": "object",
+        "properties": {
+          "authorizationCode": {
+            "type": "string",
+            "description": "앱의 Sign in with Apple이 준 authorizationCode. 5분 동안 한 번만 쓸 수 있다"
+          }
+        },
+        "required": [
+          "authorizationCode"
         ]
       },
       "ErrorResponse": {

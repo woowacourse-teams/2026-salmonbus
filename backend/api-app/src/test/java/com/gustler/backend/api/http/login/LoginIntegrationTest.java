@@ -35,6 +35,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
     "auth.apple.client-id=" + FakeAppleServer.CLIENT_ID,
     "auth.apple.team-id=" + FakeAppleServer.TEAM_ID,
     "auth.apple.key-id=" + FakeAppleServer.KEY_ID,
+    "auth.app.apple-client-id=" + FakeAppleServer.APP_CLIENT_ID,
+    "auth.app.kakao-app-key=" + FakeKakaoServer.APP_KEY,
 })
 @Import({PostgresTestContainer.class, FakeLoginProviders.class})
 @MockitoSpyBean(types = SignInWithSocialAccount.class)
