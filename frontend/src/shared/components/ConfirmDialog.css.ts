@@ -12,6 +12,6 @@ export const dialog = style({
   selectors: { "&::backdrop": { background: "#0006" } },
 });
 
-export const dialogTitle = style({ fontSize: 18, margin: "0 0 12px" });
+export const dialogTitle = style({ fontSize: 18, margin: "0 0 12px", outline: "none" });
 
 globalStyle(`${dialog} button:focus-visible`, { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 4 });
