@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
+import { track } from "@/shared/analytics/track";
 import { readLoginReturn } from "@/shared/routing/loginReturn";
 import { WHATS_NEW_NOTES, type WhatsNewNote } from "@/shared/whats-new/whatsNewNotes";
-import { notesToShowFor } from "@/shared/whats-new/whatsNewPolicy";
+import { notesToShowFor, type WhatsNewCloseMethod } from "@/shared/whats-new/whatsNewPolicy";
 import { loadWhatsNewRecord, recordWhatsNewClosed, recordWhatsNewShown } from "@/shared/whats-new/whatsNewStorage";
+import { whatsNewClosedPropertiesOf, whatsNewViewedPropertiesOf } from "../analytics/whatsNewEventPolicy";
 import { WhatsNewDialog } from "./WhatsNewDialog";
 
 function notesToShowOnEntry(deferred: boolean): readonly WhatsNewNote[] {
@@ -18,13 +20,20 @@ export function WhatsNewOnEntry() {
   const [notes, setNotes] = useState(() =>
     notesToShowOnEntry(readLoginReturn() !== null || typeof location.state?.notice === "string"),
   );
+  const shownAt = useRef<number | null>(null);
 
   useEffect(() => {
-    if (notes.length > 0) recordWhatsNewShown(Date.now());
+    // 개발 모드 StrictMode는 Effect를 두 번 돌려서, 막지 않으면 노출 이벤트가 두 번 간다.
+    if (notes.length === 0 || shownAt.current !== null) return;
+    shownAt.current = performance.now();
+    recordWhatsNewShown(Date.now());
+    track("whats_new_viewed", whatsNewViewedPropertiesOf(notes));
   }, [notes]);
 
-  const close = () => {
+  const close = (closeMethod: WhatsNewCloseMethod) => {
     recordWhatsNewClosed(notes);
+    const closedAt = performance.now();
+    track("whats_new_closed", whatsNewClosedPropertiesOf(notes, closeMethod, closedAt - (shownAt.current ?? closedAt)));
     setNotes([]);
   };
 

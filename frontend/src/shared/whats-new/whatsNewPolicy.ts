@@ -5,6 +5,8 @@ export interface WhatsNewRecord {
   lastShownDay: string | null;
 }
 
+export type WhatsNewCloseMethod = "closeButton" | "backdrop" | "escape";
+
 const AUTO_SHOW_PERIOD_MS = 7 * 24 * 60 * 60_000;
 const KST_OFFSET_MS = 9 * 60 * 60_000;
 
@@ -31,7 +33,7 @@ export function closedRecordFor(record: WhatsNewRecord, shownNotes: readonly Wha
   return { ...record, lastSeenId: Math.max(record.lastSeenId, latestIdOf(shownNotes)) };
 }
 
-function latestIdOf(notes: readonly WhatsNewNote[]): number {
+export function latestIdOf(notes: readonly WhatsNewNote[]): number {
   return notes.reduce((latest, note) => Math.max(latest, note.id), 0);
 }
 
