@@ -118,6 +118,8 @@ auth:
     token-uri: https://appleid.apple.com/auth/token
     jwk-set-uri: https://appleid.apple.com/auth/keys
     revoke-uri: https://appleid.apple.com/auth/revoke
+  app:
+    apple-client-id: ${AUTH_APPLE_APP_ID:} # 앱 로그인 ID 토큰의 aud. iOS 번들 ID
 
 arrivals:
   enabled: ${ARRIVALS_ENABLED:false}

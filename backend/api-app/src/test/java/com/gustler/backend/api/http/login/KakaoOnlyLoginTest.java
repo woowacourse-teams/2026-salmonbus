@@ -1,5 +1,6 @@
 package com.gustler.backend.api.http.login;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.support.PostgresTestContainer;
@@ -12,9 +13,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 
 /**
- * 카카오만 켜면 켜지 않은 애플의 시작 경로는 없는 경로로 답한다.
+ * 카카오만 켜면 켜지 않은 애플의 시작 경로와 서버 간 알림 경로는 없는 경로로 답한다.
  *
- * <p>제공자가 하나라도 켜지면 로그인 시작 필터가 붙으므로, 켜진 제공자가 없는 앱과는 다른 경로를 지난다. 시작 경로만
+ * <p>제공자가 하나라도 켜지면 로그인 시작 필터가 붙으므로, 켜진 제공자가 없는 앱과는 다른 경로를 지난다. 애플 경로만
  * 보므로 카카오 주소는 쓰이지 않는다.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = {
@@ -39,5 +40,14 @@ class KakaoOnlyLoginTest {
             softly.assertThat(apple.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
             softly.assertThat(appleWithdrawal.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
         });
+    }
+
+    @Test
+    void 켜지지_않은_애플의_서버_간_알림_경로는_없는_경로다() throws Exception {
+        // when
+        HttpResponse<String> actual = new TestBrowser(port).post("/api/auth/apple/notifications");
+
+        // then
+        assertThat(actual.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
     }
 }
