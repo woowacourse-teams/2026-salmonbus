@@ -1,9 +1,9 @@
+import { ROUTE_FIRST_SEEN_KEY } from "@/shared/route-list/seenRouteStorage";
 import { isRecord } from "@/shared/utils/valueGuards";
 import type { WhatsNewNote } from "./whatsNewNotes";
 import { closedRecordFor, firstRecordFor, shownRecordFor, type WhatsNewRecord } from "./whatsNewPolicy";
 
 const STORAGE_KEY = "salmonbus.whatsNew";
-const ROUTE_FIRST_SEEN_KEY = "salmonbus.routeFirstSeen";
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 type WhatsNewStorage = Pick<Storage, "getItem" | "setItem">;

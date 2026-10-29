@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { searchViewFor, submitSelectionFor, type RoutesState } from "./displayPolicy";
-import type { FirstSeenTimes } from "./new-route/newRoutePolicy";
-import type { InServiceRoute } from "./routeSearchPolicy";
+import type { FirstSeenTimes } from "@/shared/route-list/newRoutePolicy";
+import type { InServiceRoute } from "@/shared/route-list/routeListPolicy";
 
 const FIRST_SEEN_AT = Date.parse("2027-01-10T08:00:00+09:00");
 const NEW_PERIOD_MS = 7 * 24 * 60 * 60_000;
