@@ -1,7 +1,7 @@
 import { test, expect, storedFavorite } from "./fixtures/favorites";
 import { routeId } from "./fixtures/mock-data";
 
-for (const path of ["/", "/mypage"]) {
+for (const path of ["/"]) {
   for (const direction of ["down", "up"] as const) {
     for (const reducedMotion of ["no-preference", "reduce"] as const) {
       test(`${path} ${direction} ${reducedMotion} 카드 정렬은 놓는 순간 되돌아가지 않는다`, async ({

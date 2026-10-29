@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { BottomNavigation } from "./BottomNavigation";
 import * as styles from "./AccountLayout.css";
 
 interface AccountLayoutProps {
@@ -12,7 +11,6 @@ export function AccountLayout({ children, contentClassName }: AccountLayoutProps
     <div className={styles.shell}>
       <div className={styles.top} />
       <main className={`${styles.content} ${contentClassName ?? ""}`}>{children}</main>
-      <BottomNavigation />
     </div>
   );
 }

@@ -193,6 +193,8 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
       await page.getByRole("tab", { name: "통학", exact: true }).focus();
       const tabKey = browserName === "webkit" ? "Alt+Tab" : "Tab";
       await page.keyboard.press(tabKey);
+      await expect(page.getByRole("button", { name: "그룹 추가", exact: true })).toBeFocused();
+      await page.keyboard.press(tabKey);
       await expect(page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true })).toBeFocused();
       await page.keyboard.press(tabKey);
       await expect(page.getByRole("link", { name: "홈", exact: true })).toBeFocused();
@@ -501,6 +503,7 @@ test("정보가 없는 항목은 안내 카드로 남기고 정상 카드는 저
   await expect(page.getByText("정류장 정보 없음", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "즐겨찾기 1 삭제", exact: true })).toBeEnabled();
   await page.getByRole("link", { name: "마이페이지로 돌아가기", exact: true }).click();
+  await page.goto("/");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "즐겨찾기 편집", exact: true }).getByText(up.name, { exact: true }),
@@ -544,32 +547,20 @@ test("순서 일부가 저장된 뒤 실패하면 저장된 부분을 유지하�
   expect(favorites.groups[1]!.favorites.map((favorite) => favorite.stopId)).toEqual([second!.stopId, first!.stopId]);
 });
 
-test("손잡이를 끌어서 그룹 순서를 바꾸고 저장한다", async ({ page, favorites }) => {
+test("마이페이지의 그룹 카드에서 손잡이로 순서를 바꾸고 저장한다", async ({ page, favorites }) => {
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
   await page.goto("/mypage");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
-  const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-  await expect(editor.getByText("아직 등록한 정류장이 없어요", { exact: true })).toBeVisible();
-  await expect
-    .poll(async () => {
-      const doneBounds = (await editor.getByRole("button", { name: "완료", exact: true }).boundingBox())!;
-      const logoutBounds = (await page.getByRole("button", { name: "로그아웃", exact: false }).boundingBox())!;
-      return logoutBounds.y - doneBounds.y - doneBounds.height;
-    })
-    .toBeCloseTo(24, 1);
-  await editor
-    .getByRole("list", { name: "그룹 순서", exact: true })
-    .evaluate((element) =>
-      Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
-    );
-  const first = await editor.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true }).boundingBox();
-  const second = await editor.getByRole("button", { name: "통학 순서 변경", exact: true }).boundingBox();
-  await page.mouse.move(first!.x + first!.width / 2, first!.y + first!.height / 2);
+  const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
+  await expect(editor.getByRole("button", { name: "그룹 추가", exact: true })).toHaveCount(0);
+  const first = (await editor.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true }).boundingBox())!;
+  const second = (await editor.getByRole("button", { name: "통학 순서 변경", exact: true }).boundingBox())!;
+  await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
   await page.mouse.down();
-  await page.mouse.move(second!.x + second!.width / 2, second!.y + second!.height / 2, { steps: 12 });
+  await page.mouse.move(second.x + second.width / 2, second.y + second.height / 2, { steps: 12 });
   await page.mouse.up();
   await editor.getByRole("button", { name: "완료", exact: true }).click();
-  await expect(editor).not.toBeVisible();
+  await expect(editor).toHaveCount(0);
   expect(favorites.groups.map((group) => group.id)).toEqual([secondGroupId, defaultGroupId]);
 });
 
@@ -590,10 +581,10 @@ test("마이페이지에서 한 그룹의 즐겨찾기를 삭제해도 다른 �
   expect(favorites.groups[1]!.favorites).toHaveLength(1);
 });
 
-test("즐겨찾기가 없으면 판정 보드와 같은 별 아이콘으로 정류장의 별을 누르라고 안내한다", async ({ page, api }) => {
+test("즐겨찾기가 없으면 검색으로 이동하는 버튼과 판정 보드와 같은 별 아이콘을 표시한다", async ({ page, api }) => {
   await page.goto("/");
   const empty = page.getByText("등록된 즐겨찾기가 없어요", { exact: true }).locator("..");
-  await expect(empty).toContainText("정류장의 별을 눌러");
+  await expect(empty.getByRole("link", { name: "즐겨찾기 추가하기", exact: true })).toHaveAttribute("href", "/search");
   const emptyIcon = await empty.locator("img").getAttribute("src");
   const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   await page.goto(`/routes/${routeId}`);

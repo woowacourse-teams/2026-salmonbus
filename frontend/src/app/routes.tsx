@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router";
+import { Outlet, Route, Routes } from "react-router";
 import { RouteSearchPage } from "@/pages/route-search";
 import { RouteSelectPage } from "@/pages/route-select";
 import { VerdictBoardPage } from "@/pages/verdict-board";
@@ -9,6 +9,16 @@ import { MyPage } from "@/pages/my-page";
 import { FavoriteGroupPage } from "@/pages/favorite-group";
 import { NicknamePage } from "@/pages/nickname";
 import { useFocusKeepingNavigation } from "./useFocusKeepingNavigation";
+import { BottomNavigation } from "@/shared/components/BottomNavigation";
+
+function NavigationLayout() {
+  return (
+    <>
+      <Outlet />
+      <BottomNavigation />
+    </>
+  );
+}
 
 export function AppRoutes() {
   const { shownLocation, navigateKeepingFocus } = useFocusKeepingNavigation();
@@ -17,13 +27,15 @@ export function AppRoutes() {
   return (
     <FocusKeepingNavigationContext value={navigateKeepingFocus}>
       <Routes location={shownLocation}>
-        <Route path={paths.routeSelect} element={<RouteSelectPage />} />
+        <Route element={<NavigationLayout />}>
+          <Route path={paths.routeSelect} element={<RouteSelectPage />} />
+          <Route path={paths.login} element={<LoginPage />} />
+          <Route path={paths.mypage} element={<MyPage />} />
+          <Route path={paths.nickname} element={<NicknamePage />} />
+          <Route path={paths.favoriteGroup} element={<FavoriteGroupPage />} />
+        </Route>
         <Route path={paths.routeSearch} element={<RouteSearchPage />} />
         <Route path={paths.board} element={<VerdictBoardPage />} />
-        <Route path={paths.login} element={<LoginPage />} />
-        <Route path={paths.mypage} element={<MyPage />} />
-        <Route path={paths.nickname} element={<NicknamePage />} />
-        <Route path={paths.favoriteGroup} element={<FavoriteGroupPage />} />
       </Routes>
     </FocusKeepingNavigationContext>
   );

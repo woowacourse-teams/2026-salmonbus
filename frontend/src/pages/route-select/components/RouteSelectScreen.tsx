@@ -1,6 +1,5 @@
 import { useLocation } from "react-router";
 import { useAuth } from "@/shared/hooks/useAuth";
-import { BottomNavigation } from "@/shared/components/BottomNavigation";
 import { Brand } from "@/shared/components/Brand";
 import { GuestFavoritesCard } from "./GuestFavoritesCard";
 import { HomeFavorites } from "./HomeFavorites";
@@ -63,7 +62,6 @@ export function RouteSelectScreen() {
           )}
         </section>
       </main>
-      <BottomNavigation />
       {typeof notice === "string" && <Notice key={notice} message={notice} />}
       <WhatsNewOnEntry />
     </div>
