@@ -1,4 +1,4 @@
-const NAVIGATED_BOARD_ENTRIES = ["search", "favorite"] as const;
+const NAVIGATED_BOARD_ENTRIES = ["search", "favorite", "whats_new"] as const;
 
 export type BoardEntry = (typeof NAVIGATED_BOARD_ENTRIES)[number] | "direct";
 

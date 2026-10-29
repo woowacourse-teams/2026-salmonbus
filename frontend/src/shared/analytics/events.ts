@@ -111,6 +111,7 @@ export interface EventMap {
   whats_new_viewed: {
     latest_note_id: number;
     feature_count: number;
+    new_route_count: number;
   };
 
   whats_new_closed: {
