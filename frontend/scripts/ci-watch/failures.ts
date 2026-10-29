@@ -70,13 +70,16 @@ export function failedTestsFrom(report: PlaywrightReport): FailedTest[] {
 }
 
 // PR은 Chromium과 iPhone 15만, dev push는 네 프로젝트를 돌리고 줄 번호도 브랜치마다 달라서 둘 다 비교하지 않는다.
-export function testKeyOf(test: FailedTest) {
+function testKeyOf(test: FailedTest) {
   return [test.file, ...test.titlePath].join(" › ");
 }
 
-export function sharedFailuresFrom(failures: FailedTest[], devFailures: FailedTest[]) {
+export function failureSplitFrom(failures: FailedTest[], devFailures: FailedTest[]) {
   const devKeys = new Set(devFailures.map(testKeyOf));
-  return failures.filter((test) => devKeys.has(testKeyOf(test)));
+  return {
+    sharedWithDev: failures.filter((test) => devKeys.has(testKeyOf(test))),
+    branchOnly: failures.filter((test) => !devKeys.has(testKeyOf(test))),
+  };
 }
 
 export function testLabelOf(test: FailedTest) {

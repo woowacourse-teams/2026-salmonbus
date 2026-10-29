@@ -24,10 +24,15 @@ export interface HealerReport {
   warnings: string[];
 }
 
+export interface DevOverlap {
+  devRunId: number;
+  sharedFailures: FailedTest[];
+}
+
 export type WatchResult =
   | (RunSummary & { outcome: "not-e2e" })
-  | (RunSummary & { outcome: "dev-problem"; devRunId: number; sharedFailures: FailedTest[] })
-  | (RunSummary & { outcome: "healed"; healer: HealerReport });
+  | (RunSummary & { outcome: "dev-problem" } & DevOverlap)
+  | (RunSummary & { outcome: "healed"; healer: HealerReport; devOverlap: DevOverlap | null });
 
 export const stateRoot = path.join(
   process.env.XDG_STATE_HOME ?? path.join(homedir(), ".local", "state"),

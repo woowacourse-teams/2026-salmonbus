@@ -1,11 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import {
-  failedTestsFrom,
-  sharedFailuresFrom,
-  testLabelOf,
-  type FailedTest,
-  type PlaywrightReport,
-} from "./failures.ts";
+import { failedTestsFrom, failureSplitFrom, testLabelOf, type FailedTest, type PlaywrightReport } from "./failures.ts";
 
 function createFailure(overrides: Partial<FailedTest>): FailedTest {
   return {
@@ -72,19 +66,23 @@ describe("failedTestsFrom", () => {
   });
 });
 
-describe("sharedFailuresFrom", () => {
-  it("브라우저와 줄 번호가 달라도 파일과 제목이 같으면 dev에서도 실패한 테스트로 본다", () => {
-    const failure = createFailure({ project: "iphone-15", line: 1463 });
+describe("failureSplitFrom", () => {
+  it("브라우저와 줄 번호가 달라도 파일과 제목이 같으면 dev에서도 실패한 테스트로 나눈다", () => {
+    const sharedFailure = createFailure({ project: "iphone-15", line: 1463 });
+    const ownFailure = createFailure({ file: "route-select.spec.ts", titlePath: ["결과 없음을 알린다"] });
     const devFailure = createFailure({ project: "firefox", line: 1470 });
 
-    expect(sharedFailuresFrom([failure], [devFailure])).toEqual([failure]);
+    expect(failureSplitFrom([sharedFailure, ownFailure], [devFailure])).toEqual({
+      sharedWithDev: [sharedFailure],
+      branchOnly: [ownFailure],
+    });
   });
 
-  it("describe가 다르면 다른 테스트로 본다", () => {
+  it("describe가 다르면 이 브랜치에서만 실패한 테스트로 본다", () => {
     const failure = createFailure({ titlePath: ["지도", "확대한다"] });
     const devFailure = createFailure({ titlePath: ["목록", "확대한다"] });
 
-    expect(sharedFailuresFrom([failure], [devFailure])).toEqual([]);
+    expect(failureSplitFrom([failure], [devFailure])).toEqual({ sharedWithDev: [], branchOnly: [failure] });
   });
 });
 

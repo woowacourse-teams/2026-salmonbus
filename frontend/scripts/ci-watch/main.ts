@@ -14,7 +14,7 @@ import {
   runEndingFor,
   type CiRun,
 } from "./ci.ts";
-import { sharedFailuresFrom, type FailedTest } from "./failures.ts";
+import { failureSplitFrom, type FailedTest } from "./failures.ts";
 import { healerResultFor, promptFor, runHealer, warningsFor, whyHealerCannotRun } from "./healer.ts";
 import { markOrcaCard, noticeFor, notify, summaryFor, type Notice } from "./notify.ts";
 import {
@@ -24,6 +24,7 @@ import {
   stateRoot,
   withHealerLock,
   type Agent,
+  type DevOverlap,
   type RunSummary,
   type WatchResult,
 } from "./state.ts";
@@ -119,19 +120,27 @@ function showSaved(result: WatchResult) {
   if (!logFile) console.log("\n" + readFileSync(path.join(runDirFor(result.runId), "summary.md"), "utf8"));
 }
 
-function fetchSharedDevFailures(failures: FailedTest[], runDir: string) {
+function fetchDevFailureSplit(failures: FailedTest[], runDir: string) {
   const devRun = fetchLatestDevPushRun();
   if (devRun?.conclusion !== "failure") return null;
   const devArtifactDir = path.join(runDir, "dev-artifact");
   try {
-    const sharedFailures = sharedFailuresFrom(failures, fetchFailures(devRun.databaseId, devArtifactDir) ?? []);
-    return sharedFailures.length > 0 ? { devRunId: devRun.databaseId, sharedFailures } : null;
+    return {
+      devRunId: devRun.databaseId,
+      ...failureSplitFrom(failures, fetchFailures(devRun.databaseId, devArtifactDir) ?? []),
+    };
   } finally {
     rmSync(devArtifactDir, { recursive: true, force: true });
   }
 }
 
-async function heal(runSummary: RunSummary, agent: Agent, artifactDir: string) {
+async function heal(
+  runSummary: RunSummary,
+  healerTargets: FailedTest[],
+  devOverlap: DevOverlap | null,
+  agent: Agent,
+  artifactDir: string,
+) {
   const runDir = runDirFor(runSummary.runId);
   log(`${agent} healer를 부릅니다.`);
   try {
@@ -139,11 +148,11 @@ async function heal(runSummary: RunSummary, agent: Agent, artifactDir: string) {
       repoDir: worktreeDir,
       sha: runSummary.sha,
       agent,
-      failures: runSummary.failures,
+      failures: healerTargets,
       ...(healerFrom ? { healerFrom } : {}),
       setupLog: path.join(runDir, "setup.log"),
     });
-    const prompt = promptFor(agent, runSummary.failures, path.join(artifactDir, "playwright-report"));
+    const prompt = promptFor(agent, healerTargets, path.join(artifactDir, "playwright-report"));
     const healerRun = await runHealer(agent, prompt, artifactDir, runDir);
     const { diff, changedFiles } = collectChanges(injected);
     writeFileSync(path.join(runDir, "healer.diff"), diff);
@@ -167,6 +176,7 @@ async function heal(runSummary: RunSummary, agent: Agent, artifactDir: string) {
         ...runSummary,
         outcome: "healed",
         healer: { agent, verdicts, seconds: healerRun.seconds, changedFiles, warnings },
+        devOverlap,
       },
       healerRun.finalMessage,
     );
@@ -187,8 +197,15 @@ async function handleFailure(run: CiRun, agent: Agent) {
   const runSummary = { runId: run.databaseId, url: run.url, branch: run.headBranch, sha: run.headSha, failures };
   if (failures.length === 0) return finish({ ...runSummary, outcome: "not-e2e" });
 
-  const devProblem = run.event === "push" ? null : fetchSharedDevFailures(failures, runDir);
-  if (devProblem) return finish({ ...runSummary, outcome: "dev-problem", ...devProblem });
+  const devSplit = run.event === "push" ? null : fetchDevFailureSplit(failures, runDir);
+  const healerTargets = devSplit?.branchOnly ?? failures;
+  const devOverlap =
+    devSplit && devSplit.sharedWithDev.length > 0
+      ? { devRunId: devSplit.devRunId, sharedFailures: devSplit.sharedWithDev }
+      : null;
+  if (devOverlap && healerTargets.length === 0) {
+    return finish({ ...runSummary, outcome: "dev-problem", ...devOverlap });
+  }
 
   const blocked = await whyHealerCannotRun(agent);
   fetchCommits(worktreeDir, run.headSha);
@@ -201,7 +218,7 @@ async function handleFailure(run: CiRun, agent: Agent) {
     );
     return;
   }
-  await heal(runSummary, agent, artifactDir);
+  await heal(runSummary, healerTargets, devOverlap, agent, artifactDir);
 }
 
 async function main() {

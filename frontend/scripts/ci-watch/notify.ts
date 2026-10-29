@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { testKeyOf, testLabelOf } from "./failures.ts";
-import { runDirFor, type WatchResult } from "./state.ts";
+import { testLabelOf } from "./failures.ts";
+import { runDirFor, type DevOverlap, type HealerReport, type WatchResult } from "./state.ts";
 
 export interface Notice {
   title: string;
@@ -16,31 +16,28 @@ export function titleFor(result: WatchResult) {
     case "not-e2e":
       return "E2E: 실패 없음, 다른 CI 단계 실패";
     case "dev-problem":
-      return branchOnlyFailuresOf(result).length > 0
-        ? `E2E: ${failures}, dev와 겹침 ${result.sharedFailures.length}개`
-        : `E2E: ${failures}, dev 쪽 문제`;
-    case "healed":
-      return `E2E: ${failures}, ${result.healer.verdicts.join(", ")}`;
+      return `E2E: ${failures}, dev 쪽 문제`;
+    case "healed": {
+      const verdicts = `E2E: ${failures}, ${result.healer.verdicts.join(", ")}`;
+      return result.devOverlap ? `${verdicts}, dev 쪽 문제 ${result.devOverlap.sharedFailures.length}개` : verdicts;
+    }
   }
 }
 
-function branchOnlyFailuresOf(result: Extract<WatchResult, { outcome: "dev-problem" }>) {
-  const sharedKeys = new Set(result.sharedFailures.map(testKeyOf));
-  return result.failures.filter((test) => !sharedKeys.has(testKeyOf(test)));
+function healerLeadFor({ warnings, changedFiles }: HealerReport) {
+  const [warning] = warnings;
+  if (warning) return `확인 필요: ${warning}`;
+  const files = changedFiles.map((file) => file.replace(/^frontend\//, ""));
+  return files.length > 0 ? `${files.join(", ")}를 고쳤어요.` : "테스트는 그대로예요.";
 }
 
 function leadFor(result: WatchResult) {
-  if (result.outcome === "dev-problem") {
-    const shared = `dev push에서도 ${result.sharedFailures.length}개가 실패해요.`;
-    const branchOnly = branchOnlyFailuresOf(result).length;
-    return branchOnly > 0 ? `${shared} 이 브랜치에서만 실패한 ${branchOnly}개는 healer를 부르지 않았어요.` : shared;
-  }
+  if (result.outcome === "dev-problem") return `dev push에서도 ${result.sharedFailures.length}개가 실패해요.`;
   if (result.outcome === "not-e2e") return "lint, 타입 검사, 빌드 같은 다른 단계를 확인해 주세요.";
 
-  const [warning] = result.healer.warnings;
-  if (warning) return `확인 필요: ${warning}`;
-  const files = result.healer.changedFiles.map((file) => file.replace(/^frontend\//, ""));
-  return files.length > 0 ? `${files.join(", ")}를 고쳤어요.` : "테스트는 그대로예요.";
+  const lead = healerLeadFor(result.healer);
+  if (!result.devOverlap) return lead;
+  return `${lead} dev push에서도 실패한 ${result.devOverlap.sharedFailures.length}개는 healer에게 넘기지 않았어요.`;
 }
 
 export function noticeFor(result: WatchResult): Notice {
@@ -49,6 +46,17 @@ export function noticeFor(result: WatchResult): Notice {
     subtitle: result.branch,
     message: `${leadFor(result)} 자세히: pnpm ci:watch --run ${result.runId}`,
   };
+}
+
+function devOverlapSectionFor({ devRunId, sharedFailures }: DevOverlap, handoff: string) {
+  return [
+    "",
+    `## dev push 실행 ${devRunId}에서도 실패한 테스트`,
+    "",
+    ...sharedFailures.map((test) => `- ${testLabelOf(test)}`),
+    "",
+    `${handoff} dev가 고쳐지면 dev를 병합하고 다시 푸시해 주세요.`,
+  ];
 }
 
 export function summaryFor(result: WatchResult, healerMessage = "") {
@@ -72,27 +80,10 @@ export function summaryFor(result: WatchResult, healerMessage = "") {
       `CI 실패 기록 열기: npx playwright show-report ${reportDir}`,
     );
   }
-  if (result.outcome === "dev-problem") {
-    lines.push(
-      "",
-      `## dev push 실행 ${result.devRunId}에서도 실패한 테스트`,
-      "",
-      ...result.sharedFailures.map((test) => `- ${testLabelOf(test)}`),
-      "",
-      "healer를 부르지 않았어요. dev가 고쳐지면 dev를 병합하고 다시 푸시해 주세요.",
-    );
-    const branchOnlyFailures = branchOnlyFailuresOf(result);
-    if (branchOnlyFailures.length > 0) {
-      lines.push(
-        "",
-        "## 이 브랜치에서만 실패한 테스트",
-        "",
-        ...branchOnlyFailures.map((test) => `- ${testLabelOf(test)}`),
-      );
-    }
-  }
+  if (result.outcome === "dev-problem") lines.push(...devOverlapSectionFor(result, "healer를 부르지 않았어요."));
   if (result.outcome === "healed") {
-    const { healer } = result;
+    const { healer, devOverlap } = result;
+    if (devOverlap) lines.push(...devOverlapSectionFor(devOverlap, "healer에게 넘기지 않았어요."));
     lines.push(
       "",
       "## healer",
