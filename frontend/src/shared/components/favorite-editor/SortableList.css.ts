@@ -76,7 +76,7 @@ export const groupGrip = style([
     overflow: "hidden",
     animation: `${revealGroupGrip} ${vars.duration.spring} ${vars.easing.slide} both`,
     "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
-    color: vars.color.textSubtle,
+    color: "#837B74",
     selectors: {
       "&::before": { width: 15, height: 15 },
       '[aria-pressed="true"] + &': { color: "white" },

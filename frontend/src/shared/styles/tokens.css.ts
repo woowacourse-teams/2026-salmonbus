@@ -7,7 +7,7 @@ export const vars = createGlobalTheme(":root", {
     cardBorder: "#D8D5CF",
     ink: "#111111",
     onInk: "#FFFFFF",
-    brand: "#C23D2B",
+    brand: "#E8523F",
     onBrand: "#FFFFFF",
     textStrong: "#151515",
     textBody: "#454545",
@@ -26,7 +26,7 @@ export const vars = createGlobalTheme(":root", {
     forecastCardSurface: "#F7F7F5",
     forecastCardBorder: "#E3E2DE",
     noVehicleRing: "#000000",
-    liveBus: "#C23D2B",
+    liveBus: "#E8533F",
     mapBus: "#E53D4D",
     mapStopName: "#24352B",
     routeSummary: {
@@ -40,8 +40,8 @@ export const vars = createGlobalTheme(":root", {
     currentLocationShadow: "#163D7626",
 
     remainingSeat: {
-      surface: "#C23D2B",
-      border: "#C23D2B",
+      surface: "#E8533F",
+      border: "#E8533F",
       label: "#FFFFFF",
       value: "#FFFFFF",
     },

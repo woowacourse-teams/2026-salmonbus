@@ -64,7 +64,7 @@ export const count = style({
   padding: "4px 9px",
   borderRadius: 7,
   background: "#FFF0EB",
-  color: vars.color.brand,
+  color: "#C95642",
   fontSize: 12,
   fontWeight: 600,
   lineHeight: "17px",
@@ -97,7 +97,7 @@ export const deleteTool = style({
   },
 });
 export const cancelSelection = style([text, { minHeight: 32, padding: 0, fontSize: 14, fontWeight: 500 }]);
-export const representative = style({ flexShrink: 0, color: vars.color.textSubtle, fontSize: 11, fontWeight: 600 });
+export const representative = style({ flexShrink: 0, color: "#9A928B", fontSize: 11, fontWeight: 600 });
 export const selection = style({
   cursor: "pointer",
   selectors: {
@@ -111,7 +111,7 @@ export const checkbox = style({
   width: 22,
   height: 22,
   margin: 0,
-  border: `1px solid ${vars.color.iconMuted}`,
+  border: "1px solid #D7D0C8",
   borderRadius: 6,
   background: "#FFFFFF",
   cursor: "inherit",
@@ -126,7 +126,7 @@ export const deleteSelected = style({
   padding: 0,
   border: 0,
   borderRadius: 14,
-  background: vars.color.brand,
+  background: "#E8533F",
   color: "white",
   font: "inherit",
   fontSize: 14,
@@ -151,7 +151,7 @@ export const confirm = style({
   padding: 0,
   border: 0,
   borderRadius: 12,
-  background: vars.color.brand,
+  background: "#E8533F",
   color: "white",
   font: "inherit",
   fontSize: 15,
