@@ -1,6 +1,7 @@
 import type { Board } from "@/shared/api/routeForecast.types";
 import { createNativeMapChannel } from "@/shared/native-map/bridge";
 import { startOverlayLayoutBridge } from "@/shared/native-map/overlayLayoutBridge";
+import { recordInputMethod } from "@/shared/input-method/inputMethod";
 import type { NativeMapScene, NativeMapSceneState, NativeMapVehicle } from "@/shared/native-map/protocol";
 import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
@@ -45,6 +46,9 @@ export function createNativeRouteMap(options: {
   let destroyed = false;
   const timer = window.setTimeout(() => onError(new Error("지도를 불러오지 못했어요"), "timeout"), 15_000);
   const unsubscribe = channel.subscribe((event) => {
+    // 앱 지도를 누른 손가락은 웹 문서에 pointerdown을 남기지 않는다.
+    if (event.type === "stopPress" || event.type === "vehiclePress" || event.type === "mapPress")
+      recordInputMethod("pointer");
     switch (event.type) {
       case "ready":
         window.clearTimeout(timer);

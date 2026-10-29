@@ -5,6 +5,7 @@ import type { BridgeEnvelope } from "../src/shared/bridge/bridge.types";
 import { NATIVE_MAP_CAPABILITIES } from "../src/shared/native-map/bridge";
 import type { NativeMapCommands, NativeMapEvent, NativeMapSession } from "../src/shared/native-map/protocol";
 import { test as favoritesTest } from "./fixtures/favorites";
+import { expectFocusRing, nextFocusKeyFor } from "./utils/focus-ring";
 
 const test = mapTest.extend<{ nativeReady: boolean; appCapabilities: readonly string[] }>({
   nativeReady: [true, { option: true }],
@@ -163,6 +164,40 @@ test("실제 transition 경계와 웹 버튼 영역을 전달하고 native 위�
   expect(
     (await messages(page)).filter((message) => message.type === "updateScene").at(-1)?.payload.selectedStop,
   ).toBeNull();
+});
+
+test("native 지도에서 정류장이나 버스를 고르면 웹에서 키를 누른 뒤여도 정류장 줄에 테두리를 보이지 않는다", async ({
+  page,
+  browserName,
+}) => {
+  await open(page);
+  const row = (sequence: number) =>
+    page
+      .getByRole("region", { name: "판정보드 정류장 목록", exact: true })
+      .locator(`li[data-stop-sequence='${sequence}'] button[aria-expanded]`);
+  await test.step("웹에서 키를 누른 뒤 앱 지도에서 정류장 누르기", async () => {
+    await page.getByRole("button", { name: "현재 위치 보기", exact: true }).press("Shift");
+    await emit(page, { type: "stopPress", payload: { selection: { direction: "UP", sequence: 3 } } });
+    await page.clock.runFor(1_000);
+    await expectFocusRing(row(3), "hidden");
+  });
+  const vehicle = (await messages(page))
+    .filter((message) => message.type === "updateScene")
+    .at(-1)!
+    .payload.vehicles.find((item) => item.direction === "UP" && item.currentStopSequence !== 3)!;
+  const selection = { direction: vehicle.direction, sequence: vehicle.currentStopSequence };
+  await test.step("웹에서 키를 누른 뒤 앱 지도에서 다른 정류장의 버스 누르기", async () => {
+    await page.keyboard.press("Shift");
+    await emit(page, { type: "vehiclePress", payload: { key: vehicle.key, selection } });
+    await page.clock.runFor(1_000);
+    await expectFocusRing(row(selection.sequence), "hidden");
+  });
+  await test.step("키보드로 정류장 줄에 돌아오면 테두리", async () => {
+    const tabKey = nextFocusKeyFor(browserName);
+    await page.keyboard.press(`Shift+${tabKey}`);
+    await page.keyboard.press(tabKey);
+    await expectFocusRing(row(selection.sequence), "shown");
+  });
 });
 
 test("native 위치 권한 대기가 12초를 넘어도 결과를 받아 위치를 표시한다", async ({ page }) => {

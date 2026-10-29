@@ -41,8 +41,7 @@ export function ConfirmDialog({
         onCancel();
       }}
     >
-      {/* showModal은 포커스할 수 있는 첫 요소에 포커스를 준다. 제목이 포커스를 받게 해서 키보드를 쓰지 않은 사람에게 버튼 포커스 링이 보이지 않게 한다. */}
-      <h2 id="account-dialog-title" className={`${styles.dialogTitle} ${titleClassName ?? ""}`} tabIndex={-1}>
+      <h2 id="account-dialog-title" className={`${styles.dialogTitle} ${titleClassName ?? ""}`}>
         {title}
       </h2>
       {children}

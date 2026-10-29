@@ -8,6 +8,7 @@ import {
   targetStopNames,
 } from "./fixtures/mock-data";
 import { test, expect } from "./fixtures/naver-map";
+import { expectFocusRing } from "./utils/focus-ring";
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
 
@@ -1438,6 +1439,26 @@ test("핸들 클릭은 네 단계를 순환하고 느린 드래그는 70% 높이
   await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
   await expect(sheet(page)).toHaveAttribute("data-dragging", "false");
   await expectSheetAndMapHeights(page, targetHeight, 844 - targetHeight);
+});
+
+test("키보드로 움직인 핸들은 테두리를 보이고 누르거나 끌면 숨기며 다시 키를 누르면 보인다", async ({ page }) => {
+  await openMap(page);
+  await handle(page).focus();
+  await page.keyboard.press("ArrowUp");
+  await page.clock.runFor(32);
+  await expectFocusRing(handle(page), "shown");
+  const bounds = await handle(page).boundingBox();
+  if (bounds === null) throw new Error("핸들이 없습니다");
+  await page.mouse.move(bounds.x + 25, bounds.y + 2);
+  await page.mouse.down();
+  await expectFocusRing(handle(page), "hidden");
+  await page.mouse.move(bounds.x + 25, bounds.y + 200, { steps: 12 });
+  await page.clock.runFor(32);
+  await page.mouse.up();
+  await page.clock.runFor(32);
+  await expectFocusRing(handle(page), "hidden");
+  await page.keyboard.press("ArrowUp");
+  await expectFocusRing(handle(page), "shown");
 });
 
 test("헤더 드래그는 양 끝에 붙고 방향 버튼에서 시작한 드래그는 높이를 바꾸지 않는다", async ({ page }) => {

@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { POINTER_INPUT } from "@/shared/input-method/inputMethod";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const choice = style({
@@ -15,6 +16,7 @@ export const choice = style({
 });
 export const choiceCount = style({ marginLeft: "auto", fontSize: 12, color: vars.color.textSubtle });
 globalStyle(`${choice} input`, { width: 18, height: 18, accentColor: vars.color.brand });
+globalStyle(`${POINTER_INPUT} ${choice} input:focus`, { outline: "none" });
 
 export const addGroup = style({
   display: "flex",
