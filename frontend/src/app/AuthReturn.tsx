@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import { track, trackAsMember } from "@/shared/analytics/track";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { clearLoginReturn, readLoginReturn } from "@/shared/routing/loginReturn";
+import { withdrawalNoticeLabelOf } from "./withdrawalNoticeLabelOf";
 
 export function AuthReturn() {
   const { state } = useAuth();
@@ -29,11 +30,9 @@ export function AuthReturn() {
       void navigate(withdrawn ? "/" : "/mypage", {
         replace: true,
         state: {
-          notice: withdrawn
-            ? "회원탈퇴가 완료됐어요"
-            : withdrawal === "cancelled"
-              ? "회원탈퇴를 취소했어요"
-              : "회원탈퇴를 완료하지 못했어요. 다시 시도해 주세요.",
+          notice: withdrawalNoticeLabelOf(
+            withdrawn ? "withdrawn" : withdrawal === "cancelled" ? "cancelled" : "failed",
+          ),
         },
       });
     } else if (pending !== null && memberId !== null) {

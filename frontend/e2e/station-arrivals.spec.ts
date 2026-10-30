@@ -66,22 +66,12 @@ test("펼친 목록은 watch 순서·거리·좌석을 유지하고 같은 차�
   });
 });
 
+// 선택한 방문과 다른 ETA를 붙이지 않는 규칙은 stationArrivalPolicy 단위 테스트가 본다.
 test("ETA에만 있는 차량과 ID가 없는 차량의 시간은 watch 차량에 붙이지 않는다", async ({ page, api }) => {
   const response = readyArrivals();
   response.routes[0]!.arrivals[0]!.vehicleId = "eta-only";
   response.routes[0]!.arrivals[1]!.vehicleId = null;
   api.data.arrivals = response;
-  await openBoard(page);
-  await targetStop(page, "UP").click();
-  await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
-    /3정류장 전\s*도착 시 5석 예상해요/,
-    /7정류장 전\s*도착 시 2석 예상해요/,
-  ]);
-});
-
-test("선택한 방문과 다른 ETA는 표시하지 않는다", async ({ page, api }) => {
-  api.data.arrivals = readyArrivals();
-  api.data.arrivals.routes[0]!.targetVisit.stopSequence = 12;
   await openBoard(page);
   await targetStop(page, "UP").click();
   await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
@@ -189,24 +179,15 @@ test("ETA 시간이 지나도 도착으로 추정하지 않고 snapshot 만료 �
   ]);
 });
 
-for (const state of ["empty", "network-error"] as const) {
-  test(`도착정보 ${state === "empty" ? "빈 결과" : "조회 실패"}에도 watch 거리와 좌석 예보를 유지한다`, async ({
-    page,
-    api,
-  }) => {
-    if (state === "network-error") api.mode.arrivals = state;
-    else
-      api.data.arrivals = createStationArrivalsData(
-        new URL(`${arrivalsPath}?routeId=${routeId}&referenceVersionId=1&stopSequence=11`, "https://example.test"),
-        now,
-      );
-    await openBoard(page);
-    await targetStop(page, "UP").click();
-    await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
-      /3정류장 전\s*도착 시 5석 예상해요/,
-      /7정류장 전\s*도착 시 2석 예상해요/,
-    ]);
-    expect(api.requests.arrivals).toBe(1);
-    await expect(page.getByText(targetStopNames.UP, { exact: true })).toBeVisible();
-  });
-}
+// 빈 결과도 시간만 숨기고 watch 거리와 좌석을 바꾸지 않는 규칙은 stationArrivalPolicy 단위 테스트가 본다.
+test("도착정보 조회 실패에도 watch 거리와 좌석 예보를 유지한다", async ({ page, api }) => {
+  api.mode.arrivals = "network-error";
+  await openBoard(page);
+  await targetStop(page, "UP").click();
+  await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
+    /3정류장 전\s*도착 시 5석 예상해요/,
+    /7정류장 전\s*도착 시 2석 예상해요/,
+  ]);
+  expect(api.requests.arrivals).toBe(1);
+  await expect(page.getByText(targetStopNames.UP, { exact: true })).toBeVisible();
+});

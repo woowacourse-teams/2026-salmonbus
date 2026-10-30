@@ -12,7 +12,7 @@ export const shell = style({
   margin: "0 auto",
   background: "#FAF9F7",
   color: "#292A2D",
-  paddingBottom: "calc(66px + env(safe-area-inset-bottom, 0px))",
+  paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
 });
 
 export const top = style({ height: "env(safe-area-inset-top, 0px)", background: vars.color.brand, flexShrink: 0 });

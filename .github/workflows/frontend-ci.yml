@@ -122,6 +122,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # PR은 base와 PR을 합친 커밋을 받으므로, 부모까지 받아 PR이 바꾼 파일을 HEAD^1과 비교한다.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
 
       - name: Set up Node.js and pnpm
         uses: pnpm/setup@v1
@@ -136,8 +138,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # mock 라우터 검사는 mock, 그 검사, Playwright 설정, 의존성이 바뀐 PR에서만 돌린다. git diff가 실패하면(종료 코드 128) 바뀐 것으로 보고 돌린다.
+      - name: Skip API mock cleanup tests unless mocks, the spec, Playwright config, or dependencies changed
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          if git diff --quiet HEAD^1 HEAD -- e2e/fixtures e2e/api-mock-cleanup.spec.ts playwright.config.ts package.json pnpm-lock.yaml; then
+            echo "E2E_FILTER=--grep-invert=api-mock-cleanup.spec.ts" >> "$GITHUB_ENV"
+          fi
+
       - name: Run E2E tests
-        run: pnpm test:e2e $E2E_PROJECTS
+        run: pnpm test:e2e $E2E_PROJECTS $E2E_FILTER
 
       - name: Upload Playwright results
         if: ${{ !cancelled() }}

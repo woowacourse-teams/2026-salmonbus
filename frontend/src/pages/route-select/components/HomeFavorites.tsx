@@ -2,7 +2,7 @@ import { directionLabelOf } from "@/shared/utils/directionLabelOf";
 import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router";
-import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
+import type { FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
@@ -11,7 +11,7 @@ import { seatLabelOf } from "@/shared/utils/seatLabelOf";
 import { toRemainingTime } from "@/shared/utils/remainingTime";
 import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
 import { boardEntryStateFor } from "@/shared/routing/boardEntry";
-import { boardPathFor, favoritePath } from "@/shared/routing/paths";
+import { boardPathFor, favoritePath, paths } from "@/shared/routing/paths";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { playHaptic } from "@/shared/haptic/haptic";
 import { FavoritesNotice, FavoritesRetryButton } from "@/shared/components/FavoritesNotice";
@@ -23,14 +23,9 @@ import * as homeStyles from "./HomeFavorites.css";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { stopNameLabels } from "./stopNameLabels";
+import { favoriteStatusLabelOf } from "./favoriteStatusLabelOf";
+import { FavoriteGroupAddButton } from "@/shared/components/FavoriteGroupAddButton";
 
-const STATUS_LABEL: Record<Exclude<FavoriteStatus, "READY">, string> = {
-  NO_VEHICLE: "도착 예정 차량이 없어요",
-  PREPARING: "도착 예보를 준비하고 있어요",
-  UNAVAILABLE: "현재 노선에서 이 정류장을 이용할 수 없어요",
-  AMBIGUOUS: "승차할 정류장을 다시 확인해 주세요",
-  ERROR: "정류장 정보를 불러오지 못했어요",
-};
 const EMPTY_FAVORITES: HomeFavorite[] = [];
 
 export function HomeFavorites() {
@@ -168,14 +163,9 @@ export function HomeFavorites() {
   return (
     <section {...maskedPropsFor(homeStyles.section)} aria-label="내 즐겨찾기">
       <FavoritesNotice resource={resource} onRetry={reload} />
-      {groups.length > 0 && (
+      {(groups.length > 0 || resource.status === "success") && (
         <div className={homeStyles.tabs}>
-          <div
-            role="tablist"
-            aria-label="즐겨찾기 그룹"
-            className={homeStyles.tabs}
-            style={{ marginBottom: 0, flex: 1 }}
-          >
+          <div role="tablist" aria-label="즐겨찾기 그룹" className={homeStyles.groupTabs}>
             {groups.map((candidate, index) => (
               <button
                 className={homeStyles.tab}
@@ -192,15 +182,18 @@ export function HomeFavorites() {
               </button>
             ))}
           </div>
-          <button
-            ref={editButton}
-            type="button"
-            className={homeStyles.homeEdit}
-            aria-label="그룹과 즐겨찾기 순서 편집"
-            onClick={() => changeMode(true)}
-          >
-            <img src={editIcon} width="20" height="20" alt="" draggable={false} />
-          </button>
+          <FavoriteGroupAddButton />
+          {groups.length > 0 && (
+            <button
+              ref={editButton}
+              type="button"
+              className={homeStyles.homeEdit}
+              aria-label="그룹과 즐겨찾기 순서 편집"
+              onClick={() => changeMode(true)}
+            >
+              <img src={editIcon} width="20" height="20" alt="" draggable={false} />
+            </button>
+          )}
         </div>
       )}
       {switching ? (
@@ -227,7 +220,9 @@ export function HomeFavorites() {
             <div className={homeStyles.homeEmpty}>
               <img src={starOutline} width="34" height="34" alt="" draggable={false} />
               <p className={homeStyles.homeEmptyTitle}>등록된 즐겨찾기가 없어요</p>
-              <p className={homeStyles.homeEmptyDescription}>노선을 선택하고 자주 타는 정류장의 별을 눌러 보세요</p>
+              <Link className={homeStyles.addFavorite} to={paths.routeSearch}>
+                즐겨찾기 추가하기
+              </Link>
             </div>
           )}
           <ul ref={list} className={homeStyles.list}>
@@ -266,7 +261,7 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
       <li className={homeStyles.card}>
         <div className={homeStyles.unavailable}>
           <p className={homeStyles.notice}>
-            {favorite.status === "READY" ? STATUS_LABEL.ERROR : STATUS_LABEL[favorite.status]}
+            {favoriteStatusLabelOf(favorite.status === "READY" ? "ERROR" : favorite.status)}
           </p>
           {direction && (
             <span className={homeStyles.direction}>{directionLabelOf(favorite.route.terminalStopName, direction)}</span>
@@ -334,7 +329,7 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
             </ul>
           ) : (
             <p className={homeStyles.notice}>
-              {favorite.status === "READY" ? STATUS_LABEL.NO_VEHICLE : STATUS_LABEL[favorite.status]}
+              {favoriteStatusLabelOf(favorite.status === "READY" ? "NO_VEHICLE" : favorite.status)}
             </p>
           )}
         </div>

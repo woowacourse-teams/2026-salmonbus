@@ -58,6 +58,32 @@ describe("native map 채널", () => {
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith({ type: "mapPress", payload: { sessionId: channel.sessionId, revision: 1 } });
   });
+
+  it("randomUUID가 없는 환경에서도 32자리 16진수 세션 ID를 만들고 그 세션의 이벤트를 받는다", () => {
+    const randomUUID = Object.getOwnPropertyDescriptor(crypto, "randomUUID");
+    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
+    try {
+      const { bridgeWindow } = appWindow();
+      const channel = createNativeMapChannel(bridgeWindow);
+      const listener = jest.fn<(event: NativeMapEvent) => void>();
+      channel.subscribe(listener);
+      expect(channel.sessionId).toMatch(/^[0-9a-f]{32}$/);
+      const selection = { direction: "UP" as const, sequence: 1 };
+      bridgeWindow.dispatchEvent(
+        new CustomEvent(BRIDGE_EVENT, {
+          detail: { v: 1, type: "map.stopPress", payload: { sessionId: channel.sessionId, revision: 1, selection } },
+        }),
+      );
+      expect(listener).toHaveBeenCalledWith({
+        type: "stopPress",
+        payload: { sessionId: channel.sessionId, revision: 1, selection },
+      });
+      channel.destroy();
+    } finally {
+      if (randomUUID === undefined) Reflect.deleteProperty(crypto, "randomUUID");
+      else Object.defineProperty(crypto, "randomUUID", randomUUID);
+    }
+  });
 });
 
 describe("native map 이벤트 경계", () => {
