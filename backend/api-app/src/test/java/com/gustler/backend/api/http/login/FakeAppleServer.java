@@ -307,6 +307,24 @@ final class FakeAppleServer implements AutoCloseable {
         server.stop(0);
     }
 
+    /**
+     * 애플이 서버 간 알림으로 보내는 것과 같은 JWT 를 만든다. 대상은 웹 Services ID 이고, 애플 알림처럼 만료가 없다.
+     * {@code events} 는 {@code mutation} 으로 넣는다. 클레임을 바꾸거나 다른 키로 서명해 거절 경우를 만든다.
+     */
+    String notification(Consumer<JWTClaimsSet.Builder> mutation, boolean signWithOtherKey) throws JOSEException {
+        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
+            .issuer(baseUrl())
+            .audience(CLIENT_ID)
+            .issueTime(new Date())
+            .jwtID(UUID.randomUUID().toString());
+        mutation.accept(claims);
+        RSAKey key = signWithOtherKey ? otherKey : signingKey;
+        SignedJWT jwt = new SignedJWT(
+            new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(key.getKeyID()).build(), claims.build());
+        jwt.sign(new RSASSASigner(key));
+        return jwt.serialize();
+    }
+
     record RevokeRequest(
         String token,
         String tokenTypeHint,

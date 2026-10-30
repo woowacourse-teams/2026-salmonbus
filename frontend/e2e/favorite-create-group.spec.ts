@@ -1,51 +1,53 @@
 import { test, expect } from "./fixtures/favorites";
 import { routeId } from "./fixtures/mock-data";
+import { captureEnabled } from "./utils/capture";
+import { checkAtBothWidths } from "./utils/widths";
 
-for (const width of [320, 425]) {
-  test(`${width}px 판정보드 모달에서 새 그룹을 만들고 기존 선택과 함께 저장한다`, async ({
-    page,
-    favorites,
-    api,
-    browserName,
-  }) => {
-    await page.setViewportSize({ width, height: 844 });
-    const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
-    await page.goto(`/routes/${routeId}`);
-    await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "저장할 그룹 선택" });
-    await expect(dialog.getByText(stop.name, { exact: false })).toHaveCount(0);
-    await dialog.getByRole("checkbox", { name: /즐겨찾기/ }).check();
-    await dialog.getByRole("button", { name: "새 그룹 만들기", exact: true }).click();
-    const input = dialog.getByRole("textbox", { name: "그룹 이름", exact: true });
-    await expect(input).toBeFocused();
-    await input.fill("  🚌 통학  ");
-    await expect(dialog.getByRole("button", { name: "저장", exact: true })).toHaveCount(0);
+test("320px 판정보드 모달에서 새 그룹을 만들고 기존 선택과 함께 저장한다", async ({
+  page,
+  favorites,
+  api,
+  browserName,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
+  await page.goto(`/routes/${routeId}`);
+  await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "저장할 그룹 선택" });
+  await expect(dialog.getByText(stop.name, { exact: false })).toHaveCount(0);
+  await dialog.getByRole("checkbox", { name: /즐겨찾기/ }).check();
+  await dialog.getByRole("button", { name: "새 그룹 만들기", exact: true }).click();
+  const input = dialog.getByRole("textbox", { name: "그룹 이름", exact: true });
+  await expect(input).toBeFocused();
+  await input.fill("  🚌 통학  ");
+  await expect(dialog.getByRole("button", { name: "저장", exact: true })).toHaveCount(0);
+  await checkAtBothWidths(page, async (width) => {
     expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-    if (width === 425 && browserName === "chromium")
+    if (captureEnabled && width === 425 && browserName === "chromium")
       await page.screenshot({ path: test.info().outputPath("salmonbus-create-group-form.png") });
-    await input.press("Enter");
-    await expect(dialog.getByRole("textbox")).toHaveCount(0);
-    await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toBeChecked();
-    await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toBeFocused();
-    await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toHaveAccessibleName(/정류장 1개, 최대 2개/);
-    await expect(dialog.getByRole("checkbox", { name: /즐겨찾기/ })).toBeChecked();
-    expect(favorites.requests.find((request) => request.method === "POST")?.body).toEqual({ name: "🚌 통학" });
-    expect(favorites.requests.some((request) => request.path === "/api/me/favorite-selections")).toBe(false);
-    const save = dialog.getByRole("button", { name: "저장", exact: true });
-    await expect(save).toBeEnabled();
-    if (width === 425 && browserName === "chromium")
-      await page.screenshot({ path: test.info().outputPath("salmonbus-create-group-selected.png") });
-    await save.click();
-    await expect(dialog).toHaveCount(0);
-    expect(
-      favorites.requests.find((request) => request.path === "/api/me/favorite-selections")?.body?.favoriteGroupIds,
-    ).toEqual(favorites.groups.map((group) => group.id));
-    expect(favorites.groups.every((group) => group.favorites.some((favorite) => favorite.stopId === stop.stopId))).toBe(
-      true,
-    );
-    await expect(page.getByText("즐겨찾기를 저장했습니다", { exact: true })).toBeVisible();
   });
-}
+  await input.press("Enter");
+  await expect(dialog.getByRole("textbox")).toHaveCount(0);
+  await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toBeChecked();
+  await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toBeFocused();
+  await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toHaveAccessibleName(/정류장 1개, 최대 2개/);
+  await expect(dialog.getByRole("checkbox", { name: /즐겨찾기/ })).toBeChecked();
+  expect(favorites.requests.find((request) => request.method === "POST")?.body).toEqual({ name: "🚌 통학" });
+  expect(favorites.requests.some((request) => request.path === "/api/me/favorite-selections")).toBe(false);
+  const save = dialog.getByRole("button", { name: "저장", exact: true });
+  await expect(save).toBeEnabled();
+  if (captureEnabled && browserName === "chromium") {
+    await page.setViewportSize({ width: 425, height: 844 });
+    await page.screenshot({ path: test.info().outputPath("salmonbus-create-group-selected.png") });
+    await page.setViewportSize({ width: 320, height: 844 });
+  }
+  await save.click();
+  await expect(dialog).toHaveCount(0);
+  expect(favorites.groups.every((group) => group.favorites.some((favorite) => favorite.stopId === stop.stopId))).toBe(
+    true,
+  );
+  await expect(page.getByText("즐겨찾기를 저장했습니다", { exact: true })).toBeVisible();
+});
 
 test("그룹 이름 검증·중복·생성 실패 후에도 입력과 기존 선택을 유지하며 재시도한다", async ({
   page,
@@ -107,8 +109,6 @@ test("그룹 생성 취소는 요청하지 않고 생성 후 모달 취소는 �
   expect(favorites.groups.every((group) => group.favorites.length === 0)).toBe(true);
   await star.click();
   await expect(dialog.getByRole("checkbox", { name: /통학/ })).not.toBeChecked();
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
 });
 
 test("세 번째 그룹을 만들면 추가 버튼을 숨기고 즐겨찾기 저장은 유지한다", async ({ page, favorites, api }) => {

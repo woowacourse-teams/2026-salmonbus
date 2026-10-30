@@ -10,6 +10,7 @@ export const paths = {
   favoriteGroup: "/mypage/groups/:groupId",
   privacy: "/privacy",
   privacyEdition: "/privacy/:effectiveDate",
+  whatsNew: "/mypage/whats-new",
 } as const;
 
 export function boardPathFor(routeId: string): string {

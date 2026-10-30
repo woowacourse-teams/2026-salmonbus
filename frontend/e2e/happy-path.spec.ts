@@ -1,7 +1,8 @@
 import { apiPaths, pollIntervalMs } from "./fixtures/mock-data";
 import { centerY, expectForwardMotion } from "./utils/vehicle-motion";
 import { test, expect } from "./fixtures/api";
-import { directionButton, expectDirection, openBoard, targetRow, targetStop } from "./utils/verdict-board";
+import { selectRoute } from "./utils/route-select";
+import { directionButton, expectDirection, targetRow, targetStop } from "./utils/verdict-board";
 
 test.use({
   viewport: { width: 390, height: 844 },
@@ -41,7 +42,9 @@ for (const { direction, label, sequence, expectedArrivals } of [
     api.data.watch.vehicles = [vehicle];
 
     await test.step("노선 선택 페이지에서 3330번 노선을 선택한다", async () => {
-      await openBoard(page);
+      await page.goto("/");
+      await selectRoute(page);
+      await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
     });
 
     await test.step(`${label} 방향의 정류장 목록과 순서를 확인한다`, async () => {
@@ -94,8 +97,8 @@ for (const { direction, label, sequence, expectedArrivals } of [
         expect(api.requests.watch).toBeGreaterThan(requestsBefore);
 
         const motion = await expectForwardMotion(page, marker, from, to);
-        // 같은 차량은 응답 갱신 때 순간이동하지 않고 이전 표시 위치에서 이어 움직인다.
-        expect(Math.abs(motion.start - previousY)).toBeLessThan(1);
+        // 같은 차량은 응답 갱신 때 순간이동하지 않고 이전 표시 위치 근처에서 이어 움직인다. 이어 가는 위치의 정확한 값은 useLiveVehicleMotion 단위 테스트가 본다.
+        expect(Math.abs(motion.start - previousY)).toBeLessThan((to - from) / 10);
         expect(motion.end).toBeGreaterThan(departed.end + 1);
       }
     });

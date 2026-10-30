@@ -1,5 +1,6 @@
 package com.gustler.backend.member.api;
 
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -31,6 +32,13 @@ public interface RefreshTokens {
      * <p>모든 기기에서 로그아웃할 때 쓴다. 리프레시 토큰만 폐기하므로 이미 발급된 액세스 토큰은 만료(최대 15분)까지 남는다.
      */
     int revokeAll(UUID publicId);
+
+    /**
+     * 회원의 계통 중 {@code time} 전에 시작한 것만 폐기하고 폐기한 계통 수를 돌려준다. 회원이 없거나 그런 계통이 없으면 0 이다.
+     *
+     * <p>바깥에서 늦게 도착할 수 있는 로그아웃 요청에 쓴다. 그 시각 뒤에 새로 한 로그인은 남는다.
+     */
+    int revokeAllStartedBefore(UUID publicId, Instant time);
 
     /**
      * 만료된 계통을 한 묶음 지우고 지운 개수를 돌려준다.

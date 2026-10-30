@@ -2,6 +2,7 @@ import type { ErrorCode } from "@/shared/api/apiError";
 import type { LoginProvider } from "@/shared/api/auth.types";
 import type { Direction, RouteStatus } from "@/shared/api/routeForecast.types";
 import type { BoardEntry } from "@/shared/routing/boardEntry";
+import type { WhatsNewCloseMethod } from "@/shared/whats-new/whatsNewPolicy";
 
 export type FailureProperties =
   | {
@@ -109,5 +110,17 @@ export interface EventMap {
   login_finished: {
     provider: LoginProvider | "unknown";
     result: "succeeded" | "cancelled" | "failed";
+  };
+
+  whats_new_viewed: {
+    latest_note_id: number;
+    feature_count: number;
+    new_route_count: number;
+  };
+
+  whats_new_closed: {
+    latest_note_id: number;
+    close_method: WhatsNewCloseMethod;
+    open_duration_ms: number;
   };
 }

@@ -1,0 +1,1 @@
+export { WhatsNewPage } from "./WhatsNewPage";

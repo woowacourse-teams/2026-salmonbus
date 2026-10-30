@@ -542,6 +542,32 @@ class RefreshTokenRotationTest {
     }
 
     @Test
+    void 시각을_정해_폐기하면_그_전에_시작한_계통만_폐기하고_뒤에_시작한_계통은_갱신할_수_있다() {
+        // given
+        UUID publicId = insertMember();
+        IssuedRefreshToken before = refreshTokens.issue(publicId);
+        clock.advance(Duration.ofMinutes(1));
+        Instant revokedAt = clock.instant();
+        IssuedRefreshToken atRevocation = refreshTokens.issue(publicId);
+        clock.advance(Duration.ofMinutes(1));
+        IssuedRefreshToken after = refreshTokens.issue(publicId);
+
+        // when
+        int actual = refreshTokens.revokeAllStartedBefore(publicId, revokedAt);
+        int unknownRevoked = refreshTokens.revokeAllStartedBefore(UUID.randomUUID(), revokedAt);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(actual).isEqualTo(1);
+            softly.assertThat(unknownRevoked).isZero();
+            softly.assertThat(refreshTokens.rotate(before.token()))
+                .isEqualTo(new RefreshResult.Rejected(Reason.UNKNOWN));
+            softly.assertThat(refreshTokens.rotate(atRevocation.token())).isInstanceOf(ROTATED);
+            softly.assertThat(refreshTokens.rotate(after.token())).isInstanceOf(ROTATED);
+        });
+    }
+
+    @Test
     void 계통이_없거나_없는_회원의_계통을_모두_폐기하면_0이다() {
         // given
         UUID withoutFamily = insertMember();

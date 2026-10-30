@@ -2,7 +2,7 @@ import { directionLabelOf } from "@/shared/utils/directionLabelOf";
 import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router";
-import type { FavoriteStatus, FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
+import type { FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
@@ -23,15 +23,9 @@ import * as homeStyles from "./HomeFavorites.css";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { stopNameLabels } from "./stopNameLabels";
+import { favoriteStatusLabelOf } from "./favoriteStatusLabelOf";
 import { FavoriteGroupAddButton } from "@/shared/components/FavoriteGroupAddButton";
 
-const STATUS_LABEL: Record<Exclude<FavoriteStatus, "READY">, string> = {
-  NO_VEHICLE: "도착 예정 차량이 없어요",
-  PREPARING: "도착 예보를 준비하고 있어요",
-  UNAVAILABLE: "현재 노선에서 이 정류장을 이용할 수 없어요",
-  AMBIGUOUS: "승차할 정류장을 다시 확인해 주세요",
-  ERROR: "정류장 정보를 불러오지 못했어요",
-};
 const EMPTY_FAVORITES: HomeFavorite[] = [];
 
 export function HomeFavorites() {
@@ -267,7 +261,7 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
       <li className={homeStyles.card}>
         <div className={homeStyles.unavailable}>
           <p className={homeStyles.notice}>
-            {favorite.status === "READY" ? STATUS_LABEL.ERROR : STATUS_LABEL[favorite.status]}
+            {favoriteStatusLabelOf(favorite.status === "READY" ? "ERROR" : favorite.status)}
           </p>
           {direction && (
             <span className={homeStyles.direction}>{directionLabelOf(favorite.route.terminalStopName, direction)}</span>
@@ -335,7 +329,7 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
             </ul>
           ) : (
             <p className={homeStyles.notice}>
-              {favorite.status === "READY" ? STATUS_LABEL.NO_VEHICLE : STATUS_LABEL[favorite.status]}
+              {favoriteStatusLabelOf(favorite.status === "READY" ? "NO_VEHICLE" : favorite.status)}
             </p>
           )}
         </div>

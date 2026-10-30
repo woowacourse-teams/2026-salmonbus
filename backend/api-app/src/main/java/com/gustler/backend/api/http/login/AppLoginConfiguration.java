@@ -1,5 +1,6 @@
 package com.gustler.backend.api.http.login;
 
+import com.gustler.backend.api.account.analytics.AmplitudeDeletionProcessor;
 import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.AuthCookies;
 import com.gustler.backend.api.favorite.application.DefaultFavoriteGroupService;
@@ -43,6 +44,7 @@ public class AppLoginConfiguration {
         Clock clock,
         ObjectProvider<AppleClientAssertion> appleClientAssertion,
         WithdrawMember withdrawMember,
+        AmplitudeDeletionProcessor analytics,
         MeterRegistry meters,
         ObjectMapper objectMapper
     ) {
@@ -59,7 +61,7 @@ public class AppLoginConfiguration {
                     apple.tokenUri(), appSecret, objectMapper),
                 verifier,
                 new AppleWithdrawal(withdrawMember, new AppleRevokeClient(SocialLoginConfiguration.providerRestClient(),
-                    app.appleClientId(), apple.revokeUri(), appSecret), meters),
+                    app.appleClientId(), apple.revokeUri(), appSecret), meters, analytics),
                 meters));
         }
         if (enabled(environment, "auth.kakao.enabled") && present(app.kakaoAppKey())) {

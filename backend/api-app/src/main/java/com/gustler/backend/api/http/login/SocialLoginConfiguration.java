@@ -1,5 +1,6 @@
 package com.gustler.backend.api.http.login;
 
+import com.gustler.backend.api.account.analytics.AmplitudeDeletionProcessor;
 import com.gustler.backend.api.account.token.AccessTokens;
 import com.gustler.backend.api.account.token.AuthCookies;
 import com.gustler.backend.api.account.token.WithdrawalTickets;
@@ -101,11 +102,12 @@ public class SocialLoginConfiguration {
         LoginProperties properties,
         AppleClientAssertion clientSecret,
         WithdrawMember withdrawMember,
+        AmplitudeDeletionProcessor analytics,
         MeterRegistry meters
     ) {
         AppleRevokeClient revokeClient = new AppleRevokeClient(
             providerRestClient(), properties.apple().clientId(), properties.apple().revokeUri(), clientSecret);
-        return new AppleWithdrawal(withdrawMember, revokeClient, meters);
+        return new AppleWithdrawal(withdrawMember, revokeClient, meters, analytics);
     }
 
     /** 제공자 API 를 부르는 클라이언트. 제공자가 응답하지 않아도 요청 스레드가 매달리지 않게 제한 시간을 둔다. */

@@ -40,10 +40,10 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정되어도 다른 파일을 제외해 항상 통과하게 된다. 파일 이름으로 선택하고,
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
-     * <p>이 브랜치는 V45 즐겨찾기 이후 기점 관측의 품질 방향 판정을 고친다.
+     * <p>이 브랜치는 V46 이후 탈퇴 회원의 분석 기록 삭제 대기 테이블을 만든다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("first_stop_quality_direction");
+        List.of("analytics_deletion");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

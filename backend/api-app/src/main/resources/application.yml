@@ -143,3 +143,11 @@ management:
       # 8080 에 /readyz 를 연다. 배포 검증이 8080 이 트래픽 받을 상태인지 이걸로 본다
       probes:
         add-additional-paths: true
+
+# dev는 프로젝트 852649, 운영은 852648의 키를 각각 주입한다.
+# 로그인 기능을 켜면 삭제 요청도 기본으로 전송한다. 인증 키는 서버에서 주입한다.
+analytics:
+  amplitude:
+    enabled: true
+    api-key: ${AMPLITUDE_API_KEY:}
+    secret-key: ${AMPLITUDE_SECRET_KEY:}

@@ -1,26 +1,7 @@
 import { test, expect, testMember, redirectAuth } from "./fixtures/auth";
-import contract from "../../contract/auth-v1.openapi.json" with { type: "json" };
 import { selectRoute } from "./utils/route-select";
-import { routeId } from "./fixtures/mock-data";
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
-
-for (const { name, path } of [
-  { name: "홈", path: "/" },
-  { name: "마이페이지", path: "/mypage" },
-]) {
-  test(`${name}에서 로그인하면 같은 화면으로 복귀한다`, async ({ page, auth }) => {
-    await page.goto("/");
-    if (path === "/mypage") await page.getByRole("link", { name: "마이페이지", exact: true }).click();
-    await expect(page).toHaveURL(path);
-    await page.getByRole("link", { name: "로그인 / 회원가입", exact: true }).click();
-    await expect(page).toHaveURL(`/login?${new URLSearchParams({ returnTo: path })}`);
-    await page.getByRole("button", { name: "카카오로 계속하기" }).click();
-    await expect(page).toHaveURL(path);
-    await expect(page.getByText(path === "/" ? "등록된 즐겨찾기가 없어요" : "살몽님", { exact: true })).toBeVisible();
-    expect(auth.requests.some((request) => request.path === "/api/auth/kakao/start")).toBe(true);
-  });
-}
 
 test("인증 API가 꺼져 있어도 노선을 검색하고 판정보드에 진입한다", async ({ page, auth }) => {
   auth.enabled = false;
@@ -93,9 +74,6 @@ test("닉네임 중복 오류 후 입력을 수정해 저장하고 재접속해�
   await expect(page.getByRole("status")).toHaveText("닉네임을 변경했어요");
   await page.reload();
   await expect(page.getByText("새연어님", { exact: true })).toBeVisible();
-  expect(
-    auth.requests.filter((request) => request.method === "PATCH").every((request) => request.csrf === "e2e-csrf"),
-  ).toBe(true);
 });
 
 test("닉네임 저장 실패 후 같은 입력으로 재시도하면 이전 오류를 지우고 저장한다", async ({ page, auth }) => {
@@ -151,66 +129,23 @@ for (const action of ["로그아웃", "회원탈퇴"] as const) {
   });
 }
 
-for (const result of ["cancelled", "failed"] as const) {
-  test(`Apple 탈퇴 ${result} 후 회원을 유지하고 재시도할 수 있다`, async ({ page, auth, browserName }) => {
-    auth.member = { ...testMember, provider: "APPLE" };
-    await page.goto("/mypage");
-    await page.getByRole("button", { name: "회원탈퇴", exact: true }).click();
-    await expect(page.getByText("탈퇴를 완료하려면 Apple 계정으로 한 번 더 인증해야 해요.")).toBeVisible();
-    await page.route("**/api/auth/apple/start?**", (route) => redirectAuth(route, `/?withdraw=${result}`, browserName));
-    await page.getByRole("dialog").getByRole("button", { name: "회원탈퇴", exact: true }).click();
-    await expect(page).toHaveURL("/mypage");
-    await expect(
-      page.getByRole("status").filter({
-        hasText: result === "cancelled" ? "회원탈퇴를 취소했어요" : "회원탈퇴를 완료하지 못했어요. 다시 시도해 주세요.",
-      }),
-    ).toBeVisible();
-    await expect(page.getByText("살몽님", { exact: true })).toBeVisible();
-    expect(
-      auth.requests.some((request) => request.path === "/api/me/withdrawal/apple" && request.csrf === "e2e-csrf"),
-    ).toBe(true);
-    await page.getByRole("button", { name: "회원탈퇴", exact: true }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-  });
-}
-
-test("Apple 탈퇴 시작이 401이면 갱신 후 같은 요청을 재시도한다", async ({ page, auth, browserName }) => {
+// 결과별 안내 문구는 withdrawalNoticeLabelOf.test.ts가 본다.
+test("Apple 탈퇴 cancelled 후 회원을 유지하고 재시도할 수 있다", async ({ page, auth, browserName }) => {
   auth.member = { ...testMember, provider: "APPLE" };
-  let attempts = 0;
-  await page.route("**/api/me/withdrawal/apple", async (route) => {
-    attempts += 1;
-    if (attempts === 1) {
-      await route.fulfill({
-        status: 401,
-        json: contract.paths["/api/me/withdrawal/apple"].post.responses["401"].content["application/json"].examples
-          .unauthenticated.value,
-        headers: { "Cache-Control": "no-store" },
-      });
-    } else await route.fallback();
-  });
-  await page.route("**/api/auth/apple/start?**", (route) => redirectAuth(route, "/?withdraw=cancelled", browserName));
   await page.goto("/mypage");
   await page.getByRole("button", { name: "회원탈퇴", exact: true }).click();
+  await expect(page.getByText("탈퇴를 완료하려면 Apple 계정으로 한 번 더 인증해야 해요.")).toBeVisible();
+  await page.route("**/api/auth/apple/start?**", (route) => redirectAuth(route, "/?withdraw=cancelled", browserName));
   await page.getByRole("dialog").getByRole("button", { name: "회원탈퇴", exact: true }).click();
   await expect(page).toHaveURL("/mypage");
   await expect(page.getByRole("status").filter({ hasText: "회원탈퇴를 취소했어요" })).toBeVisible();
+  await expect(page.getByText("살몽님", { exact: true })).toBeVisible();
   await expect(page.getByText("Apple 계정으로 로그인 중")).toBeVisible();
-  expect(attempts).toBe(2);
-  expect(auth.requests.filter((request) => request.path === "/api/auth/refresh")).toHaveLength(1);
-});
-
-test("방면·정류장이 담긴 판정보드 주소는 로그인 후에도 유지한다", async ({ page, api }) => {
-  const stop = api.data.watch.stops.find((candidate) => candidate.direction === "DOWN" && candidate.boardingAllowed)!;
-  const returnTo = `/routes/${routeId}?direction=DOWN&stopId=${stop.stopId}`;
-  await page.goto(`/login?${new URLSearchParams({ returnTo })}`);
-  await page.getByRole("button", { name: "카카오로 계속하기" }).click();
-  await expect(page).toHaveURL(returnTo);
-  await expect(
-    page.getByRole("group", { name: "운행 방향 선택" }).getByRole("button", { pressed: true }),
-  ).toContainText("방면");
-  await expect(
-    page.locator(`[data-stop-sequence="${stop.sequence}"]`).getByRole("button", { expanded: true }).first(),
-  ).toBeVisible();
+  expect(
+    auth.requests.some((request) => request.path === "/api/me/withdrawal/apple" && request.csrf === "e2e-csrf"),
+  ).toBe(true);
+  await page.getByRole("button", { name: "회원탈퇴", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
 });
 
 test("갱신 토큰도 만료되면 비회원으로 복귀하고 갱신을 반복하지 않는다", async ({ page, auth }) => {

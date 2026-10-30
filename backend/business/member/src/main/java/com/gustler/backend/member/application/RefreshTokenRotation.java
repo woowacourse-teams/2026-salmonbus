@@ -10,7 +10,9 @@ import com.gustler.backend.member.domain.RefreshTokenPolicy;
 import com.gustler.backend.member.domain.RefreshTokenRepository;
 import com.gustler.backend.member.domain.RotatedRefreshToken;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
@@ -78,6 +80,11 @@ public class RefreshTokenRotation implements RefreshTokens {
     @Override
     public int revokeAll(UUID publicId) {
         return repository.deleteAllOf(publicId);
+    }
+
+    @Override
+    public int revokeAllStartedBefore(UUID publicId, Instant time) {
+        return repository.deleteAllOfStartedBefore(publicId, OffsetDateTime.ofInstant(time, ZoneOffset.UTC));
     }
 
     @Override

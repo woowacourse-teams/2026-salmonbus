@@ -8,10 +8,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gustler.backend.api.account.analytics.AmplitudeDeletionProcessor;
 import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.MemberIdentity;
 import com.gustler.backend.member.api.ProviderUnlink;
 import com.gustler.backend.member.api.WithdrawMember;
+import com.gustler.backend.member.api.WithdrawnMember;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,8 +26,9 @@ class AppleWithdrawalTest {
 
     private final WithdrawMember withdrawMember = mock(WithdrawMember.class);
     private final AppleRevokeClient revokeClient = mock(AppleRevokeClient.class);
+    private final AmplitudeDeletionProcessor analytics = mock(AmplitudeDeletionProcessor.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
-    private final AppleWithdrawal withdrawal = new AppleWithdrawal(withdrawMember, revokeClient, meters);
+    private final AppleWithdrawal withdrawal = new AppleWithdrawal(withdrawMember, revokeClient, meters, analytics);
 
     @BeforeEach
     void 회원은_같은_애플_계정이다() {
@@ -36,12 +39,15 @@ class AppleWithdrawalTest {
     void 토큰을_취소하면_회원을_지운다() {
         // given
         when(revokeClient.revoke("token")).thenReturn(true);
+        when(withdrawMember.withdraw(MEMBER_ID, ProviderUnlink.DONE))
+            .thenReturn(Optional.of(new WithdrawnMember(IDENTITY, Optional.empty())));
 
         // when
         boolean actual = withdrawal.withdraw(MEMBER_ID, IDENTITY, Optional.of("token"));
 
         // then
         verify(withdrawMember).withdraw(MEMBER_ID, ProviderUnlink.DONE);
+        verify(analytics).attempt(MEMBER_ID);
         assertSoftly(softly -> {
             softly.assertThat(actual).isTrue();
             softly.assertThat(count("done")).isEqualTo(1);
@@ -58,6 +64,7 @@ class AppleWithdrawalTest {
 
         // then
         verify(withdrawMember, never()).withdraw(any(), any());
+        verify(analytics, never()).attempt(any());
         assertSoftly(softly -> {
             softly.assertThat(actual).isFalse();
             softly.assertThat(count("revoke_failed")).isEqualTo(1);
@@ -72,6 +79,7 @@ class AppleWithdrawalTest {
         // then
         verify(revokeClient, never()).revoke(anyString());
         verify(withdrawMember, never()).withdraw(any(), any());
+        verify(analytics, never()).attempt(any());
         assertSoftly(softly -> {
             softly.assertThat(actual).isFalse();
             softly.assertThat(count("revoke_failed")).isEqualTo(1);
@@ -87,6 +95,7 @@ class AppleWithdrawalTest {
         // then
         verify(revokeClient, never()).revoke(anyString());
         verify(withdrawMember, never()).withdraw(any(), any());
+        verify(analytics, never()).attempt(any());
         assertSoftly(softly -> {
             softly.assertThat(actual).isFalse();
             softly.assertThat(count("identity_mismatch")).isEqualTo(1);

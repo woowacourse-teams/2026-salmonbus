@@ -3,6 +3,7 @@ package com.gustler.backend.api.http.login;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import com.gustler.backend.api.account.analytics.AmplitudeDeletionProcessor;
 import com.gustler.backend.api.favorite.application.DefaultFavoriteGroupService;
 import com.gustler.backend.api.monitoring.UserMonitoring;
 import com.gustler.backend.member.api.RefreshTokens;
@@ -33,6 +34,7 @@ class AppleLoginConfigurationTest {
         .withBean(SignInWithSocialAccount.class, () -> identity -> null)
         .withBean(RefreshTokens.class, () -> Mockito.mock(RefreshTokens.class))
         .withBean(WithdrawMember.class, () -> Mockito.mock(WithdrawMember.class))
+        .withBean(AmplitudeDeletionProcessor.class, () -> Mockito.mock(AmplitudeDeletionProcessor.class))
         .withBean(DefaultFavoriteGroupService.class, () -> Mockito.mock(DefaultFavoriteGroupService.class))
         .withBean(UserMonitoring.class, () -> Mockito.mock(UserMonitoring.class))
         .withBean(MeterRegistry.class, SimpleMeterRegistry::new)

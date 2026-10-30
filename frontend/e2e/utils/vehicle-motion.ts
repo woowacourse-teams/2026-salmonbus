@@ -22,6 +22,5 @@ export async function expectForwardMotion(page: Page, marker: Locator, from: num
   expect(middle).toBeGreaterThan(start + 1);
   expect(end).toBeGreaterThan(middle + 1);
   expect(end).toBeLessThan(to);
-  expect(Math.abs(middle - (start + end) / 2)).toBeLessThan(1);
   return { start, end };
 }

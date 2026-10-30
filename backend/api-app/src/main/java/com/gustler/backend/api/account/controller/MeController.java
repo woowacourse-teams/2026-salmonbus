@@ -5,6 +5,7 @@ import com.gustler.backend.api.account.NicknameInvalidException;
 import com.gustler.backend.api.account.NicknameTakenException;
 import com.gustler.backend.api.account.NotAppleMemberException;
 import com.gustler.backend.api.account.ReauthRequiredException;
+import com.gustler.backend.api.account.analytics.AmplitudeDeletionProcessor;
 import com.gustler.backend.api.account.dto.AppleWithdrawalRequest;
 import com.gustler.backend.api.account.dto.AppleWithdrawalResponse;
 import com.gustler.backend.api.account.dto.MyProfileResponse;
@@ -79,6 +80,7 @@ public class MeController {
     private final ChangeNickname changeNickname;
     private final WithdrawMember withdrawMember;
     private final ProviderUnlinkRunner unlinkRunner;
+    private final AmplitudeDeletionProcessor analytics;
     private final AuthCookies authCookies;
     private final WithdrawalTickets withdrawalTickets;
     private final RefreshTokens refreshTokens;
@@ -88,6 +90,7 @@ public class MeController {
         ChangeNickname changeNickname,
         WithdrawMember withdrawMember,
         ProviderUnlinkRunner unlinkRunner,
+        AmplitudeDeletionProcessor analytics,
         AuthCookies authCookies,
         WithdrawalTickets withdrawalTickets,
         RefreshTokens refreshTokens
@@ -96,6 +99,7 @@ public class MeController {
         this.changeNickname = changeNickname;
         this.withdrawMember = withdrawMember;
         this.unlinkRunner = unlinkRunner;
+        this.analytics = analytics;
         this.authCookies = authCookies;
         this.withdrawalTickets = withdrawalTickets;
         this.refreshTokens = refreshTokens;
@@ -250,6 +254,7 @@ public class MeController {
         WithdrawnMember withdrawn = withdrawMember.withdraw(principal.publicId(), ProviderUnlink.PENDING)
             .orElseThrow(UnauthenticatedException::new);
         withdrawn.pendingUnlink().ifPresent(unlinkRunner::attempt);
+        analytics.attempt(principal.publicId());
         HttpHeaders headers = new HttpHeaders();
         authCookies.clear(headers);
         return ResponseEntity.noContent().headers(headers).cacheControl(CacheControl.noStore()).build();

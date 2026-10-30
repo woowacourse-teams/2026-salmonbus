@@ -1,5 +1,6 @@
 package com.gustler.backend.api.http.login;
 
+import com.gustler.backend.api.account.analytics.AmplitudeDeletionProcessor;
 import com.gustler.backend.member.api.MemberIdentity;
 import com.gustler.backend.member.api.ProviderUnlink;
 import com.gustler.backend.member.api.WithdrawMember;
@@ -23,11 +24,18 @@ final class AppleWithdrawal {
     private final WithdrawMember withdrawMember;
     private final AppleRevokeClient revokeClient;
     private final MeterRegistry meters;
+    private final AmplitudeDeletionProcessor analytics;
 
-    AppleWithdrawal(WithdrawMember withdrawMember, AppleRevokeClient revokeClient, MeterRegistry meters) {
+    AppleWithdrawal(
+        WithdrawMember withdrawMember,
+        AppleRevokeClient revokeClient,
+        MeterRegistry meters,
+        AmplitudeDeletionProcessor analytics
+    ) {
         this.withdrawMember = withdrawMember;
         this.revokeClient = revokeClient;
         this.meters = meters;
+        this.analytics = analytics;
     }
 
     /**
@@ -46,7 +54,7 @@ final class AppleWithdrawal {
             LOGGER.warn("애플 토큰을 취소하지 못해 탈퇴하지 않았다");
             return false;
         }
-        withdrawMember.withdraw(memberId, ProviderUnlink.DONE);
+        withdrawMember.withdraw(memberId, ProviderUnlink.DONE).ifPresent(ignored -> analytics.attempt(memberId));
         count("done");
         return true;
     }

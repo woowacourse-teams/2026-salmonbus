@@ -24,3 +24,8 @@ auth:
     purge-cron: "-"
   refresh-token:
     secret: test-only-secret-key-for-refresh-tokens-0123456789
+
+# 통합 테스트가 실제 Amplitude로 삭제 요청을 보내지 않게 한다.
+analytics:
+  amplitude:
+    enabled: false

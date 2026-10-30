@@ -10,6 +10,7 @@ import { MyPage } from "@/pages/my-page";
 import { FavoriteGroupPage } from "@/pages/favorite-group";
 import { NicknamePage } from "@/pages/nickname";
 import { AccountLayout } from "@/shared/components/AccountLayout";
+import { WhatsNewPage } from "@/pages/whats-new";
 import { useFocusKeepingNavigation } from "./useFocusKeepingNavigation";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
 
@@ -39,16 +40,17 @@ function NavigationLayout() {
 }
 
 const pagesWithNavigation = [
-  { path: paths.routeSelect, title: "홈", element: <RouteSelectPage /> },
-  { path: paths.login, title: "로그인", element: <LoginPage /> },
+  { path: paths.routeSelect, title: "", element: <RouteSelectPage /> },
   { path: paths.mypage, title: "마이페이지", element: <MyPage /> },
   { path: paths.nickname, title: "닉네임 수정", element: <NicknamePage /> },
   { path: paths.favoriteGroup, title: "즐겨찾기 그룹 관리", element: <FavoriteGroupPage /> },
   { path: paths.privacy, title: "개인정보 처리방침", element: privacyPage },
   { path: paths.privacyEdition, title: "개인정보 처리방침", element: privacyPage },
+  { path: paths.whatsNew, title: "새 소식", element: <WhatsNewPage /> },
 ];
 
 const pagesWithoutNavigation = [
+  { path: paths.login, title: "로그인", element: <LoginPage /> },
   { path: paths.routeSearch, title: "노선 검색", element: <RouteSearchPage /> },
   { path: paths.board, title: "노선 판정보드", element: <VerdictBoardPage /> },
 ];
@@ -60,7 +62,7 @@ export function AppRoutes() {
   )?.title;
 
   useEffect(() => {
-    document.title = title === undefined ? "연어" : `${title} | 연어`;
+    document.title = title ? `${title} | 연어버스` : "연어버스";
   }, [title]);
 
   // Routes에 location을 늘 넘겨야 미리 그린 화면에서 실제 주소로 바뀔 때 화면이 다시 마운트되지 않는다.
