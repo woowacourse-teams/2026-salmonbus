@@ -4,6 +4,7 @@ import { useBoardSheet } from "../hooks/useBoardSheet";
 import * as styles from "./BoardBottomSheet.css";
 
 interface BoardBottomSheetProps {
+  id: string;
   snap: BoardSheetSnap;
   onSnapChange: (snap: BoardSheetSnap) => void;
   viewportHeight: number;
@@ -19,7 +20,7 @@ const SNAP_LABEL: Record<BoardSheetSnap, string> = {
 };
 const SNAP_VALUE: Record<BoardSheetSnap, number> = { minimum: 0, half: 1, expanded: 2, full: 3 };
 
-export function BoardBottomSheet({ snap, onSnapChange, viewportHeight, header, children }: BoardBottomSheetProps) {
+export function BoardBottomSheet({ id, snap, onSnapChange, viewportHeight, header, children }: BoardBottomSheetProps) {
   const listId = useId();
   const {
     sheetRef,
@@ -35,7 +36,9 @@ export function BoardBottomSheet({ snap, onSnapChange, viewportHeight, header, c
 
   return (
     <section
+      id={id}
       ref={sheetRef}
+      tabIndex={-1}
       className={styles.sheet}
       style={{ height }}
       data-snap={snap}

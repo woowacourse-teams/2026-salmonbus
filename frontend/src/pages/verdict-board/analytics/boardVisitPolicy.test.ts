@@ -200,7 +200,7 @@ describe("nextStopExpandStep", () => {
     name: "정류장2",
     isTurnaround: false,
   };
-  const expand = { stop, direction: "UP", rowPosition: 1 } as const;
+  const expand = { stop, direction: "UP", rowPosition: 1, source: "list" } as const;
 
   function visitAfter(observations: BoardObservation[], from: BoardVisit | null = null): BoardVisit {
     let visit = from;

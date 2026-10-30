@@ -1,4 +1,4 @@
-import { useState, type SubmitEvent } from "react";
+import { useEffect, useRef, useState, type SubmitEvent } from "react";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { createFavoriteGroup } from "@/shared/api/favorites.api";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
@@ -9,6 +9,7 @@ import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { playHaptic } from "@/shared/haptic/haptic";
 import * as buttons from "@/shared/styles/button.css";
 import * as formStyles from "@/shared/styles/form.css";
+import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import {
   MAX_FAVORITE_GROUPS,
   MAX_FAVORITES_PER_GROUP,
@@ -34,6 +35,9 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
   const { run, busy, error, setError } = useFavoriteAction();
   const saveSelections = useSaveFavoriteSelections(target);
   const [creating, setCreating] = useState(false);
+  const [createdGroupId, setCreatedGroupId] = useState<string | null>(null);
+  const nameField = useRef<HTMLInputElement>(null);
+  const returnToAdd = useRef(false);
   const [name, setName] = useState("");
   const [beforeCreation, setBeforeCreation] = useState<typeof resource | null>(null);
   // 생성 직전 응답이 남아 있는 동안 새 그룹을 누락으로 처리하지 않는다.
@@ -41,12 +45,16 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
   const invalidName = groupNameError(name);
   const full = exceedsFavoriteLimit(groups, target, ids);
   const missing = !refreshingGroups && ids.some((id) => !groups.some((group) => group.id === id));
+  useEffect(() => {
+    if (creating && error !== null) nameField.current?.focus();
+  }, [creating, error]);
   async function createGroup(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || invalidName || groups.length >= MAX_FAVORITE_GROUPS || resource.status !== "success") return;
     await run(async () => {
       const result = await createFavoriteGroup(name);
       if (result.ok) {
+        setCreatedGroupId(result.body.id);
         setBeforeCreation(resource);
         setChosen([...ids, result.body.id]);
         setName("");
@@ -71,11 +79,15 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
       {groups.map((group) => (
         <label {...maskedPropsFor(styles.choice)} key={group.id}>
           <span>{group.name}</span>
-          <span className={styles.choiceCount}>
+          <span className={styles.choiceCount} aria-hidden="true">
             {favoriteCountFor(group, target, ids)} / {MAX_FAVORITES_PER_GROUP}
+          </span>
+          <span className={visuallyHidden}>
+            {`정류장 ${favoriteCountFor(group, target, ids)}개, 최대 ${MAX_FAVORITES_PER_GROUP}개`}
           </span>
           <input
             type="checkbox"
+            autoFocus={group.id === createdGroupId}
             checked={ids.includes(group.id)}
             disabled={busy}
             onChange={(event) => {
@@ -89,13 +101,14 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
         <form {...maskedPropsFor(styles.createGroup)} onSubmit={(event) => void createGroup(event)}>
           <label htmlFor="favorite-group-name">그룹 이름</label>
           <input
+            ref={nameField}
             id="favorite-group-name"
             className={formStyles.field}
             value={name}
             autoFocus
             autoComplete="off"
             disabled={busy}
-            aria-describedby="favorite-group-name-help favorite-group-name-error"
+            aria-describedby={`favorite-group-name-help favorite-group-name-error${error ? " favorite-selection-error" : ""}`}
             aria-invalid={error !== null || (name !== "" && invalidName !== null)}
             onChange={(event) => {
               setName(event.target.value);
@@ -113,7 +126,14 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
               className={buttons.secondary}
               type="button"
               disabled={busy}
-              onClick={() => {
+              onClick={(event) => {
+                returnToAdd.current = groups.length < MAX_FAVORITE_GROUPS;
+                if (!returnToAdd.current) {
+                  event.currentTarget
+                    .closest("dialog")
+                    ?.querySelector<HTMLInputElement>('input[type="checkbox"]:not(:disabled)')
+                    ?.focus();
+                }
                 setCreating(false);
                 setName("");
                 setError(null);
@@ -135,6 +155,12 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
         resource.status === "success" &&
         groups.length < MAX_FAVORITE_GROUPS && (
           <button
+            ref={(button) => {
+              if (button !== null && returnToAdd.current) {
+                returnToAdd.current = false;
+                button.focus();
+              }
+            }}
             className={styles.addGroup}
             type="button"
             disabled={busy || refreshingGroups}
@@ -151,7 +177,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
         <p className={formStyles.subtle}>그룹을 준비하고 있어요. 목록을 다시 확인해 주세요.</p>
       )}
       {(error || full || missing) && (
-        <p className={formStyles.error} role="alert">
+        <p id="favorite-selection-error" className={formStyles.error} role="alert">
           {error ??
             (missing
               ? "그룹 목록이 변경됐어요. 다시 확인해 주세요."

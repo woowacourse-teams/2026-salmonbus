@@ -38,6 +38,7 @@ test("320px 이름 변경 화면은 제목·라벨·입력·정책·저장 순�
   await input.fill("통학");
   await save.click();
   await expect(page.getByRole("alert")).toContainText("이미 사용 중");
+  await expect(input).toBeFocused();
   await expect(input).toHaveValue("통학");
   await input.fill("회사 가는 길");
   await expect(page.getByRole("alert")).toBeHidden();

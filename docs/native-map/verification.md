@@ -150,3 +150,12 @@ xcodebuild \
 ## 별도 기기 확인 범위
 
 실제 iPhone의 두 손가락 제스처, 빠른 경계 터치, 위치 권한, 키보드·VoiceOver와 장시간 차량 애니메이션 성능은 Simulator 결과와 별도로 확인해야 한다.
+
+## 뒤로가기 스와이프 수정 검증 (2026-10-30)
+
+- 실제 앱의 전체 Debug Simulator 빌드, 앱 TypeScript·lint, 최신 dev 기준 앱 Node 테스트 33개 통과.
+- `MapNavigationSnapshotChecks.swift`를 Simulator에서 실행해 WebView 탐색, history 유무에 따른 가장자리 터치, RTL, 제스처 비활성화와 반복 정리를 확인했다.
+- 리뷰 반영 후 같은 검사에서 scroll view를 다른 부모에 남겨 두고 제스처 종료 1초 후 캡처 제거·지도 복구, 복구 후 새 스와이프와 정상 취소의 즉시 정리를 확인했다. 캡처는 UIView 대역을 사용했다. 복구 검사는 수정 전 코드에서 실패하고 수정 후 통과했다.
+- iPhone 18 Pro / iOS 27.0의 실제 앱에서 네이버 SDK 인증·지도 타일·노선·차량 표시를 확인했다. 스와이프 녹화 프레임에서 지도·마커·네이버 로고가 웹 시트와 같은 거리로 이동하고, 취소 뒤 실제 지도 double-tap 확대가 다시 동작하는 것을 확인했다. 노선·차량 API는 기존 localhost fixture를 사용했다.
+- 실제 앱 XCUITest는 `testBackSwipeCancelAndBackLink`와 `testNativePanWebSheetAndDoubleTap` 2개 / 실패 0개, 49.584초로 통과했다. 지도 캡처의 실제 이동량이 30pt를 넘는지, 취소 후 지도 확대·뒤로가기 링크, 지도 pan·웹 시트 드래그·double-tap 확대를 검사했다. 이동량은 DEBUG 검증 상태에만 노출한다.
+- 끝까지 미는 스와이프의 자동 검사는 실제 앱과 수정 코드가 없는 기본 WebKit 대조 환경에서 모두 페이지 이동 없이 취소됐다. 자동 입력의 영향으로 추정하며 완료 동작은 실기기에서 확인해야 한다. 취소 복구와 이후 웹 뒤로가기 링크 동작은 `testBackSwipeCancelAndBackLink`로 따로 검사한다.

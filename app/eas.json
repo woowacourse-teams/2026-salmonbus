@@ -33,5 +33,12 @@
         "EXPO_PUBLIC_WEB_URL": "https://dev.salmonbus.com"
       }
     }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6827973564"
+      }
+    }
   }
 }
