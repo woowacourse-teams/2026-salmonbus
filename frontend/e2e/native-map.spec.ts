@@ -5,9 +5,11 @@ import type { BridgeEnvelope } from "../src/shared/bridge/bridge.types";
 import { NATIVE_MAP_CAPABILITIES } from "../src/shared/native-map/bridge";
 import type { NativeMapCommands, NativeMapEvent, NativeMapSession } from "../src/shared/native-map/protocol";
 import { test as favoritesTest } from "./fixtures/favorites";
+import { expectFocusRing, nextFocusKeyFor } from "./utils/focus-ring";
 
-const test = mapTest.extend<{ nativeReady: boolean }>({
+const test = mapTest.extend<{ nativeReady: boolean; appCapabilities: readonly string[] }>({
   nativeReady: [true, { option: true }],
+  appCapabilities: [NATIVE_MAP_CAPABILITIES, { option: true }],
 });
 const favoriteNativeTest = mergeTests(test, favoritesTest);
 
@@ -24,7 +26,7 @@ declare global {
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "no-preference" });
 
-test.beforeEach(async ({ page, nativeReady }) => {
+test.beforeEach(async ({ page, nativeReady, appCapabilities }) => {
   await page.addInitScript(
     ({ nativeReady, capabilities }) => {
       window.bridgeMessages = [];
@@ -53,7 +55,7 @@ test.beforeEach(async ({ page, nativeReady }) => {
         },
       };
     },
-    { nativeReady, capabilities: NATIVE_MAP_CAPABILITIES },
+    { nativeReady, capabilities: appCapabilities },
   );
 });
 
@@ -164,6 +166,40 @@ test("실제 transition 경계와 웹 버튼 영역을 전달하고 native 위�
   ).toBeNull();
 });
 
+test("native 지도에서 정류장이나 버스를 고르면 웹에서 키를 누른 뒤여도 정류장 줄에 테두리를 보이지 않는다", async ({
+  page,
+  browserName,
+}) => {
+  await open(page);
+  const row = (sequence: number) =>
+    page
+      .getByRole("region", { name: "판정보드 정류장 목록", exact: true })
+      .locator(`li[data-stop-sequence='${sequence}'] button[aria-expanded]`);
+  await test.step("웹에서 키를 누른 뒤 앱 지도에서 정류장 누르기", async () => {
+    await page.getByRole("button", { name: "현재 위치 보기", exact: true }).press("Shift");
+    await emit(page, { type: "stopPress", payload: { selection: { direction: "UP", sequence: 3 } } });
+    await page.clock.runFor(1_000);
+    await expectFocusRing(row(3), "hidden");
+  });
+  const vehicle = (await messages(page))
+    .filter((message) => message.type === "updateScene")
+    .at(-1)!
+    .payload.vehicles.find((item) => item.direction === "UP" && item.currentStopSequence !== 3)!;
+  const selection = { direction: vehicle.direction, sequence: vehicle.currentStopSequence };
+  await test.step("웹에서 키를 누른 뒤 앱 지도에서 다른 정류장의 버스 누르기", async () => {
+    await page.keyboard.press("Shift");
+    await emit(page, { type: "vehiclePress", payload: { key: vehicle.key, selection } });
+    await page.clock.runFor(1_000);
+    await expectFocusRing(row(selection.sequence), "hidden");
+  });
+  await test.step("키보드로 정류장 줄에 돌아오면 테두리", async () => {
+    const tabKey = nextFocusKeyFor(browserName);
+    await page.keyboard.press(`Shift+${tabKey}`);
+    await page.keyboard.press(tabKey);
+    await expectFocusRing(row(selection.sequence), "shown");
+  });
+});
+
 test("native 위치 권한 대기가 12초를 넘어도 결과를 받아 위치를 표시한다", async ({ page }) => {
   await open(page);
   const button = page.getByRole("button", { name: "현재 위치 보기", exact: true });
@@ -198,6 +234,7 @@ test("native 위치 조회 시간 초과와 권한 거부를 안내하고 재시
         { exact: true },
       ),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: "설정 열기", exact: true })).toHaveCount(0);
   }
   const errors: Error[] = [];
   page.on("pageerror", (error) => errors.push(error));
@@ -211,6 +248,56 @@ test("native 위치 조회 시간 초과와 권한 거부를 안내하고 재시
   await expect(button).toHaveCount(0);
   expect((await messages(page)).at(-1)?.type).toBe("unmount");
   expect(errors).toEqual([]);
+});
+
+test.describe("설정 화면을 열 수 있는 앱", () => {
+  test.use({ appCapabilities: [...NATIVE_MAP_CAPABILITIES, "settings.open"] });
+
+  test("위치 권한이 거부되면 안내를 남겨 두고 설정 열기로 앱에 설정 화면을 요청하거나 닫기로 닫는다", async ({
+    page,
+  }) => {
+    await open(page);
+    const locate = page.getByRole("button", { name: "현재 위치 보기", exact: true });
+    const notice = page.getByText("iPhone 설정에서 연어버스의 위치 권한을 허용해주세요", { exact: true });
+    const settingsRequests = async () =>
+      (await page.evaluate(() => window.bridgeMessages)).filter((message) => message.type === "settings.open");
+    const deny = async () => {
+      await locate.click();
+      const location = (await messages(page)).filter((message) => message.type === "location").at(-1)!;
+      await emit(page, { type: "locationResult", payload: { requestId: location.payload.requestId, error: "denied" } });
+      await expect(notice).toBeVisible();
+    };
+
+    await deny();
+    await page.clock.runFor(10_000);
+    await expect(notice).toBeVisible();
+    await page.getByRole("button", { name: "설정 열기", exact: true }).click();
+    expect(await settingsRequests()).toEqual([{ v: 1, type: "settings.open", payload: {} }]);
+    await expect(notice).toHaveCount(0);
+
+    await deny();
+    await page.getByRole("button", { name: "닫기", exact: true }).click();
+    await expect(notice).toHaveCount(0);
+    expect(await settingsRequests()).toHaveLength(1);
+  });
+
+  test("위치 권한 안내는 닫기를 왼쪽, 설정 열기를 오른쪽에 두고 Tab도 같은 순서로 옮겨 간다", async ({
+    page,
+    browserName,
+  }) => {
+    await open(page);
+    await page.getByRole("button", { name: "현재 위치 보기", exact: true }).click();
+    const location = (await messages(page)).filter((message) => message.type === "location").at(-1)!;
+    await emit(page, { type: "locationResult", payload: { requestId: location.payload.requestId, error: "denied" } });
+    const dismiss = page.getByRole("button", { name: "닫기", exact: true });
+    const settings = page.getByRole("button", { name: "설정 열기", exact: true });
+    await expect(settings).toBeVisible();
+    expect((await dismiss.boundingBox())!.x).toBeLessThan((await settings.boundingBox())!.x);
+    await dismiss.focus();
+    // WebKit은 Safari처럼 Option+Tab일 때만 버튼으로 초점을 옮긴다.
+    await page.keyboard.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+    await expect(settings).toBeFocused();
+  });
 });
 
 favoriteNativeTest("즐겨찾기 dialog를 열면 native 지도 입력을 차단하고 닫으면 복구한다", async ({ page, api }) => {

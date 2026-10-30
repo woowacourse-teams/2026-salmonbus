@@ -45,22 +45,7 @@ export function FavoritesNotice({ resource, onRetry, home = false }: FavoritesNo
           즐겨찾기를 불러오지 못했어요
         </p>
         <p className={styles.homeErrorDescription}>잠시 후 다시 시도해 주세요.</p>
-        <button type="button" className={styles.homeRetry} onClick={retry}>
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#D65B46"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8m0-5v5h-5" />
-          </svg>
-          다시 시도
-        </button>
+        <FavoritesRetryButton onRetry={retry}>다시 시도</FavoritesRetryButton>
       </div>
     );
   }
@@ -73,5 +58,26 @@ export function FavoritesNotice({ resource, onRetry, home = false }: FavoritesNo
         다시 확인하기
       </button>
     </div>
+  );
+}
+
+export function FavoritesRetryButton({ children, onRetry }: { children: string; onRetry: () => void }) {
+  return (
+    <button type="button" className={styles.homeRetry} onClick={onRetry}>
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#D65B46"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8m0-5v5h-5" />
+      </svg>
+      {children}
+    </button>
   );
 }

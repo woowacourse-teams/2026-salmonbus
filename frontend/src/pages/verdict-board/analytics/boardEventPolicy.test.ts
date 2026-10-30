@@ -95,7 +95,7 @@ function expandableStopAt(direction: Direction, sequence: number): ExpandableSto
   return stop;
 }
 
-const expandContext = { routeId: "R1", direction: "DOWN", rowPosition: 3, expandIndex: 2 } as const;
+const expandContext = { routeId: "R1", direction: "DOWN", rowPosition: 3, expandIndex: 2, source: "map" } as const;
 
 describe("stopExpandedPropertiesOf", () => {
   it("예보가 있는 정류장은 가장 가까운 버스의 등급과 거리, 카드에 보인 버스 수를 보낸다", () => {
@@ -129,7 +129,7 @@ describe("stopExpandedPropertiesOf", () => {
     expect(properties).not.toHaveProperty("forecast_status");
   });
 
-  it("정류장 정보와 목록 위치, 펼친 순서를 그대로 옮긴다", () => {
+  it("정류장 정보와 목록 위치, 펼친 순서, 펼친 곳을 그대로 옮긴다", () => {
     expect(stopExpandedPropertiesOf(expandableStopAt("DOWN", 4), expandContext)).toMatchObject({
       route_id: "R1",
       direction: "DOWN",
@@ -137,6 +137,7 @@ describe("stopExpandedPropertiesOf", () => {
       stop_sequence: 4,
       row_position: 3,
       expand_index: 2,
+      source: "map",
     });
   });
 });

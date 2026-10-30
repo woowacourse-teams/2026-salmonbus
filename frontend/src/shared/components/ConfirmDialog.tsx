@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react";
 import * as styles from "./ConfirmDialog.css";
 
 interface ConfirmDialogProps {
@@ -18,6 +18,7 @@ export function ConfirmDialog({
   titleClassName,
   fallbackFocus,
 }: ConfirmDialogProps) {
+  const titleId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -35,13 +36,13 @@ export function ConfirmDialog({
     <dialog
       ref={ref}
       className={`${styles.dialog} ${className ?? ""}`}
-      aria-labelledby="account-dialog-title"
+      aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
         onCancel();
       }}
     >
-      <h2 id="account-dialog-title" className={`${styles.dialogTitle} ${titleClassName ?? ""}`}>
+      <h2 id={titleId} className={`${styles.dialogTitle} ${titleClassName ?? ""}`}>
         {title}
       </h2>
       {children}

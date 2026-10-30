@@ -66,6 +66,14 @@ final class AppleClientAssertion {
         return new AppleClientAssertion(apple.teamId(), apple.clientId(), apple.keyId(), signer, clock);
     }
 
+    /**
+     * 같은 키로 다른 {@code client_id} 용 비밀을 만드는 발급기. 앱 번들 ID 로 코드를 교환·취소할 때 쓴다. 키는 그 번들 ID 의
+     * primary App ID 그룹에 묶여 있어야 애플이 받는다.
+     */
+    AppleClientAssertion forClient(String otherClientId) {
+        return new AppleClientAssertion(teamId, otherClientId, keyId, signer, clock);
+    }
+
     String issue() {
         Instant now = clock.instant();
         JWTClaimsSet claims = new JWTClaimsSet.Builder()

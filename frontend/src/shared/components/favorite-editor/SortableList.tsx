@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
+import { playHaptic } from "@/shared/haptic/haptic";
 import * as styles from "./SortableList.css";
 
 interface SortableItem {
@@ -22,6 +23,7 @@ interface PositionBox {
 interface DragSession {
   pointerId: number;
   from: number;
+  to: number;
   start: number;
   shift: number;
   boxes: PositionBox[];
@@ -42,6 +44,7 @@ export function SortableList<T extends SortableItem>({
   onMove,
 }: SortableListProps<T>) {
   const list = useRef<HTMLUListElement>(null);
+  const labelIdPrefix = useId();
   const session = useRef<DragSession | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const previous = useRef<Map<string, DOMRect> | null>(null);
@@ -122,7 +125,7 @@ export function SortableList<T extends SortableItem>({
                   type="button"
                   className={horizontal ? styles.groupGrip : styles.grip}
                   disabled={disabled || items.length < 2}
-                  aria-label={`${label(item)} 순서 변경`}
+                  aria-labelledby={`${labelIdPrefix}${item.id}`}
                   aria-describedby="favorite-sort-help"
                   onKeyDown={(event) => {
                     if (event.key === "Escape" && session.current) {
@@ -168,12 +171,14 @@ export function SortableList<T extends SortableItem>({
                     session.current = {
                       pointerId: event.pointerId,
                       from: index,
+                      to: index,
                       start: horizontal ? event.clientX : event.clientY,
                       boxes,
                       shift,
                     };
                     setDrag({ from: index, to: index, offset: 0, shift });
                     event.currentTarget.setPointerCapture(event.pointerId);
+                    playHaptic("impact");
                   }}
                   onPointerMove={(event) => {
                     const current = session.current;
@@ -199,12 +204,21 @@ export function SortableList<T extends SortableItem>({
                         distance = Math.abs(position - slot);
                       }
                     }
+                    if (to !== current.to) {
+                      current.to = to;
+                      playHaptic("selection");
+                    }
                     setDrag({ from: current.from, to, offset, shift: current.shift });
                   }}
                   onPointerUp={() => finish(true)}
                   onPointerCancel={() => finish(false)}
                   onLostPointerCapture={() => finish(false)}
-                />,
+                >
+                  {/* Session Replay는 속성 값을 가리지 못해서, 그룹 이름은 aria-label 대신 숨긴 글자로 둔다. */}
+                  <span id={`${labelIdPrefix}${item.id}`} hidden>
+                    {`${label(item)} 순서 변경`}
+                  </span>
+                </button>,
               )}
             </li>
           );

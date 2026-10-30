@@ -1,6 +1,7 @@
 import { requestJson, type ApiResult, type RequestOptions } from "./client";
-import { isAuthSession, isMember } from "./auth.schema";
-import type { AuthSession, Member } from "./auth.types";
+import type { NativeLoginProvider } from "../native-auth/nativeAuth.types";
+import { isAuthSession, isMember, isNativeNonce } from "./auth.schema";
+import type { AuthSession, Member, NativeCredential } from "./auth.types";
 
 let generation = 0;
 let refreshing: Promise<ApiResult<void>> | null = null;
@@ -101,6 +102,24 @@ export async function withdraw(): Promise<ApiResult<void | { startUrl: string }>
       Boolean(url.searchParams.get("ticket"))
     );
   });
+}
+
+/** 앱 네이티브 로그인 API(SAL-318)가 없는 서버는 404다. 웹은 그때 WebView 로그인으로 간다. */
+export async function issueNativeNonce(provider: NativeLoginProvider): Promise<ApiResult<{ nonce: string }>> {
+  return checked(await authRequest<unknown>(`/api/auth/${provider}/native/nonce`, { method: "POST" }), isNativeNonce);
+}
+
+export function signInWithIdToken(
+  provider: NativeLoginProvider,
+  credential: NativeCredential,
+): Promise<ApiResult<void>> {
+  return authRequest<void>(`/api/auth/${provider}/native`, { method: "POST", body: credential });
+}
+
+export async function withdrawAppleWithCode(authorizationCode: string): Promise<ApiResult<void>> {
+  generation += 1;
+  await refreshing;
+  return memberRequest<void>("/api/me/withdrawal/apple/native", { method: "POST", body: { authorizationCode } });
 }
 
 function checked<T>(result: ApiResult<unknown>, guard: (value: unknown) => value is T): ApiResult<T> {

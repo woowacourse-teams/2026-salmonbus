@@ -89,6 +89,32 @@ export const locationNotice = style({
   textAlign: "center",
   boxShadow: "0 2px 8px #00000015",
 });
+export const locationPromptText = style({ margin: 0 });
+export const locationPromptActions = style({
+  display: "flex",
+  justifyContent: "center",
+  gap: 8,
+  marginTop: 8,
+});
+const locationPromptButton = style({
+  minHeight: 36,
+  padding: "0 14px",
+  border: `1px solid ${vars.color.rowDivider}`,
+  borderRadius: 8,
+  background: vars.color.surface,
+  color: vars.color.textBody,
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+  selectors: {
+    "&:focus-visible": { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 2 },
+  },
+});
+export const locationSettingsButton = style([
+  locationPromptButton,
+  { borderColor: vars.color.brand, background: vars.color.brand, color: vars.color.onInk },
+]);
+export const locationDismissButton = locationPromptButton;
 export const stop = style({
   position: "relative",
   display: "grid",

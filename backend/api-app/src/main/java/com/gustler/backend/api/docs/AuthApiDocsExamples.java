@@ -74,6 +74,14 @@ public final class AuthApiDocsExamples {
         "requestId":"example-request"}
         """;
 
+    public static final String APP_LOGIN_NONCE = """
+        {"nonce":"example-nonce"}
+        """;
+
+    public static final String ENDPOINT_NOT_FOUND = """
+        {"code":"ENDPOINT_NOT_FOUND","message":"요청한 경로를 찾을 수 없습니다.","requestId":"example-request"}
+        """;
+
     private AuthApiDocsExamples() {
     }
 }

@@ -1,6 +1,7 @@
 package com.gustler.backend.api.http;
 
 import com.gustler.backend.api.account.token.BearerTokens;
+import com.gustler.backend.api.http.login.AppLogin;
 import com.gustler.backend.api.http.login.SocialLogin;
 import com.gustler.backend.api.http.token.TokenAuthentication;
 import jakarta.servlet.DispatcherType;
@@ -24,7 +25,8 @@ import tools.jackson.databind.ObjectMapper;
  * 보내는 우회를 막는다. 토큰 값은 헤더로만 받는다. 폼 파라미터로 받으면 헤더 없이 일반 폼 전송으로 도용할 수 있다.
  *
  * <p>CSRF 토큰은 쿠키로 인증하는 변경 요청에만 요구한다. 인증 쿠키가 없거나 {@code Authorization} 헤더로 인증하는 요청은
- * 다른 사이트가 도용할 수 있는 권한이 없다.
+ * 다른 사이트가 도용할 수 있는 권한이 없다. 예외는 앱 로그인 요청({@link AppLogin#isAppLoginRequest})이다. 로그인 전이라
+ * 쿠키가 없지만, 다른 사이트가 공격자 계정의 토큰으로 사용자를 로그인시키지 못하게 늘 요구한다.
  *
  * <p>세션 고정 보호는 끈다. 세션은 로그인 중에만 쓰는 임시 값이고 로그인하면 지우므로, 로그인 상태를 담은 세션이 없어
  * 고정 공격의 대상이 없다. 켜 두면 세션 ID 교체가 저장되기 전에 세션을 지우는 탓에 행이 만료까지 남는다.
@@ -64,7 +66,8 @@ public class ApiSecurityConfiguration {
             .csrf(csrf -> csrf
                 .csrfTokenRepository(csrfTokens)
                 .csrfTokenRequestHandler(new HeaderOnlyCsrfTokenRequestHandler())
-                .ignoringRequestMatchers(request -> !loginEnabled || !BearerTokens.usesAmbientCredentials(request)))
+                .ignoringRequestMatchers(request -> !loginEnabled
+                    || (!BearerTokens.usesAmbientCredentials(request) && !AppLogin.isAppLoginRequest(request))))
             .requestCache(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
             .httpBasic(AbstractHttpConfigurer::disable)

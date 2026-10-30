@@ -5,7 +5,7 @@ const require = createRequire(import.meta.url);
 const babelJest = require.resolve("babel-jest");
 
 const shared = {
-  roots: ["<rootDir>/src"],
+  roots: ["<rootDir>/src", "<rootDir>/scripts"],
   transform: {
     "^.+\\.[jt]sx?$": babelJest,
   },
@@ -22,7 +22,7 @@ export default {
       ...shared,
       displayName: "unit",
       testEnvironment: "node",
-      testMatch: ["<rootDir>/src/**/*.test.ts"],
+      testMatch: ["<rootDir>/src/**/*.test.ts", "<rootDir>/scripts/**/*.test.ts"],
     },
   ],
 };

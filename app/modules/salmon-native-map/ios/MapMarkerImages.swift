@@ -2,7 +2,7 @@ import UIKit
 
 // Sizes, colors and glyphs follow frontend/.../map/RouteMap.css.ts and naverMapAdapter.ts.
 enum MapMarkerImages {
-  static let stopColor = UIColor(red: 201/255, green: 90/255, blue: 80/255, alpha: 1)
+  static let stopColor = UIColor(red: 220/255, green: 120/255, blue: 102/255, alpha: 1)
   static let mutedColor = UIColor(red: 91/255, green: 100/255, blue: 114/255, alpha: 1)
   static let busColor = UIColor(red: 229/255, green: 61/255, blue: 77/255, alpha: 1)
   static let routeColor = UIColor(red: 237/255, green: 119/255, blue: 104/255, alpha: 0.95)
@@ -13,25 +13,28 @@ enum MapMarkerImages {
 
   static func stop(selected: Bool, active: Bool, boardingAllowed: Bool) -> UIImage {
     let size: CGFloat = selected ? 32 : 24
-    let border: CGFloat = selected ? 3 : 2
-    let color = active ? stopColor : mutedColor
+    let diameter: CGFloat = boardingAllowed ? (selected ? 20 : 16) : (selected ? 8 : 6)
+    let border: CGFloat = boardingAllowed ? (selected ? 4 : 2.5) : 0
+    let color = selected ? UIColor(red: 212/255, green: 105/255, blue: 83/255, alpha: 1)
+                         : active ? stopColor : mutedColor
     return UIGraphicsImageRenderer(size: CGSize(width: size + 12, height: size + 12)).image { context in
-      let circle = UIBezierPath(ovalIn: CGRect(x: 6 + border/2, y: 6 + border/2,
-                                             width: size - border, height: size - border))
-      context.cgContext.setShadow(offset: CGSize(width: 0, height: 1), blur: 4,
-                                  color: UIColor.black.withAlphaComponent(0.13).cgColor)
-      (selected ? stopColor : active ? .white : UIColor(white: 237/255, alpha: 1)).setFill()
-      circle.fill()
-      context.cgContext.setShadow(offset: .zero, blur: 0)
-      color.setStroke()
-      circle.lineWidth = border
-      circle.stroke()
-      let iconSize = (size - border * 2) * 0.65
-      // PNGs are rendered at 3x from the web's original SVGs, including bus-front.svg.
-      UIImage(named: boardingAllowed ? "stop-boarding" : "stop-nonboarding")?
-        .withTintColor(selected ? .white : color, renderingMode: .alwaysOriginal)
-        .draw(in: CGRect(x: 6 + (size - iconSize)/2, y: 6 + (size - iconSize)/2,
-                         width: iconSize, height: iconSize))
+      let rect = CGRect(x: (size + 12 - diameter)/2, y: (size + 12 - diameter)/2,
+                        width: diameter, height: diameter)
+      if selected {
+        context.cgContext.setShadow(offset: CGSize(width: 0, height: 2), blur: 8,
+                                    color: UIColor(red: 120/255, green: 68/255, blue: 56/255, alpha: 0.15).cgColor)
+        UIColor(red: 242/255, green: 221/255, blue: 213/255, alpha: 1).setFill()
+        UIBezierPath(ovalIn: rect.insetBy(dx: -5, dy: -5)).fill()
+        context.cgContext.setShadow(offset: .zero, blur: 0)
+        UIColor.white.setFill()
+        UIBezierPath(ovalIn: rect.insetBy(dx: -2, dy: -2)).fill()
+      }
+      color.setFill()
+      UIBezierPath(ovalIn: rect).fill()
+      if boardingAllowed {
+        (selected || active ? UIColor.white : UIColor(red: 237/255, green: 237/255, blue: 235/255, alpha: 1)).setFill()
+        UIBezierPath(ovalIn: rect.insetBy(dx: border, dy: border)).fill()
+      }
     }
   }
 

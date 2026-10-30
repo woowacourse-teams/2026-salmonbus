@@ -50,8 +50,14 @@ export function bridgeMessageFrom(raw: string): BridgeMessage | null {
   return { type: value.type, payload: value.payload };
 }
 
-/** 메시지를 웹에 넘기는 injectJavaScript 스크립트. 웹은 salmon:bridge CustomEvent로 받는다. */
-export function bridgeEventScriptFor(message: BridgeMessage): string {
+/**
+ * 메시지를 웹에 넘기는 injectJavaScript 스크립트. 웹은 salmon:bridge CustomEvent로 받는다.
+ * targetOrigin을 주면 스크립트가 실행될 때 열려 있는 문서가 그 origin일 때만 넘긴다.
+ * WebView는 로그인 제공자 화면도 여는데, 로그인 토큰 같은 값이 그 화면에 가면 안 된다.
+ */
+export function bridgeEventScriptFor(message: BridgeMessage, targetOrigin?: string): string {
   const envelope = scriptLiteralFrom(JSON.stringify({ v: 1, type: message.type, payload: message.payload }));
-  return `window.dispatchEvent(new CustomEvent(${scriptLiteralFrom(BRIDGE_EVENT)}, { detail: JSON.parse(${envelope}) })); true;`;
+  const dispatch = `window.dispatchEvent(new CustomEvent(${scriptLiteralFrom(BRIDGE_EVENT)}, { detail: JSON.parse(${envelope}) }));`;
+  if (targetOrigin === undefined) return `${dispatch} true;`;
+  return `if (window.location.origin === ${scriptLiteralFrom(targetOrigin)}) { ${dispatch} } true;`;
 }
