@@ -7,7 +7,7 @@ import { vars } from "@/shared/styles/tokens.css";
 const list = style({ display: "flex", gap: 12, margin: 0, padding: 0, listStyle: "none" });
 export const groups = style([list, { gap: 8, minHeight: 37, alignItems: "center" }]);
 export const cards = style([list, { flexDirection: "column" }]);
-const item = style({
+export const item = style({
   position: "relative",
   minWidth: 0,
   selectors: {
@@ -21,6 +21,9 @@ export const group = style([
     display: "flex",
     alignItems: "center",
     padding: "0 12px",
+    touchAction: "none",
+    userSelect: "none",
+    cursor: "grab",
     selectors: {
       '&:has([aria-pressed="true"])': { background: vars.color.liveBus, color: "white" },
     },

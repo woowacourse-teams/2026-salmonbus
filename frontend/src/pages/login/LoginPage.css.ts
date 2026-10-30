@@ -10,7 +10,7 @@ export const login = style({
   "@media": { [PHONE_MEDIA]: { maxWidth: "none" } },
   margin: "0 auto",
   minHeight: "100dvh",
-  padding: "calc(20px + env(safe-area-inset-top, 0px)) 32px calc(28px + env(safe-area-inset-bottom, 0px))",
+  padding: "calc(20px + env(safe-area-inset-top, 0px)) 32px calc(100px + env(safe-area-inset-bottom, 0px))",
   background: vars.color.brand,
   color: "white",
 });
