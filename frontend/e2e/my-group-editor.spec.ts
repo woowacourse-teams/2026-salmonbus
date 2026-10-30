@@ -112,6 +112,11 @@ test("새 대표 표시는 즉시 바뀌고 이전 대표 삭제는 순서 저�
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(mutations).toEqual(["order", "order", "delete", "delete"]);
+  await expect(
+    editor
+      .getByRole("status")
+      .filter({ hasText: "일부 순서는 저장됐어요. 아직 저장하지 못한 순서만 다시 저장할 수 있어요." }),
+  ).toHaveCount(0);
   await editor.getByRole("button", { name: "완료", exact: true }).click();
   await expect(editor).toHaveCount(0);
   expect(favorites.groups.map((group) => group.name)).toEqual(["통학"]);

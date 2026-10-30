@@ -25,7 +25,11 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
   const [saved, setSaved] = useState(groups);
   const [draft, setDraft] = useState(groups);
   const [deleting, setDeleting] = useState<FavoriteGroup | null>(null);
-  const { busy, error, setError, run, partial, removeGroup } = useFavoriteGroupDeletion(saved, draft, setSaved);
+  const { busy, error, setError, run, partial, setPartial, removeGroup } = useFavoriteGroupDeletion(
+    saved,
+    draft,
+    setSaved,
+  );
   const labelIdPrefix = useId();
   const done = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -44,6 +48,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
   async function remove() {
     if (!deleting || protectedGroup || resource.status !== "success") return;
     if (await removeGroup(deleting.id)) {
+      setPartial(false);
       setSaved((current) => current.filter((group) => group.id !== deleting.id));
       setDraft((current) => current.filter((group) => group.id !== deleting.id));
       setDeleting(null);
