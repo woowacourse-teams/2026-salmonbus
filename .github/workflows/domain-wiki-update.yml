@@ -1,0 +1,105 @@
+name: DOMAIN-WIKI-UPDATE
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: domain-wiki-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ATLASSIAN_EMAIL: ${{ secrets.ATLASSIAN_EMAIL }}
+      ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+      PYTHONPATH: tools/domain-wiki
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Clone Git Wiki
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.wiki.git" .domain-wiki/wiki
+      - name: Initialize managed Wiki documents
+        run: >-
+          python3 -m domain_wiki.wiki_bootstrap_cli
+          --wiki-directory .domain-wiki/wiki
+          --seed-directory tools/domain-wiki/wiki-seed
+          --result .domain-wiki/bootstrap-result.json
+      - name: Find the merged PR and discussion
+        id: context
+        env:
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          mkdir -p .domain-wiki
+          gh api "repos/${REPOSITORY}/commits/${SHA}/pulls" > .domain-wiki/pulls.json
+          jq '[.[] | select(.merged_at != null and .base.ref == "dev")][0] // {}' .domain-wiki/pulls.json > .domain-wiki/pr-full.json
+          jq '{title: (.title // ""), body: (.body // ""), number: .number, url: .html_url}' .domain-wiki/pr-full.json > .domain-wiki/pr.json
+          number="$(jq -r '.number // empty' .domain-wiki/pr-full.json)"
+          echo "number=${number}" >> "$GITHUB_OUTPUT"
+          if [[ -n "$number" ]]; then
+            gh api --paginate --slurp "repos/${REPOSITORY}/issues/${number}/comments" | jq 'add' > .domain-wiki/issue-comments.json
+            gh api --paginate --slurp "repos/${REPOSITORY}/pulls/${number}/comments" | jq 'add' > .domain-wiki/review-comments.json
+            gh api --paginate --slurp "repos/${REPOSITORY}/pulls/${number}/reviews" | jq 'add' > .domain-wiki/reviews.json
+            jq -s 'add' .domain-wiki/issue-comments.json .domain-wiki/review-comments.json .domain-wiki/reviews.json > .domain-wiki/discussion.json
+          else
+            printf '[]\n' > .domain-wiki/discussion.json
+          fi
+      - name: Check AI credentials
+        id: credentials
+        shell: bash
+        run: |
+          if [[ -n "$OPENAI_API_KEY" && -n "$ATLASSIAN_EMAIL" && -n "$ATLASSIAN_API_TOKEN" ]]; then
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+            echo 'Wiki seed applied; AI document review skipped until secrets are configured.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Review merged code and update approved Wiki text
+        if: ${{ steps.credentials.outputs.configured == 'true' && github.event_name == 'push' }}
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: >-
+          python3 -m domain_wiki.wiki_update_cli
+          --repository . --base "$BASE_SHA" --head "$HEAD_SHA"
+          --wiki-directory .domain-wiki/wiki
+          --seed-directory tools/domain-wiki/wiki-seed
+          --pull-request-context .domain-wiki/pr.json
+          --discussion .domain-wiki/discussion.json
+      - name: Commit and push Wiki changes
+        id: wiki
+        working-directory: .domain-wiki/wiki
+        shell: bash
+        run: |
+          if git diff --quiet && [[ -z "$(git status --short)" ]]; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git commit -m "docs: dev 머지 결과 반영 (${{ github.sha }})"
+          git push origin HEAD
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+      - name: Publish Wiki update result on the merged PR
+        if: ${{ steps.credentials.outputs.configured == 'true' && steps.context.outputs.number != '' && github.event_name == 'push' }}
+        env:
+          PR_NUMBER: ${{ steps.context.outputs.number }}
+        run: >-
+          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}"
+          --body-file .domain-wiki/output/wiki-comment.md

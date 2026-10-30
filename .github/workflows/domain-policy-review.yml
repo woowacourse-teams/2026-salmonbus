@@ -1,0 +1,67 @@
+name: DOMAIN-POLICY-REVIEW
+
+on:
+  pull_request_target:
+    branches: [dev]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: domain-policy-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ATLASSIAN_EMAIL: ${{ secrets.ATLASSIAN_EMAIL }}
+      ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      PYTHONPATH: tools/domain-wiki
+    steps:
+      # pull_request_target에서는 신뢰하는 base SHA의 자동화 코드만 실행한다.
+      # PR head는 git diff의 데이터로만 읽고 절대 실행하지 않는다.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Fetch PR head as untrusted data
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: git fetch --no-tags origin "pull/${PR_NUMBER}/head:refs/remotes/policy-review/head"
+      - name: Clone Git Wiki
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.wiki.git" .domain-wiki/wiki
+      - name: Read PR title and body
+        env:
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: >-
+          gh api "repos/${REPOSITORY}/pulls/${PR_NUMBER}"
+          --jq '{title: .title, body: (.body // "")}'
+          > .domain-wiki/pr.json
+      - name: Review changed code against active Wiki policies
+        env:
+          REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: >-
+          python3 -m domain_wiki.policy_issue_cli
+          --repository . --base "$BASE_SHA" --head "$HEAD_SHA"
+          --target-repository "$REPOSITORY" --source-url "$PR_URL"
+          --pull-request-context .domain-wiki/pr.json
+          --wiki-directory .domain-wiki/wiki
+      - name: Publish or update policy review comment
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: >-
+          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}"
+          --edit-last --create-if-none --body-file .domain-wiki/output/policy-comment.md

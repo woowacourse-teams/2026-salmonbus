@@ -1,0 +1,40 @@
+name: DOMAIN-WIKI-TOOLS-CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - tools/domain-wiki/**
+      - .github/workflows/domain-policy-review.yml
+      - .github/workflows/domain-wiki-tools-ci.yml
+      - .github/workflows/domain-wiki-update.yml
+  push:
+    branches: [dev, main]
+    paths:
+      - tools/domain-wiki/**
+      - .github/workflows/domain-policy-review.yml
+      - .github/workflows/domain-wiki-tools-ci.yml
+      - .github/workflows/domain-wiki-update.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: domain-wiki-tools-${{ github.event_name == 'pull_request' && github.ref || format('{0}-{1}', github.ref, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  domain-wiki-tools:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile Python sources
+        run: python3 -m compileall -q tools/domain-wiki/domain_wiki tools/domain-wiki/tests
+      - name: Run unit tests
+        env:
+          PYTHONPATH: tools/domain-wiki
+        run: python3 -m unittest discover -s tools/domain-wiki/tests -p 'test_*.py' -v
