@@ -36,6 +36,11 @@ module.exports = {
         test: /\.(woff2?|ttf|otf)$/i,
         type: "asset/resource",
       },
+      {
+        test: /\.md$/i,
+        include: path.resolve(__dirname, "../src/pages/privacy/editions"),
+        type: "asset/source",
+      },
     ],
   },
   plugins: [

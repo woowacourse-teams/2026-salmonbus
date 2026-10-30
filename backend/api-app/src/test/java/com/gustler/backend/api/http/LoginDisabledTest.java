@@ -46,6 +46,7 @@ class LoginDisabledTest {
             Arguments.of("GET", "/api/auth/apple/start"),
             Arguments.of("GET", "/api/auth/kakao/callback?code=code&state=state"),
             Arguments.of("GET", "/api/auth/apple/callback?code=code&state=state"),
+            Arguments.of("POST", "/api/auth/apple/notifications"),
             Arguments.of("POST", "/api/auth/refresh"),
             Arguments.of("POST", "/api/auth/logout"),
             Arguments.of("POST", "/api/auth/kakao/native/nonce"),

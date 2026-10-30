@@ -170,13 +170,10 @@ export function SortableList<T extends SortableItem>({
     const first = current.boxes[0];
     const last = current.boxes.at(-1);
     if (origin === undefined || first === undefined || last === undefined) return;
-    const offset = Math.max(
-      first.start - origin.start,
-      Math.min(
-        last.start + last.size - origin.start - origin.size,
-        (horizontal ? event.clientX : event.clientY) - current.start,
-      ),
-    );
+    const movement = (horizontal ? event.clientX : event.clientY) - current.start;
+    const offset = dropZone
+      ? movement
+      : Math.max(first.start - origin.start, Math.min(last.start + last.size - origin.start - origin.size, movement));
     const crossOffset = dropZone ? (horizontal ? event.clientY : event.clientX) - current.crossStart : 0;
     if (horizontal && drag === null && Math.hypot(offset, crossOffset) < 4) return;
     if (drag === null) playHaptic("impact");

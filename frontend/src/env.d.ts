@@ -1,3 +1,4 @@
+/// <reference types="webpack/module" />
 declare namespace NodeJS {
   interface ProcessEnv {
     readonly WEBPACK_NAVER_MAP_KEY_ID?: string;

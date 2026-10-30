@@ -38,7 +38,7 @@ test("하단 탭으로 홈과 마이페이지를 오가면 현재 메뉴를 표�
   expect((await indicator.boundingBox())!.x).toBe(start.x);
 });
 
-test("계정 하위 화면에는 탭을 유지하고 검색·판정 보드에는 표시하지 않는다", async ({ page, auth }) => {
+test("계정 하위 화면에는 탭을 유지하고 로그인·검색·판정 보드에는 표시하지 않는다", async ({ page, auth }) => {
   const nav = page.getByRole("navigation", { name: "주요 메뉴", exact: true });
   await page.goto("/mypage/nickname");
   await expect(page).toHaveTitle("닉네임 수정 | 연어버스");
@@ -57,9 +57,9 @@ test("계정 하위 화면에는 탭을 유지하고 검색·판정 보드에는
   await expect(page).toHaveTitle("로그인 | 연어버스");
   await expect(page.getByRole("link", { name: "연어버스 홈으로 이동", exact: true })).toHaveText("연어버스");
   await expect(page.getByRole("button", { name: "카카오로 계속하기", exact: true })).toBeVisible();
-  await expect(nav).toBeVisible();
-  await expect(nav.locator('[aria-current="page"]')).toHaveCount(0);
+  await expect(nav).toHaveCount(0);
   await page.getByRole("link", { name: "돌아가기", exact: true }).click();
   await expect(page).toHaveURL("/");
   await expect(page).toHaveTitle("연어버스");
+  await expect(nav.getByRole("link", { name: "홈", exact: true })).toHaveAttribute("aria-current", "page");
 });

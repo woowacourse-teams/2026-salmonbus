@@ -2,7 +2,7 @@ import type { RouteSummary } from "@/shared/api/routeForecast.types";
 import { isRecord } from "@/shared/utils/valueGuards";
 import { firstSeenTimesFor, type FirstSeenTimes } from "./newRoutePolicy";
 
-const STORAGE_KEY = "salmonbus.routeFirstSeen";
+export const ROUTE_FIRST_SEEN_KEY = "salmonbus.routeFirstSeen";
 
 type SeenRouteStorage = Pick<Storage, "getItem" | "setItem">;
 
@@ -16,9 +16,9 @@ export function recordSeenRoutes(
 ): FirstSeenTimes {
   try {
     const storage = openStorage();
-    const stored = firstSeenTimesFrom(storage.getItem(STORAGE_KEY));
+    const stored = firstSeenTimesFrom(storage.getItem(ROUTE_FIRST_SEEN_KEY));
     const next = firstSeenTimesFor(routes, stored, now);
-    if (next.size > stored.size) storage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(next)));
+    if (next.size > stored.size) storage.setItem(ROUTE_FIRST_SEEN_KEY, JSON.stringify(Object.fromEntries(next)));
     return next;
   } catch {
     return new Map();

@@ -3,8 +3,8 @@ import { failurePropertiesOf } from "@/shared/analytics/failureProperties";
 import { track } from "@/shared/analytics/track";
 import { createLatestRequestGate } from "@/shared/api/latestRequestGate";
 import { fetchRoutes } from "@/shared/api/routeForecast.api";
+import { recordSeenRoutes } from "@/shared/route-list/seenRouteStorage";
 import { searchViewFor, type RoutesState } from "./displayPolicy";
-import { recordSeenRoutes } from "./new-route/seenRouteStorage";
 
 export function useRouteSearch(initialInput: string) {
   const [input, setInput] = useState(initialInput);

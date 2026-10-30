@@ -159,3 +159,25 @@ iOS 앱이 애플·카카오 SDK로 로그인하고, 앱 WebView 안의 웹이 �
 - 앱을 열면 `GET /api/auth/session`을 부른다. `authenticated=false`이고 `refreshable=true`면 `POST /api/auth/refresh`를 한 번 부르고, 204면 다시 `session`을 부른다.
 - `/api/me` 아래 요청이 401이면 `refresh`를 한 번 부른 뒤 다시 요청한다. `refresh`도 401이면 로그아웃 상태로 본다.
 - 결과 쿼리(`login`, `withdrawn`, `withdraw`)는 안내를 보여 준 뒤 주소에서 지운다.
+
+## 애플 서버 간 알림
+
+이용자가 애플 설정에서 연어버스와의 연결을 끊거나 애플 계정을 지우면 애플 서버가 알린다. 프론트가 부르는 API가 아니어서 Swagger 명세에는 없다. 알림 주소는 애플 개발자 계정의 기본 App ID에 등록한다.
+
+`POST /api/auth/apple/notifications`, 본문은 `{"payload": "<애플이 서명한 JWT>"}`이다. 쿠키와 CSRF 토큰은 필요 없다.
+
+| 알림(`events.type`) | 처리 | 응답 |
+| --- | --- | --- |
+| `account-deleted`, `account-delete` | 그 회원을 탈퇴시킨다. 애플 계정이 이미 없으므로 애플 토큰 취소는 부르지 않는다 | 200 |
+| `consent-revoked` | 그 회원의 로그인 계통 중 `event_time` 전에 시작한 것을 모두 지워 모든 기기에서 로그아웃시킨다. 그 뒤에 다시 로그인한 기기는 남는다. 회원은 남긴다 | 200 |
+| `email-enabled`, `email-disabled`, 그 밖의 값 | 아무것도 하지 않는다 | 200 |
+| `events.sub`에 맞는 회원이 없음 | 아무것도 하지 않는다 | 200 |
+| 서명, 발급자, 대상, 형식 중 하나라도 틀림 | 아무것도 하지 않는다 | 400 `INVALID_REQUEST` |
+| 애플 공개키를 받지 못함 | 아무것도 하지 않는다 | 503 `SERVICE_UNAVAILABLE` |
+
+- 서명은 RS256이고 애플 공개키로 확인한다. 발급자(`iss`)는 `https://appleid.apple.com`, 대상(`aud`)은 웹 Services ID(`AUTH_APPLE_CLIENT_ID`)나 앱 번들 ID(`AUTH_APPLE_APP_ID`)다. 번들 ID를 비워 두면 대상이 번들 ID인 알림은 400이다.
+- 애플 알림에는 만료(`exp`)가 없어 요구하지 않는다. 있으면 지나지 않아야 한다.
+- `events`는 JSON 문자열이든 객체든 받는다. 안에 `type`과 `sub`가 있어야 한다.
+- 성공 응답은 본문이 없다. 같은 알림이 다시 와도 결과가 같다. 이미 탈퇴한 회원의 계정 삭제 알림은 회원이 없는 알림과 같다.
+- 로그인이나 애플 로그인이 꺼져 있으면 404 `ENDPOINT_NOT_FOUND`다.
+- 이미 발급된 액세스 토큰은 취소되지 않아 최대 15분 남는다. 탈퇴한 회원의 `/api/me` 아래 요청은 401이다.

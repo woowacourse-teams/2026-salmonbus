@@ -7,6 +7,9 @@ public interface WithdrawMember {
     /** 회원의 제공자 계정. 탈퇴했거나 없는 회원이면 비어 있다. */
     Optional<MemberIdentity> identityOf(UUID publicId);
 
+    /** 제공자 계정의 회원. 가입하지 않았거나 탈퇴한 계정이면 비어 있다. */
+    Optional<UUID> memberOf(MemberIdentity identity);
+
     /**
      * 회원을 지운다. 그 회원의 제공자 계정과 리프레시 토큰도 함께 지워져 모든 기기의 로그인이 끝난다.
      *

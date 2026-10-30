@@ -1,15 +1,11 @@
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import { newRouteIdsFor, type FirstSeenTimes } from "./new-route/newRoutePolicy";
-import { isInService, matchingRoutesFor, numberOrderedRoutesFor, type InServiceRoute } from "./routeSearchPolicy";
+import { listedRoutesFor, type FirstSeenTimes, type ListedRoute } from "@/shared/route-list/newRoutePolicy";
+import { matchingRoutesFor } from "./routeSearchPolicy";
 
 export type RoutesState =
   | { status: "loading"; routes?: never; firstSeenTimes?: never; checkedAt?: never }
   | { status: "error"; routes?: never; firstSeenTimes?: never; checkedAt?: never }
   | { status: "ready"; routes: RouteSummary[]; firstSeenTimes: FirstSeenTimes; checkedAt: number };
-
-export interface ListedRoute extends InServiceRoute {
-  isNew: boolean;
-}
 
 export type SearchView =
   | { kind: "empty"; routes?: never }
@@ -23,11 +19,7 @@ export function searchViewFor(routesState: RoutesState, input: string): SearchVi
   if (routesState.status === "error") return { kind: "error" };
   if (routesState.status === "loading") return { kind: "loading" };
   const { routes, firstSeenTimes, checkedAt } = routesState;
-  const newRouteIds = newRouteIdsFor(firstSeenTimes, checkedAt);
-  const listedRoutes = numberOrderedRoutesFor(routes.filter(isInService)).map((route) => ({
-    ...route,
-    isNew: newRouteIds.has(route.id),
-  }));
+  const listedRoutes = listedRoutesFor(routes, firstSeenTimes, checkedAt);
   if (input.trim() === "") {
     return listedRoutes.length > 0 ? { kind: "all", routes: listedRoutes } : { kind: "empty" };
   }

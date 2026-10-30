@@ -1,18 +1,25 @@
 import { useEffect, useEffectEvent, useRef } from "react";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
+import { RouteRow } from "@/shared/components/RouteRow";
+import type { ListedRoute } from "@/shared/route-list/newRoutePolicy";
 import * as buttonStyles from "@/shared/styles/button.css";
-import { noteHeadingLabelOf } from "@/shared/whats-new/whatsNewCopy";
+import { moreRoutesLabelOf, noteHeadingLabelOf } from "@/shared/whats-new/whatsNewCopy";
 import type { WhatsNewNote } from "@/shared/whats-new/whatsNewNotes";
+import type { WhatsNewCloseMethod } from "@/shared/whats-new/whatsNewPolicy";
 import * as styles from "./WhatsNewDialog.css";
+
+const MAX_SHOWN_ROUTES = 5;
 
 interface WhatsNewDialogProps {
   notes: readonly WhatsNewNote[];
-  onClose: () => void;
+  routes: readonly ListedRoute[];
+  onClose: (closeMethod: WhatsNewCloseMethod) => void;
+  onSelectRoute: (route: ListedRoute) => void;
 }
 
-export function WhatsNewDialog({ notes, onClose }: WhatsNewDialogProps) {
+export function WhatsNewDialog({ notes, routes, onClose, onSelectRoute }: WhatsNewDialogProps) {
   const notesList = useRef<HTMLDivElement>(null);
-  const closeFromBackdrop = useEffectEvent(onClose);
+  const closeFromBackdrop = useEffectEvent(() => onClose("backdrop"));
 
   useEffect(() => {
     const dialog = notesList.current?.closest("dialog");
@@ -42,8 +49,30 @@ export function WhatsNewDialog({ notes, onClose }: WhatsNewDialogProps) {
   }, []);
 
   return (
-    <ConfirmDialog title="새 소식이 있어요" className={styles.dialog} titleClassName={styles.title} onCancel={onClose}>
+    <ConfirmDialog
+      title="새 소식이 있어요"
+      className={styles.dialog}
+      titleClassName={styles.title}
+      onCancel={() => onClose("escape")}
+    >
       <div ref={notesList} className={styles.notes}>
+        {routes.length > 0 && (
+          <section aria-labelledby="whats-new-routes">
+            <h3 id="whats-new-routes" className={styles.routesTitle}>
+              새로 추가된 노선
+            </h3>
+            <ul className={styles.routes}>
+              {routes.slice(0, MAX_SHOWN_ROUTES).map((route) => (
+                <li key={route.id}>
+                  <RouteRow route={route} onSelect={() => onSelectRoute(route)} />
+                </li>
+              ))}
+            </ul>
+            {routes.length > MAX_SHOWN_ROUTES && (
+              <p className={styles.moreRoutes}>{moreRoutesLabelOf(routes.length - MAX_SHOWN_ROUTES)}</p>
+            )}
+          </section>
+        )}
         {notes.map((note) => (
           <section key={note.id} aria-labelledby={`whats-new-${note.id}`}>
             <h3 id={`whats-new-${note.id}`} className={styles.noteDate}>
@@ -59,7 +88,7 @@ export function WhatsNewDialog({ notes, onClose }: WhatsNewDialogProps) {
         ))}
       </div>
       <div className={styles.actions}>
-        <button className={buttonStyles.primary} type="button" onClick={onClose}>
+        <button className={buttonStyles.primary} type="button" onClick={() => onClose("closeButton")}>
           닫기
         </button>
       </div>
