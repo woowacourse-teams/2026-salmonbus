@@ -40,22 +40,36 @@ class PublicApiDocsContractTest {
     @Test
     void 익명_방문자에게_현재_구현된_HTTP_GET만_명세로_보인다() throws Exception {
         // given
-        String body = mockMvc.perform(get("/api/docs/openapi"))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.paths['/api/v1/routes'].get").exists())
-            .andExpect(jsonPath("$.paths['/api/v1/routes/{routeId}/board'].get").exists())
-            .andExpect(jsonPath("$.paths['/api/v1/routes/{routeId}/vehicles'].get").exists())
-            .andExpect(jsonPath("$.paths['/api/v1/routes/{routeId}/watch'].get").exists())
-            .andExpect(jsonPath("$.paths['/api/v2/stations/{stationId}/arrivals'].get").exists())
-            .andExpect(jsonPath("$.paths['/api/v2/routes/{routeId}/geometry'].get").exists())
-            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        String body =
+            mockMvc.perform(get("/api/docs/openapi"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/routes'].get").exists())
+                .andExpect(
+                    jsonPath("$.paths['/api/v1/routes/{routeId}/board'].get").exists())
+                .andExpect(
+                    jsonPath("$.paths['/api/v1/routes/{routeId}/vehicles'].get")
+                        .exists())
+                .andExpect(
+                    jsonPath("$.paths['/api/v1/routes/{routeId}/watch'].get").exists())
+                .andExpect(
+                    jsonPath("$.paths['/api/v1/routes/{routeId}/service-status'].get")
+                        .exists())
+                .andExpect(
+                    jsonPath("$.paths['/api/v2/stations/{stationId}/arrivals'].get")
+                        .exists())
+                .andExpect(
+                    jsonPath("$.paths['/api/v2/routes/{routeId}/geometry'].get")
+                        .exists())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
 
         // when
         JsonNode document = objectMapper.readTree(body);
         JsonNode paths = document.path("paths");
 
         // then
-        assertThat(paths.size()).isEqualTo(6);
+        assertThat(paths.size()).isEqualTo(7);
         assertThat(document.path("servers").get(0).path("url").asText()).isEqualTo("/");
         assertThat(document.path("components").path("schemas")
             .path("ForecastResponse").path("properties")

@@ -19,30 +19,34 @@ import org.springframework.transaction.support.TransactionTemplate;
 final class JdbcStatisticsInputExtractor {
     private static final int MAX_ROWS = 10_000;
     private static final long MAX_ID_SPAN = 10_000;
-    private static final String SQL = """
-        WITH candidates AS MATERIALIZED (
-            SELECT e.* FROM forecast_evaluation_result e
-            WHERE e.route_version_id=:route AND e.vehicle_observation_id>:after
-              AND e.vehicle_observation_id<=:through AND e.scored_at<=:until
-            ORDER BY e.vehicle_observation_id,e.target_stop_order LIMIT :limit
-        )
-        SELECT e.vehicle_observation_id,e.target_stop_order,e.scoring_state,
-            e.arrival_observation_id,e.seats_on_arrival,e.arrived_at,e.scored_at,
-            f.stops_to_target,s.boarding_allowed,
-            source.id AS source_id,source.route_version_id AS source_route,
-            source.vehicle_id AS source_vehicle,source.quality_direction AS source_direction,
-            source.remaining_seats AS source_seats,source.forecast_eligible AS source_usable,
-            arrival.id AS arrival_id,arrival.route_version_id AS arrival_route,
-            arrival.vehicle_id AS arrival_vehicle,arrival.quality_direction AS arrival_direction,
-            arrival.remaining_seats AS arrival_seats,arrival.forecast_eligible AS arrival_usable
-        FROM candidates e
-        LEFT JOIN seat_forecast f ON f.vehicle_observation_id=e.vehicle_observation_id
-            AND f.target_stop_order=e.target_stop_order
-        LEFT JOIN route_stop s ON s.route_version_id=e.route_version_id AND s.stop_order=e.target_stop_order
-        LEFT JOIN forecast_observation_quality source ON source.id=e.vehicle_observation_id
-        LEFT JOIN forecast_observation_quality arrival ON arrival.id=e.arrival_observation_id
-        ORDER BY e.vehicle_observation_id,e.target_stop_order
-        """;
+    private static final String SQL =
+        """
+            WITH candidates AS MATERIALIZED (
+                SELECT e.* FROM forecast_evaluation_result e
+                WHERE e.route_version_id=:route AND e.vehicle_observation_id>:after
+                  AND e.vehicle_observation_id<=:through AND e.scored_at<=:until
+                ORDER BY e.vehicle_observation_id,e.target_stop_order LIMIT :limit
+            )
+            SELECT e.vehicle_observation_id,e.target_stop_order,e.scoring_state,
+                e.arrival_observation_id,e.seats_on_arrival,e.arrived_at,e.scored_at,
+                f.stops_to_target,s.boarding_allowed,
+                source.id AS source_id,source.route_version_id AS source_route,
+                source.vehicle_id AS source_vehicle,source.quality_direction AS source_direction,
+            source.remaining_seats AS source_seats,
+            (source.forecast_eligible AND route_service_period_eligible(e.route_version_id,
+              source_batch.response_received_at,COALESCE(e.arrived_at,e.scored_at))) AS source_usable,
+                arrival.id AS arrival_id,arrival.route_version_id AS arrival_route,
+                arrival.vehicle_id AS arrival_vehicle,arrival.quality_direction AS arrival_direction,
+                arrival.remaining_seats AS arrival_seats,arrival.forecast_eligible AS arrival_usable
+            FROM candidates e
+            LEFT JOIN seat_forecast f ON f.vehicle_observation_id=e.vehicle_observation_id
+                AND f.target_stop_order=e.target_stop_order
+            LEFT JOIN route_stop s ON s.route_version_id=e.route_version_id AND s.stop_order=e.target_stop_order
+            LEFT JOIN forecast_observation_quality source ON source.id=e.vehicle_observation_id
+            LEFT JOIN forecast_observation_quality arrival ON arrival.id=e.arrival_observation_id
+            LEFT JOIN observation_batch source_batch ON source_batch.id=source.observation_batch_id
+            ORDER BY e.vehicle_observation_id,e.target_stop_order
+            """;
 
     private final JdbcClient jdbc;
     private final TransactionTemplate transaction;

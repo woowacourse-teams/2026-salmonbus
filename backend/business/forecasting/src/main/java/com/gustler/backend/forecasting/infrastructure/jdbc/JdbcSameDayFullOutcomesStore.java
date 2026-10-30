@@ -72,39 +72,44 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
     /**
      * 평가에 보관한 실제 도착 시각으로 당일 결과를 집계한다.
      *
-     * <p>현재 품질 조건을 통과하고 발행 당시 품질 버전도 일치하는 결과만 사용한다.
-     * 같은 노선의 이전 노선 버전도 포함하며, 지정한 기준 시각과 같은 순간의 도착은 포함한다.
+     * <p>현재 품질 조건을 통과하고 발행 당시 품질 버전도 일치하는 결과만 사용한다. 같은 노선의 이전 노선 버전도 포함하며, 지정한 기준 시각과 같은 순간의 도착은
+     * 포함한다.
      */
     // FK가 예보↔예측 관측, 도착 관측↔batch의 판본 일치를 보장한다.
     // 아래 EXISTS가 예측↔도착 판본도 일치시키므로 품질 버전은 대상 route에서 한 번 읽을 수 있다.
-    private static final String COUNT_FROM_SOURCE = """
-        SELECT forecast.stops_to_target,
-               count(*) AS row_count,
-               count(*) FILTER (WHERE evaluation.seats_on_arrival = 0) AS actual_full_count,
-               sum(forecast.seat_full_chance_raw) AS raw_full_chance_sum,
-               max(evaluation.arrived_at) AS settled_through
-        FROM forecast_evaluation evaluation
-        JOIN seat_forecast forecast
-          ON forecast.vehicle_observation_id = evaluation.vehicle_observation_id
-         AND forecast.target_stop_order = evaluation.target_stop_order
-        JOIN forecast_eligible_observation arrival
-          ON arrival.id = evaluation.arrival_observation_id
-        WHERE evaluation.route_version_id IN (
-                SELECT id FROM route_version WHERE route_id = :routeId)
-          AND evaluation.arrived_at >= :dayStart
-          AND evaluation.arrived_at < :dayEnd
-          AND evaluation.arrived_at <= :until
-          AND forecast.model_deployment_id = :modelDeploymentId
-          AND evaluation.scoring_state = 'SETTLED'
-          AND evaluation.seats_on_arrival IS NOT NULL
-          AND forecast.quality_revision = (SELECT quality_revision FROM route_data_quality WHERE route_id = :routeId)
-          AND EXISTS (
-              SELECT 1 FROM forecast_eligible_observation source
-              WHERE source.id = evaluation.vehicle_observation_id
-                AND %s)
-        GROUP BY forecast.stops_to_target
-        ORDER BY forecast.stops_to_target
-        """.formatted(EligibleObservationSql.ARRIVAL_MATCHES_SOURCE);
+    private static final String COUNT_FROM_SOURCE =
+        """
+            SELECT forecast.stops_to_target,
+                   count(*) AS row_count,
+                   count(*) FILTER (WHERE evaluation.seats_on_arrival = 0) AS actual_full_count,
+                   sum(forecast.seat_full_chance_raw) AS raw_full_chance_sum,
+                   max(evaluation.arrived_at) AS settled_through
+            FROM forecast_evaluation evaluation
+            JOIN seat_forecast forecast
+              ON forecast.vehicle_observation_id = evaluation.vehicle_observation_id
+             AND forecast.target_stop_order = evaluation.target_stop_order
+            JOIN forecast_eligible_observation arrival
+              ON arrival.id = evaluation.arrival_observation_id
+            WHERE evaluation.route_version_id IN (
+                    SELECT id FROM route_version WHERE route_id = :routeId)
+              AND evaluation.arrived_at >= :dayStart
+              AND evaluation.arrived_at < :dayEnd
+              AND evaluation.arrived_at <= :until
+              AND forecast.model_deployment_id = :modelDeploymentId
+              AND evaluation.scoring_state = 'SETTLED'
+              AND evaluation.seats_on_arrival IS NOT NULL
+              AND forecast.quality_revision = (SELECT quality_revision FROM route_data_quality WHERE route_id = :routeId)
+              AND EXISTS (
+                  SELECT 1 FROM forecast_eligible_observation source
+                  WHERE source.id = evaluation.vehicle_observation_id
+              AND route_service_period_eligible(source.route_version_id,
+                (SELECT batch.response_received_at FROM observation_batch batch WHERE batch.id=source.observation_batch_id),
+                evaluation.arrived_at)
+                    AND %s)
+            GROUP BY forecast.stops_to_target
+            ORDER BY forecast.stops_to_target
+            """
+            .formatted(EligibleObservationSql.ARRIVAL_MATCHES_SOURCE);
 
     private final JdbcClient jdbcClient;
 
@@ -119,11 +124,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
     }
 
     @Override
-    public List<SameDayFullOutcomeCount> findCounts(
-        final long routeId,
-        final long modelDeploymentId,
-        SeoulDay day
-    ) {
+    public List<SameDayFullOutcomeCount> findCounts(final long routeId, final long modelDeploymentId, SeoulDay day) {
         return jdbcClient.sql(SELECT_COUNTS)
             .param("routeId", routeId)
             .param("modelDeploymentId", modelDeploymentId)
@@ -154,9 +155,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
     }
 
     @Override
-    public void add(
-        SettledForecast settled
-    ) {
+    public void add(SettledForecast settled) {
         addCounts(settled.routeId(), settled.modelDeploymentId(), SeoulDay.containing(settled.arrivedAt()), List.of(
             new SameDayFullOutcomeCount(settled.stopsToTarget(), 1, fullCount(settled.wasFull()),
                 settled.rawFullChance(), settled.arrivedAt())));
@@ -205,10 +204,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
             .list();
     }
 
-    private static SameDayFullOutcomeCount countOf(
-        ResultSet resultSet,
-        final int rowNumber
-    ) throws SQLException {
+    private static SameDayFullOutcomeCount countOf(ResultSet resultSet, final int rowNumber) throws SQLException {
         return new SameDayFullOutcomeCount(
             resultSet.getInt("stops_to_target"),
             resultSet.getInt("row_count"),
@@ -217,15 +213,11 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
             instantOf(resultSet.getObject("settled_through", OffsetDateTime.class)));
     }
 
-    private static Instant instantOf(
-        OffsetDateTime timestamp
-    ) {
+    private static Instant instantOf(OffsetDateTime timestamp) {
         return timestamp.toInstant();
     }
 
-    private static OffsetDateTime offsetOf(
-        Instant timestamp
-    ) {
+    private static OffsetDateTime offsetOf(Instant timestamp) {
         return timestamp.atOffset(ZoneOffset.UTC);
     }
 

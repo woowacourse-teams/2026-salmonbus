@@ -3,6 +3,7 @@ package com.gustler.backend.maintenance;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 유지보수 명령과 옵션을 해석하고 필수 값·경로의 누락을 명령 오류로 전달한다.
@@ -11,17 +12,12 @@ final class CliArguments {
     private final String command;
     private final Map<String, String> options;
 
-    private CliArguments(
-        String command,
-        Map<String, String> options
-    ) {
+    private CliArguments(String command, Map<String, String> options) {
         this.command = command;
         this.options = Map.copyOf(options);
     }
 
-    static CliArguments parse(
-        String[] arguments
-    ) {
+    static CliArguments parse(String[] arguments) {
         if (arguments.length == 0 || arguments[0].startsWith("--")) {
             throw new MaintenanceException("COMMAND_REQUIRED");
         }
@@ -38,13 +34,21 @@ final class CliArguments {
         return new CliArguments(arguments[0], options);
     }
 
+    void requireOnlyOptions(Set<String> allowed) {
+        if (!allowed.containsAll(options.keySet())) {
+            throw new MaintenanceException("UNKNOWN_COMMAND_ARGUMENT");
+        }
+    }
+
+    String optional(String name, String fallback) {
+        return options.getOrDefault(name, fallback);
+    }
+
     String command() {
         return command;
     }
 
-    String required(
-        String name
-    ) {
+    String required(String name) {
         String value = options.get(name);
         if (value == null || value.isBlank()) {
             throw new MaintenanceException("MISSING_ARGUMENT_" + name.replace('-', '_').toUpperCase());
@@ -52,9 +56,7 @@ final class CliArguments {
         return value;
     }
 
-    Path requiredPath(
-        String name
-    ) {
+    Path requiredPath(String name) {
         return Path.of(required(name)).toAbsolutePath().normalize();
     }
 }

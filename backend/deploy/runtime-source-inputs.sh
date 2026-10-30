@@ -4,7 +4,7 @@
 
 runtime_source_inputs() {
   local component="${1:-}" module
-  local modules=(common)
+  local modules=(common business/route-operations)
   case "$component" in
     api)
       modules+=(api-app business/member)

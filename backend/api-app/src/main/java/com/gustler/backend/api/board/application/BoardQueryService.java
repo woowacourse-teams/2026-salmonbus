@@ -18,6 +18,8 @@ import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import com.gustler.backend.api.route.domain.Route;
 import com.gustler.backend.api.route.domain.RouteStatus;
+import com.gustler.backend.routeoperations.api.RouteOperation;
+import com.gustler.backend.routeoperations.api.RouteOperations;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -29,6 +31,7 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,17 +58,19 @@ public class BoardQueryService {
     private final BoardQueryRepository boardQueryRepository;
     private final BoardFreshnessPolicy freshnessPolicy;
     private final BoardCachePolicy cachePolicy;
+    private RouteOperations operations;
 
-    public BoardOverview getBoard(
-        RouteId routeId
-    ) {
+    @Autowired(required = false)
+    public void setOperations(RouteOperations value) {
+        operations = value;
+    }
+
+    public BoardOverview getBoard(RouteId routeId) {
         BoardReading reading = readBoard(routeId);
         return new BoardOverview(reading.board(), reading.cacheMaxAge());
     }
 
-    public BoardReading readBoard(
-        RouteId routeId
-    ) {
+    public BoardReading readBoard(RouteId routeId) {
         BoardSnapshot snapshot = boardQueryRepository.findSnapshot(routeId)
             .orElseThrow(RouteNotFoundException::new);
         ForecastModel activeModel = snapshot.activeModel()
@@ -88,7 +93,13 @@ public class BoardQueryService {
             throw new ServiceUnavailableException();
         }
 
-        List<StoredPrediction> predictions = publishedPredictions(observation);
+        final boolean publicForecast =
+            operations == null
+                || operations
+                    .find(routeId.value())
+                    .map(RouteOperation::serviceEnabled)
+                    .orElse(false);
+        List<StoredPrediction> predictions = visiblePredictions(observation, publicForecast);
         ForecastModel model = modelOf(predictions, activeModel);
         List<BoardVehicleObservation> vehicles = boardQueryRepository.findObservedVehicles(
             observation.batchId(), snapshot.routeVersionId());
@@ -99,10 +110,10 @@ public class BoardQueryService {
             .map(stop -> toStopState(stop, vehicles, predictionsByStop.getOrDefault(stop.sequence(), Map.of())))
             .toList();
 
-        RouteStatus status = RouteStatus.from(
-            snapshot.activeModel().isPresent(),
-            observation.forecastPublished()
-        );
+        RouteStatus status =
+            RouteStatus.from(
+                snapshot.activeModel().isPresent(),
+                publicForecast && observation.forecastPublished());
         Board board = new Board(
             toBoardRoute(snapshot, stops, status),
             observation.observedAt(),
@@ -118,16 +129,18 @@ public class BoardQueryService {
         );
     }
 
-    private static double seatAvailableProbability(
-        final double seatFullChance
-    ) {
+    private List<StoredPrediction> visiblePredictions(SnapshotObservation observation, final boolean publicForecast) {
+        if (publicForecast) {
+            return publishedPredictions(observation);
+        }
+        return List.of();
+    }
+
+    private static double seatAvailableProbability(final double seatFullChance) {
         return 1.0d - seatFullChance;
     }
 
-    private ForecastModel modelOf(
-        List<StoredPrediction> predictions,
-        ForecastModel activeModel
-    ) {
+    private ForecastModel modelOf(List<StoredPrediction> predictions, ForecastModel activeModel) {
         if (predictions.isEmpty()) {
             return activeModel;
         }
@@ -194,11 +207,7 @@ public class BoardQueryService {
         );
     }
 
-    private BoardRoute toBoardRoute(
-        BoardSnapshot snapshot,
-        List<BoardStop> stops,
-        RouteStatus status
-    ) {
+    private BoardRoute toBoardRoute(BoardSnapshot snapshot, List<BoardStop> stops, RouteStatus status) {
         Route route = snapshot.route();
         DepartureSchedule schedule = snapshot.schedule();
         return new BoardRoute(
@@ -214,20 +223,14 @@ public class BoardQueryService {
         );
     }
 
-    private List<DirectionInfo> directionsOf(
-        BoardSnapshot snapshot,
-        List<BoardStop> stops
-    ) {
+    private List<DirectionInfo> directionsOf(BoardSnapshot snapshot, List<BoardStop> stops) {
         if (snapshot.turnSequence() == null) {
             return List.of(singleDirectionOf(snapshot.schedule(), stops));
         }
         return roundTripDirectionsOf(snapshot, stops);
     }
 
-    private DirectionInfo singleDirectionOf(
-        DepartureSchedule schedule,
-        List<BoardStop> stops
-    ) {
+    private DirectionInfo singleDirectionOf(DepartureSchedule schedule, List<BoardStop> stops) {
         Set<BoardDirection> directions = stops.stream()
             .map(BoardStop::direction)
             .collect(Collectors.toCollection(() -> EnumSet.noneOf(BoardDirection.class)));
@@ -251,10 +254,7 @@ public class BoardQueryService {
         );
     }
 
-    private List<DirectionInfo> roundTripDirectionsOf(
-        BoardSnapshot snapshot,
-        List<BoardStop> stops
-    ) {
+    private List<DirectionInfo> roundTripDirectionsOf(BoardSnapshot snapshot, List<BoardStop> stops) {
         final int turnSequence = snapshot.turnSequence();
         Map<Integer, BoardStop> stopsBySequence = stops.stream()
             .collect(Collectors.toMap(
@@ -300,10 +300,7 @@ public class BoardQueryService {
         return turn == terminal;
     }
 
-    private void requireRoundTripDirections(
-        List<BoardStop> stops,
-        final int turnSequence
-    ) {
+    private void requireRoundTripDirections(List<BoardStop> stops, final int turnSequence) {
         final boolean inconsistent = stops.stream()
             .anyMatch(stop -> hasUnexpectedDirection(stop, turnSequence));
         if (inconsistent) {
@@ -318,15 +315,11 @@ public class BoardQueryService {
         return stop.direction() != BoardDirection.DOWN;
     }
 
-    private String directionName(
-        BoardStop terminal
-    ) {
+    private String directionName(BoardStop terminal) {
         return terminal.name() + " 방면";
     }
 
-    private String requireDepartureTime(
-        String value
-    ) {
+    private String requireDepartureTime(String value) {
         if (value == null || !DEPARTURE_TIME_FORMAT.matcher(value).matches()) {
             throw new ServiceUnavailableException();
         }

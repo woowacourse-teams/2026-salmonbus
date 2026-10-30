@@ -56,6 +56,17 @@ public final class MaintenanceApplication {
     static Object run(CliArguments arguments) {
         return switch (arguments.command()) {
             case "bundle-check" -> bundleCheck(arguments);
+            case "routes-list",
+                    "routes-status",
+                    "routes-register",
+                    "routes-collection",
+                    "routes-service",
+                    "routes-disable-both",
+                    "routes-retry",
+                    "routes-preview",
+                    "routes-notice",
+                    "routes-retry-geometry" ->
+                RouteOperationsCommand.run(arguments);
             case "quality-preview", "quality-rebuild", "quality-status" -> quality(arguments);
             default -> throw new MaintenanceException("UNKNOWN_COMMAND");
         };

@@ -19,10 +19,18 @@ public record RouteListResponse(
     }
 
     public static RouteListResponse from(RouteOverview overview) {
-        List<RouteSummary> routes = overview.routes()
-            .stream()
-            .map(currentRoute -> RouteSummary.from(currentRoute.route(), currentRoute.status()))
-            .toList();
+        List<RouteSummary> routes =
+            overview.routes().stream()
+                .map(
+                    currentRoute ->
+                        new RouteSummary(
+                            currentRoute.route().id(),
+                            currentRoute.route().displayName(),
+                            currentRoute.route().startStopName(),
+                            currentRoute.route().endStopName(),
+                            currentRoute.status(),
+                            currentRoute.serviceNotice()))
+                .toList();
 
         return new RouteListResponse(routes);
     }

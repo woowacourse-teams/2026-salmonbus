@@ -51,10 +51,22 @@ class RuntimeProcessSeparationTest {
     private static final Duration BOOT_TIMEOUT = Duration.ofMinutes(3);
     private static final Duration POLL = Duration.ofMillis(500);
     private static final Duration DISABLED_JOB_OBSERVATION = Duration.ofSeconds(2);
-    private static final Set<String> PROJECT_MODULES = Set.of(
-        "api-app", "worker-app", "maintenance-app", "common", "route-catalog",
-        "observations", "arrivals", "forecasting", "api-call-quota", "gbis-client", "operation-log", "member", "runtime-test"
-    );
+    private static final Set<String> PROJECT_MODULES =
+        Set.of(
+            "api-app",
+            "worker-app",
+            "maintenance-app",
+            "common",
+            "route-catalog",
+            "observations",
+            "arrivals",
+            "forecasting",
+            "api-call-quota",
+            "gbis-client",
+            "operation-log",
+            "member",
+            "runtime-test",
+            "route-operations");
     private static final int LOG_TAIL = 4000;
 
     private static final HttpClient HTTP = HttpClient.newBuilder()
@@ -213,16 +225,23 @@ class RuntimeProcessSeparationTest {
         List<String> libraries1 = projectLibraries(API_JAR);
 
         // then
-        assertThat(libraries1).containsExactlyInAnyOrder("common", "member");
+        assertThat(libraries1).containsExactlyInAnyOrder("common", "member", "route-operations");
 
         // when
         List<String> libraries2 = projectLibraries(WORKER_JAR);
 
         // then
-        assertThat(libraries2).containsExactlyInAnyOrder(
-            "common", "route-catalog", "observations", "arrivals", "forecasting", "api-call-quota", "gbis-client",
-            "operation-log"
-        );
+        assertThat(libraries2)
+            .containsExactlyInAnyOrder(
+                "common",
+                "route-catalog",
+                "observations",
+                "arrivals",
+                "forecasting",
+                "api-call-quota",
+                "gbis-client",
+                "operation-log",
+                "route-operations");
     }
 
     @Test
@@ -318,11 +337,7 @@ class RuntimeProcessSeparationTest {
         return builder.start();
     }
 
-    private static void awaitHealthy(
-        Process process,
-        final int port,
-        Path log
-    ) throws InterruptedException {
+    private static void awaitHealthy(Process process, final int port, Path log) throws InterruptedException {
         final long deadline = System.nanoTime() + BOOT_TIMEOUT.toNanos();
         while (System.nanoTime() < deadline) {
             if (!process.isAlive()) {
@@ -336,10 +351,7 @@ class RuntimeProcessSeparationTest {
         fail("%s 안에 health 가 안 떴다. 로그=%s".formatted(BOOT_TIMEOUT, tailOf(log)));
     }
 
-    private static int statusOf(
-        final int port,
-        String path
-    ) {
+    private static int statusOf(final int port, String path) {
         try {
             return HTTP.send(request(port, path), BodyHandlers.discarding()).statusCode();
         } catch (IOException e) {
@@ -350,10 +362,7 @@ class RuntimeProcessSeparationTest {
         }
     }
 
-    private static String bodyOf(
-        final int port,
-        String path
-    ) {
+    private static String bodyOf(final int port, String path) {
         try {
             return HTTP.send(request(port, path), BodyHandlers.ofString()).body();
         } catch (IOException e) {
@@ -364,10 +373,7 @@ class RuntimeProcessSeparationTest {
         }
     }
 
-    private static HttpRequest request(
-        final int port,
-        String path
-    ) {
+    private static HttpRequest request(final int port, String path) {
         return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
             .timeout(Duration.ofSeconds(5))
             .GET()
@@ -482,9 +488,7 @@ class RuntimeProcessSeparationTest {
         }
     }
 
-    private static String jarAt(
-        String property
-    ) {
+    private static String jarAt(String property) {
         String path = System.getProperty(property);
         if (path == null || !Files.isRegularFile(Path.of(path))) {
             throw new IllegalStateException(
@@ -494,9 +498,7 @@ class RuntimeProcessSeparationTest {
         return path;
     }
 
-    private static String tailOf(
-        Path log
-    ) {
+    private static String tailOf(Path log) {
         try {
             String whole = Files.readString(log);
 

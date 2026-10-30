@@ -1,0 +1,98 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "노선 서비스 운영상태",
+    "version": "1"
+  },
+  "paths": {
+    "/api/v1/routes/{routeId}/service-status": {
+      "get": {
+        "parameters": [
+          {
+            "name": "routeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{9}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "관측·모델 유무와 독립된 서비스 상태. Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteServiceStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RouteServiceStatus": {
+        "type": "object",
+        "required": [
+          "routeId",
+          "managed",
+          "state",
+          "forecastAllowed",
+          "collectionEnabled",
+          "reason",
+          "message",
+          "sourceUrl",
+          "checkedAt",
+          "validUntil"
+        ],
+        "properties": {
+          "routeId": {
+            "type": "string",
+            "pattern": "^[0-9]{9}$"
+          },
+          "managed": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ON",
+              "OFF",
+              "WARMING_UP",
+              "PENDING",
+              "READY",
+              "FAILED"
+            ]
+          },
+          "forecastAllowed": {
+            "type": "boolean"
+          },
+          "collectionEnabled": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "sourceUrl": {
+            "type": "string"
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

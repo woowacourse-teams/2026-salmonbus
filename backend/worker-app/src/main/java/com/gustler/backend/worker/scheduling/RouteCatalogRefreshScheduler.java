@@ -5,6 +5,8 @@ import static com.gustler.backend.diagnostics.Logfmt.quote;
 import com.gustler.backend.routecatalog.api.RefreshRouteCatalog;
 import com.gustler.backend.routecatalog.api.RefreshRouteGeometry;
 import com.gustler.backend.routecatalog.api.RefreshRouteGeometry.Outcome;
+import com.gustler.backend.routeoperations.api.RouteOperation;
+import com.gustler.backend.routeoperations.api.RouteOperations;
 import com.gustler.backend.worker.configuration.CollectionProperties;
 import com.gustler.backend.worker.configuration.RouteGeometryProperties;
 import java.time.Clock;
@@ -18,6 +20,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -36,6 +39,8 @@ public class RouteCatalogRefreshScheduler {
     private final Set<String> geometryRoutes;
     private final boolean includeCatalog;
     private final AtomicBoolean catalogGeometryPending = new AtomicBoolean();
+
+    private RouteOperations operations;
 
     public RouteCatalogRefreshScheduler(
         CollectionProperties properties,
@@ -69,7 +74,7 @@ public class RouteCatalogRefreshScheduler {
                     continue;
                 }
                 refreshed.add(routeId);
-                if (!includeCatalog && geometryRoutes.contains(routeId)) {
+                if (!includeCatalog && (geometryRoutes.contains(routeId) || operations != null)) {
                     enqueueGeometry(routeId, false);
                 }
             } catch (RuntimeException failure) {
@@ -95,29 +100,31 @@ public class RouteCatalogRefreshScheduler {
             return;
         }
         try {
-            geometryExecutor.execute(() -> {
-                try {
-                    Set<String> routes = new LinkedHashSet<>(geometryRoutes);
-                    routes.addAll(properties.routeIds());
+            geometryExecutor.execute(
+                () -> {
                     try {
-                        routes.addAll(catalog.currentGbisRouteIds());
-                    } catch (RuntimeException failure) {
-                        LOGGER.warn("event=route_geometry_catalog_lookup_failed exceptionType={}",
-                            quote(failure.getClass().getSimpleName()));
-                    }
-                    for (String routeId : routes) {
-                        if (!observed.contains(routeId)) {
-                            refreshGeometryCatalog(routeId);
-                            continue;
+                        Set<String> routes = new LinkedHashSet<>(geometryRoutes);
+                        routes.addAll(legacyOrObservedRouteIds());
+                        try {
+                            routes.addAll(catalog.currentGbisRouteIds());
+                        } catch (RuntimeException failure) {
+                            LOGGER.warn(
+                                "event=route_geometry_catalog_lookup_failed exceptionType={}",
+                                quote(failure.getClass().getSimpleName()));
                         }
-                        if (refreshed.contains(routeId)) {
-                            refreshGeometry(routeId);
+                        for (String routeId : routes) {
+                            if (!observed.contains(routeId)) {
+                                refreshGeometryCatalog(routeId);
+                                continue;
+                            }
+                            if (refreshed.contains(routeId)) {
+                                refreshGeometry(routeId);
+                            }
                         }
-                    }
-                } finally {
-                    catalogGeometryPending.set(false);
-                }
-            });
+                    } finally {
+                        catalogGeometryPending.set(false);
+                        }
+                });
         } catch (RejectedExecutionException full) {
             catalogGeometryPending.set(false);
             LOGGER.warn("event=route_geometry_refresh_deferred reason=QUEUE_FULL scope=CATALOG");
@@ -176,10 +183,28 @@ public class RouteCatalogRefreshScheduler {
         return Collections.unmodifiableSet(new LinkedHashSet<>(routeIds));
     }
 
+    @Autowired(required = false)
+    public void setOperations(RouteOperations operations) {
+        this.operations = operations;
+    }
+
     private List<String> observedRouteIds() {
+        if (operations != null) {
+            return operations.list().stream()
+                .filter(RouteOperation::canCollect)
+                .map(RouteOperation::routeId)
+                .toList();
+        }
         if (properties.enabled()) {
             return properties.routeIds();
         }
         return List.of();
+    }
+
+    private List<String> legacyOrObservedRouteIds() {
+        if (operations == null) {
+            return properties.routeIds();
+        }
+        return observedRouteIds();
     }
 }

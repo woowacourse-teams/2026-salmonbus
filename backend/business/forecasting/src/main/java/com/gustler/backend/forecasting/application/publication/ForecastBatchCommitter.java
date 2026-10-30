@@ -10,6 +10,7 @@ import com.gustler.backend.forecasting.domain.publication.ForecastPublicationRep
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.observations.api.CollectionInputs;
+import com.gustler.backend.routeoperations.api.RouteOperations;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +33,8 @@ public class ForecastBatchCommitter {
     private final EvaluationSamplingSelector sampling;
     private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
 
+    private RouteOperations operations;
+
     public ForecastBatchCommitter(
         ForecastPublicationRepository publications,
         EvaluationWorkStore work,
@@ -44,6 +47,11 @@ public class ForecastBatchCommitter {
         this.quality = quality;
         this.inputs = inputs;
         this.sampling = sampling;
+    }
+
+    @Autowired(required = false)
+    public void setOperations(RouteOperations value) {
+        operations = value;
     }
 
     @Autowired(required = false)
@@ -63,8 +71,16 @@ public class ForecastBatchCommitter {
      * 품질 판본이 같은 경우에만 발행·평가 작업·입력 확정을 함께 저장한다. 표본 기준과 성공 지표는 실제 커밋 후 갱신한다.
      */
     @Transactional(readOnly = false)
-    public int commit(PendingForecastBatch batch, ForecastPublication publication,
-        List<EvaluationSamplingSource> sources) {
+    public int commit(
+        PendingForecastBatch batch,
+        ForecastPublication publication,
+        List<EvaluationSamplingSource> sources
+    ) {
+        if (operations != null
+            && !operations.allowPublication(
+                batch.routeVersionId(), batch.responseReceivedAt())) {
+            return 0;
+        }
         quality.ensureExists(batch.routeVersionId());
         final long currentRevision = quality.current(batch.routeVersionId());
         if (currentRevision != publication.qualityRevision()) {
@@ -76,6 +92,9 @@ public class ForecastBatchCommitter {
 
         Selection selection = sampling.select(publication, sources);
         final boolean firstPublication = publications.save(selection.publication());
+        if (operations != null && selection.publication().predictionCount() > 0) {
+            operations.publicationCommitted(batch.routeVersionId(), batch.responseReceivedAt());
+        }
         List<Long> observations = selection.publication()
             .predictions()
             .stream()

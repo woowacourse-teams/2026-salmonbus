@@ -16,6 +16,7 @@ COPY --chown=developer:developer backend/worker-app/build.gradle ./worker-app/bu
 COPY --chown=developer:developer backend/maintenance-app/build.gradle ./maintenance-app/build.gradle
 COPY --chown=developer:developer backend/common/build.gradle ./common/build.gradle
 COPY --chown=developer:developer backend/business/route-catalog/build.gradle ./business/route-catalog/build.gradle
+COPY --chown=developer:developer backend/business/route-operations/build.gradle ./business/route-operations/build.gradle
 COPY --chown=developer:developer backend/business/observations/build.gradle ./business/observations/build.gradle
 COPY --chown=developer:developer backend/business/arrivals/build.gradle ./business/arrivals/build.gradle
 COPY --chown=developer:developer backend/business/forecasting/build.gradle ./business/forecasting/build.gradle

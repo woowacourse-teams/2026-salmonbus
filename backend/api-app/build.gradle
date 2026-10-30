@@ -4,6 +4,7 @@ plugins {
 }
 
 dependencies {
+    implementation project(':route-operations')
     implementation project(':common')
     implementation project(':member')
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
@@ -58,7 +59,7 @@ tasks.named('test') {
     }
 }
 
-// API 실행 경로에 로그인용 회원 모듈 외의 쓰기 업무나 다른 실행 앱이 간접 의존으로 들어오지 않게 확인한다.
+// API는 공통, 회원, 노선 운영 상태 모듈만 사용하며 다른 실행 앱이나 수집 업무에 의존하지 않는다.
 tasks.register('verifyRuntimeProjects') {
     doLast {
         def components = configurations.runtimeClasspath.incoming.resolutionResult.allComponents
@@ -73,7 +74,7 @@ tasks.register('verifyRuntimeProjects') {
             .findAll { it.id instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier }
             .collect { it.id.projectPath }
             .toSet()
-        def expected = [':api-app', ':common', ':member'] as Set
+        def expected = [':api-app', ':common', ':member', ':route-operations'] as Set
         if (projects != expected) {
             throw new GradleException("API runtime project dependencies must be ${expected}, but were ${projects}")
         }

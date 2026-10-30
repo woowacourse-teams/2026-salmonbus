@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -24,6 +25,8 @@ import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.domain.Route;
 import com.gustler.backend.api.route.domain.RouteStatus;
+import com.gustler.backend.routeoperations.api.RouteOperation;
+import com.gustler.backend.routeoperations.api.RouteOperations;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -73,6 +76,43 @@ class BoardQueryServiceTest {
             new BoardFreshnessPolicy(clock),
             new BoardCachePolicy(clock)
         );
+    }
+
+    @Test
+    void 서비스_OFF는_관측_차량을_남기고_좌석_예보를_숨긴다() {
+        given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
+        given(repository.findStops(1L)).willReturn(roundTripStops());
+        given(repository.findObservedVehicles(100L, 1L))
+            .willReturn(List.of(new BoardVehicleObservation("A", 1, 2, 2)));
+        RouteOperations operations = mock(RouteOperations.class);
+        RouteOperation state =
+            new RouteOperation(
+                ROUTE_ID.value(),
+                "READY",
+                true,
+                false,
+                false,
+                true,
+                "STRIKE",
+                "파업",
+                "",
+                2,
+                1,
+                Instant.EPOCH,
+                "",
+                Instant.EPOCH,
+                null);
+        given(operations.find(ROUTE_ID.value())).willReturn(Optional.of(state));
+        service.setOperations(operations);
+        Board board = service.getBoard(ROUTE_ID).board();
+        assertThat(board.vehiclesInService()).isEqualTo(4);
+        assertThat(
+                board.stops().stream()
+                    .flatMap(stop -> stop.approachingVehicles().stream())
+                    .map(ApproachingVehicle::forecast))
+            .allMatch(forecast -> forecast instanceof Unavailable);
+        assertThat(board.route().status()).isEqualTo(RouteStatus.PREPARING);
+        verify(repository, never()).findPredictions(org.mockito.ArgumentMatchers.anyLong());
     }
 
     @Test
@@ -638,9 +678,7 @@ class BoardQueryServiceTest {
             .isInstanceOf(NoRecentObservationException.class);
     }
 
-    private BoardSnapshot snapshotObserving(
-        SnapshotObservation observation
-    ) {
+    private BoardSnapshot snapshotObserving(SnapshotObservation observation) {
         return new BoardSnapshot(
             1L,
             route(),

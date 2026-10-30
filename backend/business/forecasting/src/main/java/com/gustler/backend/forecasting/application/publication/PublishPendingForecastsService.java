@@ -11,6 +11,8 @@ import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
 import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
+import com.gustler.backend.routeoperations.api.RouteOperation;
+import com.gustler.backend.routeoperations.api.RouteOperations;
 import jakarta.annotation.PostConstruct;
 import java.time.Clock;
 import java.time.Duration;
@@ -50,6 +52,8 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
     private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
     private Instant lastStaleWarningAt;
 
+    private RouteOperations operations;
+
     public PublishPendingForecastsService(
         VehicleTrajectoryQuery vehicleTrajectoryQuery,
         RouteVersionQuery routeVersions,
@@ -66,6 +70,11 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
         this.forecastBatchWriter = forecastBatchWriter;
         this.properties = properties;
         this.clock = clock;
+    }
+
+    @Autowired(required = false)
+    public void setOperations(RouteOperations value) {
+        operations = value;
     }
 
     @Autowired(required = false)
@@ -124,11 +133,7 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
         });
     }
 
-    private boolean writeForecastsOfRouteInTick(
-        final long routeVersionId,
-        Instant notBefore,
-        RuntimeSnapshot runtime
-    ) {
+    private boolean writeForecastsOfRouteInTick(final long routeVersionId, Instant notBefore, RuntimeSnapshot runtime) {
         try {
             return WorkerOperationLog.measure("forecast_route", routeVersionId,
                 () -> writeForecastsOfCoveredRoute(routeVersionId, notBefore, runtime));
@@ -144,6 +149,18 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
     ) {
         RouteStops stops = WorkerOperationLog.measure("forecast_stops", routeVersionId,
             () -> routeStops.readStops(routeVersionId));
+        if (operations != null) {
+            Optional<RouteOperation> operation = operations.find(stops.sourceRouteId());
+            if (operation.isEmpty()) {
+                return false;
+            }
+            boolean supported =
+                runtime.covers(stops.sourceRouteId()) && runtime.model().supportsRoute(stops);
+            operations.modelResult(stops.sourceRouteId(), supported);
+            if (!operation.get().canGenerate()) {
+                return false;
+            }
+        }
         if (!runtime.covers(stops.sourceRouteId())) {
             return false;
         }
@@ -155,19 +172,12 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
         return true;
     }
 
-    private Optional<Instant> leftBehindAt(
-        final long routeVersionId,
-        Instant from,
-        Instant until
-    ) {
+    private Optional<Instant> leftBehindAt(final long routeVersionId, Instant from, Instant until) {
         return WorkerOperationLog.measure("forecast_stale_batches", routeVersionId,
             () -> vehicleTrajectoryQuery.findOldestLeftBehindAt(routeVersionId, from, until));
     }
 
-    private void warnIfLeftBehind(
-        Instant oldestLeftBehind,
-        Instant now
-    ) {
+    private void warnIfLeftBehind(Instant oldestLeftBehind, Instant now) {
         if (oldestLeftBehind == null) {
             lastStaleWarningAt = null;
             return;
@@ -180,10 +190,7 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
                 + "관측 시각={}", oldestLeftBehind.atZone(clock.getZone()));
     }
 
-    private static Instant olderOf(
-        Instant kept,
-        Optional<Instant> candidate
-    ) {
+    private static Instant olderOf(Instant kept, Optional<Instant> candidate) {
         if (candidate.isEmpty()) {
             return kept;
         }

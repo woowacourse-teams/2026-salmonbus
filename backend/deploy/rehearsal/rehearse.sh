@@ -229,7 +229,8 @@ for runtime_path in api-app/src/main/java/Marker.java api-app/src/main/resources
   business/member/build.gradle; do
   check_runtime_change "$runtime_path" changed unchanged
 done
-for runtime_path in common/src/main/java/Marker.java common/src/main/resources/db/migration/V17__fixture.sql \
+for runtime_path in business/route-operations/src/main/java/Marker.java business/route-operations/src/main/resources/policy.properties \
+  business/route-operations/build.gradle common/src/main/java/Marker.java common/src/main/resources/db/migration/V17__fixture.sql \
   common/build.gradle build.gradle settings.gradle gradle.properties gradle/wrapper/gradle-wrapper.properties \
   gradle/libs.versions.toml deploy/runtime-source-inputs.sh; do
   check_runtime_change "$runtime_path" changed changed

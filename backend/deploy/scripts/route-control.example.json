@@ -1,0 +1,12 @@
+{
+  "java": "/usr/bin/java",
+  "jar": "/REPLACE/maintenance-app.jar",
+  "maintenanceConfig": "/etc/salmonbus/routes.properties",
+  "databaseIdentity": "REPLACE_WITH_ROUTES_STATUS_DATABASE_IDENTITY",
+  "routes": {
+    "5600": "228000184",
+    "4000": "200000314",
+    "3330": "204000057"
+  },
+  "ready": false
+}

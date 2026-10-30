@@ -158,3 +158,6 @@ management:
   endpoint:
     health:
       show-details: never
+
+route-operations:
+  enabled: ${ROUTE_OPERATIONS_ENABLED:false}

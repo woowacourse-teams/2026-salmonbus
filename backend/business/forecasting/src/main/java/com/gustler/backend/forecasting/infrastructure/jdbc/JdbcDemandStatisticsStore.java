@@ -152,12 +152,11 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
             ) vehicles
             CROSS JOIN LATERAL (
                 SELECT observation.remaining_seats
-                FROM vehicle_observation observation
+                FROM forecast_eligible_observation observation
                 JOIN observation_batch batch ON batch.id=observation.observation_batch_id
                 WHERE observation.route_version_id=:version AND observation.vehicle_id=vehicles.vehicle_id
                   AND observation.remaining_seats IS NOT NULL
                   AND batch.response_received_at<=:dataUntil
-                  AND EXISTS(SELECT 1 FROM forecast_eligible_observation eligible WHERE eligible.id=observation.id)
                 ORDER BY observation.remaining_seats DESC LIMIT 1
             ) capacity
             """).param("version", routeVersionId).param("inputUntilId", inputUntilId)

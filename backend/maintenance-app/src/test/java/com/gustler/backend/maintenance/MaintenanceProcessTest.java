@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipEntry;
@@ -32,10 +33,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @Testcontainers
@@ -59,6 +61,150 @@ class MaintenanceProcessTest {
     private Path directory;
 
     private int processSequence;
+
+    @Test
+    void 노선_운영_실제_JAR은_등록_재시도와_내용_충돌을_구분한다() throws Exception {
+        Database database = database(true);
+        database.jdbc()
+            .sql(
+                "INSERT INTO route_operation_runtime(singleton,collection_enabled,forecast_enabled,maximum_collection_routes) VALUES(true,true,true,20)")
+            .update();
+        String id = "228000184";
+        String request = "8a6c430b-b11b-4112-b3bb-d646ed1a499e";
+        Result first =
+            execute(
+                "routes-register",
+                "--config",
+                database.configuration().toString(),
+                "--route-id",
+                id,
+                "--actor",
+                "test",
+                "--request-id",
+                request);
+        assertThat(first.exitCode()).isZero();
+        assertThat(JSON.readTree(first.stdout()).at("/result/registrationState").asString())
+            .isEqualTo("PENDING");
+        Result retry =
+            execute(
+                "routes-register",
+                "--config",
+                database.configuration().toString(),
+                "--route-id",
+                id,
+                "--actor",
+                "test",
+                "--request-id",
+                request);
+        assertThat(retry.exitCode()).isZero();
+        Result different =
+            execute(
+                "routes-register",
+                "--config",
+                database.configuration().toString(),
+                "--route-id",
+                id,
+                "--actor",
+                "different-operator",
+                "--request-id",
+                request);
+        assertThat(different.exitCode()).isEqualTo(1);
+        assertThat(JSON.readTree(different.stderr()).path("code").asString())
+            .isEqualTo("REQUEST_ID_REUSED");
+        Result preview =
+            execute(
+                "routes-status",
+                "--config",
+                database.configuration().toString(),
+                "--route-id",
+                id);
+        assertThat(preview.exitCode()).isZero();
+        assertThat(JSON.readTree(preview.stdout()).at("/result/preview/state").asString())
+            .isEqualTo("PENDING");
+        assertThat(
+                JSON.readTree(preview.stdout())
+                    .at("/result/preview/operation/serviceEnabled")
+                    .asBoolean())
+            .isFalse();
+    }
+
+    @Test
+    void 노선_운영_실제_JAR의_수집과_서비스_ON_OFF를_확인한다() throws Exception {
+        Database database = database(true);
+        database.jdbc()
+            .sql(
+                "INSERT INTO route_operation_runtime(singleton,collection_enabled,forecast_enabled,maximum_collection_routes) VALUES(true,true,true,20)")
+            .update();
+        String id = "228000184";
+        Result registered =
+            execute(
+                "routes-register",
+                "--config",
+                database.configuration().toString(),
+                "--route-id",
+                id,
+                "--actor",
+                "test",
+                "--request-id",
+                UUID.randomUUID().toString());
+        assertThat(registered.exitCode()).isZero();
+        // 명령 경계만 검증하므로 등록 완료와 worker heartbeat는 테스트 전제 자료로 준비한다.
+        database.jdbc()
+            .sql(
+                "UPDATE route_operation SET registration_state='READY',collection_enabled=false,service_requested=false WHERE source_route_id=?")
+            .param(id)
+            .update();
+        long revision = JSON.readTree(registered.stdout()).at("/result/revision").asLong();
+        for (String[] step :
+            List.of(
+                new String[] {"routes-collection", "true"},
+                new String[] {"routes-service", "true"},
+                new String[] {"routes-service", "false"},
+                new String[] {"routes-collection", "false"})) {
+            Result changed =
+                execute(
+                    step[0],
+                    "--config",
+                    database.configuration().toString(),
+                    "--route-id",
+                    id,
+                    "--actor",
+                    "test",
+                    "--request-id",
+                    UUID.randomUUID().toString(),
+                    "--expected-revision",
+                    Long.toString(revision),
+                    "--enabled",
+                    step[1],
+                    "--reason",
+                    "MANUAL",
+                    "--message",
+                    "local command verification");
+            assertThat(changed.exitCode())
+                .as(step[0] + " " + step[1] + ": " + changed.stderr())
+                .isZero();
+            JsonNode operation = JSON.readTree(changed.stdout()).path("result");
+            revision++;
+            assertThat(operation.path("revision").asLong()).isEqualTo(revision);
+            assertThat(
+                    operation
+                        .path(
+                            Map.of("routes-collection", "collectionEnabled", "routes-service", "serviceRequested").get(step[0]))
+                        .asBoolean())
+                .isEqualTo(Boolean.parseBoolean(step[1]));
+            assertThat(operation.path("serviceEnabled").asBoolean()).isFalse();
+        }
+        Result status =
+            execute(
+                "routes-status",
+                "--config",
+                database.configuration().toString(),
+                "--route-id",
+                id);
+        assertThat(status.exitCode()).isZero();
+        assertThat(JSON.readTree(status.stdout()).at("/result/preview/state").asString())
+            .isEqualTo("OFF");
+    }
 
     @Test
     void 폐기한_이관_명령은_실제_JAR에서도_종료코드_1로_거절한다() throws Exception {
