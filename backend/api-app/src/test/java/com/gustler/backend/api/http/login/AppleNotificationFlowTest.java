@@ -13,6 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Date;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -69,6 +70,29 @@ class AppleNotificationFlowTest {
         jdbcClient.sql("DELETE FROM member").update();
         jdbcClient.sql("DELETE FROM provider_unlink").update();
         jdbcClient.sql("DELETE FROM SPRING_SESSION").update();
+    }
+
+    @Test
+    void 연결을_끊은_뒤_다시_로그인한_기기는_늦게_온_연결_해제_알림에도_로그인이_이어진다() throws Exception {
+        // given
+        LoginBrowser before = signedIn(SUBJECT);
+        Instant revokedAt = startedAtOfOnlyFamily().plusMillis(1);
+        LoginBrowser after = signedIn(SUBJECT);
+
+        // when
+        HttpResponse<String> actual = send(notification("consent-revoked", SUBJECT, revokedAt));
+        HttpResponse<String> replayed = send(notification("consent-revoked", SUBJECT, revokedAt));
+
+        // then
+        HttpResponse<String> beforeRefresh = before.postJson("/api/auth/refresh", "{}");
+        HttpResponse<String> afterRefresh = after.postJson("/api/auth/refresh", "{}");
+        assertSoftly(softly -> {
+            softly.assertThat(actual.statusCode()).isEqualTo(HttpStatus.OK.value());
+            softly.assertThat(replayed.statusCode()).isEqualTo(HttpStatus.OK.value());
+            softly.assertThat(beforeRefresh.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            softly.assertThat(afterRefresh.statusCode()).isEqualTo(HttpStatus.OK.value());
+            softly.assertThat(count("refresh_token")).isEqualTo(1);
+        });
     }
 
     @ParameterizedTest
@@ -300,17 +324,29 @@ class AppleNotificationFlowTest {
     }
 
     private static Map<String, Object> events(String type, String subject) {
-        return Map.of("type", type, "sub", subject, "event_time", Instant.now().getEpochSecond());
+        return events(type, subject, Instant.now());
+    }
+
+    private static Map<String, Object> events(String type, String subject, Instant occurredAt) {
+        return Map.of("type", type, "sub", subject, "event_time", occurredAt.toEpochMilli());
     }
 
     /** 실제 알림처럼 {@code events} 를 JSON 문자열로 넣는다. */
     private Consumer<JWTClaimsSet.Builder> withEvents(String type, String subject) {
-        String events = objectMapper.writeValueAsString(events(type, subject));
-        return claims -> claims.claim("events", events);
+        return withEvents(events(type, subject));
+    }
+
+    private Consumer<JWTClaimsSet.Builder> withEvents(Map<String, Object> events) {
+        String json = objectMapper.writeValueAsString(events);
+        return claims -> claims.claim("events", json);
     }
 
     private String notification(String type, String subject) throws JOSEException {
         return apple.notification(withEvents(type, subject), false);
+    }
+
+    private String notification(String type, String subject, Instant occurredAt) throws JOSEException {
+        return apple.notification(withEvents(events(type, subject, occurredAt)), false);
     }
 
     private HttpResponse<String> send(String payload) throws IOException, InterruptedException {
@@ -336,6 +372,13 @@ class AppleNotificationFlowTest {
 
     private String code(HttpResponse<String> response) {
         return objectMapper.readTree(response.body()).path("code").asString();
+    }
+
+    private Instant startedAtOfOnlyFamily() {
+        return jdbcClient.sql("SELECT started_at FROM refresh_token")
+            .query(OffsetDateTime.class)
+            .single()
+            .toInstant();
     }
 
     private long count(String table) {

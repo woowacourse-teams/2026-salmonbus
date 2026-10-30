@@ -41,6 +41,9 @@ public interface RefreshTokenRepository {
     /** 회원의 계통을 모두 지우고 지운 개수를 돌려준다. 회원이 없으면 0 이다. */
     int deleteAllOf(UUID publicId);
 
+    /** 회원의 계통 중 {@code time} 전에 시작한 것을 지우고 지운 개수를 돌려준다. 회원이 없으면 0 이다. */
+    int deleteAllOfStartedBefore(UUID publicId, OffsetDateTime time);
+
     /** {@code now} 보다 먼저 만료된 계통을 {@code limit} 개까지 지우고 지운 개수를 돌려준다. */
     int deleteExpired(OffsetDateTime now, int limit);
 }

@@ -13,6 +13,8 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -39,7 +41,8 @@ import tools.jackson.databind.ObjectMapper;
  * 알림에는 만료가 없어 요구하지 않고, 있으면 지나지 않았는지만 본다.
  *
  * <p>{@code events} 는 애플 문서에는 객체로 나오지만 JSON 문자열로 온다는 보고가 있어 둘 다 읽는다. 안에 {@code type} 과
- * {@code sub} 가 있어야 한다.
+ * {@code sub} 가 있어야 한다. 알림 시각 {@code event_time} 은 애플 문서 예시에는 초로, 실제 알림에는 밀리초로 온다는 보고가
+ * 있어 크기로 나눠 읽는다. 없으면 받은 시각으로 본다.
  *
  * <p>공개키는 캐시하고, 처음 보는 키 ID 때문에 다시 받는 일은 {@link #JWK_REFRESH_INTERVAL} 에 한 번으로 묶는다. 위조
  * 알림이 키 ID 를 바꿔 가며 들어와도 애플 호출이 늘지 않게 하려는 것이다.
@@ -51,13 +54,16 @@ final class AppleNotificationVerifier {
     private static final int READ_TIMEOUT_MILLIS = 5_000;
     private static final int JWK_SET_SIZE_LIMIT_BYTES = 64 * 1024;
     private static final String EVENTS = "events";
+    private static final long SMALLEST_EPOCH_MILLI = 100_000_000_000L;
 
     private final NimbusJwtDecoder decoder;
     private final ObjectMapper objectMapper;
+    private final Clock clock;
 
-    private AppleNotificationVerifier(NimbusJwtDecoder decoder, ObjectMapper objectMapper) {
+    private AppleNotificationVerifier(NimbusJwtDecoder decoder, ObjectMapper objectMapper, Clock clock) {
         this.decoder = decoder;
         this.objectMapper = objectMapper;
+        this.clock = clock;
     }
 
     static AppleNotificationVerifier create(
@@ -74,7 +80,7 @@ final class AppleNotificationVerifier {
         });
         NimbusJwtDecoder decoder = new NimbusJwtDecoder(processor);
         decoder.setJwtValidator(validator(issuer, audiences, clock));
-        return new AppleNotificationVerifier(decoder, objectMapper);
+        return new AppleNotificationVerifier(decoder, objectMapper, clock);
     }
 
     Verification verify(String payload) {
@@ -106,9 +112,17 @@ final class AppleNotificationVerifier {
         };
         if (events.get("type") instanceof String type && !type.isBlank()
             && events.get("sub") instanceof String subject && !subject.isBlank()) {
-            return Optional.of(AppleAccountEvent.of(type, subject));
+            return Optional.of(AppleAccountEvent.of(type, subject, occurredAt(events.get("event_time"))));
         }
         return Optional.empty();
+    }
+
+    private Instant occurredAt(Object eventTime) {
+        if (!(eventTime instanceof Number number)) {
+            return clock.instant();
+        }
+        long value = number.longValue();
+        return value < SMALLEST_EPOCH_MILLI ? Instant.ofEpochSecond(value) : Instant.ofEpochMilli(value);
     }
 
     private Map<?, ?> objectOf(String json) {

@@ -20,11 +20,14 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.ObjectMapper;
 
 class AppleNotificationVerifierTest {
@@ -90,6 +93,43 @@ class AppleNotificationVerifierTest {
             new Verification.Verified(new AppleAccountEvent.AccountDeleted(SUBJECT)));
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 연결_해제_알림의_시각은_초로_오든_밀리초로_오든_같은_시각으로_읽는다(boolean inMillis) throws Exception {
+        // given
+        AppleNotificationVerifier verifier = verifier("http://localhost:" + server.getAddress().getPort() + "/keys");
+        Instant revokedAt = NOW.minusSeconds(90);
+        long eventTime = inMillis ? revokedAt.toEpochMilli() : revokedAt.getEpochSecond();
+
+        // when
+        Verification actual = verifier.verify(signedWith(signingKey, consentRevoked(eventTime)));
+
+        // then
+        assertThat(actual).isEqualTo(
+            new Verification.Verified(new AppleAccountEvent.ConsentRevoked(SUBJECT, revokedAt)));
+    }
+
+    @Test
+    void 연결_해제_알림에_시각이_없으면_받은_시각으로_읽는다() throws Exception {
+        // given
+        AppleNotificationVerifier verifier = verifier("http://localhost:" + server.getAddress().getPort() + "/keys");
+
+        // when
+        Verification actual = verifier.verify(signedWith(signingKey, consentRevoked(null)));
+
+        // then
+        assertThat(actual).isEqualTo(
+            new Verification.Verified(new AppleAccountEvent.ConsentRevoked(SUBJECT, NOW)));
+    }
+
+    private static Map<String, Object> consentRevoked(Long eventTime) {
+        Map<String, Object> events = new HashMap<>(Map.of("type", "consent-revoked", "sub", SUBJECT));
+        if (eventTime != null) {
+            events.put("event_time", eventTime);
+        }
+        return events;
+    }
+
     private static AppleNotificationVerifier verifier(String jwkSetUri) {
         return AppleNotificationVerifier.create(ISSUER, Set.of(AUDIENCE), jwkSetUri, new ObjectMapper(), CLOCK);
     }
@@ -101,11 +141,15 @@ class AppleNotificationVerifierTest {
     }
 
     private static String signedWith(RSAKey key) throws Exception {
+        return signedWith(key, Map.of("type", "account-deleted", "sub", SUBJECT));
+    }
+
+    private static String signedWith(RSAKey key, Map<String, Object> events) throws Exception {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
             .issuer(ISSUER)
             .audience(AUDIENCE)
             .issueTime(Date.from(NOW))
-            .claim("events", Map.of("type", "account-deleted", "sub", SUBJECT))
+            .claim("events", events)
             .build();
         SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(key.getKeyID()).build(), claims);
         jwt.sign(new RSASSASigner(key));

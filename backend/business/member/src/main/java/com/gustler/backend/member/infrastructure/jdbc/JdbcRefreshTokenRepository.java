@@ -54,6 +54,8 @@ public class JdbcRefreshTokenRepository implements RefreshTokenRepository {
         WHERE member_id = (SELECT id FROM member WHERE public_id = ?)
         """;
 
+    static final String DELETE_ALL_OF_STARTED_BEFORE = DELETE_ALL_OF + "AND started_at < ?\n";
+
     /** 잠긴 행은 건너뛰어 다른 트랜잭션을 기다리지 않는다. 정렬 없이 만료 인덱스로 찾는다. */
     static final String DELETE_EXPIRED = """
         DELETE FROM refresh_token
@@ -121,6 +123,11 @@ public class JdbcRefreshTokenRepository implements RefreshTokenRepository {
     @Override
     public int deleteAllOf(UUID publicId) {
         return jdbcClient.sql(DELETE_ALL_OF).param(publicId).update();
+    }
+
+    @Override
+    public int deleteAllOfStartedBefore(UUID publicId, OffsetDateTime time) {
+        return jdbcClient.sql(DELETE_ALL_OF_STARTED_BEFORE).params(publicId, time).update();
     }
 
     @Override
