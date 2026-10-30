@@ -48,6 +48,7 @@ test("방향이 바뀔 때만 selection 진동을 보내고 같은 방향을 다
   });
   await openInApp(page, `/routes/${routeId}?direction=UP`);
   await expect(directionButton(page, "UP")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("naver-map-test-double")).toHaveCount(1);
   await page.clock.runFor(48);
   await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
   // 두 방향 정류장 핀은 확대해야 보인다.
