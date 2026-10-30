@@ -16,6 +16,7 @@ interface StopExpandContext {
   direction: Direction;
   rowPosition: number;
   expandIndex: number;
+  source: EventMap["stop_expanded"]["source"];
 }
 
 export function boardViewedPropertiesOf(
@@ -50,7 +51,7 @@ export function boardViewedPropertiesOf(
 
 export function stopExpandedPropertiesOf(
   stop: ExpandableStopView,
-  { routeId, direction, rowPosition, expandIndex }: StopExpandContext,
+  { routeId, direction, rowPosition, expandIndex, source }: StopExpandContext,
 ): EventMap["stop_expanded"] {
   const common = {
     route_id: routeId,
@@ -59,6 +60,7 @@ export function stopExpandedPropertiesOf(
     stop_sequence: stop.sequence,
     row_position: rowPosition,
     expand_index: expandIndex,
+    source,
   };
   if (stop.kind === "noVehicle") {
     return { ...common, stop_kind: "noVehicle", arrival_count: 0 };

@@ -24,6 +24,7 @@ type StopExpandedBase = {
   stop_sequence: number;
   row_position: number;
   expand_index: number;
+  source: "list" | "map";
 };
 
 export interface EventMap {
@@ -39,6 +40,8 @@ export interface EventMap {
   route_search_unmatched: {
     query: string;
   };
+
+  route_list_unavailable: FailureProperties & { attempt: number };
 
   board_viewed: {
     route_id: string;
@@ -63,6 +66,7 @@ export interface EventMap {
   direction_switched: {
     route_id: string;
     to_direction: Direction;
+    source: "tab" | "map" | "outOfService";
   };
 
   favorite_button_clicked: {

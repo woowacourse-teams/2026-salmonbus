@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@react-native-kakao/core": "2.4.11",
+    "@react-native-kakao/user": "2.4.11",
     "expo": "~57.0.27",
+    "expo-apple-authentication": "~57.0.2",
     "expo-application": "~57.0.3",
+    "expo-crypto": "~57.0.4",
     "expo-haptics": "~57.0.3",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
@@ -21,7 +25,7 @@
   "scripts": {
     "start": "expo start",
     "ios": "expo run:ios",
-    "test": "node --test plugins/*.test.cjs bridge/*.test.mjs",
+    "test": "node --test plugins/*.test.cjs bridge/*.test.mjs navigation/*.test.mjs auth/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint"
   },

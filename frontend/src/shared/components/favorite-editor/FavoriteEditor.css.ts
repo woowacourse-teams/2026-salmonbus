@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { POINTER_INPUT } from "@/shared/input-method/inputMethod";
 import { vars } from "@/shared/styles/tokens.css";
 import { primary, secondary } from "@/shared/styles/button.css";
+import trashIcon from "@/shared/assets/icons/trash.svg";
 
 export const editor = style({
   width: "100%",
@@ -12,6 +13,8 @@ export const editor = style({
   gap: 16,
   fontFamily: "'Noto Sans KR', sans-serif",
 });
+export const groupControls = style({ display: "flex", alignItems: "center", gap: 8 });
+export const groupList = style({ minWidth: 0 });
 export const groupName = style({
   minWidth: 0,
   padding: "9px 0",
@@ -63,6 +66,38 @@ export const done = style([
   primary,
   { minHeight: 46, borderRadius: 14, fontWeight: 700, padding: "12px 18px", background: vars.color.liveBus },
 ]);
+export const groupDropArea = style({
+  position: "relative",
+  borderRadius: 14,
+  selectors: {
+    '&[data-dragging="true"]': { background: "#FFF0EB", boxShadow: "inset 0 0 0 1px #E5B7AC" },
+    '&[data-drop-active="true"]': { background: "#FBE2DB", boxShadow: `inset 0 0 0 2px ${vars.color.liveBus}` },
+  },
+});
+export const dropContent = style({
+  selectors: { [`${groupDropArea}[data-dragging="true"] &`]: { visibility: "hidden" } },
+});
+export const dropHint = style({
+  position: "absolute",
+  inset: 0,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  padding: 16,
+  color: "#B34736",
+  fontSize: 14,
+  fontWeight: 600,
+  textAlign: "center",
+  pointerEvents: "none",
+});
+export const dropIcon = style({
+  width: 22,
+  height: 22,
+  background: "currentColor",
+  mask: `url(${trashIcon}) center / contain no-repeat`,
+});
 export const deleteDialog = style({
   selectors: {
     "&&": {
@@ -81,6 +116,7 @@ export const deleteDescription = style({
   fontSize: 13,
   lineHeight: 1.65,
   textAlign: "center",
+  wordBreak: "keep-all",
   overflowWrap: "anywhere",
 });
 export const deleteActions = style({ display: "flex", gap: 10, marginTop: 20 });

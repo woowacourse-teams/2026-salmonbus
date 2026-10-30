@@ -9,7 +9,7 @@ export const page = style({
   "@media": { [PHONE_MEDIA]: { maxWidth: "none" } },
   minHeight: "100dvh",
   margin: "0 auto",
-  paddingBottom: "calc(66px + env(safe-area-inset-bottom, 0px))",
+  paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
   background: "#FAF9F7",
 });
 

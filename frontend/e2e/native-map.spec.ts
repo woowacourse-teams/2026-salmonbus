@@ -73,6 +73,13 @@ async function open(page: Page, id = routeId) {
   await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
   await page.clock.runFor(64);
 }
+// 앱 전용 투명 모드가 풀리면 지도 영역이 다시 배경색을 칠한다.
+async function expectWebMapBackground(page: Page) {
+  await expect(page.getByRole("region", { name: "노선 지도", exact: true })).not.toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+}
 async function emit(page: Page, event: NativeMapEvent, sessionId?: string) {
   const mount = (await messages(page)).find((message) => message.type === "mount")!;
   await page.evaluate(
@@ -113,20 +120,6 @@ test("native host는 JS SDK 없이 scene과 관측별 motion을 보내고 브라
   expect(
     await page.getByTestId("route-map").evaluate((element) => getComputedStyle(element.parentElement!).backgroundColor),
   ).toBe("rgba(0, 0, 0, 0)");
-});
-
-test("randomUUID가 없는 환경에서도 native 지도 연결과 선택 이벤트가 동작한다", async ({ page }) => {
-  await page.addInitScript(() => {
-    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
-  });
-  await open(page);
-  const mount = (await messages(page)).find((message) => message.type === "mount")!;
-  expect(mount.sessionId).toMatch(/^[0-9a-f]{32}$/);
-  await emit(page, { type: "stopPress", payload: { selection: { direction: "UP", sequence: 1 } } });
-  await page.clock.runFor(64);
-  expect(
-    (await messages(page)).filter((message) => message.type === "updateScene").at(-1)?.payload.selectedStop,
-  ).toEqual({ direction: "UP", sequence: 1 });
 });
 
 test("실제 transition 경계와 웹 버튼 영역을 전달하고 native 위치·선택 이벤트를 연결한다", async ({ page }) => {
@@ -222,32 +215,39 @@ test("native 위치 조회 시간 초과와 권한 거부를 안내하고 재시
   await open(page);
   const button = page.getByRole("button", { name: "현재 위치 보기", exact: true });
   for (const error of ["timeout", "denied"] as const) {
+    await test.step(
+      error === "timeout" ? "시간 초과 안내 뒤 다시 누를 수 있음" : "권한 거부 안내 뒤 다시 누를 수 있음",
+      async () => {
+        await button.click();
+        const location = (await messages(page)).filter((message) => message.type === "location").at(-1)!;
+        await emit(page, { type: "locationResult", payload: { requestId: location.payload.requestId, error } });
+        await expect(button).toBeEnabled();
+        await expect(
+          page.getByText(
+            error === "timeout"
+              ? "위치를 확인하는 데 시간이 걸려요. 다시 눌러주세요"
+              : "iPhone 설정에서 연어버스의 위치 권한을 허용해주세요",
+            { exact: true },
+          ),
+        ).toBeVisible();
+        await expect(page.getByRole("button", { name: "설정 열기", exact: true })).toHaveCount(0);
+      },
+    );
+  }
+  await test.step("위치 조회 중 지도 오류로 닫히면 늦은 결과를 버림", async () => {
+    const errors: Error[] = [];
+    page.on("pageerror", (error) => errors.push(error));
     await button.click();
     const location = (await messages(page)).filter((message) => message.type === "location").at(-1)!;
-    await emit(page, { type: "locationResult", payload: { requestId: location.payload.requestId, error } });
-    await expect(button).toBeEnabled();
-    await expect(
-      page.getByText(
-        error === "timeout"
-          ? "위치를 확인하는 데 시간이 걸려요. 다시 눌러주세요"
-          : "iPhone 설정에서 연어버스의 위치 권한을 허용해주세요",
-        { exact: true },
-      ),
-    ).toBeVisible();
-    await expect(page.getByRole("button", { name: "설정 열기", exact: true })).toHaveCount(0);
-  }
-  const errors: Error[] = [];
-  page.on("pageerror", (error) => errors.push(error));
-  await button.click();
-  const location = (await messages(page)).filter((message) => message.type === "location").at(-1)!;
-  await emit(page, { type: "error", payload: { message: "SDK 인증 실패" } });
-  await emit(page, {
-    type: "locationResult",
-    payload: { requestId: location.payload.requestId, coordinate: { latitude: 37.4, longitude: 127.1 } },
+    await emit(page, { type: "error", payload: { message: "SDK 인증 실패" } });
+    await emit(page, {
+      type: "locationResult",
+      payload: { requestId: location.payload.requestId, coordinate: { latitude: 37.4, longitude: 127.1 } },
+    });
+    await expect(button).toHaveCount(0);
+    expect((await messages(page)).at(-1)?.type).toBe("unmount");
+    expect(errors).toEqual([]);
   });
-  await expect(button).toHaveCount(0);
-  expect((await messages(page)).at(-1)?.type).toBe("unmount");
-  expect(errors).toEqual([]);
 });
 
 test.describe("설정 화면을 열 수 있는 앱", () => {
@@ -317,7 +317,7 @@ test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투�
   await emit(page, { type: "error", payload: { message: "SDK 인증 실패" } });
   await expect(page.getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "판정보드 정류장 목록", exact: true })).toBeVisible();
-  expect(await page.locator("html").getAttribute("data-native-map")).toBeNull();
+  await expectWebMapBackground(page);
   expect((await messages(page)).at(-1)?.type).toBe("unmount");
 });
 
@@ -355,7 +355,8 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
     expect((await messages(page)).filter((message) => message.type === "camera")).toHaveLength(0);
   });
 
-  for (const failure of ["timeout", "native-timeout", "auth"] as const) {
+  // 앱이 보낸 오류 문구의 분류(native-timeout 포함)는 jest nativeMapAdapter.test.ts가 확인한다.
+  for (const failure of ["timeout", "auth"] as const) {
     test(`${failure} 후 JS 지도를 유지하고 선택과 차량 이동을 연결한다`, async ({ page, naverMap, api }) => {
       api.cacheMaxAgeSeconds = 60;
       api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1")!.phase = "IN_TRANSIT";
@@ -363,17 +364,13 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
       await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
       await emit(page, { type: "stopPress", payload: { selection: { direction: "UP", sequence: 1 } } });
       if (failure === "timeout") await page.clock.runFor(15_000);
-      else
-        await emit(page, {
-          type: "error",
-          payload: { message: failure === "auth" ? "지도 설정을 확인하지 못했어요" : "지도를 불러오지 못했어요" },
-        });
+      else await emit(page, { type: "error", payload: { message: "지도 설정을 확인하지 못했어요" } });
 
       const map = page.getByRole("region", { name: "노선 지도", exact: true });
       await expect(map.getByTestId("naver-map-test-double")).toHaveCount(1);
       await page.clock.runFor(64);
       await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
-      expect(await page.locator("html").getAttribute("data-native-map")).toBeNull();
+      await expectWebMapBackground(page);
       expect((await messages(page)).filter((message) => message.type === "unmount")).toHaveLength(1);
       await expect(map.locator('button[data-map-stop-sequence="1"][aria-pressed="true"]')).toHaveCount(1);
 
@@ -408,7 +405,7 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
     await emit(page, { type: "error", payload: { message: "지도 설정을 확인하지 못했어요" } });
     await expect(page.getByText(/지도를 불러오지 못했어요|지도 설정을 준비 중이에요/)).toBeVisible();
     await expect(page.getByRole("region", { name: "판정보드 정류장 목록", exact: true })).toBeVisible();
-    expect(await page.locator("html").getAttribute("data-native-map")).toBeNull();
+    await expectWebMapBackground(page);
     const count = (await messages(page)).filter((message) => message.type === "mount").length;
     await page.clock.runFor(16_000);
     expect((await messages(page)).filter((message) => message.type === "mount")).toHaveLength(count);

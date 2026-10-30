@@ -11,6 +11,7 @@ export const section = style([
     display: "flex",
     flexDirection: "column",
     gap: 12,
+    width: "100%",
     maxWidth: 356,
     margin: "0 auto 24px",
     fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
@@ -59,6 +60,16 @@ export const info = style({
   flex: 1,
   minWidth: 0,
 });
+export const cardTools = style({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 6,
+  width: 52,
+  flexShrink: 0,
+});
+export const deletePlaceholder = style({ width: 24, flexShrink: 0 });
+export const cardDelete = style([edit, { width: 24, padding: 0 }]);
 export const name = style({ fontSize: 16, fontWeight: 600, lineHeight: "23px", overflowWrap: "anywhere" });
 export const count = style({
   padding: "4px 9px",

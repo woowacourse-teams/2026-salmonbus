@@ -15,6 +15,13 @@ export interface NativeRouteMapAdapter extends RouteMapAdapter {
   locate: (requestId: number) => Promise<GeoCoordinate>;
 }
 
+// shortcut: 기존 앱과 호환하려고 오류 문구로 분류하며, 앱에 오류 코드가 추가되면 교체한다.
+export function nativeMapErrorReasonFrom(message: string): "timeout" | "auth" | undefined {
+  if (message === "지도 설정을 확인하지 못했어요") return "auth";
+  if (message === "지도를 불러오지 못했어요") return "timeout";
+  return undefined;
+}
+
 export function createNativeRouteMap(options: {
   region: HTMLElement;
   board: Board;
@@ -72,15 +79,7 @@ export function createNativeRouteMap(options: {
         onDeselect();
         break;
       case "error":
-        // shortcut: 기존 앱과 호환하려고 오류 문구로 분류하며, 앱에 오류 코드가 추가되면 교체한다.
-        onError(
-          new Error(event.payload.message),
-          event.payload.message === "지도 설정을 확인하지 못했어요"
-            ? "auth"
-            : event.payload.message === "지도를 불러오지 못했어요"
-              ? "timeout"
-              : undefined,
-        );
+        onError(new Error(event.payload.message), nativeMapErrorReasonFrom(event.payload.message));
         break;
       case "locationResult": {
         const request = locationRequests.get(event.payload.requestId);

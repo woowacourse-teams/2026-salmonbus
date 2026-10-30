@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { trackBeforeLeaving } from "@/shared/analytics/track";
+import { track, trackBeforeLeaving } from "@/shared/analytics/track";
 import type { LoginProvider } from "@/shared/api/auth.types";
 import { Brand } from "@/shared/components/Brand";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { useAuth } from "@/shared/hooks/useAuth";
+import { signInInApp } from "@/shared/native-auth/nativeSignIn";
 import { clearLoginReturn, saveLoginReturn } from "@/shared/routing/loginReturn";
 import { localReturnTo, boardReturnTo } from "@/shared/routing/loginReturnPolicy";
 import * as buttonStyles from "@/shared/styles/button.css";
@@ -44,9 +45,22 @@ export function LoginPage() {
     saveLoginReturn(returnTo, provider);
     setPending(true);
     await trackBeforeLeaving("login_started", { provider, entry: loginEntryOf(returnTo) });
-    window.location.assign(
-      `/api/auth/${provider.toLowerCase()}/start?${new URLSearchParams({ returnTo: boardReturnTo(returnTo) })}`,
-    );
+    const outcome = await signInInApp(provider);
+    if (outcome === "unsupported") {
+      window.location.assign(
+        `/api/auth/${provider.toLowerCase()}/start?${new URLSearchParams({ returnTo: boardReturnTo(returnTo) })}`,
+      );
+      return;
+    }
+    // 웹 로그인 콜백처럼 복귀 화면을 새로 연다. AuthReturn이 성공 이벤트를 남기고 처음 가려던 곳으로 보낸다.
+    if (outcome === "signedIn") {
+      window.location.assign(boardReturnTo(returnTo));
+      return;
+    }
+    track("login_finished", { provider, result: outcome });
+    clearLoginReturn();
+    setPending(false);
+    setLoginResult(outcome);
   }
 
   function dismissFailure() {

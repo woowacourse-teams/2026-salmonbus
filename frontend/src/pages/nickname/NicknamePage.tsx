@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { AccountLayout } from "@/shared/components/AccountLayout";
@@ -56,6 +56,7 @@ export function NicknamePage() {
 }
 
 function NicknameForm({ current }: { current: string }) {
+  const field = useRef<HTMLInputElement>(null);
   const isStillOnScreen = useStillOnScreen();
   const playResultHaptic = useResultHaptic();
   const { changeNickname } = useAuth();
@@ -64,6 +65,9 @@ function NicknameForm({ current }: { current: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const localError = nicknameErrorOf(nickname);
+  useEffect(() => {
+    if (error !== null) field.current?.focus();
+  }, [error]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -87,6 +91,7 @@ function NicknameForm({ current }: { current: string }) {
         닉네임
       </label>
       <input
+        ref={field}
         id="nickname"
         name="nickname"
         className={styles.field}

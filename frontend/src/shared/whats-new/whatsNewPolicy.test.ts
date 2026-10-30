@@ -12,7 +12,7 @@ const note3 = createNote(3, "2026-11-13");
 const NOV_14_MORNING = Date.parse("2026-11-14T08:00:00+09:00");
 
 function recordAfter(lastSeenId: number): WhatsNewRecord {
-  return { lastSeenId, autoShow: true, lastShownDay: null };
+  return { lastSeenId, lastShownDay: null };
 }
 
 const idsOf = (notes: readonly WhatsNewNote[]) => notes.map((note) => note.id);
@@ -50,12 +50,6 @@ describe("notesToShowFor", () => {
     expect(notesToShowFor([note2], recordAfter(0), nextDay)).toEqual([]);
   });
 
-  it("다시 보지 않기를 고른 기기에는 띄우지 않는다", () => {
-    const record = { ...recordAfter(0), autoShow: false };
-
-    expect(notesToShowFor([note3], record, NOV_14_MORNING)).toEqual([]);
-  });
-
   describe("하루에 한 번만 띄운다", () => {
     it("오늘 이미 띄웠으면 닫지 않았어도 다시 띄우지 않는다", () => {
       const shown = shownRecordFor(recordAfter(0), NOV_14_MORNING);
@@ -76,29 +70,21 @@ describe("notesToShowFor", () => {
 describe("closedRecordFor", () => {
   it("닫으면 보여 준 소식까지 본 것으로 적어 같은 소식은 다시 뜨지 않는다", () => {
     const shown = shownRecordFor(recordAfter(1), NOV_14_MORNING);
-    const closed = closedRecordFor(shown, [note3, note2], "keep");
+    const closed = closedRecordFor(shown, [note3, note2]);
     const nextDay = NOV_14_MORNING + 24 * 60 * 60_000;
 
-    expect(closed).toEqual({ lastSeenId: 3, autoShow: true, lastShownDay: "2026-11-14" });
+    expect(closed).toEqual({ lastSeenId: 3, lastShownDay: "2026-11-14" });
     expect(notesToShowFor([note2, note3], closed, nextDay)).toEqual([]);
   });
 
   it("닫은 뒤 새 배포가 나오면 그 소식은 다시 띄운다", () => {
-    const closed = closedRecordFor(recordAfter(1), [note2], "keep");
+    const closed = closedRecordFor(recordAfter(1), [note2]);
     const note4 = createNote(4, "2026-11-20");
 
     expect(idsOf(notesToShowFor([note2, note4], closed, Date.parse("2026-11-20T08:00:00+09:00")))).toEqual([4]);
   });
 
-  it("다시 보지 않기는 앞으로 나올 소식도 자동으로 띄우지 않는다", () => {
-    const closed = closedRecordFor(recordAfter(1), [note2], "stop");
-    const note4 = createNote(4, "2026-11-20");
-
-    expect(closed.autoShow).toBe(false);
-    expect(notesToShowFor([note2, note4], closed, Date.parse("2026-11-20T08:00:00+09:00"))).toEqual([]);
-  });
-
   it("마지막으로 본 번호를 뒤로 돌리지 않는다", () => {
-    expect(closedRecordFor(recordAfter(3), [note2], "keep").lastSeenId).toBe(3);
+    expect(closedRecordFor(recordAfter(3), [note2]).lastSeenId).toBe(3);
   });
 });

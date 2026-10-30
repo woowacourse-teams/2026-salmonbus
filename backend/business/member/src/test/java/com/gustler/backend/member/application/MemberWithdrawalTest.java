@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import com.gustler.backend.member.api.AnalyticsDeletions;
 import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.MemberIdentity;
 import com.gustler.backend.member.api.PendingUnlink;
@@ -25,18 +26,24 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntFunction;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @MemberIntegrationTest
 class MemberWithdrawalTest {
     private static final int CONCURRENT_REQUESTS = 8;
     private static final String SUBJECT = "kakao-withdraw";
     private static final MemberIdentity IDENTITY = new MemberIdentity(LoginProvider.KAKAO, SUBJECT);
+
+    @Autowired
+    private AnalyticsDeletions analyticsDeletions;
 
     @Autowired
     private WithdrawMember withdrawMember;
@@ -56,8 +63,12 @@ class MemberWithdrawalTest {
     @Autowired
     private JdbcClient jdbcClient;
 
+    @Autowired
+    private PlatformTransactionManager transactions;
+
     @BeforeEach
     void 회원과_연결_해제_요청을_비우고_시계를_되돌린다() {
+        jdbcClient.sql("DELETE FROM analytics_deletion").update();
         jdbcClient.sql("DELETE FROM member").update();
         jdbcClient.sql("DELETE FROM provider_unlink").update();
         clock.reset();
@@ -198,6 +209,7 @@ class MemberWithdrawalTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(actual).isEmpty();
+            softly.assertThat(count("SELECT count(*) FROM analytics_deletion")).isZero();
             softly.assertThat(count("SELECT count(*) FROM provider_unlink")).isZero();
         });
     }
@@ -228,8 +240,62 @@ class MemberWithdrawalTest {
             softly.assertThat(actual.stream().filter(Optional::isEmpty)).hasSize(CONCURRENT_REQUESTS - 1);
             softly.assertThat(count("SELECT count(*) FROM provider_unlink")).isEqualTo(1);
             softly.assertThat(count("SELECT count(*) FROM member")).isZero();
+            softly.assertThat(count("SELECT count(*) FROM analytics_deletion")).isEqualTo(1);
             softly.assertThat(count("SELECT count(*) FROM refresh_token")).isZero();
         });
+    }
+
+    @Test
+    void 탈퇴하면_분석_기록_삭제를_위한_공개_ID를_남긴다() {
+        UUID publicId = register(LoginProvider.APPLE, "apple-analytics");
+        withdrawMember.withdraw(publicId, ProviderUnlink.DONE);
+        assertThat(count("SELECT count(*) FROM analytics_deletion WHERE public_id = ? AND attempts = 0", publicId))
+            .isEqualTo(1);
+    }
+
+    @Test
+    void 전송이_실패해도_회원은_탈퇴하고_재시도_성공_후_기록이_사라진다() {
+        UUID publicId = register(LoginProvider.KAKAO, "kakao-analytics");
+        withdrawMember.withdraw(publicId, ProviderUnlink.PENDING);
+        analyticsDeletions.attempt(publicId, ids -> { throw new IllegalStateException("offline"); });
+        assertThat(viewMember.view(publicId)).isEmpty();
+        assertThat(count("SELECT count(*) FROM analytics_deletion WHERE public_id = ? AND attempts = 1", publicId))
+            .isEqualTo(1);
+        analyticsDeletions.retry(ids -> assertThat(ids).contains(publicId));
+        assertThat(count("SELECT count(*) FROM analytics_deletion WHERE public_id = ?", publicId)).isZero();
+    }
+
+    @Test
+    void 탈퇴가_롤백되면_분석_삭제_기록도_저장하지_않는다() {
+        UUID publicId = register(LoginProvider.KAKAO, "rollback-analytics");
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            withdrawMember.withdraw(publicId, ProviderUnlink.PENDING);
+            status.setRollbackOnly();
+        });
+        assertThat(viewMember.view(publicId)).isPresent();
+        assertThat(count("SELECT count(*) FROM analytics_deletion WHERE public_id = ?", publicId)).isZero();
+    }
+
+    @Test
+    void 삭제_대기_기록을_저장하지_못하면_회원_ID도_지우지_않는다() {
+        UUID publicId = register(LoginProvider.KAKAO, "queue-failure-analytics");
+        jdbcClient.sql("INSERT INTO analytics_deletion (public_id, attempts) VALUES (?, 0)").param(publicId).update();
+        assertThatThrownBy(() -> withdrawMember.withdraw(publicId, ProviderUnlink.PENDING))
+            .isInstanceOf(org.springframework.dao.DuplicateKeyException.class);
+        assertThat(viewMember.view(publicId)).isPresent();
+    }
+
+    @Test
+    void 같은_삭제_요청을_동시에_재시도해도_한_번만_전송한다() throws Exception {
+        UUID publicId = register(LoginProvider.KAKAO, "concurrent-analytics");
+        withdrawMember.withdraw(publicId, ProviderUnlink.PENDING);
+        AtomicInteger sends = new AtomicInteger();
+        runConcurrently(index -> {
+            analyticsDeletions.attempt(publicId, ids -> sends.incrementAndGet());
+            return true;
+        });
+        assertThat(sends.get()).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM analytics_deletion WHERE public_id = ?", publicId)).isZero();
     }
 
     private UUID register(LoginProvider provider, String subject) {

@@ -18,3 +18,12 @@ export function isAuthSession(value: unknown): value is AuthSession {
     ? session.refreshable === false && isMember(session.member)
     : session.authenticated === false && typeof session.refreshable === "boolean" && session.member === undefined;
 }
+
+// 앱 app/auth/authMessages.ts의 NONCE와 같은 규칙이다. 앱은 이 규칙에 맞지 않는 요청을 버린다.
+const NATIVE_NONCE = /^[A-Za-z0-9._~-]{16,128}$/;
+
+export function isNativeNonce(value: unknown): value is { nonce: string } {
+  if (typeof value !== "object" || value === null) return false;
+  const nonce = (value as Record<string, unknown>).nonce;
+  return typeof nonce === "string" && NATIVE_NONCE.test(nonce);
+}

@@ -102,6 +102,8 @@ jobs:
         uses: mikepenz/action-junit-report@v6
         with:
           report_paths: 'backend/**/build/test-results/*/TEST-*.xml'
+          # 포크 PR의 토큰은 체크 생성 권한이 없어 로그와 잡 요약으로만 보고한다.
+          annotate_only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
           check_name: 'BE 테스트 결과'
           detailed_summary: true
 

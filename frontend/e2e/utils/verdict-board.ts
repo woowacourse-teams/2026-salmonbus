@@ -1,8 +1,7 @@
 import type { Page } from "@playwright/test";
 import type { Direction } from "../../src/shared/api/routeForecast.types";
 import { expect } from "../fixtures/api";
-import { directionLabels, stopNames, targetStopNames } from "../fixtures/mock-data";
-import { selectRoute } from "./route-select";
+import { directionLabels, routeId, stopNames, targetStopNames } from "../fixtures/mock-data";
 
 export function directionButton(page: Page, direction: Direction) {
   return page
@@ -35,9 +34,9 @@ export async function expectDirection(page: Page, direction: Direction) {
   await expect(targetStop(page, other)).toHaveCount(0);
 }
 
+// 검색에서 보드로 가는 길은 happy-path와 route-select가 보고, 보드 테스트는 판정 보드 주소로 바로 연다.
 export async function openBoard(page: Page) {
-  await page.goto("/");
-  await selectRoute(page);
+  await page.goto(`/routes/${routeId}`);
   await expect(
     page
       .getByRole("heading", { name: "3330", exact: true })
