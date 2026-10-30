@@ -90,7 +90,7 @@ class AppleNotificationFlowTest {
             softly.assertThat(actual.statusCode()).isEqualTo(HttpStatus.OK.value());
             softly.assertThat(replayed.statusCode()).isEqualTo(HttpStatus.OK.value());
             softly.assertThat(beforeRefresh.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
-            softly.assertThat(afterRefresh.statusCode()).isEqualTo(HttpStatus.OK.value());
+            softly.assertThat(afterRefresh.statusCode()).isEqualTo(HttpStatus.NO_CONTENT.value());
             softly.assertThat(count("refresh_token")).isEqualTo(1);
         });
     }
