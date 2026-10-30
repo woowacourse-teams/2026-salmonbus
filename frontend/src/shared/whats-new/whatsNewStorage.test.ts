@@ -31,7 +31,7 @@ describe("loadWhatsNewRecord", () => {
 
     const record = loadWhatsNewRecord(notes, () => storage);
 
-    expect(record).toEqual({ lastSeenId: 2, autoShow: true, lastShownDay: null });
+    expect(record).toEqual({ lastSeenId: 2, lastShownDay: null });
     expect(storedRecordOf(storage)).toEqual(record);
   });
 
@@ -40,33 +40,36 @@ describe("loadWhatsNewRecord", () => {
 
     const record = loadWhatsNewRecord(notes, () => storage);
 
-    expect(record).toEqual({ lastSeenId: 0, autoShow: true, lastShownDay: null });
+    expect(record).toEqual({ lastSeenId: 0, lastShownDay: null });
     expect(storedRecordOf(storage)).toEqual(record);
   });
 
   it("저장한 기록이 있으면 그대로 읽고 다시 쓰지 않는다", () => {
-    const stored = JSON.stringify({ lastSeenId: 1, autoShow: false, lastShownDay: "2026-11-13" });
+    const stored = JSON.stringify({ lastSeenId: 1, lastShownDay: "2026-11-13" });
     const storage = createMemoryStorage({ [STORAGE_KEY]: stored });
 
-    expect(loadWhatsNewRecord(notes, () => storage)).toEqual({
-      lastSeenId: 1,
-      autoShow: false,
-      lastShownDay: "2026-11-13",
-    });
+    expect(loadWhatsNewRecord(notes, () => storage)).toEqual({ lastSeenId: 1, lastShownDay: "2026-11-13" });
     expect(storage.items.get(STORAGE_KEY)).toBe(stored);
+  });
+
+  it("다시 보지 않기가 있던 때 저장한 기록도 읽고, 자동 표시 값은 버린다", () => {
+    const storage = createMemoryStorage({
+      [STORAGE_KEY]: JSON.stringify({ lastSeenId: 1, autoShow: false, lastShownDay: "2026-11-13" }),
+    });
+
+    expect(loadWhatsNewRecord(notes, () => storage)).toEqual({ lastSeenId: 1, lastShownDay: "2026-11-13" });
   });
 
   it.each([
     { kind: "JSON이 아닌 글자", storedText: "{oops" },
     { kind: "배열", storedText: "[1]" },
-    { kind: "음수 번호", storedText: '{"lastSeenId":-1,"autoShow":true,"lastShownDay":null}' },
-    { kind: "불리언이 아닌 자동 표시", storedText: '{"lastSeenId":1,"autoShow":"yes","lastShownDay":null}' },
-    { kind: "날짜 모양이 아닌 날", storedText: '{"lastSeenId":1,"autoShow":true,"lastShownDay":"11월 14일"}' },
+    { kind: "음수 번호", storedText: '{"lastSeenId":-1,"lastShownDay":null}' },
+    { kind: "날짜 모양이 아닌 날", storedText: '{"lastSeenId":1,"lastShownDay":"11월 14일"}' },
   ])("$kind로 깨진 기록은 처음 온 기기로 보고 덮어쓴다", ({ storedText }) => {
     const storage = createMemoryStorage({ [STORAGE_KEY]: storedText });
 
-    expect(loadWhatsNewRecord(notes, () => storage)).toEqual({ lastSeenId: 2, autoShow: true, lastShownDay: null });
-    expect(storedRecordOf(storage)).toEqual({ lastSeenId: 2, autoShow: true, lastShownDay: null });
+    expect(loadWhatsNewRecord(notes, () => storage)).toEqual({ lastSeenId: 2, lastShownDay: null });
+    expect(storedRecordOf(storage)).toEqual({ lastSeenId: 2, lastShownDay: null });
   });
 
   it("저장소를 쓸 수 없으면 기록 없이 돌아가 모달을 띄우지 않는다", () => {
@@ -85,7 +88,7 @@ describe("recordWhatsNewShown", () => {
 
     recordWhatsNewShown(Date.parse("2026-11-14T23:30:00+09:00"), () => storage);
 
-    expect(storedRecordOf(storage)).toEqual({ lastSeenId: 2, autoShow: true, lastShownDay: "2026-11-14" });
+    expect(storedRecordOf(storage)).toEqual({ lastSeenId: 2, lastShownDay: "2026-11-14" });
   });
 
   it("기록이 없으면 아무것도 쓰지 않는다", () => {
@@ -102,22 +105,13 @@ describe("recordWhatsNewClosed", () => {
     const storage = createMemoryStorage({ [ROUTE_FIRST_SEEN_KEY]: "{}" });
     loadWhatsNewRecord(notes, () => storage);
 
-    recordWhatsNewClosed(notes, "keep", () => storage);
+    recordWhatsNewClosed(notes, () => storage);
 
-    expect(storedRecordOf(storage)).toEqual({ lastSeenId: 2, autoShow: true, lastShownDay: null });
-  });
-
-  it("다시 보지 않기를 고르면 자동 표시를 끈다", () => {
-    const storage = createMemoryStorage({ [ROUTE_FIRST_SEEN_KEY]: "{}" });
-    loadWhatsNewRecord(notes, () => storage);
-
-    recordWhatsNewClosed(notes, "stop", () => storage);
-
-    expect(storedRecordOf(storage)).toEqual({ lastSeenId: 2, autoShow: false, lastShownDay: null });
+    expect(storedRecordOf(storage)).toEqual({ lastSeenId: 2, lastShownDay: null });
   });
 
   it("저장하다 예외가 나도 화면을 멈추지 않는다", () => {
-    const stored = JSON.stringify({ lastSeenId: 0, autoShow: true, lastShownDay: null });
+    const stored = JSON.stringify({ lastSeenId: 0, lastShownDay: null });
     const storage = {
       getItem: () => stored,
       setItem: () => {
@@ -125,6 +119,6 @@ describe("recordWhatsNewClosed", () => {
       },
     };
 
-    expect(() => recordWhatsNewClosed(notes, "keep", () => storage)).not.toThrow();
+    expect(() => recordWhatsNewClosed(notes, () => storage)).not.toThrow();
   });
 });

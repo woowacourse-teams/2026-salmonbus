@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router";
 import { track } from "@/shared/analytics/track";
+import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, paths } from "@/shared/routing/paths";
 import { initialInputFrom } from "@/shared/routing/routeSearchEntry";
@@ -50,6 +51,7 @@ export function RouteSearchPage() {
         />
       </header>
       <main className={styles.results}>
+        <h1 className={visuallyHidden}>노선 검색</h1>
         <SearchResults
           view={view}
           onSelect={handleSelect}

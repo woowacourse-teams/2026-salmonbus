@@ -1,4 +1,5 @@
 import type { Board, Direction, StopState } from "@/shared/api/routeForecast.types";
+import type { ExpandableStopView, StopView } from "./displayPolicy";
 
 export interface StopSelection {
   direction: Direction;
@@ -11,4 +12,13 @@ export function stopSelectionFrom(board: Board, direction: Direction, stopId: st
   );
   const stop = matches.length === 1 ? matches[0] : undefined;
   return stop === undefined ? null : { direction, sequence: stop.sequence };
+}
+
+export function expandableRowOf(
+  stops: readonly StopView[],
+  sequence: number,
+): { stop: ExpandableStopView; rowPosition: number } | null {
+  const rowPosition = stops.findIndex((stop) => stop.sequence === sequence);
+  const stop = stops[rowPosition];
+  return stop === undefined || stop.kind === "passThrough" ? null : { stop, rowPosition };
 }

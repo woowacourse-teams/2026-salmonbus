@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { failurePropertiesOf } from "@/shared/analytics/failureProperties";
+import { track } from "@/shared/analytics/track";
 import { createLatestRequestGate } from "@/shared/api/latestRequestGate";
 import { fetchRoutes } from "@/shared/api/routeForecast.api";
 import { searchViewFor, type RoutesState } from "./displayPolicy";
@@ -17,6 +19,8 @@ export function useRouteSearch(initialInput: string) {
         return;
       }
       if (!result.ok) {
+        const failure = failurePropertiesOf(result.failure);
+        if (failure !== null) track("route_list_unavailable", { ...failure, attempt: attempt + 1 });
         setRoutesState({ status: "error" });
         return;
       }

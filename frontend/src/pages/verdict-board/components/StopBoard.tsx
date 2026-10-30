@@ -70,7 +70,9 @@ export function StopBoard(props: StopBoardProps) {
 
   return (
     <section className={styles.noticeBoard} role="region" aria-label="판정보드 정류장 목록">
-      <p className={styles.notice}>{NOTICES[props.status]}</p>
+      <p className={styles.notice} role={props.status === "error" ? "alert" : "status"}>
+        {NOTICES[props.status]}
+      </p>
     </section>
   );
 }
