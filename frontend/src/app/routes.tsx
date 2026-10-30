@@ -22,7 +22,7 @@ function NavigationLayout() {
 }
 
 const pagesWithNavigation = [
-  { path: paths.routeSelect, title: "홈", element: <RouteSelectPage /> },
+  { path: paths.routeSelect, title: "", element: <RouteSelectPage /> },
   { path: paths.login, title: "로그인", element: <LoginPage /> },
   { path: paths.mypage, title: "마이페이지", element: <MyPage /> },
   { path: paths.nickname, title: "닉네임 수정", element: <NicknamePage /> },
@@ -41,7 +41,7 @@ export function AppRoutes() {
   )?.title;
 
   useEffect(() => {
-    document.title = title === undefined ? "연어" : `${title} | 연어`;
+    document.title = title ? `${title} | 연어버스` : "연어버스";
   }, [title]);
 
   // Routes에 location을 늘 넘겨야 미리 그린 화면에서 실제 주소로 바뀔 때 화면이 다시 마운트되지 않는다.

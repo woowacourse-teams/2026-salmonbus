@@ -240,7 +240,7 @@ test("편집 중 홈 로고를 누르면 미저장 순서를 버리고 일반 �
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   await editor.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true }).press("ArrowRight");
-  await page.getByRole("link", { name: "Salmonbus 홈으로 이동", exact: true }).click();
+  await page.getByRole("link", { name: "연어버스 홈으로 이동", exact: true }).click();
   await expect(editor).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toBeVisible();
   expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId, secondGroupId]);

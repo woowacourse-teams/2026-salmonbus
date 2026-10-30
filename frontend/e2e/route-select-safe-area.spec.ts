@@ -36,7 +36,10 @@ for (const { width, height, insets } of [
     expect(entryBox).not.toBeNull();
     expect(entryBox!.y).toBeGreaterThanOrEqual(insets.top);
     expect(entryBox!.y + entryBox!.height).toBeLessThan(height / 2);
-    const logoBox = await page.getByRole("img", { name: "연어 버스 로고", exact: true }).boundingBox();
+    const logoBox = await page
+      .getByRole("link", { name: "연어버스 홈으로 이동", exact: true })
+      .locator("img")
+      .boundingBox();
     expect(logoBox).not.toBeNull();
     expect(logoBox!.y).toBeGreaterThanOrEqual(insets.top);
 

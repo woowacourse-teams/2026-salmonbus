@@ -10,9 +10,9 @@ interface BrandProps {
 
 export function Brand({ onClick }: BrandProps) {
   return (
-    <Link className={styles.brand} to={paths.routeSelect} aria-label="Salmonbus 홈으로 이동" onClick={onClick}>
-      <img className={styles.mascot} src={salmong} alt="연어 버스 로고" />
-      <span>Salmonbus</span>
+    <Link className={styles.brand} to={paths.routeSelect} aria-label="연어버스 홈으로 이동" onClick={onClick}>
+      <img className={styles.mascot} src={salmong} alt="" />
+      <span>연어버스</span>
     </Link>
   );
 }
