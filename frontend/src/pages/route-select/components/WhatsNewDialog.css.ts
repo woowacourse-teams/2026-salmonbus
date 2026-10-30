@@ -49,5 +49,3 @@ export const features = style({
 });
 
 export const actions = style({ display: "grid", gap: 4, flex: "none", marginTop: 18 });
-
-export const stopButton = style({ justifySelf: "center" });

@@ -1,4 +1,4 @@
-import { useState, type SubmitEvent } from "react";
+import { useEffect, useRef, useState, type SubmitEvent } from "react";
 import { useNavigate } from "react-router";
 import { createFavoriteGroup, renameFavoriteGroup } from "@/shared/api/favorites.api";
 import type { FavoriteGroup } from "@/shared/api/favorites.types";
@@ -23,11 +23,15 @@ interface RenameGroupNameFormProps {
 type GroupNameFormProps = CreateGroupNameFormProps | RenameGroupNameFormProps;
 
 export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
+  const field = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(group?.name ?? "");
   const { busy, error, setError, run } = useFavoriteAction();
   const navigate = useNavigate();
   const isStillOnScreen = useStillOnScreen();
   const invalid = groupNameError(name);
+  useEffect(() => {
+    if (error !== null) field.current?.focus();
+  }, [error]);
   async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (invalid || name.trim() === group?.name) return;
@@ -43,6 +47,7 @@ export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
         {group ? "변경할 그룹 이름" : "그룹 이름"}
       </label>
       <input
+        ref={field}
         id="group-name"
         className={group ? styles.field : formStyles.field}
         value={name}

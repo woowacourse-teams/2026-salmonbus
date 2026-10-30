@@ -1,6 +1,7 @@
 import { style } from "@vanilla-extract/css";
 import { PHONE_MEDIA } from "@/shared/styles/media";
 import { vars } from "@/shared/styles/tokens.css";
+import { secondary } from "@/shared/styles/button.css";
 
 const SAFE_AREA_TOP = "env(safe-area-inset-top, 0px)";
 const SAFE_AREA_BOTTOM = "env(safe-area-inset-bottom, 0px)";
@@ -24,6 +25,18 @@ export const content = style({
   height: "100%",
 });
 export const mapSlot = style({ position: "relative", flex: 1, minHeight: 0 });
+export const skipLink = style([
+  secondary,
+  {
+    position: "absolute",
+    top: `calc(${SAFE_AREA_TOP} + 8px)`,
+    left: 18,
+    right: 18,
+    zIndex: 3,
+    width: "auto",
+    selectors: { "&:not(:focus)": { clipPath: "inset(50%)" } },
+  },
+]);
 export const back = style({
   position: "absolute",
   top: "calc(env(safe-area-inset-top, 0px) + 20px)",
