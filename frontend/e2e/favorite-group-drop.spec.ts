@@ -17,7 +17,14 @@ async function dropGroup(page: Page, name: string) {
   const target = editor.getByRole("region", { name: "그룹 삭제 영역", exact: true });
   await expect(target).toBeVisible();
   await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeVisible();
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 16 });
+  const destination = { x: to.x + to.width - 32, y: to.y + to.height / 2 };
+  await page.mouse.move(destination.x, destination.y, { steps: 16 });
+  expect(
+    await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest("[data-sort-id]")?.textContent,
+      destination,
+    ),
+  ).toContain(name);
   await page.mouse.up();
 }
 
