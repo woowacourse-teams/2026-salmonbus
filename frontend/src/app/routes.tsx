@@ -23,13 +23,13 @@ function NavigationLayout() {
 
 const pagesWithNavigation = [
   { path: paths.routeSelect, title: "", element: <RouteSelectPage /> },
-  { path: paths.login, title: "로그인", element: <LoginPage /> },
   { path: paths.mypage, title: "마이페이지", element: <MyPage /> },
   { path: paths.nickname, title: "닉네임 수정", element: <NicknamePage /> },
   { path: paths.favoriteGroup, title: "즐겨찾기 그룹 관리", element: <FavoriteGroupPage /> },
 ];
 
 const pagesWithoutNavigation = [
+  { path: paths.login, title: "로그인", element: <LoginPage /> },
   { path: paths.routeSearch, title: "노선 검색", element: <RouteSearchPage /> },
   { path: paths.board, title: "노선 판정보드", element: <VerdictBoardPage /> },
 ];
