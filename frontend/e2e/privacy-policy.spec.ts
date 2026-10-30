@@ -12,6 +12,8 @@ const transferSection = (page: Page) =>
 const backLink = (page: Page) => page.getByRole("link", { name: "이전 화면으로 돌아가기", exact: true });
 const currentEditionLink = (page: Page) =>
   page.getByRole("link", { name: "지금 적용 중인 처리방침 보기", exact: true });
+const myPagePolicyLink = (page: Page) =>
+  page.getByRole("region", { name: "개인정보" }).getByRole("link", { name: POLICY_LINK, exact: true });
 
 async function expectCurrentEdition(page: Page) {
   await expect(policyTitle(page)).toBeVisible();
@@ -62,11 +64,11 @@ for (const date of ["2025-01-01", "latest"]) {
   });
 }
 
-test("목차를 누르면 주소와 방문 기록을 바꾸지 않고 그 절로 옮겨 가서, 뒤로 가기 한 번에 홈으로 돌아간다", async ({
+test("목차를 누르면 주소와 방문 기록을 바꾸지 않고 그 절로 옮겨 가서, 뒤로 가기 한 번에 마이페이지로 돌아간다", async ({
   page,
 }) => {
-  await page.goto("/");
-  await page.getByRole("link", { name: POLICY_LINK, exact: true }).click();
+  await page.goto("/mypage");
+  await myPagePolicyLink(page).click();
   await expect(policyTitle(page)).toBeVisible();
 
   await page.getByRole("link", { name: "개인정보의 국외 이전", exact: true }).click();
@@ -75,27 +77,13 @@ test("목차를 누르면 주소와 방문 기록을 바꾸지 않고 그 절로
   await expect(page).toHaveURL("/privacy");
 
   await page.goBack();
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/mypage");
 });
 
 test("주소에 절 아이디(#)를 붙여 들어오면 그 절을 보여 준다", async ({ page }) => {
   await page.goto("/privacy#8-개인정보의-국외-이전");
 
   await expect(transferSection(page)).toBeInViewport();
-});
-
-test("홈에서 연 처리방침은 돌아가기 버튼과 브라우저 뒤로 가기 모두 홈으로 돌아간다", async ({ page }) => {
-  const homePolicyLink = page.getByRole("link", { name: POLICY_LINK, exact: true });
-  await page.goto("/");
-  await homePolicyLink.click();
-  await expect(page).toHaveURL("/privacy");
-  await backLink(page).click();
-  await expect(page).toHaveURL("/");
-
-  await homePolicyLink.click();
-  await expect(policyTitle(page)).toBeVisible();
-  await page.goBack();
-  await expect(page).toHaveURL("/");
 });
 
 test("마이페이지 아래쪽에서 연 처리방침은 맨 위부터 보여 주고, 돌아가기로 마이페이지에 돌아간다", async ({ page }) => {
@@ -137,13 +125,17 @@ test("처리방침으로 바로 들어와서 돌아가기를 누르면 홈으로
   await expect(page).toHaveURL("/");
 });
 
-test("처리방침 코드는 홈에서 받지 않고 처리방침을 열 때 한 번 받는다", async ({ page }) => {
+test("홈에는 처리방침 링크가 없고, 처리방침 코드는 마이페이지에서 처리방침을 열 때 한 번 받는다", async ({ page }) => {
   const requests = privacyScriptRequests(page);
   await page.goto("/");
-  await expect(page.getByRole("link", { name: POLICY_LINK, exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "마이페이지", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: POLICY_LINK, exact: true })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "마이페이지", exact: true }).click();
+  await expect(myPagePolicyLink(page)).toBeVisible();
   expect(requests).toEqual([]);
 
-  await page.getByRole("link", { name: POLICY_LINK, exact: true }).click();
+  await myPagePolicyLink(page).click();
   await expect(firstSection(page)).toBeVisible();
   expect(requests).toHaveLength(1);
 });
@@ -151,8 +143,8 @@ test("처리방침 코드는 홈에서 받지 않고 처리방침을 열 때 한
 test("처리방침 코드를 받지 못하면 오류 화면을 보여 주고, 다시 시도하면 처리방침을 연다", async ({ page }) => {
   const blockPrivacyScript = /\/assets\/js\/privacy\.[^/]+\.js$/;
   await page.route(blockPrivacyScript, (route) => route.abort());
-  await page.goto("/");
-  await page.getByRole("link", { name: POLICY_LINK, exact: true }).click();
+  await page.goto("/mypage");
+  await myPagePolicyLink(page).click();
   await expect(page.getByText("앗, 문제가 생겼어요", { exact: true })).toBeVisible();
 
   await page.unroute(blockPrivacyScript);

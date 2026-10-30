@@ -195,7 +195,7 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
       await page.keyboard.press(tabKey);
       await expect(page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true })).toBeFocused();
       await page.keyboard.press(tabKey);
-      await expect(page.getByRole("link", { name: "개인정보 처리방침", exact: true })).toBeFocused();
+      await expect(page.getByRole("link", { name: "홈", exact: true })).toBeFocused();
       const pending = (await panel.boundingBox())!;
       expect(pending.y).toBeCloseTo(before.y, 1);
       expect(pending.height).toBeCloseTo(before.height, 1);
