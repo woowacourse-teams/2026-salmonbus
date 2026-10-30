@@ -5,14 +5,15 @@ import type { FavoriteGroup, HomeFavorite, SavedFavorite } from "@/shared/api/fa
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
+import { FavoriteGroupAddButton } from "@/shared/components/FavoriteGroupAddButton";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
-import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { FavoritesNotice, PartialFavoriteOrderNotice } from "@/shared/components/FavoritesNotice";
 import { SortableList } from "./SortableList";
 import { moveItem } from "@/shared/utils/moveItem";
-import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
+import { useFavoriteGroupDeletion } from "@/shared/hooks/useFavoriteGroupDeletion";
 import trashIcon from "@/shared/assets/icons/trash.svg";
 import * as styles from "./FavoriteEditor.css";
 import * as common from "@/shared/styles/form.css";
@@ -29,6 +30,10 @@ interface FavoriteOrderChange {
   ids: string[];
 }
 
+interface GroupDrag {
+  overTarget: boolean;
+}
+
 export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: FavoriteEditorProps) {
   const { groups, reload } = useFavorites();
   const [saved, setSaved] = useState(groups);
@@ -36,7 +41,9 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   const [selected, select] = useState(initialGroupId ?? groups[0]?.id);
   const group = draft.find((candidate) => candidate.id === selected) ?? draft[0];
   const [deleting, setDeleting] = useState<SavedFavorite | null>(null);
-  const [partial, setPartial] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState<FavoriteGroup | null>(null);
+  const [groupDrag, setGroupDrag] = useState<GroupDrag | null>(null);
+  const protectedGroup = deletingGroup !== null && draft[0]?.id === deletingGroup.id;
   const [revision, retry] = useState(0);
   const summaries = useHomeFavorites({ kind: "all" }, revision);
   const favorites =
@@ -44,12 +51,21 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   const hasGroupDetails =
     initialFavorites !== undefined &&
     group?.favorites.every((favorite) => favorites.some((item) => item.id === favorite.id));
-  const { busy, error, setError, run } = useFavoriteAction();
+  const {
+    busy,
+    error,
+    setError,
+    run,
+    partial,
+    setPartial,
+    removeGroup: deleteGroup,
+  } = useFavoriteGroupDeletion(saved, draft, setSaved);
   const editor = useRef<HTMLElement>(null);
   const doneButton = useRef<HTMLButtonElement>(null);
+  const groupDropArea = useRef<HTMLDivElement>(null);
   useEffect(() => {
     editor.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus();
-  }, []);
+  }, [group?.id]);
   const idsOf = (items: { id: string }[]) => items.map((item) => item.id);
   const labelOf = (favorite: SavedFavorite) => {
     const item = favorites.find((candidate) => candidate.id === favorite.id);
@@ -60,6 +76,11 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
     if (partial || error) reload();
     onClose(false);
   };
+  function addGroup(created: FavoriteGroup) {
+    setSaved((current) => [...current, created]);
+    setDraft((current) => [...current, created]);
+    select(created.id);
+  }
   async function remove() {
     if (!group || !deleting) return;
     if (await run(() => deleteFavorite(group.id, deleting.id))) {
@@ -72,6 +93,16 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
       setDraft(withoutDeleted);
       setSaved(withoutDeleted);
       setDeleting(null);
+    }
+  }
+  async function removeGroup() {
+    if (!deletingGroup || protectedGroup || busy) return;
+    if (await deleteGroup(deletingGroup.id)) {
+      setSaved((current) => current.filter((candidate) => candidate.id !== deletingGroup.id));
+      setDraft((current) => current.filter((candidate) => candidate.id !== deletingGroup.id));
+      setDeletingGroup(null);
+    } else {
+      reload();
     }
   }
   async function save() {
@@ -129,35 +160,49 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
       aria-label="즐겨찾기 편집"
       aria-busy={summaries.status === "pending" && !hasGroupDetails}
       onKeyDown={(event) => {
-        if (event.key === "Escape" && deleting === null) close();
+        if (event.target instanceof Element && event.target.closest("dialog")) return;
+        if (event.key === "Escape" && deleting === null && deletingGroup === null) close();
       }}
     >
       <h2 className={visuallyHidden}>즐겨찾기 편집</h2>
       <p id="favorite-sort-help" className={visuallyHidden}>
         손잡이를 끌거나 선택 후 그룹은 왼쪽·오른쪽, 정류장은 위·아래 방향키로 순서를 바꿀 수 있어요. Escape 키를 누르면
-        취소해요.
+        취소해요. 그룹을 아래 휴지통에 놓으면 삭제를 확인할 수 있어요.
       </p>
-      <SortableList
-        items={draft}
-        horizontal
-        disabled={busy}
-        label={(candidate) => candidate.name}
-        onMove={(from, to) => setDraft((current) => moveItem(current, from, to))}
-        render={(candidate, handle) => (
-          <>
-            <button
-              type="button"
-              className={styles.groupName}
-              aria-pressed={group?.id === candidate.id}
-              disabled={busy}
-              onClick={() => select(candidate.id)}
-            >
-              {candidate.name}
-            </button>
-            {handle}
-          </>
-        )}
-      />
+      <div className={styles.groupControls}>
+        <div className={styles.groupList}>
+          <SortableList
+            items={draft}
+            horizontal
+            disabled={busy}
+            label={(candidate) => candidate.name}
+            onMove={(from, to) => setDraft((current) => moveItem(current, from, to))}
+            dropZone={{
+              target: groupDropArea,
+              onDrag: (dragged, overTarget) => setGroupDrag(dragged ? { overTarget } : null),
+              onDrop: (dropped) => {
+                setError(null);
+                setDeletingGroup(dropped);
+              },
+            }}
+            render={(candidate, handle) => (
+              <>
+                <button
+                  type="button"
+                  className={styles.groupName}
+                  aria-pressed={group?.id === candidate.id}
+                  disabled={busy}
+                  onClick={() => select(candidate.id)}
+                >
+                  {candidate.name}
+                </button>
+                {handle}
+              </>
+            )}
+          />
+        </div>
+        <FavoriteGroupAddButton disabled={busy} onCreated={addGroup} />
+      </div>
       {summaries.status === "pending" ? (
         !hasGroupDetails && (
           <p className={visuallyHidden} role="status">
@@ -167,85 +212,151 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
       ) : (
         <FavoritesNotice resource={summaries} onRetry={() => retry((value) => value + 1)} />
       )}
-      {group && group.favorites.length > 0 && (
-        <SortableList
-          key={group.id}
-          items={group.favorites}
-          disabled={busy}
-          label={labelOf}
-          onMove={(from, to) =>
-            setDraft((current) =>
-              current.map((candidate) =>
-                candidate.id === group.id
-                  ? { ...candidate, favorites: moveItem(candidate.favorites, from, to) }
-                  : candidate,
-              ),
-            )
-          }
-          render={(favorite, handle) => {
-            const item = favorites.find((candidate) => candidate.id === favorite.id);
-            return (
-              <>
-                <div className={styles.info}>
-                  {summaries.status === "pending" && !item ? (
-                    <>
-                      <span className={styles.loadingName} aria-hidden="true" />
-                      <span className={styles.loadingDirection} aria-hidden="true" />
-                    </>
-                  ) : (
-                    <div className={styles.cardHeading}>
-                      <RouteBadge
-                        size={item?.route.displayName ? "large" : "small"}
-                        className={item?.route.displayName ? styles.routeBadge : ""}
-                      >
-                        {item?.route.displayName || "노선 정보 없음"}
-                      </RouteBadge>
-                      <div className={styles.stopNameAndDirection}>
-                        <span className={styles.stop}>{item?.stop.name || "정류장 정보 없음"}</span>
-                        <span className={styles.direction}>
-                          {directionLabelOf(item?.route.terminalStopName, favorite.direction)}
-                        </span>
-                      </div>
+      <div
+        ref={groupDropArea}
+        className={styles.groupDropArea}
+        data-group-drop-zone=""
+        data-dragging={groupDrag !== null}
+        data-drop-active={groupDrag?.overTarget ?? false}
+        role={groupDrag ? "region" : undefined}
+        aria-label={groupDrag ? "그룹 삭제 영역" : undefined}
+      >
+        <div className={styles.dropContent} inert={groupDrag !== null}>
+          {group && group.favorites.length > 0 && (
+            <SortableList
+              key={group.id}
+              items={group.favorites}
+              disabled={busy}
+              label={labelOf}
+              onMove={(from, to) =>
+                setDraft((current) =>
+                  current.map((candidate) =>
+                    candidate.id === group.id
+                      ? { ...candidate, favorites: moveItem(candidate.favorites, from, to) }
+                      : candidate,
+                  ),
+                )
+              }
+              render={(favorite, handle) => {
+                const item = favorites.find((candidate) => candidate.id === favorite.id);
+                return (
+                  <>
+                    <div className={styles.info}>
+                      {summaries.status === "pending" && !item ? (
+                        <>
+                          <span className={styles.loadingName} aria-hidden="true" />
+                          <span className={styles.loadingDirection} aria-hidden="true" />
+                        </>
+                      ) : (
+                        <div className={styles.cardHeading}>
+                          <RouteBadge
+                            size={item?.route.displayName ? "large" : "small"}
+                            className={item?.route.displayName ? styles.routeBadge : ""}
+                          >
+                            {item?.route.displayName || "노선 정보 없음"}
+                          </RouteBadge>
+                          <div className={styles.stopNameAndDirection}>
+                            <span className={styles.stop}>{item?.stop.name || "정류장 정보 없음"}</span>
+                            <span className={styles.direction}>
+                              {directionLabelOf(item?.route.terminalStopName, favorite.direction)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className={styles.trash}
-                  disabled={busy}
-                  aria-label={`${item?.stop.name || `즐겨찾기 ${group.favorites.indexOf(favorite) + 1}`} 삭제`}
-                  onClick={(event) => {
-                    event.currentTarget.focus();
-                    setError(null);
-                    setDeleting(favorite);
-                  }}
-                >
-                  <img src={trashIcon} width="18" height="18" alt="" draggable={false} />
-                </button>
-                {handle}
-              </>
-            );
-          }}
-        />
-      )}
-      {group?.favorites.length === 0 && <EmptyFavoriteGroup />}
-      {error && deleting === null && (
+                    <button
+                      type="button"
+                      className={styles.trash}
+                      disabled={busy}
+                      aria-label={`${item?.stop.name || `즐겨찾기 ${group.favorites.indexOf(favorite) + 1}`} 삭제`}
+                      onClick={(event) => {
+                        event.currentTarget.focus();
+                        setError(null);
+                        setDeleting(favorite);
+                      }}
+                    >
+                      <img src={trashIcon} width="18" height="18" alt="" draggable={false} />
+                    </button>
+                    {handle}
+                  </>
+                );
+              }}
+            />
+          )}
+          {group?.favorites.length === 0 && <EmptyFavoriteGroup />}
+        </div>
+        {groupDrag && (
+          <div className={styles.dropHint}>
+            <span className={styles.dropIcon} aria-hidden="true" />
+            <span>그룹 삭제</span>
+          </div>
+        )}
+      </div>
+      {error && deleting === null && deletingGroup === null && (
         <p className={common.error} role="alert">
           {error}
         </p>
       )}
-      {partial && (
-        <p className={common.subtle} role="status">
-          일부 순서는 저장됐어요. 아직 저장하지 못한 순서만 다시 저장할 수 있어요.
-        </p>
-      )}
-      <button ref={doneButton} type="button" className={styles.done} disabled={busy} onClick={() => void save()}>
+      {partial && deletingGroup === null && <PartialFavoriteOrderNotice />}
+      <button
+        ref={doneButton}
+        type="button"
+        className={styles.done}
+        disabled={busy}
+        aria-disabled={busy || groupDrag !== null}
+        onClick={() => {
+          if (groupDrag === null) void save();
+        }}
+      >
         {busy ? "저장 중…" : "완료"}
       </button>
       {(partial || error) && (
         <button type="button" className={buttons.text} disabled={busy} onClick={close}>
           닫기
         </button>
+      )}
+      {deletingGroup && (
+        <ConfirmDialog
+          title={protectedGroup ? "대표 그룹은 삭제할 수 없어요" : "그룹을 삭제하시겠습니까?"}
+          className={styles.deleteDialog}
+          titleClassName={styles.deleteTitle}
+          fallbackFocus={doneButton}
+          onCancel={() => {
+            if (!busy) setDeletingGroup(null);
+          }}
+        >
+          <p className={styles.deleteDescription}>
+            {protectedGroup ? (
+              "다른 그룹을 맨 위로 옮긴 뒤 삭제해 주세요."
+            ) : (
+              <>
+                {deletingGroup.name} 그룹과 즐겨찾기 {deletingGroup.favorites.length}개가 함께 삭제돼요.
+                <br />
+                다른 그룹의 즐겨찾기는 유지돼요.
+              </>
+            )}
+          </p>
+          {error && (
+            <p className={common.error} role="alert">
+              {error}
+            </p>
+          )}
+          {partial && <PartialFavoriteOrderNotice />}
+          {protectedGroup ? (
+            <button className={styles.cancel} onClick={() => setDeletingGroup(null)}>
+              확인
+            </button>
+          ) : (
+            <div className={styles.deleteActions}>
+              <button className={styles.cancel} disabled={busy} onClick={() => setDeletingGroup(null)}>
+                취소
+              </button>
+              <button className={styles.confirm} disabled={busy} onClick={() => void removeGroup()}>
+                {busy ? "삭제 중…" : "삭제"}
+              </button>
+            </div>
+          )}
+        </ConfirmDialog>
       )}
       {deleting && (
         <ConfirmDialog

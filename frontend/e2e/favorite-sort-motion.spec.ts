@@ -20,12 +20,15 @@ for (const { path, direction, reducedMotion } of [
       storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),
       storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
     ];
+    favorites.groups.push({ id: "10000000-0000-4000-8000-000000000003", name: "통학", favorites: [] });
     await page.goto(path);
     await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
-    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-    const list = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true });
+    const home = path === "/";
+    const editor = page.getByRole("region", { name: home ? "즐겨찾기 편집" : "즐겨찾기 그룹 편집", exact: true });
+    const list = editor.getByRole("list", { name: home ? "즐겨찾기 순서" : "그룹 순서", exact: true });
     const cards = list.getByRole("listitem");
-    await expect(cards.first().getByText(first!.name, { exact: true })).toBeVisible();
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first()).toContainText(home ? first!.name : "즐겨찾기");
     await page.evaluate(() => document.fonts.ready);
     await editor.evaluate((element) =>
       Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
@@ -81,9 +84,14 @@ for (const { path, direction, reducedMotion } of [
     if (reducedMotion === "reduce") {
       expect(await list.evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
     }
-    await expect(cards.first()).toContainText(second!.name);
+    await expect(cards.first()).toContainText(home ? second!.name : "통학");
     await editor.getByRole("button", { name: "완료", exact: true }).click();
     await expect(editor).toHaveCount(0);
-    expect(favorites.groups[0]!.favorites.map((favorite) => favorite.stopId)).toEqual([second!.stopId, first!.stopId]);
+    if (home)
+      expect(favorites.groups[0]!.favorites.map((favorite) => favorite.stopId)).toEqual([
+        second!.stopId,
+        first!.stopId,
+      ]);
+    else expect(favorites.groups.map((group) => group.name)).toEqual(["통학", "즐겨찾기"]);
   });
 }

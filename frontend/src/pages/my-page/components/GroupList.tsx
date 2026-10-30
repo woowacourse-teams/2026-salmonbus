@@ -7,7 +7,7 @@ import { useFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
-import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
+import { GroupOrderEditor } from "./GroupOrderEditor";
 import { Notice } from "@/shared/components/Notice";
 import * as formStyles from "@/shared/styles/form.css";
 import * as styles from "./GroupList.css";
@@ -71,14 +71,12 @@ export function GroupList() {
 
   if (mode === "order")
     return (
-      <div className={styles.section}>
-        <FavoriteEditor
-          onClose={(saved) => {
-            setMode("view");
-            if (saved) showNotice((value) => ({ id: value.id + 1, message: "변경 사항을 저장했어요" }));
-          }}
-        />
-      </div>
+      <GroupOrderEditor
+        onClose={(saved) => {
+          setMode("view");
+          if (saved) showNotice((value) => ({ id: value.id + 1, message: "변경 사항을 저장했어요" }));
+        }}
+      />
     );
   return (
     <section {...maskedPropsFor(styles.section)} aria-label="즐겨찾기 그룹 관리">
@@ -164,7 +162,9 @@ export function GroupList() {
               ) : (
                 <Link className={styles.group} to={`/mypage/groups/${encodeURIComponent(group.id)}`}>
                   {info}
-                  <img src={chevronIcon} width="18" height="18" alt="" draggable={false} />
+                  <span className={styles.cardTools}>
+                    <img src={chevronIcon} width="18" height="18" alt="" draggable={false} />
+                  </span>
                 </Link>
               )}
             </li>

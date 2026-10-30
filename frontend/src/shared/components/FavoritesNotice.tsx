@@ -61,6 +61,14 @@ export function FavoritesNotice({ resource, onRetry, home = false }: FavoritesNo
   );
 }
 
+export function PartialFavoriteOrderNotice() {
+  return (
+    <p className={formStyles.subtle} role="status">
+      일부 순서는 저장됐어요. 아직 저장하지 못한 순서만 다시 저장할 수 있어요.
+    </p>
+  );
+}
+
 export function FavoritesRetryButton({ children, onRetry }: { children: string; onRetry: () => void }) {
   return (
     <button type="button" className={styles.homeRetry} onClick={onRetry}>

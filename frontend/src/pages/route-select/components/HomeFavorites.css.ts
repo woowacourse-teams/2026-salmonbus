@@ -2,7 +2,7 @@ import { keyframes, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 import { card as cardBase, outlinedCard } from "@/shared/styles/surface.css";
 import { pill } from "@/shared/styles/selection.css";
-import { text } from "@/shared/styles/button.css";
+import { primary, text } from "@/shared/styles/button.css";
 import { modeTransition } from "@/shared/styles/transition.css";
 
 export const section = style([modeTransition, { width: "100%", maxWidth: 356, margin: "0 auto" }]);
@@ -141,9 +141,20 @@ export const list = style({
   listStyle: "none",
 });
 export const tabs = style({ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 });
+export const groupTabs = style({
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flex: "0 1 auto",
+  minWidth: 0,
+  overflowX: "auto",
+  padding: 4,
+  margin: -4,
+});
 export const tab = style([
   pill,
   {
+    flexShrink: 0,
     cursor: "pointer",
     transition: "background-color 160ms ease, color 160ms ease",
     selectors: { '&[aria-selected="true"]': { background: vars.color.liveBus, color: "white" } },
@@ -152,7 +163,15 @@ export const tab = style([
 ]);
 export const homeEdit = style([
   text,
-  { display: "grid", placeItems: "center", flexShrink: 0, width: 36, height: 32, padding: "6px 8px" },
+  {
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+    width: 36,
+    height: 32,
+    padding: "6px 8px",
+    marginLeft: "auto",
+  },
 ]);
 export const homeEmpty = style({
   display: "flex",
@@ -165,4 +184,17 @@ export const homeEmpty = style({
   textAlign: "center",
 });
 export const homeEmptyTitle = style({ margin: 0, fontSize: 16, fontWeight: 500 });
-export const homeEmptyDescription = style({ margin: 0, fontSize: 13, lineHeight: 1.6 });
+export const addFavorite = style([
+  primary,
+  {
+    width: "auto",
+    borderRadius: 10,
+    background: vars.color.surface,
+    color: vars.color.textBody,
+    boxShadow: "inset 0 0 0 1px #E3DCD5, 0 2px 3px #3B2D2408",
+    selectors: {
+      "&:hover": { background: "#FFFCFA", boxShadow: "inset 0 0 0 1px #D7BFB5, 0 2px 3px #3B2D2408" },
+      "&:active": { background: "#F4F0EC", boxShadow: "inset 0 0 0 1px #D7BFB5" },
+    },
+  },
+]);
