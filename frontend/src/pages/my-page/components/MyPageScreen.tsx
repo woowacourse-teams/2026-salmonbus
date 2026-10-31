@@ -15,6 +15,7 @@ import { authErrorOf } from "@/shared/utils/authErrorOf";
 import * as buttonStyles from "@/shared/styles/button.css";
 import pencilIcon from "../assets/pencil.svg";
 import * as styles from "./MyPageScreen.css";
+import { row } from "./row.css";
 import { pageEnter } from "@/shared/styles/pageTransition.css";
 
 export function MyPageScreen() {
@@ -102,7 +103,7 @@ export function MyPageScreen() {
           <GroupList />
           <WhatsNewLink />
           <button
-            className={styles.row}
+            className={row}
             type="button"
             onClick={() => {
               setError(null);
@@ -112,7 +113,7 @@ export function MyPageScreen() {
             로그아웃<span aria-hidden="true">›</span>
           </button>
           <button
-            className={styles.row}
+            className={row}
             type="button"
             onClick={() => {
               setError(null);
@@ -135,7 +136,7 @@ export function MyPageScreen() {
               <p className={styles.error} role="alert">
                 로그인 상태를 확인하지 못했어요.
               </p>
-              <button className={styles.row} type="button" onClick={() => void reload()}>
+              <button className={row} type="button" onClick={() => void reload()}>
                 다시 확인하기
               </button>
             </>
