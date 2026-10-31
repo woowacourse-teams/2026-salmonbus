@@ -5,7 +5,7 @@ import { previewRoutes } from "./routeMapPreviewStops.mock";
 let lastKey: string | null = null;
 let lastData: RouteMapData | null = null;
 
-// 개발 전용: 실제 정류장 좌표를 순번대로 잇는 목업이다. 실제 도로 경로 API를 대신하지 않는다.
+// 테스트용: 실제 정류장 좌표를 순번대로 잇는 목업이다. 실제 도로 경로 API를 대신하지 않는다.
 export function loadPreviewRouteMapData(board: Board): RouteMapData | null {
   const key = JSON.stringify([
     board.route.id,
