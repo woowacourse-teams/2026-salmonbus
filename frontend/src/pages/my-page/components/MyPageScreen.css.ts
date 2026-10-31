@@ -1,9 +1,9 @@
 import { style } from "@vanilla-extract/css";
-import { row } from "./row.css";
+import { menuRow } from "./menuRow.css";
 
 export const title = style({ margin: "0 0 28px", fontSize: 25, fontWeight: 700 });
 
-export const nickname = style([row, { minHeight: 32, fontSize: 22, fontWeight: 700, cursor: "auto" }]);
+export const nickname = style([menuRow, { minHeight: 32, fontSize: 22, fontWeight: 700, cursor: "auto" }]);
 
 export const nicknameEdit = style({ display: "flex", flexShrink: 0, padding: 2, margin: -2 });
 

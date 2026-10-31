@@ -1,6 +1,6 @@
 import { style } from "@vanilla-extract/css";
 
-export const row = style({
+export const menuRow = style({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
