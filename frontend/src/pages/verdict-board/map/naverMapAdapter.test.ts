@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { boardMock } from "@/shared/api/routeForecast.mock";
 import { liveVehicleViewsFor } from "../components/liveVehiclePolicy";
 import { routeWatchMock } from "@/shared/api/routeForecast.mock";
-import { loadPreviewRouteMapData } from "./routeMapPreview";
+import { loadPreviewRouteMapData } from "./routeMapPreview.mock";
 import type { NaverCoordinate, NaverMap, NaverMaps, NaverMarker } from "./naverSdk";
 import { createNaverRouteMap } from "./naverMapAdapter";
 import type { RouteMapData } from "./routeMapModel";
 
-jest.mock("./RouteMap.css", () => ({
+jest.mock("./naverMapAdapter.css", () => ({
   stop: "stop",
   stopName: "name",
   arrow: "arrow",

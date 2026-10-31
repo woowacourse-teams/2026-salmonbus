@@ -1,9 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
 import { boardMock } from "@/shared/api/routeForecast.mock";
-import { loadPreviewRouteMapData } from "./routeMapPreview";
-import { previewRoutes } from "./routeMapPreviewStops";
+import { loadPreviewRouteMapData } from "./routeMapPreview.mock";
+import { previewRoutes } from "./routeMapPreviewStops.mock";
 
-describe("개발용 지도 fixture", () => {
+describe("테스트용 지도 fixture", () => {
   it("41개 노선의 모든 정류장 좌표를 담고 있다", () => {
     expect(Object.keys(previewRoutes)).toHaveLength(41);
     const stops = Object.values(previewRoutes).flatMap((route) => route.stops);

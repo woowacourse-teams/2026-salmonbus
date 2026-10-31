@@ -1,4 +1,4 @@
-// 개발 전용 정류장 snapshot. 실제 도로 형상이 아닌 정류장 연결 목업을 만든다.
+// 테스트용 정류장 snapshot. 실제 도로 형상이 아닌 정류장 연결 목업을 만든다.
 // 원본: dev/data/routes.json (2026-10-06), catalog-routes.json (2026-10-07).
 import type { Direction } from "@/shared/api/routeForecast.types";
 

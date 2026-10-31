@@ -5,7 +5,7 @@ import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
 import { routeArrowsFor, routeMapCoordinateForSequence, type RouteArrow } from "./routeMapGeometry";
 import type { NaverMaps, NaverMarker } from "./naverSdk";
-import * as styles from "./RouteMap.css";
+import * as styles from "./naverMapAdapter.css";
 
 const DETAIL_ZOOM = 14;
 const INITIALIZATION_TIMEOUT_MS = 10_000;
