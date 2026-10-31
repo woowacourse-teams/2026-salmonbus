@@ -1,6 +1,6 @@
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
 import type { RouteMapData, RouteMapStop } from "./routeMapModel";
-import { previewRoutes } from "./routeMapPreviewStops";
+import { previewRoutes } from "./routeMapPreviewStops.mock";
 
 let lastKey: string | null = null;
 let lastData: RouteMapData | null = null;
