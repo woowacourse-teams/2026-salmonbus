@@ -7,7 +7,7 @@ import type { NaverCoordinate, NaverMap, NaverMaps, NaverMarker } from "./naverS
 import { createNaverRouteMap } from "./naverMapAdapter";
 import type { RouteMapData } from "./routeMapModel";
 
-jest.mock("./RouteMap.css", () => ({
+jest.mock("./naverMapAdapter.css", () => ({
   stop: "stop",
   stopName: "name",
   arrow: "arrow",
