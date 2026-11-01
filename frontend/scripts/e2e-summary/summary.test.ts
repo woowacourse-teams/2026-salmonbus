@@ -172,7 +172,7 @@ describe("summaryMarkdownOf", () => {
     });
 
     expect(markdown).toContain("| test() | 2 | 3 | +1 |");
-    expect(markdown).toContain("| 실행 횟수(chromium, iphone-15) | 4 | 6 | +2 |");
+    expect(markdown).toContain("| 실행 횟수(chromium, iphone-15, 필터 적용 전 목록 기준) | 4 | 6 | +2 |");
     expect(markdown).toContain("더한 test() 1개, 뺀 test() 0개.");
     expect(markdown).toContain("- home.spec.ts › 다");
     expect(markdown).toContain("이번 실행 필터: `--grep-invert=api-mock-cleanup.spec.ts`");

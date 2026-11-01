@@ -230,7 +230,7 @@ function comparisonSection(comparison: Loaded<Comparison>): string[] {
     "|---|---:|---:|---:|",
     `| spec 파일 | ${base.fileCount} | ${head.fileCount} | ${signed(head.fileCount - base.fileCount)} |`,
     `| test() | ${base.testNames.size} | ${head.testNames.size} | ${signed(head.testNames.size - base.testNames.size)} |`,
-    `| 실행 횟수(${head.projects.join(", ")}) | ${base.runCount} | ${head.runCount} | ${signed(head.runCount - base.runCount)} |`,
+    `| 실행 횟수(${head.projects.join(", ")}, 필터 적용 전 목록 기준) | ${base.runCount} | ${head.runCount} | ${signed(head.runCount - base.runCount)} |`,
     "",
     `더한 test() ${added.length}개, 뺀 test() ${removed.length}개. 제목이나 파일이 바뀐 테스트는 뺀 것과 더한 것에 함께 들어간다.`,
     ...namesBlock("더한 test()", added),

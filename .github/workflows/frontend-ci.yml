@@ -168,6 +168,7 @@ jobs:
 
       # base(HEAD^1)를 따로 꺼내 같은 node_modules로 목록을 만든다. 실패하면 요약에 "비교 못 함"으로 남는다.
       # pnpm exec는 base의 lockfile과 링크한 node_modules가 다르면 node_modules를 지우고 다시 설치하려 하므로 Playwright CLI를 직접 부른다.
+      # 의존성을 바꾼 PR에서는 base 목록도 head의 의존성으로 만들어 숫자가 다를 수 있지만, 드문 경우라 따로 막지 않는다.
       - name: List E2E tests on PR base
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         continue-on-error: true
