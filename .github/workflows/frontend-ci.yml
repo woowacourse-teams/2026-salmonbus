@@ -159,3 +159,36 @@ jobs:
             frontend/test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+      # 아래 세 단계는 E2E가 다시 불어나는지 보려는 요약이다. 실패해도 job을 실패시키지 않는다.
+      - name: List E2E tests
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: PLAYWRIGHT_JSON_OUTPUT_FILE="$RUNNER_TEMP/e2e-list-head.json" pnpm exec playwright test --list --reporter=json $E2E_PROJECTS > /dev/null
+
+      # base(HEAD^1)를 따로 꺼내 같은 node_modules로 목록을 만든다. 실패하면 요약에 "비교 못 함"으로 남는다.
+      # pnpm exec는 base의 lockfile과 링크한 node_modules가 다르면 node_modules를 지우고 다시 설치하려 하므로 Playwright CLI를 직접 부른다.
+      - name: List E2E tests on PR base
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        run: |
+          base_dir="$RUNNER_TEMP/e2e-base"
+          playwright="$PWD/node_modules/.bin/playwright"
+          git worktree add --detach "$base_dir" HEAD^1
+          ln -s "$PWD/node_modules" "$base_dir/frontend/node_modules"
+          cd "$base_dir/frontend"
+          PLAYWRIGHT_JSON_OUTPUT_FILE="$RUNNER_TEMP/e2e-list-base.json" "$playwright" test --list --reporter=json $E2E_PROJECTS > /dev/null
+
+      - name: Summarize E2E run time and counts
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            set -- --base-list "$RUNNER_TEMP/e2e-list-base.json"
+          fi
+          node scripts/e2e-summary/main.ts \
+            --results test-results/e2e-results.json \
+            --list "$RUNNER_TEMP/e2e-list-head.json" \
+            --filter="${E2E_FILTER:-}" \
+            --output "$GITHUB_STEP_SUMMARY" \
+            "$@"
