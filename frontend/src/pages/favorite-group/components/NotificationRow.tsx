@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { track } from "@/shared/analytics/track";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { deleteNotificationSetting, registerPushDevice, saveNotificationSetting } from "@/shared/api/notifications.api";
 import type { NotificationSchedule, NotificationSetting } from "@/shared/api/notifications.types";
@@ -36,12 +37,24 @@ export function NotificationRow({ target, stopLabel, initialSetting }: Notificat
 
   function save(schedule: NotificationSchedule) {
     if (state.status !== "editing" && state.status !== "failed") return;
+    const isFirst = state.previous === null;
     void submitNotification(
       target,
       state.previous,
       schedule,
       { requestRegistration: requestNotificationRegistration, registerPushDevice, saveNotificationSetting },
-      apply,
+      (event) => {
+        apply(event);
+        if (event.type === "saved")
+          track("notification_settings_saved", {
+            route_id: event.setting.routeId,
+            direction: event.setting.direction,
+            stop_id: event.setting.stopId,
+            time: event.setting.time,
+            weekday_count: event.setting.weekdays.length,
+            is_first: isFirst,
+          });
+      },
     );
   }
 
