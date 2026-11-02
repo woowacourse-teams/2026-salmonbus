@@ -56,8 +56,14 @@ export default tseslint.config(
       "src/**/*{Notification,notification}*.{ts,tsx}",
       "src/shared/components/favorite-editor/**/*.{ts,tsx}",
     ],
-    // shared/notification은 앱 bridge 모양을 앱과 같이 쓰는 SAL-172 영역이라 이 습관 규칙에서 뺀다.
-    ignores: ["src/**/*.test.ts", "src/**/*.typeTest.ts", "src/shared/notification/**"],
+    // SAL-172가 앱과 같이 쓰는 bridge 파일은 이 습관 규칙에서 뺀다.
+    ignores: [
+      "src/**/*.test.ts",
+      "src/**/*.typeTest.ts",
+      "src/shared/notification/notification.types.ts",
+      "src/shared/notification/nativeNotification.ts",
+      "src/shared/notification/openedNotificationInbox.ts",
+    ],
     rules: {
       "@typescript-eslint/consistent-type-definitions": ["error", "interface"],
       "@typescript-eslint/method-signature-style": ["error", "property"],
