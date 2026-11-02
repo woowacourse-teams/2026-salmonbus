@@ -4,9 +4,8 @@ import {
   NOTIFICATION_CAPABILITIES,
   apnsEnvironmentFrom,
   notificationRequestIdFrom,
-  notificationTargetFrom,
+  openedTargetFrom,
 } from './notificationMessages.ts';
-import { createTapInbox } from './tapInbox.ts';
 
 const TARGET = { routeId: '234000884', stopId: '203000165', direction: 'UP' };
 
@@ -38,23 +37,19 @@ describe('알림 메시지', () => {
 });
 
 describe('알림 대상', () => {
-  it('payload의 target이 맞으면 대상으로 읽는다', () => {
-    assert.deepEqual(notificationTargetFrom(TARGET), TARGET);
-    assert.deepEqual(notificationTargetFrom({ ...TARGET, direction: 'DOWN', extra: 1 }), { ...TARGET, direction: 'DOWN' });
+  it('payload의 target 객체를 고치지 않고 넘긴다', () => {
+    const withLaterField = { ...TARGET, platform: 'ios' };
+    assert.equal(openedTargetFrom(withLaterField), withLaterField);
   });
 
   for (const [name, value] of [
-    ['소문자 방향', { ...TARGET, direction: 'up' }],
-    ['모르는 방향', { ...TARGET, direction: 'LEFT' }],
-    ['숫자 노선', { ...TARGET, routeId: 234000884 }],
-    ['빈 정류장', { ...TARGET, stopId: '' }],
-    ['경로 문자가 든 노선', { ...TARGET, routeId: '../234' }],
-    ['배열', [TARGET]],
     ['target 없음', undefined],
     ['null', null],
+    ['문자열', '234000884'],
+    ['배열', [TARGET]],
   ]) {
-    it(`${name}이면 대상으로 읽지 않는다`, () => {
-      assert.equal(notificationTargetFrom(value), null);
+    it(`${name}이면 대상 없이 넘긴다`, () => {
+      assert.equal(openedTargetFrom(value), null);
     });
   }
 });
@@ -73,38 +68,5 @@ describe('APNs 환경', () => {
   it('정할 수 없으면 null이다', () => {
     assert.equal(apnsEnvironmentFrom(null, 'other'), null);
     assert.equal(apnsEnvironmentFrom('staging', 'appStore'), null);
-  });
-});
-
-describe('알림 탭 칸', () => {
-  it('웹 문서가 뜨는 중에 누른 탭은 칸에 두고 takeOpened에 한 번만 돌려준다', () => {
-    const inbox = createTapInbox();
-    assert.equal(inbox.accept({ identifier: 'n1', target: TARGET }, false), false);
-    assert.deepEqual(inbox.take(), TARGET);
-    assert.equal(inbox.take(), null);
-  });
-
-  it('웹 문서가 다 뜬 뒤 누른 탭은 바로 보내고 칸에 남기지 않는다', () => {
-    const inbox = createTapInbox();
-    assert.equal(inbox.accept({ identifier: 'n1', target: TARGET }, true), true);
-    assert.equal(inbox.take(), null);
-  });
-
-  it('같은 탭이 두 길로 와도 한 번만 받는다', () => {
-    const inbox = createTapInbox();
-    assert.equal(inbox.accept({ identifier: 'n1', target: TARGET }, true), true);
-    assert.equal(inbox.accept({ identifier: 'n1', target: TARGET }, true), false);
-  });
-
-  it('칸에는 마지막 탭만 남고, 바로 보낸 탭은 앞서 쌓인 탭을 지운다', () => {
-    const inbox = createTapInbox();
-    const later = { ...TARGET, routeId: '234000026' };
-    inbox.accept({ identifier: 'n1', target: TARGET }, false);
-    inbox.accept({ identifier: 'n2', target: later }, false);
-    assert.deepEqual(inbox.take(), later);
-
-    inbox.accept({ identifier: 'n3', target: TARGET }, false);
-    assert.equal(inbox.accept({ identifier: 'n4', target: later }, true), true);
-    assert.equal(inbox.take(), null);
   });
 });

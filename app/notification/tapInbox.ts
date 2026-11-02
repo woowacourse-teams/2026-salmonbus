@@ -1,35 +1,36 @@
-import type { NotificationTarget } from '../../frontend/src/shared/notification/notification.types';
-
 export interface NotificationTap {
-  identifier: string;
-  target: NotificationTarget | null;
+  /** 같은 탭이 두 길로 와도 같은 값이다. 알림 identifier와 받은 시각을 합친다. */
+  key: string;
+  target: Record<string, unknown> | null;
 }
+
+/** send는 부른 쪽이 바로 웹에 보낸다. held는 칸에 두고 takeOpened를 기다린다. */
+export type TapDecision = 'send' | 'held' | 'duplicate';
 
 /**
  * 알림 탭을 담는 칸 하나. 알림 하나는 판정 보드 하나를 여니 마지막 탭만 남긴다.
- * 꺼진 앱을 연 탭은 마지막 응답과 응답 이벤트 두 길로 올 수 있어서 identifier로 한 번만 받는다.
+ * 꺼진 앱을 연 탭은 마지막 응답과 응답 이벤트 두 길로 올 수 있어서 key로 한 번만 받는다.
  */
 export function createTapInbox() {
   let held: NotificationTap | null = null;
-  let lastIdentifier: string | null = null;
+  let lastKey: string | null = null;
 
-  /** 웹 문서가 다 떴으면 true를 돌려주고, 부른 쪽이 바로 보낸다. 뜨는 중이면 칸에 두고 false다. */
-  function accept(tap: NotificationTap, documentLoaded: boolean): boolean {
-    if (tap.identifier === lastIdentifier) return false;
-    lastIdentifier = tap.identifier;
+  function receive(tap: NotificationTap, documentLoaded: boolean): TapDecision {
+    if (tap.key === lastKey) return 'duplicate';
+    lastKey = tap.key;
     if (documentLoaded) {
       held = null;
-      return true;
+      return 'send';
     }
     held = tap;
-    return false;
+    return 'held';
   }
 
-  function take(): NotificationTarget | null {
+  function take(): Record<string, unknown> | null {
     const target = held?.target ?? null;
     held = null;
     return target;
   }
 
-  return { accept, take };
+  return { receive, take };
 }

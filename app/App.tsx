@@ -13,6 +13,7 @@ import { HAPTIC_CAPABILITIES, playHaptic } from './haptic/playHaptic';
 import { NativeRouteMap, type NativeRouteMapRef } from './native-map/NativeRouteMap';
 import { NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
 import { LOGIN_PROVIDER_ORIGINS, navigationDecisionFor } from './navigation/navigationPolicy';
+import type { NotificationCommandType } from '../frontend/src/shared/notification/notification.types';
 import {
   NOTIFICATION_CAPABILITIES,
   OPENED_EVENT,
@@ -89,7 +90,11 @@ export default function App() {
     SplashScreen.hide();
   };
   const retryLoad = () => setLoadFailed(false);
-  const reloadWebView = () => webViewRef.current?.reload();
+  // 백그라운드에서 WebView 프로세스가 끝나면 문서도 없다. 다시 뜨기 전에 온 알림 탭은 쌓아 둔다.
+  const reloadWebView = () => {
+    documentLoaded.current = false;
+    webViewRef.current?.reload();
+  };
 
   function handleLoadStart() {
     documentLoaded.current = false;
@@ -148,14 +153,22 @@ export default function App() {
     sendToWeb({ type: SIGN_IN_RESULT, payload: { ...result } });
   }
 
+  // 웹에 명령이 늘면 이 표에서 앱 tsc가 막는다.
+  const notificationHandlers: Record<NotificationCommandType, (requestId: string) => void> = {
+    'notification.requestPermission': (requestId) => replyRegistration(requestId, { ask: true }),
+    'notification.getRegistration': (requestId) => replyRegistration(requestId, { ask: false }),
+    'notification.takeOpened': (requestId) =>
+      sendToWeb({ type: OPENED_EVENT, payload: { requestId, target: notificationTaps.take() } }),
+  };
+
   function handleNotificationCommand(message: BridgeMessage) {
     const requestId = notificationRequestIdFrom(message.payload);
     if (requestId === null) return;
-    if (message.type === 'notification.takeOpened') {
-      sendToWeb({ type: OPENED_EVENT, payload: { requestId, target: notificationTaps.take() } });
-      return;
-    }
-    registrationFor(requestId, { ask: message.type === 'notification.requestPermission' }).then((registration) =>
+    notificationHandlers[message.type as NotificationCommandType](requestId);
+  }
+
+  function replyRegistration(requestId: string, { ask }: { ask: boolean }) {
+    registrationFor(requestId, { ask }).then((registration) =>
       sendToWeb({ type: REGISTRATION_EVENT, payload: { ...registration } }),
     );
   }
@@ -166,7 +179,7 @@ export default function App() {
   }
 
   const handleNotificationTap = useEffectEvent((tap: NotificationTap) => {
-    if (!notificationTaps.accept(tap, documentLoaded.current && webViewRef.current !== null)) return;
+    if (notificationTaps.receive(tap, documentLoaded.current && webViewRef.current !== null) !== 'send') return;
     sendToWeb({ type: OPENED_EVENT, payload: { requestId: null, target: tap.target } });
   });
 

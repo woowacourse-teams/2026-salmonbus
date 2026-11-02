@@ -1,8 +1,4 @@
-import type {
-  ApnsEnvironment,
-  NotificationCommandType,
-  NotificationTarget,
-} from '../../frontend/src/shared/notification/notification.types';
+import type { ApnsEnvironment, NotificationCommandType } from '../../frontend/src/shared/notification/notification.types';
 
 // 웹의 frontend/src/shared/notification/notification.types.ts와 같은 메시지를 주고받는다. 웹의 bridge.test.ts가 목록을 비교한다.
 export const NOTIFICATION_CAPABILITIES = [
@@ -17,21 +13,19 @@ export const OPENED_EVENT = 'notification.opened';
 export type ReleaseKind = 'simulator' | 'appStore' | 'other';
 
 const REQUEST_ID = /^[A-Za-z0-9-]{1,64}$/;
-const TARGET_ID = /^[A-Za-z0-9]{1,32}$/;
 
 export function notificationRequestIdFrom(payload: Record<string, unknown>): string | null {
   const { requestId } = payload;
   return typeof requestId === 'string' && REQUEST_ID.test(requestId) ? requestId : null;
 }
 
-/** 알림 payload의 target과 notification.opened의 target은 같은 모양이다. */
-export function notificationTargetFrom(value: unknown): NotificationTarget | null {
+/**
+ * 알림 payload의 target을 고치지 않고 웹에 넘긴다. 대상 형식은 웹(nativeNotification.ts) 한 곳에서 읽는다.
+ * 앱이 형식을 판단하면 서버가 target에 값을 더할 때 이미 깔린 앱이 그 값을 버린다.
+ */
+export function openedTargetFrom(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
-  const { routeId, stopId, direction } = value as Record<string, unknown>;
-  if (typeof routeId !== 'string' || !TARGET_ID.test(routeId)) return null;
-  if (typeof stopId !== 'string' || !TARGET_ID.test(stopId)) return null;
-  if (direction !== 'UP' && direction !== 'DOWN') return null;
-  return { routeId, stopId, direction };
+  return value as Record<string, unknown>;
 }
 
 /**
