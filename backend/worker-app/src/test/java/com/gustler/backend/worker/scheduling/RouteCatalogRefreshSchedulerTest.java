@@ -15,17 +15,20 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+
 import com.gustler.backend.routecatalog.api.RefreshRouteCatalog;
 import com.gustler.backend.routecatalog.api.RefreshRouteGeometry;
 import com.gustler.backend.routecatalog.api.RouteReference;
 import com.gustler.backend.worker.configuration.CollectionProperties;
 import com.gustler.backend.worker.configuration.RouteGeometryProperties;
+
+import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+
 import java.time.Clock;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Optional;
-import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
 
 class RouteCatalogRefreshSchedulerTest {
     @Test
@@ -102,11 +105,17 @@ class RouteCatalogRefreshSchedulerTest {
         when(catalog.knownRouteName("id-1")).thenReturn("3330");
         when(catalog.knownRouteName("id-2")).thenReturn("");
         when(catalog.refresh(eq("id-1"), any())).thenReturn(Optional.empty());
-        when(catalog.refresh(eq("id-2"), any())).thenThrow(new IllegalStateException("serviceKey=SECRET\nHTTP body"));
+        when(catalog.refresh(eq("id-2"), any()))
+                .thenThrow(new IllegalStateException("serviceKey=SECRET\nHTTP body"));
         when(catalog.refresh(eq("id-3"), any())).thenReturn(Optional.of(new RouteReference(3)));
-        RouteCatalogRefreshScheduler scheduler = new RouteCatalogRefreshScheduler(
-            new CollectionProperties(true, List.of("id-1", "id-2", "id-3")), catalog, Clock.systemUTC(),
-            mock(RefreshRouteGeometry.class), Runnable::run, new RouteGeometryProperties(false, List.of()));
+        RouteCatalogRefreshScheduler scheduler =
+                new RouteCatalogRefreshScheduler(
+                        new CollectionProperties(true, List.of("id-1", "id-2", "id-3")),
+                        catalog,
+                        Clock.systemUTC(),
+                        mock(RefreshRouteGeometry.class),
+                        Runnable::run,
+                        new RouteGeometryProperties(false, List.of()));
         Logger logger = (Logger) LoggerFactory.getLogger(RouteCatalogRefreshScheduler.class);
         ListAppender<ILoggingEvent> logs = new ListAppender<ILoggingEvent>();
         logs.start();
@@ -129,5 +138,55 @@ class RouteCatalogRefreshSchedulerTest {
             logger.detachAppender(logs);
             logs.stop();
         }
+    }
+
+    @Test
+    void 대기중_작업을_합치고_실패하면_다음_회차에_다시_조회한다() {
+        var catalog = mock(RefreshRouteCatalog.class);
+        var geometry = mock(RefreshRouteGeometry.class);
+        when(catalog.refresh(anyString(), any()))
+                .thenReturn(Optional.empty(), Optional.of(new RouteReference(7)));
+        var tasks = new ArrayDeque<Runnable>();
+        var scheduler =
+                new RouteCatalogRefreshScheduler(
+                        new CollectionProperties(false, List.of()),
+                        catalog,
+                        Clock.systemUTC(),
+                        geometry,
+                        tasks::add,
+                        new RouteGeometryProperties(true, List.of("204000057")));
+        scheduler.refreshAllRoutes();
+        scheduler.refreshAllRoutes();
+        assertThat(tasks).hasSize(1);
+        tasks.remove().run();
+        verifyNoInteractions(geometry);
+        scheduler.refreshAllRoutes();
+        tasks.remove().run();
+        verify(geometry).refresh(eq("204000057"), any());
+    }
+
+    @Test
+    void 큐가_거부해도_다음회차의_재시도를_막지_않는다() {
+        var catalog = mock(RefreshRouteCatalog.class);
+        var geometry = mock(RefreshRouteGeometry.class);
+        when(catalog.refresh(anyString(), any())).thenReturn(Optional.of(new RouteReference(7)));
+        var attempts = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.Executor executor =
+                task -> {
+                    if (attempts.getAndIncrement() == 0)
+                        throw new java.util.concurrent.RejectedExecutionException();
+                    task.run();
+                };
+        var scheduler =
+                new RouteCatalogRefreshScheduler(
+                        new CollectionProperties(false, List.of()),
+                        catalog,
+                        Clock.systemUTC(),
+                        geometry,
+                        executor,
+                        new RouteGeometryProperties(true, List.of("204000057")));
+        scheduler.refreshAllRoutes();
+        scheduler.refreshAllRoutes();
+        verify(geometry).refresh(eq("204000057"), any());
     }
 }

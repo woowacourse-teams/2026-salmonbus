@@ -1,0 +1,52 @@
+{
+  "purpose": "GBIS_WEB_SOURCE_PROJECTION_GOLDEN_NOT_ROUTE_OR_LANE_TRUTH",
+  "route": "7007-1",
+  "fold": "calibration",
+  "sourcePath": "/Users/idonghun/.paseo/worktrees/0p640er8/sal206-dev-eta/.work/geometry-source-improvement-20261025/backend/build/geometry-source-improvement-20261025/public-static/228000393.json",
+  "sourceSha256": "a5c88f08738421050881304d90a0fe96855ffda31308a5beb4bff455efcc3215",
+  "jsonPath": "result.gg.downLine.list",
+  "sourceRows": [
+    {
+      "linkId": "1190008400",
+      "lon": "14135726.207024",
+      "seq": "832",
+      "type": "1",
+      "lat": "4508678.791113"
+    },
+    {
+      "linkId": "",
+      "lon": "14135697.802015",
+      "seq": "833",
+      "type": "3",
+      "lat": "4508627.919945"
+    },
+    {
+      "linkId": "",
+      "lon": "14135669.809729",
+      "seq": "834",
+      "type": "3",
+      "lat": "4508537.851309"
+    },
+    {
+      "linkId": "",
+      "lon": "14135659.248058",
+      "seq": "835",
+      "type": "3",
+      "lat": "4508466.933584"
+    },
+    {
+      "linkId": "1190008400",
+      "lon": "14135650.749913",
+      "seq": "836",
+      "type": "1",
+      "lat": "4508203.876498"
+    }
+  ],
+  "sourceFieldAxisMeaning": "lon/lat fields contain EPSG:3857 x/y metres; projected output is EPSG:4326 longitude/latitude",
+  "pyprojVersion": "3.8.0",
+  "projVersion": "9.8.1",
+  "always_xy": true,
+  "forwardToleranceDegrees": 1e-08,
+  "inverseToleranceMetres": 0.001,
+  "nativeChainageAllowed": false
+}

@@ -5,10 +5,14 @@ import com.gustler.backend.api.route.RouteGeometryReferenceConflictException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import com.gustler.backend.api.route.application.RouteGeometryQueryRepository.Reference;
-import com.gustler.backend.api.route.domain.RouteGeometry;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Optional;
 
 /**
  * 현재 노선 판본의 정류장·형상을 읽어 지도 조회 결과를 만든다.
@@ -19,8 +23,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class RouteGeometryQueryService {
     private final RouteGeometryQueryRepository repository;
 
+    private final Optional<RouteDisplaySelector> display;
+
     public RouteGeometryQueryService(RouteGeometryQueryRepository repository) {
+        this(repository, Optional.empty());
+    }
+
+    @Autowired
+    public RouteGeometryQueryService(
+            RouteGeometryQueryRepository repository, Optional<RouteDisplaySelector> display) {
         this.repository = repository;
+        this.display = display;
     }
 
     /**
@@ -34,8 +47,16 @@ public class RouteGeometryQueryService {
         if (requestedVersion != null && requestedVersion != reference.versionId()) {
             throw new RouteGeometryReferenceConflictException();
         }
-        return new RouteGeometry(reference.routeId(), reference.versionId(), reference.name(), reference.startPoint(),
-            reference.endPoint(), reference.turnSequence(), repository.stops(reference.versionId()),
-            repository.shape(reference.versionId()).orElse(null));
+        RouteGeometry geometry =
+                new RouteGeometry(
+                        reference.routeId(),
+                        reference.versionId(),
+                        reference.name(),
+                        reference.startPoint(),
+                        reference.endPoint(),
+                        reference.turnSequence(),
+                        repository.stops(reference.versionId()),
+                        repository.shape(reference.versionId()).orElse(null));
+        return display.map(selector -> selector.enrich(geometry)).orElse(geometry);
     }
 }

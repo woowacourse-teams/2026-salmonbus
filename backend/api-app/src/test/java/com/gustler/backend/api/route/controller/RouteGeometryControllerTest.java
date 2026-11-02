@@ -14,10 +14,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.gustler.backend.api.http.ApiExceptionHandler;
 import com.gustler.backend.api.route.RouteGeometryReferenceConflictException;
 import com.gustler.backend.api.route.application.RouteGeometryQueryService;
-import com.gustler.backend.api.route.domain.RouteGeometry;
-import com.gustler.backend.api.route.domain.RouteGeometry.Point;
-import com.gustler.backend.api.route.domain.RouteGeometry.Shape;
-import com.gustler.backend.api.route.domain.RouteGeometry.Stop;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Point;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Shape;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Stop;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -95,6 +95,16 @@ class RouteGeometryControllerTest {
         when(service.get(any(), eq(6L))).thenThrow(new RouteGeometryReferenceConflictException());
         mvc.perform(get(PATH).param("referenceVersionId", "6").header("If-None-Match", "*"))
             .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("REFERENCE_VERSION_CONFLICT"));
+    }
+
+    @Test
+    void 표시_응답필드가_추가된_배포는_기능이_꺼져있어도_과거_ETag에_304를_주지않는다() throws Exception {
+        // Python struct로 계산한 기존 route-geometry-v2 직렬화 판본의 SHA-256.
+        String legacy="00ab659e323c27db9151be51cf0c6f155da527f03abe6aebd6d95748c6622b8f";
+        when(service.get(any(),any())).thenReturn(geometry(127.1,true));
+        mvc.perform(get(PATH).header("If-None-Match","\""+legacy+"\""))
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag",Matchers.not("\""+legacy+"\"")));
     }
 
     private static Shape shapeOf(final boolean enabled) {

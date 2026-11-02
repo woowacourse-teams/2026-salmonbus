@@ -11,4 +11,11 @@ public interface RouteSource {
      * 지정 원천 노선을 읽어 카탈로그 입력으로 변환한다. 정상 입력 또는 읽기 실패 결과를 반환한다.
      */
     RouteSourceResult read(String sourceRouteId);
+
+    default Capture capture(String sourceRouteId) {
+        return new Capture(read(sourceRouteId),java.util.List.of());
+    }
+    record Capture(RouteSourceResult result,java.util.List<com.gustler.backend.routegeometry.api.RouteSourceReceipt> receipts) {
+        public Capture { receipts=java.util.List.copyOf(receipts); }
+    }
 }

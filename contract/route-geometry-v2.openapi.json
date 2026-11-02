@@ -564,6 +564,28 @@
               }
             ],
             "description": "정류장 마커 좌표(x=경도,y=위도). 미제공·유효하지 않은 좌표이면 null로 유지하고 마커를 생략한다. 도로 형상 points와 별개다."
+          },
+          "displayPoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "검수된 표시핀. 수동 형상의 승차 방문에는 필수이며 비승차 방문은 null일 수 있다. null이면 원본 point를 마커 좌표로 사용하며 pathConnection의 도로 연결은 별도로 유지한다."
+          },
+          "pathConnection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathConnection"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "해당 방문 occurrence가 연결된 최종 표시 경로의 선분·보간값. 원본 point가 있는 비승차 방문도 표시핀 유무와 별개로 연결을 보존한다."
           }
         },
         "additionalProperties": false
@@ -719,6 +741,78 @@
                 "type": "null"
               }
             ]
+          },
+          "displayPaths": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoutePaths"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "현재 원본에 맞는 선택된 표시 경로. 원본 paths 보존"
+          },
+          "displaySource": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "MANUAL_REVIEWED",
+              "AUTOMATIC_FALLBACK",
+              null
+            ]
+          },
+          "displayEvidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "status",
+                "digest"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "digest": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "displayQuality": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DisplayQuality"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "자동 형상 품질 검사. WITHHELD이면 원본 경로로 우회하지 않고 정류장만 표시한다."
+          },
+          "displayAccuracyGrade": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "UNEVALUATED",
+              "ROAD_VERIFIED",
+              "LANE_VERIFIED",
+              null
+            ],
+            "description": "표시 품질과 별개인 독립 도로/차로 정확도 평가 등급. ROAD_VERIFIED/LANE_VERIFIED는 향후 검증 결과를 위한 예약 값이며 현재 서버는 발급하지 않는다. 현재 수동·자동 표시 형상은 UNEVALUATED, displaySource가 null이면 null이다. 수동 입력이나 품질 검사 통과만으로 승격하지 않는다."
           }
         },
         "additionalProperties": false,
@@ -838,6 +932,89 @@
         },
         "additionalProperties": false,
         "description": "기점→회차 지점과 회차 지점→복귀 경로. 두 경로는 같은 회차 경계점을 공유한다. DOWN은 UP을 뒤집어 만들지 않는다. 별도 status/reason 필드는 없다."
+      },
+      "PathConnection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "point",
+          "segmentIndex",
+          "segmentFraction"
+        ],
+        "properties": {
+          "point": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "segmentIndex": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "segmentFraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "DisplayQuality": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "issues"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "PASSED",
+              "REVIEW_REQUIRED",
+              "SOURCE_ONLY",
+              "WITHHELD"
+            ]
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DisplayQualityIssue"
+            }
+          }
+        }
+      },
+      "DisplayQualityIssue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "direction",
+          "sequence",
+          "meters"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "UP",
+              "DOWN",
+              null
+            ]
+          },
+          "sequence": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "meters": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          }
+        }
       }
     }
   },

@@ -5,6 +5,8 @@ plugins {
 
 dependencies {
     implementation project(':common')
+    implementation project(':route-geometry-engine')
+    implementation project(':route-geometry-contract')
     implementation project(':member')
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -27,6 +29,7 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
     testImplementation testFixtures(project(':common'))
+    testImplementation testFixtures(project(':route-geometry-contract'))
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'
@@ -58,6 +61,7 @@ tasks.named('test') {
     }
 }
 
+// 표시 계약과 공용 생성 엔진은 프레임워크·DB 자원 없는 값 타입과 순수 계산만 제공한다.
 // API 실행 경로에 로그인용 회원 모듈 외의 쓰기 업무나 다른 실행 앱이 간접 의존으로 들어오지 않게 확인한다.
 tasks.register('verifyRuntimeProjects') {
     doLast {
@@ -73,7 +77,7 @@ tasks.register('verifyRuntimeProjects') {
             .findAll { it.id instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier }
             .collect { it.id.projectPath }
             .toSet()
-        def expected = [':api-app', ':common', ':member'] as Set
+        def expected = [':api-app', ':common', ':member', ':route-geometry-contract', ':route-geometry-engine'] as Set
         if (projects != expected) {
             throw new GradleException("API runtime project dependencies must be ${expected}, but were ${projects}")
         }

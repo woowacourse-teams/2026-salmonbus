@@ -133,6 +133,22 @@ forecast:
   arrival-limit: 400
 
 route-geometry:
+  generation:
+    enabled: ${ROUTE_GEOMETRY_GENERATION_ENABLED:false}
+    poll-delay-ms: 10000
+    shadow:
+      enabled: ${ROUTE_GEOMETRY_SHADOW_ENABLED:false}
+      # Enabled local shadow requires an independently pinned source-only search bundle.
+      # bundle-path, bundle-sha256 (decompressed), raw-source-sha256 and model-input-sha256
+      # are explicit configuration; no graph paths or authority flags come from model output.
+  multi-source:
+    enabled: ${ROUTE_GEOMETRY_MULTI_SOURCE_ENABLED:false}
+    gg-key: ${GG_DATA_API_KEY:}
+    gbis-web-endpoint: ${ROUTE_GEOMETRY_GBIS_WEB_ENDPOINT:https://www.gbis.go.kr/gbis2014/schBusAPI.action}
+    bms-node-endpoint: ${ROUTE_GEOMETRY_BMS_NODE_ENDPOINT:https://openapi.gg.go.kr/TBBMSNODEM}
+    cache-interval: PT6H
+  # 실패·쿼터 부족·큐 포화도 다음 회차에 다시 확인한다. 짧게 바꿀 때 노선 수와 호출 예산을 함께 계산한다.
+  refresh-interval: ${ROUTE_GEOMETRY_REFRESH_INTERVAL:PT24H}
   enabled: ${ROUTE_GEOMETRY_ENABLED:false} # 카탈로그 갱신 후 노선당 1회, 기존 BUS_ROUTE 예산 사용
   route-ids: [] # 비어 있으면 collection.route-ids. 별도 지정해도 차량 관측 대상은 늘어나지 않는다.
 

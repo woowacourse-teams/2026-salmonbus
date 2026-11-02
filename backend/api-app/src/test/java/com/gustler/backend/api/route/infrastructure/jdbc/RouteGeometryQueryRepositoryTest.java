@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import com.gustler.backend.api.route.RouteGeometryReferenceConflictException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.application.RouteGeometryQueryService;
-import com.gustler.backend.api.route.domain.RouteGeometry;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry;
 import com.gustler.backend.api.route.infrastructure.jdbc.RouteGeometryQueryRepositoryTest.Config;
 import com.gustler.backend.support.PostgresTestContainer;
 import java.util.UUID;
