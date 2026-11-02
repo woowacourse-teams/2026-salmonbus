@@ -2,7 +2,8 @@ import { parsedMemberRequest } from "./auth.api";
 import { emptyFrom } from "./favorites.schema";
 import type { FavoriteTarget } from "./favorites.types";
 import { notificationSettingFrom, notificationSettingsFrom } from "./notifications.schema";
-import type { ApnsEnvironment, NotificationSchedule } from "./notifications.types";
+import type { ApnsEnvironment } from "../notification/notification.types";
+import type { NotificationSchedule } from "./notifications.types";
 
 const SETTINGS = "/api/me/notification-settings";
 

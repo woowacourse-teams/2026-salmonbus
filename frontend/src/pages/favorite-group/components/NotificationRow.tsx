@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { track } from "@/shared/analytics/track";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
-import { deleteNotificationSetting, registerPushDevice, saveNotificationSetting } from "@/shared/api/notifications.api";
+import { deleteNotificationSetting, saveNotificationSetting } from "@/shared/api/notifications.api";
 import type { NotificationSchedule, NotificationSetting } from "@/shared/api/notifications.types";
 import { isSupportedInApp, sendToApp } from "@/shared/bridge/bridge";
 import { Switch } from "@/shared/components/Switch";
 import { useResultHaptic } from "@/shared/haptic/haptic";
+import { requestNotificationPermission } from "@/shared/notification/nativeNotification";
+import { registerThisDevice } from "@/shared/notification/useNotificationRegistration";
 import { scheduleLabelOf } from "@/shared/utils/notificationPolicy";
 import * as formStyles from "@/shared/styles/form.css";
-import { requestNotificationRegistration } from "../notificationRegistration";
 import { NotificationSheet } from "./NotificationSheet";
 import {
   nextNotificationRowState,
@@ -42,7 +43,11 @@ export function NotificationRow({ target, stopLabel, initialSetting }: Notificat
       target,
       state.previous,
       schedule,
-      { requestRegistration: requestNotificationRegistration, registerPushDevice, saveNotificationSetting },
+      {
+        requestRegistration: requestNotificationPermission,
+        registerPushDevice: registerThisDevice,
+        saveNotificationSetting,
+      },
       (event) => {
         apply(event);
         if (event.type === "saved")

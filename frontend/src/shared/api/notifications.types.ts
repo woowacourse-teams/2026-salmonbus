@@ -18,6 +18,3 @@ export interface NotificationSetting extends FavoriteTarget, NotificationSchedul
 export interface NotificationSettings {
   settings: NotificationSetting[];
 }
-
-// SAL-172가 bridge 타입을 커밋하면 그쪽 ApnsEnvironment를 쓰고 이 유니온은 지운다.
-export type ApnsEnvironment = "SANDBOX" | "PRODUCTION";

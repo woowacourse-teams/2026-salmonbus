@@ -1,7 +1,7 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { ApiResult } from "@/shared/api/client";
 import type { NotificationSchedule, NotificationSetting } from "@/shared/api/notifications.types";
-import type { NotificationRegistration } from "../notificationRegistration";
+import type { NotificationRegistration } from "@/shared/notification/notification.types";
 import {
   nextNotificationRowState,
   notificationRowStateOf,
@@ -47,7 +47,7 @@ function contractFailure(
   };
 }
 
-function servicesFor(registration: NotificationRegistration) {
+function servicesFor(registration: NotificationRegistration | null) {
   return {
     requestRegistration: jest.fn<NotificationSaveServices["requestRegistration"]>().mockResolvedValue(registration),
     registerPushDevice: jest
@@ -112,7 +112,12 @@ describe("알림 줄 상태", () => {
 
 describe("알림 저장", () => {
   it("새 알림은 권한을 묻고 받은 토큰으로 기기를 등록한 뒤 설정을 저장해 켠다", async () => {
-    const services = servicesFor({ status: "granted", token: "device-token", environment: "SANDBOX" });
+    const services = servicesFor({
+      requestId: "request-1",
+      status: "granted",
+      token: "device-token",
+      environment: "SANDBOX",
+    });
     const order: string[] = [];
     services.registerPushDevice.mockImplementation(async () => {
       order.push("device");
@@ -132,7 +137,7 @@ describe("알림 저장", () => {
   });
 
   it("허락했지만 토큰이 없으면 기기 등록 없이 설정만 저장한다", async () => {
-    const services = servicesFor({ status: "granted", token: null, environment: "PRODUCTION" });
+    const services = servicesFor({ requestId: "request-1", status: "granted", token: null, environment: null });
     const state = await finalStateOf(editingNew, (apply) =>
       submitNotification(target, null, schedule, services, apply),
     );
@@ -140,11 +145,14 @@ describe("알림 저장", () => {
     expect(services.registerPushDevice).not.toHaveBeenCalled();
   });
 
-  it.each<[NotificationRegistration["status"], NotificationRowState]>([
+  it.each<[NotificationRegistration["status"] | null, NotificationRowState]>([
     ["denied", { status: "denied" }],
     ["undetermined", { status: "off" }],
+    [null, { status: "off" }],
   ])("권한 답이 %s이면 어떤 API도 부르지 않고 꺼진 채로 남는다", async (status, expected) => {
-    const services = servicesFor({ status, token: "device-token", environment: "PRODUCTION" });
+    const services = servicesFor(
+      status === null ? null : { requestId: "request-1", status, token: "device-token", environment: "PRODUCTION" },
+    );
     const state = await finalStateOf(editingNew, (apply) =>
       submitNotification(target, null, schedule, services, apply),
     );
@@ -154,7 +162,12 @@ describe("알림 저장", () => {
   });
 
   it("기기 등록에 실패하면 설정을 저장하지 않고 창에 문구를 남긴다", async () => {
-    const services = servicesFor({ status: "granted", token: "device-token", environment: "PRODUCTION" });
+    const services = servicesFor({
+      requestId: "request-1",
+      status: "granted",
+      token: "device-token",
+      environment: "PRODUCTION",
+    });
     services.registerPushDevice.mockResolvedValue(contractFailure("INVALID_PUSH_DEVICE", 400));
     const state = await finalStateOf(editingNew, (apply) =>
       submitNotification(target, null, schedule, services, apply),
@@ -169,7 +182,7 @@ describe("알림 저장", () => {
   });
 
   it("켜진 알림을 고치면 권한을 다시 묻지 않고 설정만 저장한다", async () => {
-    const services = servicesFor({ status: "denied", token: null, environment: "PRODUCTION" });
+    const services = servicesFor({ requestId: "request-1", status: "denied", token: null, environment: null });
     const state = await finalStateOf(editingExisting, (apply) =>
       submitNotification(target, setting, schedule, services, apply),
     );
@@ -179,7 +192,7 @@ describe("알림 저장", () => {
   });
 
   it("즐겨찾기가 아닌 대상이라는 답이면 창에 고정 문구를 보이고 이전 값을 지킨다", async () => {
-    const services = servicesFor({ status: "granted", token: null, environment: "PRODUCTION" });
+    const services = servicesFor({ requestId: "request-1", status: "granted", token: null, environment: null });
     services.saveNotificationSetting.mockResolvedValue(contractFailure("NOTIFICATION_TARGET_NOT_FAVORITE", 422));
     const state = await finalStateOf(editingExisting, (apply) =>
       submitNotification(target, setting, schedule, services, apply),

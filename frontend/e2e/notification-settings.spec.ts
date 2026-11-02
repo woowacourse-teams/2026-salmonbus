@@ -5,14 +5,60 @@ import { routeId } from "./fixtures/mock-data";
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
 
-const NOTIFICATION_CAPABILITY = "notification.requestPermission";
+const NOTIFICATION_COMMANDS = [
+  "notification.requestPermission",
+  "notification.getRegistration",
+  "notification.takeOpened",
+];
+const DEVICE_TOKEN = "a1b2c3d4".repeat(8);
 
-/** 앱 WebView 흉내. capabilities에 알림 권한 명령이 없으면 옛 앱이다. */
-async function openInApp(page: Page, capabilities: string[]) {
-  await page.addInitScript((capabilities) => {
-    window.__SALMONBUS_APP__ = { appVersion: "1.0.0", capabilities };
-    window.ReactNativeWebView = { postMessage() {} };
-  }, capabilities);
+type PermissionStatus = "granted" | "denied" | "undetermined";
+
+interface SimulatedApp {
+  capabilities?: string[];
+  /** 앱을 열 때 이미 고른 권한. */
+  permission?: PermissionStatus;
+  /** 권한 창에서 고를 답. 이미 고른 권한이 undetermined가 아니면 창 없이 그 권한으로 답한다. */
+  permissionAnswer?: PermissionStatus;
+  /** notification.takeOpened로 꺼낼 알림 탭 대상. */
+  opened?: { routeId: string; stopId: string; direction: "UP" | "DOWN" } | null;
+}
+
+/** 앱 WebView 흉내. 알림 명령을 받으면 테크 스펙 v4 bridge 표대로 같은 requestId로 답한다. */
+async function openInApp(page: Page, app: SimulatedApp = {}) {
+  await page.addInitScript(
+    ({ capabilities, permission, permissionAnswer, opened, token }) => {
+      let status = permission;
+      let pending = opened;
+      // api fixture가 page.clock을 멈춰 두어 setTimeout으로는 답이 가지 않는다.
+      const reply = (type: string, payload: object) =>
+        queueMicrotask(() =>
+          window.dispatchEvent(new CustomEvent("salmon:bridge", { detail: { v: 1, type, payload } })),
+        );
+      window.__SALMONBUS_APP__ = { appVersion: "1.0.0", capabilities };
+      window.ReactNativeWebView = {
+        postMessage(raw: string) {
+          const { type, payload } = JSON.parse(raw) as { type: string; payload: { requestId: string } };
+          if (type === "notification.requestPermission" && status === "undetermined") status = permissionAnswer;
+          if (type === "notification.requestPermission" || type === "notification.getRegistration") {
+            const device =
+              status === "granted" ? { token, environment: "SANDBOX" } : { token: null, environment: null };
+            reply("notification.registration", { requestId: payload.requestId, status, ...device });
+          } else if (type === "notification.takeOpened") {
+            reply("notification.opened", { requestId: payload.requestId, target: pending });
+            pending = null;
+          }
+        },
+      };
+    },
+    {
+      capabilities: app.capabilities ?? NOTIFICATION_COMMANDS,
+      permission: app.permission ?? "undetermined",
+      permissionAnswer: app.permissionAnswer ?? app.permission ?? "undetermined",
+      opened: app.opened ?? null,
+      token: DEVICE_TOKEN,
+    },
+  );
 }
 
 test.describe("그룹 편집 화면의 알림 줄", () => {
@@ -37,7 +83,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
   });
 
   test("알림 권한 명령을 모르는 옛 앱에서는 알림 줄을 숨긴다", async ({ page, notifications }) => {
-    await openInApp(page, ["haptic.success", "settings.open"]);
+    await openInApp(page, { capabilities: ["haptic.success", "settings.open"] });
     await page.goto(`/mypage/groups/${defaultGroupId}`);
     await expect(page.getByText(stopName, { exact: true })).toBeVisible();
     await expect(page.getByRole("switch")).toHaveCount(0);
@@ -46,7 +92,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
 
   test("저장된 알림이 있으면 켜진 스위치와 요약을 보인다", async ({ page, notifications }) => {
     notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
-    await openInApp(page, [NOTIFICATION_CAPABILITY]);
+    await openInApp(page);
     await page.goto(`/mypage/groups/${defaultGroupId}`);
     await expect(notificationSwitch(page)).toBeChecked();
     await expect(page.getByRole("button", { name: "평일 07:40", exact: true })).toBeVisible();
@@ -54,7 +100,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
 
   test("시각과 요일을 바꿔 저장하면 바꾼 값을 PUT으로 보내고 요약이 바뀐다", async ({ page, notifications }) => {
     notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
-    await openInApp(page, [NOTIFICATION_CAPABILITY]);
+    await openInApp(page);
     await page.goto(`/mypage/groups/${defaultGroupId}`);
     await page.getByRole("button", { name: "평일 07:40", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
@@ -78,7 +124,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
   test("즐겨찾기가 아닌 대상이라는 답이면 창 안에 문구를 보이고 이전 값을 지킨다", async ({ page, notifications }) => {
     notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
     notifications.mutationError = { status: 422, code: "NOTIFICATION_TARGET_NOT_FAVORITE" };
-    await openInApp(page, [NOTIFICATION_CAPABILITY]);
+    await openInApp(page);
     await page.goto(`/mypage/groups/${defaultGroupId}`);
     await page.getByRole("button", { name: "평일 07:40", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
@@ -97,7 +143,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
   test("켜진 스위치를 끄면 바로 DELETE를 보내고 꺼진다", async ({ page, notifications }) => {
     const setting = storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"]);
     notifications.settings = [setting];
-    await openInApp(page, [NOTIFICATION_CAPABILITY]);
+    await openInApp(page);
     await page.goto(`/mypage/groups/${defaultGroupId}`);
     await notificationSwitch(page).click();
     await expect(notificationSwitch(page)).not.toBeChecked();
@@ -108,11 +154,11 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     expect(notifications.settings).toEqual([]);
   });
 
-  test("앱 답이 오기 전의 기본 응답으로는 스위치가 꺼진 채로 남고 알림 API를 부르지 않는다", async ({
+  test("권한 창에서 고르지 않고 닫으면 스위치가 꺼진 채로 남고 알림 API를 부르지 않는다", async ({
     page,
     notifications,
   }) => {
-    await openInApp(page, [NOTIFICATION_CAPABILITY]);
+    await openInApp(page, { permissionAnswer: "undetermined" });
     await page.goto(`/mypage/groups/${defaultGroupId}`);
     await expect(notificationSwitch(page)).not.toBeChecked();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
@@ -134,4 +180,53 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     await expect(page.getByText("iPhone 설정에서 연어버스의 알림을 허용해 주세요.")).toHaveCount(0);
     expect(notifications.requests).toEqual([{ path: "/api/me/notification-settings", method: "GET", body: null }]);
   });
+
+  test("알림을 켜고 권한을 허용하면 기기를 등록한 뒤 설정을 저장한다", async ({ page, notifications }) => {
+    await openInApp(page, { permissionAnswer: "granted" });
+    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await notificationSwitch(page).click();
+    const sheet = page.getByRole("dialog", { name: "출발 알림" });
+    await sheet.getByRole("button", { name: "저장", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(notificationSwitch(page)).toBeChecked();
+    await expect(page.getByRole("button", { name: "평일 07:30", exact: true })).toBeVisible();
+    expect(notifications.requests.filter((request) => request.method !== "GET")).toEqual([
+      { path: `/api/me/push-devices/${DEVICE_TOKEN}`, method: "PUT", body: { environment: "SANDBOX" } },
+      {
+        path: "/api/me/notification-settings",
+        method: "PUT",
+        body: { ...target, time: "07:30", weekdays: ["MON", "TUE", "WED", "THU", "FRI"] },
+      },
+    ]);
+  });
+
+  test("알림을 켜고 권한을 거절하면 설정 안내를 보이고 알림 API를 부르지 않는다", async ({ page, notifications }) => {
+    await openInApp(page, { permissionAnswer: "denied" });
+    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await notificationSwitch(page).click();
+    const sheet = page.getByRole("dialog", { name: "출발 알림" });
+    await sheet.getByRole("button", { name: "저장", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(page.getByText("iPhone 설정에서 연어버스의 알림을 허용해 주세요.")).toBeVisible();
+    await expect(notificationSwitch(page)).not.toBeChecked();
+    expect(notifications.requests).toEqual([{ path: "/api/me/notification-settings", method: "GET", body: null }]);
+  });
+});
+
+test("로그아웃하면 이 기기 token을 먼저 지우고 로그아웃한다", async ({ page }) => {
+  await openInApp(page, { permission: "granted" });
+  const sent: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/api/me/push-devices/") || path === "/api/auth/logout")
+      sent.push(`${request.method()} ${path}`);
+  });
+  await page.goto("/mypage");
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "로그아웃", exact: true }).click();
+  await expect(page).toHaveURL("/");
+  expect(sent.filter((request) => !request.startsWith("PUT"))).toEqual([
+    `DELETE /api/me/push-devices/${DEVICE_TOKEN}`,
+    "POST /api/auth/logout",
+  ]);
 });

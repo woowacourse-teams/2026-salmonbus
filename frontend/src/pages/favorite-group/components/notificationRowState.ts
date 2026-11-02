@@ -1,8 +1,12 @@
 import type { ApiResult } from "@/shared/api/client";
-import type { ApnsEnvironment, NotificationSchedule, NotificationSetting } from "@/shared/api/notifications.types";
+import type { NotificationSchedule, NotificationSetting } from "@/shared/api/notifications.types";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
+import type {
+  ApnsEnvironment,
+  NotificationPermissionStatus,
+  NotificationRegistration,
+} from "@/shared/notification/notification.types";
 import { NEW_NOTIFICATION_SCHEDULE, notificationErrorOf } from "@/shared/utils/notificationPolicy";
-import type { NotificationRegistration } from "../notificationRegistration";
 
 /** 정류장 하나의 알림 줄. editing, asking, saving, failed 동안 시각과 요일 창이 열려 있다. */
 export type NotificationRowState =
@@ -20,7 +24,7 @@ export type NotificationRowEvent =
   | { type: "open" }
   | { type: "cancel" }
   | { type: "submit"; schedule: NotificationSchedule }
-  | { type: "answered"; status: NotificationRegistration["status"] }
+  | { type: "answered"; status: NotificationPermissionStatus }
   | { type: "saved"; setting: NotificationSetting }
   | { type: "failed"; message: string }
   | { type: "remove" }
@@ -92,7 +96,8 @@ export function nextNotificationRowState(
 }
 
 export interface NotificationSaveServices {
-  requestRegistration: () => Promise<NotificationRegistration>;
+  /** 앱이 답하지 않거나 앱 밖이면 null이다. 권한을 고르지 않은 것과 같게 본다. */
+  requestRegistration: () => Promise<NotificationRegistration | null>;
   registerPushDevice: (token: string, environment: ApnsEnvironment) => Promise<ApiResult<void>>;
   saveNotificationSetting: (
     target: FavoriteTarget,
@@ -114,8 +119,8 @@ export async function submitNotification(
   apply({ type: "submit", schedule });
   if (previous === null) {
     const registration = await services.requestRegistration();
-    apply({ type: "answered", status: registration.status });
-    if (registration.status !== "granted") return;
+    apply({ type: "answered", status: registration?.status ?? "undetermined" });
+    if (registration?.status !== "granted") return;
     if (registration.token !== null) {
       const device = await services.registerPushDevice(registration.token, registration.environment);
       if (!device.ok) {

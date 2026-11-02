@@ -13,8 +13,8 @@ import { RouteBadge } from "@/shared/components/RouteBadge";
 import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
 import { sameFavorite } from "@/shared/utils/favoritePolicy";
 import * as formStyles from "@/shared/styles/form.css";
+import { isNativeNotificationSupported } from "@/shared/notification/nativeNotification";
 import { useNotificationSettings } from "../hooks/useNotificationSettings";
-import { canRequestNotificationPermission } from "../notificationRegistration";
 import { NotificationRow } from "./NotificationRow";
 import * as styles from "./GroupDetails.css";
 
@@ -29,7 +29,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
   const summary = useHomeFavorites({ kind: "group", groupId: group.id }, revision);
   const favorites = latestSuccessOf(summary)?.body.groups[0]?.favorites ?? [];
   const { busy, error, setError, run } = useFavoriteAction();
-  const notificationSettings = useNotificationSettings(canRequestNotificationPermission());
+  const notificationSettings = useNotificationSettings(isNativeNotificationSupported());
   const navigate = useNavigate();
   const groupDeleteButton = useRef<HTMLButtonElement>(null);
   const focusAfterDelete = useRef(false);
