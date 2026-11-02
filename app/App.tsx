@@ -13,6 +13,14 @@ import { HAPTIC_CAPABILITIES, playHaptic } from './haptic/playHaptic';
 import { NativeRouteMap, type NativeRouteMapRef } from './native-map/NativeRouteMap';
 import { NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
 import { LOGIN_PROVIDER_ORIGINS, navigationDecisionFor } from './navigation/navigationPolicy';
+import {
+  NOTIFICATION_CAPABILITIES,
+  OPENED_EVENT,
+  REGISTRATION_EVENT,
+  notificationRequestIdFrom,
+} from './notification/notificationMessages';
+import { registrationFor } from './notification/registration';
+import { createTapInbox } from './notification/tapInbox';
 import { SETTINGS_CAPABILITIES } from './settings/settingsMessages';
 
 SplashScreen.preventAutoHideAsync();
@@ -44,6 +52,7 @@ const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
   haptic: HAPTIC_CAPABILITIES,
   settings: SETTINGS_CAPABILITIES,
   auth: AUTH_CAPABILITIES,
+  notification: NOTIFICATION_CAPABILITIES,
 });
 type BridgeDomain = keyof typeof CAPABILITIES_BY_DOMAIN;
 const APP_CAPABILITIES: readonly string[] = Object.values(CAPABILITIES_BY_DOMAIN).flat();
@@ -51,6 +60,7 @@ const APP_BOOTSTRAP = appBootstrapScriptFor({
   appVersion: Application.nativeApplicationVersion ?? 'unknown',
   capabilities: APP_CAPABILITIES,
 });
+const notificationTaps = createTapInbox();
 
 export default function App() {
   const webViewRef = useRef<WebView>(null);
@@ -94,6 +104,7 @@ export default function App() {
       Linking.openSettings().catch(() => undefined);
     },
     auth: (message) => handleSignIn(message),
+    notification: (message) => handleNotificationCommand(message),
   };
 
   // 로그인 창은 한 번에 하나만 연다. 결과는 웹 origin의 문서에만 넘긴다.
@@ -113,7 +124,24 @@ export default function App() {
   }
 
   function replySignIn(result: SignInResult) {
-    webViewRef.current?.injectJavaScript(bridgeEventScriptFor({ type: SIGN_IN_RESULT, payload: { ...result } }, WEB_ORIGIN));
+    sendToWeb({ type: SIGN_IN_RESULT, payload: { ...result } });
+  }
+
+  function handleNotificationCommand(message: BridgeMessage) {
+    const requestId = notificationRequestIdFrom(message.payload);
+    if (requestId === null) return;
+    if (message.type === 'notification.takeOpened') {
+      sendToWeb({ type: OPENED_EVENT, payload: { requestId, target: notificationTaps.take() } });
+      return;
+    }
+    registrationFor(requestId, { ask: message.type === 'notification.requestPermission' }).then((registration) =>
+      sendToWeb({ type: REGISTRATION_EVENT, payload: { ...registration } }),
+    );
+  }
+
+  // 로그인 결과와 기기 토큰이 WebView가 연 로그인 제공자 화면에 가면 안 되어서 웹 origin 문서에만 넘긴다.
+  function sendToWeb(message: BridgeMessage) {
+    webViewRef.current?.injectJavaScript(bridgeEventScriptFor(message, WEB_ORIGIN));
   }
 
   function allowNavigation(request: ShouldStartLoadRequest) {
