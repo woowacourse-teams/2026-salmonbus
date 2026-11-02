@@ -1,5 +1,7 @@
+import { useEffect, useRef } from "react";
 import type { ApiResult } from "../api/client";
 import { registerPushDevice, unregisterPushDevice } from "../api/notifications.api";
+import { memberIdOf, useAuth } from "../hooks/useAuth";
 import { getNotificationRegistration } from "./nativeNotification";
 import type { ApnsEnvironment, NotificationRegistration } from "./notification.types";
 
@@ -17,6 +19,29 @@ export async function registerThisDevice(
   const result = await register(token, environment);
   if (result.ok) registeredToken = token;
   return result;
+}
+
+/**
+ * 로그인한 회원마다 한 번, 권한 창 없이 앱에 지금 token을 물어 서버에 등록한다.
+ * APNs가 token을 바꿨거나 이전 로그아웃이 이 기기를 지웠을 수 있어 앱을 열 때와 로그인할 때마다 다시 등록한다.
+ */
+export function useNotificationRegistration() {
+  const memberId = memberIdOf(useAuth().state);
+  const registeredMemberId = useRef<string | null>(null);
+  useEffect(() => {
+    if (memberId === undefined || registeredMemberId.current === memberId) return;
+    registeredMemberId.current = memberId;
+    if (memberId !== null) void registerDeviceIfGranted();
+  }, [memberId]);
+}
+
+export async function registerDeviceIfGranted(
+  readRegistration: () => Promise<NotificationRegistration | null> = getNotificationRegistration,
+  register: typeof registerPushDevice = registerPushDevice,
+): Promise<void> {
+  const registration = await readRegistration();
+  if (registration?.status !== "granted" || registration.token === null) return;
+  await registerThisDevice(registration.token, registration.environment, register);
 }
 
 interface UnregisterOptions {

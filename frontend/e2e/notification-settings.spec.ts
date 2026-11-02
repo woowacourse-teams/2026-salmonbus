@@ -213,20 +213,21 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
   });
 });
 
-test("로그아웃하면 이 기기 token을 먼저 지우고 로그아웃한다", async ({ page }) => {
+test("허용된 앱을 열면 기기를 한 번 등록하고, 로그아웃하면 그 token을 먼저 지운 뒤 로그아웃한다", async ({ page }) => {
   await openInApp(page, { permission: "granted" });
+  const devicePath = `/api/me/push-devices/${DEVICE_TOKEN}`;
   const sent: string[] = [];
   page.on("request", (request) => {
     const path = new URL(request.url()).pathname;
-    if (path.startsWith("/api/me/push-devices/") || path === "/api/auth/logout")
-      sent.push(`${request.method()} ${path}`);
+    if (path === devicePath || path === "/api/auth/logout") sent.push(`${request.method()} ${path}`);
   });
+  const registered = page.waitForResponse(
+    (response) => response.request().method() === "PUT" && new URL(response.url()).pathname === devicePath,
+  );
   await page.goto("/mypage");
+  await registered;
   await page.getByRole("button", { name: "로그아웃", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "로그아웃", exact: true }).click();
   await expect(page).toHaveURL("/");
-  expect(sent.filter((request) => !request.startsWith("PUT"))).toEqual([
-    `DELETE /api/me/push-devices/${DEVICE_TOKEN}`,
-    "POST /api/auth/logout",
-  ]);
+  expect(sent).toEqual([`PUT ${devicePath}`, `DELETE ${devicePath}`, "POST /api/auth/logout"]);
 });
