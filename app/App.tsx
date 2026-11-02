@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import * as Application from 'expo-application';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { Linking, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
+import type { ShouldStartLoadRequest, WebViewNavigationEvent } from 'react-native-webview/lib/WebViewTypes';
 import { LoadFailedView } from './LoadFailedView';
 import { AUTH_CAPABILITIES, SIGN_IN_RESULT, signInRequestFrom, type SignInResult } from './auth/authMessages';
 import { signInNatively } from './auth/signInNatively';
@@ -19,11 +19,13 @@ import {
   REGISTRATION_EVENT,
   notificationRequestIdFrom,
 } from './notification/notificationMessages';
+import { showNotificationsInForeground, watchNotificationTaps } from './notification/openedNotifications';
 import { registrationFor } from './notification/registration';
-import { createTapInbox } from './notification/tapInbox';
+import { createTapInbox, type NotificationTap } from './notification/tapInbox';
 import { SETTINGS_CAPABILITIES } from './settings/settingsMessages';
 
 SplashScreen.preventAutoHideAsync();
+showNotificationsInForeground();
 
 function readWebUrl() {
   const webUrl = process.env.EXPO_PUBLIC_WEB_URL;
@@ -62,21 +64,42 @@ const APP_BOOTSTRAP = appBootstrapScriptFor({
 });
 const notificationTaps = createTapInbox();
 
+function isInAppUrl(url: string): boolean {
+  try {
+    return IN_APP_ORIGINS.includes(new URL(url).origin);
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   const webViewRef = useRef<WebView>(null);
   const nativeMapRef = useRef<NativeRouteMapRef>(null);
   const commandQueue = useRef(Promise.resolve());
   const documentEpoch = useRef(0);
   const signingIn = useRef(false);
+  // 웹 문서가 다 떴는지. 뜨는 중에 넣은 injectJavaScript는 사라질 수 있어서 알림 탭을 보낼지 쌓을지 이 값으로 정한다.
+  const documentLoaded = useRef(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const showLoadFailed = () => {
+    documentLoaded.current = false;
     resetNativeMap();
     setLoadFailed(true);
     SplashScreen.hide();
   };
   const retryLoad = () => setLoadFailed(false);
   const reloadWebView = () => webViewRef.current?.reload();
+
+  function handleLoadStart() {
+    documentLoaded.current = false;
+    resetNativeMap();
+  }
+
+  // WebView는 로그인 제공자 화면도 연다. 그 화면에는 알림 탭을 넘기지 않으니 웹 문서가 떴을 때만 true다.
+  function handleLoad(event: WebViewNavigationEvent) {
+    documentLoaded.current = isInAppUrl(event.nativeEvent.url);
+  }
 
   function resetNativeMap() {
     documentEpoch.current += 1;
@@ -86,9 +109,7 @@ export default function App() {
   }
 
   function handleMessage(event: WebViewMessageEvent) {
-    try {
-      if (!IN_APP_ORIGINS.includes(new URL(event.nativeEvent.url).origin)) return;
-    } catch { return; }
+    if (!isInAppUrl(event.nativeEvent.url)) return;
     const raw = event.nativeEvent.data;
     const message = bridgeMessageFrom(raw);
     if (message === null || !APP_CAPABILITIES.includes(message.type)) return;
@@ -144,6 +165,13 @@ export default function App() {
     webViewRef.current?.injectJavaScript(bridgeEventScriptFor(message, WEB_ORIGIN));
   }
 
+  const handleNotificationTap = useEffectEvent((tap: NotificationTap) => {
+    if (!notificationTaps.accept(tap, documentLoaded.current && webViewRef.current !== null)) return;
+    sendToWeb({ type: OPENED_EVENT, payload: { requestId: null, target: tap.target } });
+  });
+
+  useEffect(() => watchNotificationTaps(handleNotificationTap), []);
+
   function allowNavigation(request: ShouldStartLoadRequest) {
     const decision = navigationDecisionFor(request.url, request.isTopFrame, NAVIGABLE_ORIGINS);
     if (decision === 'openOutside') Linking.openURL(request.url).catch(() => undefined);
@@ -185,7 +213,8 @@ export default function App() {
       injectedJavaScriptBeforeContentLoaded={APP_BOOTSTRAP}
       injectedJavaScriptBeforeContentLoadedForMainFrameOnly
       onMessage={handleMessage}
-      onLoadStart={resetNativeMap}
+      onLoadStart={handleLoadStart}
+      onLoad={handleLoad}
       onLoadEnd={SplashScreen.hide}
       onError={showLoadFailed}
       onHttpError={showLoadFailed}
