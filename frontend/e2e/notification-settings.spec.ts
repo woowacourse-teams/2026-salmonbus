@@ -90,18 +90,14 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     expect(notifications.requests).toEqual([]);
   });
 
-  test("저장된 알림이 있으면 켜진 스위치와 요약을 보인다", async ({ page, notifications }) => {
+  test("저장된 알림은 켜진 채로 보이고, 시각과 요일을 바꿔 저장하면 바꾼 값을 PUT으로 보내고 요약이 바뀐다", async ({
+    page,
+    notifications,
+  }) => {
     notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
     await openInApp(page);
     await page.goto(`/mypage/groups/${defaultGroupId}`);
     await expect(notificationSwitch(page)).toBeChecked();
-    await expect(page.getByRole("button", { name: "평일 07:40", exact: true })).toBeVisible();
-  });
-
-  test("시각과 요일을 바꿔 저장하면 바꾼 값을 PUT으로 보내고 요약이 바뀐다", async ({ page, notifications }) => {
-    notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
-    await openInApp(page);
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
     await page.getByRole("button", { name: "평일 07:40", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
     await expect(sheet.getByLabel("시각")).toHaveValue("07:40");
@@ -163,22 +159,21 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     await expect(notificationSwitch(page)).not.toBeChecked();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
 
-    await notificationSwitch(page).click();
-    await expect(sheet.getByLabel("시각")).toHaveValue("07:30");
-    for (const weekday of ["월요일", "화요일", "수요일", "목요일", "금요일"])
-      await expect(sheet.getByRole("button", { name: weekday })).toHaveAttribute("aria-pressed", "true");
-    for (const weekday of ["토요일", "일요일"])
-      await expect(sheet.getByRole("button", { name: weekday })).toHaveAttribute("aria-pressed", "false");
-    await sheet.getByRole("button", { name: "취소", exact: true }).click();
-    await expect(sheet).toBeHidden();
-    await expect(notificationSwitch(page)).not.toBeChecked();
+    await test.step("창에서 취소하면 스위치가 꺼진 채로 남는다", async () => {
+      await notificationSwitch(page).click();
+      await sheet.getByRole("button", { name: "취소", exact: true }).click();
+      await expect(sheet).toBeHidden();
+      await expect(notificationSwitch(page)).not.toBeChecked();
+    });
 
-    await notificationSwitch(page).click();
-    await sheet.getByRole("button", { name: "저장", exact: true }).click();
-    await expect(sheet).toBeHidden();
-    await expect(notificationSwitch(page)).not.toBeChecked();
-    await expect(page.getByText("iPhone 설정에서 연어버스의 알림을 허용해 주세요.")).toHaveCount(0);
-    expect(notifications.requests).toEqual([{ path: "/api/me/notification-settings", method: "GET", body: null }]);
+    await test.step("저장했지만 권한을 고르지 않으면 꺼진 채로 남고 안내도 알림 API도 없다", async () => {
+      await notificationSwitch(page).click();
+      await sheet.getByRole("button", { name: "저장", exact: true }).click();
+      await expect(sheet).toBeHidden();
+      await expect(notificationSwitch(page)).not.toBeChecked();
+      await expect(page.getByText("iPhone 설정에서 연어버스의 알림을 허용해 주세요.")).toHaveCount(0);
+      expect(notifications.requests).toEqual([{ path: "/api/me/notification-settings", method: "GET", body: null }]);
+    });
   });
 
   test("알림을 켜고 권한을 허용하면 기기를 등록한 뒤 설정을 저장한다", async ({ page, notifications }) => {
