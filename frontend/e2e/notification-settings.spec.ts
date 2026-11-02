@@ -231,3 +231,12 @@ test("허용된 앱을 열면 기기를 한 번 등록하고, 로그아웃하면
   await expect(page).toHaveURL("/");
   expect(sent).toEqual([`PUT ${devicePath}`, `DELETE ${devicePath}`, "POST /api/auth/logout"]);
 });
+
+test("알림을 눌러 앱을 열면 로그인하지 않아도 그 정류장의 판정 보드를 연다", async ({ page, auth, api }) => {
+  auth.member = null;
+  const stop = api.data.watch.stops.find((candidate) => candidate.direction === "UP" && candidate.boardingAllowed)!;
+  await openInApp(page, { opened: { routeId, stopId: stop.stopId, direction: "UP" } });
+  await page.goto("/");
+  await expect(page).toHaveURL(`/routes/${routeId}?direction=UP&stopId=${stop.stopId}`);
+  await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
+});
