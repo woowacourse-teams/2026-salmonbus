@@ -66,6 +66,7 @@ export function nextNotificationRowState(
         return { status: "editing", schedule: state.setting, previous: state.setting };
       return state;
     case "cancel":
+      if (state.status === "asking") return { status: "off" };
       return state.status === "editing" || state.status === "failed" ? notificationRowStateOf(state.previous) : state;
     case "submit":
       if (state.status !== "editing" && state.status !== "failed") return state;
@@ -108,6 +109,7 @@ export interface NotificationSaveServices {
 /**
  * 창의 저장 버튼. 새 알림이면 권한을 묻고, 허락받은 기기를 등록한 뒤 설정을 저장한다.
  * 이미 켜진 알림은 시각과 요일만 저장한다. 단계마다 apply로 사건을 넘긴다.
+ * 앱은 권한 답을 오래 쥐고 있을 수 있어서, 권한을 묻는 동안 취소하면(signal) 늦게 온 답으로는 아무것도 저장하지 않는다.
  */
 export async function submitNotification(
   target: FavoriteTarget,
@@ -115,10 +117,12 @@ export async function submitNotification(
   schedule: NotificationSchedule,
   services: NotificationSaveServices,
   apply: (event: NotificationRowEvent) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   apply({ type: "submit", schedule });
   if (previous === null) {
     const registration = await services.requestRegistration();
+    if (signal?.aborted) return;
     apply({ type: "answered", status: registration?.status ?? "undetermined" });
     if (registration?.status !== "granted") return;
     if (registration.token !== null) {

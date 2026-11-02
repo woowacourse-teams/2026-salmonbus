@@ -10,6 +10,8 @@ interface NotificationSheetProps {
   stopLabel: string;
   initialSchedule: NotificationSchedule;
   busy: boolean;
+  /** 저장 요청이 서버로 간 뒤에는 되돌릴 수 없어 닫지 않는다. 권한을 묻는 동안에는 닫을 수 있다. */
+  cancellable: boolean;
   error: string | null;
   onCancel: () => void;
   onSave: (schedule: NotificationSchedule) => void;
@@ -19,6 +21,7 @@ export function NotificationSheet({
   stopLabel,
   initialSchedule,
   busy,
+  cancellable,
   error,
   onCancel,
   onSave,
@@ -31,7 +34,7 @@ export function NotificationSheet({
       titleClassName={groupStyles.dialogTitle}
       title="출발 알림"
       onCancel={() => {
-        if (!busy) onCancel();
+        if (cancellable) onCancel();
       }}
     >
       <p className={groupStyles.description}>{stopLabel}</p>
@@ -68,7 +71,7 @@ export function NotificationSheet({
         </p>
       )}
       <div className={groupStyles.dialogActions}>
-        <button className={groupStyles.cancel} disabled={busy} onClick={onCancel}>
+        <button className={groupStyles.cancel} disabled={!cancellable} onClick={onCancel}>
           취소
         </button>
         <button

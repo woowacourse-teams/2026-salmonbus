@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { track } from "@/shared/analytics/track";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { deleteNotificationSetting, saveNotificationSetting } from "@/shared/api/notifications.api";
@@ -30,6 +30,7 @@ interface NotificationRowProps {
 export function NotificationRow({ target, stopLabel, initialSetting }: NotificationRowProps) {
   const [state, setState] = useState(() => notificationRowStateOf(initialSetting));
   const playResultHaptic = useResultHaptic();
+  const permissionAsk = useRef<AbortController | null>(null);
 
   function apply(event: NotificationRowEvent) {
     setState((current) => nextNotificationRowState(current, event));
@@ -39,6 +40,8 @@ export function NotificationRow({ target, stopLabel, initialSetting }: Notificat
   function save(schedule: NotificationSchedule) {
     if (state.status !== "editing" && state.status !== "failed") return;
     const isFirst = state.previous === null;
+    const ask = new AbortController();
+    permissionAsk.current = ask;
     void submitNotification(
       target,
       state.previous,
@@ -60,6 +63,7 @@ export function NotificationRow({ target, stopLabel, initialSetting }: Notificat
             is_first: isFirst,
           });
       },
+      ask.signal,
     );
   }
 
@@ -120,8 +124,12 @@ export function NotificationRow({ target, stopLabel, initialSetting }: Notificat
           stopLabel={stopLabel}
           initialSchedule={state.schedule}
           busy={busy}
+          cancellable={state.status !== "saving"}
           error={state.status === "failed" ? state.message : null}
-          onCancel={() => apply({ type: "cancel" })}
+          onCancel={() => {
+            permissionAsk.current?.abort();
+            apply({ type: "cancel" });
+          }}
           onSave={save}
         />
       )}

@@ -242,3 +242,27 @@ describe("알림 끄기", () => {
     });
   });
 });
+
+describe("권한을 묻는 동안 취소", () => {
+  it("창을 닫으면 꺼진 상태로 돌아가고, 늦게 온 허락으로는 기기 등록도 설정 저장도 하지 않는다", async () => {
+    const services = servicesFor(null);
+    let answerPermission: (registration: NotificationRegistration | null) => void = () => {};
+    services.requestRegistration.mockReturnValue(new Promise((resolve) => (answerPermission = resolve)));
+    const ask = new AbortController();
+    let state = editingNew;
+    const apply = (event: NotificationRowEvent) => {
+      state = nextNotificationRowState(state, event);
+    };
+
+    const submission = submitNotification(target, null, schedule, services, apply, ask.signal);
+    expect(state.status).toBe("asking");
+    ask.abort();
+    apply({ type: "cancel" });
+    answerPermission({ requestId: "request-1", status: "granted", token: "device-token", environment: "SANDBOX" });
+    await submission;
+
+    expect(state).toEqual({ status: "off" });
+    expect(services.registerPushDevice).not.toHaveBeenCalled();
+    expect(services.saveNotificationSetting).not.toHaveBeenCalled();
+  });
+});
