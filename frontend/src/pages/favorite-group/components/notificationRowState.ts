@@ -6,7 +6,7 @@ import type {
   NotificationPermissionStatus,
   NotificationRegistration,
 } from "@/shared/notification/notification.types";
-import { NEW_NOTIFICATION_SCHEDULE, notificationErrorOf } from "@/shared/utils/notificationPolicy";
+import { NEW_NOTIFICATION_SCHEDULE, notificationErrorOf } from "./notificationPolicy";
 
 /** 정류장 하나의 알림 줄. editing, asking, saving, failed 동안 시각과 요일 창이 열려 있다. */
 export type NotificationRowState =

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { WEEKDAYS, type NotificationSchedule } from "@/shared/api/notifications.types";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
-import { toggledWeekdaysOf, WEEKDAY_LABELS } from "@/shared/utils/notificationPolicy";
+import { toggledWeekdaysOf, WEEKDAY_LABELS } from "./notificationPolicy";
 import * as formStyles from "@/shared/styles/form.css";
 import * as groupStyles from "./GroupDetails.css";
 import * as styles from "./NotificationRow.css";

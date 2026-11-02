@@ -1,6 +1,6 @@
 import type { ApiFailure } from "@/shared/api/client";
 import { WEEKDAYS, type NotificationSchedule, type Weekday } from "@/shared/api/notifications.types";
-import { authErrorOf } from "./authErrorOf";
+import { authErrorOf } from "@/shared/utils/authErrorOf";
 
 const WORKDAYS: Weekday[] = ["MON", "TUE", "WED", "THU", "FRI"];
 const WEEKEND: Weekday[] = ["SAT", "SUN"];

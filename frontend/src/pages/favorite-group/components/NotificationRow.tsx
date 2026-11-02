@@ -8,7 +8,7 @@ import { Switch } from "@/shared/components/Switch";
 import { useResultHaptic } from "@/shared/haptic/haptic";
 import { requestNotificationPermission } from "@/shared/notification/nativeNotification";
 import { registerThisDevice } from "@/shared/notification/useNotificationRegistration";
-import { scheduleLabelOf } from "@/shared/utils/notificationPolicy";
+import { scheduleLabelOf } from "./notificationPolicy";
 import * as formStyles from "@/shared/styles/form.css";
 import { NotificationSheet } from "./NotificationSheet";
 import {
