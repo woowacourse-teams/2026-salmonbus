@@ -71,6 +71,20 @@ export async function memberRequest<T>(url: string, options: RequestOptions = {}
   return result;
 }
 
+/** 회원 요청의 성공 본문을 parse로 검증한다. parse가 null을 돌려주면 잘못된 응답으로 바꾼다. */
+export async function parsedMemberRequest<T>(
+  url: string,
+  options: RequestOptions,
+  parse: (body: unknown) => T | null,
+): Promise<ApiResult<T>> {
+  const result = await memberRequest<unknown>(url, options);
+  if (!result.ok) return result;
+  const body = parse(result.body);
+  return body === null
+    ? { ok: false, failure: { kind: "malformed", status: result.status, requestId: result.requestId } }
+    : { ...result, body };
+}
+
 export async function updateNickname(nickname: string): Promise<ApiResult<Member>> {
   return checked(
     await memberRequest<unknown>("/api/me", { method: "PATCH", body: { nickname: nickname.trim() } }),
