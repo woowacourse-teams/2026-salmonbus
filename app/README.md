@@ -22,10 +22,28 @@
 
 Simulator에서 로컬 웹 서버에 연결할 때는 `http://127.0.0.1:<port>`를 사용합니다. 실제 iPhone에서는 Mac의 LAN 주소나 HTTPS 개발 서버가 필요합니다. native module은 Expo Go에 포함되지 않으므로 iOS native map 검증에는 development build를 사용합니다.
 
+## 알림
+
+앱은 알림 권한, APNs device token, 알림 탭만 맡고, 토큰 등록과 화면은 웹이 맡습니다. 웹이 `notification.requestPermission`(권한 묻기)이나 `notification.getRegistration`(묻지 않고 읽기)을 보내면 앱이 `notification.registration`으로 상태, token, APNs 환경을 돌려줍니다. 환경은 빌드 설정이 아니라 서명된 앱에서 읽습니다(`expo-application`). 시뮬레이터와 개발 서명 빌드는 `SANDBOX`, TestFlight와 App Store 빌드는 `PRODUCTION`이고, 정할 수 없으면 token을 `null`로 보냅니다.
+
+알림을 누르면 앱이 payload의 `target`을 읽습니다. 웹 문서가 다 떴으면 바로 `notification.opened`로 넘기고, 뜨는 중이거나 꺼진 앱이 알림으로 열렸으면 쌓아 두었다가 웹의 `notification.takeOpened`에 돌려줍니다. `expo-notifications`는 원격 알림의 `data`에 payload의 `body` 키만 넣으므로 서버는 대상을 `aps` 밖 `target`에 둡니다.
+
+Simulator에서는 아래 payload를 파일로 저장하고 `xcrun simctl push booted com.salmonbus.app payload.apns`로 넣습니다.
+
+```json
+{
+  "aps": { "alert": { "title": "연어버스", "body": "즐겨찾기한 버스를 확인할 시간이에요" }, "sound": "default" },
+  "target": { "routeId": "234000884", "stopId": "203000165", "direction": "UP" }
+}
+```
+
+실기기 token과 실제 수신은 App ID(`com.salmonbus.app`)에 Push Notifications를 켜고 APNs 키를 만든 뒤 `dev-testflight` 프로필(dev 웹, TestFlight 설치)로 확인합니다.
+
 ## 코드 위치
 
 - `bridge/bridge.ts`: 앱 정보(`window.__SALMONBUS_APP__`) 주입, 웹과 주고받는 envelope 검증, 웹으로 이벤트 전달
 - `auth/`: 로그인 메시지 검사(`authMessages.ts`)와 Apple, 카카오 SDK 호출(`signInNatively.ts`)
+- `notification/`: 알림 메시지 검사와 APNs 환경 판단(`notificationMessages.ts`), 권한과 token(`registration.ts`), 알림 탭 칸(`tapInbox.ts`)과 탭 감시(`openedNotifications.ts`)
 - `native-map/NativeRouteMap.tsx`: native view의 TypeScript 계약
 - `native-map/nativeMapMessages.ts`: 앱이 받는 지도 메시지 목록(웹의 `NATIVE_MAP_CAPABILITIES`와 같음)
 - `haptic/playHaptic.ts`: 진동 종류를 iOS 진동에 연결하는 표. 종류 목록은 웹의 `HapticKind`를 import type으로 읽고, 다르면 `pnpm typecheck`가 실패
