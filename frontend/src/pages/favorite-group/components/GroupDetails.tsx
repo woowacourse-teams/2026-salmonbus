@@ -11,7 +11,11 @@ import { useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
+import { sameFavorite } from "@/shared/utils/favoritePolicy";
 import * as formStyles from "@/shared/styles/form.css";
+import { useNotificationSettings } from "../hooks/useNotificationSettings";
+import { canRequestNotificationPermission } from "../notificationRegistration";
+import { NotificationRow } from "./NotificationRow";
 import * as styles from "./GroupDetails.css";
 
 interface GroupDetailsProps {
@@ -25,6 +29,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
   const summary = useHomeFavorites({ kind: "group", groupId: group.id }, revision);
   const favorites = latestSuccessOf(summary)?.body.groups[0]?.favorites ?? [];
   const { busy, error, setError, run } = useFavoriteAction();
+  const notificationSettings = useNotificationSettings(canRequestNotificationPermission());
   const navigate = useNavigate();
   const groupDeleteButton = useRef<HTMLButtonElement>(null);
   const focusAfterDelete = useRef(false);
@@ -46,6 +51,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
       <ul className={styles.list}>
         {group.favorites.map((favorite, index) => {
           const item = favorites.find((candidate) => candidate.id === favorite.id);
+          const stopLabel = item?.stop.name || `즐겨찾기 ${index + 1}`;
           return (
             <li className={styles.card} key={favorite.id}>
               <span className={styles.info}>
@@ -61,7 +67,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
               </span>
               <button
                 className={styles.remove}
-                aria-label={`${item?.stop.name || `즐겨찾기 ${index + 1}`} 삭제`}
+                aria-label={`${stopLabel} 삭제`}
                 onClick={(event) => {
                   event.currentTarget.focus();
                   setError(null);
@@ -70,6 +76,15 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
               >
                 삭제
               </button>
+              {notificationSettings.status === "ready" && (
+                <NotificationRow
+                  target={favorite}
+                  stopLabel={stopLabel}
+                  initialSetting={
+                    notificationSettings.settings.find((setting) => sameFavorite(setting, favorite)) ?? null
+                  }
+                />
+              )}
             </li>
           );
         })}

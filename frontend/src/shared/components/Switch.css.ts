@@ -12,11 +12,12 @@ export const input = style({
   margin: 0,
   borderRadius: 14,
   background: "#D7D0C8",
-  cursor: "inherit",
+  cursor: "pointer",
   transition: "background-color 150ms linear",
   selectors: {
     "&:checked": { background: vars.color.brand },
     "&:focus-visible": { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 3 },
+    "&:disabled": { opacity: 0.45, cursor: "default" },
   },
   "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
