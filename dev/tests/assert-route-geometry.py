@@ -24,6 +24,47 @@ def point_valid(point):
             and -180 <= point["x"] <= 180 and -90 <= point["y"] <= 90)
 
 
+def display_point_valid(point):
+    return (point_valid(point) and set(point) == {"x", "y"}
+            and all(type(point[key]) in (int, float) for key in ("x", "y")))
+
+
+def assert_stop_contract(actual, stop, body):
+    context = (body["routeId"], stop["sequence"])
+    expected = {"stationId": stop["stationId"], "stopSequence": stop["sequence"],
+                "name": stop["name"], "direction": stop["direction"],
+                "boardingAllowed": stop["boardingAllowed"],
+                "point": {"x": stop["x"], "y": stop["y"]}}
+    assert isinstance(actual, dict) and set(expected) <= actual.keys() <= \
+        set(expected) | {"displayPoint", "pathConnection"}, context
+    # Additive display metadata must not change any original visit or GPS field.
+    assert {key: actual[key] for key in expected} == expected, context
+    assert point_valid(actual["point"]), context
+    display_point = actual.get("displayPoint")
+    assert display_point is None or display_point_valid(display_point), context
+    connection = actual.get("pathConnection")
+    if connection is None:
+        return
+    assert isinstance(connection, dict) and set(connection) == \
+        {"point", "segmentIndex", "segmentFraction"}, context
+    assert display_point_valid(connection["point"]), context
+    index, fraction = connection["segmentIndex"], connection["segmentFraction"]
+    assert type(index) is int and index >= 0, context
+    assert type(fraction) in (int, float) and 0 <= fraction <= 1 and math.isfinite(fraction), context
+    paths = body.get("displayPaths")
+    assert isinstance(paths, dict), context
+    path = paths.get(stop["direction"])
+    assert isinstance(path, dict) and isinstance(path.get("points"), list), context
+    points = path["points"]
+    assert index + 1 < len(points), context
+    a, b = points[index:index + 2]
+    assert display_point_valid(a) and display_point_valid(b), context
+    # Match the consumer's tolerance for the serialized final segment interpolation.
+    for key in ("x", "y"):
+        interpolated = a[key] + (b[key] - a[key]) * fraction
+        assert math.isclose(interpolated, connection["point"][key], rel_tol=0, abs_tol=1e-9), context
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", required=True)
@@ -81,11 +122,7 @@ def main():
         assert body["turningPoint"]["stopSequence"] == route["turnSequence"], route_id
         assert len(body["busStops"]) == len(route["stops"]), route_id
         for actual, stop in zip(body["busStops"], route["stops"]):
-            assert actual == {"stationId": stop["stationId"], "stopSequence": stop["sequence"],
-                              "name": stop["name"], "direction": stop["direction"],
-                              "boardingAllowed": stop["boardingAllowed"],
-                              "point": {"x": stop["x"], "y": stop["y"]}}, (route_id, stop["sequence"])
-            assert point_valid(actual["point"]), (route_id, stop["sequence"])
+            assert_stop_contract(actual, stop, body)
         assert shapes[route_id]["referenceDigest"] == route["contentDigest"], route_id
         assert body["points"] == shapes[route_id]["points"], f"{route_id}: source shape was changed"
         assert len(body["points"]) >= 2 and len({(p["x"], p["y"]) for p in body["points"]}) >= 2, route_id

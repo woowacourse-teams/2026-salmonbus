@@ -24,6 +24,7 @@ import com.gustler.backend.observations.support.ObservationIntegrationTest;
 import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.quota.domain.CallQuotaStore;
 import com.gustler.backend.routecatalog.domain.RouteHeadways;
+import com.gustler.backend.routecatalog.domain.RouteSource;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
 import com.gustler.backend.routecatalog.domain.RouteStops;
@@ -102,7 +103,7 @@ class ObservationCollectorTest {
         given(clock.getZone()).willReturn(KOREA);
         given(routeSource.requiredCallsPerRead()).willReturn(2);
         given(clock.instant()).willReturn(TICK);
-        given(routeSource.read(ROUTE_3330)).willReturn(new RouteSourceResult.Success(upstreamRoute()));
+        given(routeSource.capture(ROUTE_3330)).willReturn(normalizedCapture(new RouteSourceResult.Success(upstreamRoute())));
         given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             busAt(VEHICLE_204000206, 1, STOP_205000217))));
         WorkerOperationLog.recovered("collection_quota", ROUTE_3330);
@@ -181,7 +182,7 @@ class ObservationCollectorTest {
         collector.collectOnce(ROUTE_3330);
 
         // then
-        then(routeSource).should().read(ROUTE_3330);
+        then(routeSource).should().capture(ROUTE_3330);
     }
 
     @Test
@@ -342,8 +343,8 @@ class ObservationCollectorTest {
     void 노선_행_확보와_판본_열기가_한_트랜잭션에서_끝난다() {
         // given
         // 정류소 이름이 열 길이를 초과해 판본의 정류소 저장에 실패한다
-        given(routeSource.read(ROUTE_3330))
-            .willReturn(new RouteSourceResult.Success(routeWithTooLongStopName()));
+        given(routeSource.capture(ROUTE_3330))
+            .willReturn(normalizedCapture(new RouteSourceResult.Success(routeWithTooLongStopName())));
 
         // when
         assertThatThrownBy(() -> collector.collectOnce(ROUTE_3330)).isInstanceOf(RuntimeException.class);
@@ -435,7 +436,7 @@ class ObservationCollectorTest {
     @Test
     void 노선정보를_못_읽으면_판을_열지_않는다() {
         // given
-        given(routeSource.read(ROUTE_3330)).willReturn(new Failed("상류가 답하지 않았다"));
+        given(routeSource.capture(ROUTE_3330)).willReturn(normalizedCapture(new Failed("상류가 답하지 않았다")));
 
         // when
         collector.collectOnce(ROUTE_3330);
@@ -447,7 +448,7 @@ class ObservationCollectorTest {
     @Test
     void 노선정보를_못_읽으면_위치정보_한도를_안_쓴다() {
         // given
-        given(routeSource.read(ROUTE_3330)).willReturn(new Failed("상류가 답하지 않았다"));
+        given(routeSource.capture(ROUTE_3330)).willReturn(normalizedCapture(new Failed("상류가 답하지 않았다")));
 
         // when
         collector.collectOnce(ROUTE_3330);
@@ -470,6 +471,19 @@ class ObservationCollectorTest {
 
     private int routeRowCount() {
         return jdbcClient.sql("SELECT count(*) FROM route").query(Integer.class).single();
+    }
+
+    /** 정규화 결과만 제공하는 대역이다. 원문 없는 default capture는 loader에서
+     * UNRECORDED_LEGACY로 기록되며, 보관한 원문이 있는 것처럼 표시하지 않는다. */
+    private static RouteSource.Capture normalizedCapture(RouteSourceResult result) {
+        RouteSource normalizedOnly = new RouteSource() {
+            @Override
+            public int requiredCallsPerRead() { return 2; }
+
+            @Override
+            public RouteSourceResult read(String sourceRouteId) { return result; }
+        };
+        return normalizedOnly.capture(ROUTE_3330);
     }
 
     private static UpstreamRoute upstreamRoute() {
