@@ -232,6 +232,40 @@ test("허용된 앱을 열면 기기를 한 번 등록하고, 로그아웃하면
   expect(sent).toEqual([`PUT ${devicePath}`, `DELETE ${devicePath}`, "POST /api/auth/logout"]);
 });
 
+test("기기 등록 응답이 오기 전에 로그아웃하면 등록이 끝난 뒤에 token을 지우고 로그아웃한다", async ({ page }) => {
+  await openInApp(page, { permission: "granted" });
+  const devicePath = `/api/me/push-devices/${DEVICE_TOKEN}`;
+  const sent: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path === devicePath || path === "/api/auth/logout") sent.push(`${request.method()} ${path}`);
+  });
+  let releaseRegistration: () => void = () => {};
+  const registrationHeld = new Promise<void>((held) => {
+    void page.route(`**${devicePath}`, async (route) => {
+      if (route.request().method() !== "PUT") return route.fallback();
+      held();
+      await new Promise<void>((release) => (releaseRegistration = release));
+      sent.push("PUT 응답");
+      await route.fallback();
+    });
+  });
+  await page.goto("/mypage");
+  await registrationHeld;
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "로그아웃", exact: true }).click();
+  // 등록이 끝나지 않은 동안에는 아무 요청도 나가지 않아야 한다. 나가지 않음을 확인하려면 잠시 지켜볼 수밖에 없다.
+  const early = await page
+    .waitForRequest((request) => request.method() === "DELETE" || request.url().endsWith("/api/auth/logout"), {
+      timeout: 1_000,
+    })
+    .catch(() => null);
+  expect(early).toBeNull();
+  releaseRegistration();
+  await expect(page).toHaveURL("/");
+  expect(sent).toEqual([`PUT ${devicePath}`, "PUT 응답", `DELETE ${devicePath}`, "POST /api/auth/logout"]);
+});
+
 test("알림을 눌러 앱을 열면 로그인하지 않아도 그 정류장의 판정 보드를 연다", async ({ page, auth, api }) => {
   auth.member = null;
   const stop = api.data.watch.stops.find((candidate) => candidate.direction === "UP" && candidate.boardingAllowed)!;

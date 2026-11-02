@@ -123,6 +123,41 @@ describe("로그아웃 전 기기 삭제", () => {
     expect(services.unregister).toHaveBeenCalledWith(TOKEN);
   });
 
+  it("등록 요청이 아직 서버에 가는 중이면 끝나길 기다린 뒤 그 token을 지운다", async () => {
+    const services = servicesFor(granted(OTHER_TOKEN));
+    let answerRegistration: (result: ApiResult<void>) => void = () => {};
+    services.register.mockReturnValue(new Promise((resolve) => (answerRegistration = resolve)));
+    const registration = registerDeviceIfGranted(async () => granted(TOKEN), services.register);
+    await Promise.resolve();
+
+    const removal = unregisterThisDevice(services);
+    await Promise.resolve();
+    expect(services.unregister).not.toHaveBeenCalled();
+
+    answerRegistration(noContent);
+    await Promise.all([registration, removal]);
+    expect(services.unregister.mock.calls).toEqual([[TOKEN]]);
+    expect(services.readRegistration).not.toHaveBeenCalled();
+  });
+
+  it("등록 요청이 시간 제한 안에 끝나지 않으면 기다리지 않고 앱이 주는 token을 지운다", async () => {
+    jest.useFakeTimers();
+    const services = servicesFor(granted(OTHER_TOKEN));
+    let answerRegistration: (result: ApiResult<void>) => void = () => {};
+    services.register.mockReturnValue(new Promise((resolve) => (answerRegistration = resolve)));
+    const registration = registerThisDevice(TOKEN, "SANDBOX", services.register);
+
+    const removal = unregisterThisDevice({ ...services, timeoutMs: 3_000 });
+    await jest.advanceTimersByTimeAsync(2_999);
+    expect(services.unregister).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(1);
+    await removal;
+    expect(services.unregister.mock.calls).toEqual([[OTHER_TOKEN]]);
+
+    answerRegistration(timedOut);
+    await registration;
+  });
+
   it("앱 읽기나 삭제가 예외를 던져도 로그아웃을 막지 않는다", async () => {
     const services = servicesFor();
     services.readRegistration.mockRejectedValue(new Error("bridge"));
