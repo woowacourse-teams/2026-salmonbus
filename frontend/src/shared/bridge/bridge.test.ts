@@ -1,5 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { AUTH_CAPABILITIES as APP_AUTH_CAPABILITIES } from "../../../../app/auth/authMessages";
+import { NOTIFICATION_CAPABILITIES as APP_NOTIFICATION_CAPABILITIES } from "../../../../app/notification/notificationMessages";
 import { SETTINGS_CAPABILITIES as APP_SETTINGS_CAPABILITIES } from "../../../../app/settings/settingsMessages";
 import type { AppCommandType, BridgeMessage } from "./bridge.types";
 import { BRIDGE_EVENT, appHostFrom, bridgeMessageFrom, isSupportedInApp, sendToApp, subscribeToApp } from "./bridge";
@@ -21,6 +22,16 @@ describe("설정 메시지 목록", () => {
 describe("로그인 메시지 목록", () => {
   it("앱의 app/auth/authMessages.ts와 같은 목록이다", () => {
     expect(APP_AUTH_CAPABILITIES).toEqual(["auth.signIn"] satisfies AppCommandType[]);
+  });
+});
+
+describe("알림 메시지 목록", () => {
+  it("앱의 app/notification/notificationMessages.ts와 같은 목록이다", () => {
+    expect(APP_NOTIFICATION_CAPABILITIES).toEqual([
+      "notification.requestPermission",
+      "notification.getRegistration",
+      "notification.takeOpened",
+    ] satisfies AppCommandType[]);
   });
 });
 
