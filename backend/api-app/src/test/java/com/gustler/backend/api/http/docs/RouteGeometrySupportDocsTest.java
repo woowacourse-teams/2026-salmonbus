@@ -87,6 +87,23 @@ class RouteGeometrySupportDocsTest {
         assertThat(examples.at("/withoutDirectionSplit/value/paths").isNull()).isTrue();
         assertThat(examples.at("/partial/value/reason").asString()).isEqualTo("MISSING_STOP_COORDINATES");
         assertThat(examples.at("/notCollected/value/points")).isEmpty();
+        assertThat(examples.at("/ready/value").size()).isEqualTo(14);
+        assertThat(examples.at("/ready/value/busStops/0").size()).isEqualTo(7);
+        assertThat(examples.at("/displayWithheld/value/reason").asString()).isEqualTo("DISPLAY_WITHHELD");
+        assertThat(examples.at("/displayWithheld/value/points")).isEmpty();
+        assertThat(examples.at("/diagnostic/value/displayAccuracyGrade").asString()).isEqualTo("UNEVALUATED");
+        assertThat(properties.at("/paths/description").asString()).contains("최종 표시", "includeDiagnostics");
+        assertThat(document.at("/components/schemas/RouteGeometryStop/properties/pathConnection/description").asString())
+                .contains("paths", "direction", "displayPaths");
+        boolean diagnosticParameter = false;
+        for (JsonNode parameter : operation(document).path("parameters")) {
+            if (parameter.path("name").asString().equals("includeDiagnostics")) {
+                diagnosticParameter = true;
+                assertThat(parameter.path("required").booleanValue()).isFalse();
+                assertThat(parameter.at("/schema/default").booleanValue()).isFalse();
+            }
+        }
+        assertThat(diagnosticParameter).isTrue();
     }
 
     private JsonNode operation(JsonNode source) {

@@ -50,12 +50,18 @@ public class RouteGeometryController {
             `busStops[].point`는 정류장 마커 좌표입니다. 정류장 좌표를 이어 도로 형상을 만들지 않습니다.
             같은 stationId의 반복 방문은 `stopSequence`로 구분합니다. `turningPoint.stopSequence`도 방문 순번이며 형상 배열 인덱스가 아닙니다.
 
+            기본 응답은 기존 14개 루트 필드와 정류장의 기존 6개 필드에 선택적 `pathConnection`만 더합니다.
+            `paths`는 서버가 한 묶음으로 검증하고 선택한 최종 표시 경로입니다. `pathConnection`의 segmentIndex/segmentFraction은 해당 방문 direction의 `paths` 기준이며 좌표를 재투영하지 않습니다.
+            `points`와 `busStops[].point`는 원본을 보존합니다. `includeDiagnostics=true`일 때만 `displayPaths`·출처·근거·품질·정확도 및 정류장 `displayPoint`를 추가하고, 그때의 `paths`는 원본 방향 경로입니다. 진단 모드의 연결은 `displayPaths` 기준입니다.
+            기본/진단 응답의 geometryRevision과 ETag는 서로 다른 namespace를 사용하여 모드 간 304 재사용을 방지합니다.
+
             `paths`가 있으면 `UP.points`와 `DOWN.points`를 함께 사용합니다. 두 경로는 회차 경계점을 공유하며,
             하행을 상행의 역순으로 만들지 않습니다. 방문 순서와 회차를 형상에 대응할 근거가 부족하거나 모호하면
             READY여도 `paths=null`일 수 있으므로 전체 `points`를 표시합니다. 방향 선택·색상·겹침 순서는 프론트에서 처리하고,
             방향 전환이나 지도 확대·이동마다 재조회하지 않습니다.
 
             READY는 도로 형상과 모든 정류장 좌표 제공, PARTIAL은 도로 형상을 유지하되 일부 정류장의 `point=null`인 상태입니다.
+            표시가 보류되거나 선택 묶음의 구조 검증이 실패하면 기본 응답은 UNAVAILABLE/DISPLAY_WITHHELD로 `points=[]`, `paths=null`, 연결점 생략이며 원본 정류장 GPS는 유지합니다. 이 경우 원본 선을 대신 그리지 않습니다.
             UNAVAILABLE/NOT_COLLECTED는 현재 판본의 형상 미수집으로 `points=[]`, `paths=null`이며, 정류장 좌표가 있으면 마커만 표시할 수 있습니다.
             dev 공급 자료는 현재 41노선의 정류장 방문 3,215건과 형상점 35,542개를 포함한 GBIS 정적 재생 자료입니다.
             8노선은 기존 정적 API 저장본, 33노선은 공식 공개 지도 형상입니다. 방문 건수는 고유 물리 정류장 수가 아닙니다.
@@ -71,7 +77,7 @@ public class RouteGeometryController {
             schema = @Schema(type = "string")))
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "READY: 형상과 모든 정류장 좌표. PARTIAL: 형상은 있고 일부 point=null. "
-            + "UNAVAILABLE/NOT_COLLECTED: 현재 판본 형상 미수집. READY여도 paths=null 가능. 예시는 합성 자료.",
+            + "UNAVAILABLE/NOT_COLLECTED: 현재 판본 형상 미수집. DISPLAY_WITHHELD: 기본 지도 표시 보류. READY여도 paths=null 가능. 예시는 합성 자료.",
             headers = {
                 @Header(name = "ETag", description = "W/\"g-{geometryRevision}\". UNAVAILABLE에는 제공하지 않음",
                     schema = @Schema(type = "string")),
@@ -95,7 +101,13 @@ public class RouteGeometryController {
                         value = RouteGeometryApiDocsExamples.NOT_COLLECTED),
                     @ExampleObject(name = "withoutDirectionSplit", summary = "READY: 전체 형상 제공·방향 분리 근거 없음",
                         description = "합성 예시. READY가 paths의 존재를 보장하지 않습니다. paths=null이면 전체 points를 표시합니다.",
-                        value = RouteGeometryApiDocsExamples.WITHOUT_DIRECTION_SPLIT)
+                        value = RouteGeometryApiDocsExamples.WITHOUT_DIRECTION_SPLIT),
+                    @ExampleObject(name = "displayWithheld", summary = "UNAVAILABLE: 표시 보류",
+                        description = "합성 예시. 기본 응답에서 표시 검증을 통과하지 못한 선과 연결을 제거하며 원본 정류장 GPS는 보존합니다.",
+                        value = RouteGeometryApiDocsExamples.DISPLAY_WITHHELD),
+                    @ExampleObject(name = "diagnostic", summary = "includeDiagnostics=true: 원본과 표시 자료 분리",
+                        description = "합성 예시. 진단 요청에만 표시 경로·품질·근거·정확도를 추가합니다. 일반 지도는 기본 paths를 사용합니다.",
+                        value = RouteGeometryApiDocsExamples.DIAGNOSTIC)
                 })),
         @ApiResponse(responseCode = "304", description = "ETag와 같은 지도 자료. 본문 없음", content = @Content,
             headers = {
@@ -134,10 +146,12 @@ public class RouteGeometryController {
         @Parameter(description = "현재 노선 판본. 양의 64비트 정수의 문자열 표현", example = "\"7\"",
             schema = @Schema(implementation = String.class, pattern = "^[1-9][0-9]*$"))
         @RequestParam(required = false) Long referenceVersionId,
+        @Parameter(description = "진단 전용 원본/표시 경로·품질·근거 메타 포함. 기본 false이며 일반 지도 구현에는 불필요")
+        @RequestParam(defaultValue = "false") boolean includeDiagnostics,
         WebRequest request
     ) {
         RouteGeometryResponse response =
-            RouteGeometryResponse.from(service.get(new RouteId(routeId), referenceVersionId));
+            RouteGeometryResponse.from(service.get(new RouteId(routeId), referenceVersionId), includeDiagnostics);
         if (response.status().equals("UNAVAILABLE")) {
             return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
         }

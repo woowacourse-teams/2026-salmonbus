@@ -65,13 +65,16 @@ class RouteDisplayGenerationRuntimeTest {
                 "{\"arrivals\":{\"enabled\":false},\"route-geometry\":{\"presentation\":{\"enabled\":true}}}"))) {
             seed(runtime);
             installSourceOnly(runtime);
-            URI uri=runtime.arrivalsUri().resolve("/api/v2/routes/"+ROUTE+"/geometry");
+            URI mapUri=runtime.arrivalsUri().resolve("/api/v2/routes/"+ROUTE+"/geometry");
+            URI uri=URI.create(mapUri+"?includeDiagnostics=true");
             var response=get(uri);
             assertThat(body(response).at("/displayQuality/status").asString()).isEqualTo("SOURCE_ONLY");
             assertThat(body(response).path("displaySource").asString()).isEqualTo("AUTOMATIC_FALLBACK");
             assertThat(body(response).path("displayPaths").isNull()).isFalse();
             assertThat(body(response).at("/busStops/0/pathConnection/segmentIndex").asInt()).isZero();
             assertThat(count(runtime,"route_display_automatic_artifact")).isEqualTo(1);
+            assertCompact(mapUri,response);
+            assertRepresentationCaching(mapUri,uri);
             capture(Path.of("build/reports/route-display-generation-http"),"source-only",response,"LOCAL_ENGINE_FIXTURE_REAL_HTTP");
         }
     }
@@ -82,17 +85,20 @@ class RouteDisplayGenerationRuntimeTest {
             {"arrivals":{"enabled":false},"route-geometry":{"presentation":{"enabled":true}}}
             """))) {
             seed(runtime);
-            URI uri=runtime.arrivalsUri().resolve("/api/v2/routes/"+ROUTE+"/geometry");
+            URI mapUri=runtime.arrivalsUri().resolve("/api/v2/routes/"+ROUTE+"/geometry");
+            URI uri=URI.create(mapUri+"?includeDiagnostics=true");
             var pending=get(uri);
             assertThat(body(pending).at("/displayQuality/status").asString()).isEqualTo("WITHHELD");
             assertThat(body(pending).at("/displayQuality/issues/0/code").asString()).isEqualTo("GENERATION_PENDING");
             assertThat(count(runtime,"route_display_generation_job")).as("API never queues or generates on GET").isZero();
+            assertCompact(mapUri,pending);
 
             observe(runtime,live,"pending",uri,pending,"LOCAL_SYNTHETIC_REAL_HTTP");
             if(realMaintenance) {
                 holdFullGeneration(runtime);
                 runtime.startWorker(false,WORKER);
                 var sourceOnly=await(uri,b -> "SOURCE_ONLY".equals(b.at("/displayQuality/status").asString()));
+                assertCompact(mapUri,sourceOnly);
                 observe(runtime,true,"source-only",uri,sourceOnly,"LOCAL_WORKER_GENERATED_REAL_HTTP");
                 releaseFullGeneration(runtime);
             } else {
@@ -100,6 +106,7 @@ class RouteDisplayGenerationRuntimeTest {
                     installSourceOnly(runtime);
                     var sourceOnly=get(uri);
                     assertThat(body(sourceOnly).at("/displayQuality/status").asString()).isEqualTo("SOURCE_ONLY");
+                    assertCompact(mapUri,sourceOnly);
                     observe(runtime,true,"source-only",uri,sourceOnly,"LOCAL_ENGINE_FIXTURE_REAL_HTTP");
                 }
                 runtime.startWorker(false,WORKER);
@@ -110,6 +117,8 @@ class RouteDisplayGenerationRuntimeTest {
             assertThat(body(automaticA).path("displayAccuracyGrade").asString()).isEqualTo("UNEVALUATED");
             assertThat(count(runtime,"route_display_automatic_artifact")).isEqualTo(2);
             String automaticEtag=automaticA.headers().firstValue("ETag").orElseThrow();
+            assertCompact(mapUri,automaticA);
+            assertRepresentationCaching(mapUri,uri);
             observe(runtime,live,"automatic-a",uri,automaticA,"LOCAL_SYNTHETIC_REAL_HTTP");
 
             // The API still serves the generated result after the generator process exits.
@@ -119,6 +128,7 @@ class RouteDisplayGenerationRuntimeTest {
             var manualA=await(uri,b -> "MANUAL_REVIEWED".equals(b.path("displaySource").asString()));
             assertThat(body(manualA).at("/busStops/0/displayPoint/x").asDouble()).isEqualTo(127.0001);
             assertThat(manualA.headers().firstValue("ETag")).isNotEqualTo(automaticA.headers().firstValue("ETag"));
+            assertCompact(mapUri,manualA);
 
             observe(runtime,live,"manual-a",uri,manualA,realMaintenance ? "LOCAL_MAINTENANCE_IMPORT_REAL_HTTP" : "LOCAL_MANUAL_FIXTURE_SQL_REAL_HTTP");
             // A new source invalidates both old manual and automatic data while the worker is stopped.
@@ -130,6 +140,7 @@ class RouteDisplayGenerationRuntimeTest {
             assertThat(body(changed).at("/displayQuality/status").asString()).isEqualTo("WITHHELD");
             assertThat(body(changed).path("displayPaths").isNull()).isTrue();
             assertThat(body(changed).at("/busStops/1/point/x").asDouble()).isEqualTo(127.0101);
+            assertCompact(mapUri,changed);
             observe(runtime,live,"changed",uri,changed,"LOCAL_SYNTHETIC_REAL_HTTP");
 
             runtime.startWorker(false,WORKER);
@@ -137,6 +148,7 @@ class RouteDisplayGenerationRuntimeTest {
                 && "PASSED".equals(b.at("/displayQuality/status").asString()));
             assertThat(automaticB.headers().firstValue("ETag")).isNotEqualTo(automaticA.headers().firstValue("ETag"));
             assertThat(count(runtime,"route_display_automatic_artifact")).isEqualTo(4);
+            assertCompact(mapUri,automaticB);
             observe(runtime,live,"automatic-b",uri,automaticB,"LOCAL_SYNTHETIC_REAL_HTTP");
             var a=RouteDisplaySamples.input();
             var visits=a.visits().stream().map(v -> v.sequence()==2
@@ -147,6 +159,7 @@ class RouteDisplayGenerationRuntimeTest {
             var manualB=await(uri,b -> "MANUAL_REVIEWED".equals(b.path("displaySource").asString()));
             assertThat(body(manualB).at("/busStops/0/displayPoint/x").asDouble()).isEqualTo(127.0002);
             assertThat(manualB.headers().firstValue("ETag")).isNotEqualTo(manualA.headers().firstValue("ETag"));
+            assertCompact(mapUri,manualB);
             assertThat(count(runtime,"route_display_generation_job")).isEqualTo(4);
             observe(runtime,live,"manual-b",uri,manualB,realMaintenance ? "LOCAL_MAINTENANCE_IMPORT_REAL_HTTP" : "LOCAL_MANUAL_FIXTURE_SQL_REAL_HTTP");
             assertThat(runtime.source.unexpected()).isEmpty();
@@ -324,6 +337,62 @@ class RouteDisplayGenerationRuntimeTest {
         try(var c=runtime.connection();var s=c.createStatement();var rows=s.executeQuery("SELECT count(*) FROM "+table)) {
             rows.next();return rows.getInt(1);
         }
+    }
+    /** The normal client consumes the original shape plus one optional visit connection. */
+    private static void assertCompact(URI mapUri,HttpResponse<String> diagnosticResponse) throws Exception {
+        var response=get(mapUri);var compact=body(response);var diagnostic=body(diagnosticResponse);
+        var fields=List.of("routeId","referenceVersionId","geometryRevision","name","startPoint","endPoint",
+                "status","reason","coordinateSystem","turningPoint","busStops","points","paths","boundary");
+        assertThat(compact.size()).isEqualTo(fields.size());
+        fields.forEach(field -> assertThat(compact.has(field)).as("compact root: "+field).isTrue());
+        assertThat(compact.path("geometryRevision")).isNotEqualTo(diagnostic.path("geometryRevision"));
+        boolean withheld="WITHHELD".equals(diagnostic.at("/displayQuality/status").asString());
+        if(withheld) {
+            assertThat(compact.path("status").asString()).isEqualTo("UNAVAILABLE");
+            assertThat(compact.path("reason").asString()).isEqualTo("DISPLAY_WITHHELD");
+            assertThat(compact.path("points")).isEmpty();
+            assertThat(compact.path("paths").isNull()).isTrue();
+            assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
+            assertThat(response.headers().firstValue("ETag")).isEmpty();
+        } else {
+            assertThat(compact.path("points")).isEqualTo(diagnostic.path("points"));
+            assertThat(compact.path("paths")).isEqualTo(diagnostic.path("displayPaths"));
+        }
+        assertThat(compact.path("busStops")).hasSize(diagnostic.path("busStops").size());
+        var stopFields=List.of("stationId","stopSequence","name","direction","boardingAllowed","point");
+        for(int i=0;i<compact.path("busStops").size();i++) {
+            var stop=compact.path("busStops").get(i);var original=diagnostic.path("busStops").get(i);
+            stopFields.forEach(field -> assertThat(stop.path(field)).as("original stop field: "+field).isEqualTo(original.path(field)));
+            assertThat(stop.has("displayPoint")).isFalse();
+            assertThat(stop.size()).isEqualTo(stopFields.size()+(stop.has("pathConnection")?1:0));
+            if(withheld) assertThat(stop.has("pathConnection")).isFalse();
+            else if(original.has("pathConnection")) {
+                assertThat(stop.path("pathConnection")).isEqualTo(original.path("pathConnection"));
+                var connection=stop.path("pathConnection");
+                var points=compact.path("paths").path(stop.path("direction").asString()).path("points");
+                int segment=connection.path("segmentIndex").asInt();double fraction=connection.path("segmentFraction").asDouble();
+                assertThat(segment).isBetween(0,points.size()-2);assertThat(fraction).isBetween(0d,1d);
+                for(String axis:List.of("x","y")) {
+                    double a=points.get(segment).path(axis).asDouble(),b=points.get(segment+1).path(axis).asDouble();
+                    assertThat(connection.path("point").path(axis).asDouble())
+                            .isCloseTo(a+(b-a)*fraction,org.assertj.core.data.Offset.offset(1e-9));
+                }
+            }
+        }
+    }
+
+    private static void assertRepresentationCaching(URI mapUri,URI diagnosticUri) throws Exception {
+        String compact=get(mapUri).headers().firstValue("ETag").orElseThrow();
+        String diagnostic=get(diagnosticUri).headers().firstValue("ETag").orElseThrow();
+        assertThat(compact).isNotEqualTo(diagnostic);
+        assertThat(conditional(mapUri,compact).statusCode()).isEqualTo(304);
+        assertThat(conditional(diagnosticUri,diagnostic).statusCode()).isEqualTo(304);
+        assertThat(conditional(mapUri,diagnostic).statusCode()).isEqualTo(200);
+        assertThat(conditional(diagnosticUri,compact).statusCode()).isEqualTo(200);
+    }
+    private static HttpResponse<String> conditional(URI uri,String etag) throws Exception {
+        return HTTP.send(HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(5)).header("If-None-Match",etag)
+                .GET().build(),HttpResponse.BodyHandlers.ofString());
     }
     private static HttpResponse<String> get(URI uri) throws Exception {
         var response=HTTP.send(HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(5)).GET().build(),HttpResponse.BodyHandlers.ofString());

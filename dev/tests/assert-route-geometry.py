@@ -51,7 +51,7 @@ def assert_stop_contract(actual, stop, body):
     index, fraction = connection["segmentIndex"], connection["segmentFraction"]
     assert type(index) is int and index >= 0, context
     assert type(fraction) in (int, float) and 0 <= fraction <= 1 and math.isfinite(fraction), context
-    paths = body.get("displayPaths")
+    paths = body.get("displayPaths") if "displayPaths" in body else body.get("paths")
     assert isinstance(paths, dict), context
     path = paths.get(stop["direction"])
     assert isinstance(path, dict) and isinstance(path.get("points"), list), context
@@ -137,14 +137,15 @@ def main():
             up, down = paths["UP"]["points"], paths["DOWN"]["points"]
             assert len(up) >= 2 and len(down) >= 2 and all(point_valid(p) for p in up + down), route_id
             assert up[0] == body["points"][0] and down[-1] == body["points"][-1] and up[-1] == down[0], route_id
-            # A split inserts zero, one or two copies of its shared boundary.
-            # A zero-length source edge already contains two identical original
-            # points, so unconditionally dropping down[0] would lose an original.
-            # Removing only possible inserted boundary copies must recover the
-            # exact full source array, including every duplicate, in its order.
-            assert any((up[:-1] if drop_up else up) + (down[1:] if drop_down else down) == body["points"]
-                       for drop_up in (False, True) for drop_down in (False, True)), \
-                f"{route_id}: directional paths lost, inserted or reordered source points"
+            for point in up + down:
+                assert boundary["left"] <= point["x"] <= boundary["right"], route_id
+                assert boundary["bottom"] <= point["y"] <= boundary["top"], route_id
+            # Diagnostic/legacy paths split the exact source; compact paths with
+            # connections are the selected generated shape and may resample it.
+            if "displayPaths" in body or not any(stop.get("pathConnection") is not None for stop in body["busStops"]):
+                assert any((up[:-1] if drop_up else up) + (down[1:] if drop_down else down) == body["points"]
+                           for drop_up in (False, True) for drop_down in (False, True)), \
+                    f"{route_id}: source directional paths lost, inserted or reordered source points"
         version = body["referenceVersionId"]
         assert isinstance(version, str) and version.isdecimal() and int(version) > 0, route_id
         pinned, _, pinned_raw = request(url + "?referenceVersionId=" + version)

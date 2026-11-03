@@ -55,10 +55,6 @@ final class EvidenceRoutePaths {
                     Point a=points.get(left),b=points.get(right);
                     if(!classifications.containsKey(a) || !classifications.containsKey(b) || distance(a,b)<1 || distance(a,b)>500
                             || segmentDistance(target,a,b)>(confirmed?25:10)){safe=false;break;}
-                    for(var stop:geometry.busStops())if(stop.point()!=null) {
-                        double before=Math.min(segmentDistance(stop.point(),a,target),segmentDistance(stop.point(),target,b));
-                        if(before<100 && segmentDistance(stop.point(),a,b)>before+5){safe=false;break;}
-                    }
                     if(!safe)break;
                 }
                 if(!safe)break;
@@ -128,19 +124,7 @@ final class EvidenceRoutePaths {
                     || distance(a, b) > 500
                     || segmentDistance(target, a, b) > (confirmed ? 25 : 10)) continue;
             if (!RouteDisplayTopology.safeShortcut(points, i, other, crossings, angles)) continue;
-            boolean safe = true;
-            for (var stop : geometry.busStops()) {
-                if (stop.point() == null) continue;
-                double before =
-                        Math.min(
-                                segmentDistance(stop.point(), a, target),
-                                segmentDistance(stop.point(), target, b));
-                if (before < 100 && segmentDistance(stop.point(), a, b) > before + 5) {
-                    safe = false;
-                    break;
-                }
-            }
-            if (safe) points.remove(i);
+            points.remove(i);
         }
     }
 

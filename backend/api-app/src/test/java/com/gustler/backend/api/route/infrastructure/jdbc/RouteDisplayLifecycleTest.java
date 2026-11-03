@@ -107,14 +107,14 @@ class RouteDisplayLifecycleTest {
         RouteGeometry raw = current();
         install(raw, 0.0001);
         var first =
-                mvc.perform(get(path))
+                mvc.perform(get(path).param("includeDiagnostics", "true"))
                         .andExpect(status().isOk())
                         .andExpect(jsonPath("$.displaySource").value("MANUAL_REVIEWED"))
                         .andExpect(jsonPath("$.points[0].x").value(127))
                         .andExpect(jsonPath("$.busStops[0].displayPoint.x").value(127.0001))
                         .andReturn();
         String etag = first.getResponse().getHeader("ETag");
-        mvc.perform(get(path).header("If-None-Match", etag)).andExpect(status().isNotModified());
+        mvc.perform(get(path).param("includeDiagnostics", "true").header("If-None-Match", etag)).andExpect(status().isNotModified());
         long version = raw.referenceVersionId();
         jdbc.sql(
                         "INSERT INTO"
@@ -123,10 +123,10 @@ class RouteDisplayLifecycleTest {
                 .param(version)
                 .update();
         var changed =
-                mvc.perform(get(path).header("If-None-Match", etag))
+                mvc.perform(get(path).param("includeDiagnostics", "true").header("If-None-Match", etag))
                         .andExpect(status().isOk())
                         .andExpect(jsonPath("$.displaySource").value("AUTOMATIC_FALLBACK"))
-                        .andExpect(jsonPath("$.busStops[0].displayPoint").isEmpty())
+                        .andExpect(jsonPath("$.busStops[0].displayPoint").doesNotExist())
                         .andReturn();
         assertThat(current().referenceVersionId()).isEqualTo(version);
         assertThat(changed.getResponse().getHeader("ETag")).isNotEqualTo(etag);
@@ -177,20 +177,43 @@ class RouteDisplayLifecycleTest {
                 .containsExactly("INVALID");
         assertThat(current().points()).hasSize(3);
     }
-    @Test void 품질검사_실패형상은_HTTP에서도_보류하고_원본좌표_복구시_다시제공한다() throws Exception {
+    @Test void GPS거리_경고는_표시를_보류하지않고_원본좌표_복구시_품질만_갱신한다() throws Exception {
+        var mvc=MockMvcBuilders.standaloneSetup(new RouteGeometryController(service)).build();
+        String path="/api/v2/routes/"+ID.value()+"/geometry";
+        jdbc.sql("UPDATE route_stop_location_history SET y=y+0.0003 WHERE stop_order=1").update();
+        installAutomatic(current());
+        var warned=mvc.perform(get(path).param("includeDiagnostics", "true")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.displayQuality.status").value("REVIEW_REQUIRED"))
+            .andExpect(jsonPath("$.displayQuality.issues[*].code", org.hamcrest.Matchers.hasItem("STOP_CONNECTION_GAP")))
+            .andExpect(jsonPath("$.displayPaths.UP.points").isNotEmpty())
+            .andExpect(jsonPath("$.points.length()").value(3))
+            .andExpect(jsonPath("$.busStops[0].point.y").value(37.0003))
+            .andExpect(jsonPath("$.busStops[0].pathConnection.segmentIndex").value(0)).andReturn();
+        jdbc.sql("UPDATE route_stop_location_history SET y=37 WHERE stop_order=1").update();
+        mvc.perform(get(path).param("includeDiagnostics", "true").header("If-None-Match",warned.getResponse().getHeader("ETag")))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.displayQuality.status").value("PASSED"))
+            .andExpect(jsonPath("$.busStops[0].pathConnection.segmentIndex").value(0));
+    }
+
+    @Test
+    void 공식_방문근거없는_큰GPS이격은_계속_보류하고_기본응답의_원본선도_숨긴다() throws Exception {
         var mvc=MockMvcBuilders.standaloneSetup(new RouteGeometryController(service)).build();
         String path="/api/v2/routes/"+ID.value()+"/geometry";
         jdbc.sql("UPDATE route_stop_location_history SET y=y+0.0006 WHERE stop_order=1").update();
         installAutomatic(current());
-        var withheld=mvc.perform(get(path)).andExpect(status().isOk())
-            .andExpect(jsonPath("$.displayQuality.status").value("WITHHELD"))
-            .andExpect(jsonPath("$.displayPaths").isEmpty())
-            .andExpect(jsonPath("$.points.length()").value(3))
-            .andExpect(jsonPath("$.busStops[0].pathConnection").isEmpty()).andReturn();
-        jdbc.sql("UPDATE route_stop_location_history SET y=37 WHERE stop_order=1").update();
-        mvc.perform(get(path).header("If-None-Match",withheld.getResponse().getHeader("ETag")))
-            .andExpect(status().isOk()).andExpect(jsonPath("$.displayQuality.status").value("PASSED"))
-            .andExpect(jsonPath("$.busStops[0].pathConnection.segmentIndex").value(0));
+        mvc.perform(get(path).param("includeDiagnostics", "true")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayQuality.status").value("WITHHELD"))
+                .andExpect(jsonPath("$.displayPaths").doesNotExist())
+                .andExpect(jsonPath("$.points.length()").value(3))
+                .andExpect(jsonPath("$.busStops[0].point.y").value(37.0006))
+                .andExpect(jsonPath("$.busStops[0].pathConnection").doesNotExist());
+        mvc.perform(get(path)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UNAVAILABLE"))
+                .andExpect(jsonPath("$.reason").value("DISPLAY_WITHHELD"))
+                .andExpect(jsonPath("$.points").isEmpty())
+                .andExpect(jsonPath("$.paths").isEmpty())
+                .andExpect(jsonPath("$.busStops[0].point.y").value(37.0006))
+                .andExpect(jsonPath("$.busStops[0].pathConnection").doesNotExist());
     }
 
 }

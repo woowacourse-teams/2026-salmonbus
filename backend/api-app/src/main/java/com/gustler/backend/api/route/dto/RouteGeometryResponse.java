@@ -1,6 +1,9 @@
 package com.gustler.backend.api.route.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.gustler.backend.routegeometry.engine.api.RouteStopIntervals;
+import com.gustler.backend.routegeometry.api.ManualRouteDisplay.Connection;
 import com.gustler.backend.routegeometry.engine.api.RouteGeometry;
 import com.gustler.backend.routegeometry.engine.api.RoutePaths;
 import com.gustler.backend.api.route.dto.RouteGeometryResponse.Boundary;
@@ -16,6 +19,11 @@ import io.swagger.v3.oas.annotations.media.Schema.AdditionalPropertiesValue;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 /** 네이버 버스 노선 응답의 points/busStops/point/boundary 구성을 필요한 필드로 한정한다. */
 @Schema(
@@ -56,15 +64,15 @@ public record RouteGeometryResponse(
         @Schema(
                         description =
                                 "READY=형상과 모든 정류장 좌표, PARTIAL=형상은 있고 일부 정류장 point=null,"
-                                        + " UNAVAILABLE=현재 판본 형상 미수집. READY여도 paths=null 가능",
+                                        + " UNAVAILABLE=현재 판본 형상 미수집 또는 표시 보류. READY여도 paths=null 가능",
                         allowableValues = {"READY", "PARTIAL", "UNAVAILABLE"})
                 String status,
         @Schema(
                         description =
                                 "READY이면 null. NOT_COLLECTED=현재 판본 형상 미수집,"
-                                        + " MISSING_STOP_COORDINATES=일부 정류장 좌표 누락",
+                                        + " MISSING_STOP_COORDINATES=일부 정류장 좌표 누락, DISPLAY_WITHHELD=표시 묶음의 구조 검증 실패 또는 보류",
                         nullable = true,
-                        allowableValues = {"NOT_COLLECTED", "MISSING_STOP_COORDINATES"})
+                        allowableValues = {"NOT_COLLECTED", "MISSING_STOP_COORDINATES", "DISPLAY_WITHHELD"})
                 String reason,
         @Schema(
                         description = "x를 경도, y를 위도로 표시하는 가정이며 원천 좌표계 확인 완료를 뜻하지 않음",
@@ -84,28 +92,33 @@ public record RouteGeometryResponse(
         @Schema(
                         description =
                                 "원본 운행 순서의 전체 도로 형상. 정류장 마커와 별도 자료이며 정류장 직선으로 대체하지 않음. 미수집이면 빈 배열,"
-                                        + " paths=null이어도 형상은 유지")
+                                        + " paths=null이어도 형상은 유지. DISPLAY_WITHHELD이면 빈 배열")
                 List<Point> points,
         @Schema(
                         description =
-                                "분리 근거가 확인되면 UP/DOWN을 함께 제공. 회차·방문 순서 대응이 부족하거나 모호하면 READY여도 null이며"
-                                        + " 전체 points는 유지. 방향 선택에 재조회 불필요",
+                                "서버가 검증하고 선택한 최종 표시 UP/DOWN을 함께 제공. 회차·방문 순서 대응이 부족하거나 모호하면 READY여도 null이며"
+                                        + " 전체 points는 유지. 방향 선택에 재조회 불필요. includeDiagnostics=true에서는 원본 방향 경로",
                         nullable = true)
                 Paths paths,
         @Schema(description = "전체 경로와 제공 가능한 정류장 좌표를 포함하는 영역. 좌표가 전혀 없으면 null", nullable = true)
                 Boundary boundary,
-        @Schema(description = "현재 원본에 맞는 선택된 표시 경로. 원본 paths 보존", nullable = true)
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        @Schema(description = "includeDiagnostics=true 전용: 선택된 최종 표시 경로. 원본 paths 보존", nullable = true)
                 Paths displayPaths,
+        @JsonInclude(JsonInclude.Include.NON_NULL)
         @Schema(
-                        description = "검수 수동 형상 또는 자동 대체 형상",
+                        description = "includeDiagnostics=true 전용: 검수 수동 형상 또는 자동 대체 형상",
                         allowableValues = {"MANUAL_REVIEWED", "AUTOMATIC_FALLBACK"},
                         nullable = true)
                 String displaySource,
-        @Schema(description = "자동 생성에서 검토한 자료별 가용 상태와 내용 지문") List<DisplayEvidence> displayEvidence,
-        @Schema(description = "자동 형상의 품질 검사와 표시 보류 사유", nullable = true)
+        @JsonInclude(JsonInclude.Include.NON_EMPTY)
+        @Schema(description = "includeDiagnostics=true 전용: 자동 생성에서 검토한 자료별 가용 상태와 내용 지문") List<DisplayEvidence> displayEvidence,
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        @Schema(description = "includeDiagnostics=true 전용: 자동 형상의 품질 검사와 표시 보류 사유", nullable = true)
                 DisplayQuality displayQuality) {
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonProperty("displayAccuracyGrade")
-    @Schema(description = "독립 도로/차로 정확도 평가 등급. 품질 검사 통과 또는 수동 검수만으로 승격하지 않는다",
+    @Schema(description = "includeDiagnostics=true 전용: 독립 도로/차로 정확도 평가 등급. 품질 검사 통과 또는 수동 검수만으로 승격하지 않는다",
             allowableValues = {"UNEVALUATED", "ROAD_VERIFIED", "LANE_VERIFIED"}, nullable = true)
     public String displayAccuracyGrade() {
         return displaySource == null ? null : "UNEVALUATED";
@@ -184,9 +197,11 @@ public record RouteGeometryResponse(
                                             + " 형상 points와 별개",
                             nullable = true)
                     Point point,
-            @Schema(description = "표시용 정류장 좌표. 없으면 원본 point 사용", nullable = true)
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "includeDiagnostics=true 전용: 표시용 정류장 좌표. 원본 point는 보존", nullable = true)
                     Point displayPoint,
-            @Schema(description = "선택된 표시 경로의 방문별 연결점", nullable = true)
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "방문별 연결점. 기본 응답 paths의 해당 direction 선분 인덱스/분율이며 includeDiagnostics=true이면 displayPaths 기준. 같은 stationId도 방문별로 구분. 없으면 생략", nullable = true)
                     PathConnection pathConnection) {}
 
     @Schema(
@@ -256,66 +271,88 @@ public record RouteGeometryResponse(
     }
 
     public static RouteGeometryResponse from(RouteGeometry geometry) {
-        RoutePaths paths = geometry.display() == null ? geometry.paths() : geometry.display().sourcePaths();
-        RouteGeometry.Boundary boundary = geometry.boundary();
-        return new RouteGeometryResponse(
-                geometry.routeId(),
-                Long.toString(geometry.referenceVersionId()),
-                geometry.revision(),
-                geometry.name(),
-                geometry.startPoint(),
-                geometry.endPoint(),
-                geometry.status().name(),
-                geometry.reason(),
-                RouteGeometry.COORDINATE_SYSTEM,
-                turningPointOf(geometry.turnSequence()),
-                geometry.busStops().stream()
-                        .map(
-                                stop ->
-                                        new BusStop(
-                                                stop.stationId(),
-                                                stop.stopSequence(),
-                                                stop.name(),
-                                                stop.direction(),
-                                                stop.boardingAllowed(),
-                                                pointOf(stop.point()),
-                                                geometry.display() == null
-                                                        ? null
-                                                        : pointOf(
-                                                                geometry.display()
-                                                                        .stationPositions()
-                                                                        .get(stop.stopSequence())),
-                                                connectionOf(geometry, stop.stopSequence())))
-                        .toList(),
-                pointsOf(geometry.points()),
-                pathsOf(paths),
-                boundaryOf(boundary),
-                pathsOf(geometry.displayPaths()),
-                geometry.display() == null ? null : geometry.display().source().name(),
-                geometry.display() == null
-                        ? List.of()
-                        : geometry.display().evidence().stream()
-                                .map(
-                                        source ->
-                                                new DisplayEvidence(
-                                                        source.id(),
-                                                        source.status(),
-                                                        source.digest()))
-                                .toList(),
-                qualityOf(geometry));
+        return from(geometry, false);
     }
 
-    private static PathConnection connectionOf(RouteGeometry geometry, int sequence) {
-        if (geometry.display() == null) {
-            return null;
+    /** The public map chooses one whole bundle; diagnostics retain the separate source paths. */
+    public static RouteGeometryResponse from(RouteGeometry geometry, boolean includeDiagnostics) {
+        Selection selected = selection(geometry);
+        boolean withheld = selected.withheld() && !includeDiagnostics;
+        RoutePaths paths = includeDiagnostics
+                ? (geometry.display() == null ? geometry.paths() : geometry.display().sourcePaths())
+                : selected.paths();
+        return new RouteGeometryResponse(
+                geometry.routeId(), Long.toString(geometry.referenceVersionId()),
+                representationRevision(geometry, includeDiagnostics), geometry.name(),
+                geometry.startPoint(), geometry.endPoint(),
+                withheld ? "UNAVAILABLE" : geometry.status().name(),
+                withheld ? "DISPLAY_WITHHELD" : geometry.reason(),
+                RouteGeometry.COORDINATE_SYSTEM, turningPointOf(geometry.turnSequence()),
+                geometry.busStops().stream().map(stop -> new BusStop(
+                        stop.stationId(), stop.stopSequence(), stop.name(), stop.direction(),
+                        stop.boardingAllowed(), pointOf(stop.point()),
+                        includeDiagnostics && geometry.display() != null
+                                ? pointOf(geometry.display().stationPositions().get(stop.stopSequence())) : null,
+                        connectionOf(selected.connections().get(stop.stopSequence())))).toList(),
+                withheld ? List.of() : pointsOf(geometry.points()),
+                pathsOf(paths), boundaryOf(geometry.boundary()),
+                includeDiagnostics && geometry.display() != null ? pathsOf(selected.paths()) : null,
+                includeDiagnostics && geometry.display() != null ? geometry.display().source().name() : null,
+                !includeDiagnostics || geometry.display() == null ? List.of()
+                        : geometry.display().evidence().stream().map(source -> new DisplayEvidence(
+                                source.id(), source.status(), source.digest())).toList(),
+                includeDiagnostics ? qualityOf(geometry) : null);
+    }
+
+    private record Selection(RoutePaths paths, Map<Integer, Connection> connections, boolean withheld) {}
+
+    private static Selection selection(RouteGeometry geometry) {
+        var display = geometry.display();
+        if (display == null) return new Selection(geometry.paths(), Map.of(), false);
+        if (display.quality() != null && display.quality().status()
+                == com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.QualityStatus.WITHHELD)
+            return new Selection(null, Map.of(), true);
+        if (display.paths() == null) {
+            // An unsplit source-only route may keep neutral raw points, never stale connections.
+            boolean sourceOnly = display.quality() != null && display.quality().status()
+                    == com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.QualityStatus.SOURCE_ONLY;
+            return new Selection(null, Map.of(), !sourceOnly || !display.connections().isEmpty());
         }
-        var connection = geometry.display().connections().get(sequence);
-        return connection == null
-                ? null
-                : new PathConnection(
-                        new Point(connection.point().x(), connection.point().y()),
-                        connection.segmentIndex(),
-                        connection.segmentFraction());
+        try {
+            var paths = display.paths();
+            if (!paths.up().points().getLast().equals(paths.down().points().getFirst())
+                    || !RouteStopIntervals.evaluate(geometry.busStops(), paths, display.connections()).usable())
+                return new Selection(null, Map.of(), true);
+            // Even a zero-length duplicate segment retains a serialized occurrence identity.
+            var previous = new java.util.HashMap<String, Double>();
+            for (var stop : geometry.busStops()) {
+                var connection = display.connections().get(stop.stopSequence());
+                if (connection == null) continue;
+                double progress = connection.segmentIndex() + connection.segmentFraction();
+                if (progress + 1e-9 < previous.getOrDefault(stop.direction(), -1.0))
+                    return new Selection(null, Map.of(), true);
+                previous.put(stop.direction(), progress);
+            }
+            return new Selection(paths, display.connections(), false);
+        } catch (RuntimeException invalidBundle) {
+            return new Selection(null, Map.of(), true);
+        }
+    }
+
+    private static String representationRevision(RouteGeometry geometry, boolean diagnostics) {
+        try {
+            String namespace = diagnostics ? "route-map-diagnostic-v1/" : "route-map-compact-v1/";
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(
+                    (namespace + geometry.revision()).getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    private static PathConnection connectionOf(Connection connection) {
+        return connection == null ? null : new PathConnection(
+                new Point(connection.point().x(), connection.point().y()),
+                connection.segmentIndex(), connection.segmentFraction());
     }
 
     private static TurningPoint turningPointOf(Integer sequence) {

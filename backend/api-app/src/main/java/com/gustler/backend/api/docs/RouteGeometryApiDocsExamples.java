@@ -26,6 +26,14 @@ public final class RouteGeometryApiDocsExamples {
               "point": {
                 "x": 127,
                 "y": 37
+              },
+              "pathConnection": {
+                "point": {
+                  "x": 127,
+                  "y": 37
+                },
+                "segmentIndex": 0,
+                "segmentFraction": 0
               }
             },
             {
@@ -37,6 +45,14 @@ public final class RouteGeometryApiDocsExamples {
               "point": {
                 "x": 127.2,
                 "y": 37.1
+              },
+              "pathConnection": {
+                "point": {
+                  "x": 127.2,
+                  "y": 37.1
+                },
+                "segmentIndex": 1,
+                "segmentFraction": 1
               }
             },
             {
@@ -48,6 +64,14 @@ public final class RouteGeometryApiDocsExamples {
               "point": {
                 "x": 127,
                 "y": 37
+              },
+              "pathConnection": {
+                "point": {
+                  "x": 127,
+                  "y": 37
+                },
+                "segmentIndex": 0,
+                "segmentFraction": 1
               }
             }
           ],
@@ -317,6 +341,245 @@ public final class RouteGeometryApiDocsExamples {
         }
         """;
 
-    private RouteGeometryApiDocsExamples() {
-    }
+    public static final String DISPLAY_WITHHELD = """
+        {
+          "routeId": "204000057",
+          "referenceVersionId": "7",
+          "geometryRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "name": "3330",
+          "startPoint": "합성 기점 A",
+          "endPoint": "합성 회차 B",
+          "status": "UNAVAILABLE",
+          "reason": "DISPLAY_WITHHELD",
+          "coordinateSystem": "WGS84_ASSUMED",
+          "turningPoint": {
+            "stopSequence": 2
+          },
+          "busStops": [
+            {
+              "stationId": "206000637",
+              "stopSequence": 1,
+              "name": "합성 A",
+              "direction": "UP",
+              "boardingAllowed": true,
+              "point": {
+                "x": 127,
+                "y": 37
+              }
+            },
+            {
+              "stationId": "206000638",
+              "stopSequence": 2,
+              "name": "합성 B",
+              "direction": "UP",
+              "boardingAllowed": true,
+              "point": {
+                "x": 127.2,
+                "y": 37.1
+              }
+            },
+            {
+              "stationId": "206000637",
+              "stopSequence": 3,
+              "name": "합성 A",
+              "direction": "DOWN",
+              "boardingAllowed": true,
+              "point": {
+                "x": 127,
+                "y": 37
+              }
+            }
+          ],
+          "points": [],
+          "paths": null,
+          "boundary": {
+            "left": 127,
+            "top": 37.1,
+            "right": 127.2,
+            "bottom": 37
+          }
+        }
+        """;
+
+    public static final String DIAGNOSTIC = """
+        {
+          "routeId": "204000057",
+          "referenceVersionId": "7",
+          "geometryRevision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "name": "3330",
+          "startPoint": "합성 기점 A",
+          "endPoint": "합성 회차 B",
+          "status": "READY",
+          "reason": null,
+          "coordinateSystem": "WGS84_ASSUMED",
+          "turningPoint": {
+            "stopSequence": 2
+          },
+          "busStops": [
+            {
+              "stationId": "206000637",
+              "stopSequence": 1,
+              "name": "합성 A",
+              "direction": "UP",
+              "boardingAllowed": true,
+              "point": {
+                "x": 127,
+                "y": 37
+              },
+              "pathConnection": {
+                "point": {
+                  "x": 127,
+                  "y": 37
+                },
+                "segmentIndex": 0,
+                "segmentFraction": 0
+              }
+            },
+            {
+              "stationId": "206000638",
+              "stopSequence": 2,
+              "name": "합성 B",
+              "direction": "UP",
+              "boardingAllowed": true,
+              "point": {
+                "x": 127.2,
+                "y": 37.1
+              },
+              "pathConnection": {
+                "point": {
+                  "x": 127.2,
+                  "y": 37.1
+                },
+                "segmentIndex": 1,
+                "segmentFraction": 1
+              }
+            },
+            {
+              "stationId": "206000637",
+              "stopSequence": 3,
+              "name": "합성 A",
+              "direction": "DOWN",
+              "boardingAllowed": true,
+              "point": {
+                "x": 127,
+                "y": 37
+              },
+              "pathConnection": {
+                "point": {
+                  "x": 127,
+                  "y": 37
+                },
+                "segmentIndex": 0,
+                "segmentFraction": 1
+              }
+            }
+          ],
+          "points": [
+            {
+              "x": 127,
+              "y": 37
+            },
+            {
+              "x": 127.1,
+              "y": 37.05
+            },
+            {
+              "x": 127.2,
+              "y": 37.1
+            },
+            {
+              "x": 127,
+              "y": 37
+            }
+          ],
+          "paths": {
+            "UP": {
+              "points": [
+                {
+                  "x": 127,
+                  "y": 37
+                },
+                {
+                  "x": 127.1,
+                  "y": 37.05
+                },
+                {
+                  "x": 127.2,
+                  "y": 37.1
+                }
+              ]
+            },
+            "DOWN": {
+              "points": [
+                {
+                  "x": 127.2,
+                  "y": 37.1
+                },
+                {
+                  "x": 127,
+                  "y": 37
+                }
+              ]
+            }
+          },
+          "boundary": {
+            "left": 127,
+            "top": 37.1,
+            "right": 127.2,
+            "bottom": 37
+          },
+          "displayPaths": {
+            "UP": {
+              "points": [
+                {
+                  "x": 127,
+                  "y": 37
+                },
+                {
+                  "x": 127.1,
+                  "y": 37.05
+                },
+                {
+                  "x": 127.2,
+                  "y": 37.1
+                }
+              ]
+            },
+            "DOWN": {
+              "points": [
+                {
+                  "x": 127.2,
+                  "y": 37.1
+                },
+                {
+                  "x": 127,
+                  "y": 37
+                }
+              ]
+            }
+          },
+          "displaySource": "AUTOMATIC_FALLBACK",
+          "displayEvidence": [
+            {
+              "id": "GBIS_WEB",
+              "status": "AVAILABLE",
+              "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          ],
+          "displayQuality": {
+            "status": "REVIEW_REQUIRED",
+            "issues": [
+              {
+                "code": "STOP_CONNECTION_GAP_REVIEW",
+                "direction": "UP",
+                "sequence": 1,
+                "meters": 20.0
+              }
+            ]
+          },
+          "displayAccuracyGrade": "UNEVALUATED"
+        }
+        """;
+
+    private RouteGeometryApiDocsExamples() {}
 }

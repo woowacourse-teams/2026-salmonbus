@@ -11,7 +11,7 @@ import java.util.*;
 
 /** 자동 후보는 최종 방문·끝점·교차 검사를 거친다. 요청에서 외부 도로 조회나 임의의 핀 이동을 하지 않는다. */
 public final class AutomaticRouteDisplay {
-    public static final String REVISION = "automatic-quality-v5";
+    public static final String REVISION = "automatic-quality-v6";
 
     private AutomaticRouteDisplay() {}
 
@@ -42,8 +42,7 @@ public final class AutomaticRouteDisplay {
                     || !RouteDisplayTopology.noNewCrossings(floor.paths(),baseline.paths())
                     || !RouteDisplayTopology.noNewRendererCrossings(floor.paths(),baseline.paths())
                     || !RouteDisplayTopology.noNewContacts(floor.paths(),baseline.paths())
-                    || !RouteDisplayTopology.noNewSpike(floor.paths(),baseline.paths())
-                    || !visitsNoWorse(geometry,floor,baseline))) {
+                    || !RouteDisplayTopology.noNewSpike(floor.paths(),baseline.paths()))) {
                 baseline=floor;
                 nodeCandidate=EvidenceRoutePaths.buildSequentialFloor(geometry);
             }
@@ -105,7 +104,13 @@ public final class AutomaticRouteDisplay {
         if(!RouteDisplayTopology.noNewRendererCrossings(baseline.paths(),curve.paths()))rejected.add("CURVE_NEW_RENDERER_CROSSING_LOCATION");
         if(!RouteDisplayTopology.noNewContacts(baseline.paths(),curve.paths()))rejected.add("CURVE_NEW_NONADJACENT_TOUCH_OR_OVERLAP");
         if(!RouteDisplayTopology.noNewSpike(baseline.paths(),curve.paths()))rejected.add("CURVE_NEW_BACKTRACK_SPIKE");
-        if(curve.curvature().values().stream().anyMatch(c->!c.noNewFixedFiveMetreRegression()))rejected.add("CURVE_FIXED_FIVE_METRE_REGRESSION");
+        List<QualityIssue> qualityWarnings=new ArrayList<>();
+        // Relative visual measurements do not invalidate a usable generated bundle.
+        for(String direction:List.of("UP","DOWN")) {
+            var metric=curve.curvature().get(direction);
+            if(metric!=null && !metric.noNewFixedFiveMetreRegression())
+                qualityWarnings.add(issue("CURVE_FIXED_FIVE_METRE_REGRESSION",direction,null,null));
+        }
         // Keep validated terminal cuts and transport protected road occurrences
         // through the combined plan. Reprojecting passenger GPS onto a newly
         // closer curve can select another source position or repeated lap.
@@ -121,20 +126,19 @@ public final class AutomaticRouteDisplay {
         if(!checked.blocked())for(var stop:geometry.busStops()) {
             if(stop.point()==null)continue;
             Connection before=baseline.connections().get(stop.stopSequence()),after=checked.connections().get(stop.stopSequence());
-            if(before==null || after==null || RouteStopAlignment.distance(stop.point(),point(after))>RouteStopAlignment.distance(stop.point(),point(before))+5)
-                rejected.add("CURVE_STOP_CONNECTION_WORSENED");
+            if(before==null || after==null) {
+                rejected.add("CURVE_STOP_CONNECTION_MISSING");
+                continue;
+            }
+            double increase=RouteStopAlignment.distance(stop.point(),point(after))-RouteStopAlignment.distance(stop.point(),point(before));
+            if(increase>5)qualityWarnings.add(issue("CURVE_STOP_CONNECTION_WORSENED",stop.direction(),stop.stopSequence(),increase));
         }
         if(!rejected.isEmpty())return new CurveCheck(null,List.copyOf(new LinkedHashSet<>(rejected)));
-        var result=result(geometry,inputDigest,checked.paths(),checked.connections(),checked.issues().isEmpty()?QualityStatus.PASSED:QualityStatus.REVIEW_REQUIRED,checked.issues());
+        var issues=new ArrayList<>(checked.issues());
+        issues.addAll(connectionGapWarnings(geometry,original,checked.connections()));
+        issues.addAll(qualityWarnings);
+        var result=result(geometry,inputDigest,checked.paths(),checked.connections(),issues.isEmpty()?QualityStatus.PASSED:QualityStatus.REVIEW_REQUIRED,issues);
         return new CurveCheck(result,List.of());
-    }
-
-    private static boolean visitsNoWorse(RouteGeometry geometry,RouteDisplayGeometry before,RouteDisplayGeometry after) {
-        for(var stop:geometry.busStops())if(stop.point()!=null) {
-            Connection a=before.connections().get(stop.stopSequence()),b=after.connections().get(stop.stopSequence());
-            if(a==null || b==null || RouteStopAlignment.distance(stop.point(),point(b))>RouteStopAlignment.distance(stop.point(),point(a))+5)return false;
-        }
-        return true;
     }
 
     private static boolean usableBaseline(RouteDisplayGeometry result) {
@@ -174,35 +178,9 @@ public final class AutomaticRouteDisplay {
         RoutePaths candidate = nodeCandidate;
         Evaluation checked = evaluate(geometry, original, candidate, true);
         if (!checked.blocked()) {
-            Map<Integer, Connection> before = new HashMap<>();
-            var up = RouteStopAlignment.align(original.up().points(), stops(geometry, "UP"), true);
-            var down =
-                    RouteStopAlignment.align(
-                            original.down().points(), stops(geometry, "DOWN"), false);
-            if (up.usable()) before.putAll(up.connections());
-            if (down.usable()) before.putAll(down.connections());
             List<QualityIssue> problems = new ArrayList<>(checked.issues());
-            for (var stop : geometry.busStops())
-                if (stop.point() != null
-                        && before.containsKey(stop.stopSequence())
-                        && checked.connections().containsKey(stop.stopSequence())) {
-                    double oldGap =
-                            RouteStopAlignment.distance(
-                                    stop.point(), point(before.get(stop.stopSequence())));
-                    double newGap =
-                            RouteStopAlignment.distance(
-                                    stop.point(),
-                                    point(checked.connections().get(stop.stopSequence())));
-                    if (newGap > oldGap + 5)
-                        problems.add(
-                                issue(
-                                        "STOP_CONNECTION_WORSENED",
-                                        stop.direction(),
-                                        stop.stopSequence(),
-                                        newGap - oldGap));
-                }
-            if (problems.size() > checked.issues().size())
-                checked = new Evaluation(checked.paths(), checked.connections(), problems, true);
+            problems.addAll(connectionGapWarnings(geometry, original, checked.connections()));
+            checked = new Evaluation(checked.paths(), checked.connections(), problems, false);
         }
         if (!checked.blocked())
             return result(
@@ -227,6 +205,24 @@ public final class AutomaticRouteDisplay {
                 source.connections(),
                 QualityStatus.SOURCE_ONLY,
                 issues);
+    }
+
+    private static List<QualityIssue> connectionGapWarnings(RouteGeometry geometry, RoutePaths original,
+            Map<Integer, Connection> selectedConnections) {
+        Map<Integer, Connection> before = new HashMap<>();
+        var up = RouteStopAlignment.align(original.up().points(), stops(geometry, "UP"), true);
+        var down = RouteStopAlignment.align(original.down().points(), stops(geometry, "DOWN"), false);
+        if (up.usable()) before.putAll(up.connections());
+        if (down.usable()) before.putAll(down.connections());
+        List<QualityIssue> warnings = new ArrayList<>();
+        for (var stop : geometry.busStops()) {
+            Connection old = before.get(stop.stopSequence()), selected = selectedConnections.get(stop.stopSequence());
+            if (stop.point() == null || old == null || selected == null) continue;
+            double increase = RouteStopAlignment.distance(stop.point(), point(selected))
+                    - RouteStopAlignment.distance(stop.point(), point(old));
+            if (increase > 5) warnings.add(issue("STOP_CONNECTION_WORSENED", stop.direction(), stop.stopSequence(), increase));
+        }
+        return warnings;
     }
 
     /** 원본 경로만 검사한다. 보조 기하를 생성하거나 원본 끝점을 자르지 않는다. */
