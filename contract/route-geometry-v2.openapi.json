@@ -1110,7 +1110,10 @@
                   "maxItems": 0
                 },
                 "reason": {
-                  "const": "NOT_COLLECTED"
+                  "enum": [
+                    "NOT_COLLECTED",
+                    "DISPLAY_WITHHELD"
+                  ]
                 },
                 "paths": {
                   "type": "null"

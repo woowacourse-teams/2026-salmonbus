@@ -70,6 +70,30 @@ class V2ApiDocsContractTest {
                     .isFalse();
             }
         }
+        JsonNode geometryContract = json.readTree(Files.readString(Path.of(System.getProperty("geometry.openapi.contract"))));
+        JsonNode generatedRules = document.at("/components/schemas/RouteGeometryResponse/allOf");
+        JsonNode sharedRules = geometryContract.at("/components/schemas/RouteGeometry/allOf");
+        assertThat(generatedRules).isEqualTo(sharedRules);
+        assertThat(generatedRules.at("/0/then/properties/reason/const").isMissingNode()).isTrue();
+        assertThat(generatedRules.at("/0/then/properties/reason/enum")).isEqualTo(
+                json.readTree("[\"NOT_COLLECTED\",\"DISPLAY_WITHHELD\"]"));
+        // Check every actual example against the status-dependent reason/shape constraints.
+        for (JsonNode example : operation(GEOMETRY).at("/responses/200/content/application~1json/examples")) {
+            JsonNode value = example.path("value");
+            for (JsonNode rule : generatedRules) {
+                if (!value.path("status").equals(rule.at("/if/properties/status/const"))) continue;
+                JsonNode properties = rule.at("/then/properties");
+                if (value.path("status").asString().equals("UNAVAILABLE")) {
+                    assertThat(properties.at("/reason/enum")).contains(value.path("reason"));
+                    assertThat(value.path("points").size()).isLessThanOrEqualTo(properties.at("/points/maxItems").intValue());
+                    assertThat(value.path("paths").isNull()).isTrue();
+                } else if (value.path("status").asString().equals("READY")) {
+                    assertThat(value.path("reason").isNull()).isTrue();
+                } else {
+                    assertThat(value.path("reason")).isEqualTo(properties.at("/reason/const"));
+                }
+            }
+        }
         assertThat(operation(GEOMETRY).at("/responses/304/content").isMissingNode()).isTrue();
         assertThat(operation(GEOMETRY).at("/responses/200/headers/ETag").isMissingNode()).isFalse();
         assertThat(operation(ARRIVALS).at("/responses/200/headers/Cache-Control").isMissingNode()).isFalse();

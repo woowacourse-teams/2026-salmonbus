@@ -101,6 +101,47 @@ public class ApiDocsConfiguration {
         }
     }
 
+    /** Keep availability constraints equal to the shared 3.1 geometry contract. */
+    @Bean
+    OpenApiCustomizer geometryAvailability() {
+        return document -> {
+            if (document.getComponents() == null || document.getComponents().getSchemas() == null) return;
+            Schema<?> geometry = document.getComponents().getSchemas().get("RouteGeometryResponse");
+            if (geometry == null) return;
+            Schema<Object> reasons = contractSchema();
+            reasons.setEnum(List.of("NOT_COLLECTED", "DISPLAY_WITHHELD"));
+            Schema<Object> unavailable = availabilityRule("UNAVAILABLE", contractSchema()
+                    .addProperties("points", contractSchema().maxItems(0))
+                    .addProperties("reason", reasons)
+                    .addProperties("paths", nullContractSchema()));
+            unavailable.setElse(contractSchema().addProperties("points", contractSchema().minItems(2)));
+            geometry.addAllOfItem(unavailable);
+            geometry.addAllOfItem(availabilityRule("READY", contractSchema()
+                    .addProperties("reason", nullContractSchema())));
+            geometry.addAllOfItem(availabilityRule("PARTIAL", contractSchema()
+                    .addProperties("reason", contractSchema()._const("MISSING_STOP_COORDINATES"))));
+        };
+    }
+
+    private static Schema<Object> availabilityRule(String status, Schema<?> result) {
+        Schema<Object> rule = contractSchema();
+        rule.setIf(contractSchema().addProperties("status", contractSchema()._const(status)));
+        rule.setThen(result);
+        return rule;
+    }
+
+    private static Schema<Object> contractSchema() {
+        Schema<Object> schema = new Schema<>();
+        schema.setSpecVersion(SpecVersion.V31);
+        return schema;
+    }
+
+    private static Schema<Object> nullContractSchema() {
+        Schema<Object> schema = contractSchema();
+        schema.setTypes(Set.of("null"));
+        return schema;
+    }
+
     /**
      * 실제로 문서에 실린 operation 의 묶음만 정해 둔 순서로 두고, 경로도 화면 흐름 순서로 둔다.
      * 꺼진 기능의 묶음은 빈 제목으로 남지 않는다.
