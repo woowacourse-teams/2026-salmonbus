@@ -76,8 +76,8 @@ final class EvidenceRoutePaths {
                 : floor;
     }
 
-    /** Exact v2 sequential policy: preserve its successful whole bundle as the
-     * lower floor before any new atomic-role or curve changes. */
+    /** Sequential role removal preserves a validated whole bundle as the
+     * lower floor before atomic shared-role or curve changes. */
     static RoutePaths buildSequentialFloor(RouteGeometry geometry) {
         RoutePaths original = geometry.paths();
         if (original == null) return null;

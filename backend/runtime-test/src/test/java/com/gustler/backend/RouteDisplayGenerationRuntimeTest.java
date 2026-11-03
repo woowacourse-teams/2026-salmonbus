@@ -70,7 +70,7 @@ class RouteDisplayGenerationRuntimeTest {
             var response=get(uri);
             assertThat(body(response).at("/displayQuality/status").asString()).isEqualTo("SOURCE_ONLY");
             assertThat(body(response).path("displaySource").asString()).isEqualTo("AUTOMATIC_FALLBACK");
-            assertThat(body(response).path("displayPaths").isNull()).isFalse();
+            assertThat(body(response).hasNonNull("displayPaths")).isTrue();
             assertThat(body(response).at("/busStops/0/pathConnection/segmentIndex").asInt()).isZero();
             assertThat(count(runtime,"route_display_automatic_artifact")).isEqualTo(1);
             assertCompact(mapUri,response);
@@ -138,7 +138,7 @@ class RouteDisplayGenerationRuntimeTest {
             var changed=get(uri);
             assertThat(body(changed).path("displaySource").asString()).isEqualTo("AUTOMATIC_FALLBACK");
             assertThat(body(changed).at("/displayQuality/status").asString()).isEqualTo("WITHHELD");
-            assertThat(body(changed).path("displayPaths").isNull()).isTrue();
+            assertThat(body(changed).hasNonNull("displayPaths")).isFalse();
             assertThat(body(changed).at("/busStops/1/point/x").asDouble()).isEqualTo(127.0101);
             assertCompact(mapUri,changed);
             observe(runtime,live,"changed",uri,changed,"LOCAL_SYNTHETIC_REAL_HTTP");
@@ -356,7 +356,9 @@ class RouteDisplayGenerationRuntimeTest {
             assertThat(response.headers().firstValue("ETag")).isEmpty();
         } else {
             assertThat(compact.path("points")).isEqualTo(diagnostic.path("points"));
-            assertThat(compact.path("paths")).isEqualTo(diagnostic.path("displayPaths"));
+            if(diagnostic.hasNonNull("displayPaths"))
+                assertThat(compact.path("paths")).isEqualTo(diagnostic.path("displayPaths"));
+            else assertThat(compact.path("paths").isNull()).isTrue();
         }
         assertThat(compact.path("busStops")).hasSize(diagnostic.path("busStops").size());
         var stopFields=List.of("stationId","stopSequence","name","direction","boardingAllowed","point");
