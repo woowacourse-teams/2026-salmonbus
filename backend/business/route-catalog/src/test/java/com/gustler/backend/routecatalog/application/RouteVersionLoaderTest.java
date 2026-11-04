@@ -13,10 +13,12 @@ import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
 import com.gustler.backend.routecatalog.support.RouteCatalogIntegrationTest;
 import jakarta.persistence.EntityManager;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -157,17 +159,14 @@ class RouteVersionLoaderTest {
         // given
         loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
         loader.load(routeId, fourStops(), TIMETABLE_1650, SECOND_READ_AT);
-        entityManager.flush();
-        String recompute = new String(getClass().getClassLoader()
-            .getResourceAsStream("db/migration/V48__route_version_digest_without_name.sql").readAllBytes(),
-            StandardCharsets.UTF_8);
+        List<String> stored = digestsOf(routeId);
 
         // when
-        final int actual = jdbcClient.sql(recompute).update();
+        jdbcClient.sql(migrationSql("V48__route_version_digest_without_name.sql")).update();
 
         // then
-        // 같은 규칙이면 다시 계산해도 바뀌는 행이 없다
-        assertThat(actual).isZero();
+        // 같은 규칙이면 이 노선의 지문은 다시 계산해도 그대로다
+        assertThat(digestsOf(routeId)).containsExactlyElementsOf(stored);
     }
 
     @Test
@@ -472,6 +471,21 @@ class RouteVersionLoaderTest {
             new UpstreamRouteStop(2, STOP_277103149, "안양대교(경유)"),
             new UpstreamRouteStop(3, STOP_208000069, "안양역")
         ));
+    }
+
+    private List<String> digestsOf(final long routeId) {
+        entityManager.flush();
+        return jdbcClient.sql("SELECT content_digest FROM route_version WHERE route_id = ? ORDER BY id")
+            .param(routeId)
+            .query(String.class)
+            .list();
+    }
+
+    private String migrationSql(String fileName) throws IOException {
+        try (InputStream migration = Objects.requireNonNull(
+            getClass().getClassLoader().getResourceAsStream("db/migration/" + fileName), fileName)) {
+            return new String(migration.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     private RouteStops threeStopsRenamed() {

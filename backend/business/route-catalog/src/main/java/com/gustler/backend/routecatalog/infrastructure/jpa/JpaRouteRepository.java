@@ -79,7 +79,7 @@ public class JpaRouteRepository implements RouteRepository {
                 WHERE stop.route_version_id = :version
                   AND stop.stop_order = incoming.stop_order
                   AND stop.stop_id = incoming.stop_id
-                  AND stop.name <> incoming.name
+                  AND stop.name IS DISTINCT FROM incoming.name
                 """)
             .param("version", routeVersionId)
             .param("orders", incoming.stream().map(RouteStop::stopOrder).toList())
