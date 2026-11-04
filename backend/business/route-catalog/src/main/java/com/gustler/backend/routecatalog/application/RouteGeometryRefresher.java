@@ -3,6 +3,7 @@ package com.gustler.backend.routecatalog.application;
 import com.gustler.backend.quota.api.ApiCallQuota;
 import com.gustler.backend.routecatalog.api.RefreshRouteGeometry;
 import com.gustler.backend.routecatalog.api.RefreshRouteGeometry.Outcome;
+import com.gustler.backend.routecatalog.api.RouteGeometryInputAvailable;
 import com.gustler.backend.routecatalog.domain.geometry.RouteGeometrySource;
 import com.gustler.backend.routecatalog.domain.geometry.RouteGeometrySource.Read;
 import com.gustler.backend.routecatalog.domain.geometry.RouteGeometryStore;
@@ -15,6 +16,9 @@ import com.gustler.backend.routecatalog.domain.geometry.RouteSourceArchive;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -30,6 +34,7 @@ public class RouteGeometryRefresher implements RefreshRouteGeometry {
     private final RouteGeometrySource source;
     private final ApiCallQuota quota;
     private final List<SupplementaryRouteGeometrySource> supplementary;
+    private final ApplicationEventPublisher events;
 
     public RouteGeometryRefresher(RouteGeometryStore store, RouteGeometrySource source, ApiCallQuota quota) {
         this(store, source, quota, List.of());
@@ -43,15 +48,22 @@ public class RouteGeometryRefresher implements RefreshRouteGeometry {
         this(store,source,quota,supplementary,Optional.empty());
     }
 
-    @Autowired
     public RouteGeometryRefresher(RouteGeometryStore store, RouteGeometrySource source,
             ApiCallQuota quota, List<SupplementaryRouteGeometrySource> supplementary,
             Optional<RouteSourceArchive> archive) {
+        this(store, source, quota, supplementary, archive, ignored -> {});
+    }
+
+    @Autowired
+    public RouteGeometryRefresher(RouteGeometryStore store, RouteGeometrySource source,
+            ApiCallQuota quota, List<SupplementaryRouteGeometrySource> supplementary,
+            Optional<RouteSourceArchive> archive, ApplicationEventPublisher events) {
         this.archive=archive.orElse(RouteSourceArchive.NONE);
         this.supplementary = List.copyOf(supplementary);
         this.store = store;
         this.source = source;
         this.quota = quota;
+        this.events = events;
     }
 
     @Override
@@ -170,11 +182,36 @@ public class RouteGeometryRefresher implements RefreshRouteGeometry {
         }
         Read selected = read.orElseThrow();
         read = Optional.of(new Read(selected.shape(),selected.receivedAt(),selected.evidence(),acquisitionManifest));
-        return switch (store.publish(reference.get(), read.get())) {
+        Outcome outcome = switch (store.publish(reference.get(), read.get())) {
             case UPDATED -> Outcome.UPDATED;
             case UNCHANGED -> Outcome.UNCHANGED;
             case REFERENCE_CHANGED -> Outcome.REFERENCE_CHANGED;
         };
+        if (outcome == Outcome.UPDATED || outcome == Outcome.UNCHANGED) {
+            inputAvailableAfterCommit(new RouteGeometryInputAvailable(routeId, reference.get().versionId()));
+        }
+        return outcome;
+    }
+
+    private void inputAvailableAfterCommit(RouteGeometryInputAvailable event) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override public void afterCommit() { publishInputAvailable(event); }
+                });
+            }
+            return;
+        }
+        // JdbcRouteGeometryStore's transactional proxy has committed before publish() returns.
+        publishInputAvailable(event);
+    }
+
+    private void publishInputAvailable(RouteGeometryInputAvailable event) {
+        try { events.publishEvent(event); }
+        catch (RuntimeException failure) {
+            LOG.warn("event=route_geometry_input_notification_failed routeId={} routeVersionId={} exceptionType={}",
+                event.routeId(), event.routeVersionId(), failure.getClass().getSimpleName());
+        }
     }
 
     private static RouteSourceReceipt receipt(String id,String route,RouteSourceReceipt.Status status,OffsetDateTime at) {

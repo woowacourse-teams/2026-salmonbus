@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import org.junit.jupiter.api.Test;
+import com.gustler.backend.routecatalog.api.RefreshRouteGeometryEvidence;
+import org.springframework.scheduling.annotation.Scheduled;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import tools.jackson.databind.ObjectMapper;
@@ -97,4 +100,21 @@ class BmsEvidenceCacheTest {
         none.refresh();
         assertThat(none.read("204000057").source().status()).isEqualTo("NOT_CONFIGURED");
     }
+
+    @Test
+    void 공통갱신포트로_한번_가져온_BMS를_여러노선이_쓰고_독립타이머는_등록하지않는다() throws Exception {
+        var requests = new AtomicInteger();
+        var cache = new GgBmsNodeGeometrySource(new ObjectMapper(), successfulCacheJdbc(),
+            Clock.fixed(Instant.EPOCH, ZoneOffset.UTC), "test-key", uri -> {
+                requests.incrementAndGet();
+                return GOOD;
+            });
+        RefreshRouteGeometryEvidence refresh = cache;
+        refresh.refresh();
+        assertThat(cache.read("204000057").nodes()).hasSize(2);
+        assertThat(cache.read("204000081").nodes()).hasSize(2);
+        assertThat(requests.get()).isEqualTo(1);
+        assertThat(GgBmsNodeGeometrySource.class.getMethod("refresh").getAnnotation(Scheduled.class)).isNull();
+    }
+
 }

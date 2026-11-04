@@ -10,6 +10,7 @@ import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.ServiceDay;
 import com.gustler.backend.routecatalog.domain.StopCoordinates;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
+import com.gustler.backend.routecatalog.api.RouteVersionChanged;
 import com.gustler.backend.routecatalog.support.RouteCatalogIntegrationTest;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
@@ -23,9 +24,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.context.event.RecordApplicationEvents;
+import org.springframework.test.context.event.ApplicationEvents;
 
 @RouteCatalogIntegrationTest
 @Transactional
+@RecordApplicationEvents
 class RouteVersionLoaderTest {
     private static final OffsetDateTime FIRST_READ_AT = OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
     private static final OffsetDateTime SECOND_READ_AT = OffsetDateTime.parse("2026-08-26T11:14:04.911+09:00");
@@ -58,6 +62,7 @@ class RouteVersionLoaderTest {
 
     @Autowired
     private EntityManager entityManager;
+    @Autowired private ApplicationEvents applicationEvents;
 
     private long routeId;
 
@@ -73,6 +78,18 @@ class RouteVersionLoaderTest {
 
         // then
         assertThat(versionCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 실제_새_판본에만_커밋_후_처리할_이벤트를_트랜잭션_안에서_발행한다() {
+        long initial=loader.load(routeId,threeStops(),TIMETABLE_1650,FIRST_READ_AT);
+        assertThat(loader.load(routeId,threeStops(),TIMETABLE_1650,SECOND_READ_AT)).isEqualTo(initial);
+        assertThat(loader.load(routeId,threeStops(),TIMETABLE_1650_LAST_BUS_MOVED,THIRD_READ_AT)).isEqualTo(initial);
+        long changed=loader.load(routeId,fourStops(),TIMETABLE_1650_LAST_BUS_MOVED,THIRD_READ_AT.plusDays(1));
+        assertThat(changed).isNotEqualTo(initial);
+        // This test transaction is still open: an afterCommit publisher would not have emitted yet.
+        assertThat(applicationEvents.stream(RouteVersionChanged.class).toList())
+            .containsExactly(new RouteVersionChanged(routeId,initial),new RouteVersionChanged(routeId,changed));
     }
 
     @Test

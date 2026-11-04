@@ -3,6 +3,7 @@ package com.gustler.backend.routecatalog.infrastructure.supplementary;
 import com.gustler.backend.gbis.api.GbisCapturePolicy;
 import com.gustler.backend.gbis.api.GbisResponseCapture;
 import com.gustler.backend.routecatalog.domain.geometry.RouteSourceArchive;
+import com.gustler.backend.routecatalog.api.RefreshRouteGeometryEvidence;
 import com.gustler.backend.routecatalog.domain.geometry.SupplementaryRouteGeometrySource;
 import com.gustler.backend.routegeometry.api.RouteDisplayInput.Point;
 import com.gustler.backend.routegeometry.api.RouteShapeEvidence;
@@ -17,7 +18,6 @@ import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -25,7 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 /** Pages are archived once per shared acquisition; a failed refresh never replaces usable cache data. */
 @Component
 @ConditionalOnProperty(name = "route-geometry.multi-source.enabled", havingValue = "true")
-public class GgBmsNodeGeometrySource implements SupplementaryRouteGeometrySource {
+public class GgBmsNodeGeometrySource implements SupplementaryRouteGeometrySource, RefreshRouteGeometryEvidence {
     private final ObjectMapper json;
     private final JdbcClient jdbc;
     private final Clock clock;
@@ -72,8 +72,7 @@ public class GgBmsNodeGeometrySource implements SupplementaryRouteGeometrySource
     }
     public String id() { return "GG_BMS_NODES"; }
 
-    @Scheduled(initialDelayString = "PT1S", fixedDelayString = "${route-geometry.multi-source.cache-interval:PT6H}",
-            scheduler = "routeGeometryEvidenceScheduler")
+    @Override
     public synchronized void refresh() {
         List<RouteSourceReceipt> receipts = new ArrayList<>();
         var budget = new CaptureBudget(maxCaptureBytes);

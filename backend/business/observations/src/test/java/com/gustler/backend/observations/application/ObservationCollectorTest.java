@@ -20,6 +20,7 @@ import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.GbisLocationSource;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.observations.domain.CollectionSchedule;
+import com.gustler.backend.observations.api.ObservationRouteMismatchDetected;
 import com.gustler.backend.observations.support.ObservationIntegrationTest;
 import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.quota.domain.CallQuotaStore;
@@ -45,12 +46,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.context.event.RecordApplicationEvents;
+import org.springframework.test.context.event.ApplicationEvents;
 
 /**
  * 설정에 노선을 적고 수집을 한 번 실행하면 판본이 열리고 관측이 저장되는지 확인한다.
  * 상류만 시험용 대역이고 나머지는 실제 배선과 DB 를 그대로 쓴다.
  */
 @ObservationIntegrationTest
+@RecordApplicationEvents
 class ObservationCollectorTest {
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
     /** 한국 시각 2026-08-28 11:14:04. 낮이라 20초 간격이다. */
@@ -95,6 +99,7 @@ class ObservationCollectorTest {
 
     @Autowired
     private JdbcClient jdbcClient;
+    @Autowired private ApplicationEvents applicationEvents;
 
     private ListAppender<ILoggingEvent> collectorLog;
 
@@ -141,6 +146,9 @@ class ObservationCollectorTest {
             assertThat(phaseFailure1)
                 .isNotNull().isInstanceOf(RuntimeException.class);
             assertThat(observationCount()).isZero();
+            assertThat(applicationEvents.stream(ObservationRouteMismatchDetected.class).toList())
+                .containsExactly(new ObservationRouteMismatchDetected(ROUTE_3330,
+                    onlyBatchColumn("route_version_id",Long.class)));
             assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("DISPATCHING");
             assertThat(diagnostics.list).hasSize(1);
             assertThat(diagnostics.list.getFirst().getFormattedMessage()).contains(

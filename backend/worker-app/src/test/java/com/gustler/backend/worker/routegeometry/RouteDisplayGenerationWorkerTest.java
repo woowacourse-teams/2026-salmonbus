@@ -8,10 +8,24 @@ import com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry;
 import com.gustler.backend.routegeometry.engine.api.RouteGeometry;
 import com.gustler.backend.routegeometry.api.RouteDisplayDbSamples;
 import com.gustler.backend.routegeometry.api.RouteShapeEvidence;
+import com.gustler.backend.routecatalog.api.RefreshRouteCatalog;
+import com.gustler.backend.routecatalog.api.RefreshRouteGeometry;
+import com.gustler.backend.routecatalog.api.RouteGeometryInputAvailable;
+import com.gustler.backend.routecatalog.api.RouteReference;
+import com.gustler.backend.routecatalog.api.RouteVersionChanged;
+import com.gustler.backend.observations.api.ObservationRouteMismatchDetected;
+import com.gustler.backend.worker.configuration.CollectionProperties;
+import com.gustler.backend.worker.configuration.RouteGeometryProperties;
+import com.gustler.backend.worker.scheduling.JdbcRouteRefreshStateRepository;
+import com.gustler.backend.worker.scheduling.RouteChangeRefreshCoordinator;
 import com.gustler.backend.support.PostgresTestContainer;
 import java.time.*;
 import java.util.List;
 import java.util.Optional;
+import java.util.ArrayDeque;
+import java.util.UUID;
+import java.util.concurrent.Executor;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,18 +34,41 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest(classes = RouteDisplayGenerationWorkerTest.Config.class,
-    properties = "route-geometry.generation.max-attempts=5")
+    properties = {"route-geometry.generation.max-attempts=5", "route-geometry.enabled=true",
+        "route-geometry.generation.enabled=true"})
 class RouteDisplayGenerationWorkerTest {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
-    @Import({PostgresTestContainer.class, JdbcRouteDisplayGenerationStore.class, RouteDisplaySourceReader.class})
-    static class Config { @Bean ObjectMapper mapper() { return new ObjectMapper(); } }
+    @Import({PostgresTestContainer.class, JdbcRouteDisplayGenerationStore.class, RouteDisplaySourceReader.class,
+        JdbcRouteRefreshStateRepository.class, RouteChangeRefreshCoordinator.class,
+        RouteDisplayGenerationWorker.class, RouteDisplayGenerationWakeup.class})
+    static class Config {
+        @Bean ObjectMapper mapper() { return new ObjectMapper(); }
+        @Bean Tasks tasks() { return new Tasks(); }
+        @Bean Executor routeGeometryExecutor(Tasks tasks) { return tasks.information::add; }
+        @Bean Executor routeDisplayGenerationScheduler(Tasks tasks) { return tasks.generation::add; }
+        @Bean CollectionProperties collectionProperties() { return new CollectionProperties(true,List.of(ROUTE)); }
+        @Bean RouteGeometryProperties routeGeometryProperties() { return new RouteGeometryProperties(true,List.of(ROUTE)); }
+        @Bean RefreshRouteCatalog catalogRefresher() { return org.mockito.Mockito.mock(RefreshRouteCatalog.class); }
+        @Bean RefreshRouteGeometry geometryCollector() { return org.mockito.Mockito.mock(RefreshRouteGeometry.class); }
+    }
+    static class Tasks {
+        final ArrayDeque<Runnable> information=new ArrayDeque<>();
+        final ArrayDeque<Runnable> generation=new ArrayDeque<>();
+        void drain() {
+            while(!information.isEmpty() || !generation.isEmpty()) {
+                while(!information.isEmpty())information.remove().run();
+                while(!generation.isEmpty())generation.remove().run();
+            }
+        }
+    }
     private static final String ROUTE="204000057";
     private static final Instant START=Instant.parse("2026-11-02T00:00:00Z");
     @Autowired JdbcClient jdbc;
@@ -39,16 +76,23 @@ class RouteDisplayGenerationWorkerTest {
     @Autowired RouteDisplaySourceReader source;
     @Autowired ObjectMapper json;
     @Autowired PlatformTransactionManager transactions;
+    @Autowired ApplicationEventPublisher events;
+    @Autowired Tasks tasks;
+    @Autowired RefreshRouteCatalog catalogRefresher;
+    @Autowired RefreshRouteGeometry geometryCollector;
     private MutableClock clock;
     private RouteDisplayGenerationWorker worker;
 
     @BeforeEach void reset() {
+        assertThat(tasks.information).isEmpty();assertThat(tasks.generation).isEmpty();
+        org.mockito.Mockito.reset(catalogRefresher,geometryCollector);
         jdbc.sql("TRUNCATE route_display_generation_job,route_display_automatic_artifact").update();
         jdbc.sql("TRUNCATE route CASCADE").update();
         RouteDisplayDbSamples.seed(jdbc,ROUTE);
         clock=new MutableClock(START);
         worker=restartedWorker();
     }
+    @AfterEach void drainSignals() { tasks.drain(); }
     private RouteDisplayGenerationWorker restartedWorker() {
         return new RouteDisplayGenerationWorker(store,source,json,transactions,Optional.of(clock));
     }
@@ -63,6 +107,95 @@ class RouteDisplayGenerationWorkerTest {
     private int artifactCount() { return jdbc.sql("SELECT count(*) FROM route_display_automatic_artifact").query(Integer.class).single(); }
     private String state(String key) {
         return jdbc.sql("SELECT status FROM route_display_generation_job WHERE generation_key=?").param(key).query(String.class).single();
+    }
+
+    private long newVersion(boolean rollback) {
+        long old=current().referenceVersionId();
+        return new TransactionTemplate(transactions).execute(tx -> {
+            long route=jdbc.sql("SELECT route_id FROM route_version WHERE id=?").param(old).query(Long.class).single();
+            jdbc.sql("UPDATE route_version SET valid_to=? WHERE id=?").params(OffsetDateTime.ofInstant(START,ZoneOffset.UTC),old).update();
+            long next=jdbc.sql("INSERT INTO route_version(route_id,turn_sequence,content_digest,valid_from) VALUES (?,2,?,?) RETURNING id")
+                .params(route,"c".repeat(64),OffsetDateTime.ofInstant(START,ZoneOffset.UTC)).query(Long.class).single();
+            jdbc.sql("""
+                INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
+                SELECT ?,stop_order,CASE WHEN stop_order=2 THEN '206000639' ELSE stop_id END,name,direction,boarding_allowed
+                FROM route_stop WHERE route_version_id=?
+                """).params(next,old).update();
+            jdbc.sql("""
+                INSERT INTO route_stop_location_history(route_version_id,stop_order,stop_id,observed_at,x,y)
+                SELECT ?,stop_order,CASE WHEN stop_order=2 THEN '206000639' ELSE stop_id END,observed_at,x,y
+                FROM route_stop_location_history WHERE route_version_id=?
+                """).params(next,old).update();
+            events.publishEvent(new RouteVersionChanged(route,next));
+            assertThat(tasks.information).as("No refresh may run before commit").isEmpty();
+            if(rollback)tx.setRollbackOnly();
+            return next;
+        });
+    }
+
+    private void collectNewGeometryFrom(long oldVersion) {
+        org.mockito.Mockito.when(geometryCollector.refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(call -> {
+                long current=current().referenceVersionId();
+                jdbc.sql("""
+                    INSERT INTO route_geometry(id,route_version_id,received_at,content_digest,points,evidence)
+                    SELECT ?,?,clock_timestamp(),content_digest,points,evidence FROM route_geometry WHERE route_version_id=?
+                    ORDER BY received_at DESC LIMIT 1
+                    """).params(UUID.randomUUID(),current,oldVersion).update();
+                events.publishEvent(new RouteGeometryInputAvailable(ROUTE,current));
+                return RefreshRouteGeometry.Outcome.UPDATED;
+            });
+    }
+
+    @Test void a_committed_new_version_collects_and_generates_geometry_without_waiting_for_a_schedule() {
+        long old=current().referenceVersionId();collectNewGeometryFrom(old);
+        long next=newVersion(false);
+        assertThat(tasks.information).hasSize(1);assertThat(tasks.generation).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(geometryCollector);
+        tasks.drain();
+        assertThat(current().referenceVersionId()).isEqualTo(next);assertThat(current().shape()).isNotNull();
+        assertThat(artifactCount()).isEqualTo(2);
+        assertThat(jdbc.sql("SELECT input_json #>> '{referenceVersionId}' FROM route_display_generation_job")
+            .query(String.class).list()).containsOnly(Long.toString(next));
+        assertThat(jdbc.sql("SELECT status FROM route_display_generation_job").query(String.class).list()).containsOnly("COMPLETED");
+        org.mockito.Mockito.verify(geometryCollector,org.mockito.Mockito.times(1)).refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test void a_rolled_back_version_does_not_enqueue_source_collection() {
+        long old=current().referenceVersionId();newVersion(true);
+        assertThat(current().referenceVersionId()).isEqualTo(old);assertThat(tasks.information).isEmpty();
+        assertThat(tasks.generation).isEmpty();org.mockito.Mockito.verifyNoInteractions(geometryCollector,catalogRefresher);
+    }
+
+    @Test void an_observation_mismatch_can_confirm_a_new_version_and_publish_its_geometry() {
+        long old=current().referenceVersionId();collectNewGeometryFrom(old);
+        org.mockito.Mockito.when(catalogRefresher.refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(call -> Optional.of(new RouteReference(newVersion(false))));
+        events.publishEvent(new ObservationRouteMismatchDetected(ROUTE,old));
+        assertThat(tasks.information).hasSize(1);tasks.drain();
+        assertThat(current().referenceVersionId()).isNotEqualTo(old);assertThat(artifactCount()).isEqualTo(2);
+        org.mockito.Mockito.verify(catalogRefresher,org.mockito.Mockito.times(1)).refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(geometryCollector,org.mockito.Mockito.times(1)).refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test void an_unchanged_catalog_after_mismatch_keeps_the_version_and_geometry() {
+        long old=current().referenceVersionId();
+        org.mockito.Mockito.when(catalogRefresher.refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any()))
+            .thenReturn(Optional.of(new RouteReference(old)));
+        events.publishEvent(new ObservationRouteMismatchDetected(ROUTE,old));tasks.drain();
+        assertThat(current().referenceVersionId()).isEqualTo(old);assertThat(current().shape()).isNotNull();
+        assertThat(artifactCount()).isZero();org.mockito.Mockito.verifyNoInteractions(geometryCollector);
+    }
+
+    @Test void mismatch_resolution_uses_the_upstream_route_id_even_when_the_public_id_differs() {
+        long version=current().referenceVersionId();String sourceId="204000081";
+        jdbc.sql("UPDATE route SET source_route_id=? WHERE public_route_id=?").params(sourceId,ROUTE).update();
+        org.mockito.Mockito.when(catalogRefresher.refresh(org.mockito.ArgumentMatchers.eq(sourceId),org.mockito.ArgumentMatchers.any()))
+            .thenReturn(Optional.of(new RouteReference(version)));
+        events.publishEvent(new ObservationRouteMismatchDetected(sourceId,version));tasks.drain();
+        org.mockito.Mockito.verify(catalogRefresher).refresh(org.mockito.ArgumentMatchers.eq(sourceId),org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(catalogRefresher,org.mockito.Mockito.never()).refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verifyNoInteractions(geometryCollector);
     }
     @Test void source_validation_precedes_full_generation_and_discovery_is_idempotent() {
         worker.discover(ROUTE);worker.discover(ROUTE);
