@@ -34,3 +34,15 @@ tasks.register('verifyLesParity', JavaExec) {
         args bundlePath.get(), resultPath.get()
     }
 }
+
+// 실제 관측 이력에서 88/80열을 다시 만들어 원본 저장 표본과 비교한다.
+tasks.register('verifyLesSourceFeatures', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.gustler.backend.forecasting.infrastructure.les.LesSourceFeatureCheck'
+    maxHeapSize = '768m'
+    jvmArgs '-XX:ActiveProcessorCount=1'
+    doFirst {
+        args providers.gradleProperty('lesSourceFixture').get(), providers.gradleProperty('lesSourceOutput').get()
+    }
+}

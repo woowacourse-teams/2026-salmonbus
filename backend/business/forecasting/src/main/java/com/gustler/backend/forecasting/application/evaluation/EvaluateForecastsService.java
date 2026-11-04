@@ -59,6 +59,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     private final Map<Long, Cursor> cursors = new LinkedHashMap<>();
     private long memoryRevision;
     private WorkerQualityState qualityMemory;
+    private LesForecastEvaluation les;
 
     public EvaluateForecastsService(
         EvaluationWorkStore work,
@@ -92,10 +93,18 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         this.qualityMemory = qualityMemory;
     }
 
+    @Autowired(required = false)
+    public void useLesEvaluation(LesForecastEvaluation les) {
+        this.les = les;
+    }
+
     @Override
     @Transactional(propagation = Propagation.NEVER)
     public void settleArrivalLabels() {
         WorkerOperationLog.run("settlement_tick", "all", this::settleOnce);
+        if (les != null) {
+            WorkerOperationLog.run("les_settlement_tick", "all", les::settle);
+        }
     }
 
     private void settleOnce() {

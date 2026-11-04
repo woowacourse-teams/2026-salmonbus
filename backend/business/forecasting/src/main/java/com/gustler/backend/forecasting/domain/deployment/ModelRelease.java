@@ -2,7 +2,10 @@ package com.gustler.backend.forecasting.domain.deployment;
 
 import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
 import com.gustler.backend.forecasting.domain.model.ForecastRouteReference;
+import com.gustler.backend.forecasting.domain.model.SeatDistributionForecastModel;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
+import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
+import com.gustler.backend.forecasting.domain.model.les.LesForecastModel;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -16,8 +19,10 @@ public record ModelRelease(
     SupportedForecastScope scope,
     SeatDistributionPredictor predictor,
     ForecastFeatureContract features,
-    ForecastRouteReference routeReference
+    ForecastRouteReference routeReference,
+    SeatForecastModel model
 ) {
+
     /** 모델 출력은 만석 확률 하나가 아니라 잔여석 0석부터 70석까지의 분포다. */
     private static final String PREDICTION_TARGET_VERSION = "seat-distribution-0-70";
 
@@ -31,8 +36,31 @@ public record ModelRelease(
         String featureContractVersion,
         String dataThrough,
         SupportedForecastScope scope,
-        SeatDistributionPredictor predictor
-    ) {
+        SeatDistributionPredictor predictor,
+        ForecastFeatureContract features,
+        ForecastRouteReference reference) {
+        this(releaseId, modelVersion, bundleDigest, featureContractVersion, dataThrough, scope, predictor,
+            features, reference, new SeatDistributionForecastModel(predictor, features, reference));
+    }
+
+    public static ModelRelease les(
+        String releaseId,
+        String bundleDigest,
+        String dataThrough,
+        SupportedForecastScope scope,
+        LesForecastModel model) {
+        return new ModelRelease(releaseId, "les-gate-base-and-pool", bundleDigest, "les-online-v1",
+            dataThrough, scope, null, null, null, model);
+    }
+
+    public ModelRelease(
+        String releaseId,
+        String modelVersion,
+        String bundleDigest,
+        String featureContractVersion,
+        String dataThrough,
+        SupportedForecastScope scope,
+        SeatDistributionPredictor predictor) {
         this(releaseId, modelVersion, bundleDigest, featureContractVersion, dataThrough, scope,
             predictor, ForecastFeatureContract.LEGACY, null);
     }
@@ -47,23 +75,35 @@ public record ModelRelease(
      * <p>선택과 재승격에서 같은 기준으로 비교하도록 판단을 이곳에 모은다.
      */
     public boolean hasIdentityOf(
-        ActiveModelDeployment deployment
-    ) {
+        ActiveModelDeployment deployment) {
         return deployment.bundleDigest().equals(bundleDigest())
             && deployment.releaseId().equals(releaseId())
             && deployment.calculationVersion().equals(featureContractVersion());
     }
 
+    private String modelKey() {
+        if (model instanceof LesForecastModel) {
+            return "les-gate-base-and-pool";
+        }
+        return MODEL_KEY;
+    }
+
+    private String predictionTargetVersion() {
+        if (model instanceof LesForecastModel) {
+            return "after-alighting-and-departure-zero-v1";
+        }
+        return PREDICTION_TARGET_VERSION;
+    }
+
     public StagedModelDeployment receiptWith(
-        UUID deploymentKey
-    ) {
+        UUID deploymentKey) {
         return new StagedModelDeployment(
             deploymentKey,
             releaseId,
-            MODEL_KEY,
+            modelKey(),
             modelVersion,
             bundleDigest,
-            PREDICTION_TARGET_VERSION,
+            predictionTargetVersion(),
             featureContractVersion,
             scope.digest(),
             Instant.parse(dataThrough));

@@ -541,6 +541,31 @@ class DddStorageMigrationTest {
             VALUES(1,repeat('b',64),'calc1',1);
             UPDATE evaluation_archive_scan SET observation_id=1,stop_order=2,next_attempt_at=now()
             """);
+        // Les 예보의 자동 등록 작업, 소수 결과와 검증된 이관 참조를 모두 남긴다.
+        execute("""
+            INSERT INTO forecast_publication(source_batch_id,route_version_id,model_deployment_id,
+                demand_statistics_revision,quality_revision,observed_at,generated_at,published_at,prediction_count)
+            VALUES(2,1,1,0,7,'2026-09-01T00:01:00Z','2026-09-01T00:01:01Z','2026-09-01T00:01:01Z',1);
+            INSERT INTO seat_forecast(vehicle_observation_id,target_stop_order,route_version_id,stops_to_target,
+                model_deployment_id,demand_statistics_revision,seat_full_chance_raw,seat_full_chance,
+                generated_at,quality_revision,publication_id,seat_target,probability_target,label_version,
+                feature_snapshot,inference_bundle_hash)
+            SELECT 2,3,1,1,1,0,.5,.5,'2026-09-01T00:01:01Z',7,id,
+                'AFTER_ALIGHTING_ESTIMATE','DEPARTURE_ZERO','les-identity-safe-v1','{}'::jsonb,repeat('c',64)
+            FROM forecast_publication WHERE source_batch_id=2;
+            INSERT INTO les_forecast_evaluation_result(vehicle_observation_id,target_stop_order,target_kind,
+                label_version,route_version_id,scoring_state,label_value,pre_observation_id,post_observation_id,
+                closure_observation_id,quality_revision,scored_at)
+            VALUES(2,3,'AFTER_ALIGHTING_ESTIMATE','les-identity-safe-v1',1,'SETTLED',12.5,1,2,2,7,now());
+            DELETE FROM les_forecast_evaluation_work WHERE vehicle_observation_id=2
+                AND target_kind='AFTER_ALIGHTING_ESTIMATE';
+            INSERT INTO les_evaluation_archive(vehicle_observation_id,target_stop_order,target_kind,label_version,
+                quality_revision,route_version_id,label_value,scoring_state,scored_at,object_hash,storage_state)
+            VALUES(2,3,'AFTER_ALIGHTING_ESTIMATE','les-identity-safe-v1',7,1,12.5,'SETTLED',now(),repeat('d',64),'LIVE')
+            """);
+        assertThat(number("SELECT count(*) FROM les_forecast_evaluation_work")).isOne();
+        assertThat(number("SELECT count(*) FROM les_forecast_evaluation_result")).isOne();
+        assertThat(number("SELECT count(*) FROM les_evaluation_archive")).isOne();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
         Path root = Path.of("").toAbsolutePath();
@@ -558,6 +583,13 @@ class DddStorageMigrationTest {
         execute(source.substring(start, end));
 
         // then
+        assertThat(number("SELECT count(*) FROM les_forecast_evaluation_work")).isZero();
+        assertThat(number("SELECT count(*) FROM les_forecast_evaluation_result")).isZero();
+        assertThat(number("SELECT count(*) FROM les_evaluation_archive")).isZero();
+        assertThat(number("SELECT count(*) FROM les_evaluation_status")).isZero();
+        assertThat(number("SELECT count(*) FROM forecast_publication")).isZero();
+        assertThat(number("SELECT count(*) FROM vehicle_observation")).isZero();
+        assertThat(number("SELECT count(*) FROM observation_batch")).isZero();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isZero();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isZero();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isZero();
@@ -568,6 +600,9 @@ class DddStorageMigrationTest {
             number(
             "SELECT count(*) FROM evaluation_archive_scan WHERE id=1 AND observation_id=0 AND stop_order=0 AND next_attempt_at='-infinity'::timestamptz")).isOne();
         assertThat(number("SELECT count(*) FROM route")).isOne();
+        assertThat(number("SELECT count(*) FROM route_version")).isOne();
+        assertThat(number("SELECT count(*) FROM route_stop")).isEqualTo(3);
+        assertThat(number("SELECT count(*) FROM model_deployment")).isOne();
     }
 
     @Test
