@@ -106,8 +106,8 @@ export default function App() {
   function handleLoad(event: WebViewNavigationEvent) {
     documentLoaded.current = isInAppUrl(event.nativeEvent.url);
     if (!documentLoaded.current) return;
-    const heldTap = notificationTaps.releaseHeld();
-    if (heldTap !== null) sendToWeb({ type: OPENED_EVENT, payload: { requestId: null, target: heldTap.target } });
+    const heldTap = notificationTaps.take();
+    if (heldTap !== null) sendOpened(null, heldTap.target);
   }
 
   function resetNativeMap() {
@@ -161,8 +161,7 @@ export default function App() {
   const notificationHandlers: Record<NotificationCommandType, (requestId: string) => void> = {
     'notification.requestPermission': (requestId) => replyRegistration(requestId, { ask: true }),
     'notification.getRegistration': (requestId) => replyRegistration(requestId, { ask: false }),
-    'notification.takeOpened': (requestId) =>
-      sendToWeb({ type: OPENED_EVENT, payload: { requestId, target: notificationTaps.take() } }),
+    'notification.takeOpened': (requestId) => sendOpened(requestId, notificationTaps.take()?.target ?? null),
   };
 
   function handleNotificationCommand(message: BridgeMessage) {
@@ -177,6 +176,11 @@ export default function App() {
     );
   }
 
+  // requestId는 takeOpened의 답이면 그 id, 앱이 먼저 보내면 null이다.
+  function sendOpened(requestId: string | null, target: Record<string, unknown> | null) {
+    sendToWeb({ type: OPENED_EVENT, payload: { requestId, target } });
+  }
+
   // 로그인 결과와 기기 토큰이 WebView가 연 로그인 제공자 화면에 가면 안 되어서 웹 origin 문서에만 넘긴다.
   function sendToWeb(message: BridgeMessage) {
     webViewRef.current?.injectJavaScript(bridgeEventScriptFor(message, WEB_ORIGIN));
@@ -184,7 +188,7 @@ export default function App() {
 
   const handleNotificationTap = useEffectEvent((tap: NotificationTap) => {
     if (notificationTaps.receive(tap, documentLoaded.current && webViewRef.current !== null) !== 'send') return;
-    sendToWeb({ type: OPENED_EVENT, payload: { requestId: null, target: tap.target } });
+    sendOpened(null, tap.target);
   });
 
   useEffect(() => watchNotificationTaps(handleNotificationTap), []);

@@ -6,10 +6,10 @@ const TARGET = { routeId: '234000884', stopId: '203000165', direction: 'UP' };
 const LATER = { ...TARGET, routeId: '234000026' };
 
 describe('알림 탭 칸', () => {
-  it('웹 문서가 뜨는 중에 누른 탭은 칸에 두고 takeOpened에 한 번만 돌려준다', () => {
+  it('문서가 뜨는 중에 받은 탭은 칸에 두고 한 번만 꺼낼 수 있다', () => {
     const inbox = createTapInbox();
     assert.equal(inbox.receive({ key: 'n1@1', target: TARGET }, false), 'held');
-    assert.deepEqual(inbox.take(), TARGET);
+    assert.deepEqual(inbox.take(), { key: 'n1@1', target: TARGET });
     assert.equal(inbox.take(), null);
   });
 
@@ -35,32 +35,17 @@ describe('알림 탭 칸', () => {
     const inbox = createTapInbox();
     inbox.receive({ key: 'n1@1', target: TARGET }, false);
     inbox.receive({ key: 'n2@2', target: LATER }, false);
-    assert.deepEqual(inbox.take(), LATER);
+    assert.deepEqual(inbox.take(), { key: 'n2@2', target: LATER });
 
     inbox.receive({ key: 'n3@3', target: TARGET }, false);
     assert.equal(inbox.receive({ key: 'n4@4', target: LATER }, true), 'send');
     assert.equal(inbox.take(), null);
   });
 
-  it('웹 문서가 뜨는 중에 누른 탭은 문서가 다 뜨면 한 번 내주고, 그 뒤에는 takeOpened에도 남지 않는다', () => {
-    const inbox = createTapInbox();
-    inbox.receive({ key: 'n1@1', target: TARGET }, false);
-    assert.deepEqual(inbox.releaseHeld(), { key: 'n1@1', target: TARGET });
-    assert.equal(inbox.releaseHeld(), null);
-    assert.equal(inbox.take(), null);
-  });
-
-  it('takeOpened가 먼저 가져간 탭은 문서가 다 떠도 다시 내주지 않는다', () => {
-    const inbox = createTapInbox();
-    inbox.receive({ key: 'n1@1', target: TARGET }, false);
-    assert.deepEqual(inbox.take(), TARGET);
-    assert.equal(inbox.releaseHeld(), null);
-  });
-
-  it('대상을 못 읽은 탭도 문서가 다 뜨면 한 번 내준다', () => {
+  it('대상을 못 읽은 탭도 칸에 두고 한 번만 꺼낼 수 있다', () => {
     const inbox = createTapInbox();
     inbox.receive({ key: 'n1@1', target: null }, false);
-    assert.deepEqual(inbox.releaseHeld(), { key: 'n1@1', target: null });
-    assert.equal(inbox.releaseHeld(), null);
+    assert.deepEqual(inbox.take(), { key: 'n1@1', target: null });
+    assert.equal(inbox.take(), null);
   });
 });
