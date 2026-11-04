@@ -176,7 +176,7 @@ export default function App() {
     );
   }
 
-  // requestId는 takeOpened의 답이면 그 id, 앱이 먼저 보내면 null이다.
+  // requestId의 뜻은 웹 notification.types.ts의 OpenedNotification을 따른다.
   function sendOpened(requestId: string | null, target: Record<string, unknown> | null) {
     sendToWeb({ type: OPENED_EVENT, payload: { requestId, target } });
   }

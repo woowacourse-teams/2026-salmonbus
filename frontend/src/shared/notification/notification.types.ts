@@ -19,7 +19,10 @@ export type NotificationDevice = { token: string; environment: ApnsEnvironment }
 
 export type NotificationRegistration = { requestId: string; status: NotificationPermissionStatus } & NotificationDevice;
 
-/** requestId는 notification.takeOpened의 답이면 그 id, 켜진 앱에서 누른 알림이면 null이다. */
+/**
+ * requestId는 notification.takeOpened의 답이면 그 id, 앱이 먼저 보내면 null이다.
+ * 앱은 웹 문서가 다 뜬 뒤 누른 탭은 바로, 뜨는 동안 누른 탭이나 꺼진 앱을 연 탭은 문서가 다 뜬 순간 먼저 보낸다.
+ */
 export interface OpenedNotification {
   requestId: string | null;
   target: NotificationTarget | null;

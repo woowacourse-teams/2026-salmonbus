@@ -5,7 +5,7 @@ import type { NotificationTarget } from "./notification.types";
 type OpenedNotificationListener = (target: NotificationTarget) => void;
 
 /**
- * 켜진 앱에서 누른 알림의 대상을 듣는 쪽에 넘긴다. 앱은 문서가 다 뜨면 바로 보내고 잊는데,
+ * 앱이 먼저 보낸 알림 대상(requestId가 null인 notification.opened)을 듣는 쪽에 넘긴다. 앱은 문서가 다 뜨면 보내고 잊는데,
  * 화면은 로그인 확인 뒤에야 들을 수 있다. 그래서 듣는 쪽이 없을 때 온 마지막 대상 하나를 첫 구독자에게 넘긴다.
  */
 export function createOpenedNotificationInbox() {
