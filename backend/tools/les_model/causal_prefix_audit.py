@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from causal_events import build_events
-from causal_prepare import samples, frozen_rows
+from causal_prepare import samples, frozen_rows, FREEZE
 from contracts import SEAT_COLUMNS, TARGET_STATS, ENTRY
 
 
@@ -17,6 +17,11 @@ def audit(source, lab, model, output, route, cut):
         raise ValueError('Audit output exists')
     output.mkdir(parents=True)
     cutoff = pd.Timestamp(cut, tz='Asia/Seoul')
+    contract_path = source / 'sample-contract.json'
+    contract = json.loads(contract_path.read_text()) if contract_path.exists() else {}
+    freeze = pd.Timestamp(contract.get('freeze', str(FREEZE)))
+    if cutoff <= freeze:
+        raise ValueError('Prefix cutoff must follow the frozen statistics period')
     metadata = json.loads((source / 'routes.json').read_text())
     (output / 'routes.json').write_text(json.dumps({route: metadata[route]}))
     obs = pd.read_pickle(source / f'obs_{route}.pkl')
@@ -26,7 +31,7 @@ def audit(source, lab, model, output, route, cut):
     events.to_pickle(output / f'events_{route}.pkl')
     batch = pd.read_pickle(source / f'batches_{route}.pkl')
     batch[batch.received < cutoff].to_pickle(output / f'batches_{route}.pkl')
-    samples(output, lab, output / 'generated')
+    samples(output, lab, output / 'generated', freeze, contract.get('origin_every', 8))
     prefix = pd.read_pickle(output / f'samples_{route}_causal.pkl')
     prefix['sample_row'] = np.arange(len(prefix))
     full = pd.read_pickle(model / 'frame.pkl')
@@ -44,7 +49,7 @@ def audit(source, lab, model, output, route, cut):
     spec.loader.exec_module(module)
     matched = module.add_entry_columns(matched, metadata[route]['stops'])
     # The calibration data and model are already frozen before both cutoffs.
-    post = frozen_rows(pd.read_pickle(source / f'alight_post_{route}.pkl'))
+    post = frozen_rows(pd.read_pickle(source / f'alight_post_{route}.pkl'), freeze)
     stats = post.groupby(['stop', 'band']).agg(t_alight_mean=('post_alight', 'mean'),
                        t_after_mean=('after', 'mean'), t_arrive_mean=('arrive', 'mean'))
     matched = matched.join(stats, on=['target', 'band'])

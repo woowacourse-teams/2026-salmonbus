@@ -26,11 +26,19 @@ def export(source, generated, model_dir, lab, parent, output):
     prob = np.load(model_dir / 'probability80.npy', mmap_mode='r')
     expert, gate, pool = [joblib.load(model_dir / n) for n in ['expert.joblib', 'gate.joblib', 'pool.joblib']]
     selection = json.loads((model_dir / 'selection.json').read_text())
+    training_report = json.loads((model_dir / 'report.json').read_text())
+    freeze = pd.Timestamp(training_report.get('freeze', str(FREEZE)))
+    final_start, final_end = training_report.get('periods', {}).get('final', ['2026-10-22', '2026-10-27'])
     middle = selection['middle']
     # Stratify only by route and time; never select favorable error cases.
     rows = []
+    final_cutoff = pd.Timestamp(final_end, tz='Asia/Seoul') + pd.Timedelta(days=1)
+    final_known = pd.to_datetime(frame.label_known, utc=True) < final_cutoff
     for route in sorted(frame.route.unique()):
-        positions = np.flatnonzero((frame.route == route) & (frame.date.astype(str) >= '2026-10-22'))
+        positions = np.flatnonzero((frame.route == route)
+                                   & frame.date.astype(str).between(final_start, final_end) & final_known)
+        if not len(positions):
+            raise ValueError(f'No final-period reference rows: {route}')
         rows.extend(positions[np.linspace(0, len(positions)-1, min(128, len(positions)), dtype=int)])
     sx, px = seat[rows], prob[rows]
     with threadpool_limits(limits=1):
@@ -49,8 +57,13 @@ def export(source, generated, model_dir, lab, parent, output):
         (output / f'{name}.json').write_text(json.dumps(export_tree_model(model, kind), allow_nan=False))
     for name in ['feature-contract.json', 'route-reference.json']:
         shutil.copyfile(parent / name, output / name)
+    metadata = json.loads((source / 'routes.json').read_text())
+    route_reference = json.loads((output / 'route-reference.json').read_text())
+    route_reference['routes'] = [dict(modelRoute=name, sourceRouteId=meta['public_route_id'],
+                                      stops=meta['stops']) for name, meta in metadata.items()]
+    (output / 'route-reference.json').write_text(json.dumps(route_reference, ensure_ascii=False, indent=2))
     contract = json.loads((output / 'feature-contract.json').read_text())
-    contract.update(source_reference='causal-20261104: declared confirmation time, closure-witness history, pre-10/12 frozen tables',
+    contract.update(source_reference=f'causal: declared confirmation time, closure-witness history, tables frozen before {freeze}',
                     online_feature_parity_verified=False)
     (output / 'feature-contract.json').write_text(json.dumps(contract, indent=2))
     queue_path = lab / 'recover/analysis/queue_state.py'
@@ -69,10 +82,10 @@ def export(source, generated, model_dir, lab, parent, output):
     checks = {}
     for route, meta in metadata.items():
         ev = pd.read_pickle(source / f'events_{route}.pkl')
-        ev = ev[ev.t_known < FREEZE]
+        ev = ev[ev.t_known < freeze]
         obs = pd.read_pickle(source / f'obs_{route}_trips.pkl')[['received']]
-        obs = obs[obs.received < FREEZE]
-        scope = dict(scope_base, o=obs, ev=ev, TABLE_END=FREEZE.date())
+        obs = obs[obs.received < freeze]
+        scope = dict(scope_base, o=obs, ev=ev, TABLE_END=freeze.date())
         exec(block, scope)
         samples = pd.read_pickle(source / f'samples_{route}_causal.pkl')
         checks[route] = verify_sample_statistics(samples, scope)
@@ -105,7 +118,7 @@ def export(source, generated, model_dir, lab, parent, output):
         (output / f'statistics-{route}.json').write_text(json.dumps(payload, allow_nan=False))
         print('frozen statistics verified',route,flush=True)
     stats_manifest = dict(schema='les-statistics-v1', routes=list(metadata),
-                          static_table_end_exclusive=str(FREEZE.date()),target_mean_train_end_exclusive=str(FREEZE.date()),
+                          static_table_end_exclusive=str(freeze.date()),target_mean_train_end_exclusive=str(freeze.date()),
                           holiday_dates=sorted(str(d) for d in scope_base['HOLIDAYS']),
                           verification=checks, travel_time_scope='closed before training freeze')
     (output / 'statistics-manifest.json').write_text(json.dumps(stats_manifest, indent=2))

@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.infrastructure.bundle.les;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.domain.model.les.LesSeatPredictor;
 import java.io.InputStream;
@@ -16,6 +17,8 @@ import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -24,6 +27,10 @@ import tools.jackson.databind.node.ObjectNode;
 class LesBundleLoaderTest {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final List<String> ROUTES = List.of("3330", "1650", "9007", "9300", "6011", "3000", "5600", "3500");
+    private static final List<String> RESEARCH_ROUTES = Stream.concat(ROUTES.stream(), Stream.of(
+        "1101", "1150", "1151", "1500-2", "3100", "4000", "6003", "6801", "7007-1", "8100", "9000", "G8110"))
+        .toList();
+
     @TempDir
     Path directory;
 
@@ -74,6 +81,49 @@ class LesBundleLoaderTest {
     void 운영_로더는_미검증_번들을_거부한다() throws Exception {
         fixture();
         assertThatThrownBy(() -> LesInferenceBundle.loadForServing(directory)).hasMessageContaining("서빙 검증");
+    }
+
+    @Test
+    void 연구용_번들은_선언된_20개_노선의_통계를_적재한다() throws Exception {
+        // given
+        fixture(RESEARCH_ROUTES);
+
+        // when
+        LesInferenceBundle bundle = LesInferenceBundle.load(directory);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(bundle.routes()).containsExactlyElementsOf(RESEARCH_ROUTES);
+            softly.assertThat(bundle.statistics("G8110").get("route").stringValue()).isEqualTo("G8110");
+        });
+    }
+
+    @Test
+    void 연구_노선_확장이_운영_허용_범위를_넓히지_않는다() throws Exception {
+        // given
+        fixture(RESEARCH_ROUTES);
+        servingFixture((1.3 + 10) / 3);
+
+        // then
+        assertThatThrownBy(() -> LesInferenceBundle.loadForServing(directory))
+            .hasMessageContaining("8개 노선의 통계");
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidResearchRoutes")
+    void 비어_있거나_중복되거나_잘못된_연구_노선을_거부한다(List<String> routes) throws Exception {
+        // given
+        fixture();
+        Files.writeString(directory.resolve("statistics-manifest.json"),
+            JSON.writeValueAsString(Map.of("schema", "les-statistics-v1", "routes", routes)));
+        manifest();
+
+        // then
+        assertThatThrownBy(() -> LesInferenceBundle.load(directory)).hasMessageContaining("노선 목록");
+    }
+
+    private static Stream<List<String>> invalidResearchRoutes() {
+        return Stream.of(List.of(), List.of("3330", "3330"), List.of("../3330"));
     }
 
     @Test
@@ -150,6 +200,10 @@ class LesBundleLoaderTest {
     }
 
     private void fixture() throws Exception {
+        fixture(ROUTES);
+    }
+
+    private void fixture(List<String> routes) throws Exception {
         try (InputStream input = getClass().getResourceAsStream("/les/feature-contract.json")) {
             Files.write(directory.resolve("feature-contract.json"), input.readAllBytes());
         }
@@ -159,10 +213,10 @@ class LesBundleLoaderTest {
         model("gate", "multiclass", 88, List.of(0, 1, 2), List.of(0, 0, 0));
         model("pool", "binary", 80, List.of(0, 1), List.of(0));
         Files.writeString(directory.resolve("statistics-manifest.json"),
-            JSON.writeValueAsString(Map.of("schema", "les-statistics-v1", "routes", ROUTES)));
+            JSON.writeValueAsString(Map.of("schema", "les-statistics-v1", "routes", routes)));
         Files.writeString(directory.resolve("route-reference.json"),
-            JSON.writeValueAsString(Map.of("routes", ROUTES.stream().map(r -> Map.of("modelRoute", r)).toList())));
-        for (String route : ROUTES) {
+            JSON.writeValueAsString(Map.of("routes", routes.stream().map(r -> Map.of("modelRoute", r)).toList())));
+        for (String route : routes) {
             Files.writeString(directory.resolve("statistics-" + route + ".json"), JSON.writeValueAsString(Map.of(
                 "route", route, "min_per_stop", 1, "tables", Map.of(), "alighting", Map.of(), "route_metadata",
                 List.of(),

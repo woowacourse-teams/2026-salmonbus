@@ -19,7 +19,7 @@ def available_time(received, confirmed):
     return confirmed.where(received.notna() & confirmed.notna() & (confirmed >= received))
 
 
-def prepare(source, output):
+def prepare(source, output, all_routes=False):
     if output.exists():
         raise ValueError('Output exists; preserve source receipts')
     output.mkdir(parents=True)
@@ -28,11 +28,12 @@ def prepare(source, output):
     route = pd.read_csv(source / 'route.csv.gz', dtype={'display_name': str, 'public_route_id': str})
     versions = pd.read_csv(source / 'route_version.csv.gz').merge(
         route, left_on='route_id', right_on='id', suffixes=('', '_route'))
-    selected = versions[versions.display_name.isin(ROUTES)]
+    routes = sorted(route.display_name.unique()) if all_routes else ROUTES
+    selected = versions[versions.display_name.isin(routes)]
     names = dict(zip(selected.id, selected.display_name))
     stops = pd.read_csv(source / 'route_stop.csv.gz', dtype={'stop_id': str})
     metadata = {}
-    for name in ROUTES:
+    for name in routes:
         vs = selected[selected.display_name == name]
         if vs.turn_sequence.nunique() != 1:
             raise ValueError(f'Turn sequence changed across route versions: {name}')
@@ -79,7 +80,7 @@ def prepare(source, output):
     if batch.id.duplicated().any():
         raise ValueError('Duplicate batch identity')
     audit['eligible_batches'] = len(batch)
-    for name in ROUTES:
+    for name in routes:
         b = batch[batch.route_version_id.map(names) == name].rename(columns={'id': 'batch', 'route_version_id': 'rv'})
         b.received = b.received.dt.tz_convert('Asia/Seoul')
         b.to_pickle(output / f'batches_{name}.pkl')
@@ -102,7 +103,7 @@ def prepare(source, output):
                 audit['eligible_observations'] += len(g)
         if index % 10 == 0:
             print(json.dumps(dict(stage='source', files=index + 1, rows=audit['eligible_observations'])), flush=True)
-    for name in ROUTES:
+    for name in routes:
         files = sorted(parts.glob(f'{name}_*.pkl'))
         o = pd.concat([pd.read_pickle(p) for p in files], ignore_index=True)
         b = pd.read_pickle(output / f'batches_{name}.pkl')
@@ -135,5 +136,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--all-routes', action='store_true')
     args = parser.parse_args()
-    prepare(args.source, args.output)
+    prepare(args.source, args.output, args.all_routes)

@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from causal_source import available_time
 from causal_events import build_events
 from causal_prepare import frozen_rows
-from causal_train import partitions
+from causal_train import partitions, validate_periods
 
 
 class CausalDataTest(unittest.TestCase):
@@ -72,6 +72,30 @@ class CausalDataTest(unittest.TestCase):
         split = partitions(frame)
         self.assertEqual(split['train'].tolist(), [True, False, False, False])
         self.assertEqual(split['dev'].tolist(), [False, False, True, False])
+
+    def test_custom_freeze_and_periods_keep_later_labels_out_of_each_period(self):
+        freeze = pd.Timestamp('2026-10-22', tz='Asia/Seoul')
+        events = pd.DataFrame(dict(t_known=pd.to_datetime([
+            '2026-10-21T23:59:59+09:00', '2026-10-22T00:00:00+09:00']), value=[1, 2]))
+        self.assertEqual(frozen_rows(events, freeze).value.tolist(), [1])
+        periods = dict(train=['2026-10-22', '2026-10-28'],
+                       dev=['2026-10-29', '2026-10-30'], final=['2026-11-02', '2026-11-04'])
+        validate_periods(periods, freeze)
+        frame = pd.DataFrame(dict(date=['2026-10-28', '2026-10-28', '2026-11-04', '2026-11-05'],
+            label_known=pd.to_datetime(['2026-10-28T23:59:59+09:00', '2026-10-29T00:00:00+09:00',
+                                        '2026-11-05T00:00:00+09:00', '2026-11-05T00:01:00+09:00'])))
+        split = partitions(frame, periods)
+        self.assertEqual(split['train'].tolist(), [True, False, False, False])
+        self.assertFalse(split['final'].any())
+
+    def test_period_overlap_and_training_before_statistics_freeze_are_rejected(self):
+        freeze = pd.Timestamp('2026-10-22', tz='Asia/Seoul')
+        for periods in [dict(train=['2026-10-21', '2026-10-28'],
+                             dev=['2026-10-29', '2026-10-30'], final=['2026-11-02', '2026-11-04']),
+                        dict(train=['2026-10-22', '2026-10-28'],
+                             dev=['2026-10-28', '2026-10-30'], final=['2026-11-02', '2026-11-04'])]:
+            with self.assertRaisesRegex(ValueError, 'ordered, disjoint'):
+                validate_periods(periods, freeze)
 
 
 if __name__ == '__main__':

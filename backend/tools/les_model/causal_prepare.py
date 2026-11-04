@@ -32,14 +32,14 @@ def original_alighting(path):
     return namespace
 
 
-def frozen_rows(events):
-    return events[events.t_known.lt(FREEZE)].copy()
+def frozen_rows(events, freeze=FREEZE):
+    return events[events.t_known.lt(freeze)].copy()
 
 
-def calibrate(source, lab):
+def calibrate(source, lab, freeze=FREEZE):
     functions = original_alighting(lab / 'scripts/alight_fit.py')
     metadata = json.loads((source / 'routes.json').read_text())
-    receipts = dict(freeze_exclusive=str(FREEZE), grouping='route/band pooled', max_fit_rows=600,
+    receipts = dict(freeze_exclusive=str(freeze), grouping='route/band pooled', max_fit_rows=600,
                     optimizer='two fixed starts, L-BFGS-B, maxiter=100', groups=[])
     for route, meta in metadata.items():
         path = source / f'alight_post_{route}.pkl'
@@ -52,7 +52,7 @@ def calibrate(source, lab):
         predictions, parameters = [], []
         for band, (lo, hi) in BANDS.items():
             group = events[events.minute.between(lo, hi - 1)]
-            fit = frozen_rows(group).sort_values('t_known')
+            fit = frozen_rows(group, freeze).sort_values('t_known')
             if len(fit) < 80:
                 raise ValueError(f'Insufficient pre-freeze calibration: {route}/{band}')
             fit = fit.iloc[np.linspace(0, len(fit) - 1, min(600, len(fit)), dtype=int)]
@@ -99,7 +99,7 @@ def replace_once(text, old, new):
     return text.replace(old, new)
 
 
-def samples(source, lab, output):
+def samples(source, lab, output, freeze=FREEZE, origin_every=8):
     if output.exists():
         raise ValueError('Sample output exists')
     original = lab / 'recover/analysis/samples3.py'
@@ -108,8 +108,11 @@ def samples(source, lab, output):
                        and isinstance(n.targets[0], ast.Name) and n.targets[0].id == 'BUNDLE')
     text = replace_once(text, ast.get_source_segment(text, bundle_node),
                         'BUNDLE = ' + repr(str((lab / 'data/bundle_coldstart20').resolve())))
+    # Use the validated source catalog, including newly collected route versions.
+    text = replace_once(text, "ref = {r['modelRoute']: r['stops'] for r in ref['routes']}",
+                        "ref = {name: metadata['stops'] for name, metadata in META.items()}")
     text = replace_once(text, '    ev_sorted = ev.sort_values',
-                        '    ev_sorted = ev[ev.t_known < pd.Timestamp("2026-10-12", tz="Asia/Seoul")].sort_values')
+                        '    ev_sorted = ev[ev.t_known < pd.Timestamp(' + repr(str(freeze)) + ')].sort_values')
     text = replace_once(text, '    same = np.r_[False, vid_codes[1:] == vid_codes[:-1]]',
                         '    same = np.r_[False, (vid_codes[1:] == vid_codes[:-1]) & (o.chain.values[1:] == o.chain.values[:-1]) ]')
     text = replace_once(text, '    for i in np.flatnonzero(is_origin):',
@@ -121,13 +124,15 @@ def samples(source, lab, output):
     script = output / 'samples_causal.py'
     script.write_text(text)
     (output / 'sample-source-receipt.json').write_text(json.dumps(dict(
-        original_sha256=sha256(original), generated_sha256=sha256(script), freeze=str(FREEZE),
+        original_sha256=sha256(original), generated_sha256=sha256(script), freeze=str(freeze),
+        origin_every=origin_every, catalog='validated source routes.json',
         changes=['closure-confirmed history', 'frozen travel-time median', 'chain isolation',
                  'post-freeze weekday rush origins', 'origin identity preservation']), indent=2))
+    (source / 'sample-contract.json').write_text((output / 'sample-source-receipt.json').read_text())
     meta = json.loads((source / 'routes.json').read_text())
     for route in meta:
         subprocess.run([sys.executable, str(script), str(source), str(lab / 'recover/analysis'),
-                        '8', '2026-10-12', '_causal', route], check=True)
+                        str(origin_every), str(freeze.date()), '_causal', route], check=True)
 
 
 if __name__ == '__main__':
@@ -136,8 +141,13 @@ if __name__ == '__main__':
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--lab', type=Path, required=True)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--freeze', default=str(FREEZE.date()))
+    parser.add_argument('--origin-every', type=int, default=8)
     args = parser.parse_args()
+    freeze = pd.Timestamp(args.freeze, tz='Asia/Seoul')
+    if args.origin_every < 1:
+        parser.error('--origin-every must be positive')
     if args.stage == 'calibrate':
-        calibrate(args.source, args.lab)
+        calibrate(args.source, args.lab, freeze)
     else:
-        samples(args.source, args.lab, args.output)
+        samples(args.source, args.lab, args.output, freeze, args.origin_every)

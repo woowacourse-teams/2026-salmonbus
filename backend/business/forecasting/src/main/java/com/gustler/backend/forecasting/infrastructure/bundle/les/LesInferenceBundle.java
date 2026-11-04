@@ -25,7 +25,8 @@ import tools.jackson.databind.json.JsonMapper;
 /** 원본 파일·수치 대조·운영 검증 증거를 검사하는 레스 불변 묶음. */
 public final class LesInferenceBundle {
     private static final JsonMapper JSON = JsonMapper.builder().build();
-    private static final List<String> ROUTES = List.of("3330", "1650", "9007", "9300", "6011", "3000", "5600", "3500");
+    private static final List<String> SERVING_ROUTES = List.of(
+        "3330", "1650", "9007", "9300", "6011", "3000", "5600", "3500");
     private static final String SEAT_ORDER = "f4e11ff4c97b5fa88ef22ec37169c2698da0020efb2a746ea35012108dbd7d18";
     private static final String FULL_ORDER = "c00e89b56ec334f88aec52842102d2745097ac18222c06194f2affa9df4e2095";
     private final LesSeatPredictor predictor;
@@ -79,7 +80,7 @@ public final class LesInferenceBundle {
     }
 
     public List<String> routes() {
-        return ROUTES;
+        return List.copyOf(texts(statisticsManifest.get("routes")));
     }
 
     public JsonNode manifest() {
@@ -103,17 +104,18 @@ public final class LesInferenceBundle {
         Map<String, JsonNode> files = readDeclaredFiles(directory, manifest);
         validateFeatureContract(files);
         JsonNode statsManifest = required(files, "statistics-manifest.json");
+        require(text(statsManifest, "schema").equals("les-statistics-v1"), "통계 스키마가 다르다");
+        List<String> routes = texts(statsManifest.get("routes"));
+        require(hasValidRoutes(routes), "통계 노선 목록이 비었거나 잘못됐다");
         JsonNode routeReference = required(files, "route-reference.json");
         List<String> referencedRoutes = new ArrayList<>();
         for (JsonNode route : array(routeReference.get("routes"))) {
             referencedRoutes.add(text(route, "modelRoute"));
         }
-        for (String route : ROUTES) {
+        for (String route : routes) {
             require(referencedRoutes.stream().filter(route::equals).count() == 1, "노선 참조가 없거나 중복됐다");
         }
-        require(text(statsManifest, "schema").equals("les-statistics-v1"), "통계 스키마가 다르다");
-        require(texts(statsManifest.get("routes")).equals(ROUTES), "통계 노선 순서가 다르다");
-        Map<String, JsonNode> statistics = readStatistics(files);
+        Map<String, JsonNode> statistics = readStatistics(files, routes);
         LesSeatPredictor predictor = readPredictor(files);
         if (serving) {
             verifyServing(manifest, files);
@@ -148,9 +150,14 @@ public final class LesInferenceBundle {
             && text(contract, "probability_target").equals("departure-zero"), "입력 계약의 출력 의미가 다르다");
     }
 
-    private static Map<String, JsonNode> readStatistics(Map<String, JsonNode> files) {
+    private static boolean hasValidRoutes(List<String> routes) {
+        return !routes.isEmpty() && routes.stream().distinct().count() == routes.size()
+            && routes.stream().allMatch(route -> route.matches("[A-Za-z0-9][A-Za-z0-9-]{0,31}"));
+    }
+
+    private static Map<String, JsonNode> readStatistics(Map<String, JsonNode> files, List<String> routes) {
         Map<String, JsonNode> statistics = new HashMap<>();
-        for (String route : ROUTES) {
+        for (String route : routes) {
             JsonNode stats = required(files, "statistics-" + route + ".json");
             require(text(stats, "route").equals(route), "통계 노선이 다르다");
             require(number(stats.get("min_per_stop")) > 0, "정류장 이동시간이 잘못됐다");
@@ -181,7 +188,9 @@ public final class LesInferenceBundle {
         require(text(runtime, "feature_contract_version").equals("les-online-v1"), "서빙 입력 판이 다르다");
         require(text(runtime, "release_id").matches("[A-Za-z0-9][A-Za-z0-9._-]{0,119}"), "출시 식별자가 잘못됐다");
         verifyStatisticsCutoff(runtime, files);
-        require(texts(runtime.get("routes")).equals(ROUTES), "검증된 8개 노선만 서빙할 수 있다");
+        require(texts(runtime.get("routes")).equals(SERVING_ROUTES), "검증된 8개 노선만 서빙할 수 있다");
+        require(texts(required(files, "statistics-manifest.json").get("routes")).equals(SERVING_ROUTES),
+            "검증된 8개 노선의 통계만 서빙할 수 있다");
         require(text(runtime, "scope").equals("weekday-rush-6-10-17-21-horizon-1-12"), "지원 시각/거리가 다르다");
         String sourceDigest = text(runtime, "source_manifest_sha256");
         require(sourceDigest.matches("[a-f0-9]{64}"), "원본 묶음 식별자가 없다");
@@ -217,7 +226,7 @@ public final class LesInferenceBundle {
 
     private static void verifyStatisticsCutoff(JsonNode runtime, Map<String, JsonNode> files) {
         Instant through = Instant.parse(text(runtime, "data_through"));
-        for (String route : ROUTES) {
+        for (String route : SERVING_ROUTES) {
             JsonNode stats = required(files, "statistics-" + route + ".json");
             for (String cutoff : List.of("events_known_through", "observations_through")) {
                 Instant used = OffsetDateTime.parse(text(stats, cutoff).replace(' ', 'T')).toInstant();
