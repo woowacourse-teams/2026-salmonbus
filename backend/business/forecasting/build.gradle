@@ -17,3 +17,20 @@ dependencies {
     implementation project(':observations')
     implementation project(':operation-log')
 }
+
+// 원자료를 저장소에 넣지 않고 명시한 로컬 번들로만 Python/Java 결과를 대조한다.
+tasks.register('verifyLesParity', JavaExec) {
+    def bundlePath = providers.gradleProperty('lesBundle')
+    def resultPath = providers.gradleProperty('lesParityOutput')
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.gustler.backend.forecasting.infrastructure.bundle.les.LesParityCheck'
+    maxHeapSize = '384m'
+    jvmArgs '-XX:ActiveProcessorCount=1'
+    doFirst {
+        if (!bundlePath.isPresent() || !resultPath.isPresent()) {
+            throw new GradleException('-PlesBundle와 -PlesParityOutput 절대 경로가 필요하다')
+        }
+        args bundlePath.get(), resultPath.get()
+    }
+}
