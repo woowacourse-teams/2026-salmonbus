@@ -41,4 +41,26 @@ describe('알림 탭 칸', () => {
     assert.equal(inbox.receive({ key: 'n4@4', target: LATER }, true), 'send');
     assert.equal(inbox.take(), null);
   });
+
+  it('웹 문서가 뜨는 중에 누른 탭은 문서가 다 뜨면 한 번 내주고, 그 뒤에는 takeOpened에도 남지 않는다', () => {
+    const inbox = createTapInbox();
+    inbox.receive({ key: 'n1@1', target: TARGET }, false);
+    assert.deepEqual(inbox.releaseHeld(), { key: 'n1@1', target: TARGET });
+    assert.equal(inbox.releaseHeld(), null);
+    assert.equal(inbox.take(), null);
+  });
+
+  it('takeOpened가 먼저 가져간 탭은 문서가 다 떠도 다시 내주지 않는다', () => {
+    const inbox = createTapInbox();
+    inbox.receive({ key: 'n1@1', target: TARGET }, false);
+    assert.deepEqual(inbox.take(), TARGET);
+    assert.equal(inbox.releaseHeld(), null);
+  });
+
+  it('대상을 못 읽은 탭도 문서가 다 뜨면 한 번 내준다', () => {
+    const inbox = createTapInbox();
+    inbox.receive({ key: 'n1@1', target: null }, false);
+    assert.deepEqual(inbox.releaseHeld(), { key: 'n1@1', target: null });
+    assert.equal(inbox.releaseHeld(), null);
+  });
 });
