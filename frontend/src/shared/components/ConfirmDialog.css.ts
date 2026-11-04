@@ -13,7 +13,8 @@ export const dialog = style({
   selectors: { "&::backdrop": { background: "#0006" } },
 });
 
-export const dialogTitle = style({ fontSize: 18, margin: "0 0 12px" });
+// 제목은 열 때 포커스를 받는 자리일 뿐 누르는 컨트롤이 아니라서 포커스 테두리를 그리지 않는다.
+export const dialogTitle = style({ fontSize: 18, margin: "0 0 12px", selectors: { "&:focus": { outline: "none" } } });
 
 globalStyle(`${dialog} button:focus-visible`, { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 4 });
 globalStyle(`${POINTER_INPUT} ${dialog} button:focus`, { outline: "none" });
