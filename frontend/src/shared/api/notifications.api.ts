@@ -6,14 +6,13 @@ import type { ApnsEnvironment } from "../notification/notification.types";
 import type { NotificationSchedule } from "./notifications.types";
 
 const SETTINGS = "/api/me/notification-settings";
+const PUSH_DEVICES = "/api/me/push-devices";
 
-// BE 리뷰에서 device token이 경로 대신 본문으로 옮겨질 수 있어 주소는 이 파일에서만 만든다.
-const pushDevicePathOf = (token: string) => `/api/me/push-devices/${encodeURIComponent(token)}`;
-
+// 요청 경로는 오류 기록에 그대로 남아서 token은 본문으로만 보낸다.
 export const registerPushDevice = (token: string, environment: ApnsEnvironment) =>
-  parsedMemberRequest(pushDevicePathOf(token), { method: "PUT", body: { environment } }, emptyFrom);
+  parsedMemberRequest(PUSH_DEVICES, { method: "PUT", body: { token, environment } }, emptyFrom);
 export const unregisterPushDevice = (token: string) =>
-  parsedMemberRequest(pushDevicePathOf(token), { method: "DELETE" }, emptyFrom);
+  parsedMemberRequest(`${PUSH_DEVICES}/unregister`, { method: "POST", body: { token } }, emptyFrom);
 export const fetchNotificationSettings = (signal?: AbortSignal) =>
   parsedMemberRequest(SETTINGS, signal ? { signal } : {}, notificationSettingsFrom);
 export const saveNotificationSetting = (
