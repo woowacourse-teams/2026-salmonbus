@@ -90,6 +90,34 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     expect(notifications.requests).toEqual([]);
   });
 
+  test("알림 창을 열면 포커스가 창 안에 있지만 입력칸에는 없다", async ({ page }) => {
+    await openInApp(page);
+    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await expect(notificationSwitch(page)).toBeVisible();
+    // iOS WebView는 입력칸이 잠깐이라도 포커스를 받으면 시각 선택기를 열어 창을 가린다.
+    // Playwright로는 선택기가 보이지 않아, 원인인 포커스가 창을 여는 동안 어디로 갔는지를 모두 기록한다.
+    await page.evaluate(() => {
+      const focusedTags: string[] = [];
+      document.addEventListener("focusin", (event) => {
+        if (event.target instanceof Element && event.target.closest("dialog")) focusedTags.push(event.target.tagName);
+      });
+      Object.assign(window, { focusedTags });
+    });
+    await notificationSwitch(page).click();
+    const sheet = page.getByRole("dialog", { name: "출발 알림" });
+    await expect(sheet).toBeVisible();
+    const focus = await page.evaluate(() => {
+      const active = document.activeElement;
+      return {
+        insideDialog: active?.closest("dialog[open]") !== null,
+        focusedTags: Reflect.get(window, "focusedTags") as string[],
+      };
+    });
+    expect(focus.insideDialog).toBe(true);
+    expect(focus.focusedTags.length).toBeGreaterThan(0);
+    expect(focus.focusedTags.filter((tag) => ["INPUT", "TEXTAREA", "SELECT"].includes(tag))).toEqual([]);
+  });
+
   test("저장된 알림은 켜진 채로 보이고, 시각과 요일을 바꿔 저장하면 바꾼 값을 PUT으로 보내고 요약이 바뀐다", async ({
     page,
     notifications,
