@@ -6,6 +6,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 @Repository
 public class JdbcRouteDisplayRepository implements RouteDisplayRepository {
@@ -40,6 +43,25 @@ ORDER BY display.registered_at DESC,display.id DESC LIMIT 1
             """).params(generationKey, routeId, inputDigest, evidenceRevision, algorithmRevision)
             .query((row,index) -> new Automatic(row.getString(1),row.getString(2),row.getString(3))).optional();
     }
+    @Override
+    public Map<String, GenerationState> findGenerationStates(String routeId, String inputDigest,
+            String evidenceRevision, List<String> generationKeys) {
+        if (generationKeys.isEmpty()) return Map.of();
+        var rows = jdbc.sql("""
+            SELECT generation_key,status,
+                CASE WHEN status IN ('PENDING','SUPERSEDED') THEN attempts < attempt_limit
+                     WHEN status='RUNNING' THEN lease_until > clock_timestamp() OR attempts < attempt_limit
+                     ELSE false END AS can_progress
+            FROM route_display_generation_job
+            WHERE route_id=:routeId AND input_digest=:inputDigest AND evidence_revision=:evidenceRevision AND generation_key IN (:keys)
+            """).param("routeId",routeId).param("inputDigest",inputDigest).param("evidenceRevision",evidenceRevision)
+            .param("keys",generationKeys)
+            .query((row,n) -> Map.entry(row.getString(1),new GenerationState(row.getString(2),row.getBoolean(3)))).list();
+        var states = new HashMap<String, GenerationState>();
+        rows.forEach(entry -> states.put(entry.getKey(),entry.getValue()));
+        return Map.copyOf(states);
+    }
+
     @Override
     public Optional<SourceManifest> findSourceManifest(String id) {
         return jdbc.sql("""

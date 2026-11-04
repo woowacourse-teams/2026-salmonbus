@@ -25,7 +25,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest(classes = RouteDisplayGenerationWorkerTest.Config.class)
+@SpringBootTest(classes = RouteDisplayGenerationWorkerTest.Config.class,
+    properties = "route-geometry.generation.max-attempts=5")
 class RouteDisplayGenerationWorkerTest {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
@@ -195,6 +196,11 @@ class RouteDisplayGenerationWorkerTest {
         var display=json.readValue(jdbc.sql("SELECT document FROM route_display_automatic_artifact").query(String.class).single(),RouteDisplayGeometry.class);
         assertThat(display.quality().status()).isEqualTo(RouteDisplayGeometry.QualityStatus.WITHHELD);
         assertThat(display.paths()).isNull();assertThat(display.connections()).isEmpty();
+        assertThat(worker.runOne()).isTrue();
+        assertThat(jdbc.sql("SELECT status FROM route_display_generation_job").query(String.class).list())
+            .containsOnly("COMPLETED").hasSize(2);
+        assertThat(jdbc.sql("SELECT attempts FROM route_display_generation_job").query(Integer.class).list()).containsOnly(1);
+        worker.discover(ROUTE);assertThat(worker.runOne()).isFalse();
     }
     @Test void literal_null_supplementary_cache_is_marked_invalid_and_source_validation_still_completes() {
         jdbc.sql("UPDATE route_geometry SET evidence='null'::jsonb").update();
@@ -216,6 +222,50 @@ class RouteDisplayGenerationWorkerTest {
                 ? RouteDisplayGeometry.QualityStatus.SOURCE_ONLY : RouteDisplayGeometry.QualityStatus.PASSED);
         }
         assertThat(current().points()).hasSize(3);
+    }
+
+    @Test void transient_execution_failures_exhaust_the_persisted_budget_and_discovery_does_not_revive_it() {
+        worker.discover(ROUTE);
+        String sourceKey=jdbc.sql("SELECT generation_key FROM route_display_generation_job WHERE algorithm_revision=?")
+            .param(RouteDisplayGeneration.SOURCE_REVISION).query(String.class).single();
+        jdbc.sql("UPDATE route_display_generation_job SET status='SUPERSEDED' WHERE algorithm_revision=?")
+            .param(AutomaticRouteDisplay.REVISION).update();
+        var unavailable=org.mockito.Mockito.spy(source);
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataAccessResourceFailureException("temporary database failure"))
+            .when(unavailable).snapshotProvenanceMatches(org.mockito.Mockito.any(RouteGeometry.class),org.mockito.Mockito.nullable(String.class));
+        var failingWorker=new RouteDisplayGenerationWorker(store,unavailable,json,transactions,Optional.of(clock));
+        for(int attempt=1;attempt<=5;attempt++) {
+            assertThat(failingWorker.runOne()).isTrue();
+            assertThat(state(sourceKey)).isEqualTo(attempt==5?"FAILED":"PENDING");
+            if(attempt<5)jdbc.sql("UPDATE route_display_generation_job SET next_attempt_at=clock_timestamp()-interval '1 second' WHERE generation_key=?")
+                .param(sourceKey).update();
+        }
+        assertThat(failingWorker.runOne()).isFalse();assertThat(artifactCount()).isZero();
+        worker=restartedWorker();worker.discover(ROUTE);
+        assertThat(state(sourceKey)).isEqualTo("FAILED");
+        assertThat(jdbc.sql("SELECT attempts FROM route_display_generation_job WHERE generation_key=?").param(sourceKey).query(Integer.class).single()).isEqualTo(5);
+        // The independent full-generation job can still complete after source-only execution failed.
+        assertThat(worker.runOne()).isTrue();assertThat(artifactCount()).isEqualTo(1);
+        assertThat(worker.runOne()).isFalse();
+    }
+
+    @Test void malformed_immutable_snapshot_is_failed_once_instead_of_superseded_and_rediscovered() {
+        var g=RouteDisplayGeneration.at(current(),clock.instant());
+        String digest=RouteDisplayGeneration.input(g).digest(),evidence=g.shape().evidence().revision();
+        String key=RouteDisplayGeneration.key(digest,evidence,RouteDisplayGeneration.SOURCE_REVISION,g.shape().sourceManifestId());
+        store.enqueue(key,ROUTE,digest,evidence,RouteDisplayGeneration.SOURCE_REVISION,"{}",g.shape().sourceManifestId());
+        assertThat(worker.runOne()).isTrue();assertThat(state(key)).isEqualTo("FAILED");assertThat(artifactCount()).isZero();
+        worker.discover(ROUTE);
+        assertThat(state(key)).isEqualTo("FAILED");
+        assertThat(jdbc.sql("SELECT attempts || ':' || last_failure_code FROM route_display_generation_job WHERE generation_key=?")
+            .param(key).query(String.class).single()).isEqualTo("1:INVALID_SNAPSHOT");
+    }
+
+    @Test void retry_backoff_is_explicit_and_large_attempt_numbers_cannot_overflow() {
+        assertThat(java.util.stream.IntStream.rangeClosed(1,7).mapToObj(RouteDisplayGenerationWorker::retryDelay)
+            .map(Duration::toSeconds).toList()).containsExactly(10L,20L,40L,80L,160L,300L,300L);
+        assertThat(RouteDisplayGenerationWorker.retryDelay(Integer.MAX_VALUE)).isEqualTo(Duration.ofSeconds(300));
+        assertThatThrownBy(()->RouteDisplayGenerationWorker.retryDelay(0)).isInstanceOf(IllegalArgumentException.class);
     }
     private static class MutableClock extends Clock {
         private Instant now;

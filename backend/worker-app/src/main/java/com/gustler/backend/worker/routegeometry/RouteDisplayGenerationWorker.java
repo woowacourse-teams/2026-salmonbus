@@ -80,10 +80,15 @@ public class RouteDisplayGenerationWorker {
                 LOG.info("event=route_display_generation_superseded routeId={} generationKey={} attempt={} reason=ALGORITHM_RETIRED",job.routeId(),job.generationKey(),job.attempts());
                 return true;
             }
-            var snapshot=json.readValue(job.inputJson(),RouteGeometry.class);
-            if (!source.snapshotProvenanceMatches(snapshot,job.sourceManifestId()) || !matches(job,snapshot)) {
-                store.supersede(job);
-                LOG.info("event=route_display_generation_superseded routeId={} generationKey={} attempt={} reason=INVALID_SNAPSHOT",job.routeId(),job.generationKey(),job.attempts());
+            final RouteGeometry snapshot;
+            try { snapshot=json.readValue(job.inputJson(),RouteGeometry.class); }
+            catch (RuntimeException malformed) {
+                rejectSnapshot(job);
+                return true;
+            }
+            if (!snapshotMatches(job,snapshot)
+                    || !source.snapshotProvenanceMatches(snapshot,job.sourceManifestId())) {
+                rejectSnapshot(job);
                 return true;
             }
             var generated=job.algorithmRevision().equals(RouteDisplayGeneration.SOURCE_REVISION)
@@ -97,10 +102,12 @@ public class RouteDisplayGenerationWorker {
                     job.routeId(),job.generationKey(),job.attempts(),elapsedMillis(started),generated.quality().status());
             publish(job,document);
         } catch(RuntimeException failure) {
-            long delay=Math.min(300,1L << Math.min(job.attempts(),8));
-            store.fail(job,Duration.ofSeconds(delay));
-            LOG.warn("event=route_display_generation_failed routeId={} generationKey={} attempt={} elapsedMs={} retryDelaySeconds={} failureType={}",
-                    job.routeId(),job.generationKey(),job.attempts(),elapsedMillis(started),delay,failure.getClass().getSimpleName());
+            Duration delay=retryDelay(job.attempts());
+            var outcome=store.failWithOutcome(job,delay,"EXECUTION_ERROR");
+            LOG.warn("event=route_display_generation_failed routeId={} generationKey={} attempt={} elapsedMs={} outcome={} retryDelaySeconds={} failureType={}",
+                    job.routeId(),job.generationKey(),job.attempts(),elapsedMillis(started),outcome,
+                    outcome==JdbcRouteDisplayGenerationStore.FailureOutcome.RETRY_SCHEDULED?delay.toSeconds():0,
+                    failure.getClass().getSimpleName());
         }
         return true;
     }
@@ -108,9 +115,11 @@ public class RouteDisplayGenerationWorker {
         if(job.algorithmRevision().equals(com.gustler.backend.worker.routegeometry.reference.ReferenceShadowGeneration.ALGORITHM))
             throw new IllegalArgumentException("Shadow artifacts cannot enter display publication");
         long started=System.nanoTime();
-        var snapshot=json.readValue(job.inputJson(),RouteGeometry.class);
-        if(!source.snapshotProvenanceMatches(snapshot,job.sourceManifestId()) || !matches(job,snapshot)) {
-            store.supersede(job);
+        final RouteGeometry snapshot;
+        try { snapshot=json.readValue(job.inputJson(),RouteGeometry.class); }
+        catch (RuntimeException malformed) { rejectSnapshot(job); return false; }
+        if(!snapshotMatches(job,snapshot) || !source.snapshotProvenanceMatches(snapshot,job.sourceManifestId())) {
+            store.reject(job,"INVALID_SNAPSHOT");
             LOG.info("event=route_display_publication routeId={} generationKey={} attempt={} outcome=INVALID_SNAPSHOT publicationMs={}",
                 job.routeId(),job.generationKey(),job.attempts(),elapsedMillis(started));
             return false;
@@ -141,6 +150,21 @@ public class RouteDisplayGenerationWorker {
 
     private static long elapsedMillis(long started) {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-started);
+    }
+    static Duration retryDelay(int attempt) {
+        if (attempt < 1) throw new IllegalArgumentException("Attempt must be positive");
+        return Duration.ofSeconds(Math.min(300,10L << Math.min(attempt-1,5)));
+    }
+
+    private void rejectSnapshot(JdbcRouteDisplayGenerationStore.Job job) {
+        boolean rejected=store.reject(job,"INVALID_SNAPSHOT");
+        LOG.warn("event=route_display_generation_rejected routeId={} generationKey={} attempt={} reason=INVALID_SNAPSHOT ownershipHeld={}",
+                job.routeId(),job.generationKey(),job.attempts(),rejected);
+    }
+
+    private boolean snapshotMatches(JdbcRouteDisplayGenerationStore.Job job,RouteGeometry geometry) {
+        try { return geometry!=null && geometry.shape()!=null && matches(job,geometry); }
+        catch (RuntimeException invalid) { return false; }
     }
     private boolean matches(JdbcRouteDisplayGenerationStore.Job job,RouteGeometry g) {
         return job.routeId().equals(g.routeId()) && job.inputDigest().equals(RouteDisplayGeneration.input(g).digest())

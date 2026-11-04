@@ -150,5 +150,21 @@ class RouteGeometryControllerTest {
         }
         return new Shape(UUID.fromString("00000000-0000-0000-0000-000000000001"), Instant.EPOCH,
             List.of(new Point(127, 37), new Point(127.2, 37.2), new Point(127, 37)));
+    }    @Test
+    void 생성대기는_noStore로_재조회하고_최종보류와_구분한다() throws Exception {
+        var raw=geometry(127.1,true);
+        var pending=raw.withDisplay(new com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry(null,java.util.Map.of(),java.util.Map.of(),"pending/key",
+                com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.Source.AUTOMATIC_FALLBACK,List.of(),
+                new com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.Quality(
+                        com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.QualityStatus.WITHHELD,
+                        List.of(new com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.QualityIssue("GENERATION_PENDING",null,null,null))),raw.paths()));
+        when(service.get(any(),any())).thenReturn(pending);
+        mvc.perform(get(PATH).header("If-None-Match","*"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.reason").value("GENERATION_PENDING"))
+                .andExpect(jsonPath("$.points").isEmpty()).andExpect(jsonPath("$.paths").isEmpty())
+                .andExpect(jsonPath("$.busStops[0].pathConnection").doesNotExist())
+                .andExpect(header().string("Cache-Control","no-store")).andExpect(header().doesNotExist("ETag"));
     }
+
+
 }

@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
+import java.util.UUID;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,8 +18,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.core.io.ClassPathResource;
 
-@SpringBootTest(classes = JdbcRouteDisplayGenerationStoreTest.Config.class)
+@SpringBootTest(classes = JdbcRouteDisplayGenerationStoreTest.Config.class,
+    properties = "route-geometry.generation.max-attempts=5")
 class JdbcRouteDisplayGenerationStoreTest {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
@@ -26,6 +30,7 @@ class JdbcRouteDisplayGenerationStoreTest {
 
     @Autowired JdbcClient jdbc;
     @Autowired JdbcRouteDisplayGenerationStore store;
+    @Autowired DataSource dataSource;
     private static final Duration LEASE = Duration.ofMinutes(5);
     private static final String KEY = "a".repeat(64);
     private static final String DOCUMENT = "{\"quality\": \"SOURCE_ONLY\"}";
@@ -165,5 +170,117 @@ class JdbcRouteDisplayGenerationStoreTest {
         assertThatThrownBy(() -> jdbc.sql("DELETE FROM route_display_automatic_artifact").update())
             .isInstanceOf(org.springframework.dao.DataAccessException.class);
         assertThat(jdbc.sql("SELECT document FROM route_display_automatic_artifact").query(String.class).single()).isEqualTo(DOCUMENT);
+    }
+
+    @Test
+    void fifth_execution_failure_is_terminal_and_rediscovery_or_restart_cannot_reset_it() {
+        enqueue();
+        JdbcRouteDisplayGenerationStore.Job last = null;
+        for (int attempt=1; attempt<=5; attempt++) {
+            last=store.claim(LEASE).orElseThrow();
+            assertThat(last.attempts()).isEqualTo(attempt);
+            assertThat(store.failWithOutcome(last,Duration.ofSeconds(1),"EXECUTION_ERROR"))
+                .isEqualTo(attempt==5 ? JdbcRouteDisplayGenerationStore.FailureOutcome.FAILED
+                    : JdbcRouteDisplayGenerationStore.FailureOutcome.RETRY_SCHEDULED);
+            if (attempt<5) jdbc.sql("UPDATE route_display_generation_job SET next_attempt_at=clock_timestamp()-interval '1 second'").update();
+        }
+        var failed=jdbc.sql("SELECT status,attempts,attempt_limit,last_failure_code,failed_at IS NOT NULL FROM route_display_generation_job")
+            .query((r,n)->List.of(r.getString(1),Integer.toString(r.getInt(2)),Integer.toString(r.getInt(3)),r.getString(4),Boolean.toString(r.getBoolean(5)))).single();
+        assertThat(failed).containsExactly("FAILED","5","5","EXECUTION_ERROR","true");
+        var restarted=new JdbcRouteDisplayGenerationStore(jdbc,99);
+        restarted.enqueue(KEY,"204000057","b".repeat(64),"evidence-v1","algorithm-v1","{\"input\":1}");
+        assertThat(restarted.claim(LEASE)).isEmpty();
+        assertThat(jdbc.sql("SELECT attempt_limit FROM route_display_generation_job").query(Integer.class).single()).isEqualTo(5);
+        assertThat(store.complete(last,DOCUMENT,JdbcRouteDisplayGenerationStore.sha256(DOCUMENT))).isFalse();
+        assertThat(store.fail(last,Duration.ofSeconds(1))).isFalse();
+        assertThat(store.reject(last,"INVALID_SNAPSHOT")).isFalse();
+        // A different generation key has an independent execution budget.
+        store.enqueue("c".repeat(64),"204000057","d".repeat(64),"evidence-v2","algorithm-v1","{}");
+        assertThat(store.claim(LEASE).orElseThrow().attempts()).isEqualTo(1);
+    }
+
+    @Test
+    void last_live_lease_can_complete_but_its_expiry_is_terminal_without_another_claim() {
+        var oneAttempt=new JdbcRouteDisplayGenerationStore(jdbc,1);
+        oneAttempt.enqueue(KEY,"204000057","b".repeat(64),"evidence-v1","algorithm-v1","{}");
+        var last=oneAttempt.claim(LEASE).orElseThrow();
+        assertThat(oneAttempt.claim(LEASE)).isEmpty();
+        assertThat(jdbc.sql("SELECT status FROM route_display_generation_job").query(String.class).single()).isEqualTo("RUNNING");
+        expire();
+        assertThat(oneAttempt.claim(LEASE)).isEmpty();
+        assertThat(jdbc.sql("SELECT status || ':' || last_failure_code FROM route_display_generation_job").query(String.class).single())
+            .isEqualTo("FAILED:LEASE_EXPIRED");
+        assertThat(jdbc.sql("SELECT attempts FROM route_display_generation_job").query(Integer.class).single()).isEqualTo(1);
+        assertThat(store.complete(last,DOCUMENT,JdbcRouteDisplayGenerationStore.sha256(DOCUMENT))).isFalse();
+        assertThat(store.fail(last,Duration.ofSeconds(1))).isFalse();
+        assertThat(store.supersede(last)).isFalse();
+        assertThat(store.reject(last,"INVALID_SNAPSHOT")).isFalse();
+    }
+
+    @Test
+    void the_final_valid_attempt_may_publish_successfully() {
+        var oneAttempt=new JdbcRouteDisplayGenerationStore(jdbc,1);
+        oneAttempt.enqueue(KEY,"204000057","b".repeat(64),"evidence-v1","algorithm-v1","{}");
+        var last=oneAttempt.claim(LEASE).orElseThrow();
+        assertThat(store.complete(last,DOCUMENT,JdbcRouteDisplayGenerationStore.sha256(DOCUMENT))).isTrue();
+        assertThat(oneAttempt.claim(LEASE)).isEmpty();
+        assertThat(jdbc.sql("SELECT status FROM route_display_generation_job").query(String.class).single()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void exhausted_pending_rows_are_retired_instead_of_remaining_unclaimable_forever() {
+        enqueue();
+        jdbc.sql("UPDATE route_display_generation_job SET attempts=attempt_limit").update();
+        assertThat(store.claim(LEASE)).isEmpty();
+        assertThat(jdbc.sql("SELECT status || ':' || last_failure_code FROM route_display_generation_job").query(String.class).single())
+            .isEqualTo("FAILED:ATTEMPTS_EXHAUSTED");
+        assertThat(jdbc.sql("SELECT failed_at IS NOT NULL AND last_failure_at IS NOT NULL FROM route_display_generation_job")
+            .query(Boolean.class).single()).isTrue();
+    }
+
+    @Test
+    void permanent_rejection_ends_an_unused_budget_and_cannot_be_rediscovered() {
+        enqueue();var job=store.claim(LEASE).orElseThrow();
+        assertThat(store.reject(job,"INVALID_SNAPSHOT")).isTrue();
+        enqueue();assertThat(store.claim(LEASE)).isEmpty();
+        assertThat(jdbc.sql("SELECT status || ':' || attempts FROM route_display_generation_job").query(String.class).single())
+            .isEqualTo("FAILED:1");
+        assertThat(store.reject(job,"INVALID_SNAPSHOT")).isFalse();
+    }
+
+    @Test
+    void database_budget_rejects_an_extra_attempt_even_if_an_old_worker_ignores_the_limit() {
+        enqueue();
+        assertThatThrownBy(()->jdbc.sql("UPDATE route_display_generation_job SET attempts=attempt_limit+1").update())
+            .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(jdbc.sql("SELECT attempts FROM route_display_generation_job").query(Integer.class).single()).isZero();
+        assertThatThrownBy(()->new JdbcRouteDisplayGenerationStore(jdbc,0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void failure_migration_preserves_existing_attempt_history_above_the_new_default() throws Exception {
+        String schema="retry_budget_"+UUID.randomUUID().toString().replace("-", "");
+        String oldSchema;
+        try (var connection=dataSource.getConnection();var statement=connection.createStatement()) {
+            oldSchema=connection.getSchema();statement.execute("CREATE SCHEMA "+schema);
+            try {
+                connection.setSchema(schema);
+                String original=new ClassPathResource("db/migration/V49__route_display_generation.sql")
+                    .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                // Exercise the actual legacy job/artifact DDL without unrelated trigger definitions.
+                statement.execute(original.substring(0,original.indexOf("-- Published artifacts")));
+                statement.executeUpdate("INSERT INTO route_display_generation_job(generation_key,route_id,input_digest,evidence_revision,algorithm_revision,input_json,attempts) VALUES ('"+
+                    KEY+"','204000057','"+"b".repeat(64)+"','evidence','algorithm','{}',8)");
+                statement.execute(new ClassPathResource("db/migration/V51__route_display_generation_failure.sql")
+                    .getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                try (var result=statement.executeQuery("SELECT attempts,attempt_limit FROM route_display_generation_job")) {
+                    assertThat(result.next()).isTrue();assertThat(result.getInt(1)).isEqualTo(8);assertThat(result.getInt(2)).isEqualTo(8);
+                }
+                assertThatThrownBy(()->statement.executeUpdate("UPDATE route_display_generation_job SET attempts=9"))
+                    .isInstanceOf(java.sql.SQLException.class);
+            } finally {
+                connection.setSchema(oldSchema);statement.execute("DROP SCHEMA "+schema+" CASCADE");
+            }
+        }
     }
 }

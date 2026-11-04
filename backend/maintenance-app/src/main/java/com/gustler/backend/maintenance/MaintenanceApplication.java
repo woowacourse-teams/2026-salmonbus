@@ -57,6 +57,7 @@ public final class MaintenanceApplication {
         return switch (arguments.command()) {
             case "bundle-check" -> bundleCheck(arguments);
             case "route-display-export", "route-display-status", "route-display-import", "route-display-disable" -> RouteDisplayCommand.run(arguments);
+            case "route-display-retry" -> RouteDisplayRetryCommand.run(arguments);
             case "quality-preview", "quality-rebuild", "quality-status" -> quality(arguments);
             default -> throw new MaintenanceException("UNKNOWN_COMMAND");
         };

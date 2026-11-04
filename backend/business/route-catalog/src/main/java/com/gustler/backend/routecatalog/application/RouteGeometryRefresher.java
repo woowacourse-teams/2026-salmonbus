@@ -24,6 +24,7 @@ import java.util.Optional;
 /** HTTP 대기 중에는 DB 트랜잭션을 열지 않고 정상 변경만 발행한다. */
 @Component
 public class RouteGeometryRefresher implements RefreshRouteGeometry {
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(RouteGeometryRefresher.class);
     private final RouteSourceArchive archive;
     private final RouteGeometryStore store;
     private final RouteGeometrySource source;
@@ -55,6 +56,20 @@ public class RouteGeometryRefresher implements RefreshRouteGeometry {
 
     @Override
     public Outcome refresh(String routeId, OffsetDateTime requestedAt) {
+        long started = System.nanoTime();
+        Outcome outcome = null;
+        try {
+            outcome = refreshOnce(routeId, requestedAt);
+            return outcome;
+        } finally {
+            String publicRouteId = routeId != null && routeId.matches("[0-9]{9}") ? routeId : "INVALID";
+            LOG.info("event=route_geometry_acquisition_timing routeId={} outcome={} durationMs={}",
+                    publicRouteId, outcome == null ? "FAILED" : outcome,
+                    (System.nanoTime() - started) / 1_000_000);
+        }
+    }
+
+    private Outcome refreshOnce(String routeId, OffsetDateTime requestedAt) {
         Optional<Reference> reference = store.current(routeId);
         if (reference.isEmpty()) {
             return Outcome.NO_REFERENCE;

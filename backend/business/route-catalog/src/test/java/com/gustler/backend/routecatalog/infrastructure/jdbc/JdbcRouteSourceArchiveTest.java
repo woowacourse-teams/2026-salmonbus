@@ -12,8 +12,14 @@ import com.gustler.backend.support.PostgresTestContainer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Collections;
+import java.util.function.Supplier;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,9 +28,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest(classes = JdbcRouteSourceArchiveTest.Config.class)
+@ExtendWith(OutputCaptureExtension.class)
 class JdbcRouteSourceArchiveTest {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
@@ -35,6 +44,7 @@ class JdbcRouteSourceArchiveTest {
     @Autowired RouteSourceArchive archive;
     @Autowired JdbcClient jdbc;
     @Autowired ObjectMapper json;
+    @Autowired DataSource dataSource;
     private static final Instant TIME = Instant.parse("2026-11-02T00:00:00.123456789Z");
     private static final byte[] BODY = "{\n  \"name\": \"정류장\", \"x\": 127.1000\n}\n".getBytes(StandardCharsets.UTF_8);
     private long routeId;
@@ -192,4 +202,129 @@ class JdbcRouteSourceArchiveTest {
             .isInstanceOf(RuntimeException.class);
         assertThat(count("route_source_manifest")).isEqualTo(33);
     }
+
+    @Test
+    void one_record_reuses_the_verified_bms_receipt_but_later_operations_read_it_again(CapturedOutput output) {
+        String shared = archive.record("BMS_SHARED", List.of(success("BMS", "LINKS", "SHARED", TIME)), List.of());
+        String receiptId = receiptId(shared);
+        var observed = observedArchive();
+        String first = observed.transaction(() -> observed.archive().record("ROUTE_SHAPE",
+            List.of(success("GBIS_API", "SHAPE", "204000057", TIME)), List.of(shared)));
+        assertThat(observed.source().reads(receiptId)).isEqualTo(1);
+        assertThat(observed.source().bodyBytes(receiptId)).isEqualTo(BODY.length);
+        String recordLog = output.getOut().lines()
+            .filter(line -> line.contains("event=route_source_archive_record") && line.contains("manifestId=" + first))
+            .findFirst().orElseThrow();
+        assertThat(recordLog).contains("phase=METHOD", "transactionCommitIncluded=false", "outcome=VALIDATED",
+            "dbReceiptReads=2", "dbBodyBytes=" + (2 * BODY.length), "receiptCacheHits=1");
+
+        observed.transaction(() -> observed.archive().record("ROUTE_SHAPE",
+            List.of(success("GBIS_API", "SHAPE", "204000058", TIME)), List.of(shared)));
+        assertThat(observed.source().reads(receiptId)).isEqualTo(2);
+        observed.transaction(() -> observed.archive().restore(first));
+        assertThat(observed.source().reads(receiptId)).isEqualTo(3);
+        observed.transaction(() -> observed.archive().bind(routeId, versionId, first, input(), RouteShapeEvidence.EMPTY));
+        assertThat(observed.source().reads(receiptId)).isEqualTo(4);
+        assertThat(observed.source().bodyBytes(receiptId)).isEqualTo(4L * BODY.length);
+    }
+
+    @Test
+    void cached_receipts_still_count_toward_the_final_traversal_budget_and_roll_back() {
+        String shared = capture();
+        String receiptId = receiptId(shared);
+        String repeated = repeatedReceiptManifest(receiptId, 10000);
+        var observed = observedArchive();
+        assertThat(observed.transaction(() -> observed.archive().restore(repeated)).receipts()).hasSize(10000);
+        assertThat(observed.source().reads(receiptId)).isEqualTo(1);
+        observed.source().resetCounts();
+        int manifests = count("route_source_manifest"), receipts = count("route_source_receipt");
+        var unavailable = new RouteSourceReceipt("GBIS_WEB", "SHAPE", "204000057", Status.HTTP_ERROR,
+            503, TIME, "UNKNOWN", CoordinateSystem.UNKNOWN, null);
+
+        assertThatThrownBy(() -> observed.transaction(() -> observed.archive().record("OVER_RECEIPTS",
+            List.of(unavailable), List.of(repeated))))
+            .isInstanceOf(IllegalStateException.class).hasMessage("Archive receipt count exceeded");
+        assertThat(observed.source().reads(receiptId)).isEqualTo(1);
+        assertThat(count("route_source_manifest")).isEqualTo(manifests);
+        assertThat(count("route_source_receipt")).isEqualTo(receipts);
+    }
+
+    @Test
+    void cached_body_bytes_are_counted_and_new_bytes_are_not_double_counted() {
+        byte[] megabyte = ("\"" + "a".repeat(1024 * 1024 - 2) + "\"").getBytes(StandardCharsets.UTF_8);
+        var bms = new RouteSourceReceipt("BMS", "NODES", "SHARED", Status.SUCCESS, 200, TIME,
+            "20261102", CoordinateSystem.WGS84_ASSUMED, megabyte);
+        String shared = archive.record("BMS_SHARED", List.of(bms), List.of());
+        String receiptId = receiptId(shared);
+        String almostFull = repeatedReceiptManifest(receiptId, 511);
+        var observed = observedArchive();
+        var own = new RouteSourceReceipt("GBIS_API", "SHAPE", "204000057", Status.SUCCESS, 200, TIME,
+            "20261102", CoordinateSystem.WGS84_ASSUMED, megabyte);
+        String full = observed.transaction(() -> observed.archive().record("EXACT_BYTE_LIMIT", List.of(own), List.of(almostFull)));
+        assertThat(observed.source().reads(receiptId)).isEqualTo(1);
+        assertThat(observed.source().bodyBytes(receiptId)).isEqualTo(megabyte.length);
+        assertThat(observed.transaction(() -> observed.archive().restore(full)).receipts()).containsExactly(own);
+        int manifests = count("route_source_manifest");
+        assertThatThrownBy(() -> observed.transaction(() -> observed.archive().record("OVER_BYTE_LIMIT", List.of(own), List.of(full))))
+            .isInstanceOf(IllegalStateException.class).hasMessage("Archive exceeds byte budget");
+        assertThat(count("route_source_manifest")).isEqualTo(manifests);
+    }
+
+    @Test
+    void final_manifest_relations_are_rechecked_even_when_its_reused_receipt_is_cached() {
+        String shared = capture();
+        archive.record("EXTRA", List.of(success("GBIS_API", "SHAPE", "204000058", TIME)), List.of());
+        int manifests = count("route_source_manifest");
+        jdbc.sql("""
+            CREATE FUNCTION test_corrupt_archive_reuse() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+                IF NEW.ordinal=0 AND (SELECT purpose FROM route_source_manifest WHERE manifest_id=NEW.manifest_id)='CHECKED_ROOT' THEN
+                    INSERT INTO route_source_manifest_reuse(manifest_id,ordinal,reused_manifest_id)
+                    SELECT NEW.manifest_id,1,manifest_id FROM route_source_manifest WHERE purpose='EXTRA' LIMIT 1;
+                END IF;
+                RETURN NEW;
+            END;
+            $$
+            """).update();
+        jdbc.sql("CREATE TRIGGER test_corrupt_archive_reuse AFTER INSERT ON route_source_manifest_reuse FOR EACH ROW EXECUTE FUNCTION test_corrupt_archive_reuse()")
+            .update();
+        try {
+            var observed = observedArchive();
+            assertThatThrownBy(() -> observed.transaction(() -> observed.archive().record("CHECKED_ROOT", List.of(), List.of(shared))))
+                .isInstanceOf(IllegalStateException.class).hasMessage("Acquisition manifest reference mismatch");
+            assertThat(observed.source().reads(receiptId(shared))).isEqualTo(1);
+            assertThat(count("route_source_manifest")).isEqualTo(manifests);
+        } finally {
+            jdbc.sql("DROP TRIGGER test_corrupt_archive_reuse ON route_source_manifest_reuse").update();
+            jdbc.sql("DROP FUNCTION test_corrupt_archive_reuse()").update();
+        }
+    }
+
+    private String receiptId(String manifest) {
+        return jdbc.sql("SELECT receipt_id FROM route_source_manifest_receipt WHERE manifest_id=? ORDER BY ordinal LIMIT 1")
+            .param(manifest).query(String.class).single();
+    }
+
+    private String repeatedReceiptManifest(String receiptId, int count) {
+        String document = json.writeValueAsString(new JdbcRouteSourceArchive.ManifestDocument(
+            "route-source-manifest-v1", "REPEATED_RECEIPT", Collections.nCopies(count, receiptId), List.of()));
+        String id = RouteSourceReceipt.sha256(document.getBytes(StandardCharsets.UTF_8));
+        jdbc.sql("INSERT INTO route_source_manifest(manifest_id,purpose,document) VALUES (?,'REPEATED_RECEIPT',?)")
+            .params(id, document).update();
+        jdbc.sql("INSERT INTO route_source_manifest_receipt(manifest_id,ordinal,receipt_id) SELECT ?,n,? FROM generate_series(0,?) n")
+            .params(id, receiptId, count - 1).update();
+        return id;
+    }
+
+    private ObservedArchive observedArchive() {
+        var source = new ReceiptReadCountingDataSource(dataSource);
+        return new ObservedArchive(new JdbcRouteSourceArchive(JdbcClient.create(source), json), source);
+    }
+
+    private record ObservedArchive(JdbcRouteSourceArchive archive, ReceiptReadCountingDataSource source) {
+        <T> T transaction(Supplier<T> action) {
+            return new TransactionTemplate(new DataSourceTransactionManager(source)).execute(status -> action.get());
+        }
+    }
+
 }

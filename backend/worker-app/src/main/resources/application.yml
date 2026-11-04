@@ -135,6 +135,8 @@ forecast:
 route-geometry:
   generation:
     enabled: ${ROUTE_GEOMETRY_GENERATION_ENABLED:false}
+    # The budget is persisted per job; changing this default does not reset existing work.
+    max-attempts: ${ROUTE_GEOMETRY_GENERATION_MAX_ATTEMPTS:5}
     poll-delay-ms: 10000
     shadow:
       enabled: ${ROUTE_GEOMETRY_SHADOW_ENABLED:false}

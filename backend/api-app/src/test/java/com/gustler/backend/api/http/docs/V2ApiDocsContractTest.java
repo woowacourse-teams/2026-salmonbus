@@ -76,7 +76,7 @@ class V2ApiDocsContractTest {
         assertThat(generatedRules).isEqualTo(sharedRules);
         assertThat(generatedRules.at("/0/then/properties/reason/const").isMissingNode()).isTrue();
         assertThat(generatedRules.at("/0/then/properties/reason/enum")).isEqualTo(
-                json.readTree("[\"NOT_COLLECTED\",\"DISPLAY_WITHHELD\"]"));
+                json.readTree("[\"NOT_COLLECTED\",\"GENERATION_PENDING\",\"DISPLAY_WITHHELD\"]"));
         // Check every actual example against the status-dependent reason/shape constraints.
         for (JsonNode example : operation(GEOMETRY).at("/responses/200/content/application~1json/examples")) {
             JsonNode value = example.path("value");

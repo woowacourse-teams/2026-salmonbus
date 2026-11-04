@@ -201,6 +201,7 @@ class RouteDisplayLifecycleTest {
         String path="/api/v2/routes/"+ID.value()+"/geometry";
         jdbc.sql("UPDATE route_stop_location_history SET y=y+0.0006 WHERE stop_order=1").update();
         installAutomatic(current());
+        putGenerationJob(current(),RouteDisplayGeneration.SOURCE_REVISION,"COMPLETED",1,5,null);
         mvc.perform(get(path).param("includeDiagnostics", "true")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayQuality.status").value("WITHHELD"))
                 .andExpect(jsonPath("$.displayPaths").doesNotExist())
@@ -214,6 +215,57 @@ class RouteDisplayLifecycleTest {
                 .andExpect(jsonPath("$.paths").isEmpty())
                 .andExpect(jsonPath("$.busStops[0].point.y").value(37.0006))
                 .andExpect(jsonPath("$.busStops[0].pathConnection").doesNotExist());
+    }
+
+    private void putGenerationJob(RouteGeometry g,String algorithm,String status,int attempts,int limit,String lease) {
+        String digest=RouteDisplayGeneration.input(g).digest(),evidence=g.shape().evidence().revision();
+        jdbc.sql("""
+            INSERT INTO route_display_generation_job
+                (generation_key,route_id,input_digest,evidence_revision,algorithm_revision,input_json,status,
+                 attempts,attempt_limit,lease_token,lease_until,last_failure_code,last_failure_at,failed_at)
+            VALUES (?,?,?,?,?,CAST(? AS jsonb),?,?,?,CAST(? AS uuid),CAST(? AS timestamptz),?,
+                CASE WHEN ?='FAILED' THEN clock_timestamp() ELSE NULL END,
+                CASE WHEN ?='FAILED' THEN clock_timestamp() ELSE NULL END)
+            ON CONFLICT(generation_key) DO UPDATE SET status=excluded.status,attempts=excluded.attempts,
+                attempt_limit=excluded.attempt_limit,lease_token=excluded.lease_token,lease_until=excluded.lease_until,
+                last_failure_code=excluded.last_failure_code,last_failure_at=excluded.last_failure_at,failed_at=excluded.failed_at
+            """).params(RouteDisplayGeneration.key(digest,evidence,algorithm,g.shape().sourceManifestId()),
+                g.routeId(),digest,evidence,algorithm,json.writeValueAsString(g.withDisplay(null)),status,attempts,limit,
+                lease==null?null:UUID.randomUUID().toString(),lease,status.equals("FAILED")?"EXECUTION_FAILED":null,status,status).update();
+    }
+
+    @Test
+    void DB시각으로_마지막lease와_시도예산을_판정하고_두종료후에만_표시를_보류한다() throws Exception {
+        var g=current();jdbc.sql("TRUNCATE route_display_generation_job CASCADE").update();
+        var mvc=MockMvcBuilders.standaloneSetup(new RouteGeometryController(service)).build();String path="/api/v2/routes/"+ID.value()+"/geometry";
+        putGenerationJob(g,RouteDisplayGeneration.SOURCE_REVISION,"FAILED",1,5,null);
+        for (String[] test:List.of(new String[]{"PENDING","4",null,"GENERATION_PENDING"},
+                new String[]{"PENDING","5",null,"DISPLAY_WITHHELD"},
+                new String[]{"SUPERSEDED","4",null,"GENERATION_PENDING"},
+                new String[]{"SUPERSEDED","5",null,"DISPLAY_WITHHELD"},
+                new String[]{"RUNNING","5","2099-01-01T00:00:00Z","GENERATION_PENDING"},
+                new String[]{"RUNNING","5","2000-01-01T00:00:00Z","DISPLAY_WITHHELD"},
+                new String[]{"RUNNING","4","2000-01-01T00:00:00Z","GENERATION_PENDING"},
+                new String[]{"FAILED","5",null,"DISPLAY_WITHHELD"},
+                new String[]{"COMPLETED","1",null,"DISPLAY_WITHHELD"})) {
+            putGenerationJob(g,AutomaticRouteDisplay.REVISION,test[0],Integer.parseInt(test[1]),5,test[2]);
+            mvc.perform(get(path)).andExpect(status().isOk()).andExpect(jsonPath("$.reason").value(test[3]))
+                    .andExpect(jsonPath("$.points").isEmpty()).andExpect(jsonPath("$.paths").isEmpty())
+                    .andExpect(header().string("Cache-Control","no-store")).andExpect(header().doesNotExist("ETag"));
+        }
+    }
+
+    @Test
+    void 이전입력의_종료작업은_새입력의_생성대기를_막지않는다() throws Exception {
+        var g=current();jdbc.sql("TRUNCATE route_display_generation_job CASCADE").update();
+        putGenerationJob(g,AutomaticRouteDisplay.REVISION,"FAILED",5,5,null);
+        putGenerationJob(g,RouteDisplayGeneration.SOURCE_REVISION,"FAILED",5,5,null);
+        var before=current();
+        jdbc.sql("UPDATE route_stop_location_history SET x=x+0.00001 WHERE stop_order=1").update();
+        var after=current();
+        assertThat(before.display().quality().issues()).extracting(i->i.code()).containsExactly("GENERATION_FAILED");
+        assertThat(after.display().quality().issues()).extracting(i->i.code()).containsExactly("GENERATION_PENDING");
+        assertThat(after.revision()).isNotEqualTo(before.revision());
     }
 
 }

@@ -7,6 +7,8 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,9 +17,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class JdbcRouteDisplayGenerationStore {
     private final JdbcClient jdbc;
+    private final int attemptLimit;
 
     public JdbcRouteDisplayGenerationStore(JdbcClient jdbc) {
+        this(jdbc, 5);
+    }
+
+    @Autowired
+    public JdbcRouteDisplayGenerationStore(JdbcClient jdbc,
+            @Value("${route-geometry.generation.max-attempts:5}") int attemptLimit) {
+        if (attemptLimit < 1) throw new IllegalArgumentException("Attempt limit must be positive");
         this.jdbc = jdbc;
+        this.attemptLimit = attemptLimit;
     }
 
     public record Job(String generationKey, String routeId, String inputDigest,
@@ -32,21 +43,44 @@ public class JdbcRouteDisplayGenerationStore {
             String algorithmRevision,String inputJson,String sourceManifestId) {
         jdbc.sql("""
             INSERT INTO route_display_generation_job
-                (generation_key,route_id,input_digest,evidence_revision,algorithm_revision,input_json,source_manifest_id)
-            VALUES (?,?,?,?,?,CAST(? AS jsonb),?) ON CONFLICT (generation_key) DO UPDATE
-            SET status='PENDING',next_attempt_at=clock_timestamp(),updated_at=clock_timestamp()
+                (generation_key,route_id,input_digest,evidence_revision,algorithm_revision,input_json,source_manifest_id,attempt_limit)
+            VALUES (?,?,?,?,?,CAST(? AS jsonb),?,?) ON CONFLICT (generation_key) DO UPDATE
+            SET status=CASE WHEN route_display_generation_job.attempts < route_display_generation_job.attempt_limit
+                    THEN 'PENDING' ELSE 'FAILED' END,
+                next_attempt_at=clock_timestamp(),updated_at=clock_timestamp(),
+                failed_at=CASE WHEN route_display_generation_job.attempts >= route_display_generation_job.attempt_limit
+                    THEN clock_timestamp() ELSE NULL END,
+                last_failure_code=CASE WHEN route_display_generation_job.attempts >= route_display_generation_job.attempt_limit
+                    THEN 'ATTEMPTS_EXHAUSTED' ELSE route_display_generation_job.last_failure_code END,
+                last_failure_at=CASE WHEN route_display_generation_job.attempts >= route_display_generation_job.attempt_limit
+                    THEN clock_timestamp() ELSE route_display_generation_job.last_failure_at END
             WHERE route_display_generation_job.status='SUPERSEDED'
-            """).params(key, routeId, inputDigest, evidenceRevision, algorithmRevision, inputJson,sourceManifestId).update();
+            """).params(key, routeId, inputDigest, evidenceRevision, algorithmRevision, inputJson,sourceManifestId,attemptLimit).update();
     }
 
     /** A single UPDATE owns each selected row before returning its fresh fencing token. */
     public Optional<Job> claim(Duration lease) {
         long millis = positiveMillis(lease);
         return jdbc.sql("""
-            WITH candidate AS (
+            WITH exhausted_candidates AS (
                 SELECT generation_key FROM route_display_generation_job
-                WHERE (status='PENDING' AND next_attempt_at <= clock_timestamp())
-                   OR (status='RUNNING' AND lease_until <= clock_timestamp())
+                WHERE attempts >= attempt_limit
+                  AND (status='PENDING' OR (status='RUNNING' AND lease_until <= clock_timestamp()))
+                ORDER BY updated_at,generation_key FOR UPDATE SKIP LOCKED LIMIT 100
+            ), exhausted AS (
+                UPDATE route_display_generation_job job SET status='FAILED',lease_token=NULL,lease_until=NULL,
+                    failed_at=clock_timestamp(),updated_at=clock_timestamp(),
+                    last_failure_code=CASE WHEN job.status='RUNNING' THEN 'LEASE_EXPIRED'
+                        ELSE coalesce(job.last_failure_code,'ATTEMPTS_EXHAUSTED') END,
+                    last_failure_at=CASE WHEN job.status='RUNNING' THEN clock_timestamp()
+                        ELSE coalesce(job.last_failure_at,clock_timestamp()) END
+                FROM exhausted_candidates old WHERE job.generation_key=old.generation_key
+                RETURNING job.generation_key
+            ), candidate AS (
+                SELECT generation_key FROM route_display_generation_job
+                WHERE attempts < attempt_limit
+                  AND ((status='PENDING' AND next_attempt_at <= clock_timestamp())
+                    OR (status='RUNNING' AND lease_until <= clock_timestamp()))
                 ORDER BY CASE WHEN algorithm_revision LIKE '%/source-only' THEN 0
                     WHEN algorithm_revision='native-reference-shadow-v1' THEN 2 ELSE 1 END,
                     next_attempt_at, created_at, generation_key
@@ -87,18 +121,42 @@ public class JdbcRouteDisplayGenerationStore {
             """).params(document, sha256, job.generationKey()).update();
         jdbc.sql("""
             UPDATE route_display_generation_job SET status='COMPLETED',lease_token=NULL,
-                lease_until=NULL,updated_at=clock_timestamp() WHERE generation_key=?
+                lease_until=NULL,failed_at=NULL,updated_at=clock_timestamp() WHERE generation_key=?
             """).param(job.generationKey()).update();
         return true;
     }
 
     public boolean fail(Job job, Duration retryDelay) {
+        return failWithOutcome(job, retryDelay, "EXECUTION_ERROR") != FailureOutcome.OWNERSHIP_LOST;
+    }
+
+    public enum FailureOutcome { RETRY_SCHEDULED, FAILED, OWNERSHIP_LOST }
+
+    public FailureOutcome failWithOutcome(Job job, Duration retryDelay, String failureCode) {
         long millis = positiveMillis(retryDelay);
-        return jdbc.sql("""
-            UPDATE route_display_generation_job SET status='PENDING',lease_token=NULL,lease_until=NULL,
-                next_attempt_at=clock_timestamp() + (? * interval '1 millisecond'),updated_at=clock_timestamp()
+        requireFailureCode(failureCode);
+        var status = jdbc.sql("""
+            UPDATE route_display_generation_job
+            SET status=CASE WHEN attempts >= attempt_limit THEN 'FAILED' ELSE 'PENDING' END,
+                lease_token=NULL,lease_until=NULL,
+                next_attempt_at=clock_timestamp() + (? * interval '1 millisecond'),updated_at=clock_timestamp(),
+                last_failure_code=?,last_failure_at=clock_timestamp(),
+                failed_at=CASE WHEN attempts >= attempt_limit THEN clock_timestamp() ELSE NULL END
             WHERE generation_key=? AND status='RUNNING' AND lease_token=? AND lease_until > clock_timestamp()
-            """).params(millis, job.generationKey(), job.token()).update() == 1;
+            RETURNING status
+            """).params(millis, failureCode, job.generationKey(), job.token()).query(String.class).optional();
+        return status.map(value -> value.equals("FAILED") ? FailureOutcome.FAILED : FailureOutcome.RETRY_SCHEDULED)
+            .orElse(FailureOutcome.OWNERSHIP_LOST);
+    }
+
+    /** Invalid immutable snapshots cannot be repaired by repeating the same job. */
+    public boolean reject(Job job, String failureCode) {
+        requireFailureCode(failureCode);
+        return jdbc.sql("""
+            UPDATE route_display_generation_job SET status='FAILED',lease_token=NULL,lease_until=NULL,
+                last_failure_code=?,last_failure_at=clock_timestamp(),failed_at=clock_timestamp(),updated_at=clock_timestamp()
+            WHERE generation_key=? AND status='RUNNING' AND lease_token=? AND lease_until > clock_timestamp()
+            """).params(failureCode, job.generationKey(), job.token()).update() == 1;
     }
 
     public boolean supersede(Job job) {
@@ -122,5 +180,10 @@ public class JdbcRouteDisplayGenerationStore {
         long millis = value.toMillis();
         if (millis <= 0) throw new IllegalArgumentException("Duration must be at least one millisecond");
         return millis;
+    }
+
+    private static void requireFailureCode(String value) {
+        if (value == null || !value.matches("[A-Z0-9_]{1,64}"))
+            throw new IllegalArgumentException("Invalid generation failure code");
     }
 }

@@ -96,13 +96,34 @@ public class RouteDisplaySelector {
                 new RouteDisplayGeometry.Quality(RouteDisplayGeometry.QualityStatus.WITHHELD,
                     List.of(new RouteDisplayGeometry.QualityIssue("INVALID_SOURCE_PROVENANCE",null,null,null)))));
         }
-        var automatic = storedAutomatic(geometry, digest, evidence);
-        if (automatic.isPresent()) return geometry.withDisplay(automatic.get());
+        var terminalKeys = new java.util.HashSet<String>();
+        RouteDisplayGeometry rejected = null;
+        List<String> algorithms = List.of(AutomaticRouteDisplay.REVISION, RouteDisplayGeneration.SOURCE_REVISION);
+        String manifestId = geometry.shape().sourceManifestId();
+        List<String> keys = algorithms.stream().map(algorithm ->
+                RouteDisplayGeneration.key(digest,evidence.revision(),algorithm,manifestId)).toList();
+        for (int i=0; i<algorithms.size(); i++) {
+            var read = readAutomatic(geometry,digest,evidence,algorithms.get(i));
+            if (read.found()) terminalKeys.add(keys.get(i));
+            if (read.geometry().isEmpty()) continue;
+            var value = read.geometry().get();
+            if (value.quality().status() != RouteDisplayGeometry.QualityStatus.WITHHELD)
+                return geometry.withDisplay(value);
+            if (rejected == null) rejected = value;
+        }
+        // A rejected full result must not hide a usable source result, or finish a source job
+        // that is still running. Only the no-display path needs this single state query.
+        var states = repository.findGenerationStates(geometry.routeId(),digest,evidence.revision(),keys);
+        boolean pending = keys.stream().anyMatch(key -> !terminalKeys.contains(key)
+                && (!states.containsKey(key) || states.get(key).canProgress()));
+        if (!pending && rejected != null) return geometry.withDisplay(rejected);
+        String phase = pending ? "pending/" : "unavailable/";
+        String reason = pending ? "GENERATION_PENDING" : "GENERATION_FAILED";
         return geometry.withDisplay(new RouteDisplayGeometry(null, Map.of(), Map.of(),
-                "pending/" + RouteDisplayGeneration.key(digest, evidence.revision(), AutomaticRouteDisplay.REVISION,geometry.shape().sourceManifestId()),
-                Source.AUTOMATIC_FALLBACK, evidence.sources(),
+                phase + keys.getFirst(), Source.AUTOMATIC_FALLBACK,evidence.sources(),
                 new RouteDisplayGeometry.Quality(RouteDisplayGeometry.QualityStatus.WITHHELD,
-                        List.of(new RouteDisplayGeometry.QualityIssue("GENERATION_PENDING", null, null, null)))));
+                        List.of(new RouteDisplayGeometry.QualityIssue(reason,null,null,null))),
+                rejected == null ? null : rejected.sourcePaths()));
     }
 
     private RouteGeometry provenanceInput(RouteGeometry g,String digest) {
@@ -117,33 +138,43 @@ public class RouteDisplaySelector {
             new RouteGeometry.Shape(shape.id(),shape.receivedAt(),shape.points(),shape.evidence(),null,null,shape.sourceManifestId()));
     }
 
+    private record ArtifactRead(boolean found, java.util.Optional<RouteDisplayGeometry> geometry) {}
+
+    /** Manual diagnostics may retain an independently verified source path from a withheld result. */
     private java.util.Optional<RouteDisplayGeometry> storedAutomatic(RouteGeometry geometry, String digest,
             com.gustler.backend.routegeometry.api.RouteShapeEvidence evidence) {
-        for (String algorithm : List.of(AutomaticRouteDisplay.REVISION, RouteDisplayGeneration.SOURCE_REVISION)) {
-            String key = RouteDisplayGeneration.key(digest, evidence.revision(), algorithm,geometry.shape().sourceManifestId());
-            var stored = repository.findAutomatic(key, geometry.routeId(), digest,
-                    evidence.revision(), algorithm);
-            if (stored.isEmpty()) continue;
-            try {
-                if (!RouteDisplayGeneration.sha256(stored.get().document()).equals(stored.get().sha256()))
-                    throw new IllegalArgumentException("Artifact checksum mismatch");
-                var document = json.readValue(stored.get().document(), RouteDisplayGeometry.class);
-                validateAutomatic(document, geometry, digest, evidence.revision());
-                validateProof(document,geometry,stored.get().sourceManifestId());
-                if (!document.evidence().equals(evidence.sources())
-                        || (algorithm.equals(RouteDisplayGeneration.SOURCE_REVISION)
-                            && document.quality().status() != RouteDisplayGeometry.QualityStatus.SOURCE_ONLY
-                            && document.quality().status() != RouteDisplayGeometry.QualityStatus.WITHHELD))
-                    throw new IllegalArgumentException("Artifact evidence or source-only grade differs");
-                return java.util.Optional.of(new RouteDisplayGeometry(document.paths(), document.connections(),
-                        document.stationPositions(), document.revision() + "/stored/" + stored.get().sha256(),
-                        document.source(), document.evidence(), document.quality(), document.sourcePaths(),document.accuracyProof()));
-            } catch (RuntimeException invalid) {
-                LOGGER.warn("event=route_display_automatic_rejected routeId={} reason=INVALID_DOCUMENT",
-                        geometry.routeId());
-            }
+        for (String algorithm : List.of(AutomaticRouteDisplay.REVISION,RouteDisplayGeneration.SOURCE_REVISION)) {
+            var result=readAutomatic(geometry,digest,evidence,algorithm);
+            if(result.geometry().isPresent()) return result.geometry();
         }
         return java.util.Optional.empty();
+    }
+
+    private ArtifactRead readAutomatic(RouteGeometry geometry, String digest,
+            com.gustler.backend.routegeometry.api.RouteShapeEvidence evidence, String algorithm) {
+        String key=RouteDisplayGeneration.key(digest,evidence.revision(),algorithm,geometry.shape().sourceManifestId());
+        var stored=repository.findAutomatic(key,geometry.routeId(),digest,evidence.revision(),algorithm);
+        if(stored.isEmpty()) return new ArtifactRead(false,java.util.Optional.empty());
+        try {
+            if(!RouteDisplayGeneration.sha256(stored.get().document()).equals(stored.get().sha256()))
+                throw new IllegalArgumentException("Artifact checksum mismatch");
+            var document=json.readValue(stored.get().document(),RouteDisplayGeometry.class);
+            validateAutomatic(document,geometry,digest,evidence.revision());
+            validateProof(document,geometry,stored.get().sourceManifestId());
+            if(!document.evidence().equals(evidence.sources())
+                    || document.quality().issues().stream().anyMatch(issue -> issue.code().equals("GENERATION_PENDING"))
+                    || (algorithm.equals(RouteDisplayGeneration.SOURCE_REVISION)
+                        && document.quality().status()!=RouteDisplayGeometry.QualityStatus.SOURCE_ONLY
+                        && document.quality().status()!=RouteDisplayGeometry.QualityStatus.WITHHELD))
+                throw new IllegalArgumentException("Artifact evidence or source-only grade differs");
+            var value=new RouteDisplayGeometry(document.paths(),document.connections(),document.stationPositions(),
+                    document.revision()+"/stored/"+stored.get().sha256(),document.source(),document.evidence(),
+                    document.quality(),document.sourcePaths(),document.accuracyProof());
+            return new ArtifactRead(true,java.util.Optional.of(value));
+        } catch(RuntimeException invalid) {
+            LOGGER.warn("event=route_display_automatic_rejected routeId={} reason=INVALID_DOCUMENT",geometry.routeId());
+            return new ArtifactRead(true,java.util.Optional.empty());
+        }
     }
 
     private static void validateProof(RouteDisplayGeometry document,RouteGeometry source,String consumedManifest) {
@@ -179,6 +210,10 @@ public class RouteDisplaySelector {
         }
         if (value.quality().status() == RouteDisplayGeometry.QualityStatus.WITHHELD)
             throw new IllegalArgumentException("Withheld artifact exposes paths");
+        if (!value.paths().up().points().getLast().equals(value.paths().down().points().getFirst())
+                || !com.gustler.backend.routegeometry.engine.api.RouteStopIntervals
+                        .evaluate(geometry.busStops(),value.paths(),value.connections()).usable())
+            throw new IllegalArgumentException("Invalid selected visit bundle");
         Map<String,Double> previous = new HashMap<>();
         var visits = new java.util.HashSet<Integer>();
         for (var stop : geometry.busStops()) {

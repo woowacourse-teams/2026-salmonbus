@@ -102,12 +102,13 @@ def assert_document_contract(document):
     stop_schema = referenced_schema(geometry_schema["properties"]["busStops"]["items"])
     connection_schema = referenced_schema(stop_schema["properties"]["pathConnection"])
     assert set(geometry_schema["required"]) == ROOT_FIELDS
+    assert "GENERATION_PENDING" in geometry_schema["properties"]["reason"]["enum"]
     assert set(stop_schema["required"]) == STOP_FIELDS
     assert set(connection_schema["required"]) == {"point", "segmentIndex", "segmentFraction"}
     assert {"304", "400", "404", "409", "503"} <= operation["responses"].keys()
     examples = operation["responses"]["200"]["content"]["application/json"]["examples"]
     assert set(examples) == {"ready", "partial", "notCollected", "withoutDirectionSplit",
-                             "displayWithheld", "diagnostic"}
+                             "displayWithheld", "diagnostic", "generationPending"}
     values = {key: example["value"] for key, example in examples.items()}
     for name, body in values.items():
         assert set(body) == ROOT_FIELDS | (DIAGNOSTIC_FIELDS if name == "diagnostic" else set()), name
@@ -123,7 +124,8 @@ def assert_document_contract(document):
     assert any(stop["point"] is None for stop in partial["busStops"])
     assert values["withoutDirectionSplit"]["status"] == "READY"
     assert values["withoutDirectionSplit"]["paths"] is None
-    for name, reason in (("notCollected", "NOT_COLLECTED"), ("displayWithheld", "DISPLAY_WITHHELD")):
+    for name, reason in (("notCollected", "NOT_COLLECTED"), ("displayWithheld", "DISPLAY_WITHHELD"),
+                         ("generationPending", "GENERATION_PENDING")):
         unavailable = values[name]
         assert unavailable["status"] == "UNAVAILABLE" and unavailable["reason"] == reason
         assert unavailable["points"] == [] and unavailable["paths"] is None

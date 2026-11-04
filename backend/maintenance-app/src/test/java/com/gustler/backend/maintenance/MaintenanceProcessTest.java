@@ -245,6 +245,18 @@ class MaintenanceProcessTest {
                         com.gustler.backend.routegeometry.api.RouteDisplaySamples.input().digest());
         assertThat(disabled.exitCode()).isZero();
         assertThat(disabled.stdout()).contains("AUTOMATIC_FALLBACK");
+
+        var failedJob = RouteDisplayRetryFixtures.failed(database.jdbc());
+        Result retried = execute("route-display-retry", "--config", config, "--route-id", "204000057",
+                "--generation-key", failedJob.key());
+        assertThat(retried.exitCode()).isZero();
+        assertThat(retried.stdout()).contains("\"attemptLimit\":10", "\"attempts\":5", "\"status\":\"PENDING\"");
+        Result duplicateRetry = execute("route-display-retry", "--config", config, "--route-id", "204000057",
+                "--generation-key", failedJob.key());
+        assertThat(duplicateRetry.exitCode()).isEqualTo(1);
+        assertThat(duplicateRetry.stderr()).contains("ROUTE_DISPLAY_JOB_NOT_FAILED");
+        assertThat(database.jdbc().sql("SELECT attempt_limit FROM route_display_generation_job")
+                .query(Integer.class).single()).isEqualTo(10);
     }
 
     private ChunkOutput rebuild(Database database, final long version) throws Exception {

@@ -79,6 +79,59 @@ class RouteDisplayGenerationRuntimeTest {
         }
     }
 
+    @Test @Timeout(120)
+    void terminal_failed_jobs_are_distinct_from_pending_and_real_maintenance_restores_source_fallback() throws Exception {
+        try (var runtime = new ArrivalRuntime(List.of(), Map.of("SPRING_APPLICATION_JSON",
+                "{\"arrivals\":{\"enabled\":false},\"route-geometry\":{\"presentation\":{\"enabled\":true}}}"))) {
+            seed(runtime);
+            URI mapUri = runtime.arrivalsUri().resolve("/api/v2/routes/" + ROUTE + "/geometry");
+            URI diagnosticUri = URI.create(mapUri + "?includeDiagnostics=true");
+            var pending = get(mapUri);
+            assertThat(body(pending).path("reason").asString()).isEqualTo("GENERATION_PENDING");
+            var geometry = seededGeometry(runtime);
+            var input = RouteDisplayGeneration.input(geometry);
+            String evidence = geometry.shape().evidence().revision();
+            String sourceKey = RouteDisplayGeneration.key(input.digest(), evidence, RouteDisplayGeneration.SOURCE_REVISION);
+            for (String algorithm : List.of(RouteDisplayGeneration.SOURCE_REVISION, AutomaticRouteDisplay.REVISION)) {
+                String key = RouteDisplayGeneration.key(input.digest(), evidence, algorithm);
+                try (var connection = runtime.connection(); var insert = connection.prepareStatement("""
+                    INSERT INTO route_display_generation_job(generation_key,route_id,input_digest,evidence_revision,
+                        algorithm_revision,input_json,status,attempts,attempt_limit,last_failure_code,last_failure_at,failed_at)
+                    VALUES (?,?,?,?,?,CAST(? AS jsonb),'FAILED',5,5,'ATTEMPTS_EXHAUSTED',clock_timestamp(),clock_timestamp())
+                    """)) {
+                    insert.setString(1, key); insert.setString(2, ROUTE); insert.setString(3, input.digest());
+                    insert.setString(4, evidence); insert.setString(5, algorithm); insert.setString(6, JSON.writeValueAsString(geometry));
+                    insert.executeUpdate();
+                }
+            }
+            var failed = get(mapUri);
+            assertThat(body(failed).path("reason").asString()).isEqualTo("DISPLAY_WITHHELD");
+            assertThat(body(failed).path("geometryRevision")).isNotEqualTo(body(pending).path("geometryRevision"));
+            assertCompact(mapUri, get(diagnosticUri));
+            var retry = runtime.retryDisplayGeneration(ROUTE, sourceKey);
+            assertThat(retry.at("/result/status").asString()).isEqualTo("PENDING");
+            assertThat(retry.at("/result/attempts").asInt()).isEqualTo(5);
+            assertThat(retry.at("/result/attemptLimit").asInt()).isEqualTo(10);
+            assertThat(body(get(mapUri)).path("reason").asString()).isEqualTo("GENERATION_PENDING");
+            runtime.startWorker(false, WORKER);
+            var available = await(mapUri, b -> "READY".equals(b.path("status").asString()));
+            assertThat(body(available).path("paths").isNull()).isFalse();
+            var sourceOnly = get(diagnosticUri);
+            assertThat(body(sourceOnly).at("/displayQuality/status").asString()).isEqualTo("SOURCE_ONLY");
+            assertCompact(mapUri, sourceOnly);
+            try (var connection = runtime.connection(); var query = connection.createStatement(); var result = query.executeQuery(
+                    "SELECT status,attempts,attempt_limit FROM route_display_generation_job WHERE generation_key='" + sourceKey + "'")) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString(1)).isEqualTo("COMPLETED");
+                assertThat(result.getInt(2)).isEqualTo(6);
+                assertThat(result.getInt(3)).isEqualTo(10);
+            }
+            assertThat(count(runtime, "route_display_automatic_artifact")).isEqualTo(1);
+            capture(Path.of("build/reports/route-display-generation-http"), "terminal-failed", failed, "LOCAL_FAILED_JOB_FIXTURE_REAL_HTTP");
+            capture(Path.of("build/reports/route-display-generation-http"), "retried-source", available, "LOCAL_MAINTENANCE_RETRY_WORKER_REAL_HTTP");
+        }
+    }
+
     private static void lifecycle(boolean live) throws Exception { lifecycle(live,false); }
     private static void lifecycle(boolean live,boolean realMaintenance) throws Exception {
         try(var runtime=new ArrivalRuntime(List.of(),Map.of("SPRING_APPLICATION_JSON", """
@@ -237,11 +290,11 @@ class RouteDisplayGenerationRuntimeTest {
     private static void capture(Path directory,String name,HttpResponse<String> response,String origin) throws Exception {
         Files.createDirectories(directory);
         var envelope=JSON.createObjectNode();envelope.put("origin",origin);
-        envelope.put("httpStatus",response.statusCode());envelope.put("etag",response.headers().firstValue("ETag").orElseThrow());
+        envelope.put("httpStatus",response.statusCode());envelope.put("etag",response.headers().firstValue("ETag").orElse(null));
         envelope.put("bodyUtf8",response.body());envelope.set("body",body(response));
         Files.writeString(directory.resolve(name+".json"),JSON.writerWithDefaultPrettyPrinter().writeValueAsString(envelope));
     }
-    private static void installSourceOnly(ArrivalRuntime runtime) throws Exception {
+    private static RouteGeometry seededGeometry(ArrivalRuntime runtime) throws Exception {
         var input=RouteDisplaySamples.input();
         try(var c=runtime.connection()) {
             long version;UUID shapeId;
@@ -253,7 +306,13 @@ class RouteDisplayGenerationRuntimeTest {
                     v.boardingAllowed(),new RouteGeometry.Point(v.sourcePoint().x(),v.sourcePoint().y()))).toList(),
                 new RouteGeometry.Shape(shapeId,Instant.parse("2026-10-14T00:00:00Z"),
                     input.points().stream().map(p -> new RouteGeometry.Point(p.x(),p.y())).toList(),RouteShapeEvidence.EMPTY));
-            geometry=RouteDisplayGeneration.at(geometry,Instant.now());
+            return RouteDisplayGeneration.at(geometry,Instant.now());
+        }
+    }
+    private static void installSourceOnly(ArrivalRuntime runtime) throws Exception {
+        var input=RouteDisplaySamples.input();
+        var geometry=seededGeometry(runtime);
+        try(var c=runtime.connection()) {
             String evidence=geometry.shape().evidence().revision(),algorithm=RouteDisplayGeneration.SOURCE_REVISION;
             String key=RouteDisplayGeneration.key(input.digest(),evidence,algorithm);
             String document=JSON.writeValueAsString(AutomaticRouteDisplay.sourceOnly(geometry,input.digest()));
@@ -349,7 +408,10 @@ class RouteDisplayGenerationRuntimeTest {
         boolean withheld="WITHHELD".equals(diagnostic.at("/displayQuality/status").asString());
         if(withheld) {
             assertThat(compact.path("status").asString()).isEqualTo("UNAVAILABLE");
-            assertThat(compact.path("reason").asString()).isEqualTo("DISPLAY_WITHHELD");
+            boolean generating = false;
+            for (var issue : diagnostic.at("/displayQuality/issues"))
+                if ("GENERATION_PENDING".equals(issue.path("code").asString())) generating = true;
+            assertThat(compact.path("reason").asString()).isEqualTo(generating ? "GENERATION_PENDING" : "DISPLAY_WITHHELD");
             assertThat(compact.path("points")).isEmpty();
             assertThat(compact.path("paths").isNull()).isTrue();
             assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");

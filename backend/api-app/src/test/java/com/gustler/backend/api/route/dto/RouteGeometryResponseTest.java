@@ -85,6 +85,20 @@ class RouteGeometryResponseTest {
         assertThat(diagnostic.displayPaths()).isNull();
     }
 
+    @Test
+    void 생성대기는_최종보류와_다른사유지만_필드구조와_GPS보존은_같다() {
+        var raw=geometry();
+        var pending=raw.withDisplay(new RouteDisplayGeometry(null,Map.of(),Map.of(),"pending/key",Source.AUTOMATIC_FALLBACK,List.of(),
+                new Quality(QualityStatus.WITHHELD,List.of(new RouteDisplayGeometry.QualityIssue("GENERATION_PENDING",null,null,null))),raw.paths()));
+        var failed=raw.withDisplay(new RouteDisplayGeometry(null,Map.of(),Map.of(),"unavailable/key",Source.AUTOMATIC_FALLBACK,List.of(),
+                new Quality(QualityStatus.WITHHELD,List.of(new RouteDisplayGeometry.QualityIssue("GENERATION_FAILED",null,null,null))),raw.paths()));
+        var before=RouteGeometryResponse.from(pending);var after=RouteGeometryResponse.from(failed);
+        assertThat(before.status()).isEqualTo("UNAVAILABLE");assertThat(before.reason()).isEqualTo("GENERATION_PENDING");
+        assertThat(after.reason()).isEqualTo("DISPLAY_WITHHELD");assertThat(before.geometryRevision()).isNotEqualTo(after.geometryRevision());
+        assertThat(json.valueToTree(before).size()).isEqualTo(14);assertThat(before.paths()).isNull();assertThat(before.points()).isEmpty();
+        assertThat(before.busStops()).allMatch(stop->stop.point()!=null && stop.pathConnection()==null);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"MISSING", "INDEX", "INTERPOLATION", "ORDER", "UNKNOWN_VISIT", "SEAM", "ZERO_LENGTH_ORDER"})
     void 손상된_선택묶음은_부분연결이나_원본경로와_혼합하지않는다(String fault) {

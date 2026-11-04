@@ -109,7 +109,7 @@ public class ApiDocsConfiguration {
             Schema<?> geometry = document.getComponents().getSchemas().get("RouteGeometryResponse");
             if (geometry == null) return;
             Schema<Object> reasons = contractSchema();
-            reasons.setEnum(List.of("NOT_COLLECTED", "DISPLAY_WITHHELD"));
+            reasons.setEnum(List.of("NOT_COLLECTED", "GENERATION_PENDING", "DISPLAY_WITHHELD"));
             Schema<Object> unavailable = availabilityRule("UNAVAILABLE", contractSchema()
                     .addProperties("points", contractSchema().maxItems(0))
                     .addProperties("reason", reasons)

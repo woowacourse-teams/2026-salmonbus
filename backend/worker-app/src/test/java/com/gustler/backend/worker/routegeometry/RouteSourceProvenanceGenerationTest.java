@@ -204,7 +204,7 @@ class RouteSourceProvenanceGenerationTest {
         store.enqueue(key,ROUTE,digest,evidence,RouteDisplayGeneration.SOURCE_REVISION,json.writeValueAsString(snapshot),second);
         assertThat(first).isNotEqualTo(second);
         assertThat(worker.runOne()).isTrue();
-        assertThat(jdbc.sql("SELECT status FROM route_display_generation_job WHERE generation_key=?").param(key).query(String.class).single()).isEqualTo("SUPERSEDED");
+        assertThat(jdbc.sql("SELECT status FROM route_display_generation_job WHERE generation_key=?").param(key).query(String.class).single()).isEqualTo("FAILED");
         assertThat(artifacts()).isZero();
     }
     private static class MutableClock extends Clock {

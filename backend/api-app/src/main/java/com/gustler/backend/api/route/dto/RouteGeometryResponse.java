@@ -64,15 +64,15 @@ public record RouteGeometryResponse(
         @Schema(
                         description =
                                 "READY=형상과 모든 정류장 좌표, PARTIAL=형상은 있고 일부 정류장 point=null,"
-                                        + " UNAVAILABLE=현재 판본 형상 미수집 또는 표시 보류. READY여도 paths=null 가능",
+                                        + " UNAVAILABLE=현재 판본 형상 미수집·생성 대기·최종 표시 보류. READY여도 paths=null 가능",
                         allowableValues = {"READY", "PARTIAL", "UNAVAILABLE"})
                 String status,
         @Schema(
                         description =
                                 "READY이면 null. NOT_COLLECTED=현재 판본 형상 미수집,"
-                                        + " MISSING_STOP_COORDINATES=일부 정류장 좌표 누락, DISPLAY_WITHHELD=표시 묶음의 구조 검증 실패 또는 보류",
+                                        + " MISSING_STOP_COORDINATES=일부 정류장 좌표 누락, GENERATION_PENDING=표시 산출물 생성 대기, DISPLAY_WITHHELD=표시 묶음의 최종 보류",
                         nullable = true,
-                        allowableValues = {"NOT_COLLECTED", "MISSING_STOP_COORDINATES", "DISPLAY_WITHHELD"})
+                        allowableValues = {"NOT_COLLECTED", "MISSING_STOP_COORDINATES", "GENERATION_PENDING", "DISPLAY_WITHHELD"})
                 String reason,
         @Schema(
                         description = "x를 경도, y를 위도로 표시하는 가정이며 원천 좌표계 확인 완료를 뜻하지 않음",
@@ -92,12 +92,12 @@ public record RouteGeometryResponse(
         @Schema(
                         description =
                                 "원본 운행 순서의 전체 도로 형상. 정류장 마커와 별도 자료이며 정류장 직선으로 대체하지 않음. 미수집이면 빈 배열,"
-                                        + " paths=null이어도 형상은 유지. DISPLAY_WITHHELD이면 빈 배열")
+                                        + " paths=null이어도 형상은 유지. GENERATION_PENDING 또는 DISPLAY_WITHHELD이면 빈 배열")
                 List<Point> points,
         @Schema(
                         description =
                                 "서버가 검증하고 선택한 최종 표시 UP/DOWN을 함께 제공. 회차·방문 순서 대응이 부족하거나 모호하면 READY여도 null이며"
-                                        + " 전체 points는 유지. 방향 선택에 재조회 불필요. includeDiagnostics=true에서는 원본 방향 경로",
+                                        + " 전체 points는 유지. GENERATION_PENDING 또는 DISPLAY_WITHHELD이면 null. 방향 선택에 재조회 불필요. includeDiagnostics=true에서는 원본 방향 경로",
                         nullable = true)
                 Paths paths,
         @Schema(description = "전체 경로와 제공 가능한 정류장 좌표를 포함하는 영역. 좌표가 전혀 없으면 null", nullable = true)
@@ -286,7 +286,7 @@ public record RouteGeometryResponse(
                 representationRevision(geometry, includeDiagnostics), geometry.name(),
                 geometry.startPoint(), geometry.endPoint(),
                 withheld ? "UNAVAILABLE" : geometry.status().name(),
-                withheld ? "DISPLAY_WITHHELD" : geometry.reason(),
+                withheld ? withheldReason(geometry) : geometry.reason(),
                 RouteGeometry.COORDINATE_SYSTEM, turningPointOf(geometry.turnSequence()),
                 geometry.busStops().stream().map(stop -> new BusStop(
                         stop.stationId(), stop.stopSequence(), stop.name(), stop.direction(),
@@ -302,6 +302,14 @@ public record RouteGeometryResponse(
                         : geometry.display().evidence().stream().map(source -> new DisplayEvidence(
                                 source.id(), source.status(), source.digest())).toList(),
                 includeDiagnostics ? qualityOf(geometry) : null);
+    }
+
+    private static String withheldReason(RouteGeometry geometry) {
+        var display=geometry.display();
+        return display!=null && display.quality()!=null && display.quality().status()
+                == com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.QualityStatus.WITHHELD
+                && display.quality().issues().stream().anyMatch(issue -> issue.code().equals("GENERATION_PENDING"))
+                ? "GENERATION_PENDING" : "DISPLAY_WITHHELD";
     }
 
     private record Selection(RoutePaths paths, Map<Integer, Connection> connections, boolean withheld) {}

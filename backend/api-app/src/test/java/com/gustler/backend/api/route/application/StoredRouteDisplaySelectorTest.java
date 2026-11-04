@@ -21,8 +21,15 @@ class StoredRouteDisplaySelectorTest {
     final Map<String,RouteDisplayRepository.Automatic> artifacts = new HashMap<>();
     final Map<String,RouteDisplayRepository.SourceManifest> manifests = new HashMap<>();
     final Set<String> corruptedManifests = new HashSet<>();
+    final Map<String,RouteDisplayRepository.GenerationState> jobs = new HashMap<>();
+    int jobQueries;
     RouteDisplayRepository.Manual reviewed;
     final RouteDisplayRepository repository = new RouteDisplayRepository() {
+        public Map<String,GenerationState> findGenerationStates(String routeId,String digest,String evidence,List<String> keys) {
+            jobQueries++;var found=new HashMap<String,GenerationState>();
+            for(String key:keys)if(jobs.containsKey(key))found.put(key,jobs.get(key));
+            return found;
+        }
         public Optional<SourceManifest> findSourceManifest(String id) {
             if (corruptedManifests.contains(id)) throw new IllegalArgumentException("Corrupt sealed provenance");
             return Optional.ofNullable(manifests.get(id));
@@ -201,10 +208,66 @@ class StoredRouteDisplaySelectorTest {
         String digest=RouteDisplayGeneration.input(g).digest();
         var stored=new RouteDisplayGeometry(null,Map.of(),Map.of(),AutomaticRouteDisplay.REVISION+"/"+digest+"/"+g.shape().evidence().revision()+"/WITHHELD",
             Source.AUTOMATIC_FALLBACK,g.shape().evidence().sources(),new Quality(QualityStatus.WITHHELD,List.of(new QualityIssue("STOP_CONNECTION_GAP","UP",2,96.0))),sourcePaths);
-        store(g,stored,AutomaticRouteDisplay.REVISION);var actual=selector.enrich(g).display();
+        store(g,stored,AutomaticRouteDisplay.REVISION);
+        jobs.put(key(g,RouteDisplayGeneration.SOURCE_REVISION),new RouteDisplayRepository.GenerationState("COMPLETED",false));
+        var actual=selector.enrich(g).display();
         assertThat(actual.paths()).isNull();assertThat(actual.quality().status()).isEqualTo(QualityStatus.WITHHELD);
         assertThat(actual.quality().issues()).extracting(QualityIssue::code).containsExactly("STOP_CONNECTION_GAP");
         assertThat(actual.sourcePaths()).isEqualTo(sourcePaths);assertThat(actual.revision()).contains("/stored/");
+    }
+
+    RouteDisplayGeometry withheld(RouteGeometry g) {
+        String digest=RouteDisplayGeneration.input(g).digest();
+        return new RouteDisplayGeometry(null,Map.of(),Map.of(),AutomaticRouteDisplay.REVISION+"/"+digest+"/"+g.shape().evidence().revision()+"/WITHHELD",
+                Source.AUTOMATIC_FALLBACK,g.shape().evidence().sources(),
+                new Quality(QualityStatus.WITHHELD,List.of(new QualityIssue("STOP_CONNECTION_GAP","UP",2,96.0))),g.paths());
+    }
+    void state(RouteGeometry g,String algorithm,String status,boolean canProgress) {
+        jobs.put(key(g,algorithm),new RouteDisplayRepository.GenerationState(status,canProgress));
+    }
+    @Test void 개선이_보류돼도_유효한_현재원본을_선택하고_작업조회하지않는다() {
+        var g=geometry();store(g,withheld(g),AutomaticRouteDisplay.REVISION);
+        var source=AutomaticRouteDisplay.sourceOnly(g,RouteDisplayGeneration.input(g).digest());
+        store(g,source,RouteDisplayGeneration.SOURCE_REVISION);
+        assertThat(selector.enrich(g).display()).usingRecursiveComparison().ignoringFields("revision").isEqualTo(source);
+        assertThat(jobQueries).isZero();
+    }
+    @Test void 유효한_개선을_찾으면_원본이나_작업상태를_추가조회하지않는다() {
+        var g=geometry();store(g,build(g),AutomaticRouteDisplay.REVISION);
+        assertThat(selector.enrich(g).display().paths()).isNotNull();assertThat(jobQueries).isZero();
+    }
+    @Test void 원본만_보류되고_개선이_실행중이면_최종실패가_아니다() {
+        var g=geometry();store(g,withheld(g),RouteDisplayGeneration.SOURCE_REVISION);
+        state(g,AutomaticRouteDisplay.REVISION,"RUNNING",true);
+        var value=selector.enrich(g).display();
+        assertThat(value.quality().issues()).extracting(QualityIssue::code).containsExactly("GENERATION_PENDING");
+        assertThat(value.sourcePaths()).isEqualTo(g.paths());assertThat(jobQueries).isEqualTo(1);
+    }
+    @Test void 개선만_보류되고_원본이_대기중이어도_최종실패가_아니다() {
+        var g=geometry();store(g,withheld(g),AutomaticRouteDisplay.REVISION);
+        state(g,RouteDisplayGeneration.SOURCE_REVISION,"PENDING",true);
+        assertThat(selector.enrich(g).display().quality().issues()).extracting(QualityIssue::code).containsExactly("GENERATION_PENDING");
+    }
+    @Test void 두작업이_실패하거나_소진되면_종료하고_판본도_바뀐다() {
+        var g=geometry();var pending=selector.enrich(g);
+        for(String status:List.of("FAILED","PENDING","RUNNING","COMPLETED")) {
+            state(g,AutomaticRouteDisplay.REVISION,status,false);
+            state(g,RouteDisplayGeneration.SOURCE_REVISION,status,false);
+            var terminal=selector.enrich(g);
+            assertThat(terminal.display().quality().issues()).extracting(QualityIssue::code).containsExactly("GENERATION_FAILED");
+            assertThat(terminal.revision()).isNotEqualTo(pending.revision());
+            assertThat(terminal.display().paths()).isNull();assertThat(terminal.display().connections()).isEmpty();
+        }
+    }
+    @Test void 한도가_소진돼도_마지막lease가_유효하면_기다린다() {
+        var g=geometry();state(g,AutomaticRouteDisplay.REVISION,"RUNNING",true);
+        state(g,RouteDisplayGeneration.SOURCE_REVISION,"FAILED",false);
+        assertThat(selector.enrich(g).display().quality().issues()).extracting(QualityIssue::code).containsExactly("GENERATION_PENDING");
+    }
+    @Test void 손상된_완료산출물은_다시생성중으로_오인하지않는다() {
+        var g=geometry();artifacts.put(key(g,AutomaticRouteDisplay.REVISION),new RouteDisplayRepository.Automatic("{}","bad"));
+        state(g,RouteDisplayGeneration.SOURCE_REVISION,"FAILED",false);
+        assertThat(selector.enrich(g).display().quality().issues()).extracting(QualityIssue::code).containsExactly("GENERATION_FAILED");
     }
 
 }
