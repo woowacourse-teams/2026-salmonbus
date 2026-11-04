@@ -45,8 +45,9 @@ public class RouteVersionLoader {
         Optional<RouteVersion> previous = route.latestVersion();
         route.accept(stops, timetable, readAt);
         final long versionId = routeRepository.save(route);
-        Changes changes = locations.record(versionId, stops, readAt);
         final boolean versionChanged = previous.isEmpty() || previous.get().id() != versionId;
+        final int renamedStops = versionChanged ? 0 : routeRepository.renameStops(versionId, stops);
+        Changes changes = locations.record(versionId, stops, readAt);
         final boolean timetableChanged = previous.isPresent()
             && !previous.get().content().timetable().equals(route.currentVersion().content().timetable());
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -58,6 +59,10 @@ public class RouteVersionLoader {
                         routeId, previous.map(version -> version.id()).orElse(null), versionId,
                         changeReason(versionChanged, previous),
                         stops.stops().size(), readAt);
+                }
+                if (renamedStops > 0) {
+                    LOGGER.info("event=route_stop_renamed routeId={} routeVersionId={} count={} observedAt={}",
+                        routeId, versionId, renamedStops, readAt);
                 }
                 if (changes.hasWrites()) {
                     LOGGER.info("event=route_coordinates_recorded routeId={} routeVersionId={} firstCaptured={} "

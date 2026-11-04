@@ -8,7 +8,9 @@ import java.util.HexFormat;
 
 /**
  * 정류장 방문 구성의 동일성을 비교할 요약값이다.
- * 표시 자료의 단순 문자열 연결로 경계를 섞지 않는다.
+ * 회차 순번과 정류장 순번·ID만 넣는다. 정류장 이름은 표시 자료라 넣지 않는다.
+ * 원천이 같은 정류장을 다른 이름으로 보내도 같은 판본이다.
+ * 길이 접두 연결로 값 사이의 경계를 섞지 않는다.
  */
 public record RouteContentDigest(
     String value
@@ -40,7 +42,6 @@ public record RouteContentDigest(
     ) {
         updateWithLengthPrefixed(digest, String.valueOf(stop.stopOrder()));
         updateWithLengthPrefixed(digest, stop.stopId());
-        updateWithLengthPrefixed(digest, stop.name());
     }
 
     private static void updateWithLengthPrefixed(

@@ -2,6 +2,8 @@ package com.gustler.backend.routecatalog.infrastructure.jpa;
 
 import com.gustler.backend.routecatalog.domain.Route;
 import com.gustler.backend.routecatalog.domain.RouteRepository;
+import com.gustler.backend.routecatalog.domain.RouteStop;
+import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteVersion;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -57,6 +59,20 @@ public class JpaRouteRepository implements RouteRepository {
             .toList());
         versions.flush();
         return opened.getId();
+    }
+
+    @Override
+    public int renameStops(final long routeVersionId, RouteStops stops) {
+        int renamed = 0;
+        for (RouteStop stop : stops.stops()) {
+            renamed += jdbc.sql("""
+                    UPDATE route_stop SET name = ?
+                    WHERE route_version_id = ? AND stop_order = ? AND stop_id = ? AND name <> ?
+                    """)
+                .params(stop.name(), routeVersionId, stop.stopOrder(), stop.stopId(), stop.name())
+                .update();
+        }
+        return renamed;
     }
 
     private RouteVersionJpaEntity versionOf(final long id) {
