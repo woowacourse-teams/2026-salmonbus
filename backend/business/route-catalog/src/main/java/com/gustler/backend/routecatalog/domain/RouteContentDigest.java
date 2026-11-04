@@ -6,6 +6,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.List;
 
 /**
  * 정류장 방문 구성의 동일성을 비교할 요약값이다.
@@ -26,9 +27,12 @@ public record RouteContentDigest(
     ) {
         MessageDigest digest = newDigest();
         updateWithLengthPrefixed(digest, turnSequenceOf(routeStops));
-        routeStops.stops().stream()
+        List<RouteStop> orderedStops = routeStops.stops().stream()
             .sorted(Comparator.comparingInt(RouteStop::stopOrder))
-            .forEach(stop -> updateWithIdentityOf(digest, stop));
+            .toList();
+        for (RouteStop stop : orderedStops) {
+            updateWithIdentityOf(digest, stop);
+        }
         return new RouteContentDigest(HexFormat.of().formatHex(digest.digest()));
     }
 

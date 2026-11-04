@@ -482,9 +482,7 @@ class RouteVersionLoaderTest {
         ));
     }
 
-    private List<String> stopNamesOf(
-        final long versionId
-    ) {
+    private List<String> stopNamesOf(final long versionId) {
         entityManager.flush();
         return jdbcClient.sql("SELECT name FROM route_stop WHERE route_version_id = ? ORDER BY stop_order")
             .param(versionId)

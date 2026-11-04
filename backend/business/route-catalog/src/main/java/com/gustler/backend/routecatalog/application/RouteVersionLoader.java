@@ -46,7 +46,7 @@ public class RouteVersionLoader {
         route.accept(stops, timetable, readAt);
         final long versionId = routeRepository.save(route);
         final boolean versionChanged = previous.isEmpty() || previous.get().id() != versionId;
-        final int renamedStops = versionChanged ? 0 : routeRepository.renameStops(versionId, stops);
+        final int renamedStops = renameStopsIfKept(versionChanged, versionId, stops);
         Changes changes = locations.record(versionId, stops, readAt);
         final boolean timetableChanged = previous.isPresent()
             && !previous.get().content().timetable().equals(route.currentVersion().content().timetable());
@@ -76,6 +76,13 @@ public class RouteVersionLoader {
             }
         });
         return versionId;
+    }
+
+    private int renameStopsIfKept(final boolean versionChanged, final long versionId, RouteStops stops) {
+        if (versionChanged) {
+            return 0;
+        }
+        return routeRepository.renameStops(versionId, stops);
     }
 
     private static String changeReason(final boolean versionChanged, Optional<RouteVersion> previous) {
