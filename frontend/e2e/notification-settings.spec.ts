@@ -90,6 +90,19 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     expect(notifications.requests).toEqual([]);
   });
 
+  test("알림을 허용한 앱이어도 로그아웃 상태면 알림 줄이 없고 알림 요청도 없다", async ({
+    page,
+    auth,
+    notifications,
+  }) => {
+    auth.member = null;
+    await openInApp(page, { permission: "granted" });
+    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await expect(page.getByRole("link", { name: "로그인 / 회원가입" })).toBeVisible();
+    await expect(page.getByRole("switch")).toHaveCount(0);
+    expect(notifications.requests).toEqual([]);
+  });
+
   test("알림 창을 열면 포커스가 창 안에 있지만 입력칸에는 없다", async ({ page }) => {
     await openInApp(page);
     await page.goto(`/mypage/groups/${defaultGroupId}`);
