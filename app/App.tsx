@@ -102,8 +102,12 @@ export default function App() {
   }
 
   // WebView는 로그인 제공자 화면도 연다. 그 화면에는 알림 탭을 넘기지 않으니 웹 문서가 떴을 때만 true다.
+  // 웹은 시작 지점에서 notification.opened를 듣고 있어서, 뜨는 동안 쌓인 탭은 다 뜬 순간 보낸다.
   function handleLoad(event: WebViewNavigationEvent) {
     documentLoaded.current = isInAppUrl(event.nativeEvent.url);
+    if (!documentLoaded.current) return;
+    const heldTap = notificationTaps.releaseHeld();
+    if (heldTap !== null) sendToWeb({ type: OPENED_EVENT, payload: { requestId: null, target: heldTap.target } });
   }
 
   function resetNativeMap() {

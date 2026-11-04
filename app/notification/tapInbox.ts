@@ -4,7 +4,7 @@ export interface NotificationTap {
   target: Record<string, unknown> | null;
 }
 
-/** send는 부른 쪽이 바로 웹에 보낸다. held는 칸에 두고 takeOpened를 기다린다. */
+/** send는 부른 쪽이 바로 웹에 보낸다. held는 칸에 두고, 웹 문서가 다 뜨거나 takeOpened가 오면 내준다. */
 export type TapDecision = 'send' | 'held' | 'duplicate';
 
 /**
@@ -26,11 +26,17 @@ export function createTapInbox() {
     return 'held';
   }
 
+  /** takeOpened의 답. 꺼낸 탭은 칸에서 지워져서 문서가 다 떠도 다시 가지 않는다. */
   function take(): Record<string, unknown> | null {
-    const target = held?.target ?? null;
-    held = null;
-    return target;
+    return releaseHeld()?.target ?? null;
   }
 
-  return { receive, take };
+  /** 웹 문서가 다 떴을 때 칸에 남은 탭. 꺼낸 탭은 칸에서 지워져서 takeOpened에도 다시 가지 않는다. */
+  function releaseHeld(): NotificationTap | null {
+    const tap = held;
+    held = null;
+    return tap;
+  }
+
+  return { receive, take, releaseHeld };
 }
