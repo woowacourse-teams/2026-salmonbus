@@ -55,6 +55,22 @@ class RouteContentDigestTest {
     }
 
     @Test
+    void 정류소_목록의_순서가_뒤섞여도_같은_해시가_나온다() {
+        // given
+        RouteStops shuffled = RouteStops.from(TURN_SEQUENCE, List.of(
+            new UpstreamRouteStop(3, STOP_205000217, BEOMGYE_STOP_NAME),
+            new UpstreamRouteStop(1, STOP_205000217, BEOMGYE_STOP_NAME),
+            new UpstreamRouteStop(2, STOP_208000069, ANYANG_STOP_NAME)
+        ));
+
+        // when
+        RouteContentDigest actual = RouteContentDigest.of(shuffled);
+
+        // then
+        assertThat(actual).isEqualTo(RouteContentDigest.of(threeStops()));
+    }
+
+    @Test
     void 정류소_ID가_바뀌면_다른_해시가_나온다() {
         // given
         RouteStops replaced = RouteStops.from(TURN_SEQUENCE, List.of(
