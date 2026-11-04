@@ -20,7 +20,8 @@ export const test = favoritesTest.extend<{ notifications: NotificationsMock }>({
       await api.route(async (route) => {
         const request = route.request();
         const path = new URL(request.url()).pathname;
-        if (!path.startsWith("/api/me/notification-settings") && !path.startsWith("/api/me/push-devices/")) {
+        const devicePath = path === "/api/me/push-devices" || path.startsWith("/api/me/push-devices/");
+        if (!path.startsWith("/api/me/notification-settings") && !devicePath) {
           await route.fallback();
           return;
         }
@@ -45,7 +46,10 @@ export const test = favoritesTest.extend<{ notifications: NotificationsMock }>({
           await error(notifications.mutationError.status, notifications.mutationError.code);
           return;
         }
-        if (path.startsWith("/api/me/push-devices/") && (method === "PUT" || method === "DELETE")) {
+        if (
+          (path === "/api/me/push-devices" && method === "PUT") ||
+          (path === "/api/me/push-devices/unregister" && method === "POST")
+        ) {
           await route.fulfill({ status: 204 });
         } else if (path === "/api/me/notification-settings" && method === "GET") {
           await route.fulfill({ json: { settings: notifications.settings }, headers: { "Cache-Control": "no-store" } });

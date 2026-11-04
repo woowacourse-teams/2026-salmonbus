@@ -227,7 +227,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     await expect(notificationSwitch(page)).toBeChecked();
     await expect(page.getByRole("button", { name: "평일 07:30", exact: true })).toBeVisible();
     expect(notifications.requests.filter((request) => request.method !== "GET")).toEqual([
-      { path: `/api/me/push-devices/${DEVICE_TOKEN}`, method: "PUT", body: { environment: "SANDBOX" } },
+      { path: "/api/me/push-devices", method: "PUT", body: { token: DEVICE_TOKEN, environment: "SANDBOX" } },
       {
         path: "/api/me/notification-settings",
         method: "PUT",
@@ -249,40 +249,52 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
   });
 });
 
+const REGISTER_PATH = "/api/me/push-devices";
+const UNREGISTER_PATH = "/api/me/push-devices/unregister";
+
+/** 기기 등록, 기기 해제, 로그아웃 요청을 나간 순서대로 기록한다. token이 경로에 남지 않는지 보려고 모든 요청 주소도 모은다. */
+function recordDeviceRequests(page: Page) {
+  const sent: { request: string; body: unknown }[] = [];
+  const urls: string[] = [];
+  page.on("request", (request) => {
+    urls.push(request.url());
+    const path = new URL(request.url()).pathname;
+    if (path === REGISTER_PATH || path === UNREGISTER_PATH || path === "/api/auth/logout") {
+      sent.push({ request: `${request.method()} ${path}`, body: request.postData() ? request.postDataJSON() : null });
+    }
+  });
+  return { sent, urls };
+}
+
+const registration = { request: `PUT ${REGISTER_PATH}`, body: { token: DEVICE_TOKEN, environment: "SANDBOX" } };
+const unregistration = { request: `POST ${UNREGISTER_PATH}`, body: { token: DEVICE_TOKEN } };
+const logout = { request: "POST /api/auth/logout", body: null };
+
 test("허용된 앱을 열면 기기를 한 번 등록하고, 로그아웃하면 그 token을 먼저 지운 뒤 로그아웃한다", async ({ page }) => {
   await openInApp(page, { permission: "granted" });
-  const devicePath = `/api/me/push-devices/${DEVICE_TOKEN}`;
-  const sent: string[] = [];
-  page.on("request", (request) => {
-    const path = new URL(request.url()).pathname;
-    if (path === devicePath || path === "/api/auth/logout") sent.push(`${request.method()} ${path}`);
-  });
+  const { sent, urls } = recordDeviceRequests(page);
   const registered = page.waitForResponse(
-    (response) => response.request().method() === "PUT" && new URL(response.url()).pathname === devicePath,
+    (response) => response.request().method() === "PUT" && new URL(response.url()).pathname === REGISTER_PATH,
   );
   await page.goto("/mypage");
   await registered;
   await page.getByRole("button", { name: "로그아웃", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "로그아웃", exact: true }).click();
   await expect(page).toHaveURL("/");
-  expect(sent).toEqual([`PUT ${devicePath}`, `DELETE ${devicePath}`, "POST /api/auth/logout"]);
+  expect(sent).toEqual([registration, unregistration, logout]);
+  expect(urls.filter((url) => url.includes(DEVICE_TOKEN))).toEqual([]);
 });
 
 test("기기 등록 응답이 오기 전에 로그아웃하면 등록이 끝난 뒤에 token을 지우고 로그아웃한다", async ({ page }) => {
   await openInApp(page, { permission: "granted" });
-  const devicePath = `/api/me/push-devices/${DEVICE_TOKEN}`;
-  const sent: string[] = [];
-  page.on("request", (request) => {
-    const path = new URL(request.url()).pathname;
-    if (path === devicePath || path === "/api/auth/logout") sent.push(`${request.method()} ${path}`);
-  });
+  const { sent } = recordDeviceRequests(page);
   let releaseRegistration: () => void = () => {};
   const registrationHeld = new Promise<void>((held) => {
-    void page.route(`**${devicePath}`, async (route) => {
+    void page.route(`**${REGISTER_PATH}`, async (route) => {
       if (route.request().method() !== "PUT") return route.fallback();
       held();
       await new Promise<void>((release) => (releaseRegistration = release));
-      sent.push("PUT 응답");
+      sent.push({ request: "PUT 응답", body: null });
       await route.fallback();
     });
   });
@@ -292,14 +304,15 @@ test("기기 등록 응답이 오기 전에 로그아웃하면 등록이 끝난 
   await page.getByRole("dialog").getByRole("button", { name: "로그아웃", exact: true }).click();
   // 등록이 끝나지 않은 동안에는 아무 요청도 나가지 않아야 한다. 나가지 않음을 확인하려면 잠시 지켜볼 수밖에 없다.
   const early = await page
-    .waitForRequest((request) => request.method() === "DELETE" || request.url().endsWith("/api/auth/logout"), {
-      timeout: 1_000,
-    })
+    .waitForRequest(
+      (request) => request.url().endsWith(UNREGISTER_PATH) || request.url().endsWith("/api/auth/logout"),
+      { timeout: 1_000 },
+    )
     .catch(() => null);
   expect(early).toBeNull();
   releaseRegistration();
   await expect(page).toHaveURL("/");
-  expect(sent).toEqual([`PUT ${devicePath}`, "PUT 응답", `DELETE ${devicePath}`, "POST /api/auth/logout"]);
+  expect(sent).toEqual([registration, { request: "PUT 응답", body: null }, unregistration, logout]);
 });
 
 test("알림을 눌러 앱을 열면 로그인하지 않아도 그 정류장의 판정 보드를 연다", async ({ page, auth, api }) => {

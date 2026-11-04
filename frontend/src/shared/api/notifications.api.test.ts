@@ -9,6 +9,7 @@ import {
 import type { NotificationSetting } from "./notifications.types";
 
 const originalFetch = global.fetch;
+const DEVICE_TOKEN = "a1b2c3d4".repeat(8);
 const target = { routeId: "200000001", stopId: "200000011", direction: "UP" } as const;
 const setting = {
   id: "20000000-0000-4000-8000-000000000001",
@@ -35,26 +36,24 @@ afterEach(() => {
 });
 
 describe("알림 API 연결", () => {
-  it("기기 등록은 토큰을 경로에 인코딩하고 환경을 본문으로 보내며 204를 성공으로 읽는다", async () => {
+  it("기기 등록은 token을 경로가 아니라 본문에 환경과 함께 PUT으로 보내고 204를 성공으로 읽는다", async () => {
     const fetchMock = respondWith(() => new Response(null, { status: 204 }));
-    expect(await registerPushDevice("a/b c", "SANDBOX")).toMatchObject({ ok: true, status: 204 });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/me/push-devices/a%2Fb%20c",
-      expect.objectContaining({
-        method: "PUT",
-        body: JSON.stringify({ environment: "SANDBOX" }),
-        headers: expect.objectContaining({ "X-XSRF-TOKEN": "csrf-test" }),
-      }),
-    );
+    expect(await registerPushDevice(DEVICE_TOKEN, "SANDBOX")).toMatchObject({ ok: true, status: 204 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/me/push-devices");
+    expect(init).toMatchObject({ method: "PUT", headers: expect.objectContaining({ "X-XSRF-TOKEN": "csrf-test" }) });
+    expect(JSON.parse(String(init?.body))).toEqual({ token: DEVICE_TOKEN, environment: "SANDBOX" });
   });
 
-  it("기기 등록 해제는 같은 경로로 DELETE를 보낸다", async () => {
+  it("기기 등록 해제는 token을 본문에 담아 unregister로 POST를 보낸다", async () => {
     const fetchMock = respondWith(() => new Response(null, { status: 204 }));
-    expect(await unregisterPushDevice("token-1")).toMatchObject({ ok: true });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/me/push-devices/token-1",
-      expect.objectContaining({ method: "DELETE" }),
-    );
+    expect(await unregisterPushDevice(DEVICE_TOKEN)).toMatchObject({ ok: true, status: 204 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/me/push-devices/unregister");
+    expect(init).toMatchObject({ method: "POST", headers: expect.objectContaining({ "X-XSRF-TOKEN": "csrf-test" }) });
+    expect(JSON.parse(String(init?.body))).toEqual({ token: DEVICE_TOKEN });
   });
 
   it("설정 목록을 검증한 값으로 읽는다", async () => {
@@ -116,7 +115,7 @@ describe("알림 API 연결", () => {
   });
 
   it.each([
-    [400, "INVALID_PUSH_DEVICE", () => registerPushDevice("token-1", "PRODUCTION")],
+    [400, "INVALID_PUSH_DEVICE", () => registerPushDevice(DEVICE_TOKEN, "PRODUCTION")],
     [400, "INVALID_NOTIFICATION_SCHEDULE", () => saveNotificationSetting(target, setting)],
     [422, "NOTIFICATION_TARGET_NOT_FAVORITE", () => saveNotificationSetting(target, setting)],
     [404, "NOTIFICATION_SETTING_NOT_FOUND", () => deleteNotificationSetting(setting.id)],
