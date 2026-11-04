@@ -43,6 +43,22 @@ afterEach(() => {
 });
 
 describe("즐겨찾기 API 연결", () => {
+  it("레스 예보의 출력 기준과 독립 확률을 즐겨찾기에도 보존한다", () => {
+    const les = structuredClone(home);
+    const forecast = {
+      status: "AVAILABLE",
+      seatAvailableProbability: 0.15,
+      expectedSeats: 3.7,
+      seatTarget: "AFTER_ALIGHTING_ESTIMATE",
+      probabilityTarget: "DEPARTURE_ZERO",
+      afterAlightingSeatEstimate: 3.7,
+      departureFullProbability: 0.85,
+    };
+    Reflect.set(les.groups[0]!.favorites[0]!.approachingVehicles[0]!, "forecast", forecast);
+    expect(homeFavoritesFrom(les)?.groups[0]?.favorites[0]?.approachingVehicles[0]?.forecast).toEqual(forecast);
+    Reflect.set(forecast, "afterAlightingSeatEstimate", Infinity);
+    expect(homeFavoritesFrom(les)).toBeNull();
+  });
   it("검증한 필드로 새 객체를 만들고 서버의 초과 필드는 버린다", () => {
     const parsed = homeFavoritesFrom(home);
     expect(parsed).toEqual(home);

@@ -7,7 +7,7 @@ export function routeButton(page: Page) {
 }
 
 export function routeSearchEntry(page: Page) {
-  return page.getByRole("textbox", { name: "번호를 입력하면 탑승 확률을 알려드려요", exact: true });
+  return page.getByRole("textbox", { name: "번호를 입력하면 좌석 여유를 알려드려요", exact: true });
 }
 
 export function routeSearchInput(page: Page) {

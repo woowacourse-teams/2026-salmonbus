@@ -110,7 +110,7 @@ for (const { direction, label, sequence, expectedArrivals } of [
       await stop.scrollIntoViewIfNeeded();
       await expect(stop).toBeInViewport();
       await expect(stop).toHaveAttribute("aria-expanded", "false");
-      await expect(row.getByText("탑승 확률 높음", { exact: true })).toBeVisible();
+      await expect(row.getByText("출발 시 좌석 여유 높음", { exact: true })).toBeVisible();
 
       await stop.click();
       await expect(stop).toHaveAttribute("aria-expanded", "true");
