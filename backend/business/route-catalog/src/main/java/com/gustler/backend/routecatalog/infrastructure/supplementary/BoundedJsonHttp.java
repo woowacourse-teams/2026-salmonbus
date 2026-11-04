@@ -31,8 +31,9 @@ final class BoundedJsonHttp {
     }
 
     Result getWithMetadata(URI uri) {
+        // Providers select JSON through their query parameters. BMS rejects an explicit JSON Accept header.
         var future = client.sendAsync(HttpRequest.newBuilder(uri)
-                .timeout(Duration.ofSeconds(6)).header("Accept", "application/json").GET().build(),
+                .timeout(Duration.ofSeconds(6)).GET().build(),
                 info -> new LimitedBody());
         try {
             var response = future.get(7, TimeUnit.SECONDS);
