@@ -1,29 +1,8 @@
-import { memberRequest } from "./auth.api";
-import type { ApiResult, RequestOptions } from "./client";
+import { parsedMemberRequest as request } from "./auth.api";
 import { favoriteGroupFrom, favoriteGroupsFrom, groupNameFrom, homeFavoritesFrom, emptyFrom } from "./favorites.schema";
 import type { FavoriteGroup, FavoriteGroups, FavoriteTarget, HomeFavorites } from "./favorites.types";
 
 const GROUPS = "/api/me/favorite-groups";
-
-async function request<T>(
-  url: string,
-  options: RequestOptions,
-  parse: (body: unknown) => T | null,
-): Promise<ApiResult<T>> {
-  const result = await memberRequest<unknown>(url, options);
-  if (!result.ok) return result;
-  const body = parse(result.body);
-  return body === null
-    ? { ok: false, failure: { kind: "malformed", status: result.status, requestId: result.requestId } }
-    : {
-        ok: true,
-        body,
-        status: result.status,
-        requestId: result.requestId,
-        clock: result.clock,
-        lifetime: result.lifetime,
-      };
-}
 
 export const fetchFavoriteGroups = (signal?: AbortSignal) =>
   request<FavoriteGroups>(GROUPS, signal ? { signal } : {}, favoriteGroupsFrom);

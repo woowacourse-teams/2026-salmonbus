@@ -51,8 +51,19 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/**/*{Favorite,favorite}*.{ts,tsx}", "src/shared/components/favorite-editor/**/*.{ts,tsx}"],
-    ignores: ["src/**/*.test.ts", "src/**/*.typeTest.ts"],
+    files: [
+      "src/**/*{Favorite,favorite}*.{ts,tsx}",
+      "src/**/*{Notification,notification}*.{ts,tsx}",
+      "src/shared/components/favorite-editor/**/*.{ts,tsx}",
+    ],
+    // SAL-172가 앱과 같이 쓰는 bridge 파일은 이 습관 규칙에서 뺀다.
+    ignores: [
+      "src/**/*.test.ts",
+      "src/**/*.typeTest.ts",
+      "src/shared/notification/notification.types.ts",
+      "src/shared/notification/nativeNotification.ts",
+      "src/shared/notification/openedNotificationInbox.ts",
+    ],
     rules: {
       "@typescript-eslint/consistent-type-definitions": ["error", "interface"],
       "@typescript-eslint/method-signature-style": ["error", "property"],
