@@ -39,12 +39,21 @@ export function followOpenedNotifications(
   };
 }
 
+type Navigate = (path: string, options: { state: unknown }) => void;
+
+/** 알림 대상의 판정 보드로 가면서, 판정 보드가 board_viewed에 진입 경로 notification을 남기게 한다. */
+export function openNotificationBoard(
+  target: NotificationTarget,
+  navigate: Navigate,
+  trackEvent: typeof track = track,
+): void {
+  navigate(favoritePath(target), { state: boardEntryStateFor("notification") });
+  trackEvent("notification_opened", { route_id: target.routeId, direction: target.direction, stop_id: target.stopId });
+}
+
 /** 알림 대상의 판정 보드를 연다. 로그인하지 않아도 판정 보드는 열린다. */
 export function useOpenedNotification() {
   const navigate = useNavigate();
-  const openBoard = useEffectEvent((target: NotificationTarget) => {
-    navigate(favoritePath(target), { state: boardEntryStateFor("notification") });
-    track("notification_opened", { route_id: target.routeId, direction: target.direction, stop_id: target.stopId });
-  });
+  const openBoard = useEffectEvent((target: NotificationTarget) => openNotificationBoard(target, navigate));
   useEffect(() => followOpenedNotifications((target) => openBoard(target)), []);
 }

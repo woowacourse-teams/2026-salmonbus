@@ -1,7 +1,8 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { NotificationTarget } from "./notification.types";
 import { createOpenedNotificationInbox } from "./openedNotificationInbox";
-import { followOpenedNotifications, takeOnce } from "./useOpenedNotification";
+import { boardEntryFrom } from "../routing/boardEntry";
+import { followOpenedNotifications, openNotificationBoard, takeOnce } from "./useOpenedNotification";
 
 const TARGET: NotificationTarget = { routeId: "234000884", stopId: "203000165", direction: "UP" };
 const RUNNING_TARGET: NotificationTarget = { routeId: "234000026", stopId: "203000165", direction: "DOWN" };
@@ -51,5 +52,24 @@ describe("알림으로 연 대상 따라가기", () => {
     inbox.receive(TARGET);
     await settled();
     expect(open.mock.calls).toEqual([[RUNNING_TARGET]]);
+  });
+});
+
+describe("알림 대상의 판정 보드 열기", () => {
+  it("그 정류장의 판정 보드로 가고, 판정 보드가 읽는 진입 경로는 notification이다", () => {
+    const navigate = jest.fn<(path: string, options: { state: unknown }) => void>();
+    const trackEvent = jest.fn();
+
+    openNotificationBoard(TARGET, navigate, trackEvent);
+
+    expect(navigate).toHaveBeenCalledTimes(1);
+    const [path, { state }] = navigate.mock.calls[0]!;
+    expect(path).toBe("/routes/234000884?direction=UP&stopId=203000165");
+    expect(boardEntryFrom(state)).toBe("notification");
+    expect(trackEvent).toHaveBeenCalledWith("notification_opened", {
+      route_id: "234000884",
+      direction: "UP",
+      stop_id: "203000165",
+    });
   });
 });
