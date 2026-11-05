@@ -34,12 +34,17 @@ final class RouteDisplayTopology {
     private static boolean contactsContained(Contacts before,Contacts after) {
         if(!before.complete() || !after.complete())return false;
         for(var contact:after.values()) {
-            boolean present=before.values().stream().anyMatch(old->sameParticipants(old,contact) && (
-                contact.overlap()?old.overlap() && segmentDistance(contact.first(),old.first(),old.last())<=.05 && segmentDistance(contact.last(),old.first(),old.last())<=.05
-                :old.overlap()?segmentDistance(contact.first(),old.first(),old.last())<=.05:RouteStopAlignment.distance(contact.first(),old.first())<=.05));
+            boolean present=before.values().stream().anyMatch(old->containsContact(old,contact));
             if(!present)return false;
         }
         return true;
+    }
+    private static boolean containsContact(Contact old, Contact contact) {
+        return sameParticipants(old, contact) && (contact.overlap()
+                ? old.overlap() && segmentDistance(contact.first(), old.first(), old.last()) <= .05
+                    && segmentDistance(contact.last(), old.first(), old.last()) <= .05
+                : old.overlap() ? segmentDistance(contact.first(), old.first(), old.last()) <= .05
+                    : RouteStopAlignment.distance(contact.first(), old.first()) <= .05);
     }
     private static boolean sameParticipants(Contact a,Contact b) {
         return a.firstPath().equals(b.firstPath()) && a.secondPath().equals(b.secondPath())
@@ -260,6 +265,55 @@ final class RouteDisplayTopology {
                                 path.points().get(i + 1)),
                         Math::max);
         return result;
+    }
+
+    /** Only the replacement edge can create a new contact. The final bundle is checked separately. */
+    static boolean safeShortcutContacts(List<Point> points, int target, List<Point> other, String direction,
+            Contacts baseline, Contacts rendererBaseline) {
+        if (target <= 0 || target >= points.size() - 1
+                || !Set.of("UP", "DOWN").contains(direction)
+                || !baseline.complete() || !rendererBaseline.complete()) return false;
+        var budget = new Budget();
+        for (boolean renderer : List.of(false, true)) {
+            if (renderer && java.util.stream.Stream.concat(points.stream(), other.stream())
+                    .anyMatch(p -> Math.abs(p.y()) >= 85.06)) return false;
+            var a = coordinate(points.get(target - 1), renderer);
+            var b = coordinate(points.get(target + 1), renderer);
+            if (a.equals(b)) return false;
+            // Match the full checker: zero-length edges do not separate adjacent segments.
+            int previous = target - 2, next = target + 1;
+            while (previous >= 0 && coordinate(points.get(previous), renderer)
+                    .equals(coordinate(points.get(previous + 1), renderer))) previous--;
+            while (next < points.size() - 1 && coordinate(points.get(next), renderer)
+                    .equals(coordinate(points.get(next + 1), renderer))) next++;
+            for (int path = 0; path < 2; path++) {
+                var route = path == 0 ? points : other;
+                String participant = path == 0 ? direction : direction.equals("UP") ? "DOWN" : "UP";
+                for (int edge = 0; edge < route.size() - 1; edge++) {
+                    if (!budget.step()) return false;
+                    if (path == 0 && (edge == target - 1 || edge == target)) continue;
+                    var c = coordinate(route.get(edge), renderer);
+                    var d = coordinate(route.get(edge + 1), renderer);
+                    if (c.equals(d) || Math.max(a.x(), b.x()) < Math.min(c.x(), d.x())
+                            || Math.min(a.x(), b.x()) > Math.max(c.x(), d.x())
+                            || Math.max(a.y(), b.y()) < Math.min(c.y(), d.y())
+                            || Math.min(a.y(), b.y()) > Math.max(c.y(), d.y())) continue;
+                    var hit = contact(a, b, c, d);
+                    if (hit == null) continue;
+                    boolean overlap = !hit[0].equals(hit[1]);
+                    if (!overlap && path == 0 && (edge == previous || edge == next)) continue;
+                    var value = new Contact(geographic(hit[0], renderer), geographic(hit[1], renderer),
+                            overlap, direction, participant);
+                    boolean allowed = false;
+                    for (var old : (renderer ? rendererBaseline : baseline).values()) {
+                        if (!budget.step()) return false;
+                        if (containsContact(old, value)) { allowed = true; break; }
+                    }
+                    if (!allowed) return false;
+                }
+            }
+        }
+        return true;
     }
 
     static boolean safeShortcut(

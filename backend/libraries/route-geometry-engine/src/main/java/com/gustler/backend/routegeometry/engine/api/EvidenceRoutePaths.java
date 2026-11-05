@@ -86,13 +86,18 @@ final class EvidenceRoutePaths {
         Map<Point, List<TypedPoint>> classifications = alignment.classifications();
         var crossings = RouteDisplayTopology.crossings(original);
         if (!crossings.complete()) return original;
+        var contacts = RouteDisplayTopology.contacts(original);
+        var rendererContacts = RouteDisplayTopology.rendererContacts(original);
+        if (!contacts.complete() || !rendererContacts.complete()) return original;
         var angles = RouteDisplayTopology.angles(original);
         List<Point> up = new ArrayList<>(original.up().points()),
                 down = new ArrayList<>(original.down().points());
-        clean(up, down, "UP", classifications, geometry, crossings, angles);
-        clean(down, up, "DOWN", classifications, geometry, crossings, angles);
+        clean(up, down, "UP", classifications, geometry, crossings, angles, contacts, rendererContacts);
+        clean(down, up, "DOWN", classifications, geometry, crossings, angles, contacts, rendererContacts);
         RoutePaths candidate = new RoutePaths(new RoutePaths.Path(up), new RoutePaths.Path(down));
         return RouteDisplayTopology.noNewCrossings(original, candidate)
+                        && RouteDisplayTopology.noNewRendererCrossings(original, candidate)
+                        && RouteDisplayTopology.noNewContacts(contacts, rendererContacts, candidate)
                         && RouteDisplayTopology.noNewSpike(original, candidate)
                 ? candidate
                 : original;
@@ -105,7 +110,7 @@ final class EvidenceRoutePaths {
             Map<Point, List<TypedPoint>> classifications,
             RouteGeometry geometry,
             RouteDisplayTopology.Crossings crossings,
-            Map<Point, Double> angles) {
+            Map<Point, Double> angles, RouteDisplayTopology.Contacts contacts, RouteDisplayTopology.Contacts rendererContacts) {
         for (int i = points.size() - 2; i > 0; i--) {
             Point target = points.get(i);
             var evidence =
@@ -124,6 +129,7 @@ final class EvidenceRoutePaths {
                     || distance(a, b) > 500
                     || segmentDistance(target, a, b) > (confirmed ? 25 : 10)) continue;
             if (!RouteDisplayTopology.safeShortcut(points, i, other, crossings, angles)) continue;
+            if (!RouteDisplayTopology.safeShortcutContacts(points,i,other,direction,contacts,rendererContacts)) continue;
             points.remove(i);
         }
     }

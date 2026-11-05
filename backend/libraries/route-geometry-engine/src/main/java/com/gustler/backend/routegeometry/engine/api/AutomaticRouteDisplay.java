@@ -11,7 +11,7 @@ import java.util.*;
 
 /** 자동 후보는 최종 방문·끝점·교차 검사를 거친다. 요청에서 외부 도로 조회나 임의의 핀 이동을 하지 않는다. */
 public final class AutomaticRouteDisplay {
-    public static final String REVISION = "automatic-quality-v6";
+    public static final String REVISION = "automatic-quality-v7";
 
     private AutomaticRouteDisplay() {}
 
