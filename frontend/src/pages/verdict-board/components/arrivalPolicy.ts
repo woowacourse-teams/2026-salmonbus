@@ -10,7 +10,6 @@ export interface AvailableArrival extends ArrivalBase {
   kind: "available";
   level: SeatLevel;
   seatEstimate: SeatEstimate;
-  seatTarget?: "FIRST_POST_STOP_OBSERVATION" | "AFTER_ALIGHTING_ESTIMATE";
 }
 
 export interface UnavailableArrival extends ArrivalBase {
@@ -51,7 +50,6 @@ function toArrivalView(vehicle: ApproachingVehicle): ArrivalView {
     vehicleId,
     stopsAway: remainingStops,
     level: toSeatLevel(forecast.seatAvailableProbability),
-    seatEstimate: toSeatEstimate(forecast.afterAlightingSeatEstimate ?? forecast.expectedSeats),
-    ...(forecast.seatTarget ? { seatTarget: forecast.seatTarget } : {}),
+    seatEstimate: toSeatEstimate(forecast.expectedSeats),
   };
 }

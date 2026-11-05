@@ -5,9 +5,9 @@ import { seatLabelOf } from "@/shared/utils/seatLabelOf";
 export type ChipTone = ArrivalTone | "noVehicle";
 
 const CHIP_LABELS: Record<ChipTone, string> = {
-  high: "출발 시 좌석 여유 높음",
-  low: "출발 시 좌석 여유 낮음",
-  veryLow: "출발 시 좌석 여유 매우 낮음",
+  high: "탑승 확률 높음",
+  low: "탑승 확률 낮음",
+  veryLow: "탑승 확률 매우 낮음",
   unavailable: "좌석 예측 정보가 없어요",
   noVehicle: "지금 오는 차량이 없어요",
 };
@@ -36,7 +36,5 @@ function withoutWaypointSuffix(name: string): string {
 }
 
 export function arrivalSeatLabel(arrival: ArrivalView): string {
-  return arrival.kind === "available"
-    ? seatLabelOf(arrival.seatEstimate, arrival.seatTarget)
-    : seatLabelOf({ kind: "unknown" });
+  return seatLabelOf(arrival.kind === "available" ? arrival.seatEstimate : { kind: "unknown" });
 }

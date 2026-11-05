@@ -53,20 +53,12 @@ export interface AvailableForecast {
   status: "AVAILABLE";
   seatAvailableProbability: number;
   expectedSeats?: number;
-  seatTarget?: "FIRST_POST_STOP_OBSERVATION" | "AFTER_ALIGHTING_ESTIMATE";
-  probabilityTarget?: "FIRST_POST_STOP_ZERO" | "DEPARTURE_ZERO";
-  afterAlightingSeatEstimate?: number;
-  departureFullProbability?: number;
 }
 
 export interface UnavailableForecast {
   status: "UNAVAILABLE";
   seatAvailableProbability?: never;
   expectedSeats?: never;
-  seatTarget?: never;
-  probabilityTarget?: never;
-  afterAlightingSeatEstimate?: never;
-  departureFullProbability?: never;
 }
 
 export type VehicleForecast = AvailableForecast | UnavailableForecast;

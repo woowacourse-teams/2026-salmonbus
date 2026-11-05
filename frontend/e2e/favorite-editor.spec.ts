@@ -84,7 +84,7 @@ test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓�
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
-    page.getByRole("textbox", { name: "번호를 입력하면 좌석 여유를 알려드려요", exact: true }),
+    page.getByRole("textbox", { name: "번호를 입력하면 탑승 확률을 알려드려요", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "마이페이지", exact: true })).toBeVisible();
   const cards = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true }).getByRole("listitem");

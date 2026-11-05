@@ -99,37 +99,6 @@ function forecastFrom(value: unknown): VehicleForecast | null {
       return null;
     forecast.expectedSeats = value.expectedSeats;
   }
-  if (value.seatTarget !== undefined) {
-    if (value.seatTarget !== "FIRST_POST_STOP_OBSERVATION" && value.seatTarget !== "AFTER_ALIGHTING_ESTIMATE")
-      return null;
-    forecast.seatTarget = value.seatTarget;
-  }
-  if (value.probabilityTarget !== undefined) {
-    if (value.probabilityTarget !== "FIRST_POST_STOP_ZERO" && value.probabilityTarget !== "DEPARTURE_ZERO") return null;
-    forecast.probabilityTarget = value.probabilityTarget;
-  }
-  if (value.afterAlightingSeatEstimate !== undefined) {
-    if (
-      typeof value.afterAlightingSeatEstimate !== "number" ||
-      !Number.isFinite(value.afterAlightingSeatEstimate) ||
-      value.afterAlightingSeatEstimate < 0 ||
-      value.afterAlightingSeatEstimate > 70 ||
-      value.seatTarget !== "AFTER_ALIGHTING_ESTIMATE"
-    )
-      return null;
-    forecast.afterAlightingSeatEstimate = value.afterAlightingSeatEstimate;
-  }
-  if (value.departureFullProbability !== undefined) {
-    if (
-      typeof value.departureFullProbability !== "number" ||
-      !Number.isFinite(value.departureFullProbability) ||
-      value.departureFullProbability < 0 ||
-      value.departureFullProbability > 1 ||
-      value.probabilityTarget !== "DEPARTURE_ZERO"
-    )
-      return null;
-    forecast.departureFullProbability = value.departureFullProbability;
-  }
   return forecast;
 }
 

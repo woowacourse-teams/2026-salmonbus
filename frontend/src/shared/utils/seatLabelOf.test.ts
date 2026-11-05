@@ -3,10 +3,6 @@ import { toSeatEstimate } from "./seatGrade";
 import { seatLabelOf } from "./seatLabelOf";
 
 describe("예상 좌석 표시 문구", () => {
-  it("레스의 하차 후 추정값을 도착 관측값으로 표시하지 않는다", () => {
-    expect(seatLabelOf(toSeatEstimate(3.7), "AFTER_ALIGHTING_ESTIMATE")).toBe("하차 후 3석 예상해요");
-    expect(seatLabelOf(toSeatEstimate(0), "AFTER_ALIGHTING_ESTIMATE")).toBe("하차 후 0석 예상해요");
-  });
   it("예상 좌석이 1석 이상이면 좌석 수를 보여 준다", () => {
     expect(seatLabelOf(toSeatEstimate(5))).toBe("도착 시 5석 예상해요");
   });

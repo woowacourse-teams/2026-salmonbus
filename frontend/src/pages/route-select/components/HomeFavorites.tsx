@@ -311,11 +311,7 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
                 const arrived = vehicle.remainingStops === 0;
                 const tone =
                   forecast.status === "AVAILABLE" ? toSeatLevel(forecast.seatAvailableProbability) : "unavailable";
-                const estimate = toSeatEstimate(
-                  forecast.status === "AVAILABLE"
-                    ? (forecast.afterAlightingSeatEstimate ?? forecast.expectedSeats)
-                    : undefined,
-                );
+                const estimate = toSeatEstimate(forecast.status === "AVAILABLE" ? forecast.expectedSeats : undefined);
                 return (
                   <li className={homeStyles.arrival} key={vehicle.vehicleId ?? index}>
                     <span className={homeStyles.timing}>
@@ -326,11 +322,7 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
                         {stopsAwayLabelOf(vehicle.remainingStops)}
                       </span>
                     </span>
-                    <SeatCountBadge
-                      tone={tone}
-                      className={homeStyles.seatBadge[tone]}
-                      label={seatLabelOf(estimate, forecast.status === "AVAILABLE" ? forecast.seatTarget : undefined)}
-                    />
+                    <SeatCountBadge tone={tone} className={homeStyles.seatBadge[tone]} label={seatLabelOf(estimate)} />
                   </li>
                 );
               })}
