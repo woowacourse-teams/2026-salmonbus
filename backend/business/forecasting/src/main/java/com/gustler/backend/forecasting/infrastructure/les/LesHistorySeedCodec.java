@@ -186,9 +186,6 @@ final class LesHistorySeedCodec {
     }
 
     private static void validateRetainedWindow(List<LesObservation> rows, Map<String, LesVehiclePrefix> prefix) {
-        if (rows.isEmpty() && prefix.isEmpty()) {
-            throw unavailable("LES_SEED_EMPTY");
-        }
         Set<Long> identities = new HashSet<>();
         Set<String> vehicleBatches = new HashSet<>();
         for (LesObservation observation : rows) {

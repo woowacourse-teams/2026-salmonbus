@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.application.les.LesFeatureQuery;
+import com.gustler.backend.forecasting.application.les.LesInputConfirmation;
 import com.gustler.backend.forecasting.application.les.LesFeatureUnavailableException;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
@@ -100,6 +101,26 @@ class LesForecastPublicationTest {
         assertThatThrownBy(() -> writer.writeForecastsOf(batch, stops, runtime))
             .hasMessage("LES_HISTORY_ORIGIN_UNVERIFIED");
         verifyNoInteractions(committer, legacyStatistics, legacyOutcomes, legacyTrajectories);
+    }
+
+    @Test
+    void 확인_시각이_지원_시간_밖이면_빈_발행으로_처리를_끝낸다() {
+        // given
+        RuntimeSnapshot runtime = runtime();
+        when(statistics.confirmedProfile()).thenReturn(true);
+        LesInputConfirmation confirmation = mock(LesInputConfirmation.class);
+        writer.setConfirmedInput(confirmation);
+        when(confirmation.confirm(10, now)).thenReturn(true);
+        when(query.read(10, stops, statistics))
+            .thenThrow(new LesFeatureUnavailableException("LES_OUTSIDE_VALIDATED_RUSH_SCOPE"));
+
+        // when
+        writer.writeForecastsOf(batch, stops, runtime);
+
+        // then
+        ArgumentCaptor<ForecastPublication> published = ArgumentCaptor.forClass(ForecastPublication.class);
+        verify(committer).commitConfirmed(eq(batch), published.capture());
+        assertThat(published.getValue().predictions()).isEmpty();
     }
 
     @Test

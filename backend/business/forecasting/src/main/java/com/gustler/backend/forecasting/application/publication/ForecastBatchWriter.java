@@ -202,6 +202,9 @@ public class ForecastBatchWriter {
         } catch (LesFeatureUnavailableException error) {
             LOGGER.warn("event=forecast_batch_withheld reason={} batchId={}", error.getMessage(),
                 batch.observationBatchId());
+            if ("LES_OUTSIDE_VALIDATED_RUSH_SCOPE".equals(error.getMessage())) {
+                return Map.of();
+            }
             throw error;
         }
     }

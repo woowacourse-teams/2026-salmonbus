@@ -3,6 +3,9 @@ package com.gustler.backend.forecasting.infrastructure.les;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import com.gustler.backend.forecasting.domain.model.les.LesObservation;
+import java.time.Instant;
+import java.util.List;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -61,6 +64,28 @@ class LesHistorySeedReaderTest {
         Files.writeString(directory.resolve("7.json"), "{\"modified\":true}");
         assertThatThrownBy(() -> new LesHistorySeedReader(directory.toString(), 10).read(7))
             .hasMessageContaining("HASH_MISMATCH");
+    }
+
+    @Test
+    void 빈_초기_체크포인트_다음에_정상_관측을_저장할_수_있다() {
+        // given
+        LesHistorySeedReader reader = new LesHistorySeedReader(directory.toString(), 10);
+        Instant start = Instant.parse("2026-11-04T00:00:00Z");
+        reader.write(7, new LesHistorySeedReader.Seed(List.of(), 1, 0, start));
+
+        // when
+        LesHistorySeedReader.Seed empty = reader.read(7);
+        LesObservation observation = new LesObservation(2, 2, 1, start.plusSeconds(20), "bus", 1, 1, 2, 30, 0);
+        reader.write(7, new LesHistorySeedReader.Seed(List.of(observation), 2, 1, start.plusSeconds(20)));
+        LesHistorySeedReader.Seed restored = reader.read(7);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(empty.observations()).isEmpty();
+            softly.assertThat(empty.rank()).isZero();
+            softly.assertThat(restored.observations()).containsExactly(observation);
+            softly.assertThat(restored.batchId()).isEqualTo(2);
+        });
     }
 
     private void write(String json) throws Exception {
