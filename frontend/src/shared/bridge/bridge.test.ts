@@ -26,10 +26,8 @@ describe("로그인 메시지 목록", () => {
   });
 });
 
-// 두 타입의 원소가 서로를 다 덮을 때만 true다. 한쪽에만 있는 명령이 생기면 false가 되어 typecheck가 막는다.
 type SameMembers<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
-// jest는 babel로 타입을 지우고 돌아서, 웹 NotificationCommands에만 명령을 더하면 런타임 비교로는 못 잡는다. 그쪽은 typecheck가 잡는다.
 const WEB_NOTIFICATION_COMMANDS = [
   "notification.requestPermission",
   "notification.getRegistration",

@@ -25,7 +25,6 @@ export function useAuth(): AuthContextValue {
   return value;
 }
 
-/** 회원이면 회원 ID, 비회원이면 null이다. 세션을 확인하지 못한 상태는 회원인지 모르는 것이라 undefined다. */
 export function memberIdOf(state: AuthState): string | null | undefined {
   if (state.status === "authenticated") return state.member.id;
   if (state.status === "anonymous") return null;

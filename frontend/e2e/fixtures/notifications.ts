@@ -6,12 +6,10 @@ const settingId = (value: number) => `20000000-0000-4000-8000-${String(value).pa
 
 interface NotificationsMock {
   settings: NotificationSetting[];
-  /** 값이 있으면 GET이 아닌 알림 요청은 모두 이 오류로 답한다. */
   mutationError: { status: number; code: string } | null;
   requests: { path: string; method: string; body: Record<string, unknown> | null }[];
 }
 
-/** 테크 스펙 v4의 알림 API 표(push-devices, notification-settings)를 흉내 낸다. */
 export const test = favoritesTest.extend<{ notifications: NotificationsMock }>({
   notifications: [
     async ({ auth, api }, use) => {

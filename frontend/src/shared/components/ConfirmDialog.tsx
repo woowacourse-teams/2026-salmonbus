@@ -8,7 +8,6 @@ interface ConfirmDialogProps {
   className?: string;
   titleClassName?: string;
   fallbackFocus?: RefObject<HTMLElement | null>;
-  /** 열 때 포커스를 줄 곳. 이름 입력처럼 입력이 창의 목적일 때만 입력칸을 넘긴다. */
   initialFocus?: RefObject<HTMLElement | null>;
 }
 
@@ -20,7 +19,6 @@ function opensKeyboardOrPicker(element: HTMLElement): boolean {
   return element instanceof HTMLInputElement && !INPUT_TYPES_WITHOUT_KEYBOARD.has(element.type);
 }
 
-/** 첫 컨트롤에 포커스를 주되, 그 컨트롤이 키보드나 선택기를 여는 입력칸이면 제목에 준다. */
 function firstFocusOf(dialog: HTMLDialogElement, title: HTMLElement): HTMLElement {
   const firstControl = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].find(
     (element) => !element.matches(":disabled"),
@@ -44,8 +42,6 @@ export function ConfirmDialog({
     const dialog = ref.current;
     const previouslyFocused = document.activeElement;
     const fallbackTarget = fallbackFocus?.current;
-    // showModal은 창 안의 첫 포커스 자리에 포커스를 준다. 입력칸이 그 자리면 iOS가 키보드나 선택기를 열어 창을 가리므로,
-    // 제목을 입력칸보다 앞의 포커스 자리(tabIndex -1)로 두어 showModal이 입력칸을 거치지 않게 한 뒤 둘 곳으로 옮긴다.
     dialog?.showModal();
     const title = titleRef.current;
     if (dialog && title) (initialFocus?.current ?? firstFocusOf(dialog, title)).focus();

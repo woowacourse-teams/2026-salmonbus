@@ -56,7 +56,6 @@ export default tseslint.config(
       "src/**/*{Notification,notification}*.{ts,tsx}",
       "src/shared/components/favorite-editor/**/*.{ts,tsx}",
     ],
-    // SAL-172가 앱과 같이 쓰는 bridge 파일은 이 습관 규칙에서 뺀다.
     ignores: [
       "src/**/*.test.ts",
       "src/**/*.typeTest.ts",

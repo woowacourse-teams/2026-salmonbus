@@ -71,7 +71,6 @@ export async function memberRequest<T>(url: string, options: RequestOptions = {}
   return result;
 }
 
-/** 회원 요청의 성공 본문을 parse로 검증한다. parse가 null을 돌려주면 잘못된 응답으로 바꾼다. */
 export async function parsedMemberRequest<T>(
   url: string,
   options: RequestOptions,
@@ -118,7 +117,6 @@ export async function withdraw(): Promise<ApiResult<void | { startUrl: string }>
   });
 }
 
-/** 앱 네이티브 로그인 API(SAL-318)가 없는 서버는 404다. 웹은 그때 WebView 로그인으로 간다. */
 export async function issueNativeNonce(provider: NativeLoginProvider): Promise<ApiResult<{ nonce: string }>> {
   return checked(await authRequest<unknown>(`/api/auth/${provider}/native/nonce`, { method: "POST" }), isNativeNonce);
 }

@@ -8,7 +8,6 @@ import type {
 } from "@/shared/notification/notification.types";
 import { NEW_NOTIFICATION_SCHEDULE, notificationErrorOf } from "./notificationPolicy";
 
-/** 정류장 하나의 알림 줄. editing, asking, saving, failed 동안 시각과 요일 창이 열려 있다. */
 export type NotificationRowState =
   | { status: "off" }
   | { status: "denied" }
@@ -35,7 +34,6 @@ export function notificationRowStateOf(setting: NotificationSetting | null): Not
   return setting === null ? { status: "off" } : { status: "on", setting };
 }
 
-/** 스위치와 요약 줄이 보여 줄 설정. 저장이 끝나기 전에는 이전 값을 보인다. */
 export function shownSettingOf(state: NotificationRowState): NotificationSetting | null {
   switch (state.status) {
     case "on":
@@ -53,7 +51,6 @@ export function shownSettingOf(state: NotificationRowState): NotificationSetting
   }
 }
 
-/** 지금 상태에서 받을 수 없는 사건이면 상태를 그대로 돌려준다. */
 export function nextNotificationRowState(
   state: NotificationRowState,
   event: NotificationRowEvent,
@@ -97,7 +94,6 @@ export function nextNotificationRowState(
 }
 
 export interface NotificationSaveServices {
-  /** 앱이 답하지 않거나 앱 밖이면 null이다. 권한을 고르지 않은 것과 같게 본다. */
   requestRegistration: () => Promise<NotificationRegistration | null>;
   registerPushDevice: (token: string, environment: ApnsEnvironment) => Promise<ApiResult<void>>;
   saveNotificationSetting: (
@@ -106,11 +102,6 @@ export interface NotificationSaveServices {
   ) => Promise<ApiResult<NotificationSetting>>;
 }
 
-/**
- * 창의 저장 버튼. 새 알림이면 권한을 묻고, 허락받은 기기를 등록한 뒤 설정을 저장한다.
- * 이미 켜진 알림은 시각과 요일만 저장한다. 단계마다 apply로 사건을 넘긴다.
- * 앱은 권한 답을 오래 쥐고 있을 수 있어서, 권한을 묻는 동안 취소하면(signal) 늦게 온 답으로는 아무것도 저장하지 않는다.
- */
 export async function submitNotification(
   target: FavoriteTarget,
   previous: NotificationSetting | null,
@@ -141,7 +132,6 @@ export async function submitNotification(
   );
 }
 
-/** 켜진 스위치를 끄면 바로 지운다. 서버에 이미 없는 설정은 꺼진 것으로 본다. */
 export async function removeNotification(
   setting: NotificationSetting,
   deleteNotificationSetting: (id: string) => Promise<ApiResult<void>>,

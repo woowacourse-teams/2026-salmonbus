@@ -40,16 +40,13 @@ const WEB_URL = readWebUrl();
 const WEB_ORIGIN = new URL(WEB_URL).origin;
 const IN_APP_ORIGINS = [WEB_ORIGIN];
 const NAVIGABLE_ORIGINS = [...IN_APP_ORIGINS, ...LOGIN_PROVIDER_ORIGINS];
-// 모든 이동이 allowNavigation에 오게 한다. 허용 판단은 navigationDecisionFor가 origin을 정확히 비교해서 한다.
 const EVERY_URL = ['*'];
 const SPLASH_BACKGROUND_COLOR = '#E8533F';
-// 영역 키와 그 영역 메시지의 type 앞부분이 다르면 tsc가 막는다 (map 키에는 map.* 만).
 type DomainCapabilities<T> = { [K in keyof T]: readonly `${K & string}.${string}`[] };
 function domainCapabilitiesOf<T extends DomainCapabilities<T>>(capabilities: T): T {
   return capabilities;
 }
 
-// 영역마다 앱이 받는 메시지 목록. 처리 함수(handlersByDomain)도 같은 키로 둔다.
 const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
   map: NativeRouteMap !== null ? NATIVE_MAP_CAPABILITIES : [],
   haptic: HAPTIC_CAPABILITIES,
@@ -79,7 +76,6 @@ export default function App() {
   const commandQueue = useRef(Promise.resolve());
   const documentEpoch = useRef(0);
   const signingIn = useRef(false);
-  // 웹 문서가 다 떴는지. 뜨는 중에 넣은 injectJavaScript는 사라질 수 있어서 알림 탭을 보낼지 쌓을지 이 값으로 정한다.
   const documentLoaded = useRef(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -90,7 +86,6 @@ export default function App() {
     SplashScreen.hide();
   };
   const retryLoad = () => setLoadFailed(false);
-  // 백그라운드에서 WebView 프로세스가 끝나면 문서도 없다. 다시 뜨기 전에 온 알림 탭은 쌓아 둔다.
   const reloadWebView = () => {
     documentLoaded.current = false;
     webViewRef.current?.reload();
@@ -101,8 +96,6 @@ export default function App() {
     resetNativeMap();
   }
 
-  // WebView는 로그인 제공자 화면도 연다. 그 화면에는 알림 탭을 넘기지 않으니 웹 문서가 떴을 때만 true다.
-  // 웹은 시작 지점에서 notification.opened를 듣고 있어서, 뜨는 동안 쌓인 탭은 다 뜬 순간 보낸다.
   function handleLoad(event: WebViewNavigationEvent) {
     documentLoaded.current = isInAppUrl(event.nativeEvent.url);
     if (!documentLoaded.current) return;
@@ -126,7 +119,6 @@ export default function App() {
     handlersByDomain[domain](message, raw);
   }
 
-  // message는 검사를 마친 envelope이고, raw는 받은 JSON 그대로다. 지도 모듈은 raw를 Swift에서 다시 읽는다.
   const handlersByDomain: Record<BridgeDomain, (message: BridgeMessage, raw: string) => void> = {
     map: (_message, raw) => handleMapMessage(raw),
     haptic: (message) => playHaptic(message),
@@ -137,7 +129,6 @@ export default function App() {
     notification: (message) => handleNotificationCommand(message),
   };
 
-  // 로그인 창은 한 번에 하나만 연다. 결과는 웹 origin의 문서에만 넘긴다.
   function handleSignIn(message: BridgeMessage) {
     const request = signInRequestFrom(message.payload);
     if (request === null) return;
@@ -157,7 +148,6 @@ export default function App() {
     sendToWeb({ type: SIGN_IN_RESULT, payload: { ...result } });
   }
 
-  // 웹에 명령이 늘면 이 표에서 앱 tsc가 막는다.
   const notificationHandlers: Record<NotificationCommandType, (requestId: string) => void> = {
     'notification.requestPermission': (requestId) => replyRegistration(requestId, { ask: true }),
     'notification.getRegistration': (requestId) => replyRegistration(requestId, { ask: false }),
@@ -176,12 +166,10 @@ export default function App() {
     );
   }
 
-  // requestId의 뜻은 웹 notification.types.ts의 OpenedNotification을 따른다.
   function sendOpened(requestId: string | null, target: Record<string, unknown> | null) {
     sendToWeb({ type: OPENED_EVENT, payload: { requestId, target } });
   }
 
-  // 로그인 결과와 기기 토큰이 WebView가 연 로그인 제공자 화면에 가면 안 되어서 웹 origin 문서에만 넘긴다.
   function sendToWeb(message: BridgeMessage) {
     webViewRef.current?.injectJavaScript(bridgeEventScriptFor(message, WEB_ORIGIN));
   }
@@ -201,7 +189,6 @@ export default function App() {
 
   function handleMapMessage(raw: string) {
     const epoch = documentEpoch.current;
-    // Imperative commands preserve ordering without a React render for every geometry update.
     commandQueue.current = commandQueue.current
       .catch(() => undefined)
       .then(async () => {

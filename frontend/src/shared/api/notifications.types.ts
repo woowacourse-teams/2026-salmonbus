@@ -5,9 +5,7 @@ export const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as con
 export type Weekday = (typeof WEEKDAYS)[number];
 
 export interface NotificationSchedule {
-  /** KST 시각, "HH:MM" */
   time: string;
-  /** 하나 이상, 월요일부터 순서대로 */
   weekdays: Weekday[];
 }
 

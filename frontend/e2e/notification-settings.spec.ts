@@ -16,21 +16,16 @@ type PermissionStatus = "granted" | "denied" | "undetermined";
 
 interface SimulatedApp {
   capabilities?: string[];
-  /** 앱을 열 때 이미 고른 권한. */
   permission?: PermissionStatus;
-  /** 권한 창에서 고를 답. 이미 고른 권한이 undetermined가 아니면 창 없이 그 권한으로 답한다. */
   permissionAnswer?: PermissionStatus;
-  /** notification.takeOpened로 꺼낼 알림 탭 대상. */
   opened?: { routeId: string; stopId: string; direction: "UP" | "DOWN" } | null;
 }
 
-/** 앱 WebView 흉내. 알림 명령을 받으면 테크 스펙 v4 bridge 표대로 같은 requestId로 답한다. */
 async function openInApp(page: Page, app: SimulatedApp = {}) {
   await page.addInitScript(
     ({ capabilities, permission, permissionAnswer, opened, token }) => {
       let status = permission;
       let pending = opened;
-      // api fixture가 page.clock을 멈춰 두어 setTimeout으로는 답이 가지 않는다.
       const reply = (type: string, payload: object) =>
         queueMicrotask(() =>
           window.dispatchEvent(new CustomEvent("salmon:bridge", { detail: { v: 1, type, payload } })),
@@ -107,8 +102,6 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     await openInApp(page);
     await page.goto(`/mypage/groups/${defaultGroupId}`);
     await expect(notificationSwitch(page)).toBeVisible();
-    // iOS WebView는 입력칸이 잠깐이라도 포커스를 받으면 시각 선택기를 열어 창을 가린다.
-    // Playwright로는 선택기가 보이지 않아, 원인인 포커스가 창을 여는 동안 어디로 갔는지를 모두 기록한다.
     await page.evaluate(() => {
       const focusedTags: string[] = [];
       document.addEventListener("focusin", (event) => {
@@ -252,7 +245,6 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
 const REGISTER_PATH = "/api/me/push-devices";
 const UNREGISTER_PATH = "/api/me/push-devices/unregister";
 
-/** 기기 등록, 기기 해제, 로그아웃 요청을 나간 순서대로 기록한다. token이 경로에 남지 않는지 보려고 모든 요청 주소도 모은다. */
 function recordDeviceRequests(page: Page) {
   const sent: { request: string; body: unknown }[] = [];
   const urls: string[] = [];
@@ -302,7 +294,6 @@ test("기기 등록 응답이 오기 전에 로그아웃하면 등록이 끝난 
   await registrationHeld;
   await page.getByRole("button", { name: "로그아웃", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "로그아웃", exact: true }).click();
-  // 등록이 끝나지 않은 동안에는 아무 요청도 나가지 않아야 한다. 나가지 않음을 확인하려면 잠시 지켜볼 수밖에 없다.
   const early = await page
     .waitForRequest(
       (request) => request.url().endsWith(UNREGISTER_PATH) || request.url().endsWith("/api/auth/logout"),

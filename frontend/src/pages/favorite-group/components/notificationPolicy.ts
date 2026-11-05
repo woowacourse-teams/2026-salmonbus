@@ -34,7 +34,6 @@ export function scheduleLabelOf({ time, weekdays }: NotificationSchedule): strin
   return `${weekdaysLabelOf(weekdays)} ${time}`;
 }
 
-/** 고른 요일이 하나뿐이면 그 요일은 끌 수 없어서 그대로 돌려준다. */
 export function toggledWeekdaysOf(weekdays: Weekday[], toggled: Weekday): Weekday[] {
   if (!weekdays.includes(toggled))
     return WEEKDAYS.filter((weekday) => weekday === toggled || weekdays.includes(weekday));

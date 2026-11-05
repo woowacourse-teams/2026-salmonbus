@@ -8,7 +8,6 @@ import type { NotificationSchedule } from "./notifications.types";
 const SETTINGS = "/api/me/notification-settings";
 const PUSH_DEVICES = "/api/me/push-devices";
 
-// 요청 경로는 오류 기록에 그대로 남아서 token은 본문으로만 보낸다.
 export const registerPushDevice = (token: string, environment: ApnsEnvironment) =>
   parsedMemberRequest(PUSH_DEVICES, { method: "PUT", body: { token, environment } }, emptyFrom);
 export const unregisterPushDevice = (token: string) =>
