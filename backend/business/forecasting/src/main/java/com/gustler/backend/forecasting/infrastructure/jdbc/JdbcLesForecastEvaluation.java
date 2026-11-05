@@ -203,18 +203,7 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         LocalDate date,
         List<Work> work
     ) {
-        Map<Instant, ConfirmedLesEvaluation> confirmedByHorizon = new HashMap<>();
-        for (Work item : work) {
-            if (item.version().equals(LesRouteStatistics.CONFIRMED_LABEL)) {
-                Instant through = item.observedAt().plusSeconds(7200);
-                if (through.isAfter(now)) {
-                    through = now;
-                }
-                ConfirmedLesEvaluation confirmed = confirmedByHorizon.computeIfAbsent(through,
-                    horizon -> new ConfirmedLesEvaluation(jdbc, route, date, horizon, confirmedObservationLimit));
-                settleConfirmed(item, revision, now, confirmed);
-            }
-        }
+        settleConfirmedDay(route, revision, now, date, work);
         work = work.stream().filter(item -> !item.version().equals(LesRouteStatistics.CONFIRMED_LABEL)).toList();
         if (work.isEmpty()) {
             return;
@@ -234,6 +223,45 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         Map<List<Integer>, List<LesPassEvent>> eventCache = new HashMap<>();
         for (Work item : work) {
             settleWork(item, revision, now, evidence, byId, eventCache, inputLimit, sourceProblem);
+        }
+    }
+
+    /** 관측 목록은 같은 조회 상한을 쓰는 묶음에서만 보관하고 다음 묶음으로 넘기지 않는다. */
+    private void settleConfirmedDay(
+        final long route,
+        final long revision,
+        Instant now,
+        LocalDate date,
+        List<Work> work
+    ) {
+        Map<Instant, List<Work>> workByHorizon = work.stream()
+            .filter(item -> item.version().equals(LesRouteStatistics.CONFIRMED_LABEL))
+            .collect(Collectors.groupingBy(item -> confirmedThrough(item, now)));
+        for (Map.Entry<Instant, List<Work>> entry : workByHorizon.entrySet()) {
+            settleConfirmedGroup(route, revision, now, date, entry.getKey(), entry.getValue());
+        }
+    }
+
+    private Instant confirmedThrough(Work work, Instant now) {
+        Instant through = work.observedAt().plusSeconds(7200);
+        if (through.isAfter(now)) {
+            return now;
+        }
+        return through;
+    }
+
+    private void settleConfirmedGroup(
+        final long route,
+        final long revision,
+        Instant now,
+        LocalDate date,
+        Instant through,
+        List<Work> work
+    ) {
+        ConfirmedLesEvaluation confirmed = new ConfirmedLesEvaluation(
+            jdbc, route, date, through, confirmedObservationLimit);
+        for (Work item : work) {
+            settleConfirmed(item, revision, now, confirmed);
         }
     }
 

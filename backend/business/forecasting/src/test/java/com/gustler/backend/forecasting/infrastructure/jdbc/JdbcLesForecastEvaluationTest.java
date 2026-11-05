@@ -441,6 +441,90 @@ class JdbcLesForecastEvaluationTest {
         assertThat(store.verifiedForPurge()).isEmpty();
     }
 
+    @Test
+    void 일부_결과를_먼저_삭제해도_남은_결과는_재평가_후_이관한다() {
+        // given
+        final long second = observation("second", 10, 1, 40);
+        copyForecast(second);
+        service.settle();
+        jdbc.sql("UPDATE les_forecast_evaluation_result SET scored_at=? WHERE route_version_id=?")
+            .params(offset(START), version).update();
+        MemoryObjects objects = new MemoryObjects();
+        JdbcLesEvaluationArchiveStore store = new JdbcLesEvaluationArchiveStore(jdbc, transactions);
+        new LesEvaluationArchiveService(store, objects, false, 500).advance();
+        jdbc.sql("""
+            INSERT INTO les_forecast_evaluation_work(vehicle_observation_id,target_stop_order,target_kind,
+                label_version,route_version_id) VALUES(?,2,'AFTER_ALIGHTING_ESTIMATE',?,?)
+            """).params(source, VERSION, version).update();
+        LesEvaluationArchiveService archive = new LesEvaluationArchiveService(store, objects, true, 500);
+        archive.advance();
+        assertThat(count("les_forecast_evaluation_result")).isEqualTo(2);
+
+        // when
+        archive.advance();
+        jdbc.sql("DELETE FROM les_forecast_evaluation_work WHERE route_version_id=?").param(version).update();
+        archive.advance();
+
+        // then
+        assertThat(count("les_forecast_evaluation_result")).isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM les_evaluation_archive "
+            + "WHERE route_version_id=? AND storage_state='PURGED' AND abandoned_at IS NULL")
+            .param(version).query(Integer.class).single()).isEqualTo(4);
+        assertThat(objects.bytes).hasSize(1);
+    }
+
+    @Test
+    void 지연된_여러_예보를_처리해도_관측_목록이_힙에_계속_쌓이지_않는다() {
+        // given
+        useConfirmedProfile();
+        for (int seconds = 1; seconds <= 24; seconds++) {
+            final long next = observation("late-" + seconds, seconds, 1, 40);
+            copyForecast(next);
+        }
+        final long noise = observation("noise-first", -60, 1, 40);
+        jdbc.sql("""
+            INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
+                stop_order,stop_id,passed_stop_order,running_state,remaining_seats)
+            SELECT observation_batch_id,route_version_id,n,'noise-'||n,1,'s1',1,2,40
+            FROM vehicle_observation CROSS JOIN generate_series(1,50000) n WHERE id=?
+            """).param(noise).update();
+        jdbc.sql("""
+            UPDATE observation_batch b SET ingestion_origin='LIVE',input_confirmed_at=response_received_at,
+                stored_rows=(SELECT count(*) FROM vehicle_observation o WHERE o.observation_batch_id=b.id)
+            WHERE route_version_id=?
+            """).param(version).update();
+
+        // when
+        new JdbcLesForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions).settle();
+
+        // then
+        assertThat(count("les_forecast_evaluation_work")).isZero();
+        assertThat(count("les_forecast_evaluation_result")).isEqualTo(50);
+        assertThat(jdbc.sql("SELECT DISTINCT reason FROM les_forecast_evaluation_result "
+            + "WHERE route_version_id=? AND vehicle_observation_id<>?")
+            .params(version, source).query(String.class).list()).containsExactly("NO_CLOSED_IDENTITY_SAFE_PASS");
+    }
+
+    private void useConfirmedProfile() {
+        jdbc.sql("""
+            UPDATE seat_forecast SET label_version='les-confirmed-routeband-v2',feature_snapshot=feature_snapshot ||
+                '{"inputProfile":"les-confirmed-closure-v2",
+                  "capacityPolicy":"observed-vehicle-prefix-max-through-closure-v2","turn":4}'::jsonb
+            WHERE vehicle_observation_id=?
+            """).param(source).update();
+        jdbc.sql("UPDATE les_forecast_evaluation_work SET label_version='les-confirmed-routeband-v2' "
+            + "WHERE vehicle_observation_id=?").param(source).update();
+    }
+
+    private void copyForecast(final long observationId) {
+        jdbc.sql("""
+            INSERT INTO seat_forecast
+            SELECT (jsonb_populate_record(NULL::seat_forecast,
+                to_jsonb(f)||jsonb_build_object('vehicle_observation_id',:id))).*
+            FROM seat_forecast f WHERE vehicle_observation_id=:source
+            """).param("id", observationId).param("source", source).update();
+    }
+
     private long observation(
         String vehicle,
         final int seconds,

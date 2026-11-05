@@ -48,7 +48,11 @@ public class JdbcLesEvaluationArchiveStore implements LesEvaluationArchiveStore 
         Boolean retired = transaction.execute(status -> {
             for (LesEvaluationArchiveStore.Row row : rows) {
                 JsonNode original = JSON.readTree(row.originalJson());
-                List<String> current = lockResult(key(original));
+                LesEvaluationArchiveStore.Key key = key(original);
+                if (!isPurgeCandidate(key, hash)) {
+                    continue;
+                }
+                List<String> current = lockResult(key);
                 if (hasChanged(original, current, JSON.readTree(row.evidenceJson()))) {
                     jdbc.sql("""
                         UPDATE les_evaluation_archive SET abandoned_at=clock_timestamp()
@@ -61,6 +65,13 @@ public class JdbcLesEvaluationArchiveStore implements LesEvaluationArchiveStore 
             return false;
         });
         return Boolean.TRUE.equals(retired);
+    }
+
+    private boolean isPurgeCandidate(LesEvaluationArchiveStore.Key key, String hash) {
+        return bind(jdbc.sql("SELECT EXISTS(SELECT 1 FROM les_evaluation_archive WHERE "
+            + KEY_PREDICATE + " AND object_hash=:hash AND storage_state='LIVE' "
+            + "AND restored_at IS NULL AND abandoned_at IS NULL)"), key)
+            .param("hash", hash).query(Boolean.class).single();
     }
 
     private boolean hasChanged(JsonNode original, List<String> current, JsonNode evidence) {
