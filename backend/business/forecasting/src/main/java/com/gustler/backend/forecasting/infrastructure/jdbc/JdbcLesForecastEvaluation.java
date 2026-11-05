@@ -41,7 +41,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 예보에 기록한 계수로만 평가한다. 기존 관측 정산, DemandSample, 당일 확률 보정에 기록하지 않는다.
- * 한 tick 100개 목표, 설정한 관측 상한 초과와 원자료 누락은 관측 실패와 구분해 기록한다.
+ * 페이지당 100개씩 노선별 처리 예산까지 평가한다. 관측 상한 초과와 원자료 누락은 관측 실패와 구분한다.
  */
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
@@ -54,6 +54,8 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
     private static final Set<LocalDate> FIT_HOLIDAYS = Set.of(
         LocalDate.parse("2026-08-17"), LocalDate.parse("2026-09-24"), LocalDate.parse("2026-09-25"),
         LocalDate.parse("2026-10-05"), LocalDate.parse("2026-10-09"));
+    private static final int PAGE_SIZE = 100;
+    private final int pendingLimit;
     private final int observationLimit;
     private final int confirmedObservationLimit;
     private final JdbcClient jdbc;
@@ -80,7 +82,6 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         this(jdbc, quality, clock, transactions, observationLimit, observationLimit);
     }
 
-    @Autowired
     public JdbcLesForecastEvaluation(
         JdbcClient jdbc,
         RouteDataQualityAccess quality,
@@ -89,6 +90,23 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         @Value("${forecast.les.evaluation.maximum-observation-rows:50000}") final int observationLimit,
         @Value("${forecast.les.causal-evaluation.maximum-observation-rows:150000}") final int confirmedObservationLimit
     ) {
+        this(jdbc, quality, clock, transactions, observationLimit, confirmedObservationLimit, 3000);
+    }
+
+    @Autowired
+    public JdbcLesForecastEvaluation(
+        JdbcClient jdbc,
+        RouteDataQualityAccess quality,
+        Clock clock,
+        PlatformTransactionManager transactions,
+        @Value("${forecast.les.evaluation.maximum-observation-rows:50000}") final int observationLimit,
+        @Value("${forecast.les.causal-evaluation.maximum-observation-rows:150000}") final int confirmedObservationLimit,
+        @Value("${forecast.pending-limit:3000}") final int pendingLimit
+    ) {
+        if (pendingLimit < 1 || pendingLimit > 100_000) {
+            throw new IllegalArgumentException("Les 회차별 처리 예산은 1~100000개여야 한다");
+        }
+        this.pendingLimit = pendingLimit;
         if (confirmedObservationLimit < 1 || confirmedObservationLimit > 1_000_000) {
             throw new IllegalArgumentException("확인 시각 정산 관측 한도는 1~1000000개여야 한다");
         }
@@ -109,13 +127,11 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         registerQualityRevisionWork();
         // 다음 시각으로 순환하므로 아직 도착하지 않은 오래된 예보가 뒤의 예보를 막지 않는다.
         List<Long> routes = jdbc.sql("""
-            SELECT DISTINCT route_version_id FROM (
-                SELECT route_version_id FROM les_forecast_evaluation_work
-                WHERE next_attempt_at<=clock_timestamp() ORDER BY next_attempt_at,vehicle_observation_id LIMIT 100
-            ) due ORDER BY route_version_id
+            SELECT DISTINCT route_version_id FROM les_forecast_evaluation_work
+            WHERE next_attempt_at<=clock_timestamp() ORDER BY route_version_id
             """).query(Long.class).list();
         for (final long route : routes) {
-            transaction.executeWithoutResult(status -> settleRoute(route));
+            settleRoutePages(route);
         }
     }
 
@@ -151,18 +167,33 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
             .update();
     }
 
-    private void settleRoute(final long route) {
+    private void settleRoutePages(final long route) {
+        int remaining = pendingLimit;
+        Instant dueThrough = jdbc.sql("SELECT clock_timestamp()")
+            .query(OffsetDateTime.class).single().toInstant();
+        while (remaining > 0) {
+            final int pageLimit = Math.min(PAGE_SIZE, remaining);
+            Integer processed = transaction.execute(status -> settleRoute(route, pageLimit, dueThrough));
+            if (processed == null || processed < pageLimit) {
+                return;
+            }
+            remaining -= processed;
+        }
+    }
+
+    private int settleRoute(final long route, final int limit, Instant dueThrough) {
         final long revision = quality.lock(route);
         Instant now = clock.instant();
-        List<Work> work = readWork(route);
+        List<Work> work = readWork(route, limit, dueThrough);
         if (quality.anyInvestigationPending(route)) {
             work.forEach(item -> reschedule(item, "QUALITY_REBUILD_PENDING"));
-            return;
+            return work.size();
         }
         Map<LocalDate, List<Work>> days = work.stream().collect(Collectors.groupingBy(w -> day(w.observedAt())));
         for (Map.Entry<LocalDate, List<Work>> entry : days.entrySet()) {
             settleDay(route, revision, now, entry.getKey(), entry.getValue());
         }
+        return work.size();
     }
 
     private void settleDay(
@@ -172,10 +203,15 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         LocalDate date,
         List<Work> work
     ) {
-        ConfirmedLesEvaluation confirmed = new ConfirmedLesEvaluation(
-            jdbc, route, date, now, confirmedObservationLimit);
+        Map<Instant, ConfirmedLesEvaluation> confirmedByHorizon = new HashMap<>();
         for (Work item : work) {
             if (item.version().equals(LesRouteStatistics.CONFIRMED_LABEL)) {
+                Instant through = item.observedAt().plusSeconds(7200);
+                if (through.isAfter(now)) {
+                    through = now;
+                }
+                ConfirmedLesEvaluation confirmed = confirmedByHorizon.computeIfAbsent(through,
+                    horizon -> new ConfirmedLesEvaluation(jdbc, route, date, horizon, confirmedObservationLimit));
                 settleConfirmed(item, revision, now, confirmed);
             }
         }
@@ -223,7 +259,7 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         finish(work, revision, now, outcome);
     }
 
-    private List<Work> readWork(final long route) {
+    private List<Work> readWork(final long route, final int limit, Instant dueThrough) {
         return jdbc.sql("""
             SELECT w.*,CASE WHEN w.label_version='les-confirmed-routeband-v2' THEN coalesce(batch.input_confirmed_at,batch.response_received_at)
                      ELSE batch.response_received_at END AS source_at,f.feature_snapshot::text,
@@ -232,10 +268,10 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
             JOIN seat_forecast f USING(vehicle_observation_id,target_stop_order)
             JOIN forecast_observation_quality source ON source.id=w.vehicle_observation_id
             JOIN observation_batch batch ON batch.id=source.observation_batch_id
-            WHERE w.route_version_id=:route AND w.next_attempt_at<=clock_timestamp()
+            WHERE w.route_version_id=:route AND w.next_attempt_at<=:dueThrough
             ORDER BY w.next_attempt_at,w.vehicle_observation_id,w.target_stop_order,w.target_kind
-            LIMIT 100 FOR UPDATE OF w SKIP LOCKED
-            """).param("route", route)
+            LIMIT :limit FOR UPDATE OF w SKIP LOCKED
+            """).param("route", route).param("limit", limit).param("dueThrough", dueThrough.atOffset(ZoneOffset.UTC))
             .query((rs, n) -> new Work(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order"),
                 rs.getString("target_kind"), rs.getString("label_version"), route,
                 rs.getObject("source_at", OffsetDateTime.class).toInstant(), rs.getString("feature_snapshot"),

@@ -37,9 +37,37 @@ public class JdbcLesEvaluationArchiveStore implements LesEvaluationArchiveStore 
     public Optional<String> verifiedForPurge() {
         return jdbc.sql("""
             SELECT object_hash FROM les_evaluation_archive
-            WHERE storage_state='LIVE' AND restored_at IS NULL ORDER BY verified_at LIMIT 1
+            WHERE storage_state='LIVE' AND restored_at IS NULL AND abandoned_at IS NULL
+            ORDER BY verified_at LIMIT 1
             """)
             .query(String.class).optional();
+    }
+
+    @Override
+    public boolean retireChanged(String hash, List<LesEvaluationArchiveStore.Row> rows) {
+        Boolean retired = transaction.execute(status -> {
+            for (LesEvaluationArchiveStore.Row row : rows) {
+                JsonNode original = JSON.readTree(row.originalJson());
+                List<String> current = lockResult(key(original));
+                if (hasChanged(original, current, JSON.readTree(row.evidenceJson()))) {
+                    jdbc.sql("""
+                        UPDATE les_evaluation_archive SET abandoned_at=clock_timestamp()
+                        WHERE object_hash=:hash AND storage_state='LIVE' AND restored_at IS NULL
+                          AND abandoned_at IS NULL
+                        """).param("hash", hash).update();
+                    return true;
+                }
+            }
+            return false;
+        });
+        return Boolean.TRUE.equals(retired);
+    }
+
+    private boolean hasChanged(JsonNode original, List<String> current, JsonNode evidence) {
+        if (current.isEmpty()) {
+            return true;
+        }
+        return !JSON.readTree(current.getFirst()).equals(original) || !readEvidence(original).equals(evidence);
     }
 
     @Override
@@ -84,7 +112,7 @@ public class JdbcLesEvaluationArchiveStore implements LesEvaluationArchiveStore 
     private void archiveRow(LesEvaluationArchiveStore.Row original, String hash, final boolean deleteEnabled) {
         JsonNode row = JSON.readTree(original.originalJson());
         LesEvaluationArchiveStore.Key key = key(row);
-        if (wasRestored(key)) {
+        if (isRetained(key)) {
             return;
         }
         List<String> current = lockResult(key);
@@ -101,9 +129,9 @@ public class JdbcLesEvaluationArchiveStore implements LesEvaluationArchiveStore 
         }
     }
 
-    private boolean wasRestored(LesEvaluationArchiveStore.Key key) {
+    private boolean isRetained(LesEvaluationArchiveStore.Key key) {
         return bind(jdbc.sql("SELECT EXISTS(SELECT 1 FROM les_evaluation_archive WHERE "
-            + KEY_PREDICATE + " AND restored_at IS NOT NULL)"), key).query(Boolean.class).single();
+            + KEY_PREDICATE + " AND (restored_at IS NOT NULL OR abandoned_at IS NOT NULL))"), key).query(Boolean.class).single();
     }
 
     private List<String> lockResult(LesEvaluationArchiveStore.Key key) {

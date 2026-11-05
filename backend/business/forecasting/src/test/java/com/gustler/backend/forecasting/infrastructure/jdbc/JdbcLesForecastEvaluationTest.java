@@ -373,6 +373,74 @@ class JdbcLesForecastEvaluationTest {
         assertThat(count("les_quality_eligible_evaluation")).isEqualTo(2);
     }
 
+    @Test
+    void 처리_예산이_허용하면_백개를_넘는_정산도_한_회차에서_처리한다() {
+        // given
+        jdbc.sql("""
+            INSERT INTO les_forecast_evaluation_work(vehicle_observation_id,target_stop_order,target_kind,
+                label_version,route_version_id)
+            SELECT vehicle_observation_id,target_stop_order,seat_target,'unknown-'||n,route_version_id
+            FROM seat_forecast CROSS JOIN generate_series(1,250) n WHERE vehicle_observation_id=?
+            """).param(source).update();
+
+        // when
+        new JdbcLesForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions, 50_000, 150_000, 220).settle();
+
+        // then
+        assertThat(count("les_forecast_evaluation_work")).isEqualTo(32);
+        assertThat(count("les_forecast_evaluation_result")).isEqualTo(220);
+    }
+
+    @Test
+    void 다음날_관측이_늘어도_확인시각_정산의_입력_범위를_넓히지_않는다() {
+        // given
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at "
+            + "WHERE route_version_id=?").param(version).update();
+        jdbc.sql("""
+            UPDATE seat_forecast SET label_version='les-confirmed-routeband-v2',feature_snapshot=feature_snapshot ||
+                '{"inputProfile":"les-confirmed-closure-v2",
+                  "capacityPolicy":"observed-vehicle-prefix-max-through-closure-v2","turn":4}'::jsonb
+            WHERE vehicle_observation_id=?
+            """).param(source).update();
+        jdbc.sql("UPDATE les_forecast_evaluation_work SET label_version='les-confirmed-routeband-v2' "
+            + "WHERE vehicle_observation_id=?").param(source).update();
+        observation("unrelated", 86400, 1, 40);
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at "
+            + "WHERE route_version_id=?").param(version).update();
+
+        // when
+        new JdbcLesForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions, 50_000, 8).settle();
+
+        // then
+        assertThat(jdbc.sql("SELECT scoring_state FROM les_forecast_evaluation_result "
+            + "WHERE vehicle_observation_id=? AND target_kind='DEPARTURE_ZERO'")
+            .param(source).query(String.class).single()).isEqualTo("SETTLED");
+    }
+
+    @Test
+    void 근거가_바뀐_보관_묶음은_격리하고_다음_후보를_이관한다() {
+        // given
+        service.settle();
+        jdbc.sql("UPDATE les_forecast_evaluation_result SET scored_at=? WHERE route_version_id=?")
+            .params(offset(START), version).update();
+        MemoryObjects objects = new MemoryObjects();
+        JdbcLesEvaluationArchiveStore store = new JdbcLesEvaluationArchiveStore(jdbc, transactions);
+        new LesEvaluationArchiveService(store, objects, false, 1).advance();
+        jdbc.sql("UPDATE vehicle_observation SET remaining_seats=1 WHERE id=?").param(post).update();
+        LesEvaluationArchiveService archive = new LesEvaluationArchiveService(store, objects, true, 1);
+
+        // when
+        archive.advance();
+        archive.advance();
+
+        // then
+        assertThat(jdbc.sql("SELECT count(*) FROM les_evaluation_archive "
+            + "WHERE route_version_id=? AND abandoned_at IS NOT NULL")
+            .param(version).query(Integer.class).single()).isEqualTo(1);
+        assertThat(count("les_forecast_evaluation_result")).isEqualTo(1);
+        assertThat(store.verifiedForPurge()).isEmpty();
+    }
+
     private long observation(
         String vehicle,
         final int seconds,

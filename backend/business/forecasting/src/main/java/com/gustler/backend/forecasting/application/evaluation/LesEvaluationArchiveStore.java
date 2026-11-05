@@ -19,6 +19,9 @@ public interface LesEvaluationArchiveStore {
 
     Optional<String> verifiedForPurge();
 
+    /** 근거가 변경된 LIVE 묶음을 삭제 대상에서 격리하고 원본과 객체 파일은 보존한다. */
+    boolean retireChanged(String objectHash, List<Row> verifiedRows);
+
     List<Row> candidates(int limit);
 
     void archive(List<Row> verifiedRows, String objectHash, boolean deleteEnabled);

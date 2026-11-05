@@ -57,8 +57,11 @@ public class LesEvaluationArchiveService implements LesEvaluationArchive {
             Optional<String> verified = store.verifiedForPurge();
             if (verified.isPresent()) {
                 String hash = verified.get();
-                store.archive(readEnvelope(download(hash)), hash, true);
-                return;
+                List<LesEvaluationArchiveStore.Row> rows = readEnvelope(download(hash));
+                if (!store.retireChanged(hash, rows)) {
+                    store.archive(rows, hash, true);
+                    return;
+                }
             }
         }
         List<LesEvaluationArchiveStore.Row> rows = store.candidates(pageSize);
