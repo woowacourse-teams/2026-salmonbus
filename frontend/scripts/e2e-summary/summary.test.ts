@@ -1,5 +1,36 @@
 import { describe, expect, it } from "@jest/globals";
-import { comparisonOf, inventoryOf, runStatsOf, summaryMarkdownOf, type PlaywrightJsonReport } from "./summary.ts";
+import {
+  comparisonFrom,
+  comparisonOf,
+  inventoryOf,
+  runStatsOf,
+  summaryMarkdownOf,
+  type Inventory,
+  type Loaded,
+  type PlaywrightJsonReport,
+} from "./summary.ts";
+
+function unwrapped<T>(result: Loaded<T>): T {
+  if (!result.ok) throw new Error(result.reason);
+  return result.value;
+}
+
+function inventory(list: PlaywrightJsonReport): Inventory {
+  return unwrapped(inventoryOf(list));
+}
+
+function brokenList(): PlaywrightJsonReport {
+  return {
+    stats: { duration: 300 },
+    suites: [],
+    errors: [
+      {
+        message: "\u001b[31mError: Cannot find module './nope'\u001b[39m\nRequire stack:\n- broken.spec.ts",
+      },
+      { message: "second error" },
+    ],
+  };
+}
 
 function attempt(startTime: string, duration: number, status = "passed") {
   return { startTime, duration, status };
@@ -111,18 +142,18 @@ describe("runStatsOf", () => {
 
 describe("inventoryOf", () => {
   it("spec 파일 수와 test() 수는 project 하나 기준이고, 실행 횟수는 test 수 x project 수다", () => {
-    const inventory = inventoryOf(
+    const counted = inventory(
       listOf({ "home.spec.ts": ["가", "나", "다"], "board.spec.ts": ["가"] }, ["chromium", "iphone-15"]),
     );
 
-    expect(inventory.fileCount).toBe(2);
-    expect(inventory.testNames.size).toBe(4);
-    expect(inventory.runCount).toBe(8);
-    expect(inventory.projects).toEqual(["chromium", "iphone-15"]);
+    expect(counted.fileCount).toBe(2);
+    expect(counted.testNames.size).toBe(4);
+    expect(counted.runCount).toBe(8);
+    expect(counted.projects).toEqual(["chromium", "iphone-15"]);
   });
 
   it("describe 안의 test는 describe 제목까지 이어 이름을 만든다", () => {
-    expect([...inventoryOf(runReport).testNames]).toEqual([
+    expect([...inventory(runReport).testNames]).toEqual([
       "home.spec.ts › 홈을 연다",
       "home.spec.ts › 즐겨찾기 › 별을 누른다",
     ]);
@@ -132,8 +163,8 @@ describe("inventoryOf", () => {
 describe("comparisonOf", () => {
   it("base에 없던 test()는 더한 것, head에 없는 test()는 뺀 것으로 센다", () => {
     const projects = ["chromium", "iphone-15"];
-    const base = inventoryOf(listOf({ "home.spec.ts": ["가", "나"] }, projects));
-    const head = inventoryOf(listOf({ "home.spec.ts": ["가", "다", "라"], "new.spec.ts": ["가"] }, projects));
+    const base = inventory(listOf({ "home.spec.ts": ["가", "나"] }, projects));
+    const head = inventory(listOf({ "home.spec.ts": ["가", "다", "라"], "new.spec.ts": ["가"] }, projects));
 
     const comparison = comparisonOf(base, head);
 
@@ -144,8 +175,8 @@ describe("comparisonOf", () => {
 });
 
 describe("summaryMarkdownOf", () => {
-  const head = inventoryOf(listOf({ "home.spec.ts": ["가", "나", "다"] }, ["chromium", "iphone-15"]));
-  const base = inventoryOf(listOf({ "home.spec.ts": ["가", "나"] }, ["chromium", "iphone-15"]));
+  const head = inventory(listOf({ "home.spec.ts": ["가", "나", "다"] }, ["chromium", "iphone-15"]));
+  const base = inventory(listOf({ "home.spec.ts": ["가", "나"] }, ["chromium", "iphone-15"]));
 
   it("실행 시간, project별 실행 횟수와 합계, 테스트 수를 쓴다", () => {
     const markdown = summaryMarkdownOf({
@@ -189,5 +220,49 @@ describe("summaryMarkdownOf", () => {
     expect(markdown).toContain("실행 결과를 읽지 못했다: 파일이 없다.");
     expect(markdown).toContain("- test(): 3개");
     expect(markdown).toContain("비교 못 함: base 목록이 없다.");
+  });
+});
+
+describe("목록에 Playwright 오류가 있을 때", () => {
+  const projects = ["chromium", "iphone-15"];
+  const goodList = listOf({ "home.spec.ts": ["가", "나"] }, projects);
+  const summaryOf = (baseList: PlaywrightJsonReport, headList: PlaywrightJsonReport) => {
+    const head = inventoryOf(headList);
+    const base = inventoryOf(baseList);
+    return summaryMarkdownOf({
+      run: { ok: true, value: runStatsOf(runReport) },
+      head,
+      comparison: comparisonFrom(base, head),
+      filter: "",
+    });
+  };
+
+  it("base 목록이 깨지면 비교 못 함과 첫 오류 줄을 쓰고 모든 test()를 뺀 것으로 세지 않는다", () => {
+    const markdown = summaryOf(brokenList(), goodList);
+
+    expect(markdown).toContain(
+      "비교 못 함: 목록을 만들다 Playwright 오류 2개가 났다. Error: Cannot find module './nope'",
+    );
+    expect(markdown).not.toContain("뺀 test()");
+    expect(markdown).not.toContain("| test() | 0 |");
+  });
+
+  it("head 목록이 깨지면 테스트 수와 비교 절 모두 읽지 못했다고 쓰고 0개로 세지 않는다", () => {
+    const markdown = summaryOf(goodList, brokenList());
+
+    expect(markdown).toContain("테스트 목록을 읽지 못했다: 목록을 만들다 Playwright 오류 2개가 났다.");
+    expect(markdown).toContain("비교 못 함: 목록을 만들다 Playwright 오류 2개가 났다.");
+    expect(markdown).not.toContain("- test(): 0개");
+  });
+
+  it("base와 head가 모두 깨지면 비교 표를 쓰지 않는다", () => {
+    expect(summaryOf(brokenList(), brokenList())).not.toContain("| spec 파일 |");
+  });
+
+  it("목록이 깨져도 실행 결과 절은 그대로 쓴다", () => {
+    const markdown = summaryOf(brokenList(), brokenList());
+
+    expect(markdown).toContain("- 테스트 실행 시간: 4.0분");
+    expect(markdown).toContain("| 합계 | 3 | 1 | 1 | 1 | 1 | 5 | 4.0 |");
   });
 });

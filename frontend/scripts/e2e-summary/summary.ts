@@ -30,7 +30,7 @@ interface JsonSuite {
 export interface PlaywrightJsonReport {
   stats: { duration: number };
   suites: JsonSuite[];
-  errors: unknown[];
+  errors: { message?: string }[];
 }
 
 interface TestCase {
@@ -135,13 +135,30 @@ export function runStatsOf(report: PlaywrightJsonReport): RunStats {
   };
 }
 
-export function inventoryOf(list: PlaywrightJsonReport): Inventory {
+const ansiColor = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
+function firstLineOf(message: string): string {
+  const [firstLine = ""] = message.replace(ansiColor, "").split("\n");
+  return firstLine.trim();
+}
+
+export function inventoryOf(list: PlaywrightJsonReport): Loaded<Inventory> {
+  const errors = list.errors ?? [];
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      reason: `목록을 만들다 Playwright 오류 ${errors.length}개가 났다. ${firstLineOf(errors[0]?.message ?? "")}`,
+    };
+  }
   const cases = testCasesOf(list);
   return {
-    fileCount: new Set(cases.map((testCase) => testCase.file)).size,
-    testNames: new Set(cases.map((testCase) => testCase.name)),
-    runCount: cases.length,
-    projects: uniqueSorted(cases.map((testCase) => testCase.projectName)),
+    ok: true,
+    value: {
+      fileCount: new Set(cases.map((testCase) => testCase.file)).size,
+      testNames: new Set(cases.map((testCase) => testCase.name)),
+      runCount: cases.length,
+      projects: uniqueSorted(cases.map((testCase) => testCase.projectName)),
+    },
   };
 }
 
@@ -152,6 +169,12 @@ export function comparisonOf(base: Inventory, head: Inventory): Comparison {
     added: [...head.testNames].filter((name) => !base.testNames.has(name)).sort(),
     removed: [...base.testNames].filter((name) => !head.testNames.has(name)).sort(),
   };
+}
+
+export function comparisonFrom(base: Loaded<Inventory>, head: Loaded<Inventory>): Loaded<Comparison> {
+  if (!base.ok) return base;
+  if (!head.ok) return head;
+  return { ok: true, value: comparisonOf(base.value, head.value) };
 }
 
 function minutesOf(milliseconds: number): string {
