@@ -80,3 +80,5 @@ TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock nice -n 10 ./gradlew 
 집계 결과는 같은 디렉터리의 `20-route-worker-replay-result-20261105.json`에 보존한다. BE Java 컨벤션은 Confluence 52723720의 v6 본문으로 확인했다. 여러 필드를 가진 정산 객체는 한 노선/날짜의 관측과 사건 캐시를 공유하는 하나의 정산 책임을 갖는다. 긴 SQL과 JSON 문자열은 원문을 보존하고 일반 Java 코드의 긴 줄을 나눴다.
 
 입력 확정, 스키마와 정산 근거가 같은 발행 계약으로 연결되어 있으므로 한 커밋으로 묶었다. 전체 모듈의 테스트 개수 기준은 이번에 작성한 테스트 수만 반영했으며, 전체 CI를 실행해 재측정한 값은 아니다.
+
+후속 작업: 이 문서에서 남겨 둔 20개 노선 운영 적재 조건과 운영 번들 포장은 [운영 적재 준비 결과](20-route-serving-release-20261105.md)에서 완료했다. 운영 활성화는 수행하지 않았다.

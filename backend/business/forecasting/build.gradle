@@ -62,3 +62,16 @@ tasks.register('verifyLesWorkerReplay', JavaExec) {
         }
     }
 }
+
+// 후보 계약 검사와 최종 운영 로더 검사를 구분하며 운영 DB에 적재하지 않는다.
+tasks.register('verifyLesServingReadiness', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.gustler.backend.forecasting.infrastructure.bundle.les.LesServingReadinessCheck'
+    maxHeapSize = '512m'
+    jvmArgs '-XX:ActiveProcessorCount=1'
+    doFirst {
+        args providers.gradleProperty('lesReadinessMode').get(), providers.gradleProperty('lesBundle').get(),
+            providers.gradleProperty('lesReadinessOutput').get(), providers.gradleProperty('lesReleaseId').get()
+    }
+}

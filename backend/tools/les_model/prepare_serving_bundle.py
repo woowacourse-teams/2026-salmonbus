@@ -39,6 +39,11 @@ def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None
         if digest(content) != expected:
             raise ValueError(f"source digest mismatch: {name}")
         contents[name] = content
+    from confirmed_serving_verification import CONTRACT, checked_routes, verify_receipt
+    routes = checked_routes(contents)
+    confirmed = routes is not None
+    if routes is None:
+        routes = ROUTES
     for check in CHECKS:
         content = (receipts / f"verification-{check}.json").read_bytes()
         receipt = json.loads(content)
@@ -54,11 +59,13 @@ def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None
         evidence = (receipts / evidence_name).read_bytes()
         if not isinstance(json.loads(evidence), dict) or digest(evidence) != receipt.get("evidence_sha256"):
             raise ValueError(f"evidence digest mismatch: {check}")
+        if confirmed:
+            verify_receipt(check, receipt, json.loads(evidence), source_digest, routes)
         contents[f"verification-{check}.json"] = content
         contents[evidence_name] = evidence
     # Date includes the latest observation/event used by any frozen table.
     dates = []
-    for route in ROUTES:
+    for route in routes:
         stats = json.loads(contents[f"statistics-{route}.json"])
         dates.extend(datetime.fromisoformat(stats[key]) for key in ("events_known_through", "observations_through"))
     if any(value.tzinfo is None for value in dates):
@@ -71,9 +78,11 @@ def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None
         "feature_contract_version": "les-online-v1",
         "data_through": max(dates).isoformat(),
         "source_manifest_sha256": source_digest,
-        "routes": ROUTES,
+        "routes": routes,
         "scope": "weekday-rush-6-10-17-21-horizon-1-12",
     }
+    if confirmed:
+        manifest["runtime"].update(CONTRACT)
     manifest["files"] = {name: digest(content) for name, content in contents.items()}
     # Publish only after all inputs were validated; cleanup a partial local copy on write failure.
     output.mkdir(parents=True)

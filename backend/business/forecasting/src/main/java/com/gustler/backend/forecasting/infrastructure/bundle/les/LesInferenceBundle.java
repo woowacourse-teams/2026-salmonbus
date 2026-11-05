@@ -187,10 +187,10 @@ public final class LesInferenceBundle {
         require(runtime != null && runtime.isObject(), "서빙 계약이 없다");
         require(text(runtime, "feature_contract_version").equals("les-online-v1"), "서빙 입력 판이 다르다");
         require(text(runtime, "release_id").matches("[A-Za-z0-9][A-Za-z0-9._-]{0,119}"), "출시 식별자가 잘못됐다");
-        verifyStatisticsCutoff(runtime, files);
-        require(texts(runtime.get("routes")).equals(SERVING_ROUTES), "검증된 8개 노선만 서빙할 수 있다");
-        require(texts(required(files, "statistics-manifest.json").get("routes")).equals(SERVING_ROUTES),
-            "검증된 8개 노선의 통계만 서빙할 수 있다");
+        List<String> routes = texts(required(files, "statistics-manifest.json").get("routes"));
+        final boolean confirmed = LesConfirmedServingVerification.isConfirmed(files);
+        verifyServingRoutes(runtime, files, routes, confirmed);
+        verifyStatisticsCutoff(runtime, files, routes);
         require(text(runtime, "scope").equals("weekday-rush-6-10-17-21-horizon-1-12"), "지원 시각/거리가 다르다");
         String sourceDigest = text(runtime, "source_manifest_sha256");
         require(sourceDigest.matches("[a-f0-9]{64}"), "원본 묶음 식별자가 없다");
@@ -206,8 +206,26 @@ public final class LesInferenceBundle {
             JsonNode receipt = required(files, "verification-" + check + ".json");
             require(hasMatchingVerification(receipt, check, sourceDigest, manifest),
                 "서빙 검증 증거가 다르다: " + check);
-            required(files, "evidence-" + check + ".json");
+            JsonNode evidence = required(files, "evidence-" + check + ".json");
+            if (confirmed) {
+                LesConfirmedServingVerification.verify(check, receipt, evidence, sourceDigest, routes);
+            }
         }
+    }
+
+    private static void verifyServingRoutes(
+        JsonNode runtime,
+        Map<String, JsonNode> files,
+        List<String> routes,
+        final boolean confirmed
+    ) {
+        if (confirmed) {
+            require(texts(runtime.get("routes")).equals(routes), "운영 노선과 검증 대상 노선이 다르다");
+            LesConfirmedServingVerification.verifyContract(runtime, files, routes);
+            return;
+        }
+        require(texts(runtime.get("routes")).equals(SERVING_ROUTES), "검증된 8개 노선만 서빙할 수 있다");
+        require(routes.equals(SERVING_ROUTES), "검증된 8개 노선의 통계만 서빙할 수 있다");
     }
 
     private static boolean hasMatchingVerification(
@@ -224,9 +242,13 @@ public final class LesInferenceBundle {
             && text(receipt, "evidence_sha256").equals(text(manifest.get("files"), "evidence-" + check + ".json"));
     }
 
-    private static void verifyStatisticsCutoff(JsonNode runtime, Map<String, JsonNode> files) {
+    private static void verifyStatisticsCutoff(
+        JsonNode runtime,
+        Map<String, JsonNode> files,
+        List<String> routes
+    ) {
         Instant through = Instant.parse(text(runtime, "data_through"));
-        for (String route : SERVING_ROUTES) {
+        for (String route : routes) {
             JsonNode stats = required(files, "statistics-" + route + ".json");
             for (String cutoff : List.of("events_known_through", "observations_through")) {
                 Instant used = OffsetDateTime.parse(text(stats, cutoff).replace(' ', 'T')).toInstant();
