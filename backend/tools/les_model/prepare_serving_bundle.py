@@ -22,7 +22,7 @@ def digest(content: bytes) -> str:
 
 def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None:
     import re
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,119}", release_id):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", release_id):
         raise ValueError("invalid release id")
     if output.exists():
         raise ValueError("output must be a new immutable release directory")

@@ -168,6 +168,28 @@ class LesBundleLoaderTest {
         assertThatThrownBy(() -> LesInferenceBundle.loadForServing(directory)).hasMessageContaining("미래 통계");
     }
 
+    @Test
+    void 출시_식별자는_DB와_같이_팔십자까지만_허용한다() throws Exception {
+        // given
+        fixture();
+        servingFixture((1.3 + 10) / 3);
+        Path file = directory.resolve("manifest.json");
+        ObjectNode manifest = (ObjectNode) JSON.readTree(Files.readAllBytes(file));
+        ObjectNode runtime = (ObjectNode) manifest.get("runtime");
+        runtime.put("release_id", "a".repeat(81));
+        Files.writeString(file, JSON.writeValueAsString(manifest));
+
+        // then
+        assertThatThrownBy(() -> LesInferenceBundle.loadForServing(directory)).hasMessageContaining("출시 식별자");
+
+        // when
+        runtime.put("release_id", "a".repeat(80));
+        Files.writeString(file, JSON.writeValueAsString(manifest));
+
+        // then
+        assertThat(LesInferenceBundle.loadForServing(directory)).isNotNull();
+    }
+
     private void servingFixture(final double seats) throws Exception {
         Map<String, Object> golden = Map.of("seat_inputs", List.of(new double[88]), "probability_inputs",
             List.of(new double[80]),

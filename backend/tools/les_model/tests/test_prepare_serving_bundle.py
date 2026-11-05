@@ -52,6 +52,14 @@ class ServingBundleTest(unittest.TestCase):
         for name, expected in release["files"].items():
             self.assertEqual(MODULE.digest((self.output / name).read_bytes()), expected)
 
+    def test_release_id_matches_database_length_limit(self):
+        for length in (81, 120):
+            with self.subTest(length=length), self.assertRaises(ValueError):
+                MODULE.prepare(self.source, self.output, "a" * length, self.receipts)
+            self.assertFalse(self.output.exists())
+        MODULE.prepare(self.source, self.output, "a" * 80, self.receipts)
+        self.assertEqual(len(json.loads((self.output / "manifest.json").read_text())["runtime"]["release_id"]), 80)
+
     def test_missing_evidence_does_not_create_release(self):
         (self.receipts / "evidence-feature_parity.json").unlink()
         with self.assertRaises(FileNotFoundError):

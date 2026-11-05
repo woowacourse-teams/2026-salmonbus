@@ -187,7 +187,7 @@ public final class LesInferenceBundle {
         JsonNode runtime = manifest.get("runtime");
         require(runtime != null && runtime.isObject(), "서빙 계약이 없다");
         require(text(runtime, "feature_contract_version").equals("les-online-v1"), "서빙 입력 판이 다르다");
-        require(text(runtime, "release_id").matches("[A-Za-z0-9][A-Za-z0-9._-]{0,119}"), "출시 식별자가 잘못됐다");
+        require(text(runtime, "release_id").matches("[A-Za-z0-9][A-Za-z0-9._-]{0,79}"), "출시 식별자가 잘못됐다");
         List<String> routes = texts(required(files, "statistics-manifest.json").get("routes"));
         final boolean confirmed = LesConfirmedServingVerification.isConfirmed(files);
         verifyServingRoutes(runtime, files, routes, confirmed);
