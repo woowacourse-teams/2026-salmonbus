@@ -125,8 +125,28 @@ describe("runStatsOf", () => {
 
   it("project별로 실행, 통과, flaky, 실패, 건너뜀, 재시도를 포함한 시도 수를 센다", () => {
     expect(runStatsOf(runReport).projects).toEqual([
-      { project: "chromium", executed: 2, passed: 1, flaky: 0, failed: 1, skipped: 0, attempts: 3, testMs: 150_000 },
-      { project: "iphone-15", executed: 1, passed: 0, flaky: 1, failed: 0, skipped: 1, attempts: 2, testMs: 90_000 },
+      {
+        project: "chromium",
+        executed: 2,
+        passed: 1,
+        flaky: 0,
+        failed: 1,
+        skipped: 0,
+        attempts: 3,
+        testMs: 150_000,
+        flakyNames: [],
+      },
+      {
+        project: "iphone-15",
+        executed: 1,
+        passed: 0,
+        flaky: 1,
+        failed: 0,
+        skipped: 1,
+        attempts: 2,
+        testMs: 90_000,
+        flakyNames: ["home.spec.ts › 홈을 연다"],
+      },
     ]);
   });
 
@@ -264,5 +284,50 @@ describe("목록에 Playwright 오류가 있을 때", () => {
 
     expect(markdown).toContain("- 테스트 실행 시간: 4.0분");
     expect(markdown).toContain("| 합계 | 3 | 1 | 1 | 1 | 1 | 5 | 4.0 |");
+  });
+});
+
+describe("재시도해서 통과한 테스트", () => {
+  const head = inventory(listOf({ "home.spec.ts": ["가"] }, ["chromium"]));
+
+  it("실행 결과 절에 project별로 재시도해서야 통과한 테스트 이름을 쓴다", () => {
+    const markdown = summaryMarkdownOf({
+      run: { ok: true, value: runStatsOf(runReport) },
+      head: { ok: true, value: head },
+      filter: "",
+    });
+
+    expect(markdown).toContain("재시도해서 통과한 테스트(flaky)");
+    expect(markdown).toContain("- iphone-15\n  - home.spec.ts › 홈을 연다");
+    expect(markdown).not.toContain("- chromium\n  - ");
+    expect(markdown.indexOf("재시도해서 통과한 테스트(flaky)")).toBeLessThan(markdown.indexOf("#### 테스트 수"));
+  });
+
+  it("재시도해서 통과한 테스트가 없으면 아무것도 쓰지 않는다", () => {
+    const steady: PlaywrightJsonReport = {
+      ...runReport,
+      suites: [
+        {
+          title: "a.spec.ts",
+          file: "a.spec.ts",
+          specs: [
+            {
+              title: "가",
+              file: "a.spec.ts",
+              tests: [
+                { projectName: "chromium", status: "expected", results: [attempt("2026-11-01T00:00:00.000Z", 1_000)] },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const markdown = summaryMarkdownOf({
+      run: { ok: true, value: runStatsOf(steady) },
+      head: { ok: true, value: head },
+      filter: "",
+    });
+
+    expect(markdown).not.toContain("재시도해서 통과한 테스트");
   });
 });

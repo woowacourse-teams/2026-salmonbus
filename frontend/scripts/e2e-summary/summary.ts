@@ -51,6 +51,7 @@ export interface ProjectRun {
   skipped: number;
   attempts: number;
   testMs: number;
+  flakyNames: string[];
 }
 
 export interface RunStats {
@@ -124,6 +125,9 @@ export function runStatsOf(report: PlaywrightJsonReport): RunStats {
       skipped: countOf("skipped"),
       attempts: projectAttempts.length,
       testMs: projectAttempts.reduce((total, result) => total + result.duration, 0),
+      flakyNames: uniqueSorted(
+        projectCases.filter((testCase) => testCase.status === "flaky").map((testCase) => testCase.name),
+      ),
     };
   });
 
@@ -197,6 +201,17 @@ function namesBlock(summary: string, names: string[]): string[] {
   ];
 }
 
+function flakySection(projects: ProjectRun[]): string[] {
+  const flakyProjects = projects.filter((project) => project.flakyNames.length > 0);
+  if (flakyProjects.length === 0) return [];
+  return [
+    "",
+    "재시도해서 통과한 테스트(flaky)",
+    "",
+    ...flakyProjects.flatMap((project) => [`- ${project.project}`, ...project.flakyNames.map((name) => `  - ${name}`)]),
+  ];
+}
+
 function runSection(run: Loaded<RunStats>, filter: string): string[] {
   if (!run.ok) return [`실행 결과를 읽지 못했다: ${run.reason}`];
   const { value } = run;
@@ -231,6 +246,7 @@ function runSection(run: Loaded<RunStats>, filter: string): string[] {
       `| ${minutesOf(total((project) => project.testMs))} |`,
     "",
     "테스트 시간 합은 테스트마다 걸린 시간을 더한 값이라 worker가 여럿이면 실행 시간보다 길다.",
+    ...flakySection(value.projects),
   );
   return lines;
 }
