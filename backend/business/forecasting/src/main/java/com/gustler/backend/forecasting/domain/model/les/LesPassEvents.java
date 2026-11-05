@@ -83,7 +83,8 @@ public final class LesPassEvents {
         List<LesObservation> chain,
         final long trip,
         List<Integer> stops,
-        Map<String, LesPassEvent> eventsByTripStop) {
+        Map<String, LesPassEvent> eventsByTripStop
+    ) {
         if (chain.size() < 3) {
             return;
         }
@@ -119,7 +120,8 @@ public final class LesPassEvents {
         final long trip,
         final int target,
         final int before,
-        final int next) {
+        final int next
+    ) {
         LesObservation arrival = null;
         LesObservation first = null;
         LesObservation last = null;
@@ -152,7 +154,8 @@ public final class LesPassEvents {
         LesObservation arrival,
         LesObservation row,
         final int target,
-        final int next) {
+        final int next
+    ) {
         return arrival != null && row.passedStopOrder() >= target && row.passedStopOrder() < next;
     }
 
@@ -162,7 +165,8 @@ public final class LesPassEvents {
         LesObservation last,
         LesObservation confirmation,
         final long trip,
-        final int target) {
+        final int target
+    ) {
         if (hasMissingSeats(arrival, last)) {
             return null;
         }

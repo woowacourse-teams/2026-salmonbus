@@ -39,7 +39,8 @@ public class LesEvaluationArchiveService implements LesEvaluationArchive {
         LesEvaluationArchiveStore store,
         EvaluationArchiveObjects objects,
         @Value("${forecast.archive.delete-enabled:false}") final boolean deleteEnabled,
-        @Value("${forecast.archive.page-size:500}") final int pageSize) {
+        @Value("${forecast.archive.page-size:500}") final int pageSize
+    ) {
         if (pageSize < 1 || pageSize > 1000) {
             throw new IllegalArgumentException("Les 이관 페이지는 1~1000개여야 한다");
         }
@@ -93,7 +94,8 @@ public class LesEvaluationArchiveService implements LesEvaluationArchive {
         final int stop,
         String target,
         String labelVersion,
-        final long qualityRevision) {
+        final long qualityRevision
+    ) {
         outsideTransaction();
         LesEvaluationArchiveStore.Key wanted = new LesEvaluationArchiveStore.Key(observationId, stop, target,
             labelVersion, qualityRevision);

@@ -10,8 +10,8 @@ import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkPage
 import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkPageReader.Ready;
 import com.gustler.backend.forecasting.application.evaluation.RecentArrivalObservationCache.Round;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.application.quality.WorkerQualityState;
 import com.gustler.backend.forecasting.application.quality.WorkerQualityState.Read;
+import com.gustler.backend.forecasting.application.quality.WorkerQualityState;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabelResolver;

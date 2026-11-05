@@ -279,7 +279,8 @@ class LesPublicationLifecycleTest {
         String vehicle,
         final int seconds,
         final int stop,
-        final int seats) {
+        final int seats
+    ) {
         OffsetDateTime time = offset(START.plusSeconds(seconds));
         final long batch = jdbc
             .sql(
@@ -321,7 +322,8 @@ class LesPublicationLifecycleTest {
             String bucket,
             String key,
             Path source,
-            String checksum) {
+            String checksum
+        ) {
             try {
                 bytes.putIfAbsent(key, Files.readAllBytes(source));
             } catch (IOException error) {
@@ -333,7 +335,8 @@ class LesPublicationLifecycleTest {
             String bucket,
             String key,
             Path destination,
-            final long limit) {
+            final long limit
+        ) {
             try {
                 Files.write(destination, bytes.get(key));
             } catch (IOException error) {

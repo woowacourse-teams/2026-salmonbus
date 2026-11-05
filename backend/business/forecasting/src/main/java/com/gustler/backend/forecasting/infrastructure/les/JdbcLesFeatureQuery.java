@@ -102,7 +102,8 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
         @Value("${forecast.les.history-origin-batch-ids:}") String verifiedOrigins,
         @Value("${forecast.les.maximum-history-rows:250000}") final int maximumRows,
         @Value("${forecast.les.rush-only:true}") final boolean rushOnly,
-        @Value("${forecast.les.history-seed-directory:}") String seedDirectory) {
+        @Value("${forecast.les.history-seed-directory:}") String seedDirectory
+    ) {
         this.jdbc = jdbc;
         this.maximumRows = maximumRows;
         this.rushOnly = rushOnly;
@@ -151,7 +152,8 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
         final long batchId,
         RouteStops stops,
         LesRouteStatistics statistics,
-        final boolean checkpointOnly) {
+        final boolean checkpointOnly
+    ) {
         validateRoute(stops, statistics);
         Target target = target(batchId, statistics.confirmedProfile());
         validateScope(stops, statistics, target, checkpointOnly);
@@ -185,7 +187,8 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
         RouteStops stops,
         LesRouteStatistics statistics,
         Target target,
-        final boolean checkpointOnly) {
+        final boolean checkpointOnly
+    ) {
         if (!checkpointOnly && target.version() != stops.routeVersionId()) {
             throw new LesFeatureUnavailableException("LES_ROUTE_VERSION_MISMATCH");
         }
@@ -319,7 +322,8 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
         LesRouteStatistics statistics,
         ReplayCursor cursor,
         List<LesObservation> history,
-        List<LesPassEvent> events) {
+        List<LesPassEvent> events
+    ) {
         Set<Long> eligible = new HashSet<>(jdbc
             .sql("SELECT id FROM forecast_observation_quality WHERE observation_batch_id=:batch AND forecast_eligible")
             .param("batch", cursor.batchId()).query(Long.class).list());

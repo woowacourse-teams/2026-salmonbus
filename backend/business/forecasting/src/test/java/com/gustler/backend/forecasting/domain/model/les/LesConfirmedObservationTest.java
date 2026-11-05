@@ -26,7 +26,8 @@ class LesConfirmedObservationTest {
         final long version,
         final boolean down,
         final boolean chainBreak,
-        final boolean tripBreak) {
+        final boolean tripBreak
+    ) {
         // given
         Instant start = Instant.parse("2026-11-04T00:00:00Z");
         LesObservation previous = new LesObservation(1, 1, 0, start, "bus", 2, 3, 1, 40, 0,

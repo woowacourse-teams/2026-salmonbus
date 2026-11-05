@@ -33,7 +33,8 @@ class LesAlightingPosteriorTest {
         final double alightingProbability,
         final double dispersion,
         final double boardingRate,
-        final double fullBusMultiplier) {
+        final double fullBusMultiplier
+    ) {
         double[] lambda = new double[8];
         Arrays.fill(lambda, boardingRate);
         LesAlightingPosterior.Parameters parameters = new LesAlightingPosterior.Parameters(

@@ -57,7 +57,8 @@ class LesPassEventsTest {
         final long id,
         final int second,
         final int order,
-        final int seats) {
+        final int seats
+    ) {
         return row(id, Instant.EPOCH.plusSeconds(second), order, seats);
     }
 
@@ -65,7 +66,8 @@ class LesPassEventsTest {
         final long id,
         Instant at,
         final int order,
-        final int seats) {
+        final int seats
+    ) {
         return new LesObservation(id, id, id, at, "bus", order, order, 2, seats, 0);
     }
 }

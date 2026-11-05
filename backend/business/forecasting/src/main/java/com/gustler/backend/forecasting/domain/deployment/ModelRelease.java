@@ -48,7 +48,8 @@ public record ModelRelease(
         String bundleDigest,
         String dataThrough,
         SupportedForecastScope scope,
-        LesForecastModel model) {
+        LesForecastModel model
+    ) {
         return new ModelRelease(releaseId, "les-gate-base-and-pool", bundleDigest, "les-online-v1",
             dataThrough, scope, null, null, null, model);
     }
@@ -60,7 +61,8 @@ public record ModelRelease(
         String featureContractVersion,
         String dataThrough,
         SupportedForecastScope scope,
-        SeatDistributionPredictor predictor) {
+        SeatDistributionPredictor predictor
+    ) {
         this(releaseId, modelVersion, bundleDigest, featureContractVersion, dataThrough, scope,
             predictor, ForecastFeatureContract.LEGACY, null);
     }

@@ -13,7 +13,8 @@ public sealed interface VehicleForecast {
             final double seatAvailableProbability,
             Double expectedSeats,
             String seatTarget,
-            String probabilityTarget) {
+            String probabilityTarget
+        ) {
             this(seatAvailableProbability, expectedSeats, seatTarget, probabilityTarget,
                 fullProbabilityFromAvailability(probabilityTarget, seatAvailableProbability));
         }

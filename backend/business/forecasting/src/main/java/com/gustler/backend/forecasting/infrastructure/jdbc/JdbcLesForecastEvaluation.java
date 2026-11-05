@@ -65,7 +65,8 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         JdbcClient jdbc,
         RouteDataQualityAccess quality,
         Clock clock,
-        PlatformTransactionManager transactions) {
+        PlatformTransactionManager transactions
+    ) {
         this(jdbc, quality, clock, transactions, 50_000, 150_000);
     }
 
@@ -74,7 +75,8 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         RouteDataQualityAccess quality,
         Clock clock,
         PlatformTransactionManager transactions,
-        @Value("${forecast.les.evaluation.maximum-observation-rows:50000}") final int observationLimit) {
+        @Value("${forecast.les.evaluation.maximum-observation-rows:50000}") final int observationLimit
+    ) {
         this(jdbc, quality, clock, transactions, observationLimit, observationLimit);
     }
 
@@ -168,7 +170,8 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         final long revision,
         Instant now,
         LocalDate date,
-        List<Work> work) {
+        List<Work> work
+    ) {
         ConfirmedLesEvaluation confirmed = new ConfirmedLesEvaluation(
             jdbc, route, date, now, confirmedObservationLimit);
         for (Work item : work) {
@@ -198,7 +201,12 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         }
     }
 
-    private void settleConfirmed(Work work, final long revision, Instant now, ConfirmedLesEvaluation confirmed) {
+    private void settleConfirmed(
+        Work work,
+        final long revision,
+        Instant now,
+        ConfirmedLesEvaluation confirmed
+    ) {
         if (quality.investigationPending(work.route(), work.vehicle())) {
             reschedule(work, "QUALITY_REBUILD_PENDING");
             return;
@@ -244,7 +252,8 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         Map<Long, Evidence> byId,
         Map<List<Integer>, List<LesPassEvent>> eventCache,
         final boolean inputLimit,
-        String sourceProblem) {
+        String sourceProblem
+    ) {
         if (!work.version().equals(VERSION)) {
             finish(work, revision, now, Outcome.unsupported("UNKNOWN_LABEL_VERSION"));
             return;
@@ -312,7 +321,8 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         Work work,
         List<Evidence> evidence,
         Map<Long, Evidence> byId,
-        Map<List<Integer>, List<LesPassEvent>> eventCache) {
+        Map<List<Integer>, List<LesPassEvent>> eventCache
+    ) {
         JsonNode snapshot = JSON.readTree(work.snapshot());
         if (work.trip() == null) {
             return null;
@@ -343,7 +353,8 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         List<Evidence> evidence,
         JsonNode snapshot,
         List<LesPassEvent> events,
-        LesPassEvent event) {
+        LesPassEvent event
+    ) {
         Instant departure = event.firstDeparture().receivedAt();
         ZonedDateTime local = departure.atZone(SEOUL);
         final int minute = local.getHour() * 60 + local.getMinute();
@@ -388,7 +399,8 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         JsonNode parameters,
         final double gap,
         final int minute,
-        String band) {
+        String band
+    ) {
         double[] lambda = new double[8];
         if (parameters.path("lam").size() != 8) {
             return Outcome.unsupported("INVALID_PARAMETER_DIMENSION", event);
@@ -464,7 +476,8 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         Work work,
         final long revision,
         Instant now,
-        String reason) {
+        String reason
+    ) {
         if (Duration.between(work.observedAt(), now).compareTo(Duration.ofHours(2)) > 0) {
             finish(work, revision, now, new Outcome("LOST", null, reason, null, null, null, null, null));
             return;
@@ -486,7 +499,8 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         Work work,
         final long revision,
         Instant now,
-        Outcome outcome) {
+        Outcome outcome
+    ) {
         jdbc.sql(
             """
                 INSERT INTO les_forecast_evaluation_result(vehicle_observation_id,target_stop_order,target_kind,label_version,

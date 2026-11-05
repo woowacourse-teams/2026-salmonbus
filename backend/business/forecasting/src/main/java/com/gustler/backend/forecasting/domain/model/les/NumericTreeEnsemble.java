@@ -58,7 +58,8 @@ public final class NumericTreeEnsemble {
         final int featureCount,
         Kind kind,
         double[] baseline,
-        List<List<List<Node>>> iterations) {
+        List<List<List<Node>>> iterations
+    ) {
         validateDimensions(featureCount, kind, baseline, iterations);
         for (final double value : baseline) {
             requireFinite(value);
@@ -75,7 +76,8 @@ public final class NumericTreeEnsemble {
         final int featureCount,
         Kind kind,
         double[] baseline,
-        List<List<List<Node>>> iterations) {
+        List<List<List<Node>>> iterations
+    ) {
         if (hasInvalidDimensions(featureCount, kind, baseline, iterations)) {
             throw new IllegalArgumentException("트리 모델 차원이 잘못됐다");
         }
@@ -85,7 +87,8 @@ public final class NumericTreeEnsemble {
         final int featureCount,
         Kind kind,
         double[] baseline,
-        List<List<List<Node>>> iterations) {
+        List<List<List<Node>>> iterations
+    ) {
         return featureCount <= 0 || kind == null
             || baseline.length != kind.baselineCount() || iterations.isEmpty();
     }

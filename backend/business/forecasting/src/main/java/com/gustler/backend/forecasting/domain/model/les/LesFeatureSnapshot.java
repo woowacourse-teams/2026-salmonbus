@@ -30,7 +30,8 @@ public final class LesFeatureSnapshot {
         LesObservation source,
         LesRouteStatistics statistics,
         List<LesObservation> history,
-        List<LesPassEvent> events) {
+        List<LesPassEvent> events
+    ) {
         this(routeVersionId, source, statistics, history, events, Map.of());
     }
 
@@ -40,7 +41,8 @@ public final class LesFeatureSnapshot {
         LesRouteStatistics statistics,
         List<LesObservation> history,
         List<LesPassEvent> events,
-        Map<String, LesVehiclePrefix> prefix) {
+        Map<String, LesVehiclePrefix> prefix
+    ) {
         if (!source.hasVehicleIdentity()) {
             throw new IllegalArgumentException("Anonymous observation is not a forecast source");
         }
@@ -362,7 +364,8 @@ public final class LesFeatureSnapshot {
         final int horizon,
         ZonedDateTime time,
         Map<Integer, QueueState> queues,
-        final float betweenSeats) {
+        final float betweenSeats
+    ) {
         QueueState queue = queues.get(target);
         final boolean known = queue != null && queue.known(source.receivedAt());
         final double rate = statistics.rate(target, statistics.dayType(time.toLocalDate()), minute(time));
@@ -381,7 +384,8 @@ public final class LesFeatureSnapshot {
         final int target,
         ZonedDateTime time,
         OriginState origin,
-        Preceding preceding) {
+        Preceding preceding
+    ) {
         final float capacity = origin.capacity();
         final double morning = indicator(time.getHour() >= 7 && time.getHour() < 9);
         final double evening = indicator(time.getHour() >= 17 && time.getHour() < 20);
@@ -405,7 +409,8 @@ public final class LesFeatureSnapshot {
         double[] features,
         final double position,
         final double morning,
-        final double evening) {
+        final double evening
+    ) {
         for (int index = 0; index < 8; index++) {
             final double basis = Math.max(1 - Math.abs(position - (double) index / 7) * 7, 0);
             features[20 + index] = basis;
@@ -425,7 +430,8 @@ public final class LesFeatureSnapshot {
         PathFeatures path,
         DayFeatures demand,
         QueueEstimate queue,
-        final double trend) {
+        final double trend
+    ) {
         final float capacity = origin.capacity();
         String day = statistics.dayType(time.toLocalDate());
         final int minute = minute(time);
@@ -448,7 +454,8 @@ public final class LesFeatureSnapshot {
         final int target,
         ZonedDateTime time,
         double[] base,
-        double[] extras) {
+        double[] extras
+    ) {
         double[] seat = new double[88];
         System.arraycopy(base, 0, seat, 0, 50);
         System.arraycopy(extras, 0, seat, 50, 31);
@@ -466,7 +473,8 @@ public final class LesFeatureSnapshot {
         final int target,
         ZonedDateTime time,
         double[] base,
-        double[] extras) {
+        double[] extras
+    ) {
         double[] probability = new double[80];
         System.arraycopy(base, 0, probability, 0, 50);
         int[] indices = { 12, 5, 6, 7, 9, 10, 8, 11, 13, 14, 15, 22, 23, 24, 25, 26 };

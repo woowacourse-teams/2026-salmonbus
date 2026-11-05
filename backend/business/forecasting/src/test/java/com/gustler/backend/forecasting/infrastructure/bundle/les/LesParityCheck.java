@@ -75,7 +75,8 @@ public final class LesParityCheck {
         final int row,
         double[] actual,
         double[] expected,
-        double[] maximum) {
+        double[] maximum
+    ) {
         for (int column = 0; column < maximum.length; column++) {
             final double difference = Math.abs(actual[column] - expected[column]);
             if (!Double.isFinite(difference) || difference > TOLERANCE) {

@@ -24,7 +24,8 @@ public record StoredPrediction(
         final int stopsToTarget,
         final double seatFullChance,
         Double expectedSeats,
-        ForecastModel model) {
+        ForecastModel model
+    ) {
         this(targetStopOrder, vehicleId, sourceRowNumber, stopsToTarget, seatFullChance, expectedSeats, model,
             "FIRST_POST_STOP_OBSERVATION", "FIRST_POST_STOP_ZERO");
     }

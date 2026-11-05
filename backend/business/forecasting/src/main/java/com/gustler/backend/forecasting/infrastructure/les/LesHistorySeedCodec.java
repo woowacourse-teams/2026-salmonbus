@@ -160,7 +160,8 @@ final class LesHistorySeedCodec {
         LesObservation arrival,
         LesObservation first,
         LesObservation departure,
-        LesObservation confirmation) {
+        LesObservation confirmation
+    ) {
         if (!hasOrderedEventTimes(arrival, first, departure, confirmation)) {
             throw unavailable("LES_SEED_EVENT_TIME_ORDER");
         }
@@ -176,7 +177,8 @@ final class LesHistorySeedCodec {
         LesObservation arrival,
         LesObservation first,
         LesObservation departure,
-        LesObservation confirmation) {
+        LesObservation confirmation
+    ) {
         if (arrival.receivedAt().isAfter(first.receivedAt()) || first.receivedAt().isAfter(departure.receivedAt())) {
             return false;
         }

@@ -46,7 +46,8 @@ public final class LesServingBundle {
         String route,
         LesInferenceBundle bundle,
         LesRouteStatistics stats,
-        JsonNode raw) {
+        JsonNode raw
+    ) {
         Map<Integer, String> targets = new HashMap<>();
         for (LesRouteStatistics.Stop stop : stats.stops()) {
             ObjectNode snapshot = JSON.createObjectNode();

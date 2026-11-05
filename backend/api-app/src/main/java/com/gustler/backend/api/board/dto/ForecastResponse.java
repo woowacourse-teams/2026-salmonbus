@@ -1,10 +1,10 @@
 package com.gustler.backend.api.board.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.gustler.backend.api.board.domain.VehicleForecast;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * 승차 시점 좌석 예보의 제공 가능 상태와 수치를 공개 응답으로 전달한다.

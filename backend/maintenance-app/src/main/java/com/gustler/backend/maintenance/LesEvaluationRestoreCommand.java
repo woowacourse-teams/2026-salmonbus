@@ -38,7 +38,8 @@ final class LesEvaluationRestoreCommand {
         CliArguments arguments,
         DatabaseEnvironment environment,
         LocalLesArchive archive,
-        Clock clock) {
+        Clock clock
+    ) {
         if (environment.targetKind() != DatabaseEnvironment.TargetKind.LOCAL) {
             new ApprovalGate(clock).require(arguments.requiredPath("approval"),
                 ApprovalGate.ACADEMY_LES_EVALUATION_RESTORE, archive.sha256(), environment.identitySha256());
@@ -55,7 +56,8 @@ final class LesEvaluationRestoreCommand {
         CliArguments arguments,
         String name,
         final long minimum,
-        final long maximum) {
+        final long maximum
+    ) {
         try {
             final long parsed = Long.parseLong(arguments.required(name));
             if (parsed < minimum || parsed > maximum) {

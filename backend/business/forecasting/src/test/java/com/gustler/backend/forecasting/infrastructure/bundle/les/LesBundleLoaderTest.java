@@ -230,7 +230,8 @@ class LesBundleLoaderTest {
         String kind,
         final int size,
         List<Integer> classes,
-        List<Integer> baseline)
+        List<Integer> baseline
+    )
         throws Exception {
         Map<String, Object> value = new LinkedHashMap<>();
         value.put("schema", "les-numeric-hgb-v1");

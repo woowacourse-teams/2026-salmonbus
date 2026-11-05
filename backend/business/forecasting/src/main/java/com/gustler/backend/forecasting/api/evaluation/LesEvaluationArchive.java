@@ -9,5 +9,6 @@ public interface LesEvaluationArchive {
         int stop,
         String target,
         String labelVersion,
-        long qualityRevision);
+        long qualityRevision
+    );
 }

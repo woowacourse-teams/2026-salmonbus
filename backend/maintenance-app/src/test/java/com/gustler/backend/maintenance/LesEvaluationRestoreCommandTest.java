@@ -47,7 +47,8 @@ class LesEvaluationRestoreCommandTest {
                 final int stop,
                 String target,
                 String version,
-                final long revision) {
+                final long revision
+            ) {
                 key.set(id + ":" + stop + ":" + target + ":" + version + ":" + revision);
                 return 1;
             }

@@ -119,7 +119,8 @@ public class ForecastBatchWriter {
         RuntimeSnapshot runtime,
         LesForecastModel model,
         Instant generatedAt,
-        final long qualityRevision) {
+        final long qualityRevision
+    ) {
         if (lesFeatures == null) {
             throw new IllegalStateException("레스 입력 조회기가 등록되지 않았다");
         }
@@ -213,7 +214,8 @@ public class ForecastBatchWriter {
         LesRouteStatistics statistics,
         LesFeatureSnapshot snapshot,
         VehicleStopTarget target,
-        LesFeatureVector vector) {
+        LesFeatureVector vector
+    ) {
         ObjectNode evidence = (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.stopOrder()));
         evidence.put("asOf", batch.responseReceivedAt().toString());
         evidence.put("inputProfile", statistics.profile().input());

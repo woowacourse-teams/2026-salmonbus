@@ -185,7 +185,8 @@ public class JdbcLesEvaluationArchiveStore implements LesEvaluationArchiveStore 
         LesEvaluationArchiveStore.Key key,
         String hash,
         JsonNode saved,
-        ObjectNode restoredRow) {
+        ObjectNode restoredRow
+    ) {
         String locked = bind(jdbc.sql("SELECT object_hash FROM les_evaluation_archive WHERE "
             + KEY_PREDICATE + " FOR UPDATE"), key).query(String.class).single();
         if (!locked.equals(hash)) {

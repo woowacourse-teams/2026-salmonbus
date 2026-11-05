@@ -115,7 +115,8 @@ class LesFeatureSnapshotTest {
         Instant at,
         String vid,
         final int passed,
-        final int seats) {
+        final int seats
+    ) {
         return new LesObservation(id, rank + 1, rank, at, vid, passed, passed + 1, 1, seats, 2);
     }
 

@@ -22,7 +22,8 @@ public final class LesForecastModel implements SeatForecastModel {
         LesSeatPredictor predictor,
         Map<String, LesRouteStatistics> statistics,
         Map<String, Map<Integer, String>> evidence,
-        String bundleDigest) {
+        String bundleDigest
+    ) {
         this.predictor = Objects.requireNonNull(predictor);
         this.statistics = Map.copyOf(statistics);
         this.evidence = evidence.entrySet().stream().collect(Collectors.toUnmodifiableMap(

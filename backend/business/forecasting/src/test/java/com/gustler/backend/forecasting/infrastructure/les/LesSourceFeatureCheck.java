@@ -149,7 +149,8 @@ public final class LesSourceFeatureCheck {
         final int row,
         String vector,
         JsonNode expected,
-        double[] actual) {
+        double[] actual
+    ) {
         double maximum = 0;
         for (int index = 0; index < actual.length; index++) {
             final double expectedValue = expectedNumber(expected.get(index));

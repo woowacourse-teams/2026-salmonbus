@@ -94,7 +94,8 @@ public final class LesHistoryCompactor {
         List<LesPassEvent> sourceEvents,
         Map<String, LesVehiclePrefix> accumulated,
         List<LesObservation> retained,
-        Instant cutoff) {
+        Instant cutoff
+    ) {
         Set<Long> neededTrips = neededTrips(accumulated, retained);
         Map<String, List<LesPassEvent>> precedingByTrip = new HashMap<>();
         for (LesPassEvent event : sourceEvents) {
@@ -189,7 +190,8 @@ public final class LesHistoryCompactor {
         LesVehiclePrefix state,
         LesObservation observation,
         final boolean linked,
-        final int difference) {
+        final int difference
+    ) {
         if (observation.seats() == null || observation.seats() != 0) {
             return 0;
         }

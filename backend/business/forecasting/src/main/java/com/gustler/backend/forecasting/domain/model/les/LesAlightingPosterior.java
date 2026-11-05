@@ -35,7 +35,8 @@ public final class LesAlightingPosterior {
             double[] lambda,
             final double probability,
             final double previousFullCoefficient,
-            final double dispersion) {
+            final double dispersion
+        ) {
             return lambda.length != 8 || probability <= 0 || probability >= 1 || !Double.isFinite(probability)
                 || previousFullCoefficient < 0 || !Double.isFinite(previousFullCoefficient)
                 || dispersion <= 0 || !Double.isFinite(dispersion);
@@ -52,7 +53,8 @@ public final class LesAlightingPosterior {
         final int capacity,
         final double gapMinutes,
         final boolean previousFull,
-        final int bin) {
+        final int bin
+    ) {
         if (hasInvalidObservation(arrive, depart, capacity, gapMinutes, bin)) {
             throw new IllegalArgumentException("하차 posterior 입력이 잘못됐다");
         }
@@ -68,7 +70,8 @@ public final class LesAlightingPosterior {
         final int depart,
         final int capacity,
         final double gapMinutes,
-        final int bin) {
+        final int bin
+    ) {
         return capacity < 0 || capacity > 70 || arrive < 0 || arrive > capacity || depart < 0
             || depart > capacity || gapMinutes <= 0 || !Double.isFinite(gapMinutes) || bin < 0 || bin > 7;
     }
@@ -85,7 +88,8 @@ public final class LesAlightingPosterior {
         BoardingProbabilities probabilities,
         final int onboard,
         final int arrive,
-        final int depart) {
+        final int depart
+    ) {
         double total = 0;
         double weighted = 0;
         for (int alight = 0; alight <= onboard; alight++) {

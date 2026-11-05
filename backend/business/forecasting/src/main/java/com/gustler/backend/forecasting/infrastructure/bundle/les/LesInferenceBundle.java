@@ -40,7 +40,8 @@ public final class LesInferenceBundle {
         Map<String, JsonNode> statistics,
         JsonNode manifest,
         JsonNode statisticsManifest,
-        String digest) {
+        String digest
+    ) {
         this.predictor = predictor;
         this.statistics = Map.copyOf(statistics);
         this.manifest = manifest.deepCopy();
@@ -232,7 +233,8 @@ public final class LesInferenceBundle {
         JsonNode receipt,
         String check,
         String sourceDigest,
-        JsonNode manifest) {
+        JsonNode manifest
+    ) {
         return text(receipt, "schema").equals("les-serving-verification-v1")
             && text(receipt, "check").equals(check) && text(receipt, "status").equals("PASS")
             && text(receipt, "source_manifest_sha256").equals(sourceDigest)

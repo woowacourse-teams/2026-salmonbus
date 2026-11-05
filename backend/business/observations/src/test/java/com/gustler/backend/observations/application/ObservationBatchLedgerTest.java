@@ -1,9 +1,9 @@
 package com.gustler.backend.observations.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.gbis.api.GbisLocationResult.GbisSystemError;
 import com.gustler.backend.gbis.api.GbisLocationResult.NoResponse;

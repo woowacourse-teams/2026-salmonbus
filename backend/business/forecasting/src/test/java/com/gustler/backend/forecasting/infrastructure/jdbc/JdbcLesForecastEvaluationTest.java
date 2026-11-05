@@ -226,14 +226,16 @@ class JdbcLesForecastEvaluationTest {
                 String bucket,
                 String key,
                 Path source,
-                String checksum) {
+                String checksum
+            ) {
             }
 
             public void download(
                 String bucket,
                 String key,
                 Path destination,
-                final long limit) {
+                final long limit
+            ) {
                 try {
                     Files.writeString(destination, "corrupted");
                 } catch (IOException error) {
@@ -375,7 +377,8 @@ class JdbcLesForecastEvaluationTest {
         String vehicle,
         final int seconds,
         final int stop,
-        final int seats) {
+        final int seats
+    ) {
         OffsetDateTime time = offset(START.plusSeconds(seconds));
         final long batch = jdbc
             .sql(
@@ -417,7 +420,8 @@ class JdbcLesForecastEvaluationTest {
             String bucket,
             String key,
             Path source,
-            String checksum) {
+            String checksum
+        ) {
             try {
                 bytes.putIfAbsent(key, Files.readAllBytes(source));
             } catch (IOException error) {
@@ -429,7 +433,8 @@ class JdbcLesForecastEvaluationTest {
             String bucket,
             String key,
             Path destination,
-            final long limit) {
+            final long limit
+        ) {
             try {
                 Files.write(destination, bytes.get(key), StandardOpenOption.CREATE_NEW);
             } catch (IOException error) {

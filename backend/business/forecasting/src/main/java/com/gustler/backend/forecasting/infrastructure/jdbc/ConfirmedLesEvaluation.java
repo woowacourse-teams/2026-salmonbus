@@ -51,7 +51,12 @@ final class ConfirmedLesEvaluation {
         this.limit = limit;
     }
 
-    JdbcLesForecastEvaluation.Outcome evaluate(final long sourceId, final int target, String kind, JsonNode snapshot) {
+    JdbcLesForecastEvaluation.Outcome evaluate(
+        final long sourceId,
+        final int target,
+        String kind,
+        JsonNode snapshot
+    ) {
         if (!snapshot.path("inputProfile").asText().equals(LesRouteStatistics.CONFIRMED_PROFILE)) {
             return unsupported("INPUT_PROFILE_MISMATCH");
         }

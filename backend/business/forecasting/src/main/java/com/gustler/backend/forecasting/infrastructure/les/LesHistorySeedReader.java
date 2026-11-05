@@ -53,7 +53,8 @@ public final class LesHistorySeedReader {
             List<LesObservation> observations,
             final long batchId,
             final long rank,
-            Instant through) {
+            Instant through
+        ) {
             this(observations, batchId, rank, through, Map.of(), List.of());
         }
 
@@ -129,7 +130,8 @@ public final class LesHistorySeedReader {
         Seed seed,
         Map<String, Object> payload,
         Path folder,
-        Path target) throws IOException, NoSuchAlgorithmException {
+        Path target
+    ) throws IOException, NoSuchAlgorithmException {
         try (FileChannel channel = FileChannel.open(folder.resolve(routeVersionId + ".lock"),
             StandardOpenOption.CREATE, StandardOpenOption.WRITE);
             FileLock ignored = channel.lock()) {
@@ -145,7 +147,8 @@ public final class LesHistorySeedReader {
         final long routeVersionId,
         Map<String, Object> payload,
         Path folder,
-        Path target) throws IOException, NoSuchAlgorithmException {
+        Path target
+    ) throws IOException, NoSuchAlgorithmException {
         byte[] bytes = new ObjectMapper().writeValueAsBytes(payload);
         byte[] envelope = new ObjectMapper().writeValueAsBytes(Map.of(
             "sha256", digest(bytes), "payload", new String(bytes, StandardCharsets.UTF_8)));

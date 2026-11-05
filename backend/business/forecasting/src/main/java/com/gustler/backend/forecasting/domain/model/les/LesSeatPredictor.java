@@ -23,7 +23,8 @@ public final class LesSeatPredictor {
         NumericTreeEnsemble base,
         NumericTreeEnsemble gate,
         NumericTreeEnsemble pool,
-        final double middle) {
+        final double middle
+    ) {
         validateSeatModels(base, gate);
         validateProbabilityModel(pool);
         validateMiddleSeats(middle);

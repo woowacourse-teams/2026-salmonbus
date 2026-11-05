@@ -62,7 +62,8 @@ class LesHistoryCompactorTest {
         final long rank,
         Instant at,
         final int p,
-        final int seats) {
+        final int seats
+    ) {
         return new LesObservation(id, rank + 1, rank, at, "bus", p, p, 2, seats, 0);
     }
 

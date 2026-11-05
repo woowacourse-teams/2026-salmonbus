@@ -40,7 +40,8 @@ public final class LocalLesArchive implements EvaluationArchiveObjects {
         String bucket,
         String key,
         Path destination,
-        final long maxBytes) {
+        final long maxBytes
+    ) {
         if (!"techcourse-project-2026".equals(bucket)
             || !("salmonbus-be/les-evaluation-archive/v1/" + hash + ".json").equals(key)) {
             throw new MaintenanceException("LES_ARCHIVE_DATABASE_HASH_MISMATCH");
@@ -60,7 +61,8 @@ public final class LocalLesArchive implements EvaluationArchiveObjects {
         String bucket,
         String key,
         Path source,
-        String checksumSha256) {
+        String checksumSha256
+    ) {
         throw new MaintenanceException("LES_RESTORE_UPLOAD_FORBIDDEN");
     }
 }

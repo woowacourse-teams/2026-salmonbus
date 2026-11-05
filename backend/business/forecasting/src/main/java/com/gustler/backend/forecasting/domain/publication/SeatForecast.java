@@ -57,7 +57,8 @@ public record SeatForecast(
         final double seatFullChanceRaw,
         final double seatFullChance,
         Double expectedSeats,
-        Instant generatedAt) {
+        Instant generatedAt
+    ) {
         this(vehicleObservationId, routeVersionId, targetStopOrder, stopsToTarget, modelDeploymentId,
             demandStatisticsRevision, seatFullChanceRaw, seatFullChance, expectedSeats, generatedAt, true);
     }

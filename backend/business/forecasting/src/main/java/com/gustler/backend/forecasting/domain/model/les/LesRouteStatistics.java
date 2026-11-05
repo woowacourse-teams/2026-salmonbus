@@ -125,7 +125,8 @@ public record LesRouteStatistics(
         String table,
         final int stop,
         String day,
-        final int minute) {
+        final int minute
+    ) {
         return tables.get(table).getOrDefault(stop + "|" + day + "|" + minute / 30, 0.0);
     }
 

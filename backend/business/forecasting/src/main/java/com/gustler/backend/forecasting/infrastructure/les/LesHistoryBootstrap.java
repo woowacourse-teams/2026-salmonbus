@@ -25,7 +25,8 @@ public final class LesHistoryBootstrap {
         final long throughBatchId,
         final int batchStep,
         final int maximumRows,
-        String checkpointDirectory) {
+        String checkpointDirectory
+    ) {
         validateRequest(checkpointDirectory, batchStep);
         Instant through = through(stops.routeVersionId(), throughBatchId, statistics.confirmedProfile());
         String seedDirectory = checkpointDirectory;

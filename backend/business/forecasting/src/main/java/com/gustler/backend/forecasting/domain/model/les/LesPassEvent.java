@@ -19,7 +19,8 @@ public record LesPassEvent(
         final int stopOrder,
         LesObservation arrival,
         LesObservation departure,
-        Instant confirmedAt) {
+        Instant confirmedAt
+    ) {
         this(vehicleId, tripId, stopOrder, arrival, departure, confirmedAt, departure, departure);
     }
 }

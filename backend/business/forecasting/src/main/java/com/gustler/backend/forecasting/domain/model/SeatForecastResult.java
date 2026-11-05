@@ -52,7 +52,8 @@ public record SeatForecastResult(
         String probabilityTarget,
         final double fullChanceRaw,
         final double fullChance,
-        final double expectedSeats) {
+        final double expectedSeats
+    ) {
         return LES_SEAT_TARGET.equals(seatTarget)
             && LES_PROBABILITY_TARGET.equals(probabilityTarget) && distribution == null
             && fullChanceRaw == fullChance && expectedSeats <= 70;
