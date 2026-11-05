@@ -12,6 +12,13 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   reactHooks.configs.flat["recommended-latest"],
   {
+    files: ["src/**/*.typeTest.ts"],
+    rules: {
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+    },
+  },
+  {
     files: ["src/**/*.{ts,tsx}"],
     languageOptions: {
       globals: globals.browser,

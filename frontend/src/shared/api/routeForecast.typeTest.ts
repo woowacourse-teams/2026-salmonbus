@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars -- 아래 함수들은 호출용이 아니라 컴파일 검사용이라서 어디서도 쓰지 않는다 */
 import type { ErrorResponse } from "./apiError";
 import type {
   ApproachingVehicle,
