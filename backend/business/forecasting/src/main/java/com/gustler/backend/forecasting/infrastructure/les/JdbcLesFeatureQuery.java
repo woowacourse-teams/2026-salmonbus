@@ -11,6 +11,7 @@ import com.gustler.backend.forecasting.domain.model.les.LesObservation;
 import com.gustler.backend.forecasting.domain.model.les.LesPassEvent;
 import com.gustler.backend.forecasting.domain.model.les.LesRouteStatistics;
 import com.gustler.backend.forecasting.domain.model.les.LesVehiclePrefix;
+import java.nio.file.Path;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -32,7 +33,7 @@ import org.springframework.stereotype.Repository;
 /**
  * 검증된 원점 또는 체크포인트와 DB 후속 관측으로 입력을 복구한다.
  * 다섯 필드는 하나의 복구 유스케이스에 필요한 저장소·지원 범위·자원 제한 설정이다.
- * 과거 수신 시각 기준으로 읽고, 성공한 복구 상태만 체크포인트 파일에 저장한다.
+ * 원본은 수신 시각, 확인 판본은 입력 확인 시각으로 읽으며 체크포인트도 판본별로 분리한다.
  */
 @Repository
 public class JdbcLesFeatureQuery implements LesFeatureQuery {
@@ -48,6 +49,27 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
           FROM batches b JOIN vehicle_observation o ON o.observation_batch_id=b.id
           ORDER BY o.vehicle_id,b.id,o.source_row_number,o.id
         ) SELECT * FROM observations ORDER BY response_received_at,batch_id,vehicle_id LIMIT :limit
+        """;
+    private static final String READ_CONFIRMED_HISTORY = """
+        WITH batches AS (
+          SELECT id,route_version_id,input_confirmed_at AS available_at,response_received_at AS physical_at,
+            row_number() OVER (ORDER BY input_confirmed_at,id)-1 AS rank
+          FROM observation_batch WHERE route_version_id IN (:versions)
+            AND ingestion_origin='LIVE' AND outcome='SUCCESS_ROWS' AND stored_rows>0
+            AND input_confirmed_at>=response_received_at
+            AND input_confirmed_at<=response_received_at+interval '90 seconds'
+            AND (input_confirmed_at,id)<=(:until,:batch)
+            AND (:seedBatch=0 OR (input_confirmed_at,id)>(:seedTime,:seedBatch))
+        ), observations AS (
+          SELECT o.id,b.id AS batch_id,b.rank,b.available_at AS response_received_at,b.physical_at,
+            b.route_version_id,o.vehicle_id,o.passed_stop_order,o.stop_order,o.running_state,o.crowd_level,
+            CASE WHEN o.remaining_seats BETWEEN 0 AND 70 AND o.seat_unknown_reason IS NULL
+                THEN o.remaining_seats END AS remaining_seats,
+            count(*) OVER (PARTITION BY o.vehicle_id,b.id) AS identity_rows
+          FROM batches b JOIN vehicle_observation o ON o.observation_batch_id=b.id
+          WHERE o.vehicle_id IS NOT NULL
+        ) SELECT * FROM observations WHERE identity_rows=1
+          ORDER BY response_received_at,batch_id,vehicle_id LIMIT :limit
         """;
     private static final String CHECK_ROWS = """
         SELECT EXISTS (
@@ -73,6 +95,7 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
     private final int maximumRows;
     private final boolean rushOnly;
     private final LesHistorySeedReader seeds;
+    private final LesHistorySeedReader confirmedSeeds;
 
     public JdbcLesFeatureQuery(
         JdbcClient jdbc,
@@ -85,6 +108,11 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
         this.rushOnly = rushOnly;
         this.origins = new HashMap<>();
         this.seeds = new LesHistorySeedReader(seedDirectory, maximumRows);
+        String confirmedDirectory = "";
+        if (!seedDirectory.isBlank()) {
+            confirmedDirectory = Path.of(seedDirectory).resolve(LesRouteStatistics.CONFIRMED_PROFILE).toString();
+        }
+        this.confirmedSeeds = new LesHistorySeedReader(confirmedDirectory, maximumRows);
         if (maximumRows < 1) {
             throw new IllegalArgumentException("Les history row limit must be positive");
         }
@@ -125,27 +153,30 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
         LesRouteStatistics statistics,
         final boolean checkpointOnly) {
         validateRoute(stops, statistics);
-        Target target = target(batchId);
+        Target target = target(batchId, statistics.confirmedProfile());
         validateScope(stops, statistics, target, checkpointOnly);
         List<Long> versions = compatibleVersions(statistics, target.time(), batchId);
-        LesHistorySeedReader.Seed seed = seeds.read(stops.routeVersionId());
+        LesHistorySeedReader reader = seedReader(statistics);
+        LesHistorySeedReader.Seed seed = reader.read(stops.routeVersionId());
+        validateSeedProfile(seed, statistics);
         ReplayCursor cursor = new ReplayCursor(target, batchId, versions, seed);
         validateHistoryOrigin(stops, cursor);
-        List<LesObservation> history = observations(cursor);
+        List<LesObservation> history = observations(cursor, statistics);
         validateRowsAndAnchor(cursor);
         Map<String, LesVehiclePrefix> prefix = cursor.prefix();
         List<LesPassEvent> events = LesHistoryCompactor.resolve(
             new LesHistoryCompactor.History(prefix, history, cursor.pastEvents()), statistics.realStopOrders());
         Map<Long, LesFeatureSnapshot> snapshots = snapshots(stops, statistics, cursor, history, events);
-        saveCheckpoint(stops.routeVersionId(), cursor, history, events);
+        saveCheckpoint(stops.routeVersionId(), cursor, history, events, reader);
         return Map.copyOf(snapshots);
     }
 
-    private Target target(final long batchId) {
-        return jdbc.sql(
-            "SELECT route_version_id,response_received_at FROM observation_batch WHERE id=:id AND response_received_at IS NOT NULL")
+    private Target target(final long batchId, final boolean confirmed) {
+        String sql = "SELECT route_version_id,response_received_at FROM observation_batch WHERE id=:id AND response_received_at IS NOT NULL";
+        return jdbc.sql(profileSql(sql, confirmed))
             .param("id", batchId)
-            .query((row, index) -> new Target(row.getLong(1), row.getObject(2, OffsetDateTime.class).toInstant()))
+            .query((row, index) -> new Target(
+                row.getLong(1), row.getObject(2, OffsetDateTime.class).toInstant(), confirmed))
             .optional()
             .orElseThrow(() -> new LesFeatureUnavailableException("LES_SOURCE_BATCH_MISSING"));
     }
@@ -187,7 +218,7 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
             throw new LesFeatureUnavailableException("LES_HISTORY_ORIGIN_UNVERIFIED");
         }
         Long first = jdbc.sql(
-            "SELECT id FROM observation_batch WHERE route_version_id IN (:versions) AND response_received_at IS NOT NULL ORDER BY response_received_at,id LIMIT 1")
+            profileSql("SELECT id FROM observation_batch WHERE route_version_id IN (:versions) AND response_received_at IS NOT NULL ORDER BY response_received_at,id LIMIT 1", cursor.target().confirmed()))
             .param("versions", cursor.versions()).query(Long.class).optional().orElse(null);
         if (!expected.equals(first)) {
             throw new LesFeatureUnavailableException("LES_SOURCE_HISTORY_PURGED");
@@ -217,25 +248,47 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
         return !retained && !empty;
     }
 
-    /** 빈 배치와 실패 배치도 rank에 포함하고, 익명 관측도 배치당 첫 행만 남긴다. */
-    private List<LesObservation> observations(ReplayCursor cursor) {
+    /**
+     * 원본은 빈/실패 배치와 익명 첫 행도 보존한다.
+     * 확인 판본은 유효 LIVE 배치만 순위를 매기며 익명과 모호한 중복 차량 행은 전부 제외한다.
+     */
+    private List<LesObservation> observations(ReplayCursor cursor, LesRouteStatistics statistics) {
         List<LesObservation> history = new ArrayList<>();
         if (cursor.seed() != null) {
             history.addAll(cursor.seed().observations().stream().filter(cursor::includes).toList());
         }
         final long rankOffset = cursor.lastRank() + 1;
-        history.addAll(cursor.bind(jdbc.sql(READ_HISTORY)).param("limit", maximumRows + 1)
-            .query((row, index) -> observation(row, rankOffset)).list());
+        String sql = READ_HISTORY;
+        if (statistics.confirmedProfile()) {
+            sql = READ_CONFIRMED_HISTORY;
+        }
+        final int turn = statistics.turn();
+        history.addAll(cursor.bind(jdbc.sql(sql)).param("limit", maximumRows + 1)
+            .query((row, index) -> observation(row, rankOffset, statistics.confirmedProfile(), turn)).list());
         if (history.size() > maximumRows) {
             throw new LesFeatureUnavailableException("LES_HISTORY_ROW_LIMIT_EXCEEDED");
         }
         return history;
     }
 
-    private static LesObservation observation(ResultSet row, final long rankOffset) throws SQLException {
+    private static LesObservation observation(
+        ResultSet row,
+        final long rankOffset,
+        final boolean confirmed,
+        final int turn
+    ) throws SQLException {
         String vehicleId = row.getString("vehicle_id");
         if (vehicleId == null) {
             vehicleId = LesObservation.ANONYMOUS_GROUP;
+        }
+        if (confirmed) {
+            final int stop = row.getInt("stop_order");
+            final int state = row.getInt("running_state");
+            return new LesObservation(row.getLong("id"), row.getLong("batch_id"), row.getLong("rank") + rankOffset,
+                row.getObject("response_received_at", OffsetDateTime.class).toInstant(), vehicleId,
+                row.getInt("passed_stop_order"), stop, state, (Integer) row.getObject("remaining_seats"),
+                row.getInt("crowd_level"), row.getLong("route_version_id"),
+                row.getObject("physical_at", OffsetDateTime.class).toInstant(), isDown(stop, state, turn));
         }
         return new LesObservation(row.getLong("id"), row.getLong("batch_id"), row.getLong("rank") + rankOffset,
             row.getObject("response_received_at", OffsetDateTime.class).toInstant(), vehicleId,
@@ -244,7 +297,8 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
     }
 
     private void validateRowsAndAnchor(ReplayCursor cursor) {
-        final boolean incomplete = cursor.bind(jdbc.sql(CHECK_ROWS)).query(Boolean.class).single();
+        final boolean incomplete = cursor.bind(jdbc.sql(profileSql(CHECK_ROWS, cursor.target().confirmed())))
+            .query(Boolean.class).single();
         if (incomplete) {
             throw new LesFeatureUnavailableException("LES_SOURCE_ROWS_MISSING");
         }
@@ -252,7 +306,7 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
             return;
         }
         final boolean anchorExists = jdbc.sql(
-            "SELECT EXISTS(SELECT 1 FROM observation_batch WHERE id=:id AND route_version_id IN (:versions) AND response_received_at=:time)")
+            profileSql("SELECT EXISTS(SELECT 1 FROM observation_batch WHERE id=:id AND route_version_id IN (:versions) AND response_received_at=:time)", cursor.target().confirmed()))
             .param("id", cursor.seedBatchId()).param("versions", cursor.versions())
             .param("time", cursor.seedTime().atOffset(ZoneOffset.UTC)).query(Boolean.class).single();
         if (!anchorExists) {
@@ -274,12 +328,54 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
             if (!isEligibleSource(source, cursor.batchId(), eligible)) {
                 continue;
             }
-            if (hasCapacity(source, cursor.prefix(), history)) {
+            if (hasCapacity(source, cursor.prefix(), history, statistics.confirmedProfile())) {
                 result.put(source.observationId(), new LesFeatureSnapshot(stops.routeVersionId(), source, statistics,
                     history, events, cursor.prefix()));
             }
         }
         return result;
+    }
+
+    private LesHistorySeedReader seedReader(LesRouteStatistics statistics) {
+        if (statistics.confirmedProfile()) {
+            return confirmedSeeds;
+        }
+        return seeds;
+    }
+
+    private static void validateSeedProfile(LesHistorySeedReader.Seed seed, LesRouteStatistics statistics) {
+        if (seed == null) {
+            return;
+        }
+        List<LesObservation> evidence = new ArrayList<>(seed.observations());
+        seed.prefix().values().forEach(state -> evidence.add(state.previous()));
+        seed.events().forEach(event -> evidence.add(event.arrival()));
+        if (evidence.stream().anyMatch(row -> row.confirmedProfile() != statistics.confirmedProfile())) {
+            throw new LesFeatureUnavailableException("LES_SEED_PROFILE_MISMATCH");
+        }
+    }
+
+    private static boolean isDown(final int stop, final int state, final int turn) {
+        return stop > turn || (stop == turn && state == 2) || (stop == 1 && state != 2);
+    }
+
+    static String profileSql(String sql, final boolean confirmed) {
+        if (!confirmed) {
+            return sql;
+        }
+        String predicate = "ingestion_origin='LIVE' AND outcome='SUCCESS_ROWS' AND stored_rows>0 "
+            + "AND input_confirmed_at>=response_received_at "
+            + "AND input_confirmed_at<=response_received_at+interval '90 seconds'";
+        String alias = "";
+        if (sql.contains("batch.response_received_at")) {
+            alias = "batch.";
+        }
+        String qualified = predicate.replace("ingestion_origin", alias + "ingestion_origin")
+            .replace("outcome", alias + "outcome").replace("stored_rows", alias + "stored_rows")
+            .replace("input_confirmed_at", alias + "input_confirmed_at")
+            .replace("response_received_at", alias + "response_received_at");
+        String transformed = sql.replace("response_received_at", "input_confirmed_at");
+        return transformed.replace("WHERE ", "WHERE " + qualified + " AND ");
     }
 
     private static boolean isEligibleSource(LesObservation source, final long batchId, Set<Long> eligible) {
@@ -292,11 +388,22 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
     private static boolean hasCapacity(
         LesObservation source,
         Map<String, LesVehiclePrefix> prefix,
-        List<LesObservation> history) {
-        if (prefix.containsKey(source.vehicleId()) && prefix.get(source.vehicleId()).capacity() > 0) {
+        List<LesObservation> history,
+        final boolean confirmed
+    ) {
+        final int minimum = minimumCapacity(confirmed);
+        if (prefix.containsKey(source.vehicleId()) && prefix.get(source.vehicleId()).capacity() >= minimum) {
             return true;
         }
-        return history.stream().anyMatch(observation -> isCapacityObservation(observation, source.vehicleId()));
+        return history.stream().anyMatch(observation -> isCapacityObservation(observation, source.vehicleId())
+            && observation.seats() >= minimum);
+    }
+
+    private static int minimumCapacity(final boolean confirmed) {
+        if (confirmed) {
+            return 30;
+        }
+        return 1;
     }
 
     private static boolean isCapacityObservation(LesObservation observation, String vehicleId) {
@@ -310,18 +417,20 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
         final long routeVersionId,
         ReplayCursor cursor,
         List<LesObservation> history,
-        List<LesPassEvent> events) {
+        List<LesPassEvent> events,
+        LesHistorySeedReader reader
+    ) {
         final long newBatches = cursor.bind(jdbc.sql(
-            "SELECT count(*) FROM observation_batch WHERE route_version_id IN (:versions) AND response_received_at IS NOT NULL AND (response_received_at,id)<=(:until,:batch) AND (:seedBatch=0 OR (response_received_at,id)>(:seedTime,:seedBatch))"))
+            profileSql("SELECT count(*) FROM observation_batch WHERE route_version_id IN (:versions) AND response_received_at IS NOT NULL AND (response_received_at,id)<=(:until,:batch) AND (:seedBatch=0 OR (response_received_at,id)>(:seedTime,:seedBatch))", cursor.target().confirmed())))
             .query(Long.class).single();
         if (!cursor.isOlderThanSeed()) {
-            seeds.write(routeVersionId, new LesHistorySeedReader.Seed(history, cursor.batchId(),
+            reader.write(routeVersionId, new LesHistorySeedReader.Seed(history, cursor.batchId(),
                 cursor.lastRank() + newBatches, cursor.target().time(), cursor.prefix(), events));
         }
     }
 
     private List<Long> compatibleVersions(LesRouteStatistics statistics, Instant until, final long batchId) {
-        List<Long> versions = jdbc.sql(READ_VERSIONS).param("name", statistics.route())
+        List<Long> versions = jdbc.sql(profileSql(READ_VERSIONS, statistics.confirmedProfile())).param("name", statistics.route())
             .param("until", until.atOffset(ZoneOffset.UTC)).param("batch", batchId).query(Long.class).list();
         if (versions.isEmpty()) {
             throw new LesFeatureUnavailableException("LES_ROUTE_HISTORY_MISSING");
@@ -374,7 +483,7 @@ public class JdbcLesFeatureQuery implements LesFeatureQuery {
         return "UP";
     }
 
-    private record Target(long version, Instant time) {
+    private record Target(long version, Instant time, boolean confirmed) {
     }
 
     private record ReplayCursor(Target target, long batchId, List<Long> versions, LesHistorySeedReader.Seed seed) {

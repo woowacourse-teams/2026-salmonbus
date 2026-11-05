@@ -169,6 +169,50 @@ class JdbcLesFeatureQueryTest {
         assertThat(query().read(sourceBatch, stops, statistics).get(source).forTarget(2).seat88()[53]).isEqualTo(68);
     }
 
+    @Test
+    void 확인_시각_판본은_빈_배치를_제외하고_물리적_단절을_유지한다() {
+        // given
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at+interval '1 second' WHERE route_version_id=?")
+            .param(version).update();
+        LesRouteStatistics confirmed = new LesRouteStatistics(statistics.route(), statistics.stops(),
+            statistics.minutesPerStop(), statistics.tables(), statistics.targetBands(), statistics.holidays(), true);
+
+        // when
+        LesFeatureSnapshot snapshot = query().read(sourceBatch, stops, confirmed).get(source);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(snapshot.source().receivedAt()).isEqualTo(NOW.plusSeconds(1));
+            softly.assertThat(snapshot.source().sourceReceivedAt()).isEqualTo(NOW);
+            softly.assertThat(snapshot.source().batchRank()).isEqualTo(1);
+            softly.assertThat(snapshot.forTarget(2).seat88()[13]).isEqualTo(1);
+            softly.assertThat(snapshot.provenance().capacityObservation().seats()).isEqualTo(68);
+        });
+    }
+
+    @Test
+    void 새_판본_체크포인트를_복구하고_재시작해도_입력이_같다() {
+        // given
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at+interval '1 second' WHERE route_version_id=?")
+            .param(version).update();
+        LesRouteStatistics confirmed = new LesRouteStatistics(statistics.route(), statistics.stops(),
+            statistics.minutesPerStop(), statistics.tables(), statistics.targetBands(), statistics.holidays(), true);
+        LesFeatureVector expected = query().read(sourceBatch, stops, confirmed).get(source).forTarget(2);
+
+        // when
+        final int steps = new LesHistoryBootstrap(jdbc).rebuild(stops, confirmed, first, sourceBatch, 1, 100,
+            checkpoint.toString());
+        LesFeatureVector restored = new JdbcLesFeatureQuery(jdbc, "", 100, true, checkpoint.toString())
+            .read(sourceBatch, stops, confirmed).get(source).forTarget(2);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(steps).isEqualTo(2);
+            softly.assertThat(restored.seat88()).containsExactly(expected.seat88());
+            softly.assertThat(restored.probability80()).containsExactly(expected.probability80());
+        });
+    }
+
     private JdbcLesFeatureQuery query() {
         return new JdbcLesFeatureQuery(jdbc, version + ":" + first, 100, true, "");
     }

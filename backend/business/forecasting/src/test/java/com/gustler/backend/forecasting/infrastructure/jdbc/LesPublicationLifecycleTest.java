@@ -35,7 +35,9 @@ import com.gustler.backend.forecasting.domain.model.les.NumericTreeEnsemble;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
+import com.gustler.backend.forecasting.infrastructure.les.ConfirmedLesInput;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -85,6 +87,11 @@ class LesPublicationLifecycleTest {
         {"realStopOrders":[1,2,3],"alighting":{"stops":[{"stop":2,"band":"morning",
         "p":0.12,"lam":[1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5],"kappa":1,"r":2}]}}
         """;
+
+    @Autowired
+    ConfirmedLesInput confirmedInput;
+    @Autowired
+    CollectionInputs collectionInputs;
 
     @BeforeEach
     void 정산_자료를_준비한다() {
@@ -143,6 +150,25 @@ class LesPublicationLifecycleTest {
                     .update();
             }
         });
+    }
+
+    @Test
+    void 새_입력_확정_후_기존_발행_경로도_확인_시각을_덮어쓰지_않는다() {
+        // given
+        final long batch = jdbc.sql("SELECT observation_batch_id FROM vehicle_observation WHERE id=?")
+            .param(source).query(Long.class).single();
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=NULL WHERE id=?")
+            .param(batch).update();
+        Instant first = START.plusSeconds(1);
+
+        // when
+        confirmedInput.confirm(batch, first);
+        confirmedInput.confirm(batch, START.plusSeconds(30));
+        tx.executeWithoutResult(status -> collectionInputs.confirmInput(batch, START.plusSeconds(60)));
+
+        // then
+        assertThat(jdbc.sql("SELECT input_confirmed_at FROM observation_batch WHERE id=?")
+            .param(batch).query(OffsetDateTime.class).single().toInstant()).isEqualTo(first);
     }
 
     @Test

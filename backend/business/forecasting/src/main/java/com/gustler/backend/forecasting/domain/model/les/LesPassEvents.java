@@ -54,12 +54,18 @@ public final class LesPassEvents {
     }
 
     private static boolean startsChain(LesObservation previous, LesObservation current, Duration gap) {
+        if (current.confirmedProfile()) {
+            return current.startsConfirmedChainAfter(previous);
+        }
         return changedVehicle(previous, current)
             || gap.compareTo(Duration.ofSeconds(90)) > 0
             || movedBackwards(previous, current);
     }
 
     private static boolean startsTrip(LesObservation previous, LesObservation current, Duration gap) {
+        if (current.confirmedProfile()) {
+            return current.startsConfirmedTripAfter(previous);
+        }
         return changedVehicle(previous, current)
             || gap.compareTo(Duration.ofMinutes(30)) > 0
             || movedBackwards(previous, current);
@@ -81,13 +87,21 @@ public final class LesPassEvents {
         if (chain.size() < 3) {
             return;
         }
-        for (int index = 0; index + 1 < stops.size(); index++) {
+        int start = 0;
+        if (chain.getFirst().confirmedProfile()) {
+            start = 1;
+        }
+        for (int index = start; index + 1 < stops.size(); index++) {
             final int target = stops.get(index);
             final int before = previousStop(stops, index);
             final int next = stops.get(index + 1);
             LesPassEvent event = resolvePass(chain, trip, target, before, next);
             if (event != null) {
-                eventsByTripStop.put(event.vehicleId() + ":" + trip + ":" + target, event);
+                String key = event.vehicleId() + ":" + trip + ":" + target;
+                if (event.arrival().confirmedProfile() && eventsByTripStop.containsKey(key)) {
+                    throw new IllegalArgumentException("Ambiguous confirmed trip/stop visit");
+                }
+                eventsByTripStop.put(key, event);
             }
         }
     }

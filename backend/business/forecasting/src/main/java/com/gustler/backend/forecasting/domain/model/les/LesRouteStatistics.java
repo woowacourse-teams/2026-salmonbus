@@ -13,8 +13,22 @@ public record LesRouteStatistics(
     double minutesPerStop,
     Map<String, Map<String, Double>> tables,
     Map<String, List<Double>> targetBands,
-    Set<LocalDate> holidays
+    Set<LocalDate> holidays,
+    boolean confirmedProfile
 ) {
+    public static final String CONFIRMED_PROFILE = "les-confirmed-closure-v2";
+    public static final String CONFIRMED_LABEL = "les-confirmed-routeband-v2";
+
+    public LesRouteStatistics(
+        String route,
+        List<LesRouteStatistics.Stop> stops,
+        final double minutesPerStop,
+        Map<String, Map<String, Double>> tables,
+        Map<String, List<Double>> targetBands,
+        Set<LocalDate> holidays
+    ) {
+        this(route, stops, minutesPerStop, tables, targetBands, holidays, false);
+    }
     /** 다섯 값은 하나의 원본 정류장 메타데이터를 구성한다. */
     public record Stop(int order, String id, String name, boolean down, boolean boardingAllowed) {
         public Stop {
@@ -85,7 +99,22 @@ public record LesRouteStatistics(
     }
 
     public List<Integer> realStopOrders() {
+        if (confirmedProfile) {
+            return stops.stream().filter(Stop::boardingAllowed).map(Stop::order).sorted().toList();
+        }
         return stops.stream().filter(stop -> !stop.via()).map(LesRouteStatistics.Stop::order).sorted().toList();
+    }
+
+    public Profile profile() {
+        if (confirmedProfile) {
+            return new Profile(CONFIRMED_PROFILE, CONFIRMED_LABEL,
+                "observed-vehicle-prefix-max-through-closure-v2");
+        }
+        return new Profile("les-original-v1", "les-identity-safe-v1",
+            "observed-route-day-max-through-closure-v1");
+    }
+
+    public record Profile(String input, String label, String capacity) {
     }
 
     public LesRouteStatistics.Stop stop(final int order) {

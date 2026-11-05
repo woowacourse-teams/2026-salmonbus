@@ -1,14 +1,15 @@
 package com.gustler.backend.observations.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.GbisLocationResult.GbisSystemError;
 import com.gustler.backend.gbis.api.GbisLocationResult.NoResponse;
 import com.gustler.backend.gbis.api.GbisLocationResult.NoVehicles;
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
+import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.observations.api.CollectionQualityHook;
@@ -473,6 +474,25 @@ class ObservationBatchLedgerTest {
                 throw new IllegalStateException("품질 처리 실패");
             }
         }
+    }
+
+    @Test
+    void 실시간_수집은_LIVE로_기록하고_확인_시각은_한_번만_저장한다() {
+        // given
+        final long batchId = confirmSuccessfulInput();
+
+        // when
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            collectionInputs.confirmInput(batchId, RESPONSE_RECEIVED_AT.plusSeconds(30).toInstant()));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(jdbcClient.sql("SELECT ingestion_origin FROM observation_batch WHERE id=?")
+                .param(batchId).query(String.class).single()).isEqualTo("LIVE");
+            softly.assertThat(jdbcClient.sql("SELECT input_confirmed_at FROM observation_batch WHERE id=?")
+                .param(batchId).query(OffsetDateTime.class).single().toInstant())
+                .isEqualTo(RESPONSE_RECEIVED_AT.plusSeconds(1).toInstant());
+        });
     }
 
     private int quotaRowCount() {

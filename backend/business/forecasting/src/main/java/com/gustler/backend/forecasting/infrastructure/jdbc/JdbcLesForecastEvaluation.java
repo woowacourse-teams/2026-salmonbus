@@ -6,6 +6,7 @@ import com.gustler.backend.forecasting.domain.model.les.LesAlightingPosterior;
 import com.gustler.backend.forecasting.domain.model.les.LesObservation;
 import com.gustler.backend.forecasting.domain.model.les.LesPassEvent;
 import com.gustler.backend.forecasting.domain.model.les.LesPassEvents;
+import com.gustler.backend.forecasting.domain.model.les.LesRouteStatistics;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -54,6 +55,7 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         LocalDate.parse("2026-08-17"), LocalDate.parse("2026-09-24"), LocalDate.parse("2026-09-25"),
         LocalDate.parse("2026-10-05"), LocalDate.parse("2026-10-09"));
     private final int observationLimit;
+    private final int confirmedObservationLimit;
     private final JdbcClient jdbc;
     private final RouteDataQualityAccess quality;
     private final Clock clock;
@@ -64,7 +66,16 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         RouteDataQualityAccess quality,
         Clock clock,
         PlatformTransactionManager transactions) {
-        this(jdbc, quality, clock, transactions, 50_000);
+        this(jdbc, quality, clock, transactions, 50_000, 150_000);
+    }
+
+    public JdbcLesForecastEvaluation(
+        JdbcClient jdbc,
+        RouteDataQualityAccess quality,
+        Clock clock,
+        PlatformTransactionManager transactions,
+        @Value("${forecast.les.evaluation.maximum-observation-rows:50000}") final int observationLimit) {
+        this(jdbc, quality, clock, transactions, observationLimit, observationLimit);
     }
 
     @Autowired
@@ -73,7 +84,13 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         RouteDataQualityAccess quality,
         Clock clock,
         PlatformTransactionManager transactions,
-        @Value("${forecast.les.evaluation.maximum-observation-rows:50000}") final int observationLimit) {
+        @Value("${forecast.les.evaluation.maximum-observation-rows:50000}") final int observationLimit,
+        @Value("${forecast.les.causal-evaluation.maximum-observation-rows:150000}") final int confirmedObservationLimit
+    ) {
+        if (confirmedObservationLimit < 1 || confirmedObservationLimit > 1_000_000) {
+            throw new IllegalArgumentException("확인 시각 정산 관측 한도는 1~1000000개여야 한다");
+        }
+        this.confirmedObservationLimit = confirmedObservationLimit;
         if (observationLimit < 1 || observationLimit > 1_000_000) {
             throw new IllegalArgumentException("Les 정산 관측 한도는 1~1000000개여야 한다");
         }
@@ -152,6 +169,17 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         Instant now,
         LocalDate date,
         List<Work> work) {
+        ConfirmedLesEvaluation confirmed = new ConfirmedLesEvaluation(
+            jdbc, route, date, now, confirmedObservationLimit);
+        for (Work item : work) {
+            if (item.version().equals(LesRouteStatistics.CONFIRMED_LABEL)) {
+                settleConfirmed(item, revision, now, confirmed);
+            }
+        }
+        work = work.stream().filter(item -> !item.version().equals(LesRouteStatistics.CONFIRMED_LABEL)).toList();
+        if (work.isEmpty()) {
+            return;
+        }
         Instant through = work.stream().map(w -> w.observedAt().plusSeconds(7200))
             .max(Instant::compareTo).orElse(now);
         if (through.isAfter(now)) {
@@ -170,9 +198,27 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         }
     }
 
+    private void settleConfirmed(Work work, final long revision, Instant now, ConfirmedLesEvaluation confirmed) {
+        if (quality.investigationPending(work.route(), work.vehicle())) {
+            reschedule(work, "QUALITY_REBUILD_PENDING");
+            return;
+        }
+        if (!work.eligible()) {
+            finish(work, revision, now, Outcome.unsupported("SOURCE_QUALITY_EXCLUDED"));
+            return;
+        }
+        Outcome outcome = confirmed.evaluate(work.id(), work.stop(), work.target(), JSON.readTree(work.snapshot()));
+        if (outcome == null) {
+            defer(work, revision, now, "NO_CLOSED_IDENTITY_SAFE_PASS");
+            return;
+        }
+        finish(work, revision, now, outcome);
+    }
+
     private List<Work> readWork(final long route) {
         return jdbc.sql("""
-            SELECT w.*,batch.response_received_at AS source_at,f.feature_snapshot::text,
+            SELECT w.*,CASE WHEN w.label_version='les-confirmed-routeband-v2' THEN coalesce(batch.input_confirmed_at,batch.response_received_at)
+                     ELSE batch.response_received_at END AS source_at,f.feature_snapshot::text,
                    source.vehicle_id,source.vehicle_trip_key,source.quality_direction,source.forecast_eligible
             FROM les_forecast_evaluation_work w
             JOIN seat_forecast f USING(vehicle_observation_id,target_stop_order)
@@ -508,7 +554,7 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
     }
 
     /** 한 목표의 결과와 근거 식별자를 같은 트랜잭션으로 저장하기 위한 출력 계약이다. */
-    private record Outcome(
+    record Outcome(
         String state,
         Double label,
         String reason,
@@ -572,6 +618,9 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
             if (event == null) {
                 return null;
             }
+            if (event.arrival().confirmedProfile()) {
+                return offset(event.departure().receivedAt());
+            }
             return offset(event.firstDeparture().receivedAt());
         }
 
@@ -588,6 +637,9 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         String capacityPolicy() {
             if (capacity == null) {
                 return null;
+            }
+            if (event.arrival().confirmedProfile()) {
+                return "observed-vehicle-prefix-max-through-closure-v2";
             }
             return CAPACITY_POLICY;
         }

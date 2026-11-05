@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -25,6 +26,10 @@ public final class LesSourceFeatureCheck {
     public static void main(String[] args) throws Exception {
         if (args.length != 2) {
             throw new IllegalArgumentException("fixture and new output paths required");
+        }
+        if (Files.isDirectory(Path.of(args[0]))) {
+            runDirectory(Path.of(args[0]), Path.of(args[1]));
+            return;
         }
         Path output = Path.of(args[1]);
         if (Files.exists(output)) {
@@ -40,6 +45,25 @@ public final class LesSourceFeatureCheck {
         Files.writeString(output,
             json.writerWithDefaultPrettyPrinter().writeValueAsString(comparison.report(root, fixture)));
         comparison.reportOutcome(output);
+    }
+
+    private static void runDirectory(Path source, Path output) throws Exception {
+        Files.createDirectory(output);
+        List<Path> failures = new ArrayList<>();
+        try (Stream<Path> entries = Files.list(source)) {
+            List<Path> fixtures = entries.filter(path -> path.toString().endsWith(".json"))
+                .filter(path -> !path.getFileName().toString().equals("manifest.json")).sorted().toList();
+            for (Path fixture : fixtures) {
+                try {
+                    main(new String[] { fixture.toString(), output.resolve(fixture.getFileName()).toString() });
+                } catch (IllegalStateException failure) {
+                    failures.add(fixture);
+                }
+            }
+        }
+        if (!failures.isEmpty()) {
+            throw new IllegalStateException("Source parity failed for " + failures);
+        }
     }
 
     private static Fixture fixture(JsonNode root) {
@@ -69,6 +93,15 @@ public final class LesSourceFeatureCheck {
     }
 
     private static LesObservation observation(JsonNode row) {
+        if (row.has("route_version_id")) {
+            return new LesObservation(row.path("id").asLong(), row.path("batch_id").asLong(),
+                row.path("batch_rank").asLong(), Instant.parse(row.path("received_at").asText()),
+                row.path("vehicle_id").asText(), row.path("passed_stop_order").asInt(),
+                row.path("stop_order").asInt(), row.path("running_state").asInt(),
+                nullableSeats(row.path("remaining_seats")), row.path("crowd_level").asInt(),
+                row.path("route_version_id").asLong(), Instant.parse(row.path("physical_received_at").asText()),
+                row.path("down").asBoolean());
+        }
         return new LesObservation(row.path("id").asLong(), row.path("batch_id").asLong(),
             row.path("batch_rank").asLong(),
             Instant.parse(row.path("received_at").asText()), row.path("vehicle_id").asText(),
@@ -165,7 +198,8 @@ public final class LesSourceFeatureCheck {
         private LesFeatureVector vector(JsonNode row, List<LesPassEvent> events) {
             LesObservation source = byId.get(row.path("source_id").asLong());
             final int target = row.path("target").asInt();
-            return new LesFeatureSnapshot(1, source, statistics, observations, events, prefix).forTarget(target);
+            return new LesFeatureSnapshot(
+            Math.max(source.routeVersionId(), 1), source, statistics, observations, events, prefix).forTarget(target);
         }
     }
 
@@ -176,7 +210,11 @@ public final class LesSourceFeatureCheck {
         private double maximum;
 
         private void accept(JsonNode row, Fixture fixture) {
-            LesFeatureVector actual = fixture.vector(row, fixture.research());
+            List<LesPassEvent> reference = fixture.research();
+            if (fixture.statistics().confirmedProfile()) {
+                reference = fixture.causal();
+            }
+            LesFeatureVector actual = fixture.vector(row, reference);
             LesFeatureVector causal = fixture.vector(row, fixture.causal());
             maximum = Math.max(maximum, compare(differences, cases, "seat88", row.path("seat88"), actual.seat88()));
             maximum = Math.max(maximum,

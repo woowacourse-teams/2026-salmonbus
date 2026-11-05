@@ -40,7 +40,11 @@ public final class LesHistoryCompactor {
             }
             retained.add(observation);
         }
-        return new History(accumulated, retained, retainedEvents(input.events(), accumulated, retained, cutoff));
+        Instant eventCutoff = cutoff;
+        if (retained.stream().anyMatch(LesObservation::confirmedProfile)) {
+            eventCutoff = cutoff.minusSeconds(5400);
+        }
+        return new History(accumulated, retained, retainedEvents(input.events(), accumulated, retained, eventCutoff));
     }
 
     private static Instant retainedFrom(List<LesObservation> observations, Instant windowStart) {
@@ -59,6 +63,9 @@ public final class LesHistoryCompactor {
     }
 
     private static boolean startsChain(LesObservation previous, LesObservation observation) {
+        if (observation.confirmedProfile()) {
+            return observation.startsConfirmedChainAfter(previous);
+        }
         if (previous == null || gap(previous, observation, 90)) {
             return true;
         }
@@ -141,7 +148,14 @@ public final class LesHistoryCompactor {
         final float capacity = capacity(state, observation);
         Instant entry = entryAt(state, observation, difference);
         final long tripId = tripId(state, observation, difference);
-        return new LesVehiclePrefix(capacity, streak, observation, entry, tripId);
+        LesObservation capacityObservation = null;
+        if (state != null) {
+            capacityObservation = state.capacityObservation();
+        }
+        if (hasValidCapacity(observation) && (state == null || observation.seats() > state.capacity())) {
+            capacityObservation = observation;
+        }
+        return new LesVehiclePrefix(capacity, streak, observation, entry, tripId, capacityObservation);
     }
 
     private static LesObservation previous(LesVehiclePrefix state) {
@@ -162,6 +176,9 @@ public final class LesHistoryCompactor {
         LesObservation previous,
         LesObservation observation,
         final int difference) {
+        if (observation.confirmedProfile() && observation.startsConfirmedChainAfter(previous)) {
+            return false;
+        }
         if (previous == null || observation.batchRank() - previous.batchRank() != 1) {
             return false;
         }
@@ -214,6 +231,9 @@ public final class LesHistoryCompactor {
         LesVehiclePrefix state,
         LesObservation observation,
         final int difference) {
+        if (observation.confirmedProfile() && observation.startsConfirmedChainAfter(previous(state))) {
+            return observation.receivedAt();
+        }
         if (state == null || difference != 0) {
             return observation.receivedAt();
         }
@@ -221,6 +241,9 @@ public final class LesHistoryCompactor {
     }
 
     private static long tripId(LesVehiclePrefix state, LesObservation observation, final int difference) {
+        if (observation.confirmedProfile() && observation.startsConfirmedTripAfter(previous(state))) {
+            return observation.observationId();
+        }
         if (state == null || gap(state.previous(), observation, 1800)) {
             return observation.observationId();
         }

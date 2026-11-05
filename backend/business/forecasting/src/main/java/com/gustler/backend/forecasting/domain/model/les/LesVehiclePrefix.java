@@ -2,14 +2,24 @@ package com.gustler.backend.forecasting.domain.model.les;
 
 import java.time.Instant;
 
-/** 다섯 필드는 보존한 원관측 이전의 누적 상태다. 관측을 만들어 대신 넣지 않는다. */
+/** 관측 창 이전의 누적 상태와 최대 좌석의 근거 관측이다. 관측을 만들어 대신 넣지 않는다. */
 public record LesVehiclePrefix(
     float capacity,
     double fullStreak,
     LesObservation previous,
     Instant entryAt,
-    long tripId
+    long tripId,
+    LesObservation capacityObservation
 ) {
+    public LesVehiclePrefix(
+        final float capacity,
+        final double fullStreak,
+        LesObservation previous,
+        Instant entryAt,
+        final long tripId
+    ) {
+        this(capacity, fullStreak, previous, entryAt, tripId, null);
+    }
     public LesVehiclePrefix {
         if (hasInvalidCapacity(capacity) || hasInvalidStreak(fullStreak)) {
             throw new IllegalArgumentException("Invalid Les vehicle prefix");

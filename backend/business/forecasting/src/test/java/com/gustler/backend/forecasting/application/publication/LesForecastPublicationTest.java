@@ -58,6 +58,8 @@ class LesForecastPublicationTest {
         when(model.statistics(stops)).thenReturn(statistics);
         when(model.bundleDigest()).thenReturn("b".repeat(64));
         when(statistics.route()).thenReturn("3330");
+        when(statistics.profile()).thenReturn(new LesRouteStatistics.Profile(
+            "les-original-v1", "les-identity-safe-v1", "observed-route-day-max-through-closure-v1"));
         when(statistics.dayType(any())).thenReturn("work");
         writer.setLesFeatures(query);
         return new RuntimeSnapshot(new ActiveModelDeployment(7, "les-online-v1", "les-test", "b".repeat(64)),

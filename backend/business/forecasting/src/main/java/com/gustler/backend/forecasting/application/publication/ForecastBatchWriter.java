@@ -3,6 +3,7 @@ package com.gustler.backend.forecasting.application.publication;
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.application.les.LesFeatureQuery;
 import com.gustler.backend.forecasting.application.les.LesFeatureUnavailableException;
+import com.gustler.backend.forecasting.application.les.LesInputConfirmation;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationSamplingPoint;
@@ -18,6 +19,7 @@ import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.model.les.LesFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.les.LesFeatureVector;
 import com.gustler.backend.forecasting.domain.model.les.LesForecastModel;
+import com.gustler.backend.forecasting.domain.model.les.LesObservation;
 import com.gustler.backend.forecasting.domain.model.les.LesRouteStatistics;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.ForecastTimeSlot;
@@ -59,10 +61,16 @@ public class ForecastBatchWriter {
     private final Clock clock;
     private final RouteDataQualityAccess quality;
     private LesFeatureQuery lesFeatures;
+    private LesInputConfirmation confirmedInput;
 
     @Autowired(required = false)
     public void setLesFeatures(LesFeatureQuery lesFeatures) {
         this.lesFeatures = lesFeatures;
+    }
+
+    @Autowired(required = false)
+    public void setConfirmedInput(LesInputConfirmation confirmedInput) {
+        this.confirmedInput = confirmedInput;
     }
 
     public ForecastBatchWriter(
@@ -117,28 +125,55 @@ public class ForecastBatchWriter {
         }
         LesRouteStatistics statistics = model.statistics(stops);
         List<SeatForecast> predictions = new ArrayList<>();
+        if (statistics.confirmedProfile()) {
+            if (confirmedInput == null) {
+                throw new IllegalStateException("확인 시각 입력 확정기가 등록되지 않았다");
+            }
+            if (!confirmedInput.confirm(batch.observationBatchId(), generatedAt)) {
+                return commitLes(batch, new ForecastPublication(batch.observationBatchId(), batch.routeVersionId(),
+                    runtime.deploymentId(), 0, qualityRevision, batch.responseReceivedAt(), generatedAt, generatedAt,
+                    List.of()), statistics);
+            }
+        }
         ZonedDateTime localTime = batch.responseReceivedAt().atZone(ZoneId.of("Asia/Seoul"));
         final int minute = localTime.getHour() * 60 + localTime.getMinute();
-        if (!isValidatedRush(statistics, localTime, minute)) {
+        if (!statistics.confirmedProfile() && !isValidatedRush(statistics, localTime, minute)) {
             LOGGER.info("event=forecast_batch_withheld reason=LES_OUTSIDE_VALIDATED_RUSH_SCOPE batchId={}",
                 batch.observationBatchId());
-            return committer.commit(batch, new ForecastPublication(batch.observationBatchId(),
+            return commitLes(batch, new ForecastPublication(batch.observationBatchId(),
                 batch.routeVersionId(), runtime.deploymentId(), 0, qualityRevision,
-                batch.responseReceivedAt(), generatedAt, generatedAt, List.of()), List.of());
+                batch.responseReceivedAt(), generatedAt, generatedAt, List.of()), statistics);
         }
         Map<Long, LesFeatureSnapshot> snapshots = readLesFeatures(batch, stops, statistics);
         for (LesFeatureSnapshot snapshot : snapshots.values()) {
+            if (statistics.confirmedProfile()) {
+                ZonedDateTime sourceTime = snapshot.source().receivedAt().atZone(ZoneId.of("Asia/Seoul"));
+                if (!isValidatedRush(statistics, sourceTime, sourceTime.getHour() * 60 + sourceTime.getMinute())) {
+                    continue;
+                }
+            }
             List<SeatForecast> vehiclePredictions = new ArrayList<>();
             for (VehicleStopTarget target : stops.targetsAheadOf(snapshot.observation())) {
+                if (statistics.confirmedProfile()
+                    && statistics.stop(target.stopOrder()).down() != snapshot.source().down()) {
+                    continue;
+                }
                 LesFeatureVector vector = snapshot.forTarget(target.stopOrder());
                 vehiclePredictions.add(lesForecast(batch, runtime, model, generatedAt,
                     statistics, snapshot, target, vector));
             }
             predictions.addAll(vehiclePredictions);
         }
-        return committer.commit(batch, new ForecastPublication(batch.observationBatchId(),
+        return commitLes(batch, new ForecastPublication(batch.observationBatchId(),
             batch.routeVersionId(), runtime.deploymentId(), 0, qualityRevision,
-            batch.responseReceivedAt(), generatedAt, generatedAt, predictions), List.of());
+            batch.responseReceivedAt(), generatedAt, generatedAt, predictions), statistics);
+    }
+
+    private int commitLes(PendingForecastBatch batch, ForecastPublication publication, LesRouteStatistics statistics) {
+        if (statistics.confirmedProfile()) {
+            return committer.commitConfirmed(batch, publication);
+        }
+        return committer.commit(batch, publication, List.of());
     }
 
     private boolean isValidatedRush(LesRouteStatistics statistics, ZonedDateTime localTime, final int minute) {
@@ -181,13 +216,27 @@ public class ForecastBatchWriter {
         LesFeatureVector vector) {
         ObjectNode evidence = (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.stopOrder()));
         evidence.put("asOf", batch.responseReceivedAt().toString());
+        evidence.put("inputProfile", statistics.profile().input());
+        evidence.put("capacityPolicy", statistics.profile().capacity());
+        if (statistics.confirmedProfile()) {
+            evidence.put("asOf", snapshot.source().receivedAt().toString());
+            LesFeatureSnapshot.Provenance provenance = snapshot.provenance();
+            LesObservation capacity = provenance.capacityObservation();
+            if (capacity == null) {
+                throw new LesFeatureUnavailableException("LES_CAPACITY_EVIDENCE_MISSING");
+            }
+            evidence.put("tripStartObservationId", provenance.tripStartObservationId());
+            evidence.put("capacityObservationId", capacity.observationId());
+            evidence.put("capacity", capacity.seats());
+            evidence.put("capacityKnownAt", capacity.receivedAt().toString());
+        }
         evidence.put("vehicleObservationId", snapshot.vehicleObservationId());
         evidence.put("sourceBatchId", batch.observationBatchId());
         evidence.set("seat88", nullableVector(vector.seat88()));
         evidence.set("probability80", nullableVector(vector.probability80()));
         return SeatForecast.of(snapshot.vehicleObservationId(), target,
             model.predict(vector), runtime.deploymentId(), 0, generatedAt)
-            .withLesEvidence(JSON.writeValueAsString(evidence), model.bundleDigest());
+            .withLesEvidence(JSON.writeValueAsString(evidence), model.bundleDigest(), statistics.profile().label());
     }
 
     private static ArrayNode nullableVector(double[] vector) {

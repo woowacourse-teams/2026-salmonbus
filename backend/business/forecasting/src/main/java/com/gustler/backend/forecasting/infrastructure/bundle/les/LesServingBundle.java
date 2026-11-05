@@ -23,6 +23,13 @@ public final class LesServingBundle {
 
     public static ModelRelease load(Path directory) throws IOException {
         LesInferenceBundle bundle = LesInferenceBundle.loadForServing(directory);
+        JsonNode runtime = bundle.manifest().get("runtime");
+        return ModelRelease.les(runtime.get("release_id").asString(), bundle.digest(),
+            runtime.get("data_through").asString(), new SupportedForecastScope(bundle.routes()), readModel(bundle));
+    }
+
+    /** 해시 검증을 마친 모델을 읽는다. 배포 생성이나 활성화는 수행하지 않는다. */
+    public static LesForecastModel readModel(LesInferenceBundle bundle) {
         Map<String, LesRouteStatistics> statistics = new HashMap<>();
         Map<String, Map<Integer, String>> evidence = new HashMap<>();
         for (String route : bundle.routes()) {
@@ -32,10 +39,7 @@ public final class LesServingBundle {
             Map<Integer, String> targets = targetEvidence(route, bundle, stats, raw);
             evidence.put(route, targets);
         }
-        JsonNode runtime = bundle.manifest().get("runtime");
-        return ModelRelease.les(runtime.get("release_id").asString(), bundle.digest(),
-            runtime.get("data_through").asString(), new SupportedForecastScope(bundle.routes()),
-            new LesForecastModel(bundle.predictor(), statistics, evidence, bundle.digest()));
+        return new LesForecastModel(bundle.predictor(), statistics, evidence, bundle.digest());
     }
 
     private static Map<Integer, String> targetEvidence(
@@ -48,7 +52,10 @@ public final class LesServingBundle {
             ObjectNode snapshot = JSON.createObjectNode();
             snapshot.put("route", route);
             snapshot.put("bundleDigest", bundle.digest());
-            snapshot.put("capacityPolicy", "observed-route-day-max-through-closure-v1");
+            snapshot.put("capacityPolicy", stats.profile().capacity());
+            snapshot.put("inputProfile", stats.profile().input());
+            snapshot.put("turn", stats.turn());
+            snapshot.set("holidays", JSON.valueToTree(bundle.holidays().stream().map(Object::toString).toList()));
             snapshot.set("realStopOrders", JSON.valueToTree(stats.realStopOrders()));
             ObjectNode alighting = JSON.createObjectNode();
             alighting.put("route", route);

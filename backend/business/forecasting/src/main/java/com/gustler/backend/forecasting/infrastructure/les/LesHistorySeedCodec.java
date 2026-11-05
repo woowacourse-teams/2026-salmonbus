@@ -115,7 +115,7 @@ final class LesHistorySeedCodec {
             throw unavailable("LES_SEED_INVALID_PREFIX");
         }
         return new LesVehiclePrefix((float) state.path("capacity").asDouble(), state.path("full_streak").asDouble(),
-            previous, entry, state.path("trip_id").asLong());
+            previous, entry, state.path("trip_id").asLong(), capacityObservation(state, previous, cursor));
     }
 
     private static boolean hasPrefixTypes(JsonNode state) {
@@ -222,6 +222,16 @@ final class LesHistorySeedCodec {
         if (row.path("vehicle_id").asText().isBlank()) {
             throw unavailable("LES_SEED_INVALID_VEHICLE");
         }
+        if (row.path("route_version_id").asLong() > 0) {
+            requireFields(row, List.of("physical_received_at", "down"));
+            return new LesObservation(row.path("id").asLong(), row.path("batch_id").asLong(),
+                row.path("batch_rank").asLong(), Instant.parse(row.path("received_at").asText()),
+                row.path("vehicle_id").asText(), row.path("passed_stop_order").asInt(),
+                row.path("stop_order").asInt(), row.path("running_state").asInt(),
+                seats(row.path("remaining_seats")), row.path("crowd_level").asInt(),
+                row.path("route_version_id").asLong(), Instant.parse(row.path("physical_received_at").asText()),
+                row.path("down").asBoolean());
+        }
         return new LesObservation(row.path("id").asLong(), row.path("batch_id").asLong(),
             row.path("batch_rank").asLong(),
             Instant.parse(row.path("received_at").asText()), row.path("vehicle_id").asText(),
@@ -262,9 +272,31 @@ final class LesHistorySeedCodec {
     }
 
     private static Map<String, Object> prefixRow(LesVehiclePrefix state) {
-        return Map.of("capacity", state.capacity(), "full_streak", state.fullStreak(), "previous",
-            row(state.previous()),
-            "entry_at", state.entryAt().toString(), "trip_id", state.tripId());
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("capacity", state.capacity());
+        result.put("full_streak", state.fullStreak());
+        result.put("previous", row(state.previous()));
+        result.put("entry_at", state.entryAt().toString());
+        result.put("trip_id", state.tripId());
+        if (state.capacityObservation() != null) {
+            result.put("capacity_observation", row(state.capacityObservation()));
+        }
+        return result;
+    }
+
+    private static LesObservation capacityObservation(JsonNode state, LesObservation previous, Cursor cursor) {
+        if (!state.has("capacity_observation")) {
+            return null;
+        }
+        LesObservation capacity = observation(state.path("capacity_observation"));
+        cursor.requireEvidence(capacity);
+        if (!capacity.vehicleId().equals(previous.vehicleId()) || capacity.seats() == null) {
+            throw unavailable("LES_SEED_CAPACITY_EVIDENCE_MISMATCH");
+        }
+        if (capacity.seats() != state.path("capacity").asInt() || capacity.receivedAt().isAfter(previous.receivedAt())) {
+            throw unavailable("LES_SEED_CAPACITY_EVIDENCE_MISMATCH");
+        }
+        return capacity;
     }
 
     private static Map<String, Object> eventRow(LesPassEvent event) {
@@ -286,6 +318,11 @@ final class LesHistorySeedCodec {
         row.put("running_state", observation.state());
         row.put("remaining_seats", observation.seats());
         row.put("crowd_level", observation.crowd());
+        if (observation.confirmedProfile()) {
+            row.put("route_version_id", observation.routeVersionId());
+            row.put("physical_received_at", observation.sourceReceivedAt().toString());
+            row.put("down", observation.down());
+        }
         return row;
     }
 

@@ -43,7 +43,7 @@ class MigrationOrderTest {
      * <p>이 브랜치는 V47 이후 Les 목표별 정산·이관 기록과 예보 의미를 추가한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("les_target_evaluation");
+        List.of("les_target_evaluation", "les_input_provenance");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

@@ -18,7 +18,18 @@ public final class LesStatisticsReader {
         Map<String, Map<String, Double>> tables = tables(json.path("tables"));
         Map<String, List<Double>> bands = bands(json.path("tables").path("target_band"));
         return new LesRouteStatistics(json.path("route").asText(), stops,
-            json.path("min_per_stop").asDouble(Double.NaN), tables, bands, holidays);
+            json.path("min_per_stop").asDouble(Double.NaN), tables, bands, holidays, confirmedProfile(json));
+    }
+
+    private static boolean confirmedProfile(JsonNode json) {
+        String profile = json.path("input_profile").asText("les-original-v1");
+        if (profile.equals(LesRouteStatistics.CONFIRMED_PROFILE)) {
+            return true;
+        }
+        if (!profile.equals("les-original-v1")) {
+            throw new IllegalArgumentException("Unknown Les input profile");
+        }
+        return false;
     }
 
     private static List<LesRouteStatistics.Stop> stops(JsonNode rows) {

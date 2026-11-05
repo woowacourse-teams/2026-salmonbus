@@ -51,7 +51,7 @@ public final class LesFeatureSnapshot {
         this.history = history.stream().filter(observation -> before(observation, source)).toList();
         this.events = events.stream()
             .filter(event -> isAvailable(event, source))
-            .sorted(Comparator.comparing(event -> event.departure().receivedAt()))
+            .sorted(Comparator.comparing(this::eventTime))
             .toList();
         if (!this.history.contains(source)) {
             throw new IllegalArgumentException("Source observation missing from Les history");
@@ -75,6 +75,18 @@ public final class LesFeatureSnapshot {
 
     public LesObservation source() {
         return source;
+    }
+
+    /** 정산이 같은 차량의 과거 최대 좌석 근거를 이어 읽도록 저장할 식별자다. */
+    public Provenance provenance() {
+        List<LesObservation> own = history.stream()
+            .filter(row -> row.vehicleId().equals(source.vehicleId()))
+            .sorted(Comparator.comparingLong(LesObservation::batchRank)).toList();
+        LesVehiclePrefix current = originState(own).state();
+        return new Provenance(current.tripId(), current.capacityObservation());
+    }
+
+    public record Provenance(long tripStartObservationId, LesObservation capacityObservation) {
     }
 
     public ObservedVehicle observation() {
@@ -123,6 +135,9 @@ public final class LesFeatureSnapshot {
         if (horizon < 1 || horizon > 12) {
             return true;
         }
+        if (statistics.confirmedProfile() && statistics.stop(target).down() != source.down()) {
+            return true;
+        }
         return !statistics.stop(target).boardingAllowed();
     }
 
@@ -155,6 +170,9 @@ public final class LesFeatureSnapshot {
     }
 
     private static boolean hasKnownSlope(LesObservation previous, LesObservation observation) {
+        if (observation.confirmedProfile() && observation.startsConfirmedChainAfter(previous)) {
+            return false;
+        }
         if (previous == null || observation.batchRank() - previous.batchRank() != 1) {
             return false;
         }
@@ -176,6 +194,9 @@ public final class LesFeatureSnapshot {
     }
 
     private static boolean startsTrendSegment(LesObservation previous, LesObservation observation) {
+        if (observation.confirmedProfile()) {
+            return observation.startsConfirmedChainAfter(previous);
+        }
         if (previous == null || observation.passedStopOrder() < previous.passedStopOrder()) {
             return true;
         }
@@ -206,11 +227,11 @@ public final class LesFeatureSnapshot {
     }
 
     private List<LesObservation> entriesAt(final int passedStop) {
-        Map<String, Integer> lastPassedByVehicle = new HashMap<>();
-        prefix.forEach((vehicle, state) -> lastPassedByVehicle.put(vehicle, state.previous().passedStopOrder()));
+        Map<String, LesObservation> lastByVehicle = new HashMap<>();
+        prefix.forEach((vehicle, state) -> lastByVehicle.put(vehicle, state.previous()));
         List<LesObservation> entries = new ArrayList<>();
         for (LesObservation observation : history) {
-            Integer previous = lastPassedByVehicle.put(observation.vehicleId(), observation.passedStopOrder());
+            LesObservation previous = lastByVehicle.put(observation.vehicleId(), observation);
             if (isNewEntry(observation, previous, passedStop)) {
                 entries.add(observation);
             }
@@ -218,11 +239,14 @@ public final class LesFeatureSnapshot {
         return entries;
     }
 
-    private static boolean isNewEntry(LesObservation observation, Integer previous, final int passedStop) {
+    private static boolean isNewEntry(LesObservation observation, LesObservation previous, final int passedStop) {
         if (observation.passedStopOrder() != passedStop) {
             return false;
         }
-        return previous == null || previous != passedStop;
+        if (observation.confirmedProfile() && observation.startsConfirmedChainAfter(previous)) {
+            return true;
+        }
+        return previous == null || previous.passedStopOrder() != passedStop;
     }
 
     private double trend(List<LesObservation> own, OriginState origin) {
@@ -255,10 +279,10 @@ public final class LesFeatureSnapshot {
         Map<Integer, QueueState> queues = new HashMap<>();
         LocalDate day = source.receivedAt().atZone(SEOUL).toLocalDate();
         for (LesPassEvent event : events) {
-            if (!event.departure().receivedAt().atZone(SEOUL).toLocalDate().equals(day)) {
+            if (!eventTime(event).atZone(SEOUL).toLocalDate().equals(day)) {
                 continue;
             }
-            queues.computeIfAbsent(event.stopOrder(), ignored -> new QueueState()).accept(event);
+            queues.computeIfAbsent(event.stopOrder(), ignored -> new QueueState()).accept(event, eventTime(event));
         }
         return queues;
     }
@@ -312,14 +336,21 @@ public final class LesFeatureSnapshot {
 
     private List<LesPassEvent> hourEvents() {
         return events.stream()
-            .filter(event -> !event.departure().receivedAt().isBefore(source.receivedAt().minusSeconds(3600)))
+            .filter(event -> !eventTime(event).isBefore(source.receivedAt().minusSeconds(3600)))
             .toList();
+    }
+
+    private Instant eventTime(LesPassEvent event) {
+        if (statistics.confirmedProfile()) {
+            return event.confirmedAt();
+        }
+        return event.departure().receivedAt();
     }
 
     private double deviation(List<LesPassEvent> events) {
         double value = 0;
         for (LesPassEvent event : events) {
-            ZonedDateTime time = event.departure().receivedAt().atZone(SEOUL);
+            ZonedDateTime time = eventTime(event).atZone(SEOUL);
             value += event.arrival().seats() - event.departure().seats()
                 - statistics.typicalNet(event.stopOrder(), statistics.dayType(time.toLocalDate()), minute(time));
         }
@@ -596,9 +627,9 @@ public final class LesFeatureSnapshot {
         private double full;
         private double boarded;
 
-        private void accept(LesPassEvent event) {
+        private void accept(LesPassEvent event, Instant knownAt) {
             if (event.arrival().seats() >= 1 && event.departure().seats() >= 1) {
-                clear = event.departure().receivedAt();
+                clear = knownAt;
                 full = 0;
                 boarded = 0;
                 return;

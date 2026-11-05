@@ -105,12 +105,16 @@ public record SeatForecast(
     }
 
     public SeatForecast withLesEvidence(String snapshot, String bundleHash) {
+        return withLesEvidence(snapshot, bundleHash, "les-identity-safe-v1");
+    }
+
+    public SeatForecast withLesEvidence(String snapshot, String bundleHash, String labelVersion) {
         if (!hasLesEvidence(snapshot, bundleHash)) {
             throw new IllegalArgumentException("레스 예보에는 입력과 계수 근거가 있어야 한다");
         }
         return new SeatForecast(vehicleObservationId, routeVersionId, targetStopOrder, stopsToTarget,
             modelDeploymentId, demandStatisticsRevision, seatFullChanceRaw, seatFullChance, expectedSeats,
-            generatedAt, evaluationDetailRequired, seatTarget, probabilityTarget, "les-identity-safe-v1",
+            generatedAt, evaluationDetailRequired, seatTarget, probabilityTarget, labelVersion,
             snapshot, bundleHash);
     }
 
