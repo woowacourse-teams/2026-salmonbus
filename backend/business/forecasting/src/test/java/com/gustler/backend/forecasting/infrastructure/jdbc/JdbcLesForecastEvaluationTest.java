@@ -28,6 +28,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @ForecastingIntegrationTest
@@ -476,6 +479,7 @@ class JdbcLesForecastEvaluationTest {
     @Test
     void 지연된_여러_예보를_처리해도_관측_목록이_힙에_계속_쌓이지_않는다() {
         // given
+        PlatformTransactionManager heapTransactions = new HeapTestTransactions(transactions);
         useConfirmedProfile();
         for (int seconds = 1; seconds <= 24; seconds++) {
             final long next = observation("late-" + seconds, seconds, 1, 40);
@@ -495,7 +499,7 @@ class JdbcLesForecastEvaluationTest {
             """).param(version).update();
 
         // when
-        new JdbcLesForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions).settle();
+        new JdbcLesForecastEvaluation(jdbc, quality, Clock.systemUTC(), heapTransactions).settle();
 
         // then
         assertThat(count("les_forecast_evaluation_work")).isZero();
@@ -563,6 +567,26 @@ class JdbcLesForecastEvaluationTest {
 
     private static OffsetDateTime offset(Instant value) {
         return value.atOffset(ZoneOffset.UTC);
+    }
+
+    /** 힙 회귀 검사는 CI 처리 속도와 분리한다. 실제 DB 트랜잭션에만 120초를 주고 힙 제한은 유지한다. */
+    private record HeapTestTransactions(PlatformTransactionManager delegate) implements PlatformTransactionManager {
+        @Override
+        public TransactionStatus getTransaction(TransactionDefinition definition) {
+            DefaultTransactionDefinition heapCheck = new DefaultTransactionDefinition(definition);
+            heapCheck.setTimeout(120);
+            return delegate.getTransaction(heapCheck);
+        }
+
+        @Override
+        public void commit(TransactionStatus status) {
+            delegate.commit(status);
+        }
+
+        @Override
+        public void rollback(TransactionStatus status) {
+            delegate.rollback(status);
+        }
     }
 
     private static final class MemoryObjects implements EvaluationArchiveObjects {
