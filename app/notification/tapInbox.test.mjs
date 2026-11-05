@@ -48,4 +48,34 @@ describe('알림 탭 칸', () => {
     assert.deepEqual(inbox.take(), { key: 'n1@1', target: null });
     assert.equal(inbox.take(), null);
   });
+
+  it('꺼낸 탭을 도로 넣으면 한 번 더 꺼낼 수 있다', () => {
+    const inbox = createTapInbox();
+    inbox.receive({ key: 'n1@1', target: TARGET }, false);
+    const taken = inbox.take();
+    assert.ok(taken);
+    assert.equal(inbox.restore(taken), true);
+    assert.deepEqual(inbox.take(), { key: 'n1@1', target: TARGET });
+    assert.equal(inbox.take(), null);
+  });
+
+  it('칸에 더 새로운 탭이 있으면 예전 탭을 도로 넣지 않는다', () => {
+    const inbox = createTapInbox();
+    inbox.receive({ key: 'n1@1', target: TARGET }, false);
+    const taken = inbox.take();
+    assert.ok(taken);
+    inbox.receive({ key: 'n2@2', target: LATER }, false);
+    assert.equal(inbox.restore(taken), false);
+    assert.deepEqual(inbox.take(), { key: 'n2@2', target: LATER });
+  });
+
+  it('바로 보낸 더 새로운 탭이 있으면 예전 탭을 도로 넣지 않는다', () => {
+    const inbox = createTapInbox();
+    inbox.receive({ key: 'n1@1', target: TARGET }, false);
+    const taken = inbox.take();
+    assert.ok(taken);
+    assert.equal(inbox.receive({ key: 'n2@2', target: LATER }, true), 'send');
+    assert.equal(inbox.restore(taken), false);
+    assert.equal(inbox.take(), null);
+  });
 });

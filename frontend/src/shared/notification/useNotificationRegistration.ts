@@ -8,8 +8,12 @@ import type { ApnsEnvironment, NotificationRegistration } from "./notification.t
 const UNREGISTER_TIMEOUT_MS = 3_000;
 
 let registeredToken: string | null = null;
+let registrationEpoch = 0;
+let acceptedEpoch = 0;
+let registrationsOpen = true;
 
 const registrationsInFlight = new Set<Promise<unknown>>();
+const registrationClosed: ApiResult<void> = { ok: false, failure: { kind: "aborted" } };
 
 function trackRegistration<T>(registration: Promise<T>): Promise<T> {
   registrationsInFlight.add(registration);
@@ -20,15 +24,21 @@ function trackRegistration<T>(registration: Promise<T>): Promise<T> {
   return registration;
 }
 
+export function allowDeviceRegistration(): void {
+  registrationsOpen = true;
+}
+
 export function registerThisDevice(
   token: string,
   environment: ApnsEnvironment,
   register: typeof registerPushDevice = registerPushDevice,
 ): Promise<ApiResult<void>> {
+  const epoch = registrationEpoch;
+  if (!registrationsOpen || epoch !== acceptedEpoch) return Promise.resolve(registrationClosed);
   return trackRegistration(
     (async () => {
       const result = await register(token, environment);
-      if (result.ok) registeredToken = token;
+      if (result.ok && epoch === acceptedEpoch) registeredToken = token;
       return result;
     })(),
   );
@@ -40,7 +50,9 @@ export function useNotificationRegistration() {
   useEffect(() => {
     if (memberId === undefined || registeredMemberId.current === memberId) return;
     registeredMemberId.current = memberId;
-    if (memberId !== null) void registerDeviceIfGranted();
+    if (memberId === null) return;
+    allowDeviceRegistration();
+    void registerDeviceIfGranted();
   }, [memberId]);
 }
 
@@ -48,9 +60,12 @@ export function registerDeviceIfGranted(
   readRegistration: () => Promise<NotificationRegistration | null> = getNotificationRegistration,
   register: typeof registerPushDevice = registerPushDevice,
 ): Promise<void> {
+  const epoch = registrationEpoch;
+  if (!registrationsOpen || epoch !== acceptedEpoch) return Promise.resolve();
   return trackRegistration(
     (async () => {
       const registration = await readRegistration();
+      if (!registrationsOpen || epoch !== acceptedEpoch) return;
       if (registration?.status !== "granted" || registration.token === null) return;
       await registerThisDevice(registration.token, registration.environment, register);
     })(),
@@ -68,7 +83,10 @@ export async function unregisterThisDevice({
   readRegistration = getNotificationRegistration,
   timeoutMs = UNREGISTER_TIMEOUT_MS,
 }: UnregisterOptions = {}): Promise<void> {
+  registrationsOpen = false;
+  registrationEpoch += 1;
   await settledWithin(Promise.allSettled(registrationsInFlight), timeoutMs);
+  acceptedEpoch = registrationEpoch;
   const remembered = registeredToken;
   registeredToken = null;
   await settledWithin(

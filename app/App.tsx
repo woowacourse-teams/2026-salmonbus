@@ -22,6 +22,12 @@ import {
 } from './notification/notificationMessages';
 import { showNotificationsInForeground, watchNotificationTaps } from './notification/openedNotifications';
 import { registrationFor } from './notification/registration';
+import {
+  initialDocumentLoad,
+  noteDocumentLoad,
+  noteLoadFailure,
+  noteLoadStart,
+} from './notification/documentLoad';
 import { createTapInbox, type NotificationTap } from './notification/tapInbox';
 import { SETTINGS_CAPABILITIES } from './settings/settingsMessages';
 
@@ -77,10 +83,17 @@ export default function App() {
   const documentEpoch = useRef(0);
   const signingIn = useRef(false);
   const documentLoaded = useRef(false);
+  const documentLoad = useRef(initialDocumentLoad());
+  const provisionalTap = useRef<NotificationTap | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const showLoadFailed = () => {
+    const decision = noteLoadFailure(documentLoad.current);
+    documentLoad.current = decision.state;
     documentLoaded.current = false;
+    const tap = provisionalTap.current;
+    provisionalTap.current = null;
+    if (decision.restore && tap !== null) notificationTaps.restore(tap);
     resetNativeMap();
     setLoadFailed(true);
     SplashScreen.hide();
@@ -93,14 +106,20 @@ export default function App() {
 
   function handleLoadStart() {
     documentLoaded.current = false;
+    provisionalTap.current = null;
+    documentLoad.current = noteLoadStart(documentLoad.current);
     resetNativeMap();
   }
 
   function handleLoad(event: WebViewNavigationEvent) {
-    documentLoaded.current = isInAppUrl(event.nativeEvent.url);
-    if (!documentLoaded.current) return;
+    const decision = noteDocumentLoad(documentLoad.current, isInAppUrl(event.nativeEvent.url));
+    documentLoad.current = decision.state;
+    documentLoaded.current = decision.documentLoaded;
+    if (!decision.take) return;
     const heldTap = notificationTaps.take();
-    if (heldTap !== null) sendOpened(null, heldTap.target);
+    if (heldTap === null) return;
+    provisionalTap.current = heldTap;
+    sendOpened(null, heldTap.target);
   }
 
   function resetNativeMap() {

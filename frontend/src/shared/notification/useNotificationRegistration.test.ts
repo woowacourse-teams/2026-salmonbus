@@ -1,7 +1,12 @@
-import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import type { ApiResult } from "../api/client";
 import type { NotificationRegistration } from "./notification.types";
-import { registerDeviceIfGranted, registerThisDevice, unregisterThisDevice } from "./useNotificationRegistration";
+import {
+  allowDeviceRegistration,
+  registerDeviceIfGranted,
+  registerThisDevice,
+  unregisterThisDevice,
+} from "./useNotificationRegistration";
 
 const TOKEN = "a1b2c3d4".repeat(8);
 const OTHER_TOKEN = "e5f6a7b8".repeat(8);
@@ -30,6 +35,12 @@ function servicesFor(registration: NotificationRegistration | null = null) {
     readRegistration: jest.fn<() => Promise<NotificationRegistration | null>>().mockResolvedValue(registration),
   };
 }
+
+const registrationClosed: ApiResult<void> = { ok: false, failure: { kind: "aborted" } };
+
+beforeEach(() => {
+  allowDeviceRegistration();
+});
 
 afterEach(async () => {
   jest.useRealTimers();
@@ -162,5 +173,81 @@ describe("로그아웃 전 기기 삭제", () => {
     const services = servicesFor();
     services.readRegistration.mockRejectedValue(new Error("bridge"));
     await expect(unregisterThisDevice(services)).resolves.toBeUndefined();
+  });
+
+  it("로그아웃이 시작된 뒤에는 서버에 다시 등록하지 않는다", async () => {
+    const services = servicesFor(granted(TOKEN));
+    services.register.mockResolvedValue(noContent);
+    await unregisterThisDevice(services);
+
+    await expect(registerThisDevice(TOKEN, "SANDBOX", services.register)).resolves.toEqual(registrationClosed);
+    await registerDeviceIfGranted(services.readRegistration, services.register);
+
+    expect(services.register).not.toHaveBeenCalled();
+  });
+
+  it("해제가 끝나기 전에 시작한 등록은 서버로 가지 않는다", async () => {
+    const services = servicesFor(granted(OTHER_TOKEN));
+    let answerRegistration: (result: ApiResult<void>) => void = () => {};
+    services.register.mockReturnValue(new Promise((resolve) => (answerRegistration = resolve)));
+    const registration = registerThisDevice(TOKEN, "SANDBOX", services.register);
+    const removal = unregisterThisDevice(services);
+    await Promise.resolve();
+
+    await expect(registerThisDevice(OTHER_TOKEN, "PRODUCTION", services.register)).resolves.toEqual(registrationClosed);
+    expect(services.register.mock.calls).toEqual([[TOKEN, "SANDBOX"]]);
+
+    answerRegistration(noContent);
+    await Promise.all([registration, removal]);
+    expect(services.unregister.mock.calls).toEqual([[TOKEN]]);
+  });
+
+  it("기기 정보를 읽는 중에 로그아웃이 시작되면 그 뒤에는 서버에 등록하지 않는다", async () => {
+    let answerRead: (registration: NotificationRegistration | null) => void = () => {};
+    const readRegistration = jest.fn<() => Promise<NotificationRegistration | null>>(
+      () => new Promise((resolve) => (answerRead = resolve)),
+    );
+    const register = jest
+      .fn<(token: string, environment: "SANDBOX" | "PRODUCTION") => Promise<ApiResult<void>>>()
+      .mockResolvedValue(noContent);
+    const pending = registerDeviceIfGranted(readRegistration, register);
+    await Promise.resolve();
+
+    const removal = unregisterThisDevice({ unregister: async () => noContent, readRegistration: async () => null });
+    answerRead(granted(TOKEN));
+    await Promise.all([pending, removal]);
+
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it("해제 시간 제한 뒤에 성공한 등록은 token을 다시 기억하지 않는다", async () => {
+    jest.useFakeTimers();
+    const services = servicesFor(granted(OTHER_TOKEN));
+    let answerRegistration: (result: ApiResult<void>) => void = () => {};
+    services.register.mockReturnValue(new Promise((resolve) => (answerRegistration = resolve)));
+    const registration = registerThisDevice(TOKEN, "SANDBOX", services.register);
+
+    const removal = unregisterThisDevice({ ...services, timeoutMs: 3_000 });
+    await jest.advanceTimersByTimeAsync(3_000);
+    await removal;
+    expect(services.unregister.mock.calls).toEqual([[OTHER_TOKEN]]);
+
+    answerRegistration(noContent);
+    await expect(registration).resolves.toEqual(noContent);
+
+    services.readRegistration.mockResolvedValue(null);
+    await unregisterThisDevice(services);
+    expect(services.unregister).toHaveBeenCalledTimes(1);
+  });
+
+  it("다시 로그인하면 기기 등록을 막지 않는다", async () => {
+    const services = servicesFor(granted(TOKEN));
+    services.register.mockResolvedValue(noContent);
+    await unregisterThisDevice(services);
+
+    allowDeviceRegistration();
+    await registerDeviceIfGranted(services.readRegistration, services.register);
+
+    expect(services.register.mock.calls).toEqual([[TOKEN, "PRODUCTION"]]);
   });
 });

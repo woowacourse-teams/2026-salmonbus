@@ -26,5 +26,11 @@ export function createTapInbox() {
     return tap;
   }
 
-  return { receive, take };
+  function restore(tap: NotificationTap): boolean {
+    if (held !== null || tap.key !== lastKey) return false;
+    held = tap;
+    return true;
+  }
+
+  return { receive, take, restore };
 }
