@@ -94,7 +94,7 @@ enum MapMarkerImages {
       arrow.move(to: CGPoint(x: 3, y: 10))
       arrow.addLine(to: CGPoint(x: 7, y: 5))
       arrow.addLine(to: CGPoint(x: 11, y: 10))
-      arrow.lineWidth = 2.5; arrow.lineCapStyle = .round; arrow.lineJoinStyle = .round
+      arrow.lineWidth = 3.5; arrow.lineCapStyle = .round; arrow.lineJoinStyle = .round
       UIColor.white.setStroke(); arrow.stroke()
     }
   }
