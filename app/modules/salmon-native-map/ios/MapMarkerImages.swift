@@ -90,9 +90,10 @@ enum MapMarkerImages {
   static func routeArrow() -> UIImage {
     UIGraphicsImageRenderer(size: CGSize(width: 14, height: 14)).image { _ in
       let arrow = UIBezierPath()
-      arrow.move(to: CGPoint(x: 4, y: 3))
-      arrow.addLine(to: CGPoint(x: 9, y: 7))
-      arrow.addLine(to: CGPoint(x: 4, y: 11))
+      // 네이버 지도 SDK의 경로선 패턴은 이미지의 위쪽을 진행 방향에 맞춘다.
+      arrow.move(to: CGPoint(x: 3, y: 10))
+      arrow.addLine(to: CGPoint(x: 7, y: 5))
+      arrow.addLine(to: CGPoint(x: 11, y: 10))
       arrow.lineWidth = 2.5; arrow.lineCapStyle = .round; arrow.lineJoinStyle = .round
       UIColor.white.setStroke(); arrow.stroke()
     }
