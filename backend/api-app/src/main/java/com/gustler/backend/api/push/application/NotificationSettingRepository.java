@@ -21,6 +21,15 @@ public interface NotificationSettingRepository {
         }
     }
 
+    record DueSetting(
+        UUID id,
+        long memberId,
+        FavoriteTarget target,
+        NotificationSchedule schedule,
+        Instant occurrenceAt
+    ) {
+    }
+
     Optional<Long> memberIdOf(UUID memberPublicId);
 
     boolean hasFavorite(long memberId, FavoriteTarget target);
@@ -36,4 +45,10 @@ public interface NotificationSettingRepository {
     List<SavedSetting> findByMemberId(long memberId);
 
     boolean delete(long memberId, UUID settingId);
+
+    List<DueSetting> findDue(Instant now, int limit);
+
+    boolean advance(UUID settingId, Instant readOccurrenceAt, Instant nextOccurrenceAt, Instant now);
+
+    boolean deleteOrphan(UUID settingId, Instant readOccurrenceAt);
 }

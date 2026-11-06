@@ -9,4 +9,6 @@ public interface PushDeviceRepository {
     boolean register(UUID memberPublicId, DeviceToken token, PushEnvironment environment, Instant registeredAt);
 
     boolean unregister(UUID memberPublicId, DeviceToken token);
+
+    boolean deleteById(long deviceId);
 }
