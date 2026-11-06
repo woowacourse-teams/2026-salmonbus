@@ -11,7 +11,18 @@ import { usePolledRequest } from "@/shared/api/usePolledRequest";
 import { playHaptic } from "@/shared/haptic/haptic";
 import { boardEntryFrom } from "@/shared/routing/boardEntry";
 import { paths } from "@/shared/routing/paths";
-import { directionInfoFor, directionViewsFor, serviceStateFor, stopViewsFor, type BoardScreen } from "./displayPolicy";
+import {
+  boardFreshnessOf,
+  boardNoticeFor,
+  directionInfoFor,
+  directionViewsFor,
+  displayedStopViewsFor,
+  serviceStateFor,
+  stopViewsFor,
+  type BoardFreshness,
+  type BoardNotice,
+  type BoardScreen,
+} from "./displayPolicy";
 import { liveVehicleViewsFor } from "./liveVehiclePolicy";
 import { liveMotionDurationOf, useFreshLiveVehicles } from "../hooks/useFreshLiveVehicles";
 import { useLiveVehicleMotion } from "../hooks/useLiveVehicleMotion";
@@ -27,7 +38,7 @@ import { useBoardVisitEvents } from "../analytics/useBoardVisitEvents";
 import { RouteMap } from "../map/RouteMap";
 import { useRouteMapData } from "../map/useRouteMapData";
 import { useBoardViewport } from "../hooks/useBoardViewport";
-import { OUT_OF_SERVICE_NOTICE } from "./verdictCopy";
+import { boardNoticeLabel, OUT_OF_SERVICE_NOTICE } from "./verdictCopy";
 import * as styles from "./VerdictBoardScreen.css";
 
 type BoardState =
@@ -43,6 +54,8 @@ interface OperatingBoardProps {
   liveVehicles: readonly Vehicle[];
   liveMotionDurationMs: number;
   switched: boolean;
+  freshness: BoardFreshness;
+  notice: BoardNotice | null;
   onDirectionChange: (direction: Direction, source: DirectionSwitchSource) => void;
   onStopExpand: (expansion: StopExpandInput) => void;
 }
@@ -63,7 +76,8 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const [entry] = useState(() => boardEntryFrom(location.state));
   const watchResource = usePolledRequest(loadRouteWatch, routeId);
   const latestWatch = latestSuccessOf(watchResource);
-  const freshLiveVehicles = useFreshLiveVehicles(latestWatch);
+  const { vehicles: freshLiveVehicles, expired } = useFreshLiveVehicles(latestWatch);
+  const freshness = boardFreshnessOf(watchResource.status, expired);
   const motionDurationMs = liveMotionDurationOf(watchResource);
   const [preferredDirection, setPreferredDirection] = useState<Direction | null>(() =>
     search.get("direction") === "UP" ? "UP" : search.get("direction") === "DOWN" ? "DOWN" : null,
@@ -91,6 +105,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   }
 
   if (state.status === "ready" && screen.kind === "forecast") {
+    const serviceState = serviceStateFor(state.watch, state.direction, state.watch.vehicles);
     return (
       <OperatingBoard
         key={state.watch.route.referenceVersionId}
@@ -99,6 +114,8 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
         switched={switched}
         liveVehicles={freshLiveVehicles}
         liveMotionDurationMs={motionDurationMs}
+        freshness={freshness}
+        notice={boardNoticeFor(serviceState, freshness, state.watch.observedAt)}
         onDirectionChange={selectDirection}
         onStopExpand={trackStopExpanded}
       />
@@ -106,10 +123,10 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   }
 
   const status = screen.kind === "outOfService" ? "outOfService" : screen.kind === "error" ? "error" : "loading";
-  const runningDirection =
+  const alternateDirection =
     status === "outOfService" && state.status === "ready"
       ? (state.watch.route.directions.find(
-          (candidate) => serviceStateFor(state.watch, candidate, state.watch.vehicles) === "running",
+          (candidate) => serviceStateFor(state.watch, candidate, state.watch.vehicles) !== "outOfService",
         ) ?? null)
       : null;
   return (
@@ -119,13 +136,13 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
       {status === "outOfService" ? (
         <div className={styles.outOfService}>
           <p role="status">{OUT_OF_SERVICE_NOTICE}</p>
-          {runningDirection !== null && (
+          {alternateDirection !== null && (
             <button
               type="button"
               className={styles.alternateDirection}
-              onClick={() => selectDirection(runningDirection.id, "outOfService")}
+              onClick={() => selectDirection(alternateDirection.id, "outOfService")}
             >
-              {runningDirection.terminalStopName} 방면 보기
+              {alternateDirection.terminalStopName} 방면 보기
             </button>
           )}
         </div>
@@ -142,6 +159,8 @@ function OperatingBoard({
   liveVehicles,
   liveMotionDurationMs,
   switched,
+  freshness,
+  notice,
   onDirectionChange,
   onStopExpand,
 }: OperatingBoardProps) {
@@ -155,10 +174,11 @@ function OperatingBoard({
   const [scrollRequest, setScrollRequest] = useState<StopSelection | null>(selected);
   const [vehicleFocusRequest, setVehicleFocusRequest] = useState<{ key: string; focusMarker: boolean } | null>(null);
   const selectedVehicleKey = vehicleFocusRequest?.key ?? null;
-  const stops = useMemo(() => stopViewsFor(board, direction.id), [board, direction.id]);
+  const sourceStops = useMemo(() => stopViewsFor(board, direction.id), [board, direction.id]);
+  const stops = useMemo(() => displayedStopViewsFor(board, direction.id, freshness), [board, direction.id, freshness]);
   const selectedStop =
     selected?.direction === direction.id
-      ? stops.find((stop) => stop.sequence === selected.sequence && stop.kind !== "passThrough")
+      ? sourceStops.find((stop) => stop.sequence === selected.sequence && stop.kind !== "passThrough")
       : undefined;
   const arrivalSelection =
     selectedStop === undefined
@@ -204,7 +224,9 @@ function OperatingBoard({
     setVehicleFocusRequest(null);
     scrollToStop(selection);
     rememberSelection(selection);
-    const row = reselected ? null : expandableRowOf(stopViewsFor(board, selection.direction), selection.sequence);
+    const row = reselected
+      ? null
+      : expandableRowOf(displayedStopViewsFor(board, selection.direction, freshness), selection.sequence);
     if (row !== null) onStopExpand({ ...row, direction: selection.direction, source: "map" });
   }
 
@@ -306,6 +328,11 @@ function OperatingBoard({
                 animated={switched}
                 onSelect={switchDirection}
               />
+              {notice !== null && (
+                <p className={styles.boardNotice} role="status">
+                  {boardNoticeLabel(notice)}
+                </p>
+              )}
             </>
           }
         >

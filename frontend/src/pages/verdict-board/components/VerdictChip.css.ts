@@ -40,4 +40,4 @@ const noVehicleChip = style([
   },
 ]);
 
-export const chip = { ...seatChip, noVehicle: noVehicleChip };
+export const chip = { ...seatChip, noVehicle: noVehicleChip, checking: noVehicleChip };

@@ -81,3 +81,10 @@ export const noticePage = style({
   padding: `calc(64px + ${SAFE_AREA_TOP}) 18px calc(32px + ${SAFE_AREA_BOTTOM})`,
   backgroundColor: vars.color.background,
 });
+
+export const boardNotice = style({
+  margin: 0,
+  color: vars.color.textSubtle,
+  fontSize: vars.font.boardNotice,
+  textAlign: "center",
+});
