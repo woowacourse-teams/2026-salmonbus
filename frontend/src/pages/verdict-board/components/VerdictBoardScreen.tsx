@@ -11,7 +11,15 @@ import { usePolledRequest } from "@/shared/api/usePolledRequest";
 import { playHaptic } from "@/shared/haptic/haptic";
 import { boardEntryFrom } from "@/shared/routing/boardEntry";
 import { paths } from "@/shared/routing/paths";
-import { directionInfoFor, directionViewsFor, serviceStateFor, stopViewsFor, type BoardScreen } from "./displayPolicy";
+import {
+  boardNoticeFor,
+  directionInfoFor,
+  directionViewsFor,
+  serviceStateFor,
+  stopViewsFor,
+  type BoardNotice,
+  type BoardScreen,
+} from "./displayPolicy";
 import { liveVehicleViewsFor } from "./liveVehiclePolicy";
 import { liveMotionDurationOf, useFreshLiveVehicles } from "../hooks/useFreshLiveVehicles";
 import { useLiveVehicleMotion } from "../hooks/useLiveVehicleMotion";
@@ -27,7 +35,7 @@ import { useBoardVisitEvents } from "../analytics/useBoardVisitEvents";
 import { RouteMap } from "../map/RouteMap";
 import { useRouteMapData } from "../map/useRouteMapData";
 import { useBoardViewport } from "../hooks/useBoardViewport";
-import { OUT_OF_SERVICE_NOTICE } from "./verdictCopy";
+import { boardNoticeLabel, OUT_OF_SERVICE_NOTICE } from "./verdictCopy";
 import * as styles from "./VerdictBoardScreen.css";
 
 type BoardState =
@@ -43,6 +51,7 @@ interface OperatingBoardProps {
   liveVehicles: readonly Vehicle[];
   liveMotionDurationMs: number;
   switched: boolean;
+  notice: BoardNotice | null;
   onDirectionChange: (direction: Direction, source: DirectionSwitchSource) => void;
   onStopExpand: (expansion: StopExpandInput) => void;
 }
@@ -91,6 +100,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   }
 
   if (state.status === "ready" && screen.kind === "forecast") {
+    const serviceState = serviceStateFor(state.watch, state.direction, state.watch.vehicles);
     return (
       <OperatingBoard
         key={state.watch.route.referenceVersionId}
@@ -99,6 +109,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
         switched={switched}
         liveVehicles={freshLiveVehicles}
         liveMotionDurationMs={motionDurationMs}
+        notice={boardNoticeFor(serviceState)}
         onDirectionChange={selectDirection}
         onStopExpand={trackStopExpanded}
       />
@@ -106,10 +117,10 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   }
 
   const status = screen.kind === "outOfService" ? "outOfService" : screen.kind === "error" ? "error" : "loading";
-  const runningDirection =
+  const alternateDirection =
     status === "outOfService" && state.status === "ready"
       ? (state.watch.route.directions.find(
-          (candidate) => serviceStateFor(state.watch, candidate, state.watch.vehicles) === "running",
+          (candidate) => serviceStateFor(state.watch, candidate, state.watch.vehicles) !== "outOfService",
         ) ?? null)
       : null;
   return (
@@ -119,13 +130,13 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
       {status === "outOfService" ? (
         <div className={styles.outOfService}>
           <p role="status">{OUT_OF_SERVICE_NOTICE}</p>
-          {runningDirection !== null && (
+          {alternateDirection !== null && (
             <button
               type="button"
               className={styles.alternateDirection}
-              onClick={() => selectDirection(runningDirection.id, "outOfService")}
+              onClick={() => selectDirection(alternateDirection.id, "outOfService")}
             >
-              {runningDirection.terminalStopName} 방면 보기
+              {alternateDirection.terminalStopName} 방면 보기
             </button>
           )}
         </div>
@@ -142,6 +153,7 @@ function OperatingBoard({
   liveVehicles,
   liveMotionDurationMs,
   switched,
+  notice,
   onDirectionChange,
   onStopExpand,
 }: OperatingBoardProps) {
@@ -306,6 +318,11 @@ function OperatingBoard({
                 animated={switched}
                 onSelect={switchDirection}
               />
+              {notice !== null && (
+                <p className={styles.boardNotice} role="status">
+                  {boardNoticeLabel(notice)}
+                </p>
+              )}
             </>
           }
         >

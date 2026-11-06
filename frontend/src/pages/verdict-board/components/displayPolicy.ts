@@ -16,7 +16,7 @@ import {
   type ArrivalTone,
 } from "./arrivalPolicy";
 
-export type ServiceState = "running" | "outOfService";
+export type ServiceState = "running" | "noVehiclesInService" | "outOfService";
 
 export type BoardScreen =
   | { kind: "loading" }
@@ -91,7 +91,13 @@ export function serviceStateFor(
   // 실제 운영 시간이라고 하더라도 운행 중인 차량이 하나도 없으면 예측 화면을 보여주지 않는다.
   // 관측한 값일 뿐 계산된 판정이 아니라서, 실제 운영 중 시간대에서만 이 값을 보여준다.
   // 시간표를 못 읽어 판정하지 못한 경우도 예보가 틀린 건 아니므로 판정화면을 보여주되 같은 기준으로 판단한다.
-  return board.vehiclesInService > 0 ? "running" : "outOfService";
+  return board.vehiclesInService > 0 ? "running" : "noVehiclesInService";
+}
+
+export type BoardNotice = { kind: "noVehiclesInService" };
+
+export function boardNoticeFor(serviceState: ServiceState): BoardNotice | null {
+  return serviceState === "noVehiclesInService" ? { kind: "noVehiclesInService" } : null;
 }
 
 export function directionInfoFor(board: Board, preferred: Direction | null): DirectionInfo {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { HeadwayRange, RouteHeadways, Vehicle } from "@/shared/api/routeForecast.types";
-import { headwayLabelFor, serviceStateFor, stopViewsFor } from "./displayPolicy";
+import { boardNoticeFor, headwayLabelFor, serviceStateFor, stopViewsFor } from "./displayPolicy";
 import { boardWith, stopAt, upInfo, vehicleAt } from "@/testing/fixtures";
 import { forecastFixtures } from "@/testing/forecastFixtures";
 
@@ -96,8 +96,8 @@ describe("serviceStateFor", () => {
       expect(serviceStateFor(boardWith({ observedAt: observedAt("01:00") }), overnight, noVehicles)).toBe("running");
     });
 
-    it("도는 차량이 없으면 운행 종료이다", () => {
-      expect(serviceStateFor(boardWith({ vehiclesInService: 0 }), upInfo, noVehicles)).toBe("outOfService");
+    it("도는 차량이 없으면 오는 차량 없음이다", () => {
+      expect(serviceStateFor(boardWith({ vehiclesInService: 0 }), upInfo, noVehicles)).toBe("noVehiclesInService");
     });
   });
 
@@ -152,6 +152,24 @@ describe("serviceStateFor", () => {
         "running",
       );
     });
+
+    it("판정 불가인데 도는 차량이 없으면 오는 차량 없음이다", () => {
+      expect(
+        serviceStateFor(
+          boardWith({ observedAt: observedAt("08:00", "+00:00"), vehiclesInService: 0 }),
+          upInfo,
+          noVehicles,
+        ),
+      ).toBe("noVehiclesInService");
+    });
+  });
+});
+
+describe("boardNoticeFor", () => {
+  it("오는 차량 없음만 안내를 주고 나머지는 안내가 없다", () => {
+    expect(boardNoticeFor("noVehiclesInService")).toEqual({ kind: "noVehiclesInService" });
+    expect(boardNoticeFor("running")).toBeNull();
+    expect(boardNoticeFor("outOfService")).toBeNull();
   });
 });
 
