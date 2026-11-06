@@ -1,6 +1,8 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { AUTH_CAPABILITIES as APP_AUTH_CAPABILITIES } from "../../../../app/auth/authMessages";
+import { NOTIFICATION_CAPABILITIES as APP_NOTIFICATION_CAPABILITIES } from "../../../../app/notification/notificationMessages";
 import { SETTINGS_CAPABILITIES as APP_SETTINGS_CAPABILITIES } from "../../../../app/settings/settingsMessages";
+import type { NotificationCommandType } from "../notification/notification.types";
 import type { AppCommandType, BridgeMessage } from "./bridge.types";
 import { BRIDGE_EVENT, appHostFrom, bridgeMessageFrom, isSupportedInApp, sendToApp, subscribeToApp } from "./bridge";
 
@@ -21,6 +23,29 @@ describe("설정 메시지 목록", () => {
 describe("로그인 메시지 목록", () => {
   it("앱의 app/auth/authMessages.ts와 같은 목록이다", () => {
     expect(APP_AUTH_CAPABILITIES).toEqual(["auth.signIn"] satisfies AppCommandType[]);
+  });
+});
+
+type SameMembers<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+const WEB_NOTIFICATION_COMMANDS = [
+  "notification.requestPermission",
+  "notification.getRegistration",
+  "notification.takeOpened",
+] as const satisfies readonly NotificationCommandType[];
+const webListCoversNotificationCommands: SameMembers<
+  (typeof WEB_NOTIFICATION_COMMANDS)[number],
+  NotificationCommandType
+> = true;
+const appListMatchesNotificationCommands: SameMembers<
+  (typeof APP_NOTIFICATION_CAPABILITIES)[number],
+  NotificationCommandType
+> = true;
+
+describe("알림 메시지 목록", () => {
+  it("앱의 app/notification/notificationMessages.ts와 웹 NotificationCommands가 같은 명령을 갖는다", () => {
+    expect(webListCoversNotificationCommands && appListMatchesNotificationCommands).toBe(true);
+    expect([...APP_NOTIFICATION_CAPABILITIES].sort()).toEqual([...WEB_NOTIFICATION_COMMANDS].sort());
   });
 });
 

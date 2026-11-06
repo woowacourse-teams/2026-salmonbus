@@ -3,6 +3,11 @@ import type { ApiResult } from "@/shared/api/client";
 import * as api from "@/shared/api/auth.api";
 import type { AuthSession } from "@/shared/api/auth.types";
 import { AuthContext, type AuthState } from "@/shared/hooks/useAuth";
+import {
+  allowDeviceRegistration,
+  registerDeviceIfGranted,
+  unregisterThisDevice,
+} from "@/shared/notification/useNotificationRegistration";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: "loading" });
@@ -51,9 +56,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signOut() {
     mutations.current += 1;
     const current = ++revision.current;
+    await unregisterThisDevice();
     const result = await api.logout();
     mutations.current -= 1;
     if (current === revision.current && result.ok) setState({ status: "anonymous" });
+    if (current === revision.current && !result.ok) {
+      allowDeviceRegistration();
+      void registerDeviceIfGranted();
+    }
     return result;
   }
 

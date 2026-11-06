@@ -1,6 +1,7 @@
 import type { HapticCommands } from "../haptic/haptic.types";
 import type { AuthCommands, AuthEvents } from "../native-auth/nativeAuth.types";
 import type { NativeMapBridgeCommands, NativeMapBridgeEvents } from "../native-map/protocol";
+import type { NotificationCommands, NotificationEvents } from "../notification/notification.types";
 import type { SettingsCommands } from "../settings/settings.types";
 
 export interface BridgeMessage {
@@ -12,10 +13,14 @@ export interface BridgeEnvelope extends BridgeMessage {
   v: 1;
 }
 
-export type AppCommands = NativeMapBridgeCommands & HapticCommands & SettingsCommands & AuthCommands;
+export type AppCommands = NativeMapBridgeCommands &
+  HapticCommands &
+  SettingsCommands &
+  AuthCommands &
+  NotificationCommands;
 export type AppCommandType = keyof AppCommands;
 
-export type AppEvents = NativeMapBridgeEvents & AuthEvents;
+export type AppEvents = NativeMapBridgeEvents & AuthEvents & NotificationEvents;
 export type AppEventType = keyof AppEvents;
 
 export interface AppHost {
