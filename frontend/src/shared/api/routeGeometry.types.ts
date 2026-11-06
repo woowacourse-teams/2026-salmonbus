@@ -13,7 +13,7 @@ export type RouteGeometry = {
   startPoint: string;
   endPoint: string;
   status: "READY" | "PARTIAL" | "UNAVAILABLE";
-  reason: "NOT_COLLECTED" | "MISSING_STOP_COORDINATES" | null;
+  reason: "NOT_COLLECTED" | "MISSING_STOP_COORDINATES" | "GENERATION_PENDING" | "DISPLAY_WITHHELD" | null;
   /** x를 경도, y를 위도로 표시하는 가정. 공급자가 WGS84를 보증한 값은 아니다. */
   coordinateSystem: "WGS84_ASSUMED";
   turningPoint: { stopSequence: number } | null;
@@ -24,6 +24,7 @@ export type RouteGeometry = {
     direction: "UP" | "DOWN";
     boardingAllowed: boolean;
     point: RouteMapPoint | null;
+    pathConnection?: { point: RouteMapPoint; segmentIndex: number; segmentFraction: number };
   }[];
   points: RouteMapPoint[];
   /** 운행 순서의 상·하행 경로. 분리할 수 없으면 null이며 전체 points는 유지한다. */

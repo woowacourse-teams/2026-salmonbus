@@ -46,9 +46,14 @@ public class RouteGeometryController {
     @GetMapping("/api/v2/routes/{routeId}/geometry")
     @Operation(operationId = "getRouteGeometry", summary = "노선 도로 형상과 정류장 좌표",
         description = """
-            노선 목록에서 선택한 routeId로 한 번 조회합니다. `points`는 원본 운행 순서의 전체 도로 형상이고,
+            노선 목록에서 선택한 routeId로 조회하고, 같은 화면에서도 형상 생성 완료·판본 변경을 재검증합니다. `points`는 원본 운행 순서의 전체 도로 형상이고,
             `busStops[].point`는 정류장 마커 좌표입니다. 정류장 좌표를 이어 도로 형상을 만들지 않습니다.
             같은 stationId의 반복 방문은 `stopSequence`로 구분합니다. `turningPoint.stopSequence`도 방문 순번이며 형상 배열 인덱스가 아닙니다.
+
+            기본 응답은 기존 14개 루트 필드와 정류장의 기존 6개 필드에 선택적 `pathConnection`만 더합니다.
+            `paths`는 서버가 한 묶음으로 검증하고 선택한 최종 표시 경로입니다. `pathConnection`의 segmentIndex/segmentFraction은 해당 방문 direction의 `paths` 기준이며 좌표를 재투영하지 않습니다.
+            `points`와 `busStops[].point`는 원본을 보존합니다. `includeDiagnostics=true`일 때만 `displayPaths`·출처·근거·품질·정확도 및 정류장 `displayPoint`를 추가하고, 그때의 `paths`는 원본 방향 경로입니다. 진단 모드의 연결은 `displayPaths` 기준입니다.
+            기본/진단 응답의 geometryRevision과 ETag는 서로 다른 namespace를 사용하여 모드 간 304 재사용을 방지합니다.
 
             `paths`가 있으면 `UP.points`와 `DOWN.points`를 함께 사용합니다. 두 경로는 회차 경계점을 공유하며,
             하행을 상행의 역순으로 만들지 않습니다. 방문 순서와 회차를 형상에 대응할 근거가 부족하거나 모호하면
@@ -56,6 +61,7 @@ public class RouteGeometryController {
             방향 전환이나 지도 확대·이동마다 재조회하지 않습니다.
 
             READY는 도로 형상과 모든 정류장 좌표 제공, PARTIAL은 도로 형상을 유지하되 일부 정류장의 `point=null`인 상태입니다.
+            자동 형상의 최초 개선 시도가 아직 끝나지 않았으면 원본 검증이 먼저 끝났어도 UNAVAILABLE/GENERATION_PENDING입니다. 첫 시도 후 일시 오류로 재시도 중이거나 개선 결과를 사용할 수 없을 때는 유효한 현재 원본 대체를 제공합니다. 사용할 결과가 없고 생성 또는 자료 복구가 진행 가능하면 GENERATION_PENDING, 모두 종료됐거나 입력·선택 묶음이 무효이면 DISPLAY_WITHHELD입니다. 기본 응답의 두 UNAVAILABLE 상태는 `points=[]`, `paths=null`, 연결점 생략이며 원본 정류장 GPS는 유지합니다.
             UNAVAILABLE/NOT_COLLECTED는 현재 판본의 형상 미수집으로 `points=[]`, `paths=null`이며, 정류장 좌표가 있으면 마커만 표시할 수 있습니다.
             dev 공급 자료는 현재 41노선의 정류장 방문 3,215건과 형상점 35,542개를 포함한 GBIS 정적 재생 자료입니다.
             8노선은 기존 정적 API 저장본, 33노선은 공식 공개 지도 형상입니다. 방문 건수는 고유 물리 정류장 수가 아닙니다.
@@ -71,7 +77,7 @@ public class RouteGeometryController {
             schema = @Schema(type = "string")))
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "READY: 형상과 모든 정류장 좌표. PARTIAL: 형상은 있고 일부 point=null. "
-            + "UNAVAILABLE/NOT_COLLECTED: 현재 판본 형상 미수집. READY여도 paths=null 가능. 예시는 합성 자료.",
+            + "UNAVAILABLE/NOT_COLLECTED: 현재 판본 형상 미수집. GENERATION_PENDING: 생성 대기. DISPLAY_WITHHELD: 최종 표시 보류. READY여도 paths=null 가능. 예시는 합성 자료.",
             headers = {
                 @Header(name = "ETag", description = "W/\"g-{geometryRevision}\". UNAVAILABLE에는 제공하지 않음",
                     schema = @Schema(type = "string")),
@@ -95,7 +101,16 @@ public class RouteGeometryController {
                         value = RouteGeometryApiDocsExamples.NOT_COLLECTED),
                     @ExampleObject(name = "withoutDirectionSplit", summary = "READY: 전체 형상 제공·방향 분리 근거 없음",
                         description = "합성 예시. READY가 paths의 존재를 보장하지 않습니다. paths=null이면 전체 points를 표시합니다.",
-                        value = RouteGeometryApiDocsExamples.WITHOUT_DIRECTION_SPLIT)
+                        value = RouteGeometryApiDocsExamples.WITHOUT_DIRECTION_SPLIT),
+                    @ExampleObject(name = "displayWithheld", summary = "UNAVAILABLE: 표시 보류",
+                        description = "합성 예시. 기본 응답에서 표시 검증을 통과하지 못한 선과 연결을 제거하며 원본 정류장 GPS는 보존합니다.",
+                        value = RouteGeometryApiDocsExamples.DISPLAY_WITHHELD),
+                    @ExampleObject(name = "generationPending", summary = "UNAVAILABLE: 표시 산출물 생성 대기",
+                        description = "합성 예시. 원본·개선 중 실행 가능한 작업이 남아 있어 재조회해야 합니다. 선·연결은 없고 원본 정류장 GPS는 보존합니다.",
+                        value = RouteGeometryApiDocsExamples.GENERATION_PENDING),
+                    @ExampleObject(name = "diagnostic", summary = "includeDiagnostics=true: 원본과 표시 자료 분리",
+                        description = "합성 예시. 진단 요청에만 표시 경로·품질·근거·정확도를 추가합니다. 일반 지도는 기본 paths를 사용합니다.",
+                        value = RouteGeometryApiDocsExamples.DIAGNOSTIC)
                 })),
         @ApiResponse(responseCode = "304", description = "ETag와 같은 지도 자료. 본문 없음", content = @Content,
             headers = {
@@ -134,10 +149,12 @@ public class RouteGeometryController {
         @Parameter(description = "현재 노선 판본. 양의 64비트 정수의 문자열 표현", example = "\"7\"",
             schema = @Schema(implementation = String.class, pattern = "^[1-9][0-9]*$"))
         @RequestParam(required = false) Long referenceVersionId,
+        @Parameter(description = "진단 전용 원본/표시 경로·품질·근거 메타 포함. 기본 false이며 일반 지도 구현에는 불필요")
+        @RequestParam(defaultValue = "false") boolean includeDiagnostics,
         WebRequest request
     ) {
         RouteGeometryResponse response =
-            RouteGeometryResponse.from(service.get(new RouteId(routeId), referenceVersionId));
+            RouteGeometryResponse.from(service.get(new RouteId(routeId), referenceVersionId), includeDiagnostics);
         if (response.status().equals("UNAVAILABLE")) {
             return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
         }

@@ -3,16 +3,19 @@ package com.gustler.backend.api.route.infrastructure.jdbc;
 import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.application.RouteGeometryQueryRepository;
 import com.gustler.backend.api.route.application.RouteGeometryQueryRepository.Reference;
-import com.gustler.backend.api.route.domain.RouteGeometry.Point;
-import com.gustler.backend.api.route.domain.RouteGeometry.Shape;
-import com.gustler.backend.api.route.domain.RouteGeometry.Stop;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Point;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Shape;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Stop;
+
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
+
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.stereotype.Repository;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * 현재 판본의 기본정보·정류장 좌표·도로 형상을 지도 조회용으로 읽는다.
@@ -29,44 +32,87 @@ public class JdbcRouteGeometryQueryRepository implements RouteGeometryQueryRepos
 
     @Override
     public Optional<Reference> reference(String routeId) {
-        return jdbc.sql("""
-            SELECT route.public_route_id,version.id,route.display_name,route.start_stop_name,route.end_stop_name,version.turn_sequence
-            FROM route JOIN route_version version ON version.route_id=route.id AND version.valid_to IS NULL
-            WHERE route.public_route_id=? AND route.source_id='GBIS'
-            """)
-            .param(routeId)
-            .query((row, index) -> new Reference(row.getString(1), row.getLong(2), row.getString(3),
-                row.getString(4), row.getString(5), row.getObject(6, Integer.class)))
-            .optional();
+        return jdbc.sql(
+                        """
+SELECT route.public_route_id,version.id,route.display_name,route.start_stop_name,route.end_stop_name,version.turn_sequence
+FROM route JOIN route_version version ON version.route_id=route.id AND version.valid_to IS NULL
+WHERE route.public_route_id=? AND route.source_id='GBIS'
+""")
+                .param(routeId)
+                .query(
+                        (row, index) ->
+                                new Reference(
+                                        row.getString(1),
+                                        row.getLong(2),
+                                        row.getString(3),
+                                        row.getString(4),
+                                        row.getString(5),
+                                        row.getObject(6, Integer.class)))
+                .optional();
     }
 
     @Override
     public List<Stop> stops(final long versionId) {
-        return jdbc.sql("""
-            SELECT stop.stop_id,stop.stop_order,stop.name,stop.direction,stop.boarding_allowed,location.x,location.y
-            FROM route_stop stop LEFT JOIN LATERAL (
-                SELECT x,y FROM route_stop_location_history history
-                WHERE history.route_version_id=stop.route_version_id AND history.stop_order=stop.stop_order
-                ORDER BY history.observed_at DESC LIMIT 1
-            ) location ON true WHERE stop.route_version_id=? ORDER BY stop.stop_order
-            """).param(versionId).query((row, index) -> new Stop(row.getString(1), row.getInt(2), row.getString(3),
-            row.getString(4), row.getBoolean(5), Point.orNull(row.getObject(6, Double.class),
-                row.getObject(7, Double.class)))).list();
+        return jdbc.sql(
+                        """
+SELECT stop.stop_id,stop.stop_order,stop.name,stop.direction,stop.boarding_allowed,location.x,location.y
+FROM route_stop stop LEFT JOIN LATERAL (
+    SELECT x,y FROM route_stop_location_history history
+    WHERE history.route_version_id=stop.route_version_id AND history.stop_order=stop.stop_order
+    ORDER BY history.observed_at DESC LIMIT 1
+) location ON true WHERE stop.route_version_id=? ORDER BY stop.stop_order
+""")
+                .param(versionId)
+                .query(
+                        (row, index) ->
+                                new Stop(
+                                        row.getString(1),
+                                        row.getInt(2),
+                                        row.getString(3),
+                                        row.getString(4),
+                                        row.getBoolean(5),
+                                        Point.orNull(
+                                                row.getObject(6, Double.class),
+                                                row.getObject(7, Double.class))))
+                .list();
     }
 
     @Override
     public Optional<Shape> shape(final long versionId) {
-        return jdbc.sql("""
-            SELECT id,received_at,points::text FROM route_geometry WHERE route_version_id=?
-            ORDER BY received_at DESC,id DESC LIMIT 1
-            """).param(versionId).query((row, index) -> {
-            try {
-                return new Shape(row.getObject(1, UUID.class), row.getTimestamp(2).toInstant(),
-                    json.readValue(row.getString(3), new TypeReference<List<Point>>() {
-                    }));
-            } catch (RuntimeException unreadable) {
-                throw new ServiceUnavailableException();
-            }
-        }).optional();
+        return jdbc.sql(
+                        """
+SELECT id,received_at,points::text,evidence::text,source_manifest_id FROM route_geometry WHERE route_version_id=?
+ORDER BY received_at DESC,id DESC LIMIT 1
+""")
+                .param(versionId)
+                .query(
+                        (row, index) -> {
+                            try {
+                                return new Shape(
+                                        row.getObject(1, UUID.class),
+                                        row.getTimestamp(2).toInstant(),
+                                        json.readValue(
+                                                row.getString(3),
+                                                new TypeReference<List<Point>>() {}),
+                                        evidence(row.getString(4)),row.getString(5));
+                            } catch (RuntimeException unreadable) {
+                                throw new ServiceUnavailableException();
+                            }
+                        })
+                .optional();
+    }
+
+    private com.gustler.backend.routegeometry.api.RouteShapeEvidence evidence(String text) {
+        try {
+            return java.util.Objects.requireNonNull(json.readValue(
+                    text, com.gustler.backend.routegeometry.api.RouteShapeEvidence.class));
+        } catch (RuntimeException invalid) {
+            return new com.gustler.backend.routegeometry.api.RouteShapeEvidence(
+                    "GBIS_API",
+                    List.of(
+                            new com.gustler.backend.routegeometry.api.RouteShapeEvidence.Source(
+                                    "SUPPLEMENTARY_CACHE", "INVALID", null)),
+                    List.of());
+        }
     }
 }

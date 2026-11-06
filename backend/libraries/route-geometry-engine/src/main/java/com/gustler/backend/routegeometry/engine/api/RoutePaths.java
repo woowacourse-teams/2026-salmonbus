@@ -1,7 +1,7 @@
-package com.gustler.backend.api.route.domain;
+package com.gustler.backend.routegeometry.engine.api;
 
-import com.gustler.backend.api.route.domain.RouteGeometry.Point;
-import com.gustler.backend.api.route.domain.RoutePaths.Path;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Point;
+import com.gustler.backend.routegeometry.engine.api.RoutePaths.Path;
 import java.util.List;
 import java.util.Objects;
 

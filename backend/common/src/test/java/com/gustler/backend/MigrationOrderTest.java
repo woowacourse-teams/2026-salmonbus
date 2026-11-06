@@ -126,7 +126,8 @@ class MigrationOrderTest {
     private static boolean isThisBranchMigration(
         String fileName
     ) {
-        return MIGRATIONS_THIS_BRANCH_ADDS.stream().anyMatch(fileName::contains);
+        return MIGRATIONS_THIS_BRANCH_ADDS.stream()
+            .anyMatch(name -> fileName.endsWith("__" + name + ".sql"));
     }
 
     /**

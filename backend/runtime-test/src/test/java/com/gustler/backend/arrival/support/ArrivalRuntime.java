@@ -209,8 +209,45 @@ public final class ArrivalRuntime implements AutoCloseable {
         }
     }
 
-    private Connection connection() throws SQLException {
+    /** Test fixtures own and close the returned connection; applications still use separate processes. */
+    public Connection connection() throws SQLException {
         return database.connection();
+    }
+
+    /** Runs real maintenance commands against this isolated DB; temporary credentials never leave this helper. */
+    public JsonNode importReviewedDisplay(Path artifact) throws Exception {
+        return routeDisplayMaintenance(List.of("route-display-import", "--artifact", artifact.toAbsolutePath().toString()));
+    }
+
+    public JsonNode retryDisplayGeneration(String routeId, String generationKey) throws Exception {
+        return routeDisplayMaintenance(List.of("route-display-retry", "--route-id", routeId, "--generation-key", generationKey));
+    }
+
+    private JsonNode routeDisplayMaintenance(List<String> arguments) throws Exception {
+        Path temporary=Files.createTempDirectory("route-display-maintenance-");
+        Path env=temporary.resolve("database.env"),config=temporary.resolve("local.properties");
+        Process process=null;
+        try {
+            Files.writeString(env,"DB_URL="+database.jdbcUrl()+"\nDB_USERNAME="+database.username()+"\nDB_PASSWORD="+database.password()+"\n");
+            Files.setPosixFilePermissions(env,java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+            Files.writeString(config,"target.kind=local\ndatabase.env-file="+env+"\n");
+            var command = new ArrayList<>(List.of(Path.of(System.getProperty("java.home"),"bin/java").toString(),
+                "-Xmx128m", "-XX:ActiveProcessorCount=2", "-jar",System.getProperty("maintenance.boot.jar"),arguments.getFirst(),
+                "--config",config.toString()));
+            command.addAll(arguments.subList(1, arguments.size()));
+            var builder=new ProcessBuilder(command);
+            builder.environment().clear();builder.redirectError(ProcessBuilder.Redirect.DISCARD);
+            process=builder.start();
+            if(!process.waitFor(30,TimeUnit.SECONDS)) throw new AssertionError("Local maintenance command timed out");
+            String output=new String(process.getInputStream().readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+            assertThat(process.exitValue()).as("Local maintenance command exit status; raw output omitted").isZero();
+            var reply=JSON.readTree(output);
+            assertThat(reply.path("status").asString()).isEqualTo("succeeded");
+            return reply;
+        } finally {
+            if(process!=null && process.isAlive()) destroy(process);
+            Files.deleteIfExists(config);Files.deleteIfExists(env);Files.deleteIfExists(temporary);
+        }
     }
 
     private void seedCatalog() throws SQLException {

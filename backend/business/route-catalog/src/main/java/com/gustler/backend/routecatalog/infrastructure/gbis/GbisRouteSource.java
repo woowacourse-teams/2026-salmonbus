@@ -56,15 +56,37 @@ public class GbisRouteSource implements RouteSource {
     public RouteSourceResult read(
         String routeId
     ) {
-        return switch (routes.read(routeId)) {
-            case RouteInfoUnavailable ignored ->
-            new Failed("노선 %s 의 기본 정보를 읽지 못했다".formatted(routeId));
-            case StationsUnavailable ignored ->
-            new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
-            case GbisRouteResult.Success read when read.stations().isEmpty() ->
-            new Failed("노선 %s 의 경유 정류소를 읽지 못했다".formatted(routeId));
-            case GbisRouteResult.Success read -> toSuccess(routeId, read.routeInfo(), read.stations());
+        return capture(routeId).result();
+    }
+
+    @Override
+    public RouteSource.Capture capture(String routeId) {
+        var captured=routes.capture(routeId);
+        RouteSourceResult result=switch(captured.result()) {
+            case RouteInfoUnavailable ignored -> new Failed("기본 정보를 읽지 못했다");
+            case StationsUnavailable ignored -> new Failed("경유 정류소를 읽지 못했다");
+            case GbisRouteResult.Success success -> normalizeCaptured(routeId,success);
         };
+        var receipts=captured.responses().stream().map(response -> {
+            var status=com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status.valueOf(response.status().name());
+            byte[] body=response.body();
+            if(result instanceof Failed && response.operation().equals("ROUTE_STATIONS")
+                    && status==com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status.SUCCESS) {
+                status=com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status.INVALID_RESPONSE;body=null;
+            }
+            return new com.gustler.backend.routegeometry.api.RouteSourceReceipt("GBIS_API",response.operation(),
+                routeId.matches("[0-9]{1,20}")?routeId:"UNSPECIFIED",status,
+                response.httpStatus()==0?null:response.httpStatus(),response.acquiredAt(),"NOT_PROVIDED",
+                response.operation().equals("ROUTE_STATIONS")
+                    ? com.gustler.backend.routegeometry.api.RouteSourceReceipt.CoordinateSystem.WGS84_ASSUMED
+                    : com.gustler.backend.routegeometry.api.RouteSourceReceipt.CoordinateSystem.UNKNOWN,body);
+        }).toList();
+        return new RouteSource.Capture(result,receipts);
+    }
+
+    private RouteSourceResult normalizeCaptured(String routeId,GbisRouteResult.Success success) {
+        try { return toSuccess(routeId,success.routeInfo(),success.stations()); }
+        catch(RuntimeException invalid) { return new Failed("정류소 목록이 성립하지 않는다"); }
     }
 
     private RouteSourceResult toSuccess(
@@ -82,7 +104,7 @@ public class GbisRouteSource implements RouteSource {
                 timetableOf(routeId, routeInfo)));
         } catch (IllegalArgumentException e) {
             // 순번이 겹치거나 회차 순번이 정류소 목록에 없는 응답. 이 응답으로는 유효한 노선 판본을 만들 수 없다.
-            return new Failed("노선 %s 의 정류소 목록이 성립하지 않는다: %s".formatted(routeId, e.getMessage()));
+            return new Failed("정류소 목록이 성립하지 않는다");
         }
     }
 

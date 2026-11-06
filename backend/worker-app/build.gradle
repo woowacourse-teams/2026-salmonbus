@@ -10,6 +10,7 @@ dependencies {
     }
     implementation 'software.amazon.awssdk:apache5-client'
     implementation project(':common')
+    implementation project(':route-geometry-engine')
     implementation project(':route-catalog')
     implementation project(':observations')
     implementation project(':arrivals')
@@ -44,6 +45,7 @@ tasks.named('test') {
     environment 'FORECAST_ARCHIVE_ENABLED', 'false'
     environment 'ARRIVALS_ENABLED', 'false'
     environment 'ROUTE_GEOMETRY_ENABLED', 'false'
+    environment 'ROUTE_GEOMETRY_GENERATION_ENABLED', 'false'
     environment 'GBIS_SERVICE_KEY', 'fake-service-key-for-test'
     // SharedDevWorkerScheduleTest 가 dev 서버 설정을 상대 경로로 읽는다.
     inputs.file(rootProject.file('../dev/server/worker.yml'))

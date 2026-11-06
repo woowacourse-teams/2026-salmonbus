@@ -55,7 +55,14 @@ class RouteGeometrySupportDocsTest {
                 .as("HTTP " + code).isEqualTo(shared.path("responses").path(code).path("description"));
         }
         assertThat(operation.at("/responses/200/description").asString())
-            .contains("READY", "PARTIAL", "UNAVAILABLE", "paths=null");
+            .contains("READY", "PARTIAL", "UNAVAILABLE", "GENERATION_PENDING", "DISPLAY_WITHHELD", "paths=null");
+        for (String field : List.of("status", "reason", "points", "paths")) {
+            assertThat(document.at("/components/schemas/RouteGeometryResponse/properties/" + field + "/description"))
+                .as("geometry " + field + " description")
+                .isEqualTo(contract.at("/components/schemas/RouteGeometry/properties/" + field + "/description"));
+        }
+        assertThat(contract.at("/components/schemas/RouteGeometry/properties/reason/description").asString())
+            .contains("GENERATION_PENDING=표시 산출물 생성 대기", "DISPLAY_WITHHELD=표시 묶음의 최종 보류");
         assertThat(operation.at("/responses/409/description").asString()).contains("referenceVersionId 없이");
         assertThat(operation.at("/responses/503/description").asString()).contains("200/UNAVAILABLE", "no-store");
         assertThat(operation.at("/responses/200/headers/Cache-Control/description").asString())
@@ -87,6 +94,25 @@ class RouteGeometrySupportDocsTest {
         assertThat(examples.at("/withoutDirectionSplit/value/paths").isNull()).isTrue();
         assertThat(examples.at("/partial/value/reason").asString()).isEqualTo("MISSING_STOP_COORDINATES");
         assertThat(examples.at("/notCollected/value/points")).isEmpty();
+        assertThat(examples.at("/ready/value").size()).isEqualTo(14);
+        assertThat(examples.at("/ready/value/busStops/0").size()).isEqualTo(7);
+        assertThat(examples.at("/displayWithheld/value/reason").asString()).isEqualTo("DISPLAY_WITHHELD");
+        assertThat(examples.at("/displayWithheld/value/points")).isEmpty();
+        assertThat(examples.at("/generationPending/value/reason").asString()).isEqualTo("GENERATION_PENDING");
+        assertThat(examples.at("/generationPending/value/points")).isEmpty();
+        assertThat(examples.at("/diagnostic/value/displayAccuracyGrade").asString()).isEqualTo("UNEVALUATED");
+        assertThat(properties.at("/paths/description").asString()).contains("최종 표시", "includeDiagnostics");
+        assertThat(document.at("/components/schemas/RouteGeometryStop/properties/pathConnection/description").asString())
+                .contains("paths", "direction", "displayPaths");
+        boolean diagnosticParameter = false;
+        for (JsonNode parameter : operation(document).path("parameters")) {
+            if (parameter.path("name").asString().equals("includeDiagnostics")) {
+                diagnosticParameter = true;
+                assertThat(parameter.path("required").booleanValue()).isFalse();
+                assertThat(parameter.at("/schema/default").booleanValue()).isFalse();
+            }
+        }
+        assertThat(diagnosticParameter).isTrue();
     }
 
     private JsonNode operation(JsonNode source) {
