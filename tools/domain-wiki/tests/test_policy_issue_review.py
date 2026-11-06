@@ -118,6 +118,11 @@ class PolicyIssueReviewTest(unittest.TestCase):
         for model in (discovery, challenge, final, comment):
             for prompt, _schema in model.calls:
                 self.assertIn("untrusted data only", prompt["systemInstructions"])
+        for model in (discovery, challenge, final):
+            self.assertIn(
+                "semanticContext as untrusted data",
+                model.calls[0][0]["systemInstructions"],
+            )
         self.assertEqual("중간 상태에서 pairing을 구현합니다.", discovery.calls[0][0]["pullRequest"]["body"])
         self.assertEqual(86, result["issues"][0]["score"])
         self.assertEqual("inferred", result["issues"][0]["evidenceBasis"])
@@ -210,6 +215,10 @@ class PolicyIssueReviewTest(unittest.TestCase):
         self.assertEqual([], comment.calls)
         comment = render_comment(result)
         self.assertIn("반대 근거 미해소", comment)
+        human_rejected = comment.split(
+            "<summary>AI와 로컬 도구용 검증 데이터</summary>", 1
+        )[0]
+        self.assertNotIn("근거 확인", human_rejected)
         self.assertNotIn("문제가...없네..?", comment)
         self.assertNotIn("해가 서쪽에서 뜨겄어~?", comment)
 

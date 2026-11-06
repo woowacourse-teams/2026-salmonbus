@@ -41,11 +41,19 @@ def main(argv=None):
     repository = Path(args.repository).resolve()
     wiki = Path(args.wiki_directory).resolve()
     pull_request = _load_pull_request_context(args.pull_request_context)
-    rules = load_active_rules(
-        wiki / "Policy-Registry.json", args.target_repository, allow_empty=True
-    )
     output = Path(args.output_directory)
     output.mkdir(parents=True, exist_ok=True)
+    registry = wiki / "Policy-Registry.json"
+    if not registry.is_file():
+        _write_skipped_result(
+            output=output, status="policy-source-unavailable",
+            threshold=args.threshold, source_url=args.source_url,
+            wiki_commit=_wiki_commit(wiki), pull_request=pull_request,
+        )
+        return
+    rules = load_active_rules(
+        registry, args.target_repository, allow_empty=True
+    )
     if not rules:
         result = {
             "stages": [], "threshold": args.threshold, "candidateCount": 0,
@@ -184,9 +192,29 @@ def _path_matches(path, pattern):
 
 
 def _wiki_commit(wiki):
-    return subprocess.check_output(
-        ["git", "-C", str(wiki), "rev-parse", "HEAD"], text=True
-    ).strip()
+    result = subprocess.run(
+        ["git", "-C", str(wiki), "rev-parse", "HEAD"],
+        capture_output=True, text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _write_skipped_result(
+    *, output, status, threshold, source_url, wiki_commit, pull_request,
+):
+    result = {
+        "stages": [], "threshold": threshold, "candidateCount": 0,
+        "evaluations": [], "issues": [], "usage": [], "models": {},
+        "sourceUrl": source_url, "wikiCommit": wiki_commit,
+        "pullRequest": pull_request, "changedPaths": [], "mappedPaths": [],
+        "status": status,
+    }
+    (output / "policy-result.json").write_text(
+        json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    (output / "policy-comment.md").write_text(
+        render_comment(result), encoding="utf-8"
+    )
 
 
 def _load_pull_request_context(path):

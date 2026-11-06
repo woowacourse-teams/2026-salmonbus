@@ -44,6 +44,8 @@ class AnthropicClientTest(unittest.TestCase):
         schema = body["output_config"]["format"]["schema"]
         self.assertNotIn("$schema", schema)
         self.assertNotIn("minimum", schema["properties"]["score"])
+        self.assertIn("title", schema["properties"])
+        self.assertNotIn("pattern", schema["properties"]["title"])
         self.assertEqual(120, usage["inputTokens"])
         self.assertEqual(60, usage["cachedInputTokens"])
         self.assertEqual("claude-sonnet-5-5-20260928", usage["servedModel"])
@@ -67,8 +69,11 @@ class AnthropicClientTest(unittest.TestCase):
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
             "additionalProperties": False,
-            "required": ["score"],
-            "properties": {"score": {"type": "integer", "minimum": 0}},
+            "required": ["score", "title"],
+            "properties": {
+                "score": {"type": "integer", "minimum": 0},
+                "title": {"type": "string", "pattern": "^ok$"},
+            },
         }
 
 

@@ -93,15 +93,17 @@ class AnthropicClient:
         }
 
 
-def _anthropic_schema(value):
+def _anthropic_schema(value, *, property_names=False):
     if isinstance(value, dict):
         unsupported = {
             "$schema", "$id", "title", "minimum", "maximum", "multipleOf", "pattern"
         }
         return {
-            key: _anthropic_schema(item)
+            key: _anthropic_schema(
+                item, property_names=key == "properties" and not property_names
+            )
             for key, item in value.items()
-            if key not in unsupported
+            if property_names or key not in unsupported
         }
     if isinstance(value, list):
         return [_anthropic_schema(item) for item in value]

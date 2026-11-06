@@ -234,13 +234,29 @@ def _read_discussion(path, max_characters=20_000, max_body_characters=4_000):
     raw = _read_json(path)
     if not isinstance(raw, list):
         return []
-    compact = []
+    candidates = [
+        (index, item, _discussion_timestamp(item))
+        for index, item in enumerate(raw)
+        if isinstance(item, dict)
+    ]
+    prioritized = sorted(
+        candidates,
+        key=lambda entry: (entry[2] is not None, entry[2] or "", entry[0]),
+        reverse=True,
+    )
+    selected = []
     remaining = max_characters
-    for item in raw:
-        if not isinstance(item, dict) or remaining <= 0:
-            continue
+    for index, item, timestamp in prioritized:
+        if remaining <= 0:
+            break
         body = _clip(item.get("body", ""), min(max_body_characters, remaining))
         remaining -= len(body)
+        selected.append((index, item, timestamp, body))
+    selected.sort(
+        key=lambda entry: (entry[2] is not None, entry[2] or "", entry[0])
+    )
+    compact = []
+    for _index, item, timestamp, body in selected:
         user = item.get("user") if isinstance(item.get("user"), dict) else {}
         compact.append(
             {
@@ -248,9 +264,18 @@ def _read_discussion(path, max_characters=20_000, max_body_characters=4_000):
                 "body": body,
                 "path": item.get("path"),
                 "state": item.get("state"),
+                "createdAt": timestamp,
             }
         )
     return compact
+
+
+def _discussion_timestamp(item):
+    for key in ("submitted_at", "created_at", "updated_at"):
+        value = item.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
 
 
 def _clip(value, limit):

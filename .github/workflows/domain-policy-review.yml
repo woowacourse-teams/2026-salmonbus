@@ -39,7 +39,13 @@ jobs:
       - name: Clone Git Wiki
         env:
           REPOSITORY: ${{ github.repository }}
-        run: git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.wiki.git" .domain-wiki/wiki
+        shell: bash
+        run: |
+          if git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.wiki.git" .domain-wiki/wiki; then
+            exit 0
+          fi
+          mkdir -p .domain-wiki/wiki
+          git -C .domain-wiki/wiki init --quiet
       - name: Read PR title and body
         env:
           REPOSITORY: ${{ github.repository }}
@@ -49,6 +55,7 @@ jobs:
           --jq '{title: .title, body: (.body // "")}'
           > .domain-wiki/pr.json
       - name: Review changed code against active Wiki policies
+        id: policy_review
         env:
           REPOSITORY: ${{ github.repository }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -60,9 +67,28 @@ jobs:
           --target-repository "$REPOSITORY" --source-url "$PR_URL"
           --pull-request-context .domain-wiki/pr.json
           --wiki-directory .domain-wiki/wiki
+      - name: Record a failed review for this head
+        if: ${{ always() && steps.policy_review.outcome == 'failure' }}
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          mkdir -p .domain-wiki/output
+          printf '%s\n' \
+            '<!-- salmonbus-policy-issue-review -->' \
+            '## 정책 검수를 완료하지 못했어요' \
+            '' \
+            "- 검수한 head: \`${HEAD_SHA}\`" \
+            '- 모델 또는 정책 근거를 읽는 중 오류가 발생했습니다.' \
+            '- 이전 검수 결과를 최신 결과로 사용하면 안 됩니다.' \
+            > .domain-wiki/output/policy-comment.md
       - name: Publish or update policy review comment
+        if: ${{ always() }}
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: >-
-          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}"
-          --edit-last --create-if-none --body-file .domain-wiki/output/policy-comment.md
+        shell: bash
+        run: |
+          if [[ -f .domain-wiki/output/policy-comment.md ]]; then
+            gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
+              --edit-last --create-if-none --body-file .domain-wiki/output/policy-comment.md
+          fi

@@ -179,6 +179,27 @@ class WikiUpdateTest(unittest.TestCase):
         self.assertEqual({"login": "reviewer"}, compact_discussion[0]["user"])
         self.assertNotIn("url", compact_discussion[0])
 
+    def test_discussion_budget_keeps_the_latest_review_evidence(self):
+        discussion = self.root / "discussion-budget.json"
+        discussion.write_text(
+            json.dumps([
+                {
+                    "user": {"login": "older"}, "body": "o" * 20,
+                    "created_at": "2026-10-01T00:00:00Z",
+                },
+                {
+                    "user": {"login": "latest"}, "body": "최종 승인",
+                    "submitted_at": "2026-10-02T00:00:00Z", "state": "APPROVED",
+                },
+            ], ensure_ascii=False),
+            encoding="utf-8",
+        )
+        compact = _read_discussion(
+            discussion, max_characters=len("최종 승인"), max_body_characters=100
+        )
+        self.assertEqual(["latest"], [item["user"]["login"] for item in compact])
+        self.assertEqual("APPROVED", compact[0]["state"])
+
     def test_unresolved_or_unmapped_proposal_is_rejected(self):
         proposal = {
             "proposalId": "W1", "document": "Policy.md",
