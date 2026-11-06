@@ -105,6 +105,58 @@ def create_approval_request(
     return payload
 
 
+def merge_wiki_update_results(results):
+    if not results:
+        raise WikiUpdateError("at least one Wiki review batch is required")
+    first = results[0]
+    proposals = {}
+    replacements = {}
+    usage = []
+    for batch_number, result in enumerate(results, 1):
+        for item in result.get("usage", []):
+            usage.append({**item, "batch": batch_number})
+        for accepted, items in (
+            (True, result.get("accepted", [])),
+            (False, result.get("rejected", [])),
+        ):
+            for item in items:
+                candidate = {
+                    **item,
+                    "proposalId": f"B{batch_number}-{item.get('proposalId')}",
+                }
+                signature = (
+                    candidate.get("document"), candidate.get("currentText"),
+                    candidate.get("replacementText"),
+                )
+                target = (candidate.get("document"), candidate.get("currentText"))
+                replacements.setdefault(target, set()).add(candidate.get("replacementText"))
+                previous = proposals.get(signature)
+                if previous is None or not accepted:
+                    proposals[signature] = (accepted, candidate)
+    conflicted_targets = {
+        target for target, values in replacements.items() if len(values) > 1
+    }
+    for signature, (accepted, candidate) in tuple(proposals.items()):
+        if accepted and signature[:2] in conflicted_targets:
+            proposals[signature] = (
+                False,
+                {
+                    **candidate,
+                    "gateFailures": [
+                        *candidate.get("gateFailures", []), "batch-conflict"
+                    ],
+                    "rationale": "분할 검수 결과가 같은 문장에 서로 다른 교체안을 제안했습니다.",
+                },
+            )
+    return {
+        **first,
+        "accepted": [item for accepted, item in proposals.values() if accepted],
+        "rejected": [item for accepted, item in proposals.values() if not accepted],
+        "usage": usage,
+        "batchCount": len(results),
+    }
+
+
 def approval_digest(request):
     protected = {
         key: value for key, value in request.items() if key != "approvalDigest"

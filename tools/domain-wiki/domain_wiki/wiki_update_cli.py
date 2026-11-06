@@ -8,11 +8,12 @@ import subprocess
 from pathlib import Path
 
 from .confluence import ConfluenceClient
-from .git_diff import read_git_diff, read_patches
+from .git_diff import read_git_diff, read_patch_batches
 from .openai import MAX_PATCH_BYTES, OpenAIClient
 from .wiki_update import (
     apply_confirmed_updates,
     create_approval_request,
+    merge_wiki_update_results,
     render_wiki_result,
     run_wiki_update_review,
     validate_approval_request,
@@ -51,7 +52,7 @@ def main(argv=None):
         path for path in diff.changed_paths
         if any(_path_matches(path, pattern) for pattern in registry["codePaths"])
     )
-    patches = read_patches(
+    patch_batches = read_patch_batches(
         repository, diff.base_sha, diff.head_sha, mapped_paths, MAX_PATCH_BYTES
     )
     evidence = _read_meeting_evidence(registry) if mapped_paths else []
@@ -65,16 +66,26 @@ def main(argv=None):
         model=os.environ.get("POLICY_REVIEW_MODEL", "gpt-6.1-sol"),
         reasoning_effort=os.environ.get("POLICY_REVIEW_REASONING", "high"),
     )
-    result = run_wiki_update_review(
-        cheap_client=cheap,
-        strong_client=strong,
-        documents=documents,
-        changed_paths=mapped_paths,
-        patches=patches,
-        pull_request=pull_request,
-        discussion=discussion,
-        meeting_evidence=evidence,
-    )
+    if patch_batches:
+        result = merge_wiki_update_results([
+            run_wiki_update_review(
+                cheap_client=cheap,
+                strong_client=strong,
+                documents=documents,
+                changed_paths=tuple(patches),
+                patches=patches,
+                pull_request=pull_request,
+                discussion=discussion,
+                meeting_evidence=evidence,
+            )
+            for patches in patch_batches
+        ])
+    else:
+        result = run_wiki_update_review(
+            cheap_client=cheap, strong_client=strong, documents=documents,
+            changed_paths=(), patches={}, pull_request=pull_request,
+            discussion=discussion, meeting_evidence=evidence,
+        )
     approval = create_approval_request(
         result=result,
         base_sha=diff.base_sha,

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from domain_wiki.git_diff import read_git_diff
+from domain_wiki.git_diff import read_git_diff, read_patch_batches
 
 
 class GitDiffTest(unittest.TestCase):
@@ -49,6 +49,28 @@ class GitDiffTest(unittest.TestCase):
         self.assertEqual(self.base, pr_diff.base_sha)
         self.assertEqual(("feature.txt",), pr_diff.changed_paths)
         self.assertEqual(("feature.txt", "main.txt"), direct_diff.changed_paths)
+
+    def test_large_diff_is_split_into_bounded_review_batches(self):
+        subprocess.run(
+            ["git", "-C", str(self.root), "checkout", "-q", "feature"], check=True
+        )
+        large = self.root / "large.txt"
+        large.write_text("".join(f"line-{index:03d}\n" for index in range(100)), encoding="utf-8")
+        self._commit("large diff")
+        head = self._rev()
+
+        batches = read_patch_batches(
+            self.root, self.feature, head, ("large.txt",), max_batch_bytes=350
+        )
+
+        self.assertGreater(len(batches), 1)
+        self.assertTrue(all("large.txt" in batch for batch in batches))
+        self.assertTrue(
+            all(
+                len(next(iter(batch.values())).encode("utf-8")) <= 350
+                for batch in batches
+            )
+        )
 
     def _commit(self, message):
         subprocess.run(["git", "-C", str(self.root), "add", "."], check=True)

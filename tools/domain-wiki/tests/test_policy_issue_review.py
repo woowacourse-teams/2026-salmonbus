@@ -8,6 +8,7 @@ from pathlib import Path
 from domain_wiki.policy_issue_review import (
     PolicyIssueError,
     load_active_rules,
+    merge_issue_review_results,
     render_comment,
     run_issue_review,
     verify_confluence_evidence,
@@ -97,7 +98,7 @@ class PolicyIssueReviewTest(unittest.TestCase):
         result = run_issue_review(
             discovery_client=discovery, challenge_client=challenge,
             final_client=final, comment_client=comment, rules=self.rules,
-            patches={candidate["path"]: "+ newest paired board can be removed"},
+            patches={candidate["path"]: _patch()},
             repository=self.root, head_sha=self.head, wiki_commit="abc123",
             source_url="https://github.com/woowacourse-teams/2026-salmonbus/pull/106",
             pull_request={"title": "같은 observation batch만 표시", "body": "중간 상태에서 pairing을 구현합니다."},
@@ -188,7 +189,7 @@ class PolicyIssueReviewTest(unittest.TestCase):
         result = run_issue_review(
             discovery_client=discovery, challenge_client=challenge,
             final_client=final, comment_client=comment, rules=self.rules,
-            patches={candidate["path"]: "patch"}, repository=self.root,
+            patches={candidate["path"]: _patch()}, repository=self.root,
             head_sha=self.head, wiki_commit="abc", source_url="url",
         )
 
@@ -207,7 +208,7 @@ class PolicyIssueReviewTest(unittest.TestCase):
         result = run_issue_review(
             discovery_client=discovery, challenge_client=challenge,
             final_client=final, comment_client=comment, rules=self.rules,
-            patches={candidate["path"]: "patch"}, repository=self.root,
+            patches={candidate["path"]: _patch()}, repository=self.root,
             head_sha=self.head, wiki_commit="abc", source_url="url",
         )
         self.assertEqual([], result["issues"])
@@ -232,7 +233,7 @@ class PolicyIssueReviewTest(unittest.TestCase):
         result = run_issue_review(
             discovery_client=discovery, challenge_client=challenge,
             final_client=final, comment_client=comment, rules=self.rules,
-            patches={candidate["path"]: "patch"}, repository=self.root,
+            patches={candidate["path"]: _patch()}, repository=self.root,
             head_sha=self.head, wiki_commit="abc", source_url="url",
         )
         self.assertEqual([], result["issues"])
@@ -254,7 +255,7 @@ class PolicyIssueReviewTest(unittest.TestCase):
         without_record = run_issue_review(
             discovery_client=discovery, challenge_client=challenge,
             final_client=final, comment_client=comment, rules=self.rules,
-            patches={candidate["path"]: "patch"}, repository=self.root,
+            patches={candidate["path"]: _patch()}, repository=self.root,
             head_sha=self.head, wiki_commit="abc", source_url="url",
         )
         self.assertEqual([], without_record["issues"])
@@ -275,7 +276,7 @@ class PolicyIssueReviewTest(unittest.TestCase):
         with_record = run_issue_review(
             discovery_client=discovery, challenge_client=challenge,
             final_client=final, comment_client=comment, rules=self.rules,
-            patches={candidate["path"]: "patch"}, repository=self.root,
+            patches={candidate["path"]: _patch()}, repository=self.root,
             head_sha=self.head, wiki_commit="abc", source_url="url",
             execution_evidence=[{
                 "id": "check-1", "command": ["npm", "test"],
@@ -283,6 +284,44 @@ class PolicyIssueReviewTest(unittest.TestCase):
             }],
         )
         self.assertEqual("check-1", with_record["issues"][0]["executionEvidenceId"])
+
+    def test_candidate_source_line_must_match_the_reviewed_head(self):
+        candidate = {**_candidate(), "headLine": "조작된 코드 줄"}
+        discovery, challenge, final, comment = _clients(
+            candidate=candidate,
+            review1={**_assessment(100), "missedCandidates": []},
+            review2=_assessment(100, final=True),
+        )
+        result = run_issue_review(
+            discovery_client=discovery, challenge_client=challenge,
+            final_client=final, comment_client=comment, rules=self.rules,
+            patches={candidate["path"]: _patch()}, repository=self.root,
+            head_sha=self.head, wiki_commit="abc", source_url="url",
+        )
+        self.assertEqual([], result["issues"])
+        self.assertIn("code-location", result["evaluations"][0]["gateFailures"])
+
+    def test_batch_results_get_unique_candidate_ids(self):
+        base = {
+            "stages": ["discover", "review-1", "review-2"],
+            "threshold": 80, "candidateCount": 1, "models": {},
+            "sourceUrl": "url", "wikiCommit": "wiki", "pullRequest": {},
+            "semanticContext": None, "executionEvidence": [],
+        }
+        first_issue = {**_candidate(), "historyKey": "one"}
+        second_issue = {
+            **_candidate(), "line": 3, "headLine": "three", "historyKey": "two",
+            "violationType": "another-violation",
+        }
+        merged = merge_issue_review_results([
+            {**base, "evaluations": [{**first_issue, "accepted": True}], "issues": [first_issue], "usage": []},
+            {**base, "evaluations": [{**second_issue, "accepted": True}], "issues": [second_issue], "usage": []},
+        ])
+        self.assertEqual(2, merged["candidateCount"])
+        self.assertEqual(
+            ["B1-C1", "B2-C1"],
+            [item["candidateId"] for item in merged["issues"]],
+        )
 
     def test_completed_review_without_candidates_uses_namukkun_result(self):
         result = {
@@ -341,6 +380,7 @@ def _candidate():
         "candidateId": "C1", "ruleId": "POL-DSP-001-R2",
         "violationType": "paired-snapshot-discarded",
         "path": "frontend/src/pages/verdict-board/boardSnapshotPolicy.ts", "line": 2,
+        "headLine": "two",
         "claim": "새 보드 응답이 짝이 맞는 스냅샷을 제거한다.",
         "condition": "예보 응답 뒤에 짝이 없는 보드 응답이 오면 발생한다.",
         "impact": "서로 다른 관측 시점이 한 화면에 표시될 수 있다.",
@@ -401,6 +441,18 @@ def _comments(candidate_id="C1"):
         "humanSuggestion": "새 정보의 짝이 완성될 때까지 기존 버스 위치와 예보를 유지해 주세요. 같은 순서로 응답이 도착하는 테스트도 추가하면 좋겠습니다.",
         "humanMeme": "대충 하면~? 꼭 두 번 일한다~",
     }]}
+
+
+def _patch():
+    return """diff --git a/frontend/src/pages/verdict-board/boardSnapshotPolicy.ts b/frontend/src/pages/verdict-board/boardSnapshotPolicy.ts
+--- a/frontend/src/pages/verdict-board/boardSnapshotPolicy.ts
++++ b/frontend/src/pages/verdict-board/boardSnapshotPolicy.ts
+@@ -1,3 +1,3 @@
+ one
+-two
++two
+ three
+"""
 
 
 if __name__ == "__main__":

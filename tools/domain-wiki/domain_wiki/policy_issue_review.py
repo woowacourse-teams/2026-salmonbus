@@ -207,6 +207,7 @@ def run_issue_review(
             "ruleId": candidate.get("ruleId"),
             "path": candidate.get("path"),
             "line": candidate.get("line"),
+            "headLine": candidate.get("headLine"),
             "claim": candidate.get("claim"),
             "violationType": candidate.get("violationType"),
             "historyKey": history_key,
@@ -255,48 +256,12 @@ def run_issue_review(
         _usage_record("review-1", challenge_client, usage2),
         _usage_record("review-2", final_client, usage3),
     ]
-    if issues:
-        comments, usage4 = comment_client.review(
-            _prompt(
-                "comment",
-                {
-                    "issues": issues,
-                    "pullRequest": context["pullRequest"],
-                },
-                comment_style=comment_style,
-            ),
-            _comment_schema(),
+    if issues and comment_client is not None:
+        usage4 = _comment_issues(
+            issues, comment_client, context["pullRequest"], comment_style
         )
-        comment_by_id = {
-            item.get("candidateId"): item
-            for item in comments.get("comments", [])
-        }
-        for issue in issues:
-            human = comment_by_id.get(issue.get("candidateId"), {})
-            issue.update({
-                "humanTitle": human.get(
-                    "humanTitle", "확인이 필요한 정책 위반이 있어요"
-                ),
-                "humanExplanation": human.get(
-                    "humanExplanation", issue.get("impact", "")
-                ),
-                "humanTrigger": human.get(
-                    "humanTrigger", issue.get("condition", "")
-                ),
-                "humanSuggestion": human.get(
-                    "humanSuggestion", issue.get("finalComment", "")
-                ),
-                "humanMeme": human.get("humanMeme", ""),
-            })
         stages.append("comment")
         usage.append(_usage_record("comment", comment_client, usage4))
-    meme_kept = False
-    for issue in issues:
-        meme = issue.get("humanMeme", "")
-        if not meme_kept and meme in NAMUKKUN_MEMES:
-            meme_kept = True
-        else:
-            issue["humanMeme"] = ""
     return {
         "stages": stages,
         "threshold": threshold,
@@ -308,7 +273,7 @@ def run_issue_review(
             "discovery": _client_metadata(discovery_client),
             "review1": _client_metadata(challenge_client),
             "review2": _client_metadata(final_client),
-            "comment": _client_metadata(comment_client),
+            "comment": _client_metadata(comment_client) if comment_client else None,
         },
         "sourceUrl": source_url,
         "wikiCommit": wiki_commit,
@@ -316,6 +281,101 @@ def run_issue_review(
         "semanticContext": semantic_context,
         "executionEvidence": list(execution_evidence),
     }
+
+
+def add_issue_comments(result, comment_client, comment_style=None):
+    if not result.get("issues"):
+        return result
+    usage = _comment_issues(
+        result["issues"], comment_client, result.get("pullRequest", {}), comment_style
+    )
+    result["stages"] = [*result.get("stages", []), "comment"]
+    result["usage"] = [
+        *result.get("usage", []), _usage_record("comment", comment_client, usage)
+    ]
+    result.setdefault("models", {})["comment"] = _client_metadata(comment_client)
+    return result
+
+
+def merge_issue_review_results(results):
+    if not results:
+        raise PolicyIssueError("at least one review batch is required")
+    first = results[0]
+    evaluations = {}
+    issues = {}
+    usage = []
+    for batch_number, result in enumerate(results, 1):
+        for item in result.get("usage", []):
+            usage.append({**item, "batch": batch_number})
+        for item in result.get("evaluations", []):
+            candidate = {**item, "candidateId": f"B{batch_number}-{item.get('candidateId')}"}
+            signature = _review_signature(candidate)
+            previous = evaluations.get(signature)
+            if previous is None or (candidate.get("accepted") and not previous.get("accepted")):
+                evaluations[signature] = candidate
+        for item in result.get("issues", []):
+            candidate = {**item, "candidateId": f"B{batch_number}-{item.get('candidateId')}"}
+            issues.setdefault(_review_signature(candidate), candidate)
+    return {
+        **first,
+        "stages": ["discover", "review-1", "review-2"],
+        "candidateCount": len(evaluations),
+        "evaluations": list(evaluations.values()),
+        "issues": list(issues.values()),
+        "usage": usage,
+        "models": {**first.get("models", {}), "comment": None},
+        "batchCount": len(results),
+    }
+
+
+def _comment_issues(issues, comment_client, pull_request, comment_style):
+    comments, usage = comment_client.review(
+        _prompt(
+            "comment",
+            {
+                "issues": issues,
+                "pullRequest": pull_request,
+            },
+            comment_style=comment_style,
+        ),
+        _comment_schema(),
+    )
+    comment_by_id = {
+        item.get("candidateId"): item
+        for item in comments.get("comments", [])
+    }
+    for issue in issues:
+        human = comment_by_id.get(issue.get("candidateId"), {})
+        issue.update({
+            "humanTitle": human.get(
+                "humanTitle", "확인이 필요한 정책 위반이 있어요"
+            ),
+            "humanExplanation": human.get(
+                "humanExplanation", issue.get("impact", "")
+            ),
+            "humanTrigger": human.get(
+                "humanTrigger", issue.get("condition", "")
+            ),
+            "humanSuggestion": human.get(
+                "humanSuggestion", issue.get("finalComment", "")
+            ),
+            "humanMeme": human.get("humanMeme", ""),
+        })
+    meme_kept = False
+    for issue in issues:
+        meme = issue.get("humanMeme", "")
+        if not meme_kept and meme in NAMUKKUN_MEMES:
+            meme_kept = True
+        else:
+            issue["humanMeme"] = ""
+    return usage
+
+
+def _review_signature(item):
+    return (
+        item.get("ruleId"), item.get("path"), item.get("line"),
+        item.get("violationType"),
+    )
 
 
 def _merge_candidates(discovered, missed):
@@ -514,13 +574,40 @@ def _score(scores):
 def _valid_location(repository, head_sha, candidate, patches):
     path = candidate.get("path")
     line = candidate.get("line")
+    head_line = candidate.get("headLine")
     if path not in patches or not isinstance(line, int) or isinstance(line, bool) or line < 1:
         return False
     result = subprocess.run(
         ["git", "-C", str(repository), "show", f"{head_sha}:{path}"],
         capture_output=True, text=True,
     )
-    return result.returncode == 0 and line <= len(result.stdout.splitlines())
+    source_lines = result.stdout.splitlines()
+    if (
+        result.returncode != 0
+        or line > len(source_lines)
+        or not isinstance(head_line, str)
+        or source_lines[line - 1] != head_line
+    ):
+        return False
+    return line in _diff_visible_lines(patches[path])
+
+
+def _diff_visible_lines(patch):
+    visible = set()
+    current = None
+    for raw in str(patch).splitlines():
+        if raw.startswith("@@"):
+            match = re.search(r"\+(\d+)", raw)
+            current = int(match.group(1)) if match else None
+            continue
+        if current is None or raw.startswith("\\"):
+            continue
+        if raw.startswith("-"):
+            continue
+        if raw.startswith(("+", " ")):
+            visible.add(current)
+            current += 1
+    return visible
 
 
 def _history_key(rule_id, violation_type):
@@ -563,7 +650,8 @@ def _prompt(stage, payload, comment_style=None):
             "Inspect retention limits, fallback selection, and the order of asynchronous "
             "updates when they affect whether two values still share one observation. "
             "A candidate must name the exact input sequence, state mutation, and visible "
-            "result. Write claim, condition, impact, and codeEvidence in Korean. "
+            "result. Copy the complete source line at path and line into headLine exactly, "
+            "including indentation. Write claim, condition, impact, and codeEvidence in Korean. "
             "Return no candidate only after those traces do not demonstrate a violation."
         ),
         "review-1": (
@@ -625,11 +713,12 @@ def _discovery_schema():
 def _candidate_schema():
     return {
         "type": "object", "additionalProperties": False,
-        "required": ["candidateId", "ruleId", "violationType", "path", "line", "claim", "condition", "impact", "codeEvidence"],
+        "required": ["candidateId", "ruleId", "violationType", "path", "line", "headLine", "claim", "condition", "impact", "codeEvidence"],
         "properties": {
             "candidateId": {"type": "string"}, "ruleId": {"type": "string"},
             "violationType": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
             "path": {"type": "string"}, "line": {"type": "integer", "minimum": 1},
+            "headLine": {"type": "string"},
             "claim": {"type": "string"}, "condition": {"type": "string"},
             "impact": {"type": "string"}, "codeEvidence": {"type": "string"},
         },

@@ -76,6 +76,108 @@ def read_patches(
     return patches
 
 
+def read_patch_batches(
+    repository: Path,
+    base_sha: str,
+    head_sha: str,
+    paths: Tuple[str, ...],
+    max_batch_bytes: int,
+):
+    if max_batch_bytes < 1:
+        raise ValueError("max_batch_bytes must be positive")
+    batches = []
+    current = {}
+    current_bytes = 0
+    for path in paths:
+        patch = _read_patch(Path(repository).resolve(), base_sha, head_sha, path)
+        for fragment in _split_patch(patch, max_batch_bytes):
+            fragment_bytes = len(fragment.encode("utf-8"))
+            if current and (
+                current_bytes + fragment_bytes > max_batch_bytes or path in current
+            ):
+                batches.append(current)
+                current = {}
+                current_bytes = 0
+            current[path] = fragment
+            current_bytes += fragment_bytes
+    if current:
+        batches.append(current)
+    return tuple(batches)
+
+
+def _split_patch(patch, max_bytes):
+    if len(patch.encode("utf-8")) <= max_bytes:
+        return (patch,)
+    lines = patch.splitlines(keepends=True)
+    header = []
+    sections = []
+    current = []
+    for line in lines:
+        if line.startswith("@@"):
+            if current:
+                sections.append(current)
+            current = [line]
+        elif current:
+            current.append(line)
+        else:
+            header.append(line)
+    if current:
+        sections.append(current)
+    if not sections:
+        return tuple(_split_lines([], lines, max_bytes, 1))
+
+    fragments = []
+    grouped_sections = []
+    for section in sections:
+        candidate = "".join([*header, *section])
+        if len(candidate.encode("utf-8")) > max_bytes:
+            if grouped_sections:
+                fragments.append("".join([*header, *grouped_sections]))
+                grouped_sections = []
+            new_start = _new_hunk_start(section[0])
+            fragments.extend(_split_lines(header, section[1:], max_bytes, new_start))
+            continue
+        grouped = "".join([*header, *grouped_sections, *section])
+        if grouped_sections and len(grouped.encode("utf-8")) > max_bytes:
+            fragments.append("".join([*header, *grouped_sections]))
+            grouped_sections = []
+        grouped_sections.extend(section)
+    if grouped_sections:
+        fragments.append("".join([*header, *grouped_sections]))
+    return tuple(fragments)
+
+
+def _split_lines(header, lines, max_bytes, new_start):
+    fragments = []
+    chunk = []
+    chunk_start = new_start
+    next_line = new_start
+    for line in lines:
+        prefix = [*header, f"@@ -0,0 +{chunk_start},0 @@ continued\n"]
+        if chunk and len("".join([*prefix, *chunk, line]).encode("utf-8")) > max_bytes:
+            fragments.append("".join([*prefix, *chunk]))
+            chunk = []
+            chunk_start = next_line
+        if len("".join([*header, f"@@ -0,0 +{chunk_start},0 @@ continued\n", line]).encode("utf-8")) > max_bytes:
+            raise GitDiffTooLargeError("a single diff line exceeds the review batch limit")
+        chunk.append(line)
+        if not line.startswith("-"):
+            next_line += 1
+    if chunk:
+        fragments.append(
+            "".join([*header, f"@@ -0,0 +{chunk_start},0 @@ continued\n", *chunk])
+        )
+    return fragments
+
+
+def _new_hunk_start(header):
+    try:
+        value = header.split("+", 1)[1].split(" ", 1)[0].split(",", 1)[0]
+        return int(value)
+    except (IndexError, ValueError):
+        return 1
+
+
 def _ensure_repository(repository: Path) -> None:
     result = _run_git(repository, "rev-parse", "--is-inside-work-tree", check=False)
     if result.returncode != 0 or result.stdout.strip() != "true":

@@ -8,6 +8,7 @@ from domain_wiki.wiki_update import (
     WikiUpdateError,
     apply_confirmed_updates,
     create_approval_request,
+    merge_wiki_update_results,
     render_wiki_result,
     run_wiki_update_review,
     validate_approval_request,
@@ -33,6 +34,43 @@ class FakeModel:
 
 
 class WikiUpdateTest(unittest.TestCase):
+    def test_rejected_duplicate_wins_when_batch_results_are_merged(self):
+        proposal = {
+            "proposalId": "P1",
+            "document": "Policy.md",
+            "currentText": "old",
+            "replacementText": "new",
+        }
+        base = {"accepted": [], "rejected": [], "usage": []}
+        merged = merge_wiki_update_results([
+            {**base, "accepted": [proposal]},
+            {**base, "rejected": [{**proposal, "reason": "근거 부족"}]},
+        ])
+
+        self.assertEqual([], merged["accepted"])
+        self.assertEqual("B2-P1", merged["rejected"][0]["proposalId"])
+        self.assertEqual(2, merged["batchCount"])
+
+    def test_conflicting_batch_replacements_are_rejected(self):
+        proposal = {
+            "proposalId": "P1",
+            "document": "Policy.md",
+            "currentText": "old",
+            "replacementText": "first",
+        }
+        base = {"accepted": [], "rejected": [], "usage": []}
+        merged = merge_wiki_update_results([
+            {**base, "accepted": [proposal]},
+            {**base, "accepted": [{**proposal, "replacementText": "second"}]},
+        ])
+
+        self.assertEqual([], merged["accepted"])
+        self.assertEqual(2, len(merged["rejected"]))
+        self.assertTrue(all(
+            "batch-conflict" in item["gateFailures"]
+            for item in merged["rejected"]
+        ))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

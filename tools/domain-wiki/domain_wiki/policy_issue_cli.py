@@ -8,10 +8,12 @@ from .anthropic import AnthropicClient
 from .comment_style import load_namukkun_style
 from .confluence import ConfluenceClient
 from .execution_evidence import load_execution_evidence
-from .git_diff import read_git_diff, read_patches
+from .git_diff import read_git_diff, read_patch_batches
 from .openai import MAX_PATCH_BYTES, OpenAIClient
 from .policy_issue_review import (
     load_active_rules,
+    add_issue_comments,
+    merge_issue_review_results,
     render_comment,
     run_issue_review,
     verify_confluence_evidence,
@@ -121,7 +123,7 @@ def main(argv=None):
     )
     verify_confluence_evidence(confluence, rules)
 
-    patches = read_patches(
+    patch_batches = read_patch_batches(
         repository, diff.base_sha, diff.head_sha, mapped_paths, MAX_PATCH_BYTES
     )
     semantic_context = None
@@ -156,23 +158,28 @@ def main(argv=None):
     )
     comment_style = load_namukkun_style(args.comment_style_directory)
     wiki_commit = _wiki_commit(wiki)
-    result = run_issue_review(
-        discovery_client=discovery,
-        challenge_client=challenge,
-        final_client=final,
-        comment_client=comment,
-        rules=rules,
-        patches=patches,
-        repository=repository,
-        head_sha=diff.head_sha,
-        wiki_commit=wiki_commit,
-        source_url=args.source_url,
-        pull_request=pull_request,
-        semantic_context=semantic_context,
-        execution_evidence=execution_evidence,
-        comment_style=comment_style,
-        threshold=args.threshold,
-    )
+    batch_results = [
+        run_issue_review(
+            discovery_client=discovery,
+            challenge_client=challenge,
+            final_client=final,
+            comment_client=None,
+            rules=rules,
+            patches=patches,
+            repository=repository,
+            head_sha=diff.head_sha,
+            wiki_commit=wiki_commit,
+            source_url=args.source_url,
+            pull_request=pull_request,
+            semantic_context=semantic_context,
+            execution_evidence=execution_evidence,
+            comment_style=comment_style,
+            threshold=args.threshold,
+        )
+        for patches in patch_batches
+    ]
+    result = merge_issue_review_results(batch_results)
+    add_issue_comments(result, comment, comment_style)
     result.update({
         "baseSha": diff.base_sha,
         "headSha": diff.head_sha,
