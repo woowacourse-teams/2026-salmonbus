@@ -15,6 +15,7 @@
     },
     "plugins": [
       "./plugins/withSceneLifecycle",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {

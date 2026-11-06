@@ -24,3 +24,9 @@ export function useAuth(): AuthContextValue {
   if (value === null) throw new Error("AuthProvider 안에서 사용해야 합니다.");
   return value;
 }
+
+export function memberIdOf(state: AuthState): string | null | undefined {
+  if (state.status === "authenticated") return state.member.id;
+  if (state.status === "anonymous") return null;
+  return undefined;
+}

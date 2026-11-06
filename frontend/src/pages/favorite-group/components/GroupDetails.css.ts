@@ -10,6 +10,7 @@ export const list = style({
 });
 export const card = style({
   display: "flex",
+  flexWrap: "wrap",
   alignItems: "center",
   gap: 8,
   padding: 15,
