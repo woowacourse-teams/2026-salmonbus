@@ -75,4 +75,5 @@ export const notice = style({
   fontSize: vars.font.cardNotice,
   fontWeight: 500,
   textAlign: "center",
+  wordBreak: "keep-all",
 });
