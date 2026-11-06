@@ -69,11 +69,13 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
         </button>
       </h2>
       <p id="favorite-sort-help" className={visuallyHidden}>
-        손잡이를 끌거나 위·아래 방향키로 그룹 순서를 바꿀 수 있어요. Escape 키를 누르면 취소해요.
+        카드를 끌거나 손잡이에 초점을 둔 채 위·아래 방향키를 누르면 그룹 순서를 바꿀 수 있어요. Escape 키를 누르면
+        취소해요.
       </p>
       <SortableList
         ariaLabel="그룹 순서"
         itemClassName={styles.group}
+        dragFromItem
         items={draft}
         disabled={busy}
         label={(group) => group.name}
