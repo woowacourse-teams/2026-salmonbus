@@ -224,15 +224,6 @@ function busMarkerAt(page: Page, stopName: string) {
     .getByRole("button", { name: new RegExp(`^${stopName} 정류장,`) });
 }
 
-async function pollRouteWatch(page: Page) {
-  const polled = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
-  );
-  await page.clock.fastForward(pollIntervalMs);
-  await polled;
-  await settleMarkers(page);
-}
-
 // 픽스처가 시계를 멈춰 두어서, 마커 위치를 재는 타이머가 돌도록 시계를 조금 진행한다.
 async function settleMarkers(page: Page) {
   await page.clock.runFor(100);
