@@ -9,7 +9,7 @@ ALTER TABLE seat_forecast
 ALTER TABLE seat_forecast ADD CONSTRAINT ck_les_forecast_contract CHECK (
     seat_target <> 'AFTER_ALIGHTING_ESTIMATE' OR (
         probability_target='DEPARTURE_ZERO' AND label_version IS NOT NULL
-        AND feature_snapshot IS NOT NULL AND inference_bundle_hash IS NOT NULL AND inference_bundle_hash ~ '^[0-9a-f]{64}$'));
+        AND feature_snapshot IS NOT NULL AND inference_bundle_hash IS NOT NULL AND inference_bundle_hash ~ '^[0-9a-f]{64}$')) NOT VALID;
 
 CREATE TABLE les_forecast_evaluation_work (
     vehicle_observation_id bigint NOT NULL,

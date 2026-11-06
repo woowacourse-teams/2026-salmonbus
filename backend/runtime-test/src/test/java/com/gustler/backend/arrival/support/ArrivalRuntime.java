@@ -223,9 +223,13 @@ public final class ArrivalRuntime implements AutoCloseable {
         return routeDisplayMaintenance(List.of("route-display-retry", "--route-id", routeId, "--generation-key", generationKey));
     }
 
+    private static final java.util.regex.Pattern MAINTENANCE_ERROR = java.util.regex.Pattern.compile(
+        "\\{\"code\":\"([A-Z][A-Z0-9_]{0,79})\",\"status\":\"failed\"\\}");
+
     private JsonNode routeDisplayMaintenance(List<String> arguments) throws Exception {
         Path temporary=Files.createTempDirectory("route-display-maintenance-");
         Path env=temporary.resolve("database.env"),config=temporary.resolve("local.properties");
+        Path stderr = temporary.resolve("stderr.log");
         Process process=null;
         try {
             Files.writeString(env,"DB_URL="+database.jdbcUrl()+"\nDB_USERNAME="+database.username()+"\nDB_PASSWORD="+database.password()+"\n");
@@ -236,16 +240,28 @@ public final class ArrivalRuntime implements AutoCloseable {
                 "--config",config.toString()));
             command.addAll(arguments.subList(1, arguments.size()));
             var builder=new ProcessBuilder(command);
-            builder.environment().clear();builder.redirectError(ProcessBuilder.Redirect.DISCARD);
+            builder.environment().clear();
+            builder.redirectError(stderr.toFile());
             process=builder.start();
             if(!process.waitFor(30,TimeUnit.SECONDS)) throw new AssertionError("Local maintenance command timed out");
             String output=new String(process.getInputStream().readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
-            assertThat(process.exitValue()).as("Local maintenance command exit status; raw output omitted").isZero();
+            if (process.exitValue() != 0) {
+                String code = "UNAVAILABLE";
+                try (var lines = Files.lines(stderr)) {
+                    code = lines.map(MAINTENANCE_ERROR::matcher)
+                        .filter(java.util.regex.Matcher::matches)
+                        .map(match -> match.group(1))
+                        .findFirst().orElse(code);
+                }
+                throw new AssertionError("Local maintenance command exited with status "
+                    + process.exitValue() + ", error code " + code);
+            }
             var reply=JSON.readTree(output);
             assertThat(reply.path("status").asString()).isEqualTo("succeeded");
             return reply;
         } finally {
             if(process!=null && process.isAlive()) destroy(process);
+            Files.deleteIfExists(stderr);
             Files.deleteIfExists(config);Files.deleteIfExists(env);Files.deleteIfExists(temporary);
         }
     }
