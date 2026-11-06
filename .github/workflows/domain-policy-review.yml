@@ -14,9 +14,99 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  semantic-context:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      available: ${{ steps.generate.outputs.available }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Fetch PR head as untrusted data
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: git fetch --no-tags origin "pull/${PR_NUMBER}/head:refs/remotes/policy-review/head"
+      - name: Select changed TypeScript files
+        id: select
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          mkdir -p .domain-wiki
+          python3 - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+
+          merge_base = subprocess.check_output([
+              "git", "merge-base", os.environ["BASE_SHA"], os.environ["HEAD_SHA"],
+          ], text=True).strip()
+          paths = subprocess.check_output([
+              "git", "diff", "--name-only", "-z", "--no-ext-diff",
+              merge_base, os.environ["HEAD_SHA"], "--",
+          ]).split(b"\0")
+          selected = [
+              path for path in paths
+              if path.startswith(b"frontend/") and path.endswith((b".ts", b".tsx"))
+          ]
+          Path(".domain-wiki/typescript-paths").write_bytes(b"\0".join(selected))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"available={'true' if selected else 'false'}\n")
+          PY
+      - name: Set up Node.js and pnpm
+        if: ${{ steps.select.outputs.available == 'true' }}
+        uses: pnpm/setup@v1
+        with:
+          version: 11.20.0
+          runtime: node@24
+          cache: true
+          cache-dependency-path: frontend/pnpm-lock.yaml
+          package-json-file: frontend/package.json
+          install: false
+      - name: Install trusted TypeScript analyzer
+        if: ${{ steps.select.outputs.available == 'true' }}
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Generate semantic navigation context
+        id: generate
+        if: ${{ steps.select.outputs.available == 'true' }}
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          git worktree add --detach .domain-wiki/head "$HEAD_SHA"
+          if node tools/domain-wiki/scripts/typescript-semantic-context.cjs \
+            .domain-wiki/head "$(pwd)/frontend/node_modules/typescript" \
+            "$HEAD_SHA" .domain-wiki/typescript-paths \
+            > .domain-wiki/semantic-context.json; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            rm -f .domain-wiki/semantic-context.json
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::TypeScript semantic context was unavailable; policy review will continue without it.'
+          fi
+      - name: Save semantic navigation context
+        if: ${{ steps.generate.outputs.available == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: domain-policy-semantic-${{ github.run_id }}
+          path: .domain-wiki/semantic-context.json
+          if-no-files-found: error
+          retention-days: 1
+
   review:
+    needs: semantic-context
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -54,6 +144,12 @@ jobs:
           gh api "repos/${REPOSITORY}/pulls/${PR_NUMBER}"
           --jq '{title: .title, body: (.body // "")}'
           > .domain-wiki/pr.json
+      - name: Read semantic navigation context
+        if: ${{ needs.semantic-context.outputs.available == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: domain-policy-semantic-${{ github.run_id }}
+          path: .domain-wiki
       - name: Review changed code against active Wiki policies
         id: policy_review
         env:
@@ -61,12 +157,18 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: >-
-          python3 -m domain_wiki.policy_issue_cli
-          --repository . --base "$BASE_SHA" --head "$HEAD_SHA"
-          --target-repository "$REPOSITORY" --source-url "$PR_URL"
-          --pull-request-context .domain-wiki/pr.json
-          --wiki-directory .domain-wiki/wiki
+        shell: bash
+        run: |
+          semantic_args=()
+          if [[ -f .domain-wiki/semantic-context.json ]]; then
+            semantic_args=(--semantic-context .domain-wiki/semantic-context.json)
+          fi
+          python3 -m domain_wiki.policy_issue_cli \
+            --repository . --base "$BASE_SHA" --head "$HEAD_SHA" \
+            --target-repository "$REPOSITORY" --source-url "$PR_URL" \
+            --pull-request-context .domain-wiki/pr.json \
+            --wiki-directory .domain-wiki/wiki \
+            "${semantic_args[@]}"
       - name: Record a failed review for this head
         if: ${{ always() && steps.policy_review.outcome == 'failure' }}
         env:

@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path, PurePosixPath
 
 
-MAX_SEMANTIC_CONTEXT_BYTES = 1_000_000
+MAX_SEMANTIC_CONTEXT_BYTES = 80_000
 
 
 class SemanticContextError(ValueError):
@@ -38,8 +38,11 @@ def load_semantic_context(path, head_sha, mapped_paths, repository):
         if not isinstance(file_context, dict) or file_context.get("path") not in allowed_paths:
             raise SemanticContextError("semantic context contains an unmapped path")
         symbols = file_context.get("symbols", [])
+        call_targets = file_context.get("callTargets", [])
         if not isinstance(symbols, list) or len(symbols) > 500:
             raise SemanticContextError("semantic context symbols must be a bounded list")
+        if not isinstance(call_targets, list) or len(call_targets) > 100:
+            raise SemanticContextError("semantic context call targets must be a bounded list")
         normalized_symbols = []
         for symbol in symbols:
             if not isinstance(symbol, dict):
@@ -94,7 +97,17 @@ def load_semantic_context(path, head_sha, mapped_paths, repository):
                     "references": normalized_references,
                 }
             )
-        normalized.append({"path": file_context["path"], "symbols": normalized_symbols})
+        normalized_call_targets = [
+            _validated_call_target(
+                item, file_context["path"], repository, head_sha, file_cache
+            )
+            for item in call_targets
+        ]
+        normalized.append({
+            "path": file_context["path"],
+            "symbols": normalized_symbols,
+            "callTargets": normalized_call_targets,
+        })
 
     return {
         "schemaVersion": 1,
@@ -109,6 +122,51 @@ def _repository_path(value):
         return False
     path = PurePosixPath(value)
     return not path.is_absolute() and ".." not in path.parts
+
+
+def _validated_call_target(item, source_path, repository, head_sha, cache):
+    if not isinstance(item, dict):
+        raise SemanticContextError("semantic context call target must be an object")
+    call = item.get("call")
+    call_line = item.get("callLine")
+    definition_path = item.get("definitionPath")
+    definition_line = item.get("definitionLine")
+    snippet = item.get("definitionSnippet")
+    if (
+        not isinstance(call, str)
+        or not call
+        or len(call) > 200
+        or not isinstance(call_line, int)
+        or isinstance(call_line, bool)
+        or call_line < 1
+        or not _repository_path(definition_path)
+        or not isinstance(definition_line, int)
+        or isinstance(definition_line, bool)
+        or definition_line < 1
+        or not isinstance(snippet, str)
+        or not snippet
+        or len(snippet) > 8_000
+    ):
+        raise SemanticContextError("semantic context call target is invalid")
+    source_lines = _git_lines(repository, head_sha, source_path, cache)
+    definition_lines = _git_lines(repository, head_sha, definition_path, cache)
+    snippet_lines = snippet.splitlines()
+    if call_line > len(source_lines) or call not in source_lines[call_line - 1]:
+        raise SemanticContextError(
+            "semantic context call target does not match the reviewed commit"
+        )
+    actual = definition_lines[definition_line - 1:definition_line - 1 + len(snippet_lines)]
+    if actual != snippet_lines:
+        raise SemanticContextError(
+            "semantic context definition does not match the reviewed commit"
+        )
+    return {
+        "call": call,
+        "callLine": call_line,
+        "definitionPath": definition_path,
+        "definitionLine": definition_line,
+        "definitionSnippet": snippet,
+    }
 
 
 def _git_lines(repository, head_sha, path, cache):

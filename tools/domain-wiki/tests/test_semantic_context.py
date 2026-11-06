@@ -39,6 +39,13 @@ class SemanticContextTest(unittest.TestCase):
                     "line": 20,
                     "references": [{"path": "src/screen.ts", "line": 45}],
                 }],
+                "callTargets": [{
+                    "call": "withBoard",
+                    "callLine": 20,
+                    "definitionPath": "src/policy.ts",
+                    "definitionLine": 20,
+                    "definitionSnippet": "function withBoard() {}",
+                }],
             }],
         }
 
@@ -54,6 +61,10 @@ class SemanticContextTest(unittest.TestCase):
         self.assertEqual(
             "src/screen.ts",
             loaded["files"][0]["symbols"][0]["references"][0]["path"],
+        )
+        self.assertEqual(
+            "src/policy.ts",
+            loaded["files"][0]["callTargets"][0]["definitionPath"],
         )
 
     def test_rejects_context_for_another_head(self):
@@ -75,6 +86,22 @@ class SemanticContextTest(unittest.TestCase):
         self.context["files"][0]["symbols"][0]["references"][0]["line"] = 44
         self.path.write_text(json.dumps(self.context), encoding="utf-8")
         with self.assertRaisesRegex(SemanticContextError, "reference does not match"):
+            load_semantic_context(
+                self.path, self.head, ("src/policy.ts",), self.root
+            )
+
+    def test_rejects_definition_snippet_not_present_at_reported_line(self):
+        self.context["files"][0]["callTargets"][0]["definitionSnippet"] = "fake"
+        self.path.write_text(json.dumps(self.context), encoding="utf-8")
+        with self.assertRaisesRegex(SemanticContextError, "definition does not match"):
+            load_semantic_context(
+                self.path, self.head, ("src/policy.ts",), self.root
+            )
+
+    def test_rejects_call_not_present_at_reported_line(self):
+        self.context["files"][0]["callTargets"][0]["call"] = "missingCall"
+        self.path.write_text(json.dumps(self.context), encoding="utf-8")
+        with self.assertRaisesRegex(SemanticContextError, "call target does not match"):
             load_semantic_context(
                 self.path, self.head, ("src/policy.ts",), self.root
             )
