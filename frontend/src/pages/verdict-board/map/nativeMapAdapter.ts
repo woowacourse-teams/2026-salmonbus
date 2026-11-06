@@ -28,6 +28,7 @@ export function createNativeRouteMap(options: {
   data: RouteMapData;
   motion: LiveVehicleMotionStore;
   initialSelection?: StopSelection | null;
+  preserveCamera?: boolean;
   onSelect: (selection: StopSelection) => void;
   onVehicleSelect: (selection: StopSelection, key: string) => void;
   onDeselect: () => void;
@@ -97,12 +98,17 @@ export function createNativeRouteMap(options: {
     ...sceneState,
     routeId: data.routeId,
     referenceVersionId: data.referenceVersionId,
+    ...(options.preserveCamera && { preserveCamera: true }),
     stops: data.stops.flatMap((stop) => {
       const state = board.stops.find((item) => item.direction === stop.direction && item.sequence === stop.sequence);
       if (state === undefined) return [];
       return [
         {
-          ...stop,
+          direction: stop.direction,
+          sequence: stop.sequence,
+          stopId: stop.stopId,
+          coordinate: stop.coordinate,
+          ...(stop.pathConnection && { connectionCoordinate: stop.pathConnection.coordinate }),
           name: state.name,
           boardingAllowed: state.boardingAllowed,
           terminalStopName:

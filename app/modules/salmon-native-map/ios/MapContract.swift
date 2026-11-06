@@ -14,7 +14,7 @@ struct MapEnvelope: Decodable {
   let payload: MapSession
 }
 
-struct MapCoordinate: Decodable {
+struct MapCoordinate: Decodable, Equatable {
   let latitude: Double
   let longitude: Double
 
@@ -36,9 +36,13 @@ struct MapStop: Decodable {
   let direction: String
   let sequence: Int
   let coordinate: MapCoordinate
+  let connectionCoordinate: MapCoordinate?
   let name: String
   let boardingAllowed: Bool
   let terminalStopName: String
+  var markerCoordinate: MapCoordinate {
+    boardingAllowed ? coordinate : connectionCoordinate ?? coordinate
+  }
   var selection: MapSelection { MapSelection(direction: direction, sequence: sequence) }
   var key: String { "\(direction):\(sequence)" }
 }
@@ -62,6 +66,7 @@ struct MapVehicle: Decodable {
 struct MapScene: Decodable {
   let routeId: String
   let referenceVersionId: String
+  let preserveCamera: Bool?
   let stops: [MapStop]
   let paths: [MapPath]
   let fullPath: [MapCoordinate]

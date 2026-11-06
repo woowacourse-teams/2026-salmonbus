@@ -221,9 +221,7 @@ test("도로 경로가 미수집이어도 관측 정류장에 버스를 표시�
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(0);
   await expect(map(page).locator("[data-marker-kind='arrow']")).toHaveCount(0);
   await expect(map(page).getByRole("button", { name: /부근 버스/ })).toHaveCount(2);
-  await expect(
-    map(page).getByRole("status").filter({ hasText: "방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요" }),
-  ).toBeVisible();
+  await expect(map(page).getByRole("status").filter({ hasText: "노선을 준비 중이에요" })).toBeVisible();
   await expect(map(page)).toHaveAttribute("aria-busy", "false");
   await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
 
@@ -248,6 +246,64 @@ test("도로 경로가 미수집이어도 관측 정류장에 버스를 표시�
   await expect(stop).toHaveAttribute("aria-expanded", "true");
   await expectStopFocusedInList(page, 11);
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(0);
+});
+
+test("노선이 준비되면 보고 있던 위치에서 선을 그리고 형상 재조회를 멈춘다", async ({ page, api, naverMap }) => {
+  const readyGeometry = createRouteGeometry(api.data.watch);
+  api.data.geometry = {
+    ...readyGeometry,
+    geometryRevision: "a".repeat(64),
+    status: "UNAVAILABLE",
+    reason: "GENERATION_PENDING",
+    points: [],
+    paths: null,
+  };
+  await openMap(page);
+  await expect(map(page).getByRole("status")).toContainText("노선을 준비 중이에요");
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(0);
+  await naverMap.panToStop(11);
+  const camera = await naverMap.snapshot();
+
+  api.data.geometry = { ...readyGeometry, geometryRevision: "b".repeat(64) };
+  await page.clock.runFor(59_000);
+  expect(api.requests.geometry).toBe(1);
+  await page.clock.runFor(1_000);
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
+  await page.clock.runFor(48);
+  await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+  expect(await naverMap.snapshot()).toEqual(camera);
+  await page.clock.runFor(60_000);
+  expect(api.requests.geometry).toBe(2);
+});
+
+test("형상 판본이 충돌하면 보드를 다시 받아 새 판본의 노선을 표시한다", async ({ page, api }) => {
+  const revisions: (string | null)[] = [];
+  const original = api.data.watch.route.referenceVersionId;
+  const next = String(Number(original) + 1);
+  await api.route(async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname !== apiPaths.geometry) {
+      await route.fallback();
+      return;
+    }
+    const version = url.searchParams.get("referenceVersionId");
+    revisions.push(version);
+    if (version !== original) {
+      await route.fallback();
+      return;
+    }
+    api.data.watch.route.referenceVersionId = next;
+    api.data.geometry = createRouteGeometry(api.data.watch);
+    await route.fulfill({
+      status: 409,
+      json: { code: "REFERENCE_VERSION_CONFLICT", message: "노선 판본이 달라요", requestId: "geometry-conflict" },
+    });
+  });
+
+  await openMap(page);
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
+  expect(revisions).toEqual([original, next]);
+  expect(api.requests.watch).toBe(2);
 });
 
 test("미분리된 실제 도로 경로를 그대로 표시하고 방향 화살표를 만들지 않는다", async ({ page, api }) => {

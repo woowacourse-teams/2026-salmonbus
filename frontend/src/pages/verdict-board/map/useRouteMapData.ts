@@ -1,34 +1,112 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { Board } from "@/shared/api/routeForecast.types";
 import { fetchRouteGeometry } from "@/shared/api/routeGeometry.api";
+import { nextPollFrom } from "@/shared/api/pollSchedule";
 import { routeGeometryMapDataFor } from "./routeGeometryMapData";
 import type { RouteMapData } from "./routeMapModel";
 
+const RETRY_DELAY_MS = 60_000;
+
+type RouteMapResource =
+  | { status: "loading" | "error" | "conflict"; data: null }
+  | { status: "preparing" | "withheld"; data: RouteMapData | null }
+  | { status: "ready"; data: RouteMapData };
+
+export type RouteMapGeometryStatus = RouteMapResource["status"];
+
 interface LoadedMapData {
   identity: string;
-  data: RouteMapData | null;
+  revision: string | null;
+  resource: RouteMapResource;
 }
 
-export function useRouteMapData(board: Board): RouteMapData | null {
+export function useRouteMapData(board: Board, visible: boolean, onConflict: () => void): RouteMapResource {
   const { id: routeId, referenceVersionId } = board.route;
   const identity = JSON.stringify([routeId, referenceVersionId]);
   const [loaded, setLoaded] = useState<LoadedMapData | null>(null);
+  const reportConflict = useEffectEvent(onConflict);
 
   useEffect(() => {
+    if (!visible) return;
     const controller = new AbortController();
-    let active = true;
+    let timer: number | undefined;
+    let requesting = false;
+    let preparing = false;
+    let conflicted = false;
 
-    void fetchRouteGeometry(routeId, { signal: controller.signal, referenceVersionId }).then((result) => {
-      if (!active) return;
-      const data = result.ok ? routeGeometryMapDataFor(result.body, { id: routeId, referenceVersionId }) : null;
-      setLoaded({ identity, data });
-    });
+    function clearTimer() {
+      window.clearTimeout(timer);
+      timer = undefined;
+    }
 
+    function schedule(delay = RETRY_DELAY_MS) {
+      if (document.visibilityState === "visible") timer = window.setTimeout(load, delay);
+    }
+
+    async function load() {
+      clearTimer();
+      if (requesting || conflicted || document.visibilityState !== "visible") return;
+      requesting = true;
+      const result = await fetchRouteGeometry(routeId, { signal: controller.signal, referenceVersionId });
+      requesting = false;
+      if (controller.signal.aborted) return;
+      if (!result.ok) {
+        const { failure } = result;
+        if (
+          failure.kind === "contract" &&
+          failure.status === 409 &&
+          failure.error.code === "REFERENCE_VERSION_CONFLICT"
+        ) {
+          conflicted = true;
+          setLoaded({ identity, revision: null, resource: { status: "conflict", data: null } });
+          reportConflict();
+        } else {
+          setLoaded((previous) =>
+            previous?.identity === identity && previous.resource.status !== "loading"
+              ? previous
+              : { identity, revision: null, resource: { status: "error", data: null } },
+          );
+          const decision = nextPollFrom(result);
+          if (preparing && decision.kind === "again") schedule(Math.max(RETRY_DELAY_MS, decision.delayMs));
+        }
+        return;
+      }
+
+      const geometry = result.body;
+      const revision = typeof geometry.geometryRevision === "string" ? geometry.geometryRevision : null;
+      const data = routeGeometryMapDataFor(geometry, { id: routeId, referenceVersionId });
+      const reason = geometry.status === "UNAVAILABLE" ? geometry.reason : null;
+      preparing = reason === "NOT_COLLECTED" || reason === "GENERATION_PENDING";
+      const resource: RouteMapResource = preparing
+        ? { status: "preparing", data }
+        : reason === "DISPLAY_WITHHELD"
+          ? { status: "withheld", data }
+          : data === null
+            ? { status: "error", data: null }
+            : { status: "ready", data };
+      setLoaded((previous) =>
+        revision !== null && previous?.identity === identity && previous.revision === revision
+          ? previous
+          : { identity, revision, resource },
+      );
+      if (preparing) schedule();
+    }
+
+    function revalidateWhenVisible() {
+      if (document.visibilityState === "visible") void load();
+      else clearTimer();
+    }
+
+    document.addEventListener("visibilitychange", revalidateWhenVisible);
+    window.addEventListener("online", revalidateWhenVisible);
+    void load();
     return () => {
-      active = false;
+      clearTimer();
       controller.abort();
+      document.removeEventListener("visibilitychange", revalidateWhenVisible);
+      window.removeEventListener("online", revalidateWhenVisible);
     };
-  }, [identity, routeId, referenceVersionId]);
+  }, [identity, routeId, referenceVersionId, visible]);
 
-  return loaded?.identity === identity ? loaded.data : null;
+  return loaded?.identity === identity ? loaded.resource : { status: "loading", data: null };
 }

@@ -79,6 +79,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private var vehicleAppearanceKeys: [String: String] = [:]
   private var vehicleMarkers: [String: NMFMarker] = [:]
   private var routeLines: [(String, NMFPath)] = []
+  private var stopConnections: [(MapSelection, NMFPolylineOverlay)] = []
   private var imageCache: [String: NMFOverlayImage] = [:]
   private var motions: [String: RunningMotion] = [:]
   private var displayLink: CADisplayLink?
@@ -219,6 +220,8 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     vehicleAppearanceKeys.removeAll()
     vehicleMarkers.removeAll()
     routeLines.removeAll()
+    stopConnections.forEach { $0.1.mapView = nil }
+    stopConnections.removeAll()
     imageCache.removeAll()
     mapView.locationOverlay.hidden = true
     scene = nil
@@ -247,7 +250,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
 
   private func mount(_ nextScene: MapScene) {
     guard !nextScene.stops.isEmpty || !nextScene.fullPath.isEmpty || nextScene.paths.contains(where: { !$0.coordinates.isEmpty }),
-          nextScene.stops.allSatisfy({ $0.coordinate.valid }),
+          nextScene.stops.allSatisfy({ $0.coordinate.valid && ($0.connectionCoordinate?.valid ?? true) }),
           nextScene.paths.allSatisfy({ $0.coordinates.allSatisfy(\.valid) }),
           nextScene.fullPath.allSatisfy(\.valid) else {
       fail("지도 좌표를 확인하지 못했어요")
@@ -255,9 +258,10 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     }
     scene = nextScene
     let initialStop = nextScene.stops.first { $0.selection == nextScene.selectedStop }
-    initialFitPending = initialStop == nil
-    if let initialStop {
-      let camera = NMFCameraUpdate(scrollTo: initialStop.coordinate.naver, zoomTo: 13)
+    let preserveCamera = nextScene.preserveCamera == true
+    initialFitPending = !preserveCamera && initialStop == nil
+    if !preserveCamera, let initialStop {
+      let camera = NMFCameraUpdate(scrollTo: initialStop.markerCoordinate.naver, zoomTo: 13)
       camera.animation = .none
       mapView.moveCamera(camera)
     }
@@ -288,11 +292,20 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       routeLines.append(("", line))
     }
     for stop in nextScene.stops {
-      let marker = NMFMarker(position: stop.coordinate.naver)
+      if stop.boardingAllowed, let connection = stop.connectionCoordinate, connection != stop.coordinate,
+         let line = NMFPolylineOverlay([stop.coordinate.naver, connection.naver]) {
+        line.width = 2.5
+        line.color = MapMarkerImages.mutedColor.withAlphaComponent(0.85)
+        line.pattern = [2, 3]
+        line.minZoom = 14
+        line.zIndex = 3
+        stopConnections.append((stop.selection, line))
+      }
+      let marker = NMFMarker(position: stop.markerCoordinate.naver)
       marker.anchor = CGPoint(x: 0.5, y: 0.5)
       marker.isForceShowIcon = true
       marker.minZoom = nextScene.paths.contains { $0.direction == stop.direction } ? 14 : 0
-      let label = NMFMarker(position: stop.coordinate.naver)
+      let label = NMFMarker(position: stop.markerCoordinate.naver)
       label.isForceShowIcon = true
       label.minZoom = 14
       label.mapView = mapView
@@ -356,7 +369,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private func refreshStopAnchors() {
     guard readySent, let scene, let state = sceneState, mapView.bounds.width > 1 else { return }
     let projected = scene.stops.compactMap { stop -> (stop: MapStop, point: CGPoint, size: CGFloat)? in
-      let point = mapView.projection.point(from: stop.coordinate.naver)
+      let point = mapView.projection.point(from: stop.markerCoordinate.naver)
       guard point.x.isFinite, point.y.isFinite else { return nil }
       return (stop, point, state.selectedStop == stop.selection ? 32 : 24)
     }
@@ -414,6 +427,11 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
 
   private func refreshRouteStyles() {
     guard let state = sceneState else { return }
+    for (selection, line) in stopConnections {
+      let visible = selection.direction == state.activeDirection || selection == state.selectedStop
+      if visible && line.mapView == nil { line.mapView = mapView }
+      if !visible && line.mapView != nil { line.mapView = nil }
+    }
     let showBothDirections = mapView.cameraPosition.zoom >= 14
     for (direction, line) in routeLines {
       let active = direction == state.activeDirection
@@ -521,7 +539,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     var coordinate: NMGLatLng?
     switch command.command {
     case "stop":
-      coordinate = scene?.stops.first(where: { $0.selection == command.selection })?.coordinate.naver
+      coordinate = scene?.stops.first(where: { $0.selection == command.selection })?.markerCoordinate.naver
     case "vehicle":
       if let key = command.key { coordinate = vehicleMarkers[key]?.position }
     case "location":

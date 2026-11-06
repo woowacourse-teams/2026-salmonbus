@@ -4,7 +4,7 @@ import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
 import { routeArrowsFor, routeMapCoordinateForSequence, type RouteArrow } from "./routeMapGeometry";
-import type { NaverMaps, NaverMarker } from "./naverSdk";
+import type { NaverMaps, NaverMarker, NaverPolyline } from "./naverSdk";
 import * as styles from "./naverMapAdapter.css";
 
 const DETAIL_ZOOM = 14;
@@ -17,6 +17,7 @@ interface StopMarker {
   marker: NaverMarker;
   button: HTMLButtonElement;
   label: HTMLSpanElement;
+  connector: NaverPolyline | undefined;
 }
 interface VehicleMarker {
   marker: NaverMarker;
@@ -32,7 +33,13 @@ interface ArrowMarker extends RouteArrow {
   visible: boolean;
 }
 
+export interface RouteMapCamera {
+  center: GeoCoordinate;
+  zoom: number;
+}
+
 export interface RouteMapAdapter {
+  camera?: () => RouteMapCamera;
   update: (
     selected: StopSelection | null,
     activeDirection: Direction,
@@ -59,6 +66,7 @@ export function createNaverRouteMap(
   onVehicleSelect: (selection: StopSelection, key: string) => void,
   onDeselect: () => void,
   initialSelection: StopSelection | null = null,
+  initialCamera?: RouteMapCamera,
 ): RouteMapAdapter {
   const createNativeEventHandler = (action: () => void) => () => {
     try {
@@ -76,8 +84,8 @@ export function createNaverRouteMap(
   if (first === undefined) throw new Error("지도 좌표가 없어요");
   const toNaverCoordinate = (coordinate: GeoCoordinate) => new sdk.LatLng(coordinate.latitude, coordinate.longitude);
   const map = new sdk.Map(element, {
-    center: toNaverCoordinate(first),
-    zoom: initialStop === undefined ? 10 : 13,
+    center: toNaverCoordinate(initialCamera?.center ?? first),
+    zoom: initialCamera?.zoom ?? (initialStop === undefined ? 10 : 13),
     size: new sdk.Size(element.clientWidth, element.clientHeight),
     zoomControl: false,
     scaleControl: false,
@@ -91,9 +99,9 @@ export function createNaverRouteMap(
   });
   let selected: StopSelection | null = initialSelection;
   let activeDirection: Direction = initialStop?.direction ?? board.route.directions[0].id;
-  let initialFitPending = true;
+  let initialFitPending = initialCamera === undefined;
   let initialized = false;
-  let initialViewIdle = false;
+  let initialViewIdle = initialCamera !== undefined;
   let initializationFailed = false;
   let routeRevealed = false;
   let readyNotified = false;
@@ -132,6 +140,7 @@ export function createNaverRouteMap(
           routeRevealed = true;
           paths.forEach(({ direction, line }) => line.setOptions(routePathStyleFor(direction)));
           fullRouteLine?.setOptions({ strokeColor: "#5B6472", strokeOpacity: 0.95, zIndex: 1 });
+          refreshStops();
           // 노선의 GPU 그리기를 먼저 예약한 뒤 HTML 마커와 버튼을 함께 공개한다.
           notifyReadyAfterFrame();
           return;
@@ -275,14 +284,30 @@ export function createNaverRouteMap(
       createNativeEventHandler(() => focus(selection))();
       onSelect(selection);
     });
+    const connection = stop.pathConnection?.coordinate;
+    const coordinate = stopState.boardingAllowed ? stop.coordinate : (connection ?? stop.coordinate);
+    const connector =
+      stopState.boardingAllowed &&
+      connection &&
+      (connection.latitude !== coordinate.latitude || connection.longitude !== coordinate.longitude)
+        ? new sdk.Polyline({
+            map,
+            path: [toNaverCoordinate(coordinate), toNaverCoordinate(connection)],
+            strokeColor: "#5B6472",
+            strokeWeight: 2.5,
+            strokeOpacity: 0,
+            strokeStyle: "shortdot",
+            zIndex: 3,
+          })
+        : undefined;
     const marker = new sdk.Marker({
       map,
-      position: toNaverCoordinate(stop.coordinate),
+      position: toNaverCoordinate(coordinate),
       icon: { content: button, anchor: new sdk.Point(12, 12) },
       zIndex: 5,
       clickable: true,
     });
-    return [{ selection, coordinate: stop.coordinate, marker, button, label }];
+    return [{ selection, coordinate, marker, button, label, connector }];
   });
 
   function refreshStops() {
@@ -305,9 +330,14 @@ export function createNaverRouteMap(
         down.offsetX = Math.min(down.offsetX, -offset);
       }
     }
-    display.forEach(({ selection, marker, button, label, size, offsetX }) => {
+    display.forEach(({ selection, marker, button, label, size, offsetX, connector }) => {
       const isSelected = selected?.sequence === selection.sequence && selected.direction === selection.direction;
       const isActive = selection.direction === activeDirection;
+      connector?.setOptions({
+        strokeColor: "#5B6472",
+        strokeOpacity: routeRevealed && !hidden && (isActive || isSelected) ? 0.85 : 0,
+        zIndex: 3,
+      });
       const selectionChanged = button.getAttribute("aria-pressed") !== String(isSelected);
       const directionChanged = button.dataset.active !== String(isActive);
       if (selectionChanged) button.setAttribute("aria-pressed", String(isSelected));
@@ -664,6 +694,10 @@ export function createNaverRouteMap(
       map.setCenter(position);
       map.setZoom(Math.max(15, map.getZoom()), false);
     },
+    camera() {
+      const center = map.getCenter();
+      return { center: { latitude: center.lat(), longitude: center.lng() }, zoom: map.getZoom() };
+    },
     destroy() {
       destroyed = true;
       cancelCameraFocus();
@@ -683,7 +717,10 @@ export function createNaverRouteMap(
         cleanup(() => element.removeEventListener("dblclick", onDoubleClick));
         cleanup(() => element.removeEventListener("touchend", onTouchEnd, true));
       }
-      stops.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
+      stops.forEach(({ marker, connector }) => {
+        cleanup(() => marker.setMap(null));
+        cleanup(() => connector?.setMap(null));
+      });
       vehicles.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       arrows.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       paths.forEach(({ line }) => cleanup(() => line.setMap(null)));
