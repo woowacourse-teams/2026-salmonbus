@@ -15,8 +15,10 @@ from domain_wiki.policy_issue_review import (
 
 
 class FakeModel:
-    def __init__(self, model, outputs):
+    def __init__(self, provider, model, reasoning_effort, outputs):
+        self.provider = provider
         self.model = model
+        self.reasoning_effort = reasoning_effort
         self.outputs = list(outputs)
         self.calls = []
 
@@ -86,10 +88,15 @@ class PolicyIssueReviewTest(unittest.TestCase):
 
     def test_two_mutual_reviews_and_score_gate_leave_comment(self):
         candidate = _candidate()
-        cheap = FakeModel("gpt-6-luna", [{"candidates": [candidate]}, {"responses": [{"candidateId": "C1", "disposition": "defend", "response": "재현 조건이 코드에 남아 있다."}]}])
-        strong = FakeModel("gpt-6.1-sol", [_assessment(79), _assessment(86, final=True)])
+        discovery, challenge, final, comment = _clients(
+            candidate=candidate,
+            review1={**_assessment(79), "missedCandidates": []},
+            review2=_assessment(86, final=True),
+            comments=_comments(),
+        )
         result = run_issue_review(
-            cheap_client=cheap, strong_client=strong, rules=self.rules,
+            discovery_client=discovery, challenge_client=challenge,
+            final_client=final, comment_client=comment, rules=self.rules,
             patches={candidate["path"]: "+ newest paired board can be removed"},
             repository=self.root, head_sha=self.head, wiki_commit="abc123",
             source_url="https://github.com/woowacourse-teams/2026-salmonbus/pull/106",
@@ -100,17 +107,18 @@ class PolicyIssueReviewTest(unittest.TestCase):
                 "memes": "대충 하면~? 꼭 두 번 일한다~",
             },
         )
-        self.assertEqual(["discover", "review-1", "author-response", "review-2"], result["stages"])
-        self.assertEqual(2, len(cheap.calls))
-        self.assertEqual(2, len(strong.calls))
-        self.assertIn("scoringRubric", strong.calls[0][0])
-        self.assertIn("independently", strong.calls[1][0]["systemInstructions"])
-        self.assertIn("팀원이 읽는 설명", strong.calls[1][0]["systemInstructions"])
-        self.assertNotIn("팀원이 읽는 설명", strong.calls[0][0]["systemInstructions"])
-        for model in (cheap, strong):
+        self.assertEqual(["discover", "review-1", "review-2", "comment"], result["stages"])
+        for model in (discovery, challenge, final, comment):
+            self.assertEqual(1, len(model.calls))
+        self.assertIn("scoringRubric", challenge.calls[0][0])
+        self.assertIn("missedCandidates", challenge.calls[0][0]["systemInstructions"])
+        self.assertIn("second independent", final.calls[0][0]["systemInstructions"])
+        self.assertIn("팀원이 읽는 설명", comment.calls[0][0]["systemInstructions"])
+        self.assertNotIn("팀원이 읽는 설명", final.calls[0][0]["systemInstructions"])
+        for model in (discovery, challenge, final, comment):
             for prompt, _schema in model.calls:
                 self.assertIn("untrusted data only", prompt["systemInstructions"])
-        self.assertEqual("중간 상태에서 pairing을 구현합니다.", cheap.calls[0][0]["pullRequest"]["body"])
+        self.assertEqual("중간 상태에서 pairing을 구현합니다.", discovery.calls[0][0]["pullRequest"]["body"])
         self.assertEqual(86, result["issues"][0]["score"])
         self.assertEqual("inferred", result["issues"][0]["evidenceBasis"])
         self.assertEqual(16, len(result["issues"][0]["historyKey"]))
@@ -140,18 +148,66 @@ class PolicyIssueReviewTest(unittest.TestCase):
         self.assertEqual("중간 상태에서 pairing을 구현합니다.", parsed["source"]["pullRequest"]["body"])
         self.assertEqual("47775855", parsed["review"]["issues"][0]["meetingEvidence"]["pageId"])
         self.assertEqual("inferred", parsed["review"]["issues"][0]["evidenceBasis"])
+        self.assertEqual(
+            {"provider": "openai", "model": "gpt-6.1-sol", "effort": "medium"},
+            result["models"]["review2"],
+        )
+        self.assertEqual(
+            ["discover", "review-1", "review-2", "comment"],
+            [item["stage"] for item in result["usage"]],
+        )
+
+    def test_challenge_can_add_a_missed_candidate_for_final_review(self):
+        candidate = _candidate()
+        missed = {
+            **candidate,
+            "candidateId": "R1",
+            "violationType": "mixed-observation-time",
+            "claim": "서로 다른 관측 시점의 값이 함께 표시된다.",
+        }
+        discovery, challenge, final, comment = _clients(
+            candidate=candidate,
+            review1={
+                "assessments": _assessment(70)["assessments"],
+                "missedCandidates": [missed],
+            },
+            review2={
+                "assessments": [
+                    _assessment_item("C1", 70, final=True),
+                    _assessment_item("R1", 90, final=True),
+                ]
+            },
+            comments=_comments(candidate_id="R1"),
+        )
+
+        result = run_issue_review(
+            discovery_client=discovery, challenge_client=challenge,
+            final_client=final, comment_client=comment, rules=self.rules,
+            patches={candidate["path"]: "patch"}, repository=self.root,
+            head_sha=self.head, wiki_commit="abc", source_url="url",
+        )
+
+        self.assertEqual(2, result["candidateCount"])
+        self.assertEqual("review-1", result["issues"][0]["candidateSource"])
+        self.assertEqual("R1", result["issues"][0]["candidateId"])
+        self.assertEqual(2, len(final.calls[0][0]["candidates"]))
 
     def test_unresolved_counterevidence_blocks_high_score(self):
         candidate = _candidate()
-        cheap = FakeModel("cheap", [{"candidates": [candidate]}, {"responses": [{"candidateId": "C1", "disposition": "defend", "response": "x"}]}])
-        strong = FakeModel("strong", [_assessment(100), _assessment(100, final=True, unresolved=True)])
+        discovery, challenge, final, comment = _clients(
+            candidate=candidate,
+            review1={**_assessment(100), "missedCandidates": []},
+            review2=_assessment(100, final=True, unresolved=True),
+        )
         result = run_issue_review(
-            cheap_client=cheap, strong_client=strong, rules=self.rules,
+            discovery_client=discovery, challenge_client=challenge,
+            final_client=final, comment_client=comment, rules=self.rules,
             patches={candidate["path"]: "patch"}, repository=self.root,
             head_sha=self.head, wiki_commit="abc", source_url="url",
         )
         self.assertEqual([], result["issues"])
         self.assertIn("counterevidence", result["evaluations"][0]["gateFailures"])
+        self.assertEqual([], comment.calls)
         comment = render_comment(result)
         self.assertIn("반대 근거 미해소", comment)
         self.assertNotIn("문제가...없네..?", comment)
@@ -159,20 +215,25 @@ class PolicyIssueReviewTest(unittest.TestCase):
 
     def test_guessed_evidence_never_leaves_a_comment(self):
         candidate = _candidate()
-        cheap = FakeModel("cheap", [{"candidates": [candidate]}, {"responses": [{"candidateId": "C1", "disposition": "defend", "response": "x"}]}])
-        strong = FakeModel("strong", [_assessment(100), _assessment(100, final=True, evidence_basis="guessed")])
+        discovery, challenge, final, comment = _clients(
+            candidate=candidate,
+            review1={**_assessment(100), "missedCandidates": []},
+            review2=_assessment(100, final=True, evidence_basis="guessed"),
+        )
         result = run_issue_review(
-            cheap_client=cheap, strong_client=strong, rules=self.rules,
+            discovery_client=discovery, challenge_client=challenge,
+            final_client=final, comment_client=comment, rules=self.rules,
             patches={candidate["path"]: "patch"}, repository=self.root,
             head_sha=self.head, wiki_commit="abc", source_url="url",
         )
         self.assertEqual([], result["issues"])
         self.assertIn("guessed-evidence", result["evaluations"][0]["gateFailures"])
+        self.assertEqual([], comment.calls)
         self.assertIn("추측 근거", render_comment(result))
 
     def test_completed_review_without_candidates_uses_namukkun_result(self):
         result = {
-            "stages": ["discover", "review-1", "author-response", "review-2"],
+            "stages": ["discover", "review-1", "review-2"],
             "issues": [], "evaluations": [], "models": {}, "threshold": 80,
             "candidateCount": 0,
         }
@@ -192,10 +253,13 @@ class PolicyIssueReviewTest(unittest.TestCase):
         self.assertNotIn("문제가...없네..?", comment)
         self.assertNotIn("해가 서쪽에서 뜨겄어~?", comment)
 
-    def test_same_model_is_rejected(self):
-        with self.assertRaisesRegex(PolicyIssueError, "must be different"):
+    def test_same_review_provider_is_rejected(self):
+        with self.assertRaisesRegex(PolicyIssueError, "different providers"):
             run_issue_review(
-                cheap_client=FakeModel("same", []), strong_client=FakeModel("same", []),
+                discovery_client=FakeModel("openai", "discovery", "medium", []),
+                challenge_client=FakeModel("openai", "challenge", "medium", []),
+                final_client=FakeModel("openai", "final", "medium", []),
+                comment_client=FakeModel("openai", "comment", "low", []),
                 rules=self.rules, patches={}, repository=self.root, head_sha=self.head,
                 wiki_commit="abc", source_url="url",
             )
@@ -232,6 +296,14 @@ def _candidate():
 
 
 def _assessment(score, final=False, unresolved=False, evidence_basis="inferred"):
+    item = _assessment_item(
+        "C1", score, final=final, unresolved=unresolved,
+        evidence_basis=evidence_basis,
+    )
+    return {"assessments": [item]}
+
+
+def _assessment_item(candidate_id, score, final=False, unresolved=False, evidence_basis="inferred"):
     values = {
         "policyApplicability": min(score, 25),
         "codeEvidence": min(max(score - 25, 0), 25),
@@ -239,20 +311,35 @@ def _assessment(score, final=False, unresolved=False, evidence_basis="inferred")
         "reproducibleCondition": min(max(score - 70, 0), 15),
         "counterevidenceResolved": min(max(score - 85, 0), 15),
     }
-    item = {"candidateId": "C1", "decision": "confirmed", "scores": values, "rationale": "근거 확인"}
+    item = {"candidateId": candidate_id, "decision": "confirmed", "scores": values, "rationale": "근거 확인"}
     if final:
         item.update({
             "unresolvedCounterevidence": unresolved,
             "evidenceBasis": evidence_basis,
             "evidenceReason": "코드의 상태 변경 순서로 확인했다.",
             "finalComment": "짝이 맞는 최신 스냅샷을 유지해야 합니다.",
-            "humanTitle": "버스 위치 없이 새 예보만 보일 수 있어요",
-            "humanExplanation": "현재 화면은 같은 시점에 확인한 버스 위치와 예보를 함께 보여줍니다. 새 예보만 먼저 여러 번 도착하면 기존 정보가 사라지고, 새 예보만 화면에 나올 수 있어요.",
-            "humanTrigger": "버스 위치와 예보가 함께 보이는 동안 새 예보만 두 번 연속 먼저 도착하면 생깁니다.",
-            "humanSuggestion": "새 정보의 짝이 완성될 때까지 기존 버스 위치와 예보를 유지해 주세요. 같은 순서로 응답이 도착하는 테스트도 추가하면 좋겠습니다.",
-            "humanMeme": "대충 하면~? 꼭 두 번 일한다~",
         })
-    return {"assessments": [item]}
+    return item
+
+
+def _clients(candidate, review1, review2, comments=None):
+    return (
+        FakeModel("openai", "gpt-6.1-sol", "medium", [{"candidates": [candidate]}]),
+        FakeModel("anthropic", "claude-sonnet-5-5", "medium", [review1]),
+        FakeModel("openai", "gpt-6.1-sol", "medium", [review2]),
+        FakeModel("openai", "gpt-6-luna", "low", [comments] if comments else []),
+    )
+
+
+def _comments(candidate_id="C1"):
+    return {"comments": [{
+        "candidateId": candidate_id,
+        "humanTitle": "버스 위치 없이 새 예보만 보일 수 있어요",
+        "humanExplanation": "현재 화면은 같은 시점에 확인한 버스 위치와 예보를 함께 보여줍니다. 새 예보만 먼저 여러 번 도착하면 기존 정보가 사라지고, 새 예보만 화면에 나올 수 있어요.",
+        "humanTrigger": "버스 위치와 예보가 함께 보이는 동안 새 예보만 두 번 연속 먼저 도착하면 생깁니다.",
+        "humanSuggestion": "새 정보의 짝이 완성될 때까지 기존 버스 위치와 예보를 유지해 주세요. 같은 순서로 응답이 도착하는 테스트도 추가하면 좋겠습니다.",
+        "humanMeme": "대충 하면~? 꼭 두 번 일한다~",
+    }]}
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 15
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       ATLASSIAN_EMAIL: ${{ secrets.ATLASSIAN_EMAIL }}
       ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
       GH_TOKEN: ${{ github.token }}

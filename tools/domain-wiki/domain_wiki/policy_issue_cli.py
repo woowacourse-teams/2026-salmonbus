@@ -4,6 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
+from .anthropic import AnthropicClient
 from .comment_style import load_namukkun_style
 from .confluence import ConfluenceClient
 from .git_diff import read_git_diff, read_patches
@@ -82,7 +83,12 @@ def main(argv=None):
         return
     if not all(
         os.environ.get(name)
-        for name in ("OPENAI_API_KEY", "ATLASSIAN_EMAIL", "ATLASSIAN_API_TOKEN")
+        for name in (
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "ATLASSIAN_EMAIL",
+            "ATLASSIAN_API_TOKEN",
+        )
     ):
         result = {
             "stages": [], "threshold": args.threshold, "candidateCount": 0,
@@ -113,21 +119,33 @@ def main(argv=None):
         semantic_context = load_semantic_context(
             args.semantic_context, diff.head_sha, mapped_paths
         )
-    cheap = OpenAIClient(
+    discovery = OpenAIClient(
         os.environ.get("OPENAI_API_KEY"),
-        model=os.environ.get("POLICY_DRAFT_MODEL", "gpt-6-luna"),
-        reasoning_effort=os.environ.get("POLICY_DRAFT_REASONING", "low"),
+        model=os.environ.get("POLICY_DISCOVERY_MODEL", "gpt-6.1-sol"),
+        reasoning_effort=os.environ.get("POLICY_DISCOVERY_REASONING", "medium"),
     )
-    strong = OpenAIClient(
+    challenge = AnthropicClient(
+        os.environ.get("ANTHROPIC_API_KEY"),
+        model=os.environ.get("POLICY_CHALLENGE_MODEL", "claude-sonnet-5-5"),
+        reasoning_effort=os.environ.get("POLICY_CHALLENGE_REASONING", "medium"),
+    )
+    final = OpenAIClient(
         os.environ.get("OPENAI_API_KEY"),
-        model=os.environ.get("POLICY_REVIEW_MODEL", "gpt-6.1-sol"),
-        reasoning_effort=os.environ.get("POLICY_REVIEW_REASONING", "high"),
+        model=os.environ.get("POLICY_FINAL_MODEL", "gpt-6.1-sol"),
+        reasoning_effort=os.environ.get("POLICY_FINAL_REASONING", "medium"),
+    )
+    comment = OpenAIClient(
+        os.environ.get("OPENAI_API_KEY"),
+        model=os.environ.get("POLICY_COMMENT_MODEL", "gpt-6-luna"),
+        reasoning_effort=os.environ.get("POLICY_COMMENT_REASONING", "low"),
     )
     comment_style = load_namukkun_style(args.comment_style_directory)
     wiki_commit = _wiki_commit(wiki)
     result = run_issue_review(
-        cheap_client=cheap,
-        strong_client=strong,
+        discovery_client=discovery,
+        challenge_client=challenge,
+        final_client=final,
+        comment_client=comment,
         rules=rules,
         patches=patches,
         repository=repository,

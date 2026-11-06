@@ -132,12 +132,13 @@ def verify_confluence_evidence(client, rules):
 
 
 def run_issue_review(
-    *, cheap_client, strong_client, rules, patches, repository, head_sha,
+    *, discovery_client, challenge_client, final_client, comment_client,
+    rules, patches, repository, head_sha,
     wiki_commit, source_url, pull_request=None, semantic_context=None,
     comment_style=None, threshold=80,
 ):
-    if cheap_client.model == strong_client.model:
-        raise PolicyIssueError("draft and review models must be different")
+    if challenge_client.provider == final_client.provider:
+        raise PolicyIssueError("the two review passes must use different providers")
     context = {
         "rules": [_rule_payload(rule) for rule in rules],
         "patches": patches,
@@ -148,20 +149,22 @@ def run_issue_review(
         "pullRequest": pull_request or {"title": "", "body": ""},
         "semanticContext": semantic_context,
     }
-    discovery, usage1 = cheap_client.review(_prompt("discover", context), _discovery_schema())
-    candidates = discovery.get("candidates", [])
-    review1, usage2 = strong_client.review(
-        _prompt("review-1", {**context, "candidates": candidates}), _assessment_schema()
+    discovery, usage1 = discovery_client.review(
+        _prompt("discover", context), _discovery_schema()
     )
-    response, usage3 = cheap_client.review(
-        _prompt("author-response", {**context, "candidates": candidates, "review": review1}),
-        _response_schema(),
+    candidates = [
+        {**candidate, "candidateSource": "discovery"}
+        for candidate in discovery.get("candidates", [])
+    ]
+    review1, usage2 = challenge_client.review(
+        _prompt("review-1", {**context, "candidates": candidates}),
+        _challenge_schema(),
     )
-    review2, usage4 = strong_client.review(
+    candidates = _merge_candidates(candidates, review1.get("missedCandidates", []))
+    review2, usage3 = final_client.review(
         _prompt(
             "review-2",
-            {**context, "candidates": candidates, "review": review1, "response": response},
-            comment_style=comment_style,
+            {**context, "candidates": candidates, "review": review1},
         ),
         _assessment_schema(final=True),
     )
@@ -220,11 +223,6 @@ def run_issue_review(
                     "score": score,
                     "scores": final["scores"],
                     "finalComment": final.get("finalComment", ""),
-                    "humanTitle": final.get("humanTitle", "확인이 필요한 정책 위반이 있어요"),
-                    "humanExplanation": final.get("humanExplanation", candidate.get("impact", "")),
-                    "humanTrigger": final.get("humanTrigger", candidate.get("condition", "")),
-                    "humanSuggestion": final.get("humanSuggestion", final.get("finalComment", "")),
-                    "humanMeme": final.get("humanMeme", ""),
                     "reviewRationale": final.get("rationale", ""),
                     "wikiCommit": wiki_commit,
                     "sourceUrl": source_url,
@@ -240,6 +238,47 @@ def run_issue_review(
                     },
                 }
             )
+    stages = ["discover", "review-1", "review-2"]
+    usage = [
+        _usage_record("discover", discovery_client, usage1),
+        _usage_record("review-1", challenge_client, usage2),
+        _usage_record("review-2", final_client, usage3),
+    ]
+    if issues:
+        comments, usage4 = comment_client.review(
+            _prompt(
+                "comment",
+                {
+                    "issues": issues,
+                    "pullRequest": context["pullRequest"],
+                },
+                comment_style=comment_style,
+            ),
+            _comment_schema(),
+        )
+        comment_by_id = {
+            item.get("candidateId"): item
+            for item in comments.get("comments", [])
+        }
+        for issue in issues:
+            human = comment_by_id.get(issue.get("candidateId"), {})
+            issue.update({
+                "humanTitle": human.get(
+                    "humanTitle", "확인이 필요한 정책 위반이 있어요"
+                ),
+                "humanExplanation": human.get(
+                    "humanExplanation", issue.get("impact", "")
+                ),
+                "humanTrigger": human.get(
+                    "humanTrigger", issue.get("condition", "")
+                ),
+                "humanSuggestion": human.get(
+                    "humanSuggestion", issue.get("finalComment", "")
+                ),
+                "humanMeme": human.get("humanMeme", ""),
+            })
+        stages.append("comment")
+        usage.append(_usage_record("comment", comment_client, usage4))
     meme_kept = False
     for issue in issues:
         meme = issue.get("humanMeme", "")
@@ -248,17 +287,66 @@ def run_issue_review(
         else:
             issue["humanMeme"] = ""
     return {
-        "stages": ["discover", "review-1", "author-response", "review-2"],
+        "stages": stages,
         "threshold": threshold,
         "candidateCount": len(candidates),
         "evaluations": evaluations,
         "issues": issues,
-        "usage": [usage1, usage2, usage3, usage4],
-        "models": {"draft": cheap_client.model, "review": strong_client.model},
+        "usage": usage,
+        "models": {
+            "discovery": _client_metadata(discovery_client),
+            "review1": _client_metadata(challenge_client),
+            "review2": _client_metadata(final_client),
+            "comment": _client_metadata(comment_client),
+        },
         "sourceUrl": source_url,
         "wikiCommit": wiki_commit,
         "pullRequest": pull_request or {"title": "", "body": ""},
         "semanticContext": semantic_context,
+    }
+
+
+def _merge_candidates(discovered, missed):
+    merged = list(discovered)
+    signatures = {
+        (
+            item.get("ruleId"), item.get("path"), item.get("line"),
+            item.get("violationType"),
+        )
+        for item in merged
+    }
+    used_ids = {item.get("candidateId") for item in merged}
+    for item in missed:
+        signature = (
+            item.get("ruleId"), item.get("path"), item.get("line"),
+            item.get("violationType"),
+        )
+        if signature in signatures:
+            continue
+        candidate = {**item, "candidateSource": "review-1"}
+        candidate_id = candidate.get("candidateId")
+        if not isinstance(candidate_id, str) or not candidate_id or candidate_id in used_ids:
+            candidate_id = f"R{len(merged) + 1}"
+            candidate["candidateId"] = candidate_id
+        merged.append(candidate)
+        signatures.add(signature)
+        used_ids.add(candidate_id)
+    return merged
+
+
+def _client_metadata(client):
+    return {
+        "provider": client.provider,
+        "model": client.model,
+        "effort": client.reasoning_effort,
+    }
+
+
+def _usage_record(stage, client, usage):
+    return {
+        "stage": stage,
+        **_client_metadata(client),
+        **usage,
     }
 
 
@@ -455,19 +543,27 @@ def _prompt(stage, payload, comment_style=None):
         ),
         "review-1": (
             "Independently challenge each candidate and score only supported evidence. "
+            "Then inspect every active rule and the supplied code again for violations the "
+            "discovery stage missed. Return those only in missedCandidates, using candidate "
+            "IDs prefixed with R. A missed candidate must meet the same concrete evidence "
+            "requirements as a discovered candidate. "
             "Score all five scoringRubric dimensions independently; do not distribute one "
             "shared subtotal across them. The sum can be 100. Write rationale in Korean."
         ),
-        "author-response": "Answer every review objection in Korean. Withdraw unsupported candidates; do not add new candidates.",
         "review-2": (
-            "Make the final independent judgment after the response. Confirm only reproducible "
+            "Make the second independent judgment after the first review. Consider candidates "
+            "from both discovery and review-1. Confirm only reproducible "
             "violations with resolved counterevidence. Score all five scoringRubric dimensions "
             "independently using their full ranges; do not treat any one dimension as the total. "
             "Classify evidenceBasis as measured only when an executed check directly reproduced "
             "the behavior, inferred when code and navigation evidence demonstrate it without "
             "execution, or guessed when it remains only a possibility. Explain that choice in "
-            "evidenceReason. "
-            "Write rationale and finalComment in Korean. Also write the human fields for a "
+            "evidenceReason. Write rationale and finalComment in Korean."
+        ),
+        "comment": (
+            "The policy verdicts are already fixed. Do not change, reject, rescore, or add an "
+            "issue. Write only the human-facing fields for each supplied candidateId. "
+            "Write for a "
             "teammate who does not know this policy implementation: humanTitle is a short "
             "user-visible result without policy IDs, file paths, scores, English identifiers, "
             "or internal jargon; humanExplanation starts with the current behavior and explains "
@@ -477,7 +573,7 @@ def _prompt(stage, payload, comment_style=None):
             "use metaphors, vague wording, or repeat the same conclusion across fields."
         ),
     }[stage]
-    if stage == "review-2" and comment_style:
+    if stage == "comment" and comment_style:
         instructions += (
             "\n\nAfter the verdict is fixed, apply the following trusted team comment "
             "style only to the human fields. Put no meme inside humanSuggestion. "
@@ -492,7 +588,15 @@ def _prompt(stage, payload, comment_style=None):
 
 
 def _discovery_schema():
-    candidate = {
+    return {
+        "type": "object", "additionalProperties": False,
+        "required": ["candidates"],
+        "properties": {"candidates": {"type": "array", "items": _candidate_schema()}},
+    }
+
+
+def _candidate_schema():
+    return {
         "type": "object", "additionalProperties": False,
         "required": ["candidateId", "ruleId", "violationType", "path", "line", "claim", "condition", "impact", "codeEvidence"],
         "properties": {
@@ -503,10 +607,32 @@ def _discovery_schema():
             "impact": {"type": "string"}, "codeEvidence": {"type": "string"},
         },
     }
-    return {"type": "object", "additionalProperties": False, "required": ["candidates"], "properties": {"candidates": {"type": "array", "items": candidate}}}
+
+
+def _challenge_schema():
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["assessments", "missedCandidates"],
+        "properties": {
+            "assessments": {
+                "type": "array",
+                "items": _assessment_item_schema(final=False),
+            },
+            "missedCandidates": {
+                "type": "array",
+                "items": _candidate_schema(),
+            },
+        },
+    }
 
 
 def _assessment_schema(final=False):
+    item = _assessment_item_schema(final=final)
+    return {"type": "object", "additionalProperties": False, "required": ["assessments"], "properties": {"assessments": {"type": "array", "items": item}}}
+
+
+def _assessment_item_schema(final=False):
     properties = {
         "candidateId": {"type": "string"},
         "decision": {"type": "string", "enum": ["confirmed", "uncertain", "rejected"]},
@@ -520,22 +646,36 @@ def _assessment_schema(final=False):
             "evidenceBasis": {"type": "string", "enum": ["measured", "inferred", "guessed"]},
             "evidenceReason": {"type": "string"},
             "finalComment": {"type": "string"},
+        })
+        required.extend([
+            "unresolvedCounterevidence", "evidenceBasis", "evidenceReason",
+            "finalComment",
+        ])
+    return {
+        "type": "object", "additionalProperties": False,
+        "required": required, "properties": properties,
+    }
+
+
+def _comment_schema():
+    item = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "candidateId", "humanTitle", "humanExplanation", "humanTrigger",
+            "humanSuggestion", "humanMeme",
+        ],
+        "properties": {
+            "candidateId": {"type": "string"},
             "humanTitle": {"type": "string"},
             "humanExplanation": {"type": "string"},
             "humanTrigger": {"type": "string"},
             "humanSuggestion": {"type": "string"},
             "humanMeme": {"type": "string", "enum": ["", *NAMUKKUN_MEMES]},
-        })
-        required.extend([
-            "unresolvedCounterevidence", "evidenceBasis", "evidenceReason",
-            "finalComment", "humanTitle",
-            "humanExplanation", "humanTrigger", "humanSuggestion",
-            "humanMeme",
-        ])
-    item = {"type": "object", "additionalProperties": False, "required": required, "properties": properties}
-    return {"type": "object", "additionalProperties": False, "required": ["assessments"], "properties": {"assessments": {"type": "array", "items": item}}}
-
-
-def _response_schema():
-    item = {"type": "object", "additionalProperties": False, "required": ["candidateId", "disposition", "response"], "properties": {"candidateId": {"type": "string"}, "disposition": {"type": "string", "enum": ["defend", "revise", "withdraw"]}, "response": {"type": "string"}}}
-    return {"type": "object", "additionalProperties": False, "required": ["responses"], "properties": {"responses": {"type": "array", "items": item}}}
+        },
+    }
+    return {
+        "type": "object", "additionalProperties": False,
+        "required": ["comments"],
+        "properties": {"comments": {"type": "array", "items": item}},
+    }

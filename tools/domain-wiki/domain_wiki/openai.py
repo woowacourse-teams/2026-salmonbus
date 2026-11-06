@@ -27,6 +27,8 @@ class UrlLibTransport:
 
 
 class OpenAIClient:
+    provider = "openai"
+
     def __init__(
         self,
         api_key,
@@ -123,6 +125,7 @@ class OpenAIClient:
             "cacheWriteInputTokens": input_details.get("cache_write_tokens", 0),
             "cacheWrite30mInputTokens": write_details.get("ttl_30m_tokens", 0),
             "cacheWrite12hInputTokens": write_details.get("ttl_12h_tokens", 0),
+            "servedModel": response.get("model"),
         }
 
 def _output_text(response):
