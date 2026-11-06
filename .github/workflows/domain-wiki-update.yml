@@ -41,6 +41,7 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ATLASSIAN_EMAIL: ${{ secrets.ATLASSIAN_EMAIL }}
       ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.KOROGIT_DISCORD_WEBHOOK_URL }}
       PYTHONPATH: tools/domain-wiki
     steps:
       - uses: actions/checkout@v4
@@ -115,6 +116,26 @@ jobs:
           path: .domain-wiki/output
           if-no-files-found: error
           retention-days: 30
+      - name: Notify Discord about the Wiki approval
+        if: ${{ steps.credentials.outputs.configured == 'true' }}
+        continue-on-error: true
+        env:
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          if [[ -z "$DISCORD_WEBHOOK_URL" ]]; then
+            echo 'Discord notification skipped because DISCORD_WEBHOOK_URL is not configured.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ "$(jq -r '.status' .domain-wiki/output/wiki-result.json)" != 'approval-required' ]]; then
+            exit 0
+          fi
+          python3 -m domain_wiki.discord_notify_cli \
+            --approval .domain-wiki/output/wiki-approval.json \
+            --result .domain-wiki/output/wiki-result.json \
+            --repository "$REPOSITORY" \
+            --run-id "$GITHUB_RUN_ID" \
+            --send
       - name: Publish Wiki review on the merged PR
         if: ${{ steps.credentials.outputs.configured == 'true' && steps.context.outputs.number != '' }}
         env:
