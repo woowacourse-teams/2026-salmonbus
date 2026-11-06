@@ -24,6 +24,8 @@ export type BoardScreen =
   | { kind: "outOfService"; board: Board }
   | { kind: "error"; failure: ApiFailure };
 
+export type BoardFreshness = "fresh" | "refreshFailed" | "expired";
+
 type ServicePhase = "withinTimetable" | "outsideTimetable" | "undetermined";
 
 interface StopViewBase {
@@ -47,8 +49,13 @@ export interface NoVehicleStopView extends StopViewBase {
   kind: "noVehicle";
 }
 
-export type StopView = BoardingStopView | PassThroughStopView | NoVehicleStopView;
-export type ExpandableStopView = BoardingStopView | NoVehicleStopView;
+export interface CheckingStopView extends StopViewBase {
+  kind: "checking";
+}
+
+export type SourceStopView = BoardingStopView | PassThroughStopView | NoVehicleStopView;
+export type StopView = SourceStopView | CheckingStopView;
+export type ExpandableStopView = BoardingStopView | NoVehicleStopView | CheckingStopView;
 
 export interface DirectionView {
   id: Direction;
@@ -94,9 +101,33 @@ export function serviceStateFor(
   return board.vehiclesInService > 0 ? "running" : "noVehiclesInService";
 }
 
-export type BoardNotice = { kind: "noVehiclesInService" };
+export type BoardNotice =
+  | { kind: "noVehiclesInService" }
+  | { kind: "expired"; observedClock: string | null }
+  | { kind: "refreshFailed"; observedClock: string | null };
 
-export function boardNoticeFor(serviceState: ServiceState): BoardNotice | null {
+export function boardFreshnessOf(status: string, expired: boolean): BoardFreshness {
+  if (expired) return "expired";
+  if (status === "refetchError") return "refreshFailed";
+  return "fresh";
+}
+
+export function observedClockOf(observedAt: string): string | null {
+  const match = KST_LOCAL_TIME.exec(observedAt);
+  if (match === null) return null;
+  const [, hours, minutes] = match;
+  if (hours === undefined || minutes === undefined) return null;
+  return `${hours}:${minutes}`;
+}
+
+export function boardNoticeFor(
+  serviceState: ServiceState,
+  freshness: BoardFreshness,
+  observedAt: string,
+): BoardNotice | null {
+  const observedClock = observedClockOf(observedAt);
+  if (freshness === "expired") return { kind: "expired", observedClock };
+  if (freshness === "refreshFailed") return { kind: "refreshFailed", observedClock };
   return serviceState === "noVehiclesInService" ? { kind: "noVehiclesInService" } : null;
 }
 
@@ -105,13 +136,29 @@ export function directionInfoFor(board: Board, preferred: Direction | null): Dir
   return directions.find((directionInfo) => directionInfo.id === preferred) ?? directions[0];
 }
 
-export function stopViewsFor(board: Board, direction: Direction): StopView[] {
+export function stopViewsFor(board: Board, direction: Direction): SourceStopView[] {
   const { turnSequence } = board.route;
 
   return board.stops
     .filter((stop) => stop.direction === direction)
     .sort((left, right) => left.sequence - right.sequence)
     .map((stop) => toStopView(stop, turnSequence));
+}
+
+export function displayedStopViewsFor(board: Board, direction: Direction, freshness: BoardFreshness): StopView[] {
+  const source = stopViewsFor(board, direction);
+  if (freshness !== "expired") return source;
+  return source.map((stop) =>
+    stop.kind === "passThrough"
+      ? stop
+      : {
+          kind: "checking" as const,
+          sequence: stop.sequence,
+          stopId: stop.stopId,
+          name: stop.name,
+          isTurnaround: stop.isTurnaround,
+        },
+  );
 }
 
 export function directionViewsFor(board: Board): DirectionView[] {
@@ -121,7 +168,7 @@ export function directionViewsFor(board: Board): DirectionView[] {
   }));
 }
 
-function toStopView(stop: StopState, turnSequence: number | null): StopView {
+function toStopView(stop: StopState, turnSequence: number | null): SourceStopView {
   const { sequence, stopId, name } = stop;
   const isTurnaround = touchesTurnaround(sequence, turnSequence);
 

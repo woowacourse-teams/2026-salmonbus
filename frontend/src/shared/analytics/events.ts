@@ -100,7 +100,8 @@ export interface EventMap {
         stops_away: number;
         arrival_count: number;
       })
-    | (StopExpandedBase & { stop_kind: "noVehicle"; arrival_count: 0 });
+    | (StopExpandedBase & { stop_kind: "noVehicle"; arrival_count: 0 })
+    | (StopExpandedBase & { stop_kind: "checking"; arrival_count: 0 });
 
   login_started: {
     provider: LoginProvider;

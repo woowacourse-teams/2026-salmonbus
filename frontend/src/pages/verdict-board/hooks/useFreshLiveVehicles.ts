@@ -7,7 +7,16 @@ const MIN_LIVE_MOTION_DURATION_MS = 5_000;
 // 렌더마다 새 빈 배열을 만들면 마커 계산과 이동 효과가 매번 다시 돈다.
 const NO_VEHICLES: readonly Vehicle[] = [];
 
-export function useFreshLiveVehicles(latestSuccess: LatestSuccess<RouteWatch> | null): readonly Vehicle[] {
+export function expiredAtReceiptOf(latestSuccess: LatestSuccess<RouteWatch>): boolean {
+  const staleAtMillis = Date.parse(latestSuccess.body.staleAt);
+  const referenceAtReceipt = latestSuccess.clock?.servedAt ?? latestSuccess.receivedAt;
+  return Number.isNaN(staleAtMillis) || staleAtMillis <= referenceAtReceipt;
+}
+
+export function useFreshLiveVehicles(latestSuccess: LatestSuccess<RouteWatch> | null): {
+  vehicles: readonly Vehicle[];
+  expired: boolean;
+} {
   const watch = latestSuccess?.body ?? null;
   const staleAtMillis = watch === null ? null : Date.parse(watch.staleAt);
   const serverClock = latestSuccess?.clock ?? null;
@@ -25,12 +34,15 @@ export function useFreshLiveVehicles(latestSuccess: LatestSuccess<RouteWatch> | 
     return () => window.clearTimeout(expiryTimer);
   }, [observationKey, serverClock, staleAtMillis]);
 
-  if (latestSuccess === null || staleAtMillis === null) return NO_VEHICLES;
+  if (latestSuccess === null || staleAtMillis === null) {
+    return { vehicles: NO_VEHICLES, expired: false };
+  }
 
-  const referenceAtReceipt = latestSuccess.clock?.servedAt ?? latestSuccess.receivedAt;
-  const expiredBeforeReceipt = Number.isNaN(staleAtMillis) || staleAtMillis <= referenceAtReceipt;
-
-  return !expiredBeforeReceipt && expiredObservationKey !== observationKey ? latestSuccess.body.vehicles : NO_VEHICLES;
+  const expired = expiredAtReceiptOf(latestSuccess) || expiredObservationKey === observationKey;
+  return {
+    vehicles: expired ? NO_VEHICLES : latestSuccess.body.vehicles,
+    expired,
+  };
 }
 
 export function liveMotionDurationOf(resource: PolledResource<RouteWatch>): number {

@@ -12,11 +12,14 @@ import { playHaptic } from "@/shared/haptic/haptic";
 import { boardEntryFrom } from "@/shared/routing/boardEntry";
 import { paths } from "@/shared/routing/paths";
 import {
+  boardFreshnessOf,
   boardNoticeFor,
   directionInfoFor,
   directionViewsFor,
+  displayedStopViewsFor,
   serviceStateFor,
   stopViewsFor,
+  type BoardFreshness,
   type BoardNotice,
   type BoardScreen,
 } from "./displayPolicy";
@@ -51,6 +54,7 @@ interface OperatingBoardProps {
   liveVehicles: readonly Vehicle[];
   liveMotionDurationMs: number;
   switched: boolean;
+  freshness: BoardFreshness;
   notice: BoardNotice | null;
   onDirectionChange: (direction: Direction, source: DirectionSwitchSource) => void;
   onStopExpand: (expansion: StopExpandInput) => void;
@@ -72,7 +76,8 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const [entry] = useState(() => boardEntryFrom(location.state));
   const watchResource = usePolledRequest(loadRouteWatch, routeId);
   const latestWatch = latestSuccessOf(watchResource);
-  const freshLiveVehicles = useFreshLiveVehicles(latestWatch);
+  const { vehicles: freshLiveVehicles, expired } = useFreshLiveVehicles(latestWatch);
+  const freshness = boardFreshnessOf(watchResource.status, expired);
   const motionDurationMs = liveMotionDurationOf(watchResource);
   const [preferredDirection, setPreferredDirection] = useState<Direction | null>(() =>
     search.get("direction") === "UP" ? "UP" : search.get("direction") === "DOWN" ? "DOWN" : null,
@@ -109,7 +114,8 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
         switched={switched}
         liveVehicles={freshLiveVehicles}
         liveMotionDurationMs={motionDurationMs}
-        notice={boardNoticeFor(serviceState)}
+        freshness={freshness}
+        notice={boardNoticeFor(serviceState, freshness, state.watch.observedAt)}
         onDirectionChange={selectDirection}
         onStopExpand={trackStopExpanded}
       />
@@ -153,6 +159,7 @@ function OperatingBoard({
   liveVehicles,
   liveMotionDurationMs,
   switched,
+  freshness,
   notice,
   onDirectionChange,
   onStopExpand,
@@ -167,10 +174,11 @@ function OperatingBoard({
   const [scrollRequest, setScrollRequest] = useState<StopSelection | null>(selected);
   const [vehicleFocusRequest, setVehicleFocusRequest] = useState<{ key: string; focusMarker: boolean } | null>(null);
   const selectedVehicleKey = vehicleFocusRequest?.key ?? null;
-  const stops = useMemo(() => stopViewsFor(board, direction.id), [board, direction.id]);
+  const sourceStops = useMemo(() => stopViewsFor(board, direction.id), [board, direction.id]);
+  const stops = useMemo(() => displayedStopViewsFor(board, direction.id, freshness), [board, direction.id, freshness]);
   const selectedStop =
     selected?.direction === direction.id
-      ? stops.find((stop) => stop.sequence === selected.sequence && stop.kind !== "passThrough")
+      ? sourceStops.find((stop) => stop.sequence === selected.sequence && stop.kind !== "passThrough")
       : undefined;
   const arrivalSelection =
     selectedStop === undefined
@@ -216,7 +224,9 @@ function OperatingBoard({
     setVehicleFocusRequest(null);
     scrollToStop(selection);
     rememberSelection(selection);
-    const row = reselected ? null : expandableRowOf(stopViewsFor(board, selection.direction), selection.sequence);
+    const row = reselected
+      ? null
+      : expandableRowOf(displayedStopViewsFor(board, selection.direction, freshness), selection.sequence);
     if (row !== null) onStopExpand({ ...row, direction: selection.direction, source: "map" });
   }
 

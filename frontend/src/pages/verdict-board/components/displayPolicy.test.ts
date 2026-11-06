@@ -1,6 +1,14 @@
 import { describe, expect, it } from "@jest/globals";
 import type { HeadwayRange, RouteHeadways, Vehicle } from "@/shared/api/routeForecast.types";
-import { boardNoticeFor, headwayLabelFor, serviceStateFor, stopViewsFor } from "./displayPolicy";
+import {
+  boardFreshnessOf,
+  boardNoticeFor,
+  displayedStopViewsFor,
+  headwayLabelFor,
+  observedClockOf,
+  serviceStateFor,
+  stopViewsFor,
+} from "./displayPolicy";
 import { boardWith, stopAt, upInfo, vehicleAt } from "@/testing/fixtures";
 import { forecastFixtures } from "@/testing/forecastFixtures";
 
@@ -165,11 +173,50 @@ describe("serviceStateFor", () => {
   });
 });
 
+describe("boardFreshnessOf", () => {
+  it("만료면 status와 무관하게 expired다", () => {
+    expect(boardFreshnessOf("success", true)).toBe("expired");
+    expect(boardFreshnessOf("refetchError", true)).toBe("expired");
+  });
+
+  it("만료 전 재조회 실패는 refreshFailed이고 성공은 fresh다", () => {
+    expect(boardFreshnessOf("refetchError", false)).toBe("refreshFailed");
+    expect(boardFreshnessOf("success", false)).toBe("fresh");
+  });
+});
+
+describe("observedClockOf", () => {
+  it("KST 관측 시각만 HH:MM으로 읽고 그 외는 null이다", () => {
+    expect(observedClockOf("2026-09-01T08:00:00+09:00")).toBe("08:00");
+    expect(observedClockOf("2026-09-01T08:00:00+00:00")).toBeNull();
+  });
+});
+
 describe("boardNoticeFor", () => {
+  const observedAt = "2026-09-01T08:00:00+09:00";
+
   it("오는 차량 없음만 안내를 주고 나머지는 안내가 없다", () => {
-    expect(boardNoticeFor("noVehiclesInService")).toEqual({ kind: "noVehiclesInService" });
-    expect(boardNoticeFor("running")).toBeNull();
-    expect(boardNoticeFor("outOfService")).toBeNull();
+    expect(boardNoticeFor("noVehiclesInService", "fresh", observedAt)).toEqual({ kind: "noVehiclesInService" });
+    expect(boardNoticeFor("running", "fresh", observedAt)).toBeNull();
+    expect(boardNoticeFor("outOfService", "fresh", observedAt)).toBeNull();
+  });
+
+  it("만료와 재조회 실패가 오는 차량 없음보다 우선하고 기준 시각을 붙인다", () => {
+    expect(boardNoticeFor("noVehiclesInService", "expired", observedAt)).toEqual({
+      kind: "expired",
+      observedClock: "08:00",
+    });
+    expect(boardNoticeFor("noVehiclesInService", "refreshFailed", observedAt)).toEqual({
+      kind: "refreshFailed",
+      observedClock: "08:00",
+    });
+  });
+
+  it("KST가 아니면 기준 시각을 null로 둔다", () => {
+    expect(boardNoticeFor("running", "expired", "2026-09-01T08:00:00+00:00")).toEqual({
+      kind: "expired",
+      observedClock: null,
+    });
   });
 });
 
@@ -209,6 +256,37 @@ describe("stopViewsFor", () => {
         ],
       },
       { sequence: 3, kind: "noVehicle" },
+    ]);
+  });
+});
+
+describe("displayedStopViewsFor", () => {
+  it("만료가 아니면 stopViewsFor와 같다", () => {
+    const board = boardWith({
+      stops: [
+        stopAt(1, { boardingAllowed: false }),
+        stopAt(2, { approachingVehicles: [forecastFixtures.available] }),
+        stopAt(3),
+      ],
+    });
+
+    expect(displayedStopViewsFor(board, "UP", "fresh")).toEqual(stopViewsFor(board, "UP"));
+    expect(displayedStopViewsFor(board, "UP", "refreshFailed")).toEqual(stopViewsFor(board, "UP"));
+  });
+
+  it("만료면 탑승·무차량 정류장만 checking으로 바꾸고 경유는 그대로 둔다", () => {
+    const board = boardWith({
+      stops: [
+        stopAt(1, { boardingAllowed: false }),
+        stopAt(2, { approachingVehicles: [forecastFixtures.available] }),
+        stopAt(3),
+      ],
+    });
+
+    expect(displayedStopViewsFor(board, "UP", "expired")).toMatchObject([
+      { sequence: 1, kind: "passThrough" },
+      { sequence: 2, kind: "checking", stopId: "S2", name: expect.any(String) },
+      { sequence: 3, kind: "checking", stopId: "S3" },
     ]);
   });
 });
