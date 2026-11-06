@@ -11,10 +11,14 @@ final class CompatiblePreparation {
     // SAL-223: 특징 계산 코드의 컨벤션을 정리했다. 초기화 코드와 모델 번들의 내용은 그대로다.
     static final String NEXT = "fb6c6841a0236e558219cb431f2fb4cdb7dbd28e3423efef31206fdbe10fd649";
 
+    static final String FIXTURE_DIGEST = "bae7cee31d0a289b72dff1e55c72aab7194dce45db1d30c4b01f3a6073ebef46";
+
     static boolean permits(RevisionStore.Revision previous, RevisionStore.Revision next) {
         var from = previous.files().get("tools/data-contract.sha256");
         var to = next.files().get("tools/data-contract.sha256");
-        return PREVIOUS.equals(from)
+        return NEXT.equals(from) && FIXTURE_DIGEST.equals(to)
+            || FIXTURE_DIGEST.equals(from) && NEXT.equals(to)
+            || PREVIOUS.equals(from)
                 && (COLLECTED_DATA.equals(to) || EVALUATION_DATA.equals(to) || NEXT.equals(to))
             || COLLECTED_DATA.equals(from) && (EVALUATION_DATA.equals(to) || NEXT.equals(to))
             || EVALUATION_DATA.equals(from) && NEXT.equals(to);
