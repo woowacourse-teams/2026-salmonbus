@@ -36,12 +36,14 @@ class ApiPackageBoundaryTest {
     private static final String PREFIX = "com.gustler.backend.api.";
     private static final String TRANSPORT = "com.gustler.backend.api.http..";
     private static final String CONTRACT = "com.gustler.backend.api.error..";
-    private static final String ARRIVAL_HTTP_CLIENT = PREFIX + "arrival.infrastructure.http..";
-    private static final List<String> FEATURES = List.of("arrival", "board", "favorite", "route", "vehicle");
+    private static final String[] WORKER_HTTP_CLIENTS = {
+        PREFIX + "arrival.infrastructure.http..", PREFIX + "station.infrastructure.http.."
+    };
+    private static final List<String> FEATURES = List.of("arrival", "board", "favorite", "route", "station", "vehicle");
     private static final List<String> BUSINESS_MODULES = List.of(
         "com.gustler.backend.routecatalog..", "com.gustler.backend.observations..",
         "com.gustler.backend.forecasting..", "com.gustler.backend.arrivals..",
-        "com.gustler.backend.quota..", "com.gustler.backend.gbis..");
+        "com.gustler.backend.quota..", "com.gustler.backend.gbis..", "com.gustler.backend.stations..");
     private static final List<String> READ_LAYERS = List.of("..domain..", "..application..", "..infrastructure..");
     private static final List<String> REQUEST_HANDLING = List.of(
         "org.springframework.web..", "jakarta.servlet..", "org.apache.catalina..");
@@ -121,13 +123,13 @@ class ApiPackageBoundaryTest {
     @ArchTest
     static final ArchRule READ_LAYERS_DO_NOT_TOUCH_WEB_TECHNOLOGY = noClasses()
         .that().resideInAnyPackage(READ_LAYERS.toArray(String[]::new))
-        .and().resideOutsideOfPackage(ARRIVAL_HTTP_CLIENT)
+        .and().resideOutsideOfPackages(WORKER_HTTP_CLIENTS)
         .should().dependOnClassesThat().resideInAnyPackage(
             concat(REQUEST_HANDLING, "org.springframework.http.."));
 
     @ArchTest
     static final ArchRule ARRIVAL_HTTP_CLIENT_DOES_NOT_HANDLE_SERVER_REQUESTS = noClasses()
-        .that().resideInAPackage(ARRIVAL_HTTP_CLIENT)
+        .that().resideInAnyPackage(WORKER_HTTP_CLIENTS)
         .should().dependOnClassesThat().resideInAnyPackage(
             "org.springframework.web.bind..", "org.springframework.web.servlet..",
             "org.springframework.web.context..", "org.springframework.web.filter..",

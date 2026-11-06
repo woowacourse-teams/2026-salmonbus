@@ -11,6 +11,7 @@ import com.gustler.backend.api.board.application.BoardCachePolicy;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.support.FixedDaytimeClockConfig;
 import com.gustler.backend.support.IntegrationTest;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -41,6 +42,9 @@ class BoardApiContractTest {
 
     @Autowired
     private Clock clock;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private MockMvc mockMvc;
     private BoardDatabaseFixture fixture;
@@ -435,6 +439,71 @@ class BoardApiContractTest {
             .param(observation).query(Integer.class).single()).isEqualTo(82);
         assertThat(jdbcClient.sql("SELECT count(*) FROM seat_forecast WHERE vehicle_observation_id = ?")
             .param(observation).query(Integer.class).single()).isEqualTo(1);
+    }
+
+    @Test
+    void 캐시된_회차가_재발행되면_바뀐_예보를_즉시_반환한다() throws Exception {
+        // given
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        final long model = fixture.insertModel("model-cache", "ACTIVE", now.minusDays(1));
+        final long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
+        fixture.insertPublication(batch, model, now, now);
+        final long observation = fixture.insertObservation(route, batch, 1, "A", 2, "STOP-2", now);
+        fixture.insertForecast(route, observation, 3, 1, model, 0.2, 40.0, now);
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.expectedSeats").value(40.0));
+        }
+
+        // when
+        jdbcClient.sql("UPDATE seat_forecast SET expected_seats = 5 WHERE vehicle_observation_id = ?")
+            .param(observation)
+            .update();
+        jdbcClient.sql("UPDATE forecast_publication SET published_at = published_at + interval '1 second'"
+                + " WHERE source_batch_id = ?")
+            .param(batch)
+            .update();
+        entityManager.clear();
+        ResultActions httpResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.expectedSeats").value(5.0));
+    }
+
+    @Test
+    void 캐시된_운행을_제외하고_품질_판본을_올리면_예보가_즉시_사라진다() throws Exception {
+        // given
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        final long model = fixture.insertModel("model-cache", "ACTIVE", now.minusDays(1));
+        final long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
+        fixture.insertPublication(batch, model, now, now);
+        final long observation = fixture.insertObservation(route, batch, 1, "A", 2, "STOP-2", now);
+        fixture.insertForecast(route, observation, 3, 1, model, 0.2, 40.0, now);
+        mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.status").value("AVAILABLE"));
+
+        // when
+        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED', evidence_observation_id = ?"
+                + " WHERE id = CAST(? AS text)")
+            .param(observation)
+            .param(observation)
+            .update();
+        jdbcClient.sql("UPDATE route_data_quality SET quality_revision = quality_revision + 1 WHERE route_id = ?")
+            .param(route.routeId())
+            .update();
+        entityManager.clear();
+        ResultActions httpResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.status").value("UNAVAILABLE"));
     }
 
     @Test

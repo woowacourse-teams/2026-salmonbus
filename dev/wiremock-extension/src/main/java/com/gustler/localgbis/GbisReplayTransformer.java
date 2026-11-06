@@ -32,6 +32,16 @@ public final class GbisReplayTransformer implements ResponseDefinitionTransforme
     public ResponseDefinition transform(ServeEvent event) {
         var parameters = event.getTransformerParameters();
         String operation = parameters.getString("operation");
+        if (operation.equals("stationAround")) {
+            var request = event.getRequest();
+            var around = engine.stationAround(request.queryParameter("x").firstValue(),
+                request.queryParameter("y").firstValue());
+            return ResponseDefinitionBuilder.like(event.getResponseDefinition()).withStatus(around.status())
+                .withBody(Json.write(around.body())).withHeader("Content-Type", "application/json;charset=UTF-8")
+                .withHeader("X-RateLimit-Limit", String.valueOf(StationReplay.DAILY_LIMIT))
+                .withHeader("X-RateLimit-Remaining", String.valueOf(engine.stationCallsRemaining()))
+                .withHeader("X-RateLimit-Requested", "1").build();
+        }
         var reply = engine.response(operation,
             (String) parameters.getOrDefault("mode", "normal"), event.getRequest()
                 .queryParameter(operation.equals("arrival") ? "stationId" : "routeId").firstValue(),

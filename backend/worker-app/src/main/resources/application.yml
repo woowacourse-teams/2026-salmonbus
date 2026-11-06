@@ -179,3 +179,16 @@ management:
   endpoint:
     health:
       show-details: never
+
+stations:
+  seed:
+    enabled: ${STATION_SEED_ENABLED:false}
+    path: ${STATION_SEED_PATH:}
+    encoding: ${STATION_SEED_ENCODING:UTF-8}
+  fill:
+    enabled: ${STATION_FILL_ENABLED:false}
+    internal-token: ${STATION_INTERNAL_TOKEN:}
+    refresh-interval: 30d
+    queue-capacity: 64
+    idle-interval: 5s
+    max-failures: 5

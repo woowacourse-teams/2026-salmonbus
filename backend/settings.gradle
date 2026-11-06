@@ -3,6 +3,7 @@ rootProject.name = 'backend'
 include 'route-catalog'
 include 'observations'
 include 'arrivals'
+include 'stations'
 include 'forecasting'
 include 'api-call-quota'
 include 'member'
@@ -17,6 +18,7 @@ include 'common'
 project(':route-catalog').projectDir = file('business/route-catalog')
 project(':observations').projectDir = file('business/observations')
 project(':arrivals').projectDir = file('business/arrivals')
+project(':stations').projectDir = file('business/stations')
 project(':forecasting').projectDir = file('business/forecasting')
 project(':api-call-quota').projectDir = file('business/api-call-quota')
 project(':member').projectDir = file('business/member')

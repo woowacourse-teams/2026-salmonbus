@@ -35,10 +35,39 @@ final class ReplayEngine {
     private final String runId;
     private final AtomicLong startedAt = new AtomicLong(Long.MIN_VALUE);
     private final Map<String, Layout> layouts = new java.util.concurrent.ConcurrentHashMap<>();
+    private StationReplay stations = StationReplay.empty();
 
     ReplayEngine(Path routeFile, Path scenarioFile) throws Exception {
         this(readAllRoutes(routeFile), scenarioFile, routeFile.resolveSibling("route-shapes.json"),
             routeFile.resolveSibling("route-headways.json"));
+        this.stations = StationReplay.read(routeFile.resolveSibling("station-around-20261105.json"),
+            routeFile.resolveSibling("station-arrivals-20261105.json"), clock.instant());
+    }
+
+    ReplayEngine withStations(StationReplay replay) {
+        this.stations = replay;
+        return this;
+    }
+
+    /** 주변정류소 목록조회. 결과가 없으면 실제 API처럼 결과 코드 4다. */
+    Reply stationAround(String x, String y) {
+        final double longitude;
+        final double latitude;
+        try {
+            longitude = Double.parseDouble(x);
+            latitude = Double.parseDouble(y);
+        } catch (RuntimeException invalid) {
+            return new Reply(200, envelope(2, null));
+        }
+        List<Map<String, Object>> rows = stations.around(longitude, latitude);
+        if (rows.isEmpty()) {
+            return new Reply(200, envelope(4, null));
+        }
+        return new Reply(200, envelope(0, Map.of("busStationAroundList", rows)));
+    }
+
+    int stationCallsRemaining() {
+        return stations.remaining();
     }
 
     private ReplayEngine(Dataset dataset, Path scenarioFile, Path shapeFile, Path headwayFile) throws Exception {
@@ -294,6 +323,8 @@ final class ReplayEngine {
                 rows.add(row);
             }
         }
+        // 카탈로그에 없는 노선은 11-05 실측 응답으로 채운다(정류장 지도의 "다른 노선" 확인용)
+        rows.addAll(stations.otherRouteRows(stationId, routes.keySet(), clock.instant()));
         return new Reply(200, envelope(0, Map.of("busArrivalList", rows)), delay);
     }
 
@@ -364,7 +395,7 @@ final class ReplayEngine {
         return Map.of("response", response);
     }
 
-    private static void require(final boolean condition, String message) {
+    static void require(final boolean condition, String message) {
         if (!condition) {
             throw new IllegalArgumentException(message);
         }

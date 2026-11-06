@@ -18,6 +18,7 @@ COPY --chown=developer:developer backend/common/build.gradle ./common/build.grad
 COPY --chown=developer:developer backend/business/route-catalog/build.gradle ./business/route-catalog/build.gradle
 COPY --chown=developer:developer backend/business/observations/build.gradle ./business/observations/build.gradle
 COPY --chown=developer:developer backend/business/arrivals/build.gradle ./business/arrivals/build.gradle
+COPY --chown=developer:developer backend/business/stations/build.gradle ./business/stations/build.gradle
 COPY --chown=developer:developer backend/business/forecasting/build.gradle ./business/forecasting/build.gradle
 COPY --chown=developer:developer backend/business/api-call-quota/build.gradle ./business/api-call-quota/build.gradle
 COPY --chown=developer:developer backend/business/member/build.gradle ./business/member/build.gradle
@@ -40,7 +41,7 @@ RUN --mount=type=cache,id=salmonbus-backend-gradle-${TARGETARCH},target=/depende
 
 FROM dependencies AS development
 COPY --chown=developer:developer backend/ ./
-COPY --chown=developer:developer contract/station-arrivals-v2.openapi.json contract/route-geometry-v2.openapi.json contract/route-watch-v1.openapi.json contract/auth-v1.openapi.json /workspace/contract/
+COPY --chown=developer:developer contract/station-arrivals-v2.openapi.json contract/route-geometry-v2.openapi.json contract/route-watch-v1.openapi.json contract/auth-v1.openapi.json contract/station-map-v2.openapi.json contract/boarding-options-v1.openapi.json /workspace/contract/
 COPY --chown=developer:developer dev/data/ /local/data/
 COPY --chmod=755 dev/docker/run-backend.sh /usr/local/bin/run-backend
 ARG DEV_COMPONENT=api-app

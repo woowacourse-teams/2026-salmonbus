@@ -53,7 +53,7 @@ class RuntimeProcessSeparationTest {
     private static final Duration DISABLED_JOB_OBSERVATION = Duration.ofSeconds(2);
     private static final Set<String> PROJECT_MODULES = Set.of(
         "api-app", "worker-app", "maintenance-app", "common", "route-catalog",
-        "observations", "arrivals", "forecasting", "api-call-quota", "gbis-client", "operation-log", "member", "runtime-test", "route-geometry-contract", "route-geometry-engine"
+        "observations", "arrivals", "stations", "forecasting", "api-call-quota", "gbis-client", "operation-log", "member", "runtime-test", "route-geometry-contract", "route-geometry-engine"
     );
     private static final int LOG_TAIL = 4000;
 
@@ -220,7 +220,7 @@ class RuntimeProcessSeparationTest {
 
         // then
         assertThat(libraries2).containsExactlyInAnyOrder(
-            "common", "route-catalog", "observations", "arrivals", "forecasting", "api-call-quota", "gbis-client",
+            "common", "route-catalog", "observations", "arrivals", "stations", "forecasting", "api-call-quota", "gbis-client",
             "operation-log", "route-geometry-contract", "route-geometry-engine"
         );
     }

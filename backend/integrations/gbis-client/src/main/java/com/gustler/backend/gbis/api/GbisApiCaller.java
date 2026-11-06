@@ -89,6 +89,41 @@ public class GbisApiCaller {
         return requestBy(path, "routeId", routeId, keyAlias);
     }
 
+    /** 좌표(WGS84 경도 x, 위도 y)를 받는 조회. 주변정류소 목록조회가 쓴다. */
+    public GbisHttpResult getByCoordinateWithMetadata(
+        String path,
+        final double x,
+        final double y,
+        String keyAlias
+    ) {
+        try {
+            ResponseEntity<byte[]> response = gbisRestClient.get()
+                .uri(builder -> builder
+                    .path(path)
+                    .queryParam("serviceKey", "{serviceKey}")
+                    .queryParam("x", "{x}")
+                    .queryParam("y", "{y}")
+                    .queryParam("format", "json")
+                    .build(properties.serviceKeyOf(keyAlias), Double.toString(x), Double.toString(y)))
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, KEEP_ERROR_BODY)
+                .toEntity(byte[].class);
+            return new GbisHttpResult(interpret(decode(response.getBody())), response.getStatusCode().value(),
+                response.getHeaders().getFirst("Retry-After"),
+                remainingOf(response.getHeaders().getFirst("X-RateLimit-Remaining")));
+        } catch (RestClientException e) {
+            // 예외 메시지에는 인증키를 포함한 요청 URL이 들어갈 수 있다.
+            return new GbisHttpResult(new NotReceived(e.getClass().getSimpleName()), 0, null);
+        }
+    }
+
+    private static Integer remainingOf(String header) {
+        if (header == null || !header.matches("[0-9]{1,9}")) {
+            return null;
+        }
+        return Integer.valueOf(header);
+    }
+
     private GbisRawResponse getBy(
         String path,
         String parameter,

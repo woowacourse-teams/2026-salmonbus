@@ -1,0 +1,1073 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "정류장 지도 API",
+    "version": "2"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/v2/stations/tiles/{zoom}/{x}/{y}": {
+      "get": {
+        "tags": [
+          "정류장 도착정보"
+        ],
+        "summary": "정류장 지도 칸",
+        "description": "웹 메르카토르 줌 14 칸의 정류장을 줍니다. 지도를 줌 14 이상으로 볼 때 화면에 걸친 칸만 부릅니다. 도착정보는 넣지 않으며 정류장을 누르면 /api/v2/stations/{stationId}를 부릅니다.",
+        "operationId": "getStationTile",
+        "parameters": [
+          {
+            "name": "zoom",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "x",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "y",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "기초 명부 또는 저장 목록. 원천 갱신 완료는 기다리지 않음",
+            "headers": {
+              "Cache-Control": {
+                "description": "READY: public, max-age=300, must-revalidate. PENDING: no-store",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "READY 목록과 기준일·검증 시각의 약한 ETag",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StationTileResponse"
+                },
+                "examples": {
+                  "baseline": {
+                    "description": "baseline",
+                    "value": {
+                      "tile": {
+                        "zoom": 14,
+                        "x": 13976,
+                        "y": 6354
+                      },
+                      "status": "READY",
+                      "source": "GBIS",
+                      "coordinateSystem": "WGS84",
+                      "stations": [
+                        {
+                          "stationId": "206000532",
+                          "name": "예시 정류장",
+                          "point": {
+                            "x": 127.1118,
+                            "y": 37.3918
+                          },
+                          "mobileNo": "07489",
+                          "regionName": "성남",
+                          "direction": null,
+                          "salmonRouteIds": []
+                        }
+                      ],
+                      "baselineDate": "2026-10-20",
+                      "verifiedAt": null
+                    }
+                  },
+                  "pending": {
+                    "description": "pending",
+                    "value": {
+                      "tile": {
+                        "zoom": 14,
+                        "x": 13976,
+                        "y": 6354
+                      },
+                      "status": "PENDING",
+                      "source": "GBIS",
+                      "coordinateSystem": "WGS84",
+                      "stations": [],
+                      "baselineDate": null,
+                      "verifiedAt": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "READY 응답의 If-None-Match가 현재 ETag와 같음. 본문 없음",
+            "headers": {
+              "Cache-Control": {
+                "description": "public, max-age=300, must-revalidate",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "줌이14가 아니거나 칸 번호가0~16383을 벗어남",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "INVALID_STATION_TILE",
+                  "message": "정류장 지도 칸 번호가 올바르지 않습니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "지원하지 않는 HTTP 메서드",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "METHOD_NOT_ALLOWED",
+                  "message": "이 경로에서 지원하지 않는 요청 방식입니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "저장소 연결 또는 조회 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "SERVICE_UNAVAILABLE",
+                  "message": "일시적인 서버 장애가 발생했습니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "요청 처리 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "INTERNAL_ERROR",
+                  "message": "요청을 처리하지 못했습니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/stations/{stationId}": {
+      "get": {
+        "tags": [
+          "정류장 도착정보"
+        ],
+        "summary": "정류장 상세 — 도착 버스와 우리 노선 예보",
+        "description": "정류장 지도에서 누른 정류장의 도착정보입니다. 우리 노선은 supported=true이고 차량별 좌석 예보가 붙습니다. 시트가 열려 있는 동안 refresh.suggestedRefreshAt에 다시 부르고 닫히면 멈춥니다.",
+        "operationId": "getStationDetail",
+        "parameters": [
+          {
+            "name": "stationId",
+            "in": "path",
+            "description": "등록된 GBIS 정류장의9자리 ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{9}$"
+            },
+            "example": "206000532"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "정류장 상세·도착정보 수신 상태·우리 노선 예보",
+            "headers": {
+              "Cache-Control": {
+                "description": "유효한 도착정보는 public, max-age 최대5초. UNAVAILABLE은 no-store",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StationDetailResponse"
+                },
+                "examples": {
+                  "collecting": {
+                    "description": "collecting",
+                    "value": {
+                      "stationId": "206000532",
+                      "name": "예시 정류장",
+                      "point": {
+                        "x": 127.1118,
+                        "y": 37.3918
+                      },
+                      "coordinateSystem": "WGS84",
+                      "regionName": "성남",
+                      "direction": null,
+                      "notice": null,
+                      "generatedAt": "2026-11-06T07:00:00Z",
+                      "status": "UNAVAILABLE",
+                      "reason": "NOT_COLLECTED",
+                      "snapshot": null,
+                      "refresh": {
+                        "status": "RUNNING",
+                        "reason": "COLLECTING",
+                        "suggestedRefreshAt": "2026-11-06T07:00:01Z"
+                      },
+                      "routes": []
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 정류장 ID 형식",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "INVALID_REQUEST",
+                  "message": "요청 형식이 올바르지 않습니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "등록된 활성 정류장 또는 우리 노선의 정류장을 찾지 못함",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "STATION_NOT_FOUND",
+                  "message": "지원하지 않는 정류장입니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "지원하지 않는 HTTP 메서드",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "METHOD_NOT_ALLOWED",
+                  "message": "이 경로에서 지원하지 않는 요청 방식입니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "저장소 연결 또는 조회 불가",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "SERVICE_UNAVAILABLE",
+                  "message": "일시적인 서버 장애가 발생했습니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "요청 처리 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "INTERNAL_ERROR",
+                  "message": "요청을 처리하지 못했습니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ArrivalRefresh": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "IDLE, RUNNING, BLOCKED, FAILED. 실패·제한 중에도 기존 ETA는 유효할 수 있음",
+            "enum": [
+              "IDLE",
+              "RUNNING",
+              "BLOCKED",
+              "FAILED"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "COLLECTING, STARTING, RATE_LIMITED, DAILY_QUOTA_EXHAUSTED, REFRESH_DISABLED 등. 없으면 null"
+          },
+          "suggestedRefreshAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "다음 재조회 권장 시각. 수집 중에는 보통 1초 뒤이며 고정 주기 대신 이 값을 사용"
+          }
+        },
+        "required": [
+          "reason",
+          "status",
+          "suggestedRefreshAt"
+        ]
+      },
+      "ArrivalSeat": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "EXACT는 좌석 수 제공, UNKNOWN은 미제공",
+            "enum": [
+              "EXACT",
+              "UNKNOWN"
+            ]
+          },
+          "remaining": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "현재 잔여 좌석 수. 0은 제공된 값이며 UNKNOWN의 null과 구분",
+            "minimum": 0
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "미제공 사유. NOT_REPORTED 또는 UNSUPPORTED_ROUTE_TYPE 등이며 EXACT이면 null"
+          }
+        },
+        "required": [
+          "kind",
+          "reason",
+          "remaining"
+        ]
+      },
+      "ArrivalSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "snapshotId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "수신 결과 식별자"
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "서버가 GBIS 응답을 받은 시각"
+          },
+          "sourceObservedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "실제 원천 차량 관측시각은 알 수 없어 현재 null. receivedAt으로 대신 채우지 않음"
+          },
+          "sourceQueryTime": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "원천의 정보요청시간 문자열. 실제 차량 관측시각이나 ETA 산출시각이 아님"
+          },
+          "refreshAfterAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "수신 후 40초. 이후 조회에서 갱신을 요청할 수 있는 시각"
+          },
+          "staleAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "수신 후 60초. 이 시각부터 수신 결과를 사용하지 않음"
+          }
+        },
+        "required": [
+          "receivedAt",
+          "refreshAfterAt",
+          "snapshotId",
+          "sourceObservedAt",
+          "sourceQueryTime",
+          "staleAt"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "안정적인 오류 코드",
+            "enum": [
+              "INVALID_ROUTE_ID",
+              "ROUTE_NOT_FOUND",
+              "STATION_NOT_FOUND",
+              "INVALID_STATION_TILE",
+              "REFERENCE_VERSION_CONFLICT",
+              "STOP_VISIT_AMBIGUOUS",
+              "UNSUPPORTED_MODE",
+              "MODEL_OUT_OF_SCOPE",
+              "NO_RECENT_OBSERVATION",
+              "SERVICE_UNAVAILABLE",
+              "FAVORITE_GROUP_LIMIT_EXCEEDED",
+              "FAVORITE_LIMIT_EXCEEDED",
+              "INVALID_FAVORITE_GROUP_NAME",
+              "FAVORITE_GROUP_NAME_CONFLICT",
+              "FAVORITE_GROUP_NOT_FOUND",
+              "LAST_FAVORITE_GROUP",
+              "INVALID_FAVORITE_ORDER",
+              "FAVORITE_TARGET_AMBIGUOUS",
+              "FAVORITE_TARGET_UNAVAILABLE",
+              "INVALID_REQUEST",
+              "ENDPOINT_NOT_FOUND",
+              "METHOD_NOT_ALLOWED",
+              "INTERNAL_ERROR",
+              "UNAUTHENTICATED",
+              "CSRF_REJECTED",
+              "NICKNAME_LENGTH",
+              "NICKNAME_CHARACTERS",
+              "NICKNAME_RESERVED",
+              "NICKNAME_TAKEN",
+              "REAUTH_REQUIRED"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "사람이 읽는 설명. 클라이언트 분기는 code를 사용"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "응답 헤더의 X-Request-Id 및 서버 로그와 대응하는 요청 식별자"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ]
+      },
+      "Eta": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "UNAVAILABLE"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "PREDICTION_ELAPSED, ARRIVAL_UNAVAILABLE(GBIS 수신본 없음), VEHICLE_NOT_MATCHED(GBIS에 이 차량 없음)"
+          },
+          "resolution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "SECONDS",
+              "MINUTES",
+              null
+            ]
+          },
+          "estimateBaseAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "baseKind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "RECEIVED_AT_APPROXIMATION",
+              null
+            ]
+          },
+          "expectedArrivalAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "remainingSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "Forecast": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "BEYOND_HORIZON은 판정보드 예보 범위(12정류장)보다 먼 차량, NOT_MATCHED는 범위 안인데 판정보드에 없는 차량",
+            "enum": [
+              "AVAILABLE",
+              "UNAVAILABLE",
+              "NOT_MATCHED",
+              "BEYOND_HORIZON",
+              "PREPARING",
+              "BOARD_UNAVAILABLE"
+            ]
+          },
+          "seatAvailableProbability": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "expectedSeats": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "Headway": {
+        "type": "object",
+        "properties": {
+          "minMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxMinutes": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "Headways": {
+        "type": "object",
+        "properties": {
+          "weekday": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Headway"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "saturday": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Headway"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sunday": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Headway"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "holiday": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Headway"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "일요일 값으로 대신하지 않는다"
+          }
+        }
+      },
+      "Point": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "Route": {
+        "type": "object",
+        "properties": {
+          "routeId": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "destinationName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "routeTypeCode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "supported": {
+            "type": "boolean",
+            "description": "우리 노선(연어버스 노선)이면 true"
+          },
+          "service": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Service"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "우리 노선의 방문·노선 상태·시간표. 다른 노선은 null"
+          },
+          "status": {
+            "type": "string",
+            "description": "우리 노선은 차량이 있으면 READY, 없으면 NO_PREDICTION. 다른 노선은 GBIS 기준",
+            "enum": [
+              "READY",
+              "NO_PREDICTION",
+              "UNAVAILABLE"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "우리 노선 차량이 없으면 NO_APPROACHING_VEHICLE"
+          },
+          "arrivals": {
+            "type": "array",
+            "description": "가까운 순",
+            "items": {
+              "$ref": "#/components/schemas/Vehicle"
+            }
+          }
+        }
+      },
+      "Schedule": {
+        "type": "object",
+        "properties": {
+          "firstDepartureTime": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HH:mm"
+          },
+          "lastDepartureTime": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HH:mm. 첫차보다 이르면 자정을 넘긴 막차"
+          },
+          "headways": {
+            "$ref": "#/components/schemas/Headways"
+          }
+        }
+      },
+      "Service": {
+        "type": "object",
+        "properties": {
+          "routeStatus": {
+            "type": "string",
+            "enum": [
+              "FORECAST_READY",
+              "PREPARING"
+            ]
+          },
+          "referenceVersionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stopSequence": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "direction": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "matchStatus": {
+            "type": "string",
+            "enum": [
+              "MATCHED",
+              "UNVERIFIED"
+            ]
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "이 방향의 기점 첫차·막차 출발 시각과 배차. 판정보드를 못 읽으면 null"
+          },
+          "scheduleWindow": {
+            "type": "string",
+            "description": "지금이 기점 출발 시각의 어디쯤인지. 운행 종료 판정이 아니며 차량이 있으면 차량이 우선이다",
+            "enum": [
+              "BEFORE_FIRST_DEPARTURE",
+              "WITHIN_DEPARTURES",
+              "AFTER_LAST_DEPARTURE",
+              "UNKNOWN"
+            ]
+          }
+        }
+      },
+      "Station": {
+        "type": "object",
+        "properties": {
+          "stationId": {
+            "type": "string",
+            "description": "GBIS 정류장 ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "정류장 이름. 우리 노선 정류장은 노선 자료의 이름"
+          },
+          "point": {
+            "$ref": "#/components/schemas/Point",
+            "description": "WGS84 좌표"
+          },
+          "mobileNo": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "정류소번호. 없으면 null"
+          },
+          "regionName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "지역명. 우리 노선 정류장만 있고 원본이 없으면 null"
+          },
+          "direction": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "같은 이름 정류장을 구별하는 방면(다음 정차 정류장 이름). 우리 노선이 없는 정류장은 null"
+          },
+          "salmonRouteIds": {
+            "type": "array",
+            "description": "이 정류장을 지나는 우리 노선. 비면 예보 노선이 없는 정류장",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "StationDetailResponse": {
+        "type": "object",
+        "properties": {
+          "stationId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "point": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "coordinateSystem": {
+            "type": "string"
+          },
+          "regionName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "direction": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "같은 이름 정류장을 구별하는 방면(다음 정차 정류장 이름). 우리 노선이 없는 정류장은 null"
+          },
+          "notice": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "지역명만으로 도착정보 부재를 단정하지 않음. 현재 null"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "description": "GBIS 도착정보 수신 상태",
+            "enum": [
+              "READY",
+              "NO_PREDICTION",
+              "UNAVAILABLE"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArrivalSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refresh": {
+            "$ref": "#/components/schemas/ArrivalRefresh"
+          },
+          "routes": {
+            "type": "array",
+            "description": "우리 노선 먼저, 그다음 첫째 차량 ETA 오름차순",
+            "items": {
+              "$ref": "#/components/schemas/Route"
+            }
+          }
+        }
+      },
+      "StationTileResponse": {
+        "type": "object",
+        "properties": {
+          "tile": {
+            "$ref": "#/components/schemas/Tile",
+            "description": "줌 14 칸 번호"
+          },
+          "status": {
+            "type": "string",
+            "description": "READY는 이 칸이 기초 명부에 포함됐거나 칸 전체 조회에 성공함. 최신 전수 검증 보장이 아니며 명부 경계에 걸친 칸은 일부만 담길 수 있음. PENDING은 이 칸의 목록을 아직 확보하지 못함. 이웃 칸 조회로 저장된 일부 정류장이 있을 수 있고 수집 범위 밖 칸도 PENDING",
+            "enum": [
+              "READY",
+              "PENDING"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "description": "정류장 원천"
+          },
+          "coordinateSystem": {
+            "type": "string",
+            "description": "좌표계"
+          },
+          "stations": {
+            "type": "array",
+            "description": "칸 안 정류장. stationId 오름차순",
+            "items": {
+              "$ref": "#/components/schemas/Station"
+            }
+          },
+          "baselineDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "설치된 공식 기초 명부 기준일. 없으면 null"
+          },
+          "verifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "이 칸의 마지막 전체 실조회 성공 시각. 명부 적재 시각과 별개"
+          }
+        }
+      },
+      "Tile": {
+        "type": "object",
+        "properties": {
+          "zoom": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "x": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "y": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "Vehicle": {
+        "type": "object",
+        "properties": {
+          "vehicleId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ordinal": {
+            "type": "integer",
+            "format": "int32",
+            "description": "이 행 안에서 가까운 순 1부터"
+          },
+          "remainingStops": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "positionSource": {
+            "type": "string",
+            "description": "remainingStops의 출처. BOARD는 판정보드(우리 관측), ARRIVAL은 GBIS 도착정보",
+            "enum": [
+              "BOARD",
+              "ARRIVAL"
+            ]
+          },
+          "eta": {
+            "$ref": "#/components/schemas/Eta"
+          },
+          "currentSeat": {
+            "$ref": "#/components/schemas/ArrivalSeat"
+          },
+          "congestionCode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "forecast": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Forecast"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "우리 노선 차량의 좌석 예보. 다른 노선은 null"
+          }
+        }
+      }
+    }
+  }
+}
