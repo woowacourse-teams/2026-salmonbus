@@ -371,8 +371,14 @@ test("판의 만료 시각이 지나면 차량 마커와 좌석 예측을 숨기
   await stop.click();
   await expect(stop).toHaveAttribute("aria-expanded", "false");
   await expect(row.getByText("정보가 오래됐어요", { exact: true })).toBeVisible();
+  const recoveryStepMs = 5_000;
+  await page.clock.fastForward(pollIntervalMs - recoveryStepMs);
+  const arrivalsReloaded = page.waitForResponse(
+    (response) => new URL(response.url()).pathname.endsWith("/arrivals") && response.status() === 200,
+  );
   await stop.click();
   await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await (await arrivalsReloaded).finished();
 
   // 만료 기록은 이전 관측에만 남으므로 새 관측의 차량은 다시 보여야 한다.
   const bus = api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
@@ -381,7 +387,12 @@ test("판의 만료 시각이 지나면 차량 마커와 좌석 예측을 숨기
   api.data.watch.observedAt = "2026-09-16T08:05:00+09:00";
   api.data.watch.staleAt = "2026-09-16T08:10:00+09:00";
   api.mode.watch = "success";
-  await pollRouteWatch(page);
+  const recovered = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
+  );
+  await page.clock.fastForward(recoveryStepMs);
+  await recovered;
+  await settleMarkers(page);
 
   await expect(busMarkerAt(page, "상행 정류장 9")).toBeVisible();
   await expect(stop).toHaveAttribute("aria-expanded", "true");
