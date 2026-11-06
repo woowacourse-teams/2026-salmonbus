@@ -2,7 +2,7 @@ package com.gustler.devtools;
 
 import java.util.List;
 
-/** 검토한 초기화 코드의 정방향 전환만 허용한다. 초기 데이터 변경은 별도 검사한다. */
+/** 검토한 초기화 코드 전환만 허용한다. 초기 데이터 변경은 별도 검사한다. */
 final class CompatiblePreparation {
     static final String PREVIOUS = "1760d3f777e91af09ca577ebabb6faa0ab577f79aef92ef2bb8be27750f3fa56";
     static final String COLLECTED_DATA = "52b4d7117c1db439b8e90468eb334fc063f20a12387d4a72495ed936a45a508d";
@@ -13,17 +13,27 @@ final class CompatiblePreparation {
     // SAL-223: 특징 계산 코드의 컨벤션을 정리했다. 초기화 코드와 모델 번들의 내용은 그대로다.
     static final String NEXT = "fb6c6841a0236e558219cb431f2fb4cdb7dbd28e3423efef31206fdbe10fd649";
 
-    // SAL-359: 명시적 초기화에 레스 정산 테이블 세 개를 포함한다. 데이터/모델 파일은 바꾸지 않는다.
-    static final String LES_EVALUATION_DATA = "17a98f6b1ac235c9d77dc59823cd55974dcdc5c045a879c77e81f6b074df7616";
+    static final String FIXTURE_DIGEST = "bae7cee31d0a289b72dff1e55c72aab7194dce45db1d30c4b01f3a6073ebef46";
+
+    // SAL-359: 노선 지문을 정리한 dev 초기화에 레스 정산 테이블을 포함한다.
+    static final String PREVIOUS_LES_EVALUATION_DATA =
+        "17a98f6b1ac235c9d77dc59823cd55974dcdc5c045a879c77e81f6b074df7616";
+    static final String LES_EVALUATION_DATA = "30cf3a383cbd23cc0180d0028697cb54eaad6f04ab024feab8a89ee789e16410";
 
     private static final List<String> REVIEWED_ORDER = List.of(
-        PREVIOUS, COLLECTED_DATA, EVALUATION_DATA, NEXT, LES_EVALUATION_DATA);
+        PREVIOUS, COLLECTED_DATA, EVALUATION_DATA, NEXT, PREVIOUS_LES_EVALUATION_DATA, LES_EVALUATION_DATA);
 
     static boolean permits(RevisionStore.Revision previous, RevisionStore.Revision next) {
         String from = previous.files().get("tools/data-contract.sha256");
         String to = next.files().get("tools/data-contract.sha256");
         if (from == null || to == null) {
             return false;
+        }
+        if (FIXTURE_DIGEST.equals(from)) {
+            return NEXT.equals(to) || LES_EVALUATION_DATA.equals(to);
+        }
+        if (FIXTURE_DIGEST.equals(to)) {
+            return NEXT.equals(from);
         }
         final int previousIndex = REVIEWED_ORDER.indexOf(from);
         final int nextIndex = REVIEWED_ORDER.indexOf(to);

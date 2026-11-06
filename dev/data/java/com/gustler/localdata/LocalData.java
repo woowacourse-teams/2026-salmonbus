@@ -174,7 +174,7 @@ public final class LocalData {
                 down_first_departure_time,down_last_departure_time,content_digest,valid_from)
             VALUES (?,?,?,?,?,?,?,?) RETURNING id
             """, routeId, route.turnSequence(), time.upFirstDepartureTime(), time.upLastDepartureTime(),
-            time.downFirstDepartureTime(), time.downLastDepartureTime(), route.contentDigest(), BASELINE));
+            time.downFirstDepartureTime(), time.downLastDepartureTime(), route.versionDigest(), BASELINE));
         execute(connection, "INSERT INTO route_data_quality(route_id) VALUES (?)", routeId);
         for (RouteDataset.Stop stop : route.stops()) {
             execute(connection, """
@@ -313,7 +313,7 @@ public final class LocalData {
                 var time = route.timetable();
                 require(actual.equals(java.util.Arrays.asList(route.routeId(), "GBIS", route.displayName(),
                     route.startStopName(), route.endStopName(), route.turnSequence(), time.upFirstDepartureTime(),
-                    time.upLastDepartureTime(), time.downFirstDepartureTime(), time.downLastDepartureTime(), route.contentDigest()))
+                    time.upLastDepartureTime(), time.downFirstDepartureTime(), time.downLastDepartureTime(), route.versionDigest()))
                     && !rows.next(), "ROUTE_DATA_CHANGED");
             }
             List<com.gustler.backend.forecasting.domain.model.RouteStop> modelStops = new ArrayList<>();

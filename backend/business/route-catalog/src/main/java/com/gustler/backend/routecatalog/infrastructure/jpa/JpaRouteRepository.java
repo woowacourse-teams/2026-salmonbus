@@ -2,7 +2,10 @@ package com.gustler.backend.routecatalog.infrastructure.jpa;
 
 import com.gustler.backend.routecatalog.domain.Route;
 import com.gustler.backend.routecatalog.domain.RouteRepository;
+import com.gustler.backend.routecatalog.domain.RouteStop;
+import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteVersion;
+import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
@@ -57,6 +60,32 @@ public class JpaRouteRepository implements RouteRepository {
             .toList());
         versions.flush();
         return opened.getId();
+    }
+
+    /**
+     * 순번·ID가 같은 행의 이름만 한 문장으로 고친다. 노선 행 잠금 아래에서 매 갱신마다 불리므로
+     * 정류장 수만큼 왕복하지 않고, 이름이 이미 같은 행은 건드리지 않는다.
+     */
+    @Override
+    public int renameStops(final long routeVersionId, RouteStops stops) {
+        List<RouteStop> incoming = stops.stops();
+        if (incoming.isEmpty()) {
+            return 0;
+        }
+        return jdbc.sql("""
+                UPDATE route_stop stop SET name = incoming.name
+                FROM unnest(ARRAY[:orders]::int[], ARRAY[:ids]::text[], ARRAY[:names]::text[])
+                    AS incoming(stop_order, stop_id, name)
+                WHERE stop.route_version_id = :version
+                  AND stop.stop_order = incoming.stop_order
+                  AND stop.stop_id = incoming.stop_id
+                  AND stop.name IS DISTINCT FROM incoming.name
+                """)
+            .param("version", routeVersionId)
+            .param("orders", incoming.stream().map(RouteStop::stopOrder).toList())
+            .param("ids", incoming.stream().map(RouteStop::stopId).toList())
+            .param("names", incoming.stream().map(RouteStop::name).toList())
+            .update();
     }
 
     private RouteVersionJpaEntity versionOf(final long id) {

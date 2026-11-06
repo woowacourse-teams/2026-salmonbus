@@ -77,7 +77,8 @@ class RouteVersionConcurrencyTest {
         final long previous = loader.load(routeId, stops("종점"), TIMETABLE, FIRST);
 
         // when
-        List<Long> versions = loadTogether(stops("변경된 종점"), SECOND);
+        // 정류장 ID가 바뀌어야 개편이다. 이름만 바뀌면 같은 판본에서 이름을 고친다.
+        List<Long> versions = loadTogether(stops("201", "변경된 종점"), SECOND);
 
         // then
         assertThat(versions.getFirst()).isEqualTo(versions.getLast()).isNotEqualTo(previous);
@@ -94,7 +95,8 @@ class RouteVersionConcurrencyTest {
         // then
 
         // when
-        Throwable phaseFailure1 = catchThrowable(() -> loader.load(routeId, stops("긴".repeat(61)), TIMETABLE, SECOND));
+        Throwable phaseFailure1 =
+            catchThrowable(() -> loader.load(routeId, stops("201", "긴".repeat(61)), TIMETABLE, SECOND));
 
         // then
         assertThat(phaseFailure1)
@@ -128,8 +130,12 @@ class RouteVersionConcurrencyTest {
     }
 
     private static RouteStops stops(String lastStopName) {
+        return stops("200", lastStopName);
+    }
+
+    private static RouteStops stops(String lastStopId, String lastStopName) {
         return RouteStops.from(null, List.of(
             new UpstreamRouteStop(1, "100", "기점"),
-            new UpstreamRouteStop(2, "200", lastStopName)));
+            new UpstreamRouteStop(2, lastStopId, lastStopName)));
     }
 }

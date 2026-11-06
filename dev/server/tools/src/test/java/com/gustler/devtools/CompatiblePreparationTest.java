@@ -33,6 +33,9 @@ class CompatiblePreparationTest {
             softly.assertThat(CompatiblePreparation.permits(next, revision(CompatiblePreparation.COLLECTED_DATA)))
                 .isFalse();
             softly.assertThat(CompatiblePreparation.permits(next, old)).isFalse();
+            RevisionStore.Revision fixture = revision(CompatiblePreparation.FIXTURE_DIGEST);
+            softly.assertThat(CompatiblePreparation.permits(next, fixture)).isTrue();
+            softly.assertThat(CompatiblePreparation.permits(fixture, next)).isTrue();
             softly.assertThat(CompatiblePreparation.permits(revision("unknown"), next)).isFalse();
             softly.assertThat(CompatiblePreparation.permits(old, revision("unknown"))).isFalse();
         });
@@ -43,7 +46,8 @@ class CompatiblePreparationTest {
         RevisionStore.Revision next = revision(CompatiblePreparation.LES_EVALUATION_DATA);
         assertSoftly(softly -> {
             for (String previous : List.of(CompatiblePreparation.PREVIOUS, CompatiblePreparation.COLLECTED_DATA,
-                CompatiblePreparation.EVALUATION_DATA, CompatiblePreparation.NEXT)) {
+                CompatiblePreparation.EVALUATION_DATA, CompatiblePreparation.NEXT,
+                CompatiblePreparation.FIXTURE_DIGEST, CompatiblePreparation.PREVIOUS_LES_EVALUATION_DATA)) {
                 softly.assertThat(CompatiblePreparation.permits(revision(previous), next)).isTrue();
                 softly.assertThat(CompatiblePreparation.permits(next, revision(previous))).isFalse();
             }

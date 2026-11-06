@@ -15,7 +15,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 class RefactoredPreparationCompatibilityTest {
     @ParameterizedTest(name = "{0} → {1}")
     @MethodSource("reviewedTransitions")
-    void 검토한_계약의_순방향_전환만_허용하고_기존_전환도_유지한다(
+    void 검토한_계약_전환만_허용하고_기존_전환도_유지한다(
             Contract from, Contract to, final boolean permitted) {
         // given
         RevisionStore.Revision previous = revision(contractFiles(from.hash()));
@@ -34,6 +34,7 @@ class RefactoredPreparationCompatibilityTest {
                 new Contract("collected", CompatiblePreparation.COLLECTED_DATA),
                 new Contract("evaluation", CompatiblePreparation.EVALUATION_DATA),
                 new Contract("refactored", CompatiblePreparation.NEXT),
+                new Contract("fixture", CompatiblePreparation.FIXTURE_DIGEST),
                 new Contract("unknown", "e".repeat(64)),
                 new Contract("missing", null));
         Set<String> permitted = Set.of(
@@ -42,7 +43,9 @@ class RefactoredPreparationCompatibilityTest {
                 "previous:refactored",
                 "collected:evaluation",
                 "collected:refactored",
-                "evaluation:refactored");
+                "evaluation:refactored",
+                "refactored:fixture",
+                "fixture:refactored");
         return contracts.stream().flatMap(from -> contracts.stream().map(to ->
                 Arguments.of(from, to, permitted.contains(from.name() + ":" + to.name()))));
     }
