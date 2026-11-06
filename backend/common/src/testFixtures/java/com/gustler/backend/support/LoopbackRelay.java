@@ -2,10 +2,13 @@ package com.gustler.backend.support;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 
 public final class LoopbackRelay implements AutoCloseable {
+    private static final int CONNECT_TIMEOUT_MILLIS = 5_000;
+
     private final ServerSocket server;
     private final String targetHost;
     private final int targetPort;
@@ -30,11 +33,15 @@ public final class LoopbackRelay implements AutoCloseable {
         while (!server.isClosed()) {
             try {
                 Socket client = server.accept();
-                Socket target;
+                Socket target = new Socket();
                 try {
-                    target = new Socket(targetHost, targetPort);
+                    target.connect(new InetSocketAddress(targetHost, targetPort), CONNECT_TIMEOUT_MILLIS);
                 } catch (IOException connectionFailed) {
-                    client.close();
+                    try {
+                        target.close();
+                    } finally {
+                        client.close();
+                    }
                     continue;
                 }
                 pipe(client, target);
