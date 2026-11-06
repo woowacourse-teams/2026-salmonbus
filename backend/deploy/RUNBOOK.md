@@ -312,7 +312,7 @@ sudo sed -i 's/^MODEL_BUNDLE_PROMOTE_ON_START=.*/MODEL_BUNDLE_PROMOTE_ON_START=f
 ## 정류장 도보 거리 교체
 
 탑승 후보 조회 API가 읽는 정류장 쌍 도보 거리(`stop_walk_distance`)는 레포에 두지 않는다. 파일 두 개를 Worker가 읽는 디렉터리에 두고 재시작한다.
-V48 이후 배포 버전이어야 하고, 테이블이 비어 있어도 API는 같은 정류장을 다시 지나는 후보만 응답한다.
+V49 이후 배포 버전이어야 하고, 테이블이 비어 있어도 API는 같은 정류장을 다시 지나는 후보만 응답한다.
 
 ```bash
 sudo -u salmonbus mkdir -p /var/lib/salmonbus/walking/current
