@@ -25,6 +25,9 @@ export function useRouteMapData(board: Board, visible: boolean, onConflict: () =
   const identity = JSON.stringify([routeId, referenceVersionId]);
   const [loaded, setLoaded] = useState<LoadedMapData | null>(null);
   const reportConflict = useEffectEvent(onConflict);
+  const hasReadyMap = useEffectEvent(
+    (requestIdentity: string) => loaded?.identity === requestIdentity && loaded.resource.status === "ready",
+  );
 
   useEffect(() => {
     if (!visible) return;
@@ -59,9 +62,9 @@ export function useRouteMapData(board: Board, visible: boolean, onConflict: () =
           conflicted = true;
           setLoaded({ identity, revision: null, resource: { status: "conflict", data: null } });
           reportConflict();
-        } else {
+        } else if (!hasReadyMap(identity)) {
           const decision = nextPollFrom(result);
-          if (decision.kind === "again") {
+          if (failure.kind !== "malformed" && decision.kind === "again") {
             schedule(Math.max(RETRY_DELAY_MS, decision.delayMs));
           } else {
             setLoaded((previous) =>

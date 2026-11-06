@@ -336,6 +336,42 @@ test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받으�
   expect(terminalRequests).toBe(1);
 });
 
+test("첫 형상 요청이 HTML 오류 페이지를 받으면 실패를 안내하고 자동 재시도하지 않는다", async ({ page, api }) => {
+  let requests = 0;
+  await api.route(async (route) => {
+    if (new URL(route.request().url()).pathname !== apiPaths.geometry) {
+      await route.fallback();
+      return;
+    }
+    requests += 1;
+    await route.fulfill({ status: 502, contentType: "text/html", body: "<html>Bad Gateway</html>" });
+  });
+
+  await page.goto(`/routes/${routeId}`);
+  await expect(map(page).getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
+  await expect(list(page)).toBeVisible();
+  await page.clock.runFor(60_000);
+  expect(requests).toBe(1);
+});
+
+test("탭 복귀 후 형상 재확인이 503이면 기존 지도를 유지하고 자동 재시도하지 않는다", async ({ page, api }) => {
+  await openMap(page);
+  const paths = map(page).getByTestId("naver-polyline");
+  await expect(paths).toHaveCount(2);
+
+  api.mode.geometry = { status: 503 };
+  const revalidation = page.waitForResponse((response) => new URL(response.url()).pathname === apiPaths.geometry);
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  const response = await revalidation;
+  expect(response.status()).toBe(503);
+  await response.finished();
+
+  await page.clock.runFor(120_000);
+  await expect(paths).toHaveCount(2);
+  await expect(map(page).getByTestId("route-map")).toHaveAttribute("data-overlays-ready", "true");
+  expect(api.requests.geometry).toBe(2);
+});
+
 test("형상 판본이 충돌하면 보드를 다시 받아 새 판본의 노선을 표시한다", async ({ page, api }) => {
   const revisions: (string | null)[] = [];
   const original = api.data.watch.route.referenceVersionId;
