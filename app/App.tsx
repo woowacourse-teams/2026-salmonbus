@@ -40,7 +40,7 @@ function domainCapabilitiesOf<T extends DomainCapabilities<T>>(capabilities: T):
 
 // 영역마다 앱이 받는 메시지 목록. 처리 함수(handlersByDomain)도 같은 키로 둔다.
 const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
-  map: NativeRouteMap !== null ? NATIVE_MAP_CAPABILITIES : [],
+  map: NativeRouteMap !== null ? [...NATIVE_MAP_CAPABILITIES, 'map.selectedStopOnly'] : [],
   haptic: HAPTIC_CAPABILITIES,
   settings: SETTINGS_CAPABILITIES,
   auth: AUTH_CAPABILITIES,

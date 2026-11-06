@@ -58,6 +58,28 @@ describe("지도 차량 좌표", () => {
     expect(routeMapMotionPathFor(curved, 3, 2, "UP")).toEqual([]);
   });
 
+  it("같은 좌표를 반복 방문할 때 서버가 지정한 선분에서 차량 이동을 시작한다", () => {
+    const origin = { latitude: 0, longitude: 0 };
+    const end = { latitude: 1, longitude: 0 };
+    const loop: RouteMapData = {
+      ...data,
+      paths: [{ direction: "UP", coordinates: [origin, { latitude: 0, longitude: 1 }, origin, end] }],
+      stops: [
+        {
+          ...data.stops[0]!,
+          coordinate: origin,
+          pathConnection: { coordinate: origin, segmentIndex: 2, segmentFraction: 0 },
+        },
+        {
+          ...data.stops[1]!,
+          coordinate: end,
+          pathConnection: { coordinate: end, segmentIndex: 2, segmentFraction: 1 },
+        },
+      ],
+    };
+    expect(routeMapCoordinateForSequence(loop, 1.5, "UP")).toEqual({ latitude: 0.5, longitude: 0 });
+  });
+
   it("목록과 공유한 순번 진행률을 제공된 방향별 경로 위에서 보간한다", () => {
     expect(routeMapCoordinateForSequence(data, 1.25, "UP")).toEqual({ latitude: 37.25, longitude: 127.5 });
     expect(routeMapCoordinateForSequence(data, 0, "UP")).toEqual(data.stops[0]?.coordinate);

@@ -45,7 +45,8 @@ interface NaverOverlay {
   setMap(map: NaverMap | null): void;
 }
 
-interface NaverPolyline extends NaverOverlay {
+export interface NaverPolyline extends NaverOverlay {
+  setPath(path: NaverCoordinate[]): void;
   setOptions(options: { strokeColor: string; strokeOpacity: number; zIndex: number }): void;
 }
 
@@ -82,6 +83,7 @@ export interface NaverMaps {
     strokeColor: string;
     strokeWeight: number;
     strokeOpacity: number;
+    strokeStyle?: "shortdot";
     zIndex: number;
   }) => NaverPolyline;
   Circle: new (options: {
