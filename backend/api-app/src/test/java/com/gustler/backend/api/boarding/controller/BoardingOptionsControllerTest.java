@@ -20,21 +20,27 @@ import com.gustler.backend.api.boarding.domain.BoardingOptions.Leg;
 import com.gustler.backend.api.boarding.domain.BoardingOptions.Option;
 import com.gustler.backend.api.boarding.domain.StopRelation;
 import com.gustler.backend.api.boarding.domain.StopVisit;
+import com.gustler.backend.api.boarding.dto.BoardingOptionsResponse;
 import com.gustler.backend.api.http.ApiExceptionHandler;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import tools.jackson.databind.ObjectMapper;
 
 class BoardingOptionsControllerTest {
     private static final String PATH = "/api/v1/routes/204000057/stations/205000231/boarding-options";
     private final BoardingOptionsQueryService service = mock(BoardingOptionsQueryService.class);
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new BoardingOptionsController(service))
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new BoardingOptionsController(service, new ObjectMapper()))
         .setControllerAdvice(new ApiExceptionHandler()).build();
 
     private static BoardingOptions result(Integer meters) {
-        StopVisit origin = new StopVisit("205000231", 5, "동강프라자앞", "UP", true, 127.1487833, 37.4146333);
+        return result(meters, "동강프라자앞");
+    }
+
+    private static BoardingOptions result(Integer meters, String originName) {
+        StopVisit origin = new StopVisit("205000231", 5, originName, "UP", true, 127.1487833, 37.4146333);
         StopVisit across = new StopVisit("205000226", 81, "동강프라자", "DOWN", true, 127.14865, 37.4145333);
         return new BoardingOptions("204000057", 7, origin, List.of(new Option(across, 76, StopRelation.OPPOSITE,
             List.of(Access.of(List.of(new Leg(AccessMode.WALK, 98, meters, "PEDESTRIAN_GRAPH")))))));
@@ -74,6 +80,26 @@ class BoardingOptionsControllerTest {
 
         // then
         assertThat(after).isNotEqualTo(before);
+    }
+
+    @Test
+    void hashCode가_같아도_정류장_이름이_바뀌면_새_응답을_내보낸다() throws Exception {
+        // given
+        BoardingOptions before = result(103, "Aa");
+        BoardingOptions after = result(103, "BB");
+        assertThat(BoardingOptionsResponse.from(before).hashCode())
+            .isEqualTo(BoardingOptionsResponse.from(after).hashCode());
+        when(service.get(any())).thenReturn(before);
+        String oldTag = mvc.perform(get(PATH)).andExpect(status().isOk()).andReturn()
+            .getResponse().getHeader("ETag");
+
+        // when
+        when(service.get(any())).thenReturn(after);
+        String newTag = mvc.perform(get(PATH).header("If-None-Match", oldTag)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.origin.name").value("BB")).andReturn().getResponse().getHeader("ETag");
+
+        // then
+        assertThat(newTag).isNotEqualTo(oldTag);
     }
 
     @Test

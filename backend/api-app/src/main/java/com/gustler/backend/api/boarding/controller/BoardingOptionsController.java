@@ -21,9 +21,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HexFormat;
 import java.util.Set;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -33,6 +36,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.WebRequest;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 같은 노선의 다른 정류장으로 이동해 탈 수 있는 후보와 그곳까지 가는 방법을 제공한다.
@@ -43,9 +47,11 @@ import org.springframework.web.context.request.WebRequest;
 public class BoardingOptionsController {
     private static final CacheControl CACHE = CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic().mustRevalidate();
     private final BoardingOptionsQueryService service;
+    private final ObjectMapper json;
 
-    public BoardingOptionsController(BoardingOptionsQueryService service) {
+    public BoardingOptionsController(BoardingOptionsQueryService service, ObjectMapper json) {
         this.service = service;
+        this.json = json;
     }
 
     /**
@@ -144,11 +150,20 @@ public class BoardingOptionsController {
         BoardingOptionsResponse response = BoardingOptionsResponse.from(service.get(new BoardingOptionsQuery(
             new RouteId(routeId), stationId, stopSequence, referenceVersionId, modes(modes), maxMinutes, limit,
             relations(relations), boardingOnly)));
-        String etag = "W/\"b-" + Integer.toHexString(response.hashCode()) + "\"";
+        String etag = etag(response);
         if (request.checkNotModified(etag)) {
             return ResponseEntity.status(HttpStatus.NOT_MODIFIED).cacheControl(CACHE).eTag(etag).build();
         }
         return ResponseEntity.ok().cacheControl(CACHE).eTag(etag).body(response);
+    }
+
+    private String etag(BoardingOptionsResponse response) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(response));
+            return "W/\"b-" + HexFormat.of().formatHex(digest) + "\"";
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
     }
 
     private static Set<AccessMode> modes(String raw) {
