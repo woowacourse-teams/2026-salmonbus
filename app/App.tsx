@@ -54,7 +54,7 @@ function domainCapabilitiesOf<T extends DomainCapabilities<T>>(capabilities: T):
 }
 
 const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
-  map: NativeRouteMap !== null ? NATIVE_MAP_CAPABILITIES : [],
+  map: NativeRouteMap !== null ? [...NATIVE_MAP_CAPABILITIES, 'map.selectedStopOnly'] : [],
   haptic: HAPTIC_CAPABILITIES,
   settings: SETTINGS_CAPABILITIES,
   auth: AUTH_CAPABILITIES,

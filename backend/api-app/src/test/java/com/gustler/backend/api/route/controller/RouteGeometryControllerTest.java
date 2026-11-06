@@ -14,10 +14,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.gustler.backend.api.http.ApiExceptionHandler;
 import com.gustler.backend.api.route.RouteGeometryReferenceConflictException;
 import com.gustler.backend.api.route.application.RouteGeometryQueryService;
-import com.gustler.backend.api.route.domain.RouteGeometry;
-import com.gustler.backend.api.route.domain.RouteGeometry.Point;
-import com.gustler.backend.api.route.domain.RouteGeometry.Shape;
-import com.gustler.backend.api.route.domain.RouteGeometry.Stop;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Point;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Shape;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Stop;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -97,11 +97,74 @@ class RouteGeometryControllerTest {
             .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("REFERENCE_VERSION_CONFLICT"));
     }
 
+    @Test
+    void 표시_응답필드가_추가된_배포는_기능이_꺼져있어도_과거_ETag에_304를_주지않는다() throws Exception {
+        // Python struct로 계산한 기존 route-geometry-v2 직렬화 판본의 SHA-256.
+        String legacy="00ab659e323c27db9151be51cf0c6f155da527f03abe6aebd6d95748c6622b8f";
+        when(service.get(any(),any())).thenReturn(geometry(127.1,true));
+        mvc.perform(get(PATH).header("If-None-Match","\""+legacy+"\""))
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag",Matchers.not("\""+legacy+"\"")));
+    }
+
+    @Test
+    void 기본과_진단_모드는_ETag와_304를_서로_재사용하지않는다() throws Exception {
+        when(service.get(any(), any())).thenReturn(geometry(127.1, true));
+        String compact = mvc.perform(get(PATH)).andReturn().getResponse().getHeader("ETag");
+        var diagnostic = mvc.perform(get(PATH).param("includeDiagnostics", "true")
+                        .header("If-None-Match", compact)).andExpect(status().isOk()).andReturn();
+        String diagnosticTag = diagnostic.getResponse().getHeader("ETag");
+        assertThat(diagnosticTag).isNotEqualTo(compact);
+        mvc.perform(get(PATH).param("includeDiagnostics", "true").header("If-None-Match", diagnosticTag))
+                .andExpect(status().isNotModified()).andExpect(content().string(""));
+        mvc.perform(get(PATH).header("If-None-Match", diagnosticTag)).andExpect(status().isOk());
+        when(service.get(any(), eq(6L))).thenThrow(new RouteGeometryReferenceConflictException());
+        mvc.perform(get(PATH).param("includeDiagnostics", "true").param("referenceVersionId", "6")
+                        .header("If-None-Match", "*")).andExpect(status().isConflict());
+    }
+
+    @Test
+    void 표시보류는_조건부요청이어도_noStore이며_원본선을_노출하지않는다() throws Exception {
+        var raw = geometry(127.1, true);
+        when(service.get(any(), any())).thenReturn(raw.withDisplay(
+                new com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry(null, java.util.Map.of(),
+                        java.util.Map.of(), "withheld",
+                        com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.Source.AUTOMATIC_FALLBACK,
+                        List.of(), new com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.Quality(
+                                com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.QualityStatus.WITHHELD,
+                                List.of()))));
+        mvc.perform(get(PATH).header("If-None-Match", "*")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UNAVAILABLE"))
+                .andExpect(jsonPath("$.reason").value("DISPLAY_WITHHELD"))
+                .andExpect(jsonPath("$.points").isEmpty())
+                .andExpect(jsonPath("$.paths").value(Matchers.nullValue()))
+                .andExpect(jsonPath("$.busStops[0].point.x").value(127.1))
+                .andExpect(jsonPath("$.busStops[0].pathConnection").doesNotExist())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().doesNotExist("ETag"));
+    }
+
     private static Shape shapeOf(final boolean enabled) {
         if (!enabled) {
             return null;
         }
         return new Shape(UUID.fromString("00000000-0000-0000-0000-000000000001"), Instant.EPOCH,
             List.of(new Point(127, 37), new Point(127.2, 37.2), new Point(127, 37)));
+    }    @Test
+    void 생성대기는_noStore로_재조회하고_최종보류와_구분한다() throws Exception {
+        var raw=geometry(127.1,true);
+        var pending=raw.withDisplay(new com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry(null,java.util.Map.of(),java.util.Map.of(),"pending/key",
+                com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.Source.AUTOMATIC_FALLBACK,List.of(),
+                new com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.Quality(
+                        com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.QualityStatus.WITHHELD,
+                        List.of(new com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry.QualityIssue("GENERATION_PENDING",null,null,null))),raw.paths()));
+        when(service.get(any(),any())).thenReturn(pending);
+        mvc.perform(get(PATH).header("If-None-Match","*"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.reason").value("GENERATION_PENDING"))
+                .andExpect(jsonPath("$.points").isEmpty()).andExpect(jsonPath("$.paths").isEmpty())
+                .andExpect(jsonPath("$.busStops[0].pathConnection").doesNotExist())
+                .andExpect(header().string("Cache-Control","no-store")).andExpect(header().doesNotExist("ETag"));
     }
+
+
 }

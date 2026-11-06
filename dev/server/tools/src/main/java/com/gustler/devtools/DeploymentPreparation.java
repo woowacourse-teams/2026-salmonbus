@@ -90,7 +90,7 @@ final class DeploymentPreparation {
                         "DEV_PREPARATION_RECOVERY_REQUIRED");
             }
             var state = snapshot(app, previous);
-            state.put("dataTransition", dataChange);
+            state.put("dataTransition", approval != null);
             write(state);
             try {
                 stopApplications();
@@ -106,7 +106,7 @@ final class DeploymentPreparation {
                 return Map.of("status", "ok", "preparationRequired", true,
                         "applicationsRemainStopped", true);
             } catch (Exception error) {
-                if (dataChange) {
+                if (approval != null) {
                     state.put("phase", "RECOVERY_REQUIRED");
                     write(state);
                     throw new IllegalArgumentException("DEV_DATA_TRANSITION_RECOVERY_REQUIRED");

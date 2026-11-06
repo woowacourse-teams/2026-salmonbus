@@ -66,6 +66,6 @@ class CompatiblePreparationTest {
             .digest((contract + "\n").getBytes(StandardCharsets.UTF_8)));
 
         // then
-        assertEquals(CompatiblePreparation.NEXT, hash);
+        assertEquals(CompatiblePreparation.FIXTURE_DIGEST, hash);
     }
 }

@@ -139,6 +139,69 @@ class DeploymentPreparationServerTest {
                 "expiresAt", java.time.Instant.now().plusSeconds(900).toString())), 0600);
     }
 
+    private void changeFixtureCodeContract() throws Exception {
+        Files.delete(original.resolve("revision.json"));
+        Files.writeString(original.resolve("tools/data-contract.sha256"),
+            "116160aff97c67af1d1802ea7b985003889654365ee56b1a63783b713f30a5f1\n");
+        var previous = RevisionStore.seal(original, "basis", "a".repeat(40), "1".repeat(64), "1".repeat(64), false);
+        assertEquals(CompatiblePreparation.NEXT, previous.files().get("tools/data-contract.sha256"));
+        original = Files.move(original, original.resolveSibling(previous.releaseId()));
+        Deployment.setLink(fixture.layout.root().resolve("basis/current"), original);
+        RevisionStore.ready(fixture.layout, previous);
+        var next = incoming.resolve("basis");
+        Files.delete(next.resolve("revision.json"));
+        Files.writeString(next.resolve("tools/data-contract.sha256"),
+            "a0169df87d0dbc8f488b562039beec76412275ecc077174d4f855dc5a1af2ee1\n");
+        var candidate = RevisionStore.seal(next, "basis", "b".repeat(40), "2".repeat(64), "2".repeat(64), false);
+        assertEquals(CompatiblePreparation.FIXTURE_DIGEST, candidate.files().get("tools/data-contract.sha256"));
+        Files.delete(incoming.resolve("revision.json"));
+        RevisionStore.seal(incoming, "api", "b".repeat(40), "3".repeat(64), "2".repeat(64), false);
+    }
+
+    @Test
+    void 파일_검증용_지문_분리는_DB_전환_없이_준비하고_다음_hook_실패에도_복구한다() throws Exception {
+        // given
+        changeFixtureCodeContract();
+        var existingData = Files.createDirectories(fixture.layout.data().resolve("data")).resolve("routes.json");
+        Files.writeString(existingData, "existing route fixture bytes");
+
+        // when
+        preparation().prepare(incoming, apiEnvironment);
+
+        // then
+        assertFalse(databaseApproved);
+        assertFalse(Json.read(fixture.layout.data().resolve("deployment-preparation/current.json"))
+            .path("dataTransition").asBoolean());
+        assertFalse(Files.exists(fixture.layout.units().resolve("salmonbus-api.service.d/40-data-transition.conf")));
+        assertEquals("existing route fixture bytes", Files.readString(existingData));
+        assertEquals(true, preparation().recover(incoming, apiEnvironment).get("recoveryRequired"));
+        assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
+        assertTrue(host.apiActive);
+        assertTrue(host.workerActive);
+        assertEquals("existing database contents\n", Files.readString(fixture.layout.data().resolve("database-sentinel")));
+        assertEquals("existing route fixture bytes", Files.readString(existingData));
+    }
+
+    @Test
+    void 파일_검증용_지문_분리_중_인프라_교체가_실패해도_기존_서비스를_복구한다() throws Exception {
+        // given
+        changeFixtureCodeContract();
+        host.failLoad = true;
+
+        // when
+        var error = assertThrows(IllegalArgumentException.class,
+            () -> preparation().prepare(incoming, apiEnvironment));
+
+        // then
+        assertEquals("DEV_PREPARATION_FAILED", error.getMessage());
+        assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
+        assertTrue(host.apiActive);
+        assertTrue(host.workerActive);
+        assertFalse(databaseApproved);
+        assertEquals("ROLLED_BACK", Json.read(fixture.layout.data()
+            .resolve("deployment-preparation/current.json")).path("phase").asText());
+    }
+
     @Test
     void 복구_완료_기록은_다음_실패에서_서비스를_다시_중지하지_않는다() throws Exception {
         // given

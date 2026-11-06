@@ -42,6 +42,8 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
     private final RouteRegistry routeRegistry;
     private final RouteVersionLoader routeVersionLoader;
     private final TransactionTemplate transactionTemplate;
+    private final com.gustler.backend.routecatalog.domain.geometry.RouteSourceArchive archive;
+    private final com.gustler.backend.routecatalog.domain.CatalogSourceBinding sourceBinding;
 
     public RouteCatalogLoader(
         CurrentRouteVersionQuery currentRouteVersionQuery,
@@ -51,6 +53,18 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
         RouteVersionLoader routeVersionLoader,
         TransactionTemplate transactionTemplate
     ) {
+        this(currentRouteVersionQuery,apiCallQuota,routeSource,routeRegistry,routeVersionLoader,transactionTemplate,
+            Optional.empty(),Optional.empty());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public RouteCatalogLoader(CurrentRouteVersionQuery currentRouteVersionQuery,ApiCallQuota apiCallQuota,
+            RouteSource routeSource,RouteRegistry routeRegistry,RouteVersionLoader routeVersionLoader,
+            TransactionTemplate transactionTemplate,
+            Optional<com.gustler.backend.routecatalog.domain.geometry.RouteSourceArchive> archive,
+            Optional<com.gustler.backend.routecatalog.domain.CatalogSourceBinding> sourceBinding) {
+        this.archive=archive.orElse(com.gustler.backend.routecatalog.domain.geometry.RouteSourceArchive.NONE);
+        this.sourceBinding=sourceBinding.orElse(com.gustler.backend.routecatalog.domain.CatalogSourceBinding.NONE);
         this.currentRouteVersionQuery = currentRouteVersionQuery;
         this.apiCallQuota = apiCallQuota;
         this.routeSource = routeSource;
@@ -107,6 +121,8 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
         OffsetDateTime readAt
     ) {
         if (!apiCallQuota.reserveRouteCatalog(readAt, routeSource.requiredCallsPerRead())) {
+            archive.record("ROUTE_CATALOG_ACQUISITION",List.of(receipt(sourceRouteId,readAt,
+                com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status.NO_QUOTA)),List.of());
             LOGGER.warn("하루 호출 한도가 남지 않아 노선정보를 갱신하지 못했다. 노선={}",
                 sourceRouteId);
             return OptionalLong.empty();
@@ -116,14 +132,28 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
         // 예약을 취소하려 해도 이미 전송한 호출에 해당하는지 여기서는 확인할 수 없다.
         // 노선 버전이 없을 때만 실행하므로 자주 발생하지 않는다.
 
-        return switch (routeSource.read(sourceRouteId)) {
+        RouteSource.Capture captured;
+        if(archive==com.gustler.backend.routecatalog.domain.geometry.RouteSourceArchive.NONE) {
+            captured=new RouteSource.Capture(routeSource.read(sourceRouteId),List.of());
+        } else {
+            try { captured=java.util.Objects.requireNonNull(routeSource.capture(sourceRouteId)); }
+            catch(RuntimeException failure) {
+                captured=new RouteSource.Capture(new Failed("CATALOG_CAPTURE_FAILED"),
+                    List.of(receipt(sourceRouteId,readAt,
+                        com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status.TRANSPORT_FAILURE)));
+            }
+        }
+        var receipts=captured.receipts().isEmpty()?List.of(receipt(sourceRouteId,readAt,
+            com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status.UNRECORDED_LEGACY)):captured.receipts();
+        String manifest=archive.record("ROUTE_CATALOG_ACQUISITION",receipts,List.of());
+        return switch (captured.result()) {
             case Failed failed -> {
-                LOGGER.warn("노선정보를 읽지 못해 판본을 못 열었다. 노선={} 사유={}", sourceRouteId, failed.reason());
+                LOGGER.warn("노선정보를 읽지 못해 판본을 못 열었다. 노선={} 사유=SOURCE_UNAVAILABLE", sourceRouteId);
                 yield OptionalLong.empty();
             }
             case Success success -> {
                 rememberName(success.route());
-                yield OptionalLong.of(open(success.route(), readAt));
+                yield OptionalLong.of(open(success.route(), readAt,manifest));
             }
         };
     }
@@ -140,9 +170,19 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
      */
     private long open(
         UpstreamRoute route,
-        OffsetDateTime readAt
+        OffsetDateTime readAt,
+        String acquisitionManifestId
     ) {
-        return transactionTemplate.execute(status -> routeVersionLoader.load(
-            routeRegistry.register(route), route.stops(), route.timetable(), readAt));
+        return transactionTemplate.execute(status -> {
+            long versionId=routeVersionLoader.load(routeRegistry.register(route),route.stops(),route.timetable(),readAt);
+            if(acquisitionManifestId!=null) sourceBinding.bind(versionId,route,acquisitionManifestId,readAt);
+            return versionId;
+        });
+    }
+    private static com.gustler.backend.routegeometry.api.RouteSourceReceipt receipt(String routeId,OffsetDateTime at,
+            com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status status) {
+        return new com.gustler.backend.routegeometry.api.RouteSourceReceipt("GBIS_API","ROUTE_CATALOG",
+            routeId.matches("[0-9]{1,20}")?routeId:"UNSPECIFIED",status,null,at.toInstant(),"NOT_PROVIDED",
+            com.gustler.backend.routegeometry.api.RouteSourceReceipt.CoordinateSystem.UNKNOWN,null);
     }
 }

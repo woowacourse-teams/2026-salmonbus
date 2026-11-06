@@ -8,6 +8,7 @@ import com.gustler.backend.api.account.ReauthRequiredException;
 import com.gustler.backend.api.arrival.ArrivalQuery.Failure;
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
+import com.gustler.backend.api.boarding.BoardingOptionsException;
 import com.gustler.backend.api.error.ApiException;
 import com.gustler.backend.api.error.CsrfRejectedException;
 import com.gustler.backend.api.error.ErrorCode;
@@ -70,7 +71,9 @@ class ApiExceptionHandlerTest {
             new RepresentativeFavoriteGroupDeletionException(),
             new InvalidFavoriteOrderException(),
             new FavoriteTargetAmbiguousException(),
-            new FavoriteTargetUnavailableException()
+            new FavoriteTargetUnavailableException(),
+            new BoardingOptionsException(ErrorCode.STOP_VISIT_AMBIGUOUS),
+            new BoardingOptionsException(ErrorCode.UNSUPPORTED_MODE)
         );
     }
 

@@ -1,0 +1,41 @@
+{
+  "fixtureVersion": "ngii-7007-1-source-fragment-v3",
+  "candidateSha256": "d6fb70022ce9e7dee246e181a0700d2c6dc0730952dd18a541cb83fda71a2048",
+  "sourceSha256": "3898bf3e38e664c13ebbb81f3bf716e8bb2522a43ae54644ddc843b826b64aa9",
+  "generationRunSha256": "043017d3f6cc659fa7f7a4f0f095a77965a08e651bff1c7e185e49d18472df0e",
+  "catalogSha256": "4058867f71541ecdc85df658492ab912830b945535ffc0eb70b4c54d51b9f804",
+  "sliceSha256": "0116878e564b86707ac423f0183e40a350942384b692c48b0bda5f754726ed39",
+  "sourceArchives": [
+    {
+      "sha256": "4875b3f8b5408387456f8e769ade49c906fce6a2d21f4dfa0ecca1a4f7e189ce",
+      "bytes": 915574684
+    }
+  ],
+  "sourceLayers": [
+    {
+      "id": "4875b3f8b5408387:d2363270e798",
+      "archiveSha256": "4875b3f8b5408387456f8e769ade49c906fce6a2d21f4dfa0ecca1a4f7e189ce",
+      "kind": "links",
+      "layer": "A2_LINK",
+      "sourceHorizontalCrs": "PROJCS[\"ITRF_2000_UTM_K\",GEOGCS[\"GCS_ITRF_2000\",DATUM[\"D_ITRF_2000\",SPHEROID[\"GRS_1980\",6378137,298.257222101004]],PRIMEM[\"Greenwich\",0],UNIT[\"Degree\",0.0174532925199433]], PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"False_Easting\",1000000],PARAMETER[\"False_Northing\",2000000],PARAMETER[\"Central_Meridian\",127.5],PARAMETER[\"Scale_Factor\",0.9996],PARAMETER[\"Latitude_Of_Origin\",38],UNIT[\"Meter\",1]]\r\n",
+      "modelVersion": "2020",
+      "namespace": "ngii:4875b3f8b5408387456f8e769ade49c906fce6a2d21f4dfa0ecca1a4f7e189ce:model2020:PROJCS[\"ITRF_2000_UTM_K\",GEOGCS[\"GCS_ITRF_2000\",DATUM[\"D_ITRF_2000\",SPHEROID[\"GRS_1980\",6378137,298.257222101004]],PRIMEM[\"Greenwich\",0],UNIT[\"Degree\",0.0174532925199433]], PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"False_Easting\",1000000],PARAMETER[\"False_Northing\",2000000],PARAMETER[\"Central_Meridian\",127.5],PARAMETER[\"Scale_Factor\",0.9996],PARAMETER[\"Latitude_Of_Origin\",38],UNIT[\"Meter\",1]]\r\n:ELLIPSOIDAL_HEIGHT"
+    }
+  ],
+  "selectedSourceIds": [
+    "A223AD534276",
+    "A223AD534277"
+  ],
+  "referenceScope": "two immutable features extracted from route-ngii-vector-data-v1 catalog; no ground-truth or evaluation answer read",
+  "accuracyGrade": "UNEVALUATED",
+  "fragmentOnly": true,
+  "published": false,
+  "modelAdopted": false,
+  "limits": [
+    "Fixture verifies source/candidate/catalog consistency and projection, not independent lane accuracy or full-route operation.",
+    "Original horizontal WKT and transformed canonical axes remain separate fields.",
+    "Generation metadata is recorded by hash only; its filesystem paths are not part of the runtime protocol.",
+    "Visit 64 connection is the clipped endpoint projection, not verified physical station or lane truth.",
+    "All visit checks are STRUCTURAL_ONLY; whole-path source context, operation and entry/exit remain unverified."
+  ]
+}

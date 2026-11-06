@@ -61,6 +61,7 @@ class CollectionTwentyRoutesTest {
     @BeforeEach
     void 상류_대역을_세운다() {
         given(routeSource.requiredCallsPerRead()).willReturn(2);
+        given(routeSource.capture(org.mockito.ArgumentMatchers.anyString())).willCallRealMethod();
         for (String routeId : properties.routeIds()) {
             given(routeSource.read(routeId)).willReturn(new RouteSourceResult.Success(upstreamRoute(routeId)));
             given(locationSource.read(routeId, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(

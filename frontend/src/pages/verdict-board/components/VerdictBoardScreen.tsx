@@ -1,9 +1,9 @@
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import type { EventMap } from "@/shared/analytics/events";
 import { track } from "@/shared/analytics/track";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
-import type { ApiFailure, ApiResult } from "@/shared/api/client";
+import type { ApiFailure } from "@/shared/api/client";
 import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
 import { fetchRouteWatch } from "@/shared/api/routeForecast.api";
 import type { Board, Direction, DirectionInfo, RouteWatch, Vehicle } from "@/shared/api/routeForecast.types";
@@ -45,10 +45,7 @@ interface OperatingBoardProps {
   switched: boolean;
   onDirectionChange: (direction: Direction, source: DirectionSwitchSource) => void;
   onStopExpand: (expansion: StopExpandInput) => void;
-}
-
-function loadRouteWatch(routeId: string, signal: AbortSignal): Promise<ApiResult<RouteWatch>> {
-  return fetchRouteWatch(routeId, { signal });
+  onGeometryConflict: () => void;
 }
 
 export function VerdictBoardScreen() {
@@ -61,7 +58,17 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const location = useLocation();
   // 방향을 바꾸면 주소를 바꾸면서 이동 state가 사라져서, 처음 그릴 때 읽은 진입 경로를 유지한다.
   const [entry] = useState(() => boardEntryFrom(location.state));
-  const watchResource = usePolledRequest(loadRouteWatch, routeId);
+  const [watchRevision, setWatchRevision] = useState(0);
+  const revalidateWatch = useRef(false);
+  const watchResource = usePolledRequest<RouteWatch>(
+    (id, signal) => {
+      const refresh = revalidateWatch.current;
+      revalidateWatch.current = false;
+      return fetchRouteWatch(id, { signal, ...(refresh && { cache: "no-cache" }) });
+    },
+    routeId,
+    watchRevision,
+  );
   const latestWatch = latestSuccessOf(watchResource);
   const freshLiveVehicles = useFreshLiveVehicles(latestWatch);
   const motionDurationMs = liveMotionDurationOf(watchResource);
@@ -101,6 +108,10 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
         liveMotionDurationMs={motionDurationMs}
         onDirectionChange={selectDirection}
         onStopExpand={trackStopExpanded}
+        onGeometryConflict={() => {
+          revalidateWatch.current = true;
+          setWatchRevision((revision) => revision + 1);
+        }}
       />
     );
   }
@@ -144,6 +155,7 @@ function OperatingBoard({
   switched,
   onDirectionChange,
   onStopExpand,
+  onGeometryConflict,
 }: OperatingBoardProps) {
   const sheetId = useId();
   const viewport = useBoardViewport();
@@ -152,6 +164,7 @@ function OperatingBoard({
   const [selected, setSelected] = useState<StopSelection | null>(() =>
     stopSelectionFrom(board, direction.id, search.get("stopId")),
   );
+  const [selectedFromList, setSelectedFromList] = useState(false);
   const [scrollRequest, setScrollRequest] = useState<StopSelection | null>(selected);
   const [vehicleFocusRequest, setVehicleFocusRequest] = useState<{ key: string; focusMarker: boolean } | null>(null);
   const selectedVehicleKey = vehicleFocusRequest?.key ?? null;
@@ -176,8 +189,10 @@ function OperatingBoard({
     [board, liveVehicles, direction.id],
   );
   const motion = useLiveVehicleMotion(vehicles, liveMotionDurationMs);
-  const mapData = useRouteMapData(board);
   const mapVisible = snap !== "full";
+  const map = useRouteMapData(board, mapVisible, onGeometryConflict);
+  const mapSelection =
+    map.status === "withheld" || (map.status === "generating" && !selectedFromList) ? null : selected;
 
   function rememberSelection(selection: StopSelection | null) {
     const stop =
@@ -200,6 +215,7 @@ function OperatingBoard({
 
   function selectFromMap(selection: StopSelection) {
     const reselected = selected?.direction === selection.direction && selected.sequence === selection.sequence;
+    if (!reselected) setSelectedFromList(false);
     setSelected(selection);
     setVehicleFocusRequest(null);
     scrollToStop(selection);
@@ -244,6 +260,8 @@ function OperatingBoard({
         ? null
         : { direction: direction.id, sequence };
     setSelected(next);
+    setSelectedFromList(next !== null);
+    if (next !== null && map.status === "generating" && snap === "full") setSnap("half");
     rememberSelection(next);
     setScrollRequest(null);
   }
@@ -272,8 +290,9 @@ function OperatingBoard({
         <div className={styles.mapSlot} inert={!mapVisible} aria-hidden={!mapVisible}>
           <RouteMap
             board={board}
-            data={mapData}
-            selected={selected}
+            data={map.data}
+            geometryStatus={map.status}
+            selected={mapSelection}
             onSelect={selectFromMap}
             onVehicleSelect={selectVehicleFromMap}
             onDeselect={clearMapSelection}

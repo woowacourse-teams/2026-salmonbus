@@ -389,6 +389,10 @@ export const test = apiTest.extend<{
               this.svg.append(this.line);
               this.setMap(options.map);
             }
+            setPath(path: NaverCoordinate[]) {
+              this.path = path;
+              this.draw();
+            }
             setOptions(options: Parameters<InstanceType<NaverMaps["Polyline"]>["setOptions"]>[0]) {
               this.line.setAttribute("stroke", options.strokeColor);
               this.line.setAttribute("stroke-opacity", String(options.strokeOpacity));

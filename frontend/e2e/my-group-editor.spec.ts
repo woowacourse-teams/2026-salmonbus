@@ -1,8 +1,30 @@
-import { test, expect } from "./fixtures/favorites";
+import { defaultGroupId, test, expect } from "./fixtures/favorites";
 
 test.use({ viewport: { width: 320, height: 844 }, reducedMotion: "reduce" });
 const schoolId = "10000000-0000-4000-8000-000000000003";
 const weekendId = "10000000-0000-4000-8000-000000000004";
+
+test("마이페이지 그룹 카드의 이름을 끌어서 바꾼 순서를 저장한다", async ({ page, favorites }) => {
+  favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
+  await page.goto("/mypage");
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+  const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
+  const cards = editor.getByRole("listitem");
+  const name = await cards.nth(1).getByText("통학", { exact: true }).boundingBox();
+  const first = await cards.first().boundingBox();
+  if (!name || !first) throw new Error("그룹 카드 위치를 찾지 못했습니다.");
+
+  await page.mouse.move(name.x + name.width / 2, name.y + name.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(name.x + name.width / 2, first.y + first.height / 2, { steps: 8 });
+  await page.mouse.up();
+
+  await expect(cards.first()).toContainText("통학 · 대표 그룹");
+  expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId, schoolId]);
+  await editor.getByRole("button", { name: "완료", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  expect(favorites.groups.map((group) => group.id)).toEqual([schoolId, defaultGroupId]);
+});
 
 test("그룹 카드 편집은 순서·삭제 아이콘을 표시하고 실패 후 재시도하며 미저장 순서를 유지한다", async ({
   page,
