@@ -157,6 +157,31 @@ def merge_wiki_update_results(results):
     }
 
 
+def reject_sequential_conflicts(result, documents):
+    contents = {item["path"]: item["content"] for item in documents}
+    accepted = []
+    for proposal in result.get("accepted", []):
+        document = proposal.get("document")
+        current = proposal.get("currentText")
+        replacement = proposal.get("replacementText")
+        content = contents.get(document, "")
+        if not isinstance(current, str) or content.count(current) != 1:
+            result.setdefault("rejected", []).append(
+                {
+                    **proposal,
+                    "gateFailures": [
+                        *proposal.get("gateFailures", []),
+                        "overlapping-current-text",
+                    ],
+                    "rationale": "앞선 변경안과 교체 범위가 겹쳐 같이 적용할 수 없습니다.",
+                }
+            )
+            continue
+        contents[document] = content.replace(current, replacement, 1)
+        accepted.append(proposal)
+    result["accepted"] = accepted
+
+
 def approval_digest(request):
     protected = {
         key: value for key, value in request.items() if key != "approvalDigest"

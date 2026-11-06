@@ -6,17 +6,16 @@ on:
 
 permissions:
   actions: read
-  contents: write
-  pull-requests: write
-
-concurrency:
-  group: domain-wiki-update
-  cancel-in-progress: false
+  contents: read
 
 jobs:
   review:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
     outputs:
       approval_required: ${{ steps.approval_status.outputs.required }}
       pr_url: ${{ steps.context.outputs.url }}
@@ -142,14 +141,31 @@ jobs:
             --run-id "$GITHUB_RUN_ID" \
             --send
 
-  apply:
+  approval:
     needs: review
     if: ${{ needs.review.outputs.approval_required == 'true' }}
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 10
+    permissions:
+      contents: read
     environment:
       name: wiki-update-approval
       url: ${{ needs.review.outputs.pr_url || format('https://github.com/{0}/actions/runs/{1}', github.repository, github.run_id) }}
+    steps:
+      - name: Record human approval
+        run: echo 'Wiki update approved.' >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    needs: [review, approval]
+    if: ${{ needs.review.outputs.approval_required == 'true' && needs.approval.result == 'success' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: domain-wiki-apply
+      cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
       PYTHONPATH: tools/domain-wiki

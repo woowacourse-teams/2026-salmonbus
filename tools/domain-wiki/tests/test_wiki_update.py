@@ -9,6 +9,7 @@ from domain_wiki.wiki_update import (
     apply_confirmed_updates,
     create_approval_request,
     merge_wiki_update_results,
+    reject_sequential_conflicts,
     render_wiki_result,
     run_wiki_update_review,
     validate_approval_request,
@@ -16,6 +17,7 @@ from domain_wiki.wiki_update import (
 )
 from domain_wiki.wiki_update_cli import initialize_wiki, main as wiki_update_main
 from domain_wiki.wiki_update_cli import (
+    _path_matches,
     _read_discussion,
     _read_documents,
     _read_pull_request_context,
@@ -34,6 +36,10 @@ class FakeModel:
 
 
 class WikiUpdateTest(unittest.TestCase):
+    def test_recursive_path_pattern_does_not_match_a_sibling_prefix(self):
+        self.assertTrue(_path_matches("backend/src/main/App.java", "backend/src/main/**"))
+        self.assertFalse(_path_matches("backend/src/main-old/App.java", "backend/src/main/**"))
+
     def test_rejected_duplicate_wins_when_batch_results_are_merged(self):
         proposal = {
             "proposalId": "P1",
@@ -70,6 +76,29 @@ class WikiUpdateTest(unittest.TestCase):
             "batch-conflict" in item["gateFailures"]
             for item in merged["rejected"]
         ))
+
+    def test_overlapping_proposals_are_rejected_before_approval(self):
+        result = {
+            "accepted": [
+                {
+                    "proposalId": "W1", "document": "Policy.md",
+                    "currentText": "현재 동작", "replacementText": "새 동작",
+                },
+                {
+                    "proposalId": "W2", "document": "Policy.md",
+                    "currentText": "현재 동작입니다", "replacementText": "완료했습니다",
+                },
+            ],
+            "rejected": [],
+        }
+
+        reject_sequential_conflicts(
+            result, [{"path": "Policy.md", "content": "현재 동작입니다\n"}]
+        )
+
+        self.assertEqual(["W1"], [item["proposalId"] for item in result["accepted"]])
+        self.assertEqual(["W2"], [item["proposalId"] for item in result["rejected"]])
+        self.assertIn("overlapping-current-text", result["rejected"][0]["gateFailures"])
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

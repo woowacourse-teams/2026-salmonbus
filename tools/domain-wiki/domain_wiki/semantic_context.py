@@ -97,12 +97,16 @@ def load_semantic_context(path, head_sha, mapped_paths, repository):
                     "references": normalized_references,
                 }
             )
-        normalized_call_targets = [
-            _validated_call_target(
-                item, file_context["path"], repository, head_sha, file_cache
-            )
-            for item in call_targets
-        ]
+        normalized_call_targets = []
+        for item in call_targets:
+            try:
+                normalized_call_targets.append(
+                    _validated_call_target(
+                        item, file_context["path"], repository, head_sha, file_cache
+                    )
+                )
+            except SemanticContextError:
+                continue
         normalized.append({
             "path": file_context["path"],
             "symbols": normalized_symbols,

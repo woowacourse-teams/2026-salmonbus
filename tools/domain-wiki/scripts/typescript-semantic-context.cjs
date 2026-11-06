@@ -136,9 +136,18 @@ function analyze(relativeTarget) {
 
     if (ts.isCallExpression(node) && callTargets.length < 100) {
       const expression = node.expression;
-      const call = expression.getText(source).slice(0, 200);
-      const callPosition = expression.getStart(source);
+      const callee = ts.isPropertyAccessExpression(expression)
+        ? expression.name
+        : ts.isElementAccessExpression(expression) && expression.argumentExpression
+          ? expression.argumentExpression
+          : expression;
+      const call = callee.getText(source).slice(0, 200);
+      const callPosition = callee.getStart(source);
       const callLine = source.getLineAndCharacterOfPosition(callPosition).line + 1;
+      if (call.includes("\n")) {
+        ts.forEachChild(node, visit);
+        return;
+      }
       const definitions = resolvedDefinitions(target, callPosition);
       for (const definition of definitions) {
         if (!isRepositorySource(definition.fileName)) continue;

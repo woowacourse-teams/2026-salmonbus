@@ -14,6 +14,7 @@ from .wiki_update import (
     apply_confirmed_updates,
     create_approval_request,
     merge_wiki_update_results,
+    reject_sequential_conflicts,
     render_wiki_result,
     run_wiki_update_review,
     validate_approval_request,
@@ -86,6 +87,7 @@ def main(argv=None):
             changed_paths=(), patches={}, pull_request=pull_request,
             discussion=discussion, meeting_evidence=evidence,
         )
+    reject_sequential_conflicts(result, documents)
     approval = create_approval_request(
         result=result,
         base_sha=diff.base_sha,
@@ -294,7 +296,7 @@ def _clip(value, limit):
 
 
 def _path_matches(path, pattern):
-    return path.startswith(pattern[:-3]) if pattern.endswith("/**") else path == pattern
+    return path.startswith(pattern[:-2]) if pattern.endswith("/**") else path == pattern
 
 
 def _plain(value):

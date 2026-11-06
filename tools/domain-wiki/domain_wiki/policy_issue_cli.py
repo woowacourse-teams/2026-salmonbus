@@ -194,7 +194,7 @@ def main(argv=None):
 
 def _path_matches(path, pattern):
     if pattern.endswith("/**"):
-        return path.startswith(pattern[:-3])
+        return path.startswith(pattern[:-2])
     return path == pattern
 
 

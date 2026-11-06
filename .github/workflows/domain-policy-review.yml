@@ -102,6 +102,7 @@ jobs:
 
   review:
     needs: semantic-context
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     permissions:
@@ -145,7 +146,7 @@ jobs:
           --jq '{title: .title, body: (.body // "")}'
           > .domain-wiki/pr.json
       - name: Read semantic navigation context
-        if: ${{ needs.semantic-context.outputs.available == 'true' }}
+        if: ${{ needs.semantic-context.result == 'success' && needs.semantic-context.outputs.available == 'true' }}
         uses: actions/download-artifact@v4
         with:
           name: domain-policy-semantic-${{ github.run_id }}
@@ -188,9 +189,19 @@ jobs:
         if: ${{ always() }}
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
           if [[ -f .domain-wiki/output/policy-comment.md ]]; then
-            gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" \
-              --edit-last --create-if-none --body-file .domain-wiki/output/policy-comment.md
+            comment_id="$(
+              gh api --paginate --slurp "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+                --jq 'add | map(select(.user.login == "github-actions[bot]" and ((.body // "") | contains("<!-- salmonbus-policy-issue-review -->")))) | last | .id // empty'
+            )"
+            if [[ -n "$comment_id" ]]; then
+              gh api --method PATCH "repos/${REPOSITORY}/issues/comments/${comment_id}" \
+                -F body=@.domain-wiki/output/policy-comment.md >/dev/null
+            else
+              gh api --method POST "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+                -F body=@.domain-wiki/output/policy-comment.md >/dev/null
+            fi
           fi

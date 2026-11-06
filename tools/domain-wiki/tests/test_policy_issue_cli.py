@@ -3,10 +3,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from domain_wiki.policy_issue_cli import main
+from domain_wiki.policy_issue_cli import _path_matches, main
 
 
 class PolicyIssueCliTest(unittest.TestCase):
+    def test_recursive_path_pattern_does_not_match_a_sibling_prefix(self):
+        self.assertTrue(_path_matches("frontend/src/pages/view.ts", "frontend/src/pages/**"))
+        self.assertFalse(_path_matches("frontend/src/pages-old/view.ts", "frontend/src/pages/**"))
+
     def test_missing_policy_registry_records_an_unavailable_review(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -90,21 +90,21 @@ class SemanticContextTest(unittest.TestCase):
                 self.path, self.head, ("src/policy.ts",), self.root
             )
 
-    def test_rejects_definition_snippet_not_present_at_reported_line(self):
+    def test_drops_definition_snippet_not_present_at_reported_line(self):
         self.context["files"][0]["callTargets"][0]["definitionSnippet"] = "fake"
         self.path.write_text(json.dumps(self.context), encoding="utf-8")
-        with self.assertRaisesRegex(SemanticContextError, "definition does not match"):
-            load_semantic_context(
-                self.path, self.head, ("src/policy.ts",), self.root
-            )
+        loaded = load_semantic_context(
+            self.path, self.head, ("src/policy.ts",), self.root
+        )
+        self.assertEqual([], loaded["files"][0]["callTargets"])
 
-    def test_rejects_call_not_present_at_reported_line(self):
+    def test_drops_call_not_present_at_reported_line(self):
         self.context["files"][0]["callTargets"][0]["call"] = "missingCall"
         self.path.write_text(json.dumps(self.context), encoding="utf-8")
-        with self.assertRaisesRegex(SemanticContextError, "call target does not match"):
-            load_semantic_context(
-                self.path, self.head, ("src/policy.ts",), self.root
-            )
+        loaded = load_semantic_context(
+            self.path, self.head, ("src/policy.ts",), self.root
+        )
+        self.assertEqual([], loaded["files"][0]["callTargets"])
 
 
 if __name__ == "__main__":
