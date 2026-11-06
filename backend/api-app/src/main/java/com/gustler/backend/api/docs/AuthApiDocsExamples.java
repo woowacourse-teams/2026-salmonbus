@@ -82,6 +82,10 @@ public final class AuthApiDocsExamples {
         {"code":"ENDPOINT_NOT_FOUND","message":"요청한 경로를 찾을 수 없습니다.","requestId":"example-request"}
         """;
 
+    public static final String INVALID_PUSH_DEVICE = """
+        {"code":"INVALID_PUSH_DEVICE","message":"푸시 기기 정보가 올바르지 않습니다.","requestId":"example-request"}
+        """;
+
     private AuthApiDocsExamples() {
     }
 }

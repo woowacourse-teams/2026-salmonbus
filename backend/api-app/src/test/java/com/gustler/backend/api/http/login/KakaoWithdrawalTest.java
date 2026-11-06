@@ -267,6 +267,28 @@ class KakaoWithdrawalTest {
         });
     }
 
+    @Test
+    void 탈퇴하면_자기_푸시_기기만_연쇄_삭제한다() throws Exception {
+        UUID other = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "other-push-member")).publicId();
+        jdbcClient.sql("""
+            INSERT INTO push_device (member_id, token, environment, created_at, last_registered_at)
+            SELECT id, ?, 'SANDBOX', now(), now() FROM member WHERE public_id = ?
+            """)
+            .params("ab", memberId).update();
+        jdbcClient.sql("""
+            INSERT INTO push_device (member_id, token, environment, created_at, last_registered_at)
+            SELECT id, ?, 'PRODUCTION', now(), now() FROM member WHERE public_id = ?
+            """)
+            .params("cd", other).update();
+
+        HttpResponse<String> response = withdraw(accessTokens.issue(memberId));
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.NO_CONTENT.value());
+        assertThat(jdbcClient.sql("SELECT token FROM push_device").query(String.class).list()).containsExactly("cd");
+        assertThat(jdbcClient.sql("SELECT m.public_id FROM push_device p JOIN member m ON m.id = p.member_id")
+            .query(UUID.class).single()).isEqualTo(other);
+    }
+
     private HttpResponse<String> withdraw(String accessToken) throws IOException, InterruptedException {
         return send(request("/api/me")
             .header("Cookie", ACCESS_COOKIE + "=" + accessToken + "; " + CSRF_COOKIE + "=" + csrfToken)
