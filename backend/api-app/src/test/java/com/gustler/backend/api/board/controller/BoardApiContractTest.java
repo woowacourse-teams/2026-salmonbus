@@ -445,7 +445,7 @@ class BoardApiContractTest {
     void 캐시된_회차가_재발행되면_바뀐_예보를_즉시_반환한다() throws Exception {
         // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
-        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        BoardDatabaseFixture.RouteContext route = insertRoundTripRoute(now.minusDays(1));
         final long model = fixture.insertModel("model-cache", "ACTIVE", now.minusDays(1));
         final long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
         fixture.insertPublication(batch, model, now, now);
@@ -478,7 +478,7 @@ class BoardApiContractTest {
     void 캐시된_운행을_제외하고_품질_판본을_올리면_예보가_즉시_사라진다() throws Exception {
         // given
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
-        RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        BoardDatabaseFixture.RouteContext route = insertRoundTripRoute(now.minusDays(1));
         final long model = fixture.insertModel("model-cache", "ACTIVE", now.minusDays(1));
         final long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
         fixture.insertPublication(batch, model, now, now);
