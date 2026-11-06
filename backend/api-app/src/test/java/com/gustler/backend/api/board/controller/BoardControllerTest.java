@@ -22,8 +22,6 @@ import com.gustler.backend.api.board.domain.HeadwayRange;
 import com.gustler.backend.api.board.domain.RouteHeadways;
 import com.gustler.backend.api.board.domain.StopState;
 import com.gustler.backend.api.board.domain.VehicleForecast;
-import com.gustler.backend.api.board.domain.VehicleForecast.Available;
-import com.gustler.backend.api.board.domain.VehicleForecast.Unavailable;
 import com.gustler.backend.api.http.ApiExceptionHandler;
 import com.gustler.backend.api.route.domain.RouteStatus;
 import java.time.Duration;
@@ -53,7 +51,7 @@ class BoardControllerTest {
     @Test
     void v4_Board와_적응형_캐시를_반환한다() throws Exception {
         // given
-        given(boardQueryService.getBoard(any())).willReturn(overview(new Available(0.8, null)));
+        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Available(0.8, null)));
 
         // when
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
@@ -77,7 +75,7 @@ class BoardControllerTest {
     void 노선_정보에_요일별_최소_최대_배차간격을_분_단위로_내보낸다() throws Exception {
         // given
         given(boardQueryService.getBoard(any())).willReturn(overview(
-            new Unavailable(),
+            new VehicleForecast.Unavailable(),
             new RouteHeadways(new HeadwayRange(10, 20), new HeadwayRange(12, 12), null, new HeadwayRange(16, 35))));
 
         // when
@@ -101,7 +99,7 @@ class BoardControllerTest {
     @Test
     void 배차간격_정보가_없어도_네_요일_키를_null로_내보내고_기존_노선_필드는_그대로다() throws Exception {
         // given
-        given(boardQueryService.getBoard(any())).willReturn(overview(new Unavailable()));
+        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Unavailable()));
 
         // when
         ResultActions httpResponse2 = mockMvc.perform(get("/api/v1/routes/204000057/board"));
@@ -124,13 +122,13 @@ class BoardControllerTest {
     @Test
     void 접근_차량_응답에_forecast_필드를_포함한다() throws Exception {
         // given
-        given(boardQueryService.getBoard(any())).willReturn(overview(new Available(0.8, null)));
+        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Available(0.8, null)));
 
         // when
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0]", aMapWithSize(3)))
-            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(2)))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(4)))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").doesNotExist())
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].seatAvailableProbability").doesNotExist());
     }
@@ -138,21 +136,25 @@ class BoardControllerTest {
     @Test
     void 예보가_있으면_forecast에_AVAILABLE과_예측값을_포함한다() throws Exception {
         // given
-        given(boardQueryService.getBoard(any())).willReturn(overview(new Available(0.0, 0.0)));
+        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Available(0.0, 0.0)));
 
         // when
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(3)))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(5)))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.status").value("AVAILABLE"))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.seatAvailableProbability").value(0.0))
-            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").value(0.0));
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").value(0.0))
+            .andExpect(
+                jsonPath("$.stops[0].approachingVehicles[0].forecast.seatTarget").value("FIRST_POST_STOP_OBSERVATION"))
+            .andExpect(
+                jsonPath("$.stops[0].approachingVehicles[0].forecast.probabilityTarget").value("FIRST_POST_STOP_ZERO"));
     }
 
     @Test
     void 예보가_없으면_forecast에_UNAVAILABLE만_포함한다() throws Exception {
         // given
-        given(boardQueryService.getBoard(any())).willReturn(overview(new Unavailable()));
+        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Unavailable()));
 
         // when
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
@@ -169,8 +171,7 @@ class BoardControllerTest {
 
     private BoardOverview overview(
         VehicleForecast forecast,
-        RouteHeadways headways
-    ) {
+        RouteHeadways headways) {
         BoardRoute route = new BoardRoute(
             "204000057",
             "3330",
@@ -184,19 +185,16 @@ class BoardControllerTest {
                 "기점",
                 "종점",
                 "04:50",
-                "23:30"
-            )),
+                "23:30")),
             "1",
-            headways
-        );
+            headways);
         StopState stop = new StopState(
             1,
             "STOP-1",
             "기점",
             BoardDirection.UP,
             true,
-            List.of(new ApproachingVehicle(null, 1, forecast))
-        );
+            List.of(new ApproachingVehicle(null, 1, forecast)));
         Board board = new Board(
             route,
             OffsetDateTime.parse("2026-08-27T08:00:00+09:00"),
@@ -204,11 +202,9 @@ class BoardControllerTest {
             new ForecastModel(
                 7L,
                 "model-7",
-                OffsetDateTime.parse("2026-08-26T23:59:59+09:00")
-            ),
+                OffsetDateTime.parse("2026-08-26T23:59:59+09:00")),
             1,
-            List.of(stop)
-        );
+            List.of(stop));
         return new BoardOverview(board, Duration.ofSeconds(15));
     }
 }

@@ -1,7 +1,6 @@
 package com.gustler.backend.observations.application;
 
 import com.gustler.backend.observations.api.CollectionInputs;
-import com.gustler.backend.observations.domain.CollectionBatch;
 import com.gustler.backend.observations.domain.CollectionBatchRepository;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -23,8 +22,6 @@ public class CollectionInputService implements CollectionInputs {
 
     @Override
     public void confirmInput(final long batchId, Instant confirmedAt) {
-        CollectionBatch batch = batches.getById(batchId);
-        batch.confirmInput(confirmedAt.atOffset(ZoneOffset.UTC));
-        batches.save(batch);
+        batches.confirmInputOnce(batchId, confirmedAt.atOffset(ZoneOffset.UTC));
     }
 }

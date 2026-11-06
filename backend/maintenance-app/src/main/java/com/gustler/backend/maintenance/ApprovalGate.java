@@ -13,6 +13,8 @@ import tools.jackson.databind.JsonNode;
 public final class ApprovalGate {
     public static final String ACADEMY_TRIP_QUALITY_REBUILD = "ACADEMY_TRIP_QUALITY_REBUILD";
 
+    public static final String ACADEMY_LES_EVALUATION_RESTORE = "ACADEMY_LES_EVALUATION_RESTORE";
+
     private static final String SCHEMA = "salmonbus-migration-approval-v1";
     private static final Set<String> KNOWN_FIELDS = Set.of(
         "action", "artifactSha256", "databaseIdentitySha256", "expiresAt", "schemaVersion");
@@ -20,8 +22,7 @@ public final class ApprovalGate {
     private final Clock clock;
 
     public ApprovalGate(
-        Clock clock
-    ) {
+        Clock clock) {
         this.clock = clock;
     }
 
@@ -29,8 +30,7 @@ public final class ApprovalGate {
         Path receipt,
         String action,
         String artifactSha256,
-        String databaseIdentitySha256
-    ) {
+        String databaseIdentitySha256) {
         SecureFiles.requirePrivateRegularFile(receipt);
         JsonNode root = CanonicalJson.readCanonical(receipt, "APPROVAL_RECEIPT_INVALID");
         requireExactFields(root);
@@ -55,8 +55,7 @@ public final class ApprovalGate {
     }
 
     private static void requireExactFields(
-        JsonNode root
-    ) {
+        JsonNode root) {
         if (!root.isObject()) {
             throw new MaintenanceException("APPROVAL_RECEIPT_INVALID");
         }
@@ -71,8 +70,7 @@ public final class ApprovalGate {
         JsonNode root,
         String field,
         String expected,
-        String code
-    ) {
+        String code) {
         JsonNode value = root.get(field);
         if (expected == null) {
             if (value != null && !value.isNull()) {
@@ -94,8 +92,7 @@ public final class ApprovalGate {
 
     private static String text(
         JsonNode root,
-        String field
-    ) {
+        String field) {
         JsonNode value = root.get(field);
         if (!hasText(value)) {
             throw new MaintenanceException("APPROVAL_FIELD_INVALID");

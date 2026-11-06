@@ -53,6 +53,20 @@ class CollectionBatchTest {
             .isNotNull().isInstanceOf(InputAlreadyConfirmedException.class);
     }
 
+    @Test
+    void 재처리해도_첫_입력_확인_시각을_유지한다() {
+        // given
+        CollectionBatch batch = dispatched();
+        batch.conclude(EMPTY, RECEIVED);
+        batch.confirmInput(RECEIVED.plusSeconds(1));
+
+        // when
+        batch.confirmInput(RECEIVED.plusSeconds(30));
+
+        // then
+        assertThat(batch.state().inputConfirmedAt()).isEqualTo(RECEIVED.plusSeconds(1));
+    }
+
     private CollectionBatch dispatched() {
         CollectionBatch batch = saved(true);
         batch.dispatch(START);

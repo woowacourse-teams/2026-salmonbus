@@ -390,7 +390,7 @@ done
 
 ## 정류장 지도 켜기
 
-정류장 지도(`/api/v2/stations/tiles/14/{x}/{y}`, `/api/v2/stations/{stationId}`)는 V55·V56이 만든 `bus_station`을 읽는다.
+정류장 지도(`/api/v2/stations/tiles/14/{x}/{y}`, `/api/v2/stations/{stationId}`)는 V59·V60이 만든 `bus_station`을 읽는다.
 기초 명부 설치와 요청한 칸의 갱신은 따로 켠다. **둘 다 기본은 꺼져 있다.** 꺼져 있어도 API는 저장된 목록을 응답한다.
 
 | 파일 | 넣는 줄 |
