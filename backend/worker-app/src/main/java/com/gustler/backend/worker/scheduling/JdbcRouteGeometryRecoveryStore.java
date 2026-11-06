@@ -14,7 +14,9 @@ public class JdbcRouteGeometryRecoveryStore {
     public record Job(String routeId, long versionId, UUID token, int attempts) {}
 
     public Optional<Long> request(String routeId, boolean scheduled) {
-        String reset = ":scheduled AND route_geometry_recovery.status IN ('SUCCEEDED','EXHAUSTED','SUPERSEDED')";
+        String reset = ":scheduled AND (route_geometry_recovery.status IN ('SUCCEEDED','EXHAUSTED','SUPERSEDED')"
+                + " OR route_geometry_recovery.status='RUNNING' AND route_geometry_recovery.attempts>=5"
+                + " AND route_geometry_recovery.lease_until<=statement_timestamp())";
         return jdbc.sql("""
             INSERT INTO route_geometry_recovery(route_version_id,route_id,status)
             SELECT v.id,r.id,'PENDING' FROM route r
@@ -23,6 +25,8 @@ public class JdbcRouteGeometryRecoveryStore {
             ON CONFLICT(route_version_id) DO UPDATE SET
                 status=CASE WHEN %1$s THEN 'PENDING' ELSE route_geometry_recovery.status END,
                 attempts=CASE WHEN %1$s THEN 0 ELSE route_geometry_recovery.attempts END,
+                lease_token=CASE WHEN %1$s THEN NULL ELSE route_geometry_recovery.lease_token END,
+                lease_until=CASE WHEN %1$s THEN NULL ELSE route_geometry_recovery.lease_until END,
                 next_attempt_at=CASE WHEN %1$s THEN clock_timestamp() ELSE route_geometry_recovery.next_attempt_at END,
                 cycle_started_at=CASE WHEN %1$s THEN clock_timestamp() ELSE route_geometry_recovery.cycle_started_at END,
                 last_outcome=CASE WHEN %1$s THEN NULL ELSE route_geometry_recovery.last_outcome END,

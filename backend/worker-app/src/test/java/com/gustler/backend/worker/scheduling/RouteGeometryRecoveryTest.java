@@ -204,4 +204,14 @@ class RouteGeometryRecoveryTest {
         assertThat(jobs.status(version)).contains("RUNNING");assertThat(attempts()).isEqualTo(2);
     }
 
+    @Test void scheduledCollectionCanRecoverAnExpiredFinalLeaseInTheSameSweep() {
+        jobs.request(ROUTE,false);
+        for(int i=0;i<4;i++){var job=jobs.claim(version).orElseThrow();jobs.finish(job,true,false,"WEB_UNAVAILABLE");due();}
+        var last=jobs.claim(version).orElseThrow();
+        jdbc.sql("UPDATE route_geometry_recovery SET lease_until=clock_timestamp()-interval '1 second'").update();
+        assertThat(refresh.refresh(ROUTE,OffsetDateTime.now())).isEqualTo(Outcome.UPDATED);
+        assertThat(jobs.status(version)).contains("SUCCEEDED");assertThat(attempts()).isEqualTo(1);
+        assertThat(jobs.finish(last,true,false,"WEB_UNAVAILABLE")).isFalse();
+    }
+
 }
