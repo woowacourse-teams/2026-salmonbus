@@ -43,7 +43,7 @@ class MigrationOrderTest {
      * <p>이 브랜치는 정류장 지도의 정류장 원본과 칸 진행 테이블을 만든다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("notification_setting");
+        List.of("notification_delivery");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
