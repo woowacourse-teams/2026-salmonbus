@@ -530,7 +530,7 @@ class DddStorageMigrationTest {
         preparePendingTransition();
         migrate("38");
         approveEvaluationTransition();
-        migrate("latest");
+        migrate("52");
         execute("""
             INSERT INTO evaluation_archive_batch(id,route_version_id,quality_revision,lease_token,lease_until,row_count)
             VALUES('00000000-0000-0000-0000-000000000002',1,7,
@@ -556,15 +556,16 @@ class DddStorageMigrationTest {
             INSERT INTO les_forecast_evaluation_result(vehicle_observation_id,target_stop_order,target_kind,
                 label_version,route_version_id,scoring_state,label_value,pre_observation_id,post_observation_id,
                 closure_observation_id,quality_revision,scored_at)
-            VALUES(2,3,'AFTER_ALIGHTING_ESTIMATE','les-identity-safe-v1',1,'SETTLED',12.5,1,2,2,7,now());
-            DELETE FROM les_forecast_evaluation_work WHERE vehicle_observation_id=2
-                AND target_kind='AFTER_ALIGHTING_ESTIMATE';
+            VALUES(2,3,'AFTER_ALIGHTING_ESTIMATE','les-identity-safe-v1',1,'SETTLED',12.5,1,2,2,7,now()),
+                  (2,3,'DEPARTURE_ZERO','les-identity-safe-v1',1,'SETTLED',1,1,2,2,7,now());
             INSERT INTO les_evaluation_archive(vehicle_observation_id,target_stop_order,target_kind,label_version,
                 quality_revision,route_version_id,label_value,scoring_state,scored_at,object_hash,storage_state)
             VALUES(2,3,'AFTER_ALIGHTING_ESTIMATE','les-identity-safe-v1',7,1,12.5,'SETTLED',now(),repeat('d',64),'LIVE')
             """);
-        assertThat(number("SELECT count(*) FROM les_forecast_evaluation_work")).isOne();
-        assertThat(number("SELECT count(*) FROM les_forecast_evaluation_result")).isOne();
+        assertThat(number("SELECT count(*) FROM les_forecast_evaluation_work")).isEqualTo(2);
+        migrate("latest");
+        assertThat(scalar("SELECT target_kind FROM les_forecast_evaluation_work")).isEqualTo("AFTER_ALIGHTING_ESTIMATE");
+        assertThat(number("SELECT count(*) FROM les_forecast_evaluation_result")).isEqualTo(2);
         assertThat(number("SELECT count(*) FROM les_evaluation_archive")).isOne();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();

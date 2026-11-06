@@ -151,6 +151,7 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
                 ) r JOIN route_version v ON v.id=r.route_version_id
                 JOIN route_data_quality q ON q.route_id=v.route_id
                 WHERE r.quality_revision<q.quality_revision
+                  AND r.target_kind='AFTER_ALIGHTING_ESTIMATE'
                   AND NOT EXISTS(SELECT 1 FROM les_forecast_evaluation_result current
                     WHERE current.vehicle_observation_id=r.vehicle_observation_id AND current.target_stop_order=r.target_stop_order
                       AND current.target_kind=r.target_kind AND current.label_version=r.label_version
@@ -279,7 +280,7 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
             finish(work, revision, now, Outcome.unsupported("SOURCE_QUALITY_EXCLUDED"));
             return;
         }
-        Outcome outcome = confirmed.evaluate(work.id(), work.stop(), work.target(), JSON.readTree(work.snapshot()));
+        Outcome outcome = confirmed.evaluate(work.id(), work.stop(), JSON.readTree(work.snapshot()));
         if (outcome == null) {
             defer(work, revision, now, "NO_CLOSED_IDENTITY_SAFE_PASS");
             return;
@@ -406,9 +407,6 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
             return null;
         }
         LesPassEvent event = match.get();
-        if (work.target().equals("DEPARTURE_ZERO")) {
-            return Outcome.departureZero(event);
-        }
         return evaluateAfterAlighting(work, evidence, snapshot, events, event);
     }
 
@@ -648,14 +646,6 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
 
         static Outcome unsupported(String reason, LesPassEvent event) {
             return new Outcome("UNSUPPORTED", null, reason, event, null, null, null, null);
-        }
-
-        static Outcome departureZero(LesPassEvent event) {
-            double label = 0.0;
-            if (event.departure().seats() == 0) {
-                label = 1.0;
-            }
-            return new Outcome("SETTLED", label, null, event, null, null, null, null);
         }
 
         Long preObservationId() {

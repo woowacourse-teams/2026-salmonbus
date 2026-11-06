@@ -18,6 +18,12 @@ class ConfirmedVerificationTest(unittest.TestCase):
         self.assertEqual(verify_result('historical_replay', self.worker, self.digest, self.routes), 2)
         self.assertEqual(verify_result('settlement', self.worker, self.digest, self.routes), 4)
 
+    def test_after_alighting_only_reports_count_one_settlement_per_forecast(self):
+        self.worker['settlement_scope'] = 'after_alighting_only'
+        for row in self.worker['routes']:
+            row['settled_targets'] = 1
+        self.assertEqual(verify_result('settlement', self.worker, self.digest, self.routes), 2)
+
     def test_missing_or_duplicate_route_is_rejected(self):
         for rows in [self.worker['routes'][:1], [self.worker['routes'][0]] * 2]:
             with self.subTest(rows=rows):

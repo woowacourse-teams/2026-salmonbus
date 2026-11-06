@@ -172,7 +172,7 @@ class LesPublicationLifecycleTest {
     }
 
     @Test
-    void 실제_발행부터_두_목표_정산_보관_복원_기존_모델_복귀까지_연결한다() {
+    void 예보에_만석_확률을_저장하고_하차_후_잔여석만_정산한다() {
         LesRouteStatistics stats = statistics();
         LesForecastModel model = new LesForecastModel(new LesSeatPredictor(
             constant(88, NumericTreeEnsemble.Kind.REGRESSION, 10),
@@ -209,7 +209,7 @@ class LesPublicationLifecycleTest {
         assertThat(writer.writeForecastsOf(batch, stops, selected)).isEqualTo(1);
         assertThat(count("seat_forecast")).isEqualTo(1);
         assertThat(count("forecast_publication")).isEqualTo(1);
-        assertThat(count("les_forecast_evaluation_work")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_work")).isOne();
         assertThat(count("forecast_evaluation_work")).isZero();
         assertThat(jdbc.sql("SELECT input_confirmed_at IS NOT NULL FROM observation_batch WHERE id=?")
             .param(batchId).query(Boolean.class).single()).isTrue();
@@ -219,12 +219,14 @@ class LesPublicationLifecycleTest {
             .param(source).query(Double.class).single();
         assertThat(prediction).isCloseTo((10 + 1.3) / 3, within(1e-12));
 
+        assertThat(jdbc.sql("SELECT seat_full_chance FROM seat_forecast WHERE vehicle_observation_id=?")
+            .param(source).query(Double.class).single()).isEqualTo(0.8);
+
         service.settle();
         service.settle();
         final double after = label(AFTER);
         assertThat(after).isGreaterThan(2).isNotEqualTo(Math.rint(after));
-        assertThat(label("DEPARTURE_ZERO")).isEqualTo(1);
-        assertThat(count("les_forecast_evaluation_result")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_result")).isOne();
         assertThat(count("forecast_evaluation_result")).isZero();
         assertThat(count("les_forecast_evaluation_work")).isZero();
 
@@ -235,12 +237,11 @@ class LesPublicationLifecycleTest {
             new JdbcLesEvaluationArchiveStore(jdbc, transactions), objects, true, 500);
         archive.advance();
         assertThat(count("les_forecast_evaluation_result")).isZero();
-        assertThat(count("les_forecast_evaluation_metric")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_metric")).isOne();
         assertThat(archive.restore(source, 2, AFTER, VERSION, 1)).isEqualTo(1);
-        assertThat(archive.restore(source, 2, "DEPARTURE_ZERO", VERSION, 1)).isEqualTo(1);
         assertThat(archive.restore(source, 2, AFTER, VERSION, 1)).isZero();
         assertThat(label(AFTER)).isEqualTo(after);
-        assertThat(count("les_forecast_evaluation_metric")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_metric")).isOne();
 
         ModelRelease legacy = new ModelRelease("legacy-lifecycle", "legacy-v1", "a".repeat(64), "legacy-v1",
             START.minusSeconds(86400).toString(), new SupportedForecastScope(List.of("3330")),
@@ -253,7 +254,7 @@ class LesPublicationLifecycleTest {
             .param(source).query(Long.class).single()).isEqualTo(deployed);
         assertThat(jdbc.sql("SELECT expected_seats FROM seat_forecast WHERE vehicle_observation_id=?")
             .param(source).query(Double.class).single()).isEqualTo(prediction);
-        assertThat(count("les_forecast_evaluation_metric")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_metric")).isOne();
     }
 
     private LesRouteStatistics statistics() {

@@ -51,12 +51,7 @@ final class ConfirmedLesEvaluation {
         this.limit = limit;
     }
 
-    JdbcLesForecastEvaluation.Outcome evaluate(
-        final long sourceId,
-        final int target,
-        String kind,
-        JsonNode snapshot
-    ) {
+    JdbcLesForecastEvaluation.Outcome evaluate(final long sourceId, final int target, JsonNode snapshot) {
         if (!snapshot.path("inputProfile").asText().equals(LesRouteStatistics.CONFIRMED_PROFILE)) {
             return unsupported("INPUT_PROFILE_MISMATCH");
         }
@@ -80,9 +75,6 @@ final class ConfirmedLesEvaluation {
         LesPassEvent visit = passes.stream().filter(event -> matches(source, target, event)).findFirst().orElse(null);
         if (visit == null) {
             return null;
-        }
-        if (kind.equals("DEPARTURE_ZERO")) {
-            return JdbcLesForecastEvaluation.Outcome.departureZero(visit);
         }
         return afterSeats(source, visit, passes, snapshot);
     }

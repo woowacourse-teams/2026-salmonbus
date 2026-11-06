@@ -19,12 +19,23 @@ class LesConfirmedServingVerificationTest {
     private static final List<String> ROUTES = List.of("3330", "G8110");
     private static final String DIGEST = "b".repeat(64);
 
-    @Test
-    void 같은_원본의_전체_노선과_새_입력_판본을_검증한다() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void 과거와_현재_보고서의_전체_노선과_정산_건수를_검증한다(final boolean afterAlightingOnly) {
         assertThatCode(() -> {
             for (String check : List.of("feature_parity", "historical_replay", "settlement", "runtime_validation")) {
                 ObjectNode receipt = receipt(check);
-                LesConfirmedServingVerification.verify(check, receipt, evidence(check), DIGEST, ROUTES);
+                ObjectNode evidence = evidence(check);
+                if (afterAlightingOnly && List.of("historical_replay", "settlement").contains(check)) {
+                    ObjectNode result = (ObjectNode) evidence.get("result");
+                    result.put("settlement_scope", "after_alighting_only");
+                    for (JsonNode route : result.path("routes")) {
+                        ((ObjectNode) route).put("settled_targets", 1);
+                    }
+                    receipt.put("verified_cases", ROUTES.size());
+                    evidence.put("verified_cases", ROUTES.size());
+                }
+                LesConfirmedServingVerification.verify(check, receipt, evidence, DIGEST, ROUTES);
             }
         }).doesNotThrowAnyException();
     }

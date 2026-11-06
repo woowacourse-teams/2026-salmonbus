@@ -117,6 +117,7 @@ public final class ConfirmedLesWorkerReplay {
         Files.writeString(output.resolve("report.json"),
             JSON.writerWithDefaultPrettyPrinter().writeValueAsString(Map.of(
                 "passed", passed, "routes", results, "bundle_manifest_sha256", bundle.digest(), "serving_ready", false,
+                "settlement_scope", "after_alighting_only",
                 "quality_scope",
                 "Only chosen source observations have test-confirmed identity; production quality state unavailable; unassigned rows retain the normal eligible behavior",
                 "input_scope",
@@ -186,6 +187,11 @@ public final class ConfirmedLesWorkerReplay {
                 .sql("SELECT expected_seats FROM seat_forecast WHERE vehicle_observation_id=? AND target_stop_order=?")
                 .params(source.observationId(), row.path("target").asInt()).query(Double.class).single();
             maximumPrediction = Math.max(maximumPrediction, Math.abs(prediction - expected.afterAlightingSeats()));
+            final double fullProbability = jdbc
+                .sql("SELECT seat_full_chance FROM seat_forecast WHERE vehicle_observation_id=? AND target_stop_order=?")
+                .params(source.observationId(), row.path("target").asInt()).query(Double.class).single();
+            maximumPrediction = Math.max(maximumPrediction,
+                Math.abs(fullProbability - expected.departureFullProbability()));
             // A restart must use the saved cursor and preserve the first confirmation.
             writer.writeForecastsOf(batch, stops, runtime);
             Instant confirmed = jdbc.sql("SELECT input_confirmed_at FROM observation_batch WHERE id=?")
@@ -221,7 +227,7 @@ public final class ConfirmedLesWorkerReplay {
                         """)
                 .params(row.path("source_id").asLong(), row.path("target").asInt(), LesRouteStatistics.CONFIRMED_LABEL)
                 .query().listOfRows();
-            if (labels.size() != 2) {
+            if (labels.size() != 1) {
                 List<Map<String, Object>> pending = jdbc.sql(
                     "SELECT reason,target_kind FROM les_forecast_evaluation_work WHERE vehicle_observation_id=? AND target_stop_order=?")
                     .params(row.path("source_id").asLong(), row.path("target").asInt()).query().listOfRows();
@@ -229,18 +235,13 @@ public final class ConfirmedLesWorkerReplay {
                     "label_count", labels.size(), "pending", pending));
             }
             for (Map<String, Object> label : labels) {
-                if (!"SETTLED".equals(label.get("scoring_state"))) {
+                if (!"SETTLED".equals(label.get("scoring_state"))
+                    || !"AFTER_ALIGHTING_ESTIMATE".equals(label.get("target_kind"))) {
                     failures.add(Map.of("id", row.path("source_id").asLong(), "target", row.path("target").asInt(),
                         "state", label.toString()));
                     continue;
                 }
-                double expected = row.path("expected_after").asDouble();
-                if ("DEPARTURE_ZERO".equals(label.get("target_kind"))) {
-                    expected = 0;
-                    if (row.path("expected_departure").asInt() == 0) {
-                        expected = 1;
-                    }
-                }
+                final double expected = row.path("expected_after").asDouble();
                 maximumLabel = Math.max(maximumLabel,
                     Math.abs(((Number) label.get("label_value")).doubleValue() - expected));
                 if (!matchesEvidence(row, label)) {
@@ -254,7 +255,7 @@ public final class ConfirmedLesWorkerReplay {
             "max_feature_difference", maximumFeature, "max_prediction_difference", maximumPrediction,
             "max_label_difference", maximumLabel, "failures", failures,
             "passed", maximumFeature == 0 && maximumPrediction <= 1e-9 && maximumLabel <= 1e-8
-                && settled == cases.size() * 2 && failures.isEmpty());
+                && settled == cases.size() && failures.isEmpty());
     }
 
     private static boolean matchesEvidence(JsonNode expected, Map<String, Object> actual) {
@@ -270,9 +271,6 @@ public final class ConfirmedLesWorkerReplay {
         if (!((Timestamp) actual.get("known_at")).toInstant()
             .equals(Instant.parse(expected.path("expected_known").asText()))) {
             return false;
-        }
-        if (actual.get("target_kind").equals("DEPARTURE_ZERO")) {
-            return true;
         }
         return ((Number) actual.get("previous_post_observation_id")).longValue() == expected
             .path("expected_previous_post").asLong()

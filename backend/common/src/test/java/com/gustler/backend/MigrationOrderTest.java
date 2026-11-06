@@ -43,7 +43,8 @@ class MigrationOrderTest {
      * <p>이 브랜치는 V49 이후 레스 예보의 정산과 이관에 필요한 스키마를 추가한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("les_target_evaluation", "les_input_provenance", "les_archive_changed_evidence");
+        List.of("les_target_evaluation", "les_input_provenance", "les_archive_changed_evidence",
+            "les_after_alighting_only_evaluation");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

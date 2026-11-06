@@ -49,8 +49,7 @@ final class LesConfirmedServingVerification {
         return switch (check) {
         case "feature_parity" -> verifyNumeric(result);
         case "runtime_validation" -> verifyRuntime(result, routes);
-        case "historical_replay" -> verifyWorker(result, routes);
-        case "settlement" -> verifyWorker(result, routes) * 2;
+        case "historical_replay", "settlement" -> verifyWorker(result, routes, check);
         default -> throw new IllegalArgumentException("알 수 없는 운영 검증이다: " + check);
         };
     }
@@ -84,22 +83,36 @@ final class LesConfirmedServingVerification {
         return cases;
     }
 
-    private static int verifyWorker(JsonNode result, List<String> routes) {
+    private static int verifyWorker(JsonNode result, List<String> routes, String check) {
+        final int targetsPerForecast = settlementTargetsPerForecast(result);
         JsonNode results = result.path("routes");
         require(results.isArray() && results.size() == routes.size(), "Worker 검증 노선 수가 다르다");
         int cases = 0;
         for (int index = 0; index < routes.size(); index++) {
             JsonNode row = results.get(index);
-            verifyWorkerRoute(row, routes.get(index));
+            verifyWorkerRoute(row, routes.get(index), targetsPerForecast);
             cases += row.path("cases").asInt();
+        }
+        if ("settlement".equals(check)) {
+            return cases * targetsPerForecast;
         }
         return cases;
     }
 
-    private static void verifyWorkerRoute(JsonNode row, String route) {
+    private static int settlementTargetsPerForecast(JsonNode result) {
+        JsonNode scope = result.path("settlement_scope");
+        if (scope.isMissingNode()) {
+            return 2;
+        }
+        require("after_alighting_only".equals(scope.asText()), "알 수 없는 정산 검증 범위다");
+        return 1;
+    }
+
+    private static void verifyWorkerRoute(JsonNode row, String route, final int targetsPerForecast) {
         require(row.path("route").asText().equals(route), "Worker 검증 노선이 다르다");
         require(row.path("passed").asBoolean() && row.path("cases").asInt() > 0, "Worker 검증이 실패했다");
-        require(row.path("settled_targets").asInt() == row.path("cases").asInt() * 2, "정산 검증이 누락됐다");
+        require(row.path("settled_targets").asInt() == row.path("cases").asInt() * targetsPerForecast,
+            "정산 검증 건수가 다르다");
         require(row.path("failures").isArray() && row.path("failures").isEmpty(), "정산 근거가 다르다");
         require(withinTolerance(row.path("max_feature_difference"), 0), "Worker 입력이 다르다");
         require(withinTolerance(row.path("max_prediction_difference"), 1e-9), "Worker 예측이 다르다");

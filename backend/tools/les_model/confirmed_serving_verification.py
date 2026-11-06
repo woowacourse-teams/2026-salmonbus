@@ -57,6 +57,11 @@ def verify_result(check, result, source_digest, routes):
         return len(routes)
     if check not in ('historical_replay', 'settlement'):
         raise ValueError('unknown verification')
+    targets_per_forecast = 2
+    if 'settlement_scope' in result:
+        if result['settlement_scope'] != 'after_alighting_only':
+            raise ValueError('unknown settlement scope')
+        targets_per_forecast = 1
     rows = result['routes']
     if [row['route'] for row in rows] != routes:
         raise ValueError('Worker validation does not cover source routes')
@@ -64,14 +69,14 @@ def verify_result(check, result, source_digest, routes):
     for row in rows:
         if row.get('passed') is not True or type(row['cases']) is not int or row['cases'] < 1:
             raise ValueError('failed Worker route')
-        if row['settled_targets'] != row['cases'] * 2 or row['failures'] != []:
+        if row['settled_targets'] != row['cases'] * targets_per_forecast or row['failures'] != []:
             raise ValueError('missing settlement or evidence mismatch')
         for field, tolerance in [('max_feature_difference', 0), ('max_prediction_difference', 1e-9),
                                  ('max_label_difference', 1e-8)]:
             if not within(row[field], tolerance):
                 raise ValueError('Worker difference exceeds tolerance: '+field)
         cases += row['cases']
-    return cases * (2 if check == 'settlement' else 1)
+    return cases * (targets_per_forecast if check == 'settlement' else 1)
 
 
 def verify_receipt(check, receipt, evidence, source_digest, routes):

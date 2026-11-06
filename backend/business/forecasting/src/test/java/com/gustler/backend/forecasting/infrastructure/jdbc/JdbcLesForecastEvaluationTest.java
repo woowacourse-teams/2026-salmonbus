@@ -136,21 +136,20 @@ class JdbcLesForecastEvaluationTest {
     }
 
     @Test
-    void 발행시_두_목표를_등록하고_기존_정산에_넣지_않는다() {
-        assertThat(count("les_forecast_evaluation_work")).isEqualTo(2);
+    void 발행하면_하차_후_잔여석_정산만_등록한다() {
+        assertThat(count("les_forecast_evaluation_work")).isOne();
         tx.executeWithoutResult(status -> legacyWork.register(version, List.of(source)));
         assertThat(count("forecast_evaluation_work")).isZero();
         assertThat(count("forecast_evaluation_pending")).isZero();
     }
 
     @Test
-    void 같은_편도의_소수_라벨과_출발_만석을_독립적으로_한번만_정산한다() {
+    void 같은_편도의_하차_후_잔여석을_소수로_한번만_정산한다() {
         service.settle();
         service.settle();
-        assertThat(count("les_forecast_evaluation_result")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_result")).isOne();
         assertThat(count("les_forecast_evaluation_work")).isZero();
         assertThat(label(AFTER)).isBetween(2.0, 40.0).isNotEqualTo(Math.rint(label(AFTER)));
-        assertThat(label("DEPARTURE_ZERO")).isEqualTo(1);
         assertThat(count("forecast_evaluation_result")).isZero();
         assertThat(jdbc.sql("SELECT count(*) FROM stop_demand_pending_sample WHERE prediction_observation_id=?")
             .param(source).query(Integer.class).single()).isZero();
@@ -161,15 +160,13 @@ class JdbcLesForecastEvaluationTest {
         jdbc.sql("UPDATE seat_forecast SET generated_at=? WHERE vehicle_observation_id=?")
             .params(offset(START.plusSeconds(172800)), source).update();
         service.settle();
-        assertThat(label("DEPARTURE_ZERO")).isEqualTo(1);
         assertThat(label(AFTER)).isGreaterThan(2);
     }
 
     @Test
-    void 용량_근거가_없어도_출발_만석_평가는_완료한다() {
+    void 정원_근거가_없으면_하차_후_잔여석_정산은_지원_불가로_남긴다() {
         jdbc.sql("UPDATE vehicle_observation SET remaining_seats=20 WHERE id=?").param(source).update();
         service.settle();
-        assertThat(label("DEPARTURE_ZERO")).isEqualTo(1);
         assertThat(jdbc
             .sql("SELECT reason FROM les_forecast_evaluation_result WHERE vehicle_observation_id=? AND target_kind=?")
             .params(source, AFTER).query(String.class).single()).isEqualTo("CAPACITY_NOT_OBSERVED");
@@ -182,17 +179,28 @@ class JdbcLesForecastEvaluationTest {
         assertThat(jdbc.sql(
             "SELECT count(*) FROM les_forecast_evaluation_result WHERE route_version_id=? AND scoring_state='SETTLED'")
             .param(version).query(Integer.class).single()).isZero();
-        assertThat(count("les_forecast_evaluation_result")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_result")).isOne();
     }
 
     @Test
-    void 품질_재평가는_이전_숫자를_지우지_않고_새_판본으로_남긴다() {
+    void 품질_재평가는_과거_만석_정산을_보존하고_하차_후_잔여석만_다시_정산한다() {
         service.settle();
+        jdbc.sql("""
+            INSERT INTO les_forecast_evaluation_result(vehicle_observation_id,target_stop_order,target_kind,
+                label_version,route_version_id,quality_revision,scoring_state,label_value,scored_at)
+            SELECT vehicle_observation_id,target_stop_order,'DEPARTURE_ZERO',label_version,route_version_id,
+                quality_revision,'SETTLED',1,scored_at
+            FROM les_forecast_evaluation_result WHERE vehicle_observation_id=?
+            """).param(source).update();
         jdbc.sql("UPDATE route_data_quality SET quality_revision=quality_revision+1 WHERE route_id=?").param(route)
             .update();
+
         service.settle();
-        assertThat(count("les_forecast_evaluation_result")).isEqualTo(4);
-        assertThat(count("les_quality_eligible_metric")).isEqualTo(2);
+
+        assertThat(count("les_forecast_evaluation_result")).isEqualTo(3);
+        assertThat(label("DEPARTURE_ZERO")).isEqualTo(1);
+        assertThat(count("les_forecast_evaluation_work")).isZero();
+        assertThat(count("les_quality_eligible_metric")).isOne();
     }
 
     @Test
@@ -207,13 +215,13 @@ class JdbcLesForecastEvaluationTest {
         archive.advance();
         assertThat(objects.bytes).hasSize(1);
         assertThat(count("les_forecast_evaluation_result")).isZero();
-        assertThat(count("les_forecast_evaluation_metric")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_metric")).isOne();
         jdbc.sql("DELETE FROM observation_trip_assignment WHERE observation_id=?").param(post).update();
         jdbc.sql("DELETE FROM vehicle_observation WHERE id=?").param(post).update();
         assertThat(archive.restore(source, 2, AFTER, VERSION, 1)).isEqualTo(1);
         assertThat(archive.restore(source, 2, AFTER, VERSION, 1)).isZero();
         assertThat(label(AFTER)).isEqualTo(before);
-        assertThat(count("les_forecast_evaluation_metric")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_metric")).isOne();
         assertThat(count("les_forecast_evaluation_work")).isZero();
         assertThat(
             jdbc.sql("SELECT evidence_archive_hash FROM les_forecast_evaluation_result WHERE vehicle_observation_id=?")
@@ -251,7 +259,7 @@ class JdbcLesForecastEvaluationTest {
         LesEvaluationArchiveService archive = new LesEvaluationArchiveService(
             new JdbcLesEvaluationArchiveStore(jdbc, transactions), corrupted, true, 1);
         assertThatThrownBy(archive::advance).isInstanceOf(IllegalStateException.class);
-        assertThat(count("les_forecast_evaluation_result")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_result")).isOne();
         assertThat(count("les_evaluation_archive")).isZero();
     }
 
@@ -263,7 +271,7 @@ class JdbcLesForecastEvaluationTest {
         MemoryObjects objects = new MemoryObjects();
         new LesEvaluationArchiveService(new JdbcLesEvaluationArchiveStore(jdbc, transactions), objects, false, 500)
             .advance();
-        assertThat(count("les_forecast_evaluation_result")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_result")).isOne();
         new LesEvaluationArchiveService(new JdbcLesEvaluationArchiveStore(jdbc, transactions), objects, true, 1)
             .advance();
         assertThat(count("les_forecast_evaluation_result")).isZero();
@@ -293,7 +301,7 @@ class JdbcLesForecastEvaluationTest {
             .params(version, offset(START.plusSeconds(90))).update();
         service.settle();
         assertThat(count("les_forecast_evaluation_result")).isZero();
-        assertThat(count("les_forecast_evaluation_work")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_work")).isOne();
         assertThat(jdbc.sql("SELECT DISTINCT reason FROM les_evaluation_status WHERE route_version_id=?")
             .param(version).query(String.class).list()).containsExactly("QUALITY_REBUILD_PENDING");
         jdbc.sql("UPDATE trip_quality_rebuild SET completed=true,phase='DONE' WHERE route_version_id=?").param(version)
@@ -301,7 +309,7 @@ class JdbcLesForecastEvaluationTest {
         jdbc.sql("UPDATE les_forecast_evaluation_work SET next_attempt_at=? WHERE route_version_id=?")
             .params(offset(START), version).update();
         service.settle();
-        assertThat(label("DEPARTURE_ZERO")).isEqualTo(1);
+        assertThat(label(AFTER)).isGreaterThan(2);
     }
 
     @Test
@@ -318,7 +326,7 @@ class JdbcLesForecastEvaluationTest {
         assertThat(jdbc
             .sql(
                 "SELECT count(*) FROM les_quality_eligible_metric WHERE route_version_id=? AND scoring_state='SETTLED'")
-            .param(version).query(Integer.class).single()).isEqualTo(2);
+            .param(version).query(Integer.class).single()).isOne();
     }
 
     @Test
@@ -360,20 +368,20 @@ class JdbcLesForecastEvaluationTest {
             new LesEvaluationArchiveService(new JdbcLesEvaluationArchiveStore(jdbc, transactions), new MemoryObjects(),
                 true, 500).advance();
         }
-        assertThat(count("les_quality_eligible_metric")).isEqualTo(2);
+        assertThat(count("les_quality_eligible_metric")).isOne();
         jdbc.sql("INSERT INTO trip_quality_rebuild(route_version_id,vehicle_id,until_at) VALUES(?,'',?)")
             .params(version, offset(START.plusSeconds(90))).update();
-        assertThat(count("les_forecast_evaluation_metric")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_metric")).isOne();
         assertThat(count("les_quality_eligible_metric")).isZero();
         assertThat(count("les_quality_eligible_evaluation")).isZero();
         jdbc.sql("UPDATE trip_quality_rebuild SET completed=true,phase='DONE' WHERE route_version_id=?").param(version)
             .update();
-        assertThat(count("les_quality_eligible_metric")).isEqualTo(2);
+        assertThat(count("les_quality_eligible_metric")).isOne();
         if (archived) {
             assertThat(count("les_quality_eligible_evaluation")).isZero();
             return;
         }
-        assertThat(count("les_quality_eligible_evaluation")).isEqualTo(2);
+        assertThat(count("les_quality_eligible_evaluation")).isOne();
     }
 
     @Test
@@ -390,7 +398,7 @@ class JdbcLesForecastEvaluationTest {
         new JdbcLesForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions, 50_000, 150_000, 220).settle();
 
         // then
-        assertThat(count("les_forecast_evaluation_work")).isEqualTo(32);
+        assertThat(count("les_forecast_evaluation_work")).isEqualTo(31);
         assertThat(count("les_forecast_evaluation_result")).isEqualTo(220);
     }
 
@@ -402,7 +410,8 @@ class JdbcLesForecastEvaluationTest {
         jdbc.sql("""
             UPDATE seat_forecast SET label_version='les-confirmed-routeband-v2',feature_snapshot=feature_snapshot ||
                 '{"inputProfile":"les-confirmed-closure-v2",
-                  "capacityPolicy":"observed-vehicle-prefix-max-through-closure-v2","turn":4}'::jsonb
+                  "capacityPolicy":"observed-vehicle-prefix-max-through-closure-v2","turn":4}'::jsonb ||
+                jsonb_build_object('capacityObservationId',vehicle_observation_id,'capacity',40)
             WHERE vehicle_observation_id=?
             """).param(source).update();
         jdbc.sql("UPDATE les_forecast_evaluation_work SET label_version='les-confirmed-routeband-v2' "
@@ -415,14 +424,16 @@ class JdbcLesForecastEvaluationTest {
         new JdbcLesForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions, 50_000, 8).settle();
 
         // then
-        assertThat(jdbc.sql("SELECT scoring_state FROM les_forecast_evaluation_result "
-            + "WHERE vehicle_observation_id=? AND target_kind='DEPARTURE_ZERO'")
-            .param(source).query(String.class).single()).isEqualTo("SETTLED");
+        assertThat(jdbc.sql("SELECT scoring_state,reason FROM les_forecast_evaluation_result "
+            + "WHERE vehicle_observation_id=? AND target_kind=?")
+            .params(source, AFTER).query().singleRow()).containsEntry("scoring_state", "SETTLED");
     }
 
     @Test
     void 근거가_바뀐_보관_묶음은_격리하고_다음_후보를_이관한다() {
         // given
+        final long second = observation("second", 10, 1, 40);
+        copyForecast(second);
         service.settle();
         jdbc.sql("UPDATE les_forecast_evaluation_result SET scored_at=? WHERE route_version_id=?")
             .params(offset(START), version).update();
@@ -461,7 +472,7 @@ class JdbcLesForecastEvaluationTest {
             """).params(source, VERSION, version).update();
         LesEvaluationArchiveService archive = new LesEvaluationArchiveService(store, objects, true, 500);
         archive.advance();
-        assertThat(count("les_forecast_evaluation_result")).isEqualTo(2);
+        assertThat(count("les_forecast_evaluation_result")).isOne();
 
         // when
         archive.advance();
@@ -472,7 +483,7 @@ class JdbcLesForecastEvaluationTest {
         assertThat(count("les_forecast_evaluation_result")).isZero();
         assertThat(jdbc.sql("SELECT count(*) FROM les_evaluation_archive "
             + "WHERE route_version_id=? AND storage_state='PURGED' AND abandoned_at IS NULL")
-            .param(version).query(Integer.class).single()).isEqualTo(4);
+            .param(version).query(Integer.class).single()).isEqualTo(2);
         assertThat(objects.bytes).hasSize(1);
     }
 
@@ -503,7 +514,7 @@ class JdbcLesForecastEvaluationTest {
 
         // then
         assertThat(count("les_forecast_evaluation_work")).isZero();
-        assertThat(count("les_forecast_evaluation_result")).isEqualTo(50);
+        assertThat(count("les_forecast_evaluation_result")).isEqualTo(25);
         assertThat(jdbc.sql("SELECT DISTINCT reason FROM les_forecast_evaluation_result "
             + "WHERE route_version_id=? AND vehicle_observation_id<>?")
             .params(version, source).query(String.class).list()).containsExactly("NO_CLOSED_IDENTITY_SAFE_PASS");
