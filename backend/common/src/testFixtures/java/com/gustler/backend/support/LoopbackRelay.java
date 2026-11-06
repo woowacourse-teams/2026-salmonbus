@@ -1,28 +1,31 @@
-package com.gustler.backend.maintenance;
+package com.gustler.backend.support;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 
-final class LoopbackRelay implements AutoCloseable {
+public final class LoopbackRelay implements AutoCloseable {
+    private static final int CONNECT_TIMEOUT_MILLIS = 5_000;
+
     private final ServerSocket server;
     private final String targetHost;
     private final int targetPort;
 
-    LoopbackRelay(
+    public LoopbackRelay(
         String targetHost,
         final int targetPort
     ) throws IOException {
         this.targetHost = targetHost;
         this.targetPort = targetPort;
-        this.server = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
+        this.server = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"));
         Thread acceptor = new Thread(this::accept, "loopback-relay");
         acceptor.setDaemon(true);
         acceptor.start();
     }
 
-    int port() {
+    public int port() {
         return server.getLocalPort();
     }
 
@@ -30,7 +33,17 @@ final class LoopbackRelay implements AutoCloseable {
         while (!server.isClosed()) {
             try {
                 Socket client = server.accept();
-                Socket target = new Socket(targetHost, targetPort);
+                Socket target = new Socket();
+                try {
+                    target.connect(new InetSocketAddress(targetHost, targetPort), CONNECT_TIMEOUT_MILLIS);
+                } catch (IOException connectionFailed) {
+                    try {
+                        target.close();
+                    } finally {
+                        client.close();
+                    }
+                    continue;
+                }
                 pipe(client, target);
                 pipe(target, client);
             } catch (IOException ignored) {

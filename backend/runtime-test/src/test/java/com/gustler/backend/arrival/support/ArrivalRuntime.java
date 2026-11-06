@@ -231,8 +231,10 @@ public final class ArrivalRuntime implements AutoCloseable {
         Path env=temporary.resolve("database.env"),config=temporary.resolve("local.properties");
         Path stderr = temporary.resolve("stderr.log");
         Process process=null;
-        try {
-            Files.writeString(env,"DB_URL="+database.jdbcUrl()+"\nDB_USERNAME="+database.username()+"\nDB_PASSWORD="+database.password()+"\n");
+        try (var relay = database.openLoopbackRelay()) {
+            String localUrl = database.jdbcUrlThrough(relay);
+            Files.writeString(env, "DB_URL=" + localUrl + "\nDB_USERNAME=" + database.username()
+                + "\nDB_PASSWORD=" + database.password() + "\n");
             Files.setPosixFilePermissions(env,java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
             Files.writeString(config,"target.kind=local\ndatabase.env-file="+env+"\n");
             var command = new ArrayList<>(List.of(Path.of(System.getProperty("java.home"),"bin/java").toString(),

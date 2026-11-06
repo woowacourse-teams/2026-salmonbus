@@ -42,11 +42,20 @@ export function ConfirmDialog({
     const dialog = ref.current;
     const previouslyFocused = document.activeElement;
     const fallbackTarget = fallbackFocus?.current;
-    dialog?.showModal();
     const title = titleRef.current;
-    if (dialog && title) (initialFocus?.current ?? firstFocusOf(dialog, title)).focus();
+    if (!dialog || !title) return;
+
+    const focusTarget = initialFocus?.current ?? firstFocusOf(dialog, title);
+    const hadAutofocus = focusTarget.hasAttribute("autofocus");
+    focusTarget.setAttribute("autofocus", "");
+    try {
+      dialog.showModal();
+    } finally {
+      if (!hadAutofocus) focusTarget.removeAttribute("autofocus");
+    }
+    if (document.activeElement !== focusTarget) focusTarget.focus();
     return () => {
-      dialog?.close();
+      dialog.close();
       const target =
         previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected ? previouslyFocused : fallbackTarget;
       target?.focus();
