@@ -71,7 +71,12 @@ const waypointRing = style([
   },
 ]);
 
-export const ring = { ...seatRing, noVehicle: noVehicleRing, checking: noVehicleRing, passThrough: waypointRing };
+export const ring = {
+  ...seatRing,
+  noVehicle: noVehicleRing,
+  checking: seatRing.unavailable,
+  passThrough: waypointRing,
+};
 
 const headingBase = style({
   display: "block",
@@ -83,5 +88,5 @@ const seatHeading = styleVariants(vars.color.seat, (tone) => [headingBase, { col
 export const heading = {
   ...seatHeading,
   noVehicle: style([headingBase, { color: vars.color.noVehicleRing }]),
-  checking: style([headingBase, { color: vars.color.noVehicleRing }]),
+  checking: seatHeading.unavailable,
 };
