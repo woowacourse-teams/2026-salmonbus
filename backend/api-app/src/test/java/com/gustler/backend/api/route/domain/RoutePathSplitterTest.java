@@ -1,12 +1,15 @@
 package com.gustler.backend.api.route.domain;
 
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry;
+import com.gustler.backend.routegeometry.engine.api.RoutePaths;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
-import com.gustler.backend.api.route.domain.RouteGeometry.Availability;
-import com.gustler.backend.api.route.domain.RouteGeometry.Point;
-import com.gustler.backend.api.route.domain.RouteGeometry.Shape;
-import com.gustler.backend.api.route.domain.RouteGeometry.Stop;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Availability;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Point;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Shape;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Stop;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.ArrayList;

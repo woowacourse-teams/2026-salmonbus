@@ -1,7 +1,9 @@
-package com.gustler.backend.api.route.domain;
+package com.gustler.backend.routegeometry.engine.api;
 
-import com.gustler.backend.api.route.domain.RouteGeometry.Shape;
-import com.gustler.backend.api.route.domain.RouteGeometry.Stop;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Shape;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Stop;
+import com.gustler.backend.routegeometry.api.RouteShapeEvidence;
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -15,8 +17,54 @@ import java.util.Objects;
 import java.util.UUID;
 
 /** 노선 판본의 방문 목록과 별도 형상 판본을 조합한 정적 지도 자료. */
-public record RouteGeometry(String routeId, long referenceVersionId, String name, String startPoint,
-    String endPoint, Integer turnSequence, List<Stop> busStops, Shape shape) {
+public record RouteGeometry(
+        String routeId,
+        long referenceVersionId,
+        String name,
+        String startPoint,
+        String endPoint,
+        Integer turnSequence,
+        List<Stop> busStops,
+        Shape shape,
+        RouteDisplayGeometry display) {
+    public RouteGeometry(
+            String routeId,
+            long referenceVersionId,
+            String name,
+            String startPoint,
+            String endPoint,
+            Integer turnSequence,
+            List<Stop> busStops,
+            Shape shape) {
+        this(
+                routeId,
+                referenceVersionId,
+                name,
+                startPoint,
+                endPoint,
+                turnSequence,
+                busStops,
+                shape,
+                null);
+    }
+
+    public RouteGeometry withDisplay(RouteDisplayGeometry selected) {
+        return new RouteGeometry(
+                routeId,
+                referenceVersionId,
+                name,
+                startPoint,
+                endPoint,
+                turnSequence,
+                busStops,
+                shape,
+                selected);
+    }
+
+    public RoutePaths displayPaths() {
+        return display == null ? null : display.paths();
+    }
+
     public static final String COORDINATE_SYSTEM = "WGS84_ASSUMED";
     public enum Availability {
         READY, PARTIAL, UNAVAILABLE
@@ -51,8 +99,25 @@ public record RouteGeometry(String routeId, long referenceVersionId, String name
     public record Stop(String stationId, int stopSequence, String name, String direction,
         boolean boardingAllowed, Point point) {
     }
-    public record Shape(UUID id, Instant receivedAt, List<Point> points) {
+
+    public record Shape(
+            UUID id, Instant receivedAt, List<Point> points, RouteShapeEvidence evidence, String sourceManifestId, Instant evidenceEvaluatedAt, String unboundSourceManifestId) {
+        public Shape(UUID id,Instant receivedAt,List<Point> points,RouteShapeEvidence evidence,String sourceManifestId,Instant evidenceEvaluatedAt) {
+            this(id,receivedAt,points,evidence,sourceManifestId,evidenceEvaluatedAt,null);
+        }
+        public Shape(UUID id,Instant receivedAt,List<Point> points,RouteShapeEvidence evidence,String sourceManifestId) {
+            this(id,receivedAt,points,evidence,sourceManifestId,null);
+        }
+        public Shape(UUID id,Instant receivedAt,List<Point> points,RouteShapeEvidence evidence) {
+            this(id,receivedAt,points,evidence,null);
+        }
+        public Shape(UUID id, Instant receivedAt, List<Point> points) {
+            this(id, receivedAt, points, RouteShapeEvidence.EMPTY);
+        }
+
         public Shape {
+            if(sourceManifestId!=null && unboundSourceManifestId!=null)
+                throw new IllegalArgumentException("Source provenance cannot be bound and unbound together");
             points = List.copyOf(points);
             if (points.size() < 2 || points.stream()
                 .distinct()
@@ -102,6 +167,13 @@ public record RouteGeometry(String routeId, long referenceVersionId, String name
             .map(Stop::point)
             .filter(Objects::nonNull)
             .forEach(all::add);
+        if (display != null) {
+            all.addAll(display.stationPositions().values());
+            if (display.paths() != null) {
+                all.addAll(display.paths().up().points());
+                all.addAll(display.paths().down().points());
+            }
+        }
         if (all.isEmpty()) {
             return null;
         }
@@ -128,7 +200,8 @@ public record RouteGeometry(String routeId, long referenceVersionId, String name
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             DataOutputStream revisionOutput = new DataOutputStream(bytes);
-            revisionOutput.writeUTF("route-geometry-v2/" + COORDINATE_SYSTEM + "/" + RoutePathSplitter.REVISION);
+            revisionOutput.writeUTF(
+                    "route-geometry-v2/display-quality-v2/" + COORDINATE_SYSTEM + "/" + RoutePathSplitter.REVISION);
             revisionOutput.writeUTF(routeId);
             revisionOutput.writeLong(referenceVersionId);
             revisionOutput.writeUTF(name);
@@ -158,7 +231,12 @@ public record RouteGeometry(String routeId, long referenceVersionId, String name
                 revisionOutput.writeDouble(point.x());
                 revisionOutput.writeDouble(point.y());
             }
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()));
+            if (display != null) {
+                revisionOutput.writeUTF(display.source().name());
+                revisionOutput.writeUTF(display.revision());
+            }
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()));
         } catch (IOException | NoSuchAlgorithmException impossible) {
             throw new IllegalStateException(impossible);
         }

@@ -1,7 +1,7 @@
 package com.gustler.backend.api.route.application;
 
-import com.gustler.backend.api.route.domain.RouteGeometry.Shape;
-import com.gustler.backend.api.route.domain.RouteGeometry.Stop;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Shape;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry.Stop;
 import java.util.List;
 import java.util.Optional;
 

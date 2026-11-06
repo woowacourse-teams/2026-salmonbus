@@ -58,6 +58,7 @@ class CollectionSchedulerRoutesTest {
     @BeforeEach
     void 상류_대역을_세운다() {
         given(routeSource.requiredCallsPerRead()).willReturn(2);
+        given(routeSource.capture(org.mockito.ArgumentMatchers.anyString())).willCallRealMethod();
         given(routeSource.read(ROUTE_3330)).willReturn(new RouteSourceResult.Success(upstreamRoute()));
         given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
             new BusLocation("경기70아0001", "204000206", 0, ROUTE_3330, 11,

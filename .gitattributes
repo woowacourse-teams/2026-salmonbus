@@ -1,0 +1,2 @@
+# Preserve the generated projection CSV goldens, whose CSV writer uses CRLF.
+backend/libraries/route-geometry-engine/src/test/resources/native-reference/*.csv -text whitespace=trailing-space,space-before-tab,cr-at-eol

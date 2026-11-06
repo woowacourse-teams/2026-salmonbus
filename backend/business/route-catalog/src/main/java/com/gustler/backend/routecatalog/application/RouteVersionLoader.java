@@ -7,11 +7,14 @@ import com.gustler.backend.routecatalog.domain.RouteStopLocationStore.Changes;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.RouteTimetable;
 import com.gustler.backend.routecatalog.domain.RouteVersion;
+import com.gustler.backend.routecatalog.api.RouteVersionChanged;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -25,10 +28,18 @@ public class RouteVersionLoader {
     private static final Logger LOGGER = LoggerFactory.getLogger(RouteVersionLoader.class);
     private final RouteRepository routeRepository;
     private final RouteStopLocationStore locations;
+    private final ApplicationEventPublisher events;
 
     public RouteVersionLoader(RouteRepository routeRepository, RouteStopLocationStore locations) {
+        this(routeRepository, locations, ignored -> {});
+    }
+
+    @Autowired
+    public RouteVersionLoader(RouteRepository routeRepository, RouteStopLocationStore locations,
+            ApplicationEventPublisher events) {
         this.routeRepository = routeRepository;
         this.locations = locations;
+        this.events = events;
     }
 
     /**
@@ -50,6 +61,9 @@ public class RouteVersionLoader {
         Changes changes = locations.record(versionId, stops, readAt);
         final boolean timetableChanged = previous.isPresent()
             && !previous.get().content().timetable().equals(route.currentVersion().content().timetable());
+        if (versionChanged) {
+            events.publishEvent(new RouteVersionChanged(routeId, versionId));
+        }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
