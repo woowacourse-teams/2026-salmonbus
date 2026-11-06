@@ -68,7 +68,7 @@ export const notice = style({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  height: ROW_HEIGHT,
+  minHeight: ROW_HEIGHT,
   margin: 0,
   padding: `0 ${CARD_PADDING_X}`,
   color: vars.color.textSubtle,
