@@ -235,4 +235,68 @@ class RouteGeometryAcquisitionArchiveTest {
         @Override public Clock withZone(ZoneId zone) { return this; }
         @Override public Instant instant() { return now; }
     }
+    private Contribution usableWeb() {
+        byte[] bytes=json.writeValueAsBytes(java.util.Map.of("success",true,"result",java.util.Map.of("gg",java.util.Map.of(
+            "upLine",java.util.Map.of("count",2,"list",List.of(webPoint(1,127,37),webPoint(2,127.01,37.01))),
+            "downLine",java.util.Map.of("count",2,"list",List.of(webPoint(1,127.01,37.01),webPoint(2,127,37)))))));
+        var receipt=new RouteSourceReceipt("GBIS_WEB","MAP_LINE",ROUTE,RouteSourceReceipt.Status.SUCCESS,200,START,
+            "NOT_PROVIDED",RouteSourceReceipt.CoordinateSystem.WEB_MERCATOR_ASSUMED,bytes);
+        var roles=List.of(
+            new RouteShapeEvidence.TypedPoint(new RouteDisplayInput.Point(127,37),3,"UP",false),
+            new RouteShapeEvidence.TypedPoint(new RouteDisplayInput.Point(127.01,37.01),3,"UP",false),
+            new RouteShapeEvidence.TypedPoint(new RouteDisplayInput.Point(127.01,37.01),3,"DOWN",false),
+            new RouteShapeEvidence.TypedPoint(new RouteDisplayInput.Point(127,37),3,"DOWN",false));
+        return new Contribution(Optional.empty(),new RouteShapeEvidence.Source("GBIS_WEB","AVAILABLE",receipt.bodySha256()),roles,List.of(),List.of(receipt),List.of());
+    }
+    @Test void temporary_web_failure_does_not_replace_valid_evidence_for_the_same_current_input() {
+        reply(HttpStatus.OK,raw(127.01));reply(HttpStatus.OK,raw(127.01));
+        assertThat(refresh(usableWeb())).isEqualTo(Outcome.UPDATED);String before=currentManifest();
+        clock.now=START.plusSeconds(10);
+        assertThat(refresh(Contribution.unavailable("GBIS_WEB"))).isEqualTo(Outcome.UNCHANGED);
+        assertThat(currentManifest()).isEqualTo(before);assertThat(count("route_input_manifest")).isEqualTo(1);
+        assertThat(inputDocument(before).evidence().sources()).anyMatch(s->s.id().equals("GBIS_WEB")&&s.status().equals("AVAILABLE"));
+        assertThat(count("route_source_manifest")).isGreaterThan(1);http.verify();noCredentialsStored();
+    }
+    @Test void changed_shape_cannot_borrow_previous_web_evidence() {
+        reply(HttpStatus.OK,raw(127.01));reply(HttpStatus.OK,raw(127.02));
+        refresh(usableWeb());String before=currentManifest();clock.now=START.plusSeconds(10);
+        assertThat(refresh(Contribution.unavailable("GBIS_WEB"))).isEqualTo(Outcome.UPDATED);
+        assertThat(currentManifest()).isNotEqualTo(before);
+        assertThat(inputDocument(currentManifest()).evidence().sources()).anyMatch(s->s.id().equals("GBIS_WEB")&&s.status().equals("UNAVAILABLE"));
+        http.verify();
+    }
+    @Test void changed_stop_coordinates_in_the_same_version_require_a_new_input_binding() {
+        reply(HttpStatus.OK,raw(127.01));reply(HttpStatus.OK,raw(127.01));
+        refresh(usableWeb());String before=currentManifest();
+        jdbc.sql("UPDATE route_stop_location_history SET x=127.01001 WHERE stop_order=2").update();clock.now=START.plusSeconds(10);
+        assertThat(refresh(Contribution.unavailable("GBIS_WEB"))).isEqualTo(Outcome.UNCHANGED);
+        assertThat(currentManifest()).isNotEqualTo(before);
+        assertThat(inputDocument(currentManifest()).inputDigest()).isNotEqualTo(inputDocument(before).inputDigest());http.verify();
+    }
+    @Test void expired_bms_does_not_discard_valid_web_roles_and_is_disabled_when_evaluated() {
+        reply(HttpStatus.OK,raw(127.01));reply(HttpStatus.OK,raw(127.01));
+        var expired=new Contribution(Optional.empty(),new RouteShapeEvidence.Source("GG_BMS_NODES","AVAILABLE","d".repeat(64),Instant.EPOCH),List.of(),
+            List.of(new RouteDisplayInput.Point(127,37),new RouteDisplayInput.Point(127.01,37.01)));
+        refresh(usableWeb(),expired);String before=currentManifest();clock.now=START.plusSeconds(10);
+        refresh(Contribution.unavailable("GBIS_WEB"),Contribution.unavailable("GG_BMS_NODES"));
+        assertThat(currentManifest()).isEqualTo(before);
+        var historical=inputDocument(before).evidence();assertThat(historical.webPoints()).anyMatch(RouteShapeEvidence.TypedPoint::nodeConfirmed);
+        var evaluated=historical.at(Instant.now());
+        assertThat(evaluated.revision()).isNotEqualTo(historical.revision());
+        assertThat(evaluated.sources()).anyMatch(s->s.id().equals("GBIS_WEB")&&s.status().equals("AVAILABLE"));
+        assertThat(evaluated.sources()).anyMatch(s->s.id().equals("GG_BMS_NODES")&&s.status().equals("STALE"));
+        assertThat(evaluated.webPoints()).noneMatch(RouteShapeEvidence.TypedPoint::nodeConfirmed);http.verify();
+    }
+
+    @Test void expired_web_evidence_cannot_be_retained() {
+        reply(HttpStatus.OK,raw(127.01));reply(HttpStatus.OK,raw(127.01));
+        var web=usableWeb();var expired=new Contribution(web.shape(),
+            new RouteShapeEvidence.Source("GBIS_WEB","AVAILABLE",web.source().digest(),Instant.EPOCH),
+            web.webPoints(),web.nodes(),web.receipts(),web.reusedManifestIds());
+        refresh(expired);String before=currentManifest();clock.now=START.plusSeconds(10);
+        refresh(Contribution.unavailable("GBIS_WEB"));
+        assertThat(currentManifest()).isNotEqualTo(before);
+        assertThat(inputDocument(currentManifest()).evidence().sources()).anyMatch(s->s.id().equals("GBIS_WEB")&&s.status().equals("UNAVAILABLE"));http.verify();
+    }
+
 }

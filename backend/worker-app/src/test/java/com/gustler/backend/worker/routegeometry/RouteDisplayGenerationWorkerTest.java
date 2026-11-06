@@ -134,7 +134,7 @@ class RouteDisplayGenerationWorkerTest {
     }
 
     private void collectNewGeometryFrom(long oldVersion) {
-        org.mockito.Mockito.when(geometryCollector.refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any()))
+        org.mockito.Mockito.when(geometryCollector.ensure(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any()))
             .thenAnswer(call -> {
                 long current=current().referenceVersionId();
                 jdbc.sql("""
@@ -158,7 +158,7 @@ class RouteDisplayGenerationWorkerTest {
         assertThat(jdbc.sql("SELECT input_json #>> '{referenceVersionId}' FROM route_display_generation_job")
             .query(String.class).list()).containsOnly(Long.toString(next));
         assertThat(jdbc.sql("SELECT status FROM route_display_generation_job").query(String.class).list()).containsOnly("COMPLETED");
-        org.mockito.Mockito.verify(geometryCollector,org.mockito.Mockito.times(1)).refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(geometryCollector,org.mockito.Mockito.times(1)).ensure(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any());
     }
 
     @Test void a_rolled_back_version_does_not_enqueue_source_collection() {
@@ -175,7 +175,7 @@ class RouteDisplayGenerationWorkerTest {
         assertThat(tasks.information).hasSize(1);tasks.drain();
         assertThat(current().referenceVersionId()).isNotEqualTo(old);assertThat(artifactCount()).isEqualTo(2);
         org.mockito.Mockito.verify(catalogRefresher,org.mockito.Mockito.times(1)).refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any());
-        org.mockito.Mockito.verify(geometryCollector,org.mockito.Mockito.times(1)).refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(geometryCollector,org.mockito.Mockito.times(1)).ensure(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any());
     }
 
     @Test void an_unchanged_catalog_after_mismatch_keeps_the_version_and_geometry() {

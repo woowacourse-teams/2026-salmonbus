@@ -44,7 +44,7 @@ class MigrationOrderTest {
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
         List.of("route_display_geometry", "route_display_generation", "route_source_archive",
-            "route_display_generation_failure");
+            "route_display_generation_failure", "route_geometry_recovery");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

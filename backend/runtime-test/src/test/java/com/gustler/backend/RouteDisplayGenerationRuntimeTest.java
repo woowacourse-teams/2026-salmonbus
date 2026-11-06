@@ -316,6 +316,11 @@ class RouteDisplayGenerationRuntimeTest {
             String evidence=geometry.shape().evidence().revision(),algorithm=RouteDisplayGeneration.SOURCE_REVISION;
             String key=RouteDisplayGeneration.key(input.digest(),evidence,algorithm);
             String document=JSON.writeValueAsString(AutomaticRouteDisplay.sourceOnly(geometry,input.digest()));
+            try(var insert=c.prepareStatement("INSERT INTO route_display_generation_job(generation_key,route_id,input_digest,evidence_revision,algorithm_revision,input_json,status,attempts,last_failure_code) VALUES (?,?,?,?,?,CAST(? AS jsonb),'PENDING',1,'EXECUTION_ERROR')")) {
+                insert.setString(1,RouteDisplayGeneration.key(input.digest(),evidence,AutomaticRouteDisplay.REVISION));
+                insert.setString(2,ROUTE);insert.setString(3,input.digest());insert.setString(4,evidence);
+                insert.setString(5,AutomaticRouteDisplay.REVISION);insert.setString(6,JSON.writeValueAsString(geometry));insert.executeUpdate();
+            }
             try(var insert=c.prepareStatement("INSERT INTO route_display_generation_job(generation_key,route_id,input_digest,evidence_revision,algorithm_revision,input_json,status) VALUES (?,?,?,?,?,CAST(? AS jsonb),'COMPLETED')")) {
                 insert.setString(1,key);insert.setString(2,ROUTE);insert.setString(3,input.digest());insert.setString(4,evidence);
                 insert.setString(5,algorithm);insert.setString(6,JSON.writeValueAsString(geometry));insert.executeUpdate();
@@ -361,7 +366,7 @@ class RouteDisplayGenerationRuntimeTest {
     }
     private static void holdFullGeneration(ArrivalRuntime runtime) throws Exception {
         try(var c=runtime.connection();var s=c.createStatement()) {
-            s.execute("CREATE FUNCTION runtime_hold_full_generation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.algorithm_revision NOT LIKE '%/source-only' THEN NEW.next_attempt_at=clock_timestamp()+interval '1 day'; END IF; RETURN NEW; END; $$");
+            s.execute("CREATE FUNCTION runtime_hold_full_generation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.algorithm_revision NOT LIKE '%/source-only' THEN NEW.next_attempt_at=clock_timestamp()+interval '1 day'; NEW.attempts=1; NEW.last_failure_code='EXECUTION_ERROR'; END IF; RETURN NEW; END; $$");
             s.execute("CREATE TRIGGER runtime_hold_full_generation BEFORE INSERT ON route_display_generation_job FOR EACH ROW EXECUTE FUNCTION runtime_hold_full_generation()");
         }
     }

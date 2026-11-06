@@ -179,8 +179,9 @@ public class RouteChangeRefreshCoordinator {
             int attempt = reserveSourceAttempt(routeId, request.versionId());
             if (attempt == 0) return;
             active = new VersionRequest(request.versionId(), attempt - 1, request.due());
-            Outcome outcome = geometry.refresh(state.publicRouteId(), OffsetDateTime.now(clock));
-            if (outcome == Outcome.UPDATED || outcome == Outcome.UNCHANGED) return;
+            Outcome outcome = geometry.ensure(state.publicRouteId(), OffsetDateTime.now(clock));
+            if (outcome == Outcome.UPDATED || outcome == Outcome.UNCHANGED
+                    || outcome == Outcome.RECOVERY_SCHEDULED || outcome == Outcome.RECOVERY_EXHAUSTED) return;
             if (outcome == Outcome.REFERENCE_CHANGED) {
                 var latest = states.findByRouteId(routeId);
                 if (latest.isPresent() && latest.get().versionId() != request.versionId())

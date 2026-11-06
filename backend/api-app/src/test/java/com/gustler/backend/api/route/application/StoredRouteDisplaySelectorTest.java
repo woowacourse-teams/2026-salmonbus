@@ -24,7 +24,9 @@ class StoredRouteDisplaySelectorTest {
     final Map<String,RouteDisplayRepository.GenerationState> jobs = new HashMap<>();
     int jobQueries;
     RouteDisplayRepository.Manual reviewed;
+    RouteDisplayRepository.GenerationState recovery;
     final RouteDisplayRepository repository = new RouteDisplayRepository() {
+        public Optional<GenerationState> findSourceRecovery(String routeId,long versionId) { return Optional.ofNullable(recovery); }
         public Map<String,GenerationState> findGenerationStates(String routeId,String digest,String evidence,List<String> keys) {
             jobQueries++;var found=new HashMap<String,GenerationState>();
             for(String key:keys)if(jobs.containsKey(key))found.put(key,jobs.get(key));
@@ -72,9 +74,10 @@ class StoredRouteDisplaySelectorTest {
         assertThat(selector.enrich(g).display().sourcePaths()).isEqualTo(generated.sourcePaths());
         assertThat(selector.enrich(g).display().paths()).isNotEqualTo(generated.sourcePaths());
     }
-    @Test void 자동이_없으면_검증된_원본산출물을_선택한다() {
+    @Test void 개선이_최종실패하면_검증된_원본산출물을_선택한다() {
         var g=geometry();var source=AutomaticRouteDisplay.sourceOnly(g,RouteDisplayGeneration.input(g).digest());
         store(g,source,RouteDisplayGeneration.SOURCE_REVISION);
+        state(g,AutomaticRouteDisplay.REVISION,"FAILED",false);
         assertThat(selector.enrich(g).display()).usingRecursiveComparison().ignoringFields("revision").isEqualTo(source);
         assertThat(source.quality().status()).isEqualTo(QualityStatus.SOURCE_ONLY);
     }
@@ -99,6 +102,7 @@ class StoredRouteDisplaySelectorTest {
     @Test void 품질등급이_같아도_선택산출물이_바뀌면_ETag판본이_달라진다() {
         var g=geometry();var source=AutomaticRouteDisplay.sourceOnly(g,RouteDisplayGeneration.input(g).digest());
         store(g,source,RouteDisplayGeneration.SOURCE_REVISION);
+        jobs.put(key(g,AutomaticRouteDisplay.REVISION),new RouteDisplayRepository.GenerationState("PENDING",true,false));
         var before=selector.enrich(g);
         var automatic=new RouteDisplayGeometry(source.paths(),source.connections(),Map.of(),source.revision(),
             source.source(),source.evidence(),new Quality(QualityStatus.SOURCE_ONLY,
@@ -268,6 +272,50 @@ class StoredRouteDisplaySelectorTest {
         var g=geometry();artifacts.put(key(g,AutomaticRouteDisplay.REVISION),new RouteDisplayRepository.Automatic("{}","bad"));
         state(g,RouteDisplayGeneration.SOURCE_REVISION,"FAILED",false);
         assertThat(selector.enrich(g).display().quality().issues()).extracting(QualityIssue::code).containsExactly("GENERATION_FAILED");
+    }
+
+    @Test void 원본검증이_먼저_끝나도_최초_개선시도가_끝날때까지_핀만_제공한다() {
+        var g=geometry();store(g,AutomaticRouteDisplay.sourceOnly(g,RouteDisplayGeneration.input(g).digest()),RouteDisplayGeneration.SOURCE_REVISION);
+        for(String status:List.of("PENDING","RUNNING")) {
+            jobs.put(key(g,AutomaticRouteDisplay.REVISION),new RouteDisplayRepository.GenerationState(status,true,true));
+            var response=com.gustler.backend.api.route.dto.RouteGeometryResponse.from(selector.enrich(g));
+            assertThat(response.reason()).isEqualTo("GENERATION_PENDING");assertThat(response.paths()).isNull();assertThat(response.points()).isEmpty();
+            assertThat(response.busStops()).hasSize(3);assertThat(response.busStops().getFirst().point()).isNotNull();
+        }
+    }
+    @Test void 일시오류_재시도중에는_유효한_원본을_제공하고_개선완료시_교체한다() {
+        var g=geometry();var source=AutomaticRouteDisplay.sourceOnly(g,RouteDisplayGeneration.input(g).digest());store(g,source,RouteDisplayGeneration.SOURCE_REVISION);
+        jobs.put(key(g,AutomaticRouteDisplay.REVISION),new RouteDisplayRepository.GenerationState("PENDING",true,false));
+        var fallback=selector.enrich(g);
+        assertThat(fallback.display()).usingRecursiveComparison().ignoringFields("revision").isEqualTo(source);
+        store(g,build(g),AutomaticRouteDisplay.REVISION);var completed=selector.enrich(g);
+        assertThat(completed.display()).usingRecursiveComparison().ignoringFields("revision").isEqualTo(build(g));
+        assertThat(completed.revision()).isNotEqualTo(fallback.revision());
+    }
+    @Test void 원본이_없어도_자료복구가_소진되면_최종보류를_응답한다() {
+        var g=geometry();var missing=new RouteGeometry(g.routeId(),g.referenceVersionId(),g.name(),g.startPoint(),g.endPoint(),g.turnSequence(),g.busStops(),null);
+        recovery=new RouteDisplayRepository.GenerationState("EXHAUSTED",false,false);
+        var response=com.gustler.backend.api.route.dto.RouteGeometryResponse.from(selector.enrich(missing));
+        assertThat(response.reason()).isEqualTo("DISPLAY_WITHHELD");assertThat(response.paths()).isNull();assertThat(response.points()).isEmpty();
+        assertThat(response.busStops().getFirst().point()).isNotNull();
+    }
+    @Test void 자료_수집중에는_미수집과_최종보류를_혼동하지않는다() {
+        var g=geometry();var missing=new RouteGeometry(g.routeId(),g.referenceVersionId(),g.name(),g.startPoint(),g.endPoint(),g.turnSequence(),g.busStops(),null);
+        recovery=new RouteDisplayRepository.GenerationState("PENDING",true,false);
+        assertThat(com.gustler.backend.api.route.dto.RouteGeometryResponse.from(selector.enrich(missing)).reason()).isEqualTo("NOT_COLLECTED");
+    }
+    @Test void 현재계산이_끝나도_원천복구가_예약되어있으면_대기한다() {
+        var g=geometry();store(g,withheld(g),AutomaticRouteDisplay.REVISION);store(g,withheld(g),RouteDisplayGeneration.SOURCE_REVISION);
+        recovery=new RouteDisplayRepository.GenerationState("PENDING",true,false);
+        assertThat(com.gustler.backend.api.route.dto.RouteGeometryResponse.from(selector.enrich(g)).reason()).isEqualTo("GENERATION_PENDING");
+        recovery=new RouteDisplayRepository.GenerationState("EXHAUSTED",false,false);
+        assertThat(com.gustler.backend.api.route.dto.RouteGeometryResponse.from(selector.enrich(g)).reason()).isEqualTo("DISPLAY_WITHHELD");
+    }
+    @Test void 유효한_개선결과가_있으면_원천복구_실패때문에_숨기지않는다() {
+        var g=geometry();store(g,build(g),AutomaticRouteDisplay.REVISION);
+        recovery=new RouteDisplayRepository.GenerationState("EXHAUSTED",false,false);
+        assertThat(selector.enrich(g).display()).usingRecursiveComparison().ignoringFields("revision").isEqualTo(build(g));
+        assertThat(jobQueries).isZero();
     }
 
 }

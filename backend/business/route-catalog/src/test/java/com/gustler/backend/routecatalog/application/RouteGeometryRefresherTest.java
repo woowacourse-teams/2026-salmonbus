@@ -176,4 +176,16 @@ class RouteGeometryRefresherTest {
                 .isEqualTo(Outcome.UPDATED);
         verify(available).read("204000057");
     }
+    @Test
+    void 원본을_발행해도_웹_근거_실패는_복구_대상으로_남긴다() {
+        var web=mock(com.gustler.backend.routecatalog.domain.geometry.SupplementaryRouteGeometrySource.class);
+        when(web.read(any())).thenReturn(com.gustler.backend.routecatalog.domain.geometry.SupplementaryRouteGeometrySource.Contribution.unavailable("GBIS_WEB"));
+        when(store.current("204000057")).thenReturn(Optional.of(reference));when(quota.reserveRouteCatalog(now,1)).thenReturn(true);
+        when(source.read("204000057")).thenReturn(Optional.of(new Read(new RouteShape(List.of(new Point(127,37),new Point(127.1,37.1))),now)));
+        when(store.publish(any(),any())).thenReturn(Publication.UPDATED);
+        var result=new RouteGeometryRefresher(store,source,quota,List.of(web)).refreshWithDetails("204000057",now);
+        assertThat(result.outcome()).isEqualTo(Outcome.UPDATED);assertThat(result.supplementaryRecoveryNeeded()).isTrue();
+        verify(store).publish(any(),any());
+    }
+
 }

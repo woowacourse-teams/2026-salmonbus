@@ -27,14 +27,21 @@ public class JdbcRouteGeometryStore implements RouteGeometryStore {
     private final RouteSourceArchive archive;
     private final JdbcClient jdbc;
     private final ObjectMapper json;
+    private final java.time.Clock clock;
 
     public JdbcRouteGeometryStore(JdbcClient jdbc, ObjectMapper json) {
         this(jdbc,json,Optional.empty());
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
     public JdbcRouteGeometryStore(JdbcClient jdbc,ObjectMapper json,Optional<RouteSourceArchive> archive) {
+        this(jdbc,json,archive,Optional.empty());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public JdbcRouteGeometryStore(JdbcClient jdbc,ObjectMapper json,Optional<RouteSourceArchive> archive,
+            Optional<java.time.Clock> clock) {
         this.jdbc=jdbc;this.json=json;this.archive=archive.orElse(RouteSourceArchive.NONE);
+        this.clock=clock.orElseGet(java.time.Clock::systemUTC);
     }
 
     @Override
@@ -70,10 +77,16 @@ WHERE route.public_route_id=? AND route.source_id='GBIS'
         if (!current) {
             return Publication.REFERENCE_CHANGED;
         }
+        if(reference.recoveryLeaseToken()!=null && jdbc.sql("""
+                SELECT route_version_id FROM route_geometry_recovery
+                WHERE route_version_id=? AND route_id=? AND status='RUNNING' AND lease_token=?
+                    AND lease_until>clock_timestamp() FOR UPDATE
+                """).params(reference.versionId(),reference.routeId(),reference.recoveryLeaseToken())
+                .query(Long.class).optional().isEmpty())return Publication.RECOVERY_LEASE_LOST;
         Optional<Previous> previous =
                 jdbc.sql(
                                 """
-SELECT content_digest,received_at FROM route_geometry WHERE route_version_id=?
+SELECT content_digest,received_at,evidence::text,source_manifest_id FROM route_geometry WHERE route_version_id=?
 ORDER BY received_at DESC,id DESC LIMIT 1
 """)
                         .param(reference.versionId())
@@ -81,9 +94,11 @@ ORDER BY received_at DESC,id DESC LIMIT 1
                                 (row, index) ->
                                         new Previous(
                                                 row.getString(1),
-                                                row.getObject(2, OffsetDateTime.class)))
+                                                row.getObject(2, OffsetDateTime.class),row.getString(3),row.getString(4)))
                         .optional();
         String digest = read.shape().digest();
+        if(previous.isPresent() && retainUsableEvidence(reference,previous.get(),read,digest))
+            return Publication.UNCHANGED;
         if (previous.isPresent() && isUnchanged(previous.get(), read, digest)) {
             if (previous.get().digest().equals(digest) && !read.receivedAt().isBefore(previous.get().receivedAt())) {
                 String sourceManifest=bindInput(reference,read);
@@ -121,8 +136,24 @@ VALUES (?,?,?,?,CAST(? AS jsonb),CAST(? AS jsonb),?,?)
         return Publication.UPDATED;
     }
 
-    private String bindInput(Reference reference,Read read) {
-        if (read.acquisitionManifestId()==null || archive==RouteSourceArchive.NONE) return null;
+    private boolean retainUsableEvidence(Reference reference,Previous previous,Read incoming,String digest) {
+        if(previous.sourceManifest()==null || !previous.digest().equals(digest)
+                || incoming.evidence().sources().stream().noneMatch(s->s.id().equals("GBIS_WEB") && s.status().equals("UNAVAILABLE")))return false;
+        try {
+            var evidence=json.readValue(previous.evidence(),com.gustler.backend.routegeometry.api.RouteShapeEvidence.class);
+            if(evidence.webPoints().isEmpty() || evidence.sources().stream().noneMatch(s->s.id().equals("GBIS_WEB") && s.status().equals("AVAILABLE"))
+                    || evidence.sources().stream().anyMatch(s->!s.id().equals("GG_BMS_NODES")
+                        && s.validUntil()!=null && !clock.instant().isBefore(s.validUntil())))return false;
+            var binding=inputBinding(reference,incoming);
+            return jdbc.sql("""
+                SELECT EXISTS(SELECT 1 FROM route_input_manifest WHERE manifest_id=? AND route_id=?
+                    AND reference_version_id=? AND input_digest=? AND evidence_revision=?)
+                """).params(previous.sourceManifest(),reference.routeId(),reference.versionId(),binding.input().digest(),evidence.revision())
+                .query(Boolean.class).single();
+        } catch(RuntimeException invalid) {return false;}
+    }
+
+    private InputBinding inputBinding(Reference reference,Read read) {
         var catalog=jdbc.sql("""
             SELECT r.public_route_id,v.turn_sequence,v.acquisition_manifest_id
             FROM route r JOIN route_version v ON v.route_id=r.id WHERE v.id=? AND r.id=?
@@ -142,6 +173,16 @@ VALUES (?,?,?,?,CAST(? AS jsonb),CAST(? AS jsonb),?,?)
             }).list();
         var input=new RouteDisplayInput(catalog.routeId(),catalog.turnSequence(),read.shape().points().stream()
             .map(p -> new RouteDisplayInput.Point(p.x(),p.y())).toList(),visits);
+        return new InputBinding(catalog,input);
+    }
+
+    private record InputBinding(Catalog catalog,RouteDisplayInput input) {}
+
+    private String bindInput(Reference reference,Read read) {
+        if (read.acquisitionManifestId()==null || archive==RouteSourceArchive.NONE) return null;
+        var binding=inputBinding(reference,read);
+        var catalog=binding.catalog();
+        var input=binding.input();
         var references=new java.util.ArrayList<String>();references.add(read.acquisitionManifestId());
         var receipts=new java.util.ArrayList<RouteSourceReceipt>();
         if(catalog.manifestId()!=null) references.add(catalog.manifestId());
@@ -160,6 +201,6 @@ VALUES (?,?,?,?,CAST(? AS jsonb),CAST(? AS jsonb),?,?)
         return !read.receivedAt().isAfter(previous.receivedAt());
     }
 
-    private record Previous(String digest, OffsetDateTime receivedAt) {
+    private record Previous(String digest, OffsetDateTime receivedAt, String evidence, String sourceManifest) {
     }
 }

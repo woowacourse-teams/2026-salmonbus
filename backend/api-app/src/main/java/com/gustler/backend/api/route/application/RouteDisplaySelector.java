@@ -51,7 +51,15 @@ public class RouteDisplaySelector {
     }
 
     public RouteGeometry enrich(RouteGeometry geometry) {
-        if (!enabled || geometry.shape() == null) {
+        if (!enabled) return geometry;
+        if (geometry.shape() == null) {
+            var recovery=repository.findSourceRecovery(geometry.routeId(),geometry.referenceVersionId());
+            if(recovery.isPresent() && !recovery.get().canProgress()
+                    && !recovery.get().status().equals("SUCCEEDED") && !recovery.get().status().equals("SUPERSEDED"))
+                return geometry.withDisplay(new RouteDisplayGeometry(null,Map.of(),Map.of(),
+                    "source-exhausted/"+geometry.referenceVersionId(),Source.AUTOMATIC_FALLBACK,List.of(),
+                    new RouteDisplayGeometry.Quality(RouteDisplayGeometry.QualityStatus.WITHHELD,
+                        List.of(new RouteDisplayGeometry.QualityIssue("SOURCE_RECOVERY_EXHAUSTED",null,null,null)))));
             return geometry;
         }
         final RouteDisplayInput input;
@@ -98,6 +106,7 @@ public class RouteDisplaySelector {
         }
         var terminalKeys = new java.util.HashSet<String>();
         RouteDisplayGeometry rejected = null;
+        RouteDisplayGeometry fallback = null;
         List<String> algorithms = List.of(AutomaticRouteDisplay.REVISION, RouteDisplayGeneration.SOURCE_REVISION);
         String manifestId = geometry.shape().sourceManifestId();
         List<String> keys = algorithms.stream().map(algorithm ->
@@ -107,15 +116,23 @@ public class RouteDisplaySelector {
             if (read.found()) terminalKeys.add(keys.get(i));
             if (read.geometry().isEmpty()) continue;
             var value = read.geometry().get();
-            if (value.quality().status() != RouteDisplayGeometry.QualityStatus.WITHHELD)
-                return geometry.withDisplay(value);
+            if (value.quality().status() != RouteDisplayGeometry.QualityStatus.WITHHELD) {
+                if(i==0)return geometry.withDisplay(value);
+                fallback=value;
+                continue;
+            }
             if (rejected == null) rejected = value;
         }
-        // A rejected full result must not hide a usable source result, or finish a source job
-        // that is still running. Only the no-display path needs this single state query.
+        if(fallback!=null && terminalKeys.contains(keys.getFirst()))return geometry.withDisplay(fallback);
         var states = repository.findGenerationStates(geometry.routeId(),digest,evidence.revision(),keys);
-        boolean pending = keys.stream().anyMatch(key -> !terminalKeys.contains(key)
+        var improved=states.get(keys.getFirst());
+        boolean initialAttempt=!terminalKeys.contains(keys.getFirst())
+                && (improved==null || improved.canProgress() && improved.initialAttempt());
+        if(fallback!=null && !initialAttempt)return geometry.withDisplay(fallback);
+        boolean pending = initialAttempt || keys.stream().anyMatch(key -> !terminalKeys.contains(key)
                 && (!states.containsKey(key) || states.get(key).canProgress()));
+        if(!pending)pending=repository.findSourceRecovery(geometry.routeId(),geometry.referenceVersionId())
+                .map(RouteDisplayRepository.GenerationState::canProgress).orElse(false);
         if (!pending && rejected != null) return geometry.withDisplay(rejected);
         String phase = pending ? "pending/" : "unavailable/";
         String reason = pending ? "GENERATION_PENDING" : "GENERATION_FAILED";

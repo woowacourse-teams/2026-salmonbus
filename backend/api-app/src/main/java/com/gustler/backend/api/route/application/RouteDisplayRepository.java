@@ -16,7 +16,15 @@ public interface RouteDisplayRepository {
     /** Current-key state only; reads never enqueue or revive work. */
     default Map<String, GenerationState> findGenerationStates(String routeId, String inputDigest,
             String evidenceRevision, List<String> generationKeys) { return Map.of(); }
-    record GenerationState(String status, boolean canProgress) {}
+    record GenerationState(String status, boolean canProgress, boolean initialAttempt) {
+        public GenerationState(String status, boolean canProgress) {
+            this(status, canProgress, canProgress && (status.equals("PENDING") || status.equals("RUNNING")));
+        }
+    }
+
+    default Optional<GenerationState> findSourceRecovery(String routeId, long referenceVersionId) {
+        return Optional.empty();
+    }
 
     default Optional<SourceManifest> findSourceManifest(String id) { return Optional.empty(); }
     record SourceManifest(String inputDigest,String evidenceRevision,long referenceVersionId) {}

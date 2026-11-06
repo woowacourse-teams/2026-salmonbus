@@ -51,15 +51,29 @@ ORDER BY display.registered_at DESC,display.id DESC LIMIT 1
             SELECT generation_key,status,
                 CASE WHEN status IN ('PENDING','SUPERSEDED') THEN attempts < attempt_limit
                      WHEN status='RUNNING' THEN lease_until > clock_timestamp() OR attempts < attempt_limit
-                     ELSE false END AS can_progress
+                     ELSE false END AS can_progress,
+                (status='PENDING' AND attempts=0 OR status='RUNNING' AND attempts=1 AND lease_until>clock_timestamp()) AS initial_attempt
             FROM route_display_generation_job
             WHERE route_id=:routeId AND input_digest=:inputDigest AND evidence_revision=:evidenceRevision AND generation_key IN (:keys)
             """).param("routeId",routeId).param("inputDigest",inputDigest).param("evidenceRevision",evidenceRevision)
             .param("keys",generationKeys)
-            .query((row,n) -> Map.entry(row.getString(1),new GenerationState(row.getString(2),row.getBoolean(3)))).list();
+            .query((row,n) -> Map.entry(row.getString(1),new GenerationState(row.getString(2),row.getBoolean(3),row.getBoolean(4)))).list();
         var states = new HashMap<String, GenerationState>();
         rows.forEach(entry -> states.put(entry.getKey(),entry.getValue()));
         return Map.copyOf(states);
+    }
+
+    @Override
+    public Optional<GenerationState> findSourceRecovery(String routeId, long referenceVersionId) {
+        return jdbc.sql("""
+            SELECT j.status,
+                CASE WHEN j.status='PENDING' THEN j.attempts<5
+                     WHEN j.status='RUNNING' THEN j.lease_until>clock_timestamp() OR j.attempts<5
+                     ELSE false END
+            FROM route_geometry_recovery j JOIN route r ON r.id=j.route_id
+            WHERE j.route_version_id=? AND r.public_route_id=? AND r.source_id='GBIS'
+            """).params(referenceVersionId,routeId)
+            .query((row,n)->new GenerationState(row.getString(1),row.getBoolean(2),false)).optional();
     }
 
     @Override

@@ -7,7 +7,7 @@
       "startStopName": "구리수택차고지",
       "endStopName": "안양역",
       "turnSequence": 44,
-      "contentDigest": "53f77a07fcfb444adc62628ced27d65fec55061bd4170459e17e0971e8e2c71a",
+      "contentDigest": "f6b5a3b0fabd731dbbab36054826be26714061c42d66b862eac60b191b4b51bc",
       "timetable": {
         "upFirstDepartureTime": "04:10",
         "upLastDepartureTime": "22:35",
@@ -824,7 +824,7 @@
       "startStopName": "도촌동9단지앞",
       "endStopName": "안양역",
       "turnSequence": 43,
-      "contentDigest": "196eaa74848d7f455a1579dae8601e3b71a8deab906fa6b2dbaacf040e3100bb",
+      "contentDigest": "91749006e76e5f822c1c2e241b37fae4eba6941e217dcba2928c6e7e8ffdae5d",
       "timetable": {
         "upFirstDepartureTime": "04:50",
         "upLastDepartureTime": "23:30",
@@ -1605,7 +1605,7 @@
       "startStopName": "운중동먹거리촌",
       "endStopName": "서울역버스환승센터(5번승강장)(중)",
       "turnSequence": 37,
-      "contentDigest": "bf1310639ce6579a4853113f38cb34f0e4f9a25c13e1005daacc0f4857850904",
+      "contentDigest": "efb1417c9fea037a132bc464bcb878e5c98c6443f915aee83697995d4ba9c9ed",
       "timetable": {
         "upFirstDepartureTime": "05:00",
         "upLastDepartureTime": "22:50",
@@ -2278,7 +2278,7 @@
       "startStopName": "도촌동9단지앞",
       "endStopName": "서울역버스환승센터(5번승강장)(중)",
       "turnSequence": 40,
-      "contentDigest": "07a71ac030314ba9304aebb4b97824ca10a1ace1295a33338f7ce0c327d81509",
+      "contentDigest": "1ac326886786974a11058d2a1ced484c8c227bf4a0f4aa45a8afdcd56a030bd7",
       "timetable": {
         "upFirstDepartureTime": "05:00",
         "upLastDepartureTime": "23:00",
@@ -2942,7 +2942,7 @@
       "startStopName": "호수자이파밀리에.아이원",
       "endStopName": "판교역.낙생육교.현대백화점",
       "turnSequence": 26,
-      "contentDigest": "8f8cb7b67af625ed7caef08a3b76d631a7d62d6148b9d09e84aea61ef34b7b86",
+      "contentDigest": "056933eac19755727e4d6441d5e092893568ebdd55f86d15d291558b82e93a3f",
       "timetable": {
         "upFirstDepartureTime": "05:10",
         "upLastDepartureTime": "23:00",
@@ -3345,7 +3345,7 @@
       "startStopName": "미사역호반써밋",
       "endStopName": "금토천교",
       "turnSequence": 35,
-      "contentDigest": "e739e846d68575374c60ea4e27679a54db71c48de958f95e81e44157510bfde5",
+      "contentDigest": "8686d5a908f77affc660566189b3b8a4aaaec9fca402ab91dc2abd5e0c77a35d",
       "timetable": {
         "upFirstDepartureTime": "05:00",
         "upLastDepartureTime": "23:00",
@@ -4000,7 +4000,7 @@
       "startStopName": "명지대",
       "endStopName": "테크노마트앞.강변역(C)",
       "turnSequence": 64,
-      "contentDigest": "6e4603205361a7a6e6e0ff0a7d832c93168a9585c11368238ffbf74c163a8dfe",
+      "contentDigest": "82b634314bdab64c3ba84ba251437cf946e60e5f0e0322f19947147a92d3e770",
       "timetable": {
         "upFirstDepartureTime": "05:30",
         "upLastDepartureTime": "23:00",
@@ -5159,7 +5159,7 @@
       "startStopName": "구미동차고지(경유)",
       "endStopName": "케피코경기외국어고등학교",
       "turnSequence": 42,
-      "contentDigest": "c0a4e6286b1959990723852ea596103f16e93b857617b76a1899916b4c64ed43",
+      "contentDigest": "d96c35c32a62e6298286e32dcdbcc762596d6d795f521faf6cd00155a470358a",
       "timetable": {
         "upFirstDepartureTime": "04:50",
         "upLastDepartureTime": "23:20",

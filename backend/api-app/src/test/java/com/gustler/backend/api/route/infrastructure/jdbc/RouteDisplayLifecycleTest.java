@@ -53,6 +53,7 @@ class RouteDisplayLifecycleTest {
     @Autowired JdbcClient jdbc;
     @Autowired ObjectMapper json;
     @Autowired RouteGeometryQueryService service;
+    @Autowired JdbcRouteDisplayRepository displays;
     private static final RouteId ID = new RouteId("204000057");
 
     @BeforeEach
@@ -266,6 +267,36 @@ class RouteDisplayLifecycleTest {
         assertThat(before.display().quality().issues()).extracting(i->i.code()).containsExactly("GENERATION_FAILED");
         assertThat(after.display().quality().issues()).extracting(i->i.code()).containsExactly("GENERATION_PENDING");
         assertThat(after.revision()).isNotEqualTo(before.revision());
+    }
+
+    @Test void 자료복구_소진은_현재버전에서만_핀_응답으로_반영된다() throws Exception {
+        var g=current();jdbc.sql("DELETE FROM route_geometry").update();
+        jdbc.sql("INSERT INTO route_geometry_recovery(route_version_id,route_id,status,attempts) SELECT ?,id,'PENDING',0 FROM route WHERE public_route_id=?")
+            .params(g.referenceVersionId(),ID.value()).update();
+        var mvc=MockMvcBuilders.standaloneSetup(new RouteGeometryController(service)).build();
+        String path="/api/v2/routes/"+ID.value()+"/geometry";
+        mvc.perform(get(path)).andExpect(jsonPath("$.reason").value("NOT_COLLECTED"));
+        jdbc.sql("UPDATE route_geometry_recovery SET status='EXHAUSTED',attempts=5").update();
+        mvc.perform(get(path).header("If-None-Match","old-ready"))
+            .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+            .andExpect(header().doesNotExist("ETag")).andExpect(jsonPath("$.reason").value("DISPLAY_WITHHELD"))
+            .andExpect(jsonPath("$.points").isEmpty()).andExpect(jsonPath("$.paths").isEmpty())
+            .andExpect(jsonPath("$.busStops[0].point.x").value(127.0));
+        assertThat(displays.findSourceRecovery(ID.value(),g.referenceVersionId()+1000)).isEmpty();
+    }
+    @Test void 실제작업상태는_첫시도와_오류후_재시도를_구별한다() {
+        var g=current();String digest=RouteDisplayGeneration.input(g).digest(),evidence=g.shape().evidence().revision();
+        String key=RouteDisplayGeneration.key(digest,evidence,AutomaticRouteDisplay.REVISION);
+        jdbc.sql("UPDATE route_display_generation_job SET status='PENDING',attempts=0 WHERE generation_key=?").param(key).update();
+        assertThat(displays.findGenerationStates(ID.value(),digest,evidence,List.of(key)).get(key).initialAttempt()).isTrue();
+        jdbc.sql("UPDATE route_display_generation_job SET attempts=1 WHERE generation_key=?").param(key).update();
+        assertThat(displays.findGenerationStates(ID.value(),digest,evidence,List.of(key)).get(key).initialAttempt()).isFalse();
+        jdbc.sql("UPDATE route_display_generation_job SET status='RUNNING',lease_token=?,lease_until=clock_timestamp()+interval '1 minute' WHERE generation_key=?")
+            .params(UUID.randomUUID(),key).update();
+        assertThat(displays.findGenerationStates(ID.value(),digest,evidence,List.of(key)).get(key).initialAttempt()).isTrue();
+        jdbc.sql("UPDATE route_display_generation_job SET lease_until=clock_timestamp()-interval '1 second' WHERE generation_key=?").param(key).update();
+        var expired=displays.findGenerationStates(ID.value(),digest,evidence,List.of(key)).get(key);
+        assertThat(expired.canProgress()).isTrue();assertThat(expired.initialAttempt()).isFalse();
     }
 
 }

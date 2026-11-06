@@ -61,7 +61,7 @@ public class RouteGeometryController {
             방향 전환이나 지도 확대·이동마다 재조회하지 않습니다.
 
             READY는 도로 형상과 모든 정류장 좌표 제공, PARTIAL은 도로 형상을 유지하되 일부 정류장의 `point=null`인 상태입니다.
-            사용 가능한 표시 결과가 없고 현재 생성 작업이 진행 중이면 UNAVAILABLE/GENERATION_PENDING입니다. 두 작업이 종료됐거나 입력·선택 묶음이 무효이면 UNAVAILABLE/DISPLAY_WITHHELD입니다. 두 응답 모두 `points=[]`, `paths=null`, 연결점 생략이며 원본 정류장 GPS는 유지합니다. 이 경우 원본 선을 대신 그리지 않습니다.
+            자동 형상의 최초 개선 시도가 아직 끝나지 않았으면 원본 검증이 먼저 끝났어도 UNAVAILABLE/GENERATION_PENDING입니다. 첫 시도 후 일시 오류로 재시도 중이거나 개선 결과를 사용할 수 없을 때는 유효한 현재 원본 대체를 제공합니다. 사용할 결과가 없고 생성 또는 자료 복구가 진행 가능하면 GENERATION_PENDING, 모두 종료됐거나 입력·선택 묶음이 무효이면 DISPLAY_WITHHELD입니다. 기본 응답의 두 UNAVAILABLE 상태는 `points=[]`, `paths=null`, 연결점 생략이며 원본 정류장 GPS는 유지합니다.
             UNAVAILABLE/NOT_COLLECTED는 현재 판본의 형상 미수집으로 `points=[]`, `paths=null`이며, 정류장 좌표가 있으면 마커만 표시할 수 있습니다.
             dev 공급 자료는 현재 41노선의 정류장 방문 3,215건과 형상점 35,542개를 포함한 GBIS 정적 재생 자료입니다.
             8노선은 기존 정적 API 저장본, 33노선은 공식 공개 지도 형상입니다. 방문 건수는 고유 물리 정류장 수가 아닙니다.

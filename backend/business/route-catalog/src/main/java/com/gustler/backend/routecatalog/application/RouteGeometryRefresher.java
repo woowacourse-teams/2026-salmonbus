@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Optional;
 
 /** HTTP 대기 중에는 DB 트랜잭션을 열지 않고 정상 변경만 발행한다. */
-@Component
+@Component("routeGeometryRefresher")
 public class RouteGeometryRefresher implements RefreshRouteGeometry {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(RouteGeometryRefresher.class);
     private final RouteSourceArchive archive;
@@ -68,11 +68,22 @@ public class RouteGeometryRefresher implements RefreshRouteGeometry {
 
     @Override
     public Outcome refresh(String routeId, OffsetDateTime requestedAt) {
+        return refreshWithDetails(routeId, requestedAt).outcome();
+    }
+
+    @Override
+    public Acquisition refreshWithDetails(String routeId, OffsetDateTime requestedAt) {
+        return refreshAttempt(routeId,requestedAt,null);
+    }
+
+    @Override
+    public Acquisition refreshAttempt(String routeId, OffsetDateTime requestedAt, Attempt attempt) {
         long started = System.nanoTime();
         Outcome outcome = null;
         try {
-            outcome = refreshOnce(routeId, requestedAt);
-            return outcome;
+            Acquisition acquired = refreshOnce(routeId, requestedAt, attempt);
+            outcome = acquired.outcome();
+            return acquired;
         } finally {
             String publicRouteId = routeId != null && routeId.matches("[0-9]{9}") ? routeId : "INVALID";
             LOG.info("event=route_geometry_acquisition_timing routeId={} outcome={} durationMs={}",
@@ -81,10 +92,15 @@ public class RouteGeometryRefresher implements RefreshRouteGeometry {
         }
     }
 
-    private Outcome refreshOnce(String routeId, OffsetDateTime requestedAt) {
+    private Acquisition refreshOnce(String routeId, OffsetDateTime requestedAt, Attempt attempt) {
         Optional<Reference> reference = store.current(routeId);
         if (reference.isEmpty()) {
-            return Outcome.NO_REFERENCE;
+            return new Acquisition(Outcome.NO_REFERENCE, false);
+        }
+        if(attempt!=null) {
+            if(reference.get().versionId()!=attempt.versionId())return new Acquisition(Outcome.REFERENCE_CHANGED,false);
+            var current=reference.get();
+            reference=Optional.of(new Reference(current.routeId(),current.sourceRouteId(),current.versionId(),attempt.leaseToken()));
         }
         boolean allowed = quota.reserveRouteCatalog(requestedAt, 1);
         Optional<Read> primary = Optional.empty();
@@ -140,7 +156,7 @@ public class RouteGeometryRefresher implements RefreshRouteGeometry {
             }
         }
         if (read.isEmpty()) {
-            return allowed ? Outcome.SOURCE_UNAVAILABLE : Outcome.NO_QUOTA;
+            return new Acquisition(allowed ? Outcome.SOURCE_UNAVAILABLE : Outcome.NO_QUOTA, false);
         }
         if (!supplementary.isEmpty()) {
             List<RouteShapeEvidence.Source> sources = new ArrayList<>();
@@ -186,11 +202,15 @@ public class RouteGeometryRefresher implements RefreshRouteGeometry {
             case UPDATED -> Outcome.UPDATED;
             case UNCHANGED -> Outcome.UNCHANGED;
             case REFERENCE_CHANGED -> Outcome.REFERENCE_CHANGED;
+            case RECOVERY_LEASE_LOST -> Outcome.RECOVERY_SCHEDULED;
         };
         if (outcome == Outcome.UPDATED || outcome == Outcome.UNCHANGED) {
             inputAvailableAfterCommit(new RouteGeometryInputAvailable(routeId, reference.get().versionId()));
         }
-        return outcome;
+        boolean webRecovery = contributions.stream().anyMatch(c -> c.source().id().equals("GBIS_WEB")
+                && !c.source().status().equals("NOT_CONFIGURED")
+                && (!c.source().status().equals("AVAILABLE") || c.webPoints().isEmpty()));
+        return new Acquisition(outcome, webRecovery);
     }
 
     private void inputAvailableAfterCommit(RouteGeometryInputAvailable event) {

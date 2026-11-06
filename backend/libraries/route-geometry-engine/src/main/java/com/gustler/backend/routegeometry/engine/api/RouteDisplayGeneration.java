@@ -32,6 +32,12 @@ public final class RouteDisplayGeneration {
                 s.stopSequence(), s.direction(), s.boardingAllowed(), s.point() == null ? null :
                 new RouteDisplayInput.Point(s.point().x(), s.point().y()))).toList());
     }
+    public static boolean roleEvidenceNeedsRefresh(RouteGeometry geometry) {
+        if (geometry.shape() == null || geometry.shape().evidence().sources().stream()
+                .noneMatch(s -> s.id().equals("GBIS_WEB") && s.status().equals("AVAILABLE"))) return false;
+        return EvidenceRoutePaths.classify(geometry).classifications().isEmpty();
+    }
+
     public static RouteGeometry at(RouteGeometry g, java.time.Instant now) {
         var s = g.shape();
         return new RouteGeometry(g.routeId(),g.referenceVersionId(),g.name(),g.startPoint(),g.endPoint(),
