@@ -6,6 +6,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.support.PostgresTestContainer;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +18,8 @@ import org.springframework.scheduling.Trigger;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.scheduling.config.TriggerTask;
+import org.springframework.scheduling.support.CronTrigger;
+import org.springframework.scheduling.support.SimpleTriggerContext;
 import org.springframework.test.context.bean.override.mockito.MockReset;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -51,9 +56,17 @@ class ScheduledCollectionTest {
             .toList();
 
         // then
-        assertThat(triggers).singleElement().isInstanceOf(AdaptiveCollectionTrigger.class);
+        assertThat(triggers).filteredOn(AdaptiveCollectionTrigger.class::isInstance).hasSize(1);
+        var nightly = triggers.stream().filter(CronTrigger.class::isInstance).map(CronTrigger.class::cast).toList();
+        assertThat(nightly).hasSize(1);
+        assertThat(nightly.getFirst().getExpression()).isEqualTo("0 0 4 * * *");
+        assertThat(nightly.getFirst().nextExecution(new SimpleTriggerContext(
+            Clock.fixed(Instant.parse("2026-11-04T18:59:59Z"), ZoneOffset.UTC))))
+            .isEqualTo(Instant.parse("2026-11-04T19:00:00Z"));
         verify(collectionScheduler).schedule(any(Runnable.class), any(AdaptiveCollectionTrigger.class));
+        verify(collectionScheduler).schedule(any(Runnable.class), any(CronTrigger.class));
         verify(processingScheduler, never()).schedule(any(Runnable.class), any(AdaptiveCollectionTrigger.class));
+        verify(processingScheduler, never()).schedule(any(Runnable.class), any(CronTrigger.class));
     }
 
     @Test

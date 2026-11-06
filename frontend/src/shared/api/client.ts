@@ -59,6 +59,7 @@ export interface RequestOptions {
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
+  cache?: RequestCache;
   errorContext?: RequestErrorContext;
 }
 
@@ -114,6 +115,7 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
       },
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
       signal: controller.signal,
+      ...(options.cache === undefined ? {} : { cache: options.cache }),
     });
     contentType = response.headers.get("content-type");
     const clock = referenceClockFrom(response.headers);

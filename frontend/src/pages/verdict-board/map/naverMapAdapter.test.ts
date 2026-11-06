@@ -209,6 +209,10 @@ function createRecordingSdk(glSupported = true) {
         lines.push(options);
         lineMaps.set(options, options.map);
       }
+      setPath(path: NaverCoordinate[]) {
+        checkSdk();
+        this.options.path = path;
+      }
       setOptions(options: Parameters<InstanceType<NaverMaps["Polyline"]>["setOptions"]>[0]) {
         checkSdk();
         Object.assign(this.options, options);

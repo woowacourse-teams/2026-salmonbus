@@ -11,7 +11,27 @@ public interface RefreshRouteGeometry {
      */
     Outcome refresh(String routeId, OffsetDateTime requestedAt);
 
+    default Outcome ensure(String routeId, OffsetDateTime requestedAt) {
+        return refresh(routeId, requestedAt);
+    }
+
+    default Acquisition refreshWithDetails(String routeId, OffsetDateTime requestedAt) {
+        return new Acquisition(refresh(routeId, requestedAt), false);
+    }
+
+    default Acquisition refreshAttempt(String routeId, OffsetDateTime requestedAt, Attempt attempt) {
+        return refreshWithDetails(routeId, requestedAt);
+    }
+
+    record Attempt(long versionId, java.util.UUID leaseToken) {
+        public Attempt {
+            if(versionId<=0 || leaseToken==null)throw new IllegalArgumentException("Invalid acquisition lease");
+        }
+    }
+
+    record Acquisition(Outcome outcome, boolean supplementaryRecoveryNeeded) {}
+
     enum Outcome {
-        UPDATED, UNCHANGED, NO_REFERENCE, NO_QUOTA, SOURCE_UNAVAILABLE, REFERENCE_CHANGED
+        UPDATED, UNCHANGED, NO_REFERENCE, NO_QUOTA, SOURCE_UNAVAILABLE, REFERENCE_CHANGED, RECOVERY_SCHEDULED, RECOVERY_EXHAUSTED
     }
 }

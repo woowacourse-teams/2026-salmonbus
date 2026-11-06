@@ -13,6 +13,7 @@ export function fetchRouteGeometry(
       : `?referenceVersionId=${encodeURIComponent(options.referenceVersionId)}`;
   return requestJson<RouteGeometry>(endpoint.replace(":routeId", encodeURIComponent(routeId)) + query, {
     signal: options.signal,
+    cache: "no-cache",
     errorContext: { endpoint, tags: { route_id: routeId } },
   });
 }

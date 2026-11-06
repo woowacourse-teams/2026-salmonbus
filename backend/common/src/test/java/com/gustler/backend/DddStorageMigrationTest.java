@@ -530,7 +530,7 @@ class DddStorageMigrationTest {
         preparePendingTransition();
         migrate("38");
         approveEvaluationTransition();
-        migrate("52");
+        migrate("57");
         execute("""
             INSERT INTO evaluation_archive_batch(id,route_version_id,quality_revision,lease_token,lease_until,row_count)
             VALUES('00000000-0000-0000-0000-000000000002',1,7,

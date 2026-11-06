@@ -1,0 +1,11 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api project(':route-geometry-contract')
+    implementation 'org.locationtech.proj4j:proj4j:1.4.3'
+    implementation 'org.locationtech.proj4j:proj4j-epsg:1.4.3'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

@@ -5,12 +5,15 @@ plugins {
 
 dependencies {
     implementation project(':forecasting')
+    implementation project(':route-geometry-contract')
+    implementation project(':route-geometry-engine')
     implementation 'org.springframework:spring-context'
     implementation 'org.springframework:spring-jdbc'
     implementation 'tools.jackson.core:jackson-databind'
     runtimeOnly 'org.postgresql:postgresql'
 
-    testRuntimeOnly project(':common')
+    testImplementation testFixtures(project(':common'))
+    testImplementation testFixtures(project(':route-geometry-contract'))
     testImplementation 'org.flywaydb:flyway-core'
     testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.junit.jupiter:junit-jupiter'

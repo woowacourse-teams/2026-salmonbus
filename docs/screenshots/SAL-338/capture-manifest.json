@@ -1,0 +1,167 @@
+{
+  "format": "sal338-final-v5-actual-app-same-input-before-after-v2",
+  "algorithm": "automatic-quality-v5",
+  "baselineFrontendCommit": "09f23452e5553f7903667714ccc7f4cbf615a3c2",
+  "baselineFrontendUnmodified": true,
+  "finalFrontend": "current local reference implementation excluded from backend PR",
+  "geometryRevision": "ef6542c791900e2d750f317e386b0019416ce8696deafb4af1a44b934016bdc8",
+  "sameActualGeometryResponseSha256": "736efbeeda0bad38426ddbaa1090923fd25bacff54ca323698ba4ec199b35b80",
+  "sameActualWatchResponseSha256": "8e25ba4ced5a09819c03a5879d7a786ab95e13eb355dd2b7b449484f859f11b3",
+  "providerDataBasis": "retained public bytes via LOCAL_REPLAY; not live vehicle GPS",
+  "inputReplay": "Identical actual v5 HTTP body delivered to both app versions. Baseline consumes original paths, reference consumes displayPaths. Frozen geometry/watch handlers fulfilled in both phases (recorded).",
+  "baselineStaticAssets": "Only isolated before-browser HTML/static assets forwarded from own baseline server3002 through registered Naver localhost3000 origin; actual user app unchanged.",
+  "rawSourceFieldsEqualRetainedPreChange": [
+    "routeId",
+    "referenceVersionId",
+    "name",
+    "startPoint",
+    "endPoint",
+    "status",
+    "reason",
+    "coordinateSystem",
+    "turningPoint",
+    "points",
+    "paths",
+    "boundary",
+    "all visit stationId/sequence/direction/point"
+  ],
+  "photos": [
+    {
+      "case": "pangyo-x-detail",
+      "phase": "before",
+      "filename": "pangyo-x-detail-before.png",
+      "url": "http://localhost:3000/routes/204000057?direction=UP&stopId=206000532",
+      "clip": {
+        "x": 0,
+        "y": 261,
+        "width": 430,
+        "height": 320
+      },
+      "camera": {
+        "zoom": 18,
+        "lon": 127.11299,
+        "lat": 37.39175,
+        "devicePixelRatio": 2
+      }
+    },
+    {
+      "case": "dochon-terminal",
+      "phase": "before",
+      "filename": "dochon-terminal-before.png",
+      "url": "http://localhost:3000/routes/204000057?direction=UP&stopId=205000227",
+      "clip": {
+        "x": 0,
+        "y": 121,
+        "width": 430,
+        "height": 600
+      },
+      "camera": {
+        "zoom": 18,
+        "lon": 127.16291665,
+        "lat": 37.41188335,
+        "devicePixelRatio": 2
+      }
+    },
+    {
+      "case": "pangyo-x-detail",
+      "phase": "after",
+      "filename": "pangyo-x-detail-after.png",
+      "url": "http://localhost:3000/routes/204000057?direction=UP&stopId=206000532",
+      "clip": {
+        "x": 0,
+        "y": 261,
+        "width": 430,
+        "height": 320
+      },
+      "camera": {
+        "zoom": 18,
+        "lon": 127.11299,
+        "lat": 37.39175,
+        "devicePixelRatio": 2
+      }
+    },
+    {
+      "case": "dochon-terminal",
+      "phase": "after",
+      "filename": "dochon-terminal-after.png",
+      "url": "http://localhost:3000/routes/204000057?direction=UP&stopId=205000227",
+      "clip": {
+        "x": 0,
+        "y": 121,
+        "width": 430,
+        "height": 600
+      },
+      "camera": {
+        "zoom": 18,
+        "lon": 127.16291665,
+        "lat": 37.41188335,
+        "devicePixelRatio": 2
+      }
+    },
+    {
+      "case": "seohyeon-curve-complete",
+      "phase": "before",
+      "filename": "seohyeon-curve-complete-before.png",
+      "url": "http://localhost:3000/routes/204000057?direction=UP&stopId=206000532",
+      "clip": {
+        "x": 0,
+        "y": 181,
+        "width": 430,
+        "height": 480
+      },
+      "camera": {
+        "zoom": 20,
+        "lon": 127.12682,
+        "lat": 37.3863,
+        "devicePixelRatio": 2
+      }
+    },
+    {
+      "case": "seohyeon-curve-complete",
+      "phase": "after",
+      "filename": "seohyeon-curve-complete-after.png",
+      "url": "http://localhost:3000/routes/204000057?direction=UP&stopId=206000532",
+      "clip": {
+        "x": 0,
+        "y": 181,
+        "width": 430,
+        "height": 480
+      },
+      "camera": {
+        "zoom": 20,
+        "lon": 127.12682,
+        "lat": 37.3863,
+        "devicePixelRatio": 2
+      }
+    }
+  ],
+  "imageEditing": false,
+  "geographicDataEdited": false,
+  "prototypeDomLayer": false,
+  "cameraAndClipPairExact": true,
+  "frontendCodeIncludedInBackendPr": false,
+  "proofRequestCounts": {
+    "before": {
+      "geometry": 8,
+      "watch": 8
+    },
+    "after": {
+      "geometry": 8,
+      "watch": 6
+    }
+  },
+  "pngSha256": {
+    "selected-9507.png": "8807f92d7581e1a6d937c2367f1b8b36d4df2fba3db238959097c09534894b79",
+    "gangnam-curb-down-202507.png": "79bb64895691b341f7ef3dd7a757c4f141c5d57c1bb330a655578cfffdbcc46a",
+    "gangnam-curb-up-202501.png": "addd5824e3f93a803a0052dffcde01c3c679dea5598fd25e3d1a87f4690979e5",
+    "dochon-terminal-after.png": "967f2ab9a08debb49f680ea453aaaf5c4576667808c8f659328782dd1dc6d5fd",
+    "dochon-terminal-before.png": "15317ba14093daa10506ec2bc4a7b3472d753e20196471f01dbaecf14ca63690",
+    "pangyo-x-detail-after.png": "f778ee3eafe2faa0f190edd018f441ce97f6390aa475afcab74b2015c4cdac43",
+    "jamsil-underground-map.png": "a9036625b6e0c24181f011b7da16937bf7777d2e223644fdf76447fe52652c31",
+    "seohyeon-curve-complete-after.png": "f3d4f6a66aa406d90c5e6e9311e1765af9eeb73581e699c4a574b234519d68e7",
+    "seohyeon-curve-complete-before.png": "b2e88d1933209b7b4cbee553b38915b59586181665352b9a181e57f136093031",
+    "pangyo-x-detail-before.png": "f1567df61f60db4573b4cfe8f2b9b177b87769aae43ebf0e79b658791f149411",
+    "selected-1009.png": "be8293494828afc36eee4263ec5221b2fc53c2edfee7d3c53c98fa252708eac0",
+    "review-41-hub.png": "c6f640e1cb8111428692e303ee84a045e61941a587605a384e1a100b1a4dfb8f"
+  }
+}

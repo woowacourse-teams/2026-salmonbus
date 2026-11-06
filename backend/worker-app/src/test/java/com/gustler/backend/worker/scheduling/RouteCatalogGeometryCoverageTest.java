@@ -46,8 +46,7 @@ class RouteCatalogGeometryCoverageTest {
 
         // then
         assertThat(tasks).hasSize(1);
-        verify(catalog, never()).currentGbisRouteIds();
-        verifyNoInteractions(geometry);
+        verifyNoInteractions(catalog, geometry);
         tasks.remove().run();
         for (String routeId : initialRoutes) {
             verify(catalog).refresh(eq(routeId), any());
