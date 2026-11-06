@@ -1,3 +1,5 @@
+import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -5,10 +7,13 @@ from pathlib import Path
 from domain_wiki.wiki_update import (
     WikiUpdateError,
     apply_confirmed_updates,
+    create_approval_request,
     render_wiki_result,
     run_wiki_update_review,
+    validate_approval_request,
+    _gate_failures,
 )
-from domain_wiki.wiki_update_cli import initialize_wiki
+from domain_wiki.wiki_update_cli import initialize_wiki, main as wiki_update_main
 from domain_wiki.wiki_update_cli import (
     _read_discussion,
     _read_documents,
@@ -197,6 +202,131 @@ class WikiUpdateTest(unittest.TestCase):
         self.assertEqual([], result["accepted"])
         self.assertIn("counterevidence", result["rejected"][0]["gateFailures"])
         self.assertIn("changed-code-evidence", result["rejected"][0]["gateFailures"])
+
+    def test_author_withdrawal_cannot_be_overridden_by_final_review(self):
+        proposal = {
+            "proposalId": "W1", "document": "Policy.md",
+            "currentText": "현재 동작", "replacementText": "다른 동작",
+            "reason": "초안", "codePaths": ["frontend/src/a.ts"],
+        }
+        cheap = FakeModel(
+            "cheap",
+            [
+                {"proposals": [proposal]},
+                {"responses": [{
+                    "proposalId": "W1", "disposition": "withdraw",
+                    "response": "근거가 없어 철회",
+                }]},
+            ],
+        )
+        strong = FakeModel(
+            "strong",
+            [
+                {"assessments": [{
+                    "proposalId": "W1", "decision": "support", "objections": [],
+                }]},
+                {"assessments": [{
+                    "proposalId": "W1", "decision": "confirmed",
+                    "unresolvedCounterevidence": False, "rationale": "확인",
+                }]},
+            ],
+        )
+        result = run_wiki_update_review(
+            cheap_client=cheap, strong_client=strong,
+            documents=[{"path": "Policy.md", "content": "현재 동작\n"}],
+            changed_paths=("frontend/src/a.ts",), patches={}, pull_request={},
+            discussion=[], meeting_evidence=[],
+        )
+        self.assertEqual([], result["accepted"])
+        self.assertIn("author-withdrawn", result["rejected"][0]["gateFailures"])
+
+    def test_author_revision_requires_a_new_draft(self):
+        failures = _gate_failures(
+            {
+                "document": "Policy.md", "currentText": "현재 동작",
+                "replacementText": "수정 전 문장", "codePaths": ["frontend/src/a.ts"],
+            },
+            {"decision": "confirmed", "unresolvedCounterevidence": False},
+            {"disposition": "revise", "response": "문장을 바꿔야 함"},
+            [{"path": "Policy.md", "content": "현재 동작\n"}],
+            ("frontend/src/a.ts",),
+        )
+        self.assertIn("author-revision-not-redrafted", failures)
+
+    def test_approval_digest_binds_proposals_and_wiki_commit(self):
+        result = {"accepted": [{
+            "proposalId": "W1", "document": "Policy.md",
+            "currentText": "현재 동작", "replacementText": "새 동작",
+        }], "rejected": []}
+        request = create_approval_request(
+            result=result, base_sha="base", head_sha="head",
+            wiki_commit="wiki", bootstrap_files=("Home.md",),
+            pull_request={"number": 192},
+        )
+        accepted = validate_approval_request(
+            request, request["approvalDigest"], "wiki"
+        )
+        self.assertEqual("W1", accepted[0]["proposalId"])
+        self.assertIn("사람 승인 대기", render_wiki_result(result, [], request))
+
+        tampered = {**request, "accepted": [{**request["accepted"][0], "replacementText": "조작"}]}
+        with self.assertRaisesRegex(WikiUpdateError, "digest"):
+            validate_approval_request(tampered, request["approvalDigest"], "wiki")
+        with self.assertRaisesRegex(WikiUpdateError, "Wiki changed"):
+            validate_approval_request(request, request["approvalDigest"], "new-wiki")
+
+    def test_cli_applies_only_the_exact_approved_request(self):
+        repository = self.root / "repository"
+        repository.mkdir()
+        subprocess.run(["git", "init", "-q", str(repository)], check=True)
+        subprocess.run(["git", "-C", str(repository), "config", "user.email", "test@example.com"], check=True)
+        subprocess.run(["git", "-C", str(repository), "config", "user.name", "Test"], check=True)
+        (repository / "code.txt").write_text("before\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repository), "commit", "-qm", "base"], check=True)
+        base = subprocess.check_output(
+            ["git", "-C", str(repository), "rev-parse", "HEAD"], text=True
+        ).strip()
+        (repository / "code.txt").write_text("after\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repository), "commit", "-qam", "head"], check=True)
+        head = subprocess.check_output(
+            ["git", "-C", str(repository), "rev-parse", "HEAD"], text=True
+        ).strip()
+
+        (self.wiki / "Home.md").write_text("# 정책 Wiki\n", encoding="utf-8")
+        (self.wiki / "Policy.md").write_text("현재 동작\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(self.wiki)], check=True)
+        subprocess.run(["git", "-C", str(self.wiki), "config", "user.email", "test@example.com"], check=True)
+        subprocess.run(["git", "-C", str(self.wiki), "config", "user.name", "Test"], check=True)
+        subprocess.run(["git", "-C", str(self.wiki), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(self.wiki), "commit", "-qm", "wiki"], check=True)
+        wiki_commit = subprocess.check_output(
+            ["git", "-C", str(self.wiki), "rev-parse", "HEAD"], text=True
+        ).strip()
+        (self.seed / "Wiki-Document-Registry.json").write_text(
+            '{"documents":["Policy.md"],"codePaths":["code.txt"]}\n',
+            encoding="utf-8",
+        )
+        request = create_approval_request(
+            result={"accepted": [{
+                "proposalId": "W1", "document": "Policy.md",
+                "currentText": "현재 동작", "replacementText": "새 동작",
+            }]},
+            base_sha=base, head_sha=head, wiki_commit=wiki_commit,
+        )
+        approval = self.root / "approval.json"
+        approval.write_text(json.dumps(request), encoding="utf-8")
+        output = self.root / "output"
+        wiki_update_main([
+            "--repository", str(repository), "--base", base, "--head", head,
+            "--wiki-directory", str(self.wiki), "--seed-directory", str(self.seed),
+            "--pull-request-context", "/dev/null", "--discussion", "/dev/null",
+            "--output-directory", str(output), "--apply-approval", str(approval),
+            "--approval-digest", request["approvalDigest"],
+        ])
+        self.assertEqual("새 동작\n", (self.wiki / "Policy.md").read_text())
+        applied = json.loads((output / "wiki-result.json").read_text())
+        self.assertEqual("applied", applied["status"])
 
     def test_same_model_is_rejected(self):
         with self.assertRaisesRegex(WikiUpdateError, "must be different"):

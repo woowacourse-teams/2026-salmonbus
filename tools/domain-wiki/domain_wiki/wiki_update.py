@@ -1,3 +1,5 @@
+import hashlib
+import html
 import json
 from pathlib import Path
 
@@ -56,13 +58,21 @@ def run_wiki_update_review(
         _final_schema(),
     )
     finals = {item.get("proposalId"): item for item in review2.get("assessments", [])}
+    responses = {
+        item.get("proposalId"): item for item in response.get("responses", [])
+    }
     accepted = []
     rejected = []
     for proposal in draft.get("proposals", []):
         final = finals.get(proposal.get("proposalId"), {})
-        failures = _gate_failures(proposal, final, documents, changed_paths)
+        author_response = responses.get(proposal.get("proposalId"), {})
+        failures = _gate_failures(
+            proposal, final, author_response, documents, changed_paths
+        )
         evaluation = {
             **proposal,
+            "authorDisposition": author_response.get("disposition", "missing"),
+            "authorResponse": author_response.get("response", ""),
             "decision": final.get("decision", "missing"),
             "unresolvedCounterevidence": final.get("unresolvedCounterevidence"),
             "rationale": final.get("rationale", ""),
@@ -76,6 +86,50 @@ def run_wiki_update_review(
         "rejected": rejected,
         "usage": [usage1, usage2, usage3, usage4],
     }
+
+
+def create_approval_request(
+    *, result, base_sha, head_sha, wiki_commit, bootstrap_files=(), pull_request=None,
+):
+    payload = {
+        "schemaVersion": 1,
+        "kind": "salmonbus-wiki-update-approval",
+        "baseSha": base_sha,
+        "headSha": head_sha,
+        "wikiCommit": wiki_commit,
+        "bootstrapFiles": sorted(set(bootstrap_files)),
+        "accepted": result.get("accepted", []),
+        "pullRequest": pull_request or {},
+    }
+    payload["approvalDigest"] = approval_digest(payload)
+    return payload
+
+
+def approval_digest(request):
+    protected = {
+        key: value for key, value in request.items() if key != "approvalDigest"
+    }
+    serialized = json.dumps(
+        protected, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def validate_approval_request(request, supplied_digest, wiki_commit):
+    if (
+        request.get("schemaVersion") != 1
+        or request.get("kind") != "salmonbus-wiki-update-approval"
+    ):
+        raise WikiUpdateError("unsupported Wiki approval request")
+    expected = approval_digest(request)
+    if request.get("approvalDigest") != expected or supplied_digest != expected:
+        raise WikiUpdateError("Wiki approval digest does not match")
+    if request.get("wikiCommit") != wiki_commit:
+        raise WikiUpdateError("Wiki changed after the approval request was created")
+    accepted = request.get("accepted")
+    if not isinstance(accepted, list):
+        raise WikiUpdateError("Wiki approval request has no accepted proposals")
+    return accepted
 
 
 def apply_confirmed_updates(wiki_directory, documents, accepted):
@@ -107,15 +161,54 @@ def apply_confirmed_updates(wiki_directory, documents, accepted):
     return changed, skipped
 
 
-def render_wiki_result(result, changed):
+def render_wiki_result(result, changed, approval=None):
+    waiting = (
+        approval is not None
+        and bool(result.get("accepted") or approval.get("bootstrapFiles"))
+        and not changed
+    )
     lines = [
         "<!-- salmonbus-wiki-update -->",
-        "## 머지 후 Git Wiki 갱신 결과",
+        "## 머지 후 Git Wiki 갱신 검토 결과" if waiting else "## 머지 후 Git Wiki 갱신 결과",
         "",
         f"- 확정: {len(result['accepted'])}건",
         f"- 탈락: {len(result['rejected'])}건",
         f"- 변경 문서: {', '.join(f'`{path}`' for path in changed) if changed else '없음'}",
     ]
+    if waiting:
+        lines.extend(
+            [
+                "- 상태: 사람 승인 대기",
+                f"- 승인값: `{approval['approvalDigest']}`",
+                "",
+                "위 변경 후보를 확인한 뒤 GitHub Actions의 `DOMAIN-WIKI-UPDATE`를 "
+                "수동 실행하고 승인값을 입력해야 Wiki에 반영됩니다.",
+            ]
+        )
+        if approval.get("bootstrapFiles"):
+            lines.append(
+                "- 초기 생성 예정: "
+                + ", ".join(f"`{path}`" for path in approval["bootstrapFiles"])
+            )
+        lines.extend(["", "<details>", "<summary>반영 예정 문장</summary>", ""])
+        for item in result["accepted"]:
+            current = html.escape(str(item.get("currentText", "")))
+            replacement = html.escape(str(item.get("replacementText", "")))
+            lines.extend(
+                [
+                    f"### `{item.get('document', '')}`",
+                    "",
+                    "**현재 문장**",
+                    "",
+                    f"<pre>{current}</pre>",
+                    "",
+                    "**승인하면 바뀔 문장**",
+                    "",
+                    f"<pre>{replacement}</pre>",
+                    "",
+                ]
+            )
+        lines.extend(["</details>"])
     if result["rejected"]:
         lines.extend(["", "<details>", "<summary>탈락한 변경 후보</summary>", ""])
         for item in result["rejected"]:
@@ -141,7 +234,7 @@ def render_wiki_result(result, changed):
     return "\n".join(lines) + "\n"
 
 
-def _gate_failures(proposal, final, documents, changed_paths):
+def _gate_failures(proposal, final, author_response, documents, changed_paths):
     failures = []
     document_map = {item["path"]: item for item in documents}
     document = document_map.get(proposal.get("document"))
@@ -151,6 +244,12 @@ def _gate_failures(proposal, final, documents, changed_paths):
         failures.append("final-decision")
     if final.get("unresolvedCounterevidence") is not False:
         failures.append("counterevidence")
+    if author_response.get("disposition") == "withdraw":
+        failures.append("author-withdrawn")
+    elif author_response.get("disposition") == "revise":
+        failures.append("author-revision-not-redrafted")
+    elif author_response.get("disposition") != "defend":
+        failures.append("author-response-missing")
     old = proposal.get("currentText")
     replacement = proposal.get("replacementText")
     if not isinstance(old, str) or not old or not isinstance(replacement, str) or not replacement:

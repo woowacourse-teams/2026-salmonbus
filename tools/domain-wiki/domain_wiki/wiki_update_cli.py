@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 from .confluence import ConfluenceClient
@@ -11,8 +12,10 @@ from .git_diff import read_git_diff, read_patches
 from .openai import MAX_PATCH_BYTES, OpenAIClient
 from .wiki_update import (
     apply_confirmed_updates,
+    create_approval_request,
     render_wiki_result,
     run_wiki_update_review,
+    validate_approval_request,
 )
 
 
@@ -26,11 +29,18 @@ def main(argv=None):
     parser.add_argument("--pull-request-context", required=True)
     parser.add_argument("--discussion", required=True)
     parser.add_argument("--output-directory", default=".domain-wiki/output")
+    parser.add_argument("--apply-approval")
+    parser.add_argument("--approval-digest")
     args = parser.parse_args(argv)
 
     repository = Path(args.repository).resolve()
     wiki = Path(args.wiki_directory).resolve()
     seed = Path(args.seed_directory).resolve()
+    wiki_commit = _git_commit(wiki)
+    if args.apply_approval:
+        _apply_approval(args, repository, wiki, seed, wiki_commit)
+        return
+
     bootstrap_changed = initialize_wiki(wiki, seed)
     registry = _read_json(seed / "Wiki-Document-Registry.json")
     documents = _read_documents(wiki, registry)
@@ -65,26 +75,71 @@ def main(argv=None):
         discussion=discussion,
         meeting_evidence=evidence,
     )
-    ai_changed, skipped = apply_confirmed_updates(
-        wiki, documents, result["accepted"]
+    approval = create_approval_request(
+        result=result,
+        base_sha=diff.base_sha,
+        head_sha=diff.head_sha,
+        wiki_commit=wiki_commit,
+        bootstrap_files=bootstrap_changed,
+        pull_request=pull_request,
     )
-    if skipped:
-        skipped_ids = {item.get("proposalId") for item in skipped}
-        result["accepted"] = [
-            item for item in result["accepted"]
-            if item.get("proposalId") not in skipped_ids
-        ]
-        result["rejected"].extend(skipped)
-    changed = sorted(set(bootstrap_changed + ai_changed))
     result.update(
         {
             "baseSha": diff.base_sha,
             "headSha": diff.head_sha,
             "changedPaths": list(diff.changed_paths),
             "mappedPaths": list(mapped_paths),
-            "writtenDocuments": changed,
+            "writtenDocuments": [],
+            "status": "approval-required" if result["accepted"] or bootstrap_changed else "no-changes",
+            "approvalDigest": approval["approvalDigest"],
         }
     )
+    output = Path(args.output_directory)
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "wiki-approval.json").write_text(
+        json.dumps(approval, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    (output / "wiki-result.json").write_text(
+        json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    (output / "wiki-comment.md").write_text(
+        render_wiki_result(result, [], approval=approval), encoding="utf-8"
+    )
+
+
+def _apply_approval(args, repository, wiki, seed, wiki_commit):
+    if not args.approval_digest:
+        raise ValueError("--approval-digest is required with --apply-approval")
+    request = _read_json(Path(args.apply_approval))
+    accepted = validate_approval_request(
+        request, args.approval_digest, wiki_commit
+    )
+    expected_base = _resolved_commit(repository, args.base)
+    expected_head = _resolved_commit(repository, args.head)
+    if request.get("baseSha") != expected_base or request.get("headSha") != expected_head:
+        raise ValueError("approval request does not match the selected merged commit")
+
+    bootstrap_changed = initialize_wiki(wiki, seed)
+    expected_bootstrap = sorted(request.get("bootstrapFiles", []))
+    if sorted(bootstrap_changed) != expected_bootstrap:
+        raise ValueError("Wiki bootstrap state changed after approval was requested")
+    registry = _read_json(seed / "Wiki-Document-Registry.json")
+    documents = _read_documents(wiki, registry)
+    ai_changed, skipped = apply_confirmed_updates(wiki, documents, accepted)
+    if skipped:
+        raise ValueError("approved Wiki text changed before it could be applied")
+    changed = sorted(set(bootstrap_changed + ai_changed))
+    result = {
+        "stages": ["human-approval", "apply"],
+        "accepted": accepted,
+        "rejected": [],
+        "baseSha": expected_base,
+        "headSha": expected_head,
+        "wikiCommit": wiki_commit,
+        "writtenDocuments": changed,
+        "status": "applied",
+        "approvalDigest": request["approvalDigest"],
+    }
     output = Path(args.output_directory)
     output.mkdir(parents=True, exist_ok=True)
     (output / "wiki-result.json").write_text(
@@ -153,6 +208,16 @@ def _read_meeting_evidence(registry):
 
 def _read_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def _git_commit(repository):
+    return _resolved_commit(repository, "HEAD")
+
+
+def _resolved_commit(repository, revision):
+    return subprocess.check_output(
+        ["git", "-C", str(repository), "rev-parse", revision], text=True
+    ).strip()
 
 
 def _read_pull_request_context(path):
