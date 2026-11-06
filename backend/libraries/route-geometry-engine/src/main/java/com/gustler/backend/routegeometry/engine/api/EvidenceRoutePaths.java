@@ -147,7 +147,7 @@ final class EvidenceRoutePaths {
     /** 좌표를 이동하지 않고 분류만 대응한다. 중복 회차점 이외 삽입·삭제는 추측하지 않는다. */
     static Classification classify(RouteGeometry geometry) {
         Classification full=classifyFull(geometry),visible=classifyVisible(geometry);
-        if(visible==null)return full;
+        if(visible==null || visible.unmatchedPoints()>0 && !full.classifications().isEmpty())return full;
         if(full.classifications().isEmpty() || full.unmatchedPoints()>0 || geometry.shape().evidence().selectedSource().equals("GBIS_WEB"))return visible;
         // A one-node/duplicate degeneracy may fit both lineages. Retain only
         // roles on which both complete source interpretations agree.
@@ -203,8 +203,9 @@ final class EvidenceRoutePaths {
     }
 
     /** The official web fallback already excludes type2 before saving its
-     * primary shape. Only that exact visible sequence (optionally the single
-     * shared turn duplicate) is recognized; never nearest/insertion matching. */
+     * primary shape. The visible sequence keeps its indices (optionally the single
+     * shared turn duplicate); unmatched interior shape points are protected.
+     * Never infer nearest-point or insertion matching. */
     private static Classification classifyVisible(RouteGeometry geometry) {
         var typed=geometry.shape().evidence().webPoints();var raw=geometry.points();
         if(raw.size()>10000 || typed.isEmpty() || typed.stream().noneMatch(p->p.type()==2))return null;
@@ -230,10 +231,19 @@ final class EvidenceRoutePaths {
         }
         if(rows.size()!=raw.size())return null;
         Map<Point,List<TypedPoint>> result=new HashMap<>();
-        for(int i=0;i<raw.size();i++)for(var value:rows.get(i)) {
-            if(distance(raw.get(i),point(value))>4)return null;
-            result.computeIfAbsent(raw.get(i),ignored->new ArrayList<>()).add(value);
+        java.util.Set<Integer> unmatched=new java.util.HashSet<>();
+        java.util.Set<Point> protectedPoints=new java.util.HashSet<>();
+        for(int i=0;i<raw.size();i++) {
+            Point rawPoint=raw.get(i);
+            if(rows.get(i).stream().anyMatch(value->distance(rawPoint,point(value))>4)) {
+                if(i==0 || i==raw.size()-1 || i==boundary || !merge && i==boundary+1
+                        || rows.get(i).stream().anyMatch(value->value.type()!=3))return null;
+                unmatched.add(i);
+                for(int j=Math.max(0,i-1);j<=Math.min(raw.size()-1,i+1);j++)protectedPoints.add(raw.get(j));
+            } else result.computeIfAbsent(rawPoint,ignored->new ArrayList<>()).addAll(rows.get(i));
         }
+        if((long)(raw.size()-unmatched.size())*100<(long)raw.size()*95)return null;
+        protectedPoints.forEach(result::remove);
         List<java.util.Set<String>> visits=new ArrayList<>();
         for(int i=0;i<visible.size();i++)if(visible.get(i).type()==1) {
             if(duplicate && i==boundary && visible.get(i+1).type()==1 && geometry.busStops().size()==visible.stream().filter(p->p.type()==1).count()-1) {
@@ -249,8 +259,33 @@ final class EvidenceRoutePaths {
             previous=stop.stopSequence();
         }
         Map<Point,List<TypedPoint>> immutable=new HashMap<>();result.forEach((p,values)->immutable.put(p,List.copyOf(values)));
-        return new Classification(Map.copyOf(immutable),raw.size(),0,merge,"OFFICIAL_VISIBLE_SUBSEQUENCE_V1");
+        return new Classification(Map.copyOf(immutable),raw.size()-unmatched.size(),unmatched.size(),merge,
+                unmatched.isEmpty()?"OFFICIAL_VISIBLE_SUBSEQUENCE_V1":"PARTIAL_VISIBLE_SUBSEQUENCE_V1");
     }
+
+    static boolean preservesPartialSegments(RouteGeometry geometry,RoutePaths candidate,Classification classified) {
+        if(!classified.normalization().equals("PARTIAL_VISIBLE_SUBSEQUENCE_V1"))return true;
+        var original=geometry.paths();
+        if(original==null || candidate==null)return false;
+        for(var pair:List.of(Map.entry(original.up(),candidate.up()),Map.entry(original.down(),candidate.down()))) {
+            var required=new HashMap<ProtectedEdge,Integer>();
+            var points=pair.getKey().points();
+            for(int i=0;i<points.size()-1;i++) {
+                var a=points.get(i);var b=points.get(i+1);
+                if(!a.equals(b) && (!classified.classifications().containsKey(a) || !classified.classifications().containsKey(b)))
+                    required.merge(new ProtectedEdge(a,b),1,Integer::sum);
+            }
+            var actual=pair.getValue().points();
+            for(int i=0;i<actual.size()-1;i++) {
+                var edge=new ProtectedEdge(actual.get(i),actual.get(i+1));
+                required.computeIfPresent(edge,(key,count)->count-1);
+            }
+            if(required.values().stream().anyMatch(count->count>0))return false;
+        }
+        return true;
+    }
+
+    private record ProtectedEdge(Point from,Point to) {}
 
     private static Point point(TypedPoint value) {
         return new Point(value.point().x(), value.point().y());

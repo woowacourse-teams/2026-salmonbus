@@ -11,7 +11,7 @@ import java.util.*;
 
 /** 자동 후보는 최종 방문·끝점·교차 검사를 거친다. 요청에서 외부 도로 조회나 임의의 핀 이동을 하지 않는다. */
 public final class AutomaticRouteDisplay {
-    public static final String REVISION = "automatic-quality-v7";
+    public static final String REVISION = "automatic-quality-v8";
 
     private AutomaticRouteDisplay() {}
 
@@ -375,6 +375,13 @@ public final class AutomaticRouteDisplay {
             issues.add(issue("FINAL_NEW_CROSSING_LOCATION", null, null, null));
             return new Evaluation(paths, Map.of(), issues, true);
         }
+        var classified = EvidenceRoutePaths.classify(geometry);
+        if (!EvidenceRoutePaths.preservesPartialSegments(geometry,selected,classified)) {
+            issues.add(issue("PARTIAL_SOURCE_SEGMENT_CHANGED", null, null, null));
+            return new Evaluation(paths, Map.of(), issues, true);
+        }
+        if (classified.normalization().equals("PARTIAL_VISIBLE_SUBSEQUENCE_V1"))
+            issues.add(issue("PARTIAL_SOURCE_ROLE_MATCH", null, null, null));
         Map<Integer, Connection> finalConnections = new HashMap<>(finalUp.connections());
         finalConnections.putAll(finalDown.connections());
         var intervals=RouteStopIntervals.evaluate(geometry.busStops(),selected,finalConnections);
