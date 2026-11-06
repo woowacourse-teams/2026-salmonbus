@@ -1,5 +1,6 @@
 package com.gustler.backend.maintenance;
 
+import com.gustler.backend.support.LoopbackRelay;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.annotation.JsonProperty;

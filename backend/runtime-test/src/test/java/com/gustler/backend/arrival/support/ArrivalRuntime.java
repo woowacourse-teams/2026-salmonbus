@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.fail;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot.Prediction;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot.RouteArrival;
+import com.gustler.backend.support.LoopbackRelay;
 import com.gustler.backend.support.TestDatabase;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -231,8 +232,11 @@ public final class ArrivalRuntime implements AutoCloseable {
         Path env=temporary.resolve("database.env"),config=temporary.resolve("local.properties");
         Path stderr = temporary.resolve("stderr.log");
         Process process=null;
-        try {
-            Files.writeString(env,"DB_URL="+database.jdbcUrl()+"\nDB_USERNAME="+database.username()+"\nDB_PASSWORD="+database.password()+"\n");
+        URI databaseAddress = URI.create(database.jdbcUrl().substring("jdbc:".length()));
+        try (var relay = new LoopbackRelay(databaseAddress.getHost(), databaseAddress.getPort())) {
+            String localUrl = "jdbc:postgresql://127.0.0.1:" + relay.port() + databaseAddress.getRawPath();
+            Files.writeString(env, "DB_URL=" + localUrl + "\nDB_USERNAME=" + database.username()
+                + "\nDB_PASSWORD=" + database.password() + "\n");
             Files.setPosixFilePermissions(env,java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
             Files.writeString(config,"target.kind=local\ndatabase.env-file="+env+"\n");
             var command = new ArrayList<>(List.of(Path.of(System.getProperty("java.home"),"bin/java").toString(),
