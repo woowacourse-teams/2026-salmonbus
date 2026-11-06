@@ -46,7 +46,8 @@ tasks.named('test') {
     def geometryContract = rootProject.file('../contract/route-geometry-v2.openapi.json')
     def watchContract = rootProject.file('../contract/route-watch-v1.openapi.json')
     def authContract = rootProject.file('../contract/auth-v1.openapi.json')
-    inputs.files(arrivalsContract, geometryContract, watchContract, authContract)
+    def boardingContract = rootProject.file('../contract/boarding-options-v1.openapi.json')
+    inputs.files(arrivalsContract, geometryContract, watchContract, authContract, boardingContract)
         .withPropertyName('v2OpenApiContracts')
         .withPathSensitivity(PathSensitivity.NONE)
     // DevApiDocsConfigurationTest 가 dev 서버 설정을 상대 경로로 찾아 읽는다.
@@ -58,6 +59,7 @@ tasks.named('test') {
         systemProperty 'geometry.openapi.contract', geometryContract.absolutePath
         systemProperty 'watch.openapi.contract', watchContract.absolutePath
         systemProperty 'auth.openapi.contract', authContract.absolutePath
+        systemProperty 'boarding.openapi.contract', boardingContract.absolutePath
     }
 }
 

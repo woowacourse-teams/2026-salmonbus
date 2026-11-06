@@ -265,13 +265,13 @@ class JdbcRouteDisplayGenerationStoreTest {
             oldSchema=connection.getSchema();statement.execute("CREATE SCHEMA "+schema);
             try {
                 connection.setSchema(schema);
-                String original=new ClassPathResource("db/migration/V49__route_display_generation.sql")
+                String original=new ClassPathResource("db/migration/V51__route_display_generation.sql")
                     .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
                 // Exercise the actual legacy job/artifact DDL without unrelated trigger definitions.
                 statement.execute(original.substring(0,original.indexOf("-- Published artifacts")));
                 statement.executeUpdate("INSERT INTO route_display_generation_job(generation_key,route_id,input_digest,evidence_revision,algorithm_revision,input_json,attempts) VALUES ('"+
                     KEY+"','204000057','"+"b".repeat(64)+"','evidence','algorithm','{}',8)");
-                statement.execute(new ClassPathResource("db/migration/V51__route_display_generation_failure.sql")
+                statement.execute(new ClassPathResource("db/migration/V53__route_display_generation_failure.sql")
                     .getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 try (var result=statement.executeQuery("SELECT attempts,attempt_limit FROM route_display_generation_job")) {
                     assertThat(result.next()).isTrue();assertThat(result.getInt(1)).isEqualTo(8);assertThat(result.getInt(2)).isEqualTo(8);

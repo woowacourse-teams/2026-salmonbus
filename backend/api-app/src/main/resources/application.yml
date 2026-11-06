@@ -152,7 +152,7 @@ analytics:
     api-key: ${AMPLITUDE_API_KEY:}
     secret-key: ${AMPLITUDE_SECRET_KEY:}
 
-# V48 마이그레이션과 클라이언트 반영 후 명시적으로 활성화한다.
+# V50~V53 마이그레이션과 클라이언트 반영 후 명시적으로 활성화한다.
 route-geometry:
   presentation:
     enabled: ${ROUTE_GEOMETRY_PRESENTATION_ENABLED:false}

@@ -15,6 +15,7 @@ API와 Worker를 따로 배포한다. 배포 패키지와 systemd 서비스도 �
 /etc/salmonbus/api.env                        API 환경변수
 /etc/salmonbus/worker.env                     Worker 환경변수
 /var/lib/salmonbus/model/current/             모델 계수 파일. 수동으로 배치한다
+/var/lib/salmonbus/walking/current/           정류장 쌍 도보 거리 파일. 수동으로 배치한다
 ```
 
 **배포는 `/opt/salmonbus/` 아래만 교체한다.** `/etc/salmonbus/`와 `/var/lib/salmonbus/`는 변경하지 않는다.
@@ -307,6 +308,23 @@ sudo sed -i 's/^MODEL_BUNDLE_PROMOTE_ON_START=.*/MODEL_BUNDLE_PROMOTE_ON_START=f
 
 **활성화한 채로 두면 배포로 재시작할 때마다 디스크의 모델 계수가 적용된다.**
 운영 기본값은 `false`이며 systemd 유닛에도 같은 값이 설정돼 있다.
+
+## 정류장 도보 거리 교체
+
+탑승 후보 조회 API가 읽는 정류장 쌍 도보 거리(`stop_walk_distance`)는 레포에 두지 않는다. 파일 두 개를 Worker가 읽는 디렉터리에 두고 재시작한다.
+V49 이후 배포 버전이어야 하고, 테이블이 비어 있어도 API는 같은 정류장을 다시 지나는 후보만 응답한다.
+
+```bash
+sudo -u salmonbus mkdir -p /var/lib/salmonbus/walking/current
+sudo -u salmonbus cp stop-walk-distances.csv.gz stop-walk-distances.json /var/lib/salmonbus/walking/current/
+sudo systemctl restart salmonbus-worker
+journalctl -u salmonbus-worker | grep 'event=stop_walk_distances'   # loaded result=LOADED checksum=… pairCount=…
+```
+
+- 두 파일의 `sha256`·`pairCount`가 맞지 않거나 형식이 다르면 적재하지 않고 `event=stop_walk_distances_load_failed`를 남긴다. 기존 거리는 그대로다.
+- 지금 적재된 파일과 같으면 `result=UNCHANGED`로 쓰지 않는다. 배포로 재시작할 때마다 같은 파일을 다시 쓰지 않는다.
+- 되돌리려면 이전 파일 두 개를 같은 디렉터리에 두고 재시작한다.
+- 파일이 없으면 `event=stop_walk_distances_missing`을 남기고 건너뛴다. 수집을 끈 Worker는 읽지 않는다.
 
 ## 운영 첫 V39 전환
 

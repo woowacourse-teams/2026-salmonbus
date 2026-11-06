@@ -564,6 +564,8 @@
               "ROUTE_NOT_FOUND",
               "STATION_NOT_FOUND",
               "REFERENCE_VERSION_CONFLICT",
+              "STOP_VISIT_AMBIGUOUS",
+              "UNSUPPORTED_MODE",
               "MODEL_OUT_OF_SCOPE",
               "NO_RECENT_OBSERVATION",
               "SERVICE_UNAVAILABLE",

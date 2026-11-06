@@ -13,9 +13,13 @@ import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
 import com.gustler.backend.routecatalog.api.RouteVersionChanged;
 import com.gustler.backend.routecatalog.support.RouteCatalogIntegrationTest;
 import jakarta.persistence.EntityManager;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -83,6 +87,8 @@ class RouteVersionLoaderTest {
     @Test
     void 실제_새_판본에만_커밋_후_처리할_이벤트를_트랜잭션_안에서_발행한다() {
         long initial=loader.load(routeId,threeStops(),TIMETABLE_1650,FIRST_READ_AT);
+        assertThat(loader.load(routeId,threeStopsRenamed(),TIMETABLE_1650,FIRST_READ_AT.plusDays(1))).isEqualTo(initial);
+        assertThat(stopNamesOf(initial)).containsExactly("범계역", "안양대교(미정차)", "안양역");
         assertThat(loader.load(routeId,threeStops(),TIMETABLE_1650,SECOND_READ_AT)).isEqualTo(initial);
         assertThat(loader.load(routeId,threeStops(),TIMETABLE_1650_LAST_BUS_MOVED,THIRD_READ_AT)).isEqualTo(initial);
         long changed=loader.load(routeId,fourStops(),TIMETABLE_1650_LAST_BUS_MOVED,THIRD_READ_AT.plusDays(1));
@@ -140,6 +146,46 @@ class RouteVersionLoaderTest {
 
         // then
         assertThat(versionCount()).isEqualTo(3);
+    }
+
+    @Test
+    void 정류소_이름만_바뀌면_판본_id가_그대로다() {
+        // given
+        final long firstVersionId = loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
+
+        // when
+        final long actual = loader.load(routeId, threeStopsRenamed(), TIMETABLE_1650, SECOND_READ_AT);
+
+        // then
+        assertThat(actual).isEqualTo(firstVersionId);
+        assertThat(versionCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 정류소_이름만_바뀌면_같은_판본의_정류소_이름이_고쳐진다() {
+        // given
+        final long versionId = loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
+
+        // when
+        loader.load(routeId, threeStopsRenamed(), TIMETABLE_1650, SECOND_READ_AT);
+
+        // then
+        assertThat(stopNamesOf(versionId)).containsExactly("범계역", "안양대교(미정차)", "안양역");
+    }
+
+    @Test
+    void 마이그레이션_V48의_재계산식은_코드가_저장한_지문과_같다() throws IOException {
+        // given
+        loader.load(routeId, threeStops(), TIMETABLE_1650, FIRST_READ_AT);
+        loader.load(routeId, fourStops(), TIMETABLE_1650, SECOND_READ_AT);
+        List<String> stored = digestsOf(routeId);
+
+        // when
+        jdbcClient.sql(migrationSql("V48__route_version_digest_without_name.sql")).update();
+
+        // then
+        // 같은 규칙이면 이 노선의 지문은 다시 계산해도 그대로다
+        assertThat(digestsOf(routeId)).containsExactlyElementsOf(stored);
     }
 
     @Test
@@ -444,6 +490,37 @@ class RouteVersionLoaderTest {
             new UpstreamRouteStop(2, STOP_277103149, "안양대교(경유)"),
             new UpstreamRouteStop(3, STOP_208000069, "안양역")
         ));
+    }
+
+    private List<String> digestsOf(final long routeId) {
+        entityManager.flush();
+        return jdbcClient.sql("SELECT content_digest FROM route_version WHERE route_id = ? ORDER BY id")
+            .param(routeId)
+            .query(String.class)
+            .list();
+    }
+
+    private String migrationSql(String fileName) throws IOException {
+        try (InputStream migration = Objects.requireNonNull(
+            getClass().getClassLoader().getResourceAsStream("db/migration/" + fileName), fileName)) {
+            return new String(migration.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private RouteStops threeStopsRenamed() {
+        return RouteStops.from(TURN_SEQUENCE, List.of(
+            new UpstreamRouteStop(1, STOP_205000217, "범계역"),
+            new UpstreamRouteStop(2, STOP_277103149, "안양대교(미정차)"),
+            new UpstreamRouteStop(3, STOP_208000069, "안양역")
+        ));
+    }
+
+    private List<String> stopNamesOf(final long versionId) {
+        entityManager.flush();
+        return jdbcClient.sql("SELECT name FROM route_stop WHERE route_version_id = ? ORDER BY stop_order")
+            .param(versionId)
+            .query(String.class)
+            .list();
     }
 
     private RouteStops fourStops() {
