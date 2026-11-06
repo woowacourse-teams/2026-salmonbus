@@ -41,7 +41,7 @@ class PushDeviceServiceTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"ab,sandbox", "xyz,SANDBOX", "ab,NULL", "NULL,PRODUCTION"}, nullValues = "NULL")
+    @CsvSource(value = {"ab,sandbox", "xyz,SANDBOX", "ab,NULL", "NULL,PRODUCTION"}, nullValues = "NULL")
     void convertsRegistrationFieldErrors(String token, String environment) {
         assertThatThrownBy(() -> service.register(MEMBER, token, environment))
             .isInstanceOf(InvalidPushDeviceException.class);
