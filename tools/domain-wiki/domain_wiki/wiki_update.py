@@ -231,10 +231,10 @@ def render_wiki_result(result, changed, approval=None):
         lines.extend(
             [
                 "- 상태: 사람 승인 대기",
-                f"- 승인값: `{approval['approvalDigest']}`",
                 "",
-                "위 변경 후보를 확인한 뒤 GitHub Actions의 `DOMAIN-WIKI-UPDATE`를 "
-                "수동 실행하고 승인값을 입력해야 Wiki에 반영됩니다.",
+                "아래 `반영 예정 문장`에서 현재 문장과 바뀔 문장을 확인한 뒤 "
+                "GitHub Actions에서 `Review deployments`를 "
+                "누르고 `Approve and deploy`를 선택해야 Wiki에 반영됩니다.",
             ]
         )
         if approval.get("bootstrapFiles"):

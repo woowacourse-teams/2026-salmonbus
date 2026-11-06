@@ -326,7 +326,13 @@ class WikiUpdateTest(unittest.TestCase):
             request, request["approvalDigest"], "wiki"
         )
         self.assertEqual("W1", accepted[0]["proposalId"])
-        self.assertIn("사람 승인 대기", render_wiki_result(result, [], request))
+        rendered = render_wiki_result(result, [], request)
+        self.assertIn("사람 승인 대기", rendered)
+        self.assertIn("반영 예정 문장", rendered)
+        self.assertIn("현재 동작", rendered)
+        self.assertIn("새 동작", rendered)
+        self.assertIn("Approve and deploy", rendered)
+        self.assertNotIn("승인값:", rendered)
 
         tampered = {**request, "accepted": [{**request["accepted"][0], "replacementText": "조작"}]}
         with self.assertRaisesRegex(WikiUpdateError, "digest"):

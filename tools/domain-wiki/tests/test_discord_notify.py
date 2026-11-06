@@ -36,16 +36,16 @@ class DiscordNotifyTest(unittest.TestCase):
         }
         self.result = {"status": "approval-required", "accepted": [{}, {}]}
 
-    def test_builds_a_message_with_the_manual_approval_inputs(self):
+    def test_builds_a_message_with_the_one_click_approval_link(self):
         message = build_wiki_approval_message(
             self.approval, self.result, "owner/repository", "12345"
         )
 
         self.assertIn("PR #192 정책 Wiki 자동화", message)
         self.assertIn("변경 후보: 2건", message)
-        self.assertIn("review_run_id: 12345", message)
-        self.assertIn("approval_digest: " + "c" * 64, message)
-        self.assertIn("actions/workflows/domain-wiki-update.yml", message)
+        self.assertIn("actions/runs/12345", message)
+        self.assertIn("Review deployments", message)
+        self.assertNotIn("approval_digest", message)
 
     def test_sends_without_allowing_mentions(self):
         transport = FakeTransport()

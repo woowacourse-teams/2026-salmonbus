@@ -45,7 +45,7 @@ def build_wiki_approval_message(approval, result, repository, run_id):
         title = ""
     pr_url = f"https://github.com/{repository}/pull/{number}"
     action_url = (
-        f"https://github.com/{repository}/actions/workflows/domain-wiki-update.yml"
+        f"https://github.com/{repository}/actions/runs/{run_id}"
     )
     message = "\n".join(
         [
@@ -54,12 +54,7 @@ def build_wiki_approval_message(approval, result, repository, run_id):
             f"변경 후보: {len(result.get('accepted', []))}건",
             f"변경안 확인: {pr_url}",
             f"승인 화면: {action_url}",
-            "```text",
-            f"review_run_id: {run_id}",
-            f"base_sha: {approval.get('baseSha', '')}",
-            f"head_sha: {approval.get('headSha', '')}",
-            f"approval_digest: {approval.get('approvalDigest', '')}",
-            "```",
+            "Actions에서 `Review deployments`를 누른 뒤 `Approve and deploy`를 선택해 주세요.",
         ]
     )
     if len(message) > MAX_DISCORD_CONTENT:
