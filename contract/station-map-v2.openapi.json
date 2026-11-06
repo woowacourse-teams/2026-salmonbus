@@ -957,7 +957,7 @@
           },
           "status": {
             "type": "string",
-            "description": "READY는 기초 명부 또는 성공 저장 목록을 읽을 수 있음. 최신 전수 검증 보장이 아님. PENDING은 기초 명부·검증 기록 없음",
+            "description": "READY는 이 칸이 기초 명부에 포함됐거나 칸 전체 조회에 성공함. 최신 전수 검증 보장이 아니며 명부 경계에 걸친 칸은 일부만 담길 수 있음. PENDING은 이 칸의 목록을 아직 확보하지 못함. 이웃 칸 조회로 저장된 일부 정류장이 있을 수 있고 수집 범위 밖 칸도 PENDING",
             "enum": [
               "READY",
               "PENDING"

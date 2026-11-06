@@ -47,7 +47,7 @@ final class SalmonRouteRows {
     }
 
     /**
-     * @param board 읽기 실패 시 null이며 boardFailure에 사유가 있다
+     * @param board 읽기 실패 시 null이며 boardFailure에 사유가 있다. 방문과 노선 판본이 다르면 결합하지 않는다
      * @param gbis 해당 방문의 GBIS 도착정보. 수신본에 없으면 null
      * @param arrivalsReceived 수신본이 없으면 차량 ETA 사유를 ARRIVAL_UNAVAILABLE로 구분한다
      */
@@ -60,6 +60,10 @@ final class SalmonRouteRows {
         ArrivalSnapshot.RouteArrival source,
         LocalTime now
     ) {
+        if (board != null && !Long.toString(visit.referenceVersionId()).equals(board.route().referenceVersionId())) {
+            board = null;
+            boardFailure = "BOARD_UNAVAILABLE";
+        }
         List<StationDetailOverview.VehicleView> vehicles =
             vehiclesOf(visit, board, boardFailure, gbis, arrivalsReceived);
         DirectionInfo direction = directionOf(board, visit.direction());

@@ -81,10 +81,21 @@ public class JdbcStationReadRepository implements StationReadRepository {
     public StationTile tile(StationTileId id) {
         JdbcStationReadRepository.TileState state = jdbc.sql("""
             SELECT (SELECT data_date FROM station_seed_dataset WHERE source_id = 'GBIS') AS baseline_date,
-                   (SELECT completed_at FROM bus_station_tile WHERE tile_x = ? AND tile_y = ?) AS verified_at
+                   tile.completed_at AS verified_at,
+                   tile.completed_at IS NOT NULL OR EXISTS (
+                       SELECT 1 FROM bus_station s
+                       WHERE s.tile_x = :x AND s.tile_y = :y AND s.baseline_date IS NOT NULL
+                   ) AS ready
+            FROM (SELECT 1) one
+            LEFT JOIN bus_station_tile tile ON tile.tile_x = :x AND tile.tile_y = :y
             """)
-            .params(id.x(), id.y())
-            .query((row, index) -> new TileState(dateOf(row.getDate(1)), instantOf(row.getTimestamp(2))))
+            .param("x", id.x())
+            .param("y", id.y())
+            .query((row, index) -> new TileState(
+                dateOf(row.getDate(1)),
+                instantOf(row.getTimestamp(2)),
+                row.getBoolean(3)
+            ))
             .single();
         List<MapStation> stations = jdbc.sql(
             """
@@ -134,7 +145,7 @@ public class JdbcStationReadRepository implements StationReadRepository {
             .list();
         return new StationTile(
             id,
-            state.baselineDate() != null || state.verifiedAt() != null,
+            state.ready(),
             stations,
             state.baselineDate(),
             state.verifiedAt()
@@ -205,7 +216,7 @@ public class JdbcStationReadRepository implements StationReadRepository {
         return timestamp.toInstant();
     }
 
-    private record TileState(LocalDate baselineDate, Instant verifiedAt) {
+    private record TileState(LocalDate baselineDate, Instant verifiedAt, boolean ready) {
     }
 
     private static List<String> routeIdsOf(Array array) throws SQLException {

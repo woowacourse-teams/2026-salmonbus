@@ -150,6 +150,35 @@ class SalmonRouteRowsTest {
     }
 
     @Test
+    void 방문과_판정보드의_노선_판본이_다르면_판정보드를_결합하지_않는다() {
+        // given
+        ArrivalVisit otherVersion = new ArrivalVisit(
+            ROUTE_ID, ROUTE_ID, 5, STOP_SEQUENCE, "UP", NOW.minusSeconds(3600)
+        );
+        Board board = board(new ApproachingVehicle("V1", 1, available(0.9)));
+        RouteArrivals gbis = gbis(prediction("V1", 1, 40, 2));
+
+        // when
+        StationDetailOverview.RouteView row = SalmonRouteRows.of(otherVersion, board, null, gbis, true, null, NOON);
+
+        // then
+        assertThat(row.arrivals()).singleElement().satisfies(vehicle -> {
+            assertThat(vehicle.forecast()).isNotNull();
+            assertSoftly(softly -> {
+                softly.assertThat(vehicle.positionSource()).isEqualTo(StationDetailOverview.PositionSource.ARRIVAL);
+                softly.assertThat(vehicle.forecast().status()).isEqualTo("BOARD_UNAVAILABLE");
+            });
+        });
+        assertThat(row.service()).isNotNull();
+        assertSoftly(softly -> {
+            softly.assertThat(row.service().referenceVersionId()).isEqualTo("5");
+            softly.assertThat(row.service().routeStatus()).isEqualTo("PREPARING");
+            softly.assertThat(row.service().schedule()).isNull();
+            softly.assertThat(row.service().scheduleWindow()).isEqualTo(ScheduleWindow.UNKNOWN);
+        });
+    }
+
+    @Test
     void 차량이_없으면_운행_종료라_하지_않고_시간표와_시간표_창만_낸다() {
         // when
         StationDetailOverview.RouteView row = SalmonRouteRows.of(

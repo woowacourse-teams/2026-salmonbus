@@ -187,8 +187,8 @@ class StationMapApiDocsContractTest {
     private void seedStation() {
         jdbc.sql("INSERT INTO station_seed_dataset VALUES('GBIS',DATE '2026-10-20',repeat('a',64),1,now())").update();
         jdbc.sql("""
-            INSERT INTO bus_station(station_id,name,x,y,tile_x,tile_y,first_seen_at,last_seen_at)
-            VALUES('999999991','예시',127.11,37.39,13976,6354,now(),now())
+            INSERT INTO bus_station(station_id,name,x,y,tile_x,tile_y,first_seen_at,last_seen_at,baseline_date)
+            VALUES('999999991','예시',127.11,37.39,13976,6354,now(),now(),DATE '2026-10-20')
             """).update();
     }
 }

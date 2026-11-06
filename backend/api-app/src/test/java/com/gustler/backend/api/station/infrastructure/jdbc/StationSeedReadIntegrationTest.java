@@ -61,6 +61,52 @@ class StationSeedReadIntegrationTest {
     }
 
     @Test
+    void 기초명부_정류장이_없는_미조회_칸은_명부_기준일이_있어도_PENDING이다() {
+        // when
+        StationTile tile = repository.tile(StationTileId.of(127.03, 37.50));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(tile.ready()).isFalse();
+            softly.assertThat(tile.stations()).isEmpty();
+            softly.assertThat(tile.baselineDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+            softly.assertThat(tile.verifiedAt()).isNull();
+        });
+    }
+
+    @Test
+    void 이웃_칸_조회로_저장된_정류장만_있는_칸은_PENDING이다() {
+        // given
+        insertFetchedStation("121000123", 127.03, 37.50);
+
+        // when
+        StationTile tile = repository.tile(StationTileId.of(127.03, 37.50));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(tile.ready()).isFalse();
+            softly.assertThat(tile.stations()).extracting(MapStation::stationId).containsExactly("121000123");
+        });
+    }
+
+    @Test
+    void 칸_전체_조회에_성공하면_정류장이_없어도_READY다() {
+        // given
+        StationTileId requested = StationTileId.of(127.03, 37.50);
+        completeTile(requested);
+
+        // when
+        StationTile tile = repository.tile(requested);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(tile.ready()).isTrue();
+            softly.assertThat(tile.stations()).isEmpty();
+            softly.assertThat(tile.verifiedAt()).isEqualTo(NOW);
+        });
+    }
+
+    @Test
     void 프론트_공개경계_밖의_등록자료도_백엔드는_제공한다() {
         // given
         insertStation("241002020", 127.13, 35.82, "전주", true);
@@ -125,11 +171,31 @@ class StationSeedReadIntegrationTest {
     ) {
         StationTileId tile = StationTileId.of(longitude, latitude);
         jdbc.sql("""
-            INSERT INTO bus_station(station_id,name,x,y,region_name,tile_x,tile_y,first_seen_at,last_seen_at,active)
-            VALUES (?,'기초정류장',?,?,?,?,?,?,?,?)
+            INSERT INTO bus_station(station_id,name,x,y,region_name,tile_x,tile_y,first_seen_at,last_seen_at,
+                                    baseline_date,active)
+            VALUES (?,'기초정류장',?,?,?,?,?,?,?,DATE '2026-10-20',?)
             """)
             .params(identifier, longitude, latitude, region, tile.x(), tile.y(),
                 Timestamp.from(NOW), Timestamp.from(NOW), active)
+            .update();
+    }
+
+    private void insertFetchedStation(String identifier, final double longitude, final double latitude) {
+        StationTileId tile = StationTileId.of(longitude, latitude);
+        jdbc.sql("""
+            INSERT INTO bus_station(station_id,name,x,y,region_name,tile_x,tile_y,first_seen_at,last_seen_at,active)
+            VALUES (?,'조회정류장',?,?,'서울',?,?,?,?,true)
+            """)
+            .params(identifier, longitude, latitude, tile.x(), tile.y(), Timestamp.from(NOW), Timestamp.from(NOW))
+            .update();
+    }
+
+    private void completeTile(StationTileId tile) {
+        jdbc.sql("""
+            INSERT INTO bus_station_tile(tile_x,tile_y,priority,queued_at,completed_at,station_count)
+            VALUES (?,?,1,?,?,0)
+            """)
+            .params(tile.x(), tile.y(), Timestamp.from(NOW), Timestamp.from(NOW))
             .update();
     }
 
