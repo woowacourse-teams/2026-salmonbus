@@ -12,6 +12,7 @@ interface SortableListProps<T extends SortableItem> {
   itemClassName?: string;
   items: T[];
   horizontal?: boolean;
+  dragFromItem?: boolean;
   disabled: boolean;
   label: (item: T) => string;
   render: (item: T, handle: ReactNode) => ReactNode;
@@ -49,6 +50,7 @@ interface DragState {
 export function SortableList<T extends SortableItem>({
   items,
   horizontal = false,
+  dragFromItem = false,
   ariaLabel,
   itemClassName,
   disabled,
@@ -57,6 +59,8 @@ export function SortableList<T extends SortableItem>({
   onMove,
   dropZone,
 }: SortableListProps<T>) {
+  const dragOnItem = horizontal || dragFromItem;
+  const canDrag = !disabled && items.length > 1;
   const list = useRef<HTMLUListElement>(null);
   const labelIdPrefix = useId();
   const session = useRef<DragSession | null>(null);
@@ -109,7 +113,7 @@ export function SortableList<T extends SortableItem>({
   }
 
   function finish(commit: boolean, event?: PointerEvent<HTMLElement>) {
-    if (!session.current) return;
+    if (!session.current || (event && event.pointerId !== session.current.pointerId)) return;
     session.current = null;
     dropZone?.onDrag(null, false);
     suppressClick.current = horizontal && drag !== null;
@@ -130,11 +134,14 @@ export function SortableList<T extends SortableItem>({
 
   function startDrag(event: PointerEvent<HTMLElement>, index: number) {
     const element = list.current;
-    if (disabled || items.length < 2 || !event.isPrimary || event.button !== 0 || element === null) return;
+    if (!canDrag || !event.isPrimary || event.button !== 0 || element === null) return;
+    const button = dragOnItem && event.target instanceof Element ? event.target.closest("button") : null;
+    if (dragFromItem && button && !button.hasAttribute("data-sort-handle")) return;
     event.preventDefault();
-    const target = horizontal && event.target instanceof Element ? event.target.closest("button") : event.currentTarget;
-    const capture = target instanceof HTMLElement ? target : event.currentTarget;
-    capture.focus();
+    const capture = button ?? event.currentTarget;
+    const focusTarget =
+      dragFromItem && !button ? capture.querySelector<HTMLButtonElement>("[data-sort-handle]") : capture;
+    focusTarget?.focus();
     suppressClick.current = false;
     rows().forEach((row) => row.getAnimations({ subtree: true }).forEach((animation) => animation.cancel()));
     const boxes = rows().map((row) => {
@@ -216,17 +223,17 @@ export function SortableList<T extends SortableItem>({
           return (
             <li
               key={item.id}
-              className={`${styles.item} ${horizontal ? styles.group : (itemClassName ?? styles.card)}`}
+              className={`${styles.item} ${horizontal ? styles.group : (itemClassName ?? styles.card)}${dragFromItem && canDrag ? ` ${styles.dragSurface}` : ""}`}
               data-sort-id={item.id}
               data-dragging={lifted}
               style={{
                 transform: `translate(${horizontal ? offset : crossOffset}px, ${horizontal ? crossOffset : offset}px)${lifted ? " scale(1.025)" : ""}`,
               }}
-              onPointerDown={horizontal ? (event) => startDrag(event, index) : undefined}
-              onPointerMove={horizontal ? moveDrag : undefined}
-              onPointerUp={horizontal ? (event) => finish(true, event) : undefined}
-              onPointerCancel={horizontal ? () => finish(false) : undefined}
-              onLostPointerCapture={horizontal ? () => finish(false) : undefined}
+              onPointerDown={dragOnItem ? (event) => startDrag(event, index) : undefined}
+              onPointerMove={dragOnItem ? moveDrag : undefined}
+              onPointerUp={dragOnItem ? (event) => finish(true, event) : undefined}
+              onPointerCancel={dragOnItem ? (event) => finish(false, event) : undefined}
+              onLostPointerCapture={dragOnItem ? (event) => finish(false, event) : undefined}
               onClickCapture={
                 horizontal
                   ? (event) => {
@@ -255,7 +262,7 @@ export function SortableList<T extends SortableItem>({
                   type="button"
                   data-sort-handle=""
                   className={horizontal ? styles.groupGrip : styles.grip}
-                  disabled={disabled || items.length < 2}
+                  disabled={!canDrag}
                   aria-labelledby={`${labelIdPrefix}${item.id}`}
                   aria-describedby="favorite-sort-help"
                   onKeyDown={(event) => {
@@ -283,11 +290,11 @@ export function SortableList<T extends SortableItem>({
                     onMove(index, target);
                     announce(`${label(item)}: ${target + 1}번째로 이동했어요.`);
                   }}
-                  onPointerDown={!horizontal ? (event) => startDrag(event, index) : undefined}
-                  onPointerMove={!horizontal ? moveDrag : undefined}
-                  onPointerUp={!horizontal ? (event) => finish(true, event) : undefined}
-                  onPointerCancel={!horizontal ? () => finish(false) : undefined}
-                  onLostPointerCapture={!horizontal ? () => finish(false) : undefined}
+                  onPointerDown={!dragOnItem ? (event) => startDrag(event, index) : undefined}
+                  onPointerMove={!dragOnItem ? moveDrag : undefined}
+                  onPointerUp={!dragOnItem ? (event) => finish(true, event) : undefined}
+                  onPointerCancel={!dragOnItem ? (event) => finish(false, event) : undefined}
+                  onLostPointerCapture={!dragOnItem ? (event) => finish(false, event) : undefined}
                 >
                   {/* Session Replay는 속성 값을 가리지 못해서, 그룹 이름은 aria-label 대신 숨긴 글자로 둔다. */}
                   <span id={`${labelIdPrefix}${item.id}`} hidden>
