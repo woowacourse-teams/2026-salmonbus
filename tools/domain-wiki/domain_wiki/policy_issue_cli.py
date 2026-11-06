@@ -7,6 +7,7 @@ from pathlib import Path
 from .anthropic import AnthropicClient
 from .comment_style import load_namukkun_style
 from .confluence import ConfluenceClient
+from .execution_evidence import load_execution_evidence
 from .git_diff import read_git_diff, read_patches
 from .openai import MAX_PATCH_BYTES, OpenAIClient
 from .policy_issue_review import (
@@ -27,6 +28,7 @@ def main(argv=None):
     parser.add_argument("--source-url", required=True)
     parser.add_argument("--pull-request-context", required=True)
     parser.add_argument("--semantic-context")
+    parser.add_argument("--execution-evidence")
     parser.add_argument("--wiki-directory", required=True)
     parser.add_argument(
         "--comment-style-directory",
@@ -117,7 +119,12 @@ def main(argv=None):
     semantic_context = None
     if args.semantic_context:
         semantic_context = load_semantic_context(
-            args.semantic_context, diff.head_sha, mapped_paths
+            args.semantic_context, diff.head_sha, mapped_paths, repository
+        )
+    execution_evidence = []
+    if args.execution_evidence:
+        execution_evidence = load_execution_evidence(
+            args.execution_evidence, diff.head_sha
         )
     discovery = OpenAIClient(
         os.environ.get("OPENAI_API_KEY"),
@@ -154,6 +161,7 @@ def main(argv=None):
         source_url=args.source_url,
         pull_request=pull_request,
         semantic_context=semantic_context,
+        execution_evidence=execution_evidence,
         comment_style=comment_style,
         threshold=args.threshold,
     )

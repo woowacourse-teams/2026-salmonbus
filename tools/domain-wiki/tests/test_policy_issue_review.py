@@ -231,6 +231,50 @@ class PolicyIssueReviewTest(unittest.TestCase):
         self.assertEqual([], comment.calls)
         self.assertIn("추측 근거", render_comment(result))
 
+    def test_measured_evidence_requires_a_verified_execution_record(self):
+        candidate = _candidate()
+        discovery, challenge, final, comment = _clients(
+            candidate=candidate,
+            review1={**_assessment(100), "missedCandidates": []},
+            review2=_assessment(
+                100, final=True, evidence_basis="measured",
+                execution_evidence_id="check-1",
+            ),
+            comments=_comments(),
+        )
+        without_record = run_issue_review(
+            discovery_client=discovery, challenge_client=challenge,
+            final_client=final, comment_client=comment, rules=self.rules,
+            patches={candidate["path"]: "patch"}, repository=self.root,
+            head_sha=self.head, wiki_commit="abc", source_url="url",
+        )
+        self.assertEqual([], without_record["issues"])
+        self.assertIn(
+            "unverified-measurement",
+            without_record["evaluations"][0]["gateFailures"],
+        )
+
+        discovery, challenge, final, comment = _clients(
+            candidate=candidate,
+            review1={**_assessment(100), "missedCandidates": []},
+            review2=_assessment(
+                100, final=True, evidence_basis="measured",
+                execution_evidence_id="check-1",
+            ),
+            comments=_comments(),
+        )
+        with_record = run_issue_review(
+            discovery_client=discovery, challenge_client=challenge,
+            final_client=final, comment_client=comment, rules=self.rules,
+            patches={candidate["path"]: "patch"}, repository=self.root,
+            head_sha=self.head, wiki_commit="abc", source_url="url",
+            execution_evidence=[{
+                "id": "check-1", "command": ["npm", "test"],
+                "exitCode": 0, "outputSha256": "a" * 64,
+            }],
+        )
+        self.assertEqual("check-1", with_record["issues"][0]["executionEvidenceId"])
+
     def test_completed_review_without_candidates_uses_namukkun_result(self):
         result = {
             "stages": ["discover", "review-1", "review-2"],
@@ -295,15 +339,22 @@ def _candidate():
     }
 
 
-def _assessment(score, final=False, unresolved=False, evidence_basis="inferred"):
+def _assessment(
+    score, final=False, unresolved=False, evidence_basis="inferred",
+    execution_evidence_id="",
+):
     item = _assessment_item(
         "C1", score, final=final, unresolved=unresolved,
         evidence_basis=evidence_basis,
+        execution_evidence_id=execution_evidence_id,
     )
     return {"assessments": [item]}
 
 
-def _assessment_item(candidate_id, score, final=False, unresolved=False, evidence_basis="inferred"):
+def _assessment_item(
+    candidate_id, score, final=False, unresolved=False, evidence_basis="inferred",
+    execution_evidence_id="",
+):
     values = {
         "policyApplicability": min(score, 25),
         "codeEvidence": min(max(score - 25, 0), 25),
@@ -317,6 +368,7 @@ def _assessment_item(candidate_id, score, final=False, unresolved=False, evidenc
             "unresolvedCounterevidence": unresolved,
             "evidenceBasis": evidence_basis,
             "evidenceReason": "코드의 상태 변경 순서로 확인했다.",
+            "executionEvidenceId": execution_evidence_id,
             "finalComment": "짝이 맞는 최신 스냅샷을 유지해야 합니다.",
         })
     return item

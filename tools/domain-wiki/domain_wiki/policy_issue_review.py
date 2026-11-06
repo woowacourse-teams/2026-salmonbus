@@ -135,7 +135,7 @@ def run_issue_review(
     *, discovery_client, challenge_client, final_client, comment_client,
     rules, patches, repository, head_sha,
     wiki_commit, source_url, pull_request=None, semantic_context=None,
-    comment_style=None, threshold=80,
+    execution_evidence=(), comment_style=None, threshold=80,
 ):
     if challenge_client.provider == final_client.provider:
         raise PolicyIssueError("the two review passes must use different providers")
@@ -148,6 +148,7 @@ def run_issue_review(
         "scoringRubric": SCORE_RUBRIC,
         "pullRequest": pull_request or {"title": "", "body": ""},
         "semanticContext": semantic_context,
+        "executionEvidence": list(execution_evidence),
     }
     discovery, usage1 = discovery_client.review(
         _prompt("discover", context), _discovery_schema()
@@ -172,6 +173,9 @@ def run_issue_review(
     rule_by_id = {rule.rule_id: rule for rule in rules}
     issues = []
     evaluations = []
+    verified_execution_ids = {
+        item.get("id") for item in execution_evidence if isinstance(item, dict)
+    }
     for candidate in candidates:
         final = final_by_id.get(candidate.get("candidateId"), {})
         score = _score(final.get("scores"))
@@ -187,6 +191,11 @@ def run_issue_review(
             failures.append("score")
         if final.get("evidenceBasis") not in {"measured", "inferred"}:
             failures.append("guessed-evidence")
+        if (
+            final.get("evidenceBasis") == "measured"
+            and final.get("executionEvidenceId") not in verified_execution_ids
+        ):
+            failures.append("unverified-measurement")
         if not _valid_location(repository, head_sha, candidate, patches):
             failures.append("code-location")
         accepted = not failures
@@ -208,6 +217,7 @@ def run_issue_review(
             "rationale": final.get("rationale", ""),
             "evidenceBasis": final.get("evidenceBasis"),
             "evidenceReason": final.get("evidenceReason", ""),
+            "executionEvidenceId": final.get("executionEvidenceId", ""),
             "gateFailures": failures,
             "accepted": accepted,
         })
@@ -220,6 +230,7 @@ def run_issue_review(
                     "historyKey": history_key,
                     "evidenceBasis": final.get("evidenceBasis"),
                     "evidenceReason": final.get("evidenceReason", ""),
+                    "executionEvidenceId": final.get("executionEvidenceId", ""),
                     "score": score,
                     "scores": final["scores"],
                     "finalComment": final.get("finalComment", ""),
@@ -303,6 +314,7 @@ def run_issue_review(
         "wikiCommit": wiki_commit,
         "pullRequest": pull_request or {"title": "", "body": ""},
         "semanticContext": semantic_context,
+        "executionEvidence": list(execution_evidence),
     }
 
 
@@ -389,6 +401,7 @@ def render_comment(result):
             "counterevidence": "반대 근거 미해소",
             "score": "근거 부족",
             "guessed-evidence": "추측 근거",
+            "unverified-measurement": "실행 기록 없는 측정 판정",
             "code-location": "현재 코드 위치 확인 실패",
         }
         lines.extend(["", "<details>", "<summary>사람이 확인할 탈락 후보</summary>", ""])
@@ -446,6 +459,7 @@ def _ai_details(result):
             "headSha": result.get("headSha"),
             "wikiCommit": result.get("wikiCommit"),
             "semanticContext": result.get("semanticContext"),
+            "executionEvidence": result.get("executionEvidence"),
         },
         "review": {
             "stages": result.get("stages"),
@@ -529,9 +543,10 @@ def _prompt(stage, payload, comment_style=None):
     instructions = untrusted_notice + {
         "discover": (
             "Find concrete policy violations in changed code only. Do not score. "
-            "semanticContext, when present, is trusted navigation data bound to the reviewed "
-            "head SHA. Use it to find symbols and references, but never treat it as policy or "
-            "runtime evidence. Give every candidate a stable lower-kebab-case violationType "
+            "semanticContext, when present, is validated but non-authoritative navigation data "
+            "bound to the reviewed head SHA. Use it to find symbols and references, but verify "
+            "claims against patches and never treat it as policy or runtime evidence. Give every "
+            "candidate a stable lower-kebab-case violationType "
             "that describes the behavior independently of file names or line numbers. "
             "For every rule, follow its analysisGuidance as review questions and trace "
             "at least one concrete state transition through the changed functions. "
@@ -556,7 +571,9 @@ def _prompt(stage, payload, comment_style=None):
             "violations with resolved counterevidence. Score all five scoringRubric dimensions "
             "independently using their full ranges; do not treat any one dimension as the total. "
             "Classify evidenceBasis as measured only when an executed check directly reproduced "
-            "the behavior, inferred when code and navigation evidence demonstrate it without "
+            "the behavior and its ID exists in executionEvidence; copy that ID into "
+            "executionEvidenceId. Otherwise use an empty executionEvidenceId and classify the "
+            "basis as inferred when code and navigation evidence demonstrate it without "
             "execution, or guessed when it remains only a possibility. Explain that choice in "
             "evidenceReason. Write rationale and finalComment in Korean."
         ),
@@ -645,10 +662,12 @@ def _assessment_item_schema(final=False):
             "unresolvedCounterevidence": {"type": "boolean"},
             "evidenceBasis": {"type": "string", "enum": ["measured", "inferred", "guessed"]},
             "evidenceReason": {"type": "string"},
+            "executionEvidenceId": {"type": "string"},
             "finalComment": {"type": "string"},
         })
         required.extend([
             "unresolvedCounterevidence", "evidenceBasis", "evidenceReason",
+            "executionEvidenceId",
             "finalComment",
         ])
     return {

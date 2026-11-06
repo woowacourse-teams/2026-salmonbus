@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path, PurePosixPath
 
 
@@ -9,8 +10,8 @@ class SemanticContextError(ValueError):
     pass
 
 
-def load_semantic_context(path, head_sha, mapped_paths):
-    """Load bounded navigation data produced by an unprivileged code analyzer."""
+def load_semantic_context(path, head_sha, mapped_paths, repository):
+    """Load navigation data and verify every reported location against the reviewed commit."""
     path = Path(path)
     try:
         if path.stat().st_size > MAX_SEMANTIC_CONTEXT_BYTES:
@@ -32,6 +33,7 @@ def load_semantic_context(path, head_sha, mapped_paths):
         raise SemanticContextError("semantic context files must be a bounded list")
 
     normalized = []
+    file_cache = {}
     for file_context in files:
         if not isinstance(file_context, dict) or file_context.get("path") not in allowed_paths:
             raise SemanticContextError("semantic context contains an unmapped path")
@@ -56,6 +58,11 @@ def load_semantic_context(path, head_sha, mapped_paths):
                 or len(references) > 100
             ):
                 raise SemanticContextError("semantic context symbol is invalid")
+            symbol_lines = _git_lines(repository, head_sha, file_context["path"], file_cache)
+            if line > len(symbol_lines) or name not in symbol_lines[line - 1]:
+                raise SemanticContextError(
+                    "semantic context symbol does not match the reviewed commit"
+                )
             normalized_references = []
             for reference in references:
                 if (
@@ -66,6 +73,16 @@ def load_semantic_context(path, head_sha, mapped_paths):
                     or reference["line"] < 1
                 ):
                     raise SemanticContextError("semantic context reference is invalid")
+                reference_lines = _git_lines(
+                    repository, head_sha, reference["path"], file_cache
+                )
+                if (
+                    reference["line"] > len(reference_lines)
+                    or name not in reference_lines[reference["line"] - 1]
+                ):
+                    raise SemanticContextError(
+                        "semantic context reference does not match the reviewed commit"
+                    )
                 normalized_references.append(
                     {"path": reference["path"], "line": reference["line"]}
                 )
@@ -92,3 +109,19 @@ def _repository_path(value):
         return False
     path = PurePosixPath(value)
     return not path.is_absolute() and ".." not in path.parts
+
+
+def _git_lines(repository, head_sha, path, cache):
+    if path in cache:
+        return cache[path]
+    result = subprocess.run(
+        ["git", "-C", str(repository), "show", f"{head_sha}:{path}"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise SemanticContextError(
+            f"semantic context path is absent from the reviewed commit: {path}"
+        )
+    cache[path] = result.stdout.splitlines()
+    return cache[path]
