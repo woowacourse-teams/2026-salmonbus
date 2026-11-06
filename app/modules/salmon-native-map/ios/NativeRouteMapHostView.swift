@@ -308,6 +308,9 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       let label = NMFMarker(position: stop.markerCoordinate.naver)
       label.isForceShowIcon = true
       label.minZoom = 14
+      let hidden = nextScene.selectedStopOnly == true && stop.selection != nextScene.selectedStop
+      marker.hidden = hidden
+      label.hidden = hidden
       label.mapView = mapView
       stopLabels[stop.key] = label
       marker.touchHandler = { [weak self] _ in
@@ -333,6 +336,8 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     for stop in scene.stops {
       guard let marker = stopMarkers[stop.key] else { continue }
       let selected = state.selectedStop == stop.selection
+      marker.hidden = scene.selectedStopOnly == true && !selected
+      stopLabels[stop.key]?.hidden = marker.hidden
       let active = state.activeDirection == stop.direction
       marker.iconImage = overlayImage("stop:\(selected):\(active):\(stop.boardingAllowed)") {
         MapMarkerImages.stop(selected: selected, active: active, boardingAllowed: stop.boardingAllowed)
@@ -369,6 +374,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private func refreshStopAnchors() {
     guard readySent, let scene, let state = sceneState, mapView.bounds.width > 1 else { return }
     let projected = scene.stops.compactMap { stop -> (stop: MapStop, point: CGPoint, size: CGFloat)? in
+      guard scene.selectedStopOnly != true || stop.selection == state.selectedStop else { return nil }
       let point = mapView.projection.point(from: stop.markerCoordinate.naver)
       guard point.x.isFinite, point.y.isFinite else { return nil }
       return (stop, point, state.selectedStop == stop.selection ? 32 : 24)

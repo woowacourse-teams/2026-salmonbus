@@ -11,7 +11,7 @@ import { isNativeMapAvailable } from "@/shared/native-map/bridge";
 import { createNativeRouteMap, type NativeRouteMapAdapter } from "./nativeMapAdapter";
 import { reportNativeMapFailure } from "@/shared/error-tracking/errorTracking";
 import { NOTICE_DURATION_MS } from "@/shared/components/Notice";
-import { isSupportedInApp, sendToApp } from "@/shared/bridge/bridge";
+import { appHostFrom, isSupportedInApp, sendToApp } from "@/shared/bridge/bridge";
 import * as styles from "./RouteMap.css";
 
 interface RouteMapProps {
@@ -30,6 +30,8 @@ interface RouteMapProps {
   viewportHeight: number;
   activeDirection: Direction;
 }
+
+const NO_VEHICLES: readonly LiveVehicleView[] = [];
 
 type MapState =
   | { status: "loading" }
@@ -59,6 +61,7 @@ export function RouteMap(props: RouteMapProps) {
     vehicleFocusRequest,
     selectedVehicleKey,
   } = props;
+  const selectedStopOnly = geometryStatus === "generating" || geometryStatus === "withheld";
   const regionRef = useRef<HTMLElement | null>(null);
   const previousView = useRef<{
     routeId: string;
@@ -75,6 +78,10 @@ export function RouteMap(props: RouteMapProps) {
   const [mapState, setMapState] = useState<MapState>({ status: "loading" });
   const [locationState, setLocationState] = useState<LocationState>({ status: "idle" });
   const [nativeFailed, setNativeFailed] = useState(false);
+  const useNativeMap =
+    !nativeFailed &&
+    isNativeMapAvailable() &&
+    (!selectedStopOnly || appHostFrom()?.capabilities.includes("map.selectedStopOnly") === true);
 
   useLayoutEffect(() => {
     propsRef.current = props;
@@ -149,7 +156,7 @@ export function RouteMap(props: RouteMapProps) {
       failed = true;
       failMap(data, error);
     };
-    if (isNativeMapAvailable() && !nativeFailed) {
+    if (useNativeMap) {
       const region = regionRef.current;
       if (region !== null) {
         try {
@@ -161,6 +168,7 @@ export function RouteMap(props: RouteMapProps) {
             motion: current.motion,
             initialSelection: current.selected,
             preserveCamera: preserveNativeCamera,
+            selectedStopOnly,
             onSelect: (selection) => propsRef.current.onSelect(selection),
             onVehicleSelect: (selection, key) => propsRef.current.onVehicleSelect(selection, key),
             onDeselect: () => propsRef.current.onDeselect(),
@@ -193,7 +201,7 @@ export function RouteMap(props: RouteMapProps) {
           adapter.update(
             current.selected,
             current.activeDirection,
-            current.liveVehicleViews,
+            selectedStopOnly ? NO_VEHICLES : current.liveVehicleViews,
             current.selectedVehicleKey,
           );
         } catch (error) {
@@ -234,11 +242,17 @@ export function RouteMap(props: RouteMapProps) {
           () => propsRef.current.onDeselect(),
           current.selected,
           webCamera,
+          selectedStopOnly,
         );
         adapterRef.current = adapter;
         lastFocusedStop.current = current.selected;
-        adapter.update(current.selected, current.activeDirection, current.liveVehicleViews, current.selectedVehicleKey);
-        adapter.moveVehicles(current.motion.frames);
+        adapter.update(
+          current.selected,
+          current.activeDirection,
+          selectedStopOnly ? NO_VEHICLES : current.liveVehicleViews,
+          current.selectedVehicleKey,
+        );
+        if (!selectedStopOnly) adapter.moveVehicles(current.motion.frames);
         if (failed) {
           disposeMap();
           return;
@@ -253,14 +267,23 @@ export function RouteMap(props: RouteMapProps) {
       if (adapterRef.current !== null) rememberCamera(adapterRef.current, false);
       disposeMap();
     };
-  }, [data, disposeMap, failMap, nativeFailed]);
+  }, [data, disposeMap, failMap, selectedStopOnly, useNativeMap]);
 
   useEffect(() => {
     runMapAction((adapter) => {
-      adapter.update(selected, activeDirection, liveVehicleViews, selectedVehicleKey);
-      adapter.moveVehicles(motion.frames);
+      adapter.update(selected, activeDirection, selectedStopOnly ? NO_VEHICLES : liveVehicleViews, selectedVehicleKey);
+      if (!selectedStopOnly) adapter.moveVehicles(motion.frames);
     });
-  }, [selected, activeDirection, liveVehicleViews, motion, selectedVehicleKey, mapState, runMapAction]);
+  }, [
+    selected,
+    activeDirection,
+    liveVehicleViews,
+    motion,
+    selectedVehicleKey,
+    mapState,
+    runMapAction,
+    selectedStopOnly,
+  ]);
 
   useEffect(() => {
     if (mapState.status !== "ready" || mapState.data !== data) return;
@@ -271,7 +294,7 @@ export function RouteMap(props: RouteMapProps) {
   }, [selected, mapState, data, runMapAction]);
 
   useEffect(() => {
-    if (mapState.status !== "ready" || !visible) {
+    if (mapState.status !== "ready" || !visible || selectedStopOnly) {
       runMapAction((adapter) => adapter.focusVehicle(null));
       return;
     }
@@ -281,12 +304,12 @@ export function RouteMap(props: RouteMapProps) {
     runMapAction((adapter) =>
       adapter.focusVehicle(vehicleFocusRequest?.key ?? null, { focusMarker: vehicleFocusRequest?.focusMarker ?? true }),
     );
-  }, [vehicleFocusRequest, mapState, visible, runMapAction]);
+  }, [vehicleFocusRequest, mapState, visible, runMapAction, selectedStopOnly]);
 
   useEffect(() => {
-    if (isNativeMapAvailable() && !nativeFailed) return;
+    if (useNativeMap || selectedStopOnly) return;
     return motion.subscribe(() => runMapAction((adapter) => adapter.moveVehicles(motion.frames)));
-  }, [motion, runMapAction, nativeFailed]);
+  }, [motion, runMapAction, selectedStopOnly, useNativeMap]);
 
   useEffect(() => {
     if (locationState.status !== "message") return;
@@ -375,12 +398,12 @@ export function RouteMap(props: RouteMapProps) {
 
   const currentMapState =
     mapState.status !== "loading" && mapState.data === data ? mapState : { status: "loading" as const };
-  const geometryNotice =
-    geometryStatus === "preparing"
-      ? "노선을 준비 중이에요"
-      : geometryStatus === "withheld"
-        ? "현재 노선을 표시할 수 없어요"
-        : null;
+  const preparing = geometryStatus === "preparing" || geometryStatus === "generating";
+  const geometryNotice = preparing
+    ? "노선을 준비 중이에요"
+    : geometryStatus === "withheld"
+      ? "현재 노선을 표시할 수 없어요"
+      : null;
   const unavailableMessage =
     currentMapState.status === "error"
       ? currentMapState.message
@@ -417,7 +440,7 @@ export function RouteMap(props: RouteMapProps) {
       {data !== null &&
       ready &&
       (geometryNotice !== null || !data.paths.some((path) => path.direction === activeDirection)) ? (
-        <div className={styles.pathNotice} role="status">
+        <div className={geometryNotice === null ? styles.pathNotice : styles.geometryToast} role="status">
           {geometryNotice ?? "방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요"}
         </div>
       ) : null}

@@ -164,6 +164,7 @@ function OperatingBoard({
   const [selected, setSelected] = useState<StopSelection | null>(() =>
     stopSelectionFrom(board, direction.id, search.get("stopId")),
   );
+  const [selectedFromList, setSelectedFromList] = useState(false);
   const [scrollRequest, setScrollRequest] = useState<StopSelection | null>(selected);
   const [vehicleFocusRequest, setVehicleFocusRequest] = useState<{ key: string; focusMarker: boolean } | null>(null);
   const selectedVehicleKey = vehicleFocusRequest?.key ?? null;
@@ -190,6 +191,8 @@ function OperatingBoard({
   const motion = useLiveVehicleMotion(vehicles, liveMotionDurationMs);
   const mapVisible = snap !== "full";
   const map = useRouteMapData(board, mapVisible, onGeometryConflict);
+  const mapSelection =
+    map.status === "withheld" || (map.status === "generating" && !selectedFromList) ? null : selected;
 
   function rememberSelection(selection: StopSelection | null) {
     const stop =
@@ -212,6 +215,7 @@ function OperatingBoard({
 
   function selectFromMap(selection: StopSelection) {
     const reselected = selected?.direction === selection.direction && selected.sequence === selection.sequence;
+    if (!reselected) setSelectedFromList(false);
     setSelected(selection);
     setVehicleFocusRequest(null);
     scrollToStop(selection);
@@ -256,6 +260,8 @@ function OperatingBoard({
         ? null
         : { direction: direction.id, sequence };
     setSelected(next);
+    setSelectedFromList(next !== null);
+    if (next !== null && map.status === "generating" && snap === "full") setSnap("half");
     rememberSelection(next);
     setScrollRequest(null);
   }
@@ -286,7 +292,7 @@ function OperatingBoard({
             board={board}
             data={map.data}
             geometryStatus={map.status}
-            selected={selected}
+            selected={mapSelection}
             onSelect={selectFromMap}
             onVehicleSelect={selectVehicleFromMap}
             onDeselect={clearMapSelection}

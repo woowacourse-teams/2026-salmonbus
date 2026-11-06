@@ -248,7 +248,11 @@ test("도로 경로가 미수집이어도 관측 정류장에 버스를 표시�
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(0);
 });
 
-test("노선이 준비되면 보고 있던 위치에서 선을 그리고 형상 재조회를 멈춘다", async ({ page, api, naverMap }) => {
+test("노선 생성 중에는 목록에서 선택한 핀만 표시하고, 준비되면 같은 위치에서 노선을 표시한다", async ({
+  page,
+  api,
+  naverMap,
+}) => {
   const readyGeometry = createRouteGeometry(api.data.watch);
   api.data.geometry = {
     ...readyGeometry,
@@ -261,8 +265,22 @@ test("노선이 준비되면 보고 있던 위치에서 선을 그리고 형상 
   await openMap(page);
   await expect(map(page).getByRole("status")).toContainText("노선을 준비 중이에요");
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(0);
-  await naverMap.panToStop(11);
+  const stopPins = map(page).locator("button[data-map-stop-sequence]:visible");
+  const busPins = map(page).locator("button[data-map-vehicle-key]");
+  await expect(stopPins).toHaveCount(0);
+  await expect(busPins).toHaveCount(0);
+
+  const stop = list(page).locator("li[data-stop-sequence='11'] button[aria-expanded]");
+  await stop.click();
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await expect(stopPins).toHaveCount(1);
+  await expect(stopPins).toHaveAttribute("data-map-stop-sequence", "11");
+  await expect(busPins).toHaveCount(0);
   const camera = await naverMap.snapshot();
+  const point = readyGeometry.busStops.find(
+    ({ direction, stopSequence }) => direction === "UP" && stopSequence === 11,
+  )?.point;
+  expect(camera).toEqual({ zoom: 15, latitude: point?.y, longitude: point?.x });
 
   api.data.geometry = { ...readyGeometry, geometryRevision: "b".repeat(64) };
   await page.clock.runFor(59_000);
@@ -272,6 +290,8 @@ test("노선이 준비되면 보고 있던 위치에서 선을 그리고 형상 
   await page.clock.runFor(48);
   await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
   expect(await naverMap.snapshot()).toEqual(camera);
+  await expect(stopPins).toHaveCount(24);
+  await expect(busPins).toHaveCount(2);
   await page.clock.runFor(60_000);
   expect(api.requests.geometry).toBe(2);
 });

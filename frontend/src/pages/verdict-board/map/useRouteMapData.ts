@@ -9,7 +9,7 @@ const RETRY_DELAY_MS = 60_000;
 
 type RouteMapResource =
   | { status: "loading" | "error" | "conflict"; data: null }
-  | { status: "preparing" | "withheld"; data: RouteMapData | null }
+  | { status: "preparing" | "generating" | "withheld"; data: RouteMapData | null }
   | { status: "ready"; data: RouteMapData };
 
 export type RouteMapGeometryStatus = RouteMapResource["status"];
@@ -78,14 +78,17 @@ export function useRouteMapData(board: Board, visible: boolean, onConflict: () =
       const reason = geometry.status === "UNAVAILABLE" ? geometry.reason : null;
       preparing = reason === "NOT_COLLECTED" || reason === "GENERATION_PENDING";
       const resource: RouteMapResource = preparing
-        ? { status: "preparing", data }
+        ? { status: reason === "GENERATION_PENDING" ? "generating" : "preparing", data }
         : reason === "DISPLAY_WITHHELD"
           ? { status: "withheld", data }
           : data === null
             ? { status: "error", data: null }
             : { status: "ready", data };
       setLoaded((previous) =>
-        revision !== null && previous?.identity === identity && previous.revision === revision
+        revision !== null &&
+        previous?.identity === identity &&
+        previous.revision === revision &&
+        previous.resource.status === resource.status
           ? previous
           : { identity, revision, resource },
       );

@@ -40,11 +40,8 @@ export const notice = style({
   textAlign: "center",
   pointerEvents: "auto",
 });
-export const pathNotice = style({
+const pathNoticeSurface = style({
   position: "absolute",
-  top: "calc(env(safe-area-inset-top, 0px) + 16px)",
-  left: 64,
-  right: 16,
   zIndex: 30,
   padding: "8px 12px",
   borderRadius: 8,
@@ -55,6 +52,22 @@ export const pathNotice = style({
   boxShadow: "0 2px 8px #00000015",
   pointerEvents: "none",
 });
+export const pathNotice = style([
+  pathNoticeSurface,
+  { top: "calc(env(safe-area-inset-top, 0px) + 16px)", left: 64, right: 16 },
+]);
+export const geometryToast = style([
+  pathNoticeSurface,
+  {
+    bottom: 16,
+    left: 66,
+    right: 66,
+    width: "fit-content",
+    marginInline: "auto",
+    borderRadius: 999,
+    textAlign: "center",
+  },
+]);
 export const location = style({
   position: "absolute",
   bottom: 16,

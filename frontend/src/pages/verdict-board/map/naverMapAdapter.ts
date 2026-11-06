@@ -18,6 +18,7 @@ interface StopMarker {
   button: HTMLButtonElement;
   label: HTMLSpanElement;
   connector: NaverPolyline | undefined;
+  visible: boolean;
 }
 interface VehicleMarker {
   marker: NaverMarker;
@@ -67,6 +68,7 @@ export function createNaverRouteMap(
   onDeselect: () => void,
   initialSelection: StopSelection | null = null,
   initialCamera?: RouteMapCamera,
+  selectedStopOnly = false,
 ): RouteMapAdapter {
   const createNativeEventHandler = (action: () => void) => () => {
     try {
@@ -307,18 +309,32 @@ export function createNaverRouteMap(
       zIndex: 5,
       clickable: true,
     });
-    return [{ selection, coordinate, marker, button, label, connector }];
+    return [{ selection, coordinate, marker, button, label, connector, visible: true }];
   });
 
   function refreshStops() {
     const hidden = map.getZoom() < DETAIL_ZOOM;
     const projection = map.getProjection();
-    const display = stops.map((stop) => ({
-      ...stop,
-      point: projection.fromCoordToOffset(toNaverCoordinate(stop.coordinate)),
-      size: selected?.sequence === stop.selection.sequence && selected.direction === stop.selection.direction ? 32 : 24,
-      offsetX: 0,
-    }));
+    const display = stops.flatMap((stop) => {
+      const { selection } = stop;
+      const isSelected = selected?.sequence === selection.sequence && selected.direction === selection.direction;
+      const visible = selectedStopOnly ? isSelected : !hidden || !mappedDirections.has(selection.direction);
+      if (stop.visible !== visible) {
+        stop.visible = visible;
+        stop.marker.setVisible(visible);
+      }
+      if (stop.label.hidden !== hidden) stop.label.hidden = hidden;
+      if (selectedStopOnly && !isSelected) return [];
+      return [
+        {
+          ...stop,
+          isSelected,
+          point: projection.fromCoordToOffset(toNaverCoordinate(stop.coordinate)),
+          size: isSelected ? 32 : 24,
+          offsetX: 0,
+        },
+      ];
+    });
     // 마주 보는 정류장이 겹치면 화면상 선택 영역만 벌린다. 실제 정류장 좌표는 유지한다.
     for (const up of display.filter((stop) => stop.selection.direction === "UP")) {
       for (const down of display.filter((stop) => stop.selection.direction === "DOWN")) {
@@ -330,8 +346,7 @@ export function createNaverRouteMap(
         down.offsetX = Math.min(down.offsetX, -offset);
       }
     }
-    display.forEach(({ selection, marker, button, label, size, offsetX, connector }) => {
-      const isSelected = selected?.sequence === selection.sequence && selected.direction === selection.direction;
+    display.forEach(({ selection, marker, button, isSelected, size, offsetX, connector }) => {
       const isActive = selection.direction === activeDirection;
       connector?.setOptions({
         strokeColor: "#5B6472",
@@ -344,10 +359,6 @@ export function createNaverRouteMap(
       if (directionChanged) button.dataset.active = String(isActive);
       const labelAbove = String(offsetX !== 0 && !isActive);
       if (button.dataset.labelAbove !== labelAbove) button.dataset.labelAbove = labelAbove;
-      if (label.hidden !== hidden) {
-        label.hidden = hidden;
-        marker.setVisible(!hidden || !mappedDirections.has(selection.direction));
-      }
       if (selectionChanged || directionChanged) marker.setZIndex(isSelected ? 15 : isActive ? 6 : 5);
       // 아이콘을 다시 설정하면 SDK가 DOM을 재구성하므로 표시 위치만 조정한다.
       const transform = `translate(${offsetX - (size - 24) / 2}px, ${-(size - 24) / 2}px)`;

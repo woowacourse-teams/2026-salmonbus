@@ -29,6 +29,7 @@ export function createNativeRouteMap(options: {
   motion: LiveVehicleMotionStore;
   initialSelection?: StopSelection | null;
   preserveCamera?: boolean;
+  selectedStopOnly?: boolean;
   onSelect: (selection: StopSelection) => void;
   onVehicleSelect: (selection: StopSelection, key: string) => void;
   onDeselect: () => void;
@@ -99,6 +100,7 @@ export function createNativeRouteMap(options: {
     routeId: data.routeId,
     referenceVersionId: data.referenceVersionId,
     ...(options.preserveCamera && { preserveCamera: true }),
+    ...(options.selectedStopOnly && { selectedStopOnly: true }),
     stops: data.stops.flatMap((stop) => {
       const state = board.stops.find((item) => item.direction === stop.direction && item.sequence === stop.sequence);
       if (state === undefined) return [];
