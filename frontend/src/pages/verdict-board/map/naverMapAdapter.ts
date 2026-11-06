@@ -18,6 +18,7 @@ interface StopMarker {
   button: HTMLButtonElement;
   label: HTMLSpanElement;
   connector: NaverPolyline | undefined;
+  connection: GeoCoordinate | undefined;
   visible: boolean;
 }
 interface VehicleMarker {
@@ -309,7 +310,7 @@ export function createNaverRouteMap(
       zIndex: 5,
       clickable: true,
     });
-    return [{ selection, coordinate, marker, button, label, connector, visible: true }];
+    return [{ selection, coordinate, marker, button, label, connector, connection, visible: true }];
   });
 
   function refreshStops() {
@@ -346,24 +347,32 @@ export function createNaverRouteMap(
         down.offsetX = Math.min(down.offsetX, -offset);
       }
     }
-    display.forEach(({ selection, marker, button, isSelected, size, offsetX, connector }) => {
-      const isActive = selection.direction === activeDirection;
-      connector?.setOptions({
-        strokeColor: "#5B6472",
-        strokeOpacity: routeRevealed && !hidden && (isActive || isSelected) ? 0.85 : 0,
-        zIndex: 3,
-      });
-      const selectionChanged = button.getAttribute("aria-pressed") !== String(isSelected);
-      const directionChanged = button.dataset.active !== String(isActive);
-      if (selectionChanged) button.setAttribute("aria-pressed", String(isSelected));
-      if (directionChanged) button.dataset.active = String(isActive);
-      const labelAbove = String(offsetX !== 0 && !isActive);
-      if (button.dataset.labelAbove !== labelAbove) button.dataset.labelAbove = labelAbove;
-      if (selectionChanged || directionChanged) marker.setZIndex(isSelected ? 15 : isActive ? 6 : 5);
-      // 아이콘을 다시 설정하면 SDK가 DOM을 재구성하므로 표시 위치만 조정한다.
-      const transform = `translate(${offsetX - (size - 24) / 2}px, ${-(size - 24) / 2}px)`;
-      if (button.style.transform !== transform) button.style.transform = transform;
-    });
+    display.forEach(
+      ({ selection, marker, button, isSelected, size, offsetX, point, coordinate, connector, connection }) => {
+        const isActive = selection.direction === activeDirection;
+        if (connector && connection) {
+          const visible = routeRevealed && !hidden && (isActive || isSelected);
+          if (visible) {
+            const start =
+              offsetX === 0
+                ? toNaverCoordinate(coordinate)
+                : projection.fromOffsetToCoord(new sdk.Point(point.x + offsetX, point.y));
+            connector.setPath([start, toNaverCoordinate(connection)]);
+          }
+          connector.setOptions({ strokeColor: "#5B6472", strokeOpacity: visible ? 0.85 : 0, zIndex: 3 });
+        }
+        const selectionChanged = button.getAttribute("aria-pressed") !== String(isSelected);
+        const directionChanged = button.dataset.active !== String(isActive);
+        if (selectionChanged) button.setAttribute("aria-pressed", String(isSelected));
+        if (directionChanged) button.dataset.active = String(isActive);
+        const labelAbove = String(offsetX !== 0 && !isActive);
+        if (button.dataset.labelAbove !== labelAbove) button.dataset.labelAbove = labelAbove;
+        if (selectionChanged || directionChanged) marker.setZIndex(isSelected ? 15 : isActive ? 6 : 5);
+        // 아이콘을 다시 설정하면 SDK가 DOM을 재구성하므로 표시 위치만 조정한다.
+        const transform = `translate(${offsetX - (size - 24) / 2}px, ${-(size - 24) / 2}px)`;
+        if (button.style.transform !== transform) button.style.transform = transform;
+      },
+    );
   }
 
   function refreshVehicleCounts() {

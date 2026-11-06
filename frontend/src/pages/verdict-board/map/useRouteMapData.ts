@@ -31,7 +31,6 @@ export function useRouteMapData(board: Board, visible: boolean, onConflict: () =
     const controller = new AbortController();
     let timer: number | undefined;
     let requesting = false;
-    let preparing = false;
     let conflicted = false;
 
     function clearTimer() {
@@ -61,13 +60,17 @@ export function useRouteMapData(board: Board, visible: boolean, onConflict: () =
           setLoaded({ identity, revision: null, resource: { status: "conflict", data: null } });
           reportConflict();
         } else {
-          setLoaded((previous) =>
-            previous?.identity === identity && previous.resource.status !== "loading"
-              ? previous
-              : { identity, revision: null, resource: { status: "error", data: null } },
-          );
           const decision = nextPollFrom(result);
-          if (preparing && decision.kind === "again") schedule(Math.max(RETRY_DELAY_MS, decision.delayMs));
+          if (decision.kind === "again") {
+            schedule(Math.max(RETRY_DELAY_MS, decision.delayMs));
+          } else {
+            setLoaded((previous) =>
+              previous?.identity === identity &&
+              (previous.resource.status === "ready" || previous.resource.status === "withheld")
+                ? previous
+                : { identity, revision: null, resource: { status: "error", data: null } },
+            );
+          }
         }
         return;
       }
@@ -76,7 +79,7 @@ export function useRouteMapData(board: Board, visible: boolean, onConflict: () =
       const revision = typeof geometry.geometryRevision === "string" ? geometry.geometryRevision : null;
       const data = routeGeometryMapDataFor(geometry, { id: routeId, referenceVersionId });
       const reason = geometry.status === "UNAVAILABLE" ? geometry.reason : null;
-      preparing = reason === "NOT_COLLECTED" || reason === "GENERATION_PENDING";
+      const preparing = reason === "NOT_COLLECTED" || reason === "GENERATION_PENDING";
       const resource: RouteMapResource = preparing
         ? { status: reason === "GENERATION_PENDING" ? "generating" : "preparing", data }
         : reason === "DISPLAY_WITHHELD"

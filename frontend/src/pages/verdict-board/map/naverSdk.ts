@@ -46,6 +46,7 @@ interface NaverOverlay {
 }
 
 export interface NaverPolyline extends NaverOverlay {
+  setPath(path: NaverCoordinate[]): void;
   setOptions(options: { strokeColor: string; strokeOpacity: number; zIndex: number }): void;
 }
 

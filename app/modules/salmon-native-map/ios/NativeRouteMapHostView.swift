@@ -79,7 +79,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private var vehicleAppearanceKeys: [String: String] = [:]
   private var vehicleMarkers: [String: NMFMarker] = [:]
   private var routeLines: [(String, NMFPath)] = []
-  private var stopConnections: [(MapSelection, NMFPolylineOverlay)] = []
+  private var stopConnections: [String: (selection: MapSelection, line: NMFPolylineOverlay)] = [:]
   private var imageCache: [String: NMFOverlayImage] = [:]
   private var motions: [String: RunningMotion] = [:]
   private var displayLink: CADisplayLink?
@@ -220,7 +220,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     vehicleAppearanceKeys.removeAll()
     vehicleMarkers.removeAll()
     routeLines.removeAll()
-    stopConnections.forEach { $0.1.mapView = nil }
+    stopConnections.values.forEach { $0.line.mapView = nil }
     stopConnections.removeAll()
     imageCache.removeAll()
     mapView.locationOverlay.hidden = true
@@ -299,7 +299,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
         line.pattern = [2, 3]
         line.minZoom = 14
         line.zIndex = 3
-        stopConnections.append((stop.selection, line))
+        stopConnections[stop.key] = (stop.selection, line)
       }
       let marker = NMFMarker(position: stop.markerCoordinate.naver)
       marker.anchor = CGPoint(x: 0.5, y: 0.5)
@@ -393,8 +393,15 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     for item in projected {
       guard let marker = stopMarkers[item.stop.key], let label = stopLabels[item.stop.key] else { continue }
       let offset = offsets[item.stop.key] ?? 0
-      let coordinate = mapView.projection.latlng(from: CGPoint(x: item.point.x + offset, y: item.point.y))
-      marker.position = coordinate
+      let coordinate = offset == 0
+        ? item.stop.markerCoordinate.naver
+        : mapView.projection.latlng(from: CGPoint(x: item.point.x + offset, y: item.point.y))
+      if marker.position.lat != coordinate.lat || marker.position.lng != coordinate.lng {
+        marker.position = coordinate
+        if let line = stopConnections[item.stop.key]?.line, let end = item.stop.connectionCoordinate {
+          line.line = NMGLineString(points: [coordinate, end.naver])
+        }
+      }
       let selected = state.selectedStop == item.stop.selection
       let above = offset != 0 && item.stop.direction != state.activeDirection
       let icon = overlayImage("label:\(item.stop.key):\(selected):\(above)") {
@@ -433,7 +440,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
 
   private func refreshRouteStyles() {
     guard let state = sceneState else { return }
-    for (selection, line) in stopConnections {
+    for (selection, line) in stopConnections.values {
       let visible = selection.direction == state.activeDirection || selection == state.selectedStop
       if visible && line.mapView == nil { line.mapView = mapView }
       if !visible && line.mapView != nil { line.mapView = nil }

@@ -399,16 +399,14 @@ export function RouteMap(props: RouteMapProps) {
   const currentMapState =
     mapState.status !== "loading" && mapState.data === data ? mapState : { status: "loading" as const };
   const preparing = geometryStatus === "preparing" || geometryStatus === "generating";
-  const geometryNotice = preparing
-    ? "노선을 준비 중이에요"
-    : geometryStatus === "withheld"
-      ? "현재 노선을 표시할 수 없어요"
-      : null;
+  const withheld = geometryStatus === "withheld";
+  const geometryNotice = preparing ? "노선을 준비 중이에요" : withheld ? "현재 노선을 표시할 수 없어요" : null;
+  const stopInfoNotice = withheld ? "정류장 정보는 확인 가능해요" : "정류장 목록은 계속 확인할 수 있어요";
   const unavailableMessage =
     currentMapState.status === "error"
       ? currentMapState.message
       : data === null
-        ? (geometryNotice ?? "지도 정보를 준비 중이에요")
+        ? (geometryNotice ?? (geometryStatus === "error" ? "지도를 불러오지 못했어요" : "지도 정보를 준비 중이에요"))
         : null;
   const ready = currentMapState.status === "ready";
   return (
@@ -417,7 +415,7 @@ export function RouteMap(props: RouteMapProps) {
       className={styles.region}
       style={{ pointerEvents: visible ? "auto" : "none" }}
       aria-label="노선 지도"
-      aria-busy={currentMapState.status === "loading"}
+      aria-busy={currentMapState.status === "loading" && geometryStatus !== "error"}
       aria-hidden={!visible}
       inert={!visible}
     >
@@ -434,14 +432,25 @@ export function RouteMap(props: RouteMapProps) {
       {unavailableMessage !== null ? (
         <div className={styles.notice} role="status" data-native-map-hit>
           <span>{unavailableMessage}</span>
-          <span>정류장 목록은 계속 확인할 수 있어요</span>
+          <span>{stopInfoNotice}</span>
         </div>
       ) : null}
       {data !== null &&
       ready &&
       (geometryNotice !== null || !data.paths.some((path) => path.direction === activeDirection)) ? (
-        <div className={geometryNotice === null ? styles.pathNotice : styles.geometryToast} role="status">
+        <div
+          className={
+            withheld ? styles.withheldToast : geometryNotice === null ? styles.pathNotice : styles.geometryToast
+          }
+          role="status"
+        >
           {geometryNotice ?? "방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요"}
+          {withheld && (
+            <>
+              <br />
+              {stopInfoNotice}
+            </>
+          )}
         </div>
       ) : null}
       {data !== null && ready ? (

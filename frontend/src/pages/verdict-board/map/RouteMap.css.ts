@@ -64,10 +64,11 @@ export const geometryToast = style([
     right: 66,
     width: "fit-content",
     marginInline: "auto",
-    borderRadius: 999,
+    borderRadius: 16,
     textAlign: "center",
   },
 ]);
+export const withheldToast = style([geometryToast, { letterSpacing: "0.025em" }]);
 export const location = style({
   position: "absolute",
   bottom: 16,

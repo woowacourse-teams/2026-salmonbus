@@ -296,6 +296,46 @@ test("노선 생성 중에는 목록에서 선택한 핀만 표시하고, 준비
   expect(api.requests.geometry).toBe(2);
 });
 
+test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받으면 실패를 안내한다", async ({ page, api }) => {
+  api.mode.geometry = { status: 503 };
+  api.data.geometry.status = "UNAVAILABLE";
+  api.data.geometry.reason = "GENERATION_PENDING";
+  api.data.geometry.points = [];
+  api.data.geometry.paths = null;
+
+  const firstFailure = page.waitForResponse((response) => new URL(response.url()).pathname === apiPaths.geometry);
+  await page.goto(`/routes/${routeId}`);
+  const response = await firstFailure;
+  expect(response.status()).toBe(503);
+  await response.finished();
+  await expect(map(page).getByText("지도 정보를 준비 중이에요", { exact: true })).toBeVisible();
+
+  api.mode.geometry = "success";
+  await page.clock.runFor(60_000);
+  await expect(map(page).getByTestId("naver-map-test-double")).toBeVisible();
+  await page.clock.runFor(48);
+  await expect(map(page).getByText("노선을 준비 중이에요", { exact: true })).toBeVisible();
+  expect(api.requests.geometry).toBe(2);
+
+  let terminalRequests = 0;
+  await api.route(async (route) => {
+    if (new URL(route.request().url()).pathname !== apiPaths.geometry) {
+      await route.fallback();
+      return;
+    }
+    terminalRequests += 1;
+    await route.fulfill({
+      status: 404,
+      json: { code: "ROUTE_NOT_FOUND", message: "노선을 찾을 수 없어요", requestId: "geometry-not-found" },
+    });
+  });
+  await page.clock.runFor(60_000);
+  await expect(map(page).getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
+  await expect(map(page)).toHaveAttribute("aria-busy", "false");
+  await page.clock.runFor(60_000);
+  expect(terminalRequests).toBe(1);
+});
+
 test("형상 판본이 충돌하면 보드를 다시 받아 새 판본의 노선을 표시한다", async ({ page, api }) => {
   const revisions: (string | null)[] = [];
   const original = api.data.watch.route.referenceVersionId;
@@ -324,6 +364,44 @@ test("형상 판본이 충돌하면 보드를 다시 받아 새 판본의 노선
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
   expect(revisions).toEqual([original, next]);
   expect(api.requests.watch).toBe(2);
+});
+
+test("겹치는 정류장 핀을 벌려도 연결 점선은 핀과 노선을 잇는다", async ({ page, api, naverMap }) => {
+  const { busStops, paths } = api.data.geometry;
+  const up = busStops.find((stop) => stop.stopSequence === 11);
+  const down = busStops.find((stop) => stop.stopSequence === 14);
+  const roadPoint = paths?.UP.points[9];
+  if (!up?.point || !down || !roadPoint) throw new Error("연결 점선 검증에 필요한 정류장과 경로가 없습니다");
+  down.point = { x: up.point.x, y: up.point.y + 0.0015 };
+  up.pathConnection = { point: roadPoint, segmentIndex: 9, segmentFraction: 0 };
+
+  await openMap(page);
+  await naverMap.panToStop(11);
+  const pin = map(page).locator("button[data-map-stop-sequence='11']");
+  const oppositePin = map(page).locator("button[data-map-stop-sequence='14']");
+  const line = map(page).locator('polyline[stroke-opacity="0.85"]');
+  const activePath = map(page).locator('polyline[stroke="#ED7768"]');
+  for (const zoom of [14, 18]) {
+    await naverMap.setZoom(zoom);
+    const pinBounds = await pin.boundingBox();
+    const oppositeBounds = await oppositePin.boundingBox();
+    if (!pinBounds || !oppositeBounds) throw new Error("정류장 핀의 화면 좌표가 없습니다");
+    const { start, end } = await line.evaluate((element: SVGPolylineElement) => {
+      const origin = element.ownerSVGElement!.getBoundingClientRect();
+      const first = element.points.getItem(0);
+      const last = element.points.getItem(1);
+      return { start: { x: origin.left + first.x, y: origin.top + first.y }, end: { x: last.x, y: last.y } };
+    });
+    const road = await activePath.evaluate((element: SVGPolylineElement) => {
+      const point = element.points.getItem(9);
+      return { x: point.x, y: point.y };
+    });
+    if (zoom === 14) expect(pinBounds.x - oppositeBounds.x).toBeGreaterThan(20);
+    else expect(pinBounds.x).toBeCloseTo(oppositeBounds.x);
+    expect(start.x).toBeCloseTo(pinBounds.x + pinBounds.width / 2, 0);
+    expect(start.y).toBeCloseTo(pinBounds.y + pinBounds.height / 2, 0);
+    expect(end).toEqual(road);
+  }
 });
 
 test("미분리된 실제 도로 경로를 그대로 표시하고 방향 화살표를 만들지 않는다", async ({ page, api }) => {
@@ -381,7 +459,8 @@ for (const failure of ["network", "referenceVersion"] as const) {
     else api.data.geometry.referenceVersionId = "different-reference";
     await page.goto(`/routes/${routeId}`);
     await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
-    await expect(map(page).getByText("지도 정보를 준비 중이에요", { exact: true })).toBeVisible();
+    const notice = failure === "network" ? "지도 정보를 준비 중이에요" : "지도를 불러오지 못했어요";
+    await expect(map(page).getByText(notice, { exact: true })).toBeVisible();
     await expect(map(page).getByText("정류장 목록은 계속 확인할 수 있어요", { exact: true })).toBeVisible();
     await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
