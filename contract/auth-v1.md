@@ -2,7 +2,7 @@
 
 프론트와 서버가 함께 지키는 소셜 로그인(카카오·애플) 계약이다.
 
-fetch로 부르는 API 13개의 요청·응답·오류 코드는 [`auth-v1.openapi.json`](auth-v1.openapi.json)이 원본이다. 서버 시험(`AuthApiDocsContractTest`)이 앱이 만든 명세와 이 파일을 대조한다. 이 문서는 명세에 담기지 않는 브라우저 이동 흐름과 쿠키 규칙을 적는다. 모양을 바꾸면 두 파일을 같은 PR에서 고친다.
+fetch로 부르는 API 16개의 요청·응답·오류 코드는 [`auth-v1.openapi.json`](auth-v1.openapi.json)이 원본이다. 서버 시험(`AuthApiDocsContractTest`)이 앱이 만든 명세와 이 파일을 대조한다. 이 문서는 명세에 담기지 않는 브라우저 이동 흐름과 쿠키 규칙을 적는다. 모양을 바꾸면 두 파일을 같은 PR에서 고친다.
 
 ## 켜짐
 
@@ -23,6 +23,9 @@ fetch로 부르는 API 13개의 요청·응답·오류 코드는 [`auth-v1.opena
 | `DELETE /api/me` | 204. 카카오 회원 탈퇴, 인증 쿠키 삭제 | 400 `CSRF_REJECTED`, 401 `UNAUTHENTICATED`, 409 `REAUTH_REQUIRED`(애플 회원) |
 | `PUT /api/me/push-devices` | 204. APNs 토큰 등록 또는 현재 회원으로 이동 | 400 `INVALID_PUSH_DEVICE`·`CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED` |
 | `POST /api/me/push-devices/unregister` | 204. 내 토큰 삭제. 없거나 남의 토큰이어도 같은 응답 | 400 `INVALID_PUSH_DEVICE`·`CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED` |
+| `GET /api/me/notification-settings` | 200. 내 알림 설정 목록 | 401 `UNAUTHENTICATED` |
+| `PUT /api/me/notification-settings` | 200. 저장된 알림 설정 | 400 `INVALID_NOTIFICATION_SCHEDULE`·`CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED`, 422 `NOTIFICATION_TARGET_NOT_FAVORITE` |
+| `DELETE /api/me/notification-settings/{id}` | 204. 내 알림 설정 삭제 | 400 `CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED`, 404 `NOTIFICATION_SETTING_NOT_FOUND` |
 | `DELETE /api/me/sessions` | 204. 모든 기기에서 로그아웃, 인증 쿠키 삭제 | 400 `CSRF_REJECTED`, 401 `UNAUTHENTICATED` |
 | `POST /api/me/withdrawal/apple` | 200. 애플 재인증 탈퇴 시작 주소 | 400 `INVALID_REQUEST`(카카오 회원)·`CSRF_REJECTED`, 401 `UNAUTHENTICATED` |
 | `POST /api/auth/{provider}/native/nonce` | 200. 앱 로그인 nonce | 400 `CSRF_REJECTED`, 404 `ENDPOINT_NOT_FOUND`(앱 로그인 꺼짐) |

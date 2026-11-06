@@ -51,6 +51,8 @@ public class ApiDocsConfiguration {
         "/api/me/favorites",
         "/api/me/push-devices",
         "/api/me/push-devices/unregister",
+        "/api/me/notification-settings",
+        "/api/me/notification-settings/{id}",
         "/api/me/sessions",
         "/api/me/withdrawal/apple"
     );

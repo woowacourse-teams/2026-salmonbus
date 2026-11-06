@@ -289,6 +289,39 @@ class KakaoWithdrawalTest {
             .query(UUID.class).single()).isEqualTo(other);
     }
 
+    @Test
+    void 탈퇴하면_자기_알림_설정만_연쇄_삭제한다() throws Exception {
+        UUID other = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "other-notice-member")).publicId();
+        jdbcClient.sql("""
+            INSERT INTO notification_setting (
+                id, member_id, route_id, stop_id, direction, local_time, weekdays,
+                occurrence_at, created_at, updated_at
+            )
+            SELECT ?, id, '234001739', '214002018', 'UP', TIME '07:40', 31, now(), now(), now()
+            FROM member WHERE public_id = ?
+            """)
+            .params(UUID.randomUUID(), memberId).update();
+        jdbcClient.sql("""
+            INSERT INTO notification_setting (
+                id, member_id, route_id, stop_id, direction, local_time, weekdays,
+                occurrence_at, created_at, updated_at
+            )
+            SELECT ?, id, '234001739', '214002018', 'DOWN', TIME '08:00', 31, now(), now(), now()
+            FROM member WHERE public_id = ?
+            """)
+            .params(UUID.randomUUID(), other).update();
+
+        HttpResponse<String> response = withdraw(accessTokens.issue(memberId));
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.NO_CONTENT.value());
+        assertThat(jdbcClient.sql("SELECT direction FROM notification_setting").query(String.class).list())
+            .containsExactly("DOWN");
+        assertThat(jdbcClient.sql("""
+            SELECT m.public_id FROM notification_setting setting
+            JOIN member m ON m.id = setting.member_id
+            """).query(UUID.class).single()).isEqualTo(other);
+    }
+
     private HttpResponse<String> withdraw(String accessToken) throws IOException, InterruptedException {
         return send(request("/api/me")
             .header("Cookie", ACCESS_COOKIE + "=" + accessToken + "; " + CSRF_COOKIE + "=" + csrfToken)
