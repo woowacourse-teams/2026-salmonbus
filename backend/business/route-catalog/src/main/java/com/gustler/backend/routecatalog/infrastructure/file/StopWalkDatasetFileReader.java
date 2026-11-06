@@ -46,7 +46,7 @@ public class StopWalkDatasetFileReader implements StopWalkDatasetReader {
             if (pairs.size() != node.path("pairCount").asInt(-1)) {
                 throw new IllegalStateException("도보 거리 묶음의 쌍 수가 메타데이터와 다르다: " + pairs.size());
             }
-            return new StopWalkDataset(checksum, OffsetDateTime.parse(node.get("osmBase").asString()), pairs);
+            return new StopWalkDataset(checksum, OffsetDateTime.parse(node.path("osmBase").asString("")), pairs);
         } catch (IOException failure) {
             throw new UncheckedIOException("도보 거리 묶음을 읽지 못했다", failure);
         }
