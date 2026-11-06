@@ -11,6 +11,7 @@ public enum ErrorCode {
     INVALID_ROUTE_ID(HttpStatus.BAD_REQUEST, "routeId는 9자리 숫자여야 합니다."),
     ROUTE_NOT_FOUND(HttpStatus.NOT_FOUND, "등록되지 않은 노선입니다."),
     STATION_NOT_FOUND(HttpStatus.NOT_FOUND, "지원하지 않는 정류장입니다."),
+    INVALID_STATION_TILE(HttpStatus.BAD_REQUEST, "정류장 지도 칸 번호가 올바르지 않습니다."),
     REFERENCE_VERSION_CONFLICT(HttpStatus.CONFLICT, "노선 판본과 정류장 방문이 일치하지 않습니다."),
     STOP_VISIT_AMBIGUOUS(HttpStatus.CONFLICT, "같은 정류장을 여러 번 지나는 노선이라 stopSequence가 필요합니다."),
     UNSUPPORTED_MODE(HttpStatus.BAD_REQUEST, "지원하지 않는 이동 수단입니다."),

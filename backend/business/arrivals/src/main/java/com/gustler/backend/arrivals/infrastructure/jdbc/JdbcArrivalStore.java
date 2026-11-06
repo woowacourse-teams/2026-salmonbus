@@ -28,12 +28,14 @@ public class JdbcArrivalStore implements ArrivalStore {
 
     @Override
     public boolean supported(String stationId) {
+        // 우리 노선 정류장과, 정류장 지도가 미리 받아 둔 정류장 원본(bus_station)을 수집한다.
         return jdbc.sql("""
             SELECT EXISTS (SELECT 1 FROM route_stop stop
                 JOIN route_version version ON version.id = stop.route_version_id
                 JOIN route route ON route.id = version.route_id
                 WHERE stop.stop_id = ? AND version.valid_to IS NULL AND route.source_id = 'GBIS')
-            """).param(stationId).query(Boolean.class).single();
+                OR EXISTS (SELECT 1 FROM bus_station WHERE station_id = ? AND active)
+            """).params(stationId, stationId).query(Boolean.class).single();
     }
 
     @Override

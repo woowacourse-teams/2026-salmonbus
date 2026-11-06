@@ -56,7 +56,9 @@ class PublicApiDocsContractTest {
         JsonNode paths = document.path("paths");
 
         // then
-        assertThat(paths.size()).isEqualTo(7);
+        assertThat(paths.size()).isEqualTo(9);
+        assertThat(paths.has("/api/v2/stations/tiles/{zoom}/{x}/{y}")).isTrue();
+        assertThat(paths.has("/api/v2/stations/{stationId}")).isTrue();
         assertThat(document.path("servers").get(0).path("url").asText()).isEqualTo("/");
         assertThat(document.path("components").path("schemas")
             .path("ForecastResponse").path("properties")

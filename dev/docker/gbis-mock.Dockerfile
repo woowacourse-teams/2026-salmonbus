@@ -7,6 +7,8 @@ COPY dev/data/routes.json /build/data/routes.json
 COPY dev/data/catalog-routes.json /build/data/catalog-routes.json
 COPY dev/data/route-shapes.json /build/data/route-shapes.json
 COPY dev/data/route-headways.json /build/data/route-headways.json
+COPY dev/data/station-around-20261105.json /build/data/station-around-20261105.json
+COPY dev/data/station-arrivals-20261105.json /build/data/station-arrivals-20261105.json
 COPY dev/server/replay.json /build/server/replay.json
 COPY dev/scenarios/replay.json /build/scenarios/replay.json
 COPY dev/wiremock/mappings/ /build/wiremock/mappings/
@@ -21,5 +23,8 @@ COPY dev/data/routes.json /local/data/routes.json
 COPY dev/data/catalog-routes.json /local/data/catalog-routes.json
 COPY dev/data/route-shapes.json /local/data/route-shapes.json
 COPY dev/data/route-headways.json /local/data/route-headways.json
+COPY dev/data/station-around-20261105.json /local/data/station-around-20261105.json
+COPY dev/data/station-baseline-20261020.json.gz /local/data/station-baseline.json.gz
+COPY dev/data/station-arrivals-20261105.json /local/data/station-arrivals-20261105.json
 COPY dev/scenarios/replay.json /local/scenarios/replay.json
 ENTRYPOINT ["/docker-entrypoint.sh", "--extensions", "com.gustler.localgbis.GbisReplayTransformer", "--max-request-journal-entries", "500", "--disable-banner", "--disable-request-logging"]

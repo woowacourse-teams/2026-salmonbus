@@ -563,6 +563,7 @@
               "INVALID_ROUTE_ID",
               "ROUTE_NOT_FOUND",
               "STATION_NOT_FOUND",
+              "INVALID_STATION_TILE",
               "REFERENCE_VERSION_CONFLICT",
               "STOP_VISIT_AMBIGUOUS",
               "UNSUPPORTED_MODE",

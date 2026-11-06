@@ -13,6 +13,7 @@ dependencies {
     implementation project(':route-catalog')
     implementation project(':observations')
     implementation project(':arrivals')
+    implementation project(':stations')
     implementation project(':forecasting')
     implementation project(':api-call-quota')
     implementation project(':gbis-client')

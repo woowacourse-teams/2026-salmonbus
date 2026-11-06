@@ -40,10 +40,10 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정되어도 다른 파일을 제외해 항상 통과하게 된다. 파일 이름으로 선택하고,
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
-     * <p>이 브랜치는 V48 이후 정류장 쌍 도보 거리 테이블을 만든다.
+     * <p>이 브랜치는 정류장 지도의 정류장 원본과 칸 진행 테이블을 만든다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("stop_walk_distance");
+        List.of("bus_station", "station_seed_and_demand_refresh");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

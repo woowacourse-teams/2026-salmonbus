@@ -13,6 +13,8 @@ import com.gustler.backend.support.IntegrationTest;
 import java.time.OffsetDateTime;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
@@ -164,6 +166,72 @@ class JpaBoardQueryRepositoryIntegrationTest {
 
         // then
         assertThat(snapshot.observation()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "published_at = published_at + interval '1 second'",
+        "generated_at = generated_at + interval '1 second'",
+        "prediction_count = prediction_count + 1",
+        "demand_statistics_revision = demand_statistics_revision + 1",
+        "quality_revision = quality_revision + 1"
+    })
+    void 같은_회차의_발행_정보가_바뀌면_캐시_판본도_바뀐다(String assignment) {
+        // given
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = route(fixture, "204000057", now);
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long batch = fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0);
+        fixture.insertPublication(batch, model, now, now);
+        RouteId routeId = new RouteId(route.sourceRouteId());
+        BoardSnapshot before = repository.findSnapshot(routeId).orElseThrow();
+
+        // when
+        jdbcClient.sql("UPDATE forecast_publication SET " + assignment + " WHERE source_batch_id = ?")
+            .param(batch).update();
+        BoardSnapshot after = repository.findSnapshot(routeId).orElseThrow();
+
+        // then
+        assertThat(after.observation()).isEqualTo(before.observation());
+        assertThat(after.revision()).isNotEqualTo(before.revision());
+    }
+
+    @Test
+    void 발행이_없어도_품질_판본을_읽고_품질_변경을_구별한다() {
+        // given
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = route(fixture, "204000057", now);
+        fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0);
+        RouteId routeId = new RouteId(route.sourceRouteId());
+        BoardSnapshot before = repository.findSnapshot(routeId).orElseThrow();
+
+        // when
+        jdbcClient.sql("UPDATE route_data_quality SET quality_revision = quality_revision + 1 WHERE route_id = ?")
+            .param(route.routeId()).update();
+        BoardSnapshot after = repository.findSnapshot(routeId).orElseThrow();
+
+        // then
+        assertThat(before.revision()).isNotNull();
+        assertThat(after.revision()).isNotEqualTo(before.revision());
+        assertThat(after.observation()).isEqualTo(before.observation());
+    }
+
+    @Test
+    void 품질_행이_없는_노선도_판본을_읽는다() {
+        // given
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = route(fixture, "204000057", now);
+        fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0);
+        jdbcClient.sql("DELETE FROM route_data_quality WHERE route_id = ?").param(route.routeId()).update();
+
+        // when
+        BoardSnapshot snapshot = repository.findSnapshot(new RouteId(route.sourceRouteId())).orElseThrow();
+
+        // then
+        assertThat(snapshot.revision()).isEqualTo("q-|p-|g-|n-|m-|d-|r-");
     }
 
     private RouteContext route(BoardDatabaseFixture fixture, String id, OffsetDateTime now) {

@@ -26,6 +26,7 @@ import com.gustler.backend.api.favorite.InvalidFavoriteOrderException;
 import com.gustler.backend.api.favorite.RepresentativeFavoriteGroupDeletionException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
+import com.gustler.backend.api.station.InvalidStationTileException;
 import com.gustler.backend.member.api.NicknameViolation;
 import java.time.Duration;
 import java.util.Arrays;
@@ -62,6 +63,7 @@ class ApiExceptionHandlerTest {
             new NicknameTakenException(),
             new ReauthRequiredException(),
             new Failure(ErrorCode.STATION_NOT_FOUND),
+            new InvalidStationTileException(),
             new Failure(ErrorCode.REFERENCE_VERSION_CONFLICT),
             new FavoriteGroupLimitExceededException(),
             new FavoriteLimitExceededException(),

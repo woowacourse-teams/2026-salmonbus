@@ -35,6 +35,8 @@ public class ApiDocsConfiguration {
         "/api/v1/routes/{routeId}/vehicles",
         "/api/v2/routes/{routeId}/geometry",
         "/api/v2/stations/{stationId}/arrivals",
+        "/api/v2/stations/tiles/{zoom}/{x}/{y}",
+        "/api/v2/stations/{stationId}",
         "/api/auth/session",
         "/api/auth/refresh",
         "/api/auth/logout",

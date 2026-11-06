@@ -45,7 +45,10 @@ public class BoardQueryService {
     private static final Pattern DEPARTURE_TIME_FORMAT = Pattern.compile(
         "([01][0-9]|2[0-3]):[0-5][0-9]"
     );
-    private static final int MAX_HORIZON_STOPS = 12;
+    /**
+     * 정류장마다 다가오는 차량으로 담는 최대 거리(정류장 수). 정류장 상세가 예보 범위 밖 차량을 가를 때도 쓴다.
+     */
+    public static final int MAX_HORIZON_STOPS = 12;
     private static final Comparator<Approach> APPROACH_ORDER = Comparator
         .comparingInt(Approach::remainingStops)
         .thenComparingInt(Approach::horizonStops)
@@ -55,6 +58,7 @@ public class BoardQueryService {
     private final BoardQueryRepository boardQueryRepository;
     private final BoardFreshnessPolicy freshnessPolicy;
     private final BoardCachePolicy cachePolicy;
+    private final BoardReadCache readCache;
 
     public BoardOverview getBoard(
         RouteId routeId
@@ -79,6 +83,15 @@ public class BoardQueryService {
         if (observation.vehiclesInService() == null
             || observation.vehiclesInService() < 0) {
             throw new ServiceUnavailableException();
+        }
+
+        Board cached = readCache.find(routeId.value(), snapshot);
+        if (cached != null) {
+            return new BoardReading(
+                cached,
+                observation.batchId(),
+                cachePolicy.maxAgeAt(observation.observedAt())
+            );
         }
 
         List<BoardStop> stops = boardQueryRepository.findStops(
@@ -111,6 +124,7 @@ public class BoardQueryService {
             observation.vehiclesInService(),
             stopStates
         );
+        readCache.put(routeId.value(), snapshot, board);
         return new BoardReading(
             board,
             observation.batchId(),

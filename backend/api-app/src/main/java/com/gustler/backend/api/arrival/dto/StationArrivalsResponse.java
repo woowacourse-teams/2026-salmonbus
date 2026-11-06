@@ -54,7 +54,8 @@ public record StationArrivalsResponse(
                 .toList());
     }
 
-    private static Snapshot snapshotOf(ArrivalSnapshot snapshot) {
+    /** 정류장 상세도 같은 수신 결과 형식을 쓴다. */
+    public static Snapshot snapshotOf(ArrivalSnapshot snapshot) {
         if (snapshot == null) {
             return null;
         }
@@ -62,7 +63,7 @@ public record StationArrivalsResponse(
             snapshot.sourceQueryTime(), snapshot.refreshAfterAt(), snapshot.staleAt());
     }
 
-    private static Refresh refreshOf(ArrivalRefresh value) {
+    public static Refresh refreshOf(ArrivalRefresh value) {
         String status = switch (value.status()) {
             case ACCEPTED, IN_PROGRESS -> "RUNNING";
             case DEFERRED -> deferredStatus(value);
@@ -104,7 +105,7 @@ public record StationArrivalsResponse(
             seatOf(source), source.congestion(), source.vehicleType(), source.taglessSupported());
     }
 
-    private static Eta etaOf(ArrivalPrediction prediction) {
+    public static Eta etaOf(ArrivalPrediction prediction) {
         String status = "UNAVAILABLE";
         String reason = "PREDICTION_ELAPSED";
         if (prediction.available()) {
@@ -115,7 +116,7 @@ public record StationArrivalsResponse(
             "RECEIVED_AT_APPROXIMATION", prediction.expectedArrivalAt(), prediction.remainingSeconds());
     }
 
-    private static Seat seatOf(Prediction source) {
+    public static Seat seatOf(Prediction source) {
         String kind = "EXACT";
         if (source.remainingSeats() == null) {
             kind = "UNKNOWN";

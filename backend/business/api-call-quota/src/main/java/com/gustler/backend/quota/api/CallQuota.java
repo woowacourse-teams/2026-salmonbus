@@ -11,6 +11,8 @@ public enum CallQuota {
     BUS_LOCATION("GBIS"),
     /** 버스 노선정보 조회. 노선당 하루 한 번이라 한도 대비 사용량이 적다. SAL-88에서 쓴다. */
     BUS_ROUTE("GBIS"),
+    /** 주변 정류소 조회. 지도 열람 지역의 기초 정보를 갱신한다. */
+    BUS_STATION("GBIS"),
     ;
 
     private final String provider;
