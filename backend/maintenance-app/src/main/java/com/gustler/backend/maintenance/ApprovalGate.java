@@ -12,7 +12,6 @@ import tools.jackson.databind.JsonNode;
  */
 public final class ApprovalGate {
     public static final String ACADEMY_TRIP_QUALITY_REBUILD = "ACADEMY_TRIP_QUALITY_REBUILD";
-    public static final String ACADEMY_STOP_WALK_DISTANCE_IMPORT = "ACADEMY_STOP_WALK_DISTANCE_IMPORT";
 
     private static final String SCHEMA = "salmonbus-migration-approval-v1";
     private static final Set<String> KNOWN_FIELDS = Set.of(

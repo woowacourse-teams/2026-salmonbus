@@ -12,23 +12,14 @@ import com.gustler.backend.forecasting.api.quality.TripQualityStatus;
 import com.gustler.backend.maintenance.DatabaseEnvironment.TargetKind;
 import com.gustler.backend.maintenance.configuration.BundleInspectionCommandConfiguration;
 import com.gustler.backend.maintenance.configuration.MaintenanceConfiguration;
-import com.gustler.backend.maintenance.configuration.WalkDistanceImportConfiguration;
-import com.gustler.backend.routecatalog.api.LoadStopWalkDistances;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.CannotCreateTransactionException;
 
 /**
@@ -66,7 +57,6 @@ public final class MaintenanceApplication {
         return switch (arguments.command()) {
             case "bundle-check" -> bundleCheck(arguments);
             case "quality-preview", "quality-rebuild", "quality-status" -> quality(arguments);
-            case "walk-distances-import" -> walkDistancesImport(arguments);
             default -> throw new MaintenanceException("UNKNOWN_COMMAND");
         };
     }
@@ -133,47 +123,6 @@ public final class MaintenanceApplication {
             throw new MaintenanceException("DATABASE_CONNECTION_FAILED", e);
         } catch (RuntimeException e) {
             throw new MaintenanceException("DATABASE_TRANSACTION_FAILED", e);
-        }
-    }
-
-    /**
-     * 정류장 쌍 도보 거리 파일을 검증해 DB에 넣는다. 지금 적재된 묶음과 같으면 쓰지 않는다.
-     * 운영 대상은 압축 파일의 SHA-256과 DB 동일성이 맞는 승인 자료가 있어야 한다.
-     */
-    private static Object walkDistancesImport(CliArguments arguments) {
-        Path distances = arguments.requiredPath("distances");
-        Path metadata = arguments.requiredPath("metadata");
-        DatabaseEnvironment environment = DatabaseEnvironment.load(Configuration.load(arguments.requiredPath("config")));
-        if (environment.targetKind() != TargetKind.LOCAL) {
-            new ApprovalGate(Clock.systemUTC()).require(arguments.requiredPath("approval"),
-                ApprovalGate.ACADEMY_STOP_WALK_DISTANCE_IMPORT, fileSha256(distances), environment.identitySha256());
-        }
-        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
-            context.registerBean(DatabaseEnvironment.class, () -> environment);
-            context.register(WalkDistanceImportConfiguration.class);
-            context.refresh();
-            LoadStopWalkDistances.Result result = context.getBean(LoadStopWalkDistances.class)
-                .load(distances, metadata, OffsetDateTime.now(ZoneOffset.UTC));
-            return Map.of("outcome", result.status().name(), "checksum", result.checksum(),
-                "pairCount", result.pairCount());
-        } catch (MaintenanceException e) {
-            throw e;
-        } catch (CannotCreateTransactionException e) {
-            throw new MaintenanceException("DATABASE_CONNECTION_FAILED", e);
-        } catch (DataAccessException e) {
-            throw new MaintenanceException("DATABASE_TRANSACTION_FAILED", e);
-        } catch (UncheckedIOException e) {
-            throw new MaintenanceException("WALK_DISTANCE_FILE_UNREADABLE", e);
-        } catch (RuntimeException e) {
-            throw new MaintenanceException("WALK_DISTANCE_FILE_INVALID", e);
-        }
-    }
-
-    private static String fileSha256(Path file) {
-        try {
-            return Sha256.of(Files.readAllBytes(file));
-        } catch (IOException e) {
-            throw new MaintenanceException("WALK_DISTANCE_FILE_UNREADABLE", e);
         }
     }
 

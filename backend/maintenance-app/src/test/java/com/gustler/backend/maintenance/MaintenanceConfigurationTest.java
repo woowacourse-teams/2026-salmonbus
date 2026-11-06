@@ -41,15 +41,6 @@ class MaintenanceConfigurationTest {
     }
 
     @Test
-    void 도보_거리_넣기는_파일_경로가_없으면_DB_구성을_시작하기_전에_거절한다() {
-        // when
-        Assertions.assertThatThrownBy(() ->
-            MaintenanceApplication.run(CliArguments.parse(new String[] {"walk-distances-import"})))
-            .isInstanceOfSatisfying(MaintenanceException.class,
-                error -> assertThat(error.code()).isEqualTo("MISSING_ARGUMENT_DISTANCES"));
-    }
-
-    @Test
     void 폐기한_이관_명령은_정비_구성을_시작하기_전에_거절한다() {
         // when
         Assertions.assertThatThrownBy(() ->
