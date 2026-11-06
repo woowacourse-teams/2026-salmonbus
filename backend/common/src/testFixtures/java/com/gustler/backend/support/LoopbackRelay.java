@@ -30,7 +30,13 @@ public final class LoopbackRelay implements AutoCloseable {
         while (!server.isClosed()) {
             try {
                 Socket client = server.accept();
-                Socket target = new Socket(targetHost, targetPort);
+                Socket target;
+                try {
+                    target = new Socket(targetHost, targetPort);
+                } catch (IOException connectionFailed) {
+                    client.close();
+                    continue;
+                }
                 pipe(client, target);
                 pipe(target, client);
             } catch (IOException ignored) {
