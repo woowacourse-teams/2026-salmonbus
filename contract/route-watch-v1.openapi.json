@@ -643,15 +643,45 @@
           "seatAvailableProbability": {
             "type": "number",
             "format": "double",
-            "description": "좌석 이용 가능 확률. 0~1; UNAVAILABLE이면 필드 생략",
+            "description": "좌석이 남을 확률. 개인의 탑승 확률이 아님. probabilityTarget으로 관측 기준 구분. 0~1; UNAVAILABLE이면 생략",
             "maximum": 1,
             "minimum": 0
           },
           "expectedSeats": {
             "type": "number",
             "format": "double",
-            "description": "기대 잔여 좌석 수. 값이 없거나 UNAVAILABLE이면 필드 생략",
+            "description": "좌석 점예측. seatTarget으로 하차 후 추정값과 기존 관측 기준을 구분. 값이 없으면 생략",
             "minimum": 0
+          },
+          "seatTarget": {
+            "type": "string",
+            "enum": [
+              "FIRST_POST_STOP_OBSERVATION",
+              "AFTER_ALIGHTING_ESTIMATE"
+            ],
+            "description": "좌석 목표: FIRST_POST_STOP_OBSERVATION 또는 AFTER_ALIGHTING_ESTIMATE"
+          },
+          "probabilityTarget": {
+            "type": "string",
+            "enum": [
+              "FIRST_POST_STOP_ZERO",
+              "DEPARTURE_ZERO"
+            ],
+            "description": "확률 목표: FIRST_POST_STOP_ZERO 또는 DEPARTURE_ZERO"
+          },
+          "afterAlightingSeatEstimate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 70,
+            "description": "하차 후 빈 좌석 추정값. 레스 모델에서만 제공",
+            "format": "double"
+          },
+          "departureFullProbability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "목표 정류장에서 출발할 때 0석일 확률. 레스 모델에서만 제공",
+            "format": "double"
           }
         },
         "required": [

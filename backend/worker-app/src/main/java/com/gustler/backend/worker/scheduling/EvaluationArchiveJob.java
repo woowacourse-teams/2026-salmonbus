@@ -1,6 +1,8 @@
 package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.forecasting.api.evaluation.AdvanceEvaluationArchive;
+import com.gustler.backend.forecasting.api.evaluation.LesEvaluationArchive;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -12,6 +14,12 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(prefix = "forecast.archive", name = "enabled", havingValue = "true")
 public class EvaluationArchiveJob {
     private final AdvanceEvaluationArchive service;
+    private LesEvaluationArchive les;
+
+    @Autowired(required = false)
+    public void useLesArchive(LesEvaluationArchive les) {
+        this.les = les;
+    }
 
     public EvaluationArchiveJob(AdvanceEvaluationArchive service) {
         this.service = service;
@@ -22,5 +30,8 @@ public class EvaluationArchiveJob {
         scheduler = "calibrationTaskScheduler")
     public void advance() {
         service.advance();
+        if (les != null) {
+            les.advance();
+        }
     }
 }

@@ -1,7 +1,7 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
-import com.gustler.backend.observations.domain.CollectionBatch;
 import com.gustler.backend.observations.domain.CollectionBatch.State;
+import com.gustler.backend.observations.domain.CollectionBatch;
 import com.gustler.backend.observations.domain.ObservationBatchFailureCode;
 import com.gustler.backend.observations.domain.ObservationBatchOutcome;
 import jakarta.persistence.Column;
@@ -47,6 +47,9 @@ public class ObservationBatchJpaEntity {
 
     @Column(name = "input_confirmed_at")
     private OffsetDateTime inputConfirmedAt;
+
+    @Column(name = "ingestion_origin", length = 40)
+    private String ingestionOrigin = "LIVE";
 
     @Enumerated(EnumType.STRING)
     @Column(name = "outcome")

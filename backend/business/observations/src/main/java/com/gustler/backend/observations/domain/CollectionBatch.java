@@ -111,7 +111,9 @@ public final class CollectionBatch {
     }
 
     public void confirmInput(OffsetDateTime confirmedAt) {
-        inputConfirmedAt = confirmedAt;
+        if (inputConfirmedAt == null) {
+            inputConfirmedAt = confirmedAt;
+        }
     }
 
     public Long id() {

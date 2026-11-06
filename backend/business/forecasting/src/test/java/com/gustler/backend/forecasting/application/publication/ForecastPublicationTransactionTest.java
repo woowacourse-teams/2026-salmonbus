@@ -9,17 +9,16 @@ import static org.mockito.Mockito.when;
 
 import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore;
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
-import com.gustler.backend.forecasting.application.publication.ForecastPublicationTransactionTest.FixedClock;
 import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationSamplingPoint;
-import com.gustler.backend.forecasting.domain.model.FullSeatStreak.SeenToEnd;
-import com.gustler.backend.forecasting.domain.model.ObservedSeats.Known;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
+import com.gustler.backend.forecasting.domain.model.ObservedSeats;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.model.PrecedingVehicle.Unknown;
+import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.SeatDistribution;
@@ -65,6 +64,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.IllegalTransactionStateException;
@@ -74,7 +74,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** 외부 테스트 트랜잭션 없이 실제 발행의 커밋·롤백과 수집 배치 잠금을 검증한다. */
 @ForecastingIntegrationTest
-@Import(FixedClock.class)
+@Import(ForecastPublicationTransactionTest.FixedClock.class)
 class ForecastPublicationTransactionTest {
     private static final Instant OBSERVED_AT = Instant.parse("2026-09-21T02:00:00Z");
     private static final Instant GENERATED_AT = OBSERVED_AT.plusSeconds(2);
@@ -83,10 +83,10 @@ class ForecastPublicationTransactionTest {
     private static final String CALCULATION_VERSION = "CALCULATION_V1";
     private static final int ATTEMPT_NUMBER = 2;
     private static final long MISSING_OBSERVATION_ID = Long.MAX_VALUE;
-    private static final SeatForecastResult RESULT =
-        new SeatForecastResult(new SeatDistribution(List.of(0.4, 0.6)), 0.4);
-    private static final SeatForecastResult SECOND_RESULT =
-        new SeatForecastResult(new SeatDistribution(List.of(0.7, 0.3)), 0.7);
+    private static final SeatForecastResult RESULT = new SeatForecastResult(new SeatDistribution(List.of(0.4, 0.6)),
+        0.4);
+    private static final SeatForecastResult SECOND_RESULT = new SeatForecastResult(
+        new SeatDistribution(List.of(0.7, 0.3)), 0.7);
 
     @Autowired
     private ForecastBatchWriter writer;
@@ -135,39 +135,39 @@ class ForecastPublicationTransactionTest {
         when(forecastRuntime.resolveActive()).thenReturn(Optional.empty());
         String routeKey = "publication-" + UUID.randomUUID().toString().substring(0, 12);
         routeId = jdbc.sql("""
-                INSERT INTO route (
-                    public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name
-                ) VALUES (?, 'GBIS', ?, '3330', '범계역', '강남역') RETURNING id
-                """)
+            INSERT INTO route (
+                public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name
+            ) VALUES (?, 'GBIS', ?, '3330', '범계역', '강남역') RETURNING id
+            """)
             .params(routeKey, routeKey).query(Long.class).single();
         routeVersionId = jdbc.sql("""
-                INSERT INTO route_version (route_id, content_digest, valid_from)
-                VALUES (?, ?, ?) RETURNING id
-                """)
+            INSERT INTO route_version (route_id, content_digest, valid_from)
+            VALUES (?, ?, ?) RETURNING id
+            """)
             .params(routeId, DIGEST, offset(OBSERVED_AT)).query(Long.class).single();
         for (int order = 3; order <= 5; order++) {
             jdbc.sql("""
-                    INSERT INTO route_stop (route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
-                    VALUES (?, ?, ?, ?, 'UP', true)
-                    """)
+                INSERT INTO route_stop (route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
+                VALUES (?, ?, ?, ?, 'UP', true)
+                """)
                 .params(routeVersionId, order, "stop-" + order, "정류장 " + order).update();
         }
         batchId = jdbc.sql("""
-                INSERT INTO observation_batch (
-                    route_version_id, scheduled_at, attempt_number, attempt_key, requested_at,
-                    response_received_at, completed_at, outcome, normalization_version, collection_strategy_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'SUCCESS_ROWS', 'normalization-v1', 'collection-v1')
-                RETURNING id
-                """)
+            INSERT INTO observation_batch (
+                route_version_id, scheduled_at, attempt_number, attempt_key, requested_at,
+                response_received_at, completed_at, outcome, normalization_version, collection_strategy_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'SUCCESS_ROWS', 'normalization-v1', 'collection-v1')
+            RETURNING id
+            """)
             .params(routeVersionId, offset(OBSERVED_AT), ATTEMPT_NUMBER, routeKey,
                 offset(OBSERVED_AT), offset(OBSERVED_AT), offset(OBSERVED_AT))
             .query(Long.class).single();
         observationId = jdbc.sql("""
-                INSERT INTO vehicle_observation (
-                    observation_batch_id, route_version_id, source_row_number, vehicle_id,
-                    stop_order, stop_id, passed_stop_order, running_state, remaining_seats
-                ) VALUES (?, ?, 0, 'vehicle-1', 3, 'stop-3', 3, 2, 12) RETURNING id
-                """)
+            INSERT INTO vehicle_observation (
+                observation_batch_id, route_version_id, source_row_number, vehicle_id,
+                stop_order, stop_id, passed_stop_order, running_state, remaining_seats
+            ) VALUES (?, ?, 0, 'vehicle-1', 3, 'stop-3', 3, 2, 12) RETURNING id
+            """)
             .params(batchId, routeVersionId).query(Long.class).single();
         batch = new PendingForecastBatch(batchId, routeVersionId, routeId, OBSERVED_AT);
         stops = new RouteStops(routeVersionId, routeKey, List.of(
@@ -214,8 +214,8 @@ class ForecastPublicationTransactionTest {
         ForecastBatchCommitter committer = new ForecastBatchCommitter(publications, work, quality, inputs, sampling);
 
         // when
-        new TransactionTemplate(transactions).executeWithoutResult(status ->
-            committer.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
+        new TransactionTemplate(transactions).executeWithoutResult(
+            status -> committer.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
 
         // then
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
@@ -223,13 +223,15 @@ class ForecastPublicationTransactionTest {
             jdbc.sql("SELECT target_stop_order FROM forecast_evaluation_pending WHERE vehicle_observation_id = ?")
                 .param(observationId)
                 .query(Integer.class)
-                .list()).containsExactlyInAnyOrder(4, 5);
+                .list())
+            .containsExactlyInAnyOrder(4, 5);
         assertThat(
             jdbc.sql(
-            "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
+                "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
                 .param(observationId)
                 .query(Boolean.class)
-                .list()).containsExactly(true, false);
+                .list())
+            .containsExactly(true, false);
     }
 
     @Test
@@ -247,8 +249,8 @@ class ForecastPublicationTransactionTest {
         // then
         assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
         assertThat(sampling.select(samplingPublication(), samplingSources(OBSERVED_AT.plusSeconds(15)))
-                .publication().predictions()).allMatch(
-                    SeatForecast::evaluationDetailRequired);
+            .publication().predictions()).allMatch(
+                SeatForecast::evaluationDetailRequired);
     }
 
     @Test
@@ -259,21 +261,22 @@ class ForecastPublicationTransactionTest {
         ForecastBatchCommitter enabled = new ForecastBatchCommitter(publications, work, quality, inputs, sampling);
         ForecastBatchCommitter disabled = new ForecastBatchCommitter(publications, work, quality, inputs,
             new EvaluationSamplingSelector(false, "", Duration.ofSeconds(60)));
-        new TransactionTemplate(transactions).executeWithoutResult(status ->
-            enabled.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
+        new TransactionTemplate(transactions)
+            .executeWithoutResult(status -> enabled.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
 
         // when
-        new TransactionTemplate(transactions).executeWithoutResult(status ->
-            disabled.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
+        new TransactionTemplate(transactions).executeWithoutResult(
+            status -> disabled.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
 
         // then
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
         assertThat(
             jdbc.sql(
-            "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
+                "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
                 .param(observationId)
                 .query(Boolean.class)
-                .list()).containsExactly(true, false);
+                .list())
+            .containsExactly(true, false);
     }
 
     @Test
@@ -282,25 +285,26 @@ class ForecastPublicationTransactionTest {
         EvaluationSamplingSelector sampling = new EvaluationSamplingSelector(true, "", Duration.ofSeconds(60));
         sampling.committed(sampling.select(samplingPublication(), samplingSources(OBSERVED_AT.minusSeconds(15))));
         ForecastBatchCommitter original = new ForecastBatchCommitter(publications, work, quality, inputs, sampling);
-        new TransactionTemplate(transactions).executeWithoutResult(status ->
-            original.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
+        new TransactionTemplate(transactions).executeWithoutResult(
+            status -> original.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
         EvaluationSamplingSelector restarted = new EvaluationSamplingSelector(true, "", Duration.ofSeconds(60));
         ForecastBatchCommitter committer = new ForecastBatchCommitter(publications, work, quality, inputs, restarted);
 
         // when
-        new TransactionTemplate(transactions).executeWithoutResult(status ->
-            committer.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
+        new TransactionTemplate(transactions).executeWithoutResult(
+            status -> committer.commit(batch, samplingPublication(), samplingSources(OBSERVED_AT)));
 
         // then
         assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
         assertThat(
             jdbc.sql(
-            "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
+                "SELECT evaluation_detail_required FROM seat_forecast WHERE vehicle_observation_id = ? ORDER BY target_stop_order")
                 .param(observationId)
                 .query(Boolean.class)
-                .list()).containsExactly(true, false);
+                .list())
+            .containsExactly(true, false);
         assertThat(restarted.select(samplingPublication(), samplingSources(OBSERVED_AT.plusSeconds(15)))
-                .publication().predictions()).allMatch(SeatForecast::evaluationDetailRequired);
+            .publication().predictions()).allMatch(SeatForecast::evaluationDetailRequired);
     }
 
     private ForecastPublication samplingPublication() {
@@ -361,6 +365,25 @@ class ForecastPublicationTransactionTest {
     }
 
     @Test
+    void 레스_전환으로_기존_관측의_발행_모델과_정산_의미를_덮어쓰지_않는다() {
+        writer.writeForecastsOf(batch, stops, runtime);
+        StoredPublication original = readPublication();
+        List<StoredPrediction> predictions = readPredictions();
+        RuntimeSnapshot replacement = runtime("les-replacement", input -> SECOND_RESULT);
+        jdbc.sql("UPDATE model_deployment SET calculation_version='les-online-v1' WHERE id=?")
+            .param(replacement.deploymentId()).update();
+
+        Throwable failure = catchThrowable(() -> writer.writeForecastsOf(batch, stops, replacement));
+
+        assertThat(failure).isInstanceOf(InvalidDataAccessApiUsageException.class)
+            .hasRootCauseInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("덮어쓸 수 없다");
+        assertThat(readPublication()).isEqualTo(original);
+        assertThat(readPredictions()).isEqualTo(predictions);
+        assertThat(readCounts()).isEqualTo(new StoredCounts(1, 2, 2, true));
+    }
+
+    @Test
     void 일부_예측을_저장한_뒤_실패하면_발행과_평가와_입력_확정도_롤백한다() {
         // given
         when(trajectories.readTrajectories(batchId))
@@ -405,8 +428,7 @@ class ForecastPublicationTransactionTest {
                 locked.countDown();
                 try {
                     release.await(5, TimeUnit.SECONDS);
-                }
-                catch (InterruptedException interrupted) {
+                } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                 }
             }));
@@ -414,8 +436,8 @@ class ForecastPublicationTransactionTest {
         try {
 
             // when
-            final int saved =
-                assertTimeoutPreemptively(Duration.ofSeconds(5), () -> writer.writeForecastsOf(batch, stops, runtime));
+            final int saved = assertTimeoutPreemptively(Duration.ofSeconds(5),
+                () -> writer.writeForecastsOf(batch, stops, runtime));
 
             // then
             assertThat(saved).isEqualTo(2);
@@ -440,16 +462,15 @@ class ForecastPublicationTransactionTest {
                 changed.countDown();
                 try {
                     release.await(5, TimeUnit.SECONDS);
-                }
-                catch (InterruptedException interrupted) {
+                } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                 }
             }));
         assertThat(changed.await(2, TimeUnit.SECONDS)).isTrue();
 
         // when
-        CompletableFuture<Integer> saving =
-            CompletableFuture.supplyAsync(() -> writer.writeForecastsOf(batch, stops, runtime));
+        CompletableFuture<Integer> saving = CompletableFuture
+            .supplyAsync(() -> writer.writeForecastsOf(batch, stops, runtime));
 
         // then
 
@@ -484,7 +505,7 @@ class ForecastPublicationTransactionTest {
         assertThat(saved).isZero();
         assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
         assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_work WHERE route_version_id=?")
-                .param(routeVersionId).query(Long.class).single()).isZero();
+            .param(routeVersionId).query(Long.class).single()).isZero();
     }
 
     @Test
@@ -532,7 +553,7 @@ class ForecastPublicationTransactionTest {
         assertThat(failure).isInstanceOf(DataAccessException.class);
         assertThat(readCounts()).isEqualTo(new StoredCounts(0, 0, 0, false));
         assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_work WHERE route_version_id=?")
-                .param(routeVersionId).query(Long.class).single()).isZero();
+            .param(routeVersionId).query(Long.class).single()).isZero();
     }
 
     @Test
@@ -541,8 +562,8 @@ class ForecastPublicationTransactionTest {
         TransactionTemplate transaction = new TransactionTemplate(transactions);
 
         // when
-        Throwable failure = Assertions.catchThrowable(() ->
-            transaction.executeWithoutResult(status -> writer.writeForecastsOf(batch, stops, runtime)));
+        Throwable failure = Assertions.catchThrowable(
+            () -> transaction.executeWithoutResult(status -> writer.writeForecastsOf(batch, stops, runtime)));
 
         // then
         assertThat(failure).isInstanceOf(IllegalTransactionStateException.class);
@@ -552,11 +573,11 @@ class ForecastPublicationTransactionTest {
     private RuntimeSnapshot runtime(String releaseId, SeatForecastModel model) {
         Instant dataUntil = OBSERVED_AT.minusSeconds(60);
         final long deploymentId = jdbc.sql("""
-                INSERT INTO model_deployment (
-                    deployment_key, release_id, model_key, model_version, bundle_digest,
-                    prediction_target_version, calculation_version, supported_scope_digest, data_until, state
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED') RETURNING id
-                """)
+            INSERT INTO model_deployment (
+                deployment_key, release_id, model_key, model_version, bundle_digest,
+                prediction_target_version, calculation_version, supported_scope_digest, data_until, state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'STAGED') RETURNING id
+            """)
             .params(UUID.randomUUID(), releaseId, "seat-full-chance", "1.0.0",
                 DIGEST, "SEAT_FULL_CHANCE_V1", CALCULATION_VERSION,
                 DIGEST, offset(dataUntil))
@@ -569,30 +590,29 @@ class ForecastPublicationTransactionTest {
     private VehicleTrajectory trajectory(final long sourceObservationId) {
         return new VehicleTrajectory(sourceObservationId,
             new ObservedVehicle("vehicle-" + sourceObservationId, routeVersionId, 3, OBSERVED_AT, 12, null),
-            new Known(12), new SeatSlope.Known(0),
-            new Unknown(TrajectoryGap.NO_VEHICLE_AHEAD), new SeenToEnd(0), 44);
+            new ObservedSeats.Known(12), new SeatSlope.Known(0),
+            new PrecedingVehicle.Unknown(TrajectoryGap.NO_VEHICLE_AHEAD), new FullSeatStreak.SeenToEnd(0), 44);
     }
 
     private StoredPublication readPublication() {
         return jdbc.sql("""
-                SELECT id, model_deployment_id, generated_at, published_at, prediction_count
-                FROM forecast_publication WHERE source_batch_id = ?
-                """)
+            SELECT id, model_deployment_id, generated_at, published_at, prediction_count
+            FROM forecast_publication WHERE source_batch_id = ?
+            """)
             .param(batchId)
-            .query((row, index) ->
-                new StoredPublication(row.getLong("id"), row.getLong("model_deployment_id"),
-                    row.getObject("generated_at", OffsetDateTime.class)
-                        .toInstant(),
-                    row.getObject("published_at", OffsetDateTime.class).toInstant(), row.getInt("prediction_count")))
+            .query((row, index) -> new StoredPublication(row.getLong("id"), row.getLong("model_deployment_id"),
+                row.getObject("generated_at", OffsetDateTime.class)
+                    .toInstant(),
+                row.getObject("published_at", OffsetDateTime.class).toInstant(), row.getInt("prediction_count")))
             .single();
     }
 
     private List<StoredPrediction> readPredictions() {
         return jdbc.sql("""
-                SELECT publication_id, vehicle_observation_id, target_stop_order, model_deployment_id,
-                       seat_full_chance, expected_seats, generated_at
-                FROM seat_forecast WHERE route_version_id = ? ORDER BY vehicle_observation_id, target_stop_order
-                """)
+            SELECT publication_id, vehicle_observation_id, target_stop_order, model_deployment_id,
+                   seat_full_chance, expected_seats, generated_at
+            FROM seat_forecast WHERE route_version_id = ? ORDER BY vehicle_observation_id, target_stop_order
+            """)
             .param(routeVersionId)
             .query((row, index) -> new StoredPrediction(row.getLong("publication_id"),
                 row.getLong("vehicle_observation_id"), row.getInt("target_stop_order"),
@@ -603,21 +623,21 @@ class ForecastPublicationTransactionTest {
 
     private List<String> readEvaluationStates() {
         return jdbc.sql("""
-                SELECT scoring_state FROM forecast_evaluation
-                WHERE route_version_id = ? ORDER BY vehicle_observation_id, target_stop_order
-                """)
+            SELECT scoring_state FROM forecast_evaluation
+            WHERE route_version_id = ? ORDER BY vehicle_observation_id, target_stop_order
+            """)
             .param(routeVersionId).query(String.class).list();
     }
 
     private StoredCounts readCounts() {
         return jdbc.sql("""
-                SELECT
-                    (SELECT count(*) FROM forecast_publication WHERE source_batch_id = :batchId) AS publications,
-                    (SELECT count(*) FROM seat_forecast WHERE route_version_id = :routeVersionId) AS predictions,
-                    (SELECT count(*) FROM forecast_evaluation WHERE route_version_id = :routeVersionId) AS evaluations,
-                    input_confirmed_at IS NOT NULL AS input_confirmed
-                FROM observation_batch WHERE id = :batchId
-                """)
+            SELECT
+                (SELECT count(*) FROM forecast_publication WHERE source_batch_id = :batchId) AS publications,
+                (SELECT count(*) FROM seat_forecast WHERE route_version_id = :routeVersionId) AS predictions,
+                (SELECT count(*) FROM forecast_evaluation WHERE route_version_id = :routeVersionId) AS evaluations,
+                input_confirmed_at IS NOT NULL AS input_confirmed
+            FROM observation_batch WHERE id = :batchId
+            """)
             .param("batchId", batchId).param("routeVersionId", routeVersionId)
             .query((row, index) -> new StoredCounts(row.getLong("publications"), row.getLong("predictions"),
                 row.getLong("evaluations"), row.getBoolean("input_confirmed")))
@@ -628,13 +648,17 @@ class ForecastPublicationTransactionTest {
         return instant.atOffset(ZoneOffset.UTC);
     }
 
-    private record StoredPublication(long id, long modelDeploymentId,
-        Instant generatedAt, Instant publishedAt, int predictionCount) {
+    private record StoredPublication(
+        long id, long modelDeploymentId,
+        Instant generatedAt, Instant publishedAt, int predictionCount
+    ) {
     }
 
-    private record StoredPrediction(long publicationId, long observationId, int targetStopOrder,
+    private record StoredPrediction(
+        long publicationId, long observationId, int targetStopOrder,
         long modelDeploymentId, double fullChance, double expectedSeats,
-        Instant generatedAt) {
+        Instant generatedAt
+    ) {
     }
 
     private record StoredCounts(long publications, long predictions, long evaluations, boolean inputConfirmed) {

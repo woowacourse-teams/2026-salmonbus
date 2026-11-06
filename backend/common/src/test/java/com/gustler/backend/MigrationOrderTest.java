@@ -40,11 +40,11 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정되어도 다른 파일을 제외해 항상 통과하게 된다. 파일 이름으로 선택하고,
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
-     * <p>이 브랜치는 V49 이후 표시 형상, 보조 자료 캐시와 생성 실패 상태를 추가한다.
+     * <p>이 브랜치는 V54 이후 레스 예보의 정산과 이관에 필요한 스키마를 추가한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("route_display_geometry", "route_display_generation", "route_source_archive",
-            "route_display_generation_failure", "route_geometry_recovery");
+        List.of("les_target_evaluation", "les_input_provenance", "les_archive_changed_evidence",
+            "les_after_alighting_only_evaluation");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

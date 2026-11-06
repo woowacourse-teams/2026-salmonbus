@@ -1,0 +1,13 @@
+# Match the trusted reproduction environment; no production Java dependency.
+cloudpickle==3.1.2
+joblib==1.6.0
+narwhals==2.27.1
+numpy==2.4.6
+pandas==3.1.0
+pyarrow==26.0.0
+python-dateutil==3.0.0
+scikit-learn==1.9.1
+scipy==1.17.1
+six==1.17.0
+threadpoolctl==3.7.0
+tzdata==2026.5
