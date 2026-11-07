@@ -1,0 +1,109 @@
+{
+  "purpose": "CRS_AND_NATIVE_DISTANCE_GOLDEN_ONLY_NOT_MODEL_OR_LANE_ACCURACY",
+  "fold": "calibration",
+  "route": "7007-1",
+  "catalogSha256": "4058867f71541ecdc85df658492ab912830b945535ffc0eb70b4c54d51b9f804",
+  "archive": {
+    "filename": "(B110)정밀도로지도_서울특별시_서초구.zip",
+    "sha256": "4875b3f8b5408387456f8e769ade49c906fce6a2d21f4dfa0ecca1a4f7e189ce"
+  },
+  "sourceLayer": "SEC013_과천대로_동작대로/HDMap_UTMK_타원체고/A2_LINK",
+  "sourceWkt": "PROJCS[\"ITRF_2000_UTM_K\",GEOGCS[\"GCS_ITRF_2000\",DATUM[\"D_ITRF_2000\",SPHEROID[\"GRS_1980\",6378137,298.257222101004]],PRIMEM[\"Greenwich\",0],UNIT[\"Degree\",0.0174532925199433]], PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"False_Easting\",1000000],PARAMETER[\"False_Northing\",2000000],PARAMETER[\"Central_Meridian\",127.5],PARAMETER[\"Scale_Factor\",0.9996],PARAMETER[\"Latitude_Of_Origin\",38],UNIT[\"Meter\",1]]\r\n",
+  "axisConvention": "always_xy: easting/northing and longitude/latitude; EPSG official axis order is not used by this API",
+  "projectionOracle": {
+    "package": "pyproj",
+    "version": "3.8.0",
+    "PROJ": "9.8.1",
+    "always_xy": true
+  },
+  "projectionToleranceDegrees": 1e-08,
+  "nativeDistanceToleranceMetres": 1e-08,
+  "nativeRows": [
+    {
+      "sourceId": "A223AD534276",
+      "recordIndex": 525,
+      "sourceVertexIndices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "nativeSourceCrs": "source WKT normalized as EPSG:5179 by existing catalog",
+      "sourceXYZ": [
+        [
+          954419.586661567,
+          1944479.9114869626,
+          39.915
+        ],
+        [
+          954419.1281507686,
+          1944479.3233151487,
+          39.905
+        ],
+        [
+          954417.27394213,
+          1944476.9813037813,
+          39.859
+        ],
+        [
+          954415.4081537231,
+          1944474.6131140173,
+          39.812
+        ]
+      ]
+    },
+    {
+      "sourceId": "A223AD534277",
+      "recordIndex": 235,
+      "sourceVertexIndices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "nativeSourceCrs": "source WKT normalized as EPSG:5179 by existing catalog",
+      "sourceXYZ": [
+        [
+          954306.4930045226,
+          1944316.3499983724,
+          37.36
+        ],
+        [
+          954305.9782846543,
+          1944314.8351520298,
+          37.361
+        ],
+        [
+          954305.0175108048,
+          1944312.0135046714,
+          37.364
+        ],
+        [
+          954304.0567528693,
+          1944309.1908578242,
+          37.366
+        ]
+      ]
+    }
+  ],
+  "derived5186Rows": "The same native 5179 vertices independently transformed by pyproj to EPSG:5186, not raw source 5186 observations.",
+  "areaOfUse": {
+    "5179": [
+      122.71,
+      28.6,
+      134.28,
+      40.27
+    ],
+    "5186": [
+      126.0,
+      33.14,
+      128.0,
+      38.33
+    ]
+  },
+  "verticalCoordinates": "Source Z is preserved in provenance only; projection and chainage are horizontal XY, not 3D.",
+  "references": [
+    "https://github.com/locationtech/proj4j/releases/tag/v1.4.3",
+    "https://projects.eclipse.org/projects/locationtech.proj4j/releases/1.4.3/plan"
+  ]
+}

@@ -11,8 +11,6 @@ import com.gustler.backend.api.board.domain.DirectionInfo;
 import com.gustler.backend.api.board.domain.ForecastModel;
 import com.gustler.backend.api.board.domain.StopState;
 import com.gustler.backend.api.board.domain.VehicleForecast;
-import com.gustler.backend.api.board.domain.VehicleForecast.Available;
-import com.gustler.backend.api.board.domain.VehicleForecast.Unavailable;
 import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.RouteNotFoundException;
@@ -45,7 +43,10 @@ public class BoardQueryService {
     private static final Pattern DEPARTURE_TIME_FORMAT = Pattern.compile(
         "([01][0-9]|2[0-3]):[0-5][0-9]"
     );
-    private static final int MAX_HORIZON_STOPS = 12;
+    /**
+     * 정류장마다 다가오는 차량으로 담는 최대 거리(정류장 수). 정류장 상세가 예보 범위 밖 차량을 가를 때도 쓴다.
+     */
+    public static final int MAX_HORIZON_STOPS = 12;
     private static final Comparator<Approach> APPROACH_ORDER = Comparator
         .comparingInt(Approach::remainingStops)
         .thenComparingInt(Approach::horizonStops)
@@ -55,17 +56,16 @@ public class BoardQueryService {
     private final BoardQueryRepository boardQueryRepository;
     private final BoardFreshnessPolicy freshnessPolicy;
     private final BoardCachePolicy cachePolicy;
+    private final BoardReadCache readCache;
 
     public BoardOverview getBoard(
-        RouteId routeId
-    ) {
+        RouteId routeId) {
         BoardReading reading = readBoard(routeId);
         return new BoardOverview(reading.board(), reading.cacheMaxAge());
     }
 
     public BoardReading readBoard(
-        RouteId routeId
-    ) {
+        RouteId routeId) {
         BoardSnapshot snapshot = boardQueryRepository.findSnapshot(routeId)
             .orElseThrow(RouteNotFoundException::new);
         ForecastModel activeModel = snapshot.activeModel()
@@ -81,9 +81,17 @@ public class BoardQueryService {
             throw new ServiceUnavailableException();
         }
 
+        Board cached = readCache.find(routeId.value(), snapshot);
+        if (cached != null) {
+            return new BoardReading(
+                cached,
+                observation.batchId(),
+                cachePolicy.maxAgeAt(observation.observedAt())
+            );
+        }
+
         List<BoardStop> stops = boardQueryRepository.findStops(
-            snapshot.routeVersionId()
-        );
+            snapshot.routeVersionId());
         if (stops.isEmpty()) {
             throw new ServiceUnavailableException();
         }
@@ -101,8 +109,7 @@ public class BoardQueryService {
 
         RouteStatus status = RouteStatus.from(
             snapshot.activeModel().isPresent(),
-            observation.forecastPublished()
-        );
+            observation.forecastPublished());
         Board board = new Board(
             toBoardRoute(snapshot, stops, status),
             observation.observedAt(),
@@ -111,23 +118,21 @@ public class BoardQueryService {
             observation.vehiclesInService(),
             stopStates
         );
+        readCache.put(routeId.value(), snapshot, board);
         return new BoardReading(
             board,
             observation.batchId(),
-            cachePolicy.maxAgeAt(observation.observedAt())
-        );
+            cachePolicy.maxAgeAt(observation.observedAt()));
     }
 
     private static double seatAvailableProbability(
-        final double seatFullChance
-    ) {
+        final double seatFullChance) {
         return 1.0d - seatFullChance;
     }
 
     private ForecastModel modelOf(
         List<StoredPrediction> predictions,
-        ForecastModel activeModel
-    ) {
+        ForecastModel activeModel) {
         if (predictions.isEmpty()) {
             return activeModel;
         }
@@ -151,11 +156,13 @@ public class BoardQueryService {
 
     private VehicleForecast forecastOf(StoredPrediction prediction) {
         if (prediction == null || !hasValidForecastValues(prediction)) {
-            return new Unavailable();
+            return new VehicleForecast.Unavailable();
         }
-        return new Available(
+        return new VehicleForecast.Available(
             seatAvailableProbability(prediction.seatFullChance()),
-            reportableExpectedSeats(prediction.expectedSeats()));
+            reportableExpectedSeats(prediction.expectedSeats()), prediction.seatTarget(),
+            prediction.probabilityTarget(),
+            departureFullProbability(prediction));
     }
 
     /**
@@ -174,15 +181,14 @@ public class BoardQueryService {
         return expectedSeats;
     }
 
-    private boolean isUnreportableExpectedSeats(double expectedSeats) {
+    private boolean isUnreportableExpectedSeats(final double expectedSeats) {
         return !Double.isFinite(expectedSeats) || expectedSeats < 0.0d;
     }
 
     private StopState toStopState(
         BoardStop stop,
         List<BoardVehicleObservation> vehicles,
-        Map<Integer, StoredPrediction> predictionsBySourceRow
-    ) {
+        Map<Integer, StoredPrediction> predictionsBySourceRow) {
         List<ApproachingVehicle> approachingVehicles = approachingVehicles(stop, vehicles, predictionsBySourceRow);
         return new StopState(
             stop.sequence(),
@@ -190,15 +196,13 @@ public class BoardQueryService {
             stop.name(),
             stop.direction(),
             stop.boardingAllowed(),
-            approachingVehicles
-        );
+            approachingVehicles);
     }
 
     private BoardRoute toBoardRoute(
         BoardSnapshot snapshot,
         List<BoardStop> stops,
-        RouteStatus status
-    ) {
+        RouteStatus status) {
         Route route = snapshot.route();
         DepartureSchedule schedule = snapshot.schedule();
         return new BoardRoute(
@@ -210,14 +214,12 @@ public class BoardQueryService {
             snapshot.turnSequence(),
             directionsOf(snapshot, stops),
             String.valueOf(snapshot.routeVersionId()),
-            schedule.headways()
-        );
+            schedule.headways());
     }
 
     private List<DirectionInfo> directionsOf(
         BoardSnapshot snapshot,
-        List<BoardStop> stops
-    ) {
+        List<BoardStop> stops) {
         if (snapshot.turnSequence() == null) {
             return List.of(singleDirectionOf(snapshot.schedule(), stops));
         }
@@ -226,8 +228,7 @@ public class BoardQueryService {
 
     private DirectionInfo singleDirectionOf(
         DepartureSchedule schedule,
-        List<BoardStop> stops
-    ) {
+        List<BoardStop> stops) {
         Set<BoardDirection> directions = stops.stream()
             .map(BoardStop::direction)
             .collect(Collectors.toCollection(() -> EnumSet.noneOf(BoardDirection.class)));
@@ -247,22 +248,19 @@ public class BoardQueryService {
             origin.name(),
             terminal.name(),
             firstDepartureTime,
-            lastDepartureTime
-        );
+            lastDepartureTime);
     }
 
     private List<DirectionInfo> roundTripDirectionsOf(
         BoardSnapshot snapshot,
-        List<BoardStop> stops
-    ) {
+        List<BoardStop> stops) {
         final int turnSequence = snapshot.turnSequence();
         Map<Integer, BoardStop> stopsBySequence = stops.stream()
             .collect(Collectors.toMap(
                 BoardStop::sequence,
                 Function.identity(),
                 (first, second) -> first,
-                LinkedHashMap::new
-            ));
+                LinkedHashMap::new));
         BoardStop origin = stops.getFirst();
         BoardStop turn = stopsBySequence.get(turnSequence);
         BoardStop terminal = stops.getLast();
@@ -280,16 +278,14 @@ public class BoardQueryService {
             origin.name(),
             turn.name(),
             requireDepartureTime(schedule.upFirstDepartureTime()),
-            requireDepartureTime(schedule.upLastDepartureTime())
-        ));
+            requireDepartureTime(schedule.upLastDepartureTime())));
         directions.add(new DirectionInfo(
             BoardDirection.DOWN,
             directionName(terminal),
             turn.name(),
             terminal.name(),
             requireDepartureTime(schedule.downFirstDepartureTime()),
-            requireDepartureTime(schedule.downLastDepartureTime())
-        ));
+            requireDepartureTime(schedule.downLastDepartureTime())));
         return List.copyOf(directions);
     }
 
@@ -302,8 +298,7 @@ public class BoardQueryService {
 
     private void requireRoundTripDirections(
         List<BoardStop> stops,
-        final int turnSequence
-    ) {
+        final int turnSequence) {
         final boolean inconsistent = stops.stream()
             .anyMatch(stop -> hasUnexpectedDirection(stop, turnSequence));
         if (inconsistent) {
@@ -311,7 +306,7 @@ public class BoardQueryService {
         }
     }
 
-    private boolean hasUnexpectedDirection(BoardStop stop, int turnSequence) {
+    private boolean hasUnexpectedDirection(BoardStop stop, final int turnSequence) {
         if (stop.sequence() <= turnSequence) {
             return stop.direction() != BoardDirection.UP;
         }
@@ -319,14 +314,12 @@ public class BoardQueryService {
     }
 
     private String directionName(
-        BoardStop terminal
-    ) {
+        BoardStop terminal) {
         return terminal.name() + " 방면";
     }
 
     private String requireDepartureTime(
-        String value
-    ) {
+        String value) {
         if (value == null || !DEPARTURE_TIME_FORMAT.matcher(value).matches()) {
             throw new ServiceUnavailableException();
         }
@@ -343,8 +336,7 @@ public class BoardQueryService {
     private List<ApproachingVehicle> approachingVehicles(
         BoardStop stop,
         List<BoardVehicleObservation> vehicles,
-        Map<Integer, StoredPrediction> predictionsBySourceRow
-    ) {
+        Map<Integer, StoredPrediction> predictionsBySourceRow) {
         if (!stop.boardingAllowed()) {
             return List.of();
         }
@@ -387,8 +379,7 @@ public class BoardQueryService {
             return new Approach(
                 vehicle,
                 stop.sequence() - vehicle.passedStopOrder(),
-                stop.sequence() - vehicle.stopOrder()
-            );
+                stop.sequence() - vehicle.stopOrder());
         }
 
         String vehicleId() {
@@ -411,4 +402,12 @@ public class BoardQueryService {
             return remainingStops == horizonStops || remainingStops == horizonStops - 1;
         }
     }
+
+    private Double departureFullProbability(StoredPrediction prediction) {
+        if ("DEPARTURE_ZERO".equals(prediction.probabilityTarget())) {
+            return prediction.seatFullChance();
+        }
+        return null;
+    }
+
 }

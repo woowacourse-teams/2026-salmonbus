@@ -22,21 +22,21 @@ const FAVORITE_STATUSES: { [Status in FavoriteStatus]: Status } = {
   ERROR: "ERROR",
 };
 
-function uuidFrom(value: unknown): string | null {
+export function uuidFrom(value: unknown): string | null {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
     ? value
     : null;
 }
 
-function identifierFrom(value: unknown): string | null {
+export function identifierFrom(value: unknown): string | null {
   return typeof value === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(value) ? value : null;
 }
 
-function directionFrom(value: unknown): Direction | null {
+export function directionFrom(value: unknown): Direction | null {
   return value === "UP" || value === "DOWN" ? value : null;
 }
 
-function listFrom<T>(value: unknown, maximum: number, parse: (value: unknown) => T | null): T[] | null {
+export function listFrom<T>(value: unknown, maximum: number, parse: (value: unknown) => T | null): T[] | null {
   if (!Array.isArray(value) || value.length > maximum) return null;
   const result: T[] = [];
   for (const raw of value) {

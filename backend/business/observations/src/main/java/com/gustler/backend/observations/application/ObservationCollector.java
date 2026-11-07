@@ -2,6 +2,7 @@ package com.gustler.backend.observations.application;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.observations.api.CollectObservations;
+import com.gustler.backend.observations.api.ObservationRouteMismatchDetected;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
 import com.gustler.backend.observations.domain.ObservationReply;
@@ -14,9 +15,19 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
+import java.sql.SQLException;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.postgresql.util.PSQLException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** 한 노선의 예약, HTTP 호출, 수집 결과 저장을 순서대로 진행한다. */
 @Component
@@ -28,6 +39,7 @@ public class ObservationCollector implements CollectObservations {
     private final ApiCallQuota callQuota;
     private final ObservationSource observationSource;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     public ObservationCollector(
         CurrentRouteVersion currentRouteVersion,
@@ -36,11 +48,19 @@ public class ObservationCollector implements CollectObservations {
         ObservationSource observationSource,
         Clock clock
     ) {
+        this(currentRouteVersion, batchLedger, callQuota, observationSource, clock, ignored -> {});
+    }
+
+    @Autowired
+    public ObservationCollector(CurrentRouteVersion currentRouteVersion, ObservationBatchLedger batchLedger,
+            ApiCallQuota callQuota, ObservationSource observationSource, Clock clock,
+            ApplicationEventPublisher events) {
         this.currentRouteVersion = currentRouteVersion;
         this.batchLedger = batchLedger;
         this.callQuota = callQuota;
         this.observationSource = observationSource;
         this.clock = clock;
+        this.events = events;
     }
 
     /**
@@ -103,16 +123,26 @@ public class ObservationCollector implements CollectObservations {
         attempt.resetUpstream();
         ObservationReply reply = observationSource.read(sourceRouteId, reservation.keyAlias());
         attempt.reply(reply);
+        var normalized = new AtomicBoolean();
         ObservationReply diagnosed = receivedAt -> {
             attempt.stage("NORMALIZE");
             ObservationResponse response = reply.interpret(receivedAt);
             attempt.response(response);
+            normalized.set(true);
             attempt.stage("SAVE_AND_COMMIT");
             return response;
         };
         attempt.stage("SAVE_AND_COMMIT");
-        ObservationResponse response = WorkerOperationLog.measure("collection_save_and_commit", sourceRouteId,
-            () -> batchLedger.conclude(reservation.batchId(), diagnosed, now()));
+        ObservationResponse response = WorkerOperationLog.measure("collection_save_and_commit", sourceRouteId, () -> {
+            try {
+                return batchLedger.conclude(reservation.batchId(), diagnosed, now());
+            } catch (RuntimeException failure) {
+                if (normalized.get() && isRouteStopMismatch(failure)) {
+                    mismatchAfterRollback(new ObservationRouteMismatchDetected(sourceRouteId, routeVersionId));
+                }
+                throw failure;
+            }
+        });
         attempt.committed();
         response.observations().filter(rows -> rows.providerRows() == 0 || !rows.storableRows().isEmpty())
             .ifPresent(rows -> WorkerOperationLog.collectionCommitted(sourceRouteId,
@@ -126,6 +156,49 @@ public class ObservationCollector implements CollectObservations {
         }
         attempt.stage("UPSTREAM_RESULT");
         attempt.finish("FAILED", response.conclusion().outcome().name());
+    }
+
+    private static boolean isRouteStopMismatch(Throwable failure) {
+        var seen = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
+        var remaining = new ArrayDeque<Throwable>();
+        remaining.add(failure);
+        while (!remaining.isEmpty()) {
+            Throwable current = remaining.removeFirst();
+            if (!seen.add(current)) continue;
+            if (current instanceof SQLException sql) {
+                if ("23503".equals(sql.getSQLState()) && sql instanceof PSQLException postgres
+                        && postgres.getServerErrorMessage() != null
+                        && "fk_observation_route_stop".equals(postgres.getServerErrorMessage().getConstraint())) {
+                    return true;
+                }
+                if (sql.getNextException() != null) remaining.addLast(sql.getNextException());
+            }
+            if (current.getCause() != null) remaining.addLast(current.getCause());
+        }
+        return false;
+    }
+
+    private void mismatchAfterRollback(ObservationRouteMismatchDetected event) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override public void afterCompletion(int status) {
+                        if (status == TransactionSynchronization.STATUS_ROLLED_BACK) publishMismatch(event);
+                    }
+                });
+            }
+            return;
+        }
+        // conclude()'s transaction interceptor has finished its rollback before reaching this catch.
+        publishMismatch(event);
+    }
+
+    private void publishMismatch(ObservationRouteMismatchDetected event) {
+        try { events.publishEvent(event); }
+        catch (RuntimeException notificationFailure) {
+            LOGGER.warn("event=observation_route_mismatch_notification_failed routeId={} routeVersionId={} exceptionType={}",
+                event.sourceRouteId(), event.routeVersionId(), notificationFailure.getClass().getSimpleName());
+        }
     }
 
     private void excludeKeyIfRejected(

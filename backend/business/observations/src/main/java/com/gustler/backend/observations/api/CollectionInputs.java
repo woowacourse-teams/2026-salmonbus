@@ -7,7 +7,7 @@ import java.time.Instant;
  */
 public interface CollectionInputs {
     /**
-     * 관측 묶음이 예측 입력으로 확정된 시각을 저장한다. 예측 발행과 같은 트랜잭션에서 호출한다.
+     * 첫 입력 확인 시각만 저장한다. 기존 확인 시각은 재발행에서도 유지한다. 호출자의 트랜잭션에 참여한다.
      */
     void confirmInput(long batchId, Instant confirmedAt);
 }

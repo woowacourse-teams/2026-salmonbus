@@ -4,8 +4,8 @@ import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
 import { routeArrowsFor, routeMapCoordinateForSequence, type RouteArrow } from "./routeMapGeometry";
-import type { NaverMaps, NaverMarker } from "./naverSdk";
-import * as styles from "./RouteMap.css";
+import type { NaverMaps, NaverMarker, NaverPolyline } from "./naverSdk";
+import * as styles from "./naverMapAdapter.css";
 
 const DETAIL_ZOOM = 14;
 const INITIALIZATION_TIMEOUT_MS = 10_000;
@@ -17,6 +17,9 @@ interface StopMarker {
   marker: NaverMarker;
   button: HTMLButtonElement;
   label: HTMLSpanElement;
+  connector: NaverPolyline | undefined;
+  connection: GeoCoordinate | undefined;
+  visible: boolean;
 }
 interface VehicleMarker {
   marker: NaverMarker;
@@ -32,7 +35,13 @@ interface ArrowMarker extends RouteArrow {
   visible: boolean;
 }
 
+export interface RouteMapCamera {
+  center: GeoCoordinate;
+  zoom: number;
+}
+
 export interface RouteMapAdapter {
+  camera?: () => RouteMapCamera;
   update: (
     selected: StopSelection | null,
     activeDirection: Direction,
@@ -59,6 +68,8 @@ export function createNaverRouteMap(
   onVehicleSelect: (selection: StopSelection, key: string) => void,
   onDeselect: () => void,
   initialSelection: StopSelection | null = null,
+  initialCamera?: RouteMapCamera,
+  selectedStopOnly = false,
 ): RouteMapAdapter {
   const createNativeEventHandler = (action: () => void) => () => {
     try {
@@ -76,8 +87,8 @@ export function createNaverRouteMap(
   if (first === undefined) throw new Error("지도 좌표가 없어요");
   const toNaverCoordinate = (coordinate: GeoCoordinate) => new sdk.LatLng(coordinate.latitude, coordinate.longitude);
   const map = new sdk.Map(element, {
-    center: toNaverCoordinate(first),
-    zoom: initialStop === undefined ? 10 : 13,
+    center: toNaverCoordinate(initialCamera?.center ?? first),
+    zoom: initialCamera?.zoom ?? (initialStop === undefined ? 10 : 13),
     size: new sdk.Size(element.clientWidth, element.clientHeight),
     zoomControl: false,
     scaleControl: false,
@@ -91,9 +102,9 @@ export function createNaverRouteMap(
   });
   let selected: StopSelection | null = initialSelection;
   let activeDirection: Direction = initialStop?.direction ?? board.route.directions[0].id;
-  let initialFitPending = true;
+  let initialFitPending = initialCamera === undefined;
   let initialized = false;
-  let initialViewIdle = false;
+  let initialViewIdle = initialCamera !== undefined;
   let initializationFailed = false;
   let routeRevealed = false;
   let readyNotified = false;
@@ -132,6 +143,7 @@ export function createNaverRouteMap(
           routeRevealed = true;
           paths.forEach(({ direction, line }) => line.setOptions(routePathStyleFor(direction)));
           fullRouteLine?.setOptions({ strokeColor: "#5B6472", strokeOpacity: 0.95, zIndex: 1 });
+          refreshStops();
           // 노선의 GPU 그리기를 먼저 예약한 뒤 HTML 마커와 버튼을 함께 공개한다.
           notifyReadyAfterFrame();
           return;
@@ -275,25 +287,55 @@ export function createNaverRouteMap(
       createNativeEventHandler(() => focus(selection))();
       onSelect(selection);
     });
+    const connection = stop.pathConnection?.coordinate;
+    const coordinate = stopState.boardingAllowed ? stop.coordinate : (connection ?? stop.coordinate);
+    const connector =
+      stopState.boardingAllowed &&
+      connection &&
+      (connection.latitude !== coordinate.latitude || connection.longitude !== coordinate.longitude)
+        ? new sdk.Polyline({
+            map,
+            path: [toNaverCoordinate(coordinate), toNaverCoordinate(connection)],
+            strokeColor: "#5B6472",
+            strokeWeight: 2.5,
+            strokeOpacity: 0,
+            strokeStyle: "shortdot",
+            zIndex: 3,
+          })
+        : undefined;
     const marker = new sdk.Marker({
       map,
-      position: toNaverCoordinate(stop.coordinate),
+      position: toNaverCoordinate(coordinate),
       icon: { content: button, anchor: new sdk.Point(12, 12) },
       zIndex: 5,
       clickable: true,
     });
-    return [{ selection, coordinate: stop.coordinate, marker, button, label }];
+    return [{ selection, coordinate, marker, button, label, connector, connection, visible: true }];
   });
 
   function refreshStops() {
     const hidden = map.getZoom() < DETAIL_ZOOM;
     const projection = map.getProjection();
-    const display = stops.map((stop) => ({
-      ...stop,
-      point: projection.fromCoordToOffset(toNaverCoordinate(stop.coordinate)),
-      size: selected?.sequence === stop.selection.sequence && selected.direction === stop.selection.direction ? 32 : 24,
-      offsetX: 0,
-    }));
+    const display = stops.flatMap((stop) => {
+      const { selection } = stop;
+      const isSelected = selected?.sequence === selection.sequence && selected.direction === selection.direction;
+      const visible = selectedStopOnly ? isSelected : !hidden || !mappedDirections.has(selection.direction);
+      if (stop.visible !== visible) {
+        stop.visible = visible;
+        stop.marker.setVisible(visible);
+      }
+      if (stop.label.hidden !== hidden) stop.label.hidden = hidden;
+      if (selectedStopOnly && !isSelected) return [];
+      return [
+        {
+          ...stop,
+          isSelected,
+          point: projection.fromCoordToOffset(toNaverCoordinate(stop.coordinate)),
+          size: isSelected ? 32 : 24,
+          offsetX: 0,
+        },
+      ];
+    });
     // 마주 보는 정류장이 겹치면 화면상 선택 영역만 벌린다. 실제 정류장 좌표는 유지한다.
     for (const up of display.filter((stop) => stop.selection.direction === "UP")) {
       for (const down of display.filter((stop) => stop.selection.direction === "DOWN")) {
@@ -305,24 +347,32 @@ export function createNaverRouteMap(
         down.offsetX = Math.min(down.offsetX, -offset);
       }
     }
-    display.forEach(({ selection, marker, button, label, size, offsetX }) => {
-      const isSelected = selected?.sequence === selection.sequence && selected.direction === selection.direction;
-      const isActive = selection.direction === activeDirection;
-      const selectionChanged = button.getAttribute("aria-pressed") !== String(isSelected);
-      const directionChanged = button.dataset.active !== String(isActive);
-      if (selectionChanged) button.setAttribute("aria-pressed", String(isSelected));
-      if (directionChanged) button.dataset.active = String(isActive);
-      const labelAbove = String(offsetX !== 0 && !isActive);
-      if (button.dataset.labelAbove !== labelAbove) button.dataset.labelAbove = labelAbove;
-      if (label.hidden !== hidden) {
-        label.hidden = hidden;
-        marker.setVisible(!hidden || !mappedDirections.has(selection.direction));
-      }
-      if (selectionChanged || directionChanged) marker.setZIndex(isSelected ? 15 : isActive ? 6 : 5);
-      // 아이콘을 다시 설정하면 SDK가 DOM을 재구성하므로 표시 위치만 조정한다.
-      const transform = `translate(${offsetX - (size - 24) / 2}px, ${-(size - 24) / 2}px)`;
-      if (button.style.transform !== transform) button.style.transform = transform;
-    });
+    display.forEach(
+      ({ selection, marker, button, isSelected, size, offsetX, point, coordinate, connector, connection }) => {
+        const isActive = selection.direction === activeDirection;
+        if (connector && connection) {
+          const visible = routeRevealed && !hidden && (isActive || isSelected);
+          if (visible) {
+            const start =
+              offsetX === 0
+                ? toNaverCoordinate(coordinate)
+                : projection.fromOffsetToCoord(new sdk.Point(point.x + offsetX, point.y));
+            connector.setPath([start, toNaverCoordinate(connection)]);
+          }
+          connector.setOptions({ strokeColor: "#5B6472", strokeOpacity: visible ? 0.85 : 0, zIndex: 3 });
+        }
+        const selectionChanged = button.getAttribute("aria-pressed") !== String(isSelected);
+        const directionChanged = button.dataset.active !== String(isActive);
+        if (selectionChanged) button.setAttribute("aria-pressed", String(isSelected));
+        if (directionChanged) button.dataset.active = String(isActive);
+        const labelAbove = String(offsetX !== 0 && !isActive);
+        if (button.dataset.labelAbove !== labelAbove) button.dataset.labelAbove = labelAbove;
+        if (selectionChanged || directionChanged) marker.setZIndex(isSelected ? 15 : isActive ? 6 : 5);
+        // 아이콘을 다시 설정하면 SDK가 DOM을 재구성하므로 표시 위치만 조정한다.
+        const transform = `translate(${offsetX - (size - 24) / 2}px, ${-(size - 24) / 2}px)`;
+        if (button.style.transform !== transform) button.style.transform = transform;
+      },
+    );
   }
 
   function refreshVehicleCounts() {
@@ -664,6 +714,10 @@ export function createNaverRouteMap(
       map.setCenter(position);
       map.setZoom(Math.max(15, map.getZoom()), false);
     },
+    camera() {
+      const center = map.getCenter();
+      return { center: { latitude: center.lat(), longitude: center.lng() }, zoom: map.getZoom() };
+    },
     destroy() {
       destroyed = true;
       cancelCameraFocus();
@@ -683,7 +737,10 @@ export function createNaverRouteMap(
         cleanup(() => element.removeEventListener("dblclick", onDoubleClick));
         cleanup(() => element.removeEventListener("touchend", onTouchEnd, true));
       }
-      stops.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
+      stops.forEach(({ marker, connector }) => {
+        cleanup(() => marker.setMap(null));
+        cleanup(() => connector?.setMap(null));
+      });
       vehicles.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       arrows.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       paths.forEach(({ line }) => cleanup(() => line.setMap(null)));

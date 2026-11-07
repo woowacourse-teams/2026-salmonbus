@@ -24,6 +24,129 @@ def point_valid(point):
             and -180 <= point["x"] <= 180 and -90 <= point["y"] <= 90)
 
 
+def display_point_valid(point):
+    return (point_valid(point) and set(point) == {"x", "y"}
+            and all(type(point[key]) in (int, float) for key in ("x", "y")))
+
+
+ROOT_FIELDS = {"routeId", "referenceVersionId", "geometryRevision", "name", "startPoint", "endPoint",
+               "status", "reason", "coordinateSystem", "turningPoint", "busStops", "points", "paths", "boundary"}
+STOP_FIELDS = {"stationId", "stopSequence", "name", "direction", "boardingAllowed", "point"}
+DIAGNOSTIC_FIELDS = {"displayPaths", "displaySource", "displayEvidence", "displayQuality", "displayAccuracyGrade"}
+
+
+def assert_stop_contract(actual, stop, body):
+    context = (body["routeId"], stop["sequence"])
+    expected = {"stationId": stop["stationId"], "stopSequence": stop["sequence"],
+                "name": stop["name"], "direction": stop["direction"],
+                "boardingAllowed": stop["boardingAllowed"],
+                "point": {"x": stop["x"], "y": stop["y"]}}
+    assert isinstance(actual, dict) and set(expected) <= actual.keys() <= \
+        set(expected) | {"displayPoint", "pathConnection"}, context
+    # Additive display metadata must not change any original visit or GPS field.
+    assert {key: actual[key] for key in expected} == expected, context
+    assert point_valid(actual["point"]), context
+    display_point = actual.get("displayPoint")
+    assert display_point is None or display_point_valid(display_point), context
+    assert_path_connection(actual, body, context)
+
+
+def assert_path_connection(actual, body, context):
+    connection = actual.get("pathConnection")
+    if connection is None:
+        return
+    assert isinstance(connection, dict) and set(connection) == \
+        {"point", "segmentIndex", "segmentFraction"}, context
+    assert display_point_valid(connection["point"]), context
+    index, fraction = connection["segmentIndex"], connection["segmentFraction"]
+    assert type(index) is int and index >= 0, context
+    assert type(fraction) in (int, float) and 0 <= fraction <= 1 and math.isfinite(fraction), context
+    paths = body.get("displayPaths") if "displayPaths" in body else body.get("paths")
+    assert isinstance(paths, dict), context
+    path = paths.get(actual["direction"])
+    assert isinstance(path, dict) and isinstance(path.get("points"), list), context
+    points = path["points"]
+    assert index + 1 < len(points), context
+    a, b = points[index:index + 2]
+    assert display_point_valid(a) and display_point_valid(b), context
+    # Match the consumer's tolerance for the serialized final segment interpolation.
+    for key in ("x", "y"):
+        interpolated = a[key] + (b[key] - a[key]) * fraction
+        assert math.isclose(interpolated, connection["point"][key], rel_tol=0, abs_tol=1e-9), context
+
+
+def assert_document_contract(document):
+    operation = document["paths"]["/api/v2/routes/{routeId}/geometry"]["get"]
+    assert operation["operationId"] == "getRouteGeometry"
+    assert "41" in operation["description"] and "35,542" in operation["description"]
+    parameters = {parameter["name"]: parameter for parameter in operation["parameters"]}
+    assert parameters["includeDiagnostics"]["in"] == "query"
+    assert parameters["includeDiagnostics"]["required"] is False
+    assert parameters["includeDiagnostics"]["schema"]["type"] == "boolean"
+    assert parameters["includeDiagnostics"]["schema"]["default"] is False
+
+    def referenced_schema(schema):
+        if "$ref" in schema:
+            assert schema["$ref"].startswith("#/"), schema["$ref"]
+            resolved = document
+            for part in schema["$ref"][2:].split("/"):
+                resolved = resolved[part]
+            return referenced_schema(resolved)
+        alternatives = schema.get("anyOf", schema.get("oneOf"))
+        if alternatives is not None:
+            return referenced_schema(next(option for option in alternatives if option.get("type") != "null"))
+        return schema
+
+    content = operation["responses"]["200"]["content"]["application/json"]
+    geometry_schema = referenced_schema(content["schema"])
+    stop_schema = referenced_schema(geometry_schema["properties"]["busStops"]["items"])
+    connection_schema = referenced_schema(stop_schema["properties"]["pathConnection"])
+    assert set(geometry_schema["required"]) == ROOT_FIELDS
+    assert "GENERATION_PENDING" in geometry_schema["properties"]["reason"]["enum"]
+    assert set(stop_schema["required"]) == STOP_FIELDS
+    assert set(connection_schema["required"]) == {"point", "segmentIndex", "segmentFraction"}
+    assert {"304", "400", "404", "409", "503"} <= operation["responses"].keys()
+    examples = operation["responses"]["200"]["content"]["application/json"]["examples"]
+    assert set(examples) == {"ready", "partial", "notCollected", "withoutDirectionSplit",
+                             "displayWithheld", "diagnostic", "generationPending"}
+    values = {key: example["value"] for key, example in examples.items()}
+    for name, body in values.items():
+        assert set(body) == ROOT_FIELDS | (DIAGNOSTIC_FIELDS if name == "diagnostic" else set()), name
+        for stop in body["busStops"]:
+            assert STOP_FIELDS <= stop.keys() <= STOP_FIELDS | {"pathConnection"}, name
+            assert stop["point"] is None or display_point_valid(stop["point"]), name
+            assert_path_connection(stop, body, (name, stop["stopSequence"]))
+    ready = values["ready"]
+    assert ready["status"] == "READY" and ready["reason"] is None
+    assert all(stop.get("pathConnection") is not None for stop in ready["busStops"])
+    partial = values["partial"]
+    assert partial["status"] == "PARTIAL" and partial["reason"] == "MISSING_STOP_COORDINATES"
+    assert any(stop["point"] is None for stop in partial["busStops"])
+    assert values["withoutDirectionSplit"]["status"] == "READY"
+    assert values["withoutDirectionSplit"]["paths"] is None
+    for name, reason in (("notCollected", "NOT_COLLECTED"), ("displayWithheld", "DISPLAY_WITHHELD"),
+                         ("generationPending", "GENERATION_PENDING")):
+        unavailable = values[name]
+        assert unavailable["status"] == "UNAVAILABLE" and unavailable["reason"] == reason
+        assert unavailable["points"] == [] and unavailable["paths"] is None
+        assert all(set(stop) == STOP_FIELDS for stop in unavailable["busStops"])
+        assert [{key: stop[key] for key in STOP_FIELDS} for stop in unavailable["busStops"]] == \
+            [{key: stop[key] for key in STOP_FIELDS} for stop in ready["busStops"]]
+    diagnostic = values["diagnostic"]
+    assert diagnostic["displayPaths"] is not None and diagnostic["paths"] is not None
+    assert diagnostic["displaySource"] == "AUTOMATIC_FALLBACK"
+    assert diagnostic["displayAccuracyGrade"] == "UNEVALUATED"
+    assert set(diagnostic["displayQuality"]) == {"status", "issues"}
+    assert diagnostic["displayQuality"]["status"] == "REVIEW_REQUIRED"
+    assert diagnostic["displayQuality"]["issues"]
+    assert all(set(issue) == {"code", "direction", "sequence", "meters"}
+               for issue in diagnostic["displayQuality"]["issues"])
+    assert diagnostic["displayEvidence"]
+    assert all(set(evidence) == {"id", "status", "digest"} for evidence in diagnostic["displayEvidence"])
+    assert [{key: stop[key] for key in STOP_FIELDS} for stop in diagnostic["busStops"]] == \
+        [{key: stop[key] for key in STOP_FIELDS} for stop in ready["busStops"]]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", required=True)
@@ -47,16 +170,7 @@ def main():
         status, _, raw = request(args.api + "/api/docs/openapi")
         assert status == 200, f"OpenAPI HTTP {status}"
         document = json.loads(raw)
-        operation = document["paths"]["/api/v2/routes/{routeId}/geometry"]["get"]
-        assert operation["operationId"] == "getRouteGeometry"
-        assert "41" in operation["description"] and "35,542" in operation["description"]
-        examples = operation["responses"]["200"]["content"]["application/json"]["examples"]
-        assert set(examples) == {"ready", "partial", "notCollected", "withoutDirectionSplit"}
-        assert examples["ready"]["value"]["status"] == "READY"
-        assert examples["partial"]["value"]["status"] == "PARTIAL"
-        assert examples["notCollected"]["value"]["points"] == []
-        assert examples["withoutDirectionSplit"]["value"]["paths"] is None
-        assert {"304", "400", "404", "409", "503"} <= operation["responses"].keys()
+        assert_document_contract(document)
         status, _, config = request(args.api + "/api/docs/openapi/swagger-config")
         assert status == 200 and json.loads(config)["supportedSubmitMethods"] == []
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -74,18 +188,25 @@ def main():
             if body["status"] != "UNAVAILABLE" or time.monotonic() >= deadline:
                 break
             time.sleep(.5)
+        assert set(body) == ROOT_FIELDS, route_id
+        assert all(STOP_FIELDS <= stop.keys() <= STOP_FIELDS | {"pathConnection"}
+                   for stop in body["busStops"]), route_id
         assert body["status"] == "READY" and body["reason"] is None, (route_id, body["status"], body["reason"])
         assert body["routeId"] == route_id and body["name"] == route["displayName"], route_id
         assert body["startPoint"] == route["startStopName"] and body["endPoint"] == route["endStopName"], route_id
         assert body["coordinateSystem"] == "WGS84_ASSUMED", route_id
         assert body["turningPoint"]["stopSequence"] == route["turnSequence"], route_id
         assert len(body["busStops"]) == len(route["stops"]), route_id
+        progress = {"UP": -1, "DOWN": -1}
+        has_connections = any(stop.get("pathConnection") is not None for stop in body["busStops"])
         for actual, stop in zip(body["busStops"], route["stops"]):
-            assert actual == {"stationId": stop["stationId"], "stopSequence": stop["sequence"],
-                              "name": stop["name"], "direction": stop["direction"],
-                              "boardingAllowed": stop["boardingAllowed"],
-                              "point": {"x": stop["x"], "y": stop["y"]}}, (route_id, stop["sequence"])
-            assert point_valid(actual["point"]), (route_id, stop["sequence"])
+            assert_stop_contract(actual, stop, body)
+            if has_connections:
+                connection = actual.get("pathConnection")
+                assert connection is not None, (route_id, stop["sequence"])
+                at = connection["segmentIndex"] + connection["segmentFraction"]
+                assert at >= progress[actual["direction"]], (route_id, stop["sequence"])
+                progress[actual["direction"]] = at
         assert shapes[route_id]["referenceDigest"] == route["contentDigest"], route_id
         assert body["points"] == shapes[route_id]["points"], f"{route_id}: source shape was changed"
         assert len(body["points"]) >= 2 and len({(p["x"], p["y"]) for p in body["points"]}) >= 2, route_id
@@ -99,15 +220,17 @@ def main():
             assert set(paths) == {"UP", "DOWN"}, route_id
             up, down = paths["UP"]["points"], paths["DOWN"]["points"]
             assert len(up) >= 2 and len(down) >= 2 and all(point_valid(p) for p in up + down), route_id
-            assert up[0] == body["points"][0] and down[-1] == body["points"][-1] and up[-1] == down[0], route_id
-            # A split inserts zero, one or two copies of its shared boundary.
-            # A zero-length source edge already contains two identical original
-            # points, so unconditionally dropping down[0] would lose an original.
-            # Removing only possible inserted boundary copies must recover the
-            # exact full source array, including every duplicate, in its order.
-            assert any((up[:-1] if drop_up else up) + (down[1:] if drop_down else down) == body["points"]
-                       for drop_up in (False, True) for drop_down in (False, True)), \
-                f"{route_id}: directional paths lost, inserted or reordered source points"
+            assert up[-1] == down[0], f"{route_id}: directional seam differs"
+            for point in up + down:
+                assert boundary["left"] <= point["x"] <= boundary["right"], route_id
+                assert boundary["bottom"] <= point["y"] <= boundary["top"], route_id
+            # Diagnostic/legacy paths split the exact source; compact paths with
+            # connections are the selected generated shape and may resample it.
+            if not has_connections:
+                assert up[0] == body["points"][0] and down[-1] == body["points"][-1], route_id
+                assert any((up[:-1] if drop_up else up) + (down[1:] if drop_down else down) == body["points"]
+                           for drop_up in (False, True) for drop_down in (False, True)), \
+                    f"{route_id}: source directional paths lost, inserted or reordered source points"
         version = body["referenceVersionId"]
         assert isinstance(version, str) and version.isdecimal() and int(version) > 0, route_id
         pinned, _, pinned_raw = request(url + "?referenceVersionId=" + version)

@@ -10,7 +10,7 @@ import com.gustler.backend.api.favorite.FavoriteTargetUnavailableException;
 import com.gustler.backend.api.favorite.domain.FavoriteDirection;
 import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.route.application.RouteGeometryQueryRepository;
-import com.gustler.backend.api.route.domain.RouteGeometry;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;

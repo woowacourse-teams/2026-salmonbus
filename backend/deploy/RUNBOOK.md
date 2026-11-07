@@ -15,6 +15,7 @@ API와 Worker를 따로 배포한다. 배포 패키지와 systemd 서비스도 �
 /etc/salmonbus/api.env                        API 환경변수
 /etc/salmonbus/worker.env                     Worker 환경변수
 /var/lib/salmonbus/model/current/             모델 계수 파일. 수동으로 배치한다
+/var/lib/salmonbus/walking/current/           정류장 쌍 도보 거리 파일. 수동으로 배치한다
 ```
 
 **배포는 `/opt/salmonbus/` 아래만 교체한다.** `/etc/salmonbus/`와 `/var/lib/salmonbus/`는 변경하지 않는다.
@@ -308,6 +309,23 @@ sudo sed -i 's/^MODEL_BUNDLE_PROMOTE_ON_START=.*/MODEL_BUNDLE_PROMOTE_ON_START=f
 **활성화한 채로 두면 배포로 재시작할 때마다 디스크의 모델 계수가 적용된다.**
 운영 기본값은 `false`이며 systemd 유닛에도 같은 값이 설정돼 있다.
 
+## 정류장 도보 거리 교체
+
+탑승 후보 조회 API가 읽는 정류장 쌍 도보 거리(`stop_walk_distance`)는 레포에 두지 않는다. 파일 두 개를 Worker가 읽는 디렉터리에 두고 재시작한다.
+V49 이후 배포 버전이어야 하고, 테이블이 비어 있어도 API는 같은 정류장을 다시 지나는 후보만 응답한다.
+
+```bash
+sudo -u salmonbus mkdir -p /var/lib/salmonbus/walking/current
+sudo -u salmonbus cp stop-walk-distances.csv.gz stop-walk-distances.json /var/lib/salmonbus/walking/current/
+sudo systemctl restart salmonbus-worker
+journalctl -u salmonbus-worker | grep 'event=stop_walk_distances'   # loaded result=LOADED checksum=… pairCount=…
+```
+
+- 두 파일의 `sha256`·`pairCount`가 맞지 않거나 형식이 다르면 적재하지 않고 `event=stop_walk_distances_load_failed`를 남긴다. 기존 거리는 그대로다.
+- 지금 적재된 파일과 같으면 `result=UNCHANGED`로 쓰지 않는다. 배포로 재시작할 때마다 같은 파일을 다시 쓰지 않는다.
+- 되돌리려면 이전 파일 두 개를 같은 디렉터리에 두고 재시작한다.
+- 파일이 없으면 `event=stop_walk_distances_missing`을 남기고 건너뛴다. 수집을 끈 Worker는 읽지 않는다.
+
 ## 운영 첫 V39 전환
 
 운영 데이터가 있는 DB에서는 prepare 승인 없이 V39가 실행되지 않는다. 승인 없이 새 배포 버전을 내보내면 API의 BeforeInstall에서 멈춘다.
@@ -369,6 +387,59 @@ done
 - 도착 정보와 형상 조회는 쿼리스트링을 쓴다. CloudFront의 `/api/*` 동작이 쿼리스트링을 원본으로 넘겨야 한다
 - 지도는 FE 운영 CodeBuild의 `WEBPACK_NAVER_MAP_KEY_ID`와 NAVER Cloud Web 서비스 URL에 운영 주소가 있어야 표시된다
 - 형상은 카탈로그를 갱신한 뒤 노선마다 한 번 수집한다. 그 전에는 형상 조회가 미수집 상태로 응답한다
+
+## 정류장 지도 켜기
+
+정류장 지도(`/api/v2/stations/tiles/14/{x}/{y}`, `/api/v2/stations/{stationId}`)는 V59·V60이 만든 `bus_station`을 읽는다.
+기초 명부 설치와 요청한 칸의 갱신은 따로 켠다. **둘 다 기본은 꺼져 있다.** 꺼져 있어도 API는 저장된 목록을 응답한다.
+
+| 파일 | 넣는 줄 |
+| --- | --- |
+| `worker.env` | `STATION_SEED_ENABLED=true` · `STATION_SEED_PATH`(명부 파일 절대 경로) |
+| `worker.env` | `STATION_FILL_ENABLED=true` · `STATION_INTERNAL_TOKEN` |
+| `api.env` | `STATION_REFRESH_ENABLED=true` · `STATION_INTERNAL_TOKEN`(worker와 같은 값) · `STATION_WORKER_BASE_URL`(기본 `http://127.0.0.1:8081`) |
+
+명부 파일은 레포의 `dev/data/stations-gbis-20261020.csv.gz`다. 국토교통부 전국 버스정류장 위치정보에서 경기(`GGB`) 행만 추린 UTF-8 gzip이고,
+출처·기준일·해시는 옆의 `stations-gbis-20261020.source.json`에 있다. 앱은 파일을 내려받지 않으므로 Worker가 읽는 디렉터리에 직접 둔다.
+
+```bash
+sudo -u salmonbus mkdir -p /var/lib/salmonbus/stations
+sudo -u salmonbus cp stations-gbis-20261020.csv.gz /var/lib/salmonbus/stations/
+sha256sum /var/lib/salmonbus/stations/stations-gbis-20261020.csv.gz   # source.json의 sha256과 같아야 한다
+printf 'STATION_SEED_ENABLED=true\nSTATION_SEED_PATH=/var/lib/salmonbus/stations/stations-gbis-20261020.csv.gz\n' \
+    | sudo tee -a /etc/salmonbus/worker.env >/dev/null
+sudo systemctl restart salmonbus-worker
+journalctl -u salmonbus-worker | grep 'event=station_seed_installed'   # dataDate=2026-10-20 stations=… changed=…
+```
+
+- 명부는 Worker를 시작할 때 설치한다. 같은 파일이나 더 오래된 기준일의 파일은 다시 설치하지 않으며 `changed=false`로 남는다
+- 파일이 없거나 깨졌거나 기준일이 미래이면 설치만 건너뛰고 Worker는 그대로 수집을 이어 간다. 기존 명부는 바뀌지 않고 `event=station_seed_install_failed`가 남는다. 다른 Worker가 설치 중이면 `event=station_seed_skipped`다
+- 원본 CP949 파일을 그대로 쓸 때만 `STATION_SEED_ENCODING=MS949`를 넣는다
+
+요청한 칸의 갱신을 켜려면 두 앱에 같은 내부 토큰을 넣는다. **켠 앱에 토큰이 비어 있으면 그 앱이 시작하지 않는다.**
+
+```bash
+token="$(openssl rand -hex 32)"
+printf 'STATION_FILL_ENABLED=true\nSTATION_INTERNAL_TOKEN=%s\n' "$token" | sudo tee -a /etc/salmonbus/worker.env >/dev/null
+printf 'STATION_REFRESH_ENABLED=true\nSTATION_INTERNAL_TOKEN=%s\n' "$token" | sudo tee -a /etc/salmonbus/api.env >/dev/null
+unset token
+for c in api worker; do
+  sudo grep '^STATION_INTERNAL_TOKEN=' "/etc/salmonbus/$c.env" | cut -d= -f2- | tr -d '\n' | sha256sum | cut -c1-8
+done
+```
+
+두 줄의 출력이 같아야 한다. worker를 먼저 재시작하고 API를 재시작한다. API는 열람한 칸 가운데 갱신이 필요한 칸만
+worker의 `POST /internal/stations/refresh`로 넘기고, worker가 GBIS 주변 정류소 조회로 그 칸을 다시 채운다.
+
+- 호출 횟수는 기존 `api-call-quota`의 `daily_call_quota` 장부에 `api_service='BUS_STATION'` 행으로 따로 센다. 위치·노선·도착 정보 한도는 줄지 않는다
+- worker는 GBIS 키 별칭 `a` 하나로 정류소 API(`busstationservice`)를 부른다. 그 키에 활용신청이 있어야 한다
+- 확인: 지도 칸 하나를 열어 본다. 명부가 설치됐으면 `READY`다
+
+```bash
+curl -s http://127.0.0.1:8080/api/v2/stations/tiles/14/13976/6354 | head -c 300
+```
+
+끄려면 켤 때 넣은 `*_ENABLED`를 `false`로 바꾸고 재시작한다. 이미 설치한 명부와 수집 결과는 DB에 남고 API는 계속 그 목록을 응답한다.
 
 ## 로그인 켜기
 

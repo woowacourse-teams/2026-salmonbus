@@ -1,0 +1,13 @@
+{
+  "scope": "READ_ONLY_SOURCE_LOCATION_RESEARCH_NO_COORDINATE_PATCH",
+  "primaryDatasetUrl": "https://data.seoul.go.kr/dataList/OA-15067/S/1/datasetView.do",
+  "primaryFilename": "서울시버스정류소위치정보(20260902).xlsx",
+  "sourceIdNamespace": "countryGBISstationId andcityARS mustmatchsameofficialrow;NaverinternalIDsseparate",
+  "photos": {
+    "gangnam-curb-up-202501.png": "addd5824e3f93a803a0052dffcde01c3c679dea5598fd25e3d1a87f4690979e5",
+    "gangnam-curb-down-202507.png": "79bb64895691b341f7ef3dd7a757c4f141c5d57c1bb330a655578cfffdbcc46a",
+    "jamsil-underground-map.png": "a9036625b6e0c24181f011b7da16937bf7777d2e223644fdf76447fe52652c31"
+  },
+  "rawCoordinatesEdited": false,
+  "roadOrLaneAccuracyCertified": false
+}

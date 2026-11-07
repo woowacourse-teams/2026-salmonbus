@@ -71,6 +71,19 @@ export async function memberRequest<T>(url: string, options: RequestOptions = {}
   return result;
 }
 
+export async function parsedMemberRequest<T>(
+  url: string,
+  options: RequestOptions,
+  parse: (body: unknown) => T | null,
+): Promise<ApiResult<T>> {
+  const result = await memberRequest<unknown>(url, options);
+  if (!result.ok) return result;
+  const body = parse(result.body);
+  return body === null
+    ? { ok: false, failure: { kind: "malformed", status: result.status, requestId: result.requestId } }
+    : { ...result, body };
+}
+
 export async function updateNickname(nickname: string): Promise<ApiResult<Member>> {
   return checked(
     await memberRequest<unknown>("/api/me", { method: "PATCH", body: { nickname: nickname.trim() } }),
@@ -104,7 +117,6 @@ export async function withdraw(): Promise<ApiResult<void | { startUrl: string }>
   });
 }
 
-/** 앱 네이티브 로그인 API(SAL-318)가 없는 서버는 404다. 웹은 그때 WebView 로그인으로 간다. */
 export async function issueNativeNonce(provider: NativeLoginProvider): Promise<ApiResult<{ nonce: string }>> {
   return checked(await authRequest<unknown>(`/api/auth/${provider}/native/nonce`, { method: "POST" }), isNativeNonce);
 }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars -- 아래 함수는 호출용이 아니라 컴파일 검사용이라서 어디서도 쓰지 않는다 */
 import { playHaptic } from "./haptic";
 
 // 결과 진동은 응답이 온 뒤 화면에 남아 있을 때만 울려야 해서 playHaptic으로 보내지 않는다.

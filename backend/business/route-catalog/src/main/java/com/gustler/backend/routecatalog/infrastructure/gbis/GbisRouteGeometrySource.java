@@ -26,12 +26,29 @@ public class GbisRouteGeometrySource implements RouteGeometrySource {
 
     @Override
     public Optional<Read> read(String sourceRouteId) {
+        return capture(sourceRouteId).read();
+    }
+
+    @Override
+    public Capture capture(String sourceRouteId) {
+        var captured = lines.capture(sourceRouteId);
+        var acquiredAt = clock.instant();
+        Optional<Read> read;
+        var status = com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status.valueOf(captured.status().name());
+        byte[] body = captured.body();
         try {
-            return lines.read(sourceRouteId).map(points -> new Read(new RouteShape(points.stream()
-                .map(point -> new Point(point.x(), point.y()))
-                .toList()), OffsetDateTime.now(clock)));
-        } catch (IllegalArgumentException unreadable) {
-            return Optional.empty();
+            read = captured.points().map(points -> new Read(new RouteShape(points.stream()
+                .map(point -> new Point(point.x(), point.y())).toList()),
+                OffsetDateTime.ofInstant(acquiredAt, java.time.ZoneOffset.UTC)));
+        } catch (IllegalArgumentException invalidShape) {
+            read = Optional.empty();
+            status = com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status.INVALID_RESPONSE;
+            body = null;
         }
+        var receipt = new com.gustler.backend.routegeometry.api.RouteSourceReceipt(
+            "GBIS_API", "ROUTE_LINE", sourceRouteId.matches("[0-9]{1,20}") ? sourceRouteId : "UNSPECIFIED",
+            status, captured.httpStatus() == 0 ? null : captured.httpStatus(), acquiredAt, "NOT_PROVIDED",
+            com.gustler.backend.routegeometry.api.RouteSourceReceipt.CoordinateSystem.WGS84_ASSUMED, body);
+        return new Capture(read, java.util.List.of(receipt));
     }
 }

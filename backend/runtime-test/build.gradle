@@ -7,7 +7,9 @@ plugins {
 dependencies {
     // BoardFreshnessContractTest 가 보드의 신선도 창 상수를 같은 패키지에서 읽는다.
     testImplementation project(':api-app')
+    testImplementation project(':route-geometry-engine')
     testImplementation testFixtures(project(':common'))
+    testImplementation testFixtures(project(':route-geometry-contract'))
     testImplementation 'org.springframework.boot:spring-boot'
     testImplementation 'tools.jackson.core:jackson-databind'
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -22,9 +24,12 @@ tasks.named('test') {
     // 실행 JAR 이 이 환경변수를 물려받는 시험이 있다. 빌드 호스트 값과 무관하게 꺼 둔다.
     environment 'ARRIVALS_ENABLED', 'false'
     environment 'ROUTE_GEOMETRY_ENABLED', 'false'
+    environment 'ROUTE_GEOMETRY_GENERATION_ENABLED', 'false'
     // 상세 성능 계측은 명시적으로 요청할 때만 실행한다.
     systemProperty 'arrival.profile', providers.gradleProperty('arrivalProfile').getOrElse('false')
     systemProperty 'arrival.firstResultProfile', providers.gradleProperty('arrivalFirstResultProfile').getOrElse('false')
+    systemProperty 'route.display.live-browser', providers.gradleProperty('routeDisplayLiveBrowser').getOrElse('false')
+    systemProperty 'route.display.live-browser-dir', providers.gradleProperty('routeDisplayLiveBrowserDir').getOrElse('build/reports/route-display-live-browser')
     // 두 프로젝트가 구성된 뒤 실제 Boot JAR 출력 파일을 조회한다.
     def apiJar = providers.provider {
         project(':api-app').tasks.named('bootJar').get().archiveFile.get()
@@ -32,8 +37,9 @@ tasks.named('test') {
     def workerJar = providers.provider {
         project(':worker-app').tasks.named('bootJar').get().archiveFile.get()
     }
-    dependsOn ':api-app:bootJar', ':worker-app:bootJar'
-    inputs.files(apiJar, workerJar)
+    def maintenanceJar = providers.provider { project(':maintenance-app').tasks.named('bootJar').get().archiveFile.get() }
+    dependsOn ':api-app:bootJar', ':worker-app:bootJar', ':maintenance-app:bootJar'
+    inputs.files(apiJar, workerJar, maintenanceJar)
         .withPropertyName('runtimeJars')
         .withPathSensitivity(PathSensitivity.NONE)
     def geometryRoutesFixture = rootProject.file('../dev/data/routes.json')
@@ -43,6 +49,7 @@ tasks.named('test') {
     doFirst {
         systemProperty 'api.boot.jar', apiJar.get().asFile.absolutePath
         systemProperty 'worker.boot.jar', workerJar.get().asFile.absolutePath
+        systemProperty 'maintenance.boot.jar', maintenanceJar.get().asFile.absolutePath
         systemProperty 'geometry.routes.fixture', geometryRoutesFixture.absolutePath
     }
 }

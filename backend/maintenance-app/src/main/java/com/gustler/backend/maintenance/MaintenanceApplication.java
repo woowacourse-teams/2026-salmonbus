@@ -1,7 +1,10 @@
 package com.gustler.backend.maintenance;
 
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
+import com.gustler.backend.forecasting.api.evaluation.LesEvaluationArchive;
+import com.gustler.backend.forecasting.api.les.BootstrapLesHistory;
+import com.gustler.backend.forecasting.api.les.LesHistoryBootstrapException;
 import com.gustler.backend.forecasting.api.model.InspectModelBundle;
-import com.gustler.backend.forecasting.api.model.InspectModelBundle.Inspection;
 import com.gustler.backend.forecasting.api.model.ModelLoadException;
 import com.gustler.backend.forecasting.api.quality.GetTripQualityStatus;
 import com.gustler.backend.forecasting.api.quality.PreviewTripQuality;
@@ -9,8 +12,9 @@ import com.gustler.backend.forecasting.api.quality.ProcessTripQualityChunk;
 import com.gustler.backend.forecasting.api.quality.TripQualityChunkResult;
 import com.gustler.backend.forecasting.api.quality.TripQualityPreview;
 import com.gustler.backend.forecasting.api.quality.TripQualityStatus;
-import com.gustler.backend.maintenance.DatabaseEnvironment.TargetKind;
 import com.gustler.backend.maintenance.configuration.BundleInspectionCommandConfiguration;
+import com.gustler.backend.maintenance.configuration.LesEvaluationRestoreCommandConfiguration;
+import com.gustler.backend.maintenance.configuration.LesHistoryBootstrapCommandConfiguration;
 import com.gustler.backend.maintenance.configuration.MaintenanceConfiguration;
 import java.time.Clock;
 import java.time.Instant;
@@ -55,9 +59,14 @@ public final class MaintenanceApplication {
 
     static Object run(CliArguments arguments) {
         return switch (arguments.command()) {
-            case "bundle-check" -> bundleCheck(arguments);
-            case "quality-preview", "quality-rebuild", "quality-status" -> quality(arguments);
-            default -> throw new MaintenanceException("UNKNOWN_COMMAND");
+        case "bundle-check" -> bundleCheck(arguments);
+        case "route-display-export", "route-display-status", "route-display-import", "route-display-disable" ->
+            RouteDisplayCommand.run(arguments);
+        case "route-display-retry" -> RouteDisplayRetryCommand.run(arguments);
+        case "les-history-bootstrap" -> lesHistoryBootstrap(arguments);
+        case "les-evaluation-restore" -> lesEvaluationRestore(arguments);
+        case "quality-preview", "quality-rebuild", "quality-status" -> quality(arguments);
+        default -> throw new MaintenanceException("UNKNOWN_COMMAND");
         };
     }
 
@@ -66,7 +75,7 @@ public final class MaintenanceApplication {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.register(BundleInspectionCommandConfiguration.class);
             context.refresh();
-            Inspection inspected = context.getBean(InspectModelBundle.class).inspect(directory);
+            InspectModelBundle.Inspection inspected = context.getBean(InspectModelBundle.class).inspect(directory);
             return Map.of(
                 "validation", "PASSED",
                 "activated", false,
@@ -84,14 +93,50 @@ public final class MaintenanceApplication {
         }
     }
 
+    private static Object lesHistoryBootstrap(CliArguments arguments) {
+        LesHistoryBootstrapCommand.Options options = LesHistoryBootstrapCommand.parse(arguments);
+        Configuration configuration = Configuration.load(options.config());
+        DatabaseEnvironment environment = DatabaseEnvironment.load(configuration);
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(DatabaseEnvironment.class, () -> environment);
+            context.register(LesHistoryBootstrapCommandConfiguration.class);
+            context.refresh();
+            return LesHistoryBootstrapCommand.invoke(options, context.getBean(BootstrapLesHistory.class));
+        } catch (LesHistoryBootstrapException failure) {
+            throw new MaintenanceException(failure.code(), failure);
+        } catch (CannotCreateTransactionException failure) {
+            throw new MaintenanceException("DATABASE_CONNECTION_FAILED", failure);
+        } catch (RuntimeException failure) {
+            throw new MaintenanceException("DATABASE_TRANSACTION_FAILED", failure);
+        }
+    }
+
+    private static Object lesEvaluationRestore(CliArguments arguments) {
+        LesEvaluationRestoreCommand.Options options = LesEvaluationRestoreCommand.parse(arguments);
+        LocalLesArchive archive = LocalLesArchive.read(options.archiveFile());
+        DatabaseEnvironment environment = DatabaseEnvironment.load(Configuration.load(options.config()));
+        LesEvaluationRestoreCommand.authorize(arguments, environment, archive, Clock.systemUTC());
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(DatabaseEnvironment.class, () -> environment);
+            context.registerBean(EvaluationArchiveObjects.class, () -> archive);
+            context.register(LesEvaluationRestoreCommandConfiguration.class);
+            context.refresh();
+            return LesEvaluationRestoreCommand.invoke(options, context.getBean(LesEvaluationArchive.class));
+        } catch (MaintenanceException failure) {
+            throw failure;
+        } catch (CannotCreateTransactionException failure) {
+            throw new MaintenanceException("DATABASE_CONNECTION_FAILED", failure);
+        } catch (RuntimeException failure) {
+            throw new MaintenanceException("LES_EVALUATION_RESTORE_FAILED", failure);
+        }
+    }
+
     private static Object quality(CliArguments arguments) {
-        Configuration
-        configuration = Configuration.load(arguments.requiredPath("config"));
-        DatabaseEnvironment
-        environment = DatabaseEnvironment.load(configuration);
+        Configuration configuration = Configuration.load(arguments.requiredPath("config"));
+        DatabaseEnvironment environment = DatabaseEnvironment.load(configuration);
         final long version = Long.parseLong(arguments.required("route-version"));
         final boolean write = arguments.command().equals("quality-rebuild");
-        if (write && environment.targetKind() != TargetKind.LOCAL) {
+        if (write && environment.targetKind() != DatabaseEnvironment.TargetKind.LOCAL) {
             new ApprovalGate(Clock.systemUTC()).require(arguments.requiredPath("approval"),
                 ApprovalGate.ACADEMY_TRIP_QUALITY_REBUILD, null, environment.identitySha256());
         }

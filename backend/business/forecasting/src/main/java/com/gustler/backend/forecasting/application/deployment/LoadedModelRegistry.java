@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>이미 조회한 묶음은 여기서 지워도 사용하는 batch가 예측기 참조를 유지하므로 사라지지 않는다.
  * 따라서 <b>진행 중 batch가 쓰던 계수가 승격 도중에 사라지지 않는다.</b>
  *
- * <p>적재한 묶음은 삭제하지 않는다. 사람이 수동으로 적재하므로 자주 늘지 않고 하나가 235KB 쯤이다.
+ * <p>적재한 묶음은 삭제하지 않는다. 모델별 크기가 다르며 레스 묶음에는 트리와 통계가 함께 들어 있다.
  * 삭제 가능한 시점은 batch가 언제 끝나는지 알아야 정할 수 있지만, 예보 경로에 이를 확인할 연결이
  * 아직 없어 지금은 알 수 없다. 연결하는 PR에서 정한다.
  */
@@ -27,21 +27,18 @@ public final class LoadedModelRegistry {
 
     /** 활성 배포가 가리키는 요약값으로 조회한다. 없으면 빈 결과를 반환한다. */
     public Optional<ModelRelease> find(
-        String bundleDigest
-    ) {
+        String bundleDigest) {
         return Optional.ofNullable(byBundleDigest.get(bundleDigest));
     }
 
     public void add(
-        ModelRelease bundle
-    ) {
+        ModelRelease bundle) {
         byBundleDigest.put(bundle.bundleDigest(), bundle);
     }
 
     /** 실패한 적재를 제거한다. 조회 키가 달라 선택되지 않지만 불필요하게 남겨 두지 않는다. */
     public void remove(
-        String bundleDigest
-    ) {
+        String bundleDigest) {
         byBundleDigest.remove(bundleDigest);
     }
 

@@ -22,8 +22,31 @@ public record SeatForecast(
     double seatFullChance,
     Double expectedSeats,
     Instant generatedAt,
-    boolean evaluationDetailRequired
+    boolean evaluationDetailRequired,
+    String seatTarget,
+    String probabilityTarget,
+    String labelVersion,
+    String featureSnapshot,
+    String inferenceBundleHash
 ) {
+    public SeatForecast(
+        final long vehicleObservationId,
+        final long routeVersionId,
+        final int targetStopOrder,
+        final int stopsToTarget,
+        final long modelDeploymentId,
+        final int demandStatisticsRevision,
+        final double seatFullChanceRaw,
+        final double seatFullChance,
+        Double expectedSeats,
+        Instant generatedAt,
+        final boolean evaluationDetailRequired) {
+        this(vehicleObservationId, routeVersionId, targetStopOrder, stopsToTarget, modelDeploymentId,
+            demandStatisticsRevision, seatFullChanceRaw, seatFullChance, expectedSeats, generatedAt,
+            evaluationDetailRequired, SeatForecastResult.LEGACY_SEAT_TARGET,
+            SeatForecastResult.LEGACY_PROBABILITY_TARGET, null, null, null);
+    }
+
     public SeatForecast(
         final long vehicleObservationId,
         final long routeVersionId,
@@ -64,11 +87,10 @@ public record SeatForecast(
         SeatForecastResult result,
         final long modelDeploymentId,
         final int demandStatisticsRevision,
-        Instant generatedAt
-    ) {
-        long routeVersionId = target.observation().routeVersionId();
-        int stopsToTarget = target.distance().stopCount();
-        Double expectedSeats = result.distribution().expectedSeats();
+        Instant generatedAt) {
+        final long routeVersionId = target.observation().routeVersionId();
+        final int stopsToTarget = target.distance().stopCount();
+        Double expectedSeats = result.expectedSeats();
 
         return new SeatForecast(
             vehicleObservationId,
@@ -80,12 +102,31 @@ public record SeatForecast(
             result.fullChanceRaw(),
             result.fullChance(),
             expectedSeats,
-            generatedAt);
+            generatedAt, true, result.seatTarget(), result.probabilityTarget(), null, null, null);
+    }
+
+    public SeatForecast withLesEvidence(String snapshot, String bundleHash) {
+        return withLesEvidence(snapshot, bundleHash, "les-identity-safe-v1");
+    }
+
+    public SeatForecast withLesEvidence(String snapshot, String bundleHash, String labelVersion) {
+        if (!hasLesEvidence(snapshot, bundleHash)) {
+            throw new IllegalArgumentException("레스 예보에는 입력과 계수 근거가 있어야 한다");
+        }
+        return new SeatForecast(vehicleObservationId, routeVersionId, targetStopOrder, stopsToTarget,
+            modelDeploymentId, demandStatisticsRevision, seatFullChanceRaw, seatFullChance, expectedSeats,
+            generatedAt, evaluationDetailRequired, seatTarget, probabilityTarget, labelVersion,
+            snapshot, bundleHash);
     }
 
     public SeatForecast withEvaluationDetailRequired(final boolean required) {
         return new SeatForecast(vehicleObservationId, routeVersionId, targetStopOrder, stopsToTarget,
             modelDeploymentId, demandStatisticsRevision, seatFullChanceRaw, seatFullChance, expectedSeats,
-            generatedAt, required);
+            generatedAt, required, seatTarget, probabilityTarget, labelVersion, featureSnapshot, inferenceBundleHash);
     }
+
+    private boolean hasLesEvidence(String snapshot, String bundleHash) {
+        return SeatForecastResult.LES_SEAT_TARGET.equals(seatTarget) && snapshot != null && bundleHash != null;
+    }
+
 }

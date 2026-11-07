@@ -39,7 +39,7 @@ public final class GbisContractCheck {
                 LocalData.require(read instanceof RouteSourceResult.Success, "GBIS_ROUTE_CONTRACT");
                 var actual = ((RouteSourceResult.Success) read).route();
                 LocalData.require(actual.displayName().equals(route.displayName())
-                    && RouteContentDigest.of(actual.stops()).value().equals(route.contentDigest())
+                    && RouteContentDigest.of(actual.stops()).value().equals(route.versionDigest())
                     && actual.stops().turnSequence().equals(route.turnSequence())
                     && actual.stops().stops().equals(route.domainStops().stops()), "GBIS_STATION_CONTRACT");
                 if (!RouteDataset.MODEL_ROUTES.contains(route.displayName())) {

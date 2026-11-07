@@ -36,7 +36,8 @@ class PackageBoundaryTest {
                     if (separator >= 0) {
                         module = relative.substring(0, separator);
                     }
-                    final boolean api = inPackage(target, PREFIX + module + ".api");
+                    final boolean api = inPackage(target, PREFIX + module + ".api")
+                        || inPackage(target, PREFIX + "routegeometry.engine.api");
                     final boolean configuration = inPackage(source, APP + ".configuration")
                         && inPackage(target, PREFIX + module + ".configuration");
                     events.add(new SimpleConditionEvent(dependency, api || configuration, dependency.getDescription()));

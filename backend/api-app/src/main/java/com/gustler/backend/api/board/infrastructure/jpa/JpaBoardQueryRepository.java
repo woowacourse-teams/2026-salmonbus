@@ -10,6 +10,7 @@ import com.gustler.backend.api.board.domain.BoardStop;
 import com.gustler.backend.api.board.domain.ForecastModel;
 import com.gustler.backend.api.board.domain.HeadwayRange;
 import com.gustler.backend.api.board.domain.RouteHeadways;
+import com.gustler.backend.api.board.infrastructure.jdbc.JdbcBoardSnapshotReader;
 import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.observation.ObservationFreshness;
 import com.gustler.backend.api.route.RouteId;
@@ -22,6 +23,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -43,12 +45,22 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     private final BoardVehicleObservationEntityRepository vehicleObservationRepository;
     private final ModelDeploymentEntityRepository modelDeploymentRepository;
     private final BoardForecastPublicationEntityRepository forecastPublicationRepository;
+    private final JdbcBoardSnapshotReader snapshotReader;
+
+    @Value("${board.snapshot.single-query.enabled:true}")
+    private boolean singleQueryEnabled = true;
+
+    @Value("${board.read-cache.enabled:true}")
+    private boolean readCacheEnabled = true;
 
     @Override
     public Optional<BoardSnapshot> findSnapshot(
         RouteId routeId
     ) {
         try {
+            if (singleQueryEnabled) {
+                return snapshotReader.findSnapshot(routeId);
+            }
             return routeVersionRepository.findCurrent(routeId.value())
                 .map(this::toSnapshot);
         } catch (DataAccessException exception) {
@@ -121,8 +133,18 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
                 headwaysOf(routeVersion)
             ),
             observation,
-            activeModel
+            activeModel,
+            revisionOf(routeVersion.id(), observation)
         );
+    }
+
+    private String revisionOf(final long versionId, Optional<SnapshotObservation> observation) {
+        if (!readCacheEnabled) {
+            return null;
+        }
+        return observation
+            .flatMap(selected -> forecastPublicationRepository.findBoardRevision(versionId, selected.batchId()))
+            .orElse(null);
     }
 
     private RouteHeadways headwaysOf(
