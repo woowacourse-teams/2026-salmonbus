@@ -39,15 +39,20 @@ export function NotificationSheet({
       <p className={groupStyles.description}>{stopLabel}</p>
       <label className={styles.field}>
         시각
-        <input
-          className={styles.time}
-          type="time"
-          step={60}
-          required
-          value={time}
-          disabled={busy}
-          onChange={(event) => setTime(event.target.value)}
-        />
+        <span className={styles.timeControl}>
+          <span className={styles.timeFace} aria-hidden="true">
+            {time}
+          </span>
+          <input
+            className={styles.time}
+            type="time"
+            step={60}
+            required
+            value={time}
+            disabled={busy}
+            onChange={(event) => setTime(event.target.value)}
+          />
+        </span>
       </label>
       <div className={styles.weekdays} role="group" aria-label="요일">
         {WEEKDAYS.map((weekday) => (

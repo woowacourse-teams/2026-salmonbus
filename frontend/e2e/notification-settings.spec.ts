@@ -135,7 +135,9 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     await page.getByRole("button", { name: "평일 07:40", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
     await expect(sheet.getByLabel("시각")).toHaveValue("07:40");
+    await expect(sheet.getByText("07:40", { exact: true })).toBeVisible();
     await sheet.getByLabel("시각").fill("08:10");
+    await expect(sheet.getByText("08:10", { exact: true })).toBeVisible();
     await sheet.getByRole("button", { name: "금요일" }).click();
     await sheet.getByRole("button", { name: "토요일" }).click();
     await expect(sheet.getByRole("button", { name: "토요일" })).toHaveAttribute("aria-pressed", "true");

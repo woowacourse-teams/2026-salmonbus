@@ -3,6 +3,7 @@ import {
   exceedsFavoriteLimit,
   favoriteCountFor,
   favoriteErrorOf,
+  favoriteStopLabelOf,
   groupNameError,
   selectedGroups,
 } from "./favoritePolicy";
@@ -62,5 +63,12 @@ describe("즐겨찾기 정책", () => {
   });
   it.each([" 출근 ", "👨‍👩‍👧‍👦".repeat(10), "🇰🇷".repeat(10)])("보이는 문자 기준으로 이름을 검증한다: %s", (name) => {
     expect(groupNameError(name)).toBeNull();
+  });
+  it("카드와 알림 창이 같은 정류장 문구를 쓰게 한다", () => {
+    expect(favoriteStopLabelOf({ stop: { name: "강남역" } }, 0)).toBe("강남역");
+    expect(favoriteStopLabelOf({ stop: { name: "" } }, 0)).toBe("정류장 정보 없음");
+    expect(favoriteStopLabelOf({ stop: {} }, 4)).toBe("정류장 정보 없음");
+    expect(favoriteStopLabelOf(undefined, 0)).toBe("즐겨찾기 1");
+    expect(favoriteStopLabelOf(null, 2)).toBe("즐겨찾기 3");
   });
 });

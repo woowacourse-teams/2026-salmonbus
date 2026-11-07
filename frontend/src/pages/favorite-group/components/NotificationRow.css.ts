@@ -79,7 +79,18 @@ export const field = style({
   fontSize: 14,
   fontWeight: 600,
 });
-export const time = style({
+export const timeControl = style({
+  position: "relative",
+  minWidth: 120,
+  height: 44,
+  selectors: {
+    "&:has(input:disabled)": { opacity: 0.45 },
+  },
+});
+export const timeFace = style({
+  display: "flex",
+  alignItems: "center",
+  boxSizing: "border-box",
   minWidth: 120,
   height: 44,
   padding: "0 12px",
@@ -87,8 +98,22 @@ export const time = style({
   borderRadius: 10,
   background: "#FAF9F7",
   color: "#292A2D",
-  font: "inherit",
   fontSize: 16,
+  pointerEvents: "none",
+});
+export const time = style({
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+  margin: 0,
+  opacity: 0,
+  border: 0,
+  fontSize: 16,
+  cursor: "pointer",
+  selectors: {
+    "&:disabled": { cursor: "default" },
+  },
 });
 export const weekdays = style({ display: "flex", gap: 6, marginTop: 16 });
 export const weekday = style({
