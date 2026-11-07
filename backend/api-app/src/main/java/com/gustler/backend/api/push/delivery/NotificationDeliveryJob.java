@@ -28,12 +28,18 @@ public final class NotificationDeliveryJob {
         try {
             expandDue();
         } catch (RuntimeException exception) {
-            exception.getClass();
+            LOGGER.error(
+                "event=notification_expand status=FAILED cause={}",
+                exception.getClass().getSimpleName()
+            );
         }
         try {
             sendDue();
         } catch (RuntimeException exception) {
-            exception.getClass();
+            LOGGER.error(
+                "event=notification_send status=FAILED cause={}",
+                exception.getClass().getSimpleName()
+            );
         }
     }
 
