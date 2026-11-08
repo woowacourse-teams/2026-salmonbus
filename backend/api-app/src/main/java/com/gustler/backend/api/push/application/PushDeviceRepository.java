@@ -6,7 +6,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 public interface PushDeviceRepository {
-    boolean register(UUID memberPublicId, DeviceToken token, PushEnvironment environment, Instant registeredAt);
+    boolean register(UUID memberPublicId, UUID sessionId, DeviceToken token, PushEnvironment environment,
+        Instant registeredAt);
 
     boolean unregister(UUID memberPublicId, DeviceToken token);
 

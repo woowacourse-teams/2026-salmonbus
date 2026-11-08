@@ -27,7 +27,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 /**
  * 회원의 공개 식별자를 담은 짧은 수명의 액세스 토큰을 만들고 검증한다.
  *
- * <p>토큰에는 {@code sub}(회원 {@code public_id}), 발급자, 발급·만료 시각만 담는다. 닉네임처럼 바뀌는 값은 넣지 않는다.
+ * <p>토큰에는 {@code sub}(회원 {@code public_id}), {@code sid}(로그인 계통), 발급자, 발급 시각과 만료 시각을 담는다.
  * 서버가 즉시 취소할 수 없으므로 수명을 짧게 두고, 취소는 리프레시 토큰 폐기와 회원 조회로 보완한다.
  */
 public final class AccessTokens {
@@ -58,15 +58,21 @@ public final class AccessTokens {
     }
 
     public String issue(UUID publicId) {
+        return issue(publicId, null);
+    }
+
+    public String issue(UUID publicId, UUID sessionId) {
         Instant now = clock.instant();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).keyId(properties.keyId()).build();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
+        JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
             .issuer(ISSUER)
             .subject(publicId.toString())
             .issuedAt(now)
-            .expiresAt(now.plus(properties.accessTtl()))
-            .build();
-        return encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+            .expiresAt(now.plus(properties.accessTtl()));
+        if (sessionId != null) {
+            claims.claim("sid", sessionId.toString());
+        }
+        return encoder.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();
     }
 
     /** 서명·발급자·만료가 맞으면 회원 식별자를 돌려준다. 어떤 이유로든 검증에 실패하면 비어 있다. */
