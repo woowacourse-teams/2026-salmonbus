@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.gustler.backend.api.push.domain.DeviceToken;
 import com.gustler.backend.api.push.domain.PushEnvironment;
 import com.gustler.backend.support.IntegrationTest;
+import com.gustler.backend.member.api.RefreshTokens;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -24,14 +25,18 @@ class JdbcPushDeviceRepositoryTest {
     private JdbcPushDeviceRepository repository;
     @Autowired
     private JdbcClient jdbc;
+    @Autowired
+    private RefreshTokens refreshTokens;
 
     @Test
     void registersAndRefreshesOneRow() {
         UUID member = member("연어하나");
-        assertThat(repository.register(member, TOKEN, PushEnvironment.SANDBOX, NOW)).isTrue();
-        assertThat(repository.register(member, TOKEN, PushEnvironment.PRODUCTION, NOW.plusSeconds(60))).isTrue();
+        UUID sessionId = session(member);
+        assertThat(repository.register(member, sessionId, TOKEN, PushEnvironment.SANDBOX, NOW)).isTrue();
+        assertThat(repository.register(member, sessionId, TOKEN, PushEnvironment.PRODUCTION, NOW.plusSeconds(60))).isTrue();
         assertThat(count()).isEqualTo(1);
         assertThat(jdbc.sql("SELECT token FROM push_device").query(String.class).single()).isEqualTo("abcdef");
+        assertThat(jdbc.sql("SELECT session_family_id FROM push_device").query(UUID.class).single()).isEqualTo(sessionId);
         assertThat(jdbc.sql("SELECT environment FROM push_device").query(String.class).single()).isEqualTo("PRODUCTION");
         assertThat(time("created_at")).isEqualTo(NOW);
         assertThat(time("last_registered_at")).isEqualTo(NOW.plusSeconds(60));
@@ -41,9 +46,12 @@ class JdbcPushDeviceRepositoryTest {
     void movesTokenWithoutChangingIdentityOrCreationTime() {
         UUID first = member("연어하나");
         UUID second = member("연어둘");
-        repository.register(first, TOKEN, PushEnvironment.SANDBOX, NOW);
+        repository.register(first, session(first), TOKEN, PushEnvironment.SANDBOX, NOW);
         long id = jdbc.sql("SELECT id FROM push_device").query(Long.class).single();
-        assertThat(repository.register(second, TOKEN, PushEnvironment.PRODUCTION, NOW.plusSeconds(60))).isTrue();
+        UUID secondSession = session(second);
+        assertThat(repository.register(second, secondSession, TOKEN, PushEnvironment.PRODUCTION, NOW.plusSeconds(60))).isTrue();
+        assertThat(jdbc.sql("SELECT session_family_id FROM push_device").query(UUID.class).single())
+            .isEqualTo(secondSession);
         assertThat(count()).isEqualTo(1);
         assertThat(jdbc.sql("SELECT id FROM push_device").query(Long.class).single()).isEqualTo(id);
         assertThat(jdbc.sql("SELECT m.public_id FROM push_device p JOIN member m ON m.id = p.member_id")
@@ -57,8 +65,8 @@ class JdbcPushDeviceRepositoryTest {
     void unregisterOnlyDeletesOwnTokenAndIsIdempotent() {
         UUID first = member("연어하나");
         UUID second = member("연어둘");
-        repository.register(first, TOKEN, PushEnvironment.SANDBOX, NOW);
-        repository.register(second, new DeviceToken("bb"), PushEnvironment.PRODUCTION, NOW);
+        repository.register(first, session(first), TOKEN, PushEnvironment.SANDBOX, NOW);
+        repository.register(second, session(second), new DeviceToken("bb"), PushEnvironment.PRODUCTION, NOW);
         assertThat(repository.unregister(second, TOKEN)).isTrue();
         assertThat(repository.unregister(first, new DeviceToken("cc"))).isTrue();
         assertThat(count()).isEqualTo(2);
@@ -70,8 +78,8 @@ class JdbcPushDeviceRepositoryTest {
     @Test
     void deleteByIdRemovesOnlyThatDevice() {
         UUID member = member("연어하나");
-        repository.register(member, TOKEN, PushEnvironment.SANDBOX, NOW);
-        repository.register(member, new DeviceToken("bb"), PushEnvironment.PRODUCTION, NOW);
+        repository.register(member, session(member), TOKEN, PushEnvironment.SANDBOX, NOW);
+        repository.register(member, session(member), new DeviceToken("bb"), PushEnvironment.PRODUCTION, NOW);
         long id = jdbc.sql("SELECT id FROM push_device WHERE token = ?")
             .param("abcdef")
             .query(Long.class)
@@ -84,9 +92,13 @@ class JdbcPushDeviceRepositoryTest {
     @Test
     void missingMemberCannotRegisterOrUnregister() {
         UUID missing = UUID.randomUUID();
-        assertThat(repository.register(missing, TOKEN, PushEnvironment.SANDBOX, NOW)).isFalse();
+        assertThat(repository.register(missing, UUID.randomUUID(), TOKEN, PushEnvironment.SANDBOX, NOW)).isFalse();
         assertThat(repository.unregister(missing, TOKEN)).isFalse();
         assertThat(count()).isZero();
+    }
+
+    private UUID session(UUID member) {
+        return refreshTokens.issue(member).familyId();
     }
 
     private UUID member(String nickname) {

@@ -100,6 +100,17 @@ class AccessTokensTest {
         });
     }
 
+    @Test
+    void issuedTokenContainsSessionFamilyId() {
+        UUID sessionId = UUID.randomUUID();
+        AccessTokens tokens = tokensAt(ISSUED_AT);
+
+        String token = tokens.issue(MEMBER, sessionId);
+
+        assertThat(tokens.decoder().decode(token).getClaimAsString("sid")).isEqualTo(sessionId.toString());
+        assertThat(tokens.verify(token)).contains(MEMBER);
+    }
+
     private AccessTokens tokensAt(Instant instant) {
         return new AccessTokens(properties, Clock.fixed(instant, ZoneOffset.UTC));
     }

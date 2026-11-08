@@ -40,10 +40,10 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정되어도 다른 파일을 제외해 항상 통과하게 된다. 파일 이름으로 선택하고,
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
-     * <p>이 브랜치는 정류장 지도의 정류장 원본과 칸 진행 테이블을 만든다.
+     * <p>이 브랜치는 푸시 기기를 로그인 계통에 연결한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("notification_delivery");
+        List.of("push_device_session");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
@@ -109,6 +109,41 @@ class MigrationOrderTest {
             IntStream.rangeClosed(1, actual.size())
                 .boxed()
                 .toArray(Integer[]::new));
+    }
+
+    @Test
+    void sessionMigrationRemovesExistingDevicesAndTheirDeliveries() {
+        migrateWith("filesystem:" + stagedMigrations());
+        long memberId = jdbcClient.sql("""
+            INSERT INTO staged_deploy.member (public_id, nickname, created_at, last_login_at)
+            VALUES (gen_random_uuid(), '연어하나', now(), now()) RETURNING id
+            """).query(Long.class).single();
+        long deviceId = jdbcClient.sql("""
+            INSERT INTO staged_deploy.push_device (member_id, token, environment, created_at, last_registered_at)
+            VALUES (?, 'ab', 'SANDBOX', now(), now()) RETURNING id
+            """).param(memberId).query(Long.class).single();
+        jdbcClient.sql("""
+            WITH setting AS (
+                INSERT INTO staged_deploy.notification_setting (
+                    id, member_id, route_id, stop_id, direction, local_time, weekdays,
+                    occurrence_at, created_at, updated_at
+                ) VALUES (gen_random_uuid(), ?, '234000884', '203000165', 'UP',
+                    TIME '07:40', 31, now(), now(), now())
+                RETURNING id
+            )
+            INSERT INTO staged_deploy.notification_delivery (
+                setting_id, occurrence_at, device_id, status, attempts, next_attempt_at, created_at, updated_at
+            ) SELECT id, now(), ?, 'PENDING', 0, now(), now(), now() FROM setting
+            """).params(memberId, deviceId).update();
+
+        migrateWith("classpath:" + MIGRATION_LOCATION);
+
+        assertThat(jdbcClient.sql("SELECT count(*) FROM staged_deploy.push_device").query(Long.class).single()).isZero();
+        assertThat(jdbcClient.sql("SELECT count(*) FROM staged_deploy.notification_delivery")
+            .query(Long.class).single()).isZero();
+        assertThat(jdbcClient.sql("SELECT count(*) FROM staged_deploy.notification_setting")
+            .query(Long.class).single()).isEqualTo(1);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM staged_deploy.member").query(Long.class).single()).isEqualTo(1);
     }
 
     /**

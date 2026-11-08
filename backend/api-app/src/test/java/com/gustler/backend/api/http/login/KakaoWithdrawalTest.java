@@ -271,15 +271,15 @@ class KakaoWithdrawalTest {
     void 탈퇴하면_자기_푸시_기기만_연쇄_삭제한다() throws Exception {
         UUID other = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "other-push-member")).publicId();
         jdbcClient.sql("""
-            INSERT INTO push_device (member_id, token, environment, created_at, last_registered_at)
-            SELECT id, ?, 'SANDBOX', now(), now() FROM member WHERE public_id = ?
+            INSERT INTO push_device (member_id, session_family_id, token, environment, created_at, last_registered_at)
+            SELECT id, ?, ?, 'SANDBOX', now(), now() FROM member WHERE public_id = ?
             """)
-            .params("ab", memberId).update();
+            .params(refreshTokens.issue(memberId).familyId(), "ab", memberId).update();
         jdbcClient.sql("""
-            INSERT INTO push_device (member_id, token, environment, created_at, last_registered_at)
-            SELECT id, ?, 'PRODUCTION', now(), now() FROM member WHERE public_id = ?
+            INSERT INTO push_device (member_id, session_family_id, token, environment, created_at, last_registered_at)
+            SELECT id, ?, ?, 'PRODUCTION', now(), now() FROM member WHERE public_id = ?
             """)
-            .params("cd", other).update();
+            .params(refreshTokens.issue(other).familyId(), "cd", other).update();
 
         HttpResponse<String> response = withdraw(accessTokens.issue(memberId));
 

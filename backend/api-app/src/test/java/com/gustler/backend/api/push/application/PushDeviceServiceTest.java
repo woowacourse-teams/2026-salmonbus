@@ -22,15 +22,23 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class PushDeviceServiceTest {
     private static final UUID MEMBER = UUID.randomUUID();
+    private static final UUID SESSION = UUID.randomUUID();
     private static final Instant NOW = Instant.parse("2026-11-06T01:30:00Z");
     private final PushDeviceRepository repository = mock(PushDeviceRepository.class);
     private final PushDeviceService service = new PushDeviceService(repository, Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
     void registersNormalizedTokenWithClockTime() {
-        when(repository.register(MEMBER, new DeviceToken("ab"), PushEnvironment.SANDBOX, NOW)).thenReturn(true);
-        service.register(MEMBER, "AB", "SANDBOX");
-        verify(repository).register(MEMBER, new DeviceToken("ab"), PushEnvironment.SANDBOX, NOW);
+        when(repository.register(MEMBER, SESSION, new DeviceToken("ab"), PushEnvironment.SANDBOX, NOW)).thenReturn(true);
+        service.register(MEMBER, SESSION, "AB", "SANDBOX");
+        verify(repository).register(MEMBER, SESSION, new DeviceToken("ab"), PushEnvironment.SANDBOX, NOW);
+    }
+
+    @Test
+    void rejectsRegistrationWithoutSession() {
+        assertThatThrownBy(() -> service.register(MEMBER, null, "ab", "SANDBOX"))
+            .isInstanceOf(UnauthenticatedException.class);
+        verifyNoInteractions(repository);
     }
 
     @Test
@@ -43,7 +51,7 @@ class PushDeviceServiceTest {
     @ParameterizedTest
     @CsvSource(value = {"ab,sandbox", "xyz,SANDBOX", "ab,NULL", "NULL,PRODUCTION"}, nullValues = "NULL")
     void convertsRegistrationFieldErrors(String token, String environment) {
-        assertThatThrownBy(() -> service.register(MEMBER, token, environment))
+        assertThatThrownBy(() -> service.register(MEMBER, SESSION, token, environment))
             .isInstanceOf(InvalidPushDeviceException.class);
         verifyNoInteractions(repository);
     }
@@ -58,7 +66,7 @@ class PushDeviceServiceTest {
 
     @Test
     void rejectsRegistrationForMissingMember() {
-        assertThatThrownBy(() -> service.register(MEMBER, "ab", "PRODUCTION"))
+        assertThatThrownBy(() -> service.register(MEMBER, SESSION, "ab", "PRODUCTION"))
             .isInstanceOf(UnauthenticatedException.class);
     }
 

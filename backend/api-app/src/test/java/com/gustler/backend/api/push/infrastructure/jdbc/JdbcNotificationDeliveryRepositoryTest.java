@@ -14,6 +14,7 @@ import com.gustler.backend.api.push.domain.DeviceToken;
 import com.gustler.backend.api.push.domain.NotificationSchedule;
 import com.gustler.backend.api.push.domain.PushEnvironment;
 import com.gustler.backend.support.IntegrationTest;
+import com.gustler.backend.member.api.RefreshTokens;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -43,6 +44,8 @@ class JdbcNotificationDeliveryRepositoryTest {
     private JdbcPushDeviceRepository devices;
     @Autowired
     private JdbcClient jdbc;
+    @Autowired
+    private RefreshTokens refreshTokens;
 
     @Test
     void creatingTheSameOccurrenceTwiceDoesNotAddRows() {
@@ -124,7 +127,8 @@ class JdbcNotificationDeliveryRepositoryTest {
         long memberId = settings.memberIdOf(member).orElseThrow();
         addFavorite(memberId, TARGET);
         SavedSetting setting = settings.upsert(memberId, TARGET, SCHEDULE, NOW, NOW);
-        tokens.forEach(token -> devices.register(member, new DeviceToken(token), PushEnvironment.SANDBOX, NOW));
+        UUID sessionId = refreshTokens.issue(member).familyId();
+        tokens.forEach(token -> devices.register(member, sessionId, new DeviceToken(token), PushEnvironment.SANDBOX, NOW));
         List<Long> deviceIds = jdbc.sql("SELECT id FROM push_device WHERE member_id = ? ORDER BY id")
             .param(memberId)
             .query(Long.class)

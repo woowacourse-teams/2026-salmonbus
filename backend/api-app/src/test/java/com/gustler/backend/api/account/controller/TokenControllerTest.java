@@ -67,6 +67,7 @@ class TokenControllerTest {
 
     private UUID memberId;
     private String refreshToken;
+    private UUID familyId;
     private String csrfToken;
 
     @BeforeEach
@@ -76,6 +77,7 @@ class TokenControllerTest {
         changeNickname.change(memberId, "연어팬");
         IssuedRefreshToken issued = refreshTokens.issue(memberId);
         refreshToken = issued.token();
+        familyId = issued.familyId();
         csrfToken = csrfToken();
     }
 
@@ -92,6 +94,8 @@ class TokenControllerTest {
             softly.assertThat(setCookie(actual, REFRESH_COOKIE)).contains("HttpOnly", "Secure", "Path=/;");
             softly.assertThat(cookieValue(actual, REFRESH_COOKIE)).isNotEqualTo(refreshToken);
             softly.assertThat(accessTokens.verify(cookieValue(actual, ACCESS_COOKIE))).contains(memberId);
+            softly.assertThat(accessTokens.decoder().decode(cookieValue(actual, ACCESS_COOKIE)).getClaimAsString("sid"))
+                .isEqualTo(familyId.toString());
         });
     }
 
@@ -109,6 +113,8 @@ class TokenControllerTest {
             softly.assertThat(header(actual, "Cache-Control")).isEqualTo("no-store");
             softly.assertThat(actual.headers().allValues("Set-Cookie")).isEmpty();
             softly.assertThat(accessTokens.verify(body.path("accessToken").asString())).contains(memberId);
+            softly.assertThat(accessTokens.decoder().decode(body.path("accessToken").asString()).getClaimAsString("sid"))
+                .isEqualTo(familyId.toString());
             softly.assertThat(body.path("expiresIn").asLong()).isEqualTo(900);
             softly.assertThat(body.path("refreshToken").asString()).isNotBlank().isNotEqualTo(refreshToken);
             softly.assertThat(body.path("refreshTokenExpiresAt").asString()).isNotBlank();

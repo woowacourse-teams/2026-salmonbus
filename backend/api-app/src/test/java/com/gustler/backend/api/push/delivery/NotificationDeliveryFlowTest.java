@@ -13,6 +13,7 @@ import com.gustler.backend.api.push.domain.DeviceToken;
 import com.gustler.backend.api.push.domain.NotificationSchedule;
 import com.gustler.backend.api.push.domain.PushEnvironment;
 import com.gustler.backend.support.IntegrationTest;
+import com.gustler.backend.member.api.RefreshTokens;
 import com.zaxxer.hikari.HikariDataSource;
 import java.net.http.HttpClient;
 import java.nio.file.Path;
@@ -65,6 +66,8 @@ class NotificationDeliveryFlowTest {
     private PushDeviceRepository devices;
     @Autowired
     private JdbcClient jdbc;
+    @Autowired
+    private RefreshTokens refreshTokens;
     @Autowired
     private DataSource dataSource;
 
@@ -341,7 +344,8 @@ class NotificationDeliveryFlowTest {
         List<String> tokens = IntStream.range(0, deviceCount)
             .mapToObj(index -> String.format("%064x", index + 0xabcd))
             .toList();
-        tokens.forEach(token -> devices.register(member, new DeviceToken(token), PushEnvironment.SANDBOX, T0));
+        UUID sessionId = refreshTokens.issue(member).familyId();
+        tokens.forEach(token -> devices.register(member, sessionId, new DeviceToken(token), PushEnvironment.SANDBOX, T0));
         return new Prepared(member, memberId, setting.id(), tokens);
     }
 
