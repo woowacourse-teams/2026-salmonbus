@@ -29,4 +29,6 @@ public interface NotificationDeliveryRepository {
     List<ClaimedDelivery> claimDue(Instant now, Instant leasedUntil, int limit);
 
     void record(long id, DeliveryDecision decision, Instant now);
+
+    int deleteCompletedBefore(Instant cutoff, int limit);
 }

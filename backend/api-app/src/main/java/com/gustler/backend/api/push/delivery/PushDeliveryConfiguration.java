@@ -1,10 +1,12 @@
 package com.gustler.backend.api.push.delivery;
 
+import com.gustler.backend.api.push.application.NotificationDeliveryRepository;
 import com.gustler.backend.api.push.application.NotificationDeliveryService;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -60,5 +62,14 @@ public class PushDeliveryConfiguration {
         NotificationDeliveryRunner runner
     ) {
         return new NotificationDeliveryJob(service, runner);
+    }
+
+    @Bean
+    NotificationDeliveryPurge notificationDeliveryPurge(
+        NotificationDeliveryRepository deliveries,
+        Clock clock,
+        @Value("${push.delivery.retention:7d}") Duration retention
+    ) {
+        return new NotificationDeliveryPurge(deliveries, clock, retention);
     }
 }

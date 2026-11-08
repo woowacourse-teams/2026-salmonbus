@@ -181,6 +181,9 @@ route-geometry:
 
 push:
   enabled: ${PUSH_ENABLED:false}
+  delivery:
+    purge-cron: "0 41 4 * * *"
+    retention: 7d
   apns:
     team-id: ${APNS_TEAM_ID:}
     key-id: ${APNS_KEY_ID:}
