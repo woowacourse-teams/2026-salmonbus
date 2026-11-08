@@ -338,7 +338,64 @@ for (const reason of ["NOT_COLLECTED", "GENERATION_PENDING"] as const) {
   });
 }
 
-test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받으면 실패를 안내한다", async ({ page, api }) => {
+test("생성 중 지도는 형식이 잘못된 갱신 응답에도 선택을 유지하고 자동 재시도를 멈춘다", async ({
+  page,
+  api,
+  naverMap,
+}) => {
+  const readyGeometry = createRouteGeometry(api.data.watch);
+  api.data.geometry = {
+    ...readyGeometry,
+    geometryRevision: "a".repeat(64),
+    status: "UNAVAILABLE",
+    reason: "GENERATION_PENDING",
+    points: [],
+    paths: null,
+  };
+  await openMap(page);
+  const stop = list(page).locator("li[data-stop-sequence='11'] button[aria-expanded]");
+  await stop.click();
+  await page.clock.runFor(32);
+  const pins = map(page).locator("button[data-map-stop-sequence]:visible");
+  await expect(pins).toHaveCount(1);
+  const camera = await naverMap.snapshot();
+  let malformed = true;
+  let malformedRequests = 0;
+  await api.route(async (route) => {
+    if (new URL(route.request().url()).pathname !== apiPaths.geometry || !malformed) {
+      await route.fallback();
+      return;
+    }
+    malformedRequests += 1;
+    await route.fulfill({ status: 502, contentType: "text/html", body: "<html>Bad Gateway</html>" });
+  });
+
+  const failedResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.geometry && response.status() === 502,
+  );
+  await page.clock.runFor(60_000);
+  await (await failedResponse).finished();
+  await page.clock.runFor(32);
+  expect(malformedRequests).toBe(1);
+  await expect(pins).toHaveCount(1);
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+  expect(await naverMap.snapshot()).toEqual(camera);
+  await expect(map(page).getByText("잠시 후 자동으로 다시 불러와요.", { exact: false })).toHaveCount(0);
+  await page.clock.runFor(60_000);
+  expect(malformedRequests).toBe(1);
+
+  malformed = false;
+  api.data.geometry = { ...readyGeometry, geometryRevision: "b".repeat(64) };
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
+  await page.clock.runFor(48);
+  await expect(pins).toHaveCount(24);
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  expect(await naverMap.snapshot()).toEqual(camera);
+});
+
+test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받아도 기존 지도는 유지한다", async ({ page, api }) => {
   api.mode.geometry = { status: 503 };
   api.data.geometry.status = "UNAVAILABLE";
   api.data.geometry.reason = "GENERATION_PENDING";
@@ -372,7 +429,8 @@ test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받으�
     });
   });
   await page.clock.runFor(60_000);
-  await expect(map(page).getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
+  await expect(map(page).getByTestId("naver-map-test-double")).toBeVisible();
+  await expect(map(page).getByText("노선을 준비 중이에요", { exact: true })).toBeVisible();
   await expect(map(page)).toHaveAttribute("aria-busy", "false");
   await page.clock.runFor(60_000);
   expect(terminalRequests).toBe(1);

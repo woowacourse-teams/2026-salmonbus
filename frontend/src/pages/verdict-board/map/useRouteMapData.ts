@@ -78,9 +78,10 @@ export function useRouteMapData(
                 : { identity, revision: null, resource: { status: "retrying", data: null }, retrying: true },
             );
           } else {
+            // 자동 재시도를 멈춰도 이전에 검증된 지도 데이터는 계속 사용할 수 있다.
             setLoaded((previous) =>
               previous?.identity === identity &&
-              (previous.resource.status === "ready" || previous.resource.status === "withheld")
+              (previous.resource.status === "withheld" || previous.resource.data !== null)
                 ? { identity, revision: previous.revision, resource: previous.resource, retrying: false }
                 : { identity, revision: null, resource: { status: "error", data: null }, retrying: false },
             );
