@@ -1,11 +1,55 @@
 import type { Page } from "@playwright/test";
 import { test, expect, testMember } from "./fixtures/auth";
+import { captureEnabled } from "./utils/capture";
 
 const STORAGE_KEY = "salmonbus.analyticsOptOut";
 const DESCRIPTION = "끄면 이 기기의 이용 기록과 화면 기록을 Amplitude(미국)로 보내지 않고, 안내와 설문도 뜨지 않아요.";
 
 const participation = (page: Page) =>
   page.getByRole("region", { name: "개인정보" }).getByRole("switch", { name: "서비스 개선에 참여하기" });
+
+test("고대비 모드에서 스위치의 켜짐과 꺼짐은 테두리와 시스템 색으로 구분된다", async ({ page }) => {
+  await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  await page.goto("/mypage");
+  const control = participation(page);
+  const thumb = control.locator("+ span");
+  const colors = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    const resolved = ["Canvas", "CanvasText", "Highlight", "HighlightText"].map((color) => {
+      probe.style.color = color;
+      return getComputedStyle(probe).color;
+    });
+    probe.remove();
+    return resolved;
+  });
+  const [canvas, canvasText, highlight, highlightText] = colors;
+  await expect(control).toBeChecked();
+  if (captureEnabled) {
+    await page.evaluate(() => document.fonts.ready);
+    await page.clock.runFor(32);
+    await page.screenshot({ path: test.info().outputPath("switch-on.png") });
+  }
+  await expect.soft(control).toHaveCSS("border-top-style", "solid");
+  await expect.soft(control).toHaveCSS("border-top-width", "2px");
+  await expect.soft(control).toHaveCSS("border-top-color", highlight!);
+  await expect.soft(control).toHaveCSS("background-color", highlight!);
+  await expect.soft(thumb).toHaveCSS("background-color", highlightText!);
+  await expect(thumb).toHaveCSS("transform", "matrix(1, 0, 0, 1, 18, 0)");
+
+  await control.click();
+  await expect(control).not.toBeChecked();
+  if (captureEnabled) {
+    await page.clock.runFor(32);
+    await page.screenshot({ path: test.info().outputPath("switch-off.png") });
+  }
+  await expect.soft(control).toHaveCSS("border-top-style", "solid");
+  await expect.soft(control).toHaveCSS("border-top-width", "2px");
+  await expect.soft(control).toHaveCSS("border-top-color", canvasText!);
+  await expect.soft(control).toHaveCSS("background-color", canvas!);
+  await expect.soft(thumb).toHaveCSS("background-color", canvasText!);
+  await expect(thumb).toHaveCSS("transform", "none");
+});
 
 test("비회원 마이페이지에서 서비스 개선 참여를 끄면 새로고침 뒤에도 꺼져 있고, 다시 켤 수 있다", async ({ page }) => {
   await page.goto("/mypage");
