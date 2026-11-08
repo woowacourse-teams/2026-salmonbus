@@ -8,7 +8,7 @@ import type { RouteMapData } from "./routeMapModel";
 const RETRY_DELAY_MS = 60_000;
 
 type RouteMapResource =
-  | { status: "loading" | "error" | "conflict"; data: null }
+  | { status: "loading" | "retrying" | "error" | "conflict"; data: null }
   | { status: "preparing" | "generating" | "withheld"; data: RouteMapData | null }
   | { status: "ready"; data: RouteMapData };
 
@@ -66,6 +66,11 @@ export function useRouteMapData(board: Board, visible: boolean, onConflict: () =
           const decision = nextPollFrom(result);
           if (failure.kind !== "malformed" && decision.kind === "again") {
             schedule(Math.max(RETRY_DELAY_MS, decision.delayMs));
+            setLoaded((previous) =>
+              previous?.identity === identity && previous.resource.status === "withheld"
+                ? previous
+                : { identity, revision: null, resource: { status: "retrying", data: null } },
+            );
           } else {
             setLoaded((previous) =>
               previous?.identity === identity &&

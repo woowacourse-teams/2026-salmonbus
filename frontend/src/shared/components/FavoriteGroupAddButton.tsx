@@ -63,7 +63,7 @@ function CreateGroupDialog({ onClose, onCreated }: CreateGroupDialogProps) {
         if (result.ok) created = result.body;
         return result;
       },
-      { resultHaptic: true },
+      { resultHaptic: true, failureMessage: "그룹을 만들지 못했어요. 다시 시도해 주세요." },
     );
     if (ok && created !== null) {
       onCreated?.(created);

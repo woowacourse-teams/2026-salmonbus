@@ -25,6 +25,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
   const [saved, setSaved] = useState(groups);
   const [draft, setDraft] = useState(groups);
   const [deleting, setDeleting] = useState<FavoriteGroup | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
   const { busy, error, setError, run, partial, setPartial, removeGroup } = useFavoriteGroupDeletion(
     saved,
     draft,
@@ -39,14 +40,20 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
   async function save() {
     if (busy) return;
     const ids = draft.map((group) => group.id);
-    if (
-      ids.every((id, index) => saved[index]?.id === id) ||
-      (await run(() => saveGroupOrder(ids), { resultHaptic: true }))
-    )
+    if (ids.every((id, index) => saved[index]?.id === id)) {
       onClose(true);
+      return;
+    }
+    const savedOrder = await run(() => saveGroupOrder(ids), {
+      resultHaptic: true,
+      failureMessage: "그룹 순서를 저장하지 못했어요. 다시 시도해 주세요.",
+    });
+    setSaveFailed(!savedOrder);
+    if (savedOrder) onClose(true);
   }
   async function remove() {
     if (!deleting || protectedGroup || resource.status !== "success") return;
+    setSaveFailed(false);
     if (await removeGroup(deleting.id)) {
       setPartial(false);
       setSaved((current) => current.filter((group) => group.id !== deleting.id));
@@ -65,7 +72,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
       <h2 className={styles.heading}>
         <span>{`내 그룹  ${draft.length} / ${MAX_FAVORITE_GROUPS}`}</span>
         <button ref={done} className={styles.cancelSelection} disabled={busy} onClick={() => void save()}>
-          완료
+          {saveFailed && error && deleting === null ? "다시 저장하기" : "완료"}
         </button>
       </h2>
       <p id="favorite-sort-help" className={visuallyHidden}>

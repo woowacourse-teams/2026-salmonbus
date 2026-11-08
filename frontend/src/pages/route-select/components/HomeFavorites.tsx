@@ -255,6 +255,14 @@ interface FavoriteCardProps {
 }
 
 function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRetry }: FavoriteCardProps) {
+  if (favorite.status === "ERROR") {
+    return (
+      <li className={homeStyles.unavailable}>
+        <p className={homeStyles.notice}>{favoriteStatusLabelOf("ERROR")}</p>
+        <FavoritesRetryButton onRetry={onRetry}>다시 시도하기</FavoritesRetryButton>
+      </li>
+    );
+  }
   const direction = favorite.stop.direction ?? savedDirection;
   if (!favorite.route.displayName || !favorite.stop.name) {
     return (
@@ -266,7 +274,6 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
           {direction && (
             <span className={homeStyles.direction}>{directionLabelOf(favorite.route.terminalStopName, direction)}</span>
           )}
-          {favorite.status === "ERROR" && <FavoritesRetryButton onRetry={onRetry}>다시 확인하기</FavoritesRetryButton>}
         </div>
       </li>
     );

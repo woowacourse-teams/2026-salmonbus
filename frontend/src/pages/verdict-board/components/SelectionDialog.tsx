@@ -38,6 +38,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
   const [createdGroupId, setCreatedGroupId] = useState<string | null>(null);
   const nameField = useRef<HTMLInputElement>(null);
   const returnToAdd = useRef(false);
+  const focusAfterRetry = useRef(false);
   const [name, setName] = useState("");
   const [beforeCreation, setBeforeCreation] = useState<typeof resource | null>(null);
   // 생성 직전 응답이 남아 있는 동안 새 그룹을 누락으로 처리하지 않는다.
@@ -51,17 +52,37 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
   async function createGroup(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || invalidName || groups.length >= MAX_FAVORITE_GROUPS || resource.status !== "success") return;
-    await run(async () => {
-      const result = await createFavoriteGroup(name);
-      if (result.ok) {
-        setCreatedGroupId(result.body.id);
-        setBeforeCreation(resource);
-        setChosen([...ids, result.body.id]);
-        setName("");
-        setCreating(false);
-      }
-      return result;
-    });
+    await run(
+      async () => {
+        const result = await createFavoriteGroup(name);
+        if (result.ok) {
+          setCreatedGroupId(result.body.id);
+          setBeforeCreation(resource);
+          setChosen([...ids, result.body.id]);
+          setName("");
+          setCreating(false);
+        }
+        return result;
+      },
+      { failureMessage: "그룹을 만들지 못했어요. 다시 시도해 주세요." },
+    );
+  }
+  if (resource.status === "loadingError" || resource.status === "refetchError") {
+    return (
+      <ConfirmDialog title="저장할 그룹 선택" onCancel={onClose}>
+        <button className={styles.close} type="button" aria-label="닫기" onClick={onClose}>
+          ×
+        </button>
+        <FavoritesNotice
+          resource={resource}
+          onRetry={() => {
+            focusAfterRetry.current = true;
+            reload();
+          }}
+          retryStyle="primary"
+        />
+      </ConfirmDialog>
+    );
   }
   return (
     <ConfirmDialog
@@ -86,6 +107,12 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
             {`정류장 ${favoriteCountFor(group, target, ids)}개, 최대 ${MAX_FAVORITES_PER_GROUP}개`}
           </span>
           <input
+            ref={(input) => {
+              if (input !== null && focusAfterRetry.current && group.id === groups[0]?.id) {
+                focusAfterRetry.current = false;
+                input.focus();
+              }
+            }}
             type="checkbox"
             autoFocus={group.id === createdGroupId}
             checked={ids.includes(group.id)}
@@ -193,7 +220,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
             reload();
           }}
         >
-          그룹 목록 다시 확인하기
+          다시 시도하기
         </button>
       )}
       {!creating && (
@@ -207,7 +234,10 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
               busy || refreshingGroups || resource.status !== "success" || groups.length === 0 || full || missing
             }
             onClick={() =>
-              void run(() => saveSelections(ids), { resultHaptic: true }).then((ok) => {
+              void run(() => saveSelections(ids), {
+                resultHaptic: true,
+                failureMessage: "즐겨찾기를 저장하지 못했어요. 다시 시도해 주세요.",
+              }).then((ok) => {
                 if (ok) onSaved();
               })
             }

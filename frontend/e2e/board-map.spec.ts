@@ -308,7 +308,7 @@ test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받으�
   const response = await firstFailure;
   expect(response.status()).toBe(503);
   await response.finished();
-  await expect(map(page).getByText("지도 정보를 준비 중이에요", { exact: true })).toBeVisible();
+  await expect(map(page).getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
 
   api.mode.geometry = "success";
   await page.clock.runFor(60_000);
@@ -495,7 +495,7 @@ for (const failure of ["network", "referenceVersion"] as const) {
     else api.data.geometry.referenceVersionId = "different-reference";
     await page.goto(`/routes/${routeId}`);
     await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
-    const notice = failure === "network" ? "지도 정보를 준비 중이에요" : "지도를 불러오지 못했어요";
+    const notice = "지도를 불러오지 못했어요";
     await expect(map(page).getByText(notice, { exact: true })).toBeVisible();
     await expect(map(page).getByText("정류장 목록은 계속 확인할 수 있어요", { exact: true })).toBeVisible();
     await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(0);
@@ -2122,7 +2122,7 @@ test("운행 종료 화면에는 지도와 바텀시트가 없다", async ({ pag
   api.data.watch.vehicles = [];
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toBeVisible();
-  await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
+  await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
   await expect(sheet(page)).toHaveCount(0);
   await expect(map(page)).toHaveCount(0);
   await expect(handle(page)).toHaveCount(0);

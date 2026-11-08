@@ -19,7 +19,7 @@ export const WAYPOINT_CAPTION = "경유";
 export const NO_VEHICLE_NOTICE = "현재 예측할 수 있는 차량이 없습니다";
 export const OUT_OF_SERVICE_NOTICE = "현재는 운행시간이 아닙니다";
 export const LOADING_NOTICE = "불러오는 중이에요";
-export const LOAD_FAILED_NOTICE = "정보를 불러오지 못했어요";
+export const LOAD_FAILED_NOTICE = "노선 정보를 불러오지 못했어요";
 
 export function chipLabel(tone: ChipTone): string {
   return CHIP_LABELS[tone];

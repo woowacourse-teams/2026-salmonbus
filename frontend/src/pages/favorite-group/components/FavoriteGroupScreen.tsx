@@ -20,6 +20,7 @@ export function FavoriteGroupScreen() {
   const { reload: reloadAuth } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const group = groups.find((candidate) => candidate.id === groupId);
+  const loadFailed = resource.status === "loadingError" || resource.status === "refetchError";
   const representative = group !== undefined && groups[0]?.id === group.id;
   const editing = auth.status === "authenticated" && group !== undefined && editingId === group.id;
   return (
@@ -46,7 +47,7 @@ export function FavoriteGroupScreen() {
             </h1>
             {!editing && representative && <span className={styles.representative}>대표</span>}
           </div>
-          {group && auth.status === "authenticated" && editingId !== group.id && (
+          {group && auth.status === "authenticated" && editingId !== group.id && !loadFailed && (
             <button
               type="button"
               className={styles.rename}
@@ -66,36 +67,55 @@ export function FavoriteGroupScreen() {
             </p>
             {auth.status === "error" && (
               <button className={buttons.secondary} onClick={() => void reloadAuth()}>
-                다시 확인하기
+                다시 시도하기
               </button>
             )}
           </>
         ) : (
           <>
-            <FavoritesNotice resource={resource} onRetry={reload} />
-            {groupId === "new" ? (
-              groups.length < MAX_FAVORITE_GROUPS && resource.status === "success" ? (
-                <GroupNameForm />
+            {loadFailed ? (
+              <div className={styles.loadError}>
+                <FavoritesNotice
+                  resource={resource}
+                  onRetry={reload}
+                  retryStyle="refresh"
+                  className={styles.loadNotice}
+                  failureMessage="즐겨찾기를 불러오지 못했어요."
+                />
+              </div>
+            ) : (
+              <FavoritesNotice resource={resource} onRetry={reload} />
+            )}
+            <div hidden={loadFailed}>
+              {groupId === "new" ? (
+                groups.length < MAX_FAVORITE_GROUPS && resource.status === "success" ? (
+                  <GroupNameForm />
+                ) : (
+                  resource.status === "success" && (
+                    <p className={formStyles.error} role="alert">
+                      {`그룹은 ${MAX_FAVORITE_GROUPS}개까지 만들 수 있어요.`}
+                    </p>
+                  )
+                )
+              ) : group ? (
+                editing ? (
+                  <GroupNameForm key={group.id} group={group} onRenamed={() => setEditingId(null)} />
+                ) : (
+                  <GroupDetails key={group.id} group={group} representative={representative} />
+                )
               ) : (
                 resource.status === "success" && (
-                  <p className={formStyles.error} role="alert">
-                    {`그룹은 ${MAX_FAVORITE_GROUPS}개까지 만들 수 있어요.`}
-                  </p>
+                  <>
+                    <p className={formStyles.error} role="alert">
+                      그룹을 찾지 못했어요. 삭제 되었거나 없는 그룹입니다.
+                    </p>
+                    <Link className={buttons.secondary} to="/mypage">
+                      그룹 목록으로 가기
+                    </Link>
+                  </>
                 )
-              )
-            ) : group ? (
-              editing ? (
-                <GroupNameForm key={group.id} group={group} onRenamed={() => setEditingId(null)} />
-              ) : (
-                <GroupDetails key={group.id} group={group} representative={representative} />
-              )
-            ) : (
-              resource.status === "success" && (
-                <p className={formStyles.error} role="alert">
-                  그룹을 찾지 못했어요.
-                </p>
-              )
-            )}
+              )}
+            </div>
           </>
         )}
       </div>

@@ -21,6 +21,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
       <ErrorView
         title="앗, 문제가 생겼어요"
         caption="화면을 새로고침해 주세요."
+        retryLabel="새로고침"
         onRetry={() => window.location.reload()}
       />
     ) : (

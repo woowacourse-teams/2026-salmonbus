@@ -7,6 +7,7 @@ import { favoriteErrorOf } from "@/shared/utils/favoritePolicy";
 interface FavoriteActionOptions {
   /** 켜면 응답에 맞춰 결과 진동을 울린다. 켤지는 화면이 정하고, 언제 울릴지는 결과를 아는 run이 정한다. */
   resultHaptic?: boolean;
+  failureMessage?: string;
 }
 
 export function useFavoriteAction() {
@@ -23,7 +24,7 @@ export function useFavoriteAction() {
   }, []);
   async function run(
     operation: () => Promise<ApiResult<unknown>>,
-    { resultHaptic = false }: FavoriteActionOptions = {},
+    { resultHaptic = false, failureMessage }: FavoriteActionOptions = {},
   ): Promise<boolean> {
     if (busy) return false;
     setBusy(true);
@@ -32,7 +33,7 @@ export function useFavoriteAction() {
     if (result.ok) reload();
     if (!active.current) return false;
     setBusy(false);
-    if (!result.ok) setError(favoriteErrorOf(result.failure));
+    if (!result.ok) setError(favoriteErrorOf(result.failure, failureMessage));
     if (resultHaptic) playResultHaptic(result.ok);
     return result.ok;
   }

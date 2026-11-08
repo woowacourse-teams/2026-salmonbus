@@ -38,7 +38,7 @@ test("판정 보드 최초 조회 실패는 운행 없음이나 예측 없음과
   await page.goto("/");
   await selectRoute(page);
 
-  await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).toBeVisible();
+  await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).toBeVisible();
   await expect(page.locator("button[aria-expanded]")).toHaveCount(0);
   await expect(page.getByText(/도착 시 .*석 예상해요/)).toHaveCount(0);
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).not.toBeVisible();
@@ -50,7 +50,7 @@ test("판정 보드 최초 조회가 503이면 Retry-After 뒤 다시 불러와 
   api.mode.watch = { status: 503, retryAfterSeconds: 30 };
   await page.goto("/");
   await selectRoute(page);
-  await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).toBeVisible();
+  await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).toBeVisible();
 
   api.mode.watch = "success";
   const retried = page.waitForResponse(
@@ -61,7 +61,34 @@ test("판정 보드 최초 조회가 503이면 Retry-After 뒤 다시 불러와 
   await retried;
 
   await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
-  await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).toBeHidden();
+  await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).toBeHidden();
+  expect(api.requests.watch).toBe(2);
+});
+
+test("판정보드 재시도 중에는 중복 요청을 막고 성공하면 같은 노선을 표시한다", async ({ page, api }) => {
+  api.mode.watch = "network-error";
+  await page.goto("/");
+  await selectRoute(page);
+  await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).toBeVisible();
+  const failedUrl = page.url();
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**${apiPaths.watch}*`, async (route) => {
+    await pending;
+    await route.fallback();
+  });
+  try {
+    await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
+    await expect(page.getByRole("button", { name: "불러오는 중…", exact: true })).toBeDisabled();
+    expect(page.url()).toBe(failedUrl);
+    api.mode.watch = "success";
+  } finally {
+    release();
+  }
+  await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
+  expect(page.url()).toBe(failedUrl);
   expect(api.requests.watch).toBe(2);
 });
 
@@ -360,7 +387,7 @@ test("운행 중인 노선의 특정 정류장에 접근 차량이 없으면 차
   await expect(stop).toHaveAttribute("aria-expanded", "true");
   await expect(row.getByText("현재 예측할 수 있는 차량이 없습니다", { exact: true })).toBeVisible();
   await expect(row.getByRole("listitem")).toHaveCount(0);
-  await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
+  await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).not.toBeVisible();
 });
 

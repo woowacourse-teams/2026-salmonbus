@@ -36,7 +36,14 @@ export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
     event.preventDefault();
     if (invalid || name.trim() === group?.name) return;
     const saveName = () => (group ? renameFavoriteGroup(group.id, name) : createFavoriteGroup(name));
-    if (await run(saveName, { resultHaptic: true })) {
+    if (
+      await run(saveName, {
+        resultHaptic: true,
+        failureMessage: group
+          ? "그룹 이름을 저장하지 못했어요. 다시 시도해 주세요."
+          : "그룹을 만들지 못했어요. 다시 시도해 주세요.",
+      })
+    ) {
       if (onRenamed) onRenamed();
       else if (isStillOnScreen()) void navigate("/mypage", { replace: true, state: { notice: "그룹을 만들었어요" } });
     }

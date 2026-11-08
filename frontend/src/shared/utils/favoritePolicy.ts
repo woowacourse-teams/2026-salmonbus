@@ -29,7 +29,7 @@ export function groupNameError(name: string): string | null {
   return length < 1 || length > 10 ? "그룹 이름은 앞뒤 공백을 제외한 1~10자로 입력해 주세요." : null;
 }
 
-export function favoriteErrorOf(failure: ApiFailure): string {
+export function favoriteErrorOf(failure: ApiFailure, fallbackMessage?: string): string {
   if (failure.kind === "contract") {
     switch (failure.error.code) {
       case "INVALID_FAVORITE_GROUP_NAME":
@@ -56,5 +56,5 @@ export function favoriteErrorOf(failure: ApiFailure): string {
     }
   }
   if ("status" in failure && failure.status === 404) return "즐겨찾기 기능을 준비 중이에요.";
-  return authErrorOf(failure);
+  return authErrorOf(failure, fallbackMessage);
 }

@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const homeError = style({
@@ -28,4 +28,13 @@ export const homeRetry = style({
   fontSize: 13,
   fontWeight: 600,
   cursor: "pointer",
+  ":disabled": { cursor: "default", opacity: 0.7 },
+  ":focus-visible": { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 4 },
+});
+
+const spin = keyframes({ to: { transform: "rotate(360deg)" } });
+
+export const spinning = style({
+  animation: `${spin} 900ms linear infinite`,
+  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
 });

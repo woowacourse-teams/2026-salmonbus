@@ -52,16 +52,19 @@ export function GroupList() {
     const [first, ...rest] = targets;
     if (busy || changed || resource.status !== "success" || first === undefined) return;
     const removed: string[] = [];
-    const ok = await run(async () => {
-      let result = await deleteFavoriteGroup(first.id);
-      if (result.ok) removed.push(first.id);
-      for (const group of rest) {
-        if (!result.ok) break;
-        result = await deleteFavoriteGroup(group.id);
-        if (result.ok) removed.push(group.id);
-      }
-      return result;
-    });
+    const ok = await run(
+      async () => {
+        let result = await deleteFavoriteGroup(first.id);
+        if (result.ok) removed.push(first.id);
+        for (const group of rest) {
+          if (!result.ok) break;
+          result = await deleteFavoriteGroup(group.id);
+          if (result.ok) removed.push(group.id);
+        }
+        return result;
+      },
+      { failureMessage: "그룹을 삭제하지 못했어요. 다시 시도해 주세요." },
+    );
     // 중간 실패로 이미 삭제된 그룹도 목록에서 갱신하고 다시 요청하지 않는다.
     if (!ok) reload();
     setSelected((current) => current.filter((id) => !removed.includes(id)));
@@ -116,7 +119,13 @@ export function GroupList() {
           </span>
         )}
       </h2>
-      <FavoritesNotice resource={resource} onRetry={reload} />
+      <FavoritesNotice
+        resource={resource}
+        onRetry={reload}
+        retryStyle="refresh"
+        retryLabel="다시 시도하기"
+        className={styles.loadNotice}
+      />
       <ul className={styles.list}>
         {groups.map((group, index) => {
           const info = (

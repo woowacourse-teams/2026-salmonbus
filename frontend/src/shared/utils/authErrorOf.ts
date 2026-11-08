@@ -1,6 +1,9 @@
 import type { ApiFailure } from "@/shared/api/client";
 
-export function authErrorOf(failure: ApiFailure): string {
+export function authErrorOf(
+  failure: ApiFailure,
+  fallbackMessage = "요청을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.",
+): string {
   if (failure.kind === "contract") {
     switch (failure.error.code) {
       case "NICKNAME_TAKEN":
@@ -19,5 +22,5 @@ export function authErrorOf(failure: ApiFailure): string {
   }
   if ("status" in failure && failure.status === 404)
     return "로그인 기능을 준비 중이에요. 노선 검색은 계속 이용할 수 있어요.";
-  return "요청을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.";
+  return fallbackMessage;
 }
