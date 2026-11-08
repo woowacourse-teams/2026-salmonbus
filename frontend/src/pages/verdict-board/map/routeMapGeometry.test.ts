@@ -1,6 +1,104 @@
 import { describe, expect, it } from "@jest/globals";
-import { routeArrowsFor, routeMapCoordinateForSequence, routeMapMotionPathFor } from "./routeMapGeometry";
+import {
+  routeArrowsFor,
+  routeMapCoordinateForSequence,
+  routeMapMotionPathFor,
+  stopDistanceForZoom,
+  stopOverlapForLabelZoom,
+  stopSpreadOffsetsFor,
+  stopSpreadRangeFor,
+} from "./routeMapGeometry";
 import type { RouteMapData } from "./routeMapModel";
+
+describe("정류장 기준 줌 거리", () => {
+  it.each([14, 16, 18, 13.5])("줌 %s의 화면 좌표를 줌 14의 같은 원형 중심 거리로 환산한다", (zoom) => {
+    const scale = 2 ** (zoom - 14);
+    const first = { x: 100 + 9 * scale, y: 200 + 12 * scale };
+    const second = { x: 100, y: 200 };
+
+    expect(stopDistanceForZoom(first, second, zoom, 14)).toBeCloseTo(15);
+    expect(stopDistanceForZoom(second, first, zoom, 14)).toBeCloseTo(15);
+  });
+});
+
+describe("이름표 기준 줌의 기본 아이콘 겹침", () => {
+  it.each([14, 16, 18, 13.5])("줌 %s에서도 줌 14의 중심 거리가 24px 미만일 때만 겹친다", (zoom) => {
+    const scale = 2 ** (zoom - 14);
+    const first = { x: 9 * scale, y: 12 * scale };
+    const second = { x: 0, y: 0 };
+
+    expect(stopOverlapForLabelZoom(first, second, zoom)).toBe(true);
+    expect(stopOverlapForLabelZoom(second, first, zoom)).toBe(true);
+    expect(stopOverlapForLabelZoom({ x: 23.99 * scale, y: 0 }, second, zoom)).toBe(true);
+    expect(stopOverlapForLabelZoom({ x: 24 * scale, y: 0 }, second, zoom)).toBe(false);
+    expect(stopOverlapForLabelZoom({ x: 24.01 * scale, y: 0 }, second, zoom)).toBe(false);
+  });
+});
+
+describe("마주 보는 정류장 밀림", () => {
+  it.each([-16, 16])("UP의 가로 위치가 %spx일 때 좌우 순서를 유지하고 원형 영역을 벌린다", (horizontalDistance) => {
+    const up = { x: horizontalDistance, y: 12 };
+    const down = { x: 0, y: 0 };
+    const offsets = stopSpreadOffsetsFor(up, down, 32);
+    const spreadDistance = up.x + offsets.up - (down.x + offsets.down);
+
+    expect(Math.sign(spreadDistance)).toBe(Math.sign(horizontalDistance));
+    expect(Math.hypot(spreadDistance, up.y - down.y)).toBeCloseTo(32);
+    expect(offsets.up + offsets.down).toBe(0);
+  });
+
+  it.each([-1, 1])("가로 경계의 %s 방향 안팎에서 밀림 차이가 1px 미만이다", (direction) => {
+    const inside = stopSpreadOffsetsFor({ x: direction * 31.99, y: 0 }, { x: 0, y: 0 }, 32);
+    const outside = stopSpreadOffsetsFor({ x: direction * 32.01, y: 0 }, { x: 0, y: 0 }, 32);
+
+    expect(Math.abs(inside.up - outside.up)).toBeLessThan(1);
+    expect(Math.abs(inside.down - outside.down)).toBeLessThan(1);
+    expect(outside).toEqual({ up: 0, down: 0 });
+  });
+
+  it.each([-1, 1])("세로 경계의 %s 방향 안팎에서 밀림 차이가 1px 미만이다", (direction) => {
+    const inside = stopSpreadOffsetsFor({ x: 0, y: direction * 31.99 }, { x: 0, y: 0 }, 32);
+    const outside = stopSpreadOffsetsFor({ x: 0, y: direction * 32.01 }, { x: 0, y: 0 }, 32);
+
+    expect(Math.abs(inside.up - outside.up)).toBeLessThan(1);
+    expect(Math.abs(inside.down - outside.down)).toBeLessThan(1);
+    expect(outside).toEqual({ up: 0, down: 0 });
+  });
+
+  it.each([
+    { x: 32, y: 0 },
+    { x: -32, y: 0 },
+    { x: 0, y: 32 },
+    { x: 0, y: -32 },
+    { x: 24, y: 24 },
+    { x: 50, y: 50 },
+  ])("원형 영역이 겹치지 않는 위치 $x, $y에서는 밀지 않는다", (point) => {
+    expect(stopSpreadOffsetsFor(point, { x: 0, y: 0 }, 32)).toEqual({ up: 0, down: 0 });
+  });
+
+  it("가로 위치가 같을 때만 UP을 오른쪽으로 벌린다", () => {
+    expect(stopSpreadOffsetsFor({ x: 0, y: 0 }, { x: 0, y: 0 }, 32)).toEqual({ up: 16, down: -16 });
+  });
+});
+
+describe("여러 정류장 짝의 밀림 누적", () => {
+  it.each([
+    { offsets: [], expected: 0 },
+    { offsets: [0], expected: 0 },
+    { offsets: [4, 8, 6], expected: 8 },
+    { offsets: [-4, -8, -6], expected: -8 },
+    { offsets: [3, 9, -4, -7, 5], expected: 2 },
+  ])(
+    "밀림 $offsets는 처리 순서와 무관하게 방향별 최댓값과 최솟값을 더해 $expected px이 된다",
+    ({ offsets, expected }) => {
+      const range = offsets.reduce(stopSpreadRangeFor, { left: 0, right: 0 });
+      const reversed = [...offsets].reverse().reduce(stopSpreadRangeFor, { left: 0, right: 0 });
+
+      expect(range.left + range.right).toBe(expected);
+      expect(reversed).toEqual(range);
+    },
+  );
+});
 
 const data: RouteMapData = {
   routeId: "1",

@@ -1,9 +1,44 @@
 import type { Direction } from "@/shared/api/routeForecast.types";
 import type { GeoCoordinate, RouteMapData, RouteMapStop } from "./routeMapModel";
 
+export const DETAIL_ZOOM = 14;
+export const DEFAULT_STOP_ICON_SIZE = 24;
+
 export interface ScreenPoint {
   x: number;
   y: number;
+}
+
+export function stopDistanceForZoom(first: ScreenPoint, second: ScreenPoint, zoom: number, targetZoom: number): number {
+  return Math.hypot(first.x - second.x, first.y - second.y) * 2 ** (targetZoom - zoom);
+}
+
+export function stopOverlapForLabelZoom(first: ScreenPoint, second: ScreenPoint, zoom: number): boolean {
+  // 줌과 선택 변경으로 이름표가 움직이지 않도록 기준 줌의 기본 아이콘만 비교하고 밀림 여유 간격은 제외한다.
+  return stopDistanceForZoom(first, second, zoom, DETAIL_ZOOM) < DEFAULT_STOP_ICON_SIZE;
+}
+
+export function stopSpreadOffsetsFor(
+  up: ScreenPoint,
+  down: ScreenPoint,
+  separation: number,
+): { up: number; down: number } {
+  const horizontalDistance = up.x - down.x;
+  const verticalDistance = up.y - down.y;
+  const requiredHorizontalDistance = Math.sqrt(Math.max(0, separation ** 2 - verticalDistance ** 2));
+  const spread = Math.max(0, requiredHorizontalDistance - Math.abs(horizontalDistance)) / 2;
+  if (spread === 0) return { up: 0, down: 0 };
+  const offset = spread * (Math.sign(horizontalDistance) || 1);
+  return { up: offset, down: -offset };
+}
+
+export interface StopSpreadRange {
+  left: number;
+  right: number;
+}
+
+export function stopSpreadRangeFor(range: StopSpreadRange, offset: number): StopSpreadRange {
+  return { left: Math.min(range.left, offset), right: Math.max(range.right, offset) };
 }
 
 export interface RouteArrow {

@@ -3,11 +3,20 @@ import busFrontIcon from "../assets/bus-front.svg";
 import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
-import { routeArrowsFor, routeMapCoordinateForSequence, type RouteArrow } from "./routeMapGeometry";
+import {
+  DEFAULT_STOP_ICON_SIZE,
+  DETAIL_ZOOM,
+  routeArrowsFor,
+  routeMapCoordinateForSequence,
+  stopOverlapForLabelZoom,
+  stopSpreadOffsetsFor,
+  stopSpreadRangeFor,
+  type RouteArrow,
+} from "./routeMapGeometry";
 import type { NaverMaps, NaverMarker, NaverPolyline } from "./naverSdk";
 import * as styles from "./naverMapAdapter.css";
 
-const DETAIL_ZOOM = 14;
+const STOP_SPREAD_GAP = 4;
 const INITIALIZATION_TIMEOUT_MS = 10_000;
 const CAMERA_FOCUS_DURATION_MS = 560;
 
@@ -314,7 +323,8 @@ export function createNaverRouteMap(
   });
 
   function refreshStops() {
-    const hidden = map.getZoom() < DETAIL_ZOOM;
+    const zoom = map.getZoom();
+    const hidden = zoom < DETAIL_ZOOM;
     const projection = map.getProjection();
     const display = stops.flatMap((stop) => {
       const { selection } = stop;
@@ -331,24 +341,39 @@ export function createNaverRouteMap(
           ...stop,
           isSelected,
           point: projection.fromCoordToOffset(toNaverCoordinate(stop.coordinate)),
-          size: isSelected ? 32 : 24,
-          offsetX: 0,
+          size: isSelected ? 32 : DEFAULT_STOP_ICON_SIZE,
+          spreadRange: { left: 0, right: 0 },
+          overlapsAtLabelZoom: false,
         },
       ];
     });
-    // 마주 보는 정류장이 겹치면 화면상 선택 영역만 벌린다. 실제 정류장 좌표는 유지한다.
     for (const up of display.filter((stop) => stop.selection.direction === "UP")) {
       for (const down of display.filter((stop) => stop.selection.direction === "DOWN")) {
-        const separation = (up.size + down.size) / 2 + 4;
-        const difference = up.point.x - down.point.x;
-        if (Math.abs(difference) >= separation || Math.abs(up.point.y - down.point.y) >= separation) continue;
-        const offset = (separation - difference) / 2;
-        up.offsetX = Math.max(up.offsetX, offset);
-        down.offsetX = Math.min(down.offsetX, -offset);
+        const combinedRadius = (up.size + down.size) / 2;
+        const offsets = stopSpreadOffsetsFor(up.point, down.point, combinedRadius + STOP_SPREAD_GAP);
+        up.spreadRange = stopSpreadRangeFor(up.spreadRange, offsets.up);
+        down.spreadRange = stopSpreadRangeFor(down.spreadRange, offsets.down);
+        if (stopOverlapForLabelZoom(up.point, down.point, zoom)) {
+          up.overlapsAtLabelZoom = true;
+          down.overlapsAtLabelZoom = true;
+        }
       }
     }
     display.forEach(
-      ({ selection, marker, button, isSelected, size, offsetX, point, coordinate, connector, connection }) => {
+      ({
+        selection,
+        marker,
+        button,
+        isSelected,
+        size,
+        spreadRange,
+        overlapsAtLabelZoom,
+        point,
+        coordinate,
+        connector,
+        connection,
+      }) => {
+        const offsetX = spreadRange.left + spreadRange.right;
         const isActive = selection.direction === activeDirection;
         if (connector && connection) {
           const visible = routeRevealed && !hidden && (isActive || isSelected);
@@ -365,11 +390,11 @@ export function createNaverRouteMap(
         const directionChanged = button.dataset.active !== String(isActive);
         if (selectionChanged) button.setAttribute("aria-pressed", String(isSelected));
         if (directionChanged) button.dataset.active = String(isActive);
-        const labelAbove = String(offsetX !== 0 && !isActive);
+        const labelAbove = String(overlapsAtLabelZoom && !isActive);
         if (button.dataset.labelAbove !== labelAbove) button.dataset.labelAbove = labelAbove;
         if (selectionChanged || directionChanged) marker.setZIndex(isSelected ? 15 : isActive ? 6 : 5);
         // 아이콘을 다시 설정하면 SDK가 DOM을 재구성하므로 표시 위치만 조정한다.
-        const transform = `translate(${offsetX - (size - 24) / 2}px, ${-(size - 24) / 2}px)`;
+        const transform = `translate(${offsetX - (size - DEFAULT_STOP_ICON_SIZE) / 2}px, ${-(size - DEFAULT_STOP_ICON_SIZE) / 2}px)`;
         if (button.style.transform !== transform) button.style.transform = transform;
       },
     );

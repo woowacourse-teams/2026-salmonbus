@@ -370,7 +370,218 @@ function visibleArrowDirections(native: ReturnType<typeof createRecordingSdk>) {
   ].sort();
 }
 
+function horizontalTranslationFor(marker: ReturnType<typeof createRecordingSdk>["markers"][number]) {
+  return Number.parseFloat(marker.options.icon.content.style.transform.slice("translate(".length));
+}
+
+function createStopSpreadSetup(direction: number) {
+  const coordinate = { latitude: 37.5, longitude: 127 };
+  const connection = { latitude: 37.501, longitude: 127 };
+  const downCoordinate = { latitude: 37.5, longitude: 127 + direction * 0.016 };
+  const downConnection = { latitude: 37.501, longitude: downCoordinate.longitude };
+  const { native, adapter, flushFrames } = setup(
+    true,
+    {},
+    {
+      stops: [
+        {
+          sequence: 11,
+          stopId: "206000729",
+          direction: "UP",
+          coordinate,
+          pathConnection: { coordinate: connection, segmentIndex: 0, segmentFraction: 0 },
+        },
+        {
+          sequence: 76,
+          stopId: "206000724",
+          direction: "DOWN",
+          coordinate: downCoordinate,
+          pathConnection: { coordinate: downConnection, segmentIndex: 0, segmentFraction: 0 },
+        },
+        {
+          sequence: 75,
+          stopId: "206000726",
+          direction: "DOWN",
+          coordinate: { latitude: 37.5, longitude: 127 + direction * 0.024 },
+        },
+      ],
+    },
+  );
+  const projection = native.map.getProjection();
+  jest.spyOn(native.map, "getProjection").mockImplementation(() => {
+    const scale = 2 ** (native.map.getZoom() - 14);
+    return {
+      fromCoordToOffset: (position) => {
+        const point = projection.fromCoordToOffset(position);
+        return new PointStub(point.x * scale, point.y * scale);
+      },
+      fromOffsetToCoord: (point) => projection.fromOffsetToCoord(new PointStub(point.x / scale, point.y / scale)),
+    };
+  });
+  const up = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "11")!;
+  const down = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "76")!;
+  const positions = [up.options.position, down.options.position];
+  native.map.zoom = 14;
+  native.events.find((event) => event.name === "idle")!.listener();
+  flushFrames();
+  flushFrames();
+  adapter.update({ direction: "UP", sequence: 11 }, "DOWN", []);
+  const zoomChanged = native.events.find((event) => event.name === "zoom_changed")!.listener;
+  return { native, up, down, positions, connection, downConnection, zoomChanged };
+}
+
 describe("네이버 지도 adapter", () => {
+  it.each([-1, 1])("양쪽 DOWN의 가로 배치를 %s배 해도 확대 중 UP의 밀림 변화가 1px 미만이다", (direction) => {
+    const { native, adapter } = setup(
+      true,
+      {},
+      {
+        stops: [
+          { sequence: 11, stopId: "up", direction: "UP", coordinate: { latitude: 37.5, longitude: 127 } },
+          {
+            sequence: 75,
+            stopId: "down-diagonal",
+            direction: "DOWN",
+            coordinate: { latitude: 37.488, longitude: 127 - direction * 0.004 },
+          },
+          {
+            sequence: 76,
+            stopId: "down-horizontal",
+            direction: "DOWN",
+            coordinate: { latitude: 37.5, longitude: 127 + direction * 0.008 },
+          },
+        ],
+      },
+    );
+    const projection = native.map.getProjection();
+    jest.spyOn(native.map, "getProjection").mockImplementation(() => ({
+      ...projection,
+      fromCoordToOffset: (coordinate) => {
+        const scale = 2 ** (native.map.getZoom() - 14);
+        const point = projection.fromCoordToOffset(coordinate);
+        return new PointStub(point.x * scale, point.y * scale);
+      },
+    }));
+    const up = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "11")!;
+    const offsets = Array.from({ length: 21 }, (_, index) => {
+      const scale = 1.39 + index * 0.001;
+      native.map.zoom = 14 + Math.log2(scale);
+      adapter.update(null, "UP", []);
+      return horizontalTranslationFor(up);
+    });
+
+    for (let index = 1; index < offsets.length; index += 1) {
+      expect(Math.abs(offsets[index]! - offsets[index - 1]!)).toBeLessThan(1);
+    }
+    expect(offsets[0]! * direction).toBeGreaterThan(0);
+    expect(offsets[10]).toBeCloseTo(0);
+    expect(offsets.at(-1)! * direction).toBeLessThan(0);
+  });
+
+  it.each([-1, 1])(
+    "DOWN이 가로 %s 방향에만 있으면 가장 큰 밀림과 선택 크기를 반영한 연결선을 표시하고 실제 좌표를 유지한다",
+    (direction) => {
+      const { native, up, down, positions, connection, downConnection, zoomChanged } = createStopSpreadSetup(direction);
+
+      expect(horizontalTranslationFor(up) + 4).toBeCloseTo(-direction * 8);
+      expect(horizontalTranslationFor(down)).toBeCloseTo(direction * 8);
+      const connectors = native.lines.filter((line) => line.strokeStyle === "shortdot");
+      expect(connectors).toHaveLength(2);
+      for (const scale of [1, 1.999, 2.001]) {
+        native.map.zoom = 14 + Math.log2(scale);
+        zoomChanged();
+        const spread = Math.max(0, 32 - 16 * scale) / 2;
+        expect(horizontalTranslationFor(up) + 4).toBeCloseTo(-direction * spread);
+        expect(horizontalTranslationFor(down)).toBeCloseTo(direction * spread);
+        const screen = native.map.getProjection();
+        [up, down].forEach((marker, index) => {
+          const start = screen.fromCoordToOffset(connectors[index]!.path[0]!);
+          const point = screen.fromCoordToOffset(marker.options.position);
+          const sizeCorrection = marker === up ? 4 : 0;
+          expect(start.x).toBeCloseTo(point.x + horizontalTranslationFor(marker) + sizeCorrection);
+          expect(start.y).toBeCloseTo(point.y);
+          expect(connectors[index]!.strokeOpacity).toBe(0.85);
+        });
+      }
+      expect([up.options.position, down.options.position]).toEqual(positions);
+      expect(connectors[0]!.path[1]!.lat()).toBe(connection.latitude);
+      expect(connectors[0]!.path[1]!.lng()).toBe(connection.longitude);
+      expect(connectors[1]!.path[1]!.lat()).toBe(downConnection.latitude);
+      expect(connectors[1]!.path[1]!.lng()).toBe(downConnection.longitude);
+    },
+  );
+
+  it.each([-1, 1])("DOWN이 가로 %s 방향에 있어도 확대 겹침 경계 안팎의 밀림 차이가 1px 미만이다", (direction) => {
+    const { native, up, down, zoomChanged } = createStopSpreadSetup(direction);
+    native.map.zoom = 14 + Math.log2(1.999);
+    zoomChanged();
+    const inside = [horizontalTranslationFor(up), horizontalTranslationFor(down)];
+
+    native.map.zoom = 14 + Math.log2(2.001);
+    zoomChanged();
+
+    expect(Math.abs(horizontalTranslationFor(up) - inside[0]!)).toBeLessThan(1);
+    expect(Math.abs(horizontalTranslationFor(down) - inside[1]!)).toBeLessThan(1);
+    expect(horizontalTranslationFor(up)).toBe(-4);
+    expect(horizontalTranslationFor(down)).toBe(0);
+  });
+
+  it.each([
+    { distance: 23.99, labelAbove: true },
+    { distance: 24.01, labelAbove: false },
+    { distance: 27.99, labelAbove: false },
+    { distance: 28.01, labelAbove: false },
+  ])(
+    "줌 14에서 간격이 $distance px인 짝은 줌과 선택이 바뀌어도 비활성 이름표 위치를 유지한다",
+    ({ distance, labelAbove }) => {
+      const { native, adapter } = setup(
+        true,
+        {},
+        {
+          stops: [
+            { sequence: 11, stopId: "206000729", direction: "UP", coordinate: { latitude: 37.5, longitude: 127 } },
+            {
+              sequence: 76,
+              stopId: "206000724",
+              direction: "DOWN",
+              coordinate: { latitude: 37.5, longitude: 127 + distance / 1000 },
+            },
+          ],
+        },
+      );
+      const projection = native.map.getProjection();
+      jest.spyOn(native.map, "getProjection").mockImplementation(() => {
+        const scale = 2 ** (native.map.getZoom() - 14);
+        return {
+          fromCoordToOffset: (coordinate) => {
+            const point = projection.fromCoordToOffset(coordinate);
+            return new PointStub(point.x * scale, point.y * scale);
+          },
+          fromOffsetToCoord: (point) => projection.fromOffsetToCoord(new PointStub(point.x / scale, point.y / scale)),
+        };
+      });
+      const up = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "11")!;
+      const down = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "76")!;
+      const zoomChanged = native.events.find((event) => event.name === "zoom_changed")!.listener;
+
+      for (const zoom of [14, 16, 18, 13.5, 14]) {
+        native.map.zoom = zoom;
+        zoomChanged();
+        for (const selection of [
+          null,
+          { direction: "UP" as const, sequence: 11 },
+          { direction: "DOWN" as const, sequence: 76 },
+        ]) {
+          for (const activeDirection of ["UP", "DOWN"] as const) {
+            adapter.update(selection, activeDirection, []);
+            expect(up.options.icon.content.dataset.labelAbove).toBe(String(labelAbove && activeDirection !== "UP"));
+            expect(down.options.icon.content.dataset.labelAbove).toBe(String(labelAbove && activeDirection !== "DOWN"));
+          }
+        }
+      }
+    },
+  );
+
   it.each(["click", "tap"])("지도 배경의 %s는 카메라 이동 없이 선택 해제를 요청한다", (eventName) => {
     const { native, adapter, onDeselect, onSelect, onVehicleSelect } = setup();
     const selection = { direction: "UP" as const, sequence: 15 };
