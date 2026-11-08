@@ -7,6 +7,7 @@ import { useFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { RetryButton } from "@/shared/components/RetryButton";
 import { GroupOrderEditor } from "./GroupOrderEditor";
 import { Notice } from "@/shared/components/Notice";
 import * as formStyles from "@/shared/styles/form.css";
@@ -16,14 +17,14 @@ import chevronIcon from "../assets/group-chevron.svg";
 import plusIcon from "@/shared/assets/icons/favorite-group-plus.svg";
 
 export function GroupList() {
-  const { groups, resource, reload } = useFavorites();
+  const { groups, resource, requestState, reload } = useFavorites();
   const labelIdPrefix = useId();
   const [mode, setMode] = useState<"view" | "order" | "delete">("view");
   const [selected, setSelected] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [notice, showNotice] = useState({ id: 0, message: "" });
-  const { run, busy, error, setError } = useFavoriteAction();
+  const { run, busy, error, clearError } = useFavoriteAction();
   const editButton = useRef<HTMLButtonElement>(null);
   const deleteButton = useRef<HTMLButtonElement>(null);
   const selectionButton = useRef<HTMLButtonElement>(null);
@@ -44,7 +45,7 @@ export function GroupList() {
     setMode("view");
     setConfirming(false);
     setSelected([]);
-    setError(null);
+    clearError();
     if (count > 0) showNotice((value) => ({ id: value.id + 1, message: `그룹 ${count}개를 삭제했어요` }));
   }
 
@@ -63,7 +64,7 @@ export function GroupList() {
         }
         return result;
       },
-      { failureMessage: "그룹을 삭제하지 못했어요. 다시 시도해 주세요." },
+      { kind: "deleteGroup" },
     );
     // 중간 실패로 이미 삭제된 그룹도 목록에서 갱신하고 다시 요청하지 않는다.
     if (!ok) reload();
@@ -101,7 +102,7 @@ export function GroupList() {
                   event.currentTarget.focus();
                   setSelected([]);
                   setDeletedIds([]);
-                  setError(null);
+                  clearError();
                   setMode("delete");
                   reload();
                 }}
@@ -119,13 +120,18 @@ export function GroupList() {
           </span>
         )}
       </h2>
-      <FavoritesNotice
-        resource={resource}
-        onRetry={reload}
-        retryStyle="refresh"
-        retryLabel="다시 시도하기"
-        className={styles.loadNotice}
-      />
+      <FavoritesNotice resource={resource} requestState={requestState} onRetry={reload}>
+        {({ message, retry, retrying }) => (
+          <div className={styles.loadNotice}>
+            <p className={formStyles.error} role="alert">
+              {message}
+            </p>
+            <RetryButton onRetry={retry} busy={retrying}>
+              {retrying ? "불러오는 중…" : "다시 시도하기"}
+            </RetryButton>
+          </div>
+        )}
+      </FavoritesNotice>
       <ul className={styles.list}>
         {groups.map((group, index) => {
           const info = (
@@ -161,7 +167,7 @@ export function GroupList() {
                       checked={selected.includes(group.id)}
                       disabled={busy || resource.status !== "success"}
                       onChange={(event) => {
-                        setError(null);
+                        clearError();
                         const ids = targets.map((target) => target.id);
                         setSelected(event.target.checked ? [...ids, group.id] : ids.filter((id) => id !== group.id));
                       }}
@@ -187,7 +193,7 @@ export function GroupList() {
           disabled={busy || changed || selected.length === 0 || resource.status !== "success"}
           onClick={(event) => {
             event.currentTarget.focus();
-            setError(null);
+            clearError();
             setConfirming(true);
           }}
         >

@@ -50,7 +50,7 @@ function CreateGroupDialog({ onClose, onCreated }: CreateGroupDialogProps) {
   const { groups, resource } = useFavorites();
   const [name, setName] = useState("");
   const nameField = useRef<HTMLInputElement>(null);
-  const { run, busy, error, setError } = useFavoriteAction();
+  const { run, busy, error, clearError } = useFavoriteAction();
   const invalid = groupNameError(name);
   const full = groups.length >= MAX_FAVORITE_GROUPS;
   async function submit(event: SubmitEvent<HTMLFormElement>) {
@@ -63,7 +63,7 @@ function CreateGroupDialog({ onClose, onCreated }: CreateGroupDialogProps) {
         if (result.ok) created = result.body;
         return result;
       },
-      { resultHaptic: true, failureMessage: "그룹을 만들지 못했어요. 다시 시도해 주세요." },
+      { resultHaptic: true, kind: "createGroup" },
     );
     if (ok && created !== null) {
       onCreated?.(created);
@@ -90,7 +90,7 @@ function CreateGroupDialog({ onClose, onCreated }: CreateGroupDialogProps) {
           aria-invalid={error !== null || (name !== "" && invalid !== null)}
           onChange={(event) => {
             setName(event.currentTarget.value);
-            setError(null);
+            clearError();
           }}
         />
         <p id="home-group-name-help" className={form.subtle}>

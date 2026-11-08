@@ -1,20 +1,7 @@
 import { keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
-export const homeError = style({
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 18,
-  minHeight: 260,
-  marginTop: 41,
-  color: "#837B74",
-  textAlign: "center",
-});
-export const homeErrorTitle = style({ margin: 0, fontSize: 16, fontWeight: 500, lineHeight: 1.5 });
-export const homeErrorDescription = style({ margin: 0, fontSize: 13, lineHeight: 1.6 });
-export const homeRetry = style({
+export const button = style({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

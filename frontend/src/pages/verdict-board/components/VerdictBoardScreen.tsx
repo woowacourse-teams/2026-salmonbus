@@ -8,7 +8,6 @@ import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResourc
 import { fetchRouteWatch } from "@/shared/api/routeForecast.api";
 import type { Board, Direction, DirectionInfo, RouteWatch, Vehicle } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
-import { nextPollFrom } from "@/shared/api/pollSchedule";
 import { playHaptic } from "@/shared/haptic/haptic";
 import { boardEntryFrom } from "@/shared/routing/boardEntry";
 import { paths } from "@/shared/routing/paths";
@@ -61,7 +60,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const [entry] = useState(() => boardEntryFrom(location.state));
   const [watchRevision, setWatchRevision] = useState(0);
   const revalidateWatch = useRef(false);
-  const watchResource = usePolledRequest<RouteWatch>(
+  const { resource: watchResource, requestState } = usePolledRequest<RouteWatch>(
     (id, signal) => {
       const refresh = revalidateWatch.current;
       revalidateWatch.current = false;
@@ -71,9 +70,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
     watchRevision,
   );
   const latestWatch = latestSuccessOf(watchResource);
-  // 같은 실패를 다시 요청하는 동안 버튼을 잠그고, 새 응답이 오면 해제한다.
-  const [retriedResource, setRetriedResource] = useState<PolledResource<RouteWatch> | null>(null);
-  const retrying = retriedResource === watchResource;
+  const retrying = requestState === "loading";
   const freshLiveVehicles = useFreshLiveVehicles(latestWatch);
   const motionDurationMs = liveMotionDurationOf(watchResource);
   const [preferredDirection, setPreferredDirection] = useState<Direction | null>(() =>
@@ -148,10 +145,9 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
         <StopBoard
           status="error"
           retrying={retrying}
-          autoRetry={state.status === "error" && nextPollFrom({ ok: false, failure: state.failure }).kind === "again"}
+          autoRetry={requestState === "scheduled"}
           onRetry={() => {
             if (retrying) return;
-            setRetriedResource(watchResource);
             revalidateWatch.current = true;
             setWatchRevision((revision) => revision + 1);
           }}

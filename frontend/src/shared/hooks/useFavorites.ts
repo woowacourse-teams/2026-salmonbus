@@ -2,13 +2,14 @@ import { createContext, useContext } from "react";
 import { fetchHomeFavorites } from "@/shared/api/favorites.api";
 import type { FavoriteGroup, FavoriteGroups } from "@/shared/api/favorites.types";
 import type { PolledResource } from "@/shared/api/polledResource";
-import { usePolledRequest } from "@/shared/api/usePolledRequest";
+import { usePolledRequest, type PolledRequestState } from "@/shared/api/usePolledRequest";
 import type { AuthState } from "./useAuth";
 
 export interface FavoritesContextValue {
   auth: AuthState;
   memberId: string | null;
   resource: PolledResource<FavoriteGroups>;
+  requestState: PolledRequestState;
   groups: FavoriteGroup[];
   reload: () => void;
   revision: number;

@@ -39,6 +39,11 @@ export const loadNotice = style({
 });
 
 export const returnHome = style({
+  padding: 0,
+  border: 0,
+  background: "transparent",
+  font: "inherit",
+  cursor: "pointer",
   color: vars.color.textSubtle,
   fontSize: 13,
   textDecoration: "underline",

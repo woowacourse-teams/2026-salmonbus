@@ -7,11 +7,13 @@ import { latestSuccessOf } from "@/shared/api/polledResource";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { LoadError } from "@/shared/components/LoadError";
+import { RetryButton } from "@/shared/components/RetryButton";
 import { useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
-import { sameFavorite } from "@/shared/utils/favoritePolicy";
+import { sameFavorite, FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
 import * as formStyles from "@/shared/styles/form.css";
 import { isNativeNotificationSupported } from "@/shared/notification/nativeNotification";
 import { useNotificationSettings } from "../hooks/useNotificationSettings";
@@ -26,10 +28,10 @@ interface GroupDetailsProps {
 export function GroupDetails({ group, representative }: GroupDetailsProps) {
   const [deleting, setDeleting] = useState<"group" | SavedFavorite | null>(null);
   const [revision, retry] = useState(0);
-  const summary = useHomeFavorites({ kind: "group", groupId: group.id }, revision);
+  const { resource: summary, requestState } = useHomeFavorites({ kind: "group", groupId: group.id }, revision);
   const favorites = latestSuccessOf(summary)?.body.groups[0]?.favorites ?? [];
   const failed = summary.status === "loadingError";
-  const { busy, error, setError, run } = useFavoriteAction();
+  const { busy, error, clearError, run } = useFavoriteAction();
   const notificationSettings = useNotificationSettings(isNativeNotificationSupported());
   const navigate = useNavigate();
   const groupDeleteButton = useRef<HTMLButtonElement>(null);
@@ -48,7 +50,19 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
   const protectedGroup = deleting === "group" && representative;
   return (
     <section {...maskedPropsFor()}>
-      <FavoritesNotice resource={summary} home={failed} onRetry={() => retry((value) => value + 1)} />
+      {failed ? (
+        <FavoritesNotice resource={summary} requestState={requestState} onRetry={() => retry((value) => value + 1)}>
+          {({ retry, retrying }) => (
+            <LoadError title={FAVORITES_LOAD_FAILURE_TITLE} description="잠시 후 다시 시도해 주세요.">
+              <RetryButton onRetry={retry} busy={retrying}>
+                {retrying ? "불러오는 중…" : "다시 시도하기"}
+              </RetryButton>
+            </LoadError>
+          )}
+        </FavoritesNotice>
+      ) : (
+        <FavoritesNotice resource={summary} requestState={requestState} onRetry={() => retry((value) => value + 1)} />
+      )}
       <div hidden={failed}>
         <ul className={styles.list}>
           {group.favorites.map((favorite, index) => {
@@ -72,7 +86,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
                   aria-label={`${stopLabel} 삭제`}
                   onClick={(event) => {
                     event.currentTarget.focus();
-                    setError(null);
+                    clearError();
                     setDeleting(favorite);
                   }}
                 >
@@ -98,7 +112,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
             className={styles.deleteGroup}
             onClick={(event) => {
               event.currentTarget.focus();
-              setError(null);
+              clearError();
               setDeleting("group");
             }}
           >
@@ -163,10 +177,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
                       () =>
                         deleting === "group" ? deleteFavoriteGroup(group.id) : deleteFavorite(group.id, deleting.id),
                       {
-                        failureMessage:
-                          deleting === "group"
-                            ? "그룹을 삭제하지 못했어요. 다시 시도해 주세요."
-                            : "즐겨찾기를 삭제하지 못했어요. 다시 시도해 주세요.",
+                        kind: deleting === "group" ? "deleteGroup" : "deleteFavorite",
                       },
                     ).then((ok) => {
                       if (!ok) return;

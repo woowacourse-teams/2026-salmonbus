@@ -654,6 +654,19 @@ test("순서 일부가 저장된 뒤 실패하면 저장된 부분을 유지하�
   await expect(editor.getByRole("button", { name: "닫기", exact: true })).toBeEnabled();
   expect(favorites.groups.map((group) => group.id)).toEqual([secondGroupId, defaultGroupId]);
   expect(favorites.groups[1]!.favorites[0]!.stopId).toBe(first!.stopId);
+  await test.step("저장 실패 뒤 삭제 실패를 다시 저장하기로 안내하지 않는다", async () => {
+    await editor.getByRole("button", { name: `${first!.name} 삭제`, exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "즐겨찾기를 삭제할까요?", exact: true });
+    favorites.mutationError = "SERVICE_UNAVAILABLE";
+    await dialog.getByRole("button", { name: "삭제하기", exact: true }).click();
+    await expect(dialog.getByRole("alert")).toHaveText("즐겨찾기를 삭제하지 못했어요. 다시 시도해 주세요.");
+    await dialog.getByRole("button", { name: "취소", exact: true }).click();
+    await expect(editor.getByRole("button", { name: "다시 저장하기", exact: true })).toHaveCount(0);
+    await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeEnabled();
+    favorites.mutationError = null;
+    await editor.getByRole("button", { name: "완료", exact: true }).click();
+    await expect(editor.getByRole("button", { name: "다시 저장하기", exact: true })).toBeVisible();
+  });
   favorites.orderFailureGroupId = null;
   await editor.getByRole("button", { name: "다시 저장하기", exact: true }).click();
   await expect(editor).not.toBeVisible();

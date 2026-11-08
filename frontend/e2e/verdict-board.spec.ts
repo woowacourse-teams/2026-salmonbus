@@ -92,6 +92,46 @@ test("판정보드 재시도 중에는 중복 요청을 막고 성공하면 같�
   expect(api.requests.watch).toBe(2);
 });
 
+test("자동 재시도 안내는 실제 예약이 있을 때만 표시하고 숨은 화면에서는 예약을 취소한다", async ({ page, api }) => {
+  api.mode.watch = { status: 503, retryAfterSeconds: 30 };
+  await page.goto("/");
+  await selectRoute(page);
+  const notice = page.getByText("잠시 후 자동으로 다시 불러와요.", { exact: true });
+  await expect(notice).toBeVisible();
+
+  await setVisibility(page, "hidden");
+  await expect(notice).toHaveCount(0);
+  const requests = api.requests.watch;
+  await page.clock.fastForward(60_000);
+  expect(api.requests.watch).toBe(requests);
+
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**${apiPaths.watch}*`, async (route) => {
+    await pending;
+    await route.fallback();
+  });
+  try {
+    await setVisibility(page, "visible");
+    await expect(page.getByRole("button", { name: "불러오는 중…", exact: true })).toBeDisabled();
+    await expect(notice).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await expect(notice).toBeVisible();
+  await page.route(`**${apiPaths.watch}*`, (route) =>
+    route.fulfill({
+      status: 404,
+      json: { code: "ROUTE_NOT_FOUND", message: "노선을 찾지 못했어요", requestId: "retry-stopped" },
+    }),
+  );
+  await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
+  await expect(notice).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "다시 시도하기", exact: true })).toBeEnabled();
+});
+
 test("유효기간 안의 자동 갱신 실패 시 마지막 예측을 유지하고, 다음 요청이 성공하면 새 예측으로 교체한다", async ({
   page,
   api,

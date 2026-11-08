@@ -1,6 +1,5 @@
 import { directionLabelOf } from "@/shared/utils/directionLabelOf";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
 import { deleteFavorite, saveFavoriteOrder, saveGroupOrder } from "@/shared/api/favorites.api";
 import type { FavoriteGroup, HomeFavorite, SavedFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
@@ -12,6 +11,8 @@ import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { FavoritesNotice, PartialFavoriteOrderNotice } from "@/shared/components/FavoritesNotice";
+import { RetryButton } from "@/shared/components/RetryButton";
+import { FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
 import { SortableList } from "./SortableList";
 import { moveItem } from "@/shared/utils/moveItem";
 import { useFavoriteGroupDeletion } from "@/shared/hooks/useFavoriteGroupDeletion";
@@ -46,8 +47,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   const [groupDrag, setGroupDrag] = useState<GroupDrag | null>(null);
   const protectedGroup = deletingGroup !== null && draft[0]?.id === deletingGroup.id;
   const [revision, retry] = useState(0);
-  const [saveFailed, setSaveFailed] = useState(false);
-  const summaries = useHomeFavorites({ kind: "all" }, revision);
+  const { resource: summaries, requestState } = useHomeFavorites({ kind: "all" }, revision);
   const loadFailed = summaries.status === "loadingError";
   const favorites =
     latestSuccessOf(summaries)?.body.groups.flatMap((candidate) => candidate.favorites) ?? initialFavorites ?? [];
@@ -56,8 +56,9 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
     group?.favorites.every((favorite) => favorites.some((item) => item.id === favorite.id));
   const {
     busy,
+    failure,
     error,
-    setError,
+    clearError,
     run,
     partial,
     setPartial,
@@ -86,10 +87,9 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   }
   async function remove() {
     if (!group || !deleting) return;
-    setSaveFailed(false);
     if (
       await run(() => deleteFavorite(group.id, deleting.id), {
-        failureMessage: "즐겨찾기를 삭제하지 못했어요. 다시 시도해 주세요.",
+        kind: "deleteFavorite",
       })
     ) {
       const withoutDeleted = (current: FavoriteGroup[]) =>
@@ -105,7 +105,6 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   }
   async function removeGroup() {
     if (!deletingGroup || protectedGroup || busy) return;
-    setSaveFailed(false);
     if (await deleteGroup(deletingGroup.id)) {
       setSaved((current) => current.filter((candidate) => candidate.id !== deletingGroup.id));
       setDraft((current) => current.filter((candidate) => candidate.id !== deletingGroup.id));
@@ -162,11 +161,11 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
     };
     const savedSuccessfully = await run(saveChanges, {
       resultHaptic: true,
-      failureMessage: "순서를 저장하지 못했어요. 다시 시도해 주세요.",
+      kind: "saveOrder",
     });
-    setSaveFailed(!savedSuccessfully);
     if (savedSuccessfully) onClose(true);
   }
+  const doneLabel = busy ? "저장 중…" : failure?.operation === "saveOrder" ? "다시 저장하기" : "완료";
   return (
     <section
       ref={editor}
@@ -181,17 +180,21 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
       <h2 className={visuallyHidden}>즐겨찾기 편집</h2>
       {loadFailed && (
         <div className={styles.loadError}>
-          <FavoritesNotice
-            resource={summaries}
-            onRetry={() => retry((value) => value + 1)}
-            retryStyle="refresh"
-            retryLabel="다시 시도하기"
-            className={styles.loadNotice}
-            failureMessage="즐겨찾기를 불러오지 못했어요."
-          />
-          <Link to="/" className={styles.returnHome} onClick={close}>
+          <FavoritesNotice resource={summaries} requestState={requestState} onRetry={() => retry((value) => value + 1)}>
+            {({ retry, retrying }) => (
+              <div className={styles.loadNotice}>
+                <p className={common.error} role="alert">
+                  {FAVORITES_LOAD_FAILURE_TITLE}.
+                </p>
+                <RetryButton onRetry={retry} busy={retrying}>
+                  {retrying ? "불러오는 중…" : "다시 시도하기"}
+                </RetryButton>
+              </div>
+            )}
+          </FavoritesNotice>
+          <button type="button" className={styles.returnHome} onClick={close}>
             홈으로 돌아가기
-          </Link>
+          </button>
         </div>
       )}
       <div className={styles.controls} hidden={loadFailed}>
@@ -211,7 +214,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
                 target: groupDropArea,
                 onDrag: (dragged, overTarget) => setGroupDrag(dragged ? { overTarget } : null),
                 onDrop: (dropped) => {
-                  setError(null);
+                  clearError();
                   setDeletingGroup(dropped);
                 },
               }}
@@ -239,7 +242,18 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
           </p>
         )}
         {summaries.status === "refetchError" && (
-          <FavoritesNotice resource={summaries} onRetry={() => retry((value) => value + 1)} retryStyle="refresh" />
+          <FavoritesNotice resource={summaries} requestState={requestState} onRetry={() => retry((value) => value + 1)}>
+            {({ message, retry, retrying }) => (
+              <div>
+                <p className={common.error} role="alert">
+                  {message}
+                </p>
+                <RetryButton onRetry={retry} busy={retrying}>
+                  {retrying ? "불러오는 중…" : "다시 시도하기"}
+                </RetryButton>
+              </div>
+            )}
+          </FavoritesNotice>
         )}
         <div
           ref={groupDropArea}
@@ -300,7 +314,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
                         aria-label={`${item?.stop.name || `즐겨찾기 ${group.favorites.indexOf(favorite) + 1}`} 삭제`}
                         onClick={(event) => {
                           event.currentTarget.focus();
-                          setError(null);
+                          clearError();
                           setDeleting(favorite);
                         }}
                       >
@@ -336,11 +350,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
             if (groupDrag === null) void save();
           }}
         >
-          {busy
-            ? "저장 중…"
-            : saveFailed && error && deleting === null && deletingGroup === null
-              ? "다시 저장하기"
-              : "완료"}
+          {doneLabel}
         </button>
         {(partial || error) && (
           <button type="button" className={buttons.text} disabled={busy} onClick={close}>

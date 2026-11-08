@@ -1,10 +1,11 @@
-import { MAX_FAVORITE_GROUPS } from "@/shared/utils/favoritePolicy";
+import { MAX_FAVORITE_GROUPS, FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { AccountLayout } from "@/shared/components/AccountLayout";
 import { LoginButton } from "@/shared/components/LoginButton";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { RetryButton } from "@/shared/components/RetryButton";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useFavorites } from "@/shared/hooks/useFavorites";
 import { GroupNameForm } from "./GroupNameForm";
@@ -16,7 +17,7 @@ import backArrow from "../assets/back-arrow.svg";
 
 export function FavoriteGroupScreen() {
   const { groupId = "" } = useParams();
-  const { auth, groups, resource, reload } = useFavorites();
+  const { auth, groups, resource, requestState, reload } = useFavorites();
   const hasGroupData = resource.status === "success" || resource.status === "refetchError";
   const { reload: reloadAuth } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -76,16 +77,32 @@ export function FavoriteGroupScreen() {
           <>
             {loadFailed ? (
               <div className={styles.loadError}>
-                <FavoritesNotice
-                  resource={resource}
-                  onRetry={reload}
-                  retryStyle="refresh"
-                  className={styles.loadNotice}
-                  failureMessage="즐겨찾기를 불러오지 못했어요."
-                />
+                <FavoritesNotice resource={resource} requestState={requestState} onRetry={reload}>
+                  {({ retry, retrying }) => (
+                    <div className={styles.loadNotice}>
+                      <p className={formStyles.error} role="alert">
+                        {FAVORITES_LOAD_FAILURE_TITLE}.
+                      </p>
+                      <RetryButton onRetry={retry} busy={retrying}>
+                        {retrying ? "불러오는 중…" : "다시 시도하기"}
+                      </RetryButton>
+                    </div>
+                  )}
+                </FavoritesNotice>
               </div>
             ) : (
-              <FavoritesNotice resource={resource} onRetry={reload} retryStyle="refresh" />
+              <FavoritesNotice resource={resource} requestState={requestState} onRetry={reload}>
+                {({ message, retry, retrying }) => (
+                  <div>
+                    <p className={formStyles.error} role="alert">
+                      {message}
+                    </p>
+                    <RetryButton onRetry={retry} busy={retrying}>
+                      {retrying ? "불러오는 중…" : "다시 시도하기"}
+                    </RetryButton>
+                  </div>
+                )}
+              </FavoritesNotice>
             )}
             <div hidden={loadFailed}>
               {groupId === "new" ? (

@@ -25,8 +25,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
   const [saved, setSaved] = useState(groups);
   const [draft, setDraft] = useState(groups);
   const [deleting, setDeleting] = useState<FavoriteGroup | null>(null);
-  const [saveFailed, setSaveFailed] = useState(false);
-  const { busy, error, setError, run, partial, setPartial, removeGroup } = useFavoriteGroupDeletion(
+  const { busy, failure, error, clearError, run, partial, setPartial, removeGroup } = useFavoriteGroupDeletion(
     saved,
     draft,
     setSaved,
@@ -46,14 +45,12 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
     }
     const savedOrder = await run(() => saveGroupOrder(ids), {
       resultHaptic: true,
-      failureMessage: "그룹 순서를 저장하지 못했어요. 다시 시도해 주세요.",
+      kind: "saveGroupOrder",
     });
-    setSaveFailed(!savedOrder);
     if (savedOrder) onClose(true);
   }
   async function remove() {
     if (!deleting || protectedGroup || resource.status !== "success") return;
-    setSaveFailed(false);
     if (await removeGroup(deleting.id)) {
       setPartial(false);
       setSaved((current) => current.filter((group) => group.id !== deleting.id));
@@ -61,6 +58,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
       setDeleting(null);
     } else reload();
   }
+  const doneLabel = failure?.operation === "saveGroupOrder" ? "다시 저장하기" : "완료";
   return (
     <section
       {...maskedPropsFor(styles.section)}
@@ -72,7 +70,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
       <h2 className={styles.heading}>
         <span>{`내 그룹  ${draft.length} / ${MAX_FAVORITE_GROUPS}`}</span>
         <button ref={done} className={styles.cancelSelection} disabled={busy} onClick={() => void save()}>
-          {saveFailed && error && deleting === null ? "다시 저장하기" : "완료"}
+          {doneLabel}
         </button>
       </h2>
       <p id="favorite-sort-help" className={visuallyHidden}>
@@ -106,7 +104,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
                   disabled={busy || resource.status !== "success"}
                   onClick={(event) => {
                     event.currentTarget.focus();
-                    setError(null);
+                    clearError();
                     setDeleting(group);
                   }}
                 >

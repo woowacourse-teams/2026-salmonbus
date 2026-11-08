@@ -14,7 +14,10 @@ import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, favoritePath, paths } from "@/shared/routing/paths";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { playHaptic } from "@/shared/haptic/haptic";
-import { FavoritesNotice, FavoritesRetryButton } from "@/shared/components/FavoritesNotice";
+import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { RetryButton } from "@/shared/components/RetryButton";
+import { LoadError } from "@/shared/components/LoadError";
+import { FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
 import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { Notice } from "@/shared/components/Notice";
 import starOutline from "@/shared/assets/icons/star-outline.svg";
@@ -29,7 +32,7 @@ import { FavoriteGroupAddButton } from "@/shared/components/FavoriteGroupAddButt
 const EMPTY_FAVORITES: HomeFavorite[] = [];
 
 export function HomeFavorites() {
-  const { groups, resource, reload } = useFavorites();
+  const { groups, resource, requestState, reload } = useFavorites();
   const [selected, setSelected] = useState<string | null>(null);
   const group = groups.find((candidate) => candidate.id === selected) ?? groups[0];
   const [ordering, setOrdering] = useState(false);
@@ -46,7 +49,10 @@ export function HomeFavorites() {
     return ordering ? () => editButton.current?.focus() : undefined;
   }, [ordering]);
   const [revision, retry] = useReducer((value: number) => value + 1, 0);
-  const summary = useHomeFavorites(group ? { kind: "group", groupId: group.id } : null, revision);
+  const { resource: summary, requestState: summaryRequestState } = useHomeFavorites(
+    group ? { kind: "group", groupId: group.id } : null,
+    revision,
+  );
   const latest = latestSuccessOf(summary);
   const [previous, setPrevious] = useState({ groupId: group?.id, latest });
   const previousGroup = groups.find((candidate) => candidate.id === previous.groupId);
@@ -156,13 +162,25 @@ export function HomeFavorites() {
   if (loadingError) {
     return (
       <section {...maskedPropsFor()} aria-label="내 즐겨찾기">
-        <FavoritesNotice home resource={loadingError} onRetry={resource.status === "loadingError" ? reload : retry} />
+        <FavoritesNotice
+          resource={loadingError}
+          requestState={resource.status === "loadingError" ? requestState : summaryRequestState}
+          onRetry={resource.status === "loadingError" ? reload : retry}
+        >
+          {({ retry, retrying }) => (
+            <LoadError title={FAVORITES_LOAD_FAILURE_TITLE} description="잠시 후 다시 시도해 주세요.">
+              <RetryButton onRetry={retry} busy={retrying}>
+                {retrying ? "불러오는 중…" : "다시 시도하기"}
+              </RetryButton>
+            </LoadError>
+          )}
+        </FavoritesNotice>
       </section>
     );
   }
   return (
     <section {...maskedPropsFor(homeStyles.section)} aria-label="내 즐겨찾기">
-      <FavoritesNotice resource={resource} onRetry={reload} />
+      <FavoritesNotice resource={resource} requestState={requestState} onRetry={reload} />
       {(groups.length > 0 || resource.status === "success") && (
         <div className={homeStyles.tabs}>
           <div role="tablist" aria-label="즐겨찾기 그룹" className={homeStyles.groupTabs}>
@@ -201,7 +219,7 @@ export function HomeFavorites() {
           {group?.name} 그룹의 즐겨찾기를 불러오고 있어요…
         </p>
       ) : (
-        group && <FavoritesNotice resource={summary} onRetry={retry} />
+        group && <FavoritesNotice resource={summary} requestState={summaryRequestState} onRetry={retry} />
       )}
       <div
         id="home-favorites"
@@ -259,7 +277,7 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
     return (
       <li className={homeStyles.unavailable}>
         <p className={homeStyles.notice}>{favoriteStatusLabelOf("ERROR")}</p>
-        <FavoritesRetryButton onRetry={onRetry}>다시 시도하기</FavoritesRetryButton>
+        <RetryButton onRetry={onRetry}>다시 시도하기</RetryButton>
       </li>
     );
   }
