@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.api.account.token.AccessTokens;
+import com.gustler.backend.api.favorite.application.DefaultFavoriteGroupService;
 import com.gustler.backend.member.api.LoginProvider;
 import com.gustler.backend.member.api.SignInWithSocialAccount;
 import com.gustler.backend.member.api.SocialIdentity;
@@ -43,6 +44,8 @@ class NotificationSettingControllerTest {
     private AccessTokens accessTokens;
     @Autowired
     private ObjectMapper json;
+    @Autowired
+    private DefaultFavoriteGroupService defaultGroups;
 
     private UUID memberId;
     private String accessCookie;
@@ -52,6 +55,7 @@ class NotificationSettingControllerTest {
     void setUp() throws Exception {
         jdbc.sql("DELETE FROM member").update();
         memberId = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "notice-member")).publicId();
+        defaultGroups.ensure(memberId);
         accessCookie = cookie(memberId);
         HttpResponse<String> session = client.send(request("/api/auth/session").GET().build(),
             HttpResponse.BodyHandlers.ofString());
