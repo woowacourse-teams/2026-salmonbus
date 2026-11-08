@@ -87,36 +87,39 @@ final class PolicyEvaluator {
             this.candidate = candidate;
         }
 
+        /**
+         * 맞은편으로 건너가 반대 방향 버스를 타고, 내려서 원래 방향 버스를 다시 타는 경로의 실패 위험을 계산한다.
+         *
+         * <p>이 메서드는 판정 순서만 보여 주고 계산은 단계 메서드에 맡긴다. 검사 하나하나가 앞 검사의 결과를 전제로 하기
+         * 때문에 순서를 바꾸면 결과가 바뀐다. 순서는 다음과 같다.
+         * <ol>
+         *   <li>맞은편 목록을 검증한다. 목록이 없거나 도착을 모르는 버스가 있으면 근거 부족이다.</li>
+         *   <li>t2를 가장 짧게 잡아도 H 안에 드는 맞은편 버스가 없으면 확인된 공집합으로 끝낸다(목록이 창을 덮지 않으면
+         *       근거 부족). 하한값은 모르는 시간을 0으로 두고 계산하므로 도보, 탑승 시간이 없어도 이 검사를 할 수 있다.
+         *       그래서 시간 검증보다 앞에 둔다.</li>
+         *   <li>도보 시간, 탑승 시간, 재탑승 목록을 검증한다.</li>
+         *   <li>맞은편 버스마다 t2를 계산해 포함 가지(t2가 H 안)와 경계 가지(t2는 H 밖, 하한은 H 안)로 나눈다.</li>
+         *   <li>경계 가지의 확률이 하나라도 없으면 근거 부족으로 끝낸다. 이 검사는 포함 가지가 비었는지 보기 전에 한다.
+         *       순서가 바뀌면 경계 가지만 있고 그 확률이 없는 경우를 확인된 공집합으로 잘못 돌려준다. 확률이 모두 있고
+         *       포함 가지가 비었으면 2번과 같은 결과로 끝낸다.</li>
+         *   <li>위험도를 풀고 여유 시간과 시도 순서를 붙인다.</li>
+         * </ol>
+         */
         Outcome run() {
             if (candidate.opposite() instanceof Unavailable unavailable) {
                 return missing("opposite list unavailable: " + unavailable.reason());
             }
-            Optional<Span> walkToOpposite = candidate.walkToOpposite().present();
-            Window all = Window.of(candidate.opposite().entries(), new Offset(0), config.horizon());
-            if (!all.unresolved().isEmpty()) {
-                return missing("opposite arrival of " + all.unresolved().get(0));
+            Window oppositeWindow = Window.of(candidate.opposite().entries(), new Offset(0), config.horizon());
+            if (!oppositeWindow.unresolved().isEmpty()) {
+                return missing("opposite arrival of " + oppositeWindow.unresolved().get(0));
             }
-            Offset t1 = new Offset(0).plus(walkToOpposite.map(config::readyAfterWalk).orElse(new Span(0)));
-            List<StopEntry> opposite = all.attempts().stream()
-                .filter(entry -> walkToOpposite.isEmpty() || entry.arrival().present().orElseThrow().compareTo(t1) >= 0)
-                .toList();
-            List<StopEntry> oppositeMissed = all.attempts().stream()
-                .filter(entry -> !opposite.contains(entry)).toList();
-
-            List<StopEntry> live = new ArrayList<>();
-            for (StopEntry entry : opposite) {
-                if (lowerT2(entry).compareTo(config.horizon()) <= 0) {
-                    live.add(entry);
-                }
-            }
-            boolean covers = coversWindow(candidate.opposite());
-            if (live.isEmpty()) {
-                return covers ? new Outcome(new ConfirmedEmpty(timeBasis(opposite)), List.of(), List.of(),
-                    Optional.empty(), Optional.empty(), List.of()) : missing("opposite list does not cover the window");
+            Reach reach = reachOf(oppositeWindow);
+            if (reach.boardable().stream().noneMatch(this::returnsWithinHorizonAtBest)) {
+                return emptyOrUncovered(reach.boardable());
             }
             Optional<Span> ride = candidate.rideTime().present();
             Optional<Span> walkAfter = candidate.walkAfterAlight().present();
-            if (walkToOpposite.isEmpty() || ride.isEmpty() || walkAfter.isEmpty()) {
+            if (candidate.walkToOpposite().present().isEmpty() || ride.isEmpty() || walkAfter.isEmpty()) {
                 return missing("walk or ride time of " + candidate.id());
             }
             if (candidate.reboard() instanceof Unavailable unavailable) {
@@ -126,33 +129,58 @@ final class PolicyEvaluator {
             if (!reboardWindow.unresolved().isEmpty()) {
                 return missing("reboard arrival of " + reboardWindow.unresolved().get(0));
             }
-            Span afterAlight = config.scaledByAlpha(walkAfter.get());
+            Branches branches = branchesOf(reach.boardable(), ride.get(), walkAfter.get(), reboardWindow);
+            if (branches.boundarySlots().stream().anyMatch(slot -> supply.valueFor(slot) instanceof Absent)) {
+                return missing("probabilities for boundary branches of " + candidate.id());
+            }
+            if (branches.included().isEmpty()) {
+                return emptyOrUncovered(reach.boardable());
+            }
+            return outcomeOf(reach, branches.included(), reboardWindow);
+        }
+
+        private Reach reachOf(Window oppositeWindow) {
+            Optional<Span> walkToOpposite = candidate.walkToOpposite().present();
+            Offset t1 = new Offset(0).plus(walkToOpposite.map(config::readyAfterWalk).orElse(new Span(0)));
+            List<StopEntry> boardable = oppositeWindow.attempts().stream()
+                .filter(entry -> walkToOpposite.isEmpty() || entry.arrival().present().orElseThrow().compareTo(t1) >= 0)
+                .toList();
+            List<StopEntry> missed = oppositeWindow.attempts().stream()
+                .filter(entry -> !boardable.contains(entry)).toList();
+            return new Reach(t1, boardable, missed);
+        }
+
+        private Branches branchesOf(List<StopEntry> boardable, Span ride, Span walkAfter, Window reboardWindow) {
+            Span afterAlight = config.scaledByAlpha(walkAfter);
             List<Included> included = new ArrayList<>();
             List<Slot> boundarySlots = new ArrayList<>();
-            for (StopEntry entry : opposite) {
+            for (StopEntry entry : boardable) {
                 Offset arrival = entry.arrival().present().orElseThrow();
-                Offset t2 = config.ceilToResolution(arrival.plus(ride.get()).plus(afterAlight));
+                Offset t2 = config.ceilToResolution(arrival.plus(ride).plus(afterAlight));
                 if (t2.compareTo(config.horizon()) <= 0) {
                     included.add(new Included(entry, arrival, t2, reboardWindow.attemptsFrom(t2, config.horizon()),
                         reboardWindow.missedBefore(t2)));
-                } else if (lowerT2(entry).compareTo(config.horizon()) <= 0) {
+                } else if (returnsWithinHorizonAtBest(entry)) {
                     boundarySlots.addAll(boundarySlotsOf(entry, lowerT2(entry), reboardWindow));
                 }
             }
-            if (boundarySlots.stream().anyMatch(slot -> supply.valueFor(slot) instanceof Absent)) {
-                return missing("probabilities for boundary branches of " + candidate.id());
-            }
-            if (included.isEmpty()) {
-                return covers ? new Outcome(new ConfirmedEmpty(timeBasis(opposite)), List.of(), List.of(),
-                    Optional.empty(), Optional.empty(), List.of()) : missing("opposite list does not cover the window");
-            }
-            List<Slot> chain = oppositeSlots(opposite, oppositeMissed, included.size());
-            boolean reboardCovers = coversWindow(candidate.reboard());
-            TimeBasis basis = reboardBasis(opposite, reboardWindow);
-            Evaluation evaluation = solve(resolver -> reboardRisk(chain, included, reboardCovers, resolver), basis);
+            return new Branches(included, boundarySlots);
+        }
 
-            Resolver optimistic = new Resolver(java.util.Map.of());
-            List<Double> chances = branchChances(chain, optimistic);
+        private Outcome outcomeOf(Reach reach, List<Included> included, Window reboardWindow) {
+            List<Slot> chain = oppositeSlots(reach.boardable(), reach.missed(), included.size());
+            boolean reboardCovers = coversWindow(candidate.reboard());
+            TimeBasis basis = reboardBasis(reach.boardable(), reboardWindow);
+            Evaluation evaluation = solve(resolver -> reboardRisk(chain, included, reboardCovers, resolver), basis);
+            List<MarginItem> items = marginsOf(reach.t1(), chain, included);
+            List<Attempt> first = included.stream().map(branch -> attemptOf(branch.entry())).toList();
+            List<Attempt> second = included.get(0).attempts().stream().map(PolicyEvaluator::attemptOf).toList();
+            return new Outcome(evaluation, first, second, minimumMargin(items), Optional.of(connectionOf(items)),
+                List.of());
+        }
+
+        private List<MarginItem> marginsOf(Offset t1, List<Slot> chain, List<Included> included) {
+            List<Double> chances = branchChances(chain, new Resolver(java.util.Map.of()));
             List<MarginItem> items = new ArrayList<>();
             for (int index = 0; index < included.size(); index++) {
                 if (chances.get(index) <= 0) {
@@ -166,10 +194,18 @@ final class PolicyEvaluator {
                     items.add(new MarginItem(branch.t2().until(entry.arrival().present().orElseThrow()), bound));
                 }
             }
-            List<Attempt> first = included.stream().map(branch -> attemptOf(branch.entry())).toList();
-            List<Attempt> second = included.get(0).attempts().stream().map(PolicyEvaluator::attemptOf).toList();
-            return new Outcome(evaluation, first, second, minimumMargin(items), Optional.of(connectionOf(items)),
-                List.of());
+            return items;
+        }
+
+        private Outcome emptyOrUncovered(List<StopEntry> boardable) {
+            return coversWindow(candidate.opposite())
+                ? new Outcome(new ConfirmedEmpty(timeBasis(boardable)), List.of(), List.of(), Optional.empty(),
+                    Optional.empty(), List.of())
+                : missing("opposite list does not cover the window");
+        }
+
+        private boolean returnsWithinHorizonAtBest(StopEntry entry) {
+            return lowerT2(entry).compareTo(config.horizon()) <= 0;
         }
 
         private Offset lowerT2(StopEntry entry) {
@@ -185,8 +221,8 @@ final class PolicyEvaluator {
             return slotsOf(attempts, missed, Optional.of(entry.id()));
         }
 
-        private List<Slot> oppositeSlots(List<StopEntry> opposite, List<StopEntry> missed, int count) {
-            return slotsOf(opposite.subList(0, count), missed, Optional.empty());
+        private List<Slot> oppositeSlots(List<StopEntry> boardable, List<StopEntry> missed, int count) {
+            return slotsOf(boardable.subList(0, count), missed, Optional.empty());
         }
 
         private List<Double> branchChances(List<Slot> chain, Resolver resolver) {
@@ -222,15 +258,15 @@ final class PolicyEvaluator {
             return undefined ? Double.NaN : 1 - success;
         }
 
-        private TimeBasis timeBasis(List<StopEntry> opposite) {
-            boolean derived = opposite.stream().anyMatch(entry -> entry.arrival().isDerived())
+        private TimeBasis timeBasis(List<StopEntry> boardable) {
+            boolean derived = boardable.stream().anyMatch(entry -> entry.arrival().isDerived())
                 || candidate.walkToOpposite().isDerived() || candidate.rideTime().isDerived()
                 || candidate.walkAfterAlight().isDerived();
             return derived ? TimeBasis.DERIVED : TimeBasis.DIRECT;
         }
 
-        private TimeBasis reboardBasis(List<StopEntry> opposite, Window reboardWindow) {
-            return timeBasis(opposite) == TimeBasis.DERIVED || reboardWindow.derivedIn()
+        private TimeBasis reboardBasis(List<StopEntry> boardable, Window reboardWindow) {
+            return timeBasis(boardable) == TimeBasis.DERIVED || reboardWindow.derivedIn()
                 ? TimeBasis.DERIVED : TimeBasis.DIRECT;
         }
 
@@ -244,6 +280,12 @@ final class PolicyEvaluator {
     }
 
     private record MarginItem(Span margin, Optional<Span> bound) {
+    }
+
+    private record Reach(Offset t1, List<StopEntry> boardable, List<StopEntry> missed) {
+    }
+
+    private record Branches(List<Included> included, List<Slot> boundarySlots) {
     }
 
     private List<Slot> slotsOf(List<StopEntry> attempts, List<StopEntry> missed, Optional<String> oppositeBoarded) {
