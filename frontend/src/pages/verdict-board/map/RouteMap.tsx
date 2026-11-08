@@ -18,6 +18,7 @@ interface RouteMapProps {
   board: Board;
   data: RouteMapData | null;
   geometryStatus: RouteMapGeometryStatus;
+  geometryRetrying: boolean;
   selected: StopSelection | null;
   onSelect: (selection: StopSelection) => void;
   onVehicleSelect: (selection: StopSelection, key: string) => void;
@@ -52,6 +53,7 @@ export function RouteMap(props: RouteMapProps) {
   const {
     data,
     geometryStatus,
+    geometryRetrying,
     visible,
     viewportHeight,
     selected,
@@ -436,14 +438,18 @@ export function RouteMap(props: RouteMapProps) {
       ) : null}
       {data !== null &&
       ready &&
-      (geometryNotice !== null || !data.paths.some((path) => path.direction === activeDirection)) ? (
+      (geometryRetrying ||
+        geometryNotice !== null ||
+        !data.paths.some((path) => path.direction === activeDirection)) ? (
         <div
           className={
             withheld ? styles.withheldToast : geometryNotice === null ? styles.pathNotice : styles.geometryToast
           }
           role="status"
         >
-          {geometryNotice ?? "방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요"}
+          {geometryRetrying
+            ? "지도를 갱신하지 못했어요. 잠시 후 자동으로 다시 불러와요."
+            : (geometryNotice ?? "방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요")}
           {withheld && (
             <>
               <br />

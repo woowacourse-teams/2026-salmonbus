@@ -296,6 +296,48 @@ test("노선 생성 중에는 목록에서 선택한 핀만 표시하고, 준비
   expect(api.requests.geometry).toBe(2);
 });
 
+for (const reason of ["NOT_COLLECTED", "GENERATION_PENDING"] as const) {
+  test(`${reason} 지도는 후속 조회 실패에도 정류장과 선택을 유지하고 복구한다`, async ({ page, api, naverMap }) => {
+    const readyGeometry = createRouteGeometry(api.data.watch);
+    api.data.geometry = {
+      ...readyGeometry,
+      geometryRevision: "a".repeat(64),
+      status: "UNAVAILABLE",
+      reason,
+      points: [],
+      paths: null,
+    };
+    await openMap(page);
+    const stop = list(page).locator("li[data-stop-sequence='11'] button[aria-expanded]");
+    await stop.click();
+    await page.clock.runFor(32);
+    const pins = map(page).locator("button[data-map-stop-sequence]:visible");
+    const expectedPins = reason === "GENERATION_PENDING" ? 1 : 24;
+    await expect(pins).toHaveCount(expectedPins);
+    const camera = await naverMap.snapshot();
+
+    api.mode.geometry = reason === "GENERATION_PENDING" ? "network-error" : { status: 503 };
+    await page.clock.runFor(60_000);
+    expect(api.requests.geometry).toBe(2);
+    await expect(pins).toHaveCount(expectedPins);
+    await expect(stop).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+    expect(await naverMap.snapshot()).toEqual(camera);
+    await expect(map(page).getByRole("status")).toContainText("잠시 후 자동으로 다시 불러와요.");
+
+    api.mode.geometry = "success";
+    api.data.geometry = { ...readyGeometry, geometryRevision: "b".repeat(64) };
+    await page.clock.runFor(60_000);
+    expect(api.requests.geometry).toBe(3);
+    await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
+    await page.clock.runFor(48);
+    await expect(pins).toHaveCount(24);
+    await expect(stop).toHaveAttribute("aria-expanded", "true");
+    expect(await naverMap.snapshot()).toEqual(camera);
+    await expect(map(page).getByText("잠시 후 자동으로 다시 불러와요.", { exact: false })).toHaveCount(0);
+  });
+}
+
 test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받으면 실패를 안내한다", async ({ page, api }) => {
   api.mode.geometry = { status: 503 };
   api.data.geometry.status = "UNAVAILABLE";

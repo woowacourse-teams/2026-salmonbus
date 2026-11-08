@@ -308,6 +308,7 @@ function OperatingBoard({
             board={board}
             data={map.data}
             geometryStatus={map.status}
+            geometryRetrying={map.retrying}
             selected={mapSelection}
             onSelect={selectFromMap}
             onVehicleSelect={selectVehicleFromMap}
