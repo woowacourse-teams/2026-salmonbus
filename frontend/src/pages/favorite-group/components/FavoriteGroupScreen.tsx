@@ -17,10 +17,11 @@ import backArrow from "../assets/back-arrow.svg";
 export function FavoriteGroupScreen() {
   const { groupId = "" } = useParams();
   const { auth, groups, resource, reload } = useFavorites();
+  const hasGroupData = resource.status === "success" || resource.status === "refetchError";
   const { reload: reloadAuth } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const group = groups.find((candidate) => candidate.id === groupId);
-  const loadFailed = resource.status === "loadingError" || resource.status === "refetchError";
+  const loadFailed = resource.status === "loadingError";
   const representative = group !== undefined && groups[0]?.id === group.id;
   const editing = auth.status === "authenticated" && group !== undefined && editingId === group.id;
   return (
@@ -84,14 +85,14 @@ export function FavoriteGroupScreen() {
                 />
               </div>
             ) : (
-              <FavoritesNotice resource={resource} onRetry={reload} />
+              <FavoritesNotice resource={resource} onRetry={reload} retryStyle="refresh" />
             )}
             <div hidden={loadFailed}>
               {groupId === "new" ? (
-                groups.length < MAX_FAVORITE_GROUPS && resource.status === "success" ? (
+                groups.length < MAX_FAVORITE_GROUPS && hasGroupData ? (
                   <GroupNameForm />
                 ) : (
-                  resource.status === "success" && (
+                  hasGroupData && (
                     <p className={formStyles.error} role="alert">
                       {`그룹은 ${MAX_FAVORITE_GROUPS}개까지 만들 수 있어요.`}
                     </p>
@@ -104,7 +105,7 @@ export function FavoriteGroupScreen() {
                   <GroupDetails key={group.id} group={group} representative={representative} />
                 )
               ) : (
-                resource.status === "success" && (
+                hasGroupData && (
                   <>
                     <p className={formStyles.error} role="alert">
                       그룹을 찾지 못했어요. 삭제 되었거나 없는 그룹입니다.

@@ -28,7 +28,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
   const [revision, retry] = useState(0);
   const summary = useHomeFavorites({ kind: "group", groupId: group.id }, revision);
   const favorites = latestSuccessOf(summary)?.body.groups[0]?.favorites ?? [];
-  const failed = summary.status === "loadingError" || summary.status === "refetchError";
+  const failed = summary.status === "loadingError";
   const { busy, error, setError, run } = useFavoriteAction();
   const notificationSettings = useNotificationSettings(isNativeNotificationSupported());
   const navigate = useNavigate();

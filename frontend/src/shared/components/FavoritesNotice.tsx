@@ -71,7 +71,10 @@ export function FavoritesNotice({
   return (
     <div className={className}>
       <p className={formStyles.error} role="alert">
-        {favoriteErrorOf(resource.failure, failureMessage)}
+        {favoriteErrorOf(
+          resource.failure,
+          resource.status === "refetchError" ? "즐겨찾기를 갱신하지 못했어요." : failureMessage,
+        )}
       </p>
       {retryStyle === "refresh" ? (
         <FavoritesRetryButton onRetry={retry} busy={retrying}>

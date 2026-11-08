@@ -30,6 +30,7 @@ interface SelectionDialogProps {
 
 export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogProps) {
   const { groups, resource, reload } = useFavorites();
+  const hasGroupData = resource.status === "success" || resource.status === "refetchError";
   const [chosen, setChosen] = useState<string[] | null>(null);
   const ids = chosen ?? selectedGroups(groups, target);
   const { run, busy, error, setError } = useFavoriteAction();
@@ -51,7 +52,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
   }, [creating, error]);
   async function createGroup(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || invalidName || groups.length >= MAX_FAVORITE_GROUPS || resource.status !== "success") return;
+    if (busy || invalidName || groups.length >= MAX_FAVORITE_GROUPS || !hasGroupData) return;
     await run(
       async () => {
         const result = await createFavoriteGroup(name);
@@ -67,7 +68,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
       { failureMessage: "그룹을 만들지 못했어요. 다시 시도해 주세요." },
     );
   }
-  if (resource.status === "loadingError" || resource.status === "refetchError") {
+  if (resource.status === "loadingError") {
     return (
       <ConfirmDialog title="저장할 그룹 선택" onCancel={onClose}>
         <button className={styles.close} type="button" aria-label="닫기" onClick={onClose}>
@@ -170,16 +171,14 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
             </button>
             <button
               className={buttons.primary}
-              disabled={
-                busy || invalidName !== null || groups.length >= MAX_FAVORITE_GROUPS || resource.status !== "success"
-              }
+              disabled={busy || invalidName !== null || groups.length >= MAX_FAVORITE_GROUPS || !hasGroupData}
             >
               {busy ? "만드는 중…" : "만들기"}
             </button>
           </div>
         </form>
       ) : (
-        resource.status === "success" &&
+        hasGroupData &&
         groups.length < MAX_FAVORITE_GROUPS && (
           <button
             ref={(button) => {
@@ -200,7 +199,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
           </button>
         )
       )}
-      {resource.status === "success" && groups.length === 0 && (
+      {hasGroupData && groups.length === 0 && (
         <p className={formStyles.subtle}>그룹을 준비하고 있어요. 목록을 다시 확인해 주세요.</p>
       )}
       {(error || full || missing) && (
@@ -230,9 +229,7 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
           </button>
           <button
             className={buttons.primary}
-            disabled={
-              busy || refreshingGroups || resource.status !== "success" || groups.length === 0 || full || missing
-            }
+            disabled={busy || refreshingGroups || !hasGroupData || groups.length === 0 || full || missing}
             onClick={() =>
               void run(() => saveSelections(ids), {
                 resultHaptic: true,

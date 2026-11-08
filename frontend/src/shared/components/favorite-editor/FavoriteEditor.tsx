@@ -48,7 +48,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   const [revision, retry] = useState(0);
   const [saveFailed, setSaveFailed] = useState(false);
   const summaries = useHomeFavorites({ kind: "all" }, revision);
-  const loadFailed = summaries.status === "loadingError" || summaries.status === "refetchError";
+  const loadFailed = summaries.status === "loadingError";
   const favorites =
     latestSuccessOf(summaries)?.body.groups.flatMap((candidate) => candidate.favorites) ?? initialFavorites ?? [];
   const hasGroupDetails =
@@ -237,6 +237,9 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
           <p className={visuallyHidden} role="status">
             즐겨찾기를 불러오고 있어요…
           </p>
+        )}
+        {summaries.status === "refetchError" && (
+          <FavoritesNotice resource={summaries} onRetry={() => retry((value) => value + 1)} retryStyle="refresh" />
         )}
         <div
           ref={groupDropArea}

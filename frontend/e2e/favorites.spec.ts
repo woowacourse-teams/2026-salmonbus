@@ -15,7 +15,7 @@ for (const screen of ["group", "groups", "mypage", "selection", "editor"] as con
   }) => {
     const stop = api.data.watch.stops.find((candidate) => candidate.direction === "UP" && candidate.boardingAllowed)!;
     favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
-    await page.emulateMedia({ reducedMotion: "no-preference" });
+    if (screen === "editor") favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
     const endpoint =
       screen === "selection" || screen === "groups" || screen === "mypage"
         ? "/api/me/favorite-groups"
@@ -39,73 +39,121 @@ for (const screen of ["group", "groups", "mypage", "selection", "editor"] as con
         });
       } else await route.fallback();
     });
-    if (screen === "mypage") {
-      await page.goto("/mypage");
-    } else if (screen === "group" || screen === "groups") {
-      await page.goto(`/mypage/groups/${defaultGroupId}`);
-      await expect(page.getByRole("button", { name: "그룹 삭제", exact: true })).toBeHidden();
-    } else if (screen === "selection") {
-      await page.goto(`/routes/${routeId}`);
-      await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
-      await expect(page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true })).toBeVisible();
-      await expect(page.getByRole("dialog").getByRole("button", { name: "저장", exact: true })).toHaveCount(0);
-      await expect(page.getByRole("dialog").getByRole("button", { name: "취소", exact: true })).toHaveCount(0);
-    } else {
-      await page.goto("/");
-      await expect(page.getByRole("tabpanel").getByText(stop.name, { exact: true })).toBeVisible();
-      failed = true;
-      await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
-    }
-    const retry = page.getByRole("button", {
-      name: "다시 시도하기",
-      exact: true,
-    });
-    await expect(retry).toBeVisible();
-    if (screen === "groups") {
-      await expect(page.getByRole("link", { name: "홈으로 돌아가기", exact: true })).toHaveCount(0);
-    }
-    if (screen === "editor") {
-      const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-      await expect(editor.locator("[data-group-drop-zone]")).toBeHidden();
-      await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeHidden();
-    }
-    failed = false;
-    held = true;
-    try {
-      await retry.click();
-      const loading = page.getByRole("button", { name: "불러오는 중…", exact: true });
-      await expect(loading).toBeDisabled();
-      await expect(loading).toHaveAttribute("aria-busy", "true");
-      if (screen === "group" || screen === "groups")
-        await expect(page.getByRole("button", { name: `${stop.name} 삭제`, exact: true })).toBeHidden();
-    } finally {
-      release();
-    }
-    await expect(page.getByRole("button", { name: "불러오는 중…", exact: true })).toHaveCount(0);
-    if (screen === "group" || screen === "groups") {
-      await expect(page.getByRole("button", { name: `${stop.name} 삭제`, exact: true })).toBeVisible();
-    } else if (screen === "mypage") {
-      await expect(
-        page
-          .getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true })
-          .getByRole("link", { name: /즐겨찾기/ })
-          .first(),
-      ).toBeVisible();
-    } else if (screen === "selection")
-      await expect(page.getByRole("dialog").getByRole("checkbox").first()).toBeFocused();
-    else {
-      const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-      await expect(editor.getByText(stop.name, { exact: true })).toBeVisible();
-      failed = true;
-      await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    const retry = page.getByRole("button", { name: "다시 시도하기", exact: true });
+
+    await test.step("첫 조회 실패 안내에서 재시도할 수 있다", async () => {
+      if (screen === "mypage") {
+        await page.goto("/mypage");
+      } else if (screen === "group" || screen === "groups") {
+        await page.goto(`/mypage/groups/${defaultGroupId}`);
+        await expect(page.getByRole("button", { name: "그룹 삭제", exact: true })).toBeHidden();
+      } else if (screen === "selection") {
+        await page.goto(`/routes/${routeId}`);
+        await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
+        await expect(page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true })).toBeVisible();
+        await expect(page.getByRole("dialog").getByRole("button", { name: "저장", exact: true })).toHaveCount(0);
+        await expect(page.getByRole("dialog").getByRole("button", { name: "취소", exact: true })).toHaveCount(0);
+      } else {
+        await page.goto("/");
+        await expect(page.getByRole("tabpanel").getByText(stop.name, { exact: true })).toBeVisible();
+        failed = true;
+        await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+      }
       await expect(retry).toBeVisible();
-      await expect(editor.getByRole("alert")).toHaveText("즐겨찾기를 불러오지 못했어요.");
+      if (screen === "groups")
+        await expect(page.getByRole("link", { name: "홈으로 돌아가기", exact: true })).toHaveCount(0);
+      if (screen === "editor") {
+        const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+        await expect(editor.locator("[data-group-drop-zone]")).toBeHidden();
+        await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeHidden();
+      }
+    });
+
+    await test.step("재시도 요청 중에는 버튼을 잠그고 성공하면 해제한다", async () => {
       failed = false;
-      const home = editor.getByRole("link", { name: "홈으로 돌아가기", exact: true });
-      await home.click();
-      await expect(editor).toHaveCount(0);
-      await expect(page.getByRole("tabpanel").getByText(stop.name, { exact: true })).toBeVisible();
-    }
+      held = true;
+      try {
+        await retry.click();
+        const loading = page.getByRole("button", { name: "불러오는 중…", exact: true });
+        await expect(loading).toBeDisabled();
+        await expect(loading).toHaveAttribute("aria-busy", "true");
+        if (screen === "group" || screen === "groups")
+          await expect(page.getByRole("button", { name: `${stop.name} 삭제`, exact: true })).toBeHidden();
+      } finally {
+        release();
+      }
+      await expect(page.getByRole("button", { name: "불러오는 중…", exact: true })).toHaveCount(0);
+    });
+
+    await test.step("조회 성공 후에는 원래 화면에서 작업을 이어간다", async () => {
+      if (screen === "group" || screen === "groups") {
+        await expect(page.getByRole("button", { name: `${stop.name} 삭제`, exact: true })).toBeVisible();
+        if (screen === "groups") {
+          await test.step("그룹 목록 갱신 실패에도 입력한 그룹 이름을 유지하고 저장한다", async () => {
+            await page.getByRole("button", { name: "그룹 이름 변경", exact: true }).click();
+            const name = page.getByRole("textbox", { name: "변경할 그룹 이름", exact: true });
+            await name.fill("출근");
+            failed = true;
+            await page.evaluate(() => window.dispatchEvent(new Event("online")));
+            await expect(page.getByText("즐겨찾기를 갱신하지 못했어요.", { exact: true })).toBeVisible();
+            await expect(name).toHaveValue("출근");
+            await expect(page.getByRole("button", { name: "저장", exact: true })).toBeEnabled();
+            failed = false;
+            await page.getByRole("button", { name: "저장", exact: true }).click();
+            await expect(page.getByRole("heading", { name: "출근", exact: true })).toBeVisible();
+          });
+        } else {
+          await test.step("정류장 정보 갱신 실패에도 기존 카드와 삭제 동작을 유지한다", async () => {
+            failed = true;
+            await page.evaluate(() => window.dispatchEvent(new Event("online")));
+            await expect(page.getByText("즐겨찾기를 갱신하지 못했어요.", { exact: true })).toBeVisible();
+            await expect(page.getByRole("button", { name: `${stop.name} 삭제`, exact: true })).toBeEnabled();
+          });
+        }
+      } else if (screen === "mypage") {
+        await expect(
+          page
+            .getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true })
+            .getByRole("link", { name: /즐겨찾기/ })
+            .first(),
+        ).toBeVisible();
+      } else if (screen === "selection") {
+        const dialog = page.getByRole("dialog");
+        const choice = dialog.getByRole("checkbox").first();
+        await expect(choice).toBeFocused();
+        await test.step("그룹 목록 갱신 실패에도 미저장 선택과 저장 동작을 유지한다", async () => {
+          await choice.uncheck();
+          failed = true;
+          await page.evaluate(() => window.dispatchEvent(new Event("online")));
+          await expect(dialog.getByText("즐겨찾기를 갱신하지 못했어요.", { exact: true })).toBeVisible();
+          await expect(choice).not.toBeChecked();
+          await expect(dialog.getByRole("button", { name: "저장", exact: true })).toBeEnabled();
+          failed = false;
+          await dialog.getByRole("button", { name: "저장", exact: true }).click();
+          await expect(dialog).toHaveCount(0);
+          expect(favorites.groups[0]!.favorites).toHaveLength(0);
+        });
+      } else {
+        const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+        await expect(editor.getByText(stop.name, { exact: true })).toBeVisible();
+        await test.step("백그라운드 갱신 실패에도 편집한 그룹 순서를 유지하고 저장한다", async () => {
+          await editor.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true }).press("ArrowRight");
+          const groups = editor.getByRole("list", { name: "그룹 순서", exact: true }).getByRole("listitem");
+          await expect(groups.first()).toContainText("통학");
+          failed = true;
+          await page.evaluate(() => window.dispatchEvent(new Event("online")));
+          await expect(editor.getByRole("alert")).toHaveText("즐겨찾기를 갱신하지 못했어요.");
+          await expect(editor.locator("[data-group-drop-zone]")).toBeVisible();
+          await expect(editor.getByText(stop.name, { exact: true })).toBeVisible();
+          await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeEnabled();
+          await expect(groups.first()).toContainText("통학");
+          failed = false;
+          await editor.getByRole("button", { name: "완료", exact: true }).click();
+          await expect(editor).toHaveCount(0);
+          expect(favorites.groups.map((group) => group.name)).toEqual(["통학", "즐겨찾기"]);
+        });
+      }
+    });
   });
 }
 
