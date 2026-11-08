@@ -33,7 +33,7 @@
 | application/ArrivalStopSource | 저장된 도착 스냅샷(ArrivalReadRepository)에서 노선과 정류장 방문의 대기 / 직접 도보용 목록을 만든다. 신선도(staleAt), 방문 검증, 분 해상도 양자화 상계를 처리한다. 창 덮임 규칙은 CoverageRule로 받고, 켜기 전까지 NONE(항상 덮임 모름)을 쓴다. |
 | application/StopArrivalSource | 정류장 도착 목록 포트. StopArrivalSource.unavailable()은 소스가 없을 때 결측(NOT_PROVIDED)을 돌려준다. |
 
-테스트 70건(신규): ArrivalStopSourceTest 12, ActionJudgeTest 38, ActionOracleTest 4, ActionGuidanceTest 5, ActionDeciderTest 3, EtaFieldsTest 3, CandidateAssemblerTest 5. EtaChain으로 만든 구간시간으로 가상 픽스처가 GO까지 가는 통합 테스트를 포함한다. 독립 오라클(LeafOracle)은 제품 코드를 가져오지 않고 잎을 펼쳐 합산하며, 확률 조합 243개와 대기 9개에서 판정기 값과 일치한다. 기준 파일 test-baseline.properties의 executed.api-app.test는 이 체크아웃 기준 957이다. dev 기준으로는 1061에서 1148이다.
+테스트 72건(신규): ArrivalStopSourceTest 13, ActionJudgeTest 38, ActionOracleTest 4, ActionGuidanceTest 5, ActionDeciderTest 3, EtaFieldsTest 3, CandidateAssemblerTest 6. 여기에 EtaChainTest 17건을 더하면 salmon 패키지 테스트는 89건이다. EtaChain으로 만든 구간시간으로 가상 픽스처가 GO까지 가는 통합 테스트를 포함한다. 독립 오라클(LeafOracle)은 제품 코드를 가져오지 않고 잎을 펼쳐 합산하며, 확률 조합 243개와 대기 9개에서 판정기 값과 일치한다. 기준 파일 test-baseline.properties의 executed.api-app.test는 1150이다. Docker를 켠 전체 :api-app:check가 1150건으로 통과했다.
 
 ## 전제로 쓴 항목과 알려진 이탈
 
@@ -88,7 +88,7 @@
 
 1. 접속 가능한 네트워크에서 도착 스냅샷 추출 스크립트(eta_extract_arrivals.sh)를 출퇴근 시간(KST 07시부터 10시, 17시부터 20시) 밖에 읽기 전용으로 실행한다. 사용법은 스크립트 머리말에 있다. 평일 낮 1시간 창부터 시작한다.
 2. `python3 -I docs/salmon-action/scripts/check_arrival_assumptions.py --csv arrivals.csv.gz --window-minutes 15`를 실행한다.
-3. 출력은 집계 숫자뿐이다(순서 어긋난 쌍, 빈 차량 ID, 해상도 비율, 둘째 도착이 창 안일 때 숨은 차량이 보인 비율, 규칙 위반 비율). 원자료 행과 차량 식별자는 대화에 올리지 않는다.
+3. 출력은 집계 숫자뿐이다(순서 어긋난 쌍, 빈 차량 ID, 해상도 비율, 둘째 도착이 창 안일 때 숨은 차량이 보인 비율, 규칙 위반 비율). 규칙 위반 비율은 각 스냅샷 쌍의 첫 수신 시각을 판정 시각으로 가정한 근사치다. 실제 판정 시각이 더 늦으면 비율이 달라진다. 원자료 행과 차량 식별자는 대화에 올리지 않는다.
 4. 규칙 위반 비율이 낮을 때만 CoverageRule을 SECOND_BEYOND_WINDOW로 켜는 것을 검토한다. 얼마가 낮은지는 정해지지 않았다.
 
 ## 검증

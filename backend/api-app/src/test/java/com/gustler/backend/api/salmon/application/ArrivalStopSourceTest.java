@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 class ArrivalStopSourceTest {
     private static final Instant RECEIVED = Instant.parse("2026-11-08T09:00:00Z");
@@ -75,6 +76,25 @@ class ArrivalStopSourceTest {
         StopList list = source(null, visits(), CoverageRule.NONE).arrivalsAt(PUBLIC_ROUTE, STATION, 5, NOW);
 
         assertThat(list).isEqualTo(new Unavailable(MissingReason.NOT_PROVIDED));
+    }
+
+    @Test
+    void 저장소_조회가_실패하면_조회_실패다() {
+        ArrivalReadRepository failing = new ArrivalReadRepository() {
+            @Override
+            public List<ArrivalVisit> visits(String stationId) {
+                throw new DataAccessResourceFailureException("connection refused");
+            }
+
+            @Override
+            public Optional<ArrivalSnapshot> latest(String stationId) {
+                return Optional.of(snapshotOf(RECEIVED.plusSeconds(600), prediction("bus-1", 1, 270, null)));
+            }
+        };
+        StopList list = new ArrivalStopSource(failing, CoverageRule.NONE, ActionFixture.config(15, 8))
+            .arrivalsAt(PUBLIC_ROUTE, STATION, 5, NOW);
+
+        assertThat(list).isEqualTo(new Unavailable(MissingReason.QUERY_FAILED));
     }
 
     @Test

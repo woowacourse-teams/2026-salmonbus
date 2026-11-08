@@ -96,4 +96,10 @@ class CandidateAssemblerTest {
         assertThat(fixture.ride).isEqualTo(new Missing<Span>(MissingReason.UNIDENTIFIED_VEHICLE));
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE);
     }
+
+    @Test
+    void 관계_값이_없거나_모르는_값이면_UNKNOWN이다() {
+        assertThat(Relation.parse(null)).isEqualTo(Relation.UNKNOWN);
+        assertThat(Relation.parse("TELEPORT")).isEqualTo(Relation.UNKNOWN);
+    }
 }

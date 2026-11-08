@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.dao.DataAccessException;
 
 public final class ArrivalStopSource implements StopArrivalSource {
     private static final Span MINUTE_RESOLUTION_BOUND = new Span(60_000);
@@ -38,6 +39,14 @@ public final class ArrivalStopSource implements StopArrivalSource {
 
     @Override
     public StopList arrivalsAt(String routeId, String stationId, int stopSequence, Instant decisionAt) {
+        try {
+            return listOf(routeId, stationId, stopSequence, decisionAt);
+        } catch (DataAccessException exception) {
+            return new Unavailable(MissingReason.QUERY_FAILED);
+        }
+    }
+
+    private StopList listOf(String routeId, String stationId, int stopSequence, Instant decisionAt) {
         Optional<ArrivalSnapshot> latest = repository.latest(stationId);
         if (latest.isEmpty()) {
             return new Unavailable(MissingReason.NOT_PROVIDED);

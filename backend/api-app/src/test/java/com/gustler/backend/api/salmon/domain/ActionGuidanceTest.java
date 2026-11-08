@@ -29,7 +29,7 @@ class ActionGuidanceTest {
 
         String text = String.join("\n", ActionGuidance.compose(verdict, config));
         assertThat(text).contains("맞은편 정류장으로 이동해요", "약 4분 뒤 차를 시도해요", "약 9분 뒤 차를 시도할 수 있어요",
-            "정해진 하차 정류장에서 내려요", "길을 건너", "약 14분 뒤 차를 시도해요", "약 19분 뒤 차를 시도할 수 있어요",
+            "정해진 하차 정류장에서 내려요", "길을 건너", "맞은편에서 약 4분 뒤 차를 탔다면 지금부터 약 14분 뒤 차를 시도해요", "약 19분 뒤 차를 시도할 수 있어요",
             "입력된 차량 기준", "구간시간은 추정", "연결 여유는 약 1.4분", "근거가 부족해요");
         assertThat(text).doesNotContain("확실히");
     }

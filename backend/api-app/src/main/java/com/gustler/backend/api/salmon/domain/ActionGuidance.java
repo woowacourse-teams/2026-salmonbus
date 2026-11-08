@@ -42,7 +42,8 @@ public final class ActionGuidance {
             lines.add(attemptLine(outcome.first()));
             lines.add("타면 정해진 하차 정류장에서 내려요.");
             lines.add("길을 건너 원하는 방향 정류장으로 가요.");
-            lines.add(attemptLine(outcome.second()));
+            lines.add("맞은편에서 약 " + minutesText(outcome.first().get(0).arrival().minutes()) + "분 뒤 차를 탔다면 지금부터 "
+                + attemptLine(outcome.second()));
         } else {
             lines.add("정류장으로 걸어간 뒤 차를 시도해요.");
             lines.add(attemptLine(outcome.first()));

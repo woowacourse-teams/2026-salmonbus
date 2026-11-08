@@ -5,6 +5,9 @@ public record WalkOption(String stationId, int stopSequence, Relation relation, 
         BEFORE, AFTER, OPPOSITE, SAME_STATION, UNKNOWN;
 
         public static Relation parse(String wire) {
+            if (wire == null) {
+                return UNKNOWN;
+            }
             return switch (wire) {
                 case "BEFORE" -> BEFORE;
                 case "AFTER" -> AFTER;
