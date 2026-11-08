@@ -37,6 +37,7 @@ export interface RequestErrorContext {
 }
 
 export interface ApiFailureDetails {
+  method?: RequestOptions["method"];
   context: RequestErrorContext | null;
   abortReason: unknown;
   rawResponse: { body: string; contentType: string | null } | null;
@@ -86,6 +87,7 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
   const outcomeOf = (result: ApiResult<T>): RequestOutcome<T> => ({
     result,
     details: {
+      method: options.method ?? "GET",
       context: options.errorContext ?? null,
       abortReason: options.signal?.reason ?? null,
       rawResponse:
