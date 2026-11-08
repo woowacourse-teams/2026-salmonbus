@@ -26,7 +26,7 @@ Simulator에서 로컬 웹 서버에 연결할 때는 `http://127.0.0.1:<port>`�
 
 앱은 알림 권한, APNs device token, 알림 탭만 맡고, 토큰 등록과 화면은 웹이 맡습니다. 웹이 `notification.requestPermission`(권한 묻기)이나 `notification.getRegistration`(묻지 않고 읽기)을 보내면 앱이 `notification.registration`으로 상태, token, APNs 환경을 돌려줍니다. 환경은 빌드 설정이 아니라 서명된 앱에서 읽습니다(`expo-application`). 시뮬레이터와 개발 서명 빌드는 `SANDBOX`, TestFlight와 App Store 빌드는 `PRODUCTION`이고, 정할 수 없으면 token을 `null`로 보냅니다.
 
-알림을 누르면 앱이 payload의 `target`을 고치지 않고 웹에 넘깁니다. 웹 문서가 다 떴으면 바로 `notification.opened`로 넘깁니다. 문서가 뜨는 중이거나 꺼진 앱이 알림으로 열렸으면 쌓아 두었다가, 웹 문서가 다 뜨는 순간 `notification.opened`로 넘깁니다. 그 전에 웹이 `notification.takeOpened`를 보내면 그 답으로 돌려줍니다. 어느 쪽이든 한 번만 갑니다. `expo-notifications`는 원격 알림의 `data`에 payload의 `body` 키만 넣으므로 서버는 대상을 `aps` 밖 `target`에 둡니다.
+알림을 누르면 앱이 payload의 `target`을 고치지 않고 웹에 넘깁니다. 웹이 `notification.takeOpened`를 보내면 그 문서가 받을 준비를 마친 것으로 보고 보관한 탭을 답으로 돌려줍니다. 문서의 `onLoad`만으로는 탭을 꺼내지 않습니다. 준비된 문서에서 새로 누른 탭은 바로 `notification.opened`로 넘깁니다. 새 문서를 읽기 시작하거나 로드에 실패하거나 WebView 프로세스가 끝나면 준비 상태를 내립니다. 보관한 탭은 10분이 지나면 버리고 같은 탭은 한 번만 넘깁니다. `expo-notifications`는 원격 알림의 `data`에 payload의 `body` 키만 넣으므로 서버는 대상을 `aps` 밖 `target`에 둡니다.
 
 Simulator에서는 아래 payload를 파일로 저장하고 `xcrun simctl push booted com.salmonbus.app payload.apns`로 넣습니다.
 

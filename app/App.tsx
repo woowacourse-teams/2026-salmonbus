@@ -4,7 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { Linking, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import type { ShouldStartLoadRequest, WebViewNavigationEvent } from 'react-native-webview/lib/WebViewTypes';
+import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 import { LoadFailedView } from './LoadFailedView';
 import { AUTH_CAPABILITIES, SIGN_IN_RESULT, signInRequestFrom, type SignInResult } from './auth/authMessages';
 import { signInNatively } from './auth/signInNatively';
@@ -24,9 +24,8 @@ import { showNotificationsInForeground, watchNotificationTaps } from './notifica
 import { registrationFor } from './notification/registration';
 import {
   initialDocumentLoad,
-  noteDocumentLoad,
   noteLoadFailure,
-  noteLoadStart,
+  noteWebReady,
 } from './notification/documentLoad';
 import { createTapInbox, type NotificationTap } from './notification/tapInbox';
 import { SETTINGS_CAPABILITIES } from './settings/settingsMessages';
@@ -82,44 +81,24 @@ export default function App() {
   const commandQueue = useRef(Promise.resolve());
   const documentEpoch = useRef(0);
   const signingIn = useRef(false);
-  const documentLoaded = useRef(false);
   const documentLoad = useRef(initialDocumentLoad());
-  const provisionalTap = useRef<NotificationTap | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const showLoadFailed = () => {
-    const decision = noteLoadFailure(documentLoad.current);
-    documentLoad.current = decision.state;
-    documentLoaded.current = false;
-    const tap = provisionalTap.current;
-    provisionalTap.current = null;
-    if (decision.restore && tap !== null) notificationTaps.restore(tap);
+    documentLoad.current = noteLoadFailure();
     resetNativeMap();
     setLoadFailed(true);
     SplashScreen.hide();
   };
   const retryLoad = () => setLoadFailed(false);
   const reloadWebView = () => {
-    documentLoaded.current = false;
+    handleLoadStart();
     webViewRef.current?.reload();
   };
 
   function handleLoadStart() {
-    documentLoaded.current = false;
-    provisionalTap.current = null;
-    documentLoad.current = noteLoadStart(documentLoad.current);
+    documentLoad.current = initialDocumentLoad();
     resetNativeMap();
-  }
-
-  function handleLoad(event: WebViewNavigationEvent) {
-    const decision = noteDocumentLoad(documentLoad.current, isInAppUrl(event.nativeEvent.url));
-    documentLoad.current = decision.state;
-    documentLoaded.current = decision.documentLoaded;
-    if (!decision.take) return;
-    const heldTap = notificationTaps.take();
-    if (heldTap === null) return;
-    provisionalTap.current = heldTap;
-    sendOpened(null, heldTap.target);
   }
 
   function resetNativeMap() {
@@ -170,7 +149,11 @@ export default function App() {
   const notificationHandlers: Record<NotificationCommandType, (requestId: string) => void> = {
     'notification.requestPermission': (requestId) => replyRegistration(requestId, { ask: true }),
     'notification.getRegistration': (requestId) => replyRegistration(requestId, { ask: false }),
-    'notification.takeOpened': (requestId) => sendOpened(requestId, notificationTaps.take()?.target ?? null),
+    'notification.takeOpened': (requestId) => {
+      documentLoad.current = noteWebReady(documentLoad.current);
+      const tap = documentLoad.current.ready ? notificationTaps.take() : null;
+      sendOpened(requestId, tap?.target ?? null);
+    },
   };
 
   function handleNotificationCommand(message: BridgeMessage) {
@@ -194,7 +177,7 @@ export default function App() {
   }
 
   const handleNotificationTap = useEffectEvent((tap: NotificationTap) => {
-    if (notificationTaps.receive(tap, documentLoaded.current && webViewRef.current !== null) !== 'send') return;
+    if (notificationTaps.receive(tap, documentLoad.current.ready && webViewRef.current !== null) !== 'send') return;
     sendOpened(null, tap.target);
   });
 
@@ -241,7 +224,6 @@ export default function App() {
       injectedJavaScriptBeforeContentLoadedForMainFrameOnly
       onMessage={handleMessage}
       onLoadStart={handleLoadStart}
-      onLoad={handleLoad}
       onLoadEnd={SplashScreen.hide}
       onError={showLoadFailed}
       onHttpError={showLoadFailed}

@@ -1,26 +1,16 @@
 export interface DocumentLoadState {
-  epoch: number;
+  ready: boolean;
   failed: boolean;
-  provisionalEpoch: number | null;
 }
 
 export function initialDocumentLoad(): DocumentLoadState {
-  return { epoch: 0, failed: false, provisionalEpoch: null };
+  return { ready: false, failed: false };
 }
 
-export function noteLoadStart(state: DocumentLoadState): DocumentLoadState {
-  return { epoch: state.epoch + 1, failed: false, provisionalEpoch: null };
+export function noteWebReady(state: DocumentLoadState): DocumentLoadState {
+  return state.failed ? state : { ...state, ready: true };
 }
 
-export function noteDocumentLoad(
-  state: DocumentLoadState,
-  inApp: boolean,
-): { state: DocumentLoadState; documentLoaded: boolean; take: boolean } {
-  if (!inApp || state.failed) return { state, documentLoaded: false, take: false };
-  return { state: { ...state, provisionalEpoch: state.epoch }, documentLoaded: true, take: true };
-}
-
-export function noteLoadFailure(state: DocumentLoadState): { state: DocumentLoadState; restore: boolean } {
-  const restore = state.provisionalEpoch === state.epoch;
-  return { state: { epoch: state.epoch, failed: true, provisionalEpoch: null }, restore };
+export function noteLoadFailure(): DocumentLoadState {
+  return { ready: false, failed: true };
 }
