@@ -55,6 +55,7 @@ class NotificationDeliveryFlowTest {
     );
     private static final String TOPIC = "com.salmonbus.app";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final AtomicInteger MEMBER_SEQUENCE = new AtomicInteger();
 
     @Autowired
     private NotificationSettingRepository settings;
@@ -338,7 +339,7 @@ class NotificationDeliveryFlowTest {
         }
         SavedSetting setting = settings.upsert(memberId, TARGET, WEEKDAY_0740, T0, T0);
         List<String> tokens = IntStream.range(0, deviceCount)
-            .mapToObj(index -> String.format("%02x", index))
+            .mapToObj(index -> String.format("%064x", index + 0xabcd))
             .toList();
         tokens.forEach(token -> devices.register(member, new DeviceToken(token), PushEnvironment.SANDBOX, T0));
         return new Prepared(member, memberId, setting.id(), tokens);
@@ -349,7 +350,7 @@ class NotificationDeliveryFlowTest {
         createdMembers.add(id);
         OffsetDateTime now = OffsetDateTime.ofInstant(T0, ZoneOffset.UTC);
         jdbc.sql("INSERT INTO member (public_id, nickname, created_at, last_login_at) VALUES (?, ?, ?, ?)")
-            .params(id, "flow-" + id, now, now)
+            .params(id, "flow" + MEMBER_SEQUENCE.incrementAndGet(), now, now)
             .update();
         return id;
     }

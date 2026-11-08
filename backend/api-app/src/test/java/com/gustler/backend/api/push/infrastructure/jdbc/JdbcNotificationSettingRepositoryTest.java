@@ -109,7 +109,6 @@ class JdbcNotificationSettingRepositoryTest {
     void findDueSelectsDueSettingsInOrderWithLimit() {
         UUID member = member("연어하나");
         long memberId = memberId(member);
-        addFavorite(memberId, TARGET);
         SavedSetting first = repository.upsert(
             memberId,
             TARGET,
@@ -118,7 +117,6 @@ class JdbcNotificationSettingRepositoryTest {
             NOW
         );
         FavoriteTarget secondTarget = new FavoriteTarget("234000885", "203000166", FavoriteDirection.DOWN);
-        addFavorite(memberId, secondTarget);
         SavedSetting second = repository.upsert(
             memberId,
             secondTarget,
@@ -127,7 +125,6 @@ class JdbcNotificationSettingRepositoryTest {
             NOW
         );
         FavoriteTarget laterTarget = new FavoriteTarget("234000886", "203000167", FavoriteDirection.UP);
-        addFavorite(memberId, laterTarget);
         repository.upsert(memberId, laterTarget, SCHEDULE, Instant.parse("2026-11-01T22:40:00Z"), NOW);
 
         assertThat(repository.findDue(Instant.parse("2026-11-01T22:39:00Z"), 1))
