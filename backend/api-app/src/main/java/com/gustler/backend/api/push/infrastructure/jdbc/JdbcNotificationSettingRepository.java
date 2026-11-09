@@ -27,9 +27,28 @@ public class JdbcNotificationSettingRepository implements NotificationSettingRep
         ON CONFLICT (member_id, route_id, stop_id, direction) DO UPDATE SET
             local_time = EXCLUDED.local_time,
             weekdays = EXCLUDED.weekdays,
-            occurrence_at = EXCLUDED.occurrence_at,
+            occurrence_at = CASE
+                WHEN notification_setting.local_time = EXCLUDED.local_time
+                    AND notification_setting.weekdays = EXCLUDED.weekdays
+                THEN notification_setting.occurrence_at
+                ELSE EXCLUDED.occurrence_at
+            END,
             updated_at = EXCLUDED.updated_at
         RETURNING id, route_id, stop_id, direction, local_time, weekdays
+        """;
+
+    private static final String DELETE_WITHOUT_FAVORITE = """
+        DELETE FROM notification_setting setting
+        WHERE setting.member_id = ?
+            AND NOT EXISTS (
+                SELECT 1
+                FROM favorite favorite
+                JOIN favorite_group favorite_group ON favorite_group.id = favorite.favorite_group_id
+                WHERE favorite_group.member_id = setting.member_id
+                    AND favorite.route_id = setting.route_id
+                    AND favorite.stop_id = setting.stop_id
+                    AND favorite.direction = setting.direction
+            )
         """;
 
     private final JdbcClient jdbc;
@@ -111,6 +130,11 @@ public class JdbcNotificationSettingRepository implements NotificationSettingRep
         return jdbc.sql("DELETE FROM notification_setting WHERE member_id = ? AND id = ?")
             .params(memberId, settingId)
             .update() > 0;
+    }
+
+    @Override
+    public void deleteWithoutFavorite(long memberId) {
+        jdbc.sql(DELETE_WITHOUT_FAVORITE).param(memberId).update();
     }
 
     private static SavedSetting mapSetting(ResultSet resultSet, int rowNum) throws SQLException {

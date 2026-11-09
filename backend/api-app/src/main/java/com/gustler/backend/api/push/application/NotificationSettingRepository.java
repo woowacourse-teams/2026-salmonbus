@@ -36,4 +36,6 @@ public interface NotificationSettingRepository {
     List<SavedSetting> findByMemberId(long memberId);
 
     boolean delete(long memberId, UUID settingId);
+
+    void deleteWithoutFavorite(long memberId);
 }
