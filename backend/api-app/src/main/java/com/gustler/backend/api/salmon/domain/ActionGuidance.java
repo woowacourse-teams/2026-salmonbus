@@ -7,7 +7,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 public final class ActionGuidance {
-    // attemptLine이 보이는 차 수와 맞춰, 안내하지 않은 맞은편 차의 가지 문장을 내지 않는다.
+    // 시도 문장과 재탑승 가지 문장이 같은 차 수까지만 보이게 해서, 안내하지 않은 맞은편 차의 가지 문장을 내지 않는다.
     private static final int SHOWN_ATTEMPTS = 2;
 
     private ActionGuidance() {
@@ -63,12 +63,7 @@ public final class ActionGuidance {
             return condition + "입력된 차량 기준으로 지금부터 " + minutesText(config.horizon().minutes())
                 + "분 안에 원하는 방향 정류장에서 시도할 차가 없어요.";
         }
-        String first = condition + "지금부터 약 " + minutesText(reboards.get(0).arrival().minutes()) + "분 뒤 차를 시도해요.";
-        if (reboards.size() == 1) {
-            return first;
-        }
-        return first + " 못 타면 지금부터 약 " + minutesText(reboards.get(1).arrival().minutes())
-            + "분 뒤 차를 시도할 수 있어요.";
+        return condition + attemptLine(reboards, "지금부터 ");
     }
 
     private static String basisLine(Evaluation evaluation) {
@@ -106,11 +101,15 @@ public final class ActionGuidance {
     }
 
     private static String attemptLine(List<Attempt> attempts) {
-        String first = "약 " + minutesText(attempts.get(0).arrival().minutes()) + "분 뒤 차를 시도해요.";
-        if (attempts.size() == 1) {
-            return first;
-        }
-        return first + " 못 타면 약 " + minutesText(attempts.get(1).arrival().minutes()) + "분 뒤 차를 시도할 수 있어요.";
+        return attemptLine(attempts, "");
+    }
+
+    private static String attemptLine(List<Attempt> attempts, String from) {
+        List<Attempt> shown = attempts.subList(0, Math.min(SHOWN_ATTEMPTS, attempts.size()));
+        StringBuilder text = new StringBuilder(from + "약 " + minutesText(shown.get(0).arrival().minutes()) + "분 뒤 차를 시도해요.");
+        shown.stream().skip(1).forEach(attempt -> text.append(" 못 타면 ").append(from).append("약 ")
+            .append(minutesText(attempt.arrival().minutes())).append("분 뒤 차를 시도할 수 있어요."));
+        return text.toString();
     }
 
     private static String partialPrefix(Verdict verdict) {

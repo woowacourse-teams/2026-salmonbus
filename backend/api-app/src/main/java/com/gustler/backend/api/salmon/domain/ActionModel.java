@@ -287,6 +287,9 @@ public final class ActionModel {
             attempts = List.copyOf(attempts);
             branches = List.copyOf(branches);
             nearMissExcluded = List.copyOf(nearMissExcluded);
+            if (!branches.isEmpty() && !attempts.equals(branches.stream().map(ReboardBranch::boarded).toList())) {
+                throw new IllegalArgumentException("reboard attempts must match the boarded bus of each branch");
+            }
         }
 
         static Outcome of(Evaluation evaluation) {

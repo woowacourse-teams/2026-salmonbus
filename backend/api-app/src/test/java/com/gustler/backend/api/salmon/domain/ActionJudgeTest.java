@@ -5,8 +5,10 @@ import static com.gustler.backend.api.salmon.domain.ActionFixture.entry;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.marginal;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.minutes;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.observed;
+import static com.gustler.backend.api.salmon.domain.ActionFixture.offsetOf;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.queried;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import com.gustler.backend.api.salmon.domain.ActionJudge.Failed;
@@ -447,6 +449,16 @@ class ActionJudgeTest {
         Verdict second = ActionJudge.judge(fixture.baseline(), config(20, 8), source);
 
         assertThat(second).isEqualTo(first);
+    }
+
+    @Test
+    void 재탑승_가지의_탄_차와_시도_순서가_다르면_결과를_만들지_않는다() {
+        Attempt first = new Attempt("o-4", offsetOf(4));
+        Attempt second = new Attempt("o-9", offsetOf(9));
+        ReboardBranch branch = new ReboardBranch(first, offsetOf(12.6), List.of());
+
+        assertThatThrownBy(() -> new Outcome(new ConfirmedEmpty(TimeBasis.DIRECT), List.of(second), List.of(branch),
+            Optional.empty(), Optional.empty(), List.of())).isInstanceOf(IllegalArgumentException.class);
     }
 
     private static CandidateRecord recordOf(Verdict verdict, String id) {
