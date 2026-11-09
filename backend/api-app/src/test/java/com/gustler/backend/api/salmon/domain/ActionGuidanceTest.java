@@ -6,6 +6,7 @@ import static com.gustler.backend.api.salmon.domain.ActionFixture.marginal;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.observed;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.queried;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.gustler.backend.api.salmon.domain.ActionModel.*;
 import java.util.ArrayList;
@@ -32,6 +33,92 @@ class ActionGuidanceTest {
             "정해진 하차 정류장에서 내려요", "길을 건너", "맞은편에서 약 4분 뒤 차를 탔다면 지금부터 약 14분 뒤 차를 시도해요", "약 19분 뒤 차를 시도할 수 있어요",
             "입력된 차량 기준", "구간시간은 추정", "연결 여유는 약 1.4분", "근거가 부족해요");
         assertThat(text).doesNotContain("확실히");
+    }
+
+    @Test
+    void 맞은편_둘째_차를_탄_가지는_그_가지의_재탑승_시각을_지금부터_기준으로_보인다() {
+        ActionFixture fixture = new ActionFixture();
+        ActionConfig config = config(20, 8);
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, fixture.source(fixture.reboardCandidate()));
+
+        assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
+        List<String> lines = ActionGuidance.compose(verdict, config);
+        assertAllowed(String.join("\n", lines));
+        assertThat(lines).filteredOn(line -> line.startsWith("맞은편에서 약 9분 뒤"))
+            .containsExactly("맞은편에서 약 9분 뒤 차를 탔다면 지금부터 약 19분 뒤 차를 시도해요.");
+    }
+
+    @Test
+    void 하차_뒤_준비_시각보다_먼저_오는_재탑승_차는_그_가지_문장에_넣지_않는다() {
+        ActionFixture fixture = new ActionFixture();
+        ActionConfig config = config(20, 8);
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, fixture.source(fixture.reboardCandidate()));
+
+        assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
+        List<String> lines = ActionGuidance.compose(verdict, config);
+        assertAllowed(String.join("\n", lines));
+        assertThat(lines).filteredOn(line -> line.startsWith("맞은편에서 약 9분 뒤"))
+            .singleElement().asString().doesNotContain("14분");
+        assertThat(lines).filteredOn(line -> line.startsWith("맞은편에서 약 4분 뒤"))
+            .containsExactly("맞은편에서 약 4분 뒤 차를 탔다면 지금부터 약 14분 뒤 차를 시도해요. "
+                + "못 타면 지금부터 약 19분 뒤 차를 시도할 수 있어요.");
+        assertThat(String.join("\n", lines)).doesNotContain("약 6분 뒤 차");
+    }
+
+    @Test
+    void 창_안에_재탑승할_차가_없는_가지는_시도할_차가_없다고_밝힌다() {
+        ActionFixture fixture = new ActionFixture();
+        fixture.reboard = queried(entry("b-6", 6), entry("b-14", 14));
+        fixture.candidateProbabilities.removeIf(input -> input.attempt().equals("b-14"));
+        fixture.candidateProbabilities.add(ActionFixture.conditional("b-14", ValueTag.COND_MISS, 0.5,
+            Set.of(), Set.of("b-6"), Optional.of("o-4")));
+        ActionConfig config = config(20, 8);
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, fixture.source(fixture.reboardCandidate()));
+
+        assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
+        assertThat(verdict.candidates().get(0).outcome().branches().get(1).reboards()).isEmpty();
+        List<String> lines = ActionGuidance.compose(verdict, config);
+        assertAllowed(String.join("\n", lines));
+        assertThat(lines).filteredOn(line -> line.startsWith("맞은편에서 약 9분 뒤"))
+            .containsExactly("맞은편에서 약 9분 뒤 차를 탔다면 입력된 차량 기준으로 지금부터 20분 안에 "
+                + "원하는 방향 정류장에서 시도할 차가 없어요.")
+            .allSatisfy(line -> assertThat(line).doesNotContain("14분"));
+    }
+
+    @Test
+    void 맞은편_승차_확률이_0인_가지도_평가한_시도_순서대로_문장을_보인다() {
+        ActionFixture fixture = new ActionFixture();
+        fixture.candidateProbabilities.set(1, ActionFixture.conditional("o-9", ValueTag.COND_FAIL, 0.0,
+            Set.of("o-4"), Set.of(), Optional.empty()));
+        ActionConfig config = config(20, 8);
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, fixture.source(fixture.reboardCandidate()));
+
+        assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
+        List<String> lines = ActionGuidance.compose(verdict, config);
+        assertAllowed(String.join("\n", lines));
+        assertThat(lines).filteredOn(line -> line.startsWith("맞은편에서 약 9분 뒤"))
+            .containsExactly("맞은편에서 약 9분 뒤 차를 탔다면 지금부터 약 19분 뒤 차를 시도해요.");
+        assertThat(verdict.candidates().get(0).outcome().margin().orElseThrow().minutes())
+            .isCloseTo(1.4, within(1e-9));
+    }
+
+    @Test
+    void 가지_문장은_맞은편_시도_문장에_나온_차까지만_보인다() {
+        ActionFixture fixture = new ActionFixture();
+        fixture.opposite = queried(entry("o-4", 4), entry("o-9", 9), entry("o-10", 10));
+        fixture.candidateProbabilities.add(ActionFixture.conditional("o-10", ValueTag.COND_FAIL, 0.8,
+            Set.of("o-4", "o-9"), Set.of(), Optional.empty()));
+        fixture.candidateProbabilities.add(ActionFixture.conditional("b-19", ValueTag.COND_MISS, 0.35,
+            Set.of(), Set.of("b-6", "b-14"), Optional.of("o-10")));
+        ActionConfig config = config(20, 8);
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, fixture.source(fixture.reboardCandidate()));
+
+        assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
+        assertThat(verdict.candidates().get(0).outcome().branches()).hasSize(3);
+        List<String> lines = ActionGuidance.compose(verdict, config);
+        assertAllowed(String.join("\n", lines));
+        assertThat(lines).filteredOn(line -> line.startsWith("맞은편에서 약"))
+            .hasSize(2).noneMatch(line -> line.startsWith("맞은편에서 약 10분"));
     }
 
     @Test
@@ -92,9 +179,13 @@ class ActionGuidanceTest {
         assertThat(verdicts).extracting(Verdict::code).containsExactlyInAnyOrder(ReasonCode.values());
         for (Verdict verdict : verdicts) {
             String text = String.join("\n", ActionGuidance.compose(verdict, config));
-            assertThat(text).isNotBlank().doesNotContain(LONG_DASH, MIDDLE_DOT);
-            FORBIDDEN_PHRASES.forEach(phrase -> assertThat(text).doesNotContain(phrase));
+            assertAllowed(text);
         }
+    }
+
+    private static void assertAllowed(String text) {
+        assertThat(text).isNotBlank().doesNotContain(LONG_DASH, MIDDLE_DOT);
+        FORBIDDEN_PHRASES.forEach(phrase -> assertThat(text).doesNotContain(phrase));
     }
 
     private static Verdict verdictOf(int scenario, ActionConfig config) {

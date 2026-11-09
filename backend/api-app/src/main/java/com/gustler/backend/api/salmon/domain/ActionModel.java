@@ -273,11 +273,19 @@ public final class ActionModel {
     public record Attempt(String entryId, Offset arrival) {
     }
 
-    public record Outcome(Evaluation evaluation, List<Attempt> first, List<Attempt> second,
+    public record ReboardBranch(Attempt boarded, Offset ready, List<Attempt> reboards) {
+        public ReboardBranch {
+            Objects.requireNonNull(boarded);
+            Objects.requireNonNull(ready);
+            reboards = List.copyOf(reboards);
+        }
+    }
+
+    public record Outcome(Evaluation evaluation, List<Attempt> attempts, List<ReboardBranch> branches,
                           Optional<Span> margin, Optional<ConnectionTag> connection, List<String> nearMissExcluded) {
         public Outcome {
-            first = List.copyOf(first);
-            second = List.copyOf(second);
+            attempts = List.copyOf(attempts);
+            branches = List.copyOf(branches);
             nearMissExcluded = List.copyOf(nearMissExcluded);
         }
 

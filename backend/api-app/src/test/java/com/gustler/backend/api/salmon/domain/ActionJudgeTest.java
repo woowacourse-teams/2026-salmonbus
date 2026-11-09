@@ -49,8 +49,12 @@ class ActionJudgeTest {
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(20, 8), fixture.source(fixture.reboardCandidate()));
 
         Outcome outcome = recordOf(verdict, "reboard").outcome();
-        assertThat(outcome.first()).extracting(Attempt::entryId).containsExactly("o-4", "o-9");
-        assertThat(outcome.second()).extracting(Attempt::entryId).containsExactly("b-14", "b-19");
+        assertThat(outcome.attempts()).extracting(Attempt::entryId).containsExactly("o-4", "o-9");
+        assertThat(outcome.branches()).extracting(branch -> branch.boarded().entryId()).containsExactly("o-4", "o-9");
+        assertThat(outcome.branches().get(0).ready().minutes()).isCloseTo(12.6, within(TOLERANCE));
+        assertThat(outcome.branches().get(0).reboards()).extracting(Attempt::entryId).containsExactly("b-14", "b-19");
+        assertThat(outcome.branches().get(1).ready().minutes()).isCloseTo(17.6, within(TOLERANCE));
+        assertThat(outcome.branches().get(1).reboards()).extracting(Attempt::entryId).containsExactly("b-19");
     }
 
     @Test
@@ -62,7 +66,9 @@ class ActionJudgeTest {
         assertThat(verdict.code()).isEqualTo(ReasonCode.STAY_GAIN_BELOW_THRESHOLD);
         assertThat(riskOf(recordOf(verdict, "reboard").outcome())).isCloseTo(0.72, within(TOLERANCE));
         assertThat(verdict.delta().orElseThrow()).isCloseTo(0.135, within(TOLERANCE));
-        assertThat(recordOf(verdict, "reboard").outcome().first()).extracting(Attempt::entryId).containsExactly("o-4");
+        assertThat(recordOf(verdict, "reboard").outcome().attempts()).extracting(Attempt::entryId).containsExactly("o-4");
+        assertThat(recordOf(verdict, "reboard").outcome().branches()).singleElement()
+            .satisfies(branch -> assertThat(branch.reboards()).extracting(Attempt::entryId).containsExactly("b-14"));
     }
 
     @Test
@@ -137,7 +143,7 @@ class ActionJudgeTest {
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(15, 8),
             ActionFixture.sourceOf(new Failed(MissingReason.QUERY_FAILED)));
 
-        assertThat(verdict.stay().first()).extracting(Attempt::entryId).containsExactly("s0-12", "s0-15");
+        assertThat(verdict.stay().attempts()).extracting(Attempt::entryId).containsExactly("s0-12", "s0-15");
         assertThat(riskOf(verdict.stay())).isCloseTo(0.4, within(TOLERANCE));
     }
 
@@ -148,7 +154,7 @@ class ActionJudgeTest {
         fixture.candidateProbabilities.add(marginal("w-12", 0.3));
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(15, 10), fixture.source(walk));
 
-        assertThat(recordOf(verdict, "walk").outcome().first()).extracting(Attempt::entryId).containsExactly("w-12");
+        assertThat(recordOf(verdict, "walk").outcome().attempts()).extracting(Attempt::entryId).containsExactly("w-12");
     }
 
     @Test

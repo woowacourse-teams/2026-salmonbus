@@ -7,13 +7,16 @@ import java.util.Locale;
 import java.util.Optional;
 
 public final class ActionGuidance {
+    // attemptLine이 보이는 차 수와 맞춰, 안내하지 않은 맞은편 차의 가지 문장을 내지 않는다.
+    private static final int SHOWN_ATTEMPTS = 2;
+
     private ActionGuidance() {
     }
 
     public static List<String> compose(Verdict verdict, ActionConfig config) {
         List<String> lines = new ArrayList<>();
         switch (verdict.code()) {
-            case GO -> lines.addAll(goLines(verdict));
+            case GO -> lines.addAll(goLines(verdict, config));
             case STAY_GAIN_BELOW_THRESHOLD -> {
                 lines.add(partialPrefix(verdict) + "비교한 경로의 이득이 크지 않아 이동은 권하지 않아요.");
                 lines.add(stayLine(verdict.stay(), config));
@@ -30,7 +33,7 @@ public final class ActionGuidance {
         return List.copyOf(lines);
     }
 
-    private static List<String> goLines(Verdict verdict) {
+    private static List<String> goLines(Verdict verdict, ActionConfig config) {
         CandidateRecord chosen = verdict.candidates().stream()
             .filter(record -> verdict.chosen().filter(record.id()::equals).isPresent())
             .findFirst().orElseThrow();
@@ -39,18 +42,33 @@ public final class ActionGuidance {
         lines.add(partialPrefix(verdict) + "이동하는 경로를 안내해요.");
         if (chosen.kind() == CandidateKind.REBOARD) {
             lines.add("맞은편 정류장으로 이동해요.");
-            lines.add(attemptLine(outcome.first()));
+            lines.add(attemptLine(outcome.attempts()));
             lines.add("타면 정해진 하차 정류장에서 내려요.");
             lines.add("길을 건너 원하는 방향 정류장으로 가요.");
-            lines.add("맞은편에서 약 " + minutesText(outcome.first().get(0).arrival().minutes()) + "분 뒤 차를 탔다면 지금부터 "
-                + attemptLine(outcome.second()));
+            outcome.branches().stream().limit(SHOWN_ATTEMPTS)
+                .map(branch -> branchLine(branch, config)).forEach(lines::add);
         } else {
             lines.add("정류장으로 걸어간 뒤 차를 시도해요.");
-            lines.add(attemptLine(outcome.first()));
+            lines.add(attemptLine(outcome.attempts()));
         }
         lines.add(basisLine(outcome.evaluation()));
         outcome.margin().ifPresent(margin -> lines.add(marginLine(margin, outcome.connection())));
         return lines;
+    }
+
+    private static String branchLine(ReboardBranch branch, ActionConfig config) {
+        String condition = "맞은편에서 약 " + minutesText(branch.boarded().arrival().minutes()) + "분 뒤 차를 탔다면 ";
+        List<Attempt> reboards = branch.reboards();
+        if (reboards.isEmpty()) {
+            return condition + "입력된 차량 기준으로 지금부터 " + minutesText(config.horizon().minutes())
+                + "분 안에 원하는 방향 정류장에서 시도할 차가 없어요.";
+        }
+        String first = condition + "지금부터 약 " + minutesText(reboards.get(0).arrival().minutes()) + "분 뒤 차를 시도해요.";
+        if (reboards.size() == 1) {
+            return first;
+        }
+        return first + " 못 타면 지금부터 약 " + minutesText(reboards.get(1).arrival().minutes())
+            + "분 뒤 차를 시도할 수 있어요.";
     }
 
     private static String basisLine(Evaluation evaluation) {
@@ -76,7 +94,7 @@ public final class ActionGuidance {
     }
 
     private static String stayLine(Outcome stay, ActionConfig config) {
-        List<Attempt> attempts = stay.first();
+        List<Attempt> attempts = stay.attempts();
         if (attempts.isEmpty()) {
             return "입력된 차량 기준으로 " + minutesText(config.horizon().minutes())
                 + "분 안에 이 정류장에서 시도할 차가 없어요.";

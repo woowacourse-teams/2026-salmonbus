@@ -173,9 +173,9 @@ final class PolicyEvaluator {
             TimeBasis basis = reboardBasis(reach.boardable(), reboardWindow);
             Evaluation evaluation = solve(resolver -> reboardRisk(chain, included, reboardCovers, resolver), basis);
             List<MarginItem> items = marginsOf(reach.t1(), chain, included);
-            List<Attempt> first = included.stream().map(branch -> attemptOf(branch.entry())).toList();
-            List<Attempt> second = included.get(0).attempts().stream().map(PolicyEvaluator::attemptOf).toList();
-            return new Outcome(evaluation, first, second, minimumMargin(items), Optional.of(connectionOf(items)),
+            List<Attempt> attempts = included.stream().map(branch -> attemptOf(branch.entry())).toList();
+            List<ReboardBranch> branches = included.stream().map(Included::branch).toList();
+            return new Outcome(evaluation, attempts, branches, minimumMargin(items), Optional.of(connectionOf(items)),
                 List.of());
         }
 
@@ -277,6 +277,9 @@ final class PolicyEvaluator {
 
     private record Included(StopEntry entry, Offset arrival, Offset t2, List<StopEntry> attempts,
                             List<StopEntry> missed) {
+        ReboardBranch branch() {
+            return new ReboardBranch(attemptOf(entry), t2, attempts.stream().map(PolicyEvaluator::attemptOf).toList());
+        }
     }
 
     private record MarginItem(Span margin, Optional<Span> bound) {

@@ -30,7 +30,7 @@ class ActionDeciderTest {
 
         assertThat(decision.epochsUsed()).isEqualTo(2);
         assertThat(decision.verdict().epoch()).isEqualTo("epoch-2");
-        assertThat(decision.verdict().stay().first()).extracting(Attempt::entryId).containsExactly("s0-4");
+        assertThat(decision.verdict().stay().attempts()).extracting(Attempt::entryId).containsExactly("s0-4");
         assertThat(decision.verdict().code()).isEqualTo(ReasonCode.GO);
     }
 

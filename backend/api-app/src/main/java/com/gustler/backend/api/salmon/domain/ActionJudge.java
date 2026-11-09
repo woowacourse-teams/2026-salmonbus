@@ -109,7 +109,7 @@ public final class ActionJudge {
 
     private static boolean changesBaseline(Baseline baseline, ActionConfig config, StopList update, Outcome stay) {
         Outcome updated = new PolicyEvaluator(config, baseline.epoch(), baseline.supply()).stay(update);
-        return !updated.evaluation().equals(stay.evaluation()) || !updated.first().equals(stay.first());
+        return !updated.evaluation().equals(stay.evaluation()) || !updated.attempts().equals(stay.attempts());
     }
 
     static Admissibility admissibilityOf(Candidate candidate, ActionConfig config) {
