@@ -33,11 +33,15 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
             UPDATE notification_delivery
             SET next_attempt_at = ?, updated_at = ?
             WHERE id IN (
-                SELECT id FROM notification_delivery
-                WHERE status = 'PENDING' AND next_attempt_at <= ?
-                ORDER BY next_attempt_at, id
+                SELECT delivery.id
+                FROM notification_delivery delivery
+                JOIN push_device device ON device.id = delivery.device_id
+                JOIN notification_setting setting ON setting.id = delivery.setting_id
+                WHERE delivery.status = 'PENDING' AND delivery.next_attempt_at <= ?
+                    AND device.member_id = setting.member_id
+                ORDER BY delivery.next_attempt_at, delivery.id
                 LIMIT ?
-                FOR UPDATE SKIP LOCKED
+                FOR UPDATE OF delivery SKIP LOCKED
             )
             RETURNING id, setting_id, device_id, occurrence_at, attempts
         )
@@ -46,6 +50,13 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
         FROM claimed
         JOIN push_device device ON device.id = claimed.device_id
         JOIN notification_setting setting ON setting.id = claimed.setting_id
+        """;
+
+    // next_attempt_at이 아직 오지 않은 행은 다른 실행이 임대해 보내는 중이라 결과 기록을 그쪽에 맡긴다.
+    private static final String GIVE_UP_OCCURRED_BEFORE = """
+        UPDATE notification_delivery
+        SET status = 'GAVE_UP', updated_at = ?
+        WHERE status = 'PENDING' AND occurrence_at < ? AND next_attempt_at <= ?
         """;
 
     private static final String RECORD = """
@@ -93,6 +104,14 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
 
     @Override
     @Transactional
+    public int giveUpOccurredBefore(Instant occurredBefore, Instant now) {
+        OffsetDateTime timestamp = OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
+        return jdbc.sql(GIVE_UP_OCCURRED_BEFORE)
+            .params(timestamp, OffsetDateTime.ofInstant(occurredBefore, ZoneOffset.UTC), timestamp)
+            .update();
+    }
+
+    @Override
     public void record(long id, DeliveryDecision decision, Instant now) {
         jdbc.sql(RECORD)
             .params(

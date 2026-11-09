@@ -9,6 +9,7 @@ import com.gustler.backend.api.push.application.NotificationDeliveryService;
 import com.gustler.backend.api.push.application.NotificationSettingRepository;
 import com.gustler.backend.api.push.application.NotificationSettingRepository.SavedSetting;
 import com.gustler.backend.api.push.application.PushDeviceRepository;
+import com.gustler.backend.api.push.domain.DeliveryPolicy;
 import com.gustler.backend.api.push.domain.DeviceToken;
 import com.gustler.backend.api.push.domain.NotificationSchedule;
 import com.gustler.backend.api.push.domain.PushEnvironment;
@@ -227,6 +228,54 @@ class NotificationDeliveryFlowTest {
             assertThat(fake.requests()).hasSize(1);
             assertThat(statusCounts("GAVE_UP")).isEqualTo(1);
             assertThat(output.getOut() + output.getErr()).contains("status=CONFIG_ERROR");
+        }
+    }
+
+    @Test
+    void firstRunHoursLateGivesUpWithoutSending() throws Exception {
+        Prepared prepared = prepare(1, true);
+        try (FakeApnsServer fake = new FakeApnsServer()) {
+            runAt(T0.plus(Duration.ofHours(3)), fake);
+            assertThat(fake.requests()).isEmpty();
+            assertThat(statusCounts("GAVE_UP")).isEqualTo(1);
+            assertThat(occurrenceOf(prepared.settingId())).isEqualTo(NEXT);
+        }
+    }
+
+    @Test
+    void retryAfterLongPauseGivesUpWithoutSending() throws Exception {
+        prepare(1, true);
+        try (FakeApnsServer fake = new FakeApnsServer()) {
+            fake.answerAll(500, "InternalServerError");
+            runAt(T0, fake);
+            runAt(T0.plus(Duration.ofMinutes(10)), fake);
+            assertThat(fake.requests()).hasSize(1);
+            assertThat(statusCounts("GAVE_UP")).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void firstRunAtWindowEdgeStillSends() throws Exception {
+        prepare(1, true);
+        try (FakeApnsServer fake = new FakeApnsServer()) {
+            runAt(T0.plus(DeliveryPolicy.RETRY_WINDOW), fake);
+            assertThat(fake.requests()).hasSize(1);
+            assertThat(statusCounts("SENT")).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void tokenMovedToAnotherMemberDoesNotReceivePreviousMembersRetry() throws Exception {
+        Prepared prepared = prepare(1, true);
+        try (FakeApnsServer fake = new FakeApnsServer()) {
+            fake.answerAll(500, "InternalServerError");
+            runAt(T0, fake);
+            UUID other = newMember();
+            devices.register(other, new DeviceToken(prepared.tokens().get(0)), PushEnvironment.SANDBOX, T0);
+            fake.answerAll(200, "");
+            runAt(T0.plus(Duration.ofMinutes(1)), fake);
+            assertThat(fake.requests()).hasSize(1);
+            assertThat(deliveryCount()).isZero();
         }
     }
 

@@ -31,4 +31,6 @@ public interface NotificationDeliveryRepository {
     void record(long id, DeliveryDecision decision, Instant now);
 
     int deleteCompletedBefore(Instant cutoff, int limit);
+
+    int giveUpOccurredBefore(Instant occurredBefore, Instant now);
 }

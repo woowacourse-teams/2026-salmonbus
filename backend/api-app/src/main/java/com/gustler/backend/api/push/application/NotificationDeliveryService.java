@@ -45,6 +45,11 @@ public class NotificationDeliveryService {
         settings.advance(due.id(), due.occurrenceAt(), due.schedule().nextAfter(now), now);
     }
 
+    public int giveUpExpired() {
+        Instant now = now();
+        return deliveries.giveUpOccurredBefore(now.minus(DeliveryPolicy.RETRY_WINDOW), now);
+    }
+
     public List<ClaimedDelivery> claimDue(int limit) {
         Instant now = now();
         return deliveries.claimDue(now, now.plus(DeliveryPolicy.LEASE), limit);

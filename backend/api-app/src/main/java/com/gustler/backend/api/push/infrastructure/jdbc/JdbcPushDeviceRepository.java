@@ -14,6 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class JdbcPushDeviceRepository implements PushDeviceRepository {
+    private static final String DELETE_OTHER_OWNER = """
+        DELETE FROM push_device
+        WHERE token = ? AND member_id <> (SELECT id FROM member WHERE public_id = ?)
+        """;
+
     private static final String REGISTER = """
         INSERT INTO push_device (member_id, token, environment, created_at, last_registered_at)
         SELECT id, ?, ?, ?, ? FROM member WHERE public_id = ?
@@ -31,6 +36,7 @@ public class JdbcPushDeviceRepository implements PushDeviceRepository {
     @Transactional
     public boolean register(UUID memberPublicId, DeviceToken token, PushEnvironment environment, Instant registeredAt) {
         OffsetDateTime timestamp = OffsetDateTime.ofInstant(registeredAt, ZoneOffset.UTC);
+        jdbc.sql(DELETE_OTHER_OWNER).params(token.value(), memberPublicId).update();
         return jdbc.sql(REGISTER)
             .params(token.value(), environment.name(), timestamp, timestamp, memberPublicId)
             .update() > 0;
