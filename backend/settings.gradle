@@ -22,3 +22,5 @@ project(':api-call-quota').projectDir = file('business/api-call-quota')
 project(':member').projectDir = file('business/member')
 project(':gbis-client').projectDir = file('integrations/gbis-client')
 project(':operation-log').projectDir = file('libraries/operation-log')
+
+include 'archive-app'

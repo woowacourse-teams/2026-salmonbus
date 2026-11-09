@@ -1,0 +1,23 @@
+plugins { id 'java'; id 'org.springframework.boot' }
+dependencies {
+    implementation project(':common')
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-flyway'
+    implementation 'tools.jackson.core:jackson-databind'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+    implementation platform('software.amazon.awssdk:bom:2.57.3')
+    implementation('software.amazon.awssdk:s3') { exclude group:'software.amazon.awssdk', module:'netty-nio-client' }
+    implementation 'software.amazon.awssdk:apache5-client'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation testFixtures(project(':common'))
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+springBoot { buildInfo() }
+
+tasks.named('test') {
+    dependsOn tasks.named('bootJar')
+    systemProperty 'archive.boot.jar', tasks.named('bootJar').get().archiveFile.get().asFile.absolutePath
+}
