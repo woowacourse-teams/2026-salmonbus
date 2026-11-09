@@ -48,6 +48,13 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
         JOIN notification_setting setting ON setting.id = claimed.setting_id
         """;
 
+    // next_attempt_at이 아직 오지 않은 행은 다른 실행이 임대해 보내는 중이라 결과 기록을 그쪽에 맡긴다.
+    private static final String GIVE_UP_OCCURRED_BEFORE = """
+        UPDATE notification_delivery
+        SET status = 'GAVE_UP', updated_at = ?
+        WHERE status = 'PENDING' AND occurrence_at < ? AND next_attempt_at <= ?
+        """;
+
     private static final String RECORD = """
         UPDATE notification_delivery
         SET status = ?, attempts = attempts + 1, next_attempt_at = ?, updated_at = ?
@@ -83,6 +90,14 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
 
     @Override
     @Transactional
+    public int giveUpOccurredBefore(Instant occurredBefore, Instant now) {
+        OffsetDateTime timestamp = OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
+        return jdbc.sql(GIVE_UP_OCCURRED_BEFORE)
+            .params(timestamp, OffsetDateTime.ofInstant(occurredBefore, ZoneOffset.UTC), timestamp)
+            .update();
+    }
+
+    @Override
     public void record(long id, DeliveryDecision decision, Instant now) {
         jdbc.sql(RECORD)
             .params(
