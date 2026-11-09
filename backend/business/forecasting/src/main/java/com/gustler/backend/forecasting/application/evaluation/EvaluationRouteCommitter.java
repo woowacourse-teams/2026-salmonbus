@@ -1,11 +1,7 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
-import com.gustler.backend.forecasting.application.evaluation.EvaluateForecastsService.RouteInput;
-import com.gustler.backend.forecasting.application.evaluation.EvaluationSelection.Cursor;
-import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkPageReader.Ready;
-import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Key;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.util.ArrayList;
@@ -30,88 +26,71 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class EvaluationRouteCommitter {
     private static final Logger LOGGER = LoggerFactory.getLogger(EvaluationRouteCommitter.class);
     private final EvaluationWorkStore work;
-    private final RouteDataQualityAccess quality;
+    private final RouteWorkAccess routeWork;
     private final ForecastEvaluationWriter writer;
-    private final EvaluationQualityRecheck qualityRecheck;
+    private final EvaluationInputRecheck inputRecheck;
 
     public EvaluationRouteCommitter(
         EvaluationWorkStore work,
-        RouteDataQualityAccess quality,
+        RouteWorkAccess routeWork,
         ForecastEvaluationWriter writer,
-        EvaluationQualityRecheck qualityRecheck
+        EvaluationInputRecheck inputRecheck
     ) {
         this.work = work;
-        this.quality = quality;
+        this.routeWork = routeWork;
         this.writer = writer;
-        this.qualityRecheck = qualityRecheck;
+        this.inputRecheck = inputRecheck;
     }
 
     /**
-     * 실제 트랜잭션에서 작업·품질 판본을 확인하고 평가를 확정한다. 메모리 완료 통지는 커밋 뒤에 실행한다.
+     * 실제 트랜잭션에서 작업·입력 판본을 확인하고 평가를 확정한다. 메모리 완료 통지는 커밋 뒤에 실행한다.
      */
     @Transactional(readOnly = false)
-    public void commit(RouteInput input, List<ForecastEvaluation> results,
+    public void commit(EvaluateForecastsService.RouteInput input, List<ForecastEvaluation> results,
         BiConsumer<Integer, Change> completion) {
-        commit(input, results, completion, false);
-    }
-
-    /**
-     * 실제 트랜잭션에서 작업·품질 판본을 확인하고 평가를 확정한다. 메모리 완료 통지는 커밋 뒤에 실행한다.
-     */
-    @Transactional(readOnly = false)
-    public void commit(
-        RouteInput input,
-        List<ForecastEvaluation> results,
-        BiConsumer<Integer, Change> completion,
-        final boolean memoryChanged
-    ) {
         requireTransaction();
-        final long actualRevision = quality.lock(input.version());
+        final long actualRevision = routeWork.lock(input.version());
         if (!workUnchanged(input)) {
             LOGGER.info("event=settlement_skipped reason=WORK_CHANGED routeVersionId={}", input.version());
             return;
         }
 
-        final boolean qualityChanged = memoryChanged || actualRevision != input.revision();
-        List<ForecastEvaluation> verified = verifyIfQualityChanged(input, results, qualityChanged);
-        if (qualityChanged) {
-            LOGGER.info("event=settlement_quality_rechecked routeVersionId={} calculated={} unchanged={} deferred={}",
+        final boolean inputChanged = actualRevision != input.revision();
+        List<ForecastEvaluation> verified = verifyIfInputChanged(input, results, inputChanged);
+        if (inputChanged) {
+            LOGGER.info("event=settlement_input_rechecked routeVersionId={} calculated={} unchanged={} deferred={}",
                 input.version(), results.size(), verified.size(), results.size() - verified.size());
         }
 
-        Set<Key> completed = new HashSet<>();
+        Set<EvaluationWorkStore.Key> completed = new HashSet<>();
         for (List<Long> ids : chunks(input.checked())) {
-            work.closeExcluded(input.version(), ids, 500);
             completed.addAll(work.completed(input.version(), ids));
         }
-        Set<Key> selected = input.selected()
-            .stream()
-            .map(forecast -> new Key(forecast.vehicleObservationId(), forecast.targetStopOrder()))
+        Set<EvaluationWorkStore.Key> selected = input.selected().stream()
+            .map(forecast -> new EvaluationWorkStore.Key(forecast.vehicleObservationId(), forecast.targetStopOrder()))
             .collect(Collectors.toCollection(HashSet::new));
-        List<ForecastEvaluation> pending = verified.stream()
-            .filter(result -> {
-                Key key = new Key(result.vehicleObservationId(), result.targetStopOrder());
-                return selected.contains(key) && !completed.contains(key);
-            })
-            .toList();
+        List<ForecastEvaluation> pending = verified.stream().filter(result -> {
+            EvaluationWorkStore.Key key = new EvaluationWorkStore.Key(result.vehicleObservationId(),
+                result.targetStopOrder());
+            return selected.contains(key) && !completed.contains(key);
+        }).toList();
         writer.complete(pending);
         for (List<Long> ids : chunks(input.checked())) {
             completed.addAll(work.completed(input.version(), ids));
             work.releaseCompleted(input.version(), ids);
         }
 
-        List<Ready> remaining = new ArrayList<>();
+        List<EvaluationWorkPageReader.Ready> remaining = new ArrayList<>();
         // 변경 전에 읽은 대기 상세는 다음 회차에서 DB로 다시 확인한다.
-        if (!input.investigating() && !qualityChanged) {
-            for (Ready item : input.ready()) {
-                List<PendingForecast> forecasts = item.forecasts()
-                    .stream()
-                    .filter(forecast -> !completed.contains(new Key(
-                        forecast.vehicleObservationId(), forecast.targetStopOrder())))
+        if (!inputChanged) {
+            for (EvaluationWorkPageReader.Ready item : input.ready()) {
+                List<PendingForecast> forecasts = item.forecasts().stream()
+                    .filter(forecast -> !completed.contains(
+                        new EvaluationWorkStore.Key(forecast.vehicleObservationId(), forecast.targetStopOrder())))
                     .toList();
                 if (!forecasts.isEmpty()) {
-                    remaining.add(new Ready(
-                        item.observationId(), input.revision(), item.workRevision(), forecasts));
+                    remaining.add(new EvaluationWorkPageReader.Ready(item.observationId(), input.revision(),
+                        item.workRevision(), forecasts));
                 }
             }
         }
@@ -125,7 +104,7 @@ public class EvaluationRouteCommitter {
         });
     }
 
-    private boolean workUnchanged(RouteInput input) {
+    private boolean workUnchanged(EvaluateForecastsService.RouteInput input) {
         Map<Long, Long> current = new LinkedHashMap<>();
         for (List<Long> ids : chunks(input.checked())) {
             current.putAll(work.revisions(input.version(), ids));
@@ -143,13 +122,13 @@ public class EvaluationRouteCommitter {
 
     private static void requireTransaction() {
         if (!TransactionSynchronizationManager.isActualTransactionActive()
-                || !TransactionSynchronizationManager.isSynchronizationActive()) {
+            || !TransactionSynchronizationManager.isSynchronizationActive()) {
             throw new IllegalStateException("노선별 정산 확정에는 실제 트랜잭션이 필요하다");
         }
     }
 
-    public record Change(long version, Cursor cursor, Set<Long> checked,
-        List<Ready> remaining) {
+    public record Change(long version, EvaluationSelection.Cursor cursor, Set<Long> checked,
+        List<EvaluationWorkPageReader.Ready> remaining) {
         /** 원본 참조와 분리하고 기존 null·원소·순서를 보존한다. */
         public Change {
             if (checked != null) {
@@ -161,14 +140,11 @@ public class EvaluationRouteCommitter {
         }
     }
 
-    private List<ForecastEvaluation> verifyIfQualityChanged(
-        RouteInput input,
-        List<ForecastEvaluation> results,
-        final boolean qualityChanged
-    ) {
-        if (qualityChanged) {
+    private List<ForecastEvaluation> verifyIfInputChanged(EvaluateForecastsService.RouteInput input,
+        List<ForecastEvaluation> results, final boolean inputChanged) {
+        if (inputChanged) {
             return WorkerOperationLog.measure("settlement_quality_recheck", input.version(),
-                () -> qualityRecheck.unchanged(input, results));
+                () -> inputRecheck.unchanged(input, results));
         }
         return results;
     }

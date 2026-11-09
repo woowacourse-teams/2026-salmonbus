@@ -66,8 +66,8 @@ class JdbcDemandStatisticsVersionTransactionTest {
     void 저장한_테스트_자료를_정리한다() {
         jdbc.sql("DELETE FROM stop_demand_statistics WHERE route_version_id = ?").param(routeVersionId).update();
         jdbc.sql("DELETE FROM demand_statistics_version WHERE route_version_id = ?").param(routeVersionId).update();
-        jdbc.sql("DELETE FROM route_data_quality WHERE route_id = ?").param(routeId).update();
         jdbc.sql("DELETE FROM route_stop WHERE route_version_id = ?").param(routeVersionId).update();
+        jdbc.sql("DELETE FROM stop_demand_baseline WHERE route_version_id=?").param(routeVersionId).update();
         jdbc.sql("DELETE FROM route_version WHERE id = ?").param(routeVersionId).update();
         jdbc.sql("DELETE FROM route WHERE id = ?").param(routeId).update();
     }
@@ -122,7 +122,7 @@ class JdbcDemandStatisticsVersionTransactionTest {
             throw new IllegalStateException(exception);
         }
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            repository.readHourlyTotals(routeVersionId, DATA_UNTIL);
+            jdbc.sql("SELECT id FROM route WHERE id=? FOR UPDATE").param(routeId).query(Long.class).single();
             final int revision = repository.currentRevision(routeVersionId, CALCULATION_VERSION) + 1;
             repository.append(version(revision, List.of(measurement(1))));
         });

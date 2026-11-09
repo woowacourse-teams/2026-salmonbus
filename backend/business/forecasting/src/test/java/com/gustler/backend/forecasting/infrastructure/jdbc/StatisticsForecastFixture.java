@@ -29,11 +29,11 @@ final class StatisticsForecastFixture {
                     published_at, prediction_count
                 )
                 SELECT batch.id, batch.route_version_id, ?, ?,
-                       COALESCE(quality.quality_revision, 1), batch.response_received_at, ?, ?, 1
+                       COALESCE(route_state.data_revision, 1), batch.response_received_at, ?, ?, 1
                 FROM vehicle_observation observation
                 JOIN observation_batch batch ON batch.id = observation.observation_batch_id
                 JOIN route_version version ON version.id = batch.route_version_id
-                LEFT JOIN route_data_quality quality ON quality.route_id = version.route_id
+                LEFT JOIN route route_state ON route_state.id = version.route_id
                 WHERE observation.id = ?
                 RETURNING id
                 """)
@@ -70,7 +70,7 @@ final class StatisticsForecastFixture {
         final int inserted = jdbc.sql("""
                 WITH arrival AS MATERIALIZED (
                     SELECT observation.*, batch.response_received_at, CAST(? AS timestamptz) AS scored_at
-                    FROM forecast_observation_quality observation
+                    FROM operational_observation observation
                     JOIN observation_batch batch ON batch.id=observation.observation_batch_id
                     WHERE observation.id=?
                 ), removed AS (

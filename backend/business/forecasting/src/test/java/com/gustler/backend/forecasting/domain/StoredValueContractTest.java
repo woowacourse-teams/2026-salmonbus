@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
 import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
-import com.gustler.backend.forecasting.domain.quality.OneWayTripClassifier.Status;
 import com.gustler.backend.support.SchemaCheck;
 import java.util.Arrays;
 import java.util.Set;
@@ -31,14 +30,4 @@ class StoredValueContractTest {
             .map(Enum::name)).containsExactlyInAnyOrderElementsOf(allowed);
     }
 
-    @Test
-    void 편도_판정_상태는_편도_표의_CHECK와_같다() {
-        // when
-        Set<String> allowed = SchemaCheck.allowedValues("V15__one_way_trip_quality.sql", "status");
-
-        // then
-        assertThat(Arrays.stream(Status.values())
-            .map(Enum::name))
-            .containsExactlyInAnyOrderElementsOf(allowed);
-    }
 }

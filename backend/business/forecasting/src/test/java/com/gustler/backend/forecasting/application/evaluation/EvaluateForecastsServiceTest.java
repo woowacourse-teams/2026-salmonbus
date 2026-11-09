@@ -12,15 +12,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
-import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Key;
-import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Restored;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Lost;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.SeatMissing;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Skipped;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
@@ -59,7 +53,7 @@ class EvaluateForecastsServiceTest {
     private EvaluationWorkStore work;
 
     @Mock
-    private RouteDataQualityAccess quality;
+    private RouteWorkAccess quality;
 
     @Mock
     private ForecastEvaluationWriter writer;
@@ -74,12 +68,11 @@ class EvaluateForecastsServiceTest {
 
     @BeforeEach
     void 회수_배치를_멈춘_시계로_세운다() {
-        job =
-            new EvaluateForecastsService(work, new EvaluationWorkPageReader(work),
-                new EvaluationRouteCommitter(work, quality, writer,
-                    new EvaluationQualityRecheck(work, arrivalObservationQuery, properties().arrivalLimit())),
-                arrivalObservationQuery, quality, properties(), Clock.fixed(SETTLED_AT, ZoneOffset.UTC), 30000, 3,
-                new RecentArrivalObservationCache(false, 30000, Duration.ofMinutes(30)));
+        job = new EvaluateForecastsService(work, new EvaluationWorkPageReader(work),
+            new EvaluationRouteCommitter(work, quality, writer,
+                new EvaluationInputRecheck(work, arrivalObservationQuery, properties().arrivalLimit())),
+            arrivalObservationQuery, quality, properties(), Clock.fixed(SETTLED_AT, ZoneOffset.UTC), 30000, 3,
+            new RecentArrivalObservationCache(false, 30000, Duration.ofMinutes(30)));
     }
 
     @Test
@@ -92,7 +85,7 @@ class EvaluateForecastsServiceTest {
         runRound();
 
         // then
-        assertThat(settledLabels()).containsExactly(new Settled(ARRIVAL_OBSERVATION_ID, 0));
+        assertThat(settledLabels()).containsExactly(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0));
     }
 
     @Test
@@ -118,7 +111,7 @@ class EvaluateForecastsServiceTest {
         runRound();
 
         // then
-        assertThat(settledLabels()).containsExactly(new SeatMissing(ARRIVAL_OBSERVATION_ID));
+        assertThat(settledLabels()).containsExactly(new ArrivalLabel.SeatMissing(ARRIVAL_OBSERVATION_ID));
     }
 
     @Test
@@ -131,9 +124,8 @@ class EvaluateForecastsServiceTest {
         runRound();
 
         // then
-        assertThat(settledLabels()).containsExactly(
-            new Settled(ARRIVAL_OBSERVATION_ID, 0),
-            new Settled(ARRIVAL_OBSERVATION_ID, 0));
+        assertThat(settledLabels()).containsExactly(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0),
+            new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0));
     }
 
     @Test
@@ -152,8 +144,8 @@ class EvaluateForecastsServiceTest {
     @Test
     void 차량_아이디가_없는_예보는_뒤_관측을_안_읽는다() {
         // given
-        givenPendingOn(ROUTE_VERSION_3330, new PendingForecast(
-            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, null, 4, OBSERVED_AT, OBSERVED_AT));
+        givenPendingOn(ROUTE_VERSION_3330,
+            new PendingForecast(100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, null, 4, OBSERVED_AT, OBSERVED_AT));
 
         // when
         runRound();
@@ -198,8 +190,7 @@ class EvaluateForecastsServiceTest {
         runRound();
 
         // then
-        verify(arrivalObservationQuery)
-            .findAfter(anyLong(), anyString(), eq(OBSERVED_AT.plusSeconds(90)), anyInt());
+        verify(arrivalObservationQuery).findAfter(anyLong(), anyString(), eq(OBSERVED_AT.plusSeconds(90)), anyInt());
     }
 
     @Test
@@ -235,8 +226,7 @@ class EvaluateForecastsServiceTest {
         final int passedStopOrder = TARGET_STOP_ORDER - 1;
         final int laterTarget = TARGET_STOP_ORDER + 1;
         PendingForecast reached = pending(observationId, passedStopOrder);
-        PendingForecast waiting = new PendingForecast(
-            observationId, laterTarget, ROUTE_VERSION_3330, VEHICLE_ID,
+        PendingForecast waiting = new PendingForecast(observationId, laterTarget, ROUTE_VERSION_3330, VEHICLE_ID,
             laterTarget - passedStopOrder, OBSERVED_AT, OBSERVED_AT);
         givenPendingOn(ROUTE_VERSION_3330, reached, waiting);
         givenArrivals(passedAt(TARGET_STOP_ORDER, 60, 0));
@@ -269,41 +259,33 @@ class EvaluateForecastsServiceTest {
 
         // then
         verify(writer, times(rounds)).complete(settlements.capture());
-        assertThat(settlements.getAllValues()).allSatisfy(
-            completed -> assertThat(completed).isEmpty());
+        assertThat(settlements.getAllValues()).allSatisfy(completed -> assertThat(completed).isEmpty());
         verify(work, times(rounds)).routes();
         verify(work).restore(eq(ROUTE_VERSION_3330), any());
-        verify(arrivalObservationQuery, times(rounds)).findAfter(
-            ROUTE_VERSION_3330, VEHICLE_ID, OBSERVED_AT, properties().arrivalLimit());
+        verify(arrivalObservationQuery, times(rounds)).findAfter(ROUTE_VERSION_3330, VEHICLE_ID, OBSERVED_AT,
+            properties().arrivalLimit());
     }
 
-    private void givenPendingOn(
-        final long routeVersionId,
-        PendingForecast... forecasts
-    ) {
-        List<Long> ids = Arrays.stream(forecasts)
-            .map(PendingForecast::vehicleObservationId)
-            .distinct()
-            .sorted()
+    private void givenPendingOn(final long routeVersionId, PendingForecast... forecasts) {
+        List<Long> ids = Arrays.stream(forecasts).map(PendingForecast::vehicleObservationId).distinct().sorted()
             .toList();
         when(work.routes()).thenReturn(List.of(routeVersionId));
         when(work.lastObservationId(routeVersionId)).thenReturn(lastIdOf(ids));
         if (ids.isEmpty()) {
             return;
         }
-        when(work.revisions(eq(routeVersionId), any())).thenReturn(ids.stream()
-                .collect(Collectors.toMap(id -> id, id -> 1L)));
+        when(work.revisions(eq(routeVersionId), any()))
+            .thenReturn(ids.stream().collect(Collectors.toMap(id -> id, id -> 1L)));
         when(work.page(eq(routeVersionId), anyLong(), anyLong(), anyInt())).thenAnswer(call -> {
             final long after = call.getArgument(1);
-            return ids.stream()
-                .filter(id -> id > after)
-                .toList();
+            return ids.stream().filter(id -> id > after).toList();
         });
         when(work.restore(eq(routeVersionId), any())).thenReturn(Arrays.stream(forecasts)
-                .map(f -> new Restored(new Key(f.vehicleObservationId(), f.targetStopOrder()),
-                    Optional.of(new PendingForecast(f.vehicleObservationId(), f.targetStopOrder(), routeVersionId,
-                        f.vehicleId(), f.stopsToTarget(), f.observedAt(), f.generatedAt(), f.qualityDirection()))))
-                .toList());
+            .map(f -> new EvaluationWorkStore.Restored(
+                new EvaluationWorkStore.Key(f.vehicleObservationId(), f.targetStopOrder()),
+                Optional.of(new PendingForecast(f.vehicleObservationId(), f.targetStopOrder(), routeVersionId,
+                    f.vehicleId(), f.stopsToTarget(), f.observedAt(), f.generatedAt(), f.qualityDirection()))))
+            .toList());
     }
 
     private void runRound() {
@@ -325,18 +307,15 @@ class EvaluateForecastsServiceTest {
     }
 
     private List<ArrivalLabel> settledLabels() {
-        return captured().stream()
-            .<ArrivalLabel>map(evaluation -> switch (evaluation.state()) {
-                case SETTLED -> new Settled(evaluation.result()
-                    .arrivalObservationId(), evaluation.result()
-                    .seatsOnArrival());
-                case SEAT_MISSING -> new SeatMissing(evaluation.result().arrivalObservationId());
-                case SKIPPED -> new Skipped();
-                case LOST -> new Lost();
-                case QUALITY_EXCLUDED -> throw new AssertionError("품질 제외는 도착 판정이 아니라 저장소에서 처리한다");
-                case PENDING -> throw new AssertionError("평가 대기 상태를 저장하면 안 된다");
-            })
-            .toList();
+        return captured().stream().<ArrivalLabel>map(evaluation -> switch (evaluation.state()) {
+        case SETTLED ->
+            new ArrivalLabel.Settled(evaluation.result().arrivalObservationId(), evaluation.result().seatsOnArrival());
+        case SEAT_MISSING -> new ArrivalLabel.SeatMissing(evaluation.result().arrivalObservationId());
+        case SKIPPED -> new ArrivalLabel.Skipped();
+        case LOST -> new ArrivalLabel.Lost();
+        case QUALITY_EXCLUDED -> throw new AssertionError("품질 제외는 도착 판정이 아니라 저장소에서 처리한다");
+        case PENDING -> throw new AssertionError("평가 대기 상태를 저장하면 안 된다");
+        }).toList();
     }
 
     private List<ForecastEvaluation> captured() {
@@ -344,47 +323,25 @@ class EvaluateForecastsServiceTest {
         return settlements.getValue();
     }
 
-    private PendingForecast pending(
-        final long vehicleObservationId,
-        final int passedStopOrder
-    ) {
+    private PendingForecast pending(final long vehicleObservationId, final int passedStopOrder) {
         return forecastMadeAt(vehicleObservationId, passedStopOrder, 0);
     }
 
-    private PendingForecast forecastMadeAt(
-        final long vehicleObservationId,
-        final int passedStopOrder,
-        final int secondsAfterObserved
-    ) {
-        return new PendingForecast(
-            vehicleObservationId,
-            TARGET_STOP_ORDER,
-            ROUTE_VERSION_3330,
-            VEHICLE_ID,
-            TARGET_STOP_ORDER - passedStopOrder,
-            OBSERVED_AT.plusSeconds(secondsAfterObserved),
+    private PendingForecast forecastMadeAt(final long vehicleObservationId, final int passedStopOrder,
+        final int secondsAfterObserved) {
+        return new PendingForecast(vehicleObservationId, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID,
+            TARGET_STOP_ORDER - passedStopOrder, OBSERVED_AT.plusSeconds(secondsAfterObserved),
             OBSERVED_AT.plusSeconds(secondsAfterObserved));
     }
 
-    private ArrivalCandidate passedAt(
-        final int passedStopOrder,
-        final int secondsAfterObserved,
-        Integer remainingSeats
-    ) {
-        return new ArrivalCandidate(
-            ARRIVAL_OBSERVATION_ID,
-            new ObservedVehicle(
-                VEHICLE_ID,
-                ROUTE_VERSION_3330,
-                passedStopOrder,
-                OBSERVED_AT.plusSeconds(secondsAfterObserved),
-                remainingSeats,
-                CROWD_LEVEL_UNKNOWN));
+    private ArrivalCandidate passedAt(final int passedStopOrder, final int secondsAfterObserved,
+        Integer remainingSeats) {
+        return new ArrivalCandidate(ARRIVAL_OBSERVATION_ID, new ObservedVehicle(VEHICLE_ID, ROUTE_VERSION_3330,
+            passedStopOrder, OBSERVED_AT.plusSeconds(secondsAfterObserved), remainingSeats, CROWD_LEVEL_UNKNOWN));
     }
 
     private ForecastPolicy properties() {
-        return new ForecastPolicy(
-            Duration.ofMinutes(5), 20, 3000, 400);
+        return new ForecastPolicy(Duration.ofMinutes(5), 20, 3000, 400);
     }
 
     private static long lastIdOf(List<Long> ids) {

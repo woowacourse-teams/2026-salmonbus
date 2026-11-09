@@ -8,7 +8,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
@@ -87,7 +87,7 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
     @Test
     void 초기집계_SQL이_실패하면_집계를_남기지_않고_잠금도_해제한다() {
         // when
-        jdbc.sql("INSERT INTO route_data_quality(route_id) VALUES (?) ON CONFLICT DO NOTHING")
+        jdbc.sql("UPDATE route SET data_revision=1 WHERE id=?")
             .param(routeId).update();
         doAnswer(call -> {
             jdbc.sql("SELECT pg_sleep(1)").query().singleRow();
@@ -104,7 +104,7 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
             .isNotNull().isInstanceOf(QueryTimeoutException.class);
         assertThat(count("same_day_model_full_outcomes")).isZero();
         new TransactionTemplate(new DataSourceTransactionManager(dataSource)).executeWithoutResult(status ->
-            jdbc.sql("SELECT route_id FROM route_data_quality WHERE route_id = ? FOR UPDATE NOWAIT")
+            jdbc.sql("SELECT id FROM route WHERE id = ? FOR UPDATE NOWAIT")
                 .param(routeId)
                 .query(Long.class)
                 .single());
@@ -197,8 +197,8 @@ class SameDayFullOutcomesInitializerTest extends SameDayTransactionBoundaryTest 
             await(read);
             quality = workers.submit(() -> new TransactionTemplate(new DataSourceTransactionManager(dataSource))
                 .executeWithoutResult(status -> {
-                    context.getBean(RouteDataQualityAccess.class).lock(versionId);
-                    jdbc.sql("UPDATE route_data_quality SET quality_revision = quality_revision + 1 WHERE route_id = ?")
+                    context.getBean(RouteWorkAccess.class).lock(versionId);
+                    jdbc.sql("UPDATE route SET data_revision = data_revision + 1 WHERE id = ?")
                         .param(routeId).update();
                 }));
             awaitLockWait();

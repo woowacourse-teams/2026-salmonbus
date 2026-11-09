@@ -3,7 +3,6 @@ package com.gustler.backend.forecasting.application.evaluation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -12,13 +11,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gustler.backend.forecasting.application.evaluation.EvaluateForecastsService.RouteInput;
-import com.gustler.backend.forecasting.application.evaluation.EvaluationRouteCommitter.Change;
-import com.gustler.backend.forecasting.application.evaluation.EvaluationSelection.Cursor;
-import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkPageReader.Ready;
-import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Key;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Lost;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.time.Instant;
@@ -34,12 +28,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 class EvaluationRouteCommitterTest {
     private final EvaluationWorkStore work = mock(EvaluationWorkStore.class);
-    private final RouteDataQualityAccess quality = mock(RouteDataQualityAccess.class);
+    private final RouteWorkAccess quality = mock(RouteWorkAccess.class);
     private final ForecastEvaluationWriter writer = mock(ForecastEvaluationWriter.class);
-    private final EvaluationQualityRecheck recheck = mock(EvaluationQualityRecheck.class);
+    private final EvaluationInputRecheck recheck = mock(EvaluationInputRecheck.class);
     private final EvaluationRouteCommitter committer = new EvaluationRouteCommitter(work, quality, writer, recheck);
     private final List<Integer> completions = new ArrayList<>();
-    private final List<Change> changes = new ArrayList<>();
+    private final List<EvaluationRouteCommitter.Change> changes = new ArrayList<>();
     private final Instant now = Instant.parse("2026-10-01T00:00:00Z");
 
     @BeforeEach
@@ -59,7 +53,7 @@ class EvaluationRouteCommitterTest {
         // given
         when(quality.lock(1)).thenReturn(2L);
         when(work.revisions(1, List.of(10L))).thenReturn(Map.of(10L, 1L));
-        ForecastEvaluation safe = ForecastEvaluation.completed(10, 2, new Lost(), now);
+        ForecastEvaluation safe = ForecastEvaluation.completed(10, 2, new ArrivalLabel.Lost(), now);
         when(recheck.unchanged(any(), any())).thenReturn(List.of(safe));
 
         // when
@@ -99,10 +93,8 @@ class EvaluationRouteCommitterTest {
         Throwable caughtFailure = catchThrowable(() -> commit(true));
 
         // then
-        assertThat(caughtFailure)
-            .isNotNull().isInstanceOf(IllegalStateException.class);
+        assertThat(caughtFailure).isNotNull().isInstanceOf(IllegalStateException.class);
         verifyNoInteractions(writer);
-        verify(work, never()).closeExcluded(anyLong(), any(), anyInt());
         verify(work, never()).releaseCompleted(anyLong(), any());
         assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
     }
@@ -142,14 +134,13 @@ class EvaluationRouteCommitterTest {
     void 품질_제외로_종료한_예보는_도착_정산으로_다시_저장하지_않는다() {
         // given
         unchanged();
-        when(work.completed(1, List.of(10L))).thenReturn(List.of(new Key(10, 2)));
+        when(work.completed(1, List.of(10L))).thenReturn(List.of(new EvaluationWorkStore.Key(10, 2)));
 
         // when
         commit();
 
         // then
         InOrder order = inOrder(work, writer);
-        order.verify(work).closeExcluded(1, List.of(10L), 500);
         order.verify(work).completed(1, List.of(10L));
         order.verify(writer).complete(List.of());
         order.verify(work).completed(1, List.of(10L));
@@ -182,15 +173,18 @@ class EvaluationRouteCommitterTest {
     }
 
     private void commit(final boolean memoryChanged) {
+        if (memoryChanged) {
+            when(quality.lock(1)).thenReturn(2L);
+        }
         PendingForecast forecast = new PendingForecast(10, 2, 1, "bus", 1, now, now);
-        RouteInput input = new RouteInput(1, 1, false,
-            Cursor.START, List.of(10L), Map.of(10L, 1L),
-            List.of(new Ready(10, 1, 1, List.of(forecast))), List.of(forecast));
-        committer.commit(input, List.of(ForecastEvaluation.completed(10, 2, new Lost(), now)),
+        EvaluateForecastsService.RouteInput input = new EvaluateForecastsService.RouteInput(1, 1,
+            EvaluationSelection.Cursor.START, List.of(10L), Map.of(10L, 1L),
+            List.of(new EvaluationWorkPageReader.Ready(10, 1, 1, List.of(forecast))), List.of(forecast));
+        committer.commit(input, List.of(ForecastEvaluation.completed(10, 2, new ArrivalLabel.Lost(), now)),
             (status, change) -> {
                 completions.add(status);
                 changes.add(change);
-            }, memoryChanged);
+            });
     }
 
     private static void finish(final int status) {

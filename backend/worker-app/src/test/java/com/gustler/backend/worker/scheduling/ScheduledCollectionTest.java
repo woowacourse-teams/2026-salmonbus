@@ -57,7 +57,7 @@ class ScheduledCollectionTest {
     }
 
     @Test
-    void 예보_계산을_꺼도_수집을_켜면_이상_차량의_편도_조사를_등록한다() {
+    void 수집을_켜도_편도_조사_스케줄을_등록하지_않는다() {
         // given
         // 수집은 켜고 예보 계산은 끈 컨텍스트다.
 
@@ -69,6 +69,6 @@ class ScheduledCollectionTest {
             .toList();
 
         // then
-        assertThat(registeredTasks).contains(TripQualityInvestigationJob.class.getName() + ".investigate");
+        assertThat(registeredTasks).noneMatch(task -> task.endsWith("TripQualityInvestigationJob.investigate"));
     }
 }

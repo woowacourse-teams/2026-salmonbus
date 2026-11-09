@@ -14,8 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * 정산 회차의 후속 관측을 품질 판본과 보존 시간으로 제한해 재사용한다.
- * 아직 커밋하지 않은 회차 자료는 공유하지 않는다.
+ * 정산 회차의 후속 관측을 품질 판본과 보존 시간으로 제한해 재사용한다. 아직 커밋하지 않은 회차 자료는 공유하지 않는다.
  */
 @Component
 public class RecentArrivalObservationCache {
@@ -33,8 +32,7 @@ public class RecentArrivalObservationCache {
     public RecentArrivalObservationCache(
         @Value("${forecast.evaluation.observation-cache.enabled:false}") final boolean enabled,
         @Value("${forecast.evaluation.observation-cache.max-observations:100000}") final int capacity,
-        @Value("${forecast.evaluation.observation-cache.retention:50m}") Duration retention
-    ) {
+        @Value("${forecast.evaluation.observation-cache.retention:50m}") Duration retention) {
         if (capacity < 1 || isInvalidRetention(retention)) {
             throw new IllegalArgumentException("관측 보관 개수와 시간은 양수여야 한다");
         }
@@ -61,7 +59,7 @@ public class RecentArrivalObservationCache {
         return entry.candidate();
     }
 
-    private boolean isReusable(Entry entry, long revision, Instant now) {
+    private boolean isReusable(Entry entry, final long revision, Instant now) {
         if (entry == null || entry.revision() != revision) {
             return false;
         }
@@ -69,8 +67,7 @@ public class RecentArrivalObservationCache {
     }
 
     private boolean recent(ArrivalCandidate candidate, Instant now) {
-        return candidate.observedAt().isAfter(now.minus(retention))
-            && !candidate.observedAt().isAfter(now);
+        return candidate.observedAt().isAfter(now.minus(retention)) && !candidate.observedAt().isAfter(now);
     }
 
     private synchronized void publish(Map<Key, Entry> additions, Instant now) {
@@ -100,6 +97,7 @@ public class RecentArrivalObservationCache {
 
     private record Key(long routeVersionId, long observationId) {
     }
+
     private record Entry(long revision, ArrivalCandidate candidate) {
     }
 
@@ -129,22 +127,21 @@ public class RecentArrivalObservationCache {
         }
 
         /**
-         * 품질 조사 중이거나 캐시로 안전하게 답할 수 없으면 DB 조회로 되돌아간다. 차량·시각 범위와 결과 개수 제한을 유지한다.
+         * 캐시로 답할 수 없으면 DB 조회로 되돌아간다. 차량·시각 범위와 결과 개수 제한을 유지한다.
          */
         public List<ArrivalCandidate> read(
             ArrivalObservationQuery query,
             final long version,
             final long revision,
-            final boolean investigating,
             String vehicle,
             Instant after,
             final int limit
         ) {
-            if (!enabled || investigating) {
+            if (!enabled) {
                 return query.findAfter(version, vehicle, after, limit);
             }
             if (delivered != null) {
-                return delivered.read(query, version, revision, investigating, vehicle, after, limit);
+                return delivered.read(query, version, revision, vehicle, after, limit);
             }
 
             List<Long> ids = query.findIdsAfter(version, vehicle, after, limit);
@@ -173,9 +170,7 @@ public class RecentArrivalObservationCache {
                 return query.findAfter(version, vehicle, after, limit);
             }
 
-            List<ArrivalCandidate> ordered = ids.stream()
-                .map(found::get)
-                .toList();
+            List<ArrivalCandidate> ordered = ids.stream().map(found::get).toList();
             for (ArrivalCandidate candidate : ordered) {
                 if (recent(candidate, now)) {
                     staged.put(new Key(version, candidate.observationId()), new Entry(revision, candidate));

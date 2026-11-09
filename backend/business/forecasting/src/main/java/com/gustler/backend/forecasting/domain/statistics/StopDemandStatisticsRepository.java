@@ -1,7 +1,6 @@
 package com.gustler.backend.forecasting.domain.statistics;
 
 import java.time.Instant;
-import java.util.List;
 
 /**
  * 정류장별 수요 통계를 조회하고 새 통계 버전을 저장한다.
@@ -34,10 +33,6 @@ public interface StopDemandStatisticsRepository {
      * <p>승차 가능한 정류장의 한 정류장 앞 예측만 집계한다. 같은 도착 결과가 여러 거리의 예측에
      * 반영되므로, 대상 정류장까지 남은 거리를 제한해 중복 집계를 막는다.
      */
-    List<StopDemandHourlyTotals> readHourlyTotals(
-        long routeVersionId,
-        Instant dataUntil
-    );
 
     /**
      * 새 통계 버전을 추가하고 이전 버전은 보존한다.

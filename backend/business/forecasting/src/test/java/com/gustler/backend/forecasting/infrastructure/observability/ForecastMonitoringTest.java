@@ -23,6 +23,26 @@ import org.slf4j.LoggerFactory;
 
 class ForecastMonitoringTest {
     @Test
+    void 격리_판정별로_건수와_마지막_발생_시각을_노출한다() {
+        // given
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        ForecastMonitoring monitoring = new ForecastMonitoring(registry, mock(DataSource.class),
+            Clock.fixed(Instant.ofEpochSecond(1000), ZoneOffset.UTC));
+
+        // when
+        monitoring.collectionSeatQuality(2, 0);
+        monitoring.collectionSeatQuality(1, 1);
+
+        // then
+        assertThat(registry.get("salmonbus.collection.seat.quality").tag("decision", "REVIEW").counter().count())
+            .isEqualTo(3);
+        assertThat(registry.get("salmonbus.collection.seat.quality").tag("decision", "OUTLIER").counter().count())
+            .isEqualTo(1);
+        assertThat(registry.get("salmonbus.collection.seat.quality.last.timestamp").gauges())
+            .extracting(gauge -> gauge.value()).containsExactlyInAnyOrder(1000.0, 1000.0);
+    }
+
+    @Test
     void 좌석오차는_예측좌석으로_계산하고_누락과_제외는_정답으로_세지_않는다() {
         // when
         Logger logger = (Logger) LoggerFactory.getLogger(ForecastMonitoring.class);

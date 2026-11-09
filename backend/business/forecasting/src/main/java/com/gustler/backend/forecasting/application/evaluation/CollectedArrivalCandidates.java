@@ -3,28 +3,24 @@ package com.gustler.backend.forecasting.application.evaluation;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
-import com.gustler.backend.observations.api.ObservationDeliveryBatch.Row;
 import java.time.Instant;
 import java.util.List;
 
-/** 새 관측에만 적용한다. 기존 편도 배정은 DB 복원으로 읽고 품질 버전 변경 시 재사용하지 않는다. */
+/** 수집된 새 관측을 정산의 도착 후보로 변환한다. */
 final class CollectedArrivalCandidates {
     private CollectedArrivalCandidates() {
     }
 
     static List<ArrivalCandidate> from(ObservationDeliveryBatch batch, Integer turn, Instant storedAt) {
-        return batch.rows()
-            .stream()
-            .map(row -> new ArrivalCandidate(row.observationId(),
-                new ObservedVehicle(row.vehicleId(), batch.routeVersionId(),
-                    passedStopOrder(row), storedAt,
-                    row.remainingSeats(), row.crowdLevel()),
-                qualityDirection(row, turn), true))
+        return batch.rows().stream()
+            .map(row -> new ArrivalCandidate(row.observationId(), new ObservedVehicle(row.vehicleId(),
+                batch.routeVersionId(), passedStopOrder(row), storedAt, row.remainingSeats(), row.crowdLevel()),
+                direction(row, turn)))
             .toList();
     }
 
-    // forecast_observation_quality와 같은 규칙. NULL 운행 상태는 SQL의 UNKNOWN을 그대로 반영한다.
-    private static long direction(Row row, Integer turn) {
+    // operational_observation와 같은 규칙. NULL 운행 상태는 SQL의 UNKNOWN을 그대로 반영한다.
+    private static long direction(ObservationDeliveryBatch.Row row, Integer turn) {
         Integer stop = row.stopOrder();
         Integer state = row.runningState();
         if (isInboundObservation(turn, stop, state)) {
@@ -46,21 +42,14 @@ final class CollectedArrivalCandidates {
         return isReturningAtFirstStop(stop, state);
     }
 
-    private static boolean isReturningAtFirstStop(int stop, Integer state) {
+    private static boolean isReturningAtFirstStop(final int stop, Integer state) {
         return stop == 1 && Integer.valueOf(1).equals(state);
     }
 
-    private static int passedStopOrder(Row row) {
+    private static int passedStopOrder(ObservationDeliveryBatch.Row row) {
         if (row.passedStopOrder() == null) {
             return 0;
         }
         return row.passedStopOrder();
-    }
-
-    private static Long qualityDirection(Row row, Integer turn) {
-        if (row.remainingSeats() != null && row.remainingSeats() > 70) {
-            return null;
-        }
-        return direction(row, turn);
     }
 }

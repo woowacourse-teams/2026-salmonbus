@@ -12,14 +12,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gustler.backend.forecasting.application.evaluation.ObservationDeliveryService.Round;
-import com.gustler.backend.forecasting.application.evaluation.RecentObservationBatches.Header;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
-import com.gustler.backend.observations.api.ObservationDeliveryBatch.Kind;
-import com.gustler.backend.observations.api.ObservationDeliveryBatch.Row;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -40,7 +36,7 @@ class ObservationDeliveryServiceTest {
         headers(header(1, 1));
 
         // when
-        Round round = memory.begin(NOW);
+        ObservationDeliveryService.Round round = memory.begin(NOW);
         assertThat(read(round, 1)).extracting(ArrivalCandidate::remainingSeats).containsExactly(10);
         read(round, 1);
 
@@ -82,7 +78,7 @@ class ObservationDeliveryServiceTest {
     @Test
     void 재시작으로_캐시가_비면_DB에_저장된_관측을_읽는다() {
         // given
-        headers(new Header(1, 1, NOW, 1, 5));
+        headers(new RecentObservationBatches.Header(1, 1, NOW, 1, 5));
         restoring(1, candidate(1, 10));
 
         // when
@@ -97,7 +93,7 @@ class ObservationDeliveryServiceTest {
         // given
         memory.receive(1, batch(1, 1, 10));
         headers(header(1, 1));
-        ArrivalCandidate excluded = new ArrivalCandidate(1, candidate(1, 10).vehicle(), null, true);
+        ArrivalCandidate excluded = new ArrivalCandidate(1, candidate(1, 10).vehicle(), null);
         restoring(1, excluded);
 
         // when
@@ -112,7 +108,7 @@ class ObservationDeliveryServiceTest {
     void 품질_변경을_반영한_캐시를_이전_품질_버전의_수집_콜백이_덮어쓰지_않는다() {
         // given
         headers(header(1, 1));
-        ArrivalCandidate excluded = new ArrivalCandidate(1, candidate(1, 10).vehicle(), null, true);
+        ArrivalCandidate excluded = new ArrivalCandidate(1, candidate(1, 10).vehicle(), null);
         restoring(1, excluded);
         assertThat(read(memory.begin(NOW), 2)).containsExactly(excluded);
 
@@ -144,8 +140,8 @@ class ObservationDeliveryServiceTest {
     void 배치가_비워지면_늦은_콜백이_와도_옛_관측을_사용하지_않는다() {
         // given
         memory.receive(1, batch(1, 1, 10));
-        memory.receive(1, new ObservationDeliveryBatch(1, 1, 2,
-            Kind.CLEARED, null, List.of()));
+        memory.receive(1,
+            new ObservationDeliveryBatch(1, 1, 2, ObservationDeliveryBatch.Kind.CLEARED, null, List.of()));
         headers();
 
         // when
@@ -203,7 +199,7 @@ class ObservationDeliveryServiceTest {
         // given
         memory.receive(1, batch(1, 1, 10));
         headers(header(1, 1));
-        Round round = memory.begin(NOW);
+        ObservationDeliveryService.Round round = memory.begin(NOW);
         read(round, 1);
 
         // when
@@ -214,17 +210,15 @@ class ObservationDeliveryServiceTest {
     }
 
     @Test
-    void 품질조사_중이거나_보관기간_밖이면_기존_DB_조회로_처리한다() {
+    void 보관기간_밖이면_기존_DB_조회로_처리한다() {
         // given
-        Round round = memory.begin(NOW);
+        ObservationDeliveryService.Round round = memory.begin(NOW);
 
         // when
-        round.read(fallback, 1, 1, true, "bus", NOW, 100);
-        round.read(fallback, 1, 1, false, "bus", NOW.minusSeconds(3600), 100);
+        round.read(fallback, 1, 1, "bus", NOW.minusSeconds(3600), 100);
 
         // then
         verifyNoInteractions(source);
-        verify(fallback).findAfter(1, "bus", NOW, 100);
         verify(fallback).findAfter(1, "bus", NOW.minusSeconds(3600), 100);
     }
 
@@ -233,25 +227,25 @@ class ObservationDeliveryServiceTest {
             Duration.ofMinutes(30));
     }
 
-    private List<ArrivalCandidate> read(Round round, final long revision) {
-        return round.read(fallback, 1, revision, false, "bus", NOW.minusSeconds(60), 100);
+    private List<ArrivalCandidate> read(ObservationDeliveryService.Round round, final long revision) {
+        return round.read(fallback, 1, revision, "bus", NOW.minusSeconds(60), 100);
     }
 
-    private void headers(Header... headers) {
+    private void headers(RecentObservationBatches.Header... headers) {
         when(source.headers(anyLong(), any(), anyInt())).thenReturn(List.of(headers));
     }
 
-    private Header header(final long batch, final int attempt) {
-        return new Header(batch, attempt, NOW, 1, 5);
+    private RecentObservationBatches.Header header(final long batch, final int attempt) {
+        return new RecentObservationBatches.Header(batch, attempt, NOW, 1, 5);
     }
 
     private ObservationDeliveryBatch batch(final long id, final int attempt, final int seats) {
-        return new ObservationDeliveryBatch(id, 1, attempt, Kind.STORED, NOW,
-            List.of(new Row(id, "bus", seats, 2, null, 2, 2)));
+        return new ObservationDeliveryBatch(id, 1, attempt, ObservationDeliveryBatch.Kind.STORED, NOW,
+            List.of(new ObservationDeliveryBatch.Row(id, "bus", seats, 2, null, 2, 2)));
     }
 
     private ArrivalCandidate candidate(final long id, final int seats) {
-        return new ArrivalCandidate(id, new ObservedVehicle("bus", 1, 2, NOW, seats, null), 0L, true);
+        return new ArrivalCandidate(id, new ObservedVehicle("bus", 1, 2, NOW, seats, null), 0L);
     }
 
     private void restoring(final long batch, ArrivalCandidate candidate) {

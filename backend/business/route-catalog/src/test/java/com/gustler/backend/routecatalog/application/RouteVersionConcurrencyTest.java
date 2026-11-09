@@ -56,6 +56,7 @@ class RouteVersionConcurrencyTest {
             "DELETE FROM route_stop WHERE route_version_id IN (SELECT id FROM route_version WHERE route_id = ?)")
                 .param(routeId)
                 .update();
+            jdbc.sql("DELETE FROM stop_demand_baseline WHERE route_version_id IN(SELECT id FROM route_version WHERE route_id=?)").param(routeId).update();
             jdbc.sql("DELETE FROM route_version WHERE route_id = ?").param(routeId).update();
             jdbc.sql("DELETE FROM route WHERE id = ?").param(routeId).update();
         });

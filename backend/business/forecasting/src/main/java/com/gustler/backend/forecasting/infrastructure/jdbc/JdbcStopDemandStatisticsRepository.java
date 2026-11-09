@@ -1,9 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCell;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandMeasurement;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
@@ -18,7 +17,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.core.simple.JdbcClient.StatementSpec;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,10 +46,8 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
               AND calculation_version = :calculationVersion
               AND data_until <= :observedAt AND computed_at <= :observedAt
               AND quality_revision = (
-                  SELECT q.quality_revision FROM route_version v
-                  JOIN route_data_quality q ON q.route_id = v.route_id WHERE v.id = :routeVersionId)
-              AND NOT EXISTS (SELECT 1 FROM trip_quality_rebuild r
-                              WHERE r.route_version_id = :routeVersionId AND NOT r.completed)
+                  SELECT q.data_revision FROM route_version v
+                  JOIN route q ON q.id = v.route_id WHERE v.id = :routeVersionId)
         ) version
         LEFT JOIN stop_demand_statistics cell
                ON cell.route_version_id = :routeVersionId
@@ -76,49 +72,6 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
      * 확인한 차량별 최대 잔여석으로 계산하고, 집계 대상은 현재 품질 조건을 통과한 자료로 제한한다.
      * 도착 시각은 평가할 때 보관한 값을 사용한다. 날짜와 시간대 분류는 도메인 집계기가 담당한다.
      */
-    private static final String SELECT_HOURLY_TOTALS = """
-        WITH vehicle_capacity AS (
-            SELECT observation.vehicle_id,
-                   GREATEST(MAX(observation.remaining_seats), 1) AS capacity
-            FROM forecast_eligible_observation observation
-            JOIN observation_batch capacity_batch
-              ON capacity_batch.id = observation.observation_batch_id
-            WHERE observation.route_version_id = :routeVersionId
-              AND observation.vehicle_id IS NOT NULL
-              AND observation.remaining_seats IS NOT NULL
-              AND capacity_batch.response_received_at <= :dataUntil
-            GROUP BY observation.vehicle_id
-        )
-        SELECT forecast.target_stop_order AS stop_order,
-               date_trunc('hour', evaluation.arrived_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
-                   AS arrived_hour_start,
-               SUM(1 - forecast.seats_on_arrival::double precision / vehicle_capacity.capacity)
-                   AS fill_rate_total,
-               SUM(prediction.remaining_seats - forecast.seats_on_arrival)::double precision
-                   AS net_boarding_total,
-               SUM(vehicle_capacity.capacity)::double precision AS capacity_total,
-               COUNT(*) AS sample_count
-        FROM one_stop_quality_eligible_seat_forecast forecast
-        JOIN route_stop target_stop
-          ON target_stop.route_version_id = forecast.route_version_id
-         AND target_stop.stop_order = forecast.target_stop_order
-        JOIN vehicle_observation prediction
-          ON prediction.id = forecast.vehicle_observation_id
-        JOIN forecast_evaluation_result evaluation
-          ON evaluation.vehicle_observation_id = forecast.vehicle_observation_id
-         AND evaluation.target_stop_order = forecast.target_stop_order
-        JOIN vehicle_capacity
-          ON vehicle_capacity.vehicle_id = prediction.vehicle_id
-        WHERE forecast.route_version_id = :routeVersionId
-          AND forecast.scoring_state = 'SETTLED'
-          AND forecast.stops_to_target = 1
-          AND forecast.scored_at <= :dataUntil
-          AND target_stop.boarding_allowed = true
-          AND prediction.remaining_seats IS NOT NULL
-        GROUP BY forecast.target_stop_order, arrived_hour_start
-        ORDER BY forecast.target_stop_order, arrived_hour_start
-        """;
-
     private static final String INSERT_VERSION = """
         INSERT INTO demand_statistics_version (
             route_version_id, calculation_version, revision, data_until, computed_at,
@@ -143,14 +96,14 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
         """;
 
     private final JdbcClient jdbcClient;
-    private final RouteDataQualityAccess qualityAccess;
+    private final RouteWorkAccess routeWork;
 
     public JdbcStopDemandStatisticsRepository(
         JdbcClient jdbcClient,
-        RouteDataQualityAccess qualityAccess
+        RouteWorkAccess routeWork
     ) {
         this.jdbcClient = jdbcClient;
-        this.qualityAccess = qualityAccess;
+        this.routeWork = routeWork;
     }
 
     /** 사용할 통계가 없으면 버전 0과 빈 목록을 반환한다. */
@@ -190,46 +143,11 @@ public class JdbcStopDemandStatisticsRepository implements StopDemandStatisticsR
     }
 
     @Override
-    public List<StopDemandHourlyTotals> readHourlyTotals(
-        final long routeVersionId,
-        Instant dataUntil
-    ) {
-        // read→aggregate→append 동안 판정 변경을 막는다. 호출 writer가 노선별 transaction을 연다.
-        qualityAccess.lock(routeVersionId);
-        final boolean archived = jdbcClient.sql("""
-            SELECT EXISTS(SELECT 1 FROM evaluation_archive_batch b JOIN evaluation_archive_member m ON m.batch_id=b.id
-                JOIN seat_forecast f ON f.vehicle_observation_id=m.vehicle_observation_id
-                  AND f.target_stop_order=m.target_stop_order AND f.stops_to_target=1
-                WHERE b.route_version_id=:route AND NOT EXISTS(SELECT 1 FROM forecast_evaluation_result e
-                    WHERE e.vehicle_observation_id=m.vehicle_observation_id AND e.target_stop_order=m.target_stop_order))
-            """)
-            .param("route", routeVersionId)
-            .query(Boolean.class)
-            .single();
-        if (archived) {
-            throw new IllegalStateException("DB 원본만 읽는 일괄 집계는 이관된 정산을 처리할 수 없다");
-        }
-        StatementSpec statement = jdbcClient.sql(SELECT_HOURLY_TOTALS)
-            .param("routeVersionId", routeVersionId)
-            .param("dataUntil", offsetOf(dataUntil));
-        return statement
-            .query((resultSet, rowNumber) -> new StopDemandHourlyTotals(
-                resultSet.getInt("stop_order"),
-                instantOf(resultSet.getObject("arrived_hour_start", OffsetDateTime.class)),
-                resultSet.getDouble("fill_rate_total"),
-                resultSet.getDouble("net_boarding_total"),
-                resultSet.getDouble("capacity_total"),
-                resultSet.getInt("sample_count")))
-            .list();
-    }
-
-    /** 버전 정보와 모든 셀을 같은 트랜잭션으로 저장해 일부만 공개되는 것을 막는다. */
-    @Override
     @Transactional(readOnly = false)
     public void append(
         DemandStatisticsVersion version
     ) {
-        final long qualityRevision = qualityAccess.lock(version.routeVersionId());
+        final long qualityRevision = routeWork.lock(version.routeVersionId());
         jdbcClient.sql(INSERT_VERSION)
             .param("routeVersionId", version.routeVersionId())
             .param("calculationVersion", version.calculationVersion())

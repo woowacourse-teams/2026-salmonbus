@@ -25,7 +25,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
         WHERE route_id = :routeId
           AND model_deployment_id = :modelDeploymentId
           AND outcome_date = :outcomeDate
-          AND quality_revision = (SELECT quality_revision FROM route_data_quality WHERE route_id = :routeId)
+          AND quality_revision = (SELECT data_revision FROM route WHERE id = :routeId)
         ORDER BY stops_to_target
         """;
 
@@ -36,7 +36,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
         ) VALUES (
             :routeId, :modelDeploymentId, :outcomeDate, :stopsToTarget,
             :rowCount, :actualFullCount, :rawFullChanceSum, :settledThrough,
-            (SELECT quality_revision FROM route_data_quality WHERE route_id = :routeId)
+            (SELECT data_revision FROM route WHERE id = :routeId)
         )
         ON CONFLICT (route_id, model_deployment_id, outcome_date, stops_to_target) DO UPDATE SET
             row_count = EXCLUDED.row_count,
@@ -52,7 +52,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
             row_count, actual_full_count, raw_full_chance_sum, settled_through, quality_revision
         ) VALUES (
             :routeId, :modelDeploymentId, :outcomeDate, :stopsToTarget, :rowCount, :fullCount, :rawFullChance, :arrivedAt,
-            (SELECT quality_revision FROM route_data_quality WHERE route_id = :routeId)
+            (SELECT data_revision FROM route WHERE id = :routeId)
         )
         ON CONFLICT (route_id, model_deployment_id, outcome_date, stops_to_target) DO UPDATE SET
             row_count = CASE WHEN same_day_model_full_outcomes.quality_revision = EXCLUDED.quality_revision
@@ -87,7 +87,7 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
         JOIN seat_forecast forecast
           ON forecast.vehicle_observation_id = evaluation.vehicle_observation_id
          AND forecast.target_stop_order = evaluation.target_stop_order
-        JOIN forecast_eligible_observation arrival
+        JOIN operational_observation arrival
           ON arrival.id = evaluation.arrival_observation_id
         WHERE evaluation.route_version_id IN (
                 SELECT id FROM route_version WHERE route_id = :routeId)
@@ -96,11 +96,11 @@ public class JdbcSameDayFullOutcomesStore implements SameDayFullOutcomesStore {
           AND evaluation.arrived_at <= :until
           AND forecast.model_deployment_id = :modelDeploymentId
           AND evaluation.scoring_state = 'SETTLED'
-          AND evaluation.seats_on_arrival IS NOT NULL
-          AND forecast.quality_revision = (SELECT quality_revision FROM route_data_quality WHERE route_id = :routeId)
+          AND evaluation.seats_on_arrival IS NOT NULL AND arrival.remaining_seats IS NOT NULL
+          AND forecast.quality_revision = (SELECT data_revision FROM route WHERE id = :routeId)
           AND EXISTS (
-              SELECT 1 FROM forecast_eligible_observation source
-              WHERE source.id = evaluation.vehicle_observation_id
+              SELECT 1 FROM operational_observation source
+              WHERE source.id = evaluation.vehicle_observation_id AND source.remaining_seats IS NOT NULL
                 AND %s)
         GROUP BY forecast.stops_to_target
         ORDER BY forecast.stops_to_target

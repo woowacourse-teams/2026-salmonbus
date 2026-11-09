@@ -10,7 +10,6 @@ import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcSameDayFullOutcomesStore;
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.configuration.BusinessConfiguration;
-import com.gustler.backend.worker.integration.forecasting.SameDayInitializationTimeoutTest.WorkerBusiness;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -32,11 +31,10 @@ import org.springframework.jdbc.datasource.ConnectionHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-@SpringBootTest(classes = WorkerBusiness.class,
+@SpringBootTest(classes = SameDayInitializationTimeoutTest.WorkerBusiness.class,
     webEnvironment = WebEnvironment.NONE, properties = {
         "forecast.enabled=true",
-        "spring.datasource.hikari.data-source-properties.options=-c statement_timeout=5000 -c lock_timeout=2000"
-    })
+        "spring.datasource.hikari.data-source-properties.options=-c statement_timeout=5000 -c lock_timeout=2000" })
 class SameDayInitializationTimeoutTest {
     static final Instant OBSERVED_AT = Instant.parse("2026-09-28T00:00:00Z");
     static final Instant NOW = OBSERVED_AT.plusSeconds(60);
@@ -57,7 +55,7 @@ class SameDayInitializationTimeoutTest {
             INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
             VALUES ('fixture','fixture','fixture','fixture','start','end') RETURNING id
             """).query(Long.class).single();
-        jdbc.sql("INSERT INTO route_data_quality(route_id) VALUES (?)").param(routeId).update();
+        jdbc.sql("UPDATE route SET data_revision=1 WHERE id=?").param(routeId).update();
         jdbc.sql("""
             INSERT INTO model_deployment(deployment_key,release_id,model_key,model_version,bundle_digest,
                 prediction_target_version,calculation_version,supported_scope_digest,data_until,state)
@@ -87,8 +85,8 @@ class SameDayInitializationTimeoutTest {
             return counted;
         }).when(countsSpy).countFromSource(anyLong(), anyLong(), any(), any());
 
-        assertThat(context.getBean(SameDayFullOutcomesInitializer.class)
-                .initialize(routeId, SeoulDay.containing(NOW))).isTrue();
+        assertThat(context.getBean(SameDayFullOutcomesInitializer.class).initialize(routeId, SeoulDay.containing(NOW)))
+            .isTrue();
         assertThat(sourceQueryMs.get()).isGreaterThanOrEqualTo(2_000L);
         assertThat(count("same_day_model_full_outcomes")).isEqualTo(1);
     }
@@ -99,7 +97,7 @@ class SameDayInitializationTimeoutTest {
 
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
-    @Import({PostgresTestContainer.class, BusinessConfiguration.class})
+    @Import({ PostgresTestContainer.class, BusinessConfiguration.class })
     static class WorkerBusiness {
     }
 }

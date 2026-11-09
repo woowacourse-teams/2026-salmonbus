@@ -9,15 +9,12 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.application.evaluation.ObservationDeliveryService;
-import com.gustler.backend.forecasting.application.evaluation.ObservationDeliveryService.Round;
 import com.gustler.backend.forecasting.application.evaluation.RecentObservationBatches;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
-import com.gustler.backend.observations.api.ObservationDeliveryBatch.Kind;
-import com.gustler.backend.observations.api.ObservationDeliveryBatch.Row;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Clock;
 import java.time.Duration;
@@ -35,7 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class ObservationDeliveryRecoveryTest {
     private static final Instant NOW = Instant.parse("2026-10-12T00:00:00Z");
-    private final List<Row> rows = new ArrayList<>();
+    private final List<ObservationDeliveryBatch.Row> rows = new ArrayList<>();
     @Autowired
     JdbcClient jdbc;
     @Autowired
@@ -43,18 +40,19 @@ class ObservationDeliveryRecoveryTest {
     @Autowired
     JdbcRecentObservationBatches batches;
     @Autowired
-    RouteDataQualityAccess quality;
+    RouteWorkAccess quality;
     private long version;
     private long batch;
 
     @BeforeEach
     void 수집할_노선과_배치를_만든다() {
-        final long route = jdbc.sql("""
-            INSERT INTO route (public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name)
-            VALUES ('memory-test', 'GBIS', 'memory-test', '테스트', '출발', '도착') RETURNING id
-            """)
-            .query(Long.class)
-            .single();
+        final long route = jdbc
+            .sql(
+                """
+                    INSERT INTO route (public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name)
+                    VALUES ('memory-test', 'GBIS', 'memory-test', '테스트', '출발', '도착') RETURNING id
+                    """)
+            .query(Long.class).single();
         version = jdbc.sql("""
             INSERT INTO route_version (route_id, content_digest, valid_from, turn_sequence)
             VALUES (:route, :digest, :at, 5) RETURNING id
@@ -66,15 +64,14 @@ class ObservationDeliveryRecoveryTest {
                 VALUES (:version, :stop, :id, '정류장', 'UP', true)
                 """).param("version", version).param("stop", stop).param("id", "stop-" + stop).update();
         }
-        batch = jdbc.sql("""
-            INSERT INTO observation_batch (route_version_id, scheduled_at, attempt_number, attempt_key,
-                requested_at, response_received_at, outcome, normalization_version, collection_strategy_version, stored_rows)
-            VALUES (:version, :at, 1, 'memory-test', :at, :at, 'SUCCESS_ROWS', 'test-v1', 'test-v1', 0) RETURNING id
-            """)
-            .param("version", version)
-            .param("at", NOW.atOffset(ZoneOffset.UTC))
-            .query(Long.class)
-            .single();
+        batch = jdbc
+            .sql(
+                """
+                    INSERT INTO observation_batch (route_version_id, scheduled_at, attempt_number, attempt_key,
+                        requested_at, response_received_at, outcome, normalization_version, collection_strategy_version, stored_rows)
+                    VALUES (:version, :at, 1, 'memory-test', :at, :at, 'SUCCESS_ROWS', 'test-v1', 'test-v1', 0) RETURNING id
+                    """)
+            .param("version", version).param("at", NOW.atOffset(ZoneOffset.UTC)).query(Long.class).single();
         quality.lock(version);
     }
 
@@ -92,17 +89,16 @@ class ObservationDeliveryRecoveryTest {
         memory.receive(1, payload());
 
         // when
-        Round round = memory.begin(NOW);
-        for (Row row : rows) {
-            assertThat(round.read(query, version, 1, false, row.vehicleId(), NOW.minusSeconds(60), 100))
+        ObservationDeliveryService.Round round = memory.begin(NOW);
+        for (ObservationDeliveryBatch.Row row : rows) {
+            assertThat(round.read(query, version, 1, row.vehicleId(), NOW.minusSeconds(60), 100))
                 .isEqualTo(query.findAfter(version, row.vehicleId(), NOW.minusSeconds(60), 100));
         }
 
         // then
         verify(reads, never()).restore(anyLong(), anyList(), anyInt());
-        assertThat(jdbc.sql("SELECT to_regclass('observation_delivery') IS NULL")
-            .query(Boolean.class)
-            .single()).isTrue();
+        assertThat(jdbc.sql("SELECT to_regclass('observation_delivery') IS NULL").query(Boolean.class).single())
+            .isTrue();
     }
 
     @Test
@@ -141,8 +137,10 @@ class ObservationDeliveryRecoveryTest {
         assertThat(read(memory, 1).getFirst().qualityDirection()).isNotNull();
         final long observation = rows.getFirst().observationId();
         ConfirmedTripFixture.include(jdbc, observation);
-        jdbc.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED'").update();
-        jdbc.sql("UPDATE route_data_quality SET quality_revision = quality_revision + 1").update();
+        jdbc.sql(
+            "UPDATE vehicle_observation SET remaining_seats = NULL, seat_unknown_reason = 'REPORTED_UNKNOWN' WHERE id = ?")
+            .param(observation).update();
+        jdbc.sql("UPDATE route SET data_revision = data_revision + 1").update();
 
         // when
         memory.receive(1, payload());
@@ -150,7 +148,7 @@ class ObservationDeliveryRecoveryTest {
 
         // then
         assertThat(actual).isEqualTo(expected());
-        assertThat(actual.getFirst().qualityDirection()).isNull();
+        assertThat(actual.getFirst().hasKnownSeats()).isFalse();
     }
 
     @Test
@@ -164,9 +162,8 @@ class ObservationDeliveryRecoveryTest {
         // when
         jdbc.sql("DELETE FROM vehicle_observation WHERE observation_batch_id = ?").param(batch).update();
         jdbc.sql(
-        "UPDATE observation_batch SET response_received_at = NULL, stored_rows = NULL, attempt_number = 2 WHERE id = ?")
-            .param(batch)
-            .update();
+            "UPDATE observation_batch SET response_received_at = NULL, stored_rows = NULL, attempt_number = 2 WHERE id = ?")
+            .param(batch).update();
 
         // then
         assertThat(read(memory, 1)).isEqualTo(expected()).isEmpty();
@@ -179,17 +176,16 @@ class ObservationDeliveryRecoveryTest {
             INSERT INTO vehicle_observation (observation_batch_id, route_version_id, source_row_number,
                 vehicle_id, stop_order, stop_id, passed_stop_order, running_state, remaining_seats, seat_unknown_reason)
             VALUES (:batch, :version, :row, :vehicle, :stop, :stopId, :passed, :state, :seats, :reason) RETURNING id
-            """).param("batch", batch).param("version", version).param("row", rows.size())
-            .param("stop", stop).param("stopId", "stop-" + stop).param("passed", passed)
-            .param("vehicle", vehicle).param("state", state).param("seats", seats).param("reason", seatReason(seats))
-            .query(Long.class).single();
-        rows.add(new Row(id, vehicle, seats, passed, null, stop, state));
-        jdbc.sql("UPDATE observation_batch SET stored_rows = :rows WHERE id = :id")
-            .param("rows", rows.size()).param("id", batch).update();
+            """).param("batch", batch).param("version", version).param("row", rows.size()).param("stop", stop)
+            .param("stopId", "stop-" + stop).param("passed", passed).param("vehicle", vehicle).param("state", state)
+            .param("seats", seats).param("reason", seatReason(seats)).query(Long.class).single();
+        rows.add(new ObservationDeliveryBatch.Row(id, vehicle, seats, passed, null, stop, state));
+        jdbc.sql("UPDATE observation_batch SET stored_rows = :rows WHERE id = :id").param("rows", rows.size())
+            .param("id", batch).update();
     }
 
     private ObservationDeliveryBatch payload() {
-        return new ObservationDeliveryBatch(batch, version, 1, Kind.STORED, NOW, rows);
+        return new ObservationDeliveryBatch(batch, version, 1, ObservationDeliveryBatch.Kind.STORED, NOW, rows);
     }
 
     private ObservationDeliveryService memory(RecentObservationBatches source) {
@@ -197,7 +193,7 @@ class ObservationDeliveryRecoveryTest {
     }
 
     private List<ArrivalCandidate> read(ObservationDeliveryService memory, final long revision) {
-        return memory.begin(NOW).read(query, version, revision, false, "bus", NOW.minusSeconds(60), 100);
+        return memory.begin(NOW).read(query, version, revision, "bus", NOW.minusSeconds(60), 100);
     }
 
     private List<ArrivalCandidate> expected() {

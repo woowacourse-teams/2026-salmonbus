@@ -1,6 +1,7 @@
 package com.gustler.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.support.IntegrationTest;
 import java.io.IOException;
@@ -13,6 +14,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.junit.jupiter.api.AfterEach;
@@ -40,10 +42,11 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정되어도 다른 파일을 제외해 항상 통과하게 된다. 파일 이름으로 선택하고,
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
-     * <p>이 브랜치는 V46 이후 탈퇴 회원의 분석 기록 삭제 대기 테이블을 만든다.
+     * <p>이 브랜치는 차량 정원 테이블, 정적 초기값과 좌석 품질 기준을 적용한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("__vehicle_capacity.sql", "__vehicle_seat_quality.sql");
+        List.of("__vehicle_capacity.sql", "__vehicle_seat_quality.sql",
+            "__operational_observation_columns.sql", "__operational_observation.sql", "__retire_trip_quality.sql", "__operational_archive.sql");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
@@ -109,6 +112,147 @@ class MigrationOrderTest {
             IntStream.rangeClosed(1, actual.size())
                 .boxed()
                 .toArray(Integer[]::new));
+    }
+
+    @Test
+    void 조사_완료_후_기존_제외_결과를_옮기고_운영_조회는_조사_테이블을_읽지_않는다() {
+        // given
+        Flyway.configure().dataSource(dataSource).locations("classpath:" + MIGRATION_LOCATION)
+            .schemas(STAGED_SCHEMA).createSchemas(true).target("50").load().migrate();
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.route
+                (public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name)
+            VALUES ('test', 'GBIS', 'test', '3330', '출발', '도착')
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.route_version (route_id, content_digest, valid_from)
+            SELECT id, repeat('0', 64), CURRENT_TIMESTAMP FROM staged_deploy.route
+            """).update();
+        final long version = jdbcClient.sql("SELECT id FROM staged_deploy.route_version").query(Long.class).single();
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.route_stop (route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
+            VALUES (?, 1, 'stop', '출발', 'UP', true)
+            """).param(version).update();
+        final long batch = jdbcClient.sql("""
+            INSERT INTO staged_deploy.observation_batch
+                (route_version_id, scheduled_at, attempt_number, attempt_key, requested_at,
+                 response_received_at, outcome, normalization_version, collection_strategy_version)
+            VALUES (?, CURRENT_TIMESTAMP, 1, 'test', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                'SUCCESS_ROWS', 'test', 'test')
+            RETURNING id
+            """).param(version).query(Long.class).single();
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.vehicle_observation
+                (observation_batch_id, route_version_id, source_row_number, vehicle_id,
+                 stop_order, stop_id, running_state, remaining_seats, passed_stop_order)
+            SELECT ?, ?, n, 'bus-' || n, 1, 'stop', 2, seats, 1
+            FROM (VALUES (1, 44), (2, 82), (3, 45)) rows(n, seats)
+            """).params(batch, version).update();
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.vehicle_one_way_trip
+                (id, start_observation_id, route_version_id, vehicle_id, status, boundary, rule_version)
+            SELECT 'trip-1', id, route_version_id, vehicle_id, 'EXCLUDED', 'DEPARTURE', 'test'
+            FROM staged_deploy.vehicle_observation WHERE source_row_number = 1
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.observation_trip_assignment(observation_id, trip_id)
+            SELECT start_observation_id, id FROM staged_deploy.vehicle_one_way_trip
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.trip_quality_rebuild(route_version_id, vehicle_id, until_at, phase)
+            VALUES (?, 'bus-1', CURRENT_TIMESTAMP, 'REPLAY')
+            """).param(version).update();
+
+        // when
+        assertThatThrownBy(() -> migrateTo51())
+            .isInstanceOf(FlywayException.class).hasMessageContaining("Finish pending historical trip");
+        jdbcClient.sql("UPDATE staged_deploy.trip_quality_rebuild SET completed = true, phase = 'DONE'").update();
+        migrateTo51();
+        jdbcClient.sql("UPDATE staged_deploy.vehicle_one_way_trip SET status = 'ELIGIBLE'").update();
+
+        // then
+        assertThat(jdbcClient.sql("""
+            SELECT historical_exclusion FROM staged_deploy.vehicle_observation ORDER BY source_row_number
+            """).query(String.class).list()).containsExactly("CONFIRMED", "INELIGIBLE", null);
+        assertThat(jdbcClient.sql("""
+            SELECT vehicle_trip_key FROM staged_deploy.operational_observation WHERE source_row_number = 1
+            """).query(String.class).single()).isEqualTo("trip-1");
+        assertThat(jdbcClient.sql("""
+            SELECT remaining_seats FROM staged_deploy.operational_eligible_observation
+            """).query(Integer.class).list()).containsExactly(45);
+        assertThat(jdbcClient.sql("EXPLAIN (VERBOSE) SELECT * FROM staged_deploy.operational_eligible_observation")
+            .query(String.class).list()).noneMatch(line -> line.contains("trip_quality_rebuild")
+                || line.contains("observation_trip_assignment") || line.contains("vehicle_one_way_trip"));
+        prepareRetirementForecasts(version, batch);
+        migrateWith("classpath:" + MIGRATION_LOCATION);
+        assertThat(jdbcClient.sql("""
+            SELECT data_revision FROM staged_deploy.route
+            """).query(Long.class).single()).isEqualTo(7);
+        assertThat(jdbcClient.sql("""
+            SELECT reported_remaining_seats FROM staged_deploy.vehicle_observation
+            WHERE remaining_seats IS NULL ORDER BY source_row_number
+            """).query(Integer.class).list()).containsExactly(44, 82, 0);
+        assertThat(jdbcClient.sql("""
+            SELECT source.source_row_number FROM staged_deploy.forecast_evaluation_pending pending
+            JOIN staged_deploy.vehicle_observation source ON source.id = pending.vehicle_observation_id
+            """).query(Integer.class).list()).containsExactly(3);
+        assertThat(jdbcClient.sql("""
+            SELECT scoring_state FROM staged_deploy.forecast_evaluation_result
+            """).query(String.class).list()).containsExactly("QUALITY_EXCLUDED");
+        assertThat(jdbcClient.sql("""
+            SELECT count(*) FROM information_schema.tables
+            WHERE table_schema = 'staged_deploy'
+              AND table_name IN ('route_data_quality', 'route_version_quality_policy', 'vehicle_one_way_trip',
+                  'observation_trip_assignment', 'trip_quality_rebuild')
+            """).query(Integer.class).single()).isZero();
+        assertThat(jdbcClient.sql("""
+            EXPLAIN (VERBOSE) SELECT * FROM staged_deploy.operational_observation
+            """).query(String.class).list()).noneMatch(line -> line.contains("historical_exclusion")
+                || line.contains("trip_quality") || line.contains("forecast_eligible"));
+    }
+
+    private void prepareRetirementForecasts(final long version, final long batch) {
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.route_stop
+                (route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
+            VALUES (?, 2, 'target', '도착', 'UP', true)
+            """).param(version).update();
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.vehicle_observation
+                (observation_batch_id, route_version_id, source_row_number, vehicle_id,
+                 stop_order, stop_id, running_state, remaining_seats, passed_stop_order, historical_exclusion)
+            VALUES (?, ?, 4, 'bus-4', 1, 'stop', 2, 0, 1, 'CONFIRMED')
+            """).params(batch, version).update();
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.route_data_quality(route_id, quality_revision)
+            SELECT route_id, 7 FROM staged_deploy.route_version WHERE id=?
+            """).param(version).update();
+        final long model = jdbcClient.sql("""
+            INSERT INTO staged_deploy.model_deployment
+                (deployment_key, release_id, model_key, model_version, bundle_digest,
+                 prediction_target_version, calculation_version, supported_scope_digest, data_until, state)
+            VALUES ('00000000-0000-0000-0000-000000000001', 'test', 'test', '1', repeat('0', 64),
+                'SEAT_FULL_CHANCE_V1', 'test', repeat('0', 64), CURRENT_TIMESTAMP, 'STAGED')
+            RETURNING id
+            """).query(Long.class).single();
+        final long publication = jdbcClient.sql("""
+            INSERT INTO staged_deploy.forecast_publication
+                (source_batch_id, route_version_id, model_deployment_id, demand_statistics_revision,
+                 quality_revision, observed_at, generated_at, published_at, prediction_count)
+            VALUES (?, ?, ?, 1, 7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 2) RETURNING id
+            """).params(batch, version, model).query(Long.class).single();
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.seat_forecast
+                (vehicle_observation_id, target_stop_order, route_version_id, stops_to_target,
+                 model_deployment_id, demand_statistics_revision, quality_revision, seat_full_chance_raw,
+                 seat_full_chance, expected_seats, generated_at, publication_id)
+            SELECT id, 2, route_version_id, 1, ?, 1, 7, 0.5, 0.5, 20, CURRENT_TIMESTAMP, ?
+            FROM staged_deploy.vehicle_observation WHERE source_row_number IN (1, 3)
+            """).params(model, publication).update();
+        jdbcClient.sql("""
+            INSERT INTO staged_deploy.forecast_evaluation_work(vehicle_observation_id, route_version_id)
+            SELECT vehicle_observation_id, route_version_id FROM staged_deploy.seat_forecast
+            """).update();
     }
 
     /**
@@ -188,6 +332,11 @@ class MigrationOrderTest {
         String location
     ) {
         return flywayAt(location).migrate();
+    }
+
+    private MigrateResult migrateTo51() {
+        return Flyway.configure().dataSource(dataSource).locations("classpath:" + MIGRATION_LOCATION)
+            .schemas(STAGED_SCHEMA).createSchemas(true).target("51").load().migrate();
     }
 
     private Flyway flywayAt(

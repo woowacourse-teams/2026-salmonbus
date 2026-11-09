@@ -287,13 +287,13 @@ class JdbcArrivalObservationQueryTest {
     }
 
     @Test
-    void 상세_조회도_좌석_미상과_품질_제외_정보를_그대로_반환한다() {
+    void 상세_조회는_미확인_좌석과_운행_방향을_함께_반환한다() {
         // given
         final long unknown = insertSeatUnknownObservation(
             insertBatch(FIRST_POLL_AFTER_FORECAST), VEHICLE_204000206, STOP_6);
         final long excluded = insertDepartedObservation(
             insertBatch(SECOND_POLL_AFTER_FORECAST), VEHICLE_204000206, STOP_6);
-        jdbcClient.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED' WHERE route_version_id = ?")
+        jdbcClient.sql("UPDATE vehicle_observation SET remaining_seats = NULL, seat_unknown_reason = 'REPORTED_UNKNOWN' WHERE route_version_id = ?")
             .param(routeVersionId).update();
 
         // when
@@ -304,7 +304,7 @@ class JdbcArrivalObservationQueryTest {
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             softly.assertThat(details).containsExactlyInAnyOrderElementsOf(jdbcArrivalObservationQuery.findAfter(
                 routeVersionId, VEHICLE_204000206, FORECAST_OBSERVED_AT.toInstant(), READ_LIMIT));
-            softly.assertThat(details).allMatch(candidate -> candidate.qualityDirection() == null);
+            softly.assertThat(details).allMatch(candidate -> candidate.qualityDirection() != null);
             softly.assertThat(details).anyMatch(candidate -> !candidate.hasKnownSeats());
         }
     }

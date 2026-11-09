@@ -3,7 +3,7 @@ package com.gustler.backend.forecasting.application.evaluation;
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.application.AfterCommitTelemetry;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ForecastEvaluationWriter {
     private final ForecastEvaluationRepository evaluations;
 
-    private final RouteDataQualityAccess quality;
+    private final RouteWorkAccess routeWork;
 
     private final SameDayFullOutcomesService outcomes;
     private final DemandSampleStore samples;
@@ -31,12 +31,12 @@ public class ForecastEvaluationWriter {
 
     public ForecastEvaluationWriter(
         ForecastEvaluationRepository evaluations,
-        RouteDataQualityAccess quality,
+        RouteWorkAccess routeWork,
         SameDayFullOutcomesService outcomes,
         DemandSampleStore samples
     ) {
         this.evaluations = evaluations;
-        this.quality = quality;
+        this.routeWork = routeWork;
         this.outcomes = outcomes;
         this.samples = samples;
     }
@@ -74,7 +74,7 @@ public class ForecastEvaluationWriter {
             .stream()
             .distinct()
             .sorted()
-            .forEach(quality::lockByRoute);
+            .forEach(routeWork::lockByRoute);
 
         List<SettledForecast> settled = new ArrayList<>();
         List<DemandSample> demandSamples = new ArrayList<>();

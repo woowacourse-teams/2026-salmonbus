@@ -10,15 +10,13 @@ import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.api.evaluation.EvaluateForecasts;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.application.evaluation.ForecastEvaluationWriter;
 import com.gustler.backend.forecasting.application.evaluation.RecentArrivalObservationCache;
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Skipped;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
-import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomeCount;
 import com.gustler.backend.forecasting.domain.evaluation.SameDayFullOutcomesStore;
 import com.gustler.backend.forecasting.domain.evaluation.SeoulDay;
@@ -27,7 +25,6 @@ import com.gustler.backend.forecasting.domain.evaluation.SettledForecast;
 import com.gustler.backend.forecasting.domain.model.SameDayFullOutcomes;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
-import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcForecastEvaluationTransactionTest.FixedClock;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Clock;
@@ -61,7 +58,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @ForecastingIntegrationTest
-@Import(FixedClock.class)
+@Import(JdbcForecastEvaluationTransactionTest.FixedClock.class)
 @TestPropertySource(properties = "forecast.evaluation.observation-cache.enabled=true")
 class JdbcForecastEvaluationTransactionTest {
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-19T02:14:00Z");
@@ -88,7 +85,7 @@ class JdbcForecastEvaluationTransactionTest {
     private SameDayFullOutcomesService outcomes;
 
     @Autowired
-    private RouteDataQualityAccess qualityAccess;
+    private RouteWorkAccess qualityAccess;
 
     @Autowired
     private DemandSampleStore demandSamples;
@@ -119,60 +116,49 @@ class JdbcForecastEvaluationTransactionTest {
     void 평가할_예측과_같은_차량의_도착_관측을_준비한다() {
         String routeKey = "evaluation-tx-" + UUID.randomUUID().toString().substring(0, 16);
         routeId = jdbc.sql("""
-                INSERT INTO route(public_route_id, source_id, source_route_id,
-                    display_name, start_stop_name, end_stop_name)
-                VALUES (?, 'GBIS', ?, '평가 검증', '출발', '도착') RETURNING id
-                """).params(routeKey, routeKey).query(Long.class).single();
+            INSERT INTO route(public_route_id, source_id, source_route_id,
+                display_name, start_stop_name, end_stop_name)
+            VALUES (?, 'GBIS', ?, '평가 검증', '출발', '도착') RETURNING id
+            """).params(routeKey, routeKey).query(Long.class).single();
         routeVersionId = jdbc.sql("""
-                INSERT INTO route_version(route_id, content_digest, valid_from)
-                VALUES (?, ?, ?) RETURNING id
-                """).params(routeId, "0".repeat(64), offset(OBSERVED_AT)).query(Long.class).single();
+            INSERT INTO route_version(route_id, content_digest, valid_from)
+            VALUES (?, ?, ?) RETURNING id
+            """).params(routeId, "0".repeat(64), offset(OBSERVED_AT)).query(Long.class).single();
         for (final int stopOrder : List.of(SOURCE_STOP_ORDER, TARGET_STOP_ORDER)) {
             jdbc.sql("""
-                    INSERT INTO route_stop(route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
-                    VALUES (?, ?, ?, ?, 'UP', true)
-                    """).params(routeVersionId, stopOrder, "stop-" + stopOrder, "정류장 " + stopOrder).update();
+                INSERT INTO route_stop(route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
+                VALUES (?, ?, ?, ?, 'UP', true)
+                """).params(routeVersionId, stopOrder, "stop-" + stopOrder, "정류장 " + stopOrder).update();
         }
         modelId = jdbc.sql("""
-                INSERT INTO model_deployment(deployment_key, release_id, model_key, model_version,
-                    bundle_digest, prediction_target_version, calculation_version,
-                    supported_scope_digest, data_until, state)
-                VALUES (?, ?, 'seat-full-chance', '1.0.0', ?, 'SEAT_FULL_CHANCE_V1',
-                    'CALCULATION_V1', ?, ?, 'STAGED') RETURNING id
-                """).params(UUID.randomUUID(), routeKey, "0".repeat(64), "0".repeat(64), offset(OBSERVED_AT))
+            INSERT INTO model_deployment(deployment_key, release_id, model_key, model_version,
+                bundle_digest, prediction_target_version, calculation_version,
+                supported_scope_digest, data_until, state)
+            VALUES (?, ?, 'seat-full-chance', '1.0.0', ?, 'SEAT_FULL_CHANCE_V1',
+                'CALCULATION_V1', ?, ?, 'STAGED') RETURNING id
+            """).params(UUID.randomUUID(), routeKey, "0".repeat(64), "0".repeat(64), offset(OBSERVED_AT))
             .query(Long.class).single();
         final long sourceBatchId = insertBatch(OBSERVED_AT);
         sourceObservationId = insertObservation(sourceBatchId, SOURCE_STOP_ORDER, 12);
         arrivalBatchId = insertBatch(ARRIVED_AT);
         arrivalObservationId = insertObservation(arrivalBatchId, TARGET_STOP_ORDER, 0);
-        ForecastEvaluationTestData.saveForecasts(jdbc, List.of(new SeatForecast(
-            sourceObservationId, routeVersionId, TARGET_STOP_ORDER, STOPS_TO_TARGET, modelId, 1,
-            RAW_FULL_CHANCE, 0.38, 12.5, OBSERVED_AT.plusSeconds(1))));
+        ForecastEvaluationTestData.saveForecasts(jdbc, List.of(new SeatForecast(sourceObservationId, routeVersionId,
+            TARGET_STOP_ORDER, STOPS_TO_TARGET, modelId, 1, RAW_FULL_CHANCE, 0.38, 12.5, OBSERVED_AT.plusSeconds(1))));
     }
 
     @AfterEach
     void 이_테스트가_저장한_자료만_정리한다() {
         inTransaction(() -> {
             jdbc.sql("DELETE FROM forecast_evaluation_work WHERE route_version_id = ?").param(routeVersionId).update();
-            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?")
-                .param(routeVersionId)
+            jdbc.sql("DELETE FROM forecast_evaluation_result WHERE route_version_id = ?").param(routeVersionId)
                 .update();
             jdbc.sql("DELETE FROM seat_forecast WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM forecast_publication WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM same_day_model_full_outcomes WHERE route_id = ?").param(routeId).update();
-            jdbc.sql("""
-                    DELETE FROM observation_trip_assignment WHERE observation_id IN (
-                        SELECT id FROM vehicle_observation WHERE route_version_id = ?)
-                    """).param(routeVersionId).update();
-            jdbc.sql("DELETE FROM trip_quality_rebuild WHERE route_version_id = ?").param(routeVersionId).update();
-            jdbc.sql("DELETE FROM vehicle_one_way_trip WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM vehicle_observation WHERE route_version_id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM observation_batch WHERE route_version_id = ?").param(routeVersionId).update();
-            jdbc.sql("DELETE FROM route_version_quality_policy WHERE route_version_id = ?")
-                .param(routeVersionId)
-                .update();
-            jdbc.sql("DELETE FROM route_data_quality WHERE route_id = ?").param(routeId).update();
             jdbc.sql("DELETE FROM route_stop WHERE route_version_id = ?").param(routeVersionId).update();
+            jdbc.sql("DELETE FROM stop_demand_baseline WHERE route_version_id=?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM route_version WHERE id = ?").param(routeVersionId).update();
             jdbc.sql("DELETE FROM route WHERE id = ?").param(routeId).update();
             jdbc.sql("DELETE FROM model_deployment WHERE id = ?").param(modelId).update();
@@ -195,8 +181,7 @@ class JdbcForecastEvaluationTransactionTest {
             FOR EACH ROW EXECUTE FUNCTION reject_settlement_preview_fixture()
             """).update();
         try {
-            Assertions.assertThatThrownBy(settlement::settleArrivalLabels)
-                .isInstanceOf(DataAccessException.class);
+            Assertions.assertThatThrownBy(settlement::settleArrivalLabels).isInstanceOf(DataAccessException.class);
         } finally {
             jdbc.sql("DROP TRIGGER reject_settlement_preview_fixture ON forecast_evaluation_result").update();
             jdbc.sql("DROP FUNCTION reject_settlement_preview_fixture()").update();
@@ -221,8 +206,8 @@ class JdbcForecastEvaluationTransactionTest {
         // when
         List<ArrivalCandidate> reused = inTransaction(() -> {
             final long revision = qualityAccess.lock(routeVersionId);
-            return observationCache.begin(SCORED_AT).read(arrivals, routeVersionId, revision, false,
-                "evaluation-vehicle", OBSERVED_AT.plusSeconds(1), 400);
+            return observationCache.begin(SCORED_AT).read(arrivals, routeVersionId, revision, "evaluation-vehicle",
+                OBSERVED_AT.plusSeconds(1), 400);
         });
 
         // then
@@ -273,8 +258,8 @@ class JdbcForecastEvaluationTransactionTest {
         // given
         // 실제 집계 저장까지 수행한 뒤 실패시킨다.
         initializeSameDayOutcomes();
-        SameDayFullOutcomesService failingOutcomes =
-            new SameDayFullOutcomesService(new FailingOutcomeRepository(outcomeRepository));
+        SameDayFullOutcomesService failingOutcomes = new SameDayFullOutcomesService(
+            new FailingOutcomeRepository(outcomeRepository));
         ForecastEvaluationWriter failingWriter = new ForecastEvaluationWriter(evaluations, qualityAccess,
             failingOutcomes, demandSamples);
 
@@ -284,8 +269,8 @@ class JdbcForecastEvaluationTransactionTest {
 
         // then
         assertThat(evaluationState()).isEqualTo("PENDING");
-        assertThat(jdbc.sql("SELECT sum(row_count) FROM same_day_model_full_outcomes WHERE route_id = ?")
-                .param(routeId).query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("SELECT sum(row_count) FROM same_day_model_full_outcomes WHERE route_id = ?").param(routeId)
+            .query(Long.class).single()).isZero();
     }
 
     @Test
@@ -293,18 +278,18 @@ class JdbcForecastEvaluationTransactionTest {
         // given
         // 도착 관측 없이 완료된 평가는 다른 결과로 덮어쓸 수 없다.
         evaluationWriter.complete(List.of(ForecastEvaluation.completed(sourceObservationId, TARGET_STOP_ORDER,
-            new Skipped(), SCORED_AT)));
+            new ArrivalLabel.Skipped(), SCORED_AT)));
 
         // when
-        List<SettledForecast> repeated = evaluationWriter.complete(List.of(ForecastEvaluation.completed(
-            sourceObservationId, TARGET_STOP_ORDER, new Settled(arrivalObservationId, 0),
-            SCORED_AT.plusSeconds(60))));
+        List<SettledForecast> repeated = evaluationWriter
+            .complete(List.of(ForecastEvaluation.completed(sourceObservationId, TARGET_STOP_ORDER,
+                new ArrivalLabel.Settled(arrivalObservationId, 0), SCORED_AT.plusSeconds(60))));
 
         // then
         assertThat(repeated).isEmpty();
         assertThat(evaluationState()).isEqualTo("SKIPPED");
-        assertThat(jdbc.sql("SELECT count(*) FROM same_day_model_full_outcomes WHERE route_id = ?")
-                .param(routeId).query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM same_day_model_full_outcomes WHERE route_id = ?").param(routeId)
+            .query(Long.class).single()).isZero();
     }
 
     @Test
@@ -434,55 +419,6 @@ class JdbcForecastEvaluationTransactionTest {
         }
     }
 
-    @Test
-    void 제외_처리가_잠금을_기다리는_동안_재조사가_시작되면_대기를_유지한다() throws Exception {
-        // when
-        jdbc.sql("UPDATE vehicle_one_way_trip SET status='EXCLUDED' WHERE start_observation_id=?")
-            .param(sourceObservationId).update();
-        jdbc.sql("""
-            INSERT INTO trip_quality_rebuild(route_version_id,vehicle_id,until_at,completed,phase)
-            VALUES(?,'evaluation-vehicle',?,true,'DONE')
-            """).params(routeVersionId, offset(SCORED_AT)).update();
-        CountDownLatch locked = new CountDownLatch(1);
-        CountDownLatch closeStarted = new CountDownLatch(1);
-        CountDownLatch release = new CountDownLatch(1);
-        AtomicInteger holding = new AtomicInteger();
-        AtomicInteger waiting = new AtomicInteger();
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        try {
-            Future<Boolean> investigation = executor.submit(() -> inTransaction(() -> {
-                holding.set(connectionId());
-                qualityAccess.lockByRoute(routeId);
-                jdbc.sql("UPDATE trip_quality_rebuild SET completed=false,phase='REPLAY' WHERE route_version_id=?")
-                    .param(routeVersionId).update();
-                locked.countDown();
-                await(release);
-                return true;
-            }));
-            Future<List<PendingForecast>> closing = executor.submit(() -> {
-                await(locked);
-                return inTransaction(() -> {
-                    waiting.set(connectionId());
-                    closeStarted.countDown();
-                    return evaluations.findPending(routeVersionId, 10);
-                });
-            });
-            await(closeStarted);
-            awaitDatabaseLock(waiting.get(), holding.get());
-            release.countDown();
-            investigation.get(10, TimeUnit.SECONDS);
-
-            // then
-            assertThat(closing.get(10, TimeUnit.SECONDS)).isEmpty();
-            assertThat(evaluationState()).isEqualTo("PENDING");
-        } finally {
-            locked.countDown();
-            closeStarted.countDown();
-            release.countDown();
-            stop(executor);
-        }
-    }
-
     private void initializeSameDayOutcomes() {
         inTransaction(() -> {
             qualityAccess.lockByRoute(routeId);
@@ -504,10 +440,10 @@ class JdbcForecastEvaluationTransactionTest {
 
     private void assertCountedOnce() {
         assertThat(evaluationState()).isEqualTo("SETTLED");
-        assertThat(outcomes.outcomesFor(routeId, modelId, SCORED_AT)).containsExactlyEntriesOf(
-            Map.of(STOPS_TO_TARGET, new SameDayFullOutcomes(1, 1, RAW_FULL_CHANCE)));
-        assertThat(jdbc.sql("SELECT sum(row_count) FROM same_day_model_full_outcomes WHERE route_id = ?")
-                .param(routeId).query(Long.class).single()).isEqualTo(1);
+        assertThat(outcomes.outcomesFor(routeId, modelId, SCORED_AT))
+            .containsExactlyEntriesOf(Map.of(STOPS_TO_TARGET, new SameDayFullOutcomes(1, 1, RAW_FULL_CHANCE)));
+        assertThat(jdbc.sql("SELECT sum(row_count) FROM same_day_model_full_outcomes WHERE route_id = ?").param(routeId)
+            .query(Long.class).single()).isEqualTo(1);
     }
 
     private String evaluationState() {
@@ -523,8 +459,8 @@ class JdbcForecastEvaluationTransactionTest {
         throws InterruptedException {
         final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(4);
         while (System.nanoTime() < deadline) {
-            if (jdbc.sql("SELECT ? = ANY(pg_blocking_pids(?))")
-                .params(holdingConnection, waitingConnection).query(Boolean.class).single()) {
+            if (jdbc.sql("SELECT ? = ANY(pg_blocking_pids(?))").params(holdingConnection, waitingConnection)
+                .query(Boolean.class).single()) {
                 return;
             }
             Thread.sleep(10);
@@ -543,28 +479,27 @@ class JdbcForecastEvaluationTransactionTest {
 
     private ForecastEvaluation completedEvaluation() {
         return ForecastEvaluation.completed(sourceObservationId, TARGET_STOP_ORDER,
-            new Settled(arrivalObservationId, 0), SCORED_AT);
+            new ArrivalLabel.Settled(arrivalObservationId, 0), SCORED_AT);
     }
 
     private long insertBatch(Instant observedAt) {
         return jdbc.sql("""
-                INSERT INTO observation_batch(route_version_id, scheduled_at, attempt_number, attempt_key,
-                    requested_at, response_received_at, completed_at, outcome,
-                    normalization_version, collection_strategy_version, stored_rows)
-                VALUES (?, ?, 1, ?, ?, ?, ?, 'SUCCESS_ROWS', 'normalization-v1', 'collection-v1', 1)
-                RETURNING id
-                """).params(routeVersionId, offset(observedAt), UUID.randomUUID().toString(),
-            offset(observedAt), offset(observedAt), offset(observedAt))
-            .query(Long.class).single();
+            INSERT INTO observation_batch(route_version_id, scheduled_at, attempt_number, attempt_key,
+                requested_at, response_received_at, completed_at, outcome,
+                normalization_version, collection_strategy_version, stored_rows)
+            VALUES (?, ?, 1, ?, ?, ?, ?, 'SUCCESS_ROWS', 'normalization-v1', 'collection-v1', 1)
+            RETURNING id
+            """).params(routeVersionId, offset(observedAt), UUID.randomUUID().toString(), offset(observedAt),
+            offset(observedAt), offset(observedAt)).query(Long.class).single();
     }
 
     private long insertObservation(final long batchId, final int stopOrder, final int seats) {
         final long observationId = jdbc.sql("""
-                INSERT INTO vehicle_observation(observation_batch_id, route_version_id, source_row_number,
-                    vehicle_id, stop_order, stop_id, passed_stop_order, running_state, remaining_seats)
-                VALUES (?, ?, 0, 'evaluation-vehicle', ?, ?, ?, 2, ?) RETURNING id
-                """).params(batchId, routeVersionId, stopOrder, "stop-" + stopOrder, stopOrder, seats)
-            .query(Long.class).single();
+            INSERT INTO vehicle_observation(observation_batch_id, route_version_id, source_row_number,
+                vehicle_id, stop_order, stop_id, passed_stop_order, running_state, remaining_seats)
+            VALUES (?, ?, 0, 'evaluation-vehicle', ?, ?, ?, 2, ?) RETURNING id
+            """).params(batchId, routeVersionId, stopOrder, "stop-" + stopOrder, stopOrder, seats).query(Long.class)
+            .single();
         return ConfirmedTripFixture.include(jdbc, observationId);
     }
 

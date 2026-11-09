@@ -6,9 +6,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Skipped;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
+import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
@@ -35,7 +34,7 @@ class ForecastEvaluationWriterTest {
     private ForecastEvaluationRepository evaluations;
 
     @Mock
-    private RouteDataQualityAccess quality;
+    private RouteWorkAccess quality;
 
     @Mock
     private SameDayFullOutcomesService outcomes;
@@ -57,12 +56,11 @@ class ForecastEvaluationWriterTest {
         ForecastEvaluation first = settledEvaluation(200L, 300L, SCORED_AT);
         ForecastEvaluation second = settledEvaluation(100L, 400L, SCORED_AT.plusSeconds(1));
         List<ForecastEvaluation> completed = List.of(first, second);
-        List<SettledForecast> newlySettled = List.of(
-            new SettledForecast(8L, 1L, 3, 0.4, ARRIVED_AT, 0),
+        List<SettledForecast> newlySettled = List.of(new SettledForecast(8L, 1L, 3, 0.4, ARRIVED_AT, 0),
             new SettledForecast(3L, 1L, 3, 0.6, ARRIVED_AT, 0));
         when(evaluations.findRouteIdsForObservations(List.of(200L, 100L))).thenReturn(List.of(8L, 3L, 8L));
-        when(evaluations.settle(completed)).thenReturn(List.of(
-            settledFrom(newlySettled.get(0)), settledFrom(newlySettled.get(1))));
+        when(evaluations.settle(completed))
+            .thenReturn(List.of(settledFrom(newlySettled.get(0)), settledFrom(newlySettled.get(1))));
 
         // when
         List<SettledForecast> actual = writer.complete(completed);
@@ -98,8 +96,8 @@ class ForecastEvaluationWriterTest {
     @Test
     void 도착_관측이_없는_종료_결과도_저장한다() {
         // given
-        ForecastEvaluation skipped = ForecastEvaluation.completed(200L, TARGET_STOP_ORDER,
-            new Skipped(), SCORED_AT);
+        ForecastEvaluation skipped = ForecastEvaluation.completed(200L, TARGET_STOP_ORDER, new ArrivalLabel.Skipped(),
+            SCORED_AT);
         when(evaluations.findRouteIdsForObservations(List.of(200L))).thenReturn(List.of(8L));
 
         // when
@@ -117,32 +115,24 @@ class ForecastEvaluationWriterTest {
         ForecastEvaluation settled = settledEvaluation(200L, 300L, SCORED_AT);
         when(evaluations.findRouteIdsForObservations(List.of(200L))).thenReturn(List.of(8L));
         when(evaluations.settle(List.of(settled))).thenReturn(List.of(new SettledEvaluation(8L, 1L, 11L, 200L,
-            TARGET_STOP_ORDER, 1, 0.4, ScoringState.SETTLED, 300L, 0, ARRIVED_AT, SCORED_AT, true, "bus-1", 12,
-            true)));
+            TARGET_STOP_ORDER, 1, 0.4, ScoringState.SETTLED, 300L, 0, ARRIVED_AT, SCORED_AT, true, "bus-1", 12, true)));
 
         // when
         writer.complete(List.of(settled));
 
         // then
-        verify(samples).record(List.of(new DemandSample(11L, 200L, 300L, "bus-1", TARGET_STOP_ORDER, ARRIVED_AT,
-            SCORED_AT, 12, 0)));
+        verify(samples).record(
+            List.of(new DemandSample(11L, 200L, 300L, "bus-1", TARGET_STOP_ORDER, ARRIVED_AT, SCORED_AT, 12, 0)));
     }
 
-    private static SettledEvaluation settledFrom(
-        SettledForecast forecast
-    ) {
+    private static SettledEvaluation settledFrom(SettledForecast forecast) {
         return new SettledEvaluation(forecast.routeId(), forecast.modelDeploymentId(), 11L, 200L, TARGET_STOP_ORDER,
-            forecast.stopsToTarget(),
-            forecast.rawFullChance(), ScoringState.SETTLED, 300L, forecast.seatsOnArrival(), forecast.arrivedAt(),
-            SCORED_AT, true, null, null, false);
+            forecast.stopsToTarget(), forecast.rawFullChance(), ScoringState.SETTLED, 300L, forecast.seatsOnArrival(),
+            forecast.arrivedAt(), SCORED_AT, true, null, null, false);
     }
 
-    private static ForecastEvaluation settledEvaluation(
-        final long sourceId,
-        final long arrivalId,
-        Instant scoredAt
-    ) {
-        return ForecastEvaluation.completed(sourceId, TARGET_STOP_ORDER,
-            new Settled(arrivalId, 0), scoredAt);
+    private static ForecastEvaluation settledEvaluation(final long sourceId, final long arrivalId, Instant scoredAt) {
+        return ForecastEvaluation.completed(sourceId, TARGET_STOP_ORDER, new ArrivalLabel.Settled(arrivalId, 0),
+            scoredAt);
     }
 }

@@ -83,7 +83,7 @@ class ForecastObservationQualityViewTest {
 
         // when
         final long actual = jdbcClient.sql(
-            "SELECT quality_direction FROM forecast_observation_quality WHERE observation_batch_id = ?")
+            "SELECT quality_direction FROM operational_observation WHERE observation_batch_id = ?")
             .param(batchId)
             .query(Long.class)
             .single();

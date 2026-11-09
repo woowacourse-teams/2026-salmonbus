@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** 조회는 잠금 없이 수행할 수 있다. 등록·종료는 호출자가 확보한 노선 품질 잠금과 트랜잭션이 필요하다. */
+/** 조회는 잠금 없이 수행할 수 있다. 등록·종료는 호출자가 확보한 노선 잠금과 트랜잭션이 필요하다. */
 public interface EvaluationWorkStore {
     /**
      * 발행된 관측의 평가 작업을 등록한다. 예측 발행과 같은 트랜잭션에서 호출한다.
@@ -41,11 +41,6 @@ public interface EvaluationWorkStore {
      * 지정 관측의 저장된 작업과 미완료 예측을 복원한다. 예측이 없는 상태도 복원 결과에서 구별한다.
      */
     List<Restored> restore(long version, List<Long> observationIds);
-
-    /**
-     * 선택 관측 중 품질상 제외된 미완료 작업을 최대 limit건 닫고 닫힌 키를 반환한다.
-     */
-    List<Key> closeExcluded(long version, List<Long> observationIds, int limit);
 
     /**
      * 선택 관측에서 평가가 끝난 대상 키를 읽는다. 아직 끝나지 않은 작업은 결과에 포함하지 않는다.

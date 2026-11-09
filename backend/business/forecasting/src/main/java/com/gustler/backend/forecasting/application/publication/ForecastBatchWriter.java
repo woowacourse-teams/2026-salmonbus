@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.application.publication;
 
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationSamplingPoint;
 import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
@@ -43,7 +43,7 @@ public class ForecastBatchWriter {
     private final SameDayFullOutcomesService sameDayFullOutcomesService;
     private final StopDemandStatisticsRepository stopDemandStatisticsRepository;
     private final Clock clock;
-    private final RouteDataQualityAccess quality;
+    private final RouteWorkAccess routeWork;
 
     public ForecastBatchWriter(
         VehicleTrajectoryQuery vehicleTrajectoryQuery,
@@ -51,47 +51,40 @@ public class ForecastBatchWriter {
         SameDayFullOutcomesService sameDayFullOutcomesService,
         StopDemandStatisticsRepository stopDemandStatisticsRepository,
         Clock clock,
-        RouteDataQualityAccess quality
+        RouteWorkAccess routeWork
     ) {
         this.vehicleTrajectoryQuery = vehicleTrajectoryQuery;
         this.committer = committer;
         this.sameDayFullOutcomesService = sameDayFullOutcomesService;
         this.stopDemandStatisticsRepository = stopDemandStatisticsRepository;
         this.clock = clock;
-        this.quality = quality;
+        this.routeWork = routeWork;
     }
 
     /** 이번 호출에서 저장한 예보 수. 빈 발행도 기존처럼 처리 완료로 확정한다. */
     @Transactional(propagation = Propagation.NEVER)
-    public int writeForecastsOf(
-        PendingForecastBatch batch,
-        RouteStops stops,
-        RuntimeSnapshot runtime
-    ) {
-        final long qualityRevision = quality.current(batch.routeVersionId());
+    public int writeForecastsOf(PendingForecastBatch batch, RouteStops stops, RuntimeSnapshot runtime) {
+        final long qualityRevision = routeWork.current(batch.routeVersionId());
         Instant generatedAt = clock.instant();
         TimeSlot timeSlot = ForecastTimeSlot.of(batch, clock);
         StopDemandStatistics statistics = stopDemandStatisticsOf(batch, runtime, timeSlot);
-        Map<Integer, SameDayFullOutcomes> sameDayOutcomes =
-            sameDayFullOutcomesService.outcomesFor(batch.routeId(), runtime.deploymentId(), batch.responseReceivedAt());
+        Map<Integer, SameDayFullOutcomes> sameDayOutcomes = sameDayFullOutcomesService.outcomesFor(batch.routeId(),
+            runtime.deploymentId(), batch.responseReceivedAt());
         List<EvaluationSamplingSource> sources = new ArrayList<>();
-        List<SeatForecast> predictions =
-            forecastsOf(batch, stops, statistics, sameDayOutcomes, runtime, generatedAt, sources);
-        ForecastPublication publication = new ForecastPublication(
-            batch.observationBatchId(), batch.routeVersionId(), runtime.deploymentId(), statistics.revision(),
-            qualityRevision, batch.responseReceivedAt(), generatedAt, generatedAt, predictions);
+        List<SeatForecast> predictions = forecastsOf(batch, stops, statistics, sameDayOutcomes, runtime, generatedAt,
+            sources);
+        ForecastPublication publication = new ForecastPublication(batch.observationBatchId(), batch.routeVersionId(),
+            runtime.deploymentId(), statistics.revision(), qualityRevision, batch.responseReceivedAt(), generatedAt,
+            generatedAt, predictions);
         return committer.commit(batch, publication, sources);
     }
 
     /** 관측 시점에 사용할 수 있었던 통계 값과 버전을 함께 읽는다. */
-    private StopDemandStatistics stopDemandStatisticsOf(
-        PendingForecastBatch batch,
-        RuntimeSnapshot runtime,
-        TimeSlot timeSlot
-    ) {
+    private StopDemandStatistics stopDemandStatisticsOf(PendingForecastBatch batch, RuntimeSnapshot runtime,
+        TimeSlot timeSlot) {
         String statisticsVersion = calculationVersionOf(runtime.featureContractVersion());
-        return stopDemandStatisticsRepository.readAsOf(
-            batch.routeVersionId(), timeSlot, statisticsVersion, batch.responseReceivedAt());
+        return stopDemandStatisticsRepository.readAsOf(batch.routeVersionId(), timeSlot, statisticsVersion,
+            batch.responseReceivedAt());
     }
 
     private List<SeatForecast> forecastsOf(
@@ -103,27 +96,20 @@ public class ForecastBatchWriter {
         Instant generatedAt,
         List<EvaluationSamplingSource> sources
     ) {
-        return vehicleTrajectoryQuery.readTrajectories(batch.observationBatchId())
-            .stream()
-            .flatMap(trajectory -> {
-                List<SeatForecast> forecasts = forecastsOfVehicleOrEmpty(
-                    batch, trajectory, stops, statistics, sameDayOutcomes, runtime, generatedAt);
-                ObservedVehicle observation = trajectory.observation();
-                if (!forecasts.isEmpty() && hasVehicleId(observation)) {
-                    String direction = stops.stops()
-                        .stream()
-                        .filter(stop -> stop.stopOrder() == observation.passedStopOrder())
-                        .map(stop -> stop.direction().name())
-                        .findFirst()
-                        .orElse(RouteDirection.UNKNOWN.name());
-                    sources.add(new EvaluationSamplingSource(trajectory.vehicleObservationId(), stops.sourceRouteId(),
-                        new EvaluationSamplingPoint(batch.routeVersionId(), runtime.deploymentId(),
-                            observation.vehicleId(), observation.passedStopOrder(), direction,
-                            observation.observedAt())));
-                }
-                return forecasts.stream();
-            })
-            .toList();
+        return vehicleTrajectoryQuery.readTrajectories(batch.observationBatchId()).stream().flatMap(trajectory -> {
+            List<SeatForecast> forecasts = forecastsOfVehicleOrEmpty(batch, trajectory, stops, statistics,
+                sameDayOutcomes, runtime, generatedAt);
+            ObservedVehicle observation = trajectory.observation();
+            if (!forecasts.isEmpty() && hasVehicleId(observation)) {
+                String direction = stops.stops().stream()
+                    .filter(stop -> stop.stopOrder() == observation.passedStopOrder())
+                    .map(stop -> stop.direction().name()).findFirst().orElse(RouteDirection.UNKNOWN.name());
+                sources.add(new EvaluationSamplingSource(trajectory.vehicleObservationId(), stops.sourceRouteId(),
+                    new EvaluationSamplingPoint(batch.routeVersionId(), runtime.deploymentId(), observation.vehicleId(),
+                        observation.passedStopOrder(), direction, observation.observedAt())));
+            }
+            return forecasts.stream();
+        }).toList();
     }
 
     private boolean hasVehicleId(ObservedVehicle observation) {
@@ -143,12 +129,13 @@ public class ForecastBatchWriter {
         try {
             return forecastsOfVehicle(trajectory, stops, statistics, sameDayOutcomes, runtime, generatedAt);
         } catch (SeatRangeException e) {
-            LOGGER.warn("event=forecast_vehicle_skipped reason=MODEL_INPUT_OUT_OF_RANGE "
+            LOGGER.warn(
+                "event=forecast_vehicle_skipped reason=MODEL_INPUT_OUT_OF_RANGE "
                     + "batchId={} vehicleObservationId={} modelDeploymentId={} "
                     + "currentSeats={} capacity={} field={} value={} minimum={} maximum={}",
                 batch.observationBatchId(), trajectory.vehicleObservationId(), runtime.deploymentId(),
-                trajectory.observation().remainingSeats(), trajectory.maximumSeatsEverObserved(),
-                e.inputField(), e.inputValue(), e.minimum(), e.maximum());
+                trajectory.observation().remainingSeats(), trajectory.maximumSeatsEverObserved(), e.inputField(),
+                e.inputValue(), e.minimum(), e.maximum());
             return List.of();
         }
     }
@@ -162,17 +149,12 @@ public class ForecastBatchWriter {
         RuntimeSnapshot runtime,
         Instant generatedAt
     ) {
-        return stops.targetsAheadOf(trajectory.observation())
-            .stream()
-            .map(target -> SeatForecast.of(
-                trajectory.vehicleObservationId(),
-                target,
-                runtime.model().predict(new SeatForecastInput(
-                    target, trajectory, statistics, stops, statistics.timeSlot(),
-                    sameDayOutcomes.get(target.distance().stopCount()))),
-                runtime.deploymentId(),
-                statistics.revision(),
-                generatedAt))
+        return stops.targetsAheadOf(trajectory.observation()).stream()
+            .map(target -> SeatForecast.of(trajectory.vehicleObservationId(), target,
+                runtime.model()
+                    .predict(new SeatForecastInput(target, trajectory, statistics, stops, statistics.timeSlot(),
+                        sameDayOutcomes.get(target.distance().stopCount()))),
+                runtime.deploymentId(), statistics.revision(), generatedAt))
             .toList();
     }
 

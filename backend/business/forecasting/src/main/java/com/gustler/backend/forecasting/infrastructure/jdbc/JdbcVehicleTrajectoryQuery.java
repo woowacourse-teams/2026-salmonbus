@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.model.ObservedSeats;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.model.SeatGrid;
 import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import com.gustler.backend.forecasting.domain.publication.ObservationHistory;
@@ -11,6 +10,8 @@ import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.TrajectoryObservation;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryAssembler;
 import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
+import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
+import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -74,10 +75,13 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         """;
 
     private static final String SELECT_TARGET_BATCH = """
-        SELECT /* salmonbus:vehicle_trajectory_query.select_target_batch */ route_version_id, response_received_at
-        FROM observation_batch
-        WHERE id = :observationBatchId
-          AND response_received_at IS NOT NULL
+        SELECT /* salmonbus:vehicle_trajectory_query.select_target_batch */
+            batch.route_version_id, batch.response_received_at, route.source_id
+        FROM observation_batch batch
+        JOIN route_version version ON version.id = batch.route_version_id
+        JOIN route ON route.id = version.route_id
+        WHERE batch.id = :observationBatchId
+          AND batch.response_received_at IS NOT NULL
         """;
 
     /**
@@ -103,10 +107,10 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
     private static final String SELECT_OBSERVATIONS_IN_BATCHES = """
         SELECT /* salmonbus:vehicle_trajectory_query.select_observations_in_batches */ o.id, o.observation_batch_id, o.route_version_id, o.vehicle_id,
                o.vehicle_trip_key, o.passed_stop_order,
-               CASE WHEN o.forecast_eligible THEN o.remaining_seats END AS remaining_seats,
-               CASE WHEN NOT o.forecast_eligible THEN 'QUALITY_WITHHELD' ELSE o.seat_unknown_reason END AS seat_unknown_reason,
+               o.remaining_seats,
+               o.seat_unknown_reason,
                o.crowd_level
-        FROM forecast_observation_quality o
+        FROM operational_observation o
         WHERE o.observation_batch_id IN (:observationBatchIds)
           AND o.vehicle_id IS NOT NULL
         ORDER BY o.observation_batch_id, o.source_row_number
@@ -131,38 +135,23 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
      * 마찬가지로 궤적을 만들지 않으며 예보도 발행하지 않는다.
      *
      * <p>차량마다 기존 잔여석 인덱스를 역순으로 읽어 조건에 맞는 첫 양수 값을 선택한다.
-     * 기준 시각과 품질 검사는 LIMIT 전에 수행해야 미래/제외 관측을 제외한 최대값을 얻는다.
-     * 품질은 후보 ID로 확인하여 편도 view 조인이 잔여석 순서의 인덱스 탐색을 깨지 않게 한다.
+     * 기준 시각과 저장된 과거 제외 여부는 LIMIT 전에 적용한다.
      */
     private static final String SELECT_MAXIMUM_SEATS_EVER_OBSERVED = """
-        WITH /* salmonbus:vehicle_trajectory_query.select_maximum_seats_ever_observed */ vehicles AS (
-            SELECT unnest(ARRAY[:vehicleIds]::text[]) AS vehicle_id
-        )
-        SELECT capacity.vehicle_id, capacity.maximum_seats
-        FROM vehicles vehicle
-        CROSS JOIN LATERAL (
-            SELECT observation.vehicle_id,
-                   observation.remaining_seats AS maximum_seats
-            FROM vehicle_observation observation
-            JOIN observation_batch batch
-              ON batch.id = observation.observation_batch_id
-            WHERE observation.route_version_id = :routeVersionId
-              AND observation.vehicle_id = vehicle.vehicle_id
-              AND observation.remaining_seats > 0 AND observation.remaining_seats <= :maximumSeats
-              AND (SELECT quality.forecast_eligible FROM forecast_observation_quality quality
-                   WHERE quality.id = observation.id)
-              AND (batch.response_received_at, batch.id) <= (:until, :observationBatchId)
-            ORDER BY observation.remaining_seats DESC
-            LIMIT 1
-        ) capacity
+        SELECT DISTINCT ON (h.vehicle_id) h.vehicle_id,h.capacity AS maximum_seats
+        FROM vehicle_capacity_history h
+        JOIN route_version v ON v.id=:routeVersionId JOIN route r ON r.id=v.route_id
+        WHERE h.source_id=r.source_id AND h.vehicle_id IN (:vehicleIds)
+          AND (h.evidence_at,h.evidence_batch_id)<=(:until,:observationBatchId)
+        ORDER BY h.vehicle_id,h.evidence_at DESC,h.evidence_batch_id DESC
         """;
 
     private final JdbcClient jdbcClient;
+    private final VehicleCapacityCache vehicleCapacities;
 
-    public JdbcVehicleTrajectoryQuery(
-        JdbcClient jdbcClient
-    ) {
+    public JdbcVehicleTrajectoryQuery(JdbcClient jdbcClient, VehicleCapacityCache vehicleCapacities) {
         this.jdbcClient = jdbcClient;
+        this.vehicleCapacities = vehicleCapacities;
     }
 
     @Override
@@ -210,7 +199,6 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
         Set<Long> eligibleIds = history.targetBatch()
             .observations()
             .stream()
-            .filter(TrajectoryObservation::isForecastEligible)
             .map(TrajectoryObservation::vehicleObservationId)
             .collect(Collectors.toSet());
         return VehicleTrajectoryAssembler.assemble(history, maximumSeatsEverObservedOf(target.get(), history))
@@ -220,27 +208,42 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
     }
 
     /**
-     * 대상 batch 에 있는 차량마다 그 노선 판본에서 지금까지 보여 준 가장 많은 잔여석.
-     *
-     * <p>대상 batch 의 차량만 묻는다. 궤적 창 안의 다른 batch 에만 있는 차량은 예보 대상이 아니라
-     * 그 값이 필요 없다.
+     * 입력 경계까지 알려진 정원을 사용한다. 캐시가 비었거나 더 나중 관측을 담고 있으면 기준 시점까지 조회한다.
      */
     private Map<String, Integer> maximumSeatsEverObservedOf(
         TargetBatch target,
         ObservationHistory history
     ) {
-        List<String> vehicleIds = history.targetBatch()
-            .observations()
-            .stream()
-            .filter(TrajectoryObservation::isForecastEligible)
-            .map(TrajectoryObservation::vehicleId)
-            .distinct()
-            .toList();
+        Map<String, Integer> seatsByVehicle = history.targetBatch().observations().stream()
+            .collect(Collectors.toMap(TrajectoryObservation::vehicleId, this::observedSeats, Math::max));
+        List<String> vehicleIds = List.copyOf(seatsByVehicle.keySet());
         if (vehicleIds.isEmpty()) {
             return Map.of();
         }
-        List<VehicleMaximumSeats> rows = jdbcClient.sql(SELECT_MAXIMUM_SEATS_EVER_OBSERVED)
-            .param("maximumSeats", SeatGrid.LARGEST_SEATS)
+        Map<String, Integer> maximumSeats = vehicleCapacities.find(target.sourceId(), vehicleIds).values().stream()
+            .filter(capacity -> capacity.wasKnownAt(target.responseReceivedAt(), target.observationBatchId()))
+            .filter(capacity -> capacity.seats() >= seatsByVehicle.get(capacity.vehicleId()))
+            .collect(Collectors.toMap(JdbcVehicleCapacityStore.Capacity::vehicleId,
+                JdbcVehicleCapacityStore.Capacity::seats));
+        List<String> unresolved = vehicleIds.stream()
+            .filter(vehicleId -> !maximumSeats.containsKey(vehicleId))
+            .toList();
+        if (!unresolved.isEmpty()) {
+            readHistoricalCapacities(target, unresolved)
+                .forEach(capacity -> maximumSeats.put(capacity.vehicleId(), capacity.maximumSeats()));
+        }
+        return maximumSeats;
+    }
+
+    private int observedSeats(TrajectoryObservation observation) {
+        if (observation.seats() instanceof ObservedSeats.Known known) {
+            return known.seats();
+        }
+        return 0;
+    }
+
+    private List<VehicleMaximumSeats> readHistoricalCapacities(TargetBatch target, List<String> vehicleIds) {
+        return jdbcClient.sql(SELECT_MAXIMUM_SEATS_EVER_OBSERVED)
             .param("routeVersionId", target.routeVersionId())
             .param("vehicleIds", vehicleIds)
             .param("until", offsetOf(target.responseReceivedAt()))
@@ -248,12 +251,6 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
             .query((resultSet, rowNumber) -> new VehicleMaximumSeats(
                 resultSet.getString("vehicle_id"), resultSet.getInt("maximum_seats")))
             .list();
-
-        Map<String, Integer> maximumSeatsByVehicle = rows.stream()
-            .collect(LinkedHashMap::new,
-                (byVehicle, row) -> byVehicle.put(row.vehicleId(), row.maximumSeats()),
-                Map::putAll);
-        return maximumSeatsByVehicle;
     }
 
     /**
@@ -268,7 +265,8 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
             .query((resultSet, rowNumber) -> new TargetBatch(
                 observationBatchId,
                 resultSet.getLong("route_version_id"),
-                instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class))))
+                instantOf(resultSet.getObject("response_received_at", OffsetDateTime.class)),
+                resultSet.getString("source_id")))
             .optional();
     }
 
@@ -349,7 +347,8 @@ public class JdbcVehicleTrajectoryQuery implements VehicleTrajectoryQuery {
     private record TargetBatch(
         long observationBatchId,
         long routeVersionId,
-        Instant responseReceivedAt
+        Instant responseReceivedAt,
+        String sourceId
     ) {
     }
 

@@ -18,19 +18,19 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 import ch.qos.logback.core.read.ListAppender;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore;
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationSamplingPoint;
 import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
-import com.gustler.backend.forecasting.domain.model.FullSeatStreak.SeenToEnd;
-import com.gustler.backend.forecasting.domain.model.ObservedSeats.Known;
+import com.gustler.backend.forecasting.domain.model.FullSeatStreak;
+import com.gustler.backend.forecasting.domain.model.ObservedSeats;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
-import com.gustler.backend.forecasting.domain.model.PrecedingVehicle.Unknown;
+import com.gustler.backend.forecasting.domain.model.PrecedingVehicle;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
@@ -74,30 +74,30 @@ class ForecastBatchWriterTest {
     private static final Instant NOW = Instant.parse("2026-09-21T02:00:00Z");
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private static final PendingForecastBatch BATCH = new PendingForecastBatch(100, 1, 1, NOW);
-    private static final RouteStops STOPS = new RouteStops(1, "204000057", List.of(
-        new RouteStop(1, 4, "stop-4", true), new RouteStop(1, 5, "stop-5", true)));
-    private static final StopDemandStatistics STATISTICS = new StopDemandStatistics(
-        1, ForecastTimeSlot.of(BATCH, CLOCK), 3, List.of());
-    private static final SeatForecastResult RESULT = new SeatForecastResult(
-        new SeatDistribution(List.of(0.4, 0.6)), 0.4);
+    private static final RouteStops STOPS = new RouteStops(1, "204000057",
+        List.of(new RouteStop(1, 4, "stop-4", true), new RouteStop(1, 5, "stop-5", true)));
+    private static final StopDemandStatistics STATISTICS = new StopDemandStatistics(1,
+        ForecastTimeSlot.of(BATCH, CLOCK), 3, List.of());
+    private static final SeatForecastResult RESULT = new SeatForecastResult(new SeatDistribution(List.of(0.4, 0.6)),
+        0.4);
 
     private final VehicleTrajectoryQuery trajectories = mock(VehicleTrajectoryQuery.class);
     private final ForecastPublicationRepository forecasts = mock(ForecastPublicationRepository.class);
     private final EvaluationWorkStore evaluations = mock(EvaluationWorkStore.class);
     private final StopDemandStatisticsRepository statistics = mock(StopDemandStatisticsRepository.class);
-    private final RouteDataQualityAccess quality =
-        mock(RouteDataQualityAccess.class);
+    private final RouteWorkAccess quality = mock(RouteWorkAccess.class);
     private final SameDayFullOutcomesService outcomes = mock(SameDayFullOutcomesService.class);
     private final CollectionInputs inputs = mock(CollectionInputs.class);
     private final ForecastBatchWriter writer = new ForecastBatchWriter(trajectories,
         new ForecastBatchCommitter(forecasts, evaluations, quality, inputs,
-            new EvaluationSamplingSelector(false, "", Duration.ofSeconds(60))), outcomes,
-        statistics, CLOCK, quality);
+            new EvaluationSamplingSelector(false, "", Duration.ofSeconds(60))),
+        outcomes, statistics, CLOCK, quality);
     private final ListAppender<ILoggingEvent> logs = new ListAppender<>();
 
     @BeforeEach
     void setUp() {
         when(quality.current(anyLong())).thenReturn(1L);
+        when(quality.lock(anyLong())).thenReturn(1L);
         when(statistics.readAsOf(1, STATISTICS.timeSlot(), "feature-v1", NOW)).thenReturn(STATISTICS);
         when(outcomes.outcomesFor(1, 7L, NOW)).thenReturn(Map.of());
         logs.start();
@@ -115,11 +115,11 @@ class ForecastBatchWriterTest {
     void 이미_조회한_관측과_정류장에서_평가_선택에_필요한_정보를_전달한다() {
         // given
         ForecastBatchCommitter committer = mock(ForecastBatchCommitter.class);
-        ForecastBatchWriter writer =
-            new ForecastBatchWriter(trajectories, committer, outcomes, statistics, CLOCK, quality);
-        RouteStops stops = new RouteStops(1, "204000057", List.of(
-            new RouteStop(1, 3, "stop-3", true, RouteDirection.UP),
-            new RouteStop(1, 4, "stop-4", true), new RouteStop(1, 5, "stop-5", true)));
+        ForecastBatchWriter writer = new ForecastBatchWriter(trajectories, committer, outcomes, statistics, CLOCK,
+            quality);
+        RouteStops stops = new RouteStops(1, "204000057",
+            List.of(new RouteStop(1, 3, "stop-3", true, RouteDirection.UP), new RouteStop(1, 4, "stop-4", true),
+                new RouteStop(1, 5, "stop-5", true)));
         when(trajectories.readTrajectories(100)).thenReturn(List.of(vehicle(10, 12, 44)));
 
         // when
@@ -129,13 +129,12 @@ class ForecastBatchWriterTest {
         ArgumentCaptor<List<EvaluationSamplingSource>> sources = ArgumentCaptor.forClass(List.class);
         verify(committer).commit(eq(BATCH), any(ForecastPublication.class), sources.capture());
         assertThat(sources.getValue()).containsExactly(new EvaluationSamplingSource(10, "204000057",
-            new EvaluationSamplingPoint(
-                1, 7, "vehicle-10", 3, "UP", NOW)));
+            new EvaluationSamplingPoint(1, 7, "vehicle-10", 3, "UP", NOW)));
         verify(trajectories, times(1)).readTrajectories(100);
     }
 
     @Test
-    void 예보_계산에_쓸_품질_버전과_통계를_읽은_뒤_저장_직전에_잠그지_않고_품질_버전을_다시_읽는다() {
+    void 예보_계산_입력을_읽고_저장_직전에_노선을_잠가_입력_판본을_확인한다() {
         // given
         RuntimeSnapshot snapshot = runtime(input -> RESULT);
 
@@ -146,10 +145,8 @@ class ForecastBatchWriterTest {
         InOrder order = inOrder(quality, statistics, forecasts);
         order.verify(quality).current(BATCH.routeVersionId());
         order.verify(statistics).readAsOf(1, STATISTICS.timeSlot(), "feature-v1", NOW);
-        order.verify(quality).ensureExists(BATCH.routeVersionId());
-        order.verify(quality).current(BATCH.routeVersionId());
+        order.verify(quality).lock(BATCH.routeVersionId());
         order.verify(forecasts).save(any());
-        verify(quality, never()).lock(anyLong());
     }
 
     @Test
@@ -161,8 +158,8 @@ class ForecastBatchWriterTest {
         writer.writeForecastsOf(BATCH, STOPS, runtime(this::predictWithSeatValidation));
 
         // then
-        assertThat(saved()).containsExactlyInAnyOrder(
-            expected(10, 4), expected(10, 5), expected(11, 4), expected(11, 5));
+        assertThat(saved()).containsExactlyInAnyOrder(expected(10, 4), expected(10, 5), expected(11, 4),
+            expected(11, 5));
         verify(inputs).confirmInput(100, NOW);
         assertThat(logs.list).isEmpty();
     }
@@ -183,7 +180,7 @@ class ForecastBatchWriterTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     void 같은_관측_묶음에서_과거_최대값이_모델_범위를_초과한_차량만_제외한다(final boolean badFirst) {
         // given
         VehicleTrajectory good = vehicle(10, 12, 44);
@@ -197,10 +194,9 @@ class ForecastBatchWriterTest {
         assertThat(saved()).containsExactlyInAnyOrder(expected(10, 4), expected(10, 5));
         verify(inputs).confirmInput(100, NOW);
         assertThat(logs.list).singleElement().satisfies(event -> assertThat(event.getFormattedMessage())
-                .contains("event=forecast_vehicle_skipped", "batchId=100", "vehicleObservationId=11",
-                    "modelDeploymentId=7", "currentSeats=43", "capacity=82", "field=capacity",
-                    "value=82", "minimum=1", "maximum=70")
-                .doesNotContain("vehicle-11"));
+            .contains("event=forecast_vehicle_skipped", "batchId=100", "vehicleObservationId=11", "modelDeploymentId=7",
+                "currentSeats=43", "capacity=82", "field=capacity", "value=82", "minimum=1", "maximum=70")
+            .doesNotContain("vehicle-11"));
     }
 
     @Test
@@ -283,8 +279,8 @@ class ForecastBatchWriterTest {
         doThrow(failure).when(forecasts).save(any());
 
         // when
-        Throwable actual = catchThrowable(() ->
-            writer.writeForecastsOf(BATCH, STOPS, runtime(this::predictWithSeatValidation)));
+        Throwable actual = catchThrowable(
+            () -> writer.writeForecastsOf(BATCH, STOPS, runtime(this::predictWithSeatValidation)));
 
         // then
         assertThat(actual).isSameAs(failure);
@@ -341,9 +337,8 @@ class ForecastBatchWriterTest {
         when(statistics.readAsOf(2, STATISTICS.timeSlot(), "feature-v1", NOW))
             .thenReturn(new StopDemandStatistics(2, STATISTICS.timeSlot(), 3, List.of()));
         ForecastPolicy properties = new ForecastPolicy(Duration.ofMinutes(5), 20, 3000, 400);
-        PublishPendingForecastsService job =
-            new PublishPendingForecastsService(trajectories, routes, stops, runtimeProvider, writer,
-                properties, CLOCK);
+        PublishPendingForecastsService job = new PublishPendingForecastsService(trajectories, routes, stops,
+            runtimeProvider, writer, properties, CLOCK);
 
         // when
         job.writeForecasts();
@@ -351,8 +346,8 @@ class ForecastBatchWriterTest {
         // then
         ArgumentCaptor<ForecastPublication> publications = ArgumentCaptor.forClass(ForecastPublication.class);
         verify(forecasts, times(3)).save(publications.capture());
-        assertThat(publications.getAllValues()).extracting(ForecastPublication::predictionCount)
-            .containsExactly(0, 2, 0);
+        assertThat(publications.getAllValues()).extracting(ForecastPublication::predictionCount).containsExactly(0, 2,
+            0);
         verify(inputs).confirmInput(100, NOW);
         verify(inputs).confirmInput(101, NOW);
         verify(inputs).confirmInput(102, NOW);
@@ -360,7 +355,7 @@ class ForecastBatchWriterTest {
 
     private SeatForecastResult predictWithSeatValidation(SeatForecastInput input) {
         // 실제 모델 입력 검증을 사용한다. 계수 계산 연결은 모델 어댑터 테스트가 검증한다.
-        new SeatDistributionInput(new double[] {1}, "3330", input.target().distance().stopCount(),
+        new SeatDistributionInput(new double[] { 1 }, "3330", input.target().distance().stopCount(),
             input.target().remainingSeats(), input.maximumSeatsEverObserved(), null);
         return RESULT;
     }
@@ -372,9 +367,8 @@ class ForecastBatchWriterTest {
         when(statistics.readAsOf(1, STATISTICS.timeSlot(), version, NOW)).thenReturn(STATISTICS);
         when(trajectories.readTrajectories(100)).thenReturn(List.of(vehicle(10, 20, 44)));
         RuntimeSnapshot runtime = new RuntimeSnapshot(new ActiveModelDeployment(7,
-            ForecastFeatureContract.STATISTICS_VERSION,
-            "statistics-release", "0".repeat(64)), new SupportedForecastScope(List.of("1650", "3330")),
-            input -> {
+            ForecastFeatureContract.STATISTICS_VERSION, "statistics-release", "0".repeat(64)),
+            new SupportedForecastScope(List.of("1650", "3330")), input -> {
                 assertThat(input.statistics()).isSameAs(STATISTICS);
                 return RESULT;
             }, NOW.minusSeconds(60));
@@ -392,8 +386,8 @@ class ForecastBatchWriterTest {
 
     private VehicleTrajectory vehicle(final long id, final int seats, final int maximumSeats) {
         ObservedVehicle observation = new ObservedVehicle("vehicle-" + id, 1, 3, NOW, seats, null);
-        return new VehicleTrajectory(id, observation, new Known(seats), new SeatSlope.Known(0),
-            new Unknown(TrajectoryGap.NO_VEHICLE_AHEAD), new SeenToEnd(0),
+        return new VehicleTrajectory(id, observation, new ObservedSeats.Known(seats), new SeatSlope.Known(0),
+            new PrecedingVehicle.Unknown(TrajectoryGap.NO_VEHICLE_AHEAD), new FullSeatStreak.SeenToEnd(0),
             maximumSeats);
     }
 
@@ -411,11 +405,8 @@ class ForecastBatchWriterTest {
         return captured.getValue();
     }
 
-    private static List<VehicleTrajectory> trajectoriesInOrder(
-        VehicleTrajectory bad,
-        VehicleTrajectory good,
-        final boolean badFirst
-    ) {
+    private static List<VehicleTrajectory> trajectoriesInOrder(VehicleTrajectory bad, VehicleTrajectory good,
+        final boolean badFirst) {
         if (badFirst) {
             return List.of(bad, good);
         }

@@ -7,9 +7,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 
 import com.gustler.backend.forecasting.domain.statistics.StopDemandMeasurement;
-import com.gustler.backend.forecasting.infrastructure.statistics.JdbcStatisticsInputExtractor.Extracted;
-import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsExtractUploader.Command;
-import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsExtractWriter.Bundle;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -62,7 +59,7 @@ class JdbcStatisticsInputExtractorTest {
             INSERT INTO route_version(route_id,content_digest,valid_from)
             VALUES(:route,:digest,'2026-10-01T00:00:00Z') RETURNING id
             """).param("route", routeId).param("digest", "0".repeat(64)).query(Long.class).single();
-        jdbc.sql("INSERT INTO route_data_quality(route_id) VALUES(?)").param(routeId).update();
+        jdbc.sql("UPDATE route SET data_revision=1 WHERE id=?").param(routeId).update();
         jdbc.sql("""
             INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
             VALUES(:route,8,'stop-eight','출발','UP',true),
@@ -97,11 +94,7 @@ class JdbcStatisticsInputExtractorTest {
               expected_seats,generated_at,quality_revision,publication_id)
             SELECT :source,target,:route,target-8,:model,1,0.5,0.5,10,'2026-10-08T23:00:00Z',1,:publication
             FROM generate_series(9,10) target
-            """)
-            .param("source", source)
-            .param("route", route)
-            .param("model", model)
-            .param("publication", publication)
+            """).param("source", source).param("route", route).param("model", model).param("publication", publication)
             .update();
         jdbc.sql("""
             INSERT INTO forecast_evaluation_result(vehicle_observation_id,target_stop_order,route_version_id,
@@ -117,7 +110,7 @@ class JdbcStatisticsInputExtractorTest {
         final long before = jdbc.sql("SELECT count(*) FROM forecast_evaluation_result").query(Long.class).single();
 
         // when
-        Extracted result = extractor.extract(route, source - 1, source, UNTIL, ZONE, 10);
+        JdbcStatisticsInputExtractor.Extracted result = extractor.extract(route, source - 1, source, UNTIL, ZONE, 10);
 
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
@@ -125,21 +118,19 @@ class JdbcStatisticsInputExtractorTest {
             softly.assertThat(result.scope().qualityRevision()).isEqualTo(1);
         }
         assertThat(result.rows()).extracting(StatisticsInputRow::targetStopOrder).containsExactly(9, 10);
-        assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_result")
-            .query(Long.class)
-            .single()).isEqualTo(before);
+        assertThat(jdbc.sql("SELECT count(*) FROM forecast_evaluation_result").query(Long.class).single())
+            .isEqualTo(before);
     }
 
     @Test
     void 기준_시각_이후에_완료된_자료는_이번_묶음에서_제외한다() {
         // given
         jdbc.sql(
-        "UPDATE forecast_evaluation_result SET scored_at='2026-10-10T00:00:00Z' WHERE vehicle_observation_id=? AND target_stop_order=10")
-            .param(source)
-            .update();
+            "UPDATE forecast_evaluation_result SET scored_at='2026-10-10T00:00:00Z' WHERE vehicle_observation_id=? AND target_stop_order=10")
+            .param(source).update();
 
         // when
-        Extracted result = extractor.extract(route, source - 1, source, UNTIL, ZONE, 10);
+        JdbcStatisticsInputExtractor.Extracted result = extractor.extract(route, source - 1, source, UNTIL, ZONE, 10);
 
         // then
         assertThat(result.rows()).extracting(StatisticsInputRow::targetStopOrder).containsExactly(9);
@@ -155,9 +146,7 @@ class JdbcStatisticsInputExtractorTest {
             () -> extractor.extract(route, source - 1, source, UNTIL, ZONE, rowLimit));
 
         // then
-        assertThat(caughtFailure)
-            .isNotNull()
-            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("한도");
+        assertThat(caughtFailure).isNotNull().isInstanceOf(IllegalArgumentException.class).hasMessageContaining("한도");
     }
 
     @Test
@@ -170,9 +159,7 @@ class JdbcStatisticsInputExtractorTest {
             () -> extractor.extract(route, 0, outsideAllowedRange, UNTIL, ZONE, 10));
 
         // then
-        assertThat(caughtFailure)
-            .isNotNull()
-            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("범위");
+        assertThat(caughtFailure).isNotNull().isInstanceOf(IllegalArgumentException.class).hasMessageContaining("범위");
     }
 
     @Test
@@ -183,8 +170,8 @@ class JdbcStatisticsInputExtractorTest {
               requested_at,response_received_at,outcome,normalization_version,collection_strategy_version)
             VALUES(:route,'2026-10-08T23:10:00Z',1,:key,'2026-10-08T23:10:00Z','2026-10-08T23:10:00Z',
               'SUCCESS_ROWS','normalization-v1.0.0','adaptive-kst-v1.0.1') RETURNING id
-            """).param("route", route).param("key", UUID.randomUUID().toString().substring(0, 20))
-            .query(Long.class).single();
+            """).param("route", route).param("key", UUID.randomUUID().toString().substring(0, 20)).query(Long.class)
+            .single();
         final long arrival = jdbc.sql("""
             INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,
               vehicle_id,stop_order,stop_id,passed_stop_order,running_state,remaining_seats)
@@ -199,11 +186,12 @@ class JdbcStatisticsInputExtractorTest {
             """).param("arrival", arrival).param("route", route).param("source", source).update();
 
         // when
-        Extracted extracted = extractor.extract(route, source - 1, source, UNTIL, ZONE, 10);
-        Bundle bundle = StatisticsExtractWriter.write(directory, extracted, 8192);
+        JdbcStatisticsInputExtractor.Extracted extracted = extractor.extract(route, source - 1, source, UNTIL, ZONE,
+            10);
+        StatisticsExtractWriter.Bundle bundle = StatisticsExtractWriter.write(directory, extracted, 8192);
         // 전송 경계만 메모리 저장소로 대체한다. 실제 S3 실행 결과와 구분한다.
         Map<String, byte[]> objects = new HashMap<>();
-        Command storage = command -> {
+        StatisticsExtractUploader.Command storage = command -> {
             String key = command.get(command.indexOf("--key") + 1);
             try {
                 if (command.contains("put-object")) {
@@ -219,11 +207,10 @@ class JdbcStatisticsInputExtractorTest {
         };
         UUID exportId = UUID.randomUUID();
         new StatisticsExtractUploader(storage).upload(bundle, exportId);
-        Bundle received = new StatisticsExtractDownloader(storage).download(directory, exportId, bundle.manifest());
-        List<StopDemandMeasurement> result =
-            StatisticsFileCalculator.calculate(received.directory(), received.manifest()
-                .files(),
-                extracted.scope(), Map.of("bus", 20), 100, 4096);
+        StatisticsExtractWriter.Bundle received = new StatisticsExtractDownloader(storage).download(directory, exportId,
+            bundle.manifest());
+        List<StopDemandMeasurement> result = StatisticsFileCalculator.calculate(received.directory(),
+            received.manifest().files(), extracted.scope(), Map.of("bus", 20), 100, 4096);
 
         // then
         assertThat(result).hasSize(1);
@@ -244,10 +231,10 @@ class JdbcStatisticsInputExtractorTest {
                 WHERE vehicle_observation_id=:source
                 """).param("source", source).update());
             return invocation.callRealMethod();
-        }).when(instrumented).sql(contains("SELECT EXISTS"));
+        }).when(instrumented).sql(contains("WITH candidates AS MATERIALIZED"));
 
         // when
-        Extracted result = new JdbcStatisticsInputExtractor(instrumented, transactions)
+        JdbcStatisticsInputExtractor.Extracted result = new JdbcStatisticsInputExtractor(instrumented, transactions)
             .extract(route, source - 1, source, UNTIL, ZONE, 10);
 
         // then

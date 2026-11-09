@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.infrastructure.statistics;
 
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
-import com.gustler.backend.forecasting.infrastructure.statistics.StatisticsInputRow.Observation;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -31,16 +30,16 @@ final class JdbcStatisticsInputExtractor {
             f.stops_to_target,s.boarding_allowed,
             source.id AS source_id,source.route_version_id AS source_route,
             source.vehicle_id AS source_vehicle,source.quality_direction AS source_direction,
-            source.remaining_seats AS source_seats,source.forecast_eligible AS source_usable,
+            source.remaining_seats AS source_seats,true AS source_usable,
             arrival.id AS arrival_id,arrival.route_version_id AS arrival_route,
             arrival.vehicle_id AS arrival_vehicle,arrival.quality_direction AS arrival_direction,
-            arrival.remaining_seats AS arrival_seats,arrival.forecast_eligible AS arrival_usable
+            arrival.remaining_seats AS arrival_seats,true AS arrival_usable
         FROM candidates e
         LEFT JOIN seat_forecast f ON f.vehicle_observation_id=e.vehicle_observation_id
             AND f.target_stop_order=e.target_stop_order
         LEFT JOIN route_stop s ON s.route_version_id=e.route_version_id AND s.stop_order=e.target_stop_order
-        LEFT JOIN forecast_observation_quality source ON source.id=e.vehicle_observation_id
-        LEFT JOIN forecast_observation_quality arrival ON arrival.id=e.arrival_observation_id
+        LEFT JOIN operational_observation source ON source.id=e.vehicle_observation_id
+        LEFT JOIN operational_observation arrival ON arrival.id=e.arrival_observation_id
         ORDER BY e.vehicle_observation_id,e.target_stop_order
         """;
 
@@ -77,16 +76,9 @@ final class JdbcStatisticsInputExtractor {
             jdbc.sql("SET LOCAL statement_timeout = '2s'").update();
             jdbc.sql("SET LOCAL lock_timeout = '500ms'").update();
             final long revision = jdbc.sql("""
-                SELECT q.quality_revision FROM route_data_quality q
-                JOIN route_version v ON v.route_id=q.route_id WHERE v.id=:route
+                SELECT q.data_revision FROM route q
+                JOIN route_version v ON v.route_id=q.id WHERE v.id=:route
                 """).param("route", route).query(Long.class).single();
-            final boolean rebuilding = jdbc.sql("""
-                SELECT EXISTS(SELECT 1 FROM trip_quality_rebuild
-                    WHERE route_version_id=:route AND NOT completed)
-                """).param("route", route).query(Boolean.class).single();
-            if (rebuilding) {
-                throw new IllegalStateException("품질 조사 중인 노선은 추출하지 않는다");
-            }
             List<StatisticsInputRow> rows = jdbc.sql(SQL).param("route", route).param("after", after)
                 .param("through", through).param("until", OffsetDateTime.ofInstant(until, ZoneOffset.UTC))
                 .param("limit", maxRows + 1).query((rs, index) -> row(rs, revision)).list();
@@ -100,7 +92,7 @@ final class JdbcStatisticsInputExtractor {
         });
     }
 
-    private boolean hasValidObservationRange(long route, long after, long through) {
+    private boolean hasValidObservationRange(final long route, final long after, final long through) {
         if (route <= 0 || after < 0) {
             return false;
         }
@@ -120,21 +112,21 @@ final class JdbcStatisticsInputExtractor {
         if (distance == null || boarding == null) {
             throw new IllegalArgumentException("정산에 연결된 예보 또는 정류장이 없다");
         }
-        return new StatisticsInputRow(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order"),
-            distance, boarding, ScoringState.valueOf(rs.getString("scoring_state")),
+        return new StatisticsInputRow(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order"), distance,
+            boarding, ScoringState.valueOf(rs.getString("scoring_state")),
             rs.getObject("arrival_observation_id", Long.class), rs.getObject("seats_on_arrival", Integer.class),
-            instant(rs, "arrived_at"), instant(rs, "scored_at"), revision,
-            observation(rs, "source"), observation(rs, "arrival"));
+            instant(rs, "arrived_at"), instant(rs, "scored_at"), revision, observation(rs, "source"),
+            observation(rs, "arrival"));
     }
 
-    private Observation observation(ResultSet rs, String prefix) throws SQLException {
+    private StatisticsInputRow.Observation observation(ResultSet rs, String prefix) throws SQLException {
         Long id = rs.getObject(prefix + "_id", Long.class);
         if (id == null) {
             return null;
         }
-        return new Observation(id, rs.getLong(prefix + "_route"),
-            rs.getString(prefix + "_vehicle"), rs.getLong(prefix + "_direction"),
-            rs.getObject(prefix + "_seats", Integer.class), rs.getBoolean(prefix + "_usable"));
+        return new StatisticsInputRow.Observation(id, rs.getLong(prefix + "_route"), rs.getString(prefix + "_vehicle"),
+            rs.getLong(prefix + "_direction"), rs.getObject(prefix + "_seats", Integer.class),
+            rs.getBoolean(prefix + "_usable"));
     }
 
     private Instant instant(ResultSet rs, String column) throws SQLException {

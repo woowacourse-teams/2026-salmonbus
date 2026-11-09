@@ -2,10 +2,6 @@ package com.gustler.backend.forecasting.domain.evaluation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Lost;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.NotArrivedYet;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.SeatMissing;
-import com.gustler.backend.forecasting.domain.evaluation.ArrivalLabel.Settled;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import java.time.Instant;
 import java.util.List;
@@ -38,7 +34,7 @@ class ArrivalLabelResolverTest {
         ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing, STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new Settled(ARRIVAL_OBSERVATION_ID, 0));
+        assertThat(actual).isEqualTo(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0));
     }
 
     @Test
@@ -50,14 +46,13 @@ class ArrivalLabelResolverTest {
         ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing, STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new Settled(ARRIVAL_OBSERVATION_ID, 9));
+        assertThat(actual).isEqualTo(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 9));
     }
 
     @Test
     void 대상_정류장에_아직_안_닿은_여정은_열어_둔다() {
         // given
-        List<ArrivalCandidate> stillComing = List.of(
-            passedAt(PASSED_STOP_ORDER + 1, 20, 9),
+        List<ArrivalCandidate> stillComing = List.of(passedAt(PASSED_STOP_ORDER + 1, 20, 9),
             passedAt(PASSED_STOP_ORDER + 2, 40, 8));
 
         // when
@@ -76,14 +71,13 @@ class ArrivalLabelResolverTest {
         ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), passing, STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new SeatMissing(ARRIVAL_OBSERVATION_ID));
+        assertThat(actual).isEqualTo(new ArrivalLabel.SeatMissing(ARRIVAL_OBSERVATION_ID));
     }
 
     @Test
     void 대상_순번을_건너뛴_여정은_건너뜀으로_닫는다() {
         // given
-        List<ArrivalCandidate> jumped = List.of(
-            passedAt(TARGET_STOP_ORDER - 1, 40, 9),
+        List<ArrivalCandidate> jumped = List.of(passedAt(TARGET_STOP_ORDER - 1, 40, 9),
             passedAt(TARGET_STOP_ORDER + 1, 80, 9));
 
         // when
@@ -120,9 +114,7 @@ class ArrivalLabelResolverTest {
     @Test
     void 순번이_되돌아가면_새_여정이라_끊긴_것으로_닫는다() {
         // given
-        List<ArrivalCandidate> turnedAround = List.of(
-            passedAt(PASSED_STOP_ORDER + 1, 20, 9),
-            passedAt(1, 40, 40));
+        List<ArrivalCandidate> turnedAround = List.of(passedAt(PASSED_STOP_ORDER + 1, 20, 9), passedAt(1, 40, 40));
 
         // when
         ArrivalLabel actual = ArrivalLabelResolver.resolve(pending(), turnedAround, STILL_WAITING_AT);
@@ -134,8 +126,8 @@ class ArrivalLabelResolverTest {
     @Test
     void 차량_아이디가_없는_예보는_도착을_찾을_수_없어_끊긴_것으로_닫는다() {
         // given
-        PendingForecast withoutVehicleId = new PendingForecast(
-            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, null, STOPS_TO_TARGET, FORECAST_AT, FORECAST_AT);
+        PendingForecast withoutVehicleId = new PendingForecast(100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, null,
+            STOPS_TO_TARGET, FORECAST_AT, FORECAST_AT);
 
         // when
         ArrivalLabel actual = ArrivalLabelResolver.resolve(withoutVehicleId, List.of(), STILL_WAITING_AT);
@@ -147,9 +139,7 @@ class ArrivalLabelResolverTest {
     @Test
     void 같은_정류장에_여러_판_머무는_동안은_열어_둔다() {
         // given
-        List<ArrivalCandidate> waiting = List.of(
-            passedAt(PASSED_STOP_ORDER, 20, 9),
-            passedAt(PASSED_STOP_ORDER, 40, 9),
+        List<ArrivalCandidate> waiting = List.of(passedAt(PASSED_STOP_ORDER, 20, 9), passedAt(PASSED_STOP_ORDER, 40, 9),
             passedAt(PASSED_STOP_ORDER, 60, 9));
 
         // when
@@ -192,104 +182,87 @@ class ArrivalLabelResolverTest {
     @Test
     void 예보_계산_전에_도착한_관측은_평가에_사용하지_않는다() {
         // given
-        PendingForecast forecast = new PendingForecast(
-            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID, STOPS_TO_TARGET,
-            FORECAST_AT, FORECAST_AT.plusSeconds(30));
+        PendingForecast forecast = new PendingForecast(100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID,
+            STOPS_TO_TARGET, FORECAST_AT, FORECAST_AT.plusSeconds(30));
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(
-            forecast, List.of(passedAt(TARGET_STOP_ORDER, 29, 0)), STILL_WAITING_AT);
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(forecast, List.of(passedAt(TARGET_STOP_ORDER, 29, 0)),
+            STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new NotArrivedYet());
+        assertThat(actual).isEqualTo(new ArrivalLabel.NotArrivedYet());
     }
 
     @Test
     void 예보_계산과_같은_시각의_관측도_평가에서_제외한다() {
         // given
-        PendingForecast forecast = new PendingForecast(
-            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID, STOPS_TO_TARGET,
-            FORECAST_AT, FORECAST_AT.plusSeconds(30));
+        PendingForecast forecast = new PendingForecast(100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID,
+            STOPS_TO_TARGET, FORECAST_AT, FORECAST_AT.plusSeconds(30));
 
         // when
-        ArrivalLabel actual = ArrivalLabelResolver.resolve(
-            forecast, List.of(passedAt(TARGET_STOP_ORDER, 30, 0)), STILL_WAITING_AT);
+        ArrivalLabel actual = ArrivalLabelResolver.resolve(forecast, List.of(passedAt(TARGET_STOP_ORDER, 30, 0)),
+            STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new NotArrivedYet());
+        assertThat(actual).isEqualTo(new ArrivalLabel.NotArrivedYet());
     }
 
     @Test
     void 예보_계산_시각을_지난_관측부터_평가에_사용한다() {
         // given
         Instant generatedAt = FORECAST_AT.plusSeconds(30);
-        PendingForecast forecast = new PendingForecast(
-            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID, STOPS_TO_TARGET,
-            FORECAST_AT, generatedAt);
-        ArrivalCandidate arrival = new ArrivalCandidate(ARRIVAL_OBSERVATION_ID,
-            new ObservedVehicle(VEHICLE_ID, ROUTE_VERSION_3330, TARGET_STOP_ORDER,
-                generatedAt.plusNanos(1), 0, CROWD_LEVEL_UNKNOWN));
+        PendingForecast forecast = new PendingForecast(100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID,
+            STOPS_TO_TARGET, FORECAST_AT, generatedAt);
+        ArrivalCandidate arrival = new ArrivalCandidate(ARRIVAL_OBSERVATION_ID, new ObservedVehicle(VEHICLE_ID,
+            ROUTE_VERSION_3330, TARGET_STOP_ORDER, generatedAt.plusNanos(1), 0, CROWD_LEVEL_UNKNOWN));
 
         // when
         ArrivalLabel actual = ArrivalLabelResolver.resolve(forecast, List.of(arrival), STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new Settled(ARRIVAL_OBSERVATION_ID, 0));
+        assertThat(actual).isEqualTo(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0));
     }
 
     @Test
     void 계산_전과_같은_시각의_부적격_관측은_이후_정상_관측의_평가를_막지_않는다() {
         // given
-        PendingForecast forecast = new PendingForecast(
-            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID, STOPS_TO_TARGET,
-            FORECAST_AT, FORECAST_AT.plusSeconds(30), 0L);
+        PendingForecast forecast = new PendingForecast(100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID,
+            STOPS_TO_TARGET, FORECAST_AT, FORECAST_AT.plusSeconds(30), 0L);
         List<ArrivalCandidate> candidates = List.of(
-            new ArrivalCandidate(1L, passedAt(TARGET_STOP_ORDER, 20, 0).vehicle(), 1L, false),
-            new ArrivalCandidate(2L, passedAt(TARGET_STOP_ORDER, 30, 0).vehicle(), 1L, true),
-            new ArrivalCandidate(ARRIVAL_OBSERVATION_ID, passedAt(TARGET_STOP_ORDER, 31, 9).vehicle(), 0L, true));
+            new ArrivalCandidate(1L, passedAt(TARGET_STOP_ORDER, 20, 0).vehicle(), 1L),
+            new ArrivalCandidate(2L, passedAt(TARGET_STOP_ORDER, 30, 0).vehicle(), 1L),
+            new ArrivalCandidate(ARRIVAL_OBSERVATION_ID, passedAt(TARGET_STOP_ORDER, 31, 9).vehicle(), 0L));
 
         // when
         ArrivalLabel actual = ArrivalLabelResolver.resolve(forecast, candidates, STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new Settled(ARRIVAL_OBSERVATION_ID, 9));
+        assertThat(actual).isEqualTo(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 9));
     }
 
     @Test
     void 계산_전_관측을_제외해도_관측_공백은_예보의_원_관측_시각부터_계산한다() {
         // given
-        PendingForecast forecast = new PendingForecast(
-            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID, STOPS_TO_TARGET,
-            FORECAST_AT, FORECAST_AT.plusSeconds(80));
-        List<ArrivalCandidate> candidates = List.of(
-            passedAt(PASSED_STOP_ORDER + 1, 70, 12),
+        PendingForecast forecast = new PendingForecast(100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID,
+            STOPS_TO_TARGET, FORECAST_AT, FORECAST_AT.plusSeconds(80));
+        List<ArrivalCandidate> candidates = List.of(passedAt(PASSED_STOP_ORDER + 1, 70, 12),
             passedAt(TARGET_STOP_ORDER, 100, 9));
 
         // when
         ArrivalLabel actual = ArrivalLabelResolver.resolve(forecast, candidates, STILL_WAITING_AT);
 
         // then
-        assertThat(actual).isEqualTo(new Lost());
+        assertThat(actual).isEqualTo(new ArrivalLabel.Lost());
     }
 
     private PendingForecast pending() {
-        return new PendingForecast(
-            100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID, STOPS_TO_TARGET, FORECAST_AT, FORECAST_AT);
+        return new PendingForecast(100L, TARGET_STOP_ORDER, ROUTE_VERSION_3330, VEHICLE_ID, STOPS_TO_TARGET,
+            FORECAST_AT, FORECAST_AT);
     }
 
-    private ArrivalCandidate passedAt(
-        final int passedStopOrder,
-        final int secondsAfterForecast,
-        Integer remainingSeats
-    ) {
-        return new ArrivalCandidate(
-            ARRIVAL_OBSERVATION_ID,
-            new ObservedVehicle(
-                VEHICLE_ID,
-                ROUTE_VERSION_3330,
-                passedStopOrder,
-                FORECAST_AT.plusSeconds(secondsAfterForecast),
-                remainingSeats,
-                CROWD_LEVEL_UNKNOWN));
+    private ArrivalCandidate passedAt(final int passedStopOrder, final int secondsAfterForecast,
+        Integer remainingSeats) {
+        return new ArrivalCandidate(ARRIVAL_OBSERVATION_ID, new ObservedVehicle(VEHICLE_ID, ROUTE_VERSION_3330,
+            passedStopOrder, FORECAST_AT.plusSeconds(secondsAfterForecast), remainingSeats, CROWD_LEVEL_UNKNOWN));
     }
 }

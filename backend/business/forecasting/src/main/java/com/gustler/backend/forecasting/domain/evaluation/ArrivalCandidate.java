@@ -11,11 +11,10 @@ import java.time.Instant;
 public record ArrivalCandidate(
     long observationId,
     ObservedVehicle vehicle,
-    Long qualityDirection,
-    boolean qualityAssessed
+    Long qualityDirection
 ) {
     public ArrivalCandidate(final long observationId, ObservedVehicle vehicle) {
-        this(observationId, vehicle, null, true);
+        this(observationId, vehicle, null);
     }
 
     public int passedStopOrder() {

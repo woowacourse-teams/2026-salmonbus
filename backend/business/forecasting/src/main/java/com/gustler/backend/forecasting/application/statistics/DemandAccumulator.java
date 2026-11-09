@@ -1,11 +1,9 @@
 package com.gustler.backend.forecasting.application.statistics;
 
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage;
-import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage.PendingSample;
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun;
-import com.gustler.backend.forecasting.domain.statistics.RebuildScope;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -16,19 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class DemandAccumulator {
     private final DemandStatisticsStore store;
     private final DemandSampleStore samples;
-    private final DemandStatisticsRebuildRequestStore requests;
-    private final RouteDataQualityAccess quality;
+    private final RouteWorkAccess routeWork;
 
-    public DemandAccumulator(
-        DemandStatisticsStore store,
-        DemandSampleStore samples,
-        DemandStatisticsRebuildRequestStore requests,
-        RouteDataQualityAccess quality
-    ) {
+    public DemandAccumulator(DemandStatisticsStore store, DemandSampleStore samples, RouteWorkAccess routeWork) {
         this.store = store;
         this.samples = samples;
-        this.requests = requests;
-        this.quality = quality;
+        this.routeWork = routeWork;
     }
 
     @Transactional(readOnly = false, timeout = 2)
@@ -40,31 +31,19 @@ public class DemandAccumulator {
         Instant dataUntil
     ) {
         store.limitStatementTime();
-        quality.lock(routeVersionId);
-        if (quality.investigationPending(routeVersionId, vehicleId)
-            || requests.blocksAccumulation(routeVersionId, vehicleId)) {
-            return Result.waiting(afterInputId);
-        }
+        routeWork.lock(routeVersionId);
         DemandSamplePage page = samples.lockPage(routeVersionId, vehicleId, afterInputId, inputUntilId,
             DemandStatisticsRun.PAGE_SIZE);
-        if (page.requiresRebuild()) {
-            requests.request(routeVersionId, new RebuildScope(vehicleId));
-            return new Result(page.size(), 0, true, page.nextInputId(afterInputId));
-        }
-        List<PendingSample> applicable = page.applicableUntil(dataUntil);
+        List<DemandSamplePage.PendingSample> applicable = page.applicableUntil(dataUntil);
         if (!applicable.isEmpty()) {
             store.addToCurrentTotals(routeVersionId, page.totalsUntil(dataUntil));
             store.registerVehicle(routeVersionId, vehicleId);
-            samples.remove(applicable.stream()
-                .map(PendingSample::id)
-                .toList());
         }
-        return new Result(page.size(), applicable.size(), false, page.nextInputId(afterInputId));
+        samples.remove(page.processedUntil(dataUntil).stream().map(DemandSamplePage.PendingSample::id).toList());
+        return new Result(page.size(), applicable.size(), page.nextInputId(afterInputId));
     }
 
-    public record Result(int selected, int applied, boolean waitingForRebuild, long nextInputId) {
-        static Result waiting(final long afterInputId) {
-            return new Result(0, 0, true, afterInputId);
-        }
+    public record Result(int selected, int applied, long nextInputId) {
+
     }
 }

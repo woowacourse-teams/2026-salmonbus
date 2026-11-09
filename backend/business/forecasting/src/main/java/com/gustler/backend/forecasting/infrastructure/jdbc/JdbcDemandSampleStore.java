@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.domain.statistics.DemandSample;
 import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage;
-import com.gustler.backend.forecasting.domain.statistics.DemandSamplePage.PendingSample;
 import com.gustler.backend.forecasting.domain.statistics.DemandSampleStore;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -12,8 +11,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * 정산에서 생긴 통계 표본을 기록하고 제한된 페이지로 잠가 처리한다.
- * 원본 정산과 표본 처리의 경계를 구분한다.
+ * 정산에서 생긴 통계 표본을 기록하고 제한된 페이지로 잠가 처리한다. 원본 정산과 표본 처리의 경계를 구분한다.
  */
 @Repository
 public class JdbcDemandSampleStore implements DemandSampleStore {
@@ -36,10 +34,11 @@ public class JdbcDemandSampleStore implements DemandSampleStore {
             ORDER BY id LIMIT :limit FOR UPDATE
         )
         SELECT page.*, EXISTS (
-            SELECT 1 FROM forecast_eligible_observation source
-            JOIN forecast_eligible_observation arrival ON arrival.id = page.arrival_observation_id
+            SELECT 1 FROM operational_observation source
+            JOIN operational_observation arrival ON arrival.id = page.arrival_observation_id
               AND %s
             WHERE source.id = page.prediction_observation_id
+              AND source.remaining_seats IS NOT NULL AND arrival.remaining_seats IS NOT NULL
         ) AS usable
         FROM page
         ORDER BY page.id
@@ -54,17 +53,13 @@ public class JdbcDemandSampleStore implements DemandSampleStore {
     @Override
     public void record(List<DemandSample> samples) {
         for (DemandSample sample : samples) {
-            jdbc.sql(INSERT)
-                .param("routeVersionId", sample.routeVersionId())
+            jdbc.sql(INSERT).param("routeVersionId", sample.routeVersionId())
                 .param("predictionObservationId", sample.predictionObservationId())
-                .param("arrivalObservationId", sample.arrivalObservationId())
-                .param("vehicleId", sample.vehicleId())
-                .param("targetStopOrder", sample.targetStopOrder())
-                .param("arrivedAt", offsetOf(sample.arrivedAt()))
+                .param("arrivalObservationId", sample.arrivalObservationId()).param("vehicleId", sample.vehicleId())
+                .param("targetStopOrder", sample.targetStopOrder()).param("arrivedAt", offsetOf(sample.arrivedAt()))
                 .param("scoredAt", offsetOf(sample.scoredAt()))
                 .param("predictionRemainingSeats", sample.predictionRemainingSeats())
-                .param("arrivalRemainingSeats", sample.arrivalRemainingSeats())
-                .update();
+                .param("arrivalRemainingSeats", sample.arrivalRemainingSeats()).update();
         }
     }
 
@@ -76,15 +71,14 @@ public class JdbcDemandSampleStore implements DemandSampleStore {
         final long inputUntilId,
         final int limit
     ) {
-        return new DemandSamplePage(jdbc.sql(LOCK_PAGE)
-            .param("version", routeVersionId).param("vehicle", vehicleId)
+        return new DemandSamplePage(jdbc.sql(LOCK_PAGE).param("version", routeVersionId).param("vehicle", vehicleId)
             .param("afterInputId", afterInputId).param("inputUntilId", inputUntilId).param("limit", limit)
-            .query((rs, row) -> new PendingSample(rs.getLong("id"), new DemandSample(
-                rs.getLong("route_version_id"), rs.getLong("prediction_observation_id"),
-                rs.getLong("arrival_observation_id"), rs.getString("vehicle_id"), rs.getInt("target_stop_order"),
-                rs.getObject("arrived_at", OffsetDateTime.class).toInstant(),
-                rs.getObject("scored_at", OffsetDateTime.class).toInstant(),
-                rs.getInt("prediction_remaining_seats"), rs.getInt("arrival_remaining_seats")),
+            .query((rs, row) -> new DemandSamplePage.PendingSample(rs.getLong("id"),
+                new DemandSample(rs.getLong("route_version_id"), rs.getLong("prediction_observation_id"),
+                    rs.getLong("arrival_observation_id"), rs.getString("vehicle_id"), rs.getInt("target_stop_order"),
+                    rs.getObject("arrived_at", OffsetDateTime.class).toInstant(),
+                    rs.getObject("scored_at", OffsetDateTime.class).toInstant(),
+                    rs.getInt("prediction_remaining_seats"), rs.getInt("arrival_remaining_seats")),
                 rs.getBoolean("usable")))
             .list());
     }

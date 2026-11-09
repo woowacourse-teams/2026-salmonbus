@@ -1,11 +1,8 @@
 package com.gustler.backend.forecasting.application.evaluation;
 
-import com.gustler.backend.forecasting.application.evaluation.RecentObservationBatches.Header;
-import com.gustler.backend.forecasting.application.evaluation.RecentObservationBatches.Row;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
-import com.gustler.backend.observations.api.ObservationDeliveryBatch.Kind;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,8 +21,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * 커밋된 관측을 용량과 보존 시간 안에서 보관한다.
- * 전달 누락이나 재시작은 제한된 DB 복원으로 보완한다.
+ * 커밋된 관측을 용량과 보존 시간 안에서 보관한다. 전달 누락이나 재시작은 제한된 DB 복원으로 보완한다.
  */
 @Component
 @ConditionalOnProperty(prefix = "forecast.evaluation.observation-cache", name = "enabled", havingValue = "true")
@@ -68,7 +64,7 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
         if (isSupersededStoredBatch(previous, batch, qualityRevision)) {
             return false;
         }
-        if (batch.kind() == Kind.CLEARED) {
+        if (batch.kind() == ObservationDeliveryBatch.Kind.CLEARED) {
             remove(key);
             return true;
         }
@@ -78,8 +74,9 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
         return put(key, new Entry(batch.attempt(), batch.observedAt(), qualityRevision, batch, List.of()));
     }
 
-    private boolean isSupersededStoredBatch(Entry previous, ObservationDeliveryBatch batch, long qualityRevision) {
-        if (previous == null || batch.kind() != Kind.STORED) {
+    private boolean isSupersededStoredBatch(Entry previous, ObservationDeliveryBatch batch,
+        final long qualityRevision) {
+        if (previous == null || batch.kind() != ObservationDeliveryBatch.Kind.STORED) {
             return false;
         }
         if (previous.attempt() != batch.attempt()) {
@@ -125,13 +122,13 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
     }
 
     private synchronized List<ArrivalCandidate> prepare(final long version, final long revision, Round round) {
-        List<Header> headers = source.headers(version, round.cutoff, capacity + 1);
+        List<RecentObservationBatches.Header> headers = source.headers(version, round.cutoff, capacity + 1);
         if (headersExceedRoundLimits(headers, round)) {
             return null;
         }
 
         Map<Long, List<ArrivalCandidate>> ready = new HashMap<>();
-        List<Header> missing = addReusableBatches(version, revision, headers, ready);
+        List<RecentObservationBatches.Header> missing = addReusableBatches(version, revision, headers, ready);
         if (!restoreMissingBatchesWithinRoundLimits(version, missing, round, ready)) {
             return null;
         }
@@ -142,19 +139,19 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
         return sortReadyCandidatesAndConsumeBudget(ready, round);
     }
 
-    private boolean headersExceedRoundLimits(List<Header> headers, Round round) {
+    private boolean headersExceedRoundLimits(List<RecentObservationBatches.Header> headers, Round round) {
         return headers.size() > capacity || headers.stream().anyMatch(header -> header.rows() < 0)
-            || headers.stream().mapToLong(Header::rows).sum() > round.remaining;
+            || headers.stream().mapToLong(RecentObservationBatches.Header::rows).sum() > round.remaining;
     }
 
-    private List<Header> addReusableBatches(
+    private List<RecentObservationBatches.Header> addReusableBatches(
         final long version,
         final long revision,
-        List<Header> headers,
+        List<RecentObservationBatches.Header> headers,
         Map<Long, List<ArrivalCandidate>> ready
     ) {
-        List<Header> missing = new ArrayList<>();
-        for (Header header : headers) {
+        List<RecentObservationBatches.Header> missing = new ArrayList<>();
+        for (RecentObservationBatches.Header header : headers) {
             Entry entry = batches.get(new Key(version, header.batchId()));
             if (!canReuseBatch(entry, header, revision)) {
                 missing.add(header);
@@ -165,15 +162,14 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
         return missing;
     }
 
-    private static boolean canReuseBatch(Entry entry, Header header, final long revision) {
-        return entry != null
-            && entry.attempt() == header.attempt()
-            && (entry.raw() != null || entry.observedAt().equals(header.observedAt()))
-            && entry.size() == header.rows()
+    private static boolean canReuseBatch(Entry entry, RecentObservationBatches.Header header, final long revision) {
+        return entry != null && entry.attempt() == header.attempt()
+            && (entry.raw() != null || entry.observedAt().equals(header.observedAt())) && entry.size() == header.rows()
             && entry.revision() == revision;
     }
 
-    private static List<ArrivalCandidate> candidatesFromCachedEntry(Entry entry, Header header) {
+    private static List<ArrivalCandidate> candidatesFromCachedEntry(Entry entry,
+        RecentObservationBatches.Header header) {
         if (entry.raw() == null) {
             return entry.candidates();
         }
@@ -182,28 +178,26 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
 
     private boolean restoreMissingBatchesWithinRoundLimits(
         final long version,
-        List<Header> missing,
+        List<RecentObservationBatches.Header> missing,
         Round round,
         Map<Long, List<ArrivalCandidate>> ready
     ) {
-        List<Header> recovering = missing.stream()
-            .limit(round.recoveryBatches)
-            .toList();
+        List<RecentObservationBatches.Header> recovering = missing.stream().limit(round.recoveryBatches).toList();
         round.recoveryBatches -= recovering.size();
         if (recovering.isEmpty()) {
             return true;
         }
-        List<Long> batchIds = recovering.stream().map(Header::batchId).toList();
-        List<Row> rows = source.restore(version, batchIds, round.remaining + 1);
+        List<Long> batchIds = recovering.stream().map(RecentObservationBatches.Header::batchId).toList();
+        List<RecentObservationBatches.Row> rows = source.restore(version, batchIds, round.remaining + 1);
         if (rows.size() > round.remaining) {
             return false;
         }
         Map<Long, List<ArrivalCandidate>> candidatesByBatchId = rows.stream()
-            .collect(Collectors.groupingBy(Row::batchId, HashMap::new,
-                Collectors.mapping(Row::candidate, Collectors.toCollection(ArrayList::new))));
-        for (Header header : recovering) {
-            List<ArrivalCandidate> candidates =
-                List.copyOf(candidatesByBatchId.getOrDefault(header.batchId(), List.of()));
+            .collect(Collectors.groupingBy(RecentObservationBatches.Row::batchId, HashMap::new,
+                Collectors.mapping(RecentObservationBatches.Row::candidate, Collectors.toCollection(ArrayList::new))));
+        for (RecentObservationBatches.Header header : recovering) {
+            List<ArrivalCandidate> candidates = List
+                .copyOf(candidatesByBatchId.getOrDefault(header.batchId(), List.of()));
             if (hasCompleteRecoveredBatch(header, candidates)) {
                 ready.put(header.batchId(), candidates);
             }
@@ -211,7 +205,8 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
         return true;
     }
 
-    private static boolean hasCompleteRecoveredBatch(Header header, List<ArrivalCandidate> candidates) {
+    private static boolean hasCompleteRecoveredBatch(RecentObservationBatches.Header header,
+        List<ArrivalCandidate> candidates) {
         return candidates.size() == header.rows()
             && candidates.stream().allMatch(candidate -> candidate.observedAt().equals(header.observedAt()));
     }
@@ -219,27 +214,23 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
     private void cacheReadyBatches(
         final long version,
         final long revision,
-        List<Header> headers,
+        List<RecentObservationBatches.Header> headers,
         Map<Long, List<ArrivalCandidate>> ready
     ) {
-        for (Header header : headers) {
+        for (RecentObservationBatches.Header header : headers) {
             List<ArrivalCandidate> candidates = ready.get(header.batchId());
             if (candidates != null) {
-                put(new Key(version, header.batchId()), new Entry(header.attempt(),
-                    header.observedAt(), revision, null, candidates));
+                put(new Key(version, header.batchId()),
+                    new Entry(header.attempt(), header.observedAt(), revision, null, candidates));
             }
         }
     }
 
-    private static List<ArrivalCandidate> sortReadyCandidatesAndConsumeBudget(
-        Map<Long, List<ArrivalCandidate>> ready,
-        Round round
-    ) {
-        List<ArrivalCandidate> result = ready.values()
-            .stream()
-            .flatMap(List::stream)
-            .sorted(Comparator.comparing(ArrivalCandidate::observedAt)
-                .thenComparingLong(ArrivalCandidate::observationId))
+    private static List<ArrivalCandidate> sortReadyCandidatesAndConsumeBudget(Map<Long, List<ArrivalCandidate>> ready,
+        Round round) {
+        List<ArrivalCandidate> result = ready.values().stream().flatMap(List::stream)
+            .sorted(
+                Comparator.comparing(ArrivalCandidate::observedAt).thenComparingLong(ArrivalCandidate::observationId))
             .toList();
         round.remaining -= result.size();
         return result;
@@ -247,8 +238,9 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
 
     private record Key(long version, long batch) {
     }
-    private record Entry(int attempt, Instant observedAt, long revision,
-        ObservationDeliveryBatch raw, List<ArrivalCandidate> candidates) {
+
+    private record Entry(int attempt, Instant observedAt, long revision, ObservationDeliveryBatch raw,
+        List<ArrivalCandidate> candidates) {
         /** 호출자가 가진 원본과 분리해 null·원소·순서를 보존한다. */
         private Entry {
             if (candidates != null) {
@@ -280,18 +272,17 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
         }
 
         /**
-         * 품질 조사 중이거나 캐시로 안전하게 답할 수 없으면 DB 조회로 되돌아간다. 차량·시각 범위와 결과 개수 제한을 유지한다.
+         * 캐시로 답할 수 없으면 DB 조회로 되돌아간다. 차량·시각 범위와 결과 개수 제한을 유지한다.
          */
         public List<ArrivalCandidate> read(
             ArrivalObservationQuery query,
             final long version,
             final long revision,
-            final boolean investigating,
             String vehicle,
             Instant after,
             final int limit
         ) {
-            if (investigating || after.isBefore(cutoff)) {
+            if (after.isBefore(cutoff)) {
                 return query.findAfter(version, vehicle, after, limit);
             }
             if (!routes.containsKey(version)) {
@@ -302,10 +293,8 @@ public class ObservationDeliveryService implements ObservationDeliveryReceiver {
                 return query.findAfter(version, vehicle, after, limit);
             }
             return candidates.stream()
-                .filter(row -> Objects.equals(row.vehicle().vehicleId(), vehicle)
-                    && row.observedAt().isAfter(after))
-                .limit(limit)
-                .toList();
+                .filter(row -> Objects.equals(row.vehicle().vehicleId(), vehicle) && row.observedAt().isAfter(after))
+                .limit(limit).toList();
         }
     }
 }

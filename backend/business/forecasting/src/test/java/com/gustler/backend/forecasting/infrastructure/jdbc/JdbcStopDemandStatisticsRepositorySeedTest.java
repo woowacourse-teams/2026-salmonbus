@@ -1,18 +1,13 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
@@ -98,81 +93,9 @@ class JdbcStopDemandStatisticsRepositorySeedTest {
         createSeedSchema();
     }
 
-    @Test
-    void 원본_편도를_확인할_수_없는_seed_합계를_제외하고_ELIGIBLE_편도의_라벨만_집계한다() {
-        // given
-        UUID seedImportId = insertAppliedSeedImport();
-        insertSeedHourlyTotal(seedImportId);
-        insertSettledLabel(VEHICLE_AFTER_CUTOVER, ARRIVED_AFTER_CUTOVER);
-
-        // when
-        List<StopDemandHourlyTotals> actual = repository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual).singleElement().isEqualTo(new StopDemandHourlyTotals(
-            TARGET_STOP_ORDER,
-            ARRIVED_HOUR_START,
-            LIVE_FILL_RATE,
-            LIVE_NET_BOARDING,
-            LIVE_CAPACITY,
-            LIVE_SAMPLE_COUNT));
-    }
-
     /** seed를 섞지 않으므로 판정된 원본은 cutover 이전이라도 센다. */
-    @Test
-    void seed_집계_기준_시각_이전이라도_ELIGIBLE_편도의_라벨은_집계한다() {
-        // given
-        UUID seedImportId = insertAppliedSeedImport();
-        insertSeedHourlyTotal(seedImportId);
-        insertSettledLabel(VEHICLE_BEFORE_CUTOVER, ARRIVED_BEFORE_CUTOVER);
-
-        // when
-        List<StopDemandHourlyTotals> actual = repository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual).singleElement().isEqualTo(new StopDemandHourlyTotals(
-            TARGET_STOP_ORDER,
-            ARRIVED_HOUR_START,
-            LIVE_FILL_RATE,
-            LIVE_NET_BOARDING,
-            LIVE_CAPACITY,
-            LIVE_SAMPLE_COUNT));
-    }
-
-    @Test
-    void seed_집계_기준과_같은_시각의_ELIGIBLE_라벨을_seed_합계_없이_집계한다() {
-        // given
-        UUID seedImportId = insertAppliedSeedImport();
-        insertSeedHourlyTotal(seedImportId);
-        insertSettledLabel(VEHICLE_ON_CUTOVER, ARRIVED_ON_CUTOVER);
-
-        // when
-        List<StopDemandHourlyTotals> actual = repository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual).singleElement()
-            .extracting(StopDemandHourlyTotals::sampleCount)
-            .isEqualTo(LIVE_SAMPLE_COUNT);
-    }
 
     /** seed 표만 있고 선 세대가 없으면 예전 길로 간다. 역사 합이 없으니 더할 것도 없다. */
-    @Test
-    void 선_seed_가_없으면_실시간_합만_읽는다() {
-        // given
-        insertSettledLabel(VEHICLE_BEFORE_CUTOVER, ARRIVED_BEFORE_CUTOVER);
-
-        // when
-        List<StopDemandHourlyTotals> actual = repository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual).singleElement().isEqualTo(new StopDemandHourlyTotals(
-            TARGET_STOP_ORDER,
-            ARRIVED_HOUR_START,
-            LIVE_FILL_RATE,
-            LIVE_NET_BOARDING,
-            LIVE_CAPACITY,
-            LIVE_SAMPLE_COUNT));
-    }
 
     /**
      * 도구 Flyway 의 V3 에서 조회가 읽는 열과 view 정의만 옮겨 왔다.

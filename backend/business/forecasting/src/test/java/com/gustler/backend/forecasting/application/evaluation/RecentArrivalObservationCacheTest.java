@@ -7,7 +7,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gustler.backend.forecasting.application.evaluation.RecentArrivalObservationCache.Round;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalObservationQuery;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
@@ -28,7 +27,7 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate row = candidate(10, NOW.minusSeconds(15));
         givenRows(row);
-        Round first = cache.begin(NOW);
+        RecentArrivalObservationCache.Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW);
 
@@ -46,7 +45,7 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate later = candidate(20, NOW.minusSeconds(15));
         givenRows(later);
-        Round first = cache.begin(NOW);
+        RecentArrivalObservationCache.Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW);
         ArrivalCandidate delayed = candidate(5, NOW.minusSeconds(30));
@@ -80,10 +79,10 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate before = candidate(10, NOW.minusSeconds(15));
         givenRows(before);
-        Round first = cache.begin(NOW);
+        RecentArrivalObservationCache.Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW);
-        ArrivalCandidate changed = new ArrivalCandidate(10, before.vehicle(), null, true);
+        ArrivalCandidate changed = new ArrivalCandidate(10, before.vehicle(), null);
         when(query.findByIds(1, "bus", List.of(10L))).thenReturn(List.of(changed));
 
         // when
@@ -95,34 +94,14 @@ class RecentArrivalObservationCacheTest {
     }
 
     @Test
-    void 품질검사_중에는_캐시를_사용하지_않는다() {
-        // given
-        ArrivalCandidate row = candidate(10, NOW.minusSeconds(15));
-        givenRows(row);
-        Round first = cache.begin(NOW);
-        read(first, 1, false);
-        first.committed(NOW);
-        when(query.findAfter(1, "bus", AFTER, 400)).thenReturn(List.of());
-
-        // when
-        List<ArrivalCandidate> result = read(cache.begin(NOW), 1, true);
-
-        // then
-        assertThat(result).isEmpty();
-        verify(query).findAfter(1, "bus", AFTER, 400);
-        verify(query, times(1)).findIdsAfter(1, "bus", AFTER, 400);
-    }
-
-    @Test
     void 보관_한도를_넘은_관측은_필요할_때_DB에서_읽는다() {
         // given
         ArrivalCandidate first = candidate(10, NOW.minusSeconds(30));
         ArrivalCandidate second = candidate(20, NOW.minusSeconds(20));
         ArrivalCandidate third = candidate(30, NOW.minusSeconds(10));
         when(query.findIdsAfter(1, "bus", AFTER, 400)).thenReturn(List.of(10L, 20L, 30L));
-        when(query.findByIds(1, "bus", List.of(10L, 20L, 30L)))
-            .thenReturn(List.of(first, second, third));
-        Round round = cache.begin(NOW);
+        when(query.findByIds(1, "bus", List.of(10L, 20L, 30L))).thenReturn(List.of(first, second, third));
+        RecentArrivalObservationCache.Round round = cache.begin(NOW);
         read(round, 1, false);
         round.committed(NOW);
         when(query.findIdsAfter(1, "bus", AFTER, 400)).thenReturn(List.of(10L));
@@ -144,7 +123,7 @@ class RecentArrivalObservationCacheTest {
         ArrivalCandidate third = candidate(30, NOW.minusSeconds(10));
         for (ArrivalCandidate candidate : List.of(first, second, third)) {
             givenRows(candidate);
-            Round round = cache.begin(NOW);
+            RecentArrivalObservationCache.Round round = cache.begin(NOW);
             read(round, 1, false);
             round.committed(NOW);
         }
@@ -163,7 +142,7 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate row = candidate(10, NOW.minusSeconds(1799));
         givenRows(row);
-        Round first = cache.begin(NOW);
+        RecentArrivalObservationCache.Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW.plusSeconds(1));
 
@@ -180,7 +159,7 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate row = candidate(10, NOW.minusSeconds(1799));
         givenRows(row);
-        Round first = cache.begin(NOW);
+        RecentArrivalObservationCache.Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW);
 
@@ -210,7 +189,7 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate row = candidate(10, NOW.minusSeconds(15));
         givenRows(row);
-        Round first = cache.begin(NOW);
+        RecentArrivalObservationCache.Round first = cache.begin(NOW);
         read(first, 1, false);
         first.committed(NOW);
         RecentArrivalObservationCache restarted = cache(true, 2);
@@ -258,11 +237,11 @@ class RecentArrivalObservationCacheTest {
         // given
         ArrivalCandidate old = candidate(10, NOW.minusSeconds(15));
         givenRows(old);
-        Round previous = cache.begin(NOW);
+        RecentArrivalObservationCache.Round previous = cache.begin(NOW);
         read(previous, 1, false);
-        ArrivalCandidate changed = new ArrivalCandidate(10, old.vehicle(), null, true);
+        ArrivalCandidate changed = new ArrivalCandidate(10, old.vehicle(), null);
         when(query.findByIds(1, "bus", List.of(10L))).thenReturn(List.of(changed));
-        Round latest = cache.begin(NOW);
+        RecentArrivalObservationCache.Round latest = cache.begin(NOW);
         read(latest, 2, false);
         latest.committed(NOW);
         previous.committed(NOW);
@@ -275,9 +254,9 @@ class RecentArrivalObservationCacheTest {
         verify(query, times(2)).findByIds(1, "bus", List.of(10L));
     }
 
-    private List<ArrivalCandidate> read(Round round,
-        final long revision, final boolean investigating) {
-        return round.read(query, 1, revision, investigating, "bus", AFTER, 400);
+    private List<ArrivalCandidate> read(RecentArrivalObservationCache.Round round, final long revision,
+        final boolean investigating) {
+        return round.read(query, 1, revision, "bus", AFTER, 400);
     }
 
     private void givenRows(ArrivalCandidate row) {
@@ -290,6 +269,6 @@ class RecentArrivalObservationCacheTest {
     }
 
     private static ArrivalCandidate candidate(final long id, Instant at) {
-        return new ArrivalCandidate(id, new ObservedVehicle("bus", 1, 5, at, 20, 1), 0L, true);
+        return new ArrivalCandidate(id, new ObservedVehicle("bus", 1, 5, at, 20, 1), 0L);
     }
 }

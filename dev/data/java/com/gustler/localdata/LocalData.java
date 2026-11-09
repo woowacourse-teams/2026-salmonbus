@@ -5,7 +5,7 @@ import com.gustler.backend.forecasting.domain.model.RouteDirection;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionInput;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader;
-import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcRouteDataQualityAccess;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcRouteWorkAccess;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcStopDemandStatisticsRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -141,18 +141,14 @@ public final class LocalData {
         execute(connection, """
             TRUNCATE daily_call_quota, observation_batch, vehicle_observation, seat_forecast,
                 forecast_publication, forecast_evaluation_work, forecast_evaluation_result, forecast_evaluation_compact,
-                evaluation_archive_member, evaluation_archive_batch, evaluation_archive_scan,
+                operational_archive_file, operational_archive_job, operational_archive_boundary, archive_legacy_member, archive_legacy_batch,
                 file_statistics_publication,
-                observation_trip_assignment,
-                vehicle_one_way_trip, trip_quality_rebuild, same_day_full_outcomes,
-                same_day_model_full_outcomes, stop_demand_pending_sample, stop_demand_rebuild_request,
-                stop_demand_current_total, stop_demand_baseline, stop_demand_rebuild_progress,
-                stop_demand_rebuild_total, stop_demand_rebuild_scan, stop_demand_vehicle,
+                same_day_full_outcomes,
+                same_day_model_full_outcomes, stop_demand_pending_sample, stop_demand_current_total, stop_demand_baseline, stop_demand_vehicle,
                 stop_demand_run, stop_demand_capacity_stage, stop_demand_day_stage,
                 stop_demand_cell_stage, stop_demand_statistics, demand_statistics_version;
-            INSERT INTO evaluation_archive_scan(id) VALUES(1)
             """);
-        execute(connection, "UPDATE route_data_quality SET quality_revision=1");
+        execute(connection, "UPDATE route SET data_revision=1");
         for (RouteDataset.Route route : data.routes()) {
             final long versionId = Long.parseLong(scalar(connection, """
                 SELECT v.id FROM route r JOIN route_version v ON v.route_id=r.id
@@ -174,7 +170,6 @@ public final class LocalData {
             VALUES (?,?,?,?,?,?,?,?) RETURNING id
             """, routeId, route.turnSequence(), time.upFirstDepartureTime(), time.upLastDepartureTime(),
             time.downFirstDepartureTime(), time.downLastDepartureTime(), route.contentDigest(), BASELINE));
-        execute(connection, "INSERT INTO route_data_quality(route_id) VALUES (?)", routeId);
         for (RouteDataset.Stop stop : route.stops()) {
             execute(connection, """
                 INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
@@ -232,17 +227,17 @@ public final class LocalData {
                OR vehicle_id !~ '^L[0-9a-f]{8}-[0-9]{9}-[0-9]+[UD]$'
                OR plate_number !~ '^LOCAL-[0-9]+(-[0-5])?-[UD]$'
             """).equals("0") && !scalar(connection, "SELECT count(*) FROM vehicle_observation").equals("0"), "RECOVERY_REQUIRES_MOCK_OBSERVATIONS");
-        require(scalar(connection, "SELECT count(*) FROM route_data_quality WHERE quality_revision<>1").equals("0")
-            && scalar(connection, "SELECT count(*) FROM trip_quality_rebuild WHERE NOT completed").equals("0")
+        require(scalar(connection, "SELECT count(*) FROM route WHERE data_revision<>1").equals("0")
             && scalar(connection, "SELECT count(*) FROM demand_statistics_version WHERE cell_count<>0 OR calculation_version<>?", STATISTICS).equals("0"), "RECOVERY_STATE_UNSUPPORTED");
         verify(connection, data, ReferenceBundle.DIRECTORY, false);
-        var quality = new JdbcRouteDataQualityAccess(JdbcClient.create(new SingleConnectionDataSource(connection, true)));
+        JdbcRouteWorkAccess routeWork = new JdbcRouteWorkAccess(
+            JdbcClient.create(new SingleConnectionDataSource(connection, true)));
         for (RouteDataset.Route route : data.routes()) {
             final long versionId = Long.parseLong(scalar(connection, """
                 SELECT v.id FROM route r JOIN route_version v ON v.route_id=r.id
                 WHERE r.source_route_id=? AND v.valid_to IS NULL
                 """, route.routeId()));
-            require(quality.lock(versionId) == 1, "RECOVERY_STATE_UNSUPPORTED");
+            require(routeWork.lock(versionId) == 1, "RECOVERY_STATE_UNSUPPORTED");
             final int revision = Integer.parseInt(scalar(connection,
                 "SELECT COALESCE(MAX(revision),0)+1 FROM demand_statistics_version WHERE route_version_id=? AND calculation_version=?",
                 versionId, STATISTICS));
@@ -292,7 +287,8 @@ public final class LocalData {
     static void verify(Connection connection, RouteDataset data, String modelDirectory,
                                final boolean verifyStatistics, final boolean modelSupported) throws Exception {
         JdbcClient jdbc = JdbcClient.create(new SingleConnectionDataSource(connection, true));
-        var statistics = new JdbcStopDemandStatisticsRepository(jdbc, new JdbcRouteDataQualityAccess(jdbc));
+        JdbcStopDemandStatisticsRepository statistics =
+            new JdbcStopDemandStatisticsRepository(jdbc, new JdbcRouteWorkAccess(jdbc));
         var release = modelSupported ? new FileModelBundleLoader().filesUnder(modelDirectory).load() : null;
         for (RouteDataset.Route route : data.routes()) {
             final long versionId;

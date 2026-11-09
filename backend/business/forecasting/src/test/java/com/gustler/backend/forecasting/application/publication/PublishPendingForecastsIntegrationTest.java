@@ -4,9 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
-import com.gustler.backend.forecasting.application.publication.PublishPendingForecastsIntegrationTest
-    .FixedSeatForecastModel;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
@@ -39,13 +37,15 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 /**
  * 수집 배치의 예보 발행과 저장 결과를 함께 검증한다.
  *
- * <p>테스트용 {@link SeatForecastModel}이 일정한 값을 반환하게 해 발행 결과를 확인한다.
+ * <p>
+ * 테스트용 {@link SeatForecastModel}이 일정한 값을 반환하게 해 발행 결과를 확인한다.
  *
- * <p>예보 계산은 트랜잭션 밖에서, 저장은 실제 저장 빈의 트랜잭션에서 실행한다.
- * 테스트가 끝나면 일회용 PostgreSQL의 노선·모델 및 연결된 테스트 자료를 정리한다.
+ * <p>
+ * 예보 계산은 트랜잭션 밖에서, 저장은 실제 저장 빈의 트랜잭션에서 실행한다. 테스트가 끝나면 일회용 PostgreSQL의 노선·모델 및
+ * 연결된 테스트 자료를 정리한다.
  */
 @ForecastingIntegrationTest
-@Import(FixedSeatForecastModel.class)
+@Import(PublishPendingForecastsIntegrationTest.FixedSeatForecastModel.class)
 class PublishPendingForecastsIntegrationTest {
     /** 수집 배치마다 기록할 두 판본. 기본값이 없어 픽스처에서 직접 지정한다. */
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
@@ -90,16 +90,14 @@ class PublishPendingForecastsIntegrationTest {
     private static final long NO_FORECAST_ROW = 0L;
 
     /** 수집 배치가 상류 응답을 받은 시각. 관측 시각의 기준이다. */
-    private static final OffsetDateTime RESPONSE_RECEIVED_AT =
-        OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
-    private static final OffsetDateTime EMPTY_RESPONSE_RECEIVED_AT =
-        OffsetDateTime.parse("2026-08-19T11:16:04.911+09:00");
-    private static final OffsetDateTime PREVIOUSLY_PUBLISHED_AT =
-        OffsetDateTime.parse("2026-08-19T11:14:07.000+09:00");
+    private static final OffsetDateTime RESPONSE_RECEIVED_AT = OffsetDateTime.parse("2026-08-19T11:14:04.911+09:00");
+    private static final OffsetDateTime EMPTY_RESPONSE_RECEIVED_AT = OffsetDateTime
+        .parse("2026-08-19T11:16:04.911+09:00");
+    private static final OffsetDateTime PREVIOUSLY_PUBLISHED_AT = OffsetDateTime.parse("2026-08-19T11:14:07.000+09:00");
 
     // 품질 잠금은 전용 테스트에서 검증하고, 여기서는 발행에 기록할 품질 버전을 고정한다.
     @MockitoBean
-    private RouteDataQualityAccess routeDataQuality;
+    private RouteWorkAccess routeDataQuality;
 
     @Autowired
     private PublishPendingForecastsService forecastJob;
@@ -121,16 +119,15 @@ class PublishPendingForecastsIntegrationTest {
         when(routeDataQuality.current(anyLong())).thenReturn(1L);
         when(routeDataQuality.lock(anyLong())).thenReturn(1L);
         final long routeId = insertRoute();
-        jdbcClient.sql("INSERT INTO route_data_quality(route_id, quality_revision) VALUES (?, 1)")
-            .param(routeId).update();
+        jdbcClient.sql("UPDATE route SET data_revision=1 WHERE id=?").param(routeId).update();
         routeVersionId = insertRouteVersion(routeId);
         for (int stopOrder = FIRST_STOP_ORDER; stopOrder <= LAST_STOP_ORDER; stopOrder++) {
             insertRouteStop(stopOrder);
         }
         modelDeploymentId = insertActiveModelDeployment();
         observationBatchId = insertObservationBatch("11:14", RESPONSE_RECEIVED_AT, OUTCOME_WITH_ROWS);
-        vehicleObservationId = insertObservationWithKnownSeats(
-            VEHICLE_204000206, FIRST_SOURCE_ROW_NUMBER, PASSED_STOP_ORDER);
+        vehicleObservationId = insertObservationWithKnownSeats(VEHICLE_204000206, FIRST_SOURCE_ROW_NUMBER,
+            PASSED_STOP_ORDER);
     }
 
     @AfterEach
@@ -141,8 +138,8 @@ class PublishPendingForecastsIntegrationTest {
     @Test
     void 예보가_안_붙은_판의_차량마다_앞_정류장_예보가_쌓인다() {
         // given
-        final long earlyVehicleObservationId = insertObservationWithKnownSeats(
-            VEHICLE_204000207, SECOND_SOURCE_ROW_NUMBER, EARLY_PASSED_STOP_ORDER);
+        final long earlyVehicleObservationId = insertObservationWithKnownSeats(VEHICLE_204000207,
+            SECOND_SOURCE_ROW_NUMBER, EARLY_PASSED_STOP_ORDER);
 
         // when
         forecastJob.writeForecasts();
@@ -243,8 +240,7 @@ class PublishPendingForecastsIntegrationTest {
     @Test
     void 차량이_없는_수집_배치도_사용한_모델과_함께_발행한다() {
         // given
-        final long emptyBatchId =
-            insertObservationBatch("11:16", EMPTY_RESPONSE_RECEIVED_AT, OUTCOME_WITHOUT_ROWS);
+        final long emptyBatchId = insertObservationBatch("11:16", EMPTY_RESPONSE_RECEIVED_AT, OUTCOME_WITHOUT_ROWS);
 
         // when
         forecastJob.writeForecasts();
@@ -271,8 +267,7 @@ class PublishPendingForecastsIntegrationTest {
         forecastJob.writeForecasts();
 
         // then
-        UntouchedBatch actual =
-            new UntouchedBatch(countForecasts(), readPublishedAt(observationBatchId));
+        UntouchedBatch actual = new UntouchedBatch(countForecasts(), readPublishedAt(observationBatchId));
         assertThat(actual).isEqualTo(new UntouchedBatch(NO_FORECAST_ROW, null));
     }
 
@@ -288,42 +283,34 @@ class PublishPendingForecastsIntegrationTest {
 
     private List<Integer> readTargetStopOrders() {
         return jdbcClient.sql("""
-                SELECT forecast.target_stop_order
-                FROM seat_forecast forecast
-                JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
-                WHERE observation.observation_batch_id = ?
-                ORDER BY forecast.target_stop_order
-                """)
-            .param(observationBatchId)
-            .query(Integer.class)
-            .list();
+            SELECT forecast.target_stop_order
+            FROM seat_forecast forecast
+            JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
+            WHERE observation.observation_batch_id = ?
+            ORDER BY forecast.target_stop_order
+            """).param(observationBatchId).query(Integer.class).list();
     }
 
     private List<Long> readForecastVehicleObservationIds() {
         return jdbcClient.sql("""
-                SELECT DISTINCT forecast.vehicle_observation_id
-                FROM seat_forecast forecast
-                JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
-                WHERE observation.observation_batch_id = ?
-                ORDER BY forecast.vehicle_observation_id
-                """)
-            .param(observationBatchId)
-            .query(Long.class)
-            .list();
+            SELECT DISTINCT forecast.vehicle_observation_id
+            FROM seat_forecast forecast
+            JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
+            WHERE observation.observation_batch_id = ?
+            ORDER BY forecast.vehicle_observation_id
+            """).param(observationBatchId).query(Long.class).list();
     }
 
     private List<VehicleForecastCount> readForecastCounts() {
         return jdbcClient.sql("""
-                SELECT forecast.vehicle_observation_id, count(*) AS forecast_count
-                FROM seat_forecast forecast
-                JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
-                WHERE observation.observation_batch_id = ?
-                GROUP BY forecast.vehicle_observation_id
-                ORDER BY forecast.vehicle_observation_id
-                """)
-            .param(observationBatchId)
-            .query((resultSet, rowNumber) -> new VehicleForecastCount(
-                resultSet.getLong("vehicle_observation_id"),
+            SELECT forecast.vehicle_observation_id, count(*) AS forecast_count
+            FROM seat_forecast forecast
+            JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
+            WHERE observation.observation_batch_id = ?
+            GROUP BY forecast.vehicle_observation_id
+            ORDER BY forecast.vehicle_observation_id
+            """).param(observationBatchId)
+            .query((resultSet, rowNumber) -> new VehicleForecastCount(resultSet.getLong("vehicle_observation_id"),
                 resultSet.getLong("forecast_count")))
             .list();
     }
@@ -352,80 +339,61 @@ class PublishPendingForecastsIntegrationTest {
 
     private List<Integer> readDemandStatisticsRevisions() {
         return jdbcClient.sql("""
-                SELECT forecast.demand_statistics_revision
-                FROM seat_forecast forecast
-                JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
-                WHERE observation.observation_batch_id = ?
-                """)
-            .param(observationBatchId)
-            .query(Integer.class)
-            .list();
+            SELECT forecast.demand_statistics_revision
+            FROM seat_forecast forecast
+            JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
+            WHERE observation.observation_batch_id = ?
+            """).param(observationBatchId).query(Integer.class).list();
     }
 
     private List<Long> readModelDeploymentIds() {
         return jdbcClient.sql("""
-                SELECT forecast.model_deployment_id
-                FROM seat_forecast forecast
-                JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
-                WHERE observation.observation_batch_id = ?
-                """)
-            .param(observationBatchId)
-            .query(Long.class)
-            .list();
+            SELECT forecast.model_deployment_id
+            FROM seat_forecast forecast
+            JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
+            WHERE observation.observation_batch_id = ?
+            """).param(observationBatchId).query(Long.class).list();
     }
 
     private List<Instant> readDistinctGeneratedAt() {
         return jdbcClient.sql("""
-                SELECT DISTINCT forecast.generated_at
-                FROM seat_forecast forecast
-                JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
-                WHERE observation.observation_batch_id = ?
-                """)
-            .param(observationBatchId)
-            .query((resultSet, rowNumber) ->
-                instantOf(resultSet.getObject("generated_at", OffsetDateTime.class)))
+            SELECT DISTINCT forecast.generated_at
+            FROM seat_forecast forecast
+            JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
+            WHERE observation.observation_batch_id = ?
+            """).param(observationBatchId)
+            .query((resultSet, rowNumber) -> instantOf(resultSet.getObject("generated_at", OffsetDateTime.class)))
             .list();
     }
 
     private long countForecasts() {
         return jdbcClient.sql("""
-                SELECT count(*)
-                FROM seat_forecast forecast
-                JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
-                WHERE observation.observation_batch_id = ?
-                """)
-            .param(observationBatchId)
-            .query(Long.class)
-            .single();
+            SELECT count(*)
+            FROM seat_forecast forecast
+            JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
+            WHERE observation.observation_batch_id = ?
+            """).param(observationBatchId).query(Long.class).single();
     }
 
     /** 아직 발행하지 않은 수집 배치는 발행 기록이 없다. */
-    private Instant readPublishedAt(
-        final long batchId
-    ) {
+    private Instant readPublishedAt(final long batchId) {
         return jdbcClient.sql("""
-                SELECT published_at
-                FROM forecast_publication
-                WHERE source_batch_id = ?
-                """)
-            .param(batchId)
-            .query((resultSet, rowNumber) ->
-                instantOf(resultSet.getObject("published_at", OffsetDateTime.class)))
-            .optional()
-            .orElse(null);
+            SELECT published_at
+            FROM forecast_publication
+            WHERE source_batch_id = ?
+            """).param(batchId)
+            .query((resultSet, rowNumber) -> instantOf(resultSet.getObject("published_at", OffsetDateTime.class)))
+            .optional().orElse(null);
     }
 
     private StoredPublication readPublication(final long batchId) {
         return jdbcClient.sql("""
-                SELECT model_deployment_id, demand_statistics_revision,
-                       quality_revision, observed_at, generated_at, published_at, prediction_count
-                FROM forecast_publication WHERE source_batch_id = ?
-                """)
-            .param(batchId)
-            .query((resultSet, rowNumber) -> new StoredPublication(
-                resultSet.getLong("model_deployment_id"),
-                resultSet.getInt("demand_statistics_revision"),
-                resultSet.getLong("quality_revision"),
+            SELECT model_deployment_id, demand_statistics_revision,
+                   quality_revision, observed_at, generated_at, published_at, prediction_count
+            FROM forecast_publication WHERE source_batch_id = ?
+            """).param(batchId)
+            .query((resultSet, rowNumber) -> new StoredPublication(resultSet.getLong("model_deployment_id"),
+                resultSet.getInt("demand_statistics_revision"), resultSet.getLong("quality_revision"),
                 instantOf(resultSet.getObject("observed_at", OffsetDateTime.class)),
                 instantOf(resultSet.getObject("generated_at", OffsetDateTime.class)),
                 instantOf(resultSet.getObject("published_at", OffsetDateTime.class)),
@@ -434,10 +402,8 @@ class PublishPendingForecastsIntegrationTest {
     }
 
     private Instant readInputConfirmedAt(final long batchId) {
-        return jdbcClient.sql("SELECT input_confirmed_at FROM observation_batch WHERE id = ?")
-            .param(batchId)
-            .query((resultSet, rowNumber) ->
-                instantOf(resultSet.getObject("input_confirmed_at", OffsetDateTime.class)))
+        return jdbcClient.sql("SELECT input_confirmed_at FROM observation_batch WHERE id = ?").param(batchId)
+            .query((resultSet, rowNumber) -> instantOf(resultSet.getObject("input_confirmed_at", OffsetDateTime.class)))
             .single();
     }
 
@@ -472,50 +438,37 @@ class PublishPendingForecastsIntegrationTest {
         assertThat(actual.maximumSeatsEverObserved()).isEqualTo(SEATS_LEFT);
     }
 
-    private void insertLegacyPublication(
-        final long batchId,
-        OffsetDateTime completedAt
-    ) {
+    private void insertLegacyPublication(final long batchId, OffsetDateTime completedAt) {
         jdbcClient.sql("""
-                UPDATE observation_batch SET input_confirmed_at = ? WHERE id = ?
-                """)
-            .params(completedAt, batchId)
-            .update();
+            UPDATE observation_batch SET input_confirmed_at = ? WHERE id = ?
+            """).params(completedAt, batchId).update();
         jdbcClient.sql("""
-                INSERT INTO forecast_publication (
-                    source_batch_id, route_version_id, observed_at,
-                    published_at, prediction_count, provenance
-                )
-                SELECT id, route_version_id, response_received_at, ?, 0, 'LEGACY_UNKNOWN'
-                FROM observation_batch WHERE id = ?
-                """)
-            .params(completedAt, batchId)
-            .update();
+            INSERT INTO forecast_publication (
+                source_batch_id, route_version_id, observed_at,
+                published_at, prediction_count, provenance
+            )
+            SELECT id, route_version_id, response_received_at, ?, 0, 'LEGACY_UNKNOWN'
+            FROM observation_batch WHERE id = ?
+            """).params(completedAt, batchId).update();
     }
 
     private void blockBoardingAt(final int stopOrder) {
         jdbcClient.sql("""
-                UPDATE route_stop
-                SET boarding_allowed = false
-                WHERE route_version_id = ?
-                  AND stop_order = ?
-                """)
-            .params(routeVersionId, stopOrder)
-            .update();
+            UPDATE route_stop
+            SET boarding_allowed = false
+            WHERE route_version_id = ?
+              AND stop_order = ?
+            """).params(routeVersionId, stopOrder).update();
     }
 
     private void deleteModelDeployment() {
         jdbcClient.sql("""
-                DELETE FROM model_deployment
-                WHERE id = ?
-                """)
-            .param(modelDeploymentId)
-            .update();
+            DELETE FROM model_deployment
+            WHERE id = ?
+            """).param(modelDeploymentId).update();
     }
 
-    private static Instant instantOf(
-        OffsetDateTime timestamp
-    ) {
+    private static Instant instantOf(OffsetDateTime timestamp) {
         if (timestamp == null) {
             return null;
         }
@@ -524,101 +477,74 @@ class PublishPendingForecastsIntegrationTest {
 
     private long insertRoute() {
         return jdbcClient.sql("""
-                INSERT INTO route (
-                    public_route_id, source_id, source_route_id,
-                    display_name, start_stop_name, end_stop_name
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                RETURNING id
-                """)
-            .params(ROUTE_204000057, SOURCE_ID, ROUTE_204000057, "3330", "범계역", "강남역")
-            .query(Long.class)
-            .single();
+            INSERT INTO route (
+                public_route_id, source_id, source_route_id,
+                display_name, start_stop_name, end_stop_name
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            RETURNING id
+            """).params(ROUTE_204000057, SOURCE_ID, ROUTE_204000057, "3330", "범계역", "강남역").query(Long.class).single();
     }
 
-    private long insertRouteVersion(
-        final long routeId
-    ) {
+    private long insertRouteVersion(final long routeId) {
         return jdbcClient.sql("""
-                INSERT INTO route_version (route_id, content_digest, valid_from)
-                VALUES (?, ?, ?)
-                RETURNING id
-                """)
-            .params(routeId, CONTENT_DIGEST, RESPONSE_RECEIVED_AT)
-            .query(Long.class)
-            .single();
+            INSERT INTO route_version (route_id, content_digest, valid_from)
+            VALUES (?, ?, ?)
+            RETURNING id
+            """).params(routeId, CONTENT_DIGEST, RESPONSE_RECEIVED_AT).query(Long.class).single();
     }
 
     private void insertRouteStop(final int stopOrder) {
         jdbcClient.sql("""
-                INSERT INTO route_stop (
-                    route_version_id, stop_order, stop_id, name, direction, boarding_allowed
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """)
-            .params(routeVersionId, stopOrder, stopIdOf(stopOrder), "정류소 " + stopOrder, "UP", true)
-            .update();
+            INSERT INTO route_stop (
+                route_version_id, stop_order, stop_id, name, direction, boarding_allowed
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """).params(routeVersionId, stopOrder, stopIdOf(stopOrder), "정류소 " + stopOrder, "UP", true).update();
     }
 
     private long insertActiveModelDeployment() {
         return jdbcClient.sql("""
-                INSERT INTO model_deployment (
-                    deployment_key, release_id, model_key, model_version, bundle_digest,
-                    prediction_target_version, calculation_version, supported_scope_digest,
-                    data_until, state
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                RETURNING id
-                """)
-            .params(
-                UUID.fromString("7c1f5a3d-2e94-4b18-8a6c-0d3f9b2e7a41"),
-                "2026-08-19-1", "seat-full-chance", "1.4.0", CONTENT_DIGEST,
-                "SEAT_FULL_CHANCE_V1", "CALCULATION_V1", CONTENT_DIGEST,
-                RESPONSE_RECEIVED_AT, "ACTIVE"
-            )
-            .query(Long.class)
-            .single();
+            INSERT INTO model_deployment (
+                deployment_key, release_id, model_key, model_version, bundle_digest,
+                prediction_target_version, calculation_version, supported_scope_digest,
+                data_until, state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+            """)
+            .params(UUID.fromString("7c1f5a3d-2e94-4b18-8a6c-0d3f9b2e7a41"), "2026-08-19-1", "seat-full-chance",
+                "1.4.0", CONTENT_DIGEST, "SEAT_FULL_CHANCE_V1", "CALCULATION_V1", CONTENT_DIGEST, RESPONSE_RECEIVED_AT,
+                "ACTIVE")
+            .query(Long.class).single();
     }
 
-    private long insertObservationBatch(
-        String attemptKey,
-        OffsetDateTime responseReceivedAt,
-        String outcome
-    ) {
+    private long insertObservationBatch(String attemptKey, OffsetDateTime responseReceivedAt, String outcome) {
         return jdbcClient.sql("""
-                INSERT INTO observation_batch (
-                    route_version_id, scheduled_at, attempt_number, attempt_key,
-                    requested_at, response_received_at, outcome,
-                    normalization_version, collection_strategy_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                RETURNING id
-                """)
-            .params(
-                routeVersionId, responseReceivedAt, 1, ROUTE_204000057 + "-" + attemptKey,
-                responseReceivedAt, responseReceivedAt, outcome,
-                NORMALIZATION_VERSION, COLLECTION_STRATEGY_VERSION
-            )
-            .query(Long.class)
-            .single();
+            INSERT INTO observation_batch (
+                route_version_id, scheduled_at, attempt_number, attempt_key,
+                requested_at, response_received_at, outcome,
+                normalization_version, collection_strategy_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+            """)
+            .params(routeVersionId, responseReceivedAt, 1, ROUTE_204000057 + "-" + attemptKey, responseReceivedAt,
+                responseReceivedAt, outcome, NORMALIZATION_VERSION, COLLECTION_STRATEGY_VERSION)
+            .query(Long.class).single();
     }
 
-    private long insertObservationWithKnownSeats(
-        String vehicleId,
-        final int sourceRowNumber,
-        final int passedStopOrder
-    ) {
+    private long insertObservationWithKnownSeats(String vehicleId, final int sourceRowNumber,
+        final int passedStopOrder) {
         return insertObservation(vehicleId, sourceRowNumber, passedStopOrder, SEATS_LEFT, null);
     }
 
-    private long insertObservationWithUnknownSeats(
-        String vehicleId,
-        final int sourceRowNumber,
-        final int passedStopOrder
-    ) {
+    private long insertObservationWithUnknownSeats(String vehicleId, final int sourceRowNumber,
+        final int passedStopOrder) {
         return insertObservation(vehicleId, sourceRowNumber, passedStopOrder, null, SEAT_UNKNOWN_REASON);
     }
 
     /**
      * 관측 한 행. 운행 상태가 지나감이라 상류 순번과 통과 순번이 같다.
      *
-     * <p>잔여석과 모르는 사유는 둘 중 하나만 채운다. 스키마가 둘 다 채우는 것도 둘 다 비우는 것도 막는다.
+     * <p>
+     * 잔여석과 모르는 사유는 둘 중 하나만 채운다. 스키마가 둘 다 채우는 것도 둘 다 비우는 것도 막는다.
      */
     private long insertObservation(
         String vehicleId,
@@ -627,62 +553,44 @@ class PublishPendingForecastsIntegrationTest {
         Integer remainingSeats,
         String seatUnknownReason
     ) {
-        return ConfirmedTripFixture.include(jdbcClient, jdbcClient.sql("""
+        return ConfirmedTripFixture.include(jdbcClient,
+            jdbcClient.sql("""
                 INSERT INTO vehicle_observation (
                     observation_batch_id, route_version_id, source_row_number,
                     vehicle_id, stop_order, stop_id, passed_stop_order,
                     running_state, remaining_seats, seat_unknown_reason
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING id
-                """)
-                    .params(
-                        observationBatchId, routeVersionId, sourceRowNumber,
-                        vehicleId, passedStopOrder, stopIdOf(passedStopOrder), passedStopOrder,
-                        RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason
-                    )
-                    .query(Long.class)
-                    .single());
+                """).params(observationBatchId, routeVersionId, sourceRowNumber, vehicleId, passedStopOrder,
+                stopIdOf(passedStopOrder), passedStopOrder, RUNNING_STATE_DEPARTED, remainingSeats, seatUnknownReason)
+                .query(Long.class).single());
     }
 
-    private static String stopIdOf(
-        final int stopOrder
-    ) {
+    private static String stopIdOf(final int stopOrder) {
         return "20500%04d".formatted(stopOrder);
     }
 
-    private record StoredPublication(
-        long modelDeploymentId,
-        int statisticsRevision,
-        long qualityRevision,
-        Instant observedAt,
-        Instant generatedAt,
-        Instant publishedAt,
-        int predictionCount
-    ) {
+    private record StoredPublication(long modelDeploymentId, int statisticsRevision, long qualityRevision,
+        Instant observedAt, Instant generatedAt, Instant publishedAt, int predictionCount) {
     }
 
     /** 차량 한 대에 쌓인 예보 줄 수. */
-    private record VehicleForecastCount(
-        long vehicleObservationId,
-        long forecastCount
-    ) {
+    private record VehicleForecastCount(long vehicleObservationId, long forecastCount) {
     }
 
     /** 발행하지 않은 수집 배치의 예측 건수와 발행 기록을 확인한다. */
-    private record UntouchedBatch(
-        long forecastCount,
-        Instant publishedAt
-    ) {
+    private record UntouchedBatch(long forecastCount, Instant publishedAt) {
     }
 
     /**
      * 항상 같은 값을 반환하고 받은 입력을 기록하는 좌석 예보 모델이다.
      *
-     * <p>계수 번들이 없어 {@link SeatForecastModel} 구현이 아직 없다. 배치를 발행하려면 모델 빈이
-     * 필요하므로 테스트에서 등록한다. 값이 고정돼 예보 행의 확률과 기대 잔여석이 실행마다 같다.
+     * <p>
+     * 계수 번들이 없어 {@link SeatForecastModel} 구현이 아직 없다. 배치를 발행하려면 모델 빈이 필요하므로 테스트에서
+     * 등록한다. 값이 고정돼 예보 행의 확률과 기대 잔여석이 실행마다 같다.
      *
-     * <p>이 티켓에서 배치가 모델에 넘기는 입력이 바뀌었으므로 받은 입력도 기록한다.
-     * 예보 행만 확인하면 입력이 빈 채로 전달돼도 알 수 없다.
+     * <p>
+     * 이 티켓에서 배치가 모델에 넘기는 입력이 바뀌었으므로 받은 입력도 기록한다. 예보 행만 확인하면 입력이 빈 채로 전달돼도 알 수 없다.
      */
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedSeatForecastModel {
@@ -691,8 +599,9 @@ class PublishPendingForecastsIntegrationTest {
         /**
          * 픽스처의 수집 배치를 신선도 창 안에 두는 시각이다. 두 수집 배치 중 늦은 것보다 1분쯤 뒤다.
          *
-         * <p>실제 시계를 사용하면 과거로 고정된 픽스처가 기본 창 5분 밖에 있어 수집 배치가 하나도 발행되지 않는다.
-         * 이를 피하려고 창을 넓히면 운영에서 사용할 수 없는 크기가 된다.
+         * <p>
+         * 실제 시계를 사용하면 과거로 고정된 픽스처가 기본 창 5분 밖에 있어 수집 배치가 하나도 발행되지 않는다. 이를 피하려고 창을 넓히면
+         * 운영에서 사용할 수 없는 크기가 된다.
          */
         private static final Instant JUST_AFTER_FIXTURE = Instant.parse("2026-08-19T02:17:00Z");
 
@@ -711,20 +620,15 @@ class PublishPendingForecastsIntegrationTest {
         /**
          * 활성 배포와 모델을 함께 반환하는 경계를 대역으로 바꾼다.
          *
-         * <p>계수 파일이 없어 실제 구현은 아무것도 반환하지 않는다. 배치가 모델에 넘기는 입력을 확인하려면
-         * 이 경계가 배포 행과 테스트 모델을 함께 반환해야 한다.
+         * <p>
+         * 계수 파일이 없어 실제 구현은 아무것도 반환하지 않는다. 배치가 모델에 넘기는 입력을 확인하려면 이 경계가 배포 행과 테스트 모델을 함께
+         * 반환해야 한다.
          */
         @Bean
         @Primary
-        ForecastRuntime forecastRuntime(
-            ModelDeploymentRepository deployments,
-            RecordingSeatForecastModel model
-        ) {
-            return () -> deployments.findActive().map(deployment -> new RuntimeSnapshot(
-                deployment,
-                new SupportedForecastScope(List.of("1650", "3330")),
-                model,
-                DATA_UNTIL));
+        ForecastRuntime forecastRuntime(ModelDeploymentRepository deployments, RecordingSeatForecastModel model) {
+            return () -> deployments.findActive().map(deployment -> new RuntimeSnapshot(deployment,
+                new SupportedForecastScope(List.of("1650", "3330")), model, DATA_UNTIL));
         }
     }
 
@@ -737,9 +641,7 @@ class PublishPendingForecastsIntegrationTest {
         private final List<SeatForecastInput> receivedInputs = new ArrayList<>();
 
         @Override
-        public SeatForecastResult predict(
-            SeatForecastInput input
-        ) {
+        public SeatForecastResult predict(SeatForecastInput input) {
             receivedInputs.add(input);
             return new SeatForecastResult(new SeatDistribution(CHANCE_BY_SEATS), FULL_CHANCE_RAW);
         }

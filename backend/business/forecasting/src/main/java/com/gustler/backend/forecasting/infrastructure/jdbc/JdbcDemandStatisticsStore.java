@@ -1,37 +1,39 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.statistics.DemandStatisticsStore;
-import com.gustler.backend.forecasting.application.statistics.DemandStatisticsStore.FoldRow;
 import com.gustler.backend.forecasting.domain.statistics.DailyStopDemand;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsBaseline;
-import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.FoldCursor;
-import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun.ReduceCursor;
+import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsRun;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCellTotals;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 import com.gustler.backend.forecasting.domain.statistics.VehicleHourlyDemand;
+import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
+import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * 통계 처리 페이지와 중간 합계를 읽고 저장한다.
- * 한 단계의 조회·정리가 설정된 DB 시간 예산 안에서 실행되게 한다.
+ * 통계 처리 페이지와 중간 합계를 읽고 저장한다. 한 단계의 조회·정리가 설정된 DB 시간 예산 안에서 실행되게 한다.
  */
 @Repository
 public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
-    private static final List<String> STAGES =
-        List.of("stop_demand_capacity_stage", "stop_demand_day_stage", "stop_demand_cell_stage");
+    private static final List<String> STAGES = List.of("stop_demand_capacity_stage", "stop_demand_day_stage",
+        "stop_demand_cell_stage");
 
     private final JdbcClient jdbc;
+    private final VehicleCapacityCache vehicleCapacities;
 
-    public JdbcDemandStatisticsStore(JdbcClient jdbc) {
+    public JdbcDemandStatisticsStore(JdbcClient jdbc, VehicleCapacityCache vehicleCapacities) {
         this.jdbc = jdbc;
+        this.vehicleCapacities = vehicleCapacities;
     }
 
     @Override
@@ -48,28 +50,24 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
             SELECT /* salmonbus:demand_statistics.idle_check */ run.data_until
             FROM stop_demand_run run
             JOIN route_version version ON version.id = run.route_version_id
-            JOIN route_data_quality quality ON quality.route_id = version.route_id
+            JOIN route route_state ON route_state.id = version.route_id
             JOIN stop_demand_baseline baseline ON baseline.route_version_id = run.route_version_id
             WHERE run.route_version_id = :version
               AND baseline.initialized
               AND run.phase = 'DONE'
-              AND run.quality_revision = quality.quality_revision
+              AND run.quality_revision = route_state.data_revision
               AND run.completed_at > :completedAfter
-              AND NOT EXISTS (
-                  SELECT 1 FROM stop_demand_rebuild_request request
-                  WHERE request.route_version_id = run.route_version_id
-              )
             """).param("version", routeVersionId).param("completedAfter", offsetOf(completedAfter))
             .query((rs, row) -> rs.getObject("data_until", OffsetDateTime.class).toInstant()).optional();
     }
 
     @Override
     public DemandStatisticsBaseline baseline(final long routeVersionId) {
-        jdbc.sql("INSERT INTO stop_demand_baseline(route_version_id) VALUES (?) ON CONFLICT DO NOTHING")
-            .param(routeVersionId).update();
+        jdbc.sql(
+            "INSERT INTO stop_demand_baseline(route_version_id,initialized) SELECT :version,NOT EXISTS(SELECT 1 FROM vehicle_observation WHERE route_version_id=:version) ON CONFLICT DO NOTHING")
+            .param("version", routeVersionId).update();
         return jdbc.sql("SELECT initialized, data_until FROM stop_demand_baseline WHERE route_version_id = ?")
-            .param(routeVersionId)
-            .query((rs, row) -> new DemandStatisticsBaseline(rs.getBoolean("initialized"),
+            .param(routeVersionId).query((rs, row) -> new DemandStatisticsBaseline(rs.getBoolean("initialized"),
                 instantOrNull(rs.getObject("data_until", OffsetDateTime.class))))
             .single();
     }
@@ -130,8 +128,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
         // 표 이름은 코드에 고정돼 있다. 외부 입력으로 SQL 식별자를 만들지 않는다.
         for (String table : STAGES) {
             final int removed = jdbc.sql("DELETE FROM " + table + " WHERE ctid IN (SELECT ctid FROM " + table
-                + " WHERE route_version_id=? LIMIT ?)")
-                .params(routeVersionId, limit).update();
+                + " WHERE route_version_id=? LIMIT ?)").params(routeVersionId, limit).update();
             if (removed > 0) {
                 return removed;
             }
@@ -141,31 +138,66 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
 
     @Override
     public void stageCapacities(final long routeVersionId, Instant dataUntil, final long inputUntilId) {
-        // 이 SQL 한 번의 snapshot에서 모든 정원을 고정한다. 다음 단계에서는 관측을 다시 읽지 않는다.
+        List<String> vehicleIds = jdbc.sql("""
+            SELECT vehicle_id FROM stop_demand_vehicle WHERE route_version_id = :version
+            UNION
+            SELECT vehicle_id FROM stop_demand_pending_sample WHERE route_version_id = :version AND id <= :inputUntilId
+            """).param("version", routeVersionId).param("inputUntilId", inputUntilId).query(String.class).list();
+        if (vehicleIds.isEmpty()) {
+            return;
+        }
+        Map<String, JdbcVehicleCapacityStore.Capacity> capacities = vehicleCapacities.find(findSourceId(routeVersionId),
+            vehicleIds);
+        List<JdbcVehicleCapacityStore.Capacity> known = capacities.values().stream()
+            .filter(capacity -> capacity.canUseInStatistics(dataUntil)).toList();
+        stageKnownCapacities(routeVersionId, known);
+        List<String> unresolved = vehicleIds.stream()
+            .filter(vehicleId -> !canUseCapacity(capacities.get(vehicleId), dataUntil)).toList();
+        if (!unresolved.isEmpty()) {
+            stageHistoricalCapacities(routeVersionId, dataUntil, unresolved);
+        }
+    }
+
+    private boolean canUseCapacity(JdbcVehicleCapacityStore.Capacity capacity, Instant dataUntil) {
+        return capacity != null && capacity.canUseInStatistics(dataUntil);
+    }
+
+    private String findSourceId(final long routeVersionId) {
+        return jdbc.sql("""
+            SELECT route.source_id FROM route_version version JOIN route ON route.id = version.route_id
+            WHERE version.id = :version
+            """).param("version", routeVersionId).query(String.class).single();
+    }
+
+    private void stageKnownCapacities(final long routeVersionId, List<JdbcVehicleCapacityStore.Capacity> capacities) {
+        if (capacities.isEmpty()) {
+            return;
+        }
+        String[] vehicleIds = capacities.stream().map(JdbcVehicleCapacityStore.Capacity::vehicleId)
+            .toArray(String[]::new);
+        Integer[] seats = capacities.stream().map(JdbcVehicleCapacityStore.Capacity::seats).toArray(Integer[]::new);
+        jdbc.sql("""
+            INSERT INTO stop_demand_capacity_stage(route_version_id, vehicle_id, capacity)
+            SELECT :version, vehicle_id, capacity
+            FROM unnest(CAST(:vehicleIds AS text[]), CAST(:seats AS integer[])) AS snapshot(vehicle_id, capacity)
+            """).param("version", routeVersionId).param("vehicleIds", vehicleIds).param("seats", seats).update();
+    }
+
+    /** 원본 관측 대신 정원 변경 이력으로 기준 시각을 재현한다. */
+    private void stageHistoricalCapacities(final long routeVersionId, Instant dataUntil, List<String> vehicleIds) {
         jdbc.sql("""
             INSERT INTO stop_demand_capacity_stage(route_version_id,vehicle_id,capacity)
-            SELECT :version,vehicles.vehicle_id,GREATEST(capacity.remaining_seats,1)
-            FROM (
-                SELECT vehicle_id FROM stop_demand_vehicle WHERE route_version_id=:version
-                UNION SELECT vehicle_id FROM stop_demand_pending_sample WHERE route_version_id=:version
-                  AND id<=:inputUntilId
-            ) vehicles
-            CROSS JOIN LATERAL (
-                SELECT observation.remaining_seats
-                FROM vehicle_observation observation
-                JOIN observation_batch batch ON batch.id=observation.observation_batch_id
-                WHERE observation.route_version_id=:version AND observation.vehicle_id=vehicles.vehicle_id
-                  AND observation.remaining_seats IS NOT NULL
-                  AND batch.response_received_at<=:dataUntil
-                  AND EXISTS(SELECT 1 FROM forecast_eligible_observation eligible WHERE eligible.id=observation.id)
-                ORDER BY observation.remaining_seats DESC LIMIT 1
-            ) capacity
-            """).param("version", routeVersionId).param("inputUntilId", inputUntilId)
-            .param("dataUntil", offsetOf(dataUntil)).update();
+            SELECT DISTINCT ON (h.vehicle_id) :version,h.vehicle_id,h.capacity
+            FROM vehicle_capacity_history h
+            WHERE h.source_id=:source AND h.vehicle_id IN (:vehicles) AND h.evidence_at<=:until
+            ORDER BY h.vehicle_id,h.evidence_at DESC,h.evidence_batch_id DESC
+            """).param("version", routeVersionId).param("source", findSourceId(routeVersionId))
+            .param("vehicles", vehicleIds).param("until", offsetOf(dataUntil)).update();
     }
 
     @Override
-    public List<FoldRow> foldPage(final long routeVersionId, Optional<FoldCursor> after, final int limit) {
+    public List<DemandStatisticsStore.FoldRow> foldPage(final long routeVersionId,
+        Optional<DemandStatisticsRun.FoldCursor> after, final int limit) {
         return jdbc.sql("""
             SELECT total.*,capacity.capacity FROM stop_demand_current_total total
             LEFT JOIN stop_demand_capacity_stage capacity ON capacity.route_version_id=total.route_version_id
@@ -175,11 +207,11 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
                   >(:vehicleCursor,COALESCE(CAST(:hourCursor AS timestamptz),'-infinity'::timestamptz),:stopCursor)
             ORDER BY total.vehicle_id,total.arrived_hour_start,total.target_stop_order LIMIT :limit
             """).param("version", routeVersionId)
-            .param("vehicleCursor", after.map(FoldCursor::vehicleId).orElse(""))
+            .param("vehicleCursor", after.map(DemandStatisticsRun.FoldCursor::vehicleId).orElse(""))
             .param("hourCursor", after.map(cursor -> offsetOf(cursor.arrivedHourStart())).orElse(null))
-            .param("stopCursor", after.map(FoldCursor::targetStopOrder).orElse(0))
+            .param("stopCursor", after.map(DemandStatisticsRun.FoldCursor::targetStopOrder).orElse(0))
             .param("limit", limit)
-            .query((rs, row) -> new FoldRow(new VehicleHourlyDemand(rs.getString("vehicle_id"),
+            .query((rs, row) -> new DemandStatisticsStore.FoldRow(new VehicleHourlyDemand(rs.getString("vehicle_id"),
                 rs.getObject("arrived_hour_start", OffsetDateTime.class).toInstant(), rs.getInt("target_stop_order"),
                 rs.getLong("sample_count"), rs.getLong("arrival_seats_sum"), rs.getLong("net_boarding_sum")),
                 rs.getObject("capacity", Integer.class)))
@@ -189,15 +221,16 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     @Override
     public void addToDayStage(final long routeVersionId, List<DailyStopDemand> days) {
         for (DailyStopDemand day : days) {
-            jdbc.sql("""
-                INSERT INTO stop_demand_day_stage AS day(route_version_id,stop_order,time_slot,arrival_date,
-                    fill_rate_total,net_boarding_total,capacity_total,sample_count)
-                VALUES (?,?,?,?,?,?,?,?)
-                ON CONFLICT(route_version_id,stop_order,time_slot,arrival_date) DO UPDATE SET
-                    fill_rate_total=day.fill_rate_total+EXCLUDED.fill_rate_total,
-                    net_boarding_total=day.net_boarding_total+EXCLUDED.net_boarding_total,
-                    capacity_total=day.capacity_total+EXCLUDED.capacity_total,sample_count=day.sample_count+EXCLUDED.sample_count
-                """)
+            jdbc.sql(
+                """
+                    INSERT INTO stop_demand_day_stage AS day(route_version_id,stop_order,time_slot,arrival_date,
+                        fill_rate_total,net_boarding_total,capacity_total,sample_count)
+                    VALUES (?,?,?,?,?,?,?,?)
+                    ON CONFLICT(route_version_id,stop_order,time_slot,arrival_date) DO UPDATE SET
+                        fill_rate_total=day.fill_rate_total+EXCLUDED.fill_rate_total,
+                        net_boarding_total=day.net_boarding_total+EXCLUDED.net_boarding_total,
+                        capacity_total=day.capacity_total+EXCLUDED.capacity_total,sample_count=day.sample_count+EXCLUDED.sample_count
+                    """)
                 .params(routeVersionId, day.stopOrder(), storedTimeSlotOf(day.timeSlot()), day.arrivalDate(),
                     day.fillRateTotal(), day.netBoardingTotal(), day.capacityTotal(), day.sampleCount())
                 .update();
@@ -205,7 +238,7 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
     }
 
     @Override
-    public List<DailyStopDemand> reducePage(final long routeVersionId, Optional<ReduceCursor> after,
+    public List<DailyStopDemand> reducePage(final long routeVersionId, Optional<DemandStatisticsRun.ReduceCursor> after,
         final int limit) {
         return jdbc.sql("""
             SELECT * FROM stop_demand_day_stage
@@ -214,9 +247,9 @@ public class JdbcDemandStatisticsStore implements DemandStatisticsStore {
                   >(:stopCursor,:slotCursor,COALESCE(CAST(:dayCursor AS date),'-infinity'::date))
             ORDER BY stop_order,time_slot,arrival_date LIMIT :limit
             """).param("version", routeVersionId)
-            .param("stopCursor", after.map(ReduceCursor::stopOrder).orElse(0))
+            .param("stopCursor", after.map(DemandStatisticsRun.ReduceCursor::stopOrder).orElse(0))
             .param("slotCursor", after.map(cursor -> storedTimeSlotOf(cursor.timeSlot())).orElse(""))
-            .param("dayCursor", after.map(ReduceCursor::arrivalDate).orElse(null))
+            .param("dayCursor", after.map(DemandStatisticsRun.ReduceCursor::arrivalDate).orElse(null))
             .param("limit", limit)
             .query((rs, row) -> new DailyStopDemand(rs.getInt("stop_order"), timeSlotOf(rs.getString("time_slot")),
                 rs.getObject("arrival_date", LocalDate.class), rs.getDouble("fill_rate_total"),

@@ -9,23 +9,21 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.application.evaluation.ObservationDeliveryReceiver;
 import com.gustler.backend.forecasting.application.evaluation.ObservationDeliveryService;
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.ArrivalCandidate;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcArrivalObservationQuery;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcRecentObservationBatches;
-import com.gustler.backend.gbis.api.GbisLocationResult.Success;
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
+import com.gustler.backend.gbis.api.GbisLocationResult;
+import com.gustler.backend.gbis.api.dto.BusLocationResponse;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
-import com.gustler.backend.observations.api.ObservationDeliveryBatch.Kind;
 import com.gustler.backend.observations.application.ObservationBatchLedger;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.WorkerApplication;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
-import com.gustler.backend.worker.integration.observations.ObservationDeliveryIntegrationTest.ReceiverConfiguration;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -51,10 +49,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@SpringBootTest(classes = WorkerApplication.class,
-    properties = "forecast.evaluation.observation-cache.enabled=true")
-@Import({PostgresTestContainer.class, CollectionRuntimeConfiguration.class,
-    ReceiverConfiguration.class})
+@SpringBootTest(classes = WorkerApplication.class, properties = "forecast.evaluation.observation-cache.enabled=true")
+@Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class,
+        ObservationDeliveryIntegrationTest.ReceiverConfiguration.class })
 class ObservationDeliveryIntegrationTest {
     private static final OffsetDateTime AT = OffsetDateTime.parse("2026-08-19T11:14:00.123456789+09:00");
     private static final String SOURCE_ROUTE = "delivery-test-route";
@@ -69,7 +66,7 @@ class ObservationDeliveryIntegrationTest {
     @Autowired
     JdbcArrivalObservationQuery arrivals;
     @Autowired
-    RouteDataQualityAccess quality;
+    RouteWorkAccess quality;
     private long version;
     private long batch;
     private CollectionPlan plan;
@@ -84,8 +81,7 @@ class ObservationDeliveryIntegrationTest {
         version = jdbc.sql("""
             INSERT INTO route_version (route_id, content_digest, valid_from, turn_sequence)
             VALUES (:route, :digest, :at, 2) RETURNING id
-            """).param("route", route).param("digest", "0".repeat(64)).param("at", AT)
-            .query(Long.class).single();
+            """).param("route", route).param("digest", "0".repeat(64)).param("at", AT).query(Long.class).single();
         jdbc.sql("""
             INSERT INTO route_stop (route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
             VALUES (:version, 1, 'stop-one', '출발', 'UP', true),
@@ -121,19 +117,16 @@ class ObservationDeliveryIntegrationTest {
         save();
         List<ArrivalCandidate> result = new TransactionTemplate(transactions).execute(status -> {
             final long revision = quality.lock(version);
-            return memory.begin(AT.plusSeconds(2).toInstant()).read(arrivals, version, revision, false,
+            return memory.begin(AT.plusSeconds(2).toInstant()).read(arrivals, version, revision,
                 receiver.deliveries.getFirst().batch().rows().getFirst().vehicleId(), AT.toInstant(), 100);
         });
 
         // then
         assertThat(result).singleElement().satisfies(row -> {
             assertThat(row.remainingSeats()).isEqualTo(20);
-            assertThat(row.observedAt()).isEqualTo(
-                jdbc.sql("SELECT response_received_at FROM observation_batch WHERE id = ?")
-                    .param(batch)
-                    .query(OffsetDateTime.class)
-                    .single()
-                    .toInstant());
+            assertThat(row.observedAt())
+                .isEqualTo(jdbc.sql("SELECT response_received_at FROM observation_batch WHERE id = ?").param(batch)
+                    .query(OffsetDateTime.class).single().toInstant());
         });
         verify(source, never()).restore(anyLong(), anyList(), anyInt());
         assertDeliveryTableAbsent();
@@ -166,11 +159,10 @@ class ObservationDeliveryIntegrationTest {
                 // when
                 List<ArrivalCandidate> result = new TransactionTemplate(transactions).execute(status -> {
                     final long revision = quality.lock(version);
-                    String vehicle = jdbc.sql("SELECT vehicle_id FROM vehicle_observation")
-                        .query(String.class)
+                    String vehicle = jdbc.sql("SELECT vehicle_id FROM vehicle_observation").query(String.class)
                         .single();
-                    return memory.begin(AT.plusSeconds(2).toInstant()).read(arrivals, version, revision, false,
-                        vehicle, AT.toInstant(), 100);
+                    return memory.begin(AT.plusSeconds(2).toInstant()).read(arrivals, version, revision, vehicle,
+                        AT.toInstant(), 100);
                 });
 
                 // then
@@ -184,8 +176,8 @@ class ObservationDeliveryIntegrationTest {
     }
 
     private ObservationDeliveryService memory(JdbcRecentObservationBatches source) {
-        return new ObservationDeliveryService(source, Clock.fixed(AT.plusSeconds(2).toInstant(), ZoneOffset.UTC),
-            100, Duration.ofMinutes(30));
+        return new ObservationDeliveryService(source, Clock.fixed(AT.plusSeconds(2).toInstant(), ZoneOffset.UTC), 100,
+            Duration.ofMinutes(30));
     }
 
     @Test
@@ -223,10 +215,10 @@ class ObservationDeliveryIntegrationTest {
         ObservationDeliveryBatch delivered = receiver.deliveries.getFirst().batch();
         assertThat(delivered.batchId()).isEqualTo(batch);
         assertThat(delivered.rows()).hasSize(1);
-        assertThat(delivered.rows().getFirst().observationId()).isEqualTo(
-            jdbc.sql("SELECT id FROM vehicle_observation").query(Long.class).single());
-        assertThat(delivered.rows().getFirst().passedStopOrder()).isEqualTo(
-            jdbc.sql("SELECT passed_stop_order FROM vehicle_observation").query(Integer.class).single());
+        assertThat(delivered.rows().getFirst().observationId())
+            .isEqualTo(jdbc.sql("SELECT id FROM vehicle_observation").query(Long.class).single());
+        assertThat(delivered.rows().getFirst().passedStopOrder())
+            .isEqualTo(jdbc.sql("SELECT passed_stop_order FROM vehicle_observation").query(Integer.class).single());
         assertThat(delivered.rows().getFirst().remainingSeats()).isEqualTo(20);
         assertDeliveryTableAbsent();
     }
@@ -243,8 +235,9 @@ class ObservationDeliveryIntegrationTest {
         assertThat(count("vehicle_observation")).isEqualTo(1);
         assertDeliveryTableAbsent();
         assertThat(receiver.deliveries).isEmpty();
-        assertThat(jdbc.sql("SELECT outcome FROM observation_batch WHERE id = ?")
-                .param(batch).query(String.class).single()).isEqualTo("SUCCESS_ROWS");
+        assertThat(
+            jdbc.sql("SELECT outcome FROM observation_batch WHERE id = ?").param(batch).query(String.class).single())
+            .isEqualTo("SUCCESS_ROWS");
     }
 
     @Test
@@ -260,15 +253,10 @@ class ObservationDeliveryIntegrationTest {
         // then
         assertThat(reused).isEqualTo(batch);
         assertThat(receiver.deliveries).hasSize(3);
-        assertThat(receiver.deliveries.stream()
-                .map(item -> item.batch().attempt())
-                .toList())
-            .containsExactly(1, 2, 2);
-        assertThat(receiver.deliveries.stream()
-                .map(item -> item.batch().kind())
-                .toList())
-            .containsExactly(Kind.STORED,
-                Kind.CLEARED, Kind.STORED);
+        assertThat(receiver.deliveries.stream().map(item -> item.batch().attempt()).toList()).containsExactly(1, 2, 2);
+        assertThat(receiver.deliveries.stream().map(item -> item.batch().kind()).toList()).containsExactly(
+            ObservationDeliveryBatch.Kind.STORED, ObservationDeliveryBatch.Kind.CLEARED,
+            ObservationDeliveryBatch.Kind.STORED);
         assertThat(receiver.deliveries.get(1).batch().rows()).isEmpty();
         assertThat(count("vehicle_observation")).isEqualTo(1);
     }
@@ -286,8 +274,7 @@ class ObservationDeliveryIntegrationTest {
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
             final long revision = quality.lock(version);
             String vehicle = receiver.deliveries.getFirst().batch().rows().getFirst().vehicleId();
-            memory.begin(AT.plusSeconds(2).toInstant())
-                .read(arrivals, version, revision, false, vehicle, AT.toInstant(), 100);
+            memory.begin(AT.plusSeconds(2).toInstant()).read(arrivals, version, revision, vehicle, AT.toInstant(), 100);
         });
 
         // then
@@ -297,15 +284,16 @@ class ObservationDeliveryIntegrationTest {
     }
 
     private void assertDeliveryTableAbsent() {
-        assertThat(jdbc.sql("SELECT to_regclass('observation_delivery') IS NULL")
-                    .query(Boolean.class).single()).isTrue();
+        assertThat(jdbc.sql("SELECT to_regclass('observation_delivery') IS NULL").query(Boolean.class).single())
+            .isTrue();
     }
 
     private void save() {
-        BusLocation bus = new BusLocation("경기70아0001", "delivery-test-vehicle", 0, SOURCE_ROUTE, 11,
-            "stop-one", 1, 2, 20, 3, 1);
-        ledger.conclude(batch,
-            at -> GbisObservationMapper.response(new Success("2026-08-19 11:14:00.9", List.of(bus)), at),
+        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation("경기70아0001", "delivery-test-vehicle",
+            0, SOURCE_ROUTE, 11, "stop-one", 1, 2, 20, 3, 1);
+        ledger.conclude(
+            batch, at -> GbisObservationMapper
+                .response(new GbisLocationResult.Success("2026-08-19 11:14:00.9", List.of(bus)), at),
             AT.plusSeconds(2));
     }
 

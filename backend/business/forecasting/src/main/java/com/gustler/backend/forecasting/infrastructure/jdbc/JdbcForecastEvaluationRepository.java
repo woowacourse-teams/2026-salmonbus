@@ -1,6 +1,5 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationDiagnostics;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluation;
 import com.gustler.backend.forecasting.domain.evaluation.ForecastEvaluationRepository;
@@ -18,7 +17,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -45,7 +43,7 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         ), sources AS MATERIALIZED (
             SELECT source.id, source.vehicle_id, source.quality_direction, batch.response_received_at
             FROM source_ids keys
-            JOIN forecast_eligible_observation source ON source.id = keys.id
+            JOIN operational_observation source ON source.id = keys.id
             JOIN observation_batch batch ON batch.id = source.observation_batch_id
         )
         SELECT evaluation.vehicle_observation_id, evaluation.target_stop_order,
@@ -63,12 +61,12 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
 
     private static final int SETTLEMENT_BATCH_SIZE = 100;
 
-    /** 품질을 재확인한 대기 행만 제거하고, 같은 SQL에서 완료 근거를 보관한다. */
+    /** 대기 행의 도착 근거를 맞춰 보고, 같은 SQL에서 완료 근거를 보관한다. */
     private static final String COMPLETE_BATCH = """
         WITH /* salmonbus:forecast_evaluation.complete_batch */ input(vehicleObservationId, targetStopOrder, arrivalObservationId, scoringState, seatsOnArrival, scoredAt)
             AS MATERIALIZED (VALUES %s),
         eligible AS MATERIALIZED (
-            SELECT observation.* FROM forecast_eligible_observation observation
+            SELECT observation.* FROM operational_observation observation
             JOIN (
                 SELECT vehicleObservationId AS id FROM input
                 UNION
@@ -87,7 +85,8 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
                    arrival.quality_direction AS arrival_quality_direction,
                    version.route_id, forecast.model_deployment_id, forecast.stops_to_target,
                    forecast.seat_full_chance_raw, forecast.evaluation_detail_required,
-                   forecast.quality_revision = quality.quality_revision AS usable_for_calibration,
+                   (forecast.quality_revision = route_state.data_revision
+                    AND source.remaining_seats IS NOT NULL) AS usable_for_calibration,
                    source.vehicle_id AS prediction_vehicle_id, source.remaining_seats AS prediction_remaining_seats,
                    COALESCE(target_stop.boarding_allowed, false) AS target_boarding_allowed,
                    route_info.display_name AS route_name, target_stop.name AS stop_name,
@@ -101,12 +100,14 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
             JOIN route route_info ON route_info.id = version.route_id
             LEFT JOIN route_stop target_stop ON target_stop.route_version_id = forecast.route_version_id
              AND target_stop.stop_order = forecast.target_stop_order
-            JOIN route_data_quality quality ON quality.route_id = version.route_id
+            JOIN route route_state ON route_state.id = version.route_id
             JOIN eligible source ON source.id = forecast.vehicle_observation_id
             LEFT JOIN eligible arrival ON arrival.id = input.arrivalObservationId
             LEFT JOIN observation_batch arrival_batch ON arrival_batch.id = arrival.observation_batch_id
             WHERE CAST(input.arrivalObservationId AS bigint) IS NULL OR (
-                arrival.id IS NOT NULL AND arrival_batch.response_received_at IS NOT NULL AND %s)
+                arrival.id IS NOT NULL AND arrival_batch.response_received_at IS NOT NULL
+                AND (input.scoringState <> 'SETTLED' OR arrival.remaining_seats IS NOT NULL)
+                AND %s)
         ), saved AS (
             INSERT INTO forecast_evaluation_result (
                 vehicle_observation_id, target_stop_order, route_version_id, scoring_state,
@@ -140,33 +141,10 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
         SELECT candidate.* FROM candidates candidate JOIN completed USING (vehicle_observation_id, target_stop_order)
         """;
 
-    private static final int EXCLUSION_LIMIT = 500;
-
-    // 조사 중의 임시 편도 배정은 종료 근거로 쓰지 않는다. 완료된 차량 조사와 확정 제외가 모두 필요하다.
-    private static final String CONFIRMED_EXCLUSION = """
-        trip.status = 'EXCLUDED'
-        AND EXISTS (SELECT 1 FROM trip_quality_rebuild completed
-            WHERE completed.route_version_id = source.route_version_id
-              AND completed.vehicle_id = source.vehicle_id AND completed.completed AND completed.phase = 'DONE')
-        AND NOT EXISTS (SELECT 1 FROM trip_quality_rebuild pending
-            WHERE pending.route_version_id = source.route_version_id AND NOT pending.completed
-              AND (pending.vehicle_id = '' OR pending.vehicle_id = source.vehicle_id))
-        """;
-
-    private static final String EXCLUSION_SOURCE = """
-        JOIN vehicle_observation source ON source.id = keys.observation_id
-        LEFT JOIN observation_trip_assignment assignment ON assignment.observation_id = source.id
-        JOIN vehicle_one_way_trip trip ON trip.id = COALESCE(assignment.trip_id, source.vehicle_trip_key)
-        """;
-
     private final JdbcClient jdbcClient;
     private final JdbcEvaluationWorkStore work;
 
-    private final RouteDataQualityAccess quality;
-
-    public JdbcForecastEvaluationRepository(JdbcClient jdbcClient, JdbcEvaluationWorkStore work,
-        RouteDataQualityAccess quality) {
-        this.quality = quality;
+    public JdbcForecastEvaluationRepository(JdbcClient jdbcClient, JdbcEvaluationWorkStore work) {
         this.work = work;
         this.jdbcClient = jdbcClient;
     }
@@ -201,7 +179,6 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
     public List<PendingForecast> findPending(final long routeVersionId, final int limit) {
         List<PendingForecast> pending = new ArrayList<>();
         PendingKey after = PendingKey.BEFORE_FIRST;
-        int exclusionBudget = EXCLUSION_LIMIT;
         while (pending.size() < limit) {
             PendingPage page = findPendingPage(routeVersionId, after, limit);
             List<PendingKey> keys = page.keys();
@@ -210,76 +187,10 @@ public class JdbcForecastEvaluationRepository implements ForecastEvaluationRepos
             }
             PendingKey last = keys.getLast();
             List<PendingForecast> eligible = page.eligible();
-            if (exclusionBudget > 0 && eligible.size() < keys.size()) {
-                exclusionBudget -= closeConfirmedExclusions(routeVersionId, keys, eligible, exclusionBudget);
-            }
             pending.addAll(eligible.subList(0, Math.min(eligible.size(), limit - pending.size())));
             after = last;
         }
         return pending;
-    }
-
-    private int closeConfirmedExclusions(
-        final long version,
-        List<PendingKey> keys,
-        List<PendingForecast> eligible,
-        final int budget
-    ) {
-        Set<Long> eligibleIds = eligible.stream()
-            .map(PendingForecast::vehicleObservationId)
-            .collect(Collectors.toSet());
-        List<Long> absentIds = keys.stream()
-            .map(PendingKey::vehicleObservationId)
-            .filter(id -> !eligibleIds.contains(id))
-            .distinct()
-            .toList();
-        if (absentIds.isEmpty()) {
-            return 0;
-        }
-        List<Long> confirmed = jdbcClient.sql("""
-            SELECT source.id FROM vehicle_observation source
-            LEFT JOIN observation_trip_assignment assignment ON assignment.observation_id = source.id
-            JOIN vehicle_one_way_trip trip ON trip.id = COALESCE(assignment.trip_id, source.vehicle_trip_key)
-            WHERE source.id IN (:ids) AND source.route_version_id = :version AND
-            """ + CONFIRMED_EXCLUSION)
-            .param("ids", absentIds).param("version", version).query(Long.class).list();
-        if (confirmed.isEmpty()) {
-            return 0;
-        }
-
-        // 제외 확정도 같은 노선의 품질 변경과 순서를 맞춘다.
-        quality.lock(version);
-        Set<Long> excludedIds = Set.copyOf(confirmed);
-        List<PendingKey> closing = keys.stream()
-            .filter(key -> excludedIds.contains(key.vehicleObservationId()))
-            .limit(budget)
-            .toList();
-        String values = IntStream.range(0, closing.size())
-            .mapToObj(index -> "(CAST(:observation%d AS bigint), CAST(:stop%d AS integer))".formatted(index, index))
-            .collect(Collectors.joining(", "));
-        // 잠금을 얻은 뒤 최신 조사/편도 상태를 다시 확인한다. PENDING 조건으로 재시도도 중복 갱신하지 않는다.
-        StatementSpec query = jdbcClient.sql("""
-            WITH keys(observation_id, target_stop_order) AS MATERIALIZED (VALUES %s)
-            , closing AS (
-                SELECT evaluation.vehicle_observation_id, evaluation.target_stop_order, evaluation.route_version_id
-                FROM forecast_evaluation_pending evaluation CROSS JOIN keys
-                %s
-                WHERE evaluation.vehicle_observation_id = keys.observation_id
-                  AND evaluation.target_stop_order = keys.target_stop_order
-                  AND evaluation.route_version_id = :version AND source.route_version_id = :version AND %s
-            )
-            INSERT INTO forecast_evaluation_result (
-                vehicle_observation_id, target_stop_order, route_version_id, scoring_state, scored_at)
-            SELECT vehicle_observation_id, target_stop_order, route_version_id, 'QUALITY_EXCLUDED', CURRENT_TIMESTAMP
-            FROM closing
-            ON CONFLICT (vehicle_observation_id, target_stop_order) DO NOTHING
-            """.formatted(values, EXCLUSION_SOURCE, CONFIRMED_EXCLUSION)).param("version", version);
-        for (int index = 0; index < closing.size(); index++) {
-            query = query.param("observation" + index, closing.get(index).vehicleObservationId())
-                .param("stop" + index, closing.get(index).targetStopOrder());
-        }
-        query.update();
-        return closing.size();
     }
 
     private PendingPage findPendingPage(final long routeVersionId, PendingKey after, final int limit) {

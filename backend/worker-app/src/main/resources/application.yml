@@ -86,11 +86,6 @@ forecast:
     # GBIS 노선 ID를 쉼표로 구분한다. 비어 있으면 전체 노선에 적용한다.
     route-ids: ${FORECAST_EVALUATION_SAMPLING_ROUTE_IDS:}
     interval: ${FORECAST_EVALUATION_SAMPLING_INTERVAL:60s}
-  quality-memory:
-    # 단일 worker 전용. 수동 DB 품질 변경 또는 다중 worker 실행 시 끈다.
-    enabled: ${FORECAST_QUALITY_MEMORY_ENABLED:false}
-    # 관측 수가 아니라 보관할 노선 버전 수다. 초과분은 필요할 때 다시 읽는다.
-    max-routes: ${FORECAST_QUALITY_MEMORY_MAX_ROUTES:100}
   evaluation:
     memory-limit: ${FORECAST_EVALUATION_MEMORY_LIMIT:60000}
     recovery-page-limit: ${FORECAST_EVALUATION_RECOVERY_PAGE_LIMIT:3}
@@ -99,15 +94,6 @@ forecast:
       enabled: ${FORECAST_EVALUATION_OBSERVATION_CACHE_ENABLED:false}
       max-observations: ${FORECAST_EVALUATION_OBSERVATION_CACHE_MAX_OBSERVATIONS:100000}
       retention: ${FORECAST_EVALUATION_OBSERVATION_CACHE_RETENTION:50m}
-  archive:
-    # 배포 유닛에서만 기본 활성화한다. 로컬과 테스트는 외부 저장소를 사용하지 않는다.
-    enabled: ${FORECAST_ARCHIVE_ENABLED:false}
-    delete-enabled: ${FORECAST_ARCHIVE_DELETE_ENABLED:false}
-    work-directory: ${FORECAST_ARCHIVE_WORK_DIRECTORY:/var/lib/salmonbus/evaluation-archive}
-    page-size: ${FORECAST_ARCHIVE_PAGE_SIZE:500}
-    max-file-bytes: ${FORECAST_ARCHIVE_MAX_FILE_BYTES:4194304}
-    interval: 5s
-    initial-delay: 60s
   same-day-initialization:
     interval: 10s
     retry-interval: 60s

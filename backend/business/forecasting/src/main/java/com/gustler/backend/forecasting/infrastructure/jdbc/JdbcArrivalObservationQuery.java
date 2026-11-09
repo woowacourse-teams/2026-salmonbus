@@ -25,12 +25,11 @@ public class JdbcArrivalObservationQuery implements ArrivalObservationQuery {
     private static final String COLUMNS = """
         SELECT o.id, o.vehicle_id, o.route_version_id, o.passed_stop_order,
                b.response_received_at, o.remaining_seats, o.crowd_level,
-               CASE WHEN o.forecast_eligible THEN o.quality_direction END AS quality_direction,
-               o.id AS assessed_id
+               o.quality_direction
         """;
 
     private static final String SOURCE = """
-        FROM forecast_observation_quality o
+        FROM operational_observation o
         JOIN observation_batch b
           ON b.id = o.observation_batch_id
          AND b.route_version_id = o.route_version_id
@@ -98,7 +97,7 @@ public class JdbcArrivalObservationQuery implements ArrivalObservationQuery {
                 rs.getInt("passed_stop_order"),
                 instantOf(rs.getObject("response_received_at", OffsetDateTime.class)),
                 (Integer) rs.getObject("remaining_seats"), (Integer) rs.getObject("crowd_level")),
-            rs.getObject("quality_direction", Long.class), rs.getObject("assessed_id", Long.class) != null);
+            rs.getObject("quality_direction", Long.class));
     }
 
     private static OffsetDateTime offsetOf(Instant instant) {

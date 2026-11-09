@@ -14,8 +14,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보 발행 기록과 예보 행을 저장 경계에 반영한다.
- * 관측·노선·모델·품질 판본을 함께 보존한다.
+ * 예보 발행 기록과 예보 행을 저장 경계에 반영한다. 관측·노선·모델·품질 판본을 함께 보존한다.
  */
 @Repository
 public class JdbcForecastPublicationRepository implements ForecastPublicationRepository {
@@ -38,7 +37,8 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
     /**
      * 예보 한 줄. 같은 (관측, 대상 순번) 이 이미 있으면 예보 값만 덮어쓴다.
      *
-     * <p>재시도가 같은 판을 두 번 열어도 행이 하나만 남는다.
+     * <p>
+     * 재시도가 같은 판을 두 번 열어도 행이 하나만 남는다.
      */
     // 재발행은 최초 평가 선택을 유지한다. 비활성화로 과거 생략분이 다시 등록되지 않는다.
     private static final String UPSERT_PREDICTION = """
@@ -79,26 +79,32 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
     @Override
     @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public boolean save(ForecastPublication publication) {
+        final boolean archived = jdbc.sql("""
+            SELECT EXISTS(SELECT 1 FROM operational_archive_boundary
+                WHERE route_version_id=? AND closed_before>?)
+            """).params(publication.routeVersionId(), offset(publication.observedAt())).query(Boolean.class).single();
+        if (archived) {
+            throw new IllegalStateException("이관 대상으로 확정한 과거 예보는 운영에서 재발행하지 않는다");
+        }
         Optional<Long> existing = jdbc.sql("SELECT id FROM forecast_publication WHERE source_batch_id = ?")
             .param(publication.sourceBatchId()).query(Long.class).optional();
         final long publicationId = existing.orElseGet(() -> jdbc.sql(INSERT_PUBLICATION)
             .params(publication.sourceBatchId(), publication.routeVersionId(), publication.modelDeploymentId(),
-                publication.demandStatisticsRevision(), publication.qualityRevision(),
-                offset(publication.observedAt()), offset(publication.generatedAt()),
-                offset(publication.publishedAt()), publication.predictionCount())
+                publication.demandStatisticsRevision(), publication.qualityRevision(), offset(publication.observedAt()),
+                offset(publication.generatedAt()), offset(publication.publishedAt()), publication.predictionCount())
             .query(Long.class).single());
         existing.ifPresent(id -> jdbc.sql(UPDATE_PUBLICATION)
             .params(publication.modelDeploymentId(), publication.demandStatisticsRevision(),
                 publication.qualityRevision(), offset(publication.observedAt()), offset(publication.generatedAt()),
                 offset(publication.publishedAt()), id)
             .update());
-        List<Object[]> rows = publication.predictions()
-            .stream()
-            .map(prediction -> new Object[] {publicationId, prediction.vehicleObservationId(),
-                prediction.targetStopOrder(), prediction.routeVersionId(), prediction.stopsToTarget(),
-                prediction.modelDeploymentId(), prediction.demandStatisticsRevision(), prediction.seatFullChanceRaw(),
-                prediction.seatFullChance(), prediction.expectedSeats(), offset(prediction.generatedAt()),
-                publication.qualityRevision(), prediction.evaluationDetailRequired()})
+        List<Object[]> rows = publication.predictions().stream()
+            .map(prediction -> new Object[] { publicationId, prediction.vehicleObservationId(),
+                    prediction.targetStopOrder(), prediction.routeVersionId(), prediction.stopsToTarget(),
+                    prediction.modelDeploymentId(), prediction.demandStatisticsRevision(),
+                    prediction.seatFullChanceRaw(), prediction.seatFullChance(), prediction.expectedSeats(),
+                    offset(prediction.generatedAt()), publication.qualityRevision(),
+                    prediction.evaluationDetailRequired() })
             .toList();
         if (!rows.isEmpty()) {
             batches.batchUpdate(UPSERT_PREDICTION, rows);

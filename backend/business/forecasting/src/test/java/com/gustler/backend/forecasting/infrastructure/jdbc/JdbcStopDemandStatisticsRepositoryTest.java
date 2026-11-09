@@ -3,12 +3,9 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import com.gustler.backend.forecasting.application.quality.RouteDataQualityAccess;
-import com.gustler.backend.forecasting.domain.quality.RouteDataQuality;
-import com.gustler.backend.forecasting.domain.quality.RouteDataQualityRepository;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.domain.statistics.DemandStatisticsVersion;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandCell;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandHourlyTotals;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandMeasurement;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatistics;
 import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
@@ -130,10 +127,7 @@ class JdbcStopDemandStatisticsRepositoryTest {
     private JdbcClient jdbcClient;
 
     @Autowired
-    private RouteDataQualityAccess qualityAccess;
-
-    @Autowired
-    private RouteDataQualityRepository qualities;
+    private RouteWorkAccess qualityAccess;
 
     private long routeVersionId;
     private long modelDeploymentId;
@@ -299,168 +293,6 @@ class JdbcStopDemandStatisticsRepositoryTest {
     }
 
     @Test
-    void 회수된_라벨을_정류장과_시각으로_묶어_합을_낸다() {
-        // given
-        insertSettledLabel(
-            VEHICLE_204000206, TARGET_STOP_ORDER, NEXT_STOP_AHEAD,
-            SEATS_ON_PREDICTION, SEATS_ON_FIRST_ARRIVAL, FIRST_ARRIVED_AT, SCORED_AT);
-        insertSettledLabel(
-            VEHICLE_204000311, TARGET_STOP_ORDER, NEXT_STOP_AHEAD,
-            SEATS_ON_PREDICTION, SEATS_ON_SECOND_ARRIVAL, SECOND_ARRIVED_AT, SCORED_AT);
-
-        // when
-        List<StopDemandHourlyTotals> actual =
-            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual).singleElement().isEqualTo(new StopDemandHourlyTotals(
-            TARGET_STOP_ORDER,
-            ARRIVED_HOUR_START,
-            MERGED_FILL_RATE_TOTAL,
-            MERGED_NET_BOARDING_TOTAL,
-            MERGED_CAPACITY_TOTAL,
-            MERGED_SAMPLE_COUNT));
-    }
-
-    @Test
-    void 지평_1_예보만_센다() {
-        // given
-        insertSettledLabel(
-            VEHICLE_204000206, TARGET_STOP_ORDER, NEXT_STOP_AHEAD,
-            SEATS_ON_PREDICTION, SEATS_ON_FIRST_ARRIVAL, FIRST_ARRIVED_AT, SCORED_AT);
-        insertSettledLabel(
-            VEHICLE_204000311, TARGET_STOP_ORDER, TWO_STOPS_AHEAD,
-            SEATS_ON_PREDICTION, SEATS_ON_SECOND_ARRIVAL, SECOND_ARRIVED_AT, SCORED_AT);
-
-        // when
-        List<StopDemandHourlyTotals> actual =
-            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual).singleElement()
-            .extracting(StopDemandHourlyTotals::sampleCount)
-            .isEqualTo(SINGLE_SAMPLE_COUNT);
-    }
-
-    @Test
-    void 도착_배치의_시각이_달라져도_평가할_때_보관한_시각으로_집계한다() {
-        // given
-        insertSettledLabel(
-            VEHICLE_204000206, TARGET_STOP_ORDER, NEXT_STOP_AHEAD,
-            SEATS_ON_PREDICTION, SEATS_ON_FIRST_ARRIVAL, FIRST_ARRIVED_AT, SCORED_AT);
-        jdbcClient.sql("""
-                UPDATE observation_batch SET response_received_at = ?
-                WHERE id IN (
-                    SELECT observation_batch_id FROM vehicle_observation
-                    WHERE route_version_id = ? AND vehicle_id = ? AND stop_order = ?
-                )
-                """)
-            .params(RESPONSE_RECEIVED_AFTER_DATA_UNTIL, routeVersionId, VEHICLE_204000206, TARGET_STOP_ORDER)
-            .update();
-
-        // when
-        List<StopDemandHourlyTotals> actual =
-            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual).singleElement().isEqualTo(new StopDemandHourlyTotals(
-            TARGET_STOP_ORDER, ARRIVED_HOUR_START, FILL_RATE_WITH_CAPACITY_40,
-            SEATS_ON_PREDICTION - SEATS_ON_FIRST_ARRIVAL, SEATS_ON_PREDICTION, SINGLE_SAMPLE_COUNT));
-    }
-
-    @Test
-    void 승차할_수_있는_정류장의_라벨만_센다() {
-        // given
-        insertSettledLabel(
-            VEHICLE_204000206, TARGET_STOP_ORDER, NEXT_STOP_AHEAD,
-            SEATS_ON_PREDICTION, SEATS_ON_FIRST_ARRIVAL, FIRST_ARRIVED_AT, SCORED_AT);
-        insertSettledLabel(
-            VEHICLE_204000311, PASSING_ONLY_STOP_ORDER, NEXT_STOP_AHEAD,
-            SEATS_ON_PREDICTION, SEATS_ON_SECOND_ARRIVAL, SECOND_ARRIVED_AT, SCORED_AT);
-
-        // when
-        List<StopDemandHourlyTotals> actual =
-            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual)
-            .extracting(StopDemandHourlyTotals::stopOrder)
-            .containsExactly(TARGET_STOP_ORDER);
-    }
-
-    @Test
-    void 아직_안_닫힌_예보는_안_센다() {
-        // given
-        insertPendingForecast(VEHICLE_204000206, TARGET_STOP_ORDER, FIRST_ARRIVED_AT);
-
-        // when
-        List<StopDemandHourlyTotals> actual =
-            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual).isEmpty();
-    }
-
-    @Test
-    void 기준_시각_뒤에_회수된_라벨은_안_센다() {
-        // given
-        insertSettledLabel(
-            VEHICLE_204000206, TARGET_STOP_ORDER, NEXT_STOP_AHEAD,
-            SEATS_ON_PREDICTION, SEATS_ON_FIRST_ARRIVAL, FIRST_ARRIVED_AT, SCORED_AFTER_DATA_UNTIL);
-
-        // when
-        List<StopDemandHourlyTotals> actual =
-            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual).isEmpty();
-    }
-
-    @Test
-    void 정원은_그_차량이_보여_준_최대_잔여석이다() {
-        // given
-        insertObservation(
-            VEHICLE_204000206,
-            TARGET_STOP_ORDER - NEXT_STOP_AHEAD,
-            OBSERVED_MAX_SEATS,
-            SECOND_ARRIVED_AT);
-        insertSettledLabel(
-            VEHICLE_204000206, TARGET_STOP_ORDER, NEXT_STOP_AHEAD,
-            SEATS_ON_PREDICTION_BELOW_MAX, SEATS_ON_FIRST_ARRIVAL, FIRST_ARRIVED_AT, SCORED_AT);
-
-        // when
-        List<StopDemandHourlyTotals> actual =
-            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual).singleElement()
-            .extracting(StopDemandHourlyTotals::fillRateTotal)
-            .isEqualTo(FILL_RATE_WITH_CAPACITY_40);
-    }
-
-    @Test
-    void 기준_시각_뒤에_들어온_잔여석은_정원에_안_들어간다() {
-        // given
-        insertSettledLabel(
-            VEHICLE_204000206, TARGET_STOP_ORDER, NEXT_STOP_AHEAD,
-            SEATS_ON_PREDICTION, SEATS_ON_FIRST_ARRIVAL, FIRST_ARRIVED_AT, SCORED_AT);
-        insertObservation(
-            VEHICLE_204000206,
-            TARGET_STOP_ORDER,
-            SEATS_SEEN_AFTER_DATA_UNTIL,
-            RESPONSE_RECEIVED_AFTER_DATA_UNTIL);
-
-        // when
-        List<StopDemandHourlyTotals> actual =
-            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-
-        // then
-        assertThat(actual).singleElement()
-            .extracting(StopDemandHourlyTotals::fillRateTotal)
-            .isEqualTo(FILL_RATE_WITH_CAPACITY_40);
-    }
-
-    @Test
     void 한_세대를_덮어쓰면_지난_세대의_행이_안_남는다() {
         // given
         jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION, List.of(
@@ -489,28 +321,6 @@ class JdbcStopDemandStatisticsRepositoryTest {
         // then
         String actual = readStoredTimeSlot(TARGET_STOP_ORDER);
         assertThat(actual).isEqualTo("morning");
-    }
-
-    @Test
-    void 계산_자료_버전이_변경되고_집계_표본이_없으면_이전_통계_대신_빈_통계를_반환한다() {
-        // given
-        jdbcStopDemandStatisticsRepository.append(generationOf(FIRST_REVISION, CALCULATION_VERSION,
-            List.of(measurementOf(TimeSlot.MORNING, TARGET_STOP_ORDER))));
-        qualityAccess.lock(routeVersionId);
-        changeEligibility();
-
-        // when
-        List<StopDemandHourlyTotals> totals =
-            jdbcStopDemandStatisticsRepository.readHourlyTotals(routeVersionId, DATA_UNTIL);
-        StopDemandStatistics actual = jdbcStopDemandStatisticsRepository.readAsOf(routeVersionId, TimeSlot.MORNING,
-            CALCULATION_VERSION, READ_AS_OF);
-
-        // then
-        assertThat(totals).isEmpty();
-        assertThat(actual.revision()).isZero();
-        assertThat(actual.cells()).isEmpty();
-        assertThat(jdbcStopDemandStatisticsRepository.currentRevision(routeVersionId, CALCULATION_VERSION))
-            .isEqualTo(FIRST_REVISION);
     }
 
     private DemandStatisticsVersion generationOf(
@@ -696,8 +506,9 @@ class JdbcStopDemandStatisticsRepositoryTest {
     }
 
     private void changeEligibility() {
-        RouteDataQuality quality = qualities.findForUpdate(routeVersionId);
-        quality.changeEligibility();
-        qualities.save(quality);
+        jdbcClient.sql("""
+            UPDATE route SET data_revision = data_revision + 1
+            WHERE id = (SELECT route_id FROM route_version WHERE id = ?)
+            """).param(routeVersionId).update();
     }
 }
