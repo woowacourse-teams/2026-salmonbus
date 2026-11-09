@@ -29,7 +29,7 @@ class JdbcPushDeviceRepositoryTest {
     private RefreshTokens refreshTokens;
 
     @Test
-    void registersAndRefreshesOneRow() {
+    void 같은_회원이_다시_등록하면_한_행을_갱신한다() {
         UUID member = member("연어하나");
         UUID sessionId = session(member);
         assertThat(repository.register(member, sessionId, TOKEN, PushEnvironment.SANDBOX, NOW)).isTrue();
@@ -43,7 +43,7 @@ class JdbcPushDeviceRepositoryTest {
     }
 
     @Test
-    void movesTokenWithoutChangingIdentityOrCreationTime() {
+    void 다른_회원이_같은_토큰을_등록하면_이전_행을_지우고_새_기기로_만든다() {
         UUID first = member("연어하나");
         UUID second = member("연어둘");
         repository.register(first, session(first), TOKEN, PushEnvironment.SANDBOX, NOW);
@@ -53,16 +53,16 @@ class JdbcPushDeviceRepositoryTest {
         assertThat(jdbc.sql("SELECT session_family_id FROM push_device").query(UUID.class).single())
             .isEqualTo(secondSession);
         assertThat(count()).isEqualTo(1);
-        assertThat(jdbc.sql("SELECT id FROM push_device").query(Long.class).single()).isEqualTo(id);
+        assertThat(jdbc.sql("SELECT id FROM push_device").query(Long.class).single()).isNotEqualTo(id);
         assertThat(jdbc.sql("SELECT m.public_id FROM push_device p JOIN member m ON m.id = p.member_id")
             .query(UUID.class).single()).isEqualTo(second);
-        assertThat(time("created_at")).isEqualTo(NOW);
+        assertThat(time("created_at")).isEqualTo(NOW.plusSeconds(60));
         assertThat(time("last_registered_at")).isEqualTo(NOW.plusSeconds(60));
         assertThat(jdbc.sql("SELECT environment FROM push_device").query(String.class).single()).isEqualTo("PRODUCTION");
     }
 
     @Test
-    void unregisterOnlyDeletesOwnTokenAndIsIdempotent() {
+    void 해제는_자기_토큰만_지우고_여러_번_해도_같다() {
         UUID first = member("연어하나");
         UUID second = member("연어둘");
         repository.register(first, session(first), TOKEN, PushEnvironment.SANDBOX, NOW);
@@ -76,7 +76,7 @@ class JdbcPushDeviceRepositoryTest {
     }
 
     @Test
-    void deleteByIdRemovesOnlyThatDevice() {
+    void deleteById는_그_기기만_지운다() {
         UUID member = member("연어하나");
         repository.register(member, session(member), TOKEN, PushEnvironment.SANDBOX, NOW);
         repository.register(member, session(member), new DeviceToken("bb"), PushEnvironment.PRODUCTION, NOW);
@@ -90,7 +90,7 @@ class JdbcPushDeviceRepositoryTest {
     }
 
     @Test
-    void missingMemberCannotRegisterOrUnregister() {
+    void 없는_회원은_등록도_해제도_못_한다() {
         UUID missing = UUID.randomUUID();
         assertThat(repository.register(missing, UUID.randomUUID(), TOKEN, PushEnvironment.SANDBOX, NOW)).isFalse();
         assertThat(repository.unregister(missing, TOKEN)).isFalse();

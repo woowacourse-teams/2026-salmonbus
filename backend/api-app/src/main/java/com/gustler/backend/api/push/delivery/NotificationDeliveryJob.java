@@ -64,6 +64,10 @@ public final class NotificationDeliveryJob {
     }
 
     private void sendDue() {
+        int expired = service.giveUpExpired();
+        if (expired > 0) {
+            LOGGER.warn("event=notification_delivery status=EXPIRED count={}", expired);
+        }
         for (int batch = 0; batch < MAX_BATCHES_PER_RUN; batch++) {
             List<ClaimedDelivery> claimed = service.claimDue(SEND_BATCH_SIZE);
             claimed.forEach(runner::attempt);

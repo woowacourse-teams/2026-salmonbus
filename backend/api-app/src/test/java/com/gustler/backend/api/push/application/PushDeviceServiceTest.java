@@ -28,21 +28,21 @@ class PushDeviceServiceTest {
     private final PushDeviceService service = new PushDeviceService(repository, Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
-    void registersNormalizedTokenWithClockTime() {
+    void 소문자로_바꾼_토큰을_시계_시각으로_등록한다() {
         when(repository.register(MEMBER, SESSION, new DeviceToken("ab"), PushEnvironment.SANDBOX, NOW)).thenReturn(true);
         service.register(MEMBER, SESSION, "AB", "SANDBOX");
         verify(repository).register(MEMBER, SESSION, new DeviceToken("ab"), PushEnvironment.SANDBOX, NOW);
     }
 
     @Test
-    void rejectsRegistrationWithoutSession() {
+    void 세션이_없으면_등록은_401이다() {
         assertThatThrownBy(() -> service.register(MEMBER, null, "ab", "SANDBOX"))
             .isInstanceOf(UnauthenticatedException.class);
         verifyNoInteractions(repository);
     }
 
     @Test
-    void unregistersNormalizedToken() {
+    void 소문자로_바꾼_토큰으로_해제한다() {
         when(repository.unregister(MEMBER, new DeviceToken("ab"))).thenReturn(true);
         service.unregister(MEMBER, "AB");
         verify(repository).unregister(MEMBER, new DeviceToken("ab"));
@@ -50,7 +50,7 @@ class PushDeviceServiceTest {
 
     @ParameterizedTest
     @CsvSource(value = {"ab,sandbox", "xyz,SANDBOX", "ab,NULL", "NULL,PRODUCTION"}, nullValues = "NULL")
-    void convertsRegistrationFieldErrors(String token, String environment) {
+    void 등록_필드가_틀리면_INVALID_PUSH_DEVICE로_바꾼다(String token, String environment) {
         assertThatThrownBy(() -> service.register(MEMBER, SESSION, token, environment))
             .isInstanceOf(InvalidPushDeviceException.class);
         verifyNoInteractions(repository);
@@ -59,19 +59,19 @@ class PushDeviceServiceTest {
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"xyz", " ab"})
-    void convertsUnregistrationFieldErrors(String token) {
+    void 해제_토큰이_틀리면_INVALID_PUSH_DEVICE로_바꾼다(String token) {
         assertThatThrownBy(() -> service.unregister(MEMBER, token)).isInstanceOf(InvalidPushDeviceException.class);
         verifyNoInteractions(repository);
     }
 
     @Test
-    void rejectsRegistrationForMissingMember() {
+    void 없는_회원의_등록은_401이다() {
         assertThatThrownBy(() -> service.register(MEMBER, SESSION, "ab", "PRODUCTION"))
             .isInstanceOf(UnauthenticatedException.class);
     }
 
     @Test
-    void rejectsUnregistrationForMissingMember() {
+    void 없는_회원의_해제는_401이다() {
         assertThatThrownBy(() -> service.unregister(MEMBER, "ab")).isInstanceOf(UnauthenticatedException.class);
     }
 }
