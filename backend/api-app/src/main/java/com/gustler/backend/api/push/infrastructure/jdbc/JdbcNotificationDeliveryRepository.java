@@ -33,11 +33,15 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
             UPDATE notification_delivery
             SET next_attempt_at = ?, updated_at = ?
             WHERE id IN (
-                SELECT id FROM notification_delivery
-                WHERE status = 'PENDING' AND next_attempt_at <= ?
-                ORDER BY next_attempt_at, id
+                SELECT delivery.id
+                FROM notification_delivery delivery
+                JOIN push_device device ON device.id = delivery.device_id
+                JOIN notification_setting setting ON setting.id = delivery.setting_id
+                WHERE delivery.status = 'PENDING' AND delivery.next_attempt_at <= ?
+                    AND device.member_id = setting.member_id
+                ORDER BY delivery.next_attempt_at, delivery.id
                 LIMIT ?
-                FOR UPDATE SKIP LOCKED
+                FOR UPDATE OF delivery SKIP LOCKED
             )
             RETURNING id, setting_id, device_id, occurrence_at, attempts
         )
