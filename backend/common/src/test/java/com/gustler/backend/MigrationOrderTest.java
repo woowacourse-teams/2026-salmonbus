@@ -43,7 +43,7 @@ class MigrationOrderTest {
      * <p>이 브랜치는 V46 이후 탈퇴 회원의 분석 기록 삭제 대기 테이블을 만든다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("analytics_deletion");
+        List.of("__vehicle_capacity.sql", "__vehicle_seat_quality.sql");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
