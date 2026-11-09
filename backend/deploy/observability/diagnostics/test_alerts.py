@@ -16,6 +16,8 @@ LABELS = {'job': 'salmonbus/worker', 'route_id': '1', 'route_name': '3330'}
 COLLECTION = 'salmonbus-diag-collection-age'
 SEAT_QUALITY = 'salmonbus-diag-seat-quality'
 FORECAST = 'salmonbus-diag-forecast-pending'
+COLLECTION_FAILURE = 'salmonbus-diag-collection-failure'
+COLLECTION_RECOVERY = 'salmonbus-diag-collection-recovery'
 
 
 def series(metric, values, per_route=True):
@@ -43,8 +45,9 @@ def check(uid, minute, firing=False):
 
 
 def run(promtool):
-    selected = [r for r in rules if r['rule_uid'] in (COLLECTION, FORECAST, SEAT_QUALITY)]
-    assert len(selected) == 3 and all(r['is_paused'] for r in rules)
+    selected = [r for r in rules if r['rule_uid'] in
+                (COLLECTION, FORECAST, SEAT_QUALITY, COLLECTION_FAILURE, COLLECTION_RECOVERY)]
+    assert len(selected) == 5 and all(r['is_paused'] for r in rules)
     # Prevent stale generated configuration from diverging from tested expressions.
     saved = json.loads((Path(__file__).parent/'alert-rules.paused.json').read_text())
     assert saved == rules
@@ -93,6 +96,20 @@ def run(promtool):
             {'eval_time': '6m', 'alertname': SEAT_QUALITY, 'exp_alerts': []},
         ],
     })
+    for uid, metric, severity in [
+        (COLLECTION_FAILURE, 'salmonbus_collection_failure_last_timestamp', 'critical'),
+        (COLLECTION_RECOVERY, 'salmonbus_collection_recovery_last_timestamp', 'warning'),
+    ]:
+        labels = {'service': 'salmonbus', 'severity': severity}
+        tests.append({
+            'name': f'{uid}: a single event fires and resolves five minutes later',
+            'input_series': [series(metric, '0+0x5 360+0x10', False)],
+            'alert_rule_test': [
+                {'eval_time': f'{minute}m', 'alertname': uid,
+                 'exp_alerts': [{'exp_labels': labels, 'exp_annotations': {}}] if firing else []}
+                for minute, firing in [(5, False), (6, True), (10, True), (11, False)]
+            ],
+        })
     for test in tests:
         test['interval'] = '1m'
     with tempfile.TemporaryDirectory(prefix='salmonbus-alert-test-') as directory:

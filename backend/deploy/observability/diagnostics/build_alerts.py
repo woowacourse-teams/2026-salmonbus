@@ -57,7 +57,23 @@ rule('salmonbus-diag-seat-quality','좌석 관측값 격리',f'{seat_quality} > 
      'vehicle_observation의 reported_remaining_seats와 차종 및 차량별 확인 상한을 비교하세요. '
      '마지막 격리 5분 후 자동 복구되며, GBIS 오류 해결을 의미하지 않습니다.',severity='warning')
 rules[-1]['labels'].pop('prepared_by')
-panel_ids={'salmonbus-diag-api-5xx':'2','salmonbus-diag-collection-age':'39','salmonbus-diag-forecast-pending':'40','salmonbus-diag-monitoring':'44','salmonbus-diag-seat-quality':'49'}
+collection_failure=f'max(salmonbus_collection_failure_last_timestamp{base})'
+rule('salmonbus-diag-collection-failure','수집 또는 미완료 종료 실패',f'{collection_failure} > (time() - 300)',0,'0s',
+     '[긴급] 수집 또는 미완료 상태 정리에 실패했습니다',
+     '최근 5분에 수집 또는 미완료 회수 예외가 발생했습니다. collection_attempt의 routeId, batchId, stage, reason, '
+     'sqlState를 확인하세요. 53100은 DB 파일 공간, 23503은 노선·정류장 참조를 확인합니다. '
+     'collection_batch_close_failed가 있으면 즉시 종료도 실패한 것입니다. '
+     '정상 수집이 이어져도 1건의 내부 예외를 감지하며, 5분간 새 예외가 없어 알림이 복구돼도 원인 해결로 단정하지 않습니다.')
+rules[-1]['labels'].pop('prepared_by')
+collection_recovery=f'max(salmonbus_collection_recovery_last_timestamp{base})'
+rule('salmonbus-diag-collection-recovery','이전 회차 미완료 수집 종료',f'{collection_recovery} > (time() - 300)',0,'0s',
+     '[확인 필요] 이전 회차의 미완료 수집 기록을 종료했습니다',
+     'Worker가 새 수집 회차 시작 전에 이전 회차의 미완료를 최대 100건씩 종료했습니다. collection_batch_recovery의 count와 batchIds로 '
+     '원래 수집 실패 로그와 배포·재시작 시각을 대조하세요. 배치 기록·시각·관측은 삭제하지 않으며, '
+     '과거 요청을 다시 보내지 않습니다. 최근 5분에 추가 회수가 없으면 알림이 복구됩니다.',severity='warning')
+rules[-1]['labels'].pop('prepared_by')
+panel_ids={'salmonbus-diag-api-5xx':'2','salmonbus-diag-collection-age':'39','salmonbus-diag-forecast-pending':'40','salmonbus-diag-monitoring':'44','salmonbus-diag-seat-quality':'49',
+           'salmonbus-diag-collection-failure':'52','salmonbus-diag-collection-recovery':'53'}
 for r in rules: r['annotations']['__panelId__']=panel_ids[r['rule_uid']]
 if __name__ == '__main__':
     (ROOT/'alert-rules.paused.json').write_text(json.dumps(rules,ensure_ascii=False,indent=2)+'\n')
