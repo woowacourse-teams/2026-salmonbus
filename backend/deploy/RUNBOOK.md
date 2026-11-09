@@ -470,24 +470,44 @@ DELETE FROM refresh_token WHERE member_id = (SELECT id FROM member WHERE public_
 
 사용자는 스스로 `DELETE /api/me/sessions`로 다른 기기의 세션까지 끊을 수 있다.
 
-## 평가 이관과 원본 삭제
+## 운영 원본 이관
 
-worker 유닛이 `FORECAST_ARCHIVE_ENABLED=true`·`FORECAST_ARCHIVE_DELETE_ENABLED=true`로 켠다.
-검증을 마친 완료 정산을 S3 `techcourse-project-2026` 버킷의 `salmonbus-be/evaluation-archive/v1/` 아래에 올리고, 다시 내려받아 대조한 뒤 DB 원본을 지운다.
-**이 경로에는 환경 구분이 없다.** dev와 운영이 같은 접두어를 쓴다.
+Worker의 정산 단독 S3 이관은 제거했다. `archive-app`은 수집·예보와 별도 프로세스다.
+새 스키마 migration을 API에서 적용하기 전 구 Worker 이관/복원 작업과 수요 재구축을 종료한다.
+V53은 미완료 구 이관/재구축을 발견하면 전환을 거부한다. 기존 S3 파일은 지우지 않는다.
 
-켜 두기 전에 확인할 것:
+`deploy/package-archive-revision.sh`가 별도 JAR·unit과 소스/아티팩트 지문을 만든다.
+운영 환경을 `/etc/salmonbus/archive.env`에 설정하고 동일 환경의 새 prefix만 사용한다.
+`archive.env.example`은 값 목록이며 실사용 비밀 파일이 아니다.
+프로세스는 `/opt/salmonbus/archive/current/jars/archive-app.jar`에서 실행한다.
+unit의 256MiB heap/384MiB MemoryMax/CPUQuota=50%는 초기 제한값으로 서버 여유에 맞게 확인한다.
+DB 연결은 최대 1개이며 nice만으로 자원 격리가 된다고 보지 않는다.
 
-- 인스턴스 역할에 이 접두어의 `s3:PutObject`·`s3:GetObject` 권한이 있다
-- 버킷 수명 주기 규칙이 이 접두어의 객체를 지우지 않는다. 지우면 DB 원본을 삭제한 뒤 복구할 곳이 없다
+처음에는 ARCHIVE_ENABLED=true, ARCHIVE_DELETE_ENABLED=false로 보관·재읽기를 검증한다.
+검증된 과거 범위만 지울 때 delete-enabled를 활성화한다.
+먼저 실제 pg_indexes를 확인하고 누락된 삭제 FK 인덱스만
+`deploy/sql/prepare-operational-archive-indexes.sql`로 한 개씩 준비한다.
+큰 테이블 index는 추가 공간과 I/O를 쓰므로 여유를 확인하기 전 자동 실행하지 않는다.
+인덱스가 없으면 새 앱은 보관은 수행하되 원본 삭제를 거부한다. KST 오늘·어제는 보존한다.
+미완료 정산/통계 노선은 로그에 보류 사유를 남기고 다른 노선으로 진행한다.
+삭제 전에 기존 누적값·모델 입력 동등성과 과거 정원 이력 인계를 확인해야 한다.
 
-끄려면 `worker.env`에 줄을 넣고 재시작한다. `worker.env`는 유닛의 `Environment=`보다 뒤에 읽혀 값을 덮는다.
-삭제만 끄면 이관은 계속하고 DB 원본은 남긴다.
+전환 기준은 Git 머지 시각이 아니라 구 Worker 이관 중지와 새 버전 배포 완료 시점이다.
+이후 archive-app은 새 prefix만 읽고 쓴다. 옛 S3 다운로드/변환/합치기는 운영 코드에 없다.
+DB에 남은 과거 원본도 기존 완료 판정에 따라 새 prefix로 이관한다. 배포 후 생성 행만으로 제한하지 않는다.
+기존 S3 파일은 배포 뒤 별도 일회성 수동 이관으로 처리한다. 구 writer 중지를 확인한 뒤
+대상 key/version/크기/해시 목록을 고정하고, 새 형식과 경로에 보관해 행 수·키·값·해시를 대조한다.
+기존 정산과 새 관측·예보는 원본 ID/대상 정류장 키로 연결하고, 중복 데이터는 키·해시로 검증한다.
+수동 작업의 완료·검증 전 기존 S3 객체나 archive_legacy_batch의 인계 메타데이터를 지우지 않는다.
+옛 멤버 행은 DB 원본과 함께 먼저 새 S3 원본 파일에 보관되므로 DB에서 삭제돼도 인계 근거는 남는다.
+기존 객체 삭제는 수동 인계 검증·읽기 전환 뒤 정확한 객체 목록으로 별도 수행한다.
+새 파일은 원본 JSONL gzip과 manifest다. 분석 Parquet는 이후 검증 원본에서 만든다.
+운영 과거 재발행·DB 복원은 중지하고 S3 기반 오프라인 작업으로 분리한다.
 
-```bash
-echo 'FORECAST_ARCHIVE_DELETE_ENABLED=false' | sudo tee -a /etc/salmonbus/worker.env >/dev/null   # 이관도 끄려면 FORECAST_ARCHIVE_ENABLED=false
-sudo systemctl restart salmonbus-worker
-```
+지표는 `event=operational_archive`의 VERIFIED_FILE/DONE/DEFERRED/FAILED와
+salmonbus_archive_rows/bytes/stage meter다. 현재 비웹 앱이므로 meter의 외부 수집은
+실행 환경에서 별도 연결해야 하며 구조화 로그는 기존 journal/Loki에서 읽는다.
+삭제는 DB 내부 재사용을 늘리며 RDS 여유 파일 공간의 즉시 축소를 보장하지 않는다.
 
 ## 인증 정보를 출력하지 않고 확인하기
 

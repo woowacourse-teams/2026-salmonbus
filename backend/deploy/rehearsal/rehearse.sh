@@ -265,12 +265,8 @@ make_revision worker WORKERv1 aaaaaaa1111 99998888777766665555444433332222111100
 deploy api
 deploy worker
 
-[ "$(stat -c '%a:%U' /var/lib/salmonbus/evaluation-archive)" = "700:salmonbus" ] \
-  && ok "이관 임시 디렉터리는 worker 사용자만 접근한다" || bad "이관 디렉터리 권한이 다르다"
-grep -qx 'Environment=FORECAST_ARCHIVE_ENABLED=true' /etc/systemd/system/salmonbus-worker.service \
-  && ok "배포된 worker는 자동 이관을 활성화한다" || bad "자동 이관 기본값 누락"
-grep -qx 'Environment=FORECAST_ARCHIVE_DELETE_ENABLED=true' /etc/systemd/system/salmonbus-worker.service \
-  && ok "배포된 worker는 검증 후 삭제를 활성화한다" || bad "검증 후 삭제 기본값 누락"
+! grep -q 'FORECAST_ARCHIVE_' /etc/systemd/system/salmonbus-worker.service \
+  && ok "Worker는 레거시 이관을 실행하지 않는다" || bad "Worker 이관 설정이 남았다"
 [ "$(readlink -f /opt/salmonbus/api/current)" = "/opt/salmonbus/api/releases/1111aaaa2222bbbb3333cccc4444dddd5555eeee6666ffff7777000088889999" ] \
   && ok "api current 가 소스 지문으로 이름 붙은 배포 버전을 가리킨다" || bad "api current=$(readlink -f /opt/salmonbus/api/current 2>/dev/null)"
 grep -qx salmonbus-api /work/running && grep -qx salmonbus-worker /work/running \
