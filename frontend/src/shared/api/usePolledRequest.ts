@@ -6,14 +6,23 @@ import { nextResourceFrom, IDLE_RESOURCE, PENDING_RESOURCE, type PolledResource 
 
 interface PolledState<T> {
   key: string;
+  revision: string | number;
   resource: PolledResource<T>;
+  requestState: PolledRequestState;
+}
+
+export type PolledRequestState = "idle" | "loading" | "scheduled" | "stopped";
+
+export interface PolledRequest<T> {
+  resource: PolledResource<T>;
+  requestState: PolledRequestState;
 }
 
 export function usePolledRequest<T>(
   request: (key: string, signal: AbortSignal) => Promise<ApiResult<T>>,
   key: string | null,
   revision: string | number = 0,
-): PolledResource<T> {
+): PolledRequest<T> {
   const [state, setState] = useState<PolledState<T> | null>(null);
   const requestResource = useEffectEvent(request);
 
@@ -34,19 +43,28 @@ export function usePolledRequest<T>(
     const load = () => {
       clearTimer();
       const ticket = gate.issue();
+      setState((previous) => ({
+        key,
+        revision,
+        resource: previous?.key === key ? previous.resource : PENDING_RESOURCE,
+        requestState: "loading",
+      }));
       void requestResource(key, ticket.signal).then((result) => {
         if (disposed || !ticket.isLatest()) {
           return;
         }
 
         const receivedAt = Date.now();
+        const decision = nextPollFrom(result);
+        const scheduled = decision.kind === "again" && document.visibilityState === "visible";
         setState((previous) => ({
           key,
+          revision,
           resource: nextResourceFrom(previous?.key === key ? previous.resource : PENDING_RESOURCE, result, receivedAt),
+          requestState: scheduled ? "scheduled" : "stopped",
         }));
 
-        const decision = nextPollFrom(result);
-        if (decision.kind === "again" && document.visibilityState === "visible") {
+        if (scheduled && decision.kind === "again") {
           timer = window.setTimeout(load, decision.delayMs);
         }
       });
@@ -57,6 +75,11 @@ export function usePolledRequest<T>(
         load();
       } else {
         clearTimer();
+        setState((previous) =>
+          previous?.key === key && previous.requestState === "scheduled"
+            ? { key, revision, resource: previous.resource, requestState: "stopped" }
+            : previous,
+        );
       }
     };
 
@@ -81,6 +104,14 @@ export function usePolledRequest<T>(
     };
   }, [key, revision]);
 
-  if (key === null) return IDLE_RESOURCE;
-  return state?.key === key ? state.resource : PENDING_RESOURCE;
+  if (key === null) return { resource: IDLE_RESOURCE, requestState: "idle" };
+  return {
+    resource: state?.key === key ? state.resource : PENDING_RESOURCE,
+    requestState:
+      state?.key === key && state.revision === revision
+        ? state.requestState
+        : document.visibilityState === "visible"
+          ? "loading"
+          : "stopped",
+  };
 }

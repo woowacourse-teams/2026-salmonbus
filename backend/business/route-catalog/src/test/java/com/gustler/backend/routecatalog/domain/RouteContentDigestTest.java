@@ -39,7 +39,7 @@ class RouteContentDigestTest {
     }
 
     @Test
-    void 정류소_이름이_바뀌면_다른_해시가_나온다() {
+    void 정류소_이름만_바뀌면_같은_해시가_나온다() {
         // given
         RouteStops renamed = RouteStops.from(TURN_SEQUENCE, List.of(
             new UpstreamRouteStop(1, STOP_205000217, BEOMGYE_STOP_NAME),
@@ -49,6 +49,38 @@ class RouteContentDigestTest {
 
         // when
         RouteContentDigest actual = RouteContentDigest.of(renamed);
+
+        // then
+        assertThat(actual).isEqualTo(RouteContentDigest.of(threeStops()));
+    }
+
+    @Test
+    void 정류소_목록의_순서가_뒤섞여도_같은_해시가_나온다() {
+        // given
+        RouteStops shuffled = RouteStops.from(TURN_SEQUENCE, List.of(
+            new UpstreamRouteStop(3, STOP_205000217, BEOMGYE_STOP_NAME),
+            new UpstreamRouteStop(1, STOP_205000217, BEOMGYE_STOP_NAME),
+            new UpstreamRouteStop(2, STOP_208000069, ANYANG_STOP_NAME)
+        ));
+
+        // when
+        RouteContentDigest actual = RouteContentDigest.of(shuffled);
+
+        // then
+        assertThat(actual).isEqualTo(RouteContentDigest.of(threeStops()));
+    }
+
+    @Test
+    void 정류소_ID가_바뀌면_다른_해시가_나온다() {
+        // given
+        RouteStops replaced = RouteStops.from(TURN_SEQUENCE, List.of(
+            new UpstreamRouteStop(1, STOP_205000217, BEOMGYE_STOP_NAME),
+            new UpstreamRouteStop(2, "208000070", ANYANG_STOP_NAME),
+            new UpstreamRouteStop(3, STOP_205000217, BEOMGYE_STOP_NAME)
+        ));
+
+        // when
+        RouteContentDigest actual = RouteContentDigest.of(replaced);
 
         // then
         assertThat(actual).isNotEqualTo(RouteContentDigest.of(threeStops()));
@@ -80,16 +112,16 @@ class RouteContentDigestTest {
     }
 
     @Test
-    void 정류소_이름에_구분자가_섞여도_정류소가_하나인_노선과_둘인_노선은_해시가_다르다() {
+    void 정류소_ID에_구분자가_섞여도_정류소가_하나인_노선과_둘인_노선은_해시가_다르다() {
         // given
-        RouteStops oneStopWithSeparatorInName = RouteStops.from(1, List.of(
-            new UpstreamRouteStop(1, STOP_205000217, "범계역\n2|208000069|안양역")));
+        RouteStops oneStopWithSeparatorInId = RouteStops.from(1, List.of(
+            new UpstreamRouteStop(1, STOP_205000217 + "\n2|208000069", BEOMGYE_STOP_NAME)));
         RouteStops twoStops = RouteStops.from(1, List.of(
             new UpstreamRouteStop(1, STOP_205000217, BEOMGYE_STOP_NAME),
             new UpstreamRouteStop(2, STOP_208000069, ANYANG_STOP_NAME)));
 
         // when
-        RouteContentDigest actual = RouteContentDigest.of(oneStopWithSeparatorInName);
+        RouteContentDigest actual = RouteContentDigest.of(oneStopWithSeparatorInId);
 
         // then
         assertThat(actual).isNotEqualTo(RouteContentDigest.of(twoStops));

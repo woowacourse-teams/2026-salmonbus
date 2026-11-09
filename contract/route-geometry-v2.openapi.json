@@ -32,6 +32,16 @@
             "description": "생략하면 현재 판본. 지정한 판본이 현재와 다르면 409이므로 판본 없이 geometry를 다시 조회한다. 과거 판본 조회가 아니다. 양의 64비트 정수 문자열."
           },
           {
+            "name": "includeDiagnostics",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "진단 전용 원본/표시 경로·품질·근거 메타 포함. 기본 false이며 일반 지도 구현에는 불필요"
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -43,7 +53,7 @@
         ],
         "responses": {
           "200": {
-            "description": "READY: 형상과 모든 정류장 좌표. PARTIAL: 형상은 있고 일부 point=null. UNAVAILABLE/NOT_COLLECTED: 현재 판본 형상 미수집. READY여도 paths=null 가능. 예시는 합성 자료.",
+            "description": "READY: 형상과 모든 정류장 좌표. PARTIAL: 형상은 있고 일부 point=null. UNAVAILABLE/NOT_COLLECTED: 현재 판본 형상 미수집. GENERATION_PENDING: 생성 대기. DISPLAY_WITHHELD: 최종 표시 보류. READY여도 paths=null 가능. 예시는 합성 자료.",
             "headers": {
               "ETag": {
                 "schema": {
@@ -94,6 +104,14 @@
                           "point": {
                             "x": 127,
                             "y": 37
+                          },
+                          "pathConnection": {
+                            "point": {
+                              "x": 127,
+                              "y": 37
+                            },
+                            "segmentIndex": 0,
+                            "segmentFraction": 0
                           }
                         },
                         {
@@ -105,6 +123,14 @@
                           "point": {
                             "x": 127.2,
                             "y": 37.1
+                          },
+                          "pathConnection": {
+                            "point": {
+                              "x": 127.2,
+                              "y": 37.1
+                            },
+                            "segmentIndex": 1,
+                            "segmentFraction": 1
                           }
                         },
                         {
@@ -116,6 +142,14 @@
                           "point": {
                             "x": 127,
                             "y": 37
+                          },
+                          "pathConnection": {
+                            "point": {
+                              "x": 127,
+                              "y": 37
+                            },
+                            "segmentIndex": 0,
+                            "segmentFraction": 1
                           }
                         }
                       ],
@@ -388,6 +422,309 @@
                       }
                     },
                     "description": "합성 예시. READY가 paths의 존재를 보장하지 않습니다. paths=null이면 전체 points를 표시합니다."
+                  },
+                  "displayWithheld": {
+                    "summary": "UNAVAILABLE: 표시 보류",
+                    "description": "합성 예시. 기본 응답에서 표시 검증을 통과하지 못한 선과 연결을 제거하며 원본 정류장 GPS는 보존합니다.",
+                    "value": {
+                      "routeId": "204000057",
+                      "referenceVersionId": "7",
+                      "geometryRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                      "name": "3330",
+                      "startPoint": "합성 기점 A",
+                      "endPoint": "합성 회차 B",
+                      "status": "UNAVAILABLE",
+                      "reason": "DISPLAY_WITHHELD",
+                      "coordinateSystem": "WGS84_ASSUMED",
+                      "turningPoint": {
+                        "stopSequence": 2
+                      },
+                      "busStops": [
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 1,
+                          "name": "합성 A",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        },
+                        {
+                          "stationId": "206000638",
+                          "stopSequence": 2,
+                          "name": "합성 B",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127.2,
+                            "y": 37.1
+                          }
+                        },
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 3,
+                          "name": "합성 A",
+                          "direction": "DOWN",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        }
+                      ],
+                      "points": [],
+                      "paths": null,
+                      "boundary": {
+                        "left": 127,
+                        "top": 37.1,
+                        "right": 127.2,
+                        "bottom": 37
+                      }
+                    }
+                  },
+                  "diagnostic": {
+                    "summary": "includeDiagnostics=true: 원본과 표시 자료 분리",
+                    "description": "합성 예시. 진단 요청에만 표시 경로·품질·근거·정확도를 추가합니다. 일반 지도는 기본 paths를 사용합니다.",
+                    "value": {
+                      "routeId": "204000057",
+                      "referenceVersionId": "7",
+                      "geometryRevision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                      "name": "3330",
+                      "startPoint": "합성 기점 A",
+                      "endPoint": "합성 회차 B",
+                      "status": "READY",
+                      "reason": null,
+                      "coordinateSystem": "WGS84_ASSUMED",
+                      "turningPoint": {
+                        "stopSequence": 2
+                      },
+                      "busStops": [
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 1,
+                          "name": "합성 A",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          },
+                          "pathConnection": {
+                            "point": {
+                              "x": 127,
+                              "y": 37
+                            },
+                            "segmentIndex": 0,
+                            "segmentFraction": 0
+                          }
+                        },
+                        {
+                          "stationId": "206000638",
+                          "stopSequence": 2,
+                          "name": "합성 B",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127.2,
+                            "y": 37.1
+                          },
+                          "pathConnection": {
+                            "point": {
+                              "x": 127.2,
+                              "y": 37.1
+                            },
+                            "segmentIndex": 1,
+                            "segmentFraction": 1
+                          }
+                        },
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 3,
+                          "name": "합성 A",
+                          "direction": "DOWN",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          },
+                          "pathConnection": {
+                            "point": {
+                              "x": 127,
+                              "y": 37
+                            },
+                            "segmentIndex": 0,
+                            "segmentFraction": 1
+                          }
+                        }
+                      ],
+                      "points": [
+                        {
+                          "x": 127,
+                          "y": 37
+                        },
+                        {
+                          "x": 127.1,
+                          "y": 37.05
+                        },
+                        {
+                          "x": 127.2,
+                          "y": 37.1
+                        },
+                        {
+                          "x": 127,
+                          "y": 37
+                        }
+                      ],
+                      "paths": {
+                        "UP": {
+                          "points": [
+                            {
+                              "x": 127,
+                              "y": 37
+                            },
+                            {
+                              "x": 127.1,
+                              "y": 37.05
+                            },
+                            {
+                              "x": 127.2,
+                              "y": 37.1
+                            }
+                          ]
+                        },
+                        "DOWN": {
+                          "points": [
+                            {
+                              "x": 127.2,
+                              "y": 37.1
+                            },
+                            {
+                              "x": 127,
+                              "y": 37
+                            }
+                          ]
+                        }
+                      },
+                      "boundary": {
+                        "left": 127,
+                        "top": 37.1,
+                        "right": 127.2,
+                        "bottom": 37
+                      },
+                      "displayPaths": {
+                        "UP": {
+                          "points": [
+                            {
+                              "x": 127,
+                              "y": 37
+                            },
+                            {
+                              "x": 127.1,
+                              "y": 37.05
+                            },
+                            {
+                              "x": 127.2,
+                              "y": 37.1
+                            }
+                          ]
+                        },
+                        "DOWN": {
+                          "points": [
+                            {
+                              "x": 127.2,
+                              "y": 37.1
+                            },
+                            {
+                              "x": 127,
+                              "y": 37
+                            }
+                          ]
+                        }
+                      },
+                      "displaySource": "AUTOMATIC_FALLBACK",
+                      "displayEvidence": [
+                        {
+                          "id": "GBIS_WEB",
+                          "status": "AVAILABLE",
+                          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        }
+                      ],
+                      "displayQuality": {
+                        "status": "REVIEW_REQUIRED",
+                        "issues": [
+                          {
+                            "code": "STOP_CONNECTION_GAP_REVIEW",
+                            "direction": "UP",
+                            "sequence": 1,
+                            "meters": 20.0
+                          }
+                        ]
+                      },
+                      "displayAccuracyGrade": "UNEVALUATED"
+                    }
+                  },
+                  "generationPending": {
+                    "summary": "UNAVAILABLE: 표시 산출물 생성 대기",
+                    "description": "합성 예시. 원본·개선 중 실행 가능한 작업이 남아 있어 재조회해야 합니다. 선·연결은 없고 원본 정류장 GPS는 보존합니다.",
+                    "value": {
+                      "routeId": "204000057",
+                      "referenceVersionId": "7",
+                      "geometryRevision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "name": "3330",
+                      "startPoint": "합성 기점 A",
+                      "endPoint": "합성 회차 B",
+                      "status": "UNAVAILABLE",
+                      "reason": "GENERATION_PENDING",
+                      "coordinateSystem": "WGS84_ASSUMED",
+                      "turningPoint": {
+                        "stopSequence": 2
+                      },
+                      "busStops": [
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 1,
+                          "name": "합성 A",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        },
+                        {
+                          "stationId": "206000638",
+                          "stopSequence": 2,
+                          "name": "합성 B",
+                          "direction": "UP",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127.2,
+                            "y": 37.1
+                          }
+                        },
+                        {
+                          "stationId": "206000637",
+                          "stopSequence": 3,
+                          "name": "합성 A",
+                          "direction": "DOWN",
+                          "boardingAllowed": true,
+                          "point": {
+                            "x": 127,
+                            "y": 37
+                          }
+                        }
+                      ],
+                      "points": [],
+                      "paths": null,
+                      "boundary": {
+                        "left": 127,
+                        "top": 37.1,
+                        "right": 127.2,
+                        "bottom": 37
+                      }
+                    }
                   }
                 }
               }
@@ -487,7 +824,7 @@
             }
           }
         },
-        "description": "노선 목록에서 선택한 routeId로 한 번 조회합니다. `points`는 원본 운행 순서의 전체 도로 형상이고,\n`busStops[].point`는 정류장 마커 좌표입니다. 정류장 좌표를 이어 도로 형상을 만들지 않습니다.\n같은 stationId의 반복 방문은 `stopSequence`로 구분합니다. `turningPoint.stopSequence`도 방문 순번이며 형상 배열 인덱스가 아닙니다.\n\n`paths`가 있으면 `UP.points`와 `DOWN.points`를 함께 사용합니다. 두 경로는 회차 경계점을 공유하며,\n하행을 상행의 역순으로 만들지 않습니다. 방문 순서와 회차를 형상에 대응할 근거가 부족하거나 모호하면\nREADY여도 `paths=null`일 수 있으므로 전체 `points`를 표시합니다. 방향 선택·색상·겹침 순서는 프론트에서 처리하고,\n방향 전환이나 지도 확대·이동마다 재조회하지 않습니다.\n\nREADY는 도로 형상과 모든 정류장 좌표 제공, PARTIAL은 도로 형상을 유지하되 일부 정류장의 `point=null`인 상태입니다.\nUNAVAILABLE/NOT_COLLECTED는 현재 판본의 형상 미수집으로 `points=[]`, `paths=null`이며, 정류장 좌표가 있으면 마커만 표시할 수 있습니다.\ndev 공급 자료는 현재 41노선의 정류장 방문 3,215건과 형상점 35,542개를 포함한 GBIS 정적 재생 자료입니다.\n8노선은 기존 정적 API 저장본, 33노선은 공식 공개 지도 형상입니다. 방문 건수는 고유 물리 정류장 수가 아닙니다.\n초기 수집 완료 전이나 새 카탈로그 판본으로 바뀐 직후에는 미수집 상태일 수 있으며, dev 자료가 실시간 최신성을 보장하지는 않습니다.\n\n`referenceVersionId`를 생략하면 현재 판본을 반환합니다. 지정한 판본이 현재와 다르면 409이며 판본 없이 다시 조회합니다.\n새 판본에는 이전 판본의 정류장 좌표·형상을 붙이지 않습니다. READY/PARTIAL은 최대 5분 캐시와 ETag 재검증을 지원하며,\n같은 ETag에는 본문 없는 304를 반환합니다. UNAVAILABLE과 오류는 no-store이고, 저장소·저장 형상을 읽을 수 없으면 503입니다.\n조회는 외부 수집을 유발하지 않으며 모델·차량 관측의 준비 상태와 독립적입니다.\n"
+        "description": "노선 목록에서 선택한 routeId로 조회하고, 같은 화면에서도 형상 생성 완료·판본 변경을 재검증합니다. `points`는 원본 운행 순서의 전체 도로 형상이고,\n`busStops[].point`는 정류장 마커 좌표입니다. 정류장 좌표를 이어 도로 형상을 만들지 않습니다.\n같은 stationId의 반복 방문은 `stopSequence`로 구분합니다. `turningPoint.stopSequence`도 방문 순번이며 형상 배열 인덱스가 아닙니다.\n\n기본 응답은 기존 14개 루트 필드와 정류장의 기존 6개 필드에 선택적 `pathConnection`만 더합니다.\n`paths`는 서버가 한 묶음으로 검증하고 선택한 최종 표시 경로입니다. `pathConnection`의 segmentIndex/segmentFraction은 해당 방문 direction의 `paths` 기준이며 좌표를 재투영하지 않습니다.\n`points`와 `busStops[].point`는 원본을 보존합니다. `includeDiagnostics=true`일 때만 `displayPaths`·출처·근거·품질·정확도 및 정류장 `displayPoint`를 추가하고, 그때의 `paths`는 원본 방향 경로입니다. 진단 모드의 연결은 `displayPaths` 기준입니다.\n기본/진단 응답의 geometryRevision과 ETag는 서로 다른 namespace를 사용하여 모드 간 304 재사용을 방지합니다.\n\n`paths`가 있으면 `UP.points`와 `DOWN.points`를 함께 사용합니다. 두 경로는 회차 경계점을 공유하며,\n하행을 상행의 역순으로 만들지 않습니다. 방문 순서와 회차를 형상에 대응할 근거가 부족하거나 모호하면\nREADY여도 `paths=null`일 수 있으므로 전체 `points`를 표시합니다. 방향 선택·색상·겹침 순서는 프론트에서 처리하고,\n방향 전환이나 지도 확대·이동마다 재조회하지 않습니다.\n\nREADY는 도로 형상과 모든 정류장 좌표 제공, PARTIAL은 도로 형상을 유지하되 일부 정류장의 `point=null`인 상태입니다.\n자동 형상의 최초 개선 시도가 아직 끝나지 않았으면 원본 검증이 먼저 끝났어도 UNAVAILABLE/GENERATION_PENDING입니다. 첫 시도 후 일시 오류로 재시도 중이거나 개선 결과를 사용할 수 없을 때는 유효한 현재 원본 대체를 제공합니다. 사용할 결과가 없고 생성 또는 자료 복구가 진행 가능하면 GENERATION_PENDING, 모두 종료됐거나 입력·선택 묶음이 무효이면 DISPLAY_WITHHELD입니다. 기본 응답의 두 UNAVAILABLE 상태는 `points=[]`, `paths=null`, 연결점 생략이며 원본 정류장 GPS는 유지합니다.\nUNAVAILABLE/NOT_COLLECTED는 현재 판본의 형상 미수집으로 `points=[]`, `paths=null`이며, 정류장 좌표가 있으면 마커만 표시할 수 있습니다.\ndev 공급 자료는 현재 41노선의 정류장 방문 3,215건과 형상점 35,542개를 포함한 GBIS 정적 재생 자료입니다.\n8노선은 기존 정적 API 저장본, 33노선은 공식 공개 지도 형상입니다. 방문 건수는 고유 물리 정류장 수가 아닙니다.\n초기 수집 완료 전이나 새 카탈로그 판본으로 바뀐 직후에는 미수집 상태일 수 있으며, dev 자료가 실시간 최신성을 보장하지는 않습니다.\n\n`referenceVersionId`를 생략하면 현재 판본을 반환합니다. 지정한 판본이 현재와 다르면 409이며 판본 없이 다시 조회합니다.\n새 판본에는 이전 판본의 정류장 좌표·형상을 붙이지 않습니다. READY/PARTIAL은 최대 5분 캐시와 ETag 재검증을 지원하며,\n같은 ETag에는 본문 없는 304를 반환합니다. UNAVAILABLE과 오류는 no-store이고, 저장소·저장 형상을 읽을 수 없으면 503입니다.\n조회는 외부 수집을 유발하지 않으며 모델·차량 관측의 준비 상태와 독립적입니다.\n"
       }
     }
   },
@@ -564,6 +901,28 @@
               }
             ],
             "description": "정류장 마커 좌표(x=경도,y=위도). 미제공·유효하지 않은 좌표이면 null로 유지하고 마커를 생략한다. 도로 형상 points와 별개다."
+          },
+          "displayPoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "includeDiagnostics=true 전용. 원본 point는 변경하지 않는다."
+          },
+          "pathConnection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathConnection"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "선택된 최종 경로의 방문별 연결. 기본 paths의 해당 direction 선분 기준이며 includeDiagnostics=true에서는 displayPaths 기준. 유효한 연결이 없으면 속성 생략. stationId가 아닌 stopSequence로 반복 방문을 구분한다."
           }
         },
         "additionalProperties": false
@@ -638,7 +997,7 @@
           "geometryRevision": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$",
-            "description": "형상·정류장 자료와 방향 분리 규칙을 반영한 캐시 판본. referenceVersionId가 같아도 좌표가 바뀌면 변경."
+            "description": "응답 형식별 캐시 판본. 기본 mapcompact/진단 namespace가 달라 같은 입력이어도 ETag를 교차 재사용하지 않는다."
           },
           "name": {
             "type": "string"
@@ -656,7 +1015,7 @@
               "PARTIAL",
               "UNAVAILABLE"
             ],
-            "description": "READY=형상과 모든 정류장 좌표, PARTIAL=형상은 있고 일부 정류장 point=null, UNAVAILABLE=현재 판본 형상 미수집. READY여도 paths=null 가능."
+            "description": "READY=형상과 모든 정류장 좌표, PARTIAL=형상은 있고 일부 정류장 point=null, UNAVAILABLE=현재 판본 형상 미수집·생성 대기·최종 표시 보류. READY여도 paths=null 가능"
           },
           "reason": {
             "type": [
@@ -666,9 +1025,11 @@
             "enum": [
               null,
               "NOT_COLLECTED",
-              "MISSING_STOP_COORDINATES"
+              "MISSING_STOP_COORDINATES",
+              "GENERATION_PENDING",
+              "DISPLAY_WITHHELD"
             ],
-            "description": "READY이면 null. NOT_COLLECTED=현재 판본 형상 미수집, MISSING_STOP_COORDINATES=일부 정류장 좌표 누락."
+            "description": "READY이면 null. NOT_COLLECTED=현재 판본 형상 미수집, MISSING_STOP_COORDINATES=일부 정류장 좌표 누락, GENERATION_PENDING=표시 산출물 생성 대기, DISPLAY_WITHHELD=표시 묶음의 최종 보류"
           },
           "coordinateSystem": {
             "type": "string",
@@ -697,7 +1058,7 @@
             "items": {
               "$ref": "#/components/schemas/Point"
             },
-            "description": "원본 운행 순서의 전체 도로 형상. 정류장 마커와 별도 자료이며 정류장 직선으로 대체하지 않는다. 미수집이면 빈 배열, paths=null이어도 형상은 유지한다."
+            "description": "원본 운행 순서의 전체 도로 형상. 정류장 마커와 별도 자료이며 정류장 직선으로 대체하지 않음. 미수집이면 빈 배열, paths=null이어도 형상은 유지. GENERATION_PENDING 또는 DISPLAY_WITHHELD이면 빈 배열"
           },
           "paths": {
             "anyOf": [
@@ -708,7 +1069,7 @@
                 "type": "null"
               }
             ],
-            "description": "분리 근거가 확인되면 UP/DOWN을 함께 제공한다. 회차·방문 순서 대응이 부족하거나 모호하면 READY여도 null이며 전체 points는 유지한다. 방향 선택에 재조회가 필요하지 않다."
+            "description": "서버가 검증하고 선택한 최종 표시 UP/DOWN을 함께 제공. 회차·방문 순서 대응이 부족하거나 모호하면 READY여도 null이며 전체 points는 유지. GENERATION_PENDING 또는 DISPLAY_WITHHELD이면 null. 방향 선택에 재조회 불필요. includeDiagnostics=true에서는 원본 방향 경로"
           },
           "boundary": {
             "anyOf": [
@@ -719,6 +1080,80 @@
                 "type": "null"
               }
             ]
+          },
+          "displayPaths": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoutePaths"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "includeDiagnostics=true 전용. 현재 원본에 맞는 선택된 표시 경로. 원본 paths 보존"
+          },
+          "displaySource": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "MANUAL_REVIEWED",
+              "AUTOMATIC_FALLBACK",
+              null
+            ],
+            "description": "includeDiagnostics=true 전용. "
+          },
+          "displayEvidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "status",
+                "digest"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "digest": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "includeDiagnostics=true 전용. "
+          },
+          "displayQuality": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DisplayQuality"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "includeDiagnostics=true 전용. 자동 형상 품질 검사. WITHHELD이면 원본 경로로 우회하지 않고 정류장만 표시한다."
+          },
+          "displayAccuracyGrade": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "UNEVALUATED",
+              "ROAD_VERIFIED",
+              "LANE_VERIFIED",
+              null
+            ],
+            "description": "includeDiagnostics=true 전용. 표시 품질과 별개인 독립 도로/차로 정확도 평가 등급. ROAD_VERIFIED/LANE_VERIFIED는 향후 검증 결과를 위한 예약 값이며 현재 서버는 발급하지 않는다. 현재 수동·자동 표시 형상은 UNEVALUATED, displaySource가 null이면 null이다. 수동 입력이나 품질 검사 통과만으로 승격하지 않는다."
           }
         },
         "additionalProperties": false,
@@ -737,7 +1172,11 @@
                   "maxItems": 0
                 },
                 "reason": {
-                  "const": "NOT_COLLECTED"
+                  "enum": [
+                    "NOT_COLLECTED",
+                    "GENERATION_PENDING",
+                    "DISPLAY_WITHHELD"
+                  ]
                 },
                 "paths": {
                   "type": "null"
@@ -838,6 +1277,89 @@
         },
         "additionalProperties": false,
         "description": "기점→회차 지점과 회차 지점→복귀 경로. 두 경로는 같은 회차 경계점을 공유한다. DOWN은 UP을 뒤집어 만들지 않는다. 별도 status/reason 필드는 없다."
+      },
+      "PathConnection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "point",
+          "segmentIndex",
+          "segmentFraction"
+        ],
+        "properties": {
+          "point": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "segmentIndex": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "segmentFraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "DisplayQuality": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "issues"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "PASSED",
+              "REVIEW_REQUIRED",
+              "SOURCE_ONLY",
+              "WITHHELD"
+            ]
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DisplayQualityIssue"
+            }
+          }
+        }
+      },
+      "DisplayQualityIssue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "direction",
+          "sequence",
+          "meters"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "UP",
+              "DOWN",
+              null
+            ]
+          },
+          "sequence": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "meters": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          }
+        }
       }
     }
   },

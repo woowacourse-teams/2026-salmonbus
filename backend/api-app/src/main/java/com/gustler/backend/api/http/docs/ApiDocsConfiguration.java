@@ -35,6 +35,8 @@ public class ApiDocsConfiguration {
         "/api/v1/routes/{routeId}/vehicles",
         "/api/v2/routes/{routeId}/geometry",
         "/api/v2/stations/{stationId}/arrivals",
+        "/api/v2/stations/tiles/{zoom}/{x}/{y}",
+        "/api/v2/stations/{stationId}",
         "/api/auth/session",
         "/api/auth/refresh",
         "/api/auth/logout",
@@ -99,6 +101,47 @@ public class ApiDocsConfiguration {
             values.add(null);
             property.setEnum(values);
         }
+    }
+
+    /** Keep availability constraints equal to the shared 3.1 geometry contract. */
+    @Bean
+    OpenApiCustomizer geometryAvailability() {
+        return document -> {
+            if (document.getComponents() == null || document.getComponents().getSchemas() == null) return;
+            Schema<?> geometry = document.getComponents().getSchemas().get("RouteGeometryResponse");
+            if (geometry == null) return;
+            Schema<Object> reasons = contractSchema();
+            reasons.setEnum(List.of("NOT_COLLECTED", "GENERATION_PENDING", "DISPLAY_WITHHELD"));
+            Schema<Object> unavailable = availabilityRule("UNAVAILABLE", contractSchema()
+                    .addProperties("points", contractSchema().maxItems(0))
+                    .addProperties("reason", reasons)
+                    .addProperties("paths", nullContractSchema()));
+            unavailable.setElse(contractSchema().addProperties("points", contractSchema().minItems(2)));
+            geometry.addAllOfItem(unavailable);
+            geometry.addAllOfItem(availabilityRule("READY", contractSchema()
+                    .addProperties("reason", nullContractSchema())));
+            geometry.addAllOfItem(availabilityRule("PARTIAL", contractSchema()
+                    .addProperties("reason", contractSchema()._const("MISSING_STOP_COORDINATES"))));
+        };
+    }
+
+    private static Schema<Object> availabilityRule(String status, Schema<?> result) {
+        Schema<Object> rule = contractSchema();
+        rule.setIf(contractSchema().addProperties("status", contractSchema()._const(status)));
+        rule.setThen(result);
+        return rule;
+    }
+
+    private static Schema<Object> contractSchema() {
+        Schema<Object> schema = new Schema<>();
+        schema.setSpecVersion(SpecVersion.V31);
+        return schema;
+    }
+
+    private static Schema<Object> nullContractSchema() {
+        Schema<Object> schema = contractSchema();
+        schema.setTypes(Set.of("null"));
+        return schema;
     }
 
     /**

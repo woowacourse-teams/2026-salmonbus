@@ -1,12 +1,20 @@
 package com.gustler.backend.maintenance;
 
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
+import com.gustler.backend.forecasting.api.evaluation.LesEvaluationArchive;
+import com.gustler.backend.forecasting.api.les.BootstrapLesHistory;
+import com.gustler.backend.forecasting.api.les.LesHistoryBootstrapException;
 import com.gustler.backend.forecasting.api.model.InspectModelBundle;
 import com.gustler.backend.forecasting.api.model.ModelLoadException;
 import com.gustler.backend.maintenance.configuration.BundleInspectionCommandConfiguration;
+import com.gustler.backend.maintenance.configuration.LesEvaluationRestoreCommandConfiguration;
+import com.gustler.backend.maintenance.configuration.LesHistoryBootstrapCommandConfiguration;
+import java.time.Clock;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.transaction.CannotCreateTransactionException;
 
 /**
  * 유지보수 명령을 선택해 실행하고 정해진 JSON 결과와 종료 코드를 출력한다. 예외 원문과 인증정보는 표준 오류에 노출하지 않는다.
@@ -41,6 +49,11 @@ public final class MaintenanceApplication {
     static Object run(CliArguments arguments) {
         return switch (arguments.command()) {
         case "bundle-check" -> bundleCheck(arguments);
+        case "route-display-export", "route-display-status", "route-display-import", "route-display-disable" ->
+            RouteDisplayCommand.run(arguments);
+        case "route-display-retry" -> RouteDisplayRetryCommand.run(arguments);
+        case "les-history-bootstrap" -> lesHistoryBootstrap(arguments);
+        case "les-evaluation-restore" -> lesEvaluationRestore(arguments);
         default -> throw new MaintenanceException("UNKNOWN_COMMAND");
         };
     }
@@ -51,13 +64,56 @@ public final class MaintenanceApplication {
             context.register(BundleInspectionCommandConfiguration.class);
             context.refresh();
             InspectModelBundle.Inspection inspected = context.getBean(InspectModelBundle.class).inspect(directory);
-            return Map.of("validation", "PASSED", "activated", false, "accuracyEvaluated", false, "releaseId",
-                inspected.releaseId(), "bundleDigest", inspected.bundleDigest(), "featureContractVersion",
-                inspected.featureContractVersion(), "dataThrough", inspected.dataThrough(), "routes",
-                inspected.routes());
+            return Map.of(
+                "validation", "PASSED",
+                "activated", false,
+                "accuracyEvaluated", false,
+                "releaseId", inspected.releaseId(),
+                "bundleDigest", inspected.bundleDigest(),
+                "featureContractVersion", inspected.featureContractVersion(),
+                "dataThrough", inspected.dataThrough(),
+                "routes", inspected.routes());
         } catch (ModelLoadException error) {
             Matcher code = Pattern.compile("^\\[([A-Z][A-Z0-9_]*)\\]").matcher(modelFailureMessage(error));
             throw new MaintenanceException(bundleRejectionCode(code), error);
+        }
+    }
+
+    private static Object lesHistoryBootstrap(CliArguments arguments) {
+        LesHistoryBootstrapCommand.Options options = LesHistoryBootstrapCommand.parse(arguments);
+        Configuration configuration = Configuration.load(options.config());
+        DatabaseEnvironment environment = DatabaseEnvironment.load(configuration);
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(DatabaseEnvironment.class, () -> environment);
+            context.register(LesHistoryBootstrapCommandConfiguration.class);
+            context.refresh();
+            return LesHistoryBootstrapCommand.invoke(options, context.getBean(BootstrapLesHistory.class));
+        } catch (LesHistoryBootstrapException failure) {
+            throw new MaintenanceException(failure.code(), failure);
+        } catch (CannotCreateTransactionException failure) {
+            throw new MaintenanceException("DATABASE_CONNECTION_FAILED", failure);
+        } catch (RuntimeException failure) {
+            throw new MaintenanceException("DATABASE_TRANSACTION_FAILED", failure);
+        }
+    }
+
+    private static Object lesEvaluationRestore(CliArguments arguments) {
+        LesEvaluationRestoreCommand.Options options = LesEvaluationRestoreCommand.parse(arguments);
+        LocalLesArchive archive = LocalLesArchive.read(options.archiveFile());
+        DatabaseEnvironment environment = DatabaseEnvironment.load(Configuration.load(options.config()));
+        LesEvaluationRestoreCommand.authorize(arguments, environment, archive, Clock.systemUTC());
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(DatabaseEnvironment.class, () -> environment);
+            context.registerBean(EvaluationArchiveObjects.class, () -> archive);
+            context.register(LesEvaluationRestoreCommandConfiguration.class);
+            context.refresh();
+            return LesEvaluationRestoreCommand.invoke(options, context.getBean(LesEvaluationArchive.class));
+        } catch (MaintenanceException failure) {
+            throw failure;
+        } catch (CannotCreateTransactionException failure) {
+            throw new MaintenanceException("DATABASE_CONNECTION_FAILED", failure);
+        } catch (RuntimeException failure) {
+            throw new MaintenanceException("LES_EVALUATION_RESTORE_FAILED", failure);
         }
     }
 

@@ -84,7 +84,7 @@ for (const width of [320, 425]) {
     await page.goto("/");
     const panel = page.getByRole("tabpanel");
     const message = panel.getByText("정류장 정보를 불러오지 못했어요", { exact: true });
-    const retry = panel.getByRole("button", { name: "다시 확인하기", exact: true });
+    const retry = panel.getByRole("button", { name: "다시 시도하기", exact: true });
     await expect(message).toBeVisible();
     await expect(retry).toBeVisible();
     await expect(panel.getByText("노선 정보 없음", { exact: true })).toHaveCount(0);

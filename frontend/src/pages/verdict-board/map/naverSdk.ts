@@ -45,7 +45,8 @@ interface NaverOverlay {
   setMap(map: NaverMap | null): void;
 }
 
-interface NaverPolyline extends NaverOverlay {
+export interface NaverPolyline extends NaverOverlay {
+  setPath(path: NaverCoordinate[]): void;
   setOptions(options: { strokeColor: string; strokeOpacity: number; zIndex: number }): void;
 }
 
@@ -82,6 +83,7 @@ export interface NaverMaps {
     strokeColor: string;
     strokeWeight: number;
     strokeOpacity: number;
+    strokeStyle?: "shortdot";
     zIndex: number;
   }) => NaverPolyline;
   Circle: new (options: {
@@ -169,7 +171,8 @@ function readyNaverMapsOf(host: Window): NaverMaps | null {
 export function loadNaverMaps(keyId: string): Promise<NaverMaps> {
   const existingMaps = readyNaverMapsOf(window);
   if (existingMaps?.glEnabled === true) return Promise.resolve(existingMaps);
-  if (existingMaps === null && keyId.trim() === "") return Promise.reject(new Error("지도 설정을 준비 중이에요"));
+  if (existingMaps === null && keyId.trim() === "")
+    return Promise.reject(new Error("지도 설정이 없어 지도를 불러올 수 없어요"));
   if (sdkPromise !== null) return sdkPromise;
   sdkPromise = new Promise<NaverMaps>((resolve, reject) => {
     const script = document.createElement("script");

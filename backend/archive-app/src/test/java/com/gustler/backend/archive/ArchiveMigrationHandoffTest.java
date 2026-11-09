@@ -27,10 +27,27 @@ class ArchiveMigrationHandoffTest {
     }
 
     @Test
+    void 운영_V60_스키마와_수집_이력을_보존하며_V66으로_전환한다() {
+        try (TestDatabase db = TestDatabase.create()) {
+            DriverManagerDataSource source = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
+            Flyway.configure().dataSource(source).target("60").load().migrate();
+            JdbcClient jdbc = JdbcClient.create(source);
+            seed(jdbc);
+            Flyway flyway = Flyway.configure().dataSource(source).load();
+            flyway.migrate();
+            flyway.validate();
+            assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("66");
+            assertThat(jdbc.sql("SELECT count(*) FROM observation_batch").query(Long.class).single()).isOne();
+            assertThat(jdbc.sql("SELECT count(*) FROM vehicle_capacity").query(Long.class).single()).isEqualTo(426);
+            assertThat(jdbc.sql("SELECT to_regclass('route_data_quality') IS NULL").query(Boolean.class).single()).isTrue();
+        }
+    }
+
+    @Test
     void 구_이관_예약이_남으면_장부를_보존하고_전환을_거부한다() {
         try (TestDatabase db = TestDatabase.create()) {
             DriverManagerDataSource source = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
-            Flyway.configure().dataSource(source).target("52").load().migrate();
+            Flyway.configure().dataSource(source).target("65").load().migrate();
             JdbcClient jdbc = JdbcClient.create(source);
             seed(jdbc);
             jdbc.sql(
@@ -46,7 +63,7 @@ class ArchiveMigrationHandoffTest {
     void 업무_데이터가_있는_DB에_구_Worker가_연결돼_있으면_전환하지_않는다() throws Exception {
         try (TestDatabase db = TestDatabase.create()) {
             DriverManagerDataSource source = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
-            Flyway.configure().dataSource(source).target("52").load().migrate();
+            Flyway.configure().dataSource(source).target("65").load().migrate();
             JdbcClient jdbc = JdbcClient.create(source);
             seed(jdbc);
             Properties properties = new Properties();

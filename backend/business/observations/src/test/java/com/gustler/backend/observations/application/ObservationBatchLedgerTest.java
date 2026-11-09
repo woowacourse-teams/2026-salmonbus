@@ -3,9 +3,14 @@ package com.gustler.backend.observations.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import com.gustler.backend.gbis.api.GbisLocationResult.GbisSystemError;
+import com.gustler.backend.gbis.api.GbisLocationResult.NoResponse;
+import com.gustler.backend.gbis.api.GbisLocationResult.NoVehicles;
+import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.GbisLocationResult;
-import com.gustler.backend.gbis.api.dto.BusLocationResponse;
+import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.observations.api.CollectionQualityHook;
 import com.gustler.backend.observations.api.VehicleObservationsStored;
@@ -369,7 +374,7 @@ class ObservationBatchLedgerTest {
         // given
         insertStop();
         final long batchId = dispatchedBatch();
-        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation("경기70아0001", VEHICLE_ID, 0,
+        BusLocation bus = new BusLocation("경기70아0001", VEHICLE_ID, 0,
             ROUTE_204000057, 11, STOP_ID, 1, 2, 43, 3, 1);
         ledger.conclude(batchId, reply(new GbisLocationResult.Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT);
 
@@ -399,7 +404,7 @@ class ObservationBatchLedgerTest {
         insertStop();
         final long batchId = dispatchedBatch();
         failingQualityHook.fail = true;
-        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation("경기70아0001", VEHICLE_ID, 0,
+        BusLocation bus = new BusLocation("경기70아0001", VEHICLE_ID, 0,
             ROUTE_204000057, 11, STOP_ID, 1, 2, 71, 3, 1);
 
         // when
@@ -461,6 +466,25 @@ class ObservationBatchLedgerTest {
             }
             return Set.of();
         }
+    }
+
+    @Test
+    void 실시간_수집은_LIVE로_기록하고_확인_시각은_한_번만_저장한다() {
+        // given
+        final long batchId = confirmSuccessfulInput();
+
+        // when
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            collectionInputs.confirmInput(batchId, RESPONSE_RECEIVED_AT.plusSeconds(30).toInstant()));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(jdbcClient.sql("SELECT ingestion_origin FROM observation_batch WHERE id=?")
+                .param(batchId).query(String.class).single()).isEqualTo("LIVE");
+            softly.assertThat(jdbcClient.sql("SELECT input_confirmed_at FROM observation_batch WHERE id=?")
+                .param(batchId).query(OffsetDateTime.class).single().toInstant())
+                .isEqualTo(RESPONSE_RECEIVED_AT.plusSeconds(1).toInstant());
+        });
     }
 
     private int quotaRowCount() {

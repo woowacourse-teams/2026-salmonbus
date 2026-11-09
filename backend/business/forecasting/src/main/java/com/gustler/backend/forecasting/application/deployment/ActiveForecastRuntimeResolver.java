@@ -5,7 +5,6 @@ import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionForecastModel;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -25,8 +24,7 @@ public final class ActiveForecastRuntimeResolver implements ForecastRuntime {
 
     public ActiveForecastRuntimeResolver(
         ModelDeploymentRepository deployments,
-        LoadedModelRegistry bundles
-    ) {
+        LoadedModelRegistry bundles) {
         this.deployments = deployments;
         this.bundles = bundles;
     }
@@ -50,18 +48,16 @@ public final class ActiveForecastRuntimeResolver implements ForecastRuntime {
 
     private static RuntimeSnapshot snapshotOf(
         ActiveModelDeployment deployment,
-        ModelRelease bundle
-    ) {
+        ModelRelease bundle) {
         return new RuntimeSnapshot(
             deployment,
             bundle.scope(),
-            new SeatDistributionForecastModel(bundle.predictor(), bundle.features(), bundle.routeReference()),
+            bundle.model(),
             dataUntilOf(bundle));
     }
 
     private static Instant dataUntilOf(
-        ModelRelease bundle
-    ) {
+        ModelRelease bundle) {
         return Instant.parse(bundle.dataThrough());
     }
 }

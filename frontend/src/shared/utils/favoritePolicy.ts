@@ -5,6 +5,23 @@ import { authErrorOf } from "./authErrorOf";
 export const MAX_FAVORITE_GROUPS = 3;
 export const MAX_FAVORITES_PER_GROUP = 2;
 
+export const FAVORITES_LOAD_FAILURE_TITLE = "즐겨찾기를 불러오지 못했어요";
+
+const failureLabels = {
+  request: "요청을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.",
+  load: "즐겨찾기를 불러오지 못했어요. 다시 시도해 주세요.",
+  refresh: "즐겨찾기를 갱신하지 못했어요.",
+  createGroup: "그룹을 만들지 못했어요. 다시 시도해 주세요.",
+  renameGroup: "그룹 이름을 저장하지 못했어요. 다시 시도해 주세요.",
+  deleteGroup: "그룹을 삭제하지 못했어요. 다시 시도해 주세요.",
+  deleteFavorite: "즐겨찾기를 삭제하지 못했어요. 다시 시도해 주세요.",
+  saveFavorite: "즐겨찾기를 저장하지 못했어요. 다시 시도해 주세요.",
+  saveOrder: "순서를 저장하지 못했어요. 다시 시도해 주세요.",
+  saveGroupOrder: "그룹 순서를 저장하지 못했어요. 다시 시도해 주세요.",
+};
+
+export type FavoriteOperation = keyof typeof failureLabels;
+
 export function sameFavorite(left: FavoriteTarget, right: FavoriteTarget): boolean {
   return left.routeId === right.routeId && left.stopId === right.stopId && left.direction === right.direction;
 }
@@ -29,7 +46,7 @@ export function groupNameError(name: string): string | null {
   return length < 1 || length > 10 ? "그룹 이름은 앞뒤 공백을 제외한 1~10자로 입력해 주세요." : null;
 }
 
-export function favoriteErrorOf(failure: ApiFailure): string {
+export function favoriteErrorOf(failure: ApiFailure, operation: FavoriteOperation = "request"): string {
   if (failure.kind === "contract") {
     switch (failure.error.code) {
       case "INVALID_FAVORITE_GROUP_NAME":
@@ -56,5 +73,5 @@ export function favoriteErrorOf(failure: ApiFailure): string {
     }
   }
   if ("status" in failure && failure.status === 404) return "즐겨찾기 기능을 준비 중이에요.";
-  return authErrorOf(failure);
+  return authErrorOf(failure, failureLabels[operation]);
 }

@@ -11,9 +11,11 @@ import com.gustler.backend.api.board.application.BoardCachePolicy;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.support.FixedDaytimeClockConfig;
 import com.gustler.backend.support.IntegrationTest;
+import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +43,9 @@ class BoardApiContractTest {
     @Autowired
     private Clock clock;
 
+    @Autowired
+    private EntityManager entityManager;
+
     private MockMvc mockMvc;
     private BoardDatabaseFixture fixture;
 
@@ -56,12 +61,23 @@ class BoardApiContractTest {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         OffsetDateTime observedAt = now.minusMinutes(1);
         BoardDatabaseFixture.RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        final long snapshotModelId = fixture.insertModel("model-snapshot", "RETIRED", now.minusDays(2));
+        final long snapshotModelId = fixture.insertModel(
+            "model-snapshot",
+            "RETIRED",
+            now.minusDays(2));
         fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        final long completedBatchId = fixture.insertBatch(route, observedAt, "SUCCESS_ROWS", 5);
-        fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
-        fixture.insertPublication(completedBatchId, snapshotModelId, observedAt.plusSeconds(1),
-            observedAt.plusSeconds(2));
+        final long completedBatchId = fixture.insertBatch(
+            route,
+            observedAt,
+            "SUCCESS_ROWS",
+            5);
+        fixture.insertBatch(
+            route,
+            now,
+            "SUCCESS_ROWS",
+            1);
+        fixture.insertPublication(completedBatchId, snapshotModelId,
+            observedAt.plusSeconds(1), observedAt.plusSeconds(2));
         insertPredictions(route, completedBatchId, snapshotModelId, observedAt);
 
         String cacheControl = "max-age=" + new BoardCachePolicy(clock).maxAgeAt(observedAt).toSeconds() + ", public";
@@ -98,6 +114,34 @@ class BoardApiContractTest {
             .andExpect(jsonPath("$.stops[2].approachingVehicles[2]", aMapWithSize(3)))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[2].vehicleId").isEmpty())
             .andExpect(jsonPath("$.stops[2].approachingVehicles[2].forecast.expectedSeats").doesNotExist());
+    }
+
+    @Test
+    void 저장한_레스_하차좌석과_출발확률을_board와_watch가_그대로_공개한다() throws Exception {
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        OffsetDateTime observed = now.minusMinutes(1);
+        BoardDatabaseFixture.RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        final long model = fixture.insertModel("les-projection", "ACTIVE", now.minusDays(1));
+        final long batch = fixture.insertBatch(route, observed, "SUCCESS_ROWS", 1);
+        fixture.insertPublication(batch, model, observed.plusSeconds(1), observed.plusSeconds(2));
+        insertPrediction(route, batch, model, 1, "LES-BUS", 2, "STOP-2", 3, 1, 0.85, 3.7, observed);
+        jdbcClient.sql("""
+            UPDATE seat_forecast SET seat_target='AFTER_ALIGHTING_ESTIMATE',probability_target='DEPARTURE_ZERO',
+                label_version='les-identity-safe-v1',feature_snapshot='{}'::jsonb,inference_bundle_hash=?
+            WHERE route_version_id=?
+            """).params("b".repeat(64), route.routeVersionId()).update();
+
+        for (String endpoint : List.of("board", "watch")) {
+            mockMvc.perform(get("/api/v1/routes/{routeId}/" + endpoint, ROUTE_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.expectedSeats").value(3.7))
+                .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.afterAlightingSeatEstimate").value(3.7))
+                .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.departureFullProbability").value(0.85))
+                .andExpect(
+                    jsonPath("$.stops[2].approachingVehicles[0].forecast.seatTarget").value("AFTER_ALIGHTING_ESTIMATE"))
+                .andExpect(
+                    jsonPath("$.stops[2].approachingVehicles[0].forecast.probabilityTarget").value("DEPARTURE_ZERO"));
+        }
     }
 
     @Test
@@ -155,10 +199,20 @@ class BoardApiContractTest {
         BoardDatabaseFixture.RouteContext route = insertRoundTripRoute(now.minusDays(1));
         final long firstModel = fixture.insertModel("model-first", "RETIRED", now.minusDays(2));
         final long secondModel = fixture.insertModel("model-second", "ACTIVE", now.minusDays(1));
-        final long firstBatch = fixture.insertBatch(route, observedAt, "SUCCESS_ROWS", 1);
-        final long secondBatch = fixture.insertBatch(route, observedAt, "SUCCESS_ROWS", 2);
-        fixture.insertPublication(firstBatch, firstModel, observedAt.plusSeconds(1), observedAt.plusSeconds(1));
-        fixture.insertPublication(secondBatch, secondModel, observedAt.plusSeconds(1), observedAt.plusSeconds(2));
+        final long firstBatch = fixture.insertBatch(
+            route,
+            observedAt,
+            "SUCCESS_ROWS",
+            1);
+        final long secondBatch = fixture.insertBatch(
+            route,
+            observedAt,
+            "SUCCESS_ROWS",
+            2);
+        fixture.insertPublication(firstBatch, firstModel,
+            observedAt.plusSeconds(1), observedAt.plusSeconds(1));
+        fixture.insertPublication(secondBatch, secondModel,
+            observedAt.plusSeconds(1), observedAt.plusSeconds(2));
         insertSinglePrediction(route, firstBatch, firstModel, "FIRST", observedAt);
         insertSinglePrediction(route, secondBatch, secondModel, "SECOND", observedAt);
 
@@ -200,7 +254,10 @@ class BoardApiContractTest {
             SELECT id, route_version_id,
                    response_received_at, :publishedAt, 0, 'LEGACY_UNKNOWN'
             FROM observation_batch WHERE id = :batchId
-            """).param("batchId", batch).param("publishedAt", now).update();
+            """)
+            .param("batchId", batch)
+            .param("publishedAt", now)
+            .update();
         jdbcClient.sql("UPDATE observation_batch SET input_confirmed_at = :publishedAt WHERE id = :batchId")
             .param("batchId", batch).param("publishedAt", now).update();
 
@@ -234,7 +291,11 @@ class BoardApiContractTest {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         BoardDatabaseFixture.RouteContext route = insertRoundTripRoute(now.minusDays(1));
         final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        final long batch = fixture.insertBatch(route, now.minusMinutes(5).minusSeconds(1), "SUCCESS_EMPTY", 0);
+        final long batch = fixture.insertBatch(
+            route,
+            now.minusMinutes(5).minusSeconds(1),
+            "SUCCESS_EMPTY",
+            0);
         fixture.insertPublication(batch, model, now.minusMinutes(5), now.minusMinutes(5));
 
         // when
@@ -333,7 +394,7 @@ class BoardApiContractTest {
 
         // then
         boardResponse.andExpect(status().isOk()).andExpect(jsonPath("$.stops[2].approachingVehicles.length()").value(1))
-            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast", aMapWithSize(3)))
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast", aMapWithSize(5)))
             .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.status").value("AVAILABLE"));
         vehiclesResponse.andExpect(status().isOk()).andExpect(jsonPath("$.vehicles[0].seat.kind").value("UNKNOWN"))
             .andExpect(jsonPath("$.vehicles[0].seat.remaining").doesNotExist());
@@ -341,6 +402,39 @@ class BoardApiContractTest {
             .param(observation).query(Integer.class).single()).isEqualTo(82);
         assertThat(jdbcClient.sql("SELECT count(*) FROM seat_forecast WHERE vehicle_observation_id = ?")
             .param(observation).query(Integer.class).single()).isEqualTo(1);
+    }
+
+    @Test
+    void 캐시된_회차가_재발행되면_바뀐_예보를_즉시_반환한다() throws Exception {
+        // given
+        OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
+        BoardDatabaseFixture.RouteContext route = insertRoundTripRoute(now.minusDays(1));
+        final long model = fixture.insertModel("model-cache", "ACTIVE", now.minusDays(1));
+        final long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
+        fixture.insertPublication(batch, model, now, now);
+        final long observation = fixture.insertObservation(route, batch, 1, "A", 2, "STOP-2", now);
+        fixture.insertForecast(route, observation, 3, 1, model, 0.2, 40.0, now);
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.expectedSeats").value(40.0));
+        }
+
+        // when
+        jdbcClient.sql("UPDATE seat_forecast SET expected_seats = 5 WHERE vehicle_observation_id = ?")
+            .param(observation)
+            .update();
+        jdbcClient.sql("UPDATE forecast_publication SET published_at = published_at + interval '1 second'"
+                + " WHERE source_batch_id = ?")
+            .param(batch)
+            .update();
+        entityManager.clear();
+        ResultActions httpResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/board", ROUTE_ID));
+
+        // then
+        httpResponse
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.stops[2].approachingVehicles[0].forecast.expectedSeats").value(5.0));
     }
 
     @Test
@@ -424,7 +518,11 @@ class BoardApiContractTest {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         BoardDatabaseFixture.RouteContext route = insertRoundTripRoute(now.minusDays(1));
         final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        final long staleBatch = fixture.insertBatch(route, now.minusMinutes(5).minusSeconds(1), "SUCCESS_EMPTY", 0);
+        final long staleBatch = fixture.insertBatch(
+            route,
+            now.minusMinutes(5).minusSeconds(1),
+            "SUCCESS_EMPTY",
+            0);
         fixture.insertPublication(staleBatch, model, now.minusMinutes(5), now.minusMinutes(5));
         fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_ROWS", 1);
 
@@ -524,7 +622,9 @@ class BoardApiContractTest {
         fixture.insertStop(route, 3, "STOP-3", "종점", "DOWN", true);
     }
 
-    private void insertLegacyPublication(final long batchId, OffsetDateTime publishedAt) {
+    private void insertLegacyPublication(
+        final long batchId,
+        OffsetDateTime publishedAt) {
         jdbcClient.sql("""
             INSERT INTO forecast_publication (
                 source_batch_id, route_version_id,
@@ -534,10 +634,15 @@ class BoardApiContractTest {
                    response_received_at, :publishedAt, 0, 'LEGACY_UNKNOWN'
             FROM observation_batch WHERE id = :batchId
             RETURNING id
-            """).param("batchId", batchId).param("publishedAt", publishedAt).query(Long.class).single();
+            """)
+            .param("batchId", batchId)
+            .param("publishedAt", publishedAt)
+            .query(Long.class)
+            .single();
     }
 
-    private BoardDatabaseFixture.RouteContext insertPublishedRoundTripRoute(OffsetDateTime now) {
+    private BoardDatabaseFixture.RouteContext insertPublishedRoundTripRoute(
+        OffsetDateTime now) {
         OffsetDateTime observedAt = now.minusMinutes(1);
         BoardDatabaseFixture.RouteContext route = insertRoundTripRoute(now.minusDays(1));
         final long modelId = fixture.insertModel("model-headway", "ACTIVE", now.minusDays(1));
@@ -547,8 +652,17 @@ class BoardApiContractTest {
     }
 
     private BoardDatabaseFixture.RouteContext insertRoundTripRoute(OffsetDateTime validFrom) {
-        BoardDatabaseFixture.RouteContext route = fixture.insertRoute(ROUTE_ID, "3330", "기점", "종점", 2, "04:50", "23:30",
-            "05:00", "23:30", validFrom);
+        BoardDatabaseFixture.RouteContext route = fixture.insertRoute(
+            ROUTE_ID,
+            "3330",
+            "기점",
+            "종점",
+            2,
+            "04:50",
+            "23:30",
+            "05:00",
+            "23:30",
+            validFrom);
         fixture.insertStop(route, 1, "STOP-1", "기점", "UP", true);
         fixture.insertStop(route, 2, "STOP-2", "회차점", "UP", false);
         fixture.insertStop(route, 3, "STOP-3", "종점", "DOWN", true);
@@ -559,14 +673,30 @@ class BoardApiContractTest {
         BoardDatabaseFixture.RouteContext route,
         final long batchId,
         final long modelId,
-        OffsetDateTime observedAt
-    ) {
-        insertPrediction(route, batchId, modelId, 1, "C", 1, "STOP-1", 3, 2, 0.4, 12.0, observedAt);
-        insertPrediction(route, batchId, modelId, 2, null, 2, "STOP-2", 3, 1, 0.2, null, observedAt);
-        insertPrediction(route, batchId, modelId, 3, "A", 1, "STOP-1", 3, 2, 0.1, 20.0, observedAt);
-        insertPrediction(route, batchId, modelId, 4, "B", 2, "STOP-2", 3, 1, 0.004, 15.0, observedAt);
-        insertPrediction(route, batchId, modelId, 5, "0", 2, "STOP-2", 3, 1, 0.5, Double.POSITIVE_INFINITY, observedAt);
-        insertPrediction(route, batchId, modelId, 6, "IGNORED", 1, "STOP-1", 2, 1, 0.2, 10.0, observedAt);
+        OffsetDateTime observedAt) {
+        insertPrediction(route, batchId, modelId, 1, "C", 1, "STOP-1", 3, 2, 0.4, 12.0,
+            observedAt);
+        insertPrediction(route, batchId, modelId, 2, null, 2, "STOP-2", 3, 1, 0.2, null,
+            observedAt);
+        insertPrediction(route, batchId, modelId, 3, "A", 1, "STOP-1", 3, 2, 0.1, 20.0,
+            observedAt);
+        insertPrediction(route, batchId, modelId, 4, "B", 2, "STOP-2", 3, 1, 0.004, 15.0,
+            observedAt);
+        insertPrediction(
+            route,
+            batchId,
+            modelId,
+            5,
+            "0",
+            2,
+            "STOP-2",
+            3,
+            1,
+            0.5,
+            Double.POSITIVE_INFINITY,
+            observedAt);
+        insertPrediction(route, batchId, modelId, 6, "IGNORED", 1, "STOP-1", 2, 1, 0.2,
+            10.0, observedAt);
     }
 
     private void insertSinglePrediction(
@@ -574,9 +704,9 @@ class BoardApiContractTest {
         final long batchId,
         final long modelId,
         String vehicleId,
-        OffsetDateTime observedAt
-    ) {
-        insertPrediction(route, batchId, modelId, 1, vehicleId, 2, "STOP-2", 3, 1, 0.2, 10.0, observedAt);
+        OffsetDateTime observedAt) {
+        insertPrediction(route, batchId, modelId, 1, vehicleId, 2, "STOP-2", 3, 1, 0.2,
+            10.0, observedAt);
     }
 
     private void insertPrediction(
@@ -591,11 +721,23 @@ class BoardApiContractTest {
         final int stopsToTarget,
         final double seatFullChance,
         Double expectedSeats,
-        OffsetDateTime observedAt
-    ) {
-        final long observationId = fixture.insertObservation(route, batchId, sourceRowNumber, vehicleId,
-            currentStopOrder, currentStopId, observedAt);
-        fixture.insertForecast(route, observationId, targetStopOrder, stopsToTarget, modelId, seatFullChance,
-            expectedSeats, observedAt.plusSeconds(1));
+        OffsetDateTime observedAt) {
+        final long observationId = fixture.insertObservation(
+            route,
+            batchId,
+            sourceRowNumber,
+            vehicleId,
+            currentStopOrder,
+            currentStopId,
+            observedAt);
+        fixture.insertForecast(
+            route,
+            observationId,
+            targetStopOrder,
+            stopsToTarget,
+            modelId,
+            seatFullChance,
+            expectedSeats,
+            observedAt.plusSeconds(1));
     }
 }

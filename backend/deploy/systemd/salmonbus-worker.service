@@ -14,6 +14,8 @@ Environment=SPRING_PROFILES_INCLUDE=observability
 # promote-on-start 를 켠 채 두면 배포로 재기동할 때마다 디스크에 있는 계수가 올라간다
 Environment=MODEL_BUNDLE_DIRECTORY=/var/lib/salmonbus/model/current
 Environment=MODEL_BUNDLE_PROMOTE_ON_START=false
+# 정류장 쌍 도보 거리 파일도 사람이 갖다 놓는다. 기동할 때 지금 적재된 묶음과 다르면 바꾸고, 같으면 쓰지 않는다
+Environment=WALK_DISTANCES_DIRECTORY=/var/lib/salmonbus/walking/current
 
 # 배포 후 검증된 완료 정산의 이관·삭제를 실행한다. worker.env에서 각각 false로 중지할 수 있다.
 

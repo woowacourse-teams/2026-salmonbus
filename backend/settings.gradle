@@ -3,6 +3,7 @@ rootProject.name = 'backend'
 include 'route-catalog'
 include 'observations'
 include 'arrivals'
+include 'stations'
 include 'forecasting'
 include 'api-call-quota'
 include 'member'
@@ -17,6 +18,7 @@ include 'common'
 project(':route-catalog').projectDir = file('business/route-catalog')
 project(':observations').projectDir = file('business/observations')
 project(':arrivals').projectDir = file('business/arrivals')
+project(':stations').projectDir = file('business/stations')
 project(':forecasting').projectDir = file('business/forecasting')
 project(':api-call-quota').projectDir = file('business/api-call-quota')
 project(':member').projectDir = file('business/member')
@@ -24,3 +26,8 @@ project(':gbis-client').projectDir = file('integrations/gbis-client')
 project(':operation-log').projectDir = file('libraries/operation-log')
 
 include 'archive-app'
+include 'route-geometry-contract'
+project(':route-geometry-contract').projectDir = file('libraries/route-geometry-contract')
+
+include 'route-geometry-engine'
+project(':route-geometry-engine').projectDir = file('libraries/route-geometry-engine')

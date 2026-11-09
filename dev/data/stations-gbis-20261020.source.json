@@ -1,0 +1,12 @@
+{
+  "source": "국토교통부_전국 버스정류장 위치정보",
+  "url": "https://www.data.go.kr/data/15067528/fileData.do",
+  "dataDate": "2026-10-20",
+  "retrievedAt": "2026-11-06",
+  "originalSha256": "08ab0ecca91fd0d09d5f8846a5bcb01bbcee406adc1cdfbb1f1097a350be2571",
+  "selection": "정류장번호 starts with GGB; columns preserved; UTF-8 gzip; importer excludes 277 non-boarding IDs",
+  "rows": 46070,
+  "file": "stations-gbis-20261020.csv.gz",
+  "sha256": "eadb743274daaef37ab766922facaef7a43a74c92b8c6ceb31a40a9eebb6f782",
+  "license": "이용허락범위 제한 없음"
+}

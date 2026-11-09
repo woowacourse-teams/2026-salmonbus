@@ -15,6 +15,7 @@ import {
 } from "../routeSearchCopy";
 import * as styles from "./SearchResults.css";
 import { useNewBadgeHop } from "./useNewBadgeHop";
+import refreshIcon from "@/shared/assets/icons/refresh.svg";
 
 interface SearchResultsProps {
   view: SearchView;
@@ -64,8 +65,10 @@ function renderView(
       );
     case "error":
       return (
-        <div className={styles.notice}>
-          <p aria-hidden="true">{LOAD_FAILED_NOTICE}</p>
+        <div className={styles.errorNotice}>
+          <p className={styles.errorMessage} aria-hidden="true">
+            {LOAD_FAILED_NOTICE}
+          </p>
           <RetryButton label={RETRY_LABEL} onRetry={onRetry} />
         </div>
       );
@@ -90,6 +93,7 @@ function RetryButton({ label, onRetry }: { label: string; onRetry: () => void })
       onPointerDown={(event) => event.preventDefault()}
       onClick={onRetry}
     >
+      <img src={refreshIcon} width={14} height={14} alt="" />
       {label}
     </button>
   );

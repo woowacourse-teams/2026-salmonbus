@@ -5,6 +5,7 @@ import com.gustler.backend.observations.domain.CollectionBatchRepository;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.StoredObservations.Row;
 import com.gustler.backend.observations.domain.UpstreamObservationRow;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -36,6 +37,14 @@ public class JpaCollectionBatchRepository implements CollectionBatchRepository {
     @Override
     public CollectionBatch getById(final long batchId) {
         return batches.findById(batchId).orElseThrow().toDomain();
+    }
+
+    @Override
+    public void confirmInputOnce(final long batchId, OffsetDateTime at) {
+        final int changed = batches.confirmInputOnce(batchId, at);
+        if (changed == 0 && !batches.existsById(batchId)) {
+            throw new IllegalArgumentException("수집 배치가 없다: " + batchId);
+        }
     }
 
     @Override

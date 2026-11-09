@@ -27,12 +27,7 @@ public class SeatForecastJpaEntity {
     private ForecastPublicationJpaEntity publication;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(
-        name = "vehicle_observation_id",
-        insertable = false,
-        updatable = false,
-        nullable = false
-    )
+    @JoinColumn(name = "vehicle_observation_id", insertable = false, updatable = false, nullable = false)
     private VehicleObservationJpaEntity vehicleObservation;
 
     @Column(name = "stops_to_target", nullable = false)
@@ -48,12 +43,17 @@ public class SeatForecastJpaEntity {
     @Column(name = "expected_seats")
     private Double expectedSeats;
 
+    @Column(name = "seat_target", nullable = false)
+    private String seatTarget;
+
+    @Column(name = "probability_target", nullable = false)
+    private String probabilityTarget;
+
     protected SeatForecastJpaEntity() {
     }
 
     public StoredPrediction toDomain(
-        ZoneId zoneId
-    ) {
+        ZoneId zoneId) {
         return new StoredPrediction(
             id.targetStopOrder(),
             vehicleObservation.vehicleId(),
@@ -66,8 +66,8 @@ public class SeatForecastJpaEntity {
                 modelDeployment.releaseId(),
                 modelDeployment.dataUntil()
                     .atZoneSameInstant(zoneId)
-                    .toOffsetDateTime()
-            )
-        );
+                    .toOffsetDateTime()),
+            seatTarget,
+            probabilityTarget);
     }
 }

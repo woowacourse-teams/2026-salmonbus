@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.api.board.ModelOutOfScopeException;
@@ -24,6 +25,7 @@ import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.domain.Route;
 import com.gustler.backend.api.route.domain.RouteStatus;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -56,11 +58,15 @@ class BoardQueryServiceTest {
         "model-snapshot",
         OffsetDateTime.parse("2026-08-25T23:59:59+09:00")
     );
+    private static final String REVISION = "q1|p-|g-|n-|m-|d-|r-";
 
     @Mock
     private BoardQueryRepository repository;
 
     private BoardQueryService service;
+    private BoardFreshnessPolicy freshness;
+    private BoardCachePolicy cachePolicy;
+    private SimpleMeterRegistry meters;
 
     @BeforeEach
     void setUp() {
@@ -68,10 +74,14 @@ class BoardQueryServiceTest {
             Instant.parse("2026-08-26T23:04:59Z"),
             ZoneId.of("Asia/Seoul")
         );
+        freshness = new BoardFreshnessPolicy(clock);
+        cachePolicy = new BoardCachePolicy(clock);
+        meters = new SimpleMeterRegistry();
         service = new BoardQueryService(
             repository,
-            new BoardFreshnessPolicy(clock),
-            new BoardCachePolicy(clock)
+            freshness,
+            cachePolicy,
+            new BoardReadCache(true, meters)
         );
     }
 
@@ -107,7 +117,8 @@ class BoardQueryServiceTest {
             2,
             new DepartureSchedule("04:50", "23:30", "05:00", "23:30", headways),
             Optional.of(observation()),
-            Optional.of(ACTIVE_MODEL)
+            Optional.of(ACTIVE_MODEL),
+            REVISION
         )));
         given(repository.findStops(1L)).willReturn(roundTripStops());
         given(repository.findPredictions(100L)).willReturn(List.of());
@@ -318,7 +329,8 @@ class BoardQueryServiceTest {
             2,
             schedule(),
             Optional.of(observation()),
-            Optional.empty()
+            Optional.empty(),
+            REVISION
         );
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(snapshot));
 
@@ -342,7 +354,8 @@ class BoardQueryServiceTest {
             2,
             schedule(),
             Optional.empty(),
-            Optional.of(ACTIVE_MODEL)
+            Optional.of(ACTIVE_MODEL),
+            REVISION
         );
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(snapshot));
 
@@ -366,7 +379,8 @@ class BoardQueryServiceTest {
             null,
             new DepartureSchedule("05:00", "23:00", null, null, RouteHeadways.none()),
             Optional.of(observation()),
-            Optional.of(ACTIVE_MODEL)
+            Optional.of(ACTIVE_MODEL),
+            REVISION
         );
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(snapshot));
         given(repository.findStops(2L)).willReturn(List.of(
@@ -638,6 +652,190 @@ class BoardQueryServiceTest {
             .isInstanceOf(NoRecentObservationException.class);
     }
 
+    @Test
+    void 같은_스냅샷이면_정류장_예보_차량을_다시_읽지_않고_같은_보드를_쓴다() {
+        // given
+        givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
+        Board first = service.readBoard(ROUTE_ID).board();
+
+        // when
+        BoardReading second = service.readBoard(ROUTE_ID);
+
+        // then
+        assertThat(second.board()).isSameAs(first);
+        assertThat(second.observationBatchId()).isEqualTo(100L);
+        verify(repository, times(2)).findSnapshot(ROUTE_ID);
+        verify(repository, times(1)).findStops(1L);
+        verify(repository, times(1)).findPredictions(100L);
+        verify(repository, times(1)).findObservedVehicles(100L, 1L);
+        assertThat(meters.get("board.read.cache").tag("result", "hit").counter().count()).isEqualTo(1);
+        assertThat(meters.get("board.read.cache").tag("result", "miss").counter().count()).isEqualTo(1);
+    }
+
+    @Test
+    void 같은_회차가_처음_발행되면_준비_중_캐시를_버리고_예보를_읽는다() {
+        // given
+        given(repository.findStops(1L)).willReturn(roundTripStops());
+        given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of());
+        givenSnapshot(withObservation(new SnapshotObservation(100L, OBSERVED_AT, 4, false)));
+        RouteStatus preparing = service.readBoard(ROUTE_ID).board().route().status();
+        givenSnapshot(roundTripSnapshot());
+        given(repository.findPredictions(100L)).willReturn(List.of());
+
+        // when
+        RouteStatus published = service.readBoard(ROUTE_ID).board().route().status();
+
+        // then
+        assertThat(preparing).isEqualTo(RouteStatus.PREPARING);
+        assertThat(published).isEqualTo(RouteStatus.FORECAST_READY);
+        verify(repository, times(2)).findStops(1L);
+        verify(repository).findPredictions(100L);
+    }
+
+    @Test
+    void 캐시에_있어도_관측이_오래되면_반환하지_않는다() {
+        // given
+        BoardReadCache shared = new BoardReadCache(true, meters);
+        service = new BoardQueryService(repository, freshness, cachePolicy, shared);
+        givenRoundTripBoard(List.of());
+        service.readBoard(ROUTE_ID);
+        Clock later = Clock.fixed(OBSERVED_AT.plusMinutes(6).toInstant(), ZoneId.of("Asia/Seoul"));
+        BoardQueryService expired = new BoardQueryService(
+            repository,
+            new BoardFreshnessPolicy(later),
+            cachePolicy,
+            shared
+        );
+
+        // when
+        Throwable actual = catchThrowable(() -> expired.readBoard(ROUTE_ID));
+
+        // then
+        assertThat(actual).isInstanceOf(NoRecentObservationException.class);
+        verify(repository).findStops(1L);
+        assertThat(meters.get("board.read.cache").tag("result", "hit").counter().count()).isZero();
+    }
+
+    @Test
+    void 관측_회차가_바뀌면_보드를_새로_만든다() {
+        // given
+        givenRoundTripBoard(List.of());
+        service.readBoard(ROUTE_ID);
+        givenSnapshot(withObservation(new SnapshotObservation(101L, OBSERVED_AT, 4, true)));
+        given(repository.findPredictions(101L)).willReturn(List.of());
+        given(repository.findObservedVehicles(101L, 1L)).willReturn(List.of());
+
+        // when
+        BoardReading reading = service.readBoard(ROUTE_ID);
+
+        // then
+        assertThat(reading.observationBatchId()).isEqualTo(101L);
+        verify(repository, times(2)).findStops(1L);
+    }
+
+    @Test
+    void 같은_회차라도_판본_표시가_바뀌면_재발행이나_적격_변경으로_보고_새로_만든다() {
+        // given
+        givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
+        service.readBoard(ROUTE_ID);
+        givenSnapshot(withRevision("q2|p-|g-|n-|m-|d-|r-"));
+        given(repository.findPredictions(100L)).willReturn(List.of(prediction(3, "A", 1, 1, 0.9, 1.0)));
+
+        // when
+        Board board = service.readBoard(ROUTE_ID).board();
+
+        // then
+        verify(repository, times(2)).findPredictions(100L);
+        assertThat(board.stops())
+            .flatExtracting(StopState::approachingVehicles)
+            .extracting(ApproachingVehicle::forecast)
+            .containsExactly(new Available(0.09999999999999998, 1.0));
+    }
+
+    @Test
+    void 활성_모델이_바뀌면_보드를_새로_만든다() {
+        // given
+        givenRoundTripBoard(List.of());
+        service.readBoard(ROUTE_ID);
+        BoardSnapshot base = roundTripSnapshot();
+        givenSnapshot(new BoardSnapshot(
+            base.routeVersionId(),
+            base.route(),
+            base.turnSequence(),
+            base.schedule(),
+            base.observation(),
+            Optional.of(new ForecastModel(8L, "model-next", ACTIVE_MODEL.trainedThrough())),
+            base.revision()
+        ));
+
+        // when
+        service.readBoard(ROUTE_ID);
+
+        // then
+        verify(repository, times(2)).findStops(1L);
+    }
+
+    @Test
+    void 시간표만_바뀌어도_보드를_새로_만든다() {
+        // given
+        givenRoundTripBoard(List.of());
+        Board first = service.readBoard(ROUTE_ID).board();
+        BoardSnapshot base = roundTripSnapshot();
+        givenSnapshot(new BoardSnapshot(
+            base.routeVersionId(),
+            base.route(),
+            base.turnSequence(),
+            new DepartureSchedule("05:10", "23:30", "05:20", "23:40", RouteHeadways.none()),
+            base.observation(),
+            base.activeModel(),
+            base.revision()
+        ));
+
+        // when
+        Board second = service.readBoard(ROUTE_ID).board();
+
+        // then
+        assertThat(second).isNotSameAs(first);
+        assertThat(second.route().directions())
+            .extracting(direction -> direction.firstDepartureTime())
+            .containsExactly("05:10", "05:20");
+    }
+
+    @Test
+    void 캐시를_끄면_같은_스냅샷이어도_매번_보드를_만든다() {
+        // given
+        BoardQueryService uncached = new BoardQueryService(
+            repository,
+            freshness,
+            cachePolicy,
+            new BoardReadCache(false, null)
+        );
+        givenRoundTripBoard(List.of());
+
+        // when
+        uncached.readBoard(ROUTE_ID);
+        uncached.readBoard(ROUTE_ID);
+
+        // then
+        verify(repository, times(2)).findStops(1L);
+    }
+
+    @Test
+    void 실패한_보드는_담지_않고_다음_조회에서_다시_만든다() {
+        // given
+        givenRoundTripBoard(List.of());
+        given(repository.findStops(1L)).willReturn(List.of()).willReturn(roundTripStops());
+        Throwable failure = catchThrowable(() -> service.readBoard(ROUTE_ID));
+
+        // when
+        Board board = service.readBoard(ROUTE_ID).board();
+
+        // then
+        assertThat(failure).isInstanceOf(ServiceUnavailableException.class);
+        assertThat(board.stops()).hasSize(3);
+        verify(repository, times(2)).findStops(1L);
+    }
+
     private BoardSnapshot snapshotObserving(
         SnapshotObservation observation
     ) {
@@ -647,7 +845,8 @@ class BoardQueryServiceTest {
             2,
             schedule(),
             Optional.of(observation),
-            Optional.of(ACTIVE_MODEL)
+            Optional.of(ACTIVE_MODEL),
+            REVISION
         );
     }
 
@@ -658,7 +857,38 @@ class BoardQueryServiceTest {
             2,
             schedule(),
             Optional.of(observation()),
-            Optional.of(ACTIVE_MODEL)
+            Optional.of(ACTIVE_MODEL),
+            REVISION
+        );
+    }
+
+    private void givenSnapshot(BoardSnapshot snapshot) {
+        given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(snapshot));
+    }
+
+    private BoardSnapshot withObservation(SnapshotObservation observation) {
+        BoardSnapshot base = roundTripSnapshot();
+        return new BoardSnapshot(
+            base.routeVersionId(),
+            base.route(),
+            base.turnSequence(),
+            base.schedule(),
+            Optional.of(observation),
+            base.activeModel(),
+            base.revision()
+        );
+    }
+
+    private BoardSnapshot withRevision(String revision) {
+        BoardSnapshot base = roundTripSnapshot();
+        return new BoardSnapshot(
+            base.routeVersionId(),
+            base.route(),
+            base.turnSequence(),
+            base.schedule(),
+            base.observation(),
+            base.activeModel(),
+            revision
         );
     }
 

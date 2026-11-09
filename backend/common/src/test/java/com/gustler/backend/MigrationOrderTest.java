@@ -45,8 +45,8 @@ class MigrationOrderTest {
      * <p>이 브랜치는 차량 정원 테이블, 정적 초기값과 좌석 품질 기준을 적용한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("__vehicle_capacity.sql", "__vehicle_seat_quality.sql",
-            "__operational_observation_columns.sql", "__operational_observation.sql", "__retire_trip_quality.sql", "__operational_archive.sql");
+        List.of("vehicle_capacity", "vehicle_seat_quality",
+            "operational_observation_columns", "operational_observation", "retire_trip_quality", "operational_archive");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
@@ -118,7 +118,7 @@ class MigrationOrderTest {
     void 조사_완료_후_기존_제외_결과를_옮기고_운영_조회는_조사_테이블을_읽지_않는다() {
         // given
         Flyway.configure().dataSource(dataSource).locations("classpath:" + MIGRATION_LOCATION)
-            .schemas(STAGED_SCHEMA).createSchemas(true).target("50").load().migrate();
+            .schemas(STAGED_SCHEMA).createSchemas(true).target("63").load().migrate();
         jdbcClient.sql("""
             INSERT INTO staged_deploy.route
                 (public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name)
@@ -164,10 +164,10 @@ class MigrationOrderTest {
             """).param(version).update();
 
         // when
-        assertThatThrownBy(() -> migrateTo51())
+        assertThatThrownBy(() -> migrateTo64())
             .isInstanceOf(FlywayException.class).hasMessageContaining("Finish pending historical trip");
         jdbcClient.sql("UPDATE staged_deploy.trip_quality_rebuild SET completed = true, phase = 'DONE'").update();
-        migrateTo51();
+        migrateTo64();
         jdbcClient.sql("UPDATE staged_deploy.vehicle_one_way_trip SET status = 'ELIGIBLE'").update();
 
         // then
@@ -270,7 +270,8 @@ class MigrationOrderTest {
     private static boolean isThisBranchMigration(
         String fileName
     ) {
-        return MIGRATIONS_THIS_BRANCH_ADDS.stream().anyMatch(fileName::contains);
+        return MIGRATIONS_THIS_BRANCH_ADDS.stream()
+            .anyMatch(name -> fileName.endsWith("__" + name + ".sql"));
     }
 
     /**
@@ -334,9 +335,9 @@ class MigrationOrderTest {
         return flywayAt(location).migrate();
     }
 
-    private MigrateResult migrateTo51() {
+    private MigrateResult migrateTo64() {
         return Flyway.configure().dataSource(dataSource).locations("classpath:" + MIGRATION_LOCATION)
-            .schemas(STAGED_SCHEMA).createSchemas(true).target("51").load().migrate();
+            .schemas(STAGED_SCHEMA).createSchemas(true).target("64").load().migrate();
     }
 
     private Flyway flywayAt(

@@ -68,7 +68,7 @@ collection:
     - "228000393" # 7007-1
     - "200000314" # 4000
 
-# 계수 파일이 든 디렉터리. manifest.json 과 weights.safetensors 둘이 있어야 한다.
+# 계수 파일이 든 디렉터리. manifest.json과 그 안에 선언된 모델 파일이 있어야 한다.
 # 비워 두면 아무것도 안 읽고 예보 배치가 batch 를 안 연다. 계수가 아직 없는 지금의 정상 상태다.
 model:
   bundle:
@@ -76,6 +76,12 @@ model:
     # 도는 배포와 계수 파일의 신원이 다를 때만 본다. 꺼져 있으면 안 올리고 경고만 남긴다.
     # 계수를 갈아 끼우거나 옛 계수로 되돌릴 때 사람이 켠다. 켠 채로 두면 재기동마다 올라간다.
     promote-on-start: ${MODEL_BUNDLE_PROMOTE_ON_START:false}
+
+# 정류장 쌍 도보 거리 파일(stop-walk-distances.csv.gz·json)이 든 디렉터리. 계수 파일처럼 사람이 갖다 놓는다.
+# 기동할 때 지금 적재된 묶음과 다르면 stop_walk_distance 를 통째로 바꾼다. 비워 두거나 파일이 없으면 건너뛴다.
+walking:
+  distances:
+    directory: ${WALK_DISTANCES_DIRECTORY:}
 
 # 예보 배치와 라벨 회수 배치. 계수 번들이 없어 도는 배포가 하나도 없으므로 꺼둔 채로 낸다.
 # 켜는 것은 배포 행이 선 뒤다. 수집(collection.enabled)과 같은 방식으로 끈다.
@@ -119,7 +125,22 @@ forecast:
   arrival-limit: 400
 
 route-geometry:
-  enabled: ${ROUTE_GEOMETRY_ENABLED:false} # 카탈로그 갱신 후 노선당 1회, 기존 BUS_ROUTE 예산 사용
+  generation:
+    enabled: ${ROUTE_GEOMETRY_GENERATION_ENABLED:false}
+    # The budget is persisted per job; changing this default does not reset existing work.
+    max-attempts: ${ROUTE_GEOMETRY_GENERATION_MAX_ATTEMPTS:5}
+    poll-delay-ms: 10000
+    shadow:
+      enabled: ${ROUTE_GEOMETRY_SHADOW_ENABLED:false}
+      # Enabled local shadow requires an independently pinned source-only search bundle.
+      # bundle-path, bundle-sha256 (decompressed), raw-source-sha256 and model-input-sha256
+      # are explicit configuration; no graph paths or authority flags come from model output.
+  multi-source:
+    enabled: ${ROUTE_GEOMETRY_MULTI_SOURCE_ENABLED:false}
+    gg-key: ${GG_DATA_API_KEY:}
+    gbis-web-endpoint: ${ROUTE_GEOMETRY_GBIS_WEB_ENDPOINT:https://www.gbis.go.kr/gbis2014/schBusAPI.action}
+    bms-node-endpoint: ${ROUTE_GEOMETRY_BMS_NODE_ENDPOINT:https://openapi.gg.go.kr/TBBMSNODEM}
+  enabled: ${ROUTE_GEOMETRY_ENABLED:false} # 기동과 매일04시 수집, 기존 BUS_ROUTE 예산 사용
   route-ids: [] # 비어 있으면 collection.route-ids. 별도 지정해도 차량 관측 대상은 늘어나지 않는다.
 
 arrivals:
@@ -144,3 +165,16 @@ management:
   endpoint:
     health:
       show-details: never
+
+stations:
+  seed:
+    enabled: ${STATION_SEED_ENABLED:false}
+    path: ${STATION_SEED_PATH:}
+    encoding: ${STATION_SEED_ENCODING:UTF-8}
+  fill:
+    enabled: ${STATION_FILL_ENABLED:false}
+    internal-token: ${STATION_INTERNAL_TOKEN:}
+    refresh-interval: 30d
+    queue-capacity: 64
+    idle-interval: 5s
+    max-failures: 5

@@ -126,6 +126,15 @@ public class ArchiveRepository {
         if (pending) {
             return "SETTLEMENT_PENDING";
         }
+        final boolean lesPending = jdbc.sql("""
+            SELECT EXISTS(SELECT 1 FROM les_forecast_evaluation_work w
+                JOIN vehicle_observation o ON o.id=w.vehicle_observation_id
+                JOIN observation_batch b ON b.id=o.observation_batch_id
+                WHERE w.route_version_id=:v AND COALESCE(b.response_received_at,b.scheduled_at)<:until)
+            """).param("v", job.version()).param("until", time(job.until())).query(Boolean.class).single();
+        if (lesPending) {
+            return "LES_SETTLEMENT_PENDING";
+        }
         final boolean samples = jdbc.sql("""
             SELECT EXISTS(SELECT 1 FROM stop_demand_pending_sample s
                 JOIN vehicle_observation o ON o.id=s.prediction_observation_id
@@ -173,7 +182,16 @@ public class ArchiveRepository {
                     """)
             .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
             .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
-        if (recent) {
+        final boolean recentLes = jdbc.sql("""
+            SELECT EXISTS(SELECT 1 FROM les_forecast_evaluation_metric e
+                JOIN vehicle_observation o ON o.id=e.vehicle_observation_id
+                JOIN observation_batch b ON b.id=o.observation_batch_id
+                WHERE e.route_version_id=:v AND COALESCE(b.response_received_at,b.scheduled_at)>=:from
+                    AND COALESCE(b.response_received_at,b.scheduled_at)<:until
+                    AND (e.scored_at>=:cutoff OR e.event_at>=:cutoff))
+            """).param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
+            .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
+        if (recent || recentLes) {
             return "RECENT_CHILD_RECORD";
         }
         return "READY";
@@ -339,7 +357,13 @@ public class ArchiveRepository {
         for (String[] required : List.of(new String[] { "forecast_evaluation_result", "arrival_observation_id" },
             new String[] { "forecast_evaluation_compact", "arrival_observation_id" },
             new String[] { "stop_demand_pending_sample", "arrival_observation_id" },
-            new String[] { "seat_forecast", "publication_id" })) {
+            new String[] { "seat_forecast", "publication_id" },
+            new String[] { "les_forecast_evaluation_result", "pre_observation_id" },
+            new String[] { "les_forecast_evaluation_result", "post_observation_id" },
+            new String[] { "les_forecast_evaluation_result", "closure_observation_id" },
+            new String[] { "les_forecast_evaluation_result", "previous_post_observation_id" },
+            new String[] { "les_forecast_evaluation_result", "previous_closure_observation_id" },
+            new String[] { "les_forecast_evaluation_result", "capacity_observation_id" })) {
             final boolean indexed = jdbc.sql("""
                 SELECT EXISTS(SELECT 1 FROM pg_index i JOIN pg_attribute a
                     ON a.attrelid=i.indrelid AND a.attnum=i.indkey[0]

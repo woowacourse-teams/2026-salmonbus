@@ -1,12 +1,24 @@
 package com.gustler.backend.maintenance;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.SerializationFeature;
 import tools.jackson.databind.cfg.JsonNodeFeature;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 유지보수 명령의 JSON 출력을 일관된 키 순서로 기록한다. */
+/**
+ * 유지보수 입출력의 JSON을 일관된 표현으로 읽고 쓴다.
+ * 파일 입력은 엄격한 UTF-8 해석을 사용한다.
+ */
 public final class CanonicalJson {
+    private static final ObjectMapper READER = new ObjectMapper();
     private static final ObjectMapper WRITER = JsonMapper.builder()
         .enable(JsonNodeFeature.WRITE_PROPERTIES_SORTED)
         .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
@@ -15,7 +27,57 @@ public final class CanonicalJson {
     private CanonicalJson() {
     }
 
-    public static String stringOf(Object value) {
+    public static String stringOf(
+        Object value
+    ) {
         return WRITER.writeValueAsString(value);
+    }
+
+    private static JsonNode parse(
+        byte[] bytes,
+        String errorCode
+    ) {
+        strictUtf8(bytes, errorCode);
+        try {
+            return READER.readTree(bytes);
+        } catch (RuntimeException e) {
+            throw new MaintenanceException(errorCode, e);
+        }
+    }
+
+    /**
+     * 파일을 읽어 정규 JSON 표현을 검증한다. 허용되지 않는 표현은 번들 검증 실패로 처리한다.
+     */
+    public static JsonNode readCanonical(
+        Path path,
+        String errorCode
+    ) {
+        byte[] bytes;
+        try {
+            bytes = Files.readAllBytes(path);
+        } catch (IOException e) {
+            throw new MaintenanceException(errorCode, e);
+        }
+        JsonNode root = parse(bytes, errorCode);
+        String actual = strictUtf8(bytes, errorCode).strip();
+        if (!WRITER.writeValueAsString(root).equals(actual)) {
+            throw new MaintenanceException("NON_CANONICAL_JSON");
+        }
+        return root;
+    }
+
+    private static String strictUtf8(
+        byte[] bytes,
+        String errorCode
+    ) {
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes))
+                .toString();
+        } catch (CharacterCodingException e) {
+            throw new MaintenanceException(errorCode, e);
+        }
     }
 }

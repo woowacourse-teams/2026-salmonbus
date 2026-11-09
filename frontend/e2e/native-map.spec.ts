@@ -403,7 +403,7 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
     await page.goto(`/routes/${routeId}`);
     await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
     await emit(page, { type: "error", payload: { message: "지도 설정을 확인하지 못했어요" } });
-    await expect(page.getByText(/지도를 불러오지 못했어요|지도 설정을 준비 중이에요/)).toBeVisible();
+    await expect(page.getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "판정보드 정류장 목록", exact: true })).toBeVisible();
     await expectWebMapBackground(page);
     const count = (await messages(page)).filter((message) => message.type === "mount").length;

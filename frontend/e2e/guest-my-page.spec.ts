@@ -58,6 +58,6 @@ test("로그인 확인 중이나 오류일 때는 게스트 환영 화면 대신
   release();
   await expect(page.getByRole("alert")).toContainText("로그인 상태를 확인하지 못했어요");
   fail = false;
-  await page.getByRole("button", { name: "다시 확인하기", exact: true }).click();
+  await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "연어버스에 합류 하세요!", exact: true })).toBeVisible();
 });

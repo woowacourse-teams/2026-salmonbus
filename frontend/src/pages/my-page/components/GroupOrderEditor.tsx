@@ -25,7 +25,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
   const [saved, setSaved] = useState(groups);
   const [draft, setDraft] = useState(groups);
   const [deleting, setDeleting] = useState<FavoriteGroup | null>(null);
-  const { busy, error, setError, run, partial, setPartial, removeGroup } = useFavoriteGroupDeletion(
+  const { busy, failure, error, clearError, run, partial, setPartial, removeGroup } = useFavoriteGroupDeletion(
     saved,
     draft,
     setSaved,
@@ -39,11 +39,15 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
   async function save() {
     if (busy) return;
     const ids = draft.map((group) => group.id);
-    if (
-      ids.every((id, index) => saved[index]?.id === id) ||
-      (await run(() => saveGroupOrder(ids), { resultHaptic: true }))
-    )
+    if (ids.every((id, index) => saved[index]?.id === id)) {
       onClose(true);
+      return;
+    }
+    const savedOrder = await run(() => saveGroupOrder(ids), {
+      resultHaptic: true,
+      kind: "saveGroupOrder",
+    });
+    if (savedOrder) onClose(true);
   }
   async function remove() {
     if (!deleting || protectedGroup || resource.status !== "success") return;
@@ -54,6 +58,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
       setDeleting(null);
     } else reload();
   }
+  const doneLabel = failure?.operation === "saveGroupOrder" ? "다시 저장하기" : "완료";
   return (
     <section
       {...maskedPropsFor(styles.section)}
@@ -65,15 +70,17 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
       <h2 className={styles.heading}>
         <span>{`내 그룹  ${draft.length} / ${MAX_FAVORITE_GROUPS}`}</span>
         <button ref={done} className={styles.cancelSelection} disabled={busy} onClick={() => void save()}>
-          완료
+          {doneLabel}
         </button>
       </h2>
       <p id="favorite-sort-help" className={visuallyHidden}>
-        손잡이를 끌거나 위·아래 방향키로 그룹 순서를 바꿀 수 있어요. Escape 키를 누르면 취소해요.
+        카드를 끌거나 손잡이에 초점을 둔 채 위·아래 방향키를 누르면 그룹 순서를 바꿀 수 있어요. Escape 키를 누르면
+        취소해요.
       </p>
       <SortableList
         ariaLabel="그룹 순서"
         itemClassName={styles.group}
+        dragFromItem
         items={draft}
         disabled={busy}
         label={(group) => group.name}
@@ -97,7 +104,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
                   disabled={busy || resource.status !== "success"}
                   onClick={(event) => {
                     event.currentTarget.focus();
-                    setError(null);
+                    clearError();
                     setDeleting(group);
                   }}
                 >

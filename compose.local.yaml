@@ -153,6 +153,7 @@ services:
       - ./dev/docker:/local-tools:ro
       - settings-data:/local-settings:ro
       - ./dev/config/worker.yml:/local/config/worker.yml:ro
+      - ./dev/data:/local/station-data:ro
       - model-data:/local/models:ro
     depends_on:
       local-init:

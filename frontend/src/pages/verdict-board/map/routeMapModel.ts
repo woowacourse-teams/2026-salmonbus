@@ -10,6 +10,7 @@ export interface RouteMapStop {
   stopId: StopState["stopId"];
   direction: Direction;
   coordinate: GeoCoordinate;
+  pathConnection?: { coordinate: GeoCoordinate; segmentIndex: number; segmentFraction: number };
 }
 
 export interface DirectionPath {

@@ -7,8 +7,13 @@ import com.gustler.backend.routecatalog.domain.RouteStop;
 import com.gustler.backend.routecatalog.domain.RouteStops;
 import com.gustler.backend.routecatalog.domain.StopCoordinates;
 import com.gustler.backend.routecatalog.domain.StopDirection;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.DeserializationFeature;
@@ -44,7 +49,7 @@ record RouteDataset(String version, List<RouteDataset.Route> routes) {
         return mapper.readValue(Files.readAllBytes(path), RouteDataset.class);
     }
 
-    private static void validate(RouteDataset data) {
+    private static void validate(RouteDataset data) throws NoSuchAlgorithmException {
         LocalData.require(data.routes().stream().map(Route::routeId).distinct().count() == data.routes().size()
             && data.routes().stream().map(Route::displayName).distinct().count() == data.routes().size(), "ROUTE_DUPLICATE");
         for (Route route : data.routes()) {
@@ -61,15 +66,36 @@ record RouteDataset(String version, List<RouteDataset.Route> routes) {
                 LocalData.require(Double.isFinite(stop.x()) && Double.isFinite(stop.y())
                     && stop.x() >= -180 && stop.x() <= 180 && stop.y() >= -90 && stop.y() <= 90, "STOP_COORDINATES");
             }
-            LocalData.require(RouteContentDigest.of(route.domainStops()).value().equals(route.contentDigest()), "ROUTE_DIGEST");
+            LocalData.require(fixtureDigest(route).equals(route.contentDigest()), "ROUTE_DIGEST");
             for (String time : route.timetable().values()) {
                 LocalData.require(time == null || time.matches("(?:[01][0-9]|2[0-3]):[0-5][0-9]"), "TIMETABLE");
             }
         }
     }
 
+    private static String fixtureDigest(Route route) throws NoSuchAlgorithmException {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        updateFixtureDigest(digest, String.valueOf(route.turnSequence()));
+        for (Stop stop : route.stops()) {
+            updateFixtureDigest(digest, String.valueOf(stop.sequence()), stop.stationId(), stop.name());
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static void updateFixtureDigest(MessageDigest digest, String... values) {
+        for (String value : values) {
+            byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+            digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
+            digest.update(bytes);
+        }
+    }
+
     record Route(String routeId, String displayName, String startStopName, String endStopName,
                  int turnSequence, String contentDigest, Timetable timetable, List<Stop> stops) {
+        String versionDigest() {
+            return RouteContentDigest.of(domainStops()).value();
+        }
+
         RouteStops domainStops() {
             return new RouteStops(turnSequence, stops.stream().map(stop -> new RouteStop(
                 stop.sequence(), stop.stationId(), stop.name(), StopDirection.valueOf(stop.direction()),

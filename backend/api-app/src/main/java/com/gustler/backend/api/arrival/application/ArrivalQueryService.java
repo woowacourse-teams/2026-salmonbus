@@ -61,8 +61,27 @@ public class ArrivalQueryService {
      * 조회 대상을 검증하고 필요한 수집을 요청한다. 첫 유효 결과는 제한된 시간만 기다리며 사용할 결과가 없으면 UNAVAILABLE을 반환한다.
      */
     public StationArrivalsOverview get(ArrivalQuery query) {
+        return read(query, true);
+    }
+
+    /**
+     * 정류장 지도 상세가 입구 확인을 마친 정류장을 조회한다. 우리 노선 방문이 없는 정류장도 수신본을 읽는다.
+     * 기존 정류장 도착정보 API의 입구 조건(우리 노선 방문이 있어야 함)은 바꾸지 않는다.
+     */
+    public StationArrivalsOverview getForKnownStation(String stationId) {
+        return read(new ArrivalQuery(stationId, null, null, null), false);
+    }
+
+    /**
+     * 현재 판본에서 이 정류장을 지나는 우리 노선 방문. 정류장 상세가 노선 보드를 고르는 데 쓴다.
+     */
+    public List<ArrivalVisit> visits(String stationId) {
+        return repository.visits(stationId);
+    }
+
+    private StationArrivalsOverview read(ArrivalQuery query, final boolean requireVisit) {
         List<ArrivalVisit> visits = repository.visits(query.stationId());
-        validateTarget(query, visits);
+        validateTarget(query, visits, requireVisit);
 
         ArrivalSnapshot snapshot = repository.latest(query.stationId()).orElse(null);
         final boolean waiting = !freshness.usable(snapshot, clock.instant()) && firstResult.tryAcquire();
@@ -74,7 +93,7 @@ public class ArrivalQueryService {
                 if (freshness.usable(snapshot, clock.instant())) {
                     // 대기 중 바뀐 판본을 다시 확인해 새 수신을 이전 판본에 연결하지 않는다.
                     visits = repository.visits(query.stationId());
-                    validateTarget(query, visits);
+                    validateTarget(query, visits, requireVisit);
                     if (!freshness.refreshDue(snapshot, clock.instant())) {
                         refresh = new ArrivalRefresh(Status.IDLE, null, snapshot.refreshAfterAt());
                     }
@@ -141,8 +160,8 @@ public class ArrivalQueryService {
         return "PREDICTION_ELAPSED";
     }
 
-    private static void validateTarget(ArrivalQuery query, List<ArrivalVisit> visits) {
-        if (visits.isEmpty()) {
+    private static void validateTarget(ArrivalQuery query, List<ArrivalVisit> visits, final boolean requireVisit) {
+        if (visits.isEmpty() && requireVisit) {
             throw new Failure(ErrorCode.STATION_NOT_FOUND);
         }
         if (query.referenceVersionId() != null && visits.stream().noneMatch(visit -> matchesReference(query, visit))) {

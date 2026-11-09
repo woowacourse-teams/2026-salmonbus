@@ -50,6 +50,12 @@ class OperationalArchiveIntegrationTest {
         jdbc.sql("CREATE INDEX ix_archive_sample_arrival_fk ON stop_demand_pending_sample(arrival_observation_id)")
             .update();
         jdbc.sql("CREATE INDEX ix_archive_forecast_publication_fk ON seat_forecast(publication_id)").update();
+        jdbc.sql("CREATE INDEX ix_archive_les_pre_observation_id ON les_forecast_evaluation_result(pre_observation_id)").update();
+        jdbc.sql("CREATE INDEX ix_archive_les_post_observation_id ON les_forecast_evaluation_result(post_observation_id)").update();
+        jdbc.sql("CREATE INDEX ix_archive_les_closure_observation_id ON les_forecast_evaluation_result(closure_observation_id)").update();
+        jdbc.sql("CREATE INDEX ix_archive_les_previous_post_observation_id ON les_forecast_evaluation_result(previous_post_observation_id)").update();
+        jdbc.sql("CREATE INDEX ix_archive_les_previous_closure_observation_id ON les_forecast_evaluation_result(previous_closure_observation_id)").update();
+        jdbc.sql("CREATE INDEX ix_archive_les_capacity_observation_id ON les_forecast_evaluation_result(capacity_observation_id)").update();
         repository = new ArchiveRepository(jdbc, new JdbcTransactionManager(source));
     }
 
@@ -133,6 +139,53 @@ class OperationalArchiveIntegrationTest {
             softly.assertThat(jdbc.sql("SELECT failure_code FROM operational_archive_job").query(String.class).single())
                 .isEqualTo("SETTLEMENT_PENDING");
         });
+    }
+
+    @Test
+    void 새_모델의_미완료_정산도_이관을_막고_완료되면_문자열_복합키로_나눠_보관한다() {
+        final long id = observation(batch("2026-11-07T03:00Z"));
+        forecast(id, false, 0);
+        jdbc.sql("""
+            INSERT INTO les_forecast_evaluation_work(vehicle_observation_id,target_stop_order,target_kind,label_version,route_version_id)
+            VALUES(?,2,'AFTER_ALIGHTING_ESTIMATE','label-v1',?)
+            """).params(id, version).update();
+        MemoryObjects objects = new MemoryObjects();
+        service(objects).advance();
+        assertThat(jdbc.sql("SELECT failure_code FROM operational_archive_job").query(String.class).single())
+            .isEqualTo("LES_SETTLEMENT_PENDING");
+        assertThat(count("vehicle_observation")).isOne();
+
+        jdbc.sql("DELETE FROM les_forecast_evaluation_work WHERE vehicle_observation_id=?").param(id).update();
+        jdbc.sql("""
+            INSERT INTO les_forecast_evaluation_result(vehicle_observation_id,target_stop_order,target_kind,label_version,
+                route_version_id,scoring_state,label_value,pre_observation_id,quality_revision,scored_at)
+            SELECT ?,2,'AFTER_ALIGHTING_ESTIMATE',label,?,'SETTLED',12.5,?,revision,'2026-11-07T03:11Z'
+            FROM (VALUES ('label-v1',1),('label-v1',2),('label-v2',1)) AS rows(label,revision)
+            """).params(id, version, id).update();
+        jdbc.sql("""
+            INSERT INTO les_evaluation_archive(vehicle_observation_id,target_stop_order,target_kind,label_version,
+                quality_revision,route_version_id,label_value,scoring_state,scored_at,object_hash,storage_state)
+            SELECT vehicle_observation_id,target_stop_order,target_kind,label_version,quality_revision,route_version_id,
+                label_value,scoring_state,scored_at,repeat('a',64),'LIVE' FROM les_forecast_evaluation_result
+            """).update();
+        jdbc.sql("UPDATE les_forecast_evaluation_result SET scored_at='2026-11-09T03:00Z'").update();
+        jdbc.sql("UPDATE operational_archive_job SET retry_at='-infinity',lease_until='-infinity'").update();
+        service(objects).advance();
+        assertThat(jdbc.sql("SELECT failure_code FROM operational_archive_job").query(String.class).single())
+            .isEqualTo("RECENT_CHILD_RECORD");
+        assertThat(count("les_forecast_evaluation_result")).isEqualTo(3);
+        jdbc.sql("UPDATE les_forecast_evaluation_result SET scored_at='2026-11-07T03:11Z'").update();
+        jdbc.sql("UPDATE operational_archive_job SET retry_at='-infinity',lease_until='-infinity'").update();
+        service(objects).advance();
+        assertThat(jdbc.sql("SELECT state FROM operational_archive_job").query(String.class).single()).isEqualTo("DONE");
+        assertThat(count("les_forecast_evaluation_result")).isZero();
+        assertThat(count("les_evaluation_archive")).isZero();
+        assertThat(count("vehicle_observation")).isZero();
+        for (String table : List.of("les_forecast_evaluation_result", "les_evaluation_archive")) {
+            assertThat(jdbc.sql("SELECT sum(row_count) FROM operational_archive_file WHERE table_name=?")
+                .param(table).query(Long.class).single()).isEqualTo(3);
+            assertThat(objects.values.keySet().stream().filter(key -> key.contains("-" + table + "-"))).hasSize(2);
+        }
     }
 
     @Test

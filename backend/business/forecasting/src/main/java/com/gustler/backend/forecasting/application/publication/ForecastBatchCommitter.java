@@ -64,6 +64,20 @@ public class ForecastBatchCommitter {
     @Transactional(readOnly = false)
     public int commit(PendingForecastBatch batch, ForecastPublication publication,
         List<EvaluationSamplingSource> sources) {
+        return commitPublication(batch, publication, sources, false);
+    }
+
+    @Transactional(readOnly = false)
+    public int commitConfirmed(PendingForecastBatch batch, ForecastPublication publication) {
+        return commitPublication(batch, publication, List.of(), true);
+    }
+
+    private int commitPublication(
+        PendingForecastBatch batch,
+        ForecastPublication publication,
+        List<EvaluationSamplingSource> sources,
+        final boolean confirmedInput
+    ) {
         final long currentRevision = routeWork.lock(batch.routeVersionId());
         if (currentRevision != publication.qualityRevision()) {
             LOGGER.info(
@@ -80,7 +94,9 @@ public class ForecastBatchCommitter {
             work.register(batch.routeVersionId(),
                 observations.subList(from, Math.min(from + 100, observations.size())));
         }
-        inputs.confirmInput(batch.observationBatchId(), publication.generatedAt());
+        if (!confirmedInput) {
+            inputs.confirmInput(batch.observationBatchId(), publication.generatedAt());
+        }
         // 재발행은 DB에 남아 있는 최초 선택을 유지하므로 새 표본 기준으로 삼지 않는다.
         if (firstPublication && !selection.advances().isEmpty()) {
             if (!TransactionSynchronizationManager.isActualTransactionActive()

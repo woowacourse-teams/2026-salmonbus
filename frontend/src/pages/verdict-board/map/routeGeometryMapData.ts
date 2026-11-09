@@ -23,14 +23,37 @@ export function routeGeometryMapDataFor(
     if (points === undefined || !validPath(points)) continue;
     paths.push({ direction, coordinates: points.map(coordinateFor) });
   }
+  const pathsByDirection = new Map(paths.map((path) => [path.direction, path.coordinates]));
   const stops: RouteMapStop[] = geometry.busStops.flatMap((stop) => {
     if (stop.point === null || !validPoint(stop.point)) return [];
+    const connection = stop.pathConnection;
+    const coordinates = pathsByDirection.get(stop.direction);
+    const from = connection && coordinates?.[connection.segmentIndex];
+    const to = connection && coordinates?.[connection.segmentIndex + 1];
+    const fraction = connection?.segmentFraction ?? NaN;
+    const pathConnection =
+      connection &&
+      from &&
+      to &&
+      Number.isFinite(fraction) &&
+      fraction >= 0 &&
+      fraction <= 1 &&
+      validPoint(connection.point) &&
+      Math.abs(connection.point.x - (from.longitude + (to.longitude - from.longitude) * fraction)) <= 1e-9 &&
+      Math.abs(connection.point.y - (from.latitude + (to.latitude - from.latitude) * fraction)) <= 1e-9
+        ? {
+            coordinate: coordinateFor(connection.point),
+            segmentIndex: connection.segmentIndex,
+            segmentFraction: fraction,
+          }
+        : undefined;
     return [
       {
         sequence: stop.stopSequence,
         stopId: stop.stationId,
         direction: stop.direction,
         coordinate: coordinateFor(stop.point),
+        ...(pathConnection && { pathConnection }),
       },
     ];
   });
@@ -39,8 +62,9 @@ export function routeGeometryMapDataFor(
   return { routeId: geometry.routeId, referenceVersionId: geometry.referenceVersionId, stops, paths, fullPath };
 }
 
-function validPoint(point: RouteMapPoint): boolean {
+function validPoint(point: RouteMapPoint | null | undefined): point is RouteMapPoint {
   return (
+    point != null &&
     Number.isFinite(point.x) &&
     point.x >= -180 &&
     point.x <= 180 &&

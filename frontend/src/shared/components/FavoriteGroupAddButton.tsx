@@ -1,4 +1,4 @@
-import { useState, type SubmitEvent } from "react";
+import { useRef, useState, type SubmitEvent } from "react";
 import { createFavoriteGroup } from "@/shared/api/favorites.api";
 import type { FavoriteGroup } from "@/shared/api/favorites.types";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
@@ -49,7 +49,8 @@ interface CreateGroupDialogProps {
 function CreateGroupDialog({ onClose, onCreated }: CreateGroupDialogProps) {
   const { groups, resource } = useFavorites();
   const [name, setName] = useState("");
-  const { run, busy, error, setError } = useFavoriteAction();
+  const nameField = useRef<HTMLInputElement>(null);
+  const { run, busy, error, clearError } = useFavoriteAction();
   const invalid = groupNameError(name);
   const full = groups.length >= MAX_FAVORITE_GROUPS;
   async function submit(event: SubmitEvent<HTMLFormElement>) {
@@ -62,7 +63,7 @@ function CreateGroupDialog({ onClose, onCreated }: CreateGroupDialogProps) {
         if (result.ok) created = result.body;
         return result;
       },
-      { resultHaptic: true },
+      { resultHaptic: true, kind: "createGroup" },
     );
     if (ok && created !== null) {
       onCreated?.(created);
@@ -72,23 +73,24 @@ function CreateGroupDialog({ onClose, onCreated }: CreateGroupDialogProps) {
   return (
     <ConfirmDialog
       title="그룹 추가"
+      initialFocus={nameField}
       onCancel={() => {
         if (!busy) onClose();
       }}
     >
       <form onSubmit={(event) => void submit(event)}>
         <input
+          ref={nameField}
           id="home-group-name"
           aria-label="그룹 이름"
           className={form.field}
-          autoFocus
           autoComplete="off"
           value={name}
           aria-describedby="home-group-name-help home-group-name-error"
           aria-invalid={error !== null || (name !== "" && invalid !== null)}
           onChange={(event) => {
             setName(event.currentTarget.value);
-            setError(null);
+            clearError();
           }}
         />
         <p id="home-group-name-help" className={form.subtle}>

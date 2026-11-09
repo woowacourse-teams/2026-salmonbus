@@ -17,9 +17,10 @@ public interface RouteGeometryStore {
      */
     Publication publish(Reference reference, Read read);
 
-    record Reference(long routeId, String sourceRouteId, long versionId) {
+    record Reference(long routeId, String sourceRouteId, long versionId, java.util.UUID recoveryLeaseToken) {
+        public Reference(long routeId,String sourceRouteId,long versionId) { this(routeId,sourceRouteId,versionId,null); }
     }
     enum Publication {
-        UPDATED, UNCHANGED, REFERENCE_CHANGED
+        UPDATED, UNCHANGED, REFERENCE_CHANGED, RECOVERY_LEASE_LOST
     }
 }

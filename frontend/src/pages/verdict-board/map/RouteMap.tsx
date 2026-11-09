@@ -5,17 +5,20 @@ import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { RouteMapData } from "./routeMapModel";
 import { loadNaverMaps, subscribeNaverMapAuthFailure } from "./naverSdk";
-import { createNaverRouteMap, type RouteMapAdapter } from "./naverMapAdapter";
+import { createNaverRouteMap, type RouteMapAdapter, type RouteMapCamera } from "./naverMapAdapter";
+import type { RouteMapGeometryStatus } from "./useRouteMapData";
 import { isNativeMapAvailable } from "@/shared/native-map/bridge";
 import { createNativeRouteMap, type NativeRouteMapAdapter } from "./nativeMapAdapter";
 import { reportNativeMapFailure } from "@/shared/error-tracking/errorTracking";
 import { NOTICE_DURATION_MS } from "@/shared/components/Notice";
-import { isSupportedInApp, sendToApp } from "@/shared/bridge/bridge";
+import { appHostFrom, isSupportedInApp, sendToApp } from "@/shared/bridge/bridge";
 import * as styles from "./RouteMap.css";
 
 interface RouteMapProps {
   board: Board;
   data: RouteMapData | null;
+  geometryStatus: RouteMapGeometryStatus;
+  geometryRetrying: boolean;
   selected: StopSelection | null;
   onSelect: (selection: StopSelection) => void;
   onVehicleSelect: (selection: StopSelection, key: string) => void;
@@ -28,6 +31,8 @@ interface RouteMapProps {
   viewportHeight: number;
   activeDirection: Direction;
 }
+
+const NO_VEHICLES: readonly LiveVehicleView[] = [];
 
 type MapState =
   | { status: "loading" }
@@ -47,6 +52,8 @@ function locationDeniedStateFor(message: string): LocationState {
 export function RouteMap(props: RouteMapProps) {
   const {
     data,
+    geometryStatus,
+    geometryRetrying,
     visible,
     viewportHeight,
     selected,
@@ -56,7 +63,14 @@ export function RouteMap(props: RouteMapProps) {
     vehicleFocusRequest,
     selectedVehicleKey,
   } = props;
+  const selectedStopOnly = geometryStatus === "generating" || geometryStatus === "withheld";
   const regionRef = useRef<HTMLElement | null>(null);
+  const previousView = useRef<{
+    routeId: string;
+    referenceVersionId: string;
+    camera?: RouteMapCamera;
+    native: boolean;
+  } | null>(null);
   const elementRef = useRef<HTMLDivElement>(null);
   const adapterRef = useRef<RouteMapAdapter | NativeRouteMapAdapter | null>(null);
   const lastFocusedStop = useRef<StopSelection | null>(null);
@@ -66,6 +80,10 @@ export function RouteMap(props: RouteMapProps) {
   const [mapState, setMapState] = useState<MapState>({ status: "loading" });
   const [locationState, setLocationState] = useState<LocationState>({ status: "idle" });
   const [nativeFailed, setNativeFailed] = useState(false);
+  const useNativeMap =
+    !nativeFailed &&
+    isNativeMapAvailable() &&
+    (!selectedStopOnly || appHostFrom()?.capabilities.includes("map.selectedStopOnly") === true);
 
   useLayoutEffect(() => {
     propsRef.current = props;
@@ -82,16 +100,13 @@ export function RouteMap(props: RouteMapProps) {
   }, []);
 
   const failMap = useCallback(
-    (failedData: RouteMapData, error: unknown) => {
+    (failedData: RouteMapData) => {
       if (propsRef.current.data !== failedData) return;
       disposeMap();
       setMapState({
         status: "error",
         data: failedData,
-        message:
-          error instanceof Error && error.message === "지도 설정을 준비 중이에요"
-            ? error.message
-            : "지도를 불러오지 못했어요",
+        message: "지도를 불러오지 못했어요",
       });
       setLocationState({ status: "idle" });
     },
@@ -104,24 +119,43 @@ export function RouteMap(props: RouteMapProps) {
       if (adapter === null) return;
       try {
         action(adapter);
-      } catch (error) {
+      } catch {
         const currentData = propsRef.current.data;
-        if (currentData !== null) failMap(currentData, error);
+        if (currentData !== null) failMap(currentData);
       }
     },
     [failMap],
   );
 
   useEffect(() => {
-    if (data === null) return;
+    if (data === null) {
+      previousView.current = null;
+      return;
+    }
+    const { routeId, referenceVersionId } = data;
+    const view = previousView.current;
+    const sameVersion = view?.routeId === data.routeId && view.referenceVersionId === data.referenceVersionId;
+    const webCamera = sameVersion ? view.camera : undefined;
+    const preserveNativeCamera = sameVersion && view.native;
+    let ready = false;
+    function rememberCamera(adapter: RouteMapAdapter, native: boolean) {
+      if (!ready) return;
+      const camera = adapter.camera?.();
+      previousView.current = {
+        routeId,
+        referenceVersionId,
+        native,
+        ...(camera && { camera }),
+      };
+    }
     let active = true;
     let failed = false;
-    const failActiveMap = (error: unknown) => {
+    const failActiveMap = () => {
       if (!active) return;
       failed = true;
-      failMap(data, error);
+      failMap(data);
     };
-    if (isNativeMapAvailable() && !nativeFailed) {
+    if (useNativeMap) {
       const region = regionRef.current;
       if (region !== null) {
         try {
@@ -132,13 +166,15 @@ export function RouteMap(props: RouteMapProps) {
             data,
             motion: current.motion,
             initialSelection: current.selected,
+            preserveCamera: preserveNativeCamera,
+            selectedStopOnly,
             onSelect: (selection) => propsRef.current.onSelect(selection),
             onVehicleSelect: (selection, key) => propsRef.current.onVehicleSelect(selection, key),
             onDeselect: () => propsRef.current.onDeselect(),
-            onError: (error, reason) => {
+            onError: (_error, reason) => {
               if (!active || failed || propsRef.current.data !== data) return;
               if (reason === undefined) {
-                failActiveMap(error);
+                failActiveMap();
                 return;
               }
               failed = true;
@@ -152,7 +188,8 @@ export function RouteMap(props: RouteMapProps) {
               if (!active || failed || propsRef.current.data !== data) return;
               // 이전 앱도 초기 정류장을 확대할 수 있도록 준비 후 카메라 명령은 유지한다.
               const selection = propsRef.current.selected;
-              if (selection !== null) adapterRef.current?.focus(selection);
+              if (!preserveNativeCamera && selection !== null) adapterRef.current?.focus(selection);
+              ready = true;
               lastFocusedStop.current = selection;
               setMapState({ status: "ready", data });
               setLocationState({ status: "idle" });
@@ -163,19 +200,20 @@ export function RouteMap(props: RouteMapProps) {
           adapter.update(
             current.selected,
             current.activeDirection,
-            current.liveVehicleViews,
+            selectedStopOnly ? NO_VEHICLES : current.liveVehicleViews,
             current.selectedVehicleKey,
           );
-        } catch (error) {
-          failActiveMap(error);
+        } catch {
+          failActiveMap();
         }
       }
       return () => {
         active = false;
+        if (adapterRef.current !== null) rememberCamera(adapterRef.current, true);
         disposeMap();
       };
     }
-    const unsubscribeAuthFailure = subscribeNaverMapAuthFailure(() => failActiveMap(null));
+    const unsubscribeAuthFailure = subscribeNaverMapAuthFailure(() => failActiveMap());
     void loadNaverMaps(__NAVER_MAP_KEY_ID__)
       .then((sdk) => {
         const element = elementRef.current;
@@ -189,11 +227,12 @@ export function RouteMap(props: RouteMapProps) {
           data,
           region.clientHeight,
           (selection) => propsRef.current.onSelect(selection),
-          () => failActiveMap(null),
+          () => failActiveMap(),
           () => {
             if (!active || failed || propsRef.current.data !== data) return;
             const selection = propsRef.current.selected;
-            if (selection !== null) adapterRef.current?.focus(selection, { animate: true });
+            if (webCamera === undefined && selection !== null) adapterRef.current?.focus(selection, { animate: true });
+            ready = true;
             lastFocusedStop.current = selection;
             setMapState({ status: "ready", data });
             setLocationState({ status: "idle" });
@@ -201,32 +240,47 @@ export function RouteMap(props: RouteMapProps) {
           (selection, key) => propsRef.current.onVehicleSelect(selection, key),
           () => propsRef.current.onDeselect(),
           current.selected,
+          webCamera,
+          selectedStopOnly,
         );
         adapterRef.current = adapter;
         lastFocusedStop.current = current.selected;
-        adapter.update(current.selected, current.activeDirection, current.liveVehicleViews, current.selectedVehicleKey);
-        adapter.moveVehicles(current.motion.frames);
+        adapter.update(
+          current.selected,
+          current.activeDirection,
+          selectedStopOnly ? NO_VEHICLES : current.liveVehicleViews,
+          current.selectedVehicleKey,
+        );
+        if (!selectedStopOnly) adapter.moveVehicles(current.motion.frames);
         if (failed) {
           disposeMap();
           return;
         }
       })
-      .catch((error: unknown) => {
-        failActiveMap(error);
-      });
+      .catch(failActiveMap);
     return () => {
       active = false;
       unsubscribeAuthFailure();
+      if (adapterRef.current !== null) rememberCamera(adapterRef.current, false);
       disposeMap();
     };
-  }, [data, disposeMap, failMap, nativeFailed]);
+  }, [data, disposeMap, failMap, selectedStopOnly, useNativeMap]);
 
   useEffect(() => {
     runMapAction((adapter) => {
-      adapter.update(selected, activeDirection, liveVehicleViews, selectedVehicleKey);
-      adapter.moveVehicles(motion.frames);
+      adapter.update(selected, activeDirection, selectedStopOnly ? NO_VEHICLES : liveVehicleViews, selectedVehicleKey);
+      if (!selectedStopOnly) adapter.moveVehicles(motion.frames);
     });
-  }, [selected, activeDirection, liveVehicleViews, motion, selectedVehicleKey, mapState, runMapAction]);
+  }, [
+    selected,
+    activeDirection,
+    liveVehicleViews,
+    motion,
+    selectedVehicleKey,
+    mapState,
+    runMapAction,
+    selectedStopOnly,
+  ]);
 
   useEffect(() => {
     if (mapState.status !== "ready" || mapState.data !== data) return;
@@ -237,7 +291,7 @@ export function RouteMap(props: RouteMapProps) {
   }, [selected, mapState, data, runMapAction]);
 
   useEffect(() => {
-    if (mapState.status !== "ready" || !visible) {
+    if (mapState.status !== "ready" || !visible || selectedStopOnly) {
       runMapAction((adapter) => adapter.focusVehicle(null));
       return;
     }
@@ -247,12 +301,12 @@ export function RouteMap(props: RouteMapProps) {
     runMapAction((adapter) =>
       adapter.focusVehicle(vehicleFocusRequest?.key ?? null, { focusMarker: vehicleFocusRequest?.focusMarker ?? true }),
     );
-  }, [vehicleFocusRequest, mapState, visible, runMapAction]);
+  }, [vehicleFocusRequest, mapState, visible, runMapAction, selectedStopOnly]);
 
   useEffect(() => {
-    if (isNativeMapAvailable() && !nativeFailed) return;
+    if (useNativeMap || selectedStopOnly) return;
     return motion.subscribe(() => runMapAction((adapter) => adapter.moveVehicles(motion.frames)));
-  }, [motion, runMapAction, nativeFailed]);
+  }, [motion, runMapAction, selectedStopOnly, useNativeMap]);
 
   useEffect(() => {
     if (locationState.status !== "message") return;
@@ -341,8 +395,19 @@ export function RouteMap(props: RouteMapProps) {
 
   const currentMapState =
     mapState.status !== "loading" && mapState.data === data ? mapState : { status: "loading" as const };
+  const preparing = geometryStatus === "preparing" || geometryStatus === "generating";
+  const withheld = geometryStatus === "withheld";
+  const geometryNotice = preparing ? "노선을 준비 중이에요" : withheld ? "현재 노선을 표시할 수 없어요" : null;
+  const stopInfoNotice = withheld ? "정류장 정보는 확인 가능해요" : "정류장 목록은 계속 확인할 수 있어요";
   const unavailableMessage =
-    data === null ? "지도 정보를 준비 중이에요" : currentMapState.status === "error" ? currentMapState.message : null;
+    currentMapState.status === "error"
+      ? currentMapState.message
+      : data === null
+        ? (geometryNotice ??
+          (geometryStatus === "error" || geometryStatus === "retrying"
+            ? "지도를 불러오지 못했어요"
+            : "지도 정보를 준비 중이에요"))
+        : null;
   const ready = currentMapState.status === "ready";
   return (
     <section
@@ -350,7 +415,7 @@ export function RouteMap(props: RouteMapProps) {
       className={styles.region}
       style={{ pointerEvents: visible ? "auto" : "none" }}
       aria-label="노선 지도"
-      aria-busy={currentMapState.status === "loading"}
+      aria-busy={currentMapState.status === "loading" && geometryStatus !== "error" && geometryStatus !== "retrying"}
       aria-hidden={!visible}
       inert={!visible}
     >
@@ -367,12 +432,30 @@ export function RouteMap(props: RouteMapProps) {
       {unavailableMessage !== null ? (
         <div className={styles.notice} role="status" data-native-map-hit>
           <span>{unavailableMessage}</span>
-          <span>정류장 목록은 계속 확인할 수 있어요</span>
+          {geometryStatus === "retrying" && <span>잠시 후 자동으로 다시 불러와요.</span>}
+          <span>{stopInfoNotice}</span>
         </div>
       ) : null}
-      {data !== null && ready && !data.paths.some((path) => path.direction === activeDirection) ? (
-        <div className={styles.pathNotice} role="status">
-          방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요
+      {data !== null &&
+      ready &&
+      (geometryRetrying ||
+        geometryNotice !== null ||
+        !data.paths.some((path) => path.direction === activeDirection)) ? (
+        <div
+          className={
+            withheld ? styles.withheldToast : geometryNotice === null ? styles.pathNotice : styles.geometryToast
+          }
+          role="status"
+        >
+          {geometryRetrying
+            ? "지도를 갱신하지 못했어요. 잠시 후 자동으로 다시 불러와요."
+            : (geometryNotice ?? "방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요")}
+          {withheld && (
+            <>
+              <br />
+              {stopInfoNotice}
+            </>
+          )}
         </div>
       ) : null}
       {data !== null && ready ? (

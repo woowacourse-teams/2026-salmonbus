@@ -2,6 +2,14 @@
 
 이 폴더에서 일하는 코딩 에이전트(Claude Code, Codex)가 따르는 규칙입니다.
 
+## 규칙과 강제
+
+| 규칙                                                     | 강제                                              | 근거                             |
+| -------------------------------------------------------- | ------------------------------------------------- | -------------------------------- |
+| typeTest 파일의 할당성 검사 함수는 런타임에 안 써도 된다 | eslint.config.js *.typeTest.ts no-unused-vars off | SAL-172 PR #247 comment-strip CI |
+
+주석 제거 작업이 삭제할 수 있는 eslint-disable 주석에 의존하지 않습니다. 예외는 ESLint 설정으로 강제합니다.
+
 ## 실패한 E2E를 고칠 때
 
 healer 에이전트(Claude Code의 `playwright-test-healer`, Codex의 `playwright_test_healer`)와, 실패한 E2E를 고치는 모든 세션에 적용합니다. healer 정의의 workflow와 부딪히면 이 규칙을 따릅니다.

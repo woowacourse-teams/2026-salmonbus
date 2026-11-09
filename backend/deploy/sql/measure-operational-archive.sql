@@ -16,6 +16,7 @@ FROM pg_stat_user_tables
 WHERE schemaname = 'public' AND relname IN (
     'vehicle_observation', 'observation_batch', 'forecast_publication', 'seat_forecast',
     'forecast_evaluation_result', 'forecast_evaluation_compact',
+    'les_forecast_evaluation_work', 'les_forecast_evaluation_result', 'les_evaluation_archive',
     'evaluation_archive_member', 'archive_legacy_member',
     'operational_archive_job', 'operational_archive_file'
 )
@@ -34,6 +35,27 @@ FROM bounded work
 JOIN vehicle_observation observation ON observation.id = work.vehicle_observation_id
 JOIN observation_batch batch ON batch.id = observation.observation_batch_id
 GROUP BY work.route_version_id ORDER BY oldest_observed_at;
+
+-- 새 모델의 정산은 별도 작업 테이블이다. 50,001개면 전수 결과가 아니다.
+-- 확인 시각 모델은 input_confirmed_at부터 2시간을 판정하므로 입력 시각을 구분한다.
+WITH bounded AS MATERIALIZED (
+    SELECT vehicle_observation_id, route_version_id, label_version, next_attempt_at
+    FROM les_forecast_evaluation_work LIMIT 50001
+), sources AS (
+    SELECT work.route_version_id, work.next_attempt_at,
+           CASE WHEN work.label_version='les-confirmed-routeband-v2'
+               THEN COALESCE(batch.input_confirmed_at,batch.response_received_at)
+               ELSE batch.response_received_at END AS source_at
+    FROM bounded work
+    JOIN vehicle_observation observation ON observation.id=work.vehicle_observation_id
+    JOIN observation_batch batch ON batch.id=observation.observation_batch_id
+)
+SELECT route_version_id, count(*) AS target_work_count, min(source_at) AS oldest_input_at,
+       count(*) FILTER (WHERE next_attempt_at<=now()) AS due_now,
+       count(*) FILTER (WHERE source_at<now()-interval '2 hours') AS over_two_hours,
+       count(*) FILTER (WHERE source_at<
+           date_trunc('day',now(),'Asia/Seoul')-interval '1 day') AS older_than_retention
+FROM sources GROUP BY route_version_id ORDER BY oldest_input_at;
 
 -- 1,001개가 반환되면 전수 결과가 아니다. 과거 미완료 수집이 이관을 막는지 확인한다.
 WITH bounded AS MATERIALIZED (

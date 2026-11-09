@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -47,6 +48,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     private final int pageLimit;
     private final Map<Long, EvaluationSelection.Cursor> cursors = new LinkedHashMap<>();
     private long memoryRevision;
+    private LesForecastEvaluation les;
 
     public EvaluateForecastsService(
         EvaluationWorkStore work,
@@ -75,10 +77,18 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         this.pageLimit = pageLimit;
     }
 
+    @Autowired(required = false)
+    public void useLesEvaluation(LesForecastEvaluation les) {
+        this.les = les;
+    }
+
     @Override
     @Transactional(propagation = Propagation.NEVER)
     public void settleArrivalLabels() {
         WorkerOperationLog.run("settlement_tick", "all", this::settleOnce);
+        if (les != null) {
+            WorkerOperationLog.run("les_settlement_tick", "all", les::settle);
+        }
     }
 
     private void settleOnce() {

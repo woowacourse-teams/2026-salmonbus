@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import * as Application from 'expo-application';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { Linking, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
+import type { ShouldStartLoadRequest, WebViewNavigationEvent } from 'react-native-webview/lib/WebViewTypes';
 import { LoadFailedView } from './LoadFailedView';
 import { AUTH_CAPABILITIES, SIGN_IN_RESULT, signInRequestFrom, type SignInResult } from './auth/authMessages';
 import { signInNatively } from './auth/signInNatively';
@@ -13,9 +13,26 @@ import { HAPTIC_CAPABILITIES, playHaptic } from './haptic/playHaptic';
 import { NativeRouteMap, type NativeRouteMapRef } from './native-map/NativeRouteMap';
 import { NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
 import { LOGIN_PROVIDER_ORIGINS, navigationDecisionFor } from './navigation/navigationPolicy';
+import type { NotificationCommandType } from '../frontend/src/shared/notification/notification.types';
+import {
+  NOTIFICATION_CAPABILITIES,
+  OPENED_EVENT,
+  REGISTRATION_EVENT,
+  notificationRequestIdFrom,
+} from './notification/notificationMessages';
+import { showNotificationsInForeground, watchNotificationTaps } from './notification/openedNotifications';
+import { registrationFor } from './notification/registration';
+import {
+  initialDocumentLoad,
+  noteDocumentLoad,
+  noteLoadFailure,
+  noteLoadStart,
+} from './notification/documentLoad';
+import { createTapInbox, type NotificationTap } from './notification/tapInbox';
 import { SETTINGS_CAPABILITIES } from './settings/settingsMessages';
 
 SplashScreen.preventAutoHideAsync();
+showNotificationsInForeground();
 
 function readWebUrl() {
   const webUrl = process.env.EXPO_PUBLIC_WEB_URL;
@@ -29,21 +46,19 @@ const WEB_URL = readWebUrl();
 const WEB_ORIGIN = new URL(WEB_URL).origin;
 const IN_APP_ORIGINS = [WEB_ORIGIN];
 const NAVIGABLE_ORIGINS = [...IN_APP_ORIGINS, ...LOGIN_PROVIDER_ORIGINS];
-// 모든 이동이 allowNavigation에 오게 한다. 허용 판단은 navigationDecisionFor가 origin을 정확히 비교해서 한다.
 const EVERY_URL = ['*'];
 const SPLASH_BACKGROUND_COLOR = '#E8533F';
-// 영역 키와 그 영역 메시지의 type 앞부분이 다르면 tsc가 막는다 (map 키에는 map.* 만).
 type DomainCapabilities<T> = { [K in keyof T]: readonly `${K & string}.${string}`[] };
 function domainCapabilitiesOf<T extends DomainCapabilities<T>>(capabilities: T): T {
   return capabilities;
 }
 
-// 영역마다 앱이 받는 메시지 목록. 처리 함수(handlersByDomain)도 같은 키로 둔다.
 const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
-  map: NativeRouteMap !== null ? NATIVE_MAP_CAPABILITIES : [],
+  map: NativeRouteMap !== null ? [...NATIVE_MAP_CAPABILITIES, 'map.selectedStopOnly'] : [],
   haptic: HAPTIC_CAPABILITIES,
   settings: SETTINGS_CAPABILITIES,
   auth: AUTH_CAPABILITIES,
+  notification: NOTIFICATION_CAPABILITIES,
 });
 type BridgeDomain = keyof typeof CAPABILITIES_BY_DOMAIN;
 const APP_CAPABILITIES: readonly string[] = Object.values(CAPABILITIES_BY_DOMAIN).flat();
@@ -51,6 +66,15 @@ const APP_BOOTSTRAP = appBootstrapScriptFor({
   appVersion: Application.nativeApplicationVersion ?? 'unknown',
   capabilities: APP_CAPABILITIES,
 });
+const notificationTaps = createTapInbox();
+
+function isInAppUrl(url: string): boolean {
+  try {
+    return IN_APP_ORIGINS.includes(new URL(url).origin);
+  } catch {
+    return false;
+  }
+}
 
 export default function App() {
   const webViewRef = useRef<WebView>(null);
@@ -58,15 +82,45 @@ export default function App() {
   const commandQueue = useRef(Promise.resolve());
   const documentEpoch = useRef(0);
   const signingIn = useRef(false);
+  const documentLoaded = useRef(false);
+  const documentLoad = useRef(initialDocumentLoad());
+  const provisionalTap = useRef<NotificationTap | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const showLoadFailed = () => {
+    const decision = noteLoadFailure(documentLoad.current);
+    documentLoad.current = decision.state;
+    documentLoaded.current = false;
+    const tap = provisionalTap.current;
+    provisionalTap.current = null;
+    if (decision.restore && tap !== null) notificationTaps.restore(tap);
     resetNativeMap();
     setLoadFailed(true);
     SplashScreen.hide();
   };
   const retryLoad = () => setLoadFailed(false);
-  const reloadWebView = () => webViewRef.current?.reload();
+  const reloadWebView = () => {
+    documentLoaded.current = false;
+    webViewRef.current?.reload();
+  };
+
+  function handleLoadStart() {
+    documentLoaded.current = false;
+    provisionalTap.current = null;
+    documentLoad.current = noteLoadStart(documentLoad.current);
+    resetNativeMap();
+  }
+
+  function handleLoad(event: WebViewNavigationEvent) {
+    const decision = noteDocumentLoad(documentLoad.current, isInAppUrl(event.nativeEvent.url));
+    documentLoad.current = decision.state;
+    documentLoaded.current = decision.documentLoaded;
+    if (!decision.take) return;
+    const heldTap = notificationTaps.take();
+    if (heldTap === null) return;
+    provisionalTap.current = heldTap;
+    sendOpened(null, heldTap.target);
+  }
 
   function resetNativeMap() {
     documentEpoch.current += 1;
@@ -76,9 +130,7 @@ export default function App() {
   }
 
   function handleMessage(event: WebViewMessageEvent) {
-    try {
-      if (!IN_APP_ORIGINS.includes(new URL(event.nativeEvent.url).origin)) return;
-    } catch { return; }
+    if (!isInAppUrl(event.nativeEvent.url)) return;
     const raw = event.nativeEvent.data;
     const message = bridgeMessageFrom(raw);
     if (message === null || !APP_CAPABILITIES.includes(message.type)) return;
@@ -86,7 +138,6 @@ export default function App() {
     handlersByDomain[domain](message, raw);
   }
 
-  // message는 검사를 마친 envelope이고, raw는 받은 JSON 그대로다. 지도 모듈은 raw를 Swift에서 다시 읽는다.
   const handlersByDomain: Record<BridgeDomain, (message: BridgeMessage, raw: string) => void> = {
     map: (_message, raw) => handleMapMessage(raw),
     haptic: (message) => playHaptic(message),
@@ -94,9 +145,9 @@ export default function App() {
       Linking.openSettings().catch(() => undefined);
     },
     auth: (message) => handleSignIn(message),
+    notification: (message) => handleNotificationCommand(message),
   };
 
-  // 로그인 창은 한 번에 하나만 연다. 결과는 웹 origin의 문서에만 넘긴다.
   function handleSignIn(message: BridgeMessage) {
     const request = signInRequestFrom(message.payload);
     if (request === null) return;
@@ -113,8 +164,41 @@ export default function App() {
   }
 
   function replySignIn(result: SignInResult) {
-    webViewRef.current?.injectJavaScript(bridgeEventScriptFor({ type: SIGN_IN_RESULT, payload: { ...result } }, WEB_ORIGIN));
+    sendToWeb({ type: SIGN_IN_RESULT, payload: { ...result } });
   }
+
+  const notificationHandlers: Record<NotificationCommandType, (requestId: string) => void> = {
+    'notification.requestPermission': (requestId) => replyRegistration(requestId, { ask: true }),
+    'notification.getRegistration': (requestId) => replyRegistration(requestId, { ask: false }),
+    'notification.takeOpened': (requestId) => sendOpened(requestId, notificationTaps.take()?.target ?? null),
+  };
+
+  function handleNotificationCommand(message: BridgeMessage) {
+    const requestId = notificationRequestIdFrom(message.payload);
+    if (requestId === null) return;
+    notificationHandlers[message.type as NotificationCommandType](requestId);
+  }
+
+  function replyRegistration(requestId: string, { ask }: { ask: boolean }) {
+    registrationFor(requestId, { ask }).then((registration) =>
+      sendToWeb({ type: REGISTRATION_EVENT, payload: { ...registration } }),
+    );
+  }
+
+  function sendOpened(requestId: string | null, target: Record<string, unknown> | null) {
+    sendToWeb({ type: OPENED_EVENT, payload: { requestId, target } });
+  }
+
+  function sendToWeb(message: BridgeMessage) {
+    webViewRef.current?.injectJavaScript(bridgeEventScriptFor(message, WEB_ORIGIN));
+  }
+
+  const handleNotificationTap = useEffectEvent((tap: NotificationTap) => {
+    if (notificationTaps.receive(tap, documentLoaded.current && webViewRef.current !== null) !== 'send') return;
+    sendOpened(null, tap.target);
+  });
+
+  useEffect(() => watchNotificationTaps(handleNotificationTap), []);
 
   function allowNavigation(request: ShouldStartLoadRequest) {
     const decision = navigationDecisionFor(request.url, request.isTopFrame, NAVIGABLE_ORIGINS);
@@ -124,7 +208,6 @@ export default function App() {
 
   function handleMapMessage(raw: string) {
     const epoch = documentEpoch.current;
-    // Imperative commands preserve ordering without a React render for every geometry update.
     commandQueue.current = commandQueue.current
       .catch(() => undefined)
       .then(async () => {
@@ -157,7 +240,8 @@ export default function App() {
       injectedJavaScriptBeforeContentLoaded={APP_BOOTSTRAP}
       injectedJavaScriptBeforeContentLoadedForMainFrameOnly
       onMessage={handleMessage}
-      onLoadStart={resetNativeMap}
+      onLoadStart={handleLoadStart}
+      onLoad={handleLoad}
       onLoadEnd={SplashScreen.hide}
       onError={showLoadFailed}
       onHttpError={showLoadFailed}

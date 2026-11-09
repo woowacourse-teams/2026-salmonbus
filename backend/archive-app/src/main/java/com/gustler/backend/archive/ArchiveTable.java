@@ -5,6 +5,10 @@ import java.util.stream.IntStream;
 
 /** SQL 식별자는 이 목록에서만 선택한다. 값은 항상 bind한다. 순서는 FK 삭제 순서다. */
 public enum ArchiveTable {
+    LES_RESULT("les_forecast_evaluation_result", List.of("vehicle_observation_id", "target_stop_order",
+        "target_kind", "label_version", "quality_revision"), "observation"),
+    LES_ARCHIVE("les_evaluation_archive", List.of("vehicle_observation_id", "target_stop_order",
+        "target_kind", "label_version", "quality_revision"), "observation"),
     RESULT("forecast_evaluation_result", List.of("vehicle_observation_id", "target_stop_order"), "observation"),
     COMPACT("forecast_evaluation_compact", List.of("vehicle_observation_id", "target_stop_order"), "observation"),
     LEGACY_MEMBER("archive_legacy_member", List.of("vehicle_observation_id", "target_stop_order"), "observation"),
@@ -32,7 +36,8 @@ public enum ArchiveTable {
 
     String afterCursor() {
         List<String> cursors = IntStream.range(0, keys.size())
-            .mapToObj(index -> "COALESCE((CAST(:cursor AS jsonb)->>" + index + ")::bigint,0)").toList();
+            .mapToObj(index -> "COALESCE((CAST(:cursor AS jsonb)->>" + index + ")::" + keyType(keys.get(index))
+                + "," + (keyType(keys.get(index)).equals("text") ? "''" : "0") + ")").toList();
         return "(" + keyOrder() + ")>(" + String.join(",", cursors) + ")";
     }
 
@@ -53,7 +58,12 @@ public enum ArchiveTable {
         return "b";
     }
 
+    private static String keyType(String key) {
+        return key.equals("target_kind") || key.equals("label_version") ? "text" : "bigint";
+    }
+
     String keyMatch() {
-        return String.join(" AND ", keys.stream().map(k -> "t." + k + "=(r.original->>'" + k + "')::bigint").toList());
+        return String.join(" AND ", keys.stream()
+            .map(key -> "t." + key + "=(r.original->>'" + key + "')::" + keyType(key)).toList());
     }
 }

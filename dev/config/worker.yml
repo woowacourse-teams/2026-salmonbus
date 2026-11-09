@@ -47,3 +47,21 @@ logging:
     com.gustler.backend.forecasting.application.evaluation.InitializeSameDayOutcomesService: WARN
     org.springframework.web.servlet.DispatcherServlet: WARN
     org.apache.catalina.core.ContainerBase: WARN
+
+# 정류장 지도: 공식 기초 명부를 설치하고 열람 요청한 칸만 모의 GBIS로 갱신한다.
+stations:
+  seed:
+    enabled: true
+    path: /local/station-data/stations-gbis-20261020.csv.gz
+  fill:
+    enabled: true
+    internal-token: local-only-station-token
+    queue-capacity: 64
+
+# 정류장 지도 시험용: 로컬에서도 도착정보 수집을 켠다. 내부 요청은 컨테이너 네트워크 안에서만 받는다.
+server:
+  address: 0.0.0.0
+
+arrivals:
+  enabled: true
+  internal-token: local-only-arrival-token

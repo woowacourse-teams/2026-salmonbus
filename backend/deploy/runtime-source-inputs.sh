@@ -7,11 +7,12 @@ runtime_source_inputs() {
   local modules=(common)
   case "$component" in
     api)
-      modules+=(api-app business/member)
+      modules+=(api-app business/member libraries/route-geometry-contract libraries/route-geometry-engine)
       ;;
     worker)
-      modules+=(worker-app business/route-catalog business/observations business/arrivals
-        business/forecasting business/api-call-quota integrations/gbis-client libraries/operation-log)
+      modules+=(worker-app business/route-catalog business/observations business/arrivals business/stations
+        business/forecasting business/api-call-quota integrations/gbis-client libraries/operation-log
+        libraries/route-geometry-contract libraries/route-geometry-engine)
       ;;
     archive)
       modules+=(archive-app)

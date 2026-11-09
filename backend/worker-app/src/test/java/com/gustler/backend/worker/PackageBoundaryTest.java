@@ -30,7 +30,7 @@ import org.springframework.stereotype.Repository;
 class PackageBoundaryTest {
     private static final String PREFIX = "com.gustler.backend.";
     private static final List<String> MODULES =
-        List.of("routecatalog", "observations", "forecasting", "arrivals", "quota", "gbis");
+        List.of("routecatalog", "observations", "forecasting", "arrivals", "stations", "quota", "gbis");
 
     @ArchTest
     static final ArchRule DOMAIN_USES_ONLY_BUSINESS_TYPES = noClasses()

@@ -24,7 +24,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   ...(process.env.CI ? { workers: 2 } : {}),
-  reporter: "html",
+  // JSON 결과는 CI 요약(scripts/e2e-summary)이 실행 시간과 개수를 세는 데 쓴다.
+  reporter: [["html"], ["json", { outputFile: "test-results/e2e-results.json" }]],
   use: {
     baseURL,
     trace: { mode: "retain-on-first-failure", snapshots: false },

@@ -17,3 +17,61 @@ dependencies {
     implementation project(':observations')
     implementation project(':operation-log')
 }
+
+// 원자료를 저장소에 넣지 않고 명시한 로컬 번들로만 Python/Java 결과를 대조한다.
+tasks.register('verifyLesParity', JavaExec) {
+    def bundlePath = providers.gradleProperty('lesBundle')
+    def resultPath = providers.gradleProperty('lesParityOutput')
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.gustler.backend.forecasting.infrastructure.bundle.les.LesParityCheck'
+    maxHeapSize = '384m'
+    jvmArgs '-XX:ActiveProcessorCount=1'
+    doFirst {
+        if (!bundlePath.isPresent() || !resultPath.isPresent()) {
+            throw new GradleException('-PlesBundle와 -PlesParityOutput 절대 경로가 필요하다')
+        }
+        args bundlePath.get(), resultPath.get()
+    }
+}
+
+// 실제 관측 이력에서 88/80열을 다시 만들어 원본 저장 표본과 비교한다.
+tasks.register('verifyLesSourceFeatures', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.gustler.backend.forecasting.infrastructure.les.LesSourceFeatureCheck'
+    maxHeapSize = '768m'
+    jvmArgs '-XX:ActiveProcessorCount=1'
+    doFirst {
+        args providers.gradleProperty('lesSourceFixture').get(), providers.gradleProperty('lesSourceOutput').get()
+    }
+}
+
+// 명시한 로컬 원자료만 별도 테스트 DB로 재생하며 운영 DB에 접속하지 않는다.
+tasks.register('verifyLesWorkerReplay', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.gustler.backend.forecasting.support.ConfirmedLesWorkerReplay'
+    maxHeapSize = '1g'
+    jvmArgs '-XX:ActiveProcessorCount=1'
+    doFirst {
+        args providers.gradleProperty('lesWorkerFixtures').get(), providers.gradleProperty('lesBundle').get(),
+            providers.gradleProperty('lesWorkerOutput').get()
+        if (providers.gradleProperty('lesWorkerRoute').isPresent()) {
+            args providers.gradleProperty('lesWorkerRoute').get()
+        }
+    }
+}
+
+// 후보 계약 검사와 최종 운영 로더 검사를 구분하며 운영 DB에 적재하지 않는다.
+tasks.register('verifyLesServingReadiness', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.gustler.backend.forecasting.infrastructure.bundle.les.LesServingReadinessCheck'
+    maxHeapSize = '512m'
+    jvmArgs '-XX:ActiveProcessorCount=1'
+    doFirst {
+        args providers.gradleProperty('lesReadinessMode').get(), providers.gradleProperty('lesBundle').get(),
+            providers.gradleProperty('lesReadinessOutput').get(), providers.gradleProperty('lesReleaseId').get()
+    }
+}

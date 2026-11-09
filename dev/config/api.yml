@@ -9,3 +9,16 @@ logging:
   level:
     org.springframework.web.servlet.DispatcherServlet: WARN
     org.apache.catalina.core.ContainerBase: WARN
+
+# 정류장 지도 시험용: 로컬에서도 도착정보를 켠다. worker는 같은 compose 네트워크의 worker 컨테이너다.
+arrivals:
+  enabled: true
+  worker-base-url: http://worker:8081
+  internal-token: local-only-arrival-token
+
+# 저장된 명부를 먼저 응답하고 내부 갱신 접수는 별도 실행 큐에서 수행한다.
+stations:
+  refresh:
+    enabled: true
+    worker-base-url: http://worker:8081
+    internal-token: local-only-station-token

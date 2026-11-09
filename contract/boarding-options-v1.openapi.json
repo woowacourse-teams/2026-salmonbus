@@ -1,0 +1,551 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "연어버스 탑승 후보 API",
+    "version": "v1",
+    "description": "같은 노선의 다른 정류장으로 이동해 탈 수 있는 후보. 후보는 정류장 방문 하나이고 가는 방법은 accesses 배열이다. 지금은 modes=WALK만 지원하며 기본값은 앞으로도 WALK다. 새 수단은 modes에 넣어 요청할 때만 나온다. mode·source·relation 값은 늘어날 수 있으며 모르는 값은 건너뛴다. 도보 거리는 © OpenStreetMap contributors(ODbL) 기반 정적 계산이다."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/v1/routes/{routeId}/stations/{stationId}/boarding-options": {
+      "get": {
+        "tags": [
+          "노선"
+        ],
+        "summary": "같은 노선에서 이동해 탈 수 있는 정류장 후보",
+        "description": "기준 정류장에서 같은 노선의 다른 정류장으로 이동해 탈 수 있는 후보를 가장 빠른 이동 방법의 시간 순서로 반환합니다.\n후보는 정류장 방문 하나이고, `stop`(어디서 탈지)과 `accesses`(거기까지 가는 방법 목록, 빠른 순서)를 둡니다.\n이동 방법 하나는 구간 목록 `legs`이고, `durationSeconds`는 출발부터 탑승 정류장 도착까지 전체 시간입니다.\n기다리는 시간이 있는 수단이 생기면 그 시간도 들어가 구간 시간의 합보다 클 수 있습니다.\n지금은 `modes=WALK`만 지원하므로 후보마다 이동 방법이 하나, 구간이 도보 하나입니다.\n`modes`의 기본값은 앞으로도 `WALK`입니다. 새 수단은 `modes`에 넣어 요청할 때만 응답에 나옵니다.\n이동 수단이 늘어도 `limit`은 정류장 수이고 응답 모양은 같습니다. 구간 수단별 칸은 수단이 생길 때 추가됩니다.\n`mode`·`source`·`relation`은 값이 늘어날 수 있으므로 모르는 값의 이동 방법이나 후보는 건너뜁니다.\n\n도보 거리는 OpenStreetMap 보행 그래프로 미리 계산한 실제 보행 경로 거리(© OpenStreetMap contributors)이며\n직선거리가 아닙니다. 도보 시간은 거리를 1.06m/s로 나눈 값입니다. 정류장이 25m 넘게 옮겨진 쌍은 후보에서 뺍니다.\n`relation`은 기준과의 관계입니다. `BEFORE`·`AFTER`는 같은 방향에서 같은 회차의 버스가 기준보다 먼저·나중에 지나는\n정류장, `OPPOSITE`는 방향이 다른 정류장, `SAME_STATION`은 같은 정류장의 다른 방문입니다.\n`OPPOSITE`는 방향이 다르다는 뜻만 있고, 그 정류장에서 타고 기준 쪽으로 돌아올 수 있는지는 보장하지 않습니다.\n`sequenceOffset`은 후보 순번 − 기준 순번입니다.\n같은 정류장을 두 번 지나는 노선은 `stopSequence`로 기준 방문을 고릅니다.\n",
+        "operationId": "getBoardingOptions",
+        "parameters": [
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "이전 응답의 ETag. 일치하면 본문 없는 304",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "routeId",
+            "in": "path",
+            "description": "9자리 GBIS 노선 ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{9}$"
+            },
+            "example": "204000057"
+          },
+          {
+            "name": "stationId",
+            "in": "path",
+            "description": "기준 정류장 ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,20}$"
+            },
+            "example": "205000231"
+          },
+          {
+            "name": "modes",
+            "in": "query",
+            "description": "쓸 수 있는 구간 수단. 쉼표로 여러 개. 지금은 WALK만. 기본값은 앞으로도 WALK",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "WALK"
+            }
+          },
+          {
+            "name": "maxMinutes",
+            "in": "query",
+            "description": "이동 방법 전체 시간 상한(분)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 15,
+              "maximum": 30,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "최대 후보 정류장 수",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "relations",
+            "in": "query",
+            "description": "고를 관계. 쉼표로 여러 개(BEFORE, AFTER, OPPOSITE, SAME_STATION). 없으면 전부",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "BEFORE,OPPOSITE"
+          },
+          {
+            "name": "boardingOnly",
+            "in": "query",
+            "description": "승차 불가 정류장 제외",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "stopSequence",
+            "in": "query",
+            "description": "반복 방문일 때 기준 방문 순번",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "referenceVersionId",
+            "in": "query",
+            "description": "현재 노선 판본. 양의 64비트 정수의 문자열 표현",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            },
+            "example": "7"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "후보 목록. 없으면 options=[]",
+            "headers": {
+              "Cache-Control": {
+                "description": "public, max-age=300, must-revalidate",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "W/\"b-{내용 해시}\"",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardingOptionsResponse"
+                },
+                "examples": {
+                  "walk": {
+                    "summary": "도보 후보",
+                    "description": "walk",
+                    "value": {
+                      "routeId": "204000057",
+                      "referenceVersionId": "7",
+                      "origin": {
+                        "stationId": "205000231",
+                        "stopSequence": 5,
+                        "name": "동강프라자앞",
+                        "direction": "UP",
+                        "boardingAllowed": true
+                      },
+                      "options": [
+                        {
+                          "stop": {
+                            "stationId": "205000226",
+                            "stopSequence": 81,
+                            "name": "동강프라자",
+                            "direction": "DOWN",
+                            "boardingAllowed": true
+                          },
+                          "sequenceOffset": 76,
+                          "relation": "OPPOSITE",
+                          "accesses": [
+                            {
+                              "durationSeconds": 98,
+                              "legs": [
+                                {
+                                  "mode": "WALK",
+                                  "durationSeconds": 98,
+                                  "distanceMeters": 103,
+                                  "source": "PEDESTRIAN_GRAPH"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "ETag와 같은 내용. 본문 없음"
+          },
+          "400": {
+            "description": "노선 ID·정류장 ID·쿼리 형식 오류 또는 지원하지 않는 이동 수단",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidRouteId": {
+                    "description": "invalidRouteId",
+                    "value": {
+                      "code": "INVALID_ROUTE_ID",
+                      "message": "routeId는 9자리 숫자여야 합니다.",
+                      "requestId": "example-request"
+                    }
+                  },
+                  "invalidRequest": {
+                    "description": "invalidRequest",
+                    "value": {
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 형식이 올바르지 않습니다.",
+                      "requestId": "example-request"
+                    }
+                  },
+                  "unsupportedMode": {
+                    "description": "unsupportedMode",
+                    "value": {
+                      "code": "UNSUPPORTED_MODE",
+                      "message": "지원하지 않는 이동 수단입니다.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "현재 카탈로그에 없는 노선 또는 그 노선에 없는 정류장",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "routeNotFound": {
+                    "description": "routeNotFound",
+                    "value": {
+                      "code": "ROUTE_NOT_FOUND",
+                      "message": "등록되지 않은 노선입니다.",
+                      "requestId": "example-request"
+                    }
+                  },
+                  "stationNotFound": {
+                    "description": "stationNotFound",
+                    "value": {
+                      "code": "STATION_NOT_FOUND",
+                      "message": "지원하지 않는 정류장입니다.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "판본이 현재와 다르거나, stopSequence가 그 정류장의 방문이 아니거나, 반복 방문인데 stopSequence가 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "referenceVersionConflict": {
+                    "description": "referenceVersionConflict",
+                    "value": {
+                      "code": "REFERENCE_VERSION_CONFLICT",
+                      "message": "노선 판본과 정류장 방문이 일치하지 않습니다.",
+                      "requestId": "example-request"
+                    }
+                  },
+                  "stopVisitAmbiguous": {
+                    "description": "stopVisitAmbiguous",
+                    "value": {
+                      "code": "STOP_VISIT_AMBIGUOUS",
+                      "message": "같은 정류장을 여러 번 지나는 노선이라 stopSequence가 필요합니다.",
+                      "requestId": "example-request"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "저장소 조회 불가. no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "SERVICE_UNAVAILABLE",
+                  "message": "일시적인 서버 장애가 발생했습니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "지원하지 않는 HTTP 메서드",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "METHOD_NOT_ALLOWED",
+                  "message": "이 경로에서 지원하지 않는 요청 방식입니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "요청 처리 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "code": "INTERNAL_ERROR",
+                  "message": "요청을 처리하지 못했습니다.",
+                  "requestId": "example-request"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BoardingAccess": {
+        "type": "object",
+        "properties": {
+          "durationSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "description": "출발부터 탑승 정류장 도착까지 전체 시간(초). 기다리는 시간이 있는 수단이면 legs 시간의 합보다 클 수 있다"
+          },
+          "legs": {
+            "type": "array",
+            "description": "이동 구간. 지금은 WALK 한 구간",
+            "items": {
+              "$ref": "#/components/schemas/BoardingLeg"
+            }
+          }
+        },
+        "required": [
+          "durationSeconds",
+          "legs"
+        ]
+      },
+      "BoardingLeg": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "구간 수단. 지금은 WALK. 값이 늘어날 수 있으며 모르는 값의 이동 방법은 건너뛴다",
+            "example": "WALK"
+          },
+          "durationSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "description": "구간 이동 시간(초)"
+          },
+          "distanceMeters": {
+            "type": "integer",
+            "format": "int32",
+            "description": "구간 이동 거리(m). 도보는 실제 보행 경로 거리이며 직선거리가 아니다. 수단에 따라 없을 수 있다"
+          },
+          "source": {
+            "type": "string",
+            "description": "값의 출처. PEDESTRIAN_GRAPH는 OSM 보행 그래프 정적 계산. 값이 늘어날 수 있다",
+            "example": "PEDESTRIAN_GRAPH"
+          }
+        },
+        "required": [
+          "durationSeconds",
+          "mode",
+          "source"
+        ]
+      },
+      "BoardingOption": {
+        "type": "object",
+        "properties": {
+          "stop": {
+            "$ref": "#/components/schemas/BoardingStop"
+          },
+          "sequenceOffset": {
+            "type": "integer",
+            "format": "int32",
+            "description": "후보 순번 − 기준 순번"
+          },
+          "relation": {
+            "type": "string",
+            "description": "기준과의 관계. BEFORE·AFTER(같은 방향에서 버스가 기준보다 먼저·나중에 지남), OPPOSITE(방향이 다름), SAME_STATION(같은 정류장의 다른 방문). 값이 늘어날 수 있으며 모르는 값의 후보는 건너뛴다",
+            "example": "OPPOSITE"
+          },
+          "accesses": {
+            "type": "array",
+            "description": "그 정류장까지 가는 방법. durationSeconds 오름차순이고 적어도 하나 있다",
+            "items": {
+              "$ref": "#/components/schemas/BoardingAccess"
+            }
+          }
+        },
+        "required": [
+          "accesses",
+          "relation",
+          "sequenceOffset",
+          "stop"
+        ]
+      },
+      "BoardingOptionsResponse": {
+        "type": "object",
+        "properties": {
+          "routeId": {
+            "type": "string",
+            "description": "9자리 GBIS 노선 ID",
+            "example": "204000057"
+          },
+          "referenceVersionId": {
+            "type": "string",
+            "description": "현재 노선 판본. 양의 64비트 정수의 문자열 표현",
+            "example": "7"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BoardingStop",
+            "description": "기준 방문"
+          },
+          "options": {
+            "type": "array",
+            "description": "후보 정류장 방문. accesses[0].durationSeconds 오름차순, 같으면 stopSequence 오름차순. 없으면 빈 배열",
+            "items": {
+              "$ref": "#/components/schemas/BoardingOption"
+            }
+          }
+        },
+        "required": [
+          "options",
+          "origin",
+          "referenceVersionId",
+          "routeId"
+        ]
+      },
+      "BoardingStop": {
+        "type": "object",
+        "properties": {
+          "stationId": {
+            "type": "string",
+            "description": "정류장 ID"
+          },
+          "stopSequence": {
+            "type": "integer",
+            "format": "int32",
+            "description": "현재 노선 판본의 방문 순번"
+          },
+          "name": {
+            "type": "string",
+            "description": "정류장 이름"
+          },
+          "direction": {
+            "type": "string",
+            "description": "노선 진행 방향(UP 또는 DOWN). 기준 정류장과의 관계는 relation으로 판단한다"
+          },
+          "boardingAllowed": {
+            "type": "boolean",
+            "description": "이 정류장에서 승차 가능 여부"
+          }
+        },
+        "required": [
+          "boardingAllowed",
+          "direction",
+          "name",
+          "stationId",
+          "stopSequence"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "안정적인 오류 코드",
+            "enum": [
+              "INVALID_ROUTE_ID",
+              "ROUTE_NOT_FOUND",
+              "STATION_NOT_FOUND",
+              "INVALID_STATION_TILE",
+              "REFERENCE_VERSION_CONFLICT",
+              "STOP_VISIT_AMBIGUOUS",
+              "UNSUPPORTED_MODE",
+              "MODEL_OUT_OF_SCOPE",
+              "NO_RECENT_OBSERVATION",
+              "SERVICE_UNAVAILABLE",
+              "FAVORITE_GROUP_LIMIT_EXCEEDED",
+              "FAVORITE_LIMIT_EXCEEDED",
+              "INVALID_FAVORITE_GROUP_NAME",
+              "FAVORITE_GROUP_NAME_CONFLICT",
+              "FAVORITE_GROUP_NOT_FOUND",
+              "LAST_FAVORITE_GROUP",
+              "INVALID_FAVORITE_ORDER",
+              "FAVORITE_TARGET_AMBIGUOUS",
+              "FAVORITE_TARGET_UNAVAILABLE",
+              "INVALID_REQUEST",
+              "ENDPOINT_NOT_FOUND",
+              "METHOD_NOT_ALLOWED",
+              "INTERNAL_ERROR",
+              "UNAUTHENTICATED",
+              "CSRF_REJECTED",
+              "NICKNAME_LENGTH",
+              "NICKNAME_CHARACTERS",
+              "NICKNAME_RESERVED",
+              "NICKNAME_TAKEN",
+              "REAUTH_REQUIRED"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "사람이 읽는 설명. 클라이언트 분기는 code를 사용"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "응답 헤더의 X-Request-Id 및 서버 로그와 대응하는 요청 식별자"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ]
+      }
+    }
+  }
+}
