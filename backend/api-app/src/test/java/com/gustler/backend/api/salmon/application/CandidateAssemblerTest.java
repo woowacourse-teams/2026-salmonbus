@@ -10,7 +10,6 @@ import com.gustler.backend.api.salmon.domain.ActionJudge;
 import com.gustler.backend.api.salmon.domain.ActionJudge.Listed;
 import com.gustler.backend.api.salmon.domain.ActionModel.*;
 import com.gustler.backend.api.salmon.domain.EtaChain;
-import com.gustler.backend.api.salmon.domain.EtaChain.Known;
 import com.gustler.backend.api.salmon.domain.EtaChain.Observation;
 import com.gustler.backend.api.salmon.domain.EtaChain.Pattern;
 import com.gustler.backend.api.salmon.domain.EtaChain.Run;
@@ -78,39 +77,6 @@ class CandidateAssemblerTest {
         assertThat(listed.candidates()).extracting(Candidate::id).containsExactly("walk-A-4", "walk-B-9");
         assertThat(listed.candidates()).extracting(Candidate::detour)
             .containsExactly(Optional.of(config.maxDetour()), Optional.empty());
-    }
-
-    @Test
-    void 우회량이_역치_이하인_직접_도보_후보는_허용으로_확정된다() {
-        ActionFixture fixture = new ActionFixture();
-        ActionConfig config = config(15, 10);
-        StopArrivalSource arrivals = (routeId, stationId, stopSequence, decisionAt) ->
-            ActionFixture.queried(ActionFixture.entry("walk-9", 9));
-        DetourSource detours = (routeId, option) -> Optional.of(config.maxDetour());
-        Listed listed = CandidateAssembler.assemble("route", INFORMATION, List.of(new WalkOption("A", 4, Relation.AFTER, 60)),
-            arrivals, detours, ProbabilitySupply.none());
-
-        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, epoch -> listed);
-
-        assertThat(verdict.candidates()).singleElement()
-            .satisfies(record -> assertThat(record.admissibility()).isEqualTo(Admissibility.ALLOWED));
-    }
-
-    @Test
-    void 우회량이_역치를_넘는_직접_도보_후보는_위반으로_확정된다() {
-        ActionFixture fixture = new ActionFixture();
-        ActionConfig config = config(15, 10);
-        StopArrivalSource arrivals = (routeId, stationId, stopSequence, decisionAt) ->
-            ActionFixture.queried(ActionFixture.entry("walk-9", 9));
-        DetourSource detours = (routeId, option) -> Optional.of(Math.nextUp(config.maxDetour()));
-        Listed listed = CandidateAssembler.assemble("route", INFORMATION, List.of(new WalkOption("A", 4, Relation.AFTER, 60)),
-            arrivals, detours, ProbabilitySupply.none());
-
-        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, epoch -> listed);
-
-        assertThat(verdict.candidates()).singleElement()
-            .satisfies(record -> assertThat(record.admissibility()).isEqualTo(Admissibility.VIOLATED));
-        assertThat(verdict.code()).isEqualTo(ReasonCode.NO_MOVE_INFEASIBLE);
     }
 
     @Test

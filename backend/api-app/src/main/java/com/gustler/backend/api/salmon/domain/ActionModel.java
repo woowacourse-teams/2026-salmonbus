@@ -314,7 +314,7 @@ public final class ActionModel {
             Objects.requireNonNull(walk);
             Objects.requireNonNull(list);
             Objects.requireNonNull(detour);
-            detour.ifPresent(ActionModel::requireFinite);
+            requireDetour(detour);
         }
 
         @Override
@@ -334,7 +334,7 @@ public final class ActionModel {
             Objects.requireNonNull(opposite);
             Objects.requireNonNull(reboard);
             Objects.requireNonNull(detour);
-            detour.ifPresent(ActionModel::requireFinite);
+            requireDetour(detour);
         }
 
         @Override
@@ -356,9 +356,14 @@ public final class ActionModel {
         }
     }
 
-    static void requireFinite(double value) {
+    // 음수 우회량은 막지 않는다. D의 뜻과 단위가 정해지지 않아 음수 허용 여부는 SAL-389에서 정한다.
+    static void requireDetour(Optional<Double> detour) {
+        detour.ifPresent(value -> requireFinite(value, "detour"));
+    }
+
+    static void requireFinite(double value, String name) {
         if (!Double.isFinite(value)) {
-            throw new IllegalArgumentException("detour must be finite");
+            throw new IllegalArgumentException(name + " must be finite");
         }
     }
 
