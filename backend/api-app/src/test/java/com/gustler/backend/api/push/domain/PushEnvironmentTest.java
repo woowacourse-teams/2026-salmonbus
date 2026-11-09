@@ -11,14 +11,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 class PushEnvironmentTest {
     @ParameterizedTest
     @EnumSource(PushEnvironment.class)
-    void acceptsExactEnvironment(PushEnvironment environment) {
+    void 정확한_이름의_환경을_받는다(PushEnvironment environment) {
         assertThat(PushEnvironment.from(environment.name())).isEqualTo(environment);
     }
 
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"sandbox", "production", " SANDBOX", "PRODUCTION ", "OTHER"})
-    void rejectsOtherEnvironment(String value) {
+    void 다른_이름의_환경을_거절한다(String value) {
         assertThatThrownBy(() -> PushEnvironment.from(value)).isInstanceOf(IllegalArgumentException.class);
     }
 }
