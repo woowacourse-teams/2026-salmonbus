@@ -51,4 +51,6 @@ public interface NotificationSettingRepository {
     boolean advance(UUID settingId, Instant readOccurrenceAt, Instant nextOccurrenceAt, Instant now);
 
     boolean deleteOrphan(UUID settingId, Instant readOccurrenceAt);
+
+    void deleteWithoutFavorite(long memberId);
 }
