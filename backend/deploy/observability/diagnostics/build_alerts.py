@@ -50,7 +50,14 @@ rule('salmonbus-diag-monitoring','앱 또는 DB 지표 수집 중단',expr,0,'3m
      '[확인 필요] {{ $labels.job }} 지표 수집 중단',
      '앱 장애로 단정하지 마세요. Alloy, 관리 포트, DB 통계 수집 권한, 전송 경로를 확인하세요. 지표가 없다는 이유로 정상으로 복구 처리하지 않습니다.',severity='warning')
 rules[-1]['no_data_state']='Alerting'
-panel_ids={'salmonbus-diag-api-5xx':'2','salmonbus-diag-collection-age':'39','salmonbus-diag-forecast-pending':'40','salmonbus-diag-monitoring':'44'}
+seat_quality=f'max by(decision) (salmonbus_collection_seat_quality_last_timestamp{base})'
+rule('salmonbus-diag-seat-quality','좌석 관측값 격리',f'{seat_quality} > (time() - 300)',0,'0s',
+     '[확인 필요] GBIS 좌석 관측값 격리 ({{ $labels.decision }})',
+     '최근 5분에 운영 좌석값으로 쓰지 않은 관측이 있습니다. 좌석값 격리 로그에서 batchId와 routeVersionId를 찾고 '
+     'vehicle_observation의 reported_remaining_seats와 차종 및 차량별 확인 상한을 비교하세요. '
+     '마지막 격리 5분 후 자동 복구되며, GBIS 오류 해결을 의미하지 않습니다.',severity='warning')
+rules[-1]['labels'].pop('prepared_by')
+panel_ids={'salmonbus-diag-api-5xx':'2','salmonbus-diag-collection-age':'39','salmonbus-diag-forecast-pending':'40','salmonbus-diag-monitoring':'44','salmonbus-diag-seat-quality':'49'}
 for r in rules: r['annotations']['__panelId__']=panel_ids[r['rule_uid']]
 if __name__ == '__main__':
     (ROOT/'alert-rules.paused.json').write_text(json.dumps(rules,ensure_ascii=False,indent=2)+'\n')

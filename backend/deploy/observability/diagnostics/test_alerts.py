@@ -14,6 +14,7 @@ from build_alerts import rules
 
 LABELS = {'job': 'salmonbus/worker', 'route_id': '1', 'route_name': '3330'}
 COLLECTION = 'salmonbus-diag-collection-age'
+SEAT_QUALITY = 'salmonbus-diag-seat-quality'
 FORECAST = 'salmonbus-diag-forecast-pending'
 
 
@@ -42,8 +43,8 @@ def check(uid, minute, firing=False):
 
 
 def run(promtool):
-    selected = [r for r in rules if r['rule_uid'] in (COLLECTION, FORECAST)]
-    assert len(selected) == 2 and all(r['is_paused'] for r in rules)
+    selected = [r for r in rules if r['rule_uid'] in (COLLECTION, FORECAST, SEAT_QUALITY)]
+    assert len(selected) == 3 and all(r['is_paused'] for r in rules)
     # Prevent stale generated configuration from diverging from tested expressions.
     saved = json.loads((Path(__file__).parent/'alert-rules.paused.json').read_text())
     assert saved == rules
@@ -76,6 +77,22 @@ def run(promtool):
          'alert_rule_test': [check(FORECAST, 9), check(FORECAST, 10),
                              check(FORECAST, 11, True), check(FORECAST, 12)]},
     ]
+    seat_labels = {'decision': 'REVIEW', 'service': 'salmonbus', 'severity': 'warning'}
+    tests.append({
+        'name': 'first scraped isolation fires once and resolves five minutes after the last event',
+        'input_series': [{
+            'series': 'salmonbus_collection_seat_quality_last_timestamp{job="salmonbus/worker",decision="REVIEW"}',
+            'values': '_ 60+0x10',
+        }],
+        'alert_rule_test': [
+            {'eval_time': '0m', 'alertname': SEAT_QUALITY, 'exp_alerts': []},
+            {'eval_time': '1m', 'alertname': SEAT_QUALITY,
+             'exp_alerts': [{'exp_labels': seat_labels, 'exp_annotations': {}}]},
+            {'eval_time': '5m', 'alertname': SEAT_QUALITY,
+             'exp_alerts': [{'exp_labels': seat_labels, 'exp_annotations': {}}]},
+            {'eval_time': '6m', 'alertname': SEAT_QUALITY, 'exp_alerts': []},
+        ],
+    })
     for test in tests:
         test['interval'] = '1m'
     with tempfile.TemporaryDirectory(prefix='salmonbus-alert-test-') as directory:

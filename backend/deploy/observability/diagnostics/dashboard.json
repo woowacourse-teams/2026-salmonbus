@@ -2667,16 +2667,126 @@
     {
       "id": 48,
       "type": "row",
+      "title": "08 수집 좌석값 품질",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 150,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 49,
+      "type": "logs",
+      "title": "좌석값 격리 로그",
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 151,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{unit=\"salmonbus-worker.service\"} |= \"event=observation_seat_quality \"",
+          "queryType": "range",
+          "direction": "backward",
+          "maxLines": 100,
+          "datasource": {
+            "type": "loki",
+            "uid": "grafanacloud-logs"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLevel": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "enableLogDetails": true
+      }
+    },
+    {
+      "id": 50,
+      "title": "좌석값 격리 추이",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 159,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "sum by (decision) (rate(salmonbus_collection_seat_quality_total{job=\"salmonbus/worker\"}[5m]))",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{decision}}",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 51,
+      "type": "row",
       "title": "도움말과 적용 상태",
       "collapsed": true,
       "panels": [
         {
-          "id": 49,
+          "id": 52,
           "type": "text",
           "title": "해석과 적용 상태",
           "gridPos": {
             "x": 0,
-            "y": 151,
+            "y": 167,
             "w": 24,
             "h": 18
           },
@@ -2688,7 +2798,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 150,
+        "y": 166,
         "w": 24,
         "h": 1
       }

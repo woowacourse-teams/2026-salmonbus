@@ -90,6 +90,9 @@ panel('API 지표 수집', 'min(up{job="salmonbus/api"})',kind='stat',legend='AP
 panel('worker 지표 수집', 'min(up{job="salmonbus/worker"})',kind='stat',legend='worker up')
 panel('추가 RDS 원본 표본 경과', 'time() - max_over_time(timestamp(aws_rds_read_throughput_average{dimension_DBInstanceIdentifier="salmonbus-db"})[30m:1m])','s',kind='stat',legend='원본 표본 나이')
 panel('SQL 통계 표본 경과', f'time() - timestamp(salmonbus_pg_statement_coverage_statements{pg})','s',kind='stat',legend='SQL 표본 나이')
+row('08 수집 좌석값 품질')
+logs('좌석값 격리 로그','{unit="salmonbus-worker.service"} |= "event=observation_seat_quality "')
+panel('좌석값 격리 추이','sum by (decision) (rate(salmonbus_collection_seat_quality_total{job="salmonbus/worker"}[5m]))','ops',legend='{{decision}}')
 help_text='''### 읽는 순서
 사용자 영향 → 연결 대기 → 읽기와 쓰기 → 잠금 → 메모리 → SQL과 업무 순서로 같은 시간을 선택합니다.
 
