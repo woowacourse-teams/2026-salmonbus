@@ -51,6 +51,7 @@ public class ArchiveService {
         this.prefix = prefix;
         this.pageSize = pageSize;
         this.deleteEnabled = deleteEnabled;
+        LOG.info("event=operational_archive_config enabled=true deleteEnabled={} pageSize={}", deleteEnabled, pageSize);
     }
 
     private boolean isValidDestination(String prefix) {
@@ -85,13 +86,13 @@ public class ArchiveService {
         }
         verifyManifest(job);
         if (!deleteEnabled) {
-            repository.defer(job, "DELETE_DISABLED");
+            defer(job, "DELETE_DISABLED");
             return;
         }
         purgeVerifiedFiles(job);
         repository.finish(job);
-        LOG.info("event=operational_archive status=DONE routeVersionId={} date={} durationMs={}", job.version(),
-            job.date(), (System.nanoTime() - started) / 1000000);
+        LOG.info("event=operational_archive status=DONE archiveId={} routeVersionId={} date={} durationMs={}",
+            job.id(), job.version(), job.date(), (System.nanoTime() - started) / 1000000);
     }
 
     private boolean isReady(ArchiveRepository.Job job) {
@@ -99,11 +100,15 @@ public class ArchiveService {
         if (readiness.equals("READY")) {
             return true;
         }
-        repository.defer(job, readiness);
-        metrics.counter("salmonbus_archive_jobs", "status", "deferred", "reason", readiness).increment();
-        LOG.info("event=operational_archive status=DEFERRED routeVersionId={} date={} reason={}", job.version(),
-            job.date(), readiness);
+        defer(job, readiness);
         return false;
+    }
+
+    private void defer(ArchiveRepository.Job job, String reason) {
+        repository.defer(job, reason);
+        metrics.counter("salmonbus_archive_jobs", "status", "deferred", "reason", reason).increment();
+        LOG.info("event=operational_archive status=DEFERRED archiveId={} routeVersionId={} date={} reason={}",
+            job.id(), job.version(), job.date(), reason);
     }
 
     private void purgeVerifiedFiles(ArchiveRepository.Job job) {
@@ -115,6 +120,11 @@ public class ArchiveService {
             List<String> rows = readVerifiedRows(file);
             final long started = System.nanoTime();
             final int removed = repository.purge(job, file, rows);
+            LOG.info(
+                "event=operational_archive status=PURGED_FILE archiveId={} routeVersionId={} date={}"
+                    + " fileNumber={} table={} deletedRows={} fileRows={} fileBytes={} dbDurationMs={}",
+                job.id(), job.version(), job.date(), file.number(), file.table(), removed, file.rows(), file.bytes(),
+                (System.nanoTime() - started) / 1000000);
             metrics.counter("salmonbus_archive_rows", "stage", "purged", "table", file.table()).increment(removed);
             metrics.timer("salmonbus_archive_stage", "stage", "purge").record(System.nanoTime() - started,
                 TimeUnit.NANOSECONDS);
@@ -142,9 +152,9 @@ public class ArchiveService {
         metrics.counter("salmonbus_archive_jobs", "status", "failed", "reason", failure.getClass().getSimpleName())
             .increment();
         LOG.warn(
-            "event=operational_archive status=FAILED routeVersionId={} date={}"
+            "event=operational_archive status=FAILED archiveId={} routeVersionId={} date={}"
                 + " failureType={} reason={} sqlState={}",
-            job.version(), job.date(), failure.getClass().getSimpleName(), failureCode(failure), sqlState(failure));
+            job.id(), job.version(), job.date(), failure.getClass().getSimpleName(), failureCode(failure), sqlState(failure));
     }
 
     private String failureCode(RuntimeException failure) {
@@ -228,9 +238,10 @@ public class ArchiveService {
         metrics.timer("salmonbus_archive_stage", "stage", "export").record(System.nanoTime() - started,
             TimeUnit.NANOSECONDS);
         LOG.info(
-            "event=operational_archive status=VERIFIED_FILE routeVersionId={} date={} table={}"
+            "event=operational_archive status=VERIFIED_FILE archiveId={} routeVersionId={} date={} fileNumber={} table={}"
                 + " rows={} bytes={} durationMs={}",
-            job.version(), job.date(), table, rows.size(), bytes.length, (System.nanoTime() - started) / 1000000);
+            job.id(), job.version(), job.date(), number, table, rows.size(), bytes.length,
+            (System.nanoTime() - started) / 1000000);
     }
 
     private byte[] manifest(ArchiveRepository.Job job) {

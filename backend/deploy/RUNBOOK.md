@@ -743,3 +743,26 @@ current 심볼릭 링크가 가리키는 JAR로 실행된다
 0이 아닌 코드로 종료하면 Restart=on-failure가 재시작한다
 143으로 종료하면 SuccessExitStatus=143이 성공으로 처리한다
 ```
+
+### 운영 데이터 이관 전후 측정
+
+머지 시각이 아니라 실제 배포 revision/sourceDigest와 이관·삭제 활성화 시각을 기준으로 비교한다.
+배포 직전, 실제 S3 검증과 삭제 활성화 직후, 24시간 후에 `sql/measure-operational-archive.sql`을 같은 DB에서
+읽기 전용으로 실행하고 출력과 worker/archive의 `release-manifest.txt`를 보존한다. SQL의 건수 상한에
+도달하거나 5초 타임아웃이면 미측정으로 남긴다. 생산 원본 전체 COUNT로 확대하지 않는다.
+
+- 같은 24시간 구간의 테이블별 INSERT/DELETE 변화량, RDS 여유 공간과 DB 파일 크기를 비교한다.
+  카운터 reset/수집 공백과 저장공간 증설 여부도 확인한다. DELETE는 내부 재사용 공간을 만들지만
+  RDS 여유 공간이나 DB 파일이 즉시 줄어드는 것을 보장하지 않는다.
+- `journalctl -u salmonbus-archive.service --since '<시작 UTC>' --until '<종료 UTC>' --grep='event=operational_archive' -o json --no-pager`
+  로 배포 후 로그를 수집한다. `VERIFIED_FILE`의 rows/bytes는 파일 검증량,
+  `PURGED_FILE`의 deletedRows는 커밋된 테이블별 삭제량이며 fileBytes는 DB에서 확보한 바이트가 아니다.
+  archiveId/fileNumber로 재시도를 구분한다. 커밋 직후 프로세스가 종료되면 로그가 빠질 수 있으므로
+  작업·파일 장부와 PostgreSQL 카운터로 대조한다. DONE 로그의 durationMs는 해당 실행 시도의 시간이다.
+- `DEFERRED`의 reason/date로 수집 미완료, 정산 대기, 통계 미반영, 삭제 비활성화를 구분한다.
+  가장 오래된 날짜가 전진하는지 확인한다. 오래된 RESERVED/DISPATCHING 기록을 발견해도 측정 중 임의로 종료하거나 삭제하지 않는다.
+- 같은 시간대의 collection_route/forecast_tick/settlement_tick p95와 실패, DB CPU/잠금 대기를 같이 비교한다.
+  심야 수집 주기와 요일 차이를 구분하며, 데이터 나이를 작업 실행시간이나 처리 지연과 혼동하지 않는다.
+
+프로세스가 웹 서버를 띄우지 않으므로 내부 Micrometer meter가 Grafana에 자동으로 수집된다고 가정하지 않는다.
+현재 결과 대조는 구조화 로그와 DB 장부를 사용한다. 실제 S3 PUT/GET과 보관 원본 대조가 끝나기 전에는 삭제를 활성화하지 않는다.
