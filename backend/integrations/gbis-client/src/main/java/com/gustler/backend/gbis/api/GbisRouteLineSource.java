@@ -28,29 +28,58 @@ public class GbisRouteLineSource {
     public record Point(int lineSeq, double x, double y) {
     }
 
-    /** 형상점을 순번대로 반환한다. 통신·파싱·형식 검증에 실패하면 빈 값이다. */
-    public Optional<List<Point>> read(String routeId) {
-        GbisHttpResult http = caller.getWithMetadata(PATH, routeId, GbisKey.PRIMARY);
-        if (http.httpStatus() != 200 || !(http.response() instanceof Received received)) {
-            return Optional.empty();
+    public enum CaptureStatus { SUCCESS, HTTP_ERROR, TRANSPORT_FAILURE, INVALID_RESPONSE,
+        SENSITIVE_RESPONSE, UNRECORDED_LEGACY }
+
+    public record Capture(Optional<List<Point>> points, int httpStatus, CaptureStatus status, byte[] body) {
+        public Capture {
+            points = points.map(List::copyOf);
+            body = body == null ? null : body.clone();
+            if (status != CaptureStatus.SUCCESS && body != null)
+                throw new IllegalArgumentException("Failed or withheld source cannot retain bytes");
         }
+        @Override public byte[] body() { return body == null ? null : body.clone(); }
+        @Override public String toString() {
+            return "RouteLineCapture[httpStatus="+httpStatus+", status="+status+", pointCount="
+                +points.map(List::size).orElse(0)+"]";
+        }
+    }
+
+    /** Existing callers keep the same parsed result; capture preserves the original accepted response separately. */
+    public Optional<List<Point>> read(String routeId) {
+        return capture(routeId).points();
+    }
+
+    public Capture capture(String routeId) {
+        GbisHttpResult http = caller.getWithMetadata(PATH, routeId, GbisKey.PRIMARY);
+        if (http.httpStatus() == 0)
+            return new Capture(Optional.empty(), 0, CaptureStatus.TRANSPORT_FAILURE, null);
+        if (http.httpStatus() != 200)
+            return new Capture(Optional.empty(), http.httpStatus(), CaptureStatus.HTTP_ERROR, null);
+        Optional<List<Point>> parsed = parse(http.response(), routeId);
+        if (parsed.isEmpty())
+            return new Capture(parsed, http.httpStatus(), CaptureStatus.INVALID_RESPONSE, null);
+        return switch (http.capture().disposition()) {
+            case AVAILABLE -> new Capture(parsed, http.httpStatus(), CaptureStatus.SUCCESS, http.capture().body());
+            case SENSITIVE_RESPONSE -> new Capture(parsed, http.httpStatus(), CaptureStatus.SENSITIVE_RESPONSE, null);
+            case NOT_RETAINED -> new Capture(parsed, http.httpStatus(), CaptureStatus.UNRECORDED_LEGACY, null);
+        };
+    }
+
+    private Optional<List<Point>> parse(GbisRawResponse raw, String routeId) {
+        if (!(raw instanceof Received received)) return Optional.empty();
         try {
             JsonNode response = json.readTree(received.body()).path("response");
             if (!"0".equals(response.path("msgHeader").path("resultCode").asString(null))) {
                 return Optional.empty();
             }
             JsonNode rows = response.path("msgBody").path("busRouteLineList");
-            if (!rows.isArray() && !rows.isObject()) {
-                return Optional.empty();
-            }
+            if (!rows.isArray() && !rows.isObject()) return Optional.empty();
             List<Point> points = pointsOf(rows, routeId);
             points.sort(Comparator.comparingInt(Point::lineSeq));
-            if (points.size() < 2 || points.size() > 100_000) {
+            if (points.size() < 2 || points.size() > 100_000
+                    || IntStream.range(0, points.size()).anyMatch(index -> points.get(index).lineSeq() != index + 1))
                 return Optional.empty();
-            }
-            if (IntStream.range(0, points.size()).anyMatch(index -> points.get(index).lineSeq() != index + 1)) {
-                return Optional.empty();
-            }
             return Optional.of(List.copyOf(points));
         } catch (RuntimeException invalid) {
             return Optional.empty();

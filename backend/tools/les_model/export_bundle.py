@@ -1,0 +1,137 @@
+"""Export trained numeric trees and original statistics for Java parity (not activation)."""
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import tempfile
+
+import joblib
+import numpy as np
+from threadpoolctl import threadpool_limits
+
+from contracts import MODEL_HASHES, gate_base, sha256, verify_models, verify_sources
+from export_statistics import export_statistics
+from refit_pool import verify_environment
+
+
+def export_tree_model(model, kind):
+    if model.is_categorical_ is not None and np.any(model.is_categorical_):
+        raise ValueError('Categorical trees are not supported by this numeric contract')
+    trees = []
+    for iteration in model._predictors:
+        step = []
+        for predictor in iteration:
+            rows = []
+            for n in predictor.nodes:
+                if n['is_categorical'] or not np.isfinite(n['num_threshold']) or not np.isfinite(n['value']):
+                    raise ValueError('Unsupported categorical/nonfinite node')
+                rows.append([int(n['feature_idx']), float(n['num_threshold']), bool(n['missing_go_to_left']),
+                             int(n['left']), int(n['right']), float(n['value']), bool(n['is_leaf'])])
+            step.append(rows)
+        trees.append(step)
+    return dict(schema='les-numeric-hgb-v1', kind=kind, feature_count=int(model.n_features_in_),
+                baseline=model._baseline_prediction.ravel().tolist(),
+                classes=model.classes_.tolist() if hasattr(model, 'classes_') else [],
+                node_fields=['feature', 'threshold', 'missing_left', 'left', 'right', 'value', 'leaf'],
+                leaf_values_include_learning_rate=True, trees=trees)
+
+
+def boundary_cases(base, gate, pool, reference):
+    sx = np.array(reference['seat_inputs'][0], dtype=float)
+    px = np.array(reference['probability_inputs'][0], dtype=float)
+    cases = [(sx.copy(), px.copy(), 'baseline')]
+    for name, model in [('base', base), ('gate', gate), ('pool', pool)]:
+        # Probe root split equality and its neighbours in the input's actual dtype.
+        for iteration in model._predictors[::max(1, len(model._predictors) // 32)]:
+            node = iteration[0].nodes[0]
+            if node['is_leaf']:
+                continue
+            dtype = np.float64 if name == 'pool' else np.float32
+            at = dtype(node['num_threshold'])
+            for label, value in [('below', np.nextafter(at, dtype(-np.inf))), ('at', at),
+                                  ('above', np.nextafter(at, dtype(np.inf))), ('missing', np.nan)]:
+                seat, full = sx.copy(), px.copy()
+                (full if name == 'pool' else seat)[int(node['feature_idx'])] = value
+                cases.append((seat, full, f'{name}:{label}'))
+    # Exercise missing branches for every feature, including features not used at roots.
+    for f in range(88):
+        seat, full = sx.copy(), px.copy()
+        seat[f] = np.nan
+        if f < 80:
+            full[f] = np.nan
+        cases.append((seat, full, 'missing-feature'))
+    seats = np.array([c[0] for c in cases], dtype='float32')
+    full = np.array([c[1] for c in cases], dtype='float64')
+    with threadpool_limits(limits=1):
+        b = np.maximum(base.predict(seats), 0)
+        p = gate.predict_proba(seats)
+        output = gate_base(b, p, reference['middle'])
+        probability = pool.predict_proba(full)[:, 1]
+    def values(a):
+        return np.where(np.isnan(a), None, a).tolist()
+    return dict(schema='les-reference-cases-v1', case_type='synthetic-boundaries',
+                seat_inputs=values(seats), probability_inputs=values(full), expected_base=b.tolist(),
+                expected_gate_probabilities=p.tolist(), expected_seats=output.tolist(),
+                expected_departure_full=probability.tolist(), middle=reference['middle'],
+                labels=[c[2] for c in cases])
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    for arg in ['run', 'handoff-lab', 'pool-reference', 'reference', 'output']:
+        parser.add_argument('--' + arg, required=True, type=Path)
+    args = parser.parse_args()
+    if args.output.exists():
+        raise ValueError('Output exists; preserve previous artifacts')
+    environment = verify_environment(args.run)
+    sources = verify_sources(args.handoff_lab)
+    models = args.run / 'lab/models/reproduced'
+    verify_models(models)
+    pool_receipt = json.loads((args.pool_reference / 'receipt.json').read_text())
+    pool_path = args.pool_reference / 'pool_gb.joblib'
+    if sha256(pool_path) != pool_receipt['model_sha256']:
+        raise ValueError('Pool digest mismatch')
+    ref_manifest = json.loads((args.reference / 'manifest.json').read_text())
+    expected_models = {**MODEL_HASHES, 'pool_gb.joblib': pool_receipt['model_sha256']}
+    if ref_manifest['model_hashes'] != expected_models:
+        raise ValueError('Reference generated by a different model')
+    for name, digest in ref_manifest['files'].items():
+        if sha256(args.reference / name) != digest:
+            raise ValueError('Reference file changed')
+    for name, digest in ref_manifest['input_hashes'].items():
+        if sha256(args.run / 'lab/data/derived' / name) != digest:
+            raise ValueError('Reference inputs changed')
+    base = joblib.load(models / 'gb_after_entry.joblib')
+    gate = joblib.load(models / 'gate_after.joblib')
+    pool = joblib.load(pool_path)
+    reference = json.loads((args.reference / 'golden.json').read_text())
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.les-bundle-', dir=args.output.parent) as temp:
+        stage = Path(temp)
+        for name, model, kind in [('base', base, 'regression'), ('gate', gate, 'multiclass'), ('pool', pool, 'binary')]:
+            (stage / f'{name}.json').write_text(json.dumps(export_tree_model(model, kind), allow_nan=False, separators=(',', ':')) + '\n')
+        for name in ['golden.json', 'feature-contract.json']:
+            shutil.copyfile(args.reference / name, stage / name)
+        (stage / 'boundaries.json').write_text(json.dumps(boundary_cases(base, gate, pool, reference), allow_nan=False, separators=(',', ':')) + '\n')
+        shutil.copyfile(models / 'gate_constants.json', stage / 'constants.json')
+        # samples3 uses this for direction/boarding/position, while stop_features
+        # uses rebuild/routes.json for entry features. Both references are needed.
+        route_reference = args.run / 'lab/data/bundle_coldstart20/route-reference.json'
+        shutil.copyfile(route_reference, stage / 'route-reference.json')
+        stats = export_statistics(args.run, args.handoff_lab, stage)
+        manifest = dict(schema='les-inference-bundle-v1', model='les-gate-base-and-pool',
+                        serving_ready=False, output_targets=['after-alighting-estimated', 'departure-zero'],
+                        environment=environment, source_hashes=sources, trained_model_hashes=expected_models,
+                        reference_manifest_sha256=sha256(args.reference / 'manifest.json'),
+                        route_reference_sha256=sha256(route_reference),
+                        statistics_verification=stats['verification'],
+                        files={p.name: sha256(p) for p in sorted(stage.iterdir())},
+                        pending=['online feature builder', 'versioned settlement', 'runtime activation and API'])
+        (stage / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+        os.rename(stage, args.output)
+    print(json.dumps(dict(output=str(args.output), files=len(manifest['files']), serving_ready=False)))
+
+
+if __name__ == '__main__':
+    main()

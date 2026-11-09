@@ -8,6 +8,7 @@ import com.gustler.backend.api.account.ReauthRequiredException;
 import com.gustler.backend.api.arrival.ArrivalQuery.Failure;
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
+import com.gustler.backend.api.boarding.BoardingOptionsException;
 import com.gustler.backend.api.error.ApiException;
 import com.gustler.backend.api.error.CsrfRejectedException;
 import com.gustler.backend.api.error.ErrorCode;
@@ -25,6 +26,7 @@ import com.gustler.backend.api.favorite.InvalidFavoriteOrderException;
 import com.gustler.backend.api.favorite.RepresentativeFavoriteGroupDeletionException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
+import com.gustler.backend.api.station.InvalidStationTileException;
 import com.gustler.backend.member.api.NicknameViolation;
 import java.time.Duration;
 import java.util.Arrays;
@@ -61,6 +63,7 @@ class ApiExceptionHandlerTest {
             new NicknameTakenException(),
             new ReauthRequiredException(),
             new Failure(ErrorCode.STATION_NOT_FOUND),
+            new InvalidStationTileException(),
             new Failure(ErrorCode.REFERENCE_VERSION_CONFLICT),
             new FavoriteGroupLimitExceededException(),
             new FavoriteLimitExceededException(),
@@ -70,7 +73,9 @@ class ApiExceptionHandlerTest {
             new RepresentativeFavoriteGroupDeletionException(),
             new InvalidFavoriteOrderException(),
             new FavoriteTargetAmbiguousException(),
-            new FavoriteTargetUnavailableException()
+            new FavoriteTargetUnavailableException(),
+            new BoardingOptionsException(ErrorCode.STOP_VISIT_AMBIGUOUS),
+            new BoardingOptionsException(ErrorCode.UNSUPPORTED_MODE)
         );
     }
 

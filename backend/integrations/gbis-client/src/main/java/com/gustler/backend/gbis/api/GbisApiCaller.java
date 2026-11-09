@@ -38,6 +38,10 @@ public class GbisApiCaller {
     private static final Pattern AUTH_MESSAGE_IN_XML = Pattern.compile("<returnAuthMsg>(.*?)</returnAuthMsg>");
     private static final String UNKNOWN_REASON_CODE = "UNKNOWN";
     private static final String NO_MESSAGE = "";
+    private static final Set<String> CAPTURE_PATHS = Set.of(
+        "/busrouteservice/v2/getBusRouteLineListv2",
+        "/busrouteservice/v2/getBusRouteInfoItemv2",
+        "/busrouteservice/v2/getBusRouteStationListv2");
     private static final String EMPTY_BODY = "Open API가 본문 없이 응답했다";
 
     /** HTTP 상태가 오류여도 본문을 버리지 않는다. 포털 오류는 4xx·5xx 로 오면서 사유를 본문에 담는다. */
@@ -85,6 +89,41 @@ public class GbisApiCaller {
         return requestBy(path, "routeId", routeId, keyAlias);
     }
 
+    /** 좌표(WGS84 경도 x, 위도 y)를 받는 조회. 주변정류소 목록조회가 쓴다. */
+    public GbisHttpResult getByCoordinateWithMetadata(
+        String path,
+        final double x,
+        final double y,
+        String keyAlias
+    ) {
+        try {
+            ResponseEntity<byte[]> response = gbisRestClient.get()
+                .uri(builder -> builder
+                    .path(path)
+                    .queryParam("serviceKey", "{serviceKey}")
+                    .queryParam("x", "{x}")
+                    .queryParam("y", "{y}")
+                    .queryParam("format", "json")
+                    .build(properties.serviceKeyOf(keyAlias), Double.toString(x), Double.toString(y)))
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, KEEP_ERROR_BODY)
+                .toEntity(byte[].class);
+            return new GbisHttpResult(interpret(decode(response.getBody())), response.getStatusCode().value(),
+                response.getHeaders().getFirst("Retry-After"),
+                remainingOf(response.getHeaders().getFirst("X-RateLimit-Remaining")));
+        } catch (RestClientException e) {
+            // 예외 메시지에는 인증키를 포함한 요청 URL이 들어갈 수 있다.
+            return new GbisHttpResult(new NotReceived(e.getClass().getSimpleName()), 0, null);
+        }
+    }
+
+    private static Integer remainingOf(String header) {
+        if (header == null || !header.matches("[0-9]{1,9}")) {
+            return null;
+        }
+        return Integer.valueOf(header);
+    }
+
     private GbisRawResponse getBy(
         String path,
         String parameter,
@@ -113,8 +152,28 @@ public class GbisApiCaller {
                 .toEntity(byte[].class);
             diagnostic("collectionHttpStatus", Integer.toString(response.getStatusCode().value()));
             diagnostic("collectionTransport", "RECEIVED");
-            return new GbisHttpResult(interpret(decode(response.getBody())), response.getStatusCode().value(),
-                response.getHeaders().getFirst("Retry-After"));
+            byte[] body = response.getBody();
+            // Never normalize a response that bypassed credential screening because of its size.
+            // This guard precedes UTF-8 decoding, portal interpretation and all endpoint schema parsing.
+            if (captureBodyTooLarge(path, body == null ? 0 : body.length)) {
+                diagnostic("collectionTransport", "RESPONSE_TOO_LARGE");
+                return new GbisHttpResult(new NotReceived("RESPONSE_TOO_LARGE"),
+                    response.getStatusCode().value(), null, GbisResponseCapture.NONE);
+            }
+            GbisRawResponse interpreted = interpret(decode(body));
+            GbisResponseCapture capture = response.getStatusCode().value() == 200
+                    && interpreted instanceof Received && CAPTURE_PATHS.contains(path)
+                ? GbisCapturePolicy.screen(body, properties.serviceKeyOf(keyAlias), objectMapper)
+                : GbisResponseCapture.NONE;
+            if (response.getStatusCode().value() == 200 && interpreted instanceof Received
+                    && CAPTURE_PATHS.contains(path)
+                    && capture.disposition() == GbisResponseCapture.Disposition.NOT_RETAINED) {
+                // A production HTTP response that could not be screened is not a legacy parsed response.
+                return new GbisHttpResult(new NotReceived("RESPONSE_NOT_RETAINABLE"),
+                    response.getStatusCode().value(), null, GbisResponseCapture.NONE);
+            }
+            return new GbisHttpResult(interpreted, response.getStatusCode().value(),
+                response.getHeaders().getFirst("Retry-After"), capture);
         } catch (RestClientException e) {
             diagnostic("collectionTransport", e.getClass().getSimpleName());
             Throwable cause = e;
@@ -126,6 +185,10 @@ public class GbisApiCaller {
             // 예외 메시지에는 인증키를 포함한 요청 URL이 들어갈 수 있다.
             return new GbisHttpResult(new NotReceived(e.getClass().getSimpleName()), 0, null);
         }
+    }
+
+    static boolean captureBodyTooLarge(String path, int byteCount) {
+        return CAPTURE_PATHS.contains(path) && byteCount > GbisCapturePolicy.MAX_RESPONSE_BYTES;
     }
 
     private static void diagnostic(String key, String value) {

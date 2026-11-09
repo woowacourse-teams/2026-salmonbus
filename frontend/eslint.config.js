@@ -12,6 +12,13 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   reactHooks.configs.flat["recommended-latest"],
   {
+    files: ["src/**/*.typeTest.ts"],
+    rules: {
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+    },
+  },
+  {
     files: ["src/**/*.{ts,tsx}"],
     languageOptions: {
       globals: globals.browser,
@@ -51,8 +58,18 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/**/*{Favorite,favorite}*.{ts,tsx}", "src/shared/components/favorite-editor/**/*.{ts,tsx}"],
-    ignores: ["src/**/*.test.ts", "src/**/*.typeTest.ts"],
+    files: [
+      "src/**/*{Favorite,favorite}*.{ts,tsx}",
+      "src/**/*{Notification,notification}*.{ts,tsx}",
+      "src/shared/components/favorite-editor/**/*.{ts,tsx}",
+    ],
+    ignores: [
+      "src/**/*.test.ts",
+      "src/**/*.typeTest.ts",
+      "src/shared/notification/notification.types.ts",
+      "src/shared/notification/nativeNotification.ts",
+      "src/shared/notification/openedNotificationInbox.ts",
+    ],
     rules: {
       "@typescript-eslint/consistent-type-definitions": ["error", "interface"],
       "@typescript-eslint/method-signature-style": ["error", "property"],

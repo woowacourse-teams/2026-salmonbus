@@ -18,11 +18,14 @@ COPY --chown=developer:developer backend/common/build.gradle ./common/build.grad
 COPY --chown=developer:developer backend/business/route-catalog/build.gradle ./business/route-catalog/build.gradle
 COPY --chown=developer:developer backend/business/observations/build.gradle ./business/observations/build.gradle
 COPY --chown=developer:developer backend/business/arrivals/build.gradle ./business/arrivals/build.gradle
+COPY --chown=developer:developer backend/business/stations/build.gradle ./business/stations/build.gradle
 COPY --chown=developer:developer backend/business/forecasting/build.gradle ./business/forecasting/build.gradle
 COPY --chown=developer:developer backend/business/api-call-quota/build.gradle ./business/api-call-quota/build.gradle
 COPY --chown=developer:developer backend/business/member/build.gradle ./business/member/build.gradle
 COPY --chown=developer:developer backend/integrations/gbis-client/build.gradle ./integrations/gbis-client/build.gradle
 COPY --chown=developer:developer backend/libraries/operation-log/build.gradle ./libraries/operation-log/build.gradle
+COPY --chown=developer:developer backend/libraries/route-geometry-contract/build.gradle ./libraries/route-geometry-contract/build.gradle
+COPY --chown=developer:developer backend/libraries/route-geometry-engine/build.gradle ./libraries/route-geometry-engine/build.gradle
 COPY --chown=developer:developer backend/runtime-test/build.gradle ./runtime-test/build.gradle
 COPY --chown=developer:developer dev/docker/dependencies.init dev/docker/gradle.properties /local-build/
 USER developer
@@ -38,7 +41,7 @@ RUN --mount=type=cache,id=salmonbus-backend-gradle-${TARGETARCH},target=/depende
 
 FROM dependencies AS development
 COPY --chown=developer:developer backend/ ./
-COPY --chown=developer:developer contract/station-arrivals-v2.openapi.json contract/route-geometry-v2.openapi.json contract/route-watch-v1.openapi.json contract/auth-v1.openapi.json /workspace/contract/
+COPY --chown=developer:developer contract/station-arrivals-v2.openapi.json contract/route-geometry-v2.openapi.json contract/route-watch-v1.openapi.json contract/auth-v1.openapi.json contract/station-map-v2.openapi.json contract/boarding-options-v1.openapi.json /workspace/contract/
 COPY --chown=developer:developer dev/data/ /local/data/
 COPY --chmod=755 dev/docker/run-backend.sh /usr/local/bin/run-backend
 ARG DEV_COMPONENT=api-app

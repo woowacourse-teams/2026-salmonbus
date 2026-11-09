@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/busstationservice/v2/getBusStationAroundListv2",
+    "queryParameters": {
+      "serviceKey": {"matches": "(local-only-placeholder|shared-dev-placeholder)"},
+      "format": {"equalTo": "json"},
+      "x": {"matches": "-?[0-9]+(\\.[0-9]+)?"},
+      "y": {"matches": "-?[0-9]+(\\.[0-9]+)?"}
+    }
+  },
+  "response": {
+    "status": 200,
+    "transformers": ["gbis-replay"],
+    "transformerParameters": {"operation": "stationAround"}
+  }
+}

@@ -1,8 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Key;
 import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore.Restored;
+import com.gustler.backend.forecasting.application.evaluation.EvaluationWorkStore;
 import com.gustler.backend.forecasting.domain.evaluation.PendingForecast;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -28,6 +28,7 @@ public class JdbcEvaluationWorkStore implements EvaluationWorkStore {
         SELECT DISTINCT forecast.vehicle_observation_id, forecast.route_version_id
         FROM seat_forecast forecast
         WHERE forecast.route_version_id = :version
+          AND forecast.seat_target <> 'AFTER_ALIGHTING_ESTIMATE'
           AND forecast.vehicle_observation_id IN (:ids)
           AND NOT EXISTS (
               SELECT 1 FROM forecast_evaluation_result result

@@ -1,5 +1,6 @@
 package com.gustler.backend.support;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -43,6 +44,14 @@ public final class TestDatabase implements AutoCloseable {
     public String jdbcUrl() {
         return "jdbc:postgresql://" + server.getHost() + ":"
             + server.getMappedPort(PostgreSQLContainer.POSTGRESQL_PORT) + "/" + name;
+    }
+
+    public LoopbackRelay openLoopbackRelay() throws IOException {
+        return new LoopbackRelay(server.getHost(), server.getMappedPort(PostgreSQLContainer.POSTGRESQL_PORT));
+    }
+
+    public String jdbcUrlThrough(LoopbackRelay relay) {
+        return "jdbc:postgresql://127.0.0.1:" + relay.port() + "/" + name;
     }
 
     public String username() {

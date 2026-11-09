@@ -103,6 +103,21 @@ export interface EventMap {
     | (StopExpandedBase & { stop_kind: "noVehicle"; arrival_count: 0 })
     | (StopExpandedBase & { stop_kind: "checking"; arrival_count: 0 });
 
+  notification_settings_saved: {
+    route_id: string;
+    direction: Direction;
+    stop_id: string;
+    time: string;
+    weekday_count: number;
+    is_first: boolean;
+  };
+
+  notification_opened: {
+    route_id: string;
+    direction: Direction;
+    stop_id: string;
+  };
+
   login_started: {
     provider: LoginProvider;
     entry: "favorite" | "home" | "mypage";

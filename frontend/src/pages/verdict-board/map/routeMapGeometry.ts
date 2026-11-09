@@ -120,6 +120,21 @@ function preparedRoutePathFor(data: RouteMapData, direction: Direction): Prepare
       distances[index - 1]! + Math.hypot(to.latitude - from.latitude, (to.longitude - from.longitude) * longitudeScale),
     );
   }
+  const stopSequences = stops.map((stop) => stop.sequence);
+  const connectionDistances = stops.map(({ pathConnection }) => {
+    if (pathConnection === undefined) return NaN;
+    const { segmentIndex, segmentFraction } = pathConnection;
+    const start = distances[segmentIndex] ?? NaN;
+    const end = distances[segmentIndex + 1] ?? NaN;
+    return start + (end - start) * segmentFraction;
+  });
+  if (
+    connectionDistances.every(
+      (distance, index) => Number.isFinite(distance) && distance >= (connectionDistances[index - 1] ?? 0),
+    )
+  ) {
+    return { coordinates, distances, stopSequences, stopDistances: connectionDistances };
+  }
   let minimumDistance = 0;
   const stopDistances = stops.map((stop) => {
     let nearestDistance = minimumDistance;
@@ -151,7 +166,7 @@ function preparedRoutePathFor(data: RouteMapData, direction: Direction): Prepare
     minimumDistance = nearestDistance;
     return nearestDistance;
   });
-  return { coordinates, distances, stopSequences: stops.map((stop) => stop.sequence), stopDistances };
+  return { coordinates, distances, stopSequences, stopDistances };
 }
 
 function upperBoundIndexFor(values: readonly number[], target: number): number {

@@ -1,5 +1,6 @@
 package com.gustler.backend.maintenance;
 
+import com.gustler.backend.support.LoopbackRelay;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -200,6 +201,63 @@ class MaintenanceProcessTest {
             || name.startsWith("com/gustler/backend/migration/") || name.startsWith("software/amazon/awssdk/")
             || name.startsWith("com/amazonaws/")
             || name.startsWith("db/migration/") || name.startsWith("db/historical-migration/");
+    }
+
+    @Test
+    void 정비JAR에서_형상상태_내보내기_등록_해제를_끝까지_실행한다() throws Exception {
+        Database database = database(true);
+        com.gustler.backend.routegeometry.api.RouteDisplayDbSamples.seed(
+                database.jdbc(), "204000057");
+        String config = database.configuration().toString();
+        Result exported =
+                execute("route-display-export", "--config", config, "--route-id", "204000057");
+        assertThat(exported.exitCode()).isZero();
+        assertThat(exported.stdout())
+                .contains(
+                        com.gustler.backend.routegeometry.api.RouteDisplaySamples.input().digest());
+        Path artifact = directory.resolve("reviewed-display.json");
+        Files.write(
+                artifact,
+                JSON.writeValueAsBytes(
+                        com.gustler.backend.routegeometry.api.RouteDisplaySamples.manual(
+                                com.gustler.backend.routegeometry.api.RouteDisplaySamples.input(),
+                                0.0001)));
+        Result imported =
+                execute(
+                        "route-display-import",
+                        "--config",
+                        config,
+                        "--artifact",
+                        artifact.toString());
+        assertThat(imported.exitCode()).isZero();
+        assertThat(imported.stdout()).contains("MANUAL_REVIEWED");
+        Result status =
+                execute("route-display-status", "--config", config, "--route-id", "204000057");
+        assertThat(status.exitCode()).isZero();
+        assertThat(status.stdout()).contains("MANUAL_REVIEWED");
+        Result disabled =
+                execute(
+                        "route-display-disable",
+                        "--config",
+                        config,
+                        "--route-id",
+                        "204000057",
+                        "--input-digest",
+                        com.gustler.backend.routegeometry.api.RouteDisplaySamples.input().digest());
+        assertThat(disabled.exitCode()).isZero();
+        assertThat(disabled.stdout()).contains("AUTOMATIC_FALLBACK");
+
+        var failedJob = RouteDisplayRetryFixtures.failed(database.jdbc());
+        Result retried = execute("route-display-retry", "--config", config, "--route-id", "204000057",
+                "--generation-key", failedJob.key());
+        assertThat(retried.exitCode()).isZero();
+        assertThat(retried.stdout()).contains("\"attemptLimit\":10", "\"attempts\":5", "\"status\":\"PENDING\"");
+        Result duplicateRetry = execute("route-display-retry", "--config", config, "--route-id", "204000057",
+                "--generation-key", failedJob.key());
+        assertThat(duplicateRetry.exitCode()).isEqualTo(1);
+        assertThat(duplicateRetry.stderr()).contains("ROUTE_DISPLAY_JOB_NOT_FAILED");
+        assertThat(database.jdbc().sql("SELECT attempt_limit FROM route_display_generation_job")
+                .query(Integer.class).single()).isEqualTo(10);
     }
 
     private ChunkOutput rebuild(Database database, final long version) throws Exception {

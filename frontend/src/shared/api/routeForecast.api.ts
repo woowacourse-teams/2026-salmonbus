@@ -17,7 +17,10 @@ export function fetchRoutes(options: FetchRequestOption): Promise<ApiResult<Rout
   return requestJson<RouteListResponse>(`${API_BASE}/routes`, options);
 }
 
-export function fetchRouteWatch(routeId: string, options: FetchRequestOption): Promise<ApiResult<RouteWatch>> {
+export function fetchRouteWatch(
+  routeId: string,
+  options: FetchRequestOption & Pick<RequestOptions, "cache">,
+): Promise<ApiResult<RouteWatch>> {
   const endpoint = ENDPOINTS.watch;
 
   return requestJson<RouteWatch>(routeUrlFrom(endpoint, routeId), {

@@ -45,8 +45,9 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
         INSERT /* salmonbus:forecast_publication.upsert_prediction */ INTO seat_forecast (
             publication_id, vehicle_observation_id, target_stop_order, route_version_id, stops_to_target,
             model_deployment_id, demand_statistics_revision, seat_full_chance_raw, seat_full_chance,
-            expected_seats, generated_at, quality_revision, evaluation_detail_required
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            expected_seats, generated_at, quality_revision, evaluation_detail_required,
+            seat_target, probability_target, label_version, feature_snapshot, inference_bundle_hash
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)
         ON CONFLICT (vehicle_observation_id, target_stop_order) DO UPDATE SET
             publication_id = EXCLUDED.publication_id,
             route_version_id = EXCLUDED.route_version_id,
@@ -57,7 +58,10 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
             seat_full_chance = EXCLUDED.seat_full_chance,
             expected_seats = EXCLUDED.expected_seats,
             generated_at = EXCLUDED.generated_at,
-            quality_revision = EXCLUDED.quality_revision
+            quality_revision = EXCLUDED.quality_revision,
+            seat_target = EXCLUDED.seat_target, probability_target = EXCLUDED.probability_target,
+            label_version = EXCLUDED.label_version, feature_snapshot = EXCLUDED.feature_snapshot,
+            inference_bundle_hash = EXCLUDED.inference_bundle_hash
         """;
 
     private static final String COUNT_PREDICTIONS = """
@@ -79,8 +83,23 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
     @Override
     @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public boolean save(ForecastPublication publication) {
-        Optional<Long> existing = jdbc.sql("SELECT id FROM forecast_publication WHERE source_batch_id = ?")
-            .param(publication.sourceBatchId()).query(Long.class).optional();
+        Optional<ExistingPublication> previous = jdbc.sql(
+            """
+                SELECT p.id, p.model_deployment_id,
+                    (old.calculation_version='les-online-v1' OR incoming.calculation_version='les-online-v1') AS les
+                FROM forecast_publication p JOIN model_deployment old ON old.id=p.model_deployment_id
+                JOIN model_deployment incoming ON incoming.id=? WHERE p.source_batch_id=? FOR UPDATE OF p
+                """)
+            .params(publication.modelDeploymentId(), publication.sourceBatchId())
+            .query((row, index) -> new ExistingPublication(row.getLong("id"), row.getLong("model_deployment_id"),
+                row.getBoolean("les")))
+            .optional();
+        previous.ifPresent(existing -> {
+            if (existing.les() && existing.modelDeploymentId() != publication.modelDeploymentId()) {
+                throw new IllegalStateException("이미 발행한 관측을 다른 모델로 덮어쓸 수 없다. 독립 재생 DB를 사용해야 한다");
+            }
+        });
+        Optional<Long> existing = previous.map(ExistingPublication::id);
         final long publicationId = existing.orElseGet(() -> jdbc.sql(INSERT_PUBLICATION)
             .params(publication.sourceBatchId(), publication.routeVersionId(), publication.modelDeploymentId(),
                 publication.demandStatisticsRevision(), publication.qualityRevision(),
@@ -94,17 +113,22 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
             .update());
         List<Object[]> rows = publication.predictions()
             .stream()
-            .map(prediction -> new Object[] {publicationId, prediction.vehicleObservationId(),
+            .map(prediction -> new Object[] { publicationId, prediction.vehicleObservationId(),
                 prediction.targetStopOrder(), prediction.routeVersionId(), prediction.stopsToTarget(),
                 prediction.modelDeploymentId(), prediction.demandStatisticsRevision(), prediction.seatFullChanceRaw(),
                 prediction.seatFullChance(), prediction.expectedSeats(), offset(prediction.generatedAt()),
-                publication.qualityRevision(), prediction.evaluationDetailRequired()})
+                publication.qualityRevision(), prediction.evaluationDetailRequired(), prediction.seatTarget(),
+                prediction.probabilityTarget(), prediction.labelVersion(), prediction.featureSnapshot(),
+                prediction.inferenceBundleHash() })
             .toList();
         if (!rows.isEmpty()) {
             batches.batchUpdate(UPSERT_PREDICTION, rows);
         }
         existing.ifPresent(id -> jdbc.sql(COUNT_PREDICTIONS).params(publication.sourceBatchId(), id).update());
         return existing.isEmpty();
+    }
+
+    private record ExistingPublication(long id, long modelDeploymentId, boolean les) {
     }
 
     private static OffsetDateTime offset(Instant instant) {

@@ -24,7 +24,13 @@ public record CallQuotaPolicy(
         Objects.requireNonNull(dailyLimits, "API별 하루 호출 한도가 필요하다");
         Map<CallQuota, Integer> limits = new EnumMap<>(CallQuota.class);
         limits.putAll(dailyLimits);
-        for (CallQuota service : CallQuota.values()) {
+        for (Entry<CallQuota, Integer> entry : limits.entrySet()) {
+            if (entry.getValue() == null || entry.getValue() <= 0) {
+                throw new IllegalArgumentException("하루 호출 한도는 API마다 1 이상이어야 한다: " + entry.getKey());
+            }
+        }
+        // 위치/노선 수집의 기존 필수 설정이다. 정류소는 StationFillPolicy에서 별도 한도를 준다.
+        for (CallQuota service : List.of(CallQuota.BUS_LOCATION, CallQuota.BUS_ROUTE)) {
             Integer limit = limits.get(service);
             if (limit == null || limit <= 0) {
                 throw new IllegalArgumentException("하루 호출 한도는 API마다 1 이상이어야 한다: " + service);

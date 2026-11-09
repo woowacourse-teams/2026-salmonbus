@@ -6,6 +6,7 @@ import { App } from "@/app/App";
 import { AppErrorBoundary } from "@/app/AppErrorBoundary";
 import { initAnalytics } from "@/shared/analytics/analytics";
 import { initInputMethod } from "@/shared/input-method/inputMethod";
+import { initOpenedNotifications } from "@/shared/notification/openedNotificationInbox";
 
 const container = document.getElementById("root");
 if (!container) {
@@ -14,6 +15,7 @@ if (!container) {
 
 initAnalytics();
 initInputMethod();
+initOpenedNotifications();
 
 createRoot(container, errorTrackingRootOptions).render(
   <StrictMode>
