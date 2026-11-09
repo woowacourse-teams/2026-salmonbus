@@ -46,7 +46,14 @@ export function MyPageScreen() {
     }
     setBusy(false);
     if (!result.ok) {
-      setError(authErrorOf(result.failure));
+      setError(
+        authErrorOf(
+          result.failure,
+          action === "logout"
+            ? "로그아웃하지 못했어요. 다시 시도해 주세요."
+            : "회원탈퇴를 완료하지 못했어요. 다시 시도해 주세요.",
+        ),
+      );
       return;
     }
     void navigate("/", {
@@ -137,7 +144,7 @@ export function MyPageScreen() {
                 로그인 상태를 확인하지 못했어요.
               </p>
               <button className={menuRow} type="button" onClick={() => void reload()}>
-                다시 확인하기
+                다시 시도하기
               </button>
             </>
           )}

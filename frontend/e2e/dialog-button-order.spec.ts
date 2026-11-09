@@ -105,7 +105,7 @@ test("로그인에서 돌아와 열린 실패 창은 돌아가기에 테두리 �
   await page.goto("/login?returnTo=%2Fmypage");
   await page.getByRole("button", { name: "카카오로 계속하기" }).click();
   await expectFocusRing(button(page.getByRole("dialog"), "돌아가기"), "hidden");
-  await expectCancelFirst(page, page.getByRole("dialog"), "돌아가기", "다시 로그인");
+  await expectCancelFirst(page, page.getByRole("dialog"), "돌아가기", "확인");
 });
 
 test("키보드로 연 마이페이지 확인 창은 취소에 포커스 테두리를 보인다", async ({ page }) => {

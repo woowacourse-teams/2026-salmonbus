@@ -52,6 +52,10 @@ test("그룹 카드 편집은 순서·삭제 아이콘을 표시하고 실패 �
   favorites.mutationError = "INTERNAL_ERROR";
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog.getByRole("alert")).toBeVisible();
+  await dialog.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(editor.getByRole("button", { name: "완료", exact: true })).toBeVisible();
+  await expect(editor.getByRole("button", { name: "다시 저장하기", exact: true })).toHaveCount(0);
+  await editor.getByRole("button", { name: "통학 그룹 삭제", exact: true }).click();
   favorites.mutationError = null;
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -61,7 +65,7 @@ test("그룹 카드 편집은 순서·삭제 아이콘을 표시하고 실패 �
   await editor.getByRole("button", { name: "완료", exact: true }).click();
   await expect(editor.getByRole("alert")).toBeVisible();
   favorites.mutationError = null;
-  await editor.getByRole("button", { name: "완료", exact: true }).click();
+  await editor.getByRole("button", { name: "다시 저장하기", exact: true }).click();
   await expect(editor).toHaveCount(0);
   expect(favorites.groups.map((group) => group.name)).toEqual(["주말", "즐겨찾기"]);
 });
@@ -126,18 +130,14 @@ test("새 대표 표시는 즉시 바뀌고 이전 대표 삭제는 순서 저�
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog.getByRole("alert")).toBeVisible();
   expect(favorites.groups[0]!.id).toBe(schoolId);
-  await expect(dialog.getByRole("status")).toHaveText(
-    "일부 순서는 저장됐어요. 아직 저장하지 못한 순서만 다시 저장할 수 있어요.",
-  );
+  await expect(dialog.getByRole("status")).toHaveText("일부 순서는 저장됐어요. 남은 작업을 다시 시도해 주세요.");
   failDelete = false;
   await expect(dialog.getByRole("button", { name: "삭제", exact: true })).toBeEnabled();
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   expect(mutations).toEqual(["order", "order", "delete", "delete"]);
   await expect(
-    editor
-      .getByRole("status")
-      .filter({ hasText: "일부 순서는 저장됐어요. 아직 저장하지 못한 순서만 다시 저장할 수 있어요." }),
+    editor.getByRole("status").filter({ hasText: "일부 순서는 저장됐어요. 남은 작업을 다시 시도해 주세요." }),
   ).toHaveCount(0);
   await editor.getByRole("button", { name: "완료", exact: true }).click();
   await expect(editor).toHaveCount(0);

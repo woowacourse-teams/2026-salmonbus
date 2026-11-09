@@ -11,6 +11,8 @@ import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { FavoritesNotice, PartialFavoriteOrderNotice } from "@/shared/components/FavoritesNotice";
+import { RetryButton } from "@/shared/components/RetryButton";
+import { FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
 import { SortableList } from "./SortableList";
 import { moveItem } from "@/shared/utils/moveItem";
 import { useFavoriteGroupDeletion } from "@/shared/hooks/useFavoriteGroupDeletion";
@@ -45,7 +47,8 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   const [groupDrag, setGroupDrag] = useState<GroupDrag | null>(null);
   const protectedGroup = deletingGroup !== null && draft[0]?.id === deletingGroup.id;
   const [revision, retry] = useState(0);
-  const summaries = useHomeFavorites({ kind: "all" }, revision);
+  const { resource: summaries, requestState } = useHomeFavorites({ kind: "all" }, revision);
+  const loadFailed = summaries.status === "loadingError";
   const favorites =
     latestSuccessOf(summaries)?.body.groups.flatMap((candidate) => candidate.favorites) ?? initialFavorites ?? [];
   const hasGroupDetails =
@@ -53,8 +56,9 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
     group?.favorites.every((favorite) => favorites.some((item) => item.id === favorite.id));
   const {
     busy,
+    failure,
     error,
-    setError,
+    clearError,
     run,
     partial,
     setPartial,
@@ -64,8 +68,8 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   const doneButton = useRef<HTMLButtonElement>(null);
   const groupDropArea = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    editor.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus();
-  }, [group?.id]);
+    if (!loadFailed) editor.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus();
+  }, [group?.id, loadFailed]);
   const idsOf = (items: { id: string }[]) => items.map((item) => item.id);
   const labelOf = (favorite: SavedFavorite) => {
     const item = favorites.find((candidate) => candidate.id === favorite.id);
@@ -83,7 +87,11 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   }
   async function remove() {
     if (!group || !deleting) return;
-    if (await run(() => deleteFavorite(group.id, deleting.id))) {
+    if (
+      await run(() => deleteFavorite(group.id, deleting.id), {
+        kind: "deleteFavorite",
+      })
+    ) {
       const withoutDeleted = (current: FavoriteGroup[]) =>
         current.map((candidate) =>
           candidate.id === group.id
@@ -151,8 +159,13 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
       }
       return result;
     };
-    if (await run(saveChanges, { resultHaptic: true })) onClose(true);
+    const savedSuccessfully = await run(saveChanges, {
+      resultHaptic: true,
+      kind: "saveOrder",
+    });
+    if (savedSuccessfully) onClose(true);
   }
+  const doneLabel = busy ? "저장 중…" : failure?.operation === "saveOrder" ? "다시 저장하기" : "완료";
   return (
     <section
       ref={editor}
@@ -165,156 +178,186 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
       }}
     >
       <h2 className={visuallyHidden}>즐겨찾기 편집</h2>
-      <p id="favorite-sort-help" className={visuallyHidden}>
-        손잡이를 끌거나 선택 후 그룹은 왼쪽·오른쪽, 정류장은 위·아래 방향키로 순서를 바꿀 수 있어요. Escape 키를 누르면
-        취소해요. 그룹을 아래 휴지통에 놓으면 삭제를 확인할 수 있어요.
-      </p>
-      <div className={styles.groupControls}>
-        <div className={styles.groupList}>
-          <SortableList
-            items={draft}
-            horizontal
-            disabled={busy}
-            label={(candidate) => candidate.name}
-            onMove={(from, to) => setDraft((current) => moveItem(current, from, to))}
-            dropZone={{
-              target: groupDropArea,
-              onDrag: (dragged, overTarget) => setGroupDrag(dragged ? { overTarget } : null),
-              onDrop: (dropped) => {
-                setError(null);
-                setDeletingGroup(dropped);
-              },
-            }}
-            render={(candidate, handle) => (
-              <>
-                <button
-                  type="button"
-                  className={styles.groupName}
-                  aria-pressed={group?.id === candidate.id}
-                  disabled={busy}
-                  onClick={() => select(candidate.id)}
-                >
-                  {candidate.name}
-                </button>
-                {handle}
-              </>
+      {loadFailed && (
+        <div className={styles.loadError}>
+          <FavoritesNotice resource={summaries} requestState={requestState} onRetry={() => retry((value) => value + 1)}>
+            {({ retry, retrying }) => (
+              <div className={styles.loadNotice}>
+                <p className={common.error} role="alert">
+                  {FAVORITES_LOAD_FAILURE_TITLE}.
+                </p>
+                <RetryButton onRetry={retry} busy={retrying}>
+                  {retrying ? "불러오는 중…" : "다시 시도하기"}
+                </RetryButton>
+              </div>
             )}
-          />
+          </FavoritesNotice>
+          <button type="button" className={styles.returnHome} onClick={close}>
+            홈으로 돌아가기
+          </button>
         </div>
-        <FavoriteGroupAddButton disabled={busy} onCreated={addGroup} />
-      </div>
-      {summaries.status === "pending" ? (
-        !hasGroupDetails && (
+      )}
+      <div className={styles.controls} hidden={loadFailed}>
+        <p id="favorite-sort-help" className={visuallyHidden}>
+          손잡이를 끌거나 선택 후 그룹은 왼쪽·오른쪽, 정류장은 위·아래 방향키로 순서를 바꿀 수 있어요. Escape 키를
+          누르면 취소해요. 그룹을 아래 휴지통에 놓으면 삭제를 확인할 수 있어요.
+        </p>
+        <div className={styles.groupControls}>
+          <div className={styles.groupList}>
+            <SortableList
+              items={draft}
+              horizontal
+              disabled={busy}
+              label={(candidate) => candidate.name}
+              onMove={(from, to) => setDraft((current) => moveItem(current, from, to))}
+              dropZone={{
+                target: groupDropArea,
+                onDrag: (dragged, overTarget) => setGroupDrag(dragged ? { overTarget } : null),
+                onDrop: (dropped) => {
+                  clearError();
+                  setDeletingGroup(dropped);
+                },
+              }}
+              render={(candidate, handle) => (
+                <>
+                  <button
+                    type="button"
+                    className={styles.groupName}
+                    aria-pressed={group?.id === candidate.id}
+                    disabled={busy}
+                    onClick={() => select(candidate.id)}
+                  >
+                    {candidate.name}
+                  </button>
+                  {handle}
+                </>
+              )}
+            />
+          </div>
+          <FavoriteGroupAddButton disabled={busy} onCreated={addGroup} />
+        </div>
+        {summaries.status === "pending" && !hasGroupDetails && (
           <p className={visuallyHidden} role="status">
             즐겨찾기를 불러오고 있어요…
           </p>
-        )
-      ) : (
-        <FavoritesNotice resource={summaries} onRetry={() => retry((value) => value + 1)} />
-      )}
-      <div
-        ref={groupDropArea}
-        className={styles.groupDropArea}
-        data-group-drop-zone=""
-        data-dragging={groupDrag !== null}
-        data-drop-active={groupDrag?.overTarget ?? false}
-        role={groupDrag ? "region" : undefined}
-        aria-label={groupDrag ? "그룹 삭제 영역" : undefined}
-      >
-        <div className={styles.dropContent} inert={groupDrag !== null}>
-          {group && group.favorites.length > 0 && (
-            <SortableList
-              key={group.id}
-              items={group.favorites}
-              disabled={busy}
-              label={labelOf}
-              onMove={(from, to) =>
-                setDraft((current) =>
-                  current.map((candidate) =>
-                    candidate.id === group.id
-                      ? { ...candidate, favorites: moveItem(candidate.favorites, from, to) }
-                      : candidate,
-                  ),
-                )
-              }
-              render={(favorite, handle) => {
-                const item = favorites.find((candidate) => candidate.id === favorite.id);
-                return (
-                  <>
-                    <div className={styles.info}>
-                      {summaries.status === "pending" && !item ? (
-                        <>
-                          <span className={styles.loadingName} aria-hidden="true" />
-                          <span className={styles.loadingDirection} aria-hidden="true" />
-                        </>
-                      ) : (
-                        <div className={styles.cardHeading}>
-                          <RouteBadge
-                            size={item?.route.displayName ? "large" : "small"}
-                            className={item?.route.displayName ? styles.routeBadge : ""}
-                          >
-                            {item?.route.displayName || "노선 정보 없음"}
-                          </RouteBadge>
-                          <div className={styles.stopNameAndDirection}>
-                            <span className={styles.stop}>{item?.stop.name || "정류장 정보 없음"}</span>
-                            <span className={styles.direction}>
-                              {directionLabelOf(item?.route.terminalStopName, favorite.direction)}
-                            </span>
+        )}
+        {summaries.status === "refetchError" && (
+          <FavoritesNotice resource={summaries} requestState={requestState} onRetry={() => retry((value) => value + 1)}>
+            {({ message, retry, retrying }) => (
+              <div>
+                <p className={common.error} role="alert">
+                  {message}
+                </p>
+                <RetryButton onRetry={retry} busy={retrying}>
+                  {retrying ? "불러오는 중…" : "다시 시도하기"}
+                </RetryButton>
+              </div>
+            )}
+          </FavoritesNotice>
+        )}
+        <div
+          ref={groupDropArea}
+          className={styles.groupDropArea}
+          data-group-drop-zone=""
+          data-dragging={groupDrag !== null}
+          data-drop-active={groupDrag?.overTarget ?? false}
+          role={groupDrag ? "region" : undefined}
+          aria-label={groupDrag ? "그룹 삭제 영역" : undefined}
+        >
+          <div className={styles.dropContent} inert={groupDrag !== null}>
+            {group && group.favorites.length > 0 && (
+              <SortableList
+                key={group.id}
+                items={group.favorites}
+                disabled={busy}
+                label={labelOf}
+                onMove={(from, to) =>
+                  setDraft((current) =>
+                    current.map((candidate) =>
+                      candidate.id === group.id
+                        ? { ...candidate, favorites: moveItem(candidate.favorites, from, to) }
+                        : candidate,
+                    ),
+                  )
+                }
+                render={(favorite, handle) => {
+                  const item = favorites.find((candidate) => candidate.id === favorite.id);
+                  return (
+                    <>
+                      <div className={styles.info}>
+                        {summaries.status === "pending" && !item ? (
+                          <>
+                            <span className={styles.loadingName} aria-hidden="true" />
+                            <span className={styles.loadingDirection} aria-hidden="true" />
+                          </>
+                        ) : (
+                          <div className={styles.cardHeading}>
+                            <RouteBadge
+                              size={item?.route.displayName ? "large" : "small"}
+                              className={item?.route.displayName ? styles.routeBadge : ""}
+                            >
+                              {item?.route.displayName || "노선 정보 없음"}
+                            </RouteBadge>
+                            <div className={styles.stopNameAndDirection}>
+                              <span className={styles.stop}>{item?.stop.name || "정류장 정보 없음"}</span>
+                              <span className={styles.direction}>
+                                {directionLabelOf(item?.route.terminalStopName, favorite.direction)}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.trash}
-                      disabled={busy}
-                      aria-label={`${item?.stop.name || `즐겨찾기 ${group.favorites.indexOf(favorite) + 1}`} 삭제`}
-                      onClick={(event) => {
-                        event.currentTarget.focus();
-                        setError(null);
-                        setDeleting(favorite);
-                      }}
-                    >
-                      <img src={trashIcon} width="18" height="18" alt="" draggable={false} />
-                    </button>
-                    {handle}
-                  </>
-                );
-              }}
-            />
-          )}
-          {group?.favorites.length === 0 && <EmptyFavoriteGroup />}
-        </div>
-        {groupDrag && (
-          <div className={styles.dropHint}>
-            <span className={styles.dropIcon} aria-hidden="true" />
-            <span>그룹 삭제</span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.trash}
+                        disabled={busy}
+                        aria-label={`${item?.stop.name || `즐겨찾기 ${group.favorites.indexOf(favorite) + 1}`} 삭제`}
+                        onClick={(event) => {
+                          event.currentTarget.focus();
+                          clearError();
+                          setDeleting(favorite);
+                        }}
+                      >
+                        <img src={trashIcon} width="18" height="18" alt="" draggable={false} />
+                      </button>
+                      {handle}
+                    </>
+                  );
+                }}
+              />
+            )}
+            {group?.favorites.length === 0 && <EmptyFavoriteGroup />}
           </div>
+          {groupDrag && (
+            <div className={styles.dropHint}>
+              <span className={styles.dropIcon} aria-hidden="true" />
+              <span>그룹 삭제</span>
+            </div>
+          )}
+        </div>
+        {error && deleting === null && deletingGroup === null && (
+          <p className={common.error} role="alert">
+            {error}
+          </p>
+        )}
+        <button
+          ref={doneButton}
+          type="button"
+          className={styles.done}
+          disabled={busy}
+          aria-disabled={busy || groupDrag !== null}
+          onClick={() => {
+            if (groupDrag === null) void save();
+          }}
+        >
+          {doneLabel}
+        </button>
+        {(partial || error) && (
+          <button type="button" className={buttons.text} disabled={busy} onClick={close}>
+            닫기
+          </button>
         )}
       </div>
-      {error && deleting === null && deletingGroup === null && (
-        <p className={common.error} role="alert">
-          {error}
-        </p>
-      )}
-      {partial && deletingGroup === null && <PartialFavoriteOrderNotice />}
-      <button
-        ref={doneButton}
-        type="button"
-        className={styles.done}
-        disabled={busy}
-        aria-disabled={busy || groupDrag !== null}
-        onClick={() => {
-          if (groupDrag === null) void save();
-        }}
-      >
-        {busy ? "저장 중…" : "완료"}
-      </button>
-      {(partial || error) && (
-        <button type="button" className={buttons.text} disabled={busy} onClick={close}>
-          닫기
-        </button>
-      )}
       {deletingGroup && (
         <ConfirmDialog
           title={protectedGroup ? "대표 그룹은 삭제할 수 없어요" : "그룹을 삭제하시겠습니까?"}

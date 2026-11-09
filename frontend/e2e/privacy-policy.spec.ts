@@ -148,7 +148,7 @@ test("처리방침 코드를 받지 못하면 오류 화면을 보여 주고, �
   await expect(page.getByText("앗, 문제가 생겼어요", { exact: true })).toBeVisible();
 
   await page.unroute(blockPrivacyScript);
-  await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
+  await page.getByRole("button", { name: "새로고침", exact: true }).click();
   await expect(firstSection(page)).toBeVisible();
 });
 

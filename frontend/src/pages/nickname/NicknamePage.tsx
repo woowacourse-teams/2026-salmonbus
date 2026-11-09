@@ -45,7 +45,7 @@ export function NicknamePage() {
             로그인 상태를 확인하지 못했어요.
           </p>
           <button className={buttonStyles.secondary} type="button" onClick={() => void reload()}>
-            다시 확인하기
+            다시 시도하기
           </button>
         </>
       ) : (
@@ -78,7 +78,7 @@ function NicknameForm({ current }: { current: string }) {
     setBusy(false);
     playResultHaptic(result.ok);
     if (!result.ok) {
-      setError(authErrorOf(result.failure));
+      setError(authErrorOf(result.failure, "닉네임을 저장하지 못했어요. 다시 시도해 주세요."));
       return;
     }
     // 화면을 떠나는 중이어도 폼은 남아 있을 수 있으니 busy와 오류는 늘 정리하고, 마이페이지로 옮기는 건 아직 이 화면에 있을 때만 한다.

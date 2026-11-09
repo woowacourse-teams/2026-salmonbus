@@ -19,6 +19,32 @@ const group: FavoriteGroup = {
 };
 
 describe("즐겨찾기 정책", () => {
+  it("작업별 실패 문구를 지정해도 한도 초과와 로그인 만료 안내를 유지한다", () => {
+    const fallback = "즐겨찾기를 저장하지 못했어요. 다시 시도해 주세요.";
+    expect(favoriteErrorOf({ kind: "network", cause: new Error("offline") }, "saveFavorite")).toBe(fallback);
+    expect(
+      favoriteErrorOf(
+        {
+          kind: "contract",
+          status: 409,
+          retryAfterMs: null,
+          error: { code: "FAVORITE_LIMIT_EXCEEDED", message: "한도 초과", requestId: "limit" },
+        },
+        "saveFavorite",
+      ),
+    ).toBe("한 그룹에는 즐겨찾기를 2개까지 저장할 수 있어요.");
+    expect(
+      favoriteErrorOf(
+        {
+          kind: "contract",
+          status: 401,
+          retryAfterMs: null,
+          error: { code: "UNAUTHENTICATED", message: "인증 만료", requestId: "auth" },
+        },
+        "saveFavorite",
+      ),
+    ).toBe("로그인이 만료됐어요. 다시 로그인해 주세요.");
+  });
   it.each(["INVALID_FAVORITE_GROUP_ORDER", "INVALID_FAVORITE_ORDER"] as const)(
     "%s 오류에 목록 갱신 후 순서 저장을 안내한다",
     (code) => {
