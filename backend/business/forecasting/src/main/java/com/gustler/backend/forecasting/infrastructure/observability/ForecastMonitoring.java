@@ -39,6 +39,9 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
     private final Counter seatOutliers;
     private final AtomicLong lastSeatReview = new AtomicLong();
     private final AtomicLong lastSeatOutlier = new AtomicLong();
+    private final AtomicLong lastCollectionFailure = new AtomicLong();
+    private final AtomicLong lastCollectionRecovery = new AtomicLong();
+    private final Counter recoveredCollections;
     private final Clock clock;
     private final JdbcTemplate catalog;
     private final Map<String, Timer> timers = new ConcurrentHashMap<>();
@@ -55,6 +58,11 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         this.clock = clock;
         seatReviews = registry.counter("salmonbus.collection.seat.quality", "decision", "REVIEW");
         seatOutliers = registry.counter("salmonbus.collection.seat.quality", "decision", "OUTLIER");
+        recoveredCollections = registry.counter("salmonbus.collection.recovered.batches");
+        Gauge.builder("salmonbus.collection.failure.last.timestamp", lastCollectionFailure, AtomicLong::get)
+            .register(registry);
+        Gauge.builder("salmonbus.collection.recovery.last.timestamp", lastCollectionRecovery, AtomicLong::get)
+            .register(registry);
         Gauge.builder("salmonbus.collection.seat.quality.last.timestamp", lastSeatReview, AtomicLong::get)
             .tag("decision", "REVIEW").register(registry);
         Gauge.builder("salmonbus.collection.seat.quality.last.timestamp", lastSeatOutlier, AtomicLong::get)
@@ -186,6 +194,9 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         final long nanos,
         final boolean failed
     ) {
+        if (failed && operation.startsWith("collection_")) {
+            lastCollectionFailure.accumulateAndGet(clock.instant().getEpochSecond(), Math::max);
+        }
         String outcome = operationOutcome(failed);
         String key = operation + ":" + outcome;
         if (!timers.containsKey(key) && timers.size() >= 128) {
@@ -198,6 +209,14 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
                     Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(60))
                 .register(registry))
             .record(nanos, TimeUnit.NANOSECONDS);
+    }
+
+    @Override
+    public void collectionRecovered(final int batches) {
+        if (batches > 0) {
+            recoveredCollections.increment(batches);
+            lastCollectionRecovery.accumulateAndGet(clock.instant().getEpochSecond(), Math::max);
+        }
     }
 
     @Override

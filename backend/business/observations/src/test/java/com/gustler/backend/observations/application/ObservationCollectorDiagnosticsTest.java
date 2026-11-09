@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -93,6 +94,19 @@ class ObservationCollectorDiagnosticsTest {
             .contains("stage=SAVE_AND_COMMIT", "resultCommitConfirmed=false", "batchId=10");
         assertThat(MDC.get("collectionAttemptId")).isNull();
         verifyNoInteractions(quota);
+    }
+
+    @Test
+    void 미완료_종료도_실패하면_처음_수집_예외를_그대로_전파한다() {
+        when(source.read(anyString(), anyString())).thenReturn(ObservationResponse::unconfirmed);
+        RuntimeException original = new IllegalStateException("observation commit failed");
+        when(ledger.conclude(anyLong(), any(), any())).thenThrow(original);
+        when(ledger.closeUnfinished(10)).thenThrow(new IllegalStateException("recovery unavailable"));
+
+        Throwable actual = catchThrowable(() -> collector.collectOnce("234000886"));
+
+        assertThat(actual).isSameAs(original);
+        verify(ledger).closeUnfinished(10);
     }
 
     @Test

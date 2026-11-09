@@ -35,6 +35,9 @@ public final class WorkerOperationLog {
         default void collectionCommitted(String sourceRoute, final long observedEpochSecond, final int usableRows) {
         }
 
+        default void collectionRecovered(final int batches) {
+        }
+
         default String context(String operation, Object route) {
             return "";
         }
@@ -80,6 +83,15 @@ public final class WorkerOperationLog {
         }
         catch (RuntimeException ignored) {
             // 진단 실패가 수집 시도를 막지 않는다.
+            return;
+        }
+    }
+
+    /** 회수 트랜잭션이 커밋된 뒤 호출한다. 계측 실패가 수집 복구 결과를 바꾸지 않는다. */
+    public static void collectionRecovered(final int batches) {
+        try {
+            listener.collectionRecovered(batches);
+        } catch (RuntimeException ignored) {
             return;
         }
     }

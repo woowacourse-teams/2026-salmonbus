@@ -428,6 +428,99 @@ class ObservationBatchLedgerTest {
         return new CollectionPlan(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY);
     }
 
+    @Test
+    void 예약만_남은_수집은_기록을_보존하고_상태만_종료한다() {
+        final long batchId = ledger.reserve(plan(), RESERVED_AT).batchId();
+        String before = batchWithoutOutcome(batchId);
+
+        assertThat(ledger.closeUnfinished(batchId)).isEqualTo(1);
+
+        assertThat(outcomeOf(batchId)).isEqualTo("ABANDONED_BEFORE_SEND");
+        assertThat(batchWithoutOutcome(batchId)).isEqualTo(before);
+        assertThat(reservedCallsOn(KOREA_8_19)).isEqualTo(1);
+    }
+
+    @Test
+    void 전송한_수집의_종료는_호출자_트랜잭션이_롤백돼도_유지된다() {
+        final long batchId = dispatchedBatch();
+        String before = batchWithoutOutcome(batchId);
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            ledger.closeUnfinished(batchId);
+            status.setRollbackOnly();
+        });
+
+        assertThat(outcomeOf(batchId)).isEqualTo("UNKNOWN_AFTER_DISPATCH");
+        assertThat(batchWithoutOutcome(batchId)).isEqualTo(before);
+    }
+
+    @Test
+    void 응답을_저장한_수집은_종료와_다음_회차_정리에서_제외한다() {
+        final long batchId = dispatchedBatch();
+        ledger.conclude(batchId, reply(new NoVehicles(QUERY_TIME)), RESPONSE_RECEIVED_AT);
+        String before = batchWithoutOutcome(batchId);
+
+        assertThat(ledger.closeUnfinished(batchId)).isZero();
+        assertThat(ledger.closePreviousRound()).isEmpty();
+
+        assertThat(outcomeOf(batchId)).isEqualTo("SUCCESS_EMPTY");
+        assertThat(batchWithoutOutcome(batchId)).isEqualTo(before);
+    }
+
+    @Test
+    void 관측이_저장된_배치는_미완료_상태라도_정리하지_않는다() {
+        final long batchId = dispatchedBatch();
+        insertStop();
+        jdbcClient.sql("""
+            INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
+                stop_order,stop_id,running_state,passed_stop_order,remaining_seats)
+            VALUES(?,?,1,?,1,?,2,1,12)
+            """).params(batchId, routeVersionId, VEHICLE_ID, STOP_ID).update();
+
+        assertThat(ledger.closeUnfinished(batchId)).isZero();
+        assertThat(ledger.closePreviousRound()).isEmpty();
+
+        assertThat(outcomeOf(batchId)).isEqualTo("DISPATCHING");
+        assertThat(jdbcClient.sql("SELECT count(*) FROM vehicle_observation WHERE observation_batch_id=?")
+            .param(batchId).query(Integer.class).single()).isEqualTo(1);
+    }
+
+    @Test
+    void 다음_회차에서_오래된_미완료를_백건까지만_종료한다() {
+        jdbcClient.sql("""
+            INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,outcome,
+                normalization_version,collection_strategy_version)
+            SELECT ?,CAST(? AS timestamptz)+n*interval '1 second',1,concat('unfinished-',n),'RESERVED','n','c'
+            FROM generate_series(1,101) n
+            """).params(routeVersionId, SCHEDULED_AT).update();
+
+        List<Long> closed = ledger.closePreviousRound();
+
+        assertThat(closed).hasSize(100);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM observation_batch WHERE outcome='RESERVED'")
+            .query(Integer.class).single()).isEqualTo(1);
+        assertThat(ledger.closePreviousRound()).hasSize(1);
+    }
+
+    @Test
+    void 다른_트랜잭션이_잠근_미완료는_기다리지_않고_건너뛴다() {
+        final long batchId = ledger.reserve(plan(), RESERVED_AT).batchId();
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            jdbcClient.sql("SELECT id FROM observation_batch WHERE id=? FOR UPDATE")
+                .param(batchId).query(Long.class).single();
+            assertThat(ledger.closePreviousRound()).isEmpty();
+        });
+
+        assertThat(outcomeOf(batchId)).isEqualTo("RESERVED");
+        assertThat(ledger.closePreviousRound()).containsExactly(batchId);
+    }
+
+    private String batchWithoutOutcome(final long batchId) {
+        return jdbcClient.sql("SELECT (to_jsonb(batch)-'outcome')::text FROM observation_batch batch WHERE id=?")
+            .param(batchId).query(String.class).single();
+    }
+
     private long dispatchedBatch() {
         final long batchId = ledger.reserve(plan(), RESERVED_AT).batchId();
         ledger.markDispatching(batchId, RESERVED_AT, REQUESTED_AT, "a");

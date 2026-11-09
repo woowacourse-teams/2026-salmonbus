@@ -67,6 +67,10 @@ final class CollectionAttemptLog implements AutoCloseable {
         batchId = value;
     }
 
+    long batchId() {
+        return batchId;
+    }
+
     void committed() {
         committed = true;
     }

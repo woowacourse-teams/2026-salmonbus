@@ -19,7 +19,7 @@ public enum ObservationBatchOutcome {
     NOT_RESERVED,
     /** 예약 후 전송 전에 중단했다. 예약한 호출 횟수는 이미 한도에서 차감했다. */
     ABANDONED_BEFORE_SEND,
-    /** 전송했지만 응답이 오지 않아 상류가 호출 횟수를 집계했는지 알 수 없다. */
+    /** 전송 후 수집 결과를 DB에 확정하지 못했다. 응답 미수신·저장 실패 등은 원인 로그로 구분한다. */
     UNKNOWN_AFTER_DISPATCH,
     SUCCESS_ROWS,
     SUCCESS_EMPTY,

@@ -87,8 +87,26 @@ public class ObservationCollector implements CollectObservations {
                 collectOn(reference.orElseThrow().routeVersionId(), sourceRouteId, scheduledAt, attempt);
             } catch (RuntimeException failure) {
                 attempt.failed(failure);
+                closeUnfinished(attempt.batchId(), sourceRouteId);
                 throw failure;
             }
+        }
+    }
+
+    private void closeUnfinished(final long batchId, String sourceRouteId) {
+        if (batchId < 1) {
+            return;
+        }
+        try {
+            final int closed = WorkerOperationLog.measure("collection_failure_close", sourceRouteId,
+                () -> batchLedger.closeUnfinished(batchId));
+            if (closed > 0) {
+                LOGGER.warn("event=collection_batch_closed reason=COLLECTION_FAILED batchId={} routeId={}",
+                    batchId, sourceRouteId);
+            }
+        } catch (RuntimeException closeFailure) {
+            LOGGER.error("event=collection_batch_close_failed batchId={} routeId={} exceptionType={}",
+                batchId, sourceRouteId, closeFailure.getClass().getSimpleName());
         }
     }
 

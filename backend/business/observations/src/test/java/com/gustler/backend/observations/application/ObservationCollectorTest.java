@@ -149,7 +149,7 @@ class ObservationCollectorTest {
             assertThat(applicationEvents.stream(ObservationRouteMismatchDetected.class).toList())
                 .containsExactly(new ObservationRouteMismatchDetected(ROUTE_3330,
                     onlyBatchColumn("route_version_id",Long.class)));
-            assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("DISPATCHING");
+            assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("UNKNOWN_AFTER_DISPATCH");
             assertThat(diagnostics.list).hasSize(1);
             assertThat(diagnostics.list.getFirst().getFormattedMessage()).contains(
                 "reason=DB_REFERENCE_MISMATCH", "sqlState=23503", "resultCommitConfirmed=false",
@@ -377,7 +377,7 @@ class ObservationCollectorTest {
     }
 
     @Test
-    void 정규화에_실패한_응답을_미수신으로_바꾸지_않는다() {
+    void 정규화_예외를_유지하고_미완료_전송을_종료한다() {
         // given
         given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, null));
 
@@ -387,7 +387,7 @@ class ObservationCollectorTest {
         // then
         assertThat(caughtFailure)
             .isNotNull().isInstanceOf(NullPointerException.class);
-        assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("DISPATCHING");
+        assertThat(onlyBatchColumn("outcome", String.class)).isEqualTo("UNKNOWN_AFTER_DISPATCH");
         assertThat(onlyBatchColumn("response_received_at IS NULL", Boolean.class)).isTrue();
         assertThat(observationCount()).isZero();
     }
