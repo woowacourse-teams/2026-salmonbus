@@ -32,6 +32,7 @@
 | application/WalkOption, CandidateAssembler | SAL-362 응답(stationId, stopSequence, relation, 도보 초)을 받는 얇은 입력 타입과, 같은 방향(BEFORE, AFTER) 후보만 직접 도보 후보로 조립하는 함수. |
 | application/ArrivalStopSource | 저장된 도착 스냅샷(ArrivalReadRepository)에서 노선과 정류장 방문의 대기 / 직접 도보용 목록을 만든다. 신선도(staleAt), 방문 검증, 분 해상도 양자화 상계를 처리한다. 창 덮임 규칙은 CoverageRule로 받고, 켜기 전까지 NONE(항상 덮임 모름)을 쓴다. |
 | application/StopArrivalSource | 정류장 도착 목록 포트. StopArrivalSource.unavailable()은 소스가 없을 때 결측(NOT_PROVIDED)을 돌려준다. |
+| application/DetourSource | 후보 우회량 포트. unavailable()은 값이 없는 결측을 돌려준다. |
 
 테스트 72건(신규): ArrivalStopSourceTest 13, ActionJudgeTest 38, ActionOracleTest 4, ActionGuidanceTest 5, ActionDeciderTest 3, EtaFieldsTest 3, CandidateAssemblerTest 6. 여기에 EtaChainTest 17건을 더하면 salmon 패키지 테스트는 89건이다. EtaChain으로 만든 구간시간으로 가상 픽스처가 GO까지 가는 통합 테스트를 포함한다. 독립 오라클(LeafOracle)은 제품 코드를 가져오지 않고 잎을 펼쳐 합산하며, 확률 조합 243개와 대기 9개에서 판정기 값과 일치한다. 기준 파일 test-baseline.properties의 executed.api-app.test는 1150이다. Docker를 켠 전체 :api-app:check가 1150건으로 통과했다.
 
@@ -40,7 +41,7 @@
 - 정류장 항목의 도착 시각이 파생이고 창 경계를 넘나들 수 있으면(점값은 창 밖, 보수 하한은 창 안) 설계 4.1 규칙 3은 슬롯이 결측일 때만 보류하라고 한다. 구현은 목록 쪽 경계 항목을 곧바로 근거 부족으로 본다(더 보수적). 재탑승 가지 쪽만 규칙 3대로 슬롯을 확인한다.
 - 첫 시도 슬롯(S_FIRST)은 주변확률(MARG) 표지와 일치로 본다. 설계 12.1의 P-ON 표를 따른 해석이고 설계 본문에 명시되지는 않았다.
 - 해상도는 준비 시각과 t2에만 적용한다. 입력 도착 시각은 그대로 비교한다.
-- 우회량 D는 입력으로 받고 허용 확정에 필수이다. 소스가 없으면 모든 후보가 허용 미확인이라 판정은 보류로 끝난다(설계 14.1의 위험).
+- 우회량 D는 입력으로 받고 허용 확정에 필수이다. 직접 도보 후보는 CandidateAssembler가 DetourSource에서 D를 받는다. D의 뜻과 단위가 정해지지 않아 실제 계산 구현은 없고 DetourSource.unavailable()만 있다. 그래서 운영 입력에서는 모든 후보가 허용 미확인이다.
 
 ## 아직 없는 것
 

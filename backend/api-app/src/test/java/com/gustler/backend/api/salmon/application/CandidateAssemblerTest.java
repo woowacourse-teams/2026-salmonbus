@@ -4,6 +4,7 @@ import static com.gustler.backend.api.salmon.domain.ActionFixture.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.api.salmon.application.WalkOption.Relation;
+import com.gustler.backend.api.salmon.domain.ActionConfig;
 import com.gustler.backend.api.salmon.domain.ActionFixture;
 import com.gustler.backend.api.salmon.domain.ActionJudge;
 import com.gustler.backend.api.salmon.domain.ActionJudge.Listed;
@@ -31,7 +32,7 @@ class CandidateAssemblerTest {
             new WalkOption("D", 6, Relation.SAME_STATION, 0),
             new WalkOption("E", 7, Relation.parse("TELEPORT"), 30));
         Listed listed = CandidateAssembler.assemble("route", INFORMATION, options, StopArrivalSource.unavailable(),
-            ProbabilitySupply.none());
+            DetourSource.unavailable(), ProbabilitySupply.none());
 
         assertThat(listed.candidates()).extracting(Candidate::id).containsExactly("walk-A-4", "walk-B-9");
         WalkCandidate first = (WalkCandidate) listed.candidates().get(0);
@@ -43,7 +44,7 @@ class CandidateAssemblerTest {
     void 도착_소스와_확률_소스가_없으면_판정은_지어내지_않고_근거_부족으로_끝난다() {
         ActionFixture fixture = new ActionFixture();
         Listed listed = CandidateAssembler.assemble("route", INFORMATION, List.of(new WalkOption("A", 4, Relation.BEFORE, 60)),
-            StopArrivalSource.unavailable(), ProbabilitySupply.none());
+            StopArrivalSource.unavailable(), DetourSource.unavailable(), ProbabilitySupply.none());
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(15, 10), epoch -> listed);
 
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE);
@@ -56,9 +57,76 @@ class CandidateAssemblerTest {
         StopList arrivals = ActionFixture.queried(ActionFixture.entry("walk-9", 9));
         StopArrivalSource source = (routeId, stationId, stopSequence, decisionAt) -> arrivals;
         Listed listed = CandidateAssembler.assemble("route", INFORMATION, List.of(new WalkOption("A", 4, Relation.AFTER, 60)), source,
-            ProbabilitySupply.none());
+            DetourSource.unavailable(), ProbabilitySupply.none());
 
         assertThat(((WalkCandidate) listed.candidates().get(0)).list()).isSameAs(arrivals);
+    }
+
+    @Test
+    void 우회량_소스가_준_값을_직접_도보_후보에_넣는다() {
+        ActionConfig config = config(15, 10);
+        WalkOption after = new WalkOption("A", 4, Relation.AFTER, 60);
+        WalkOption before = new WalkOption("B", 9, Relation.BEFORE, 60);
+        DetourSource detours = (routeId, option) -> {
+            assertThat(routeId).isEqualTo("route");
+            return option.equals(after) ? Optional.of(config.maxDetour()) : Optional.empty();
+        };
+
+        Listed listed = CandidateAssembler.assemble("route", INFORMATION, List.of(after, before),
+            StopArrivalSource.unavailable(), detours, ProbabilitySupply.none());
+
+        assertThat(listed.candidates()).extracting(Candidate::id).containsExactly("walk-A-4", "walk-B-9");
+        assertThat(listed.candidates()).extracting(Candidate::detour)
+            .containsExactly(Optional.of(config.maxDetour()), Optional.empty());
+    }
+
+    @Test
+    void 우회량이_역치_이하인_직접_도보_후보는_허용으로_확정된다() {
+        ActionFixture fixture = new ActionFixture();
+        ActionConfig config = config(15, 10);
+        StopArrivalSource arrivals = (routeId, stationId, stopSequence, decisionAt) ->
+            ActionFixture.queried(ActionFixture.entry("walk-9", 9));
+        DetourSource detours = (routeId, option) -> Optional.of(config.maxDetour());
+        Listed listed = CandidateAssembler.assemble("route", INFORMATION, List.of(new WalkOption("A", 4, Relation.AFTER, 60)),
+            arrivals, detours, ProbabilitySupply.none());
+
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, epoch -> listed);
+
+        assertThat(verdict.candidates()).singleElement()
+            .satisfies(record -> assertThat(record.admissibility()).isEqualTo(Admissibility.ALLOWED));
+    }
+
+    @Test
+    void 우회량이_역치를_넘는_직접_도보_후보는_위반으로_확정된다() {
+        ActionFixture fixture = new ActionFixture();
+        ActionConfig config = config(15, 10);
+        StopArrivalSource arrivals = (routeId, stationId, stopSequence, decisionAt) ->
+            ActionFixture.queried(ActionFixture.entry("walk-9", 9));
+        DetourSource detours = (routeId, option) -> Optional.of(Math.nextUp(config.maxDetour()));
+        Listed listed = CandidateAssembler.assemble("route", INFORMATION, List.of(new WalkOption("A", 4, Relation.AFTER, 60)),
+            arrivals, detours, ProbabilitySupply.none());
+
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, epoch -> listed);
+
+        assertThat(verdict.candidates()).singleElement()
+            .satisfies(record -> assertThat(record.admissibility()).isEqualTo(Admissibility.VIOLATED));
+        assertThat(verdict.code()).isEqualTo(ReasonCode.NO_MOVE_INFEASIBLE);
+    }
+
+    @Test
+    void 우회량을_계산하지_못한_직접_도보_후보는_허용_미확인으로_남는다() {
+        ActionFixture fixture = new ActionFixture();
+        ActionConfig config = config(15, 10);
+        StopArrivalSource arrivals = (routeId, stationId, stopSequence, decisionAt) ->
+            ActionFixture.queried(ActionFixture.entry("walk-9", 9));
+        Listed listed = CandidateAssembler.assemble("route", INFORMATION, List.of(new WalkOption("A", 4, Relation.AFTER, 60)),
+            arrivals, DetourSource.unavailable(), ProbabilitySupply.none());
+
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, epoch -> listed);
+
+        assertThat(verdict.candidates()).singleElement()
+            .satisfies(record -> assertThat(record.admissibility()).isEqualTo(Admissibility.UNCONFIRMED));
+        assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE);
     }
 
     @Test

@@ -19,12 +19,13 @@ public final class CandidateAssembler {
     }
 
     public static Listed assemble(String routeId, Instant decisionAt, List<WalkOption> options,
-                                StopArrivalSource arrivals, ProbabilitySupply supply) {
+                                StopArrivalSource arrivals, DetourSource detours, ProbabilitySupply supply) {
         List<Candidate> candidates = options.stream()
             .filter(option -> SAME_DIRECTION.contains(option.relation()))
             .<Candidate>map(option -> new WalkCandidate(idOf(option),
                 new Observed<>(new Span(option.walkSeconds() * 1000L)),
-                arrivals.arrivalsAt(routeId, option.stationId(), option.stopSequence(), decisionAt), Optional.empty()))
+                arrivals.arrivalsAt(routeId, option.stationId(), option.stopSequence(), decisionAt),
+                detours.detourOf(routeId, option)))
             .toList();
         return new Listed(candidates, supply, Optional.empty());
     }

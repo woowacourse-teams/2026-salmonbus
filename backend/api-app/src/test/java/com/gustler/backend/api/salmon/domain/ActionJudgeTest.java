@@ -99,6 +99,43 @@ class ActionJudgeTest {
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(20, 8), fixture.source(fixture.reboardCandidate()));
 
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE);
+        assertThat(recordOf(verdict, "reboard").admissibility()).isEqualTo(Admissibility.UNCONFIRMED);
+    }
+
+    @Test
+    void 우회량이_역치를_넘으면_도보가_허용이어도_위반이다() {
+        ActionFixture fixture = new ActionFixture();
+        ActionConfig config = config(20, 8);
+        fixture.detour = Optional.of(Math.nextUp(config.maxDetour()));
+
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, fixture.source(fixture.reboardCandidate()));
+
+        assertThat(recordOf(verdict, "reboard").admissibility()).isEqualTo(Admissibility.VIOLATED);
+        assertThat(verdict.code()).isEqualTo(ReasonCode.NO_MOVE_INFEASIBLE);
+    }
+
+    @Test
+    void 우회량이_역치와_같으면_허용으로_확정된다() {
+        ActionFixture fixture = new ActionFixture();
+        ActionConfig config = config(20, 8);
+        fixture.detour = Optional.of(config.maxDetour());
+
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, fixture.source(fixture.reboardCandidate()));
+
+        assertThat(recordOf(verdict, "reboard").admissibility()).isEqualTo(Admissibility.ALLOWED);
+        assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
+        assertThat(verdict.chosen()).contains("reboard");
+    }
+
+    @Test
+    void 우회량이_유한한_수가_아니면_후보를_만들지_않는다() {
+        ActionFixture fixture = new ActionFixture();
+        for (double detour : List.of(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {
+            fixture.detour = Optional.of(detour);
+
+            assertThatThrownBy(fixture::walkB).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(fixture::reboardCandidate).isInstanceOf(IllegalArgumentException.class);
+        }
     }
 
     @Test

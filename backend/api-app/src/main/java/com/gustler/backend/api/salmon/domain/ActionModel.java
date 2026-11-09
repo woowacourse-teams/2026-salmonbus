@@ -314,6 +314,7 @@ public final class ActionModel {
             Objects.requireNonNull(walk);
             Objects.requireNonNull(list);
             Objects.requireNonNull(detour);
+            detour.ifPresent(ActionModel::requireFinite);
         }
 
         @Override
@@ -333,6 +334,7 @@ public final class ActionModel {
             Objects.requireNonNull(opposite);
             Objects.requireNonNull(reboard);
             Objects.requireNonNull(detour);
+            detour.ifPresent(ActionModel::requireFinite);
         }
 
         @Override
@@ -351,6 +353,12 @@ public final class ActionModel {
                           List<CandidateRecord> candidates, Optional<String> chosen, Optional<Double> delta) {
         public Verdict {
             candidates = List.copyOf(candidates);
+        }
+    }
+
+    static void requireFinite(double value) {
+        if (!Double.isFinite(value)) {
+            throw new IllegalArgumentException("detour must be finite");
         }
     }
 
