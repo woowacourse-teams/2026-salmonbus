@@ -2,17 +2,14 @@ package com.gustler.backend.worker.configuration;
 
 import com.gustler.backend.config.ClockConfig;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
-import com.gustler.backend.forecasting.api.WarmUpVehicleCapacities;
 import com.gustler.backend.forecasting.api.evaluation.SameDayInitializationPolicy;
 import com.gustler.backend.forecasting.api.statistics.DemandStatisticsPolicy;
 import com.gustler.backend.forecasting.configuration.ForecastingConfiguration;
 import com.gustler.backend.observations.configuration.ObservationPersistenceConfiguration;
-import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.convert.DurationStyle;
-import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -27,12 +24,6 @@ import org.springframework.core.env.StandardEnvironment;
 @Import({ClockConfig.class, ObservationPersistenceConfiguration.class, ForecastingConfiguration.class})
 public class BusinessConfiguration {
     private static final String STALENESS = "forecast.staleness";
-
-    @Bean
-    @DependsOnDatabaseInitialization
-    SmartInitializingSingleton vehicleCapacityWarmUp(WarmUpVehicleCapacities capacities) {
-        return capacities::warmUp;
-    }
 
     @Bean
     DemandStatisticsPolicy demandStatisticsPolicy(@Value("${forecast.statistics-interval:6h}") String interval) {
