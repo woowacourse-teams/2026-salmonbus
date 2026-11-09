@@ -265,6 +265,21 @@ class NotificationDeliveryFlowTest {
     }
 
     @Test
+    void tokenMovedToAnotherMemberDoesNotReceivePreviousMembersRetry() throws Exception {
+        Prepared prepared = prepare(1, true);
+        try (FakeApnsServer fake = new FakeApnsServer()) {
+            fake.answerAll(500, "InternalServerError");
+            runAt(T0, fake);
+            UUID other = newMember();
+            devices.register(other, new DeviceToken(prepared.tokens().get(0)), PushEnvironment.SANDBOX, T0);
+            fake.answerAll(200, "");
+            runAt(T0.plus(Duration.ofMinutes(1)), fake);
+            assertThat(fake.requests()).hasSize(1);
+            assertThat(deliveryCount()).isZero();
+        }
+    }
+
+    @Test
     void orphanSettingIsDeletedWithoutSending() throws Exception {
         prepare(1, false);
         try (FakeApnsServer fake = new FakeApnsServer()) {

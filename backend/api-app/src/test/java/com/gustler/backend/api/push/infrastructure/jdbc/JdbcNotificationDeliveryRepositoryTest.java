@@ -86,6 +86,18 @@ class JdbcNotificationDeliveryRepositoryTest {
     }
 
     @Test
+    void claimDueSkipsDeliveryWhoseDeviceBelongsToAnotherMember() {
+        Prepared prepared = prepare(List.of("aa"));
+        deliveries.createForMemberDevices(prepared.settingId(), NOW, prepared.memberId(), NOW);
+        UUID other = member("연어둘");
+        jdbc.sql("UPDATE push_device SET member_id = (SELECT id FROM member WHERE public_id = ?)")
+            .param(other)
+            .update();
+
+        assertThat(deliveries.claimDue(NOW, NOW.plusSeconds(120), 10)).isEmpty();
+    }
+
+    @Test
     void unknownStatusIsRejected() {
         Prepared prepared = prepare(List.of("aa"));
         assertThatThrownBy(() -> insertDelivery(
