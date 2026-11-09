@@ -57,6 +57,27 @@ class JdbcNotificationSettingRepositoryTest {
     }
 
     @Test
+    void 시각과_요일이_같으면_다시_저장해도_아직_보내지_않은_차례를_넘기지_않는다() {
+        UUID member = member("연어하나");
+        long memberId = memberId(member);
+        addFavorite(memberId, TARGET);
+        Instant dueAt = Instant.parse("2026-11-01T22:40:00Z");
+        repository.upsert(memberId, TARGET, SCHEDULE, dueAt, NOW);
+
+        SavedSetting resaved = repository.upsert(
+            memberId,
+            TARGET,
+            SCHEDULE,
+            Instant.parse("2026-11-02T22:40:00Z"),
+            dueAt.plusSeconds(30)
+        );
+
+        assertThat(resaved.time()).isEqualTo("07:40");
+        assertThat(instantOf("occurrence_at")).isEqualTo(dueAt);
+        assertThat(instantOf("updated_at")).isEqualTo(dueAt.plusSeconds(30));
+    }
+
+    @Test
     void 남의_설정은_지우지_않는다() {
         UUID owner = member("연어하나");
         UUID other = member("연어둘");
