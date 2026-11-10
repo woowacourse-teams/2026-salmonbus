@@ -55,12 +55,10 @@ class AsOfReadContractTest {
         fixture.insertPublication(latest, model, now.minusSeconds(50), now.minusSeconds(40));
         long near = fixture.insertObservation(route, latest, 1, "bus-1", 2, "STOP-2", now);
         long far = fixture.insertObservation(route, latest, 2, "bus-2", 1, "STOP-1", now);
-        long excluded = fixture.insertObservation(route, latest, 3, "bus-3", 1, "STOP-1", now);
+        long third = fixture.insertObservation(route, latest, 3, "bus-3", 1, "STOP-1", now);
         fixture.insertForecast(route, near, 3, 1, model, 0.2, 20.0, now.minusSeconds(50));
         fixture.insertForecast(route, far, 3, 2, model, 0.4, null, now.minusSeconds(50));
-        fixture.insertForecast(route, excluded, 3, 2, model, 0.6, 5.0, now.minusSeconds(50));
-        jdbc.sql("UPDATE vehicle_one_way_trip SET status = 'EXCLUDED' WHERE start_observation_id = ?")
-            .param(excluded).update();
+        fixture.insertForecast(route, third, 3, 2, model, 0.6, 5.0, now.minusSeconds(50));
         fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
 
         AsOfBoardQueryRepository boards = new AsOfBoardQueryRepository(jdbc, new AsOfClock(Instant.now()));
@@ -70,7 +68,7 @@ class AsOfReadContractTest {
         assertThat(boards.findSnapshot(new RouteId(ROUTE))).contains(expected);
         assertThat(boards.findStops(route.routeVersionId()))
             .isEqualTo(productBoards.findStops(route.routeVersionId()));
-        assertThat(boards.findPredictions(latest)).hasSize(2)
+        assertThat(boards.findPredictions(latest)).hasSize(3)
             .containsExactlyInAnyOrderElementsOf(productBoards.findPredictions(latest));
         assertThat(boards.findObservedVehicles(latest, route.routeVersionId())).hasSize(3)
             .containsExactlyInAnyOrderElementsOf(productBoards.findObservedVehicles(latest, route.routeVersionId()));

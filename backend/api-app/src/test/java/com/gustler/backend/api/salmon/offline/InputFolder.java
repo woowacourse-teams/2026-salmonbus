@@ -12,7 +12,6 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
-import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,8 +29,9 @@ import java.util.stream.Stream;
  */
 final class InputFolder {
     static final String DECISION_FILE = "decision";
-    private static final String INELIGIBLE_OBSERVATION = "ineligible_observation";
     private static final String FIRST_PUBLICATION = "route_version_first_publication";
+    /** 제품이 표를 없앤 뒤에도 예전 추출 폴더에 남을 수 있는 파일. 있으면 적재를 멈춘다. */
+    private static final List<String> RETIRED_FILES = List.of("ineligible_observation", "route_data_quality");
     private static final int BATCH_SIZE = 1_000;
 
     record Table(String name, boolean mandatory, List<String> required, List<String> optional,
@@ -56,7 +56,6 @@ final class InputFolder {
         new Table("route_stop", true,
             List.of("route_version_id", "stop_order", "stop_id", "name", "direction", "boarding_allowed"),
             List.of()),
-        new Table("route_data_quality", false, List.of("route_id"), List.of("quality_revision")),
         new Table("model_deployment", false,
             List.of("id", "deployment_key", "release_id", "model_key", "model_version", "bundle_digest",
                 "prediction_target_version", "calculation_version", "supported_scope_digest", "data_until", "state"),
@@ -95,10 +94,15 @@ final class InputFolder {
         if (Files.exists(folder.resolve("INCOMPLETE"))) {
             throw new IllegalArgumentException("입력 폴더에 INCOMPLETE 파일이 있다. 추출이 중간에 멈춘 폴더라 쓰지 않는다");
         }
+        List<String> retired = RETIRED_FILES.stream().filter(name -> fileOf(folder, name).isPresent()).toList();
+        if (!retired.isEmpty()) {
+            throw new IllegalArgumentException(String.join(", ", retired)
+                + " 파일은 받지 않는다. 제품이 그 표와 예보 적격 뷰를 더 이상 읽지 않는다");
+        }
         Map<String, Integer> loaded = new LinkedHashMap<>();
         try (Statement statement = connection.createStatement()) {
             // 하차 뒤 좌석 예보를 넣을 때마다 평가 작업 행을 만드는 트리거다. 실행기는 평가를 돌리지 않는다.
-            statement.execute("ALTER TABLE seat_forecast DISABLE TRIGGER trg_les_evaluation_work");
+            statement.execute("ALTER TABLE seat_forecast DISABLE TRIGGER trg_alighting_evaluation_work");
         }
         for (Table table : TABLES) {
             Optional<Path> file = fileOf(folder, table.name());
@@ -107,8 +111,6 @@ final class InputFolder {
             }
             loaded.put(table.name(), file.isEmpty() ? 0 : insert(connection, table, file.get()));
         }
-        Optional<Path> ineligible = fileOf(folder, INELIGIBLE_OBSERVATION);
-        loaded.put(INELIGIBLE_OBSERVATION, ineligible.isEmpty() ? 0 : exclude(connection, ineligible.get()));
         Optional<Path> firstPublication = fileOf(folder, FIRST_PUBLICATION);
         loaded.put(FIRST_PUBLICATION, firstPublication.isEmpty() ? 0
             : markFirstPublications(connection, firstPublication.get()));
@@ -264,41 +266,5 @@ final class InputFolder {
             }
         }
         return marked;
-    }
-
-    /**
-     * 예보 적격에서 빠진 관측을 제품 뷰(forecast_eligible_observation)가 빼도록 제외 상태의 편도를 붙인다.
-     * 뷰가 보는 테이블에 그대로 넣어서, 실행기 읽기와 제품 읽기가 같은 행을 뺀다.
-     */
-    private static int exclude(Connection connection, Path file) throws IOException, SQLException {
-        List<String> ids = new ArrayList<>();
-        try (CsvRows rows = CsvRows.open(file)) {
-            headerOf(rows, new Table(INELIGIBLE_OBSERVATION, false, List.of("vehicle_observation_id"), List.of()),
-                file);
-            for (List<String> row = rows.next(); row != null; row = rows.next()) {
-                ids.add(row.get(0));
-            }
-        }
-        try (PreparedStatement trip = connection.prepareStatement("""
-                INSERT INTO vehicle_one_way_trip(id, start_observation_id, route_version_id, vehicle_id, status,
-                    boundary, rule_version)
-                SELECT 'offline-excluded-' || id, id, route_version_id, vehicle_id, 'EXCLUDED', 'OFFLINE_INPUT',
-                    'offline-input'
-                FROM vehicle_observation WHERE id = CAST(? AS bigint)
-                """);
-             PreparedStatement assignment = connection.prepareStatement("""
-                INSERT INTO observation_trip_assignment(observation_id, trip_id)
-                SELECT id, 'offline-excluded-' || id FROM vehicle_observation WHERE id = CAST(? AS bigint)
-                """)) {
-            for (String id : ids) {
-                trip.setString(1, id);
-                trip.addBatch();
-                assignment.setString(1, id);
-                assignment.addBatch();
-            }
-            trip.executeBatch();
-            assignment.executeBatch();
-        }
-        return ids.size();
     }
 }

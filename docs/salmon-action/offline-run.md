@@ -126,14 +126,12 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 | route | 예 | id, public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name | 없음 |
 | route_version | 예 | id, route_id, content_digest, valid_from | valid_to, turn_sequence, up_first_departure_time, up_last_departure_time, down_first_departure_time, down_last_departure_time, 요일별 배차 간격 8열(weekday, saturday, sunday, holiday의 min, max) |
 | route_stop | 예 | route_version_id, stop_order, stop_id, name, direction, boarding_allowed | 없음 |
-| route_data_quality | 아니오 | route_id | quality_revision |
 | model_deployment | 아니오 | id, deployment_key, release_id, model_key, model_version, bundle_digest, prediction_target_version, calculation_version, supported_scope_digest, data_until, state | predecessor_deployment_id, activated_at, retired_at |
 | observation_batch | 아니오 | id, route_version_id, scheduled_at, attempt_number, attempt_key, outcome, normalization_version, collection_strategy_version | requested_at, response_received_at, completed_at, http_status, result_code, failure_code, provider_rows, stored_rows, excluded_rows, input_confirmed_at, ingestion_origin |
 | vehicle_observation | 아니오 | id, observation_batch_id, route_version_id, source_row_number, stop_order, stop_id, running_state, passed_stop_order | vehicle_id, vehicle_trip_key, remaining_seats, crowd_level, vehicle_type, route_type, tagless, seat_unknown_reason |
 | forecast_publication | 아니오 | id, source_batch_id, route_version_id, observed_at, published_at, prediction_count | model_deployment_id, demand_statistics_revision, quality_revision, generated_at, provenance |
 | seat_forecast | 아니오 | vehicle_observation_id, target_stop_order, route_version_id, stops_to_target, model_deployment_id, demand_statistics_revision, seat_full_chance_raw, seat_full_chance, generated_at, publication_id | expected_seats, quality_revision, evaluation_detail_required, seat_target, probability_target, label_version, inference_bundle_hash |
 | arrival_snapshot | 아니오 | id, station_id, received_at, refresh_after_at, stale_at, payload | stored_at |
-| ineligible_observation | 아니오 | vehicle_observation_id | 없음 |
 | route_version_first_publication | 아니오 | route_version_id, first_published_at | 없음 |
 | decision | 아니오 | route_id, station_id, stop_sequence, decision_at (이 순서 그대로) | 없음 |
 
@@ -145,7 +143,7 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 - `vehicle_observation`: 남은 좌석(remaining_seats)과 좌석 미제공 사유(seat_unknown_reason) 가운데 정확히 하나가 있어야 한다(DB 제약).
 - `seat_forecast`: seat_target과 probability_target이 없으면 DB 기본값(FIRST_POST_STOP_OBSERVATION, FIRST_POST_STOP_ZERO)이 들어간다. 하차 뒤 좌석 계약(AFTER_ALIGHTING_ESTIMATE) 행은 label_version과 inference_bundle_hash가 있어야 하고, 특징 값은 실행기가 빈 객체로 채운다.
 - `arrival_snapshot`: payload는 운영 테이블의 payload 열(jsonb) 그대로다. 제품 코드가 `ArrivalSnapshot`으로 읽는다. provider, operation, normalization_version, payload_digest는 실행기가 채운다.
-- `ineligible_observation`: 예보 적격에서 빠진 관측의 ID다. 운영에서 `forecast_observation_quality`의 `forecast_eligible`이 거짓인 관측을 뽑는다. 실행기는 이 관측에 제외 상태의 편도를 붙여, 제품 뷰가 그 관측의 예보를 빼게 한다.
+- `ineligible_observation`, `route_data_quality`: 제품이 그 표와 예보 적격 뷰를 없앴다. 폴더에 이 파일이 있으면 적재를 멈춘다.
 - `route_version_first_publication`: 그 판본의 첫 발행 시각이다. 입력에는 판정 구간의 발행만 들어 있어서, 이 파일이 없으면 구간 안에 발행이 없는 판본을 "발행이 한 번도 없던 판본"과 구분하지 못한다. 제품은 발행이 있던 판본에서 최근 발행 묶음이 없으면 최근 관측 없음으로 거부하고, 발행이 한 번도 없던 판본에서는 예보 없이 가장 늦은 묶음을 보여 준다. 실행기는 이 파일의 시각에 예보 없는 표시용 발행을 넣어 제품과 같은 쪽으로 읽는다. 파일이 없어 발행 없는 판본으로 읽힌 판정은 `diagnostics.boardAtDecision`에 `READ_UNPUBLISHED`로 따로 센다.
 - 폴더에 `INCOMPLETE` 파일이 있으면 추출이 중간에 멈춘 폴더다. 실행기는 그 폴더를 읽지 않는다.
 - `decision`: 판정할 자리를 직접 적는다. route_id는 public_route_id이고 decision_at은 `2026-11-10T00:00:00Z` 같은 ISO-8601 시각이다. 이 파일이 있으면 적힌 자리만 판정한다.
@@ -174,7 +172,7 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 
 되살리지 못하는 것
 
-- 예보 적격 여부는 시각별 이력이 없다. 입력에 담긴 값(뽑은 시점의 값)을 쓴다.
+- 보드는 그 묶음의 좌석 예보를 전부 읽는다. 예보 적격 뷰와 편도 제외는 쓰지 않는다.
 - 재발행으로 예보 행이 덮였으면 덮인 뒤의 값을 읽는다. 재발행은 발행 시각(published_at)도 재발행 시각으로 덮는다(`JdbcForecastPublicationRepository`의 갱신 문). 그래서 원래 발행과 재발행 사이의 판정 시각에서는 그 묶음이 아직 발행 전으로 보이고, 실행기는 더 앞의 묶음을 고른다.
 - 도착 스냅샷이 수신된 뒤 DB에 저장되기까지의 지연은 되살리지 않는다.
 - `BoardQueryService`의 읽기 트랜잭션(반복 읽기)은 걸지 않는다. 임시 DB는 적재 뒤 바뀌지 않아 결과에 영향이 없다.
@@ -189,7 +187,7 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 - 첫 관측 기준: 통과 순번이 그 정류장 순번과 같은 첫 관측의 남은 좌석. FIRST_POST_STOP_ZERO 예보의 정산(`ArrivalLabelResolver`)이 고르는 관측이다.
 - 마지막 관측 기준: 통과 순번이 그 정류장 순번 이상이고 다음 승차 정류장 순번 미만인 관측 가운데 마지막의 남은 좌석. 다음 승차 정류장을 지난 관측이 있어야 확정한다. DEPARTURE_ZERO 예보의 정답을 흉내 낸 근사다. 제품(`LesPassEvents`)은 모델 번들의 정차 순번으로 다음 정류장을 정하고 5순번까지의 후퇴를 허용하는데, 실행기는 route_stop의 승차 가능 정류장을 쓰고 순번이 되돌아가면 끊는다.
 - 남은 좌석이 1 이상이면 `SEATS_AVAILABLE`, 0이면 `FULL`, 그 밖은 `UNKNOWN/<이유>`다.
-- 추적을 끊는 조건은 제품 정산(`ArrivalLabelResolver`)을 따른다. 연속 관측 간격이 90초를 넘거나, 통과 순번이 되돌아가거나, 운행 방향이 출발점과 다르거나, 예보 적격이 아닌 관측을 만나면 `LOST`다. 판정 뒤 2시간까지만 본다.
+- 추적을 끊는 조건은 제품 정산(`ArrivalLabelResolver`)을 따른다. 연속 관측 간격이 90초를 넘거나, 통과 순번이 되돌아가거나, 운행 방향이 출발점과 다르면 `LOST`다. 방향은 `operational_observation.quality_direction`이다. 판정 뒤 2시간까지만 본다.
 - 제품 정산과 다른 점: 제품은 예보의 원 관측에서 시작해 예보 계산 시각 뒤의 관측만 보는데, 시도의 결과는 판정 시각에서 시작한다(예보가 아니라 판정이 기준이다). 품질 판정을 아직 받지 않은 관측에서 기다리는 규칙은 쓰지 않는다. 보드 차량 진단(`boardVehicleOutcomes`)은 제품처럼 보드 묶음의 관측에서 시작하고 예보 계산 시각까지의 관측을 건너뛴다.
 
 | 이유 | 뜻 |

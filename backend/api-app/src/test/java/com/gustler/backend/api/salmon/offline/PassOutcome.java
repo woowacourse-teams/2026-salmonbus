@@ -15,7 +15,7 @@ import java.util.OptionalInt;
  *       관측이 있어야 확정한다. DEPARTURE_ZERO 예보의 정답(LesPassEvents의 출발 관측)과 같은 관측이다.</li>
  * </ul>
  * 추적을 끊는 조건은 ArrivalLabelResolver와 같다. 연속 관측 간격이 90초를 넘거나, 통과 순번이 되돌아가거나, 운행 방향이
- * 출발점의 방향과 다르거나, 예보 적격이 아닌 관측(방향 없음)을 만나면 끊는다. 편도(trip) 연결 규칙은 쓰지 않는다.
+ * 출발점의 방향과 다르거나, 운행 방향이 없는 관측을 만나면 끊는다. 편도(trip) 연결 규칙은 쓰지 않는다.
  *
  * <p>last는 DEPARTURE_ZERO 정답의 근사다. 제품(LesPassEvents)은 모델 번들의 정차 순번으로 다음 정류장을 정하고 작은 순번
  * 후퇴를 허용하는데, 여기서는 route_stop의 승차 가능 정류장을 쓰고 순번이 되돌아가면 끊는다.
@@ -50,7 +50,7 @@ record PassOutcome(Seats first, Seats last) {
         }
     }
 
-    /** direction은 운행 방향이고, 예보 적격이 아닌 관측이면 null이다(제품의 정산 조회와 같은 규칙). */
+    /** direction은 운행 방향이다. operational_observation.quality_direction은 0 또는 1이라 비지 않는다. */
     record Observation(Instant at, int passedStopOrder, Integer remainingSeats, Long direction) {
     }
 
@@ -73,7 +73,7 @@ record PassOutcome(Seats first, Seats last) {
             return unknown(Unknown.ALREADY_PASSED);
         }
         Observation previous = start.orElse(null);
-        // 출발점이 적격이 아니면(방향 없음) 제품처럼 방향을 보지 않는다. 출발점 관측이 없으면 첫 뒤 관측의 방향을 기준으로 둔다.
+        // 출발점의 방향이 없으면 방향을 보지 않는다. 출발점 관측이 없으면 첫 뒤 관측의 방향을 기준으로 둔다.
         Long direction = start.isPresent() ? start.get().direction() : later.get(0).direction();
         Observation first = null;
         Observation last = null;

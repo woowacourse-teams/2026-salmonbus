@@ -131,7 +131,7 @@ public final class SalmonOfflineRun {
             "후보를 연결하지 않아 사유 코드는 ABSTAIN_STAY_UNDEFINED, STAY_SCAN_NOT_TRIGGERED, "
                 + "NO_MOVE_NO_CANDIDATE만 나온다. NO_MOVE_NO_CANDIDATE는 대기 위험이 탐색 역치 이상이라 "
                 + "후보를 조회했을 판정이라는 뜻이다",
-            "예보 적격 여부(forecast_eligible_observation)는 판정 시각의 값이 아니라 입력 자료에 담긴 값이다",
+            "보드는 그 묶음의 좌석 예보를 전부 읽는다. 예보 적격 뷰와 편도 제외는 쓰지 않는다",
             "도착 스냅샷은 수신 시각(received_at)이 판정 시각 이전인 것을 본다. 수신과 저장 사이의 지연은 되살리지 않는다",
             "재발행된 묶음은 발행 시각(published_at)도 재발행 시각으로 덮여 있다. 원래 발행과 재발행 사이의 판정 시각에서는 "
                 + "그 묶음이 아직 발행 전으로 보여 더 앞의 묶음을 고른다",

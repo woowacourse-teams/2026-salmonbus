@@ -27,7 +27,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  *
  * <p>묶음 고르기는 제품 조회(JdbcBoardSnapshotReader)에 세 조건을 더했다. 노선 판본은 그 시각에 유효하던 것,
  * 발행은 그 시각까지 발행된 것(published_at), 활성 모델은 그 시각에 활성이던 배포다(활성 시각이 빈 ACTIVE 배포는
- * 언제나 활성으로 본다). 시계가 지금이면 제품 구현과 같은 값을 돌려준다. 예보 적격 여부(forecast_eligible_observation)는 시각별 이력이 없어 DB에 있는 값을 그대로 쓴다.
+ * 언제나 활성으로 본다). 시계가 지금이면 제품 구현과 같은 값을 돌려준다. 예보 판본 문자열도 제품과 같이 발행 열만 잇고,
+ * 배치는 그 묶음의 좌석 예보를 전부 읽는다.
  */
 final class AsOfBoardQueryRepository implements BoardQueryRepository {
     private static final String SNAPSHOT_SQL = """
@@ -41,7 +42,6 @@ final class AsOfBoardQueryRepository implements BoardQueryRepository {
                flags.published, b.id AS batch_id, b.response_received_at, b.stored_rows,
                model.id AS model_id, model.release_id, model.data_until,
                CASE WHEN b.id IS NULL THEN NULL ELSE concat_ws('|',
-                   'q' || COALESCE(quality.quality_revision::text, '-'),
                    'p' || COALESCE(publication.published_at::text, '-'),
                    'g' || COALESCE(publication.generated_at::text, '-'),
                    'n' || COALESCE(publication.prediction_count::text, '-'),
@@ -80,7 +80,6 @@ final class AsOfBoardQueryRepository implements BoardQueryRepository {
             WHERE (deployment.activated_at <= :at OR deployment.activated_at IS NULL AND deployment.state = 'ACTIVE')
               AND (deployment.retired_at IS NULL OR deployment.retired_at > :at)
             ORDER BY deployment.activated_at DESC NULLS LAST, deployment.id DESC LIMIT 1) model ON true
-        LEFT JOIN route_data_quality quality ON quality.route_id=v.route_id
         LEFT JOIN forecast_publication publication ON publication.source_batch_id=b.id
         WHERE r.source_route_id=:routeId AND v.valid_from <= :at AND (v.valid_to IS NULL OR v.valid_to > :at)
         """;
@@ -124,8 +123,6 @@ final class AsOfBoardQueryRepository implements BoardQueryRepository {
             JOIN vehicle_observation observation ON observation.id = forecast.vehicle_observation_id
             JOIN model_deployment model ON model.id = forecast.model_deployment_id
             WHERE publication.source_batch_id = :batchId AND observation.observation_batch_id = :batchId
-              AND EXISTS (SELECT 1 FROM forecast_eligible_observation eligible
-                          WHERE eligible.id = observation.id AND eligible.observation_batch_id = :batchId)
             """).param("batchId", observationBatchId).query((row, index) -> new StoredPrediction(row.getInt(1),
             row.getString(2), row.getInt(3), row.getInt(4), row.getDouble(5), row.getObject(6, Double.class),
             new ForecastModel(row.getLong(7), row.getString(8), timeAt(row, 9)), row.getString(10),

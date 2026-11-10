@@ -177,11 +177,9 @@ class SalmonOfflineRunTest {
     }
 
     @Test
-    void 정류장을_떠난_첫_관측이_예보_적격이_아니면_제품_정산처럼_결과를_모름으로_둔다() throws Exception {
+    void 정류장을_떠난_첫_관측이_0석이면_가득_참으로_보고_다음_승차_전_마지막_좌석을_본다() throws Exception {
         Path input = new SyntheticInput(Files.createDirectory(workspace.resolve("input")))
             .snapshot(15, 0, arrival("bus-4", 1, 120))
-            // bus-4가 정류장 15를 떠난 첫 관측(0석)이다.
-            .ineligibleObservations(1014)
             .folder();
         Path output = workspace.resolve("output");
 
@@ -189,8 +187,8 @@ class SalmonOfflineRunTest {
 
         JsonNode attempts = JSON.readTree(Files.readAllBytes(output.resolve("base-15/summary.json")))
             .path("outcomes").path("attempts");
-        assertThat(countsOf(attempts.path("byFirstObservation").path("results"))).containsExactly("UNKNOWN/LOST=1");
-        assertThat(countsOf(attempts.path("byLastObservation").path("results"))).containsExactly("UNKNOWN/LOST=1");
+        assertThat(countsOf(attempts.path("byFirstObservation").path("results"))).containsExactly("FULL=1");
+        assertThat(countsOf(attempts.path("byLastObservation").path("results"))).containsExactly("SEATS_AVAILABLE=1");
     }
 
     @Test
@@ -278,8 +276,6 @@ class SalmonOfflineRunTest {
                 ROUTE + "," + stationOf(15) + ",15," + BASE.plusSeconds(1),
                 ROUTE + "," + stationOf(15) + ",15," + BASE.plusSeconds(600),
                 ROUTE + "," + stationOf(7) + ",7," + BASE.plusSeconds(1))
-            // bus-4의 관측이 예보 적격에서 빠지면 보드는 그 차량의 예보를 내지 않는다.
-            .ineligibleObservations(1004)
             .folder();
         Path output = workspace.resolve("output");
 
@@ -287,22 +283,23 @@ class SalmonOfflineRunTest {
 
         JsonNode summary = JSON.readTree(Files.readAllBytes(output.resolve("base-15/summary.json")));
         assertThat(summary.path("data").path("decisionSource").asString()).isEqualTo("decision.csv");
-        assertThat(summary.path("data").path("inputRows").path("ineligible_observation").asInt()).isEqualTo(1);
         JsonNode results = summary.path("results");
-        assertThat(countsOf(results.path("reasonCodes"))).containsExactly("ABSTAIN_STAY_UNDEFINED=3");
+        assertThat(countsOf(results.path("reasonCodes")))
+            .containsExactlyInAnyOrder("ABSTAIN_STAY_UNDEFINED=2", "NO_MOVE_NO_CANDIDATE=1");
         assertThat(countsOf(results.path("arrivalLists"))).containsExactlyInAnyOrder("QUERIED=1",
             "UNAVAILABLE/NOT_PROVIDED=1", "UNAVAILABLE/STALE=1");
         assertThat(results.path("stayGaps").valueStream().map(gap -> gap.path("kind").asString() + "/"
             + gap.path("list").asString() + "/" + gap.path("reason").asString() + "=" + gap.path("count").asInt()))
-            .containsExactlyInAnyOrder("LIST_UNAVAILABLE/CURRENT/NOT_PROVIDED=1", "LIST_UNAVAILABLE/CURRENT/STALE=1",
-                "PROBABILITY_UNKNOWN/-/-=1");
+            .containsExactlyInAnyOrder("LIST_UNAVAILABLE/CURRENT/NOT_PROVIDED=1",
+                "LIST_UNAVAILABLE/CURRENT/STALE=1");
         JsonNode all = results.path("seatForecastLookups").path("allEntries");
-        assertThat(countsOf(all.path("foundByProbabilityTarget"))).containsExactly("DEPARTURE_ZERO=1");
-        assertThat(countsOf(all.path("notFoundByCause"))).containsExactly("FORECAST_UNAVAILABLE=1");
+        assertThat(countsOf(all.path("foundByProbabilityTarget")))
+            .containsExactlyInAnyOrder("DEPARTURE_ZERO=1", "FIRST_POST_STOP_ZERO=1");
+        assertThat(all.path("notFoundByCause").isEmpty()).isTrue();
         JsonNode board = summary.path("diagnostics").path("boardAtDecision");
         assertThat(countsOf(board.path("status"))).containsExactlyInAnyOrder("NO_RECENT_OBSERVATION=1", "READ=2");
         assertThat(countsOf(board.path("vehiclesAtStop"))).containsExactlyInAnyOrder("1=1", "3=1");
-        assertThat(countsOf(board.path("vehiclesWithForecastAtStop"))).containsExactlyInAnyOrder("0=1", "2=1");
+        assertThat(countsOf(board.path("vehiclesWithForecastAtStop"))).containsExactlyInAnyOrder("0=1", "3=1");
     }
 
     @Test

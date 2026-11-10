@@ -8,7 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -108,12 +107,6 @@ final class SyntheticInput {
 
     SyntheticInput decisions(String... rows) throws IOException {
         write(InputFolder.DECISION_FILE, "route_id,station_id,stop_sequence,decision_at", rows);
-        return this;
-    }
-
-    SyntheticInput ineligibleObservations(long... observationIds) throws IOException {
-        write("ineligible_observation", "vehicle_observation_id",
-            Arrays.stream(observationIds).mapToObj(Long::toString).toArray(String[]::new));
         return this;
     }
 

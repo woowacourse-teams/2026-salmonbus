@@ -57,7 +57,7 @@ final class ObservationTrail {
     /**
      * 기준 시각 뒤 창 길이 안에 그 정류장을 떠나기 시작한 차량마다, 통과 순번이 그 정류장 순번과 같은 첫 관측의 좌석.
      * 차량 한 대는 한 번만 센다. 기준 시각에 이미 그 정류장을 떠난 상태였던 차량은 넣지 않는다. 그 관측과 바로 앞 관측이
-     * 이어지지 않으면(앞 관측 없음, 90초 초과, 방향 다름, 적격 아님) 떠난 직후의 관측인지 알 수 없어 좌석을 모름으로 둔다.
+     * 이어지지 않으면(앞 관측 없음, 90초 초과, 방향이 없거나 다름) 떠난 직후의 관측인지 알 수 없어 좌석을 모름으로 둔다.
      */
     List<Seats> passagesWithin(long routeVersionId, int stopSequence, Instant after, Duration window) {
         return passages(trailOf(routeVersionId).byVehicle().values(), stopSequence, after, after.plus(window));
@@ -100,9 +100,8 @@ final class ObservationTrail {
         Map<String, List<Observation>> byVehicle = new HashMap<>();
         jdbc.sql("""
             SELECT observation.vehicle_id, batch.response_received_at, observation.passed_stop_order,
-                   observation.remaining_seats,
-                   CASE WHEN observation.forecast_eligible THEN observation.quality_direction END
-            FROM forecast_observation_quality observation
+                   observation.remaining_seats, observation.quality_direction
+            FROM operational_observation observation
             JOIN observation_batch batch ON batch.id = observation.observation_batch_id
             WHERE observation.route_version_id = ? AND observation.vehicle_id IS NOT NULL
               AND batch.response_received_at IS NOT NULL

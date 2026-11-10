@@ -62,7 +62,7 @@ class PassOutcomeTest {
     }
 
     @Test
-    void 예보_적격이_아닌_관측을_만나면_제품_정산처럼_끊긴다() {
+    void 운행_방향이_없는_관측을_만나면_끊긴다() {
         Observation ineligible = new Observation(START.plusSeconds(60), 49, 5, null);
 
         assertThat(first(ineligible)).isEqualTo(Seats.unknown(Unknown.LOST));
@@ -82,7 +82,7 @@ class PassOutcomeTest {
     }
 
     @Test
-    void 출발점이_적격이_아니면_제품_정산처럼_방향을_보지_않는다() {
+    void 출발점의_운행_방향이_없으면_방향을_보지_않는다() {
         Optional<Observation> ineligibleStart = Optional.of(new Observation(START, 44, 9, null));
 
         assertThat(PassOutcome.resolve(ineligibleStart, List.of(passed(49, 60, 3)), TARGET, NEXT_BOARDING_STOP,
