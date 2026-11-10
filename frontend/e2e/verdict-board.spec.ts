@@ -396,9 +396,16 @@ test("판의 만료 시각이 지나면 차량 마커와 좌석 예측을 숨기
   await expect(sheetNotice).toHaveCount(0);
 
   // 갱신이 계속 실패해서 마지막으로 받은 응답의 staleAt을 넘긴다.
+  // 다음 폴링 타이머는 실패한 /watch 처리가 끝난 뒤에 걸린다. 그 전에 복구 시계를 밀면 그 타이머를 당기지 못한다.
+  const watchFailed = page.waitForEvent(
+    "requestfailed",
+    (request) => new URL(request.url()).pathname === apiPaths.watch,
+  );
   api.mode.watch = "network-error";
   const now = await page.evaluate(() => Date.now());
   await page.clock.fastForward(Date.parse(api.data.watch.staleAt) - now + 1_000);
+  await watchFailed;
+  await page.clock.runFor(1);
   await settleMarkers(page);
 
   await expect(busMarkerAt(page, "상행 정류장 8")).toHaveCount(0);
@@ -496,6 +503,19 @@ test("운행 중인 노선의 특정 정류장에 접근 차량이 없으면 차
     ringBackgroundColor: "rgb(255, 255, 255)",
     arrowColor: "rgb(0, 0, 0)",
   });
+});
+
+test("운행 시간인데 도는 차량이 없으면 지도와 정류장 목록을 유지하고 시트에 안내한다", async ({ page, api }) => {
+  api.data.watch.vehiclesInService = 0;
+  api.data.watch.vehicles = [];
+  await openBoard(page);
+
+  await expect(page.getByRole("region", { name: "노선 지도", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "판정보드 정류장 목록", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "판정보드", exact: true }).getByRole("status")).toHaveText(
+    "지금 오는 차량이 없어요",
+  );
+  await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).not.toBeVisible();
 });
 
 // 같은 차량의 현재 좌석이 도착 예측을 대신하지 않는지 확인한다. 예측값별 칩과 좌석 문구는 verdictCopy, seatLabelOf, arrivalPolicy 단위 테스트가 본다.
