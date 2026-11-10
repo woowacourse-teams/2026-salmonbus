@@ -86,8 +86,13 @@ class DeliveryPolicyTest {
 
     @Test
     void constantsMatchTicketWindow() {
-        assertThat(DeliveryPolicy.LEASE).isEqualTo(Duration.ofMinutes(2));
+        assertThat(DeliveryPolicy.LEASE).isEqualTo(Duration.ofMinutes(1));
         assertThat(DeliveryPolicy.RETRY_INTERVAL).isEqualTo(Duration.ofMinutes(1));
         assertThat(DeliveryPolicy.RETRY_WINDOW).isEqualTo(Duration.ofMinutes(2));
+    }
+
+    @Test
+    void leaseEndsInsideRetryWindowSoACrashedSendCanBeClaimedAgain() {
+        assertThat(DeliveryPolicy.LEASE).isLessThan(DeliveryPolicy.RETRY_WINDOW);
     }
 }

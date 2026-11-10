@@ -143,15 +143,16 @@ class NotificationDeliveryFlowTest {
     }
 
     @Test
-    void anotherRunSendsAfterLeaseExpires() throws Exception {
+    void deliveryClaimedByACrashedRunIsSentByALaterRunInsideTheWindow() throws Exception {
         prepare(1, true);
+        Duration schedulerLag = Duration.ofMillis(300);
         try (FakeApnsServer fake = new FakeApnsServer()) {
-            NotificationDeliveryService service = serviceAt(T0);
-            service.expand(service.findDue(100).get(0));
-            assertThat(service.claimDue(10)).hasSize(1);
-            runAt(T0.plus(Duration.ofMinutes(1)), fake);
+            NotificationDeliveryService crashed = serviceAt(T0.plusSeconds(1));
+            crashed.expand(crashed.findDue(100).get(0));
+            assertThat(crashed.claimDue(NotificationDeliveryJob.SEND_BATCH_SIZE)).hasSize(1);
+            runAt(T0.plus(Duration.ofMinutes(1)).plus(schedulerLag), fake);
             assertThat(fake.requests()).isEmpty();
-            runAt(T0.plus(Duration.ofMinutes(2)), fake);
+            runAt(T0.plus(Duration.ofMinutes(2)).plus(schedulerLag), fake);
             assertThat(fake.requests()).hasSize(1);
             assertThat(statusCounts("SENT")).isEqualTo(1);
         }

@@ -86,7 +86,7 @@ class NotificationDeliveryServiceTest {
     }
 
     @Test
-    void claimDueLeasesForTwoMinutes() {
+    void claimDueLeasesForTheLeaseDuration() {
         service.claimDue(10);
         verify(deliveries).claimDue(NOW, NOW.plus(DeliveryPolicy.LEASE), 10);
     }
