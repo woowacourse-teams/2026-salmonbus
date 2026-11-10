@@ -1821,7 +1821,7 @@
         "properties": {
           "token": {
             "type": "string",
-            "description": "APNs 기기 토큰. 64자리 16진수"
+            "description": "APNs 기기 토큰. 1~200자의 16진수"
           },
           "environment": {
             "type": "string",
@@ -1838,7 +1838,7 @@
         "properties": {
           "token": {
             "type": "string",
-            "description": "APNs 기기 토큰. 64자리 16진수"
+            "description": "APNs 기기 토큰. 1~200자의 16진수"
           }
         },
         "required": [

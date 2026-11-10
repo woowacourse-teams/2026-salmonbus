@@ -72,6 +72,16 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
         WHERE id = ? AND status = 'PENDING'
         """;
 
+    private static final String DELETE_COMPLETED = """
+        DELETE FROM notification_delivery
+        WHERE id IN (
+            SELECT id FROM notification_delivery
+            WHERE status IN ('SENT', 'GAVE_UP') AND updated_at < ?
+            LIMIT ?
+            FOR UPDATE SKIP LOCKED
+        )
+        """;
+
     private final JdbcClient jdbc;
 
     public JdbcNotificationDeliveryRepository(JdbcClient jdbc) {
@@ -123,6 +133,14 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
                 OffsetDateTime.ofInstant(now, ZoneOffset.UTC),
                 id
             )
+            .update();
+    }
+
+    @Override
+    @Transactional
+    public int deleteCompletedBefore(Instant cutoff, int limit) {
+        return jdbc.sql(DELETE_COMPLETED)
+            .params(OffsetDateTime.ofInstant(cutoff, ZoneOffset.UTC), limit)
             .update();
     }
 

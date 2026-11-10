@@ -1,5 +1,6 @@
 package com.gustler.backend.api.push.delivery;
 
+import com.gustler.backend.api.push.application.NotificationDeliveryRepository;
 import com.gustler.backend.api.push.application.NotificationDeliveryService;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -61,6 +62,15 @@ public class PushDeliveryConfiguration {
         NotificationDeliveryRunner runner
     ) {
         return new NotificationDeliveryJob(service, runner);
+    }
+
+    @Bean
+    NotificationDeliveryPurge notificationDeliveryPurge(
+        NotificationDeliveryRepository deliveries,
+        Clock clock,
+        @Value("${push.delivery.retention:7d}") Duration retention
+    ) {
+        return new NotificationDeliveryPurge(deliveries, clock, retention);
     }
 
     @Bean

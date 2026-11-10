@@ -15,6 +15,8 @@ import com.gustler.backend.api.push.domain.NotificationSchedule;
 import com.gustler.backend.api.push.domain.PushEnvironment;
 import com.gustler.backend.support.IntegrationTest;
 import com.gustler.backend.member.api.RefreshTokens;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -30,6 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 class JdbcNotificationDeliveryRepositoryTest {
     private static final Instant NOW = Instant.parse("2026-11-01T22:40:00Z");
+    private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+    private static final Instant CUTOFF = CLOCK.instant().minus(Duration.ofDays(7));
     private static final FavoriteTarget TARGET = new FavoriteTarget("234000884", "203000165", FavoriteDirection.UP);
     private static final NotificationSchedule SCHEDULE = NotificationSchedule.parse(
         "07:40",
@@ -140,6 +144,71 @@ class JdbcNotificationDeliveryRepositoryTest {
         deliveries.createForMemberDevices(prepared.settingId(), NOW, prepared.memberId(), NOW);
         jdbc.sql("DELETE FROM member WHERE public_id = ?").param(prepared.memberPublicId()).update();
         assertThat(count()).isZero();
+    }
+
+    @Test
+    void purgeDeletesSentAndGaveUpRowsUpdatedBeforeRetention() {
+        Prepared prepared = prepare(List.of("aa"));
+        insertDeliveryUpdatedAt(prepared, "SENT", CUTOFF.minusSeconds(1), 0);
+        insertDeliveryUpdatedAt(prepared, "GAVE_UP", CUTOFF.minusSeconds(60), 1);
+
+        assertThat(deliveries.deleteCompletedBefore(CUTOFF, 1_000)).isEqualTo(2);
+        assertThat(count()).isZero();
+    }
+
+    @Test
+    void purgeKeepsPendingRecentAndExactlyAtCutoffRows() {
+        Prepared prepared = prepare(List.of("aa"));
+        insertDeliveryUpdatedAt(prepared, "PENDING", CUTOFF.minusSeconds(60), 0);
+        insertDeliveryUpdatedAt(prepared, "SENT", CUTOFF, 1);
+        insertDeliveryUpdatedAt(prepared, "GAVE_UP", CUTOFF, 2);
+        insertDeliveryUpdatedAt(prepared, "SENT", CUTOFF.plusSeconds(1), 3);
+        insertDeliveryUpdatedAt(prepared, "GAVE_UP", CUTOFF.plusSeconds(1), 4);
+
+        assertThat(deliveries.deleteCompletedBefore(CUTOFF, 1_000)).isZero();
+        assertThat(count()).isEqualTo(5);
+    }
+
+    @Test
+    void purgeDeletesAtMostTheLimitUntilAllCompletedRowsAreGone() {
+        Prepared prepared = prepare(List.of("aa"));
+        OffsetDateTime cutoff = OffsetDateTime.ofInstant(CUTOFF, ZoneOffset.UTC);
+        jdbc.sql("""
+            INSERT INTO notification_delivery (
+                setting_id, occurrence_at, device_id, status, attempts, next_attempt_at, created_at, updated_at
+            )
+            SELECT ?, ?::timestamptz - sequence * INTERVAL '1 second', ?,
+                CASE WHEN sequence % 2 = 0 THEN 'SENT' ELSE 'GAVE_UP' END,
+                1, ?, ?, ?::timestamptz - INTERVAL '1 second'
+            FROM generate_series(1, 2005) AS sequence
+            """)
+            .params(prepared.settingId(), cutoff, prepared.deviceIds().getFirst(), cutoff, cutoff, cutoff)
+            .update();
+
+        assertThat(deliveries.deleteCompletedBefore(CUTOFF, 1_000)).isEqualTo(1_000);
+        assertThat(count()).isEqualTo(1_005);
+        assertThat(deliveries.deleteCompletedBefore(CUTOFF, 1_000)).isEqualTo(1_000);
+        assertThat(count()).isEqualTo(5);
+        assertThat(deliveries.deleteCompletedBefore(CUTOFF, 1_000)).isEqualTo(5);
+        assertThat(deliveries.deleteCompletedBefore(CUTOFF, 1_000)).isZero();
+        assertThat(count()).isZero();
+    }
+
+    private void insertDeliveryUpdatedAt(Prepared prepared, String status, Instant updatedAt, int occurrenceOffset) {
+        long id = insertDelivery(
+            prepared.settingId(),
+            CUTOFF.minusSeconds(3_600).plusSeconds(occurrenceOffset),
+            prepared.deviceIds().getFirst(),
+            status,
+            CUTOFF
+        );
+        jdbc.sql("UPDATE notification_delivery SET created_at = ?, updated_at = ? WHERE id = ?")
+            .params(
+                OffsetDateTime.ofInstant(CUTOFF.minus(Duration.ofDays(1)), ZoneOffset.UTC),
+                OffsetDateTime.ofInstant(updatedAt, ZoneOffset.UTC),
+                id
+            )
+            .update();
     }
 
     private Prepared prepare(List<String> tokens) {
