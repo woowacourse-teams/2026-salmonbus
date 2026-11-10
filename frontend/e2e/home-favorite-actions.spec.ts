@@ -3,8 +3,8 @@ import { routeSearchInput } from "./utils/route-select";
 
 test.use({ viewport: { width: 425, height: 844 }, reducedMotion: "reduce" });
 
-test("로그인한 빈 홈에서 즐겨찾기 추가하기를 누르면 검색 입력창으로 이동한다", async ({ page }) => {
-  await page.goto("/");
+test("로그인한 빈 즐겨찾기 탭에서 즐겨찾기 추가하기를 누르면 검색 입력창으로 이동한다", async ({ page }) => {
+  await page.goto("/favorites");
   await expect(page.getByText("노선을 선택하고 자주 타는 정류장의 별을 눌러 보세요", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "즐겨찾기 추가하기", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "즐겨찾기 추가하기", exact: true }).click();
@@ -12,9 +12,9 @@ test("로그인한 빈 홈에서 즐겨찾기 추가하기를 누르면 검색 �
   await expect(routeSearchInput(page)).toBeFocused();
 });
 
-test("홈의 + 버튼에서 그룹을 만들고 최대 개수에 도달하면 추가를 막는다", async ({ page, favorites }) => {
+test("즐겨찾기 탭의 + 버튼에서 그룹을 만들고 최대 개수에 도달하면 추가를 막는다", async ({ page, favorites }) => {
   await page.setViewportSize({ width: 320, height: 844 });
-  await page.goto("/");
+  await page.goto("/favorites");
   const add = page.getByRole("button", { name: "그룹 추가", exact: true });
   await add.click();
   const dialog = page.getByRole("dialog", { name: "그룹 추가", exact: true });
@@ -41,7 +41,7 @@ test("홈의 + 버튼에서 그룹을 만들고 최대 개수에 도달하면 �
 });
 
 test("그룹 추가에서 잘못된 이름과 중복 이름을 안내하고 실패한 입력으로 재시도한다", async ({ page, favorites }) => {
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹 추가", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "그룹 추가", exact: true });
   const input = dialog.getByRole("textbox", { name: "그룹 이름", exact: true });
@@ -65,7 +65,7 @@ test("그룹 추가에서 잘못된 이름과 중복 이름을 안내하고 실�
 });
 
 test("그룹 추가 취소와 Escape는 저장하지 않고 열었던 버튼으로 돌아간다", async ({ page, favorites }) => {
-  await page.goto("/");
+  await page.goto("/favorites");
   const add = page.getByRole("button", { name: "그룹 추가", exact: true });
   await add.click();
   const dialog = page.getByRole("dialog", { name: "그룹 추가", exact: true });
@@ -85,20 +85,20 @@ test("그룹이 3개면 +가 없고 그룹을 삭제하면 다시 표시한다",
     { id: "10000000-0000-4000-8000-000000000003", name: "통학", favorites: [] },
     { id: "10000000-0000-4000-8000-000000000004", name: "주말", favorites: [] },
   );
-  await page.goto("/");
+  await page.goto("/favorites");
   const add = page.getByRole("button", { name: "그룹 추가", exact: true });
   await expect(page.getByRole("tab", { name: "주말", exact: true })).toBeVisible();
   await expect(add).toHaveCount(0);
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   await expect(page.getByRole("region", { name: "즐겨찾기 편집", exact: true })).toBeVisible();
   await expect(add).toHaveCount(0);
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   await page.getByRole("button", { name: "통학 그룹 삭제", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "삭제", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "완료", exact: true }).click();
-  await page.goto("/");
+  await page.goto("/favorites");
   await expect(add).toBeVisible();
   await expect(add).toBeEnabled();
 });

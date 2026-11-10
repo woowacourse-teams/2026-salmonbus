@@ -102,7 +102,7 @@ test("320px 대표 그룹은 이름과 무관하게 삭제를 막는다", async 
   await page.setViewportSize({ width: 320, height: 844 });
   favorites.groups[0]!.name = "이름을바꾼대표그룹";
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   await page.getByRole("link", { name: /이름을바꾼대표그룹 · 대표 그룹/ }).click();
   const header = page.getByRole("heading", { name: "이름을바꾼대표그룹", exact: true }).locator("..");
   await expect(header.getByText("대표", { exact: true })).toBeVisible();

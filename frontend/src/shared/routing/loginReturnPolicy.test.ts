@@ -17,6 +17,7 @@ describe("로그인 복귀 경로", () => {
     const path = "/routes/123456789?direction=DOWN&stopId=stop_1";
     expect(boardReturnTo(path)).toBe(path);
     expect(localReturnTo("/mypage")).toBe("/mypage");
+    expect(localReturnTo("/favorites")).toBe("/favorites");
     expect(localReturnTo("/?q=3330")).toBe("/?q=3330");
   });
 });

@@ -30,7 +30,7 @@ async function dropGroup(page: Page, name: string) {
 
 test("그룹을 정류장 영역에 놓으면 확인 창을 열고 취소·실패·재시도 후 실제로 삭제한다", async ({ page, favorites }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   await dropGroup(page, "통학");
@@ -57,7 +57,7 @@ test("그룹을 정류장 영역에 놓으면 확인 창을 열고 취소·실�
 
 test("현재 대표 그룹을 휴지통에 놓아도 삭제하지 않고 보호 안내를 표시한다", async ({ page, favorites }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   await dropGroup(page, "즐겨찾기");
   const dialog = page.getByRole("dialog", { name: "대표 그룹은 삭제할 수 없어요", exact: true });
@@ -70,7 +70,7 @@ test("현재 대표 그룹을 휴지통에 놓아도 삭제하지 않고 보호 
 
 test("드래그 중 Escape와 삭제 영역 밖에 놓기는 정류장 영역으로 돌아온다", async ({ page, favorites }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   const handle = editor.getByRole("button", { name: "통학 순서 변경", exact: true });
@@ -137,7 +137,7 @@ test("이전 대표 삭제 전에 새 순서를 저장하고 실패 후 재시�
     }
     await route.fallback();
   });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   await editor.getByRole("button", { name: "통학", exact: true }).click();
@@ -165,7 +165,7 @@ test("이전 대표 삭제 전에 새 순서를 저장하고 실패 후 재시�
 
 test("터치·포인터로 휴지통에 놓아도 그룹 삭제 확인 창이 열린다", async ({ page, favorites, browserName }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   if (browserName !== "chromium") {
     await dropGroup(page, "통학");

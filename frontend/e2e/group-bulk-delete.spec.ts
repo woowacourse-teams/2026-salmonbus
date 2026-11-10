@@ -22,7 +22,7 @@ test("320px 그룹 삭제 선택·취소·확인·완료는 시안대로 동작�
   browserName,
 }) => {
   await page.setViewportSize({ width: 320, height: 844 });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
   const remove = region.getByRole("button", { name: "그룹 삭제 선택", exact: true });
   const order = region.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true });
@@ -104,7 +104,7 @@ for (const failedId of [schoolId, weekendId]) {
       }
       await route.fallback();
     });
-    await page.goto("/mypage");
+    await page.goto("/favorites/groups");
     const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
     await region.getByRole("button", { name: "그룹 삭제 선택", exact: true }).click();
     await region.getByRole("checkbox", { name: "통학 삭제 선택", exact: true }).check();
@@ -146,7 +146,7 @@ test("삭제 중에는 취소와 중복 클릭을 막고 대표 그룹 하나만
     if (route.request().method() === "DELETE") await response;
     await route.fallback();
   });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
   await region.getByRole("button", { name: "그룹 삭제 선택", exact: true }).click();
   await region.getByRole("checkbox", { name: "통학 삭제 선택", exact: true }).check();
@@ -175,7 +175,7 @@ test("삭제 중에는 취소와 중복 클릭을 막고 대표 그룹 하나만
 });
 
 test("선택 중 대표 그룹이 바뀌면 삭제를 막고 다시 선택한 현재 비대표 그룹만 삭제한다", async ({ page, favorites }) => {
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
   await region.getByRole("button", { name: "그룹 삭제 선택", exact: true }).click();
   await region.getByRole("checkbox", { name: "통학 삭제 선택", exact: true }).check();

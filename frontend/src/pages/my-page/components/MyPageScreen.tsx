@@ -1,12 +1,10 @@
+import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
-import { AccountLayout } from "@/shared/components/AccountLayout";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { LoginButton } from "@/shared/components/LoginButton";
-import { Notice } from "@/shared/components/Notice";
 import { GuestMyPage } from "./GuestMyPage";
-import { GroupList } from "./GroupList";
 import { PrivacySection } from "./PrivacySection";
 import { WhatsNewLink } from "./WhatsNewLink";
 import { useAuth } from "@/shared/hooks/useAuth";
@@ -27,12 +25,10 @@ export function MyPageScreen() {
     };
   }, []);
   const { state, reload, signOut, withdraw } = useAuth();
-  const location = useLocation();
   const navigate = useNavigate();
   const [action, setAction] = useState<"logout" | "withdraw" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const notice: unknown = location.state?.notice;
 
   async function confirm() {
     if (busy || action === null) return;
@@ -85,15 +81,14 @@ export function MyPageScreen() {
 
   if (state.status === "anonymous")
     return (
-      <AccountLayout contentClassName={pageEnter}>
+      <section className={pageEnter}>
         <GuestMyPage />
-        {typeof notice === "string" && <Notice key={notice} message={notice} />}
-      </AccountLayout>
+      </section>
     );
 
   return (
-    <AccountLayout contentClassName={pageEnter}>
-      <h1 className={styles.title}>마이페이지</h1>
+    <section className={pageEnter}>
+      <h1 className={visuallyHidden}>마이페이지</h1>
       {state.status === "authenticated" ? (
         <>
           <div {...maskedPropsFor()}>
@@ -107,7 +102,6 @@ export function MyPageScreen() {
               {state.member.provider === "KAKAO" ? "카카오" : "Apple"} 계정으로 로그인 중
             </p>
           </div>
-          <GroupList />
           <WhatsNewLink />
           <button
             className={menuRow}
@@ -137,7 +131,7 @@ export function MyPageScreen() {
         </p>
       ) : (
         <>
-          <LoginButton returnTo="/mypage" />
+          <LoginButton returnTo="/mypage" menuRowClassName={menuRow} />
           {state.status === "error" && (
             <>
               <p className={styles.error} role="alert">
@@ -152,7 +146,6 @@ export function MyPageScreen() {
           <WhatsNewLink />
         </>
       )}
-      {typeof notice === "string" && <Notice key={notice} message={notice} />}
       {action !== null && (
         <ConfirmDialog
           title={action === "logout" ? "로그아웃 하시겠어요?" : "정말 탈퇴하시겠어요?"}
@@ -179,6 +172,6 @@ export function MyPageScreen() {
           </div>
         </ConfirmDialog>
       )}
-    </AccountLayout>
+    </section>
   );
 }

@@ -10,8 +10,17 @@ test.use({
   reducedMotion: "reduce",
 });
 
-test("watch 배차간격을 표시하고 다음 응답에 정보가 없으면 안내 문구로 바뀐다", async ({ page, api }) => {
+test("운행 정보는 기본으로 접혀 있고 펼치면 최신 배차간격을 보여 준다", async ({ page, api }) => {
   await openBoard(page);
+  const toggle = page.getByRole("button", { name: "운행 정보", exact: true });
+  const hours = page.getByText("05:00–23:00", { exact: true });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(hours).toBeHidden();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(hours).toBeVisible();
+  await expect(page.getByText("3대 운행 중", { exact: true })).toBeVisible();
   const summary = page.getByRole("definition").filter({ hasText: "15~25분" });
   await expect(summary).toBeVisible();
 
@@ -21,11 +30,16 @@ test("watch 배차간격을 표시하고 다음 응답에 정보가 없으면 �
   await (await refreshed).finished();
   await expect(page.getByText("정보 준비 중", { exact: true })).toBeVisible();
   await expect(page.getByText("15~25분", { exact: true })).toHaveCount(0);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(hours).toBeHidden();
 });
 
 test("화면을 켜 둔 채 한국 시간 자정을 넘기면 새 응답 없이도 오늘의 배차간격으로 바뀐다", async ({ page, api }) => {
   await page.clock.setSystemTime(new Date("2026-10-30T23:59:30+09:00"));
   await openBoard(page);
+  await page.getByRole("button", { name: "운행 정보", exact: true }).click();
   await expect(page.getByText("15~25분", { exact: true })).toBeVisible();
 
   api.mode.watch = "network-error";

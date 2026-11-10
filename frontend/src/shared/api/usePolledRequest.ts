@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useState } from "react";
 import type { ApiResult } from "./client";
 import { createLatestRequestGate } from "./latestRequestGate";
-import { nextPollFrom } from "./pollSchedule";
+import { nextPollFrom, type PollDecision } from "./pollSchedule";
 import { nextResourceFrom, IDLE_RESOURCE, PENDING_RESOURCE, type PolledResource } from "./polledResource";
 
 interface PolledState<T> {
@@ -22,6 +22,7 @@ export function usePolledRequest<T>(
   request: (key: string, signal: AbortSignal) => Promise<ApiResult<T>>,
   key: string | null,
   revision: string | number = 0,
+  nextPoll: (result: ApiResult<T>) => PollDecision = nextPollFrom,
 ): PolledRequest<T> {
   const [state, setState] = useState<PolledState<T> | null>(null);
   const requestResource = useEffectEvent(request);
@@ -55,7 +56,7 @@ export function usePolledRequest<T>(
         }
 
         const receivedAt = Date.now();
-        const decision = nextPollFrom(result);
+        const decision = nextPoll(result);
         const scheduled = decision.kind === "again" && document.visibilityState === "visible";
         setState((previous) => ({
           key,
@@ -102,7 +103,7 @@ export function usePolledRequest<T>(
       window.removeEventListener("online", onOnline);
       gate.close();
     };
-  }, [key, revision]);
+  }, [key, revision, nextPoll]);
 
   if (key === null) return { resource: IDLE_RESOURCE, requestState: "idle" };
   return {

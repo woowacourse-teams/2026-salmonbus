@@ -1,0 +1,16 @@
+version: 0.2
+
+env:
+  shell: bash
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+  build:
+    commands:
+      - test -n "$S3_BASE"
+      - cd "${CODEBUILD_SRC_DIR}/frontend"
+      - python3 scripts/collect-home-events.py
+      # 지도 데이터 파일만 교체한다.
+      - aws s3 cp public/home-events.json "${S3_BASE}/assets/home-events.json" --cache-control "public, max-age=300, must-revalidate" --content-type "application/json"

@@ -8,6 +8,8 @@ export interface StationArrivalSelection {
   direction: Direction;
 }
 
+export type StationArrivalQuery = StationArrivalSelection | { stationId: string };
+
 export type StationArrivalStatus = "READY" | "NO_PREDICTION" | "UNAVAILABLE";
 
 export interface ArrivalSnapshot {

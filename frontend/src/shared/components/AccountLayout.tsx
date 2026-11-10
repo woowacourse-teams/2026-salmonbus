@@ -4,11 +4,12 @@ import * as styles from "./AccountLayout.css";
 interface AccountLayoutProps {
   children: ReactNode;
   contentClassName?: string;
+  variant?: "tab";
 }
 
-export function AccountLayout({ children, contentClassName }: AccountLayoutProps) {
+export function AccountLayout({ children, contentClassName, variant }: AccountLayoutProps) {
   return (
-    <div className={styles.shell}>
+    <div className={variant === "tab" ? styles.tabShell : styles.shell}>
       <div className={styles.top} />
       <main className={`${styles.content} ${contentClassName ?? ""}`}>{children}</main>
     </div>

@@ -6,13 +6,19 @@ import * as styles from "./Brand.css";
 
 interface BrandProps {
   onClick?: MouseEventHandler<HTMLAnchorElement>;
+  glass?: boolean;
 }
 
-export function Brand({ onClick }: BrandProps) {
+export function Brand({ onClick, glass = false }: BrandProps) {
   return (
-    <Link className={styles.brand} to={paths.routeSelect} aria-label="연어버스 홈으로 이동" onClick={onClick}>
-      <img className={styles.mascot} src={salmong} alt="" />
-      <span>연어버스</span>
+    <Link
+      className={glass ? styles.glassBrand : styles.brand}
+      to={paths.routeSelect}
+      aria-label="연어버스 홈으로 이동"
+      onClick={onClick}
+    >
+      <img className={glass ? styles.glassMascot : styles.mascot} src={salmong} alt="" />
+      <span className={glass ? styles.glassWordmark : undefined}>연어버스</span>
     </Link>
   );
 }

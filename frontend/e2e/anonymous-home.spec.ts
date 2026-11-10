@@ -3,23 +3,23 @@ import { captureEnabled } from "./utils/capture";
 import { checkAtBothWidths } from "./utils/widths";
 import { test, expect } from "./fixtures/auth";
 
-test("비회원 홈 안내 카드는 320px에서 검색·로그인과 함께 동작한다", async ({ page, browserName }, testInfo) => {
+test("비회원 즐겨찾기 안내 카드는 320px에서 검색·로그인과 함께 동작한다", async ({ page, browserName }, testInfo) => {
   await page.setViewportSize({ width: 320, height: 844 });
-  await page.goto("/");
+  await page.goto("/favorites");
   const card = page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true });
   await expect(card).toBeVisible();
   await expect(card).toContainText("로그인을 하면 자주 타는 노선과 정류장을");
   await expect(card).toContainText("내 그룹에 모아 볼 수 있어요.");
   await expect(card.getByRole("link", { name: "로그인 / 회원가입", exact: true })).toHaveAttribute(
     "href",
-    "/login?returnTo=%2F",
+    "/login?returnTo=%2Ffavorites",
   );
   await page.evaluate(() => document.fonts.ready);
   await checkAtBothWidths(page, async (width) => {
     expect(await card.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (captureEnabled && width === 425) {
-      await testInfo.attach("비회원 홈 안내", { body: await page.screenshot(), contentType: "image/png" });
+      await testInfo.attach("비회원 즐겨찾기 안내", { body: await page.screenshot(), contentType: "image/png" });
       if (browserName === "chromium") {
         await page.screenshot({ path: test.info().outputPath("anonymous-home.png") });
         await card.screenshot({ path: test.info().outputPath("anonymous-card.png") });
@@ -34,9 +34,9 @@ test("비회원 홈 안내 카드는 320px에서 검색·로그인과 함께 동
   await page.getByRole("link", { name: "노선 선택으로 돌아가기", exact: true }).click();
   await expect(card).toBeVisible();
   await card.getByRole("link", { name: "로그인 / 회원가입", exact: true }).click();
-  await expect(page).toHaveURL("/login?returnTo=%2F");
+  await expect(page).toHaveURL("/login?returnTo=%2Ffavorites");
   await page.getByRole("button", { name: "카카오로 계속하기", exact: true }).click();
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/favorites");
   await expect(card).toHaveCount(0);
   await expect(page.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toBeVisible();
 });

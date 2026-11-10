@@ -1,5 +1,11 @@
 export type SeatLevel = "high" | "low" | "veryLow";
 
+export const seatLevelLabels: Record<SeatLevel, string> = {
+  high: "높음",
+  low: "낮음",
+  veryLow: "매우 낮음",
+};
+
 export interface CountedSeats {
   kind: "count";
   seats: number;

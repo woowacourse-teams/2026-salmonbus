@@ -1,41 +1,18 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { PHONE_MEDIA } from "@/shared/styles/media";
+import { POINTER_INPUT } from "@/shared/input-method/inputMethod";
 import { PRESS_IN, PRESS_OUT, PRESSED_SCALE } from "@/shared/styles/press";
 import { vars } from "@/shared/styles/tokens.css";
-
-export const page = style({
-  width: "100%",
-  maxWidth: 425,
-  "@media": { [PHONE_MEDIA]: { maxWidth: "none" } },
-  minHeight: "100dvh",
-  margin: "0 auto",
-  paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
-  background: "#FAF9F7",
-});
-
-// 홈이 화면을 꽉 채울 때만 바깥 배경을 헤더와 같은 색으로 칠한다.
-globalStyle(`html:has(${page})`, {
-  "@media": { [PHONE_MEDIA]: { backgroundColor: vars.color.brand } },
-});
-
-export const header = style({
-  padding: "calc(18px + env(safe-area-inset-top, 0px)) 24px 16px",
-  background: vars.color.brand,
-});
-export const searchArea = style({ marginTop: 12 });
-export const account = style({ padding: "24px 32px", textAlign: "left" });
-export const welcome = style({ margin: "116px 0 0", color: "#68645F", fontSize: 14, lineHeight: 1.6 });
+import { tabSheetBody } from "../home/HomeScreen.css";
 
 export const searchEntry = style({
-  display: "flex",
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  flex: 1,
+  minWidth: 0,
   alignItems: "center",
-  height: "48px",
-  paddingLeft: "22px",
-  borderRadius: "30px",
-  backgroundColor: vars.color.surface,
-  color: vars.color.textSubtle,
-  fontSize: "16px",
-  textDecoration: "none",
+  gap: 5,
+  height: "100%",
+  cursor: "text",
   // 평소에도 scale을 두어야 누르는 순간 stacking context가 새로 생기지 않는다.
   scale: "1",
   selectors: {
@@ -53,7 +30,8 @@ export const searchEntry = style({
 });
 
 export const searchEntryText = style({
-  flex: 1,
+  gridArea: "1 / 1",
+  width: "100%",
   minWidth: 0,
   height: "100%",
   padding: 0,
@@ -63,16 +41,49 @@ export const searchEntryText = style({
   // 16px보다 작으면 iOS가 포커스할 때 화면을 확대한다.
   fontSize: "16px",
   color: vars.color.textStrong,
-  "::placeholder": { color: vars.color.textSubtle },
+  "::placeholder": { opacity: 0 },
+  selectors: {
+    "&:focus-visible": { outline: "2px solid #8C3C30", outlineOffset: -2, borderRadius: 8 },
+    [`${POINTER_INPUT} &:focus`]: { outline: "none" },
+  },
+});
+
+export const searchEntryPrompt = style({
+  gridArea: "1 / 1",
+  fontSize: 12.5,
+  lineHeight: 1.25,
+  letterSpacing: "-0.25px",
+  color: vars.color.textSubtle,
+  wordBreak: "keep-all",
+  overflowWrap: "anywhere",
+  pointerEvents: "none",
+  selectors: { [`${searchEntryText}:not(:placeholder-shown) + &`]: { display: "none" } },
+  "@media": {
+    "(min-width: 420px)": { fontSize: 13 },
+    "(max-width: 389px)": { fontSize: 12 },
+    "(max-width: 374px)": { fontSize: 11.25, letterSpacing: "-0.15px" },
+  },
 });
 
 export const searchIcon = style({
+  gridArea: "1 / 2",
   flexShrink: 0,
-  width: "22px",
-  height: "22px",
-  marginRight: "19px",
+  width: 18,
+  height: 18,
   fill: "none",
-  stroke: vars.color.brand,
-  strokeWidth: 2,
+  stroke: "#000000",
+  strokeWidth: 1.9,
   strokeLinecap: "round",
 });
+export const centeredGuestFavorites = style({
+  display: "grid",
+  minHeight: "100%",
+  paddingBlockEnd: 36,
+  alignItems: "center",
+});
+export const favoritesSheetPage = style({
+  display: "flex",
+  flexDirection: "column",
+  minHeight: "100%",
+});
+globalStyle(`${tabSheetBody}:has(> ${favoritesSheetPage})`, { scrollbarGutter: "stable both-edges" });

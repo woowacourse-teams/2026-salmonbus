@@ -5,7 +5,7 @@ import { ArrivalForecastCard } from "./ArrivalForecastCard";
 import type { StationArrivalDetails } from "./stationArrivalPolicy";
 import { StopName } from "./StopName";
 import { TimelineMarker, type RoutePosition } from "./TimelineMarker";
-import { VerdictChip } from "./VerdictChip";
+import { VerdictChip } from "@/shared/components/VerdictChip";
 import * as styles from "./StopRow.css";
 import { FavoriteButton, type FavoriteBoardRoute } from "./FavoriteButton";
 
