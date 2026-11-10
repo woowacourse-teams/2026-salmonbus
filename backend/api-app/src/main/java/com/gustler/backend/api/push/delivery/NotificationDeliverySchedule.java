@@ -1,5 +1,6 @@
 package com.gustler.backend.api.push.delivery;
 
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
 
@@ -14,6 +15,9 @@ public final class NotificationDeliverySchedule implements AutoCloseable {
     NotificationDeliverySchedule(NotificationDeliveryJob job, String cron) {
         scheduler.setPoolSize(1);
         scheduler.setThreadNamePrefix("push-delivery-");
+        if (Scheduled.CRON_DISABLED.equals(cron)) {
+            return;
+        }
         scheduler.initialize();
         scheduler.schedule(job::run, new CronTrigger(cron));
     }
