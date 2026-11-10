@@ -75,3 +75,9 @@ export function favoriteErrorOf(failure: ApiFailure, operation: FavoriteOperatio
   if ("status" in failure && failure.status === 404) return "즐겨찾기 기능을 준비 중이에요.";
   return authErrorOf(failure, failureLabels[operation]);
 }
+
+export function favoriteStopLabelOf(item: { stop: { name?: string } } | null | undefined, index: number): string {
+  if (item?.stop.name) return item.stop.name;
+  if (item) return `정류장 정보 없음 (즐겨찾기 ${index + 1})`;
+  return `즐겨찾기 ${index + 1}`;
+}

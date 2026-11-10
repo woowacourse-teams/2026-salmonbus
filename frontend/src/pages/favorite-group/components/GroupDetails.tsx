@@ -13,7 +13,7 @@ import { useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
-import { sameFavorite, FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
+import { favoriteStopLabelOf, sameFavorite, FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
 import * as formStyles from "@/shared/styles/form.css";
 import { isNativeNotificationSupported } from "@/shared/notification/nativeNotification";
 import { useNotificationSettings } from "../hooks/useNotificationSettings";
@@ -67,15 +67,13 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
         <ul className={styles.list}>
           {group.favorites.map((favorite, index) => {
             const item = favorites.find((candidate) => candidate.id === favorite.id);
-            const stopLabel = item?.stop.name || `즐겨찾기 ${index + 1}`;
+            const stopLabel = favoriteStopLabelOf(item, index);
             return (
               <li className={styles.card} key={favorite.id}>
                 <span className={styles.info}>
                   <span className={styles.cardHeading}>
                     <RouteBadge>{item?.route.displayName || "노선 정보 없음"}</RouteBadge>
-                    <span className={styles.stop}>
-                      {item ? item.stop.name || "정류장 정보 없음" : `즐겨찾기 ${index + 1}`}
-                    </span>
+                    <span className={styles.stop}>{stopLabel}</span>
                   </span>
                   <span className={styles.direction}>
                     {directionLabelOf(item?.route.terminalStopName, favorite.direction)}
@@ -140,7 +138,12 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
             <div className={styles.target}>
               <div className={styles.targetHeading}>
                 <RouteBadge>{deletingItem?.route.displayName || "노선 정보 없음"}</RouteBadge>
-                <span className={styles.targetStop}>{deletingItem?.stop.name || "정류장 정보 없음"}</span>
+                <span className={styles.targetStop}>
+                  {favoriteStopLabelOf(
+                    deletingItem,
+                    group.favorites.findIndex((favorite) => favorite.id === deleting.id),
+                  )}
+                </span>
               </div>
               <span className={styles.direction}>
                 {directionLabelOf(deletingItem?.route.terminalStopName, deleting.direction)}

@@ -1,6 +1,6 @@
 import { useId } from "react";
 import type { ExpandableStopView, StopView } from "./displayPolicy";
-import { stopNameLabel, WAYPOINT_CAPTION } from "./verdictCopy";
+import { NO_VEHICLE_NOTICE, STALE_FORECAST_NOTICE, stopNameLabel, WAYPOINT_CAPTION } from "./verdictCopy";
 import { ArrivalForecastCard } from "./ArrivalForecastCard";
 import type { StationArrivalDetails } from "./stationArrivalPolicy";
 import { StopName } from "./StopName";
@@ -48,8 +48,8 @@ export function StopRow({
     );
   }
 
-  const boardingStop = stop.kind === "boarding" ? stop : null;
-  const tone = boardingStop === null ? "noVehicle" : boardingStop.tone;
+  const tone = stop.kind === "boarding" ? stop.tone : stop.kind;
+  const emptyNotice = stop.kind === "checking" ? STALE_FORECAST_NOTICE : NO_VEHICLE_NOTICE;
 
   return (
     <li className={styles.stopRow} data-stop-sequence={stop.sequence} data-selected={selected}>
@@ -82,7 +82,11 @@ export function StopRow({
         onClick={expanded ? () => onToggle(stop) : undefined}
       >
         <div id={panelId} className={styles.detailInner}>
-          <ArrivalForecastCard arrivals={boardingStop?.arrivals ?? []} stationArrivals={stationArrivals} />
+          <ArrivalForecastCard
+            arrivals={stop.kind === "boarding" ? stop.arrivals : []}
+            stationArrivals={stationArrivals}
+            emptyNotice={emptyNotice}
+          />
         </div>
       </div>
     </li>

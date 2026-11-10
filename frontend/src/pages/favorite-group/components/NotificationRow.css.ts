@@ -79,16 +79,22 @@ export const field = style({
   fontSize: 14,
   fontWeight: 600,
 });
-export const time = style({
-  minWidth: 120,
+export const timeParts = style({ display: "flex", alignItems: "center", gap: 6, fontSize: 16 });
+export const timePart = style({
   height: 44,
-  padding: "0 12px",
+  minWidth: 64,
+  padding: "0 10px",
   border: "1px solid #EAE6E0",
   borderRadius: 10,
   background: "#FAF9F7",
   color: "#292A2D",
   font: "inherit",
   fontSize: 16,
+  cursor: "pointer",
+  selectors: {
+    "&:focus-visible": { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 2 },
+    "&:disabled": { opacity: 0.45, cursor: "default" },
+  },
 });
 export const weekdays = style({ display: "flex", gap: 6, marginTop: 16 });
 export const weekday = style({

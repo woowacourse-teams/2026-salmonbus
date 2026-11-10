@@ -55,6 +55,8 @@ class LoginDisabledTest {
             Arguments.of("GET", "/api/me/favorite-groups"),
             Arguments.of("GET", "/api/me/favorites"),
             Arguments.of("PUT", "/api/me/favorite-order"),
+            Arguments.of("PUT", "/api/me/push-devices"),
+            Arguments.of("POST", "/api/me/push-devices/unregister"),
             Arguments.of("PATCH", "/api/me"),
             Arguments.of("DELETE", "/api/me"),
             Arguments.of("DELETE", "/api/me/sessions"),

@@ -36,7 +36,8 @@ class AuthApiDocsContractTest {
     private static final List<String> SCHEMAS = List.of(
         "AuthSessionResponse", "MemberResponse", "MyProfileResponse", "TokenResponse", "RefreshRequest",
         "UpdateNicknameRequest", "AppleWithdrawalRequest", "AppleWithdrawalResponse", "AppLoginRequest",
-        "AppLoginNonceResponse", "AppleAppWithdrawalRequest", "ErrorResponse"
+        "AppLoginNonceResponse", "AppleAppWithdrawalRequest", "RegisterPushDeviceRequest",
+        "UnregisterPushDeviceRequest", "ErrorResponse"
     );
 
     @Autowired
@@ -68,7 +69,7 @@ class AuthApiDocsContractTest {
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             softly.assertThat(generatedOperations).isEqualTo(contractOperations);
-            softly.assertThat(generatedOperations).hasSize(11);
+            softly.assertThat(generatedOperations).hasSize(13);
         }
     }
 
