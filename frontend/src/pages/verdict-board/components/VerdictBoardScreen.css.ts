@@ -96,13 +96,20 @@ export const routeNumber = style({
   lineHeight: 1,
   whiteSpace: "nowrap",
 });
-export const outOfService = style({
-  alignSelf: "center",
-  width: "100%",
+export const centeredNotice = style({
+  display: "grid",
+  flex: 1,
+  minHeight: 0,
+  alignContent: "safe center",
+  justifyItems: "center",
+  gap: 10,
+  overflowY: "auto",
+  paddingBlock: 12,
   textAlign: "center",
-  color: vars.color.textSubtle,
-  fontSize: vars.font.boardNotice,
+  color: vars.color.textStrong,
 });
+export const noticeMascot = style({ width: "clamp(64px, 11dvh, 88px)", height: "auto" });
+globalStyle(`${centeredNotice} > p`, { margin: 0, fontSize: 20, fontWeight: 700, lineHeight: 1.4 });
 export const alternateDirection = style({
   border: `1px solid ${vars.color.cardBorder}`,
   borderRadius: vars.radius.control,
@@ -133,6 +140,7 @@ export const sharedNoticePage = style([
   noticePage,
   mapOverlay,
   {
+    position: "fixed",
     padding: 0,
     alignItems: "flex-end",
     backgroundColor: "transparent",

@@ -325,6 +325,43 @@ test("노선 카드에서 기존 지도 위에 판정보드를 열고 노선 응
   await expect(card).toBeVisible();
 });
 
+test("노선도에서 운행이 끝난 방향을 열면 판정보드 바텀시트 중앙에 안내가 보인다", async ({ page, api }) => {
+  api.data.watch.observedAt = "2026-09-16T23:30:00+09:00";
+  api.data.watch.vehiclesInService = 0;
+  api.data.watch.vehicles = [];
+  await page.goto("/route-map");
+  const card = page.getByRole("list", { name: "서비스 중 노선" }).getByRole("link", { name: /3330/ });
+  await card.click();
+  await expect(page).toHaveURL(`/routes/${routeId}`);
+  const board = page.getByRole("region", { name: "판정보드", exact: true });
+  await expect(board).toHaveAttribute("data-snap", "expanded");
+  await board.evaluate((element) => Promise.allSettled(element.getAnimations().map((animation) => animation.finished)));
+  const notice = board.getByRole("status");
+  await expect(notice).toHaveText("현재는 운행시간이 아닙니다");
+  await expect(notice).toBeInViewport({ ratio: 1 });
+  const mascot = board.locator("img");
+  await expect(mascot).toBeInViewport({ ratio: 1 });
+  const imageBox = (await mascot.boundingBox())!;
+  const noticeBox = (await notice.boundingBox())!;
+  const sheetBox = (await board.boundingBox())!;
+  expect(imageBox.y + imageBox.height).toBeLessThan(noticeBox.y);
+  expect(imageBox.x + imageBox.width / 2).toBeCloseTo(noticeBox.x + noticeBox.width / 2, 0);
+  const contentCenter = (imageBox.y + noticeBox.y + noticeBox.height) / 2;
+  expect(Math.abs(contentCenter - (sheetBox.y + sheetBox.height / 2))).toBeLessThan(24);
+  const map = page.getByTestId("naver-map-test-double");
+  const paths = map.getByTestId("naver-polyline");
+  await expect(paths).toHaveCount(2);
+  await page.clock.runFor(64);
+  await expect(paths.first().locator("polyline")).toHaveAttribute("stroke-opacity", "0.95");
+  await expect(map.getByRole("button", { name: /정류장 지도에서 선택/ })).toHaveCount(0);
+  const back = page.getByRole("link", { name: "노선 선택으로 돌아가기", exact: true });
+  await expect(back).toBeInViewport({ ratio: 1 });
+  await back.click();
+  await expect(page).toHaveURL("/route-map");
+  await expect(card).toBeVisible();
+  await expect(paths).toHaveCount(0);
+});
+
 test("검색에서 같은 지도 위에 판정보드를 먼저 열고 응답이 오면 노선을 표시한다", async ({ page, api, naverMap }) => {
   let releaseGeometry!: () => void;
   const geometryPending = new Promise<void>((resolve) => {
