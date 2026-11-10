@@ -5,17 +5,22 @@ import { BRIDGE_EVENT, appBootstrapScriptFor, bridgeEventScriptFor, bridgeMessag
 
 function webWindow(origin = 'https://dev.salmonbus.com') {
   const events = [];
+  const posted = [];
+  const listeners = {};
   const window = {
     location: { origin },
     dispatchEvent: (event) => events.push(event),
+    addEventListener: (type, listener) => (listeners[type] ??= []).push(listener),
+    ReactNativeWebView: { postMessage: (message) => posted.push(JSON.parse(message)) },
   };
+  const fire = (type, event) => (listeners[type] ?? []).forEach((listener) => listener(event));
   class CustomEvent {
     constructor(type, init) {
       this.type = type;
       this.detail = init.detail;
     }
   }
-  return { context: vm.createContext({ window, CustomEvent, JSON, Object }), window, events };
+  return { context: vm.createContext({ window, CustomEvent, JSON, Object }), window, events, posted, fire };
 }
 
 describe('앱 정보 주입', () => {
@@ -33,6 +38,22 @@ describe('앱 정보 주입', () => {
     vm.runInContext(appBootstrapScriptFor({ appVersion, capabilities: [] }), context);
     assert.equal(window.__SALMONBUS_APP__.appVersion, appVersion);
     assert.equal(window.hacked, undefined);
+  });
+
+  it('새 문서가 시작되면 웹 코드보다 먼저 앱에 문서 시작을 알린다', () => {
+    const { context, posted } = webWindow();
+    vm.runInContext(appBootstrapScriptFor({ appVersion: '1.0.0', capabilities: [] }), context);
+    assert.deepEqual(posted, [{ v: 1, type: 'app.documentStarted', payload: {} }]);
+  });
+
+  it('페이지 캐시에서 복원된 문서는 다시 문서 시작을 알리고 처음 뜬 pageshow에는 알리지 않는다', () => {
+    const { context, posted, fire } = webWindow();
+    vm.runInContext(appBootstrapScriptFor({ appVersion: '1.0.0', capabilities: [] }), context);
+    fire('pageshow', { persisted: false });
+    assert.equal(posted.length, 1);
+    fire('pageshow', { persisted: true });
+    assert.equal(posted.length, 2);
+    assert.equal(posted[1].type, 'app.documentStarted');
   });
 });
 

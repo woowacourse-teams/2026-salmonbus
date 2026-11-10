@@ -81,11 +81,19 @@ function startApp() {
     },
   });
   exports.default();
+  const announceDocument = (url = WEB_URL) => webView.onMessage({ nativeEvent: {
+    url, data: JSON.stringify({ v: 1, type: 'app.documentStarted', payload: {} }),
+  } });
   return {
     sent,
     tap: (key = 'n1@1') => onTap({ key, target: TARGET }),
     load: () => webView.onLoad?.({ nativeEvent: { url: WEB_URL } }),
-    start: () => webView.onLoadStart(),
+    start: () => {
+      webView.onLoadStart();
+      announceDocument();
+    },
+    beginLoad: () => webView.onLoadStart(),
+    announceDocument: () => announceDocument(),
     fail: (event) => webView[event]({ nativeEvent: { url: WEB_URL, statusCode: 500 } }),
     terminate: () => webView.onContentProcessDidTerminate(),
     advanceTime: (duration) => {
@@ -185,6 +193,43 @@ describe('앱 WebView의 알림 전달', () => {
     app.tap();
     assert.deepEqual(app.sent, []);
     app.ready();
+    assert.deepEqual(deliveredTargets(app), [TARGET]);
+  });
+});
+
+describe('문서가 바뀌는 사이에 온 준비 신호', () => {
+  it('새 문서를 읽기 시작한 뒤 이전 문서가 늦게 보낸 준비 신호는 보관한 탭을 가져가지 않는다', () => {
+    const app = startApp();
+    app.start();
+    app.tap();
+    app.beginLoad();
+    app.ready('old-1');
+    assert.deepEqual(deliveredTargets(app), []);
+    app.announceDocument();
+    app.ready('new-1');
+    assert.deepEqual(deliveredTargets(app), [TARGET]);
+    assert.equal(app.sent.find((message) => message.payload.target).payload.requestId, 'new-1');
+  });
+
+  it('새 문서가 시작을 알리기 전에 온 탭도 보관했다가 새 문서의 준비 신호에 준다', () => {
+    const app = startApp();
+    app.start();
+    app.ready('old-1');
+    app.beginLoad();
+    app.tap();
+    app.ready('old-2');
+    app.announceDocument();
+    app.ready('new-1');
+    assert.deepEqual(deliveredTargets(app), [TARGET]);
+    assert.equal(app.sent.find((message) => message.payload.target).payload.requestId, 'new-1');
+  });
+
+  it('문서 시작 알림 없이 로드가 끝나도 그 뒤 준비 신호는 받는다', () => {
+    const app = startApp();
+    app.beginLoad();
+    app.tap();
+    app.loadEnd();
+    app.ready('after-end');
     assert.deepEqual(deliveredTargets(app), [TARGET]);
   });
 });
