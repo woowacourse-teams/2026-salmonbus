@@ -20,8 +20,12 @@ final class CompatiblePreparation {
         "17a98f6b1ac235c9d77dc59823cd55974dcdc5c045a879c77e81f6b074df7616";
     static final String LES_EVALUATION_DATA = "30cf3a383cbd23cc0180d0028697cb54eaad6f04ab024feab8a89ee789e16410";
 
+    // SAL-385: 폐기한 품질 및 재구축 테이블 대신 최종 원본 보관 스키마를 초기화한다.
+    static final String ARCHIVE_DATA = "febd4e42fed774cd46d4e3b42861e69bbf7e66bc6baf8b2e53132627ffebbc19";
+
     private static final List<String> REVIEWED_ORDER = List.of(
-        PREVIOUS, COLLECTED_DATA, EVALUATION_DATA, NEXT, PREVIOUS_LES_EVALUATION_DATA, LES_EVALUATION_DATA);
+        PREVIOUS, COLLECTED_DATA, EVALUATION_DATA, NEXT, PREVIOUS_LES_EVALUATION_DATA, LES_EVALUATION_DATA,
+        ARCHIVE_DATA);
 
     static boolean permits(RevisionStore.Revision previous, RevisionStore.Revision next) {
         String from = previous.files().get("tools/data-contract.sha256");
@@ -30,7 +34,7 @@ final class CompatiblePreparation {
             return false;
         }
         if (FIXTURE_DIGEST.equals(from)) {
-            return NEXT.equals(to) || LES_EVALUATION_DATA.equals(to);
+            return NEXT.equals(to) || LES_EVALUATION_DATA.equals(to) || ARCHIVE_DATA.equals(to);
         }
         if (FIXTURE_DIGEST.equals(to)) {
             return NEXT.equals(from);

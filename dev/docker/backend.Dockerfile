@@ -13,6 +13,7 @@ COPY --chown=developer:developer backend/gradlew backend/build.gradle backend/se
 COPY --chown=developer:developer backend/gradle/ ./gradle/
 COPY --chown=developer:developer backend/api-app/build.gradle ./api-app/build.gradle
 COPY --chown=developer:developer backend/worker-app/build.gradle ./worker-app/build.gradle
+COPY --chown=developer:developer backend/archive-app/build.gradle ./archive-app/build.gradle
 COPY --chown=developer:developer backend/maintenance-app/build.gradle ./maintenance-app/build.gradle
 COPY --chown=developer:developer backend/common/build.gradle ./common/build.gradle
 COPY --chown=developer:developer backend/business/route-catalog/build.gradle ./business/route-catalog/build.gradle
