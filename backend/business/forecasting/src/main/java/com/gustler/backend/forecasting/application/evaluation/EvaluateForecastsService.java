@@ -44,6 +44,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     private final RouteWorkAccess routeWork;
     private final ForecastPolicy policy;
     private final Clock clock;
+    private final SettlementRouteRunner routeRunner;
     private final PendingEvaluationBuffer buffer;
     private final int pageLimit;
     private final Map<Long, EvaluationSelection.Cursor> cursors = new LinkedHashMap<>();
@@ -73,6 +74,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         this.routeWork = routeWork;
         this.policy = policy;
         this.clock = clock;
+        this.routeRunner = new SettlementRouteRunner(clock, "settlement_route");
         this.buffer = new PendingEvaluationBuffer(memoryLimit);
         this.pageLimit = pageLimit;
     }
@@ -96,7 +98,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
         Snapshot beforeRoutes = snapshot();
         List<Long> versions = WorkerOperationLog.measure("settlement_pending_routes", "all", work::routes);
         discardInactive(beforeRoutes, versions);
-        for (final long version : versions) {
+        routeRunner.run(versions, version -> {
             Snapshot snapshot = snapshot();
             RecentArrivalObservationCache.Round observations = observationCache.begin(now);
             final long revision = routeWork.current(version);
@@ -113,7 +115,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
                     }
                 }
             });
-        }
+        });
     }
 
     private RouteInput read(final long version, final long revision, Snapshot snapshot) {

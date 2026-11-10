@@ -102,6 +102,8 @@ class SameDayTransactionBoundaryTest {
     DataSource dataSource;
     @Autowired
     JdbcClient jdbc;
+    @MockitoSpyBean(name = "sameDayBoundaryClock")
+    Clock settlementClock;
     @MockitoSpyBean
     JdbcSameDayFullOutcomesStore countsSpy;
     @MockitoSpyBean
@@ -211,13 +213,13 @@ class SameDayTransactionBoundaryTest {
         // then
 
         // when
-        Throwable phaseFailure1 = catchThrowable(settlement::settleArrivalLabels);
+        settlement.settleArrivalLabels();
 
         // then
-        assertThat(phaseFailure1).isNotNull().isInstanceOf(QueryTimeoutException.class);
         assertUnsettled();
 
         doAnswer(call -> call.callRealMethod()).when(countsSpy).addCounts(anyLong(), anyLong(), any(), any());
+        when(settlementClock.instant()).thenReturn(NOW.plusSeconds(2));
         settlement.settleArrivalLabels();
         settlement.settleArrivalLabels();
         assertSettledOnce();
@@ -430,7 +432,7 @@ class SameDayTransactionBoundaryTest {
     }
 
     @Test
-    void 다음_노선의_저장이_실패해도_앞서_커밋한_노선의_정산은_유지된다() {
+    void 앞_노선의_저장이_실패해도_뒤_노선은_커밋하고_실패_노선만_재시도한다() {
         // given
         savePending();
         ArrivalCandidate firstArrival = arrival();
@@ -442,24 +444,24 @@ class SameDayTransactionBoundaryTest {
             return List.of(other.arrival());
         });
         doAnswer(call -> {
-            if ((long) call.getArgument(0) == other.version()) {
-                throw new IllegalStateException("두 번째 노선 작업 종료 실패");
+            if ((long) call.getArgument(0) == versionId) {
+                throw new IllegalStateException("첫 번째 노선 작업 종료 실패");
             }
             return call.callRealMethod();
         }).when(workStore()).releaseCompleted(anyLong(), any());
 
         // when
-        assertThatThrownBy(settlement::settleArrivalLabels).hasRootCauseInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("두 번째 노선 작업 종료 실패");
+        settlement.settleArrivalLabels();
 
         // then
         assertThat(jdbc.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id=?")
-            .param(sourceId).query(String.class).single()).isEqualTo("SETTLED");
+            .param(sourceId).query(String.class).single()).isEqualTo("PENDING");
         assertThat(jdbc.sql("SELECT scoring_state FROM forecast_evaluation WHERE vehicle_observation_id=?")
-            .param(other.source()).query(String.class).single()).isEqualTo("PENDING");
+            .param(other.source()).query(String.class).single()).isEqualTo("SETTLED");
         assertThat(count("stop_demand_pending_sample")).isOne();
         assertThat(count("forecast_evaluation_work")).isOne();
         doAnswer(call -> call.callRealMethod()).when(workStore()).releaseCompleted(anyLong(), any());
+        when(settlementClock.instant()).thenReturn(NOW.plusSeconds(2));
         settlement.settleArrivalLabels();
         assertThat(count("forecast_evaluation_result")).isEqualTo(2);
         assertThat(count("stop_demand_pending_sample")).isEqualTo(2);
@@ -614,12 +616,13 @@ class SameDayTransactionBoundaryTest {
         }).when(countsSpy).addCounts(anyLong(), anyLong(), any(), any());
 
         // when
-        assertThatThrownBy(settlement::settleArrivalLabels).isInstanceOf(QueryTimeoutException.class);
+        settlement.settleArrivalLabels();
 
         // then
         assertThat(count("forecast_evaluation_compact")).isZero();
         assertUnsettled();
         doAnswer(call -> call.callRealMethod()).when(countsSpy).addCounts(anyLong(), anyLong(), any(), any());
+        when(settlementClock.instant()).thenReturn(NOW.plusSeconds(2));
         settlement.settleArrivalLabels();
         settlement.settleArrivalLabels();
         assertCompactSettledOnce();

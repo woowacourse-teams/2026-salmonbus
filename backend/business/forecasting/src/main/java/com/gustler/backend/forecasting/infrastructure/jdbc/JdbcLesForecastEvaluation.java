@@ -1,7 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.application.evaluation.LesForecastEvaluation;
 import com.gustler.backend.forecasting.application.RouteWorkAccess;
+import com.gustler.backend.forecasting.application.evaluation.LesForecastEvaluation;
+import com.gustler.backend.forecasting.application.evaluation.SettlementRouteRunner;
 import com.gustler.backend.forecasting.domain.model.les.LesAlightingPosterior;
 import com.gustler.backend.forecasting.domain.model.les.LesObservation;
 import com.gustler.backend.forecasting.domain.model.les.LesPassEvent;
@@ -61,6 +62,7 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
     private final JdbcClient jdbc;
     private final RouteWorkAccess routeWork;
     private final Clock clock;
+    private final SettlementRouteRunner routeRunner;
     private final TransactionTemplate transaction;
 
     public JdbcLesForecastEvaluation(
@@ -118,6 +120,7 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
         this.jdbc = jdbc;
         this.routeWork = routeWork;
         this.clock = clock;
+        this.routeRunner = new SettlementRouteRunner(clock, "les_settlement_route");
         this.transaction = new TransactionTemplate(transactions);
         this.transaction.setTimeout(15);
     }
@@ -129,9 +132,7 @@ public class JdbcLesForecastEvaluation implements LesForecastEvaluation {
             SELECT DISTINCT route_version_id FROM les_forecast_evaluation_work
             WHERE next_attempt_at<=clock_timestamp() ORDER BY route_version_id
             """).query(Long.class).list();
-        for (final long route : routes) {
-            settleRoutePages(route);
-        }
+        routeRunner.run(routes, this::settleRoutePages);
     }
 
     private void settleRoutePages(final long route) {

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.api.evaluation.EvaluateForecasts;
@@ -41,7 +42,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,7 +50,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
-import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -95,6 +94,9 @@ class JdbcForecastEvaluationTransactionTest {
 
     @Autowired
     private EvaluateForecasts settlement;
+
+    @MockitoSpyBean(name = "arrivalCacheTestClock")
+    private Clock settlementClock;
 
     @Autowired
     private RecentArrivalObservationCache observationCache;
@@ -181,7 +183,7 @@ class JdbcForecastEvaluationTransactionTest {
             FOR EACH ROW EXECUTE FUNCTION reject_settlement_preview_fixture()
             """).update();
         try {
-            Assertions.assertThatThrownBy(settlement::settleArrivalLabels).isInstanceOf(DataAccessException.class);
+            settlement.settleArrivalLabels();
         } finally {
             jdbc.sql("DROP TRIGGER reject_settlement_preview_fixture ON forecast_evaluation_result").update();
             jdbc.sql("DROP FUNCTION reject_settlement_preview_fixture()").update();
@@ -189,6 +191,7 @@ class JdbcForecastEvaluationTransactionTest {
         assertThat(evaluationState()).isEqualTo("PENDING");
 
         // when
+        when(settlementClock.instant()).thenReturn(SCORED_AT.plusSeconds(2));
         settlement.settleArrivalLabels();
 
         // then

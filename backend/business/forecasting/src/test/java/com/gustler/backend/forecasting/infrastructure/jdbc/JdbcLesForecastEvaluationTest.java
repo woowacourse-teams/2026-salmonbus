@@ -139,6 +139,54 @@ class JdbcLesForecastEvaluationTest {
     }
 
     @Test
+    void 앞_노선의_실패를_롤백하고_뒤_노선은_정산한다() {
+        final long failedRoute = route;
+        final long failedVersion = version;
+        final long failedDeployment = deployment;
+        jdbc.sql("UPDATE model_deployment SET state='RETIRED' WHERE id=?").param(deployment).update();
+        정산_자료를_준비한다();
+        try {
+            RouteWorkAccess failing = new RouteWorkAccess() {
+                @Override
+                public long current(long id) {
+                    return quality.current(id);
+                }
+
+                @Override
+                public long lock(long id) {
+                    long revision = quality.lock(id);
+                    if (id == failedVersion) {
+                        jdbc.sql("UPDATE les_forecast_evaluation_work SET reason='temporary' WHERE route_version_id=?")
+                            .param(id).update();
+                        throw new IllegalStateException("첫 노선 정산 실패");
+                    }
+                    return revision;
+                }
+
+                @Override
+                public long lockByRoute(long id) {
+                    return quality.lockByRoute(id);
+                }
+            };
+            service = new JdbcLesForecastEvaluation(jdbc, failing, Clock.systemUTC(), transactions);
+
+            service.settle();
+
+            assertThat(jdbc.sql("SELECT count(*) FROM les_forecast_evaluation_result WHERE route_version_id=?")
+                .param(failedVersion).query(Integer.class).single()).isZero();
+            assertThat(jdbc.sql("SELECT reason FROM les_forecast_evaluation_work WHERE route_version_id=?")
+                .param(failedVersion).query(String.class).single()).isEqualTo("AWAITING_OBSERVATION");
+            assertThat(count("les_forecast_evaluation_result")).isOne();
+            assertThat(count("les_forecast_evaluation_work")).isZero();
+        } finally {
+            준비한_자료를_정리한다();
+            route = failedRoute;
+            version = failedVersion;
+            deployment = failedDeployment;
+        }
+    }
+
+    @Test
     void 같은_편도의_하차_후_잔여석을_소수로_한번만_정산한다() {
         service.settle();
         service.settle();
