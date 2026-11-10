@@ -89,6 +89,7 @@ function startApp() {
     sent,
     tap: (key = 'n1@1') => onTap({ key, target: TARGET }),
     load: () => webView.onLoad?.({ nativeEvent: { url: WEB_URL } }),
+    // start는 실제 순서대로 loadStart 뒤 새 문서의 시작 알림까지 보내고, beginLoad는 loadStart만 보낸다.
     start: () => {
       webView.onLoadStart();
       announceDocument();

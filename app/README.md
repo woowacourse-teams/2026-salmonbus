@@ -26,7 +26,7 @@ Simulator에서 로컬 웹 서버에 연결할 때는 `http://127.0.0.1:<port>`�
 
 앱은 알림 권한, APNs device token, 알림 탭만 맡고, 토큰 등록과 화면은 웹이 맡습니다. 웹이 `notification.requestPermission`(권한 묻기)이나 `notification.getRegistration`(묻지 않고 읽기)을 보내면 앱이 `notification.registration`으로 상태, token, APNs 환경을 돌려줍니다. 환경은 빌드 설정이 아니라 서명된 앱에서 읽습니다(`expo-application`). 시뮬레이터와 개발 서명 빌드는 `SANDBOX`, TestFlight와 App Store 빌드는 `PRODUCTION`이고, 정할 수 없으면 token을 `null`로 보냅니다.
 
-알림을 누르면 앱이 payload의 `target`을 고치지 않고 웹에 넘깁니다. 웹이 `notification.takeOpened`를 보내면 그 문서가 받을 준비를 마친 것으로 보고 보관한 탭을 답으로 돌려줍니다. 문서의 `onLoad`만으로는 탭을 꺼내지 않습니다. 준비된 문서에서 새로 누른 탭은 바로 `notification.opened`로 넘깁니다. 새 문서를 읽기 시작하거나 로드에 실패하거나 WebView 프로세스가 끝나면 준비 상태를 내립니다. 보관한 탭은 10분이 지나면 버리고 같은 탭은 한 번만 넘깁니다. `expo-notifications`는 원격 알림의 `data`에 payload의 `body` 키만 넣으므로 서버는 대상을 `aps` 밖 `target`에 둡니다.
+알림을 누르면 앱이 payload의 `target`을 고치지 않고 웹에 넘깁니다. 웹이 `notification.takeOpened`를 보내면 그 문서가 받을 준비를 마친 것으로 보고 보관한 탭을 답으로 돌려줍니다. 다만 새 문서를 읽기 시작한 뒤에는 응답이 올 때까지 이전 문서가 살아서 요청을 보낼 수 있으므로, 새 문서가 시작을 알리거나(`app.documentStarted`, 앱이 주입하는 스크립트가 보냅니다) 로드가 끝나기 전에 온 요청에는 탭을 주지 않습니다. 문서의 `onLoad`만으로는 탭을 꺼내지 않습니다. 준비된 문서에서 새로 누른 탭은 바로 `notification.opened`로 넘깁니다. 새 문서를 읽기 시작하거나 로드에 실패하거나 WebView 프로세스가 끝나면 준비 상태를 내립니다. 보관한 탭은 10분이 지나면 버리고 같은 탭은 한 번만 넘깁니다. `expo-notifications`는 원격 알림의 `data`에 payload의 `body` 키만 넣으므로 서버는 대상을 `aps` 밖 `target`에 둡니다.
 
 Simulator에서는 아래 payload를 파일로 저장하고 `xcrun simctl push booted com.salmonbus.app payload.apns`로 넣습니다.
 
@@ -41,7 +41,7 @@ Simulator에서는 아래 payload를 파일로 저장하고 `xcrun simctl push b
 
 ## 코드 위치
 
-- `bridge/bridge.ts`: 앱 정보(`window.__SALMONBUS_APP__`) 주입, 웹과 주고받는 envelope 검증, 웹으로 이벤트 전달
+- `bridge/bridge.ts`: 앱 정보(`window.__SALMONBUS_APP__`) 주입과 새 문서 시작 알림, 웹과 주고받는 envelope 검증, 웹으로 이벤트 전달
 - `auth/`: 로그인 메시지 검사(`authMessages.ts`)와 Apple, 카카오 SDK 호출(`signInNatively.ts`)
 - `notification/`: 알림 메시지 검사와 APNs 환경 판단(`notificationMessages.ts`), 권한과 token(`registration.ts`), 알림 탭 칸(`tapInbox.ts`)과 탭 감시(`openedNotifications.ts`)
 - `native-map/NativeRouteMap.tsx`: native view의 TypeScript 계약
