@@ -116,6 +116,7 @@ class NotificationSettingControllerTest {
             {"routeId":"%s","stopId":"%s","direction":"UP","time":"07:40"}
             """.formatted(ROUTE, STOP), accessCookie, true), 400, "INVALID_NOTIFICATION_SCHEDULE");
         assertError(put(validBody("07:40", "[\"MON\",\"MON\"]"), accessCookie, true), 400, "INVALID_NOTIFICATION_SCHEDULE");
+        assertError(put(validBody("07:40", "[\"MON\",null]"), accessCookie, true), 400, "INVALID_NOTIFICATION_SCHEDULE");
         assertThat(count()).isZero();
     }
 

@@ -1,5 +1,7 @@
 package com.gustler.backend.api.push.dto;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public record SaveNotificationSettingRequest(
@@ -11,7 +13,7 @@ public record SaveNotificationSettingRequest(
 ) {
     public SaveNotificationSettingRequest {
         if (weekdays != null) {
-            weekdays = List.copyOf(weekdays);
+            weekdays = Collections.unmodifiableList(new ArrayList<>(weekdays));
         }
     }
 }
