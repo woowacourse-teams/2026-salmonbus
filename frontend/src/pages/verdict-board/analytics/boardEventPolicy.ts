@@ -62,6 +62,9 @@ export function stopExpandedPropertiesOf(
     expand_index: expandIndex,
     source,
   };
+  if (stop.kind === "checking") {
+    return { ...common, stop_kind: "checking", arrival_count: 0 };
+  }
   if (stop.kind === "noVehicle") {
     return { ...common, stop_kind: "noVehicle", arrival_count: 0 };
   }

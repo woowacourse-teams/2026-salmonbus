@@ -129,6 +129,21 @@ describe("stopExpandedPropertiesOf", () => {
     expect(properties).not.toHaveProperty("forecast_status");
   });
 
+  it("만료 확인 중인 정류장은 checking으로 보내고 도착 수는 0이다", () => {
+    const stop = {
+      kind: "checking" as const,
+      sequence: 2,
+      stopId: "S2",
+      name: "정류장2",
+      isTurnaround: false,
+    };
+    const properties = stopExpandedPropertiesOf(stop, expandContext);
+    expect(properties).toMatchObject({ stop_kind: "checking", arrival_count: 0 });
+    expect(properties).not.toHaveProperty("level");
+    expect(properties).not.toHaveProperty("stops_away");
+    expect(properties).not.toHaveProperty("forecast_status");
+  });
+
   it("정류장 정보와 목록 위치, 펼친 순서, 펼친 곳을 그대로 옮긴다", () => {
     expect(stopExpandedPropertiesOf(expandableStopAt("DOWN", 4), expandContext)).toMatchObject({
       route_id: "R1",
