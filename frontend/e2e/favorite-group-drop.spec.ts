@@ -55,19 +55,6 @@ test("그룹을 정류장 영역에 놓으면 확인 창을 열고 취소·실�
   await expect(editor).toHaveCount(0);
 });
 
-test("현재 대표 그룹을 휴지통에 놓아도 삭제하지 않고 보호 안내를 표시한다", async ({ page, favorites }) => {
-  favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/favorites");
-  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
-  await dropGroup(page, "즐겨찾기");
-  const dialog = page.getByRole("dialog", { name: "대표 그룹은 삭제할 수 없어요", exact: true });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "삭제", exact: true })).toHaveCount(0);
-  await dialog.getByRole("button", { name: "확인", exact: true }).click();
-  expect(favorites.requests.some((request) => request.method === "DELETE")).toBe(false);
-  expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId, schoolId]);
-});
-
 test("드래그 중 Escape와 삭제 영역 밖에 놓기는 정류장 영역으로 돌아온다", async ({ page, favorites }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
   await page.goto("/favorites");
@@ -100,7 +87,7 @@ test("드래그 중 Escape와 삭제 영역 밖에 놓기는 정류장 영역으
   expect(favorites.requests.some((request) => request.method === "DELETE")).toBe(false);
 });
 
-test("이전 대표 삭제 전에 새 순서를 저장하고 실패 후 재시도해도 살아남은 정류장 편집을 유지한다", async ({
+test("그룹 삭제가 실패해도 순서를 먼저 저장하지 않고 재시도 후 정류장 편집을 유지한다", async ({
   page,
   favorites,
   api,
@@ -123,11 +110,11 @@ test("이전 대표 삭제 전에 새 순서를 저장하고 실패 후 재시�
       mutations.push(path.endsWith("/favorite-groups/order") ? "group-order" : "favorite-order");
     if (request.method() === "DELETE" && path.endsWith(defaultGroupId)) {
       mutations.push("delete");
-      if (favorites.groups[0]?.id === defaultGroupId || failDelete) {
+      if (failDelete) {
         await route.fulfill({
           status: 409,
           json: {
-            code: favorites.groups[0]?.id === defaultGroupId ? "LAST_FAVORITE_GROUP" : "INTERNAL_ERROR",
+            code: "INTERNAL_ERROR",
             message: "failed",
             requestId: "drop-delete-test",
           },
@@ -151,15 +138,15 @@ test("이전 대표 삭제 전에 새 순서를 저장하고 실패 후 재시�
   const dialog = page.getByRole("dialog", { name: "그룹을 삭제하시겠습니까?", exact: true });
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog.getByRole("alert")).toBeVisible();
-  expect(favorites.groups[0]!.id).toBe(schoolId);
-  await expect(dialog.getByRole("status")).toHaveText("일부 순서는 저장됐어요. 남은 작업을 다시 시도해 주세요.");
+  expect(favorites.groups[0]!.id).toBe(defaultGroupId);
+  await expect(dialog.getByRole("status")).toHaveCount(0);
   failDelete = false;
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(stops.getByRole("listitem").first()).toContainText(second!.name);
   await editor.getByRole("button", { name: "완료", exact: true }).click();
   await expect(editor).toHaveCount(0);
-  expect(mutations).toEqual(["group-order", "delete", "delete", "favorite-order"]);
+  expect(mutations).toEqual(["delete", "delete", "favorite-order"]);
   expect(favorites.groups[0]!.favorites.map((favorite) => favorite.stopId)).toEqual([second!.stopId, first!.stopId]);
 });
 

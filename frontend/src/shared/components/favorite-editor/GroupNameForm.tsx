@@ -6,6 +6,7 @@ import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { groupNameError } from "@/shared/utils/favoritePolicy";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { useStillOnScreen } from "@/shared/routing/stillOnScreen";
+import { paths } from "@/shared/routing/paths";
 import * as buttons from "@/shared/styles/button.css";
 import * as formStyles from "@/shared/styles/form.css";
 import * as styles from "./GroupNameForm.css";
@@ -13,22 +14,36 @@ import * as styles from "./GroupNameForm.css";
 interface CreateGroupNameFormProps {
   group?: never;
   onRenamed?: never;
+  onCancel?: never;
 }
 
 interface RenameGroupNameFormProps {
   group: FavoriteGroup;
-  onRenamed: () => void;
+  onRenamed: (name: string) => void;
+  onCancel?: () => void;
 }
 
 type GroupNameFormProps = CreateGroupNameFormProps | RenameGroupNameFormProps;
 
-export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
+export function GroupNameForm({ group, onRenamed, onCancel }: GroupNameFormProps) {
   const field = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(group?.name ?? "");
   const { busy, error, clearError, run } = useFavoriteAction();
   const navigate = useNavigate();
   const isStillOnScreen = useStillOnScreen();
   const invalid = groupNameError(name);
+  const inline = onCancel !== undefined;
+  const submitButton = (
+    <button
+      className={group ? styles.save : buttons.primary}
+      disabled={busy || invalid !== null || name.trim() === group?.name}
+    >
+      {busy ? "저장 중…" : group ? "저장" : "만들기"}
+    </button>
+  );
+  useEffect(() => {
+    if (inline) field.current?.focus();
+  }, [inline]);
   useEffect(() => {
     if (error !== null) field.current?.focus();
   }, [error]);
@@ -42,8 +57,9 @@ export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
         kind: group ? "renameGroup" : "createGroup",
       })
     ) {
-      if (onRenamed) onRenamed();
-      else if (isStillOnScreen()) void navigate("/mypage", { replace: true, state: { notice: "그룹을 만들었어요" } });
+      if (onRenamed) onRenamed(name.trim());
+      else if (isStillOnScreen())
+        void navigate(paths.favoriteGroups, { replace: true, state: { notice: "그룹을 만들었어요" } });
     }
   }
   return (
@@ -83,12 +99,16 @@ export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
       >
         {error ?? (name !== "" ? invalid : null)}
       </p>
-      <button
-        className={group ? styles.save : buttons.primary}
-        disabled={busy || invalid !== null || name.trim() === group?.name}
-      >
-        {busy ? "저장 중…" : group ? "저장" : "만들기"}
-      </button>
+      {onCancel ? (
+        <div className={styles.renameActions}>
+          <button type="button" className={buttons.secondary} disabled={busy} onClick={onCancel}>
+            취소
+          </button>
+          {submitButton}
+        </div>
+      ) : (
+        submitButton
+      )}
     </form>
   );
 }

@@ -24,16 +24,6 @@ export const loadNotice = style({
   alignItems: "center",
 });
 export const titleLabel = style({ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 });
-export const representative = style({
-  flexShrink: 0,
-  padding: "4px 8px",
-  borderRadius: 12,
-  background: "#FFEAE4",
-  color: "#B94130",
-  fontSize: 11,
-  fontWeight: 700,
-  lineHeight: 1.3,
-});
 export const name = style({
   minWidth: 0,
   overflowWrap: "anywhere",

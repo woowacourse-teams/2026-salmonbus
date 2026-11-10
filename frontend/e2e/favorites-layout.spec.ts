@@ -7,6 +7,103 @@ import { checkAtBothWidths } from "./utils/widths";
 
 const test = mergeTests(mapTest, favoritesTest);
 
+test("선택한 즐겨찾기 그룹의 노선만 지도에 표시하고 화면에 맞춘다", async ({ page, favorites, api, naverMap }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const stop = api.data.watch.stops.find((item) => item.direction === "UP" && item.boardingAllowed)!;
+  const nextRoute = "200000002";
+  await page.route(`**/api/v2/routes/${nextRoute}/geometry`, (route) =>
+    route.fulfill({
+      json: {
+        ...api.data.geometry,
+        routeId: nextRoute,
+        busStops: [],
+        paths: null,
+        points: [
+          { x: 126.99, y: 37.49 },
+          { x: 127.24, y: 37.62 },
+        ],
+        boundary: { left: 126.99, right: 127.24, top: 37.62, bottom: 37.49 },
+      },
+    }),
+  );
+  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: "UP" })];
+  favorites.groups.push(
+    {
+      id: "10000000-0000-4000-8000-000000000003",
+      name: "통학",
+      favorites: [storedFavorite({ routeId: nextRoute, stopId: stop.stopId, direction: "UP" }, 4)],
+    },
+    { id: "10000000-0000-4000-8000-000000000005", name: "빈 그룹", favorites: [] },
+  );
+  const geometryRequests: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    const match = /^\/api\/v2\/routes\/([^/]+)\/geometry$/.exec(path);
+    if (match?.[1]) geometryRequests.push(match[1]);
+  });
+  await page.goto("/favorites");
+  const lines = page.getByTestId("naver-polyline");
+  await expect(lines.first()).toBeAttached();
+  const initial = await lines.first().elementHandle();
+  await page.clock.runFor(64);
+  const initialCamera = await naverMap.snapshot();
+  expect(geometryRequests).toEqual([routeId]);
+
+  await page.getByRole("tab", { name: "통학", exact: true }).click();
+  await expect.poll(() => geometryRequests).toEqual([routeId, nextRoute]);
+  await expect(lines).toHaveCount(1);
+  expect(await initial?.evaluate((line) => line.isConnected)).toBe(false);
+  await page.clock.runFor(64);
+  const nextCamera = await naverMap.snapshot();
+  expect(nextCamera.latitude).toBeGreaterThan(initialCamera.latitude);
+  expect(nextCamera.zoom).toBeLessThan(initialCamera.zoom);
+  const bounds = await lines.locator("polyline").evaluate((line: SVGGraphicsElement) => {
+    const { x, y, width, height } = line.getBBox();
+    return { x, y, right: x + width, bottom: y + height };
+  });
+  const search = (await page.locator("main header").first().boundingBox())!;
+  const sheet = (await page.getByRole("region", { name: "즐겨찾기 메뉴", exact: true }).boundingBox())!;
+  expect(bounds.x).toBeGreaterThan(0);
+  expect(bounds.right).toBeLessThan(390);
+  expect(bounds.y).toBeGreaterThan(search.y + search.height);
+  expect(bounds.bottom).toBeLessThan(sheet.y);
+
+  await page.getByRole("tab", { name: "빈 그룹", exact: true }).click();
+  await expect(lines).toHaveCount(0);
+  expect(geometryRequests).toEqual([routeId, nextRoute]);
+});
+
+test("한 방향 경로가 빠진 즐겨찾기 노선은 전체 경로까지 화면에 맞춘다", async ({ page, favorites, api }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const stop = api.data.watch.stops.find((item) => item.direction === "UP" && item.boardingAllowed)!;
+  const geometry = api.data.geometry;
+  geometry.paths!.DOWN.points = [];
+  geometry.points.push({ x: 127.6, y: 37.45 });
+  geometry.boundary!.right = 127.6;
+  favorites.groups[0]!.favorites = [];
+  favorites.groups.push({
+    id: "10000000-0000-4000-8000-000000000003",
+    name: "통학",
+    favorites: [storedFavorite({ routeId, stopId: stop.stopId, direction: "UP" })],
+  });
+
+  await page.goto("/favorites");
+  await page.getByRole("tab", { name: "통학", exact: true }).click();
+  const lines = page.getByTestId("naver-polyline");
+  await expect(lines).toHaveCount(2);
+  await page.clock.runFor(64);
+
+  const rightEdges = await lines.locator("polyline").evaluateAll((polylines: SVGGraphicsElement[]) =>
+    polylines.map((line) => {
+      const { x, width } = line.getBBox();
+      return x + width;
+    }),
+  );
+  expect(Math.max(...rightEdges)).toBeLessThan(390);
+});
+
 test("겹치는 두 정류장명은 차이를 남기고 하나를 삭제하면 끝 말줄임으로 돌아간다", async ({ page, favorites, api }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -116,7 +213,7 @@ for (const width of [320, 425]) {
       storedFavorite({ routeId, stopId: stop!.stopId, direction: "UP" }, 5),
     ];
     await page.goto("/favorites");
-    const cards = page.getByRole("tabpanel").getByRole("link");
+    const cards = page.getByRole("tabpanel").getByRole("list").first().getByRole("link");
     await expect(cards).toHaveCount(2);
     const card = cards.nth(1);
     await page.evaluate(() => document.fonts.ready);
@@ -132,6 +229,31 @@ for (const width of [320, 425]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }
+
+test("긴 방면의 승강장 정보는 즐겨찾기와 판정보드에서 별도 줄에 표시한다", async ({ page, favorites, api }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  const stop = api.data.watch.stops.find((item) => item.direction === "UP" && item.boardingAllowed)!;
+  const terminal = "서울역버스환승센터";
+  const details = "(5번승강장)(중) 방면";
+  api.data.watch.route.directions[0].terminalStopName = terminal + "(5번승강장)(중)";
+  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: "UP" })];
+
+  await page.goto("/favorites");
+  const card = page.getByRole("tabpanel").getByRole("list").first().getByRole("link");
+  const favoriteDetails = card.getByText(details, { exact: true });
+  await expect(favoriteDetails).toBeVisible();
+  await expect(favoriteDetails).toHaveCSS("display", "block");
+
+  await card.click();
+  const directions = page.getByRole("group", { name: "운행 방향 선택" });
+  const long = directions.getByRole("button", { name: terminal + details, exact: true });
+  const short = directions.getByRole("button", { name: "테스트 기점 방면", exact: true });
+  await expect(long.getByText(details, { exact: true })).toHaveCSS("display", "block");
+  const height = (await long.boundingBox())!.height;
+  expect((await short.boundingBox())!.height).toBeCloseTo(height, 0);
+  await short.click();
+  expect((await long.boundingBox())!.height).toBeCloseTo(height, 0);
+});
 
 test("즐겨찾기 홈과 저장 창은 320px 화면에 맞고 주요 내용을 가리지 않는다", async ({
   page,
@@ -155,9 +277,9 @@ test("즐겨찾기 홈과 저장 창은 320px 화면에 맞고 주요 내용을 
       await page.screenshot({ path: test.info().outputPath(name) });
   };
 
-  await test.step("즐겨찾기 탭", async () => {
+  await test.step("홈", async () => {
     await page.goto("/favorites");
-    await expect(page.getByRole("tabpanel").getByRole("link")).toHaveCount(2);
+    await expect(page.getByRole("tabpanel").getByRole("list").first().getByRole("link")).toHaveCount(2);
     await page.evaluate(() => document.fonts.ready);
     await checkAtBothWidths(page, async (width) => {
       expect(await fitsWidth()).toBe(true);
@@ -213,7 +335,7 @@ test("즐겨찾기 홈과 저장 창은 320px 화면에 맞고 주요 내용을 
     await dialog.getByRole("button", { name: "취소", exact: true }).click();
   });
 
-  await test.step("즐겨찾기 편집", async () => {
+  await test.step("홈 편집", async () => {
     await page.goto("/favorites");
     await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
     const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });

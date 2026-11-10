@@ -56,7 +56,7 @@ export function favoriteErrorOf(failure: ApiFailure, operation: FavoriteOperatio
       case "FAVORITE_GROUP_LIMIT_EXCEEDED":
         return `그룹은 ${MAX_FAVORITE_GROUPS}개까지 만들 수 있어요.`;
       case "LAST_FAVORITE_GROUP":
-        return "대표 그룹은 삭제할 수 없어요.";
+        return "그룹은 최소 하나 남겨야 해요.";
       case "FAVORITE_LIMIT_EXCEEDED":
         return `한 그룹에는 즐겨찾기를 ${MAX_FAVORITES_PER_GROUP}개까지 저장할 수 있어요.`;
       case "FAVORITE_GROUP_NOT_FOUND":

@@ -26,7 +26,9 @@ async function expectCancelFirst(page: Page, dialog: Locator, cancelName: string
 test("즐겨찾기 그룹 선택 창은 열릴 때 첫 그룹에 포커스를 주고 저장 줄과 그룹 만들기 줄은 취소를 왼쪽에 둔다", async ({
   page,
   api,
+  favorites,
 }) => {
+  favorites.groups.push({ id: schoolId, name: "주말", favorites: [] });
   const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();

@@ -1,7 +1,8 @@
 import { directionLabelOf } from "@/shared/utils/directionLabelOf";
+import { DirectionLabel } from "@/shared/components/DirectionLabel";
 import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type KeyboardEvent } from "react";
-import { Link } from "react-router";
+import { Link, useOutletContext } from "react-router";
 import type { FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
@@ -12,58 +13,59 @@ import { toRemainingTime } from "@/shared/utils/remainingTime";
 import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
 import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, favoritePath, paths } from "@/shared/routing/paths";
-import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
+import { useFavorites } from "@/shared/hooks/useFavorites";
 import { playHaptic } from "@/shared/haptic/haptic";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { LoadError } from "@/shared/components/LoadError";
-import { FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
+import { FAVORITES_LOAD_FAILURE_TITLE, MAX_FAVORITES_PER_GROUP } from "@/shared/utils/favoritePolicy";
 import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { Notice } from "@/shared/components/Notice";
 import starOutline from "@/shared/assets/icons/star-outline.svg";
-import editIcon from "@/shared/assets/icons/favorite-edit.svg";
+import salmong from "@/shared/assets/images/salmong-logo/salmong-proud.png";
+import editIcon from "../../my-page/assets/pencil.svg";
 import * as homeStyles from "./HomeFavorites.css";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { stopNameLabels } from "./stopNameLabels";
 import { favoriteStatusLabelOf } from "./favoriteStatusLabelOf";
 import { FavoriteGroupAddButton } from "@/shared/components/FavoriteGroupAddButton";
+import type { FavoriteGroupContext } from "./RouteSelectScreen";
 
 const EMPTY_FAVORITES: HomeFavorite[] = [];
 
 export function HomeFavorites() {
   const { groups, resource, requestState, reload } = useFavorites();
-  const [selected, setSelected] = useState<string | null>(null);
-  const group = groups.find((candidate) => candidate.id === selected) ?? groups[0];
+  const {
+    favoriteGroup: group,
+    selectFavoriteGroup,
+    summary: { resource: summary, requestState: summaryRequestState },
+    retrySummary: retry,
+    displayedGroup: shownGroup,
+    displayedSummary: shownLatest,
+    switchingGroup: switching,
+  } = useOutletContext<FavoriteGroupContext>();
+  const groupTabs = useRef<HTMLDivElement>(null);
   const [ordering, setOrdering] = useState(false);
+  useLayoutEffect(() => {
+    const tabs = groupTabs.current;
+    const active = tabs?.querySelector('[aria-selected="true"]');
+    if (!tabs || !active) return;
+    const tab = active.getBoundingClientRect();
+    const strip = tabs.getBoundingClientRect();
+    tabs.scrollLeft += Math.min(0, tab.left - strip.left) + Math.max(0, tab.right - strip.right);
+  }, [group?.id, ordering]);
   const list = useRef<HTMLUListElement>(null);
   const [nameLabels, setNameLabels] = useState<Record<string, string>>({});
-  const [animateGroup, setAnimateGroup] = useState(true);
-  const changeMode = (editing: boolean) => {
-    setAnimateGroup(false);
-    setOrdering(editing);
-  };
   const [notice, showNotice] = useReducer((value: number) => value + 1, 0);
   const editButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     return ordering ? () => editButton.current?.focus() : undefined;
   }, [ordering]);
-  const [revision, retry] = useReducer((value: number) => value + 1, 0);
-  const { resource: summary, requestState: summaryRequestState } = useHomeFavorites(
-    group ? { kind: "group", groupId: group.id } : null,
-    revision,
-  );
   const latest = latestSuccessOf(summary);
-  const [previous, setPrevious] = useState({ groupId: group?.id, latest });
-  const previousGroup = groups.find((candidate) => candidate.id === previous.groupId);
-  const switching = summary.status === "pending" && previous.latest !== null && previousGroup !== undefined;
-  const shownLatest = switching ? previous.latest : latest;
-  const shownGroup = switching ? previousGroup : group;
   const selectGroup = (id: string) => {
     if (id === group?.id) return;
-    if (latest !== null) setPrevious({ groupId: group?.id, latest });
-    setAnimateGroup(true);
-    setSelected(id);
+    selectFavoriteGroup(id);
     playHaptic("selection");
   };
   function handleGroupTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
@@ -92,6 +94,7 @@ export function HomeFavorites() {
   }, [shownLatest]);
   const favorites =
     shownLatest?.body.groups.find((candidate) => candidate.id === shownGroup?.id)?.favorites ?? EMPTY_FAVORITES;
+  const canAddFavorite = (shownGroup?.favorites.length ?? 0) < MAX_FAVORITES_PER_GROUP;
   useLayoutEffect(() => {
     const elements = Array.from(list.current?.querySelectorAll<HTMLElement>("[data-favorite-name]") ?? []);
     const firstElement = elements[0];
@@ -151,22 +154,16 @@ export function HomeFavorites() {
           {...(group ? { initialGroupId: group.id } : {})}
           {...(latest ? { initialFavorites: favorites } : {})}
           onClose={(saved) => {
-            changeMode(false);
+            setOrdering(false);
             if (saved) showNotice();
           }}
         />
       </div>
     );
-  const loadingError =
-    resource.status === "loadingError" ? resource : group && summary.status === "loadingError" ? summary : null;
-  if (loadingError) {
+  if (resource.status === "loadingError") {
     return (
       <section {...maskedPropsFor()} aria-label="내 즐겨찾기">
-        <FavoritesNotice
-          resource={loadingError}
-          requestState={resource.status === "loadingError" ? requestState : summaryRequestState}
-          onRetry={resource.status === "loadingError" ? reload : retry}
-        >
+        <FavoritesNotice resource={resource} requestState={requestState} onRetry={reload}>
           {({ retry, retrying }) => (
             <LoadError title={FAVORITES_LOAD_FAILURE_TITLE} description="잠시 후 다시 시도해 주세요.">
               <RetryButton onRetry={retry} busy={retrying}>
@@ -178,12 +175,25 @@ export function HomeFavorites() {
       </section>
     );
   }
+  const addFavoriteLink = (
+    <Link
+      className={homeStyles.addFavorite}
+      to={paths.routeSearch}
+      onClick={(event) => {
+        if (group && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+          selectFavoriteGroup(group.id);
+        }
+      }}
+    >
+      즐겨찾기 추가하기
+    </Link>
+  );
   return (
-    <section {...maskedPropsFor(homeStyles.section)} aria-label="내 즐겨찾기">
+    <section {...maskedPropsFor(homeStyles.browseSection)} aria-label="내 즐겨찾기">
       <FavoritesNotice resource={resource} requestState={requestState} onRetry={reload} />
       {(groups.length > 0 || resource.status === "success") && (
         <div className={homeStyles.tabs}>
-          <div role="tablist" aria-label="즐겨찾기 그룹" className={homeStyles.groupTabs}>
+          <div ref={groupTabs} role="tablist" aria-label="즐겨찾기 그룹" className={homeStyles.groupTabs}>
             {groups.map((candidate, index) => (
               <button
                 className={homeStyles.tab}
@@ -196,18 +206,21 @@ export function HomeFavorites() {
                 onClick={() => selectGroup(candidate.id)}
                 onKeyDown={(event) => handleGroupTabKeyDown(event, index)}
               >
+                {group?.id === candidate.id && (
+                  <img className={homeStyles.groupMascot} src={salmong} alt="" draggable={false} />
+                )}
                 {candidate.name}
               </button>
             ))}
           </div>
-          <FavoriteGroupAddButton />
+          <FavoriteGroupAddButton onCreated={(created) => selectGroup(created.id)} />
           {groups.length > 0 && (
             <button
               ref={editButton}
               type="button"
               className={homeStyles.homeEdit}
               aria-label="그룹과 즐겨찾기 순서 편집"
-              onClick={() => changeMode(true)}
+              onClick={() => setOrdering(true)}
             >
               <img src={editIcon} width="20" height="20" alt="" draggable={false} />
             </button>
@@ -215,11 +228,14 @@ export function HomeFavorites() {
         </div>
       )}
       {switching ? (
-        <p role="status" className={visuallyHidden}>
+        <p role="status" className={homeStyles.groupLoading}>
           {group?.name} 그룹의 즐겨찾기를 불러오고 있어요…
         </p>
       ) : (
-        group && <FavoritesNotice resource={summary} requestState={summaryRequestState} onRetry={retry} />
+        group &&
+        summary.status !== "loadingError" && (
+          <FavoritesNotice resource={summary} requestState={summaryRequestState} onRetry={retry} />
+        )
       )}
       <div
         id="home-favorites"
@@ -227,20 +243,24 @@ export function HomeFavorites() {
         aria-labelledby={group ? `group-tab-${group.id}` : undefined}
         aria-busy={summary.status === "pending"}
         className={homeStyles.panel}
-        data-loading={switching}
       >
-        <div
-          key={shownGroup?.id}
-          className={shownLatest && animateGroup ? homeStyles.panelContent : undefined}
-          inert={switching}
-        >
+        {summary.status === "loadingError" && (
+          <FavoritesNotice resource={summary} requestState={summaryRequestState} onRetry={retry}>
+            {({ retry, retrying }) => (
+              <LoadError title={FAVORITES_LOAD_FAILURE_TITLE} description="잠시 후 다시 시도해 주세요.">
+                <RetryButton onRetry={retry} busy={retrying}>
+                  {retrying ? "불러오는 중…" : "다시 시도하기"}
+                </RetryButton>
+              </LoadError>
+            )}
+          </FavoritesNotice>
+        )}
+        <div key={shownGroup?.id} className={homeStyles.panelInner} inert={switching}>
           {((resource.status === "success" && !group) || (shownLatest !== null && favorites.length === 0)) && (
             <div className={homeStyles.homeEmpty}>
               <img src={starOutline} width="34" height="34" alt="" draggable={false} />
               <p className={homeStyles.homeEmptyTitle}>등록된 즐겨찾기가 없어요</p>
-              <Link className={homeStyles.addFavorite} to={paths.routeSearch}>
-                즐겨찾기 추가하기
-              </Link>
+              {canAddFavorite && addFavoriteLink}
             </div>
           )}
           <ul ref={list} className={homeStyles.list}>
@@ -257,6 +277,9 @@ export function HomeFavorites() {
               />
             ))}
           </ul>
+          {favorites.length > 0 && canAddFavorite && (
+            <div className={homeStyles.addFavoriteFooter}>{addFavoriteLink}</div>
+          )}
         </div>
       </div>
       {notice > 0 && <Notice key={notice} message="변경 사항을 저장했어요" />}
@@ -290,7 +313,10 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
             {favoriteStatusLabelOf(favorite.status === "READY" ? "ERROR" : favorite.status)}
           </p>
           {direction && (
-            <span className={homeStyles.direction}>{directionLabelOf(favorite.route.terminalStopName, direction)}</span>
+            <DirectionLabel
+              className={homeStyles.direction}
+              label={directionLabelOf(favorite.route.terminalStopName, direction)}
+            />
           )}
         </div>
       </li>
@@ -305,7 +331,7 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
             ? favoritePath({ routeId: favorite.route.id, stopId: favorite.stop.stopId, direction })
             : boardPathFor(favorite.route.id)
         }
-        state={boardEntryStateFor("favorite")}
+        state={{ ...boardEntryStateFor("favorite"), mapFlow: true }}
       >
         <div className={homeStyles.heading}>
           <RouteBadge size="large" className={homeStyles.routeBadge}>
@@ -322,7 +348,10 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
                 favorite.stop.name
               )}
             </span>
-            <span className={homeStyles.direction}>{directionLabelOf(favorite.route.terminalStopName, direction)}</span>
+            <DirectionLabel
+              className={homeStyles.direction}
+              label={directionLabelOf(favorite.route.terminalStopName, direction)}
+            />
           </div>
         </div>
         <div className={homeStyles.forecast}>

@@ -16,7 +16,7 @@ test.beforeEach(({ favorites, api }) => {
   );
 });
 
-test("320px 그룹 삭제 선택·취소·확인·완료는 시안대로 동작하고 대표 그룹을 유지한다", async ({
+test("320px 그룹 삭제 선택·취소·확인·완료는 시안대로 동작하고 선택하지 않은 그룹을 유지한다", async ({
   page,
   favorites,
   browserName,
@@ -30,9 +30,9 @@ test("320px 그룹 삭제 선택·취소·확인·완료는 시안대로 동작�
   expect((await remove.boundingBox())!.x).toBeLessThan((await order.boundingBox())!.x);
   await remove.click();
   await expect(region.getByRole("link")).toHaveCount(0);
-  await expect(region.getByRole("checkbox")).toHaveCount(2);
-  await expect(region.getByText("대표 그룹", { exact: true })).toBeVisible();
-  await expect(region.getByRole("checkbox", { name: /출퇴근/ })).toHaveCount(0);
+  await expect(region.getByRole("checkbox")).toHaveCount(3);
+  await expect(region.getByText("대표 그룹", { exact: true })).toHaveCount(0);
+  await expect(region.getByRole("checkbox", { name: "출퇴근 삭제 선택", exact: true })).toBeEnabled();
   await expect(region.getByRole("button", { name: "선택한 그룹 0개 삭제", exact: true })).toBeDisabled();
   const school = region.getByRole("checkbox", { name: "통학 삭제 선택", exact: true });
   const weekend = region.getByRole("checkbox", { name: "주말 나들이 삭제 선택", exact: true });
@@ -117,7 +117,7 @@ for (const failedId of [schoolId, weekendId]) {
     if (failedId === weekendId) {
       await expect(dialog).toHaveAccessibleName(/선택한 그룹 1개를/);
       await expect(dialog.getByRole("alert")).toContainText("일부 그룹은 삭제됐어요");
-      await expect(region.getByRole("checkbox")).toHaveCount(1);
+      await expect(region.getByRole("checkbox")).toHaveCount(2);
       expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId, weekendId]);
     } else {
       expect(favorites.groups).toHaveLength(3);
@@ -133,7 +133,7 @@ for (const failedId of [schoolId, weekendId]) {
   });
 }
 
-test("삭제 중에는 취소와 중복 클릭을 막고 대표 그룹 하나만 남으면 삭제 버튼을 숨긴다", async ({
+test("삭제 중에는 취소와 중복 클릭을 막고 마지막 그룹만 남으면 삭제 버튼을 숨긴다", async ({
   page,
   favorites,
   api,
@@ -166,7 +166,7 @@ test("삭제 중에는 취소와 중복 클릭을 막고 대표 그룹 하나만
     expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId, weekendId]);
     await expect(region.getByRole("button", { name: "그룹 삭제 선택", exact: true })).toBeVisible();
   });
-  await test.step("대표 그룹 하나만 남으면 삭제 버튼 숨김", async () => {
+  await test.step("마지막 그룹만 남으면 삭제 버튼 숨김", async () => {
     favorites.groups = favorites.groups.slice(0, 1);
     await page.reload();
     await expect(region.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true })).toBeEnabled();
@@ -174,25 +174,16 @@ test("삭제 중에는 취소와 중복 클릭을 막고 대표 그룹 하나만
   });
 });
 
-test("선택 중 대표 그룹이 바뀌면 삭제를 막고 다시 선택한 현재 비대표 그룹만 삭제한다", async ({ page, favorites }) => {
+test("첫 그룹도 삭제 대상으로 고를 수 있고 마지막 하나는 선택할 수 없다", async ({ page, favorites }) => {
   await page.goto("/favorites/groups");
   const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
   await region.getByRole("button", { name: "그룹 삭제 선택", exact: true }).click();
+  await region.getByRole("checkbox", { name: "출퇴근 삭제 선택", exact: true }).check();
   await region.getByRole("checkbox", { name: "통학 삭제 선택", exact: true }).check();
-  await region.getByRole("checkbox", { name: "주말 나들이 삭제 선택", exact: true }).check();
+  await expect(region.getByRole("checkbox", { name: "주말 나들이 삭제 선택", exact: true })).toBeDisabled();
   await region.getByRole("button", { name: "선택한 그룹 2개 삭제", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  favorites.groups = [favorites.groups[1]!, favorites.groups[0]!, favorites.groups[2]!];
-  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-  await expect(dialog.getByRole("alert")).toContainText("그룹 목록이 변경됐어요");
-  await expect(dialog.getByRole("button", { name: "삭제", exact: true })).toBeDisabled();
-  expect(favorites.requests.filter((request) => request.method === "DELETE")).toHaveLength(0);
-  await dialog.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(region.getByRole("checkbox", { name: "통학 삭제 선택", exact: true })).toHaveCount(0);
-  await region.getByRole("checkbox", { name: "주말 나들이 삭제 선택", exact: true }).uncheck();
-  await region.getByRole("checkbox", { name: "출퇴근 삭제 선택", exact: true }).check();
-  await region.getByRole("button", { name: "선택한 그룹 1개 삭제", exact: true }).click();
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  expect(favorites.groups.map((group) => group.id)).toEqual([schoolId, weekendId]);
+  expect(favorites.groups.map((group) => group.id)).toEqual([weekendId]);
 });

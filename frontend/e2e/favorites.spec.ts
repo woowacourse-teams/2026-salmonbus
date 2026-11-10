@@ -231,7 +231,8 @@ test("선택한 그룹 조회에 실패해도 재시도하면 같은 그룹의 �
   await page.goto("/favorites");
   await page.getByRole("tab", { name: "통학", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveText("즐겨찾기를 불러오지 못했어요");
-  await expect(page.getByRole("tablist")).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "통학", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toBeEnabled();
   await expect(page.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toHaveCount(0);
 
   failed = false;
@@ -331,7 +332,7 @@ test("그룹을 전환하면 응답 전까지 기존 항목을 유지하고 응�
   await expect(panel.getByText(first!.name, { exact: true })).toHaveCount(0);
   await expect(panel).toHaveAttribute("aria-busy", "false");
   await expect(panel.locator("[inert]")).toHaveCount(0);
-  await expect(panel.getByRole("link")).toBeVisible();
+  await expect(panel.getByRole("list").first().getByRole("link")).toBeVisible();
 });
 
 test("그룹을 빠르게 다시 바꾸면 늦게 도착한 이전 응답을 표시하지 않는다", async ({ page, favorites, api }) => {
@@ -376,7 +377,7 @@ test("그룹을 빠르게 다시 바꾸면 늦게 도착한 이전 응답을 표
   await completed;
   await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
   await expect(panel.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toHaveCount(0);
-  await expect(panel.getByRole("link")).toBeVisible();
+  await expect(panel.getByRole("list").first().getByRole("link")).toBeVisible();
 });
 
 test("서버의 일괄 저장 실패 시 선택과 기존 등록을 유지하고 같은 선택으로 재시도한다", async ({
@@ -385,6 +386,7 @@ test("서버의 일괄 저장 실패 시 선택과 기존 등록을 유지하고
   api,
 }) => {
   const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+  favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
   favorites.mutationError = "FAVORITE_LIMIT_EXCEEDED";
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
@@ -456,20 +458,20 @@ test("가득 찬 그룹은 새 정류장 저장을 막고 기존 선택은 유�
   });
 });
 
-test("대표 그룹은 이름이 바뀌어도 보호하고 일반 그룹은 삭제한다", async ({ page, favorites }) => {
-  await test.step("대표 그룹은 삭제를 막는다", async () => {
+test("마지막 그룹은 이름이 바뀌어도 보호하고 다른 그룹이 있으면 삭제한다", async ({ page, favorites }) => {
+  await test.step("마지막 그룹은 삭제를 막는다", async () => {
     await page.goto(`/mypage/groups/${defaultGroupId}`);
     await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
-    await expect(page.getByRole("dialog")).toContainText("대표 그룹은 삭제할 수 없어요");
+    await expect(page.getByRole("dialog")).toContainText("그룹은 최소 하나 남겨야 해요");
     await page.getByRole("dialog").getByRole("button", { name: "확인", exact: true }).click();
     expect(favorites.requests.some((request) => request.method === "DELETE")).toBe(false);
   });
-  await test.step("즐겨찾기 그룹 관리에서 새 그룹을 만든다", async () => {
-    await page.goto("/favorites/groups");
+  await test.step("즐겨찾기 그룹 목록에서 새 그룹을 만든다", async () => {
+    await page.getByRole("link", { name: "그룹 목록으로 돌아가기" }).click();
     await page.getByRole("link", { name: "새 그룹 만들기", exact: true }).click();
     await page.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("  🚌통학  ");
     await page.getByRole("button", { name: "만들기", exact: true }).click();
-    await expect(page).toHaveURL("/mypage");
+    await expect(page).toHaveURL("/favorites/groups");
     await expect(page.getByText("그룹을 만들었어요", { exact: true })).toBeVisible();
   });
   await test.step("이름이 겹치면 안내하고 다른 이름으로 바꾼다", async () => {
@@ -486,20 +488,21 @@ test("대표 그룹은 이름이 바뀌어도 보호하고 일반 그룹은 삭�
   await test.step("일반 그룹은 삭제한다", async () => {
     await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
     await page.getByRole("dialog").getByRole("button", { name: "삭제", exact: true }).click();
-    await expect(page).toHaveURL("/mypage");
+    await expect(page).toHaveURL("/favorites/groups");
     expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId]);
   });
-  await test.step("이름을 바꾼 대표 그룹도 삭제를 막는다", async () => {
-    await page.goto("/favorites/groups");
-    await page.getByRole("link", { name: /즐겨찾기 · 대표 그룹/ }).click();
+  await test.step("이름을 바꾼 마지막 그룹도 삭제를 막는다", async () => {
+    await page
+      .getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true })
+      .locator(`a[href="/favorites/groups/${defaultGroupId}"]`)
+      .click();
     await page.getByRole("button", { name: "그룹 이름 변경", exact: true }).click();
     await expect(page.getByText("대표", { exact: true })).toHaveCount(0);
     await page.getByRole("textbox", { name: "변경할 그룹 이름", exact: true }).fill("출퇴근");
     await page.getByRole("button", { name: "저장", exact: true }).click();
     await expect(page.getByRole("heading", { name: "출퇴근", exact: true })).toBeVisible();
-    await expect(page.getByText("대표", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
-    await expect(page.getByRole("dialog")).toContainText("대표 그룹은 삭제할 수 없어요");
+    await expect(page.getByRole("dialog")).toContainText("그룹은 최소 하나 남겨야 해요");
   });
 });
 
@@ -524,18 +527,10 @@ test("그룹과 즐겨찾기 순서를 키보드로 편집하고 전체 ID 목�
   expect(favorites.groups.map((group) => group.id)).toEqual([secondGroupId, defaultGroupId]);
   expect(favorites.groups[1]!.favorites.map((favorite) => favorite.stopId)).toEqual([second!.stopId, first!.stopId]);
   await page.reload();
-  await expect(page.getByRole("tab", { name: "통학", exact: true })).toHaveAttribute("aria-selected", "true");
-  await page.goto("/favorites/groups");
-  await expect(page.getByRole("link", { name: /통학 · 대표 그룹/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: /즐겨찾기 · 대표 그룹/ })).toHaveCount(0);
-  await page.getByRole("link", { name: /통학 · 대표 그룹/ }).click();
-  await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "대표 그룹은 삭제할 수 없어요" })).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "확인", exact: true }).click();
-  await page.goto(`/mypage/groups/${defaultGroupId}`);
-  await expect(page.getByText("대표", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "즐겨찾기를 삭제할까요?" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tabpanel").getByText(second!.name, { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "통학", exact: true }).click();
+  await expect(page.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toBeVisible();
 });
 
 // 상태별 문구는 favoriteStatusLabelOf.test.ts가 본다. 링크로 남는 상태와 재시도가 있는 상태만 화면에서 확인한다.
@@ -553,9 +548,9 @@ for (const [status, label] of [
     const panel = page.getByRole("tabpanel");
     await expect(panel.getByText(label, { exact: true })).toBeVisible();
     if (status === "NO_VEHICLE") {
-      await expect(panel.getByRole("link")).toContainText(stop.name);
+      await expect(panel.getByRole("list").first().getByRole("link")).toContainText(stop.name);
     } else {
-      await expect(panel.getByRole("link")).toHaveCount(0);
+      await expect(panel.getByRole("list").first().getByRole("link")).toHaveCount(0);
       await expect(panel.getByText("노선 정보 없음", { exact: true })).toHaveCount(0);
       await expect(panel.getByText("정류장 정보 없음", { exact: true })).toHaveCount(0);
     }
@@ -588,7 +583,7 @@ for (const width of [320, 425]) {
     await expect(cards).toHaveCount(2);
     await expect(cards.first().getByText("상행", { exact: true })).toBeVisible();
     await expect(cards.last().getByText("하행", { exact: true })).toBeVisible();
-    await expect(panel.getByRole("link")).toHaveCount(0);
+    await expect(panel.getByRole("list").first().getByRole("link")).toHaveCount(0);
     await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
     const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
     await expect(editor.getByText("상행", { exact: true })).toBeVisible();
@@ -604,12 +599,12 @@ test("정보가 없는 항목은 안내 카드로 남기고 정상 카드는 저
   favorites.statuses[unavailable.id] = "UNAVAILABLE";
   await page.goto("/favorites");
   const panel = page.getByRole("tabpanel");
-  await expect(panel.getByRole("link")).toHaveCount(1);
+  await expect(panel.getByRole("list").first().getByRole("link")).toHaveCount(1);
   await expect(panel.getByText(up.name, { exact: true })).toBeVisible();
   await expect(panel.getByText("현재 노선에서 이 정류장을 이용할 수 없어요", { exact: true })).toBeVisible();
   await expect(panel.getByText("노선 정보 없음", { exact: true })).toHaveCount(0);
   await expect(panel.getByText("정류장 정보 없음", { exact: true })).toHaveCount(0);
-  const ready = panel.getByRole("link");
+  const ready = panel.getByRole("list").first().getByRole("link");
   await expect(ready).toHaveAttribute("href", `/routes/${routeId}?direction=UP&stopId=${up.stopId}`);
   await expect(page.getByRole("alert")).toHaveCount(0);
   await ready.click();
@@ -619,7 +614,7 @@ test("정보가 없는 항목은 안내 카드로 남기고 정상 카드는 저
   await expect(page.getByText("노선 정보 없음", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("정류장 정보 없음 (즐겨찾기 1)", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "정류장 정보 없음 (즐겨찾기 1) 삭제", exact: true })).toBeEnabled();
-  await page.getByRole("link", { name: "마이페이지로 돌아가기", exact: true }).click();
+  await page.getByRole("link", { name: "그룹 목록으로 돌아가기", exact: true }).click();
   await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   await expect(
@@ -676,7 +671,7 @@ test("순서 일부가 저장된 뒤 실패하면 저장된 부분을 유지하�
   expect(favorites.groups[1]!.favorites.map((favorite) => favorite.stopId)).toEqual([second!.stopId, first!.stopId]);
 });
 
-test("즐겨찾기 그룹 관리에서 손잡이로 순서를 바꾸고 저장한다", async ({ page, favorites }) => {
+test("즐겨찾기 그룹 카드에서 손잡이로 순서를 바꾸고 저장한다", async ({ page, favorites }) => {
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
   await page.goto("/favorites/groups");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
@@ -706,7 +701,7 @@ test("갱신 실패 중 도착 예정 시간이 지나면 시간을 감추고 �
   await expect(panel.getByText("시간 정보 없음", { exact: true })).toHaveCount(0);
   favorites.unavailable = true;
   await page.clock.runFor(481_000);
-  await expect(panel.getByRole("link").first().getByRole("listitem")).toHaveText([
+  await expect(panel.getByRole("list").first().getByRole("link").first().getByRole("listitem")).toHaveText([
     /^3정류장 전\s*도착 시 7석 예상해요$/,
     /^7정류장 전\s*도착 시 4석 예상해요$/,
     /^11정류장 전\s*도착 시 1석 예상해요$/,
@@ -721,6 +716,7 @@ test("즐겨찾기 API의 404도 조회 실패 시안을 보여주고 공개 노
   favorites.unavailable = true;
   await page.goto("/favorites");
   await expect(page.getByRole("alert")).toHaveText("즐겨찾기를 불러오지 못했어요");
+  await page.getByRole("link", { name: "홈", exact: true }).click();
   await openRouteSearch(page);
   await routeSearchInput(page).fill("3330");
   await expect(routeButton(page)).toBeVisible();

@@ -1,10 +1,27 @@
-import { test, expect } from "./fixtures/favorites";
+import { test, expect, storedFavorite } from "./fixtures/favorites";
+import { routeId } from "./fixtures/mock-data";
 import { routeSearchInput } from "./utils/route-select";
 
 test.use({ viewport: { width: 425, height: 844 }, reducedMotion: "reduce" });
 
-test("로그인한 빈 즐겨찾기 탭에서 즐겨찾기 추가하기를 누르면 검색 입력창으로 이동한다", async ({ page }) => {
+test("빈 즐겨찾기 안내는 시트 높이에 맞춰 가운데에 놓이고 추가 버튼으로 검색을 연다", async ({ page }) => {
   await page.goto("/favorites");
+  const sheet = page.getByRole("region", { name: "즐겨찾기 메뉴", exact: true });
+  const panel = sheet.getByRole("tabpanel");
+  const empty = panel.getByText("등록된 즐겨찾기가 없어요", { exact: true }).locator("..");
+  const tab = page.getByRole("navigation", { name: "주요 메뉴" }).getByRole("link", { name: "즐겨찾기", exact: true });
+  let previousHeight = 0;
+  for (const snap of ["summary", "detail", "full"]) {
+    await expect(sheet).toHaveAttribute("data-snap", snap);
+    await expect(empty).toBeVisible();
+    const panelBox = (await panel.boundingBox())!;
+    const emptyBox = (await empty.boundingBox())!;
+    expect(panelBox.height).toBeGreaterThan(previousHeight);
+    expect(panelBox.height).toBeGreaterThan(emptyBox.height);
+    expect(emptyBox.y + emptyBox.height / 2).toBeCloseTo(panelBox.y + panelBox.height / 2, 0);
+    previousHeight = panelBox.height;
+    if (snap !== "full") await tab.click();
+  }
   await expect(page.getByText("노선을 선택하고 자주 타는 정류장의 별을 눌러 보세요", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "즐겨찾기 추가하기", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "즐겨찾기 추가하기", exact: true }).click();
@@ -12,7 +29,44 @@ test("로그인한 빈 즐겨찾기 탭에서 즐겨찾기 추가하기를 누�
   await expect(routeSearchInput(page)).toBeFocused();
 });
 
-test("즐겨찾기 탭의 + 버튼에서 그룹을 만들고 최대 개수에 도달하면 추가를 막는다", async ({ page, favorites }) => {
+test("정류장이 1개면 카드 아래에서 검색을 열 수 있고 2개면 추가 버튼을 숨긴다", async ({ page, favorites, api }) => {
+  await page.setViewportSize({ width: 390, height: 940 });
+  const stops = api.data.watch.stops.filter(({ boardingAllowed }) => boardingAllowed).slice(0, 2);
+  const saved = stops.map(({ stopId, direction }, index) => storedFavorite({ routeId, stopId, direction }, index + 2));
+  favorites.groups[0]!.favorites = saved.slice(0, 1);
+  favorites.groups.push({ id: "10000000-0000-4000-8000-000000000003", name: "통학", favorites: saved });
+  await page.goto("/favorites");
+  const panel = page.getByRole("tabpanel");
+  const cards = panel.getByRole("list").first().getByRole("link");
+  const groupTabs = page.getByRole("tablist", { name: "즐겨찾기 그룹", exact: true });
+  const sheetBody = page.getByRole("region", { name: "선택한 탭 내용", exact: true });
+  const isScrollable = () => sheetBody.evaluate((element) => element.scrollHeight > element.clientHeight + 1);
+  const add = panel.getByRole("link", { name: "즐겨찾기 추가하기", exact: true });
+  await expect(cards).toHaveCount(1);
+  await expect(add).toBeVisible();
+  expect(await isScrollable()).toBe(false);
+  const tabsBefore = (await groupTabs.boundingBox())!;
+  const firstCardBefore = (await cards.first().boundingBox())!;
+  const lastCard = (await cards.last().boundingBox())!;
+  expect((await add.boundingBox())!.y).toBeGreaterThan(lastCard.y + lastCard.height);
+  await page.getByRole("tab", { name: "통학", exact: true }).click();
+  await expect(cards).toHaveCount(2);
+  await expect(add).toHaveCount(0);
+  expect(await isScrollable()).toBe(true);
+  const tabsAfter = (await groupTabs.boundingBox())!;
+  const firstCardAfter = (await cards.first().boundingBox())!;
+  expect(tabsAfter.x).toBeCloseTo(tabsBefore.x, 0);
+  expect(tabsAfter.y).toBeCloseTo(tabsBefore.y, 0);
+  expect(firstCardAfter.x).toBeCloseTo(firstCardBefore.x, 0);
+  expect(firstCardAfter.y).toBeCloseTo(firstCardBefore.y, 0);
+  expect(firstCardAfter.width).toBeCloseTo(firstCardBefore.width, 0);
+  await page.getByRole("tab", { name: "즐겨찾기", exact: true }).click();
+  await add.click();
+  await expect(page).toHaveURL("/search");
+  await expect(routeSearchInput(page)).toBeFocused();
+});
+
+test("홈의 + 버튼에서 그룹을 만들고 최대 개수에 도달하면 추가를 막는다", async ({ page, favorites }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/favorites");
   const add = page.getByRole("button", { name: "그룹 추가", exact: true });
@@ -36,6 +90,13 @@ test("즐겨찾기 탭의 + 버튼에서 그룹을 만들고 최대 개수에 �
     { name: "아침출근즐겨찾기그룹" },
     { name: "🚌 통학" },
   ]);
+  const school = page.getByRole("tab", { name: "🚌 통학", exact: true });
+  await expect(school).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("link", { name: "즐겨찾기 추가하기", exact: true }).click();
+  await expect(page).toHaveURL("/search");
+  await page.getByRole("link", { name: "노선 선택으로 돌아가기", exact: true }).click();
+  await expect(page).toHaveURL("/favorites");
+  await expect(school).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "즐겨찾기", exact: true }).click();
   await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toHaveAttribute("aria-selected", "true");
 });

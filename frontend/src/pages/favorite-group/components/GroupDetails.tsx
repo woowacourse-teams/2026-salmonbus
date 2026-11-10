@@ -11,6 +11,7 @@ import { LoadError } from "@/shared/components/LoadError";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
+import { paths } from "@/shared/routing/paths";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
 import { favoriteStopLabelOf, sameFavorite, FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
@@ -22,10 +23,10 @@ import * as styles from "./GroupDetails.css";
 
 interface GroupDetailsProps {
   group: FavoriteGroup;
-  representative: boolean;
+  lastGroup: boolean;
 }
 
-export function GroupDetails({ group, representative }: GroupDetailsProps) {
+export function GroupDetails({ group, lastGroup }: GroupDetailsProps) {
   const [deleting, setDeleting] = useState<"group" | SavedFavorite | null>(null);
   const [revision, retry] = useState(0);
   const { resource: summary, requestState } = useHomeFavorites({ kind: "group", groupId: group.id }, revision);
@@ -47,7 +48,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
   const lastCode = group.name.charCodeAt(group.name.length - 1);
   const objectParticle =
     lastCode >= 0xac00 && lastCode <= 0xd7a3 ? ((lastCode - 0xac00) % 28 === 0 ? "를" : "을") : " 그룹을";
-  const protectedGroup = deleting === "group" && representative;
+  const protectedGroup = deleting === "group" && lastGroup;
   return (
     <section {...maskedPropsFor()}>
       {failed ? (
@@ -125,7 +126,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
           fallbackFocus={groupDeleteButton}
           title={
             protectedGroup
-              ? "대표 그룹은 삭제할 수 없어요"
+              ? "그룹은 최소 하나 남겨야 해요"
               : deleting === "group"
                 ? `${group.name}${objectParticle} 삭제할까요?`
                 : "정말 삭제 하시겠습니까?"
@@ -153,7 +154,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
           {deleting === "group" && (
             <p className={styles.description}>
               {protectedGroup
-                ? "첫 번째로 설정된 대표 그룹은 삭제할 수 없어요."
+                ? "다른 그룹을 만든 뒤 이 그룹을 삭제할 수 있어요."
                 : `이 그룹과 즐겨찾기 ${group.favorites.length}개가 함께 삭제돼요. 다른 그룹에 저장된 즐겨찾기는 그대로 유지돼요.`}
             </p>
           )}
@@ -187,7 +188,7 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
                       focusAfterDelete.current = deleting !== "group";
                       setDeleting(null);
                       if (deleting === "group")
-                        void navigate("/mypage", { replace: true, state: { notice: "그룹을 삭제했어요" } });
+                        void navigate(paths.favoriteGroups, { replace: true, state: { notice: "그룹을 삭제했어요" } });
                     })
                   }
                 >

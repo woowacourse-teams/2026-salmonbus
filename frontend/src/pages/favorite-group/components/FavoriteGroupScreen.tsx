@@ -8,7 +8,8 @@ import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useFavorites } from "@/shared/hooks/useFavorites";
-import { GroupNameForm } from "./GroupNameForm";
+import { paths } from "@/shared/routing/paths";
+import { GroupNameForm } from "@/shared/components/favorite-editor/GroupNameForm";
 import { GroupDetails } from "./GroupDetails";
 import * as buttons from "@/shared/styles/button.css";
 import * as formStyles from "@/shared/styles/form.css";
@@ -23,10 +24,9 @@ export function FavoriteGroupScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const group = groups.find((candidate) => candidate.id === groupId);
   const loadFailed = resource.status === "loadingError";
-  const representative = group !== undefined && groups[0]?.id === group.id;
   const editing = auth.status === "authenticated" && group !== undefined && editingId === group.id;
   return (
-    <AccountLayout>
+    <AccountLayout variant="tab">
       <div className={styles.screen}>
         <header {...maskedPropsFor(styles.title)}>
           {editing ? (
@@ -39,7 +39,7 @@ export function FavoriteGroupScreen() {
               <img src={backArrow} width="17" height="17" alt="" draggable={false} />
             </button>
           ) : (
-            <Link to="/mypage" className={styles.back} aria-label="마이페이지로 돌아가기">
+            <Link to={paths.favoriteGroups} className={styles.back} aria-label="그룹 목록으로 돌아가기">
               <img src={backArrow} width="17" height="17" alt="" draggable={false} />
             </Link>
           )}
@@ -47,7 +47,6 @@ export function FavoriteGroupScreen() {
             <h1 className={styles.name}>
               {editing ? "이름 변경" : groupId === "new" ? "그룹 만들기" : (group?.name ?? "그룹 관리")}
             </h1>
-            {!editing && representative && <span className={styles.representative}>대표</span>}
           </div>
           {group && auth.status === "authenticated" && editingId !== group.id && !loadFailed && (
             <button
@@ -61,7 +60,7 @@ export function FavoriteGroupScreen() {
           )}
         </header>
         {auth.status === "anonymous" ? (
-          <LoginButton returnTo="/mypage" />
+          <LoginButton returnTo={paths.favorites} />
         ) : auth.status !== "authenticated" ? (
           <>
             <p role="status" className={formStyles.subtle}>
@@ -119,7 +118,7 @@ export function FavoriteGroupScreen() {
                 editing ? (
                   <GroupNameForm key={group.id} group={group} onRenamed={() => setEditingId(null)} />
                 ) : (
-                  <GroupDetails key={group.id} group={group} representative={representative} />
+                  <GroupDetails key={group.id} group={group} lastGroup={groups.length === 1} />
                 )
               ) : (
                 hasGroupData && (
@@ -127,7 +126,7 @@ export function FavoriteGroupScreen() {
                     <p className={formStyles.error} role="alert">
                       그룹을 찾지 못했어요. 삭제 되었거나 없는 그룹입니다.
                     </p>
-                    <Link className={buttons.secondary} to="/mypage">
+                    <Link className={buttons.secondary} to={paths.favoriteGroups}>
                       그룹 목록으로 가기
                     </Link>
                   </>

@@ -3,7 +3,14 @@ import busFrontIcon from "../assets/bus-front.svg";
 import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
-import { DETAIL_ZOOM, routeArrowsFor, routeMapCoordinateForSequence, type RouteArrow } from "./routeMapGeometry";
+import {
+  DETAIL_ZOOM,
+  fullPathForDisplay,
+  routeArrowsFor,
+  routeMapCoordinateForSequence,
+  type RouteArrow,
+} from "./routeMapGeometry";
+import type { MapFlowSurface } from "@/shared/map/mapFlowSurface";
 import type { NaverMap, NaverMaps, NaverMarker } from "@/shared/map/naverSdk";
 import { activeRouteColor, inactiveRouteColor } from "@/shared/map/routeColors";
 import { createMapStopPin } from "@/shared/map/mapStopPin";
@@ -54,6 +61,26 @@ export interface RouteMapAdapter {
   focusVehicle: (key: string | null, options?: { focusMarker?: boolean }) => void;
   showLocation: (coordinate: GeoCoordinate) => void;
   destroy: () => void;
+}
+
+export function createNaverRouteOverview({ maps, map, element }: MapFlowSurface, data: RouteMapData) {
+  const noop = () => undefined;
+  return createNaverRouteMap(
+    maps,
+    element,
+    null,
+    data,
+    element.clientHeight,
+    noop,
+    noop,
+    noop,
+    noop,
+    noop,
+    null,
+    undefined,
+    false,
+    map,
+  );
 }
 
 export function createNaverRouteMap(
@@ -181,18 +208,17 @@ export function createNaverRouteMap(
   }));
   // 전체 형상만 있거나 일부 방향이 미분리된 경우에도 API가 제공한 도로는 그대로 표시한다.
   // 방향을 알 수 없는 전체 선에는 방향별 색상과 화살표를 붙이지 않는다.
-  const fullRouteLine =
-    fullPath.length >= 2 &&
-    (board?.route.directions.some(({ id }) => !mappedDirections.has(id)) ?? mappedDirections.size < 2)
-      ? new sdk.Polyline({
-          map,
-          path: fullPath.map(toNaverCoordinate),
-          strokeWeight: 6,
-          strokeColor: inactiveRouteColor,
-          strokeOpacity: routeRevealed ? 0.95 : 0,
-          zIndex: 1,
-        })
-      : null;
+  const displayedFullPath = fullPathForDisplay(data, board?.route.directions);
+  const fullRouteLine = displayedFullPath
+    ? new sdk.Polyline({
+        map,
+        path: displayedFullPath.map(toNaverCoordinate),
+        strokeWeight: 6,
+        strokeColor: inactiveRouteColor,
+        strokeOpacity: routeRevealed ? 0.95 : 0,
+        zIndex: 1,
+      })
+    : null;
   const arrows: ArrowMarker[] = [];
   let arrowsShowBothDirections: boolean | null = null;
   let userMarker: NaverMarker | null = null;

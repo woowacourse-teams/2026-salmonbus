@@ -29,10 +29,8 @@ test("320px 정류장 별은 접힘 행과 펼친 이름의 중앙에 놓이고 
   const outline = await star.locator("img").getAttribute("src");
 
   await star.click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("checkbox", { name: /즐겨찾기/ }).check();
-  await dialog.getByRole("button", { name: "저장", exact: true }).click();
-  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText("즐겨찾기에 추가되었습니다", { exact: true })).toBeVisible();
   await expect(star).toHaveAttribute("aria-pressed", "true");
   await expect(star.locator("img")).not.toHaveAttribute("src", outline!);
   await expect(head).toHaveAttribute("aria-expanded", "true");
