@@ -356,7 +356,7 @@ public final class ActionModel {
         }
     }
 
-    // 음수 우회량은 막지 않는다. D의 뜻과 단위가 정해지지 않아 음수 허용 여부는 SAL-389에서 정한다.
+    // 음수 우회량은 막지 않는다. 채택된 D 정의가 없어 음수 허용 여부는 SAL-389에서 D 정의와 함께 정한다.
     static void requireDetour(Optional<Double> detour) {
         detour.ifPresent(value -> requireFinite(value, "detour"));
     }
