@@ -67,16 +67,19 @@ public final class ArrivalStopSource implements StopArrivalSource {
                 snapshot.receivedAt()))
             .findFirst();
         List<StopEntry> entries = route.map(value -> value.arrivals().stream()
-            .map(prediction -> entryOf(snapshot, routeId, prediction, decisionAt)).toList()).orElse(List.of());
+            .map(prediction -> entryOf(snapshot, routeId, stopSequence, prediction, decisionAt)).toList())
+            .orElse(List.of());
         return new Queried(entries, coverageOf(entries));
     }
 
-    private StopEntry entryOf(ArrivalSnapshot snapshot, String routeId, Prediction prediction, Instant decisionAt) {
+    private StopEntry entryOf(ArrivalSnapshot snapshot, String routeId, int stopSequence, Prediction prediction,
+                              Instant decisionAt) {
         Instant expected = ArrivalPrediction.at(prediction, snapshot.receivedAt(), decisionAt).expectedArrivalAt();
         Offset arrival = new Offset(Duration.between(decisionAt, expected).toMillis());
         Optional<Span> quantization = prediction.sourceRemainingSeconds() == null
             ? Optional.of(MINUTE_RESOLUTION_BOUND) : Optional.empty();
-        String id = snapshot.id() + ":" + routeId + ":" + prediction.ordinal();
+        // 스냅샷은 정류장 단위라, 한 노선이 이 정류장을 두 번 지나면 방문 순번이 있어야 두 방문의 항목이 구분된다.
+        String id = snapshot.id() + ":" + routeId + ":" + stopSequence + ":" + prediction.ordinal();
         return new StopEntry(id, new Observed<>(arrival, quantization));
     }
 
