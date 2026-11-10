@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.gustler.backend.api.salmon.application.WalkOption.Relation;
 import com.gustler.backend.api.salmon.domain.ActionConfig;
 import com.gustler.backend.api.salmon.domain.ActionFixture;
-import com.gustler.backend.api.salmon.domain.ActionJudge;
 import com.gustler.backend.api.salmon.domain.ActionJudge.Listed;
 import com.gustler.backend.api.salmon.domain.Candidates.*;
 import com.gustler.backend.api.salmon.domain.EtaChain;
@@ -49,7 +48,7 @@ class CandidateAssemblerTest {
         ActionFixture fixture = new ActionFixture();
         Listed listed = CandidateAssembler.assemble("route", INFORMATION, List.of(new WalkOption("A", 4, Relation.BEFORE, 60)),
             StopArrivalSource.unavailable(), DetourSource.unavailable(), ProbabilitySupply.none());
-        Verdict verdict = ActionJudge.judge(fixture.baseline(), config(15, 10), epoch -> listed);
+        Verdict verdict = ActionFixture.judge(fixture.baseline(), config(15, 10), epoch -> listed);
 
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE);
         assertThat(verdict.candidates()).singleElement()
@@ -93,7 +92,7 @@ class CandidateAssemblerTest {
         Listed listed = CandidateAssembler.assemble("route", INFORMATION, List.of(new WalkOption("A", 4, Relation.AFTER, 60)),
             arrivals, DetourSource.unavailable(), ProbabilitySupply.none());
 
-        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, epoch -> listed);
+        Verdict verdict = ActionFixture.judge(fixture.baseline(), config, epoch -> listed);
 
         assertThat(verdict.candidates()).singleElement()
             .satisfies(record -> assertThat(record.admissibility()).isEqualTo(Admissibility.UNCONFIRMED));
@@ -111,7 +110,7 @@ class CandidateAssemblerTest {
         ActionFixture fixture = new ActionFixture();
         fixture.ride = EtaFields.rideTime(EtaChain.sameRun(atOpposite, atAlight));
 
-        Verdict verdict = ActionJudge.judge(fixture.baseline(), config(20, 8),
+        Verdict verdict = ActionFixture.judge(fixture.baseline(), config(20, 8),
             fixture.source(fixture.reboardCandidate()));
 
         assertThat(fixture.ride).isEqualTo(new Derived<>(new Span(300_000), new NoBound()));
@@ -129,7 +128,7 @@ class CandidateAssemblerTest {
         ActionFixture fixture = new ActionFixture();
         fixture.ride = EtaFields.rideTime(EtaChain.sameRun(atOpposite, atAlight));
 
-        Verdict verdict = ActionJudge.judge(fixture.baseline(), config(20, 8),
+        Verdict verdict = ActionFixture.judge(fixture.baseline(), config(20, 8),
             fixture.source(fixture.reboardCandidate()));
 
         assertThat(fixture.ride).isEqualTo(new Missing<Span>(MissingReason.UNIDENTIFIED_VEHICLE));

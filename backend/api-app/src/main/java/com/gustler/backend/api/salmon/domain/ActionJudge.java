@@ -11,7 +11,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-/** 대기와 이동 후보의 탑승 실패 위험을 비교해 사유 코드 하나로 판정한다. */
+/**
+ * 대기와 이동 후보의 탑승 실패 위험을 비교해 사유 코드 하나로 판정한다.
+ *
+ * <p>판정 기 한 번만 다룬다. 후보 조회가 기준선을 바꾸면 판정하지 않고 바뀐 기준선을 돌려주며,
+ * 그 기준선으로 다시 판정하는 일은 {@link ActionDecider}가 맡는다. 그래서 판정 진입점은 패키지 안에만 연다.
+ */
 public final class ActionJudge {
     private static final double EPSILON = 1e-12;
 
@@ -38,35 +43,39 @@ public final class ActionJudge {
         Enumeration enumerate(String epoch);
     }
 
-    public record Judgement(Verdict verdict, Optional<StopList> staleBaseline) {
+    sealed interface Judgement permits Settled, BaselineChanged {
     }
 
-    public static Verdict judge(Baseline baseline, ActionConfig config, CandidateSource source) {
-        return judgement(baseline, config, source).verdict();
+    record Settled(Verdict verdict) implements Judgement {
     }
 
-    public static Judgement judgement(Baseline baseline, ActionConfig config, CandidateSource source) {
+    record BaselineChanged(StopList update) implements Judgement {
+    }
+
+    static Judgement judgement(Baseline baseline, ActionConfig config, CandidateSource source) {
         PolicyEvaluator stayEvaluator = new PolicyEvaluator(config, baseline.epoch(), baseline.supply());
         Outcome stay = stayEvaluator.stay(baseline.currentStop());
         Optional<Double> stayRisk = stay.evaluation().failureRisk();
         if (stayRisk.isEmpty()) {
-            return plain(ReasonCode.ABSTAIN_STAY_UNDEFINED, baseline, stay, List.of(), false);
+            return withoutComparison(ReasonCode.ABSTAIN_STAY_UNDEFINED, baseline, stay, List.of());
         }
         if (stayRisk.get() < config.scanThreshold() - EPSILON) {
-            return plain(ReasonCode.STAY_SCAN_NOT_TRIGGERED, baseline, stay, List.of(), false);
+            return withoutComparison(ReasonCode.STAY_SCAN_NOT_TRIGGERED, baseline, stay, List.of());
         }
         return switch (source.enumerate(baseline.epoch())) {
-            case Failed ignored -> plain(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE, baseline, stay, List.of(), false);
-            case Listed listed -> compare(baseline, config, stay, stayRisk.get(), listed);
+            case Failed ignored -> withoutComparison(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE, baseline, stay,
+                List.of());
+            case Listed listed -> listed.baselineUpdate()
+                .filter(update -> changesBaseline(baseline, config, update, stay))
+                .<Judgement>map(BaselineChanged::new)
+                .orElseGet(() -> compare(baseline, config, stay, stayRisk.get(), listed));
         };
     }
 
-    private static Judgement compare(Baseline baseline, ActionConfig config, Outcome stay, double stayRisk,
-                                     Listed listed) {
-        Optional<StopList> staleBaseline = listed.baselineUpdate()
-            .filter(update -> changesBaseline(baseline, config, update, stay));
+    private static Settled compare(Baseline baseline, ActionConfig config, Outcome stay, double stayRisk,
+                                   Listed listed) {
         if (listed.candidates().isEmpty()) {
-            return stalled(ReasonCode.NO_MOVE_NO_CANDIDATE, baseline, stay, List.of(), false, staleBaseline);
+            return withoutComparison(ReasonCode.NO_MOVE_NO_CANDIDATE, baseline, stay, List.of());
         }
         PolicyEvaluator evaluator = new PolicyEvaluator(config, baseline.epoch(),
             baseline.supply().plus(listed.supply()));
@@ -81,21 +90,21 @@ public final class ActionJudge {
         List<CandidateRecord> permitted = records.stream()
             .filter(record -> record.admissibility() != Admissibility.VIOLATED).toList();
         if (permitted.isEmpty()) {
-            return stalled(ReasonCode.NO_MOVE_INFEASIBLE, baseline, stay, records, false, staleBaseline);
+            return withoutComparison(ReasonCode.NO_MOVE_INFEASIBLE, baseline, stay, records);
         }
         List<CandidateRecord> comparable = permitted.stream()
             .filter(record -> record.admissibility() == Admissibility.ALLOWED
                 && record.outcome().evaluation().failureRisk().isPresent()).toList();
         if (comparable.isEmpty()) {
-            return stalled(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE, baseline, stay, records, false, staleBaseline);
+            return withoutComparison(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE, baseline, stay, records);
         }
         boolean partial = comparable.size() < permitted.size();
         CandidateRecord best = comparable.stream().min(comparator(config, listed.candidates())).orElseThrow();
         double delta = stayRisk - best.outcome().evaluation().failureRisk().orElseThrow();
         ReasonCode code = delta >= config.gainThreshold() - EPSILON
             ? ReasonCode.GO : ReasonCode.STAY_GAIN_BELOW_THRESHOLD;
-        return new Judgement(new Verdict(code, baseline.epoch(), partial, stay, records, Optional.of(best.id()),
-            Optional.of(delta)), staleBaseline);
+        return new Settled(new Verdict(code, baseline.epoch(), partial, stay, records, Optional.of(best.id()),
+            Optional.of(delta)));
     }
 
     private static Outcome evaluate(PolicyEvaluator evaluator, Candidate candidate) {
@@ -138,14 +147,9 @@ public final class ActionJudge {
         return complete ? Admissibility.ALLOWED : Admissibility.UNCONFIRMED;
     }
 
-    private static Judgement plain(ReasonCode code, Baseline baseline, Outcome stay, List<CandidateRecord> records,
-                                   boolean partial) {
-        return stalled(code, baseline, stay, records, partial, Optional.empty());
-    }
-
-    private static Judgement stalled(ReasonCode code, Baseline baseline, Outcome stay, List<CandidateRecord> records,
-                                     boolean partial, Optional<StopList> staleBaseline) {
-        return new Judgement(new Verdict(code, baseline.epoch(), partial, stay, records, Optional.empty(),
-            Optional.empty()), staleBaseline);
+    private static Settled withoutComparison(ReasonCode code, Baseline baseline, Outcome stay,
+                                             List<CandidateRecord> records) {
+        return new Settled(new Verdict(code, baseline.epoch(), false, stay, records, Optional.empty(),
+            Optional.empty()));
     }
 }

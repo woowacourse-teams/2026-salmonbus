@@ -3,11 +3,13 @@ package com.gustler.backend.api.salmon.domain;
 import com.gustler.backend.api.salmon.domain.ActionJudge.Baseline;
 import com.gustler.backend.api.salmon.domain.ActionJudge.Enumeration;
 import com.gustler.backend.api.salmon.domain.ActionJudge.Listed;
+import com.gustler.backend.api.salmon.domain.ActionJudge.Settled;
 import com.gustler.backend.api.salmon.domain.Candidates.*;
 import com.gustler.backend.api.salmon.domain.Fields.*;
 import com.gustler.backend.api.salmon.domain.Probabilities.*;
 import com.gustler.backend.api.salmon.domain.StopLists.*;
 import com.gustler.backend.api.salmon.domain.Timing.*;
+import com.gustler.backend.api.salmon.domain.Verdicts.Verdict;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -93,6 +95,13 @@ public final class ActionFixture {
     public ActionJudge.CandidateSource source(Candidate... candidates) {
         Listed listed = new Listed(List.of(candidates), new ProbabilitySupply(candidateProbabilities), Optional.empty());
         return epoch -> listed;
+    }
+
+    public static Verdict judge(Baseline baseline, ActionConfig config, ActionJudge.CandidateSource source) {
+        if (ActionJudge.judgement(baseline, config, source) instanceof Settled settled) {
+            return settled.verdict();
+        }
+        throw new AssertionError("candidate source changed the baseline");
     }
 
     public static ActionJudge.CandidateSource sourceOf(Enumeration enumeration) {

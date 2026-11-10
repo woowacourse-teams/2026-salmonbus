@@ -34,7 +34,7 @@ class ActionOracleTest {
                         for (double q19Second : GRID) {
                             ActionFixture fixture = fixtureWith(beta1, beta2, q14, q19First, q19Second);
                             fixture.ride = ActionFixture.observed(5);
-                            Verdict verdict = ActionJudge.judge(fixture.baseline(), config(20, 8),
+                            Verdict verdict = ActionFixture.judge(fixture.baseline(), config(20, 8),
                                 fixture.source(fixture.reboardCandidate()));
                             double expected = LeafOracle.failure(LeafOracle.reboardLeaves(
                                 new double[] {beta1, beta2}, new double[][] {{q14, q19First}, {q19Second}}));
@@ -56,7 +56,7 @@ class ActionOracleTest {
                 fixture.stayProbabilities.set(0, ActionFixture.marginal("s0-3", first));
                 fixture.stayProbabilities.set(1, ActionFixture.conditional("s0-11", ValueTag.COND_FAIL, second,
                     Set.of("s0-3"), Set.of(), Optional.empty()));
-                Verdict verdict = ActionJudge.judge(fixture.baseline(), config(15, 8), ActionFixture.sourceOf(
+                Verdict verdict = ActionFixture.judge(fixture.baseline(), config(15, 8), ActionFixture.sourceOf(
                     new ActionJudge.Listed(List.of(), ProbabilitySupply.none(), Optional.empty())));
                 double expected = LeafOracle.failure(LeafOracle.attemptLeaves(new double[] {first, second}));
                 assertThat(verdict.stay().evaluation().failureRisk().orElseThrow()).isCloseTo(expected, within(TOLERANCE));
@@ -68,10 +68,10 @@ class ActionOracleTest {
     void 창을_15에서_20으로_넓히면_모든_시도열이_다시_잘려_코드가_바뀐다() {
         ActionFixture narrow = new ActionFixture();
         narrow.ride = ActionFixture.observed(5);
-        Verdict narrowVerdict = ActionJudge.judge(narrow.baseline(), config(15, 8), narrow.source(narrow.reboardCandidate()));
+        Verdict narrowVerdict = ActionFixture.judge(narrow.baseline(), config(15, 8), narrow.source(narrow.reboardCandidate()));
         ActionFixture wide = new ActionFixture();
         wide.ride = ActionFixture.observed(5);
-        Verdict wideVerdict = ActionJudge.judge(wide.baseline(), config(20, 8), wide.source(wide.reboardCandidate()));
+        Verdict wideVerdict = ActionFixture.judge(wide.baseline(), config(20, 8), wide.source(wide.reboardCandidate()));
 
         assertThat(narrowVerdict.code()).isEqualTo(ReasonCode.STAY_GAIN_BELOW_THRESHOLD);
         assertThat(wideVerdict.code()).isEqualTo(ReasonCode.GO);
