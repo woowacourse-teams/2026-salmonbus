@@ -1,26 +1,24 @@
+export const WEB_READY_TIMEOUT_MS = 10_000;
+
 export interface DocumentLoadState {
-  epoch: number;
+  started: boolean;
+  ready: boolean;
   failed: boolean;
-  provisionalEpoch: number | null;
 }
 
 export function initialDocumentLoad(): DocumentLoadState {
-  return { epoch: 0, failed: false, provisionalEpoch: null };
+  return { started: false, ready: false, failed: false };
 }
 
-export function noteLoadStart(state: DocumentLoadState): DocumentLoadState {
-  return { epoch: state.epoch + 1, failed: false, provisionalEpoch: null };
+export function noteDocumentStarted(state: DocumentLoadState): DocumentLoadState {
+  return state.failed ? state : { ...state, started: true };
 }
 
-export function noteDocumentLoad(
-  state: DocumentLoadState,
-  inApp: boolean,
-): { state: DocumentLoadState; documentLoaded: boolean; take: boolean } {
-  if (!inApp || state.failed) return { state, documentLoaded: false, take: false };
-  return { state: { ...state, provisionalEpoch: state.epoch }, documentLoaded: true, take: true };
+// 새 문서가 시작되기 전에 온 준비 신호는 이전 문서가 보낸 것이다.
+export function noteWebReady(state: DocumentLoadState): DocumentLoadState {
+  return state.failed || !state.started ? state : { ...state, ready: true };
 }
 
-export function noteLoadFailure(state: DocumentLoadState): { state: DocumentLoadState; restore: boolean } {
-  const restore = state.provisionalEpoch === state.epoch;
-  return { state: { epoch: state.epoch, failed: true, provisionalEpoch: null }, restore };
+export function noteLoadFailure(): DocumentLoadState {
+  return { started: false, ready: false, failed: true };
 }

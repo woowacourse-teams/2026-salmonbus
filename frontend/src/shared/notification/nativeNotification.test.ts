@@ -128,6 +128,18 @@ describe("알림 탭 대상 꺼내기", () => {
     await expect(opened).resolves.toEqual(TARGET);
   });
 
+  it("준비 신호를 보내기 전에 듣기 시작하므로 앱이 즉시 답해도 대상을 받는다", async () => {
+    const { bridgeWindow, postMessage } = inAppWindow();
+    const target = new EventTarget();
+    postMessage.mockImplementation((raw) => {
+      const { payload } = JSON.parse(raw) as { payload: { requestId: string } };
+      reply(target, "notification.opened", { requestId: payload.requestId, target: TARGET });
+    });
+
+    await expect(takeOpenedNotification(bridgeWindow, target)).resolves.toEqual(TARGET);
+    expect(postMessage).toHaveBeenCalledTimes(1);
+  });
+
   it("쌓인 대상이 없으면 null이다", async () => {
     const { bridgeWindow, postMessage } = inAppWindow();
     const target = new EventTarget();

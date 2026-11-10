@@ -13,7 +13,7 @@ describe('알림 탭 칸', () => {
     assert.equal(inbox.take(), null);
   });
 
-  it('웹 문서가 다 뜬 뒤 누른 탭은 바로 보내고 칸에 남기지 않는다', () => {
+  it('웹이 준비된 뒤 누른 탭은 바로 보내고 칸에 남기지 않는다', () => {
     const inbox = createTapInbox();
     assert.equal(inbox.receive({ key: 'n1@1', target: TARGET }, true), 'send');
     assert.equal(inbox.take(), null);
@@ -49,33 +49,42 @@ describe('알림 탭 칸', () => {
     assert.equal(inbox.take(), null);
   });
 
-  it('꺼낸 탭을 도로 넣으면 한 번 더 꺼낼 수 있다', () => {
-    const inbox = createTapInbox();
+  it('10분 직전에는 탭을 꺼낼 수 있다', () => {
+    let currentTime = 1_000;
+    const inbox = createTapInbox(() => currentTime);
     inbox.receive({ key: 'n1@1', target: TARGET }, false);
-    const taken = inbox.take();
-    assert.ok(taken);
-    assert.equal(inbox.restore(taken), true);
+    currentTime += 10 * 60 * 1_000 - 1;
     assert.deepEqual(inbox.take(), { key: 'n1@1', target: TARGET });
+  });
+
+  it('10분이 된 탭은 버리고 같은 탭으로 보관 시간을 늘리지 않는다', () => {
+    let currentTime = 1_000;
+    const inbox = createTapInbox(() => currentTime);
+    const tap = { key: 'n1@1', target: TARGET };
+    inbox.receive(tap, false);
+    currentTime += 9 * 60 * 1_000;
+    assert.equal(inbox.receive(tap, false), 'duplicate');
+    currentTime += 60 * 1_000;
+    assert.equal(inbox.take(), null);
+    assert.equal(inbox.receive(tap, true), 'duplicate');
+  });
+
+  it('몇 시간 뒤 준비된 웹에는 지난 탭을 주지 않는다', () => {
+    let currentTime = 1_000;
+    const inbox = createTapInbox(() => currentTime);
+    inbox.receive({ key: 'n1@1', target: TARGET }, false);
+    currentTime += 3 * 60 * 60 * 1_000;
+    assert.equal(inbox.take(), null);
     assert.equal(inbox.take(), null);
   });
 
-  it('칸에 더 새로운 탭이 있으면 예전 탭을 도로 넣지 않는다', () => {
-    const inbox = createTapInbox();
+  it('새 탭의 보관 기간은 새로 받은 시각부터 센다', () => {
+    let currentTime = 1_000;
+    const inbox = createTapInbox(() => currentTime);
     inbox.receive({ key: 'n1@1', target: TARGET }, false);
-    const taken = inbox.take();
-    assert.ok(taken);
+    currentTime += 9 * 60 * 1_000;
     inbox.receive({ key: 'n2@2', target: LATER }, false);
-    assert.equal(inbox.restore(taken), false);
+    currentTime += 60 * 1_000;
     assert.deepEqual(inbox.take(), { key: 'n2@2', target: LATER });
-  });
-
-  it('바로 보낸 더 새로운 탭이 있으면 예전 탭을 도로 넣지 않는다', () => {
-    const inbox = createTapInbox();
-    inbox.receive({ key: 'n1@1', target: TARGET }, false);
-    const taken = inbox.take();
-    assert.ok(taken);
-    assert.equal(inbox.receive({ key: 'n2@2', target: LATER }, true), 'send');
-    assert.equal(inbox.restore(taken), false);
-    assert.equal(inbox.take(), null);
   });
 });

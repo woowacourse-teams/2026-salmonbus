@@ -7,10 +7,22 @@ import { followOpenedNotifications, openNotificationBoard, takeOnce } from "./us
 const TARGET: NotificationTarget = { routeId: "234000884", stopId: "203000165", direction: "UP" };
 const RUNNING_TARGET: NotificationTarget = { routeId: "234000026", stopId: "203000165", direction: "DOWN" };
 
-function sourcesFor(launchTarget: NotificationTarget | null) {
+function sourcesFor(launchTarget: NotificationTarget | null, restoredTarget: NotificationTarget | null = null) {
   const inbox = createOpenedNotificationInbox();
   const take = jest.fn<() => Promise<NotificationTarget | null>>().mockResolvedValue(launchTarget);
-  return { inbox, take, sources: { takeLaunchTarget: takeOnce(take), subscribe: inbox.subscribe } };
+  const takeRestored = jest.fn<() => Promise<NotificationTarget | null>>().mockResolvedValue(restoredTarget);
+  const restoreListeners = new Set<() => void>();
+  const restorePage = () => restoreListeners.forEach((listener) => listener());
+  const sources = {
+    takeLaunchTarget: takeOnce(take),
+    subscribe: inbox.subscribe,
+    takeRestoredTarget: takeRestored,
+    onPageRestore: (listener: () => void) => {
+      restoreListeners.add(listener);
+      return () => restoreListeners.delete(listener);
+    },
+  };
+  return { inbox, take, takeRestored, restorePage, sources };
 }
 
 const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -52,6 +64,30 @@ describe("알림으로 연 대상 따라가기", () => {
     inbox.receive(TARGET);
     await settled();
     expect(open.mock.calls).toEqual([[RUNNING_TARGET]]);
+  });
+});
+
+describe("페이지 캐시에서 복원된 문서", () => {
+  it("복원되면 앱에 다시 물어 받은 대상을 연다", async () => {
+    const { sources, takeRestored, restorePage } = sourcesFor(null, TARGET);
+    const open = jest.fn<(target: NotificationTarget) => void>();
+    followOpenedNotifications(open, sources);
+    await settled();
+    restorePage();
+    await settled();
+    expect(takeRestored).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls).toEqual([[TARGET]]);
+  });
+
+  it("그만 따라간 뒤에 복원되면 묻지 않는다", async () => {
+    const { sources, takeRestored, restorePage } = sourcesFor(null, TARGET);
+    const open = jest.fn<(target: NotificationTarget) => void>();
+    const stop = followOpenedNotifications(open, sources);
+    stop();
+    restorePage();
+    await settled();
+    expect(takeRestored).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
   });
 });
 

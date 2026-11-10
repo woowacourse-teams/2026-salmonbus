@@ -5,32 +5,33 @@ export interface NotificationTap {
 
 export type TapDecision = 'send' | 'held' | 'duplicate';
 
-export function createTapInbox() {
-  let held: NotificationTap | null = null;
+const TAP_RETENTION_MS = 10 * 60 * 1_000;
+
+export function createTapInbox(now: () => number = Date.now) {
+  let held: { tap: NotificationTap; receivedAt: number } | null = null;
   let lastKey: string | null = null;
 
-  function receive(tap: NotificationTap, documentLoaded: boolean): TapDecision {
+  function receive(tap: NotificationTap, documentReady: boolean): TapDecision {
     if (tap.key === lastKey) return 'duplicate';
     lastKey = tap.key;
-    if (documentLoaded) {
+    if (documentReady) {
       held = null;
       return 'send';
     }
-    held = tap;
+    held = { tap, receivedAt: now() };
     return 'held';
   }
 
+  function holding(): boolean {
+    return held !== null && now() - held.receivedAt < TAP_RETENTION_MS;
+  }
+
   function take(): NotificationTap | null {
-    const tap = held;
+    const pending = held;
     held = null;
-    return tap;
+    if (pending === null || now() - pending.receivedAt >= TAP_RETENTION_MS) return null;
+    return pending.tap;
   }
 
-  function restore(tap: NotificationTap): boolean {
-    if (held !== null || tap.key !== lastKey) return false;
-    held = tap;
-    return true;
-  }
-
-  return { receive, take, restore };
+  return { receive, holding, take };
 }
