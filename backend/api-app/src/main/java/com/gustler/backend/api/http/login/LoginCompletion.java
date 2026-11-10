@@ -47,8 +47,8 @@ final class LoginCompletion {
     Completed complete(LoginProvider provider, String subject) {
         SignedInMember member = signIn.signIn(new SocialIdentity(provider, subject));
         ensureDefaultGroup(member.publicId());
-        String accessToken = accessTokens.issue(member.publicId());
         IssuedRefreshToken refreshToken = refreshTokens.issue(member.publicId());
+        String accessToken = accessTokens.issue(member.publicId(), refreshToken.familyId());
         HttpHeaders cookies = new HttpHeaders();
         authCookies.write(cookies, accessToken, refreshToken);
         return new Completed(cookies, member.registered());

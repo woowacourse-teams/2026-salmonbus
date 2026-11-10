@@ -66,6 +66,7 @@ class RefreshTokenRotationTest {
         assertSoftly(softly -> {
             softly.assertThat(tokenCount()).isEqualTo(1);
             softly.assertThat(row.generation()).isZero();
+            softly.assertThat(actual.familyId()).isEqualTo(familyOf(actual.token()));
             softly.assertThat(generationOf(actual.token())).isZero();
             softly.assertThat(row.startedAt().toInstant()).isEqualTo(clock.instant());
             softly.assertThat(row.rotatedAt().toInstant()).isEqualTo(clock.instant());
@@ -147,6 +148,7 @@ class RefreshTokenRotationTest {
         assertSoftly(softly -> {
             softly.assertThat(rotated.publicId()).isEqualTo(publicId);
             softly.assertThat(rotated.next().token()).isNotEqualTo(issued.token());
+            softly.assertThat(rotated.next().familyId()).isEqualTo(issued.familyId());
             softly.assertThat(familyOf(rotated.next().token())).isEqualTo(familyOf(issued.token()));
             softly.assertThat(generationOf(rotated.next().token())).isEqualTo(1);
             softly.assertThat(rotated.next().expiresAt().toInstant()).isEqualTo(rotatedAt.plusDays(30).toInstant());
@@ -328,6 +330,7 @@ class RefreshTokenRotationTest {
         assertSoftly(softly -> {
             softly.assertThat(second.publicId()).isEqualTo(publicId);
             softly.assertThat(second.next()).isEqualTo(first.next());
+            softly.assertThat(second.next().familyId()).isEqualTo(issued.familyId());
             softly.assertThat(row(familyOf(issued.token()))).isEqualTo(before);
             softly.assertThat(tokenCount()).isEqualTo(1);
         });
@@ -642,7 +645,7 @@ class RefreshTokenRotationTest {
 
     /** 시계가 멈춰 있어 어느 세대든 만료 시각이 같다. */
     private static RefreshResult rotatedTo(RefreshResult.Rotated reference, String token) {
-        IssuedRefreshToken issued = new IssuedRefreshToken(token, reference.next().expiresAt());
+        IssuedRefreshToken issued = new IssuedRefreshToken(token, reference.next().expiresAt(), reference.next().familyId());
         return new RefreshResult.Rotated(reference.publicId(), issued);
     }
 

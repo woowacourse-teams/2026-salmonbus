@@ -246,7 +246,7 @@ class NotificationSettingControllerTest {
     }
 
     private String cookie(UUID member) {
-        return "__Host-sb_at=" + accessTokens.issue(member);
+        return "__Host-sb_at=" + accessTokens.issue(member, null);
     }
 
     private HttpRequest.Builder request(String path) {
