@@ -219,6 +219,21 @@ class NotificationDeliveryFlowTest {
     }
 
     @Test
+    void schedulerStartingAfterTheMinuteStillMakesTheThirdAttempt() throws Exception {
+        prepare(1, true);
+        Duration schedulerLag = Duration.ofMillis(300);
+        try (FakeApnsServer fake = new FakeApnsServer()) {
+            fake.answerAll(500, "InternalServerError");
+            runAt(T0.plus(schedulerLag), fake);
+            runAt(T0.plus(Duration.ofMinutes(1)).plus(schedulerLag), fake);
+            runAt(T0.plus(Duration.ofMinutes(2)).plus(schedulerLag), fake);
+            runAt(T0.plus(Duration.ofMinutes(3)).plus(schedulerLag), fake);
+            assertThat(fake.requests()).hasSize(3);
+            assertThat(statusCounts("GAVE_UP")).isEqualTo(1);
+        }
+    }
+
+    @Test
     void invalidProviderTokenGivesUpWithoutRetry(CapturedOutput output) throws Exception {
         prepare(1, true);
         try (FakeApnsServer fake = new FakeApnsServer()) {
