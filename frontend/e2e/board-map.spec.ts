@@ -296,7 +296,106 @@ test("노선 생성 중에는 목록에서 선택한 핀만 표시하고, 준비
   expect(api.requests.geometry).toBe(2);
 });
 
-test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받으면 실패를 안내한다", async ({ page, api }) => {
+for (const reason of ["NOT_COLLECTED", "GENERATION_PENDING"] as const) {
+  test(`${reason} 지도는 후속 조회 실패에도 정류장과 선택을 유지하고 복구한다`, async ({ page, api, naverMap }) => {
+    const readyGeometry = createRouteGeometry(api.data.watch);
+    api.data.geometry = {
+      ...readyGeometry,
+      geometryRevision: "a".repeat(64),
+      status: "UNAVAILABLE",
+      reason,
+      points: [],
+      paths: null,
+    };
+    await openMap(page);
+    const stop = list(page).locator("li[data-stop-sequence='11'] button[aria-expanded]");
+    await stop.click();
+    await page.clock.runFor(32);
+    const pins = map(page).locator("button[data-map-stop-sequence]:visible");
+    const expectedPins = reason === "GENERATION_PENDING" ? 1 : 24;
+    await expect(pins).toHaveCount(expectedPins);
+    const camera = await naverMap.snapshot();
+
+    api.mode.geometry = reason === "GENERATION_PENDING" ? "network-error" : { status: 503 };
+    await page.clock.runFor(60_000);
+    expect(api.requests.geometry).toBe(2);
+    await expect(pins).toHaveCount(expectedPins);
+    await expect(stop).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+    expect(await naverMap.snapshot()).toEqual(camera);
+    await expect(map(page).getByRole("status")).toContainText("잠시 후 자동으로 다시 불러와요.");
+
+    api.mode.geometry = "success";
+    api.data.geometry = { ...readyGeometry, geometryRevision: "b".repeat(64) };
+    await page.clock.runFor(60_000);
+    expect(api.requests.geometry).toBe(3);
+    await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
+    await page.clock.runFor(48);
+    await expect(pins).toHaveCount(24);
+    await expect(stop).toHaveAttribute("aria-expanded", "true");
+    expect(await naverMap.snapshot()).toEqual(camera);
+    await expect(map(page).getByText("잠시 후 자동으로 다시 불러와요.", { exact: false })).toHaveCount(0);
+  });
+}
+
+test("생성 중 지도는 형식이 잘못된 갱신 응답에도 선택을 유지하고 자동 재시도를 멈춘다", async ({
+  page,
+  api,
+  naverMap,
+}) => {
+  const readyGeometry = createRouteGeometry(api.data.watch);
+  api.data.geometry = {
+    ...readyGeometry,
+    geometryRevision: "a".repeat(64),
+    status: "UNAVAILABLE",
+    reason: "GENERATION_PENDING",
+    points: [],
+    paths: null,
+  };
+  await openMap(page);
+  const stop = list(page).locator("li[data-stop-sequence='11'] button[aria-expanded]");
+  await stop.click();
+  await page.clock.runFor(32);
+  const pins = map(page).locator("button[data-map-stop-sequence]:visible");
+  await expect(pins).toHaveCount(1);
+  const camera = await naverMap.snapshot();
+  let malformed = true;
+  let malformedRequests = 0;
+  await api.route(async (route) => {
+    if (new URL(route.request().url()).pathname !== apiPaths.geometry || !malformed) {
+      await route.fallback();
+      return;
+    }
+    malformedRequests += 1;
+    await route.fulfill({ status: 502, contentType: "text/html", body: "<html>Bad Gateway</html>" });
+  });
+
+  const failedResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.geometry && response.status() === 502,
+  );
+  await page.clock.runFor(60_000);
+  await (await failedResponse).finished();
+  await page.clock.runFor(32);
+  expect(malformedRequests).toBe(1);
+  await expect(pins).toHaveCount(1);
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
+  expect(await naverMap.snapshot()).toEqual(camera);
+  await expect(map(page).getByText("잠시 후 자동으로 다시 불러와요.", { exact: false })).toHaveCount(0);
+  await page.clock.runFor(60_000);
+  expect(malformedRequests).toBe(1);
+
+  malformed = false;
+  api.data.geometry = { ...readyGeometry, geometryRevision: "b".repeat(64) };
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
+  await page.clock.runFor(48);
+  await expect(pins).toHaveCount(24);
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  expect(await naverMap.snapshot()).toEqual(camera);
+});
+
+test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받아도 기존 지도는 유지한다", async ({ page, api }) => {
   api.mode.geometry = { status: 503 };
   api.data.geometry.status = "UNAVAILABLE";
   api.data.geometry.reason = "GENERATION_PENDING";
@@ -308,7 +407,7 @@ test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받으�
   const response = await firstFailure;
   expect(response.status()).toBe(503);
   await response.finished();
-  await expect(map(page).getByText("지도 정보를 준비 중이에요", { exact: true })).toBeVisible();
+  await expect(map(page).getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
 
   api.mode.geometry = "success";
   await page.clock.runFor(60_000);
@@ -330,7 +429,8 @@ test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받으�
     });
   });
   await page.clock.runFor(60_000);
-  await expect(map(page).getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
+  await expect(map(page).getByTestId("naver-map-test-double")).toBeVisible();
+  await expect(map(page).getByText("노선을 준비 중이에요", { exact: true })).toBeVisible();
   await expect(map(page)).toHaveAttribute("aria-busy", "false");
   await page.clock.runFor(60_000);
   expect(terminalRequests).toBe(1);
@@ -495,7 +595,7 @@ for (const failure of ["network", "referenceVersion"] as const) {
     else api.data.geometry.referenceVersionId = "different-reference";
     await page.goto(`/routes/${routeId}`);
     await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
-    const notice = failure === "network" ? "지도 정보를 준비 중이에요" : "지도를 불러오지 못했어요";
+    const notice = "지도를 불러오지 못했어요";
     await expect(map(page).getByText(notice, { exact: true })).toBeVisible();
     await expect(map(page).getByText("정류장 목록은 계속 확인할 수 있어요", { exact: true })).toBeVisible();
     await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(0);
@@ -2122,7 +2222,7 @@ test("운행 종료 화면에는 지도와 바텀시트가 없다", async ({ pag
   api.data.watch.vehicles = [];
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toBeVisible();
-  await expect(page.getByText("정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
+  await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
   await expect(sheet(page)).toHaveCount(0);
   await expect(map(page)).toHaveCount(0);
   await expect(handle(page)).toHaveCount(0);

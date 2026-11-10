@@ -116,7 +116,7 @@ test("앱 로그인이 실패하면 실패 안내를 띄우고 다시 시도할 
   await page.getByRole("button", { name: "Apple로 계속하기" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "다시 로그인", exact: true }).click();
+  await dialog.getByRole("button", { name: "확인", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByRole("button", { name: "Apple로 계속하기" })).toBeEnabled();
 });

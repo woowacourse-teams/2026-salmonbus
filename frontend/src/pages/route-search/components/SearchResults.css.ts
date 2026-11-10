@@ -45,7 +45,25 @@ export const notice = style({
 
 export const loadingNotice = style([notice, { animation: `${revealAfterDelay} 0s 200ms both` }]);
 
+export const errorNotice = style({
+  display: "flex",
+  flex: 1,
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  textAlign: "center",
+  color: vars.color.textSubtle,
+  fontSize: "14px",
+  fontWeight: 600,
+});
+
+export const errorMessage = style({ margin: 0 });
+
 export const retryButton = style({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
   minHeight: "44px",
   marginTop: "8px",
   padding: "0 18px",

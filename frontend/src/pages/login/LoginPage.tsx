@@ -133,7 +133,7 @@ export function LoginPage() {
               로그인 상태를 확인하지 못했어요.
             </p>
             <button type="button" className={styles.back} onClick={() => void reload()}>
-              다시 확인하기
+              다시 시도하기
             </button>
           </>
         )}
@@ -148,7 +148,7 @@ export function LoginPage() {
       </Link>
       {failed && (
         <ConfirmDialog title="로그인을 완료하지 못했어요" onCancel={dismissFailure}>
-          <p className={styles.caption}>다시 로그인하거나 돌아가서 노선을 검색할 수 있어요.</p>
+          <p className={styles.caption}>로그인 방법을 선택해 다시 시도해 주세요.</p>
           <div className={styles.actions}>
             <button
               className={buttonStyles.secondary}
@@ -161,7 +161,7 @@ export function LoginPage() {
               돌아가기
             </button>
             <button className={buttonStyles.primary} type="button" onClick={dismissFailure}>
-              다시 로그인
+              확인
             </button>
           </div>
         </ConfirmDialog>

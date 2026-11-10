@@ -7,11 +7,13 @@ import { latestSuccessOf } from "@/shared/api/polledResource";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { LoadError } from "@/shared/components/LoadError";
+import { RetryButton } from "@/shared/components/RetryButton";
 import { useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
-import { favoriteStopLabelOf, sameFavorite } from "@/shared/utils/favoritePolicy";
+import { favoriteStopLabelOf, sameFavorite, FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
 import * as formStyles from "@/shared/styles/form.css";
 import { isNativeNotificationSupported } from "@/shared/notification/nativeNotification";
 import { useNotificationSettings } from "../hooks/useNotificationSettings";
@@ -26,9 +28,10 @@ interface GroupDetailsProps {
 export function GroupDetails({ group, representative }: GroupDetailsProps) {
   const [deleting, setDeleting] = useState<"group" | SavedFavorite | null>(null);
   const [revision, retry] = useState(0);
-  const summary = useHomeFavorites({ kind: "group", groupId: group.id }, revision);
+  const { resource: summary, requestState } = useHomeFavorites({ kind: "group", groupId: group.id }, revision);
   const favorites = latestSuccessOf(summary)?.body.groups[0]?.favorites ?? [];
-  const { busy, error, setError, run } = useFavoriteAction();
+  const failed = summary.status === "loadingError";
+  const { busy, error, clearError, run } = useFavoriteAction();
   const notificationSettings = useNotificationSettings(isNativeNotificationSupported());
   const navigate = useNavigate();
   const groupDeleteButton = useRef<HTMLButtonElement>(null);
@@ -47,59 +50,73 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
   const protectedGroup = deleting === "group" && representative;
   return (
     <section {...maskedPropsFor()}>
-      <FavoritesNotice resource={summary} onRetry={() => retry((value) => value + 1)} />
-      <ul className={styles.list}>
-        {group.favorites.map((favorite, index) => {
-          const item = favorites.find((candidate) => candidate.id === favorite.id);
-          const stopLabel = favoriteStopLabelOf(item, index);
-          return (
-            <li className={styles.card} key={favorite.id}>
-              <span className={styles.info}>
-                <span className={styles.cardHeading}>
-                  <RouteBadge>{item?.route.displayName || "노선 정보 없음"}</RouteBadge>
-                  <span className={styles.stop}>{stopLabel}</span>
+      {failed ? (
+        <FavoritesNotice resource={summary} requestState={requestState} onRetry={() => retry((value) => value + 1)}>
+          {({ retry, retrying }) => (
+            <LoadError title={FAVORITES_LOAD_FAILURE_TITLE} description="잠시 후 다시 시도해 주세요.">
+              <RetryButton onRetry={retry} busy={retrying}>
+                {retrying ? "불러오는 중…" : "다시 시도하기"}
+              </RetryButton>
+            </LoadError>
+          )}
+        </FavoritesNotice>
+      ) : (
+        <FavoritesNotice resource={summary} requestState={requestState} onRetry={() => retry((value) => value + 1)} />
+      )}
+      <div hidden={failed}>
+        <ul className={styles.list}>
+          {group.favorites.map((favorite, index) => {
+            const item = favorites.find((candidate) => candidate.id === favorite.id);
+            const stopLabel = favoriteStopLabelOf(item, index);
+            return (
+              <li className={styles.card} key={favorite.id}>
+                <span className={styles.info}>
+                  <span className={styles.cardHeading}>
+                    <RouteBadge>{item?.route.displayName || "노선 정보 없음"}</RouteBadge>
+                    <span className={styles.stop}>{stopLabel}</span>
+                  </span>
+                  <span className={styles.direction}>
+                    {directionLabelOf(item?.route.terminalStopName, favorite.direction)}
+                  </span>
                 </span>
-                <span className={styles.direction}>
-                  {directionLabelOf(item?.route.terminalStopName, favorite.direction)}
-                </span>
-              </span>
-              <button
-                className={styles.remove}
-                aria-label={`${stopLabel} 삭제`}
-                onClick={(event) => {
-                  event.currentTarget.focus();
-                  setError(null);
-                  setDeleting(favorite);
-                }}
-              >
-                삭제
-              </button>
-              {notificationSettings.status === "ready" && (
-                <NotificationRow
-                  target={favorite}
-                  stopLabel={stopLabel}
-                  initialSetting={
-                    notificationSettings.settings.find((setting) => sameFavorite(setting, favorite)) ?? null
-                  }
-                />
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      {group.favorites.length === 0 && <EmptyFavoriteGroup />}
-      <div className={styles.groupActions}>
-        <button
-          ref={groupDeleteButton}
-          className={styles.deleteGroup}
-          onClick={(event) => {
-            event.currentTarget.focus();
-            setError(null);
-            setDeleting("group");
-          }}
-        >
-          그룹 삭제
-        </button>
+                <button
+                  className={styles.remove}
+                  aria-label={`${stopLabel} 삭제`}
+                  onClick={(event) => {
+                    event.currentTarget.focus();
+                    clearError();
+                    setDeleting(favorite);
+                  }}
+                >
+                  삭제
+                </button>
+                {notificationSettings.status === "ready" && (
+                  <NotificationRow
+                    target={favorite}
+                    stopLabel={stopLabel}
+                    initialSetting={
+                      notificationSettings.settings.find((setting) => sameFavorite(setting, favorite)) ?? null
+                    }
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {group.favorites.length === 0 && <EmptyFavoriteGroup />}
+        <div className={styles.groupActions}>
+          <button
+            ref={groupDeleteButton}
+            className={styles.deleteGroup}
+            onClick={(event) => {
+              event.currentTarget.focus();
+              clearError();
+              setDeleting("group");
+            }}
+          >
+            그룹 삭제
+          </button>
+        </div>
       </div>
       {deleting !== null && (
         <ConfirmDialog
@@ -159,8 +176,12 @@ export function GroupDetails({ group, representative }: GroupDetailsProps) {
                   className={styles.confirm}
                   disabled={busy}
                   onClick={() =>
-                    void run(() =>
-                      deleting === "group" ? deleteFavoriteGroup(group.id) : deleteFavorite(group.id, deleting.id),
+                    void run(
+                      () =>
+                        deleting === "group" ? deleteFavoriteGroup(group.id) : deleteFavorite(group.id, deleting.id),
+                      {
+                        kind: deleting === "group" ? "deleteGroup" : "deleteFavorite",
+                      },
                     ).then((ok) => {
                       if (!ok) return;
                       focusAfterDelete.current = deleting !== "group";
