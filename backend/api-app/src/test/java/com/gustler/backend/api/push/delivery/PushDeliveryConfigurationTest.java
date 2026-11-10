@@ -115,6 +115,34 @@ class PushDeliveryConfigurationTest {
     }
 
     @Test
+    void dashCronTurnsTheDeliveryScheduleOff() throws Exception {
+        Path keyFile = TestApnsKeys.writePkcs8Pem(
+            TestApnsKeys.ecKeyPair("secp256r1"),
+            directory.resolve("AuthKey.p8")
+        );
+        NotificationDeliveryService service = Mockito.mock(NotificationDeliveryService.class);
+        new ApplicationContextRunner()
+            .withUserConfiguration(PushDeliveryConfiguration.class)
+            .withBean(NotificationDeliveryService.class, () -> service)
+            .withBean(Clock.class, Clock::systemUTC)
+            .withBean(ObjectMapper.class, ObjectMapper::new)
+            .withPropertyValues(
+            "push.enabled=true",
+            "push.delivery.cron=-",
+            "push.apns.team-id=TEAMTEST01",
+            "push.apns.key-id=KEYTEST001",
+            "push.apns.private-key-path=" + keyFile,
+            "push.apns.topic=com.salmonbus.app",
+            "push.apns.production-uri=http://127.0.0.1:9",
+            "push.apns.sandbox-uri=http://127.0.0.1:9"
+        ).run(context -> {
+            assertThat(context).hasNotFailed();
+            Thread.sleep(1_500);
+            Mockito.verifyNoInteractions(service);
+        });
+    }
+
+    @Test
     void productionHttpClientUsesHttp2() {
         assertThat(PushDeliveryConfiguration.apnsHttpClient().version()).isEqualTo(HttpClient.Version.HTTP_2);
     }
