@@ -185,6 +185,19 @@ class PushDeviceControllerTest {
     }
 
     @Test
+    void 로그아웃한_회원이_다른_회원의_토큰을_늦게_등록해도_다른_회원의_기기는_남는다() throws Exception {
+        UUID other = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "other-push-member")).publicId();
+        assertNoContent(send(DeviceRequest.REGISTER, validBody(), cookie(other), true));
+        assertNoContent(logout(refreshToken));
+
+        assertError(send(DeviceRequest.REGISTER, validBody(), accessCookie, true), 401, "UNAUTHENTICATED");
+
+        assertThat(count()).isEqualTo(1);
+        assertThat(jdbc.sql("SELECT m.public_id FROM push_device p JOIN member m ON m.id = p.member_id")
+            .query(UUID.class).single()).isEqualTo(other);
+    }
+
+    @Test
     void 로그아웃한_세션은_다른_세션의_기기를_가져오지_못한다() throws Exception {
         String otherSession = cookie(memberId);
         assertNoContent(send(DeviceRequest.REGISTER, validBody(), otherSession, true));
