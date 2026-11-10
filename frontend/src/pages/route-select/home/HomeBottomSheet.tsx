@@ -20,6 +20,7 @@ export function HomeBottomSheet({
   contentKey,
   station,
   home,
+  showTabClose,
   snap,
   onSnapChange,
   onHeightChange,
@@ -32,6 +33,7 @@ export function HomeBottomSheet({
   contentKey: string;
   station: { id: string; name: string } | null;
   home: boolean;
+  showTabClose: boolean;
   snap: HomeSheetSnap;
   onSnapChange: (snap: HomeSheetSnap) => void;
   onHeightChange: (height: number) => void;
@@ -45,7 +47,7 @@ export function HomeBottomSheet({
   const available = label !== null;
   const collapsed = snap === "collapsed";
   const hidden = !available || (collapsed && station === null);
-  const showClose = available && !collapsed && (!home || station !== null);
+  const showClose = available && !collapsed && (station !== null || showTabClose);
   const homeOverview = home && station === null;
   const {
     sheetRef,
