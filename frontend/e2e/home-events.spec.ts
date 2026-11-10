@@ -658,7 +658,7 @@ test("홈과 즐겨찾기에서 정류장 핀으로 도착과 탑승 예보를 �
   const favorites = nav.getByRole("link", { name: "즐겨찾기", exact: true });
   await favorites.click();
   const tabSheet = page.getByRole("region", { name: "즐겨찾기 메뉴", exact: true });
-  await tabSheet.getByRole("button", { name: "즐겨찾기 메뉴 닫기", exact: true }).click();
+  await tabSheet.getByRole("slider", { name: "홈 정보 시트 높이", exact: true }).press("Home");
   await naverMap.setZoom(12);
   await expect(pin).toHaveCount(0);
   await naverMap.setZoom(14);
@@ -940,13 +940,13 @@ test("탭 시트는 지도만 남도록 닫히고 탭을 다시 누르면 처음
     const navigationTab = navigation.getByRole("link", { name: tab, exact: true });
     await navigationTab.click();
     const tabSheet = page.getByRole("region", { name: label, exact: true });
-    const close = tabSheet.getByRole("button", { name: `${label} 닫기`, exact: true });
-    await close.click();
+    await expect(tabSheet.getByRole("button", { name: `${label} 닫기`, exact: true })).toHaveCount(0);
+    await tabSheet.getByRole("slider", { name: "홈 정보 시트 높이", exact: true }).press("Home");
     await expect(sheetElement).toHaveAttribute("data-snap", "collapsed");
     await expect(tabSheet).toHaveCount(0);
     await expect(page).toHaveURL(path);
+    await expect(navigationTab).toBeFocused();
     await navigationTab.click();
     await expect(tabSheet).toHaveAttribute("data-snap", "summary");
-    await expect(close).toBeVisible();
   }
 });
