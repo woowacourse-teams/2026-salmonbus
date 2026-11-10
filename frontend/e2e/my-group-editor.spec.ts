@@ -4,9 +4,9 @@ test.use({ viewport: { width: 320, height: 844 }, reducedMotion: "reduce" });
 const schoolId = "10000000-0000-4000-8000-000000000003";
 const weekendId = "10000000-0000-4000-8000-000000000004";
 
-test("마이페이지 그룹 카드의 이름을 끌어서 바꾼 순서를 저장한다", async ({ page, favorites }) => {
+test("즐겨찾기 그룹 카드의 이름을 끌어서 바꾼 순서를 저장한다", async ({ page, favorites }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
   const cards = editor.getByRole("listitem");
@@ -31,7 +31,7 @@ test("그룹 카드 편집은 순서·삭제 아이콘을 표시하고 실패 �
   favorites,
 }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] }, { id: weekendId, name: "주말", favorites: [] });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
   const list = editor.getByRole("list", { name: "그룹 순서", exact: true });
@@ -72,7 +72,7 @@ test("그룹 카드 편집은 순서·삭제 아이콘을 표시하고 실패 �
 
 test("그룹 순서를 바꾼 뒤 Escape로 닫으면 저장하지 않는다", async ({ page, favorites }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
   await editor.getByRole("button", { name: "통학 순서 변경", exact: true }).press("ArrowUp");
@@ -111,7 +111,7 @@ test("새 대표 표시는 즉시 바뀌고 이전 대표 삭제는 순서 저�
     }
     await route.fallback();
   });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
   await editor.getByRole("button", { name: "통학 순서 변경", exact: true }).press("ArrowUp");

@@ -18,7 +18,7 @@ test("겹치는 두 정류장명은 차이를 남기고 하나를 삭제하면 �
     storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),
     storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
   ];
-  await page.goto("/");
+  await page.goto("/favorites");
   const labels = page.locator("[data-favorite-name]");
   await expect(labels).toHaveCount(2);
   await page.evaluate(() => document.fonts.ready);
@@ -49,7 +49,7 @@ for (const width of [320, 425]) {
     const terminal = "서울대학교병원장례식장앞";
     api.data.watch.route.directions[0].terminalStopName = terminal;
     favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: "UP" })];
-    await page.goto("/");
+    await page.goto("/favorites");
     await page.evaluate(() => document.fonts.ready);
     const suffixTops = (element: HTMLElement | SVGElement) => {
       const node = element.firstChild!;
@@ -81,7 +81,7 @@ for (const width of [320, 425]) {
     const saved = storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction });
     favorites.groups[0]!.favorites = [saved];
     favorites.statuses[saved.id] = "ERROR";
-    await page.goto("/");
+    await page.goto("/favorites");
     const panel = page.getByRole("tabpanel");
     const message = panel.getByText("정류장 정보를 불러오지 못했어요", { exact: true });
     const retry = panel.getByRole("button", { name: "다시 시도하기", exact: true });
@@ -115,7 +115,7 @@ for (const width of [320, 425]) {
       storedFavorite({ routeId, stopId: shortStop!.stopId, direction: "UP" }),
       storedFavorite({ routeId, stopId: stop!.stopId, direction: "UP" }, 5),
     ];
-    await page.goto("/");
+    await page.goto("/favorites");
     const cards = page.getByRole("tabpanel").getByRole("link");
     await expect(cards).toHaveCount(2);
     const card = cards.nth(1);
@@ -155,8 +155,8 @@ test("즐겨찾기 홈과 저장 창은 320px 화면에 맞고 주요 내용을 
       await page.screenshot({ path: test.info().outputPath(name) });
   };
 
-  await test.step("홈", async () => {
-    await page.goto("/");
+  await test.step("즐겨찾기 탭", async () => {
+    await page.goto("/favorites");
     await expect(page.getByRole("tabpanel").getByRole("link")).toHaveCount(2);
     await page.evaluate(() => document.fonts.ready);
     await checkAtBothWidths(page, async (width) => {
@@ -176,8 +176,8 @@ test("즐겨찾기 홈과 저장 창은 320px 화면에 맞고 주요 내용을 
     });
   });
 
-  await test.step("마이페이지 그룹 목록", async () => {
-    await page.getByRole("link", { name: "마이페이지", exact: true }).click();
+  await test.step("즐겨찾기 그룹 목록", async () => {
+    await page.goto("/favorites/groups");
     await expect(page.getByRole("region", { name: "즐겨찾기 그룹 관리" }).getByRole("link")).toHaveCount(3);
     await checkAtBothWidths(page, async (width) => {
       expect(await fitsWidth()).toBe(true);
@@ -213,8 +213,8 @@ test("즐겨찾기 홈과 저장 창은 320px 화면에 맞고 주요 내용을 
     await dialog.getByRole("button", { name: "취소", exact: true }).click();
   });
 
-  await test.step("홈 편집", async () => {
-    await page.goto("/");
+  await test.step("즐겨찾기 편집", async () => {
+    await page.goto("/favorites");
     await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
     const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
     await expect(editor).toBeVisible();
