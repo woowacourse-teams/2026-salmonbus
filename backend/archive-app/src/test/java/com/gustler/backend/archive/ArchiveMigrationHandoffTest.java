@@ -33,7 +33,7 @@ class ArchiveMigrationHandoffTest {
             Flyway.configure().dataSource(source).target("60").load().migrate();
             JdbcClient jdbc = JdbcClient.create(source);
             seed(jdbc);
-            Flyway flyway = Flyway.configure().dataSource(source).load();
+            Flyway flyway = Flyway.configure().dataSource(source).target("72").load();
             flyway.migrate();
             flyway.validate();
             assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("72");

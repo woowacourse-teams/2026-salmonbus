@@ -545,6 +545,21 @@ DELETE FROM refresh_token WHERE member_id = (SELECT id FROM member WHERE public_
 
 사용자는 스스로 `DELETE /api/me/sessions`로 다른 기기의 세션까지 끊을 수 있다.
 
+## 푸시 알림 켜기
+
+기본은 꺼져 있다(`PUSH_ENABLED=false`). 꺼져 있으면 발송 작업과 APNs 클라이언트를 만들지 않는다.
+켰는데 값이 비면 API가 시작하지 않는다. 키 내용은 env에 넣지 않는다. `APNS_TEAM_ID`는 `AUTH_APPLE_TEAM_ID`와 별개다.
+
+| `$ETC/api.env`에 넣는 줄 | 설명 |
+| --- | --- |
+| `PUSH_ENABLED` | 켜려면 `true` |
+| `APNS_TEAM_ID` | APNs Team ID. `AUTH_APPLE_TEAM_ID`와 별개다 |
+| `APNS_KEY_ID` | APNs 키 ID |
+| `APNS_PRIVATE_KEY_PATH` | `.p8` 파일 경로. 키 내용은 env에 넣지 않는다 |
+| `APNS_TOPIC` | 앱 번들 ID |
+
+V75는 기존 `push_device` 행을 지운다. 발송 기록은 기기 외래 키를 따라 함께 지워지고, 알림 설정은 남는다. 알림이 들어 있는 앱 빌드보다 서버를 먼저 배포한다. 배포 뒤에 앱이 기기 토큰을 다시 등록해야 발송된다. `sid`가 없는 예전 액세스 토큰은 등록에서 401이 나고, 웹은 갱신한 뒤 같은 요청을 다시 보낸다.
+
 ## 운영 원본 이관
 
 Worker의 정산 단독 S3 이관은 제거했다. `archive-app`은 수집·예보와 별도 프로세스다.

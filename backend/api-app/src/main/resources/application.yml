@@ -84,6 +84,8 @@ springdoc:
     - /api/me/favorites
     - /api/me/push-devices
     - /api/me/push-devices/unregister
+    - /api/me/notification-settings
+    - /api/me/notification-settings/{id}
     - /api/me/sessions
     - /api/me/withdrawal/apple
     - /api/me/withdrawal/apple/native
@@ -181,3 +183,16 @@ route-geometry:
 salmon:
   action:
     enabled: ${SALMON_ACTION_ENABLED:false}
+
+push:
+  enabled: ${PUSH_ENABLED:false}
+  delivery:
+    purge-cron: "0 41 4 * * *"
+    retention: 7d
+  apns:
+    team-id: ${APNS_TEAM_ID:}
+    key-id: ${APNS_KEY_ID:}
+    private-key-path: ${APNS_PRIVATE_KEY_PATH:}
+    topic: ${APNS_TOPIC:}
+    production-uri: https://api.push.apple.com
+    sandbox-uri: https://api.sandbox.push.apple.com

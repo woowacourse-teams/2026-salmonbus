@@ -18,7 +18,10 @@ public class PushDeviceService {
         this.clock = clock;
     }
 
-    public void register(UUID memberPublicId, String token, String environment) {
+    public void register(UUID memberPublicId, UUID sessionId, String token, String environment) {
+        if (sessionId == null) {
+            throw new UnauthenticatedException();
+        }
         DeviceToken deviceToken;
         PushEnvironment pushEnvironment;
         try {
@@ -27,7 +30,7 @@ public class PushDeviceService {
         } catch (IllegalArgumentException exception) {
             throw new InvalidPushDeviceException();
         }
-        if (!repository.register(memberPublicId, deviceToken, pushEnvironment, clock.instant())) {
+        if (!repository.register(memberPublicId, sessionId, deviceToken, pushEnvironment, clock.instant())) {
             throw new UnauthenticatedException();
         }
     }
