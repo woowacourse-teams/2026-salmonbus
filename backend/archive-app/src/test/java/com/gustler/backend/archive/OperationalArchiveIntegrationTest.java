@@ -47,8 +47,6 @@ class OperationalArchiveIntegrationTest {
             .update();
         jdbc.sql("CREATE INDEX ix_archive_compact_arrival_fk ON forecast_evaluation_compact(arrival_observation_id)")
             .update();
-        jdbc.sql("CREATE INDEX ix_archive_sample_arrival_fk ON stop_demand_pending_sample(arrival_observation_id)")
-            .update();
         jdbc.sql("CREATE INDEX ix_archive_forecast_publication_fk ON seat_forecast(publication_id)").update();
         jdbc.sql("CREATE INDEX ix_archive_alighting_pre_observation_id ON alighting_forecast_evaluation_result(pre_observation_id)").update();
         jdbc.sql("CREATE INDEX ix_archive_alighting_post_observation_id ON alighting_forecast_evaluation_result(post_observation_id)").update();
@@ -77,10 +75,7 @@ class OperationalArchiveIntegrationTest {
             .params(route, "0".repeat(64)).query(Long.class).single();
         jdbc.sql("INSERT INTO" + " route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)"
             + " VALUES(?,1,'s1','S1','UP',true),(?,2,'s2','S2','UP',true)").params(version, version).update();
-        jdbc.sql(
-            "INSERT INTO" + " stop_demand_run(route_version_id,run_id,quality_revision,phase,data_until,completed_at)"
-                + " VALUES(?,gen_random_uuid(),1,'DONE','2026-11-08T15:00Z','2026-11-09T00:00Z')")
-            .param(version).update();
+
     }
 
     long batch(String date) {
@@ -112,6 +107,14 @@ class OperationalArchiveIntegrationTest {
     }
 
     @Test
+    void 이전_노선의_구_통계_완료_기록이_없어도_이관한다() {
+        observation(batch("2026-11-07T03:00Z"));
+        assertThat(jdbc.sql("SELECT to_regclass('stop_demand_run') IS NULL").query(Boolean.class).single()).isTrue();
+        service(new MemoryObjects()).advance();
+        assertThat(count("vehicle_observation")).isZero();
+    }
+
+    @Test
     void 완료한_과거만_이관하고_오늘과_어제는_남긴다() {
         observation(batch("2026-11-07T03:00Z"));
         observation(batch("2026-11-08T03:00Z"));
@@ -124,20 +127,6 @@ class OperationalArchiveIntegrationTest {
             softly.assertThat(jdbc.sql("SELECT state FROM operational_archive_job").query(String.class).single())
                 .isEqualTo("DONE");
             softly.assertThat(objects.values.keySet()).anyMatch(k -> k.contains("/manifest-"));
-            softly.assertThat(count("stop_demand_run")).isEqualTo(1);
-        });
-    }
-
-    @Test
-    void 미완료_정산은_해당_노선의_삭제를_막는다() {
-        final long id = observation(batch("2026-11-07T03:00Z"));
-        jdbc.sql("INSERT INTO" + " forecast_evaluation_work(vehicle_observation_id,route_version_id)" + " VALUES(?,?)")
-            .params(id, version).update();
-        service(new MemoryObjects()).advance();
-        assertSoftly(softly -> {
-            softly.assertThat(count("vehicle_observation")).isEqualTo(1);
-            softly.assertThat(jdbc.sql("SELECT failure_code FROM operational_archive_job").query(String.class).single())
-                .isEqualTo("SETTLEMENT_PENDING");
         });
     }
 
@@ -186,22 +175,6 @@ class OperationalArchiveIntegrationTest {
                 .param(table).query(Long.class).single()).isEqualTo(3);
             assertThat(objects.values.keySet().stream().filter(key -> key.contains("-" + table + "-"))).hasSize(2);
         }
-    }
-
-    @Test
-    void 미반영_통계가_있으면_삭제하지_않는다() {
-        final long id = observation(batch("2026-11-07T03:00Z"));
-        jdbc.sql("""
-            INSERT INTO stop_demand_pending_sample(route_version_id,prediction_observation_id,arrival_observation_id,
-                vehicle_id,target_stop_order,arrived_at,scored_at,prediction_remaining_seats,arrival_remaining_seats)
-            VALUES(?,?,?,'vehicle',2,'2026-11-07T03:10Z','2026-11-07T03:11Z',12,10)
-            """).params(version, id, id).update();
-        service(new MemoryObjects()).advance();
-        assertSoftly(softly -> {
-            softly.assertThat(count("vehicle_observation")).isEqualTo(1);
-            softly.assertThat(jdbc.sql("SELECT failure_code FROM operational_archive_job").query(String.class).single())
-                .isEqualTo("STATISTICS_PENDING");
-        });
     }
 
     @Test

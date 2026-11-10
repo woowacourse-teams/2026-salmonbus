@@ -92,7 +92,7 @@ class ForecastPublicationTransactionTest {
     @AfterEach
     void 자료를_정리한다() {
         for (String table : List.of("alighting_forecast_evaluation_work", "seat_forecast", "forecast_publication",
-            "vehicle_observation", "observation_batch", "route_stop", "stop_demand_baseline")) {
+            "vehicle_observation", "observation_batch", "route_stop")) {
             jdbc.sql("DELETE FROM " + table + " WHERE route_version_id=?").param(routeVersionId).update();
         }
         jdbc.sql("DELETE FROM route_version WHERE id=?").param(routeVersionId).update();

@@ -5,8 +5,6 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_evaluation_arrival_fk
     ON forecast_evaluation_result(arrival_observation_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_compact_arrival_fk
     ON forecast_evaluation_compact(arrival_observation_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_sample_arrival_fk
-    ON stop_demand_pending_sample(arrival_observation_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_forecast_publication_fk
     ON seat_forecast(publication_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_batch_date
@@ -23,5 +21,3 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_alighting_previous_post_obser
     ON alighting_forecast_evaluation_result(previous_post_observation_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_alighting_previous_closure_observation_id
     ON alighting_forecast_evaluation_result(previous_closure_observation_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_alighting_capacity_observation_id
-    ON alighting_forecast_evaluation_result(capacity_observation_id);

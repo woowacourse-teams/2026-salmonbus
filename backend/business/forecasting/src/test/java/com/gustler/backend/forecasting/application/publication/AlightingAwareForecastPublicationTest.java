@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureQuery;
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureUnavailableException;
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareInputConfirmation;
@@ -30,7 +29,6 @@ import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatchQuery;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -43,9 +41,6 @@ class AlightingAwareForecastPublicationTest {
     private final Instant now = Instant.parse("2026-11-04T00:00:00Z");
     private final PendingForecastBatch batch = new PendingForecastBatch(10, 1, 1, now);
     private final RouteStops stops = new RouteStops(1, "204000057", List.of(new RouteStop(1, 2, "stop-2", true)));
-    private final PendingForecastBatchQuery legacyTrajectories = mock(PendingForecastBatchQuery.class);
-    private final StopDemandStatisticsRepository legacyStatistics = mock(StopDemandStatisticsRepository.class);
-    private final SameDayFullOutcomesService legacyOutcomes = mock(SameDayFullOutcomesService.class);
     private final ForecastBatchCommitter committer = mock(ForecastBatchCommitter.class);
     private final RouteWorkAccess quality = mock(RouteWorkAccess.class);
     private final AlightingAwareFeatureQuery query = mock(AlightingAwareFeatureQuery.class);
@@ -89,7 +84,6 @@ class AlightingAwareForecastPublicationTest {
         assertThat(row.demandStatisticsRevision()).isZero();
         assertThat(row.inferenceBundleHash()).isEqualTo("b".repeat(64));
         assertThat(row.featureSnapshot()).contains("seat88", "probability80", "asOf", "alighting");
-        verifyNoInteractions(legacyStatistics, legacyOutcomes, legacyTrajectories);
     }
 
     @Test
@@ -99,7 +93,7 @@ class AlightingAwareForecastPublicationTest {
             .thenThrow(new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_HISTORY_ORIGIN_UNVERIFIED"));
         assertThatThrownBy(() -> writer.writeForecastsOf(batch, stops, runtime))
             .hasMessage("ALIGHTING_AWARE_HISTORY_ORIGIN_UNVERIFIED");
-        verifyNoInteractions(committer, legacyStatistics, legacyOutcomes, legacyTrajectories);
+        verifyNoInteractions(committer);
     }
 
     @Test
@@ -130,6 +124,6 @@ class AlightingAwareForecastPublicationTest {
         ArgumentCaptor<ForecastPublication> published = ArgumentCaptor.forClass(ForecastPublication.class);
         verify(committer).commit(eq(outside), published.capture());
         assertThat(published.getValue().predictions()).isEmpty();
-        verifyNoInteractions(query, legacyStatistics, legacyOutcomes, legacyTrajectories);
+        verifyNoInteractions(query);
     }
 }

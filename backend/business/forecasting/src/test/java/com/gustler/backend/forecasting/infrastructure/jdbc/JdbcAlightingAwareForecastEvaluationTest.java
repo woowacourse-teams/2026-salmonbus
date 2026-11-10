@@ -42,8 +42,6 @@ class JdbcAlightingAwareForecastEvaluationTest {
     RouteWorkAccess quality;
     @Autowired
     PlatformTransactionManager transactions;
-    @Autowired
-    JdbcEvaluationWorkStore legacyWork;
     private TransactionTemplate tx;
     private long route;
     private long version;
@@ -121,7 +119,6 @@ class JdbcAlightingAwareForecastEvaluationTest {
             jdbc.sql("DELETE FROM vehicle_observation WHERE route_version_id=?").param(version).update();
             jdbc.sql("DELETE FROM observation_batch WHERE route_version_id=?").param(version).update();
             jdbc.sql("DELETE FROM route_stop WHERE route_version_id=?").param(version).update();
-            jdbc.sql("DELETE FROM stop_demand_baseline WHERE route_version_id=?").param(version).update();
             jdbc.sql("DELETE FROM route_version WHERE id=?").param(version).update();
             jdbc.sql("DELETE FROM route WHERE id=?").param(route).update();
             jdbc.sql("DELETE FROM model_deployment WHERE id=?").param(deployment).update();
@@ -150,7 +147,6 @@ class JdbcAlightingAwareForecastEvaluationTest {
     @Test
     void 발행하면_하차_후_잔여석_정산만_등록한다() {
         assertThat(count("alighting_forecast_evaluation_work")).isOne();
-        tx.executeWithoutResult(status -> legacyWork.register(version, List.of(source)));
         assertThat(count("forecast_evaluation_work")).isZero();
         assertThat(count("forecast_evaluation_pending")).isZero();
     }
@@ -211,8 +207,7 @@ class JdbcAlightingAwareForecastEvaluationTest {
         assertThat(count("alighting_forecast_evaluation_work")).isZero();
         assertThat(label(AFTER)).isBetween(2.0, 40.0).isNotEqualTo(Math.rint(label(AFTER)));
         assertThat(count("forecast_evaluation_result")).isZero();
-        assertThat(jdbc.sql("SELECT count(*) FROM stop_demand_pending_sample WHERE prediction_observation_id=?")
-            .param(source).query(Integer.class).single()).isZero();
+        assertThat(jdbc.sql("SELECT to_regclass('stop_demand_pending_sample') IS NULL").query(Boolean.class).single()).isTrue();
     }
 
     @Test

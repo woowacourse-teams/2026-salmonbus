@@ -36,6 +36,7 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuery {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(JdbcAlightingAwareFeatureQuery.class);
     private static final String READ_HISTORY = """
         WITH batches AS (
           SELECT id,response_received_at,row_number() OVER (ORDER BY response_received_at,id)-1 AS rank
@@ -340,6 +341,10 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
             if (capacity != null && capacity.seats() >= minimumCapacity(statistics.confirmedProfile())) {
                 result.put(source.observationId(), new AlightingAwareFeatureSnapshot(stops.routeVersionId(), source,
                     capacity.seats(), statistics, history, events, cursor.prefix()));
+            } else {
+                String reason = capacity == null ? "VEHICLE_CAPACITY_UNKNOWN" : "VEHICLE_CAPACITY_OUTSIDE_MODEL_SCOPE";
+                LOGGER.info("event=forecast_vehicle_withheld reason={} batchId={} vehicleId={}", reason,
+                    cursor.batchId(),source.vehicleId());
             }
         });
         return result;

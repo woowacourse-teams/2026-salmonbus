@@ -116,16 +116,6 @@ public class ArchiveRepository {
         if (collecting) {
             return "COLLECTION_PENDING";
         }
-        // work/sample를 묶음으로 조회한다. 개별 관측 참조 SELECT는 없다.
-        final boolean pending = jdbc.sql("""
-            SELECT EXISTS(SELECT 1 FROM forecast_evaluation_work w
-                JOIN vehicle_observation o ON o.id=w.vehicle_observation_id
-                JOIN observation_batch b ON b.id=o.observation_batch_id
-                WHERE w.route_version_id=:v AND COALESCE(b.response_received_at,b.scheduled_at)<:until)
-            """).param("v", job.version()).param("until", time(job.until())).query(Boolean.class).single();
-        if (pending) {
-            return "SETTLEMENT_PENDING";
-        }
         final boolean alightingPending = jdbc.sql("""
             SELECT EXISTS(SELECT 1 FROM alighting_forecast_evaluation_work w
                 JOIN vehicle_observation o ON o.id=w.vehicle_observation_id
@@ -134,40 +124,6 @@ public class ArchiveRepository {
             """).param("v", job.version()).param("until", time(job.until())).query(Boolean.class).single();
         if (alightingPending) {
             return "ALIGHTING_AWARE_SETTLEMENT_PENDING";
-        }
-        final boolean samples = jdbc.sql("""
-            SELECT EXISTS(SELECT 1 FROM stop_demand_pending_sample s
-                JOIN vehicle_observation o ON o.id=s.prediction_observation_id
-                JOIN observation_batch b ON b.id=o.observation_batch_id
-                WHERE s.route_version_id=:v AND COALESCE(b.response_received_at,b.scheduled_at)<:until)
-            """).param("v", job.version()).param("until", time(job.until())).query(Boolean.class).single();
-        if (samples) {
-            return "STATISTICS_PENDING";
-        }
-        final boolean completed = jdbc.sql("""
-            SELECT EXISTS(SELECT 1 FROM stop_demand_baseline base
-                JOIN stop_demand_run run USING(route_version_id)
-                JOIN route_version v ON v.id=base.route_version_id JOIN route r ON r.id=v.route_id
-                WHERE base.route_version_id=:v AND base.initialized AND run.phase='DONE'
-                  AND run.quality_revision=r.data_revision)
-            """).param("v", job.version()).query(Boolean.class).single();
-        if (!completed) {
-            return "STATISTICS_NOT_COMPLETED";
-        }
-        final boolean beyond = jdbc
-            .sql(
-                """
-                    SELECT EXISTS(SELECT 1 FROM forecast_evaluation_result e
-                        JOIN vehicle_observation o ON o.id=e.vehicle_observation_id
-                        JOIN observation_batch b ON b.id=o.observation_batch_id
-                        JOIN stop_demand_run run ON run.route_version_id=e.route_version_id
-                        WHERE e.route_version_id=:v AND COALESCE(b.response_received_at,b.scheduled_at)>=:from AND COALESCE(b.response_received_at,b.scheduled_at)<:until
-                          AND e.scored_at>run.data_until)
-                    """)
-            .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
-            .query(Boolean.class).single();
-        if (beyond) {
-            return "LATE_SETTLEMENT_NOT_PUBLISHED";
         }
         final boolean recent = jdbc
             .sql(
@@ -356,14 +312,12 @@ public class ArchiveRepository {
     public void requireDeletionIndexes() {
         for (String[] required : List.of(new String[] { "forecast_evaluation_result", "arrival_observation_id" },
             new String[] { "forecast_evaluation_compact", "arrival_observation_id" },
-            new String[] { "stop_demand_pending_sample", "arrival_observation_id" },
             new String[] { "seat_forecast", "publication_id" },
             new String[] { "alighting_forecast_evaluation_result", "pre_observation_id" },
             new String[] { "alighting_forecast_evaluation_result", "post_observation_id" },
             new String[] { "alighting_forecast_evaluation_result", "closure_observation_id" },
             new String[] { "alighting_forecast_evaluation_result", "previous_post_observation_id" },
-            new String[] { "alighting_forecast_evaluation_result", "previous_closure_observation_id" },
-            new String[] { "alighting_forecast_evaluation_result", "capacity_observation_id" })) {
+            new String[] { "alighting_forecast_evaluation_result", "previous_closure_observation_id" })) {
             final boolean indexed = jdbc.sql("""
                 SELECT EXISTS(SELECT 1 FROM pg_index i JOIN pg_attribute a
                     ON a.attrelid=i.indrelid AND a.attnum=i.indkey[0]

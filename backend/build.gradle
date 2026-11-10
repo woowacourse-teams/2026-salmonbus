@@ -95,7 +95,6 @@ def testContainerOwners = [
 ] as Set
 def dirtiesContextOwners = [
     'DatabaseFailureContractTest',
-    'JdbcStatisticsInputExtractorTest',
 ] as Set
 
 tasks.register('verifyTestResourceRules') {

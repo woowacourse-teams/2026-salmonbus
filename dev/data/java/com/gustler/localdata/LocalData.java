@@ -1,12 +1,7 @@
 package com.gustler.localdata;
 
-import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionInput;
-import com.gustler.backend.forecasting.domain.statistics.TimeSlot;
 import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader;
-import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcRouteWorkAccess;
-import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcStopDemandStatisticsRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -24,7 +19,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 public final class LocalData {
-    private static final String STATISTICS = ForecastFeatureContract.STATISTICS_CALCULATION_VERSION;
     private static final OffsetDateTime BASELINE = OffsetDateTime.parse("2026-10-06T00:00:00Z");
 
     public static void main(String[] args) {
@@ -87,8 +81,8 @@ public final class LocalData {
                             require(scalar(connection, """
                                 SELECT count(*) FROM model_deployment WHERE state='ACTIVE' AND bundle_digest NOT IN (?, ?)
                                 """, inspection.bundleDigest(), CandidateBundle.DIGEST).equals("0"), "UNOWNED_ACTIVE_MODEL");
-                            verify(connection, data, args[1], false);
-                            verify(connection, catalog, args[1], false, false);
+                            verify(connection, data, args[1]);
+                            verify(connection, catalog, args[1], false);
                             resetGenerated(connection, data);
                         }
                     } else {
@@ -112,7 +106,7 @@ public final class LocalData {
                         """, inspection.bundleDigest(), CandidateBundle.DIGEST).equals("0"),
                         "UNOWNED_ACTIVE_MODEL");
                     verify(connection, data, args[1]);
-                    verify(connection, catalog, args[1], false, false);
+                    verify(connection, catalog, args[1], false);
                     connection.commit();
                 } catch (Exception error) {
                     connection.rollback();
@@ -124,7 +118,7 @@ public final class LocalData {
                 "catalogRouteCount", catalog.routes().size(), "modelRouteCount", data.routes().size(),
                 "stopCount", data.routes().stream().mapToInt(route -> route.stops().size()).sum()
                     + catalog.routes().stream().mapToInt(route -> route.stops().size()).sum(),
-                "statisticsCellCount", data.routes().stream().flatMap(route -> route.stops().stream()).filter(RouteDataset.Stop::boardingAllowed).count() * 3,
+                "statisticsCellCount", 0,
                 "featureContract", inspection.featureContractVersion(), "bundleDigest", inspection.bundleDigest(),
                 "modelActivated", false)), java.nio.charset.StandardCharsets.UTF_8));
         } catch (Exception error) {
@@ -144,19 +138,10 @@ public final class LocalData {
                 alighting_forecast_evaluation_work, alighting_forecast_evaluation_result, alighting_evaluation_archive,
                 operational_archive_file, operational_archive_job, operational_archive_boundary, archive_legacy_member, archive_legacy_batch,
                 file_statistics_publication,
-                same_day_full_outcomes,
-                same_day_model_full_outcomes, stop_demand_pending_sample, stop_demand_current_total, stop_demand_baseline, stop_demand_vehicle,
-                stop_demand_run, stop_demand_capacity_stage, stop_demand_day_stage,
-                stop_demand_cell_stage, stop_demand_statistics, demand_statistics_version;
+                stop_demand_statistics, demand_statistics_version;
             """);
         execute(connection, "UPDATE route SET data_revision=1");
-        for (RouteDataset.Route route : data.routes()) {
-            final long versionId = Long.parseLong(scalar(connection, """
-                SELECT v.id FROM route r JOIN route_version v ON v.route_id=r.id
-                WHERE r.source_route_id=? AND v.valid_to IS NULL
-                """, route.routeId()));
-            seedStatistics(connection, route, versionId, 1);
-        }
+
     }
 
     static long seedRoute(Connection connection, RouteDataset.Route route) throws Exception {
@@ -184,7 +169,7 @@ public final class LocalData {
 
     private static void seed(Connection connection, RouteDataset data) throws Exception {
         for (RouteDataset.Route route : data.routes()) {
-            seedStatistics(connection, route, seedRoute(connection, route), 1);
+            seedRoute(connection, route);
         }
     }
 
@@ -228,68 +213,16 @@ public final class LocalData {
                OR vehicle_id !~ '^L[0-9a-f]{8}-[0-9]{9}-[0-9]+[UD]$'
                OR plate_number !~ '^LOCAL-[0-9]+(-[0-5])?-[UD]$'
             """).equals("0") && !scalar(connection, "SELECT count(*) FROM vehicle_observation").equals("0"), "RECOVERY_REQUIRES_MOCK_OBSERVATIONS");
-        require(scalar(connection, "SELECT count(*) FROM route WHERE data_revision<>1").equals("0")
-            && scalar(connection, "SELECT count(*) FROM demand_statistics_version WHERE cell_count<>0 OR calculation_version<>?", STATISTICS).equals("0"), "RECOVERY_STATE_UNSUPPORTED");
-        verify(connection, data, ReferenceBundle.DIRECTORY, false);
-        JdbcRouteWorkAccess routeWork = new JdbcRouteWorkAccess(
-            JdbcClient.create(new SingleConnectionDataSource(connection, true)));
-        for (RouteDataset.Route route : data.routes()) {
-            final long versionId = Long.parseLong(scalar(connection, """
-                SELECT v.id FROM route r JOIN route_version v ON v.route_id=r.id
-                WHERE r.source_route_id=? AND v.valid_to IS NULL
-                """, route.routeId()));
-            require(routeWork.lock(versionId) == 1, "RECOVERY_STATE_UNSUPPORTED");
-            final int revision = Integer.parseInt(scalar(connection,
-                "SELECT COALESCE(MAX(revision),0)+1 FROM demand_statistics_version WHERE route_version_id=? AND calculation_version=?",
-                versionId, STATISTICS));
-            seedStatistics(connection, route, versionId, revision);
-        }
-    }
-
-    private static void seedStatistics(Connection connection, RouteDataset.Route route,
-                                       final long versionId, final int revision) throws Exception {
-        final int index = RouteDataset.MODEL_ROUTES.indexOf(route.displayName());
-        final long cellCount = route.stops().stream().filter(RouteDataset.Stop::boardingAllowed).count() * 3;
-        execute(connection, """
-            INSERT INTO demand_statistics_version(route_version_id,calculation_version,revision,data_until,
-                computed_at,quality_revision,cell_count) VALUES (?,?,?,?,?,1,?)
-            """, versionId, STATISTICS, revision, BASELINE.minusDays(1), BASELINE, cellCount);
-        for (RouteDataset.Stop stop : route.stops()) {
-            if (!stop.boardingAllowed()) { continue; }
-            for (TimeSlot slot : TimeSlot.values()) {
-                execute(connection, """
-                    INSERT INTO stop_demand_statistics(route_version_id,stop_order,time_slot,calculation_version,
-                        revision,average_fill_rate,average_net_boarding_rate,sample_count,day_count,data_until,computed_at,quality_revision)
-                    VALUES (?,?,?,?,?,?,?,120,7,?,?,1)
-                    """, versionId, stop.sequence(), slot.name().toLowerCase(java.util.Locale.ROOT), STATISTICS,
-                    revision, fillRate(route, stop, slot, index), netBoarding(route, stop, slot), BASELINE.minusDays(1), BASELINE);
-            }
-        }
-    }
-
-    private static double fillRate(RouteDataset.Route route, RouteDataset.Stop stop, TimeSlot slot, final int index) {
-        final double position = (stop.sequence() - 1.0) / (route.stops().size() - 1.0);
-        return .25 + .25 * Math.sin(position * Math.PI) + index * .01 + slot.ordinal() * .05;
-    }
-
-    private static double netBoarding(RouteDataset.Route route, RouteDataset.Stop stop, TimeSlot slot) {
-        final double position = (stop.sequence() - 1.0) / (route.stops().size() - 1.0);
-        return .12 * Math.cos(position * Math.PI * 2) * (slot == TimeSlot.OTHER ? .5 : 1);
+        require(scalar(connection, "SELECT count(*) FROM route WHERE data_revision<>1").equals("0"), "RECOVERY_STATE_UNSUPPORTED");
+        verify(connection, data, ReferenceBundle.DIRECTORY);
     }
 
     private static void verify(Connection connection, RouteDataset data, String modelDirectory) throws Exception {
         verify(connection, data, modelDirectory, true);
     }
 
-    private static void verify(Connection connection, RouteDataset data, String modelDirectory, final boolean verifyStatistics) throws Exception {
-        verify(connection, data, modelDirectory, verifyStatistics, true);
-    }
-
-    static void verify(Connection connection, RouteDataset data, String modelDirectory,
-                               final boolean verifyStatistics, final boolean modelSupported) throws Exception {
+    static void verify(Connection connection, RouteDataset data, String modelDirectory, final boolean modelSupported) throws Exception {
         JdbcClient jdbc = JdbcClient.create(new SingleConnectionDataSource(connection, true));
-        JdbcStopDemandStatisticsRepository statistics =
-            new JdbcStopDemandStatisticsRepository(jdbc, new JdbcRouteWorkAccess(jdbc));
         var release = modelSupported ? new FileModelBundleLoader().filesUnder(modelDirectory).load() : null;
         for (RouteDataset.Route route : data.routes()) {
             final long versionId;
@@ -335,44 +268,14 @@ public final class LocalData {
                 // 노선과 정류장 기준만 검증한다. 수집 후 생긴 관측과 통계는 재시작 시 보존한다.
                 continue;
             }
-            release.routeReference().requireMatches(new com.gustler.backend.forecasting.domain.model.RouteStops(
-                versionId, route.routeId(), modelStops, route.displayName()));
-            if (!verifyStatistics) {
-                continue;
-            }
-            final int fixtureRevision = Integer.parseInt(scalar(connection, """
-                SELECT revision FROM demand_statistics_version WHERE route_version_id=? AND calculation_version=?
-                AND data_until=? AND computed_at=? AND quality_revision=1
-                """, versionId, STATISTICS, BASELINE.minusDays(1), BASELINE));
-            require(statistics.readAsOf(versionId, TimeSlot.OTHER, STATISTICS, BASELINE.minusSeconds(1).toInstant())
-                .revision() == 0, "STATISTICS_AS_OF");
-            for (TimeSlot slot : TimeSlot.values()) {
-                var cells = statistics.readAsOf(versionId, slot, STATISTICS, BASELINE.plusSeconds(1).toInstant());
-                require(cells.revision() == fixtureRevision
-                    && cells.cells().size() == route.stops().stream().filter(RouteDataset.Stop::boardingAllowed).count(), "STATISTICS_FIXTURE_CHANGED");
-                for (var cell : cells.cells()) {
-                    RouteDataset.Stop stop = route.stops().get(cell.stopOrder() - 1);
-                    final int index = RouteDataset.MODEL_ROUTES.indexOf(route.displayName());
-                    require(Math.abs(cell.averageFillRate() - fillRate(route, stop, slot, index)) < 1e-12
-                        && Math.abs(cell.averageNetBoardingRate() - netBoarding(route, stop, slot)) < 1e-12
-                        && cell.sampleCount() == 120 && cell.dayCount() == 7, "STATISTICS_FIXTURE_CHANGED");
-                }
-            }
-            var cells = statistics.readAsOf(versionId, TimeSlot.OTHER, STATISTICS, BASELINE.plusSeconds(1).toInstant());
-            for (int ahead = 1; ahead <= 12; ahead++) {
-                double[] vector = new double[release.features().featureNames().size()];
-                vector[0] = 1;
-                vector[4] = .25;
-                vector[28] = cells.fillRateScoreAt(ahead + 1);
-                vector[29] = cells.netBoardingSegmentScoreOf(ahead + 1, ahead);
-                var prediction = release.predictor().predict(new SeatDistributionInput(vector, route.displayName(), ahead, 10, 40, null));
-                final double fullChance = prediction.distribution().fullChance();
-                final double seats = prediction.distribution().expectedSeats();
-                require(Double.isFinite(fullChance) && fullChance >= 0 && fullChance <= 1
-                    && Double.isFinite(seats) && seats >= 0 && seats <= 70, "MODEL_CALCULATION");
+            var stops = new com.gustler.backend.forecasting.domain.model.RouteStops(
+                versionId,route.routeId(),modelStops,route.displayName());
+            if (release.scope().coversSourceRoute(route.routeId())) {
+                require(release.model().supportsRoute(stops), "MODEL_ROUTE_REFERENCE_CHANGED");
             }
         }
     }
+
 
     private static PreparedStatement statement(Connection connection, String sql, Object... args) throws Exception {
         PreparedStatement statement = connection.prepareStatement(sql);
