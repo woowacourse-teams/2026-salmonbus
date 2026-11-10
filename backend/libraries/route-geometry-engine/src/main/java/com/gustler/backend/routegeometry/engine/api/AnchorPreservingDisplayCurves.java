@@ -23,10 +23,16 @@ public final class AnchorPreservingDisplayCurves {
     private record Built(SourceBoundDisplayCurves.Correspondence mapping,List<AnchorProof> proofs) {}
 
     public static Result build(RouteGeometry geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> baselineConnections) {
-        try {return checkedBuild(geometry,current,baselineConnections);}
+        return build(geometry,current,baselineConnections,false);
+    }
+    static Result buildWithTurnSupport(RouteGeometry geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> baselineConnections) {
+        return build(geometry,current,baselineConnections,true);
+    }
+    private static Result build(RouteGeometry geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> baselineConnections,boolean supportTurn) {
+        try {return checkedBuild(geometry,current,baselineConnections,supportTurn);}
         catch(IllegalArgumentException|ArithmeticException e) {return new Result(current,0,List.of(),List.of("ANCHOR_CURVE_FALLBACK:"+e.getMessage()));}
     }
-    private static Result checkedBuild(RouteGeometry geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> connections) {
+    private static Result checkedBuild(RouteGeometry geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> connections,boolean supportTurn) {
         require(current.referenceDomain().contains("NODE_BASELINE"),"UNSUPPORTED_REFERENCE_DOMAIN");
         var classified=EvidenceRoutePaths.classify(geometry).classifications();
         Map<Point,Integer> counts=new HashMap<>();for(var m:current.correspondences().values())for(var p:m.referencePoints())counts.merge(p,1,Integer::sum);
@@ -40,7 +46,7 @@ public final class AnchorPreservingDisplayCurves {
         Map<String,SourceBoundDisplayCurves.Correspondence> mappings=new LinkedHashMap<>();List<AnchorProof> proofs=new ArrayList<>();
         for(String direction:List.of("UP","DOWN")) {
             var old=current.correspondences().get(direction);require(old!=null,"MISSING_DIRECTION_MAPPING");
-            var built=direction(geometry,direction,old,connections,classified,shared,protectedTopology);
+            var built=direction(geometry,direction,old,connections,classified,shared,protectedTopology,supportTurn);
             mappings.put(direction,built.mapping());proofs.addAll(built.proofs());
         }
         if(proofs.isEmpty())return new Result(current,0,List.of(),List.of("NO_CERTIFIED_ANCHOR_CURVE"));
@@ -58,13 +64,14 @@ public final class AnchorPreservingDisplayCurves {
         }
         double bound=Math.max(finalSerializedBound,Math.max(current.maximumCertifiedDeviationMetres(),proofs.stream().mapToDouble(AnchorProof::maximumCertifiedDeviationMetres).max().orElse(0)));
         List<String> notes=new ArrayList<>(current.notes());notes.add(REVISION+":EXACT_SOURCE_AND_VISIT_KNOTS");
+        if(supportTurn)notes.add("TURN_SUBSEGMENT_CURVE:EXACT_ORDERED_SOURCE_OCCURRENCE");
         var plan=new SourceBoundDisplayCurves.Plan(current.referenceDomain(),paths,mappings,metrics,current.curveCount()+proofs.size(),bound,
                 current.continuousControlHullCertified(),current.serializedChordCorrespondenceCertified(),notes);
         return new Result(plan,proofs.size(),proofs,notes);
     }
     private static Built direction(RouteGeometry geometry,String direction,SourceBoundDisplayCurves.Correspondence old,
             Map<Integer,Connection> connections,Map<Point,List<com.gustler.backend.routegeometry.api.RouteShapeEvidence.TypedPoint>> classified,
-            Set<Point> shared,List<Point> topology) {
+            Set<Point> shared,List<Point> topology,boolean supportTurn) {
         var frame=old.metricFrame();var source=new Line(old.referencePoints(),frame);TreeMap<Double,Point> anchors=new TreeMap<>();
         for(int i=0;i<source.points.size();i++)if(classified.getOrDefault(source.points.get(i),List.of()).stream().anyMatch(p->direction.equals(p.direction())&&p.type()==1))anchor(anchors,source.chain[i],source.points.get(i));
         for(var stop:geometry.busStops())if(direction.equals(stop.direction())&&stop.point()!=null) {
@@ -77,14 +84,16 @@ public final class AnchorPreservingDisplayCurves {
             anchor(anchors,s,p);
         }
         var terminalSupport=SourceBoundDisplayCurves.terminalSubsegmentSupport(geometry,direction,source.points,connections,classified);
+        var turnSupport=supportTurn?TurnSubsegmentSupport.certify(geometry,direction,source.points,connections,classified,terminalSupport):Optional.<TurnSubsegmentSupport.Witness>empty();
         List<Patch> patches=new ArrayList<>();
         for(int i=1;i<source.points.size()-1;i++) {
             Point b=source.points.get(i);double at=source.chain[i];
             var labels=classified.getOrDefault(b,List.of()).stream().filter(p->direction.equals(p.direction())).toList();
             if(labels.isEmpty()||labels.stream().anyMatch(p->p.type()!=1&&p.type()!=3)||shared.contains(b))continue;
-            boolean previousBound=classified.getOrDefault(source.points.get(i-1),List.of()).stream().anyMatch(p->direction.equals(p.direction()))||terminalSupport.isPresent()&&terminalSupport.get().referenceEndpointIndex()==i-1;
-            boolean nextBound=classified.getOrDefault(source.points.get(i+1),List.of()).stream().anyMatch(p->direction.equals(p.direction()))||terminalSupport.isPresent()&&terminalSupport.get().referenceEndpointIndex()==i+1;
+            boolean previousBound=classified.getOrDefault(source.points.get(i-1),List.of()).stream().anyMatch(p->direction.equals(p.direction()))||supportedEndpoint(i-1,terminalSupport,turnSupport);
+            boolean nextBound=classified.getOrDefault(source.points.get(i+1),List.of()).stream().anyMatch(p->direction.equals(p.direction()))||supportedEndpoint(i+1,terminalSupport,turnSupport);
             if(!previousBound||!nextBound)continue;
+            if(supportTurn && (turnSupport.isEmpty() || Math.abs(turnSupport.get().referenceEndpointIndex()-i)!=1))continue;
             int existing=Collections.binarySearch(old.referenceProgressAtDisplayVertices(),at);
             if(existing<0||!old.displayPoints().get(existing).equals(b))continue; // Already replaced by a certified v3 fillet.
             XY u=unit(sub(source.xy.get(i),source.xy.get(i-1))),v=unit(sub(source.xy.get(i+1),source.xy.get(i)));double turn=angle(u,v);
@@ -122,6 +131,10 @@ public final class AnchorPreservingDisplayCurves {
         }
         var mapping=new SourceBoundDisplayCurves.Correspondence(old.referencePoints(),new ArrayList<>(output.values()),new ArrayList<>(output.keySet()),old.referenceLengthMetres(),frame);
         return new Built(mapping,patches.stream().map(Patch::proof).toList());
+    }
+    private static boolean supportedEndpoint(int index,Optional<SourceBoundDisplayCurves.TerminalSubsegmentSupport> terminal,Optional<TurnSubsegmentSupport.Witness> turn) {
+        return terminal.isPresent() && terminal.get().referenceEndpointIndex()==index
+                || turn.isPresent() && turn.get().referenceEndpointIndex()==index;
     }
     private static void anchor(TreeMap<Double,Point> anchors,double s,Point p) {
         var old=anchors.putIfAbsent(s,p);require(old==null||old.equals(p),"CONFLICTING_EXACT_ANCHOR_AT_SAME_SOURCE_PROGRESS");
@@ -209,11 +222,14 @@ public final class AnchorPreservingDisplayCurves {
         }
         return maximum;
     }
-    private static boolean noNewCurvature(SourceBoundDisplayCurves.Correspondence before,SourceBoundDisplayCurves.Correspondence after) {
+    static boolean noNewCurvature(SourceBoundDisplayCurves.Correspondence before,SourceBoundDisplayCurves.Correspondence after) {
         Line a=new Line(before.displayPoints(),before.metricFrame()),b=new Line(after.displayPoints(),after.metricFrame());
         for(double s=5;s<after.referenceLengthMetres()-5;s+=1)if(regresses(a.angleAt(transport(before,a,s)),b.angleAt(transport(after,b,s))))return false;
         for(double s:after.referenceProgressAtDisplayVertices())if(regresses(a.angleAt(transport(before,a,s)),b.angleAt(transport(after,b,s))))return false;
         return true;
+    }
+    static boolean straightOnSource(SourceBoundDisplayCurves.Correspondence mapping,double lo,double hi) {
+        return straight(mapping,new Line(mapping.referencePoints(),mapping.metricFrame()),lo,hi);
     }
     private static boolean regresses(double before,double after){return after>60&&after>before+5;}
     private static double transport(SourceBoundDisplayCurves.Correspondence map,Line display,double s) {

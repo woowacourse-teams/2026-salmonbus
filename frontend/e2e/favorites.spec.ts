@@ -615,8 +615,8 @@ test("정보가 없는 항목은 안내 카드로 남기고 정상 카드는 저
 
   await page.goto(`/mypage/groups/${defaultGroupId}`);
   await expect(page.getByText("노선 정보 없음", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("정류장 정보 없음", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "즐겨찾기 1 삭제", exact: true })).toBeEnabled();
+  await expect(page.getByText("정류장 정보 없음 (즐겨찾기 1)", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "정류장 정보 없음 (즐겨찾기 1) 삭제", exact: true })).toBeEnabled();
   await page.getByRole("link", { name: "마이페이지로 돌아가기", exact: true }).click();
   await page.goto("/");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();

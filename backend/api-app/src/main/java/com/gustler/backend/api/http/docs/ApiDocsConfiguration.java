@@ -49,6 +49,8 @@ public class ApiDocsConfiguration {
         "/api/me/favorite-selections",
         "/api/me/favorite-order",
         "/api/me/favorites",
+        "/api/me/push-devices",
+        "/api/me/push-devices/unregister",
         "/api/me/sessions",
         "/api/me/withdrawal/apple"
     );

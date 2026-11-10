@@ -35,7 +35,7 @@ Swagger에 나오는 것은 fetch로 부르는 API 7개다.
 
 브라우저를 이동시키는 경로(`/api/auth/{kakao,apple}/start`, `/api/auth/{kakao,apple}/callback`)는 컨트롤러가 아니라 보안 필터가 처리해 Swagger에 나오지 않는다. 이 흐름과 `returnTo` 규칙, 결과 쿼리(`login`, `withdrawn`, `withdraw`), 쿠키 3개(`__Host-sb_at`·`__Host-sb_rt`·`__Host-XSRF-TOKEN`)는 `contract/auth-v1.md`에 있다.
 
-fetch API의 공유 명세는 `contract/auth-v1.openapi.json`이다. 문서 테스트(`AuthApiDocsContractTest`)는 로그인을 켠 앱이 만든 명세와 이 파일의 operation 식별자·파라미터·요청 본문·응답 코드·헤더·예시·스키마를 대조한다. 설명 문구는 대조하지 않는다. 오류 응답 `ErrorResponse`의 오류 코드 목록은 이 파일과 `contract/route-watch-v1.openapi.json`에 같이 있고, 두 문서 테스트가 모두 코드의 `ErrorCode`와 대조한다.
+fetch API의 공유 명세는 `contract/auth-v1.openapi.json`이다. 문서 테스트(`AuthApiDocsContractTest`)는 로그인을 켠 앱이 만든 명세와 이 파일의 operation 식별자·파라미터·요청 본문·응답 코드·헤더·예시·스키마를 대조한다. 설명 문구는 대조하지 않는다. 오류 응답 `ErrorResponse`의 오류 코드 목록은 `contract/auth-v1.openapi.json`, `contract/route-watch-v1.openapi.json`, `contract/station-map-v2.openapi.json`, `contract/boarding-options-v1.openapi.json`에 같이 있고, 문서 테스트가 코드의 `ErrorCode`와 대조한다.
 
 ## 정류장 도착정보와 지도 geometry
 

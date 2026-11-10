@@ -119,7 +119,7 @@ class MigrationOrderTest {
     void 조사_완료_후_기존_제외_결과를_옮기고_운영_조회는_조사_테이블을_읽지_않는다() {
         // given
         Flyway.configure().dataSource(dataSource).locations("classpath:" + MIGRATION_LOCATION)
-            .schemas(STAGED_SCHEMA).createSchemas(true).target("63").load().migrate();
+            .schemas(STAGED_SCHEMA).createSchemas(true).target("64").load().migrate();
         jdbcClient.sql("""
             INSERT INTO staged_deploy.route
                 (public_route_id, source_id, source_route_id, display_name, start_stop_name, end_stop_name)
@@ -338,7 +338,7 @@ class MigrationOrderTest {
 
     private MigrateResult migrateTo64() {
         return Flyway.configure().dataSource(dataSource).locations("classpath:" + MIGRATION_LOCATION)
-            .schemas(STAGED_SCHEMA).createSchemas(true).target("64").load().migrate();
+            .schemas(STAGED_SCHEMA).createSchemas(true).target("65").load().migrate();
     }
 
     private Flyway flywayAt(

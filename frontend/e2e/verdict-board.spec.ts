@@ -291,15 +291,6 @@ function busMarkerAt(page: Page, stopName: string) {
     .getByRole("button", { name: new RegExp(`^${stopName} 정류장,`) });
 }
 
-async function pollRouteWatch(page: Page) {
-  const polled = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
-  );
-  await page.clock.fastForward(pollIntervalMs);
-  await polled;
-  await settleMarkers(page);
-}
-
 // 픽스처가 시계를 멈춰 두어서, 마커 위치를 재는 타이머가 돌도록 시계를 조금 진행한다.
 async function settleMarkers(page: Page) {
   await page.clock.runFor(100);
@@ -382,24 +373,77 @@ test("서버가 맨 앞에 보낸 목표 정류장 도착 버스는 그 순서�
   ]);
 });
 
-test("판의 만료 시각이 지나면 차량 마커만 숨기고, 새 관측을 받으면 다시 표시한다", async ({ page, api }) => {
+test("판의 만료 시각이 지나면 차량 마커와 좌석 예측을 숨기고, 새 관측을 받으면 다시 표시한다", async ({
+  page,
+  api,
+}) => {
   await openBoard(page);
   const stop = targetStop(page, "UP");
   await stop.scrollIntoViewIfNeeded();
   await stop.click();
   await settleMarkers(page);
-  const nearestArrival = targetRow(page, "UP").getByRole("listitem").nth(0);
+  const row = targetRow(page, "UP");
+  const arrivals = row.getByRole("listitem");
+  const sheetNotice = page
+    .getByRole("region", { name: "판정보드", exact: true })
+    .getByRole("status")
+    .filter({ hasText: "새 정보를 불러오지 못했어요" });
   await expect(busMarkerAt(page, "상행 정류장 8")).toBeVisible();
+  await expect(arrivals).toHaveText([
+    /(?:\d+분 남음|1분 이내)\s*3정류장 전\s*도착 시 5석 예상해요/,
+    /(?:\d+분 남음|1분 이내)\s*7정류장 전\s*도착 시 2석 예상해요/,
+  ]);
+  await expect(sheetNotice).toHaveCount(0);
 
   // 갱신이 계속 실패해서 마지막으로 받은 응답의 staleAt을 넘긴다.
+  // 다음 폴링 타이머는 실패한 /watch 처리가 끝난 뒤에 걸린다. 그 전에 복구 시계를 밀면 그 타이머를 당기지 못한다.
+  const watchFailed = page.waitForEvent(
+    "requestfailed",
+    (request) => new URL(request.url()).pathname === apiPaths.watch,
+  );
   api.mode.watch = "network-error";
   const now = await page.evaluate(() => Date.now());
   await page.clock.fastForward(Date.parse(api.data.watch.staleAt) - now + 1_000);
+  await watchFailed;
+  await page.clock.runFor(1);
   await settleMarkers(page);
 
   await expect(busMarkerAt(page, "상행 정류장 8")).toHaveCount(0);
   await expect(stop).toHaveAttribute("aria-expanded", "true");
-  await expect(nearestArrival).toHaveText(/(?:\d+분 남음|1분 이내)\s*3정류장 전\s*도착 시 5석 예상해요/);
+  await expect(page.getByText(/도착 시 .*석 예상해요/)).toHaveCount(0);
+  await expect(arrivals).toHaveCount(0);
+  await expect(row.getByText("새 정보가 오면 좌석 예측을 다시 보여드려요", { exact: true })).toBeVisible();
+  await expect(sheetNotice).toHaveText("새 정보를 불러오지 못했어요 · 08:00 기준");
+
+  const ring = row.locator("[data-timeline-sequence]");
+  await expect(ring).toHaveCount(1);
+  const expiredRing = await ring.evaluate((element) => {
+    const ringStyle = getComputedStyle(element);
+    const arrow = element.querySelector("svg");
+    const arrowStyle = arrow === null ? null : getComputedStyle(arrow);
+    return {
+      ringBorderColor: ringStyle.borderColor,
+      ringBackgroundColor: ringStyle.backgroundColor,
+      arrowColor: arrowStyle?.color ?? null,
+    };
+  });
+  expect(expiredRing).toEqual({
+    ringBorderColor: "rgb(170, 178, 188)",
+    ringBackgroundColor: "rgb(237, 237, 235)",
+    arrowColor: "rgb(170, 178, 188)",
+  });
+
+  await stop.click();
+  await expect(stop).toHaveAttribute("aria-expanded", "false");
+  await expect(row.getByText("정보가 오래됐어요", { exact: true })).toBeVisible();
+  const recoveryStepMs = 5_000;
+  await page.clock.fastForward(pollIntervalMs - recoveryStepMs);
+  const arrivalsReloaded = page.waitForResponse(
+    (response) => new URL(response.url()).pathname.endsWith("/arrivals") && response.status() === 200,
+  );
+  await stop.click();
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await (await arrivalsReloaded).finished();
 
   // 만료 기록은 이전 관측에만 남으므로 새 관측의 차량은 다시 보여야 한다.
   const bus = api.data.watch.vehicles.find((vehicle) => vehicle.vehicleId === "bus-1");
@@ -408,9 +452,21 @@ test("판의 만료 시각이 지나면 차량 마커만 숨기고, 새 관측�
   api.data.watch.observedAt = "2026-09-16T08:05:00+09:00";
   api.data.watch.staleAt = "2026-09-16T08:10:00+09:00";
   api.mode.watch = "success";
-  await pollRouteWatch(page);
+  const recovered = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
+  );
+  await page.clock.fastForward(recoveryStepMs);
+  await recovered;
+  await settleMarkers(page);
 
   await expect(busMarkerAt(page, "상행 정류장 9")).toBeVisible();
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await expect(arrivals).toHaveText([
+    /(?:\d+분 남음|1분 이내)\s*3정류장 전\s*도착 시 5석 예상해요/,
+    /(?:\d+분 남음|1분 이내)\s*7정류장 전\s*도착 시 2석 예상해요/,
+  ]);
+  await expect(page.getByText("새 정보가 오면 좌석 예측을 다시 보여드려요", { exact: true })).toHaveCount(0);
+  await expect(sheetNotice).toHaveCount(0);
 });
 
 test("운행 중인 노선의 특정 정류장에 접근 차량이 없으면 차량 없음 안내를 표시한다", async ({ page, api }) => {
@@ -428,6 +484,37 @@ test("운행 중인 노선의 특정 정류장에 접근 차량이 없으면 차
   await expect(row.getByText("현재 예측할 수 있는 차량이 없습니다", { exact: true })).toBeVisible();
   await expect(row.getByRole("listitem")).toHaveCount(0);
   await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
+  await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).not.toBeVisible();
+
+  const ring = row.locator("[data-timeline-sequence]");
+  await expect(ring).toHaveCount(1);
+  const zeroRing = await ring.evaluate((element) => {
+    const ringStyle = getComputedStyle(element);
+    const arrow = element.querySelector("svg");
+    const arrowStyle = arrow === null ? null : getComputedStyle(arrow);
+    return {
+      ringBorderColor: ringStyle.borderColor,
+      ringBackgroundColor: ringStyle.backgroundColor,
+      arrowColor: arrowStyle?.color ?? null,
+    };
+  });
+  expect(zeroRing).toEqual({
+    ringBorderColor: "rgb(0, 0, 0)",
+    ringBackgroundColor: "rgb(255, 255, 255)",
+    arrowColor: "rgb(0, 0, 0)",
+  });
+});
+
+test("운행 시간인데 도는 차량이 없으면 지도와 정류장 목록을 유지하고 시트에 안내한다", async ({ page, api }) => {
+  api.data.watch.vehiclesInService = 0;
+  api.data.watch.vehicles = [];
+  await openBoard(page);
+
+  await expect(page.getByRole("region", { name: "노선 지도", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "판정보드 정류장 목록", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "판정보드", exact: true }).getByRole("status")).toHaveText(
+    "지금 오는 차량이 없어요",
+  );
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).not.toBeVisible();
 });
 
