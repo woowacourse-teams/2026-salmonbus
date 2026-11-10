@@ -7,6 +7,7 @@ import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.push.application.NotificationDeliveryRepository;
 import com.gustler.backend.api.push.application.NotificationDeliveryService;
 import com.gustler.backend.api.push.application.NotificationSettingRepository;
+import com.gustler.backend.api.push.application.NotificationSettingRepository.DueSetting;
 import com.gustler.backend.api.push.application.NotificationSettingRepository.SavedSetting;
 import com.gustler.backend.api.push.application.PushDeviceRepository;
 import com.gustler.backend.api.push.domain.DeliveryPolicy;
@@ -172,6 +173,20 @@ class NotificationDeliveryFlowTest {
             assertThat(fake.requestsFor(secondToken)).hasSize(2);
             assertThat(statusCounts("SENT")).isEqualTo(2);
         }
+    }
+
+    @Test
+    void timeChangedBetweenReadAndExpandSendsNothingForTheOldTime() throws Exception {
+        Prepared prepared = prepare(1, true);
+        Instant changed = Instant.parse("2026-11-01T23:00:00Z");
+        NotificationDeliveryService service = serviceAt(T0);
+        DueSetting due = service.findDue(100).get(0);
+        settings.upsert(prepared.memberId(), TARGET, NotificationSchedule.parse("08:00", List.of("MON")), changed, T0);
+
+        service.expand(due);
+
+        assertThat(deliveryCount()).isZero();
+        assertThat(occurrenceOf(prepared.settingId())).isEqualTo(changed);
     }
 
     @Test
