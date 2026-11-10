@@ -1,4 +1,5 @@
 import { useEffect, useReducer } from "react";
+import { RetryButton } from "@/shared/components/RetryButton";
 import { Link } from "react-router";
 import { latestSuccessOf, type LatestSuccess } from "@/shared/api/polledResource";
 import { fetchRouteWatch } from "@/shared/api/routeForecast.api";
@@ -172,10 +173,11 @@ function HomeStopRouteRows({
 }
 
 function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
-  const { resource } = usePolledRequest(
+  const [revision, retry] = useReducer((value: number) => value + 1, 0);
+  const { resource, requestState } = usePolledRequest(
     async (id, signal) => withStationArrivalClock(await fetchStationDetail(id, signal)),
     stop.id,
-    0,
+    revision,
     nextStationArrivalPollFrom,
   );
   const latest = latestSuccessOf(resource);
@@ -190,8 +192,20 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
     return () => window.clearInterval(timer);
   }, [fresh]);
   const waiting = resource.status === "pending" || body?.refresh.status === "RUNNING";
+  const failed = resource.status === "loadingError" || resource.status === "refetchError";
+  const retrying = requestState === "loading";
   return (
     <>
+      {failed && (
+        <div className={styles.stopLoadError}>
+          <p className={styles.note} role="status">
+            {retrying ? "정류장 버스 정보를 확인하고 있어요…" : "정류장 버스 정보를 불러오지 못했어요."}
+          </p>
+          <RetryButton onRetry={retry} busy={retrying}>
+            정류장 버스 정보 다시 불러오기
+          </RetryButton>
+        </div>
+      )}
       {body?.routes.length ? (
         <ul className={styles.stopRouteList}>
           {body.routes.map((route, index) => {
@@ -221,9 +235,11 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
           })}
         </ul>
       ) : (
-        <p className={styles.note} role="status">
-          {waiting ? "정류장 버스 정보를 확인하고 있어요…" : "정차 노선 정보를 확인하지 못했어요."}
-        </p>
+        !failed && (
+          <p className={styles.note} role="status">
+            {waiting ? "정류장 버스 정보를 확인하고 있어요…" : "이 정류장의 정차 노선 정보가 없어요."}
+          </p>
+        )
       )}
     </>
   );

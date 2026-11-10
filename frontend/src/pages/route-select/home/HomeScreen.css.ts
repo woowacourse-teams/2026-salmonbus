@@ -135,6 +135,19 @@ export const mapNotice = style({
   lineHeight: 1.5,
   color: muted,
 });
+export const stationMapError = style([
+  mapNotice,
+  {
+    right: 16,
+    zIndex: 3,
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+]);
+export const stopLoadError = style({ display: "grid", justifyItems: "start", gap: 8 });
 export const locate = style({
   right: mapControlInset,
   bottom: `calc(${mapControlInset}px + ${sheetObstruction})`,
