@@ -20,4 +20,6 @@ public interface PushDeviceRepository {
      * @return 회원이 있으면 true. 지운 행이 있었는지가 아니라 회원 존재 여부다
      */
     boolean unregister(UUID memberPublicId, DeviceToken token);
+
+    boolean deleteById(long deviceId);
 }

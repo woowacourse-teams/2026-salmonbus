@@ -68,6 +68,20 @@ class JdbcPushDeviceRepositoryTest {
     }
 
     @Test
+    void deleteById는_그_기기만_지운다() {
+        UUID member = member("연어하나");
+        repository.register(member, TOKEN, PushEnvironment.SANDBOX, NOW);
+        repository.register(member, new DeviceToken("bb"), PushEnvironment.PRODUCTION, NOW);
+        long id = jdbc.sql("SELECT id FROM push_device WHERE token = ?")
+            .param("abcdef")
+            .query(Long.class)
+            .single();
+        assertThat(repository.deleteById(id)).isTrue();
+        assertThat(jdbc.sql("SELECT token FROM push_device").query(String.class).single()).isEqualTo("bb");
+        assertThat(repository.deleteById(id)).isFalse();
+    }
+
+    @Test
     void 없는_회원은_등록도_해제도_못_한다() {
         UUID missing = UUID.randomUUID();
         assertThat(repository.register(missing, TOKEN, PushEnvironment.SANDBOX, NOW)).isFalse();

@@ -541,6 +541,19 @@ DELETE FROM refresh_token WHERE member_id = (SELECT id FROM member WHERE public_
 
 사용자는 스스로 `DELETE /api/me/sessions`로 다른 기기의 세션까지 끊을 수 있다.
 
+## 푸시 알림 켜기
+
+기본은 꺼져 있다(`PUSH_ENABLED=false`). 꺼져 있으면 발송 작업과 APNs 클라이언트를 만들지 않는다.
+켰는데 값이 비면 API가 시작하지 않는다. 키 내용은 env에 넣지 않는다. `APNS_TEAM_ID`는 `AUTH_APPLE_TEAM_ID`와 별개다.
+
+| `$ETC/api.env`에 넣는 줄 | 설명 |
+| --- | --- |
+| `PUSH_ENABLED` | 켜려면 `true` |
+| `APNS_TEAM_ID` | APNs Team ID. `AUTH_APPLE_TEAM_ID`와 별개다 |
+| `APNS_KEY_ID` | APNs 키 ID |
+| `APNS_PRIVATE_KEY_PATH` | `.p8` 파일 경로. 키 내용은 env에 넣지 않는다 |
+| `APNS_TOPIC` | 앱 번들 ID |
+
 ## 평가 이관과 원본 삭제
 
 worker 유닛이 `FORECAST_ARCHIVE_ENABLED=true`·`FORECAST_ARCHIVE_DELETE_ENABLED=true`로 켠다.
