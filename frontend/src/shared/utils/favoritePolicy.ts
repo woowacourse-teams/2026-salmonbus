@@ -78,6 +78,6 @@ export function favoriteErrorOf(failure: ApiFailure, operation: FavoriteOperatio
 
 export function favoriteStopLabelOf(item: { stop: { name?: string } } | null | undefined, index: number): string {
   if (item?.stop.name) return item.stop.name;
-  if (item) return "정류장 정보 없음";
+  if (item) return `정류장 정보 없음 (즐겨찾기 ${index + 1})`;
   return `즐겨찾기 ${index + 1}`;
 }
