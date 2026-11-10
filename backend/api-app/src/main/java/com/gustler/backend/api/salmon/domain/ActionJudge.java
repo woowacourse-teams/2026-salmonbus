@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
+/** 대기와 이동 후보의 탑승 실패 위험을 비교해 사유 코드 하나로 판정한다. */
 public final class ActionJudge {
     private static final double EPSILON = 1e-12;
 

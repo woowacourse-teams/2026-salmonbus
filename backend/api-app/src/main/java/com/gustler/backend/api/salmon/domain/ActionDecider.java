@@ -9,6 +9,7 @@ import com.gustler.backend.api.salmon.domain.ActionModel.Unavailable;
 import com.gustler.backend.api.salmon.domain.ActionModel.Verdict;
 import java.util.Optional;
 
+/** 판정 중 지금 정류장 목록이 바뀌면 처음부터 다시 판정하고, 반복 한도를 넘으면 그 목록을 결측으로 두고 끝낸다. */
 public final class ActionDecider {
     private ActionDecider() {
     }

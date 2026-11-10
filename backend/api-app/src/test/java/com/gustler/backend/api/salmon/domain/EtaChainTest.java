@@ -98,7 +98,7 @@ class EtaChainTest {
         assertThat(restored.arrivalAt()).isEqualTo(BASE.plusSeconds(900));
         assertThat(restored.run()).isEqualTo(VEHICLE);
         assertThat(restored.visit()).isEqualTo(visit(10));
-        assertThat(restored.errorBound()).contains(Duration.ofSeconds(45));
+        assertThat(restored.errorBound()).contains(Duration.ofSeconds(35));
         assertThat(restored.evidence()).containsExactly("v-five", "v-eight", "u-eight", "u-ten", "transfer-study");
     }
 
@@ -159,6 +159,29 @@ class EtaChainTest {
     void 물리적_차량_식별자가_없으면_관측을_만들지_못한다() {
         assertThatThrownBy(() -> new Run(UP, "", "trip"))
             .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 복원_시각의_오차에는_상쇄되는_기준_관측의_오차를_넣지_않는다() {
+        Observation anchor = new Observation("v-five", VEHICLE, visit(5), BASE, BASE.plusSeconds(300),
+            Optional.of(Duration.ofSeconds(60)));
+        Observation later = new Observation("v-eight", VEHICLE, visit(8), BASE, BASE.plusSeconds(660),
+            Optional.of(Duration.ofSeconds(60)));
+        Segment segment = known(EtaChain.sameRun(anchor, later));
+
+        Arrival restored = known(EtaChain.restore(anchor, segment));
+
+        assertThat(segment.errorBound()).contains(Duration.ofSeconds(120));
+        assertThat(restored.arrivalAt()).isEqualTo(later.arrivalAt());
+        assertThat(restored.errorBound()).contains(Duration.ofSeconds(60));
+    }
+
+    @Test
+    void 기준_관측의_오차가_구간에_든_값보다_크면_같은_관측일_수_없어_복원하지_않는다() {
+        Observation wide = new Observation("from-5", VEHICLE, visit(5), BASE, BASE.plusSeconds(300),
+            Optional.of(Duration.ofSeconds(60)));
+
+        assertThat(EtaChain.restore(wide, segment(5, 8))).isEqualTo(new Missing<>(Reason.INFORMATION_MISMATCH));
     }
 
     private static Segment segment(int from, int to) {

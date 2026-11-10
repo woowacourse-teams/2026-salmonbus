@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+/** 판정 결과를 사용자에게 보일 안내 문장으로 바꾼다. */
 public final class ActionGuidance {
     // 시도 문장과 재탑승 가지 문장이 같은 차 수까지만 보이게 해서, 안내하지 않은 맞은편 차의 가지 문장을 내지 않는다.
     private static final int SHOWN_ATTEMPTS = 2;

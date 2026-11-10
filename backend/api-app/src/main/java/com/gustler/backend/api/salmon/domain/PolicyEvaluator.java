@@ -7,6 +7,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.ToDoubleFunction;
+import java.util.stream.Stream;
 
 final class PolicyEvaluator {
     private static final double EPSILON = 1e-12;
@@ -59,7 +60,7 @@ final class PolicyEvaluator {
             return new Outcome(evaluation, List.of(), List.of(), Optional.empty(), Optional.empty(), List.of());
         }
         List<Slot> slots = slotsOf(window.attempts(), window.missed(), Optional.empty());
-        Evaluation evaluation = solve(resolver -> riskOf(slots, resolver), basis);
+        Evaluation evaluation = solve(resolver -> riskOf(slots, resolver), basis, List.of());
         List<Attempt> trail = window.attempts().stream().map(PolicyEvaluator::attemptOf).toList();
         if (!withMargin) {
             return new Outcome(evaluation, trail, List.of(), Optional.empty(), Optional.empty(),
@@ -171,7 +172,8 @@ final class PolicyEvaluator {
             List<Slot> chain = oppositeSlots(reach.boardable(), reach.missed(), included.size());
             boolean reboardCovers = coversWindow(candidate.reboard());
             TimeBasis basis = reboardBasis(reach.boardable(), reboardWindow);
-            Evaluation evaluation = solve(resolver -> reboardRisk(chain, included, reboardCovers, resolver), basis);
+            Evaluation evaluation = solve(resolver -> reboardRisk(chain, included, reboardCovers, resolver), basis,
+                List.of("reboard list does not cover the window"));
             List<MarginItem> items = marginsOf(reach.t1(), chain, included);
             List<ReboardBranch> branches = included.stream().map(Included::branch).toList();
             List<Attempt> attempts = branches.stream().map(ReboardBranch::boarded).toList();
@@ -212,7 +214,7 @@ final class PolicyEvaluator {
             Offset arrival = lowerOffset(entry.arrival());
             Span ride = lowerSpan(candidate.rideTime());
             Span afterAlight = config.scaledByAlpha(lowerSpan(candidate.walkAfterAlight()));
-            return arrival.plus(ride).plus(afterAlight);
+            return config.ceilToResolution(arrival.plus(ride).plus(afterAlight));
         }
 
         private List<Slot> boundarySlotsOf(StopEntry entry, Offset t2, Window reboardWindow) {
@@ -314,7 +316,7 @@ final class PolicyEvaluator {
         return risk;
     }
 
-    private Evaluation solve(ToDoubleFunction<Resolver> risk, TimeBasis basis) {
+    private Evaluation solve(ToDoubleFunction<Resolver> risk, TimeBasis basis, List<String> undefinedReasons) {
         Resolver probe = new Resolver(java.util.Map.of());
         risk.applyAsDouble(probe);
         List<Slot> unresolved = List.copyOf(probe.unresolved());
@@ -329,7 +331,8 @@ final class PolicyEvaluator {
             }
             double value = risk.applyAsDouble(new Resolver(substitution));
             if (Double.isNaN(value)) {
-                return new Insufficient(unresolved.stream().map(slot -> "probability of " + slot.attempt()).toList());
+                return new Insufficient(Stream.concat(
+                    unresolved.stream().map(slot -> "probability of " + slot.attempt()), undefinedReasons.stream()).toList());
             }
             if (agreed == null) {
                 agreed = value;

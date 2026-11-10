@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.dao.DataAccessException;
 
+/** 저장된 최신 도착 스냅샷에서 노선과 정류장 방문의 도착 목록을 만든다. 새로 수집을 요청하지 않는다. */
 public final class ArrivalStopSource implements StopArrivalSource {
     private static final Span MINUTE_RESOLUTION_BOUND = new Span(60_000);
 

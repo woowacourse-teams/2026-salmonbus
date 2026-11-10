@@ -15,6 +15,7 @@ import com.gustler.backend.api.salmon.domain.EtaChain.Segment;
 import java.time.Duration;
 import java.util.Optional;
 
+/** EtaChain 구간 결과를 판정 입력 Field로 바꾼다. */
 public final class EtaFields {
     private EtaFields() {
     }

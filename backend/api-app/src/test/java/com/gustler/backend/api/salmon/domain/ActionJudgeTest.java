@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.within;
 
 import com.gustler.backend.api.salmon.domain.ActionJudge.Failed;
 import com.gustler.backend.api.salmon.domain.ActionModel.*;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -404,6 +405,31 @@ class ActionJudgeTest {
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(12, 8), fixture.source(fixture.reboardCandidate()));
 
         assertThat(recordOf(verdict, "reboard").outcome().evaluation()).isInstanceOf(ConfirmedEmpty.class);
+    }
+
+    @Test
+    void 오차가_없으면_해상도로_올림한_t2만으로_경계를_정해_판정할_수_있는_후보를_빼지_않는다() {
+        ActionFixture fixture = new ActionFixture();
+        fixture.ride = observed(5);
+        fixture.reboard = queried(entry("b-6", 6), entry("b-12", 12.7), entry("b-14", 14));
+        ActionConfig config = new ActionConfig(0.40, 0.15, new BigDecimal("1.2"), offsetOf(12.8), minutes(8), 100,
+            minutes(1), 3, List.of(CandidateKind.WALK, CandidateKind.REBOARD));
+
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config, fixture.source(fixture.reboardCandidate()));
+
+        assertThat(recordOf(verdict, "reboard").outcome().evaluation()).isInstanceOf(ConfirmedEmpty.class);
+    }
+
+    @Test
+    void 재탑승_목록이_창을_덮지_않아_판정하지_못하면_그_사유를_남긴다() {
+        ActionFixture fixture = new ActionFixture();
+        fixture.reboard = new Queried(List.of(entry("b-6", 6)), Coverage.COVERAGE_UNKNOWN);
+
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config(20, 8), fixture.source(fixture.reboardCandidate()));
+
+        Evaluation evaluation = recordOf(verdict, "reboard").outcome().evaluation();
+        assertThat(evaluation).isInstanceOf(Insufficient.class);
+        assertThat(((Insufficient) evaluation).missing()).contains("reboard list does not cover the window");
     }
 
     private static ActionFixture boundaryFixture() {

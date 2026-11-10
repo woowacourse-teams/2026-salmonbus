@@ -34,15 +34,15 @@
 | application/StopArrivalSource | 정류장 도착 목록 포트. StopArrivalSource.unavailable()은 소스가 없을 때 결측(NOT_PROVIDED)을 돌려준다. |
 | application/DetourSource | 후보 우회량 포트. unavailable()은 값이 없는 결측을 돌려준다. |
 
-테스트 83건(신규): ArrivalStopSourceTest 13, ActionJudgeTest 42, ActionOracleTest 4, ActionGuidanceTest 10, ActionDeciderTest 3, EtaFieldsTest 3, CandidateAssemblerTest 8. 여기에 EtaChainTest 17건을 더하면 salmon 패키지 테스트는 100건이다. EtaChain으로 만든 구간시간으로 가상 픽스처가 GO까지 가는 통합 테스트를 포함한다. 독립 오라클(LeafOracle)은 제품 코드를 가져오지 않고 잎을 펼쳐 합산하며, 확률 조합 243개와 대기 9개에서 판정기 값과 일치한다. 기준 파일 test-baseline.properties의 executed.api-app.test는 1161이다. Docker를 켠 전체 :api-app:check가 1161건으로 통과했다.
+테스트 85건(신규): ArrivalStopSourceTest 13, ActionJudgeTest 44, ActionOracleTest 4, ActionGuidanceTest 10, ActionDeciderTest 3, EtaFieldsTest 3, CandidateAssemblerTest 8. 여기에 EtaChainTest 19건을 더하면 salmon 패키지 테스트는 104건이다. EtaChain으로 만든 구간시간으로 가상 픽스처가 GO까지 가는 통합 테스트를 포함한다. 독립 오라클(LeafOracle)은 제품 코드를 가져오지 않고 잎을 펼쳐 합산하며, 확률 조합 243개와 대기 9개에서 판정기 값과 일치한다. 기준 파일 test-baseline.properties의 executed.api-app.test는 1165이다. Docker를 켠 전체 :api-app:check가 1165건으로 통과했다.
 
 ## 전제로 쓴 항목과 알려진 이탈
 
 - 정류장 항목의 도착 시각이 파생이고 창 경계를 넘나들 수 있으면(점값은 창 밖, 보수 하한은 창 안) 설계 4.1 규칙 3은 슬롯이 결측일 때만 보류하라고 한다. 구현은 목록 쪽 경계 항목을 곧바로 근거 부족으로 본다(더 보수적). 재탑승 가지 쪽만 규칙 3대로 슬롯을 확인한다.
 - 첫 시도 슬롯(S_FIRST)은 주변확률(MARG) 표지와 일치로 본다. 설계 12.1의 P-ON 표를 따른 해석이고 설계 본문에 명시되지는 않았다.
-- 해상도는 준비 시각과 t2에만 적용한다. 입력 도착 시각은 그대로 비교한다.
+- 해상도는 준비 시각과 t2(그리고 t2 하한)에만 적용한다. 입력 도착 시각은 그대로 비교한다. H가 해상도의 배수가 아니면 H 안에 드는 t2는 해상도 격자 위의 값뿐이라, 재탑승 쪽에서 H는 해상도로 내림한 값처럼 동작한다.
 - 재탑승 GO 안내는 맞은편 버스(포함 가지)마다 "그 차를 탔다면 지금부터 몇 분 뒤 차"를 보인다. 탈 확률이 0인 가지도 보이고, 문장은 맞은편 시도 문장과 같은 최대 2대까지다. 가지의 준비 시각(ready)은 결과에 담지만 지금 안내에서는 읽지 않는다. 화면 표시 개수와 문구는 SAL-368에서 정한다.
-- 우회량 D는 입력으로 받고 허용 확정에 필수이다. 직접 도보 후보는 CandidateAssembler가 DetourSource에서 D를 받는다. 채택 명세 v1에는 D의 이름만 있다. 검토용 통합 명세 v2(2026-11-07) 7절은 D를 목표까지 계획한 차내 이동 시간의 합으로 제안하지만 채택 전이다. 채택 여부는 SAL-389에서 정한다. 실제 계산 구현은 없고 DetourSource.unavailable()만 있다. 따라서 운영 입력에서는 어떤 후보도 허용(ALLOWED)이 되지 못한다. 도보 합이 한도를 넘는 후보는 위반이고, 나머지는 허용 미확인이다.
+- 우회량 D는 입력으로 받고 허용 확정에 필수이다. 직접 도보 후보는 CandidateAssembler가 DetourSource에서 D를 받는다. 채택 명세 v1에는 D의 이름만 있다. 검토용 통합 명세 v2(2026-11-07) 7절은 D를 목표까지 계획한 차내 이동 시간의 합으로 제안하지만 채택 전이다. 채택 여부는 SAL-389에서 정한다. 실제 계산 구현은 없고 DetourSource.unavailable()만 있다. 따라서 운영 입력에서는 어떤 후보도 허용(ALLOWED)이 되지 못한다. 도보 합이 한도를 넘는 후보는 위반이고, 나머지는 허용 미확인이다. 모든 후보가 위반이면 판정은 NO_MOVE_INFEASIBLE이다.
 
 ## 아직 없는 것
 
@@ -99,8 +99,10 @@
 
 ## 검증
 
-- 통과: `./gradlew :api-app:test --tests 'com.gustler.backend.api.salmon.*' --tests ...ArrivalPredictionTest :verifyTestResourceRules` (JDK 21, 임시 설치 /tmp/salmon-java21).
-- 실행하지 못함: 전체 `:api-app:check`. Docker 환경이 없어 통합 테스트가 실패한다. 기준 수 957은 전체 실행으로 대조하지 못했다.
-- 리뷰에서 찾은 버그 1건을 고쳤다. 경계 가지에 시도할 차가 있는데 확률 슬롯이 없으면 확인된 공집합(위험 1)으로 돌려주던 문제이다. 고치기 전에는 새 테스트가 실패하고 고친 뒤 통과함을 확인했다.
-
-git 명령, 커밋, 푸시, 배포는 실행하지 않았다.
+- 2026-11-08 첫 구현: salmon 패키지 테스트, ArrivalPredictionTest, verifyTestResourceRules가 통과했다(JDK 21). 이때 체크아웃은 dev보다 오래됐고 Docker가 없어 전체 `:api-app:check`는 돌리지 못했다.
+- 2026-11-10: dev 기준 브랜치에서 Docker를 켜고 전체 `:api-app:check`를 돌려 1165건(salmon 104건)이 통과했다. test-baseline.properties의 executed.api-app.test는 1165다.
+- 리뷰에서 찾아 고친 버그는 네 건이다. 모두 고치기 전에 새 테스트가 실패하고, 고친 뒤 통과함을 확인했다.
+  1. 경계 가지에 시도할 차가 있는데 확률 슬롯이 없으면 확인된 공집합(위험 1)으로 돌려주던 문제.
+  2. EtaChain.restore가 상쇄되는 기준 관측의 오차를 한 번 더 더하던 문제. 같은 운행 구간 하나를 쓰고 두 관측이 분 단위 예측이면 오차를 필요한 값의 세 배로 잡았다.
+  3. t2는 해상도로 올림하는데 t2 하한은 올림하지 않아, 오차가 없는 가지도 경계 가지로 분류해 판정할 수 있는 후보를 근거 부족으로 빼던 문제.
+  4. 재탑승 목록이 창을 덮지 않아 판정하지 못할 때 근거 부족의 사유 목록이 비던 문제.

@@ -7,6 +7,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+/** 같은 운행의 관측 차이로 구간 시간을 만들고, 도착 목록에 없는 버스의 도착 시각을 복원한다. */
 public final class EtaChain {
     private EtaChain() {
     }
@@ -187,8 +188,13 @@ public final class EtaChain {
         if (segment.errorBound().isEmpty()) {
             return new Missing<>(Reason.NO_ERROR_BOUND);
         }
+        // 복원 시각은 anchor 도착과 구간의 anchor 항이 상쇄되므로, 구간 오차에 든 anchor 오차를 빼야 한다.
+        // 관측 id가 관측 하나를 정한다는 전제를 쓴다. 뺀 값이 음수면 같은 관측일 수 없으므로 복원하지 않는다.
         Optional<Duration> bound = anchor.errorBound().map(value ->
-            value.plus(segment.errorBound().orElseThrow()));
+            segment.errorBound().orElseThrow().minus(value));
+        if (bound.isPresent() && bound.get().isNegative()) {
+            return new Missing<>(Reason.INFORMATION_MISMATCH);
+        }
         List<String> evidence = Stream.concat(
             Stream.of(anchor.id()), segment.evidence().stream()).distinct().toList();
         return new Known<>(new Arrival(anchor.run(), segment.to(),

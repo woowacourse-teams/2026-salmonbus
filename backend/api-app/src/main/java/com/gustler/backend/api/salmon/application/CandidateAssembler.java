@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+/** SAL-362 탑승 후보 중 같은 방향 후보를 직접 도보 후보로 조립한다. */
 public final class CandidateAssembler {
     private static final Set<Relation> SAME_DIRECTION = Set.of(Relation.BEFORE, Relation.AFTER);
 

@@ -5,6 +5,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+/** 판정에 쓰는 시각, 도착 목록, 확률, 후보, 결과 타입을 모은다. */
 public final class ActionModel {
     private ActionModel() {
     }

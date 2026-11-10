@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 
+/** 판정 설정값. 값의 유효성만 검사하고 기본값은 두지 않는다. */
 public record ActionConfig(double scanThreshold, double gainThreshold, BigDecimal alpha, Offset horizon,
                            Span maxWalk, double maxDetour, Span resolution, int epochBudget,
                            List<CandidateKind> kindOrder) {
