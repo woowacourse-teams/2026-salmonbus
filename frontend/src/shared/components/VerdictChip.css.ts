@@ -15,9 +15,11 @@ const chipBase = style({
   whiteSpace: "nowrap",
 });
 
+export const standardVerdictChipWidth = "73px";
+
 const chipMinWidth: Record<keyof typeof vars.color.seat, string> = {
-  high: "73px",
-  low: "73px",
+  high: standardVerdictChipWidth,
+  low: standardVerdictChipWidth,
   veryLow: "96px",
   unavailable: "118px",
 };

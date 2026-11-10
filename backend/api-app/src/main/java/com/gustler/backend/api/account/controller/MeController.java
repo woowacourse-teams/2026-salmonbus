@@ -268,7 +268,7 @@ public class MeController {
             - 탈퇴하면 `/?withdrawn=1`로 돌아오고 인증 쿠키가 지워집니다
             - 사용자가 취소하면 `returnTo`에 `withdraw=cancelled`, 그 밖의 실패는 `withdraw=failed`가 붙어 돌아옵니다
             - 애플 토큰 취소에 실패하면 회원을 지우지 않고 `withdraw=failed`로 돌아옵니다. 인증 쿠키가 남아 다시 시도할 수 있습니다
-            - `returnTo`는 `/` 또는 `/routes/{9자리}`(쿼리 `direction`·`stopId`만)이며, 그 밖의 값은 `/`로 바뀝니다
+            - `returnTo`는 `/`, `/favorites` 또는 `/routes/{9자리}`(쿼리 `direction`·`stopId`만)이며, 그 밖의 값은 `/`로 바뀝니다
 
             본문은 생략할 수 있습니다. 카카오 회원이면 400 `INVALID_REQUEST`입니다.
             """ + AuthApiDocs.ACCESS_TOKEN_RULE + " " + AuthApiDocs.CSRF_RULE,

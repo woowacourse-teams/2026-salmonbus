@@ -1,14 +1,40 @@
+import type { MouseEvent, Ref } from "react";
 import { NavLink, useLocation } from "react-router";
+import { paths } from "@/shared/routing/paths";
+import { TabPageGlyph } from "./TabPageGlyph";
 import * as styles from "./BottomNavigation.css";
 
-export function BottomNavigation() {
+export function BottomNavigation({ ref, onActiveTabPress }: { ref?: Ref<HTMLElement>; onActiveTabPress?: () => void }) {
   const { pathname } = useLocation();
   const activeTab =
-    pathname === "/" ? "home" : pathname === "/mypage" || pathname.startsWith("/mypage/") ? "mypage" : "none";
+    pathname === "/"
+      ? "home"
+      : pathname === paths.routeMap
+        ? "route-map"
+        : pathname === paths.favorites || pathname.startsWith(`${paths.favorites}/`)
+          ? "favorites"
+          : pathname === "/mypage" || pathname.startsWith("/mypage/")
+            ? "mypage"
+            : "none";
+  function handleTabClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (
+      !onActiveTabPress ||
+      event.currentTarget.pathname !== pathname ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    event.preventDefault();
+    onActiveTabPress();
+  }
+
   return (
-    <nav className={styles.navigation} aria-label="주요 메뉴" data-active={activeTab}>
+    <nav ref={ref} className={styles.navigation} aria-label="주요 메뉴" data-active={activeTab}>
       <span className={styles.indicator} data-tab-indicator="" aria-hidden="true" />
-      <NavLink to="/" end className={styles.tab} aria-label="홈">
+      <NavLink to="/" end className={styles.tab} aria-label="홈" onClick={handleTabClick}>
         <svg
           width="20"
           height="20"
@@ -20,24 +46,17 @@ export function BottomNavigation() {
           strokeLinejoin="round"
           aria-hidden="true"
         >
-          <path d="m3 10 9-7 9 7v10H3Z M9 20v-7h6v7" />
+          <path data-tab-fill="" fillRule="evenodd" d="m3 10 9-7 9 7v10H3Z M9 20v-7h6v7Z" />
         </svg>
       </NavLink>
-      <NavLink to="/mypage" className={styles.tab} aria-label="마이페이지">
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="7" r="3.5" />
-          <path d="M5 21v-2a7 7 0 0 1 14 0v2" />
-        </svg>
+      <NavLink to={paths.routeMap} className={styles.tab} aria-label="노선도" onClick={handleTabClick}>
+        <TabPageGlyph page="routes" />
+      </NavLink>
+      <NavLink to={paths.favorites} className={styles.tab} aria-label="즐겨찾기" onClick={handleTabClick}>
+        <TabPageGlyph page="favorites" />
+      </NavLink>
+      <NavLink to={paths.mypage} className={styles.tab} aria-label="마이페이지" onClick={handleTabClick}>
+        <TabPageGlyph page="profile" />
       </NavLink>
     </nav>
   );

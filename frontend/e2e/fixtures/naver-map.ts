@@ -1,4 +1,4 @@
-import type { NaverCoordinate, NaverMap, NaverMaps } from "../../src/pages/verdict-board/map/naverSdk";
+import type { NaverCoordinate, NaverMap, NaverMaps } from "../../src/shared/map/naverSdk";
 import { test as apiTest, expect } from "./api";
 
 interface MapSnapshot {
@@ -14,6 +14,7 @@ interface BrowserMapControls {
   finishIdle: () => void;
   setZoom: (zoom: number) => void;
   panToStop: (sequence: number) => void;
+  panToPoint: (point: [number, number]) => void;
   snapshot: () => MapSnapshot;
   failNative: (operation: NativeFailure) => void;
 }
@@ -23,6 +24,7 @@ interface MapFixture {
   finishIdle: () => Promise<void>;
   setZoom: (zoom: number) => Promise<void>;
   panToStop: (sequence: number) => Promise<void>;
+  panToPoint: (point: [number, number]) => Promise<void>;
   snapshot: () => Promise<MapSnapshot>;
   failNative: (operation: NativeFailure) => Promise<void>;
 }
@@ -97,6 +99,7 @@ export const test = apiTest.extend<{
               this.zoom = options.zoom;
               this.center = options.center;
               this.size = options.size;
+              if (options.logoControlOptions) this.scale = (256 * 2 ** 13) / 360;
               this.layer = document.createElement("div");
               this.layer.dataset.testid = "naver-map-test-double";
               this.layer.style.cssText =
@@ -151,6 +154,7 @@ export const test = apiTest.extend<{
                   this.emit("idle");
                 },
                 setZoom: (zoom) => this.setZoom(zoom),
+                panToPoint: ([longitude, latitude]) => this.setCenter(new LatLng(latitude, longitude)),
                 panToStop: (sequence) => {
                   const marker = [...this.markers].find(
                     (item) => item.content.dataset.mapStopSequence === String(sequence),
@@ -246,6 +250,15 @@ export const test = apiTest.extend<{
               this.draw();
               this.emit("idle");
             }
+            morph(center: NaverCoordinate, zoom: number) {
+              this.center = center;
+              this.setZoom(zoom);
+            }
+            stop() {
+              cancelAnimationFrame(this.zoomFrame);
+              this.zoomFrame = 0;
+              delete this.layer.dataset.zoomAnimating;
+            }
             getSize() {
               return this.size;
             }
@@ -278,6 +291,9 @@ export const test = apiTest.extend<{
             private rendererScale() {
               // GL 초기화 전후에는 같은 줌 값에서도 화면에 투영하는 배율이 달라진다.
               return this.options.gl && this.glInitialized ? 2 : 1;
+            }
+            getPanes() {
+              return { overlayLayer: this.layer };
             }
             getProjection() {
               return {
@@ -454,6 +470,7 @@ export const test = apiTest.extend<{
           window.naver = {
             maps: {
               glEnabled: true,
+              Position: { BOTTOM_LEFT: 10 },
               LatLng,
               Point: MapPoint,
               Size: MapSize,
@@ -484,6 +501,8 @@ export const test = apiTest.extend<{
         setZoom: async (zoom) => {
           await page.evaluate((value) => (window as unknown as TestMapWindow).__naverMapTest.setZoom(value), zoom);
         },
+        panToPoint: (point) =>
+          page.evaluate((value) => (window as unknown as TestMapWindow).__naverMapTest.panToPoint(value), point),
         panToStop: async (sequence) => {
           await page.evaluate(
             (value) => (window as unknown as TestMapWindow).__naverMapTest.panToStop(value),

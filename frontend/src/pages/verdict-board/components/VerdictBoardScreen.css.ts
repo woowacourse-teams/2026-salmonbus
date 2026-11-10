@@ -1,4 +1,5 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
+import { BOARD_SHEET_EXPANDED_PERCENT } from "@/shared/bottom-sheet/boardSheetPolicy";
 import { PHONE_MEDIA } from "@/shared/styles/media";
 import { vars } from "@/shared/styles/tokens.css";
 import { secondary } from "@/shared/styles/button.css";
@@ -17,6 +18,17 @@ export const page = style({
   backgroundColor: vars.color.background,
   selectors: { 'html[data-native-map="true"] &': { backgroundColor: "transparent" } },
 });
+const mapOverlay = style({
+  position: "fixed",
+  inset: "0 0 auto",
+  maxWidth: 425,
+  margin: "0 auto",
+  zIndex: 5,
+  pointerEvents: "none",
+  "@media": { [PHONE_MEDIA]: { maxWidth: "none" } },
+});
+export const sharedPage = style([page, mapOverlay, { backgroundColor: "transparent" }]);
+globalStyle(`${sharedPage} [data-native-map-hit], ${sharedPage} a:focus`, { pointerEvents: "auto" });
 export const content = style({
   position: "relative",
   display: "flex",
@@ -37,25 +49,53 @@ export const skipLink = style([
     selectors: { "&:not(:focus)": { clipPath: "inset(50%)" } },
   },
 ]);
-export const back = style({
+const mapControlsPosition = style({
   position: "absolute",
   top: "calc(env(safe-area-inset-top, 0px) + 20px)",
   left: "20px",
   zIndex: 1,
-  display: "grid",
-  placeItems: "center",
-  width: "32px",
-  height: "32px",
-  borderRadius: "50%",
-  backgroundColor: vars.color.liveBus,
-  color: "#FFFFFF",
-  selectors: { "&:focus-visible": { outline: `2px solid ${vars.color.focusRing}`, outlineOffset: "3px" } },
 });
+export const back = style([
+  mapControlsPosition,
+  {
+    display: "grid",
+    placeItems: "center",
+    width: "32px",
+    height: "32px",
+    borderRadius: "50%",
+    backgroundColor: vars.color.liveBus,
+    color: "#FFFFFF",
+    selectors: { "&:focus-visible": { outline: `2px solid ${vars.color.focusRing}`, outlineOffset: "3px" } },
+  },
+]);
 export const fullControls = style({
-  position: "relative",
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
   height: "36px",
 });
-export const fullBack = style([back, { top: 0, left: 0 }]);
+export const mapControls = style([fullControls, mapControlsPosition, { height: "32px" }]);
+export const fullBack = style([back, { position: "static", flexShrink: 0 }]);
+export const directionHeader = style({
+  display: "grid",
+  gap: "4px",
+});
+export const routeNumber = style({
+  display: "grid",
+  placeItems: "center",
+  minWidth: 54,
+  height: 32,
+  margin: 0,
+  padding: "0 10px",
+  borderRadius: vars.radius.control,
+  backgroundColor: vars.color.liveBus,
+  color: vars.color.onInk,
+  fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  fontSize: 18,
+  fontWeight: 800,
+  lineHeight: 1,
+  whiteSpace: "nowrap",
+});
 export const outOfService = style({
   alignSelf: "center",
   width: "100%",
@@ -87,4 +127,32 @@ export const boardNotice = style({
   color: vars.color.textSubtle,
   fontSize: vars.font.boardNotice,
   textAlign: "center",
+});
+
+export const sharedNoticePage = style([
+  noticePage,
+  mapOverlay,
+  {
+    padding: 0,
+    alignItems: "flex-end",
+    backgroundColor: "transparent",
+  },
+]);
+globalStyle(`${sharedNoticePage} > :last-child`, {
+  flex: "none",
+  width: "100%",
+  padding: "20px 18px calc(20px + env(safe-area-inset-bottom, 0px))",
+  border: 0,
+  borderRadius: `${vars.radius.boardSheet} ${vars.radius.boardSheet} 0 0`,
+  background: vars.color.surface,
+  pointerEvents: "auto",
+});
+globalStyle(`${sharedNoticePage} [data-native-map-hit]`, { pointerEvents: "auto" });
+globalStyle(`${sharedNoticePage}[data-station-sheet] > :last-child`, { overflowY: "auto" });
+globalStyle(`${sharedNoticePage}[data-station-sheet="summary"] > :last-child`, { height: "30dvh" });
+globalStyle(`${sharedNoticePage}[data-station-sheet="detail"] > :last-child`, {
+  height: `${BOARD_SHEET_EXPANDED_PERCENT}dvh`,
+});
+globalStyle(`${sharedNoticePage}[data-station-sheet="full"] > :last-child`, {
+  height: `calc(100dvh - ${SAFE_AREA_TOP})`,
 });

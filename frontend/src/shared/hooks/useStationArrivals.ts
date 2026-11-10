@@ -8,13 +8,13 @@ import {
   stationArrivalSelectionKey,
   withStationArrivalClock,
 } from "@/shared/api/stationArrivalsPolling";
-import type { StationArrivalSelection, StationArrivalsResponse } from "@/shared/api/stationArrivals.types";
+import type { StationArrivalQuery, StationArrivalsResponse } from "@/shared/api/stationArrivals.types";
 
 export type { StationArrivalSelection } from "@/shared/api/stationArrivals.types";
 
 interface SelectionIdentity {
   key: string;
-  selection: StationArrivalSelection;
+  selection: StationArrivalQuery;
 }
 
 interface ArrivalState {
@@ -22,23 +22,19 @@ interface ArrivalState {
   resource: PolledResource<StationArrivalsResponse>;
 }
 
-export function useStationArrivals(selection: StationArrivalSelection | null): PolledResource<StationArrivalsResponse> {
+export function useStationArrivals(selection: StationArrivalQuery | null): PolledResource<StationArrivalsResponse> {
   const stationId = selection?.stationId ?? null;
-  const routeId = selection?.routeId ?? null;
-  const referenceVersionId = selection?.referenceVersionId ?? null;
-  const stopSequence = selection?.stopSequence ?? null;
-  const direction = selection?.direction ?? null;
+  const visit = selection && "routeId" in selection ? selection : null;
+  const routeId = visit?.routeId ?? null;
+  const referenceVersionId = visit?.referenceVersionId ?? null;
+  const stopSequence = visit?.stopSequence ?? null;
+  const direction = visit?.direction ?? null;
   const identity = useMemo(() => {
-    if (
-      stationId === null ||
-      routeId === null ||
-      referenceVersionId === null ||
-      stopSequence === null ||
-      direction === null
-    ) {
-      return null;
-    }
-    const current = { stationId, routeId, referenceVersionId, stopSequence, direction };
+    if (stationId === null) return null;
+    const current =
+      routeId !== null && referenceVersionId !== null && stopSequence !== null && direction !== null
+        ? { stationId, routeId, referenceVersionId, stopSequence, direction }
+        : { stationId };
     return { key: stationArrivalSelectionKey(current), selection: current };
   }, [stationId, routeId, referenceVersionId, stopSequence, direction]);
   const [state, setState] = useState<ArrivalState | null>(null);

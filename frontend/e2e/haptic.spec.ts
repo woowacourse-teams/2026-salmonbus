@@ -79,6 +79,7 @@ test("저장할 그룹을 체크하면 selection, 즐겨찾기를 저장하면 s
   api,
   favorites,
 }) => {
+  favorites.groups.push({ id: "10000000-0000-4000-8000-000000000004", name: "주말", favorites: [] });
   const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
   await openInApp(page, `/routes/${routeId}?direction=UP`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
@@ -101,16 +102,14 @@ test("저장 응답이 오기 전에 화면을 떠나면 결과 진동을 보내
   });
   const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
   await openInApp(page, `/routes/${routeId}?direction=UP`);
-  await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "저장할 그룹 선택" });
-  await dialog.getByRole("checkbox", { name: /즐겨찾기/ }).check();
   const started = page.waitForRequest((request) => request.method() === "PUT");
-  await dialog.getByRole("button", { name: "저장", exact: true }).click();
+  const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });
+  await star.click();
   await started;
   // 라우터가 주소를 먼저 바꾸고 떠나는 화면을 잠깐 남겨 두는 순간을 만든다.
   await page.evaluate(() => history.pushState(null, "", "/"));
   finish();
-  await expect(dialog).not.toBeVisible();
+  await expect(star).toHaveAttribute("aria-pressed", "true");
   expect(favorites.groups[0]!.favorites).toHaveLength(1);
-  expect(await appMessageTypes(page)).toEqual(["haptic.selection"]);
+  expect(await appMessageTypes(page)).toEqual([]);
 });

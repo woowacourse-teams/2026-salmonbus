@@ -10,6 +10,7 @@ class ReturnToTest {
     @ParameterizedTest
     @ValueSource(strings = {
         "/",
+        "/favorites",
         "/routes/123456789",
         "/routes/123456789?direction=UP",
         "/routes/123456789?direction=DOWN&stopId=224000586",
@@ -46,6 +47,8 @@ class ReturnToTest {
         "/routes/123456789#fragment",
         "/routes/123456789\r\nSet-Cookie: a=b",
         "/other",
+        "/favorites/extra",
+        "/favorites?next=https://evil.com",
         "/?direction=UP",
     })
     void 허용하지_않은_값은_첫_화면으로_바꾼다(String candidate) {

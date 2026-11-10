@@ -1,6 +1,8 @@
-import { style } from "@vanilla-extract/css";
+import { keyframes, style } from "@vanilla-extract/css";
 import { POINTER_INPUT } from "@/shared/input-method/inputMethod";
 import { vars } from "@/shared/styles/tokens.css";
+
+const rise = keyframes({ from: { transform: "translateY(100%)" }, to: { transform: "translateY(0)" } });
 
 export const sheet = style({
   position: "relative",
@@ -20,6 +22,9 @@ export const sheet = style({
   },
   "@media": {
     "(prefers-reduced-motion: reduce)": { transition: "none" },
+    "(prefers-reduced-motion: no-preference)": {
+      selectors: { '&[data-entering-from-map="true"]': { animation: `${rise} 300ms ${vars.easing.slide}` } },
+    },
   },
 });
 

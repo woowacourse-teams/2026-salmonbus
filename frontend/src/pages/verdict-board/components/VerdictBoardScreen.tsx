@@ -1,4 +1,5 @@
-import { useId, useMemo, useRef, useState } from "react";
+import { useContext, useId, useMemo, useRef, useState } from "react";
+import { MapFlowSurfaceContext } from "@/shared/map/mapFlowSurface";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import type { EventMap } from "@/shared/analytics/events";
 import { track } from "@/shared/analytics/track";
@@ -9,7 +10,12 @@ import { fetchRouteWatch } from "@/shared/api/routeForecast.api";
 import type { Board, Direction, DirectionInfo, RouteWatch, Vehicle } from "@/shared/api/routeForecast.types";
 import { usePolledRequest } from "@/shared/api/usePolledRequest";
 import { playHaptic } from "@/shared/haptic/haptic";
-import { boardEntryFrom } from "@/shared/routing/boardEntry";
+import {
+  boardEntryFrom,
+  quietMapLoadingFrom,
+  stationSheetFrom,
+  type StationSheetEntry,
+} from "@/shared/routing/boardEntry";
 import { paths } from "@/shared/routing/paths";
 import {
   boardFreshnessOf,
@@ -26,9 +32,9 @@ import {
 import { liveVehicleViewsFor } from "./liveVehiclePolicy";
 import { liveMotionDurationOf, useFreshLiveVehicles } from "../hooks/useFreshLiveVehicles";
 import { useLiveVehicleMotion } from "../hooks/useLiveVehicleMotion";
-import { useStationArrivals } from "../hooks/useStationArrivals";
+import { useStationArrivals } from "@/shared/hooks/useStationArrivals";
 import { expandableRowOf, stopSelectionFrom, type StopSelection } from "./stopSelection";
-import type { BoardSheetSnap } from "./boardSheetPolicy";
+import type { BoardSheetSnap } from "@/shared/bottom-sheet/boardSheetPolicy";
 import { BoardBottomSheet } from "./BoardBottomSheet";
 import { BoardRouteSummary } from "./BoardRouteSummary";
 import { DirectionTabs } from "./DirectionTabs";
@@ -37,7 +43,7 @@ import type { StopExpandInput } from "../analytics/boardVisitPolicy";
 import { useBoardVisitEvents } from "../analytics/useBoardVisitEvents";
 import { RouteMap } from "../map/RouteMap";
 import { useRouteMapData } from "../map/useRouteMapData";
-import { useBoardViewport } from "../hooks/useBoardViewport";
+import { useBoardViewport } from "@/shared/bottom-sheet/useBoardViewport";
 import { boardNoticeLabel, OUT_OF_SERVICE_NOTICE } from "./verdictCopy";
 import * as styles from "./VerdictBoardScreen.css";
 
@@ -49,6 +55,7 @@ type BoardState =
 type DirectionSwitchSource = EventMap["direction_switched"]["source"];
 
 interface OperatingBoardProps {
+  stationEntry: StationSheetEntry | null;
   board: Board;
   direction: DirectionInfo;
   liveVehicles: readonly Vehicle[];
@@ -67,9 +74,10 @@ export function VerdictBoardScreen() {
 }
 
 function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
+  const shared = useContext(MapFlowSurfaceContext) !== null;
   const [search, setSearch] = useSearchParams();
   const location = useLocation();
-  // 방향을 바꾸면 주소를 바꾸면서 이동 state가 사라져서, 처음 그릴 때 읽은 진입 경로를 유지한다.
+  const stationEntry = shared ? stationSheetFrom(location.state) : null;
   const [entry] = useState(() => boardEntryFrom(location.state));
   const [watchRevision, setWatchRevision] = useState(0);
   const revalidateWatch = useRef(false);
@@ -108,7 +116,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
         previous.set("direction", next);
         return previous;
       },
-      { replace: true },
+      { replace: true, state: location.state },
     );
   }
 
@@ -117,6 +125,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
     return (
       <OperatingBoard
         key={state.watch.route.referenceVersionId}
+        stationEntry={stationEntry}
         board={state.watch}
         direction={state.direction}
         switched={switched}
@@ -142,7 +151,10 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
         ) ?? null)
       : null;
   return (
-    <main className={styles.noticePage}>
+    <main
+      className={shared ? styles.sharedNoticePage : styles.noticePage}
+      data-station-sheet={stationEntry ?? undefined}
+    >
       <h1 className={visuallyHidden}>노선 판정보드</h1>
       <BoardBackLink />
       {status === "outOfService" ? (
@@ -177,6 +189,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
 }
 
 function OperatingBoard({
+  stationEntry,
   board,
   direction,
   liveVehicles,
@@ -188,10 +201,15 @@ function OperatingBoard({
   onStopExpand,
   onGeometryConflict,
 }: OperatingBoardProps) {
+  const shared = useContext(MapFlowSurfaceContext) !== null;
+  const { state: locationState } = useLocation();
+  const favoriteMapEntry = shared && boardEntryFrom(locationState) === "favorite";
   const sheetId = useId();
   const viewport = useBoardViewport();
   const [search, setSearch] = useSearchParams();
-  const [snap, setSnap] = useState<BoardSheetSnap>("expanded");
+  const [snap, setSnap] = useState<BoardSheetSnap>(
+    stationEntry === "full" ? "full" : stationEntry === "summary" ? "half" : "expanded",
+  );
   const [selected, setSelected] = useState<StopSelection | null>(() =>
     stopSelectionFrom(board, direction.id, search.get("stopId")),
   );
@@ -241,7 +259,7 @@ function OperatingBoard({
         } else previous.delete("stopId");
         return previous;
       },
-      { replace: true },
+      { replace: true, state: locationState },
     );
   }
 
@@ -261,7 +279,7 @@ function OperatingBoard({
   function scrollToStop(selection: StopSelection) {
     // 같은 위치를 다시 눌러도 목록 이동을 새로 요청한다.
     setScrollRequest({ ...selection });
-    if (snap === "minimum") setSnap("half");
+    if (snap === "minimum") setSnap("expanded");
     onDirectionChange(selection.direction, "map");
   }
 
@@ -284,7 +302,7 @@ function OperatingBoard({
   function focusVehicleFromList(key: string) {
     setScrollRequest(null);
     setVehicleFocusRequest({ key, focusMarker: true });
-    if (snap === "full") setSnap("half");
+    if (snap === "full") setSnap("expanded");
   }
 
   function toggleFromList(sequence: number) {
@@ -295,7 +313,7 @@ function OperatingBoard({
         : { direction: direction.id, sequence };
     setSelected(next);
     setSelectedFromList(next !== null);
-    if (next !== null && map.status === "generating" && snap === "full") setSnap("half");
+    if (next !== null && map.status === "generating" && snap === "full") setSnap("expanded");
     rememberSelection(next);
     setScrollRequest(null);
   }
@@ -309,7 +327,7 @@ function OperatingBoard({
   }
 
   return (
-    <div className={styles.page} style={{ height: viewport.height, top: viewport.top }}>
+    <div className={shared ? styles.sharedPage : styles.page} style={{ height: viewport.height, top: viewport.top }}>
       <main className={styles.content}>
         <a
           href={`#${sheetId}`}
@@ -338,28 +356,31 @@ function OperatingBoard({
             visible={mapVisible}
             viewportHeight={viewport.height}
             activeDirection={direction.id}
+            preserveViewOnEntry={stationEntry !== null || favoriteMapEntry}
+            quietInitialLoad={
+              shared && (stationEntry !== null || favoriteMapEntry || quietMapLoadingFrom(locationState))
+            }
           />
-          <BoardBackLink />
+          <BoardRouteControls routeName={board.route.displayName} />
         </div>
         <BoardBottomSheet
           id={sheetId}
           snap={snap}
           onSnapChange={setSnap}
           viewportHeight={viewport.height}
+          enteringFromMap={shared && stationEntry === null}
           header={
             <>
-              {snap === "full" && (
-                <div className={styles.fullControls}>
-                  <BoardBackLink inHeader />
-                </div>
-              )}
-              <BoardRouteSummary board={board} direction={direction} />
-              <DirectionTabs
-                directions={directionViewsFor(board)}
-                selected={direction.id}
-                animated={switched}
-                onSelect={switchDirection}
-              />
+              {snap === "full" && <BoardRouteControls routeName={board.route.displayName} inHeader />}
+              <div className={styles.directionHeader}>
+                <BoardRouteSummary key={board.route.id} board={board} direction={direction} />
+                <DirectionTabs
+                  directions={directionViewsFor(board)}
+                  selected={direction.id}
+                  animated={switched}
+                  onSelect={switchDirection}
+                />
+              </div>
               {notice !== null && (
                 <p className={styles.boardNotice} role="status">
                   {boardNoticeLabel(notice)}
@@ -394,6 +415,15 @@ function OperatingBoard({
           />
         </BoardBottomSheet>
       </main>
+    </div>
+  );
+}
+
+function BoardRouteControls({ routeName, inHeader = false }: { routeName: string; inHeader?: boolean }) {
+  return (
+    <div className={inHeader ? styles.fullControls : styles.mapControls}>
+      <BoardBackLink inHeader />
+      <h1 className={styles.routeNumber}>{routeName}</h1>
     </div>
   );
 }

@@ -13,7 +13,7 @@ export function boardReturnTo(candidate: string): string {
 }
 
 export function localReturnTo(candidate: string | null): string {
-  if (candidate === "/mypage") return candidate;
+  if (candidate === "/mypage" || candidate === "/favorites") return candidate;
   if (candidate && /^\/\?q=\d{1,20}$/.test(candidate)) return candidate;
   return boardReturnTo(candidate ?? "/");
 }

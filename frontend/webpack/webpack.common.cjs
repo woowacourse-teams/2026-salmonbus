@@ -3,6 +3,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const { VanillaExtractPlugin } = require("@vanilla-extract/webpack-plugin");
 const { execSync } = require("child_process");
 const { DefinePlugin } = require("webpack");
+const fs = require("node:fs");
 
 // CodePipeline sources arrive without .git, so buildspec injects APP_VERSION
 function resolveAppVersion() {
@@ -44,6 +45,25 @@ module.exports = {
     ],
   },
   plugins: [
+    {
+      apply(compiler) {
+        compiler.hooks.thisCompilation.tap("HomeEvents", (compilation) => {
+          const source = path.resolve(__dirname, "../public/home-events.json");
+          compilation.fileDependencies.add(source);
+          compilation.hooks.processAssets.tap(
+            { name: "HomeEvents", stage: compiler.webpack.Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL },
+            () => {
+              const feed =
+                process.env.IGNORE_ENV_FILES !== "true" && fs.existsSync(source)
+                  ? fs.readFileSync(source, "utf8")
+                  : JSON.stringify({ generatedAt: null, events: [] });
+              JSON.parse(feed);
+              compilation.emitAsset("assets/home-events.json", new compiler.webpack.sources.RawSource(feed));
+            },
+          );
+        });
+      },
+    },
     new DefinePlugin({
       __SENTRY_DSN__: JSON.stringify(process.env.WEBPACK_SENTRY_DSN ?? ""),
       __SENTRY_ENVIRONMENT__: JSON.stringify(process.env.WEBPACK_SENTRY_ENVIRONMENT ?? ""),

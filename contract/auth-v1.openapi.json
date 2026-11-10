@@ -1090,7 +1090,7 @@
     "/api/me/withdrawal/apple": {
       "post": {
         "summary": "애플 회원 탈퇴 시작 주소 발급",
-        "description": "애플 회원은 애플 계정으로 다시 인증해야 탈퇴할 수 있습니다.\n이 요청은 5분 동안 유효한 탈퇴 티켓이 든 시작 주소를 반환하고, 클라이언트는 브라우저를 그 주소로 이동시킵니다.\n- 탈퇴하면 `/?withdrawn=1`로 돌아오고 인증 쿠키가 지워집니다\n- 사용자가 취소하면 `returnTo`에 `withdraw=cancelled`, 그 밖의 실패는 `withdraw=failed`가 붙어 돌아옵니다\n- 애플 토큰 취소에 실패하면 회원을 지우지 않고 `withdraw=failed`로 돌아옵니다. 인증 쿠키가 남아 다시 시도할 수 있습니다\n- `returnTo`는 `/` 또는 `/routes/{9자리}`(쿼리 `direction`·`stopId`만)이며, 그 밖의 값은 `/`로 바뀝니다\n\n본문은 생략할 수 있습니다. 카카오 회원이면 400 `INVALID_REQUEST`입니다.\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 헤더가 없거나 토큰 값이 비어 있으면 `__Host-sb_at` 쿠키를 봅니다. 헤더에 토큰 값이 있으면 그 토큰이 검증에 실패해도 쿠키를 보지 않습니다. 인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
+        "description": "애플 회원은 애플 계정으로 다시 인증해야 탈퇴할 수 있습니다.\n이 요청은 5분 동안 유효한 탈퇴 티켓이 든 시작 주소를 반환하고, 클라이언트는 브라우저를 그 주소로 이동시킵니다.\n- 탈퇴하면 `/?withdrawn=1`로 돌아오고 인증 쿠키가 지워집니다\n- 사용자가 취소하면 `returnTo`에 `withdraw=cancelled`, 그 밖의 실패는 `withdraw=failed`가 붙어 돌아옵니다\n- 애플 토큰 취소에 실패하면 회원을 지우지 않고 `withdraw=failed`로 돌아옵니다. 인증 쿠키가 남아 다시 시도할 수 있습니다\n- `returnTo`는 `/`, `/favorites` 또는 `/routes/{9자리}`(쿼리 `direction`·`stopId`만)이며, 그 밖의 값은 `/`로 바뀝니다\n\n본문은 생략할 수 있습니다. 카카오 회원이면 400 `INVALID_REQUEST`입니다.\n액세스 토큰은 `Authorization: Bearer` 헤더를 먼저 보고, 헤더가 없거나 토큰 값이 비어 있으면 `__Host-sb_at` 쿠키를 봅니다. 헤더에 토큰 값이 있으면 그 토큰이 검증에 실패해도 쿠키를 보지 않습니다. 인증 쿠키(`__Host-sb_at`·`__Host-sb_rt`)가 실린 요청은 `Authorization: Bearer` 헤더가 없으면 `X-XSRF-TOKEN` 헤더에 `__Host-XSRF-TOKEN` 쿠키 값을 실어야 합니다.",
         "operationId": "startAppleWithdrawal",
         "parameters": [
           {
@@ -1486,7 +1486,7 @@
         "properties": {
           "returnTo": {
             "type": "string",
-            "description": "탈퇴를 그만두거나 실패했을 때 돌아갈 사이트 안 경로. / 또는 /routes/{9자리 노선 ID}이며 노선 경로에는 direction(UP|DOWN)·stopId 쿼리만 한 번씩 붙일 수 있다. 생략하거나 허용하지 않는 값이면 /",
+            "description": "탈퇴를 그만두거나 실패했을 때 돌아갈 사이트 안 경로. /, /favorites 또는 /routes/{9자리 노선 ID}이며 노선 경로에는 direction(UP|DOWN)·stopId 쿼리만 한 번씩 붙일 수 있다. 생략하거나 허용하지 않는 값이면 /",
             "example": "/routes/123456789?direction=UP"
           }
         }

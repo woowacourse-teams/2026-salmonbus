@@ -1,7 +1,7 @@
 import { keyframes, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
-const TRACK_PADDING = "4px";
+export const TRACK_PADDING = "4px";
 const TAB_GAP = "3px";
 const TRAVEL = `calc(100% + ${TAB_GAP})`;
 const PRESS = 0.97;
@@ -73,8 +73,8 @@ const tabBase = style({
   fontWeight: 500,
   lineHeight: TAB_LINE_HEIGHT,
   letterSpacing: "-0.2px",
-  whiteSpace: "nowrap",
-  textOverflow: "ellipsis",
+  wordBreak: "keep-all",
+  overflowWrap: "anywhere",
   transition: `color ${vars.duration.base} ease, scale ${vars.duration.fast} ease`,
   "@media": {
     "(prefers-reduced-motion: reduce)": {

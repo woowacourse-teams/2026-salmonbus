@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
+import { chipLabel } from "@/shared/components/verdictChipCopy";
 import {
   arrivalSeatLabel,
   boardNoticeLabel,
-  chipLabel,
   OUT_OF_SERVICE_NOTICE,
   REFRESH_FAILED_NOTICE,
   STALE_FORECAST_NOTICE,

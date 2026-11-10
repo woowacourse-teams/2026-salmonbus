@@ -1,97 +1,53 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
+import { activeRouteColor, inactiveRouteColor } from "@/shared/map/routeColors";
+import { stopPinGlyph, stopPinLabel } from "@/shared/map/mapStopPin.css";
 import { vars } from "@/shared/styles/tokens.css";
 import { canvas } from "./RouteMap.css";
 
 export const stop = style({
-  position: "relative",
-  display: "grid",
-  placeItems: "center",
-  width: 24,
-  height: 24,
-  padding: 0,
-  border: 0,
-  borderRadius: "50%",
-  background: "transparent",
-  color: "#DC7866",
-  cursor: "pointer",
   selectors: {
+    "&&": { width: 24, height: 24 },
     [`${canvas}[data-overlays-ready="false"] &`]: { visibility: "hidden" },
-    '&[data-active="false"]': {
-      color: vars.color.textMuted,
-    },
-    '&[aria-pressed="true"]': {
-      width: 32,
-      height: 32,
-      color: "#D46953",
-    },
-    "&:focus-visible": { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 2 },
-  },
-});
-export const stopName = style({
-  position: "absolute",
-  left: "50%",
-  top: "calc(100% + 4px)",
-  transform: "translateX(-50%)",
-  padding: "3px 5px",
-  color: vars.color.onInk,
-  WebkitTextStroke: "2px #000000",
-  paintOrder: "stroke fill",
-  whiteSpace: "nowrap",
-  fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
-  fontSize: 13,
-  fontWeight: 800,
-  pointerEvents: "none",
-  selectors: {
-    [`${stop}[aria-pressed="true"] &`]: {
-      padding: "5px 8px",
-      borderRadius: 8,
-      background: vars.color.surface,
-      color: "#B45544",
-      WebkitTextStroke: "0",
-      boxShadow: "0 2px 8px #593D3026",
-    },
-    [`${stop}[data-label-above="true"] &`]: {
-      top: "auto",
-      bottom: "calc(100% + 4px)",
-    },
+    '&&[aria-pressed="true"]': { width: 32, height: 32 },
   },
 });
 
-export const stopIcon = style({
-  display: "block",
-  width: 16,
-  height: 16,
-  border: "2.5px solid currentColor",
-  borderRadius: "50%",
-  background: vars.color.surface,
-  transitionProperty: "width, height, border-width, box-shadow, background-color",
-  transitionDuration: vars.duration.base,
-  transitionTimingFunction: vars.easing.slide,
-  "@media": {
-    "(prefers-reduced-motion: reduce)": { transition: "none" },
-  },
-  selectors: {
-    [`${stop}[data-active="false"] &`]: { background: vars.color.mutedChipSurface },
-    [`${stop}[data-boarding-allowed="false"] &`]: {
-      width: 6,
-      height: 6,
-      border: 0,
-      background: "currentColor",
-    },
-    [`${stop}[aria-pressed="true"] &`]: {
-      width: 20,
-      height: 20,
-      borderWidth: 4,
-      background: vars.color.surface,
-      boxShadow: `0 0 0 2px ${vars.color.surface}, 0 0 0 5px #F2DDD5, 0 2px 8px #78443826`,
-    },
-    [`${stop}[data-boarding-allowed="false"][aria-pressed="true"] &`]: {
-      width: 8,
-      height: 8,
-      border: 0,
-      background: "currentColor",
-    },
-  },
+globalStyle(`${stop}[data-boarding-allowed="false"] ${stopPinGlyph}`, {
+  borderColor: "#C5C9CF",
+  background: "#F4F5F6",
+  color: inactiveRouteColor,
+  boxShadow: "0 1px 3px #5B647224",
+});
+
+globalStyle(`${stop}[data-boarding-allowed="false"][aria-pressed="true"] ${stopPinGlyph}`, {
+  borderColor: "#FFFFFF",
+  background: inactiveRouteColor,
+  color: vars.color.onInk,
+  boxShadow: "0 0 0 3px #C5C9CF, 0 2px 6px #5B647245",
+});
+
+globalStyle(`${stop} ${stopPinLabel}`, {
+  padding: 1,
+  border: 0,
+  background: "transparent",
+  boxShadow: "none",
+  color: vars.color.onInk,
+  fontSize: 13,
+  fontWeight: 800,
+  WebkitTextStroke: "2px #000000",
+  paintOrder: "stroke fill",
+});
+
+export const stopConnector = style({
+  position: "absolute",
+  top: "50%",
+  left: "50%",
+  overflow: "visible",
+  pointerEvents: "none",
+  stroke: activeRouteColor,
+  strokeWidth: 1.5,
+  strokeOpacity: 0.65,
+  strokeLinecap: "round",
 });
 export const bus = style({
   position: "relative",
@@ -130,7 +86,7 @@ export const busCount = style({
   width: "max-content",
   minWidth: 32,
   height: 18,
-  padding: "2px 6px 0",
+  padding: "0 6px",
   lineHeight: 1,
   borderRadius: 5,
   background: vars.color.mapBus,

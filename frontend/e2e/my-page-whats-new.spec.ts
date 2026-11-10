@@ -9,7 +9,7 @@ for (const visitor of ["비로그인", "로그인"] as const) {
     await expect(
       visitor === "로그인"
         ? page.getByText("살몽님", { exact: true })
-        : page.getByRole("heading", { name: "연어버스에 합류 하세요!", exact: true }),
+        : page.getByRole("link", { name: "로그인 / 회원가입", exact: true }),
     ).toBeVisible();
 
     await page.getByRole("link", { name: "새 소식", exact: true }).click();
