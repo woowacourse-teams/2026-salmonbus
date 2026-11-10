@@ -370,11 +370,7 @@ function visibleArrowDirections(native: ReturnType<typeof createRecordingSdk>) {
   ].sort();
 }
 
-function horizontalTranslationFor(marker: ReturnType<typeof createRecordingSdk>["markers"][number]) {
-  return Number.parseFloat(marker.options.icon.content.style.transform.slice("translate(".length));
-}
-
-function createStopSpreadSetup(direction: number) {
+function createOverlappingStopsSetup(direction: number) {
   const coordinate = { latitude: 37.5, longitude: 127 };
   const connection = { latitude: 37.501, longitude: 127 };
   const downCoordinate = { latitude: 37.5, longitude: 127 + direction * 0.016 };
@@ -427,103 +423,97 @@ function createStopSpreadSetup(direction: number) {
   flushFrames();
   adapter.update({ direction: "UP", sequence: 11 }, "DOWN", []);
   const zoomChanged = native.events.find((event) => event.name === "zoom_changed")!.listener;
-  return { native, up, down, positions, connection, downConnection, zoomChanged };
+  return { native, adapter, up, down, positions, connection, downConnection, zoomChanged };
 }
 
 describe("네이버 지도 adapter", () => {
-  it.each([-1, 1])("양쪽 DOWN의 가로 배치를 %s배 해도 확대 중 UP의 밀림 변화가 1px 미만이다", (direction) => {
-    const { native, adapter } = setup(
-      true,
-      {},
-      {
-        stops: [
-          { sequence: 11, stopId: "up", direction: "UP", coordinate: { latitude: 37.5, longitude: 127 } },
-          {
-            sequence: 75,
-            stopId: "down-diagonal",
-            direction: "DOWN",
-            coordinate: { latitude: 37.488, longitude: 127 - direction * 0.004 },
-          },
-          {
-            sequence: 76,
-            stopId: "down-horizontal",
-            direction: "DOWN",
-            coordinate: { latitude: 37.5, longitude: 127 + direction * 0.008 },
-          },
-        ],
-      },
-    );
-    const projection = native.map.getProjection();
-    jest.spyOn(native.map, "getProjection").mockImplementation(() => ({
-      ...projection,
-      fromCoordToOffset: (coordinate) => {
-        const scale = 2 ** (native.map.getZoom() - 14);
-        const point = projection.fromCoordToOffset(coordinate);
-        return new PointStub(point.x * scale, point.y * scale);
-      },
-    }));
-    const up = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "11")!;
-    const offsets = Array.from({ length: 21 }, (_, index) => {
-      const scale = 1.39 + index * 0.001;
-      native.map.zoom = 14 + Math.log2(scale);
-      adapter.update(null, "UP", []);
-      return horizontalTranslationFor(up);
-    });
+  it.each([-1, 0, 1])("DOWN이 가로 %s 방향에 있어도 줌과 선택을 바꿀 때 마커는 크기 보정만 적용한다", (direction) => {
+    const { native, adapter, up, down, positions, zoomChanged } = createOverlappingStopsSetup(direction);
+    const markers = [up, down];
 
-    for (let index = 1; index < offsets.length; index += 1) {
-      expect(Math.abs(offsets[index]! - offsets[index - 1]!)).toBeLessThan(1);
+    for (const zoom of [13.5, 14, 16, 18, 14]) {
+      native.map.zoom = zoom;
+      zoomChanged();
+      for (const selection of [
+        null,
+        { direction: "UP" as const, sequence: 11 },
+        { direction: "DOWN" as const, sequence: 76 },
+      ]) {
+        for (const activeDirection of ["UP", "DOWN"] as const) {
+          adapter.update(selection, activeDirection, []);
+          markers.forEach((marker, index) => {
+            const isSelected = selection?.sequence === Number(marker.options.icon.content.dataset.mapStopSequence);
+            expect(marker.options.icon.content.style.transform).toBe(
+              isSelected ? "translate(-4px, -4px)" : "translate(0px, 0px)",
+            );
+            expect(marker.options.position).toBe(positions[index]);
+          });
+        }
+      }
     }
-    expect(offsets[0]! * direction).toBeGreaterThan(0);
-    expect(offsets[10]).toBeCloseTo(0);
-    expect(offsets.at(-1)! * direction).toBeLessThan(0);
   });
 
-  it.each([-1, 1])(
-    "DOWN이 가로 %s 방향에만 있으면 가장 큰 밀림과 선택 크기를 반영한 연결선을 표시하고 실제 좌표를 유지한다",
+  it.each([-1, 0, 1])(
+    "DOWN이 가로 %s 방향에 있어도 연결선은 줌과 선택에 관계없이 정류장 좌표에서 시작한다",
     (direction) => {
-      const { native, up, down, positions, connection, downConnection, zoomChanged } = createStopSpreadSetup(direction);
-
-      expect(horizontalTranslationFor(up) + 4).toBeCloseTo(-direction * 8);
-      expect(horizontalTranslationFor(down)).toBeCloseTo(direction * 8);
+      const { native, adapter, up, down, connection, downConnection, zoomChanged } =
+        createOverlappingStopsSetup(direction);
       const connectors = native.lines.filter((line) => line.strokeStyle === "shortdot");
       expect(connectors).toHaveLength(2);
-      for (const scale of [1, 1.999, 2.001]) {
-        native.map.zoom = 14 + Math.log2(scale);
+
+      for (const zoom of [13.5, 14, 16, 18, 14]) {
+        native.map.zoom = zoom;
         zoomChanged();
-        const spread = Math.max(0, 32 - 16 * scale) / 2;
-        expect(horizontalTranslationFor(up) + 4).toBeCloseTo(-direction * spread);
-        expect(horizontalTranslationFor(down)).toBeCloseTo(direction * spread);
-        const screen = native.map.getProjection();
-        [up, down].forEach((marker, index) => {
-          const start = screen.fromCoordToOffset(connectors[index]!.path[0]!);
-          const point = screen.fromCoordToOffset(marker.options.position);
-          const sizeCorrection = marker === up ? 4 : 0;
-          expect(start.x).toBeCloseTo(point.x + horizontalTranslationFor(marker) + sizeCorrection);
-          expect(start.y).toBeCloseTo(point.y);
-          expect(connectors[index]!.strokeOpacity).toBe(0.85);
-        });
+        for (const selection of [
+          null,
+          { direction: "UP" as const, sequence: 11 },
+          { direction: "DOWN" as const, sequence: 76 },
+        ]) {
+          for (const activeDirection of ["UP", "DOWN"] as const) {
+            adapter.update(selection, activeDirection, []);
+            [up, down].forEach((marker, index) => {
+              const connector = connectors[index]!;
+              const start = connector.path[0]!;
+              const end = connector.path[1]!;
+              const target = [connection, downConnection][index]!;
+              expect(start.lat()).toBe(marker.options.position.lat());
+              expect(start.lng()).toBe(marker.options.position.lng());
+              expect(end.lat()).toBe(target.latitude);
+              expect(end.lng()).toBe(target.longitude);
+              const isSelected = selection?.sequence === Number(marker.options.icon.content.dataset.mapStopSequence);
+              const isActive = (index === 0 ? "UP" : "DOWN") === activeDirection;
+              expect(connector.strokeOpacity).toBe(zoom >= 14 && (isActive || isSelected) ? 0.85 : 0);
+            });
+          }
+        }
       }
-      expect([up.options.position, down.options.position]).toEqual(positions);
-      expect(connectors[0]!.path[1]!.lat()).toBe(connection.latitude);
-      expect(connectors[0]!.path[1]!.lng()).toBe(connection.longitude);
-      expect(connectors[1]!.path[1]!.lat()).toBe(downConnection.latitude);
-      expect(connectors[1]!.path[1]!.lng()).toBe(downConnection.longitude);
     },
   );
 
-  it.each([-1, 1])("DOWN이 가로 %s 방향에 있어도 확대 겹침 경계 안팎의 밀림 차이가 1px 미만이다", (direction) => {
-    const { native, up, down, zoomChanged } = createStopSpreadSetup(direction);
-    native.map.zoom = 14 + Math.log2(1.999);
-    zoomChanged();
-    const inside = [horizontalTranslationFor(up), horizontalTranslationFor(down)];
-
-    native.map.zoom = 14 + Math.log2(2.001);
-    zoomChanged();
-
-    expect(Math.abs(horizontalTranslationFor(up) - inside[0]!)).toBeLessThan(1);
-    expect(Math.abs(horizontalTranslationFor(down) - inside[1]!)).toBeLessThan(1);
-    expect(horizontalTranslationFor(up)).toBe(-4);
-    expect(horizontalTranslationFor(down)).toBe(0);
+  it("겹친 마커는 선택한 정류장, 보고 있는 방향, 반대 방향 순으로 우선한다", () => {
+    const { native, adapter, up, down, zoomChanged } = createOverlappingStopsSetup(0);
+    for (const zoom of [13.5, 14, 16, 18]) {
+      native.map.zoom = zoom;
+      zoomChanged();
+      for (const activeDirection of ["UP", "DOWN"] as const) {
+        const active = activeDirection === "UP" ? up : down;
+        const opposite = activeDirection === "UP" ? down : up;
+        adapter.update(null, activeDirection, []);
+        expect(active.options.zIndex).toBe(6);
+        expect(opposite.options.zIndex).toBe(5);
+        for (const selection of [
+          { direction: "UP" as const, sequence: 11 },
+          { direction: "DOWN" as const, sequence: 76 },
+        ]) {
+          adapter.update(selection, activeDirection, []);
+          expect(up.options.zIndex).toBe(selection.direction === "UP" ? 15 : activeDirection === "UP" ? 6 : 5);
+          expect(down.options.zIndex).toBe(selection.direction === "DOWN" ? 15 : activeDirection === "DOWN" ? 6 : 5);
+        }
+        adapter.update(null, activeDirection, []);
+        expect(active.options.zIndex).toBe(6);
+        expect(opposite.options.zIndex).toBe(5);
+      }
+    }
   });
 
   it.each([
@@ -646,7 +636,7 @@ describe("네이버 지도 adapter", () => {
     adapter.update(null, "DOWN", []);
     expect(native.lines.every((line) => line.strokeOpacity === 0)).toBe(true);
   });
-  it("한 번 표시한 지도는 확대·방향 전환·추가 idle에서 노선을 숨기거나 준비 콜백을 다시 호출하지 않는다", () => {
+  it("한 번 표시한 지도는 확대와 방향 전환 및 추가 idle에서 노선을 숨기거나 준비 콜백을 다시 호출하지 않는다", () => {
     const { native, adapter, initialize, onReady, flushFrames, pendingFrames } = setup();
     const idle = native.events.find((event) => event.name === "idle")!.listener;
     idle();
@@ -677,7 +667,7 @@ describe("네이버 지도 adapter", () => {
       expect(onReady).not.toHaveBeenCalled();
     });
   }
-  it("초기화 전에 정류장을 선택해도 GL 초기화·idle·두 프레임까지 마커 표시를 기다린다", () => {
+  it("초기화 전에 정류장을 선택해도 GL 초기화와 idle 및 두 프레임까지 마커 표시를 기다린다", () => {
     const { native, adapter, initialize, onReady, flushFrames } = setup(true, { initialized: false });
     const idle = native.events.find((event) => event.name === "idle")!.listener;
     adapter.focus({ direction: "UP", sequence: 15 });
@@ -991,7 +981,7 @@ describe("네이버 지도 adapter", () => {
     idle();
     expect(updates.every((update) => update.mock.calls.length === 0)).toBe(true);
   });
-  it("크기가 같으면 지도 크기와 중심·줌을 다시 설정하지 않는다", () => {
+  it("크기가 같으면 지도 크기와 중심과 줌을 다시 설정하지 않는다", () => {
     const { native, adapter } = setup();
     const setSize = jest.spyOn(native.map, "setSize");
     const setCenter = jest.spyOn(native.map, "setCenter");
@@ -1387,7 +1377,7 @@ describe("네이버 지도 adapter", () => {
       expect(pendingFrames.size).toBe(0);
     }
   });
-  it("차량 선택은 포커스와 별개로 유지하고 폴링·선택 변경·해제에도 같은 마커를 사용한다", () => {
+  it("차량 선택은 포커스와 별개로 유지하고 폴링과 선택 변경 및 해제에도 같은 마커를 사용한다", () => {
     const { native, adapter, onVehicleSelect } = setup(true, { reducedMotion: true });
     const views = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP").slice(0, 2);
     const [first, second] = views;
@@ -1499,7 +1489,7 @@ describe("네이버 지도 adapter", () => {
     expect(new Set(zooms).size).toBe(zooms.length);
     expect(native.map.zoom).toBe(16);
   });
-  it("사용자 조작이나 다른 지도 동작·차량 제거는 대기 중인 차량 이동과 포커스를 취소한다", () => {
+  it("사용자 조작이나 다른 지도 동작 및 차량 제거는 대기 중인 차량 이동과 포커스를 취소한다", () => {
     const interruptions = [
       "wheel",
       "touchstart",
@@ -1544,7 +1534,7 @@ describe("네이버 지도 adapter", () => {
       if (interruption !== "destroy") adapter.destroy();
     }
   });
-  it("잔여석만 갱신해도 차량 마커와 핀·이미지 DOM을 그대로 사용한다", () => {
+  it("잔여석만 갱신해도 차량 마커와 핀과 이미지 DOM을 그대로 사용한다", () => {
     const { native, adapter } = setup();
     const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     adapter.update(null, "UP", [view]);

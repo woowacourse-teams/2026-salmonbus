@@ -18,29 +18,6 @@ export function stopOverlapForLabelZoom(first: ScreenPoint, second: ScreenPoint,
   return stopDistanceForZoom(first, second, zoom, DETAIL_ZOOM) < DEFAULT_STOP_ICON_SIZE;
 }
 
-export function stopSpreadOffsetsFor(
-  up: ScreenPoint,
-  down: ScreenPoint,
-  separation: number,
-): { up: number; down: number } {
-  const horizontalDistance = up.x - down.x;
-  const verticalDistance = up.y - down.y;
-  const requiredHorizontalDistance = Math.sqrt(Math.max(0, separation ** 2 - verticalDistance ** 2));
-  const spread = Math.max(0, requiredHorizontalDistance - Math.abs(horizontalDistance)) / 2;
-  if (spread === 0) return { up: 0, down: 0 };
-  const offset = spread * (Math.sign(horizontalDistance) || 1);
-  return { up: offset, down: -offset };
-}
-
-export interface StopSpreadRange {
-  left: number;
-  right: number;
-}
-
-export function stopSpreadRangeFor(range: StopSpreadRange, offset: number): StopSpreadRange {
-  return { left: Math.min(range.left, offset), right: Math.max(range.right, offset) };
-}
-
 export interface RouteArrow {
   coordinate: GeoCoordinate;
   rotation: number;

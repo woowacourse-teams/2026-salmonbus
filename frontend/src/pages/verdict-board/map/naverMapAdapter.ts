@@ -9,14 +9,11 @@ import {
   routeArrowsFor,
   routeMapCoordinateForSequence,
   stopOverlapForLabelZoom,
-  stopSpreadOffsetsFor,
-  stopSpreadRangeFor,
   type RouteArrow,
 } from "./routeMapGeometry";
 import type { NaverMaps, NaverMarker, NaverPolyline } from "./naverSdk";
 import * as styles from "./naverMapAdapter.css";
 
-const STOP_SPREAD_GAP = 4;
 const INITIALIZATION_TIMEOUT_MS = 10_000;
 const CAMERA_FOCUS_DURATION_MS = 560;
 
@@ -102,7 +99,7 @@ export function createNaverRouteMap(
     zoomControl: false,
     scaleControl: false,
     mapDataControl: false,
-    // 벡터 지도의 연속 줌에서 노선·마커도 같은 카메라를 따라 움직인다.
+    // 벡터 지도의 연속 줌에서 노선과 마커도 같은 카메라를 따라 움직인다.
     gl: true,
     // GL은 마커 좌표를 직접 갱신하므로 이미지 타일용 확대 효과를 중복 적용하지 않는다.
     overlayZoomEffect: null,
@@ -342,17 +339,12 @@ export function createNaverRouteMap(
           isSelected,
           point: projection.fromCoordToOffset(toNaverCoordinate(stop.coordinate)),
           size: isSelected ? 32 : DEFAULT_STOP_ICON_SIZE,
-          spreadRange: { left: 0, right: 0 },
           overlapsAtLabelZoom: false,
         },
       ];
     });
     for (const up of display.filter((stop) => stop.selection.direction === "UP")) {
       for (const down of display.filter((stop) => stop.selection.direction === "DOWN")) {
-        const combinedRadius = (up.size + down.size) / 2;
-        const offsets = stopSpreadOffsetsFor(up.point, down.point, combinedRadius + STOP_SPREAD_GAP);
-        up.spreadRange = stopSpreadRangeFor(up.spreadRange, offsets.up);
-        down.spreadRange = stopSpreadRangeFor(down.spreadRange, offsets.down);
         if (stopOverlapForLabelZoom(up.point, down.point, zoom)) {
           up.overlapsAtLabelZoom = true;
           down.overlapsAtLabelZoom = true;
@@ -360,29 +352,12 @@ export function createNaverRouteMap(
       }
     }
     display.forEach(
-      ({
-        selection,
-        marker,
-        button,
-        isSelected,
-        size,
-        spreadRange,
-        overlapsAtLabelZoom,
-        point,
-        coordinate,
-        connector,
-        connection,
-      }) => {
-        const offsetX = spreadRange.left + spreadRange.right;
+      ({ selection, marker, button, isSelected, size, overlapsAtLabelZoom, coordinate, connector, connection }) => {
         const isActive = selection.direction === activeDirection;
         if (connector && connection) {
           const visible = routeRevealed && !hidden && (isActive || isSelected);
           if (visible) {
-            const start =
-              offsetX === 0
-                ? toNaverCoordinate(coordinate)
-                : projection.fromOffsetToCoord(new sdk.Point(point.x + offsetX, point.y));
-            connector.setPath([start, toNaverCoordinate(connection)]);
+            connector.setPath([toNaverCoordinate(coordinate), toNaverCoordinate(connection)]);
           }
           connector.setOptions({ strokeColor: "#5B6472", strokeOpacity: visible ? 0.85 : 0, zIndex: 3 });
         }
@@ -394,7 +369,7 @@ export function createNaverRouteMap(
         if (button.dataset.labelAbove !== labelAbove) button.dataset.labelAbove = labelAbove;
         if (selectionChanged || directionChanged) marker.setZIndex(isSelected ? 15 : isActive ? 6 : 5);
         // 아이콘을 다시 설정하면 SDK가 DOM을 재구성하므로 표시 위치만 조정한다.
-        const transform = `translate(${offsetX - (size - DEFAULT_STOP_ICON_SIZE) / 2}px, ${-(size - DEFAULT_STOP_ICON_SIZE) / 2}px)`;
+        const transform = `translate(${-(size - DEFAULT_STOP_ICON_SIZE) / 2}px, ${-(size - DEFAULT_STOP_ICON_SIZE) / 2}px)`;
         if (button.style.transform !== transform) button.style.transform = transform;
       },
     );
@@ -461,7 +436,7 @@ export function createNaverRouteMap(
         item.visible = true;
       }
     });
-    // 필요한 수가 줄어도 제거하지 않고 다음 확대·이동에서 재사용한다.
+    // 필요한 수가 줄어도 제거하지 않고 다음 확대와 이동에서 재사용한다.
     arrows.slice(nextArrows.length).forEach((item) => {
       if (!item.visible) return;
       item.marker.setVisible(false);
