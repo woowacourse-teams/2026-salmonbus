@@ -300,17 +300,23 @@ test.describe("설정 화면을 열 수 있는 앱", () => {
   });
 });
 
-favoriteNativeTest("즐겨찾기 dialog를 열면 native 지도 입력을 차단하고 닫으면 복구한다", async ({ page, api }) => {
-  await open(page);
-  const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
-  await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.clock.runFor(32);
-  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(true);
-  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
-  await page.clock.runFor(32);
-  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(false);
-});
+favoriteNativeTest(
+  "즐겨찾기 dialog를 열면 native 지도 입력을 차단하고 닫으면 복구한다",
+  async ({ page, api, favorites }) => {
+    favorites.groups.push({ id: "10000000-0000-4000-8000-000000000004", name: "주말", favorites: [] });
+    await open(page);
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+    await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.clock.runFor(32);
+    expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(true);
+    await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
+    await page.clock.runFor(32);
+    expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(
+      false,
+    );
+  },
+);
 
 test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투명 모드를 정리한다", async ({ page }) => {
   await open(page);

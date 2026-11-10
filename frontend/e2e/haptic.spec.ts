@@ -92,6 +92,7 @@ test("저장할 그룹을 체크하면 selection, 즐겨찾기를 저장하면 s
 });
 
 test("저장 응답이 오기 전에 화면을 떠나면 결과 진동을 보내지 않는다", async ({ page, api, favorites }) => {
+  favorites.groups.push({ id: "10000000-0000-4000-8000-000000000004", name: "주말", favorites: [] });
   let finish!: () => void;
   const release = new Promise<void>((resolve) => {
     finish = resolve;
