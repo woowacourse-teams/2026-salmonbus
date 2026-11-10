@@ -115,6 +115,15 @@ class AuthApiDocsContractTest {
         }
     }
 
+    @Test
+    void pushRegistrationDescribesRejectedSessions() {
+        String pointer = "/paths/~1api~1me~1push-devices/put/responses/401/description";
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(generated.at(pointer).asString()).contains("로그아웃한 세션의 토큰", "세션 식별자");
+            softly.assertThat(generated.at(pointer)).isEqualTo(contract.at(pointer));
+        }
+    }
+
     private static void assertResponse(
         AutoCloseableSoftAssertions softly,
         String name,
