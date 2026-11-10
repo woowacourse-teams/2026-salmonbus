@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 
 public final class NotificationDeliveryJob {
     static final int EXPAND_BATCH_SIZE = 100;
-    static final int SEND_BATCH_SIZE = 10;
+    static final int SEND_BATCH_SIZE = 5;
     static final int MAX_BATCHES_PER_RUN = 20;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NotificationDeliveryJob.class);

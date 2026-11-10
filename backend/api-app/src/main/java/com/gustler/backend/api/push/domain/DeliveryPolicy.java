@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
 public final class DeliveryPolicy {
-    public static final Duration LEASE = Duration.ofMinutes(2);
+    public static final Duration LEASE = Duration.ofMinutes(1);
     public static final Duration RETRY_INTERVAL = Duration.ofMinutes(1);
     public static final Duration RETRY_WINDOW = Duration.ofMinutes(2);
 
