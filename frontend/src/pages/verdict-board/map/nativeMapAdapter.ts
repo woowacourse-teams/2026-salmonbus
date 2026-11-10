@@ -99,6 +99,7 @@ export function createNativeRouteMap(options: {
     ...sceneState,
     routeId: data.routeId,
     referenceVersionId: data.referenceVersionId,
+    directions: board.route.directions.map(({ id }) => id),
     ...(options.preserveCamera && { preserveCamera: true }),
     ...(options.selectedStopOnly && { selectedStopOnly: true }),
     stops: data.stops.flatMap((stop) => {

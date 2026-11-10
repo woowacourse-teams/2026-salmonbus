@@ -42,6 +42,7 @@ export interface NativeMapScene extends NativeMapSceneState {
   referenceVersionId: string;
   preserveCamera?: boolean;
   selectedStopOnly?: boolean;
+  directions?: Direction[];
   stops: (NativeStopSelection & {
     stopId: string;
     coordinate: NativeCoordinate;
