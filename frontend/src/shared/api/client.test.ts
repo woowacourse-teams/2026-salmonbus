@@ -58,6 +58,7 @@ describe("requestJson", () => {
     await fetchRouteWatch("123456789", { signal: controller.signal });
     expect(global.fetch).toHaveBeenCalledWith(url, expect.anything());
     expect(reportApiFailure).toHaveBeenCalledWith(url, expect.anything(), {
+      method: "GET",
       context: { endpoint: "/api/v1/routes/:routeId/watch", tags: { route_id: "123456789" } },
       abortReason: null,
       rawResponse: null,
@@ -71,6 +72,7 @@ describe("requestJson", () => {
     await fetchRouteWatch("R/1 ?#한글%", { signal: controller.signal });
     expect(global.fetch).toHaveBeenCalledWith(url, expect.anything());
     expect(reportApiFailure).toHaveBeenCalledWith(url, expect.anything(), {
+      method: "GET",
       context: { endpoint: "/api/v1/routes/:routeId/watch", tags: { route_id: "R/1 ?#한글%" } },
       abortReason: null,
       rawResponse: null,
@@ -118,6 +120,7 @@ describe("requestJson", () => {
     });
     expect(reportApiFailure).toHaveBeenCalledTimes(1);
     expect(reportApiFailure).toHaveBeenCalledWith("/api/v1/routes/123456789/board", failure, {
+      method: "GET",
       context: null,
       abortReason: null,
       rawResponse: null,
@@ -135,6 +138,7 @@ describe("requestJson", () => {
       "/api/v1/routes",
       expect.objectContaining({ kind: "malformed", status: 502 }),
       {
+        method: "GET",
         context: null,
         abortReason: null,
         rawResponse: { body: "<html>Bad Gateway</html>", contentType: "text/plain;charset=UTF-8" },
@@ -150,7 +154,7 @@ describe("requestJson", () => {
     expect(reportApiFailure).toHaveBeenCalledWith(
       "/api/v1/routes",
       { kind: "aborted" },
-      { context: null, abortReason: REQUEST_DISPOSED, rawResponse: null },
+      { method: "GET", context: null, abortReason: REQUEST_DISPOSED, rawResponse: null },
     );
   });
 
@@ -178,7 +182,7 @@ describe("requestJson", () => {
     expect(reportApiFailure).toHaveBeenCalledWith(
       "/api/v1/routes",
       { kind: "timeout" },
-      { context: null, abortReason: null, rawResponse: null },
+      { method: "GET", context: null, abortReason: null, rawResponse: null },
     );
   });
 

@@ -179,7 +179,7 @@ export function createApiFailureReporter(
       tags: { ...details.context?.tags, source: "api", failure_kind: failure.kind, error_code: code },
       extra: {
         api_path: path,
-        http_method: "GET",
+        http_method: details.method,
         http_status: status,
         request_id: requestId,
         ...(failure.kind === "contract" ? { error_message: failure.error.message } : {}),
