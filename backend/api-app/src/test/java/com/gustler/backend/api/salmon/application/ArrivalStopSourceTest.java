@@ -74,6 +74,27 @@ class ArrivalStopSourceTest {
     }
 
     @Test
+    void 한_노선이_같은_정류장을_두_번_지나면_방문마다_항목_ID가_다르다() {
+        List<ArrivalVisit> visits = List.of(
+            new ArrivalVisit(PUBLIC_ROUTE, SOURCE_ROUTE, 7, 5, "UP", RECEIVED.minusSeconds(3600)),
+            new ArrivalVisit(PUBLIC_ROUTE, SOURCE_ROUTE, 7, 12, "DOWN", RECEIVED.minusSeconds(3600)));
+        ArrivalSnapshot snapshot = new ArrivalSnapshot(UUID.fromString("00000000-0000-0000-0000-000000000001"),
+            STATION, RECEIVED, RECEIVED.plusSeconds(60), RECEIVED.plusSeconds(600), "query", List.of(
+                new RouteArrival(SOURCE_ROUTE, "9300", 5, null, null, null, null,
+                    List.of(prediction("bus-1", 1, 300, null))),
+                new RouteArrival(SOURCE_ROUTE, "9300", 12, null, null, null, null,
+                    List.of(prediction("bus-2", 1, 420, null)))));
+        ArrivalStopSource source = source(snapshot, visits, CoverageRule.NONE);
+
+        StopEntry fifth = ((Queried) source.arrivalsAt(PUBLIC_ROUTE, STATION, 5, NOW)).entries().get(0);
+        StopEntry twelfth = ((Queried) source.arrivalsAt(PUBLIC_ROUTE, STATION, 12, NOW)).entries().get(0);
+
+        assertThat(fifth.arrival()).isEqualTo(new Observed<>(new Offset(270_000)));
+        assertThat(twelfth.arrival()).isEqualTo(new Observed<>(new Offset(390_000)));
+        assertThat(fifth.id()).isNotEqualTo(twelfth.id());
+    }
+
+    @Test
     void 저장된_스냅샷이_없으면_제공_안_됨이다() {
         StopList list = source(null, visits(), CoverageRule.NONE).arrivalsAt(PUBLIC_ROUTE, STATION, 5, NOW);
 

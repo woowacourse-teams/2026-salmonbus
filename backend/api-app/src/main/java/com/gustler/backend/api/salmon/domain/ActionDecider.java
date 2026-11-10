@@ -1,8 +1,9 @@
 package com.gustler.backend.api.salmon.domain;
 
 import com.gustler.backend.api.salmon.domain.ActionJudge.Baseline;
+import com.gustler.backend.api.salmon.domain.ActionJudge.BaselineChanged;
 import com.gustler.backend.api.salmon.domain.ActionJudge.CandidateSource;
-import com.gustler.backend.api.salmon.domain.ActionJudge.Judgement;
+import com.gustler.backend.api.salmon.domain.ActionJudge.Settled;
 import com.gustler.backend.api.salmon.domain.Fields.MissingReason;
 import com.gustler.backend.api.salmon.domain.StopLists.StopList;
 import com.gustler.backend.api.salmon.domain.StopLists.Unavailable;
@@ -27,15 +28,20 @@ public final class ActionDecider {
         Optional<StopList> override = Optional.empty();
         for (int epochNumber = 1; epochNumber <= config.epochBudget(); epochNumber++) {
             Baseline baseline = sources.baseline("epoch-" + epochNumber, override);
-            Judgement judgement = ActionJudge.judgement(baseline, config, sources.candidates());
-            if (judgement.staleBaseline().isEmpty()) {
-                return new Decision(judgement.verdict(), epochNumber);
+            switch (ActionJudge.judgement(baseline, config, sources.candidates())) {
+                case Settled settled -> {
+                    return new Decision(settled.verdict(), epochNumber);
+                }
+                case BaselineChanged changed -> override = Optional.of(changed.update());
             }
-            override = judgement.staleBaseline();
         }
         int sealedEpoch = config.epochBudget() + 1;
         Baseline unstable = sources.baseline("epoch-" + sealedEpoch,
             Optional.of(new Unavailable(MissingReason.BASELINE_UNSTABLE)));
-        return new Decision(ActionJudge.judge(unstable, config, sources.candidates()), sealedEpoch);
+        return switch (ActionJudge.judgement(unstable, config, sources.candidates())) {
+            case Settled settled -> new Decision(settled.verdict(), sealedEpoch);
+            case BaselineChanged ignored -> throw new IllegalStateException(
+                "baseline must use the override once the epoch budget is spent");
+        };
     }
 }

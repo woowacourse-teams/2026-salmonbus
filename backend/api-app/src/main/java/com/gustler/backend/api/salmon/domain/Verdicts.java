@@ -126,10 +126,34 @@ public final class Verdicts {
     public record CandidateRecord(String id, CandidateKind kind, Admissibility admissibility, Outcome outcome) {
     }
 
+    /**
+     * bestCandidate는 비교에서 실패 위험이 가장 낮았던 후보이고, delta는 대기 위험에서 그 후보의 위험을 뺀 값이다.
+     * 이동을 권하는지는 code로만 읽는다. STAY_GAIN_BELOW_THRESHOLD에서도 bestCandidate가 있다.
+     */
     public record Verdict(ReasonCode code, String epoch, boolean partialComparison, Outcome stay,
-                          List<CandidateRecord> candidates, Optional<String> chosen, Optional<Double> delta) {
+                          List<CandidateRecord> candidates, Optional<String> bestCandidate, Optional<Double> delta) {
         public Verdict {
+            Objects.requireNonNull(code, "code");
+            Objects.requireNonNull(bestCandidate, "bestCandidate");
+            Objects.requireNonNull(delta, "delta");
             candidates = List.copyOf(candidates);
+            boolean compared = comparesCandidates(code);
+            if (bestCandidate.isPresent() != compared || delta.isPresent() != compared) {
+                throw new IllegalArgumentException(
+                    "bestCandidate and delta must be present exactly for GO and STAY_GAIN_BELOW_THRESHOLD");
+            }
+            if (bestCandidate.isPresent()
+                && candidates.stream().noneMatch(record -> record.id().equals(bestCandidate.get()))) {
+                throw new IllegalArgumentException("bestCandidate must be one of the candidates");
+            }
+        }
+
+        private static boolean comparesCandidates(ReasonCode code) {
+            return switch (code) {
+                case GO, STAY_GAIN_BELOW_THRESHOLD -> true;
+                case ABSTAIN_STAY_UNDEFINED, STAY_SCAN_NOT_TRIGGERED, NO_MOVE_NO_CANDIDATE, NO_MOVE_INFEASIBLE,
+                     ABSTAIN_INSUFFICIENT_EVIDENCE -> false;
+            };
         }
     }
 }

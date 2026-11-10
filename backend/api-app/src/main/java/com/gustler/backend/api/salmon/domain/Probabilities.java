@@ -43,6 +43,9 @@ public final class Probabilities {
             if (!(value >= 0 && value <= 1)) {
                 throw new IllegalArgumentException("Probability must be within [0, 1]");
             }
+            if ((tag == ValueTag.COND_FAIL || tag == ValueTag.COND_MISS) && condition.isEmpty()) {
+                throw new IllegalArgumentException("Condition must be present for COND_FAIL and COND_MISS");
+            }
         }
     }
 
@@ -72,29 +75,37 @@ public final class Probabilities {
                 other.inputs.stream()).toList());
         }
 
+        /**
+         * 슬롯과 조건 이력이 같은 값을 먼저 쓰고, 없을 때만 조건 이력 없는 주변확률을 쓴다. 조건 이력이 다른 값은 쓰지 않는다.
+         * 재탑승 가지는 맞은편에서 탄 차가 조건 이력에 들어 있어서, 한 가지의 값이 다른 가지 슬롯에 들어가지 않는다.
+         */
         public SlotValue valueFor(Slot slot) {
-            Optional<SlotValue> exact = inputs.stream()
-                .filter(input -> input.attempt().equals(slot.attempt()) && exactlyFits(input, slot))
-                .findFirst().map(input -> new Matched(input.value()));
+            List<ProbabilityInput> sameCondition = inputs.stream()
+                .filter(input -> input.attempt().equals(slot.attempt())
+                    && input.condition().filter(slot.condition()::equals).isPresent())
+                .toList();
+            Optional<ProbabilityInput> exact = sameCondition.stream()
+                .filter(input -> input.tag() == exactTagOf(slot.kind())).findFirst();
             if (exact.isPresent()) {
-                return exact.get();
+                return new Matched(exact.get().value());
             }
-            boolean marginalAllowed = slot.kind() != SlotKind.S_FIRST;
-            return inputs.stream()
-                .filter(input -> input.attempt().equals(slot.attempt()) && input.tag() == ValueTag.MARG)
-                .findFirst()
-                .<SlotValue>map(input -> marginalAllowed ? new Marginal(input.value()) : new Matched(input.value()))
+            Optional<ProbabilityInput> marginal = sameCondition.stream()
+                .filter(input -> input.tag() == ValueTag.MARG).findFirst()
+                .or(() -> inputs.stream()
+                    .filter(input -> input.attempt().equals(slot.attempt()) && input.tag() == ValueTag.MARG
+                        && input.condition().isEmpty())
+                    .findFirst());
+            boolean marginalIsExact = slot.kind() == SlotKind.S_FIRST;
+            return marginal
+                .<SlotValue>map(input -> marginalIsExact ? new Matched(input.value()) : new Marginal(input.value()))
                 .orElse(new Absent());
         }
 
-        private static boolean exactlyFits(ProbabilityInput input, Slot slot) {
-            return switch (slot.kind()) {
-                case S_FIRST -> input.tag() == ValueTag.MARG
-                    && input.condition().map(slot.condition()::equals).orElse(true);
-                case S_MISS -> input.tag() == ValueTag.COND_MISS
-                    && input.condition().map(slot.condition()::equals).orElse(false);
-                case S_FAIL -> input.tag() == ValueTag.COND_FAIL
-                    && input.condition().map(slot.condition()::equals).orElse(false);
+        private static ValueTag exactTagOf(SlotKind kind) {
+            return switch (kind) {
+                case S_FIRST -> ValueTag.MARG;
+                case S_MISS -> ValueTag.COND_MISS;
+                case S_FAIL -> ValueTag.COND_FAIL;
             };
         }
     }
