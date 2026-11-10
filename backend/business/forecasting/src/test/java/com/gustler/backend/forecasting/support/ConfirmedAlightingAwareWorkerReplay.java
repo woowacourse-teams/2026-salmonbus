@@ -1,5 +1,7 @@
 package com.gustler.backend.forecasting.support;
 
+import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
+import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
 import com.gustler.backend.forecasting.application.deployment.ActiveForecastRuntimeResolver;
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
 import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
@@ -163,7 +165,8 @@ public final class ConfirmedAlightingAwareWorkerReplay {
             AlightingAwareObservation source = byId.get(row.path("source_id").asLong());
             RouteStops stops = catalogs.get(source.routeVersionId());
             AlightingAwareRouteStatistics statistics = model.statistics(stops);
-            JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, "", 250_000, true, directory);
+            JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
+            new JdbcVehicleCapacityStore(jdbc)), "", 250_000, true, directory);
             AlightingAwareFeatureSnapshot snapshot = query.read(source.batchId(), stops, statistics).get(source.observationId());
             if (snapshot == null) {
                 throw new IllegalStateException("Missing real source " + source.observationId());

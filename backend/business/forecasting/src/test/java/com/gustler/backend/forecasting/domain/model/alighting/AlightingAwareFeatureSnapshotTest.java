@@ -19,7 +19,7 @@ class AlightingAwareFeatureSnapshotTest {
     void 공백_이전_누적_정원과_float32_입력을_보존한다() {
         AlightingAwareObservation first = observation(1, 0, NOW.minusSeconds(7200), "bus", 1, 68);
         AlightingAwareObservation source = observation(2, 1, NOW, "bus", 5, 3);
-        AlightingAwareFeatureSnapshot snapshot = new AlightingAwareFeatureSnapshot(1, source, statistics(), List.of(first, source),
+        AlightingAwareFeatureSnapshot snapshot = new AlightingAwareFeatureSnapshot(1, source, 68, statistics(), List.of(first, source),
             List.of());
         AlightingAwareFeatureVector vector = snapshot.forTarget(7);
         assertSoftly(softly -> {
@@ -44,14 +44,14 @@ class AlightingAwareFeatureSnapshotTest {
         AlightingAwareObservation c = observation(3, 2, NOW.plusSeconds(1), "other", 8, 0);
         AlightingAwareObservation source = observation(4, 3, NOW, "bus", 5, 40);
         AlightingAwarePassEvent event = new AlightingAwarePassEvent("other", 1, 7, a, d, c.receivedAt(), d, c);
-        AlightingAwareFeatureSnapshot noFuture = new AlightingAwareFeatureSnapshot(1, source, statistics(), List.of(a, d, source, c),
+        AlightingAwareFeatureSnapshot noFuture = new AlightingAwareFeatureSnapshot(1, source, 40, statistics(), List.of(a, d, source, c),
             List.of(event));
         assertSoftly(softly -> {
             softly.assertThat(noFuture.forTarget(7).seat88()[57]).isEqualTo(1);
             softly.assertThat(noFuture.forTarget(7).seat88()[65]).isEqualTo(0);
         });
         AlightingAwareObservation after = observation(5, 4, NOW.plusSeconds(2), "bus", 5, 40);
-        AlightingAwareFeatureSnapshot known = new AlightingAwareFeatureSnapshot(1, after, statistics(), List.of(a, d, source, c, after),
+        AlightingAwareFeatureSnapshot known = new AlightingAwareFeatureSnapshot(1, after, 40, statistics(), List.of(a, d, source, c, after),
             List.of(event));
         assertThat(known.forTarget(7).seat88()[75]).isEqualTo((double) (10f / 6));
     }
@@ -60,9 +60,9 @@ class AlightingAwareFeatureSnapshotTest {
     void 재시작해도_같은_입력을_복구한다() {
         List<AlightingAwareObservation> history = List.of(observation(1, 0, NOW.minusSeconds(30), "bus", 4, 40),
             observation(2, 1, NOW, "bus", 5, 0));
-        AlightingAwareFeatureVector before = new AlightingAwareFeatureSnapshot(1, history.getLast(), statistics(), history, List.of())
+        AlightingAwareFeatureVector before = new AlightingAwareFeatureSnapshot(1, history.getLast(), 40, statistics(), history, List.of())
             .forTarget(7);
-        AlightingAwareFeatureVector restored = new AlightingAwareFeatureSnapshot(1, history.getLast(), statistics(), new ArrayList<>(history),
+        AlightingAwareFeatureVector restored = new AlightingAwareFeatureSnapshot(1, history.getLast(), 40, statistics(), new ArrayList<>(history),
             List.of()).forTarget(7);
         assertSoftly(softly -> {
             softly.assertThat(restored.seat88()).containsExactly(before.seat88());
@@ -74,7 +74,7 @@ class AlightingAwareFeatureSnapshotTest {
     @Test
     void 정원_누락과_지원하지_않는_목표를_거부한다() {
         AlightingAwareObservation source = observation(1, 0, NOW, "bus", 5, 0);
-        AlightingAwareFeatureSnapshot snapshot = new AlightingAwareFeatureSnapshot(1, source, statistics(), List.of(source), List.of());
+        AlightingAwareFeatureSnapshot snapshot = new AlightingAwareFeatureSnapshot(1, source, 0, statistics(), List.of(source), List.of());
         assertThatThrownBy(() -> snapshot.forTarget(7)).hasMessageContaining("capacity");
         assertThatThrownBy(() -> snapshot.forTarget(5)).hasMessageContaining("target");
     }
@@ -88,7 +88,7 @@ class AlightingAwareFeatureSnapshotTest {
         AlightingAwareObservation ahead = observation(4, 3, NOW, anonymous, 5, 3);
         AlightingAwareObservation source = observation(5, 3, NOW, "bus", 4, 40);
         List<AlightingAwareObservation> history = List.of(first, repeated, origin, ahead, source);
-        AlightingAwareFeatureVector vector = new AlightingAwareFeatureSnapshot(1, source, statistics(), history, List.of()).forTarget(7);
+        AlightingAwareFeatureVector vector = new AlightingAwareFeatureSnapshot(1, source, 40, statistics(), history, List.of()).forTarget(7);
         assertThat(vector.seat88()[16]).isEqualTo((double) (12f / 40)); // The first anonymous entry survives repeated passed order.
         assertSoftly(softly -> {
             softly.assertThat(vector.seat88()[17]).isZero();
@@ -98,7 +98,7 @@ class AlightingAwareFeatureSnapshotTest {
         List<AlightingAwareObservation> anonymousPass = List.of(observation(6, 0, NOW.minusSeconds(40), anonymous, 1, 20),
             observation(7, 1, NOW.minusSeconds(20), anonymous, 2, 15), observation(8, 2, NOW, anonymous, 3, 10));
         assertThat(AlightingAwarePassEvents.resolve(anonymousPass, List.of(1, 2, 3))).isEmpty();
-        assertThatThrownBy(() -> new AlightingAwareFeatureSnapshot(1, ahead, statistics(), history, List.of()))
+        assertThatThrownBy(() -> new AlightingAwareFeatureSnapshot(1, ahead, 40, statistics(), history, List.of()))
             .hasMessageContaining("Anonymous");
     }
 

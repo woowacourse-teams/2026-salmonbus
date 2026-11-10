@@ -64,7 +64,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ForecastingIntegrationTest
 class AlightingAwarePublicationLifecycleTest {
     private static final Instant START = Instant.parse("2026-01-05T00:00:00Z");
-    private static final String VERSION = "alighting-identity-safe-v1";
+    private static final String VERSION = "alighting-capacity-snapshot-v2";
     private static final String AFTER = "AFTER_ALIGHTING_ESTIMATE";
     @Autowired
     JdbcClient jdbc;
@@ -192,6 +192,7 @@ class AlightingAwarePublicationLifecycleTest {
         AlightingAwareFeatureSnapshot featureSnapshot = mock(AlightingAwareFeatureSnapshot.class);
         when(featureQuery.read(batchId, stops, stats)).thenReturn(Map.of(source, featureSnapshot));
         when(featureSnapshot.vehicleObservationId()).thenReturn(source);
+        when(featureSnapshot.capacity()).thenReturn(40);
         when(featureSnapshot.observation()).thenReturn(new ObservedVehicle("current", version, 1, START, 40, null));
         when(featureSnapshot.forTarget(2)).thenReturn(new AlightingAwareFeatureVector(new double[88], new double[80]));
         ForecastBatchWriter writer = new ForecastBatchWriter(mock(VehicleTrajectoryQuery.class), committer,

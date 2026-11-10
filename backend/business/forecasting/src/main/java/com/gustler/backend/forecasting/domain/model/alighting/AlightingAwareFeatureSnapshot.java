@@ -19,6 +19,7 @@ import java.util.Map;
 public final class AlightingAwareFeatureSnapshot {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private final long routeVersionId;
+    private final int capacity;
     private final AlightingAwareObservation source;
     private final AlightingAwareRouteStatistics statistics;
     private final List<AlightingAwareObservation> history;
@@ -28,16 +29,18 @@ public final class AlightingAwareFeatureSnapshot {
     public AlightingAwareFeatureSnapshot(
         final long routeVersionId,
         AlightingAwareObservation source,
+        final int capacity,
         AlightingAwareRouteStatistics statistics,
         List<AlightingAwareObservation> history,
         List<AlightingAwarePassEvent> events
     ) {
-        this(routeVersionId, source, statistics, history, events, Map.of());
+        this(routeVersionId, source, capacity, statistics, history, events, Map.of());
     }
 
     public AlightingAwareFeatureSnapshot(
         final long routeVersionId,
         AlightingAwareObservation source,
+        final int capacity,
         AlightingAwareRouteStatistics statistics,
         List<AlightingAwareObservation> history,
         List<AlightingAwarePassEvent> events,
@@ -46,6 +49,7 @@ public final class AlightingAwareFeatureSnapshot {
         if (!source.hasVehicleIdentity()) {
             throw new IllegalArgumentException("Anonymous observation is not a forecast source");
         }
+        this.capacity = capacity;
         this.prefix = Map.copyOf(prefix);
         this.routeVersionId = routeVersionId;
         this.source = source;
@@ -71,6 +75,10 @@ public final class AlightingAwareFeatureSnapshot {
         return observation.receivedAt().equals(source.receivedAt()) && observation.batchId() <= source.batchId();
     }
 
+    public int capacity() {
+        return capacity;
+    }
+
     public long vehicleObservationId() {
         return source.observationId();
     }
@@ -79,16 +87,16 @@ public final class AlightingAwareFeatureSnapshot {
         return source;
     }
 
-    /** 정산이 같은 차량의 과거 최대 좌석 근거를 이어 읽도록 저장할 식별자다. */
+    /** 정산할 운행의 식별자다. 정원은 별도 스냅샷 값으로 고정한다. */
     public Provenance provenance() {
         List<AlightingAwareObservation> own = history.stream()
             .filter(row -> row.vehicleId().equals(source.vehicleId()))
             .sorted(Comparator.comparingLong(AlightingAwareObservation::batchRank)).toList();
         AlightingAwareVehiclePrefix current = originState(own).state();
-        return new Provenance(current.tripId(), current.capacityObservation());
+        return new Provenance(current.tripId());
     }
 
-    public record Provenance(long tripStartObservationId, AlightingAwareObservation capacityObservation) {
+    public record Provenance(long tripStartObservationId) {
     }
 
     public ObservedVehicle observation() {
@@ -158,10 +166,10 @@ public final class AlightingAwareFeatureSnapshot {
             }
             state = AlightingAwareHistoryCompactor.advance(state, observation);
         }
-        if (state.capacity() <= 0) {
-            throw new IllegalArgumentException("No positive cumulative capacity in AlightingAware history");
+        if (capacity <= 0 || capacity > 70) {
+            throw new IllegalArgumentException("Invalid vehicle capacity snapshot");
         }
-        return new OriginState(state, slope, slopeKnown, segmentStart);
+        return new OriginState(state, slope, slopeKnown, segmentStart, capacity);
     }
 
     private static AlightingAwareObservation previous(AlightingAwareVehiclePrefix state) {
@@ -527,10 +535,7 @@ public final class AlightingAwareFeatureSnapshot {
         return 0;
     }
 
-    private record OriginState(AlightingAwareVehiclePrefix state, double slope, boolean slopeKnown, int segmentStart) {
-        private float capacity() {
-            return state.capacity();
-        }
+    private record OriginState(AlightingAwareVehiclePrefix state, double slope, boolean slopeKnown, int segmentStart, float capacity) {
 
         private double streak() {
             return state.fullStreak();

@@ -15,7 +15,7 @@ class AlightingAwareHistoryCompactorTest {
     private static final Instant NOW = Instant.parse("2026-10-15T00:00:00Z");
 
     @Test
-    void 이전_정원과_연속_만석_횟수를_체크포인트에_보존한다() {
+    void 정원을_계산하지_않고_연속_만석_횟수를_체크포인트에_보존한다() {
         AlightingAwareObservation cap = observation(1, 0, NOW.minusSeconds(86400), 1, 68);
         AlightingAwareObservation full = observation(2, 1, NOW.minusSeconds(7200), 3, 0);
         AlightingAwareObservation source = observation(3, 2, NOW, 4, 0);
@@ -24,11 +24,11 @@ class AlightingAwareHistoryCompactorTest {
         AlightingAwareHistoryCompactor.History compact = AlightingAwareHistoryCompactor.compact(raw, NOW);
         assertSoftly(softly -> {
             softly.assertThat(compact.observations()).containsExactly(source);
-            softly.assertThat(compact.prefix().get("bus").capacity()).isEqualTo(68);
+            softly.assertThat(compact.prefix().get("bus").capacity()).isZero();
         });
-        AlightingAwareFeatureVector expected = new AlightingAwareFeatureSnapshot(1, source, statistics(), raw.observations(), raw.events())
+        AlightingAwareFeatureVector expected = new AlightingAwareFeatureSnapshot(1, source, 68, statistics(), raw.observations(), raw.events())
             .forTarget(5);
-        AlightingAwareFeatureVector restored = new AlightingAwareFeatureSnapshot(1, source, statistics(), compact.observations(),
+        AlightingAwareFeatureVector restored = new AlightingAwareFeatureSnapshot(1, source, 68, statistics(), compact.observations(),
             compact.events(), compact.prefix()).forTarget(5);
         assertSoftly(softly -> {
             softly.assertThat(expected.seat88()[14]).isEqualTo(2);

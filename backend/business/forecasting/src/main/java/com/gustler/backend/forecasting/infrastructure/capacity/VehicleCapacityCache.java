@@ -18,6 +18,7 @@ public class VehicleCapacityCache {
         this.store = store;
     }
 
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
     public void warmUp() {
         remember(store.findAll());
     }
@@ -39,6 +40,25 @@ public class VehicleCapacityCache {
                 LinkedHashMap::new,
                 (byVehicle, capacity) -> byVehicle.put(capacity.vehicleId(), capacity),
                 Map::putAll);
+    }
+
+    /** 과거 재생에서는 그 시점 이후에 확인된 정원을 사용하지 않는다. */
+    public Map<String, JdbcVehicleCapacityStore.Capacity> findKnownAt(
+        String sourceId, List<String> vehicleIds, java.time.Instant until, final long batchId
+    ) {
+        Map<String, JdbcVehicleCapacityStore.Capacity> current = find(sourceId, vehicleIds);
+        Map<String, JdbcVehicleCapacityStore.Capacity> result = new LinkedHashMap<>();
+        current.forEach((vehicle, capacity) -> {
+            if (capacity.wasKnownAt(until, batchId)) {
+                result.put(vehicle, capacity);
+            }
+        });
+        List<String> historical = vehicleIds.stream().distinct().filter(id -> !result.containsKey(id)).toList();
+        if (!historical.isEmpty()) {
+            store.findKnownAt(sourceId, historical, until, batchId)
+                .forEach(capacity -> result.put(capacity.vehicleId(), capacity));
+        }
+        return Map.copyOf(result);
     }
 
     /** 지연된 조회 응답이나 커밋 콜백이 먼저 반영한 상향값을 덮지 않게 한다. */

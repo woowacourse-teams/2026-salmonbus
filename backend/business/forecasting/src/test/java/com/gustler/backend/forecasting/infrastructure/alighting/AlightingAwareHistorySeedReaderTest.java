@@ -19,7 +19,7 @@ class AlightingAwareHistorySeedReaderTest {
     Path directory;
 
     @Test
-    void 검증한_체크포인트는_순서와_정원과_미관측_좌석을_보존한다() throws Exception {
+    void 검증한_체크포인트는_정원_재계산_없이_순서와_미관측_좌석을_보존한다() throws Exception {
         write(
             """
                 {"schema":"alighting-complete-history-v1","route_version_id":7,"complete_from_source_origin":true,
@@ -40,7 +40,7 @@ class AlightingAwareHistorySeedReaderTest {
         AlightingAwareHistorySeedReader.Seed restored = reader.read(7);
         assertSoftly(softly -> {
             softly.assertThat(restored.observations()).hasSize(1);
-            softly.assertThat(restored.prefix().get("bus").capacity()).isEqualTo(68);
+            softly.assertThat(restored.prefix().get("bus").capacity()).isZero();
             softly.assertThat(restored.rank()).isEqualTo(seed.rank());
             softly.assertThat(restored.through()).isEqualTo(seed.through());
         });

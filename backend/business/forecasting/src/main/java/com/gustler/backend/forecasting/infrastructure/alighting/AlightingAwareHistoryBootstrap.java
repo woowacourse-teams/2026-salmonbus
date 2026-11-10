@@ -1,5 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.alighting;
 
+import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
+import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureUnavailableException;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
@@ -37,7 +39,8 @@ public final class AlightingAwareHistoryBootstrap {
             .read(stops.routeVersionId());
         Cursor after = initialCursor(seed);
         int checkpoints = 0;
-        JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, stops.routeVersionId() + ":" + verifiedOriginBatchId,
+        JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
+            new JdbcVehicleCapacityStore(jdbc)), stops.routeVersionId() + ":" + verifiedOriginBatchId,
             maximumRows, false, checkpointDirectory);
         while (true) {
             List<Cursor> steps = steps(

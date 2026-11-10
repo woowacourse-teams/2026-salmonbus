@@ -54,6 +54,22 @@ class VehicleCapacityCacheTest {
         assertThat(actual).isEqualTo(raised);
     }
 
+    @Test
+    void 미래_정원을_과거_예보에_사용하지_않고_현재_캐시도_유지한다() {
+        // given
+        JdbcVehicleCapacityStore store = mock(JdbcVehicleCapacityStore.class);
+        VehicleCapacityCache cache = new VehicleCapacityCache(store);
+        var before = new JdbcVehicleCapacityStore.Capacity(SOURCE, "vehicle", 44, EVIDENCE_AT, 10L);
+        var after = new JdbcVehicleCapacityStore.Capacity(SOURCE, "vehicle", 45, EVIDENCE_AT.plusSeconds(60), 20L);
+        cache.remember(List.of(after));
+        given(store.findKnownAt(SOURCE, List.of("vehicle"), EVIDENCE_AT, 10L)).willReturn(List.of(before));
+
+        // when / then
+        assertThat(cache.findKnownAt(SOURCE, List.of("vehicle"), EVIDENCE_AT, 10L))
+            .containsEntry("vehicle", before);
+        assertThat(cache.find(SOURCE, List.of("vehicle"))).containsEntry("vehicle", after);
+    }
+
     private JdbcVehicleCapacityStore.Capacity capacity(String vehicleId, final int seats) {
         return new JdbcVehicleCapacityStore.Capacity(SOURCE, vehicleId, seats, EVIDENCE_AT, null);
     }

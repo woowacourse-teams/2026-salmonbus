@@ -36,7 +36,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ForecastingIntegrationTest
 class JdbcAlightingAwareForecastEvaluationTest {
     private static final Instant START = Instant.parse("2026-01-05T00:00:00Z");
-    private static final String VERSION = "alighting-identity-safe-v1";
+    private static final String VERSION = "alighting-capacity-snapshot-v2";
     private static final String AFTER = "AFTER_ALIGHTING_ESTIMATE";
     @Autowired
     JdbcClient jdbc;
@@ -54,7 +54,7 @@ class JdbcAlightingAwareForecastEvaluationTest {
     private long post;
     private JdbcAlightingAwareForecastEvaluation service;
     private final String snapshot = """
-        {"realStopOrders":[1,2,3],"alighting":{"stops":[{"stop":2,"band":"morning",
+        {"capacity":40,"capacityPolicy":"vehicle-capacity-snapshot-v1","realStopOrders":[1,2,3],"alighting":{"stops":[{"stop":2,"band":"morning",
         "p":0.12,"lam":[1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5],"kappa":1,"r":2}]}}
         """;
 
@@ -128,6 +128,25 @@ class JdbcAlightingAwareForecastEvaluationTest {
             jdbc.sql("DELETE FROM route WHERE id=?").param(route).update();
             jdbc.sql("DELETE FROM model_deployment WHERE id=?").param(deployment).update();
         });
+    }
+
+    @Test
+    void 정원이_갱신돼도_예보에_고정한_정원으로_정산한다() {
+        // given: 예보 이후 관측 최대 잔여석이 45로 올라가도 예보에 고정된 40을 쓴다.
+        jdbc.sql("UPDATE vehicle_observation SET remaining_seats=45 WHERE id=?").param(source).update();
+
+        // when
+        service.settle();
+
+        // then
+        assertThat(jdbc.sql("""
+            SELECT capacity FROM alighting_forecast_evaluation_result
+            WHERE vehicle_observation_id=? AND target_kind=? AND scoring_state='SETTLED'
+            """).params(source, AFTER).query(Integer.class).single()).isEqualTo(40);
+        assertThat(jdbc.sql("""
+            SELECT count(*) FROM alighting_forecast_evaluation_result
+            WHERE vehicle_observation_id=? AND target_kind=? AND capacity_observation_id IS NOT NULL
+            """).params(source, AFTER).query(Integer.class).single()).isZero();
     }
 
     @Test
@@ -208,11 +227,11 @@ class JdbcAlightingAwareForecastEvaluationTest {
 
     @Test
     void 정원_근거가_없으면_하차_후_잔여석_정산은_지원_불가로_남긴다() {
-        jdbc.sql("UPDATE vehicle_observation SET remaining_seats=20 WHERE id=?").param(source).update();
+        jdbc.sql("UPDATE seat_forecast SET feature_snapshot=feature_snapshot - 'capacity' WHERE vehicle_observation_id=?").param(source).update();
         service.settle();
         assertThat(jdbc
             .sql("SELECT reason FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=? AND target_kind=?")
-            .params(source, AFTER).query(String.class).single()).isEqualTo("CAPACITY_NOT_OBSERVED");
+            .params(source, AFTER).query(String.class).single()).isEqualTo("CAPACITY_SNAPSHOT_INVALID");
     }
 
     @Test
@@ -398,13 +417,13 @@ class JdbcAlightingAwareForecastEvaluationTest {
         jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at "
             + "WHERE route_version_id=?").param(version).update();
         jdbc.sql("""
-            UPDATE seat_forecast SET label_version='alighting-confirmed-routeband-v2',feature_snapshot=feature_snapshot ||
+            UPDATE seat_forecast SET label_version='alighting-confirmed-capacity-snapshot-v3',feature_snapshot=feature_snapshot ||
                 '{"inputProfile":"alighting-confirmed-closure-v2",
-                  "capacityPolicy":"observed-vehicle-prefix-max-through-closure-v2","turn":4}'::jsonb ||
+                  "capacityPolicy":"vehicle-capacity-snapshot-v1","turn":4}'::jsonb ||
                 jsonb_build_object('capacityObservationId',vehicle_observation_id,'capacity',40)
             WHERE vehicle_observation_id=?
             """).param(source).update();
-        jdbc.sql("UPDATE alighting_forecast_evaluation_work SET label_version='alighting-confirmed-routeband-v2' "
+        jdbc.sql("UPDATE alighting_forecast_evaluation_work SET label_version='alighting-confirmed-capacity-snapshot-v3' "
             + "WHERE vehicle_observation_id=?").param(source).update();
         observation("unrelated", 86400, 1, 40);
         jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at "
@@ -512,12 +531,12 @@ class JdbcAlightingAwareForecastEvaluationTest {
 
     private void useConfirmedProfile() {
         jdbc.sql("""
-            UPDATE seat_forecast SET label_version='alighting-confirmed-routeband-v2',feature_snapshot=feature_snapshot ||
+            UPDATE seat_forecast SET label_version='alighting-confirmed-capacity-snapshot-v3',feature_snapshot=feature_snapshot ||
                 '{"inputProfile":"alighting-confirmed-closure-v2",
-                  "capacityPolicy":"observed-vehicle-prefix-max-through-closure-v2","turn":4}'::jsonb
+                  "capacityPolicy":"vehicle-capacity-snapshot-v1","turn":4}'::jsonb
             WHERE vehicle_observation_id=?
             """).param(source).update();
-        jdbc.sql("UPDATE alighting_forecast_evaluation_work SET label_version='alighting-confirmed-routeband-v2' "
+        jdbc.sql("UPDATE alighting_forecast_evaluation_work SET label_version='alighting-confirmed-capacity-snapshot-v3' "
             + "WHERE vehicle_observation_id=?").param(source).update();
     }
 

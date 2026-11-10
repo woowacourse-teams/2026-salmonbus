@@ -200,7 +200,7 @@ public final class AlightingAwareSourceFeatureCheck {
             AlightingAwareObservation source = byId.get(row.path("source_id").asLong());
             final int target = row.path("target").asInt();
             return new AlightingAwareFeatureSnapshot(
-            Math.max(source.routeVersionId(), 1), source, statistics, observations, events, prefix).forTarget(target);
+            Math.max(source.routeVersionId(), 1), source, row.path("seat88").get(53).asInt(), statistics, observations, events, prefix).forTarget(target);
         }
     }
 

@@ -43,6 +43,22 @@ public class JdbcVehicleCapacityStore {
             .list();
     }
 
+    public List<Capacity> findKnownAt(String sourceId, List<String> vehicleIds, Instant until, final long batchId) {
+        if (vehicleIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+            SELECT DISTINCT ON (vehicle_id) source_id, vehicle_id, capacity, evidence_at, evidence_batch_id
+            FROM vehicle_capacity_history
+            WHERE source_id = :sourceId AND vehicle_id IN (:vehicleIds)
+              AND (evidence_at, evidence_batch_id) <= (:until, :batchId)
+            ORDER BY vehicle_id, evidence_at DESC, evidence_batch_id DESC
+            """)
+            .param("sourceId", sourceId).param("vehicleIds", vehicleIds)
+            .param("until", until.atOffset(java.time.ZoneOffset.UTC)).param("batchId", batchId)
+            .query(this::mapCapacity).list();
+    }
+
     /** 수집 트랜잭션에서 판정, 원값 보존, 정원 갱신을 모두 완료한다. */
     @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public BatchAssessment assessBatch(final long batchId) {

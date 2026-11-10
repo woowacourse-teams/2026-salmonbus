@@ -146,17 +146,9 @@ public final class AlightingAwareHistoryCompactor {
         final int difference = passedDifference(previous, observation);
         final boolean linked = isLinked(previous, observation, difference);
         final double streak = fullStreak(state, observation, linked, difference);
-        final float capacity = capacity(state, observation);
         Instant entry = entryAt(state, observation, difference);
         final long tripId = tripId(state, observation, difference);
-        AlightingAwareObservation capacityObservation = null;
-        if (state != null) {
-            capacityObservation = state.capacityObservation();
-        }
-        if (hasValidCapacity(observation) && (state == null || observation.seats() > state.capacity())) {
-            capacityObservation = observation;
-        }
-        return new AlightingAwareVehiclePrefix(capacity, streak, observation, entry, tripId, capacityObservation);
+        return new AlightingAwareVehiclePrefix(0, streak, observation, entry, tripId, null);
     }
 
     private static AlightingAwareObservation previous(AlightingAwareVehiclePrefix state) {
@@ -209,24 +201,6 @@ public final class AlightingAwareHistoryCompactor {
             return false;
         }
         return state.previous().seats() != null && state.previous().seats() == 0;
-    }
-
-    private static float capacity(AlightingAwareVehiclePrefix state, AlightingAwareObservation observation) {
-        float capacity = 0;
-        if (state != null) {
-            capacity = state.capacity();
-        }
-        if (hasValidCapacity(observation)) {
-            capacity = Math.max(capacity, observation.seats());
-        }
-        return capacity;
-    }
-
-    private static boolean hasValidCapacity(AlightingAwareObservation observation) {
-        if (observation.seats() == null) {
-            return false;
-        }
-        return observation.seats() > 0 && observation.seats() <= 70;
     }
 
     private static Instant entryAt(

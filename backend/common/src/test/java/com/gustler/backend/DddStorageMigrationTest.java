@@ -551,7 +551,7 @@ class DddStorageMigrationTest {
         assertThat(number("SELECT count(*) FROM les_forecast_evaluation_work")).isEqualTo(2);
         execute("UPDATE evaluation_archive_batch SET abandoned_at=now()");
         migrate("latest");
-        assertThat(scalar("SELECT target_kind FROM alighting_forecast_evaluation_work")).isEqualTo("AFTER_ALIGHTING_ESTIMATE");
+        assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_work")).isZero();
         assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_result")).isEqualTo(2);
         assertThat(number("SELECT count(*) FROM alighting_evaluation_archive")).isOne();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();

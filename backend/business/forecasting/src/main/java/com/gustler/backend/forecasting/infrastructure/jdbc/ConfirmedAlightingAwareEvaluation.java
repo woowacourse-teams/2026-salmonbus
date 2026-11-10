@@ -57,7 +57,7 @@ final class ConfirmedAlightingAwareEvaluation {
         if (!canonical(snapshot.path("inputProfile").asText()).equals(AlightingAwareRouteStatistics.CONFIRMED_PROFILE)) {
             return unsupported("INPUT_PROFILE_MISMATCH");
         }
-        if (!snapshot.path("capacityPolicy").asText().equals("observed-vehicle-prefix-max-through-closure-v2")) {
+        if (!snapshot.path("capacityPolicy").asText().equals("vehicle-capacity-snapshot-v1")) {
             return unsupported("CAPACITY_POLICY_MISMATCH");
         }
         load(snapshot.path("turn").asInt());
@@ -203,8 +203,8 @@ final class ConfirmedAlightingAwareEvaluation {
         if (parameters == null) {
             return unsupported("NO_FITTED_STOP_PARAMETERS");
         }
-        AlightingAwareObservation capacity = capacity(source, visit, snapshot);
-        if (capacity == null || capacity.seats() < 30) {
+        int capacity = snapshot.path("capacity").asInt();
+        if (capacity < 30 || capacity > 70) {
             return unsupported("CAPACITY_EVIDENCE_MISMATCH");
         }
         double[] lambda = new double[8];
@@ -222,38 +222,9 @@ final class ConfirmedAlightingAwareEvaluation {
         }
         final double label = AlightingPosterior.afterSeats(fitted, visit.arrival().seats(),
             visit.departure().seats(),
-            capacity.seats(), gap, previous.departure().seats() == 0, (minute - start) / 30);
-        return new JdbcAlightingAwareForecastEvaluation.Outcome("SETTLED", label, null, visit, previous, capacity,
-            digest(parameters.toString()), capacity.seats());
-    }
-
-    private AlightingAwareObservation capacity(AlightingAwareObservation source, AlightingAwarePassEvent event, JsonNode snapshot) {
-        final long id = snapshot.path("capacityObservationId").asLong();
-        AlightingAwareObservation witness = jdbc.sql("""
-            SELECT o.*,b.input_confirmed_at,b.response_received_at FROM vehicle_observation o
-            JOIN observation_batch b ON b.id=o.observation_batch_id
-            WHERE o.id=:id AND o.vehicle_id=:vehicle AND o.seat_unknown_reason IS NULL
-              AND b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS'
-              AND b.input_confirmed_at>=b.response_received_at
-              AND b.input_confirmed_at<=b.response_received_at+interval '90 seconds'
-              AND b.input_confirmed_at<=:source
-              AND o.route_version_id IN (SELECT id FROM route_version WHERE route_id=
-                  (SELECT route_id FROM route_version WHERE id=:route))
-            """).param("id", id).param("vehicle", source.vehicleId()).param("source", offset(source.receivedAt()))
-            .param("route", route).query((rs, i) -> new AlightingAwareObservation(id, rs.getLong("observation_batch_id"), 0,
-                rs.getObject("input_confirmed_at", OffsetDateTime.class).toInstant(), source.vehicleId(),
-                rs.getInt("passed_stop_order"), rs.getInt("stop_order"), rs.getInt("running_state"),
-                rs.getObject("remaining_seats", Integer.class), rs.getInt("crowd_level"),
-                rs.getLong("route_version_id"), rs.getObject("response_received_at", OffsetDateTime.class).toInstant(),
-                source.down()))
-            .optional().orElse(null);
-        if (witness == null || witness.seats() == null || witness.seats() != snapshot.path("capacity").asInt()) {
-            return null;
-        }
-        return Stream.concat(Stream.of(witness), rows.stream())
-            .filter(row -> row.vehicleId().equals(source.vehicleId()) && row.seats() != null)
-            .filter(row -> row.seats() > 0 && row.seats() <= 70 && !row.receivedAt().isAfter(event.confirmedAt()))
-            .max(Comparator.comparingInt(AlightingAwareObservation::seats).thenComparing(AlightingAwareObservation::receivedAt)).orElse(null);
+            capacity, gap, previous.departure().seats() == 0, (minute - start) / 30);
+        return new JdbcAlightingAwareForecastEvaluation.Outcome("SETTLED", label, null, visit, previous, null,
+            digest(parameters.toString()), capacity);
     }
 
     private static boolean isHoliday(JsonNode snapshot, Instant at) {

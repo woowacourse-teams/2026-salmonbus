@@ -69,6 +69,13 @@ class ObservationForecastTriggerIntegrationTest {
     @MockitoSpyBean
     private PublishPendingForecasts publications;
 
+    // 수집→예보 신호를 검증한다. 별도 통계/정산 스케줄은 teardown과 경쟁하지 않게 한다.
+    @MockitoBean
+    private com.gustler.backend.forecasting.api.statistics.AdvanceDemandStatistics demandStatistics;
+
+    @MockitoBean
+    private com.gustler.backend.forecasting.api.evaluation.EvaluateForecasts settlements;
+
     private long routeVersionId;
 
     @BeforeEach

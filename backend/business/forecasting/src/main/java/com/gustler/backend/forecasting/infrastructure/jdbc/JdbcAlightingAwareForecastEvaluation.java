@@ -51,8 +51,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForecastEvaluation {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final JsonMapper JSON = JsonMapper.builder().build();
-    private static final String VERSION = "alighting-identity-safe-v1";
-    private static final String CAPACITY_POLICY = "observed-route-day-max-through-closure-v1";
+    private static final String VERSION = "alighting-capacity-snapshot-v2";
     // 원본 fit에서 제외한 날짜. 이후 공휴일 범위는 새 번들의 입력 계약으로 확장해야 한다.
     private static final Set<LocalDate> FIT_HOLIDAYS = Set.of(
         LocalDate.parse("2026-08-17"), LocalDate.parse("2026-09-24"), LocalDate.parse("2026-09-25"),
@@ -170,7 +169,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         List<Work> work
     ) {
         settleConfirmedDay(route, revision, now, date, work);
-        work = work.stream().filter(item -> !canonical(item.version()).equals(AlightingAwareRouteStatistics.CONFIRMED_LABEL)).toList();
+        work = work.stream().filter(item -> !canonical(item.version()).equals("alighting-confirmed-capacity-snapshot-v3")).toList();
         if (work.isEmpty()) {
             return;
         }
@@ -201,7 +200,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         List<Work> work
     ) {
         Map<Instant, List<Work>> workByHorizon = work.stream()
-            .filter(item -> canonical(item.version()).equals(AlightingAwareRouteStatistics.CONFIRMED_LABEL))
+            .filter(item -> canonical(item.version()).equals("alighting-confirmed-capacity-snapshot-v3"))
             .collect(Collectors.groupingBy(item -> confirmedThrough(item, now)));
         for (Map.Entry<Instant, List<Work>> entry : workByHorizon.entrySet()) {
             settleConfirmedGroup(route, revision, now, date, entry.getKey(), entry.getValue());
@@ -252,7 +251,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
     private List<Work> readWork(final long route, final int limit, Instant dueThrough) {
         return jdbc.sql("""
             SELECT w.vehicle_observation_id,w.target_stop_order,w.target_kind,w.label_version,
-                   CASE WHEN w.label_version='alighting-confirmed-routeband-v2' THEN coalesce(batch.input_confirmed_at,batch.response_received_at)
+                   CASE WHEN w.label_version='alighting-confirmed-capacity-snapshot-v3' THEN coalesce(batch.input_confirmed_at,batch.response_received_at)
                      ELSE batch.response_received_at END AS source_at,f.feature_snapshot::text,
                    source.vehicle_id,source.vehicle_trip_key,source.quality_direction,
                    (source.remaining_seats IS NOT NULL) AS forecast_eligible
@@ -283,7 +282,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         String sourceProblem
     ) {
         if (!canonical(work.version()).equals(VERSION)) {
-            finish(work, revision, now, Outcome.unsupported("UNKNOWN_LABEL_VERSION"));
+            finish(work, revision, now, Outcome.unsupported("MODEL_CONTRACT_RETIRED"));
             return;
         }
         if (inputLimit) {
@@ -404,19 +403,18 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         if (gap <= .2 || gap > 60) {
             return Outcome.unsupported("UNSUPPORTED_HEADWAY", event);
         }
-        Optional<AlightingAwareObservation> capacity = evidence.stream().map(Evidence::row)
-            .filter(observation -> isCapacityEvidence(work, event, observation))
-            .max(Comparator.comparingInt(AlightingAwareObservation::seats).thenComparing(AlightingAwareObservation::receivedAt));
-        if (capacity.isEmpty() || capacity.get().seats() < 30) {
-            return Outcome.unsupported("CAPACITY_NOT_OBSERVED", event);
+        int capacity = snapshot.path("capacity").asInt();
+        if (!snapshot.path("capacityPolicy").asText().equals("vehicle-capacity-snapshot-v1")
+            || capacity < 30 || capacity > 70) {
+            return Outcome.unsupported("CAPACITY_SNAPSHOT_INVALID", event);
         }
-        return calculatePosterior(event, previous.get(), capacity.get(), parameters, gap, minute, band);
+        return calculatePosterior(event, previous.get(), capacity, parameters, gap, minute, band);
     }
 
     private Outcome calculatePosterior(
         AlightingAwarePassEvent event,
         AlightingAwarePassEvent previous,
-        AlightingAwareObservation capacity,
+        final int capacity,
         JsonNode parameters,
         final double gap,
         final int minute,
@@ -432,11 +430,11 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         AlightingPosterior.Parameters fitted = new AlightingPosterior.Parameters(lambda,
             parameters.path("p").doubleValue(),
             parameters.path("kappa").doubleValue(), parameters.path("r").doubleValue());
-        final int cap = capacity.seats();
+        final int cap = capacity;
         final int bin = Math.max(0, Math.min(7, (minute - bandStart(band)) / 30));
         final double label = AlightingPosterior.afterSeats(fitted, Math.min(event.arrival().seats(), cap),
             Math.min(event.departure().seats(), cap), cap, gap, previous.departure().seats() == 0, bin);
-        return new Outcome("SETTLED", label, null, event, previous, capacity, digest(parameters.toString()), cap);
+        return new Outcome("SETTLED", label, null, event, previous, null, digest(parameters.toString()), cap);
     }
 
     private static boolean matchesWork(Work work, AlightingAwarePassEvent event, Map<Long, Evidence> byId) {
@@ -451,11 +449,6 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         return event.stopOrder() == work.stop() && day(event.firstDeparture().receivedAt()).equals(day(departure))
             && event.firstDeparture().receivedAt().isBefore(departure)
             && !event.confirmedAt().isAfter(work.observedAt().plusSeconds(7200));
-    }
-
-    private static boolean isCapacityEvidence(Work work, AlightingAwarePassEvent event, AlightingAwareObservation observation) {
-        return observation.vehicleId().equals(work.vehicle()) && !observation.receivedAt().isAfter(event.confirmedAt())
-            && observation.seats() != null && observation.seats() > 0 && observation.seats() <= 70;
     }
 
     private static String fittedBand(final int minute) {
@@ -665,10 +658,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
             if (capacity == null) {
                 return null;
             }
-            if (event.arrival().confirmedProfile()) {
-                return "observed-vehicle-prefix-max-through-closure-v2";
-            }
-            return CAPACITY_POLICY;
+            return "vehicle-capacity-snapshot-v1";
         }
     }
 }

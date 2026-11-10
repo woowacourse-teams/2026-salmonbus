@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.alighting;
 
+import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureQuery;
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureUnavailableException;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
@@ -89,6 +90,7 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
         """;
 
     private final JdbcClient jdbc;
+    private final VehicleCapacityCache capacities;
     private final Map<Long, Long> origins;
     private final int maximumRows;
     private final boolean rushOnly;
@@ -97,12 +99,14 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
 
     public JdbcAlightingAwareFeatureQuery(
         JdbcClient jdbc,
+        VehicleCapacityCache capacities,
         @Value("${forecast.alighting.history-origin-batch-ids:}") String verifiedOrigins,
         @Value("${forecast.alighting.maximum-history-rows:250000}") final int maximumRows,
         @Value("${forecast.alighting.rush-only:true}") final boolean rushOnly,
         @Value("${forecast.alighting.history-seed-directory:}") String seedDirectory
     ) {
         this.jdbc = jdbc;
+        this.capacities = capacities;
         this.maximumRows = maximumRows;
         this.rushOnly = rushOnly;
         this.origins = new HashMap<>();
@@ -322,16 +326,22 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
         List<AlightingAwareObservation> history,
         List<AlightingAwarePassEvent> events
     ) {
+        String sourceId = jdbc.sql("""
+            SELECT route.source_id FROM route_version version JOIN route ON route.id=version.route_id
+            WHERE version.id=:version
+            """).param("version", stops.routeVersionId()).query(String.class).single();
+        List<AlightingAwareObservation> sources = history.stream()
+            .filter(source -> isEligibleSource(source, cursor.batchId())).toList();
+        var known = capacities.findKnownAt(sourceId, sources.stream().map(AlightingAwareObservation::vehicleId).toList(),
+            cursor.target().time(), cursor.batchId());
         Map<Long, AlightingAwareFeatureSnapshot> result = new LinkedHashMap<>();
-        for (AlightingAwareObservation source : history) {
-            if (!isEligibleSource(source, cursor.batchId())) {
-                continue;
+        sources.forEach(source -> {
+            var capacity = known.get(source.vehicleId());
+            if (capacity != null && capacity.seats() >= minimumCapacity(statistics.confirmedProfile())) {
+                result.put(source.observationId(), new AlightingAwareFeatureSnapshot(stops.routeVersionId(), source,
+                    capacity.seats(), statistics, history, events, cursor.prefix()));
             }
-            if (hasCapacity(source, cursor.prefix(), history, statistics.confirmedProfile())) {
-                result.put(source.observationId(), new AlightingAwareFeatureSnapshot(stops.routeVersionId(), source, statistics,
-                    history, events, cursor.prefix()));
-            }
-        }
+        });
         return result;
     }
 
@@ -384,32 +394,11 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
         return source.seats() != null;
     }
 
-    private static boolean hasCapacity(
-        AlightingAwareObservation source,
-        Map<String, AlightingAwareVehiclePrefix> prefix,
-        List<AlightingAwareObservation> history,
-        final boolean confirmed
-    ) {
-        final int minimum = minimumCapacity(confirmed);
-        if (prefix.containsKey(source.vehicleId()) && prefix.get(source.vehicleId()).capacity() >= minimum) {
-            return true;
-        }
-        return history.stream().anyMatch(observation -> isCapacityObservation(observation, source.vehicleId())
-            && observation.seats() >= minimum);
-    }
-
     private static int minimumCapacity(final boolean confirmed) {
         if (confirmed) {
             return 30;
         }
         return 1;
-    }
-
-    private static boolean isCapacityObservation(AlightingAwareObservation observation, String vehicleId) {
-        if (!observation.vehicleId().equals(vehicleId) || observation.seats() == null) {
-            return false;
-        }
-        return observation.seats() > 0 && observation.seats() <= 70;
     }
 
     private void saveCheckpoint(

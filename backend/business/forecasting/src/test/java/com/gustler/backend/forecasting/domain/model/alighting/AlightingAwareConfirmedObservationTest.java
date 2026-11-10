@@ -40,8 +40,8 @@ class AlightingAwareConfirmedObservationTest {
             softly.assertThat(current.startsConfirmedChainAfter(previous)).isEqualTo(chainBreak);
             softly.assertThat(current.startsConfirmedTripAfter(previous)).isEqualTo(tripBreak);
             AlightingAwareVehiclePrefix state = AlightingAwareHistoryCompactor.advance(AlightingAwareHistoryCompactor.advance(null, previous), current);
-            softly.assertThat(state.capacity()).isEqualTo(40);
-            softly.assertThat(state.capacityObservation()).isEqualTo(previous);
+            softly.assertThat(state.capacity()).isZero();
+            softly.assertThat(state.capacityObservation()).isNull();
         });
     }
 }

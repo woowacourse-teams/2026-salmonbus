@@ -1,5 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.alighting;
 
+import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
+import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
@@ -65,6 +67,10 @@ class JdbcAlightingAwareFeatureQueryTest {
                 new AlightingAwareRouteStatistics.Stop(2, "s2", "정류장2", false, true),
                 new AlightingAwareRouteStatistics.Stop(3, "s3", "정류장3", false, true)),
             2, tables, Map.of(), Set.of());
+        jdbc.sql("""
+            INSERT INTO vehicle_capacity(source_id,vehicle_id,capacity,evidence_at)
+            VALUES('GBIS','bus',68,?) ON CONFLICT(source_id,vehicle_id) DO UPDATE SET evidence_at=EXCLUDED.evidence_at
+            """).param(at(NOW.minusSeconds(10000))).update();
         first = batch(-7200, 1);
         observation(first, 68);
         batch(-20, 0); // Empty collection still interrupts consecutive batch slope.
@@ -86,7 +92,8 @@ class JdbcAlightingAwareFeatureQueryTest {
 
     @Test
     void 검증된_이력_시작점이_없으면_거부한다() {
-        assertThatThrownBy(() -> new JdbcAlightingAwareFeatureQuery(jdbc, "", 100, true, "").read(sourceBatch, stops, statistics))
+        assertThatThrownBy(() -> new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
+            new JdbcVehicleCapacityStore(jdbc)), "", 100, true, "").read(sourceBatch, stops, statistics))
             .hasMessageContaining("ORIGIN_UNVERIFIED");
     }
 
@@ -99,7 +106,8 @@ class JdbcAlightingAwareFeatureQueryTest {
 
     @Test
     void 행_제한을_넘기면_이력을_자르지_않고_거부한다() {
-        assertThatThrownBy(() -> new JdbcAlightingAwareFeatureQuery(jdbc, version + ":" + first, 1, true, "").read(sourceBatch,
+        assertThatThrownBy(() -> new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
+            new JdbcVehicleCapacityStore(jdbc)), version + ":" + first, 1, true, "").read(sourceBatch,
             stops, statistics))
             .hasMessageContaining("ROW_LIMIT_EXCEEDED");
     }
@@ -110,7 +118,8 @@ class JdbcAlightingAwareFeatureQueryTest {
         final int steps = new AlightingAwareHistoryBootstrap(jdbc).rebuild(stops, statistics, first, sourceBatch, 1, 100,
             checkpoint.toString());
         assertThat(steps).isEqualTo(3);
-        JdbcAlightingAwareFeatureQuery restarted = new JdbcAlightingAwareFeatureQuery(jdbc, version + ":" + first, 100, true,
+        JdbcAlightingAwareFeatureQuery restarted = new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
+            new JdbcVehicleCapacityStore(jdbc)), version + ":" + first, 100, true,
             checkpoint.toString());
         AlightingAwareFeatureVector actual = restarted.read(sourceBatch, stops, statistics).get(source).forTarget(2);
         assertSoftly(softly -> {
@@ -124,13 +133,15 @@ class JdbcAlightingAwareFeatureQueryTest {
     @Test
     void 과거_미발행_배치를_재처리해도_체크포인트는_후퇴하지_않는다() {
         AlightingAwareFeatureVector expected = query().read(sourceBatch, stops, statistics).get(source).forTarget(2);
-        JdbcAlightingAwareFeatureQuery checkpointQuery = new JdbcAlightingAwareFeatureQuery(jdbc, version + ":" + first, 100, true,
+        JdbcAlightingAwareFeatureQuery checkpointQuery = new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
+            new JdbcVehicleCapacityStore(jdbc)), version + ":" + first, 100, true,
             checkpoint.toString());
         checkpointQuery.read(sourceBatch, stops, statistics);
         final long later = batch(60, 1);
         observation(later, 70);
         checkpointQuery.read(later, stops, statistics);
-        AlightingAwareFeatureVector actual = new JdbcAlightingAwareFeatureQuery(jdbc, version + ":" + first, 100, true, checkpoint.toString())
+        AlightingAwareFeatureVector actual = new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
+            new JdbcVehicleCapacityStore(jdbc)), version + ":" + first, 100, true, checkpoint.toString())
             .read(sourceBatch, stops, statistics).get(source).forTarget(2);
         assertSoftly(softly -> {
             softly.assertThat(actual.seat88()).containsExactly(expected.seat88());
@@ -186,7 +197,7 @@ class JdbcAlightingAwareFeatureQueryTest {
             softly.assertThat(snapshot.source().sourceReceivedAt()).isEqualTo(NOW);
             softly.assertThat(snapshot.source().batchRank()).isEqualTo(1);
             softly.assertThat(snapshot.forTarget(2).seat88()[13]).isEqualTo(1);
-            softly.assertThat(snapshot.provenance().capacityObservation().seats()).isEqualTo(68);
+            softly.assertThat(snapshot.capacity()).isEqualTo(68);
         });
     }
 
@@ -202,7 +213,8 @@ class JdbcAlightingAwareFeatureQueryTest {
         // when
         final int steps = new AlightingAwareHistoryBootstrap(jdbc).rebuild(stops, confirmed, first, sourceBatch, 1, 100,
             checkpoint.toString());
-        AlightingAwareFeatureVector restored = new JdbcAlightingAwareFeatureQuery(jdbc, "", 100, true, checkpoint.toString())
+        AlightingAwareFeatureVector restored = new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
+            new JdbcVehicleCapacityStore(jdbc)), "", 100, true, checkpoint.toString())
             .read(sourceBatch, stops, confirmed).get(source).forTarget(2);
 
         // then
@@ -214,7 +226,8 @@ class JdbcAlightingAwareFeatureQueryTest {
     }
 
     private JdbcAlightingAwareFeatureQuery query() {
-        return new JdbcAlightingAwareFeatureQuery(jdbc, version + ":" + first, 100, true, "");
+        return new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
+            new JdbcVehicleCapacityStore(jdbc)), version + ":" + first, 100, true, "");
     }
 
     private long batch(final int seconds, final int rows) {

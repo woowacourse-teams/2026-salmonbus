@@ -223,18 +223,11 @@ public class ForecastBatchWriter {
         ObjectNode evidence = (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.stopOrder()));
         evidence.put("asOf", batch.responseReceivedAt().toString());
         evidence.put("inputProfile", statistics.profile().input());
-        evidence.put("capacityPolicy", statistics.profile().capacity());
+        evidence.put("capacityPolicy", "vehicle-capacity-snapshot-v1");
+        evidence.put("capacity", snapshot.capacity());
         if (statistics.confirmedProfile()) {
             evidence.put("asOf", snapshot.source().receivedAt().toString());
-            AlightingAwareFeatureSnapshot.Provenance provenance = snapshot.provenance();
-            AlightingAwareObservation capacity = provenance.capacityObservation();
-            if (capacity == null) {
-                throw new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_CAPACITY_EVIDENCE_MISSING");
-            }
-            evidence.put("tripStartObservationId", provenance.tripStartObservationId());
-            evidence.put("capacityObservationId", capacity.observationId());
-            evidence.put("capacity", capacity.seats());
-            evidence.put("capacityKnownAt", capacity.receivedAt().toString());
+            evidence.put("tripStartObservationId", snapshot.provenance().tripStartObservationId());
         }
         evidence.put("vehicleObservationId", snapshot.vehicleObservationId());
         evidence.put("sourceBatchId", batch.observationBatchId());
@@ -242,7 +235,8 @@ public class ForecastBatchWriter {
         evidence.set("probability80", nullableVector(vector.probability80()));
         return SeatForecast.of(snapshot.vehicleObservationId(), target,
             model.predict(vector), runtime.deploymentId(), 0, generatedAt)
-            .withAlightingAwareEvidence(JSON.writeValueAsString(evidence), model.bundleDigest(), statistics.profile().label());
+            .withAlightingAwareEvidence(JSON.writeValueAsString(evidence), model.bundleDigest(), statistics.confirmedProfile()
+                ? "alighting-confirmed-capacity-snapshot-v3" : "alighting-capacity-snapshot-v2");
     }
 
     private static ArrayNode nullableVector(double[] vector) {
