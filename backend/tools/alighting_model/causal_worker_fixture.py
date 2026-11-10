@@ -30,11 +30,16 @@ def row_json(row, turn):
                           or (row.stop_order == 1 and row.state != 2)))
 
 
-def generate(root, output, day):
+def generate(root, output, day, alighting_reference):
     if output.exists():
         raise ValueError('Preserve existing replay fixtures')
     output.mkdir(parents=True)
     source = root / 'source'
+    from causal_prepare import original_alighting
+    reference = original_alighting(alighting_reference)
+    expected_reference = json.loads((source/'calibration-receipt.json').read_text())['original_alight_source_sha256']
+    if sha256(alighting_reference) != expected_reference:
+        raise ValueError('Use the exact independent alighting reference bound to the frozen parameters')
     frame = pd.read_pickle(root / 'model/frame.pkl')
     seat = np.load(root / 'model/seat88.npy', mmap_mode='r')
     probability = np.load(root / 'model/probability80.npy', mmap_mode='r')
@@ -83,19 +88,28 @@ def generate(root, output, day):
         stats = json.loads((root / 'bundle' / f'statistics-{route}.json').read_text())
         stats['input_profile'] = PROFILE
         golden = []
+        parameters = {p['band']: p for p in json.loads((source/f'alighting_parameters_{route}.json').read_text())}
         events = pd.read_pickle(source / f'events_{route}.pkl').copy()
         events['previous_post_id'] = events.groupby('stop').source_departure_id.shift()
         event_index = events.set_index(['trip', 'chain', 'stop'])
         for index in selected:
             case = frame.loc[index]
             event = event_index.loc[(case.trip, case.origin_chain, case.target)]
+            capacity = int(seat[index, 53])
+            if event.arrive > capacity or event.depart > capacity:
+                raise ValueError('OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT: select and record a reviewed supported cohort')
+            band = 'morning' if event.minute < 600 else 'evening'
+            observed = event.to_frame().T.copy()
+            observed['onboard'] = capacity - observed.arrive
+            predicted = reference['predict'](np.asarray(parameters[band]['theta']), reference['prepare'](observed, band))
+            frozen_after = float(event.arrive + predicted['post_alight'][0])
             golden.append(dict(source_id=int(case.origin_observation_id),
                                expected_pre=int(event.source_arrival_id), expected_post=int(event.source_departure_id),
-                               expected_closure=int(event.closure_id), expected_capacity=int(event.capacity),
+                               expected_closure=int(event.closure_id), expected_capacity=capacity,
                                expected_previous_post=int(event.previous_post_id), target=int(case.target),
                                seat88=np.where(np.isnan(seat[index]), None, seat[index]).tolist(),
                                probability80=np.where(np.isnan(probability[index]), None, probability[index]).tolist(),
-                               expected_after=float(case.after), expected_departure=int(case.true_depart),
+                               expected_after=frozen_after, expected_departure=int(case.true_depart),
                                expected_known=instant(case.label_known)))
         anchor = batches[batches.received < start].iloc[-1]
         route_versions = versions[versions.id.isin(meta['versions'])].copy()
@@ -111,7 +125,7 @@ def generate(root, output, day):
         ledger = [dict(id=int(b.batch), rv=int(b.rv), confirmed_at=instant(b.received),
                        response_at=instant(b.source_received), stored_rows=int(raw_counts.loc[b.batch]))
                   for b in batches[batches.batch.isin(needed_batches)].itertuples()]
-        payload = dict(route=route, day=day, input_profile=PROFILE,
+        payload = dict(capacity_policy="vehicle-capacity-snapshot-v1", label_version="alighting-confirmed-capacity-snapshot-v3", route=route, day=day, input_profile=PROFILE,
                        source_route_id=meta['public_route_id'], route_versions=route_versions, batches=ledger,
                        day_rows_verified_against_raw_ledger=True,
                        statistics=stats, holidays=json.loads((root/'bundle/statistics-manifest.json').read_text())['holiday_dates'],
@@ -126,6 +140,7 @@ def generate(root, output, day):
         receipts.append(receipt)
         print(json.dumps(receipt), flush=True)
     (output/'manifest.json').write_text(json.dumps(dict(profile=PROFILE, day=day, routes=receipts,
+        capacity_policy="vehicle-capacity-snapshot-v1", label_version="alighting-confirmed-capacity-snapshot-v3",
         source_receipt_sha256=sha256(source/'source-receipt.json'),
         scope='source-derived midnight prefix plus all available day observations; quality state not exported'), indent=2))
 
@@ -135,5 +150,6 @@ if __name__ == '__main__':
     p.add_argument('--root', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--day', default='2026-11-04')
+    p.add_argument('--alighting-reference', type=Path, required=True)
     a = p.parse_args()
-    generate(a.root, a.output, a.day)
+    generate(a.root, a.output, a.day, a.alighting_reference)

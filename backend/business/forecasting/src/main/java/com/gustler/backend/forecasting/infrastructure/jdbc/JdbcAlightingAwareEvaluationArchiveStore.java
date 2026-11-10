@@ -1,7 +1,5 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
-
 import com.gustler.backend.forecasting.application.evaluation.AlightingAwareEvaluationArchiveStore;
 import java.util.ArrayList;
 import java.util.List;
@@ -285,7 +283,7 @@ public class JdbcAlightingAwareEvaluationArchiveStore implements AlightingAwareE
     private static AlightingAwareEvaluationArchiveStore.Key key(JsonNode row) {
         return new AlightingAwareEvaluationArchiveStore.Key(row.path("vehicle_observation_id").longValue(),
             row.path("target_stop_order").intValue(), row.path("target_kind").asString(),
-            canonical(row.path("label_version").asString()), row.path("quality_revision").longValue());
+            row.path("label_version").asString(), row.path("quality_revision").longValue());
     }
 
     private static JdbcClient.StatementSpec bind(JdbcClient.StatementSpec query, AlightingAwareEvaluationArchiveStore.Key key) {

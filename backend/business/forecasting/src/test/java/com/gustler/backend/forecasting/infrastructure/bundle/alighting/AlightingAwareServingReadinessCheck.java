@@ -42,7 +42,9 @@ public final class AlightingAwareServingReadinessCheck {
         verifyRoutes(directory, bundle, release);
         Map<String, Object> report = Map.of(
             "passed", true, "bundle_manifest_sha256", bundle.digest(), "routes", bundle.routes(),
-            "input_profile", AlightingAwareRouteStatistics.CONFIRMED_PROFILE, "release_id", release.releaseId(),
+            "input_profile", com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical(
+                bundle.statistics(bundle.routes().getFirst()).path("input_profile").asText("alighting-original-v1")),
+            "runtime_calculation_version", release.featureContractVersion(), "release_id", release.releaseId(),
             "data_through", release.dataThrough(), "verified_cases", bundle.routes().size(),
             "mode", args[0], "scope", "local model, catalog, registry and deployment identity; no production activation");
         Files.writeString(Path.of(args[2]), JSON.writerWithDefaultPrettyPrinter().writeValueAsString(report) + "\n");

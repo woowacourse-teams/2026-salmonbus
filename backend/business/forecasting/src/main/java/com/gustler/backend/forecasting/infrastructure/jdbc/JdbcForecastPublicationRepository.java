@@ -93,7 +93,8 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
         Optional<ExistingPublication> previous = jdbc.sql(
             """
                 SELECT p.id, p.model_deployment_id,
-                    (old.calculation_version='alighting-online-v1' OR incoming.calculation_version='alighting-online-v1') AS alighting
+                    (old.model_key IN ('alighting-gate-base-and-pool','les-gate-base-and-pool')
+                     OR incoming.model_key IN ('alighting-gate-base-and-pool','les-gate-base-and-pool')) AS alighting
                 FROM forecast_publication p JOIN model_deployment old ON old.id=p.model_deployment_id
                 JOIN model_deployment incoming ON incoming.id=? WHERE p.source_batch_id=? FOR UPDATE OF p
                 """)

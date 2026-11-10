@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.domain.model.alighting;
 
 import java.time.Instant;
 
-/** 관측 창 이전의 누적 상태와 최대 좌석의 근거 관측이다. 관측을 만들어 대신 넣지 않는다. */
+/** 관측 창 이전의 운행 상태다. capacity와 capacityObservation은 과거 체크포인트 읽기 호환에만 남긴다. */
 public record AlightingAwareVehiclePrefix(
     float capacity,
     double fullStreak,

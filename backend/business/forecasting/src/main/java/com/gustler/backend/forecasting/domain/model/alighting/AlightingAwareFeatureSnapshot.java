@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 하나의 관측 시점에서 복원한 입력이다. 여섯 필드는 같은 시점의 관측·누적 상태·고정 통계를 구성한다.
+ * 하나의 관측 시점의 관측·누적 상태·고정 통계와 차량 정원을 보관한다.
  * 과거 상태를 생략한 단순 시간 창은 받을 수 없으며, 원본 float32 변환 순서를 유지한다.
  */
 public final class AlightingAwareFeatureSnapshot {

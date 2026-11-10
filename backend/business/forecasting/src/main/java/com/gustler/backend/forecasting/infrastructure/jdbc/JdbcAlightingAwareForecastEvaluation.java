@@ -407,6 +407,9 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
             || capacity < 30 || capacity > 70) {
             return Outcome.unsupported("CAPACITY_SNAPSHOT_INVALID", event);
         }
+        if (event.arrival().seats() > capacity || event.departure().seats() > capacity) {
+            return Outcome.unsupported("OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT", event);
+        }
         return calculatePosterior(event, previous.get(), capacity, parameters, gap, minute, band);
     }
 

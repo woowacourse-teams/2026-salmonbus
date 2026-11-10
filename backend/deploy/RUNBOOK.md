@@ -299,7 +299,11 @@ sudo systemctl restart salmonbus-worker
 ## 모델 계수 파일 교체
 
 ```bash
-sudo -u salmonbus cp manifest.json weights.safetensors /var/lib/salmonbus/model/current/
+# 검증한 전체 numeric bundle을 별도 디렉터리에 준비한다. manifest의 모든 참조 파일이 필요하다.
+sudo -u salmonbus cp -R /path/to/verified-bundle /var/lib/salmonbus/model/new-release
+sudo systemctl stop salmonbus-worker
+# MODEL_BUNDLE_DIRECTORY를 새 디렉터리로 지정한다. 기존 디렉터리는 보존한다.
+sudo sed -i 's|^MODEL_BUNDLE_DIRECTORY=.*|MODEL_BUNDLE_DIRECTORY=/var/lib/salmonbus/model/new-release|' /etc/salmonbus/worker.env
 sudo sed -i 's/^MODEL_BUNDLE_PROMOTE_ON_START=.*/MODEL_BUNDLE_PROMOTE_ON_START=true/' /etc/salmonbus/worker.env
 sudo systemctl restart salmonbus-worker
 # 모델 계수 적용을 확인한 뒤 반드시 다시 비활성화한다.
@@ -560,9 +564,9 @@ DB 연결은 최대 1개이며 nice만으로 자원 격리가 된다고 보지 �
 `deploy/sql/prepare-operational-archive-indexes.sql`로 한 개씩 준비한다.
 큰 테이블 index는 추가 공간과 I/O를 쓰므로 여유를 확인하기 전 자동 실행하지 않는다.
 인덱스가 없으면 새 앱은 보관은 수행하되 원본 삭제를 거부한다. KST 오늘·어제는 보존한다.
-미완료 정산/통계 노선은 로그에 보류 사유를 남기고 다른 노선으로 진행한다.
+수집·새 모델 정산이 미완료인 노선은 로그에 보류 사유를 남기고 다른 노선으로 진행한다. 구 수요 통계 완료는 기다리지 않는다.
 새 모델의 `alighting_forecast_evaluation_work`도 같은 완료 조건에 포함하며 결과·구 이관 참조를 예보보다 먼저 보관·삭제한다.
-새 모델 정산 근거의 관측 FK 6개도 준비 SQL의 인덱스 검사를 통과해야 삭제할 수 있다.
+새 모델 정산 근거 중 남아 있는 관측 FK도 준비 SQL의 인덱스 검사를 통과해야 삭제할 수 있다. 정원 근거 관측 FK는 V69에서 제거하며 기존 숫자 ID는 과거 결과 해석용으로만 남긴다.
 `COLLECTION_PENDING`은 RESERVED/DISPATCHING 수집 기록이다. 예보의 2시간 정산 만료와 별개다.
 2026-11-09 읽기 전용 조사에서 과거 실패 기록 687건(모두 관측 0행)이 26개 노선 버전에 남아 있었다.
 이 기록은 이관을 막아 별도 승인한 일회성 작업으로 상태만 종료했다.
@@ -570,7 +574,7 @@ DB 연결은 최대 1개이며 nice만으로 자원 격리가 된다고 보지 �
 해당 작업의 커밋 후 재조회에서 대상 미완료는 0건이고 outcome 이외의 필드는 모두 동일했다.
 전송 전 예약과 전송 후 결과 미확인을 구분해 종료해야 하며, 오래된 요청을 다시 보내 과거 관측으로 저장하면 안 된다.
 과거 기록을 성공으로 바꾸거나 삭제하지 않는다. 이후 재발 처리는 아래 수집 회차 경계 절차를 따른다.
-삭제 전에 기존 누적값·모델 입력 동등성과 과거 정원 이력 인계를 확인해야 한다.
+삭제 전에 모델 입력 동등성, 확인된 관측 이력 체크포인트와 차량 정원 이력 인계를 확인해야 한다.
 
 전환 기준은 Git 머지 시각이 아니라 구 Worker 이관 중지와 새 버전 배포 완료 시점이다.
 이후 archive-app은 새 prefix만 읽고 쓴다. 옛 S3 다운로드/변환/합치기는 운영 코드에 없다.
@@ -839,9 +843,9 @@ current 심볼릭 링크가 가리키는 JAR로 실행된다
   `PURGED_FILE`의 deletedRows는 커밋된 테이블별 삭제량이며 fileBytes는 DB에서 확보한 바이트가 아니다.
   archiveId/fileNumber로 재시도를 구분한다. 커밋 직후 프로세스가 종료되면 로그가 빠질 수 있으므로
   작업·파일 장부와 PostgreSQL 카운터로 대조한다. DONE 로그의 durationMs는 해당 실행 시도의 시간이다.
-- `DEFERRED`의 reason/date로 수집 미완료, 정산 대기, 통계 미반영, 삭제 비활성화를 구분한다.
+- `DEFERRED`의 reason/date로 수집 미완료, 정산 대기, 삭제 비활성화를 구분한다.
   가장 오래된 날짜가 전진하는지 확인한다. 오래된 RESERVED/DISPATCHING 기록을 발견해도 측정 중 임의로 종료하거나 삭제하지 않는다.
-- 같은 시간대의 collection_route/forecast_tick/settlement_tick p95와 실패, DB CPU/잠금 대기를 같이 비교한다.
+- 같은 시간대의 collection_route/forecast_tick/alighting_settlement_tick p95와 실패, DB CPU/잠금 대기를 같이 비교한다.
   심야 수집 주기와 요일 차이를 구분하며, 데이터 나이를 작업 실행시간이나 처리 지연과 혼동하지 않는다.
 
 프로세스가 웹 서버를 띄우지 않으므로 내부 Micrometer meter가 Grafana에 자동으로 수집된다고 가정하지 않는다.
@@ -882,3 +886,18 @@ Discord 알림을 받으면 DB 원인 분석 화면의 수집 실패 및 상태 
 53100이면 DB 여유 공간과 `could not extend file` 로그를 확인한다. 자동 증설이나 원본 삭제는 하지 않는다.
 23503이면 `referenceRouteVersionId`, `stopOrder`, `stopId`와 노선 갱신 결과를 확인한다.
 자동 종료는 이관을 막는 상태를 정리한 것이며 수집 데이터 복원이나 원인 해결을 뜻하지 않는다.
+
+
+### 하차 반영 단일 모델 전환
+
+이번 전환은 수동 중지 후 진행한다. 구 Worker·API·archive-app과 복원 작업을 중지하고 백업한 뒤 API에서 V68~V71을 적용한다. 실행 중인 구 Worker를 새 스키마에 연결하지 않는다. 구 좌석분포 모델과 DB 수요 통계·당일 보정 계산 경로는 제거했으며 기존 배포로 되돌리는 것만으로 스키마까지 복구되지는 않는다.
+
+1. 원본 번들과 서명·해시는 그대로 보존한다. 기존 `les-*` 판본 정보는 읽을 때만 새 이름으로 해석한다.
+2. 새 모델 파일과 설정을 함께 준비하고 `alighting-online-capacity-snapshot-v2` 계산 판본으로 명시적으로 승격한다. 필요하면 기존 `MODEL_BUNDLE_PROMOTE_ON_START` 절차를 사용한다. 옛 계산 판본의 활성 배포를 단순 재시작으로 재사용하지 않는다.
+3. 확정 관측 이력 체크포인트를 검증한다. 기존 `les-confirmed-closure-v2` 디렉터리를 사용했다면 새 `alighting-confirmed-closure-v2` 위치로 파일 내용을 바꾸지 않고 준비하거나 검증된 원본에서 재생성한다. 해시 확인 전에는 원본 삭제를 켜지 않는다.
+4. Worker를 시작해 차량 정원 캐시 준비와 예보·정산을 확인한다. 예보에 저장한 정원으로 정산하며, 이후 관측이 그 정원을 넘으면 `OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT` 사유로 해당 정산을 종료한다. 과거 예보의 정원을 바꾸거나 재계산하지 않는다.
+5. archive-app은 삭제를 끈 상태로 시작한다. 오늘·어제를 남기고 이전 날짜의 수집·새 정산 완료, S3 재읽기와 해시 검증을 확인한 뒤 삭제를 활성화한다. 예보 생성 직후 원본을 삭제하는 구조가 아니다.
+
+구 모델 미완료 작업은 V69/V70에서 종료 사유를 남기며 기존 완료 결과를 재작성하지 않는다. V71은 운영 중간 통계·당일 보정 테이블을 제거한다. 이미 발행한 통계·판본·파일 발행 기록은 과거 데이터 해석용으로 유지한다.
+
+개발용 모델은 정확도 검증용이 아닌 8개 노선의 합성 숫자 모델 한 벌이다. 운영 확정 관측 모델의 지원 노선 수와 다르다. 새 개발 환경 초기화는 검증했지만 기존 불변 개발 데이터·모델 파일을 자동 덮어쓰지는 않는다. 기존 환경은 별도 새 데이터 세트로 준비하거나 명시적인 전환 절차가 필요하다.

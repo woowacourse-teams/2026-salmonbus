@@ -22,13 +22,14 @@ def digest(content: bytes) -> str:
 
 def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None:
     import re
+    from confirmed_serving_verification import canonical_identifier
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", release_id):
         raise ValueError("invalid release id")
     if output.exists():
         raise ValueError("output must be a new immutable release directory")
     source_bytes = (source / "manifest.json").read_bytes()
     manifest = json.loads(source_bytes)
-    if manifest.get("schema") != "alighting-inference-bundle-v1" or manifest.get("serving_ready") is not False:
+    if canonical_identifier(manifest.get("schema")) != "alighting-inference-bundle-v1" or manifest.get("serving_ready") is not False:
         raise ValueError("expected offline AlightingAware bundle")
     source_digest = digest(source_bytes)
     contents: dict[str, bytes] = {}
@@ -71,6 +72,9 @@ def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None
     if any(value.tzinfo is None for value in dates):
         raise ValueError("statistics cutoff must include timezone")
     contents["verification-source-manifest.json"] = source_bytes
+    for field in ("schema", "model", "input_profile"):
+        if field in manifest:
+            manifest[field] = canonical_identifier(manifest[field])
     manifest["serving_ready"] = True
     manifest["pending"] = []
     manifest["runtime"] = {
@@ -83,6 +87,11 @@ def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None
     }
     if confirmed:
         manifest["runtime"].update(CONTRACT)
+        # Training metadata above is preserved separately from the verified runtime contract.
+        manifest["runtime"].update(
+            runtime_calculation_version="alighting-online-capacity-snapshot-v2",
+            runtime_capacity_policy="vehicle-capacity-snapshot-v1",
+            runtime_label_version="alighting-confirmed-capacity-snapshot-v3")
     manifest["files"] = {name: digest(content) for name, content in contents.items()}
     # Publish only after all inputs were validated; cleanup a partial local copy on write failure.
     output.mkdir(parents=True)

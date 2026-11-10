@@ -217,7 +217,7 @@ public class AlightingAwareEvaluationArchiveService implements AlightingAwareEva
     private static AlightingAwareEvaluationArchiveStore.Key key(JsonNode row) {
         return new AlightingAwareEvaluationArchiveStore.Key(row.path("vehicle_observation_id").longValue(),
             row.path("target_stop_order").intValue(),
-            row.path("target_kind").asString(), canonical(row.path("label_version").asString()),
+            row.path("target_kind").asString(), row.path("label_version").asString(),
             row.path("quality_revision").longValue());
     }
 }

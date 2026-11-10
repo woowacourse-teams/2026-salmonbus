@@ -9,6 +9,9 @@ import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -273,7 +276,40 @@ class JdbcAlightingAwareForecastEvaluationTest {
     }
 
     @Test
-    void 원격_검증에_실패하면_Les_원본을_삭제하지_않는다() {
+    void 옛_판본의_이관_파일은_키와_바이트를_바꾸지_않고_반복_복원한다() throws Exception {
+        service.settle();
+        final double before = label(AFTER);
+        String historicalVersion = "les-identity-safe-v1";
+        jdbc.sql("UPDATE alighting_forecast_evaluation_result SET label_version=?,scored_at=? WHERE route_version_id=?")
+            .params(historicalVersion, offset(START), version).update();
+        MemoryObjects objects = new MemoryObjects();
+        AlightingAwareEvaluationArchiveService archive = new AlightingAwareEvaluationArchiveService(
+            new JdbcAlightingAwareEvaluationArchiveStore(jdbc, transactions), objects, true, 500);
+        archive.advance();
+        assertThat(count("alighting_forecast_evaluation_result")).isZero();
+
+        // 옛 schema와 원본 label을 가진 해시 고정 파일을 구성한다.
+        byte[] historical = new String(objects.bytes.values().iterator().next(), StandardCharsets.UTF_8)
+            .replace("alighting-evaluation-archive-v1", "les-evaluation-archive-v1")
+            .getBytes(StandardCharsets.UTF_8);
+        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(historical));
+        String key = "salmonbus-be/alighting-evaluation-archive/v1/" + hash + ".json";
+        objects.bytes.clear();
+        objects.bytes.put(key, historical);
+        jdbc.sql("UPDATE alighting_evaluation_archive SET object_hash=? WHERE label_version=?")
+            .params(hash, historicalVersion).update();
+
+        assertThat(archive.restore(source, 2, AFTER, historicalVersion, 1)).isOne();
+        assertThat(archive.restore(source, 2, AFTER, historicalVersion, 1)).isZero();
+        assertThat(label(AFTER)).isEqualTo(before);
+        assertThat(jdbc.sql("SELECT label_version FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=?")
+            .param(source).query(String.class).single()).isEqualTo(historicalVersion);
+        assertThat(objects.bytes).hasSize(1);
+        assertThat(objects.bytes.get(key)).containsExactly(historical);
+    }
+
+    @Test
+    void 원격_검증에_실패하면_정산_원본을_삭제하지_않는다() {
         service.settle();
         EvaluationArchiveObjects corrupted = new EvaluationArchiveObjects() {
             public void putIfAbsent(
@@ -520,6 +556,22 @@ class JdbcAlightingAwareForecastEvaluationTest {
         assertThat(jdbc.sql("SELECT DISTINCT reason FROM alighting_forecast_evaluation_result "
             + "WHERE route_version_id=? AND vehicle_observation_id<>?")
             .params(version, source).query(String.class).list()).containsExactly("NO_CLOSED_IDENTITY_SAFE_PASS");
+    }
+
+    @Test
+    void 예보_후_정원이_올라_관측이_스냅샷_정원을_넘으면_재시도_대신_사유를_남긴다() {
+        useConfirmedProfile();
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at WHERE route_version_id=?")
+            .param(version).update();
+        jdbc.sql("""
+            UPDATE vehicle_observation o SET remaining_seats=45 FROM observation_batch b
+            WHERE o.observation_batch_id=b.id AND o.vehicle_id='current' AND o.passed_stop_order=1
+                AND b.response_received_at>?
+            """).param(offset(START)).update();
+        service.settle();
+        assertThat(jdbc.sql("SELECT reason FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=?")
+            .param(source).query(String.class).single()).isEqualTo("OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT");
+        assertThat(count("alighting_forecast_evaluation_work")).isZero();
     }
 
     private void useConfirmedProfile() {

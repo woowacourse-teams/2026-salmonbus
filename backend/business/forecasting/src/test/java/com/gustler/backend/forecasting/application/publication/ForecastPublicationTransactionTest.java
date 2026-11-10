@@ -39,7 +39,7 @@ class ForecastPublicationTransactionTest {
     @Autowired ForecastPublicationRepository publications;
     @Autowired RouteWorkAccess routeWork;
     @Autowired TransactionTemplate tx;
-    private long routeId, routeVersionId, batchId, observationId, deploymentId;
+    private long routeId, routeVersionId, batchId, observationId, deploymentId, nextDeploymentId;
     private PendingForecastBatch batch;
 
     @BeforeEach
@@ -85,7 +85,7 @@ class ForecastPublicationTransactionTest {
             INSERT INTO model_deployment(deployment_key,release_id,model_key,model_version,bundle_digest,
                 prediction_target_version,calculation_version,supported_scope_digest,data_until,state)
             VALUES(?,'publication-test','alighting-gate-base-and-pool','v1',?,'after-alighting-and-departure-zero-v1',
-                'alighting-online-v1',?,?,'STAGED') RETURNING id
+                'alighting-online-capacity-snapshot-v2',?,?,'STAGED') RETURNING id
             """).params(UUID.randomUUID(),DIGEST,DIGEST,offset(OBSERVED_AT.minusSeconds(60))).query(Long.class).single();
     }
 
@@ -97,7 +97,7 @@ class ForecastPublicationTransactionTest {
         }
         jdbc.sql("DELETE FROM route_version WHERE id=?").param(routeVersionId).update();
         jdbc.sql("DELETE FROM route WHERE id=?").param(routeId).update();
-        jdbc.sql("DELETE FROM model_deployment WHERE id=?").param(deploymentId).update();
+        jdbc.sql("DELETE FROM model_deployment WHERE id IN (?,?)").params(deploymentId,nextDeploymentId).update();
     }
 
     @Test
@@ -137,6 +137,26 @@ class ForecastPublicationTransactionTest {
         committer.commit(batch,publication());
         assertThat(count("seat_forecast")).isOne();
         assertThat(confirmed()).isTrue();
+    }
+
+    @Test
+    void 새_계산_버전도_이미_발행한_관측을_다른_배포로_덮어쓰지_않는다() {
+        committer.commit(batch,publication());
+        long next = jdbc.sql("""
+            INSERT INTO model_deployment(deployment_key,release_id,model_key,model_version,bundle_digest,
+                prediction_target_version,calculation_version,supported_scope_digest,data_until,state)
+            SELECT ?,'next-release',model_key,model_version,bundle_digest,prediction_target_version,
+                calculation_version,supported_scope_digest,data_until,'STAGED' FROM model_deployment WHERE id=?
+            RETURNING id
+            """).params(UUID.randomUUID(),deploymentId).query(Long.class).single();
+        nextDeploymentId=next;
+        {
+            var another = new ForecastPublication(batchId,routeVersionId,next,0,1,OBSERVED_AT,
+                GENERATED_AT,GENERATED_AT,List.of());
+            assertThatThrownBy(() -> committer.commit(batch,another)).hasMessageContaining("다른 모델로 덮어쓸 수 없다");
+            assertThat(jdbc.sql("SELECT model_deployment_id FROM forecast_publication WHERE source_batch_id=?")
+                .param(batchId).query(Long.class).single()).isEqualTo(deploymentId);
+        }
     }
 
     private ForecastPublication publication() {

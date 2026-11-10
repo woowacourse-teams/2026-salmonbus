@@ -25,9 +25,11 @@ final class CompatiblePreparation {
 
     static final String ALIGHTING_MODEL_DATA = "0779f0aef421c9a5120c94cf9c3434085e39dfbd38aa2da213a9a0d3b87e8e1e";
 
+    static final String SINGLE_MODEL_DATA = "e8cbb759abd67ff2af54253e3692e7a9370a6b252be69186a12daed2c8460a07";
+
     private static final List<String> REVIEWED_ORDER = List.of(
         PREVIOUS, COLLECTED_DATA, EVALUATION_DATA, NEXT, PREVIOUS_ALIGHTING_AWARE_EVALUATION_DATA, ALIGHTING_AWARE_EVALUATION_DATA,
-        ARCHIVE_DATA, ALIGHTING_MODEL_DATA);
+        ARCHIVE_DATA, ALIGHTING_MODEL_DATA, SINGLE_MODEL_DATA);
 
     static boolean permits(RevisionStore.Revision previous, RevisionStore.Revision next) {
         String from = previous.files().get("tools/data-contract.sha256");

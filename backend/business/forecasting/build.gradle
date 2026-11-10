@@ -29,7 +29,7 @@ tasks.register('verifyAlightingAwareParity', JavaExec) {
     jvmArgs '-XX:ActiveProcessorCount=1'
     doFirst {
         if (!bundlePath.isPresent() || !resultPath.isPresent()) {
-            throw new GradleException('-PlesBundle와 -PlesParityOutput 절대 경로가 필요하다')
+            throw new GradleException('-PalightingBundle와 -PalightingParityOutput 절대 경로가 필요하다')
         }
         args bundlePath.get(), resultPath.get()
     }

@@ -52,6 +52,21 @@ class ServingBundleTest(unittest.TestCase):
         for name, expected in release["files"].items():
             self.assertEqual(MODULE.digest((self.output / name).read_bytes()), expected)
 
+    def test_historical_source_keeps_original_bytes_and_new_release_names(self):
+        original = self.manifest.replace(b'alighting-inference-bundle-v1', b'les-inference-bundle-v1')
+        (self.source / 'manifest.json').write_bytes(original)
+        for check in MODULE.CHECKS:
+            path = self.receipts / f'verification-{check}.json'
+            receipt = json.loads(path.read_text())
+            receipt['source_manifest_sha256'] = MODULE.digest(original)
+            path.write_text(json.dumps(receipt))
+        MODULE.prepare(self.source, self.output, 'alighting-confirmed-test', self.receipts)
+        release = json.loads((self.output / 'manifest.json').read_text())
+        self.assertEqual(release['schema'], 'alighting-inference-bundle-v1')
+        self.assertEqual(release['runtime']['release_id'], 'alighting-confirmed-test')
+        self.assertEqual((self.source / 'manifest.json').read_bytes(), original)
+        self.assertEqual((self.output / 'verification-source-manifest.json').read_bytes(), original)
+
     def test_release_id_matches_database_length_limit(self):
         for length in (81, 120):
             with self.subTest(length=length), self.assertRaises(ValueError):

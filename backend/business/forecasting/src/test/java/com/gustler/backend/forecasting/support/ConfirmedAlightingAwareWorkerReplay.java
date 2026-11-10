@@ -29,7 +29,6 @@ import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcAlightingAwareFor
 import com.gustler.backend.forecasting.infrastructure.alighting.ConfirmedAlightingAwareInput;
 import com.gustler.backend.forecasting.infrastructure.alighting.JdbcAlightingAwareFeatureQuery;
 import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareHistorySeedReader;
-import com.gustler.backend.support.ConfirmedTripFixture;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -65,6 +64,11 @@ public final class ConfirmedAlightingAwareWorkerReplay {
         if ((args.length < 3 || args.length > 4) || Files.exists(Path.of(args[2]))) {
             throw new IllegalArgumentException("fixtures, inactive bundle, new output directory required");
         }
+        JsonNode manifest = JSON.readTree(Files.readAllBytes(Path.of(args[0]).resolve("manifest.json")));
+        if (!manifest.path("capacity_policy").asText().equals("vehicle-capacity-snapshot-v1")
+            || !manifest.path("label_version").asText().equals("alighting-confirmed-capacity-snapshot-v3")) {
+            throw new IllegalArgumentException("이전 정원 정책의 재생 자료다. 새 정원 스냅샷 기준으로 독립 정답을 준비해야 한다");
+        }
         Path output = Path.of(args[2]);
         Files.createDirectory(output);
         AlightingAwareInferenceBundle bundle = AlightingAwareInferenceBundle.load(Path.of(args[1]));
@@ -89,7 +93,6 @@ public final class ConfirmedAlightingAwareWorkerReplay {
             tx.executeWithoutResult(status -> activation.activate(() -> release));
             RuntimeSnapshot runtime = new ActiveForecastRuntimeResolver(deployments, registry)
                 .resolveActive().orElseThrow();
-            JsonNode manifest = JSON.readTree(Files.readAllBytes(Path.of(args[0]).resolve("manifest.json")));
             for (JsonNode route : manifest.path("routes")) {
                 if (args.length == 4 && !route.path("route").asText().equals(args[3])) {
                     continue;
@@ -117,8 +120,11 @@ public final class ConfirmedAlightingAwareWorkerReplay {
             JSON.writerWithDefaultPrettyPrinter().writeValueAsString(Map.of(
                 "passed", passed, "routes", results, "bundle_manifest_sha256", bundle.digest(), "serving_ready", false,
                 "settlement_scope", "after_alighting_only",
+                "runtime_capacity_policy", "vehicle-capacity-snapshot-v1",
+                "runtime_label_version", "alighting-confirmed-capacity-snapshot-v3",
+                "runtime_calculation_version", "alighting-online-capacity-snapshot-v2",
                 "quality_scope",
-                "Only chosen source observations have test-confirmed identity; production quality state unavailable; unassigned rows retain the normal eligible behavior",
+                "Accepted local observations with simulated collection capacity history; production collection rejection state unavailable",
                 "input_scope",
                 "Complete day observations and source-derived midnight prefixes; not full DB bootstrap")));
         if (!passed) {
@@ -152,9 +158,6 @@ public final class ConfirmedAlightingAwareWorkerReplay {
             JsonNode anchor = fixture.path("anchor");
             reader.write(stops.routeVersionId(), new AlightingAwareHistorySeedReader.Seed(List.of(), anchor.path("batch").asLong(),
                 anchor.path("rank").asLong(), Instant.parse(anchor.path("time").asText()), prefix, List.of()));
-        }
-        for (JsonNode row : cases) {
-            tx.executeWithoutResult(status -> ConfirmedTripFixture.include(jdbc, row.path("source_id").asLong()));
         }
         double maximumFeature = 0;
         double maximumPrediction = 0;
@@ -223,7 +226,7 @@ public final class ConfirmedAlightingAwareWorkerReplay {
                           closure_observation_id,previous_post_observation_id,capacity,capacity_policy,known_at FROM alighting_forecast_evaluation_result
                         WHERE vehicle_observation_id=? AND target_stop_order=? AND label_version=?
                         """)
-                .params(row.path("source_id").asLong(), row.path("target").asInt(), AlightingAwareRouteStatistics.CONFIRMED_LABEL)
+                .params(row.path("source_id").asLong(), row.path("target").asInt(), "alighting-confirmed-capacity-snapshot-v3")
                 .query().listOfRows();
             if (labels.size() != 1) {
                 List<Map<String, Object>> pending = jdbc.sql(
@@ -273,7 +276,7 @@ public final class ConfirmedAlightingAwareWorkerReplay {
         return ((Number) actual.get("previous_post_observation_id")).longValue() == expected
             .path("expected_previous_post").asLong()
             && ((Number) actual.get("capacity")).intValue() == expected.path("expected_capacity").asInt()
-            && actual.get("capacity_policy").equals("observed-vehicle-prefix-max-through-closure-v2");
+            && actual.get("capacity_policy").equals("vehicle-capacity-snapshot-v1");
     }
 
     private static long load(DataSource dataSource, JdbcClient jdbc, JsonNode fixture) throws Exception {
@@ -370,6 +373,16 @@ public final class ConfirmedAlightingAwareWorkerReplay {
                     }
                 }
                 statement.executeBatch();
+            }
+            try (var capacities = connection.createStatement()) {
+                capacities.executeUpdate("""
+                    INSERT INTO vehicle_capacity_history(source_id,vehicle_id,evidence_at,evidence_batch_id,capacity)
+                    SELECT 'GBIS',o.vehicle_id,b.input_confirmed_at,b.id,
+                        max(o.remaining_seats) OVER (PARTITION BY o.vehicle_id ORDER BY b.input_confirmed_at,b.id)
+                    FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id
+                    WHERE o.vehicle_id IS NOT NULL AND o.remaining_seats BETWEEN 1 AND 70
+                    ON CONFLICT DO NOTHING
+                    """);
             }
             connection.commit();
         }

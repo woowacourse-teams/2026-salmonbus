@@ -206,6 +206,9 @@ final class ConfirmedAlightingAwareEvaluation {
         if (capacity < 30 || capacity > 70) {
             return unsupported("CAPACITY_EVIDENCE_MISMATCH");
         }
+        if (visit.arrival().seats() > capacity || visit.departure().seats() > capacity) {
+            return unsupported("OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT");
+        }
         double[] lambda = new double[8];
         if (parameters.path("lam").size() != lambda.length) {
             return unsupported("INVALID_PARAMETER_DIMENSION");

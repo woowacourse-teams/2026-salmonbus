@@ -36,7 +36,6 @@ public final class LocalData {
             String routeDigest = ReferenceBundle.sha(Files.readAllBytes(routeFile));
             step = "MODEL";
             var inspection = ReferenceBundle.prepare(routeFile.resolveSibling("model-reference"), Path.of(args[1]));
-            CandidateBundle.prepare(Path.of(args[1]).resolveSibling(CandidateBundle.DIRECTORY));
             if (target.shared()) {
                 step = "MIGRATION";
                 // 준비 도구에서는 DB 접속 정보 대신 결과 코드만 남긴다.
@@ -79,8 +78,8 @@ public final class LocalData {
                         if (reset) {
                             step = "RESET";
                             require(scalar(connection, """
-                                SELECT count(*) FROM model_deployment WHERE state='ACTIVE' AND bundle_digest NOT IN (?, ?)
-                                """, inspection.bundleDigest(), CandidateBundle.DIGEST).equals("0"), "UNOWNED_ACTIVE_MODEL");
+                                SELECT count(*) FROM model_deployment WHERE state='ACTIVE' AND bundle_digest<>?
+                                """, inspection.bundleDigest()).equals("0"), "UNOWNED_ACTIVE_MODEL");
                             verify(connection, data, args[1]);
                             verify(connection, catalog, args[1], false);
                             resetGenerated(connection, data);
@@ -102,12 +101,15 @@ public final class LocalData {
                     prepareCatalog(connection, data, catalog, catalogDigest, args[1]);
                     step = "VERIFY";
                     require(scalar(connection, """
-                        SELECT count(*) FROM model_deployment WHERE state='ACTIVE' AND bundle_digest NOT IN (?, ?)
-                        """, inspection.bundleDigest(), CandidateBundle.DIGEST).equals("0"),
+                        SELECT count(*) FROM model_deployment WHERE state='ACTIVE' AND bundle_digest<>?
+                        """, inspection.bundleDigest()).equals("0"),
                         "UNOWNED_ACTIVE_MODEL");
                     verify(connection, data, args[1]);
                     verify(connection, catalog, args[1], false);
+                    var anchors = LocalForecastHistory.prepare(connection,inspection.routes());
                     connection.commit();
+                    step="HISTORY";
+                    LocalForecastHistory.write(anchors,Path.of(args[1]).getParent().resolve("alighting-history"));
                 } catch (Exception error) {
                     connection.rollback();
                     throw error;
@@ -115,7 +117,7 @@ public final class LocalData {
             }
             System.out.println(new String(ReferenceBundle.bytes(Map.of("status", "ok",
                 "result", reset ? "reset" : existing ? "preserved" : recover ? "recovered" : "prepared", "routeCount", data.routes().size() + catalog.routes().size(),
-                "catalogRouteCount", catalog.routes().size(), "modelRouteCount", data.routes().size(),
+                "catalogRouteCount", catalog.routes().size(), "modelRouteCount", inspection.routes().size(),
                 "stopCount", data.routes().stream().mapToInt(route -> route.stops().size()).sum()
                     + catalog.routes().stream().mapToInt(route -> route.stops().size()).sum(),
                 "statisticsCellCount", 0,
