@@ -41,13 +41,15 @@ public class NotificationDeliveryService {
             settings.deleteOrphan(due.id(), due.occurrenceAt());
             return;
         }
-        deliveries.createForMemberDevices(due.id(), due.occurrenceAt(), due.memberId(), now);
-        settings.advance(due.id(), due.occurrenceAt(), due.schedule().nextAfter(now), now);
+        if (settings.advance(due.id(), due.occurrenceAt(), due.schedule().nextAfter(now), now)) {
+            deliveries.createForMemberDevices(due.id(), due.occurrenceAt(), due.memberId(), now);
+        }
     }
 
     public int giveUpExpired() {
         Instant now = now();
-        return deliveries.giveUpOccurredBefore(now.minus(DeliveryPolicy.RETRY_WINDOW), now);
+        Instant cutoff = now.truncatedTo(ChronoUnit.MINUTES).minus(DeliveryPolicy.RETRY_WINDOW);
+        return deliveries.giveUpOccurredBefore(cutoff, now);
     }
 
     public List<ClaimedDelivery> claimDue(int limit) {

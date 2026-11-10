@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
-import org.springframework.scheduling.annotation.Scheduled;
 
 class NotificationDeliveryJobTest {
     private final NotificationDeliveryService service = mock(NotificationDeliveryService.class);
@@ -82,12 +81,6 @@ class NotificationDeliveryJobTest {
         job.run();
 
         verify(service).claimDue(NotificationDeliveryJob.SEND_BATCH_SIZE);
-    }
-
-    @Test
-    void runUsesEveryMinuteCron() throws Exception {
-        Scheduled scheduled = NotificationDeliveryJob.class.getMethod("run").getAnnotation(Scheduled.class);
-        assertThat(scheduled.cron()).isEqualTo("${push.delivery.cron:0 * * * * *}");
     }
 
     @Test

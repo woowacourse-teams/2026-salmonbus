@@ -7,6 +7,7 @@ import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.push.application.NotificationDeliveryRepository;
 import com.gustler.backend.api.push.application.NotificationDeliveryService;
 import com.gustler.backend.api.push.application.NotificationSettingRepository;
+import com.gustler.backend.api.push.application.NotificationSettingRepository.DueSetting;
 import com.gustler.backend.api.push.application.NotificationSettingRepository.SavedSetting;
 import com.gustler.backend.api.push.application.PushDeviceRepository;
 import com.gustler.backend.api.push.domain.DeliveryPolicy;
@@ -143,15 +144,16 @@ class NotificationDeliveryFlowTest {
     }
 
     @Test
-    void anotherRunSendsAfterLeaseExpires() throws Exception {
+    void deliveryClaimedByACrashedRunIsSentByALaterRunInsideTheWindow() throws Exception {
         prepare(1, true);
+        Duration schedulerLag = Duration.ofMillis(300);
         try (FakeApnsServer fake = new FakeApnsServer()) {
-            NotificationDeliveryService service = serviceAt(T0);
-            service.expand(service.findDue(100).get(0));
-            assertThat(service.claimDue(10)).hasSize(1);
-            runAt(T0.plus(Duration.ofMinutes(1)), fake);
+            NotificationDeliveryService crashed = serviceAt(T0.plusSeconds(1));
+            crashed.expand(crashed.findDue(100).get(0));
+            assertThat(crashed.claimDue(NotificationDeliveryJob.SEND_BATCH_SIZE)).hasSize(1);
+            runAt(T0.plus(Duration.ofMinutes(1)).plus(schedulerLag), fake);
             assertThat(fake.requests()).isEmpty();
-            runAt(T0.plus(Duration.ofMinutes(2)), fake);
+            runAt(T0.plus(Duration.ofMinutes(2)).plus(schedulerLag), fake);
             assertThat(fake.requests()).hasSize(1);
             assertThat(statusCounts("SENT")).isEqualTo(1);
         }
@@ -171,6 +173,20 @@ class NotificationDeliveryFlowTest {
             assertThat(fake.requestsFor(secondToken)).hasSize(2);
             assertThat(statusCounts("SENT")).isEqualTo(2);
         }
+    }
+
+    @Test
+    void timeChangedBetweenReadAndExpandSendsNothingForTheOldTime() throws Exception {
+        Prepared prepared = prepare(1, true);
+        Instant changed = Instant.parse("2026-11-01T23:00:00Z");
+        NotificationDeliveryService service = serviceAt(T0);
+        DueSetting due = service.findDue(100).get(0);
+        settings.upsert(prepared.memberId(), TARGET, NotificationSchedule.parse("08:00", List.of("MON")), changed, T0);
+
+        service.expand(due);
+
+        assertThat(deliveryCount()).isZero();
+        assertThat(occurrenceOf(prepared.settingId())).isEqualTo(changed);
     }
 
     @Test
@@ -214,6 +230,21 @@ class NotificationDeliveryFlowTest {
             assertThat(fake.requests()).hasSize(3);
             assertThat(jdbc.sql("SELECT attempts FROM notification_delivery").query(Integer.class).single())
                 .isEqualTo(3);
+            assertThat(statusCounts("GAVE_UP")).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void schedulerStartingAfterTheMinuteStillMakesTheThirdAttempt() throws Exception {
+        prepare(1, true);
+        Duration schedulerLag = Duration.ofMillis(300);
+        try (FakeApnsServer fake = new FakeApnsServer()) {
+            fake.answerAll(500, "InternalServerError");
+            runAt(T0.plus(schedulerLag), fake);
+            runAt(T0.plus(Duration.ofMinutes(1)).plus(schedulerLag), fake);
+            runAt(T0.plus(Duration.ofMinutes(2)).plus(schedulerLag), fake);
+            runAt(T0.plus(Duration.ofMinutes(3)).plus(schedulerLag), fake);
+            assertThat(fake.requests()).hasSize(3);
             assertThat(statusCounts("GAVE_UP")).isEqualTo(1);
         }
     }

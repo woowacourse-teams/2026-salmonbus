@@ -72,4 +72,12 @@ public class PushDeliveryConfiguration {
     ) {
         return new NotificationDeliveryPurge(deliveries, clock, retention);
     }
+
+    @Bean
+    NotificationDeliverySchedule notificationDeliverySchedule(
+        NotificationDeliveryJob job,
+        @Value("${push.delivery.cron:0 * * * * *}") String cron
+    ) {
+        return new NotificationDeliverySchedule(job, cron);
+    }
 }

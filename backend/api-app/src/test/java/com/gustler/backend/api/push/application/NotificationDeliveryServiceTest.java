@@ -49,12 +49,23 @@ class NotificationDeliveryServiceTest {
     @Test
     void expandCreatesDeliveriesAndAdvancesWhenFavoriteExists() {
         when(settings.hasFavorite(MEMBER_ID, TARGET)).thenReturn(true);
+        when(settings.advance(SETTING_ID, NOW, NEXT, NOW)).thenReturn(true);
 
         service.expand(DUE);
 
         verify(deliveries).createForMemberDevices(SETTING_ID, NOW, MEMBER_ID, NOW);
         verify(settings).advance(SETTING_ID, NOW, NEXT, NOW);
         verify(settings, never()).deleteOrphan(any(), any());
+    }
+
+    @Test
+    void expandCreatesNoDeliveriesWhenSettingChangedAfterItWasRead() {
+        when(settings.hasFavorite(MEMBER_ID, TARGET)).thenReturn(true);
+        when(settings.advance(SETTING_ID, NOW, NEXT, NOW)).thenReturn(false);
+
+        service.expand(DUE);
+
+        verify(deliveries, never()).createForMemberDevices(any(), any(), anyLong(), any());
     }
 
     @Test
@@ -71,6 +82,7 @@ class NotificationDeliveryServiceTest {
     @Test
     void expandAdvancesWhenMemberHasNoDevices() {
         when(settings.hasFavorite(MEMBER_ID, TARGET)).thenReturn(true);
+        when(settings.advance(SETTING_ID, NOW, NEXT, NOW)).thenReturn(true);
         when(deliveries.createForMemberDevices(SETTING_ID, NOW, MEMBER_ID, NOW)).thenReturn(0);
 
         service.expand(DUE);
@@ -86,7 +98,7 @@ class NotificationDeliveryServiceTest {
     }
 
     @Test
-    void claimDueLeasesForTwoMinutes() {
+    void claimDueLeasesForTheLeaseDuration() {
         service.claimDue(10);
         verify(deliveries).claimDue(NOW, NOW.plus(DeliveryPolicy.LEASE), 10);
     }
