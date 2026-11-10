@@ -179,6 +179,7 @@ export function HomeFavorites() {
     <Link
       className={homeStyles.addFavorite}
       to={paths.routeSearch}
+      state={{ mapFlow: true }}
       onClick={(event) => {
         if (group && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
           selectFavoriteGroup(group.id);
