@@ -1,5 +1,5 @@
 import { MapLocationButton } from "@/shared/components/MapLocationButton";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { loadNaverMaps, subscribeNaverMapAuthFailure, type NaverCoordinate } from "@/shared/map/naverSdk";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import type { MapFlowSurface, MapFlowSurfaceState } from "@/shared/map/mapFlowSurface";
