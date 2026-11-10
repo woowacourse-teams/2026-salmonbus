@@ -2,6 +2,21 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { POINTER_INPUT } from "@/shared/input-method/inputMethod";
 import { vars } from "@/shared/styles/tokens.css";
 
+export const close = style({
+  position: "absolute",
+  top: 8,
+  right: 8,
+  width: 44,
+  height: 44,
+  border: 0,
+  background: "transparent",
+  color: vars.color.textSubtle,
+  font: "inherit",
+  fontSize: 24,
+  cursor: "pointer",
+  ":focus-visible": { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: -4 },
+});
+
 export const choice = style({
   display: "flex",
   alignItems: "center",

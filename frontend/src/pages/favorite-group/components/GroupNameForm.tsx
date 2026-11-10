@@ -25,7 +25,7 @@ type GroupNameFormProps = CreateGroupNameFormProps | RenameGroupNameFormProps;
 export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
   const field = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(group?.name ?? "");
-  const { busy, error, setError, run } = useFavoriteAction();
+  const { busy, error, clearError, run } = useFavoriteAction();
   const navigate = useNavigate();
   const isStillOnScreen = useStillOnScreen();
   const invalid = groupNameError(name);
@@ -36,7 +36,12 @@ export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
     event.preventDefault();
     if (invalid || name.trim() === group?.name) return;
     const saveName = () => (group ? renameFavoriteGroup(group.id, name) : createFavoriteGroup(name));
-    if (await run(saveName, { resultHaptic: true })) {
+    if (
+      await run(saveName, {
+        resultHaptic: true,
+        kind: group ? "renameGroup" : "createGroup",
+      })
+    ) {
       if (onRenamed) onRenamed();
       else if (isStillOnScreen()) void navigate("/mypage", { replace: true, state: { notice: "그룹을 만들었어요" } });
     }
@@ -56,7 +61,7 @@ export function GroupNameForm({ group, onRenamed }: GroupNameFormProps) {
         aria-invalid={error !== null || (name !== "" && invalid !== null)}
         onChange={(event) => {
           setName(event.target.value);
-          setError(null);
+          clearError();
         }}
       />
       <p id="group-name-help" className={group ? styles.policy : formStyles.subtle}>

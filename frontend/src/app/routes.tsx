@@ -13,6 +13,7 @@ import { AccountLayout } from "@/shared/components/AccountLayout";
 import { WhatsNewPage } from "@/pages/whats-new";
 import { useFocusKeepingNavigation } from "./useFocusKeepingNavigation";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
+import { ErrorView } from "@/shared/components/ErrorView";
 
 const PrivacyPage = lazy(async () => ({
   default: (await import(/* webpackChunkName: "privacy" */ "@/pages/privacy")).PrivacyPage,
@@ -77,6 +78,16 @@ export function AppRoutes() {
         {pagesWithoutNavigation.map(({ path, element }) => (
           <Route key={path} path={path} element={element} />
         ))}
+        <Route
+          path="*"
+          element={
+            <ErrorView
+              title="페이지를 찾을 수 없어요"
+              caption="주소를 다시 확인해 주세요."
+              actionLink={{ href: paths.routeSelect, label: "홈으로 가기" }}
+            />
+          }
+        />
       </Routes>
     </FocusKeepingNavigationContext>
   );

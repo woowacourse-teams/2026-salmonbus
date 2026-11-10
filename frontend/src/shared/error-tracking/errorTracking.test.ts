@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import * as Sentry from "@sentry/react";
 import type { Event, Breadcrumb } from "@sentry/react";
 import {
@@ -7,6 +7,7 @@ import {
   createReactErrorHandlers,
   reportNativeMapFailure,
 } from "./errorTracking";
+import { initApiFailureReporter, requestJson, resetApiFailureReporter } from "@/shared/api/client";
 import { REQUEST_DISPOSED, REQUEST_SUPERSEDED } from "@/shared/api/cancellation";
 import { RESPONSE_BODY_LIMIT_BYTES, utf8ByteLengthFrom } from "./eventPolicy";
 
@@ -15,6 +16,10 @@ jest.mock("@sentry/react", () => ({
   init: jest.fn<typeof Sentry.init>(),
   captureException: jest.fn<typeof Sentry.captureException>(),
 }));
+
+afterEach(() => {
+  resetApiFailureReporter();
+});
 
 function createRecording() {
   const events: Event[] = [];
@@ -31,6 +36,36 @@ function createRecording() {
 }
 
 describe("공통 오류 수집", () => {
+  it.each(["PUT", "POST", "DELETE", "PATCH", "GET", undefined] as const)(
+    "%s 메서드로 요청이 실패하면 실제 메서드를 기록하고 생략하면 GET으로 기록한다",
+    async (method) => {
+      const recording = createRecording();
+      initApiFailureReporter(recording.report);
+      jest.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ code: "INTERNAL_ERROR", message: "실패", requestId: "request-1" }), {
+          status: 500,
+        }),
+      );
+
+      await requestJson("/api/me/notification-settings", method === undefined ? {} : { method });
+
+      expect(recording.events).toHaveLength(1);
+      expect(recording.events[0]?.extra?.http_method).toBe(method ?? "GET");
+    },
+  );
+
+  it("SDK가 요청 본문을 수집하지 않도록 초기화한다", () => {
+    initErrorTracking({
+      dsn: "",
+      environment: "production",
+      release: "test",
+      contextForPage: () => ({ path: "/" }),
+    });
+
+    const options = jest.mocked(Sentry.init).mock.calls.at(-1)?.[0];
+    expect(options?.dataCollection?.httpBodies).toEqual([]);
+  });
+
   it.each(["timeout", "auth"] as const)("native 지도 %s 실패를 원인별로 기록한다", (reason) => {
     reportNativeMapFailure(reason, "200000001");
     expect(Sentry.captureException).toHaveBeenLastCalledWith(new Error(`Native map initialization failed: ${reason}`), {
@@ -85,7 +120,7 @@ describe("공통 오류 수집", () => {
     apiFailureReporter(
       "/api/resource",
       { kind: "contract", status, retryAfterMs: null, error: { code, message: "실패", requestId: "request-1" } },
-      { context: null, abortReason: null, rawResponse: null },
+      { method: "GET", context: null, abortReason: null, rawResponse: null },
     );
 
     expect(Sentry.captureException).toHaveBeenLastCalledWith(expect.any(Error), expect.objectContaining({ level }));
@@ -93,7 +128,11 @@ describe("공통 오류 수집", () => {
 
   it.each([REQUEST_DISPOSED, REQUEST_SUPERSEDED])("확인된 취소는 참고 기록만 남긴다", (abortReason) => {
     const recording = createRecording();
-    recording.report("/api/resource", { kind: "aborted" }, { context: null, abortReason, rawResponse: null });
+    recording.report(
+      "/api/resource",
+      { kind: "aborted" },
+      { method: "GET", context: null, abortReason, rawResponse: null },
+    );
     expect(recording.events).toEqual([]);
     expect(recording.breadcrumbs).toEqual([
       expect.objectContaining({
@@ -108,7 +147,7 @@ describe("공통 오류 수집", () => {
     recording.report(
       "/api/resource",
       { kind: "aborted" },
-      { context: null, abortReason: { token: "secret" }, rawResponse: null },
+      { method: "GET", context: null, abortReason: { token: "secret" }, rawResponse: null },
     );
     expect(recording.events[0]?.level).toBe("error");
     expect(recording.events[0]?.extra?.cancellation_reason).toBe("unknown");
@@ -126,6 +165,7 @@ describe("공통 오류 수집", () => {
         error: { code: "SERVICE_UNAVAILABLE", message: "일시적 장애", requestId: "request-1" },
       },
       {
+        method: "GET",
         context: { endpoint: "/api/resource/:id", tags: { resource_id: "42" } },
         abortReason: null,
         rawResponse: { body: '{"token":"secret"}', contentType: null },
@@ -149,7 +189,7 @@ describe("공통 오류 수집", () => {
         : kind === "network"
           ? { kind, cause: new TypeError("Failed to fetch") }
           : { kind };
-    recording.report("/api/resource", failure, { context: null, abortReason: null, rawResponse: null });
+    recording.report("/api/resource", failure, { method: "GET", context: null, abortReason: null, rawResponse: null });
     expect(recording.events[0]?.level).toBe("error");
     expect(recording.events[0]?.tags?.failure_kind).toBe(kind);
     expect(recording.events[0]?.fingerprint?.[1]).toBe("/api/resource");
@@ -160,7 +200,7 @@ describe("공통 오류 수집", () => {
     recording.report(
       "/api/resource",
       { kind: "malformed", status, requestId: null },
-      { context: null, abortReason: null, rawResponse: null },
+      { method: "GET", context: null, abortReason: null, rawResponse: null },
     );
     expect(recording.events[0]?.level).toBe("error");
   });
@@ -172,7 +212,7 @@ describe("공통 오류 수집", () => {
       recording.report(
         "/api/resource",
         { kind: "malformed", status: 502, requestId: null },
-        { context: null, abortReason: null, rawResponse: { body, contentType: "text/html" } },
+        { method: "GET", context: null, abortReason: null, rawResponse: { body, contentType: "text/html" } },
       );
       expect(recording.events[0]?.extra).toMatchObject({
         response_body: body,
@@ -194,6 +234,7 @@ describe("공통 오류 수집", () => {
       "/api/resource",
       { kind: "malformed", status: 502, requestId: null },
       {
+        method: "GET",
         context: null,
         abortReason: null,
         rawResponse: {
