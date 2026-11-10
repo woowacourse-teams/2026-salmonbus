@@ -8,7 +8,13 @@ import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTyp
 import { LoadFailedView } from './LoadFailedView';
 import { AUTH_CAPABILITIES, SIGN_IN_RESULT, signInRequestFrom, type SignInResult } from './auth/authMessages';
 import { signInNatively } from './auth/signInNatively';
-import { appBootstrapScriptFor, bridgeEventScriptFor, bridgeMessageFrom, type BridgeMessage } from './bridge/bridge';
+import {
+  appBootstrapScriptFor,
+  bridgeEventScriptFor,
+  bridgeMessageFrom,
+  DOCUMENT_STARTED,
+  type BridgeMessage,
+} from './bridge/bridge';
 import { HAPTIC_CAPABILITIES, playHaptic } from './haptic/playHaptic';
 import { NativeRouteMap, type NativeRouteMapRef } from './native-map/NativeRouteMap';
 import { NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
@@ -24,6 +30,7 @@ import { showNotificationsInForeground, watchNotificationTaps } from './notifica
 import { registrationFor } from './notification/registration';
 import {
   initialDocumentLoad,
+  noteDocumentStarted,
   noteLoadFailure,
   noteWebReady,
   WEB_READY_TIMEOUT_MS,
@@ -107,6 +114,8 @@ export default function App() {
 
   function handleLoadEnd(event: { nativeEvent: { url: string } }) {
     SplashScreen.hide();
+    // 해시만 바뀌면 새 문서 없이 loadStart와 loadEnd만 온다. 로드가 끝난 뒤의 메시지는 지금 문서가 보낸 것이다.
+    documentLoad.current = noteDocumentStarted(documentLoad.current);
     if (!isInAppUrl(event.nativeEvent.url) || documentLoad.current.ready || documentLoad.current.failed) return;
     if (!notificationTaps.holding()) return;
     stopWaitingForWeb();
@@ -134,6 +143,10 @@ export default function App() {
     if (!isInAppUrl(event.nativeEvent.url)) return;
     const raw = event.nativeEvent.data;
     const message = bridgeMessageFrom(raw);
+    if (message?.type === DOCUMENT_STARTED) {
+      documentLoad.current = noteDocumentStarted(documentLoad.current);
+      return;
+    }
     if (message === null || !APP_CAPABILITIES.includes(message.type)) return;
     const domain = message.type.slice(0, message.type.indexOf('.')) as BridgeDomain;
     handlersByDomain[domain](message, raw);

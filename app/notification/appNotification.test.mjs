@@ -6,7 +6,7 @@ import ts from 'typescript';
 import * as documentLoad from './documentLoad.ts';
 import * as messages from './notificationMessages.ts';
 import { createTapInbox } from './tapInbox.ts';
-import { bridgeMessageFrom } from '../bridge/bridge.ts';
+import { DOCUMENT_STARTED, bridgeMessageFrom } from '../bridge/bridge.ts';
 
 const TARGET = { routeId: '234000884', stopId: '203000165', direction: 'UP' };
 const WEB_URL = 'https://app.salmonbus.test';
@@ -51,6 +51,7 @@ function startApp() {
       appBootstrapScriptFor: () => '',
       bridgeEventScriptFor: (message) => JSON.stringify(message),
       bridgeMessageFrom,
+      DOCUMENT_STARTED,
     },
     './haptic/playHaptic': { HAPTIC_CAPABILITIES: [] },
     './native-map/NativeRouteMap': { NativeRouteMap: null },
@@ -169,7 +170,7 @@ describe('앱 WebView의 알림 전달', () => {
       app.tap();
       app.load();
       assert.deepEqual(deliveredTargets(app), []);
-      if (reset.startsWith('on')) app.start();
+      if (reset !== 'start') app.start();
       app.ready('next-1');
       assert.deepEqual(deliveredTargets(app), [TARGET]);
     });
