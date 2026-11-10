@@ -6,7 +6,6 @@ import com.gustler.backend.api.push.application.NotificationSettingRepository.Du
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
 
 public final class NotificationDeliveryJob {
     static final int EXPAND_BATCH_SIZE = 100;
@@ -23,7 +22,6 @@ public final class NotificationDeliveryJob {
         this.runner = runner;
     }
 
-    @Scheduled(cron = "${push.delivery.cron:0 * * * * *}")
     public void run() {
         try {
             expandDue();

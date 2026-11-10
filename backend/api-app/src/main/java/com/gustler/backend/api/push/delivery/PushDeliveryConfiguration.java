@@ -5,6 +5,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -60,5 +61,13 @@ public class PushDeliveryConfiguration {
         NotificationDeliveryRunner runner
     ) {
         return new NotificationDeliveryJob(service, runner);
+    }
+
+    @Bean
+    NotificationDeliverySchedule notificationDeliverySchedule(
+        NotificationDeliveryJob job,
+        @Value("${push.delivery.cron:0 * * * * *}") String cron
+    ) {
+        return new NotificationDeliverySchedule(job, cron);
     }
 }
