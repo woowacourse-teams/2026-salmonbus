@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
+import java.util.TimeZone;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -28,6 +29,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
 import org.springframework.scheduling.config.CronTask;
+import org.springframework.scheduling.support.SimpleTriggerContext;
 import tools.jackson.databind.ObjectMapper;
 
 class PushDeliveryConfigurationTest {
@@ -188,6 +190,23 @@ class PushDeliveryConfigurationTest {
             Thread.sleep(1_500);
             Mockito.verifyNoInteractions(service);
         });
+    }
+
+    @Test
+    void purgeRunsAt0441SeoulTimeEvenWhenTheServerZoneIsUtc() throws Exception {
+        TimeZone serverZone = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+        try {
+            enabledRunner().run(context -> {
+                CronTask purge = (CronTask) context.getBean(ScheduledAnnotationBeanPostProcessor.class)
+                    .getScheduledTasks().iterator().next().getTask();
+                Instant seoul0400 = Instant.parse("2026-11-09T19:00:00Z");
+                Instant next = purge.getTrigger().nextExecution(new SimpleTriggerContext(Clock.fixed(seoul0400, ZoneOffset.UTC)));
+                assertThat(next).isEqualTo(Instant.parse("2026-11-09T19:41:00Z"));
+            });
+        } finally {
+            TimeZone.setDefault(serverZone);
+        }
     }
 
     @Test
