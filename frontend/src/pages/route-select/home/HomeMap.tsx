@@ -1,10 +1,12 @@
 import { MapLocationButton } from "@/shared/components/MapLocationButton";
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import type { Direction } from "@/shared/api/routeForecast.types";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { loadNaverMaps, subscribeNaverMapAuthFailure, type NaverCoordinate } from "@/shared/map/naverSdk";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import type { MapFlowSurface, MapFlowSurfaceState } from "@/shared/map/mapFlowSurface";
 import { mountHomeStops } from "./homeStopMarkers";
 import { HomeRouteNetwork } from "./HomeRouteNetwork";
+import { FavoriteMapRoute } from "./FavoriteMapRoute";
 import { homeStationTileKey, MIN_STATION_ZOOM } from "./homeStationTiles";
 import { distanceMeters, type HomeStop, type Point } from "./homeMapData";
 import * as styles from "./HomeScreen.css";
@@ -15,6 +17,8 @@ interface Props {
   stops: HomeStop[];
   routePaths: Point[][];
   routeOverviewKey: string | null;
+  favoriteGroupId: string | null;
+  favoriteRoutes: ReadonlyMap<string, Direction>;
   overlayOpen: boolean;
   boardOpen: boolean;
   onSurfaceChange: (state: MapFlowSurfaceState) => void;
@@ -34,6 +38,9 @@ export function HomeMap(props: Props) {
   const latest = useRef(props);
   const pendingStopCenter = useRef<Point | null>(null);
   const overviewReturnCamera = useRef<{ center: NaverCoordinate; zoom: number } | null>(null);
+  const lastFavoriteKey = useRef<string | null>(null);
+  const fittedFavorites = useRef<string | null>(null);
+  const movingFavoriteCamera = useRef(false);
   const boardReturnCamera = useRef<{ center: NaverCoordinate; zoom: number } | null>(null);
   const restoringBoardCamera = useRef(false);
   const mapReady = useRef(false);
@@ -41,6 +48,16 @@ export function HomeMap(props: Props) {
   const [instance, setInstance] = useState<MapFlowSurface | null>(null);
   const [fittedRouteOverviewKey, setFittedRouteOverviewKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [favoritePaths, setFavoritePaths] = useState<Record<string, Point[][]>>({});
+  const onFavoritePathsChange = useCallback((routeId: string, paths: Point[][] | undefined) => {
+    setFavoritePaths((current) => {
+      if (current[routeId] === paths) return current;
+      const next = { ...current };
+      if (paths === undefined) delete next[routeId];
+      else next[routeId] = paths;
+      return next;
+    });
+  }, []);
   useLayoutEffect(() => {
     latest.current = props;
   }, [props]);
@@ -87,6 +104,7 @@ export function HomeMap(props: Props) {
           );
         };
         const listener = maps.Event.addListener(map, "idle", () => {
+          movingFavoriteCamera.current = false;
           const center = map.getCenter();
           const point: Point = [center.lng(), center.lat()];
           const target = pendingStopCenter.current;
@@ -143,8 +161,26 @@ export function HomeMap(props: Props) {
   useEffect(() => {
     if (instance) instance.map.setCenter(new instance.maps.LatLng(props.point[1], props.point[0]));
   }, [instance, props.point]);
-  const { boardOpen, overlayOpen, routeOverviewKey, routePaths, searchBarRef, sheetSurfaceRef } = props;
+  const { boardOpen, overlayOpen, favoriteRoutes, routeOverviewKey, routePaths, searchBarRef, sheetSurfaceRef } = props;
+  const favoriteRouteIds = useMemo(() => [...favoriteRoutes.keys()].sort(), [favoriteRoutes]);
+  const favoriteKey = favoriteRouteIds.length === 0 ? null : JSON.stringify([props.favoriteGroupId, favoriteRouteIds]);
   const selectedStopId = props.selectedStop?.id ?? null;
+  const favoriteOverviewPaths = useMemo(
+    () =>
+      favoriteRouteIds.every((id) => favoritePaths[id] !== undefined)
+        ? favoriteRouteIds.flatMap((id) => favoritePaths[id] ?? [])
+        : [],
+    [favoritePaths, favoriteRouteIds],
+  );
+  const overviewPaths = routeOverviewKey === null ? favoriteOverviewPaths : routePaths;
+  useLayoutEffect(
+    () => () => {
+      if (!movingFavoriteCamera.current) return;
+      movingFavoriteCamera.current = false;
+      if (instance && window.naver?.maps === instance.maps) instance.map.stop();
+    },
+    [instance, favoriteKey, overlayOpen, selectedStopId],
+  );
   useLayoutEffect(() => {
     if (!instance) return;
     const { map } = instance;
@@ -166,9 +202,14 @@ export function HomeMap(props: Props) {
 
   useEffect(() => {
     if (!instance) return;
-    if (overlayOpen) return;
+    if (overlayOpen) {
+      if (lastFavoriteKey.current !== null) fittedFavorites.current = lastFavoriteKey.current;
+      return;
+    }
+    lastFavoriteKey.current = favoriteKey;
     const { map, maps } = instance;
-    if (routeOverviewKey === null) {
+    if (favoriteKey === null) fittedFavorites.current = null;
+    if (routeOverviewKey === null && favoriteKey === null) {
       const camera = overviewReturnCamera.current;
       if (camera) {
         overviewReturnCamera.current = null;
@@ -177,12 +218,13 @@ export function HomeMap(props: Props) {
       }
       return;
     }
-    if (routePaths.length === 0) return;
+    if (overviewPaths.length === 0 || (favoriteKey !== null && fittedFavorites.current === favoriteKey)) return;
 
     let frame = 0;
     const fit = () => {
       frame = 0;
       if (window.naver?.maps !== maps) return;
+      if (favoriteKey !== null && fittedFavorites.current === favoriteKey) return;
       const host = element.current;
       const search = searchBarRef.current;
       const sheet = sheetSurfaceRef.current;
@@ -200,7 +242,7 @@ export function HomeMap(props: Props) {
       const zoom = map.getZoom();
       const verticalOffset = (bottom - top) / 2;
       const bounds = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
-      for (const path of routePaths) {
+      for (const path of overviewPaths) {
         for (const [longitude, latitude] of path) {
           const { x, y } = projection.fromCoordToOffset(new maps.LatLng(latitude, longitude));
           bounds.left = Math.min(bounds.left, x);
@@ -225,9 +267,15 @@ export function HomeMap(props: Props) {
         ),
       );
       overviewReturnCamera.current ??= { center: map.getCenter(), zoom };
-      map.setZoom(targetZoom, false);
-      map.setCenter(center);
-      setFittedRouteOverviewKey(routeOverviewKey);
+      if (favoriteKey !== null && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        movingFavoriteCamera.current = true;
+        map.morph(center, targetZoom, { duration: 460 });
+      } else {
+        map.setZoom(targetZoom, false);
+        map.setCenter(center);
+      }
+      if (routeOverviewKey !== null) setFittedRouteOverviewKey(routeOverviewKey);
+      fittedFavorites.current = favoriteKey;
     };
     const schedule = () => {
       if (frame === 0) frame = requestAnimationFrame(fit);
@@ -238,7 +286,16 @@ export function HomeMap(props: Props) {
       cancelAnimationFrame(frame);
       if (window.naver?.maps === maps) maps.Event.removeListener(listener);
     };
-  }, [instance, overlayOpen, routeOverviewKey, routePaths, searchBarRef, sheetSurfaceRef, selectedStopId]);
+  }, [
+    instance,
+    overlayOpen,
+    routeOverviewKey,
+    favoriteKey,
+    overviewPaths,
+    searchBarRef,
+    sheetSurfaceRef,
+    selectedStopId,
+  ]);
   const stopLongitude = props.selectedStop?.point[0];
   const stopLatitude = props.selectedStop?.point[1];
   useEffect(() => {
@@ -300,6 +357,16 @@ export function HomeMap(props: Props) {
       {instance && routeOverviewKey === fittedRouteOverviewKey && routePaths.length > 0 && (
         <HomeRouteNetwork {...instance} paths={routePaths} />
       )}
+      {instance &&
+        [...favoriteRoutes].map(([routeId, direction]) => (
+          <FavoriteMapRoute
+            key={routeId}
+            {...instance}
+            routeId={routeId}
+            direction={direction}
+            onPathsChange={onFavoritePathsChange}
+          />
+        ))}
       {(!instance || error) && (
         <p className={styles.mapNotice} aria-live="polite">
           {error ?? "주변 지도를 불러오고 있어요…"}

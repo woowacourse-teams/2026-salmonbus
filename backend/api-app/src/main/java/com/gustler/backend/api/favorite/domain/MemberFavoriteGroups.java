@@ -1,7 +1,7 @@
 package com.gustler.backend.api.favorite.domain;
 
 import com.gustler.backend.api.favorite.FavoriteGroupLimitExceededException;
-import com.gustler.backend.api.favorite.RepresentativeFavoriteGroupDeletionException;
+import com.gustler.backend.api.favorite.LastFavoriteGroupDeletionException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -63,8 +63,8 @@ public final class MemberFavoriteGroups {
 
     public MemberFavoriteGroups remove(FavoriteGroupId id) {
         Objects.requireNonNull(id, "즐겨찾기 그룹 ID는 null일 수 없습니다.");
-        if (!values.isEmpty() && values.getFirst().id().equals(id)) {
-            throw new RepresentativeFavoriteGroupDeletionException();
+        if (values.size() == 1 && values.getFirst().id().equals(id)) {
+            throw new LastFavoriteGroupDeletionException();
         }
         return new MemberFavoriteGroups(values.stream()
             .filter(group -> !group.id().equals(id))

@@ -5,6 +5,8 @@ import trashIcon from "@/shared/assets/icons/trash.svg";
 import checkIcon from "../assets/group-check.svg";
 import { modeTransition } from "@/shared/styles/transition.css";
 
+const sectionMaxWidth = 356;
+
 export const section = style([
   modeTransition,
   {
@@ -12,7 +14,7 @@ export const section = style([
     flexDirection: "column",
     gap: 12,
     width: "100%",
-    maxWidth: 356,
+    maxWidth: sectionMaxWidth,
     margin: "0 auto 24px",
     fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
     color: "#292A2D",
@@ -113,7 +115,6 @@ export const deleteTool = style({
   },
 });
 export const cancelSelection = style([text, { minHeight: 32, padding: 0, fontSize: 14, fontWeight: 500 }]);
-export const representative = style({ flexShrink: 0, color: "#9A928B", fontSize: 11, fontWeight: 600 });
 export const selection = style({
   cursor: "pointer",
   selectors: {

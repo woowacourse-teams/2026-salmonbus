@@ -23,7 +23,7 @@ import com.gustler.backend.api.favorite.FavoriteTargetAmbiguousException;
 import com.gustler.backend.api.favorite.FavoriteTargetUnavailableException;
 import com.gustler.backend.api.favorite.InvalidFavoriteGroupNameException;
 import com.gustler.backend.api.favorite.InvalidFavoriteOrderException;
-import com.gustler.backend.api.favorite.RepresentativeFavoriteGroupDeletionException;
+import com.gustler.backend.api.favorite.LastFavoriteGroupDeletionException;
 import com.gustler.backend.api.push.InvalidPushDeviceException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
@@ -72,7 +72,7 @@ class ApiExceptionHandlerTest {
             new InvalidFavoriteGroupNameException(),
             new FavoriteGroupNameConflictException(),
             new FavoriteGroupNotFoundException(),
-            new RepresentativeFavoriteGroupDeletionException(),
+            new LastFavoriteGroupDeletionException(),
             new InvalidFavoriteOrderException(),
             new FavoriteTargetAmbiguousException(),
             new FavoriteTargetUnavailableException(),

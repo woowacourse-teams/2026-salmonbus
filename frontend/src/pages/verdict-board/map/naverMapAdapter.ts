@@ -4,6 +4,7 @@ import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
 import { DETAIL_ZOOM, routeArrowsFor, routeMapCoordinateForSequence, type RouteArrow } from "./routeMapGeometry";
+import type { MapFlowSurface } from "@/shared/map/mapFlowSurface";
 import type { NaverMap, NaverMaps, NaverMarker } from "@/shared/map/naverSdk";
 import { activeRouteColor, inactiveRouteColor } from "@/shared/map/routeColors";
 import { createMapStopPin } from "@/shared/map/mapStopPin";
@@ -54,6 +55,26 @@ export interface RouteMapAdapter {
   focusVehicle: (key: string | null, options?: { focusMarker?: boolean }) => void;
   showLocation: (coordinate: GeoCoordinate) => void;
   destroy: () => void;
+}
+
+export function createNaverRouteOverview({ maps, map, element }: MapFlowSurface, data: RouteMapData) {
+  const noop = () => undefined;
+  return createNaverRouteMap(
+    maps,
+    element,
+    null,
+    data,
+    element.clientHeight,
+    noop,
+    noop,
+    noop,
+    noop,
+    noop,
+    null,
+    undefined,
+    false,
+    map,
+  );
 }
 
 export function createNaverRouteMap(

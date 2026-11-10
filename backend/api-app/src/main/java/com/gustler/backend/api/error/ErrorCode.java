@@ -33,7 +33,7 @@ public enum ErrorCode {
     ),
     FAVORITE_GROUP_NAME_CONFLICT(HttpStatus.CONFLICT, "같은 이름의 즐겨찾기 그룹이 이미 있습니다."),
     FAVORITE_GROUP_NOT_FOUND(HttpStatus.NOT_FOUND, "즐겨찾기 그룹을 찾을 수 없습니다."),
-    LAST_FAVORITE_GROUP(HttpStatus.CONFLICT, "대표 즐겨찾기 그룹은 삭제할 수 없습니다."),
+    LAST_FAVORITE_GROUP(HttpStatus.CONFLICT, "마지막 즐겨찾기 그룹은 삭제할 수 없습니다."),
     INVALID_FAVORITE_ORDER(
         HttpStatus.BAD_REQUEST,
         "현재 즐겨찾기 순서와 요청이 일치하지 않습니다."

@@ -16,6 +16,7 @@ export const field = style({
   fontWeight: 500,
 });
 export const policy = style({ margin: "16px 0", color: "#837B74", fontSize: 13, lineHeight: 1.7 });
+export const renameActions = style({ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: 8 });
 export const save = style([
   primary,
   { minHeight: 50, height: 50, padding: 0, borderRadius: 14, background: "#E8533F", fontSize: 15, fontWeight: 700 },

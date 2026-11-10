@@ -10,6 +10,7 @@ test("320px 판정보드 모달에서 새 그룹을 만들고 기존 선택과 �
   browserName,
 }) => {
   await page.setViewportSize({ width: 320, height: 844 });
+  favorites.groups.push({ id: "10000000-0000-4000-8000-000000000004", name: "주말", favorites: [] });
   const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
@@ -43,9 +44,11 @@ test("320px 판정보드 모달에서 새 그룹을 만들고 기존 선택과 �
   }
   await save.click();
   await expect(dialog).toHaveCount(0);
-  expect(favorites.groups.every((group) => group.favorites.some((favorite) => favorite.stopId === stop.stopId))).toBe(
-    true,
-  );
+  expect(
+    favorites.groups
+      .filter((group) => group.favorites.some((favorite) => favorite.stopId === stop.stopId))
+      .map((group) => group.name),
+  ).toEqual(["즐겨찾기", "🚌 통학"]);
   await expect(page.getByText("즐겨찾기를 저장했습니다", { exact: true })).toBeVisible();
 });
 
@@ -54,6 +57,7 @@ test("그룹 이름 검증·중복·생성 실패 후에도 입력과 기존 선
   favorites,
   api,
 }) => {
+  favorites.groups.push({ id: "10000000-0000-4000-8000-000000000004", name: "주말", favorites: [] });
   const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
@@ -79,7 +83,7 @@ test("그룹 이름 검증·중복·생성 실패 후에도 입력과 기존 선
   await expect(dialog.getByRole("alert")).toBeVisible();
   await expect(input).toHaveValue("통학");
   await expect(dialog.getByRole("checkbox", { name: /즐겨찾기/ })).toBeChecked();
-  expect(favorites.groups).toHaveLength(1);
+  expect(favorites.groups).toHaveLength(2);
   favorites.mutationError = null;
   await create.click();
   await expect(dialog.getByRole("checkbox", { name: /통학/ })).toBeChecked();
@@ -87,6 +91,7 @@ test("그룹 이름 검증·중복·생성 실패 후에도 입력과 기존 선
 });
 
 test("그룹 생성 취소는 요청하지 않고 생성 후 모달 취소는 그룹만 남긴다", async ({ page, favorites, api }) => {
+  favorites.groups.push({ id: "10000000-0000-4000-8000-000000000004", name: "주말", favorites: [] });
   const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   await page.goto(`/routes/${routeId}`);
   const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });
@@ -105,7 +110,7 @@ test("그룹 생성 취소는 요청하지 않고 생성 후 모달 취소는 �
   await dialog.getByRole("button", { name: "취소", exact: true }).click();
   await expect(star).toBeFocused();
   await expect(star).toHaveAttribute("aria-pressed", "false");
-  expect(favorites.groups.map((group) => group.name)).toEqual(["즐겨찾기", "통학"]);
+  expect(favorites.groups.map((group) => group.name)).toEqual(["즐겨찾기", "주말", "통학"]);
   expect(favorites.groups.every((group) => group.favorites.length === 0)).toBe(true);
   await star.click();
   await expect(dialog.getByRole("checkbox", { name: /통학/ })).not.toBeChecked();
@@ -141,6 +146,7 @@ test("그룹 생성 후 목록 갱신이 느려도 누락 오류나 중복 생�
       await response;
     await route.fallback();
   });
+  favorites.groups.push({ id: "10000000-0000-4000-8000-000000000004", name: "주말", favorites: [] });
   const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();

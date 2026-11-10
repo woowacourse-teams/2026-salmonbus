@@ -1,7 +1,10 @@
-import { useCallback, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type MouseEvent } from "react";
 import { matchPath, useLocation, useOutlet } from "react-router";
 import { Brand } from "@/shared/components/Brand";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
+import type { Direction } from "@/shared/api/routeForecast.types";
+import type { FavoriteGroup } from "@/shared/api/favorites.types";
+import { useFavorites } from "@/shared/hooks/useFavorites";
 import { MapFlowSurfaceContext, type MapFlowSurfaceState } from "@/shared/map/mapFlowSurface";
 import { Notice } from "@/shared/components/Notice";
 import { paths } from "@/shared/routing/paths";
@@ -20,7 +23,24 @@ import { useHomeStations } from "../home/useHomeStations";
 import * as homeStyles from "../home/HomeScreen.css";
 import * as styles from "./RouteSelectScreen.css";
 
-export function RouteSelectScreen() {
+export interface FavoriteGroupContext {
+  favoriteGroup: FavoriteGroup | undefined;
+  selectFavoriteGroup: (groupId: string) => void;
+}
+
+export interface FavoriteGroupSelection {
+  key: string;
+  memberId: string;
+  groupId: string;
+}
+
+export function RouteSelectScreen({
+  favoriteSelection,
+  onFavoriteSelection,
+}: {
+  favoriteSelection: FavoriteGroupSelection | null;
+  onFavoriteSelection: (selection: FavoriteGroupSelection) => void;
+}) {
   const location = useLocation();
   const isHome = location.pathname === paths.routeSelect;
   const boardOpen = matchPath(paths.board, location.pathname) !== null;
@@ -30,7 +50,30 @@ export function RouteSelectScreen() {
   const isRouteMap = location.pathname === paths.routeMap;
   const isFavorites = location.pathname === paths.favorites;
   const showStops = isHome || isFavorites;
-  const outlet = useOutlet();
+  const { groups, memberId } = useFavorites();
+  const selectedGroupId =
+    favoriteSelection?.key === location.key && favoriteSelection.memberId === memberId
+      ? favoriteSelection.groupId
+      : null;
+  const favoriteGroup =
+    groups.find((group) => group.id === selectedGroupId) ??
+    groups.find((group) => group.favorites.length > 0) ??
+    groups[0];
+  const outlet = useOutlet({
+    favoriteGroup,
+    selectFavoriteGroup: (groupId) => {
+      if (memberId !== null) onFavoriteSelection({ key: location.key, memberId, groupId });
+    },
+  } satisfies FavoriteGroupContext);
+  const favoriteRoutes = useMemo(() => {
+    const directions = new Map<string, Direction>();
+    if (isFavorites && memberId && favoriteGroup) {
+      for (const { routeId, direction } of favoriteGroup.favorites) {
+        if (!directions.has(routeId)) directions.set(routeId, direction);
+      }
+    }
+    return directions;
+  }, [favoriteGroup, isFavorites, memberId]);
   const mainRef = useRef<HTMLElement>(null);
   const searchBarRef = useRef<HTMLElement>(null);
   const sheetSurfaceRef = useRef<HTMLDivElement>(null);
@@ -170,6 +213,8 @@ export function RouteSelectScreen() {
             stops={showStops ? stops : []}
             routePaths={isRouteMap ? routePaths : []}
             routeOverviewKey={isRouteMap ? location.key : null}
+            favoriteGroupId={isFavorites ? (favoriteGroup?.id ?? null) : null}
+            favoriteRoutes={favoriteRoutes}
             overlayOpen={overlayOpen}
             boardOpen={boardOpen}
             onSurfaceChange={setMapSurface}

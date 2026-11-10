@@ -3,8 +3,8 @@ import { routeId } from "./fixtures/mock-data";
 
 // 화면, 방향, 모션 설정의 두 값 짝이 모두 한 번씩 나오는 네 조합만 돌린다.
 for (const { path, direction, reducedMotion } of [
-  { path: "/", direction: "down", reducedMotion: "no-preference" },
-  { path: "/", direction: "up", reducedMotion: "reduce" },
+  { path: "/favorites", direction: "down", reducedMotion: "no-preference" },
+  { path: "/favorites", direction: "up", reducedMotion: "reduce" },
   { path: "/mypage", direction: "down", reducedMotion: "reduce" },
   { path: "/mypage", direction: "up", reducedMotion: "no-preference" },
 ] as const) {
@@ -23,7 +23,7 @@ for (const { path, direction, reducedMotion } of [
     favorites.groups.push({ id: "10000000-0000-4000-8000-000000000003", name: "통학", favorites: [] });
     await page.goto(path);
     await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
-    const home = path === "/";
+    const home = path === "/favorites";
     const editor = page.getByRole("region", { name: home ? "즐겨찾기 편집" : "즐겨찾기 그룹 편집", exact: true });
     const list = editor.getByRole("list", { name: home ? "즐겨찾기 순서" : "그룹 순서", exact: true });
     const cards = list.getByRole("listitem");

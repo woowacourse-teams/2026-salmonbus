@@ -78,7 +78,7 @@ for (const kind of ["favorite", "group"] as const) {
     await remove.click();
     await expect(dialog).toHaveCount(0);
     if (kind === "group") {
-      await expect(page).toHaveURL("/mypage");
+      await expect(page).toHaveURL("/favorites/groups");
       expect(favorites.groups.map((g) => g.id)).toEqual([defaultGroupId]);
       expect(favorites.groups[0]!.favorites).toHaveLength(1);
     } else {
@@ -98,17 +98,16 @@ for (const kind of ["favorite", "group"] as const) {
   });
 }
 
-test("320px 대표 그룹은 이름과 무관하게 삭제를 막는다", async ({ page, favorites, browserName }) => {
+test("320px 마지막 그룹은 이름과 무관하게 삭제를 막는다", async ({ page, favorites, browserName }) => {
   await page.setViewportSize({ width: 320, height: 844 });
-  favorites.groups[0]!.name = "이름을바꾼대표그룹";
-  favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/mypage");
-  await page.getByRole("link", { name: /이름을바꾼대표그룹 · 대표 그룹/ }).click();
-  const header = page.getByRole("heading", { name: "이름을바꾼대표그룹", exact: true }).locator("..");
-  await expect(header.getByText("대표", { exact: true })).toBeVisible();
+  favorites.groups[0]!.name = "이름을바꾼그룹";
+  await page.goto("/favorites/groups");
+  await page.getByRole("link", { name: /^이름을바꾼그룹/ }).click();
+  const header = page.getByRole("heading", { name: "이름을바꾼그룹", exact: true }).locator("..");
+  await expect(header.getByText("대표", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "대표 그룹은 삭제할 수 없어요" });
-  await expect(dialog).toContainText("첫 번째로 설정된 대표 그룹은 삭제할 수 없어요.");
+  const dialog = page.getByRole("dialog", { name: "그룹은 최소 하나 남겨야 해요" });
+  await expect(dialog).toContainText("다른 그룹을 만든 뒤 이 그룹을 삭제할 수 있어요.");
   await expect(dialog.getByRole("button")).toHaveCount(1);
   await expect(dialog.getByRole("button", { name: "삭제", exact: true })).toHaveCount(0);
   await checkAtBothWidths(page, async (width) => {

@@ -6,7 +6,7 @@ const weekendId = "10000000-0000-4000-8000-000000000004";
 
 test("마이페이지 그룹 카드의 이름을 끌어서 바꾼 순서를 저장한다", async ({ page, favorites }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
   const cards = editor.getByRole("listitem");
@@ -19,7 +19,7 @@ test("마이페이지 그룹 카드의 이름을 끌어서 바꾼 순서를 저�
   await page.mouse.move(name.x + name.width / 2, first.y + first.height / 2, { steps: 8 });
   await page.mouse.up();
 
-  await expect(cards.first()).toContainText("통학 · 대표 그룹");
+  await expect(cards.first()).toContainText("통학");
   expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId, schoolId]);
   await editor.getByRole("button", { name: "완료", exact: true }).click();
   await expect(editor).toHaveCount(0);
@@ -31,18 +31,18 @@ test("그룹 카드 편집은 순서·삭제 아이콘을 표시하고 실패 �
   favorites,
 }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] }, { id: weekendId, name: "주말", favorites: [] });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
   const list = editor.getByRole("list", { name: "그룹 순서", exact: true });
   await expect(list.getByRole("listitem")).toHaveCount(3);
   await expect(editor.getByRole("button", { name: "그룹 추가", exact: true })).toHaveCount(0);
-  await expect(editor.getByRole("button", { name: "즐겨찾기 그룹 삭제", exact: true })).toHaveCount(0);
+  await expect(editor.getByRole("button", { name: "즐겨찾기 그룹 삭제", exact: true })).toBeVisible();
   await list.getByRole("button", { name: "주말 순서 변경", exact: true }).press("ArrowUp");
   await list.getByRole("button", { name: "주말 순서 변경", exact: true }).press("ArrowUp");
   await expect(list.getByRole("listitem").first()).toContainText("주말");
-  await expect(list.getByRole("listitem").first()).toContainText("대표 그룹");
-  await expect(editor.getByRole("button", { name: "주말 그룹 삭제", exact: true })).toHaveCount(0);
+  await expect(list.getByRole("listitem").first()).not.toContainText("대표 그룹");
+  await expect(editor.getByRole("button", { name: "주말 그룹 삭제", exact: true })).toBeVisible();
   await expect(editor.getByRole("button", { name: "즐겨찾기 그룹 삭제", exact: true })).toBeVisible();
   await editor.getByRole("button", { name: "통학 그룹 삭제", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "통학 그룹을 삭제할까요?", exact: true });
@@ -72,7 +72,7 @@ test("그룹 카드 편집은 순서·삭제 아이콘을 표시하고 실패 �
 
 test("그룹 순서를 바꾼 뒤 Escape로 닫으면 저장하지 않는다", async ({ page, favorites }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
   await editor.getByRole("button", { name: "통학 순서 변경", exact: true }).press("ArrowUp");
@@ -82,11 +82,7 @@ test("그룹 순서를 바꾼 뒤 Escape로 닫으면 저장하지 않는다", a
   expect(favorites.requests.filter((request) => request.method === "PUT")).toHaveLength(0);
 });
 
-test("새 대표 표시는 즉시 바뀌고 이전 대표 삭제는 순서 저장 후 실행하며 실패해도 재시도한다", async ({
-  page,
-  favorites,
-  api,
-}) => {
+test("첫 번째 그룹은 순서를 저장하지 않고 삭제하며 실패해도 재시도한다", async ({ page, favorites, api }) => {
   const oldId = favorites.groups[0]!.id;
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
   let failDelete = true;
@@ -97,11 +93,11 @@ test("새 대표 표시는 즉시 바뀌고 이전 대표 삭제는 순서 저�
     if (request.method() === "PUT" && path.endsWith("/favorite-groups/order")) mutations.push("order");
     if (request.method() === "DELETE" && path.endsWith(oldId)) {
       mutations.push("delete");
-      if (favorites.groups[0]?.id === oldId || failDelete) {
+      if (failDelete) {
         await route.fulfill({
           status: 409,
           json: {
-            code: favorites.groups[0]?.id === oldId ? "LAST_FAVORITE_GROUP" : "INTERNAL_ERROR",
+            code: "INTERNAL_ERROR",
             message: "failed",
             requestId: "group-representative-test",
           },
@@ -111,31 +107,24 @@ test("새 대표 표시는 즉시 바뀌고 이전 대표 삭제는 순서 저�
     }
     await route.fallback();
   });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 그룹 편집", exact: true });
   await editor.getByRole("button", { name: "통학 순서 변경", exact: true }).press("ArrowUp");
-  await expect(editor.getByRole("listitem").first()).toContainText("통학 · 대표 그룹");
-  await expect(editor.getByRole("button", { name: "통학 그룹 삭제", exact: true })).toHaveCount(0);
+  await expect(editor.getByRole("listitem").first()).toContainText("통학");
+  await expect(editor.getByRole("button", { name: "통학 그룹 삭제", exact: true })).toBeVisible();
   expect(favorites.groups[0]!.id).toBe(oldId);
   await editor.getByRole("button", { name: "즐겨찾기 그룹 삭제", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "즐겨찾기 그룹을 삭제할까요?", exact: true });
-  favorites.mutationError = "INTERNAL_ERROR";
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog.getByRole("alert")).toBeVisible();
-  await expect(dialog.getByRole("status")).toHaveCount(0);
-  expect(mutations).toEqual(["order"]);
+  expect(mutations).toEqual(["delete"]);
   expect(favorites.groups[0]!.id).toBe(oldId);
-  favorites.mutationError = null;
-  await dialog.getByRole("button", { name: "삭제", exact: true }).click();
-  await expect(dialog.getByRole("alert")).toBeVisible();
-  expect(favorites.groups[0]!.id).toBe(schoolId);
-  await expect(dialog.getByRole("status")).toHaveText("일부 순서는 저장됐어요. 남은 작업을 다시 시도해 주세요.");
   failDelete = false;
   await expect(dialog.getByRole("button", { name: "삭제", exact: true })).toBeEnabled();
   await dialog.getByRole("button", { name: "삭제", exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  expect(mutations).toEqual(["order", "order", "delete", "delete"]);
+  expect(mutations).toEqual(["delete", "delete"]);
   await expect(
     editor.getByRole("status").filter({ hasText: "일부 순서는 저장됐어요. 남은 작업을 다시 시도해 주세요." }),
   ).toHaveCount(0);
