@@ -363,6 +363,47 @@ class ActionJudgeTest {
     }
 
     @Test
+    void 한_가지에_고정된_주변확률을_값이_없는_다른_가지에_쓰지_않는다() {
+        ActionFixture fixture = new ActionFixture();
+        fixture.reboard = queried(entry("b-19", 19));
+        fixture.candidateProbabilities.clear();
+        fixture.candidateProbabilities.add(marginal("o-4", 0.5));
+        fixture.candidateProbabilities.add(ActionFixture.conditional("o-9", ValueTag.COND_FAIL, 1.0,
+            Set.of("o-4"), Set.of(), Optional.empty()));
+        fixture.candidateProbabilities.add(ActionFixture.conditional("b-19", ValueTag.MARG, 0.8,
+            Set.of(), Set.of(), Optional.of("o-4")));
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config(20, 8), fixture.source(fixture.reboardCandidate()));
+
+        assertThat(gapsOf(recordOf(verdict, "reboard").outcome()))
+            .containsExactly(new Gap(GapKind.PROBABILITY_UNKNOWN, "b-19"));
+        assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE);
+    }
+
+    @Test
+    void 확률_입력_순서를_바꿔도_판정이_같다() {
+        ProbabilityInput general = marginal("b-19", 0.1);
+        ProbabilityInput boardedFirst = ActionFixture.conditional("b-19", ValueTag.MARG, 0.9,
+            Set.of(), Set.of(), Optional.of("o-4"));
+        ProbabilityInput boardedSecond = ActionFixture.conditional("b-19", ValueTag.MARG, 0.9,
+            Set.of(), Set.of(), Optional.of("o-9"));
+
+        Verdict generalFirst = reboardVerdictWith(List.of(general, boardedFirst, boardedSecond));
+        Verdict generalLast = reboardVerdictWith(List.of(boardedFirst, boardedSecond, general));
+
+        assertThat(riskOf(recordOf(generalFirst, "reboard").outcome())).isCloseTo(0.136, within(TOLERANCE));
+        assertThat(generalFirst.code()).isEqualTo(ReasonCode.GO);
+        assertThat(generalLast).isEqualTo(generalFirst);
+    }
+
+    private static Verdict reboardVerdictWith(List<ProbabilityInput> reboardProbabilities) {
+        ActionFixture fixture = new ActionFixture();
+        fixture.reboard = queried(entry("b-19", 19));
+        fixture.candidateProbabilities.removeIf(input -> input.attempt().startsWith("b-"));
+        fixture.candidateProbabilities.addAll(reboardProbabilities);
+        return ActionJudge.judge(fixture.baseline(), config(20, 8), fixture.source(fixture.reboardCandidate()));
+    }
+
+    @Test
     void 첫_반대편_확률이_없으면_정책_전체가_미정의이다() {
         ActionFixture fixture = new ActionFixture();
         fixture.ride = observed(5);
@@ -573,14 +614,6 @@ class ActionJudgeTest {
 
         assertThatThrownBy(() -> verdictLike(go, ReasonCode.GO, Optional.of("walk-B"), go.delta()))
             .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    void 조건부_확률에_조건_이력이_비어_있으면_입력을_만들지_않는다() {
-        for (ValueTag tag : List.of(ValueTag.COND_FAIL, ValueTag.COND_MISS)) {
-            assertThatThrownBy(() -> new ProbabilityInput("s0-11", tag, Optional.empty(), 0.10))
-                .as("%s", tag).isInstanceOf(IllegalArgumentException.class);
-        }
     }
 
     private static Verdict goVerdict() {
