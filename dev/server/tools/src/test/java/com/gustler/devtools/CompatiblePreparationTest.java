@@ -15,6 +15,29 @@ import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 
 class CompatiblePreparationTest {
+    @Test
+    void 모델_파일_교체는_노선이나_DB_변경으로_취급하지_않는다() {
+        assertThat(CompatiblePreparation.permits(revision(CompatiblePreparation.FIXTURE_DIGEST),
+                revision(CompatiblePreparation.ENV_MODEL_DATA))).isTrue();
+        var previous = new TreeMap<String, String>();
+        previous.put("tools/data-contract.sha256", CompatiblePreparation.ALIGHTING_AWARE_EVALUATION_DATA);
+        previous.put("infra/compose.yaml", "same");
+        previous.put("tools/data/routes.json", "routes");
+        previous.put("tools/data/catalog-routes.json", "catalog");
+        previous.put("tools/data/model-reference/manifest.json", "old");
+        previous.put("tools/data/model-reference/weights.safetensors", "old");
+        var next = new TreeMap<>(previous);
+        next.put("tools/data-contract.sha256", CompatiblePreparation.ENV_MODEL_DATA);
+        next.remove("tools/data/model-reference/weights.safetensors");
+        next.put("tools/data/model-reference/manifest.json", "new");
+        next.put("tools/data/model-reference/base.json", "new");
+        assertThatCode(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(next), null))
+                .doesNotThrowAnyException();
+        next.put("tools/data/routes.json", "different");
+        assertThatThrownBy(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(next), null))
+                .hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
+    }
+
     private RevisionStore.Revision revision(String contract) {
         return revisionWithFiles(Map.of("tools/data-contract.sha256", contract));
     }
@@ -107,6 +130,6 @@ class CompatiblePreparationTest {
         String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
             .digest((contract + "\n").getBytes(StandardCharsets.UTF_8)));
 
-        assertThat(hash).isEqualTo(CompatiblePreparation.DATABASE_CLOCK_DATA);
+        assertThat(hash).isEqualTo(CompatiblePreparation.ENV_MODEL_DATA);
     }
 }
