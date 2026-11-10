@@ -18,6 +18,7 @@ import * as styles from "./naverMapAdapter.css";
 
 const INITIALIZATION_TIMEOUT_MS = 10_000;
 const CAMERA_FOCUS_DURATION_MS = 560;
+const OVERVIEW_RESIZE_SETTLE_MS = 100;
 
 interface StopMarker {
   selection: StopSelection;
@@ -47,6 +48,11 @@ export interface RouteMapCamera {
   zoom: number;
 }
 
+interface NaverRouteMapOptions {
+  sharedMap?: NaverMap;
+  refitOverviewOnResize?: boolean;
+}
+
 export interface RouteMapAdapter {
   camera?: () => RouteMapCamera;
   update: (
@@ -56,7 +62,7 @@ export interface RouteMapAdapter {
     selectedVehicleKey?: string | null,
   ) => void;
   moveVehicles: (frames: readonly { key: string; sequencePosition: number }[]) => void;
-  resize: (width: number, height: number) => void;
+  resize: (width: number, height: number, visibleHeight: number) => void;
   focus: (selection: StopSelection, options?: { animate?: boolean }) => void;
   focusVehicle: (key: string | null, options?: { focusMarker?: boolean }) => void;
   showLocation: (coordinate: GeoCoordinate) => void;
@@ -79,7 +85,7 @@ export function createNaverRouteOverview({ maps, map, element }: MapFlowSurface,
     null,
     undefined,
     false,
-    map,
+    { sharedMap: map },
   );
 }
 
@@ -97,7 +103,7 @@ export function createNaverRouteMap(
   initialSelection: StopSelection | null = null,
   initialCamera?: RouteMapCamera,
   selectedStopOnly = false,
-  sharedMap?: NaverMap,
+  { sharedMap, refitOverviewOnResize = false }: NaverRouteMapOptions = {},
 ): RouteMapAdapter {
   const createNativeEventHandler = (action: () => void) => () => {
     try {
@@ -134,6 +140,10 @@ export function createNaverRouteMap(
   let selected: StopSelection | null = initialSelection;
   let activeDirection: Direction = initialStop?.direction ?? board?.route.directions[0].id ?? "UP";
   let initialFitPending = board !== null && initialCamera === undefined;
+  let overviewRefitEnabled = refitOverviewOnResize && initialFitPending && initialStop === undefined;
+  let overviewRefitTimer: number | undefined;
+  let viewportSize = map.getSize();
+  let mapVisibleHeight = visibleHeight;
   let initialized = sharedMap !== undefined;
   let initialViewIdle = initialCamera !== undefined;
   let initializationFailed = false;
@@ -228,6 +238,19 @@ export function createNaverRouteMap(
   let cameraFocusRevision = 0;
   const cameraFocusInterruptEvents = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 
+  function stopOverviewRefit() {
+    if (!overviewRefitEnabled) return;
+    overviewRefitEnabled = false;
+    window.clearTimeout(overviewRefitTimer);
+    cameraFocusInterruptEvents.forEach((event) => element.removeEventListener(event, stopOverviewRefit, true));
+  }
+
+  if (overviewRefitEnabled) {
+    cameraFocusInterruptEvents.forEach((event) =>
+      element.addEventListener(event, stopOverviewRefit, { passive: true, capture: true }),
+    );
+  }
+
   function cancelCameraFocus() {
     cameraFocusRevision += 1;
     if (cameraFocusFrame !== null) window.cancelAnimationFrame(cameraFocusFrame);
@@ -241,6 +264,7 @@ export function createNaverRouteMap(
     if (destroyed || initializationFailed || key === null) return;
     const item = vehicles.get(key);
     if (item === undefined) return;
+    stopOverviewRefit();
     vehicleFocusKey = key;
     animateCamera(
       () => vehicles.get(key)?.coordinate,
@@ -461,6 +485,7 @@ export function createNaverRouteMap(
       (item) => item.sequence === selection.sequence && item.direction === selection.direction,
     );
     if (stop === undefined) return;
+    stopOverviewRefit();
     initialFitPending = false;
     initialViewIdle = false;
     cancelReadyFrame();
@@ -515,6 +540,19 @@ export function createNaverRouteMap(
   }
 
   const routeCoordinates = fullPath.length > 0 ? fullPath : data.paths.flatMap((path) => path.coordinates);
+  function fitOverview() {
+    // 고정 캔버스의 위아래에서 잘리는 만큼 여백을 더해 보이는 영역 안에 경로를 맞춘다.
+    const verticalPadding = 28 + Math.max(0, (map.getSize().height - mapVisibleHeight) / 2);
+    map.fitBounds(
+      (routeCoordinates.length > 0 ? routeCoordinates : data.stops.map((stop) => stop.coordinate)).map(
+        toNaverCoordinate,
+      ),
+      { top: verticalPadding, right: 12, bottom: verticalPadding, left: 12, maxZoom: 13 },
+    );
+    refreshStops();
+    refreshArrows();
+  }
+
   function fitInitialRoute() {
     if (!initialFitPending) return;
     if (initialStop !== undefined) {
@@ -524,16 +562,7 @@ export function createNaverRouteMap(
     }
     initialFitPending = false;
     initialViewIdle = false;
-    // 고정 캔버스의 위아래에서 잘리는 만큼 여백을 더해 보이는 영역 안에 경로를 맞춘다.
-    const verticalPadding = 28 + Math.max(0, (map.getSize().height - visibleHeight) / 2);
-    map.fitBounds(
-      (routeCoordinates.length > 0 ? routeCoordinates : data.stops.map((stop) => stop.coordinate)).map(
-        toNaverCoordinate,
-      ),
-      { top: verticalPadding, right: 12, bottom: verticalPadding, left: 12, maxZoom: 13 },
-    );
-    refreshStops();
-    refreshArrows();
+    fitOverview();
   }
 
   const listeners = [
@@ -698,18 +727,34 @@ export function createNaverRouteMap(
         if (coordinate !== undefined) map.setCenter(toNaverCoordinate(coordinate));
       }
     },
-    resize(width, height) {
+    resize(width, height, nextVisibleHeight) {
       if (width <= 0 || height <= 0) return;
+      const viewportChanged = viewportSize.width !== width || viewportSize.height !== height;
+      const cropChanged = mapVisibleHeight !== nextVisibleHeight;
+      viewportSize = { width, height };
+      mapVisibleHeight = nextVisibleHeight;
       const size = map.getSize();
-      if (size.width === width && size.height === height) return;
-      map.setSize(new sdk.Size(width, height));
-      refreshStops();
-      refreshArrows();
+      if (size.width !== width || size.height !== height) {
+        map.setSize(new sdk.Size(width, height));
+        refreshStops();
+        refreshArrows();
+      }
+      if (!overviewRefitEnabled || (!viewportChanged && !(cropChanged && overviewRefitTimer !== undefined))) return;
+      // 키보드가 닫히는 동안 지도 크기와 시트 높이가 함께 바뀌므로 마지막 표시 영역에 맞춘다.
+      window.clearTimeout(overviewRefitTimer);
+      overviewRefitTimer = window.setTimeout(
+        createNativeEventHandler(() => {
+          overviewRefitTimer = undefined;
+          if (!initialFitPending && mapVisibleHeight > 0) fitOverview();
+        }),
+        OVERVIEW_RESIZE_SETTLE_MS,
+      );
     },
     focus,
     focusVehicle,
     showLocation(coordinate) {
       cancelCameraFocus();
+      stopOverviewRefit();
       initialFitPending = false;
       initialViewIdle = false;
       cancelReadyFrame();
@@ -736,6 +781,7 @@ export function createNaverRouteMap(
     destroy() {
       destroyed = true;
       cancelCameraFocus();
+      stopOverviewRefit();
       window.clearTimeout(initializationTimeout);
       initialFitPending = false;
       cancelReadyFrame();

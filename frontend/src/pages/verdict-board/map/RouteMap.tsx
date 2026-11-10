@@ -1,6 +1,8 @@
 import { MapLocationButton } from "@/shared/components/MapLocationButton";
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLocation } from "react-router";
 import { MapFlowSurfaceContext } from "@/shared/map/mapFlowSurface";
+import { boardEntryFrom } from "@/shared/routing/boardEntry";
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
 import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
@@ -54,6 +56,7 @@ function locationDeniedStateFor(message: string): LocationState {
 }
 
 export function RouteMap(props: RouteMapProps) {
+  const refitOverviewOnResize = boardEntryFrom(useLocation().state) === "search";
   const mapFlow = useContext(MapFlowSurfaceContext);
   const sharedSurface = mapFlow?.surface ?? null;
   const shared = mapFlow !== null;
@@ -259,7 +262,7 @@ export function RouteMap(props: RouteMapProps) {
           current.selected,
           webCamera,
           selectedStopOnly,
-          webSurface?.map,
+          { ...(webSurface && { sharedMap: webSurface.map }), refitOverviewOnResize },
         );
         adapterRef.current = adapter;
         lastFocusedStop.current = current.selected;
@@ -282,7 +285,7 @@ export function RouteMap(props: RouteMapProps) {
       if (adapterRef.current !== null) rememberCamera(adapterRef.current, false);
       disposeMap();
     };
-  }, [data, disposeMap, failMap, selectedStopOnly, shared, webSurface, useNativeMap]);
+  }, [data, disposeMap, failMap, refitOverviewOnResize, selectedStopOnly, shared, webSurface, useNativeMap]);
 
   useEffect(() => {
     runMapAction((adapter) => {
@@ -337,7 +340,8 @@ export function RouteMap(props: RouteMapProps) {
     if (region === null) return;
     // 시트는 지도를 잘라 보이는 높이만 바꾼다. GL 버퍼 크기는 화면 크기가 바뀔 때만 갱신한다.
     const observer = new ResizeObserver(() => {
-      const crop = Math.max(0, (viewportHeight - region.clientHeight) / 2);
+      const visibleHeight = region.clientHeight;
+      const crop = Math.max(0, (viewportHeight - visibleHeight) / 2);
       const cropInset = `${crop}px`;
       region.style.setProperty("--map-crop-inset", cropInset);
       if (webSurface && data && window.naver?.maps === webSurface.maps) {
@@ -351,7 +355,7 @@ export function RouteMap(props: RouteMapProps) {
         }
         webSurface.element.style.setProperty("--board-map-crop-inset", cropInset);
       }
-      runMapAction((adapter) => adapter.resize(region.clientWidth, viewportHeight));
+      runMapAction((adapter) => adapter.resize(region.clientWidth, viewportHeight, visibleHeight));
     });
     observer.observe(region);
     return () => observer.disconnect();
