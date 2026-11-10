@@ -135,6 +135,10 @@ export const mapNotice = style({
   lineHeight: 1.5,
   color: muted,
 });
+export const favoriteMapNotice = style([
+  mapNotice,
+  { top: "auto", bottom: `calc(${sheetObstruction} + ${mapControlInset}px)`, zIndex: 2 },
+]);
 export const stationMapError = style([
   mapNotice,
   {

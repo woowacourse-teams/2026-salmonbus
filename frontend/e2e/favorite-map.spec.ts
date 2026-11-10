@@ -101,3 +101,72 @@ test("즐겨찾기 지도는 중복 저장한 노선을 한 번만 그리며 차
   await page.getByRole("navigation", { name: "주요 메뉴" }).getByRole("link", { name: "홈", exact: true }).click();
   await expect(lines).toHaveCount(0);
 });
+
+test("그룹 응답을 기다리는 동안 이전 카드와 노선을 함께 유지하고 돌아와도 선택을 유지한다", async ({
+  page,
+  favorites,
+  api,
+}) => {
+  const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
+  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+  const groupId = "10000000-0000-4000-8000-000000000003";
+  favorites.groups.push({ id: groupId, name: "통학", favorites: [] });
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await api.route(async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/me/favorites" && url.searchParams.get("groupId") === groupId) await pending;
+    await route.fallback();
+  });
+  await page.goto("/favorites");
+  const panel = page.getByRole("tabpanel");
+  const lines = page.getByTestId("naver-map-test-double").getByTestId("naver-polyline");
+  await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
+  await expect(lines).toHaveCount(2);
+  const group = page.getByRole("tab", { name: "통학", exact: true });
+  try {
+    await group.click();
+    await expect(page.getByText("통학 그룹의 즐겨찾기를 불러오고 있어요…")).toBeVisible();
+    await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
+    await expect(lines).toHaveCount(2);
+  } finally {
+    release();
+  }
+  await expect(panel.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toBeVisible();
+  await expect(lines).toHaveCount(0);
+
+  const navigation = page.getByRole("navigation", { name: "주요 메뉴" });
+  await navigation.getByRole("link", { name: "홈", exact: true }).click();
+  await navigation.getByRole("link", { name: "즐겨찾기", exact: true }).click();
+  await expect(group).toHaveAttribute("aria-selected", "true");
+  await panel.getByRole("link", { name: "즐겨찾기 추가하기" }).click();
+  await expect(page).toHaveURL("/search");
+  await page.goBack();
+  await expect(group).toHaveAttribute("aria-selected", "true");
+});
+
+for (const reason of ["조회 실패", "표시 제한"] as const) {
+  test(`즐겨찾기 노선 형상 ${reason} 시 지도 안내와 카드를 보여준다`, async ({ page, favorites, api }) => {
+    const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
+    favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+    if (reason === "조회 실패") {
+      api.mode.geometry = "network-error";
+    } else {
+      await api.route(async (route) => {
+        if (new URL(route.request().url()).pathname === apiPaths.geometry) {
+          await route.fulfill({ json: { ...api.data.geometry, status: "UNAVAILABLE", reason: "DISPLAY_WITHHELD" } });
+        } else {
+          await route.fallback();
+        }
+      });
+    }
+    await page.goto("/favorites");
+    await expect(page.getByRole("tabpanel").getByText(stop.name, { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "지도", exact: true })).toContainText(
+      "지도에 표시할 수 없는 즐겨찾기 노선이 있어요.",
+    );
+    await expect(page.getByTestId("naver-polyline")).toHaveCount(0);
+  });
+}

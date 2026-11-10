@@ -12,6 +12,7 @@ export const panel = style({
   flexDirection: "column",
   flex: 1,
 });
+export const groupLoading = style({ margin: "8px 0", fontSize: 13, color: vars.color.textSubtle });
 export const panelInner = style({ display: "flex", flexDirection: "column", flex: 1 });
 export const card = style([
   cardBase,

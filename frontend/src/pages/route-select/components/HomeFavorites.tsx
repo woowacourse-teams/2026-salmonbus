@@ -13,7 +13,7 @@ import { toRemainingTime } from "@/shared/utils/remainingTime";
 import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
 import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, favoritePath, paths } from "@/shared/routing/paths";
-import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
+import { useFavorites } from "@/shared/hooks/useFavorites";
 import { playHaptic } from "@/shared/haptic/haptic";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { RetryButton } from "@/shared/components/RetryButton";
@@ -36,7 +36,15 @@ const EMPTY_FAVORITES: HomeFavorite[] = [];
 
 export function HomeFavorites() {
   const { groups, resource, requestState, reload } = useFavorites();
-  const { favoriteGroup: group, selectFavoriteGroup } = useOutletContext<FavoriteGroupContext>();
+  const {
+    favoriteGroup: group,
+    selectFavoriteGroup,
+    summary: { resource: summary, requestState: summaryRequestState },
+    retrySummary: retry,
+    displayedGroup: shownGroup,
+    displayedSummary: shownLatest,
+    switchingGroup: switching,
+  } = useOutletContext<FavoriteGroupContext>();
   const groupTabs = useRef<HTMLDivElement>(null);
   const [ordering, setOrdering] = useState(false);
   useLayoutEffect(() => {
@@ -54,20 +62,9 @@ export function HomeFavorites() {
   useEffect(() => {
     return ordering ? () => editButton.current?.focus() : undefined;
   }, [ordering]);
-  const [revision, retry] = useReducer((value: number) => value + 1, 0);
-  const { resource: summary, requestState: summaryRequestState } = useHomeFavorites(
-    group ? { kind: "group", groupId: group.id } : null,
-    revision,
-  );
   const latest = latestSuccessOf(summary);
-  const [previous, setPrevious] = useState({ groupId: group?.id, latest });
-  const previousGroup = groups.find((candidate) => candidate.id === previous.groupId);
-  const switching = summary.status === "pending" && previous.latest !== null && previousGroup !== undefined;
-  const shownLatest = switching ? previous.latest : latest;
-  const shownGroup = switching ? previousGroup : group;
   const selectGroup = (id: string) => {
     if (id === group?.id) return;
-    if (latest !== null) setPrevious({ groupId: group?.id, latest });
     selectFavoriteGroup(id);
     playHaptic("selection");
   };
@@ -231,7 +228,7 @@ export function HomeFavorites() {
         </div>
       )}
       {switching ? (
-        <p role="status" className={visuallyHidden}>
+        <p role="status" className={homeStyles.groupLoading}>
           {group?.name} 그룹의 즐겨찾기를 불러오고 있어요…
         </p>
       ) : (

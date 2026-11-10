@@ -172,6 +172,7 @@ export function HomeMap(props: Props) {
         : [],
     [favoritePaths, favoriteRouteIds],
   );
+  const hasUnavailableFavoriteRoutes = favoriteRouteIds.some((id) => favoritePaths[id]?.length === 0);
   const overviewPaths = routeOverviewKey === null ? favoriteOverviewPaths : routePaths;
   useLayoutEffect(
     () => () => {
@@ -367,6 +368,11 @@ export function HomeMap(props: Props) {
             onPathsChange={onFavoritePathsChange}
           />
         ))}
+      {instance && !error && !overlayOpen && hasUnavailableFavoriteRoutes && (
+        <p className={styles.favoriteMapNotice} role="status">
+          지도에 표시할 수 없는 즐겨찾기 노선이 있어요.
+        </p>
+      )}
       {(!instance || error) && (
         <p className={styles.mapNotice} aria-live="polite">
           {error ?? "주변 지도를 불러오고 있어요…"}

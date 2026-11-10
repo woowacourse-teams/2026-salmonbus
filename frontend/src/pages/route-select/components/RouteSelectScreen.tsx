@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useMemo, useReducer, useRef, useState, type MouseEvent } from "react";
 import { matchPath, useLocation, useOutlet } from "react-router";
 import { Brand } from "@/shared/components/Brand";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
 import type { Direction } from "@/shared/api/routeForecast.types";
-import type { FavoriteGroup } from "@/shared/api/favorites.types";
-import { useFavorites } from "@/shared/hooks/useFavorites";
+import type { FavoriteGroup, HomeFavorites } from "@/shared/api/favorites.types";
+import { latestSuccessOf, type LatestSuccess } from "@/shared/api/polledResource";
+import type { PolledRequest } from "@/shared/api/usePolledRequest";
+import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { MapFlowSurfaceContext, type MapFlowSurfaceState } from "@/shared/map/mapFlowSurface";
 import { Notice } from "@/shared/components/Notice";
 import { RetryButton } from "@/shared/components/RetryButton";
@@ -27,10 +29,14 @@ import * as styles from "./RouteSelectScreen.css";
 export interface FavoriteGroupContext {
   favoriteGroup: FavoriteGroup | undefined;
   selectFavoriteGroup: (groupId: string) => void;
+  summary: PolledRequest<HomeFavorites>;
+  retrySummary: () => void;
+  displayedGroup: FavoriteGroup | undefined;
+  displayedSummary: LatestSuccess<HomeFavorites> | null;
+  switchingGroup: boolean;
 }
 
 export interface FavoriteGroupSelection {
-  key: string;
   memberId: string;
   groupId: string;
 }
@@ -52,29 +58,11 @@ export function RouteSelectScreen({
   const isFavorites = location.pathname === paths.favorites;
   const showStops = isHome || isFavorites;
   const { groups, memberId } = useFavorites();
-  const selectedGroupId =
-    favoriteSelection?.key === location.key && favoriteSelection.memberId === memberId
-      ? favoriteSelection.groupId
-      : null;
+  const selectedGroupId = favoriteSelection?.memberId === memberId ? favoriteSelection.groupId : null;
   const favoriteGroup =
     groups.find((group) => group.id === selectedGroupId) ??
     groups.find((group) => group.favorites.length > 0) ??
     groups[0];
-  const outlet = useOutlet({
-    favoriteGroup,
-    selectFavoriteGroup: (groupId) => {
-      if (memberId !== null) onFavoriteSelection({ key: location.key, memberId, groupId });
-    },
-  } satisfies FavoriteGroupContext);
-  const favoriteRoutes = useMemo(() => {
-    const directions = new Map<string, Direction>();
-    if (isFavorites && memberId && favoriteGroup) {
-      for (const { routeId, direction } of favoriteGroup.favorites) {
-        if (!directions.has(routeId)) directions.set(routeId, direction);
-      }
-    }
-    return directions;
-  }, [favoriteGroup, isFavorites, memberId]);
   const mainRef = useRef<HTMLElement>(null);
   const searchBarRef = useRef<HTMLElement>(null);
   const sheetSurfaceRef = useRef<HTMLDivElement>(null);
@@ -87,6 +75,49 @@ export function RouteSelectScreen({
   } | null>(null);
   const currentSheet = sheet?.key === location.key ? sheet : null;
   const selectedStop = currentSheet?.station?.stop ?? null;
+  const [summaryRevision, retrySummary] = useReducer((value: number) => value + 1, 0);
+  const summary = useHomeFavorites(
+    isFavorites && favoriteGroup && selectedStop === null ? { kind: "group", groupId: favoriteGroup.id } : null,
+    summaryRevision,
+  );
+  const latestSummary = latestSuccessOf(summary.resource);
+  const [previousSummary, setPreviousSummary] = useState<{
+    locationKey: string;
+    memberId: string;
+    groupId: string;
+    data: LatestSuccess<HomeFavorites>;
+  } | null>(null);
+  const previousGroup =
+    previousSummary?.memberId === memberId && previousSummary.locationKey === location.key
+      ? groups.find((group) => group.id === previousSummary.groupId)
+      : undefined;
+  const switchingGroup = summary.resource.status === "pending" && previousGroup !== undefined;
+  const displayedGroup = switchingGroup ? previousGroup : favoriteGroup;
+  const displayedSummary = switchingGroup ? (previousSummary?.data ?? null) : latestSummary;
+  const outlet = useOutlet({
+    favoriteGroup,
+    selectFavoriteGroup: (groupId) => {
+      if (memberId === null) return;
+      if (favoriteGroup && favoriteGroup.id !== groupId && latestSummary) {
+        setPreviousSummary({ locationKey: location.key, memberId, groupId: favoriteGroup.id, data: latestSummary });
+      }
+      onFavoriteSelection({ memberId, groupId });
+    },
+    summary,
+    retrySummary,
+    displayedGroup,
+    displayedSummary,
+    switchingGroup,
+  } satisfies FavoriteGroupContext);
+  const favoriteRoutes = useMemo(() => {
+    const directions = new Map<string, Direction>();
+    if (isFavorites && memberId && displayedGroup) {
+      for (const { routeId, direction } of displayedGroup.favorites) {
+        if (!directions.has(routeId)) directions.set(routeId, direction);
+      }
+    }
+    return directions;
+  }, [displayedGroup, isFavorites, memberId]);
   const tabSnap = currentSheet?.tabSnap ?? "summary";
   const snap = currentSheet?.station?.snap ?? tabSnap;
   const [cameraTarget, setCameraTarget] = useState<Point>(DEFAULT_LOCATION);
@@ -218,7 +249,7 @@ export function RouteSelectScreen({
             stops={showStops ? stops : []}
             routePaths={isRouteMap ? routePaths : []}
             routeOverviewKey={isRouteMap ? location.key : null}
-            favoriteGroupId={isFavorites ? (favoriteGroup?.id ?? null) : null}
+            favoriteGroupId={isFavorites ? (displayedGroup?.id ?? null) : null}
             favoriteRoutes={favoriteRoutes}
             overlayOpen={overlayOpen}
             boardOpen={boardOpen}
