@@ -13,27 +13,32 @@ import org.springframework.stereotype.Service;
 /**
  * 연어행동 조회를 종료 상태 하나로 답한다.
  *
- * <p>플래그가 꺼지면 판정하지 않는다. 켜져 있어도 탑승 확률과 운행 식별이 없으면 대기와 이동을 비교하지 않고
- * 근거 부족을 반환한다. 합성 예제의 추천을 정류장 응답으로 만들지 않는다.
+ * <p>플래그가 꺼지면 판정하지 않는다. 켜져 있으면 전광판의 출발 만차 확률과 같은 방향 도보를 운영 값으로 비교한다.
+ * 그 확률이 하나가 아니거나 차내 시간, 도착 시각이 없으면 추천하지 않는다.
  */
 @Service
 public class SalmonActionService {
     private static final Pattern STATION_ID = Pattern.compile("[0-9]{9}");
 
     private final boolean enabled;
+    private final SalmonActionCase actionCase;
 
-    public SalmonActionService(@Value("${salmon.action.enabled:false}") boolean enabled) {
+    public SalmonActionService(
+        @Value("${salmon.action.enabled:false}") boolean enabled,
+        SalmonActionCase actionCase
+    ) {
         this.enabled = enabled;
+        this.actionCase = actionCase;
     }
 
     public SalmonActionAnswer query(String routeId, String stationId, int stopSequence) {
         if (!enabled) {
             return new SalmonActionAnswer.Off();
         }
-        new RouteId(routeId);
+        RouteId route = new RouteId(routeId);
         Recommendation recommendation = stopSequence < 1 || stationId == null || !STATION_ID.matcher(stationId).matches()
             ? IntegratedJudge.decide(Situation.contradiction())
-            : IntegratedJudge.decide(Situation.missingStay());
+            : IntegratedJudge.decide(actionCase.situation(route, stationId, stopSequence));
         Terminal terminal = recommendation.terminal();
         return new SalmonActionAnswer.Decided(terminal, IntegratedGuidance.line(terminal));
     }

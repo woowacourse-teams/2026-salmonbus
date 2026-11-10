@@ -1,0 +1,97 @@
+package com.gustler.backend.api.salmon.application;
+
+import com.gustler.backend.api.salmon.domain.IntegratedJudge.Admission;
+import com.gustler.backend.api.salmon.domain.IntegratedJudge.Coverage;
+import com.gustler.backend.api.salmon.domain.IntegratedJudge.Listing;
+import com.gustler.backend.api.salmon.domain.IntegratedJudge.Move;
+import com.gustler.backend.api.salmon.domain.IntegratedJudge.Situation;
+import com.gustler.backend.api.salmon.domain.RiskMath.Risk;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.stereotype.Component;
+
+/**
+ * 출발 만차 확률과 도보를 운영 값으로 판정 상황에 담는다.
+ *
+ * <p>대기 위험은 확률이 하나일 때만 {@code Risk(p, p)}다. 요청 시각이 마감의 시작이라 이 조회에서 창은 열려 있다.
+ * 이동 확률은 점추정이고 관측 범위는 모르므로 추천으로 닫지 않는다.
+ */
+@Component
+public class SalmonActionAssessment {
+    private final SalmonGainThreshold gainThreshold;
+    private final SalmonEta eta;
+    private final SalmonWalkCap walkCap;
+    private final SalmonTransferCap transferCap;
+    private final SalmonInVehicleCap inVehicleCap;
+    private final SalmonHorizon horizon;
+    private final SalmonAlpha alpha;
+    private final SalmonConnectionSlack connectionSlack;
+
+    public SalmonActionAssessment(
+        SalmonGainThreshold gainThreshold,
+        SalmonEta eta,
+        SalmonWalkCap walkCap,
+        SalmonTransferCap transferCap,
+        SalmonInVehicleCap inVehicleCap,
+        SalmonHorizon horizon,
+        SalmonAlpha alpha,
+        SalmonConnectionSlack connectionSlack
+    ) {
+        this.gainThreshold = gainThreshold;
+        this.eta = eta;
+        this.walkCap = walkCap;
+        this.transferCap = transferCap;
+        this.inVehicleCap = inVehicleCap;
+        this.horizon = horizon;
+        this.alpha = alpha;
+        this.connectionSlack = connectionSlack;
+    }
+
+    public Situation situation(List<Double> stayFullProbabilities, List<SalmonActionWalk> walks, boolean listingComplete) {
+        if (stayFullProbabilities.size() != 1 || !usable(stayFullProbabilities.getFirst())) {
+            return Situation.missingStay();
+        }
+        double stayFull = stayFullProbabilities.getFirst();
+        List<Move> moves = new ArrayList<>();
+        for (SalmonActionWalk walk : walks) {
+            moves.add(move(walk));
+        }
+        return new Situation(true, true, Optional.of(new Risk(stayFull, stayFull)), Coverage.UNKNOWN, false,
+            listingComplete ? Listing.COMPLETE : Listing.UNFINISHED,
+            gainThreshold.threshold(), eta.eta(), moves);
+    }
+
+    private Move move(SalmonActionWalk walk) {
+        Optional<Double> inVehicleMinutes = walk.inVehicleMillis().map(SalmonActionAssessment::minutes);
+        boolean violated = walkCap.exceeded(walk.walkMillis())
+            || transferCap.exceeded(walk.transfers())
+            || walk.inVehicleMillis().filter(inVehicleCap::exceeded).isPresent()
+            || alpha.scaledMillis(walk.walkMillis()) > horizon.horizon().toMillis()
+            || missedConnection(walk);
+        if (violated) {
+            return new Move(walk.id(), Admission.VIOLATED, Optional.empty(), false,
+                minutes(walk.walkMillis()), walk.transfers(), inVehicleMinutes);
+        }
+        if (walk.inVehicleMillis().isEmpty()) {
+            return new Move(walk.id(), Admission.UNCONFIRMED, Optional.empty(), false,
+                minutes(walk.walkMillis()), walk.transfers(), Optional.empty());
+        }
+        return new Move(walk.id(), Admission.ALLOWED, Optional.empty(), false,
+            minutes(walk.walkMillis()), walk.transfers(), inVehicleMinutes);
+    }
+
+    private boolean missedConnection(SalmonActionWalk walk) {
+        return walk.connection()
+            .filter(link -> !connectionSlack.connected(link.busArrivalMillis(), link.personReadyMillis()))
+            .isPresent();
+    }
+
+    private static boolean usable(double probability) {
+        return Double.isFinite(probability) && probability >= 0 && probability <= 1;
+    }
+
+    private static double minutes(long millis) {
+        return millis / 60_000.0;
+    }
+}

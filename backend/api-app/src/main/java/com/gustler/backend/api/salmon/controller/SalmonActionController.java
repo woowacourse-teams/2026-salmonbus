@@ -26,7 +26,7 @@ public class SalmonActionController {
 
     @GetMapping("/api/v1/routes/{routeId}/stations/{stationId}/salmon-action")
     @Operation(operationId = "getSalmonAction", summary = "연어행동 판정 안내",
-        description = "기능이 꺼져 있으면 kind만 DISABLED다. 켜져 있고 비교 근거가 없으면 근거 부족 문장을 반환한다. 확률은 반환하지 않는다.")
+        description = "기능이 꺼져 있으면 kind만 DISABLED다. 켜져 있으면 종료 상태에 해당하는 문장을 반환한다. 확률은 반환하지 않는다.")
     public ResponseEntity<SalmonActionResponse> show(
         @PathVariable String routeId,
         @PathVariable String stationId,

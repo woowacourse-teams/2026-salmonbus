@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.gustler.backend.api.http.ApiExceptionHandler;
 import com.gustler.backend.api.salmon.application.SalmonActionService;
+import com.gustler.backend.api.salmon.domain.IntegratedJudge.Situation;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -54,7 +55,8 @@ class SalmonActionControllerTest {
     }
 
     private static MockMvc mvc(boolean enabled) {
-        return MockMvcBuilders.standaloneSetup(new SalmonActionController(new SalmonActionService(enabled)))
+        return MockMvcBuilders.standaloneSetup(new SalmonActionController(
+            new SalmonActionService(enabled, (routeId, stationId, stopSequence) -> Situation.missingStay())))
             .setControllerAdvice(new ApiExceptionHandler())
             .build();
     }

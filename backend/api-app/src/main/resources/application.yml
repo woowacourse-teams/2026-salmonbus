@@ -179,10 +179,21 @@ route-geometry:
   presentation:
     enabled: ${ROUTE_GEOMETRY_PRESENTATION_ENABLED:false}
 
-# 연어행동 조회. 기본은 끈다. 켜도 탑승 확률과 운행 식별이 없으면 근거 부족으로 답한다.
+# 연어행동 조회. 기본은 끈다. 켜면 전광판의 출발 만차 확률 하나와 같은 방향 도보를 아래 값으로 비교한다.
+# 그 확률이 하나가 아니거나 차내 시간, 도착 시각이 없으면 추천하지 않는다.
 salmon:
   action:
     enabled: ${SALMON_ACTION_ENABLED:false}
+    max-walk: 15m
+    gain-threshold: 0.5
+    horizon: 20m
+    max-in-vehicle: 20m
+    eta: 0
+    alpha: 1.2
+    max-transfers: 1
+    min-connection: 15s
+    epoch-budget: 2
+    # 관측 유효 기간은 따로 두지 않는다. 스냅샷 staleAt이 지나면 그 예보를 쓰지 않는다.
 
 push:
   enabled: ${PUSH_ENABLED:false}

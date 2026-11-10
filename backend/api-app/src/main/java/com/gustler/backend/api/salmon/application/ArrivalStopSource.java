@@ -53,7 +53,7 @@ public final class ArrivalStopSource implements StopArrivalSource {
             return new Unavailable(MissingReason.NOT_PROVIDED);
         }
         ArrivalSnapshot snapshot = latest.get();
-        if (!decisionAt.isBefore(snapshot.staleAt())) {
+        if (!SalmonObservationFreshness.usable(decisionAt, snapshot.staleAt())) {
             return new Unavailable(MissingReason.STALE);
         }
         Optional<ArrivalVisit> visit = repository.visits(stationId).stream()
