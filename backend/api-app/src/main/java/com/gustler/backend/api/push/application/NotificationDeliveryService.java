@@ -47,7 +47,8 @@ public class NotificationDeliveryService {
 
     public int giveUpExpired() {
         Instant now = now();
-        return deliveries.giveUpOccurredBefore(now.minus(DeliveryPolicy.RETRY_WINDOW), now);
+        Instant cutoff = now.truncatedTo(ChronoUnit.MINUTES).minus(DeliveryPolicy.RETRY_WINDOW);
+        return deliveries.giveUpOccurredBefore(cutoff, now);
     }
 
     public List<ClaimedDelivery> claimDue(int limit) {
