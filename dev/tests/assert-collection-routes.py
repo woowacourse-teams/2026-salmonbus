@@ -1,5 +1,6 @@
 """로컬 API의 20개 수집 노선과 예보 유무를 확인한다. 운영 부하/정확도 검사가 아니다."""
 import json
+import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import sys
@@ -10,6 +11,14 @@ from pathlib import Path
 ADDED = {"204000081", "234000002", "234000313", "234000878", "234000882", "204000082",
          "234001739", "233000266", "204000170", "234000879", "228000393", "200000314"}
 
+
+
+def parse_observed_at(value):
+    # Python 3.9/3.10의 fromisoformat은 5자리 소수점 등을 읽지 못한다.
+    # 시각 범위 판정에는 마이크로초보다 작은 자릿수가 필요하지 않다.
+    value = re.sub(r"(\.\d{6})\d+", r"\1", value).replace("Z", "+00:00")
+    pattern = "%Y-%m-%dT%H:%M:%S" + (".%f" if "." in value else "") + "%z"
+    return datetime.strptime(value, pattern)
 
 def supports_time(observed_at, holiday_dates):
     local = observed_at.astimezone(ZoneInfo("Asia/Seoul"))
@@ -70,7 +79,7 @@ def verify(api, data):
             assert listed[route_id]["status"] == expected, f"{route_id}: 목록 status != {expected}"
             status, body = get(f"/api/v1/routes/{route_id}/board")
             expect_forecasts = has_model and supports_time(
-                datetime.fromisoformat(body["observedAt"].replace("Z", "+00:00")), holiday_dates)
+                parse_observed_at(body["observedAt"]), holiday_dates)
             verify_board(route_id, status, body, has_model, expect_forecasts)
         except (AssertionError, KeyError, urllib.error.URLError) as error:
             failures.append(f"{route_id}: {error}")
