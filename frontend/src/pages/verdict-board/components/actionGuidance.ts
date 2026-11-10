@@ -15,8 +15,7 @@ export const ACTION_REASON_CODES = [
 export type ActionReasonCode = (typeof ACTION_REASON_CODES)[number];
 
 export type ActionGuidanceView =
-  | { status: "hidden"; reason: "NOT_AVAILABLE" | "PAYLOAD_REJECTED" }
-  | { status: "shown"; line: string };
+  { status: "hidden"; reason: "NOT_AVAILABLE" | "PAYLOAD_REJECTED" } | { status: "shown"; line: string };
 
 export const HIDDEN_GUIDANCE: ActionGuidanceView = { status: "hidden", reason: "NOT_AVAILABLE" };
 
