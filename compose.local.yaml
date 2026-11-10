@@ -108,6 +108,7 @@ services:
       - settings-data:/local-settings:ro
       - ./dev/data:/local/data:ro
       - model-data:/local/models
+      - forecast-history-data:/local/models/alighting-history
     depends_on:
       api:
         condition: service_healthy
@@ -155,6 +156,7 @@ services:
       - ./dev/config/worker.yml:/local/config/worker.yml:ro
       - ./dev/data:/local/station-data:ro
       - model-data:/local/models:ro
+      - forecast-history-data:/local/models/alighting-history
     depends_on:
       local-init:
         condition: service_completed_successfully
@@ -271,3 +273,4 @@ volumes:
   settings-data:
   postgres-data:
   model-data:
+  forecast-history-data:

@@ -4,11 +4,6 @@ plugins {
 }
 
 dependencies {
-    implementation platform('software.amazon.awssdk:bom:2.57.3')
-    implementation('software.amazon.awssdk:s3') {
-        exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
-    }
-    implementation 'software.amazon.awssdk:apache5-client'
     implementation project(':common')
     implementation project(':route-geometry-engine')
     implementation project(':route-catalog')
@@ -42,7 +37,6 @@ tasks.named('test') {
     // 기능 스위치는 빌드 호스트 환경변수와 무관하게 꺼 둔다. 켜야 하는 시험은 시험 속성으로 켠다.
     environment 'COLLECTION_ENABLED', 'false'
     environment 'FORECAST_ENABLED', 'false'
-    environment 'FORECAST_ARCHIVE_ENABLED', 'false'
     environment 'ARRIVALS_ENABLED', 'false'
     environment 'ROUTE_GEOMETRY_ENABLED', 'false'
     environment 'ROUTE_GEOMETRY_GENERATION_ENABLED', 'false'

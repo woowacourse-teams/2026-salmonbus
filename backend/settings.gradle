@@ -25,6 +25,7 @@ project(':member').projectDir = file('business/member')
 project(':gbis-client').projectDir = file('integrations/gbis-client')
 project(':operation-log').projectDir = file('libraries/operation-log')
 
+include 'archive-app'
 include 'route-geometry-contract'
 project(':route-geometry-contract').projectDir = file('libraries/route-geometry-contract')
 

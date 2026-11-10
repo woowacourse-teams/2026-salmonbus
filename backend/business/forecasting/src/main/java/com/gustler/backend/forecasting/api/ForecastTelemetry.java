@@ -9,6 +9,9 @@ public interface ForecastTelemetry {
     ForecastTelemetry NONE = new ForecastTelemetry() {
     };
 
+    default void collectionSeatQuality(final int reviews, final int outliers) {
+    }
+
     default void pending(final long routeVersionId, Instant oldestObservedAt) {
     }
 
