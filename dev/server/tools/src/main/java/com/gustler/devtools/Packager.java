@@ -108,7 +108,6 @@ final class Packager {
                 repo.resolve("dev/server/wiremock.Dockerfile"),
                 repo.resolve("dev/server/systemd/salmonbus-dev-infra.service"),
                 repo.resolve("dev/data/java"),
-                repo.resolve("dev/data/models"),
                 repo.resolve("dev/data/model-reference"),
                 repo.resolve("dev/wiremock/mappings"),
                 repo.resolve("dev/wiremock-extension/src/main")));
@@ -120,7 +119,7 @@ final class Packager {
         var inputs = new java.util.ArrayList<>(basisInputs());
         inputs.add(
                 repo.resolve(
-                        "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/model/ForecastFeatureContract.java"));
+                        "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/model/alighting/AlightingAwareFeatureVector.java"));
         return digest(inputs);
     }
 
@@ -128,9 +127,9 @@ final class Packager {
         return digest(
                 List.of(
                         repo.resolve("dev/data/java"),
-                repo.resolve("dev/data/models"),
+                        repo.resolve("dev/data/model-reference"),
                         repo.resolve(
-                                "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/model/ForecastFeatureContract.java")));
+                                "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/model/alighting/AlightingAwareFeatureVector.java")));
     }
 
     String basisDigest() throws Exception {

@@ -3,7 +3,7 @@ gradle.projectsEvaluated {
     def dev = new File(gradle.rootProject.projectDir, '../dev')
     worker.sourceSets.create('sharedDevData') {
         java.srcDirs = [new File(dev, 'data/java')]
-        resources.srcDirs = [new File(dev, 'data/models')]
+        resources.srcDirs = []
         compileClasspath += worker.sourceSets.main.runtimeClasspath
         runtimeClasspath += worker.sourceSets.main.runtimeClasspath
     }

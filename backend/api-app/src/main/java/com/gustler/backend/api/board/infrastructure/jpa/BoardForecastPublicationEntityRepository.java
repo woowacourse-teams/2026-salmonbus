@@ -20,7 +20,6 @@ public interface BoardForecastPublicationEntityRepository
      */
     @Query(value = """
         SELECT concat_ws('|',
-            'q' || COALESCE(quality.quality_revision::text, '-'),
             'p' || COALESCE(publication.published_at::text, '-'),
             'g' || COALESCE(publication.generated_at::text, '-'),
             'n' || COALESCE(publication.prediction_count::text, '-'),
@@ -28,7 +27,7 @@ public interface BoardForecastPublicationEntityRepository
             'd' || COALESCE(publication.demand_statistics_revision::text, '-'),
             'r' || COALESCE(publication.quality_revision::text, '-'))
         FROM route_version version
-        LEFT JOIN route_data_quality quality ON quality.route_id = version.route_id
+
         LEFT JOIN forecast_publication publication ON publication.source_batch_id = :batchId
         WHERE version.id = :routeVersionId
         """, nativeQuery = true)

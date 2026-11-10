@@ -22,7 +22,7 @@ public final class DatabaseConnections {
         DriverManagerDataSource source = new DriverManagerDataSource(
             environment.jdbcUrl(), environment.username(), environment.password());
         Properties properties = new Properties();
-        properties.setProperty("ApplicationName", "salmonbus-les-history-bootstrap");
+        properties.setProperty("ApplicationName", "salmonbus-alighting-history-bootstrap");
         properties.setProperty("options", "-c default_transaction_read_only=on");
         properties.setProperty("readOnlyMode", "always");
         source.setConnectionProperties(properties);

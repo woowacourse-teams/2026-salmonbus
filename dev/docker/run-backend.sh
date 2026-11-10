@@ -26,7 +26,7 @@ case ${LOCAL_COMPONENT:-} in
     done
     [[ -z $(compgen -e | grep '^GBIS_KEYS' || true) ]] || fail
     [[ ${GBIS_BASE_URL:-http://gbis-mock:8080} == http://gbis-mock:8080 ]] || fail
-    [[ ${MODEL_BUNDLE_DIRECTORY:-/local/models/coldstart-20261016} == /local/models/coldstart-20261016 ]] || fail
+    [[ ${MODEL_BUNDLE_DIRECTORY:-/local/models/alighting-dev-v1} == /local/models/alighting-dev-v1 ]] || fail
     ;;
   *) fail ;;
 esac

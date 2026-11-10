@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.application.publication;
 
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
@@ -19,12 +20,9 @@ import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
-import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
-import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
-import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
+import com.gustler.backend.forecasting.domain.publication.PendingForecastBatchQuery;
 import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import java.time.Clock;
 import java.time.Duration;
@@ -59,11 +57,11 @@ class PublishPendingForecastsRouteCoverageTest {
     private static final RuntimeSnapshot RUNTIME = new RuntimeSnapshot(
         new ActiveModelDeployment(1L, "feature-v1", "release-1", "0".repeat(64)),
         new SupportedForecastScope(List.of("1650", "3330")),
-        input -> null,
+        supportedModel(),
         NOW);
 
     @Mock
-    private VehicleTrajectoryQuery vehicleTrajectoryQuery;
+    private PendingForecastBatchQuery vehicleTrajectoryQuery;
 
     @Mock
     private RouteVersionQuery routeVersions;
@@ -128,7 +126,7 @@ class PublishPendingForecastsRouteCoverageTest {
         RuntimeSnapshot eightRouteRuntime = new RuntimeSnapshot(
             new ActiveModelDeployment(2L, "feature-v1", "release-2", "1".repeat(64)),
             new SupportedForecastScope(List.of("1650", "3330", "9007", "9300", "6011", "3000", "5600", "3500")),
-            input -> null,
+            supportedModel(),
             NOW);
         PendingForecastBatch batch = new PendingForecastBatch(20L, ROUTE_VERSION_9007, 3L, NOW.minusSeconds(20));
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(eightRouteRuntime));
@@ -149,18 +147,10 @@ class PublishPendingForecastsRouteCoverageTest {
     @Test
     void 학습_정류장과_다른_노선은_건너뛰고_다음_노선은_계속_예보한다() {
         // when
-        SeatForecastModel model = new SeatForecastModel() {
-            @Override
-            public boolean supportsRoute(RouteStops stops) {
-                return stops.routeVersionId() == ROUTE_VERSION_3330;
-            }
+        var model = org.mockito.Mockito.mock(AlightingAwareSeatForecastModel.class);
+        when(model.supportsRoute(any())).thenAnswer(invocation ->
+            ((RouteStops) invocation.getArgument(0)).routeVersionId() == ROUTE_VERSION_3330);
 
-            @Override
-            public SeatForecastResult predict(
-                SeatForecastInput input) {
-                throw new AssertionError("이 테스트의 계산은 writer가 담당한다");
-            }
-        };
         RuntimeSnapshot runtime = new RuntimeSnapshot(RUNTIME.deployment(),
             new SupportedForecastScope(List.of("3330", "9007")), model, NOW);
         PendingForecastBatch batch = new PendingForecastBatch(10L, ROUTE_VERSION_3330, 1L, NOW.minusSeconds(20));
@@ -429,5 +419,10 @@ class PublishPendingForecastsRouteCoverageTest {
             return "3330";
         }
         return "9007";
+    }
+    private static AlightingAwareSeatForecastModel supportedModel() {
+        var model = org.mockito.Mockito.mock(AlightingAwareSeatForecastModel.class);
+        org.mockito.Mockito.lenient().when(model.supportsRoute(org.mockito.ArgumentMatchers.any())).thenReturn(true);
+        return model;
     }
 }

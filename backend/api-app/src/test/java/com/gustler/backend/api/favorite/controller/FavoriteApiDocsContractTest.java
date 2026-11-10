@@ -100,7 +100,7 @@ class FavoriteApiDocsContractTest {
     }
 
     @Test
-    void 즐겨찾기와_탑승판이_레스_출력_목표를_같은_스키마로_공개한다() {
+    void 즐겨찾기와_탑승판이_하차_반영_출력_목표를_같은_스키마로_공개한다() {
         JsonNode forecast = document.at("/components/schemas/ForecastResponse/properties");
         assertThat(forecast.path("seatTarget").path("enum")).extracting(JsonNode::asString)
             .containsExactly("FIRST_POST_STOP_OBSERVATION", "AFTER_ALIGHTING_ESTIMATE");

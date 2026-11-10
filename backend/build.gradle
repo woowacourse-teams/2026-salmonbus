@@ -89,18 +89,12 @@ subprojects {
 def testContainerOwners = [
     'SharedPostgres',                   // 모듈 테스트 JVM 마다 하나 띄워 컨텍스트별 DB 를 나눠 준다
     'DedicatedPostgresTestContainer',   // DB 를 멈추는 장애 테스트 전용
+    'MaintenanceProcessTest',           // 별도 JVM 정비 JAR의 접속과 마이그레이션을 검증한다
     'DddStorageMigrationTest',          // 빈 서버에서 마이그레이션 자체를 검증한다
-    'PostgresMigrationTestSupport',     // 빈 서버에서 마이그레이션 자체를 검증한다
     'ApiSqlOriginPostgresTest',         // pg_stat_statements 서버 설정이 필요하다
-    'MaintenanceProcessTest',           // 정비 boot JAR 을 자식 프로세스로 띄워 서버째 쓴다
 ] as Set
 def dirtiesContextOwners = [
     'DatabaseFailureContractTest',
-    'StatisticsArchiveAdoptionTest',
-    'JdbcStatisticsInputExtractorTest',
-    'JdbcEvaluationArchiveStoreTest',
-    'EvaluationArchiveRetentionTest',
-    'ArchivedDemandStatisticsRebuildTest',
 ] as Set
 
 tasks.register('verifyTestResourceRules') {

@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class DataTargetTest {
     private static final String[] LOCAL = {"/local/data/routes.json", ReferenceBundle.DIRECTORY};
     private static final String[] SHARED = {"/srv/salmonbus-dev/data/routes.json",
-        "/srv/salmonbus-dev/models/reference-20261002", "--shared-dev"};
+        "/srv/salmonbus-dev/models/alighting-dev-v1", "--shared-dev"};
 
     private Map<String, String> environment(final boolean shared) {
         return new HashMap<>(Map.of(

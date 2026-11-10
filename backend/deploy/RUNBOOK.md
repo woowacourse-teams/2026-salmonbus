@@ -299,7 +299,11 @@ sudo systemctl restart salmonbus-worker
 ## 모델 계수 파일 교체
 
 ```bash
-sudo -u salmonbus cp manifest.json weights.safetensors /var/lib/salmonbus/model/current/
+# 검증한 전체 numeric bundle을 별도 디렉터리에 준비한다. manifest의 모든 참조 파일이 필요하다.
+sudo -u salmonbus cp -R /path/to/verified-bundle /var/lib/salmonbus/model/new-release
+sudo systemctl stop salmonbus-worker
+# MODEL_BUNDLE_DIRECTORY를 새 디렉터리로 지정한다. 기존 디렉터리는 보존한다.
+sudo sed -i 's|^MODEL_BUNDLE_DIRECTORY=.*|MODEL_BUNDLE_DIRECTORY=/var/lib/salmonbus/model/new-release|' /etc/salmonbus/worker.env
 sudo sed -i 's/^MODEL_BUNDLE_PROMOTE_ON_START=.*/MODEL_BUNDLE_PROMOTE_ON_START=true/' /etc/salmonbus/worker.env
 sudo systemctl restart salmonbus-worker
 # 모델 계수 적용을 확인한 뒤 반드시 다시 비활성화한다.
@@ -541,24 +545,53 @@ DELETE FROM refresh_token WHERE member_id = (SELECT id FROM member WHERE public_
 
 사용자는 스스로 `DELETE /api/me/sessions`로 다른 기기의 세션까지 끊을 수 있다.
 
-## 평가 이관과 원본 삭제
+## 운영 원본 이관
 
-worker 유닛이 `FORECAST_ARCHIVE_ENABLED=true`·`FORECAST_ARCHIVE_DELETE_ENABLED=true`로 켠다.
-검증을 마친 완료 정산을 S3 `techcourse-project-2026` 버킷의 `salmonbus-be/evaluation-archive/v1/` 아래에 올리고, 다시 내려받아 대조한 뒤 DB 원본을 지운다.
-**이 경로에는 환경 구분이 없다.** dev와 운영이 같은 접두어를 쓴다.
+Worker의 정산 단독 S3 이관은 제거했다. `archive-app`은 수집·예보와 별도 프로세스다.
+새 스키마 migration을 API에서 적용하기 전 구 Worker 이관/복원 작업과 수요 재구축을 종료한다.
+V66은 첫 데이터 변경 전에 실행 중인 구 Worker와 미완료 이관/재구축을 검사한다. 조건을 만족하지 못하면 품질 테이블과 뷰를 지우기 전에 전환을 거부한다. 기존 S3 파일은 지우지 않는다.
 
-켜 두기 전에 확인할 것:
+`deploy/package-archive-revision.sh`가 별도 JAR·unit과 소스/아티팩트 지문을 만든다.
+운영 환경을 `/etc/salmonbus/archive.env`에 설정하고 동일 환경의 새 prefix만 사용한다.
+`archive.env.example`은 값 목록이며 실사용 비밀 파일이 아니다.
+프로세스는 `/opt/salmonbus/archive/current/jars/archive-app.jar`에서 실행한다.
+unit의 256MiB heap/384MiB MemoryMax/CPUQuota=50%는 초기 제한값으로 서버 여유에 맞게 확인한다.
+DB 연결은 최대 1개이며 nice만으로 자원 격리가 된다고 보지 않는다.
 
-- 인스턴스 역할에 이 접두어의 `s3:PutObject`·`s3:GetObject` 권한이 있다
-- 버킷 수명 주기 규칙이 이 접두어의 객체를 지우지 않는다. 지우면 DB 원본을 삭제한 뒤 복구할 곳이 없다
+처음에는 ARCHIVE_ENABLED=true, ARCHIVE_DELETE_ENABLED=false로 보관·재읽기를 검증한다.
+검증된 과거 범위만 지울 때 delete-enabled를 활성화한다.
+먼저 실제 pg_indexes를 확인하고 누락된 삭제 FK 인덱스만
+`deploy/sql/prepare-operational-archive-indexes.sql`로 한 개씩 준비한다.
+큰 테이블 index는 추가 공간과 I/O를 쓰므로 여유를 확인하기 전 자동 실행하지 않는다.
+인덱스가 없으면 새 앱은 보관은 수행하되 원본 삭제를 거부한다. KST 오늘·어제는 보존한다.
+수집·새 모델 정산이 미완료인 노선은 로그에 보류 사유를 남기고 다른 노선으로 진행한다. 구 수요 통계 완료는 기다리지 않는다.
+새 모델의 `alighting_forecast_evaluation_work`도 같은 완료 조건에 포함하며 결과·구 이관 참조를 예보보다 먼저 보관·삭제한다.
+새 모델 정산 근거 중 남아 있는 관측 FK도 준비 SQL의 인덱스 검사를 통과해야 삭제할 수 있다. 정원 근거 관측 FK는 V70에서 제거하며 기존 숫자 ID는 과거 결과 해석용으로만 남긴다.
+`COLLECTION_PENDING`은 RESERVED/DISPATCHING 수집 기록이다. 예보의 2시간 정산 만료와 별개다.
+2026-11-09 읽기 전용 조사에서 과거 실패 기록 687건(모두 관측 0행)이 26개 노선 버전에 남아 있었다.
+이 기록은 이관을 막아 별도 승인한 일회성 작업으로 상태만 종료했다.
+687행을 보존했고 전송 전 중단 133건, 전송 후 결과 미확정 554건으로 구분했다.
+해당 작업의 커밋 후 재조회에서 대상 미완료는 0건이고 outcome 이외의 필드는 모두 동일했다.
+전송 전 예약과 전송 후 결과 미확인을 구분해 종료해야 하며, 오래된 요청을 다시 보내 과거 관측으로 저장하면 안 된다.
+과거 기록을 성공으로 바꾸거나 삭제하지 않는다. 이후 재발 처리는 아래 수집 회차 경계 절차를 따른다.
+삭제 전에 모델 입력 동등성, 확인된 관측 이력 체크포인트와 차량 정원 이력 인계를 확인해야 한다.
 
-끄려면 `worker.env`에 줄을 넣고 재시작한다. `worker.env`는 유닛의 `Environment=`보다 뒤에 읽혀 값을 덮는다.
-삭제만 끄면 이관은 계속하고 DB 원본은 남긴다.
+전환 기준은 Git 머지 시각이 아니라 구 Worker 이관 중지와 새 버전 배포 완료 시점이다.
+이후 archive-app은 새 prefix만 읽고 쓴다. 옛 S3 다운로드/변환/합치기는 운영 코드에 없다.
+DB에 남은 과거 원본도 기존 완료 판정에 따라 새 prefix로 이관한다. 배포 후 생성 행만으로 제한하지 않는다.
+기존 S3 파일은 배포 뒤 별도 일회성 수동 이관으로 처리한다. 구 writer 중지를 확인한 뒤
+대상 key/version/크기/해시 목록을 고정하고, 새 형식과 경로에 보관해 행 수·키·값·해시를 대조한다.
+기존 정산과 새 관측·예보는 원본 ID/대상 정류장 키로 연결하고, 중복 데이터는 키·해시로 검증한다.
+수동 작업의 완료·검증 전 기존 S3 객체나 archive_legacy_batch의 인계 메타데이터를 지우지 않는다.
+옛 멤버 행은 DB 원본과 함께 먼저 새 S3 원본 파일에 보관되므로 DB에서 삭제돼도 인계 근거는 남는다.
+기존 객체 삭제는 수동 인계 검증·읽기 전환 뒤 정확한 객체 목록으로 별도 수행한다.
+새 파일은 원본 JSONL gzip과 manifest다. 분석 Parquet는 이후 검증 원본에서 만든다.
+운영 과거 재발행·DB 복원은 중지하고 S3 기반 오프라인 작업으로 분리한다.
 
-```bash
-echo 'FORECAST_ARCHIVE_DELETE_ENABLED=false' | sudo tee -a /etc/salmonbus/worker.env >/dev/null   # 이관도 끄려면 FORECAST_ARCHIVE_ENABLED=false
-sudo systemctl restart salmonbus-worker
-```
+지표는 `event=operational_archive`의 VERIFIED_FILE/DONE/DEFERRED/FAILED와
+salmonbus_archive_rows/bytes/stage meter다. 현재 비웹 앱이므로 meter의 외부 수집은
+실행 환경에서 별도 연결해야 하며 구조화 로그는 기존 journal/Loki에서 읽는다.
+삭제는 DB 내부 재사용을 늘리며 RDS 여유 파일 공간의 즉시 축소를 보장하지 않는다.
 
 ## 인증 정보를 출력하지 않고 확인하기
 
@@ -794,3 +827,77 @@ current 심볼릭 링크가 가리키는 JAR로 실행된다
 0이 아닌 코드로 종료하면 Restart=on-failure가 재시작한다
 143으로 종료하면 SuccessExitStatus=143이 성공으로 처리한다
 ```
+
+### 운영 데이터 이관 전후 측정
+
+머지 시각이 아니라 실제 배포 revision/sourceDigest와 이관·삭제 활성화 시각을 기준으로 비교한다.
+배포 직전, 실제 S3 검증과 삭제 활성화 직후, 24시간 후에 `sql/measure-operational-archive.sql`을 같은 DB에서
+읽기 전용으로 실행하고 출력과 worker/archive의 `release-manifest.txt`를 보존한다. SQL의 건수 상한에
+도달하거나 5초 타임아웃이면 미측정으로 남긴다. 생산 원본 전체 COUNT로 확대하지 않는다.
+
+- 같은 24시간 구간의 테이블별 INSERT/DELETE 변화량, RDS 여유 공간과 DB 파일 크기를 비교한다.
+  카운터 reset/수집 공백과 저장공간 증설 여부도 확인한다. DELETE는 내부 재사용 공간을 만들지만
+  RDS 여유 공간이나 DB 파일이 즉시 줄어드는 것을 보장하지 않는다.
+- `journalctl -u salmonbus-archive.service --since '<시작 UTC>' --until '<종료 UTC>' --grep='event=operational_archive' -o json --no-pager`
+  로 배포 후 로그를 수집한다. `VERIFIED_FILE`의 rows/bytes는 파일 검증량,
+  `PURGED_FILE`의 deletedRows는 커밋된 테이블별 삭제량이며 fileBytes는 DB에서 확보한 바이트가 아니다.
+  archiveId/fileNumber로 재시도를 구분한다. 커밋 직후 프로세스가 종료되면 로그가 빠질 수 있으므로
+  작업·파일 장부와 PostgreSQL 카운터로 대조한다. DONE 로그의 durationMs는 해당 실행 시도의 시간이다.
+- `DEFERRED`의 reason/date로 수집 미완료, 정산 대기, 삭제 비활성화를 구분한다.
+  가장 오래된 날짜가 전진하는지 확인한다. 오래된 RESERVED/DISPATCHING 기록을 발견해도 측정 중 임의로 종료하거나 삭제하지 않는다.
+- 같은 시간대의 collection_route/forecast_tick/alighting_settlement_tick p95와 실패, DB CPU/잠금 대기를 같이 비교한다.
+  심야 수집 주기와 요일 차이를 구분하며, 데이터 나이를 작업 실행시간이나 처리 지연과 혼동하지 않는다.
+
+프로세스가 웹 서버를 띄우지 않으므로 내부 Micrometer meter가 Grafana에 자동으로 수집된다고 가정하지 않는다.
+현재 결과 대조는 구조화 로그와 DB 장부를 사용한다. 실제 S3 PUT/GET과 보관 원본 대조가 끝나기 전에는 삭제를 활성화하지 않는다.
+
+## 수집 실패 배치 종료와 알림
+
+수집 저장 예외가 발생하면 원래 `collection_attempt` 실패 로그를 남기고,
+별도 트랜잭션에서 해당 배치의 `outcome`만 종료 상태로 바꾼다.
+`RESERVED`는 `ABANDONED_BEFORE_SEND`, `DISPATCHING`은 `UNKNOWN_AFTER_DISPATCH`다.
+후자는 DB에 확정된 수집 결과가 없다는 뜻이며 응답 미수신·저장 실패는 원인 로그로 구분한다.
+성공 상태, 응답·입력 확정·완료 시각, 관측 또는 발행이 있는 배치는 변경하지 않는다.
+배치와 기존 시각·호출 한도는 보존하며 과거 요청을 다시 전송하지 않는다.
+
+DB 장애로 즉시 종료도 실패하면 `collection_batch_close_failed`를 기록하고 원래 수집 예외를 유지한다.
+수집 노선이 설정돼 있으면 Worker의 첫 수집 회차와 이후 매 수집 회차 시작 전에
+이전 회차에서 남은 미완료를 최대 100건씩 정리하고, 그다음 현재 노선 수집을 시작한다.
+별도 정리 스케줄이나 2시간 대기 기준은 두지 않는다. 같은 단일 수집 스레드에서 호출하며,
+구 Worker가 완전히 종료되고 같은 DB에 다른 수집 프로세스가 없어야 한다.
+병렬 Worker나 비동기 수집으로 바꾸기 전에는 작업 소유권과 종료 판정부터 다시 설계해야 한다.
+잠긴 배치는 기다리지 않고 다음 회차로 넘기며, 실제 종료 커밋 뒤 `collection_batch_recovery`에
+건수와 배치 ID 목록을 남긴다. V68의 미완료 부분 인덱스가 필요하며 V68 전환과 같이 구 Worker를
+중지한 상태에서 migration을 적용한다. 인덱스 생성은 수집 이력을 한 번 읽고 쓰기 잠금을 쓰므로
+운영 적용은 별도로 수행한다. 새 JVM을 병렬 수집자로 확장하는 임대 계약은 포함하지 않는다.
+
+알림은 기존 Grafana Discord 수신처 `salmonbus-service-discord`를 사용한다.
+`salmonbus-diag-collection-failure`는 최근 5분에 내부 수집·종료·회수 예외가 한 번이라도 발생한 경우,
+`salmonbus-diag-collection-recovery`는 이전 회차의 미완료 배치를 종료한 경우다.
+단순 정상 관측 갱신 중단은 기존 노선별 3분 중단 알림으로 계속 구분한다.
+새 규칙은 **일시 정지 상태로 준비**하며, 코드 작성이나 JSON 생성만으로 운영에 적용하지 않는다.
+Worker 배포·observability 지표 수집·실패/복구 검증 뒤 활성화한다.
+그룹 대기 30초, 묶음 간격 5분, 반복 간격 1시간을 사용하며 실제 도착 시각은 평가·수집 지연도 포함한다.
+최근 5분에 사건이 없어서 알림이 복구된 것을 DB나 GBIS 원인 해결로 해석하지 않는다.
+여기서 5분은 알림의 사건 조회·묶음 기준이며, 미완료 정리를 실행하는 주기가 아니다.
+
+Discord 알림을 받으면 DB 원인 분석 화면의 수집 실패 및 상태 종료·회수 로그에서
+`routeId`, `batchId`, `stage`, `reason`, `sqlState`를 확인한다.
+53100이면 DB 여유 공간과 `could not extend file` 로그를 확인한다. 자동 증설이나 원본 삭제는 하지 않는다.
+23503이면 `referenceRouteVersionId`, `stopOrder`, `stopId`와 노선 갱신 결과를 확인한다.
+자동 종료는 이관을 막는 상태를 정리한 것이며 수집 데이터 복원이나 원인 해결을 뜻하지 않는다.
+
+
+### 하차 반영 단일 모델 전환
+
+이번 전환은 수동 중지 후 진행한다. 구 Worker·API·archive-app과 복원 작업을 중지하고 백업한 뒤 API에서 V62~V72를 적용한다. 실행 중인 구 Worker를 새 스키마에 연결하지 않는다. 구 좌석분포 모델과 DB 수요 통계·당일 보정 계산 경로는 제거했으며 기존 배포로 되돌리는 것만으로 스키마까지 복구되지는 않는다.
+
+1. 원본 번들과 서명·해시는 그대로 보존한다. 기존 `les-*` 판본 정보는 읽을 때만 새 이름으로 해석한다.
+2. 새 모델 파일과 설정을 함께 준비하고 `alighting-online-capacity-snapshot-v2` 계산 판본으로 명시적으로 승격한다. 필요하면 기존 `MODEL_BUNDLE_PROMOTE_ON_START` 절차를 사용한다. 옛 계산 판본의 활성 배포를 단순 재시작으로 재사용하지 않는다.
+3. 확정 관측 이력 체크포인트를 검증한다. 기존 `les-confirmed-closure-v2` 디렉터리를 사용했다면 새 `alighting-confirmed-closure-v2` 위치로 파일 내용을 바꾸지 않고 준비하거나 검증된 원본에서 재생성한다. 해시 확인 전에는 원본 삭제를 켜지 않는다.
+4. Worker를 시작해 차량 정원 캐시 준비와 예보·정산을 확인한다. 예보에 저장한 정원으로 정산하며, 이후 관측이 그 정원을 넘으면 `OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT` 사유로 해당 정산을 종료한다. 과거 예보의 정원을 바꾸거나 재계산하지 않는다.
+5. archive-app은 삭제를 끈 상태로 시작한다. 오늘·어제를 남기고 이전 날짜의 수집·새 정산 완료, S3 재읽기와 해시 검증을 확인한 뒤 삭제를 활성화한다. 예보 생성 직후 원본을 삭제하는 구조가 아니다.
+
+구 모델 미완료 작업은 V70/V71에서 종료 사유를 남기며 기존 완료 결과를 재작성하지 않는다. V72는 운영 중간 통계·당일 보정 테이블을 제거한다. 이미 발행한 통계·판본·파일 발행 기록은 과거 데이터 해석용으로 유지한다.
+
+개발용 모델은 정확도 검증용이 아닌 8개 노선의 합성 숫자 모델 한 벌이다. 운영 확정 관측 모델의 지원 노선 수와 다르다. 새 개발 환경 초기화는 검증했지만 기존 불변 개발 데이터·모델 파일을 자동 덮어쓰지는 않는다. 기존 환경은 별도 새 데이터 세트로 준비하거나 명시적인 전환 절차가 필요하다.

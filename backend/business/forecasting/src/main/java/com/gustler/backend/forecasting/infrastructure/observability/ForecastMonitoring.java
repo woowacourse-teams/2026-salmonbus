@@ -1,12 +1,12 @@
 package com.gustler.backend.forecasting.infrastructure.observability;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
-import com.gustler.backend.diagnostics.WorkerOperationLog.Listener;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationDiagnostics;
 import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
 import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import com.gustler.backend.observations.api.CollectionTiming;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -32,9 +32,16 @@ import org.springframework.stereotype.Component;
 /** scrape는 메모리만 읽는다. 새로 커밋된 정산 결과를 5분 단위로 묶는다. */
 @Component
 @Profile("observability")
-public class ForecastMonitoring implements ForecastTelemetry, Listener {
+public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog.Listener {
     private static final Logger LOGGER = LoggerFactory.getLogger(ForecastMonitoring.class);
     private final MeterRegistry registry;
+    private final Counter seatReviews;
+    private final Counter seatOutliers;
+    private final AtomicLong lastSeatReview = new AtomicLong();
+    private final AtomicLong lastSeatOutlier = new AtomicLong();
+    private final AtomicLong lastCollectionFailure = new AtomicLong();
+    private final AtomicLong lastCollectionRecovery = new AtomicLong();
+    private final Counter recoveredCollections;
     private final Clock clock;
     private final JdbcTemplate catalog;
     private final Map<String, Timer> timers = new ConcurrentHashMap<>();
@@ -49,11 +56,21 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
     public ForecastMonitoring(MeterRegistry registry, DataSource dataSource, Clock clock) {
         this.registry = registry;
         this.clock = clock;
+        seatReviews = registry.counter("salmonbus.collection.seat.quality", "decision", "REVIEW");
+        seatOutliers = registry.counter("salmonbus.collection.seat.quality", "decision", "OUTLIER");
+        recoveredCollections = registry.counter("salmonbus.collection.recovered.batches");
+        Gauge.builder("salmonbus.collection.failure.last.timestamp", lastCollectionFailure, AtomicLong::get)
+            .register(registry);
+        Gauge.builder("salmonbus.collection.recovery.last.timestamp", lastCollectionRecovery, AtomicLong::get)
+            .register(registry);
+        Gauge.builder("salmonbus.collection.seat.quality.last.timestamp", lastSeatReview, AtomicLong::get)
+            .tag("decision", "REVIEW").register(registry);
+        Gauge.builder("salmonbus.collection.seat.quality.last.timestamp", lastSeatOutlier, AtomicLong::get)
+            .tag("decision", "OUTLIER").register(registry);
         catalog = new JdbcTemplate(dataSource);
         catalog.setQueryTimeout(1);
         Gauge.builder("salmonbus.collection.expected.interval.seconds",
-            () -> CollectionTiming.intervalSeconds(clock.instant()))
-            .register(registry);
+            () -> CollectionTiming.intervalSeconds(clock.instant())).register(registry);
         Gauge.builder("salmonbus.monitoring.heartbeat.timestamp", heartbeat, AtomicLong::get).register(registry);
         Gauge.builder("salmonbus.accuracy.dropped.samples", dropped, AtomicLong::get).register(registry);
     }
@@ -66,6 +83,19 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
     @PreDestroy
     void stop() {
         WorkerOperationLog.clearListener(this);
+    }
+
+    @Override
+    public void collectionSeatQuality(final int reviews, final int outliers) {
+        final long recordedAt = clock.instant().getEpochSecond();
+        if (reviews > 0) {
+            seatReviews.increment(reviews);
+            lastSeatReview.accumulateAndGet(recordedAt, Math::max);
+        }
+        if (outliers > 0) {
+            seatOutliers.increment(outliers);
+            lastSeatOutlier.accumulateAndGet(recordedAt, Math::max);
+        }
     }
 
     @Override
@@ -87,9 +117,8 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
                 continue;
             }
             Key key = new Key(result.routeId(), result.routeVersionId(), result.targetStopOrder(),
-                text(d.routeName(), "노선 정보 없음"), text(d.stopName(), "정류장 정보 없음"),
-                text(d.stopId(), "unknown"), text(d.direction(), "unknown"), d.modelDeploymentId(),
-                distance(result.stopsToTarget()));
+                text(d.routeName(), "노선 정보 없음"), text(d.stopName(), "정류장 정보 없음"), text(d.stopId(), "unknown"),
+                text(d.direction(), "unknown"), d.modelDeploymentId(), distance(result.stopsToTarget()));
             if (!accuracy.containsKey(key) && accuracy.size() >= 5000) {
                 dropped.incrementAndGet();
                 continue;
@@ -131,7 +160,7 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
         return expectedSeats >= 0;
     }
 
-    private boolean hasValidFullChance(double fullChance) {
+    private boolean hasValidFullChance(final double fullChance) {
         if (!Double.isFinite(fullChance) || fullChance < 0) {
             return false;
         }
@@ -165,17 +194,29 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
         final long nanos,
         final boolean failed
     ) {
+        if (failed && operation.startsWith("collection_")) {
+            lastCollectionFailure.accumulateAndGet(clock.instant().getEpochSecond(), Math::max);
+        }
         String outcome = operationOutcome(failed);
         String key = operation + ":" + outcome;
         if (!timers.containsKey(key) && timers.size() >= 128) {
             return;
         }
-        timers.computeIfAbsent(key, ignored -> Timer.builder("salmonbus.worker.operation")
-                .tags("operation", operation, "outcome", outcome)
+        timers.computeIfAbsent(key,
+            ignored -> Timer.builder("salmonbus.worker.operation").tags("operation", operation, "outcome", outcome)
                 .serviceLevelObjectives(Duration.ofMillis(10), Duration.ofMillis(50), Duration.ofMillis(100),
                     Duration.ofMillis(250), Duration.ofMillis(500), Duration.ofSeconds(1), Duration.ofSeconds(2),
                     Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(60))
-                .register(registry)).record(nanos, TimeUnit.NANOSECONDS);
+                .register(registry))
+            .record(nanos, TimeUnit.NANOSECONDS);
+    }
+
+    @Override
+    public void collectionRecovered(final int batches) {
+        if (batches > 0) {
+            recoveredCollections.increment(batches);
+            lastCollectionRecovery.accumulateAndGet(clock.instant().getEpochSecond(), Math::max);
+        }
     }
 
     @Override
@@ -221,8 +262,7 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
         if (operation.startsWith("forecast_") || operation.startsWith("statistics_")) {
             return true;
         }
-        return operation.equals("settlement_pending_forecasts")
-            || operation.equals("settlement_arrival_candidates");
+        return operation.equals("settlement_pending_forecasts") || operation.equals("settlement_arrival_candidates");
     }
 
     /** 활성 노선 카탈로그만 1분마다 조회한다. 평가 테이블 재스캔은 없다. */
@@ -240,11 +280,11 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
                 JOIN route_version v ON v.route_id = r.id AND v.valid_to IS NULL
                 ORDER BY r.id LIMIT 201
                 """, row -> {
-                    names.put(row.getLong("id"), row.getString("display_name"));
-                    versions.put(row.getLong("version_id"), row.getString("display_name"));
-                    sources.put(row.getString("source_route_id"), row.getLong("id"));
-                    versionIds.put(row.getLong("version_id"), row.getLong("id"));
-                });
+                names.put(row.getLong("id"), row.getString("display_name"));
+                versions.put(row.getLong("version_id"), row.getString("display_name"));
+                sources.put(row.getString("source_route_id"), row.getLong("id"));
+                versionIds.put(row.getLong("version_id"), row.getLong("id"));
+            });
             if (names.size() > 200) {
                 throw new IllegalStateException("route limit");
             }
@@ -299,17 +339,17 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
         }
         snapshot.forEach((key, t) -> LOGGER.info(
             "event=forecast_accuracy telemetrySchema=1 routeId={} routeVersionId={} stopOrder={} "
-                        + "routeName={} stopName={} stopId={} direction={} modelDeploymentId={} distance={} "
-                        + "completed={} maeCount={} absoluteErrorSum={} probabilityCount={} brierSum={} "
-                        + "predictedFullSum={} actualFullCount={}",
+                + "routeName={} stopName={} stopId={} direction={} modelDeploymentId={} distance={} "
+                + "completed={} maeCount={} absoluteErrorSum={} probabilityCount={} brierSum={} "
+                + "predictedFullSum={} actualFullCount={}",
             key.routeId, key.version, key.stop, quote(key.routeName), quote(key.stopName), quote(key.stopId),
-            quote(key.direction), key.model, key.distance, t.completed, t.maeCount, t.absoluteError,
-            t.probabilityCount, t.brierSum, t.predictedFullSum, t.actualFullCount));
+            quote(key.direction), key.model, key.distance, t.completed, t.maeCount, t.absoluteError, t.probabilityCount,
+            t.brierSum, t.predictedFullSum, t.actualFullCount));
     }
 
     static String quote(String value) {
-        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"")
-            .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\"";
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
+            .replace("\t", "\\t") + "\"";
     }
 
     private static String text(String value, String fallback) {
@@ -328,18 +368,21 @@ public class ForecastMonitoring implements ForecastTelemetry, Listener {
         }
         return "7-12";
     }
-    private record Key(long routeId, long version, int stop, String routeName, String stopName,
-        String stopId, String direction, long model, String distance) {
+
+    private record Key(long routeId, long version, int stop, String routeName, String stopName, String stopId,
+        String direction, long model, String distance) {
     }
+
     private static final class Totals {
         long completed, maeCount, probabilityCount, actualFullCount;
         double absoluteError, brierSum, predictedFullSum;
     }
+
     private static final class RouteState {
         final String name;
         volatile double committedAt = Double.NaN, nonemptyAt = Double.NaN, observedAt = Double.NaN;
         volatile double firstAttemptAt = Double.NaN, collectionAt = Double.NaN, usableRows = Double.NaN,
-        pendingAge = Double.NaN, pendingCheckedAt = Double.NaN;
+            pendingAge = Double.NaN, pendingCheckedAt = Double.NaN;
         List<Gauge> gauges = List.of();
 
         RouteState(String name) {

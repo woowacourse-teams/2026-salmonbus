@@ -9,7 +9,7 @@ record DataTarget(String url, String username, boolean shared) {
             && ("--recover-collector-only".equals(args[2]) || "--reset-generated".equals(args[2]));
         LocalData.require(args.length == 2 || shared || localOption, "LOCAL_PATHS");
         String routes = shared ? "/srv/salmonbus-dev/data/routes.json" : "/local/data/routes.json";
-        String model = shared ? "/srv/salmonbus-dev/models/reference-20261002" : ReferenceBundle.DIRECTORY;
+        String model = shared ? "/srv/salmonbus-dev/models/alighting-dev-v1" : ReferenceBundle.DIRECTORY;
         LocalData.require(routes.equals(args[0]) && model.equals(args[1]), "LOCAL_PATHS");
         String url = shared ? "jdbc:postgresql://127.0.0.1:15432/salmonbus_dev"
             : "jdbc:postgresql://postgres:5432/salmonbus_local";

@@ -17,7 +17,7 @@ class RuntimeSnapshotTest {
     void 예보_범위가_없는_배포로는_만들_수_없다() {
         // when
         Throwable caughtFailure = catchThrowable(
-            () -> new RuntimeSnapshot(DEPLOYMENT, null, input -> null, DATA_UNTIL));
+            () -> new RuntimeSnapshot(DEPLOYMENT, null, org.mockito.Mockito.mock(com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel.class), DATA_UNTIL));
 
         // then
         assertThat(caughtFailure)
@@ -29,7 +29,7 @@ class RuntimeSnapshotTest {
     void 계수_묶음의_예보_범위로_노선을_담는지_판단한다() {
         // given
         RuntimeSnapshot runtime = new RuntimeSnapshot(
-            DEPLOYMENT, new SupportedForecastScope(List.of("3330")), input -> null, DATA_UNTIL);
+            DEPLOYMENT, new SupportedForecastScope(List.of("3330")), org.mockito.Mockito.mock(com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel.class), DATA_UNTIL);
 
         // when
         final boolean covered = runtime.covers("204000057");
