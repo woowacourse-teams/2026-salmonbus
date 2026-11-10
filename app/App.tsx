@@ -26,6 +26,7 @@ import {
   initialDocumentLoad,
   noteLoadFailure,
   noteWebReady,
+  WEB_READY_TIMEOUT_MS,
 } from './notification/documentLoad';
 import { createTapInbox, type NotificationTap } from './notification/tapInbox';
 import { SETTINGS_CAPABILITIES } from './settings/settingsMessages';
@@ -82,9 +83,11 @@ export default function App() {
   const documentEpoch = useRef(0);
   const signingIn = useRef(false);
   const documentLoad = useRef(initialDocumentLoad());
+  const webReadyWait = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const showLoadFailed = () => {
+    stopWaitingForWeb();
     documentLoad.current = noteLoadFailure();
     resetNativeMap();
     setLoadFailed(true);
@@ -97,8 +100,27 @@ export default function App() {
   };
 
   function handleLoadStart() {
+    stopWaitingForWeb();
     documentLoad.current = initialDocumentLoad();
     resetNativeMap();
+  }
+
+  function handleLoadEnd(event: { nativeEvent: { url: string } }) {
+    SplashScreen.hide();
+    if (!isInAppUrl(event.nativeEvent.url) || documentLoad.current.ready || documentLoad.current.failed) return;
+    if (!notificationTaps.holding()) return;
+    stopWaitingForWeb();
+    const epoch = documentEpoch.current;
+    webReadyWait.current = setTimeout(() => {
+      webReadyWait.current = null;
+      if (documentEpoch.current === epoch && !documentLoad.current.ready && notificationTaps.holding()) showLoadFailed();
+    }, WEB_READY_TIMEOUT_MS);
+  }
+
+  function stopWaitingForWeb() {
+    if (webReadyWait.current === null) return;
+    clearTimeout(webReadyWait.current);
+    webReadyWait.current = null;
   }
 
   function resetNativeMap() {
@@ -151,6 +173,7 @@ export default function App() {
     'notification.getRegistration': (requestId) => replyRegistration(requestId, { ask: false }),
     'notification.takeOpened': (requestId) => {
       documentLoad.current = noteWebReady(documentLoad.current);
+      if (documentLoad.current.ready) stopWaitingForWeb();
       const tap = documentLoad.current.ready ? notificationTaps.take() : null;
       sendOpened(requestId, tap?.target ?? null);
     },
@@ -224,7 +247,7 @@ export default function App() {
       injectedJavaScriptBeforeContentLoadedForMainFrameOnly
       onMessage={handleMessage}
       onLoadStart={handleLoadStart}
-      onLoadEnd={SplashScreen.hide}
+      onLoadEnd={handleLoadEnd}
       onError={showLoadFailed}
       onHttpError={showLoadFailed}
       onContentProcessDidTerminate={reloadWebView}

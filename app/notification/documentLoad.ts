@@ -1,3 +1,5 @@
+export const WEB_READY_TIMEOUT_MS = 10_000;
+
 export interface DocumentLoadState {
   ready: boolean;
   failed: boolean;

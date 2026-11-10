@@ -22,6 +22,10 @@ export function createTapInbox(now: () => number = Date.now) {
     return 'held';
   }
 
+  function holding(): boolean {
+    return held !== null && now() - held.receivedAt < TAP_RETENTION_MS;
+  }
+
   function take(): NotificationTap | null {
     const pending = held;
     held = null;
@@ -29,5 +33,5 @@ export function createTapInbox(now: () => number = Date.now) {
     return pending.tap;
   }
 
-  return { receive, take };
+  return { receive, holding, take };
 }
