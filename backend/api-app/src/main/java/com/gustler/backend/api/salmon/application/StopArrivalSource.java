@@ -1,8 +1,8 @@
 package com.gustler.backend.api.salmon.application;
 
-import com.gustler.backend.api.salmon.domain.ActionModel.MissingReason;
-import com.gustler.backend.api.salmon.domain.ActionModel.StopList;
-import com.gustler.backend.api.salmon.domain.ActionModel.Unavailable;
+import com.gustler.backend.api.salmon.domain.Fields.MissingReason;
+import com.gustler.backend.api.salmon.domain.StopLists.StopList;
+import com.gustler.backend.api.salmon.domain.StopLists.Unavailable;
 import java.time.Instant;
 
 /** 정류장 도착 목록을 주는 포트. */

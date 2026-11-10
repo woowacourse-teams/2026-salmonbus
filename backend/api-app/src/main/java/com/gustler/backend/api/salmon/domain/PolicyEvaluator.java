@@ -1,10 +1,18 @@
 package com.gustler.backend.api.salmon.domain;
 
-import com.gustler.backend.api.salmon.domain.ActionModel.*;
+import com.gustler.backend.api.salmon.domain.Candidates.*;
+import com.gustler.backend.api.salmon.domain.Fields.*;
+import com.gustler.backend.api.salmon.domain.Probabilities.*;
+import com.gustler.backend.api.salmon.domain.StopLists.*;
+import com.gustler.backend.api.salmon.domain.Timing.*;
+import com.gustler.backend.api.salmon.domain.Verdicts.*;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Stream;
@@ -27,40 +35,44 @@ final class PolicyEvaluator {
     }
 
     Outcome stay(StopList list) {
-        return singleList(list, new Offset(0), false, false);
+        return singleList(list, ListRole.CURRENT, Gap.CURRENT_STOP, new Offset(0), false, false);
     }
 
     Outcome walk(WalkCandidate candidate) {
         Optional<Span> walk = candidate.walk().present();
         if (walk.isEmpty()) {
-            return Outcome.of(new Insufficient(List.of("walk time of " + candidate.id())));
+            return Outcome.of(new Insufficient(List.of(
+                new Gap(GapKind.TIME_UNKNOWN, candidate.id(), candidate.walk().missingReason()))));
         }
         Offset ready = new Offset(0).plus(config.readyAfterWalk(walk.get()));
-        return singleList(candidate.list(), ready, true, candidate.walk().isDerived());
+        return singleList(candidate.list(), ListRole.WALK, candidate.id(), ready, true,
+            candidate.walk().isDerived());
     }
 
     Outcome reboard(ReboardCandidate candidate) {
         return new ReboardRun(candidate).run();
     }
 
-    private Outcome singleList(StopList list, Offset ready, boolean withMargin, boolean upstreamDerived) {
+    private Outcome singleList(StopList list, ListRole role, String subject, Offset ready,
+                               boolean withMargin, boolean upstreamDerived) {
         if (list instanceof Unavailable unavailable) {
-            return Outcome.of(new Insufficient(List.of("list unavailable: " + unavailable.reason())));
+            return Outcome.of(new Insufficient(List.of(
+                new Gap(GapKind.LIST_UNAVAILABLE, role, subject, Optional.of(unavailable.reason())))));
         }
         Window window = Window.of(list.entries(), ready, config.horizon());
         if (!window.unresolved().isEmpty()) {
-            return Outcome.of(new Insufficient(window.unresolved().stream()
-                .map(id -> "arrival of " + id).toList()));
+            return Outcome.of(new Insufficient(window.unresolved().stream().map(entry -> arrivalGap(role, entry))
+                .toList()));
         }
         TimeBasis basis = upstreamDerived || window.derivedIn() ? TimeBasis.DERIVED : TimeBasis.DIRECT;
         if (window.attempts().isEmpty()) {
             Evaluation evaluation = coversWindow(list)
                 ? new ConfirmedEmpty(basis)
-                : new Insufficient(List.of("list does not cover the window"));
+                : new Insufficient(List.of(new Gap(GapKind.LIST_NOT_COVERING_WINDOW, role, subject)));
             return new Outcome(evaluation, List.of(), List.of(), Optional.empty(), Optional.empty(), List.of());
         }
         List<Slot> slots = slotsOf(window.attempts(), window.missed(), Optional.empty());
-        Evaluation evaluation = solve(resolver -> riskOf(slots, resolver), basis, List.of());
+        Evaluation evaluation = solve(resolver -> riskOf(slots, resolver), basis, subject, List.of());
         List<Attempt> trail = window.attempts().stream().map(PolicyEvaluator::attemptOf).toList();
         if (!withMargin) {
             return new Outcome(evaluation, trail, List.of(), Optional.empty(), Optional.empty(),
@@ -108,11 +120,12 @@ final class PolicyEvaluator {
          */
         Outcome run() {
             if (candidate.opposite() instanceof Unavailable unavailable) {
-                return missing("opposite list unavailable: " + unavailable.reason());
+                return missing(new Gap(GapKind.LIST_UNAVAILABLE, ListRole.OPPOSITE, candidate.id(),
+                    Optional.of(unavailable.reason())));
             }
             Window oppositeWindow = Window.of(candidate.opposite().entries(), new Offset(0), config.horizon());
             if (!oppositeWindow.unresolved().isEmpty()) {
-                return missing("opposite arrival of " + oppositeWindow.unresolved().get(0));
+                return missing(arrivalGap(ListRole.OPPOSITE, oppositeWindow.unresolved().get(0)));
             }
             Reach reach = reachOf(oppositeWindow);
             if (reach.boardable().stream().noneMatch(this::returnsWithinHorizonAtBest)) {
@@ -121,23 +134,32 @@ final class PolicyEvaluator {
             Optional<Span> ride = candidate.rideTime().present();
             Optional<Span> walkAfter = candidate.walkAfterAlight().present();
             if (candidate.walkToOpposite().present().isEmpty() || ride.isEmpty() || walkAfter.isEmpty()) {
-                return missing("walk or ride time of " + candidate.id());
+                return missing(new Gap(GapKind.TIME_UNKNOWN, candidate.id(), firstMissingTimeReason()));
             }
             if (candidate.reboard() instanceof Unavailable unavailable) {
-                return missing("reboard list unavailable: " + unavailable.reason());
+                return missing(new Gap(GapKind.LIST_UNAVAILABLE, ListRole.REBOARD, candidate.id(),
+                    Optional.of(unavailable.reason())));
             }
             Window reboardWindow = Window.of(candidate.reboard().entries(), new Offset(0), config.horizon());
             if (!reboardWindow.unresolved().isEmpty()) {
-                return missing("reboard arrival of " + reboardWindow.unresolved().get(0));
+                return missing(arrivalGap(ListRole.REBOARD, reboardWindow.unresolved().get(0)));
             }
             Branches branches = branchesOf(reach.boardable(), ride.get(), walkAfter.get(), reboardWindow);
-            if (branches.boundarySlots().stream().anyMatch(slot -> supply.valueFor(slot) instanceof Absent)) {
-                return missing("probabilities for boundary branches of " + candidate.id());
+            List<Gap> absentBoundary = branches.boundarySlots().stream()
+                .filter(slot -> supply.valueFor(slot) instanceof Absent)
+                .map(slot -> new Gap(GapKind.PROBABILITY_UNKNOWN, slot.attempt())).toList();
+            if (!absentBoundary.isEmpty()) {
+                return Outcome.of(new Insufficient(absentBoundary));
             }
             if (branches.included().isEmpty()) {
                 return emptyOrUncovered(reach.boardable());
             }
             return outcomeOf(reach, branches.included(), reboardWindow);
+        }
+
+        private Optional<MissingReason> firstMissingTimeReason() {
+            return Stream.of(candidate.walkToOpposite(), candidate.rideTime(), candidate.walkAfterAlight())
+                .map(Field::missingReason).flatMap(Optional::stream).findFirst();
         }
 
         private Reach reachOf(Window oppositeWindow) {
@@ -173,7 +195,7 @@ final class PolicyEvaluator {
             boolean reboardCovers = coversWindow(candidate.reboard());
             TimeBasis basis = reboardBasis(reach.boardable(), reboardWindow);
             Evaluation evaluation = solve(resolver -> reboardRisk(chain, included, reboardCovers, resolver), basis,
-                List.of("reboard list does not cover the window"));
+                candidate.id(), List.of(new Gap(GapKind.LIST_NOT_COVERING_WINDOW, ListRole.REBOARD, candidate.id())));
             List<MarginItem> items = marginsOf(reach.t1(), chain, included);
             List<ReboardBranch> branches = included.stream().map(Included::branch).toList();
             List<Attempt> attempts = branches.stream().map(ReboardBranch::boarded).toList();
@@ -182,7 +204,7 @@ final class PolicyEvaluator {
         }
 
         private List<MarginItem> marginsOf(Offset t1, List<Slot> chain, List<Included> included) {
-            List<Double> chances = branchChances(chain, new Resolver(java.util.Map.of()));
+            List<Double> chances = branchChances(chain, new Resolver(Map.of()));
             List<MarginItem> items = new ArrayList<>();
             for (int index = 0; index < included.size(); index++) {
                 if (chances.get(index) <= 0) {
@@ -203,7 +225,7 @@ final class PolicyEvaluator {
             return coversWindow(candidate.opposite())
                 ? new Outcome(new ConfirmedEmpty(timeBasis(boardable)), List.of(), List.of(), Optional.empty(),
                     Optional.empty(), List.of())
-                : missing("opposite list does not cover the window");
+                : missing(new Gap(GapKind.LIST_NOT_COVERING_WINDOW, ListRole.OPPOSITE, candidate.id()));
         }
 
         private boolean returnsWithinHorizonAtBest(StopEntry entry) {
@@ -272,8 +294,8 @@ final class PolicyEvaluator {
                 ? TimeBasis.DERIVED : TimeBasis.DIRECT;
         }
 
-        private Outcome missing(String what) {
-            return Outcome.of(new Insufficient(List.of(what)));
+        private Outcome missing(Gap gap) {
+            return Outcome.of(new Insufficient(List.of(gap)));
         }
     }
 
@@ -300,8 +322,8 @@ final class PolicyEvaluator {
         for (StopEntry attempt : attempts) {
             SlotKind kind = !failed.isEmpty() ? SlotKind.S_FAIL
                 : !skipped.isEmpty() ? SlotKind.S_MISS : SlotKind.S_FIRST;
-            ConditionHistory condition = new ConditionHistory(epoch, new java.util.HashSet<>(failed),
-                new java.util.HashSet<>(skipped), oppositeBoarded);
+            ConditionHistory condition = new ConditionHistory(epoch, new HashSet<>(failed),
+                new HashSet<>(skipped), oppositeBoarded);
             slots.add(new Slot(attempt.id(), kind, condition));
             failed.add(attempt.id());
         }
@@ -316,40 +338,49 @@ final class PolicyEvaluator {
         return risk;
     }
 
-    private Evaluation solve(ToDoubleFunction<Resolver> risk, TimeBasis basis, List<String> undefinedReasons) {
-        Resolver probe = new Resolver(java.util.Map.of());
+    private Evaluation solve(ToDoubleFunction<Resolver> risk, TimeBasis basis, String subject,
+                             List<Gap> undefinedGaps) {
+        Resolver probe = new Resolver(Map.of());
         risk.applyAsDouble(probe);
         List<Slot> unresolved = List.copyOf(probe.unresolved());
         if (unresolved.size() > MAX_UNRESOLVED_SLOTS) {
-            return new Insufficient(List.of("too many unresolved probabilities"));
+            return new Insufficient(List.of(new Gap(GapKind.TOO_MANY_UNKNOWN_PROBABILITIES, subject)));
         }
         Double agreed = null;
         for (int mask = 0; mask < 1 << unresolved.size(); mask++) {
-            java.util.Map<Slot, Double> substitution = new java.util.HashMap<>();
+            Map<Slot, Double> substitution = new HashMap<>();
             for (int index = 0; index < unresolved.size(); index++) {
                 substitution.put(unresolved.get(index), (mask >> index & 1) == 1 ? 1.0 : 0.0);
             }
             double value = risk.applyAsDouble(new Resolver(substitution));
             if (Double.isNaN(value)) {
-                return new Insufficient(Stream.concat(
-                    unresolved.stream().map(slot -> "probability of " + slot.attempt()), undefinedReasons.stream()).toList());
+                return new Insufficient(Stream.concat(probabilityGaps(unresolved).stream(), undefinedGaps.stream())
+                    .toList());
             }
             if (agreed == null) {
                 agreed = value;
             } else if (Math.abs(agreed - value) > EPSILON) {
-                return new Insufficient(unresolved.stream().map(slot -> "probability of " + slot.attempt()).toList());
+                return new Insufficient(probabilityGaps(unresolved));
             }
         }
         Assumption assumption = probe.independent() ? Assumption.INDEP : Assumption.EXACT;
         return new Evaluable(agreed, assumption, basis);
     }
 
+    private static List<Gap> probabilityGaps(List<Slot> slots) {
+        return slots.stream().map(slot -> new Gap(GapKind.PROBABILITY_UNKNOWN, slot.attempt())).toList();
+    }
+
+    private static Gap arrivalGap(ListRole role, StopEntry entry) {
+        return new Gap(GapKind.ARRIVAL_UNKNOWN, role, entry.id(), entry.arrival().missingReason());
+    }
+
     private final class Resolver {
-        private final java.util.Map<Slot, Double> substitution;
+        private final Map<Slot, Double> substitution;
         private final LinkedHashSet<Slot> unresolved = new LinkedHashSet<>();
         private boolean independent;
 
-        Resolver(java.util.Map<Slot, Double> substitution) {
+        Resolver(Map<Slot, Double> substitution) {
             this.substitution = substitution;
         }
 
@@ -376,16 +407,16 @@ final class PolicyEvaluator {
         }
     }
 
-    private record Window(List<StopEntry> resolved, List<String> unresolved, Offset ready, Offset horizon) {
+    private record Window(List<StopEntry> resolved, List<StopEntry> unresolved, Offset ready, Offset horizon) {
         static Window of(List<StopEntry> entries, Offset ready, Offset horizon) {
             List<StopEntry> resolved = new ArrayList<>();
-            List<String> unresolved = new ArrayList<>();
+            List<StopEntry> unresolved = new ArrayList<>();
             for (StopEntry entry : entries) {
                 Optional<Offset> point = entry.arrival().present();
                 boolean boundary = point.isPresent() && entry.arrival().isDerived()
                     && point.get().compareTo(horizon) > 0 && lowerOffset(entry.arrival()).compareTo(horizon) <= 0;
                 if (point.isEmpty() || boundary) {
-                    unresolved.add(entry.id());
+                    unresolved.add(entry);
                 } else {
                     resolved.add(entry);
                 }

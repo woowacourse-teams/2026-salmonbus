@@ -1,4 +1,4 @@
-package com.gustler.backend.api.salmon.domain;
+package com.gustler.backend.api.salmon.guidance;
 
 import static com.gustler.backend.api.salmon.domain.ActionFixture.config;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.entry;
@@ -8,7 +8,14 @@ import static com.gustler.backend.api.salmon.domain.ActionFixture.queried;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
-import com.gustler.backend.api.salmon.domain.ActionModel.*;
+import com.gustler.backend.api.salmon.domain.ActionConfig;
+import com.gustler.backend.api.salmon.domain.ActionFixture;
+import com.gustler.backend.api.salmon.domain.ActionJudge;
+import com.gustler.backend.api.salmon.domain.Candidates.*;
+import com.gustler.backend.api.salmon.domain.Fields.*;
+import com.gustler.backend.api.salmon.domain.Probabilities.*;
+import com.gustler.backend.api.salmon.domain.StopLists.*;
+import com.gustler.backend.api.salmon.domain.Verdicts.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;

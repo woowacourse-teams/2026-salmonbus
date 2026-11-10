@@ -4,8 +4,9 @@ import static com.gustler.backend.api.salmon.domain.ActionFixture.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
-import com.gustler.backend.api.salmon.domain.ActionModel.*;
 import com.gustler.backend.api.salmon.domain.LeafOracle.Leaf;
+import com.gustler.backend.api.salmon.domain.Probabilities.*;
+import com.gustler.backend.api.salmon.domain.Verdicts.*;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;

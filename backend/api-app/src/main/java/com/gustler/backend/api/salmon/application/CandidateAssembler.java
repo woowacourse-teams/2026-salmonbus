@@ -2,11 +2,11 @@ package com.gustler.backend.api.salmon.application;
 
 import com.gustler.backend.api.salmon.application.WalkOption.Relation;
 import com.gustler.backend.api.salmon.domain.ActionJudge.Listed;
-import com.gustler.backend.api.salmon.domain.ActionModel.Candidate;
-import com.gustler.backend.api.salmon.domain.ActionModel.Observed;
-import com.gustler.backend.api.salmon.domain.ActionModel.ProbabilitySupply;
-import com.gustler.backend.api.salmon.domain.ActionModel.Span;
-import com.gustler.backend.api.salmon.domain.ActionModel.WalkCandidate;
+import com.gustler.backend.api.salmon.domain.Candidates.Candidate;
+import com.gustler.backend.api.salmon.domain.Candidates.WalkCandidate;
+import com.gustler.backend.api.salmon.domain.Fields.Observed;
+import com.gustler.backend.api.salmon.domain.Probabilities.ProbabilitySupply;
+import com.gustler.backend.api.salmon.domain.Timing.Span;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;

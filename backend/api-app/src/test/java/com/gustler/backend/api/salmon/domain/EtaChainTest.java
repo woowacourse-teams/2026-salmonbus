@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.api.salmon.domain.EtaChain.Arrival;
 import com.gustler.backend.api.salmon.domain.EtaChain.Known;
-import com.gustler.backend.api.salmon.domain.EtaChain.Missing;
 import com.gustler.backend.api.salmon.domain.EtaChain.Observation;
 import com.gustler.backend.api.salmon.domain.EtaChain.Pattern;
 import com.gustler.backend.api.salmon.domain.EtaChain.Reason;
 import com.gustler.backend.api.salmon.domain.EtaChain.Run;
 import com.gustler.backend.api.salmon.domain.EtaChain.Segment;
+import com.gustler.backend.api.salmon.domain.EtaChain.Unresolved;
 import com.gustler.backend.api.salmon.domain.EtaChain.Visit;
 import java.time.Duration;
 import java.time.Instant;
@@ -35,14 +35,14 @@ class EtaChainTest {
     void 다른_차량을_같은_운행으로_차분하지_않는다() {
         Run other = new Run(UP, "other", "trip");
         assertThat(EtaChain.sameRun(observation("five", VEHICLE, 5, 5),
-            observation("eight", other, 8, 11))).isEqualTo(new Missing<>(Reason.RUN_MISMATCH));
+            observation("eight", other, 8, 11))).isEqualTo(new Unresolved<>(Reason.RUN_MISMATCH));
     }
 
     @Test
     void 같은_차량의_다른_운행도_구분한다() {
         Run nextTrip = new Run(UP, "vehicle", "next-trip");
         assertThat(EtaChain.sameRun(observation("five", VEHICLE, 5, 5),
-            observation("eight", nextTrip, 8, 11))).isEqualTo(new Missing<>(Reason.RUN_MISMATCH));
+            observation("eight", nextTrip, 8, 11))).isEqualTo(new Unresolved<>(Reason.RUN_MISMATCH));
     }
 
     @Test
@@ -50,7 +50,7 @@ class EtaChainTest {
         Observation later = new Observation("later", VEHICLE, visit(8), BASE.plusSeconds(30),
             BASE.plusSeconds(660), Optional.of(Duration.ofSeconds(5)));
         assertThat(EtaChain.sameRun(observation("five", VEHICLE, 5, 5), later))
-            .isEqualTo(new Missing<>(Reason.INFORMATION_MISMATCH));
+            .isEqualTo(new Unresolved<>(Reason.INFORMATION_MISMATCH));
     }
 
     @Test
@@ -69,21 +69,21 @@ class EtaChainTest {
             BASE.plusSeconds(300), Optional.empty());
         assertThat(EtaChain.align(unknown, observation("eight", VEHICLE, 8, 11),
             Duration.ofSeconds(20), "revision-sample"))
-            .isEqualTo(new Missing<>(Reason.NO_ERROR_BOUND));
+            .isEqualTo(new Unresolved<>(Reason.NO_ERROR_BOUND));
     }
 
     @Test
     void 음수_차분을_영으로_보정하지_않는다() {
         assertThat(EtaChain.sameRun(observation("five", VEHICLE, 5, 11),
             observation("eight", VEHICLE, 8, 5)))
-            .isEqualTo(new Missing<>(Reason.PREDICTION_CONFLICT));
+            .isEqualTo(new Unresolved<>(Reason.PREDICTION_CONFLICT));
     }
 
     @Test
     void 역방향_순번을_거부한다() {
         assertThat(EtaChain.sameRun(observation("eight", VEHICLE, 8, 5),
             observation("five", VEHICLE, 5, 11)))
-            .isEqualTo(new Missing<>(Reason.SEQUENCE_MISMATCH));
+            .isEqualTo(new Unresolved<>(Reason.SEQUENCE_MISMATCH));
     }
 
     @Test
@@ -107,7 +107,7 @@ class EtaChainTest {
         Segment first = segment(5, 7);
         Segment second = segment(8, 10);
         assertThat(EtaChain.stitch(List.of(first, second), Duration.ZERO, "transfer-study"))
-            .isEqualTo(new Missing<>(Reason.COVER_BROKEN));
+            .isEqualTo(new Unresolved<>(Reason.COVER_BROKEN));
     }
 
     @Test
@@ -117,7 +117,7 @@ class EtaChainTest {
         Segment second = known(EtaChain.sameRun(observation("eight", other, 8, 2),
             observation("ten", other, 10, 6)));
         assertThat(EtaChain.stitch(List.of(segment(5, 8), second), Duration.ZERO, "transfer-study"))
-            .isEqualTo(new Missing<>(Reason.PATTERN_MISMATCH));
+            .isEqualTo(new Unresolved<>(Reason.PATTERN_MISMATCH));
     }
 
     @Test
@@ -126,27 +126,27 @@ class EtaChainTest {
             BASE.plusSeconds(300), Optional.empty());
         Segment first = known(EtaChain.sameRun(unknown, observation("eight", VEHICLE, 8, 11)));
         assertThat(EtaChain.stitch(List.of(first, segment(8, 10)), Duration.ZERO, "transfer-study"))
-            .isEqualTo(new Missing<>(Reason.NO_ERROR_BOUND));
+            .isEqualTo(new Unresolved<>(Reason.NO_ERROR_BOUND));
     }
 
     @Test
     void 다른_차량의_단일_구간을_이전_근거_없이_복원에_쓰지_않는다() {
         Run other = new Run(UP, "other", "other-trip");
         assertThat(EtaChain.restore(observation("anchor", other, 5, 5), segment(5, 8)))
-            .isEqualTo(new Missing<>(Reason.RUN_MISMATCH));
+            .isEqualTo(new Unresolved<>(Reason.RUN_MISMATCH));
     }
 
     @Test
     void 같은_차량이어도_새_관측에_예전_차분을_그대로_붙이지_않는다() {
         Observation refreshed = observation("refreshed", VEHICLE, 5, 6);
         assertThat(EtaChain.restore(refreshed, segment(5, 8)))
-            .isEqualTo(new Missing<>(Reason.INFORMATION_MISMATCH));
+            .isEqualTo(new Unresolved<>(Reason.INFORMATION_MISMATCH));
     }
 
     @Test
     void 빈_구간_목록은_성공한_복원이_아니다() {
         assertThat(EtaChain.stitch(List.of(), Duration.ZERO, "transfer-study"))
-            .isEqualTo(new Missing<>(Reason.COVER_BROKEN));
+            .isEqualTo(new Unresolved<>(Reason.COVER_BROKEN));
     }
 
     @Test
@@ -181,7 +181,7 @@ class EtaChainTest {
         Observation wide = new Observation("from-5", VEHICLE, visit(5), BASE, BASE.plusSeconds(300),
             Optional.of(Duration.ofSeconds(60)));
 
-        assertThat(EtaChain.restore(wide, segment(5, 8))).isEqualTo(new Missing<>(Reason.INFORMATION_MISMATCH));
+        assertThat(EtaChain.restore(wide, segment(5, 8))).isEqualTo(new Unresolved<>(Reason.INFORMATION_MISMATCH));
     }
 
     private static Segment segment(int from, int to) {

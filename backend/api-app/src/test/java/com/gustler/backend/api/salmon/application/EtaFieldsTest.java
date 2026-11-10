@@ -2,20 +2,21 @@ package com.gustler.backend.api.salmon.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.api.salmon.domain.ActionModel.Derived;
-import com.gustler.backend.api.salmon.domain.ActionModel.Field;
-import com.gustler.backend.api.salmon.domain.ActionModel.Finite;
-import com.gustler.backend.api.salmon.domain.ActionModel.Missing;
-import com.gustler.backend.api.salmon.domain.ActionModel.MissingReason;
-import com.gustler.backend.api.salmon.domain.ActionModel.NoBound;
-import com.gustler.backend.api.salmon.domain.ActionModel.Span;
 import com.gustler.backend.api.salmon.domain.EtaChain;
 import com.gustler.backend.api.salmon.domain.EtaChain.Known;
 import com.gustler.backend.api.salmon.domain.EtaChain.Pattern;
 import com.gustler.backend.api.salmon.domain.EtaChain.Reason;
 import com.gustler.backend.api.salmon.domain.EtaChain.Run;
 import com.gustler.backend.api.salmon.domain.EtaChain.Segment;
+import com.gustler.backend.api.salmon.domain.EtaChain.Unresolved;
 import com.gustler.backend.api.salmon.domain.EtaChain.Visit;
+import com.gustler.backend.api.salmon.domain.Fields.Derived;
+import com.gustler.backend.api.salmon.domain.Fields.Field;
+import com.gustler.backend.api.salmon.domain.Fields.Finite;
+import com.gustler.backend.api.salmon.domain.Fields.Missing;
+import com.gustler.backend.api.salmon.domain.Fields.MissingReason;
+import com.gustler.backend.api.salmon.domain.Fields.NoBound;
+import com.gustler.backend.api.salmon.domain.Timing.Span;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -41,15 +42,15 @@ class EtaFieldsTest {
 
     @Test
     void 이어붙이지_못한_구간은_사유를_옮긴_결측이다() {
-        assertThat(EtaFields.rideTime(new EtaChain.Missing<>(Reason.COVER_BROKEN)))
+        assertThat(EtaFields.rideTime(new Unresolved<>(Reason.COVER_BROKEN)))
             .isEqualTo(new Missing<>(MissingReason.COVER_BROKEN));
-        assertThat(EtaFields.rideTime(new EtaChain.Missing<>(Reason.NO_ERROR_BOUND)))
+        assertThat(EtaFields.rideTime(new Unresolved<>(Reason.NO_ERROR_BOUND)))
             .isEqualTo(new Missing<>(MissingReason.NO_ERROR_BOUND));
-        assertThat(EtaFields.rideTime(new EtaChain.Missing<>(Reason.RUN_MISMATCH)))
+        assertThat(EtaFields.rideTime(new Unresolved<>(Reason.RUN_MISMATCH)))
             .isEqualTo(new Missing<>(MissingReason.UNIDENTIFIED_VEHICLE));
-        assertThat(EtaFields.rideTime(new EtaChain.Missing<>(Reason.SEQUENCE_MISMATCH)))
+        assertThat(EtaFields.rideTime(new Unresolved<>(Reason.SEQUENCE_MISMATCH)))
             .isEqualTo(new Missing<>(MissingReason.UNVERIFIED_SEQUENCE));
-        assertThat(EtaFields.rideTime(new EtaChain.Missing<>(Reason.INFORMATION_MISMATCH)))
+        assertThat(EtaFields.rideTime(new Unresolved<>(Reason.INFORMATION_MISMATCH)))
             .isEqualTo(new Missing<>(MissingReason.INFORMATION_TIME_MISMATCH));
     }
 

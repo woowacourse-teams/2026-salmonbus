@@ -1,8 +1,8 @@
 package com.gustler.backend.api.salmon.domain;
 
-import com.gustler.backend.api.salmon.domain.ActionModel.CandidateKind;
-import com.gustler.backend.api.salmon.domain.ActionModel.Offset;
-import com.gustler.backend.api.salmon.domain.ActionModel.Span;
+import com.gustler.backend.api.salmon.domain.Candidates.CandidateKind;
+import com.gustler.backend.api.salmon.domain.Timing.Offset;
+import com.gustler.backend.api.salmon.domain.Timing.Span;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;

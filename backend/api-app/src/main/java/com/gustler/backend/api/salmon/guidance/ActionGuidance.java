@@ -1,6 +1,9 @@
-package com.gustler.backend.api.salmon.domain;
+package com.gustler.backend.api.salmon.guidance;
 
-import com.gustler.backend.api.salmon.domain.ActionModel.*;
+import com.gustler.backend.api.salmon.domain.ActionConfig;
+import com.gustler.backend.api.salmon.domain.Candidates.*;
+import com.gustler.backend.api.salmon.domain.Timing.*;
+import com.gustler.backend.api.salmon.domain.Verdicts.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;

@@ -12,7 +12,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import com.gustler.backend.api.salmon.domain.ActionJudge.Failed;
-import com.gustler.backend.api.salmon.domain.ActionModel.*;
+import com.gustler.backend.api.salmon.domain.Candidates.*;
+import com.gustler.backend.api.salmon.domain.Fields.*;
+import com.gustler.backend.api.salmon.domain.Probabilities.*;
+import com.gustler.backend.api.salmon.domain.StopLists.*;
+import com.gustler.backend.api.salmon.domain.Timing.*;
+import com.gustler.backend.api.salmon.domain.Verdicts.*;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -91,6 +96,8 @@ class ActionJudgeTest {
 
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE);
         assertThat(recordOf(verdict, "reboard").admissibility()).isEqualTo(Admissibility.UNCONFIRMED);
+        assertThat(gapsOf(recordOf(verdict, "reboard").outcome()))
+            .containsExactly(new Gap(GapKind.TIME_UNKNOWN, "reboard", Optional.of(MissingReason.NOT_PROVIDED)));
     }
 
     @Test
@@ -112,6 +119,8 @@ class ActionJudgeTest {
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config, fixture.source(fixture.reboardCandidate()));
 
         assertThat(recordOf(verdict, "reboard").admissibility()).isEqualTo(Admissibility.VIOLATED);
+        assertThat(gapsOf(recordOf(verdict, "reboard").outcome()))
+            .containsExactly(new Gap(GapKind.ADMISSIBILITY_VIOLATED, "reboard"));
         assertThat(verdict.code()).isEqualTo(ReasonCode.NO_MOVE_INFEASIBLE);
     }
 
@@ -256,6 +265,9 @@ class ActionJudgeTest {
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(15, 8), ActionFixture.neverCalled());
 
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_STAY_UNDEFINED);
+        assertThat(gapsOf(verdict.stay())).containsExactly(
+            new Gap(GapKind.LIST_UNAVAILABLE, ListRole.CURRENT, Gap.CURRENT_STOP,
+                Optional.of(MissingReason.QUERY_FAILED)));
     }
 
     @Test
@@ -275,6 +287,8 @@ class ActionJudgeTest {
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(15, 8), ActionFixture.neverCalled());
 
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_STAY_UNDEFINED);
+        assertThat(gapsOf(verdict.stay())).containsExactly(
+            new Gap(GapKind.LIST_NOT_COVERING_WINDOW, ListRole.CURRENT, Gap.CURRENT_STOP));
     }
 
     @Test
@@ -344,7 +358,8 @@ class ActionJudgeTest {
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(20, 8), fixture.source(fixture.reboardCandidate()));
 
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE);
-        assertThat(recordOf(verdict, "reboard").outcome().evaluation()).isInstanceOf(Insufficient.class);
+        assertThat(gapsOf(recordOf(verdict, "reboard").outcome()))
+            .containsExactly(new Gap(GapKind.PROBABILITY_UNKNOWN, "b-19"));
     }
 
     @Test
@@ -384,7 +399,8 @@ class ActionJudgeTest {
         fixture.reboard = new Unavailable(MissingReason.QUERY_FAILED);
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(12, 8), fixture.source(fixture.reboardCandidate()));
 
-        assertThat(recordOf(verdict, "reboard").outcome().evaluation()).isInstanceOf(Insufficient.class);
+        assertThat(gapsOf(recordOf(verdict, "reboard").outcome())).containsExactly(new Gap(GapKind.LIST_UNAVAILABLE,
+            ListRole.REBOARD, "reboard", Optional.of(MissingReason.QUERY_FAILED)));
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE);
     }
 
@@ -393,7 +409,8 @@ class ActionJudgeTest {
         ActionFixture fixture = boundaryFixture();
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(12, 8), fixture.source(fixture.reboardCandidate()));
 
-        assertThat(recordOf(verdict, "reboard").outcome().evaluation()).isInstanceOf(Insufficient.class);
+        assertThat(gapsOf(recordOf(verdict, "reboard").outcome()))
+            .containsExactly(new Gap(GapKind.PROBABILITY_UNKNOWN, "b-11"));
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE);
     }
 
@@ -427,9 +444,8 @@ class ActionJudgeTest {
 
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(20, 8), fixture.source(fixture.reboardCandidate()));
 
-        Evaluation evaluation = recordOf(verdict, "reboard").outcome().evaluation();
-        assertThat(evaluation).isInstanceOf(Insufficient.class);
-        assertThat(((Insufficient) evaluation).missing()).contains("reboard list does not cover the window");
+        assertThat(gapsOf(recordOf(verdict, "reboard").outcome()))
+            .containsExactly(new Gap(GapKind.LIST_NOT_COVERING_WINDOW, ListRole.REBOARD, "reboard"));
     }
 
     private static ActionFixture boundaryFixture() {
@@ -526,6 +542,11 @@ class ActionJudgeTest {
 
     private static CandidateRecord recordOf(Verdict verdict, String id) {
         return verdict.candidates().stream().filter(record -> record.id().equals(id)).findFirst().orElseThrow();
+    }
+
+    private static List<Gap> gapsOf(Outcome outcome) {
+        assertThat(outcome.evaluation()).isInstanceOf(Insufficient.class);
+        return ((Insufficient) outcome.evaluation()).gaps();
     }
 
     private static double riskOf(Outcome outcome) {

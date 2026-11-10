@@ -1,6 +1,11 @@
 package com.gustler.backend.api.salmon.domain;
 
-import com.gustler.backend.api.salmon.domain.ActionModel.*;
+import com.gustler.backend.api.salmon.domain.Candidates.*;
+import com.gustler.backend.api.salmon.domain.Fields.*;
+import com.gustler.backend.api.salmon.domain.Probabilities.*;
+import com.gustler.backend.api.salmon.domain.StopLists.*;
+import com.gustler.backend.api.salmon.domain.Timing.*;
+import com.gustler.backend.api.salmon.domain.Verdicts.*;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -50,11 +55,14 @@ public final class ActionJudge {
         if (stayRisk.get() < config.scanThreshold() - EPSILON) {
             return plain(ReasonCode.STAY_SCAN_NOT_TRIGGERED, baseline, stay, List.of(), false);
         }
-        Enumeration enumeration = source.enumerate(baseline.epoch());
-        if (enumeration instanceof Failed) {
-            return plain(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE, baseline, stay, List.of(), false);
-        }
-        Listed listed = (Listed) enumeration;
+        return switch (source.enumerate(baseline.epoch())) {
+            case Failed ignored -> plain(ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE, baseline, stay, List.of(), false);
+            case Listed listed -> compare(baseline, config, stay, stayRisk.get(), listed);
+        };
+    }
+
+    private static Judgement compare(Baseline baseline, ActionConfig config, Outcome stay, double stayRisk,
+                                     Listed listed) {
         Optional<StopList> staleBaseline = listed.baselineUpdate()
             .filter(update -> changesBaseline(baseline, config, update, stay));
         if (listed.candidates().isEmpty()) {
@@ -66,7 +74,7 @@ public final class ActionJudge {
         for (Candidate candidate : listed.candidates()) {
             Admissibility admissibility = admissibilityOf(candidate, config);
             Outcome outcome = admissibility == Admissibility.VIOLATED
-                ? Outcome.of(new Insufficient(List.of("violates admissibility")))
+                ? Outcome.of(new Insufficient(List.of(new Gap(GapKind.ADMISSIBILITY_VIOLATED, candidate.id()))))
                 : evaluate(evaluator, candidate);
             records.add(new CandidateRecord(candidate.id(), candidate.kind(), admissibility, outcome));
         }
@@ -83,7 +91,7 @@ public final class ActionJudge {
         }
         boolean partial = comparable.size() < permitted.size();
         CandidateRecord best = comparable.stream().min(comparator(config, listed.candidates())).orElseThrow();
-        double delta = stayRisk.get() - best.outcome().evaluation().failureRisk().orElseThrow();
+        double delta = stayRisk - best.outcome().evaluation().failureRisk().orElseThrow();
         ReasonCode code = delta >= config.gainThreshold() - EPSILON
             ? ReasonCode.GO : ReasonCode.STAY_GAIN_BELOW_THRESHOLD;
         return new Judgement(new Verdict(code, baseline.epoch(), partial, stay, records, Optional.of(best.id()),

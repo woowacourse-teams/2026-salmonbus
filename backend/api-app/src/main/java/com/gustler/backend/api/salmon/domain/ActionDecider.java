@@ -3,10 +3,10 @@ package com.gustler.backend.api.salmon.domain;
 import com.gustler.backend.api.salmon.domain.ActionJudge.Baseline;
 import com.gustler.backend.api.salmon.domain.ActionJudge.CandidateSource;
 import com.gustler.backend.api.salmon.domain.ActionJudge.Judgement;
-import com.gustler.backend.api.salmon.domain.ActionModel.MissingReason;
-import com.gustler.backend.api.salmon.domain.ActionModel.StopList;
-import com.gustler.backend.api.salmon.domain.ActionModel.Unavailable;
-import com.gustler.backend.api.salmon.domain.ActionModel.Verdict;
+import com.gustler.backend.api.salmon.domain.Fields.MissingReason;
+import com.gustler.backend.api.salmon.domain.StopLists.StopList;
+import com.gustler.backend.api.salmon.domain.StopLists.Unavailable;
+import com.gustler.backend.api.salmon.domain.Verdicts.Verdict;
 import java.util.Optional;
 
 /** 판정 중 지금 정류장 목록이 바뀌면 처음부터 다시 판정하고, 반복 한도를 넘으면 그 목록을 결측으로 두고 끝낸다. */

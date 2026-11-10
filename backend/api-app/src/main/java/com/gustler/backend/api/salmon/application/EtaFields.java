@@ -1,17 +1,18 @@
 package com.gustler.backend.api.salmon.application;
 
-import com.gustler.backend.api.salmon.domain.ActionModel.Derived;
-import com.gustler.backend.api.salmon.domain.ActionModel.ErrorBound;
-import com.gustler.backend.api.salmon.domain.ActionModel.Field;
-import com.gustler.backend.api.salmon.domain.ActionModel.Finite;
-import com.gustler.backend.api.salmon.domain.ActionModel.Missing;
-import com.gustler.backend.api.salmon.domain.ActionModel.MissingReason;
-import com.gustler.backend.api.salmon.domain.ActionModel.NoBound;
-import com.gustler.backend.api.salmon.domain.ActionModel.Span;
 import com.gustler.backend.api.salmon.domain.EtaChain;
 import com.gustler.backend.api.salmon.domain.EtaChain.Known;
 import com.gustler.backend.api.salmon.domain.EtaChain.Result;
 import com.gustler.backend.api.salmon.domain.EtaChain.Segment;
+import com.gustler.backend.api.salmon.domain.EtaChain.Unresolved;
+import com.gustler.backend.api.salmon.domain.Fields.Derived;
+import com.gustler.backend.api.salmon.domain.Fields.ErrorBound;
+import com.gustler.backend.api.salmon.domain.Fields.Field;
+import com.gustler.backend.api.salmon.domain.Fields.Finite;
+import com.gustler.backend.api.salmon.domain.Fields.Missing;
+import com.gustler.backend.api.salmon.domain.Fields.MissingReason;
+import com.gustler.backend.api.salmon.domain.Fields.NoBound;
+import com.gustler.backend.api.salmon.domain.Timing.Span;
 import java.time.Duration;
 import java.util.Optional;
 
@@ -24,7 +25,7 @@ public final class EtaFields {
         return switch (segment) {
             case Known<Segment> known -> new Derived<>(spanOf(known.value().travelTime()),
                 boundOf(known.value().errorBound()));
-            case EtaChain.Missing<Segment> missing -> new Missing<>(reasonOf(missing.reason()));
+            case Unresolved<Segment> unresolved -> new Missing<>(reasonOf(unresolved.reason()));
         };
     }
 

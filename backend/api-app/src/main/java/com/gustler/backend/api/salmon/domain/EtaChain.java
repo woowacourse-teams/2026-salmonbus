@@ -55,7 +55,7 @@ public final class EtaChain {
     public enum Reason { RUN_MISMATCH, PATTERN_MISMATCH, SEQUENCE_MISMATCH,
         INFORMATION_MISMATCH, PREDICTION_CONFLICT, COVER_BROKEN, NO_ERROR_BOUND }
 
-    public sealed interface Result<T> permits Known, Missing {
+    public sealed interface Result<T> permits Known, Unresolved {
     }
 
     public record Known<T>(T value) implements Result<T> {
@@ -64,8 +64,8 @@ public final class EtaChain {
         }
     }
 
-    public record Missing<T>(Reason reason) implements Result<T> {
-        public Missing {
+    public record Unresolved<T>(Reason reason) implements Result<T> {
+        public Unresolved {
             Objects.requireNonNull(reason);
         }
     }
@@ -99,7 +99,7 @@ public final class EtaChain {
 
     public static Result<Segment> sameRun(Observation from, Observation to) {
         if (!from.informationAt().equals(to.informationAt())) {
-            return new Missing<>(Reason.INFORMATION_MISMATCH);
+            return new Unresolved<>(Reason.INFORMATION_MISMATCH);
         }
         return difference(from, to, Duration.ZERO, Method.SAME_RUN);
     }
@@ -109,7 +109,7 @@ public final class EtaChain {
         requireNonnegative(revisionBound);
         requireText(revisionEvidence);
         if (from.errorBound().isEmpty() || to.errorBound().isEmpty()) {
-            return new Missing<>(Reason.NO_ERROR_BOUND);
+            return new Unresolved<>(Reason.NO_ERROR_BOUND);
         }
         Result<Segment> result = difference(from, to, revisionBound, Method.ALIGNED);
         if (result instanceof Known<Segment> known) {
@@ -124,14 +124,14 @@ public final class EtaChain {
     private static Result<Segment> difference(Observation from, Observation to,
                                               Duration revisionBound, Method method) {
         if (!from.run().equals(to.run())) {
-            return new Missing<>(Reason.RUN_MISMATCH);
+            return new Unresolved<>(Reason.RUN_MISMATCH);
         }
         if (from.visit().sequence() >= to.visit().sequence()) {
-            return new Missing<>(Reason.SEQUENCE_MISMATCH);
+            return new Unresolved<>(Reason.SEQUENCE_MISMATCH);
         }
         Duration travel = Duration.between(from.arrivalAt(), to.arrivalAt());
         if (travel.isNegative()) {
-            return new Missing<>(Reason.PREDICTION_CONFLICT);
+            return new Unresolved<>(Reason.PREDICTION_CONFLICT);
         }
         Optional<Duration> bound = from.errorBound().flatMap(first ->
             to.errorBound().map(second -> first.plus(second).plus(revisionBound)));
@@ -145,7 +145,7 @@ public final class EtaChain {
         requireNonnegative(transferBound);
         requireText(transferEvidence);
         if (segments.isEmpty()) {
-            return new Missing<>(Reason.COVER_BROKEN);
+            return new Unresolved<>(Reason.COVER_BROKEN);
         }
         Segment first = segments.getFirst();
         Visit end = first.from();
@@ -153,13 +153,13 @@ public final class EtaChain {
         Duration bound = transferBound;
         for (Segment segment : segments) {
             if (!first.pattern().equals(segment.pattern())) {
-                return new Missing<>(Reason.PATTERN_MISMATCH);
+                return new Unresolved<>(Reason.PATTERN_MISMATCH);
             }
             if (!end.equals(segment.from())) {
-                return new Missing<>(Reason.COVER_BROKEN);
+                return new Unresolved<>(Reason.COVER_BROKEN);
             }
             if (segment.errorBound().isEmpty()) {
-                return new Missing<>(Reason.NO_ERROR_BOUND);
+                return new Unresolved<>(Reason.NO_ERROR_BOUND);
             }
             travel = travel.plus(segment.travelTime());
             bound = bound.plus(segment.errorBound().orElseThrow());
@@ -174,26 +174,26 @@ public final class EtaChain {
 
     public static Result<Arrival> restore(Observation anchor, Segment segment) {
         if (segment.sourceRun().isPresent() && !segment.sourceRun().orElseThrow().equals(anchor.run())) {
-            return new Missing<>(Reason.RUN_MISMATCH);
+            return new Unresolved<>(Reason.RUN_MISMATCH);
         }
         if (!anchor.run().pattern().equals(segment.pattern())) {
-            return new Missing<>(Reason.PATTERN_MISMATCH);
+            return new Unresolved<>(Reason.PATTERN_MISMATCH);
         }
         if (!anchor.visit().equals(segment.from())) {
-            return new Missing<>(Reason.COVER_BROKEN);
+            return new Unresolved<>(Reason.COVER_BROKEN);
         }
         if (!anchor.id().equals(segment.evidence().getFirst())) {
-            return new Missing<>(Reason.INFORMATION_MISMATCH);
+            return new Unresolved<>(Reason.INFORMATION_MISMATCH);
         }
         if (segment.errorBound().isEmpty()) {
-            return new Missing<>(Reason.NO_ERROR_BOUND);
+            return new Unresolved<>(Reason.NO_ERROR_BOUND);
         }
         // 복원 시각은 anchor 도착과 구간의 anchor 항이 상쇄되므로, 구간 오차에 든 anchor 오차를 빼야 한다.
         // 관측 id가 관측 하나를 정한다는 전제를 쓴다. 뺀 값이 음수면 같은 관측일 수 없으므로 복원하지 않는다.
         Optional<Duration> bound = anchor.errorBound().map(value ->
             segment.errorBound().orElseThrow().minus(value));
         if (bound.isPresent() && bound.get().isNegative()) {
-            return new Missing<>(Reason.INFORMATION_MISMATCH);
+            return new Unresolved<>(Reason.INFORMATION_MISMATCH);
         }
         List<String> evidence = Stream.concat(
             Stream.of(anchor.id()), segment.evidence().stream()).distinct().toList();
