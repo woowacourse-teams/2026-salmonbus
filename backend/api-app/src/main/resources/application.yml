@@ -178,3 +178,13 @@ stations:
 route-geometry:
   presentation:
     enabled: ${ROUTE_GEOMETRY_PRESENTATION_ENABLED:false}
+
+push:
+  enabled: ${PUSH_ENABLED:false}
+  apns:
+    team-id: ${APNS_TEAM_ID:}
+    key-id: ${APNS_KEY_ID:}
+    private-key-path: ${APNS_PRIVATE_KEY_PATH:}
+    topic: ${APNS_TOPIC:}
+    production-uri: https://api.push.apple.com
+    sandbox-uri: https://api.sandbox.push.apple.com

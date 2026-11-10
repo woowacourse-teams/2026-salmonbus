@@ -54,4 +54,12 @@ public class JdbcPushDeviceRepository implements PushDeviceRepository {
             .params(memberId.get(), token.value()).update();
         return true;
     }
+
+    @Override
+    @Transactional
+    public boolean deleteById(long deviceId) {
+        return jdbc.sql("DELETE FROM push_device WHERE id = ?")
+            .param(deviceId)
+            .update() > 0;
+    }
 }

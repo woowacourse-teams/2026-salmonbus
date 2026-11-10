@@ -1,5 +1,6 @@
 package com.gustler.backend.api.push.infrastructure.jdbc;
 
+import com.gustler.backend.api.favorite.domain.FavoriteDirection;
 import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.push.application.NotificationSettingRepository;
 import com.gustler.backend.api.push.domain.NotificationSchedule;
@@ -35,6 +36,25 @@ public class JdbcNotificationSettingRepository implements NotificationSettingRep
             END,
             updated_at = EXCLUDED.updated_at
         RETURNING id, route_id, stop_id, direction, local_time, weekdays
+        """;
+
+    private static final String FIND_DUE = """
+        SELECT id, member_id, route_id, stop_id, direction, local_time, weekdays, occurrence_at
+        FROM notification_setting
+        WHERE occurrence_at <= ?
+        ORDER BY occurrence_at, id
+        LIMIT ?
+        """;
+
+    private static final String ADVANCE = """
+        UPDATE notification_setting
+        SET occurrence_at = ?, updated_at = ?
+        WHERE occurrence_at = ? AND id = ?
+        """;
+
+    private static final String DELETE_ORPHAN = """
+        DELETE FROM notification_setting
+        WHERE occurrence_at = ? AND id = ?
         """;
 
     private static final String DELETE_WITHOUT_FAVORITE = """
@@ -133,6 +153,35 @@ public class JdbcNotificationSettingRepository implements NotificationSettingRep
     }
 
     @Override
+    public List<DueSetting> findDue(Instant now, int limit) {
+        return jdbc.sql(FIND_DUE)
+            .params(OffsetDateTime.ofInstant(now, ZoneOffset.UTC), limit)
+            .query(JdbcNotificationSettingRepository::mapDue)
+            .list();
+    }
+
+    @Override
+    @Transactional
+    public boolean advance(UUID settingId, Instant readOccurrenceAt, Instant nextOccurrenceAt, Instant now) {
+        return jdbc.sql(ADVANCE)
+            .params(
+                OffsetDateTime.ofInstant(nextOccurrenceAt, ZoneOffset.UTC),
+                OffsetDateTime.ofInstant(now, ZoneOffset.UTC),
+                OffsetDateTime.ofInstant(readOccurrenceAt, ZoneOffset.UTC),
+                settingId
+            )
+            .update() > 0;
+    }
+
+    @Override
+    @Transactional
+    public boolean deleteOrphan(UUID settingId, Instant readOccurrenceAt) {
+        return jdbc.sql(DELETE_ORPHAN)
+            .params(OffsetDateTime.ofInstant(readOccurrenceAt, ZoneOffset.UTC), settingId)
+            .update() > 0;
+    }
+
+    @Override
     public void deleteWithoutFavorite(long memberId) {
         jdbc.sql(DELETE_WITHOUT_FAVORITE).param(memberId).update();
     }
@@ -145,6 +194,23 @@ public class JdbcNotificationSettingRepository implements NotificationSettingRep
             resultSet.getString("direction"),
             NotificationSchedule.formatTime(resultSet.getObject("local_time", LocalTime.class)),
             NotificationSchedule.namesOf(resultSet.getInt("weekdays"))
+        );
+    }
+
+    private static DueSetting mapDue(ResultSet resultSet, int rowNum) throws SQLException {
+        return new DueSetting(
+            resultSet.getObject("id", UUID.class),
+            resultSet.getLong("member_id"),
+            new FavoriteTarget(
+                resultSet.getString("route_id"),
+                resultSet.getString("stop_id"),
+                FavoriteDirection.valueOf(resultSet.getString("direction"))
+            ),
+            new NotificationSchedule(
+                resultSet.getObject("local_time", LocalTime.class),
+                resultSet.getInt("weekdays")
+            ),
+            resultSet.getObject("occurrence_at", OffsetDateTime.class).toInstant()
         );
     }
 }

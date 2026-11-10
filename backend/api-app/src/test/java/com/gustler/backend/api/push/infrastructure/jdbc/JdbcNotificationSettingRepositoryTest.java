@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.api.favorite.domain.FavoriteDirection;
 import com.gustler.backend.api.favorite.domain.FavoriteTarget;
+import com.gustler.backend.api.push.application.NotificationSettingRepository.DueSetting;
 import com.gustler.backend.api.push.application.NotificationSettingRepository.SavedSetting;
 import com.gustler.backend.api.push.domain.NotificationSchedule;
 import com.gustler.backend.support.IntegrationTest;
@@ -123,6 +124,66 @@ class JdbcNotificationSettingRepositoryTest {
 
     private long count() {
         return jdbc.sql("SELECT count(*) FROM notification_setting").query(Long.class).single();
+    }
+
+    @Test
+    void findDueSelectsDueSettingsInOrderWithLimit() {
+        UUID member = member("연어하나");
+        long memberId = memberId(member);
+        SavedSetting first = repository.upsert(
+            memberId,
+            TARGET,
+            SCHEDULE,
+            Instant.parse("2026-11-01T22:38:00Z"),
+            NOW
+        );
+        FavoriteTarget secondTarget = new FavoriteTarget("234000885", "203000166", FavoriteDirection.DOWN);
+        SavedSetting second = repository.upsert(
+            memberId,
+            secondTarget,
+            SCHEDULE,
+            Instant.parse("2026-11-01T22:39:00Z"),
+            NOW
+        );
+        FavoriteTarget laterTarget = new FavoriteTarget("234000886", "203000167", FavoriteDirection.UP);
+        repository.upsert(memberId, laterTarget, SCHEDULE, Instant.parse("2026-11-01T22:40:00Z"), NOW);
+
+        assertThat(repository.findDue(Instant.parse("2026-11-01T22:39:00Z"), 1))
+            .extracting(DueSetting::id)
+            .containsExactly(first.id());
+        assertThat(repository.findDue(Instant.parse("2026-11-01T22:39:00Z"), 10))
+            .extracting(DueSetting::id)
+            .containsExactly(first.id(), second.id());
+    }
+
+    @Test
+    void advanceUpdatesOnlyWhenReadOccurrenceMatches() {
+        UUID member = member("연어하나");
+        long memberId = memberId(member);
+        addFavorite(memberId, TARGET);
+        Instant read = Instant.parse("2026-11-01T22:40:00Z");
+        SavedSetting saved = repository.upsert(memberId, TARGET, SCHEDULE, read, NOW);
+        Instant next = Instant.parse("2026-11-02T22:40:00Z");
+
+        assertThat(repository.advance(saved.id(), read, next, NOW.plusSeconds(30))).isTrue();
+        assertThat(instantOf("occurrence_at")).isEqualTo(next);
+        assertThat(repository.advance(saved.id(), read, Instant.parse("2026-11-03T22:40:00Z"), NOW.plusSeconds(60)))
+            .isFalse();
+        assertThat(instantOf("occurrence_at")).isEqualTo(next);
+    }
+
+    @Test
+    void deleteOrphanDeletesOnlyWhenReadOccurrenceMatches() {
+        UUID member = member("연어하나");
+        long memberId = memberId(member);
+        addFavorite(memberId, TARGET);
+        Instant read = Instant.parse("2026-11-01T22:40:00Z");
+        SavedSetting saved = repository.upsert(memberId, TARGET, SCHEDULE, read, NOW);
+
+        assertThat(repository.deleteOrphan(saved.id(), Instant.parse("2026-11-01T23:00:00Z"))).isFalse();
+        assertThat(count()).isEqualTo(1);
+        assertThat(repository.deleteOrphan(saved.id(), read)).isTrue();
+        assertThat(count()).isZero();
     }
 
     private Instant instantOf(String column) {
