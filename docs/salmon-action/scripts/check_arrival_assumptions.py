@@ -145,6 +145,22 @@ def load_csv(path):
     ]
 
 
+def load_snapshot_csv(path):
+    """오프라인 실행기 입력 폴더의 arrival_snapshot.csv(.gz). 첫 줄이 열 이름이고 payload 열이 스냅샷 JSON이다."""
+    csv.field_size_limit(32 * 2 ** 20)
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8", newline="") as source:
+        return [
+            {
+                "stationId": row["station_id"],
+                # payload 안의 receivedAt 표기에 기대지 않고 테이블의 수신 시각 열을 쓴다.
+                "receivedAt": row["received_at"].replace(" ", "T"),
+                "routes": json.loads(row["payload"])["routes"],
+            }
+            for row in csv.DictReader(source)
+        ]
+
+
 def snapshot(received, predictions):
     return {
         "stationId": "000000001",
@@ -210,6 +226,16 @@ def self_test():
         loaded = load_csv(path)
     assert len(loaded) == 2, loaded
     assert analyze(loaded, 15)["hidden"]["hiddenVehicleSeen"] == 1
+    with tempfile.TemporaryDirectory() as folder:
+        path = os.path.join(folder, "arrival_snapshot.csv")
+        with open(path, "w", encoding="utf-8", newline="") as sample:
+            writer = csv.writer(sample)
+            writer.writerow(["id", "station_id", "received_at", "payload"])
+            for index, item in enumerate(inside):
+                received = item["receivedAt"].replace("T", " ").replace("+00:00", "+00")
+                writer.writerow([index, item["stationId"], received, json.dumps({"routes": item["routes"]})])
+        extracted = load_snapshot_csv(path)
+    assert analyze(extracted, 15) == analyze(inside, 15), extracted
     print("self-test passed")
 
 
@@ -217,6 +243,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", nargs="?", help="JSON lines of arrival snapshots, or a headerless CSV from eta_extract_arrivals.sh")
     parser.add_argument("--csv", action="store_true")
+    parser.add_argument("--snapshot-csv", action="store_true",
+                        help="input is arrival_snapshot.csv(.gz) from extract_offline_input.sh")
     parser.add_argument("--window-minutes", type=float, default=15)
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -225,7 +253,9 @@ def main():
         return
     if not args.input:
         parser.error("input is required unless --self-test is given")
-    if args.csv:
+    if args.snapshot_csv:
+        snapshots = load_snapshot_csv(args.input)
+    elif args.csv:
         snapshots = load_csv(args.input)
     else:
         with open(args.input, encoding="utf-8") as source:

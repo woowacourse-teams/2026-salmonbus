@@ -19,6 +19,11 @@ public final class CandidateAssembler {
     private CandidateAssembler() {
     }
 
+    /** 직접 도보로 조립하는 관계. 탑승 후보 조회도 이 집합만 요청한다. */
+    static Set<Relation> sameDirection() {
+        return SAME_DIRECTION;
+    }
+
     public static Listed assemble(String routeId, Instant decisionAt, List<WalkOption> options,
                                 StopArrivalSource arrivals, DetourSource detours, ProbabilitySupply supply) {
         List<Candidate> candidates = options.stream()

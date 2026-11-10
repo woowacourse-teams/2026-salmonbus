@@ -176,3 +176,8 @@ stations:
 route-geometry:
   presentation:
     enabled: ${ROUTE_GEOMETRY_PRESENTATION_ENABLED:false}
+
+# 연어행동 조회. 기본은 끈다. 켜도 탑승 확률과 운행 식별이 없으면 근거 부족으로 답한다.
+salmon:
+  action:
+    enabled: ${SALMON_ACTION_ENABLED:false}

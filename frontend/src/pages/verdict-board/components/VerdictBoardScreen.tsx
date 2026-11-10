@@ -26,6 +26,7 @@ import {
 import { liveVehicleViewsFor } from "./liveVehiclePolicy";
 import { liveMotionDurationOf, useFreshLiveVehicles } from "../hooks/useFreshLiveVehicles";
 import { useLiveVehicleMotion } from "../hooks/useLiveVehicleMotion";
+import { useActionGuidance } from "../hooks/useActionGuidance";
 import { useStationArrivals } from "../hooks/useStationArrivals";
 import { expandableRowOf, stopSelectionFrom, type StopSelection } from "./stopSelection";
 import type { BoardSheetSnap } from "./boardSheetPolicy";
@@ -216,6 +217,7 @@ function OperatingBoard({
           direction: direction.id,
         };
   const stationArrivals = useStationArrivals(arrivalSelection);
+  const actionGuidance = useActionGuidance(arrivalSelection);
   const vehicles = useMemo(
     () => liveVehicleViewsFor(board, liveVehicles, direction.id),
     [board, liveVehicles, direction.id],
@@ -378,6 +380,7 @@ function OperatingBoard({
             stationArrivals={
               arrivalSelection === null ? null : { selection: arrivalSelection, resource: stationArrivals }
             }
+            actionGuidance={actionGuidance}
             stops={stops}
             liveVehicleViews={vehicles}
             motion={motion}

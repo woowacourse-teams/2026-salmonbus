@@ -4,6 +4,7 @@ import type { LiveVehicleView } from "./liveVehiclePolicy";
 import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
 import { LiveBusTraker } from "./LiveBusTraker";
 import { StopRow } from "./StopRow";
+import { HIDDEN_GUIDANCE, type ActionGuidanceView } from "./actionGuidance";
 import type { StationArrivalDetails } from "./stationArrivalPolicy";
 import type { RoutePosition } from "./TimelineMarker";
 import type { StopSelection } from "./stopSelection";
@@ -20,6 +21,7 @@ interface StopListProps {
   scrollRequest: StopSelection | null;
   selectedVehicleKey: string | null;
   stationArrivals: StationArrivalDetails | null;
+  actionGuidance?: ActionGuidanceView;
   onToggle: (sequence: number) => void;
   onVehicleSelect: (key: string) => void;
   scrollContainerRef: RefObject<HTMLElement | null>;
@@ -50,6 +52,7 @@ export function StopList({
   scrollRequest,
   selectedVehicleKey,
   stationArrivals,
+  actionGuidance = HIDDEN_GUIDANCE,
   onToggle,
   onVehicleSelect,
   scrollContainerRef,
@@ -94,6 +97,7 @@ export function StopList({
             selected={selectedSequence === stop.sequence}
             expanded={stop.kind !== "passThrough" && selectedSequence === stop.sequence}
             stationArrivals={stationArrivals?.selection.stopSequence === stop.sequence ? stationArrivals : null}
+            guidance={selectedSequence === stop.sequence ? actionGuidance : HIDDEN_GUIDANCE}
             onToggle={(expandableStop) => toggle(expandableStop, index)}
             {...(favoriteRoute ? { favoriteRoute } : {})}
           />

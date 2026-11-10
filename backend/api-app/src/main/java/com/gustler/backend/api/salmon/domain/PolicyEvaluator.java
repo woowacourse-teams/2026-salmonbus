@@ -8,12 +8,14 @@ import com.gustler.backend.api.salmon.domain.Timing.*;
 import com.gustler.backend.api.salmon.domain.Verdicts.*;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Stream;
 
@@ -363,8 +365,7 @@ final class PolicyEvaluator {
                 return new Insufficient(probabilityGaps(unresolved));
             }
         }
-        Assumption assumption = probe.independent() ? Assumption.INDEP : Assumption.EXACT;
-        return new Evaluable(agreed, assumption, basis);
+        return new Evaluable(agreed, probe.assumptions(), basis);
     }
 
     private static List<Gap> probabilityGaps(List<Slot> slots) {
@@ -378,7 +379,7 @@ final class PolicyEvaluator {
     private final class Resolver {
         private final Map<Slot, Double> substitution;
         private final LinkedHashSet<Slot> unresolved = new LinkedHashSet<>();
-        private boolean independent;
+        private final Set<Assumption> assumptions = EnumSet.noneOf(Assumption.class);
 
         Resolver(Map<Slot, Double> substitution) {
             this.substitution = substitution;
@@ -386,10 +387,10 @@ final class PolicyEvaluator {
 
         double q(Slot slot) {
             return switch (supply.valueFor(slot)) {
-                case Matched matched -> matched.value();
+                case Matched matched -> used(matched.value(), matched.origin());
                 case Marginal marginal -> {
-                    independent = true;
-                    yield marginal.value();
+                    assumptions.add(Assumption.INDEP);
+                    yield used(marginal.value(), marginal.origin());
                 }
                 case Absent ignored -> {
                     unresolved.add(slot);
@@ -398,12 +399,19 @@ final class PolicyEvaluator {
             };
         }
 
+        private double used(double value, ValueOrigin origin) {
+            if (origin == ValueOrigin.SEAT_FORECAST) {
+                assumptions.add(Assumption.SEAT_FORECAST_PROXY);
+            }
+            return value;
+        }
+
         LinkedHashSet<Slot> unresolved() {
             return unresolved;
         }
 
-        boolean independent() {
-            return independent;
+        Set<Assumption> assumptions() {
+            return assumptions;
         }
     }
 

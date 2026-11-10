@@ -1,0 +1,7 @@
+{
+  "status": "undecided",
+  "doNotApplyTo": "backend/worker-app/src/main/resources/application.yml",
+  "retainFor": null,
+  "stationCount": null,
+  "interval": null
+}
