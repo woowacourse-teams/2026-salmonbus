@@ -80,7 +80,7 @@ class MeControllerTest {
         jdbcClient.sql("DELETE FROM member").update();
         memberId = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "kakao-1")).publicId();
         changeNickname.change(memberId, "연어팬");
-        accessCookie = ACCESS_COOKIE + "=" + accessTokens.issue(memberId);
+        accessCookie = ACCESS_COOKIE + "=" + accessTokens.issue(memberId, null);
         csrfToken = csrfToken();
     }
 
@@ -118,7 +118,7 @@ class MeControllerTest {
     void Authorization_헤더로도_내_정보를_조회한다() throws Exception {
         // when
         HttpResponse<String> actual = send(request("/api/me")
-            .header("Authorization", "Bearer " + accessTokens.issue(memberId))
+            .header("Authorization", "Bearer " + accessTokens.issue(memberId, null))
             .GET());
 
         // then
@@ -133,7 +133,7 @@ class MeControllerTest {
     void Authorization_헤더가_만료됐으면_유효한_액세스_쿠키가_있어도_401이다() throws Exception {
         // given
         Clock longAgo = Clock.fixed(Instant.now().minus(Duration.ofHours(1)), ZoneOffset.UTC);
-        String expired = new AccessTokens(tokenProperties, longAgo).issue(memberId);
+        String expired = new AccessTokens(tokenProperties, longAgo).issue(memberId, null);
 
         // when
         HttpResponse<String> actual = send(request("/api/me")
@@ -169,7 +169,7 @@ class MeControllerTest {
     void 만료된_토큰이면_401이다() throws Exception {
         // given
         Clock longAgo = Clock.fixed(Instant.now().minus(Duration.ofHours(1)), ZoneOffset.UTC);
-        String expired = new AccessTokens(tokenProperties, longAgo).issue(memberId);
+        String expired = new AccessTokens(tokenProperties, longAgo).issue(memberId, null);
 
         // when
         HttpResponse<String> actual = send(request("/api/me").header("Cookie", ACCESS_COOKIE + "=" + expired).GET());
@@ -183,7 +183,7 @@ class MeControllerTest {
         // given
         TokenProperties other = new TokenProperties(
             "another-secret-key-another-secret-key-12345", "k1", Duration.ofMinutes(15));
-        String forged = new AccessTokens(other, Clock.systemUTC()).issue(memberId);
+        String forged = new AccessTokens(other, Clock.systemUTC()).issue(memberId, null);
 
         // when
         HttpResponse<String> actual = send(request("/api/me").header("Cookie", ACCESS_COOKIE + "=" + forged).GET());

@@ -24,7 +24,7 @@ class AccessTokensTest {
     @Test
     void 발급한_토큰은_만료_전까지_회원_식별자로_검증된다() {
         // given
-        String token = tokensAt(ISSUED_AT).issue(MEMBER);
+        String token = tokensAt(ISSUED_AT).issue(MEMBER, null);
 
         // when
         Optional<UUID> justBefore = tokensAt(ISSUED_AT.plus(Duration.ofMinutes(14))).verify(token);
@@ -40,7 +40,7 @@ class AccessTokensTest {
     @Test
     void 만료와_허용_오차가_지나면_검증에_실패한다() {
         // given
-        String token = tokensAt(ISSUED_AT).issue(MEMBER);
+        String token = tokensAt(ISSUED_AT).issue(MEMBER, null);
 
         // when
         Optional<UUID> actual = tokensAt(ISSUED_AT.plus(Duration.ofMinutes(15)).plusSeconds(6)).verify(token);
@@ -52,7 +52,7 @@ class AccessTokensTest {
     @Test
     void 다른_비밀로_서명했으면_검증에_실패한다() {
         // given
-        String token = tokensAt(ISSUED_AT).issue(MEMBER);
+        String token = tokensAt(ISSUED_AT).issue(MEMBER, null);
         TokenProperties other = new TokenProperties(
             "another-secret-key-another-secret-key-0000", "k1", Duration.ofMinutes(15));
 
@@ -77,7 +77,7 @@ class AccessTokensTest {
     void 일부를_바꾼_토큰은_검증에_실패한다() {
         // given
         AccessTokens tokens = tokensAt(ISSUED_AT);
-        String token = tokens.issue(MEMBER);
+        String token = tokens.issue(MEMBER, null);
         String[] parts = token.split("\\.");
         String tampered = parts[0] + "." + parts[1] + "A." + parts[2];
 

@@ -276,12 +276,12 @@ class TokenControllerTest {
     void 액세스_토큰이_만료됐어도_리프레시_쿠키가_있으면_갱신_가능으로_알린다() throws Exception {
         // given
         Clock longAgo = Clock.fixed(Instant.now().minus(Duration.ofHours(1)), ZoneOffset.UTC);
-        String expired = new AccessTokens(tokenProperties, longAgo).issue(memberId);
+        String expired = new AccessTokens(tokenProperties, longAgo).issue(memberId, null);
 
         // when
         JsonNode refreshable = session(ACCESS_COOKIE + "=" + expired + "; " + REFRESH_COOKIE + "=" + refreshToken);
         JsonNode anonymous = session("");
-        JsonNode signedIn = session(ACCESS_COOKIE + "=" + accessTokens.issue(memberId));
+        JsonNode signedIn = session(ACCESS_COOKIE + "=" + accessTokens.issue(memberId, null));
 
         // then
         assertSoftly(softly -> {
@@ -296,7 +296,7 @@ class TokenControllerTest {
     @Test
     void 탈퇴한_회원의_토큰이면_로그인_상태를_비로그인으로_답한다() throws Exception {
         // given
-        String accessToken = accessTokens.issue(memberId);
+        String accessToken = accessTokens.issue(memberId, null);
         jdbcClient.sql("DELETE FROM member").update();
 
         // when

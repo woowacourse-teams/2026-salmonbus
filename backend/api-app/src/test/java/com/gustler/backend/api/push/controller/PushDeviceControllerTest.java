@@ -262,7 +262,7 @@ class PushDeviceControllerTest {
 
     @Test
     void sid_없는_토큰으로_등록하면_401이다() throws Exception {
-        String legacyCookie = "__Host-sb_at=" + accessTokens.issue(memberId);
+        String legacyCookie = "__Host-sb_at=" + accessTokens.issue(memberId, null);
 
         assertError(send(DeviceRequest.REGISTER, validBody(), legacyCookie, true), 401, "UNAUTHENTICATED");
 
@@ -272,7 +272,7 @@ class PushDeviceControllerTest {
     @Test
     void sid_없는_토큰으로도_자기_기기는_해제한다() throws Exception {
         assertNoContent(send(DeviceRequest.REGISTER, validBody(), accessCookie, true));
-        String legacyCookie = "__Host-sb_at=" + accessTokens.issue(memberId);
+        String legacyCookie = "__Host-sb_at=" + accessTokens.issue(memberId, null);
 
         assertNoContent(send(DeviceRequest.UNREGISTER, "{\"token\":\"ab\"}", legacyCookie, true));
 

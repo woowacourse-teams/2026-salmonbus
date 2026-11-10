@@ -57,10 +57,6 @@ public final class AccessTokens {
             timestamps, new JwtIssuerValidator(ISSUER)));
     }
 
-    public String issue(UUID publicId) {
-        return issue(publicId, null);
-    }
-
     public String issue(UUID publicId, UUID sessionId) {
         Instant now = clock.instant();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).keyId(properties.keyId()).build();
