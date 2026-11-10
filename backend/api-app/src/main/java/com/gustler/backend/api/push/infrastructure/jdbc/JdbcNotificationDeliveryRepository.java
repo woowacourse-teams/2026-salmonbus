@@ -38,6 +38,7 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
                 JOIN push_device device ON device.id = delivery.device_id
                 JOIN notification_setting setting ON setting.id = delivery.setting_id
                 WHERE delivery.status = 'PENDING' AND delivery.next_attempt_at <= ?
+                    AND delivery.occurrence_at >= ?
                     AND device.member_id = setting.member_id
                 ORDER BY delivery.next_attempt_at, delivery.id
                 LIMIT ?
@@ -57,6 +58,12 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
         UPDATE notification_delivery
         SET status = 'GAVE_UP', updated_at = ?
         WHERE status = 'PENDING' AND occurrence_at < ? AND next_attempt_at <= ?
+        """;
+
+    private static final String GIVE_UP = """
+        UPDATE notification_delivery
+        SET status = 'GAVE_UP', updated_at = ?
+        WHERE id = ? AND status = 'PENDING'
         """;
 
     private static final String RECORD = """
@@ -93,11 +100,12 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
 
     @Override
     @Transactional
-    public List<ClaimedDelivery> claimDue(Instant now, Instant leasedUntil, int limit) {
+    public List<ClaimedDelivery> claimDue(Instant now, Instant leasedUntil, Instant occurredSince, int limit) {
         OffsetDateTime current = OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
         OffsetDateTime leased = OffsetDateTime.ofInstant(leasedUntil, ZoneOffset.UTC);
+        OffsetDateTime since = OffsetDateTime.ofInstant(occurredSince, ZoneOffset.UTC);
         return jdbc.sql(CLAIM_DUE)
-            .params(leased, current, current, limit)
+            .params(leased, current, current, since, limit)
             .query(JdbcNotificationDeliveryRepository::mapClaimed)
             .list();
     }
@@ -109,6 +117,11 @@ public class JdbcNotificationDeliveryRepository implements NotificationDeliveryR
         return jdbc.sql(GIVE_UP_OCCURRED_BEFORE)
             .params(timestamp, OffsetDateTime.ofInstant(occurredBefore, ZoneOffset.UTC), timestamp)
             .update();
+    }
+
+    @Override
+    public void giveUp(long id, Instant now) {
+        jdbc.sql(GIVE_UP).params(OffsetDateTime.ofInstant(now, ZoneOffset.UTC), id).update();
     }
 
     @Override

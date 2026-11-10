@@ -18,6 +18,10 @@ public final class NotificationDeliveryRunner {
     }
 
     public void attempt(ClaimedDelivery delivery) {
+        if (service.giveUpIfExpired(delivery)) {
+            LOGGER.warn("event=notification_delivery status=EXPIRED deliveryId={}", delivery.id());
+            return;
+        }
         ApnsResponse response;
         try {
             response = sender.send(delivery);
