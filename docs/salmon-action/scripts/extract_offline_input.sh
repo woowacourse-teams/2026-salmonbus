@@ -112,8 +112,6 @@ copy_all route_version "SELECT id, route_id, content_digest, valid_from, valid_t
   FROM route_version WHERE id IN (${versions}) ORDER BY id"
 copy_all route_stop "SELECT route_version_id, stop_order, stop_id, name, direction, boarding_allowed
   FROM route_stop WHERE route_version_id IN (${versions}) ORDER BY route_version_id, stop_order"
-copy_all route_data_quality "SELECT route_id, quality_revision FROM route_data_quality
-  WHERE route_id IN (SELECT id FROM route WHERE source_route_id IN (${routes})) ORDER BY route_id"
 copy_all model_deployment "SELECT id, deployment_key, release_id, model_key, model_version, bundle_digest,
     prediction_target_version, calculation_version, supported_scope_digest, data_until, state,
     predecessor_deployment_id, activated_at, retired_at
@@ -143,12 +141,6 @@ copy_hourly vehicle_observation "SELECT observation.id, observation.observation_
   FROM vehicle_observation observation
   JOIN observation_batch batch ON batch.id = observation.observation_batch_id
   WHERE batch.route_version_id IN (${versions})
-    AND batch.response_received_at >= :'from' AND batch.response_received_at < :'to'
-  ORDER BY observation.id" "10 minutes" "2 hours"
-copy_hourly ineligible_observation "SELECT observation.id AS vehicle_observation_id
-  FROM forecast_observation_quality observation
-  JOIN observation_batch batch ON batch.id = observation.observation_batch_id
-  WHERE batch.route_version_id IN (${versions}) AND NOT observation.forecast_eligible
     AND batch.response_received_at >= :'from' AND batch.response_received_at < :'to'
   ORDER BY observation.id" "10 minutes" "2 hours"
 copy_hourly forecast_publication "SELECT publication.id, publication.source_batch_id, publication.route_version_id,
