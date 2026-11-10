@@ -2,6 +2,8 @@ import type { Page } from "@playwright/test";
 import { defaultGroupId, storedFavorite } from "./fixtures/favorites";
 import { test, expect, storedNotification } from "./fixtures/notifications";
 import { routeId } from "./fixtures/mock-data";
+import { captureEnabled } from "./utils/capture";
+import { expectFocusRing } from "./utils/focus-ring";
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
 
@@ -68,6 +70,33 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
   });
 
   const notificationSwitch = (page: Page) => page.getByRole("switch", { name: `${stopName} 출발 알림` });
+
+  for (const inputMethod of ["keyboard", "pointer"] as const) {
+    test(`${inputMethod}로 연 알림 창 제목은 입력 방식에 맞는 포커스 표시를 보인다`, async ({ page }) => {
+      await openInApp(page);
+      await page.goto(`/mypage/groups/${defaultGroupId}`);
+      const trigger = notificationSwitch(page);
+      await expect(trigger).toBeVisible();
+      if (inputMethod === "keyboard") {
+        await trigger.focus();
+        await page.keyboard.press("Space");
+      } else {
+        await trigger.click();
+      }
+      const sheet = page.getByRole("dialog", { name: "출발 알림" });
+      const title = sheet.getByRole("heading", { name: "출발 알림", exact: true });
+      await expect(title).toBeFocused();
+      if (captureEnabled) await page.screenshot({ path: test.info().outputPath(`dialog-title-${inputMethod}.png`) });
+      await expectFocusRing(title, inputMethod === "keyboard" ? "shown" : "hidden");
+      if (inputMethod === "keyboard") {
+        await expect(title).toHaveCSS("outline-width", "3px");
+        await expect(title).toHaveCSS("outline-offset", "4px");
+      }
+      await page.keyboard.press("Escape");
+      await expect(sheet).toBeHidden();
+      await expect(trigger).toBeFocused();
+    });
+  }
 
   test("브라우저에서는 알림 줄을 숨기고 설정을 읽지 않는다", async ({ page, notifications }) => {
     notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
