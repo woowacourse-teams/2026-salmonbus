@@ -170,6 +170,70 @@ test("정류장 상세 조회 실패는 재시도할 수 있고 정상 빈 응�
   await expect(sheet.getByRole("button", { name: "정류장 버스 정보 다시 불러오기" })).toHaveCount(0);
 });
 
+for (const status of ["UNAVAILABLE", "READY"] as const) {
+  test(`정류장 상세에서 GBIS가 ${status}여도 첫 판정보드 차량의 거리와 예보를 표시한다`, async ({ page }) => {
+    const stationId = "206000532";
+    await page.route("**/api/v2/stations/tiles/14/*/*", (route) => {
+      const [, , zoom, x, y] = new URL(route.request().url()).pathname.split("/").slice(-5).map(Number);
+      return route.fulfill({
+        json: {
+          tile: { zoom, x, y },
+          coordinateSystem: "WGS84",
+          status: "READY",
+          stations:
+            x === 13976 && y === 6354
+              ? [{ stationId, name: "판교역 API", point: { x: pangyoPoint[0], y: pangyoPoint[1] } }]
+              : [],
+        },
+      });
+    });
+    await page.route(`**/api/v2/stations/${stationId}`, (route) =>
+      route.fulfill({
+        headers: { date: new Date(observedAt).toUTCString() },
+        json: {
+          stationId,
+          generatedAt: observedAt,
+          status,
+          reason: status === "UNAVAILABLE" ? "STALE" : null,
+          snapshot: { staleAt: status === "READY" ? "2026-09-16T08:05:00+09:00" : observedAt },
+          refresh: { status: "IDLE", suggestedRefreshAt: "2026-09-16T08:01:00+09:00" },
+          routes: [
+            {
+              routeId,
+              name: "3330",
+              supported: true,
+              service: { matchStatus: "MATCHED", direction: "UP" },
+              arrivals: [
+                {
+                  positionSource: "BOARD",
+                  remainingStops: 1,
+                  eta: { status: "UNAVAILABLE" },
+                  forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9 },
+                },
+                {
+                  positionSource: "BOARD",
+                  remainingStops: 4,
+                  eta:
+                    status === "READY"
+                      ? { status: "AVAILABLE", expectedArrivalAt: "2026-09-16T08:03:00+09:00", remainingSeconds: 180 }
+                      : { status: "UNAVAILABLE" },
+                  forecast: { status: "AVAILABLE", seatAvailableProbability: 0.1 },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    await page.goto("/");
+    await page.getByRole("button", { name: "판교역 API 정류장" }).press("Enter");
+    const row = page.getByRole("region", { name: "정류장 노선 안내" }).getByRole("listitem").first();
+    await expect(row).toContainText("도착 정보 없음");
+    await expect(row).toContainText("1정류장 전");
+    await expect(row).toContainText("탑승 확률 높음");
+  });
+}
+
 test("지도 SDK가 인증 실패로 초기화 상태를 지워도 탭을 이동할 수 있다", async ({ page }) => {
   await page.route("**/assets/home-events.json", (route) =>
     route.fulfill({ json: { stops: [], routePaths: [[pangyoPoint, [126.84, 37.52]]] } }),
@@ -431,7 +495,7 @@ test("홈과 즐겨찾기에서 정류장 핀으로 도착과 탑승 예보를 �
         direction: "정자역",
         notice: null,
         generatedAt: arrivals.generatedAt,
-        status: arrivals.status,
+        status: stale ? "UNAVAILABLE" : arrivals.status,
         reason: stale ? "STALE" : arrivals.reason,
         snapshot: arrivals.snapshot,
         refresh: arrivals.refresh,
@@ -451,15 +515,17 @@ test("홈과 즐겨찾기에서 정류장 핀으로 도착과 탑승 예보를 �
               schedule: null,
               scheduleWindow: "UNKNOWN",
             },
-            status: "READY",
-            reason: null,
-            arrivals: [
-              {
-                ...arrival,
-                positionSource: "BOARD",
-                forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: null },
-              },
-            ],
+            status: stale ? "NO_PREDICTION" : "READY",
+            reason: stale ? "NO_APPROACHING_VEHICLE" : null,
+            arrivals: stale
+              ? []
+              : [
+                  {
+                    ...arrival,
+                    positionSource: "BOARD",
+                    forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: null },
+                  },
+                ],
           },
           {
             routeId: "200000002",

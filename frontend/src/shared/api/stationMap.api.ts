@@ -15,6 +15,7 @@ export interface StationTileResult {
 }
 
 interface StationVehicle {
+  positionSource: "BOARD" | "ARRIVAL" | null;
   remainingStops: number | null;
   eta: (Pick<ArrivalEta, "status" | "remainingSeconds"> & { expectedArrivalAt: string | null }) | null;
   probability: number | null;
@@ -83,12 +84,15 @@ function vehicleFrom(value: unknown, supported: boolean): StationVehicle[] {
   if (!isRecord(value)) return [];
   const eta = value.eta;
   const forecast = value.forecast;
+  const positionSource =
+    value.positionSource === "BOARD" || value.positionSource === "ARRIVAL" ? value.positionSource : null;
   const probability =
-    supported && value.positionSource === "BOARD" && isRecord(forecast) && forecast.status === "AVAILABLE"
+    supported && positionSource === "BOARD" && isRecord(forecast) && forecast.status === "AVAILABLE"
       ? forecast.seatAvailableProbability
       : null;
   return [
     {
+      positionSource,
       remainingStops:
         typeof value.remainingStops === "number" && Number.isInteger(value.remainingStops) && value.remainingStops >= 0
           ? value.remainingStops
