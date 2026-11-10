@@ -25,7 +25,10 @@ export const input = style({
       forcedColorAdjust: "none",
       border: "2px solid CanvasText",
       background: "Canvas",
-      selectors: { "&:checked": { borderColor: "Highlight", background: "Highlight" } },
+      selectors: {
+        "&:checked": { borderColor: "Highlight", background: "Highlight" },
+        "&:focus-visible": { outlineColor: "CanvasText" },
+      },
     },
   },
 });
