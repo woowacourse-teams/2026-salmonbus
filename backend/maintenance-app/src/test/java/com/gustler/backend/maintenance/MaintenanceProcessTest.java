@@ -74,97 +74,6 @@ class MaintenanceProcessTest {
     }
 
     @Test
-    void 실제_JAR은_인증키와_모델_없이_품질을_조회하고_DB를_변경하지_않는다() throws Exception {
-        // given
-        Database database = database(true);
-        final long version = route(database.jdbc());
-        batch(database.jdbc(), version, 1, 1, 44);
-        batch(database.jdbc(), version, 2, 2, 71);
-        Map<String, String> before = state(database.jdbc());
-
-        // when
-        Result previewProcess = command(database, "quality-preview", version);
-
-        // then
-        assertThat(previewProcess.exitCode()).isZero();
-        PreviewOutput preview = read(previewProcess.stdout(), PreviewOutput.class);
-        assertThat(preview).isEqualTo(new PreviewOutput("succeeded",
-            new Preview("LAST_32_BATCHES_SAMPLE", 2, 2, 1)));
-        Result statusProcess = command(database, "quality-status", version);
-        assertThat(statusProcess.exitCode()).isZero();
-        StatusOutput status = read(statusProcess.stdout(), StatusOutput.class);
-        assertThat(status.status()).isEqualTo("succeeded");
-        assertThat(status.result()).isEmpty();
-        assertThat(state(database.jdbc())).isEqualTo(before);
-    }
-
-    @Test
-    void 실제_JAR의_정비는_한_페이지씩_커서를_이어가고_완료한_작업을_중복_반영하지_않는다() throws Exception {
-        // given
-        Database database = database(true);
-        JdbcClient jdbc = database.jdbc();
-        final long version = route(jdbc);
-        final long first = batch(jdbc, version, 1, 1, 44);
-        final long bad = batch(jdbc, version, 2, 2, 71);
-        final long next = batch(jdbc, version, 3, 4, 44);
-
-        // when
-        ChunkOutput firstPage = rebuild(database, version);
-
-        // then
-        assertThat(firstPage.result()).isEqualTo(new Chunk(1, false, false));
-        assertThat(discoveryCursor(jdbc, version)).isEqualTo(first);
-        ChunkOutput secondPage = rebuild(database, version);
-        assertThat(secondPage.result().processedBatches()).isEqualTo(1);
-        assertThat(discoveryCursor(jdbc, version)).isEqualTo(bad);
-
-        ChunkOutput result = secondPage;
-        for (int attempt = 0; attempt < 8 && !result.result().completed(); attempt++) {
-            final long previous = discoveryCursor(jdbc, version);
-            result = rebuild(database, version);
-            assertThat(result.result().processedBatches()).isBetween(0, 1);
-            assertThat(discoveryCursor(jdbc, version)).isBetween(previous, next);
-        }
-        assertThat(result.result().completed()).as("후속 출발 관측까지 있는 조사는 제한된 재호출로 끝나야 한다").isTrue();
-        assertThat(discoveryCursor(jdbc, version)).isEqualTo(next);
-        assertThat(jdbc.sql("SELECT remaining_seats FROM vehicle_observation ORDER BY id")
-            .query(Integer.class).list()).containsExactly(44, 71, 44);
-        assertThat(
-            jdbc.sql("SELECT observation_batch_id FROM forecast_eligible_observation ORDER BY observation_batch_id")
-                .query(Long.class)
-                .list()).containsExactly(next);
-
-        StatusOutput status = read(command(database, "quality-status", version).stdout(), StatusOutput.class);
-        assertThat(status.status()).isEqualTo("succeeded");
-        assertThat(status.result()).extracting(StatusRow::vehicleId).containsExactly("", "bus-1");
-        assertThat(status.result()).allMatch(StatusRow::completed);
-        Map<String, String> completed = state(jdbc);
-        ChunkOutput repeated = rebuild(database, version);
-        assertThat(repeated.result()).isEqualTo(new Chunk(0, true, true));
-        assertThat(state(jdbc)).isEqualTo(completed);
-    }
-
-    @Test
-    void 스키마가_없는_DB에서는_자동_마이그레이션을_수행하지_않고_실패한다() throws Exception {
-        // given
-        Database database = database(false);
-
-        // when
-        Result result = command(database, "quality-status", 1);
-
-        // then
-        assertThat(result.exitCode()).isEqualTo(1);
-        assertThat(read(result.stderr(), Failure.class))
-            .isEqualTo(new Failure("failed", "DATABASE_TRANSACTION_FAILED"));
-        assertThat(database.jdbc().sql("SELECT to_regclass('public.flyway_schema_history') IS NULL")
-                .query(Boolean.class).single()).isTrue();
-        assertThat(database.jdbc().sql("""
-            SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm')
-            """).query(Long.class).single()).isZero();
-    }
-
-    @Test
     void 정비_JAR에는_다른_실행_앱과_완료된_이관_자원이_없다() throws Exception {
         // when
         List<String> forbidden = new ArrayList<>();
@@ -260,26 +169,6 @@ class MaintenanceProcessTest {
                 .query(Integer.class).single()).isEqualTo(10);
     }
 
-    private ChunkOutput rebuild(Database database, final long version) throws Exception {
-        Result process = command(database, "quality-rebuild", version);
-        assertThat(process.exitCode()).isZero();
-        ChunkOutput result = read(process.stdout(), ChunkOutput.class);
-        assertThat(result.status()).isEqualTo("succeeded");
-        return result;
-    }
-
-    private Result command(Database database, String command, final long version) throws Exception {
-        List<String> arguments = new ArrayList<>(List.of(command, "--config", database.configuration().toString(),
-            "--route-version", Long.toString(version)));
-        if (!command.equals("quality-status")) {
-            arguments.addAll(List.of("--until", UNTIL.toString()));
-        }
-        if (command.equals("quality-rebuild")) {
-            arguments.addAll(List.of("--batch-limit", "1"));
-        }
-        return execute(arguments.toArray(String[]::new));
-    }
-
     private Result execute(String... arguments) throws Exception {
         List<String> command = new ArrayList<>(List.of(Path.of(System.getProperty("java.home"), "bin", "java")
                 .toString(),
@@ -355,66 +244,6 @@ class MaintenanceProcessTest {
             Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
         return new Database(configuration,
             JdbcClient.create(new DriverManagerDataSource(url, POSTGRES.getUsername(), POSTGRES.getPassword())));
-    }
-
-    private static long route(JdbcClient jdbc) {
-        final long route = jdbc.sql("""
-            INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
-            VALUES ('900000010','TEST','900000010','test','a','b') RETURNING id
-            """).query(Long.class).single();
-        final long version = jdbc.sql("""
-            INSERT INTO route_version(route_id,content_digest,valid_from,turn_sequence)
-            VALUES (?,?,'2026-09-20T00:00:00Z',4) RETURNING id
-            """).param(route).param("0".repeat(64)).query(Long.class).single();
-        jdbc.sql("""
-            INSERT INTO route_stop SELECT ?,n,'s'||n,'stop'||n,CASE WHEN n<=4 THEN 'UP' ELSE 'DOWN' END,true
-            FROM generate_series(1,7) n
-            """).param(version).update();
-        jdbc.sql("INSERT INTO route_data_quality(route_id) VALUES (?)").param(route).update();
-        jdbc.sql("INSERT INTO route_version_quality_policy(route_version_id) VALUES (?)").param(version).update();
-        return version;
-    }
-
-    private static long batch(
-        JdbcClient jdbc,
-        final long version,
-        final int step,
-        final int stop,
-        final int seats
-    ) {
-        OffsetDateTime at = START.plusSeconds(step * 10L).atOffset(ZoneOffset.UTC);
-        final long batch = jdbc.sql("""
-            INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,requested_at,
-                response_received_at,outcome,normalization_version,collection_strategy_version)
-            VALUES (?,?,1,?,?,?,'SUCCESS_ROWS','test','test') RETURNING id
-            """).param(version).param(at).param("batch" + step).param(at).param(at).query(Long.class).single();
-        jdbc.sql("""
-            INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
-                stop_order,stop_id,running_state,passed_stop_order,remaining_seats)
-            VALUES (?,?,1,'bus-1',?,'s'||?,2,?,?)
-            """).param(batch).param(version).param(stop).param(stop).param(stop).param(seats).update();
-        return batch;
-    }
-
-    private static long discoveryCursor(JdbcClient jdbc, final long version) {
-        return jdbc.sql("SELECT last_batch_id FROM trip_quality_rebuild WHERE route_version_id=? AND vehicle_id=''")
-            .param(version).query(Long.class).single();
-    }
-
-    private static Map<String, String> state(JdbcClient jdbc) {
-        Map<String, String> snapshot = new LinkedHashMap<>();
-        for (
-            String table : List.of("observation_batch", "vehicle_observation", "route_data_quality",
-                "trip_quality_rebuild",
-                "vehicle_one_way_trip", "observation_trip_assignment", "model_deployment", "forecast_publication",
-                "seat_forecast", "forecast_evaluation", "demand_statistics_version", "stop_demand_statistics")) {
-            snapshot.put(table,
-                jdbc.sql("SELECT md5(coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text)::text,'[]')) FROM "
-                    + table + " r")
-                    .query(String.class)
-                    .single());
-        }
-        return snapshot;
     }
 
     private static Path jar() {

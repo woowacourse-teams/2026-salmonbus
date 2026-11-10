@@ -105,13 +105,13 @@ public record SeatForecast(
             generatedAt, true, result.seatTarget(), result.probabilityTarget(), null, null, null);
     }
 
-    public SeatForecast withLesEvidence(String snapshot, String bundleHash) {
-        return withLesEvidence(snapshot, bundleHash, "les-identity-safe-v1");
+    public SeatForecast withAlightingAwareEvidence(String snapshot, String bundleHash) {
+        return withAlightingAwareEvidence(snapshot, bundleHash, "alighting-identity-safe-v1");
     }
 
-    public SeatForecast withLesEvidence(String snapshot, String bundleHash, String labelVersion) {
-        if (!hasLesEvidence(snapshot, bundleHash)) {
-            throw new IllegalArgumentException("레스 예보에는 입력과 계수 근거가 있어야 한다");
+    public SeatForecast withAlightingAwareEvidence(String snapshot, String bundleHash, String labelVersion) {
+        if (!hasAlightingAwareEvidence(snapshot, bundleHash)) {
+            throw new IllegalArgumentException("하차 반영 예보에는 입력과 계수 근거가 있어야 한다");
         }
         return new SeatForecast(vehicleObservationId, routeVersionId, targetStopOrder, stopsToTarget,
             modelDeploymentId, demandStatisticsRevision, seatFullChanceRaw, seatFullChance, expectedSeats,
@@ -125,8 +125,8 @@ public record SeatForecast(
             generatedAt, required, seatTarget, probabilityTarget, labelVersion, featureSnapshot, inferenceBundleHash);
     }
 
-    private boolean hasLesEvidence(String snapshot, String bundleHash) {
-        return SeatForecastResult.LES_SEAT_TARGET.equals(seatTarget) && snapshot != null && bundleHash != null;
+    private boolean hasAlightingAwareEvidence(String snapshot, String bundleHash) {
+        return SeatForecastResult.ALIGHTING_AWARE_SEAT_TARGET.equals(seatTarget) && snapshot != null && bundleHash != null;
     }
 
 }

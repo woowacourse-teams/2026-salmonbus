@@ -6,7 +6,7 @@ major="$(/usr/bin/java -version 2>&1 | head -1 | sed -n 's/.*version "\([0-9]*\)
 [[ $major == 21 ]] || { log 'Java 21을 확인해 주세요.'; exit 1; }
 id "$SERVICE_USER" >/dev/null 2>&1 || { log '앱 실행 계정을 확인해 주세요.'; exit 1; }
 if [[ $COMPONENT == worker ]]; then
-  [[ -f $MODEL_DIRECTORY/manifest.json && -f $MODEL_DIRECTORY/weights.safetensors ]] || {
+  [[ -f $MODEL_DIRECTORY/manifest.json && -f $MODEL_DIRECTORY/base.json ]] || {
     log 'dev 모델 준비가 필요합니다.'; exit 1;
   }
 fi

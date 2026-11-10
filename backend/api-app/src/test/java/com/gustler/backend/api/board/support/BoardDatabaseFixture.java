@@ -71,11 +71,8 @@ public class BoardDatabaseFixture {
             .query(Long.class)
             .single();
 
-        jdbcClient.sql("INSERT INTO route_data_quality (route_id) VALUES (:routeId)")
+        jdbcClient.sql("UPDATE route SET data_revision=1 WHERE id=:routeId")
             .param("routeId", routeId)
-            .update();
-        jdbcClient.sql("INSERT INTO route_version_quality_policy (route_version_id) VALUES (:routeVersionId)")
-            .param("routeVersionId", routeVersionId)
             .update();
 
         return new RouteContext(routeId, routeVersionId, sourceRouteId);
@@ -109,9 +106,6 @@ public class BoardDatabaseFixture {
             .param("previousRouteVersionId", route.routeVersionId())
             .query(Long.class)
             .single();
-        jdbcClient.sql("INSERT INTO route_version_quality_policy (route_version_id) VALUES (:routeVersionId)")
-            .param("routeVersionId", routeVersionId)
-            .update();
 
         return new RouteContext(route.routeId(), routeVersionId, route.sourceRouteId());
     }

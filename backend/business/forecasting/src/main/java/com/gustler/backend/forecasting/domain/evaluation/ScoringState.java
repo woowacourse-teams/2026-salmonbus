@@ -11,6 +11,7 @@ public enum ScoringState {
     LOST,
     SEAT_MISSING,
     QUALITY_EXCLUDED,
+    MODEL_RETIRED,
     ;
 
     public boolean scorable() {

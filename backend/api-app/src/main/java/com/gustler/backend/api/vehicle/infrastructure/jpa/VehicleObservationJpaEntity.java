@@ -20,7 +20,7 @@ import org.hibernate.annotations.Immutable;
  * 수집 배치의 원천 행 식별을 유지하며 저장된 차량 관측을 조회 모델로 옮기는 JPA 매핑이다.
  */
 @Entity
-@Table(name = "forecast_observation_quality")
+@Table(name = "operational_observation")
 @Immutable
 public class VehicleObservationJpaEntity {
     @Id
@@ -55,9 +55,6 @@ public class VehicleObservationJpaEntity {
     @Column(name = "seat_unknown_reason")
     private String seatUnknownReason;
 
-    @Column(name = "forecast_eligible")
-    private boolean forecastEligible;
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumns({
         @JoinColumn(
@@ -87,7 +84,7 @@ public class VehicleObservationJpaEntity {
                 stopId,
                 routeStop.name(),
                 phase,
-                VehicleSeat.from(remainingSeats, seatUnknownReason, forecastEligible)
+                VehicleSeat.from(remainingSeats, seatUnknownReason)
             ));
     }
 }

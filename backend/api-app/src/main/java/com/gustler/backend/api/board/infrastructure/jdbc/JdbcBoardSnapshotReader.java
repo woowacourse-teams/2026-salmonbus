@@ -40,7 +40,6 @@ public class JdbcBoardSnapshotReader {
                flags.published, b.id AS batch_id, b.response_received_at, b.stored_rows,
                model.id AS model_id, model.release_id, model.data_until,
                CASE WHEN b.id IS NULL THEN NULL ELSE concat_ws('|',
-                   'q' || COALESCE(quality.quality_revision::text, '-'),
                    'p' || COALESCE(publication.published_at::text, '-'),
                    'g' || COALESCE(publication.generated_at::text, '-'),
                    'n' || COALESCE(publication.prediction_count::text, '-'),
@@ -72,7 +71,7 @@ public class JdbcBoardSnapshotReader {
             ORDER BY candidate.response_received_at DESC, candidate.id DESC LIMIT 1)
         ) b ON true
         LEFT JOIN model_deployment model ON model.state='ACTIVE'
-        LEFT JOIN route_data_quality quality ON quality.route_id=v.route_id
+
         LEFT JOIN forecast_publication publication ON publication.source_batch_id=b.id
         WHERE r.source_route_id=:routeId AND v.valid_to IS NULL
         """;

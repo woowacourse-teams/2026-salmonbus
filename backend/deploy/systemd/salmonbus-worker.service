@@ -18,9 +18,6 @@ Environment=MODEL_BUNDLE_PROMOTE_ON_START=false
 Environment=WALK_DISTANCES_DIRECTORY=/var/lib/salmonbus/walking/current
 
 # 배포 후 검증된 완료 정산의 이관·삭제를 실행한다. worker.env에서 각각 false로 중지할 수 있다.
-Environment=FORECAST_ARCHIVE_ENABLED=true
-Environment=FORECAST_ARCHIVE_DELETE_ENABLED=true
-Environment=FORECAST_ARCHIVE_WORK_DIRECTORY=/var/lib/salmonbus/evaluation-archive
 
 # 값을 유닛에 직접 쓰지 않는다. 위 Environment= 보다 뒤에 와서 필요하면 덮어쓴다
 EnvironmentFile=/etc/salmonbus/worker.env

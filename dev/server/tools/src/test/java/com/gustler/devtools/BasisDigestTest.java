@@ -32,12 +32,12 @@ class BasisDigestTest {
                         "dev/data/routes.json",
                         "dev/data/catalog-routes.json",
                         "dev/data/model-reference/manifest.json",
-                        "dev/data/models/coldstart-20261016/manifest.json",
+                        "dev/data/model-reference/manifest.json",
                         "dev/wiremock/mappings/location.json",
                         "dev/wiremock-extension/src/main/Replay.java",
                         "dev/scenarios/replay.json",
                         "dev/server/data.init",
-                        "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/model/ForecastFeatureContract.java",
+                        "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/model/alighting/AlightingAwareFeatureVector.java",
                         "backend/common/src/main/resources/db/migration/V1__initial.sql")) {
             var file = repo.resolve(name);
             Files.createDirectories(file.getParent());
@@ -58,7 +58,7 @@ class BasisDigestTest {
         for (var name :
                 List.of(
                         "dev/server/data.init",
-                        "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/model/ForecastFeatureContract.java",
+                        "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/model/alighting/AlightingAwareFeatureVector.java",
                         "backend/common/src/main/resources/db/migration/V2__added.sql")) {
             Files.writeString(repo.resolve(name), "changed input\n");
             var after = packager.basisDigest();

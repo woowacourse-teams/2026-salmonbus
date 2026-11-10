@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
-import com.gustler.backend.forecasting.api.evaluation.SameDayInitializationPolicy;
 import com.gustler.backend.worker.configuration.BusinessConfiguration.ForecastPolicies;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -71,8 +70,7 @@ class BusinessConfigurationTest {
 
                 // then
                 assertThat(context)
-                    .hasSingleBean(ForecastPolicy.class)
-                    .hasSingleBean(SameDayInitializationPolicy.class);
+                    .hasSingleBean(ForecastPolicy.class);
             });
     }
 
@@ -105,21 +103,8 @@ class BusinessConfigurationTest {
                 assertThat(context)
                     .hasNotFailed()
                     .doesNotHaveBean(ForecastProperties.class)
-                    .doesNotHaveBean(SameDayInitializationProperties.class)
-                    .doesNotHaveBean(ForecastPolicy.class)
-                    .doesNotHaveBean(SameDayInitializationPolicy.class);
+                    .doesNotHaveBean(ForecastPolicy.class);
             });
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"0s", "-1h"})
-    void 예보를_꺼도_통계_주기가_양수가_아니면_기동을_멈춘다(String interval) {
-        // when
-        Throwable caughtFailure = catchThrowable(() -> new BusinessConfiguration().demandStatisticsPolicy(interval));
-
-        // then
-        assertThat(caughtFailure)
-            .isNotNull().isInstanceOf(IllegalArgumentException.class);
     }
 
     private static ApplicationContextRunner forecastPoliciesRunner(

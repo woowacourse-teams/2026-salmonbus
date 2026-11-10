@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.inOrder;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.gustler.backend.diagnostics.WorkerOperationLog;
+import com.gustler.backend.observations.api.CloseUnfinishedCollections;
 import com.gustler.backend.observations.application.ObservationCollector;
 import com.gustler.backend.worker.configuration.CollectionProperties;
 import java.util.List;
@@ -17,6 +19,7 @@ import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
@@ -31,6 +34,9 @@ class CollectionSchedulerTest {
 
     @Mock
     private ObservationCollector collector;
+
+    @Mock
+    private CloseUnfinishedCollections unfinished;
 
     @InjectMocks
     private CollectionScheduler scheduler;
@@ -100,6 +106,28 @@ class CollectionSchedulerTest {
     }
 
     @Test
+    void 이전_회차_정리를_마친_뒤_첫_노선을_수집한다() {
+        given(properties.routeIds()).willReturn(List.of(ROUTE_3330));
+        given(unfinished.closePreviousRound()).willReturn(List.of(1L));
+
+        scheduler.collectAllRoutes();
+
+        InOrder order = inOrder(unfinished, collector);
+        order.verify(unfinished).closePreviousRound();
+        order.verify(collector).collectOnce(ROUTE_3330);
+    }
+
+    @Test
+    void 이전_회차_정리에_실패해도_현재_수집은_계속한다() {
+        given(properties.routeIds()).willReturn(List.of(ROUTE_3330));
+        given(unfinished.closePreviousRound()).willThrow(new IllegalStateException("DB unavailable"));
+
+        scheduler.collectAllRoutes();
+
+        then(collector).should().collectOnce(ROUTE_3330);
+    }
+
+    @Test
     void 돌_노선이_없으면_아무것도_부르지_않는다() {
         // given
         given(properties.routeIds()).willReturn(List.of());
@@ -109,5 +137,6 @@ class CollectionSchedulerTest {
 
         // then
         then(collector).shouldHaveNoInteractions();
+        then(unfinished).shouldHaveNoInteractions();
     }
 }

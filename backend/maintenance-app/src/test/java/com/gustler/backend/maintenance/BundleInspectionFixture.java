@@ -1,132 +1,121 @@
 package com.gustler.backend.maintenance;
 
-import com.gustler.backend.forecasting.domain.model.HorizonCoefficients;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionInput;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
-import com.gustler.backend.forecasting.domain.model.SeatForecastDesignMatrix;
-import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.stream.Stream;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
-/** 원 관측이나 학습 계수 없이 만드는 0 계수의 형식 검증용 합성 자료. */
+/** 모델 정확도와 무관한 상수 트리의 프로세스 점검용 합성 번들이다. */
 final class BundleInspectionFixture {
-    private static final List<String> ROUTES = List.of("1650", "3330", "9007", "9300", "6011", "3000", "5600", "3500");
-
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final List<String> ROUTES = List.of("3330", "1650", "9007", "9300", "6011", "3000", "5600", "3500");
+    private final Path directory;
+    private BundleInspectionFixture(Path directory) { this.directory=directory; }
     static void write(Path directory) throws Exception {
         Files.createDirectories(directory);
-        final int features = SeatForecastDesignMatrix.COLUMN_COUNT;
-        Map<String, int[]> shapes = new LinkedHashMap<>();
-        shapes.put("hurdle_coefficients", new int[] {8, 12, features});
-        shapes.put("anchor_coefficients", new int[] {8, 12, 2});
-        shapes.put("sign_coefficients", new int[] {8, 12, 2, features});
-        shapes.put("bin_coefficients", new int[] {8, 12, 2, 9, features});
-        shapes.put("bin_fitted", new int[] {8, 12, 2, 9});
-        Map<String, Object> header = new LinkedHashMap<>();
-        Map<String, Object> declarations = new LinkedHashMap<>();
-        int offset = 0;
-        for (Entry<String, int[]> entry : shapes.entrySet()) {
-            String dtype = tensorDataType(entry.getKey());
-            final int bytes = Arrays.stream(entry.getValue())
-                .reduce(1, (a, b) -> a * b) * elementBytes(dtype);
-            List<Integer> shape = Arrays.stream(entry.getValue())
-                .boxed()
-                .toList();
-            header.put(entry.getKey(),
-                Map.of("dtype", dtype, "shape", shape, "data_offsets", List.of(offset, offset + bytes)));
-            declarations.put(entry.getKey(), Map.of("dtype", dtype, "shape", shape));
-            offset += bytes;
-        }
-        byte[] headerBytes = CanonicalJson.stringOf(header).getBytes(StandardCharsets.UTF_8);
-        final int paddedSize = ((headerBytes.length + 7) / 8) * 8;
-        ByteBuffer buffer = ByteBuffer.allocate(8 + paddedSize + offset).order(ByteOrder.LITTLE_ENDIAN);
-        buffer.putLong(paddedSize).put(headerBytes);
-        while (buffer.position() < 8 + paddedSize) {
-            buffer.put((byte) ' ');
-        }
-        byte[] weights = buffer.array();
-        HorizonCoefficients coefficients = new HorizonCoefficients(new double[features], new double[2],
-            new double[features], new double[features], new double[2][9][features], new boolean[2][9]);
-        SeatDistributionPredictor predictor = new SeatDistributionPredictor((route, horizon) -> coefficients,
-            new double[] {0, .03, .07, .12, .2, .32, .48, .7, 1});
-        double[] vector = new double[features];
-        vector[0] = 1;
-        SeatForecastResult predicted = predictor.predict(new SeatDistributionInput(vector, "1650", 1, 10, 40, null));
-        final double fullChance = predicted.distribution().fullChance();
-        final double expectedSeats = predicted.distribution().expectedSeats();
-        String vectorText = Arrays.stream(vector)
-            .mapToObj(Double::toString)
-            .collect(Collectors.joining(","));
-        String goldenDigest = sha(String.join("\n", vectorText, "1650", "1", "10", "40",
-            Double.toString(fullChance), Double.toString(expectedSeats)).getBytes(StandardCharsets.UTF_8));
-        String weightsDigest = sha(weights);
-        String referenceDigest = sha("synthetic-reference".getBytes(StandardCharsets.UTF_8));
-        String featureContract = "bundle-check-fixture-v1";
-        String modelVersion = "seat-distribution-a18-v1";
-        String sourceCommit = "0".repeat(40);
-        String timeSource = "observation_batch.response_received_at";
-        String capacityPolicy = "maximum-seats-ever-observed";
-        String statisticsPolicy = "stop-demand-statistics";
-        String identity = sha(String.join("\n", featureContract, sourceCommit, modelVersion,
-            "synthetic-reference-v1", referenceDigest, weightsDigest,
-            String.join(",", SeatForecastDesignMatrix.COLUMN_NAMES), "largestSeatCount=68.0,lowSeatBand=20.0",
-            timeSource, capacityPolicy, statisticsPolicy, goldenDigest).getBytes(StandardCharsets.UTF_8));
-        Map<String, Object> manifest = new LinkedHashMap<>();
-        manifest.put("bundleSchemaVersion", "a18-live-bundle-v1");
-        manifest.put("modelVersion", modelVersion);
-        manifest.put("releaseId", "bundle-check-fixture");
-        manifest.put("featureContractVersion", featureContract);
-        manifest.put("sourceCommit", sourceCommit);
-        manifest.put("routeReference", Map.of("version", "synthetic-reference-v1", "digest", referenceDigest));
-        manifest.put("routes", ROUTES);
-        manifest.put("horizonStops", IntStream.rangeClosed(1, 12)
-                .boxed()
-                .toList());
-        manifest.put("featureNames", SeatForecastDesignMatrix.COLUMN_NAMES);
-        manifest.put("normalizationConstants", Map.of("largestSeatCount", 68.0, "lowSeatBand", 20.0));
-        manifest.put("timeSlotSource", timeSource);
-        manifest.put("capacityPolicy", capacityPolicy);
-        manifest.put("cellStatisticsPolicy", statisticsPolicy);
-        manifest.put("tensors", declarations);
-        manifest.put("weightsDigest", weightsDigest);
-        manifest.put("goldenVectorDigest", goldenDigest);
-        manifest.put("identityDigest", identity);
-        manifest.put("dataThrough", "2026-09-29T12:00:00Z");
-        manifest.put("goldenVector", Map.of("modelRoute", "1650", "stopsAhead", 1,
-            "currentSeats", 10, "capacity", 40, "featureVector", Arrays.stream(vector)
-                .boxed()
-                .toList(),
-            "expectedFullChance", fullChance, "expectedSeats", expectedSeats));
-        Files.write(directory.resolve("weights.safetensors"), weights);
-        Files.writeString(directory.resolve("manifest.json"), CanonicalJson.stringOf(manifest));
+        var fixture = new BundleInspectionFixture(directory);
+        fixture.fixture();
+        fixture.servingFixture((1.3+10)/3);
     }
 
-    private static String sha(byte[] bytes) throws Exception {
-        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+    private void servingFixture(final double seats) throws Exception {
+        Map<String, Object> golden = Map.of("seat_inputs", List.of(new double[88]), "probability_inputs",
+            List.of(new double[80]),
+            "expected_base", List.of(10), "expected_gate_probabilities", List.of(List.of(1.0 / 3, 1.0 / 3, 1.0 / 3)),
+            "expected_seats", List.of(seats), "expected_departure_full", List.of(0.5));
+        Files.writeString(directory.resolve("golden.json"), JSON.writeValueAsString(golden));
+        Files.writeString(directory.resolve("boundaries.json"), JSON.writeValueAsString(golden));
+        manifest();
+        byte[] source = Files.readAllBytes(directory.resolve("manifest.json"));
+        String sourceHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source));
+        Files.write(directory.resolve("verification-source-manifest.json"), source);
+        for (String check : List.of("feature_parity", "historical_replay", "settlement", "runtime_validation")) {
+            String evidence = "{\"syntheticFixture\":true}";
+            Files.writeString(directory.resolve("evidence-" + check + ".json"), evidence);
+            String hash = HexFormat.of()
+                .formatHex(MessageDigest.getInstance("SHA-256").digest(evidence.getBytes(StandardCharsets.UTF_8)));
+            Files.writeString(directory.resolve("verification-" + check + ".json"), JSON.writeValueAsString(Map.of(
+                "schema", "alighting-serving-verification-v1", "check", check, "status", "PASS", "verified_cases", 1,
+                "source_manifest_sha256", sourceHash, "feature_contract_version", "alighting-online-v1",
+                "evidence_file", "evidence-" + check + ".json", "evidence_sha256", hash)));
+        }
+        manifest();
+        ObjectNode root = (ObjectNode) JSON.readTree(Files.readAllBytes(directory.resolve("manifest.json")));
+        root.put("serving_ready", true);
+        root.set("runtime",
+            JSON.valueToTree(Map.of("release_id", "test-alighting", "feature_contract_version", "alighting-online-v1",
+                "data_through", "2026-10-21T00:00:00Z", "source_manifest_sha256", sourceHash, "routes", ROUTES,
+                "scope", "weekday-rush-6-10-17-21-horizon-1-12")));
+        Files.writeString(directory.resolve("manifest.json"), JSON.writeValueAsString(root));
     }
 
-    private static String tensorDataType(String name) {
-        if (name.equals("bin_fitted")) {
-            return "U8";
-        }
-        return "F64";
+    private void fixture() throws Exception {
+        fixture(ROUTES);
     }
 
-    private static int elementBytes(String dtype) {
-        if (dtype.equals("U8")) {
-            return 1;
+    private void fixture(List<String> routes) throws Exception {
+        try (InputStream input = getClass().getResourceAsStream("/alighting/feature-contract.json")) {
+            Files.write(directory.resolve("feature-contract.json"), input.readAllBytes());
         }
-        return 8;
+        Files.writeString(directory.resolve("constants.json"),
+            "{\"target\":\"after\",\"classes\":[0,1,2],\"middle\":1.3}");
+        model("base", "regression", 88, List.of(), List.of(10));
+        model("gate", "multiclass", 88, List.of(0, 1, 2), List.of(0, 0, 0));
+        model("pool", "binary", 80, List.of(0, 1), List.of(0));
+        Files.writeString(directory.resolve("statistics-manifest.json"),
+            JSON.writeValueAsString(Map.of("schema", "alighting-statistics-v1", "routes", routes, "holiday_dates", List.of())));
+        Files.writeString(directory.resolve("route-reference.json"),
+            JSON.writeValueAsString(Map.of("routes", routes.stream().map(r -> Map.of("modelRoute", r)).toList())));
+        for (String route : routes) {
+            Files.writeString(directory.resolve("statistics-" + route + ".json"), JSON.writeValueAsString(Map.of(
+                "route", route, "min_per_stop", 1, "tables", Map.of("lam",List.of(),"lam_base",List.of(),
+                    "net_tab",List.of(),"full_tab",List.of(),"dep_tab",List.of(),"stop_net_base",List.of(),
+                    "target_band",List.of()), "alighting", Map.of("stops",List.of()), "route_metadata",
+                List.of(Map.of("order",1,"id","s1","name","정류장1","direction","UP","boardingAllowed",true)),
+                "events_known_through", "2026-10-21T00:00:00Z", "observations_through", "2026-10-21T00:00:00Z")));
+        }
+        manifest();
+    }
+
+    private void model(
+        String name,
+        String kind,
+        final int size,
+        List<Integer> classes,
+        List<Integer> baseline
+    )
+        throws Exception {
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("schema", "alighting-numeric-hgb-v1");
+        value.put("kind", kind);
+        value.put("classes", classes);
+        value.put("feature_count", size);
+        value.put("baseline", baseline);
+        value.put("leaf_values_include_learning_rate", true);
+        value.put("node_fields", List.of("feature", "threshold", "missing_left", "left", "right", "value", "leaf"));
+        value.put("trees", List.of(baseline.stream().map(v -> List.of(List.of(0, 0, false, 0, 0, 0, true))).toList()));
+        Files.writeString(directory.resolve(name + ".json"), JSON.writeValueAsString(value));
+    }
+
+    private void manifest() throws Exception {
+        Map<String, String> hashes = new LinkedHashMap<>();
+        try (Stream<Path> stream = Files.list(directory)) {
+            for (Path path : stream.filter(p -> !p.getFileName().toString().equals("manifest.json")).toList()) {
+                hashes.put(path.getFileName().toString(),
+                    HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))));
+            }
+        }
+        Files.writeString(directory.resolve("manifest.json"), JSON.writeValueAsString(Map.of(
+            "schema", "alighting-inference-bundle-v1", "model", "alighting-gate-base-and-pool", "serving_ready", false,
+            "output_targets", List.of("after-alighting-estimated", "departure-zero"), "files", hashes)),
+            StandardCharsets.UTF_8);
     }
 }
