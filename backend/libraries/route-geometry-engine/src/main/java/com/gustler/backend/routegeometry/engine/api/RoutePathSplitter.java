@@ -25,6 +25,13 @@ final class RoutePathSplitter {
     }
 
     static RoutePaths split(RouteGeometry geometry) {
+        Split result = splitWithBoundary(geometry);
+        return result == null ? null : result.paths();
+    }
+
+    record Split(RoutePaths paths, int sourceSegmentIndex, double sourceFraction) {}
+
+    static Split splitWithBoundary(RouteGeometry geometry) {
         if (geometry.shape() == null || geometry.turnSequence() == null) {
             return null;
         }
@@ -86,7 +93,9 @@ final class RoutePathSplitter {
                 return null;
             }
         }
-        return cut(points, best, forwardRow.fractions()[best]);
+        double fraction = forwardRow.fractions()[best];
+        RoutePaths paths = cut(points, best, fraction);
+        return paths == null ? null : new Split(paths, best, fraction);
     }
 
     private static boolean hasInvalidTurnBoundary(int turn, int stopCount) {

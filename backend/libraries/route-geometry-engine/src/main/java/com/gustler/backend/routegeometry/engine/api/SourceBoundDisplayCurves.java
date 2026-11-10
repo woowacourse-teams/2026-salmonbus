@@ -70,6 +70,63 @@ public final class SourceBoundDisplayCurves {
         return new Plan("VALIDATED_NODE_BASELINE_METRIC_ARCLENGTH_NOT_ORIGINAL_RAW_PROGRESS",paths,mappings,metrics,count,bound,true,true,notes);
     }
 
+    static Plan withTurnSupport(RouteGeometry geometry,Plan current,Map<Integer,Connection> connections) {
+        var classified=EvidenceRoutePaths.classify(geometry).classifications();
+        var contacts=RouteDisplayTopology.contacts(current.paths());var rendered=RouteDisplayTopology.rendererContacts(current.paths());
+        if(!contacts.complete()||!rendered.complete())return current;
+        List<Point> topology=new ArrayList<>();
+        for(var c:contacts.values()){topology.add(c.first());topology.add(c.last());}
+        for(var c:rendered.values()){topology.add(c.first());topology.add(c.last());}
+        Map<String,Correspondence> maps=new LinkedHashMap<>(current.correspondences());
+        int added=0;double bound=current.maximumCertifiedDeviationMetres();
+        for(String direction:List.of("UP","DOWN")) {
+            var old=maps.get(direction);var reference=old.referencePoints();
+            var terminal=terminalSubsegmentSupport(geometry,direction,reference,connections,classified);
+            var witness=TurnSubsegmentSupport.certify(geometry,direction,reference,connections,classified,terminal);
+            if(witness.isEmpty()||reference.size()<3)continue;
+            int i=witness.get().referenceEndpointIndex()==0?1:reference.size()-2;
+            Point vertex=reference.get(i);
+            var labels=classified.getOrDefault(vertex,List.of()).stream().filter(p->direction.equals(p.direction())).toList();
+            if(labels.isEmpty()||labels.stream().anyMatch(p->p.type()!=3))continue;
+            long occurrences=current.correspondences().values().stream().flatMap(m->m.referencePoints().stream()).filter(vertex::equals).count();
+            if(occurrences!=1)continue;
+            Line source=new Line(reference,old.metricFrame());double at=source.chain[i];
+            double turn=angle(sub(source.xy.get(i),source.xy.get(i-1)),sub(source.xy.get(i+1),source.xy.get(i)));
+            if(turn<8||turn>160)continue;
+            List<Double> protectedProgress=new ArrayList<>();
+            for(int j=0;j<reference.size();j++)if(classified.getOrDefault(reference.get(j),List.of()).stream().anyMatch(p->p.type()==1))protectedProgress.add(source.chain[j]);
+            for(var stop:geometry.busStops())if(direction.equals(stop.direction())) {
+                var c=connections.get(stop.stopSequence());
+                if(c!=null)protectedProgress.add(source.chain[c.segmentIndex()]+c.segmentFraction()*(source.chain[c.segmentIndex()+1]-source.chain[c.segmentIndex()]));
+            }
+            double limit=.35*Math.min(source.chain[i]-source.chain[i-1],source.chain[i+1]-source.chain[i]);
+            for(double cap:new double[]{12,8,5,3,1}) {
+                double trim=Math.min(limit,cap),lo=at-trim,hi=at+trim;
+                if(trim<.5||protectedProgress.stream().anyMatch(s->lo-STOP_SUPPORT_METRES<=s&&s<=hi+STOP_SUPPORT_METRES))continue;
+                if(geometry.busStops().stream().anyMatch(s->s.point()!=null&&distance(old.metricFrame().xy(s.point()),source.xy.get(i))<=STOP_SUPPORT_METRES))continue;
+                if(topology.stream().anyMatch(p->distance(old.metricFrame().xy(p),source.xy.get(i))<=trim+.05))continue;
+                if(!AnchorPreservingDisplayCurves.straightOnSource(old,lo,at)||!AnchorPreservingDisplayCurves.straightOnSource(old,at,hi))continue;
+                var patch=corner(source,i,trim,old.metricFrame());if(patch==null)continue;
+                TreeMap<Double,Point> points=new TreeMap<>();
+                for(int j=0;j<old.displayPoints().size();j++)points.put(old.referenceProgressAtDisplayVertices().get(j),old.displayPoints().get(j));
+                points.subMap(lo,true,hi,true).clear();
+                for(int j=0;j<patch.points().size();j++)points.put(patch.sourceProgress().get(j),patch.points().get(j));
+                var candidate=new Correspondence(reference,new ArrayList<>(points.values()),new ArrayList<>(points.keySet()),old.referenceLengthMetres(),old.metricFrame());
+                if(!AnchorPreservingDisplayCurves.noNewCurvature(old,candidate))continue;
+                maps.put(direction,candidate);added++;bound=Math.max(bound,patch.bound());break;
+            }
+        }
+        if(added==0)return current;
+        var paths=new RoutePaths(new RoutePaths.Path(maps.get("UP").displayPoints()),new RoutePaths.Path(maps.get("DOWN").displayPoints()));
+        if(!endpointsPreserved(current.paths(),paths)||!RouteDisplayTopology.noNewCrossings(current.paths(),paths)
+                ||!RouteDisplayTopology.noNewRendererCrossings(current.paths(),paths)||!RouteDisplayTopology.noNewContacts(current.paths(),paths)
+                ||!RouteDisplayTopology.noNewSpike(current.paths(),paths))return current;
+        Map<String,Curvature> metrics=new LinkedHashMap<>();for(var entry:maps.entrySet())metrics.put(entry.getKey(),curvature(entry.getValue()));
+        var notes=new ArrayList<>(current.notes());notes.add("TURN_SUBSEGMENT_FILLET:EXACT_ORDERED_SOURCE_OCCURRENCE");
+        return new Plan(current.referenceDomain(),paths,maps,metrics,current.curveCount()+added,bound,
+                current.continuousControlHullCertified(),current.serializedChordCorrespondenceCertified(),notes);
+    }
+
     private static Built buildPath(RouteGeometry geometry,String direction,List<Point> reference,
             Map<Point,List<com.gustler.backend.routegeometry.api.RouteShapeEvidence.TypedPoint>> classified,
             Map<Integer,Connection> connections,Set<Point> shared,List<Point> protectedCrossings,boolean topologyAvailable) {
