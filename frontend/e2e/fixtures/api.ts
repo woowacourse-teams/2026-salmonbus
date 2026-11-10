@@ -53,6 +53,15 @@ export const test = base.extend<{ api: MockApi }>({
           });
           return;
         }
+        // 연어행동 조회는 기본이 꺼져 있다. 판정보드가 이 GET을 보내므로 응답이 없으면 E2E가 요청을 끊는다.
+        if (request.method() === "GET" && /^\/api\/v1\/routes\/[^/]+\/stations\/[^/]+\/salmon-action$/.test(path)) {
+          await route.fulfill({
+            status: 200,
+            headers: { "Cache-Control": "no-store" },
+            json: { kind: "DISABLED" },
+          });
+          return;
+        }
         const geometryRoute = /^\/api\/v2\/routes\/([^/]+)\/geometry$/.exec(path)?.[1];
         const endpoint: Endpoint | undefined = /^\/api\/v2\/stations\/[^/]+\/arrivals$/.test(path)
           ? "arrivals"

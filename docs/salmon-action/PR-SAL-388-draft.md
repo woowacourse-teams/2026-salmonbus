@@ -291,7 +291,7 @@ SAL-396과 SAL-392는 앞의 재작성 이력을 같이 가져온다.
 구간 비교 허용 오차는 `1e-9`다.
 공개 조회 테스트는 플래그 꺼짐, 근거 부족, 정류장 형식 오류, 노선 ID 400을 고정한다.
 
-`backend/test-baseline.properties`의 실행 수는 api-app 1355건, arrivals 48건이다.
+`backend/test-baseline.properties`의 실행 수는 api-app 1518건, arrivals 48건이다.
 skipped는 0건이다.
 이 수로 `verifyTestCount`가 통과했다.
 
