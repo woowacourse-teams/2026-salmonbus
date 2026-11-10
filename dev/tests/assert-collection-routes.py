@@ -70,7 +70,7 @@ def verify(api, data):
             assert listed[route_id]["status"] == expected, f"{route_id}: 목록 status != {expected}"
             status, body = get(f"/api/v1/routes/{route_id}/board")
             expect_forecasts = has_model and supports_time(
-                datetime.fromisoformat(body["observedAt"]), holiday_dates)
+                datetime.fromisoformat(body["observedAt"].replace("Z", "+00:00")), holiday_dates)
             verify_board(route_id, status, body, has_model, expect_forecasts)
         except (AssertionError, KeyError, urllib.error.URLError) as error:
             failures.append(f"{route_id}: {error}")
