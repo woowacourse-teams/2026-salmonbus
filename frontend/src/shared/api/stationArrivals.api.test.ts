@@ -49,6 +49,7 @@ describe("fetchStationArrivals", () => {
       "/api/v2/stations/S%2F%20%3F%23%ED%95%9C%EA%B8%80%25/arrivals?routeId=R%26%3D+%2F&referenceVersionId=7%26visit%3D2&stopSequence=22";
     expect(global.fetch).toHaveBeenCalledWith(url, expect.anything());
     expect(reportFailure).toHaveBeenCalledWith(url, expect.anything(), {
+      method: "GET",
       context: {
         endpoint: "/api/v2/stations/:stationId/arrivals",
         tags: { route_id: "R&= /", station_id: "S/ ?#한글%" },

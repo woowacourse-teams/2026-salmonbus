@@ -60,7 +60,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
   const [entry] = useState(() => boardEntryFrom(location.state));
   const [watchRevision, setWatchRevision] = useState(0);
   const revalidateWatch = useRef(false);
-  const watchResource = usePolledRequest<RouteWatch>(
+  const { resource: watchResource, requestState } = usePolledRequest<RouteWatch>(
     (id, signal) => {
       const refresh = revalidateWatch.current;
       revalidateWatch.current = false;
@@ -70,6 +70,7 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
     watchRevision,
   );
   const latestWatch = latestSuccessOf(watchResource);
+  const retrying = requestState === "loading";
   const freshLiveVehicles = useFreshLiveVehicles(latestWatch);
   const motionDurationMs = liveMotionDurationOf(watchResource);
   const [preferredDirection, setPreferredDirection] = useState<Direction | null>(() =>
@@ -140,8 +141,19 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
             </button>
           )}
         </div>
+      ) : status === "error" ? (
+        <StopBoard
+          status="error"
+          retrying={retrying}
+          autoRetry={requestState === "scheduled"}
+          onRetry={() => {
+            if (retrying) return;
+            revalidateWatch.current = true;
+            setWatchRevision((revision) => revision + 1);
+          }}
+        />
       ) : (
-        <StopBoard status={status} />
+        <StopBoard status="loading" />
       )}
     </main>
   );
@@ -292,6 +304,7 @@ function OperatingBoard({
             board={board}
             data={map.data}
             geometryStatus={map.status}
+            geometryRetrying={map.retrying}
             selected={mapSelection}
             onSelect={selectFromMap}
             onVehicleSelect={selectVehicleFromMap}

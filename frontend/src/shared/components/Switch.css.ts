@@ -19,7 +19,18 @@ export const input = style({
     "&:focus-visible": { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 3 },
     "&:disabled": { opacity: 0.45, cursor: "default" },
   },
-  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
+  "@media": {
+    "(prefers-reduced-motion: reduce)": { transition: "none" },
+    "(forced-colors: active)": {
+      forcedColorAdjust: "none",
+      border: "2px solid CanvasText",
+      background: "Canvas",
+      selectors: {
+        "&:checked": { borderColor: "Highlight", background: "Highlight" },
+        "&:focus-visible": { outlineColor: "CanvasText" },
+      },
+    },
+  },
 });
 
 export const thumb = style({
@@ -34,5 +45,13 @@ export const thumb = style({
   pointerEvents: "none",
   transition: "transform 150ms linear",
   selectors: { [`${input}:checked + &`]: { transform: "translateX(18px)" } },
-  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
+  "@media": {
+    "(prefers-reduced-motion: reduce)": { transition: "none" },
+    "(forced-colors: active)": {
+      forcedColorAdjust: "none",
+      background: "CanvasText",
+      boxShadow: "none",
+      selectors: { [`${input}:checked + &`]: { background: "HighlightText" } },
+    },
+  },
 });

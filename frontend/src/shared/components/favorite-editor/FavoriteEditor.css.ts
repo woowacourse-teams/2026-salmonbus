@@ -14,6 +14,43 @@ export const editor = style({
   fontFamily: "'Noto Sans KR', sans-serif",
 });
 export const groupControls = style({ display: "flex", alignItems: "center", gap: 8 });
+export const controls = style({
+  display: "flex",
+  flexDirection: "column",
+  gap: 16,
+  selectors: { "&[hidden]": { display: "none" } },
+});
+
+export const loadError = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 32,
+  // 홈 헤더 130px, 본문 여백 48px, 하단 메뉴 공간 100px을 제외한다.
+  minHeight: "calc(100dvh - 278px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))",
+  textAlign: "center",
+});
+
+export const loadNotice = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+});
+
+export const returnHome = style({
+  padding: 0,
+  border: 0,
+  background: "transparent",
+  font: "inherit",
+  cursor: "pointer",
+  color: vars.color.textSubtle,
+  fontSize: 13,
+  textDecoration: "underline",
+  textUnderlineOffset: 3,
+  ":focus-visible": { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 4 },
+});
+
 export const groupList = style({ minWidth: 0 });
 export const groupName = style({
   minWidth: 0,

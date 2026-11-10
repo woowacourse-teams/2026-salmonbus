@@ -22,6 +22,11 @@ export const edit = style([
   text,
   { display: "grid", placeItems: "center", flexShrink: 0, width: 36, height: 32, padding: "6px 8px" },
 ]);
+export const loadNotice = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+});
 export const heading = style({
   display: "flex",
   alignItems: "center",

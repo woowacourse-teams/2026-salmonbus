@@ -18,6 +18,7 @@ interface RouteMapProps {
   board: Board;
   data: RouteMapData | null;
   geometryStatus: RouteMapGeometryStatus;
+  geometryRetrying: boolean;
   selected: StopSelection | null;
   onSelect: (selection: StopSelection) => void;
   onVehicleSelect: (selection: StopSelection, key: string) => void;
@@ -52,6 +53,7 @@ export function RouteMap(props: RouteMapProps) {
   const {
     data,
     geometryStatus,
+    geometryRetrying,
     visible,
     viewportHeight,
     selected,
@@ -98,16 +100,13 @@ export function RouteMap(props: RouteMapProps) {
   }, []);
 
   const failMap = useCallback(
-    (failedData: RouteMapData, error: unknown) => {
+    (failedData: RouteMapData) => {
       if (propsRef.current.data !== failedData) return;
       disposeMap();
       setMapState({
         status: "error",
         data: failedData,
-        message:
-          error instanceof Error && error.message === "지도 설정을 준비 중이에요"
-            ? error.message
-            : "지도를 불러오지 못했어요",
+        message: "지도를 불러오지 못했어요",
       });
       setLocationState({ status: "idle" });
     },
@@ -120,9 +119,9 @@ export function RouteMap(props: RouteMapProps) {
       if (adapter === null) return;
       try {
         action(adapter);
-      } catch (error) {
+      } catch {
         const currentData = propsRef.current.data;
-        if (currentData !== null) failMap(currentData, error);
+        if (currentData !== null) failMap(currentData);
       }
     },
     [failMap],
@@ -151,10 +150,10 @@ export function RouteMap(props: RouteMapProps) {
     }
     let active = true;
     let failed = false;
-    const failActiveMap = (error: unknown) => {
+    const failActiveMap = () => {
       if (!active) return;
       failed = true;
-      failMap(data, error);
+      failMap(data);
     };
     if (useNativeMap) {
       const region = regionRef.current;
@@ -172,10 +171,10 @@ export function RouteMap(props: RouteMapProps) {
             onSelect: (selection) => propsRef.current.onSelect(selection),
             onVehicleSelect: (selection, key) => propsRef.current.onVehicleSelect(selection, key),
             onDeselect: () => propsRef.current.onDeselect(),
-            onError: (error, reason) => {
+            onError: (_error, reason) => {
               if (!active || failed || propsRef.current.data !== data) return;
               if (reason === undefined) {
-                failActiveMap(error);
+                failActiveMap();
                 return;
               }
               failed = true;
@@ -204,8 +203,8 @@ export function RouteMap(props: RouteMapProps) {
             selectedStopOnly ? NO_VEHICLES : current.liveVehicleViews,
             current.selectedVehicleKey,
           );
-        } catch (error) {
-          failActiveMap(error);
+        } catch {
+          failActiveMap();
         }
       }
       return () => {
@@ -214,7 +213,7 @@ export function RouteMap(props: RouteMapProps) {
         disposeMap();
       };
     }
-    const unsubscribeAuthFailure = subscribeNaverMapAuthFailure(() => failActiveMap(null));
+    const unsubscribeAuthFailure = subscribeNaverMapAuthFailure(() => failActiveMap());
     void loadNaverMaps(__NAVER_MAP_KEY_ID__)
       .then((sdk) => {
         const element = elementRef.current;
@@ -228,7 +227,7 @@ export function RouteMap(props: RouteMapProps) {
           data,
           region.clientHeight,
           (selection) => propsRef.current.onSelect(selection),
-          () => failActiveMap(null),
+          () => failActiveMap(),
           () => {
             if (!active || failed || propsRef.current.data !== data) return;
             const selection = propsRef.current.selected;
@@ -258,9 +257,7 @@ export function RouteMap(props: RouteMapProps) {
           return;
         }
       })
-      .catch((error: unknown) => {
-        failActiveMap(error);
-      });
+      .catch(failActiveMap);
     return () => {
       active = false;
       unsubscribeAuthFailure();
@@ -406,7 +403,10 @@ export function RouteMap(props: RouteMapProps) {
     currentMapState.status === "error"
       ? currentMapState.message
       : data === null
-        ? (geometryNotice ?? (geometryStatus === "error" ? "지도를 불러오지 못했어요" : "지도 정보를 준비 중이에요"))
+        ? (geometryNotice ??
+          (geometryStatus === "error" || geometryStatus === "retrying"
+            ? "지도를 불러오지 못했어요"
+            : "지도 정보를 준비 중이에요"))
         : null;
   const ready = currentMapState.status === "ready";
   return (
@@ -415,7 +415,7 @@ export function RouteMap(props: RouteMapProps) {
       className={styles.region}
       style={{ pointerEvents: visible ? "auto" : "none" }}
       aria-label="노선 지도"
-      aria-busy={currentMapState.status === "loading" && geometryStatus !== "error"}
+      aria-busy={currentMapState.status === "loading" && geometryStatus !== "error" && geometryStatus !== "retrying"}
       aria-hidden={!visible}
       inert={!visible}
     >
@@ -432,19 +432,24 @@ export function RouteMap(props: RouteMapProps) {
       {unavailableMessage !== null ? (
         <div className={styles.notice} role="status" data-native-map-hit>
           <span>{unavailableMessage}</span>
+          {geometryStatus === "retrying" && <span>잠시 후 자동으로 다시 불러와요.</span>}
           <span>{stopInfoNotice}</span>
         </div>
       ) : null}
       {data !== null &&
       ready &&
-      (geometryNotice !== null || !data.paths.some((path) => path.direction === activeDirection)) ? (
+      (geometryRetrying ||
+        geometryNotice !== null ||
+        !data.paths.some((path) => path.direction === activeDirection)) ? (
         <div
           className={
             withheld ? styles.withheldToast : geometryNotice === null ? styles.pathNotice : styles.geometryToast
           }
           role="status"
         >
-          {geometryNotice ?? "방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요"}
+          {geometryRetrying
+            ? "지도를 갱신하지 못했어요. 잠시 후 자동으로 다시 불러와요."
+            : (geometryNotice ?? "방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요")}
           {withheld && (
             <>
               <br />

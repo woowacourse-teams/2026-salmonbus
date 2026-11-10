@@ -1,6 +1,37 @@
 import { describe, expect, it } from "@jest/globals";
-import { routeArrowsFor, routeMapCoordinateForSequence, routeMapMotionPathFor } from "./routeMapGeometry";
+import {
+  routeArrowsFor,
+  routeMapCoordinateForSequence,
+  routeMapMotionPathFor,
+  stopDistanceForZoom,
+  stopOverlapForLabelZoom,
+} from "./routeMapGeometry";
 import type { RouteMapData } from "./routeMapModel";
+
+describe("정류장 기준 줌 거리", () => {
+  it.each([14, 16, 18, 13.5])("줌 %s의 화면 좌표를 줌 14의 같은 원형 중심 거리로 환산한다", (zoom) => {
+    const scale = 2 ** (zoom - 14);
+    const first = { x: 100 + 9 * scale, y: 200 + 12 * scale };
+    const second = { x: 100, y: 200 };
+
+    expect(stopDistanceForZoom(first, second, zoom, 14)).toBeCloseTo(15);
+    expect(stopDistanceForZoom(second, first, zoom, 14)).toBeCloseTo(15);
+  });
+});
+
+describe("이름표 기준 줌의 기본 아이콘 겹침", () => {
+  it.each([14, 16, 18, 13.5])("줌 %s에서도 줌 14의 중심 거리가 24px 미만일 때만 겹친다", (zoom) => {
+    const scale = 2 ** (zoom - 14);
+    const first = { x: 9 * scale, y: 12 * scale };
+    const second = { x: 0, y: 0 };
+
+    expect(stopOverlapForLabelZoom(first, second, zoom)).toBe(true);
+    expect(stopOverlapForLabelZoom(second, first, zoom)).toBe(true);
+    expect(stopOverlapForLabelZoom({ x: 23.99 * scale, y: 0 }, second, zoom)).toBe(true);
+    expect(stopOverlapForLabelZoom({ x: 24 * scale, y: 0 }, second, zoom)).toBe(false);
+    expect(stopOverlapForLabelZoom({ x: 24.01 * scale, y: 0 }, second, zoom)).toBe(false);
+  });
+});
 
 const data: RouteMapData = {
   routeId: "1",
