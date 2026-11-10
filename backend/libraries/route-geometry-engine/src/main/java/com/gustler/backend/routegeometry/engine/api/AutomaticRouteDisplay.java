@@ -11,7 +11,7 @@ import java.util.*;
 
 /** 자동 후보는 최종 방문·끝점·교차 검사를 거친다. 요청에서 외부 도로 조회나 임의의 핀 이동을 하지 않는다. */
 public final class AutomaticRouteDisplay {
-    public static final String REVISION = "automatic-quality-v8";
+    public static final String REVISION = "automatic-quality-v9";
 
     private AutomaticRouteDisplay() {}
 
@@ -63,10 +63,31 @@ public final class AutomaticRouteDisplay {
             return new BuildDetails(baseline,stage,removed,0,removed>0,terminalOnly,null,List.of("CURVE_SOURCE_MAPPING_UNAVAILABLE"));
         }
         var curve=anchored.plan();
-        if(curve.curveCount()==0)return new BuildDetails(baseline,stage,removed,0,removed>0,terminalOnly,curve,List.of());
         var selected=selectCurveFloor(geometry,inputDigest,baseline,ordinary,curve,anchored.anchoredCornerCount()>0);
         if(selected.geometry()==null)return new BuildDetails(baseline,"VALIDATED_NODE_BASELINE_CURVE_REJECTED",removed,0,removed>0,terminalOnly,curve,selected.rejections());
         curve=selected.plan();
+        SourceBoundDisplayCurves.Plan fillet;
+        try {
+            fillet=SourceBoundDisplayCurves.withTurnSupport(geometry,curve,baseline.connections());
+        }
+        catch(IllegalArgumentException unavailable) {
+            fillet=curve;
+        }
+        if(fillet.curveCount()>curve.curveCount()) {
+            var checked=checkCurvePlan(geometry,inputDigest,baseline,fillet);
+            if(checked.geometry()!=null) {
+                curve=fillet;
+                selected=new CurveSelection(checked.geometry(),curve,List.of());
+            }
+        }
+        var turn=AnchorPreservingDisplayCurves.buildWithTurnSupport(geometry,curve,baseline.connections());
+        if(turn.anchoredCornerCount()>0) {
+            var checked=checkCurvePlan(geometry,inputDigest,baseline,turn.plan());
+            if(checked.geometry()!=null) {
+                curve=turn.plan();
+                selected=new CurveSelection(checked.geometry(),curve,List.of());
+            }
+        }
         if(curve.curveCount()==0)return new BuildDetails(baseline,stage,removed,0,removed>0,terminalOnly,curve,List.of());
         return new BuildDetails(selected.geometry(),"SOURCE_BOUND_CURVE",removed,curve.curveCount(),true,false,curve,List.of());
     }
