@@ -92,9 +92,14 @@ describe("즐겨찾기 정책", () => {
   });
   it("카드와 알림 창이 같은 정류장 문구를 쓰게 한다", () => {
     expect(favoriteStopLabelOf({ stop: { name: "강남역" } }, 0)).toBe("강남역");
-    expect(favoriteStopLabelOf({ stop: { name: "" } }, 0)).toBe("정류장 정보 없음");
-    expect(favoriteStopLabelOf({ stop: {} }, 4)).toBe("정류장 정보 없음");
+    expect(favoriteStopLabelOf({ stop: { name: "" } }, 0)).toBe("정류장 정보 없음 (즐겨찾기 1)");
+    expect(favoriteStopLabelOf({ stop: {} }, 4)).toBe("정류장 정보 없음 (즐겨찾기 5)");
     expect(favoriteStopLabelOf(undefined, 0)).toBe("즐겨찾기 1");
     expect(favoriteStopLabelOf(null, 2)).toBe("즐겨찾기 3");
+  });
+  it("정류장 이름이 없는 즐겨찾기가 여럿이어도 버튼과 스위치 이름이 서로 다르다", () => {
+    const unnamed = [{ stop: {} }, { stop: { name: "" } }];
+    const labels = unnamed.map((item, index) => favoriteStopLabelOf(item, index));
+    expect(new Set(labels).size).toBe(unnamed.length);
   });
 });
