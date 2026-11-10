@@ -1,5 +1,24 @@
 SET LOCAL lock_timeout = '5s';
 
+-- 중단 조건을 품질 테이블·뷰 삭제보다 먼저 확인한다.
+DO $$ BEGIN
+    IF EXISTS(SELECT 1 FROM observation_batch LIMIT 1)
+        AND EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()
+        AND application_name IN('salmonbus-worker','salmonbus-archive','salmonbus-historical-migration')) THEN
+        RAISE EXCEPTION 'Worker와 기존 이관/복원 프로세스를 중지한 뒤 전환해야 한다';
+    END IF;
+    IF EXISTS(SELECT 1 FROM stop_demand_rebuild_request)
+       OR EXISTS(SELECT 1 FROM stop_demand_rebuild_progress)
+       OR EXISTS(SELECT 1 FROM stop_demand_rebuild_total)
+       OR EXISTS(SELECT 1 FROM stop_demand_rebuild_scan) THEN
+        RAISE EXCEPTION '진행 중인 수요 재구축을 인계한 뒤 전환해야 한다';
+    END IF;
+    IF EXISTS(SELECT 1 FROM evaluation_archive_batch
+        WHERE storage_state='LIVE' AND abandoned_at IS NULL AND restored_at IS NULL) THEN
+        RAISE EXCEPTION '기존 이관 예약을 종료한 뒤 전환해야 한다';
+    END IF;
+END $$;
+
 -- Worker와 정비 프로세스를 중지한 상태에서 적용한다.
 -- 과거 파일의 판본 번호를 보존하고, 앞으로의 작업 잠금은 노선 행을 사용한다.
 ALTER TABLE route ADD COLUMN data_revision bigint NOT NULL DEFAULT 1 CHECK (data_revision > 0);

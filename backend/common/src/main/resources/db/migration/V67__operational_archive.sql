@@ -1,23 +1,6 @@
 -- 구 Worker/복원 프로세스를 중지한 뒤 적용한다. 기존 S3 원본은 삭제하지 않는다.
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
-DO $$ BEGIN
-    IF EXISTS(SELECT 1 FROM observation_batch LIMIT 1)
-        AND EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()
-        AND application_name IN('salmonbus-worker','salmonbus-archive','salmonbus-historical-migration')) THEN
-        RAISE EXCEPTION 'Worker와 기존 이관/복원 프로세스를 중지한 뒤 전환해야 한다';
-    END IF;
-    IF EXISTS(SELECT 1 FROM stop_demand_rebuild_request)
-       OR EXISTS(SELECT 1 FROM stop_demand_rebuild_progress)
-       OR EXISTS(SELECT 1 FROM stop_demand_rebuild_total)
-       OR EXISTS(SELECT 1 FROM stop_demand_rebuild_scan) THEN
-        RAISE EXCEPTION '진행 중인 수요 재구축을 인계한 뒤 전환해야 한다';
-    END IF;
-    IF EXISTS(SELECT 1 FROM evaluation_archive_batch
-        WHERE storage_state='LIVE' AND abandoned_at IS NULL AND restored_at IS NULL) THEN
-        RAISE EXCEPTION '기존 이관 예약을 종료한 뒤 전환해야 한다';
-    END IF;
-END $$;
 -- 원본 FK를 동적으로 찾아 제거한다. 운영별 자동 생성 제약 이름 차이를 허용한다.
 DO $$ DECLARE c record; BEGIN
     FOR c IN SELECT conname FROM pg_constraint
