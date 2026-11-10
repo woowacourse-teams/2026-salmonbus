@@ -49,7 +49,7 @@ public class RefreshTokenRotation implements RefreshTokens {
         if (!repository.startFamily(publicId, familyId, now, expiresAt)) {
             throw new IllegalArgumentException("리프레시 토큰을 발급할 회원이 없다");
         }
-        return new IssuedRefreshToken(codec.encode(familyId, 0), expiresAt);
+        return new IssuedRefreshToken(codec.encode(familyId, 0), expiresAt, familyId);
     }
 
     @Override
@@ -65,7 +65,7 @@ public class RefreshTokenRotation implements RefreshTokens {
         if (rotated.isPresent()) {
             return new RefreshResult.Rotated(rotated.get().publicId(),
                 new IssuedRefreshToken(codec.encode(presented.familyId(), rotated.get().generation()),
-                    rotated.get().expiresAt()));
+                    rotated.get().expiresAt(), presented.familyId()));
         }
         return repository.find(presented.familyId())
             .map(family -> rotateStale(family, presented, now))
@@ -95,7 +95,8 @@ public class RefreshTokenRotation implements RefreshTokens {
     private RefreshResult rotateStale(RefreshTokenFamily family, RefreshTokenClaim presented, OffsetDateTime now) {
         return switch (family.statusOf(presented.generation(), now)) {
             case IN_GRACE -> new RefreshResult.Rotated(family.publicId(),
-                new IssuedRefreshToken(codec.encode(family.familyId(), family.generation()), family.expiresAt()));
+                new IssuedRefreshToken(codec.encode(family.familyId(), family.generation()), family.expiresAt(),
+                    family.familyId()));
             case REUSED -> revokeFamily(family, RefreshResult.Reason.REUSED);
             case EXPIRED -> revokeFamily(family, RefreshResult.Reason.EXPIRED);
             case FUTURE -> rejected(RefreshResult.Reason.UNKNOWN);

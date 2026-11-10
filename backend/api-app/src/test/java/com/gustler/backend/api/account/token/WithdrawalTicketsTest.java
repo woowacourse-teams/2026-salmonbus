@@ -75,7 +75,7 @@ class WithdrawalTicketsTest {
     @Test
     void 액세스_토큰은_탈퇴_티켓으로_통하지_않는다() {
         // given
-        String accessToken = new AccessTokens(PROPERTIES, fixed(ISSUED_AT)).issue(MEMBER);
+        String accessToken = new AccessTokens(PROPERTIES, fixed(ISSUED_AT)).issue(MEMBER, null);
 
         // when
         Optional<UUID> actual = ticketsAt(ISSUED_AT).verify(accessToken);

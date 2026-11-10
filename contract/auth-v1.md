@@ -2,7 +2,7 @@
 
 프론트와 서버가 함께 지키는 소셜 로그인(카카오·애플) 계약이다.
 
-fetch로 부르는 API 13개의 요청·응답·오류 코드는 [`auth-v1.openapi.json`](auth-v1.openapi.json)이 원본이다. 서버 시험(`AuthApiDocsContractTest`)이 앱이 만든 명세와 이 파일을 대조한다. 이 문서는 명세에 담기지 않는 브라우저 이동 흐름과 쿠키 규칙을 적는다. 모양을 바꾸면 두 파일을 같은 PR에서 고친다.
+fetch로 부르는 API 16개의 요청·응답·오류 코드는 [`auth-v1.openapi.json`](auth-v1.openapi.json)이 원본이다. 서버 시험(`AuthApiDocsContractTest`)이 앱이 만든 명세와 이 파일을 대조한다. 이 문서는 명세에 담기지 않는 브라우저 이동 흐름과 쿠키 규칙을 적는다. 모양을 바꾸면 두 파일을 같은 PR에서 고친다.
 
 ## 켜짐
 
@@ -23,6 +23,9 @@ fetch로 부르는 API 13개의 요청·응답·오류 코드는 [`auth-v1.opena
 | `DELETE /api/me` | 204. 카카오 회원 탈퇴, 인증 쿠키 삭제 | 400 `CSRF_REJECTED`, 401 `UNAUTHENTICATED`, 409 `REAUTH_REQUIRED`(애플 회원) |
 | `PUT /api/me/push-devices` | 204. APNs 토큰 등록 또는 현재 회원으로 이동 | 400 `INVALID_PUSH_DEVICE`·`CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED` |
 | `POST /api/me/push-devices/unregister` | 204. 내 토큰 삭제. 없거나 남의 토큰이어도 같은 응답 | 400 `INVALID_PUSH_DEVICE`·`CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED` |
+| `GET /api/me/notification-settings` | 200. 내 알림 설정 목록 | 401 `UNAUTHENTICATED` |
+| `PUT /api/me/notification-settings` | 200. 저장된 알림 설정 | 400 `INVALID_NOTIFICATION_SCHEDULE`·`CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED`, 422 `NOTIFICATION_TARGET_NOT_FAVORITE` |
+| `DELETE /api/me/notification-settings/{id}` | 204. 내 알림 설정 삭제 | 400 `CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED`, 404 `NOTIFICATION_SETTING_NOT_FOUND` |
 | `DELETE /api/me/sessions` | 204. 모든 기기에서 로그아웃, 인증 쿠키 삭제 | 400 `CSRF_REJECTED`, 401 `UNAUTHENTICATED` |
 | `POST /api/me/withdrawal/apple` | 200. 애플 재인증 탈퇴 시작 주소 | 400 `INVALID_REQUEST`(카카오 회원)·`CSRF_REJECTED`, 401 `UNAUTHENTICATED` |
 | `POST /api/auth/{provider}/native/nonce` | 200. 앱 로그인 nonce | 400 `CSRF_REJECTED`, 404 `ENDPOINT_NOT_FOUND`(앱 로그인 꺼짐) |
@@ -38,8 +41,12 @@ fetch로 부르는 API 13개의 요청·응답·오류 코드는 [`auth-v1.opena
 
 - 등록 본문은 `{"token":"aabbcc","environment":"SANDBOX"}` 형태다. 환경은 `SANDBOX` 또는 `PRODUCTION`만 받는다.
 - 토큰은 공백 없이 1~200자의 16진수다. 대소문자는 같은 토큰으로 취급한다. 해제 본문은 `{"token":"aabbcc"}`이다.
-- 같은 토큰을 다른 회원이 등록하면 그 토큰은 새 회원의 기기가 되고, 이전 회원의 알림은 더 이상 그 기기로 가지 않는다. 같은 회원이 다시 등록하면 환경만 갱신한다.
-- 회원 탈퇴 시 그 회원의 기기도 삭제한다. 전체 기기 로그아웃 시 삭제 여부는 이 계약에서 정하지 않는다.
+- 같은 토큰을 다른 회원이 등록하면 그 토큰은 새 회원의 기기가 되고, 이전 회원의 알림은 더 이상 그 기기로 가지 않는다.
+- 같은 토큰을 다시 등록하면 생성 시각은 유지하고 회원, 로그인 세션, 환경, 마지막 등록 시각을 갱신한다.
+- 등록은 액세스 토큰의 `sid`가 가리키는 로그인 세션에 기기를 연결한다. 로그인과 갱신에서 같은 세션 식별자를 발급한다.
+- 세션 식별자가 없는 토큰 또는 로그아웃한 세션의 토큰으로 등록하면 401 `UNAUTHENTICATED`이고 기기를 저장하지 않는다.
+- 로그아웃하면 그 세션의 기기를 삭제하고, 전체 기기 로그아웃과 회원 탈퇴 시 그 회원의 기기를 모두 삭제한다. 다른 로그인 세션의 기기는 해당 세션 로그아웃 시까지 남는다.
+- 토큰 갱신은 같은 세션을 유지하므로 기기를 삭제하지 않는다. 세션 만료 정리와 Apple 서버 알림에 따른 세션 폐기 시에도 연결된 기기를 삭제한다.
 - 토큰은 응답·오류·로그에 넣지 않는다.
 
 ## 인증
