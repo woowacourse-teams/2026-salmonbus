@@ -98,9 +98,9 @@ class NotificationDeliveryServiceTest {
     }
 
     @Test
-    void claimDueLeasesForTheLeaseDuration() {
+    void claimDueLeasesForTheLeaseDurationAndSkipsExpiredDeliveries() {
         service.claimDue(10);
-        verify(deliveries).claimDue(NOW, NOW.plus(DeliveryPolicy.LEASE), 10);
+        verify(deliveries).claimDue(NOW, NOW.plus(DeliveryPolicy.LEASE), DeliveryPolicy.expiryCutoff(NOW), 10);
     }
 
     @Test

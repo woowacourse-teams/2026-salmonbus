@@ -26,9 +26,11 @@ public interface NotificationDeliveryRepository {
 
     int createForMemberDevices(UUID settingId, Instant occurrenceAt, long memberId, Instant now);
 
-    List<ClaimedDelivery> claimDue(Instant now, Instant leasedUntil, int limit);
+    List<ClaimedDelivery> claimDue(Instant now, Instant leasedUntil, Instant occurredSince, int limit);
 
     void record(long id, DeliveryDecision decision, Instant now);
 
     int giveUpOccurredBefore(Instant occurredBefore, Instant now);
+
+    void giveUp(long id, Instant now);
 }

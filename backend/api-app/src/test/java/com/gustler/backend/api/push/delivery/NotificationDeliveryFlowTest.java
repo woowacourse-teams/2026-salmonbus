@@ -10,6 +10,7 @@ import com.gustler.backend.api.push.application.NotificationSettingRepository;
 import com.gustler.backend.api.push.application.NotificationSettingRepository.DueSetting;
 import com.gustler.backend.api.push.application.NotificationSettingRepository.SavedSetting;
 import com.gustler.backend.api.push.application.PushDeviceRepository;
+import com.gustler.backend.api.push.domain.DeliveryOutcome;
 import com.gustler.backend.api.push.domain.DeliveryPolicy;
 import com.gustler.backend.api.push.domain.DeviceToken;
 import com.gustler.backend.api.push.domain.NotificationSchedule;
@@ -23,6 +24,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -289,6 +291,26 @@ class NotificationDeliveryFlowTest {
     }
 
     @Test
+    void longRunDoesNotSendAfterTheRetryWindowEvenInsideAClaimedBatch() {
+        prepare(30, true);
+        MovingClock clock = new MovingClock(T0);
+        List<Instant> sentAt = new ArrayList<>();
+        NotificationDeliveryService service = new NotificationDeliveryService(settings, deliveries, devices, clock);
+        ApnsSender slowSender = delivery -> {
+            sentAt.add(clock.instant());
+            clock.advance(Duration.ofSeconds(7));
+            return new ApnsResponse(DeliveryOutcome.SENT, "OK");
+        };
+
+        new NotificationDeliveryJob(service, new NotificationDeliveryRunner(service, slowSender)).run();
+
+        Instant windowEnd = T0.plus(DeliveryPolicy.RETRY_WINDOW).plus(Duration.ofMinutes(1));
+        assertThat(sentAt).hasSize(26).allSatisfy(instant -> assertThat(instant).isBefore(windowEnd));
+        assertThat(statusCounts("SENT")).isEqualTo(26);
+        assertThat(statusCounts("GAVE_UP")).isEqualTo(4);
+    }
+
+    @Test
     void firstRunAtWindowEdgeStillSends() throws Exception {
         prepare(1, true);
         try (FakeApnsServer fake = new FakeApnsServer()) {
@@ -485,5 +507,32 @@ class NotificationDeliveryFlowTest {
     }
 
     private record Prepared(UUID memberPublicId, long memberId, UUID settingId, List<String> tokens) {
+    }
+
+    private static final class MovingClock extends Clock {
+        private Instant current;
+
+        private MovingClock(Instant start) {
+            current = start;
+        }
+
+        void advance(Duration duration) {
+            current = current.plus(duration);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Instant instant() {
+            return current;
+        }
     }
 }
