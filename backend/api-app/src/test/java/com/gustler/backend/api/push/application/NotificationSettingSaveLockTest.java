@@ -3,9 +3,17 @@ package com.gustler.backend.api.push.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.gustler.backend.api.favorite.application.FavoriteGroupRepository;
+import com.gustler.backend.api.favorite.domain.Favorite;
 import com.gustler.backend.api.favorite.domain.FavoriteDirection;
+import com.gustler.backend.api.favorite.domain.FavoriteGroup;
+import com.gustler.backend.api.favorite.domain.FavoriteGroupId;
+import com.gustler.backend.api.favorite.domain.FavoriteGroupName;
+import com.gustler.backend.api.favorite.domain.FavoriteId;
 import com.gustler.backend.api.favorite.domain.FavoriteTarget;
+import com.gustler.backend.api.favorite.domain.MemberFavoriteGroups;
 import com.gustler.backend.api.push.NotificationTargetNotFavoriteException;
+import com.gustler.backend.api.push.domain.NotificationSchedule;
 import com.gustler.backend.support.IntegrationTest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -14,6 +22,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -37,6 +46,8 @@ class NotificationSettingSaveLockTest {
     private NotificationSettingService service;
     @Autowired
     private NotificationSettingRepository repository;
+    @Autowired
+    private FavoriteGroupRepository favorites;
     @Autowired
     private JdbcClient jdbc;
     @Autowired
@@ -85,6 +96,59 @@ class NotificationSettingSaveLockTest {
             }
         }
         assertThat(settingCount(memberId)).isZero();
+    }
+
+    @Test
+    void 즐겨찾기_저장은_회원_잠금을_잡은_뒤에_빠진_알림_설정을_지운다() throws Exception {
+        member = member();
+        long memberId = repository.memberIdOf(member).orElseThrow();
+        FavoriteGroup group = group(TARGET);
+        favorites.update(member, ignored -> new MemberFavoriteGroups(List.of(group)));
+        repository.upsert(
+            memberId,
+            TARGET,
+            NotificationSchedule.parse("07:40", WEEKDAYS),
+            NOW.plusSeconds(2400),
+            NOW
+        );
+        AtomicReference<CompletableFuture<?>> removing = new AtomicReference<>();
+
+        try (Connection holder = dataSource.getConnection()) {
+            holder.setAutoCommit(false);
+            lockMember(holder, member);
+            CompletableFuture<Optional<MemberFavoriteGroups>> current = CompletableFuture.supplyAsync(() ->
+                favorites.update(member, ignored -> new MemberFavoriteGroups(List.of(group.remove(TARGET)))));
+            removing.set(current);
+            Thread.sleep(500);
+
+            assertThat(current).isNotDone();
+            assertThat(settingCount(memberId)).isEqualTo(1);
+
+            holder.rollback();
+            assertThat(current.orTimeout(10, TimeUnit.SECONDS).join()).isPresent();
+        } finally {
+            finish(removing);
+        }
+        assertThat(settingCount(memberId)).isZero();
+    }
+
+    private void finish(AtomicReference<CompletableFuture<?>> running) {
+        CompletableFuture<?> current = running.get();
+        if (current != null && !current.isDone()) {
+            try {
+                current.orTimeout(10, TimeUnit.SECONDS).join();
+            } catch (CompletionException ignored) {
+                // 잠금이 풀린 뒤의 결과다. 앞선 실패를 이 예외로 가리지 않는다.
+            }
+        }
+    }
+
+    private static FavoriteGroup group(FavoriteTarget target) {
+        return new FavoriteGroup(
+            new FavoriteGroupId(UUID.randomUUID()),
+            new FavoriteGroupName("출근"),
+            List.of(new Favorite(new FavoriteId(UUID.randomUUID()), target))
+        );
     }
 
     private void lockMember(Connection connection, UUID publicId) throws SQLException {
