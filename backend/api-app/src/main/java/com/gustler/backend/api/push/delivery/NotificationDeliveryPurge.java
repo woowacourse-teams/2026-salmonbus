@@ -24,7 +24,7 @@ public final class NotificationDeliveryPurge {
         this.retention = retention;
     }
 
-    @Scheduled(cron = "${push.delivery.purge-cron:" + DEFAULT_CRON + "}")
+    @Scheduled(cron = "${push.delivery.purge-cron:" + DEFAULT_CRON + "}", zone = "Asia/Seoul")
     public void purge() {
         long total = 0;
         try {
