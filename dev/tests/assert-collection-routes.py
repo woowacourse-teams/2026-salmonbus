@@ -30,15 +30,22 @@ def verify_board(route_id, status, body, has_model, expect_forecasts=True):
         assert all(forecast == {"status": "UNAVAILABLE"} for forecast in forecasts), f"{route_id}: 지원 노선/시간 밖의 예보 노출"
 
 
+
+def model_scope(data):
+    manifest = json.loads((data / "model-reference" / "statistics-manifest.json").read_text())
+    model_routes = set(manifest["routes"])
+    collected = json.loads((data / "routes.json").read_text())["routes"]
+    catalog = json.loads((data / "catalog-routes.json").read_text())["routes"]
+    supported = {route["routeId"] for route in collected + catalog if route["displayName"] in model_routes}
+    assert len(supported) == len(model_routes), "모델 지원 노선과 수집 노선 정보 불일치"
+    return supported, manifest["holiday_dates"]
+
 def verify(api, data):
     assert api.startswith("http://127.0.0.1:") or api.startswith("http://localhost:"), "local API only"
     reference = json.loads((data / "routes.json").read_text())["routes"]
     catalog = json.loads((data / "catalog-routes.json").read_text())["routes"]
     reference_ids = {route["routeId"] for route in reference}
-    bundle = data / "model-reference"
-    model_routes = json.loads((bundle / "route-reference.json").read_text())["routes"]
-    supported_ids = {route["sourceRouteId"] for route in model_routes}
-    holiday_dates = json.loads((bundle / "statistics-manifest.json").read_text())["holiday_dates"]
+    supported_ids, holiday_dates = model_scope(data)
 
     def get(path):
         try:

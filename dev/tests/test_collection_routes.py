@@ -61,6 +61,13 @@ class CollectionRoutesTest(unittest.TestCase):
         self.assertFalse(checks.supports_time(datetime.fromisoformat("2026-11-14T08:00:00+09:00"), []))
         self.assertFalse(checks.supports_time(datetime.fromisoformat("2026-11-10T08:00:00+09:00"), ["2026-11-10"]))
 
+    def test_실제_개발_번들과_수집_파일에서_지원_노선을_읽는다(self):
+        supported, holidays = checks.model_scope(Path(__file__).resolve().parents[1] / "data")
+        self.assertEqual(len(supported), 8)
+        self.assertIn("204000057", supported)
+        self.assertTrue(checks.ADDED.isdisjoint(supported))
+        self.assertIsInstance(holidays, list)
+
 
 if __name__ == "__main__":
     unittest.main()
