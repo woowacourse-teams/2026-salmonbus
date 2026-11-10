@@ -22,7 +22,7 @@ export const weatherHeader = style({
   gap: 8,
 });
 
-export const weatherLocation = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0 });
+export const weatherLocation = style({ display: "flex", alignItems: "center", gap: 3, minWidth: 0 });
 
 export const refresh = style({
   display: "grid",
@@ -30,6 +30,7 @@ export const refresh = style({
   flexShrink: 0,
   width: 24,
   height: 24,
+  marginInlineStart: -5,
   padding: 0,
   border: 0,
   borderRadius: "50%",
