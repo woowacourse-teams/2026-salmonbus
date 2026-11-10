@@ -64,7 +64,12 @@ test("판정 보드 최초 조회가 503이면 Retry-After 뒤 다시 불러와 
   api.mode.watch = { status: 503, retryAfterSeconds: 30 };
   await page.goto("/");
   await selectRoute(page);
-  await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).toBeVisible();
+  const sheet = page.getByRole("region", { name: "판정보드", exact: true });
+  await expect(sheet).toHaveAttribute("data-snap", "expanded");
+  await expect(sheet.getByRole("img", { name: "연어 버스 로고" })).toBeVisible();
+  await expect(sheet.getByRole("alert")).toHaveText("노선 정보를 불러오지 못했어요");
+  await expect(sheet.getByText("잠시 후 자동으로 다시 불러와요.", { exact: true })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "다시 시도하기", exact: true })).toBeInViewport({ ratio: 1 });
 
   api.mode.watch = "success";
   const retried = page.waitForResponse(

@@ -3,10 +3,34 @@ import { test as favoritesTest, expect, storedFavorite } from "./fixtures/favori
 import { test as mapTest } from "./fixtures/naver-map";
 import { apiPaths, routeId } from "./fixtures/mock-data";
 import { captureEnabled } from "./utils/capture";
+import { pickRoute } from "./utils/route-select";
 import { activeRouteColor, inactiveRouteColor } from "../src/shared/map/routeColors";
 
 const test = mergeTests(mapTest, favoritesTest);
 test.use({ viewport: { width: 425, height: 844 }, reducedMotion: "no-preference" });
+
+test("즐겨찾기 추가에서 최근 관측이 없으면 같은 지도 위에 재시도 바텀시트를 연다", async ({ page, api }) => {
+  api.mode.watch = { status: 503, retryAfterSeconds: 30 };
+  await page.goto("/favorites");
+  const map = page.getByTestId("naver-map-test-double");
+  await expect(map).toBeVisible();
+  const originalMap = await map.elementHandle();
+  await page.getByRole("link", { name: "즐겨찾기 추가하기", exact: true }).click();
+  await pickRoute(page);
+
+  const sheet = page.getByRole("region", { name: "판정보드", exact: true });
+  await expect(sheet).toHaveAttribute("data-snap", "expanded");
+  await expect(sheet.getByRole("alert")).toHaveText("노선 정보를 불러오지 못했어요");
+  expect(await originalMap?.evaluate((element) => element.isConnected)).toBe(true);
+  await page.clock.runFor(350);
+
+  api.mode.watch = "success";
+  await sheet.getByRole("button", { name: "다시 시도하기", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "노선 선택으로 돌아가기", exact: true }).click();
+  await expect(page).toHaveURL("/favorites");
+  await expect(page.getByRole("link", { name: "즐겨찾기 추가하기", exact: true })).toBeVisible();
+});
 
 test("즐겨찾기 지도에서 판정보드를 먼저 열고 노선 응답 뒤 저장한 정류장을 표시한다", async ({
   page,

@@ -174,6 +174,30 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
     );
   }
 
+  const showObservationSheet =
+    shared &&
+    entry === "search" &&
+    screen.kind === "error" &&
+    screen.failure.kind === "contract" &&
+    screen.failure.status === 503 &&
+    screen.failure.error.code === "NO_RECENT_OBSERVATION";
+  const notice =
+    screen.kind === "error" ? (
+      <StopBoard
+        status="error"
+        retrying={retrying}
+        autoRetry={requestState === "scheduled"}
+        inSheet={showObservationSheet}
+        onRetry={() => {
+          if (!retrying) refreshWatch();
+        }}
+      />
+    ) : (
+      <StopBoard status="loading" />
+    );
+
+  if (showObservationSheet) return <ObservationErrorSheet>{notice}</ObservationErrorSheet>;
+
   return (
     <main
       className={shared ? styles.sharedNoticePage : styles.noticePage}
@@ -181,18 +205,32 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
     >
       <h1 className={visuallyHidden}>노선 판정보드</h1>
       <BoardBackLink />
-      {screen.kind === "error" ? (
-        <StopBoard
-          status="error"
-          retrying={retrying}
-          autoRetry={requestState === "scheduled"}
-          onRetry={() => {
-            if (!retrying) refreshWatch();
-          }}
-        />
-      ) : (
-        <StopBoard status="loading" />
-      )}
+      {notice}
+    </main>
+  );
+}
+
+function ObservationErrorSheet({ children }: { children: ReactNode }) {
+  const sheetId = useId();
+  const viewport = useBoardViewport();
+  const [snap, setSnap] = useState<BoardSheetSnap>("expanded");
+
+  return (
+    <main className={styles.sharedPage} style={{ height: viewport.height, top: viewport.top }}>
+      <div className={styles.content}>
+        <h1 className={visuallyHidden}>노선 판정보드</h1>
+        <div className={styles.mapSlot}>{snap !== "full" && <BoardBackLink />}</div>
+        <BoardBottomSheet
+          id={sheetId}
+          snap={snap}
+          onSnapChange={setSnap}
+          viewportHeight={viewport.height}
+          enteringFromMap
+          header={snap === "full" && <BoardBackLink inHeader />}
+        >
+          {children}
+        </BoardBottomSheet>
+      </div>
     </main>
   );
 }
