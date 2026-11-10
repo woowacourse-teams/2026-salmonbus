@@ -193,4 +193,31 @@ class TurnSubsegmentSupportTest {
         assertThat(built.selectedStage()).isEqualTo("SOURCE_BOUND_CURVE");
         assertThat(built.geometry().connections()).containsKeys(1,2,3,4);
     }
+
+    @Test void turnFilletInterpolationFailureRetainsTheAlreadyValidatedCurves() {
+        double scale=111320*Math.cos(Math.toRadians(1)),q=12/scale;
+        var raw=List.of(new Point(-7*q,1),new Point(q,1),new Point(q,1+80d/111320),new Point(3*q,1+80d/111320));
+        var stops=List.of(new Stop("first",1,"first","UP",true,raw.getFirst()),
+                new Stop("turn",2,"turn","UP",true,new Point(-3*q,1)),
+                new Stop("last",3,"last","DOWN",true,raw.getLast()));
+        var typed=new ArrayList<RouteShapeEvidence.TypedPoint>();
+        for(String direction:List.of("UP","DOWN"))for(int i=0;i<=(direction.equals("UP")?0:raw.size()-1);i++) {
+            var point=raw.get(i);
+            typed.add(new RouteShapeEvidence.TypedPoint(new RouteDisplayInput.Point(point.x(),point.y()),i==0||i==raw.size()-1?1:3,direction,false));
+        }
+        var evidence=new RouteShapeEvidence("GBIS_API",List.of(new RouteShapeEvidence.Source("GBIS_WEB","AVAILABLE","a".repeat(64))),typed);
+        var g=new RouteGeometry("123456789",1,"zero meridian","A","B",2,stops,new Shape(new UUID(0,3),Instant.EPOCH,raw,evidence));
+        var input=RouteDisplayGeneration.input(g);
+        var baseline=AutomaticRouteDisplay.sourceOnly(g,input.digest());
+        var ordinary=SourceBoundDisplayCurves.build(g,baseline.paths(),baseline.connections());
+        var previous=AnchorPreservingDisplayCurves.build(g,ordinary,baseline.connections()).plan();
+        assertThat(previous.curveCount()).isPositive();
+        assertThatThrownBy(()->SourceBoundDisplayCurves.withTurnSupport(g,previous,baseline.connections()))
+                .isInstanceOf(IllegalArgumentException.class);
+        var built=AutomaticRouteDisplay.buildDetailed(g,input.digest());
+        assertThat(built.geometry().paths()).isEqualTo(previous.paths());
+        assertThat(built.appliedCurves()).isEqualTo(previous.curveCount());
+        assertThat(built.selectedStage()).isEqualTo("SOURCE_BOUND_CURVE");
+        assertThat(built.geometry().connections()).containsKeys(1,2,3);
+    }
 }

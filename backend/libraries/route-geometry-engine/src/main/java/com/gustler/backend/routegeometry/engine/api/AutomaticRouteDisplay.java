@@ -66,7 +66,13 @@ public final class AutomaticRouteDisplay {
         var selected=selectCurveFloor(geometry,inputDigest,baseline,ordinary,curve,anchored.anchoredCornerCount()>0);
         if(selected.geometry()==null)return new BuildDetails(baseline,"VALIDATED_NODE_BASELINE_CURVE_REJECTED",removed,0,removed>0,terminalOnly,curve,selected.rejections());
         curve=selected.plan();
-        var fillet=SourceBoundDisplayCurves.withTurnSupport(geometry,curve,baseline.connections());
+        SourceBoundDisplayCurves.Plan fillet;
+        try {
+            fillet=SourceBoundDisplayCurves.withTurnSupport(geometry,curve,baseline.connections());
+        }
+        catch(IllegalArgumentException unavailable) {
+            fillet=curve;
+        }
         if(fillet.curveCount()>curve.curveCount()) {
             var checked=checkCurvePlan(geometry,inputDigest,baseline,fillet);
             if(checked.geometry()!=null) {
