@@ -27,7 +27,7 @@ class ArchiveMigrationHandoffTest {
     }
 
     @Test
-    void 운영_V60_스키마와_수집_이력을_보존하며_V69로_전환한다() {
+    void 운영_V60_스키마와_수집_이력을_보존하며_V70로_전환한다() {
         try (TestDatabase db = TestDatabase.create()) {
             DriverManagerDataSource source = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
             Flyway.configure().dataSource(source).target("60").load().migrate();
@@ -36,7 +36,7 @@ class ArchiveMigrationHandoffTest {
             Flyway flyway = Flyway.configure().dataSource(source).load();
             flyway.migrate();
             flyway.validate();
-            assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("69");
+            assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("70");
             assertThat(jdbc.sql("SELECT to_regclass('ix_batch_unfinished_recovery') IS NOT NULL")
                 .query(Boolean.class).single()).isTrue();
             assertThat(jdbc.sql("SELECT count(*) FROM observation_batch").query(Long.class).single()).isOne();

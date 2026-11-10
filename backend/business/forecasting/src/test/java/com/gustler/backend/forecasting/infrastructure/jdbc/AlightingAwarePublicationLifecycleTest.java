@@ -10,7 +10,6 @@ import com.gustler.backend.forecasting.application.deployment.ActiveForecastRunt
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
 import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
 import com.gustler.backend.forecasting.application.evaluation.AlightingAwareEvaluationArchiveService;
-import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureQuery;
 import com.gustler.backend.forecasting.application.publication.ForecastBatchCommitter;
 import com.gustler.backend.forecasting.application.publication.ForecastBatchWriter;
@@ -24,8 +23,6 @@ import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionForecastModel;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
@@ -33,8 +30,6 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRout
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import com.gustler.backend.forecasting.infrastructure.alighting.ConfirmedAlightingAwareInput;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import com.gustler.backend.observations.api.CollectionInputs;
@@ -195,8 +190,7 @@ class AlightingAwarePublicationLifecycleTest {
         when(featureSnapshot.capacity()).thenReturn(40);
         when(featureSnapshot.observation()).thenReturn(new ObservedVehicle("current", version, 1, START, 40, null));
         when(featureSnapshot.forTarget(2)).thenReturn(new AlightingAwareFeatureVector(new double[88], new double[80]));
-        ForecastBatchWriter writer = new ForecastBatchWriter(mock(VehicleTrajectoryQuery.class), committer,
-            mock(SameDayFullOutcomesService.class), mock(StopDemandStatisticsRepository.class),
+        ForecastBatchWriter writer = new ForecastBatchWriter( committer,
             Clock.fixed(START.plusSeconds(1), ZoneOffset.UTC), quality);
         writer.setAlightingAwareFeatures(featureQuery);
         PendingForecastBatch batch = new PendingForecastBatch(batchId, version, route, START);
@@ -241,10 +235,10 @@ class AlightingAwarePublicationLifecycleTest {
 
         ModelRelease legacy = new ModelRelease("legacy-lifecycle", "legacy-v1", "a".repeat(64), "legacy-v1",
             START.minusSeconds(86400).toString(), new SupportedForecastScope(List.of("3330")),
-            mock(SeatDistributionPredictor.class));
+            mock(AlightingAwareSeatForecastModel.class));
         final long rolledBack = tx.execute(status -> activation.activate(() -> legacy));
         deploymentIds.add(rolledBack);
-        assertThat(resolver.resolveActive().orElseThrow().model()).isInstanceOf(SeatDistributionForecastModel.class);
+        assertThat(resolver.resolveActive().orElseThrow().model()).isInstanceOf(AlightingAwareSeatForecastModel.class);
         assertThat(selected.model()).isSameAs(model);
         assertThat(jdbc.sql("SELECT model_deployment_id FROM seat_forecast WHERE vehicle_observation_id=?")
             .param(source).query(Long.class).single()).isEqualTo(deployed);

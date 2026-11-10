@@ -12,8 +12,6 @@ import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.model.ModelRoute;
-import com.gustler.backend.forecasting.domain.model.SeatDistribution;
-import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse;
@@ -111,7 +109,7 @@ class ObservationForecastTriggerIntegrationTest {
         RuntimeSnapshot runtime = new RuntimeSnapshot(
             new ActiveModelDeployment(deploymentId, "CALCULATION_V1", "trigger-test", "0".repeat(64)),
             new SupportedForecastScope(List.of(ModelRoute.of(SOURCE_ROUTE))),
-            input -> new SeatForecastResult(new SeatDistribution(List.of(0.4, 0.6)), 0.4), validFrom.toInstant());
+            publicationModel(), validFrom.toInstant());
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
     }
 
@@ -218,5 +216,13 @@ class ObservationForecastTriggerIntegrationTest {
             Thread.sleep(20);
         }
         return null;
+    }
+    private com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel publicationModel() {
+        var model = org.mockito.Mockito.mock(com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel.class);
+        var statistics = org.mockito.Mockito.mock(com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics.class);
+        when(model.supportsRoute(org.mockito.ArgumentMatchers.any())).thenReturn(true);
+        when(model.statistics(org.mockito.ArgumentMatchers.any())).thenReturn(statistics);
+        // 지원 시간 밖의 빈 발행도 실제 커밋된다. 이 테스트는 수집 후 발행 신호의 지연을 검증한다.
+        return model;
     }
 }

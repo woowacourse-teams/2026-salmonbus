@@ -79,6 +79,20 @@ class JdbcAlightingAwareFeatureQueryTest {
     }
 
     @Test
+    void DB_정원_이력에서도_미래_정원을_과거_예보에_섞지_않는다() {
+        String vehicle = "capacity-" + UUID.randomUUID().toString().substring(0,12);
+        jdbc.sql("INSERT INTO vehicle_capacity(source_id,vehicle_id,capacity,evidence_at,evidence_batch_id) VALUES('GBIS',?,44,?,10)")
+            .params(vehicle,at(NOW.minusSeconds(60))).update();
+        jdbc.sql("UPDATE vehicle_capacity SET capacity=45,evidence_at=?,evidence_batch_id=20 WHERE vehicle_id=?")
+            .params(at(NOW.plusSeconds(60)),vehicle).update();
+        var cache = new com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache(
+            new com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore(jdbc));
+        cache.warmUp();
+        assertThat(cache.findKnownAt("GBIS",List.of(vehicle),NOW,15).get(vehicle).seats()).isEqualTo(44);
+        assertThat(cache.find("GBIS",List.of(vehicle)).get(vehicle).seats()).isEqualTo(45);
+    }
+
+    @Test
     void 전체_이력과_빈_배치_순서를_복구한다() {
         AlightingAwareFeatureSnapshot a = query().read(sourceBatch, stops, statistics).get(source);
         AlightingAwareFeatureSnapshot b = query().read(sourceBatch, stops, statistics).get(source);

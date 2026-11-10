@@ -1,6 +1,5 @@
 package com.gustler.backend.forecasting.domain.publication;
 
-import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -10,7 +9,7 @@ import java.util.Optional;
  *
  * <p>수집 구현을 직접 호출하지 않는다. 같은 vehicle_observation을 읽더라도 별도의 조회 모델을 사용한다.
  */
-public interface VehicleTrajectoryQuery {
+public interface PendingForecastBatchQuery {
     /** 예보가 아직 없는 수집 배치를 오래된 순서로 읽는다. {@code notBefore}보다 오래된 배치는 제외한다. */
     List<PendingForecastBatch> findBatchesAwaitingForecast(
         long routeVersionId,
@@ -34,8 +33,4 @@ public interface VehicleTrajectoryQuery {
         Instant until
     );
 
-    /** 수집 배치의 차량별 궤적 입력 세 가지를 읽는다. 관측 차량이 없으면 빈 목록을 반환한다. */
-    List<VehicleTrajectory> readTrajectories(
-        long observationBatchId
-    );
 }

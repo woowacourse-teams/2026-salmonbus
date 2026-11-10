@@ -23,7 +23,7 @@ class StoredValueContractTest {
     @Test
     void 평가_상태는_평가_표의_CHECK와_같다() {
         // when
-        Set<String> allowed = SchemaCheck.allowedValues("V28__quality_excluded_evaluation.sql", "scoring_state");
+        Set<String> allowed = SchemaCheck.allowedValues("V70__retire_seat_distribution_evaluation.sql", "scoring_state");
 
         // then
         assertThat(Arrays.stream(ScoringState.values())

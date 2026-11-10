@@ -4,15 +4,13 @@ import com.gustler.backend.forecasting.domain.model.ModelRoute;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
-import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
-import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
 /** 하차 반영의 고정 통계, 트리, 정산 파라미터를 하나의 불변 배포로 선택한다. */
-public final class AlightingAwareSeatForecastModel implements SeatForecastModel {
+public final class AlightingAwareSeatForecastModel {
     private final AlightingAwareSeatPredictor predictor;
     private final Map<String, AlightingAwareRouteStatistics> statistics;
     private final Map<String, Map<Integer, String>> evidence;
@@ -31,7 +29,6 @@ public final class AlightingAwareSeatForecastModel implements SeatForecastModel 
         this.bundleDigest = bundleDigest;
     }
 
-    @Override
     public boolean supportsRoute(RouteStops stops) {
         if (!ModelRoute.covers(stops.sourceRouteId())) {
             return false;
@@ -78,8 +75,4 @@ public final class AlightingAwareSeatForecastModel implements SeatForecastModel 
         return SeatForecastResult.alighting(prediction.afterAlightingSeats(), prediction.departureFullProbability());
     }
 
-    @Override
-    public SeatForecastResult predict(SeatForecastInput input) {
-        throw new IllegalArgumentException("하차 반영 좌석 모델에는 88/80열 시점별 입력이 필요하다");
-    }
 }

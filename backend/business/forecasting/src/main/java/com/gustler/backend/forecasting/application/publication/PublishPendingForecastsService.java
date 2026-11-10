@@ -9,7 +9,7 @@ import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
+import com.gustler.backend.forecasting.domain.publication.PendingForecastBatchQuery;
 import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import jakarta.annotation.PostConstruct;
 import java.time.Clock;
@@ -37,7 +37,7 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
 
     private static final Duration LEFT_BEHIND_LOOKBACK = ForecastPolicy.MAX_STALENESS;
 
-    private final VehicleTrajectoryQuery vehicleTrajectoryQuery;
+    private final PendingForecastBatchQuery vehicleTrajectoryQuery;
 
     private final RouteVersionQuery routeVersions;
 
@@ -51,7 +51,7 @@ public class PublishPendingForecastsService implements PublishPendingForecasts {
     private Instant lastStaleWarningAt;
 
     public PublishPendingForecastsService(
-        VehicleTrajectoryQuery vehicleTrajectoryQuery,
+        PendingForecastBatchQuery vehicleTrajectoryQuery,
         RouteVersionQuery routeVersions,
         RouteStopsQuery routeStops,
         ForecastRuntime forecastRuntime,

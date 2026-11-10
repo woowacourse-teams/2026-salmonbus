@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.domain.deployment;
 
-import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import java.time.Instant;
 
 /**
@@ -10,7 +10,7 @@ import java.time.Instant;
 public record RuntimeSnapshot(
     ActiveModelDeployment deployment,
     SupportedForecastScope scope,
-    SeatForecastModel model,
+    AlightingAwareSeatForecastModel model,
     Instant dataUntil
 ) {
     public RuntimeSnapshot {

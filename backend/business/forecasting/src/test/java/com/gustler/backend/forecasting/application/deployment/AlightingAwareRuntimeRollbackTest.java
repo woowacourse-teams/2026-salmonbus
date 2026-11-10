@@ -9,8 +9,6 @@ import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentReposito
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionForecastModel;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import java.util.List;
 import java.util.Optional;
@@ -26,7 +24,7 @@ class AlightingAwareRuntimeRollbackTest {
         AlightingAwareSeatForecastModel model = mock(AlightingAwareSeatForecastModel.class);
         ModelRelease alighting = ModelRelease.alighting("alighting-release", "b".repeat(64), "2026-10-21T00:00:00Z", scope, model);
         ModelRelease legacy = new ModelRelease("legacy-release", "legacy-v1", "a".repeat(64), "feature-v1",
-            "2026-10-01T00:00:00Z", scope, mock(SeatDistributionPredictor.class));
+            "2026-10-01T00:00:00Z", scope, mock(AlightingAwareSeatForecastModel.class));
         registry.add(alighting);
         registry.add(legacy);
         ActiveForecastRuntimeResolver resolver = new ActiveForecastRuntimeResolver(deployments, registry);
@@ -37,7 +35,7 @@ class AlightingAwareRuntimeRollbackTest {
             .isEqualTo("after-alighting-and-departure-zero-v1");
 
         when(deployments.findActive()).thenReturn(Optional.of(active(legacy, 1)));
-        assertThat(resolver.resolveActive().orElseThrow().model()).isInstanceOf(SeatDistributionForecastModel.class);
+        assertThat(resolver.resolveActive().orElseThrow().model()).isInstanceOf(AlightingAwareSeatForecastModel.class);
         assertThat(selected.model()).isSameAs(model);
         assertThat(selected.deploymentId()).isEqualTo(2);
     }

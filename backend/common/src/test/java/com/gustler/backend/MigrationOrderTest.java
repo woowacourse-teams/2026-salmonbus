@@ -47,7 +47,7 @@ class MigrationOrderTest {
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
         List.of("vehicle_capacity", "vehicle_seat_quality",
             "operational_observation_columns", "operational_observation", "retire_trip_quality", "operational_archive",
-            "unfinished_collection_recovery", "rename_alighting_model", "freeze_forecast_vehicle_capacity");
+            "unfinished_collection_recovery", "rename_alighting_model", "freeze_forecast_vehicle_capacity", "retire_seat_distribution_evaluation");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
@@ -196,10 +196,10 @@ class MigrationOrderTest {
         assertThat(jdbcClient.sql("""
             SELECT source.source_row_number FROM staged_deploy.forecast_evaluation_pending pending
             JOIN staged_deploy.vehicle_observation source ON source.id = pending.vehicle_observation_id
-            """).query(Integer.class).list()).containsExactly(3);
+            """).query(Integer.class).list()).isEmpty();
         assertThat(jdbcClient.sql("""
             SELECT scoring_state FROM staged_deploy.forecast_evaluation_result
-            """).query(String.class).list()).containsExactly("QUALITY_EXCLUDED");
+            """).query(String.class).list()).containsExactlyInAnyOrder("QUALITY_EXCLUDED", "MODEL_RETIRED");
         assertThat(jdbcClient.sql("""
             SELECT count(*) FROM information_schema.tables
             WHERE table_schema = 'staged_deploy'

@@ -18,7 +18,6 @@ public class VehicleCapacityCache {
         this.store = store;
     }
 
-    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
     public void warmUp() {
         remember(store.findAll());
     }

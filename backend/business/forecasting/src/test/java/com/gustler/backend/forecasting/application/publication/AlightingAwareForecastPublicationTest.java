@@ -29,7 +29,7 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRout
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
+import com.gustler.backend.forecasting.domain.publication.PendingForecastBatchQuery;
 import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -43,7 +43,7 @@ class AlightingAwareForecastPublicationTest {
     private final Instant now = Instant.parse("2026-11-04T00:00:00Z");
     private final PendingForecastBatch batch = new PendingForecastBatch(10, 1, 1, now);
     private final RouteStops stops = new RouteStops(1, "204000057", List.of(new RouteStop(1, 2, "stop-2", true)));
-    private final VehicleTrajectoryQuery legacyTrajectories = mock(VehicleTrajectoryQuery.class);
+    private final PendingForecastBatchQuery legacyTrajectories = mock(PendingForecastBatchQuery.class);
     private final StopDemandStatisticsRepository legacyStatistics = mock(StopDemandStatisticsRepository.class);
     private final SameDayFullOutcomesService legacyOutcomes = mock(SameDayFullOutcomesService.class);
     private final ForecastBatchCommitter committer = mock(ForecastBatchCommitter.class);
@@ -51,8 +51,7 @@ class AlightingAwareForecastPublicationTest {
     private final AlightingAwareFeatureQuery query = mock(AlightingAwareFeatureQuery.class);
     private final AlightingAwareSeatForecastModel model = mock(AlightingAwareSeatForecastModel.class);
     private final AlightingAwareRouteStatistics statistics = mock(AlightingAwareRouteStatistics.class);
-    private final ForecastBatchWriter writer = new ForecastBatchWriter(legacyTrajectories, committer,
-        legacyOutcomes, legacyStatistics, Clock.fixed(now, ZoneOffset.UTC), quality);
+    private final ForecastBatchWriter writer = new ForecastBatchWriter( committer, Clock.fixed(now, ZoneOffset.UTC), quality);
 
     private RuntimeSnapshot runtime() {
         when(quality.current(1)).thenReturn(1L);
@@ -78,11 +77,11 @@ class AlightingAwareForecastPublicationTest {
         when(snapshot.forTarget(2)).thenReturn(vector);
         when(model.predict(vector)).thenReturn(SeatForecastResult.alighting(3.7, 0.85));
         when(model.evidence("3330", 2)).thenReturn("{\"route\":\"3330\",\"alighting\":{\"stops\":[]}}");
-        when(committer.commit(eq(batch), any(), anyList())).thenReturn(1);
+        when(committer.commit(eq(batch), any())).thenReturn(1);
 
         assertThat(writer.writeForecastsOf(batch, stops, runtime)).isEqualTo(1);
         ArgumentCaptor<ForecastPublication> published = ArgumentCaptor.forClass(ForecastPublication.class);
-        verify(committer).commit(eq(batch), published.capture(), eq(List.of()));
+        verify(committer).commit(eq(batch), published.capture());
         SeatForecast row = published.getValue().predictions().getFirst();
         assertThat(row.expectedSeats()).isEqualTo(3.7);
         assertThat(row.seatFullChance()).isEqualTo(0.85);
@@ -129,7 +128,7 @@ class AlightingAwareForecastPublicationTest {
         PendingForecastBatch outside = new PendingForecastBatch(11, 1, 1, Instant.parse("2026-11-04T03:00:00Z"));
         writer.writeForecastsOf(outside, stops, runtime);
         ArgumentCaptor<ForecastPublication> published = ArgumentCaptor.forClass(ForecastPublication.class);
-        verify(committer).commit(eq(outside), published.capture(), eq(List.of()));
+        verify(committer).commit(eq(outside), published.capture());
         assertThat(published.getValue().predictions()).isEmpty();
         verifyNoInteractions(query, legacyStatistics, legacyOutcomes, legacyTrajectories);
     }

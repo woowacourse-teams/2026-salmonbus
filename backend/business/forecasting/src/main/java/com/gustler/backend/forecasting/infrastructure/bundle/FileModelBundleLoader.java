@@ -28,7 +28,7 @@ public final class FileModelBundleLoader implements ModelBundleLoader {
                     throw new BundleRejectedException("하차 반영 서빙 번들 검증 실패", error);
                 }
             }
-            return LoadedBundle.from(files).release();
+            throw new BundleRejectedException("지원이 종료된 좌석분포 모델 번들이다");
         };
     }
 
@@ -44,7 +44,4 @@ public final class FileModelBundleLoader implements ModelBundleLoader {
         }
     }
 
-    static ModelBundleFiles filesOf(BundleFiles files) {
-        return () -> LoadedBundle.from(files).release();
-    }
 }

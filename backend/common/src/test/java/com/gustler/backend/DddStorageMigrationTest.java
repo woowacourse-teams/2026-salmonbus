@@ -554,8 +554,9 @@ class DddStorageMigrationTest {
         assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_work")).isZero();
         assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_result")).isEqualTo(2);
         assertThat(number("SELECT count(*) FROM alighting_evaluation_archive")).isOne();
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isEqualTo(2);
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_result WHERE scoring_state='MODEL_RETIRED'")).isOne();
+        assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isZero();
         Path root = Path.of("").toAbsolutePath();
         while (root != null
             && !Files.isRegularFile(root.resolve("dev/data/java/com/gustler/localdata/LocalData.java"))) {

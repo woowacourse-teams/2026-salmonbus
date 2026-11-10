@@ -2,11 +2,6 @@ package com.gustler.backend.forecasting.domain.deployment;
 
 import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
 
-import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
-import com.gustler.backend.forecasting.domain.model.ForecastRouteReference;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionForecastModel;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
-import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import java.time.Instant;
 import java.util.UUID;
@@ -19,31 +14,8 @@ public record ModelRelease(
     String featureContractVersion,
     String dataThrough,
     SupportedForecastScope scope,
-    SeatDistributionPredictor predictor,
-    ForecastFeatureContract features,
-    ForecastRouteReference routeReference,
-    SeatForecastModel model
+    AlightingAwareSeatForecastModel model
 ) {
-
-    /** 모델 출력은 만석 확률 하나가 아니라 잔여석 0석부터 70석까지의 분포다. */
-    private static final String PREDICTION_TARGET_VERSION = "seat-distribution-0-70";
-
-    /** 계수 파일에 적힌 모델 판 이름과 같은 계열을 사용한다. 두 계열이 다르면 연결할 수 없다. */
-    private static final String MODEL_KEY = "seat-distribution-a18";
-
-    public ModelRelease(
-        String releaseId,
-        String modelVersion,
-        String bundleDigest,
-        String featureContractVersion,
-        String dataThrough,
-        SupportedForecastScope scope,
-        SeatDistributionPredictor predictor,
-        ForecastFeatureContract features,
-        ForecastRouteReference reference) {
-        this(releaseId, modelVersion, bundleDigest, featureContractVersion, dataThrough, scope, predictor,
-            features, reference, new SeatDistributionForecastModel(predictor, features, reference));
-    }
 
     public static ModelRelease alighting(
         String releaseId,
@@ -52,21 +24,8 @@ public record ModelRelease(
         SupportedForecastScope scope,
         AlightingAwareSeatForecastModel model
     ) {
-        return new ModelRelease(releaseId, "alighting-gate-base-and-pool", bundleDigest, "alighting-online-v1",
-            dataThrough, scope, null, null, null, model);
-    }
-
-    public ModelRelease(
-        String releaseId,
-        String modelVersion,
-        String bundleDigest,
-        String featureContractVersion,
-        String dataThrough,
-        SupportedForecastScope scope,
-        SeatDistributionPredictor predictor
-    ) {
-        this(releaseId, modelVersion, bundleDigest, featureContractVersion, dataThrough, scope,
-            predictor, ForecastFeatureContract.LEGACY, null);
+        return new ModelRelease(releaseId, "alighting-gate-base-and-pool", bundleDigest, "alighting-online-capacity-snapshot-v2",
+            dataThrough, scope, model);
     }
 
     /**
@@ -85,29 +44,15 @@ public record ModelRelease(
             && canonical(deployment.calculationVersion()).equals(featureContractVersion());
     }
 
-    private String modelKey() {
-        if (model instanceof AlightingAwareSeatForecastModel) {
-            return "alighting-gate-base-and-pool";
-        }
-        return MODEL_KEY;
-    }
-
-    private String predictionTargetVersion() {
-        if (model instanceof AlightingAwareSeatForecastModel) {
-            return "after-alighting-and-departure-zero-v1";
-        }
-        return PREDICTION_TARGET_VERSION;
-    }
-
     public StagedModelDeployment receiptWith(
         UUID deploymentKey) {
         return new StagedModelDeployment(
             deploymentKey,
             releaseId,
-            modelKey(),
+            "alighting-gate-base-and-pool",
             modelVersion,
             bundleDigest,
-            predictionTargetVersion(),
+            "after-alighting-and-departure-zero-v1",
             featureContractVersion,
             scope.digest(),
             Instant.parse(dataThrough));

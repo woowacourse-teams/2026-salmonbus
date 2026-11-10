@@ -35,6 +35,25 @@ class AlightingAwareBundleLoaderTest {
     Path directory;
 
     @Test
+    void 구_좌석분포_번들은_실행_대상으로_적재하지_않는다() throws Exception {
+        Files.writeString(directory.resolve("manifest.json"), "{\"bundleSchemaVersion\":\"a18-live-bundle-v2\"}");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            new com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader()
+                .filesUnder(directory.toString()).load())
+            .hasMessageContaining("지원이 종료된 좌석분포");
+    }
+
+    @Test
+    void 기동_점검도_새_모델_로더와_같은_번들_신원을_사용한다() throws Exception {
+        fixture();
+        servingFixture((1.3 + 10) / 3);
+        var inspected = new com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleInspector()
+            .inspect(directory.toString());
+        org.assertj.core.api.Assertions.assertThat(inspected.releaseId()).isEqualTo("test-alighting");
+        org.assertj.core.api.Assertions.assertThat(inspected.routes()).containsExactlyElementsOf(ROUTES);
+    }
+
+    @Test
     void 이전_이름으로_발행한_번들도_원본_해시를_검증해_읽는다() throws Exception {
         fixture();
         try (Stream<Path> paths = Files.list(directory)) {
@@ -135,7 +154,7 @@ class AlightingAwareBundleLoaderTest {
         // given
         fixture();
         Files.writeString(directory.resolve("statistics-manifest.json"),
-            JSON.writeValueAsString(Map.of("schema", "alighting-statistics-v1", "routes", routes)));
+            JSON.writeValueAsString(Map.of("schema", "alighting-statistics-v1", "routes", routes, "holiday_dates", List.of())));
         manifest();
 
         // then
@@ -255,13 +274,15 @@ class AlightingAwareBundleLoaderTest {
         model("gate", "multiclass", 88, List.of(0, 1, 2), List.of(0, 0, 0));
         model("pool", "binary", 80, List.of(0, 1), List.of(0));
         Files.writeString(directory.resolve("statistics-manifest.json"),
-            JSON.writeValueAsString(Map.of("schema", "alighting-statistics-v1", "routes", routes)));
+            JSON.writeValueAsString(Map.of("schema", "alighting-statistics-v1", "routes", routes, "holiday_dates", List.of())));
         Files.writeString(directory.resolve("route-reference.json"),
             JSON.writeValueAsString(Map.of("routes", routes.stream().map(r -> Map.of("modelRoute", r)).toList())));
         for (String route : routes) {
             Files.writeString(directory.resolve("statistics-" + route + ".json"), JSON.writeValueAsString(Map.of(
-                "route", route, "min_per_stop", 1, "tables", Map.of(), "alighting", Map.of(), "route_metadata",
-                List.of(),
+                "route", route, "min_per_stop", 1, "tables", Map.of("lam",List.of(),"lam_base",List.of(),
+                    "net_tab",List.of(),"full_tab",List.of(),"dep_tab",List.of(),"stop_net_base",List.of(),
+                    "target_band",List.of()), "alighting", Map.of("stops",List.of()), "route_metadata",
+                List.of(Map.of("order",1,"id","s1","name","정류장1","direction","UP","boardingAllowed",true)),
                 "events_known_through", "2026-10-21T00:00:00Z", "observations_through", "2026-10-21T00:00:00Z")));
         }
         manifest();

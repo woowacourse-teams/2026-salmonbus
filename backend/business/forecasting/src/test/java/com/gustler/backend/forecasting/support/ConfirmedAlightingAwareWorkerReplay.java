@@ -5,7 +5,6 @@ import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapaci
 import com.gustler.backend.forecasting.application.deployment.ActiveForecastRuntimeResolver;
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
 import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
-import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
 import com.gustler.backend.forecasting.application.publication.ForecastBatchCommitter;
 import com.gustler.backend.forecasting.application.publication.ForecastBatchWriter;
 import com.gustler.backend.forecasting.application.RouteWorkAccess;
@@ -24,8 +23,6 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRout
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareVehiclePrefix;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
-import com.gustler.backend.forecasting.domain.statistics.StopDemandStatisticsRepository;
 import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareInferenceBundle;
 import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareServingBundle;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcAlightingAwareForecastEvaluation;
@@ -176,9 +173,8 @@ public final class ConfirmedAlightingAwareWorkerReplay {
             maximumFeature = Math.max(maximumFeature, compare(row.path("probability80"), actual.probability80()));
             AlightingAwareSeatPredictor.Prediction expected = bundle.predictor().predict(vector(row.path("seat88")),
                 vector(row.path("probability80")));
-            ForecastBatchWriter writer = new ForecastBatchWriter(context.getBean(VehicleTrajectoryQuery.class),
-                context.getBean(ForecastBatchCommitter.class), context.getBean(SameDayFullOutcomesService.class),
-                context.getBean(StopDemandStatisticsRepository.class), Clock.fixed(source.receivedAt(), ZoneOffset.UTC),
+            ForecastBatchWriter writer = new ForecastBatchWriter(
+                context.getBean(ForecastBatchCommitter.class), Clock.fixed(source.receivedAt(), ZoneOffset.UTC),
                 quality);
             writer.setAlightingAwareFeatures(query);
             writer.setConfirmedInput(context.getBean(ConfirmedAlightingAwareInput.class));

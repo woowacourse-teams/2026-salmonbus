@@ -1,5 +1,7 @@
 package com.gustler.backend.forecasting.application.deployment;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
@@ -7,7 +9,6 @@ import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentReposito
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.StagedModelDeployment;
-import com.gustler.backend.forecasting.infrastructure.bundle.DummyBundle;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -184,6 +185,8 @@ class ActiveForecastRuntimeResolverTest {
         } catch (IOException error) {
             throw new UncheckedIOException(error);
         }
-        return DummyBundle.valid().loadAt(directory).release();
+        return ModelRelease.alighting("runtime-test", "b".repeat(64), "2026-10-21T00:00:00Z",
+            new com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope(List.of("3330", "1650")),
+            org.mockito.Mockito.mock(com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel.class));
     }
 }

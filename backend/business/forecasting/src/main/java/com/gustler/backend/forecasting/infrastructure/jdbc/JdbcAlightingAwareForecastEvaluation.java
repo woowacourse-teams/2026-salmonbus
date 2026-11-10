@@ -9,7 +9,6 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingPosterior
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvents;
-import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

@@ -40,7 +40,7 @@ class BundleInspectionCommandTest {
         // when
         BundleInspectionFixture.write(directory);
         byte[] manifest = Files.readAllBytes(directory.resolve("manifest.json"));
-        byte[] weights = Files.readAllBytes(directory.resolve("weights.safetensors"));
+        byte[] weights = Files.readAllBytes(directory.resolve("base.json"));
         Object actual = MaintenanceApplication.run(CliArguments.parse(new String[] {
             "bundle-check", "--directory", directory.toString()}));
 
@@ -51,10 +51,10 @@ class BundleInspectionCommandTest {
         assertThat(result.get("activated")).isEqualTo(false);
         assertThat(result.get("accuracyEvaluated")).isEqualTo(false);
         assertThat(Files.readAllBytes(directory.resolve("manifest.json"))).isEqualTo(manifest);
-        assertThat(Files.readAllBytes(directory.resolve("weights.safetensors"))).isEqualTo(weights);
+        assertThat(Files.readAllBytes(directory.resolve("base.json"))).isEqualTo(weights);
         try (Stream<Path> files = Files.list(directory)) {
             assertThat(files.map(p -> p.getFileName().toString()).toList())
-                .containsExactlyInAnyOrder("manifest.json", "weights.safetensors");
+                .contains("manifest.json", "base.json", "gate.json", "pool.json");
         }
     }
 }

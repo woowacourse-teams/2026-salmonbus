@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -14,7 +15,6 @@ import com.gustler.backend.forecasting.application.deployment.ModelStartupServic
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
-import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.util.ArrayList;
 import java.util.List;
@@ -79,7 +79,7 @@ class ModelActivationBoundaryTest {
         List<String> transactions = new ArrayList<>();
         ModelRelease release = new ModelRelease(releaseId, "model-v1", "a".repeat(64), "feature-v1",
             "2026-09-01T00:00:00Z", new SupportedForecastScope(List.of("1650", "3330")),
-            mock(SeatDistributionPredictor.class));
+            mock(AlightingAwareSeatForecastModel.class));
         ModelBundleFiles files = () -> {
             transactions.add(currentTransaction());
             return release;
