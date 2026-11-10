@@ -1550,8 +1550,8 @@
           }
         },
         "required": [
-          "token",
-          "environment"
+          "environment",
+          "token"
         ]
       },
       "UnregisterPushDeviceRequest": {
