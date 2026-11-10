@@ -68,6 +68,7 @@ struct MapScene: Decodable {
   let referenceVersionId: String
   let preserveCamera: Bool?
   let selectedStopOnly: Bool?
+  let directions: [String]?
   let stops: [MapStop]
   let paths: [MapPath]
   let fullPath: [MapCoordinate]
