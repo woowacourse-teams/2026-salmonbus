@@ -52,7 +52,7 @@ test("방향이 바뀔 때만 selection 진동을 보내고 같은 방향을 다
   await expect(page.getByTestId("naver-map-test-double")).toBeVisible();
   await page.clock.runFor(48);
   await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
-  // 두 방향 정류장 핀은 확대해야 보인다.
+  // 선택되지 않은 정류장 핀은 확대해서 확인한다.
   await naverMap.setZoom(15);
   await naverMap.panToStop(upStop.sequence);
 
@@ -68,8 +68,8 @@ test("방향이 바뀔 때만 selection 진동을 보내고 같은 방향을 다
   await directionButton(page, "DOWN").click();
   expect(await appMessageTypes(page)).toEqual(["haptic.selection"]);
 
-  await naverMap.panToStop(upStop.sequence);
-  await upPin.click();
+  await expect(upPin).toHaveCount(0);
+  await directionButton(page, "UP").click();
   await expect(directionButton(page, "UP")).toHaveAttribute("aria-pressed", "true");
   expect(await appMessageTypes(page)).toEqual(["haptic.selection", "haptic.selection"]);
 });
@@ -102,14 +102,19 @@ test("저장 응답이 오기 전에 화면을 떠나면 결과 진동을 보내
   });
   const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
   await openInApp(page, `/routes/${routeId}?direction=UP`);
-  const started = page.waitForRequest((request) => request.method() === "PUT");
   const star = page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true });
   await star.click();
+  const dialog = page.getByRole("dialog", { name: "저장할 그룹 선택" });
+  await dialog.getByRole("checkbox", { name: /즐겨찾기/ }).check();
+  const started = page.waitForRequest(
+    (request) => request.method() === "PUT" && new URL(request.url()).pathname === "/api/me/favorite-selections",
+  );
+  await dialog.getByRole("button", { name: "저장", exact: true }).click();
   await started;
   // 라우터가 주소를 먼저 바꾸고 떠나는 화면을 잠깐 남겨 두는 순간을 만든다.
   await page.evaluate(() => history.pushState(null, "", "/"));
   finish();
   await expect(star).toHaveAttribute("aria-pressed", "true");
   expect(favorites.groups[0]!.favorites).toHaveLength(1);
-  expect(await appMessageTypes(page)).toEqual([]);
+  expect(await appMessageTypes(page)).toEqual(["haptic.selection"]);
 });

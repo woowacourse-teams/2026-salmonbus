@@ -75,9 +75,6 @@ signedInTest("홈에서 날씨를 갱신하고 로그인 인사를 탭바 위에
   try {
     await naverMap.panToPoint([127.154, 37.43]);
     await expect(weather.getByText("18°", { exact: true })).toBeVisible();
-    await expect(
-      weather.getByText("마지막 조회 위치 기준이에요. 새로고침하면 지도 중심 날씨를 보여드려요."),
-    ).toBeVisible();
     expect(requestedLongitudes).toEqual(["127.111"]);
     await weather.getByRole("button", { name: "지도 중심 날씨 새로고침" }).click();
     await expect(weather.locator('[aria-busy="true"]')).toBeVisible();

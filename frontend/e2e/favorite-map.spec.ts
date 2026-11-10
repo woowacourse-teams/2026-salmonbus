@@ -7,7 +7,7 @@ import { captureEnabled } from "./utils/capture";
 const test = mergeTests(mapTest, favoritesTest);
 test.use({ viewport: { width: 425, height: 844 }, holdMapInitialization: true, reducedMotion: "no-preference" });
 
-test("홈 즐겨찾기는 선택 정류장 중심에서 준비 후 부드럽게 확대한다 (no-preference)", async ({
+test("즐겨찾기는 선택 정류장 중심에서 준비 후 부드럽게 확대한다 (no-preference)", async ({
   page,
   favorites,
   api,
@@ -16,12 +16,13 @@ test("홈 즐겨찾기는 선택 정류장 중심에서 준비 후 부드럽게 
 }) => {
   const stop = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("tabpanel").getByRole("link").click();
   await expect(page).toHaveURL(`/routes/${routeId}?direction=DOWN&stopId=${stop.stopId}`);
-  await expect(page.getByTestId("naver-map-test-double")).toHaveCount(1);
+  const boardMap = page.getByTestId("route-map");
+  await expect(boardMap.getByTestId("naver-map-test-double")).toHaveCount(1);
   await page.clock.runFor(64);
-  await expect(page.getByTestId("route-map")).toHaveAttribute("data-overlays-ready", "false");
+  await expect(boardMap).toHaveAttribute("data-overlays-ready", "false");
   const point = api.data.geometry.busStops.find(
     (item) => item.stationId === stop.stopId && item.direction === stop.direction,
   )!.point!;
