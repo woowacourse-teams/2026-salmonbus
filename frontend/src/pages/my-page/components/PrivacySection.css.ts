@@ -7,7 +7,6 @@ export const section = style({
   display: "flex",
   flexDirection: "column",
   marginTop: 32,
-  fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
   color: "#292A2D",
 });
 
