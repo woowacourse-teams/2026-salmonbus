@@ -4,7 +4,7 @@ test.use({ viewport: { width: 320, height: 844 }, reducedMotion: "reduce" });
 const schoolId = "10000000-0000-4000-8000-000000000003";
 const weekendId = "10000000-0000-4000-8000-000000000004";
 
-test("마이페이지 그룹 카드의 이름을 끌어서 바꾼 순서를 저장한다", async ({ page, favorites }) => {
+test("즐겨찾기 그룹 카드의 이름을 끌어서 바꾼 순서를 저장한다", async ({ page, favorites }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
   await page.goto("/favorites/groups");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();

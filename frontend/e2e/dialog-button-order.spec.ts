@@ -91,7 +91,7 @@ test("그룹 상세의 그룹 삭제와 즐겨찾기 삭제 창은 열릴 때 �
 test("즐겨찾기 편집의 삭제 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다", async ({ page, favorites, api }) => {
   const stop = api.data.watch.stops.find((item) => item.direction === "UP" && item.boardingAllowed)!;
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: "UP" })];
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   await editor.getByRole("button", { name: `${stop.name} 삭제`, exact: true }).click();

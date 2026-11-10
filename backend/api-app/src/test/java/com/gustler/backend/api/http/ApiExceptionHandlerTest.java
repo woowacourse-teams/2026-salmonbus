@@ -24,7 +24,10 @@ import com.gustler.backend.api.favorite.FavoriteTargetUnavailableException;
 import com.gustler.backend.api.favorite.InvalidFavoriteGroupNameException;
 import com.gustler.backend.api.favorite.InvalidFavoriteOrderException;
 import com.gustler.backend.api.favorite.LastFavoriteGroupDeletionException;
+import com.gustler.backend.api.push.InvalidNotificationScheduleException;
 import com.gustler.backend.api.push.InvalidPushDeviceException;
+import com.gustler.backend.api.push.NotificationSettingNotFoundException;
+import com.gustler.backend.api.push.NotificationTargetNotFavoriteException;
 import com.gustler.backend.api.route.InvalidRouteIdException;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import com.gustler.backend.api.station.InvalidStationTileException;
@@ -64,6 +67,9 @@ class ApiExceptionHandlerTest {
             new NicknameTakenException(),
             new ReauthRequiredException(),
             new InvalidPushDeviceException(),
+            new InvalidNotificationScheduleException(),
+            new NotificationTargetNotFavoriteException(),
+            new NotificationSettingNotFoundException(),
             new Failure(ErrorCode.STATION_NOT_FOUND),
             new InvalidStationTileException(),
             new Failure(ErrorCode.REFERENCE_VERSION_CONFLICT),

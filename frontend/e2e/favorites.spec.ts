@@ -176,7 +176,7 @@ test("비회원은 즐겨찾기를 요청하지 않고 로그인 후 조회를 �
   await expect(page.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toBeVisible();
 });
 
-test("홈에서 그룹 조회에 실패하면 320px 화면에 오류 시안을 표시하고 재시도한다", async ({
+test("즐겨찾기에서 그룹 조회에 실패하면 320px 화면에 오류 시안을 표시하고 재시도한다", async ({
   page,
   favorites,
   api,
@@ -229,6 +229,7 @@ test("선택한 그룹 조회에 실패해도 재시도하면 같은 그룹의 �
     else await route.fallback();
   });
   await page.goto("/favorites");
+  await page.getByRole("tab", { name: "통학", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveText("즐겨찾기를 불러오지 못했어요");
   await expect(page.getByRole("tab", { name: "통학", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toBeEnabled();
@@ -240,7 +241,7 @@ test("선택한 그룹 조회에 실패해도 재시도하면 같은 그룹의 �
   await expect(page.getByRole("tabpanel").getByText(stop.name, { exact: true })).toBeVisible();
 });
 
-test("홈은 첫 그룹을 조회하고 탭 변경 시 선택한 그룹만 조회하며 ETA 없는 차량도 표시한다", async ({
+test("즐겨찾기는 첫 그룹을 조회하고 탭 변경 시 선택한 그룹만 조회하며 ETA 없는 차량도 표시한다", async ({
   page,
   favorites,
   api,
@@ -474,6 +475,7 @@ test("마지막 그룹은 이름이 바뀌어도 보호하고 다른 그룹이 �
     await expect(page.getByText("그룹을 만들었어요", { exact: true })).toBeVisible();
   });
   await test.step("이름이 겹치면 안내하고 다른 이름으로 바꾼다", async () => {
+    await page.goto("/favorites/groups");
     await page.getByRole("link", { name: /🚌통학/ }).click();
     await page.getByRole("button", { name: "그룹 이름 변경", exact: true }).click();
     await page.getByRole("textbox", { name: "변경할 그룹 이름", exact: true }).fill("즐겨찾기");
@@ -537,7 +539,7 @@ for (const [status, label] of [
   ["NO_VEHICLE", "도착 예정 차량이 없어요"],
   ["ERROR", "정류장 정보를 불러오지 못했어요"],
 ] as const) {
-  test(`홈의 ${status} 항목도 유지하고 상태를 안내한다`, async ({ page, favorites, api }) => {
+  test(`즐겨찾기의 ${status} 항목도 유지하고 상태를 안내한다`, async ({ page, favorites, api }) => {
     const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
     const saved = storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction });
     favorites.groups[0]!.favorites = [saved];

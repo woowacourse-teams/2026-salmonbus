@@ -188,7 +188,7 @@ test("그룹 만들기 중 홈으로 이동하면 늦은 응답이 마이페이�
   await (await response).finished();
   await page.clock.runFor(32);
   await expect(page).toHaveURL("/");
-  await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "홈 정보", exact: true })).toBeVisible();
   expect(favorites.groups.map((group) => group.name)).toEqual(["즐겨찾기", "통학"]);
 });
 

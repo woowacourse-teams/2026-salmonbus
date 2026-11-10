@@ -10,7 +10,7 @@ export const overview = style({
   flexDirection: "column",
   gap: 22,
   paddingBlockStart: 3,
-  "@media": { "(max-height: 720px)": { gap: 16 } },
+  "@media": { "(max-height: 720px)": { gap: 12 } },
 });
 
 export const panel = style({ minWidth: 0 });
@@ -22,21 +22,19 @@ export const weatherHeader = style({
   gap: 8,
 });
 
-export const weatherHint = style({ margin: 0, fontSize: 11, lineHeight: 1.4, color: vars.color.textSubtle });
-
-export const weatherLocation = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0 });
+export const weatherLocation = style({ display: "flex", alignItems: "center", gap: 3, minWidth: 0 });
 
 export const refresh = style({
   display: "grid",
   placeItems: "center",
   flexShrink: 0,
-  width: 20,
-  height: 20,
+  width: 24,
+  height: 24,
+  marginInlineStart: -5,
   padding: 0,
-  border: "1px solid #A8A8B1",
+  border: 0,
   borderRadius: "50%",
-  background: "#DFDFE4",
-  boxShadow: "0 1px 2px #22222A20",
+  background: "transparent",
   cursor: "pointer",
   selectors: {
     "&:disabled": { opacity: 0.5, cursor: "default" },
@@ -44,7 +42,10 @@ export const refresh = style({
   },
 });
 
+export const refreshIcon = style({ opacity: 0.65 });
+
 export const refreshSpinning = style([
+  refreshIcon,
   spinning,
   { selectors: { [`${refresh}:not(:disabled) &`]: { animationIterationCount: 1 } } },
 ]);

@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.domain.evaluation;
 
 import java.time.Instant;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * 커밋된 정산 결과와 진단·보정 적격성 근거다.
@@ -60,11 +59,4 @@ public record SettledEvaluation(
         }
     }
 
-    public Optional<SettledForecast> calibrationOutcome() {
-        if (!state.scorable() || !usableForCalibration) {
-            return Optional.empty();
-        }
-        return Optional.of(
-            new SettledForecast(routeId, modelDeploymentId, stopsToTarget, rawFullChance, arrivedAt, seatsOnArrival));
-    }
 }

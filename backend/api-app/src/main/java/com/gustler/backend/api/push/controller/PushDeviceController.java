@@ -58,7 +58,8 @@ public class PushDeviceController {
                     @ExampleObject(name = "csrfRejected", value = AuthApiDocsExamples.CSRF_REJECTED),
                     @ExampleObject(name = "invalidRequest", value = ApiDocsExamples.INVALID_REQUEST)
                 })),
-        @ApiResponse(responseCode = "401", description = "액세스 토큰이 없거나 유효하지 않음, 또는 탈퇴한 회원",
+        @ApiResponse(responseCode = "401", description = "액세스 토큰이 없거나 유효하지 않음, 탈퇴한 회원, "
+            + "세션 식별자가 없는 토큰 또는 로그아웃한 세션의 토큰",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class),
                 examples = @ExampleObject(name = "unauthenticated", value = AuthApiDocsExamples.UNAUTHENTICATED)))
     })
@@ -66,7 +67,7 @@ public class PushDeviceController {
         @Parameter(hidden = true) @AuthenticationPrincipal MemberPrincipal principal,
         @RequestBody RegisterPushDeviceRequest request
     ) {
-        service.register(principal.publicId(), request.token(), request.environment());
+        service.register(principal.publicId(), principal.sessionId(), request.token(), request.environment());
         return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
     }
 

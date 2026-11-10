@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: salmonbus-archive
+  main:
+    web-application-type: none
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      connection-init-sql: "SET TIME ZONE 'UTC'"
+      maximum-pool-size: 1
+      minimum-idle: 0
+      data-source-properties:
+        ApplicationName: salmonbus-archive
+  flyway:
+    enabled: false
+archive:
+  enabled: ${ARCHIVE_ENABLED:false}
+  delete-enabled: ${ARCHIVE_DELETE_ENABLED:false}
+  bucket: ${ARCHIVE_BUCKET:techcourse-project-2026}
+  prefix: ${ARCHIVE_PREFIX:salmonbus/prod/lake-v2/}
+  page-size: ${ARCHIVE_PAGE_SIZE:2000}
+  interval: ${ARCHIVE_INTERVAL:1s}

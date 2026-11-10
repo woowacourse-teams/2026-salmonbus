@@ -41,6 +41,10 @@ final class Environment {
     private Environment() {}
 
     static Map<String, String> parse(String text, Set<String> keys) {
+        return parse(text, keys, Set.of());
+    }
+
+    private static Map<String, String> parse(String text, Set<String> keys, Set<String> optional) {
         var values = new TreeMap<String, String>();
         for (var line : text.split("\n", -1)) {
             if (line.isEmpty() || line.startsWith("#")) {
@@ -50,7 +54,7 @@ final class Environment {
             Checks.require(separator > 0, "ENV_KEYS");
             var key = line.substring(0, separator);
             var value = line.substring(separator + 1);
-            Checks.require(keys.contains(key) && !values.containsKey(key), "ENV_KEYS");
+            Checks.require((keys.contains(key) || optional.contains(key)) && !values.containsKey(key), "ENV_KEYS");
             Checks.require(
                     value.chars()
                             .noneMatch(
@@ -60,7 +64,25 @@ final class Environment {
                     "ENV_VALUE");
             values.put(key, value);
         }
-        Checks.require(values.keySet().equals(keys), "ENV_KEYS");
+        Checks.require(values.keySet().containsAll(keys), "ENV_KEYS");
+        return values;
+    }
+
+    static Map<String, String> worker(String text) {
+        var values = parse(text, KEYS.get("worker"), Set.of("MODEL_BUNDLE_DIRECTORY",
+                "MODEL_BUNDLE_PROMOTE_ON_START", "FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY"));
+        for (var key : java.util.List.of("MODEL_BUNDLE_DIRECTORY", "FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY")) {
+            if (values.containsKey(key)) {
+                var path = Path.of(values.get(key));
+                Checks.require(path.isAbsolute() && path.normalize().equals(path)
+                                && path.startsWith("/srv/salmonbus-dev/models")
+                                && path.getNameCount() > Path.of("/srv/salmonbus-dev/models").getNameCount(),
+                        "DEV_MODEL_DIRECTORY");
+            }
+        }
+        Checks.require(!values.containsKey("MODEL_BUNDLE_PROMOTE_ON_START")
+                        || Set.of("true", "false").contains(values.get("MODEL_BUNDLE_PROMOTE_ON_START")),
+                "DEV_MODEL_PROMOTION");
         return values;
     }
 
@@ -92,7 +114,8 @@ final class Environment {
         for (var entry : KEYS.entrySet()) {
             values.put(
                     entry.getKey(),
-                    entry.getKey().equals("api") ? ChatRetirement.api(directory) : parse(
+                    entry.getKey().equals("api") ? ChatRetirement.api(directory)
+                            : entry.getKey().equals("worker") ? worker(FileOps.privateText(directory.resolve("worker.env"))) : parse(
                             FileOps.privateText(directory.resolve(entry.getKey() + ".env")),
                             entry.getValue()));
         }

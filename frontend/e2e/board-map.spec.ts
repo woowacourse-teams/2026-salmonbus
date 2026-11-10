@@ -2196,8 +2196,7 @@ test("선택 방향이 운행 전이어도 반대 방향은 운행 종료 안내
   api.data.watch.vehicles = api.data.watch.vehicles.filter((vehicle) => vehicle.direction !== "UP");
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toBeVisible();
-  await expect(sheet(page)).toHaveCount(0);
-  await expect(map(page)).toHaveCount(0);
+  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
 
   await page.getByRole("button", { name: `${directionLabels.DOWN} 보기`, exact: true }).click();
   await page.clock.runFor(32);
@@ -2221,7 +2220,7 @@ test("막차 시각이 지나도 그 방향 차량이 달리고 있으면 판정
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toHaveCount(0);
 });
 
-test("운행 종료 화면에는 지도와 바텀시트가 없다", async ({ page, api }) => {
+test("운행 종료 화면에는 노선 형상과 판정보드 바텀시트의 안내를 표시한다", async ({ page, api }) => {
   const lateObservedAt = "2026-09-16T23:30:00+09:00";
   api.data.watch.observedAt = lateObservedAt;
   api.data.watch.vehiclesInService = 0;
@@ -2229,9 +2228,9 @@ test("운행 종료 화면에는 지도와 바텀시트가 없다", async ({ pag
   await page.goto(`/routes/${routeId}`);
   await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).toBeVisible();
   await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
-  await expect(sheet(page)).toHaveCount(0);
-  await expect(map(page)).toHaveCount(0);
-  await expect(handle(page)).toHaveCount(0);
+  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
+  await expect(handle(page)).toBeVisible();
   await expect(page.locator("button[aria-expanded]")).toHaveCount(0);
   await expect(page.getByText(/도착 시 .*석 예상해요/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /방면 보기$/ })).toHaveCount(0);

@@ -50,4 +50,5 @@ pack() {
 pack api    "$API_JAR"    "$API_DIGEST"
 pack worker "$WORKER_JAR" "$WORKER_DIGEST"
 
+bash deploy/package-archive-revision.sh "$commit"
 bash deploy/verify-revision.sh build/revision

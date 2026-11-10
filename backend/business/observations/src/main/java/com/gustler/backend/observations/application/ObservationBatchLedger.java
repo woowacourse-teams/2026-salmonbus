@@ -1,5 +1,6 @@
 package com.gustler.backend.observations.application;
 
+import com.gustler.backend.observations.api.CloseUnfinishedCollections;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch.Kind;
 import com.gustler.backend.observations.api.ObservationDeliveryHook;
@@ -19,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** 외부 호출 전 예약과 전송 기록, 호출 후 결과 저장의 트랜잭션을 관리한다. */
 @Component
-public class ObservationBatchLedger {
+public class ObservationBatchLedger implements CloseUnfinishedCollections {
     private final ApiCallQuota callQuota;
     private final CollectionBatchRepository batches;
     private final ObservationLoader loader;
@@ -68,6 +69,20 @@ public class ObservationBatchLedger {
     @Transactional(readOnly = false)
     public void abandonBeforeSend(final long batchId) {
         abandon(batchId);
+    }
+
+    /** 관측 저장의 롤백과 분리한다. 성공한 수집이나 업무 데이터가 남은 배치는 변경하지 않는다. */
+    @Transactional(readOnly = false, propagation = Propagation.REQUIRES_NEW, timeout = 3)
+    public int closeUnfinished(final long batchId) {
+        return batches.closeUnfinished(batchId);
+    }
+
+    @Override
+    @Transactional(readOnly = false, propagation = Propagation.REQUIRES_NEW, timeout = 3)
+    public List<Long> closePreviousRound() {
+        return batches.lockUnfinished(100).stream()
+            .filter(id -> batches.closeUnfinished(id) == 1)
+            .toList();
     }
 
     /** 관측 저장과 수집 완료, 필요한 품질 조사 등록을 한 트랜잭션에서 수행한다. */

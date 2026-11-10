@@ -2667,28 +2667,309 @@
     {
       "id": 48,
       "type": "row",
+      "title": "08 수집 좌석값 품질",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 150,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 49,
+      "type": "logs",
+      "title": "좌석값 격리 로그",
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 151,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{unit=\"salmonbus-worker.service\"} |= \"event=observation_seat_quality \"",
+          "queryType": "range",
+          "direction": "backward",
+          "maxLines": 100,
+          "datasource": {
+            "type": "loki",
+            "uid": "grafanacloud-logs"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLevel": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "enableLogDetails": true
+      }
+    },
+    {
+      "id": 50,
+      "title": "좌석값 격리 추이",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 159,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "sum by (decision) (rate(salmonbus_collection_seat_quality_total{job=\"salmonbus/worker\"}[5m]))",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "{{decision}}",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 51,
+      "type": "row",
+      "title": "09 수집 실패 종료와 회수",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 166,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 52,
+      "title": "마지막 수집·종료 실패 이후 경과",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 167,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "time() - (salmonbus_collection_failure_last_timestamp{job=\"salmonbus/worker\"} > 0)",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "마지막 내부 예외",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 53,
+      "title": "자동 종료한 미완료 수집",
+      "description": "",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 167,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "sum(increase(salmonbus_collection_recovered_batches_total{job=\"salmonbus/worker\"}[5m]))",
+          "editorMode": "code",
+          "instant": false,
+          "range": true,
+          "legendFormat": "최근 5분 추정 건수",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "미수집 / 미확인",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 54,
+      "type": "logs",
+      "title": "수집 상태 종료·회수 기록",
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 174,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{unit=\"salmonbus-worker.service\"} |~ \"event=collection_batch_(closed|close_failed|recovery) \"",
+          "queryType": "range",
+          "direction": "backward",
+          "maxLines": 100,
+          "datasource": {
+            "type": "loki",
+            "uid": "grafanacloud-logs"
+          }
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLevel": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "enableLogDetails": true
+      }
+    },
+    {
+      "id": 55,
+      "type": "row",
       "title": "도움말과 적용 상태",
       "collapsed": true,
       "panels": [
         {
-          "id": 49,
+          "id": 56,
           "type": "text",
           "title": "해석과 적용 상태",
           "gridPos": {
             "x": 0,
-            "y": 151,
+            "y": 183,
             "w": 24,
             "h": 18
           },
           "options": {
             "mode": "markdown",
-            "content": "### 읽는 순서\n사용자 영향 → 연결 대기 → 읽기와 쓰기 → 잠금 → 메모리 → SQL과 업무 순서로 같은 시간을 선택합니다.\n\n### 아직 미검증인 것\n추가 RDS 지표와 PostgreSQL 진단 쿼리는 서버 적용 전입니다. 빈 패널은 0이나 정상으로 해석하지 않습니다. SQL별 지표는 pg_stat_statements 활성화와 권한 확인 후 수집합니다.\n\n### 해석의 한계\n- EBS 잔량은 요청 크기 제한이 아닙니다. 잔량 감소만으로 장애 원인을 확정하지 않습니다.\n- SQL 버퍼 읽기는 물리 디스크 읽기가 아닙니다. 버퍼 수정과 WAL 생성량도 실제 디스크 쓰기량과 다릅니다.\n- query_origin은 소스 코드에 붙인 업무 태그입니다. 동일 SQL이 여러 업무에서 쓰이면 pg_stat_statements가 합칠 수 있습니다. 현재 실행 중인 업무 표본과 앱 로그를 함께 봅니다.\n- SQL 상위 표는 총 실행 시간 기준으로 수집된 최대 100개 SQL을 비교합니다. 평균 실행 시간은 선택 기간의 실행 시간 증가량을 실행 횟수 증가량으로 나눈 값이며, 다른 표는 기간 증가량입니다. 제외, 통계 초기화, 재시작, 수집 누락 때 전체 순위를 보장하지 않습니다. 짧은 SQL은 60초 활동 표본에 안 잡힐 수 있습니다.\n- 연결 사용 시간은 연결을 빌린 전체 시간이며 SQL 실행이나 순수 커밋 시간과 같지 않습니다. DB idle은 앱이 연결을 반납했다는 뜻이 아닙니다.\n- 노선별 관측 값은 재시작 후 메모리에서 다시 시작합니다. 미발행 나이는 한 회차 전 조회 결과일 수 있고 지원 모델이 조회한 범위만 나타냅니다.\n- 새 알림은 일시 정지 상태로 준비합니다. 배포, 지표 수집, 장애/복구 검증 후 활성화합니다. 테스트 알림은 발송하지 않았습니다.\n\n### 비용과 복구\n정상 SQL 원문/바인딩 값은 보내지 않습니다. DB 통계 60초, 추가 AWS 지표 5분, 로그 패널 최대 100줄입니다. SQL은 매 수집 시 최대 100개이며 기간 전체의 시계열 수 상한은 아닙니다. 기존 사용량과 합산해야 합니다. AWS 조회와 전송 비용은 별도입니다.\n문제 시 새 수집 블록만 제거하고 Alloy 검증 후 reload합니다. SQL 태그와 ApplicationName은 진단 표식이며 업무 결과를 바꾸지 않습니다. 재시작/확장 설치는 자동 실행하지 않습니다.\n"
+            "content": "### 읽는 순서\n사용자 영향 → 연결 대기 → 읽기와 쓰기 → 잠금 → 메모리 → SQL과 업무 순서로 같은 시간을 선택합니다.\n\n### 아직 미검증인 것\n추가 RDS 지표와 PostgreSQL 진단 쿼리는 서버 적용 전입니다. 빈 패널은 0이나 정상으로 해석하지 않습니다. SQL별 지표는 pg_stat_statements 활성화와 권한 확인 후 수집합니다.\n수집 실패·회수 알림은 기존 salmonbus-service-discord 수신처로 준비한 일시 정지 규칙입니다. 이 파일 생성만으로 배포·알림 활성화·발송을 하지 않습니다.\n\n### 해석의 한계\n- EBS 잔량은 요청 크기 제한이 아닙니다. 잔량 감소만으로 장애 원인을 확정하지 않습니다.\n- SQL 버퍼 읽기는 물리 디스크 읽기가 아닙니다. 버퍼 수정과 WAL 생성량도 실제 디스크 쓰기량과 다릅니다.\n- query_origin은 소스 코드에 붙인 업무 태그입니다. 동일 SQL이 여러 업무에서 쓰이면 pg_stat_statements가 합칠 수 있습니다. 현재 실행 중인 업무 표본과 앱 로그를 함께 봅니다.\n- SQL 상위 표는 총 실행 시간 기준으로 수집된 최대 100개 SQL을 비교합니다. 평균 실행 시간은 선택 기간의 실행 시간 증가량을 실행 횟수 증가량으로 나눈 값이며, 다른 표는 기간 증가량입니다. 제외, 통계 초기화, 재시작, 수집 누락 때 전체 순위를 보장하지 않습니다. 짧은 SQL은 60초 활동 표본에 안 잡힐 수 있습니다.\n- 연결 사용 시간은 연결을 빌린 전체 시간이며 SQL 실행이나 순수 커밋 시간과 같지 않습니다. DB idle은 앱이 연결을 반납했다는 뜻이 아닙니다.\n- 노선별 관측 값은 재시작 후 메모리에서 다시 시작합니다. 미발행 나이는 한 회차 전 조회 결과일 수 있고 지원 모델이 조회한 범위만 나타냅니다.\n- 새 알림은 일시 정지 상태로 준비합니다. 배포, 지표 수집, 장애/복구 검증 후 활성화합니다. 테스트 알림은 발송하지 않았습니다.\n\n### 비용과 복구\n정상 SQL 원문/바인딩 값은 보내지 않습니다. DB 통계 60초, 추가 AWS 지표 5분, 로그 패널 최대 100줄입니다. SQL은 매 수집 시 최대 100개이며 기간 전체의 시계열 수 상한은 아닙니다. 기존 사용량과 합산해야 합니다. AWS 조회와 전송 비용은 별도입니다.\n문제 시 새 수집 블록만 제거하고 Alloy 검증 후 reload합니다. SQL 태그와 ApplicationName은 진단 표식이며 업무 결과를 바꾸지 않습니다. 재시작/확장 설치는 자동 실행하지 않습니다.\n"
           }
         }
       ],
       "gridPos": {
         "x": 0,
-        "y": 150,
+        "y": 182,
         "w": 24,
         "h": 1
       }

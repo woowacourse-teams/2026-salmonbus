@@ -75,9 +75,6 @@ signedInTest("홈에서 날씨를 갱신하고 로그인 인사를 탭바 위에
   try {
     await naverMap.panToPoint([127.154, 37.43]);
     await expect(weather.getByText("18°", { exact: true })).toBeVisible();
-    await expect(
-      weather.getByText("마지막 조회 위치 기준이에요. 새로고침하면 지도 중심 날씨를 보여드려요."),
-    ).toBeVisible();
     expect(requestedLongitudes).toEqual(["127.111"]);
     await weather.getByRole("button", { name: "지도 중심 날씨 새로고침" }).click();
     await expect(weather.locator('[aria-busy="true"]')).toBeVisible();
@@ -169,6 +166,70 @@ test("정류장 상세 조회 실패는 재시도할 수 있고 정상 빈 응�
   await expect(sheet.getByText("이 정류장의 정차 노선 정보가 없어요.")).toBeVisible();
   await expect(sheet.getByRole("button", { name: "정류장 버스 정보 다시 불러오기" })).toHaveCount(0);
 });
+
+for (const status of ["UNAVAILABLE", "READY"] as const) {
+  test(`정류장 상세에서 GBIS가 ${status}여도 첫 판정보드 차량의 거리와 예보를 표시한다`, async ({ page }) => {
+    const stationId = "206000532";
+    await page.route("**/api/v2/stations/tiles/14/*/*", (route) => {
+      const [, , zoom, x, y] = new URL(route.request().url()).pathname.split("/").slice(-5).map(Number);
+      return route.fulfill({
+        json: {
+          tile: { zoom, x, y },
+          coordinateSystem: "WGS84",
+          status: "READY",
+          stations:
+            x === 13976 && y === 6354
+              ? [{ stationId, name: "판교역 API", point: { x: pangyoPoint[0], y: pangyoPoint[1] } }]
+              : [],
+        },
+      });
+    });
+    await page.route(`**/api/v2/stations/${stationId}`, (route) =>
+      route.fulfill({
+        headers: { date: new Date(observedAt).toUTCString() },
+        json: {
+          stationId,
+          generatedAt: observedAt,
+          status,
+          reason: status === "UNAVAILABLE" ? "STALE" : null,
+          snapshot: { staleAt: status === "READY" ? "2026-09-16T08:05:00+09:00" : observedAt },
+          refresh: { status: "IDLE", suggestedRefreshAt: "2026-09-16T08:01:00+09:00" },
+          routes: [
+            {
+              routeId,
+              name: "3330",
+              supported: true,
+              service: { matchStatus: "MATCHED", direction: "UP" },
+              arrivals: [
+                {
+                  positionSource: "BOARD",
+                  remainingStops: 1,
+                  eta: { status: "UNAVAILABLE" },
+                  forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9 },
+                },
+                {
+                  positionSource: "BOARD",
+                  remainingStops: 4,
+                  eta:
+                    status === "READY"
+                      ? { status: "AVAILABLE", expectedArrivalAt: "2026-09-16T08:03:00+09:00", remainingSeconds: 180 }
+                      : { status: "UNAVAILABLE" },
+                  forecast: { status: "AVAILABLE", seatAvailableProbability: 0.1 },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    await page.goto("/");
+    await page.getByRole("button", { name: "판교역 API 정류장" }).press("Enter");
+    const row = page.getByRole("region", { name: "정류장 노선 안내" }).getByRole("listitem").first();
+    await expect(row).toContainText("도착 정보 없음");
+    await expect(row).toContainText("1정류장 전");
+    await expect(row).toContainText("탑승 확률 높음");
+  });
+}
 
 test("지도 SDK가 인증 실패로 초기화 상태를 지워도 탭을 이동할 수 있다", async ({ page }) => {
   await page.route("**/assets/home-events.json", (route) =>
@@ -262,6 +323,43 @@ test("노선 카드에서 기존 지도 위에 판정보드를 열고 노선 응
   await page.goBack();
   await expect(page).toHaveURL("/route-map");
   await expect(card).toBeVisible();
+});
+
+test("노선도에서 운행이 끝난 방향을 열면 판정보드 바텀시트 중앙에 안내가 보인다", async ({ page, api }) => {
+  api.data.watch.observedAt = "2026-09-16T23:30:00+09:00";
+  api.data.watch.vehiclesInService = 0;
+  api.data.watch.vehicles = [];
+  await page.goto("/route-map");
+  const card = page.getByRole("list", { name: "서비스 중 노선" }).getByRole("link", { name: /3330/ });
+  await card.click();
+  await expect(page).toHaveURL(`/routes/${routeId}`);
+  const board = page.getByRole("region", { name: "판정보드", exact: true });
+  await expect(board).toHaveAttribute("data-snap", "expanded");
+  await board.evaluate((element) => Promise.allSettled(element.getAnimations().map((animation) => animation.finished)));
+  const notice = board.getByRole("status");
+  await expect(notice).toHaveText("현재는 운행시간이 아닙니다");
+  await expect(notice).toBeInViewport({ ratio: 1 });
+  const mascot = board.locator("img");
+  await expect(mascot).toBeInViewport({ ratio: 1 });
+  const imageBox = (await mascot.boundingBox())!;
+  const noticeBox = (await notice.boundingBox())!;
+  const sheetBox = (await board.boundingBox())!;
+  expect(imageBox.y + imageBox.height).toBeLessThan(noticeBox.y);
+  expect(imageBox.x + imageBox.width / 2).toBeCloseTo(noticeBox.x + noticeBox.width / 2, 0);
+  const contentCenter = (imageBox.y + noticeBox.y + noticeBox.height) / 2;
+  expect(Math.abs(contentCenter - (sheetBox.y + sheetBox.height / 2))).toBeLessThan(24);
+  const map = page.getByTestId("naver-map-test-double");
+  const paths = map.getByTestId("naver-polyline");
+  await expect(paths).toHaveCount(2);
+  await page.clock.runFor(64);
+  await expect(paths.first().locator("polyline")).toHaveAttribute("stroke-opacity", "0.95");
+  await expect(map.getByRole("button", { name: /정류장 지도에서 선택/ })).toHaveCount(0);
+  const back = page.getByRole("link", { name: "노선 선택으로 돌아가기", exact: true });
+  await expect(back).toBeInViewport({ ratio: 1 });
+  await back.click();
+  await expect(page).toHaveURL("/route-map");
+  await expect(card).toBeVisible();
+  await expect(paths).toHaveCount(0);
 });
 
 test("검색에서 같은 지도 위에 판정보드를 먼저 열고 응답이 오면 노선을 표시한다", async ({ page, api, naverMap }) => {
@@ -431,7 +529,7 @@ test("홈과 즐겨찾기에서 정류장 핀으로 도착과 탑승 예보를 �
         direction: "정자역",
         notice: null,
         generatedAt: arrivals.generatedAt,
-        status: arrivals.status,
+        status: stale ? "UNAVAILABLE" : arrivals.status,
         reason: stale ? "STALE" : arrivals.reason,
         snapshot: arrivals.snapshot,
         refresh: arrivals.refresh,
@@ -451,15 +549,17 @@ test("홈과 즐겨찾기에서 정류장 핀으로 도착과 탑승 예보를 �
               schedule: null,
               scheduleWindow: "UNKNOWN",
             },
-            status: "READY",
-            reason: null,
-            arrivals: [
-              {
-                ...arrival,
-                positionSource: "BOARD",
-                forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: null },
-              },
-            ],
+            status: stale ? "NO_PREDICTION" : "READY",
+            reason: stale ? "NO_APPROACHING_VEHICLE" : null,
+            arrivals: stale
+              ? []
+              : [
+                  {
+                    ...arrival,
+                    positionSource: "BOARD",
+                    forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: null },
+                  },
+                ],
           },
           {
             routeId: "200000002",

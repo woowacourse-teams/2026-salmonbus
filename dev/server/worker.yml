@@ -33,11 +33,13 @@ route-geometry:
   include-catalog: true
 
 forecast:
+  alighting:
+    history-seed-directory: ${FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY:/srv/salmonbus-dev/models/alighting-history}
   enabled: true
   interval: 30s
   settlement-interval: 60s
 
 model:
   bundle:
-    directory: /srv/salmonbus-dev/models/coldstart-20261016
-    promote-on-start: true
+    directory: ${MODEL_BUNDLE_DIRECTORY:/srv/salmonbus-dev/models/alighting-dev-v1}
+    promote-on-start: ${MODEL_BUNDLE_PROMOTE_ON_START:true}

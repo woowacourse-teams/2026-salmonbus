@@ -1,8 +1,9 @@
-import { useContext, useId, useMemo, useRef, useState } from "react";
+import { useContext, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { MapFlowSurfaceContext } from "@/shared/map/mapFlowSurface";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import type { EventMap } from "@/shared/analytics/events";
 import { track } from "@/shared/analytics/track";
+import salmongCrying from "@/shared/assets/images/salmong-logo/salmong-crying.png";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import type { ApiFailure } from "@/shared/api/client";
 import { latestSuccessOf, type PolledResource } from "@/shared/api/polledResource";
@@ -31,7 +32,7 @@ import {
 } from "./displayPolicy";
 import { liveVehicleViewsFor } from "./liveVehiclePolicy";
 import { liveMotionDurationOf, useFreshLiveVehicles } from "../hooks/useFreshLiveVehicles";
-import { useLiveVehicleMotion } from "../hooks/useLiveVehicleMotion";
+import { createLiveVehicleMotionStore, useLiveVehicleMotion } from "../hooks/useLiveVehicleMotion";
 import { useStationArrivals } from "@/shared/hooks/useStationArrivals";
 import { expandableRowOf, stopSelectionFrom, type StopSelection } from "./stopSelection";
 import type { BoardSheetSnap } from "@/shared/bottom-sheet/boardSheetPolicy";
@@ -53,6 +54,8 @@ type BoardState =
   | { status: "ready"; watch: RouteWatch; direction: DirectionInfo };
 
 type DirectionSwitchSource = EventMap["direction_switched"]["source"];
+
+const ignoreMapSelection = () => undefined;
 
 interface OperatingBoardProps {
   stationEntry: StationSheetEntry | null;
@@ -120,6 +123,11 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
     );
   }
 
+  function refreshWatch() {
+    revalidateWatch.current = true;
+    setWatchRevision((revision) => revision + 1);
+  }
+
   if (state.status === "ready" && screen.kind === "forecast") {
     const serviceState = serviceStateFor(state.watch, state.direction, state.watch.vehicles);
     return (
@@ -135,21 +143,37 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
         notice={boardNoticeFor(serviceState, freshness, state.watch.observedAt)}
         onDirectionChange={selectDirection}
         onStopExpand={trackStopExpanded}
-        onGeometryConflict={() => {
-          revalidateWatch.current = true;
-          setWatchRevision((revision) => revision + 1);
-        }}
+        onGeometryConflict={refreshWatch}
       />
     );
   }
 
-  const status = screen.kind === "outOfService" ? "outOfService" : screen.kind === "error" ? "error" : "loading";
-  const alternateDirection =
-    status === "outOfService" && state.status === "ready"
-      ? (state.watch.route.directions.find(
-          (candidate) => serviceStateFor(state.watch, candidate, state.watch.vehicles) !== "outOfService",
-        ) ?? null)
-      : null;
+  if (state.status === "ready" && screen.kind === "outOfService") {
+    const alternateDirection = state.watch.route.directions.find(
+      (candidate) => serviceStateFor(state.watch, candidate, state.watch.vehicles) !== "outOfService",
+    );
+    return (
+      <OutOfServiceSheet
+        board={state.watch}
+        direction={state.direction.id}
+        shared={shared}
+        stationEntry={stationEntry}
+        onGeometryConflict={refreshWatch}
+      >
+        <p role="status">{OUT_OF_SERVICE_NOTICE}</p>
+        {alternateDirection !== undefined && (
+          <button
+            type="button"
+            className={styles.alternateDirection}
+            onClick={() => selectDirection(alternateDirection.id, "outOfService")}
+          >
+            {alternateDirection.terminalStopName} 방면 보기
+          </button>
+        )}
+      </OutOfServiceSheet>
+    );
+  }
+
   return (
     <main
       className={shared ? styles.sharedNoticePage : styles.noticePage}
@@ -157,34 +181,89 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
     >
       <h1 className={visuallyHidden}>노선 판정보드</h1>
       <BoardBackLink />
-      {status === "outOfService" ? (
-        <div className={styles.outOfService}>
-          <p role="status">{OUT_OF_SERVICE_NOTICE}</p>
-          {alternateDirection !== null && (
-            <button
-              type="button"
-              className={styles.alternateDirection}
-              onClick={() => selectDirection(alternateDirection.id, "outOfService")}
-            >
-              {alternateDirection.terminalStopName} 방면 보기
-            </button>
-          )}
-        </div>
-      ) : status === "error" ? (
+      {screen.kind === "error" ? (
         <StopBoard
           status="error"
           retrying={retrying}
           autoRetry={requestState === "scheduled"}
           onRetry={() => {
-            if (retrying) return;
-            revalidateWatch.current = true;
-            setWatchRevision((revision) => revision + 1);
+            if (!retrying) refreshWatch();
           }}
         />
       ) : (
         <StopBoard status="loading" />
       )}
     </main>
+  );
+}
+
+function OutOfServiceSheet({
+  board,
+  direction,
+  shared,
+  stationEntry,
+  children,
+  onGeometryConflict,
+}: {
+  board: Board;
+  direction: Direction;
+  shared: boolean;
+  stationEntry: StationSheetEntry | null;
+  children: ReactNode;
+  onGeometryConflict: () => void;
+}) {
+  const sheetId = useId();
+  const viewport = useBoardViewport();
+  const [snap, setSnap] = useState<BoardSheetSnap>(stationEntry === "full" ? "full" : "expanded");
+  const [motion] = useState(createLiveVehicleMotionStore);
+  const mapVisible = snap !== "full";
+  const { data, status, retrying } = useRouteMapData(board, mapVisible, onGeometryConflict);
+  const shape = useMemo(
+    () => (data === null || (data.paths.length === 0 && !data.fullPath?.length) ? null : { ...data, stops: [] }),
+    [data],
+  );
+  const routeName = board.route.displayName;
+  return (
+    <div className={shared ? styles.sharedPage : styles.page} style={{ height: viewport.height, top: viewport.top }}>
+      <main className={styles.content}>
+        <div className={styles.mapSlot} inert={!mapVisible} aria-hidden={!mapVisible}>
+          {shape !== null && (
+            <RouteMap
+              board={board}
+              data={shape}
+              geometryStatus={status}
+              geometryRetrying={retrying}
+              selected={null}
+              onSelect={ignoreMapSelection}
+              onVehicleSelect={ignoreMapSelection}
+              onDeselect={ignoreMapSelection}
+              vehicleFocusRequest={null}
+              selectedVehicleKey={null}
+              liveVehicleViews={[]}
+              motion={motion}
+              visible={mapVisible}
+              viewportHeight={viewport.height}
+              activeDirection={direction}
+              quietInitialLoad
+            />
+          )}
+          {mapVisible && <BoardRouteControls routeName={routeName} />}
+        </div>
+        <BoardBottomSheet
+          id={sheetId}
+          snap={snap}
+          onSnapChange={setSnap}
+          viewportHeight={viewport.height}
+          enteringFromMap={shared}
+          header={snap === "full" && <BoardRouteControls routeName={routeName} inHeader />}
+        >
+          <div className={styles.centeredNotice}>
+            <img className={styles.noticeMascot} src={salmongCrying} width={88} height={88} alt="" />
+            {children}
+          </div>
+        </BoardBottomSheet>
+      </main>
+    </div>
   );
 }
 

@@ -1,0 +1,24 @@
+[Unit]
+Description=salmonbus 완료 원본 S3 이관
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=salmonbus
+Group=salmonbus
+EnvironmentFile=/etc/salmonbus/archive.env
+ExecStart=/usr/bin/java -Xms32m -Xmx256m -jar /opt/salmonbus/archive/current/jars/archive-app.jar
+Restart=on-failure
+RestartSec=10
+Nice=10
+CPUQuota=50%
+MemoryMax=384M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

@@ -43,7 +43,7 @@ class FixtureDigestCompatibilityTest {
 
         // when / then
         for (String name : before.keySet()) {
-            if (name.equals("tools/data-contract.sha256")) continue;
+            if (name.equals("tools/data-contract.sha256") || name.startsWith("tools/data/model-reference/")) continue;
             var changed = new TreeMap<>(after);
             changed.put(name, "changed");
             assertEquals("DEV_DATA_CHANGE_REQUIRES_PLAN", assertThrows(IllegalArgumentException.class,

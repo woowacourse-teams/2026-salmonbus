@@ -1,5 +1,5 @@
 {
-  "status": "ok",
+  "status": "historical-retired",
   "checkedAt": "2026-10-07T04:37:47.325889+00:00",
   "identityDigest": "f9d1b6d76d5ba4ef4b909a8903337cb9e7ba74883c7fe270432650f3f2fd80bb",
   "files": {
@@ -18,6 +18,6 @@
   },
   "artifactIdentityProven": false,
   "source": "Configured production bundle snapshot read via SSH; identity also matched ACTIVE deployment in read-only DB inspection",
-  "purpose": "Pinned local development reference; no runtime production connection",
+  "purpose": "Historical provenance of the retired binary reference; not the current synthetic numeric development fixture",
   "capturedArtifactNotLoadedBytesProof": true
 }

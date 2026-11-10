@@ -183,14 +183,15 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
   const latest = latestSuccessOf(resource);
   const body = latest?.body;
   const now = latest?.clock?.now() ?? Infinity;
-  const fresh =
+  const hasFreshEta =
     body?.status === "READY" && body.reason !== "STALE" && !!body.snapshot && now < Date.parse(body.snapshot.staleAt);
   const [, tick] = useReducer((value: number) => value + 1, 0);
   useEffect(() => {
-    if (!fresh) return;
+    if (!hasFreshEta) return;
     const timer = window.setInterval(tick, 1_000);
     return () => window.clearInterval(timer);
-  }, [fresh]);
+  }, [hasFreshEta]);
+  const hasBoardData = resource.status === "success" || hasFreshEta;
   const waiting = resource.status === "pending" || body?.refresh.status === "RUNNING";
   const failed = resource.status === "loadingError" || resource.status === "refetchError";
   const retrying = requestState === "loading";
@@ -209,11 +210,13 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
       {body?.routes.length ? (
         <ul className={styles.stopRouteList}>
           {body.routes.map((route, index) => {
-            const next = fresh
-              ? (route.arrivals.find((vehicle) => vehicle.eta && remainingArrivalSeconds(vehicle.eta, now) !== null) ??
-                route.arrivals[0])
-              : undefined;
-            const seconds = next?.eta ? remainingArrivalSeconds(next.eta, now) : null;
+            const next =
+              route.arrivals.find(
+                (vehicle) =>
+                  (hasBoardData && vehicle.positionSource === "BOARD") ||
+                  (hasFreshEta && vehicle.eta && remainingArrivalSeconds(vehicle.eta, now) !== null),
+              ) ?? (hasFreshEta ? route.arrivals[0] : undefined);
+            const seconds = hasFreshEta && next?.eta ? remainingArrivalSeconds(next.eta, now) : null;
             const probability = next?.probability ?? null;
             return (
               <StopRouteRow

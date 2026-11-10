@@ -42,7 +42,7 @@ class BundleInspectionProcessTest {
         // when
         Path bundle = directory.resolve("bundle");
         BundleInspectionFixture.write(bundle);
-        Path weights = bundle.resolve("weights.safetensors");
+        Path weights = bundle.resolve("base.json");
         byte[] changed = Files.readAllBytes(weights);
         changed[changed.length - 1] ^= 1;
         Files.write(weights, changed);
@@ -54,7 +54,7 @@ class BundleInspectionProcessTest {
             softly.assertThat(result.stdout()).isBlank();
         }
         JsonNode json = JsonMapper.builder().build().readTree(result.stderr());
-        assertThat(json.get("code").stringValue()).isEqualTo("BUNDLE_REJECTED_WEIGHTS_DIGEST");
+        assertThat(json.get("code").stringValue()).isEqualTo("BUNDLE_REJECTED");
     }
 
     private Result execute(Path bundle) throws Exception {

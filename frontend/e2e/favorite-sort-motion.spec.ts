@@ -5,8 +5,8 @@ import { routeId } from "./fixtures/mock-data";
 for (const { path, direction, reducedMotion } of [
   { path: "/favorites", direction: "down", reducedMotion: "no-preference" },
   { path: "/favorites", direction: "up", reducedMotion: "reduce" },
-  { path: "/mypage", direction: "down", reducedMotion: "reduce" },
-  { path: "/mypage", direction: "up", reducedMotion: "no-preference" },
+  { path: "/favorites/groups", direction: "down", reducedMotion: "reduce" },
+  { path: "/favorites/groups", direction: "up", reducedMotion: "no-preference" },
 ] as const) {
   test(`${path} ${direction} ${reducedMotion} 카드 정렬은 놓는 순간 되돌아가지 않는다`, async ({
     page,
@@ -23,12 +23,15 @@ for (const { path, direction, reducedMotion } of [
     favorites.groups.push({ id: "10000000-0000-4000-8000-000000000003", name: "통학", favorites: [] });
     await page.goto(path);
     await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
-    const home = path === "/favorites";
-    const editor = page.getByRole("region", { name: home ? "즐겨찾기 편집" : "즐겨찾기 그룹 편집", exact: true });
-    const list = editor.getByRole("list", { name: home ? "즐겨찾기 순서" : "그룹 순서", exact: true });
+    const favoritesTab = path === "/favorites";
+    const editor = page.getByRole("region", {
+      name: favoritesTab ? "즐겨찾기 편집" : "즐겨찾기 그룹 편집",
+      exact: true,
+    });
+    const list = editor.getByRole("list", { name: favoritesTab ? "즐겨찾기 순서" : "그룹 순서", exact: true });
     const cards = list.getByRole("listitem");
     await expect(cards).toHaveCount(2);
-    await expect(cards.first()).toContainText(home ? first!.name : "즐겨찾기");
+    await expect(cards.first()).toContainText(favoritesTab ? first!.name : "즐겨찾기");
     await page.evaluate(() => document.fonts.ready);
     await editor.evaluate((element) =>
       Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
@@ -84,10 +87,10 @@ for (const { path, direction, reducedMotion } of [
     if (reducedMotion === "reduce") {
       expect(await list.evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
     }
-    await expect(cards.first()).toContainText(home ? second!.name : "통학");
+    await expect(cards.first()).toContainText(favoritesTab ? second!.name : "통학");
     await editor.getByRole("button", { name: "완료", exact: true }).click();
     await expect(editor).toHaveCount(0);
-    if (home)
+    if (favoritesTab)
       expect(favorites.groups[0]!.favorites.map((favorite) => favorite.stopId)).toEqual([
         second!.stopId,
         first!.stopId,

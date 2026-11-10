@@ -49,10 +49,10 @@ export function HomeSheetWeather({
           >
             <img
               key={refreshRevision}
-              className={refreshRevision > 0 ? styles.refreshSpinning : undefined}
+              className={refreshRevision > 0 ? styles.refreshSpinning : styles.refreshIcon}
               src={refreshIcon}
-              width={14}
-              height={14}
+              width={11}
+              height={11}
               alt=""
             />
           </button>
@@ -69,7 +69,6 @@ export function HomeSheetWeather({
           </a>
         )}
       </div>
-      <p className={styles.weatherHint}>마지막 조회 위치 기준이에요. 새로고침하면 지도 중심 날씨를 보여드려요.</p>
       {weather ? (
         <ol {...maskedPropsFor(styles.hourly)} aria-label="시간대별 날씨 예보">
           <WeatherCell

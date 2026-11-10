@@ -14,7 +14,6 @@ import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
 import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.observations.api.CollectionQualityHook;
 import com.gustler.backend.observations.api.VehicleObservationsStored;
-import com.gustler.backend.observations.application.ObservationBatchLedgerTest.QualityFailureConfiguration;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.InputAlreadyConfirmedException;
 import com.gustler.backend.observations.domain.ObservationReply;
@@ -24,6 +23,7 @@ import com.gustler.backend.quota.api.CallQuota;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,11 +39,10 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 예약이 자체 트랜잭션에서 커밋되므로 @Transactional 을 붙이면 장부가 정리되지 않는다.
- * 매번 비우고 시작한다.
+ * 예약이 자체 트랜잭션에서 커밋되므로 @Transactional 을 붙이면 장부가 정리되지 않는다. 매번 비우고 시작한다.
  */
 @ObservationIntegrationTest
-@Import(QualityFailureConfiguration.class)
+@Import(ObservationBatchLedgerTest.QualityFailureConfiguration.class)
 class ObservationBatchLedgerTest {
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
@@ -95,10 +94,9 @@ class ObservationBatchLedgerTest {
         failingQualityHook.fail = false;
         failingQualityHook.afterCalls = 0;
         jdbcClient.sql("""
-                TRUNCATE vehicle_observation, observation_batch, route_stop, route_version, route,
-                    daily_call_quota RESTART IDENTITY CASCADE
-                """)
-            .update();
+            TRUNCATE vehicle_observation, observation_batch, route_stop, route_version, route,
+                daily_call_quota RESTART IDENTITY CASCADE
+            """).update();
     }
 
     @Test
@@ -197,7 +195,8 @@ class ObservationBatchLedgerTest {
         final long batchId = dispatchedBatch();
 
         // when
-        ledger.conclude(batchId, reply(new NoResponse("I/O error on GET request")), RESPONSE_RECEIVED_AT);
+        ledger.conclude(batchId, reply(new GbisLocationResult.NoResponse("I/O error on GET request")),
+            RESPONSE_RECEIVED_AT);
 
         // then
         assertThat(outcomeOf(batchId)).isEqualTo("UNKNOWN_AFTER_DISPATCH");
@@ -209,7 +208,7 @@ class ObservationBatchLedgerTest {
         final long batchId = dispatchedBatch();
 
         // when
-        ledger.conclude(batchId, reply(new NoVehicles(QUERY_TIME)), RESPONSE_RECEIVED_AT);
+        ledger.conclude(batchId, reply(new GbisLocationResult.NoVehicles(QUERY_TIME)), RESPONSE_RECEIVED_AT);
 
         // then
         assertThat(responseReceivedAtOf(batchId)).isEqualTo(RESPONSE_RECEIVED_AT);
@@ -221,7 +220,8 @@ class ObservationBatchLedgerTest {
         final long batchId = dispatchedBatch();
 
         // when
-        ledger.conclude(batchId, reply(new GbisSystemError(QUERY_TIME, "시스템 오류가 발생하였습니다.")), RESPONSE_RECEIVED_AT);
+        ledger.conclude(batchId, reply(new GbisLocationResult.GbisSystemError(QUERY_TIME, "시스템 오류가 발생하였습니다.")),
+            RESPONSE_RECEIVED_AT);
 
         // then
         assertThat(failureCodeOf(batchId)).isEqualTo("UPSTREAM_ERROR");
@@ -233,22 +233,21 @@ class ObservationBatchLedgerTest {
         final long batchId = dispatchedBatch();
 
         // when
-        ledger.conclude(batchId, reply(new NoVehicles(QUERY_TIME)), RESPONSE_RECEIVED_AT);
+        ledger.conclude(batchId, reply(new GbisLocationResult.NoVehicles(QUERY_TIME)), RESPONSE_RECEIVED_AT);
 
         // then
         assertThat(providerRowsOf(batchId)).isZero();
     }
 
     /**
-     * 호출 예약과 수집 배치는 한 트랜잭션에서 커밋된다. 배치 생성이 실패하면 예약도 함께
-     * 롤백되어야 수집 배치 없이 호출 횟수만 증가하는 상태를 막을 수 있다.
+     * 호출 예약과 수집 배치는 한 트랜잭션에서 커밋된다. 배치 생성이 실패하면 예약도 함께 롤백되어야 수집 배치 없이 호출 횟수만 증가하는
+     * 상태를 막을 수 있다.
      */
     @Test
     void 판을_못_열면_쓴_횟수도_안_오른다() {
         // given
         // 없는 노선 판본이라 수집 배치를 생성하다 외래 키 제약에 걸린다
-        CollectionPlan missingRoutePlan =
-            new CollectionPlan(MISSING_ROUTE_VERSION_ID, SCHEDULED_AT, ATTEMPT_KEY);
+        CollectionPlan missingRoutePlan = new CollectionPlan(MISSING_ROUTE_VERSION_ID, SCHEDULED_AT, ATTEMPT_KEY);
 
         // when
         assertThatThrownBy(() -> ledger.reserve(missingRoutePlan, RESERVED_AT))
@@ -317,9 +316,7 @@ class ObservationBatchLedgerTest {
         Throwable caughtFailure = catchThrowable(() -> ledger.reserve(plan(), RESERVED_AT));
 
         // then
-        assertThat(caughtFailure)
-            .isNotNull()
-            .isInstanceOf(InputAlreadyConfirmedException.class);
+        assertThat(caughtFailure).isNotNull().isInstanceOf(InputAlreadyConfirmedException.class);
     }
 
     @Test
@@ -377,17 +374,16 @@ class ObservationBatchLedgerTest {
         // given
         insertStop();
         final long batchId = dispatchedBatch();
-        BusLocation bus = new BusLocation(
-            "경기70아0001", VEHICLE_ID, 0, ROUTE_204000057, 11,
-            STOP_ID, 1, 2, 43, 3, 1);
-        ledger.conclude(batchId, reply(new Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT);
+        BusLocation bus = new BusLocation("경기70아0001", VEHICLE_ID, 0,
+            ROUTE_204000057, 11, STOP_ID, 1, 2, 43, 3, 1);
+        ledger.conclude(batchId, reply(new GbisLocationResult.Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT);
 
         // when
         ledger.reserve(plan(), RESERVED_AT);
 
         // then
         assertThat(jdbcClient.sql("SELECT count(*) FROM vehicle_observation WHERE observation_batch_id = ?")
-                .param(batchId).query(Integer.class).single()).isZero();
+            .param(batchId).query(Integer.class).single()).isZero();
     }
 
     @Test
@@ -408,31 +404,121 @@ class ObservationBatchLedgerTest {
         insertStop();
         final long batchId = dispatchedBatch();
         failingQualityHook.fail = true;
-        BusLocation bus = new BusLocation(
-            "경기70아0001", VEHICLE_ID, 0, ROUTE_204000057, 11,
-            STOP_ID, 1, 2, 71, 3, 1);
+        BusLocation bus = new BusLocation("경기70아0001", VEHICLE_ID, 0,
+            ROUTE_204000057, 11, STOP_ID, 1, 2, 71, 3, 1);
 
         // when
-        Throwable caughtFailure = catchThrowable(() ->
-            ledger.conclude(batchId, reply(new Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT));
+        Throwable caughtFailure = catchThrowable(() -> ledger.conclude(batchId,
+            reply(new GbisLocationResult.Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT));
 
         // then
-        assertThat(caughtFailure)
-            .isNotNull()
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessage("품질 처리 실패");
+        assertThat(caughtFailure).isNotNull().isInstanceOf(IllegalStateException.class).hasMessage("품질 처리 실패");
         assertThat(outcomeOf(batchId)).isEqualTo("DISPATCHING");
         assertThat(requestedAtOf(batchId)).isEqualTo(REQUESTED_AT);
         assertThat(responseReceivedAtOf(batchId)).isNull();
         assertThat(reservedCallsOn(KOREA_8_19)).isEqualTo(1);
         assertThat(jdbcClient.sql("SELECT count(*) FROM vehicle_observation WHERE observation_batch_id = ?")
-                .param(batchId).query(Integer.class).single()).isZero();
-        assertThat(jdbcClient.sql("SELECT count(*) FROM trip_quality_rebuild WHERE route_version_id = ?")
-                .param(routeVersionId).query(Integer.class).single()).isZero();
+            .param(batchId).query(Integer.class).single()).isZero();
+        assertThat(jdbcClient.sql(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name='trip_quality_rebuild' AND CAST(? AS bigint)>0")
+            .param(routeVersionId).query(Integer.class).single()).isZero();
     }
 
     private CollectionPlan plan() {
         return new CollectionPlan(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY);
+    }
+
+    @Test
+    void 예약만_남은_수집은_기록을_보존하고_상태만_종료한다() {
+        final long batchId = ledger.reserve(plan(), RESERVED_AT).batchId();
+        String before = batchWithoutOutcome(batchId);
+
+        assertThat(ledger.closeUnfinished(batchId)).isEqualTo(1);
+
+        assertThat(outcomeOf(batchId)).isEqualTo("ABANDONED_BEFORE_SEND");
+        assertThat(batchWithoutOutcome(batchId)).isEqualTo(before);
+        assertThat(reservedCallsOn(KOREA_8_19)).isEqualTo(1);
+    }
+
+    @Test
+    void 전송한_수집의_종료는_호출자_트랜잭션이_롤백돼도_유지된다() {
+        final long batchId = dispatchedBatch();
+        String before = batchWithoutOutcome(batchId);
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            ledger.closeUnfinished(batchId);
+            status.setRollbackOnly();
+        });
+
+        assertThat(outcomeOf(batchId)).isEqualTo("UNKNOWN_AFTER_DISPATCH");
+        assertThat(batchWithoutOutcome(batchId)).isEqualTo(before);
+    }
+
+    @Test
+    void 응답을_저장한_수집은_종료와_다음_회차_정리에서_제외한다() {
+        final long batchId = dispatchedBatch();
+        ledger.conclude(batchId, reply(new NoVehicles(QUERY_TIME)), RESPONSE_RECEIVED_AT);
+        String before = batchWithoutOutcome(batchId);
+
+        assertThat(ledger.closeUnfinished(batchId)).isZero();
+        assertThat(ledger.closePreviousRound()).isEmpty();
+
+        assertThat(outcomeOf(batchId)).isEqualTo("SUCCESS_EMPTY");
+        assertThat(batchWithoutOutcome(batchId)).isEqualTo(before);
+    }
+
+    @Test
+    void 관측이_저장된_배치는_미완료_상태라도_정리하지_않는다() {
+        final long batchId = dispatchedBatch();
+        insertStop();
+        jdbcClient.sql("""
+            INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
+                stop_order,stop_id,running_state,passed_stop_order,remaining_seats)
+            VALUES(?,?,1,?,1,?,2,1,12)
+            """).params(batchId, routeVersionId, VEHICLE_ID, STOP_ID).update();
+
+        assertThat(ledger.closeUnfinished(batchId)).isZero();
+        assertThat(ledger.closePreviousRound()).isEmpty();
+
+        assertThat(outcomeOf(batchId)).isEqualTo("DISPATCHING");
+        assertThat(jdbcClient.sql("SELECT count(*) FROM vehicle_observation WHERE observation_batch_id=?")
+            .param(batchId).query(Integer.class).single()).isEqualTo(1);
+    }
+
+    @Test
+    void 다음_회차에서_오래된_미완료를_백건까지만_종료한다() {
+        jdbcClient.sql("""
+            INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,outcome,
+                normalization_version,collection_strategy_version)
+            SELECT ?,CAST(? AS timestamptz)+n*interval '1 second',1,concat('unfinished-',n),'RESERVED','n','c'
+            FROM generate_series(1,101) n
+            """).params(routeVersionId, SCHEDULED_AT).update();
+
+        List<Long> closed = ledger.closePreviousRound();
+
+        assertThat(closed).hasSize(100);
+        assertThat(jdbcClient.sql("SELECT count(*) FROM observation_batch WHERE outcome='RESERVED'")
+            .query(Integer.class).single()).isEqualTo(1);
+        assertThat(ledger.closePreviousRound()).hasSize(1);
+    }
+
+    @Test
+    void 다른_트랜잭션이_잠근_미완료는_기다리지_않고_건너뛴다() {
+        final long batchId = ledger.reserve(plan(), RESERVED_AT).batchId();
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            jdbcClient.sql("SELECT id FROM observation_batch WHERE id=? FOR UPDATE")
+                .param(batchId).query(Long.class).single();
+            assertThat(ledger.closePreviousRound()).isEmpty();
+        });
+
+        assertThat(outcomeOf(batchId)).isEqualTo("RESERVED");
+        assertThat(ledger.closePreviousRound()).containsExactly(batchId);
+    }
+
+    private String batchWithoutOutcome(final long batchId) {
+        return jdbcClient.sql("SELECT (to_jsonb(batch)-'outcome')::text FROM observation_batch batch WHERE id=?")
+            .param(batchId).query(String.class).single();
     }
 
     private long dispatchedBatch() {
@@ -447,11 +533,9 @@ class ObservationBatchLedgerTest {
 
     private void insertStop() {
         jdbcClient.sql("""
-                INSERT INTO route_stop (route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
-                VALUES (?, 1, ?, '범계역', 'UP', true)
-                """)
-            .params(routeVersionId, STOP_ID)
-            .update();
+            INSERT INTO route_stop (route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
+            VALUES (?, 1, ?, '범계역', 'UP', true)
+            """).params(routeVersionId, STOP_ID).update();
     }
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -468,11 +552,12 @@ class ObservationBatchLedgerTest {
         private int afterCalls;
 
         @Override
-        public void observationsStored(VehicleObservationsStored observations) {
+        public Set<Long> observationsStored(VehicleObservationsStored observations) {
             afterCalls++;
             if (fail) {
                 throw new IllegalStateException("품질 처리 실패");
             }
+            return Set.of();
         }
     }
 
@@ -501,135 +586,90 @@ class ObservationBatchLedgerTest {
 
     private void useUpQuotaOn(LocalDate kstDate) {
         jdbcClient.sql("""
-                INSERT INTO daily_call_quota (provider, api_service, kst_date, reserved_calls, daily_limit)
-                VALUES (?, ?, ?, ?, ?)
-                """)
-            .params(
-                CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(),
-                kstDate, ALREADY_USED_UP, ALREADY_USED_UP)
-            .update();
+            INSERT INTO daily_call_quota (provider, api_service, kst_date, reserved_calls, daily_limit)
+            VALUES (?, ?, ?, ?, ?)
+            """).params(CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(), kstDate,
+            ALREADY_USED_UP, ALREADY_USED_UP).update();
     }
 
     private long confirmSuccessfulInput() {
         final long batchId = dispatchedBatch();
-        ledger.conclude(batchId, reply(new NoVehicles(QUERY_TIME)), RESPONSE_RECEIVED_AT);
-        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
-            collectionInputs.confirmInput(batchId, RESPONSE_RECEIVED_AT.plusSeconds(1).toInstant()));
+        ledger.conclude(batchId, reply(new GbisLocationResult.NoVehicles(QUERY_TIME)), RESPONSE_RECEIVED_AT);
+        new TransactionTemplate(transactionManager).executeWithoutResult(
+            status -> collectionInputs.confirmInput(batchId, RESPONSE_RECEIVED_AT.plusSeconds(1).toInstant()));
         return batchId;
     }
 
     private void useUpTheQuota() {
         jdbcClient.sql("""
-                INSERT INTO daily_call_quota (provider, api_service, kst_date, reserved_calls, daily_limit)
-                VALUES (?, ?, ?, ?, ?)
-                """)
-            .params(
-                CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(),
-                KOREA_8_19, ALREADY_USED_UP, ALREADY_USED_UP)
-            .update();
+            INSERT INTO daily_call_quota (provider, api_service, kst_date, reserved_calls, daily_limit)
+            VALUES (?, ?, ?, ?, ?)
+            """).params(CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(), KOREA_8_19,
+            ALREADY_USED_UP, ALREADY_USED_UP).update();
     }
 
     private long insertRoute() {
         return jdbcClient.sql("""
-                INSERT INTO route (
-                    public_route_id, source_id, source_route_id,
-                    display_name, start_stop_name, end_stop_name
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                RETURNING id
-                """)
-            .params(ROUTE_204000057, SOURCE_ID, ROUTE_204000057, "3330", "범계역", "강남역")
-            .query(Long.class)
-            .single();
+            INSERT INTO route (
+                public_route_id, source_id, source_route_id,
+                display_name, start_stop_name, end_stop_name
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            RETURNING id
+            """).params(ROUTE_204000057, SOURCE_ID, ROUTE_204000057, "3330", "범계역", "강남역").query(Long.class).single();
     }
 
-    private long insertRouteVersion(
-        final long routeId
-    ) {
+    private long insertRouteVersion(final long routeId) {
         return jdbcClient.sql("""
-                INSERT INTO route_version (route_id, content_digest, valid_from)
-                VALUES (?, ?, ?)
-                RETURNING id
-                """)
-            .params(routeId, CONTENT_DIGEST, SCHEDULED_AT)
-            .query(Long.class)
-            .single();
+            INSERT INTO route_version (route_id, content_digest, valid_from)
+            VALUES (?, ?, ?)
+            RETURNING id
+            """).params(routeId, CONTENT_DIGEST, SCHEDULED_AT).query(Long.class).single();
     }
 
-    private String outcomeOf(
-        final long batchId
-    ) {
+    private String outcomeOf(final long batchId) {
         return columnOf("outcome", batchId, String.class);
     }
 
-    private String failureCodeOf(
-        final long batchId
-    ) {
+    private String failureCodeOf(final long batchId) {
         return columnOf("failure_code", batchId, String.class);
     }
 
-    private OffsetDateTime requestedAtOf(
-        final long batchId
-    ) {
+    private OffsetDateTime requestedAtOf(final long batchId) {
         return columnOf("requested_at", batchId, OffsetDateTime.class);
     }
 
-    private OffsetDateTime responseReceivedAtOf(
-        final long batchId
-    ) {
+    private OffsetDateTime responseReceivedAtOf(final long batchId) {
         return columnOf("response_received_at", batchId, OffsetDateTime.class);
     }
 
-    private Integer providerRowsOf(
-        final long batchId
-    ) {
+    private Integer providerRowsOf(final long batchId) {
         return columnOf("provider_rows", batchId, Integer.class);
     }
 
-    private Integer attemptNumberOf(
-        final long batchId
-    ) {
+    private Integer attemptNumberOf(final long batchId) {
         return columnOf("attempt_number", batchId, Integer.class);
     }
 
-    private <T> T columnOf(
-        String column,
-        final long batchId,
-        Class<T> type
-    ) {
-        return jdbcClient.sql("SELECT %s FROM observation_batch WHERE id = ?".formatted(column))
-            .param(batchId)
-            .query(type)
-            .optional()
-            .orElse(null);
+    private <T> T columnOf(String column, final long batchId, Class<T> type) {
+        return jdbcClient.sql("SELECT %s FROM observation_batch WHERE id = ?".formatted(column)).param(batchId)
+            .query(type).optional().orElse(null);
     }
 
-    private int batchCountOf(
-        String attemptKey
-    ) {
-        return jdbcClient.sql("SELECT count(*) FROM observation_batch WHERE attempt_key = ?")
-            .param(attemptKey)
-            .query(Integer.class)
-            .single();
+    private int batchCountOf(String attemptKey) {
+        return jdbcClient.sql("SELECT count(*) FROM observation_batch WHERE attempt_key = ?").param(attemptKey)
+            .query(Integer.class).single();
     }
 
-    private List<String> keyAliasesOn(
-        LocalDate kstDate
-    ) {
+    private List<String> keyAliasesOn(LocalDate kstDate) {
         return jdbcClient.sql("SELECT key_alias FROM daily_call_quota WHERE api_service = ? AND kst_date = ?")
-            .params(CallQuota.BUS_LOCATION.apiService(), kstDate)
-            .query(String.class)
-            .list();
+            .params(CallQuota.BUS_LOCATION.apiService(), kstDate).query(String.class).list();
     }
 
-    private int reservedCallsOn(
-        LocalDate kstDate
-    ) {
+    private int reservedCallsOn(LocalDate kstDate) {
         return jdbcClient.sql("""
-                SELECT reserved_calls FROM daily_call_quota
-                WHERE provider = ? AND api_service = ? AND kst_date = ?
-                """)
-            .params(CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(), kstDate)
-            .query(Integer.class)
-            .single();
+            SELECT reserved_calls FROM daily_call_quota
+            WHERE provider = ? AND api_service = ? AND kst_date = ?
+            """).params(CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(), kstDate)
+            .query(Integer.class).single();
     }
 }

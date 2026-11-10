@@ -90,11 +90,19 @@ panel('API 지표 수집', 'min(up{job="salmonbus/api"})',kind='stat',legend='AP
 panel('worker 지표 수집', 'min(up{job="salmonbus/worker"})',kind='stat',legend='worker up')
 panel('추가 RDS 원본 표본 경과', 'time() - max_over_time(timestamp(aws_rds_read_throughput_average{dimension_DBInstanceIdentifier="salmonbus-db"})[30m:1m])','s',kind='stat',legend='원본 표본 나이')
 panel('SQL 통계 표본 경과', f'time() - timestamp(salmonbus_pg_statement_coverage_statements{pg})','s',kind='stat',legend='SQL 표본 나이')
+row('08 수집 좌석값 품질')
+logs('좌석값 격리 로그','{unit="salmonbus-worker.service"} |= "event=observation_seat_quality "')
+panel('좌석값 격리 추이','sum by (decision) (rate(salmonbus_collection_seat_quality_total{job="salmonbus/worker"}[5m]))','ops',legend='{{decision}}')
+row('09 수집 실패 종료와 회수')
+panel('마지막 수집·종료 실패 이후 경과','time() - (salmonbus_collection_failure_last_timestamp{job="salmonbus/worker"} > 0)','s',legend='마지막 내부 예외')
+panel('자동 종료한 미완료 수집','sum(increase(salmonbus_collection_recovered_batches_total{job="salmonbus/worker"}[5m]))',legend='최근 5분 추정 건수')
+logs('수집 상태 종료·회수 기록','{unit="salmonbus-worker.service"} |~ "event=collection_batch_(closed|close_failed|recovery) "')
 help_text='''### 읽는 순서
 사용자 영향 → 연결 대기 → 읽기와 쓰기 → 잠금 → 메모리 → SQL과 업무 순서로 같은 시간을 선택합니다.
 
 ### 아직 미검증인 것
 추가 RDS 지표와 PostgreSQL 진단 쿼리는 서버 적용 전입니다. 빈 패널은 0이나 정상으로 해석하지 않습니다. SQL별 지표는 pg_stat_statements 활성화와 권한 확인 후 수집합니다.
+수집 실패·회수 알림은 기존 salmonbus-service-discord 수신처로 준비한 일시 정지 규칙입니다. 이 파일 생성만으로 배포·알림 활성화·발송을 하지 않습니다.
 
 ### 해석의 한계
 - EBS 잔량은 요청 크기 제한이 아닙니다. 잔량 감소만으로 장애 원인을 확정하지 않습니다.

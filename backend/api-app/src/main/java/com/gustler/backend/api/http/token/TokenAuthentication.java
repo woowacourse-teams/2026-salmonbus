@@ -10,6 +10,7 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -56,16 +57,19 @@ public final class TokenAuthentication {
             .accessDeniedHandler(accessDeniedHandler)
             .jwt(jwt -> jwt
                 .decoder(tokens.decoder())
-                .jwtAuthenticationConverter(source -> authenticationOf(source.getSubject()))));
+                .jwtAuthenticationConverter(TokenAuthentication::authenticationOf)));
         http.addFilterBefore(new CookieAccessTokenFilter(), BearerTokenAuthenticationFilter.class);
     }
 
-    private static AbstractAuthenticationToken authenticationOf(String subject) {
+    private static AbstractAuthenticationToken authenticationOf(Jwt source) {
         try {
+            String sessionId = source.getClaimAsString("sid");
             return UsernamePasswordAuthenticationToken.authenticated(
-                new MemberPrincipal(UUID.fromString(subject)), null, List.of(new SimpleGrantedAuthority(MEMBER_ROLE)));
+                new MemberPrincipal(
+                    UUID.fromString(source.getSubject()), sessionId == null ? null : UUID.fromString(sessionId)),
+                null, List.of(new SimpleGrantedAuthority(MEMBER_ROLE)));
         } catch (IllegalArgumentException exception) {
-            throw new InvalidBearerTokenException("회원 식별자가 올바르지 않다", exception);
+            throw new InvalidBearerTokenException("회원 또는 세션 식별자가 올바르지 않다", exception);
         }
     }
 }

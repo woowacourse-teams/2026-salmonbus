@@ -11,9 +11,7 @@ import tools.jackson.databind.JsonNode;
  * 실행 대상과 승인 자료의 범위를 대조해 유지보수 명령의 실행 조건을 확인한다.
  */
 public final class ApprovalGate {
-    public static final String ACADEMY_TRIP_QUALITY_REBUILD = "ACADEMY_TRIP_QUALITY_REBUILD";
-
-    public static final String ACADEMY_LES_EVALUATION_RESTORE = "ACADEMY_LES_EVALUATION_RESTORE";
+    public static final String ACADEMY_ALIGHTING_AWARE_EVALUATION_RESTORE = "ACADEMY_ALIGHTING_AWARE_EVALUATION_RESTORE";
 
     private static final String SCHEMA = "salmonbus-migration-approval-v1";
     private static final Set<String> KNOWN_FIELDS = Set.of(

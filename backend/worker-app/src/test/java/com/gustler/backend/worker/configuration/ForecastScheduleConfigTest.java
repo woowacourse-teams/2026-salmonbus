@@ -6,7 +6,6 @@ import com.gustler.backend.observations.api.ObservationDeliveryHook;
 import com.gustler.backend.support.IntegrationTest;
 import com.gustler.backend.worker.scheduling.ArrivalLabelJob;
 import com.gustler.backend.worker.scheduling.ForecastTrigger;
-import com.gustler.backend.worker.scheduling.TripQualityInvestigationJob;
 import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -60,7 +59,7 @@ class ForecastScheduleConfigTest {
     }
 
     @Test
-    void 수집을_꺼도_예보를_켜면_이상_차량의_편도_조사를_등록한다() {
+    void 예보를_켜도_편도_조사_스케줄을_등록하지_않는다() {
         // when
         List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class)
             .values()
@@ -71,7 +70,7 @@ class ForecastScheduleConfigTest {
             .toList();
 
         // then
-        assertThat(registeredTasks).contains(TripQualityInvestigationJob.class.getName() + ".investigate");
+        assertThat(registeredTasks).noneMatch(task -> task.endsWith("TripQualityInvestigationJob.investigate"));
     }
 
     @Test

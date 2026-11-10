@@ -37,7 +37,7 @@ class AuthApiDocsContractTest {
         "AuthSessionResponse", "MemberResponse", "MyProfileResponse", "TokenResponse", "RefreshRequest",
         "UpdateNicknameRequest", "AppleWithdrawalRequest", "AppleWithdrawalResponse", "AppLoginRequest",
         "AppLoginNonceResponse", "AppleAppWithdrawalRequest", "RegisterPushDeviceRequest",
-        "UnregisterPushDeviceRequest", "ErrorResponse"
+        "UnregisterPushDeviceRequest", "SaveNotificationSettingRequest", "NotificationSettingResponse", "NotificationSettingsResponse", "ErrorResponse"
     );
 
     @Autowired
@@ -69,7 +69,7 @@ class AuthApiDocsContractTest {
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             softly.assertThat(generatedOperations).isEqualTo(contractOperations);
-            softly.assertThat(generatedOperations).hasSize(13);
+            softly.assertThat(generatedOperations).hasSize(16);
         }
     }
 
@@ -112,6 +112,15 @@ class AuthApiDocsContractTest {
             for (String name : SCHEMAS) {
                 softly.assertThat(generatedSchemas.path(name)).as(name).isEqualTo(sourceSchemas.path(name));
             }
+        }
+    }
+
+    @Test
+    void pushRegistrationDescribesRejectedSessions() {
+        String pointer = "/paths/~1api~1me~1push-devices/put/responses/401/description";
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(generated.at(pointer).asString()).contains("로그아웃한 세션의 토큰", "세션 식별자");
+            softly.assertThat(generated.at(pointer)).isEqualTo(contract.at(pointer));
         }
     }
 
