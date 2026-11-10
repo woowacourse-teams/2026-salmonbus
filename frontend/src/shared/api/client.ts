@@ -37,7 +37,7 @@ export interface RequestErrorContext {
 }
 
 export interface ApiFailureDetails {
-  method?: RequestOptions["method"];
+  method: NonNullable<RequestOptions["method"]>;
   context: RequestErrorContext | null;
   abortReason: unknown;
   rawResponse: { body: string; contentType: string | null } | null;
@@ -84,10 +84,11 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
 async function executeRequest<T>(url: string, options: RequestOptions): Promise<RequestOutcome<T>> {
   let responseBody: string | undefined;
   let contentType: string | null = null;
+  const method = options.method ?? "GET";
   const outcomeOf = (result: ApiResult<T>): RequestOutcome<T> => ({
     result,
     details: {
-      method: options.method ?? "GET",
+      method,
       context: options.errorContext ?? null,
       abortReason: options.signal?.reason ?? null,
       rawResponse:
@@ -109,7 +110,7 @@ async function executeRequest<T>(url: string, options: RequestOptions): Promise<
   let response: Response | null = null;
   try {
     response = await fetch(url, {
-      method: options.method ?? "GET",
+      method,
       headers: {
         Accept: "application/json",
         ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
