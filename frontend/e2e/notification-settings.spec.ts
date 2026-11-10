@@ -153,6 +153,24 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     expect(focus.focusedTags.filter((tag) => ["INPUT", "TEXTAREA", "SELECT"].includes(tag))).toEqual([]);
   });
 
+  test("키보드로 시각 칸에 들어가면 지금 고르는 칸에 포커스 테두리가 보인다", async ({ page, notifications }) => {
+    notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
+    await openInApp(page);
+    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await page.getByRole("button", { name: "평일 07:40", exact: true }).click();
+    const sheet = page.getByRole("dialog", { name: "출발 알림" });
+    const hour = sheet.getByRole("combobox", { name: "시", exact: true });
+    const minute = sheet.getByRole("combobox", { name: "분", exact: true });
+    await page.keyboard.press("Tab");
+    await expect(hour).toBeFocused();
+    await expect(hour).toHaveCSS("opacity", "1");
+    await expect(hour).not.toHaveCSS("outline-style", "none");
+    await page.keyboard.press("Tab");
+    await expect(minute).toBeFocused();
+    await expect(minute).not.toHaveCSS("outline-style", "none");
+    await expect(hour).toHaveCSS("outline-style", "none");
+  });
+
   test("저장된 알림은 켜진 채로 보이고, 시각과 요일을 바꿔 저장하면 바꾼 값을 PUT으로 보내고 요약이 바뀐다", async ({
     page,
     notifications,
@@ -163,8 +181,13 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     await expect(notificationSwitch(page)).toBeChecked();
     await page.getByRole("button", { name: "평일 07:40", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
-    await expect(sheet.getByLabel("시각")).toHaveValue("07:40");
-    await sheet.getByLabel("시각").fill("08:10");
+    const hour = sheet.getByRole("combobox", { name: "시", exact: true });
+    const minute = sheet.getByRole("combobox", { name: "분", exact: true });
+    await expect(hour).toHaveValue("07");
+    await expect(minute).toHaveValue("40");
+    await expect(hour.locator("option")).toHaveText(Array.from({ length: 24 }, (_, index) => twoDigits(index)));
+    await hour.selectOption("08");
+    await minute.selectOption("10");
     await sheet.getByRole("button", { name: "금요일" }).click();
     await sheet.getByRole("button", { name: "토요일" }).click();
     await expect(sheet.getByRole("button", { name: "토요일" })).toHaveAttribute("aria-pressed", "true");
@@ -187,12 +210,14 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     await page.goto(`/mypage/groups/${defaultGroupId}`);
     await page.getByRole("button", { name: "평일 07:40", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
-    await sheet.getByLabel("시각").fill("08:10");
+    await sheet.getByRole("combobox", { name: "시", exact: true }).selectOption("08");
+    await sheet.getByRole("combobox", { name: "분", exact: true }).selectOption("10");
     await sheet.getByRole("button", { name: "저장", exact: true }).click();
     await expect(sheet.getByRole("alert")).toHaveText(
       "즐겨찾기에 저장된 정류장만 알림을 받을 수 있어요. 목록을 다시 확인해 주세요.",
     );
-    await expect(sheet.getByLabel("시각")).toHaveValue("08:10");
+    await expect(sheet.getByRole("combobox", { name: "시", exact: true })).toHaveValue("08");
+    await expect(sheet.getByRole("combobox", { name: "분", exact: true })).toHaveValue("10");
     await sheet.getByRole("button", { name: "취소", exact: true }).click();
     await expect(sheet).toBeHidden();
     await expect(page.getByRole("button", { name: "평일 07:40", exact: true })).toBeVisible();
@@ -343,3 +368,7 @@ test("알림을 눌러 앱을 열면 로그인하지 않아도 그 정류장의 
   await expect(page).toHaveURL(`/routes/${routeId}?direction=UP&stopId=${stop.stopId}`);
   await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
 });
+
+function twoDigits(value: number): string {
+  return String(value).padStart(2, "0");
+}
