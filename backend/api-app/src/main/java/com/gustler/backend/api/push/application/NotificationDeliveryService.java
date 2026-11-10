@@ -41,8 +41,9 @@ public class NotificationDeliveryService {
             settings.deleteOrphan(due.id(), due.occurrenceAt());
             return;
         }
-        deliveries.createForMemberDevices(due.id(), due.occurrenceAt(), due.memberId(), now);
-        settings.advance(due.id(), due.occurrenceAt(), due.schedule().nextAfter(now), now);
+        if (settings.advance(due.id(), due.occurrenceAt(), due.schedule().nextAfter(now), now)) {
+            deliveries.createForMemberDevices(due.id(), due.occurrenceAt(), due.memberId(), now);
+        }
     }
 
     public int giveUpExpired() {
