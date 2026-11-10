@@ -72,8 +72,16 @@ class JdbcNotificationDeliveryRepositoryTest {
             NOW
         );
 
+        long expiredId = insertDelivery(
+            prepared.settingId(),
+            NOW.minusSeconds(180),
+            prepared.deviceIds().get(0),
+            "PENDING",
+            NOW
+        );
+
         Instant leasedUntil = NOW.plusSeconds(120);
-        List<ClaimedDelivery> claimed = deliveries.claimDue(NOW, leasedUntil, 10);
+        List<ClaimedDelivery> claimed = deliveries.claimDue(NOW, leasedUntil, NOW.minusSeconds(120), 10);
 
         assertThat(claimed).hasSize(1);
         ClaimedDelivery first = claimed.get(0);
@@ -82,7 +90,7 @@ class JdbcNotificationDeliveryRepositoryTest {
         assertThat(first.target()).isEqualTo(TARGET);
         assertThat(first.occurrenceAt()).isEqualTo(NOW);
         assertThat(nextAttemptAt(first.id())).isEqualTo(leasedUntil);
-        assertThat(claimed.stream().map(ClaimedDelivery::id).toList()).doesNotContain(futureId, sentId);
+        assertThat(claimed.stream().map(ClaimedDelivery::id).toList()).doesNotContain(futureId, sentId, expiredId);
     }
 
     @Test
@@ -94,7 +102,7 @@ class JdbcNotificationDeliveryRepositoryTest {
             .param(other)
             .update();
 
-        assertThat(deliveries.claimDue(NOW, NOW.plusSeconds(120), 10)).isEmpty();
+        assertThat(deliveries.claimDue(NOW, NOW.plusSeconds(120), NOW.minusSeconds(120), 10)).isEmpty();
     }
 
     @Test

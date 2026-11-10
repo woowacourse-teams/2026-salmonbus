@@ -48,13 +48,22 @@ public class NotificationDeliveryService {
 
     public int giveUpExpired() {
         Instant now = now();
-        Instant cutoff = now.truncatedTo(ChronoUnit.MINUTES).minus(DeliveryPolicy.RETRY_WINDOW);
-        return deliveries.giveUpOccurredBefore(cutoff, now);
+        return deliveries.giveUpOccurredBefore(DeliveryPolicy.expiryCutoff(now), now);
     }
 
     public List<ClaimedDelivery> claimDue(int limit) {
         Instant now = now();
-        return deliveries.claimDue(now, now.plus(DeliveryPolicy.LEASE), limit);
+        return deliveries.claimDue(now, now.plus(DeliveryPolicy.LEASE), DeliveryPolicy.expiryCutoff(now), limit);
+    }
+
+    // 한 묶음을 보내는 사이에도 시간이 지나므로, 가져온 건도 보내기 직전에 기한을 다시 본다.
+    public boolean giveUpIfExpired(ClaimedDelivery delivery) {
+        Instant now = now();
+        if (!DeliveryPolicy.expired(delivery.occurrenceAt(), now)) {
+            return false;
+        }
+        deliveries.giveUp(delivery.id(), now);
+        return true;
     }
 
     public void record(ClaimedDelivery delivery, DeliveryOutcome outcome) {

@@ -12,6 +12,14 @@ public final class DeliveryPolicy {
     private DeliveryPolicy() {
     }
 
+    public static Instant expiryCutoff(Instant now) {
+        return now.truncatedTo(ChronoUnit.MINUTES).minus(RETRY_WINDOW);
+    }
+
+    public static boolean expired(Instant occurrenceAt, Instant now) {
+        return occurrenceAt.isBefore(expiryCutoff(now));
+    }
+
     public static DeliveryDecision decide(DeliveryOutcome outcome, Instant occurrenceAt, Instant now) {
         return switch (outcome) {
             case SENT -> new DeliveryDecision(DeliveryStatus.SENT, now);
