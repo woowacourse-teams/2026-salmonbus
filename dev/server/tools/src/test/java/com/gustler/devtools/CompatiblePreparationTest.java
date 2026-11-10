@@ -107,6 +107,6 @@ class CompatiblePreparationTest {
         String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
             .digest((contract + "\n").getBytes(StandardCharsets.UTF_8)));
 
-        assertThat(hash).isEqualTo(CompatiblePreparation.SINGLE_MODEL_DATA);
+        assertThat(hash).isEqualTo(CompatiblePreparation.DATABASE_CLOCK_DATA);
     }
 }

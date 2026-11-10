@@ -3,9 +3,9 @@ package com.gustler.localdata;
 import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareHistorySeedReader;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,6 +15,10 @@ final class LocalForecastHistory {
     }
 
     static List<Anchor> prepare(Connection connection, List<String> supportedRoutes) throws Exception {
+        return prepare(connection, supportedRoutes, Clock.systemUTC());
+    }
+
+    static List<Anchor> prepare(Connection connection, List<String> supportedRoutes, Clock clock) throws Exception {
         List<Anchor> anchors = new ArrayList<>();
         for (String name : supportedRoutes) {
             long version;
@@ -53,12 +57,12 @@ final class LocalForecastHistory {
                     LocalData.require(rows.getLong(1) == 0, "FORECAST_HISTORY_BOOTSTRAP_REQUIRED");
                 }
             }
-            OffsetDateTime at = OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(1);
+            OffsetDateTime at = OffsetDateTime.now(clock).minusSeconds(1);
             try (var query = connection.prepareStatement("""
                 INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,requested_at,
                     response_received_at,completed_at,outcome,stored_rows,normalization_version,collection_strategy_version,ingestion_origin)
                 VALUES(?,?,1,?,?,?,?,'SUCCESS_EMPTY',0,'local-synthetic-v1','local-synthetic-v1','LIVE')
-                RETURNING id
+                RETURNING id,response_received_at
                 """)) {
                 query.setLong(1, version);
                 query.setObject(2, at);
@@ -68,7 +72,8 @@ final class LocalForecastHistory {
                 query.setObject(6, at);
                 try (var rows = query.executeQuery()) {
                     rows.next();
-                    anchors.add(new Anchor(version, rows.getLong(1), at.toInstant()));
+                    anchors.add(new Anchor(version, rows.getLong(1),
+                        rows.getObject(2, OffsetDateTime.class).toInstant()));
                 }
             }
         }

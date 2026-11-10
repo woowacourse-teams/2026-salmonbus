@@ -1,5 +1,6 @@
 """Board API 계약에 대한 검사 스크립트의 회귀 검사. 응답은 만든 예시다."""
 import importlib.util
+from datetime import datetime
 from pathlib import Path
 import unittest
 
@@ -43,6 +44,22 @@ class CollectionRoutesTest(unittest.TestCase):
         checks.verify_board("204000057", 200, self.body("204000057", "FORECAST_READY"), True)
         with self.assertRaises(AssertionError):
             checks.verify_board("204000057", 200, self.body("204000057"), True)
+
+    def test_지원_노선도_지원_시간_밖에는_예보없음을_확인한다(self):
+        body = self.body("204000057", "FORECAST_READY", {"status": "UNAVAILABLE"})
+        checks.verify_board("204000057", 200, body, True, expect_forecasts=False)
+        with self.assertRaises(AssertionError):
+            checks.verify_board("204000057", 200, self.body("204000057", "FORECAST_READY"),
+                                True, expect_forecasts=False)
+
+    def test_관측_시각과_공휴일로_검증된_출퇴근_범위를_판단한다(self):
+        for hour, expected in [(5, False), (6, True), (9, True), (10, False),
+                               (16, False), (17, True), (20, True), (21, False)]:
+            with self.subTest(hour=hour):
+                at = datetime.fromisoformat(f"2026-11-10T{hour:02d}:00:00+09:00")
+                self.assertEqual(checks.supports_time(at, []), expected)
+        self.assertFalse(checks.supports_time(datetime.fromisoformat("2026-11-14T08:00:00+09:00"), []))
+        self.assertFalse(checks.supports_time(datetime.fromisoformat("2026-11-10T08:00:00+09:00"), ["2026-11-10"]))
 
 
 if __name__ == "__main__":
