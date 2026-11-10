@@ -49,7 +49,7 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     private final int pageLimit;
     private final Map<Long, EvaluationSelection.Cursor> cursors = new LinkedHashMap<>();
     private long memoryRevision;
-    private LesForecastEvaluation les;
+    private AlightingAwareForecastEvaluation alighting;
 
     public EvaluateForecastsService(
         EvaluationWorkStore work,
@@ -80,16 +80,16 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     }
 
     @Autowired(required = false)
-    public void useLesEvaluation(LesForecastEvaluation les) {
-        this.les = les;
+    public void useAlightingAwareEvaluation(AlightingAwareForecastEvaluation alighting) {
+        this.alighting = alighting;
     }
 
     @Override
     @Transactional(propagation = Propagation.NEVER)
     public void settleArrivalLabels() {
         WorkerOperationLog.run("settlement_tick", "all", this::settleOnce);
-        if (les != null) {
-            WorkerOperationLog.run("les_settlement_tick", "all", les::settle);
+        if (alighting != null) {
+            WorkerOperationLog.run("alighting_settlement_tick", "all", alighting::settle);
         }
     }
 

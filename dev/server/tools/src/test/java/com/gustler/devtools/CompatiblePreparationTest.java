@@ -42,12 +42,12 @@ class CompatiblePreparationTest {
     }
 
     @Test
-    void 레스_정산_초기화는_검토한_과거_판에서만_전환한다() {
-        RevisionStore.Revision next = revision(CompatiblePreparation.LES_EVALUATION_DATA);
+    void 하차_반영_정산_초기화는_검토한_과거_판에서만_전환한다() {
+        RevisionStore.Revision next = revision(CompatiblePreparation.ALIGHTING_AWARE_EVALUATION_DATA);
         assertSoftly(softly -> {
             for (String previous : List.of(CompatiblePreparation.PREVIOUS, CompatiblePreparation.COLLECTED_DATA,
                 CompatiblePreparation.EVALUATION_DATA, CompatiblePreparation.NEXT,
-                CompatiblePreparation.FIXTURE_DIGEST, CompatiblePreparation.PREVIOUS_LES_EVALUATION_DATA)) {
+                CompatiblePreparation.FIXTURE_DIGEST, CompatiblePreparation.PREVIOUS_ALIGHTING_AWARE_EVALUATION_DATA)) {
                 softly.assertThat(CompatiblePreparation.permits(revision(previous), next)).isTrue();
                 softly.assertThat(CompatiblePreparation.permits(next, revision(previous))).isFalse();
             }
@@ -59,12 +59,12 @@ class CompatiblePreparationTest {
 
     @Test
     void 원본_보관_초기화는_검토한_과거_판에서만_전환한다() {
-        RevisionStore.Revision next = revision(CompatiblePreparation.ARCHIVE_DATA);
+        RevisionStore.Revision next = revision(CompatiblePreparation.ALIGHTING_MODEL_DATA);
         assertSoftly(softly -> {
             for (String previous : List.of(CompatiblePreparation.PREVIOUS, CompatiblePreparation.COLLECTED_DATA,
                 CompatiblePreparation.EVALUATION_DATA, CompatiblePreparation.NEXT,
-                CompatiblePreparation.FIXTURE_DIGEST, CompatiblePreparation.PREVIOUS_LES_EVALUATION_DATA,
-                CompatiblePreparation.LES_EVALUATION_DATA)) {
+                CompatiblePreparation.FIXTURE_DIGEST, CompatiblePreparation.PREVIOUS_ALIGHTING_AWARE_EVALUATION_DATA,
+                CompatiblePreparation.ALIGHTING_AWARE_EVALUATION_DATA, CompatiblePreparation.ARCHIVE_DATA)) {
                 softly.assertThat(CompatiblePreparation.permits(revision(previous), next)).isTrue();
                 softly.assertThat(CompatiblePreparation.permits(next, revision(previous))).isFalse();
             }
@@ -107,6 +107,6 @@ class CompatiblePreparationTest {
         String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
             .digest((contract + "\n").getBytes(StandardCharsets.UTF_8)));
 
-        assertThat(hash).isEqualTo(CompatiblePreparation.ARCHIVE_DATA);
+        assertThat(hash).isEqualTo(CompatiblePreparation.ALIGHTING_MODEL_DATA);
     }
 }

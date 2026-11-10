@@ -47,7 +47,7 @@ class MigrationOrderTest {
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
         List.of("vehicle_capacity", "vehicle_seat_quality",
             "operational_observation_columns", "operational_observation", "retire_trip_quality", "operational_archive",
-            "unfinished_collection_recovery");
+            "unfinished_collection_recovery", "rename_alighting_model");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

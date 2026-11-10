@@ -141,7 +141,7 @@ public final class LocalData {
         execute(connection, """
             TRUNCATE daily_call_quota, observation_batch, vehicle_observation, seat_forecast,
                 forecast_publication, forecast_evaluation_work, forecast_evaluation_result, forecast_evaluation_compact,
-                les_forecast_evaluation_work, les_forecast_evaluation_result, les_evaluation_archive,
+                alighting_forecast_evaluation_work, alighting_forecast_evaluation_result, alighting_evaluation_archive,
                 operational_archive_file, operational_archive_job, operational_archive_boundary, archive_legacy_member, archive_legacy_batch,
                 file_statistics_publication,
                 same_day_full_outcomes,

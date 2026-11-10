@@ -2,9 +2,9 @@ package com.gustler.backend.forecasting.application.publication;
 
 import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.application.evaluation.SameDayFullOutcomesService;
-import com.gustler.backend.forecasting.application.les.LesFeatureQuery;
-import com.gustler.backend.forecasting.application.les.LesFeatureUnavailableException;
-import com.gustler.backend.forecasting.application.les.LesInputConfirmation;
+import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureQuery;
+import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureUnavailableException;
+import com.gustler.backend.forecasting.application.alighting.AlightingAwareInputConfirmation;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.evaluation.EvaluationSamplingPoint;
 import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
@@ -16,11 +16,11 @@ import com.gustler.backend.forecasting.domain.model.SeatForecastInput;
 import com.gustler.backend.forecasting.domain.model.SeatRangeException;
 import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import com.gustler.backend.forecasting.domain.model.VehicleTrajectory;
-import com.gustler.backend.forecasting.domain.model.les.LesFeatureSnapshot;
-import com.gustler.backend.forecasting.domain.model.les.LesFeatureVector;
-import com.gustler.backend.forecasting.domain.model.les.LesForecastModel;
-import com.gustler.backend.forecasting.domain.model.les.LesObservation;
-import com.gustler.backend.forecasting.domain.model.les.LesRouteStatistics;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.ForecastTimeSlot;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
@@ -60,16 +60,16 @@ public class ForecastBatchWriter {
     private final StopDemandStatisticsRepository stopDemandStatisticsRepository;
     private final Clock clock;
     private final RouteWorkAccess routeWork;
-    private LesFeatureQuery lesFeatures;
-    private LesInputConfirmation confirmedInput;
+    private AlightingAwareFeatureQuery alightingFeatures;
+    private AlightingAwareInputConfirmation confirmedInput;
 
     @Autowired(required = false)
-    public void setLesFeatures(LesFeatureQuery lesFeatures) {
-        this.lesFeatures = lesFeatures;
+    public void setAlightingAwareFeatures(AlightingAwareFeatureQuery alightingFeatures) {
+        this.alightingFeatures = alightingFeatures;
     }
 
     @Autowired(required = false)
-    public void setConfirmedInput(LesInputConfirmation confirmedInput) {
+    public void setConfirmedInput(AlightingAwareInputConfirmation confirmedInput) {
         this.confirmedInput = confirmedInput;
     }
 
@@ -97,8 +97,8 @@ public class ForecastBatchWriter {
         RuntimeSnapshot runtime) {
         final long qualityRevision = routeWork.current(batch.routeVersionId());
         Instant generatedAt = clock.instant();
-        if (runtime.model() instanceof LesForecastModel les) {
-            return writeLes(batch, stops, runtime, les, generatedAt, qualityRevision);
+        if (runtime.model() instanceof AlightingAwareSeatForecastModel alighting) {
+            return writeAlightingAware(batch, stops, runtime, alighting, generatedAt, qualityRevision);
         }
         TimeSlot timeSlot = ForecastTimeSlot.of(batch, clock);
         StopDemandStatistics statistics = stopDemandStatisticsOf(batch, runtime, timeSlot);
@@ -113,26 +113,26 @@ public class ForecastBatchWriter {
         return committer.commit(batch, publication, sources);
     }
 
-    /** 레스는 고정 통계와 당일 원관측 입력을 사용하며 기존 정산 기반 확률 보정을 읽지 않는다. */
-    private int writeLes(
+    /** 하차 반영는 고정 통계와 당일 원관측 입력을 사용하며 기존 정산 기반 확률 보정을 읽지 않는다. */
+    private int writeAlightingAware(
         PendingForecastBatch batch,
         RouteStops stops,
         RuntimeSnapshot runtime,
-        LesForecastModel model,
+        AlightingAwareSeatForecastModel model,
         Instant generatedAt,
         final long qualityRevision
     ) {
-        if (lesFeatures == null) {
-            throw new IllegalStateException("레스 입력 조회기가 등록되지 않았다");
+        if (alightingFeatures == null) {
+            throw new IllegalStateException("하차 반영 입력 조회기가 등록되지 않았다");
         }
-        LesRouteStatistics statistics = model.statistics(stops);
+        AlightingAwareRouteStatistics statistics = model.statistics(stops);
         List<SeatForecast> predictions = new ArrayList<>();
         if (statistics.confirmedProfile()) {
             if (confirmedInput == null) {
                 throw new IllegalStateException("확인 시각 입력 확정기가 등록되지 않았다");
             }
             if (!confirmedInput.confirm(batch.observationBatchId(), generatedAt)) {
-                return commitLes(batch, new ForecastPublication(batch.observationBatchId(), batch.routeVersionId(),
+                return commitAlightingAware(batch, new ForecastPublication(batch.observationBatchId(), batch.routeVersionId(),
                     runtime.deploymentId(), 0, qualityRevision, batch.responseReceivedAt(), generatedAt, generatedAt,
                     List.of()), statistics);
             }
@@ -140,14 +140,14 @@ public class ForecastBatchWriter {
         ZonedDateTime localTime = batch.responseReceivedAt().atZone(ZoneId.of("Asia/Seoul"));
         final int minute = localTime.getHour() * 60 + localTime.getMinute();
         if (!statistics.confirmedProfile() && !isValidatedRush(statistics, localTime, minute)) {
-            LOGGER.info("event=forecast_batch_withheld reason=LES_OUTSIDE_VALIDATED_RUSH_SCOPE batchId={}",
+            LOGGER.info("event=forecast_batch_withheld reason=ALIGHTING_AWARE_OUTSIDE_VALIDATED_RUSH_SCOPE batchId={}",
                 batch.observationBatchId());
-            return commitLes(batch, new ForecastPublication(batch.observationBatchId(),
+            return commitAlightingAware(batch, new ForecastPublication(batch.observationBatchId(),
                 batch.routeVersionId(), runtime.deploymentId(), 0, qualityRevision,
                 batch.responseReceivedAt(), generatedAt, generatedAt, List.of()), statistics);
         }
-        Map<Long, LesFeatureSnapshot> snapshots = readLesFeatures(batch, stops, statistics);
-        for (LesFeatureSnapshot snapshot : snapshots.values()) {
+        Map<Long, AlightingAwareFeatureSnapshot> snapshots = readAlightingAwareFeatures(batch, stops, statistics);
+        for (AlightingAwareFeatureSnapshot snapshot : snapshots.values()) {
             if (statistics.confirmedProfile()) {
                 ZonedDateTime sourceTime = snapshot.source().receivedAt().atZone(ZoneId.of("Asia/Seoul"));
                 if (!isValidatedRush(statistics, sourceTime, sourceTime.getHour() * 60 + sourceTime.getMinute())) {
@@ -160,25 +160,25 @@ public class ForecastBatchWriter {
                     && statistics.stop(target.stopOrder()).down() != snapshot.source().down()) {
                     continue;
                 }
-                LesFeatureVector vector = snapshot.forTarget(target.stopOrder());
-                vehiclePredictions.add(lesForecast(batch, runtime, model, generatedAt,
+                AlightingAwareFeatureVector vector = snapshot.forTarget(target.stopOrder());
+                vehiclePredictions.add(alightingForecast(batch, runtime, model, generatedAt,
                     statistics, snapshot, target, vector));
             }
             predictions.addAll(vehiclePredictions);
         }
-        return commitLes(batch, new ForecastPublication(batch.observationBatchId(),
+        return commitAlightingAware(batch, new ForecastPublication(batch.observationBatchId(),
             batch.routeVersionId(), runtime.deploymentId(), 0, qualityRevision,
             batch.responseReceivedAt(), generatedAt, generatedAt, predictions), statistics);
     }
 
-    private int commitLes(PendingForecastBatch batch, ForecastPublication publication, LesRouteStatistics statistics) {
+    private int commitAlightingAware(PendingForecastBatch batch, ForecastPublication publication, AlightingAwareRouteStatistics statistics) {
         if (statistics.confirmedProfile()) {
             return committer.commitConfirmed(batch, publication);
         }
         return committer.commit(batch, publication, List.of());
     }
 
-    private boolean isValidatedRush(LesRouteStatistics statistics, ZonedDateTime localTime, final int minute) {
+    private boolean isValidatedRush(AlightingAwareRouteStatistics statistics, ZonedDateTime localTime, final int minute) {
         if (!"work".equals(statistics.dayType(localTime.toLocalDate()))) {
             return false;
         }
@@ -194,31 +194,31 @@ public class ForecastBatchWriter {
     }
 
     /** 자료 부족은 발행 확정 없이 전파해 복구 뒤 같은 배치를 재처리한다. */
-    private Map<Long, LesFeatureSnapshot> readLesFeatures(
+    private Map<Long, AlightingAwareFeatureSnapshot> readAlightingAwareFeatures(
         PendingForecastBatch batch,
         RouteStops stops,
-        LesRouteStatistics statistics) {
+        AlightingAwareRouteStatistics statistics) {
         try {
-            return lesFeatures.read(batch.observationBatchId(), stops, statistics);
-        } catch (LesFeatureUnavailableException error) {
+            return alightingFeatures.read(batch.observationBatchId(), stops, statistics);
+        } catch (AlightingAwareFeatureUnavailableException error) {
             LOGGER.warn("event=forecast_batch_withheld reason={} batchId={}", error.getMessage(),
                 batch.observationBatchId());
-            if ("LES_OUTSIDE_VALIDATED_RUSH_SCOPE".equals(error.getMessage())) {
+            if ("ALIGHTING_AWARE_OUTSIDE_VALIDATED_RUSH_SCOPE".equals(error.getMessage())) {
                 return Map.of();
             }
             throw error;
         }
     }
 
-    private SeatForecast lesForecast(
+    private SeatForecast alightingForecast(
         PendingForecastBatch batch,
         RuntimeSnapshot runtime,
-        LesForecastModel model,
+        AlightingAwareSeatForecastModel model,
         Instant generatedAt,
-        LesRouteStatistics statistics,
-        LesFeatureSnapshot snapshot,
+        AlightingAwareRouteStatistics statistics,
+        AlightingAwareFeatureSnapshot snapshot,
         VehicleStopTarget target,
-        LesFeatureVector vector
+        AlightingAwareFeatureVector vector
     ) {
         ObjectNode evidence = (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.stopOrder()));
         evidence.put("asOf", batch.responseReceivedAt().toString());
@@ -226,10 +226,10 @@ public class ForecastBatchWriter {
         evidence.put("capacityPolicy", statistics.profile().capacity());
         if (statistics.confirmedProfile()) {
             evidence.put("asOf", snapshot.source().receivedAt().toString());
-            LesFeatureSnapshot.Provenance provenance = snapshot.provenance();
-            LesObservation capacity = provenance.capacityObservation();
+            AlightingAwareFeatureSnapshot.Provenance provenance = snapshot.provenance();
+            AlightingAwareObservation capacity = provenance.capacityObservation();
             if (capacity == null) {
-                throw new LesFeatureUnavailableException("LES_CAPACITY_EVIDENCE_MISSING");
+                throw new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_CAPACITY_EVIDENCE_MISSING");
             }
             evidence.put("tripStartObservationId", provenance.tripStartObservationId());
             evidence.put("capacityObservationId", capacity.observationId());
@@ -242,7 +242,7 @@ public class ForecastBatchWriter {
         evidence.set("probability80", nullableVector(vector.probability80()));
         return SeatForecast.of(snapshot.vehicleObservationId(), target,
             model.predict(vector), runtime.deploymentId(), 0, generatedAt)
-            .withLesEvidence(JSON.writeValueAsString(evidence), model.bundleDigest(), statistics.profile().label());
+            .withAlightingAwareEvidence(JSON.writeValueAsString(evidence), model.bundleDigest(), statistics.profile().label());
     }
 
     private static ArrayNode nullableVector(double[] vector) {

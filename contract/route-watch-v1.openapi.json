@@ -674,14 +674,14 @@
             "type": "number",
             "minimum": 0,
             "maximum": 70,
-            "description": "하차 후 빈 좌석 추정값. 레스 모델에서만 제공",
+            "description": "하차 후 빈 좌석 추정값. 하차 반영 좌석 모델에서만 제공",
             "format": "double"
           },
           "departureFullProbability": {
             "type": "number",
             "minimum": 0,
             "maximum": 1,
-            "description": "목표 정류장에서 출발할 때 0석일 확률. 레스 모델에서만 제공",
+            "description": "목표 정류장에서 출발할 때 0석일 확률. 하차 반영 좌석 모델에서만 제공",
             "format": "double"
           }
         },

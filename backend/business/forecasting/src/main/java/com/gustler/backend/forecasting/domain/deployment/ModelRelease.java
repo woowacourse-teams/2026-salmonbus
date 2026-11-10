@@ -1,11 +1,13 @@
 package com.gustler.backend.forecasting.domain.deployment;
 
+import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
+
 import com.gustler.backend.forecasting.domain.model.ForecastFeatureContract;
 import com.gustler.backend.forecasting.domain.model.ForecastRouteReference;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionForecastModel;
 import com.gustler.backend.forecasting.domain.model.SeatDistributionPredictor;
 import com.gustler.backend.forecasting.domain.model.SeatForecastModel;
-import com.gustler.backend.forecasting.domain.model.les.LesForecastModel;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -43,14 +45,14 @@ public record ModelRelease(
             features, reference, new SeatDistributionForecastModel(predictor, features, reference));
     }
 
-    public static ModelRelease les(
+    public static ModelRelease alighting(
         String releaseId,
         String bundleDigest,
         String dataThrough,
         SupportedForecastScope scope,
-        LesForecastModel model
+        AlightingAwareSeatForecastModel model
     ) {
-        return new ModelRelease(releaseId, "les-gate-base-and-pool", bundleDigest, "les-online-v1",
+        return new ModelRelease(releaseId, "alighting-gate-base-and-pool", bundleDigest, "alighting-online-v1",
             dataThrough, scope, null, null, null, model);
     }
 
@@ -80,18 +82,18 @@ public record ModelRelease(
         ActiveModelDeployment deployment) {
         return deployment.bundleDigest().equals(bundleDigest())
             && deployment.releaseId().equals(releaseId())
-            && deployment.calculationVersion().equals(featureContractVersion());
+            && canonical(deployment.calculationVersion()).equals(featureContractVersion());
     }
 
     private String modelKey() {
-        if (model instanceof LesForecastModel) {
-            return "les-gate-base-and-pool";
+        if (model instanceof AlightingAwareSeatForecastModel) {
+            return "alighting-gate-base-and-pool";
         }
         return MODEL_KEY;
     }
 
     private String predictionTargetVersion() {
-        if (model instanceof LesForecastModel) {
+        if (model instanceof AlightingAwareSeatForecastModel) {
             return "after-alighting-and-departure-zero-v1";
         }
         return PREDICTION_TARGET_VERSION;

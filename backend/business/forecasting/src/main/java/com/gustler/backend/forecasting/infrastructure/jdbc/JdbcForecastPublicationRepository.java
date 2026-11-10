@@ -93,16 +93,16 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
         Optional<ExistingPublication> previous = jdbc.sql(
             """
                 SELECT p.id, p.model_deployment_id,
-                    (old.calculation_version='les-online-v1' OR incoming.calculation_version='les-online-v1') AS les
+                    (old.calculation_version='alighting-online-v1' OR incoming.calculation_version='alighting-online-v1') AS alighting
                 FROM forecast_publication p JOIN model_deployment old ON old.id=p.model_deployment_id
                 JOIN model_deployment incoming ON incoming.id=? WHERE p.source_batch_id=? FOR UPDATE OF p
                 """)
             .params(publication.modelDeploymentId(), publication.sourceBatchId())
             .query((row, index) -> new ExistingPublication(row.getLong("id"), row.getLong("model_deployment_id"),
-                row.getBoolean("les")))
+                row.getBoolean("alighting")))
             .optional();
         previous.ifPresent(existing -> {
-            if (existing.les() && existing.modelDeploymentId() != publication.modelDeploymentId()) {
+            if (existing.alighting() && existing.modelDeploymentId() != publication.modelDeploymentId()) {
                 throw new IllegalStateException("이미 발행한 관측을 다른 모델로 덮어쓸 수 없다. 독립 재생 DB를 사용해야 한다");
             }
         });
@@ -134,7 +134,7 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
         return existing.isEmpty();
     }
 
-    private record ExistingPublication(long id, long modelDeploymentId, boolean les) {
+    private record ExistingPublication(long id, long modelDeploymentId, boolean alighting) {
     }
 
     private static OffsetDateTime offset(Instant instant) {

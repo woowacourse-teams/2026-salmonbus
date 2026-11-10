@@ -13,15 +13,15 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_batch_date
     ON observation_batch(route_version_id,(COALESCE(response_received_at,scheduled_at)),id);
 
 -- 새 모델의 정산 근거 FK도 관측 삭제 때 전체 정산을 스캔하지 않도록 준비한다.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_les_pre_observation_id
-    ON les_forecast_evaluation_result(pre_observation_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_les_post_observation_id
-    ON les_forecast_evaluation_result(post_observation_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_les_closure_observation_id
-    ON les_forecast_evaluation_result(closure_observation_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_les_previous_post_observation_id
-    ON les_forecast_evaluation_result(previous_post_observation_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_les_previous_closure_observation_id
-    ON les_forecast_evaluation_result(previous_closure_observation_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_les_capacity_observation_id
-    ON les_forecast_evaluation_result(capacity_observation_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_alighting_pre_observation_id
+    ON alighting_forecast_evaluation_result(pre_observation_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_alighting_post_observation_id
+    ON alighting_forecast_evaluation_result(post_observation_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_alighting_closure_observation_id
+    ON alighting_forecast_evaluation_result(closure_observation_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_alighting_previous_post_observation_id
+    ON alighting_forecast_evaluation_result(previous_post_observation_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_alighting_previous_closure_observation_id
+    ON alighting_forecast_evaluation_result(previous_closure_observation_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_archive_alighting_capacity_observation_id
+    ON alighting_forecast_evaluation_result(capacity_observation_id);

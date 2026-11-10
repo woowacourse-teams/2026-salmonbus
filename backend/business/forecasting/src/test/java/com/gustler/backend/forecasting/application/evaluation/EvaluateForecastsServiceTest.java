@@ -77,18 +77,18 @@ class EvaluateForecastsServiceTest {
     }
 
     @Test
-    void 앞_노선이_실패해도_뒤_노선과_LES_정산을_계속한다() {
+    void 앞_노선이_실패해도_뒤_노선과_ALIGHTING_AWARE_정산을_계속한다() {
         givenPendingOn(ROUTE_VERSION_3330, pending(100L, 40));
         givenArrivals(passedAt(TARGET_STOP_ORDER, 60, 0));
         when(work.routes()).thenReturn(List.of(2L, ROUTE_VERSION_3330));
         when(quality.current(2L)).thenThrow(new IllegalStateException("첫 노선 조회 실패"));
-        AtomicInteger lesRounds = new AtomicInteger();
-        job.useLesEvaluation(lesRounds::incrementAndGet);
+        AtomicInteger alightingRounds = new AtomicInteger();
+        job.useAlightingAwareEvaluation(alightingRounds::incrementAndGet);
 
         runRound();
 
         assertThat(settledLabels()).containsExactly(new ArrivalLabel.Settled(ARRIVAL_OBSERVATION_ID, 0));
-        assertThat(lesRounds.get()).isOne();
+        assertThat(alightingRounds.get()).isOne();
     }
 
     @Test

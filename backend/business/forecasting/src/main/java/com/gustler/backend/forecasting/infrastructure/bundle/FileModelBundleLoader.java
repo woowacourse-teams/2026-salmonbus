@@ -1,8 +1,10 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
 
+import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
+
 import com.gustler.backend.forecasting.application.deployment.ModelBundleFiles;
 import com.gustler.backend.forecasting.application.deployment.ModelBundleLoader;
-import com.gustler.backend.forecasting.infrastructure.bundle.les.LesServingBundle;
+import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareServingBundle;
 import java.io.IOException;
 import java.nio.file.Path;
 import tools.jackson.core.JacksonException;
@@ -19,11 +21,11 @@ public final class FileModelBundleLoader implements ModelBundleLoader {
         BundleFiles files = BundleFiles.under(path);
         return () -> {
             JsonNode manifest = readManifest(files);
-            if (manifest.has("schema") && "les-inference-bundle-v1".equals(manifest.get("schema").asString())) {
+            if (manifest.has("schema") && "alighting-inference-bundle-v1".equals(canonical(manifest.get("schema").asString()))) {
                 try {
-                    return LesServingBundle.load(path);
+                    return AlightingAwareServingBundle.load(path);
                 } catch (IOException | IllegalArgumentException error) {
-                    throw new BundleRejectedException("레스 서빙 번들 검증 실패", error);
+                    throw new BundleRejectedException("하차 반영 서빙 번들 검증 실패", error);
                 }
             }
             return LoadedBundle.from(files).release();

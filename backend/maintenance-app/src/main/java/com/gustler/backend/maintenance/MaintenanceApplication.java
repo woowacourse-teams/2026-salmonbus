@@ -1,14 +1,14 @@
 package com.gustler.backend.maintenance;
 
 import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
-import com.gustler.backend.forecasting.api.evaluation.LesEvaluationArchive;
-import com.gustler.backend.forecasting.api.les.BootstrapLesHistory;
-import com.gustler.backend.forecasting.api.les.LesHistoryBootstrapException;
+import com.gustler.backend.forecasting.api.evaluation.AlightingAwareEvaluationArchive;
+import com.gustler.backend.forecasting.api.alighting.BootstrapAlightingAwareHistory;
+import com.gustler.backend.forecasting.api.alighting.AlightingAwareHistoryBootstrapException;
 import com.gustler.backend.forecasting.api.model.InspectModelBundle;
 import com.gustler.backend.forecasting.api.model.ModelLoadException;
 import com.gustler.backend.maintenance.configuration.BundleInspectionCommandConfiguration;
-import com.gustler.backend.maintenance.configuration.LesEvaluationRestoreCommandConfiguration;
-import com.gustler.backend.maintenance.configuration.LesHistoryBootstrapCommandConfiguration;
+import com.gustler.backend.maintenance.configuration.AlightingAwareEvaluationRestoreCommandConfiguration;
+import com.gustler.backend.maintenance.configuration.AlightingAwareHistoryBootstrapCommandConfiguration;
 import java.time.Clock;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -52,8 +52,8 @@ public final class MaintenanceApplication {
         case "route-display-export", "route-display-status", "route-display-import", "route-display-disable" ->
             RouteDisplayCommand.run(arguments);
         case "route-display-retry" -> RouteDisplayRetryCommand.run(arguments);
-        case "les-history-bootstrap" -> lesHistoryBootstrap(arguments);
-        case "les-evaluation-restore" -> lesEvaluationRestore(arguments);
+        case "alighting-history-bootstrap" -> alightingHistoryBootstrap(arguments);
+        case "alighting-evaluation-restore" -> alightingEvaluationRestore(arguments);
         default -> throw new MaintenanceException("UNKNOWN_COMMAND");
         };
     }
@@ -79,16 +79,16 @@ public final class MaintenanceApplication {
         }
     }
 
-    private static Object lesHistoryBootstrap(CliArguments arguments) {
-        LesHistoryBootstrapCommand.Options options = LesHistoryBootstrapCommand.parse(arguments);
+    private static Object alightingHistoryBootstrap(CliArguments arguments) {
+        AlightingAwareHistoryBootstrapCommand.Options options = AlightingAwareHistoryBootstrapCommand.parse(arguments);
         Configuration configuration = Configuration.load(options.config());
         DatabaseEnvironment environment = DatabaseEnvironment.load(configuration);
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(DatabaseEnvironment.class, () -> environment);
-            context.register(LesHistoryBootstrapCommandConfiguration.class);
+            context.register(AlightingAwareHistoryBootstrapCommandConfiguration.class);
             context.refresh();
-            return LesHistoryBootstrapCommand.invoke(options, context.getBean(BootstrapLesHistory.class));
-        } catch (LesHistoryBootstrapException failure) {
+            return AlightingAwareHistoryBootstrapCommand.invoke(options, context.getBean(BootstrapAlightingAwareHistory.class));
+        } catch (AlightingAwareHistoryBootstrapException failure) {
             throw new MaintenanceException(failure.code(), failure);
         } catch (CannotCreateTransactionException failure) {
             throw new MaintenanceException("DATABASE_CONNECTION_FAILED", failure);
@@ -97,23 +97,23 @@ public final class MaintenanceApplication {
         }
     }
 
-    private static Object lesEvaluationRestore(CliArguments arguments) {
-        LesEvaluationRestoreCommand.Options options = LesEvaluationRestoreCommand.parse(arguments);
-        LocalLesArchive archive = LocalLesArchive.read(options.archiveFile());
+    private static Object alightingEvaluationRestore(CliArguments arguments) {
+        AlightingAwareEvaluationRestoreCommand.Options options = AlightingAwareEvaluationRestoreCommand.parse(arguments);
+        LocalAlightingAwareArchive archive = LocalAlightingAwareArchive.read(options.archiveFile());
         DatabaseEnvironment environment = DatabaseEnvironment.load(Configuration.load(options.config()));
-        LesEvaluationRestoreCommand.authorize(arguments, environment, archive, Clock.systemUTC());
+        AlightingAwareEvaluationRestoreCommand.authorize(arguments, environment, archive, Clock.systemUTC());
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(DatabaseEnvironment.class, () -> environment);
             context.registerBean(EvaluationArchiveObjects.class, () -> archive);
-            context.register(LesEvaluationRestoreCommandConfiguration.class);
+            context.register(AlightingAwareEvaluationRestoreCommandConfiguration.class);
             context.refresh();
-            return LesEvaluationRestoreCommand.invoke(options, context.getBean(LesEvaluationArchive.class));
+            return AlightingAwareEvaluationRestoreCommand.invoke(options, context.getBean(AlightingAwareEvaluationArchive.class));
         } catch (MaintenanceException failure) {
             throw failure;
         } catch (CannotCreateTransactionException failure) {
             throw new MaintenanceException("DATABASE_CONNECTION_FAILED", failure);
         } catch (RuntimeException failure) {
-            throw new MaintenanceException("LES_EVALUATION_RESTORE_FAILED", failure);
+            throw new MaintenanceException("ALIGHTING_AWARE_EVALUATION_RESTORE_FAILED", failure);
         }
     }
 

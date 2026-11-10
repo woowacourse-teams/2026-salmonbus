@@ -20,8 +20,8 @@ public record ForecastResponse(
         "AFTER_ALIGHTING_ESTIMATE" }, requiredMode = RequiredMode.NOT_REQUIRED) String seatTarget,
     @Schema(description = "확률 목표: FIRST_POST_STOP_ZERO 또는 DEPARTURE_ZERO", allowableValues = { "FIRST_POST_STOP_ZERO",
         "DEPARTURE_ZERO" }, requiredMode = RequiredMode.NOT_REQUIRED) String probabilityTarget,
-    @Schema(description = "하차 후 빈 좌석 추정값. 레스 모델에서만 제공", minimum = "0", maximum = "70", requiredMode = RequiredMode.NOT_REQUIRED) Double afterAlightingSeatEstimate,
-    @Schema(description = "목표 정류장에서 출발할 때 0석일 확률. 레스 모델에서만 제공", minimum = "0", maximum = "1", requiredMode = RequiredMode.NOT_REQUIRED) Double departureFullProbability
+    @Schema(description = "하차 후 빈 좌석 추정값. 하차 반영 좌석 모델에서만 제공", minimum = "0", maximum = "70", requiredMode = RequiredMode.NOT_REQUIRED) Double afterAlightingSeatEstimate,
+    @Schema(description = "목표 정류장에서 출발할 때 0석일 확률. 하차 반영 좌석 모델에서만 제공", minimum = "0", maximum = "1", requiredMode = RequiredMode.NOT_REQUIRED) Double departureFullProbability
 ){
     public ForecastResponse(Status status, Double seatAvailableProbability, Double expectedSeats) {
         this(status, seatAvailableProbability, expectedSeats, null, null, null, null);

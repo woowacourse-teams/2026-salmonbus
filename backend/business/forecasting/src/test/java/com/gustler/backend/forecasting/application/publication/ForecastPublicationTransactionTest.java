@@ -361,12 +361,12 @@ class ForecastPublicationTransactionTest {
     }
 
     @Test
-    void 레스_전환으로_기존_관측의_발행_모델과_정산_의미를_덮어쓰지_않는다() {
+    void 하차_반영_전환으로_기존_관측의_발행_모델과_정산_의미를_덮어쓰지_않는다() {
         writer.writeForecastsOf(batch, stops, runtime);
         StoredPublication original = readPublication();
         List<StoredPrediction> predictions = readPredictions();
-        RuntimeSnapshot replacement = runtime("les-replacement", input -> SECOND_RESULT);
-        jdbc.sql("UPDATE model_deployment SET calculation_version='les-online-v1' WHERE id=?")
+        RuntimeSnapshot replacement = runtime("alighting-replacement", input -> SECOND_RESULT);
+        jdbc.sql("UPDATE model_deployment SET calculation_version='alighting-online-v1' WHERE id=?")
             .param(replacement.deploymentId()).update();
 
         Throwable failure = catchThrowable(() -> writer.writeForecastsOf(batch, stops, replacement));

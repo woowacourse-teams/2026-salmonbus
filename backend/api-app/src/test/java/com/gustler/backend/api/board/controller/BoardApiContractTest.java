@@ -117,17 +117,17 @@ class BoardApiContractTest {
     }
 
     @Test
-    void 저장한_레스_하차좌석과_출발확률을_board와_watch가_그대로_공개한다() throws Exception {
+    void 저장한_하차_반영_하차좌석과_출발확률을_board와_watch가_그대로_공개한다() throws Exception {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         OffsetDateTime observed = now.minusMinutes(1);
         BoardDatabaseFixture.RouteContext route = insertRoundTripRoute(now.minusDays(1));
-        final long model = fixture.insertModel("les-projection", "ACTIVE", now.minusDays(1));
+        final long model = fixture.insertModel("alighting-projection", "ACTIVE", now.minusDays(1));
         final long batch = fixture.insertBatch(route, observed, "SUCCESS_ROWS", 1);
         fixture.insertPublication(batch, model, observed.plusSeconds(1), observed.plusSeconds(2));
-        insertPrediction(route, batch, model, 1, "LES-BUS", 2, "STOP-2", 3, 1, 0.85, 3.7, observed);
+        insertPrediction(route, batch, model, 1, "ALIGHTING_AWARE-BUS", 2, "STOP-2", 3, 1, 0.85, 3.7, observed);
         jdbcClient.sql("""
             UPDATE seat_forecast SET seat_target='AFTER_ALIGHTING_ESTIMATE',probability_target='DEPARTURE_ZERO',
-                label_version='les-identity-safe-v1',feature_snapshot='{}'::jsonb,inference_bundle_hash=?
+                label_version='alighting-identity-safe-v1',feature_snapshot='{}'::jsonb,inference_bundle_hash=?
             WHERE route_version_id=?
             """).params("b".repeat(64), route.routeVersionId()).update();
 
