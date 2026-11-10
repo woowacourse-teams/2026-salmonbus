@@ -402,7 +402,7 @@ test("형상 판본이 충돌하면 보드를 다시 받아 새 판본의 노선
   expect(api.requests.watch).toBe(2);
 });
 
-test("겹치는 정류장 핀을 벌려도 연결 점선은 핀과 노선을 잇는다", async ({ page, api, naverMap }) => {
+test("겹치는 정류장 핀을 밀지 않고 연결 점선은 핀과 노선을 잇는다", async ({ page, api, naverMap }) => {
   const { busStops, paths } = api.data.geometry;
   const up = busStops.find((stop) => stop.stopSequence === 11);
   const down = busStops.find((stop) => stop.stopSequence === 14);
@@ -432,8 +432,7 @@ test("겹치는 정류장 핀을 벌려도 연결 점선은 핀과 노선을 잇
       const point = element.points.getItem(9);
       return { x: point.x, y: point.y };
     });
-    if (zoom === 14) expect(pinBounds.x - oppositeBounds.x).toBeGreaterThan(20);
-    else expect(pinBounds.x).toBeCloseTo(oppositeBounds.x);
+    expect(pinBounds.x).toBeCloseTo(oppositeBounds.x);
     expect(start.x).toBeCloseTo(pinBounds.x + pinBounds.width / 2, 0);
     expect(start.y).toBeCloseTo(pinBounds.y + pinBounds.height / 2, 0);
     expect(end).toEqual(road);
@@ -1778,7 +1777,7 @@ test("반대 방향 지도 정류장은 탭·시트·펼침·목록 스크롤을
 }) => {
   await openMap(page);
   await handle(page).press("Home");
-  await naverMap.setZoom(14);
+  await naverMap.setZoom(15);
   await naverMap.panToStop(23);
   const pin = map(page).locator("button[data-map-stop-sequence='23']");
   const row = list(page).locator("li[data-stop-sequence='23']");
