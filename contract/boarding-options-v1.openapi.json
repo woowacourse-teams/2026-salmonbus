@@ -528,7 +528,8 @@
               "NICKNAME_CHARACTERS",
               "NICKNAME_RESERVED",
               "NICKNAME_TAKEN",
-              "REAUTH_REQUIRED"
+              "REAUTH_REQUIRED",
+              "INVALID_PUSH_DEVICE"
             ]
           },
           "message": {

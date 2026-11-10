@@ -2,7 +2,7 @@
 
 프론트와 서버가 함께 지키는 소셜 로그인(카카오·애플) 계약이다.
 
-fetch로 부르는 API 11개의 요청·응답·오류 코드는 [`auth-v1.openapi.json`](auth-v1.openapi.json)이 원본이다. 서버 시험(`AuthApiDocsContractTest`)이 앱이 만든 명세와 이 파일을 대조한다. 이 문서는 명세에 담기지 않는 브라우저 이동 흐름과 쿠키 규칙을 적는다. 모양을 바꾸면 두 파일을 같은 PR에서 고친다.
+fetch로 부르는 API 13개의 요청·응답·오류 코드는 [`auth-v1.openapi.json`](auth-v1.openapi.json)이 원본이다. 서버 시험(`AuthApiDocsContractTest`)이 앱이 만든 명세와 이 파일을 대조한다. 이 문서는 명세에 담기지 않는 브라우저 이동 흐름과 쿠키 규칙을 적는다. 모양을 바꾸면 두 파일을 같은 PR에서 고친다.
 
 ## 켜짐
 
@@ -21,6 +21,8 @@ fetch로 부르는 API 11개의 요청·응답·오류 코드는 [`auth-v1.opena
 | `GET /api/me` | 200. 내 정보 | 401 `UNAUTHENTICATED` |
 | `PATCH /api/me` | 200. 바뀐 내 정보 | 400 `NICKNAME_LENGTH`·`NICKNAME_CHARACTERS`·`NICKNAME_RESERVED`·`CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED`, 409 `NICKNAME_TAKEN` |
 | `DELETE /api/me` | 204. 카카오 회원 탈퇴, 인증 쿠키 삭제 | 400 `CSRF_REJECTED`, 401 `UNAUTHENTICATED`, 409 `REAUTH_REQUIRED`(애플 회원) |
+| `PUT /api/me/push-devices` | 204. APNs 토큰 등록 또는 현재 회원으로 이동 | 400 `INVALID_PUSH_DEVICE`·`CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED` |
+| `POST /api/me/push-devices/unregister` | 204. 내 토큰 삭제. 없거나 남의 토큰이어도 같은 응답 | 400 `INVALID_PUSH_DEVICE`·`CSRF_REJECTED`·`INVALID_REQUEST`, 401 `UNAUTHENTICATED` |
 | `DELETE /api/me/sessions` | 204. 모든 기기에서 로그아웃, 인증 쿠키 삭제 | 400 `CSRF_REJECTED`, 401 `UNAUTHENTICATED` |
 | `POST /api/me/withdrawal/apple` | 200. 애플 재인증 탈퇴 시작 주소 | 400 `INVALID_REQUEST`(카카오 회원)·`CSRF_REJECTED`, 401 `UNAUTHENTICATED` |
 | `POST /api/auth/{provider}/native/nonce` | 200. 앱 로그인 nonce | 400 `CSRF_REJECTED`, 404 `ENDPOINT_NOT_FOUND`(앱 로그인 꺼짐) |
@@ -31,6 +33,14 @@ fetch로 부르는 API 11개의 요청·응답·오류 코드는 [`auth-v1.opena
 - 오류 본문은 다른 API와 같은 `{code, message, requestId}`다. 클라이언트는 `code`로 분기한다.
 - 표에 없는 405 `METHOD_NOT_ALLOWED`, 500 `INTERNAL_ERROR`, 503 `SERVICE_UNAVAILABLE`도 같은 형식으로 올 수 있다.
 - 403은 쓰지 않는다. CloudFront가 403을 `index.html` 200으로 바꾸기 때문이다.
+
+## 푸시 기기
+
+- 등록 본문은 `{"token":"aabbcc","environment":"SANDBOX"}` 형태다. 환경은 `SANDBOX` 또는 `PRODUCTION`만 받는다.
+- 토큰은 공백 없이 1~200자의 16진수다. 대소문자는 같은 토큰으로 취급한다. 해제 본문은 `{"token":"aabbcc"}`이다.
+- 같은 토큰을 다른 회원이 등록하면 그 토큰은 새 회원의 기기가 되고, 이전 회원의 알림은 더 이상 그 기기로 가지 않는다. 같은 회원이 다시 등록하면 환경만 갱신한다.
+- 회원 탈퇴 시 그 회원의 기기도 삭제한다. 전체 기기 로그아웃 시 삭제 여부는 이 계약에서 정하지 않는다.
+- 토큰은 응답·오류·로그에 넣지 않는다.
 
 ## 인증
 
