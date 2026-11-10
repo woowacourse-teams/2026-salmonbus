@@ -1820,20 +1820,30 @@
         "type": "object",
         "properties": {
           "token": {
-            "type": "string"
+            "type": "string",
+            "description": "APNs 기기 토큰. 64자리 16진수"
           },
           "environment": {
-            "type": "string"
+            "type": "string",
+            "description": "APNs 환경. SANDBOX 또는 PRODUCTION"
           }
-        }
+        },
+        "required": [
+          "environment",
+          "token"
+        ]
       },
       "UnregisterPushDeviceRequest": {
         "type": "object",
         "properties": {
           "token": {
-            "type": "string"
+            "type": "string",
+            "description": "APNs 기기 토큰. 64자리 16진수"
           }
-        }
+        },
+        "required": [
+          "token"
+        ]
       },
       "SaveNotificationSettingRequest": {
         "type": "object",
