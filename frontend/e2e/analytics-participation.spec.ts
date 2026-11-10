@@ -102,3 +102,24 @@ test("같은 브라우저의 다른 탭에서 끄거나 켜면 열려 있는 마
   await participation(page).click();
   await expect(participation(other)).toBeChecked();
 });
+
+test("어두운 고대비 모드에서 키보드로 스위치에 가면 포커스 테두리가 시스템 글자색으로 보인다", async ({ page }) => {
+  await page.emulateMedia({ forcedColors: "active", colorScheme: "dark", reducedMotion: "reduce" });
+  await page.goto("/mypage");
+  const control = participation(page);
+  const canvasText = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.color = "CanvasText";
+    const resolved = getComputedStyle(probe).color;
+    probe.remove();
+    return resolved;
+  });
+  await expect(control).toBeVisible();
+  for (let step = 0; step < 40 && !(await control.evaluate((element) => element === document.activeElement)); step++) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(control).toBeFocused();
+  await expect(control).not.toHaveCSS("outline-style", "none");
+  await expect(control).toHaveCSS("outline-color", canvasText);
+});
