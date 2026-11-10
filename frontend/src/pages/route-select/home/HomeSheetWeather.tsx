@@ -28,7 +28,7 @@ export function HomeSheetWeather({
   now: number;
   onRefresh: () => void;
 }) {
-  const caption = areaLabel ? `${areaLabel} 날씨` : "지도 중심 날씨";
+  const caption = areaLabel ? `${areaLabel} 날씨` : "마지막 조회 위치 날씨";
   const forecast =
     weather?.hourly.filter(({ time }) => {
       const offset = Date.parse(time) - now;
@@ -69,6 +69,7 @@ export function HomeSheetWeather({
           </a>
         )}
       </div>
+      <p className={styles.weatherHint}>마지막 조회 위치 기준이에요. 새로고침하면 지도 중심 날씨를 보여드려요.</p>
       {weather ? (
         <ol {...maskedPropsFor(styles.hourly)} aria-label="시간대별 날씨 예보">
           <WeatherCell

@@ -7,6 +7,7 @@ import type { FavoriteGroup } from "@/shared/api/favorites.types";
 import { useFavorites } from "@/shared/hooks/useFavorites";
 import { MapFlowSurfaceContext, type MapFlowSurfaceState } from "@/shared/map/mapFlowSurface";
 import { Notice } from "@/shared/components/Notice";
+import { RetryButton } from "@/shared/components/RetryButton";
 import { paths } from "@/shared/routing/paths";
 import { useNavigateKeepingFocus } from "@/shared/routing/focusKeepingNavigation";
 import { routeSearchStateFor } from "@/shared/routing/routeSearchEntry";
@@ -98,7 +99,11 @@ export function RouteSelectScreen({
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const [stationTileKey, setStationTileKey] = useState("");
   const { stops: fallbackStops, routePaths } = useHomeMapData();
-  const stops = useHomeStations(showStops ? stationTileKey : "", fallbackStops);
+  const {
+    stops,
+    hasError: stationTilesFailed,
+    retry: retryStationTiles,
+  } = useHomeStations(showStops ? stationTileKey : "", fallbackStops);
   const sheetLabel = selectedStop
     ? "정류장 노선 안내"
     : isRouteMap
@@ -235,6 +240,12 @@ export function RouteSelectScreen({
             onLocate={locate}
             locating={locating}
           />
+          {!overlayOpen && mapSurface.status === "ready" && stationTilesFailed && (
+            <div className={homeStyles.stationMapError}>
+              <span role="status">주변 정류장을 모두 불러오지 못했어요.</span>
+              <RetryButton onRetry={retryStationTiles}>정류장 다시 불러오기</RetryButton>
+            </div>
+          )}
           {!overlayOpen && locationMessage && (
             <p className={homeStyles.locationMessage} role="status">
               {locationMessage}

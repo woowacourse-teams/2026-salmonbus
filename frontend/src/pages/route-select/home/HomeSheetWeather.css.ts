@@ -22,6 +22,8 @@ export const weatherHeader = style({
   gap: 8,
 });
 
+export const weatherHint = style({ margin: 0, fontSize: 11, lineHeight: 1.4, color: vars.color.textSubtle });
+
 export const weatherLocation = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0 });
 
 export const refresh = style({

@@ -75,6 +75,9 @@ signedInTest("홈에서 날씨를 갱신하고 로그인 인사를 탭바 위에
   try {
     await naverMap.panToPoint([127.154, 37.43]);
     await expect(weather.getByText("18°", { exact: true })).toBeVisible();
+    await expect(
+      weather.getByText("마지막 조회 위치 기준이에요. 새로고침하면 지도 중심 날씨를 보여드려요."),
+    ).toBeVisible();
     expect(requestedLongitudes).toEqual(["127.111"]);
     await weather.getByRole("button", { name: "지도 중심 날씨 새로고침" }).click();
     await expect(weather.locator('[aria-busy="true"]')).toBeVisible();
@@ -92,6 +95,79 @@ signedInTest("홈에서 날씨를 갱신하고 로그인 인사를 탭바 위에
   await expect(hours.nth(3).getByText("오전 12시", { exact: true })).toBeVisible();
   await expect(forecast.getByText("8°", { exact: true })).toBeVisible();
   await expect(greeting).toContainText("오늘 하루도 고생 많으셨어요.");
+});
+
+test("정류장 타일 실패를 재시도하고 생성 대기 타일은 화면 복귀 후 불러온다", async ({ page }) => {
+  let attempts = 0;
+  await page.route("**/api/v2/stations/tiles/14/*/*", (route) => {
+    const [, , zoom, x, y] = new URL(route.request().url()).pathname.split("/").slice(-5).map(Number);
+    const isPangyo = x === 13976 && y === 6354;
+    if (isPangyo && ++attempts === 1) return route.fulfill({ status: 503 });
+    return route.fulfill({
+      json: {
+        tile: { zoom, x, y },
+        coordinateSystem: "WGS84",
+        status: isPangyo && attempts === 2 ? "PENDING" : "READY",
+        stations:
+          isPangyo && attempts > 2
+            ? [{ stationId: "206000532", name: "판교역 API", point: { x: pangyoPoint[0], y: pangyoPoint[1] } }]
+            : [],
+      },
+    });
+  });
+  await page.goto("/");
+  await expect(page.getByText("주변 정류장을 모두 불러오지 못했어요.")).toBeVisible();
+  const pendingTile = page.waitForResponse(
+    (response) => response.url().endsWith("/tiles/14/13976/6354") && response.ok(),
+  );
+  await page.getByRole("button", { name: "정류장 다시 불러오기" }).click();
+  await pendingTile;
+  for (const state of ["hidden", "visible"]) {
+    await page.evaluate((visibilityState) => {
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibilityState });
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, state);
+  }
+  await expect(page.getByRole("button", { name: "판교역 API 정류장" })).toBeVisible();
+  await expect(page.getByText("주변 정류장을 모두 불러오지 못했어요.")).toHaveCount(0);
+  expect(attempts).toBe(3);
+});
+
+test("정류장 상세 조회 실패는 재시도할 수 있고 정상 빈 응답은 따로 표시한다", async ({ page }) => {
+  const stationId = "206000532";
+  await page.route("**/api/v2/stations/tiles/14/*/*", (route) => {
+    const [, , zoom, x, y] = new URL(route.request().url()).pathname.split("/").slice(-5).map(Number);
+    return route.fulfill({
+      json: {
+        tile: { zoom, x, y },
+        coordinateSystem: "WGS84",
+        status: "READY",
+        stations:
+          x === 13976 && y === 6354
+            ? [{ stationId, name: "판교역 API", point: { x: pangyoPoint[0], y: pangyoPoint[1] } }]
+            : [],
+      },
+    });
+  });
+  await page.route(`**/api/v2/stations/${stationId}`, (route) =>
+    route.fulfill({
+      json: {
+        stationId,
+        generatedAt: observedAt,
+        status: "READY",
+        refresh: { status: "IDLE", suggestedRefreshAt: observedAt },
+        routes: [],
+      },
+    }),
+  );
+  await page.route(`**/api/v2/stations/${stationId}`, (route) => route.fulfill({ status: 503 }), { times: 1 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "판교역 API 정류장" }).press("Enter");
+  const sheet = page.getByRole("region", { name: "정류장 노선 안내" });
+  await expect(sheet.getByText("정류장 버스 정보를 불러오지 못했어요.")).toBeVisible();
+  await sheet.getByRole("button", { name: "정류장 버스 정보 다시 불러오기" }).click();
+  await expect(sheet.getByText("이 정류장의 정차 노선 정보가 없어요.")).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "정류장 버스 정보 다시 불러오기" })).toHaveCount(0);
 });
 
 test("지도 SDK가 인증 실패로 초기화 상태를 지워도 탭을 이동할 수 있다", async ({ page }) => {
