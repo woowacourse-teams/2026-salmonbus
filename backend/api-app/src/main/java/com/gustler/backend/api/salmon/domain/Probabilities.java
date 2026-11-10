@@ -43,6 +43,9 @@ public final class Probabilities {
             if (!(value >= 0 && value <= 1)) {
                 throw new IllegalArgumentException("Probability must be within [0, 1]");
             }
+            if ((tag == ValueTag.COND_FAIL || tag == ValueTag.COND_MISS) && condition.isEmpty()) {
+                throw new IllegalArgumentException("Condition must be present for COND_FAIL and COND_MISS");
+            }
         }
     }
 

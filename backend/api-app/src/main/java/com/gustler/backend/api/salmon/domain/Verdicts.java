@@ -130,6 +130,22 @@ public final class Verdicts {
                           List<CandidateRecord> candidates, Optional<String> chosen, Optional<Double> delta) {
         public Verdict {
             candidates = List.copyOf(candidates);
+            boolean picked = picksCandidate(code);
+            if (chosen.isPresent() != picked || delta.isPresent() != picked) {
+                throw new IllegalArgumentException(
+                    "chosen and delta must be present exactly for GO and STAY_GAIN_BELOW_THRESHOLD");
+            }
+            if (chosen.isPresent() && candidates.stream().noneMatch(record -> record.id().equals(chosen.get()))) {
+                throw new IllegalArgumentException("chosen must be one of the candidates");
+            }
+        }
+
+        private static boolean picksCandidate(ReasonCode code) {
+            return switch (code) {
+                case GO, STAY_GAIN_BELOW_THRESHOLD -> true;
+                case ABSTAIN_STAY_UNDEFINED, STAY_SCAN_NOT_TRIGGERED, NO_MOVE_NO_CANDIDATE, NO_MOVE_INFEASIBLE,
+                     ABSTAIN_INSUFFICIENT_EVIDENCE -> false;
+            };
         }
     }
 }

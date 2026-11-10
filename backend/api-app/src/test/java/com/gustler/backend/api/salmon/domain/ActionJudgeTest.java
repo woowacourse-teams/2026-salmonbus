@@ -540,6 +540,60 @@ class ActionJudgeTest {
             Optional.empty(), Optional.empty(), List.of())).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 후보를_고른_판정에_고른_후보나_위험_차이가_비어_있으면_판정을_만들지_않는다() {
+        Verdict go = goVerdict();
+        for (ReasonCode code : List.of(ReasonCode.GO, ReasonCode.STAY_GAIN_BELOW_THRESHOLD)) {
+            assertThatThrownBy(() -> verdictLike(go, code, Optional.empty(), go.delta()))
+                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> verdictLike(go, code, go.chosen(), Optional.empty()))
+                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> verdictLike(go, code, Optional.empty(), Optional.empty()))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    void 후보를_고르지_않은_판정에_고른_후보나_위험_차이가_있으면_판정을_만들지_않는다() {
+        Verdict go = goVerdict();
+        for (ReasonCode code : List.of(ReasonCode.ABSTAIN_STAY_UNDEFINED, ReasonCode.STAY_SCAN_NOT_TRIGGERED,
+            ReasonCode.NO_MOVE_NO_CANDIDATE, ReasonCode.NO_MOVE_INFEASIBLE, ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE)) {
+            assertThatThrownBy(() -> verdictLike(go, code, go.chosen(), go.delta()))
+                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> verdictLike(go, code, go.chosen(), Optional.empty()))
+                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> verdictLike(go, code, Optional.empty(), go.delta()))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    void 고른_후보가_후보_목록에_없으면_판정을_만들지_않는다() {
+        Verdict go = goVerdict();
+
+        assertThatThrownBy(() -> verdictLike(go, ReasonCode.GO, Optional.of("walk-B"), go.delta()))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 조건부_확률에_조건_이력이_비어_있으면_입력을_만들지_않는다() {
+        for (ValueTag tag : List.of(ValueTag.COND_FAIL, ValueTag.COND_MISS)) {
+            assertThatThrownBy(() -> new ProbabilityInput("s0-11", tag, Optional.empty(), 0.10))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    private static Verdict goVerdict() {
+        ActionFixture fixture = new ActionFixture();
+        Verdict verdict = ActionJudge.judge(fixture.baseline(), config(20, 8), fixture.source(fixture.reboardCandidate()));
+        assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
+        return verdict;
+    }
+
+    private static Verdict verdictLike(Verdict base, ReasonCode code, Optional<String> chosen, Optional<Double> delta) {
+        return new Verdict(code, base.epoch(), base.partialComparison(), base.stay(), base.candidates(), chosen, delta);
+    }
+
     private static CandidateRecord recordOf(Verdict verdict, String id) {
         return verdict.candidates().stream().filter(record -> record.id().equals(id)).findFirst().orElseThrow();
     }
