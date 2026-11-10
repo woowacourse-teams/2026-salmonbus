@@ -74,6 +74,36 @@ test("선택한 즐겨찾기 그룹의 노선만 지도에 표시하고 화면�
   expect(geometryRequests).toEqual([routeId, nextRoute]);
 });
 
+test("한 방향 경로가 빠진 즐겨찾기 노선은 전체 경로까지 화면에 맞춘다", async ({ page, favorites, api }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const stop = api.data.watch.stops.find((item) => item.direction === "UP" && item.boardingAllowed)!;
+  const geometry = api.data.geometry;
+  geometry.paths!.DOWN.points = [];
+  geometry.points.push({ x: 127.6, y: 37.45 });
+  geometry.boundary!.right = 127.6;
+  favorites.groups[0]!.favorites = [];
+  favorites.groups.push({
+    id: "10000000-0000-4000-8000-000000000003",
+    name: "통학",
+    favorites: [storedFavorite({ routeId, stopId: stop.stopId, direction: "UP" })],
+  });
+
+  await page.goto("/favorites");
+  await page.getByRole("tab", { name: "통학", exact: true }).click();
+  const lines = page.getByTestId("naver-polyline");
+  await expect(lines).toHaveCount(2);
+  await page.clock.runFor(64);
+
+  const rightEdges = await lines.locator("polyline").evaluateAll((polylines: SVGGraphicsElement[]) =>
+    polylines.map((line) => {
+      const { x, width } = line.getBBox();
+      return x + width;
+    }),
+  );
+  expect(Math.max(...rightEdges)).toBeLessThan(390);
+});
+
 test("겹치는 두 정류장명은 차이를 남기고 하나를 삭제하면 끝 말줄임으로 돌아간다", async ({ page, favorites, api }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });

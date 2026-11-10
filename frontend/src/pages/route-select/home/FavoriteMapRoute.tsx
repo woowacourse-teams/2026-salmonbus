@@ -9,6 +9,7 @@ import { usePolledRequest } from "@/shared/api/usePolledRequest";
 import type { MapFlowSurface } from "@/shared/map/mapFlowSurface";
 import { createNaverRouteOverview, type RouteMapAdapter } from "../../verdict-board/map/naverMapAdapter";
 import { routeGeometryMapDataFor } from "../../verdict-board/map/routeGeometryMapData";
+import { fullPathForDisplay } from "../../verdict-board/map/routeMapGeometry";
 import type { Point } from "./homeMapData";
 
 interface FavoriteMapRouteProps extends MapFlowSurface {
@@ -43,7 +44,9 @@ export function FavoriteMapRoute({ map, maps, element, routeId, direction, onPat
   );
   const paths = useMemo(() => {
     if (data === null) return [];
-    const coordinates = data.paths.length > 0 ? data.paths.map((path) => path.coordinates) : [data.fullPath ?? []];
+    const coordinates = data.paths.map((path) => path.coordinates);
+    const fullPath = fullPathForDisplay(data);
+    if (fullPath) coordinates.push(fullPath);
     return coordinates
       .filter((path) => path.length > 1)
       .map((path) => path.map(({ longitude, latitude }): Point => [longitude, latitude]));
