@@ -60,7 +60,13 @@ public enum ErrorCode {
     NICKNAME_RESERVED(HttpStatus.BAD_REQUEST, "쓸 수 없는 닉네임입니다."),
     NICKNAME_TAKEN(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
     REAUTH_REQUIRED(HttpStatus.CONFLICT, "애플 계정으로 한 번 더 인증해야 탈퇴할 수 있습니다."),
-    INVALID_PUSH_DEVICE(HttpStatus.BAD_REQUEST, "푸시 기기 정보가 올바르지 않습니다.");
+    INVALID_PUSH_DEVICE(HttpStatus.BAD_REQUEST, "푸시 기기 정보가 올바르지 않습니다."),
+    INVALID_NOTIFICATION_SCHEDULE(HttpStatus.BAD_REQUEST, "알림 시각과 요일이 올바르지 않습니다."),
+    NOTIFICATION_TARGET_NOT_FAVORITE(
+        HttpStatus.UNPROCESSABLE_CONTENT,
+        "즐겨찾기에 없는 대상입니다."
+    ),
+    NOTIFICATION_SETTING_NOT_FOUND(HttpStatus.NOT_FOUND, "알림 설정을 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;

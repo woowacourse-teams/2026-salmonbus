@@ -23,7 +23,8 @@ class CatalogRestartTest {
             Path.of(System.getProperty("dev.data.directory"), "routes.json")));
         String catalogDigest = ReferenceBundle.sha(Files.readAllBytes(
             Path.of(System.getProperty("dev.data.directory"), "catalog-routes.json")));
-        try (var database = new PostgreSQLContainer("postgres:18-alpine")) {
+        try (var database = new PostgreSQLContainer("postgres:18-alpine").withCreateContainerCmdModifier(command ->
+            command.getHostConfig().withMemory(384L*1024*1024).withNanoCPUs(1000000000L))) {
             database.start();
             Flyway.configure().dataSource(database.getJdbcUrl(), database.getUsername(), database.getPassword())
                 .locations("classpath:db/migration").target("47").load().migrate();
@@ -62,8 +63,8 @@ class CatalogRestartTest {
                 // when
                 Flyway.configure().dataSource(database.getJdbcUrl(), database.getUsername(), database.getPassword())
                     .locations("classpath:db/migration").load().migrate();
-                LocalData.verify(connection, dataset, "unused", false, false);
-                LocalData.verify(connection, dataset, "unused", false, false);
+                LocalData.verify(connection, dataset, "unused", false);
+                LocalData.verify(connection, dataset, "unused", false);
 
                 // then
                 try (var statement = connection.createStatement()) {
@@ -87,7 +88,7 @@ class CatalogRestartTest {
                         assertThat(rows.getString(1)).isEqualTo(catalogDigest);
                     }
                     statement.executeUpdate("UPDATE route_stop SET name='changed' WHERE stop_order=1");
-                    assertThatThrownBy(() -> LocalData.verify(connection, dataset, "unused", false, false))
+                    assertThatThrownBy(() -> LocalData.verify(connection, dataset, "unused", false))
                         .hasMessage("STOP_DATA_CHANGED");
                 }
             }

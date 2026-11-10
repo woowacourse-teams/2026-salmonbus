@@ -14,6 +14,9 @@ runtime_source_inputs() {
         business/forecasting business/api-call-quota integrations/gbis-client libraries/operation-log
         libraries/route-geometry-contract libraries/route-geometry-engine)
       ;;
+    archive)
+      modules+=(archive-app)
+      ;;
     *)
       printf '소스 지문을 계산할 서버는 api 또는 worker여야 한다: %s\n' "$component" >&2
       return 64

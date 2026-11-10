@@ -12,8 +12,8 @@ public record SeatForecastResult(
 
     public static final String LEGACY_SEAT_TARGET = "FIRST_POST_STOP_OBSERVATION";
     public static final String LEGACY_PROBABILITY_TARGET = "FIRST_POST_STOP_ZERO";
-    public static final String LES_SEAT_TARGET = "AFTER_ALIGHTING_ESTIMATE";
-    public static final String LES_PROBABILITY_TARGET = "DEPARTURE_ZERO";
+    public static final String ALIGHTING_AWARE_SEAT_TARGET = "AFTER_ALIGHTING_ESTIMATE";
+    public static final String ALIGHTING_AWARE_PROBABILITY_TARGET = "DEPARTURE_ZERO";
 
     public SeatForecastResult(SeatDistribution distribution, final double fullChanceRaw) {
         this(distribution, fullChanceRaw, distribution.expectedSeats(), distribution.fullChance(),
@@ -25,9 +25,9 @@ public record SeatForecastResult(
             throw new IllegalArgumentException("좌석은 유한한 0 이상, 확률은 0~1이어야 한다");
         }
         final boolean legacy = isLegacyOutput(distribution, seatTarget, probabilityTarget);
-        final boolean les = isLesOutput(distribution, seatTarget, probabilityTarget,
+        final boolean alighting = isAlightingAwareOutput(distribution, seatTarget, probabilityTarget,
             fullChanceRaw, fullChance, expectedSeats);
-        if (!legacy && !les) {
+        if (!legacy && !alighting) {
             throw new IllegalArgumentException("지원하지 않는 예보 출력 계약이다");
         }
     }
@@ -46,7 +46,7 @@ public record SeatForecastResult(
             && LEGACY_PROBABILITY_TARGET.equals(probabilityTarget) && distribution != null;
     }
 
-    private static boolean isLesOutput(
+    private static boolean isAlightingAwareOutput(
         SeatDistribution distribution,
         String seatTarget,
         String probabilityTarget,
@@ -54,13 +54,13 @@ public record SeatForecastResult(
         final double fullChance,
         final double expectedSeats
     ) {
-        return LES_SEAT_TARGET.equals(seatTarget)
-            && LES_PROBABILITY_TARGET.equals(probabilityTarget) && distribution == null
+        return ALIGHTING_AWARE_SEAT_TARGET.equals(seatTarget)
+            && ALIGHTING_AWARE_PROBABILITY_TARGET.equals(probabilityTarget) && distribution == null
             && fullChanceRaw == fullChance && expectedSeats <= 70;
     }
 
-    public static SeatForecastResult les(final double afterAlightingSeats, final double departureFullProbability) {
+    public static SeatForecastResult alighting(final double afterAlightingSeats, final double departureFullProbability) {
         return new SeatForecastResult(null, departureFullProbability, afterAlightingSeats,
-            departureFullProbability, LES_SEAT_TARGET, LES_PROBABILITY_TARGET);
+            departureFullProbability, ALIGHTING_AWARE_SEAT_TARGET, ALIGHTING_AWARE_PROBABILITY_TARGET);
     }
 }

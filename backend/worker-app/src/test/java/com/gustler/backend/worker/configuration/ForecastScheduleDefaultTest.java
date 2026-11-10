@@ -3,10 +3,8 @@ package com.gustler.backend.worker.configuration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
-import com.gustler.backend.forecasting.api.statistics.DemandStatisticsPolicy;
 import com.gustler.backend.support.IntegrationTest;
 import com.gustler.backend.worker.scheduling.ArrivalLabelJob;
-import java.time.Duration;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,17 +33,13 @@ class ForecastScheduleDefaultTest {
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             softly.assertThat(applicationContext.getBeanNamesForType(ForecastProperties.class)).isEmpty();
-            softly.assertThat(applicationContext.getBeanNamesForType(SameDayInitializationProperties.class)).isEmpty();
             softly.assertThat(applicationContext.getBeanNamesForType(ForecastPolicy.class)).isEmpty();
         }
     }
 
     @Test
-    void 예보를_꺼도_통계_주기는_읽는다() {
-        // when
-        DemandStatisticsPolicy actual = applicationContext.getBean(DemandStatisticsPolicy.class);
-
-        // then
-        assertThat(actual.refreshInterval()).isEqualTo(Duration.ofHours(6));
+    void 폐기한_통계와_당일_보정_스케줄은_등록하지_않는다() {
+        assertThat(applicationContext.containsBean("stopDemandPipelineJob")).isFalse();
+        assertThat(applicationContext.containsBean("sameDayOutcomesInitializationJob")).isFalse();
     }
 }

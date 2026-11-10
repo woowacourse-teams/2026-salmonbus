@@ -148,9 +148,8 @@ class JdbcBoardSnapshotReaderIntegrationTest {
         OffsetDateTime now = now();
         fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0);
         fixture.insertModel("active", "ACTIVE", now.minusDays(1));
-        jdbc.sql("DELETE FROM route_data_quality WHERE route_id=?").param(route.routeId()).update();
         BoardSnapshot snapshot = same(route);
-        assertThat(snapshot.revision()).isEqualTo("q-|p-|g-|n-|m-|d-|r-");
+        assertThat(snapshot.revision()).isEqualTo("p-|g-|n-|m-|d-|r-");
         assertThat(snapshot.activeModel()).isPresent();
     }
 

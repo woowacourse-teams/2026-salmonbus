@@ -409,7 +409,7 @@ class RuntimeProcessSeparationTest {
             WHERE trigger_schema = 'public' AND trigger_name = 'runtime_test_write_audit'
             """)).contains("observation_batch", "forecast_publication", "forecast_evaluation_work",
             "forecast_evaluation_result", "route",
-            "route_data_quality", "trip_quality_rebuild", "daily_call_quota", "model_deployment");
+            "daily_call_quota", "model_deployment");
         assertNoWrites();
     }
 

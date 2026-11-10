@@ -161,8 +161,10 @@ class KakaoLoginFlowTest {
             softly.assertThat(refresh).contains("HttpOnly", "Secure", "SameSite=Lax", "Path=/;");
             softly.assertThat(CookieHeaders.maxAgeOf(refresh))
                 .isBetween(THIRTY_DAYS_SECONDS - 10L, (long) THIRTY_DAYS_SECONDS);
-            softly.assertThat(claims.propertyNames()).containsExactlyInAnyOrder("iss", "sub", "iat", "exp");
+            softly.assertThat(claims.propertyNames()).containsExactlyInAnyOrder("iss", "sub", "sid", "iat", "exp");
             softly.assertThat(claims.path("sub").asString()).isEqualTo(publicId);
+            softly.assertThat(claims.path("sid").asString()).isEqualTo(
+                jdbcClient.sql("SELECT family_id::text FROM refresh_token").query(String.class).single());
             softly.assertThat(longOf("SELECT count(*) FROM refresh_token")).isEqualTo(1);
             softly.assertThat(longOf("SELECT generation FROM refresh_token"))
                 .as("테이블에는 토큰 값이 없고 계통의 세대만 있다").isZero();

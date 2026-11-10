@@ -13,22 +13,18 @@ final class ForecastEvaluationTestData {
 
     static void saveForecasts(JdbcClient jdbc, List<SeatForecast> forecasts) {
         for (SeatForecast forecast : forecasts) {
-            jdbc.sql("""
-                INSERT INTO route_data_quality(route_id)
-                SELECT route_id FROM route_version WHERE id = :version
-                ON CONFLICT DO NOTHING
-                """).param("version", forecast.routeVersionId()).update();
+
             final long publicationId = jdbc.sql("""
                 INSERT INTO forecast_publication(source_batch_id, route_version_id,
                     model_deployment_id, demand_statistics_revision, quality_revision,
                     observed_at, generated_at, published_at, prediction_count)
                 SELECT batch.id, batch.route_version_id,
-                    :model, :revision, quality.quality_revision,
+                    :model, :revision, route_state.data_revision,
                     batch.response_received_at, :generatedAt, :generatedAt, 0
                 FROM vehicle_observation observation
                 JOIN observation_batch batch ON batch.id = observation.observation_batch_id
                 JOIN route_version version ON version.id = batch.route_version_id
-                JOIN route_data_quality quality ON quality.route_id = version.route_id
+                JOIN route route_state ON route_state.id = version.route_id
                 WHERE observation.id = :observation
                 ON CONFLICT(source_batch_id) DO UPDATE SET source_batch_id = EXCLUDED.source_batch_id
                 RETURNING id

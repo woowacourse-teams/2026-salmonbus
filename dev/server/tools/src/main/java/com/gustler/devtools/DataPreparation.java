@@ -9,13 +9,36 @@ import java.util.Map;
 import java.util.TreeMap;
 
 final class DataPreparation {
-    static final List<String> FILES =
-            List.of(
-                    "routes.json",
-                    "catalog-routes.json",
-                    "model-reference/manifest.json",
-                    "model-reference/weights.safetensors",
-                    "model-reference/route-reference.json");
+    static final List<String> FILES = List.of(
+        "routes.json",
+        "catalog-routes.json",
+        "model-reference/base.json",
+        "model-reference/boundaries.json",
+        "model-reference/constants.json",
+        "model-reference/evidence-feature_parity.json",
+        "model-reference/evidence-historical_replay.json",
+        "model-reference/evidence-runtime_validation.json",
+        "model-reference/evidence-settlement.json",
+        "model-reference/feature-contract.json",
+        "model-reference/gate.json",
+        "model-reference/golden.json",
+        "model-reference/manifest.json",
+        "model-reference/pool.json",
+        "model-reference/route-reference.json",
+        "model-reference/statistics-1650.json",
+        "model-reference/statistics-3000.json",
+        "model-reference/statistics-3330.json",
+        "model-reference/statistics-3500.json",
+        "model-reference/statistics-5600.json",
+        "model-reference/statistics-6011.json",
+        "model-reference/statistics-9007.json",
+        "model-reference/statistics-9300.json",
+        "model-reference/statistics-manifest.json",
+        "model-reference/verification-feature_parity.json",
+        "model-reference/verification-historical_replay.json",
+        "model-reference/verification-runtime_validation.json",
+        "model-reference/verification-settlement.json",
+        "model-reference/verification-source-manifest.json");
     private final Layout layout;
     private final Host host;
 
@@ -144,7 +167,7 @@ final class DataPreparation {
                                     "-jar",
                                     jar.toString(),
                                     layout.data().resolve("data/routes.json").toString(),
-                                    models.resolve("reference-20261002").toString(),
+                                    models.resolve("alighting-dev-v1").toString(),
                                     "--shared-dev"));
             Checks.require(result.exit() == 0, "DEV_DATA_PREPARATION_FAILED");
             var value = Json.read(result.stdout().getBytes());

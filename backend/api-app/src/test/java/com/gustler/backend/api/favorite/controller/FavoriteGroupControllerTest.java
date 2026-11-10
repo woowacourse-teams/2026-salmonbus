@@ -60,7 +60,7 @@ class FavoriteGroupControllerTest {
     void 회원을_만든다() {
         jdbc.sql("DELETE FROM member").update();
         memberId = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "favorite-member")).publicId();
-        bearer = "Bearer " + accessTokens.issue(memberId);
+        bearer = "Bearer " + accessTokens.issue(memberId, null);
     }
 
     @Test

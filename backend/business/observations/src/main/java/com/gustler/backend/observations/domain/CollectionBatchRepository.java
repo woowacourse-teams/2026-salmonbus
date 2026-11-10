@@ -25,6 +25,12 @@ public interface CollectionBatchRepository {
      */
     long save(CollectionBatch batch);
 
+    /** 응답·관측·발행이 없는 미완료 배치만 종료한다. 이미 끝난 배치는 변경하지 않는다. */
+    int closeUnfinished(long batchId);
+
+    /** 회차 사이에 남은 미완료를 잠근다. 다른 작업이 잠근 배치는 기다리지 않는다. */
+    List<Long> lockUnfinished(int limit);
+
     /**
      * 지정 수집 묶음의 기존 관측을 제거한다. 재수신 결과를 저장하는 호출자의 트랜잭션에 참여한다.
      */

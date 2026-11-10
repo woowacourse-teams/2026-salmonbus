@@ -86,6 +86,18 @@ public final class AuthApiDocsExamples {
         {"code":"INVALID_PUSH_DEVICE","message":"푸시 기기 정보가 올바르지 않습니다.","requestId":"example-request"}
         """;
 
+    public static final String INVALID_NOTIFICATION_SCHEDULE = """
+        {"code":"INVALID_NOTIFICATION_SCHEDULE","message":"알림 시각과 요일이 올바르지 않습니다.",        "requestId":"example-request"}
+        """;
+
+    public static final String NOTIFICATION_TARGET_NOT_FAVORITE = """
+        {"code":"NOTIFICATION_TARGET_NOT_FAVORITE","message":"즐겨찾기에 없는 대상입니다.",        "requestId":"example-request"}
+        """;
+
+    public static final String NOTIFICATION_SETTING_NOT_FOUND = """
+        {"code":"NOTIFICATION_SETTING_NOT_FOUND","message":"알림 설정을 찾을 수 없습니다.",        "requestId":"example-request"}
+        """;
+
     private AuthApiDocsExamples() {
     }
 }

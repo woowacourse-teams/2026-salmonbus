@@ -2,8 +2,6 @@ package com.gustler.backend.worker.configuration;
 
 import com.gustler.backend.config.ClockConfig;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
-import com.gustler.backend.forecasting.api.evaluation.SameDayInitializationPolicy;
-import com.gustler.backend.forecasting.api.statistics.DemandStatisticsPolicy;
 import com.gustler.backend.forecasting.configuration.ForecastingConfiguration;
 import com.gustler.backend.observations.configuration.ObservationPersistenceConfiguration;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,11 +22,6 @@ import org.springframework.core.env.StandardEnvironment;
 @Import({ClockConfig.class, ObservationPersistenceConfiguration.class, ForecastingConfiguration.class})
 public class BusinessConfiguration {
     private static final String STALENESS = "forecast.staleness";
-
-    @Bean
-    DemandStatisticsPolicy demandStatisticsPolicy(@Value("${forecast.statistics-interval:6h}") String interval) {
-        return new DemandStatisticsPolicy(DurationStyle.detectAndParse(interval));
-    }
 
     /**
      * 신선도 창을 환경변수로 바꾸지 못하게 막는다.
@@ -51,7 +44,7 @@ public class BusinessConfiguration {
 
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
-    @EnableConfigurationProperties({ForecastProperties.class, SameDayInitializationProperties.class})
+    @EnableConfigurationProperties(ForecastProperties.class)
     static class ForecastPolicies {
         @Bean
         ForecastPolicy forecastPolicy(
@@ -63,10 +56,5 @@ public class BusinessConfiguration {
                 properties.arrivalLimit());
         }
 
-        @Bean
-        SameDayInitializationPolicy sameDayInitializationPolicy(SameDayInitializationProperties properties) {
-            return new SameDayInitializationPolicy(properties.retryInterval(), properties.statementTimeout(),
-                properties.lockTimeout());
-        }
     }
 }

@@ -2,15 +2,10 @@ package com.gustler.backend.worker.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.worker.scheduling.EvaluationArchiveJob;
-import com.gustler.backend.worker.scheduling.StopDemandPipelineJob;
-import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 class WorkerSchedulingConfigTest {
@@ -59,21 +54,6 @@ class WorkerSchedulingConfigTest {
             calibration.shutdown();
             collection.shutdown();
             processing.shutdown();
-        }
-    }
-
-    @Test
-    void 통계와_이관_스케줄은_같은_전용_실행기를_지정한다() throws Exception {
-        // given
-        Method statistics = StopDemandPipelineJob.class.getMethod("advance");
-        Method archive = EvaluationArchiveJob.class.getMethod("advance");
-
-        // then
-        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
-            softly.assertThat(statistics.getAnnotation(Scheduled.class).scheduler())
-                .isEqualTo("calibrationTaskScheduler");
-            softly.assertThat(archive.getAnnotation(Scheduled.class).scheduler())
-                .isEqualTo("calibrationTaskScheduler");
         }
     }
 

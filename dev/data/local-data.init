@@ -10,7 +10,7 @@ gradle.projectsEvaluated {
         dependsOn worker.tasks.named('localDataClasses')
         classpath = worker.sourceSets.localData.runtimeClasspath
         mainClass = 'com.gustler.localdata.LocalData'
-        args '/local/data/routes.json', '/local/models/reference-20261002'
+        args '/local/data/routes.json', '/local/models/alighting-dev-v1'
         if (worker.findProperty('recoverCollectorOnly') == 'true') {
             args '--recover-collector-only'
         }
@@ -25,7 +25,7 @@ gradle.projectsEvaluated {
         dependsOn worker.tasks.named('localDataClasses')
         classpath = worker.sourceSets.localData.runtimeClasspath
         mainClass = 'com.gustler.localdata.LocalData'
-        args '/local/data/routes.json', '/local/models/reference-20261002', '--reset-generated'
+        args '/local/data/routes.json', '/local/models/alighting-dev-v1', '--reset-generated'
     }
     worker.tasks.register('verifyReferenceModel', JavaExec) {
         dependsOn worker.tasks.named('localDataClasses')

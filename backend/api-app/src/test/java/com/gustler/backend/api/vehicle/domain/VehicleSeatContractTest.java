@@ -14,7 +14,7 @@ class VehicleSeatContractTest {
 
         // when
         assertThat(stored).allSatisfy(reason -> {
-            VehicleSeat seat = VehicleSeat.from(null, reason, true);
+            VehicleSeat seat = VehicleSeat.from(null, reason);
 
             // then
             assertThat(seat).hasToString(reason);

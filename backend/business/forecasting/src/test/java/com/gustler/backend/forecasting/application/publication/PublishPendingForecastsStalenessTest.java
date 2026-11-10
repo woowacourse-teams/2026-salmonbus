@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.application.publication;
 
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -25,7 +26,7 @@ import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
-import com.gustler.backend.forecasting.domain.publication.VehicleTrajectoryQuery;
+import com.gustler.backend.forecasting.domain.publication.PendingForecastBatchQuery;
 import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import java.time.Clock;
 import java.time.Duration;
@@ -56,7 +57,7 @@ class PublishPendingForecastsStalenessTest {
     private static final Instant LEFT_BEHIND_AT = NOW.minus(STALENESS).minusSeconds(1);
 
     @Mock
-    private VehicleTrajectoryQuery vehicleTrajectoryQuery;
+    private PendingForecastBatchQuery vehicleTrajectoryQuery;
 
     @Mock
 
@@ -73,7 +74,7 @@ class PublishPendingForecastsStalenessTest {
     private final RuntimeSnapshot runtime = new RuntimeSnapshot(
         new ActiveModelDeployment(1L, "feature-v1", "release-1", "0".repeat(64)),
         new SupportedForecastScope(List.of("1650", "3330")),
-        input -> null,
+        supportedModel(),
         NOW);
 
     @Captor
@@ -376,5 +377,10 @@ class PublishPendingForecastsStalenessTest {
             return "234000050";
         }
         return "204000057";
+    }
+    private static AlightingAwareSeatForecastModel supportedModel() {
+        var model = org.mockito.Mockito.mock(AlightingAwareSeatForecastModel.class);
+        org.mockito.Mockito.lenient().when(model.supportsRoute(org.mockito.ArgumentMatchers.any())).thenReturn(true);
+        return model;
     }
 }

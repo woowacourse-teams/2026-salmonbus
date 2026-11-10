@@ -7,12 +7,13 @@ RUN apt-get update \
     && useradd --create-home --uid 10001 developer
 WORKDIR /workspace/backend
 RUN chown developer:developer /workspace/backend \
-    && mkdir -p /local/models && chown developer:developer /local/models
+    && mkdir -p /local/models/alighting-history && chown -R developer:developer /local/models
 ENV GRADLE_USER_HOME=/home/developer/.gradle
 COPY --chown=developer:developer backend/gradlew backend/build.gradle backend/settings.gradle ./
 COPY --chown=developer:developer backend/gradle/ ./gradle/
 COPY --chown=developer:developer backend/api-app/build.gradle ./api-app/build.gradle
 COPY --chown=developer:developer backend/worker-app/build.gradle ./worker-app/build.gradle
+COPY --chown=developer:developer backend/archive-app/build.gradle ./archive-app/build.gradle
 COPY --chown=developer:developer backend/maintenance-app/build.gradle ./maintenance-app/build.gradle
 COPY --chown=developer:developer backend/common/build.gradle ./common/build.gradle
 COPY --chown=developer:developer backend/business/route-catalog/build.gradle ./business/route-catalog/build.gradle

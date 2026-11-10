@@ -15,7 +15,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>A 에서 B 로 전환할 때와 B 에서 A 로 되돌릴 때 모두 같은 위치를 쓴다. 되돌릴 때는 해당 위치의 파일을
  * 이전 파일로 바꾸고 같은 스위치를 켠다. <b>되돌리기도 다시 적재하는 방식이다.</b>
  *
- * @param directory {@code manifest.json} 과 {@code weights.safetensors} 가 든 디렉터리
+ * @param directory {@code manifest.json}과 그 파일이 참조하는 numeric 모델·통계·검증 파일이 든 디렉터리
  * @param promoteOnStart 활성 배포와 식별 정보가 달라도 기동할 때 적재할지. 켠 채로 두면 재기동마다 적재한다
  */
 @ConfigurationProperties("model.bundle")

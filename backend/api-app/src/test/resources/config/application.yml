@@ -29,3 +29,11 @@ auth:
 analytics:
   amplitude:
     enabled: false
+
+push:
+  delivery:
+    cron: "-"
+    purge-cron: "-"
+  apns:
+    production-uri: http://127.0.0.1:9
+    sandbox-uri: http://127.0.0.1:9

@@ -375,7 +375,7 @@ public final class ApiDocsExamples {
               "phase": "ARRIVING",
               "seat": {
                 "kind": "UNKNOWN",
-                "reason": "QUALITY_WITHHELD"
+                "reason": "REPORTED_UNKNOWN"
               }
             }
           ]
@@ -413,7 +413,7 @@ public final class ApiDocsExamples {
               "phase": "ARRIVING",
               "seat": {
                 "kind": "UNKNOWN",
-                "reason": "QUALITY_WITHHELD"
+                "reason": "REPORTED_UNKNOWN"
               }
             }
           ]

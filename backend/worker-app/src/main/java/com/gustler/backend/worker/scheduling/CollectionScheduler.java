@@ -1,8 +1,13 @@
 package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
+import com.gustler.backend.observations.api.CloseUnfinishedCollections;
 import com.gustler.backend.observations.api.CollectObservations;
 import com.gustler.backend.worker.configuration.CollectionProperties;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 설정에 적힌 노선을 한 차례 수집한다.
@@ -11,20 +16,45 @@ import com.gustler.backend.worker.configuration.CollectionProperties;
  * 해당 수집을 통째로 건너뛰면 누락 범위가 두 배가 된다.
  */
 public class CollectionScheduler {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CollectionScheduler.class);
     private final CollectionProperties properties;
     private final CollectObservations collector;
+    private final CloseUnfinishedCollections unfinished;
 
     public CollectionScheduler(
         CollectionProperties properties,
-        CollectObservations collector
+        CollectObservations collector,
+        CloseUnfinishedCollections unfinished
     ) {
         this.properties = properties;
         this.collector = collector;
+        this.unfinished = unfinished;
     }
 
     public void collectAllRoutes() {
-        for (String routeId : properties.routeIds()) {
-            collectSafely(routeId);
+        if (properties.routeIds().isEmpty()) {
+            return;
+        }
+        closePreviousRound();
+        properties.routeIds().forEach(this::collectSafely);
+    }
+
+    /** 같은 단일 수집 스레드에서, 새 회차가 시작되기 전에만 이전 기록을 정리한다. */
+    private void closePreviousRound() {
+        try {
+            WorkerOperationLog.run("collection_recovery", "all", () -> {
+                List<Long> closed = unfinished.closePreviousRound();
+                if (closed.isEmpty()) {
+                    return;
+                }
+                // 독립 트랜잭션의 커밋이 끝난 뒤에만 종료를 기록한다.
+                WorkerOperationLog.collectionRecovered(closed.size());
+                LOGGER.warn("event=collection_batch_recovery status=CLOSED count={} batchIds={}", closed.size(),
+                    closed.stream().map(String::valueOf).collect(Collectors.joining(",")));
+            });
+        } catch (RuntimeException recordedFailure) {
+            // 정리 실패는 이미 계측했다. 정상 수집을 시도할 기회까지 없애지 않는다.
+            return;
         }
     }
 

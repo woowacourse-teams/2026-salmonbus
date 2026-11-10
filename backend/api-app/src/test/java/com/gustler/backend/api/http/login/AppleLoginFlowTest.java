@@ -179,8 +179,10 @@ class AppleLoginFlowTest {
             softly.assertThat(sessionCount()).isZero();
             softly.assertThat(access).contains("HttpOnly", "Secure", "SameSite=Lax");
             softly.assertThat(refresh).contains("HttpOnly", "Secure", "SameSite=Lax", "Path=/;");
-            softly.assertThat(claims.propertyNames()).containsExactlyInAnyOrder("iss", "sub", "iat", "exp");
+            softly.assertThat(claims.propertyNames()).containsExactlyInAnyOrder("iss", "sub", "sid", "iat", "exp");
             softly.assertThat(claims.path("sub").asString()).isEqualTo(publicId);
+            softly.assertThat(claims.path("sid").asString()).isEqualTo(
+                jdbcClient.sql("SELECT family_id::text FROM refresh_token").query(String.class).single());
         });
     }
 
