@@ -278,10 +278,13 @@ test("빈 그룹 전환과 마지막 즐겨찾기 삭제를 반영한다", async
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   const empty = editor.getByText("아직 등록한 정류장이 없어요", { exact: true }).locator("..");
+  const schoolGroup = editor.getByRole("button", { name: "통학", exact: true });
+  await expect(schoolGroup).toHaveAttribute("aria-pressed", "true");
+  await editor.getByRole("button", { name: "즐겨찾기", exact: true }).click();
   await expect(empty).toBeVisible();
   await expect(empty.getByText("0 / 2", { exact: true })).toBeVisible();
   await expect(editor.getByRole("list", { name: "즐겨찾기 순서", exact: true })).toHaveCount(0);
-  await editor.getByRole("button", { name: "통학", exact: true }).click();
+  await schoolGroup.click();
   await expect(empty).toHaveCount(0);
   await editor.getByRole("button", { name: `${stop.name} 삭제`, exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "삭제하기", exact: true }).click();
