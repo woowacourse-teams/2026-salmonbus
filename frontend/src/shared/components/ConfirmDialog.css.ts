@@ -13,7 +13,14 @@ export const dialog = style({
   selectors: { "&::backdrop": { background: "#0006" } },
 });
 
-export const dialogTitle = style({ fontSize: 18, margin: "0 0 12px", selectors: { "&:focus": { outline: "none" } } });
+export const dialogTitle = style({
+  fontSize: 18,
+  margin: "0 0 12px",
+  selectors: {
+    "&:focus-visible": { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 4 },
+    [`${POINTER_INPUT} &:focus`]: { outline: "none" },
+  },
+});
 
 globalStyle(`${dialog} button:focus-visible`, { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 4 });
 globalStyle(`${POINTER_INPUT} ${dialog} button:focus`, { outline: "none" });

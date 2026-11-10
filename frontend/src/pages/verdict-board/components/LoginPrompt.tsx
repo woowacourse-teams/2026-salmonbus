@@ -1,7 +1,7 @@
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { LoginButton } from "@/shared/components/LoginButton";
-import { useAuth } from "@/shared/hooks/useAuth";
+import { useAuth, type AuthState } from "@/shared/hooks/useAuth";
 import * as buttons from "@/shared/styles/button.css";
 import * as formStyles from "@/shared/styles/form.css";
 import { favoritePath } from "@/shared/routing/paths";
@@ -15,9 +15,10 @@ interface LoginPromptProps {
 
 export function LoginPrompt({ target, onClose }: LoginPromptProps) {
   const { state, reload } = useAuth();
+  const copy = loginPromptCopyOf(state.status);
   return (
     <ConfirmDialog
-      title={"로그인하면 즐겨찾기를\n등록할 수 있어요"}
+      title={copy.title}
       className={promptStyles.dialog}
       titleClassName={promptStyles.title}
       onCancel={onClose}
@@ -25,28 +26,58 @@ export function LoginPrompt({ target, onClose }: LoginPromptProps) {
       <button className={promptStyles.close} type="button" aria-label="닫기" onClick={onClose}>
         <img src={closeIcon} width="17" height="17" alt="" draggable={false} />
       </button>
-      <p className={promptStyles.description}>
-        로그인을 하면 자주 타는 노선과 정류장을
-        <br />내 그룹에 모아 볼 수 있어요.
+      <p className={promptStyles.description} role={copy.role}>
+        {copy.description[0]}
+        <br />
+        {copy.description[1]}
       </p>
       {state.status === "anonymous" ? (
         <LoginButton returnTo={favoritePath(target)} className={promptStyles.login} />
       ) : (
         <>
-          <p className={formStyles.subtle} role="status">
-            {state.status === "loading"
-              ? "로그인 상태를 확인하고 있어요…"
-              : state.status === "unavailable"
-                ? "로그인 기능을 준비 중이에요."
-                : "로그인 상태를 확인하지 못했어요."}
-          </p>
+          {state.status === "unavailable" && (
+            <p className={formStyles.subtle} role="status">
+              로그인 기능을 준비 중이에요.
+            </p>
+          )}
           {state.status === "error" && (
-            <button className={buttons.secondary} onClick={() => void reload()}>
-              다시 확인하기
+            <button className={buttons.primary} onClick={() => void reload()}>
+              다시 시도하기
             </button>
           )}
         </>
       )}
     </ConfirmDialog>
   );
+}
+
+interface LoginPromptCopy {
+  title: string;
+  description: readonly [string, string];
+  role: "alert" | "status" | undefined;
+}
+
+function loginPromptCopyOf(status: AuthState["status"]): LoginPromptCopy {
+  switch (status) {
+    case "loading":
+      return {
+        title: "로그인 상태를\n확인하고 있어요",
+        description: ["즐겨찾기를 저장하기 전에", "현재 로그인 여부를 확인해야 해요."],
+        role: "status",
+      };
+    case "error":
+      return {
+        title: "로그인 상태를\n확인하지 못했어요.",
+        description: ["즐겨찾기를 저장하기 전에", "현재 로그인 여부를 확인해야 해요."],
+        role: "alert",
+      };
+    case "anonymous":
+    case "authenticated":
+    case "unavailable":
+      return {
+        title: "로그인하면 즐겨찾기를\n등록할 수 있어요",
+        description: ["로그인을 하면 자주 타는 노선과 정류장을", "내 그룹에 모아 볼 수 있어요."],
+        role: undefined,
+      };
+  }
 }

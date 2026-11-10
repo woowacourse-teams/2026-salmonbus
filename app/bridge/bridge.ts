@@ -1,5 +1,6 @@
 // 웹의 frontend/src/shared/bridge/bridge.ts와 같은 형식을 쓴다. 한쪽을 바꾸면 다른 쪽과 테스트도 같이 바꾼다.
 export const BRIDGE_EVENT = 'salmon:bridge';
+export const DOCUMENT_STARTED = 'app.documentStarted';
 const MESSAGE_TYPE = /^[a-z][a-zA-Z]{0,31}\.[a-z][a-zA-Z]{0,31}$/;
 const MAX_MESSAGE_LENGTH = 4_000_000;
 
@@ -22,14 +23,25 @@ function scriptLiteralFrom(value: unknown): string {
   return JSON.stringify(value).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 
-/** 웹 코드보다 먼저 실행해서 window.__SALMONBUS_APP__에 앱 정보를 넣는 스크립트. */
+/**
+ * 웹 코드보다 먼저 실행해서 window.__SALMONBUS_APP__에 앱 정보를 넣고, 앱에 새 문서가 시작됐다고 알리는 스크립트.
+ * 새 문서를 읽기 시작해도 응답이 올 때까지는 이전 문서가 살아서 메시지를 보낸다. 앱은 이 알림으로 두 문서의 메시지를 가른다.
+ */
 export function appBootstrapScriptFor(app: AppHost): string {
   const value = scriptLiteralFrom(JSON.stringify({ appVersion: app.appVersion, capabilities: app.capabilities }));
+  const started = scriptLiteralFrom(JSON.stringify({ v: 1, type: DOCUMENT_STARTED, payload: {} }));
   return `
     (function () {
       var app = JSON.parse(${value});
       Object.freeze(app.capabilities);
       Object.defineProperty(window, '__SALMONBUS_APP__', { configurable: true, value: Object.freeze(app) });
+      var announceStart = function () {
+        if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(${started});
+      };
+      announceStart();
+      window.addEventListener('pageshow', function (event) {
+        if (event.persisted) announceStart();
+      });
     })();
     true;
   `;

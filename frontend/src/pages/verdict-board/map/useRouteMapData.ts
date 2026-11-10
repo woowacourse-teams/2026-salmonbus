@@ -8,7 +8,7 @@ import type { RouteMapData } from "./routeMapModel";
 const RETRY_DELAY_MS = 60_000;
 
 type RouteMapResource =
-  | { status: "loading" | "error" | "conflict"; data: null }
+  | { status: "loading" | "retrying" | "error" | "conflict"; data: null }
   | { status: "preparing" | "generating" | "withheld"; data: RouteMapData | null }
   | { status: "ready"; data: RouteMapData };
 
@@ -18,9 +18,14 @@ interface LoadedMapData {
   identity: string;
   revision: string | null;
   resource: RouteMapResource;
+  retrying: boolean;
 }
 
-export function useRouteMapData(board: Board, visible: boolean, onConflict: () => void): RouteMapResource {
+export function useRouteMapData(
+  board: Board,
+  visible: boolean,
+  onConflict: () => void,
+): RouteMapResource & Pick<LoadedMapData, "retrying"> {
   const { id: routeId, referenceVersionId } = board.route;
   const identity = JSON.stringify([routeId, referenceVersionId]);
   const [loaded, setLoaded] = useState<LoadedMapData | null>(null);
@@ -60,18 +65,25 @@ export function useRouteMapData(board: Board, visible: boolean, onConflict: () =
           failure.error.code === "REFERENCE_VERSION_CONFLICT"
         ) {
           conflicted = true;
-          setLoaded({ identity, revision: null, resource: { status: "conflict", data: null } });
+          setLoaded({ identity, revision: null, resource: { status: "conflict", data: null }, retrying: false });
           reportConflict();
         } else if (!hasReadyMap(identity)) {
           const decision = nextPollFrom(result);
           if (failure.kind !== "malformed" && decision.kind === "again") {
             schedule(Math.max(RETRY_DELAY_MS, decision.delayMs));
-          } else {
             setLoaded((previous) =>
               previous?.identity === identity &&
-              (previous.resource.status === "ready" || previous.resource.status === "withheld")
-                ? previous
-                : { identity, revision: null, resource: { status: "error", data: null } },
+              (previous.resource.status === "withheld" || previous.resource.data !== null)
+                ? { identity, revision: previous.revision, resource: previous.resource, retrying: true }
+                : { identity, revision: null, resource: { status: "retrying", data: null }, retrying: true },
+            );
+          } else {
+            // 자동 재시도를 멈춰도 이전에 검증된 지도 데이터는 계속 사용할 수 있다.
+            setLoaded((previous) =>
+              previous?.identity === identity &&
+              (previous.resource.status === "withheld" || previous.resource.data !== null)
+                ? { identity, revision: previous.revision, resource: previous.resource, retrying: false }
+                : { identity, revision: null, resource: { status: "error", data: null }, retrying: false },
             );
           }
         }
@@ -95,8 +107,8 @@ export function useRouteMapData(board: Board, visible: boolean, onConflict: () =
         previous?.identity === identity &&
         previous.revision === revision &&
         previous.resource.status === resource.status
-          ? previous
-          : { identity, revision, resource },
+          ? { identity, revision, resource: previous.resource, retrying: false }
+          : { identity, revision, resource, retrying: false },
       );
       if (preparing) schedule();
     }
@@ -117,5 +129,7 @@ export function useRouteMapData(board: Board, visible: boolean, onConflict: () =
     };
   }, [identity, routeId, referenceVersionId, visible]);
 
-  return loaded?.identity === identity ? loaded.resource : { status: "loading", data: null };
+  return loaded?.identity === identity
+    ? { ...loaded.resource, retrying: loaded.retrying }
+    : { status: "loading", data: null, retrying: false };
 }
