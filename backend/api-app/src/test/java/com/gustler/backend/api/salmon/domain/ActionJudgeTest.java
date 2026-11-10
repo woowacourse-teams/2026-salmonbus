@@ -34,7 +34,7 @@ class ActionJudgeTest {
             fixture.source(fixture.walkB(), fixture.walkF(), fixture.reboardCandidate()));
 
         assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
-        assertThat(verdict.chosen()).contains("reboard");
+        assertThat(verdict.bestCandidate()).contains("reboard");
         assertThat(verdict.delta().orElseThrow()).isCloseTo(0.347, within(TOLERANCE));
         assertThat(verdict.partialComparison()).isFalse();
         Evaluable stay = (Evaluable) verdict.stay().evaluation();
@@ -134,7 +134,7 @@ class ActionJudgeTest {
 
         assertThat(recordOf(verdict, "reboard").admissibility()).isEqualTo(Admissibility.ALLOWED);
         assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
-        assertThat(verdict.chosen()).contains("reboard");
+        assertThat(verdict.bestCandidate()).contains("reboard");
     }
 
     @Test
@@ -156,7 +156,7 @@ class ActionJudgeTest {
             fixture.source(walkB, fixture.reboardCandidate()));
 
         assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
-        assertThat(verdict.chosen()).contains("reboard");
+        assertThat(verdict.bestCandidate()).contains("reboard");
     }
 
     @Test
@@ -177,7 +177,7 @@ class ActionJudgeTest {
         assertThat(riskOf(recordOf(verdict, "walk-B").outcome())).isCloseTo(0.65, within(TOLERANCE));
         assertThat(riskOf(recordOf(verdict, "walk-F").outcome())).isCloseTo(0.97, within(TOLERANCE));
         assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
-        assertThat(verdict.chosen()).contains("walk-B");
+        assertThat(verdict.bestCandidate()).contains("walk-B");
         assertThat(verdict.delta().orElseThrow()).isCloseTo(0.205, within(TOLERANCE));
     }
 
@@ -503,7 +503,7 @@ class ActionJudgeTest {
         WalkCandidate first = new WalkCandidate("walk-a", observed(1), queried(entry("a-9", 9)), Optional.of(0.0));
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(15, 8), fixture.source(second, first));
 
-        assertThat(verdict.chosen()).contains("walk-a");
+        assertThat(verdict.bestCandidate()).contains("walk-a");
         assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
     }
 
@@ -517,7 +517,7 @@ class ActionJudgeTest {
         Verdict verdict = ActionJudge.judge(fixture.baseline(), config(15, 8), fixture.source(known, unknown));
 
         assertThat(verdict.partialComparison()).isTrue();
-        assertThat(verdict.chosen()).contains("walk-known");
+        assertThat(verdict.bestCandidate()).contains("walk-known");
     }
 
     @Test
@@ -541,34 +541,34 @@ class ActionJudgeTest {
     }
 
     @Test
-    void 후보를_고른_판정에_고른_후보나_위험_차이가_비어_있으면_판정을_만들지_않는다() {
+    void 후보를_비교한_판정에_최선_후보나_위험_차이가_비어_있으면_판정을_만들지_않는다() {
         Verdict go = goVerdict();
         for (ReasonCode code : List.of(ReasonCode.GO, ReasonCode.STAY_GAIN_BELOW_THRESHOLD)) {
             assertThatThrownBy(() -> verdictLike(go, code, Optional.empty(), go.delta()))
-                .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> verdictLike(go, code, go.chosen(), Optional.empty()))
-                .isInstanceOf(IllegalArgumentException.class);
+                .as("%s, bestCandidate 없음", code).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> verdictLike(go, code, go.bestCandidate(), Optional.empty()))
+                .as("%s, delta 없음", code).isInstanceOf(IllegalArgumentException.class);
             assertThatThrownBy(() -> verdictLike(go, code, Optional.empty(), Optional.empty()))
-                .isInstanceOf(IllegalArgumentException.class);
+                .as("%s, 둘 다 없음", code).isInstanceOf(IllegalArgumentException.class);
         }
     }
 
     @Test
-    void 후보를_고르지_않은_판정에_고른_후보나_위험_차이가_있으면_판정을_만들지_않는다() {
+    void 후보를_비교하지_않은_판정에_최선_후보나_위험_차이가_있으면_판정을_만들지_않는다() {
         Verdict go = goVerdict();
         for (ReasonCode code : List.of(ReasonCode.ABSTAIN_STAY_UNDEFINED, ReasonCode.STAY_SCAN_NOT_TRIGGERED,
             ReasonCode.NO_MOVE_NO_CANDIDATE, ReasonCode.NO_MOVE_INFEASIBLE, ReasonCode.ABSTAIN_INSUFFICIENT_EVIDENCE)) {
-            assertThatThrownBy(() -> verdictLike(go, code, go.chosen(), go.delta()))
-                .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> verdictLike(go, code, go.chosen(), Optional.empty()))
-                .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> verdictLike(go, code, go.bestCandidate(), go.delta()))
+                .as("%s, 둘 다 있음", code).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> verdictLike(go, code, go.bestCandidate(), Optional.empty()))
+                .as("%s, bestCandidate만 있음", code).isInstanceOf(IllegalArgumentException.class);
             assertThatThrownBy(() -> verdictLike(go, code, Optional.empty(), go.delta()))
-                .isInstanceOf(IllegalArgumentException.class);
+                .as("%s, delta만 있음", code).isInstanceOf(IllegalArgumentException.class);
         }
     }
 
     @Test
-    void 고른_후보가_후보_목록에_없으면_판정을_만들지_않는다() {
+    void 최선_후보가_후보_목록에_없으면_판정을_만들지_않는다() {
         Verdict go = goVerdict();
 
         assertThatThrownBy(() -> verdictLike(go, ReasonCode.GO, Optional.of("walk-B"), go.delta()))
@@ -579,7 +579,7 @@ class ActionJudgeTest {
     void 조건부_확률에_조건_이력이_비어_있으면_입력을_만들지_않는다() {
         for (ValueTag tag : List.of(ValueTag.COND_FAIL, ValueTag.COND_MISS)) {
             assertThatThrownBy(() -> new ProbabilityInput("s0-11", tag, Optional.empty(), 0.10))
-                .isInstanceOf(IllegalArgumentException.class);
+                .as("%s", tag).isInstanceOf(IllegalArgumentException.class);
         }
     }
 
@@ -590,8 +590,10 @@ class ActionJudgeTest {
         return verdict;
     }
 
-    private static Verdict verdictLike(Verdict base, ReasonCode code, Optional<String> chosen, Optional<Double> delta) {
-        return new Verdict(code, base.epoch(), base.partialComparison(), base.stay(), base.candidates(), chosen, delta);
+    private static Verdict verdictLike(Verdict base, ReasonCode code, Optional<String> bestCandidate,
+                                       Optional<Double> delta) {
+        return new Verdict(code, base.epoch(), base.partialComparison(), base.stay(), base.candidates(), bestCandidate,
+            delta);
     }
 
     private static CandidateRecord recordOf(Verdict verdict, String id) {

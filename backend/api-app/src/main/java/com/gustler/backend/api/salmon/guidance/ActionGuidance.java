@@ -38,13 +38,13 @@ public final class ActionGuidance {
     }
 
     private static List<String> goLines(Verdict verdict, ActionConfig config) {
-        CandidateRecord chosen = verdict.candidates().stream()
-            .filter(record -> verdict.chosen().filter(record.id()::equals).isPresent())
+        CandidateRecord best = verdict.candidates().stream()
+            .filter(record -> verdict.bestCandidate().filter(record.id()::equals).isPresent())
             .findFirst().orElseThrow();
-        Outcome outcome = chosen.outcome();
+        Outcome outcome = best.outcome();
         List<String> lines = new ArrayList<>();
         lines.add(partialPrefix(verdict) + "이동하는 경로를 안내해요.");
-        if (chosen.kind() == CandidateKind.REBOARD) {
+        if (best.kind() == CandidateKind.REBOARD) {
             lines.add("맞은편 정류장으로 이동해요.");
             lines.add(attemptLine(outcome.attempts()));
             lines.add("타면 정해진 하차 정류장에서 내려요.");
