@@ -6,17 +6,19 @@ test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
 
 async function changeVisualViewport(
   page: Page,
-  sample: { height: number; offsetTop: number; scale: number },
+  sample: { height: number; offsetTop: number; scale: number; innerHeight?: number },
   event: "resize" | "scroll" = "resize",
 ) {
   await page.evaluate(
-    ({ height, offsetTop, scale, event }) => {
+    ({ height, offsetTop, scale, innerHeight, event }) => {
       const viewport = window.visualViewport!;
       Object.defineProperties(viewport, {
         height: { configurable: true, value: height },
         offsetTop: { configurable: true, value: offsetTop },
         scale: { configurable: true, value: scale },
       });
+      if (innerHeight !== undefined)
+        Object.defineProperty(window, "innerHeight", { configurable: true, value: innerHeight });
       viewport.dispatchEvent(new Event(event));
       if (scale === 1 && event === "resize") window.dispatchEvent(new Event("resize"));
     },
@@ -65,6 +67,26 @@ test("검색 키보드가 닫히는 동안 503 시트를 화면 하단에 유지
   await sheet.getByRole("button", { name: "다시 시도하기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
   await expectBottomSheet(720);
+});
+
+test("확대된 검색 화면에서 키보드가 닫혀도 503 시트의 위치와 높이를 유지한다", async ({ page, api }) => {
+  api.mode.watch = { status: 503, retryAfterSeconds: 30 };
+  await page.goto("/");
+  await openRouteSearch(page);
+
+  // Safari에서는 확대 배율에 따라 innerHeight도 작아지지만 키보드는 보이는 영역의 높이만 줄인다.
+  const enlarged = { offsetTop: 120, scale: 2, innerHeight: 422 };
+  await changeVisualViewport(page, { ...enlarged, height: 240 });
+  await pickRoute(page);
+  const sheet = page.getByRole("region", { name: "판정보드", exact: true });
+  await expect(sheet.getByRole("alert")).toHaveText("노선 정보를 불러오지 못했어요");
+
+  const opened = (await sheet.boundingBox())!;
+  expect(opened.height).toBeCloseTo(253.2, 1);
+  expect(opened.y + opened.height).toBeCloseTo(542, 1);
+
+  await changeVisualViewport(page, { ...enlarged, height: 422 });
+  expect(await sheet.boundingBox()).toEqual(opened);
 });
 
 test("확대하고 화면을 옮기면 503 시트가 보이는 영역의 하단을 따라간다", async ({ page, api }) => {

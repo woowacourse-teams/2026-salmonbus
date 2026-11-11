@@ -8,7 +8,9 @@ interface BoardViewport {
 function readViewport(): BoardViewport {
   const visual = window.visualViewport;
   if (visual && visual.scale > 1) {
-    return { height: visual.height, top: visual.offsetTop };
+    // 확대 중에도 키보드가 가린 높이에 맞춰 시트를 줄이지 않는다.
+    const heightAtScale = document.documentElement.clientHeight / visual.scale;
+    return { height: Math.max(visual.height, heightAtScale), top: visual.offsetTop };
   }
 
   // 기본 배율에서는 키보드가 닫혀도 시트의 배치 기준을 유지한다.
