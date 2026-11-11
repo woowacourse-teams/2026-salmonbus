@@ -1,7 +1,7 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { spinning } from "@/shared/components/RetryButton.css";
 import { vars } from "@/shared/styles/tokens.css";
-import { sheetSurface } from "./HomeScreen.css";
+import { navigationInset, sheetSurface } from "./HomeScreen.css";
 
 const shortViewport = "(max-height: 600px)";
 
@@ -109,7 +109,7 @@ const skyColors = {
 
 for (const [weather, color] of Object.entries(skyColors)) {
   globalStyle(`${sheetSurface}:has(${panel}[data-weather="${weather}"])`, {
-    backgroundImage: `linear-gradient(180deg, ${color}, ${vars.color.surface} 190px)`,
+    backgroundImage: `linear-gradient(180deg, ${color}, ${vars.color.surface} min(70%, 100% - ${navigationInset}))`,
   });
 }
 

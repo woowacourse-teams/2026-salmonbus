@@ -43,6 +43,10 @@ export function HomeOverview({ point, stops, onRefresh }: { point: Point; stops:
   const areaLabel = (area?.point === point ? area.label : null) ?? nearbyAreaLabel(point, stops);
   return (
     <div className={styles.overview}>
+      <p className={styles.greeting}>
+        {nickname && <span {...maskedPropsFor(styles.greetingName)}>{nickname}님,</span>}
+        {greetingFor(now)}
+      </p>
       <HomeSheetWeather
         weather={weather}
         backgroundKind={backgroundKind}
@@ -55,10 +59,6 @@ export function HomeOverview({ point, stops, onRefresh }: { point: Point; stops:
           retry();
         }}
       />
-      <p className={styles.greeting}>
-        {nickname && <span {...maskedPropsFor(styles.greetingName)}>{nickname}님,</span>}
-        {greetingFor(now)}
-      </p>
     </div>
   );
 }
