@@ -57,6 +57,25 @@ public final class RiskMath {
         return new Risk(Math.max(0, 1 - first - second), Math.min(1 - first, 1 - second));
     }
 
+    /**
+     * 시도마다 실패할 주변확률만 알 때, 모든 시도가 실패할 확률의 범위다. 시도끼리 독립이라고 보지 않는다.
+     * 상한은 가장 작은 실패 확률이고, 하한은 실패 확률의 합에서 (시도 수 - 1)을 뺀 값이다. 시도가 하나면 그 확률 그대로다.
+     */
+    public static Risk everyAttemptFails(List<Double> failures) {
+        if (failures.isEmpty()) {
+            throw new IllegalArgumentException("at least one attempt is required");
+        }
+        double sum = 0;
+        double smallest = 1;
+        for (int index = 0; index < failures.size(); index++) {
+            double failure = failures.get(index);
+            requireProbability(failure, "failure " + index);
+            sum += failure;
+            smallest = Math.min(smallest, failure);
+        }
+        return new Risk(Math.min(smallest, Math.max(0, sum - (failures.size() - 1))), smallest);
+    }
+
     public static Bound delta(Risk stay, Risk move) {
         return new Bound(stay.low() - move.high(), stay.high() - move.low());
     }

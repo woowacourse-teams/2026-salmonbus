@@ -66,6 +66,19 @@ class IntegratedJudgeTest {
     }
 
     @Test
+    void 모든_시도가_실패할_범위는_가장_작은_실패_확률을_넘지_않고_시도가_하나면_그_확률이다() {
+        assertThat(RiskMath.everyAttemptFails(List.of(0.3))).isEqualTo(new Risk(0.3, 0.3));
+        assertThat(RiskMath.everyAttemptFails(List.of(0.8, 0.2))).isEqualTo(new Risk(0, 0.2));
+        Risk three = RiskMath.everyAttemptFails(List.of(0.9, 0.8, 0.95));
+        assertThat(three.low()).isCloseTo(0.65, within(TOLERANCE));
+        assertThat(three.high()).isEqualTo(0.8);
+        assertThat(RiskMath.everyAttemptFails(List.of(1.0, 0.3))).isEqualTo(new Risk(0.3, 0.3));
+        assertThatThrownBy(() -> RiskMath.everyAttemptFails(List.of())).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> RiskMath.everyAttemptFails(List.of(0.3, 1.2)))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void 직접_시도가_없으면_실패_위험은_1이다() {
         assertThat(RiskMath.directFailure(List.of())).isEqualTo(new Risk(1, 1));
     }

@@ -1,6 +1,7 @@
 package com.gustler.backend.api.salmon.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.gustler.backend.api.salmon.application.SalmonActionWalk.Connection;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge;
@@ -30,11 +31,24 @@ class SalmonActionAssessmentTest {
     }
 
     @Test
-    void 만차확률이_하나가_아니면_근거_부족이다() {
+    void 만차확률이_없거나_쓸_수_없는_값이_섞이면_근거_부족이다() {
         assertThat(terminal(List.of())).isEqualTo(Terminal.ABSTAIN_EVIDENCE);
-        assertThat(terminal(List.of(0.8, 0.2))).isEqualTo(Terminal.ABSTAIN_EVIDENCE);
         assertThat(terminal(List.of(Double.NaN))).isEqualTo(Terminal.ABSTAIN_EVIDENCE);
         assertThat(terminal(List.of(1.2))).isEqualTo(Terminal.ABSTAIN_EVIDENCE);
+        assertThat(terminal(List.of(0.2, 1.2))).isEqualTo(Terminal.ABSTAIN_EVIDENCE);
+    }
+
+    @Test
+    void 만차확률이_둘이면_곱하지_않고_범위로_대기_위험을_만든다() {
+        Situation oneLikelyOpen = adopted().situation(List.of(0.8, 0.2), List.of(), true);
+        Situation bothLikelyFull = adopted().situation(List.of(0.8, 0.9), List.of(), true);
+
+        assertThat(oneLikelyOpen.stay().orElseThrow().low()).isEqualTo(0);
+        assertThat(oneLikelyOpen.stay().orElseThrow().high()).isEqualTo(0.2);
+        assertThat(IntegratedJudge.decide(oneLikelyOpen).terminal()).isEqualTo(Terminal.NO_MOVE_POLICY);
+        assertThat(bothLikelyFull.stay().orElseThrow().low()).isCloseTo(0.7, within(1e-9));
+        assertThat(bothLikelyFull.stay().orElseThrow().high()).isEqualTo(0.8);
+        assertThat(IntegratedJudge.decide(bothLikelyFull).terminal()).isEqualTo(Terminal.NO_MOVE_NO_CANDIDATE);
     }
 
     @Test

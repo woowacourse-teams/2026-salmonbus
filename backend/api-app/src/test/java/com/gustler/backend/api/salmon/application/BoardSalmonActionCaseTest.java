@@ -1,5 +1,6 @@
 package com.gustler.backend.api.salmon.application;
 
+import static com.gustler.backend.api.salmon.application.SalmonArrivalFixture.inSeconds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -7,7 +8,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
@@ -40,6 +40,7 @@ import com.gustler.backend.api.route.domain.RouteStatus;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge.Recommendation;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge.Terminal;
+import com.gustler.backend.arrival.contract.ArrivalSnapshot.Prediction;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -66,7 +67,7 @@ class BoardSalmonActionCaseTest {
         Terminal terminal = decide(cases(boards, walks, clock(OBSERVED)));
 
         assertThat(terminal).isEqualTo(Terminal.NO_MOVE_POLICY);
-        then(boards).should(times(2)).readBoard(ROUTE_ID);
+        then(boards).should().readBoard(ROUTE_ID);
         ArgumentCaptor<BoardingOptionsQuery> captor = ArgumentCaptor.forClass(BoardingOptionsQuery.class);
         then(walks).should().get(captor.capture());
         BoardingOptionsQuery query = captor.getValue();
@@ -99,13 +100,73 @@ class BoardSalmonActionCaseTest {
     }
 
     @Test
-    void 만차확률이_둘이면_도보를_묻지_않는다() {
+    void 마감_안에_닿는_두_대_가운데_한_대라도_만차확률이_낮으면_이동을_찾지_않는다() {
         BoardQueryService boards = mock(BoardQueryService.class);
         BoardingOptionsQueryService walks = mock(BoardingOptionsQueryService.class);
         given(boards.readBoard(ROUTE_ID)).willReturn(
             reading(board(OBSERVED, STALE, full("bus-a", 0.8), full("bus-b", 0.2))));
+        given(walks.get(any())).willReturn(noWalks());
+        SalmonDueArrivals arrivals = arrivals(inSeconds("bus-a", 1, 300), inSeconds("bus-b", 2, 360));
 
-        assertThat(decide(cases(boards, walks, clock(OBSERVED)))).isEqualTo(Terminal.ABSTAIN_EVIDENCE);
+        assertThat(decide(cases(boards, arrivals, walks, clock(OBSERVED)))).isEqualTo(Terminal.NO_MOVE_POLICY);
+    }
+
+    @Test
+    void 마감_안에_닿는_두_대의_만차확률이_모두_높으면_이동_후보를_본다() {
+        BoardQueryService boards = mock(BoardQueryService.class);
+        BoardingOptionsQueryService walks = mock(BoardingOptionsQueryService.class);
+        given(boards.readBoard(ROUTE_ID)).willReturn(
+            reading(board(OBSERVED, STALE, full("bus-a", 0.8), full("bus-b", 0.9))));
+        given(walks.get(any())).willReturn(noWalks());
+        SalmonDueArrivals arrivals = arrivals(inSeconds("bus-a", 1, 300), inSeconds("bus-b", 2, 360));
+
+        assertThat(decide(cases(boards, arrivals, walks, clock(OBSERVED)))).isEqualTo(Terminal.NO_MOVE_NO_CANDIDATE);
+    }
+
+    @Test
+    void 마감_안에_닿는_두_대_가운데_한_대의_만차확률을_모르면_근거_부족이다() {
+        BoardQueryService boards = mock(BoardQueryService.class);
+        BoardingOptionsQueryService walks = mock(BoardingOptionsQueryService.class);
+        given(boards.readBoard(ROUTE_ID)).willReturn(reading(board(OBSERVED, STALE, full("bus-a", 0.2))));
+        SalmonDueArrivals arrivals = arrivals(inSeconds("bus-a", 1, 300), inSeconds("bus-b", 2, 360));
+
+        assertThat(decide(cases(boards, arrivals, walks, clock(OBSERVED)))).isEqualTo(Terminal.ABSTAIN_EVIDENCE);
+        then(walks).should(never()).get(any());
+    }
+
+    @Test
+    void 마감_뒤에_닿는_차량의_만차확률은_대기_위험으로_쓰지_않는다() {
+        BoardQueryService boards = mock(BoardQueryService.class);
+        BoardingOptionsQueryService walks = mock(BoardingOptionsQueryService.class);
+        given(boards.readBoard(ROUTE_ID)).willReturn(reading(board(OBSERVED, STALE, full("bus", 0.3))));
+        SalmonDueArrivals arrivals = arrivals(inSeconds("bus", 1, 1500));
+
+        assertThat(decide(cases(boards, arrivals, walks, clock(OBSERVED)))).isEqualTo(Terminal.ABSTAIN_EVIDENCE);
+        then(walks).should(never()).get(any());
+    }
+
+    @Test
+    void 마감_안에_닿는_한_대의_만차확률만_대기_위험으로_쓴다() {
+        BoardQueryService boards = mock(BoardQueryService.class);
+        BoardingOptionsQueryService walks = mock(BoardingOptionsQueryService.class);
+        given(boards.readBoard(ROUTE_ID)).willReturn(
+            reading(board(OBSERVED, STALE, full("bus-a", 0.3), full("bus-b", 0.9))));
+        given(walks.get(any())).willReturn(noWalks());
+        SalmonDueArrivals arrivals = arrivals(inSeconds("bus-a", 1, 300), inSeconds("bus-b", 2, 1500));
+
+        assertThat(decide(cases(boards, arrivals, walks, clock(OBSERVED)))).isEqualTo(Terminal.NO_MOVE_POLICY);
+    }
+
+    @Test
+    void 도착_스냅샷이_없거나_그_차량이_전광판에_없으면_근거_부족이다() {
+        BoardQueryService boards = mock(BoardQueryService.class);
+        BoardingOptionsQueryService walks = mock(BoardingOptionsQueryService.class);
+        given(boards.readBoard(ROUTE_ID)).willReturn(reading(board(OBSERVED, STALE, full("bus", 0.3))));
+
+        assertThat(decide(cases(boards, SalmonArrivalFixture.noSnapshot(OBSERVED), walks, clock(OBSERVED))))
+            .isEqualTo(Terminal.ABSTAIN_EVIDENCE);
+        assertThat(decide(cases(boards, arrivals(inSeconds("other", 1, 300)), walks, clock(OBSERVED))))
+            .isEqualTo(Terminal.ABSTAIN_EVIDENCE);
         then(walks).should(never()).get(any());
     }
 
@@ -177,17 +238,22 @@ class BoardSalmonActionCaseTest {
     }
 
     @Test
-    void 관측_시각이_흔들리면_근거_부족이다() {
+    void 목록의_두_대가_모두_만차일_것_같아도_이어_붙인_뒤_차량에_자리가_있을_것_같으면_이동을_찾지_않는다() {
         BoardQueryService boards = mock(BoardQueryService.class);
         BoardingOptionsQueryService walks = mock(BoardingOptionsQueryService.class);
-        given(boards.readBoard(ROUTE_ID)).willReturn(
-            reading(board(OBSERVED, STALE, full("bus", 0.8))),
-            reading(board(OBSERVED.plusSeconds(1), STALE, full("bus", 0.8))),
-            reading(board(OBSERVED.plusSeconds(2), STALE, full("bus", 0.8))));
+        given(boards.readBoard(ROUTE_ID)).willReturn(reading(SalmonArrivalFixture.board(OBSERVED.minusSeconds(30),
+            STALE, fullAt("front", 3, 0.8), fullAt("second", 4, 0.9), fullAt("hidden", 8, 0.1))));
+        given(walks.get(any())).willReturn(noWalks());
+        SalmonArrivalFixture listedOnly = SalmonArrivalFixture.received(OBSERVED, OBSERVED.plusSeconds(3600))
+            .stored(5, inSeconds("front", 1, 300), inSeconds("second", 2, 360));
+        SalmonArrivalFixture withHidden = SalmonArrivalFixture.received(OBSERVED, OBSERVED.plusSeconds(3600))
+            .stored(5, inSeconds("front", 1, 300), inSeconds("second", 2, 360))
+            .collectable(2, inSeconds("hidden", 1, 240));
 
-        assertThat(decide(cases(boards, walks, clock(OBSERVED)))).isEqualTo(Terminal.ABSTAIN_EVIDENCE);
-        then(boards).should(times(3)).readBoard(ROUTE_ID);
-        then(walks).should(never()).get(any());
+        assertThat(decide(cases(boards, listedOnly.reader(), walks, clock(OBSERVED))))
+            .isEqualTo(Terminal.NO_MOVE_NO_CANDIDATE);
+        assertThat(decide(cases(boards, withHidden.reader(), walks, clock(OBSERVED))))
+            .isEqualTo(Terminal.NO_MOVE_POLICY);
     }
 
     private static Terminal decide(BoardSalmonActionCase cases) {
@@ -203,8 +269,17 @@ class BoardSalmonActionCaseTest {
     }
 
     private static BoardSalmonActionCase cases(BoardQueryService boards, BoardingOptionsQueryService walks, Clock clock) {
-        return new BoardSalmonActionCase(boards, walks, new SalmonActionAssessment(SalmonSettingsFixture.adopted()),
-            new SalmonEpochBudget(2), SalmonSettingsFixture.adopted(), clock);
+        return cases(boards, arrivals(inSeconds("bus", 1, 600)), walks, clock);
+    }
+
+    private static BoardSalmonActionCase cases(BoardQueryService boards, SalmonDueArrivals arrivals,
+                                               BoardingOptionsQueryService walks, Clock clock) {
+        return new BoardSalmonActionCase(boards, arrivals, walks,
+            new SalmonActionAssessment(SalmonSettingsFixture.adopted()), SalmonSettingsFixture.adopted(), clock);
+    }
+
+    private static SalmonDueArrivals arrivals(Prediction... predictions) {
+        return SalmonArrivalFixture.arrivals(OBSERVED, OBSERVED.plusSeconds(3600), predictions);
     }
 
     private static Clock clock(Instant instant) {
@@ -225,8 +300,12 @@ class BoardSalmonActionCaseTest {
     }
 
     private static ApproachingVehicle full(String vehicleId, double fullProbability) {
-        return new ApproachingVehicle(vehicleId, 1, new VehicleForecast.Available(1 - fullProbability, 12.0,
-            "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", fullProbability));
+        return fullAt(vehicleId, 1, fullProbability);
+    }
+
+    private static ApproachingVehicle fullAt(String vehicleId, int remainingStops, double fullProbability) {
+        return new ApproachingVehicle(vehicleId, remainingStops, new VehicleForecast.Available(1 - fullProbability,
+            12.0, "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", fullProbability));
     }
 
     private static BoardingOptions noWalks() {

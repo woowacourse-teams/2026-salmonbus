@@ -29,34 +29,35 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 /**
- * 공개 조회가 전광판과 같은 방향 도보를 운영 값으로 판정 상황에 담는다.
+ * 공개 조회가 전광판, 도착 예측, 같은 방향 도보를 운영 값으로 판정 상황에 담는다.
  *
- * <p>대기 위험은 그 정류장 방문의 출발 만차 확률이 하나일 때만 만든다. 둘 이상이면 독립으로 곱하지 않는다.
- * 차내 시간과 버스 도착 시각은 전광판에 없으므로 만들지 않는다. 전광판 좌석 예보는 만료 시각과 같은 순간까지 쓴다.
+ * <p>대기 위험은 마감까지 그 정류장 방문에 닿는 차량마다 전광판이 출발 만차 확률을 줄 때만 만든다. 한 대라도
+ * 확률이 없으면 만들지 않는다. 마감 뒤에 오는 차량의 확률은 대기 위험이 아니다. 전광판은 한 번만 읽는다.
+ * 이동 후보의 차내 시간과 접속 시각은 만들지 않는다. 전광판 좌석 예보는 만료 시각과 같은 순간까지 쓴다.
  */
 @Component
 public class BoardSalmonActionCase implements SalmonActionCase {
     private static final String DEPARTURE_ZERO = "DEPARTURE_ZERO";
 
     private final BoardQueryService boards;
+    private final SalmonDueArrivals arrivals;
     private final BoardingOptionsQueryService walks;
     private final SalmonActionAssessment assessment;
-    private final SalmonEpochBudget epochBudget;
     private final SalmonActionSettings settings;
     private final Clock clock;
 
     public BoardSalmonActionCase(
         BoardQueryService boards,
+        SalmonDueArrivals arrivals,
         BoardingOptionsQueryService walks,
         SalmonActionAssessment assessment,
-        SalmonEpochBudget epochBudget,
         SalmonActionSettings settings,
         Clock clock
     ) {
         this.boards = boards;
+        this.arrivals = arrivals;
         this.walks = walks;
         this.assessment = assessment;
-        this.epochBudget = epochBudget;
         this.settings = settings;
         this.clock = clock;
     }
@@ -65,18 +66,19 @@ public class BoardSalmonActionCase implements SalmonActionCase {
     public Situation situation(RouteId routeId, String stationId, int stopSequence) {
         try {
             Instant decisionAt = clock.instant();
-            Optional<Board> settled = SalmonBaselineSettle.untilStable(epochBudget,
-                () -> boards.readBoard(routeId).board(),
-                board -> board.observedAt().toInstant());
-            if (settled.isEmpty()) {
-                return Situation.missingStay();
-            }
-            Board board = settled.get();
+            Board board = boards.readBoard(routeId).board();
             if (decisionAt.isAfter(board.staleAt().toInstant())) {
                 return Situation.missingStay();
             }
-            List<Double> stay = departureFullProbabilities(board, stationId, stopSequence);
-            if (stay.size() != 1) {
+            List<Double> stay = new ArrayList<>();
+            for (String vehicleId : arrivals.vehicles(routeId.value(), board, stationId, stopSequence, decisionAt)) {
+                Optional<Double> probability = departureFullProbability(board, stationId, stopSequence, vehicleId);
+                if (probability.isEmpty()) {
+                    return Situation.missingStay();
+                }
+                stay.add(probability.get());
+            }
+            if (stay.isEmpty()) {
                 return Situation.missingStay();
             }
             BoardingOptionsQuery query = walkQuery(routeId, stationId, stopSequence);
@@ -104,27 +106,21 @@ public class BoardSalmonActionCase implements SalmonActionCase {
         return walks;
     }
 
-    private static List<Double> departureFullProbabilities(Board board, String stationId, int stopSequence) {
-        List<StopState> matched = board.stops().stream()
+    private static Optional<Double> departureFullProbability(Board board, String stationId, int stopSequence,
+                                                             String vehicleId) {
+        List<StopState> stops = board.stops().stream()
             .filter(stop -> stop.sequence() == stopSequence && stationId.equals(stop.stopId()))
             .toList();
-        if (matched.size() != 1) {
-            return List.of();
+        if (stops.size() != 1) {
+            return Optional.empty();
         }
-        List<Double> probabilities = new ArrayList<>();
-        for (ApproachingVehicle vehicle : matched.getFirst().approachingVehicles()) {
-            if (!(vehicle.forecast() instanceof VehicleForecast.Available available)) {
-                continue;
-            }
-            if (!DEPARTURE_ZERO.equals(available.probabilityTarget())) {
-                continue;
-            }
-            Double probability = available.departureFullProbability();
-            if (probability == null || !Double.isFinite(probability) || probability < 0 || probability > 1) {
-                return List.of();
-            }
-            probabilities.add(probability);
+        List<ApproachingVehicle> vehicles = stops.getFirst().approachingVehicles().stream()
+            .filter(vehicle -> vehicleId.equals(vehicle.vehicleId()))
+            .toList();
+        if (vehicles.size() != 1 || !(vehicles.getFirst().forecast() instanceof VehicleForecast.Available available)
+            || !DEPARTURE_ZERO.equals(available.probabilityTarget())) {
+            return Optional.empty();
         }
-        return probabilities;
+        return Optional.ofNullable(available.departureFullProbability());
     }
 }
