@@ -62,11 +62,13 @@ private final class DisplayLinkTarget: NSObject {
 }
 
 public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
-  NMFMapViewTouchDelegate, NMFMapViewCameraDelegate, NMFAuthManagerDelegate, CLLocationManagerDelegate {
+  NMFMapViewTouchDelegate, NMFMapViewCameraDelegate, NMFAuthManagerDelegate, CLLocationManagerDelegate,
+  UIGestureRecognizerDelegate {
   let onMapEvent = EventDispatcher()
   private let mapContainer = UIView()
   private let gate = WebOverlayGate()
   private let mapView = RouteNaverMapView(frame: .zero)
+  private lazy var rotationGesture = UIRotationGestureRecognizer(target: self, action: #selector(rotateMap(_:)))
   private lazy var navigationSnapshot = MapNavigationSnapshot(mapContainer: mapContainer)
   private let locationManager = CLLocationManager()
   private var sessionId: String?
@@ -114,9 +116,13 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     mapView.accessibilityIdentifier = "salmon-native-map"
     gate.accessibilityIdentifier = "salmon-web-overlay"
     mapView.isTiltGestureEnabled = false
+    // SDK의 회전 처리가 핀치에 의존하므로 회전은 별도 인식기로 처리한다.
     mapView.isRotateGestureEnabled = false
     mapView.isScrollGestureEnabled = true
     mapView.isZoomGestureEnabled = true
+    rotationGesture.delegate = self
+    rotationGesture.cancelsTouchesInView = false
+    mapView.addGestureRecognizer(rotationGesture)
     mapView.addLoadDelegate(delegate: self)
     mapView.addCameraDelegate(delegate: self)
     mapView.touchDelegate = self
@@ -149,6 +155,24 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   public override func unmountChildComponentView(_ childComponentView: UIView, index: Int) {
     navigationSnapshot.finish()
     childComponentView.removeFromSuperview()
+  }
+
+  @objc private func rotateMap(_ gesture: UIRotationGestureRecognizer) {
+    guard gesture.state == .began || gesture.state == .changed else { return }
+    let rotation = gesture.rotation
+    gesture.rotation = 0
+    guard rotation.isFinite, mapView.bounds.width > 0, mapView.bounds.height > 0 else { return }
+    let center = gesture.location(in: mapView)
+    let update = NMFCameraUpdate(heading: mapView.cameraPosition.heading - rotation * 180 / .pi)
+    update.pivot = CGPoint(x: center.x / mapView.bounds.width, y: center.y / mapView.bounds.height)
+    update.animation = .none
+    update.reason = Int32(NMFMapChangedByGesture)
+    mapView.moveCamera(update)
+  }
+
+  public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+    shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+    gestureRecognizer === rotationGesture || otherGestureRecognizer === rotationGesture
   }
 
   public override func layoutSubviews() {
@@ -726,6 +750,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       "routeId": scene?.routeId ?? "",
       "ready": readySent && !failed && !initialFitPending && !initialFitScheduled,
       "zoom": mapView.cameraPosition.zoom,
+      "heading": mapView.cameraPosition.heading,
       "gestureMoves": gestureMoveCount,
       "visibleMapHeight": mapContainer.bounds.height,
       "captureAll": gate.captureAll,

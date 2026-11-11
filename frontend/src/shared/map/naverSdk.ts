@@ -20,6 +20,8 @@ export interface NaverMap {
   zoomBy(delta: number, origin: NaverCoordinate, animate: boolean): void;
   getCenter(): NaverCoordinate;
   setCenter(center: NaverCoordinate): void;
+  getRotation(): number;
+  setRotation(rotation: number): void;
   morph(center: NaverCoordinate, zoom: number, options: { duration: number }): void;
   stop(): void;
   fitBounds(
@@ -64,6 +66,7 @@ export interface NaverMaps {
     options: {
       center: NaverCoordinate;
       zoom: number;
+      rotation?: number;
       size: NaverSize;
       zoomControl: boolean;
       scaleControl: boolean;
@@ -71,6 +74,7 @@ export interface NaverMaps {
       logoControlOptions?: { position: number };
       overlayZoomEffect: string | null;
       gl: boolean;
+      disableRotateTilt: boolean;
       scrollWheel: boolean;
       disableDoubleClickZoom: boolean;
     },

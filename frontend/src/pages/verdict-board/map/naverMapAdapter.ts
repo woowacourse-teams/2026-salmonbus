@@ -46,6 +46,7 @@ interface ArrowMarker extends RouteArrow {
 export interface RouteMapCamera {
   center: GeoCoordinate;
   zoom: number;
+  rotation: number;
 }
 
 interface NaverRouteMapOptions {
@@ -125,6 +126,7 @@ export function createNaverRouteMap(
     new sdk.Map(element, {
       center: toNaverCoordinate(initialCamera?.center ?? first),
       zoom: initialCamera?.zoom ?? (initialStop === undefined ? 10 : 13),
+      rotation: initialCamera?.rotation ?? 0,
       size: new sdk.Size(element.clientWidth, element.clientHeight),
       zoomControl: false,
       scaleControl: false,
@@ -132,6 +134,7 @@ export function createNaverRouteMap(
       logoControlOptions: { position: sdk.Position.BOTTOM_LEFT },
       // 벡터 지도의 연속 줌에서 노선·마커도 같은 카메라를 따라 움직인다.
       gl: true,
+      disableRotateTilt: false,
       // GL은 마커 좌표를 직접 갱신하므로 이미지 타일용 확대 효과를 중복 적용하지 않는다.
       overlayZoomEffect: null,
       scrollWheel: true,
@@ -568,6 +571,7 @@ export function createNaverRouteMap(
     fitOverview();
   }
 
+  let rotationFrame: number | null = null;
   const listeners = [
     sdk.Event.addListener(map, "click", createNativeEventHandler(onDeselect)),
     sdk.Event.addListener(map, "tap", createNativeEventHandler(onDeselect)),
@@ -591,10 +595,23 @@ export function createNaverRouteMap(
         if (arrowsShowBothDirections !== showBothDirections) refreshArrows();
       }),
     ),
+    sdk.Event.addListener(map, "rotate", () => {
+      if (rotationFrame !== null) return;
+      // 회전 이벤트가 카메라 갱신보다 먼저 올 수 있어 다음 프레임의 투영 좌표를 사용한다.
+      rotationFrame = window.requestAnimationFrame(
+        createNativeEventHandler(() => {
+          rotationFrame = null;
+          refreshStops();
+          refreshArrows();
+        }),
+      );
+    }),
     sdk.Event.addListener(
       map,
       "idle",
       createNativeEventHandler(() => {
+        if (rotationFrame !== null) window.cancelAnimationFrame(rotationFrame);
+        rotationFrame = null;
         refreshStops();
         refreshVehicleCounts();
         refreshArrows();
@@ -786,12 +803,17 @@ export function createNaverRouteMap(
     },
     camera() {
       const center = map.getCenter();
-      return { center: { latitude: center.lat(), longitude: center.lng() }, zoom: map.getZoom() };
+      return {
+        center: { latitude: center.lat(), longitude: center.lng() },
+        zoom: map.getZoom(),
+        rotation: map.getRotation(),
+      };
     },
     destroy() {
       destroyed = true;
       cancelCameraFocus();
       stopOverviewRefit();
+      if (rotationFrame !== null) window.cancelAnimationFrame(rotationFrame);
       window.clearTimeout(initializationTimeout);
       initialFitPending = false;
       cancelReadyFrame();

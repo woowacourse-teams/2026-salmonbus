@@ -104,6 +104,7 @@ function createRecordingSdk(glSupported = true) {
   const events: { name: string; listener: () => void }[] = [];
   class MapStub implements NaverMap {
     zoom = 10;
+    rotation = 0;
     center: NaverCoordinate = new CoordinateStub(0, 0);
     size = new SizeStub(400, 350);
     fits = 0;
@@ -118,6 +119,7 @@ function createRecordingSdk(glSupported = true) {
     ) {
       this.center = options.center;
       this.zoom = options.zoom;
+      this.rotation = options.rotation ?? 0;
     }
     getZoom() {
       checkSdk();
@@ -141,6 +143,12 @@ function createRecordingSdk(glSupported = true) {
     }
     setCenter(center: NaverCoordinate) {
       this.center = center;
+    }
+    getRotation() {
+      return this.rotation;
+    }
+    setRotation(rotation: number) {
+      this.rotation = rotation;
     }
     morph(center: NaverCoordinate, zoom: number) {
       this.setCenter(center);
@@ -809,6 +817,38 @@ describe("네이버 지도 adapter", () => {
     native.map.zoom = 13.9;
     zoomChanged();
     expect(visibleArrowDirections(native)).toEqual(["DOWN"]);
+  });
+  it("지도 회전 중 노선 화살표를 회전한 경로에 맞춘다", () => {
+    const { native, adapter, flushFrames } = setup(
+      true,
+      {},
+      {
+        paths: [
+          {
+            direction: "UP",
+            coordinates: [
+              { latitude: 37.5, longitude: 127 },
+              { latitude: 37.5, longitude: 127.15 },
+            ],
+          },
+        ],
+      },
+    );
+    const arrow = native.markers.find((marker) => marker.options.icon.content.dataset.mapArrowDirection === "UP");
+    expect(arrow?.options.icon.content.style.transform).toBe("rotate(0deg)");
+    const projection = native.map.getProjection();
+    jest.spyOn(native.map, "getProjection").mockReturnValue({
+      ...projection,
+      fromCoordToOffset(coordinate) {
+        const { x, y } = projection.fromCoordToOffset(coordinate);
+        return { x: 200 - y, y: x };
+      },
+    });
+    native.map.rotation = 90;
+    native.events.find((event) => event.name === "rotate")?.listener();
+    flushFrames();
+    expect(arrow?.options.icon.content.style.transform).toBe("rotate(90deg)");
+    expect(adapter.camera?.().rotation).toBe(90);
   });
   it("확대와 이동에서 정류장 아이콘과 방향 화살표를 제거하거나 다시 만들지 않는다", () => {
     const { native, adapter } = setup();

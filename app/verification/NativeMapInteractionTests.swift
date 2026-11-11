@@ -7,6 +7,7 @@ final class NativeMapInteractionTests: XCTestCase {
     let routeId: String
     let ready: Bool
     let zoom: Double
+    let heading: Double
     let gestureMoves: Int
     let visibleMapHeight: Double
     let captureAll: Bool
@@ -96,6 +97,24 @@ final class NativeMapInteractionTests: XCTestCase {
     XCTAssertTrue(app.textFields["번호를 입력하면 탑승 확률을 알려드려요"].waitForExistence(timeout: 15),
                   "The back link must still work after cancelling a swipe")
     attachScreenshot("07-back-link-home-after-cancel")
+  }
+
+  func testTwoFingerRotationChangesNativeMapHeading() throws {
+    let initial = try waitForState("native map is ready before rotation", timeout: 90) {
+      $0.ready && !$0.captureAll && $0.visibleMapHeight > 180 && $0.stops > 0
+    }
+    map.rotate(.pi / 2, withVelocity: 2)
+    let rotated = try waitForState("a two-finger rotation changes the native camera heading", timeout: 15) {
+      let difference = abs($0.heading - initial.heading).truncatingRemainder(dividingBy: 360)
+      return min(difference, 360 - difference) > 30
+    }
+    attachScreenshot("08-native-two-finger-rotation")
+    map.pinch(withScale: 1.5, velocity: 1)
+    let zoomed = try waitForState("pinch zoom still works after rotation", timeout: 15) {
+      $0.zoom > rotated.zoom + 0.25
+    }
+    let difference = abs(zoomed.heading - rotated.heading).truncatingRemainder(dividingBy: 360)
+    XCTAssertLessThan(min(difference, 360 - difference), 5, "Pinch zoom must preserve the map heading")
   }
 
   private var map: XCUIElement {
