@@ -630,6 +630,34 @@ class JdbcAlightingAwareForecastEvaluationTest {
             .param(later).query(String.class).single()).isEqualTo(reason);
     }
 
+    @ParameterizedTest
+    @CsvSource({"90, UNSUPPORTED", "91, SETTLED"})
+    void 자정에_확정된_누락은_수신_후_구십초까지_정산에_반영한다(final int delaySeconds, String expectedState) {
+        // given
+        useConfirmedProfile();
+        final long midnightObservation = observation("midnight", -32_400, 1, 40);
+        jdbc.sql("""
+            UPDATE observation_batch
+            SET ingestion_origin = 'LIVE', input_confirmed_at = response_received_at
+            WHERE route_version_id = ?
+            """).param(version).update();
+        jdbc.sql("""
+            UPDATE observation_batch
+            SET response_received_at = input_confirmed_at - make_interval(secs => ?), stored_rows = 2
+            WHERE id = (SELECT observation_batch_id FROM vehicle_observation WHERE id = ?)
+            """).params(delaySeconds, midnightObservation).update();
+
+        // when
+        service.settle();
+
+        // then
+        assertThat(jdbc.sql("""
+            SELECT scoring_state
+            FROM alighting_forecast_evaluation_result
+            WHERE vehicle_observation_id = ?
+            """).param(source).query(String.class).single()).isEqualTo(expectedState);
+    }
+
     @Test
     void 다음날_관측이_늘어도_확인시각_정산의_입력_범위를_넓히지_않는다() {
         // given
