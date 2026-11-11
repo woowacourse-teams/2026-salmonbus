@@ -129,8 +129,16 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
     public void settle() {
         // 다음 시각으로 순환하므로 아직 도착하지 않은 오래된 예보가 뒤의 예보를 막지 않는다.
         List<Long> routes = jdbc.sql("""
-            SELECT DISTINCT route_version_id FROM alighting_forecast_evaluation_work
-            WHERE next_attempt_at<=clock_timestamp() ORDER BY route_version_id
+            SELECT version.id
+            FROM route_version version
+            JOIN LATERAL (
+                SELECT 1
+                FROM alighting_forecast_evaluation_work work
+                WHERE work.route_version_id = version.id
+                  AND work.next_attempt_at <= statement_timestamp()
+                LIMIT 1
+            ) due ON true
+            ORDER BY version.id
             """).query(Long.class).list();
         routeRunner.run(routes, this::settleRoutePages);
     }

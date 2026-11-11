@@ -42,10 +42,10 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정되어도 다른 파일을 제외해 항상 통과하게 된다. 파일 이름으로 선택하고,
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
-     * <p>이 브랜치는 dev 스키마에 예보 체크포인트의 아카이브 보호 범위를 더한다.
+     * <p>이 브랜치는 정산 대기 작업에 노선별 조회 인덱스를 더한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("alighting_history_archive_protection");
+        List.of("alighting_evaluation_route_due_index");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
