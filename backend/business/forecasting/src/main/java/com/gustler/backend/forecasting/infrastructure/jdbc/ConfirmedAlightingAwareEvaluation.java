@@ -2,12 +2,12 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
 
-import com.gustler.backend.forecasting.domain.model.alighting.AlightingPosterior;
-import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvents;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingPosterior;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -16,42 +16,32 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.JsonNode;
 
 /** 확인 시각으로 닫힌 방문과 예보 당시의 차량 정원 근거를 새 정답 판본으로 연결한다. */
 final class ConfirmedAlightingAwareEvaluation {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private final JdbcClient jdbc;
-    private final long route;
+    private final History history;
     private final LocalDate date;
     private final Instant through;
-    private final int limit;
     private final Map<Long, Long> chains = new HashMap<>();
     private final Map<List<Integer>, List<AlightingAwarePassEvent>> events = new HashMap<>();
     private List<AlightingAwareObservation> rows;
-    private Boolean incomplete;
 
-    ConfirmedAlightingAwareEvaluation(
-        JdbcClient jdbc,
-        final long route,
-        LocalDate date,
-        Instant through,
-        final int limit
-    ) {
-        this.jdbc = jdbc;
-        this.route = route;
+    ConfirmedAlightingAwareEvaluation(History history, LocalDate date, Instant through) {
+        this.history = history;
         this.date = date;
         this.through = through;
-        this.limit = limit;
     }
 
     JdbcAlightingAwareForecastEvaluation.Outcome evaluate(final long sourceId, final int target, JsonNode snapshot) {
@@ -62,10 +52,10 @@ final class ConfirmedAlightingAwareEvaluation {
             return unsupported("CAPACITY_POLICY_MISMATCH");
         }
         load(snapshot.path("turn").asInt());
-        if (rows.size() > limit) {
+        if (history.exceedsLimit(rows)) {
             return unsupported("OBSERVATION_INPUT_LIMIT");
         }
-        if (incomplete()) {
+        if (history.incompleteAt(through)) {
             return unsupported("SOURCE_HISTORY_INCOMPLETE");
         }
         AlightingAwareObservation source = rows.stream().filter(row -> row.observationId() == sourceId).findFirst().orElse(null);
@@ -86,36 +76,9 @@ final class ConfirmedAlightingAwareEvaluation {
         if (rows != null) {
             return;
         }
-        rows = jdbc.sql("""
-            WITH raw AS (
-              SELECT o.*,b.input_confirmed_at,b.response_received_at,
-                count(*) OVER (PARTITION BY o.observation_batch_id,o.vehicle_id) AS identity_rows
-              FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id
-              JOIN route_version v ON v.id=b.route_version_id
-              WHERE v.route_id=(SELECT route_id FROM route_version WHERE id=:route)
-                AND b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS' AND b.stored_rows>0
-                AND b.input_confirmed_at>=b.response_received_at
-                AND b.input_confirmed_at<=b.response_received_at+interval '90 seconds'
-                AND b.input_confirmed_at>=:start AND b.input_confirmed_at<=:through
-                AND o.vehicle_id IS NOT NULL
-            ) SELECT * FROM raw WHERE identity_rows=1
-              ORDER BY vehicle_id,input_confirmed_at,observation_batch_id,id LIMIT :limit
-            """).param("route", route).param("start", offset(date.atStartOfDay(SEOUL).toInstant()))
-            .param("through", offset(through)).param("limit", limit + 1)
-            .query((rs, index) -> {
-                Integer seats = rs.getObject("remaining_seats", Integer.class);
-                if (rs.getString("seat_unknown_reason") != null || invalidSeats(seats)) {
-                    seats = null;
-                }
-                final int stop = rs.getInt("stop_order");
-                final int state = rs.getInt("running_state");
-                return new AlightingAwareObservation(rs.getLong("id"), rs.getLong("observation_batch_id"), 0,
-                    rs.getObject("input_confirmed_at", OffsetDateTime.class).toInstant(), rs.getString("vehicle_id"),
-                    rs.getInt("passed_stop_order"), stop, state, seats, rs.getInt("crowd_level"),
-                    rs.getLong("route_version_id"),
-                    rs.getObject("response_received_at", OffsetDateTime.class).toInstant(),
-                    isDown(stop, state, turn));
-            }).list();
+        rows = history.rowsAt(through).stream()
+            .map(row -> withDirection(row, turn))
+            .toList();
         AlightingAwareObservation previous = null;
         long chain = 0;
         for (AlightingAwareObservation row : rows) {
@@ -127,24 +90,140 @@ final class ConfirmedAlightingAwareEvaluation {
         }
     }
 
-    private boolean incomplete() {
-        if (incomplete != null) {
-            return incomplete;
+    private static AlightingAwareObservation withDirection(AlightingAwareObservation row, final int turn) {
+        if (!isDown(row.stopOrder(), row.state(), turn)) {
+            return row;
         }
-        incomplete = jdbc.sql("""
-            SELECT EXISTS (
-              SELECT b.id FROM observation_batch b LEFT JOIN vehicle_observation o ON o.observation_batch_id=b.id
-              JOIN route_version v ON v.id=b.route_version_id
-              WHERE v.route_id=(SELECT route_id FROM route_version WHERE id=:route)
-                AND b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS'
-                AND b.input_confirmed_at>=b.response_received_at
-                AND b.input_confirmed_at<=b.response_received_at+interval '90 seconds'
-                AND b.input_confirmed_at>=:start AND b.input_confirmed_at<=:through
-              GROUP BY b.id,b.stored_rows HAVING count(o.id)<>coalesce(b.stored_rows,0)
-            )
-            """).param("route", route).param("start", offset(date.atStartOfDay(SEOUL).toInstant()))
-            .param("through", offset(through)).query(Boolean.class).single();
-        return incomplete;
+        return new AlightingAwareObservation(row.observationId(), row.batchId(), row.batchRank(), row.receivedAt(),
+            row.vehicleId(), row.passedStopOrder(), row.stopOrder(), row.state(), row.seats(), row.crowd(),
+            row.routeVersionId(), row.sourceReceivedAt(), true);
+    }
+
+    /** 한 페이지에서 같은 날 관측을 한 번 읽고 평가마다 기존 확정 시각 범위를 적용한다. */
+    static final class History {
+        private final JdbcClient jdbc;
+        private final long route;
+        private final Instant start;
+        private final Instant through;
+        private final int limit;
+        private List<AlightingAwareObservation> rows;
+        private Optional<Instant> firstIncomplete;
+
+        History(
+            JdbcClient jdbc,
+            final long route,
+            LocalDate date,
+            Instant through,
+            final int limit
+        ) {
+            this.jdbc = jdbc;
+            this.route = route;
+            this.start = date.atStartOfDay(SEOUL).toInstant();
+            this.through = through;
+            this.limit = limit;
+        }
+
+        private List<AlightingAwareObservation> rowsAt(Instant horizon) {
+            if (rows == null) {
+                rows = readRows();
+            }
+            if (through.equals(horizon)) {
+                return rows;
+            }
+            return rows.stream()
+                .filter(row -> !row.receivedAt().isAfter(horizon))
+                .toList();
+        }
+
+        private boolean exceedsLimit(List<AlightingAwareObservation> observations) {
+            return observations.size() > limit;
+        }
+
+        private List<AlightingAwareObservation> readRows() {
+            // 확정 시각 순으로 한도를 적용해야 앞선 시각의 평가에 필요한 관측이 남는다.
+            return jdbc.sql("""
+                WITH raw AS (
+                    SELECT o.id,o.observation_batch_id,o.vehicle_id,o.passed_stop_order,o.stop_order,o.running_state,
+                        o.remaining_seats,o.seat_unknown_reason,o.crowd_level,o.route_version_id,
+                        b.input_confirmed_at,b.response_received_at,
+                        count(*) OVER (PARTITION BY o.observation_batch_id,o.vehicle_id) AS identity_rows
+                    FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id
+                    JOIN route_version v ON v.id=b.route_version_id
+                    WHERE v.route_id=(SELECT route_id FROM route_version WHERE id=:route)
+                      AND b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS' AND b.stored_rows>0
+                      AND b.response_received_at>=CAST(:start AS timestamptz)-interval '90 seconds'
+                      AND b.response_received_at<=:through
+                      AND b.input_confirmed_at>=b.response_received_at
+                      AND b.input_confirmed_at<=b.response_received_at+interval '90 seconds'
+                      AND b.input_confirmed_at>=:start AND b.input_confirmed_at<=:through
+                      AND o.vehicle_id IS NOT NULL
+                ), limited AS (
+                    SELECT id, observation_batch_id, vehicle_id, passed_stop_order, stop_order, running_state,
+                        remaining_seats, seat_unknown_reason, crowd_level, route_version_id,
+                        input_confirmed_at, response_received_at
+                    FROM raw
+                    WHERE identity_rows = 1
+                    ORDER BY input_confirmed_at, observation_batch_id, id
+                    LIMIT :limit
+                )
+                SELECT id, observation_batch_id, vehicle_id, passed_stop_order, stop_order, running_state,
+                    remaining_seats, seat_unknown_reason, crowd_level, route_version_id,
+                    input_confirmed_at, response_received_at
+                FROM limited
+                ORDER BY vehicle_id, input_confirmed_at, observation_batch_id, id
+                """)
+                .param("route", route)
+                .param("start", offset(start))
+                .param("through", offset(through))
+                .param("limit", limit + 1)
+                .query((rs, index) -> {
+                    Integer seats = rs.getObject("remaining_seats", Integer.class);
+                    if (rs.getString("seat_unknown_reason") != null || invalidSeats(seats)) {
+                        seats = null;
+                    }
+                    return new AlightingAwareObservation(rs.getLong("id"), rs.getLong("observation_batch_id"), 0,
+                        rs.getObject("input_confirmed_at", OffsetDateTime.class).toInstant(),
+                        rs.getString("vehicle_id"),
+                        rs.getInt("passed_stop_order"), rs.getInt("stop_order"), rs.getInt("running_state"),
+                        seats, rs.getInt("crowd_level"), rs.getLong("route_version_id"),
+                        rs.getObject("response_received_at", OffsetDateTime.class).toInstant(), false);
+                })
+                .list();
+        }
+
+        private boolean incompleteAt(Instant horizon) {
+            if (firstIncomplete == null) {
+                Instant checkThrough = through;
+                if (exceedsLimit(rows)) {
+                    checkThrough = rows.stream()
+                        .map(AlightingAwareObservation::receivedAt)
+                        .max(Instant::compareTo)
+                        .orElseThrow();
+                }
+                firstIncomplete = jdbc.sql("""
+                    SELECT min(input_confirmed_at) FROM (
+                        SELECT b.input_confirmed_at
+                        FROM observation_batch b LEFT JOIN vehicle_observation o ON o.observation_batch_id=b.id
+                        JOIN route_version v ON v.id=b.route_version_id
+                        WHERE v.route_id=(SELECT route_id FROM route_version WHERE id=:route)
+                          AND b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS'
+                          AND b.response_received_at>=CAST(:start AS timestamptz)-interval '90 seconds'
+                          AND b.response_received_at<=:through
+                          AND b.input_confirmed_at>=b.response_received_at
+                          AND b.input_confirmed_at<=b.response_received_at+interval '90 seconds'
+                          AND b.input_confirmed_at>=:start AND b.input_confirmed_at<=:through
+                        GROUP BY b.id,b.stored_rows HAVING count(o.id)<>coalesce(b.stored_rows,0)
+                    ) incomplete
+                    """)
+                    .param("route", route)
+                    .param("start", offset(start))
+                    .param("through", offset(checkThrough))
+                    .query(OffsetDateTime.class)
+                    .optional()
+                    .map(OffsetDateTime::toInstant);
+            }
+            return firstIncomplete.filter(at -> !at.isAfter(horizon)).isPresent();
+        }
     }
 
     private boolean matches(AlightingAwareObservation source, final int target, AlightingAwarePassEvent event) {
