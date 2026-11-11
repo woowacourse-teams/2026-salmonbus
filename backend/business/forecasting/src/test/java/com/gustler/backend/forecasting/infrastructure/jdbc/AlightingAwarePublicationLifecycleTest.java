@@ -24,10 +24,12 @@ import com.gustler.backend.forecasting.domain.model.RouteDirection;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
+import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.infrastructure.alighting.ConfirmedAlightingAwareInput;
@@ -39,6 +41,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -259,6 +262,79 @@ class AlightingAwarePublicationLifecycleTest {
         assertThat(jdbc.sql("SELECT expected_seats FROM seat_forecast WHERE vehicle_observation_id=?")
             .param(source).query(Double.class).single()).isEqualTo(prediction);
         assertThat(count("alighting_forecast_evaluation_metric")).isOne();
+    }
+
+    @Test
+    void 휴일_예보를_한번_발행하고_휴일_파라미터로_정산한다() {
+        // given
+        jdbc.sql("""
+            UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at
+            WHERE route_version_id=?
+            """).param(version).update();
+        final long batchId = jdbc.sql("SELECT observation_batch_id FROM vehicle_observation WHERE id=?")
+            .param(source).query(Long.class).single();
+        AlightingAwareRouteStatistics original = statistics();
+        AlightingAwareRouteStatistics stats = new AlightingAwareRouteStatistics("3330", original.stops(),
+            original.minutesPerStop(), original.tables(), Map.of(), Set.of(LocalDate.parse("2026-01-05")), true);
+        String extendedEvidence = """
+            {"turn":4,"realStopOrders":[1,2,3],"holidays":["2026-01-05"],
+             "extendedSettlement":{"holiday-day":{"p":0.12,"lam":[1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5],"kappa":1,"r":2}}}
+            """;
+        ExtendedAlightingPredictor extension = new ExtendedAlightingPredictor(
+            constant(6, NumericTreeEnsemble.Kind.REGRESSION, 7),
+            constant(6, NumericTreeEnsemble.Kind.BINARY, Math.log(4)));
+        AlightingAwareSeatForecastModel model = new AlightingAwareSeatForecastModel(new AlightingAwareSeatPredictor(
+            constant(88, NumericTreeEnsemble.Kind.REGRESSION, 10),
+            constant(88, NumericTreeEnsemble.Kind.MULTICLASS, 0, 0, 0),
+            constant(80, NumericTreeEnsemble.Kind.BINARY, 0), 1.3),
+            Map.of("3330", stats), Map.of("3330", Map.of(2, extendedEvidence)),
+            "b".repeat(64), Map.of("3330", extension));
+        ModelRelease release = ModelRelease.alighting("all-hours-lifecycle", "b".repeat(64),
+            START.minusSeconds(86400).toString(), new SupportedForecastScope(List.of("3330")), model);
+        LoadedModelRegistry registry = new LoadedModelRegistry();
+        BundleActivation activation = new BundleActivation(deployments, registry);
+        final long deployed = tx.execute(status -> activation.activate(() -> release));
+        deploymentIds.add(deployed);
+        RuntimeSnapshot runtime = new ActiveForecastRuntimeResolver(deployments, registry).resolveActive().orElseThrow();
+        RouteStops stops = new RouteStops(version, "204000057", List.of(
+            new RouteStop(version, 1, "s1", true, RouteDirection.UP),
+            new RouteStop(version, 2, "s2", true, RouteDirection.UP),
+            new RouteStop(version, 3, "s3", false, RouteDirection.UP)));
+        AlightingAwareFeatureQuery query = mock(AlightingAwareFeatureQuery.class);
+        AlightingAwareFeatureSnapshot feature = mock(AlightingAwareFeatureSnapshot.class);
+        when(query.readExtended(batchId, stops, stats)).thenReturn(Map.of(source, feature));
+        when(feature.vehicleObservationId()).thenReturn(source);
+        when(feature.capacity()).thenReturn(40);
+        when(feature.source()).thenReturn(new AlightingAwareObservation(source, batchId, 0, START, "current",
+            1, 1, 2, 40, 0, version, START, false));
+        when(feature.provenance()).thenReturn(new AlightingAwareFeatureSnapshot.Provenance(source));
+        when(feature.observation()).thenReturn(new ObservedVehicle("current", version, 1, START, 40, null));
+        ForecastBatchWriter writer = new ForecastBatchWriter(committer, Clock.fixed(START.plusSeconds(1), ZoneOffset.UTC), quality);
+        writer.setAlightingAwareFeatures(query);
+        writer.setConfirmedInput(confirmedInput);
+        PendingForecastBatch batch = new PendingForecastBatch(batchId, version, route, START);
+
+        // when
+        writer.writeForecastsOf(batch, stops, runtime);
+        writer.writeForecastsOf(batch, stops, runtime);
+        service.settle();
+        new JdbcAlightingAwareForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions).settle();
+
+        // then
+        assertThat(count("forecast_publication")).isOne();
+        assertThat(count("seat_forecast")).isOne();
+        assertThat(jdbc.sql("SELECT expected_seats FROM seat_forecast WHERE vehicle_observation_id=?")
+            .param(source).query(Double.class).single()).isEqualTo(7);
+        assertThat(jdbc.sql("SELECT seat_full_chance FROM seat_forecast WHERE vehicle_observation_id=?")
+            .param(source).query(Double.class).single()).isEqualTo(0.8);
+        assertThat(jdbc.sql("""
+            SELECT feature_snapshot->'extendedInputs'->>1 FROM seat_forecast WHERE vehicle_observation_id=?
+            """).param(source).query(Double.class).single()).isEqualTo(40);
+        assertThat(count("alighting_forecast_evaluation_work")).isZero();
+        assertThat(count("alighting_forecast_evaluation_result")).isOne();
+        assertThat(jdbc.sql("SELECT scoring_state FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=?")
+            .param(source).query(String.class).single()).isEqualTo("SETTLED");
+        assertThat(label(AFTER)).isGreaterThan(2);
     }
 
     private AlightingAwareRouteStatistics statistics() {

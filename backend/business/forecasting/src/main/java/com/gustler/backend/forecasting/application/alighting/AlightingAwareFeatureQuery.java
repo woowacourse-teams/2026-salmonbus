@@ -7,4 +7,9 @@ import java.util.Map;
 
 public interface AlightingAwareFeatureQuery {
     Map<Long, AlightingAwareFeatureSnapshot> read(long observationBatchId, RouteStops stops, AlightingAwareRouteStatistics statistics);
+    default Map<Long, AlightingAwareFeatureSnapshot> readExtended(
+        final long observationBatchId, RouteStops stops, AlightingAwareRouteStatistics statistics
+    ) {
+        return read(observationBatchId, stops, statistics);
+    }
 }

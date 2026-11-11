@@ -25,6 +25,18 @@ class AlightingPosteriorTest {
         assertThatThrownBy(() -> calculate(41, 0, 40, 5, .12, 2, 1.5, 1)).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 정원_44석과_45석의_Python_기대값과_같다() {
+        double[] lambda = new double[8];
+        Arrays.fill(lambda, 2);
+        AlightingPosterior.Parameters parameters = new AlightingPosterior.Parameters(lambda, .2, 1, 2);
+
+        assertThat(AlightingPosterior.afterSeats(parameters, 10, 5, 44, 5, false, 3))
+            .isCloseTo(16.27113304835795, within(1e-12));
+        assertThat(AlightingPosterior.afterSeats(parameters, 10, 5, 45, 5, false, 3))
+            .isCloseTo(16.449546403813994, within(1e-12));
+    }
+
     private double calculate(
         final int arrivalSeats,
         final int departureSeats,

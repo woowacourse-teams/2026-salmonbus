@@ -4,6 +4,7 @@ import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAw
 
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -16,6 +17,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -36,19 +38,26 @@ public final class AlightingAwareInferenceBundle {
     private final JsonNode manifest;
     private final JsonNode statisticsManifest;
     private final String digest;
+    private final JsonNode extendedHours;
 
     private AlightingAwareInferenceBundle(
         AlightingAwareSeatPredictor predictor,
         Map<String, JsonNode> statistics,
         JsonNode manifest,
         JsonNode statisticsManifest,
-        String digest
+        String digest,
+        JsonNode extendedHours
     ) {
         this.predictor = predictor;
         this.statistics = Map.copyOf(statistics);
         this.manifest = manifest.deepCopy();
         this.statisticsManifest = statisticsManifest.deepCopy();
         this.digest = digest;
+        this.extendedHours = extendedHours;
+    }
+
+    JsonNode extendedHours() {
+        return extendedHours;
     }
 
     public AlightingAwareSeatPredictor predictor() {
@@ -91,8 +100,13 @@ public final class AlightingAwareInferenceBundle {
     }
 
     public Set<LocalDate> holidays() {
-        return texts(statisticsManifest.get("holiday_dates")).stream().map(LocalDate::parse)
-            .collect(Collectors.toUnmodifiableSet());
+        Set<LocalDate> dates = texts(statisticsManifest.get("holiday_dates")).stream().map(LocalDate::parse)
+            .collect(Collectors.toCollection(HashSet::new));
+        JsonNode extension = manifest.get("extended_holiday_dates");
+        if (extension != null) {
+            texts(extension).stream().map(LocalDate::parse).forEach(dates::add);
+        }
+        return Set.copyOf(dates);
     }
 
     private static AlightingAwareInferenceBundle load(Path directory, final boolean serving) throws IOException {
@@ -120,12 +134,17 @@ public final class AlightingAwareInferenceBundle {
         }
         Map<String, JsonNode> statistics = readStatistics(files, routes);
         AlightingAwareSeatPredictor predictor = readPredictor(files);
+        JsonNode extended = files.get("extended-hours.json");
+        if (extended != null) {
+            validateExtendedHours(extended, routes);
+            require(AlightingAwareConfirmedServingVerification.isConfirmed(files), "확정 입력이 필요한 시간 확장 모델이다");
+        }
         if (serving) {
             verifyServing(manifest, files);
             verifyGolden(predictor, required(files, "golden.json"));
             verifyGolden(predictor, required(files, "boundaries.json"));
         }
-        return new AlightingAwareInferenceBundle(predictor, statistics, manifest, statsManifest, digest(manifestBytes));
+        return new AlightingAwareInferenceBundle(predictor, statistics, manifest, statsManifest, digest(manifestBytes), extended);
     }
 
     private static Map<String, JsonNode> readDeclaredFiles(Path directory, JsonNode manifest) throws IOException {
@@ -185,6 +204,28 @@ public final class AlightingAwareInferenceBundle {
         return Files.readAllBytes(file);
     }
 
+    private static void validateExtendedHours(JsonNode extended, List<String> routes) {
+        require(text(extended, "schema").equals("alighting-extended-six-v1"), "시간 확장 스키마가 다르다");
+        require(texts(extended.get("features")).equals(List.of("seats", "capacity", "stop", "horizon", "minute", "off_day")),
+            "시간 확장 입력 순서가 다르다");
+        JsonNode entries = extended.path("routes");
+        require(entries.isObject() && entries.size() == routes.size(), "시간 확장 노선이 다르다");
+        for (String route : routes) {
+            JsonNode bands = entries.path(route).path("settlement");
+            require(bands.isObject() && bands.size() == 6, "시간 확장 정산 구간이 다르다: " + route);
+            for (String name : AlightingTimeCell.extendedKeys()) {
+                JsonNode params = bands.path(name);
+                require(array(params.get("lam")).size() == 8, "시간 확장 정산 계수 개수가 다르다");
+                for (JsonNode rate : array(params.get("lam"))) {
+                    require(number(rate) > 0, "시간 확장 승차율이 잘못됐다");
+                }
+                final double probability = number(params.get("p"));
+                require(probability > 0 && probability < 1 && number(params.get("kappa")) > 0
+                    && number(params.get("r")) > 0, "시간 확장 정산 계수가 잘못됐다");
+            }
+        }
+    }
+
     private static void verifyServing(JsonNode manifest, Map<String, JsonNode> files) {
         JsonNode runtime = manifest.get("runtime");
         require(runtime != null && runtime.isObject(), "서빙 계약이 없다");
@@ -194,13 +235,28 @@ public final class AlightingAwareInferenceBundle {
         final boolean confirmed = AlightingAwareConfirmedServingVerification.isConfirmed(files);
         verifyServingRoutes(runtime, files, routes, confirmed);
         verifyStatisticsCutoff(runtime, files, routes);
-        require(text(runtime, "scope").equals("weekday-rush-6-10-17-21-horizon-1-12"), "지원 시각/거리가 다르다");
+        String expectedScope = "weekday-rush-6-10-17-21-horizon-1-12";
+        if (files.containsKey("extended-hours.json")) {
+            expectedScope = "all-hours-horizon-1-12";
+        }
+        require(text(runtime, "scope").equals(expectedScope), "지원 시각/거리가 다르다");
         String sourceDigest = text(runtime, "source_manifest_sha256");
         require(sourceDigest.matches("[a-f0-9]{64}"), "원본 묶음 식별자가 없다");
         JsonNode original = required(files, "verification-source-manifest.json");
         require(text(manifest.get("files"), "verification-source-manifest.json").equals(sourceDigest),
             "검증한 원본 manifest와 다르다");
         require(!bool(original, "serving_ready"), "검증 원본은 비활성 묶음이어야 한다");
+        if (files.containsKey("extended-hours.json")) {
+            require(original.get("files").has("extended-hours.json"), "검증 원본에 시간 확장 모델이 없다");
+            List<String> holidays = texts(original.get("extended_holiday_dates"));
+            require(!holidays.isEmpty() && holidays.equals(texts(manifest.get("extended_holiday_dates"))),
+                "검증 원본과 운영 번들의 공휴일 달력이 다르다");
+            JsonNode result = required(files, "evidence-runtime_validation.json").path("result");
+            List<String> substitutions = holidayWeekendSubstitutions(original);
+            require(substitutions.equals(holidayWeekendSubstitutions(manifest)),
+                "검증 원본과 운영 번들의 공휴일 대체 노선이 다르다");
+            verifyExtended(result, sourceDigest, text(original, "extended_verification_code_sha"), routes, substitutions);
+        }
         for (String name : original.get("files").propertyNames()) {
             require(text(original.get("files"), name).equals(text(manifest.get("files"), name)),
                 "검증 이후 원본 파일이 바뀌었다: " + name);
@@ -214,6 +270,38 @@ public final class AlightingAwareInferenceBundle {
                 AlightingAwareConfirmedServingVerification.verify(check, receipt, evidence, sourceDigest, routes);
             }
         }
+    }
+
+    private static List<String> holidayWeekendSubstitutions(JsonNode node) {
+        return node.has("holiday_weekend_substitution_routes")
+            ? texts(node.get("holiday_weekend_substitution_routes")) : List.of();
+    }
+
+    static void verifyExtended(JsonNode result, String sourceDigest, String codeSha, List<String> routes,
+                               List<String> substitutions) {
+        require(codeSha.matches("[0-9a-f]{40}"), "시간 확장 검증 코드 SHA가 잘못됐다");
+        require(text(result, "bundle_manifest_sha256").equals(sourceDigest), "시간 확장 검증 후보가 다르다");
+        require(text(result, "verification_code_sha").equals(codeSha), "시간 확장 검증 코드가 다르다");
+
+        Map<String, Set<String>> remaining = new HashMap<>();
+        for (String route : routes) {
+            remaining.put(route, new HashSet<>(AlightingTimeCell.keys()));
+        }
+        for (JsonNode row : array(result.get("extended_hours"))) {
+            Set<String> cells = remaining.get(text(row, "route"));
+            require(cells != null && cells.remove(text(row, "cell")), "시간 확장 검증 노선 또는 시간이 중복되거나 잘못됐다");
+            final int published = integer(row.get("published"));
+            final int settled = integer(row.get("settled"));
+            require(settled > 0 && settled <= published, "시간 확장 발행 또는 정산 근거가 부족하다");
+        }
+        require(new HashSet<>(substitutions).size() == substitutions.size() && routes.containsAll(substitutions)
+            && substitutions.equals(holidayWeekendSubstitutions(result)), "공휴일 대체 노선이 잘못됐다");
+        for (String route : substitutions) {
+            require(remaining.get(route).equals(Set.of("holiday-day", "holiday-night")),
+                "공휴일 대체에는 같은 노선의 주말 낮·야간 검증이 필요하다");
+            remaining.get(route).clear();
+        }
+        require(remaining.values().stream().allMatch(Set::isEmpty), "시간 확장 검증 노선 또는 시간이 빠졌다");
     }
 
     private static void verifyServingRoutes(

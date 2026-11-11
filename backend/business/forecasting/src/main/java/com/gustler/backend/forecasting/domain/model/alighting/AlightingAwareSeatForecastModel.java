@@ -15,6 +15,7 @@ public final class AlightingAwareSeatForecastModel {
     private final Map<String, AlightingAwareRouteStatistics> statistics;
     private final Map<String, Map<Integer, String>> evidence;
     private final String bundleDigest;
+    private final Map<String, ExtendedAlightingPredictor> extended;
 
     public AlightingAwareSeatForecastModel(
         AlightingAwareSeatPredictor predictor,
@@ -22,11 +23,25 @@ public final class AlightingAwareSeatForecastModel {
         Map<String, Map<Integer, String>> evidence,
         String bundleDigest
     ) {
+        this(predictor, statistics, evidence, bundleDigest, Map.of());
+    }
+
+    public AlightingAwareSeatForecastModel(
+        AlightingAwareSeatPredictor predictor,
+        Map<String, AlightingAwareRouteStatistics> statistics,
+        Map<String, Map<Integer, String>> evidence,
+        String bundleDigest,
+        Map<String, ExtendedAlightingPredictor> extended
+    ) {
         this.predictor = Objects.requireNonNull(predictor);
         this.statistics = Map.copyOf(statistics);
         this.evidence = evidence.entrySet().stream().collect(Collectors.toUnmodifiableMap(
             Map.Entry::getKey, entry -> Map.copyOf(entry.getValue())));
         this.bundleDigest = bundleDigest;
+        this.extended = Map.copyOf(extended);
+        if (!this.extended.isEmpty() && !this.extended.keySet().equals(this.statistics.keySet())) {
+            throw new IllegalArgumentException("시간 확장 모델과 통계의 노선 목록이 다르다");
+        }
     }
 
     public boolean supportsRoute(RouteStops stops) {
@@ -68,6 +83,14 @@ public final class AlightingAwareSeatForecastModel {
 
     public String bundleDigest() {
         return bundleDigest;
+    }
+
+    public boolean supportsExtendedHours() {
+        return !extended.isEmpty();
+    }
+
+    public SeatForecastResult predictExtended(String route, double[] inputs) {
+        return extended.get(route).predict(inputs);
     }
 
     public SeatForecastResult predict(AlightingAwareFeatureVector vector) {

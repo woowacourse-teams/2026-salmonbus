@@ -4,6 +4,7 @@ Passing these checks records the tested scope. It does not assert production
 load, original quality assignments, or end-to-end bootstrap were measured.
 """
 import math
+import re
 
 PROFILE = 'alighting-confirmed-closure-v2'
 LABEL = 'alighting-confirmed-routeband-v2'
@@ -98,3 +99,36 @@ def verify_receipt(check, receipt, evidence, source_digest, routes):
     cases = verify_result(check, evidence['result'], source_digest, routes)
     if receipt['verified_cases'] != cases or evidence['verified_cases'] != cases:
         raise ValueError('receipt case count mismatch')
+
+
+EXTENDED_CELLS = ('work-morning', 'work-day', 'work-evening', 'work-night',
+                  'weekend-day', 'weekend-night', 'holiday-day', 'holiday-night')
+
+
+def verify_extended(result, source_digest, code_sha, routes, substitutions=()):
+    if (not isinstance(code_sha, str) or not re.fullmatch(r'[0-9a-f]{40}', code_sha)
+            or result.get('bundle_manifest_sha256') != source_digest
+            or result.get('verification_code_sha') != code_sha):
+        raise ValueError('extended verification source or code mismatch')
+    rows = result.get('extended_hours')
+    expected = {(route, cell) for route in routes for cell in EXTENDED_CELLS}
+    if not isinstance(rows, list):
+        raise ValueError('extended verification rows are missing')
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError('invalid extended verification row')
+        key = row.get('route'), row.get('cell')
+        if key not in expected:
+            raise ValueError('unexpected or duplicate extended verification row')
+        expected.remove(key)
+        published, settled = row.get('published'), row.get('settled')
+        if type(published) is not int or type(settled) is not int or not 0 < settled <= published:
+            raise ValueError('missing extended publication or settlement evidence')
+    if (not isinstance(substitutions, (list, tuple))
+            or any(not isinstance(route, str) or route not in routes for route in substitutions)
+            or len(set(substitutions)) != len(substitutions)
+            or result.get('holiday_weekend_substitution_routes', []) != list(substitutions)):
+        raise ValueError('invalid holiday weekend substitution routes')
+    missing_holidays = {(route, cell) for route in substitutions for cell in ('holiday-day', 'holiday-night')}
+    if expected != missing_holidays:
+        raise ValueError('missing extended route or time cell')

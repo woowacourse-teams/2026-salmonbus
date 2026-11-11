@@ -30,6 +30,7 @@ public final class AlightingAwareParityCheck {
         }
         AlightingAwareInferenceBundle loaded = AlightingAwareInferenceBundle.load(bundle);
         Map<String, Object> report = compareCases(bundle, loaded.predictor());
+        report.put("extended_model_loaded", AlightingAwareServingBundle.readModel(loaded).supportsExtendedHours());
         appendReportMetadata(report, bundle, start);
         Files.writeString(output, JSON.writerWithDefaultPrettyPrinter().writeValueAsString(report) + "\n");
         System.out.println(JSON.writeValueAsString(report));

@@ -21,6 +21,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /** 작은 합성 모델로 파일 손상과 계약 혼용을 검사한다. 실제 모델 대조는 verifyAlightingAwareParity에서 한다. */
@@ -30,6 +31,39 @@ class AlightingAwareBundleLoaderTest {
     private static final List<String> RESEARCH_ROUTES = Stream.concat(ROUTES.stream(), Stream.of(
         "1101", "1150", "1151", "1500-2", "3100", "4000", "6003", "6801", "7007-1", "8100", "9000", "G8110"))
         .toList();
+
+    @Test
+    void 시간_확장_검증은_모든_시간대와_동일한_후보_및_코드가_필요하다() {
+        String digest = "a".repeat(64);
+        String code = "b".repeat(40);
+        ObjectNode report = JSON.createObjectNode();
+        report.put("bundle_manifest_sha256", digest);
+        report.put("verification_code_sha", code);
+        ArrayNode rows = report.putArray("extended_hours");
+        for (String cell : List.of("work-morning", "work-day", "work-evening", "work-night",
+            "weekend-day", "weekend-night", "holiday-day", "holiday-night")) {
+            rows.addObject().put("route", "3330").put("cell", cell).put("published", 2).put("settled", 1);
+        }
+        AlightingAwareInferenceBundle.verifyExtended(report, digest, code, List.of("3330"), List.of());
+
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
+            report, "c".repeat(64), code, List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
+            report, digest, "d".repeat(40), List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
+
+        rows.remove(rows.size() - 1);
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
+            report, digest, code, List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
+
+        rows.remove(rows.size() - 1);
+        report.putArray("holiday_weekend_substitution_routes").add("3330");
+        AlightingAwareInferenceBundle.verifyExtended(report, digest, code, List.of("3330"), List.of("3330"));
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
+            report, digest, code, List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
+        rows.remove(rows.size() - 1);
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
+            report, digest, code, List.of("3330"), List.of("3330"))).isInstanceOf(IllegalArgumentException.class);
+    }
 
     @TempDir
     Path directory;

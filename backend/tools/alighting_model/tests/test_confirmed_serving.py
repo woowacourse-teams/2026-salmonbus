@@ -2,8 +2,11 @@
 import copy
 import json
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from confirmed_serving_verification import PROFILE, checked_routes, verify_result
+from confirmed_serving_verification import EXTENDED_CELLS, PROFILE, checked_routes, verify_extended, verify_result
+from prepare_confirmed_receipts import combine_extended
 
 
 class ConfirmedVerificationTest(unittest.TestCase):
@@ -65,6 +68,49 @@ class ConfirmedVerificationTest(unittest.TestCase):
     def test_changed_model_is_rejected(self):
         with self.assertRaises(ValueError):
             verify_result('settlement', self.worker, 'c' * 64, self.routes)
+
+    def test_extended_verification_rejects_missing_cells_and_reused_evidence(self):
+        code = 'a' * 40
+        rows = [dict(route=route, cell=cell, published=2, settled=1)
+                for route in self.routes for cell in EXTENDED_CELLS]
+        result = dict(bundle_manifest_sha256=self.digest, verification_code_sha=code, extended_hours=rows)
+        verify_extended(result, self.digest, code, self.routes)
+        for bad in [dict(extended_hours=rows[:-1]), dict(extended_hours=rows + rows[:1]),
+                    dict(bundle_manifest_sha256='c' * 64), dict(verification_code_sha='d' * 40)]:
+            with self.subTest(bad=list(bad)):
+                with self.assertRaises(ValueError):
+                    verify_extended(result | bad, self.digest, code, self.routes)
+
+        selected = [row for row in rows if row['route'] != '3330' or not row['cell'].startswith('holiday-')]
+        substitution = dict(result, extended_hours=selected, holiday_weekend_substitution_routes=['3330'])
+        verify_extended(substitution, self.digest, code, self.routes, ['3330'])
+        for bad in [dict(extended_hours=selected[:-1]),
+                    dict(extended_hours=[row for row in selected if row['cell'] != 'weekend-day']),
+                    dict(extended_hours=rows), dict(holiday_weekend_substitution_routes=['G8110'])]:
+            with self.subTest(bad=list(bad)), self.assertRaises(ValueError):
+                verify_extended(substitution | bad, self.digest, code, self.routes, ['3330'])
+
+    def test_replay_reports_must_cover_every_cell_and_restore_off_peak_settlement(self):
+        code = 'a' * 40
+        rows = [dict(route='3330', cell=cell, published=2, settled=1) for cell in EXTENDED_CELLS]
+        report = dict(passed=True, bundle_manifest_sha256=self.digest, verification_code_sha=code,
+                      routes=[dict(route='3330', passed=True, restored_targets=1, extended_hours=rows)])
+        runtime = dict(bundle_manifest_sha256=self.digest)
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'report.json'
+            path.write_text(json.dumps(report))
+            result = combine_extended(runtime, [path], self.digest, code, ['3330'])
+            self.assertEqual(result['extended_hours'], rows)
+
+            report['routes'][0]['restored_targets'] = 0
+            path.write_text(json.dumps(report))
+            with self.assertRaisesRegex(ValueError, 'restore failed'):
+                combine_extended(runtime, [path], self.digest, code, ['3330'])
+
+            report['routes'][0]['restored_targets'] = 1
+            path.write_text(json.dumps(report))
+            with self.assertRaisesRegex(ValueError, 'missing extended route or time cell'):
+                combine_extended(runtime, [path], self.digest, code, ['3330', '1650'])
 
     def test_runtime_must_cover_every_route_and_confirmed_profile(self):
         runtime = dict(passed=True, bundle_manifest_sha256=self.digest, routes=self.routes,

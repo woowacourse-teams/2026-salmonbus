@@ -6,11 +6,13 @@ import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatu
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareInputConfirmation;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
+import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
+import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingPredictor;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
@@ -101,21 +103,18 @@ public class ForecastBatchWriter {
             }
         }
         ZonedDateTime localTime = batch.responseReceivedAt().atZone(ZoneId.of("Asia/Seoul"));
-        final int minute = localTime.getHour() * 60 + localTime.getMinute();
-        if (!statistics.confirmedProfile() && !isValidatedRush(statistics, localTime, minute)) {
+        if (!statistics.confirmedProfile() && !statistics.timeCell(localTime).isRush()) {
             LOGGER.info("event=forecast_batch_withheld reason=ALIGHTING_AWARE_OUTSIDE_VALIDATED_RUSH_SCOPE batchId={}",
                 batch.observationBatchId());
             return commitAlightingAware(batch, new ForecastPublication(batch.observationBatchId(),
                 batch.routeVersionId(), runtime.deploymentId(), 0, qualityRevision,
                 batch.responseReceivedAt(), generatedAt, generatedAt, List.of()), statistics);
         }
-        Map<Long, AlightingAwareFeatureSnapshot> snapshots = readAlightingAwareFeatures(batch, stops, statistics);
+        Map<Long, AlightingAwareFeatureSnapshot> snapshots = readAlightingAwareFeatures(batch, stops, statistics, model.supportsExtendedHours());
         for (AlightingAwareFeatureSnapshot snapshot : snapshots.values()) {
-            if (statistics.confirmedProfile()) {
-                ZonedDateTime sourceTime = snapshot.source().receivedAt().atZone(ZoneId.of("Asia/Seoul"));
-                if (!isValidatedRush(statistics, sourceTime, sourceTime.getHour() * 60 + sourceTime.getMinute())) {
-                    continue;
-                }
+            final boolean extended = statistics.confirmedProfile() && outsideRush(statistics, snapshot);
+            if (extended && !model.supportsExtendedHours()) {
+                continue;
             }
             List<SeatForecast> vehiclePredictions = new ArrayList<>();
             for (VehicleStopTarget target : stops.targetsAheadOf(snapshot.observation())) {
@@ -123,9 +122,8 @@ public class ForecastBatchWriter {
                     && statistics.stop(target.stopOrder()).down() != snapshot.source().down()) {
                     continue;
                 }
-                AlightingAwareFeatureVector vector = snapshot.forTarget(target.stopOrder());
                 vehiclePredictions.add(alightingForecast(batch, runtime, model, generatedAt,
-                    statistics, snapshot, target, vector));
+                    statistics, snapshot, target, extended));
             }
             predictions.addAll(vehiclePredictions);
         }
@@ -141,27 +139,22 @@ public class ForecastBatchWriter {
         return committer.commit(batch, publication);
     }
 
-    private boolean isValidatedRush(AlightingAwareRouteStatistics statistics, ZonedDateTime localTime, final int minute) {
-        if (!"work".equals(statistics.dayType(localTime.toLocalDate()))) {
-            return false;
-        }
-        return isMorningRush(minute) || isEveningRush(minute);
-    }
-
-    private boolean isMorningRush(final int minute) {
-        return minute >= 360 && minute < 600;
-    }
-
-    private boolean isEveningRush(final int minute) {
-        return minute >= 1020 && minute < 1260;
+    private boolean outsideRush(AlightingAwareRouteStatistics statistics, AlightingAwareFeatureSnapshot snapshot) {
+        ZonedDateTime sourceTime = snapshot.source().receivedAt().atZone(ZoneId.of("Asia/Seoul"));
+        return !statistics.timeCell(sourceTime).isRush();
     }
 
     /** 자료 부족은 발행 확정 없이 전파해 복구 뒤 같은 배치를 재처리한다. */
     private Map<Long, AlightingAwareFeatureSnapshot> readAlightingAwareFeatures(
         PendingForecastBatch batch,
         RouteStops stops,
-        AlightingAwareRouteStatistics statistics) {
+        AlightingAwareRouteStatistics statistics,
+        final boolean extendedHours
+    ) {
         try {
+            if (extendedHours) {
+                return alightingFeatures.readExtended(batch.observationBatchId(), stops, statistics);
+            }
             return alightingFeatures.read(batch.observationBatchId(), stops, statistics);
         } catch (AlightingAwareFeatureUnavailableException error) {
             LOGGER.warn("event=forecast_batch_withheld reason={} batchId={}", error.getMessage(),
@@ -181,7 +174,7 @@ public class ForecastBatchWriter {
         AlightingAwareRouteStatistics statistics,
         AlightingAwareFeatureSnapshot snapshot,
         VehicleStopTarget target,
-        AlightingAwareFeatureVector vector
+        final boolean extended
     ) {
         ObjectNode evidence = (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.stopOrder()));
         evidence.put("asOf", batch.responseReceivedAt().toString());
@@ -194,12 +187,33 @@ public class ForecastBatchWriter {
         }
         evidence.put("vehicleObservationId", snapshot.vehicleObservationId());
         evidence.put("sourceBatchId", batch.observationBatchId());
-        evidence.set("seat88", nullableVector(vector.seat88()));
-        evidence.set("probability80", nullableVector(vector.probability80()));
+        SeatForecastResult prediction = predict(model, statistics, snapshot, target, evidence, extended);
         return SeatForecast.of(snapshot.vehicleObservationId(), target,
-            model.predict(vector), runtime.deploymentId(), 0, generatedAt)
+            prediction, runtime.deploymentId(), 0, generatedAt)
             .withAlightingAwareEvidence(JSON.writeValueAsString(evidence), model.bundleDigest(), statistics.confirmedProfile()
                 ? "alighting-confirmed-capacity-snapshot-v3" : "alighting-capacity-snapshot-v2");
+    }
+
+    private SeatForecastResult predict(
+        AlightingAwareSeatForecastModel model,
+        AlightingAwareRouteStatistics statistics,
+        AlightingAwareFeatureSnapshot snapshot,
+        VehicleStopTarget target,
+        ObjectNode evidence,
+        final boolean extended
+    ) {
+        if (extended) {
+            ZonedDateTime local = snapshot.source().receivedAt().atZone(ZoneId.of("Asia/Seoul"));
+            final boolean offDay = "off".equals(statistics.dayType(local.toLocalDate()));
+            double[] inputs = ExtendedAlightingPredictor.inputs(snapshot, target, offDay);
+            evidence.put("forecastInput", "alighting-extended-six-v1");
+            evidence.set("extendedInputs", nullableVector(inputs));
+            return model.predictExtended(statistics.route(), inputs);
+        }
+        AlightingAwareFeatureVector vector = snapshot.forTarget(target.stopOrder());
+        evidence.set("seat88", nullableVector(vector.seat88()));
+        evidence.set("probability80", nullableVector(vector.probability80()));
+        return model.predict(vector);
     }
 
     private static ArrayNode nullableVector(double[] vector) {

@@ -55,6 +55,17 @@ tasks.register('verifyAlightingAwareWorkerReplay', JavaExec) {
     maxHeapSize = '1g'
     jvmArgs '-XX:ActiveProcessorCount=1'
     doFirst {
+        def replaySourceSha = providers.exec {
+            workingDir rootProject.projectDir
+            commandLine 'git', 'rev-parse', 'HEAD'
+        }.standardOutput.asText.get().trim()
+        def dirty = providers.exec {
+            workingDir rootProject.projectDir
+            commandLine 'git', 'status', '--porcelain', '--', 'business/forecasting', 'tools/alighting_model'
+        }.standardOutput.asText.get().trim()
+        if (dirty.isEmpty()) {
+            systemProperty 'alighting.replay.code-sha', replaySourceSha
+        }
         args providers.gradleProperty('alightingWorkerFixtures').get(), providers.gradleProperty('alightingBundle').get(),
             providers.gradleProperty('alightingWorkerOutput').get()
         if (providers.gradleProperty('alightingWorkerRoute').isPresent()) {

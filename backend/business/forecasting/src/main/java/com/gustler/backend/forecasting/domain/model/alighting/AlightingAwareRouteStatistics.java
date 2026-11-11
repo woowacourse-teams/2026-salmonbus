@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.domain.model.alighting;
 
 import java.time.LocalDate;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -81,6 +82,10 @@ public record AlightingAwareRouteStatistics(
                 throw new IllegalArgumentException("Missing AlightingAware table: " + table);
             }
         }
+    }
+
+    public AlightingTimeCell timeCell(ZonedDateTime seoulTime) {
+        return AlightingTimeCell.of(seoulTime, holidays.contains(seoulTime.toLocalDate()));
     }
 
     public String dayType(LocalDate date) {
