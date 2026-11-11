@@ -1,6 +1,12 @@
 package com.gustler.backend.archive;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureUnavailableException;
+import com.gustler.backend.forecasting.infrastructure.alighting.JdbcAlightingAwareFeatureQuery;
+import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
+import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 
 import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareHistoryBootstrap;
 import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareHistorySeedReader;
@@ -25,7 +31,7 @@ class AlightingAwareHistoryPreparationTest {
     Path directory;
 
     @Test
-    void 운영_V60에서_확정_관측_이력을_준비하고_중복_실행해도_유지한다() {
+    void 품질_전환_후_새_체크포인트로_이어_읽은_예보_입력이_DB에서_재구성한_입력과_같다() {
         try (TestDatabase db = TestDatabase.create()) {
             DriverManagerDataSource source = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
             Flyway flyway = Flyway.configure().dataSource(source).target("60").load();
@@ -41,13 +47,14 @@ class AlightingAwareHistoryPreparationTest {
                 """).param(route).query(Long.class).single();
             jdbc.sql("""
                 INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
-                VALUES(?,1,'s1','A','UP',true)
-                """).param(version).update();
+                VALUES(?,1,'s1','A','UP',true),(?,2,'s2','B','UP',true)
+                """).params(version, version).update();
             final long batch = jdbc.sql("""
                 INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,
                     response_received_at,input_confirmed_at,ingestion_origin,outcome,stored_rows,
                     normalization_version,collection_strategy_version)
-                VALUES(?,now(),1,'history',now(),now(),'LIVE','SUCCESS_ROWS',1,'n','c') RETURNING id
+                VALUES(?,'2026-11-11 06:00:00+09',1,'history','2026-11-11 06:00:00+09',
+                    '2026-11-11 06:00:01+09','LIVE','SUCCESS_ROWS',1,'n','c') RETURNING id
                 """).param(version).query(Long.class).single();
             final long observation = jdbc.sql("""
                 INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,
@@ -55,26 +62,71 @@ class AlightingAwareHistoryPreparationTest {
                 VALUES(?,?,0,'bus',1,'s1',1,2,45) RETURNING id
                 """).params(batch, version).query(Long.class).single();
             RouteStops stops = new RouteStops(version, "r",
-                List.of(new RouteStop(version, 1, "s1", true, RouteDirection.UP)), "r");
+                List.of(new RouteStop(version, 1, "s1", true, RouteDirection.UP),
+                    new RouteStop(version, 2, "s2", true, RouteDirection.UP)), "r");
             Map<String, Map<String, Double>> tables = List.of(
                 "lam", "lam_base", "net_tab", "full_tab", "dep_tab", "stop_net_base").stream()
                 .collect(Collectors.toMap(name -> name, name -> Map.of()));
             AlightingAwareRouteStatistics statistics = new AlightingAwareRouteStatistics("r",
-                List.of(new AlightingAwareRouteStatistics.Stop(1, "s1", "A", false, true)),
+                List.of(new AlightingAwareRouteStatistics.Stop(1, "s1", "A", false, true),
+                    new AlightingAwareRouteStatistics.Stop(2, "s2", "B", false, true)),
                 2, tables, Map.of(), Set.of(), true);
             AlightingAwareHistoryBootstrap bootstrap = new AlightingAwareHistoryBootstrap(jdbc);
+
+            jdbc.sql("""
+                INSERT INTO vehicle_one_way_trip(id,start_observation_id,route_version_id,vehicle_id,status,boundary,rule_version)
+                VALUES('excluded',?,?,'bus','EXCLUDED','START','v1')
+                """).params(observation, version).update();
+            jdbc.sql("INSERT INTO observation_trip_assignment(observation_id,trip_id) VALUES(?,'excluded')")
+                .param(observation).update();
+
+            assertThatThrownBy(() -> bootstrap.rebuild(stops, statistics, batch, batch, 1000, 100, directory.toString()))
+                .isInstanceOf(AlightingAwareFeatureUnavailableException.class)
+                .hasMessage("ALIGHTING_AWARE_HISTORY_REQUIRES_QUALITY_CUTOVER");
+
+            Flyway current = Flyway.configure().dataSource(source).load();
+            current.migrate();
+            current.validate();
+            assertThat(jdbc.sql("""
+                SELECT remaining_seats IS NULL AND reported_remaining_seats=45
+                FROM vehicle_observation WHERE id=?
+                """).param(observation).query(Boolean.class).single()).isTrue();
 
             final int checkpoints = bootstrap.rebuild(stops, statistics, batch, batch, 1000, 100, directory.toString());
             var seed = new AlightingAwareHistorySeedReader(
                 directory.resolve(AlightingAwareRouteStatistics.CONFIRMED_PROFILE).toString(), 100).read(version);
-
             assertThat(checkpoints).isOne();
             assertThat(seed.batchId()).isEqualTo(batch);
-            assertThat(seed.observations()).extracting(item -> item.observationId()).containsExactly(observation);
+            assertThat(seed.observations()).singleElement().satisfies(row -> {
+                assertThat(row.observationId()).isEqualTo(observation);
+                assertThat(row.seats()).isNull();
+            });
             assertThat(bootstrap.rebuild(stops, statistics, batch, batch, 1000, 100, directory.toString())).isZero();
-            assertThat(jdbc.sql("SELECT to_regclass('vehicle_capacity') IS NULL").query(Boolean.class).single()).isTrue();
-            assertThat(jdbc.sql("SELECT count(*) FROM vehicle_observation").query(Long.class).single()).isOne();
-            flyway.validate();
+
+            final long nextBatch = jdbc.sql("""
+                INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,
+                    response_received_at,input_confirmed_at,ingestion_origin,outcome,stored_rows,
+                    normalization_version,collection_strategy_version)
+                VALUES(?,'2026-11-11 06:00:20+09',1,'next','2026-11-11 06:00:20+09',
+                    '2026-11-11 06:00:21+09','LIVE','SUCCESS_ROWS',1,'n','c') RETURNING id
+                """).param(version).query(Long.class).single();
+            final long nextObservation = jdbc.sql("""
+                INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,
+                    vehicle_id,stop_order,stop_id,passed_stop_order,running_state,remaining_seats)
+                VALUES(?,?,0,'bus',1,'s1',1,2,40) RETURNING id
+                """).params(nextBatch, version).query(Long.class).single();
+            jdbc.sql("""
+                INSERT INTO vehicle_capacity_history(source_id,vehicle_id,evidence_at,evidence_batch_id,capacity)
+                VALUES('GBIS','bus','2026-11-11 06:00:20+09',?,45)
+                """).param(nextBatch).update();
+
+            VehicleCapacityCache capacities = new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc));
+            var direct = new JdbcAlightingAwareFeatureQuery(jdbc, capacities, version + ":" + batch, 100, false, "")
+                .read(nextBatch, stops, statistics).get(nextObservation).forTarget(2);
+            var resumed = new JdbcAlightingAwareFeatureQuery(jdbc, capacities, "", 100, false, directory.toString())
+                .read(nextBatch, stops, statistics).get(nextObservation).forTarget(2);
+            assertThat(resumed.seat88()).containsExactly(direct.seat88());
+            assertThat(resumed.probability80()).containsExactly(direct.probability80());
         }
     }
 }

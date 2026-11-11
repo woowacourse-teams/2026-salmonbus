@@ -30,6 +30,9 @@ public final class AlightingAwareHistoryBootstrap {
         String checkpointDirectory
     ) {
         validateRequest(checkpointDirectory, batchStep);
+        if (statistics.confirmedProfile()) {
+            requireQualityCutover();
+        }
         Instant through = through(stops.routeVersionId(), throughBatchId, statistics.confirmedProfile());
         String seedDirectory = checkpointDirectory;
         if (statistics.confirmedProfile()) {
@@ -63,6 +66,19 @@ public final class AlightingAwareHistoryBootstrap {
 
     private static boolean isInvalidBatchStep(final int batchStep) {
         return batchStep < 1 || batchStep > 1000;
+    }
+
+    private void requireQualityCutover() {
+        // V66은 제외 관측의 좌석을 비우고 route.data_revision을 추가한다.
+        boolean migrated = jdbc.sql("""
+            SELECT EXISTS (
+                SELECT 1 FROM pg_attribute
+                WHERE attrelid='route'::regclass AND attname='data_revision' AND NOT attisdropped
+            )
+            """).query(Boolean.class).single();
+        if (!migrated) {
+            throw new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_HISTORY_REQUIRES_QUALITY_CUTOVER");
+        }
     }
 
     private Instant through(final long routeVersionId, final long batchId, final boolean confirmed) {

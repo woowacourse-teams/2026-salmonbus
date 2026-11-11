@@ -905,11 +905,13 @@ Discord 알림을 받으면 DB 원인 분석 화면의 수집 실패 및 상태 
 
 ### 하차 반영 단일 모델 전환
 
-이번 전환은 수동 중지 후 진행한다. 구 Worker·API·archive-app과 복원 작업을 중지하고 백업한 뒤 API에서 V62~V72를 적용한다. 실행 중인 구 Worker를 새 스키마에 연결하지 않는다. 구 좌석분포 모델과 DB 수요 통계·당일 보정 계산 경로는 제거했으며 기존 배포로 되돌리는 것만으로 스키마까지 복구되지는 않는다.
+이번 전환은 수동 중지 후 진행한다. 구 Worker·API·archive-app과 복원 작업을 중지한다. V66 이전 DB 백업을 만들고 격리 DB에 복원해 스키마 버전과 관측 조회를 확인한다. API에서 배포 버전까지 Flyway를 적용한다. 이전 애플리케이션을 다시 배포해야 할 경우에는 검증한 V66 이전 DB도 함께 복원한다.
+
+dev에서 기존 V67을 이미 실행했다면 V72 이상 적용과 V67 단독 체크섬 불일치를 확인한 뒤 Flyway `repair`와 `validate`를 실행한다. 수정된 V67을 담아 검증을 통과한 패키지를 복구용으로 보관한다. V75 적용 전에는 기존 `push_device` 등록을 확인하고 배포 후 앱에서 기기를 다시 등록한다.
 
 1. 원본 번들과 서명·해시는 그대로 보존한다. 기존 `les-*` 판본 정보는 읽을 때만 새 이름으로 해석한다.
-2. 새 모델 파일과 설정을 함께 준비하고 `alighting-online-capacity-snapshot-v2` 계산 판본으로 명시적으로 승격한다. 필요하면 기존 `MODEL_BUNDLE_PROMOTE_ON_START` 절차를 사용한다. 옛 계산 판본의 활성 배포를 단순 재시작으로 재사용하지 않는다.
-3. 확정 관측 이력 체크포인트를 검증한다. 기존 `les-confirmed-closure-v2` 디렉터리를 사용했다면 새 `alighting-confirmed-closure-v2` 위치로 파일 내용을 바꾸지 않고 준비하거나 검증된 원본에서 재생성한다. 해시 확인 전에는 원본 삭제를 켜지 않는다.
+2. 새 모델 파일과 설정을 준비하고 Worker 시작 시 `alighting-online-capacity-snapshot-v2` 계산 판본으로 승격하도록 설정한다. 필요하면 기존 `MODEL_BUNDLE_PROMOTE_ON_START` 절차를 사용한다.
+3. API의 Flyway 적용 완료를 확인하고 Worker와 archive-app을 중지한 상태에서 확정 관측 이력 체크포인트를 생성한다. V66이 과거 제외 관측의 잔여석을 비우므로 전환 DB에서 `alighting-history-bootstrap`의 `--checkpoint-directory`에 이번 배포 전용 빈 경로를 지정한다. 기존 경로에서 실행하면 해당 파일의 마지막 커서부터 이어 읽는다. 지원 노선별로 생성된 `alighting-confirmed-closure-v2` 파일과 마지막 배치 ID를 확인한 뒤, Worker의 `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`를 이번 경로로 설정한다. 해시와 커서에 필요한 원본 배치가 확인될 때까지 원본 삭제를 보류한다.
 4. Worker를 시작해 차량 정원 캐시 준비와 예보·정산을 확인한다. 예보에 저장한 정원으로 정산하며, 이후 관측이 그 정원을 넘으면 `OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT` 사유로 해당 정산을 종료한다. 과거 예보의 정원을 바꾸거나 재계산하지 않는다.
 5. archive-app은 삭제를 끈 상태로 시작한다. 오늘·어제를 남기고 이전 날짜의 수집·새 정산 완료, S3 재읽기와 해시 검증을 확인한 뒤 삭제를 활성화한다. 예보 생성 직후 원본을 삭제하는 구조가 아니다.
 
