@@ -141,6 +141,7 @@ test.describe("홈 지도까지 지원하는 iOS 앱", () => {
   });
 
   test("앱의 지도 범위로 정류장을 조회해 핀을 보내고 선택하면 웹 시트를 연다", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
     const stationId = "206000532";
     const name = "판교역 검증 정류장";
     const center = { latitude: 37.394761, longitude: 127.111136 };
