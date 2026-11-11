@@ -2,30 +2,46 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
-import com.gustler.backend.forecasting.application.evaluation.AlightingAwareEvaluationArchiveService;
 import com.gustler.backend.forecasting.application.RouteWorkAccess;
+import com.gustler.backend.forecasting.application.evaluation.AlightingAwareEvaluationArchiveService;
+import com.gustler.backend.forecasting.application.publication.ForecastBatchCommitter;
+import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
+import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.HexFormat;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -43,6 +59,8 @@ class JdbcAlightingAwareForecastEvaluationTest {
     JdbcClient jdbc;
     @Autowired
     RouteWorkAccess quality;
+    @Autowired
+    ForecastBatchCommitter committer;
     @Autowired
     PlatformTransactionManager transactions;
     private TransactionTemplate tx;
@@ -152,6 +170,151 @@ class JdbcAlightingAwareForecastEvaluationTest {
         assertThat(count("alighting_forecast_evaluation_work")).isOne();
         assertThat(count("forecast_evaluation_work")).isZero();
         assertThat(count("forecast_evaluation_pending")).isZero();
+    }
+
+    @Test
+    void 정산_조회_중에도_발행과_노선_갱신이_진행되고_이전_판본의_결과는_저장하지_않는다() {
+        // given
+        useConfirmedProfile();
+        final long publicationSource = observation("publication", 120, 1, 40);
+        final long publicationBatch = jdbc.sql("SELECT observation_batch_id FROM vehicle_observation WHERE id=?")
+            .param(publicationSource).query(Long.class).single();
+        Instant observedAt = START.plusSeconds(120);
+        Instant generatedAt = observedAt.plusSeconds(1);
+        JdbcClient observing = mock(JdbcClient.class, delegatesTo(jdbc));
+        TransactionTemplate writer = new TransactionTemplate(transactions);
+        writer.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        doAnswer(call -> {
+            writer.executeWithoutResult(status -> {
+                jdbc.sql("SET LOCAL lock_timeout='500ms'").update();
+                committer.commit(new PendingForecastBatch(publicationBatch, version, route, observedAt),
+                    new ForecastPublication(publicationBatch, version, deployment, 0, 1,
+                        observedAt, generatedAt, generatedAt, List.of()));
+                jdbc.sql("UPDATE route SET data_revision=data_revision+1 WHERE id=?").param(route).update();
+            });
+            return jdbc.sql(call.getArgument(0, String.class));
+        }).when(observing).sql(contains("WITH raw AS"));
+
+        // when
+        new JdbcAlightingAwareForecastEvaluation(observing, quality, Clock.systemUTC(), transactions).settle();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(quality.current(version)).isEqualTo(2);
+            softly.assertThat(count("forecast_publication")).isEqualTo(2);
+            softly.assertThat(count("alighting_forecast_evaluation_result")).isZero();
+            softly.assertThat(count("alighting_forecast_evaluation_work")).isOne();
+        });
+        service.settle();
+        assertThat(jdbc.sql("""
+            SELECT quality_revision
+            FROM alighting_forecast_evaluation_result
+            WHERE vehicle_observation_id = ?
+            """).param(source).query(Long.class).single()).isEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true, 1, 0", "false, 0, 1"})
+    void 같은_페이지가_먼저_완료되거나_재예약되면_이전_계산을_저장하지_않는다(
+        final boolean anotherSettlement,
+        final int expectedResults,
+        final int expectedPending
+    ) {
+        // given
+        useConfirmedProfile();
+        JdbcClient observing = mock(JdbcClient.class, delegatesTo(jdbc));
+        try (ExecutorService writer = Executors.newSingleThreadExecutor()) {
+            doAnswer(call -> {
+                writer.submit(() -> {
+                    if (anotherSettlement) {
+                        service.settle();
+                        return;
+                    }
+                    jdbc.sql("""
+                        UPDATE alighting_forecast_evaluation_work
+                        SET next_attempt_at = clock_timestamp() + interval '1 hour'
+                        WHERE vehicle_observation_id = ?
+                        """).param(source).update();
+                }).get(5, TimeUnit.SECONDS);
+                return jdbc.sql(call.getArgument(0, String.class));
+            }).when(observing).sql(contains("WITH raw AS"));
+
+            // when
+            new JdbcAlightingAwareForecastEvaluation(observing, quality, Clock.systemUTC(), transactions).settle();
+        }
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(count("alighting_forecast_evaluation_result")).isEqualTo(expectedResults);
+            softly.assertThat(count("alighting_forecast_evaluation_work")).isEqualTo(expectedPending);
+        });
+        jdbc.sql("""
+            UPDATE alighting_forecast_evaluation_work
+            SET next_attempt_at = clock_timestamp()
+            WHERE vehicle_observation_id = ?
+            """).param(source).update();
+        service.settle();
+        assertThat(count("alighting_forecast_evaluation_result")).isOne();
+        assertThat(count("alighting_forecast_evaluation_work")).isZero();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true, false, 1", "false, false, 1", "false, true, 2"})
+    void 잠기지_않고_계산_범위가_그대로인_정산은_처리한다(
+        final boolean confirmed,
+        final boolean lockLatest,
+        final int expectedPending
+    ) throws Exception {
+        // given
+        if (confirmed) {
+            useConfirmedProfile();
+        }
+        final long next = observation("next", 120, 1, 40);
+        copyForecast(next);
+        long lockedObservation = source;
+        List<Long> expectedSettled = List.of(next);
+        if (lockLatest) {
+            lockedObservation = next;
+            expectedSettled = List.of();
+        }
+        final long lockedObservationId = lockedObservation;
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ExecutorService worker = Executors.newSingleThreadExecutor()) {
+            Future<?> holding = worker.submit(() -> tx.executeWithoutResult(status -> {
+                jdbc.sql("""
+                    SELECT vehicle_observation_id FROM alighting_forecast_evaluation_work
+                    WHERE vehicle_observation_id=? FOR UPDATE
+                    """).param(lockedObservationId).query(Long.class).single();
+                locked.countDown();
+                try {
+                    assertThat(release.await(10, TimeUnit.SECONDS)).isTrue();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+            }));
+            try {
+                assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+
+                // when
+                service.settle();
+
+                // then
+                assertThat(jdbc.sql("""
+                    SELECT vehicle_observation_id
+                    FROM alighting_forecast_evaluation_result
+                    WHERE route_version_id = ?
+                    """).param(version).query(Long.class).list()).containsExactlyElementsOf(expectedSettled);
+                assertThat(count("alighting_forecast_evaluation_work")).isEqualTo(expectedPending);
+            } finally {
+                release.countDown();
+            }
+            holding.get(5, TimeUnit.SECONDS);
+        }
+        service.settle();
+        assertThat(count("alighting_forecast_evaluation_work")).isZero();
+        assertThat(count("alighting_forecast_evaluation_result")).isEqualTo(2);
     }
 
     @Test
@@ -440,6 +603,61 @@ class JdbcAlightingAwareForecastEvaluationTest {
         assertThat(count("alighting_forecast_evaluation_result")).isEqualTo(220);
     }
 
+    @ParameterizedTest
+    @CsvSource({"9, OBSERVATION_INPUT_LIMIT", "100, SOURCE_HISTORY_INCOMPLETE"})
+    void 늦은_관측의_한도_초과와_누락은_앞선_정산에_영향을_주지_않는다(final int limit, String reason) {
+        // given
+        useConfirmedProfile();
+        final long later = observation("later", 120, 1, 40);
+        copyForecast(later);
+        final long missing = observation("incomplete", 7210, 1, 40);
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at "
+            + "WHERE route_version_id=?").param(version).update();
+        jdbc.sql("UPDATE observation_batch SET stored_rows=2 WHERE id="
+            + "(SELECT observation_batch_id FROM vehicle_observation WHERE id=?)").param(missing).update();
+
+        // when
+        new JdbcAlightingAwareForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions, 50_000, limit)
+            .settle();
+
+        // then
+        assertThat(jdbc.sql("""
+            SELECT scoring_state
+            FROM alighting_forecast_evaluation_result
+            WHERE vehicle_observation_id = ?
+            """).param(source).query(String.class).single()).isEqualTo("SETTLED");
+        assertThat(jdbc.sql("SELECT reason FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=?")
+            .param(later).query(String.class).single()).isEqualTo(reason);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"90, UNSUPPORTED", "91, SETTLED"})
+    void 자정에_확정된_누락은_수신_후_구십초까지_정산에_반영한다(final int delaySeconds, String expectedState) {
+        // given
+        useConfirmedProfile();
+        final long midnightObservation = observation("midnight", -32_400, 1, 40);
+        jdbc.sql("""
+            UPDATE observation_batch
+            SET ingestion_origin = 'LIVE', input_confirmed_at = response_received_at
+            WHERE route_version_id = ?
+            """).param(version).update();
+        jdbc.sql("""
+            UPDATE observation_batch
+            SET response_received_at = input_confirmed_at - make_interval(secs => ?), stored_rows = 2
+            WHERE id = (SELECT observation_batch_id FROM vehicle_observation WHERE id = ?)
+            """).params(delaySeconds, midnightObservation).update();
+
+        // when
+        service.settle();
+
+        // then
+        assertThat(jdbc.sql("""
+            SELECT scoring_state
+            FROM alighting_forecast_evaluation_result
+            WHERE vehicle_observation_id = ?
+            """).param(source).query(String.class).single()).isEqualTo(expectedState);
+    }
+
     @Test
     void 다음날_관측이_늘어도_확인시각_정산의_입력_범위를_넓히지_않는다() {
         // given
@@ -548,11 +766,14 @@ class JdbcAlightingAwareForecastEvaluationTest {
             """).param(version).update();
 
         // when
-        new JdbcAlightingAwareForecastEvaluation(jdbc, quality, Clock.systemUTC(), heapTransactions).settle();
+        JdbcClient observing = mock(JdbcClient.class, delegatesTo(jdbc));
+        new JdbcAlightingAwareForecastEvaluation(observing, quality, Clock.systemUTC(), heapTransactions).settle();
 
         // then
         assertThat(count("alighting_forecast_evaluation_work")).isZero();
         assertThat(count("alighting_forecast_evaluation_result")).isEqualTo(25);
+        verify(observing).sql(contains("WITH raw AS"));
+        verify(observing).sql(contains("HAVING count(o.id)"));
         assertThat(jdbc.sql("SELECT DISTINCT reason FROM alighting_forecast_evaluation_result "
             + "WHERE route_version_id=? AND vehicle_observation_id<>?")
             .params(version, source).query(String.class).list()).containsExactly("NO_CLOSED_IDENTITY_SAFE_PASS");
