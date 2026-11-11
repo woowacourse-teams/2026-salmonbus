@@ -537,6 +537,7 @@ test("그룹과 즐겨찾기 순서를 키보드로 편집하고 전체 ID 목�
 
 for (const [status, label] of [
   ["NO_VEHICLE", "도착 예정 차량이 없어요"],
+  ["UNAVAILABLE", "현재 노선에서 이 정류장을 이용할 수 없어요"],
   ["ERROR", "정류장 정보를 불러오지 못했어요"],
 ] as const) {
   test(`즐겨찾기의 ${status} 항목도 유지하고 상태를 안내한다`, async ({ page, favorites, api }) => {
@@ -554,9 +555,11 @@ for (const [status, label] of [
       await expect(panel.getByText("노선 정보 없음", { exact: true })).toHaveCount(0);
       await expect(panel.getByText("정류장 정보 없음", { exact: true })).toHaveCount(0);
     }
-    if (status === "ERROR") {
+    if (status === "UNAVAILABLE" || status === "ERROR") {
       await expect(panel.getByText("상행", { exact: true })).toHaveCount(0);
       await expect(panel.getByText("하행", { exact: true })).toHaveCount(0);
+    }
+    if (status === "ERROR") {
       favorites.statuses[saved.id] = "READY";
       await panel.getByRole("button", { name: "다시 시도하기", exact: true }).click();
       await expect(panel.getByText("11정류장 전", { exact: true })).toBeVisible();
