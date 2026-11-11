@@ -2,6 +2,10 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
 import com.gustler.backend.forecasting.application.evaluation.AlightingAwareEvaluationArchiveService;
@@ -152,6 +156,27 @@ class JdbcAlightingAwareForecastEvaluationTest {
         assertThat(count("alighting_forecast_evaluation_work")).isOne();
         assertThat(count("forecast_evaluation_work")).isZero();
         assertThat(count("forecast_evaluation_pending")).isZero();
+    }
+
+    @Test
+    void 관측을_읽는_동안_노선_판본을_갱신할_수_있고_이전_판본의_결과는_저장하지_않는다() {
+        useConfirmedProfile();
+        final JdbcClient observing = mock(JdbcClient.class, delegatesTo(jdbc));
+        final TransactionTemplate writer = new TransactionTemplate(transactions);
+        writer.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        doAnswer(call -> {
+            writer.executeWithoutResult(status -> {
+                jdbc.sql("SET LOCAL lock_timeout='500ms'").update();
+                jdbc.sql("UPDATE route SET data_revision=data_revision+1 WHERE id=?").param(route).update();
+            });
+            return jdbc.sql(call.getArgument(0, String.class));
+        }).when(observing).sql(contains("WITH raw AS"));
+
+        new JdbcAlightingAwareForecastEvaluation(observing, quality, Clock.systemUTC(), transactions).settle();
+
+        assertThat(quality.current(version)).isEqualTo(2);
+        assertThat(count("alighting_forecast_evaluation_result")).isZero();
+        assertThat(count("alighting_forecast_evaluation_work")).isOne();
     }
 
     @Test
