@@ -17,20 +17,32 @@ from causal_prepare import HOLIDAYS, original_alighting
 from contracts import sha256
 
 SEOUL = 'Asia/Seoul'
+# The rush statistics also list statutory holidays that fell on weekends.
+HISTORICAL_HOLIDAYS = HOLIDAYS | {'2026-08-15', '2026-09-26', '2026-10-03'}
+RUSH_WINDOWS = {'morning': (360, 600), 'evening': (1020, 1260)}
+SETTLEMENT_WINDOWS = dict(RUSH_WINDOWS, extended=(0, 1440))
 
 
-def classify(events):
+def settlement_window(cell):
+    if cell.startswith('work-') and cell[5:] in RUSH_WINDOWS:
+        return cell[5:], 30
+    return 'extended', 180
+
+
+def classify(events, holidays=HISTORICAL_HOLIDAYS):
     local = events.t_depart.dt.tz_convert(SEOUL)
     minute = local.dt.hour * 60 + local.dt.minute
     day = local.dt.strftime('%Y-%m-%d')
-    holiday = day.isin(HOLIDAYS)
+    holiday = day.isin(holidays)
     work = (local.dt.day_of_week < 5) & ~holiday
 
     cell = pd.Series('work-night', index=events.index)
-    cell.loc[work & minute.between(360, 599)] = 'work-morning'
-    cell.loc[work & minute.between(600, 1019)] = 'work-day'
-    cell.loc[work & minute.between(1020, 1259)] = 'work-evening'
-    daytime = minute.between(360, 1259)
+    morning_start, _ = RUSH_WINDOWS['morning']
+    _, evening_end = RUSH_WINDOWS['evening']
+    daytime = minute.between(morning_start, evening_end, inclusive='left')
+    cell.loc[work & daytime] = 'work-day'
+    for band, (start, end) in RUSH_WINDOWS.items():
+        cell.loc[work & minute.between(start, end, inclusive='left')] = f'work-{band}'
     cell.loc[~work & ~holiday & daytime] = 'weekend-day'
     cell.loc[~work & ~holiday & ~daytime] = 'weekend-night'
     cell.loc[holiday & daytime] = 'holiday-day'

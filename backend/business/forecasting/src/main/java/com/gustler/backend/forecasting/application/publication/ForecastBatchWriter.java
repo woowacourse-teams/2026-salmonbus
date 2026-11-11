@@ -103,8 +103,7 @@ public class ForecastBatchWriter {
             }
         }
         ZonedDateTime localTime = batch.responseReceivedAt().atZone(ZoneId.of("Asia/Seoul"));
-        final int minute = localTime.getHour() * 60 + localTime.getMinute();
-        if (!statistics.confirmedProfile() && !isValidatedRush(statistics, localTime, minute)) {
+        if (!statistics.confirmedProfile() && !statistics.timeCell(localTime).isRush()) {
             LOGGER.info("event=forecast_batch_withheld reason=ALIGHTING_AWARE_OUTSIDE_VALIDATED_RUSH_SCOPE batchId={}",
                 batch.observationBatchId());
             return commitAlightingAware(batch, new ForecastPublication(batch.observationBatchId(),
@@ -142,22 +141,7 @@ public class ForecastBatchWriter {
 
     private boolean outsideRush(AlightingAwareRouteStatistics statistics, AlightingAwareFeatureSnapshot snapshot) {
         ZonedDateTime sourceTime = snapshot.source().receivedAt().atZone(ZoneId.of("Asia/Seoul"));
-        return !isValidatedRush(statistics, sourceTime, sourceTime.getHour() * 60 + sourceTime.getMinute());
-    }
-
-    private boolean isValidatedRush(AlightingAwareRouteStatistics statistics, ZonedDateTime localTime, final int minute) {
-        if (!"work".equals(statistics.dayType(localTime.toLocalDate()))) {
-            return false;
-        }
-        return isMorningRush(minute) || isEveningRush(minute);
-    }
-
-    private boolean isMorningRush(final int minute) {
-        return minute >= 360 && minute < 600;
-    }
-
-    private boolean isEveningRush(final int minute) {
-        return minute >= 1020 && minute < 1260;
+        return !statistics.timeCell(sourceTime).isRush();
     }
 
     /** 자료 부족은 발행 확정 없이 전파해 복구 뒤 같은 배치를 재처리한다. */

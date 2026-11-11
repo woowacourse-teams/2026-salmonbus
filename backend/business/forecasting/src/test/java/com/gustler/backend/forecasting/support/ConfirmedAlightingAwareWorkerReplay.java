@@ -234,6 +234,7 @@ public final class ConfirmedAlightingAwareWorkerReplay {
         double maximumLabel = 0;
         int settled = 0;
         int expectedUnsupported = 0;
+        Map<String, Integer> settledBoundaries = new LinkedHashMap<>();
         List<Map<String, Object>> failures = new ArrayList<>();
         for (JsonNode row : cases) {
             List<Map<String, Object>> labels = jdbc
@@ -274,7 +275,11 @@ public final class ConfirmedAlightingAwareWorkerReplay {
                 }
                 settled++;
                 if (row.has("cell")) {
-                    counts.get(row.path("cell").asText())[1]++;
+                    String originCell = row.path("cell").asText();
+                    counts.get(originCell)[1]++;
+                    if (row.has("settlement_cell") && !originCell.equals(row.path("settlement_cell").asText())) {
+                        settledBoundaries.merge(originCell + " -> " + row.path("settlement_cell").asText(), 1, Integer::sum);
+                    }
                 }
             }
         }
@@ -297,6 +302,7 @@ public final class ConfirmedAlightingAwareWorkerReplay {
         result.put("expected_unsupported", expectedUnsupported);
         result.put("restored_targets", restored);
         result.put("boundary_probes", boundaryProbes);
+        result.put("settled_boundaries", settledBoundaries);
         result.put("passed", maximumFeature == 0 && maximumPrediction <= 1e-9 && maximumLabel <= 1e-8
             && !cases.isEmpty() && settled + expectedUnsupported == cases.size() && failures.isEmpty()
             && (!extendedReplay || restored == 1));

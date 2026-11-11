@@ -44,13 +44,14 @@ public final class AlightingAwareServingBundle {
             JsonNode raw = bundle.statistics(route);
             AlightingAwareRouteStatistics stats = AlightingAwareStatisticsReader.read(raw, bundle.holidays());
             statistics.put(route, stats);
+            JsonNode settlement = null;
             if (extended != null) {
                 JsonNode extension = extended.path("routes").path(route);
                 extendedPredictors.put(route, new ExtendedAlightingPredictor(
                     AlightingAwareInferenceBundle.model(extension.get("seats")), full));
-                ((ObjectNode) raw).set("extendedSettlement", extension.get("settlement"));
+                settlement = extension.get("settlement");
             }
-            Map<Integer, String> targets = targetEvidence(route, bundle, stats, raw);
+            Map<Integer, String> targets = targetEvidence(route, bundle, stats, raw, settlement);
             evidence.put(route, targets);
         }
         return new AlightingAwareSeatForecastModel(bundle.predictor(), statistics, evidence, bundle.digest(), extendedPredictors);
@@ -60,7 +61,8 @@ public final class AlightingAwareServingBundle {
         String route,
         AlightingAwareInferenceBundle bundle,
         AlightingAwareRouteStatistics stats,
-        JsonNode raw
+        JsonNode raw,
+        JsonNode settlement
     ) {
         Map<Integer, String> targets = new HashMap<>();
         for (AlightingAwareRouteStatistics.Stop stop : stats.stops()) {
@@ -82,8 +84,8 @@ public final class AlightingAwareServingBundle {
             }
             alighting.set("stops", parameters);
             snapshot.set("alighting", alighting);
-            if (raw.has("extendedSettlement")) {
-                snapshot.set("extendedSettlement", raw.get("extendedSettlement"));
+            if (settlement != null) {
+                snapshot.set("extendedSettlement", settlement);
             }
             targets.put(stop.order(), JSON.writeValueAsString(snapshot));
         }

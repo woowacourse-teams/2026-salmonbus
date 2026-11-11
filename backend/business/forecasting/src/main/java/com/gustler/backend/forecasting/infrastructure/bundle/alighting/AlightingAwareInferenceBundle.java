@@ -4,6 +4,7 @@ import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAw
 
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -212,7 +213,7 @@ public final class AlightingAwareInferenceBundle {
         for (String route : routes) {
             JsonNode bands = entries.path(route).path("settlement");
             require(bands.isObject() && bands.size() == 6, "시간 확장 정산 구간이 다르다: " + route);
-            for (String name : List.of("work-day", "work-night", "weekend-day", "weekend-night", "holiday-day", "holiday-night")) {
+            for (String name : AlightingTimeCell.extendedKeys()) {
                 JsonNode params = bands.path(name);
                 require(array(params.get("lam")).size() == 8, "시간 확장 정산 계수 개수가 다르다");
                 for (JsonNode rate : array(params.get("lam"))) {
@@ -275,8 +276,7 @@ public final class AlightingAwareInferenceBundle {
 
         Map<String, Set<String>> remaining = new HashMap<>();
         for (String route : routes) {
-            remaining.put(route, new HashSet<>(List.of("work-morning", "work-day", "work-evening", "work-night",
-                "weekend-day", "weekend-night", "holiday-day", "holiday-night")));
+            remaining.put(route, new HashSet<>(AlightingTimeCell.keys()));
         }
         for (JsonNode row : array(result.get("extended_hours"))) {
             Set<String> cells = remaining.get(text(row, "route"));

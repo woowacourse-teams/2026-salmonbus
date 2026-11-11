@@ -11,7 +11,7 @@ from threadpoolctl import threadpool_limits
 
 from causal_prepare import original_alighting
 from contracts import sha256
-from extended_calibration import classify
+from extended_calibration import RUSH_WINDOWS, SETTLEMENT_WINDOWS, classify, settlement_window
 from export_bundle import export_tree_model
 
 FEATURES = ['seats', 'capacity', 'stop', 'horizon', 'minute', 'off_day']
@@ -22,19 +22,55 @@ PERIODS = {
 }
 
 
-def estimated_targets(events, calibration, functions):
+def parameter_theta(parameters):
+    p = parameters['p']
+    return np.r_[np.log(parameters['lam']), np.log(p / (1 - p)),
+                 np.log(max(parameters['kappa'], np.finfo(float).tiny)), np.log(parameters['r'])]
+
+
+def rush_parameters(statistics):
+    return {(row['stop'], row['band']): parameter_theta(row) for row in statistics['alighting']['stops']}
+
+
+def checked_rush_source(bundle):
+    manifest = json.loads((bundle / 'manifest.json').read_bytes())
+    if manifest.get('serving_ready') is not True or 'extended-hours.json' in manifest['files']:
+        raise ValueError('Expected the original rush serving bundle')
+
+    def read(name):
+        path = bundle / name
+        if sha256(path) != manifest['files'][name]:
+            raise ValueError(f'Rush bundle file changed: {name}')
+        return json.loads(path.read_bytes())
+
+    receipt = read('calibration-receipt.json')
+    if pd.Timestamp(receipt['freeze_exclusive']) > pd.Timestamp(PERIODS['train'][0], tz='Asia/Seoul'):
+        raise ValueError('Rush settlement fit overlaps forecast training')
+    return read
+
+
+def estimated_targets(events, calibration, functions, rush=None):
     cells, _ = classify(events)
+    local = events.t_depart.dt.tz_convert('Asia/Seoul')
+    events = events.assign(minute=local.dt.hour * 60 + local.dt.minute)
+    groups = []
+    for cell, fit in calibration.items():
+        band, bin_minutes = settlement_window(cell)
+        if band == 'extended' and fit['status'] == 'PILOT_ONLY':
+            groups.append((events.loc[cells.eq(cell)], band, bin_minutes, fit['theta']))
+    if rush:
+        for band in RUSH_WINDOWS:
+            for stop, rows in events.loc[cells.eq(f'work-{band}')].groupby('stop'):
+                if (stop, band) in rush:
+                    groups.append((rows, *settlement_window(f'work-{band}'), rush[stop, band]))
     labels = []
-    functions['BIN_MINUTES'] = 180
-    functions['BANDS']['extended'] = (0, 1440)
-    for name, fit in calibration.items():
-        if fit['status'] != 'PILOT_ONLY':
-            continue
-        rows = events.loc[cells.eq(name)]
+    functions['BANDS'].update(SETTLEMENT_WINDOWS)
+    for rows, band, bin_minutes, theta in groups:
+        functions['BIN_MINUTES'] = bin_minutes
         for offset in range(0, len(rows), 1000):
             batch = rows.iloc[offset:offset + 1000].copy()
-            data = functions['prepare'](batch, 'extended')
-            weights, likelihood, _, _ = functions['components'](np.asarray(fit['theta']), data)
+            data = functions['prepare'](batch, band)
+            weights, likelihood, _, _ = functions['components'](np.asarray(theta), data)
             posterior = weights * likelihood
             mass = posterior.sum(axis=1)
             valid = mass > 0
@@ -84,7 +120,7 @@ def departure_partition(observations, events, period):
     return origin_features(targets, origins)
 
 
-def forecast_partitions(observations, events, calibration, functions):
+def forecast_partitions(observations, events, calibration, functions, rush=None):
     partitions = {}
     for name, (start, end) in PERIODS.items():
         start, end = [pd.Timestamp(day, tz='Asia/Seoul') for day in (start, end)]
@@ -96,13 +132,13 @@ def forecast_partitions(observations, events, calibration, functions):
         rows['onboard'] = rows.capacity - rows.arrive
         keys = ['trip', 'chain', 'stop', 'capacity']
         visits = rows.drop_duplicates(keys)
-        labels = estimated_targets(visits, calibration, functions)
+        labels = estimated_targets(visits, calibration, functions, rush)
         partitions[name] = rows.merge(labels[keys + ['label']], on=keys, how='inner', validate='many_to_one')
     return partitions
 
 
-def evaluate(observations, events, calibration, functions):
-    partitions = forecast_partitions(observations, events, calibration, functions)
+def evaluate(observations, events, calibration, functions, rush):
+    partitions = forecast_partitions(observations, events, calibration, functions, rush)
     train = partitions['train']
     if train.empty:
         return dict(status='INSUFFICIENT_TRAINING_ROWS', train_rows=0)
@@ -144,7 +180,7 @@ def evaluate(observations, events, calibration, functions):
     return result
 
 
-def export_models(source, calibration, lab, output):
+def export_models(source, calibration, lab, output, read_rush, rush_source_sha):
     if output.exists():
         raise ValueError('Extended output already exists')
     names = ('work-day', 'work-night', 'weekend-day', 'weekend-night')
@@ -159,6 +195,7 @@ def export_models(source, calibration, lab, output):
     classifier_rows = []
     test_rows = []
     probability_test_rows = []
+    boundary = {}
     for route, receipt in calibration['routes'].items():
         events_path = source / f'events_{route}.pkl'
         if sha256(events_path) != receipt['source_sha256']:
@@ -170,7 +207,8 @@ def export_models(source, calibration, lab, output):
         fit = {name: dict(status='PILOT_ONLY', theta=value) for name, value in theta.items()}
         obs = pd.read_pickle(source / f'obs_{route}_trips.pkl')
         events = pd.read_pickle(events_path)
-        partitions = forecast_partitions(obs, events, fit, original_alighting(lab))
+        rush = rush_parameters(read_rush(f'statistics-{route}.json'))
+        partitions = forecast_partitions(obs, events, fit, original_alighting(lab), rush)
         train = partitions['train']
         regressor = HistGradientBoostingRegressor(loss='absolute_error', max_iter=70, max_leaf_nodes=15,
                                                   min_samples_leaf=100, early_stopping=False, random_state=0)
@@ -185,6 +223,14 @@ def export_models(source, calibration, lab, output):
         probability_test_rows.append(probability_test)
         holdout = partitions['holdout']
         prediction = np.clip(regressor.predict(holdout[FEATURES]), 0, holdout.capacity)
+        target_cells, _ = classify(holdout)
+        crossing = target_cells.isin(['work-morning', 'work-evening'])
+        boundary[route] = [
+            dict(origin=origin, passage=passage, rows=len(rows), candidate_mae=float(rows.error.mean()))
+            for (origin, passage), rows in holdout.loc[crossing, ['cell', 'label']].assign(
+                passage=target_cells[crossing], error=np.abs(prediction[crossing] - holdout.loc[crossing, 'label']),
+            ).groupby(['cell', 'passage'], sort=True)
+        ]
         holdout = holdout[FEATURES + ['cell', 'depart', 'closure_id', 'label']].copy()
         holdout['route'] = route
         holdout['candidate_mae'] = np.abs(prediction - holdout.label)
@@ -217,8 +263,9 @@ def export_models(source, calibration, lab, output):
                 ['departure_full_brier', 'constant_rate_brier']].mean().to_dict())
         report.append(entry)
     output.write_text(json.dumps(dict(schema='alighting-extended-six-v1', features=FEATURES, routes=routes,
-                                      full=export_tree_model(full, 'binary')), separators=(',', ':')))
-    return dict(pooled_training_rows=len(train), holdout=report, artifact_sha256=sha256(output))
+                                      full=export_tree_model(full, 'binary'), rush_source_manifest_sha256=rush_source_sha), separators=(',', ':')))
+    return dict(pooled_training_rows=len(train), holdout=report, rush_boundary_holdout=boundary, artifact_sha256=sha256(output),
+                rush_source_manifest_sha256=rush_source_sha)
 
 
 def main():
@@ -226,6 +273,7 @@ def main():
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--calibration', type=Path, required=True)
     parser.add_argument('--lab', type=Path, required=True)
+    parser.add_argument('--rush-bundle', type=Path, required=True)
     parser.add_argument('--export', type=Path)
     args = parser.parse_args()
     calibration = json.loads(args.calibration.read_text())
@@ -233,10 +281,12 @@ def main():
         parser.error('Calibration lab hash does not match')
     if calibration['periods']['fit'][1] > PERIODS['train'][0]:
         parser.error('Calibration fit overlaps forecast training')
+    read_rush = checked_rush_source(args.rush_bundle)
     report = {}
     with threadpool_limits(limits=1):
         if args.export:
-            report = export_models(args.source, calibration, args.lab, args.export)
+            report = export_models(args.source, calibration, args.lab, args.export, read_rush,
+                                   sha256(args.rush_bundle / 'manifest.json'))
             print(json.dumps(dict(periods=PERIODS, calibration_sha256=sha256(args.calibration), **report), indent=2))
             return
         for route, receipt in calibration['routes'].items():
@@ -245,7 +295,8 @@ def main():
             if sha256(events) != receipt['source_sha256']:
                 parser.error(f'Calibration event hash does not match for {route}')
             report[route] = evaluate(pd.read_pickle(observations), pd.read_pickle(events),
-                                     receipt['cells'], original_alighting(args.lab))
+                                     receipt['cells'], original_alighting(args.lab),
+                                     rush_parameters(read_rush(f'statistics-{route}.json')))
             report[route]['observations_sha256'] = sha256(observations)
     print(json.dumps(dict(periods=PERIODS, calibration_sha256=sha256(args.calibration), routes=report), indent=2))
 

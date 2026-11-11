@@ -35,6 +35,9 @@ def compose(base, extension, output, code_sha, calendar):
     if manifest['serving_ready'] is not False or 'extended-hours.json' in manifest['files']:
         raise ValueError('Expected unmodified rush-only source')
     added = json.loads(extension.read_bytes())
+    if ('rush_source_manifest_sha256' in added
+            and added['rush_source_manifest_sha256'] != sha256(base / 'manifest.json')):
+        raise ValueError('Extension rush settlement source differs from the base bundle')
     if set(added['routes']) != set(serving['runtime']['routes']):
         raise ValueError('Extension must cover every route in the release')
     with TemporaryDirectory(dir=output.parent) as scratch:

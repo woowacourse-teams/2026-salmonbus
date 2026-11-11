@@ -43,9 +43,9 @@ def predict_tree_model(model, inputs):
     return 1 / (1 + math.exp(-score)) if model['kind'] == 'binary' else score
 
 
-def extended_cases(observations, events, start, end, extension, route, reference):
-    from extended_calibration import classify, eligible_events
-    from extended_forecast import FEATURES, origin_features
+def extended_cases(observations, events, start, end, extension, route, reference, statistics):
+    from extended_calibration import SETTLEMENT_WINDOWS, classify, eligible_events, settlement_window
+    from extended_forecast import FEATURES, origin_features, parameter_theta, rush_parameters
 
     targets = events.loc[events.t_arrive.ge(start) & eligible_events(events, end)].copy()
     by_stop_day = events.groupby(['stop', 'date'])
@@ -55,23 +55,32 @@ def extended_cases(observations, events, start, end, extension, route, reference
     rows = rows.loc[rows.previous_post_id.notna() & rows.arrive.le(rows.capacity) & rows.depart.le(rows.capacity)]
     target_cells, _ = classify(rows)
     rows['settlement_cell'] = target_cells
-    rows = rows.loc[rows.cell.eq(rows.settlement_cell) & rows.observation_id.notna()]
+    rush = rush_parameters(statistics)
+    rush_band = rows.settlement_cell.map({'work-morning': 'morning', 'work-evening': 'evening'})
+    is_supported_rush = pd.Series([(stop, band) in rush for stop, band in zip(rows.stop, rush_band)],
+                                  index=rows.index)
+    rows = rows.loc[rows.cell.eq(rows.settlement_cell) | is_supported_rush]
     result = []
-    reference['BIN_MINUTES'] = 180
-    reference['BANDS']['extended'] = (0, 1440)
-    for cell, candidates in rows.groupby('cell', sort=True):
+    reference['BANDS'].update(SETTLEMENT_WINDOWS)
+    for (cell, settlement_cell), candidates in rows.groupby(['cell', 'settlement_cell'], sort=True):
         candidates = candidates.sort_values(['received', 'observation_id', 'stop'])
-        for _, row in candidates.iloc[np.linspace(0, len(candidates) - 1, min(3, len(candidates)), dtype=int)].iterrows():
-            parameters = extension['routes'][route]['settlement'][cell]
-            theta = np.r_[np.log(parameters['lam']), np.log(parameters['p'] / (1 - parameters['p'])),
-                          np.log(parameters['kappa']), np.log(parameters['r'])]
+        count = 3 if cell == settlement_cell else 1
+        for _, row in candidates.iloc[np.linspace(0, len(candidates) - 1, min(count, len(candidates)), dtype=int)].iterrows():
+            band, bin_minutes = settlement_window(settlement_cell)
+            reference['BIN_MINUTES'] = bin_minutes
+            if band == 'extended':
+                theta = parameter_theta(extension['routes'][route]['settlement'][settlement_cell])
+            else:
+                theta = rush[row.stop, band]
             target = row.to_frame().T
+            local = row.t_depart.tz_convert('Asia/Seoul')
+            target['minute'] = local.hour * 60 + local.minute
             target['onboard'] = row.capacity - row.arrive
-            posterior = reference['predict'](theta, reference['prepare'](target, 'extended'))['post_alight'][0]
+            posterior = reference['predict'](theta, reference['prepare'](target, band))['post_alight'][0]
             inputs = [float(row[key]) for key in FEATURES]
             expected_seats = predict_tree_model(extension['routes'][route]['seats'], inputs)
             expected_full = predict_tree_model(extension['full'], inputs)
-            result.append(dict(source_id=int(row.observation_id), target=int(row.stop), cell=cell,
+            result.append(dict(source_id=int(row.observation_id), target=int(row.stop), cell=cell, settlement_cell=settlement_cell,
                                extended_inputs=inputs, expected_seats=float(np.clip(expected_seats, 0, row.capacity)),
                                expected_full=expected_full,
                                expected_reason='NO_PREVIOUS_PASS' if row.previous_arrival < start else None,
@@ -151,7 +160,7 @@ def generate(root, output, day, alighting_reference, extension_path=None, calibr
         golden = []
         if extension is not None:
             golden = extended_cases(window, pd.read_pickle(source / f'events_{route}.pkl'),
-                                    start, end, extension, route, reference)
+                                    start, end, extension, route, reference, stats)
         else:
             parameters = {p['band']: p for p in json.loads((source/f'alighting_parameters_{route}.json').read_text())}
             events = pd.read_pickle(source / f'events_{route}.pkl').copy()

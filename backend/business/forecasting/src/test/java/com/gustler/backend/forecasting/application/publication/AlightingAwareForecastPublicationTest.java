@@ -22,6 +22,7 @@ import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
@@ -55,7 +56,7 @@ class AlightingAwareForecastPublicationTest {
         when(statistics.route()).thenReturn("3330");
         when(statistics.profile()).thenReturn(new AlightingAwareRouteStatistics.Profile(
             "alighting-original-v1", "alighting-identity-safe-v1", "observed-route-day-max-through-closure-v1"));
-        when(statistics.dayType(any())).thenReturn("work");
+        when(statistics.timeCell(any())).thenAnswer(call -> AlightingTimeCell.of(call.getArgument(0), false));
         writer.setAlightingAwareFeatures(query);
         return new RuntimeSnapshot(new ActiveModelDeployment(7, "alighting-online-v1", "alighting-test", "b".repeat(64)),
             new SupportedForecastScope(List.of("3330")), model, now.minusSeconds(86400));

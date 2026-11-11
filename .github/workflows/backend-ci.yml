@@ -77,6 +77,20 @@ jobs:
           java-version: '21'
           distribution: 'corretto'
 
+      - uses: actions/setup-python@v5
+        if: ${{ steps.scope.outputs.relevant == 'true' }}
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: backend/tools/alighting_model/requirements.txt
+
+      - name: Verify Python alighting model contracts
+        if: ${{ steps.scope.outputs.relevant == 'true' }}
+        working-directory: backend/tools/alighting_model
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest discover -s tests
+
       - name: Set up Gradle
         if: ${{ steps.scope.outputs.relevant == 'true' }}
         uses: gradle/actions/setup-gradle@v6

@@ -26,7 +26,7 @@ class AlightingPosteriorTest {
     }
 
     @Test
-    void 학습과_정산은_통과_때_45석이어도_예보_때_정원_44석을_사용한다() {
+    void 정원_44석과_45석의_Python_기대값과_같다() {
         double[] lambda = new double[8];
         Arrays.fill(lambda, 2);
         AlightingPosterior.Parameters parameters = new AlightingPosterior.Parameters(lambda, .2, 1, 2);

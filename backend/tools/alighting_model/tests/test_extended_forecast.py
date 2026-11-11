@@ -41,6 +41,39 @@ def seat_holdout(origins, events):
 
 
 class ExtendedForecastTest(unittest.TestCase):
+    def test_extended_origin_is_labeled_with_rush_stop_parameters(self):
+        for origin, passage, cell, bin_start in (
+            ('05:57', '06:02', 'work-night', 360),
+            ('16:58', '17:03', 'work-day', 1020),
+        ):
+            with self.subTest(origin=origin):
+                obs, events = capacity_change()
+                obs['received'] = pd.Timestamp(f'2026-11-02T{origin}:00+09:00')
+                events['t_depart'] = pd.Timestamp(f'2026-11-02T{passage}:00+09:00')
+                events['t_arrive'] = events.t_depart - pd.Timedelta(seconds=20)
+                events['t_known'] = events.t_depart + pd.Timedelta(seconds=20)
+                band = 'morning' if bin_start == 360 else 'evening'
+                rush = {(10, band): np.r_[np.full(8, np.log(2)), np.log(.2 / .8), 0, np.log(2)]}
+                functions = dict(BANDS={}, prepare=lambda rows, name: rows, components=exact_departure_components)
+                rows = forecast_partitions(obs, events, {}, functions, rush)['holdout'].set_index('observation_id')
+                self.assertEqual(cell, rows.loc[1, 'cell'])
+                self.assertAlmostEqual(16.27113304835795, rows.loc[1, 'label'], places=12)
+
+    def test_posterior_reads_passage_minute_and_keeps_origin_minute_as_feature(self):
+        obs, events = capacity_change()
+        events['t_depart'] = pd.Timestamp('2026-10-31T12:01:00+09:00')
+        events['t_arrive'] = events.t_depart - pd.Timedelta(seconds=20)
+        events['t_known'] = events.t_depart + pd.Timedelta(seconds=20)
+        obs['received'] = pd.Timestamp('2026-10-31T11:58:00+09:00')
+        calibration = {'weekend-day': dict(status='PILOT_ONLY', theta=np.zeros(11))}
+        def prepare(rows, band):
+            self.assertEqual({721}, set(rows.minute))
+            return rows
+
+        functions = dict(BANDS={}, prepare=prepare, components=exact_departure_components)
+        rows = forecast_partitions(obs, events, calibration, functions)['holdout']
+        self.assertEqual({718}, set(rows.minute))
+
     def test_origin_is_strictly_before_arrival_and_in_same_chain(self):
         arrival = pd.Timestamp('2026-10-31T10:00:00+09:00')
         targets = pd.DataFrame(dict(trip=[1], chain=[2], stop=[10], t_arrive=[arrival]))

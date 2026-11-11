@@ -3,6 +3,7 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
 
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingPosterior;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvents;
@@ -178,11 +179,8 @@ final class ConfirmedAlightingAwareEvaluation {
     ) {
         Instant departure = visit.departure().receivedAt();
         ZonedDateTime local = departure.atZone(SEOUL);
-        final int minute = local.getHour() * 60 + local.getMinute();
-        String band = band(minute);
-        final boolean holiday = isHoliday(snapshot, departure);
-        final boolean weekend = local.getDayOfWeek().getValue() > 5;
-        final boolean extended = band.isEmpty() || weekend || holiday;
+        AlightingTimeCell cell = AlightingTimeCell.of(local, isHoliday(snapshot, departure));
+        final boolean extended = !cell.isRush();
         if (extended && !snapshot.has("extendedSettlement")) {
             return unsupported("OUTSIDE_FITTED_BAND");
         }
@@ -198,12 +196,9 @@ final class ConfirmedAlightingAwareEvaluation {
         if (gap < .2 || gap > 60) {
             return unsupported("UNSUPPORTED_HEADWAY");
         }
-        JsonNode parameters = findParameters(snapshot, visit.stopOrder(), band);
-        int bin = (minute - bandStart(band)) / 30;
-        if (extended) {
-            parameters = snapshot.path("extendedSettlement").get(extendedBand(minute, weekend, holiday));
-            bin = minute / 180;
-        }
+        JsonNode parameters = extended ? snapshot.path("extendedSettlement").get(cell.key())
+            : findParameters(snapshot, visit.stopOrder(), cell.rushBand());
+        final int bin = cell.settlementBin(local);
         if (parameters == null) {
             return unsupported("NO_FITTED_STOP_PARAMETERS");
         }
@@ -239,27 +234,6 @@ final class ConfirmedAlightingAwareEvaluation {
         return null;
     }
 
-    private static int bandStart(String band) {
-        if (band.equals("evening")) {
-            return 1020;
-        }
-        return 360;
-    }
-
-    private static String extendedBand(final int minute, final boolean weekend, final boolean holiday) {
-        String day = "work";
-        if (weekend) {
-            day = "weekend";
-        }
-        if (holiday) {
-            day = "holiday";
-        }
-        if (minute >= 360 && minute < 1260) {
-            return day + "-day";
-        }
-        return day + "-night";
-    }
-
     private static boolean isHoliday(JsonNode snapshot, Instant at) {
         String day = at.atZone(SEOUL).toLocalDate().toString();
         for (JsonNode holiday : snapshot.path("holidays")) {
@@ -268,16 +242,6 @@ final class ConfirmedAlightingAwareEvaluation {
             }
         }
         return false;
-    }
-
-    private static String band(final int minute) {
-        if (minute >= 360 && minute < 600) {
-            return "morning";
-        }
-        if (minute >= 1020 && minute < 1260) {
-            return "evening";
-        }
-        return "";
     }
 
     private static boolean invalidSeats(Integer seats) {

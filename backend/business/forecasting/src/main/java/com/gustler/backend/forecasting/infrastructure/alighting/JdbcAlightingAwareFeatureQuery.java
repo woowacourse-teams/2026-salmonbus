@@ -18,7 +18,6 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -211,21 +210,9 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
         if (!checkpointOnly && target.version() != stops.routeVersionId()) {
             throw new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_ROUTE_VERSION_MISMATCH");
         }
-        if (rushOnly && !extendedHours && !isSupportedRush(statistics, target.time())) {
+        if (rushOnly && !extendedHours && !statistics.timeCell(target.time().atZone(ZoneId.of("Asia/Seoul"))).isRush()) {
             throw new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_OUTSIDE_VALIDATED_RUSH_SCOPE");
         }
-    }
-
-    private static boolean isSupportedRush(AlightingAwareRouteStatistics statistics, Instant at) {
-        ZonedDateTime local = at.atZone(ZoneId.of("Asia/Seoul"));
-        if (!statistics.dayType(local.toLocalDate()).equals("work")) {
-            return false;
-        }
-        final int minute = local.getHour() * 60 + local.getMinute();
-        if (minute >= 360 && minute < 600) {
-            return true;
-        }
-        return minute >= 1020 && minute < 1260;
     }
 
     private void validateHistoryOrigin(RouteStops stops, ReplayCursor cursor) {
