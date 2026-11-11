@@ -22,7 +22,7 @@ def read_holidays(calendar):
     return sorted(dates)
 
 
-def compose(base, extension, output, code_sha, calendar):
+def compose(base, extension, output, code_sha, calendar, substitutions=()):
     if not re.fullmatch(r'[0-9a-f]{40}', code_sha):
         raise ValueError('Expected full verification code SHA')
     if output.exists():
@@ -40,6 +40,8 @@ def compose(base, extension, output, code_sha, calendar):
         raise ValueError('Extension rush settlement source differs from the base bundle')
     if set(added['routes']) != set(serving['runtime']['routes']):
         raise ValueError('Extension must cover every route in the release')
+    if len(set(substitutions)) != len(substitutions) or not set(substitutions) <= set(added['routes']):
+        raise ValueError('invalid holiday weekend substitution routes')
     with TemporaryDirectory(dir=output.parent) as scratch:
         draft = Path(scratch) / 'candidate'
         draft.mkdir()
@@ -50,6 +52,8 @@ def compose(base, extension, output, code_sha, calendar):
         shutil.copyfile(extension, draft / 'extended-hours.json')
         manifest['extended_verification_code_sha'] = code_sha
         manifest['extended_holiday_dates'] = read_holidays(calendar)
+        if substitutions:
+            manifest['holiday_weekend_substitution_routes'] = sorted(substitutions)
         manifest['files']['extended-hours.json'] = sha256(draft / 'extended-hours.json')
         (draft / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         draft.rename(output)
@@ -61,5 +65,6 @@ if __name__ == '__main__':
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--code-sha', required=True)
     parser.add_argument('--holiday-calendar', type=Path, required=True)
+    parser.add_argument('--holiday-weekend-route', action='append', default=[])
     args = parser.parse_args()
-    compose(args.base, args.extension, args.output, args.code_sha, args.holiday_calendar)
+    compose(args.base, args.extension, args.output, args.code_sha, args.holiday_calendar, args.holiday_weekend_route)

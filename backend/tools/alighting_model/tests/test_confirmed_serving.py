@@ -81,6 +81,15 @@ class ConfirmedVerificationTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     verify_extended(result | bad, self.digest, code, self.routes)
 
+        selected = [row for row in rows if row['route'] != '3330' or not row['cell'].startswith('holiday-')]
+        substitution = dict(result, extended_hours=selected, holiday_weekend_substitution_routes=['3330'])
+        verify_extended(substitution, self.digest, code, self.routes, ['3330'])
+        for bad in [dict(extended_hours=selected[:-1]),
+                    dict(extended_hours=[row for row in selected if row['cell'] != 'weekend-day']),
+                    dict(extended_hours=rows), dict(holiday_weekend_substitution_routes=['G8110'])]:
+            with self.subTest(bad=list(bad)), self.assertRaises(ValueError):
+                verify_extended(substitution | bad, self.digest, code, self.routes, ['3330'])
+
     def test_replay_reports_must_cover_every_cell_and_restore_off_peak_settlement(self):
         code = 'a' * 40
         rows = [dict(route='3330', cell=cell, published=2, settled=1) for cell in EXTENDED_CELLS]

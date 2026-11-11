@@ -44,16 +44,25 @@ class AlightingAwareBundleLoaderTest {
             "weekend-day", "weekend-night", "holiday-day", "holiday-night")) {
             rows.addObject().put("route", "3330").put("cell", cell).put("published", 2).put("settled", 1);
         }
-        AlightingAwareInferenceBundle.verifyExtended(report, digest, code, List.of("3330"));
+        AlightingAwareInferenceBundle.verifyExtended(report, digest, code, List.of("3330"), List.of());
 
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
-            report, "c".repeat(64), code, List.of("3330"))).isInstanceOf(IllegalArgumentException.class);
+            report, "c".repeat(64), code, List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
-            report, digest, "d".repeat(40), List.of("3330"))).isInstanceOf(IllegalArgumentException.class);
+            report, digest, "d".repeat(40), List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
 
         rows.remove(rows.size() - 1);
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
-            report, digest, code, List.of("3330"))).isInstanceOf(IllegalArgumentException.class);
+            report, digest, code, List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
+
+        rows.remove(rows.size() - 1);
+        report.putArray("holiday_weekend_substitution_routes").add("3330");
+        AlightingAwareInferenceBundle.verifyExtended(report, digest, code, List.of("3330"), List.of("3330"));
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
+            report, digest, code, List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
+        rows.remove(rows.size() - 1);
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
+            report, digest, code, List.of("3330"), List.of("3330"))).isInstanceOf(IllegalArgumentException.class);
     }
 
     @TempDir

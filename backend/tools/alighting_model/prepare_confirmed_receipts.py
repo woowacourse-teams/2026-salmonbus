@@ -7,7 +7,7 @@ from confirmed_serving_verification import CONTRACT, checked_routes, verify_exte
 from prepare_serving_bundle import CHECKS, digest
 
 
-def combine_extended(runtime, replays, source_digest, code_sha, routes):
+def combine_extended(runtime, replays, source_digest, code_sha, routes, substitutions=()):
     rows = []
     for path in replays:
         report = json.loads(path.read_bytes())
@@ -23,7 +23,9 @@ def combine_extended(runtime, replays, source_digest, code_sha, routes):
                 raise ValueError(f'Replay row contains results from a different route: {path.name}')
             rows.extend(cells)
     result = dict(runtime, verification_code_sha=code_sha, extended_hours=rows)
-    verify_extended(result, source_digest, code_sha, routes)
+    if substitutions:
+        result['holiday_weekend_substitution_routes'] = substitutions
+    verify_extended(result, source_digest, code_sha, routes, substitutions)
     return result
 
 
@@ -52,7 +54,8 @@ def prepare(source, numeric, worker, runtime, output, extended=()):
         cases = verify_result(check, result, source_digest, routes)
         if check == 'runtime_validation' and 'extended-hours.json' in contents:
             result = combine_extended(result, extended, source_digest,
-                                      manifest.get('extended_verification_code_sha'), routes)
+                                      manifest.get('extended_verification_code_sha'), routes,
+                                      manifest.get('holiday_weekend_substitution_routes', []))
         evidence = json.dumps(dict(schema='alighting-confirmed-serving-evidence-v1', routes=routes,
                                    verified_cases=cases, result=result), ensure_ascii=False, indent=2).encode()
         name = f'evidence-{check}.json'

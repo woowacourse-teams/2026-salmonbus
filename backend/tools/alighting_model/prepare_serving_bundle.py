@@ -68,7 +68,8 @@ def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None
             if not manifest.get("extended_holiday_dates"):
                 raise ValueError("extended hours holiday calendar is missing")
             verify_extended(json.loads(evidence)["result"], source_digest,
-                            manifest.get("extended_verification_code_sha"), routes)
+                            manifest.get("extended_verification_code_sha"), routes,
+                            manifest.get("holiday_weekend_substitution_routes", []))
         contents[f"verification-{check}.json"] = content
         contents[evidence_name] = evidence
     # Date includes the latest observation/event used by any frozen table.

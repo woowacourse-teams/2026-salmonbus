@@ -105,7 +105,7 @@ EXTENDED_CELLS = ('work-morning', 'work-day', 'work-evening', 'work-night',
                   'weekend-day', 'weekend-night', 'holiday-day', 'holiday-night')
 
 
-def verify_extended(result, source_digest, code_sha, routes):
+def verify_extended(result, source_digest, code_sha, routes, substitutions=()):
     if (not isinstance(code_sha, str) or not re.fullmatch(r'[0-9a-f]{40}', code_sha)
             or result.get('bundle_manifest_sha256') != source_digest
             or result.get('verification_code_sha') != code_sha):
@@ -124,5 +124,11 @@ def verify_extended(result, source_digest, code_sha, routes):
         published, settled = row.get('published'), row.get('settled')
         if type(published) is not int or type(settled) is not int or not 0 < settled <= published:
             raise ValueError('missing extended publication or settlement evidence')
-    if expected:
+    if (not isinstance(substitutions, (list, tuple))
+            or any(not isinstance(route, str) or route not in routes for route in substitutions)
+            or len(set(substitutions)) != len(substitutions)
+            or result.get('holiday_weekend_substitution_routes', []) != list(substitutions)):
+        raise ValueError('invalid holiday weekend substitution routes')
+    missing_holidays = {(route, cell) for route in substitutions for cell in ('holiday-day', 'holiday-night')}
+    if expected != missing_holidays:
         raise ValueError('missing extended route or time cell')

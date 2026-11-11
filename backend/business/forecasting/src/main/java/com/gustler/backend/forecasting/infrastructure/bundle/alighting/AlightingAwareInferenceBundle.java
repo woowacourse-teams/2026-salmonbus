@@ -252,7 +252,10 @@ public final class AlightingAwareInferenceBundle {
             require(!holidays.isEmpty() && holidays.equals(texts(manifest.get("extended_holiday_dates"))),
                 "검증 원본과 운영 번들의 공휴일 달력이 다르다");
             JsonNode result = required(files, "evidence-runtime_validation.json").path("result");
-            verifyExtended(result, sourceDigest, text(original, "extended_verification_code_sha"), routes);
+            List<String> substitutions = holidayWeekendSubstitutions(original);
+            require(substitutions.equals(holidayWeekendSubstitutions(manifest)),
+                "검증 원본과 운영 번들의 공휴일 대체 노선이 다르다");
+            verifyExtended(result, sourceDigest, text(original, "extended_verification_code_sha"), routes, substitutions);
         }
         for (String name : original.get("files").propertyNames()) {
             require(text(original.get("files"), name).equals(text(manifest.get("files"), name)),
@@ -269,7 +272,13 @@ public final class AlightingAwareInferenceBundle {
         }
     }
 
-    static void verifyExtended(JsonNode result, String sourceDigest, String codeSha, List<String> routes) {
+    private static List<String> holidayWeekendSubstitutions(JsonNode node) {
+        return node.has("holiday_weekend_substitution_routes")
+            ? texts(node.get("holiday_weekend_substitution_routes")) : List.of();
+    }
+
+    static void verifyExtended(JsonNode result, String sourceDigest, String codeSha, List<String> routes,
+                               List<String> substitutions) {
         require(codeSha.matches("[0-9a-f]{40}"), "시간 확장 검증 코드 SHA가 잘못됐다");
         require(text(result, "bundle_manifest_sha256").equals(sourceDigest), "시간 확장 검증 후보가 다르다");
         require(text(result, "verification_code_sha").equals(codeSha), "시간 확장 검증 코드가 다르다");
@@ -284,6 +293,13 @@ public final class AlightingAwareInferenceBundle {
             final int published = integer(row.get("published"));
             final int settled = integer(row.get("settled"));
             require(settled > 0 && settled <= published, "시간 확장 발행 또는 정산 근거가 부족하다");
+        }
+        require(new HashSet<>(substitutions).size() == substitutions.size() && routes.containsAll(substitutions)
+            && substitutions.equals(holidayWeekendSubstitutions(result)), "공휴일 대체 노선이 잘못됐다");
+        for (String route : substitutions) {
+            require(remaining.get(route).equals(Set.of("holiday-day", "holiday-night")),
+                "공휴일 대체에는 같은 노선의 주말 낮·야간 검증이 필요하다");
+            remaining.get(route).clear();
         }
         require(remaining.values().stream().allMatch(Set::isEmpty), "시간 확장 검증 노선 또는 시간이 빠졌다");
     }
