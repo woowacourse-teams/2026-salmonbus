@@ -447,10 +447,10 @@ test("노선 탭에서 지원 노선 전체를 보여주고 다른 탭으로 나
   await expect(network).toBeVisible();
   const geometry = network.locator("defs > path");
   await expect(geometry).toHaveAttribute("d", /^M[^ML]+L[^ML]+M[^ML]+L[^ML]+$/);
-  const bounds = await geometry.evaluate((element) => {
-    const path = element as SVGPathElement;
-    const svg = path.ownerSVGElement!.getBoundingClientRect();
-    const { x, y, width, height } = path.getBBox();
+  const routeStroke = network.locator(":scope > g > use").last();
+  const bounds = await routeStroke.evaluate((stroke: SVGUseElement) => {
+    const svg = stroke.ownerSVGElement!.getBoundingClientRect();
+    const { x, y, width, height } = stroke.getBBox();
     return { left: svg.left + x, right: svg.left + x + width, top: svg.top + y, bottom: svg.top + y + height };
   });
   const search = (await searchBar.boundingBox())!;
@@ -482,6 +482,34 @@ test("노선 탭에서 지원 노선 전체를 보여주고 다른 탭으로 나
   await expect
     .poll(() => naverMap.snapshot())
     .toMatchObject({ longitude: pangyoPoint[0], latitude: pangyoPoint[1], zoom: 14 });
+});
+
+test("노선도 등장 애니메이션이 끝나기 전에 노선 끝까지 드러난다", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.clock.resume();
+  await page.route("**/assets/home-events.json", (route) =>
+    route.fulfill({ json: { stops: [], routePaths: [[pangyoPoint, [127.29, 37.22]]] } }),
+  );
+  await page.goto("/");
+  await page.addStyleTag({ content: '[data-testid="home-route-network"] > g { animation-play-state: paused; }' });
+  await page.getByRole("link", { name: "노선도", exact: true }).click();
+  const network = page.getByTestId("home-route-network");
+  await expect(network.locator("defs > path")).toHaveAttribute("d", /^M[^ML]+L[^ML]+$/);
+
+  const routeStroke = network.locator(":scope > g > use").last();
+  const { radius, distanceToEnd } = await routeStroke.evaluate((stroke: SVGUseElement) => {
+    const group = stroke.parentElement!;
+    const [reveal] = group.getAnimations();
+    if (!reveal?.effect) throw new Error("노선 등장 애니메이션을 찾지 못했습니다");
+    reveal.currentTime = Number(reveal.effect.getTiming().duration) - 1;
+    const clip = getComputedStyle(group).clipPath;
+    const circle = clip.match(/^circle\(([\d.]+)px at ([\d.]+)px ([\d.]+)px\)/);
+    if (!circle) throw new Error(`노선 등장 애니메이션의 원을 읽지 못했습니다: ${clip}`);
+    const [, radius, centerX, centerY] = circle.map(Number);
+    const { x, y, width, height } = stroke.getBBox();
+    return { radius, distanceToEnd: Math.hypot(x + width - centerX!, y + height - centerY!) };
+  });
+  expect(radius).toBeGreaterThan(distanceToEnd);
 });
 
 test("홈과 즐겨찾기에서 정류장 핀으로 도착과 탑승 예보를 읽고 노선도에서는 핀을 숨긴다", async ({
