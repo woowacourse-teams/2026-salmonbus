@@ -3,7 +3,7 @@ import copy
 import json
 import unittest
 
-from confirmed_serving_verification import PROFILE, checked_routes, verify_result
+from confirmed_serving_verification import EXTENDED_CELLS, PROFILE, checked_routes, verify_extended, verify_result
 
 
 class ConfirmedVerificationTest(unittest.TestCase):
@@ -65,6 +65,18 @@ class ConfirmedVerificationTest(unittest.TestCase):
     def test_changed_model_is_rejected(self):
         with self.assertRaises(ValueError):
             verify_result('settlement', self.worker, 'c' * 64, self.routes)
+
+    def test_extended_verification_rejects_missing_cells_and_reused_evidence(self):
+        code = 'a' * 40
+        rows = [dict(route=route, cell=cell, published=2, settled=1)
+                for route in self.routes for cell in EXTENDED_CELLS]
+        result = dict(bundle_manifest_sha256=self.digest, verification_code_sha=code, extended_hours=rows)
+        verify_extended(result, self.digest, code, self.routes)
+        for bad in [dict(extended_hours=rows[:-1]), dict(extended_hours=rows + rows[:1]),
+                    dict(bundle_manifest_sha256='c' * 64), dict(verification_code_sha='d' * 40)]:
+            with self.subTest(bad=list(bad)):
+                with self.assertRaises(ValueError):
+                    verify_extended(result | bad, self.digest, code, self.routes)
 
     def test_runtime_must_cover_every_route_and_confirmed_profile(self):
         runtime = dict(passed=True, bundle_manifest_sha256=self.digest, routes=self.routes,

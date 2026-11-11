@@ -40,7 +40,7 @@ def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None
         if digest(content) != expected:
             raise ValueError(f"source digest mismatch: {name}")
         contents[name] = content
-    from confirmed_serving_verification import CONTRACT, checked_routes, verify_receipt
+    from confirmed_serving_verification import CONTRACT, checked_routes, verify_extended, verify_receipt
     routes = checked_routes(contents)
     confirmed = routes is not None
     if routes is None:
@@ -62,6 +62,13 @@ def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None
             raise ValueError(f"evidence digest mismatch: {check}")
         if confirmed:
             verify_receipt(check, receipt, json.loads(evidence), source_digest, routes)
+        if check == "runtime_validation" and "extended-hours.json" in contents:
+            if not confirmed:
+                raise ValueError("extended hours require confirmed observations")
+            if not manifest.get("extended_holiday_dates"):
+                raise ValueError("extended hours holiday calendar is missing")
+            verify_extended(json.loads(evidence)["result"], source_digest,
+                            manifest.get("extended_verification_code_sha"), routes)
         contents[f"verification-{check}.json"] = content
         contents[evidence_name] = evidence
     # Date includes the latest observation/event used by any frozen table.
@@ -83,7 +90,8 @@ def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None
         "data_through": max(dates).isoformat(),
         "source_manifest_sha256": source_digest,
         "routes": routes,
-        "scope": "weekday-rush-6-10-17-21-horizon-1-12",
+        "scope": ("all-hours-horizon-1-12" if "extended-hours.json" in contents
+                  else "weekday-rush-6-10-17-21-horizon-1-12"),
     }
     if confirmed:
         manifest["runtime"].update(CONTRACT)

@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -176,15 +177,19 @@ final class ConfirmedAlightingAwareEvaluation {
         JsonNode snapshot
     ) {
         Instant departure = visit.departure().receivedAt();
-        final int minute = departure.atZone(SEOUL).getHour() * 60 + departure.atZone(SEOUL).getMinute();
+        ZonedDateTime local = departure.atZone(SEOUL);
+        final int minute = local.getHour() * 60 + local.getMinute();
         String band = band(minute);
-        if (band.isEmpty() || departure.atZone(SEOUL).getDayOfWeek().getValue() > 5 || isHoliday(snapshot, departure)) {
+        final boolean holiday = isHoliday(snapshot, departure);
+        final boolean weekend = local.getDayOfWeek().getValue() > 5;
+        final boolean extended = band.isEmpty() || weekend || holiday;
+        if (extended && !snapshot.has("extendedSettlement")) {
             return unsupported("OUTSIDE_FITTED_BAND");
         }
         AlightingAwarePassEvent previous = passes.stream()
             .filter(
                 event -> event.stopOrder() == visit.stopOrder() && event.confirmedAt().isBefore(visit.confirmedAt()))
-            .filter(event -> event.departure().receivedAt().atZone(SEOUL).toLocalDate().equals(date))
+            .filter(event -> event.departure().receivedAt().atZone(SEOUL).toLocalDate().equals(local.toLocalDate()))
             .max(Comparator.comparing(AlightingAwarePassEvent::confirmedAt)).orElse(null);
         if (previous == null) {
             return unsupported("NO_PREVIOUS_PASS");
@@ -193,11 +198,11 @@ final class ConfirmedAlightingAwareEvaluation {
         if (gap < .2 || gap > 60) {
             return unsupported("UNSUPPORTED_HEADWAY");
         }
-        JsonNode parameters = null;
-        for (JsonNode parameter : snapshot.path("alighting").path("stops")) {
-            if (parameter.path("stop").asInt() == visit.stopOrder() && parameter.path("band").asText().equals(band)) {
-                parameters = parameter;
-            }
+        JsonNode parameters = findParameters(snapshot, visit.stopOrder(), band);
+        int bin = (minute - bandStart(band)) / 30;
+        if (extended) {
+            parameters = snapshot.path("extendedSettlement").get(extendedBand(minute, weekend, holiday));
+            bin = minute / 180;
         }
         if (parameters == null) {
             return unsupported("NO_FITTED_STOP_PARAMETERS");
@@ -218,15 +223,41 @@ final class ConfirmedAlightingAwareEvaluation {
         }
         AlightingPosterior.Parameters fitted = new AlightingPosterior.Parameters(lambda,
             parameters.path("p").asDouble(), parameters.path("kappa").asDouble(), parameters.path("r").asDouble());
-        int start = 360;
-        if (band.equals("evening")) {
-            start = 1020;
-        }
         final double label = AlightingPosterior.afterSeats(fitted, visit.arrival().seats(),
             visit.departure().seats(),
-            capacity, gap, previous.departure().seats() == 0, (minute - start) / 30);
+            capacity, gap, previous.departure().seats() == 0, bin);
         return new JdbcAlightingAwareForecastEvaluation.Outcome("SETTLED", label, null, visit, previous, null,
             digest(parameters.toString()), capacity);
+    }
+
+    private static JsonNode findParameters(JsonNode snapshot, final int stop, String band) {
+        for (JsonNode parameter : snapshot.path("alighting").path("stops")) {
+            if (parameter.path("stop").asInt() == stop && parameter.path("band").asText().equals(band)) {
+                return parameter;
+            }
+        }
+        return null;
+    }
+
+    private static int bandStart(String band) {
+        if (band.equals("evening")) {
+            return 1020;
+        }
+        return 360;
+    }
+
+    private static String extendedBand(final int minute, final boolean weekend, final boolean holiday) {
+        String day = "work";
+        if (weekend) {
+            day = "weekend";
+        }
+        if (holiday) {
+            day = "holiday";
+        }
+        if (minute >= 360 && minute < 1260) {
+            return day + "-day";
+        }
+        return day + "-night";
     }
 
     private static boolean isHoliday(JsonNode snapshot, Instant at) {

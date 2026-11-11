@@ -144,25 +144,33 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
         final long batchId,
         RouteStops stops,
         AlightingAwareRouteStatistics statistics) {
-        return read(batchId, stops, statistics, false);
+        return read(batchId, stops, statistics, false, false);
     }
 
     Map<Long, AlightingAwareFeatureSnapshot> readForCheckpoint(
         final long batchId,
         RouteStops stops,
         AlightingAwareRouteStatistics statistics) {
-        return read(batchId, stops, statistics, true);
+        return read(batchId, stops, statistics, true, false);
+    }
+
+    @Override
+    public Map<Long, AlightingAwareFeatureSnapshot> readExtended(
+        final long batchId, RouteStops stops, AlightingAwareRouteStatistics statistics
+    ) {
+        return read(batchId, stops, statistics, false, true);
     }
 
     private Map<Long, AlightingAwareFeatureSnapshot> read(
         final long batchId,
         RouteStops stops,
         AlightingAwareRouteStatistics statistics,
-        final boolean checkpointOnly
+        final boolean checkpointOnly,
+        final boolean extendedHours
     ) {
         validateRoute(stops, statistics);
         Target target = target(batchId, statistics.confirmedProfile());
-        validateScope(stops, statistics, target, checkpointOnly);
+        validateScope(stops, statistics, target, checkpointOnly, extendedHours);
         List<Long> versions = compatibleVersions(statistics, target.time(), batchId);
         AlightingAwareHistorySeedReader reader = seedReader(statistics);
         AlightingAwareHistorySeedReader.Seed seed = reader.read(stops.routeVersionId());
@@ -197,12 +205,13 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
         RouteStops stops,
         AlightingAwareRouteStatistics statistics,
         Target target,
-        final boolean checkpointOnly
+        final boolean checkpointOnly,
+        final boolean extendedHours
     ) {
         if (!checkpointOnly && target.version() != stops.routeVersionId()) {
             throw new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_ROUTE_VERSION_MISMATCH");
         }
-        if (rushOnly && !isSupportedRush(statistics, target.time())) {
+        if (rushOnly && !extendedHours && !isSupportedRush(statistics, target.time())) {
             throw new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_OUTSIDE_VALIDATED_RUSH_SCOPE");
         }
     }

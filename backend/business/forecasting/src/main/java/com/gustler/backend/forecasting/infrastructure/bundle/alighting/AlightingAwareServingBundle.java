@@ -5,6 +5,8 @@ import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareStatisticsReader;
+import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingPredictor;
+import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -32,14 +34,26 @@ public final class AlightingAwareServingBundle {
     public static AlightingAwareSeatForecastModel readModel(AlightingAwareInferenceBundle bundle) {
         Map<String, AlightingAwareRouteStatistics> statistics = new HashMap<>();
         Map<String, Map<Integer, String>> evidence = new HashMap<>();
+        JsonNode extended = bundle.extendedHours();
+        Map<String, ExtendedAlightingPredictor> extendedPredictors = new HashMap<>();
+        NumericTreeEnsemble full = null;
+        if (extended != null) {
+            full = AlightingAwareInferenceBundle.model(extended.get("full"));
+        }
         for (String route : bundle.routes()) {
             JsonNode raw = bundle.statistics(route);
             AlightingAwareRouteStatistics stats = AlightingAwareStatisticsReader.read(raw, bundle.holidays());
             statistics.put(route, stats);
+            if (extended != null) {
+                JsonNode extension = extended.path("routes").path(route);
+                extendedPredictors.put(route, new ExtendedAlightingPredictor(
+                    AlightingAwareInferenceBundle.model(extension.get("seats")), full));
+                ((ObjectNode) raw).set("extendedSettlement", extension.get("settlement"));
+            }
             Map<Integer, String> targets = targetEvidence(route, bundle, stats, raw);
             evidence.put(route, targets);
         }
-        return new AlightingAwareSeatForecastModel(bundle.predictor(), statistics, evidence, bundle.digest());
+        return new AlightingAwareSeatForecastModel(bundle.predictor(), statistics, evidence, bundle.digest(), extendedPredictors);
     }
 
     private static Map<Integer, String> targetEvidence(
@@ -68,6 +82,9 @@ public final class AlightingAwareServingBundle {
             }
             alighting.set("stops", parameters);
             snapshot.set("alighting", alighting);
+            if (raw.has("extendedSettlement")) {
+                snapshot.set("extendedSettlement", raw.get("extendedSettlement"));
+            }
             targets.put(stop.order(), JSON.writeValueAsString(snapshot));
         }
         return targets;
