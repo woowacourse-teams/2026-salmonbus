@@ -5,16 +5,26 @@ import static com.gustler.backend.api.salmon.domain.Requirements.requireText;
 import com.gustler.backend.api.salmon.domain.Candidates.*;
 import com.gustler.backend.api.salmon.domain.Fields.*;
 import com.gustler.backend.api.salmon.domain.Timing.*;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /** 정책 평가 결과, 판정하지 못한 이유, 사유 코드와 최종 판정을 나타낸다. */
 public final class Verdicts {
     private Verdicts() {
     }
 
-    public enum Assumption { EXACT, INDEP }
+    /**
+     * 실패 위험을 계산하며 쓴 가정이다. 하나도 없으면 모든 슬롯에 그 슬롯의 탑승 확률이 그대로 들어간 결과다.
+     * <ul>
+     *   <li>INDEP: 앞선 시도와 독립이라고 보고, 조건부 슬롯에 주변확률을 넣었다.</li>
+     *   <li>SEAT_FORECAST_PROXY: 탑승 확률 대신 좌석 예보에서 옮겨 온 근사 값을 넣었다.</li>
+     * </ul>
+     */
+    public enum Assumption { INDEP, SEAT_FORECAST_PROXY }
 
     public enum TimeBasis { DIRECT, DERIVED }
 
@@ -30,7 +40,12 @@ public final class Verdicts {
         }
     }
 
-    public record Evaluable(double value, Assumption assumption, TimeBasis basis) implements Evaluation {
+    public record Evaluable(double value, Set<Assumption> assumptions, TimeBasis basis) implements Evaluation {
+        public Evaluable {
+            EnumSet<Assumption> ordered = EnumSet.noneOf(Assumption.class);
+            ordered.addAll(assumptions);
+            assumptions = Collections.unmodifiableSet(ordered);
+        }
     }
 
     public record ConfirmedEmpty(TimeBasis basis) implements Evaluation {

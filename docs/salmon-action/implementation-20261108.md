@@ -61,16 +61,30 @@
 - 확률 입력은 슬롯과 조건 이력이 같은 값을 먼저 쓰고, 없을 때만 조건 이력 없는 주변확률을 쓴다. 조건 이력이 붙은 값은 슬롯의 조건 이력과 완전히 같을 때(판정 기, 앞선 실패, 미시도, 맞은편에서 탄 차)만 쓴다. 그래서 재탑승의 한 가지에 고정한 값은 다른 가지 슬롯에 들어가지 않는다. 주변확률은 첫 시도 슬롯에서는 일치로, 그 밖의 슬롯에서는 독립 가정(INDEP)으로 들어간다. 명세 7.2절은 가지가 다르면 다른 값이라는 것까지만 정하고, 조건 이력이 붙은 주변확률을 그 가지의 어느 슬롯까지 쓸지는 정하지 않는다. 구현은 가장 좁은 규칙(완전 일치)을 쓴다.
 - 해상도는 준비 시각과 t2(그리고 t2 하한)에만 적용한다. 입력 도착 시각은 그대로 비교한다. H가 해상도의 배수가 아니면 H 안에 드는 t2는 해상도 격자 위의 값뿐이라, 재탑승 쪽에서 H는 해상도로 내림한 값처럼 동작한다.
 - 재탑승 GO 안내는 맞은편 버스(포함 가지)마다 "그 차를 탔다면 지금부터 몇 분 뒤 차"를 보인다. 탈 확률이 0인 가지도 보이고, 문장은 맞은편 시도 문장과 같은 최대 2대까지다. 가지의 준비 시각(ready)은 결과에 담지만 지금 안내에서는 읽지 않는다.
-- 우회량 D는 입력으로 받고 허용 확정에 필수이다. 직접 도보 후보는 CandidateAssembler가 DetourSource에서 D를 받는다. 채택 명세 v1에는 D의 이름만 있다. 검토용 통합 명세 v2(2026-11-07) 7절은 D를 목표까지 계획한 차내 이동 시간의 합으로 제안하지만 채택 전이다. 채택 여부는 SAL-389에서 정한다. 실제 계산 구현은 없고 DetourSource.unavailable()만 있다. 따라서 운영 입력에서는 어떤 후보도 허용(ALLOWED)이 되지 못한다. 도보 합이 한도를 넘는 후보는 위반이고, 나머지는 허용 미확인이다. 모든 후보가 위반이면 판정은 NO_MOVE_INFEASIBLE이다.
+- 우회량 D는 입력으로 받고 허용 확정에 필수이다. 직접 도보 후보는 CandidateAssembler가 DetourSource에서 D를 받는다. v1 ActionJudge 경로는 DetourSource.unavailable()만 있어 운영 입력에서 후보가 ALLOWED가 되지 못한다. 도보 합이 한도를 넘는 후보는 위반이고, 나머지는 허용 미확인이다. 모든 후보가 위반이면 v1 판정은 NO_MOVE_INFEASIBLE이다.
+- 통합 명세 v2는 2026-11-10에 이번 연어행동 판정의 기준으로 채택했다. D는 목표 또는 계획 하차까지의 계획된 차내 이동 시간이고 대기 시간은 넣지 않는다. 운영 숫자(H, 도보 상한, D 상한, 환승, 이득 역치, eta)는 SAL-389에 남긴다. v2 판정은 IntegratedJudge다. 차내 이동 시간이 없는 후보는 ALLOWED가 될 수 없다. 현장 확률과 운행 식별자가 없으면 GO를 만들지 않는다.
 - ActionDecider는 판정 기 식별자를 `sources.baseline(epoch, ...)`로 넘긴다. 확률 소스는 ConditionHistory.epoch에 이 문자열을 직접 만들지 말고 받은 값을 그대로 넣는다. 그래야 조건 이력이 정확 일치로 맞는다.
+
+## 이 브랜치로 모은 하위 작업
+
+하위 워크트리의 커밋을 그대로 merge하지 않았다. SAL-395는 dev에 이미 있고, SAL-396과 SAL-392는 그 앞의 재작성 이력을 같이 가져온다. 파일만 현재 v2 트리에 올렸다.
+
+- SAL-396: 좌석 예보로 탑승 확률 입력을 만드는 SeatForecastProbabilitySource. v1 판정 타입에 근사 표지를 더했다.
+- SAL-392: 오프라인 실행기(`runSalmonOffline`)와 입력 추출 스크립트.
+- SAL-390: 도착 스냅샷 보존 비용 스크립트와 호출 한도 배수 테스트. 제품 조회가 아니다.
+- SAL-388: WalkOptions, ReboardAssembly, ActionDecision. 하차 구간은 호출자가 준 목록만 조립한다. 조회 API는 이 클래스를 부르지 않는다.
+- 하차 정류장 규칙: AlightingStopRule. 경계 설명은 docs/salmon-action/alighting-stop-boundary.md.
+- 조회 보조 타입: SalmonStop, DecisionLog, MemoryDecisionLog, SalmonDecisionRecord, SalmonCandidateRoutes, AbsentCandidateRoutes, BaselineProbabilitySource, SalmonActionOutcome, SalmonActionException. 스프링 빈으로 등록하지 않았다.
+
+통합 워크트리가 v1 ActionJudge와 PolicyEvaluator를 크게 바꾼 부분은 가져오지 않았다. 공개 판정은 IntegratedJudge다.
 
 ## 아직 없는 것
 
 - 도착 목록에서 EtaChain 입력을 만드는 변환: 도착 정보에 운행 식별자와 예측 생성 시각이 없다(SAL-387, PR #275).
-- SAL-362 후보 응답을 WalkOption으로 바꾸는 호출부와 재탑승 후보 조립(SAL-388). 재탑승 후보는 하차 정류장 규칙이 먼저 필요하다.
-- 우회량 계산(SAL-386, D 정의는 SAL-389), 탑승 확률 소스, 구간시간 이력.
-- 공개 API 계약, 설정 적재와 기능 플래그(기본 OFF), 판정 기록 저장과 지표(WP8).
-- 판정 보드 화면과 안내 연결(WP7, SAL-368), ON과 OFF 통합 검증(WP9).
+- 우회량 계산(SAL-386). D의 운영 정의와 숫자는 SAL-389.
+- 공개 조회는 `GET /api/v1/routes/{routeId}/stations/{stationId}/salmon-action`이다. `salmon.action.enabled` 기본값은 false다. 꺼지면 kind만 DISABLED다. 켜지면 마감(요청 시각 + horizon) 안에 그 정류장에 닿는 차량을 도착 예측에서 찾고, 전광판에서 그 차량들의 출발 만차 확률을 읽어 대기 위험 범위를 만든다. 한 대면 그 확률이고, 둘 이상이면 곱하지 않고 주변확률만으로 정해지는 범위(상한은 가장 작은 확률)다. 도착 목록의 두 대가 모두 마감 안이면, 전광판에만 보이는 뒤 차량의 도착 시각을 맨 앞 차량이 있는 정류장의 도착 목록에서 이어 붙인다. 이때 그 정류장의 도착 조회를 요청한다. 이 이어 붙이기는 EtaChain을 쓰지 않는 근사이고, 맨 앞 차량이 그 정류장을 이미 떠났을 수 있어 정류장 한 구간의 평균 시간을 여유로 둔다. 이어 붙인 차량은 도착 시각이 추정이라 대기 위험의 상한을 낮추지 못하고 하한에만 들어간다. 그 차량을 넣어야만 상한이 이득 역치 아래로 내려가는 경우는 ABSTAIN_EVIDENCE다. 마감 안에 닿는 차량이 없거나 그 가운데 확률이 없는 차량이 있으면 ABSTAIN_EVIDENCE다. 확률은 DEPARTURE_ZERO 예보만 쓴다. 전광판이 FIRST_POST_STOP_ZERO 예보만 내는 동안에는 켜도 항상 ABSTAIN_EVIDENCE다. 이동 후보는 같은 방향 도보만 보고, 차내 시간이 없어 GO로 닫지 않는다. 문장은 사용자가 할 행동이 정해진 상태(GO, NO_MOVE_*)에만 싣는다. ABSTAIN_*, INVALID_INPUT, WINDOW_EXPIRED는 reasonCode만 싣는다. 노선 ID, 정류장 ID, 순번의 형식이 틀리면 400이다. 확률은 응답에 넣지 않는다.
+- 판정 기록 저장과 지표(WP8)는 아직 없다.
+- 판정보드는 선택한 정류장에 서버 문장만 보여 준다. 꺼짐, 첫 응답 전, 조회 실패, 문장 없는 판정, 계약 밖 응답은 숨긴다. 서버가 꺼져 있다고 답하면 그 화면에서는 다시 조회하지 않는다. 브라우저에서 켠 상태의 문장 표시는 아직 확인하지 않았다.
 - 실제 현장 근거와 증거 묶음(SAL-367).
 
 ## 도착 정보로 만들 수 있는 것 (설계 14.3 ETA 소스 항목)

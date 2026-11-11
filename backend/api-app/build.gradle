@@ -65,6 +65,34 @@ tasks.named('test') {
     }
 }
 
+// 명시한 로컬 입력 폴더만 임시 테스트 DB에 넣어 연어행동의 대기 판정을 돌린다. 운영 DB에 접속하지 않는다.
+// 사용법은 docs/salmon-action/offline-run.md에 있다.
+tasks.register('runSalmonOffline', JavaExec) {
+    def inputPath = providers.gradleProperty('salmonOfflineInput')
+    def settingsPath = providers.gradleProperty('salmonOfflineSettings')
+    def outputPath = providers.gradleProperty('salmonOfflineOutput')
+    def codeCommit = providers.exec {
+        commandLine 'git', 'rev-parse', 'HEAD'
+        ignoreExitValue = true
+    }.standardOutput.asText
+    def uncommitted = providers.exec {
+        commandLine 'git', 'status', '--porcelain'
+        ignoreExitValue = true
+    }.standardOutput.asText
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.gustler.backend.api.salmon.offline.SalmonOfflineRun'
+    maxHeapSize = '1g'
+    doFirst {
+        if (!inputPath.isPresent() || !settingsPath.isPresent() || !outputPath.isPresent()) {
+            throw new GradleException('-PsalmonOfflineInput, -PsalmonOfflineSettings, -PsalmonOfflineOutput 절대 경로가 필요하다')
+        }
+        def commit = codeCommit.get().trim() ?: 'unknown'
+        args inputPath.get(), settingsPath.get(), outputPath.get(),
+            uncommitted.get().trim() ? "${commit}+uncommitted" : commit
+    }
+}
+
 // 표시 계약과 공용 생성 엔진은 프레임워크·DB 자원 없는 값 타입과 순수 계산만 제공한다.
 // API 실행 경로에 로그인용 회원 모듈 외의 쓰기 업무나 다른 실행 앱이 간접 의존으로 들어오지 않게 확인한다.
 tasks.register('verifyRuntimeProjects') {

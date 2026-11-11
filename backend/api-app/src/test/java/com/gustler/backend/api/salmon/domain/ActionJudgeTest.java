@@ -7,6 +7,7 @@ import static com.gustler.backend.api.salmon.domain.ActionFixture.minutes;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.observed;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.offsetOf;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.queried;
+import static com.gustler.backend.api.salmon.domain.ActionFixture.seatForecast;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
@@ -39,7 +40,7 @@ class ActionJudgeTest {
         assertThat(verdict.partialComparison()).isFalse();
         Evaluable stay = (Evaluable) verdict.stay().evaluation();
         assertThat(stay.value()).isCloseTo(0.855, within(TOLERANCE));
-        assertThat(stay.assumption()).isEqualTo(Assumption.EXACT);
+        assertThat(stay.assumptions()).isEmpty();
         assertThat(stay.basis()).isEqualTo(TimeBasis.DIRECT);
         CandidateRecord reboard = recordOf(verdict, "reboard");
         Evaluable evaluable = (Evaluable) reboard.outcome().evaluation();
@@ -328,14 +329,53 @@ class ActionJudgeTest {
 
         Evaluable stay = (Evaluable) verdict.stay().evaluation();
         assertThat(stay.value()).isCloseTo(0.855, within(TOLERANCE));
-        assertThat(stay.assumption()).isEqualTo(Assumption.INDEP);
+        assertThat(stay.assumptions()).containsExactly(Assumption.INDEP);
+    }
+
+    @Test
+    void 좌석_예보_값이_첫_시도_슬롯에_들어가면_가정_없는_결과로_두지_않고_근사_표지를_단다() {
+        ActionFixture fixture = new ActionFixture();
+        fixture.stay = queried(entry("s0-3", 3));
+        fixture.stayProbabilities.clear();
+        fixture.stayProbabilities.add(seatForecast("s0-3", 0.7));
+        Verdict verdict = ActionFixture.judge(fixture.baseline(), config(15, 8), ActionFixture.neverCalled());
+
+        Evaluable stay = (Evaluable) verdict.stay().evaluation();
+        assertThat(stay.value()).isCloseTo(0.3, within(TOLERANCE));
+        assertThat(stay.assumptions()).containsExactly(Assumption.SEAT_FORECAST_PROXY);
+    }
+
+    @Test
+    void 좌석_예보_값으로_두_번_이상_시도하면_근사_표지와_독립_가정_표지를_함께_단다() {
+        ActionFixture fixture = new ActionFixture();
+        fixture.stayProbabilities.clear();
+        fixture.stayProbabilities.add(seatForecast("s0-3", 0.7));
+        fixture.stayProbabilities.add(seatForecast("s0-11", 0.4));
+        Verdict verdict = ActionFixture.judge(fixture.baseline(), config(15, 8), ActionFixture.neverCalled());
+
+        Evaluable stay = (Evaluable) verdict.stay().evaluation();
+        assertThat(stay.value()).isCloseTo(0.18, within(TOLERANCE));
+        assertThat(stay.assumptions()).containsExactly(Assumption.INDEP, Assumption.SEAT_FORECAST_PROXY);
+    }
+
+    @Test
+    void 좌석_예보_값이_하나만_계산에_들어가도_근사_표지를_달고_독립_가정_표지는_달지_않는다() {
+        ActionFixture fixture = new ActionFixture();
+        fixture.stayProbabilities.set(0, seatForecast("s0-3", 0.05));
+        Verdict verdict = ActionFixture.judge(fixture.baseline(), config(15, 8),
+            ActionFixture.sourceOf(new Failed(MissingReason.QUERY_FAILED)));
+
+        Evaluable stay = (Evaluable) verdict.stay().evaluation();
+        assertThat(stay.value()).isCloseTo(0.855, within(TOLERANCE));
+        assertThat(stay.assumptions()).containsExactly(Assumption.SEAT_FORECAST_PROXY);
     }
 
     @Test
     void 조건_이력의_판정_기가_다르면_일치로_보지_않는다() {
         ActionFixture fixture = new ActionFixture();
         fixture.stayProbabilities.set(1, new ProbabilityInput("s0-11", ValueTag.COND_FAIL,
-            Optional.of(new ConditionHistory("epoch-0", Set.of("s0-3"), Set.of(), Optional.empty())), 0.10));
+            Optional.of(new ConditionHistory("epoch-0", Set.of("s0-3"), Set.of(), Optional.empty())), 0.10,
+            ValueOrigin.BOARDING));
         Verdict verdict = ActionFixture.judge(fixture.baseline(), config(15, 8), ActionFixture.neverCalled());
 
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_STAY_UNDEFINED);
@@ -344,7 +384,8 @@ class ActionJudgeTest {
     @Test
     void 구분_없는_값은_넣지_않고_결측으로_둔다() {
         ActionFixture fixture = new ActionFixture();
-        fixture.stayProbabilities.set(1, new ProbabilityInput("s0-11", ValueTag.UNDIFF, Optional.empty(), 0.10));
+        fixture.stayProbabilities.set(1, new ProbabilityInput("s0-11", ValueTag.UNDIFF, Optional.empty(), 0.10,
+            ValueOrigin.BOARDING));
         Verdict verdict = ActionFixture.judge(fixture.baseline(), config(15, 8), ActionFixture.neverCalled());
 
         assertThat(verdict.code()).isEqualTo(ReasonCode.ABSTAIN_STAY_UNDEFINED);

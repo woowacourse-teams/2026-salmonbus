@@ -5,6 +5,7 @@ import static com.gustler.backend.api.salmon.domain.ActionFixture.entry;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.marginal;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.observed;
 import static com.gustler.backend.api.salmon.domain.ActionFixture.queried;
+import static com.gustler.backend.api.salmon.domain.ActionFixture.seatForecast;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
@@ -40,6 +41,21 @@ class ActionGuidanceTest {
             "정해진 하차 정류장에서 내려요", "길을 건너", "맞은편에서 약 4분 뒤 차를 탔다면 지금부터 약 14분 뒤 차를 시도해요", "약 19분 뒤 차를 시도할 수 있어요",
             "입력된 차량 기준", "구간시간은 추정", "연결 여유는 약 1.4분", "근거가 부족해요");
         assertThat(text).doesNotContain("확실히");
+    }
+
+    @Test
+    void 독립_가정이나_좌석_예보_근사로_낸_결과여도_안내_문구에_확률이_추정이라는_문장을_넣지_않는다() {
+        ActionFixture fixture = new ActionFixture();
+        fixture.candidateProbabilities.add(seatForecast("w-9", 0.8));
+        ActionConfig config = config(15, 8);
+        Verdict verdict = ActionFixture.judge(fixture.baseline(), config, fixture.source(
+            new WalkCandidate("walk", observed(1), queried(entry("w-1", 1), entry("w-9", 9)), Optional.of(0.0))));
+
+        assertThat(verdict.code()).isEqualTo(ReasonCode.GO);
+        assertThat(((Evaluable) verdict.candidates().get(0).outcome().evaluation()).assumptions())
+            .containsExactly(Assumption.INDEP, Assumption.SEAT_FORECAST_PROXY);
+        String text = String.join("\n", ActionGuidance.compose(verdict, config));
+        assertThat(text).contains("입력된 차량 기준이에요.").doesNotContain("확률은 추정이에요");
     }
 
     @Test

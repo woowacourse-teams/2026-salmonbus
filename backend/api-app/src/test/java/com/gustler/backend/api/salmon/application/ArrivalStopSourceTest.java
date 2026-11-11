@@ -71,6 +71,16 @@ class ArrivalStopSourceTest {
         List<StopEntry> entries = ((Queried) list).entries();
         assertThat(entries).hasSize(2);
         assertThat(entries).extracting(StopEntry::id).allMatch(id -> id.endsWith(":1") || id.endsWith(":2"));
+        assertThat(entries).extracting(StopEntry::vehicleId).containsOnly(Optional.empty());
+    }
+
+    @Test
+    void 도착_정보의_차량_ID를_항목에_담는다() {
+        StopList list = source(snapshotOf(RECEIVED.plusSeconds(600), prediction("bus-1", 1, 270, null),
+            prediction("bus-2", 2, 540, null)), visits(), CoverageRule.NONE).arrivalsAt(PUBLIC_ROUTE, STATION, 5, NOW);
+
+        assertThat(((Queried) list).entries()).extracting(StopEntry::vehicleId)
+            .containsExactly(Optional.of("bus-1"), Optional.of("bus-2"));
     }
 
     @Test

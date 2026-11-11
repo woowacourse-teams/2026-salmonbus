@@ -67,13 +67,17 @@ public final class ActionFixture {
     }
 
     public static ProbabilityInput marginal(String attempt, double value) {
-        return new ProbabilityInput(attempt, ValueTag.MARG, Optional.empty(), value);
+        return new ProbabilityInput(attempt, ValueTag.MARG, Optional.empty(), value, ValueOrigin.BOARDING);
+    }
+
+    public static ProbabilityInput seatForecast(String attempt, double value) {
+        return new ProbabilityInput(attempt, ValueTag.MARG, Optional.empty(), value, ValueOrigin.SEAT_FORECAST);
     }
 
     public static ProbabilityInput conditional(String attempt, ValueTag tag, double value, Set<String> failed,
                                         Set<String> skipped, Optional<String> boarded) {
         return new ProbabilityInput(attempt, tag,
-            Optional.of(new ConditionHistory(EPOCH, failed, skipped, boarded)), value);
+            Optional.of(new ConditionHistory(EPOCH, failed, skipped, boarded)), value, ValueOrigin.BOARDING);
     }
 
     public ReboardCandidate reboardCandidate() {
