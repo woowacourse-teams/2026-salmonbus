@@ -176,7 +176,6 @@ function RouteBoard({ routeId }: { routeId: Board["route"]["id"] }) {
 
   const showObservationSheet =
     shared &&
-    entry === "search" &&
     screen.kind === "error" &&
     screen.failure.kind === "contract" &&
     screen.failure.status === 503 &&
