@@ -996,3 +996,33 @@ test("탭 시트가 요약 높이에서 접힐 때 아래로 내려간 뒤 사�
   await tab.click();
   await expect(sheet).toHaveAttribute("data-snap", "summary");
 });
+
+test("홈 시트가 닫히는 중 로고로 홈에 다시 들어오면 시트를 볼 수 있다", async ({ page }) => {
+  await page.goto("/");
+  const sheet = page.getByRole("region", { name: "홈 정보", exact: true });
+  const tab = page.getByRole("link", { name: "홈", exact: true });
+  const brand = page.getByRole("link", { name: "연어버스 홈으로 이동", exact: true });
+  for (const snap of ["detail", "full", "detail", "summary"]) {
+    await tab.click();
+    await expect(sheet).toHaveAttribute("data-snap", snap);
+  }
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+
+  const brandLink = await brand.elementHandle();
+  const reenteredDuringClose = await tab.evaluate(async (homeTab: HTMLAnchorElement, logo) => {
+    const surface = document.getElementById("home-bottom-sheet")?.parentElement;
+    if (!surface || !(logo instanceof HTMLAnchorElement)) return false;
+    homeTab.click();
+    const [closing] = surface.getAnimations();
+    if (!closing || closing.playState === "finished") return false;
+    logo.click();
+    await Promise.allSettled([closing.finished]);
+    return true;
+  }, brandLink);
+
+  expect(reenteredDuringClose).toBe(true);
+  await expect(sheet).toHaveAttribute("data-snap", "summary");
+  await expect(sheet).toBeInViewport();
+  await tab.click();
+  await expect(sheet).toHaveAttribute("data-snap", "detail");
+});

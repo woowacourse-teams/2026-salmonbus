@@ -306,6 +306,7 @@ export function RouteSelectScreen({
             onHeightChange={setSheetHeight}
             label={sheetLabel}
             contentKey={selectedStop?.id ?? location.pathname}
+            locationKey={location.key}
             station={selectedStop}
             home={isHome}
             showTabClose={isRouteMap || location.pathname === paths.favoriteGroups}

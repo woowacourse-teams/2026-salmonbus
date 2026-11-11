@@ -18,6 +18,7 @@ export function HomeBottomSheet({
   label,
   actionTitle,
   contentKey,
+  locationKey,
   station,
   home,
   showTabClose,
@@ -31,6 +32,7 @@ export function HomeBottomSheet({
   label: string | null;
   actionTitle?: ReactNode;
   contentKey: string;
+  locationKey: string;
   station: { id: string; name: string } | null;
   home: boolean;
   showTabClose: boolean;
@@ -81,13 +83,16 @@ export function HomeBottomSheet({
   });
   useLayoutEffect(() => {
     tabSnapDirectionRef.current = "larger";
-  }, [contentKey]);
+  }, [contentKey, locationKey]);
   useLayoutEffect(
     () => () => {
-      closeAnimationRef.current?.cancel();
+      const animation = closeAnimationRef.current;
       closeAnimationRef.current = null;
+      if (!animation) return;
+      animation.onfinish = null;
+      animation.cancel();
     },
-    [contentKey, snap],
+    [contentKey, locationKey, snap],
   );
   useEffect(() => {
     stationHeadingRef.current?.focus({ preventScroll: true });
