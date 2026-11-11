@@ -62,6 +62,17 @@ describe("editionViewFor", () => {
     });
   });
 
+  it("시행 직전에도 새 판의 직접 주소로 시행 예정 원고를 볼 수 있다", () => {
+    const beforeMidnight = Date.parse("2026-12-31T23:59:59.999+09:00");
+
+    expect(editionViewFor(editions, "2027-01-01", beforeMidnight)).toMatchObject({
+      kind: "edition",
+      title: "개인정보 처리방침 2판",
+      summary: { effectiveDate: "2027-01-01", isCurrent: false, isUpcoming: true },
+      others: [{ effectiveDate: "2026-11-04", lastDay: "2026-12-31", isCurrent: true }],
+    });
+  });
+
   it("첫 판의 시행일 전에는 첫 판을 시행 예정인 지금 판으로 보여 준다", () => {
     const onlyEdition = editionsFrom([firstEdition]);
     const dayBefore = Date.parse("2026-11-03T23:59:00+09:00");
