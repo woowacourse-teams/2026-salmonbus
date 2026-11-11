@@ -27,7 +27,10 @@ export const page = style({
   margin: "0 auto",
   background: vars.color.surface,
   color: ink,
-  selectors: { 'html[data-shared-native-map-ready="true"] &': { background: "transparent" } },
+  selectors: {
+    'html[data-shared-native-map-ready="true"] &': { background: "transparent" },
+    'html[data-native-home-map="true"] &': { background: "transparent" },
+  },
   "@media": { "(max-width: 599.98px)": { maxWidth: "none" } },
 });
 export const main = style({
@@ -79,6 +82,10 @@ export const map = style({
   background: vars.color.background,
   selectors: { 'html[data-shared-native-map-ready="true"] &': { visibility: "hidden" } },
 });
+export const nativeMap = style([
+  map,
+  { selectors: { 'html[data-native-home-map="true"] &': { background: "transparent" } } },
+]);
 export const mapCanvas = style({
   width: "100%",
   height: "100%",
@@ -139,6 +146,7 @@ export const favoriteMapNotice = style([
   mapNotice,
   { top: "auto", bottom: `calc(${sheetObstruction} + ${mapControlInset}px)`, zIndex: 2 },
 ]);
+export const mapRetryNotice = style([mapNotice, { display: "grid", gap: 8, justifyItems: "start" }]);
 export const stationMapError = style([
   mapNotice,
   {

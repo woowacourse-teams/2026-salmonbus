@@ -17,7 +17,7 @@ import {
 } from './bridge/bridge';
 import { HAPTIC_CAPABILITIES, playHaptic } from './haptic/playHaptic';
 import { NativeRouteMap, type NativeRouteMapRef } from './native-map/NativeRouteMap';
-import { NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
+import { NATIVE_HOME_MAP_CAPABILITIES, NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
 import { LOGIN_PROVIDER_ORIGINS, navigationDecisionFor } from './navigation/navigationPolicy';
 import type { NotificationCommandType } from '../frontend/src/shared/notification/notification.types';
 import {
@@ -61,7 +61,7 @@ function domainCapabilitiesOf<T extends DomainCapabilities<T>>(capabilities: T):
 }
 
 const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
-  map: NativeRouteMap !== null ? [...NATIVE_MAP_CAPABILITIES, 'map.selectedStopOnly'] : [],
+  map: NativeRouteMap !== null ? [...NATIVE_MAP_CAPABILITIES, ...NATIVE_HOME_MAP_CAPABILITIES, 'map.selectedStopOnly'] : [],
   haptic: HAPTIC_CAPABILITIES,
   settings: SETTINGS_CAPABILITIES,
   auth: AUTH_CAPABILITIES,
@@ -241,7 +241,7 @@ export default function App() {
       if (__DEV__) console.warn('지도 모듈이 보낸 이벤트의 envelope 형식이 맞지 않아 버립니다');
       return;
     }
-    webViewRef.current?.injectJavaScript(bridgeEventScriptFor(message));
+    sendToWeb(message);
   }
 
   const webView = (

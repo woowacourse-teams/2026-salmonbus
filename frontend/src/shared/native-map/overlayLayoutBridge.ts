@@ -4,7 +4,11 @@ import type { NativeMapLayout, NativeRect } from "./protocol";
 const HIT_SELECTOR = "[data-native-map-hit]";
 
 /** The host retains these rectangles for synchronous UIKit hit testing. */
-export function startOverlayLayoutBridge(channel: NativeMapChannel, mapRegion: HTMLElement): () => void {
+export function startOverlayLayoutBridge(
+  channel: NativeMapChannel,
+  mapRegion: HTMLElement,
+  logoBottomInsetFor?: (bounds: DOMRect) => number,
+): () => void {
   let frame: number | null = null;
   let stopped = false;
   let previous = "";
@@ -40,6 +44,7 @@ export function startOverlayLayoutBridge(channel: NativeMapChannel, mapRegion: H
       if (!(target instanceof Node) || !target.isConnected) transitions.delete(target);
     }
     const viewport = window.visualViewport;
+    const bounds = mapRegion.getBoundingClientRect();
     const layout: NativeMapLayout = {
       viewport: {
         width: viewport?.width ?? window.innerWidth,
@@ -48,11 +53,13 @@ export function startOverlayLayoutBridge(channel: NativeMapChannel, mapRegion: H
         offsetLeft: viewport?.offsetLeft ?? 0,
         scale: viewport?.scale ?? 1,
       },
-      mapRect: rectFor(mapRegion.getBoundingClientRect()),
+      mapRect: rectFor(bounds),
+      ...(logoBottomInsetFor && { logoBottomInset: logoBottomInsetFor(bounds) }),
       webRects: elements.filter(visible).map((element) => rectFor(element.getBoundingClientRect())),
       captureAll:
         document.querySelector("dialog[open]") !== null ||
         document.getElementById("root")?.inert === true ||
+        mapRegion.closest("[inert]") !== null ||
         mapRegion.getAttribute("aria-hidden") === "true" ||
         mapRegion.getAttribute("aria-busy") === "true",
       transitioning: pointers.size > 0 || transitions.size > 0,

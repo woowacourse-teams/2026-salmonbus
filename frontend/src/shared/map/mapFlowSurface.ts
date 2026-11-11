@@ -8,6 +8,9 @@ export interface MapFlowSurface {
 }
 
 export type MapFlowSurfaceState =
-  { status: "loading" | "error"; surface: null } | { status: "ready"; surface: MapFlowSurface };
+  | { status: "loading" | "error"; surface: null }
+  | { status: "ready"; surface: MapFlowSurface }
+  | { status: "ready"; surface: null; native: true };
 
 export const MapFlowSurfaceContext = createContext<MapFlowSurfaceState | null>(null);
+export const NativeMapFlowContext = createContext<((boardActive: boolean) => void) | null>(null);

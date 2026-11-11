@@ -25,6 +25,7 @@ export function HomeBottomSheet({
   children,
   controlsRef,
   surfaceRef,
+  sectionRef,
   label,
   actionTitle,
   contentKey,
@@ -39,6 +40,7 @@ export function HomeBottomSheet({
   children: ReactNode;
   controlsRef: RefObject<HomeSheetControls | null>;
   surfaceRef: RefObject<HTMLDivElement | null>;
+  sectionRef: RefObject<HTMLElement | null>;
   label: string | null;
   actionTitle?: ReactNode;
   contentKey: string;
@@ -102,6 +104,13 @@ export function HomeBottomSheet({
       return { minimum, half: summary, expanded: detail, full };
     },
   });
+  const attachSheet = useCallback(
+    (element: HTMLElement | null) => {
+      sheetRef.current = element;
+      sectionRef.current = element;
+    },
+    [sheetRef, sectionRef],
+  );
   useLayoutEffect(
     () => () => {
       cancelCloseMotion();
@@ -163,17 +172,18 @@ export function HomeBottomSheet({
     >
       <section
         id="home-bottom-sheet"
-        ref={sheetRef}
+        ref={attachSheet}
         className={styles.sheet}
         style={{ height: available ? height : 0 }}
         data-snap={snap}
         data-dragging={dragging}
         aria-label={label ?? undefined}
+        data-native-map-hit
         inert={hidden}
       >
         <span ref={safeTopRef} className={styles.safeTop} aria-hidden="true" />
         <span ref={safeBottomRef} className={styles.safeBottom} aria-hidden="true" />
-        <div ref={headerRef} className={styles.sheetHeader} {...dragHandlers}>
+        <div ref={headerRef} className={styles.sheetHeader} data-native-map-drag {...dragHandlers}>
           <div
             className={homeOverview ? styles.homeHandle : styles.handle}
             data-close-visible={showClose}

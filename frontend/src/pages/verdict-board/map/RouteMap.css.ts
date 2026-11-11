@@ -50,6 +50,7 @@ export const sharedNotice = style([
     pointerEvents: "none",
   },
 ]);
+export const retryMap = style({ pointerEvents: "auto" });
 const pathNoticeSurface = style({
   position: "absolute",
   zIndex: 30,

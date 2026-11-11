@@ -24,7 +24,7 @@ function nextGeometryPoll(result: ApiResult<RouteGeometry>) {
     : nextPollFrom(result);
 }
 
-export function FavoriteMapRoute({ map, maps, element, routeId, direction, onPathsChange }: FavoriteMapRouteProps) {
+export function useFavoriteMapGeometry(routeId: string) {
   const { resource: geometry } = usePolledRequest(
     (id, signal) => fetchRouteGeometry(id, { signal }),
     routeId,
@@ -42,16 +42,20 @@ export function FavoriteMapRoute({ map, maps, element, routeId, direction, onPat
         : null,
     [shape, routeId],
   );
+  const fullPath = useMemo(() => (data === null ? undefined : fullPathForDisplay(data)), [data]);
+  return { data, fullPath, settled: geometry.status !== "idle" && geometry.status !== "pending" };
+}
+
+export function FavoriteMapRoute({ map, maps, element, routeId, direction, onPathsChange }: FavoriteMapRouteProps) {
+  const { data, fullPath, settled: geometrySettled } = useFavoriteMapGeometry(routeId);
   const paths = useMemo(() => {
     if (data === null) return [];
     const coordinates = data.paths.map((path) => path.coordinates);
-    const fullPath = fullPathForDisplay(data);
     if (fullPath) coordinates.push(fullPath);
     return coordinates
       .filter((path) => path.length > 1)
       .map((path) => path.map(({ longitude, latitude }): Point => [longitude, latitude]));
-  }, [data]);
-  const geometrySettled = geometry.status !== "idle" && geometry.status !== "pending";
+  }, [data, fullPath]);
   const adapter = useRef<RouteMapAdapter | null>(null);
 
   useEffect(() => {
