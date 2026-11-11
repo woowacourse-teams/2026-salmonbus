@@ -7,7 +7,6 @@ import com.gustler.backend.api.salmon.domain.IntegratedJudge;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge.Recommendation;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge.Situation;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge.Terminal;
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -132,18 +131,10 @@ class SalmonActionAssessmentTest {
     }
 
     private static SalmonActionAssessment adopted() {
-        return assessment(Duration.ofMinutes(15), Duration.ofMinutes(20), Duration.ofMinutes(20));
+        return new SalmonActionAssessment(SalmonSettingsFixture.adopted());
     }
 
     private static SalmonActionAssessment assessment(Duration walkCap, Duration inVehicleCap, Duration horizon) {
-        return new SalmonActionAssessment(
-            new SalmonGainThreshold(0.5),
-            new SalmonEta(0),
-            new SalmonWalkCap(walkCap),
-            new SalmonTransferCap(1),
-            new SalmonInVehicleCap(inVehicleCap),
-            new SalmonHorizon(horizon),
-            new SalmonAlpha(new BigDecimal("1.2")),
-            new SalmonConnectionSlack(Duration.ofSeconds(15)));
+        return new SalmonActionAssessment(SalmonSettingsFixture.with(walkCap, inVehicleCap, horizon));
     }
 }

@@ -7,7 +7,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.gustler.backend.api.http.ApiExceptionHandler;
 import com.gustler.backend.api.salmon.application.SalmonActionService;
+import com.gustler.backend.api.salmon.application.SalmonActionSettings;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge.Situation;
+import java.math.BigDecimal;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -56,8 +59,13 @@ class SalmonActionControllerTest {
 
     private static MockMvc mvc(boolean enabled) {
         return MockMvcBuilders.standaloneSetup(new SalmonActionController(
-            new SalmonActionService(enabled, (routeId, stationId, stopSequence) -> Situation.missingStay())))
+            new SalmonActionService(settings(enabled), (routeId, stationId, stopSequence) -> Situation.missingStay())))
             .setControllerAdvice(new ApiExceptionHandler())
             .build();
+    }
+
+    private static SalmonActionSettings settings(boolean enabled) {
+        return new SalmonActionSettings(enabled, Duration.ofMinutes(15), 0.5, Duration.ofMinutes(20),
+            Duration.ofMinutes(20), 0, new BigDecimal("1.2"), 1, Duration.ofSeconds(15));
     }
 }

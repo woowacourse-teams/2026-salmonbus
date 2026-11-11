@@ -19,33 +19,10 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class SalmonActionAssessment {
-    private final SalmonGainThreshold gainThreshold;
-    private final SalmonEta eta;
-    private final SalmonWalkCap walkCap;
-    private final SalmonTransferCap transferCap;
-    private final SalmonInVehicleCap inVehicleCap;
-    private final SalmonHorizon horizon;
-    private final SalmonAlpha alpha;
-    private final SalmonConnectionSlack connectionSlack;
+    private final SalmonActionSettings settings;
 
-    public SalmonActionAssessment(
-        SalmonGainThreshold gainThreshold,
-        SalmonEta eta,
-        SalmonWalkCap walkCap,
-        SalmonTransferCap transferCap,
-        SalmonInVehicleCap inVehicleCap,
-        SalmonHorizon horizon,
-        SalmonAlpha alpha,
-        SalmonConnectionSlack connectionSlack
-    ) {
-        this.gainThreshold = gainThreshold;
-        this.eta = eta;
-        this.walkCap = walkCap;
-        this.transferCap = transferCap;
-        this.inVehicleCap = inVehicleCap;
-        this.horizon = horizon;
-        this.alpha = alpha;
-        this.connectionSlack = connectionSlack;
+    public SalmonActionAssessment(SalmonActionSettings settings) {
+        this.settings = settings;
     }
 
     public Situation situation(List<Double> stayFullProbabilities, List<SalmonActionWalk> walks, boolean listingComplete) {
@@ -59,15 +36,15 @@ public class SalmonActionAssessment {
         }
         return new Situation(true, true, Optional.of(new Risk(stayFull, stayFull)), Coverage.UNKNOWN, false,
             listingComplete ? Listing.COMPLETE : Listing.UNFINISHED,
-            gainThreshold.threshold(), eta.eta(), moves);
+            settings.gainThreshold(), settings.eta(), moves);
     }
 
     private Move move(SalmonActionWalk walk) {
         Optional<Double> inVehicleMinutes = walk.inVehicleMillis().map(SalmonActionAssessment::minutes);
-        boolean violated = walkCap.exceeded(walk.walkMillis())
-            || transferCap.exceeded(walk.transfers())
-            || walk.inVehicleMillis().filter(inVehicleCap::exceeded).isPresent()
-            || alpha.scaledMillis(walk.walkMillis()) > horizon.horizon().toMillis()
+        boolean violated = settings.walkExceeded(walk.walkMillis())
+            || settings.transfersExceeded(walk.transfers())
+            || walk.inVehicleMillis().filter(settings::inVehicleExceeded).isPresent()
+            || settings.walkOutlastsHorizon(walk.walkMillis())
             || missedConnection(walk);
         if (violated) {
             return new Move(walk.id(), Admission.VIOLATED, Optional.empty(), false,
@@ -83,7 +60,7 @@ public class SalmonActionAssessment {
 
     private boolean missedConnection(SalmonActionWalk walk) {
         return walk.connection()
-            .filter(link -> !connectionSlack.connected(link.busArrivalMillis(), link.personReadyMillis()))
+            .filter(link -> !settings.connected(link.busArrivalMillis(), link.personReadyMillis()))
             .isPresent();
     }
 

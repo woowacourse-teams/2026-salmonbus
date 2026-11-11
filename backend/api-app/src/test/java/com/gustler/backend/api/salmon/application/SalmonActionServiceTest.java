@@ -19,7 +19,7 @@ class SalmonActionServiceTest {
             throw new AssertionError("disabled query must not read a situation");
         };
 
-        SalmonActionAnswer answer = new SalmonActionService(false, cases).query("204000057", "205000231", 5);
+        SalmonActionAnswer answer = new SalmonActionService(disabled(), cases).query("204000057", "205000231", 5);
 
         assertThat(answer).isInstanceOf(SalmonActionAnswer.Off.class);
     }
@@ -30,7 +30,7 @@ class SalmonActionServiceTest {
             throw new AssertionError("bad shape must not read a situation");
         };
 
-        SalmonActionAnswer answer = new SalmonActionService(true, cases).query("204000057", "231", 1);
+        SalmonActionAnswer answer = new SalmonActionService(SalmonSettingsFixture.adopted(), cases).query("204000057", "231", 1);
 
         assertThat(answer).isEqualTo(new SalmonActionAnswer.Decided(Terminal.INVALID_INPUT,
             "요청 값이 서로 맞지 않아 판정하지 않았어요."));
@@ -40,11 +40,18 @@ class SalmonActionServiceTest {
     void 켜져_있으면_읽어_온_상황의_문장을_반환한다() {
         Situation lowStay = new Situation(true, true, Optional.of(new Risk(0.3, 0.3)), Coverage.UNKNOWN, false,
             Listing.COMPLETE, 0.5, 0, List.of());
-        SalmonActionService service = new SalmonActionService(true, (routeId, stationId, stopSequence) -> lowStay);
+        SalmonActionService service = new SalmonActionService(SalmonSettingsFixture.adopted(),
+            (routeId, stationId, stopSequence) -> lowStay);
 
         SalmonActionAnswer answer = service.query("204000057", "205000231", 5);
 
         assertThat(answer).isEqualTo(new SalmonActionAnswer.Decided(Terminal.NO_MOVE_POLICY,
             "지금 정보에서는 기다려도 실패 위험이 낮아 이동을 찾지 않아요."));
+    }
+
+    private static SalmonActionSettings disabled() {
+        SalmonActionSettings on = SalmonSettingsFixture.adopted();
+        return new SalmonActionSettings(false, on.maxWalk(), on.gainThreshold(), on.horizon(), on.maxInVehicle(),
+            on.eta(), on.alpha(), on.maxTransfers(), on.minConnection());
     }
 }

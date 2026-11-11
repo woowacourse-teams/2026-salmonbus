@@ -42,7 +42,7 @@ public class BoardSalmonActionCase implements SalmonActionCase {
     private final BoardingOptionsQueryService walks;
     private final SalmonActionAssessment assessment;
     private final SalmonEpochBudget epochBudget;
-    private final SalmonWalkCap walkCap;
+    private final SalmonActionSettings settings;
     private final Clock clock;
 
     public BoardSalmonActionCase(
@@ -50,14 +50,14 @@ public class BoardSalmonActionCase implements SalmonActionCase {
         BoardingOptionsQueryService walks,
         SalmonActionAssessment assessment,
         SalmonEpochBudget epochBudget,
-        SalmonWalkCap walkCap,
+        SalmonActionSettings settings,
         Clock clock
     ) {
         this.boards = boards;
         this.walks = walks;
         this.assessment = assessment;
         this.epochBudget = epochBudget;
-        this.walkCap = walkCap;
+        this.settings = settings;
         this.clock = clock;
     }
 
@@ -90,13 +90,8 @@ public class BoardSalmonActionCase implements SalmonActionCase {
 
     private BoardingOptionsQuery walkQuery(RouteId routeId, String stationId, int stopSequence) {
         return new BoardingOptionsQuery(routeId, stationId, stopSequence, null, Set.of(AccessMode.WALK),
-            maxWalkMinutes(), BoardingOptionsQuery.MAX_LIMIT,
+            settings.maxWalkMinutes(), BoardingOptionsQuery.MAX_LIMIT,
             EnumSet.of(StopRelation.BEFORE, StopRelation.AFTER), true);
-    }
-
-    private int maxWalkMinutes() {
-        long minutes = (walkCap.limit().toMillis() + 59_999L) / 60_000L;
-        return (int) Math.min(BoardingOptionsQuery.MAX_MINUTES, Math.max(1L, minutes));
     }
 
     private static List<SalmonActionWalk> toWalks(BoardingOptions options) {

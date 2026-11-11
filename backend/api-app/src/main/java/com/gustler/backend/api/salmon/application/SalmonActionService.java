@@ -7,7 +7,6 @@ import com.gustler.backend.api.salmon.domain.IntegratedJudge.Situation;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge.Terminal;
 import com.gustler.backend.api.salmon.guidance.IntegratedGuidance;
 import java.util.regex.Pattern;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
@@ -20,19 +19,16 @@ import org.springframework.stereotype.Service;
 public class SalmonActionService {
     private static final Pattern STATION_ID = Pattern.compile("[0-9]{9}");
 
-    private final boolean enabled;
+    private final SalmonActionSettings settings;
     private final SalmonActionCase actionCase;
 
-    public SalmonActionService(
-        @Value("${salmon.action.enabled:false}") boolean enabled,
-        SalmonActionCase actionCase
-    ) {
-        this.enabled = enabled;
+    public SalmonActionService(SalmonActionSettings settings, SalmonActionCase actionCase) {
+        this.settings = settings;
         this.actionCase = actionCase;
     }
 
     public SalmonActionAnswer query(String routeId, String stationId, int stopSequence) {
-        if (!enabled) {
+        if (!settings.enabled()) {
             return new SalmonActionAnswer.Off();
         }
         RouteId route = new RouteId(routeId);

@@ -40,7 +40,6 @@ import com.gustler.backend.api.route.domain.RouteStatus;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge.Recommendation;
 import com.gustler.backend.api.salmon.domain.IntegratedJudge.Terminal;
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -204,20 +203,8 @@ class BoardSalmonActionCaseTest {
     }
 
     private static BoardSalmonActionCase cases(BoardQueryService boards, BoardingOptionsQueryService walks, Clock clock) {
-        return new BoardSalmonActionCase(boards, walks, assessment(), new SalmonEpochBudget(2),
-            new SalmonWalkCap(Duration.ofMinutes(15)), clock);
-    }
-
-    private static SalmonActionAssessment assessment() {
-        return new SalmonActionAssessment(
-            new SalmonGainThreshold(0.5),
-            new SalmonEta(0),
-            new SalmonWalkCap(Duration.ofMinutes(15)),
-            new SalmonTransferCap(1),
-            new SalmonInVehicleCap(Duration.ofMinutes(20)),
-            new SalmonHorizon(Duration.ofMinutes(20)),
-            new SalmonAlpha(new BigDecimal("1.2")),
-            new SalmonConnectionSlack(Duration.ofSeconds(15)));
+        return new BoardSalmonActionCase(boards, walks, new SalmonActionAssessment(SalmonSettingsFixture.adopted()),
+            new SalmonEpochBudget(2), SalmonSettingsFixture.adopted(), clock);
     }
 
     private static Clock clock(Instant instant) {
