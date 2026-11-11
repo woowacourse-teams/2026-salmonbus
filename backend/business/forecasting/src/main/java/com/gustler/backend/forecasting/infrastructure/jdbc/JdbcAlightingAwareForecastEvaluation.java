@@ -143,6 +143,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
                 FROM alighting_forecast_evaluation_work work
                 WHERE work.route_version_id = version.id
                   AND work.next_attempt_at <= statement_timestamp()
+                ORDER BY work.next_attempt_at, work.vehicle_observation_id, work.target_stop_order, work.target_kind
                 LIMIT 1
             ) due ON true
             ORDER BY version.id
