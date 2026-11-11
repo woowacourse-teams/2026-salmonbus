@@ -68,6 +68,7 @@ struct MapScene: Decodable {
   let referenceVersionId: String
   let preserveCamera: Bool?
   let selectedStopOnly: Bool?
+  let reportRotation: Bool?
   let directions: [String]?
   let stops: [MapStop]
   let paths: [MapPath]
@@ -128,6 +129,7 @@ struct MapHomeContent: Decodable {
 struct MapHomeMount: Decodable {
   let content: MapHomeContent
   let camera: MapCamera
+  let reportRotation: Bool?
 }
 
 struct MapHomeCameraCommand: Decodable {

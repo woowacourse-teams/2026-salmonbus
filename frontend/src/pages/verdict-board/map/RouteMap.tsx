@@ -1,8 +1,10 @@
 import { MapLocationButton } from "@/shared/components/MapLocationButton";
+import { MapCompassButton } from "@/shared/components/MapCompassButton";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { useCallback, useContext, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { MapFlowSurfaceContext, NativeMapFlowContext } from "@/shared/map/mapFlowSurface";
+import { isMapRotated } from "@/shared/map/mapRotation";
 import { boardEntryFrom } from "@/shared/routing/boardEntry";
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
 import type { StopSelection } from "../components/stopSelection";
@@ -94,6 +96,7 @@ export function RouteMap(props: RouteMapProps) {
   const locationRequest = useRef(0);
   const [mapState, setMapState] = useState<MapState>({ status: "loading" });
   const [locationState, setLocationState] = useState<LocationState>({ status: "idle" });
+  const [rotation, setRotation] = useState(0);
   const [nativeFailed, setNativeFailed] = useState(false);
   const [retryRevision, retryMap] = useReducer((revision: number) => revision + 1, 0);
   const nativeHomeMap = isNativeHomeMapAvailable();
@@ -175,6 +178,9 @@ export function RouteMap(props: RouteMapProps) {
     }
     let active = true;
     let failed = false;
+    const onRotationChange = (rotation: number) => {
+      if (active && !failed && propsRef.current.data === data) setRotation(rotation);
+    };
     const failActiveMap = () => {
       if (!active) return;
       failed = true;
@@ -187,6 +193,7 @@ export function RouteMap(props: RouteMapProps) {
       if (region !== null) {
         try {
           const current = propsRef.current;
+          onRotationChange(0);
           const adapter = createNativeRouteMap({
             region,
             board: current.board,
@@ -198,6 +205,7 @@ export function RouteMap(props: RouteMapProps) {
             onSelect: (selection) => propsRef.current.onSelect(selection),
             onVehicleSelect: (selection, key) => propsRef.current.onVehicleSelect(selection, key),
             onDeselect: () => propsRef.current.onDeselect(),
+            onRotationChange,
             onError: (_error, reason) => {
               if (!active || failed || propsRef.current.data !== data) return;
               if (reason !== undefined) reportNativeMapFailure(reason, data.routeId);
@@ -270,7 +278,7 @@ export function RouteMap(props: RouteMapProps) {
           current.selected,
           webCamera,
           selectedStopOnly,
-          { ...(webSurface && { sharedMap: webSurface.map }), refitOverviewOnResize },
+          { ...(webSurface && { sharedMap: webSurface.map }), refitOverviewOnResize, onRotationChange },
         );
         adapterRef.current = adapter;
         lastFocusedStop.current = current.selected;
@@ -485,6 +493,8 @@ export function RouteMap(props: RouteMapProps) {
           : null;
   const ready = currentMapState.status === "ready";
   const canRetryNativeMap = nativeHomeMap && currentMapState.status === "error";
+  const showCompass = ready && isMapRotated(rotation);
+  const locationNoticeClass = showCompass ? styles.locationNoticeWithCompass : styles.locationNotice;
   const showSharedNativeMap = shared && useNativeMap && ready;
   useLayoutEffect(() => {
     if (!showSharedNativeMap) return;
@@ -563,21 +573,25 @@ export function RouteMap(props: RouteMapProps) {
         </div>
       ) : null}
       {data !== null && ready ? (
-        <MapLocationButton
-          className={styles.location}
-          aria-label="현재 위치 보기"
-          onClick={locate}
-          data-native-map-hit
-          disabled={locationState.status === "loading"}
-        />
+        <div className={styles.mapControlPosition} role="group" aria-label="지도 도구" tabIndex={-1}>
+          {showCompass && (
+            <MapCompassButton rotation={rotation} onReset={() => runMapAction((adapter) => adapter.resetNorth())} />
+          )}
+          <MapLocationButton
+            aria-label="현재 위치 보기"
+            onClick={locate}
+            data-native-map-hit
+            disabled={locationState.status === "loading"}
+          />
+        </div>
       ) : null}
       {ready && locationState.status === "message" ? (
-        <div className={styles.locationNotice} role="status" data-native-map-hit>
+        <div className={locationNoticeClass} role="status" data-native-map-hit>
           {locationState.message}
         </div>
       ) : null}
       {ready && locationState.status === "settingsPrompt" ? (
-        <div className={styles.locationNotice} data-native-map-hit>
+        <div className={locationNoticeClass} data-native-map-hit>
           <p className={styles.locationPromptText} role="status">
             {locationState.message}
           </p>

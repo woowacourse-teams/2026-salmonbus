@@ -1,9 +1,12 @@
 import { MapLocationButton } from "@/shared/components/MapLocationButton";
+import { MapCompassButton } from "@/shared/components/MapCompassButton";
 import type { Direction } from "@/shared/api/routeForecast.types";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { loadNaverMaps, subscribeNaverMapAuthFailure, type NaverCoordinate } from "@/shared/map/naverSdk";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import type { MapFlowSurface, MapFlowSurfaceState } from "@/shared/map/mapFlowSurface";
+import { isMapRotated } from "@/shared/map/mapRotation";
+import { bindNaverMapCompass } from "@/shared/map/naverMapCompass";
 import { mountHomeStops } from "./homeStopMarkers";
 import { HomeRouteNetwork } from "./HomeRouteNetwork";
 import { FavoriteMapRoute } from "./FavoriteMapRoute";
@@ -46,6 +49,9 @@ export function HomeMap(props: Props) {
   const mapReady = useRef(false);
   const stopMarkers = useRef<ReturnType<typeof mountHomeStops> | null>(null);
   const [instance, setInstance] = useState<MapFlowSurface | null>(null);
+  const compassRef = useRef<ReturnType<typeof bindNaverMapCompass> | null>(null);
+  const failMapRef = useRef<((message: string) => void) | null>(null);
+  const [rotation, setRotation] = useState(0);
   const [fittedRouteOverviewKey, setFittedRouteOverviewKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [favoritePaths, setFavoritePaths] = useState<Record<string, Point[][]>>({});
@@ -63,17 +69,26 @@ export function HomeMap(props: Props) {
   }, [props]);
   useEffect(() => {
     let active = true;
+    let failed = false;
     let dispose = () => {};
-    const unsubscribe = subscribeNaverMapAuthFailure(() => {
-      if (!active) return;
-      dispose();
+    function failMap(message: string) {
+      if (!active || failed) return;
+      failed = true;
+      try {
+        dispose();
+      } catch {
+        // SDK가 정리 중에도 실패하면 화면에서 남은 지도 요소를 치운다.
+        element.current?.replaceChildren();
+      }
       setInstance(null);
-      setError("지도 인증을 확인하지 못했어요");
+      setError(message);
       latest.current.onSurfaceChange({ status: "error", surface: null });
-    });
+    }
+    failMapRef.current = failMap;
+    const unsubscribe = subscribeNaverMapAuthFailure(() => failMap("지도 인증을 확인하지 못했어요"));
     void loadNaverMaps(__NAVER_MAP_KEY_ID__)
       .then((maps) => {
-        if (!active || !element.current) return;
+        if (!active || failed || !element.current) return;
         const host = element.current;
         const [longitude, latitude] = latest.current.point;
         const map = new maps.Map(host, {
@@ -156,13 +171,10 @@ export function HomeMap(props: Props) {
         };
         setInstance({ map, maps, element: host });
       })
-      .catch(() => {
-        if (!active) return;
-        setError((current) => current ?? "지도를 불러오지 못했어요.");
-        latest.current.onSurfaceChange({ status: "error", surface: null });
-      });
+      .catch(() => failMap("지도를 불러오지 못했어요."));
     return () => {
       active = false;
+      failMapRef.current = null;
       unsubscribe();
       dispose();
       latest.current.onSurfaceChange({ status: "loading", surface: null });
@@ -172,6 +184,15 @@ export function HomeMap(props: Props) {
     if (instance) instance.map.setCenter(new instance.maps.LatLng(props.point[1], props.point[0]));
   }, [instance, props.point]);
   const { boardOpen, overlayOpen, favoriteRoutes, routeOverviewKey, routePaths, searchBarRef, sheetSurfaceRef } = props;
+  useEffect(() => {
+    if (instance === null || boardOpen) return;
+    const compass = bindNaverMapCompass(instance, setRotation, () => failMapRef.current?.("지도를 불러오지 못했어요."));
+    compassRef.current = compass;
+    return () => {
+      compassRef.current = null;
+      compass.destroy();
+    };
+  }, [instance, boardOpen]);
   const favoriteRouteIds = useMemo(() => [...favoriteRoutes.keys()].sort(), [favoriteRoutes]);
   const favoriteKey = favoriteRouteIds.length === 0 ? null : JSON.stringify([props.favoriteGroupId, favoriteRouteIds]);
   const selectedStopId = props.selectedStop?.id ?? null;
@@ -394,12 +415,16 @@ export function HomeMap(props: Props) {
         </p>
       )}
       {!boardOpen && (
-        <MapLocationButton
-          className={styles.locate}
-          onClick={props.onLocate}
-          disabled={props.locating}
-          aria-label={props.locating ? "현재 위치 확인 중" : "현재 위치로 이동"}
-        />
+        <div className={styles.mapControlPosition} role="group" aria-label="지도 도구" tabIndex={-1}>
+          {instance !== null && !error && isMapRotated(rotation) && (
+            <MapCompassButton rotation={rotation} onReset={() => compassRef.current?.resetNorth()} />
+          )}
+          <MapLocationButton
+            onClick={props.onLocate}
+            disabled={props.locating}
+            aria-label={props.locating ? "현재 위치 확인 중" : "현재 위치로 이동"}
+          />
+        </div>
       )}
     </section>
   );

@@ -12,6 +12,8 @@ import {
 import type { Direction } from "@/shared/api/routeForecast.types";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { MapLocationButton } from "@/shared/components/MapLocationButton";
+import { MapCompassButton } from "@/shared/components/MapCompassButton";
+import { isMapRotated } from "@/shared/map/mapRotation";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { recordInputMethod } from "@/shared/input-method/inputMethod";
 import { createNativeMapChannel, type NativeMapChannel } from "@/shared/native-map/bridge";
@@ -106,6 +108,7 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
   const fittedOverview = useRef<string | null>(null);
   const locationRequest = useRef(0);
   const pendingLocation = useRef<number | null>(null);
+  const [rotation, setRotation] = useState(0);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [retryRevision, retryMap] = useReducer((revision: number) => revision + 1, 0);
@@ -156,7 +159,8 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
   const sentContent = useRef<NativeHomeMapContent | null>(null);
   const mountMap = useEffectEvent((map: NativeMapChannel) => {
     sentContent.current = content;
-    map.send("mountHome", { camera: camera.current, content });
+    setRotation(0);
+    map.send("mountHome", { camera: camera.current, content, reportRotation: true });
   });
   const cancelLocation = useEffectEvent(() => {
     if (pendingLocation.current === null) return;
@@ -187,6 +191,9 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
         );
         break;
       }
+      case "rotation":
+        setRotation(event.payload.heading);
+        break;
       case "homeStopPress":
         recordInputMethod("pointer");
         props.onSelectStop(event.payload.id);
@@ -392,13 +399,20 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
         </p>
       )}
       {!overlayOpen && status === "ready" && (
-        <MapLocationButton
-          className={styles.locate}
-          onClick={locate}
-          disabled={props.locating}
-          aria-label={props.locating ? "현재 위치 확인 중" : "현재 위치로 이동"}
-          data-native-map-hit
-        />
+        <div className={styles.mapControlPosition} role="group" aria-label="지도 도구" tabIndex={-1}>
+          {isMapRotated(rotation) && (
+            <MapCompassButton
+              rotation={rotation}
+              onReset={() => channel.current?.send("camera", { command: "resetNorth" })}
+            />
+          )}
+          <MapLocationButton
+            onClick={locate}
+            disabled={props.locating}
+            aria-label={props.locating ? "현재 위치 확인 중" : "현재 위치로 이동"}
+            data-native-map-hit
+          />
+        </div>
       )}
     </section>
   );

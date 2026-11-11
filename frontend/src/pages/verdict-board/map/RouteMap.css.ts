@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { mapControls } from "@/shared/components/mapControls.css";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const region = style({
@@ -80,7 +81,7 @@ export const geometryToast = style([
   },
 ]);
 export const withheldToast = style([geometryToast, { letterSpacing: "0.025em" }]);
-export const location = style({ bottom: 16, right: 16, zIndex: 30 });
+export const mapControlPosition = style([mapControls, { bottom: 16, right: 16, zIndex: 30 }]);
 export const locationNotice = style({
   position: "absolute",
   bottom: 66,
@@ -95,6 +96,7 @@ export const locationNotice = style({
   textAlign: "center",
   boxShadow: "0 2px 8px #00000015",
 });
+export const locationNoticeWithCompass = style([locationNotice, { right: 66 }]);
 export const locationPromptText = style({ margin: 0 });
 export const locationPromptActions = style({
   display: "flex",

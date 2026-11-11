@@ -103,6 +103,8 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private var vehicleFocusRevision = 0
   private var vehicleFocusInFlight = false
   private var readySent = false
+  private var reportsRotation = false
+  private var reportedHeading: Double?
   private var failed = false
   #if DEBUG
   private weak var webViewForVerification: WKWebView?
@@ -164,16 +166,21 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   @objc private func rotateMap(_ gesture: UIRotationGestureRecognizer) {
-    guard gesture.state == .began || gesture.state == .changed else { return }
+    guard gesture.state == .began || gesture.state == .changed else {
+      reportHeading()
+      return
+    }
     let rotation = gesture.rotation
     gesture.rotation = 0
     guard rotation.isFinite, mapView.bounds.width > 0, mapView.bounds.height > 0 else { return }
     let center = gesture.location(in: mapView)
-    let update = NMFCameraUpdate(heading: mapView.cameraPosition.heading - rotation * 180 / .pi)
+    let heading = mapView.cameraPosition.heading - rotation * 180 / .pi
+    let update = NMFCameraUpdate(heading: heading)
     update.pivot = CGPoint(x: center.x / mapView.bounds.width, y: center.y / mapView.bounds.height)
     update.animation = .none
     update.reason = Int32(NMFMapChangedByGesture)
     mapView.moveCamera(update)
+    reportHeading(heading)
   }
 
   public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
@@ -279,6 +286,8 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     sessionId = nil
     lastRevision = -1
     readySent = false
+    reportsRotation = false
+    reportedHeading = nil
     failed = false
     #if DEBUG
     previousCameraTarget = nil
@@ -306,6 +315,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       return
     }
     scene = nextScene
+    reportsRotation = nextScene.reportRotation == true
     let initialStop = nextScene.stops.first { $0.selection == nextScene.selectedStop }
     let preserveCamera = nextScene.preserveCamera == true
     initialFitPending = !preserveCamera && initialStop == nil
@@ -394,6 +404,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private func mountHome(_ mount: MapHomeMount) {
     guard mount.camera.valid else { fail("지도 좌표를 확인하지 못했어요"); return }
     homeMounted = true
+    reportsRotation = mount.reportRotation == true
     // 지도 크기가 결정된 뒤 홈 카메라를 적용해야 프레임 변경으로 중심이 밀리지 않습니다.
     pendingHomeCamera = MapHomeCameraCommand(command: "position", camera: mount.camera, coordinate: nil,
                                              visible: nil, southwest: nil, northeast: nil, animated: nil)
@@ -741,6 +752,15 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   private func moveCamera(_ command: CameraCommand) {
+    if command.command == "resetNorth" {
+      guard readySent, reportsRotation else { return }
+      let update = NMFCameraUpdate(heading: 0)
+      update.animation = UIAccessibility.isReduceMotionEnabled ? .none : .easeOut
+      update.animationDuration = 0.25
+      update.reason = Int32(NMFMapChangedByControl)
+      mapView.moveCamera(update)
+      return
+    }
     cancelVehicleFocus()
     if command.command == "vehicle", command.key == nil {
       if pendingCameraCommand?.command == "vehicle" {
@@ -876,6 +896,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     applyLayout()
     refreshVehicleImages()
     emit("ready", [:])
+    reportHeading()
     updateVerificationSnapshot()
     #if DEBUG
     NSLog("[SalmonNativeMap] native SDK ready")
@@ -883,6 +904,16 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   public func mapViewDidFinishLoadingMap(_ mapView: NMFMapView) { notifyReady() }
+
+  private func reportHeading(_ gestureHeading: Double? = nil) {
+    guard readySent, reportsRotation else { return }
+    // 회전 제스처 중에는 지도에 방금 적용한 각도를 전달하고, 끝나면 SDK의 최종 각도로 맞춘다.
+    if gestureHeading == nil && (rotationGesture.state == .began || rotationGesture.state == .changed) { return }
+    let heading = gestureHeading ?? mapView.cameraPosition.heading
+    guard heading.isFinite, heading != reportedHeading else { return }
+    reportedHeading = heading
+    emit("rotation", ["heading": heading])
+  }
 
   public func mapView(_ mapView: NMFMapView, cameraWillChangeByReason reason: Int, animated: Bool) {
     homeCameraGesture = reason == NMFMapChangedByGesture || reason == NMFMapChangedByControl
@@ -899,6 +930,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   public func mapView(_ mapView: NMFMapView, cameraIsChangingByReason reason: Int) {
+    reportHeading()
     if reason == NMFMapChangedByGesture || reason == NMFMapChangedByControl { cancelVehicleFocus() }
     refreshVehicleImages()
     refreshRouteStyles()
@@ -908,6 +940,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   public func mapViewCameraIdle(_ mapView: NMFMapView) {
+    reportHeading()
     refreshVehicleImages()
     refreshRouteStyles()
     reportHomeViewport(gesture: homeCameraGesture)

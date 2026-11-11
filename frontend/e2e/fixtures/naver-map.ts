@@ -13,6 +13,8 @@ interface BrowserMapControls {
   initialize: () => void;
   finishIdle: () => void;
   setZoom: (zoom: number) => void;
+  setRotation: (rotation: number) => void;
+  getRotation: () => number;
   panToStop: (sequence: number) => void;
   panToPoint: (point: [number, number]) => void;
   snapshot: () => MapSnapshot;
@@ -23,6 +25,8 @@ interface MapFixture {
   initialize: () => Promise<void>;
   finishIdle: () => Promise<void>;
   setZoom: (zoom: number) => Promise<void>;
+  setRotation: (rotation: number) => Promise<void>;
+  getRotation: () => Promise<number>;
   panToStop: (sequence: number) => Promise<void>;
   panToPoint: (point: [number, number]) => Promise<void>;
   snapshot: () => Promise<MapSnapshot>;
@@ -156,6 +160,8 @@ export const test = apiTest.extend<{
                   this.emit("idle");
                 },
                 setZoom: (zoom) => this.setZoom(zoom),
+                setRotation: (rotation) => this.setRotation(rotation),
+                getRotation: () => this.getRotation(),
                 panToPoint: ([longitude, latitude]) => this.setCenter(new LatLng(latitude, longitude)),
                 panToStop: (sequence) => {
                   const marker = [...this.markers].find(
@@ -512,6 +518,9 @@ export const test = apiTest.extend<{
         setZoom: async (zoom) => {
           await page.evaluate((value) => (window as unknown as TestMapWindow).__naverMapTest.setZoom(value), zoom);
         },
+        setRotation: (rotation) =>
+          page.evaluate((value) => (window as unknown as TestMapWindow).__naverMapTest.setRotation(value), rotation),
+        getRotation: () => page.evaluate(() => (window as unknown as TestMapWindow).__naverMapTest.getRotation()),
         panToPoint: (point) =>
           page.evaluate((value) => (window as unknown as TestMapWindow).__naverMapTest.panToPoint(value), point),
         panToStop: async (sequence) => {

@@ -1,4 +1,5 @@
 import { createVar, globalStyle, keyframes, style } from "@vanilla-extract/css";
+import { mapControls } from "@/shared/components/mapControls.css";
 import { standardVerdictChipWidth } from "@/shared/components/VerdictChip.css";
 import { vars } from "@/shared/styles/tokens.css";
 import { tabPageInset } from "@/shared/styles/tabPageSpacing";
@@ -160,10 +161,13 @@ export const stationMapError = style([
   },
 ]);
 export const stopLoadError = style({ display: "grid", justifyItems: "start", gap: 8 });
-export const locate = style({
-  right: mapControlInset,
-  bottom: `calc(${mapControlInset}px + ${sheetObstruction})`,
-});
+export const mapControlPosition = style([
+  mapControls,
+  {
+    right: mapControlInset,
+    bottom: `calc(${mapControlInset}px + ${sheetObstruction})`,
+  },
+]);
 export const locationMessage = style({
   position: "absolute",
   bottom: `calc(${sheetObstruction} + ${mapControlInset}px)`,

@@ -136,6 +136,17 @@ final class NativeMapInteractionTests: XCTestCase {
       $0.zoom > rotated.zoom + 0.25
     }
     XCTAssertLessThan(Self.headingDifference(zoomed.heading, rotated.heading), 5, "Pinch zoom must preserve the map heading")
+
+    let compass = app.webViews.buttons["지도를 북쪽으로 돌리기"]
+    XCTAssertTrue(compass.waitForExistence(timeout: 15))
+    let beforeReset = try XCTUnwrap(readState())
+    compass.tap()
+    let reset = try waitForState("compass restores north in place", timeout: 15) {
+      Self.headingDifference($0.heading, 0) < 0.01 && !compass.exists
+    }
+    XCTAssertEqual(reset.zoom, beforeReset.zoom, accuracy: 0.001)
+    XCTAssertEqual(reset.latitude, beforeReset.latitude, accuracy: 0.00001)
+    XCTAssertEqual(reset.longitude, beforeReset.longitude, accuracy: 0.00001)
   }
 
   func testRouteMountResetsHeadingOnlyWhenCameraIsNotPreserved() throws {
