@@ -6,9 +6,10 @@ interface BoardViewport {
 }
 
 function readViewport(): BoardViewport {
+  // 키보드가 닫히며 변하는 시각적 뷰포트 대신 고정 시트의 기준인 레이아웃 뷰포트를 쓴다.
   return {
-    height: window.visualViewport?.height ?? window.innerHeight,
-    top: window.visualViewport?.offsetTop ?? 0,
+    height: window.innerHeight,
+    top: 0,
   };
 }
 
@@ -21,12 +22,8 @@ export function useBoardViewport(): BoardViewport {
       setViewport((current) => (current.height === next.height && current.top === next.top ? current : next));
     };
     window.addEventListener("resize", update);
-    window.visualViewport?.addEventListener("resize", update);
-    window.visualViewport?.addEventListener("scroll", update);
     return () => {
       window.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("scroll", update);
     };
   }, []);
 
