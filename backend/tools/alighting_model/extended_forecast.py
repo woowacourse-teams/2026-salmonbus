@@ -11,7 +11,7 @@ from threadpoolctl import threadpool_limits
 
 from causal_prepare import original_alighting
 from contracts import sha256
-from extended_calibration import classify, eligible_events
+from extended_calibration import classify
 from export_bundle import export_tree_model
 
 FEATURES = ['seats', 'capacity', 'stop', 'horizon', 'minute', 'off_day']
@@ -88,10 +88,16 @@ def forecast_partitions(observations, events, calibration, functions):
     partitions = {}
     for name, (start, end) in PERIODS.items():
         start, end = [pd.Timestamp(day, tz='Asia/Seoul') for day in (start, end)]
-        targets = events.loc[events.t_arrive.ge(start) & eligible_events(events, end)]
-        labels = estimated_targets(targets, calibration, functions)
+        targets = events.loc[events.t_arrive.ge(start) & events.t_known.lt(end) & events.gap.between(.2, 60)]
         origins = observations.loc[observations.received.ge(start) & observations.received.lt(end)]
-        partitions[name] = origin_features(labels, origins)
+        rows = origin_features(targets, origins)
+        # Settlement uses the frozen forecast capacity for both validation and onboard.
+        rows = rows.loc[rows.arrive.between(0, rows.capacity) & rows.depart.between(0, rows.capacity)].copy()
+        rows['onboard'] = rows.capacity - rows.arrive
+        keys = ['trip', 'chain', 'stop', 'capacity']
+        visits = rows.drop_duplicates(keys)
+        labels = estimated_targets(visits, calibration, functions)
+        partitions[name] = rows.merge(labels[keys + ['label']], on=keys, how='inner', validate='many_to_one')
     return partitions
 
 
@@ -103,35 +109,38 @@ def evaluate(observations, events, calibration, functions):
     model = HistGradientBoostingRegressor(loss='absolute_error', max_iter=70, max_leaf_nodes=15,
                                           min_samples_leaf=100, early_stopping=False, random_state=0)
     model.fit(train[FEATURES], train.label)
-    full_labels = train.depart.eq(0)
+    probability_train = departure_partition(observations, events, PERIODS['train'])
+    full_labels = probability_train.depart.eq(0)
     full_rate = float(full_labels.mean())
     full = None
     if full_labels.nunique() == 2:
         full = HistGradientBoostingClassifier(max_iter=70, max_leaf_nodes=15, min_samples_leaf=100,
                                               early_stopping=False, random_state=0)
-        full.fit(train[FEATURES], full_labels)
+        full.fit(probability_train[FEATURES], full_labels)
     result = dict(train_rows=len(train), train_departure_full_rate=full_rate,
-                  train_unique_full_visits=int(train.loc[full_labels, 'closure_id'].nunique()))
+                  train_unique_full_visits=int(probability_train.loc[full_labels, 'closure_id'].nunique()))
     for name in ('validation', 'holdout'):
         frame = partitions[name].copy()
-        if frame.empty:
-            result[name] = {}
-            continue
-        prediction = np.clip(model.predict(frame[FEATURES]), 0, frame.capacity)
-        frame['error'] = (frame.label - prediction).abs()
+        if not frame.empty:
+            prediction = np.clip(model.predict(frame[FEATURES]), 0, frame.capacity)
+            frame['error'] = (frame.label - prediction).abs()
         frame['baseline_error'] = (frame.label - frame.seats).abs()
-        actual_full = frame.depart.eq(0)
-        frame['full_brier'] = np.nan
-        if full is not None:
-            frame['full_brier'] = (full.predict_proba(frame[FEATURES])[:, 1] - actual_full) ** 2
-        frame['baseline_brier'] = (full_rate - actual_full) ** 2
+        probability = departure_partition(observations, events, PERIODS[name])
+        actual_full = probability.depart.eq(0)
+        probability['full_brier'] = np.nan
+        if full is not None and not probability.empty:
+            probability['full_brier'] = (full.predict_proba(probability[FEATURES])[:, 1] - actual_full) ** 2
+        probability['baseline_brier'] = (full_rate - actual_full) ** 2
         result[name] = {
             cell: dict(rows=len(rows), unique_target_visits=rows.closure_id.nunique(), unique_full_visits=rows.loc[rows.depart.eq(0), 'closure_id'].nunique(),
-                       candidate_mae=rows.error.mean(), current_seats_mae=rows.baseline_error.mean(),
-                       departure_full_brier=None if full is None else rows.full_brier.mean(),
-                       constant_rate_brier=rows.baseline_brier.mean())
+                       candidate_mae=rows.error.mean(), current_seats_mae=rows.baseline_error.mean())
             for cell, rows in frame.groupby('cell', sort=True)
         }
+        for cell, rows in probability.groupby('cell', sort=True):
+            result[name].setdefault(cell, {}).update(
+                probability_rows=len(rows), probability_visits=rows.closure_id.nunique(),
+                departure_full_brier=None if full is None else rows.full_brier.mean(),
+                constant_rate_brier=rows.baseline_brier.mean())
     return result
 
 
