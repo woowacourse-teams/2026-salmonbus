@@ -11,6 +11,9 @@ import static org.mockito.Mockito.verify;
 import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
 import com.gustler.backend.forecasting.application.evaluation.AlightingAwareEvaluationArchiveService;
 import com.gustler.backend.forecasting.application.RouteWorkAccess;
+import com.gustler.backend.forecasting.application.publication.ForecastBatchCommitter;
+import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
+import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import java.io.IOException;
@@ -28,6 +31,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +55,8 @@ class JdbcAlightingAwareForecastEvaluationTest {
     JdbcClient jdbc;
     @Autowired
     RouteWorkAccess quality;
+    @Autowired
+    ForecastBatchCommitter committer;
     @Autowired
     PlatformTransactionManager transactions;
     private TransactionTemplate tx;
@@ -162,14 +169,22 @@ class JdbcAlightingAwareForecastEvaluationTest {
     }
 
     @Test
-    void 관측을_읽는_동안_노선_판본을_갱신할_수_있고_이전_판본의_결과는_저장하지_않는다() {
+    void 정산_조회_중에도_발행과_노선_갱신이_진행되고_이전_판본의_결과는_저장하지_않는다() {
         useConfirmedProfile();
+        final long publicationSource = observation("publication", 120, 1, 40);
+        final long publicationBatch = jdbc.sql("SELECT observation_batch_id FROM vehicle_observation WHERE id=?")
+            .param(publicationSource).query(Long.class).single();
+        Instant observedAt = START.plusSeconds(120);
+        Instant generatedAt = observedAt.plusSeconds(1);
         final JdbcClient observing = mock(JdbcClient.class, delegatesTo(jdbc));
         final TransactionTemplate writer = new TransactionTemplate(transactions);
         writer.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         doAnswer(call -> {
             writer.executeWithoutResult(status -> {
                 jdbc.sql("SET LOCAL lock_timeout='500ms'").update();
+                committer.commit(new PendingForecastBatch(publicationBatch, version, route, observedAt),
+                    new ForecastPublication(publicationBatch, version, deployment, 0, 1,
+                        observedAt, generatedAt, generatedAt, List.of()));
                 jdbc.sql("UPDATE route SET data_revision=data_revision+1 WHERE id=?").param(route).update();
             });
             return jdbc.sql(call.getArgument(0, String.class));
@@ -178,8 +193,44 @@ class JdbcAlightingAwareForecastEvaluationTest {
         new JdbcAlightingAwareForecastEvaluation(observing, quality, Clock.systemUTC(), transactions).settle();
 
         assertThat(quality.current(version)).isEqualTo(2);
+        assertThat(count("forecast_publication")).isEqualTo(2);
         assertThat(count("alighting_forecast_evaluation_result")).isZero();
         assertThat(count("alighting_forecast_evaluation_work")).isOne();
+        service.settle();
+        assertThat(jdbc.sql("SELECT quality_revision FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=?")
+            .param(source).query(Long.class).single()).isEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true", "false"})
+    void 같은_페이지가_먼저_완료되거나_재예약되면_이전_계산을_저장하지_않는다(boolean anotherSettlement) {
+        useConfirmedProfile();
+        final JdbcClient observing = mock(JdbcClient.class, delegatesTo(jdbc));
+        try (var writer = Executors.newSingleThreadExecutor()) {
+            doAnswer(call -> {
+                writer.submit(() -> {
+                    if (anotherSettlement) {
+                        service.settle();
+                    } else {
+                        jdbc.sql("""
+                            UPDATE alighting_forecast_evaluation_work SET next_attempt_at=clock_timestamp()+interval '1 hour'
+                            WHERE vehicle_observation_id=?
+                            """).param(source).update();
+                    }
+                }).get(5, TimeUnit.SECONDS);
+                return jdbc.sql(call.getArgument(0, String.class));
+            }).when(observing).sql(contains("WITH raw AS"));
+
+            new JdbcAlightingAwareForecastEvaluation(observing, quality, Clock.systemUTC(), transactions).settle();
+        }
+
+        assertThat(count("alighting_forecast_evaluation_result")).isEqualTo(anotherSettlement ? 1 : 0);
+        assertThat(count("alighting_forecast_evaluation_work")).isEqualTo(anotherSettlement ? 0 : 1);
+        jdbc.sql("UPDATE alighting_forecast_evaluation_work SET next_attempt_at=clock_timestamp() WHERE vehicle_observation_id=?")
+            .param(source).update();
+        service.settle();
+        assertThat(count("alighting_forecast_evaluation_result")).isOne();
+        assertThat(count("alighting_forecast_evaluation_work")).isZero();
     }
 
     @Test
