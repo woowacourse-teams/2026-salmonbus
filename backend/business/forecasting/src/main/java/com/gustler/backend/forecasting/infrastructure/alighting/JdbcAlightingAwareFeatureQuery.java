@@ -171,7 +171,8 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
         Map<String, AlightingAwareVehiclePrefix> prefix = cursor.prefix();
         List<AlightingAwarePassEvent> events = AlightingAwareHistoryCompactor.resolve(
             new AlightingAwareHistoryCompactor.History(prefix, history, cursor.pastEvents()), statistics.realStopOrders());
-        Map<Long, AlightingAwareFeatureSnapshot> snapshots = snapshots(stops, statistics, cursor, history, events);
+        Map<Long, AlightingAwareFeatureSnapshot> snapshots = checkpointOnly
+            ? Map.of() : snapshots(stops, statistics, cursor, history, events);
         saveCheckpoint(stops.routeVersionId(), cursor, history, events, reader);
         return Map.copyOf(snapshots);
     }
