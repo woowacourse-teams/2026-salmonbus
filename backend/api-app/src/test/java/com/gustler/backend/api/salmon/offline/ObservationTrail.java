@@ -109,11 +109,34 @@ final class ObservationTrail {
      * 기준 시각 뒤의 관측을 시각 순서로 본다. 마감까지의 관측이 그 정류장에 닿았으면 IN_TIME, 마감 뒤의 관측이 아직
      * 그 정류장에 못 미쳤으면 LATE다. 마감 전 마지막 관측은 못 미쳤고 마감 뒤 첫 관측은 이미 닿은 경우와, 뒤 관측이
      * 없는 경우는 UNSURE다. 마감과 같은 시각의 관측은 마감 안이다.
+     *
+     * <p>추적을 끊는 조건은 좌석 추적(PassOutcome.resolve)과 같다. 운행 방향이 출발점과 다르거나, 연속 관측 간격이
+     * 90초를 넘거나, 통과 순번이 되돌아간 관측부터는 같은 운행인지 알 수 없어 UNSURE다. 기준 시각에 이미 그 정류장을
+     * 지난 차량도 UNSURE다.
      */
     static Timeliness timeliness(List<Observation> trail, int stopSequence, Instant after, Instant deadline) {
+        Observation previous = null;
+        for (Observation observation : trail) {
+            if (!observation.at().isAfter(after)) {
+                previous = observation;
+            }
+        }
+        if (previous != null && previous.passedStopOrder() >= stopSequence) {
+            return Timeliness.UNSURE;
+        }
+        Long direction = previous == null ? null : previous.direction();
+        boolean directionKnown = previous != null;
         for (Observation observation : trail) {
             if (!observation.at().isAfter(after)) {
                 continue;
+            }
+            if (!directionKnown) {
+                direction = observation.direction();
+                directionKnown = true;
+            }
+            if (direction != null && !direction.equals(observation.direction())
+                || previous != null && PassOutcome.breaks(previous, observation)) {
+                return Timeliness.UNSURE;
             }
             boolean reached = observation.passedStopOrder() >= stopSequence;
             boolean pastDeadline = observation.at().isAfter(deadline);
@@ -123,6 +146,7 @@ final class ObservationTrail {
             if (pastDeadline) {
                 return Timeliness.LATE;
             }
+            previous = observation;
         }
         return Timeliness.UNSURE;
     }

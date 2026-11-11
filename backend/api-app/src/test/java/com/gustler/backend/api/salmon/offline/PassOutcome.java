@@ -110,7 +110,7 @@ record PassOutcome(Seats first, Seats last) {
             confirmed ? Seats.of(last.remainingSeats()) : Seats.unknown(Unknown.NOT_CONFIRMED));
     }
 
-    private static boolean breaks(Observation previous, Observation observation) {
+    static boolean breaks(Observation previous, Observation observation) {
         return Duration.between(previous.at(), observation.at()).compareTo(LONGEST_GAP) > 0
             || observation.passedStopOrder() < previous.passedStopOrder();
     }

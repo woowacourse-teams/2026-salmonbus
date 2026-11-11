@@ -155,6 +155,22 @@ class PassOutcomeTest {
     }
 
     @Test
+    void 추적이_끊긴_뒤의_관측으로는_마감_초과를_확정하지_않는다() {
+        Instant deadline = START.plusSeconds(60);
+        List<Observation> otherDirection = List.of(passed(48, 0, 9), new Observation(START.plusSeconds(70), 48, 9, 1L));
+        List<Observation> afterGap = List.of(passed(48, 0, 9), passed(48, 100, 9));
+        List<Observation> orderWentBack = List.of(passed(48, 0, 9), passed(47, 70, 9));
+        List<Observation> alreadyPassed = List.of(passed(49, 0, 9), passed(48, 70, 9));
+
+        assertThat(ObservationTrail.timeliness(otherDirection, TARGET, START, deadline)).isEqualTo(Timeliness.UNSURE);
+        assertThat(ObservationTrail.timeliness(afterGap, TARGET, START, deadline)).isEqualTo(Timeliness.UNSURE);
+        assertThat(ObservationTrail.timeliness(orderWentBack, TARGET, START, deadline)).isEqualTo(Timeliness.UNSURE);
+        assertThat(ObservationTrail.timeliness(alreadyPassed, TARGET, START, deadline)).isEqualTo(Timeliness.UNSURE);
+        assertThat(PassOutcome.resolve(Optional.of(otherDirection.getFirst()), otherDirection.subList(1, 2), TARGET,
+            NEXT_BOARDING_STOP, Optional.empty()).first()).isEqualTo(Seats.unknown(Unknown.LOST));
+    }
+
+    @Test
     void 마지막_관측_기준은_다음_승차_정류장_전의_마지막_관측을_읽고_그_정류장을_지난_관측이_있어야_확정한다() {
         PassOutcome confirmed = outcome(passed(49, 60, 0), passed(49, 120, 2), passed(50, 180, 4),
             passed(51, 240, 9));
