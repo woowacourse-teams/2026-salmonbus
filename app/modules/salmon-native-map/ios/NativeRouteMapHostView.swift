@@ -220,7 +220,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       case "homeCamera":
         if homeMounted {
           pendingHomeCamera = try JSONDecoder().decode(MapHomeCameraCommand.self, from: payloadBytes)
-          applyHomeCamera()
+          scheduleInitialFit()
         }
       case "updateScene":
         updateScene(try JSONDecoder().decode(MapSceneState.self, from: payloadBytes))
@@ -539,7 +539,8 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   private func reportHomeViewport(gesture: Bool) {
-    guard homeMounted, readySent, !failed, mapLayout != nil, !mapContainer.bounds.isEmpty else { return }
+    guard homeMounted, readySent, !failed, pendingHomeCamera == nil,
+          mapLayout != nil, !mapContainer.bounds.isEmpty else { return }
     let rect = mapView.convert(mapContainer.bounds, from: mapContainer)
     let corners = [CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
                    CGPoint(x: rect.minX, y: rect.maxY), CGPoint(x: rect.maxX, y: rect.maxY)]
@@ -663,7 +664,6 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     mapView.accessibilityElementsHidden = layout.captureAll || rect.height < 1
     scheduleInitialFit()
     if homeMounted, !layout.transitioning {
-      applyHomeCamera()
       reportHomeViewport(gesture: false)
     }
     updateVerificationSnapshot()
@@ -682,7 +682,8 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   private func scheduleInitialFit() {
-    guard readySent, !failed, initialFitPending || pendingCameraCommand != nil, !initialFitScheduled,
+    guard readySent, !failed, initialFitPending || pendingCameraCommand != nil || pendingHomeCamera != nil,
+          !initialFitScheduled,
           mapContainer.bounds.width > 1, mapContainer.bounds.height > 1, window != nil else { return }
     initialFitScheduled = true
     let expectedSession = sessionId
@@ -696,7 +697,10 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       self.mapContainer.layoutIfNeeded()
       self.mapView.setNeedsLayout()
       self.mapView.layoutIfNeeded()
-      if let command = self.pendingCameraCommand {
+      if self.homeMounted {
+        self.applyHomeCamera()
+        self.reportHomeViewport(gesture: false)
+      } else if let command = self.pendingCameraCommand {
         self.pendingCameraCommand = nil
         self.moveCamera(command)
       } else if self.initialFitPending {
