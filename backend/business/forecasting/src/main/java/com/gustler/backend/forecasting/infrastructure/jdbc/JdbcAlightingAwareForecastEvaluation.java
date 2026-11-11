@@ -5,10 +5,10 @@ import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAw
 import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.application.evaluation.AlightingAwareForecastEvaluation;
 import com.gustler.backend.forecasting.application.evaluation.SettlementRouteRunner;
-import com.gustler.backend.forecasting.domain.model.alighting.AlightingPosterior;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvents;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingPosterior;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -180,7 +180,12 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         return new PreparedPage(revision, now, work, outcomes);
     }
 
-    private int writePage(final long route, final int limit, Instant dueThrough, PreparedPage page) {
+    private int writePage(
+        final long route,
+        final int limit,
+        Instant dueThrough,
+        PreparedPage page
+    ) {
         if (routeWork.lock(route) != page.revision()) {
             return 0;
         }
@@ -194,24 +199,32 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
             }
             LocalDate date = day(item.observedAt());
             // 이전 판본은 같은 날짜의 작업 중 가장 늦은 시각까지의 관측을 함께 쓴다.
-            if (!isConfirmed(item) && !Objects.equals(preparedLegacyHorizons.get(date), lockedLegacyHorizons.get(date))) {
+            if (!isConfirmed(item)
+                && !Objects.equals(preparedLegacyHorizons.get(date), lockedLegacyHorizons.get(date))) {
                 continue;
             }
-            Outcome outcome = page.outcomes().get(item);
-            if (outcome == null) {
-                defer(item, page.revision(), page.now(), "NO_CLOSED_IDENTITY_SAFE_PASS");
-            } else {
-                finish(item, page.revision(), page.now(), outcome);
-            }
+            writeOutcome(item, page);
             processed++;
         }
         return processed;
     }
 
+    private void writeOutcome(Work item, PreparedPage page) {
+        Outcome outcome = page.outcomes().get(item);
+        if (outcome == null) {
+            defer(item, page.revision(), page.now(), "NO_CLOSED_IDENTITY_SAFE_PASS");
+            return;
+        }
+        finish(item, page.revision(), page.now(), outcome);
+    }
+
     private static Map<LocalDate, Instant> legacyHorizons(List<Work> work, Instant now) {
-        return work.stream().filter(item -> !isConfirmed(item)).collect(Collectors.toMap(
-            item -> day(item.observedAt()), item -> evaluationThrough(item, now),
-            BinaryOperator.maxBy(Instant::compareTo)));
+        return work.stream()
+            .filter(item -> !isConfirmed(item))
+            .collect(Collectors.toMap(
+                item -> day(item.observedAt()),
+                item -> evaluationThrough(item, now),
+                BinaryOperator.maxBy(Instant::compareTo)));
     }
 
     private static boolean isConfirmed(Work work) {
@@ -226,11 +239,16 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         Map<Work, Outcome> outcomes
     ) {
         prepareConfirmedDay(route, now, date, work, outcomes);
-        work = work.stream().filter(item -> !isConfirmed(item)).toList();
-        if (work.isEmpty()) {
+        List<Work> legacyWork = work.stream()
+            .filter(item -> !isConfirmed(item))
+            .toList();
+        if (legacyWork.isEmpty()) {
             return;
         }
-        Instant through = work.stream().map(item -> evaluationThrough(item, now)).max(Instant::compareTo).orElseThrow();
+        Instant through = legacyWork.stream()
+            .map(item -> evaluationThrough(item, now))
+            .max(Instant::compareTo)
+            .orElseThrow();
         List<Evidence> evidence = readObservations(route, date, through);
         final boolean inputLimit = evidence.size() > observationLimit;
         String sourceProblem = null;
@@ -239,7 +257,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         }
         Map<Long, Evidence> byId = evidence.stream().collect(Collectors.toMap(e -> e.row().observationId(), e -> e));
         Map<List<Integer>, List<AlightingAwarePassEvent>> eventCache = new HashMap<>();
-        for (Work item : work) {
+        for (Work item : legacyWork) {
             outcomes.put(item, evaluateWork(item, evidence, byId, eventCache, inputLimit, sourceProblem));
         }
     }
@@ -258,7 +276,8 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
             return;
         }
         Instant latest = workByHorizon.keySet().stream().max(Instant::compareTo).orElseThrow();
-        var history = new ConfirmedAlightingAwareEvaluation.History(jdbc, route, date, latest, confirmedObservationLimit);
+        ConfirmedAlightingAwareEvaluation.History history = new ConfirmedAlightingAwareEvaluation.History(
+            jdbc, route, date, latest, confirmedObservationLimit);
         for (Map.Entry<Instant, List<Work>> entry : workByHorizon.entrySet()) {
             prepareConfirmedGroup(history, date, entry.getKey(), entry.getValue(), outcomes);
         }
@@ -281,28 +300,42 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
     ) {
         ConfirmedAlightingAwareEvaluation confirmed = new ConfirmedAlightingAwareEvaluation(history, date, through);
         for (Work item : work) {
-            Outcome outcome = item.eligible()
-                ? confirmed.evaluate(item.id(), item.stop(), JSON.readTree(item.snapshot()))
-                : Outcome.unsupported("SOURCE_QUALITY_EXCLUDED");
-            outcomes.put(item, outcome);
+            if (!item.eligible()) {
+                outcomes.put(item, Outcome.unsupported("SOURCE_QUALITY_EXCLUDED"));
+                continue;
+            }
+            outcomes.put(item, confirmed.evaluate(item.id(), item.stop(), JSON.readTree(item.snapshot())));
         }
     }
 
-    private List<Work> readWork(final long route, final int limit, Instant dueThrough, boolean lock) {
-        return jdbc.sql("""
-            SELECT w.vehicle_observation_id,w.target_stop_order,w.target_kind,w.label_version,w.next_attempt_at,
-                   CASE WHEN w.label_version='alighting-confirmed-capacity-snapshot-v3' THEN coalesce(batch.input_confirmed_at,batch.response_received_at)
-                     ELSE batch.response_received_at END AS source_at,f.feature_snapshot::text,
-                   source.vehicle_id,source.vehicle_trip_key,source.quality_direction,
+    private List<Work> readWork(
+        final long route,
+        final int limit,
+        Instant dueThrough,
+        final boolean lock
+    ) {
+        String sql = """
+            SELECT w.vehicle_observation_id, w.target_stop_order, w.target_kind, w.label_version, w.next_attempt_at,
+                   CASE WHEN w.label_version = 'alighting-confirmed-capacity-snapshot-v3'
+                       THEN coalesce(batch.input_confirmed_at, batch.response_received_at)
+                       ELSE batch.response_received_at END AS source_at, f.feature_snapshot::text,
+                   source.vehicle_id, source.vehicle_trip_key, source.quality_direction,
                    (source.remaining_seats IS NOT NULL) AS forecast_eligible
             FROM alighting_forecast_evaluation_work w
             JOIN seat_forecast f USING(vehicle_observation_id,target_stop_order)
             JOIN operational_observation source ON source.id=w.vehicle_observation_id
             JOIN observation_batch batch ON batch.id=source.observation_batch_id
-            WHERE w.route_version_id=:route AND w.next_attempt_at<=:dueThrough
-            ORDER BY w.next_attempt_at,w.vehicle_observation_id,w.target_stop_order,w.target_kind
+            WHERE w.route_version_id = :route AND w.next_attempt_at <= :dueThrough
+            ORDER BY w.next_attempt_at, w.vehicle_observation_id, w.target_stop_order, w.target_kind
             LIMIT :limit
-            """ + (lock ? "FOR UPDATE OF w SKIP LOCKED" : "")).param("route", route).param("limit", limit).param("dueThrough", dueThrough.atOffset(ZoneOffset.UTC))
+            """;
+        if (lock) {
+            sql += "FOR UPDATE OF w SKIP LOCKED";
+        }
+        return jdbc.sql(sql)
+            .param("route", route)
+            .param("limit", limit)
+            .param("dueThrough", dueThrough.atOffset(ZoneOffset.UTC))
             .query((rs, n) -> new Work(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order"),
                 rs.getString("target_kind"), rs.getString("label_version"), route,
                 rs.getObject("source_at", OffsetDateTime.class).toInstant(), rs.getString("feature_snapshot"),
