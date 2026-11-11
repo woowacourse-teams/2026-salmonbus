@@ -1,13 +1,13 @@
 package com.gustler.backend.forecasting.support;
 
-import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
-import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
+import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.application.deployment.ActiveForecastRuntimeResolver;
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
 import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
+import com.gustler.backend.forecasting.application.evaluation.AlightingAwareEvaluationArchiveService;
 import com.gustler.backend.forecasting.application.publication.ForecastBatchCommitter;
 import com.gustler.backend.forecasting.application.publication.ForecastBatchWriter;
-import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
@@ -17,18 +17,22 @@ import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
-import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareVehiclePrefix;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
-import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareInferenceBundle;
-import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareServingBundle;
-import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcAlightingAwareForecastEvaluation;
+import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareHistorySeedReader;
 import com.gustler.backend.forecasting.infrastructure.alighting.ConfirmedAlightingAwareInput;
 import com.gustler.backend.forecasting.infrastructure.alighting.JdbcAlightingAwareFeatureQuery;
-import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareHistorySeedReader;
+import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareInferenceBundle;
+import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareServingBundle;
+import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
+import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcAlightingAwareEvaluationArchiveStore;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcAlightingAwareForecastEvaluation;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -116,17 +120,20 @@ public final class ConfirmedAlightingAwareWorkerReplay {
         }
         final boolean passed = results.size() == expectedRoutes
             && results.stream().allMatch(result -> Boolean.TRUE.equals(result.get("passed")));
-        Files.writeString(output.resolve("report.json"),
-            JSON.writerWithDefaultPrettyPrinter().writeValueAsString(Map.of(
-                "passed", passed, "routes", results, "bundle_manifest_sha256", bundle.digest(), "serving_ready", false,
-                "settlement_scope", "after_alighting_only",
-                "runtime_capacity_policy", "vehicle-capacity-snapshot-v1",
-                "runtime_label_version", "alighting-confirmed-capacity-snapshot-v3",
-                "runtime_calculation_version", "alighting-online-capacity-snapshot-v2",
-                "quality_scope",
-                "Accepted local observations with simulated collection capacity history; production collection rejection state unavailable",
-                "input_scope",
-                "Complete day observations and source-derived midnight prefixes; not full DB bootstrap")));
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("passed", passed);
+        report.put("routes", results);
+        report.put("bundle_manifest_sha256", bundle.digest());
+        report.put("verification_code_sha", System.getProperty("alighting.replay.code-sha", ""));
+        report.put("serving_ready", false);
+        report.put("settlement_scope", "after_alighting_only");
+        report.put("runtime_capacity_policy", "vehicle-capacity-snapshot-v1");
+        report.put("runtime_label_version", "alighting-confirmed-capacity-snapshot-v3");
+        report.put("runtime_calculation_version", "alighting-online-capacity-snapshot-v2");
+        report.put("quality_scope",
+            "Accepted local observations with simulated collection capacity history; production collection rejection state unavailable");
+        report.put("input_scope", "Complete day observations and source-derived midnight prefixes; not full DB bootstrap");
+        Files.writeString(output.resolve("report.json"), JSON.writerWithDefaultPrettyPrinter().writeValueAsString(report));
         if (!passed) {
             throw new IllegalStateException("Worker replay mismatch");
         }
@@ -153,12 +160,12 @@ public final class ConfirmedAlightingAwareWorkerReplay {
         String directory = seedRoot.toString();
         Map<Long, RouteStops> catalogs = catalogs(fixture);
         for (RouteStops stops : catalogs.values()) {
-            AlightingAwareHistorySeedReader reader = new AlightingAwareHistorySeedReader(
-                seedRoot.resolve(AlightingAwareRouteStatistics.CONFIRMED_PROFILE).toString(), 250_000);
+            AlightingAwareHistorySeedReader reader = AlightingAwareHistorySeedReader.confirmed(directory, 250_000);
             JsonNode anchor = fixture.path("anchor");
             reader.write(stops.routeVersionId(), new AlightingAwareHistorySeedReader.Seed(List.of(), anchor.path("batch").asLong(),
                 anchor.path("rank").asLong(), Instant.parse(anchor.path("time").asText()), prefix, List.of()));
         }
+        Map<String, int[]> counts = new LinkedHashMap<>();
         double maximumFeature = 0;
         double maximumPrediction = 0;
         for (JsonNode row : cases) {
@@ -167,15 +174,9 @@ public final class ConfirmedAlightingAwareWorkerReplay {
             AlightingAwareRouteStatistics statistics = model.statistics(stops);
             JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
             new JdbcVehicleCapacityStore(jdbc)), "", 250_000, true, directory);
-            AlightingAwareFeatureSnapshot snapshot = query.read(source.batchId(), stops, statistics).get(source.observationId());
-            if (snapshot == null) {
-                throw new IllegalStateException("Missing real source " + source.observationId());
-            }
-            AlightingAwareFeatureVector actual = snapshot.forTarget(row.path("target").asInt());
-            maximumFeature = Math.max(maximumFeature, compare(row.path("seat88"), actual.seat88()));
-            maximumFeature = Math.max(maximumFeature, compare(row.path("probability80"), actual.probability80()));
-            AlightingAwareSeatPredictor.Prediction expected = bundle.predictor().predict(vector(row.path("seat88")),
-                vector(row.path("probability80")));
+            final boolean extended = row.has("extended_inputs");
+            ReplayForecast expected = expectedForecast(row, query, source, stops, statistics, bundle);
+            maximumFeature = Math.max(maximumFeature, expected.featureDifference());
             ForecastBatchWriter writer = new ForecastBatchWriter(
                 context.getBean(ForecastBatchCommitter.class), Clock.fixed(source.receivedAt(), ZoneOffset.UTC),
                 quality);
@@ -187,12 +188,22 @@ public final class ConfirmedAlightingAwareWorkerReplay {
             final double prediction = jdbc
                 .sql("SELECT expected_seats FROM seat_forecast WHERE vehicle_observation_id=? AND target_stop_order=?")
                 .params(source.observationId(), row.path("target").asInt()).query(Double.class).single();
-            maximumPrediction = Math.max(maximumPrediction, Math.abs(prediction - expected.afterAlightingSeats()));
+            maximumPrediction = Math.max(maximumPrediction, Math.abs(prediction - expected.seats()));
             final double fullProbability = jdbc
                 .sql("SELECT seat_full_chance FROM seat_forecast WHERE vehicle_observation_id=? AND target_stop_order=?")
                 .params(source.observationId(), row.path("target").asInt()).query(Double.class).single();
             maximumPrediction = Math.max(maximumPrediction,
-                Math.abs(fullProbability - expected.departureFullProbability()));
+                Math.abs(fullProbability - expected.full()));
+            if (extended) {
+                String evidence = jdbc.sql("""
+                    SELECT feature_snapshot::text FROM seat_forecast WHERE vehicle_observation_id=? AND target_stop_order=?
+                    """).params(source.observationId(), row.path("target").asInt()).query(String.class).single();
+                maximumFeature = Math.max(maximumFeature,
+                    compare(row.path("extended_inputs"), vector(JSON.readTree(evidence).path("extendedInputs"))));
+            }
+            if (row.has("cell")) {
+                counts.computeIfAbsent(row.path("cell").asText(), cell -> new int[2])[0]++;
+            }
             // A restart must use the saved cursor and preserve the first confirmation.
             writer.writeForecastsOf(batch, stops, runtime);
             Instant confirmed = jdbc.sql("SELECT input_confirmed_at FROM observation_batch WHERE id=?")
@@ -217,6 +228,7 @@ public final class ConfirmedAlightingAwareWorkerReplay {
         }
         double maximumLabel = 0;
         int settled = 0;
+        int expectedUnsupported = 0;
         List<Map<String, Object>> failures = new ArrayList<>();
         for (JsonNode row : cases) {
             List<Map<String, Object>> labels = jdbc
@@ -236,6 +248,12 @@ public final class ConfirmedAlightingAwareWorkerReplay {
                     "label_count", labels.size(), "pending", pending));
             }
             for (Map<String, Object> label : labels) {
+                if ("UNSUPPORTED".equals(label.get("scoring_state"))
+                    && row.path("expected_reason").isString()
+                    && row.path("expected_reason").asText().equals(label.get("reason"))) {
+                    expectedUnsupported++;
+                    continue;
+                }
                 if (!"SETTLED".equals(label.get("scoring_state"))
                     || !"AFTER_ALIGHTING_ESTIMATE".equals(label.get("target_kind"))) {
                     failures.add(Map.of("id", row.path("source_id").asLong(), "target", row.path("target").asInt(),
@@ -250,13 +268,138 @@ public final class ConfirmedAlightingAwareWorkerReplay {
                         "evidence", label.toString()));
                 }
                 settled++;
+                if (row.has("cell")) {
+                    counts.get(row.path("cell").asText())[1]++;
+                }
             }
         }
-        return Map.of("route", fixture.path("route").asText(), "cases", cases.size(), "settled_targets", settled,
-            "max_feature_difference", maximumFeature, "max_prediction_difference", maximumPrediction,
-            "max_label_difference", maximumLabel, "failures", failures,
-            "passed", maximumFeature == 0 && maximumPrediction <= 1e-9 && maximumLabel <= 1e-8
-                && settled == cases.size() && failures.isEmpty());
+        String route = fixture.path("route").asText();
+        List<Map<String, Object>> cells = counts.entrySet().stream()
+            .map(entry -> Map.<String, Object>of("route", route, "cell", entry.getKey(),
+                "published", entry.getValue()[0], "settled", entry.getValue()[1]))
+            .toList();
+        final boolean extendedReplay = cases.stream().anyMatch(row -> row.has("extended_inputs"));
+        final int restored = restoreFirstSettled(jdbc, tx.getTransactionManager(), routeId, extendedReplay);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("route", route);
+        result.put("cases", cases.size());
+        result.put("settled_targets", settled);
+        result.put("max_feature_difference", maximumFeature);
+        result.put("max_prediction_difference", maximumPrediction);
+        result.put("max_label_difference", maximumLabel);
+        result.put("failures", failures);
+        result.put("extended_hours", cells);
+        result.put("expected_unsupported", expectedUnsupported);
+        result.put("restored_targets", restored);
+        result.put("passed", maximumFeature == 0 && maximumPrediction <= 1e-9 && maximumLabel <= 1e-8
+            && !cases.isEmpty() && settled + expectedUnsupported == cases.size() && failures.isEmpty()
+            && (!extendedReplay || restored == 1));
+        return result;
+    }
+
+    private static ReplayForecast expectedForecast(
+        JsonNode row,
+        JdbcAlightingAwareFeatureQuery query,
+        AlightingAwareObservation source,
+        RouteStops stops,
+        AlightingAwareRouteStatistics statistics,
+        AlightingAwareInferenceBundle bundle
+    ) {
+        if (row.has("extended_inputs")) {
+            return new ReplayForecast(row.get("expected_seats").asDouble(), row.get("expected_full").asDouble(), 0);
+        }
+        AlightingAwareFeatureSnapshot snapshot = query.read(source.batchId(), stops, statistics).get(source.observationId());
+        if (snapshot == null) {
+            throw new IllegalStateException("Missing real source " + source.observationId());
+        }
+        AlightingAwareFeatureVector actual = snapshot.forTarget(row.path("target").asInt());
+        final double difference = Math.max(compare(row.path("seat88"), actual.seat88()),
+            compare(row.path("probability80"), actual.probability80()));
+        AlightingAwareSeatPredictor.Prediction expected = bundle.predictor().predict(vector(row.path("seat88")),
+            vector(row.path("probability80")));
+        return new ReplayForecast(expected.afterAlightingSeats(), expected.departureFullProbability(), difference);
+    }
+
+    private record ReplayForecast(double seats, double full, double featureDifference) {
+    }
+
+    private static int restoreFirstSettled(
+        JdbcClient jdbc, PlatformTransactionManager transactions, final long route, final boolean extendedReplay
+    ) {
+        if (!extendedReplay) {
+            return 0;
+        }
+        List<Map<String, Object>> keys = jdbc.sql("""
+            SELECT result.vehicle_observation_id,result.target_stop_order,result.target_kind,result.label_version,
+                   result.quality_revision,result.label_value
+            FROM alighting_forecast_evaluation_result result
+            JOIN route_version version ON version.id=result.route_version_id
+            JOIN seat_forecast forecast USING(vehicle_observation_id,target_stop_order)
+            WHERE version.route_id=? AND result.scoring_state='SETTLED' AND forecast.feature_snapshot->'extendedInputs' IS NOT NULL
+            ORDER BY result.scored_at,result.vehicle_observation_id,result.target_stop_order LIMIT 1
+            """).param(route).query().listOfRows();
+        if (keys.isEmpty()) {
+            return 0;
+        }
+        Map<String, Object> key = keys.getFirst();
+        Map<String, byte[]> files = new HashMap<>();
+        AlightingAwareEvaluationArchiveService archive = new AlightingAwareEvaluationArchiveService(
+            new JdbcAlightingAwareEvaluationArchiveStore(jdbc, transactions), archiveObjects(files), true, 500);
+        for (int page = 0; page < 20; page++) {
+            archive.advance();
+            if (jdbc.sql("""
+                SELECT EXISTS (SELECT 1 FROM alighting_evaluation_archive WHERE vehicle_observation_id=?
+                    AND target_stop_order=? AND storage_state='PURGED')
+                """).params(key.get("vehicle_observation_id"), key.get("target_stop_order")).query(Boolean.class).single()) {
+                return restoreAndCompare(jdbc, archive, key);
+            }
+        }
+        return 0;
+    }
+
+    private static int restoreAndCompare(
+        JdbcClient jdbc, AlightingAwareEvaluationArchiveService archive, Map<String, Object> key
+    ) {
+        final long observation = ((Number) key.get("vehicle_observation_id")).longValue();
+        final int stop = ((Number) key.get("target_stop_order")).intValue();
+        final long revision = ((Number) key.get("quality_revision")).longValue();
+        String target = key.get("target_kind").toString();
+        String version = key.get("label_version").toString();
+        final int restored = archive.restore(observation, stop, target, version, revision);
+        final double after = jdbc.sql("""
+            SELECT label_value FROM alighting_forecast_evaluation_result
+            WHERE vehicle_observation_id=? AND target_stop_order=? AND target_kind=? AND label_version=? AND quality_revision=?
+            """).params(observation, stop, target, version, revision).query(Double.class).single();
+        if (after != ((Number) key.get("label_value")).doubleValue()) {
+            throw new IllegalStateException("Restored settlement differs");
+        }
+        return restored;
+    }
+
+    private static EvaluationArchiveObjects archiveObjects(Map<String, byte[]> files) {
+        return new EvaluationArchiveObjects() {
+            @Override
+            public void putIfAbsent(String bucket, String key, Path source, String checksum) {
+                try {
+                    files.putIfAbsent(key, Files.readAllBytes(source));
+                } catch (IOException failure) {
+                    throw new IllegalStateException(failure);
+                }
+            }
+
+            @Override
+            public void download(String bucket, String key, Path destination, final long limit) {
+                byte[] content = files.get(key);
+                if (content == null || content.length > limit) {
+                    throw new IllegalStateException("Replay archive object missing or oversized");
+                }
+                try {
+                    Files.write(destination, content);
+                } catch (IOException failure) {
+                    throw new IllegalStateException(failure);
+                }
+            }
+        };
     }
 
     private static boolean matchesEvidence(JsonNode expected, Map<String, Object> actual) {
@@ -451,6 +594,9 @@ public final class ConfirmedAlightingAwareWorkerReplay {
     }
 
     private static double compare(JsonNode expected, double[] actual) {
+        if (expected.size() != actual.length) {
+            throw new IllegalStateException("Replay input vector length mismatch");
+        }
         double maximum = 0;
         for (int i = 0; i < actual.length; i++) {
             final double value = expected.get(i).asDouble(Double.NaN);

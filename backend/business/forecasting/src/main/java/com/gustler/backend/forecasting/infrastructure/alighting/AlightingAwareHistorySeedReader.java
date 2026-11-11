@@ -41,7 +41,7 @@ public final class AlightingAwareHistorySeedReader {
         this.requireQualityCutover = requireQualityCutover;
     }
 
-    static AlightingAwareHistorySeedReader confirmed(String directory, final int maximumRows) {
+    public static AlightingAwareHistorySeedReader confirmed(String directory, final int maximumRows) {
         String path = directory.isBlank() ? directory
             : Path.of(directory).resolve(AlightingAwareRouteStatistics.CONFIRMED_PROFILE).toString();
         return new AlightingAwareHistorySeedReader(path, maximumRows, true);

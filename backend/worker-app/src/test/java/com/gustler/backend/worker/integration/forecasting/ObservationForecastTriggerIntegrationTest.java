@@ -163,8 +163,9 @@ class ObservationForecastTriggerIntegrationTest {
         assertThat(waitForPublication(batchId, Instant.now().plus(SIGNAL_DEADLINE))).isNotNull();
         assertThat(seenByForecast.get()).isEqualTo(45);
         assertThat(readCapacity(vehicleId)).contains(45);
-        collectWithSeats(vehicleId, 44);
+        final long nextBatchId = collectWithSeats(vehicleId, 44);
         assertThat(readCapacity(vehicleId)).contains(45);
+        assertThat(waitForPublication(nextBatchId, Instant.now().plus(SIGNAL_DEADLINE))).isNotNull();
     }
 
     @Test

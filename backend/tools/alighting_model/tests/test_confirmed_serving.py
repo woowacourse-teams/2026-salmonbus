@@ -2,8 +2,11 @@
 import copy
 import json
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from confirmed_serving_verification import EXTENDED_CELLS, PROFILE, checked_routes, verify_extended, verify_result
+from prepare_confirmed_receipts import combine_extended
 
 
 class ConfirmedVerificationTest(unittest.TestCase):
@@ -77,6 +80,28 @@ class ConfirmedVerificationTest(unittest.TestCase):
             with self.subTest(bad=list(bad)):
                 with self.assertRaises(ValueError):
                     verify_extended(result | bad, self.digest, code, self.routes)
+
+    def test_replay_reports_must_cover_every_cell_and_restore_off_peak_settlement(self):
+        code = 'a' * 40
+        rows = [dict(route='3330', cell=cell, published=2, settled=1) for cell in EXTENDED_CELLS]
+        report = dict(passed=True, bundle_manifest_sha256=self.digest, verification_code_sha=code,
+                      routes=[dict(route='3330', passed=True, restored_targets=1, extended_hours=rows)])
+        runtime = dict(bundle_manifest_sha256=self.digest)
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'report.json'
+            path.write_text(json.dumps(report))
+            result = combine_extended(runtime, [path], self.digest, code, ['3330'])
+            self.assertEqual(result['extended_hours'], rows)
+
+            report['routes'][0]['restored_targets'] = 0
+            path.write_text(json.dumps(report))
+            with self.assertRaisesRegex(ValueError, 'restore failed'):
+                combine_extended(runtime, [path], self.digest, code, ['3330'])
+
+            report['routes'][0]['restored_targets'] = 1
+            path.write_text(json.dumps(report))
+            with self.assertRaisesRegex(ValueError, 'missing extended route or time cell'):
+                combine_extended(runtime, [path], self.digest, code, ['3330', '1650'])
 
     def test_runtime_must_cover_every_route_and_confirmed_profile(self):
         runtime = dict(passed=True, bundle_manifest_sha256=self.digest, routes=self.routes,
