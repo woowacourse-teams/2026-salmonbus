@@ -86,6 +86,7 @@ final class ConfirmedAlightingAwareEvaluation {
         if (rows != null) {
             return;
         }
+        // 확정 시각이 자정이어도 응답은 최대 90초 앞설 수 있다.
         rows = jdbc.sql("""
             WITH raw AS (
               SELECT o.*,b.input_confirmed_at,b.response_received_at,
@@ -94,6 +95,8 @@ final class ConfirmedAlightingAwareEvaluation {
               JOIN route_version v ON v.id=b.route_version_id
               WHERE v.route_id=(SELECT route_id FROM route_version WHERE id=:route)
                 AND b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS' AND b.stored_rows>0
+                AND b.response_received_at>=CAST(:start AS timestamptz)-interval '90 seconds'
+                AND b.response_received_at<=:through
                 AND b.input_confirmed_at>=b.response_received_at
                 AND b.input_confirmed_at<=b.response_received_at+interval '90 seconds'
                 AND b.input_confirmed_at>=:start AND b.input_confirmed_at<=:through
@@ -137,6 +140,8 @@ final class ConfirmedAlightingAwareEvaluation {
               JOIN route_version v ON v.id=b.route_version_id
               WHERE v.route_id=(SELECT route_id FROM route_version WHERE id=:route)
                 AND b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS'
+                AND b.response_received_at>=CAST(:start AS timestamptz)-interval '90 seconds'
+                AND b.response_received_at<=:through
                 AND b.input_confirmed_at>=b.response_received_at
                 AND b.input_confirmed_at<=b.response_received_at+interval '90 seconds'
                 AND b.input_confirmed_at>=:start AND b.input_confirmed_at<=:through
