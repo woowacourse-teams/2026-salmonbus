@@ -93,6 +93,26 @@ async function emit(page: Page, event: NativeMapEvent, sessionId?: string) {
 test.describe("홈 지도까지 지원하는 iOS 앱", () => {
   test.use({ appCapabilities: [...NATIVE_MAP_CAPABILITIES, ...NATIVE_HOME_MAP_CAPABILITIES, "map.selectedStopOnly"] });
 
+  test("홈 나침반을 누르면 홈 지도 세션의 방향을 초기화한다", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "현재 위치로 이동" })).toBeVisible();
+    const compass = page.getByRole("button", { name: "지도를 북쪽으로 돌리기" });
+    const mount = (await messages(page)).find((message) => message.type === "mountHome");
+    expect(mount?.payload.reportRotation).toBe(true);
+    await expect(compass).toHaveCount(0);
+
+    await emit(page, { type: "rotation", payload: { heading: 75 } });
+    await expect(compass).toBeVisible();
+    await compass.click();
+    expect((await messages(page)).filter((message) => message.type === "camera").at(-1)).toMatchObject({
+      sessionId: mount?.sessionId,
+      payload: { command: "resetNorth" },
+    });
+
+    await emit(page, { type: "rotation", payload: { heading: 0 } });
+    await expect(compass).toHaveCount(0);
+  });
+
   test("노선도와 판정보드를 네이티브로 표시하고 오류가 나면 같은 SDK로 다시 시도한다", async ({ page }) => {
     await page.route("**/assets/home-events.json", (route) =>
       route.fulfill({
@@ -248,6 +268,32 @@ test("native host는 JS SDK 없이 scene과 관측별 motion을 보내고 브라
   expect(
     await page.getByTestId("route-map").evaluate((element) => getComputedStyle(element.parentElement!).backgroundColor),
   ).toBe("rgba(0, 0, 0, 0)");
+});
+
+test("native 지도의 나침반을 누르면 현재 지도 세션에 방향 초기화를 요청한다", async ({ page }) => {
+  await open(page);
+  const compass = page.getByRole("button", { name: "지도를 북쪽으로 돌리기" });
+  const mount = (await messages(page)).find((message) => message.type === "mount");
+  expect(mount?.payload.reportRotation).toBe(true);
+  await expect(compass).toHaveCount(0);
+
+  await emit(page, { type: "rotation", payload: { heading: 75 } });
+  await expect(compass).toBeVisible();
+  await page.clock.runFor(48);
+  const layout = (await messages(page)).filter((message) => message.type === "layout").at(-1);
+  const box = (await compass.boundingBox())!;
+  expect(layout?.payload.webRects.some(({ x, y }) => Math.abs(x - box.x) < 0.1 && Math.abs(y - box.y) < 0.1)).toBe(
+    true,
+  );
+
+  await compass.click();
+  expect((await messages(page)).filter((message) => message.type === "camera").at(-1)).toMatchObject({
+    type: "camera",
+    sessionId: mount?.sessionId,
+    payload: { command: "resetNorth" },
+  });
+  await emit(page, { type: "rotation", payload: { heading: 0 } });
+  await expect(compass).toHaveCount(0);
 });
 
 test("실제 transition 경계와 웹 버튼 영역을 전달하고 native 위치·선택 이벤트를 연결한다", async ({ page }) => {

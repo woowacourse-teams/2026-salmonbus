@@ -11,6 +11,7 @@ import {
   type RouteArrow,
 } from "./routeMapGeometry";
 import type { MapFlowSurface } from "@/shared/map/mapFlowSurface";
+import { bindNaverMapCompass } from "@/shared/map/naverMapCompass";
 import type { NaverMap, NaverMaps, NaverMarker } from "@/shared/map/naverSdk";
 import { activeRouteColor, inactiveRouteColor } from "@/shared/map/routeColors";
 import { createMapStopPin } from "@/shared/map/mapStopPin";
@@ -52,6 +53,7 @@ export interface RouteMapCamera {
 interface NaverRouteMapOptions {
   sharedMap?: NaverMap;
   refitOverviewOnResize?: boolean;
+  onRotationChange?: (rotation: number) => void;
 }
 
 export interface RouteMapAdapter {
@@ -67,6 +69,7 @@ export interface RouteMapAdapter {
   focus: (selection: StopSelection, options?: { animate?: boolean }) => void;
   focusVehicle: (key: string | null, options?: { focusMarker?: boolean }) => void;
   showLocation: (coordinate: GeoCoordinate) => void;
+  resetNorth: () => void;
   destroy: () => void;
 }
 
@@ -104,7 +107,7 @@ export function createNaverRouteMap(
   initialSelection: StopSelection | null = null,
   initialCamera?: RouteMapCamera,
   selectedStopOnly = false,
-  { sharedMap, refitOverviewOnResize = false }: NaverRouteMapOptions = {},
+  { sharedMap, refitOverviewOnResize = false, onRotationChange }: NaverRouteMapOptions = {},
 ): RouteMapAdapter {
   const createNativeEventHandler = (action: () => void) => () => {
     try {
@@ -572,6 +575,17 @@ export function createNaverRouteMap(
   }
 
   let rotationFrame: number | null = null;
+  const refreshAfterRotation = () => {
+    if (rotationFrame !== null) return;
+    // 회전 이벤트가 카메라 갱신보다 먼저 올 수 있어 다음 프레임의 투영 좌표를 사용한다.
+    rotationFrame = window.requestAnimationFrame(
+      createNativeEventHandler(() => {
+        rotationFrame = null;
+        refreshStops();
+        refreshArrows();
+      }),
+    );
+  };
   const listeners = [
     sdk.Event.addListener(map, "click", createNativeEventHandler(onDeselect)),
     sdk.Event.addListener(map, "tap", createNativeEventHandler(onDeselect)),
@@ -595,17 +609,8 @@ export function createNaverRouteMap(
         if (arrowsShowBothDirections !== showBothDirections) refreshArrows();
       }),
     ),
-    sdk.Event.addListener(map, "rotate", () => {
-      if (rotationFrame !== null) return;
-      // 회전 이벤트가 카메라 갱신보다 먼저 올 수 있어 다음 프레임의 투영 좌표를 사용한다.
-      rotationFrame = window.requestAnimationFrame(
-        createNativeEventHandler(() => {
-          rotationFrame = null;
-          refreshStops();
-          refreshArrows();
-        }),
-      );
-    }),
+    sdk.Event.addListener(map, "rotate", refreshAfterRotation),
+    sdk.Event.addListener(map, "rotation_changed", refreshAfterRotation),
     sdk.Event.addListener(
       map,
       "idle",
@@ -620,6 +625,7 @@ export function createNaverRouteMap(
       }),
     ),
   ];
+  const compass = onRotationChange && bindNaverMapCompass({ maps: sdk, map, element }, onRotationChange, onError);
   if (sharedMap) {
     fitInitialRoute();
     if (board === null) refreshArrows();
@@ -801,6 +807,11 @@ export function createNaverRouteMap(
       map.setCenter(position);
       map.setZoom(Math.max(15, map.getZoom()), false);
     },
+    resetNorth() {
+      cancelCameraFocus();
+      stopOverviewRefit();
+      compass?.resetNorth();
+    },
     camera() {
       const center = map.getCenter();
       return {
@@ -824,6 +835,7 @@ export function createNaverRouteMap(
           // 인증 실패로 SDK 내부가 비워진 경우에도 나머지 자원을 정리한다.
         }
       };
+      cleanup(() => compass?.destroy());
       listeners.forEach((listener) => cleanup(() => sdk.Event.removeListener(listener)));
       if (useInstantZoom && !sharedMap) {
         cleanup(() => element.removeEventListener("wheel", onWheel));

@@ -1,11 +1,11 @@
 import type { ComponentPropsWithoutRef } from "react";
-import { locationButton } from "./MapLocationButton.css";
+import { mapButton } from "./mapControls.css";
 
-type MapLocationButtonProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "type">;
+type MapLocationButtonProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "type" | "className">;
 
-export function MapLocationButton({ className, ...props }: MapLocationButtonProps) {
+export function MapLocationButton(props: MapLocationButtonProps) {
   return (
-    <button {...props} type="button" className={className ? `${locationButton} ${className}` : locationButton}>
+    <button {...props} type="button" className={mapButton}>
       <svg
         width="22"
         height="22"

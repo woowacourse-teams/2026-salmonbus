@@ -43,6 +43,7 @@ export interface NativeMapScene extends NativeMapSceneState {
   referenceVersionId: string;
   preserveCamera?: boolean;
   selectedStopOnly?: boolean;
+  reportRotation?: boolean;
   directions?: Direction[];
   stops: (NativeStopSelection & {
     stopId: string;
@@ -87,10 +88,11 @@ export type NativeHomeCameraCommand =
 export type NativeCameraCommand =
   | { command: "stop"; selection: NativeStopSelection }
   | { command: "vehicle"; key: string | null; focusMarker: boolean }
-  | { command: "location"; coordinate: NativeCoordinate };
+  | { command: "location"; coordinate: NativeCoordinate }
+  | { command: "resetNorth" };
 export interface NativeMapCommands {
   mount: NativeMapScene;
-  mountHome: { content: NativeHomeMapContent; camera: NativeMapCamera };
+  mountHome: { content: NativeHomeMapContent; camera: NativeMapCamera; reportRotation?: boolean };
   updateHome: Partial<NativeHomeMapContent>;
   homeCamera: NativeHomeCameraCommand;
   updateScene: NativeMapSceneState;
@@ -108,6 +110,7 @@ export interface NativeMapEvents {
   homeViewport: { camera: NativeMapCamera; corners: NativeCoordinate[]; gesture: boolean };
   vehiclePress: { selection: NativeStopSelection; key: string };
   mapPress: Record<never, never>;
+  rotation: { heading: number };
   locationResult: {
     requestId: number;
     coordinate?: NativeCoordinate;

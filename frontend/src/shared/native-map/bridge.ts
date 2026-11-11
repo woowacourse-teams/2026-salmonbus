@@ -107,6 +107,7 @@ function camera(value: unknown): boolean {
 const isValidPayloadFor = {
   ready: () => true,
   mapPress: () => true,
+  rotation: (payload) => typeof payload.heading === "number" && Number.isFinite(payload.heading),
   ack: (payload) => Number.isInteger(payload.appliedRevision),
   stopPress: (payload) => selection(payload.selection),
   homeStopPress: (payload) => typeof payload.id === "string" && payload.id.length > 0,
