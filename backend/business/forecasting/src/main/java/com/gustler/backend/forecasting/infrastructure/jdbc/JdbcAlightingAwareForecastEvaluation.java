@@ -225,7 +225,6 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         }
     }
 
-    /** 관측 목록은 같은 조회 상한을 쓰는 묶음에서만 보관하고 다음 묶음으로 넘기지 않는다. */
     private void prepareConfirmedDay(
         final long route,
         Instant now,
@@ -236,8 +235,13 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         Map<Instant, List<Work>> workByHorizon = work.stream()
             .filter(item -> canonical(item.version()).equals("alighting-confirmed-capacity-snapshot-v3"))
             .collect(Collectors.groupingBy(item -> confirmedThrough(item, now)));
+        if (workByHorizon.isEmpty()) {
+            return;
+        }
+        Instant latest = workByHorizon.keySet().stream().max(Instant::compareTo).orElseThrow();
+        var history = new ConfirmedAlightingAwareEvaluation.History(jdbc, route, date, latest, confirmedObservationLimit);
         for (Map.Entry<Instant, List<Work>> entry : workByHorizon.entrySet()) {
-            prepareConfirmedGroup(route, date, entry.getKey(), entry.getValue(), outcomes);
+            prepareConfirmedGroup(history, date, entry.getKey(), entry.getValue(), outcomes);
         }
     }
 
@@ -250,14 +254,13 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
     }
 
     private void prepareConfirmedGroup(
-        final long route,
+        ConfirmedAlightingAwareEvaluation.History history,
         LocalDate date,
         Instant through,
         List<Work> work,
         Map<Work, Outcome> outcomes
     ) {
-        ConfirmedAlightingAwareEvaluation confirmed = new ConfirmedAlightingAwareEvaluation(
-            jdbc, route, date, through, confirmedObservationLimit);
+        ConfirmedAlightingAwareEvaluation confirmed = new ConfirmedAlightingAwareEvaluation(history, date, through);
         for (Work item : work) {
             Outcome outcome = item.eligible()
                 ? confirmed.evaluate(item.id(), item.stop(), JSON.readTree(item.snapshot()))

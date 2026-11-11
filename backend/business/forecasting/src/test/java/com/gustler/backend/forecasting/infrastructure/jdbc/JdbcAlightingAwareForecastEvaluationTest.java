@@ -6,6 +6,7 @@ import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
 import com.gustler.backend.forecasting.application.evaluation.AlightingAwareEvaluationArchiveService;
@@ -30,6 +31,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -465,6 +468,26 @@ class JdbcAlightingAwareForecastEvaluationTest {
         assertThat(count("alighting_forecast_evaluation_result")).isEqualTo(220);
     }
 
+    @ParameterizedTest
+    @CsvSource({"9, OBSERVATION_INPUT_LIMIT", "100, SOURCE_HISTORY_INCOMPLETE"})
+    void 늦은_관측의_한도_초과와_누락은_앞선_정산에_영향을_주지_않는다(int limit, String reason) {
+        useConfirmedProfile();
+        final long later = observation("later", 120, 1, 40);
+        copyForecast(later);
+        final long missing = observation("incomplete", 7210, 1, 40);
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at "
+            + "WHERE route_version_id=?").param(version).update();
+        jdbc.sql("UPDATE observation_batch SET stored_rows=2 WHERE id="
+            + "(SELECT observation_batch_id FROM vehicle_observation WHERE id=?)").param(missing).update();
+
+        new JdbcAlightingAwareForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions, 50_000, limit).settle();
+
+        assertThat(jdbc.sql("SELECT scoring_state FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=?")
+            .param(source).query(String.class).single()).isEqualTo("SETTLED");
+        assertThat(jdbc.sql("SELECT reason FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=?")
+            .param(later).query(String.class).single()).isEqualTo(reason);
+    }
+
     @Test
     void 다음날_관측이_늘어도_확인시각_정산의_입력_범위를_넓히지_않는다() {
         // given
@@ -573,11 +596,14 @@ class JdbcAlightingAwareForecastEvaluationTest {
             """).param(version).update();
 
         // when
-        new JdbcAlightingAwareForecastEvaluation(jdbc, quality, Clock.systemUTC(), heapTransactions).settle();
+        final JdbcClient observing = mock(JdbcClient.class, delegatesTo(jdbc));
+        new JdbcAlightingAwareForecastEvaluation(observing, quality, Clock.systemUTC(), heapTransactions).settle();
 
         // then
         assertThat(count("alighting_forecast_evaluation_work")).isZero();
         assertThat(count("alighting_forecast_evaluation_result")).isEqualTo(25);
+        verify(observing).sql(contains("WITH raw AS"));
+        verify(observing).sql(contains("HAVING count(o.id)"));
         assertThat(jdbc.sql("SELECT DISTINCT reason FROM alighting_forecast_evaluation_result "
             + "WHERE route_version_id=? AND vehicle_observation_id<>?")
             .params(version, source).query(String.class).list()).containsExactly("NO_CLOSED_IDENTITY_SAFE_PASS");
