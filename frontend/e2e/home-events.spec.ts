@@ -172,11 +172,31 @@ test("정류장 상세 조회 실패는 재시도할 수 있고 정상 빈 응�
     releaseRefresh = resolve;
   });
   const detailEndpoint = `**/api/v2/stations/${stationId}`;
+  let releaseFollowingPoll!: () => void;
+  const followingPollPending = new Promise<void>((resolve) => {
+    releaseFollowingPoll = resolve;
+  });
+  await page.route(
+    detailEndpoint,
+    async (route) => {
+      await followingPollPending;
+      await route.fallback();
+    },
+    { times: 1 },
+  );
   await page.route(
     detailEndpoint,
     async (route) => {
       await refreshPending;
-      await route.fallback();
+      await route.fulfill({
+        json: {
+          stationId,
+          generatedAt: observedAt,
+          status: "READY",
+          refresh: { status: "RUNNING", suggestedRefreshAt: observedAt },
+          routes: [],
+        },
+      });
     },
     { times: 1 },
   );
@@ -186,8 +206,16 @@ test("정류장 상세 조회 실패는 재시도할 수 있고 정상 빈 응�
     await refresh;
     await expect(emptyNotice).toBeVisible();
     await expect(sheet.getByTestId("stop-route-skeleton")).toHaveCount(0);
+
+    const followingPoll = page.waitForRequest(detailEndpoint);
+    releaseRefresh();
+    await page.clock.resume();
+    await followingPoll;
+    await expect(emptyNotice).toBeVisible();
+    await expect(sheet.getByTestId("stop-route-skeleton")).toHaveCount(0);
   } finally {
     releaseRefresh();
+    releaseFollowingPoll();
   }
 });
 

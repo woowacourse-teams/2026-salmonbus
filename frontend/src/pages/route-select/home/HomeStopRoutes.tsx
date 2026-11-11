@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from "react";
+import { useEffect, useReducer, useState } from "react";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { Link } from "react-router";
 import { latestSuccessOf, type LatestSuccess } from "@/shared/api/polledResource";
@@ -71,7 +71,11 @@ interface HomeStopRoutesProps {
 }
 
 export function HomeStopRoutes(props: HomeStopRoutesProps) {
-  return props.stop.source === "station-api" ? <StationDetailRoutes {...props} /> : <LegacyStopRoutes {...props} />;
+  return props.stop.source === "station-api" ? (
+    <StationDetailRoutes key={props.stop.id} {...props} />
+  ) : (
+    <LegacyStopRoutes {...props} />
+  );
 }
 
 function LegacyStopRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
@@ -193,10 +197,14 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
     return () => window.clearInterval(timer);
   }, [hasFreshEta]);
   const hasBoardData = resource.status === "success" || hasFreshEta;
-  const waiting = resource.status === "pending" || body?.refresh.status === "RUNNING";
+  const collecting = body?.refresh.status === "RUNNING";
+  const [wasEmpty, setWasEmpty] = useState(false);
+  const confirmedEmpty = body?.routes.length === 0 && (!collecting || wasEmpty);
+  if (confirmedEmpty !== wasEmpty) setWasEmpty(confirmedEmpty);
+  const waiting = resource.status === "pending" || collecting;
   const failed = resource.status === "loadingError" || resource.status === "refetchError";
   const retrying = requestState === "loading";
-  const loadingRoutes = failed ? resource.status === "loadingError" && retrying : waiting;
+  const loadingRoutes = failed ? resource.status === "loadingError" && retrying : waiting && !confirmedEmpty;
   return (
     <>
       {failed && (
