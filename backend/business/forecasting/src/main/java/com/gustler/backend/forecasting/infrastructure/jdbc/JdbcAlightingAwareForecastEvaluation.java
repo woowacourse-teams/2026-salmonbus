@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -180,19 +181,41 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
     }
 
     private int writePage(final long route, final int limit, Instant dueThrough, PreparedPage page) {
-        // 다른 정산이나 재발행이 먼저 반영되면 다음 회차에서 새 입력으로 평가한다.
-        if (routeWork.lock(route) != page.revision() || !page.work().equals(readWork(route, limit, dueThrough, true))) {
+        if (routeWork.lock(route) != page.revision()) {
             return 0;
         }
-        for (Work item : page.work()) {
+        List<Work> locked = readWork(route, limit, dueThrough, true);
+        Map<LocalDate, Instant> preparedLegacyHorizons = legacyHorizons(page.work(), page.now());
+        Map<LocalDate, Instant> lockedLegacyHorizons = legacyHorizons(locked, page.now());
+        int processed = 0;
+        for (Work item : locked) {
+            if (!page.outcomes().containsKey(item)) {
+                continue;
+            }
+            LocalDate date = day(item.observedAt());
+            // 이전 판본은 같은 날짜의 작업 중 가장 늦은 시각까지의 관측을 함께 쓴다.
+            if (!isConfirmed(item) && !Objects.equals(preparedLegacyHorizons.get(date), lockedLegacyHorizons.get(date))) {
+                continue;
+            }
             Outcome outcome = page.outcomes().get(item);
             if (outcome == null) {
                 defer(item, page.revision(), page.now(), "NO_CLOSED_IDENTITY_SAFE_PASS");
             } else {
                 finish(item, page.revision(), page.now(), outcome);
             }
+            processed++;
         }
-        return page.work().size();
+        return processed;
+    }
+
+    private static Map<LocalDate, Instant> legacyHorizons(List<Work> work, Instant now) {
+        return work.stream().filter(item -> !isConfirmed(item)).collect(Collectors.toMap(
+            item -> day(item.observedAt()), item -> evaluationThrough(item, now),
+            BinaryOperator.maxBy(Instant::compareTo)));
+    }
+
+    private static boolean isConfirmed(Work work) {
+        return canonical(work.version()).equals("alighting-confirmed-capacity-snapshot-v3");
     }
 
     private void prepareDay(
@@ -203,15 +226,11 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         Map<Work, Outcome> outcomes
     ) {
         prepareConfirmedDay(route, now, date, work, outcomes);
-        work = work.stream().filter(item -> !canonical(item.version()).equals("alighting-confirmed-capacity-snapshot-v3")).toList();
+        work = work.stream().filter(item -> !isConfirmed(item)).toList();
         if (work.isEmpty()) {
             return;
         }
-        Instant through = work.stream().map(w -> w.observedAt().plusSeconds(7200))
-            .max(Instant::compareTo).orElse(now);
-        if (through.isAfter(now)) {
-            through = now;
-        }
+        Instant through = work.stream().map(item -> evaluationThrough(item, now)).max(Instant::compareTo).orElseThrow();
         List<Evidence> evidence = readObservations(route, date, through);
         final boolean inputLimit = evidence.size() > observationLimit;
         String sourceProblem = null;
@@ -233,8 +252,8 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         Map<Work, Outcome> outcomes
     ) {
         Map<Instant, List<Work>> workByHorizon = work.stream()
-            .filter(item -> canonical(item.version()).equals("alighting-confirmed-capacity-snapshot-v3"))
-            .collect(Collectors.groupingBy(item -> confirmedThrough(item, now)));
+            .filter(JdbcAlightingAwareForecastEvaluation::isConfirmed)
+            .collect(Collectors.groupingBy(item -> evaluationThrough(item, now)));
         if (workByHorizon.isEmpty()) {
             return;
         }
@@ -245,7 +264,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         }
     }
 
-    private Instant confirmedThrough(Work work, Instant now) {
+    private static Instant evaluationThrough(Work work, Instant now) {
         Instant through = work.observedAt().plusSeconds(7200);
         if (through.isAfter(now)) {
             return now;

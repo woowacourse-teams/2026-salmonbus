@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
@@ -231,6 +232,49 @@ class JdbcAlightingAwareForecastEvaluationTest {
         service.settle();
         assertThat(count("alighting_forecast_evaluation_result")).isOne();
         assertThat(count("alighting_forecast_evaluation_work")).isZero();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true, false", "false, false", "false, true"})
+    void 잠기지_않고_계산_범위가_그대로인_정산은_처리한다(boolean confirmed, boolean lockLatest) throws Exception {
+        if (confirmed) {
+            useConfirmedProfile();
+        }
+        final long next = observation("next", 120, 1, 40);
+        copyForecast(next);
+        final long lockedObservation = lockLatest ? next : source;
+        final var locked = new CountDownLatch(1);
+        final var release = new CountDownLatch(1);
+        try (var worker = Executors.newSingleThreadExecutor()) {
+            var holding = worker.submit(() -> tx.executeWithoutResult(status -> {
+                jdbc.sql("""
+                    SELECT vehicle_observation_id FROM alighting_forecast_evaluation_work
+                    WHERE vehicle_observation_id=? FOR UPDATE
+                    """).param(lockedObservation).query(Long.class).single();
+                locked.countDown();
+                try {
+                    assertThat(release.await(10, TimeUnit.SECONDS)).isTrue();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+            }));
+            try {
+                assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+                service.settle();
+                assertThat(jdbc.sql("""
+                    SELECT vehicle_observation_id FROM alighting_forecast_evaluation_result WHERE route_version_id=?
+                    """).param(version).query(Long.class).list()).containsExactlyElementsOf(
+                        lockLatest ? List.of() : List.of(next));
+                assertThat(count("alighting_forecast_evaluation_work")).isEqualTo(lockLatest ? 2 : 1);
+            } finally {
+                release.countDown();
+            }
+            holding.get(5, TimeUnit.SECONDS);
+        }
+        service.settle();
+        assertThat(count("alighting_forecast_evaluation_work")).isZero();
+        assertThat(count("alighting_forecast_evaluation_result")).isEqualTo(2);
     }
 
     @Test
