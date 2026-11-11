@@ -32,7 +32,7 @@ export function BottomNavigation({ ref, onActiveTabPress }: { ref?: Ref<HTMLElem
   }
 
   return (
-    <nav ref={ref} className={styles.navigation} aria-label="주요 메뉴" data-active={activeTab}>
+    <nav ref={ref} className={styles.navigation} aria-label="주요 메뉴" data-active={activeTab} data-native-map-hit>
       <span className={styles.indicator} data-tab-indicator="" aria-hidden="true" />
       <NavLink to="/" end className={styles.tab} aria-label="홈" onClick={handleTabClick}>
         <svg

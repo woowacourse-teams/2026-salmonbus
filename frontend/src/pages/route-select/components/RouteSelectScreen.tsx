@@ -7,7 +7,8 @@ import type { FavoriteGroup, HomeFavorites } from "@/shared/api/favorites.types"
 import { latestSuccessOf, type LatestSuccess } from "@/shared/api/polledResource";
 import type { PolledRequest } from "@/shared/api/usePolledRequest";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
-import { MapFlowSurfaceContext, type MapFlowSurfaceState } from "@/shared/map/mapFlowSurface";
+import { MapFlowSurfaceContext, NativeMapFlowContext, type MapFlowSurfaceState } from "@/shared/map/mapFlowSurface";
+import { isNativeHomeMapAvailable } from "@/shared/native-map/bridge";
 import { Notice } from "@/shared/components/Notice";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { paths } from "@/shared/routing/paths";
@@ -18,6 +19,7 @@ import { RouteNetworkTitle } from "../RouteNetworkPage";
 import { WhatsNewOnEntry } from "./WhatsNewOnEntry";
 import { HomeBottomSheet, type HomeSheetControls, type HomeSheetSnap } from "../home/HomeBottomSheet";
 import { HomeMap } from "../home/HomeMap";
+import { NativeHomeMap } from "../home/NativeHomeMap";
 import { HomeStopRoutes } from "../home/HomeStopRoutes";
 import { HomeOverview } from "../home/HomeOverview";
 import { DEFAULT_LOCATION, distanceMeters, type HomeStop, type Point } from "../home/homeMapData";
@@ -123,6 +125,8 @@ export function RouteSelectScreen({
   const [cameraTarget, setCameraTarget] = useState<Point>(DEFAULT_LOCATION);
   const [mapKey, setMapKey] = useState(0);
   const [mapSurface, setMapSurface] = useState<MapFlowSurfaceState>({ status: "loading", surface: null });
+  const nativeHomeMap = isNativeHomeMapAvailable();
+  const [nativeBoardActive, setNativeBoardActive] = useState(false);
   const mapCenter = useRef<Point>(DEFAULT_LOCATION);
   const [weatherPoint, setWeatherPoint] = useState<Point>(DEFAULT_LOCATION);
   const [currentLocation, setCurrentLocation] = useState<Point | null>(null);
@@ -167,6 +171,14 @@ export function RouteSelectScreen({
     setMapKey((key) => key + 1);
   }
 
+  function applyLocation(point: Point) {
+    setCurrentLocation(point);
+    setCameraTarget(point);
+    mapCenter.current = point;
+    closeStop();
+    setLocating(false);
+  }
+
   function locate() {
     if (!navigator.geolocation) {
       setLocationMessage("현재 위치를 지원하지 않는 환경이에요. 지도를 움직여 지역을 선택해 주세요.");
@@ -176,12 +188,7 @@ export function RouteSelectScreen({
     setLocationMessage(null);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const next: Point = [position.coords.longitude, position.coords.latitude];
-        setCurrentLocation(next);
-        setCameraTarget(next);
-        mapCenter.current = next;
-        closeStop();
-        setLocating(false);
+        applyLocation([position.coords.longitude, position.coords.latitude]);
       },
       (failure) => {
         setLocating(false);
@@ -203,6 +210,37 @@ export function RouteSelectScreen({
   const openRouteSearchWith = (input: string) =>
     navigateKeepingFocus(paths.routeSearch, { ...routeSearchStateFor(input), mapFlow: true });
 
+  function selectStop(id: string) {
+    if (selectedStop?.id === id) {
+      closeStop();
+      return;
+    }
+    const stop = stops.find((item) => item.id === id);
+    if (stop) setSheet({ key: location.key, tabSnap, station: { stop, snap: "detail" } });
+  }
+
+  const homeMapProps = {
+    point: cameraTarget,
+    location: currentLocation,
+    stops: showStops ? stops : [],
+    routePaths: isRouteMap ? routePaths : [],
+    routeOverviewKey: isRouteMap ? location.key : null,
+    favoriteGroupId: isFavorites ? (displayedGroup?.id ?? null) : null,
+    favoriteRoutes,
+    overlayOpen,
+    boardOpen,
+    onSurfaceChange: setMapSurface,
+    sheetSurfaceRef,
+    selectedStop: selectedStop ?? undefined,
+    searchBarRef,
+    onCenterChange: updateMapCenter,
+    onStationTilesChange: setStationTileKey,
+    onSelectStop: selectStop,
+    onMapBlankClick: selectedStop ? closeStop : null,
+    onLocate: locate,
+    locating,
+  };
+
   return (
     <div className={homeStyles.page}>
       <main
@@ -214,7 +252,7 @@ export function RouteSelectScreen({
         inert={searchOpen}
       >
         <div className={homeStyles.content} inert={!overlayOpen && snap === "full"}>
-          <header ref={searchBarRef} className={homeStyles.floatingSearch} hidden={overlayOpen}>
+          <header ref={searchBarRef} className={homeStyles.floatingSearch} hidden={overlayOpen} data-native-map-hit>
             <BrandHeading className={homeStyles.brandHeading}>
               <Brand glass onClick={resetHome} />
             </BrandHeading>
@@ -242,37 +280,13 @@ export function RouteSelectScreen({
               </svg>
             </label>
           </header>
-          <HomeMap
-            key={mapKey}
-            point={cameraTarget}
-            location={currentLocation}
-            stops={showStops ? stops : []}
-            routePaths={isRouteMap ? routePaths : []}
-            routeOverviewKey={isRouteMap ? location.key : null}
-            favoriteGroupId={isFavorites ? (displayedGroup?.id ?? null) : null}
-            favoriteRoutes={favoriteRoutes}
-            overlayOpen={overlayOpen}
-            boardOpen={boardOpen}
-            onSurfaceChange={setMapSurface}
-            sheetSurfaceRef={sheetSurfaceRef}
-            selectedStop={selectedStop ?? undefined}
-            searchBarRef={searchBarRef}
-            onCenterChange={updateMapCenter}
-            onStationTilesChange={setStationTileKey}
-            onSelectStop={(id) => {
-              if (selectedStop?.id === id) {
-                closeStop();
-                return;
-              }
-              const stop = stops.find((item) => item.id === id);
-              if (stop) setSheet({ key: location.key, tabSnap, station: { stop, snap: "detail" } });
-            }}
-            onMapBlankClick={selectedStop ? closeStop : null}
-            onLocate={locate}
-            locating={locating}
-          />
+          {nativeHomeMap ? (
+            <NativeHomeMap key={mapKey} {...homeMapProps} paused={nativeBoardActive} onLocation={applyLocation} />
+          ) : (
+            <HomeMap key={mapKey} {...homeMapProps} />
+          )}
           {!overlayOpen && mapSurface.status === "ready" && stationTilesFailed && (
-            <div className={homeStyles.stationMapError}>
+            <div className={homeStyles.stationMapError} data-native-map-hit>
               <span role="status">주변 정류장을 모두 불러오지 못했어요.</span>
               <RetryButton onRetry={retryStationTiles}>정류장 다시 불러오기</RetryButton>
             </div>
@@ -323,8 +337,16 @@ export function RouteSelectScreen({
           </HomeBottomSheet>
         )}
       </main>
-      {searchOpen && <div className={homeStyles.searchOverlay}>{outlet}</div>}
-      {boardOpen && <MapFlowSurfaceContext value={mapSurface}>{outlet}</MapFlowSurfaceContext>}
+      {searchOpen && (
+        <div className={homeStyles.searchOverlay} data-native-map-hit>
+          {outlet}
+        </div>
+      )}
+      {boardOpen && (
+        <NativeMapFlowContext value={nativeHomeMap ? setNativeBoardActive : null}>
+          <MapFlowSurfaceContext value={mapSurface}>{outlet}</MapFlowSurfaceContext>
+        </NativeMapFlowContext>
+      )}
       {!overlayOpen && !selectedStop && (
         <BottomNavigation ref={navigationRef} onActiveTabPress={() => sheetControlsRef.current?.advance()} />
       )}

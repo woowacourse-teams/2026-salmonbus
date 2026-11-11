@@ -129,11 +129,12 @@ export function HomeBottomSheet({
         data-snap={snap}
         data-dragging={dragging}
         aria-label={label ?? undefined}
+        data-native-map-hit
         inert={hidden}
       >
         <span ref={safeTopRef} className={styles.safeTop} aria-hidden="true" />
         <span ref={safeBottomRef} className={styles.safeBottom} aria-hidden="true" />
-        <div ref={headerRef} className={styles.sheetHeader} {...dragHandlers}>
+        <div ref={headerRef} className={styles.sheetHeader} data-native-map-drag {...dragHandlers}>
           <div
             className={homeOverview ? styles.homeHandle : styles.handle}
             data-close-visible={showClose}

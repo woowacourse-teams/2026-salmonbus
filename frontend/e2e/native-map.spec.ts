@@ -2,9 +2,9 @@ import { mergeTests, type Page } from "@playwright/test";
 import { test as mapTest, expect } from "./fixtures/naver-map";
 import { routeId } from "./fixtures/mock-data";
 import type { BridgeEnvelope } from "../src/shared/bridge/bridge.types";
-import { NATIVE_MAP_CAPABILITIES } from "../src/shared/native-map/bridge";
+import { NATIVE_HOME_MAP_CAPABILITIES, NATIVE_MAP_CAPABILITIES } from "../src/shared/native-map/bridge";
 import type { NativeMapCommands, NativeMapEvent, NativeMapSession } from "../src/shared/native-map/protocol";
-import { test as favoritesTest } from "./fixtures/favorites";
+import { storedFavorite, test as favoritesTest } from "./fixtures/favorites";
 import { expectFocusRing, nextFocusKeyFor } from "./utils/focus-ring";
 
 const test = mapTest.extend<{ nativeReady: boolean; appCapabilities: readonly string[] }>({
@@ -35,18 +35,16 @@ test.beforeEach(async ({ page, nativeReady, appCapabilities }) => {
         postMessage(raw: string) {
           const message = JSON.parse(raw) as BridgeEnvelope & { payload: { sessionId: string; revision: number } };
           window.bridgeMessages.push(message);
-          if ((message.type === "map.mount" && nativeReady) || message.type === "map.layout") {
+          const mount = message.type === "map.mount" || message.type === "map.mountHome";
+          if ((mount && nativeReady) || message.type === "map.layout") {
             const { sessionId, revision } = message.payload;
             queueMicrotask(() =>
               window.dispatchEvent(
                 new CustomEvent("salmon:bridge", {
                   detail: {
                     v: 1,
-                    type: message.type === "map.mount" ? "map.ready" : "map.ack",
-                    payload:
-                      message.type === "map.mount"
-                        ? { sessionId, revision }
-                        : { sessionId, revision, appliedRevision: revision },
+                    type: mount ? "map.ready" : "map.ack",
+                    payload: mount ? { sessionId, revision } : { sessionId, revision, appliedRevision: revision },
                   },
                 }),
               ),
@@ -81,7 +79,8 @@ async function expectWebMapBackground(page: Page) {
   );
 }
 async function emit(page: Page, event: NativeMapEvent, sessionId?: string) {
-  const mount = (await messages(page)).find((message) => message.type === "mount")!;
+  const mount = (await messages(page)).find((message) => message.type === "mount" || message.type === "mountHome");
+  if (!mount) throw new Error("앱 지도가 열리지 않았습니다");
   await page.evaluate(
     ({ type, payload }) => window.dispatchEvent(new CustomEvent("salmon:bridge", { detail: { v: 1, type, payload } })),
     {
@@ -90,6 +89,47 @@ async function emit(page: Page, event: NativeMapEvent, sessionId?: string) {
     },
   );
 }
+
+test.describe("홈 지도까지 지원하는 iOS 앱", () => {
+  test.use({ appCapabilities: [...NATIVE_MAP_CAPABILITIES, ...NATIVE_HOME_MAP_CAPABILITIES, "map.selectedStopOnly"] });
+
+  test("노선도를 네이티브 지도로 표시하고 판정보드 지도가 실패해도 웹 지도를 만들지 않는다", async ({ page }) => {
+    await page.route("**/assets/home-events.json", (route) =>
+      route.fulfill({
+        json: {
+          stops: [],
+          routePaths: [
+            [
+              [127.1, 37.39],
+              [127.12, 37.4],
+            ],
+          ],
+        },
+      }),
+    );
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-native-home-map", "true");
+    await page
+      .getByRole("navigation", { name: "주요 메뉴" })
+      .getByRole("link", { name: "노선도", exact: true })
+      .click();
+    await expect
+      .poll(async () =>
+        (await messages(page)).some((message) => message.type === "updateHome" && message.payload.paths?.length === 1),
+      )
+      .toBe(true);
+    const sent = await messages(page);
+    expect(sent.filter((message) => message.type === "mountHome")).toHaveLength(1);
+    await page.getByRole("list", { name: "서비스 중 노선" }).getByRole("link", { name: /3330/ }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-shared-native-map-ready", "true");
+    const board = (await messages(page)).find((message) => message.type === "mount");
+    if (!board) throw new Error("판정보드 지도가 열리지 않았습니다");
+    await emit(page, { type: "error", payload: { message: "지도 설정을 확인하지 못했어요" } }, board.sessionId);
+    await expect(page.getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("naver-map-test-double")).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "판정보드 정류장 목록", exact: true })).toBeVisible();
+  });
+});
 
 test("native host는 JS SDK 없이 scene과 관측별 motion을 보내고 브라우저 UI는 유지한다", async ({ page }) => {
   const sdkRequests: string[] = [];
@@ -318,6 +358,35 @@ favoriteNativeTest(
     );
   },
 );
+
+favoriteNativeTest.describe("iOS 네이티브 즐겨찾기 지도", () => {
+  favoriteNativeTest.use({
+    appCapabilities: [...NATIVE_MAP_CAPABILITIES, ...NATIVE_HOME_MAP_CAPABILITIES, "map.selectedStopOnly"],
+  });
+
+  favoriteNativeTest("저장한 노선과 방면 화살표를 홈 지도 세션에 보낸다", async ({ page, api, favorites }) => {
+    const group = favorites.groups[0];
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed);
+    if (!group || !stop) throw new Error("즐겨찾기 검증 데이터가 없습니다");
+    group.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: "DOWN" })];
+    await page.goto("/favorites");
+    await expect(page.locator("html")).toHaveAttribute("data-native-home-map", "true");
+    await expect
+      .poll(async () => {
+        const update = (await messages(page))
+          .filter((message) => message.type === "updateHome" && message.payload.paths?.length)
+          .at(-1);
+        return update?.type === "updateHome"
+          ? (update.payload.paths?.map(({ active, arrows }) => ({ active, arrows })) ?? [])
+          : [];
+      })
+      .toEqual([
+        { active: false, arrows: false },
+        { active: true, arrows: true },
+      ]);
+    await expect(page.getByTestId("naver-map-test-double")).toHaveCount(0);
+  });
+});
 
 test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투명 모드를 정리한다", async ({ page }) => {
   await open(page);

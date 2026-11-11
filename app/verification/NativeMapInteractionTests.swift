@@ -4,8 +4,14 @@ final class NativeMapInteractionTests: XCTestCase {
   private var app: XCUIApplication!
 
   private struct MapState: Decodable {
+    struct Point: Decodable {
+      let x: CGFloat
+      let y: CGFloat
+    }
+
     let sessionId: String
     let routeId: String
+    let home: Bool
     let ready: Bool
     let zoom: Double
     let heading: Double
@@ -19,6 +25,7 @@ final class NativeMapInteractionTests: XCTestCase {
     let maximumSwipeOffset: Double
     let routeFitsVisibleMap: Bool
     let webTopEdgeEffectHidden: Bool?
+    let homeStopPoint: Point?
   }
 
   override func setUpWithError() throws {
@@ -32,6 +39,10 @@ final class NativeMapInteractionTests: XCTestCase {
     let searchLink = app.webViews.links["검색 시나리오 열기"]
     XCTAssertTrue(searchLink.waitForExistence(timeout: 20))
     searchLink.tap()
+    pickFixtureRoute()
+  }
+
+  private func pickFixtureRoute() {
     let search = app.webViews.textFields.firstMatch
     XCTAssertTrue(search.waitForExistence(timeout: 20))
     search.tap()
@@ -164,6 +175,43 @@ final class NativeMapInteractionTests: XCTestCase {
       $0.routeId == "A" && $0.ready && !$0.captureAll && $0.routeFitsVisibleMap
     }
     XCTAssertLessThan(Self.headingDifference(overview.heading, 0), 0.01)
+  }
+
+  func testHomeNativeMapRestoresCameraAfterRouteBoard() throws {
+    let homeLink = app.webViews.links["홈 지도 시나리오 열기"]
+    XCTAssertTrue(homeLink.waitForExistence(timeout: 20))
+    homeLink.tap()
+    let initial = try waitForState("home receives the station tile on its native map", timeout: 30) {
+      $0.home && $0.ready && !$0.captureAll && $0.homeStopPoint != nil
+    }
+    XCTAssertEqual(initial.latitude, 37.394761, accuracy: 0.00001)
+    XCTAssertEqual(initial.longitude, 127.111136, accuracy: 0.00001)
+    let stopPoint = try XCTUnwrap(initial.homeStopPoint)
+    coordinate(x: stopPoint.x, y: stopPoint.y).tap()
+    let stopTitle = app.webViews.staticTexts["검증 정류장"]
+    XCTAssertTrue(stopTitle.waitForExistence(timeout: 15))
+    app.webViews.buttons["정류장 안내 닫기"].tap()
+    XCTAssertTrue(app.webViews.links["노선도"].waitForExistence(timeout: 15))
+    _ = try waitForState("home map receives touches after the station sheet closes", timeout: 15) {
+      $0.home && $0.ready && !$0.captureAll
+    }
+    map.rotate(.pi / 2, withVelocity: 2)
+    let rotated = try waitForState("home camera rotates", timeout: 15) {
+      $0.home && Self.headingDifference($0.heading, initial.heading) > 30
+    }
+    app.webViews.textFields["번호를 입력하면 탑승 확률을 알려드려요"].tap()
+    pickFixtureRoute()
+    _ = try waitForState("native route board takes over the map", timeout: 30) {
+      !$0.home && $0.routeId == "200000001" && $0.ready && !$0.captureAll
+    }
+    app.links["노선 선택으로 돌아가기"].tap()
+    let restored = try waitForState("native home map returns after the board", timeout: 30) {
+      $0.home && $0.sessionId != rotated.sessionId && $0.ready && !$0.captureAll && $0.stops > 0
+    }
+    XCTAssertLessThan(Self.headingDifference(restored.heading, rotated.heading), 0.01)
+    XCTAssertEqual(restored.zoom, rotated.zoom, accuracy: 0.001)
+    XCTAssertEqual(restored.latitude, rotated.latitude, accuracy: 0.00001)
+    XCTAssertEqual(restored.longitude, rotated.longitude, accuracy: 0.00001)
   }
 
   private static func headingDifference(_ first: Double, _ second: Double) -> Double {

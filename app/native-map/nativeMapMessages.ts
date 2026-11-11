@@ -8,3 +8,5 @@ export const NATIVE_MAP_CAPABILITIES = [
   'map.location',
   'map.unmount',
 ] as const;
+
+export const NATIVE_HOME_MAP_CAPABILITIES = ['map.mountHome', 'map.updateHome', 'map.homeCamera'] as const;

@@ -1,7 +1,7 @@
 import { MapLocationButton } from "@/shared/components/MapLocationButton";
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
-import { MapFlowSurfaceContext } from "@/shared/map/mapFlowSurface";
+import { MapFlowSurfaceContext, NativeMapFlowContext } from "@/shared/map/mapFlowSurface";
 import { boardEntryFrom } from "@/shared/routing/boardEntry";
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
 import type { StopSelection } from "../components/stopSelection";
@@ -11,7 +11,7 @@ import type { RouteMapData } from "./routeMapModel";
 import { loadNaverMaps, subscribeNaverMapAuthFailure } from "@/shared/map/naverSdk";
 import { createNaverRouteMap, type RouteMapAdapter, type RouteMapCamera } from "./naverMapAdapter";
 import type { RouteMapGeometryStatus } from "./useRouteMapData";
-import { isNativeMapAvailable } from "@/shared/native-map/bridge";
+import { isNativeHomeMapAvailable, isNativeMapAvailable } from "@/shared/native-map/bridge";
 import { createNativeRouteMap, type NativeRouteMapAdapter } from "./nativeMapAdapter";
 import { reportNativeMapFailure } from "@/shared/error-tracking/errorTracking";
 import { NOTICE_DURATION_MS } from "@/shared/components/Notice";
@@ -58,6 +58,7 @@ function locationDeniedStateFor(message: string): LocationState {
 export function RouteMap(props: RouteMapProps) {
   const refitOverviewOnResize = boardEntryFrom(useLocation().state) === "search";
   const mapFlow = useContext(MapFlowSurfaceContext);
+  const setNativeBoardActive = useContext(NativeMapFlowContext);
   const sharedSurface = mapFlow?.surface ?? null;
   const shared = mapFlow !== null;
   const {
@@ -93,10 +94,12 @@ export function RouteMap(props: RouteMapProps) {
   const [mapState, setMapState] = useState<MapState>({ status: "loading" });
   const [locationState, setLocationState] = useState<LocationState>({ status: "idle" });
   const [nativeFailed, setNativeFailed] = useState(false);
+  const nativeHomeMap = isNativeHomeMapAvailable();
   const useNativeMap =
-    !nativeFailed &&
-    isNativeMapAvailable() &&
-    (!selectedStopOnly || appHostFrom()?.capabilities.includes("map.selectedStopOnly") === true);
+    nativeHomeMap ||
+    (!nativeFailed &&
+      isNativeMapAvailable() &&
+      (!selectedStopOnly || appHostFrom()?.capabilities.includes("map.selectedStopOnly") === true));
   const webSurface = useNativeMap ? null : sharedSurface;
 
   useLayoutEffect(() => {
@@ -176,6 +179,7 @@ export function RouteMap(props: RouteMapProps) {
       failMap(data);
     };
     if (useNativeMap) {
+      setNativeBoardActive?.(true);
       const region = regionRef.current;
       if (region !== null) {
         try {
@@ -193,7 +197,8 @@ export function RouteMap(props: RouteMapProps) {
             onDeselect: () => propsRef.current.onDeselect(),
             onError: (_error, reason) => {
               if (!active || failed || propsRef.current.data !== data) return;
-              if (reason === undefined) {
+              if (reason !== undefined) reportNativeMapFailure(reason, data.routeId);
+              if (reason === undefined || nativeHomeMap) {
                 failActiveMap();
                 return;
               }
@@ -202,7 +207,6 @@ export function RouteMap(props: RouteMapProps) {
               setMapState({ status: "loading" });
               setLocationState({ status: "idle" });
               setNativeFailed(true);
-              reportNativeMapFailure(reason, data.routeId);
             },
             onReady: () => {
               if (!active || failed || propsRef.current.data !== data) return;
@@ -231,6 +235,7 @@ export function RouteMap(props: RouteMapProps) {
         active = false;
         if (adapterRef.current !== null) rememberCamera(adapterRef.current, true);
         disposeMap();
+        setNativeBoardActive?.(false);
       };
     }
     const unsubscribeAuthFailure = subscribeNaverMapAuthFailure(() => failActiveMap());
@@ -285,7 +290,18 @@ export function RouteMap(props: RouteMapProps) {
       if (adapterRef.current !== null) rememberCamera(adapterRef.current, false);
       disposeMap();
     };
-  }, [data, disposeMap, failMap, refitOverviewOnResize, selectedStopOnly, shared, webSurface, useNativeMap]);
+  }, [
+    data,
+    disposeMap,
+    failMap,
+    refitOverviewOnResize,
+    selectedStopOnly,
+    shared,
+    webSurface,
+    useNativeMap,
+    nativeHomeMap,
+    setNativeBoardActive,
+  ]);
 
   useEffect(() => {
     runMapAction((adapter) => {

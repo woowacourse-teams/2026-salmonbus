@@ -90,6 +90,56 @@ struct MapSceneState: Decodable {
   let vehicles: [MapVehicle]
 }
 
+struct MapCamera: Decodable {
+  let center: MapCoordinate
+  let zoom: Double
+  let heading: Double
+
+  var valid: Bool { center.valid && zoom.isFinite && heading.isFinite }
+}
+
+struct MapHomeStop: Decodable {
+  let id: String
+  let name: String
+  let coordinate: MapCoordinate
+}
+
+struct MapHomePath: Decodable, Equatable {
+  let coordinates: [MapCoordinate]
+  let active: Bool
+  let arrows: Bool
+}
+
+struct MapHomeStations: Decodable {
+  let stops: [MapHomeStop]
+  let selectedStopId: String?
+}
+
+struct MapHomeLocation: Decodable {
+  let coordinate: MapCoordinate?
+}
+
+struct MapHomeContent: Decodable {
+  let stations: MapHomeStations?
+  let paths: [MapHomePath]?
+  let location: MapHomeLocation?
+}
+
+struct MapHomeMount: Decodable {
+  let content: MapHomeContent
+  let camera: MapCamera
+}
+
+struct MapHomeCameraCommand: Decodable {
+  let command: String
+  let camera: MapCamera?
+  let coordinate: MapCoordinate?
+  let visible: MapRect?
+  let southwest: MapCoordinate?
+  let northeast: MapCoordinate?
+  let animated: Bool?
+}
+
 struct MapRect: Decodable {
   let x: Double
   let y: Double
@@ -110,6 +160,7 @@ struct MapLayout: Decodable {
   let viewport: MapViewport
   let mapRect: MapRect
   let webRects: [MapRect]
+  let logoBottomInset: Double?
   let captureAll: Bool
   let transitioning: Bool
 
@@ -117,6 +168,7 @@ struct MapLayout: Decodable {
     viewport.width.isFinite && viewport.width > 0 && viewport.height.isFinite && viewport.height > 0
       && viewport.offsetTop.isFinite && viewport.offsetLeft.isFinite
       && viewport.scale.isFinite && viewport.scale > 0 && mapRect.valid && webRects.allSatisfy(\.valid)
+      && (logoBottomInset.map { $0.isFinite && $0 >= 0 } ?? true)
   }
 
   // A CSS point is in the layout viewport. UIKit points are in the visible WebView bounds.

@@ -1,8 +1,18 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { NATIVE_MAP_CAPABILITIES as APP_NATIVE_MAP_CAPABILITIES } from "../../../../app/native-map/nativeMapMessages";
+import {
+  NATIVE_HOME_MAP_CAPABILITIES as APP_NATIVE_HOME_MAP_CAPABILITIES,
+  NATIVE_MAP_CAPABILITIES as APP_NATIVE_MAP_CAPABILITIES,
+} from "../../../../app/native-map/nativeMapMessages";
 import { BRIDGE_EVENT } from "../bridge/bridge";
 import type { NativeMapEvent } from "./protocol";
-import { NATIVE_MAP_CAPABILITIES, createNativeMapChannel, isNativeMapAvailable, nativeMapEventFrom } from "./bridge";
+import {
+  NATIVE_HOME_MAP_CAPABILITIES,
+  NATIVE_MAP_CAPABILITIES,
+  createNativeMapChannel,
+  isNativeHomeMapAvailable,
+  isNativeMapAvailable,
+  nativeMapEventFrom,
+} from "./bridge";
 
 function appWindow(capabilities: readonly string[] = NATIVE_MAP_CAPABILITIES) {
   const postMessage = jest.fn<(message: string) => void>();
@@ -16,6 +26,7 @@ function appWindow(capabilities: readonly string[] = NATIVE_MAP_CAPABILITIES) {
 describe("native map 메시지 목록", () => {
   it("앱의 app/native-map/nativeMapMessages.ts와 같은 목록이다", () => {
     expect(NATIVE_MAP_CAPABILITIES).toEqual(APP_NATIVE_MAP_CAPABILITIES);
+    expect(NATIVE_HOME_MAP_CAPABILITIES).toEqual(APP_NATIVE_HOME_MAP_CAPABILITIES);
   });
 });
 
@@ -25,6 +36,13 @@ describe("native map 사용 여부", () => {
     expect(isNativeMapAvailable(appWindow().bridgeWindow)).toBe(true);
     const withoutLocation = NATIVE_MAP_CAPABILITIES.filter((type) => type !== "map.location");
     expect(isNativeMapAvailable(appWindow(withoutLocation).bridgeWindow)).toBe(false);
+  });
+
+  it("판정보드만 지원하는 앱과 홈 지도까지 지원하는 앱을 구분한다", () => {
+    expect(isNativeHomeMapAvailable(appWindow().bridgeWindow)).toBe(false);
+    expect(
+      isNativeHomeMapAvailable(appWindow([...NATIVE_MAP_CAPABILITIES, ...NATIVE_HOME_MAP_CAPABILITIES]).bridgeWindow),
+    ).toBe(true);
   });
 });
 
@@ -89,6 +107,34 @@ describe("native map 채널", () => {
 describe("native map 이벤트 경계", () => {
   const session = { sessionId: "current", revision: 1 };
   const stopPress = { type: "map.stopPress", payload: { ...session, selection: { direction: "UP", sequence: 2 } } };
+
+  it("네 모서리가 모두 유효한 홈 지도 좌표만 정류장 조회로 넘긴다", () => {
+    const center = { latitude: 37.39, longitude: 127.11 };
+    const payload = {
+      ...session,
+      camera: { center, zoom: 14, heading: 90 },
+      corners: [
+        { latitude: 37.4, longitude: 127.1 },
+        { latitude: 37.4, longitude: 127.12 },
+        { latitude: 37.38, longitude: 127.1 },
+        { latitude: 37.38, longitude: 127.12 },
+      ],
+      gesture: true,
+    };
+    expect(nativeMapEventFrom({ type: "map.homeViewport", payload }, "current")).toEqual({
+      type: "homeViewport",
+      payload,
+    });
+    expect(
+      nativeMapEventFrom(
+        {
+          type: "map.homeViewport",
+          payload: { ...payload, corners: [...payload.corners.slice(0, 3), { latitude: 100, longitude: 127 }] },
+        },
+        "current",
+      ),
+    ).toBeNull();
+  });
 
   it("지금 세션의 map 메시지를 영역 이름을 뗀 지도 이벤트로 바꾼다", () => {
     expect(nativeMapEventFrom(stopPress, "current")).toEqual({ type: "stopPress", payload: stopPress.payload });

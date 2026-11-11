@@ -1,6 +1,6 @@
 # 연어버스 앱
 
-웹 UI는 `react-native-webview`에서 실행합니다. iOS development/release build는 로컬 Expo module의 네이버 iOS SDK 지도를 사용하며, Bottom Sheet와 목록은 기존 웹 컴포넌트를 유지합니다. 브라우저, Android와 native module이 없는 Expo Go는 기존 네이버 JavaScript SDK를 사용합니다.
+웹 UI는 `react-native-webview`에서 실행합니다. 현재 iOS development/release build는 홈·노선도·즐겨찾기·판정보드 지도를 로컬 Expo module의 네이버 iOS SDK로 그립니다. Bottom Sheet와 목록은 웹 컴포넌트로 유지합니다. 브라우저, Android, Expo Go는 네이버 JavaScript SDK를 사용합니다. 홈 지도 명령을 제공하기 전의 iOS 빌드는 판정보드에 네이티브 지도를 사용합니다.
 
 ## 로컬 실행
 
@@ -53,6 +53,8 @@ Simulator에서는 아래 payload를 파일로 저장하고 `xcrun simctl push b
 - `../frontend/src/shared/native-map/protocol.ts`: 웹과 앱의 메시지 기준 계약
 
 웹은 API 요청과 선택 state를 유지합니다. native는 관측마다 받은 차량 이동 경로를 `CADisplayLink`로 보간하며, 매 프레임 WebView bridge를 통과하지 않습니다. 시트가 움직이는 동안 새 지도 touch를 막고 최종 영역을 적용한 뒤 다시 허용합니다. 이미 시작한 touch는 UIKit이 처음 정한 view에 남습니다.
+
+홈 지도는 `map.mountHome`으로 세션을 열고 `map.updateHome`으로 바뀐 정류장, 노선, 위치만 보냅니다. iOS가 카메라 이동을 마치면 `map.homeViewport`로 중심·줌·방향과 화면 네 모서리의 좌표를 전달합니다. 웹은 좌표 범위로 정류장 타일을 조회하고, `map.homeStopPress`를 받아 정류장 시트를 엽니다. 판정보드 데이터가 준비되면 판정보드 세션이 같은 지도 뷰를 사용하고, 닫으면 홈에서 마지막으로 본 카메라를 복원합니다.
 
 iOS의 뒤로가기·앞으로가기 스와이프 중에는 `MapNavigationSnapshot.swift`가 지도 캡처를 WebView의 scroll view 안에 잠시 넣어 웹과 함께 움직이게 합니다. 이동 가능한 이력이 있는 화면 가장자리 20pt는 WebView가 받으며, 전환 완료·취소·앱 백그라운드 진입 시 캡처를 정리합니다. 제스처 종료 후 WebKit이 scroll view를 원래 부모로 돌려주지 않더라도 1초가 지나면 캡처를 정리하고 실제 지도를 복구합니다. iOS/WebKit 업데이트 시 완료와 취소를 함께 확인합니다.
 

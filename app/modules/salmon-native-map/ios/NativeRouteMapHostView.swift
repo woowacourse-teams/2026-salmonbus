@@ -75,6 +75,12 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   private var lastRevision = -1
   private var scene: MapScene?
   private var sceneState: MapSceneState?
+  private var homeMounted = false
+  private var homeMarkers: [String: NMFMarker] = [:]
+  private var homePaths: [MapHomePath] = []
+  private var homeLines: [NMFPath] = []
+  private var pendingHomeCamera: MapHomeCameraCommand?
+  private var homeCameraGesture = false
   private var mapLayout: MapLayout?
   private var stopMarkers: [String: NMFMarker] = [:]
   private var stopLabels: [String: NMFMarker] = [:]
@@ -194,18 +200,28 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
             let payload = object["payload"] else { return }
       let command = String(envelope.type.dropFirst("map.".count))
       let payloadBytes = try JSONSerialization.data(withJSONObject: payload)
-      if command == "mount" {
+      if command == "mount" || command == "mountHome" {
         if sessionId == session.sessionId && session.revision <= lastRevision { return }
         reset()
         sessionId = session.sessionId
         lastRevision = session.revision
-        let nextScene = try JSONDecoder().decode(MapScene.self, from: payloadBytes)
-        mount(nextScene)
+        if command == "mountHome" {
+          mountHome(try JSONDecoder().decode(MapHomeMount.self, from: payloadBytes))
+        } else {
+          mount(try JSONDecoder().decode(MapScene.self, from: payloadBytes))
+        }
         return
       }
       guard sessionId == session.sessionId, session.revision > lastRevision else { return }
       lastRevision = session.revision
       switch command {
+      case "updateHome":
+        if homeMounted { updateHome(try JSONDecoder().decode(MapHomeContent.self, from: payloadBytes)) }
+      case "homeCamera":
+        if homeMounted {
+          pendingHomeCamera = try JSONDecoder().decode(MapHomeCameraCommand.self, from: payloadBytes)
+          applyHomeCamera()
+        }
       case "updateScene":
         updateScene(try JSONDecoder().decode(MapSceneState.self, from: payloadBytes))
       case "layout":
@@ -244,10 +260,19 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     vehicleAppearanceKeys.removeAll()
     vehicleMarkers.removeAll()
     routeLines.removeAll()
+    homeMarkers.values.forEach { $0.mapView = nil }
+    homeLines.forEach { $0.mapView = nil }
+    homeMarkers.removeAll()
+    homeLines.removeAll()
+    homePaths.removeAll()
+    homeMounted = false
+    pendingHomeCamera = nil
+    homeCameraGesture = false
     stopConnections.values.forEach { $0.line.mapView = nil }
     stopConnections.removeAll()
     imageCache.removeAll()
     mapView.locationOverlay.hidden = true
+    mapView.locationOverlay.circleRadius = 0
     scene = nil
     sceneState = nil
     mapLayout = nil
@@ -350,13 +375,181 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       stopMarkers[stop.key] = marker
     }
     updateScene(nextScene.state)
+    waitForMapReady()
+  }
+
+  private func waitForMapReady() {
     applyLayout()
-    if mapView.loaded { notifyReady() }
+    if mapView.loaded {
+      notifyReady()
+      return
+    }
     let expectedSession = sessionId
     initializationTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
       guard let self, self.sessionId == expectedSession, !self.readySent else { return }
       self.fail("지도를 불러오지 못했어요")
     }
+  }
+
+  private func mountHome(_ mount: MapHomeMount) {
+    guard mount.camera.valid else { fail("지도 좌표를 확인하지 못했어요"); return }
+    homeMounted = true
+    // 지도 크기가 결정된 뒤 홈 카메라를 적용해야 프레임 변경으로 중심이 밀리지 않습니다.
+    pendingHomeCamera = MapHomeCameraCommand(command: "position", camera: mount.camera, coordinate: nil,
+                                             visible: nil, southwest: nil, northeast: nil, animated: nil)
+    mapContainer.isHidden = false
+    updateHome(mount.content)
+    waitForMapReady()
+  }
+
+  private func updateHome(_ content: MapHomeContent) {
+    if let stations = content.stations { updateHomeStations(stations) }
+    if let paths = content.paths { updateHomePaths(paths) }
+    if let location = content.location {
+      if let coordinate = location.coordinate, coordinate.valid {
+        mapView.locationOverlay.location = coordinate.naver
+        mapView.locationOverlay.circleRadius = 35
+        mapView.locationOverlay.hidden = false
+      } else {
+        mapView.locationOverlay.hidden = true
+      }
+    }
+    updateVerificationSnapshot()
+  }
+
+  private func updateHomeStations(_ stations: MapHomeStations) {
+    let stops = stations.stops.filter { !$0.id.isEmpty && $0.coordinate.valid }
+    let ids = Set(stops.map(\.id))
+    for id in homeMarkers.keys.filter({ !ids.contains($0) }) {
+      homeMarkers.removeValue(forKey: id)?.mapView = nil
+    }
+    for stop in stops {
+      let marker = homeMarkers[stop.id] ?? NMFMarker(position: stop.coordinate.naver)
+      if homeMarkers[stop.id] == nil {
+        let id = stop.id
+        marker.touchHandler = { [weak self] _ in
+          self?.emit("homeStopPress", ["id": id])
+          return true
+        }
+        homeMarkers[id] = marker
+      }
+      if marker.position.lat != stop.coordinate.latitude || marker.position.lng != stop.coordinate.longitude {
+        marker.position = stop.coordinate.naver
+      }
+      let selected = stop.id == stations.selectedStopId
+      let icon = stopImage(selected: selected, boardingAllowed: true)
+      if marker.iconImage !== icon {
+        marker.iconImage = icon
+        marker.anchor = icon === NMF_MARKER_IMAGE_DEFAULT ? NMF_MARKER_ANCHOR_DEFAULT : CGPoint(x: 0.5, y: 0.5)
+        marker.width = icon.image.size.width
+        marker.height = icon.image.size.height
+      }
+      marker.minZoom = selected ? 0 : 13
+      marker.captionText = stop.name
+      marker.captionMinZoom = selected ? 0 : 17
+      marker.isForceShowIcon = selected
+      marker.isHideCollidedMarkers = !selected
+      marker.isHideCollidedCaptions = !selected
+      marker.zIndex = selected ? 15 : 6
+      if marker.mapView == nil { marker.mapView = mapView }
+    }
+  }
+
+  private func updateHomePaths(_ paths: [MapHomePath]) {
+    guard homePaths != paths else { return }
+    homeLines.forEach { $0.mapView = nil }
+    homePaths = paths
+    homeLines = paths.compactMap { path in
+      guard path.coordinates.count > 1, path.coordinates.allSatisfy(\.valid) else { return nil }
+      let line = NMFPath()
+      line.path = NMGLineString(points: path.coordinates.map(\.naver))
+      line.width = 5
+      line.outlineWidth = 0
+      line.color = path.active ? MapMarkerImages.routeColor : MapMarkerImages.mutedColor
+      line.passedColor = line.color
+      line.zIndex = path.active ? 2 : 1
+      if path.arrows {
+        line.patternInterval = 100
+        line.patternIcon = routeArrowImage()
+      }
+      line.mapView = mapView
+      return line
+    }
+  }
+
+  private func setHomeCamera(_ camera: MapCamera, animated: Bool = false) {
+    guard camera.valid else { return }
+    let position = NMFCameraPosition(camera.center.naver, zoom: camera.zoom, tilt: 0, heading: camera.heading)
+    let update = NMFCameraUpdate(position: position)
+    update.animation = animated && !UIAccessibility.isReduceMotionEnabled ? .easeOut : .none
+    mapView.moveCamera(update)
+  }
+
+  private func homeVisibleRect(_ rect: MapRect, layout: MapLayout) -> CGRect {
+    mapView.convert(layout.nativeRect(rect, in: bounds), from: self).intersection(mapView.bounds)
+  }
+
+  private func applyHomeCamera() {
+    guard homeMounted, readySent, !failed, let layout = mapLayout, !layout.transitioning,
+          mapView.bounds.width > 1, mapView.bounds.height > 1, let command = pendingHomeCamera else { return }
+    pendingHomeCamera = nil
+    switch command.command {
+    case "position":
+      if let camera = command.camera { setHomeCamera(camera) }
+    case "center":
+      guard let coordinate = command.coordinate, coordinate.valid else { return }
+      let update = NMFCameraUpdate(scrollTo: coordinate.naver)
+      if let visible = command.visible, visible.valid {
+        let rect = homeVisibleRect(visible, layout: layout)
+        if !rect.isEmpty {
+          update.pivot = CGPoint(x: rect.midX / mapView.bounds.width, y: rect.midY / mapView.bounds.height)
+        }
+      }
+      update.animation = .none
+      mapView.moveCamera(update)
+    case "fit":
+      guard let southwest = command.southwest, southwest.valid, let northeast = command.northeast, northeast.valid,
+            let visible = command.visible, visible.valid else { return }
+      fitHome(southwest: southwest, northeast: northeast, visible: homeVisibleRect(visible, layout: layout),
+              animated: command.animated == true)
+    default: break
+    }
+  }
+
+  private func fitHome(southwest: MapCoordinate, northeast: MapCoordinate, visible: CGRect, animated: Bool) {
+    guard visible.width > 32, visible.height > 24 else { return }
+    let coordinates = [southwest, northeast,
+      MapCoordinate(latitude: southwest.latitude, longitude: northeast.longitude),
+      MapCoordinate(latitude: northeast.latitude, longitude: southwest.longitude)]
+    let points = coordinates.map { mapView.projection.point(from: $0.naver) }
+    let xs = points.map(\.x)
+    let ys = points.map(\.y)
+    guard let left = xs.min(), let right = xs.max(), let top = ys.min(), let bottom = ys.max(),
+          [left, right, top, bottom].allSatisfy(\.isFinite) else { return }
+    let scale = min((visible.width - 32) / max(1, right - left), (visible.height - 24) / max(1, bottom - top))
+    let position = mapView.cameraPosition
+    let zoom = min(14, max(mapView.minZoomLevel, position.zoom + log2(scale)))
+    let ratio = pow(2, position.zoom - zoom)
+    let center = mapView.projection.latlng(from: CGPoint(
+      x: (left + right) / 2 + (mapView.bounds.midX - visible.midX) * ratio,
+      y: (top + bottom) / 2 + (mapView.bounds.midY - visible.midY) * ratio
+    ))
+    setHomeCamera(MapCamera(center: MapCoordinate(latitude: center.lat, longitude: center.lng),
+                            zoom: zoom, heading: position.heading), animated: animated)
+  }
+
+  private func reportHomeViewport(gesture: Bool) {
+    guard homeMounted, readySent, !failed, mapLayout != nil, !mapContainer.bounds.isEmpty else { return }
+    let rect = mapView.convert(mapContainer.bounds, from: mapContainer)
+    let corners = [CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
+                   CGPoint(x: rect.minX, y: rect.maxY), CGPoint(x: rect.maxX, y: rect.maxY)]
+      .map { mapView.projection.latlng(from: $0) }
+      .map { MapCoordinate(latitude: $0.lat, longitude: $0.lng) }
+    let position = mapView.cameraPosition
+    let center = MapCoordinate(latitude: position.target.lat, longitude: position.target.lng)
+    guard center.valid, corners.allSatisfy(\.valid), position.zoom.isFinite, position.heading.isFinite else { return }
+    emit("homeViewport", ["camera": ["center": center.json, "zoom": position.zoom, "heading": position.heading],
+                          "corners": corners.map(\.json), "gesture": gesture])
   }
 
   private func updateScene(_ state: MapSceneState) {
@@ -465,9 +658,14 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     let crop = max(0, (bufferHeight - rect.height) / 2)
     mapView.frame = CGRect(x: 0, y: -crop, width: rect.width, height: bufferHeight)
     mapView.logoAlign = .leftBottom
-    mapView.logoMargin = UIEdgeInsets(top: 0, left: 12, bottom: crop + 12, right: 0)
+    let logoInset = min(rect.height, (layout.logoBottomInset ?? 0) * bounds.width / layout.viewport.width)
+    mapView.logoMargin = UIEdgeInsets(top: 0, left: 12, bottom: crop + logoInset + 12, right: 0)
     mapView.accessibilityElementsHidden = layout.captureAll || rect.height < 1
     scheduleInitialFit()
+    if homeMounted, !layout.transitioning {
+      applyHomeCamera()
+      reportHomeViewport(gesture: false)
+    }
     updateVerificationSnapshot()
   }
 
@@ -669,6 +867,8 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     for marker in stopLabels.values { marker.mapView = nil; marker.mapView = mapView }
     for marker in vehicleMarkers.values { marker.mapView = nil; marker.mapView = mapView }
     for (_, line) in routeLines { line.mapView = nil; line.mapView = mapView }
+    for marker in homeMarkers.values { marker.mapView = nil; marker.mapView = mapView }
+    for line in homeLines { line.mapView = nil; line.mapView = mapView }
     applyLayout()
     refreshVehicleImages()
     emit("ready", [:])
@@ -681,6 +881,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   public func mapViewDidFinishLoadingMap(_ mapView: NMFMapView) { notifyReady() }
 
   public func mapView(_ mapView: NMFMapView, cameraWillChangeByReason reason: Int, animated: Bool) {
+    homeCameraGesture = reason == NMFMapChangedByGesture || reason == NMFMapChangedByControl
     if reason == NMFMapChangedByGesture || reason == NMFMapChangedByControl {
       pendingCameraCommand = nil
       initialFitPending = false
@@ -705,6 +906,8 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   public func mapViewCameraIdle(_ mapView: NMFMapView) {
     refreshVehicleImages()
     refreshRouteStyles()
+    reportHomeViewport(gesture: homeCameraGesture)
+    homeCameraGesture = false
     #if DEBUG
     let target = mapView.cameraPosition.target
     let moved = previousCameraTarget.map {
@@ -754,6 +957,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     var snapshot: [String: Any] = [
       "sessionId": sessionId ?? "",
       "routeId": scene?.routeId ?? "",
+      "home": homeMounted,
       "ready": readySent && !failed && !initialFitPending && !initialFitScheduled,
       "zoom": mapView.cameraPosition.zoom,
       "heading": mapView.cameraPosition.heading,
@@ -762,7 +966,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
       "gestureMoves": gestureMoveCount,
       "visibleMapHeight": mapContainer.bounds.height,
       "captureAll": gate.captureAll,
-      "stops": stopMarkers.values.filter { $0.mapView === mapView }.count,
+      "stops": (homeMounted ? homeMarkers : stopMarkers).values.filter { $0.mapView === mapView }.count,
       "vehicles": vehicleMarkers.values.filter { $0.mapView === mapView }.count,
       "maximumSwipeOffset": navigationSnapshot.maximumSwipeOffset,
       "routeFitsVisibleMap": !coordinates.isEmpty && coordinates.allSatisfy {
@@ -771,6 +975,12 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     ]
     if #available(iOS 26.0, *) {
       snapshot["webTopEdgeEffectHidden"] = webViewForVerification?.scrollView.topEdgeEffect.isHidden == true
+    }
+    if let marker = homeMarkers.values.first {
+      let point = mapView.convert(mapView.projection.point(from: marker.position), to: nil)
+      if point.x.isFinite && point.y.isFinite {
+        snapshot["homeStopPoint"] = ["x": point.x, "y": point.y]
+      }
     }
     guard let data = try? JSONSerialization.data(withJSONObject: snapshot),
           let value = String(data: data, encoding: .utf8) else { return }

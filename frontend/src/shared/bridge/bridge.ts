@@ -1,8 +1,15 @@
 import type { AppCommands, AppCommandType, AppHost, BridgeEnvelope, BridgeMessage } from "./bridge.types";
+import type { NativeMapCommands, NativeMapSession } from "../native-map/protocol";
 
 /** 앱이 injectJavaScript로 웹에 메시지를 넘길 때 발생시키는 CustomEvent 이름. 앱 코드와 같은 값이어야 한다. */
 export const BRIDGE_EVENT = "salmon:bridge";
 const MESSAGE_TYPE = /^[a-z][a-zA-Z]{0,31}\.[a-z][a-zA-Z]{0,31}$/;
+
+/** 실기기에서 로컬 HTTP 주소를 열면 randomUUID를 사용할 수 없다. */
+export function createBridgeId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
 
 export type BridgeWindow = Pick<Window, "__SALMONBUS_APP__" | "ReactNativeWebView">;
 
@@ -39,11 +46,17 @@ export function isSupportedInApp(type: AppCommandType, bridgeWindow: BridgeWindo
 }
 
 /** 브라우저이거나 옛 앱이라 받을 수 없는 type이면 아무 일도 하지 않는다. */
+export function sendToApp<T extends keyof NativeMapCommands>(
+  type: `map.${T}`,
+  payload: NativeMapSession & NativeMapCommands[NoInfer<T>],
+  bridgeWindow?: BridgeWindow,
+): void;
 export function sendToApp<T extends AppCommandType>(
   type: T,
   payload: AppCommands[T],
-  bridgeWindow: BridgeWindow = window,
-): void {
+  bridgeWindow?: BridgeWindow,
+): void;
+export function sendToApp(type: string, payload: object, bridgeWindow: BridgeWindow = window): void {
   const app = connectedAppFrom(bridgeWindow);
   if (app === null || !app.capabilities.includes(type)) return;
   const envelope: BridgeEnvelope = { v: 1, type, payload };
