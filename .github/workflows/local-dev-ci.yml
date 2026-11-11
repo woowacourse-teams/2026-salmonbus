@@ -49,10 +49,6 @@ jobs:
         run: |
           docker buildx create --name "$LOCAL_TEST_BUILDER" --driver docker-container --driver-opt memory=2g \
             --buildkitd-config dev/docker/buildkitd.toml
-      - name: Install geometry check prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ripgrep
       - name: Verify local Docker development environment
         run: |
           python3 -m unittest discover -s dev/tests -p "test_*.py"
