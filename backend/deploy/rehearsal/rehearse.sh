@@ -383,6 +383,17 @@ else
 fi
 rm -rf /opt/salmonbus/.deploying
 
+sec "하차 반영 전환 중 Worker 기동 보류"
+: > /work/systemctl.log
+touch /etc/salmonbus/alighting-cutover-hold
+deploy worker fail || true
+grep -q '하차 반영 체크포인트 전환 중' "$WORK/worker-start.out" \
+  && ok "체크포인트 준비 전 Worker 기동을 거부한다" || bad "전환 보류 사유가 다르다"
+grep -q '^start salmonbus-worker$' /work/systemctl.log \
+  && bad "전환 중 Worker를 시작했다" || ok "전환 중 Worker 시작 명령을 호출하지 않는다"
+rm /etc/salmonbus/alighting-cutover-hold
+deploy worker
+
 sec "5-2. 한 번 실패한 직후 바로 롤백 (CodeDeploy 가 하는 순서)"
 # 아래는 훅의 기존 JAR 재배포 동작만 검사한다. 정비 전환 실패 시에는 DB 백업과 구 JAR을 함께 복원한다.
 # 성공 -> 실패 -> 직전 배포 버전 재배포. 이때 current 는 실패한 쪽, previous 는 직전 성공 버전이다

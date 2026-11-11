@@ -1,9 +1,11 @@
 package com.gustler.backend.forecasting.infrastructure.alighting;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +19,19 @@ import org.junit.jupiter.api.io.TempDir;
 class AlightingAwareHistorySeedReaderTest {
     @TempDir
     Path directory;
+
+    @Test
+    void 전환_표시가_없는_확정_체크포인트는_거부하고_전환_후_파일은_읽는다() {
+        var seed = new AlightingAwareHistorySeedReader.Seed(List.of(), 3, 2, Instant.parse("2026-11-06T10:00:00Z"));
+        Path oldPath = directory.resolve(AlightingAwareRouteStatistics.CONFIRMED_PROFILE);
+        new AlightingAwareHistorySeedReader(oldPath.toString(), 10).write(7, seed);
+        assertThatThrownBy(() -> AlightingAwareHistorySeedReader.confirmed(directory.toString(), 10).read(7))
+            .hasMessage("ALIGHTING_AWARE_SEED_REQUIRES_QUALITY_CUTOVER");
+
+        var newReader = AlightingAwareHistorySeedReader.confirmed(directory.resolve("new").toString(), 10);
+        newReader.write(7, seed);
+        assertThat(newReader.read(7)).isEqualTo(seed);
+    }
 
     @Test
     void 검증한_체크포인트는_정원_재계산_없이_순서와_미관측_좌석을_보존한다() throws Exception {

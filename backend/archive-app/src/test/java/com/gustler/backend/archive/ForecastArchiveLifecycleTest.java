@@ -136,9 +136,20 @@ class ForecastArchiveLifecycleTest {
                 .param(current).query(String.class).single()).isEqualTo("LOST");
             assertThat(fixture.count("alighting_forecast_evaluation_work")).isZero();
 
-            new ArchiveService(fixture.repository,objects,Clock.fixed(SOURCE.plusSeconds(3*86400),ZoneOffset.UTC),
-                new SimpleMeterRegistry(),"salmonbus/test/lake-v2/",2,true).advance();
-            assertThat(fixture.count("vehicle_observation")).isZero();
+            var archive = new ArchiveService(fixture.repository, objects,
+                Clock.fixed(SOURCE.plusSeconds(3 * 86400), ZoneOffset.UTC),
+                new SimpleMeterRegistry(), "salmonbus/test/lake-v2/", 2, true);
+            archive.advance();
+            assertThat(jdbc.sql("SELECT failure_code FROM operational_archive_job WHERE state<>'DONE'")
+                .query(String.class).single()).isEqualTo("ALIGHTING_HISTORY_REQUIRED");
+
+            long next = pass(fixture, "vehicle", 3 * 86400, 1, 40);
+            long nextBatch = jdbc.sql("SELECT observation_batch_id FROM vehicle_observation WHERE id=?")
+                .param(next).query(Long.class).single();
+            assertThat(query.read(nextBatch, stops, statistics)).containsKey(next);
+            jdbc.sql("UPDATE operational_archive_job SET retry_at='-infinity' WHERE state<>'DONE'").update();
+            archive.advance();
+            assertThat(jdbc.sql("SELECT id FROM vehicle_observation").query(Long.class).list()).containsExactly(next);
             assertThat(fixture.count("seat_forecast")).isZero();
             assertThat(fixture.count("alighting_forecast_evaluation_result")).isZero();
             assertThat(jdbc.sql("SELECT sum(row_count) FROM operational_archive_file WHERE table_name='alighting_forecast_evaluation_result'")

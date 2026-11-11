@@ -109,6 +109,28 @@ public class ArchiveRepository {
     }
 
     private String ready(Job job) {
+        boolean historyRequired = jdbc.sql("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM route_version archived
+                JOIN route archived_route ON archived_route.id=archived.route_id
+                JOIN route matching ON matching.display_name=archived_route.display_name
+                JOIN route_version active ON active.route_id=matching.id AND active.valid_to IS NULL
+                LEFT JOIN alighting_history_checkpoint current ON current.route_version_id=active.id
+                WHERE archived.id=:version AND (
+                    current.retain_from<:until OR (
+                        current.route_version_id IS NULL AND EXISTS (
+                            SELECT 1 FROM alighting_history_checkpoint previous
+                            JOIN route_version v ON v.id=previous.route_version_id
+                            WHERE v.route_id=active.route_id
+                        )
+                    )
+                )
+            )
+            """).param("version", job.version()).param("until", time(job.until())).query(Boolean.class).single();
+        if (historyRequired) {
+            return "ALIGHTING_HISTORY_REQUIRED";
+        }
         final boolean collecting = jdbc.sql("""
             SELECT EXISTS(SELECT 1 FROM observation_batch
                 WHERE route_version_id=:v AND scheduled_at<:until AND outcome IN('RESERVED','DISPATCHING'))

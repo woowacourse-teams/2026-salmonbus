@@ -12,7 +12,6 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObse
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareVehiclePrefix;
-import java.nio.file.Path;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -120,11 +119,7 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
         this.rushOnly = rushOnly;
         this.origins = new HashMap<>();
         this.seeds = new AlightingAwareHistorySeedReader(seedDirectory, maximumRows);
-        String confirmedDirectory = "";
-        if (!seedDirectory.isBlank()) {
-            confirmedDirectory = Path.of(seedDirectory).resolve(AlightingAwareRouteStatistics.CONFIRMED_PROFILE).toString();
-        }
-        this.confirmedSeeds = new AlightingAwareHistorySeedReader(confirmedDirectory, maximumRows);
+        this.confirmedSeeds = AlightingAwareHistorySeedReader.confirmed(seedDirectory, maximumRows);
         if (maximumRows < 1) {
             throw new IllegalArgumentException("AlightingAware history row limit must be positive");
         }
@@ -182,6 +177,9 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
         Map<Long, AlightingAwareFeatureSnapshot> snapshots = checkpointOnly
             ? Map.of() : snapshots(stops, statistics, cursor, history, events);
         saveCheckpoint(stops.routeVersionId(), cursor, history, events, reader);
+        if (!checkpointOnly && cursor.target().confirmed() && reader.configured() && !cursor.isOlderThanSeed()) {
+            protectCheckpoint(stops.routeVersionId(), cursor);
+        }
         return Map.copyOf(snapshots);
     }
 
@@ -425,6 +423,21 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
             reader.write(routeVersionId, new AlightingAwareHistorySeedReader.Seed(history, cursor.batchId(),
                 cursor.lastRank() + newBatches, cursor.target().time(), cursor.prefix(), events));
         }
+    }
+
+    private void protectCheckpoint(final long routeVersionId, ReplayCursor cursor) {
+        // 뒤에 확정된 배치도 체크포인트보다 최대 90초 먼저 수신됐을 수 있다.
+        jdbc.sql("""
+            INSERT INTO alighting_history_checkpoint(route_version_id,through_at,through_batch_id,retain_from)
+            VALUES(:version,:through,:batch,:through-%s)
+            ON CONFLICT(route_version_id) DO UPDATE
+            SET through_at=EXCLUDED.through_at, through_batch_id=EXCLUDED.through_batch_id,
+                retain_from=EXCLUDED.retain_from
+            WHERE (alighting_history_checkpoint.through_at,alighting_history_checkpoint.through_batch_id)
+                < (EXCLUDED.through_at,EXCLUDED.through_batch_id)
+            """.formatted(ConfirmedAlightingAwareInput.MAX_CONFIRMATION_DELAY))
+            .param("version", routeVersionId).param("through", cursor.target().time().atOffset(ZoneOffset.UTC))
+            .param("batch", cursor.batchId()).update();
     }
 
     private List<Long> compatibleVersions(AlightingAwareRouteStatistics statistics, Instant until, final long batchId) {

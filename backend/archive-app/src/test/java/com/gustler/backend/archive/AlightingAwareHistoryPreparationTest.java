@@ -127,6 +127,10 @@ class AlightingAwareHistoryPreparationTest {
                 .read(nextBatch, stops, statistics).get(nextObservation).forTarget(2);
             assertThat(resumed.seat88()).containsExactly(direct.seat88());
             assertThat(resumed.probability80()).containsExactly(direct.probability80());
+            assertThat(jdbc.sql("""
+                SELECT through_batch_id=? AND retain_from='2026-11-11 05:58:51+09'::timestamptz
+                FROM alighting_history_checkpoint WHERE route_version_id=?
+                """).params(nextBatch, version).query(Boolean.class).single()).isTrue();
         }
     }
 }

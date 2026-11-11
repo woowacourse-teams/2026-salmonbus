@@ -5,7 +5,6 @@ import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapaci
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureUnavailableException;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -34,12 +33,10 @@ public final class AlightingAwareHistoryBootstrap {
             requireQualityCutover();
         }
         Instant through = through(stops.routeVersionId(), throughBatchId, statistics.confirmedProfile());
-        String seedDirectory = checkpointDirectory;
-        if (statistics.confirmedProfile()) {
-            seedDirectory = Path.of(checkpointDirectory).resolve(AlightingAwareRouteStatistics.CONFIRMED_PROFILE).toString();
-        }
-        AlightingAwareHistorySeedReader.Seed seed = new AlightingAwareHistorySeedReader(seedDirectory, maximumRows)
-            .read(stops.routeVersionId());
+        AlightingAwareHistorySeedReader reader = statistics.confirmedProfile()
+            ? AlightingAwareHistorySeedReader.confirmed(checkpointDirectory, maximumRows)
+            : new AlightingAwareHistorySeedReader(checkpointDirectory, maximumRows);
+        AlightingAwareHistorySeedReader.Seed seed = reader.read(stops.routeVersionId());
         Cursor after = initialCursor(seed);
         int checkpoints = 0;
         JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(

@@ -905,15 +905,15 @@ Discord 알림을 받으면 DB 원인 분석 화면의 수집 실패 및 상태 
 
 ### 하차 반영 단일 모델 전환
 
-이번 전환은 수동 중지 후 진행한다. 구 Worker·API·archive-app과 복원 작업을 중지한다. V66 이전 DB 백업을 만들고 격리 DB에 복원해 스키마 버전과 관측 조회를 확인한다. API에서 배포 버전까지 Flyway를 적용한다. 이전 애플리케이션을 다시 배포해야 할 경우에는 검증한 V66 이전 DB도 함께 복원한다.
+이번 전환은 API와 Worker 배포를 나눠 진행한다. 먼저 파이프라인에서 Worker 배포 단계의 자동 진행을 중지하고 Worker 호스트에 `sudo touch /etc/salmonbus/alighting-cutover-hold`를 실행한다. 구 Worker·API·archive-app과 복원 작업을 중지한다. V66 이전 DB 백업을 만들고 격리 DB에 복원해 스키마 버전과 관측 조회를 확인한다. API에서 배포 버전까지 Flyway를 적용한다. 이전 애플리케이션을 다시 배포해야 할 경우에는 검증한 V66 이전 DB도 함께 복원한다.
 
 dev에서 기존 V67을 이미 실행했다면 V72 이상 적용과 V67 단독 체크섬 불일치를 확인한 뒤 Flyway `repair`와 `validate`를 실행한다. 수정된 V67을 담아 검증을 통과한 패키지를 복구용으로 보관한다. V75 적용 전에는 기존 `push_device` 등록을 확인하고 배포 후 앱에서 기기를 다시 등록한다.
 
 1. 원본 번들과 서명·해시는 그대로 보존한다. 기존 `les-*` 판본 정보는 읽을 때만 새 이름으로 해석한다.
 2. 새 모델 파일과 설정을 준비하고 Worker 시작 시 `alighting-online-capacity-snapshot-v2` 계산 판본으로 승격하도록 설정한다. 필요하면 기존 `MODEL_BUNDLE_PROMOTE_ON_START` 절차를 사용한다.
-3. API의 Flyway 적용 완료를 확인하고 Worker와 archive-app을 중지한 상태에서 확정 관측 이력 체크포인트를 생성한다. V66이 과거 제외 관측의 잔여석을 비우므로 전환 DB에서 `alighting-history-bootstrap`의 `--checkpoint-directory`에 이번 배포 전용 빈 경로를 지정한다. 기존 경로에서 실행하면 해당 파일의 마지막 커서부터 이어 읽는다. 지원 노선별로 생성된 `alighting-confirmed-closure-v2` 파일과 마지막 배치 ID를 확인한 뒤, Worker의 `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`를 이번 경로로 설정한다. 해시와 커서에 필요한 원본 배치가 확인될 때까지 원본 삭제를 보류한다.
-4. Worker를 시작해 차량 정원 캐시 준비와 예보·정산을 확인한다. 예보에 저장한 정원으로 정산하며, 이후 관측이 그 정원을 넘으면 `OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT` 사유로 해당 정산을 종료한다. 과거 예보의 정원을 바꾸거나 재계산하지 않는다.
-5. archive-app은 삭제를 끈 상태로 시작한다. 오늘·어제를 남기고 이전 날짜의 수집·새 정산 완료, S3 재읽기와 해시 검증을 확인한 뒤 삭제를 활성화한다. 예보 생성 직후 원본을 삭제하는 구조가 아니다.
+3. API의 Flyway 적용 완료를 확인하고 Worker와 archive-app을 중지한 상태에서 확정 관측 이력 체크포인트를 생성한다. 전환 DB에서 이번 배포 소스의 maintenance JAR로 `alighting-history-bootstrap`을 실행하고 `--checkpoint-directory`에 배포 전용 빈 경로를 지정한다. 전환 표시가 없는 기존 파일은 Worker와 준비 명령에서 거부한다. 지원 노선별 `alighting-confirmed-closure-v2` 파일의 해시와 마지막 배치 ID를 확인하고, Worker 계정에 새 경로의 읽기·쓰기 권한을 준 뒤 `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`를 그 경로로 설정한다.
+4. 새 경로를 설정한 뒤 `sudo rm /etc/salmonbus/alighting-cutover-hold`를 실행하고 Worker 배포를 재개한다. 새 Worker의 차량 정원 캐시 준비와 예보·정산을 확인한다. 예보에 저장한 정원으로 정산하며, 이후 관측이 그 정원을 넘으면 `OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT` 사유로 해당 정산을 종료한다.
+5. archive-app은 삭제를 끈 상태로 시작한다. 지원 노선의 현재 판본마다 새 Worker가 `alighting_history_checkpoint`에 저장한 배치가 DB에 존재하는지 확인한다. 이전 날짜의 수집·정산 완료와 S3 재읽기 및 해시 검증 후 삭제를 활성화한다. 마지막 체크포인트 확정 시각에서 90초를 뺀 수신 시각 이후의 자료가 포함된 날짜는 새 체크포인트가 저장될 때까지 `ALIGHTING_HISTORY_REQUIRED`로 보류된다.
 
 구 모델 미완료 작업은 V70/V71에서 종료 사유를 남기며 기존 완료 결과를 재작성하지 않는다. V72는 운영 중간 통계·당일 보정 테이블을 제거한다. 이미 발행한 통계·판본·파일 발행 기록은 과거 데이터 해석용으로 유지한다.
 
