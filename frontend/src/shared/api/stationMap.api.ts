@@ -23,7 +23,7 @@ interface StationVehicle {
 
 interface StationRoute {
   routeId: string;
-  name: string;
+  name: string | null;
   routeTypeCode: number | null;
   direction: Direction | null;
   arrivals: StationVehicle[];
@@ -111,6 +111,7 @@ function vehicleFrom(value: unknown, supported: boolean): StationVehicle[] {
 
 function routeFrom(value: unknown): StationRoute[] {
   if (!isRecord(value) || typeof value.routeId !== "string" || !Array.isArray(value.arrivals)) return [];
+  const name = typeof value.name === "string" ? value.name.trim() : "";
   const supported = value.supported === true;
   const service = value.service;
   const direction =
@@ -123,7 +124,7 @@ function routeFrom(value: unknown): StationRoute[] {
   return [
     {
       routeId: value.routeId,
-      name: typeof value.name === "string" && value.name ? value.name : value.routeId,
+      name: name || null,
       routeTypeCode:
         typeof value.routeTypeCode === "number" && Number.isInteger(value.routeTypeCode) ? value.routeTypeCode : null,
       direction,

@@ -322,6 +322,7 @@ export function RouteSelectScreen({
             surfaceRef={sheetSurfaceRef}
             sectionRef={sheetRef}
             snap={snap}
+            tabSnap={tabSheet.snap}
             tabDirection={tabSheet.direction}
             onSnapChange={(next, direction) => {
               if (selectedStop) {

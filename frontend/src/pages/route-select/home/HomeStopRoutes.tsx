@@ -13,6 +13,7 @@ import { VerdictChip } from "@/shared/components/VerdictChip";
 import { useStationArrivals } from "@/shared/hooks/useStationArrivals";
 import { favoritePath } from "@/shared/routing/paths";
 import type { StationSheetEntry } from "@/shared/routing/boardEntry";
+import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { toRemainingTime } from "@/shared/utils/remainingTime";
 import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
 import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
@@ -195,6 +196,7 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
   const waiting = resource.status === "pending" || body?.refresh.status === "RUNNING";
   const failed = resource.status === "loadingError" || resource.status === "refetchError";
   const retrying = requestState === "loading";
+  const loadingRoutes = failed ? resource.status === "loadingError" && retrying : waiting;
   return (
     <>
       {failed && (
@@ -210,6 +212,8 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
       {body?.routes.length ? (
         <ul className={styles.stopRouteList}>
           {body.routes.map((route, index) => {
+            const key = `${route.routeId}:${route.direction}:${index}`;
+            if (route.name === null) return <StopRouteSkeleton key={key} unavailable />;
             const next =
               route.arrivals.find(
                 (vehicle) =>
@@ -220,7 +224,7 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
             const probability = next?.probability ?? null;
             return (
               <StopRouteRow
-                key={`${route.routeId}:${route.direction}:${index}`}
+                key={key}
                 name={route.name}
                 badgeTone={badgeToneFor(route.routeTypeCode)}
                 seconds={seconds}
@@ -237,14 +241,42 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
             );
           })}
         </ul>
+      ) : loadingRoutes ? (
+        <>
+          {!failed && (
+            <p className={visuallyHidden} role="status">
+              정류장 버스 정보를 확인하고 있어요…
+            </p>
+          )}
+          <ul className={styles.stopRouteList} aria-hidden="true">
+            <StopRouteSkeleton />
+            <StopRouteSkeleton />
+          </ul>
+        </>
       ) : (
         !failed && (
           <p className={styles.note} role="status">
-            {waiting ? "정류장 버스 정보를 확인하고 있어요…" : "이 정류장의 정차 노선 정보가 없어요."}
+            이 정류장의 정차 노선 정보가 없어요.
           </p>
         )
       )}
     </>
+  );
+}
+
+function StopRouteSkeleton({ unavailable = false }: { unavailable?: boolean }) {
+  return (
+    <li data-testid="stop-route-skeleton">
+      {unavailable && <span className={visuallyHidden}>노선 번호 정보 없음</span>}
+      <div className={styles.stopRouteLink} aria-hidden="true">
+        <span className={styles.stopRouteSummary}>
+          <span className={styles.stopRouteNumberPlaceholder} />
+          <span className={styles.stopRouteTimePlaceholder} />
+        </span>
+        <span className={styles.stopRouteVerdictPlaceholder} />
+        <span className={styles.stopRouteArrowPlaceholder} />
+      </div>
+    </li>
   );
 }
 

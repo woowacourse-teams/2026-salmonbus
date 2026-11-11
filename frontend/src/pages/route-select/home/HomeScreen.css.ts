@@ -420,3 +420,19 @@ export const stopRouteArrow = style({
   background: vars.color.background,
   color: vars.color.textBody,
 });
+
+const stopRoutePlaceholder = style({
+  display: "block",
+  background: vars.color.mutedChipSurface,
+  borderRadius: vars.radius.badge,
+});
+export const stopRouteNumberPlaceholder = style([stopRoutePlaceholder, { width: 42, height: 26 }]);
+export const stopRouteTimePlaceholder = style([stopRoutePlaceholder, { width: "min(100%, 52px)", height: 12 }]);
+export const stopRouteVerdictPlaceholder = style([
+  stopRoutePlaceholder,
+  { width: 54, height: 14, justifySelf: "center" },
+]);
+export const stopRouteArrowPlaceholder = style([
+  stopRoutePlaceholder,
+  { width: 22, height: 22, justifySelf: "end", borderRadius: "50%" },
+]);

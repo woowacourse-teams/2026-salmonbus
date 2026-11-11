@@ -33,6 +33,7 @@ export function HomeBottomSheet({
   home,
   showTabClose,
   snap,
+  tabSnap,
   tabDirection,
   onSnapChange,
   onHeightChange,
@@ -48,6 +49,7 @@ export function HomeBottomSheet({
   home: boolean;
   showTabClose: boolean;
   snap: HomeSheetSnap;
+  tabSnap: HomeSheetSnap;
   tabDirection: BoardSheetDirection;
   onSnapChange: (snap: HomeSheetSnap, direction: BoardSheetDirection) => void;
   onHeightChange: (height: number) => void;
@@ -130,7 +132,8 @@ export function HomeBottomSheet({
   function closeWithMotion(direction: BoardSheetDirection = "larger") {
     cancelCloseMotion();
     const surface = surfaceRef.current;
-    if (!surface?.animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const returnsToTabSheet = station !== null && tabSnap !== "collapsed";
+    if (returnsToTabSheet || !surface?.animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       onSnapChange("collapsed", direction);
       return;
     }
