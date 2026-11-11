@@ -206,6 +206,15 @@ class IntegratedJudgeTest {
         assertThat(IntegratedJudge.decide(exact).chosenId()).contains("long");
     }
 
+    @Test
+    void 이동의_실패_위험이_더_높으면_역치가_오차_허용보다_작아도_추천하지_않는다() {
+        Move worse = allowed("worse", new Risk(0.8000000005, 0.8000000005), 4, 0, 10);
+        Situation situation = new Situation(true, true, Optional.of(new Risk(0.8, 0.8)), Coverage.MODEL_WINDOW, false,
+            Listing.COMPLETE, 1e-10, 0, List.of(worse));
+
+        assertThat(IntegratedJudge.decide(situation).terminal()).isEqualTo(Terminal.ABSTAIN_UNCERTAIN_GAIN);
+    }
+
     private static Situation open(Risk stay, Coverage coverage, boolean omissionsIncluded, Listing listing, Move... moves) {
         return new Situation(true, true, Optional.of(stay), coverage, omissionsIncluded, listing, 0.15, 0, List.of(moves));
     }

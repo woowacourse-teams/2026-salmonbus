@@ -121,7 +121,7 @@ public final class IntegratedJudge {
             }
             sawAllowed = true;
             Bound gain = RiskMath.delta(stay, move.risk().get());
-            boolean numericGo = gain.low() >= threshold - EPS;
+            boolean numericGo = gain.low() > 0 && gain.low() >= threshold - EPS;
             boolean numericMiss = gain.high() < threshold - EPS;
             if (!move.uncertaintyReflected()) {
                 unresolved = true;
