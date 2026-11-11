@@ -287,7 +287,7 @@ test("즐겨찾기는 첫 그룹을 조회하고 탭 변경 시 선택한 그룹
   await expect(page).toHaveURL(`/routes/${routeId}?direction=UP&stopId=${up.stopId}`);
 });
 
-test("그룹을 전환하면 응답 전까지 기존 항목을 유지하고 응답 후 새 항목을 표시한다", async ({
+test("그룹을 전환하면 응답 전까지 스켈레톤을 보여주고 응답 후 새 항목을 표시한다", async ({
   page,
   favorites,
   api,
@@ -311,12 +311,14 @@ test("그룹을 전환하면 응답 전까지 기존 항목을 유지하고 응�
   });
   await page.goto("/favorites");
   const panel = page.getByRole("tabpanel");
+  const skeleton = panel.getByTestId("favorite-cards-skeleton");
   await expect(panel.getByText(first!.name, { exact: true })).toBeVisible();
   try {
     await page.getByRole("tab", { name: "통학", exact: true }).click();
     await expect(panel).toHaveAttribute("aria-busy", "true");
-    await expect(panel.getByText(first!.name, { exact: true })).toBeVisible();
-    await expect(panel.locator("[inert]")).toHaveCount(1);
+    await expect(skeleton).toBeVisible();
+    await expect(panel.getByText(first!.name, { exact: true })).toHaveCount(0);
+    await expect(panel.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toHaveCount(0);
     await page.getByRole("tab", { name: "통학", exact: true }).focus();
     const tabKey = browserName === "webkit" ? "Alt+Tab" : "Tab";
     await page.keyboard.press(tabKey);
@@ -331,7 +333,7 @@ test("그룹을 전환하면 응답 전까지 기존 항목을 유지하고 응�
   await expect(panel.getByText(second!.name, { exact: true })).toBeVisible();
   await expect(panel.getByText(first!.name, { exact: true })).toHaveCount(0);
   await expect(panel).toHaveAttribute("aria-busy", "false");
-  await expect(panel.locator("[inert]")).toHaveCount(0);
+  await expect(skeleton).toHaveCount(0);
   await expect(panel.getByRole("list").first().getByRole("link")).toBeVisible();
 });
 

@@ -4,7 +4,6 @@ import { Brand } from "@/shared/components/Brand";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
 import type { Direction } from "@/shared/api/routeForecast.types";
 import type { FavoriteGroup, HomeFavorites } from "@/shared/api/favorites.types";
-import { latestSuccessOf, type LatestSuccess } from "@/shared/api/polledResource";
 import type { PolledRequest } from "@/shared/api/usePolledRequest";
 import type { BoardSheetDirection } from "@/shared/bottom-sheet/boardSheetPolicy";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
@@ -34,9 +33,6 @@ export interface FavoriteGroupContext {
   selectFavoriteGroup: (groupId: string) => void;
   summary: PolledRequest<HomeFavorites>;
   retrySummary: () => void;
-  displayedGroup: FavoriteGroup | undefined;
-  displayedSummary: LatestSuccess<HomeFavorites> | null;
-  switchingGroup: boolean;
 }
 
 export interface FavoriteGroupSelection {
@@ -55,6 +51,13 @@ const LOCATION_FAILURE_MESSAGE = {
 interface TabSheetState {
   snap: HomeSheetSnap;
   direction: BoardSheetDirection;
+}
+
+interface FavoriteMapTransition {
+  memberId: string;
+  locationKey: string;
+  fromGroupId: string;
+  toGroupId: string;
 }
 
 const INITIAL_TAB_SHEET: TabSheetState = { snap: "summary", direction: "larger" };
@@ -99,44 +102,37 @@ export function RouteSelectScreen({
     isFavorites && favoriteGroup && selectedStop === null ? { kind: "group", groupId: favoriteGroup.id } : null,
     summaryRevision,
   );
-  const latestSummary = latestSuccessOf(summary.resource);
-  const [previousSummary, setPreviousSummary] = useState<{
-    locationKey: string;
-    memberId: string;
-    groupId: string;
-    data: LatestSuccess<HomeFavorites>;
-  } | null>(null);
-  const previousGroup =
-    previousSummary?.memberId === memberId && previousSummary.locationKey === location.key
-      ? groups.find((group) => group.id === previousSummary.groupId)
-      : undefined;
-  const switchingGroup = summary.resource.status === "pending" && previousGroup !== undefined;
-  const displayedGroup = switchingGroup ? previousGroup : favoriteGroup;
-  const displayedSummary = switchingGroup ? (previousSummary?.data ?? null) : latestSummary;
+  const [mapTransition, setMapTransition] = useState<FavoriteMapTransition | null>(null);
+  const mapGroup =
+    summary.resource.status === "pending" &&
+    mapTransition?.memberId === memberId &&
+    mapTransition.locationKey === location.key &&
+    mapTransition.toGroupId === favoriteGroup?.id
+      ? (groups.find((group) => group.id === mapTransition.fromGroupId) ?? favoriteGroup)
+      : favoriteGroup;
   const outlet = useOutlet({
     favoriteGroup,
     selectFavoriteGroup: (groupId) => {
       if (memberId === null) return;
-      if (favoriteGroup && favoriteGroup.id !== groupId && latestSummary) {
-        setPreviousSummary({ locationKey: location.key, memberId, groupId: favoriteGroup.id, data: latestSummary });
+      if (favoriteGroup?.id !== groupId) {
+        setMapTransition(
+          mapGroup ? { memberId, locationKey: location.key, fromGroupId: mapGroup.id, toGroupId: groupId } : null,
+        );
       }
       onFavoriteSelection({ memberId, groupId });
     },
     summary,
     retrySummary,
-    displayedGroup,
-    displayedSummary,
-    switchingGroup,
   } satisfies FavoriteGroupContext);
   const favoriteRoutes = useMemo(() => {
     const directions = new Map<string, Direction>();
-    if (isFavorites && memberId && displayedGroup) {
-      for (const { routeId, direction } of displayedGroup.favorites) {
+    if (isFavorites && memberId && mapGroup) {
+      for (const { routeId, direction } of mapGroup.favorites) {
         if (!directions.has(routeId)) directions.set(routeId, direction);
       }
     }
     return directions;
-  }, [displayedGroup, isFavorites, memberId]);
+  }, [mapGroup, isFavorites, memberId]);
   const tabSheet = currentSheet?.tab ?? INITIAL_TAB_SHEET;
   const snap = currentSheet?.station?.snap ?? tabSheet.snap;
   const [cameraTarget, setCameraTarget] = useState<Point>(DEFAULT_LOCATION);
@@ -241,7 +237,7 @@ export function RouteSelectScreen({
     stops: showStops ? stops : NO_STOPS,
     routePaths: isRouteMap ? routePaths : NO_ROUTE_PATHS,
     routeOverviewKey: isRouteMap ? location.key : null,
-    favoriteGroupId: isFavorites ? (displayedGroup?.id ?? null) : null,
+    favoriteGroupId: isFavorites ? (mapGroup?.id ?? null) : null,
     favoriteRoutes,
     overlayOpen,
     onSurfaceChange: setMapSurface,

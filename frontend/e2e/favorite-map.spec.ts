@@ -126,7 +126,7 @@ test("즐겨찾기 지도는 중복 저장한 노선을 한 번만 그리며 차
   await expect(lines).toHaveCount(0);
 });
 
-test("그룹 응답을 기다리는 동안 이전 카드와 노선을 함께 유지하고 돌아와도 선택을 유지한다", async ({
+test("그룹 응답을 기다리는 동안 지도 노선을 유지하고 돌아와도 그룹 선택을 유지한다", async ({
   page,
   favorites,
   api,
@@ -152,8 +152,7 @@ test("그룹 응답을 기다리는 동안 이전 카드와 노선을 함께 유
   const group = page.getByRole("tab", { name: "통학", exact: true });
   try {
     await group.click();
-    await expect(page.getByText("통학 그룹의 즐겨찾기를 불러오고 있어요…")).toBeVisible();
-    await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
+    await expect(panel).toHaveAttribute("aria-busy", "true");
     await expect(lines).toHaveCount(2);
   } finally {
     release();
@@ -169,6 +168,58 @@ test("그룹 응답을 기다리는 동안 이전 카드와 노선을 함께 유
   await expect(page).toHaveURL("/search");
   await page.goBack();
   await expect(group).toHaveAttribute("aria-selected", "true");
+});
+
+test("그룹 조회 실패 뒤 다음 그룹을 기다리는 동안 예전 노선이 다시 나타나지 않는다", async ({
+  page,
+  favorites,
+  api,
+}) => {
+  const stop = api.data.watch.stops.find((candidate) => candidate.boardingAllowed)!;
+  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+  const failedGroupId = "10000000-0000-4000-8000-000000000003";
+  const nextGroupId = "10000000-0000-4000-8000-000000000004";
+  favorites.groups.push(
+    { id: failedGroupId, name: "통학", favorites: [] },
+    { id: nextGroupId, name: "주말", favorites: [] },
+  );
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await api.route(async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/me/favorites") {
+      const groupId = url.searchParams.get("groupId");
+      if (groupId === failedGroupId) {
+        await route.fulfill({
+          status: 503,
+          json: { code: "SERVICE_UNAVAILABLE", message: "Unavailable", requestId: "e2e-favorite-map" },
+        });
+        return;
+      }
+      if (groupId === nextGroupId) await pending;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/favorites");
+  const panel = page.getByRole("tabpanel");
+  const lines = page.getByTestId("naver-map-test-double").getByTestId("naver-polyline");
+  await expect(lines).toHaveCount(2);
+  await page.getByRole("tab", { name: "통학", exact: true }).click();
+  await expect(panel.getByRole("alert")).toHaveText("즐겨찾기를 불러오지 못했어요");
+  await expect(lines).toHaveCount(0);
+
+  try {
+    await page.getByRole("tab", { name: "주말", exact: true }).click();
+    await expect(panel.getByTestId("favorite-cards-skeleton")).toBeVisible();
+    await expect(lines).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await expect(panel.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toBeVisible();
+  expect(api.requests.geometry).toBe(1);
 });
 
 for (const reason of ["조회 실패", "표시 제한"] as const) {
