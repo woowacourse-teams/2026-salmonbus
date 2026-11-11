@@ -15,6 +15,32 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /** 새 DB의 설치와 운영 데이터가 있는 전환을 구분한다. */
 class ArchiveMigrationHandoffTest {
+    @Test
+    void 제거할_수요_통계를_초기화하지_않고_운영_DB를_전환한다() {
+        try (TestDatabase db = TestDatabase.create()) {
+            DriverManagerDataSource source = new DriverManagerDataSource(db.jdbcUrl(), db.username(), db.password());
+            Flyway.configure().dataSource(source).target("66").load().migrate();
+            JdbcClient jdbc = JdbcClient.create(source);
+            seed(jdbc);
+            jdbc.sql("""
+                CREATE FUNCTION reject_retired_statistics() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN RAISE EXCEPTION 'retired statistics initialization'; END $$
+                """).update();
+            jdbc.sql("""
+                CREATE TRIGGER reject_retired_statistics BEFORE INSERT ON stop_demand_baseline
+                FOR EACH ROW EXECUTE FUNCTION reject_retired_statistics()
+                """).update();
+
+            Flyway flyway = Flyway.configure().dataSource(source).load();
+            flyway.migrate();
+
+            flyway.validate();
+            assertThat(jdbc.sql("SELECT to_regclass('stop_demand_baseline') IS NULL")
+                .query(Boolean.class).single()).isTrue();
+            assertThat(jdbc.sql("SELECT count(*) FROM observation_batch").query(Long.class).single()).isOne();
+        }
+    }
+
     void seed(JdbcClient jdbc) {
         jdbc.sql(
             "INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name) VALUES('r','GBIS','r','3330','A','B')")

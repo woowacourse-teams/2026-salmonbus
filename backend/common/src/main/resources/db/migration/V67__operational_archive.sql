@@ -47,11 +47,6 @@ CREATE TABLE operational_archive_boundary (
     route_version_id bigint PRIMARY KEY REFERENCES route_version(id),
     closed_before timestamptz NOT NULL
 );
--- 새 노선만 명시적인 빈 기준으로 시작할 수 있다. 기존 미초기화 이력은 조용히 건너뛰지 않는다.
-INSERT INTO stop_demand_baseline(route_version_id, initialized)
-SELECT v.id,true FROM route_version v
-WHERE NOT EXISTS(SELECT 1 FROM vehicle_observation o WHERE o.route_version_id=v.id)
-ON CONFLICT(route_version_id) DO NOTHING;
 CREATE TABLE vehicle_capacity_history (
     source_id varchar(40) NOT NULL,
     vehicle_id varchar(40) NOT NULL,

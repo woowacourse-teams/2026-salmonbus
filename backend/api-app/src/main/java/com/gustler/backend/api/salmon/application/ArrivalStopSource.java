@@ -53,7 +53,7 @@ public final class ArrivalStopSource implements StopArrivalSource {
             return new Unavailable(MissingReason.NOT_PROVIDED);
         }
         ArrivalSnapshot snapshot = latest.get();
-        if (!decisionAt.isBefore(snapshot.staleAt())) {
+        if (!SalmonObservationFreshness.usable(decisionAt, snapshot.staleAt())) {
             return new Unavailable(MissingReason.STALE);
         }
         Optional<ArrivalVisit> visit = repository.visits(stationId).stream()
@@ -80,7 +80,8 @@ public final class ArrivalStopSource implements StopArrivalSource {
             ? Optional.of(MINUTE_RESOLUTION_BOUND) : Optional.empty();
         // 스냅샷은 정류장 단위라, 한 노선이 이 정류장을 두 번 지나면 방문 순번이 있어야 두 방문의 항목이 구분된다.
         String id = snapshot.id() + ":" + routeId + ":" + stopSequence + ":" + prediction.ordinal();
-        return new StopEntry(id, new Observed<>(arrival, quantization));
+        Optional<String> vehicleId = Optional.ofNullable(prediction.vehicleId()).filter(value -> !value.isBlank());
+        return new StopEntry(id, new Observed<>(arrival, quantization), vehicleId);
     }
 
     private Coverage coverageOf(List<StopEntry> entries) {

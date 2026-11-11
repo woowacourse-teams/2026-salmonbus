@@ -10,6 +10,7 @@ export function HomeRouteNetwork({ map, maps, paths }: { map: NaverMap; maps: Na
   const svg = useRef<SVGSVGElement>(null);
   const path = useRef<SVGPathElement>(null);
   const strokes = useRef<SVGGElement>(null);
+  const routeStroke = useRef<SVGUseElement>(null);
   const revealStarted = useRef(false);
   const id = useId();
 
@@ -17,7 +18,8 @@ export function HomeRouteNetwork({ map, maps, paths }: { map: NaverMap; maps: Na
     const layer = svg.current;
     const geometry = path.current;
     const lines = strokes.current;
-    if (!layer || !geometry || !lines) return;
+    const stroke = routeStroke.current;
+    if (!layer || !geometry || !lines || !stroke) return;
     const coordinatesFor = (points: Point[]) =>
       points.map(([longitude, latitude]) => new maps.LatLng(latitude, longitude));
     const runs = homeRouteRuns(paths).map(coordinatesFor);
@@ -55,7 +57,8 @@ export function HomeRouteNetwork({ map, maps, paths }: { map: NaverMap; maps: Na
         const origin = projection.fromCoordToOffset(pangyo);
         const x = origin.x - left;
         const y = origin.y - top;
-        const bounds = geometry.getBBox();
+        // Firefox에서는 defs 안의 path가 빈 경계를 반환하므로 지도에 그리는 use의 경계를 읽는다.
+        const bounds = stroke.getBBox();
         const radius = Math.hypot(
           Math.max(Math.abs(bounds.x - x), Math.abs(bounds.x + bounds.width - x)),
           Math.max(Math.abs(bounds.y - y), Math.abs(bounds.y + bounds.height - y)),
@@ -105,7 +108,14 @@ export function HomeRouteNetwork({ map, maps, paths }: { map: NaverMap; maps: Na
         }}
       >
         <use href={`#${id}-roads`} fill="none" stroke="#FFFDFB" strokeWidth="6.6" opacity=".72" />
-        <use href={`#${id}-roads`} fill="none" stroke={activeRouteColor} strokeWidth="4.8" opacity=".95" />
+        <use
+          ref={routeStroke}
+          href={`#${id}-roads`}
+          fill="none"
+          stroke={activeRouteColor}
+          strokeWidth="4.8"
+          opacity=".95"
+        />
         <g mask={`url(#${id}-mask)`}>
           <rect className={styles.routeNetworkGlow} width="20%" height="100%" fill={`url(#${id}-glow)`} />
         </g>

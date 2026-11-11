@@ -1,0 +1,18 @@
+{
+  "notice": "측정용 값이며 제품 값이 아님. 제품 역치와 창 길이는 SAL-389에서 정한다",
+  "sets": [
+    {
+      "name": "base-15",
+      "horizonMinutes": 15,
+      "coverageRule": "NONE",
+      "scanThreshold": 0,
+      "gainThreshold": 1.0E-9,
+      "alpha": "1.0",
+      "maxWalkMinutes": 15,
+      "maxDetour": 0,
+      "resolutionSeconds": 1,
+      "epochBudget": 1,
+      "kindOrder": ["WALK", "REBOARD"]
+    }
+  ]
+}

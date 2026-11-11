@@ -49,6 +49,7 @@ class PublicApiDocsContractTest {
             .andExpect(jsonPath("$.paths['/api/v2/stations/{stationId}/arrivals'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v2/routes/{routeId}/geometry'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v1/routes/{routeId}/stations/{stationId}/boarding-options'].get").exists())
+            .andExpect(jsonPath("$.paths['/api/v1/routes/{routeId}/stations/{stationId}/salmon-action'].get").exists())
             .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
 
         // when
@@ -56,7 +57,7 @@ class PublicApiDocsContractTest {
         JsonNode paths = document.path("paths");
 
         // then
-        assertThat(paths.size()).isEqualTo(9);
+        assertThat(paths.size()).isEqualTo(10);
         assertThat(paths.has("/api/v2/stations/tiles/{zoom}/{x}/{y}")).isTrue();
         assertThat(paths.has("/api/v2/stations/{stationId}")).isTrue();
         assertThat(document.path("servers").get(0).path("url").asText()).isEqualTo("/");

@@ -35,11 +35,16 @@ public final class Probabilities {
         }
     }
 
-    public record ProbabilityInput(String attempt, ValueTag tag, Optional<ConditionHistory> condition, double value) {
+    /** 값이 탑승 확률 자체인지(BOARDING), 좌석 예보에서 옮겨 온 근사인지(SEAT_FORECAST). */
+    public enum ValueOrigin { BOARDING, SEAT_FORECAST }
+
+    public record ProbabilityInput(String attempt, ValueTag tag, Optional<ConditionHistory> condition, double value,
+                                   ValueOrigin origin) {
         public ProbabilityInput {
             requireText(attempt);
             Objects.requireNonNull(tag);
             Objects.requireNonNull(condition);
+            Objects.requireNonNull(origin);
             if (!(value >= 0 && value <= 1)) {
                 throw new IllegalArgumentException("Probability must be within [0, 1]");
             }
@@ -52,10 +57,10 @@ public final class Probabilities {
     public sealed interface SlotValue permits Matched, Marginal, Absent {
     }
 
-    public record Matched(double value) implements SlotValue {
+    public record Matched(double value, ValueOrigin origin) implements SlotValue {
     }
 
-    public record Marginal(double value) implements SlotValue {
+    public record Marginal(double value, ValueOrigin origin) implements SlotValue {
     }
 
     public record Absent() implements SlotValue {
@@ -87,7 +92,7 @@ public final class Probabilities {
             Optional<ProbabilityInput> exact = sameCondition.stream()
                 .filter(input -> input.tag() == exactTagOf(slot.kind())).findFirst();
             if (exact.isPresent()) {
-                return new Matched(exact.get().value());
+                return new Matched(exact.get().value(), exact.get().origin());
             }
             Optional<ProbabilityInput> marginal = sameCondition.stream()
                 .filter(input -> input.tag() == ValueTag.MARG).findFirst()
@@ -97,7 +102,9 @@ public final class Probabilities {
                     .findFirst());
             boolean marginalIsExact = slot.kind() == SlotKind.S_FIRST;
             return marginal
-                .<SlotValue>map(input -> marginalIsExact ? new Matched(input.value()) : new Marginal(input.value()))
+                .<SlotValue>map(input -> marginalIsExact
+                    ? new Matched(input.value(), input.origin())
+                    : new Marginal(input.value(), input.origin()))
                 .orElse(new Absent());
         }
 

@@ -5,7 +5,6 @@ import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapaci
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureUnavailableException;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -30,13 +29,14 @@ public final class AlightingAwareHistoryBootstrap {
         String checkpointDirectory
     ) {
         validateRequest(checkpointDirectory, batchStep);
-        Instant through = through(stops.routeVersionId(), throughBatchId, statistics.confirmedProfile());
-        String seedDirectory = checkpointDirectory;
         if (statistics.confirmedProfile()) {
-            seedDirectory = Path.of(checkpointDirectory).resolve(AlightingAwareRouteStatistics.CONFIRMED_PROFILE).toString();
+            requireQualityCutover();
         }
-        AlightingAwareHistorySeedReader.Seed seed = new AlightingAwareHistorySeedReader(seedDirectory, maximumRows)
-            .read(stops.routeVersionId());
+        Instant through = through(stops.routeVersionId(), throughBatchId, statistics.confirmedProfile());
+        AlightingAwareHistorySeedReader reader = statistics.confirmedProfile()
+            ? AlightingAwareHistorySeedReader.confirmed(checkpointDirectory, maximumRows)
+            : new AlightingAwareHistorySeedReader(checkpointDirectory, maximumRows);
+        AlightingAwareHistorySeedReader.Seed seed = reader.read(stops.routeVersionId());
         Cursor after = initialCursor(seed);
         int checkpoints = 0;
         JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
@@ -63,6 +63,19 @@ public final class AlightingAwareHistoryBootstrap {
 
     private static boolean isInvalidBatchStep(final int batchStep) {
         return batchStep < 1 || batchStep > 1000;
+    }
+
+    private void requireQualityCutover() {
+        // V66은 제외 관측의 좌석을 비우고 route.data_revision을 추가한다.
+        boolean migrated = jdbc.sql("""
+            SELECT EXISTS (
+                SELECT 1 FROM pg_attribute
+                WHERE attrelid='route'::regclass AND attname='data_revision' AND NOT attisdropped
+            )
+            """).query(Boolean.class).single();
+        if (!migrated) {
+            throw new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_HISTORY_REQUIRES_QUALITY_CUTOVER");
+        }
     }
 
     private Instant through(final long routeVersionId, final long batchId, final boolean confirmed) {

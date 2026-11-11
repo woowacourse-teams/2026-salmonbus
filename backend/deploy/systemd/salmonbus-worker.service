@@ -2,6 +2,7 @@
 Description=salmonbus 수집·예보 Worker
 After=network-online.target
 Wants=network-online.target
+ConditionPathExists=!/etc/salmonbus/alighting-cutover-hold
 # api 와 서로 Requires 를 걸지 않는다. 한쪽 장애가 다른 쪽을 내리면 안 된다
 
 [Service]

@@ -206,6 +206,7 @@ export function useBoardSheet({
     safeBottomRef,
     height,
     dragging: dragHeight !== null,
+    heights,
     dragHandlers: {
       onPointerDown: startDrag,
       onPointerMove: moveDrag,

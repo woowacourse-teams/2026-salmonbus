@@ -72,15 +72,7 @@ public final class ActionGuidance {
 
     private static String basisLine(Evaluation evaluation) {
         boolean derived = evaluation instanceof Evaluable evaluable && evaluable.basis() == TimeBasis.DERIVED;
-        boolean independent = evaluation instanceof Evaluable evaluable && evaluable.assumption() == Assumption.INDEP;
-        StringBuilder text = new StringBuilder("입력된 차량 기준이에요.");
-        if (derived) {
-            text.append(" 구간시간은 추정한 값이에요.");
-        }
-        if (independent) {
-            text.append(" 확률은 추정이에요.");
-        }
-        return text.toString();
+        return derived ? "입력된 차량 기준이에요. 구간시간은 추정한 값이에요." : "입력된 차량 기준이에요.";
     }
 
     private static String marginLine(Span margin, Optional<ConnectionTag> connection) {

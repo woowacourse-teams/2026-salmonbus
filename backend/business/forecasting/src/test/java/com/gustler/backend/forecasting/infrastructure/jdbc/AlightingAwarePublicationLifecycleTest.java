@@ -161,6 +161,21 @@ class AlightingAwarePublicationLifecycleTest {
     }
 
     @Test
+    void 입력_확정_기한이_지난_배치는_제외하고_새_배치는_계산_대상에_포함한다() {
+        final long expired = jdbc.sql("SELECT observation_batch_id FROM vehicle_observation WHERE id=?")
+            .param(source).query(Long.class).single();
+        final long next = jdbc.sql("SELECT id FROM observation_batch WHERE route_version_id=? AND response_received_at=?")
+            .params(version, START.plusSeconds(20).atOffset(ZoneOffset.UTC)).query(Long.class).single();
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=NULL WHERE id IN (?,?)")
+            .params(expired, next).update();
+        Instant confirmedAt = START.plusSeconds(91);
+
+        assertThat(confirmedInput.confirm(expired, confirmedAt)).isFalse();
+        assertThat(confirmedInput.confirm(next, confirmedAt)).isTrue();
+        assertThat(confirmedInput.confirm(expired, START.plusSeconds(95))).isFalse();
+    }
+
+    @Test
     void 예보에_만석_확률을_저장하고_하차_후_잔여석만_정산한다() {
         AlightingAwareRouteStatistics stats = statistics();
         AlightingAwareSeatForecastModel model = new AlightingAwareSeatForecastModel(new AlightingAwareSeatPredictor(

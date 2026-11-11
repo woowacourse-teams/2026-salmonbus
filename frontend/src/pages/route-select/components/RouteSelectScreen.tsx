@@ -6,6 +6,7 @@ import type { Direction } from "@/shared/api/routeForecast.types";
 import type { FavoriteGroup, HomeFavorites } from "@/shared/api/favorites.types";
 import { latestSuccessOf, type LatestSuccess } from "@/shared/api/polledResource";
 import type { PolledRequest } from "@/shared/api/usePolledRequest";
+import type { BoardSheetDirection } from "@/shared/bottom-sheet/boardSheetPolicy";
 import { useFavorites, useHomeFavorites } from "@/shared/hooks/useFavorites";
 import { MapFlowSurfaceContext, NativeMapFlowContext, type MapFlowSurfaceState } from "@/shared/map/mapFlowSurface";
 import { isNativeHomeMapAvailable } from "@/shared/native-map/bridge";
@@ -51,6 +52,13 @@ const LOCATION_FAILURE_MESSAGE = {
   unsupported: "현재 위치를 지원하지 않는 환경이에요. 지도를 움직여 지역을 선택해 주세요.",
 };
 
+interface TabSheetState {
+  snap: HomeSheetSnap;
+  direction: BoardSheetDirection;
+}
+
+const INITIAL_TAB_SHEET: TabSheetState = { snap: "summary", direction: "larger" };
+
 export function RouteSelectScreen({
   favoriteSelection,
   onFavoriteSelection,
@@ -81,7 +89,7 @@ export function RouteSelectScreen({
   const navigationRef = useRef<HTMLElement>(null);
   const [sheet, setSheet] = useState<{
     key: string;
-    tabSnap: HomeSheetSnap;
+    tab: TabSheetState;
     station: { stop: HomeStop; snap: HomeSheetSnap } | null;
   } | null>(null);
   const currentSheet = sheet?.key === location.key ? sheet : null;
@@ -129,8 +137,8 @@ export function RouteSelectScreen({
     }
     return directions;
   }, [displayedGroup, isFavorites, memberId]);
-  const tabSnap = currentSheet?.tabSnap ?? "summary";
-  const snap = currentSheet?.station?.snap ?? tabSnap;
+  const tabSheet = currentSheet?.tab ?? INITIAL_TAB_SHEET;
+  const snap = currentSheet?.station?.snap ?? tabSheet.snap;
   const [cameraTarget, setCameraTarget] = useState<Point>(DEFAULT_LOCATION);
   const [mapKey, setMapKey] = useState(0);
   const [mapSurface, setMapSurface] = useState<MapFlowSurfaceState>({ status: "loading", surface: null });
@@ -163,7 +171,7 @@ export function RouteSelectScreen({
   }, []);
 
   function closeStop() {
-    if (selectedStop) setSheet({ key: location.key, tabSnap, station: null });
+    if (selectedStop) setSheet({ key: location.key, tab: { snap: tabSheet.snap, direction: "larger" }, station: null });
   }
 
   function updateMapCenter(point: Point, stopFocus: boolean) {
@@ -224,7 +232,7 @@ export function RouteSelectScreen({
       return;
     }
     const stop = stops.find((item) => item.id === id);
-    if (stop) setSheet({ key: location.key, tabSnap, station: { stop, snap: "detail" } });
+    if (stop) setSheet({ key: location.key, tab: tabSheet, station: { stop, snap: "detail" } });
   }
 
   const homeMapProps = {
@@ -318,10 +326,11 @@ export function RouteSelectScreen({
             surfaceRef={sheetSurfaceRef}
             sectionRef={sheetRef}
             snap={snap}
-            onSnapChange={(next) => {
+            tabDirection={tabSheet.direction}
+            onSnapChange={(next, direction) => {
               if (selectedStop) {
                 if (next === "collapsed") closeStop();
-                else setSheet({ key: location.key, tabSnap, station: { stop: selectedStop, snap: next } });
+                else setSheet({ key: location.key, tab: tabSheet, station: { stop: selectedStop, snap: next } });
                 return;
               }
               if (next === "collapsed") {
@@ -331,11 +340,11 @@ export function RouteSelectScreen({
                     ?.focus({ preventScroll: true });
                 }
               }
-              setSheet({ key: location.key, tabSnap: next, station: null });
+              setSheet({ key: location.key, tab: { snap: next, direction }, station: null });
             }}
             onHeightChange={setSheetHeight}
             label={sheetLabel}
-            contentKey={selectedStop?.id ?? location.pathname}
+            contentKey={selectedStop ? `${location.key}:${selectedStop.id}` : location.key}
             station={selectedStop}
             home={isHome}
             showTabClose={isRouteMap || location.pathname === paths.favoriteGroups}
@@ -364,7 +373,7 @@ export function RouteSelectScreen({
         </NativeMapFlowContext>
       )}
       {!overlayOpen && !selectedStop && (
-        <BottomNavigation ref={navigationRef} onActiveTabPress={() => sheetControlsRef.current?.advance()} />
+        <BottomNavigation ref={navigationRef} onActiveTabPress={() => sheetControlsRef.current?.stepHeight()} />
       )}
       {typeof notice === "string" && <Notice key={location.key} message={notice} />}
       {isHome && <WhatsNewOnEntry />}

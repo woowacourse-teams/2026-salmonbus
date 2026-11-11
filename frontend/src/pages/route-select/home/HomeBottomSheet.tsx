@@ -8,12 +8,13 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { roundTripBoardSheetStepFor, type BoardSheetDirection } from "@/shared/bottom-sheet/boardSheetPolicy";
 import { useBoardSheet } from "@/shared/bottom-sheet/useBoardSheet";
 import { useBoardViewport } from "@/shared/bottom-sheet/useBoardViewport";
 import * as styles from "./HomeScreen.css";
 
 export type HomeSheetSnap = "collapsed" | "summary" | "detail" | "full";
-export type HomeSheetControls = { advance: () => void };
+export type HomeSheetControls = { stepHeight: () => void };
 
 const BOARD_SNAP = { collapsed: "minimum", summary: "half", detail: "expanded", full: "full" } as const;
 const HOME_SNAP = { minimum: "collapsed", half: "summary", expanded: "detail", full: "full" } as const;
@@ -32,6 +33,7 @@ export function HomeBottomSheet({
   home,
   showTabClose,
   snap,
+  tabDirection,
   onSnapChange,
   onHeightChange,
 }: {
@@ -46,7 +48,8 @@ export function HomeBottomSheet({
   home: boolean;
   showTabClose: boolean;
   snap: HomeSheetSnap;
-  onSnapChange: (snap: HomeSheetSnap) => void;
+  tabDirection: BoardSheetDirection;
+  onSnapChange: (snap: HomeSheetSnap, direction: BoardSheetDirection) => void;
   onHeightChange: (height: number) => void;
 }) {
   const bodyId = useId();
@@ -60,6 +63,15 @@ export function HomeBottomSheet({
   const hidden = !available || (collapsed && station === null);
   const showClose = available && !collapsed && (station !== null || showTabClose);
   const homeOverview = home && station === null;
+  const cancelCloseMotion = useCallback(() => {
+    const animation = closeAnimationRef.current;
+    if (!animation) return false;
+    closeAnimationRef.current = null;
+    animation.onfinish = null;
+    animation.cancel();
+    return true;
+  }, []);
+
   const {
     sheetRef,
     headerRef,
@@ -67,12 +79,16 @@ export function HomeBottomSheet({
     safeBottomRef,
     height,
     dragging,
+    heights,
     dragHandlers,
     onHandleKeyDown,
     onHandleClick,
   } = useBoardSheet({
     snap: BOARD_SNAP[snap],
-    onSnapChange: (next) => onSnapChange(HOME_SNAP[next]),
+    onSnapChange: (next) => {
+      cancelCloseMotion();
+      onSnapChange(HOME_SNAP[next], "larger");
+    },
     viewportHeight: viewport.height,
     heightsFor: ({ viewportHeight, safeTop, safeBottom }) => {
       const full = Math.max(0, viewportHeight - safeTop - (station ? safeBottom : 0));
@@ -95,13 +111,11 @@ export function HomeBottomSheet({
     },
     [sheetRef, sectionRef],
   );
-  useImperativeHandle(controlsRef, () => ({ advance: onHandleClick }), [onHandleClick]);
   useLayoutEffect(
     () => () => {
-      closeAnimationRef.current?.cancel();
-      closeAnimationRef.current = null;
+      cancelCloseMotion();
     },
-    [contentKey, snap],
+    [cancelCloseMotion, contentKey],
   );
   useEffect(() => {
     stationHeadingRef.current?.focus({ preventScroll: true });
@@ -113,11 +127,11 @@ export function HomeBottomSheet({
     onHeightChange(available ? height : 0);
   }, [available, height, onHeightChange]);
 
-  function closeWithMotion() {
-    if (closeAnimationRef.current) return;
+  function closeWithMotion(direction: BoardSheetDirection = "larger") {
+    cancelCloseMotion();
     const surface = surfaceRef.current;
     if (!surface?.animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      onSnapChange("collapsed");
+      onSnapChange("collapsed", direction);
       return;
     }
 
@@ -127,9 +141,26 @@ export function HomeBottomSheet({
     );
     closeAnimationRef.current = animation;
     animation.onfinish = () => {
-      if (closeAnimationRef.current === animation) onSnapChange("collapsed");
+      if (closeAnimationRef.current !== animation) return;
+      cancelCloseMotion();
+      onSnapChange("collapsed", direction);
     };
   }
+
+  function stepHeight() {
+    if (cancelCloseMotion()) {
+      onSnapChange("summary", "larger");
+      return;
+    }
+    const current = BOARD_SNAP[snap];
+    const next = roundTripBoardSheetStepFor(current, heights, tabDirection);
+    if (next.snap === current) return;
+    if (next.snap === "minimum") closeWithMotion(next.direction);
+    else onSnapChange(HOME_SNAP[next.snap], next.direction);
+  }
+
+  useImperativeHandle(controlsRef, () => ({ stepHeight }));
+  const handleClick = station ? onHandleClick : stepHeight;
 
   return (
     <div
@@ -168,10 +199,10 @@ export function HomeBottomSheet({
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
-                onHandleClick();
+                handleClick();
               } else onHandleKeyDown(event);
             }}
-            onClick={onHandleClick}
+            onClick={handleClick}
           >
             <span className={styles.handleBar} />
           </div>

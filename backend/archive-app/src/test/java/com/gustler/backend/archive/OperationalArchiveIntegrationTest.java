@@ -107,6 +107,29 @@ class OperationalArchiveIntegrationTest {
     }
 
     @Test
+    void 월요일에도_금요일_체크포인트의_배치는_다음_체크포인트까지_보존한다() {
+        long friday = batch("2026-11-06T10:00Z");
+        observation(friday);
+        jdbc.sql("""
+            INSERT INTO alighting_history_checkpoint VALUES(?,'2026-11-06T10:00:01Z',?,'2026-11-06T09:58:31Z')
+            """).params(version, friday).update();
+        MemoryObjects objects = new MemoryObjects();
+        service(objects).advance();
+        assertThat(jdbc.sql("SELECT failure_code FROM operational_archive_job").query(String.class).single())
+            .isEqualTo("ALIGHTING_HISTORY_REQUIRED");
+        assertThat(count("observation_batch")).isOne();
+
+        long monday = batch("2026-11-09T01:00Z");
+        jdbc.sql("""
+            UPDATE alighting_history_checkpoint SET through_at='2026-11-09T01:00:01Z',through_batch_id=?,
+                retain_from='2026-11-09T00:58:31Z' WHERE route_version_id=?
+            """).params(monday, version).update();
+        jdbc.sql("UPDATE operational_archive_job SET retry_at='-infinity'").update();
+        service(objects).advance();
+        assertThat(jdbc.sql("SELECT id FROM observation_batch").query(Long.class).list()).containsExactly(monday);
+    }
+
+    @Test
     void 이전_노선의_구_통계_완료_기록이_없어도_이관한다() {
         observation(batch("2026-11-07T03:00Z"));
         assertThat(jdbc.sql("SELECT to_regclass('stop_demand_run') IS NULL").query(Boolean.class).single()).isTrue();

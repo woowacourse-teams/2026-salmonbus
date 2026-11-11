@@ -1,4 +1,5 @@
 export type BoardSheetSnap = "minimum" | "half" | "expanded" | "full";
+export type BoardSheetDirection = "larger" | "smaller";
 
 export type BoardSheetHeights = Record<BoardSheetSnap, number>;
 
@@ -39,7 +40,7 @@ export function boundedBoardSheetHeightFor(height: number, heights: BoardSheetHe
 export function adjacentBoardSheetSnapFor(
   snap: BoardSheetSnap,
   heights: BoardSheetHeights,
-  direction: "larger" | "smaller",
+  direction: BoardSheetDirection,
 ): BoardSheetSnap {
   const candidates = direction === "larger" ? SNAPS : [...SNAPS].reverse();
   return (
@@ -47,6 +48,19 @@ export function adjacentBoardSheetSnapFor(
       direction === "larger" ? heights[candidate] > heights[snap] : heights[candidate] < heights[snap],
     ) ?? snap
   );
+}
+
+export function roundTripBoardSheetStepFor(
+  snap: BoardSheetSnap,
+  heights: BoardSheetHeights,
+  direction: BoardSheetDirection,
+): { snap: BoardSheetSnap; direction: BoardSheetDirection } {
+  const next = adjacentBoardSheetSnapFor(snap, heights, direction);
+  if (next !== snap) return { snap: next, direction };
+
+  const reverse = direction === "larger" ? "smaller" : "larger";
+  const nextInReverse = adjacentBoardSheetSnapFor(snap, heights, reverse);
+  return nextInReverse === snap ? { snap, direction } : { snap: nextInReverse, direction: reverse };
 }
 
 export function settledBoardSheetSnapFor(
