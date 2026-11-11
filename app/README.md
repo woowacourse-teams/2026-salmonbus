@@ -58,7 +58,7 @@ iOS의 뒤로가기·앞으로가기 스와이프 중에는 `MapNavigationSnapsh
 
 `pnpm test`, `pnpm typecheck`, `pnpm lint`로 config plugin, bridge, TypeScript를 검사합니다. Swift와 SDK 연동은 Xcode Simulator build로 검사합니다. DEBUG build의 `[SalmonNativeMap]` 로그는 touch 대상, camera 이동 여부와 zoom, overlay 개수만 기록하며 클라이언트 키나 사용자 좌표를 기록하지 않습니다.
 
-`verification/NativeMapInteractionTests.swift`는 검색 화면에서 가상 3330 노선을 선택해 전체 경로가 상태바 안전 영역과 웹 시트 사이에 들어오는지, iOS 26 이상의 WebView 상단 효과가 지도를 흐리게 덮지 않는지, 지도 이동·시트 드래그·더블탭 확대가 동작하는지 확인합니다. 저장소의 `scripts/native-map-fixture-api.cjs`를 실행하고 웹 개발 서버의 `API_PROXY_TARGET`을 그 서버로 지정합니다. 앱의 `EXPO_PUBLIC_WEB_URL`은 웹 개발 서버의 `/search`로 설정하고, `verification/setup-ui-tests.rb`로 만든 `NativeMapVerification` scheme을 전용 iOS Simulator에서 실행합니다.
+`verification/NativeMapInteractionTests.swift`는 검색 화면에서 가상 3330 노선을 선택해 전체 경로가 상태바 안전 영역과 웹 시트 사이에 들어오는지, iOS 26 이상의 WebView 상단 효과가 지도를 흐리게 덮지 않는지, 지도 이동·시트 드래그·더블탭 확대가 동작하는지 확인합니다. 회전 후 핀치 확대와 가상 노선 재진입에서 방향 초기화 및 카메라 보존도 검증합니다. 저장소의 `scripts/native-map-fixture-api.cjs`를 실행하고 웹 개발 서버의 `API_PROXY_TARGET`을 그 서버로 지정합니다. 앱의 `EXPO_PUBLIC_WEB_URL`은 웹 개발 서버의 `/api/native-map-verification`으로 설정하고, `verification/setup-ui-tests.rb`로 만든 `NativeMapVerification` scheme을 전용 iOS Simulator에서 실행합니다.
 
 마커 UI의 기준은 `frontend/src/shared/map/mapStopPin.css.ts`와 `naverMapAdapter.css.ts`입니다. iOS 정류장 핀은 이 웹 스타일로 렌더링한 `ios/Resources/stop-*@3x.png` 네 가지를 사용합니다. 승차 가능 여부와 선택 상태에 맞춰 이미지를 고릅니다. 웹 정류장 핀 스타일을 바꿀 때는 18px 핀을 기존 36px 또는 44px 투명 캔버스 중앙에 놓고 3배 해상도로 다시 렌더링합니다. 실시간 차량은 별도의 `bus-front@3x.png`를 사용합니다.
 

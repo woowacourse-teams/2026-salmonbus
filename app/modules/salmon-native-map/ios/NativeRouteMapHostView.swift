@@ -284,6 +284,11 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     let initialStop = nextScene.stops.first { $0.selection == nextScene.selectedStop }
     let preserveCamera = nextScene.preserveCamera == true
     initialFitPending = !preserveCamera && initialStop == nil
+    if !preserveCamera, mapView.cameraPosition.heading != 0 {
+      let camera = NMFCameraUpdate(heading: 0)
+      camera.animation = .none
+      mapView.moveCamera(camera)
+    }
     if !preserveCamera, let initialStop {
       let camera = NMFCameraUpdate(scrollTo: initialStop.markerCoordinate.naver, zoomTo: 13)
       camera.animation = .none
@@ -747,10 +752,13 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     let visibleRect = mapView.convert(mapContainer.bounds, from: mapContainer)
       .intersection(mapView.convert(safeAreaLayoutGuide.layoutFrame, from: self))
     var snapshot: [String: Any] = [
+      "sessionId": sessionId ?? "",
       "routeId": scene?.routeId ?? "",
       "ready": readySent && !failed && !initialFitPending && !initialFitScheduled,
       "zoom": mapView.cameraPosition.zoom,
       "heading": mapView.cameraPosition.heading,
+      "latitude": mapView.cameraPosition.target.lat,
+      "longitude": mapView.cameraPosition.target.lng,
       "gestureMoves": gestureMoveCount,
       "visibleMapHeight": mapContainer.bounds.height,
       "captureAll": gate.captureAll,

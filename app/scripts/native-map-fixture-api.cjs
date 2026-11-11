@@ -1,6 +1,7 @@
 // Local-only data for checking the real iOS SDK against the existing web board.
 // Run with Node 24 from the repository root: node app/scripts/native-map-fixture-api.cjs
 const http = require('node:http');
+const fs = require('node:fs');
 const { createApiData } = require('../../frontend/e2e/fixtures/mock-data.ts');
 
 const port = Number(process.env.NATIVE_MAP_FIXTURE_PORT ?? 4310);
@@ -13,6 +14,12 @@ http.createServer((request, response) => {
   if (request.method !== 'GET') {
     response.writeHead(405, { Allow: 'GET' });
     response.end();
+    return;
+  }
+
+  if (url.pathname === '/api/native-map-verification') {
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    response.end(fs.readFileSync(require.resolve('../verification/native-map-fixture.html')));
     return;
   }
 
