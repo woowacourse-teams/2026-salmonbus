@@ -20,6 +20,7 @@ import static org.mockito.Mockito.never;
 import com.gustler.backend.api.board.domain.ApproachingVehicle;
 import com.gustler.backend.api.board.domain.Board;
 import com.gustler.backend.api.board.domain.VehicleForecast;
+import com.gustler.backend.api.salmon.application.SalmonDueArrivals.Due;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot.Prediction;
 import java.time.Instant;
 import java.util.List;
@@ -61,7 +62,7 @@ class SalmonDueArrivalsTest {
         Instant received = NOW.minusSeconds(60);
 
         assertThat(arrivals(received, STALE, inSeconds("gone", 1, 30), inSeconds("next", 2, 400))
-            .vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE, NOW)).containsExactly("next");
+            .vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE, NOW).listed()).containsExactly("next");
     }
 
     @Test
@@ -73,20 +74,21 @@ class SalmonDueArrivalsTest {
 
     @Test
     void 스냅샷이_없거나_만료_시각부터는_쓰지_않는다() {
-        assertThat(noSnapshot(NOW).vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE, NOW)).isEmpty();
+        assertThat(noSnapshot(NOW).vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE, NOW).listed()).isEmpty();
         assertThat(arrivals(NOW, STALE, inSeconds("bus", 1, 900))
-            .vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE, STALE.minusMillis(1))).containsExactly("bus");
+            .vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE, STALE.minusMillis(1)).listed()).containsExactly("bus");
         assertThat(arrivals(NOW, STALE, inSeconds("bus", 1, 900))
-            .vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE, STALE)).isEmpty();
+            .vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE, STALE).listed()).isEmpty();
     }
 
     @Test
     void 전광판과_노선이나_판본이나_순번이_다른_방문은_쓰지_않는다() {
         SalmonDueArrivals arrivals = arrivals(NOW, STALE, inSeconds("bus", 1, 300));
 
-        assertThat(arrivals.vehicles("204000058", EMPTY_BOARD, STATION, STOP_SEQUENCE, NOW)).isEmpty();
-        assertThat(arrivals.vehicles(ROUTE, boardOfVersion("32", NOW, STALE), STATION, STOP_SEQUENCE, NOW)).isEmpty();
-        assertThat(arrivals.vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE + 1, NOW)).isEmpty();
+        assertThat(arrivals.vehicles("204000058", EMPTY_BOARD, STATION, STOP_SEQUENCE, NOW).listed()).isEmpty();
+        assertThat(arrivals.vehicles(ROUTE, boardOfVersion("32", NOW, STALE), STATION, STOP_SEQUENCE, NOW).listed())
+            .isEmpty();
+        assertThat(arrivals.vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE + 1, NOW).listed()).isEmpty();
     }
 
     // 아래 사례의 전광판은 판정 30초 전 관측이다. 맨 앞 차량 front는 순번 2 정류장에 있고(세 정류장 앞) 300초 뒤 닿는다.
@@ -96,27 +98,28 @@ class SalmonDueArrivalsTest {
     void 목록의_두_대가_마감_안이면_전광판에만_보이는_뒤_차량의_도착을_맨_앞_차량이_있는_정류장에서_이어_붙인다() {
         SalmonArrivalFixture fixture = twoListed().collectable(2, inSeconds("hidden", 1, 240));
 
-        assertThat(dueWithHidden(fixture)).containsExactly("front", "second", "hidden");
+        Due due = dueWithHidden(fixture);
+
+        assertThat(due.listed()).containsExactly("front", "second");
+        assertThat(due.hidden()).containsExactly("hidden");
         then(fixture.stations()).should().getForKnownStation(stationOf(2));
     }
 
     @Test
     void 앞_정류장_목록에_목록의_차량이_같이_보이면_그_차량의_두_예상_시각_차이로_구간_시간을_잰다() {
         // second는 앞 정류장에 100초 뒤, 이 정류장에 360초 뒤 닿는다. 구간 시간은 260초이고 한 구간 여유는 붙지 않는다.
-        assertThat(dueWithHidden(twoListed().collectable(2, inSeconds("second", 1, 100), inSeconds("hidden", 2, 940))))
-            .containsExactly("front", "second", "hidden");
-        assertThat(dueWithHidden(twoListed().collectable(2, inSeconds("second", 1, 100), inSeconds("hidden", 2, 941))))
-            .containsExactly("front", "second");
+        assertThat(dueWithHidden(twoListed().collectable(2, inSeconds("second", 1, 100), inSeconds("hidden", 2, 940)))
+            .hidden()).containsExactly("hidden");
+        assertThat(dueWithHidden(twoListed().collectable(2, inSeconds("second", 1, 100), inSeconds("hidden", 2, 941)))
+            .hidden()).isEmpty();
     }
 
     @Test
     void 이어_붙인_도착이_여유를_더해_마감을_넘으면_뒤_차량을_세지_않는다() {
-        assertThat(dueWithHidden(twoListed().collectable(2, inSeconds("hidden", 1, 760))))
-            .containsExactly("front", "second", "hidden");
-        assertThat(dueWithHidden(twoListed().collectable(2, inSeconds("hidden", 1, 761))))
-            .containsExactly("front", "second");
-        assertThat(dueWithHidden(twoListed().collectable(2, inSeconds("hidden", 1, 900))))
-            .containsExactly("front", "second");
+        assertThat(dueWithHidden(twoListed().collectable(2, inSeconds("hidden", 1, 760))).hidden())
+            .containsExactly("hidden");
+        assertThat(dueWithHidden(twoListed().collectable(2, inSeconds("hidden", 1, 761))).hidden()).isEmpty();
+        assertThat(dueWithHidden(twoListed().collectable(2, inSeconds("hidden", 1, 900))).hidden()).isEmpty();
     }
 
     @Test
@@ -124,10 +127,11 @@ class SalmonDueArrivalsTest {
         SalmonArrivalFixture failing = twoListed();
         given(failing.stations().getForKnownStation(anyString())).willThrow(new DataAccessResourceFailureException("db"));
 
-        assertThat(dueWithHidden(twoListed())).containsExactly("front", "second");
-        assertThat(dueWithHidden(twoListed().collectable(2, inSeconds("other", 1, 240))))
-            .containsExactly("front", "second");
-        assertThat(dueWithHidden(failing)).containsExactly("front", "second");
+        for (Due due : List.of(dueWithHidden(twoListed()),
+            dueWithHidden(twoListed().collectable(2, inSeconds("other", 1, 240))), dueWithHidden(failing))) {
+            assertThat(due.listed()).containsExactly("front", "second");
+            assertThat(due.hidden()).isEmpty();
+        }
     }
 
     @Test
@@ -137,10 +141,10 @@ class SalmonDueArrivalsTest {
         SalmonArrivalFixture nothingHidden = twoListed();
 
         assertThat(secondBeyond.reader().vehicles(ROUTE, boardWithHidden(), STATION, STOP_SEQUENCE, NOW))
-            .containsExactly("front");
+            .isEqualTo(new Due(List.of("front"), List.of()));
         assertThat(nothingHidden.reader().vehicles(ROUTE,
             board(NOW.minusSeconds(30), STALE, approaching("front", 3), approaching("second", 4)), STATION,
-            STOP_SEQUENCE, NOW)).containsExactly("front", "second");
+            STOP_SEQUENCE, NOW)).isEqualTo(new Due(List.of("front", "second"), List.of()));
         then(secondBeyond.stations()).should(never()).getForKnownStation(anyString());
         then(nothingHidden.stations()).should(never()).getForKnownStation(anyString());
     }
@@ -149,7 +153,7 @@ class SalmonDueArrivalsTest {
         return received(NOW, STALE).stored(STOP_SEQUENCE, inSeconds("front", 1, 300), inSeconds("second", 2, 360));
     }
 
-    private static List<String> dueWithHidden(SalmonArrivalFixture fixture) {
+    private static Due dueWithHidden(SalmonArrivalFixture fixture) {
         return fixture.reader().vehicles(ROUTE, boardWithHidden(), STATION, STOP_SEQUENCE, NOW);
     }
 
@@ -163,6 +167,6 @@ class SalmonDueArrivalsTest {
     }
 
     private static List<String> due(Prediction... predictions) {
-        return arrivals(NOW, STALE, predictions).vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE, NOW);
+        return arrivals(NOW, STALE, predictions).vehicles(ROUTE, EMPTY_BOARD, STATION, STOP_SEQUENCE, NOW).listed();
     }
 }

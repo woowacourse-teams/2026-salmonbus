@@ -238,7 +238,7 @@ class BoardSalmonActionCaseTest {
     }
 
     @Test
-    void 목록의_두_대가_모두_만차일_것_같아도_이어_붙인_뒤_차량에_자리가_있을_것_같으면_이동을_찾지_않는다() {
+    void 이어_붙인_뒤_차량만으로는_옮기지_않아도_된다고_답하지_않는다() {
         BoardQueryService boards = mock(BoardQueryService.class);
         BoardingOptionsQueryService walks = mock(BoardingOptionsQueryService.class);
         given(boards.readBoard(ROUTE_ID)).willReturn(reading(SalmonArrivalFixture.board(OBSERVED.minusSeconds(30),
@@ -252,6 +252,21 @@ class BoardSalmonActionCaseTest {
 
         assertThat(decide(cases(boards, listedOnly.reader(), walks, clock(OBSERVED))))
             .isEqualTo(Terminal.NO_MOVE_NO_CANDIDATE);
+        assertThat(decide(cases(boards, withHidden.reader(), walks, clock(OBSERVED))))
+            .isEqualTo(Terminal.ABSTAIN_EVIDENCE);
+    }
+
+    @Test
+    void 도착_목록의_차량만으로_위험이_낮으면_이어_붙인_뒤_차량이_있어도_이동을_찾지_않는다() {
+        BoardQueryService boards = mock(BoardQueryService.class);
+        BoardingOptionsQueryService walks = mock(BoardingOptionsQueryService.class);
+        given(boards.readBoard(ROUTE_ID)).willReturn(reading(SalmonArrivalFixture.board(OBSERVED.minusSeconds(30),
+            STALE, fullAt("front", 3, 0.8), fullAt("second", 4, 0.2), fullAt("hidden", 8, 0.9))));
+        given(walks.get(any())).willReturn(noWalks());
+        SalmonArrivalFixture withHidden = SalmonArrivalFixture.received(OBSERVED, OBSERVED.plusSeconds(3600))
+            .stored(5, inSeconds("front", 1, 300), inSeconds("second", 2, 360))
+            .collectable(2, inSeconds("hidden", 1, 240));
+
         assertThat(decide(cases(boards, withHidden.reader(), walks, clock(OBSERVED))))
             .isEqualTo(Terminal.NO_MOVE_POLICY);
     }

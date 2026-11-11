@@ -49,16 +49,30 @@ public class SalmonDueArrivals {
     }
 
     /**
-     * 마감 안에 닿는 차량의 ID를 돌려준다. 이 정류장의 스냅샷을 쓸 수 없거나, 목록의 예측 가운데 마감 안인지 가를 수 없는
-     * 예측이 있거나, 마감 안에 닿는 차량 가운데 ID가 없는 차량이 있으면 빈 목록이다. 마감 안에 닿는 차량이 없을 때도
-     * 빈 목록이다. 전광판에만 보이는 뒤 차량은 마감 안이 확실할 때만 더한다.
+     * 마감 안에 닿는 차량. listed는 이 정류장의 도착 목록에 보이는 차량이고, hidden은 전광판에만 보여 도착을 앞 정류장에서
+     * 이어 붙인 차량이다. hidden의 도착 시각은 추정이라 둘을 섞지 않는다.
      */
-    public List<String> vehicles(String routeId, Board board, String stationId, int stopSequence,
-                                 Instant decisionAt) {
+    public record Due(List<String> listed, List<String> hidden) {
+        public Due {
+            listed = List.copyOf(listed);
+            hidden = List.copyOf(hidden);
+        }
+
+        static Due none() {
+            return new Due(List.of(), List.of());
+        }
+    }
+
+    /**
+     * 마감 안에 닿는 차량의 ID를 돌려준다. 이 정류장의 스냅샷을 쓸 수 없거나, 목록의 예측 가운데 마감 안인지 가를 수 없는
+     * 예측이 있거나, 마감 안에 닿는 차량 가운데 ID가 없는 차량이 있으면 listed가 비어 있다. 마감 안에 닿는 차량이 없을 때도
+     * 비어 있다. 전광판에만 보이는 뒤 차량은 마감 안이 확실할 때만 hidden에 넣는다.
+     */
+    public Due vehicles(String routeId, Board board, String stationId, int stopSequence, Instant decisionAt) {
         Optional<List<Expected>> listed = repository.latest(stationId)
             .flatMap(snapshot -> expectedAt(snapshot, routeId, board, stationId, stopSequence, decisionAt));
         if (listed.isEmpty()) {
-            return List.of();
+            return Due.none();
         }
         Instant deadline = decisionAt.plus(settings.horizon());
         List<String> due = new ArrayList<>();
@@ -67,14 +81,14 @@ public class SalmonDueArrivals {
                 continue;
             }
             if (!expected.surelyBy(deadline) || expected.vehicleId().isEmpty()) {
-                return List.of();
+                return Due.none();
             }
             due.add(expected.vehicleId().get());
         }
         if (listed.get().size() == LISTED_PER_ROUTE && due.size() == LISTED_PER_ROUTE) {
-            due.addAll(hiddenDue(routeId, board, stationId, stopSequence, listed.get(), decisionAt, deadline));
+            return new Due(due, hiddenDue(routeId, board, stationId, stopSequence, listed.get(), decisionAt, deadline));
         }
-        return due;
+        return new Due(due, List.of());
     }
 
     private List<String> hiddenDue(String routeId, Board board, String stationId, int stopSequence,

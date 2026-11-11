@@ -31,8 +31,9 @@ import org.springframework.stereotype.Component;
 /**
  * 공개 조회가 전광판, 도착 예측, 같은 방향 도보를 운영 값으로 판정 상황에 담는다.
  *
- * <p>대기 위험은 마감까지 그 정류장 방문에 닿는 차량마다 전광판이 출발 만차 확률을 줄 때만 만든다. 한 대라도
- * 확률이 없으면 만들지 않는다. 마감 뒤에 오는 차량의 확률은 대기 위험이 아니다. 전광판은 한 번만 읽는다.
+ * <p>대기 위험은 마감까지 그 정류장 방문에 닿는 도착 목록의 차량마다 전광판이 출발 만차 확률을 줄 때만 만든다.
+ * 한 대라도 확률이 없으면 만들지 않는다. 마감 뒤에 오는 차량의 확률은 대기 위험이 아니다. 도착을 이어 붙인 가려진
+ * 차량의 확률은 따로 넘긴다. 전광판은 한 번만 읽는다.
  * 이동 후보의 차내 시간과 접속 시각은 만들지 않는다. 전광판 좌석 예보는 만료 시각과 같은 순간까지 쓴다.
  */
 @Component
@@ -70,20 +71,24 @@ public class BoardSalmonActionCase implements SalmonActionCase {
             if (decisionAt.isAfter(board.staleAt().toInstant())) {
                 return Situation.missingStay();
             }
-            List<Double> stay = new ArrayList<>();
-            for (String vehicleId : arrivals.vehicles(routeId.value(), board, stationId, stopSequence, decisionAt)) {
+            SalmonDueArrivals.Due due = arrivals.vehicles(routeId.value(), board, stationId, stopSequence, decisionAt);
+            List<Double> listed = new ArrayList<>();
+            for (String vehicleId : due.listed()) {
                 Optional<Double> probability = departureFullProbability(board, stationId, stopSequence, vehicleId);
                 if (probability.isEmpty()) {
                     return Situation.missingStay();
                 }
-                stay.add(probability.get());
+                listed.add(probability.get());
             }
-            if (stay.isEmpty()) {
+            if (listed.isEmpty()) {
                 return Situation.missingStay();
             }
+            List<Optional<Double>> hidden = due.hidden().stream()
+                .map(vehicleId -> departureFullProbability(board, stationId, stopSequence, vehicleId))
+                .toList();
             BoardingOptionsQuery query = walkQuery(routeId, stationId, stopSequence);
             BoardingOptions options = walks.get(query);
-            return assessment.situation(stay, toWalks(options), options.options().size() < query.limit());
+            return assessment.situation(listed, hidden, toWalks(options), options.options().size() < query.limit());
         } catch (NoRecentObservationException | ModelOutOfScopeException | ServiceUnavailableException
                  | BoardingOptionsException | DataAccessException unavailable) {
             return Situation.missingStay();
