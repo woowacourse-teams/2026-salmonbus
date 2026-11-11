@@ -654,6 +654,23 @@ describe("네이버 지도 adapter", () => {
     expect(native.map.fits).toBe(2);
     expect(native.map.zoom).toBe(15);
   });
+  it("크기 변경 뒤 시트가 지도를 가리면 다시 보일 때 전체 노선을 맞춘다", () => {
+    const { native, adapter, advanceTimers } = setup(true, { refitOverviewOnResize: true });
+
+    adapter.resize(400, 664, 266);
+    adapter.resize(400, 664, 0);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(1);
+
+    adapter.resize(400, 664, 332);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(2);
+    expect(native.map.fitMargins?.top).toBe(194);
+
+    adapter.resize(400, 664, 266);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(2);
+  });
   for (const glSupported of [true, false]) {
     it(`${glSupported ? "GL" : "타일"} 지도의 첫 경로를 캔버스에서 잘린 위아래 영역을 제외하고 맞춘다`, () => {
       const { native } = setup(glSupported, { visibleHeight: 150 });

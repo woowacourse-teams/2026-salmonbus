@@ -141,6 +141,7 @@ export function createNaverRouteMap(
   let activeDirection: Direction = initialStop?.direction ?? board?.route.directions[0].id ?? "UP";
   let initialFitPending = board !== null && initialCamera === undefined;
   let overviewRefitEnabled = refitOverviewOnResize && initialFitPending && initialStop === undefined;
+  let overviewRefitPending = false;
   let overviewRefitTimer: number | undefined;
   let viewportSize = map.getSize();
   let mapVisibleHeight = visibleHeight;
@@ -241,7 +242,9 @@ export function createNaverRouteMap(
   function stopOverviewRefit() {
     if (!overviewRefitEnabled) return;
     overviewRefitEnabled = false;
+    overviewRefitPending = false;
     window.clearTimeout(overviewRefitTimer);
+    overviewRefitTimer = undefined;
     cameraFocusInterruptEvents.forEach((event) => element.removeEventListener(event, stopOverviewRefit, true));
   }
 
@@ -739,13 +742,20 @@ export function createNaverRouteMap(
         refreshStops();
         refreshArrows();
       }
-      if (!overviewRefitEnabled || (!viewportChanged && !(cropChanged && overviewRefitTimer !== undefined))) return;
-      // 키보드가 닫히는 동안 지도 크기와 시트 높이가 함께 바뀌므로 마지막 표시 영역에 맞춘다.
+      if (!overviewRefitEnabled || (!viewportChanged && !(cropChanged && overviewRefitPending))) return;
+      overviewRefitPending = true;
       window.clearTimeout(overviewRefitTimer);
+      // 시트가 지도를 완전히 가리면 맞춤을 보류하고, 다시 보이는 높이가 들어올 때 예약한다.
+      if (mapVisibleHeight <= 0) {
+        overviewRefitTimer = undefined;
+        return;
+      }
+      // 키보드가 닫히는 동안 지도 크기와 시트 높이가 함께 바뀌므로 마지막 표시 영역에 맞춘다.
       overviewRefitTimer = window.setTimeout(
         createNativeEventHandler(() => {
           overviewRefitTimer = undefined;
-          if (!initialFitPending && mapVisibleHeight > 0) fitOverview();
+          overviewRefitPending = false;
+          if (!initialFitPending) fitOverview();
         }),
         OVERVIEW_RESIZE_SETTLE_MS,
       );
