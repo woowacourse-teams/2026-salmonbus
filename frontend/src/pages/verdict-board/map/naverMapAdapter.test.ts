@@ -3,13 +3,19 @@ import { boardMock } from "@/shared/api/routeForecast.mock";
 import { liveVehicleViewsFor } from "../components/liveVehiclePolicy";
 import { routeWatchMock } from "@/shared/api/routeForecast.mock";
 import { loadPreviewRouteMapData } from "./routeMapPreview.mock";
-import type { NaverCoordinate, NaverMap, NaverMaps, NaverMarker } from "./naverSdk";
+import type { NaverCoordinate, NaverMap, NaverMaps, NaverMarker } from "@/shared/map/naverSdk";
 import { createNaverRouteMap } from "./naverMapAdapter";
 import type { RouteMapData } from "./routeMapModel";
 
+jest.mock("@/shared/map/mapStopPin.css", () => ({
+  stopPin: "stopPin",
+  stopPinGlyph: "stopPinGlyph",
+  stopPinLabel: "stopPinLabel",
+  stopPinSize: 18,
+}));
+
 jest.mock("./naverMapAdapter.css", () => ({
   stop: "stop",
-  stopName: "name",
   arrow: "arrow",
   bus: "bus",
   busCount: "busCount",
@@ -107,7 +113,7 @@ function createRecordingSdk(glSupported = true) {
     projectionOffsetX = 0;
     destroyed = false;
     constructor(
-      _element: HTMLElement,
+      private element: HTMLElement,
       public options: ConstructorParameters<NaverMaps["Map"]>[1],
     ) {
       this.center = options.center;
@@ -136,6 +142,11 @@ function createRecordingSdk(glSupported = true) {
     setCenter(center: NaverCoordinate) {
       this.center = center;
     }
+    morph(center: NaverCoordinate, zoom: number) {
+      this.setCenter(center);
+      this.setZoom(zoom);
+    }
+    stop() {}
     fitBounds(
       coordinates: NaverCoordinate[],
       margins: { top: number; right: number; bottom: number; left: number; maxZoom: number },
@@ -148,6 +159,9 @@ function createRecordingSdk(glSupported = true) {
     }
     getSize() {
       return this.size;
+    }
+    getPanes() {
+      return { overlayLayer: this.element };
     }
     setSize(size: SizeStub) {
       this.size = size;
@@ -198,6 +212,7 @@ function createRecordingSdk(glSupported = true) {
     }
   }
   const sdk: NaverMaps = {
+    Position: { BOTTOM_LEFT: 10 },
     glEnabled: true,
     LatLng: CoordinateStub,
     Point: PointStub,
@@ -263,7 +278,7 @@ afterEach(() => {
 
 function setup(
   glSupported = true,
-  { initialized = true, reducedMotion = false, visibleHeight = 350 } = {},
+  { initialized = true, reducedMotion = false, visibleHeight = 350, refitOverviewOnResize = false } = {},
   dataOverrides: Partial<RouteMapData> = {},
 ) {
   const pendingFrames = new Map<number, FrameRequestCallback>();
@@ -332,6 +347,10 @@ function setup(
     onReady,
     onVehicleSelect,
     onDeselect,
+    null,
+    undefined,
+    false,
+    { refitOverviewOnResize },
   );
   const initialize = () => native.events.find((event) => event.name === "init")?.listener();
   if (initialized) initialize();
@@ -370,207 +389,23 @@ function visibleArrowDirections(native: ReturnType<typeof createRecordingSdk>) {
   ].sort();
 }
 
-function createOverlappingStopsSetup(direction: number) {
-  const coordinate = { latitude: 37.5, longitude: 127 };
-  const connection = { latitude: 37.501, longitude: 127 };
-  const downCoordinate = { latitude: 37.5, longitude: 127 + direction * 0.016 };
-  const downConnection = { latitude: 37.501, longitude: downCoordinate.longitude };
-  const { native, adapter, flushFrames } = setup(
-    true,
-    {},
-    {
-      stops: [
-        {
-          sequence: 11,
-          stopId: "206000729",
-          direction: "UP",
-          coordinate,
-          pathConnection: { coordinate: connection, segmentIndex: 0, segmentFraction: 0 },
-        },
-        {
-          sequence: 76,
-          stopId: "206000724",
-          direction: "DOWN",
-          coordinate: downCoordinate,
-          pathConnection: { coordinate: downConnection, segmentIndex: 0, segmentFraction: 0 },
-        },
-        {
-          sequence: 75,
-          stopId: "206000726",
-          direction: "DOWN",
-          coordinate: { latitude: 37.5, longitude: 127 + direction * 0.024 },
-        },
-      ],
-    },
-  );
-  const projection = native.map.getProjection();
-  jest.spyOn(native.map, "getProjection").mockImplementation(() => {
-    const scale = 2 ** (native.map.getZoom() - 14);
-    return {
-      fromCoordToOffset: (position) => {
-        const point = projection.fromCoordToOffset(position);
-        return new PointStub(point.x * scale, point.y * scale);
-      },
-      fromOffsetToCoord: (point) => projection.fromOffsetToCoord(new PointStub(point.x / scale, point.y / scale)),
-    };
-  });
-  const up = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "11")!;
-  const down = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "76")!;
-  const positions = [up.options.position, down.options.position];
-  native.map.zoom = 14;
-  native.events.find((event) => event.name === "idle")!.listener();
-  flushFrames();
-  flushFrames();
-  adapter.update({ direction: "UP", sequence: 11 }, "DOWN", []);
-  const zoomChanged = native.events.find((event) => event.name === "zoom_changed")!.listener;
-  return { native, adapter, up, down, positions, connection, downConnection, zoomChanged };
-}
-
 describe("네이버 지도 adapter", () => {
-  it.each([-1, 0, 1])("DOWN이 가로 %s 방향에 있어도 줌과 선택을 바꿀 때 마커는 크기 보정만 적용한다", (direction) => {
-    const { native, adapter, up, down, positions, zoomChanged } = createOverlappingStopsSetup(direction);
-    const markers = [up, down];
-
-    for (const zoom of [13.5, 14, 16, 18, 14]) {
-      native.map.zoom = zoom;
-      zoomChanged();
-      for (const selection of [
-        null,
-        { direction: "UP" as const, sequence: 11 },
-        { direction: "DOWN" as const, sequence: 76 },
-      ]) {
-        for (const activeDirection of ["UP", "DOWN"] as const) {
-          adapter.update(selection, activeDirection, []);
-          markers.forEach((marker, index) => {
-            const isSelected = selection?.sequence === Number(marker.options.icon.content.dataset.mapStopSequence);
-            expect(marker.options.icon.content.style.transform).toBe(
-              isSelected ? "translate(-4px, -4px)" : "translate(0px, 0px)",
-            );
-            expect(marker.options.position).toBe(positions[index]);
-          });
-        }
-      }
-    }
+  it("방향 전환 시 선택한 방향의 정류장만 표시하고 좌표를 유지한다", () => {
+    const { native, adapter } = setup();
+    native.map.zoom = 16;
+    const up = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "11")!;
+    const down = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "76")!;
+    const upPosition = up.options.position;
+    const downPosition = down.options.position;
+    adapter.update(null, "UP", []);
+    expect(up.visible).toBe(true);
+    expect(down.visible).toBe(false);
+    adapter.update({ direction: "DOWN", sequence: 76 }, "DOWN", []);
+    expect(up.visible).toBe(false);
+    expect(down.visible).toBe(true);
+    expect(up.options.position).toBe(upPosition);
+    expect(down.options.position).toBe(downPosition);
   });
-
-  it.each([-1, 0, 1])(
-    "DOWN이 가로 %s 방향에 있어도 연결선은 줌과 선택에 관계없이 정류장 좌표에서 시작한다",
-    (direction) => {
-      const { native, adapter, up, down, connection, downConnection, zoomChanged } =
-        createOverlappingStopsSetup(direction);
-      const connectors = native.lines.filter((line) => line.strokeStyle === "shortdot");
-      expect(connectors).toHaveLength(2);
-
-      for (const zoom of [13.5, 14, 16, 18, 14]) {
-        native.map.zoom = zoom;
-        zoomChanged();
-        for (const selection of [
-          null,
-          { direction: "UP" as const, sequence: 11 },
-          { direction: "DOWN" as const, sequence: 76 },
-        ]) {
-          for (const activeDirection of ["UP", "DOWN"] as const) {
-            adapter.update(selection, activeDirection, []);
-            [up, down].forEach((marker, index) => {
-              const connector = connectors[index]!;
-              const start = connector.path[0]!;
-              const end = connector.path[1]!;
-              const target = [connection, downConnection][index]!;
-              expect(start.lat()).toBe(marker.options.position.lat());
-              expect(start.lng()).toBe(marker.options.position.lng());
-              expect(end.lat()).toBe(target.latitude);
-              expect(end.lng()).toBe(target.longitude);
-              const isSelected = selection?.sequence === Number(marker.options.icon.content.dataset.mapStopSequence);
-              const isActive = (index === 0 ? "UP" : "DOWN") === activeDirection;
-              expect(connector.strokeOpacity).toBe(zoom >= 14 && (isActive || isSelected) ? 0.85 : 0);
-            });
-          }
-        }
-      }
-    },
-  );
-
-  it("겹친 마커는 선택한 정류장, 보고 있는 방향, 반대 방향 순으로 우선한다", () => {
-    const { native, adapter, up, down, zoomChanged } = createOverlappingStopsSetup(0);
-    for (const zoom of [13.5, 14, 16, 18]) {
-      native.map.zoom = zoom;
-      zoomChanged();
-      for (const activeDirection of ["UP", "DOWN"] as const) {
-        const active = activeDirection === "UP" ? up : down;
-        const opposite = activeDirection === "UP" ? down : up;
-        adapter.update(null, activeDirection, []);
-        expect(active.options.zIndex).toBe(6);
-        expect(opposite.options.zIndex).toBe(5);
-        for (const selection of [
-          { direction: "UP" as const, sequence: 11 },
-          { direction: "DOWN" as const, sequence: 76 },
-        ]) {
-          adapter.update(selection, activeDirection, []);
-          expect(up.options.zIndex).toBe(selection.direction === "UP" ? 15 : activeDirection === "UP" ? 6 : 5);
-          expect(down.options.zIndex).toBe(selection.direction === "DOWN" ? 15 : activeDirection === "DOWN" ? 6 : 5);
-        }
-        adapter.update(null, activeDirection, []);
-        expect(active.options.zIndex).toBe(6);
-        expect(opposite.options.zIndex).toBe(5);
-      }
-    }
-  });
-
-  it.each([
-    { distance: 23.99, labelAbove: true },
-    { distance: 24.01, labelAbove: false },
-    { distance: 27.99, labelAbove: false },
-    { distance: 28.01, labelAbove: false },
-  ])(
-    "줌 14에서 간격이 $distance px인 짝은 줌과 선택이 바뀌어도 비활성 이름표 위치를 유지한다",
-    ({ distance, labelAbove }) => {
-      const { native, adapter } = setup(
-        true,
-        {},
-        {
-          stops: [
-            { sequence: 11, stopId: "206000729", direction: "UP", coordinate: { latitude: 37.5, longitude: 127 } },
-            {
-              sequence: 76,
-              stopId: "206000724",
-              direction: "DOWN",
-              coordinate: { latitude: 37.5, longitude: 127 + distance / 1000 },
-            },
-          ],
-        },
-      );
-      const projection = native.map.getProjection();
-      jest.spyOn(native.map, "getProjection").mockImplementation(() => {
-        const scale = 2 ** (native.map.getZoom() - 14);
-        return {
-          fromCoordToOffset: (coordinate) => {
-            const point = projection.fromCoordToOffset(coordinate);
-            return new PointStub(point.x * scale, point.y * scale);
-          },
-          fromOffsetToCoord: (point) => projection.fromOffsetToCoord(new PointStub(point.x / scale, point.y / scale)),
-        };
-      });
-      const up = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "11")!;
-      const down = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "76")!;
-      const zoomChanged = native.events.find((event) => event.name === "zoom_changed")!.listener;
-
-      for (const zoom of [14, 16, 18, 13.5, 14]) {
-        native.map.zoom = zoom;
-        zoomChanged();
-        for (const selection of [
-          null,
-          { direction: "UP" as const, sequence: 11 },
-          { direction: "DOWN" as const, sequence: 76 },
-        ]) {
-          for (const activeDirection of ["UP", "DOWN"] as const) {
-            adapter.update(selection, activeDirection, []);
-            expect(up.options.icon.content.dataset.labelAbove).toBe(String(labelAbove && activeDirection !== "UP"));
-            expect(down.options.icon.content.dataset.labelAbove).toBe(String(labelAbove && activeDirection !== "DOWN"));
-          }
-        }
-      }
-    },
-  );
 
   it.each(["click", "tap"])("지도 배경의 %s는 카메라 이동 없이 선택 해제를 요청한다", (eventName) => {
     const { native, adapter, onDeselect, onSelect, onVehicleSelect } = setup();
@@ -782,7 +617,7 @@ describe("네이버 지도 adapter", () => {
     ).toEqual(data.paths.flatMap((path) => path.coordinates));
 
     initialize();
-    adapter.resize(400, 600);
+    adapter.resize(400, 600, 350);
     adapter.update(null, "UP", []);
     initialize();
     expect(native.map.fits).toBe(1);
@@ -793,6 +628,48 @@ describe("네이버 지도 adapter", () => {
     expect(native.map.fittedCoordinates.length).toBeGreaterThan(0);
     initialize();
     expect(native.map.fits).toBe(1);
+  });
+  it("검색 진입 후 키보드가 닫히면 시트 위의 최종 영역에 전체 노선을 맞춘다", () => {
+    const { native, adapter, advanceTimers } = setup(true, {
+      visibleHeight: 140,
+      refitOverviewOnResize: true,
+    });
+    const coordinates = native.map.fittedCoordinates;
+    // 공유 지도는 판정보드의 크기 알림을 받기 전에 홈에서 먼저 크기가 바뀔 수 있다.
+    native.map.setSize(new SizeStub(400, 664));
+    adapter.resize(400, 664, 450);
+    advanceTimers(50);
+    adapter.resize(400, 664, 266);
+    advanceTimers(50);
+    expect(native.map.fits).toBe(1);
+
+    advanceTimers(50);
+    expect(native.map.fits).toBe(2);
+    expect(native.map.fitMargins).toEqual({ top: 227, right: 12, bottom: 227, left: 12, maxZoom: 13 });
+    expect(native.map.fittedCoordinates).toEqual(coordinates);
+
+    adapter.resize(400, 680, 272);
+    adapter.focus({ direction: "UP", sequence: 15 });
+    advanceTimers(100);
+    expect(native.map.fits).toBe(2);
+    expect(native.map.zoom).toBe(15);
+  });
+  it("크기 변경 뒤 시트가 지도를 가리면 다시 보일 때 전체 노선을 맞춘다", () => {
+    const { native, adapter, advanceTimers } = setup(true, { refitOverviewOnResize: true });
+
+    adapter.resize(400, 664, 266);
+    adapter.resize(400, 664, 0);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(1);
+
+    adapter.resize(400, 664, 332);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(2);
+    expect(native.map.fitMargins?.top).toBe(194);
+
+    adapter.resize(400, 664, 266);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(2);
   });
   for (const glSupported of [true, false]) {
     it(`${glSupported ? "GL" : "타일"} 지도의 첫 경로를 캔버스에서 잘린 위아래 영역을 제외하고 맞춘다`, () => {
@@ -986,7 +863,7 @@ describe("네이버 지도 adapter", () => {
     const setSize = jest.spyOn(native.map, "setSize");
     const setCenter = jest.spyOn(native.map, "setCenter");
     const setZoom = jest.spyOn(native.map, "setZoom");
-    adapter.resize(400, 350);
+    adapter.resize(400, 350, 350);
     expect(setSize).not.toHaveBeenCalled();
     expect(setCenter).not.toHaveBeenCalled();
     expect(setZoom).not.toHaveBeenCalled();
@@ -1000,7 +877,7 @@ describe("네이버 지도 adapter", () => {
     const center = native.map.center;
     const setCenter = jest.spyOn(native.map, "setCenter");
     const setZoom = jest.spyOn(native.map, "setZoom");
-    adapter.resize(400, 600);
+    adapter.resize(400, 600, 350);
     expect(native.map.size).toEqual(new SizeStub(400, 600));
     expect(setCenter).not.toHaveBeenCalled();
     expect(setZoom).not.toHaveBeenCalled();
@@ -1284,7 +1161,7 @@ describe("네이버 지도 adapter", () => {
     adapter.moveVehicles([{ key: view.key, sequencePosition: view.vehicle.currentStopSequence + 0.75 }]);
     const latestTarget = bus.options.position;
     expect([latestTarget.lat(), latestTarget.lng()]).not.toEqual([initialTarget.lat(), initialTarget.lng()]);
-    adapter.resize(400, 500);
+    adapter.resize(400, 500, 350);
     flushFrames(280);
     expect(native.map.center.lat()).toBeCloseTo(latestTarget.lat(), 12);
     expect(native.map.center.lng()).toBeCloseTo(latestTarget.lng(), 12);

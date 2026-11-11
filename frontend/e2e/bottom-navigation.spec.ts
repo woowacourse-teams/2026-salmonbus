@@ -28,7 +28,7 @@ test("하단 탭으로 홈과 마이페이지를 오가면 현재 메뉴를 표�
   await expect(mypage).toHaveAttribute("aria-current", "page");
   expect(await movement.evaluate(({ finished }) => finished)).toBeGreaterThan(start.x);
   await movement.dispose();
-  await expect(page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true })).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await home.click();
   await expect(page).toHaveURL("/");

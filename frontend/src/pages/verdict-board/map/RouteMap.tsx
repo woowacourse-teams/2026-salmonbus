@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { MapLocationButton } from "@/shared/components/MapLocationButton";
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLocation } from "react-router";
+import { MapFlowSurfaceContext } from "@/shared/map/mapFlowSurface";
+import { boardEntryFrom } from "@/shared/routing/boardEntry";
 import type { Board, Direction } from "@/shared/api/routeForecast.types";
 import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleMotionStore } from "../hooks/useLiveVehicleMotion";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { RouteMapData } from "./routeMapModel";
-import { loadNaverMaps, subscribeNaverMapAuthFailure } from "./naverSdk";
+import { loadNaverMaps, subscribeNaverMapAuthFailure } from "@/shared/map/naverSdk";
 import { createNaverRouteMap, type RouteMapAdapter, type RouteMapCamera } from "./naverMapAdapter";
 import type { RouteMapGeometryStatus } from "./useRouteMapData";
 import { isNativeMapAvailable } from "@/shared/native-map/bridge";
@@ -30,6 +34,8 @@ interface RouteMapProps {
   visible: boolean;
   viewportHeight: number;
   activeDirection: Direction;
+  preserveViewOnEntry?: boolean;
+  quietInitialLoad?: boolean;
 }
 
 const NO_VEHICLES: readonly LiveVehicleView[] = [];
@@ -50,6 +56,10 @@ function locationDeniedStateFor(message: string): LocationState {
 }
 
 export function RouteMap(props: RouteMapProps) {
+  const refitOverviewOnResize = boardEntryFrom(useLocation().state) === "search";
+  const mapFlow = useContext(MapFlowSurfaceContext);
+  const sharedSurface = mapFlow?.surface ?? null;
+  const shared = mapFlow !== null;
   const {
     data,
     geometryStatus,
@@ -62,9 +72,12 @@ export function RouteMap(props: RouteMapProps) {
     motion,
     vehicleFocusRequest,
     selectedVehicleKey,
+    preserveViewOnEntry = false,
+    quietInitialLoad = false,
   } = props;
   const selectedStopOnly = geometryStatus === "generating" || geometryStatus === "withheld";
   const regionRef = useRef<HTMLElement | null>(null);
+  const entryCropApplied = useRef(false);
   const previousView = useRef<{
     routeId: string;
     referenceVersionId: string;
@@ -84,6 +97,7 @@ export function RouteMap(props: RouteMapProps) {
     !nativeFailed &&
     isNativeMapAvailable() &&
     (!selectedStopOnly || appHostFrom()?.capabilities.includes("map.selectedStopOnly") === true);
+  const webSurface = useNativeMap ? null : sharedSurface;
 
   useLayoutEffect(() => {
     propsRef.current = props;
@@ -132,6 +146,7 @@ export function RouteMap(props: RouteMapProps) {
       previousView.current = null;
       return;
     }
+    if (shared && !useNativeMap && webSurface === null) return;
     const { routeId, referenceVersionId } = data;
     const view = previousView.current;
     const sameVersion = view?.routeId === data.routeId && view.referenceVersionId === data.referenceVersionId;
@@ -140,13 +155,18 @@ export function RouteMap(props: RouteMapProps) {
     let ready = false;
     function rememberCamera(adapter: RouteMapAdapter, native: boolean) {
       if (!ready) return;
-      const camera = adapter.camera?.();
-      previousView.current = {
-        routeId,
-        referenceVersionId,
-        native,
-        ...(camera && { camera }),
-      };
+      try {
+        const camera = adapter.camera?.();
+        previousView.current = {
+          routeId,
+          referenceVersionId,
+          native,
+          ...(camera && { camera }),
+        };
+      } catch {
+        // SDK가 이미 지도를 해제한 경우에는 위치 복원 없이 정리한다.
+        previousView.current = null;
+      }
     }
     let active = true;
     let failed = false;
@@ -214,9 +234,9 @@ export function RouteMap(props: RouteMapProps) {
       };
     }
     const unsubscribeAuthFailure = subscribeNaverMapAuthFailure(() => failActiveMap());
-    void loadNaverMaps(__NAVER_MAP_KEY_ID__)
+    void (webSurface ? Promise.resolve(webSurface.maps) : loadNaverMaps(__NAVER_MAP_KEY_ID__))
       .then((sdk) => {
-        const element = elementRef.current;
+        const element = webSurface?.element ?? elementRef.current;
         const region = regionRef.current;
         if (!active || failed || element === null || region === null) return;
         const current = propsRef.current;
@@ -242,6 +262,7 @@ export function RouteMap(props: RouteMapProps) {
           current.selected,
           webCamera,
           selectedStopOnly,
+          { ...(webSurface && { sharedMap: webSurface.map }), refitOverviewOnResize },
         );
         adapterRef.current = adapter;
         lastFocusedStop.current = current.selected;
@@ -264,7 +285,7 @@ export function RouteMap(props: RouteMapProps) {
       if (adapterRef.current !== null) rememberCamera(adapterRef.current, false);
       disposeMap();
     };
-  }, [data, disposeMap, failMap, selectedStopOnly, useNativeMap]);
+  }, [data, disposeMap, failMap, refitOverviewOnResize, selectedStopOnly, shared, webSurface, useNativeMap]);
 
   useEffect(() => {
     runMapAction((adapter) => {
@@ -319,12 +340,42 @@ export function RouteMap(props: RouteMapProps) {
     if (region === null) return;
     // 시트는 지도를 잘라 보이는 높이만 바꾼다. GL 버퍼 크기는 화면 크기가 바뀔 때만 갱신한다.
     const observer = new ResizeObserver(() => {
-      region.style.setProperty("--map-crop-inset", `${Math.max(0, (viewportHeight - region.clientHeight) / 2)}px`);
-      runMapAction((adapter) => adapter.resize(region.clientWidth, viewportHeight));
+      const visibleHeight = region.clientHeight;
+      const crop = Math.max(0, (viewportHeight - visibleHeight) / 2);
+      const cropInset = `${crop}px`;
+      region.style.setProperty("--map-crop-inset", cropInset);
+      if (webSurface && data && window.naver?.maps === webSurface.maps) {
+        if (preserveViewOnEntry && visible && !entryCropApplied.current) {
+          entryCropApplied.current = true;
+          const { map, maps } = webSurface;
+          const projection = map.getProjection();
+          const center = projection.fromCoordToOffset(map.getCenter());
+          // 캔버스가 위로 잘리는 만큼 중심을 옮겨 처음 보이던 지도 위치를 유지한다.
+          map.setCenter(projection.fromOffsetToCoord(new maps.Point(center.x, center.y - crop)));
+        }
+        webSurface.element.style.setProperty("--board-map-crop-inset", cropInset);
+      }
+      runMapAction((adapter) => adapter.resize(region.clientWidth, viewportHeight, visibleHeight));
     });
     observer.observe(region);
     return () => observer.disconnect();
-  }, [mapState, viewportHeight, runMapAction]);
+  }, [data, mapState, preserveViewOnEntry, webSurface, viewportHeight, visible, runMapAction]);
+
+  useEffect(
+    () => () => {
+      webSurface?.element.style.removeProperty("--board-map-crop-inset");
+    },
+    [webSurface],
+  );
+
+  useEffect(() => {
+    if (!sharedSurface || visible) return;
+    const { element } = sharedSurface;
+    element.setAttribute("inert", "");
+    return () => {
+      element.removeAttribute("inert");
+    };
+  }, [sharedSurface, visible]);
 
   function locate() {
     const adapter = adapterRef.current;
@@ -396,41 +447,61 @@ export function RouteMap(props: RouteMapProps) {
   const currentMapState =
     mapState.status !== "loading" && mapState.data === data ? mapState : { status: "loading" as const };
   const preparing = geometryStatus === "preparing" || geometryStatus === "generating";
+  const quietPreparation = quietInitialLoad && (geometryStatus === "loading" || preparing);
   const withheld = geometryStatus === "withheld";
   const geometryNotice = preparing ? "노선을 준비 중이에요" : withheld ? "현재 노선을 표시할 수 없어요" : null;
   const stopInfoNotice = withheld ? "정류장 정보는 확인 가능해요" : "정류장 목록은 계속 확인할 수 있어요";
+  const sharedMapFailed = !useNativeMap && mapFlow?.status === "error";
   const unavailableMessage =
     currentMapState.status === "error"
       ? currentMapState.message
-      : data === null
-        ? (geometryNotice ??
-          (geometryStatus === "error" || geometryStatus === "retrying"
-            ? "지도를 불러오지 못했어요"
-            : "지도 정보를 준비 중이에요"))
-        : null;
+      : sharedMapFailed
+        ? "지도를 불러오지 못했어요"
+        : data === null && !quietPreparation
+          ? (geometryNotice ??
+            (geometryStatus === "error" || geometryStatus === "retrying"
+              ? "지도를 불러오지 못했어요"
+              : "지도 정보를 준비 중이에요"))
+          : null;
   const ready = currentMapState.status === "ready";
+  const showSharedNativeMap = shared && useNativeMap && ready;
+  useLayoutEffect(() => {
+    if (!showSharedNativeMap) return;
+    const root = document.documentElement;
+    root.dataset.sharedNativeMapReady = "true";
+    return () => {
+      delete root.dataset.sharedNativeMapReady;
+    };
+  }, [showSharedNativeMap]);
   return (
     <section
       ref={regionRef}
-      className={styles.region}
-      style={{ pointerEvents: visible ? "auto" : "none" }}
+      className={shared ? styles.sharedRegion : styles.region}
+      style={{ pointerEvents: visible && !shared ? "auto" : "none" }}
       aria-label="노선 지도"
-      aria-busy={currentMapState.status === "loading" && geometryStatus !== "error" && geometryStatus !== "retrying"}
+      aria-busy={
+        !sharedMapFailed &&
+        currentMapState.status === "loading" &&
+        geometryStatus !== "error" &&
+        geometryStatus !== "retrying"
+      }
       aria-hidden={!visible}
       inert={!visible}
     >
-      <div className={styles.canvasViewport} style={{ height: viewportHeight }}>
-        <div
-          ref={elementRef}
-          className={styles.canvas}
-          data-testid="route-map"
-          data-overlays-ready={ready}
-          inert={!ready}
-          aria-hidden={!ready}
-        />
-      </div>
+      {!shared && (
+        <div className={styles.canvasViewport} style={{ height: viewportHeight }}>
+          <div
+            ref={elementRef}
+            className={styles.canvas}
+            data-testid="route-map"
+            data-overlays-ready={ready}
+            inert={!ready}
+            aria-hidden={!ready}
+          />
+        </div>
+      )}
       {unavailableMessage !== null ? (
-        <div className={styles.notice} role="status" data-native-map-hit>
+        <div className={shared ? styles.sharedNotice : styles.notice} role="status" data-native-map-hit>
           <span>{unavailableMessage}</span>
           {geometryStatus === "retrying" && <span>잠시 후 자동으로 다시 불러와요.</span>}
           <span>{stopInfoNotice}</span>
@@ -439,8 +510,8 @@ export function RouteMap(props: RouteMapProps) {
       {data !== null &&
       ready &&
       (geometryRetrying ||
-        geometryNotice !== null ||
-        !data.paths.some((path) => path.direction === activeDirection)) ? (
+        (!quietPreparation &&
+          (geometryNotice !== null || !data.paths.some((path) => path.direction === activeDirection)))) ? (
         <div
           className={
             withheld ? styles.withheldToast : geometryNotice === null ? styles.pathNotice : styles.geometryToast
@@ -459,28 +530,13 @@ export function RouteMap(props: RouteMapProps) {
         </div>
       ) : null}
       {data !== null && ready ? (
-        <button
-          type="button"
+        <MapLocationButton
           className={styles.location}
           aria-label="현재 위치 보기"
           onClick={locate}
           data-native-map-hit
           disabled={locationState.status === "loading"}
-        >
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="6" />
-            <circle cx="12" cy="12" r="2" />
-            <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
-          </svg>
-        </button>
+        />
       ) : null}
       {ready && locationState.status === "message" ? (
         <div className={styles.locationNotice} role="status" data-native-map-hit>

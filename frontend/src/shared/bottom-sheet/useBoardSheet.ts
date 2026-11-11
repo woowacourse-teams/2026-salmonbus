@@ -8,7 +8,7 @@ import {
   type MouseEvent,
   type PointerEvent,
 } from "react";
-import type { BoardSheetSnap } from "../components/boardSheetPolicy";
+import type { BoardSheetHeights, BoardSheetMeasurements, BoardSheetSnap } from "./boardSheetPolicy";
 import {
   BOARD_SHEET_DRAG_THRESHOLD,
   adjacentBoardSheetSnapFor,
@@ -16,11 +16,12 @@ import {
   boundedBoardSheetHeightFor,
   keyboardBoardSheetSnapFor,
   settledBoardSheetSnapFor,
-} from "../components/boardSheetPolicy";
+} from "./boardSheetPolicy";
 
 interface BoardSheetOptions {
   snap: BoardSheetSnap;
   viewportHeight: number;
+  heightsFor?: (measurements: BoardSheetMeasurements) => BoardSheetHeights;
   onSnapChange: (snap: BoardSheetSnap) => void;
 }
 
@@ -46,7 +47,12 @@ const INTERACTIVE_HEADER_CONTENT =
 const CLICK_AFTER_DRAG_MS = 400;
 const FLICK_IDLE_MS = 80;
 
-export function useBoardSheet({ snap, viewportHeight, onSnapChange }: BoardSheetOptions) {
+export function useBoardSheet({
+  snap,
+  viewportHeight,
+  heightsFor = boardSheetHeightsFor,
+  onSnapChange,
+}: BoardSheetOptions) {
   const sheetRef = useRef<HTMLElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const safeTopRef = useRef<HTMLSpanElement | null>(null);
@@ -56,7 +62,7 @@ export function useBoardSheet({ snap, viewportHeight, onSnapChange }: BoardSheet
   const draggedAtRef = useRef<number | null>(null);
   const [geometry, setGeometry] = useState<SheetGeometry>({ headerHeight: 0, safeTop: 0, safeBottom: 0 });
   const [dragHeight, setDragHeight] = useState<number | null>(null);
-  const heights = boardSheetHeightsFor({ viewportHeight, ...geometry });
+  const heights = heightsFor({ viewportHeight, ...geometry });
   const height = dragHeight === null ? heights[snap] : boundedBoardSheetHeightFor(dragHeight, heights);
 
   const cancelFrame = useCallback(() => {

@@ -4,7 +4,7 @@ import { routeId } from "./fixtures/mock-data";
 test.use({ viewport: { width: 320, height: 844 }, reducedMotion: "reduce" });
 const secondGroupId = "10000000-0000-4000-8000-000000000003";
 
-test("홈 편집 중 그룹을 추가해도 미저장 그룹·정류장 순서를 유지하고 함께 저장한다", async ({
+test("즐겨찾기 편집 중 그룹을 추가해도 미저장 그룹·정류장 순서를 유지하고 함께 저장한다", async ({
   page,
   favorites,
   api,
@@ -15,7 +15,7 @@ test("홈 편집 중 그룹을 추가해도 미저장 그룹·정류장 순서�
     storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
   ];
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   const groupList = editor.getByRole("list", { name: "그룹 순서", exact: true });
@@ -55,14 +55,14 @@ test("홈 편집 중 그룹을 추가해도 미저장 그룹·정류장 순서�
   await expect(editor).toHaveCount(0);
   expect(favorites.groups.map((group) => group.name)).toEqual(["통학", "즐겨찾기", "퇴근"]);
   expect(favorites.groups[1]!.favorites.map((favorite) => favorite.stopId)).toEqual([second!.stopId, first!.stopId]);
-  await page.goto("/");
+  await page.goto("/favorites");
   await expect(page.getByRole("tab", { name: "퇴근", exact: true })).toBeVisible();
   expect(favorites.requests.filter((request) => request.method === "POST")).toHaveLength(1);
 });
 
 test("그룹 알약의 여백을 드래그해 순서를 바꾸고 Escape로 취소하며 짧게 눌러 선택한다", async ({ page, favorites }) => {
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   const list = editor.getByRole("list", { name: "그룹 순서", exact: true });

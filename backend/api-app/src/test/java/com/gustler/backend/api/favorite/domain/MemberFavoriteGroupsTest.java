@@ -5,31 +5,28 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.gustler.backend.api.favorite.FavoriteGroupLimitExceededException;
-import com.gustler.backend.api.favorite.RepresentativeFavoriteGroupDeletionException;
+import com.gustler.backend.api.favorite.LastFavoriteGroupDeletionException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class MemberFavoriteGroupsTest {
     @Test
-    void 첫_번째_즐겨찾기_그룹은_대표이므로_삭제하지_않는다() {
+    void 그룹이_여러_개면_첫_번째_그룹도_삭제할_수_있다() {
         FavoriteGroup first = emptyGroup("출근");
         FavoriteGroup second = emptyGroup("퇴근");
         MemberFavoriteGroups groups = new MemberFavoriteGroups(List.of(first, second));
 
-        assertThatThrownBy(() -> groups.remove(first.id()))
-            .isInstanceOf(RepresentativeFavoriteGroupDeletionException.class);
+        assertThat(groups.remove(first.id()).values()).containsExactly(second);
     }
 
     @Test
-    void 순서를_바꾸면_새로운_첫_번째_그룹이_대표가_된다() {
+    void 마지막_그룹은_삭제할_수_없다() {
         FavoriteGroup first = emptyGroup("출근");
         FavoriteGroup second = emptyGroup("퇴근");
-        MemberFavoriteGroups groups = new MemberFavoriteGroups(List.of(first, second));
-        MemberFavoriteGroups reordered = groups.reorder(List.of(second.id(), first.id()));
+        MemberFavoriteGroups remaining = new MemberFavoriteGroups(List.of(first, second)).remove(first.id());
 
-        assertThatThrownBy(() -> reordered.remove(second.id()))
-            .isInstanceOf(RepresentativeFavoriteGroupDeletionException.class);
-        assertThat(reordered.remove(first.id()).values()).containsExactly(second);
+        assertThatThrownBy(() -> remaining.remove(second.id()))
+            .isInstanceOf(LastFavoriteGroupDeletionException.class);
     }
 
     @Test

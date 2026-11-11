@@ -14,6 +14,12 @@ export const editor = style({
   fontFamily: "'Noto Sans KR', sans-serif",
 });
 export const groupControls = style({ display: "flex", alignItems: "center", gap: 8 });
+export const selectedGroupActions = style({
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 8,
+});
 export const controls = style({
   display: "flex",
   flexDirection: "column",

@@ -30,7 +30,6 @@ export const vars = createGlobalTheme(":root", {
     mapBus: "#E53D4D",
     mapStopName: "#24352B",
     routeSummary: {
-      endpoints: "#354239",
       text: "#737373",
       separator: "#B3BBB2",
     },

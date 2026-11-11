@@ -10,8 +10,17 @@ test.use({
   reducedMotion: "reduce",
 });
 
-test("watch 배차간격을 표시하고 다음 응답에 정보가 없으면 안내 문구로 바뀐다", async ({ page, api }) => {
+test("운행 정보는 기본으로 접혀 있고 펼치면 최신 배차간격을 보여 준다", async ({ page, api }) => {
   await openBoard(page);
+  const toggle = page.getByRole("button", { name: "운행 정보", exact: true });
+  const hours = page.getByText("05:00–23:00", { exact: true });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(hours).toBeHidden();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(hours).toBeVisible();
+  await expect(page.getByText("3대 운행 중", { exact: true })).toBeVisible();
   const summary = page.getByRole("definition").filter({ hasText: "15~25분" });
   await expect(summary).toBeVisible();
 
@@ -21,11 +30,16 @@ test("watch 배차간격을 표시하고 다음 응답에 정보가 없으면 �
   await (await refreshed).finished();
   await expect(page.getByText("정보 준비 중", { exact: true })).toBeVisible();
   await expect(page.getByText("15~25분", { exact: true })).toHaveCount(0);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(hours).toBeHidden();
 });
 
 test("화면을 켜 둔 채 한국 시간 자정을 넘기면 새 응답 없이도 오늘의 배차간격으로 바뀐다", async ({ page, api }) => {
   await page.clock.setSystemTime(new Date("2026-10-30T23:59:30+09:00"));
   await openBoard(page);
+  await page.getByRole("button", { name: "운행 정보", exact: true }).click();
   await expect(page.getByText("15~25분", { exact: true })).toBeVisible();
 
   api.mode.watch = "network-error";
@@ -50,7 +64,12 @@ test("판정 보드 최초 조회가 503이면 Retry-After 뒤 다시 불러와 
   api.mode.watch = { status: 503, retryAfterSeconds: 30 };
   await page.goto("/");
   await selectRoute(page);
-  await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).toBeVisible();
+  const sheet = page.getByRole("region", { name: "판정보드", exact: true });
+  await expect(sheet).toHaveAttribute("data-snap", "expanded");
+  await expect(sheet.getByRole("img", { name: "연어 버스 로고" })).toBeVisible();
+  await expect(sheet.getByRole("alert")).toHaveText("노선 정보를 불러오지 못했어요");
+  await expect(sheet.getByText("잠시 후 자동으로 다시 불러와요.", { exact: true })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "다시 시도하기", exact: true })).toBeInViewport({ ratio: 1 });
 
   api.mode.watch = "success";
   const retried = page.waitForResponse(

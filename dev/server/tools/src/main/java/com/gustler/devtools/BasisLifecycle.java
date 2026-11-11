@@ -77,7 +77,8 @@ final class BasisLifecycle {
             Checks.require(previous.files().containsKey(name) && next.files().containsKey(name),
                     "DEV_DATA_CHANGE_REQUIRES_PLAN");
         }
-        for (var name : DataPreparation.FILES) {
+        // 모델은 worker.env로 따로 선택한다. 번들 파일 변경은 기존 DB의 변경이 아니다.
+        for (var name : List.of("routes.json", "catalog-routes.json")) {
             Checks.require(previous.files().containsKey("tools/data/" + name)
                             && next.files().containsKey("tools/data/" + name),
                     "DEV_DATA_CHANGE_REQUIRES_PLAN");
@@ -85,6 +86,7 @@ final class BasisLifecycle {
         var names = new java.util.TreeSet<>(previous.files().keySet());
         names.addAll(next.files().keySet());
         for (var name : names) {
+            if (name.startsWith("tools/data/model-reference/")) continue;
             if (name.equals("tools/data-contract.sha256")
                     && (approval != null || CompatiblePreparation.permits(previous, next))) continue;
             if (retirement && ChatRetirement.INFRA_FILES.contains(name)) continue;

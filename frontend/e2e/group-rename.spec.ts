@@ -10,7 +10,12 @@ test("320px 이름 변경 화면은 제목·라벨·입력·정책·저장 순�
   await page.setViewportSize({ width: 320, height: 844 });
   favorites.groups[0]!.name = "출퇴근";
   favorites.groups.push({ id: "10000000-0000-4000-8000-000000000003", name: "통학", favorites: [] });
-  await page.goto(`/mypage/groups/${defaultGroupId}`);
+  await page.goto(`/favorites/groups/${defaultGroupId}`);
+  await expect(page).toHaveURL(`/favorites/groups/${defaultGroupId}`);
+  await expect(page.getByRole("navigation").getByRole("link", { name: "즐겨찾기", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await page.getByRole("button", { name: "그룹 이름 변경", exact: true }).click();
   const heading = page.getByRole("heading", { name: "이름 변경", exact: true });
   const input = page.getByRole("textbox", { name: "변경할 그룹 이름", exact: true });
@@ -52,4 +57,34 @@ test("320px 이름 변경 화면은 제목·라벨·입력·정책·저장 순�
   await save.click();
   await expect(page.getByRole("heading", { name: "회사 가는 길", exact: true })).toBeVisible();
   expect(favorites.groups[0]!.name).toBe("회사 가는 길");
+  await page.getByRole("link", { name: "그룹 목록으로 돌아가기" }).click();
+  await page.getByRole("navigation").getByRole("link", { name: "즐겨찾기", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "회사 가는 길", exact: true })).toBeVisible();
+});
+
+test("즐겨찾기 연필에서 선택한 그룹의 이름을 바꾸고 첫 그룹도 삭제할 수 있다", async ({ page, favorites }) => {
+  const schoolId = "10000000-0000-4000-8000-000000000003";
+  favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
+  await page.goto("/favorites");
+  await expect(page.getByRole("link", { name: "그룹 관리", exact: true })).toHaveCount(0);
+  await page.getByRole("tab", { name: "통학", exact: true }).click();
+  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
+  const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+  await expect(editor.getByRole("button", { name: "통학", exact: true, pressed: true })).toBeVisible();
+  await editor.getByRole("button", { name: "그룹 이름 수정", exact: true }).click();
+  const name = editor.getByRole("textbox", { name: "변경할 그룹 이름" });
+  await expect(name).toBeFocused();
+  await name.fill("등교");
+  await editor.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(editor.getByRole("button", { name: "등교", exact: true, pressed: true })).toBeVisible();
+  expect(favorites.groups.find((group) => group.id === schoolId)?.name).toBe("등교");
+  await editor.getByRole("button", { name: "즐겨찾기", exact: true }).click();
+  await editor.getByRole("button", { name: "그룹 삭제", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "삭제", exact: true }).click();
+  await expect(editor.getByRole("button", { name: "등교", exact: true, pressed: true })).toBeVisible();
+  await expect(editor.getByRole("button", { name: "그룹 삭제", exact: true })).toHaveCount(0);
+  expect(favorites.groups.map((group) => group.id)).toEqual([schoolId]);
+  expect(favorites.requests.filter((request) => request.method === "PUT")).toHaveLength(0);
+  await editor.getByRole("button", { name: "완료", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "등교", exact: true })).toBeVisible();
 });

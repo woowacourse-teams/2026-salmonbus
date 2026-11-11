@@ -56,6 +56,18 @@ test("비회원 마이페이지에서 서비스 개선 참여를 끄면 새로�
   await expect(participation(page)).toBeChecked();
   await expect(participation(page)).toHaveAccessibleDescription(DESCRIPTION);
 
+  const toggle = page.getByRole("button", { name: "서비스 개선에 참여하기", exact: true });
+  const description = page.getByText(DESCRIPTION, { exact: true });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(description).toBeHidden();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(description).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(description).toBeHidden();
+  await expect(participation(page)).toBeChecked();
+
   await participation(page).click();
   await expect(participation(page)).not.toBeChecked();
   expect(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe("true");

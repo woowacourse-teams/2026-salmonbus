@@ -1,6 +1,6 @@
 import { directionLabelOf } from "@/shared/utils/directionLabelOf";
 import { useEffect, useRef, useState } from "react";
-import { deleteFavorite, saveFavoriteOrder, saveGroupOrder } from "@/shared/api/favorites.api";
+import { deleteFavorite, deleteFavoriteGroup, saveFavoriteOrder, saveGroupOrder } from "@/shared/api/favorites.api";
 import type { FavoriteGroup, HomeFavorite, SavedFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
@@ -15,7 +15,8 @@ import { RetryButton } from "@/shared/components/RetryButton";
 import { FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
 import { SortableList } from "./SortableList";
 import { moveItem } from "@/shared/utils/moveItem";
-import { useFavoriteGroupDeletion } from "@/shared/hooks/useFavoriteGroupDeletion";
+import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
+import { GroupNameForm } from "./GroupNameForm";
 import trashIcon from "@/shared/assets/icons/trash.svg";
 import * as styles from "./FavoriteEditor.css";
 import * as common from "@/shared/styles/form.css";
@@ -45,7 +46,9 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   const [deleting, setDeleting] = useState<SavedFavorite | null>(null);
   const [deletingGroup, setDeletingGroup] = useState<FavoriteGroup | null>(null);
   const [groupDrag, setGroupDrag] = useState<GroupDrag | null>(null);
-  const protectedGroup = deletingGroup !== null && draft[0]?.id === deletingGroup.id;
+  const [renaming, setRenaming] = useState(false);
+  const [partial, setPartial] = useState(false);
+  const canDeleteGroup = draft.length > 1;
   const [revision, retry] = useState(0);
   const { resource: summaries, requestState } = useHomeFavorites({ kind: "all" }, revision);
   const loadFailed = summaries.status === "loadingError";
@@ -54,22 +57,13 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   const hasGroupDetails =
     initialFavorites !== undefined &&
     group?.favorites.every((favorite) => favorites.some((item) => item.id === favorite.id));
-  const {
-    busy,
-    failure,
-    error,
-    clearError,
-    run,
-    partial,
-    setPartial,
-    removeGroup: deleteGroup,
-  } = useFavoriteGroupDeletion(saved, draft, setSaved);
+  const { busy, failure, error, clearError, run } = useFavoriteAction();
   const editor = useRef<HTMLElement>(null);
   const doneButton = useRef<HTMLButtonElement>(null);
   const groupDropArea = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!loadFailed) editor.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus();
-  }, [group?.id, loadFailed]);
+    if (!loadFailed && !renaming) editor.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus();
+  }, [group?.id, loadFailed, renaming]);
   const idsOf = (items: { id: string }[]) => items.map((item) => item.id);
   const labelOf = (favorite: SavedFavorite) => {
     const item = favorites.find((candidate) => candidate.id === favorite.id);
@@ -104,8 +98,8 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
     }
   }
   async function removeGroup() {
-    if (!deletingGroup || protectedGroup || busy) return;
-    if (await deleteGroup(deletingGroup.id)) {
+    if (!deletingGroup || !canDeleteGroup || busy) return;
+    if (await run(() => deleteFavoriteGroup(deletingGroup.id), { kind: "deleteGroup" })) {
       setSaved((current) => current.filter((candidate) => candidate.id !== deletingGroup.id));
       setDraft((current) => current.filter((candidate) => candidate.id !== deletingGroup.id));
       setDeletingGroup(null);
@@ -174,7 +168,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
       aria-busy={summaries.status === "pending" && !hasGroupDetails}
       onKeyDown={(event) => {
         if (event.target instanceof Element && event.target.closest("dialog")) return;
-        if (event.key === "Escape" && deleting === null && deletingGroup === null) close();
+        if (event.key === "Escape" && !renaming && deleting === null && deletingGroup === null) close();
       }}
     >
       <h2 className={visuallyHidden}>즐겨찾기 편집</h2>
@@ -197,7 +191,20 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
           </button>
         </div>
       )}
-      <div className={styles.controls} hidden={loadFailed}>
+      {renaming && group && (
+        <GroupNameForm
+          group={group}
+          onCancel={() => setRenaming(false)}
+          onRenamed={(name) => {
+            const rename = (current: FavoriteGroup[]) =>
+              current.map((candidate) => (candidate.id === group.id ? { ...candidate, name } : candidate));
+            setSaved(rename);
+            setDraft(rename);
+            setRenaming(false);
+          }}
+        />
+      )}
+      <div className={styles.controls} hidden={loadFailed || renaming}>
         <p id="favorite-sort-help" className={visuallyHidden}>
           손잡이를 끌거나 선택 후 그룹은 왼쪽·오른쪽, 정류장은 위·아래 방향키로 순서를 바꿀 수 있어요. Escape 키를
           누르면 취소해요. 그룹을 아래 휴지통에 놓으면 삭제를 확인할 수 있어요.
@@ -214,6 +221,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
                 target: groupDropArea,
                 onDrag: (dragged, overTarget) => setGroupDrag(dragged ? { overTarget } : null),
                 onDrop: (dropped) => {
+                  if (!canDeleteGroup) return;
                   clearError();
                   setDeletingGroup(dropped);
                 },
@@ -236,6 +244,26 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
           </div>
           <FavoriteGroupAddButton disabled={busy} onCreated={addGroup} />
         </div>
+        {group && (
+          <div className={styles.selectedGroupActions}>
+            <button type="button" className={buttons.text} disabled={busy} onClick={() => setRenaming(true)}>
+              그룹 이름 수정
+            </button>
+            {canDeleteGroup && (
+              <button
+                type="button"
+                className={buttons.text}
+                disabled={busy}
+                onClick={() => {
+                  clearError();
+                  setDeletingGroup(group);
+                }}
+              >
+                그룹 삭제
+              </button>
+            )}
+          </div>
+        )}
         {summaries.status === "pending" && !hasGroupDetails && (
           <p className={visuallyHidden} role="status">
             즐겨찾기를 불러오고 있어요…
@@ -360,7 +388,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
       </div>
       {deletingGroup && (
         <ConfirmDialog
-          title={protectedGroup ? "대표 그룹은 삭제할 수 없어요" : "그룹을 삭제하시겠습니까?"}
+          title="그룹을 삭제하시겠습니까?"
           className={styles.deleteDialog}
           titleClassName={styles.deleteTitle}
           fallbackFocus={doneButton}
@@ -369,15 +397,9 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
           }}
         >
           <p className={styles.deleteDescription}>
-            {protectedGroup ? (
-              "다른 그룹을 맨 위로 옮긴 뒤 삭제해 주세요."
-            ) : (
-              <>
-                {deletingGroup.name} 그룹과 즐겨찾기 {deletingGroup.favorites.length}개가 함께 삭제돼요.
-                <br />
-                다른 그룹의 즐겨찾기는 유지돼요.
-              </>
-            )}
+            {deletingGroup.name} 그룹과 즐겨찾기 {deletingGroup.favorites.length}개가 함께 삭제돼요.
+            <br />
+            다른 그룹의 즐겨찾기는 유지돼요.
           </p>
           {error && (
             <p className={common.error} role="alert">
@@ -385,20 +407,14 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
             </p>
           )}
           {partial && <PartialFavoriteOrderNotice />}
-          {protectedGroup ? (
-            <button className={styles.cancel} onClick={() => setDeletingGroup(null)}>
-              확인
+          <div className={styles.deleteActions}>
+            <button className={styles.cancel} disabled={busy} onClick={() => setDeletingGroup(null)}>
+              취소
             </button>
-          ) : (
-            <div className={styles.deleteActions}>
-              <button className={styles.cancel} disabled={busy} onClick={() => setDeletingGroup(null)}>
-                취소
-              </button>
-              <button className={styles.confirm} disabled={busy} onClick={() => void removeGroup()}>
-                {busy ? "삭제 중…" : "삭제"}
-              </button>
-            </div>
-          )}
+            <button className={styles.confirm} disabled={busy || !canDeleteGroup} onClick={() => void removeGroup()}>
+              {busy ? "삭제 중…" : "삭제"}
+            </button>
+          </div>
         </ConfirmDialog>
       )}
       {deleting && (

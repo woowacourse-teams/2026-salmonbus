@@ -18,14 +18,23 @@ export const board = style({
   },
 });
 
-export const noticeBoard = style([
-  board,
+const noticeLayout = style({
+  display: "flex",
+  flex: 1,
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+});
+
+export const noticeBoard = style([board, noticeLayout]);
+
+export const sheetNoticeBoard = style([
+  noticeLayout,
   {
-    display: "flex",
-    flex: 1,
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
+    minHeight: 0,
+    justifyContent: "safe center",
+    overflowY: "auto",
+    paddingBlock: 12,
   },
 ]);
 

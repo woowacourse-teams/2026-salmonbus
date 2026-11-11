@@ -1,4 +1,4 @@
-import { keyframes, style } from "@vanilla-extract/css";
+import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const navigation = style({
@@ -9,7 +9,7 @@ export const navigation = style({
   display: "flex",
   gap: 4,
   width: "calc(100% - 64px)",
-  maxWidth: 160,
+  maxWidth: 316,
   zIndex: 20,
   padding: 3,
   border: "1px solid #FFFFFF80",
@@ -18,8 +18,11 @@ export const navigation = style({
   boxShadow:
     "0 8px 28px #3B2A1B1F, 0 2px 6px #3B2A1B0A, inset 0 1px 0 #FFFFFFB3, inset 0 -1px 0 #FFFFFF40, inset 0 0 0 1px #93857614",
   "@supports": {
+    "(-webkit-touch-callout: none)": {
+      bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
+    },
     "(backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))": {
-      background: "linear-gradient(180deg, #FFFFFF26, #FFFFFF08), #FFFFFF26",
+      background: "linear-gradient(180deg, #FFFFFF17, #FFFFFF04), #FFFFFF16",
       backdropFilter: "blur(24px) saturate(160%)",
       WebkitBackdropFilter: "blur(24px) saturate(160%)",
     },
@@ -41,7 +44,7 @@ export const indicator = style({
   top: 3,
   bottom: 3,
   left: 3,
-  width: "calc((100% - 10px) / 2)",
+  width: "calc((100% - 18px) / 4)",
   borderRadius: 999,
   background: "linear-gradient(180deg, #FFFFFF66, #FFFFFF08), #F2825B40",
   boxShadow: "inset 0 1px 0 #FFFFFFCC, inset 0 0 0 1px #E99C7F66, 0 2px 6px #BA5A3714",
@@ -49,7 +52,9 @@ export const indicator = style({
   transform: "translateX(0)",
   transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease",
   selectors: {
-    [`${navigation}[data-active="mypage"] &`]: { transform: "translateX(calc(100% + 4px))" },
+    [`${navigation}[data-active="route-map"] &`]: { transform: "translateX(calc(100% + 4px))" },
+    [`${navigation}[data-active="favorites"] &`]: { transform: "translateX(calc(200% + 8px))" },
+    [`${navigation}[data-active="mypage"] &`]: { transform: "translateX(calc(300% + 12px))" },
     [`${navigation}[data-active="none"] &`]: { opacity: 0 },
   },
   "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
@@ -81,3 +86,5 @@ export const tab = style({
     },
   },
 });
+
+globalStyle(`${tab}[aria-current="page"] [data-tab-fill]`, { fill: "currentColor" });

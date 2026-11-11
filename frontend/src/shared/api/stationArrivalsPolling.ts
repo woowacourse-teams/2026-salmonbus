@@ -1,12 +1,16 @@
 import type { ApiResult } from "./client";
 import { nextPollFrom, type PollDecision } from "./pollSchedule";
 import { nextResourceFrom, type PolledResource } from "./polledResource";
-import type { StationArrivalSelection, StationArrivalsResponse } from "./stationArrivals.types";
+import type { StationArrivalQuery, StationArrivalsResponse } from "./stationArrivals.types";
 
 const MIN_REFRESH_DELAY_MS = 1_000;
 const FALLBACK_REFRESH_DELAY_MS = 60_000;
+type StationRefreshTiming = Pick<StationArrivalsResponse, "generatedAt"> & {
+  refresh: Pick<StationArrivalsResponse["refresh"], "suggestedRefreshAt"> & { reason: string | null };
+};
 
-export function stationArrivalSelectionKey(selection: StationArrivalSelection): string {
+export function stationArrivalSelectionKey(selection: StationArrivalQuery): string {
+  if (!("routeId" in selection)) return JSON.stringify([selection.stationId]);
   return JSON.stringify([
     selection.stationId,
     selection.routeId,
@@ -17,10 +21,10 @@ export function stationArrivalSelectionKey(selection: StationArrivalSelection): 
 }
 
 /** 수집 중 no-store 응답은 초 단위 Date 대신 응답 생성 시각부터 단조 시계로 진행한다. */
-export function withStationArrivalClock(
-  result: ApiResult<StationArrivalsResponse>,
+export function withStationArrivalClock<T extends StationRefreshTiming>(
+  result: ApiResult<T>,
   elapsedNow: () => number = () => performance.now(),
-): ApiResult<StationArrivalsResponse> {
+): ApiResult<T> {
   if (!result.ok) return result;
   const shouldUseGeneratedAt = result.lifetime.noStore && result.body.refresh.reason === "COLLECTING";
   if (result.clock !== null && !shouldUseGeneratedAt) return result;
@@ -34,7 +38,7 @@ export function withStationArrivalClock(
 }
 
 /** HTTP 캐시 최대 5초와 무관하게 서버가 알려준 다음 수집 시각을 따른다. */
-export function nextStationArrivalPollFrom(result: ApiResult<StationArrivalsResponse>): PollDecision {
+export function nextStationArrivalPollFrom(result: ApiResult<StationRefreshTiming>): PollDecision {
   if (!result.ok) return nextPollFrom(result);
 
   const suggestedAt = Date.parse(result.body.refresh.suggestedRefreshAt);

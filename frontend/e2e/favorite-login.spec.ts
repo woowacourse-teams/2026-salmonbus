@@ -107,13 +107,16 @@ test("비회원 즐겨찾기 팝업은 320px에서 닫기·로그인 복귀를 �
 
   await test.step("돌아온 판정보드에서 별을 다시 눌러 저장한다", async () => {
     await star.click();
-    const selection = page.getByRole("dialog", { name: "저장할 그룹 선택" });
-    await selection.getByRole("checkbox", { name: /즐겨찾기/ }).check();
-    await selection.getByRole("button", { name: "저장", exact: true }).click();
-    await expect(selection).not.toBeVisible();
+    await expect(page.getByText("즐겨찾기에 추가되었습니다", { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(star).toHaveAttribute("aria-pressed", "true");
     expect(favorites.groups[0]!.favorites).toEqual([
       expect.objectContaining({ routeId, stopId: stop.stopId, direction: "DOWN" }),
     ]);
+    await star.click();
+    await expect(page.getByText("즐겨찾기가 해제되었습니다", { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(star).toHaveAttribute("aria-pressed", "false");
+    expect(favorites.groups[0]!.favorites).toHaveLength(0);
   });
 });

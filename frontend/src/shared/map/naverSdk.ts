@@ -20,11 +20,14 @@ export interface NaverMap {
   zoomBy(delta: number, origin: NaverCoordinate, animate: boolean): void;
   getCenter(): NaverCoordinate;
   setCenter(center: NaverCoordinate): void;
+  morph(center: NaverCoordinate, zoom: number, options: { duration: number }): void;
+  stop(): void;
   fitBounds(
     coordinates: NaverCoordinate[],
     margins: { top: number; right: number; bottom: number; left: number; maxZoom: number },
   ): void;
   getSize(): NaverSize;
+  getPanes(): { overlayLayer: HTMLElement };
   setSize(size: NaverSize): void;
   getProjection(): {
     fromCoordToOffset(coordinate: NaverCoordinate): NaverPoint;
@@ -52,6 +55,7 @@ export interface NaverPolyline extends NaverOverlay {
 
 export interface NaverMaps {
   glEnabled: boolean;
+  Position: { BOTTOM_LEFT: number };
   LatLng: new (latitude: number, longitude: number) => NaverCoordinate;
   Point: new (x: number, y: number) => NaverPoint;
   Size: new (width: number, height: number) => NaverSize;
@@ -64,6 +68,7 @@ export interface NaverMaps {
       zoomControl: boolean;
       scaleControl: boolean;
       mapDataControl: boolean;
+      logoControlOptions?: { position: number };
       overlayZoomEffect: string | null;
       gl: boolean;
       scrollWheel: boolean;

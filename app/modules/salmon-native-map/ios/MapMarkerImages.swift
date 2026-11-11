@@ -1,8 +1,7 @@
 import UIKit
 
-// Sizes, colors and glyphs follow frontend/.../map/RouteMap.css.ts and naverMapAdapter.ts.
+// 웹의 mapStopPin.css.ts와 naverMapAdapter.css.ts에 맞춰 마커를 그린다.
 enum MapMarkerImages {
-  static let stopColor = UIColor(red: 220/255, green: 120/255, blue: 102/255, alpha: 1)
   static let mutedColor = UIColor(red: 91/255, green: 100/255, blue: 114/255, alpha: 1)
   static let busColor = UIColor(red: 229/255, green: 61/255, blue: 77/255, alpha: 1)
   static let routeColor = UIColor(red: 237/255, green: 119/255, blue: 104/255, alpha: 0.95)
@@ -11,43 +10,25 @@ enum MapMarkerImages {
     UIFont(name: "AppleSDGothicNeo-\(weight)", size: size) ?? .systemFont(ofSize: size, weight: .bold)
   }
 
-  static func stop(selected: Bool, active: Bool, boardingAllowed: Bool) -> UIImage {
-    let size: CGFloat = selected ? 32 : 24
-    let diameter: CGFloat = boardingAllowed ? (selected ? 20 : 16) : (selected ? 8 : 6)
-    let border: CGFloat = boardingAllowed ? (selected ? 4 : 2.5) : 0
-    let color = selected ? UIColor(red: 212/255, green: 105/255, blue: 83/255, alpha: 1)
-                         : active ? stopColor : mutedColor
-    return UIGraphicsImageRenderer(size: CGSize(width: size + 12, height: size + 12)).image { context in
-      let rect = CGRect(x: (size + 12 - diameter)/2, y: (size + 12 - diameter)/2,
-                        width: diameter, height: diameter)
-      if selected {
-        context.cgContext.setShadow(offset: CGSize(width: 0, height: 2), blur: 8,
-                                    color: UIColor(red: 120/255, green: 68/255, blue: 56/255, alpha: 0.15).cgColor)
-        UIColor(red: 242/255, green: 221/255, blue: 213/255, alpha: 1).setFill()
-        UIBezierPath(ovalIn: rect.insetBy(dx: -5, dy: -5)).fill()
-        context.cgContext.setShadow(offset: .zero, blur: 0)
-        UIColor.white.setFill()
-        UIBezierPath(ovalIn: rect.insetBy(dx: -2, dy: -2)).fill()
-      }
-      color.setFill()
-      UIBezierPath(ovalIn: rect).fill()
-      if boardingAllowed {
-        (selected || active ? UIColor.white : UIColor(red: 237/255, green: 237/255, blue: 235/255, alpha: 1)).setFill()
-        UIBezierPath(ovalIn: rect.insetBy(dx: border, dy: border)).fill()
-      }
-    }
+  static func stop(selected: Bool, boardingAllowed: Bool) -> UIImage? {
+    let kind = boardingAllowed ? "boarding" : "passing"
+    let selection = selected ? "-selected" : ""
+    return UIImage(named: "stop-\(kind)\(selection)")
   }
 
-  static func stopName(_ name: String, selected: Bool, above: Bool) -> UIImage {
+  static func stopName(_ name: String, selected: Bool) -> UIImage {
     let text = name as NSString
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.lineBreakMode = .byTruncatingTail
     let attributes: [NSAttributedString.Key: Any] = [
-      .font: font(size: 13, weight: "ExtraBold"), .foregroundColor: UIColor.white,
+      .font: font(size: 13, weight: "ExtraBold"), .foregroundColor: UIColor.white, .paragraphStyle: paragraph,
     ]
     let textSize = text.size(withAttributes: attributes)
-    let gap: CGFloat = (selected ? 16 : 12) + 4
-    let size = CGSize(width: ceil(textSize.width) + 10, height: ceil(textSize.height) + 6 + gap)
+    let gap: CGFloat = 13
+    let size = CGSize(width: min(selected ? 220 : 160, ceil(textSize.width) + 10),
+                      height: ceil(textSize.height) + 6 + gap)
     return UIGraphicsImageRenderer(size: size).image { _ in
-      let rect = CGRect(x: 5, y: above ? 3 : gap + 3, width: size.width - 10, height: size.height - gap - 6)
+      let rect = CGRect(x: 5, y: gap + 1, width: size.width - 10, height: ceil(textSize.height) + 3)
       var outline = attributes
       outline[.strokeColor] = UIColor.black
       outline[.strokeWidth] = 200.0/13

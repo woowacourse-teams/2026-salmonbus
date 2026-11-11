@@ -26,7 +26,9 @@ async function expectCancelFirst(page: Page, dialog: Locator, cancelName: string
 test("즐겨찾기 그룹 선택 창은 열릴 때 첫 그룹에 포커스를 주고 저장 줄과 그룹 만들기 줄은 취소를 왼쪽에 둔다", async ({
   page,
   api,
+  favorites,
 }) => {
+  favorites.groups.push({ id: schoolId, name: "주말", favorites: [] });
   const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
   await page.goto(`/routes/${routeId}`);
   await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
@@ -53,9 +55,9 @@ for (const action of ["로그아웃", "회원탈퇴"]) {
   });
 }
 
-test("마이페이지 그룹 일괄 삭제 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다", async ({ page, favorites }) => {
+test("즐겨찾기 그룹 일괄 삭제 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다", async ({ page, favorites }) => {
   favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/mypage");
+  await page.goto("/favorites/groups");
   const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
   await region.getByRole("button", { name: "그룹 삭제 선택", exact: true }).click();
   await region.getByRole("checkbox", { name: "통학 삭제 선택", exact: true }).check();
@@ -89,7 +91,7 @@ test("그룹 상세의 그룹 삭제와 즐겨찾기 삭제 창은 열릴 때 �
 test("즐겨찾기 편집의 삭제 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다", async ({ page, favorites, api }) => {
   const stop = api.data.watch.stops.find((item) => item.direction === "UP" && item.boardingAllowed)!;
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: "UP" })];
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   await editor.getByRole("button", { name: `${stop.name} 삭제`, exact: true }).click();

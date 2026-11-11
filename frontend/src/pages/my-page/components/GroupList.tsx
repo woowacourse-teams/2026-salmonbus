@@ -1,6 +1,7 @@
 import { MAX_FAVORITE_GROUPS, MAX_FAVORITES_PER_GROUP } from "@/shared/utils/favoritePolicy";
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
+import { favoriteGroupPathFor } from "@/shared/routing/paths";
 import { deleteFavoriteGroup } from "@/shared/api/favorites.api";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { useFavorites } from "@/shared/hooks/useFavorites";
@@ -29,11 +30,11 @@ export function GroupList() {
   const deleteButton = useRef<HTMLButtonElement>(null);
   const selectionButton = useRef<HTMLButtonElement>(null);
   const deleting = mode === "delete";
-  const removableGroups = groups.slice(1);
+  const visibleGroups = groups.filter((group) => !deletedIds.includes(group.id));
+  const removableGroups = visibleGroups.length > 1 ? visibleGroups : [];
   const targets = removableGroups.filter((group) => selected.includes(group.id));
-  const changed = targets.length !== selected.length;
-  // 삭제 직후 목록을 다시 받기 전에도 지운 그룹은 남은 삭제 대상으로 세지 않는다.
-  const deletable = removableGroups.some((group) => !deletedIds.includes(group.id));
+  const changed = targets.length !== selected.length || targets.length >= visibleGroups.length;
+  const deletable = removableGroups.length > 0;
   useEffect(() => {
     if (mode === "view") return;
     const trigger = mode === "order" ? editButton : deleteButton;
@@ -85,7 +86,7 @@ export function GroupList() {
   return (
     <section {...maskedPropsFor(styles.section)} aria-label="즐겨찾기 그룹 관리">
       <h2 className={styles.heading}>
-        <span>{`내 그룹  ${groups.length} / ${MAX_FAVORITE_GROUPS}`}</span>
+        <span>{`내 그룹  ${visibleGroups.length} / ${MAX_FAVORITE_GROUPS}`}</span>
         {deleting ? (
           <button className={styles.cancelSelection} disabled={busy} onClick={() => finishDeletion(deletedIds.length)}>
             취소
@@ -111,7 +112,7 @@ export function GroupList() {
             <button
               ref={editButton}
               className={styles.edit}
-              disabled={groups.length === 0}
+              disabled={visibleGroups.length === 0}
               onClick={() => setMode("order")}
               aria-label="그룹과 즐겨찾기 순서 편집"
             >
@@ -133,13 +134,10 @@ export function GroupList() {
         )}
       </FavoritesNotice>
       <ul className={styles.list}>
-        {groups.map((group, index) => {
+        {visibleGroups.map((group) => {
           const info = (
             <span className={styles.info}>
-              <span className={styles.name}>
-                {group.name}
-                {!deleting && index === 0 && " · 대표 그룹"}
-              </span>
+              <span className={styles.name}>{group.name}</span>
               <span className={styles.count}>
                 {group.favorites.length} / {MAX_FAVORITES_PER_GROUP}
               </span>
@@ -148,34 +146,31 @@ export function GroupList() {
           return (
             <li key={group.id}>
               {deleting ? (
-                index === 0 ? (
-                  <div className={styles.group}>
-                    {info}
-                    <span className={styles.representative}>대표 그룹</span>
-                  </div>
-                ) : (
-                  <label className={`${styles.group} ${styles.selection}`}>
-                    {info}
-                    {/* Session Replay는 속성 값을 가리지 못해서, 그룹 이름은 aria-label 대신 숨긴 글자로 둔다. */}
-                    <span id={`${labelIdPrefix}${group.id}`} hidden>
-                      {`${group.name} 삭제 선택`}
-                    </span>
-                    <input
-                      className={styles.checkbox}
-                      type="checkbox"
-                      aria-labelledby={`${labelIdPrefix}${group.id}`}
-                      checked={selected.includes(group.id)}
-                      disabled={busy || resource.status !== "success"}
-                      onChange={(event) => {
-                        clearError();
-                        const ids = targets.map((target) => target.id);
-                        setSelected(event.target.checked ? [...ids, group.id] : ids.filter((id) => id !== group.id));
-                      }}
-                    />
-                  </label>
-                )
+                <label className={`${styles.group} ${styles.selection}`}>
+                  {info}
+                  {/* Session Replay는 속성 값을 가리지 못해서, 그룹 이름은 aria-label 대신 숨긴 글자로 둔다. */}
+                  <span id={`${labelIdPrefix}${group.id}`} hidden>
+                    {`${group.name} 삭제 선택`}
+                  </span>
+                  <input
+                    className={styles.checkbox}
+                    type="checkbox"
+                    aria-labelledby={`${labelIdPrefix}${group.id}`}
+                    checked={selected.includes(group.id)}
+                    disabled={
+                      busy ||
+                      resource.status !== "success" ||
+                      (!selected.includes(group.id) && targets.length >= visibleGroups.length - 1)
+                    }
+                    onChange={(event) => {
+                      clearError();
+                      const ids = targets.map((target) => target.id);
+                      setSelected(event.target.checked ? [...ids, group.id] : ids.filter((id) => id !== group.id));
+                    }}
+                  />
+                </label>
               ) : (
-                <Link className={styles.group} to={`/mypage/groups/${encodeURIComponent(group.id)}`}>
+                <Link className={styles.group} to={favoriteGroupPathFor(group.id)}>
                   {info}
                   <span className={styles.cardTools}>
                     <img src={chevronIcon} width="18" height="18" alt="" draggable={false} />
@@ -202,7 +197,7 @@ export function GroupList() {
       ) : (
         resource.status === "success" &&
         groups.length < MAX_FAVORITE_GROUPS && (
-          <Link className={styles.add} to="/mypage/groups/new">
+          <Link className={styles.add} to={favoriteGroupPathFor("new")}>
             <img src={plusIcon} width="18" height="18" alt="" draggable={false} />새 그룹 만들기
           </Link>
         )

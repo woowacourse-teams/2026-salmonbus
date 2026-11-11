@@ -4,6 +4,7 @@ dist/
 env/.env*
 !env/.env.example
 !env/.env.kakao-local.example
+!env/.env.home.example
 
 *storybook.log
 storybook-static
@@ -17,3 +18,5 @@ storybook-static
 /.playwright-mcp/
 
 *.pen
+public/home-events.json
+public/home-events.tmp

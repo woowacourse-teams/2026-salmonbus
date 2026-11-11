@@ -101,6 +101,7 @@ test("native host는 JS SDK 없이 scene과 관측별 motion을 보내고 브라
   const mount = initial.find((message) => message.type === "mount");
   expect(mount?.payload.stops.length).toBeGreaterThan(0);
   expect(mount?.payload.paths.length).toBe(2);
+  expect(mount?.payload.directions).toEqual(["UP", "DOWN"]);
   expect(initial.filter((message) => message.type === "motion").length).toBeGreaterThan(0);
   const layouts = initial.filter((message) => message.type === "layout");
   expect(layouts[0]?.payload.captureAll).toBe(true);
@@ -300,17 +301,23 @@ test.describe("설정 화면을 열 수 있는 앱", () => {
   });
 });
 
-favoriteNativeTest("즐겨찾기 dialog를 열면 native 지도 입력을 차단하고 닫으면 복구한다", async ({ page, api }) => {
-  await open(page);
-  const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
-  await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.clock.runFor(32);
-  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(true);
-  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
-  await page.clock.runFor(32);
-  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(false);
-});
+favoriteNativeTest(
+  "즐겨찾기 dialog를 열면 native 지도 입력을 차단하고 닫으면 복구한다",
+  async ({ page, api, favorites }) => {
+    favorites.groups.push({ id: "10000000-0000-4000-8000-000000000004", name: "주말", favorites: [] });
+    await open(page);
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+    await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.clock.runFor(32);
+    expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(true);
+    await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
+    await page.clock.runFor(32);
+    expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(
+      false,
+    );
+  },
+);
 
 test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투명 모드를 정리한다", async ({ page }) => {
   await open(page);
@@ -323,6 +330,34 @@ test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투�
 
 test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
   test.use({ nativeReady: false });
+
+  test("앱에서도 노선도 화면을 유지하며 판정보드 지도만 전환한다", async ({ page }) => {
+    await page.goto("/");
+    const nav = page.getByRole("navigation", { name: "주요 메뉴" });
+    await nav.getByRole("link", { name: "노선도", exact: true }).click();
+    const map = page.getByTestId("naver-map-test-double");
+    await expect(map).toBeVisible();
+    const originalMap = (await map.elementHandle())!;
+    await page.getByRole("list", { name: "서비스 중 노선" }).getByRole("link", { name: /3330/ }).click();
+    const board = page.getByRole("region", { name: "판정보드 정류장 목록", exact: true });
+    await expect(board).toBeVisible();
+    await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
+    await expect(map).toBeVisible();
+    expect(await originalMap.evaluate((element) => element.isConnected)).toBe(true);
+
+    await emit(page, { type: "ready", payload: {} });
+    await expect(page.locator("html")).toHaveAttribute("data-shared-native-map-ready", "true");
+    await expect(map).toBeHidden();
+    await expect(board).toBeVisible();
+
+    await emit(page, { type: "error", payload: { message: "지도 설정을 확인하지 못했어요" } });
+    await expect(page.locator("html")).not.toHaveAttribute("data-shared-native-map-ready");
+    await expect(map).toBeVisible();
+    await expect(board).toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole("list", { name: "서비스 중 노선" })).toBeVisible();
+    expect(await originalMap.evaluate((element) => element.isConnected)).toBe(true);
+  });
 
   test("즐겨찾기 정류장을 초기 native scene에 담고 이전 앱용 카메라 명령도 유지한다", async ({ page, api }) => {
     const stop = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;

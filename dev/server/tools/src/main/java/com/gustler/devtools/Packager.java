@@ -127,7 +127,6 @@ final class Packager {
         return digest(
                 List.of(
                         repo.resolve("dev/data/java"),
-                        repo.resolve("dev/data/model-reference"),
                         repo.resolve(
                                 "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/domain/model/alighting/AlightingAwareFeatureVector.java")));
     }

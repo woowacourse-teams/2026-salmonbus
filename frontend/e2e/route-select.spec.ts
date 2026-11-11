@@ -447,11 +447,11 @@ test("판정 보드로 바로 들어오면 헤더의 뒤로 가기가 노선 선
   await expect(routeSearchEntry(page)).toBeVisible();
 });
 
-test("홈에서만 html 배경을 주황으로 칠한다", async ({ page }) => {
+test("홈과 검색 화면에서는 바깥 배경색을 따로 칠하지 않는다", async ({ page }) => {
   const htmlBackground = () => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
   await page.goto("/");
 
-  await expect.poll(htmlBackground).toBe("rgb(232, 82, 63)");
+  await expect.poll(htmlBackground).toBe("rgba(0, 0, 0, 0)");
 
   await openRouteSearch(page);
 

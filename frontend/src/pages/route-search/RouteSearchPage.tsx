@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router";
 import { track } from "@/shared/analytics/track";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
-import { boardEntryStateFor } from "@/shared/routing/boardEntry";
+import { boardEntryStateFor, mapFlowFrom } from "@/shared/routing/boardEntry";
 import { boardPathFor, paths } from "@/shared/routing/paths";
 import { initialInputFrom } from "@/shared/routing/routeSearchEntry";
 import { routeSelectedPropertiesOf, unmatchedQueryOf } from "./analytics/searchEventPolicy";
@@ -25,12 +25,13 @@ export function RouteSearchPage() {
   const handleSelect = (selection: RouteSelection) => {
     track("route_selected", routeSelectedPropertiesOf(selection, input));
     const boardPath = boardPathFor(selection.route.id);
+    const state = { ...boardEntryStateFor("search"), mapFlow: mapFlowFrom(location.state), quietMapLoading: true };
     if (location.key === "default") {
       void navigate(paths.routeSelect, { replace: true });
-      void navigate(boardPath, { state: boardEntryStateFor("search") });
+      void navigate(boardPath, { state });
       return;
     }
-    void navigate(boardPath, { replace: true, state: boardEntryStateFor("search") });
+    void navigate(boardPath, { replace: true, state });
   };
 
   const handleSubmit = () => {

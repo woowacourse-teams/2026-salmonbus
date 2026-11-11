@@ -14,6 +14,7 @@ const FLICK_SPEED_PX_PER_MS = 0.45;
 const FLICK_PROJECTION_MS = 150;
 
 export const BOARD_SHEET_DRAG_THRESHOLD = 6;
+export const BOARD_SHEET_EXPANDED_PERCENT = 60;
 
 export function boardSheetHeightsFor({
   viewportHeight,
@@ -26,7 +27,7 @@ export function boardSheetHeightsFor({
   return {
     minimum,
     half: Math.min(full, Math.max(minimum, viewportHeight / 2)),
-    expanded: Math.min(full, Math.max(minimum, viewportHeight * 0.7)),
+    expanded: Math.min(full, Math.max(minimum, (viewportHeight * BOARD_SHEET_EXPANDED_PERCENT) / 100)),
     full,
   };
 }

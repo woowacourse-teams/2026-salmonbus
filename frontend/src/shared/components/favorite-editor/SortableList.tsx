@@ -93,8 +93,8 @@ export function SortableList<T extends SortableItem>({
       const id = row.dataset.sortId;
       const old = id === undefined ? undefined : before.get(id);
       const next = row.getBoundingClientRect();
-      if (old)
-        row.animate(
+      if (old) {
+        const animation = row.animate(
           [
             {
               transformOrigin: "top left",
@@ -102,8 +102,11 @@ export function SortableList<T extends SortableItem>({
             },
             { transformOrigin: "top left", transform: "none" },
           ],
-          { duration: 220, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+          { duration: 220, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "forwards" },
         );
+        // 종료 프레임은 최종 위치에 고정하고, 같은 위치의 인라인 스타일로 넘긴다.
+        animation.onfinish = () => animation.cancel();
+      }
     }
   }, [items, drag]);
 

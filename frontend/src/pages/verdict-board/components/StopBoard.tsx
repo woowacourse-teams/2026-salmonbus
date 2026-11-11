@@ -16,7 +16,7 @@ type NoticeStatus = "loading" | "error" | "outOfService";
 
 type StopBoardProps =
   | { status: "loading" | "outOfService"; onRetry?: never; retrying?: never; autoRetry?: never }
-  | { status: "error"; onRetry?: () => void; retrying?: boolean; autoRetry?: boolean }
+  | { status: "error"; onRetry?: () => void; retrying?: boolean; autoRetry?: boolean; inSheet?: boolean }
   | {
       status: "ready";
       favoriteRoute?: FavoriteBoardRoute;
@@ -75,7 +75,11 @@ export function StopBoard(props: StopBoardProps) {
   }
 
   return (
-    <section className={styles.noticeBoard} role="region" aria-label="판정보드 정류장 목록">
+    <section
+      className={props.status === "error" && props.inSheet ? styles.sheetNoticeBoard : styles.noticeBoard}
+      role="region"
+      aria-label="판정보드 정류장 목록"
+    >
       {props.status === "error" && (
         <img className={styles.mascot} src={salmongCrying} alt="연어 버스 로고" width={96} height={96} />
       )}

@@ -15,7 +15,8 @@ CURRENT="$BASE/current"
 PREVIOUS="$BASE/previous"
 CHANGED="$BASE/.changed"
 ENV_FILE="/etc/salmonbus-dev/$COMPONENT.env"
-MODEL_DIRECTORY=/srv/salmonbus-dev/models/alighting-dev-v1
+MODEL_DIRECTORY="$(sed -n 's/^MODEL_BUNDLE_DIRECTORY=//p' /etc/salmonbus-dev/worker.env)"
+MODEL_DIRECTORY="${MODEL_DIRECTORY:-/srv/salmonbus-dev/models/alighting-dev-v1}"
 JAR="$CURRENT/jars/$COMPONENT-app.jar"
 MARKER="$ROOT/.deploying"
 

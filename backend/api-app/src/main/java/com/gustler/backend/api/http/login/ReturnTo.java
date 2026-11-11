@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 /**
  * 로그인을 마치고 돌아갈 사이트 안의 경로를 검증한다.
  *
- * <p>허용하는 값은 {@code /} 와 {@code /routes/{9자리}} 이며, 노선 경로에는 {@code direction} 과
+ * <p>허용하는 값은 {@code /}, {@code /favorites}, {@code /routes/{9자리}} 이며, 노선 경로에는 {@code direction} 과
  * {@code stopId} 쿼리만 한 번씩 붙을 수 있다. 그 밖의 값은 모두 {@code /} 로 바꾼다. 허용 목록 밖의 문자를
  * 걸러내는 방식이라 {@code //evil.com}, {@code https://...}, {@code /\evil} 같은 열린 리다이렉트가 통하지 않는다.
  */
@@ -39,7 +39,7 @@ final class ReturnTo {
     }
 
     private static boolean isAllowedPath(String path) {
-        return HOME.equals(path) || ROUTE.matcher(path).matches();
+        return HOME.equals(path) || "/favorites".equals(path) || ROUTE.matcher(path).matches();
     }
 
     private static boolean hasOnlyAllowedParameters(String query) {

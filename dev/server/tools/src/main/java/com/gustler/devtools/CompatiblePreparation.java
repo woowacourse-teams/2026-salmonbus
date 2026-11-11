@@ -29,9 +29,11 @@ final class CompatiblePreparation {
 
     static final String DATABASE_CLOCK_DATA = "f9cbf23ac3f49a175eefa844b0dd1e29954734ac2339cdfb4d3d2511447bef5b";
 
+    static final String ENV_MODEL_DATA = "357615e42dffdf387e32fb58747874da4082ac1056ef229850e149230ba866dd";
+
     private static final List<String> REVIEWED_ORDER = List.of(
         PREVIOUS, COLLECTED_DATA, EVALUATION_DATA, NEXT, PREVIOUS_ALIGHTING_AWARE_EVALUATION_DATA, ALIGHTING_AWARE_EVALUATION_DATA,
-        ARCHIVE_DATA, ALIGHTING_MODEL_DATA, SINGLE_MODEL_DATA, DATABASE_CLOCK_DATA);
+        ARCHIVE_DATA, ALIGHTING_MODEL_DATA, SINGLE_MODEL_DATA, DATABASE_CLOCK_DATA, ENV_MODEL_DATA);
 
     static boolean permits(RevisionStore.Revision previous, RevisionStore.Revision next) {
         String from = previous.files().get("tools/data-contract.sha256");
@@ -40,7 +42,8 @@ final class CompatiblePreparation {
             return false;
         }
         if (FIXTURE_DIGEST.equals(from)) {
-            return NEXT.equals(to) || ALIGHTING_AWARE_EVALUATION_DATA.equals(to) || ARCHIVE_DATA.equals(to) || ALIGHTING_MODEL_DATA.equals(to);
+            return NEXT.equals(to) || ALIGHTING_AWARE_EVALUATION_DATA.equals(to) || ARCHIVE_DATA.equals(to)
+                    || ALIGHTING_MODEL_DATA.equals(to) || ENV_MODEL_DATA.equals(to);
         }
         if (FIXTURE_DIGEST.equals(to)) {
             return NEXT.equals(from);

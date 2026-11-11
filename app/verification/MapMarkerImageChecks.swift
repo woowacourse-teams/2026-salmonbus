@@ -6,30 +6,21 @@ struct MapMarkerImageChecks {
     precondition(UIImage(named: "bus-front") != nil, "Missing web SVG asset: bus-front")
     var images: [(String, UIImage)] = []
     for selected in [false, true] {
-      for active in [true, false] {
-        for boarding in [true, false] {
-          let image = MapMarkerImages.stop(selected: selected, active: active, boardingAllowed: boarding)
-          let size: CGFloat = selected ? 44 : 36
-          precondition(image.size == CGSize(width: size, height: size))
-          images.append(("stop \(selected) \(active) \(boarding)", image))
-        }
+      guard let boarding = MapMarkerImages.stop(selected: selected, boardingAllowed: true),
+            let passing = MapMarkerImages.stop(selected: selected, boardingAllowed: false) else {
+        preconditionFailure("정류장 핀 이미지가 누락됐다")
       }
+      let size: CGFloat = selected ? 44 : 36
+      precondition(boarding.size == CGSize(width: size, height: size))
+      precondition(passing.size == boarding.size)
+      precondition(boarding.pngData() != passing.pngData(), "승차 가능 정류장과 경유 정류장은 구분된다")
+      checkCenteredGlyph(boarding, rgb: selected ? (255, 255, 255) : (152, 69, 56))
+      checkCenteredGlyph(passing, rgb: selected ? (255, 255, 255) : (91, 100, 114))
+      images += [("boarding \(selected)", boarding), ("passing \(selected)", passing)]
     }
-    for boarding in [true, false] {
-      precondition(MapMarkerImages.stop(selected: false, active: true, boardingAllowed: boarding).pngData()
-                   != MapMarkerImages.stop(selected: false, active: false, boardingAllowed: boarding).pngData(),
-                   "비선택 정류장은 활성 방향과 비활성 방향의 색상을 구분한다")
-      precondition(MapMarkerImages.stop(selected: true, active: true, boardingAllowed: boarding).pngData()
-                   == MapMarkerImages.stop(selected: true, active: false, boardingAllowed: boarding).pngData(),
-                   "선택한 정류장은 활성 방향과 관계없이 같은 강조를 사용한다")
-    }
-    for selected in [false, true] {
-      for active in [true, false] {
-        precondition(MapMarkerImages.stop(selected: selected, active: active, boardingAllowed: true).pngData()
-                     != MapMarkerImages.stop(selected: selected, active: active, boardingAllowed: false).pngData(),
-                     "승차 가능 정류장과 경유 정류장은 구분된다")
-      }
-    }
+    let longName = String(repeating: "정류장 이름", count: 10)
+    precondition(MapMarkerImages.stopName(longName, selected: false).size.width == 160)
+    precondition(MapMarkerImages.stopName(longName, selected: true).size.width == 220)
     let normal = MapMarkerImages.vehicle(caption: "현재 37석", showCount: true, stackIndex: 0)
     let stacked = MapMarkerImages.vehicle(caption: "현재 0석", showCount: true, stackIndex: 2)
     let hidden = MapMarkerImages.vehicle(caption: "현재 37석", showCount: false, stackIndex: 2)
@@ -40,8 +31,8 @@ struct MapMarkerImageChecks {
     images += [("37 seats", normal), ("stacked 0", stacked), ("zoom < 14", hidden),
                ("unknown", MapMarkerImages.vehicle(caption: "–", showCount: true, stackIndex: 0)),
                ("selected x1.5", normal),
-               ("stop name below", MapMarkerImages.stopName("잠실역.롯데월드", selected: false, above: false)),
-               ("stop name above", MapMarkerImages.stopName("잠실역.롯데월드", selected: true, above: true)),
+               ("stop name below", MapMarkerImages.stopName("잠실역.롯데월드", selected: false)),
+               ("selected stop name", MapMarkerImages.stopName("잠실역.롯데월드", selected: true)),
                ("location", MapMarkerImages.location()), ("arrow", MapMarkerImages.routeArrow())]
     let gallery = UIGraphicsImageRenderer(size: CGSize(width: 640, height: 600)).image { _ in
       UIColor(white: 0.92, alpha: 1).setFill()
@@ -57,6 +48,35 @@ struct MapMarkerImageChecks {
       }
     }
     try gallery.pngData()!.write(to: URL(fileURLWithPath: "/tmp/salmonbus-map-marker-preview.png"))
-    print("PASS: assets, 8 stop states, vehicle count sizing/stacking/zoom, marker preview")
+    print("PASS: assets, 4 stop states, vehicle count sizing/stacking/zoom, marker preview")
+  }
+
+  private static func checkCenteredGlyph(_ image: UIImage, rgb: (Int, Int, Int)) {
+    guard let source = image.cgImage, image.scale == 3,
+          let context = CGContext(data: nil, width: source.width, height: source.height,
+                                  bitsPerComponent: 8, bytesPerRow: source.width * 4,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+          let pixels = context.data?.assumingMemoryBound(to: UInt8.self) else {
+      preconditionFailure("정류장 핀의 3배 해상도 픽셀을 읽을 수 없다")
+    }
+    context.draw(source, in: CGRect(x: 0, y: 0, width: source.width, height: source.height))
+    let centerX = source.width / 2
+    let centerY = source.height / 2
+    var glyphBounds = CGRect.null
+    // 테두리가 들어오는 바깥쪽 픽셀을 제외하고 버스 그림의 경계를 구한다.
+    for y in (centerY - 20)..<(centerY + 20) {
+      for x in (centerX - 20)..<(centerX + 20) {
+        let offset = y * context.bytesPerRow + x * 4
+        if pixels[offset + 3] > 235,
+           abs(Int(pixels[offset]) - rgb.0) < 12,
+           abs(Int(pixels[offset + 1]) - rgb.1) < 12,
+           abs(Int(pixels[offset + 2]) - rgb.2) < 12 {
+          glyphBounds = glyphBounds.union(CGRect(x: x, y: y, width: 1, height: 1))
+        }
+      }
+    }
+    precondition(!glyphBounds.isNull && abs(glyphBounds.midX - CGFloat(centerX)) <= 1
+      && abs(glyphBounds.midY - CGFloat(centerY)) <= 1, "버스 그림이 사각형의 중앙을 벗어났다")
   }
 }
