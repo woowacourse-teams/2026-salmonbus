@@ -41,9 +41,6 @@ export function HomeFavorites() {
     selectFavoriteGroup,
     summary: { resource: summary, requestState: summaryRequestState },
     retrySummary: retry,
-    displayedGroup: shownGroup,
-    displayedSummary: shownLatest,
-    switchingGroup: switching,
   } = useOutletContext<FavoriteGroupContext>();
   const groupTabs = useRef<HTMLDivElement>(null);
   const [ordering, setOrdering] = useState(false);
@@ -63,6 +60,7 @@ export function HomeFavorites() {
     return ordering ? () => editButton.current?.focus() : undefined;
   }, [ordering]);
   const latest = latestSuccessOf(summary);
+  const loading = group !== undefined && summary.status === "pending";
   const selectGroup = (id: string) => {
     if (id === group?.id) return;
     selectFavoriteGroup(id);
@@ -88,13 +86,12 @@ export function HomeFavorites() {
   }
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (shownLatest === null) return;
+    if (latest === null) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [shownLatest]);
-  const favorites =
-    shownLatest?.body.groups.find((candidate) => candidate.id === shownGroup?.id)?.favorites ?? EMPTY_FAVORITES;
-  const canAddFavorite = (shownGroup?.favorites.length ?? 0) < MAX_FAVORITES_PER_GROUP;
+  }, [latest]);
+  const favorites = latest?.body.groups.find((candidate) => candidate.id === group?.id)?.favorites ?? EMPTY_FAVORITES;
+  const canAddFavorite = (group?.favorites.length ?? 0) < MAX_FAVORITES_PER_GROUP;
   useLayoutEffect(() => {
     const elements = Array.from(list.current?.querySelectorAll<HTMLElement>("[data-favorite-name]") ?? []);
     const firstElement = elements[0];
@@ -119,7 +116,7 @@ export function HomeFavorites() {
         const favorite = favorites.find((item) => item.id === element.dataset.favoriteName);
         if (!favorite?.stop.name) return [];
         const direction =
-          favorite.stop.direction ?? shownGroup?.favorites.find((item) => item.id === favorite.id)?.direction;
+          favorite.stop.direction ?? group?.favorites.find((item) => item.id === favorite.id)?.direction;
         return [
           {
             id: favorite.id,
@@ -146,7 +143,7 @@ export function HomeFavorites() {
       document.fonts.removeEventListener("loadingdone", update);
       ruler.remove();
     };
-  }, [favorites, ordering, resource.status, summary.status, shownGroup]);
+  }, [favorites, ordering, resource.status, summary.status, group]);
   if (ordering)
     return (
       <div className={homeStyles.section}>
@@ -228,9 +225,9 @@ export function HomeFavorites() {
           )}
         </div>
       )}
-      {switching ? (
-        <p role="status" className={homeStyles.groupLoading}>
-          {group?.name} 그룹의 즐겨찾기를 불러오고 있어요…
+      {loading ? (
+        <p role="status" className={visuallyHidden}>
+          {group.name} 그룹의 즐겨찾기를 불러오고 있어요…
         </p>
       ) : (
         group &&
@@ -242,7 +239,7 @@ export function HomeFavorites() {
         id="home-favorites"
         role={group ? "tabpanel" : undefined}
         aria-labelledby={group ? `group-tab-${group.id}` : undefined}
-        aria-busy={summary.status === "pending"}
+        aria-busy={loading}
         className={homeStyles.panel}
       >
         {summary.status === "loadingError" && (
@@ -256,35 +253,65 @@ export function HomeFavorites() {
             )}
           </FavoritesNotice>
         )}
-        <div key={shownGroup?.id} className={homeStyles.panelInner} inert={switching}>
-          {((resource.status === "success" && !group) || (shownLatest !== null && favorites.length === 0)) && (
-            <div className={homeStyles.homeEmpty}>
-              <img src={starOutline} width="34" height="34" alt="" draggable={false} />
-              <p className={homeStyles.homeEmptyTitle}>등록된 즐겨찾기가 없어요</p>
-              {canAddFavorite && addFavoriteLink}
-            </div>
-          )}
-          <ul ref={list} className={homeStyles.list}>
-            {favorites.map((favorite) => (
-              <FavoriteCard
-                key={favorite.id}
-                favorite={favorite}
-                displayStopName={nameLabels[favorite.id] ?? favorite.stop.name ?? ""}
-                savedDirection={
-                  shownGroup?.favorites.find((candidate) => candidate.id === favorite.id)?.direction ?? null
-                }
-                elapsed={Math.max(0, (now - (shownLatest?.receivedAt ?? now)) / 1000)}
-                onRetry={retry}
-              />
-            ))}
-          </ul>
-          {favorites.length > 0 && canAddFavorite && (
-            <div className={homeStyles.addFavoriteFooter}>{addFavoriteLink}</div>
-          )}
-        </div>
+        {loading ? (
+          <FavoriteCardsSkeleton count={Math.max(1, group.favorites.length)} />
+        ) : (
+          <div key={group?.id} className={homeStyles.panelInner}>
+            {((resource.status === "success" && !group) || (latest !== null && favorites.length === 0)) && (
+              <div className={homeStyles.homeEmpty}>
+                <img src={starOutline} width="34" height="34" alt="" draggable={false} />
+                <p className={homeStyles.homeEmptyTitle}>등록된 즐겨찾기가 없어요</p>
+                {canAddFavorite && addFavoriteLink}
+              </div>
+            )}
+            <ul ref={list} className={homeStyles.list}>
+              {favorites.map((favorite) => (
+                <FavoriteCard
+                  key={favorite.id}
+                  favorite={favorite}
+                  displayStopName={nameLabels[favorite.id] ?? favorite.stop.name ?? ""}
+                  savedDirection={group?.favorites.find((candidate) => candidate.id === favorite.id)?.direction ?? null}
+                  elapsed={Math.max(0, (now - (latest?.receivedAt ?? now)) / 1000)}
+                  onRetry={retry}
+                />
+              ))}
+            </ul>
+            {favorites.length > 0 && canAddFavorite && (
+              <div className={homeStyles.addFavoriteFooter}>{addFavoriteLink}</div>
+            )}
+          </div>
+        )}
       </div>
       {notice > 0 && <Notice key={notice} message="변경 사항을 저장했어요" />}
     </section>
+  );
+}
+
+function FavoriteCardsSkeleton({ count }: { count: number }) {
+  return (
+    <div className={homeStyles.list} aria-hidden="true" data-testid="favorite-cards-skeleton">
+      {Array.from({ length: count }, (_, index) => (
+        <div className={homeStyles.card} key={index}>
+          <div className={homeStyles.link}>
+            <div className={homeStyles.heading}>
+              <span className={homeStyles.placeholderRoute} />
+              <div className={homeStyles.stopNameAndDirection}>
+                <span className={homeStyles.placeholderStop} />
+                <span className={homeStyles.placeholderDirection} />
+              </div>
+            </div>
+            <div className={homeStyles.forecast}>
+              {[0, 1, 2].map((row) => (
+                <div className={homeStyles.arrival} key={row}>
+                  <span className={homeStyles.placeholderTime} />
+                  <span className={homeStyles.placeholderSeat} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

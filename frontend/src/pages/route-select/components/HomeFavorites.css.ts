@@ -12,7 +12,6 @@ export const panel = style({
   flexDirection: "column",
   flex: 1,
 });
-export const groupLoading = style({ margin: "8px 0", fontSize: 13, color: vars.color.textSubtle });
 export const panelInner = style({ display: "flex", flexDirection: "column", flex: 1 });
 export const card = style([
   cardBase,
@@ -29,12 +28,16 @@ export const link = style({
   color: "inherit",
   textDecoration: "none",
 });
-export const heading = style({ display: "flex", alignItems: "center", gap: 10, minWidth: 0 });
+export const heading = style({
+  display: "grid",
+  gridTemplateColumns: "minmax(64px, max-content) minmax(0, 1fr)",
+  alignItems: "center",
+  gap: 10,
+});
 export const routeBadge = style({ alignSelf: "stretch" });
 export const stopNameAndDirection = style({
   display: "flex",
   flexDirection: "column",
-  flex: 1,
   gap: 3,
   minWidth: 0,
   overflowWrap: "anywhere",
@@ -135,6 +138,19 @@ export const list = style({
   margin: 0,
   listStyle: "none",
 });
+const placeholder = style({
+  display: "block",
+  background: vars.color.mutedChipSurface,
+  borderRadius: vars.radius.badge,
+});
+export const placeholderRoute = style([placeholder, { height: 42, borderRadius: 8 }]);
+export const placeholderStop = style([placeholder, { width: "65%", height: 16 }]);
+export const placeholderDirection = style([placeholder, { width: "40%", height: 12 }]);
+export const placeholderTime = style([placeholder, { width: "24%", height: 14, marginInlineStart: 6 }]);
+export const placeholderSeat = style([
+  placeholder,
+  { width: 148, maxWidth: "55%", height: 22, marginInlineStart: "auto", borderRadius: 999 },
+]);
 export const tabs = style({ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 });
 export const groupTabs = style({
   display: "flex",
