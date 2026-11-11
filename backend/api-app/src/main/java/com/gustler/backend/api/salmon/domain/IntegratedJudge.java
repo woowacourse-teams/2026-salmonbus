@@ -63,11 +63,6 @@ public final class IntegratedJudge {
             return new Situation(true, true, Optional.empty(), Coverage.UNKNOWN, false, Listing.COMPLETE, 1, 0,
                 List.of());
         }
-
-        public static Situation contradiction() {
-            return new Situation(false, true, Optional.empty(), Coverage.UNKNOWN, false, Listing.COMPLETE, 1, 0,
-                List.of());
-        }
     }
 
     public record Recommendation(Terminal terminal, Optional<String> chosenId, Optional<Bound> delta, boolean partial) {

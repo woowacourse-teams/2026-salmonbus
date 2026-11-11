@@ -90,7 +90,8 @@ class IntegratedJudgeTest {
         assertThat(IntegratedJudge.decide(new Situation(true, true, Optional.of(new Risk(0.5, 0.5)),
             Coverage.MODEL_WINDOW, false, Listing.COMPLETE, 0.15, -0.01, List.of())).terminal())
             .isEqualTo(Terminal.INVALID_INPUT);
-        assertThat(IntegratedJudge.decide(Situation.contradiction()).terminal()).isEqualTo(Terminal.INVALID_INPUT);
+        assertThat(IntegratedJudge.decide(new Situation(false, true, Optional.empty(), Coverage.UNKNOWN, false,
+            Listing.COMPLETE, 0.15, 0, List.of())).terminal()).isEqualTo(Terminal.INVALID_INPUT);
     }
 
     @Test

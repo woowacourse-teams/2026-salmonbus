@@ -26,7 +26,7 @@ public class SalmonActionController {
 
     @GetMapping("/api/v1/routes/{routeId}/stations/{stationId}/salmon-action")
     @Operation(operationId = "getSalmonAction", summary = "연어행동 판정 안내",
-        description = "기능이 꺼져 있으면 kind만 DISABLED다. 켜져 있으면 종료 상태에 해당하는 문장을 반환한다. 확률은 반환하지 않는다.")
+        description = "기능이 꺼져 있으면 kind만 DISABLED다. 켜져 있으면 종료 상태를 반환하고, 사용자가 할 행동이 정해진 상태에만 문장을 싣는다. 확률은 반환하지 않는다.")
     public ResponseEntity<SalmonActionResponse> show(
         @PathVariable String routeId,
         @PathVariable String stationId,
@@ -41,7 +41,7 @@ public class SalmonActionController {
         return switch (answer) {
             case SalmonActionAnswer.Off ignored -> new SalmonActionResponse(Kind.DISABLED, null, null);
             case SalmonActionAnswer.Decided decided ->
-                new SalmonActionResponse(Kind.DECIDED, decided.terminal().name(), decided.guidance());
+                new SalmonActionResponse(Kind.DECIDED, decided.terminal().name(), decided.guidance().orElse(null));
         };
     }
 }
