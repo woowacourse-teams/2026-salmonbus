@@ -12,6 +12,7 @@ import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.model.ModelRoute;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse;
@@ -221,6 +222,7 @@ class ObservationForecastTriggerIntegrationTest {
         when(model.supportsRoute(org.mockito.ArgumentMatchers.any())).thenReturn(true);
         when(model.statistics(org.mockito.ArgumentMatchers.any())).thenReturn(statistics);
         // 지원 시간 밖의 빈 발행도 실제 커밋된다. 이 테스트는 수집 후 발행 신호의 지연을 검증한다.
+        when(statistics.timeCell(org.mockito.ArgumentMatchers.any())).thenReturn(AlightingTimeCell.WORK_NIGHT);
         return model;
     }
 }
