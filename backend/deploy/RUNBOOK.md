@@ -905,7 +905,9 @@ Discord 알림을 받으면 DB 원인 분석 화면의 수집 실패 및 상태 
 
 ### 하차 반영 단일 모델 전환
 
-이번 전환은 API와 Worker 배포를 나눠 진행한다. 먼저 파이프라인에서 Worker 배포 단계의 자동 진행을 중지하고 Worker 호스트에 `sudo touch /etc/salmonbus/alighting-cutover-hold`를 실행한다. 구 Worker·API·archive-app과 복원 작업을 중지한다. V66 이전 DB 백업을 만들고 격리 DB에 복원해 스키마 버전과 관측 조회를 확인한다. API에서 배포 버전까지 Flyway를 적용한다. 이전 애플리케이션을 다시 배포해야 할 경우에는 검증한 V66 이전 DB도 함께 복원한다.
+이번 전환은 API와 Worker 배포를 나눠 진행한다. 먼저 파이프라인에서 Worker 배포 단계의 자동 진행을 중지하고 Worker 호스트에서 이번 배포 소스의 `sudo bash backend/deploy/scripts/hold-alighting-worker.sh`를 실행한다. 이 명령은 호스트에 systemd 추가 설정과 보류 파일을 만들고 Worker를 중지한다. 이전 배포본이 서비스 유닛을 교체해도 호스트의 추가 설정은 보류 파일이 있는 동안 Worker 시작을 차단한다.
+
+구 API·archive-app과 복원 작업을 중지한다. V66 이전 DB 백업을 만들고 격리 DB에 복원해 스키마 버전과 관측 조회를 확인한다. API에서 배포 버전까지 Flyway를 적용한다. 이전 애플리케이션을 다시 배포해야 할 경우에는 보류 상태에서 검증한 V66 이전 DB와 이전 배포본을 함께 복원한다.
 
 dev에서 기존 V67을 이미 실행했다면 V72 이상 적용과 V67 단독 체크섬 불일치를 확인한 뒤 Flyway `repair`와 `validate`를 실행한다. 수정된 V67을 담아 검증을 통과한 패키지를 복구용으로 보관한다. V75 적용 전에는 기존 `push_device` 등록을 확인하고 배포 후 앱에서 기기를 다시 등록한다.
 

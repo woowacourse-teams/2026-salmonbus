@@ -33,7 +33,12 @@ case "$1" in
   enable)        grep -qx "$2" /work/enabled 2>/dev/null || echo "$2" >> /work/enabled; exit 0 ;;
   is-enabled)    grep -qx "$3" /work/enabled 2>/dev/null && exit 0 || exit 1 ;;
   stop)          grep -vx "$2" /work/running > /work/r.tmp 2>/dev/null || true; mv /work/r.tmp /work/running; exit 0 ;;
-  start)         if ! grep -qx "$2" /work/running 2>/dev/null; then
+  start)         if [ -e /etc/salmonbus/alighting-cutover-hold ] &&
+                   grep -Fqx 'ConditionPathExists=!/etc/salmonbus/alighting-cutover-hold' \
+                     "/etc/systemd/system/$2.service" /etc/systemd/system/"$2.service.d/"*.conf 2>/dev/null; then
+                   exit 0
+                 fi
+                 if ! grep -qx "$2" /work/running 2>/dev/null; then
                    echo "$2" >> /work/running
                    # start 할 때마다 PID 를 하나 올린다. 재시작했는지를 PID 로 본다
                    n=$(( $(cat /work/pidseq 2>/dev/null || echo 1000) + 1 )); echo "$n" > /work/pidseq; echo "$n" > "/work/pid.$2"
@@ -81,6 +86,9 @@ answer() {
   exit "$3"
 }
 [ -f /work/refuse ] && answer 000 '' 7
+if [ "$comp" = worker ] && ! grep -qx salmonbus-worker /work/running; then
+  answer 000 '' 7
+fi
 if [ "$state" != "UP" ]; then
   case "$url" in */readyz) answer 503 '{"status":"OUT_OF_SERVICE"}' 0 ;; esac
   answer 503 '{"status":"DOWN"}' 0
@@ -384,15 +392,42 @@ fi
 rm -rf /opt/salmonbus/.deploying
 
 sec "하차 반영 전환 중 Worker 기동 보류"
+cp -a "$ARCHIVE/worker" "$WORK/worker-new"
+hold_old_digest="$(printf %s worker-before-alighting-cutover | sha256sum | cut -d' ' -f1)"
+make_revision worker WORKER_BEFORE_HOLD hold0000001 "$hold_old_digest" "2026-09-23T04:00:00Z"
+sed -i '/^if .*alighting-cutover-hold.*; then$/,/^fi$/d' "$ARCHIVE/worker/scripts/start.sh"
+sed -i '/^ConditionPathExists=.*alighting-cutover-hold$/d' "$ARCHIVE/worker/systemd/salmonbus-worker.service"
+deploy worker
+mv "$ARCHIVE/worker" "$WORK/worker-before-hold"
+mv "$WORK/worker-new" "$ARCHIVE/worker"
+
+bash "$DEPLOY/scripts/hold-alighting-worker.sh" || bad "호스트에 Worker 기동 보류를 설치하지 못했다"
 : > /work/systemctl.log
-touch /etc/salmonbus/alighting-cutover-hold
 deploy worker fail || true
 grep -q '하차 반영 체크포인트 전환 중' "$WORK/worker-start.out" \
   && ok "체크포인트 준비 전 Worker 기동을 거부한다" || bad "전환 보류 사유가 다르다"
 grep -q '^start salmonbus-worker$' /work/systemctl.log \
   && bad "전환 중 Worker를 시작했다" || ok "전환 중 Worker 시작 명령을 호출하지 않는다"
+
+mv "$ARCHIVE/worker" "$WORK/worker-new"
+mv "$WORK/worker-before-hold" "$ARCHIVE/worker"
+: > /work/systemctl.log
+VALIDATE_CHECK_SECONDS=4 VALIDATE_RETRY_SECONDS=1 deploy worker fail || true
+[ "$(readlink -f /opt/salmonbus/worker/current)" = "/opt/salmonbus/worker/releases/$hold_old_digest" ] &&
+  cmp -s "$ARCHIVE/worker/systemd/salmonbus-worker.service" /etc/systemd/system/salmonbus-worker.service \
+  && ok "롤백이 구 리비전과 구 유닛을 복원했다" || bad "구 리비전이 복원되지 않았다"
+grep -qx 'start salmonbus-worker' /work/systemctl.log &&
+  ! systemctl is-active --quiet salmonbus-worker \
+  && ok "구 리비전이 시작을 요청해도 호스트 보류 설정이 차단한다" || bad "구 리비전의 기동 요청이 차단되지 않았다"
+test -f /etc/salmonbus/alighting-cutover-hold \
+  && ok "롤백 뒤에도 기동 보류 파일이 남았다" || bad "롤백 중에 기동 보류 파일이 사라졌다"
+
+rm -rf "$ARCHIVE/worker"
+mv "$WORK/worker-new" "$ARCHIVE/worker"
 rm /etc/salmonbus/alighting-cutover-hold
 deploy worker
+systemctl is-active --quiet salmonbus-worker \
+  && ok "보류 해제 후 새 Worker가 시작한다" || bad "보류 해제 후 Worker가 시작하지 않았다"
 
 sec "5-2. 한 번 실패한 직후 바로 롤백 (CodeDeploy 가 하는 순서)"
 # 아래는 훅의 기존 JAR 재배포 동작만 검사한다. 정비 전환 실패 시에는 DB 백업과 구 JAR을 함께 복원한다.
