@@ -278,7 +278,7 @@ afterEach(() => {
 
 function setup(
   glSupported = true,
-  { initialized = true, reducedMotion = false, visibleHeight = 350 } = {},
+  { initialized = true, reducedMotion = false, visibleHeight = 350, refitOverviewOnResize = false } = {},
   dataOverrides: Partial<RouteMapData> = {},
 ) {
   const pendingFrames = new Map<number, FrameRequestCallback>();
@@ -347,6 +347,10 @@ function setup(
     onReady,
     onVehicleSelect,
     onDeselect,
+    null,
+    undefined,
+    false,
+    { refitOverviewOnResize },
   );
   const initialize = () => native.events.find((event) => event.name === "init")?.listener();
   if (initialized) initialize();
@@ -613,7 +617,7 @@ describe("네이버 지도 adapter", () => {
     ).toEqual(data.paths.flatMap((path) => path.coordinates));
 
     initialize();
-    adapter.resize(400, 600);
+    adapter.resize(400, 600, 350);
     adapter.update(null, "UP", []);
     initialize();
     expect(native.map.fits).toBe(1);
@@ -624,6 +628,48 @@ describe("네이버 지도 adapter", () => {
     expect(native.map.fittedCoordinates.length).toBeGreaterThan(0);
     initialize();
     expect(native.map.fits).toBe(1);
+  });
+  it("검색 진입 후 키보드가 닫히면 시트 위의 최종 영역에 전체 노선을 맞춘다", () => {
+    const { native, adapter, advanceTimers } = setup(true, {
+      visibleHeight: 140,
+      refitOverviewOnResize: true,
+    });
+    const coordinates = native.map.fittedCoordinates;
+    // 공유 지도는 판정보드의 크기 알림을 받기 전에 홈에서 먼저 크기가 바뀔 수 있다.
+    native.map.setSize(new SizeStub(400, 664));
+    adapter.resize(400, 664, 450);
+    advanceTimers(50);
+    adapter.resize(400, 664, 266);
+    advanceTimers(50);
+    expect(native.map.fits).toBe(1);
+
+    advanceTimers(50);
+    expect(native.map.fits).toBe(2);
+    expect(native.map.fitMargins).toEqual({ top: 227, right: 12, bottom: 227, left: 12, maxZoom: 13 });
+    expect(native.map.fittedCoordinates).toEqual(coordinates);
+
+    adapter.resize(400, 680, 272);
+    adapter.focus({ direction: "UP", sequence: 15 });
+    advanceTimers(100);
+    expect(native.map.fits).toBe(2);
+    expect(native.map.zoom).toBe(15);
+  });
+  it("크기 변경 뒤 시트가 지도를 가리면 다시 보일 때 전체 노선을 맞춘다", () => {
+    const { native, adapter, advanceTimers } = setup(true, { refitOverviewOnResize: true });
+
+    adapter.resize(400, 664, 266);
+    adapter.resize(400, 664, 0);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(1);
+
+    adapter.resize(400, 664, 332);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(2);
+    expect(native.map.fitMargins?.top).toBe(194);
+
+    adapter.resize(400, 664, 266);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(2);
   });
   for (const glSupported of [true, false]) {
     it(`${glSupported ? "GL" : "타일"} 지도의 첫 경로를 캔버스에서 잘린 위아래 영역을 제외하고 맞춘다`, () => {
@@ -817,7 +863,7 @@ describe("네이버 지도 adapter", () => {
     const setSize = jest.spyOn(native.map, "setSize");
     const setCenter = jest.spyOn(native.map, "setCenter");
     const setZoom = jest.spyOn(native.map, "setZoom");
-    adapter.resize(400, 350);
+    adapter.resize(400, 350, 350);
     expect(setSize).not.toHaveBeenCalled();
     expect(setCenter).not.toHaveBeenCalled();
     expect(setZoom).not.toHaveBeenCalled();
@@ -831,7 +877,7 @@ describe("네이버 지도 adapter", () => {
     const center = native.map.center;
     const setCenter = jest.spyOn(native.map, "setCenter");
     const setZoom = jest.spyOn(native.map, "setZoom");
-    adapter.resize(400, 600);
+    adapter.resize(400, 600, 350);
     expect(native.map.size).toEqual(new SizeStub(400, 600));
     expect(setCenter).not.toHaveBeenCalled();
     expect(setZoom).not.toHaveBeenCalled();
@@ -1115,7 +1161,7 @@ describe("네이버 지도 adapter", () => {
     adapter.moveVehicles([{ key: view.key, sequencePosition: view.vehicle.currentStopSequence + 0.75 }]);
     const latestTarget = bus.options.position;
     expect([latestTarget.lat(), latestTarget.lng()]).not.toEqual([initialTarget.lat(), initialTarget.lng()]);
-    adapter.resize(400, 500);
+    adapter.resize(400, 500, 350);
     flushFrames(280);
     expect(native.map.center.lat()).toBeCloseTo(latestTarget.lat(), 12);
     expect(native.map.center.lng()).toBeCloseTo(latestTarget.lng(), 12);
