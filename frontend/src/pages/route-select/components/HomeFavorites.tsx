@@ -313,7 +313,7 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
           <p className={homeStyles.notice}>
             {favoriteStatusLabelOf(favorite.status === "READY" ? "ERROR" : favorite.status)}
           </p>
-          {direction && (
+          {favorite.status !== "UNAVAILABLE" && direction && (
             <DirectionLabel
               className={homeStyles.direction}
               label={directionLabelOf(favorite.route.terminalStopName, direction)}
@@ -349,10 +349,12 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
                 favorite.stop.name
               )}
             </span>
-            <DirectionLabel
-              className={homeStyles.direction}
-              label={directionLabelOf(favorite.route.terminalStopName, direction)}
-            />
+            {favorite.status !== "UNAVAILABLE" && (
+              <DirectionLabel
+                className={homeStyles.direction}
+                label={directionLabelOf(favorite.route.terminalStopName, direction)}
+              />
+            )}
           </div>
         </div>
         <div className={homeStyles.forecast}>
