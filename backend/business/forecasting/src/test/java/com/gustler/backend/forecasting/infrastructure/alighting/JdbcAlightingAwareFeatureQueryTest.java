@@ -239,6 +239,36 @@ class JdbcAlightingAwareFeatureQueryTest {
         });
     }
 
+    @Test
+    void 체크포인트와_확정_시각이_같아도_90초_경계의_다음_배치를_읽고_검증한다() {
+        jdbc.sql("""
+            UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at+interval '1 second'
+            WHERE route_version_id=?
+            """).param(version).update();
+        AlightingAwareRouteStatistics confirmed = new AlightingAwareRouteStatistics(statistics.route(), statistics.stops(),
+            statistics.minutesPerStop(), statistics.tables(), statistics.targetBands(), statistics.holidays(), true);
+        JdbcAlightingAwareFeatureQuery checkpointQuery = new JdbcAlightingAwareFeatureQuery(jdbc,
+            new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc)), version + ":" + first, 100, true,
+            checkpoint.toString());
+        long boundaryBatch = batch(-89, 1);
+        long boundaryObservation = observation(boundaryBatch, 3);
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=? WHERE id=?")
+            .params(at(NOW.plusSeconds(1)), boundaryBatch).update();
+
+        checkpointQuery.read(sourceBatch, stops, confirmed);
+        jdbc.sql("UPDATE observation_batch SET stored_rows=2 WHERE id=?").param(boundaryBatch).update();
+        assertThatThrownBy(() -> checkpointQuery.read(boundaryBatch, stops, confirmed))
+            .hasMessage("ALIGHTING_AWARE_SOURCE_ROWS_MISSING");
+        jdbc.sql("UPDATE observation_batch SET stored_rows=1 WHERE id=?").param(boundaryBatch).update();
+
+        AlightingAwareFeatureSnapshot snapshot = checkpointQuery.read(boundaryBatch, stops, confirmed)
+            .get(boundaryObservation);
+        assertThat(snapshot.source().batchRank()).isEqualTo(2);
+        Path confirmedCheckpoint = checkpoint.resolve(AlightingAwareRouteStatistics.CONFIRMED_PROFILE);
+        assertThat(new AlightingAwareHistorySeedReader(confirmedCheckpoint.toString(), 100).read(version).rank())
+            .isEqualTo(2);
+    }
+
     private JdbcAlightingAwareFeatureQuery query() {
         return new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
             new JdbcVehicleCapacityStore(jdbc)), version + ":" + first, 100, true, "");

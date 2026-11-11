@@ -4,6 +4,7 @@ import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatu
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareHistoryCompactor;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareVehiclePrefix;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -28,10 +29,26 @@ public final class AlightingAwareHistorySeedReader {
     private static final ConcurrentHashMap<String, Object> WRITE_LOCKS = new ConcurrentHashMap<>();
     private final String directory;
     private final int maximumRows;
+    private final boolean requireQualityCutover;
 
     public AlightingAwareHistorySeedReader(String directory, final int maximumRows) {
+        this(directory, maximumRows, false);
+    }
+
+    private AlightingAwareHistorySeedReader(String directory, final int maximumRows, boolean requireQualityCutover) {
         this.directory = directory;
         this.maximumRows = maximumRows;
+        this.requireQualityCutover = requireQualityCutover;
+    }
+
+    static AlightingAwareHistorySeedReader confirmed(String directory, final int maximumRows) {
+        String path = directory.isBlank() ? directory
+            : Path.of(directory).resolve(AlightingAwareRouteStatistics.CONFIRMED_PROFILE).toString();
+        return new AlightingAwareHistorySeedReader(path, maximumRows, true);
+    }
+
+    boolean configured() {
+        return !directory.isBlank();
     }
 
     /** 여섯 필드는 단일 체크포인트의 관측·누적 상태·사건과 확정 커서를 나타내는 저장 계약이다. */
@@ -78,7 +95,11 @@ public final class AlightingAwareHistorySeedReader {
             if (Files.size(file) > 256L * 1024 * 1024) {
                 throw unavailable("ALIGHTING_AWARE_SEED_SIZE_LIMIT_EXCEEDED");
             }
-            return AlightingAwareHistorySeedCodec.decode(verifiedPayload(file), routeVersionId, maximumRows);
+            JsonNode payload = verifiedPayload(file);
+            if (requireQualityCutover && !payload.path("quality_cutover").asBoolean()) {
+                throw unavailable("ALIGHTING_AWARE_SEED_REQUIRES_QUALITY_CUTOVER");
+            }
+            return AlightingAwareHistorySeedCodec.decode(payload, routeVersionId, maximumRows);
         } catch (IOException | NoSuchAlgorithmException | IllegalArgumentException failure) {
             throw unavailable("ALIGHTING_AWARE_SEED_INVALID: " + failure.getMessage());
         }
@@ -111,6 +132,9 @@ public final class AlightingAwareHistorySeedReader {
         AlightingAwareHistoryCompactor.History compact = AlightingAwareHistoryCompactor.compact(
             new AlightingAwareHistoryCompactor.History(seed.prefix(), seed.observations(), seed.events()), seed.through());
         Map<String, Object> payload = AlightingAwareHistorySeedCodec.encode(routeVersionId, seed, compact);
+        if (requireQualityCutover) {
+            payload.put("quality_cutover", true);
+        }
         try {
             Path folder = Path.of(directory);
             Files.createDirectories(folder);
