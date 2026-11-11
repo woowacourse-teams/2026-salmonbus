@@ -41,7 +41,7 @@ export function HomeMap(props: Props) {
   const lastFavoriteKey = useRef<string | null>(null);
   const fittedFavorites = useRef<string | null>(null);
   const movingFavoriteCamera = useRef(false);
-  const boardReturnCamera = useRef<{ center: NaverCoordinate; zoom: number } | null>(null);
+  const boardReturnCamera = useRef<{ center: NaverCoordinate; zoom: number; rotation: number } | null>(null);
   const restoringBoardCamera = useRef(false);
   const mapReady = useRef(false);
   const stopMarkers = useRef<ReturnType<typeof mountHomeStops> | null>(null);
@@ -86,6 +86,7 @@ export function HomeMap(props: Props) {
           logoControlOptions: { position: maps.Position.BOTTOM_LEFT },
           overlayZoomEffect: null,
           gl: true,
+          disableRotateTilt: false,
           scrollWheel: true,
           disableDoubleClickZoom: false,
         });
@@ -96,11 +97,20 @@ export function HomeMap(props: Props) {
             latest.current.onStationTilesChange("");
             return;
           }
-          const { x, y } = projection.fromCoordToOffset(map.getCenter());
-          const southwest = projection.fromOffsetToCoord(new maps.Point(x - width / 2, y + height / 2));
-          const northeast = projection.fromOffsetToCoord(new maps.Point(x + width / 2, y - height / 2));
+          const corners = [
+            new maps.Point(0, 0),
+            new maps.Point(width, 0),
+            new maps.Point(0, height),
+            new maps.Point(width, height),
+          ].map((point) => projection.fromOffsetToCoord(point));
+          // 지도를 돌리면 경도와 위도의 최솟값·최댓값이 다른 꼭짓점에 놓일 수 있다.
+          const longitudes = corners.map((corner) => corner.lng());
+          const latitudes = corners.map((corner) => corner.lat());
           latest.current.onStationTilesChange(
-            homeStationTileKey([southwest.lng(), southwest.lat()], [northeast.lng(), northeast.lat()]),
+            homeStationTileKey(
+              [Math.min(...longitudes), Math.min(...latitudes)],
+              [Math.max(...longitudes), Math.max(...latitudes)],
+            ),
           );
         };
         const listener = maps.Event.addListener(map, "idle", () => {
@@ -186,13 +196,18 @@ export function HomeMap(props: Props) {
     if (!instance) return;
     const { map } = instance;
     if (boardOpen) {
-      boardReturnCamera.current ??= { center: map.getCenter(), zoom: map.getZoom() };
+      boardReturnCamera.current ??= {
+        center: map.getCenter(),
+        zoom: map.getZoom(),
+        rotation: map.getRotation(),
+      };
     } else if (boardReturnCamera.current) {
       const camera = boardReturnCamera.current;
       boardReturnCamera.current = null;
       restoringBoardCamera.current = true;
       try {
         map.setZoom(camera.zoom, false);
+        if (map.getRotation() !== camera.rotation) map.setRotation(camera.rotation);
         pendingStopCenter.current = [camera.center.lng(), camera.center.lat()];
         map.setCenter(camera.center);
       } finally {

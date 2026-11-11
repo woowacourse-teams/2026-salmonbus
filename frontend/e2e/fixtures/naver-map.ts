@@ -84,6 +84,7 @@ export const test = apiTest.extend<{
             readonly listeners = new Set<Listener>();
             readonly layer: HTMLDivElement;
             private zoom: number;
+            private rotation: number;
             private center: NaverCoordinate;
             private size: Size;
             private scale = 1;
@@ -97,6 +98,7 @@ export const test = apiTest.extend<{
               private options: ConstructorParameters<NaverMaps["Map"]>[1],
             ) {
               this.zoom = options.zoom;
+              this.rotation = options.rotation ?? 0;
               this.center = options.center;
               this.size = options.size;
               if (options.logoControlOptions) this.scale = (256 * 2 ** 13) / 360;
@@ -248,6 +250,15 @@ export const test = apiTest.extend<{
             setCenter(center: NaverCoordinate) {
               this.center = center;
               this.draw();
+              this.emit("idle");
+            }
+            getRotation() {
+              return this.rotation;
+            }
+            setRotation(rotation: number) {
+              this.rotation = rotation;
+              this.draw();
+              this.emit("rotate");
               this.emit("idle");
             }
             morph(center: NaverCoordinate, zoom: number) {

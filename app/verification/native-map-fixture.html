@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>네이티브 지도 검증</title>
+<style>
+  body { margin: 0; display: flex; flex-direction: column; height: 100dvh; font: 16px system-ui; }
+  #map { flex: 1; }
+  nav { display: grid; gap: 8px; padding: 16px 16px 84px; background: white; }
+  button, a { min-height: 40px; font: inherit; }
+</style>
+<div id="map"></div>
+<nav>
+  <a href="/search">검색 시나리오 열기</a>
+  <button id="overview">A 노선 전체 보기</button>
+  <button id="preserve">A 노선 카메라 보존</button>
+  <button id="selected">B 노선 정류장으로 이동</button>
+</nav>
+<script>
+  const routes = {
+    A: [{ latitude: 37.50, longitude: 127.00 }, { latitude: 37.51, longitude: 127.03 }],
+    B: [{ latitude: 37.55, longitude: 127.07 }, { latitude: 37.56, longitude: 127.10 }],
+  };
+  let mountCount = 0;
+
+  function mount(routeId, selectedSequence, preserveCamera = false) {
+    const sessionId = `camera-fixture-${++mountCount}`;
+    const coordinates = routes[routeId];
+    const selectedStop = selectedSequence === null ? null : { direction: 'UP', sequence: selectedSequence };
+    const send = (type, revision, payload) => window.ReactNativeWebView.postMessage(
+      JSON.stringify({ v: 1, type, payload: { sessionId, revision, ...payload } }),
+    );
+    send('map.mount', 0, {
+      routeId,
+      referenceVersionId: `${routeId}-1`,
+      preserveCamera,
+      activeDirection: 'UP',
+      selectedStop,
+      stops: coordinates.map((coordinate, index) => ({
+        direction: 'UP',
+        sequence: index + 1,
+        coordinate,
+        name: `${routeId} 정류장 ${index + 1}`,
+        boardingAllowed: true,
+        terminalStopName: `${routeId} 종점`,
+      })),
+      paths: [{ direction: 'UP', coordinates }],
+      fullPath: coordinates,
+      vehicles: [],
+    });
+    const { x, y, width, height } = document.getElementById('map').getBoundingClientRect();
+    send('map.layout', 1, {
+      viewport: { width: innerWidth, height: innerHeight, offsetLeft: 0, offsetTop: 0, scale: 1 },
+      mapRect: { x, y, width, height },
+      webRects: [],
+      captureAll: false,
+      transitioning: false,
+    });
+  }
+
+  document.getElementById('overview').onclick = () => mount('A', null);
+  document.getElementById('preserve').onclick = () => mount('A', 2, true);
+  document.getElementById('selected').onclick = () => mount('B', 1);
+</script>
+</html>
