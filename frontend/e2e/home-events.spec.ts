@@ -163,8 +163,129 @@ test("정류장 상세 조회 실패는 재시도할 수 있고 정상 빈 응�
   const sheet = page.getByRole("region", { name: "정류장 노선 안내" });
   await expect(sheet.getByText("정류장 버스 정보를 불러오지 못했어요.")).toBeVisible();
   await sheet.getByRole("button", { name: "정류장 버스 정보 다시 불러오기" }).click();
-  await expect(sheet.getByText("이 정류장의 정차 노선 정보가 없어요.")).toBeVisible();
+  const emptyNotice = sheet.getByText("이 정류장의 정차 노선 정보가 없어요.");
+  await expect(emptyNotice).toBeVisible();
   await expect(sheet.getByRole("button", { name: "정류장 버스 정보 다시 불러오기" })).toHaveCount(0);
+
+  let releaseRefresh!: () => void;
+  const refreshPending = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+  const detailEndpoint = `**/api/v2/stations/${stationId}`;
+  let releaseFollowingPoll!: () => void;
+  const followingPollPending = new Promise<void>((resolve) => {
+    releaseFollowingPoll = resolve;
+  });
+  await page.route(
+    detailEndpoint,
+    async (route) => {
+      await followingPollPending;
+      await route.fallback();
+    },
+    { times: 1 },
+  );
+  await page.route(
+    detailEndpoint,
+    async (route) => {
+      await refreshPending;
+      await route.fulfill({
+        json: {
+          stationId,
+          generatedAt: observedAt,
+          status: "READY",
+          refresh: { status: "RUNNING", suggestedRefreshAt: observedAt },
+          routes: [],
+        },
+      });
+    },
+    { times: 1 },
+  );
+  try {
+    const refresh = page.waitForRequest(detailEndpoint);
+    await page.clock.runFor(1_000);
+    await refresh;
+    await expect(emptyNotice).toBeVisible();
+    await expect(sheet.getByTestId("stop-route-skeleton")).toHaveCount(0);
+
+    const followingPoll = page.waitForRequest(detailEndpoint);
+    releaseRefresh();
+    await page.clock.resume();
+    await followingPoll;
+    await expect(emptyNotice).toBeVisible();
+    await expect(sheet.getByTestId("stop-route-skeleton")).toHaveCount(0);
+  } finally {
+    releaseRefresh();
+    releaseFollowingPoll();
+  }
+});
+
+test("정류장 상세를 불러오는 중과 노선 번호가 없는 행에 스켈레톤을 표시한다", async ({ page }) => {
+  const stationId = "206000532";
+  const unnamedRouteId = "204000056";
+  let releaseFirstResponse!: () => void;
+  let releaseNextResponse!: () => void;
+  const firstResponse = new Promise<void>((resolve) => {
+    releaseFirstResponse = resolve;
+  });
+  const nextResponse = new Promise<void>((resolve) => {
+    releaseNextResponse = resolve;
+  });
+  let requests = 0;
+  await page.route("**/api/v2/stations/tiles/14/*/*", (route) => {
+    const [, , zoom, x, y] = new URL(route.request().url()).pathname.split("/").slice(-5).map(Number);
+    return route.fulfill({
+      json: {
+        tile: { zoom, x, y },
+        status: "READY",
+        coordinateSystem: "WGS84",
+        stations:
+          x === 13976 && y === 6354
+            ? [{ stationId, name: "판교역 API", point: { x: pangyoPoint[0], y: pangyoPoint[1] } }]
+            : [],
+      },
+    });
+  });
+  await page.route(`**/api/v2/stations/${stationId}`, async (route) => {
+    const first = ++requests === 1;
+    await (first ? firstResponse : nextResponse);
+    return route.fulfill({
+      json: {
+        stationId,
+        generatedAt: observedAt,
+        status: "NO_PREDICTION",
+        refresh: {
+          status: "IDLE",
+          suggestedRefreshAt: first ? observedAt : new Date(Date.parse(observedAt) + 60_000).toISOString(),
+        },
+        routes: [
+          { routeId, name: "4000", routeTypeCode: 11, supported: false, arrivals: [] },
+          { routeId: unnamedRouteId, name: first ? null : "4500", routeTypeCode: 11, supported: false, arrivals: [] },
+        ],
+      },
+    });
+  });
+
+  try {
+    await page.goto("/");
+    await page.getByRole("button", { name: "판교역 API 정류장" }).press("Enter");
+    const sheet = page.getByRole("region", { name: "정류장 노선 안내" });
+    const skeletons = sheet.getByTestId("stop-route-skeleton");
+    await expect(skeletons.first()).toBeVisible();
+    releaseFirstResponse();
+
+    await expect(sheet.getByText("4000", { exact: true })).toBeVisible();
+    await expect(skeletons).toHaveCount(1);
+    await expect(skeletons).toBeVisible();
+    await expect(sheet.getByText(unnamedRouteId, { exact: true })).toHaveCount(0);
+    releaseNextResponse();
+    await page.clock.runFor(1_000);
+
+    await expect(sheet.getByText("4500", { exact: true })).toBeVisible();
+    await expect(skeletons).toHaveCount(0);
+  } finally {
+    releaseFirstResponse();
+    releaseNextResponse();
+  }
 });
 
 for (const status of ["UNAVAILABLE", "READY"] as const) {
@@ -1016,6 +1137,41 @@ test("탭 시트는 지도만 남도록 닫히고 탭을 반복해서 누르면 
     await expect(tabSheet).toHaveAttribute("data-snap", "summary");
     await expect(page).toHaveURL(path);
   }
+});
+
+test("정류장 안내를 닫으면 홈 시트 높이까지 한 번에 내려간다", async ({ page }) => {
+  await page.route("**/assets/home-events.json", (route) =>
+    route.fulfill({ json: { stops: [{ id: "10001", name: "공원 앞", point: pangyoPoint, routes: [] }] } }),
+  );
+  await page.goto("/");
+  const home = page.getByRole("region", { name: "홈 정보", exact: true });
+  const homeTop = (await home.boundingBox())!.y;
+  await page.getByRole("button", { name: "공원 앞 정류장", exact: true }).press("Enter");
+  const station = page.getByRole("region", { name: "정류장 노선 안내", exact: true });
+  await station.getByRole("slider").press("End");
+  await expect(station).toHaveAttribute("data-snap", "full");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.clock.resume();
+
+  const tops = await station.getByRole("button", { name: "정류장 안내 닫기", exact: true }).evaluate(async (button) => {
+    const surface = button.closest("section")!.parentElement!;
+    const positions = [surface.getBoundingClientRect().top];
+    const started = performance.now();
+    (button as HTMLButtonElement).click();
+    await new Promise<void>((resolve) => {
+      function sample(now: number) {
+        positions.push(surface.getBoundingClientRect().top);
+        if (now - started >= 600) resolve();
+        else requestAnimationFrame(sample);
+      }
+      requestAnimationFrame(sample);
+    });
+    return positions;
+  });
+  expect(tops.some((top) => top > tops[0]! + 1 && top < homeTop - 1)).toBe(true);
+  expect(Math.max(...tops)).toBeLessThanOrEqual(homeTop + 1);
+  await expect(home).toHaveAttribute("data-snap", "summary");
+  expect((await home.boundingBox())!.y).toBeCloseTo(homeTop, 0);
 });
 
 test("탭 시트가 요약 높이에서 접힐 때 아래로 내려간 뒤 사라진다", async ({ page }) => {

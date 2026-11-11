@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from "react";
+import { useEffect, useReducer, useState } from "react";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { Link } from "react-router";
 import { latestSuccessOf, type LatestSuccess } from "@/shared/api/polledResource";
@@ -13,6 +13,7 @@ import { VerdictChip } from "@/shared/components/VerdictChip";
 import { useStationArrivals } from "@/shared/hooks/useStationArrivals";
 import { favoritePath } from "@/shared/routing/paths";
 import type { StationSheetEntry } from "@/shared/routing/boardEntry";
+import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { toRemainingTime } from "@/shared/utils/remainingTime";
 import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
 import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
@@ -70,7 +71,11 @@ interface HomeStopRoutesProps {
 }
 
 export function HomeStopRoutes(props: HomeStopRoutesProps) {
-  return props.stop.source === "station-api" ? <StationDetailRoutes {...props} /> : <LegacyStopRoutes {...props} />;
+  return props.stop.source === "station-api" ? (
+    <StationDetailRoutes key={props.stop.id} {...props} />
+  ) : (
+    <LegacyStopRoutes {...props} />
+  );
 }
 
 function LegacyStopRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
@@ -192,9 +197,14 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
     return () => window.clearInterval(timer);
   }, [hasFreshEta]);
   const hasBoardData = resource.status === "success" || hasFreshEta;
-  const waiting = resource.status === "pending" || body?.refresh.status === "RUNNING";
+  const collecting = body?.refresh.status === "RUNNING";
+  const [wasEmpty, setWasEmpty] = useState(false);
+  const confirmedEmpty = body?.routes.length === 0 && (!collecting || wasEmpty);
+  if (confirmedEmpty !== wasEmpty) setWasEmpty(confirmedEmpty);
+  const waiting = resource.status === "pending" || collecting;
   const failed = resource.status === "loadingError" || resource.status === "refetchError";
   const retrying = requestState === "loading";
+  const loadingRoutes = failed ? resource.status === "loadingError" && retrying : waiting && !confirmedEmpty;
   return (
     <>
       {failed && (
@@ -210,6 +220,8 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
       {body?.routes.length ? (
         <ul className={styles.stopRouteList}>
           {body.routes.map((route, index) => {
+            const key = `${route.routeId}:${route.direction}:${index}`;
+            if (route.name === null) return <StopRouteSkeleton key={key} unavailable />;
             const next =
               route.arrivals.find(
                 (vehicle) =>
@@ -220,7 +232,7 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
             const probability = next?.probability ?? null;
             return (
               <StopRouteRow
-                key={`${route.routeId}:${route.direction}:${index}`}
+                key={key}
                 name={route.name}
                 badgeTone={badgeToneFor(route.routeTypeCode)}
                 seconds={seconds}
@@ -237,14 +249,42 @@ function StationDetailRoutes({ stop, sheetSnap }: HomeStopRoutesProps) {
             );
           })}
         </ul>
+      ) : loadingRoutes ? (
+        <>
+          {!failed && (
+            <p className={visuallyHidden} role="status">
+              정류장 버스 정보를 확인하고 있어요…
+            </p>
+          )}
+          <ul className={styles.stopRouteList} aria-hidden="true">
+            <StopRouteSkeleton />
+            <StopRouteSkeleton />
+          </ul>
+        </>
       ) : (
         !failed && (
           <p className={styles.note} role="status">
-            {waiting ? "정류장 버스 정보를 확인하고 있어요…" : "이 정류장의 정차 노선 정보가 없어요."}
+            이 정류장의 정차 노선 정보가 없어요.
           </p>
         )
       )}
     </>
+  );
+}
+
+function StopRouteSkeleton({ unavailable = false }: { unavailable?: boolean }) {
+  return (
+    <li data-testid="stop-route-skeleton">
+      {unavailable && <span className={visuallyHidden}>노선 번호 정보 없음</span>}
+      <div className={styles.stopRouteLink} aria-hidden="true">
+        <span className={styles.stopRouteSummary}>
+          <span className={styles.stopRouteNumberPlaceholder} />
+          <span className={styles.stopRouteTimePlaceholder} />
+        </span>
+        <span className={styles.stopRouteVerdictPlaceholder} />
+        <span className={styles.stopRouteArrowPlaceholder} />
+      </div>
+    </li>
   );
 }
 
