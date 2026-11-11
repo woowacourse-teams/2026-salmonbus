@@ -896,7 +896,7 @@ test("홈 지도에서 정류장의 방면별 도착 시간을 보고 해당 판
   expect(await canvas?.evaluate((node) => node.isConnected)).toBe(true);
 });
 
-test("탭 시트는 지도만 남도록 닫히고 탭을 다시 누르면 처음 높이로 돌아온다", async ({ page, naverMap, api }) => {
+test("탭 시트는 지도만 남도록 닫히고 탭을 반복해서 누르면 한 단계씩 오르내린다", async ({ page, naverMap, api }) => {
   const route = api.data.routes.routes[0]!;
   api.data.routes.routes = Array.from({ length: 10 }, (_, index) => ({
     ...route,
@@ -911,6 +911,15 @@ test("탭 시트는 지도만 남도록 닫히고 탭을 다시 누르면 처음
   const list = sheet.getByRole("list", { name: "서비스 중 노선" });
   const navigation = page.getByRole("navigation", { name: "주요 메뉴" });
   const routeTab = navigation.getByRole("link", { name: "노선도" });
+  async function expectTabSheetRoundTrip(tab: typeof routeTab, path: string) {
+    await expect(sheetElement).toHaveAttribute("data-snap", "collapsed");
+    for (const snap of ["summary", "detail", "full", "detail", "summary", "collapsed", "summary", "detail"]) {
+      await tab.click();
+      await expect(sheetElement).toHaveAttribute("data-snap", snap);
+      await expect(page).toHaveURL(path);
+    }
+  }
+
   await expect(list).toBeVisible();
   await expect(page.getByTestId("naver-map-test-double")).toBeVisible();
   const mapBounds = await map.boundingBox();
@@ -939,17 +948,14 @@ test("탭 시트는 지도만 남도록 닫히고 탭을 다시 누르면 처음
   await sheet.getByRole("button", { name: "서비스 중인 노선 닫기", exact: true }).click();
   await expect(sheetElement).toHaveAttribute("data-snap", "collapsed");
   await expect(routeTab).toBeFocused();
-  for (const snap of ["summary", "detail", "full", "collapsed"]) {
-    await routeTab.click();
-    await expect(sheetElement).toHaveAttribute("data-snap", snap);
-    await expect(page).toHaveURL("/route-map");
-  }
+  await expectTabSheetRoundTrip(routeTab, "/route-map");
   expect(await map.boundingBox()).toEqual(mapBounds);
   expect(await naverMap.snapshot()).toEqual(camera);
 
   for (const [tab, label, path] of [
     ["즐겨찾기", "즐겨찾기 메뉴", "/favorites"],
     ["마이페이지", "마이페이지", "/mypage"],
+    ["홈", "홈 정보", "/"],
   ] as const) {
     const navigationTab = navigation.getByRole("link", { name: tab, exact: true });
     await navigationTab.click();
@@ -960,7 +966,33 @@ test("탭 시트는 지도만 남도록 닫히고 탭을 다시 누르면 처음
     await expect(tabSheet).toHaveCount(0);
     await expect(page).toHaveURL(path);
     await expect(navigationTab).toBeFocused();
-    await navigationTab.click();
-    await expect(tabSheet).toHaveAttribute("data-snap", "summary");
+    await expectTabSheetRoundTrip(navigationTab, path);
   }
+});
+
+test("탭 시트가 요약 높이에서 접힐 때 아래로 내려간 뒤 사라진다", async ({ page }) => {
+  await page.goto("/route-map");
+  const sheet = page.getByRole("region", { name: "서비스 중인 노선", exact: true });
+  const tab = page.getByRole("link", { name: "노선도", exact: true });
+  for (const snap of ["detail", "full", "detail", "summary"]) {
+    await tab.click();
+    await expect(sheet).toHaveAttribute("data-snap", snap);
+  }
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+
+  const slide = await tab.evaluate((element: HTMLAnchorElement) => {
+    const sheet = document.getElementById("home-bottom-sheet")!;
+    const topBefore = sheet.getBoundingClientRect().top;
+    element.click();
+    const [animation] = sheet.parentElement!.getAnimations();
+    const endTime = animation?.effect?.getComputedTiming().endTime;
+    if (!animation || typeof endTime !== "number") return null;
+    animation.currentTime = endTime / 2;
+    const { top, height } = sheet.getBoundingClientRect();
+    return { movingDown: top > topBefore, stillVisible: height > 0 && top < window.innerHeight };
+  });
+  expect(slide).toEqual({ movingDown: true, stillVisible: true });
+  await expect(sheet).toBeHidden();
+  await tab.click();
+  await expect(sheet).toHaveAttribute("data-snap", "summary");
 });

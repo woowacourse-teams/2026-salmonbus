@@ -42,6 +42,7 @@ export function HomeBottomSheet({
   const bodyRef = useRef<HTMLDivElement>(null);
   const stationHeadingRef = useRef<HTMLHeadingElement>(null);
   const closeAnimationRef = useRef<Animation | null>(null);
+  const tabSnapDirectionRef = useRef<"larger" | "smaller">("larger");
   const stationId = station?.id;
   const viewport = useBoardViewport();
   const available = label !== null;
@@ -56,6 +57,7 @@ export function HomeBottomSheet({
     safeBottomRef,
     height,
     dragging,
+    adjacentSnap,
     dragHandlers,
     onHandleKeyDown,
     onHandleClick,
@@ -77,7 +79,9 @@ export function HomeBottomSheet({
       return { minimum, half: summary, expanded: detail, full };
     },
   });
-  useImperativeHandle(controlsRef, () => ({ advance: onHandleClick }), [onHandleClick]);
+  useLayoutEffect(() => {
+    tabSnapDirectionRef.current = "larger";
+  }, [contentKey]);
   useLayoutEffect(
     () => () => {
       closeAnimationRef.current?.cancel();
@@ -112,6 +116,20 @@ export function HomeBottomSheet({
       if (closeAnimationRef.current === animation) onSnapChange("collapsed");
     };
   }
+
+  useImperativeHandle(controlsRef, () => ({
+    advance() {
+      const current = BOARD_SNAP[snap];
+      let next = adjacentSnap(tabSnapDirectionRef.current);
+      if (next === current) {
+        tabSnapDirectionRef.current = tabSnapDirectionRef.current === "larger" ? "smaller" : "larger";
+        next = adjacentSnap(tabSnapDirectionRef.current);
+      }
+      if (next === current) return;
+      if (next === "minimum") closeWithMotion();
+      else onSnapChange(HOME_SNAP[next]);
+    },
+  }));
 
   return (
     <div
