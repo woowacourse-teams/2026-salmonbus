@@ -4,6 +4,7 @@ import {
   boardSheetHeightsFor,
   boundedBoardSheetHeightFor,
   keyboardBoardSheetSnapFor,
+  roundTripBoardSheetStepFor,
   settledBoardSheetSnapFor,
 } from "./boardSheetPolicy";
 
@@ -41,6 +42,28 @@ describe("boundedBoardSheetHeightFor", () => {
     expect(boundedBoardSheetHeightFor(0, HEIGHTS)).toBe(224);
     expect(boundedBoardSheetHeightFor(600, HEIGHTS)).toBe(600);
     expect(boundedBoardSheetHeightFor(1200, HEIGHTS)).toBe(800);
+  });
+});
+
+describe("roundTripBoardSheetStepFor", () => {
+  it("위쪽 높이가 겹치면 같은 높이를 건너뛰고 아래로 돌아선다", () => {
+    const heights = { minimum: 100, half: 200, expanded: 280, full: 280 };
+    const top = roundTripBoardSheetStepFor("half", heights, "larger");
+    expect(top).toEqual({ snap: "expanded", direction: "larger" });
+    expect(roundTripBoardSheetStepFor(top.snap, heights, top.direction)).toEqual({
+      snap: "half",
+      direction: "smaller",
+    });
+  });
+
+  it("최소 높이에서 중복 단계를 건너뛰어 다시 올라간다", () => {
+    const heights = { minimum: 224, half: 224, expanded: 224, full: 280 };
+    expect(roundTripBoardSheetStepFor("minimum", heights, "smaller")).toEqual({ snap: "full", direction: "larger" });
+  });
+
+  it("모든 단계가 같은 높이면 현재 단계와 방향을 유지한다", () => {
+    const heights = { minimum: 140, half: 140, expanded: 140, full: 140 };
+    expect(roundTripBoardSheetStepFor("half", heights, "larger")).toEqual({ snap: "half", direction: "larger" });
   });
 });
 

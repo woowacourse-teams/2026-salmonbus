@@ -194,12 +194,8 @@ export function useBoardSheet({
     onSnapChange(next);
   }
 
-  function adjacentSnap(direction: "larger" | "smaller") {
-    return adjacentBoardSheetSnapFor(snap, heights, direction);
-  }
-
   function cycleSnap() {
-    const next = adjacentSnap("larger");
+    const next = adjacentBoardSheetSnapFor(snap, heights, "larger");
     onSnapChange(next === snap ? "minimum" : next);
   }
 
@@ -210,7 +206,7 @@ export function useBoardSheet({
     safeBottomRef,
     height,
     dragging: dragHeight !== null,
-    adjacentSnap,
+    heights,
     dragHandlers: {
       onPointerDown: startDrag,
       onPointerMove: moveDrag,

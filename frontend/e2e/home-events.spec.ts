@@ -911,13 +911,15 @@ test("탭 시트는 지도만 남도록 닫히고 탭을 반복해서 누르면 
   const list = sheet.getByRole("list", { name: "서비스 중 노선" });
   const navigation = page.getByRole("navigation", { name: "주요 메뉴" });
   const routeTab = navigation.getByRole("link", { name: "노선도" });
-  async function expectTabSheetRoundTrip(tab: typeof routeTab, path: string) {
-    await expect(sheetElement).toHaveAttribute("data-snap", "collapsed");
-    for (const snap of ["summary", "detail", "full", "detail", "summary", "collapsed", "summary", "detail"]) {
-      await tab.click();
-      await expect(sheetElement).toHaveAttribute("data-snap", snap);
-      await expect(page).toHaveURL(path);
-    }
+  async function dragHandleTo(y: number) {
+    const grip = await handle.boundingBox();
+    if (!grip) throw new Error("드래그할 시트 손잡이가 없습니다.");
+    const x = grip.x + grip.width / 2;
+    await page.mouse.move(x, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, y, { steps: 10 });
+    await page.clock.runFor(100);
+    await page.mouse.up();
   }
 
   await expect(list).toBeVisible();
@@ -932,11 +934,9 @@ test("탭 시트는 지도만 남도록 닫히고 탭을 반복해서 누르면 
   await body.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
   const lastCard = (await list.getByRole("link").last().boundingBox())!;
   expect(lastCard.y + lastCard.height).toBeLessThan(navBounds.y);
-  const grip = (await handle.boundingBox())!;
-  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(grip.x + grip.width / 2, 842, { steps: 10 });
-  await page.mouse.up();
+  const summaryGrip = await handle.boundingBox();
+  if (!summaryGrip) throw new Error("요약 높이의 시트 손잡이가 없습니다.");
+  await dragHandleTo(842);
   await expect(sheetElement).toHaveAttribute("data-snap", "collapsed");
   await expect(sheet).toHaveCount(0);
   await expect(sheetElement).toHaveCSS("height", "0px");
@@ -948,7 +948,25 @@ test("탭 시트는 지도만 남도록 닫히고 탭을 반복해서 누르면 
   await sheet.getByRole("button", { name: "서비스 중인 노선 닫기", exact: true }).click();
   await expect(sheetElement).toHaveAttribute("data-snap", "collapsed");
   await expect(routeTab).toBeFocused();
-  await expectTabSheetRoundTrip(routeTab, "/route-map");
+  for (const snap of ["summary", "detail", "full"]) {
+    await routeTab.click();
+    await expect(sheetElement).toHaveAttribute("data-snap", snap);
+  }
+  await handle.click();
+  await expect(sheetElement).toHaveAttribute("data-snap", "detail");
+  for (const snap of ["summary", "collapsed", "summary"]) {
+    await routeTab.click();
+    await expect(sheetElement).toHaveAttribute("data-snap", snap);
+  }
+
+  await handle.press("End");
+  await routeTab.click();
+  await expect(sheetElement).toHaveAttribute("data-snap", "detail");
+  await dragHandleTo(summaryGrip.y + summaryGrip.height / 2);
+  await expect(sheetElement).toHaveAttribute("data-snap", "summary");
+  await routeTab.click();
+  await expect(sheetElement).toHaveAttribute("data-snap", "detail");
+  await expect(page).toHaveURL("/route-map");
   expect(await map.boundingBox()).toEqual(mapBounds);
   expect(await naverMap.snapshot()).toEqual(camera);
 
@@ -966,7 +984,9 @@ test("탭 시트는 지도만 남도록 닫히고 탭을 반복해서 누르면 
     await expect(tabSheet).toHaveCount(0);
     await expect(page).toHaveURL(path);
     await expect(navigationTab).toBeFocused();
-    await expectTabSheetRoundTrip(navigationTab, path);
+    await navigationTab.click();
+    await expect(tabSheet).toHaveAttribute("data-snap", "summary");
+    await expect(page).toHaveURL(path);
   }
 });
 
@@ -995,6 +1015,24 @@ test("탭 시트가 요약 높이에서 접힐 때 아래로 내려간 뒤 사�
   await expect(sheet).toBeHidden();
   await tab.click();
   await expect(sheet).toHaveAttribute("data-snap", "summary");
+  await sheet.evaluate((element) =>
+    Promise.allSettled(element.parentElement?.getAnimations().map((animation) => animation.finished) ?? []),
+  );
+
+  const closeButton = await sheet.getByRole("button", { name: "서비스 중인 노선 닫기", exact: true }).elementHandle();
+  const reopenedDuringClose = await tab.evaluate(async (routeTab: HTMLAnchorElement, close) => {
+    if (!(close instanceof HTMLButtonElement)) return false;
+    close.click();
+    const [closing] = close.closest("section")?.parentElement?.getAnimations() ?? [];
+    if (!closing) return false;
+    const settled = Promise.allSettled([closing.finished]);
+    routeTab.click();
+    await settled;
+    return true;
+  }, closeButton);
+  expect(reopenedDuringClose).toBe(true);
+  await expect(sheet).toHaveAttribute("data-snap", "summary");
+  await expect(sheet).toBeInViewport();
 });
 
 test("홈 시트가 닫히는 중 로고로 홈에 다시 들어오면 시트를 볼 수 있다", async ({ page }) => {
