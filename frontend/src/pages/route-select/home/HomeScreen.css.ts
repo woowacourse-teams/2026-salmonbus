@@ -290,8 +290,10 @@ export const sheetBody = style({
   overflowY: "auto",
   overscrollBehaviorY: "contain",
   padding: "0 22px 10px",
-  scrollbarWidth: "thin",
-  scrollbarColor: `${vars.color.rowDivider} transparent`,
+  scrollbarWidth: "none",
+  selectors: {
+    "&::-webkit-scrollbar": { display: "none" },
+  },
 });
 export const tabSheetBody = style([
   sheetBody,

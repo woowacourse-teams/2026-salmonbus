@@ -1,8 +1,7 @@
-import { globalStyle, style } from "@vanilla-extract/css";
+import { style } from "@vanilla-extract/css";
 import { POINTER_INPUT } from "@/shared/input-method/inputMethod";
 import { PRESS_IN, PRESS_OUT, PRESSED_SCALE } from "@/shared/styles/press";
 import { vars } from "@/shared/styles/tokens.css";
-import { tabSheetBody } from "../home/HomeScreen.css";
 
 export const searchEntry = style({
   display: "grid",
@@ -86,4 +85,3 @@ export const favoritesSheetPage = style({
   flexDirection: "column",
   minHeight: "100%",
 });
-globalStyle(`${tabSheetBody}:has(> ${favoritesSheetPage})`, { scrollbarGutter: "stable both-edges" });
