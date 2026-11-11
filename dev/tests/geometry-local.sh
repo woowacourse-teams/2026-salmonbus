@@ -106,12 +106,12 @@ compose restart worker
 compose up --detach --no-build --no-deps --wait --wait-timeout 180 worker
 for attempt in $(seq 1 30); do
   compose logs --no-color worker > "$temporary/worker.log" 2>&1
-  if rg -q 'event=route_catalog_refresh_failed|reason=CATALOG_UNAVAILABLE' "$temporary/worker.log"; then
+  if grep -Eq 'event=route_catalog_refresh_failed|reason=CATALOG_UNAVAILABLE' "$temporary/worker.log"; then
     break
   fi
   sleep 1
 done
-rg --max-count 1 'event=route_catalog_refresh_failed|reason=CATALOG_UNAVAILABLE' "$temporary/worker.log" \
+grep -Em 1 'event=route_catalog_refresh_failed|reason=CATALOG_UNAVAILABLE' "$temporary/worker.log" \
   > "$report_dir/upstream-failure.txt"
 python3 "$ROOT/dev/tests/assert-route-geometry.py" --api "$api" --data "$ROOT/dev/data" \
   --output "$report_dir/upstream-offline.json" --compare "$report_dir/before.json"
@@ -127,5 +127,5 @@ python3 "$ROOT/dev/tests/assert-route-geometry.py" --api "$api" --data "$ROOT/de
   --output "$report_dir/after-restart.json" --compare "$report_dir/before.json"
 [[ $(geometry_count) == "$catalog_count" ]]
 compose logs --no-color local-init > "$report_dir/seed-restart.txt"
-rg -q '"result":"preserved"' "$report_dir/seed-restart.txt"
+grep -Fq '"result":"preserved"' "$report_dir/seed-restart.txt"
 printf '%s\n' "All catalog geometry, source points, stop visits, version pins, ETags and restart persistence passed: $report_dir"
