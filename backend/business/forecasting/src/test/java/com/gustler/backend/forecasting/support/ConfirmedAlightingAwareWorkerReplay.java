@@ -168,6 +168,7 @@ public final class ConfirmedAlightingAwareWorkerReplay {
         Map<String, int[]> counts = new LinkedHashMap<>();
         double maximumFeature = 0;
         double maximumPrediction = 0;
+        int boundaryProbes = 0;
         for (JsonNode row : cases) {
             AlightingAwareObservation source = byId.get(row.path("source_id").asLong());
             RouteStops stops = catalogs.get(source.routeVersionId());
@@ -200,6 +201,10 @@ public final class ConfirmedAlightingAwareWorkerReplay {
                     """).params(source.observationId(), row.path("target").asInt()).query(String.class).single();
                 maximumFeature = Math.max(maximumFeature,
                     compare(row.path("extended_inputs"), vector(JSON.readTree(evidence).path("extendedInputs"))));
+            }
+            if (row.path("boundary_probe").asBoolean(false)) {
+                verifyRushEvidence(jdbc, source.observationId(), row.path("target").asInt());
+                boundaryProbes++;
             }
             if (row.has("cell")) {
                 counts.computeIfAbsent(row.path("cell").asText(), cell -> new int[2])[0]++;
@@ -291,6 +296,7 @@ public final class ConfirmedAlightingAwareWorkerReplay {
         result.put("extended_hours", cells);
         result.put("expected_unsupported", expectedUnsupported);
         result.put("restored_targets", restored);
+        result.put("boundary_probes", boundaryProbes);
         result.put("passed", maximumFeature == 0 && maximumPrediction <= 1e-9 && maximumLabel <= 1e-8
             && !cases.isEmpty() && settled + expectedUnsupported == cases.size() && failures.isEmpty()
             && (!extendedReplay || restored == 1));
@@ -313,11 +319,29 @@ public final class ConfirmedAlightingAwareWorkerReplay {
             throw new IllegalStateException("Missing real source " + source.observationId());
         }
         AlightingAwareFeatureVector actual = snapshot.forTarget(row.path("target").asInt());
+        if (row.path("boundary_probe").asBoolean(false)) {
+            AlightingAwareSeatPredictor.Prediction rush = bundle.predictor().predict(actual.seat88(), actual.probability80());
+            return new ReplayForecast(rush.afterAlightingSeats(), rush.departureFullProbability(), 0);
+        }
         final double difference = Math.max(compare(row.path("seat88"), actual.seat88()),
             compare(row.path("probability80"), actual.probability80()));
         AlightingAwareSeatPredictor.Prediction expected = bundle.predictor().predict(vector(row.path("seat88")),
             vector(row.path("probability80")));
         return new ReplayForecast(expected.afterAlightingSeats(), expected.departureFullProbability(), difference);
+    }
+
+    private static void verifyRushEvidence(JdbcClient jdbc, final long source, final int target) {
+        String evidence = jdbc.sql("""
+            SELECT feature_snapshot::text FROM seat_forecast WHERE vehicle_observation_id=? AND target_stop_order=?
+            """).params(source, target).query(String.class).single();
+        JsonNode payload = JSON.readTree(evidence);
+        if (payload.path("seat88").size() != 88 || payload.path("probability80").size() != 80
+            || !payload.path("extendedInputs").isMissingNode()) {
+            throw new IllegalStateException("Boundary forecast did not use the rush model");
+        }
+        if (payload.path("extendedSettlement").path("work-day").isMissingNode()) {
+            throw new IllegalStateException("Boundary forecast does not preserve the daytime settlement parameters");
+        }
     }
 
     private record ReplayForecast(double seats, double full, double featureDifference) {
