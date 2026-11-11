@@ -1,5 +1,6 @@
 package com.gustler.backend.api.salmon.offline;
 
+import com.gustler.backend.api.salmon.offline.ObservationTrail.Timeliness;
 import com.gustler.backend.api.salmon.offline.PassOutcome.Seats;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -140,14 +141,32 @@ final class OutcomeTally {
         return basis;
     }
 
-    /** 차량들의 결과에서 대기의 성공 여부를 정한다. 한 대라도 빈자리가 있으면 성공, 전부 만석이면 실패다. */
-    static String stayOf(List<Seats> results, String whenEmpty) {
+    /** 기다리던 사람이 그 차량에 마감 안에 탈 수 있었는지. */
+    enum Boarding {
+        BOARDABLE, NOT_BOARDABLE, UNKNOWN;
+
+        /** 창 안에 떠난 차량이다. 빈자리가 있으면 탈 수 있었고 만석이면 탈 수 없었다. */
+        static Boarding of(Seats seats) {
+            return of(seats, Timeliness.IN_TIME);
+        }
+
+        /** 마감 뒤에 닿은 차량과 만석으로 떠난 차량은 탈 수 없었다. 마감 안인지 모르면 빈자리가 있어도 모름이다. */
+        static Boarding of(Seats seats, Timeliness timeliness) {
+            if (timeliness == Timeliness.LATE || seats.full()) {
+                return NOT_BOARDABLE;
+            }
+            return seats.known() && timeliness == Timeliness.IN_TIME ? BOARDABLE : UNKNOWN;
+        }
+    }
+
+    /** 차량들의 결과에서 대기의 성공 여부를 정한다. 한 대라도 탈 수 있었으면 성공, 전부 탈 수 없었으면 실패다. */
+    static String stayOf(List<Boarding> results, String whenEmpty) {
         if (results.isEmpty()) {
             return whenEmpty;
         }
-        if (results.stream().anyMatch(seats -> seats.known() && !seats.full())) {
+        if (results.contains(Boarding.BOARDABLE)) {
             return "SUCCESS";
         }
-        return results.stream().allMatch(Seats::full) ? "FAIL" : "UNKNOWN";
+        return results.stream().allMatch(result -> result == Boarding.NOT_BOARDABLE) ? "FAIL" : "UNKNOWN";
     }
 }

@@ -172,7 +172,7 @@ class SalmonOfflineRunTest {
         assertThat(nearest.path("bothFullPredictedByProduct").asDouble()).isCloseTo(0.3, within(1e-9));
 
         List<String> rows = Files.readAllLines(output.resolve("base-15/decisions.csv"));
-        assertThat(rows.get(1)).endsWith(",1:FULL|2:FULL,1:SEATS_AVAILABLE|2:FULL,FAIL,SUCCESS,FAIL");
+        assertThat(rows.get(1)).endsWith(",1:FULL|2:FULL,1:SEATS_AVAILABLE|2:FULL,1:IN_TIME|2:IN_TIME,FAIL,SUCCESS,FAIL");
         assertThat(String.join("\n", rows)).doesNotContain("bus-");
     }
 
@@ -260,10 +260,10 @@ class SalmonOfflineRunTest {
             + ",NO_MOVE_NO_CANDIDATE,QUERIED,2,2,EVALUABLE,0.15");
         assertThat(rows.get(1)).endsWith(
             ",INDEP+SEAT_FORECAST_PROXY,,1*:FOUND/FIRST_POST_STOP_ZERO|2*:FOUND/DEPARTURE_ZERO,READ,3,3,"
-            + "1:FULL|2:FULL,1:SEATS_AVAILABLE|2:FULL,FAIL,SUCCESS,FAIL");
+            + "1:FULL|2:FULL,1:SEATS_AVAILABLE|2:FULL,1:IN_TIME|2:IN_TIME,FAIL,SUCCESS,FAIL");
         assertThat(rows.get(2)).endsWith(",ABSTAIN_STAY_UNDEFINED,QUERIED,1,1,INSUFFICIENT,,,"
             + "PROBABILITY_UNKNOWN/-/-,1*:VEHICLE_NOT_ON_BOARD/BEYOND_HORIZON,READ,3,0,"
-            + "1:UNKNOWN/NOT_REACHED,1:UNKNOWN/NOT_REACHED,UNKNOWN,UNKNOWN,NO_PASSAGE");
+            + "1:UNKNOWN/NOT_REACHED,1:UNKNOWN/NOT_REACHED,1:UNSURE,UNKNOWN,UNKNOWN,NO_PASSAGE");
         assertThat(String.join("\n", rows)).doesNotContain("bus-");
         assertThat(Files.readString(output.resolve("base-15/summary.json"))).doesNotContain("bus-");
     }

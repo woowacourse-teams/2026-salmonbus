@@ -31,6 +31,7 @@ import com.gustler.backend.api.salmon.domain.StopLists.StopEntry;
 import com.gustler.backend.api.salmon.domain.StopLists.StopList;
 import com.gustler.backend.api.salmon.domain.Verdicts.Attempt;
 import com.gustler.backend.api.salmon.domain.Verdicts.Verdict;
+import com.gustler.backend.api.salmon.offline.ObservationTrail.Timeliness;
 import com.gustler.backend.api.salmon.offline.PassOutcome.Seats;
 import com.gustler.backend.api.salmon.offline.PassOutcome.Unknown;
 import com.gustler.backend.api.salmon.offline.RunSettings.SettingSet;
@@ -57,9 +58,12 @@ import tools.jackson.databind.ObjectMapper;
  * DB 읽기만 판정 시각 기준 어댑터로 바꿔 끼운다. 후보는 연결하지 않아 후보 조회는 언제나 빈 목록을 돌려준다.
  */
 final class StayRun implements AutoCloseable {
-    /** 도착 항목 하나. order는 도착이 이른 순서(1부터)이고, 결과 파일에서 차량 ID 대신 쓴다. */
+    /**
+     * 도착 항목 하나. order는 도착이 이른 순서(1부터)이고, 결과 파일에서 차량 ID 대신 쓴다.
+     * outcome은 예보 정산과 같은 한도로 길게 추적한 좌석이고, timeliness는 그 차량이 판정의 마감까지 닿았는지다.
+     */
     record EntryRecord(int order, boolean attempted, Lookup lookup, Optional<BoardAbsence> absence,
-                       PassOutcome outcome) {
+                       PassOutcome outcome, Timeliness timeliness) {
         Optional<Double> chance() {
             return lookup instanceof Found found ? Optional.of(found.value()) : Optional.empty();
         }
@@ -212,13 +216,16 @@ final class StayRun implements AutoCloseable {
         List<StopEntry> ordered = list.entries().stream()
             .sorted(Comparator.comparing((StopEntry entry) -> entry.arrival().present().orElseThrow())
                 .thenComparing(StopEntry::id)).toList();
+        Instant deadline = point.at().plusMillis(config.horizon().millis());
         List<EntryRecord> entries = new ArrayList<>();
         for (StopEntry entry : ordered) {
             Lookup lookup = lookupByEntry.get(entry.id());
             PassOutcome outcome = versionId.map(version -> trail.outcomeOf(version, entry.vehicleId(),
                 point.stopSequence(), point.at(), Optional.empty())).orElse(PassOutcome.unknown(Unknown.NO_VISIT));
+            Timeliness timeliness = versionId.map(version -> trail.timelinessOf(version, entry.vehicleId(),
+                point.stopSequence(), point.at(), deadline)).orElse(Timeliness.UNSURE);
             entries.add(new EntryRecord(entries.size() + 1, attempted.contains(entry.id()), lookup,
-                absenceOf(point, entry, lookup), outcome));
+                absenceOf(point, entry, lookup), outcome, timeliness));
         }
         return entries;
     }

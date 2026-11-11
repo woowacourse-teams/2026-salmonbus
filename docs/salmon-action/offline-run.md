@@ -204,8 +204,8 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 
 대기 판정 한 건의 성공 여부
 
-- 시도열 기준(주): 판정이 대기 위험 계산에 쓴 시도의 차량 가운데 한 대라도 `SEATS_AVAILABLE`이면 `SUCCESS`, 전부 `FULL`이면 `FAIL`, 그 밖은 `UNKNOWN`, 시도가 없으면 `NO_ATTEMPT`다. 첫 관측 기준과 마지막 관측 기준을 따로 낸다.
-- 창 기준(보조): 판정 시각 뒤 창 H 안에 그 정류장을 떠나기 시작한 그 노선의 차량마다 첫 관측의 좌석을 본다. 한 대라도 1석 이상이면 `SUCCESS`, 전부 0석이면 `FAIL`, 그런 차량이 없으면 `NO_PASSAGE`다. 차량 한 대는 한 번만 센다. 판정 시각에 이미 그 정류장을 떠난 상태였던 차량은 넣지 않는다. 그 관측이 바로 앞 관측과 이어지지 않으면(90초 초과, 방향 다름, 적격 아님) 좌석을 모름으로 둔다. 첫 관측 기준만 낸다.
+- 시도열 기준(주): 판정이 대기 위험 계산에 쓴 시도의 차량마다 마감(판정 시각 + H) 안에 탈 수 있었는지를 본다. 마감까지 그 정류장에 닿았고 `SEATS_AVAILABLE`이면 탈 수 있었다. `FULL`이거나, 마감 뒤의 관측에서도 그 정류장에 못 미쳤으면(`LATE`) 탈 수 없었다. 마감 전 마지막 관측은 못 미쳤고 마감 뒤 첫 관측은 이미 닿은 차량(`UNSURE`)은 빈자리가 있어도 모름이다. 한 대라도 탈 수 있었으면 `SUCCESS`, 전부 탈 수 없었으면 `FAIL`, 그 밖은 `UNKNOWN`, 시도가 없으면 `NO_ATTEMPT`다. 첫 관측 기준과 마지막 관측 기준을 따로 낸다. 좌석은 예보 정산과 같이 2시간까지 추적해 읽으므로, 시도 단위 보정표는 마감과 무관하다.
+- 창 기준(보조): 판정 시각 뒤 창 H 안에 그 정류장을 떠나기 시작한 그 노선의 차량마다 첫 관측의 좌석을 본다. 한 대라도 1석 이상이면 `SUCCESS`, 전부 0석이면 `FAIL`, 그런 차량이 없으면 `NO_PASSAGE`다. 차량 한 대는 한 번만 센다. 판정 시각에 이미 그 정류장을 떠난 상태였던 차량은 넣지 않는다. 그 관측이 바로 앞 관측과 이어지지 않으면(90초 초과, 방향 다름, 적격 아님) 좌석을 모름으로 둔다. 그 정류장에 못 미친 관측 바로 다음이 그 정류장을 넘어선 관측인 차량은 창 안에 떠났지만 좌석을 읽지 못했으므로 `SKIPPED` 모름으로 넣는다. 첫 관측 기준만 낸다.
 - 위험 구간별 실패율(`failureByRisk`)에는 차량의 결과를 전부 아는 판정만 넣는다. 성공은 한 대만 빈자리여도 정해지고 실패는 전부 만석이어야 정해져서, 일부만 아는 판정을 넣으면 실패율이 낮게 나온다. 뺀 판정은 `excludedDecisions`에 종류별로 센다(`SEATS_AVAILABLE_AND_UNKNOWN`, `FULL_OR_UNKNOWN_ONLY`, `NO_VEHICLE`).
 - 시도 단위 보정표와 두 시도의 만석 동반 집계는 결과를 아는 건만 센다. 어느 결과든 모르면 똑같이 빠지므로 위와 같은 쏠림은 없다. 다만 추적이 끊기는 일이 만석 여부와 무관하다는 보장은 없다.
 
@@ -250,7 +250,7 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 
 `decisions.csv`
 
-판정 한 건당 한 줄이다. 열은 route_id, station_id, stop_sequence, decision_at, reason_code, arrival_list, entries, attempts, stay_evaluation, stay_failure_risk, stay_assumptions, stay_gaps, entry_lookups, board, board_vehicles, board_vehicles_with_forecast, entry_outcomes_first, entry_outcomes_last, stay_outcome_by_first, stay_outcome_by_last, stay_outcome_by_window다. 한 칸에 여러 값이 있으면 `|`로 잇는다. entry_lookups는 `순서:결과` 모양이고 순서는 도착이 이른 순서다. 순서 뒤의 `*`는 대기 위험 계산에 들어간 시도라는 표시다. 역치를 바꿔 가며 사유 코드 분포를 다시 계산할 때 stay_failure_risk 열을 쓴다.
+판정 한 건당 한 줄이다. 열은 route_id, station_id, stop_sequence, decision_at, reason_code, arrival_list, entries, attempts, stay_evaluation, stay_failure_risk, stay_assumptions, stay_gaps, entry_lookups, board, board_vehicles, board_vehicles_with_forecast, entry_outcomes_first, entry_outcomes_last, entry_timeliness, stay_outcome_by_first, stay_outcome_by_last, stay_outcome_by_window다. 한 칸에 여러 값이 있으면 `|`로 잇는다. entry_lookups는 `순서:결과` 모양이고 순서는 도착이 이른 순서다. entry_timeliness는 그 차량이 마감까지 그 정류장에 닿았는지(`IN_TIME`, `LATE`, `UNSURE`)다. 순서 뒤의 `*`는 대기 위험 계산에 들어간 시도라는 표시다. 역치를 바꿔 가며 사유 코드 분포를 다시 계산할 때 stay_failure_risk 열을 쓴다.
 
 ## 검증
 

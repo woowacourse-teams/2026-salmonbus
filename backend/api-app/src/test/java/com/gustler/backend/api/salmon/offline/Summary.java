@@ -11,6 +11,7 @@ import com.gustler.backend.api.salmon.domain.Verdicts.Evaluable;
 import com.gustler.backend.api.salmon.domain.Verdicts.Evaluation;
 import com.gustler.backend.api.salmon.domain.Verdicts.Gap;
 import com.gustler.backend.api.salmon.domain.Verdicts.Insufficient;
+import com.gustler.backend.api.salmon.offline.OutcomeTally.Boarding;
 import com.gustler.backend.api.salmon.offline.PassOutcome.Seats;
 import com.gustler.backend.api.salmon.offline.StayRun.BoardCheck;
 import com.gustler.backend.api.salmon.offline.StayRun.BoardVehicle;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /** 판정 기록을 세어 결과 파일의 results 블록을 만든다. 차량 ID와 항목 ID는 담지 않는다. */
@@ -102,9 +104,9 @@ final class Summary {
         count(stayByLast, byLast);
         count(stayByWindow, byWindow);
         if (stay instanceof Evaluable evaluable) {
-            failureByRiskFirst.add(evaluable.value(), attempts.stream().map(a -> a.outcome().first()).toList());
-            failureByRiskLast.add(evaluable.value(), attempts.stream().map(a -> a.outcome().last()).toList());
-            failureByRiskWindow.add(evaluable.value(), decision.windowPassages());
+            failureByRiskFirst.add(evaluable.value(), boardingsOf(decision, PassOutcome::first));
+            failureByRiskLast.add(evaluable.value(), boardingsOf(decision, PassOutcome::last));
+            failureByRiskWindow.add(evaluable.value(), windowBoardingsOf(decision));
         }
         if (attempts.size() >= 2) {
             EntryRecord front = attempts.get(0);
@@ -138,15 +140,15 @@ final class Summary {
         private final Map<String, Integer> excluded = new TreeMap<>();
         private int included;
 
-        void add(double risk, List<Seats> vehicles) {
+        void add(double risk, List<Boarding> vehicles) {
             if (vehicles.isEmpty()) {
                 count(excluded, "NO_VEHICLE");
-            } else if (!vehicles.stream().allMatch(Seats::known)) {
-                boolean seatsSeen = vehicles.stream().anyMatch(seats -> seats.known() && !seats.full());
-                count(excluded, seatsSeen ? "SEATS_AVAILABLE_AND_UNKNOWN" : "FULL_OR_UNKNOWN_ONLY");
+            } else if (vehicles.contains(Boarding.UNKNOWN)) {
+                count(excluded, vehicles.contains(Boarding.BOARDABLE) ? "SEATS_AVAILABLE_AND_UNKNOWN"
+                    : "FULL_OR_UNKNOWN_ONLY");
             } else {
                 included++;
-                bins.add(risk, vehicles.stream().allMatch(Seats::full));
+                bins.add(risk, !vehicles.contains(Boarding.BOARDABLE));
             }
         }
 
@@ -160,17 +162,24 @@ final class Summary {
     }
 
     static String stayByFirstOf(DecisionRecord decision) {
-        return OutcomeTally.stayOf(decision.entries().stream().filter(EntryRecord::attempted)
-            .map(entry -> entry.outcome().first()).toList(), "NO_ATTEMPT");
+        return OutcomeTally.stayOf(boardingsOf(decision, PassOutcome::first), "NO_ATTEMPT");
     }
 
     static String stayByLastOf(DecisionRecord decision) {
-        return OutcomeTally.stayOf(decision.entries().stream().filter(EntryRecord::attempted)
-            .map(entry -> entry.outcome().last()).toList(), "NO_ATTEMPT");
+        return OutcomeTally.stayOf(boardingsOf(decision, PassOutcome::last), "NO_ATTEMPT");
     }
 
     static String stayByWindowOf(DecisionRecord decision) {
-        return OutcomeTally.stayOf(decision.windowPassages(), "NO_PASSAGE");
+        return OutcomeTally.stayOf(windowBoardingsOf(decision), "NO_PASSAGE");
+    }
+
+    private static List<Boarding> boardingsOf(DecisionRecord decision, Function<PassOutcome, Seats> basis) {
+        return decision.entries().stream().filter(EntryRecord::attempted)
+            .map(entry -> Boarding.of(basis.apply(entry.outcome()), entry.timeliness())).toList();
+    }
+
+    private static List<Boarding> windowBoardingsOf(DecisionRecord decision) {
+        return decision.windowPassages().stream().map(Boarding::of).toList();
     }
 
     /** 판정 시각 뒤의 차량 관측으로 낸 실제 결과 대조. */

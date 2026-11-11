@@ -74,7 +74,7 @@ public final class SalmonOfflineRun {
             writer.write("route_id,station_id,stop_sequence,decision_at,reason_code,arrival_list,entries,attempts,"
                 + "stay_evaluation,stay_failure_risk,stay_assumptions,stay_gaps,entry_lookups,board,"
                 + "board_vehicles,board_vehicles_with_forecast,entry_outcomes_first,entry_outcomes_last,"
-                + "stay_outcome_by_first,stay_outcome_by_last,stay_outcome_by_window");
+                + "entry_timeliness,stay_outcome_by_first,stay_outcome_by_last,stay_outcome_by_window");
             writer.newLine();
             for (DecisionPoint point : points) {
                 DecisionRecord decision = run.decide(point);
@@ -113,6 +113,8 @@ public final class SalmonOfflineRun {
                 .collect(Collectors.joining("|")),
             decision.entries().stream().map(entry -> entry.order() + ":" + entry.outcome().last().label())
                 .collect(Collectors.joining("|")),
+            decision.entries().stream().map(entry -> entry.order() + ":" + entry.timeliness())
+                .collect(Collectors.joining("|")),
             Summary.stayByFirstOf(decision),
             Summary.stayByLastOf(decision),
             Summary.stayByWindowOf(decision));
@@ -144,7 +146,8 @@ public final class SalmonOfflineRun {
         report.put("outcomesNote", "판정 시각 뒤의 차량 관측에서 읽은 실제 결과다. 판정 입력에는 쓰지 않았다. "
             + "byFirstObservation은 그 정류장을 떠난 첫 관측(FIRST_POST_STOP_ZERO의 정답), byLastObservation은 다음 승차 "
             + "정류장 전의 마지막 관측(DEPARTURE_ZERO의 정답)의 남은 좌석을 본다. 1석 이상이면 SEATS_AVAILABLE, 0석이면 "
-            + "FULL이다. 창 기준(stayByWindow)은 첫 관측만 본다. byLastObservation은 DEPARTURE_ZERO 정답의 근사다. "
+            + "FULL이다. 시도열 기준(stayByAttempts)은 마감 뒤에 닿은 차량을 만석과 같이 탈 수 없었던 차량으로 세고, 마감 안에 "
+            + "닿았는지 모르는 차량은 빈자리가 있어도 모름으로 둔다. 창 기준(stayByWindow)은 첫 관측만 본다. byLastObservation은 DEPARTURE_ZERO 정답의 근사다. "
             + "제품은 모델 번들의 정차 순번을 쓰고 작은 순번 후퇴를 허용하는데, 여기서는 승차 가능 정류장을 쓰고 순번이 "
             + "되돌아가면 끊는다. failureByRisk는 차량의 결과를 전부 아는 판정만 구간에 넣고 나머지는 excludedDecisions로 센다");
         report.put("outcomes", summary.outcomes());

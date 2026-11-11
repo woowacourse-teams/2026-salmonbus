@@ -2,6 +2,8 @@ package com.gustler.backend.api.salmon.offline;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.gustler.backend.api.salmon.offline.ObservationTrail.Timeliness;
+import com.gustler.backend.api.salmon.offline.OutcomeTally.Boarding;
 import com.gustler.backend.api.salmon.offline.PassOutcome.Observation;
 import com.gustler.backend.api.salmon.offline.PassOutcome.Seats;
 import com.gustler.backend.api.salmon.offline.PassOutcome.Unknown;
@@ -114,6 +116,42 @@ class PassOutcomeTest {
             START.plusSeconds(900))).containsExactly(Seats.of(2));
         assertThat(ObservationTrail.passages(List.of(afterGap, afterIneligible), TARGET, START,
             START.plusSeconds(900))).containsExactly(Seats.unknown(Unknown.LOST), Seats.unknown(Unknown.LOST));
+    }
+
+    @Test
+    void 창_안에_그_정류장_순번을_건너뛴_차량은_좌석을_모르는_통과로_남겨_실패로_확정하지_않는다() {
+        List<Observation> full = List.of(passed(48, 0, 9), passed(49, 30, 0));
+        List<Observation> skipping = List.of(passed(48, 0, 9), passed(50, 30, 4));
+        List<Observation> farAhead = List.of(passed(60, 0, 3), passed(61, 30, 3));
+
+        List<Seats> passages = ObservationTrail.passages(List.of(full, skipping, farAhead), TARGET, START,
+            START.plusSeconds(900));
+
+        assertThat(passages).containsExactly(Seats.of(0), Seats.unknown(Unknown.SKIPPED));
+        assertThat(OutcomeTally.stayOf(passages.stream().map(Boarding::of).toList(), "NO_PASSAGE"))
+            .isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    void 마감_뒤에도_못_미친_차량은_빈자리가_있어도_탈_수_없었고_마감을_사이에_두고_닿은_차량은_모른다() {
+        Instant deadline = START.plusSeconds(60);
+        List<Observation> late = List.of(passed(48, 0, 9), passed(48, 70, 9), passed(49, 110, 2));
+        List<Observation> straddling = List.of(passed(48, 0, 9), passed(48, 50, 9), passed(49, 70, 2));
+        List<Observation> onTime = List.of(passed(48, 0, 9), passed(49, 60, 2));
+
+        assertThat(ObservationTrail.timeliness(late, TARGET, START, deadline)).isEqualTo(Timeliness.LATE);
+        assertThat(ObservationTrail.timeliness(straddling, TARGET, START, deadline)).isEqualTo(Timeliness.UNSURE);
+        assertThat(ObservationTrail.timeliness(onTime, TARGET, START, deadline)).isEqualTo(Timeliness.IN_TIME);
+        assertThat(ObservationTrail.timeliness(List.of(), TARGET, START, deadline)).isEqualTo(Timeliness.UNSURE);
+
+        assertThat(OutcomeTally.stayOf(List.of(Boarding.of(Seats.of(2), Timeliness.LATE)), "NO_ATTEMPT"))
+            .isEqualTo("FAIL");
+        assertThat(OutcomeTally.stayOf(List.of(Boarding.of(Seats.of(2), Timeliness.UNSURE)), "NO_ATTEMPT"))
+            .isEqualTo("UNKNOWN");
+        assertThat(OutcomeTally.stayOf(List.of(Boarding.of(Seats.of(0), Timeliness.UNSURE)), "NO_ATTEMPT"))
+            .isEqualTo("FAIL");
+        assertThat(OutcomeTally.stayOf(List.of(Boarding.of(Seats.of(2), Timeliness.IN_TIME)), "NO_ATTEMPT"))
+            .isEqualTo("SUCCESS");
     }
 
     @Test
