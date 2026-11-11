@@ -1,4 +1,13 @@
-import { useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useBoardSheet } from "@/shared/bottom-sheet/useBoardSheet";
 import { useBoardViewport } from "@/shared/bottom-sheet/useBoardViewport";
 import * as styles from "./HomeScreen.css";
@@ -15,6 +24,7 @@ export function HomeBottomSheet({
   children,
   controlsRef,
   surfaceRef,
+  sectionRef,
   label,
   actionTitle,
   contentKey,
@@ -28,6 +38,7 @@ export function HomeBottomSheet({
   children: ReactNode;
   controlsRef: RefObject<HomeSheetControls | null>;
   surfaceRef: RefObject<HTMLDivElement | null>;
+  sectionRef: RefObject<HTMLElement | null>;
   label: string | null;
   actionTitle?: ReactNode;
   contentKey: string;
@@ -77,6 +88,13 @@ export function HomeBottomSheet({
       return { minimum, half: summary, expanded: detail, full };
     },
   });
+  const attachSheet = useCallback(
+    (element: HTMLElement | null) => {
+      sheetRef.current = element;
+      sectionRef.current = element;
+    },
+    [sheetRef, sectionRef],
+  );
   useImperativeHandle(controlsRef, () => ({ advance: onHandleClick }), [onHandleClick]);
   useLayoutEffect(
     () => () => {
@@ -123,7 +141,7 @@ export function HomeBottomSheet({
     >
       <section
         id="home-bottom-sheet"
-        ref={sheetRef}
+        ref={attachSheet}
         className={styles.sheet}
         style={{ height: available ? height : 0 }}
         data-snap={snap}

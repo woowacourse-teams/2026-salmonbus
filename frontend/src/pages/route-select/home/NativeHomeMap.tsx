@@ -1,12 +1,29 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type ComponentProps,
+  type RefObject,
+} from "react";
 import type { Direction } from "@/shared/api/routeForecast.types";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { MapLocationButton } from "@/shared/components/MapLocationButton";
+import { RetryButton } from "@/shared/components/RetryButton";
 import { recordInputMethod } from "@/shared/input-method/inputMethod";
 import { createNativeMapChannel, type NativeMapChannel } from "@/shared/native-map/bridge";
 import { rectFor, startOverlayLayoutBridge } from "@/shared/native-map/overlayLayoutBridge";
-import type { NativeCoordinate, NativeHomeMapContent, NativeMapCamera } from "@/shared/native-map/protocol";
+import type {
+  NativeCoordinate,
+  NativeHomeMapContent,
+  NativeMapCamera,
+  NativeMapEvent,
+} from "@/shared/native-map/protocol";
 import { useFavoriteMapGeometry } from "./FavoriteMapRoute";
+import type { HomeSheetSnap } from "./HomeBottomSheet";
 import type { HomeMap } from "./HomeMap";
 import type { Point } from "./homeMapData";
 import { homeRouteRuns } from "./homeRouteRuns";
@@ -14,9 +31,13 @@ import { homeStationTileKey, MIN_STATION_ZOOM } from "./homeStationTiles";
 import * as styles from "./HomeScreen.css";
 
 type HomePaths = NativeHomeMapContent["paths"];
-interface NativeHomeMapProps extends ComponentProps<typeof HomeMap> {
+interface NativeHomeMapProps extends Omit<ComponentProps<typeof HomeMap>, "onLocate" | "boardOpen"> {
   paused: boolean;
-  onLocation: (point: Point) => void;
+  onLocationStart: () => void;
+  onLocationResult: (result: Point | "denied" | "unavailable" | "cancelled") => void;
+  sheetRef: RefObject<HTMLElement | null>;
+  sheetSnap: HomeSheetSnap;
+  navigationRef: RefObject<HTMLElement | null>;
 }
 
 function coordinateFrom([longitude, latitude]: Point): NativeCoordinate {
@@ -41,14 +62,9 @@ function boundsFor(paths: HomePaths) {
     : null;
 }
 
-function visibleAreaFor(region: HTMLElement, props: NativeHomeMapProps, stopFocus: boolean) {
+function visibleAreaFor(region: HTMLElement, searchBar: HTMLElement | null, sheetTop: number | undefined) {
   const bounds = region.getBoundingClientRect();
-  const search = props.searchBarRef.current?.getBoundingClientRect();
-  const viewport = window.visualViewport;
-  const top = Math.max(bounds.top, search?.bottom ?? bounds.top);
-  const sheetTop = stopFocus
-    ? (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight) * (1 - styles.stopSheetViewportRatio)
-    : props.sheetSurfaceRef.current?.querySelector("#home-bottom-sheet")?.getBoundingClientRect().top;
+  const top = Math.max(bounds.top, searchBar?.getBoundingClientRect().bottom ?? bounds.top);
   const bottom = Math.min(bounds.bottom, sheetTop ?? bounds.bottom);
   if (bottom <= top) return undefined;
   return rectFor({ left: bounds.left, top, width: bounds.width, height: bottom - top });
@@ -92,8 +108,7 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
   const pendingLocation = useRef<number | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
-  const [locating, setLocating] = useState(false);
-  const [locationError, setLocationError] = useState("");
+  const [retryRevision, retryMap] = useReducer((revision: number) => revision + 1, 0);
   const [favoritePaths, setFavoritePaths] = useState<Record<string, HomePaths>>({});
   const onFavoritePathsChange = useCallback((routeId: string, paths: HomePaths | undefined) => {
     setFavoritePaths((current) => {
@@ -138,18 +153,66 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
     () => ({ stations, paths: nativePaths, location }),
     [stations, nativePaths, location],
   );
-  const latest = useRef({ props, content });
   const sentContent = useRef<NativeHomeMapContent | null>(null);
-  useLayoutEffect(() => {
-    latest.current = { props, content };
-  }, [props, content]);
+  const mountMap = useEffectEvent((map: NativeMapChannel) => {
+    sentContent.current = content;
+    map.send("mountHome", { camera: camera.current, content });
+  });
+  const cancelLocation = useEffectEvent(() => {
+    if (pendingLocation.current === null) return;
+    pendingLocation.current = null;
+    props.onLocationResult("cancelled");
+  });
+  const handleMapEvent = useEffectEvent((event: Exclude<NativeMapEvent, { type: "error" }>) => {
+    switch (event.type) {
+      case "ready":
+        setStatus("ready");
+        props.onSurfaceChange({ status: "ready", surface: null, native: true });
+        break;
+      case "homeViewport": {
+        const { camera: next, corners, gesture } = event.payload;
+        camera.current = next;
+        props.onCenterChange([next.center.longitude, next.center.latitude], !gesture);
+        if (next.zoom < MIN_STATION_ZOOM) {
+          props.onStationTilesChange("");
+          break;
+        }
+        const longitudes = corners.map(({ longitude }) => longitude);
+        const latitudes = corners.map(({ latitude }) => latitude);
+        props.onStationTilesChange(
+          homeStationTileKey(
+            [Math.min(...longitudes), Math.min(...latitudes)],
+            [Math.max(...longitudes), Math.max(...latitudes)],
+          ),
+        );
+        break;
+      }
+      case "homeStopPress":
+        recordInputMethod("pointer");
+        props.onSelectStop(event.payload.id);
+        break;
+      case "mapPress":
+        recordInputMethod("pointer");
+        props.onMapBlankClick?.();
+        break;
+      case "locationResult": {
+        const { requestId, coordinate, error } = event.payload;
+        if (pendingLocation.current !== requestId) break;
+        pendingLocation.current = null;
+        props.onLocationResult(
+          coordinate ? [coordinate.longitude, coordinate.latitude] : error === "denied" ? "denied" : "unavailable",
+        );
+        break;
+      }
+    }
+  });
 
-  const { paused, overlayOpen } = props;
+  const { paused, overlayOpen, sheetRef, sheetSurfaceRef, sheetSnap, navigationRef, searchBarRef, onSurfaceChange } =
+    props;
   useEffect(() => {
     const element = region.current;
     if (paused || element === null) return;
     setStatus("loading");
-    setLocating(false);
     const map = createNativeMapChannel();
     channel.current = map;
     let disposed = false;
@@ -157,58 +220,15 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
     const root = document.documentElement;
     const timer = window.setTimeout(() => fail("주변 지도를 불러오지 못했어요"), 15_000);
     const unsubscribe = map.subscribe((event) => {
-      const { props } = latest.current;
-      switch (event.type) {
-        case "ready":
-          window.clearTimeout(timer);
-          root.dataset.nativeHomeMap = "true";
-          setStatus("ready");
-          props.onSurfaceChange({ status: "ready", surface: null, native: true });
-          break;
-        case "homeViewport": {
-          const { camera: next, corners, gesture } = event.payload;
-          camera.current = next;
-          props.onCenterChange([next.center.longitude, next.center.latitude], !gesture);
-          if (next.zoom < MIN_STATION_ZOOM) {
-            props.onStationTilesChange("");
-            break;
-          }
-          const longitudes = corners.map(({ longitude }) => longitude);
-          const latitudes = corners.map(({ latitude }) => latitude);
-          props.onStationTilesChange(
-            homeStationTileKey(
-              [Math.min(...longitudes), Math.min(...latitudes)],
-              [Math.max(...longitudes), Math.max(...latitudes)],
-            ),
-          );
-          break;
-        }
-        case "homeStopPress":
-          recordInputMethod("pointer");
-          props.onSelectStop(event.payload.id);
-          break;
-        case "mapPress":
-          recordInputMethod("pointer");
-          props.onMapBlankClick?.();
-          break;
-        case "locationResult": {
-          const { requestId, coordinate, error } = event.payload;
-          if (pendingLocation.current !== requestId) break;
-          pendingLocation.current = null;
-          setLocating(false);
-          if (coordinate) props.onLocation([coordinate.longitude, coordinate.latitude]);
-          else
-            setLocationError(
-              error === "denied"
-                ? "위치 권한이 꺼져 있어요. 지도를 움직여 지역을 선택할 수 있어요."
-                : "현재 위치를 확인하지 못했어요. 다시 눌러주세요.",
-            );
-          break;
-        }
-        case "error":
-          fail(event.payload.message);
-          break;
+      if (event.type === "error") {
+        fail(event.payload.message);
+        return;
       }
+      if (event.type === "ready") {
+        window.clearTimeout(timer);
+        root.dataset.nativeHomeMap = "true";
+      }
+      handleMapEvent(event);
     });
     function dispose() {
       if (disposed) return;
@@ -216,7 +236,7 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
       window.clearTimeout(timer);
       stopLayout();
       unsubscribe();
-      pendingLocation.current = null;
+      cancelLocation();
       channel.current = null;
       map.send("unmount", {});
       map.destroy();
@@ -226,22 +246,19 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
       dispose();
       setStatus("error");
       setError(message);
-      latest.current.props.onSurfaceChange({ status: "error", surface: null });
+      onSurfaceChange({ status: "error", surface: null });
     }
-    sentContent.current = latest.current.content;
-    map.send("mountHome", { camera: camera.current, content: latest.current.content });
+    mountMap(map);
     stopLayout = startOverlayLayoutBridge(map, element, (bounds) => {
-      const sheet = latest.current.props.sheetSurfaceRef.current?.querySelector("#home-bottom-sheet");
-      const navigation = document.querySelector('nav[aria-label="주요 메뉴"]');
       let bottom = bounds.bottom;
-      for (const overlay of [sheet, navigation]) {
+      for (const overlay of [sheetRef.current, navigationRef.current]) {
         const rect = overlay?.getBoundingClientRect();
         if (rect && rect.height > 0) bottom = Math.min(bottom, rect.top);
       }
       return Math.max(0, bounds.bottom - bottom);
     });
     return dispose;
-  }, [paused]);
+  }, [paused, retryRevision, sheetRef, navigationRef, onSurfaceChange]);
 
   useEffect(() => {
     const map = channel.current;
@@ -276,32 +293,64 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
     }
     if (fittedOverview.current === overviewKey || (favoriteKey !== null && !favoritesSettled)) return;
     const bounds = boundsFor(nativePaths);
-    const visible = visibleAreaFor(element, latest.current.props, false);
-    if (bounds === null || visible === undefined) return;
-    overviewReturn.current ??= camera.current;
-    fittedOverview.current = overviewKey;
-    map.send("homeCamera", { command: "fit", ...bounds, visible, animated: favoriteKey !== null });
-  }, [status, paused, overlayOpen, overviewKey, selectedStopId, favoriteKey, favoritesSettled, nativePaths]);
+    if (bounds === null) return;
+
+    const fit = () => {
+      if (channel.current !== map) return;
+      const sheet = sheetRef.current;
+      const moving = [sheet, sheetSurfaceRef.current].some((overlay) =>
+        overlay
+          ?.getAnimations()
+          .some((animation) => animation.playState !== "finished" && animation.playState !== "idle"),
+      );
+      if (moving || sheet?.dataset.dragging === "true") {
+        frame = requestAnimationFrame(fit);
+        return;
+      }
+      const visible = visibleAreaFor(element, searchBarRef.current, sheet?.getBoundingClientRect().top);
+      if (visible === undefined) return;
+      overviewReturn.current ??= camera.current;
+      fittedOverview.current = overviewKey;
+      map.send("homeCamera", { command: "fit", ...bounds, visible, animated: favoriteKey !== null });
+    };
+    let frame = requestAnimationFrame(fit);
+    return () => cancelAnimationFrame(frame);
+  }, [
+    status,
+    paused,
+    overlayOpen,
+    overviewKey,
+    selectedStopId,
+    favoriteKey,
+    favoritesSettled,
+    nativePaths,
+    sheetRef,
+    sheetSurfaceRef,
+    sheetSnap,
+    searchBarRef,
+  ]);
 
   const selectedStop = props.selectedStop;
   useEffect(() => {
     const element = region.current;
     if (!element || paused || !selectedStop || overlayOpen || status !== "ready") return;
-    const visible = visibleAreaFor(element, latest.current.props, true);
+    const viewport = window.visualViewport;
+    const sheetTop =
+      (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight) * (1 - styles.stopSheetViewportRatio);
+    const visible = visibleAreaFor(element, searchBarRef.current, sheetTop);
     channel.current?.send("homeCamera", {
       command: "center",
       coordinate: coordinateFrom(selectedStop.point),
       ...(visible && { visible }),
     });
-  }, [status, paused, selectedStop, overlayOpen]);
+  }, [status, paused, selectedStop, overlayOpen, searchBarRef]);
 
   function locate() {
     const map = channel.current;
     if (!map || pendingLocation.current !== null) return;
     const requestId = ++locationRequest.current;
     pendingLocation.current = requestId;
-    setLocationError("");
-    setLocating(true);
+    props.onLocationStart();
     map.send("location", { requestId });
   }
 
@@ -322,26 +371,32 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
         />
       ))}
       {!paused && status !== "ready" && (
-        <p className={styles.mapNotice} aria-live="polite" data-native-map-hit>
-          {status === "error" ? error : "주변 지도를 불러오고 있어요…"}
-        </p>
+        <div className={status === "error" ? styles.mapRetryNotice : styles.mapNotice} data-native-map-hit>
+          <span role="status">{status === "error" ? error : "주변 지도를 불러오고 있어요…"}</span>
+          {status === "error" && (
+            <RetryButton
+              onRetry={() => {
+                setStatus("loading");
+                onSurfaceChange({ status: "loading", surface: null });
+                retryMap();
+              }}
+            >
+              지도 다시 불러오기
+            </RetryButton>
+          )}
+        </div>
       )}
       {!overlayOpen && status === "ready" && favoriteIds.some((id) => favoritePaths[id]?.length === 0) && (
         <p className={styles.favoriteMapNotice} role="status" data-native-map-hit>
           지도에 표시할 수 없는 즐겨찾기 노선이 있어요.
         </p>
       )}
-      {!overlayOpen && locationError && (
-        <p className={styles.locationMessage} role="status" data-native-map-hit>
-          {locationError}
-        </p>
-      )}
       {!overlayOpen && status === "ready" && (
         <MapLocationButton
           className={styles.locate}
           onClick={locate}
-          disabled={locating}
-          aria-label={locating ? "현재 위치 확인 중" : "현재 위치로 이동"}
+          disabled={props.locating}
+          aria-label={props.locating ? "현재 위치 확인 중" : "현재 위치로 이동"}
           data-native-map-hit
         />
       )}

@@ -1,5 +1,6 @@
 import { MapLocationButton } from "@/shared/components/MapLocationButton";
-import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { RetryButton } from "@/shared/components/RetryButton";
+import { useCallback, useContext, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { MapFlowSurfaceContext, NativeMapFlowContext } from "@/shared/map/mapFlowSurface";
 import { boardEntryFrom } from "@/shared/routing/boardEntry";
@@ -94,6 +95,7 @@ export function RouteMap(props: RouteMapProps) {
   const [mapState, setMapState] = useState<MapState>({ status: "loading" });
   const [locationState, setLocationState] = useState<LocationState>({ status: "idle" });
   const [nativeFailed, setNativeFailed] = useState(false);
+  const [retryRevision, retryMap] = useReducer((revision: number) => revision + 1, 0);
   const nativeHomeMap = isNativeHomeMapAvailable();
   const useNativeMap =
     nativeHomeMap ||
@@ -179,6 +181,7 @@ export function RouteMap(props: RouteMapProps) {
       failMap(data);
     };
     if (useNativeMap) {
+      // 판정보드 mount가 홈 unmount보다 먼저 도착해도 iOS는 이전 세션의 unmount를 무시한다.
       setNativeBoardActive?.(true);
       const region = regionRef.current;
       if (region !== null) {
@@ -300,6 +303,7 @@ export function RouteMap(props: RouteMapProps) {
     webSurface,
     useNativeMap,
     nativeHomeMap,
+    retryRevision,
     setNativeBoardActive,
   ]);
 
@@ -480,6 +484,7 @@ export function RouteMap(props: RouteMapProps) {
               : "지도 정보를 준비 중이에요"))
           : null;
   const ready = currentMapState.status === "ready";
+  const canRetryNativeMap = nativeHomeMap && currentMapState.status === "error";
   const showSharedNativeMap = shared && useNativeMap && ready;
   useLayoutEffect(() => {
     if (!showSharedNativeMap) return;
@@ -521,6 +526,18 @@ export function RouteMap(props: RouteMapProps) {
           <span>{unavailableMessage}</span>
           {geometryStatus === "retrying" && <span>잠시 후 자동으로 다시 불러와요.</span>}
           <span>{stopInfoNotice}</span>
+          {canRetryNativeMap && (
+            <div className={styles.retryMap}>
+              <RetryButton
+                onRetry={() => {
+                  setMapState({ status: "loading" });
+                  retryMap();
+                }}
+              >
+                지도 다시 불러오기
+              </RetryButton>
+            </div>
+          )}
         </div>
       ) : null}
       {data !== null &&

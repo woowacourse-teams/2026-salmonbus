@@ -54,6 +54,8 @@ Simulator에서는 아래 payload를 파일로 저장하고 `xcrun simctl push b
 
 웹은 API 요청과 선택 state를 유지합니다. native는 관측마다 받은 차량 이동 경로를 `CADisplayLink`로 보간하며, 매 프레임 WebView bridge를 통과하지 않습니다. 시트가 움직이는 동안 새 지도 touch를 막고 최종 영역을 적용한 뒤 다시 허용합니다. 이미 시작한 touch는 UIKit이 처음 정한 view에 남습니다.
 
+지도 위에서 웹이 터치를 받아야 하는 요소는 `data-native-map-hit` 영역 안에 둡니다. 그 영역의 사각형이 `map.layout`으로 앱에 전달됩니다. 검색창이나 시트처럼 기존 영역 바깥에 버튼을 추가하면 버튼에 이 속성을 붙이고, 앱에서 눌렀을 때 웹 동작이 시작되는지 확인합니다.
+
 홈 지도는 `map.mountHome`으로 세션을 열고 `map.updateHome`으로 바뀐 정류장, 노선, 위치만 보냅니다. iOS가 카메라 이동을 마치면 `map.homeViewport`로 중심·줌·방향과 화면 네 모서리의 좌표를 전달합니다. 웹은 좌표 범위로 정류장 타일을 조회하고, `map.homeStopPress`를 받아 정류장 시트를 엽니다. 판정보드 데이터가 준비되면 판정보드 세션이 같은 지도 뷰를 사용하고, 닫으면 홈에서 마지막으로 본 카메라를 복원합니다.
 
 iOS의 뒤로가기·앞으로가기 스와이프 중에는 `MapNavigationSnapshot.swift`가 지도 캡처를 WebView의 scroll view 안에 잠시 넣어 웹과 함께 움직이게 합니다. 이동 가능한 이력이 있는 화면 가장자리 20pt는 WebView가 받으며, 전환 완료·취소·앱 백그라운드 진입 시 캡처를 정리합니다. 제스처 종료 후 WebKit이 scroll view를 원래 부모로 돌려주지 않더라도 1초가 지나면 캡처를 정리하고 실제 지도를 복구합니다. iOS/WebKit 업데이트 시 완료와 취소를 함께 확인합니다.

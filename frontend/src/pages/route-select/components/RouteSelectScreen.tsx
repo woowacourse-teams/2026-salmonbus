@@ -43,6 +43,14 @@ export interface FavoriteGroupSelection {
   groupId: string;
 }
 
+const NO_STOPS: HomeStop[] = [];
+const NO_ROUTE_PATHS: Point[][] = [];
+const LOCATION_FAILURE_MESSAGE = {
+  denied: "위치 권한이 꺼져 있어요. 지도를 움직여 지역을 선택할 수 있어요.",
+  unavailable: "현재 위치를 확인하지 못했어요. 다시 눌러주세요.",
+  unsupported: "현재 위치를 지원하지 않는 환경이에요. 지도를 움직여 지역을 선택해 주세요.",
+};
+
 export function RouteSelectScreen({
   favoriteSelection,
   onFavoriteSelection,
@@ -68,6 +76,7 @@ export function RouteSelectScreen({
   const mainRef = useRef<HTMLElement>(null);
   const searchBarRef = useRef<HTMLElement>(null);
   const sheetSurfaceRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
   const sheetControlsRef = useRef<HomeSheetControls>(null);
   const navigationRef = useRef<HTMLElement>(null);
   const [sheet, setSheet] = useState<{
@@ -171,33 +180,32 @@ export function RouteSelectScreen({
     setMapKey((key) => key + 1);
   }
 
-  function applyLocation(point: Point) {
-    setCurrentLocation(point);
-    setCameraTarget(point);
-    mapCenter.current = point;
-    closeStop();
+  function startLocation() {
+    setLocating(true);
+    setLocationMessage(null);
+  }
+
+  function finishLocation(result: Point | keyof typeof LOCATION_FAILURE_MESSAGE | "cancelled") {
     setLocating(false);
+    if (typeof result === "string") {
+      if (result !== "cancelled") setLocationMessage(LOCATION_FAILURE_MESSAGE[result]);
+      return;
+    }
+    setCurrentLocation(result);
+    setCameraTarget(result);
+    mapCenter.current = result;
+    closeStop();
   }
 
   function locate() {
     if (!navigator.geolocation) {
-      setLocationMessage("현재 위치를 지원하지 않는 환경이에요. 지도를 움직여 지역을 선택해 주세요.");
+      finishLocation("unsupported");
       return;
     }
-    setLocating(true);
-    setLocationMessage(null);
+    startLocation();
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        applyLocation([position.coords.longitude, position.coords.latitude]);
-      },
-      (failure) => {
-        setLocating(false);
-        setLocationMessage(
-          failure.code === 1
-            ? "위치 권한이 꺼져 있어요. 지도를 움직여 지역을 선택할 수 있어요."
-            : "현재 위치를 확인하지 못했어요. 다시 눌러주세요.",
-        );
-      },
+      (position) => finishLocation([position.coords.longitude, position.coords.latitude]),
+      (failure) => finishLocation(failure.code === 1 ? "denied" : "unavailable"),
       { timeout: 10_000, maximumAge: 60_000, enableHighAccuracy: false },
     );
   }
@@ -222,13 +230,12 @@ export function RouteSelectScreen({
   const homeMapProps = {
     point: cameraTarget,
     location: currentLocation,
-    stops: showStops ? stops : [],
-    routePaths: isRouteMap ? routePaths : [],
+    stops: showStops ? stops : NO_STOPS,
+    routePaths: isRouteMap ? routePaths : NO_ROUTE_PATHS,
     routeOverviewKey: isRouteMap ? location.key : null,
     favoriteGroupId: isFavorites ? (displayedGroup?.id ?? null) : null,
     favoriteRoutes,
     overlayOpen,
-    boardOpen,
     onSurfaceChange: setMapSurface,
     sheetSurfaceRef,
     selectedStop: selectedStop ?? undefined,
@@ -237,7 +244,6 @@ export function RouteSelectScreen({
     onStationTilesChange: setStationTileKey,
     onSelectStop: selectStop,
     onMapBlankClick: selectedStop ? closeStop : null,
-    onLocate: locate,
     locating,
   };
 
@@ -281,9 +287,18 @@ export function RouteSelectScreen({
             </label>
           </header>
           {nativeHomeMap ? (
-            <NativeHomeMap key={mapKey} {...homeMapProps} paused={nativeBoardActive} onLocation={applyLocation} />
+            <NativeHomeMap
+              key={mapKey}
+              {...homeMapProps}
+              paused={nativeBoardActive}
+              onLocationStart={startLocation}
+              onLocationResult={finishLocation}
+              sheetRef={sheetRef}
+              sheetSnap={snap}
+              navigationRef={navigationRef}
+            />
           ) : (
-            <HomeMap key={mapKey} {...homeMapProps} />
+            <HomeMap key={mapKey} {...homeMapProps} boardOpen={boardOpen} onLocate={locate} />
           )}
           {!overlayOpen && mapSurface.status === "ready" && stationTilesFailed && (
             <div className={homeStyles.stationMapError} data-native-map-hit>
@@ -292,7 +307,7 @@ export function RouteSelectScreen({
             </div>
           )}
           {!overlayOpen && locationMessage && (
-            <p className={homeStyles.locationMessage} role="status">
+            <p className={homeStyles.locationMessage} role="status" data-native-map-hit>
               {locationMessage}
             </p>
           )}
@@ -301,6 +316,7 @@ export function RouteSelectScreen({
           <HomeBottomSheet
             controlsRef={sheetControlsRef}
             surfaceRef={sheetSurfaceRef}
+            sectionRef={sheetRef}
             snap={snap}
             onSnapChange={(next) => {
               if (selectedStop) {

@@ -146,6 +146,7 @@ export const favoriteMapNotice = style([
   mapNotice,
   { top: "auto", bottom: `calc(${sheetObstruction} + ${mapControlInset}px)`, zIndex: 2 },
 ]);
+export const mapRetryNotice = style([mapNotice, { display: "grid", gap: 8, justifyItems: "start" }]);
 export const stationMapError = style([
   mapNotice,
   {
