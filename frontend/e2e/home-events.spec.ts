@@ -325,6 +325,20 @@ test("노선 카드에서 기존 지도 위에 판정보드를 열고 노선 응
   await expect(card).toBeVisible();
 });
 
+test("노선도에서 연 노선의 최초 조회가 503이면 지도 위에 판정보드 바텀시트를 연다", async ({ page, api }) => {
+  api.mode.watch = { status: 503, retryAfterSeconds: 30 };
+  await page.goto("/route-map");
+  const map = page.getByTestId("naver-map-test-double");
+  await expect(map).toBeVisible();
+  await page.getByRole("list", { name: "서비스 중 노선" }).getByRole("link", { name: /3330/ }).click();
+
+  const sheet = page.getByRole("region", { name: "판정보드", exact: true });
+  await expect(sheet.getByRole("slider", { name: "판정보드 높이" })).toHaveAttribute("aria-valuetext", "화면 60% 표시");
+  await expect(sheet.getByRole("alert")).toHaveText("노선 정보를 불러오지 못했어요");
+  await expect(sheet.getByRole("button", { name: "다시 시도하기", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(map).toBeVisible();
+});
+
 test("노선도에서 운행이 끝난 방향을 열면 판정보드 바텀시트 중앙에 안내가 보인다", async ({ page, api }) => {
   api.data.watch.observedAt = "2026-09-16T23:30:00+09:00";
   api.data.watch.vehiclesInService = 0;
