@@ -43,7 +43,8 @@ async function setUp({
 }: { storedOptOut?: boolean } & FakeSdkOptions = {}) {
   jest.resetModules();
   const calls: Calls = [];
-  const initOptions: Array<{ optOut: boolean | undefined }> = [];
+  const initOptions: Array<{ optOut: boolean | undefined; skip: boolean | undefined }> = [];
+  const tracked: Array<{ event: string; options: Record<string, unknown> | undefined }> = [];
   const loadedAt: number[] = [];
   const heldSends: Array<{ finish: () => void; fail: () => void }> = [];
   let rejectInit = () => {};
@@ -52,12 +53,12 @@ async function setUp({
     loadedAt.push(Date.now());
     return {
       add: () => calls.push("add"),
-      initAll: (_key: string, options: { analytics: { optOut?: boolean } }) => {
+      initAll: (_key: string, options: { analytics: { optOut?: boolean }; engagement: { skip?: boolean } }) => {
         if (failToInit) throw new Error("초기화에 실패했습니다");
         calls.push("initAll");
         // 실제 initAll은 autocapture로 세션 시작과 Page Viewed를 만든다.
         calls.push("autocapture session_start", "autocapture Page Viewed");
-        initOptions.push({ optOut: options.analytics.optOut });
+        initOptions.push({ optOut: options.analytics.optOut, skip: options.engagement.skip });
         if (!holdInit) return Promise.resolve();
         return new Promise<void>((_resolve, reject) => {
           rejectInit = () => reject(new Error("플러그인 시작에 실패했습니다"));
@@ -67,8 +68,9 @@ async function setUp({
       setOptOut: (optedOut: boolean) => calls.push(`setOptOut ${optedOut}`),
       setTransport: (transport: string) => calls.push(`setTransport ${transport}`),
       flush: () => calls.push("flush"),
-      track: (event: string, _properties: unknown, ...extraArguments: unknown[]) => {
-        calls.push(extraArguments.length === 0 ? `track ${event}` : `track ${event} with-extra-arguments`);
+      track: (event: string, _properties: unknown, options?: Record<string, unknown>) => {
+        calls.push(`track ${event}`);
+        tracked.push({ event, options });
         if (throwOnTrack) throw new Error("track이 던졌습니다");
         if (!holdSends) return { promise: Promise.resolve() };
         const promise = new Promise<void>((resolve, reject) => {
@@ -94,6 +96,7 @@ async function setUp({
     ...tracking,
     calls,
     initOptions,
+    tracked,
     loadedAt,
     heldSends,
     rejectInit: () => rejectInit(),
@@ -109,8 +112,15 @@ async function finishLoadingAndSettle(setup: {
   await ONE_TICK();
 }
 
+// 수집 거부 중에는 SDK를 받아도 시작하지 않아서 준비 결과를 기다릴 수 없다.
+async function finishLoadingWithoutWaitingForStart(setup: { finishLoading: () => void }) {
+  setup.finishLoading();
+  await ONE_TICK();
+  await ONE_TICK();
+}
+
 describe("SDK가 오기 전에 부른 호출", () => {
-  it("SDK가 오기 전에 부른 이벤트는 세션 시작과 Page Viewed 뒤에 부른 순서대로 나가고, 시각을 따로 넘기지 않는다", async () => {
+  it("SDK가 오기 전에 부른 이벤트는 세션 시작과 Page Viewed 뒤에 부른 순서대로 나가고, time을 따로 주지 않는다", async () => {
     const setup = await setUp();
     setup.track("login_finished", { provider: "KAKAO", result: "succeeded" });
     setup.track("login_started", { provider: "KAKAO", entry: "home" });
@@ -126,6 +136,7 @@ describe("SDK가 오기 전에 부른 호출", () => {
       "track login_finished",
       "track login_started",
     ]);
+    expect(setup.tracked.flatMap(({ options }) => Object.keys(options ?? {}))).not.toContain("time");
   });
 
   it("회원 ID를 먼저 적용한 뒤 이벤트를 보낸다", async () => {
@@ -137,6 +148,37 @@ describe("SDK가 오기 전에 부른 호출", () => {
     const trackIndex = setup.calls.findIndex((call) => call.startsWith("track login_finished"));
     expect(identifyIndex).toBeGreaterThan(-1);
     expect(identifyIndex).toBeLessThan(trackIndex);
+  });
+
+  it("SDK가 오기 전에 회원으로 기록하고 로그아웃한 뒤 SDK가 오면, 그 이벤트의 user_id는 기록할 때의 회원 ID다", async () => {
+    const setup = await setUp();
+    setup.trackAsMember("member-1", "login_finished", { provider: "KAKAO", result: "succeeded" });
+    setup.setAnalyticsMemberId(null);
+    await finishLoadingAndSettle(setup);
+
+    expect(setup.tracked).toEqual([{ event: "login_finished", options: { user_id: "member-1" } }]);
+    expect(setup.calls.at(-1)).toBe("setUserId undefined");
+  });
+
+  it("비회원일 때 기록하고 SDK가 오기 전에 로그인하면, 그 이벤트에는 user_id를 비워서 회원 ID가 붙지 않게 한다", async () => {
+    const setup = await setUp();
+    setup.setAnalyticsMemberId(null);
+    setup.track("login_started", { provider: "KAKAO", entry: "home" });
+    setup.setAnalyticsMemberId("member-2");
+    await finishLoadingAndSettle(setup);
+
+    const [sent] = setup.tracked;
+    expect(sent?.event).toBe("login_started");
+    expect(Object.keys(sent?.options ?? {})).toContain("user_id");
+    expect(sent?.options?.user_id).toBeUndefined();
+  });
+
+  it("회원 ID를 아직 모르는 동안 기록한 이벤트에는 user_id를 주지 않아서 SDK가 가진 값을 따른다", async () => {
+    const setup = await setUp();
+    setup.track("login_started", { provider: "KAKAO", entry: "home" });
+    await finishLoadingAndSettle(setup);
+
+    expect(setup.tracked).toStrictEqual([{ event: "login_started", options: {} }]);
   });
 
   it("로그아웃하면 회원 ID를 비운다", async () => {
@@ -242,19 +284,50 @@ describe("수집 거부", () => {
     await ONE_TICK();
 
     expect(setup.loadedAt).toHaveLength(1);
-    expect(setup.initOptions).toEqual([{ optOut: false }]);
+    expect(setup.initOptions).toEqual([{ optOut: false, skip: false }]);
     expect(setup.calls.some((call) => call.startsWith("track login_started"))).toBe(true);
   });
 
-  it("SDK를 받는 중에 거부를 켜면 그 전에 쌓인 이벤트를 보내지 않고, SDK는 꺼진 채로 시작한다", async () => {
+  it("SDK를 받는 중에 거부를 켜면 그 전에 쌓인 이벤트를 보내지 않고, 받은 뒤에도 시작하지 않는다", async () => {
     const setup = await setUp();
     setup.track("login_finished", { provider: "KAKAO", result: "succeeded" });
     setup.setAnalyticsOptOut(true);
+    await finishLoadingWithoutWaitingForStart(setup);
+
+    expect(setup.loadedAt).toHaveLength(1);
+    expect(setup.calls).toEqual([]);
+  });
+
+  it("SDK를 받은 뒤 거부를 풀면 그때 거부 없이 시작하고, 그 뒤에 부른 이벤트는 나간다", async () => {
+    const setup = await setUp();
+    setup.track("login_finished", { provider: "KAKAO", result: "succeeded" });
+    setup.setAnalyticsOptOut(true);
+    await finishLoadingWithoutWaitingForStart(setup);
+    expect(setup.initOptions).toEqual([]);
+
+    setup.setAnalyticsOptOut(false);
+    setup.track("login_started", { provider: "KAKAO", entry: "home" });
     await finishLoadingAndSettle(setup);
 
-    expect(setup.calls.filter((call) => call.startsWith("track"))).toEqual([]);
-    expect(setup.initOptions).toEqual([{ optOut: true }]);
-    expect(setup.calls).toContain("setOptOut true");
+    expect(setup.initOptions).toEqual([{ optOut: false, skip: false }]);
+    expect(setup.calls.filter((call) => call.startsWith("track"))).toEqual(["track login_started"]);
+  });
+
+  it("거부를 푼 같은 틱에 다시 켜면 시작하지 않고, 다시 풀면 그때 한 번만 거부 없이 시작한다", async () => {
+    const setup = await setUp();
+    setup.setAnalyticsOptOut(true);
+    await finishLoadingWithoutWaitingForStart(setup);
+
+    setup.setAnalyticsOptOut(false);
+    setup.setAnalyticsOptOut(true);
+    await ONE_TICK();
+    await ONE_TICK();
+    expect(setup.initOptions).toEqual([]);
+
+    setup.setAnalyticsOptOut(false);
+    await finishLoadingAndSettle(setup);
+
+    expect(setup.initOptions).toEqual([{ optOut: false, skip: false }]);
   });
 
   it("거부를 켰다가 바로 풀어도 그 사이에 쌓인 이벤트는 보내지 않는다", async () => {
@@ -267,6 +340,7 @@ describe("수집 거부", () => {
 
     expect(setup.calls.filter((call) => call.startsWith("track"))).toHaveLength(1);
     expect(setup.calls.some((call) => call.startsWith("track login_started"))).toBe(true);
+    expect(setup.initOptions).toEqual([{ optOut: false, skip: false }]);
   });
 
   it("SDK를 받은 뒤 거부를 켜면 SDK에 알리고 이후 이벤트를 보내지 않는다", async () => {
@@ -372,5 +446,17 @@ describe("다른 사이트로 떠나기 전 이벤트", () => {
 
     expect(setup.calls.slice(-3)).toEqual(["setTransport beacon", "track login_started", "setTransport fetch"]);
     expect(setup.calls).not.toContain("flush");
+  });
+
+  it("떠나기 전 이벤트도 부를 때의 회원 ID로 보낸다", async () => {
+    const setup = await setUp();
+    setup.setAnalyticsMemberId("member-1");
+    const leaving = setup.trackBeforeLeaving("login_started", { provider: "KAKAO", entry: "home" });
+    setup.setAnalyticsMemberId(null);
+    setup.finishLoading();
+    await jest.advanceTimersByTimeAsync(10);
+    await leaving;
+
+    expect(setup.tracked).toEqual([{ event: "login_started", options: { user_id: "member-1" } }]);
   });
 });

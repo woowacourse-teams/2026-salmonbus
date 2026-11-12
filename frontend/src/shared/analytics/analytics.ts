@@ -9,13 +9,16 @@ interface Engagement {
 }
 
 type AmplitudeSdk = typeof import("@amplitude/unified");
+type EventOptions = NonNullable<Parameters<AmplitudeSdk["track"]>[2]>;
 
 let initialized = false;
 let sdkLoading: Promise<AmplitudeSdk | null> | null = null;
 let sdkFailed = false;
 let optedOut = false;
 let optOutCount = 0;
-let memberId: string | null = null;
+// undefined는 아직 모른다는 뜻이고, null은 비회원이라는 뜻이다.
+let memberId: string | null | undefined;
+let resumeStart: (() => void) | null = null;
 const optOutListeners = new Set<() => void>();
 
 export function initAnalytics() {
@@ -47,17 +50,22 @@ export function callAnalyticsSdk(action: (amplitude: AmplitudeSdk) => void) {
   });
 }
 
+// 부른 순간의 회원 ID와 수집 거부 횟수를 기억한다. SDK는 이벤트의 user_id를 처리하는 시점에 읽어서, 그 사이 로그인이나 로그아웃이 있으면 다른 회원 ID가 붙는다.
 // 부른 뒤에 수집 거부를 켠 적이 있으면, 거부를 다시 풀어도 그 호출은 보내지 않는다.
-// SDK를 기다리는 동안 일어난 거부 전환을 보내기 직전에 한 곳에서 판단한다.
-export function createSendPermission(): () => boolean {
+export function createSendTicket() {
   const optOutCountOnCall = optOutCount;
-  return () => isAnalyticsEnabled() && optOutCount === optOutCountOnCall;
+  const memberIdOnCall = memberId;
+  return {
+    isAllowed: () => isAnalyticsEnabled() && optOutCount === optOutCountOnCall,
+    // 회원 ID를 모르는 동안에는 SDK가 이미 가진 값을 따른다. 비회원은 user_id가 undefined인 키를 줘야 SDK의 현재 회원 ID를 덮는데, SDK 타입은 이를 허용하지 않는다.
+    eventOptions: (memberIdOnCall === undefined ? {} : { user_id: memberIdOnCall ?? undefined }) as EventOptions,
+  };
 }
 
-export function sendThroughAnalyticsSdk(send: (amplitude: AmplitudeSdk) => void) {
-  const isSendAllowed = createSendPermission();
+export function sendThroughAnalyticsSdk(send: (amplitude: AmplitudeSdk, eventOptions: EventOptions) => void) {
+  const ticket = createSendTicket();
   callAnalyticsSdk((amplitude) => {
-    if (isSendAllowed()) send(amplitude);
+    if (ticket.isAllowed()) send(amplitude, ticket.eventOptions);
   });
 }
 
@@ -71,13 +79,15 @@ async function loadAndStartAmplitude(appVersion: string | undefined): Promise<Am
   await afterWindowLoad();
   try {
     const amplitude = await import(/* webpackChunkName: "amplitude" */ "@amplitude/unified");
+    // 거부 중에 SDK를 시작하면 Session Replay와 Guides & Surveys가 거부 상태로 초기화돼서 거부를 풀어도 켜지지 않는다.
+    while (optedOut) await new Promise<void>((resolve) => (resumeStart = resolve));
     amplitude.add(clientPropertiesPluginFor(clientPropertiesFrom(appHostFrom())));
     // initAll은 Session Replay 같은 플러그인까지 기다린 뒤에 끝나서, 기다리면 먼저 부른 이벤트가 그만큼 늦게 넘어간다. 거부만 받아 실패로 돌린다.
     void amplitude
       .initAll(__AMPLITUDE_API_KEY__, {
         analytics: {
           autocapture: true,
-          // 받는 동안 수집 거부를 켰으면 꺼진 채로 시작한다. 예전에 끈 기록이 SDK 쿠키에 남아 있어도 이 값으로 덮는다.
+          // 예전에 끈 기록이 SDK 쿠키에 남아 있어도 이 값으로 덮는다.
           optOut: optedOut,
           // IP를 보내지 않으면 Amplitude가 IP로 지역도 추정하지 않는다.
           trackingOptions: { ipAddress: false },
@@ -92,7 +102,7 @@ async function loadAndStartAmplitude(appVersion: string | undefined): Promise<Am
         },
       })
       .catch(markSdkFailed);
-    if (memberId !== null) amplitude.setUserId(memberId);
+    if (typeof memberId === "string") amplitude.setUserId(memberId);
     return amplitude;
   } catch {
     markSdkFailed();
@@ -155,5 +165,6 @@ function followOptOut(nextOptedOut: boolean) {
   } else if (!optedOut) {
     startAnalytics();
   }
+  if (!optedOut) resumeStart?.();
   optOutListeners.forEach((listener) => listener());
 }
