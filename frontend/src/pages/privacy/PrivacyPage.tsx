@@ -3,22 +3,42 @@ import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { AccountLayout } from "@/shared/components/AccountLayout";
 import { paths, privacyEditionPathFor } from "@/shared/routing/paths";
 import * as buttonStyles from "@/shared/styles/button.css";
+import { kstDayOf } from "@/shared/utils/kstDayOf";
 import { PolicyBody } from "./components/PolicyBody";
 import { editionViewFor, type EditionSummary, type EditionView } from "./editionPolicy";
 import { EDITIONS } from "./editionSources";
 import { editionPeriodLabelOf } from "./privacyCopy";
+import { policyDocumentFrom } from "./policyMarkdown";
 import * as styles from "./PrivacyPage.css";
+
+const pushPrivacyNotice = policyDocumentFrom(`# 개인정보 처리방침 변경 안내
+
+## 개인정보 처리방침 변경 안내
+
+2026년 11월 14일 시행을 목표로 iOS 출발 알림과 관련한 개인정보 처리 내용을 추가합니다.
+
+| 항목 | 기존 안내 | 추가할 안내 |
+| --- | --- | --- |
+| 기기 등록 | 출발 알림 기기 등록에 관한 안내 없음 | 알림을 허용한 iOS 기기의 푸시 토큰을 등록하고, 출발 알림을 해당 기기에 보내는 데 사용합니다. |
+| Apple에 전달하는 정보 | 출발 알림 발송에 관한 안내 없음 | 알림을 보낼 때 기기 토큰, 알림 제목과 본문, 알림을 누르면 열 화면의 노선 ID, 정류장 ID와 방향을 Apple 푸시 알림 서비스에 보냅니다. |
+| 알림 끄기 | 출발 알림을 끄는 방법에 관한 안내 없음 | 즐겨찾기에서 출발 알림을 끄거나 iOS 설정에서 연어버스의 알림 권한을 끌 수 있습니다. |
+`);
 
 export function PrivacyPage() {
   const { effectiveDate } = useParams();
   const [now] = useState(() => Date.now());
   const view = editionViewFor(EDITIONS, effectiveDate, now);
+  const showPushPrivacyNotice = effectiveDate === undefined && kstDayOf(now) === "2026-11-13";
   useEntryScroll();
 
   return (
     <AccountLayout>
       <PrivacyHeader title={view.title} />
-      {view.kind === "edition" ? <EditionContent view={view} /> : <UnknownEdition />}
+      {view.kind === "edition" ? (
+        <EditionContent view={view} showPushPrivacyNotice={showPushPrivacyNotice} />
+      ) : (
+        <UnknownEdition />
+      )}
     </AccountLayout>
   );
 }
@@ -78,7 +98,13 @@ function PrivacyHeader({ title }: { title: string }) {
   );
 }
 
-function EditionContent({ view }: { view: Extract<EditionView, { kind: "edition" }> }) {
+function EditionContent({
+  view,
+  showPushPrivacyNotice,
+}: {
+  view: Extract<EditionView, { kind: "edition" }>;
+  showPushPrivacyNotice: boolean;
+}) {
   return (
     <>
       <p className={styles.period}>{editionPeriodLabelOf(view.summary)}</p>
@@ -87,6 +113,7 @@ function EditionContent({ view }: { view: Extract<EditionView, { kind: "edition"
           지금 적용 중인 처리방침 보기
         </Link>
       )}
+      {showPushPrivacyNotice && <PolicyBody blocks={pushPrivacyNotice.blocks} />}
       <PolicyBody blocks={view.edition.document.blocks} />
       {view.others.length > 0 && <OtherEditions summaries={view.others} />}
     </>
