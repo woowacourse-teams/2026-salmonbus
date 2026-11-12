@@ -440,6 +440,57 @@ describe("네이버 지도 adapter", () => {
     adapter.destroy();
     expect(native.lineMaps.get(native.lines[0]!)).toBeNull();
   });
+  it("기울기 없는 GL 지도의 회전 프레임은 세계 좌표를 재사용하고, 기울어지면 노선 점을 직접 투영한다", () => {
+    const { native, flushFrames } = setup(
+      true,
+      {},
+      {
+        paths: [
+          {
+            direction: "UP",
+            coordinates: Array.from({ length: 20 }, (_, index) => ({
+              latitude: 37.5,
+              longitude: 126.91 + index * 0.0005,
+            })),
+          },
+        ],
+        stops: [],
+        fullPath: [],
+      },
+    );
+    let tilt = 0;
+    const world = 256 * 2 ** 15;
+    const mercator = (coordinate: NaverCoordinate) => ({
+      x: (coordinate.lng() / 360) * world,
+      y: (-Math.log(Math.tan(Math.PI / 4 + (coordinate.lat() * Math.PI) / 360)) / (2 * Math.PI)) * world,
+    });
+    const path = native.lines[0]!.path;
+    const origin = mercator(path[0]!);
+    Object.assign(native.map, { getTilt: () => tilt });
+    jest.spyOn(native.map as NaverMap, "getProjection").mockReturnValue({
+      getProjectionName: () => "EPSG:3857",
+      fromCoordToOffset(coordinate) {
+        native.map.projectedCoordinates.push(coordinate);
+        const point = mercator(coordinate);
+        return new PointStub(point.x - origin.x + 50, point.y - origin.y + 175);
+      },
+      fromOffsetToCoord: (point) => new CoordinateStub(point.y, point.x),
+    });
+    const rotate = native.events.find((event) => event.name === "rotate")!.listener;
+
+    native.map.projectedCoordinates.length = 0;
+    rotate();
+    flushFrames();
+    expect(visibleArrowDirections(native)).toEqual(["UP"]);
+    expect(native.map.projectedCoordinates.some((coordinate) => path.includes(coordinate))).toBe(false);
+
+    tilt = 30;
+    native.map.projectedCoordinates.length = 0;
+    rotate();
+    flushFrames();
+    expect(visibleArrowDirections(native)).toEqual(["UP"]);
+    expect(native.map.projectedCoordinates.filter((coordinate) => path.includes(coordinate))).toHaveLength(path.length);
+  });
   it("방향 전환 시 선택한 방향의 정류장만 표시하고 좌표를 유지한다", () => {
     const { native, adapter } = setup();
     native.map.zoom = 16;

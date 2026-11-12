@@ -213,6 +213,13 @@ function interpolatedCoordinateFor(from: GeoCoordinate, to: GeoCoordinate, fract
 
 // 화면 픽셀 간격으로 샘플링하여 줌아웃에서도 방향이 읽히게 한다.
 export const ROUTE_ARROW_SPACING_PX = 100;
+// 화면 가장자리에 걸친 화살표도 그리도록 화면 밖 이 거리까지 배치한다.
+export const ROUTE_ARROW_VIEWPORT_MARGIN_PX = 16;
+
+function isNearViewport(x: number, y: number, viewport: { width: number; height: number }) {
+  const margin = ROUTE_ARROW_VIEWPORT_MARGIN_PX;
+  return x >= -margin && x <= viewport.width + margin && y >= -margin && y <= viewport.height + margin;
+}
 
 export function routeArrowsFor(
   coordinates: readonly GeoCoordinate[],
@@ -252,7 +259,7 @@ export function routeArrowsFor(
       const fraction = nextOffset / length;
       const x = start.x + dx * fraction;
       const y = start.y + dy * fraction;
-      if (x < -16 || x > viewport.width + 16 || y < -16 || y > viewport.height + 16) continue;
+      if (!isNearViewport(x, y, viewport)) continue;
       arrows.push({
         coordinate: interpolatedCoordinateFor(from, to, fraction),
         rotation: Math.atan2(dy, dx) * (180 / Math.PI),
@@ -271,7 +278,7 @@ export function routeArrowsFor(
       const fraction = remaining / length;
       const x = start.x + dx * fraction;
       const y = start.y + dy * fraction;
-      if (x >= -16 && x <= viewport.width + 16 && y >= -16 && y <= viewport.height + 16)
+      if (isNearViewport(x, y, viewport))
         arrows.push({
           coordinate: interpolatedCoordinateFor(from, to, fraction),
           rotation: Math.atan2(dy, dx) * (180 / Math.PI),

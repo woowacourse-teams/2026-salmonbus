@@ -3,10 +3,13 @@ import { createRouteArrowProjection } from "./routeArrowProjection";
 import type { NaverCoordinate } from "@/shared/map/naverSdk";
 
 class Coordinate implements NaverCoordinate {
+  static created = 0;
   constructor(
     private readonly latitude: number,
     private readonly longitude: number,
-  ) {}
+  ) {
+    Coordinate.created += 1;
+  }
   lat() {
     return this.latitude;
   }
@@ -52,8 +55,8 @@ function setup(coordinates = Array.from({ length: 200 }, (_, i) => new Coordinat
     }),
   };
   const cache = createRouteArrowProjection({ LatLng: Coordinate }, coordinates);
-  const verify = (allowPrepare = false) => {
-    const current = cache.frame(map, allowPrepare);
+  const verify = () => {
+    const current = cache.frame(map);
     coordinates.forEach((coordinate, index) => {
       const actual = current(index),
         expected = project(coordinate);
@@ -65,20 +68,15 @@ function setup(coordinates = Array.from({ length: 200 }, (_, i) => new Coordinat
 }
 
 describe("노선 화살표 투영 재사용", () => {
-  it("준비되지 않은 일반 갱신은 기존 SDK 변환만 수행한다", () => {
-    const { verify, state, coordinates } = setup();
-    verify();
-    expect(state.calls).toBe(coordinates.length);
-  });
   it("세계 좌표를 준비할 때 경로의 모든 점을 SDK 화면 좌표로 변환하지 않는다", () => {
     const { verify, state, coordinates } = setup();
-    verify(true);
+    verify();
     expect(state.calls).toBeLessThan(coordinates.length / 2);
     expect(state.projected.some((point) => coordinates.some((original) => point === original))).toBe(false);
   });
   it.each([10, 13.9, 14, 15.4, 19, 20])("줌 %s의 확대·회전·이동에서도 세계 좌표를 재사용한다", (zoom) => {
     const { verify, state, coordinates } = setup();
-    verify(true);
+    verify();
     state.zoom = zoom;
     state.angle = Math.PI / 5;
     state.pan = -76;
@@ -88,7 +86,7 @@ describe("노선 화살표 투영 재사용", () => {
   });
   it("평면 회전과 이동에서는 같은 좌표를 유지하고 전체 SDK 호출을 줄인다", () => {
     const { verify, state, coordinates } = setup();
-    verify(true);
+    verify();
     state.calls = 0;
     state.angle = Math.PI / 3;
     state.pan = 32;
@@ -97,7 +95,7 @@ describe("노선 화살표 투영 재사용", () => {
   });
   it.each(["zoom", "width"] as const)("%s 변경에도 같은 세계 좌표를 재사용한다", (key) => {
     const { verify, state, coordinates } = setup();
-    verify(true);
+    verify();
     state[key] += 1;
     state.calls = 0;
     verify();
@@ -105,17 +103,17 @@ describe("노선 화살표 투영 재사용", () => {
   });
   it.each(["tilt", "projection", "gl"] as const)("지원하지 않는 %s 상태는 직접 계산한다", (key) => {
     const { verify, state, coordinates } = setup();
-    verify(true);
+    verify();
     if (key === "tilt") state.tilt = 20;
     if (key === "projection") state.projection = "custom";
     if (key === "gl") state.gl = false;
     state.calls = 0;
-    verify(true);
+    verify();
     expect(state.calls).toBe(coordinates.length);
   });
   it("제어점의 관계가 회전·이동이 아니면 직접 계산한다", () => {
     const { verify, state, coordinates } = setup();
-    verify(true);
+    verify();
     state.perspective = 0.002;
     state.angle = 0.4;
     state.calls = 0;
@@ -128,7 +126,7 @@ describe("노선 화살표 투영 재사용", () => {
       new Coordinate(0, 0.5),
       new Coordinate(0.5, 0.5),
     ]);
-    verify(true);
+    verify();
     state.calls = 0;
     state.projected.length = 0;
     verify();
@@ -136,12 +134,15 @@ describe("노선 화살표 투영 재사용", () => {
       coordinates,
     );
   });
-  it("정리하면 재사용 자료를 해제한다", () => {
-    const { cache, verify, state, coordinates } = setup();
-    verify(true);
-    cache.clear();
-    state.calls = 0;
+  it("정리하면 재사용 자료를 해제하고 다음 갱신에서 제어점을 다시 준비한다", () => {
+    const { cache, verify } = setup();
+    Coordinate.created = 0;
     verify();
-    expect(state.calls).toBe(coordinates.length);
+    const prepared = Coordinate.created;
+    verify();
+    expect(Coordinate.created).toBe(prepared);
+    cache.clear();
+    verify();
+    expect(Coordinate.created).toBe(prepared * 2);
   });
 });

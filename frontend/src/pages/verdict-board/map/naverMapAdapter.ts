@@ -480,7 +480,7 @@ export function createNaverRouteMap(
     const nextArrows = paths
       .filter((path) => showBothDirections || path.direction === activeDirection)
       .flatMap((path) => {
-        const project = path.projectionReuse.frame(map, true);
+        const project = path.projectionReuse.frame(map);
         return routeArrowsFor(path.coordinates, (_, index) => project(index), viewport).map((arrow) => ({
           ...arrow,
           direction: path.direction,
