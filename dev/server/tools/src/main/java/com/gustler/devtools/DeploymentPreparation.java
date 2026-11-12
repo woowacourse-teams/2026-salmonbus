@@ -78,16 +78,22 @@ final class DeploymentPreparation {
         var approval = dataChange && !CompatiblePreparation.permits(previous, next)
                 ? DataTransition.approval(layout, previous, next) : null;
         BasisLifecycle.preserveData(previous, next, approval);
+        SettingsPreparation.requireReplaceableEnvironment(layout);
         FileOps.directory(directory(), 0700);
         Checks.require((FileOps.attribute(directory(), "mode") & 0777) == 0700,
                 "DEV_PREPARATION_DIRECTORY");
         try (var lease = FileOps.lock(layout.locks().resolve("salmonbus-dev-preparation.lock"))) {
             Checks.require(!FileOps.exists(layout.root().resolve(".deploying")),
                     "DEV_DEPLOYMENT_IN_PROGRESS");
+            var result = new TreeMap<String, Object>(Map.of("status", "ok", "preparationRequired", true,
+                    "applicationsRemainStopped", true));
             if (FileOps.exists(journal())) {
                 var existing = Json.read(FileOps.privateText(journal()).getBytes());
-                Checks.require(List.of("COMPLETE", "ROLLED_BACK").contains(existing.path("phase").asText()),
-                        "DEV_PREPARATION_RECOVERY_REQUIRED");
+                if (!List.of("COMPLETE", "ROLLED_BACK").contains(existing.path("phase").asText())) {
+                    Checks.require(superseded(existing, app, previous), "DEV_PREPARATION_RECOVERY_REQUIRED");
+                    result.put("supersededCommit", existing.path("commit").asText());
+                    result.put("supersededPhase", existing.path("phase").asText());
+                }
             }
             var state = snapshot(app, previous);
             state.put("dataTransition", approval != null);
@@ -103,8 +109,7 @@ final class DeploymentPreparation {
                 }
                 state.put("phase", "PREPARED");
                 write(state);
-                return Map.of("status", "ok", "preparationRequired", true,
-                        "applicationsRemainStopped", true);
+                return result;
             } catch (Exception error) {
                 if (approval != null) {
                     state.put("phase", "RECOVERY_REQUIRED");
@@ -119,6 +124,20 @@ final class DeploymentPreparation {
                 throw new IllegalArgumentException("DEV_PREPARATION_FAILED");
             }
         }
+    }
+
+    /**
+     * 다른 커밋의 배포가 basis를 바꾼 뒤 끝맺지 못한 기록인지 확인한다.
+     *
+     * <p>이 기록으로 되돌리는 것은 같은 커밋의 hook뿐이라 다음 커밋의 준비를 막을 이유가 없다. 현재 basis가 기록의
+     * 직전 basis와 다를 때, 즉 교체가 끝난 뒤에만 해당한다. DB 전환 기록과 준비 중에 멈춘 기록은 계속 막는다.
+     * 넘긴 기록의 커밋과 단계는 준비 결과의 {@code supersededCommit}·{@code supersededPhase}에 남긴다.
+     */
+    private static boolean superseded(JsonNode state, RevisionStore.Revision app, RevisionStore.Revision basis) {
+        return state.path("dataTransition").isBoolean() && !state.path("dataTransition").asBoolean()
+                && List.of("PREPARED", "API_READY").contains(state.path("phase").asText())
+                && !app.commit().equals(state.path("commit").asText())
+                && !basis.releaseId().equals(state.path("basisReleaseId").asText());
     }
 
     private Map<String, Object> snapshot(RevisionStore.Revision app, RevisionStore.Revision basis) throws Exception {
@@ -249,7 +268,7 @@ final class DeploymentPreparation {
         Checks.require(previous.matches(RevisionStore.HASH), "DEV_PREPARATION_BACKUP");
         var basis = RevisionStore.verify(RevisionStore.selectedBasis(layout), true);
         if (!basis.releaseId().equals(previous)) {
-            new BasisLifecycle(layout, host).change(layout.root().resolve("basis/releases/" + previous), true);
+            new BasisLifecycle(layout, host).revert(layout.root().resolve("basis/releases/" + previous));
         }
         for (var component : List.of("api", "worker")) {
             var base = layout.root().resolve(component);
