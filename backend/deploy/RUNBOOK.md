@@ -925,11 +925,11 @@ dev에서 기존 V67을 이미 실행했다면 V72 이상 적용과 V67 단독 �
 
 결과 준비는 `forecast.alighting.evaluation.preparation-limit`(기본 500개), 저장은 100개씩 나눈다. 한 회차의 새 준비는 `forecast.alighting.evaluation.maximum-preparations-per-tick`(기본 8회)와 `forecast.alighting.evaluation.maximum-tick-seconds`(기본 30초)로 제한하고 마지막 처리 노선 다음부터 순환한다. 이미 시작한 준비·저장은 마치며 트랜잭션의 15초 제한은 유지한다. 진행한 작업이 있으면 실행 시간의 1/4만큼 쉬고 다음 회차를 시작한다. 최소 간격은 100ms, 최대 간격과 유휴 간격은 `forecast.settlement-interval`이다. 새 통과 근거가 없는 예측은 입력 변경이나 정산 기한까지 기다린다. 실패한 노선은 기존 재시도 간격을 적용한다.
 
-V79는 증분 정산 저장소와 배치 등록·입력 변경 트리거, 입력 커서 인덱스를 만든다. Worker와 이관·복원 작업을 중지한 상태에서 적용하고 새 Worker를 시작한다. 인덱스 생성에는 기존 배치를 읽는 작업이 필요하며 잠금은 5초, 문장은 120초로 제한한다. 이력 전체를 이 마이그레이션에서 변환하거나 대기 작업을 일괄 등록하지 않는다. 폐기된 근거와 대기 정산이 없는 지난 날짜의 근거는 나누어 정리한다.
+V80은 증분 정산 저장소와 배치 등록·입력 변경 트리거, 입력 커서 인덱스를 만든다. Worker와 이관·복원 작업을 중지한 상태에서 적용하고 새 Worker를 시작한다. 인덱스 생성에는 기존 배치를 읽는 작업이 필요하며 잠금은 5초, 문장은 120초로 제한한다. 이력 전체를 이 마이그레이션에서 변환하거나 대기 작업을 일괄 등록하지 않는다. 폐기된 근거와 대기 정산이 없는 지난 날짜의 근거는 나누어 정리한다.
 
 `alighting_settlement_history_read`, `alighting_settlement_integrity_read`, `alighting_settlement_prepare`, `alighting_settlement_commit`으로 읽기·준비·저장 시간을 구분한다. `alighting_settlement_page_committed`는 커밋 뒤 처리·완료·재예약 건수를 기록한다. 재기동 후 같은 체크포인트가 유지되는지와 대기 지연, 수집·예보 지연, RDS 읽기량을 함께 확인하고 예산을 조정한다.
 
-V79 적용 뒤에는 기존 대기 작업을 배치 큐에 등록하는 동안과 등록이 끝난 뒤를 나눠 밀린 작업이 줄어드는지 확인한다. 등록은 `alighting_settlement_queue_scan.complete`가 `true`가 되면 끝난다. 두 구간 모두 5분 단위로 아래 네 값을 같은 표에 기록하고, SQL은 각 5분이 끝날 때 실행한다. 그래프는 「Salmonbus DB 원인 분석」 대시보드에서 본다.
+V80 적용 뒤에는 기존 대기 작업을 배치 큐에 등록하는 동안과 등록이 끝난 뒤를 나눠 밀린 작업이 줄어드는지 확인한다. 등록은 `alighting_settlement_queue_scan.complete`가 `true`가 되면 끝난다. 두 구간 모두 5분 단위로 아래 네 값을 같은 표에 기록하고, SQL은 각 5분이 끝날 때 실행한다. 그래프는 「Salmonbus DB 원인 분석」 대시보드에서 본다.
 
 - 신규 유입: `alighting_forecast_evaluation_work`에 추가된 행 수다. 「테이블별 수정 속도」 패널이나 `increase(salmonbus_pg_table_inserts_total{table="alighting_forecast_evaluation_work"}[5m])`로 본다.
 - 실제 완료: `alighting_forecast_evaluation_result`에 추가된 행 수다. `increase(salmonbus_pg_table_inserts_total{table="alighting_forecast_evaluation_result"}[5m])`로 보고, 같은 5분의 `event=alighting_settlement_page_committed` 로그 `completed` 합과 비교한다. 재예약한 `deferred`는 완료에 넣지 않는다. 테이블 카운터는 롤백된 행과 복원 작업이 추가한 결과도 세므로, 두 값이 크게 다르면 로그 합을 기준으로 한다.
