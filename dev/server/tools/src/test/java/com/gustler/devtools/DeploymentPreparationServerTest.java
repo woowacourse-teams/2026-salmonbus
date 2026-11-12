@@ -239,6 +239,8 @@ class DeploymentPreparationServerTest {
 
         // then
         assertEquals(true, result.get("preparationRequired"));
+        assertEquals("b".repeat(40), result.get("supersededCommit"));
+        assertEquals("PREPARED", result.get("supersededPhase"));
         assertNotEquals(prepared, RevisionStore.selectedBasis(fixture.layout));
         assertEquals("c".repeat(40), Json.read(journal()).path("commit").asText());
         assertEquals(RevisionStore.verify(prepared, true).releaseId(),
@@ -300,23 +302,24 @@ class DeploymentPreparationServerTest {
     }
 
     @Test
-    void API_검증까지_끝난_다른_커밋의_기록은_넘기고_넘긴_기록을_준비_결과에_남긴다() throws Exception {
+    void API_검증까지_끝난_다른_커밋의_기록은_그_커밋의_worker_배포가_남아_있을_수_있어_다음_기반_교체를_막는다() throws Exception {
         // given
         preparation().prepare(incoming, apiEnvironment);
         preparation().complete(incoming, apiEnvironment);
-        assertEquals("API_READY", Json.read(journal()).path("phase").asText());
+        var prepared = RevisionStore.selectedBasis(fixture.layout);
+        var recorded = Json.read(journal());
+        assertEquals("API_READY", recorded.path("phase").asText());
         var later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
                 basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
 
         // when
-        var result = preparation().prepare(later, apiEnvironment);
+        var failure = assertThrows(IllegalArgumentException.class,
+                () -> preparation().prepare(later, apiEnvironment));
 
         // then
-        assertEquals(true, result.get("preparationRequired"));
-        assertEquals("b".repeat(40), result.get("supersededCommit"));
-        assertEquals("API_READY", result.get("supersededPhase"));
-        assertEquals("c".repeat(40), Json.read(journal()).path("commit").asText());
-        assertEquals("PREPARED", Json.read(journal()).path("phase").asText());
+        assertEquals("DEV_PREPARATION_RECOVERY_REQUIRED", failure.getMessage());
+        assertEquals(recorded, Json.read(journal()));
+        assertEquals(prepared, RevisionStore.selectedBasis(fixture.layout));
     }
 
     @Test

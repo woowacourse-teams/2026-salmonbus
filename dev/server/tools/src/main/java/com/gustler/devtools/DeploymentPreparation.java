@@ -129,13 +129,15 @@ final class DeploymentPreparation {
     /**
      * 다른 커밋의 배포가 basis를 바꾼 뒤 끝맺지 못한 기록인지 확인한다.
      *
-     * <p>이 기록으로 되돌리는 것은 같은 커밋의 hook뿐이라 다음 커밋의 준비를 막을 이유가 없다. 현재 basis가 기록의
-     * 직전 basis와 다를 때, 즉 교체가 끝난 뒤에만 해당한다. DB 전환 기록과 준비 중에 멈춘 기록은 계속 막는다.
-     * 넘긴 기록의 커밋과 단계는 준비 결과의 {@code supersededCommit}·{@code supersededPhase}에 남긴다.
+     * <p>API 검증 전에 멈춘 {@code PREPARED} 기록만 넘긴다. 그 커밋의 worker 배포는 시작되지 않았고, 이 기록으로
+     * 되돌리는 것은 같은 커밋의 hook뿐이라 다음 커밋의 준비를 막을 이유가 없다. 현재 basis가 기록의 직전 basis와
+     * 다를 때, 즉 교체가 끝난 뒤에만 해당한다. {@code API_READY}는 그 커밋의 worker 배포가 아직 진행 중일 수 있어
+     * 계속 막고, DB 전환 기록과 준비 중에 멈춘 기록도 계속 막는다. 넘긴 기록의 커밋과 단계는 준비 결과의
+     * {@code supersededCommit}·{@code supersededPhase}에 남긴다.
      */
     private static boolean superseded(JsonNode state, RevisionStore.Revision app, RevisionStore.Revision basis) {
         return state.path("dataTransition").isBoolean() && !state.path("dataTransition").asBoolean()
-                && List.of("PREPARED", "API_READY").contains(state.path("phase").asText())
+                && "PREPARED".equals(state.path("phase").asText())
                 && !app.commit().equals(state.path("commit").asText())
                 && !basis.releaseId().equals(state.path("basisReleaseId").asText());
     }
