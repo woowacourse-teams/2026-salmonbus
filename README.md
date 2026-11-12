@@ -641,7 +641,7 @@ Docker Desktop이 있는 Apple Silicon 맥에서 저장소 루트의 명령 하�
 
 필요한 버전과 나머지 명령은 [로컬 실행 안내](dev/README.md)에 있습니다.
 
-## 팀
+## 팀 구성원
 
 | [<img src="https://github.com/lee-eojin.png" width="96" alt=""><br>레스](https://github.com/lee-eojin) | [<img src="https://github.com/bigcloud07.png" width="96" alt=""><br>루멘](https://github.com/bigcloud07) | [<img src="https://github.com/korogoo.png" width="96" alt=""><br>코로구](https://github.com/korogoo) | [<img src="https://github.com/DongKey777.png" width="96" alt=""><br>동키](https://github.com/DongKey777) |
 |:---:|:---:|:---:|:---:|
