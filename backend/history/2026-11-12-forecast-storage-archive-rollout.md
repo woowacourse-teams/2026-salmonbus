@@ -4,9 +4,17 @@
 
 ## 예보 포맷 전환
 
-1. V79와 두 포맷을 읽는 worker를 먼저 배포한다. 기본 설정인 `FORECAST_COMPACT_SETTLEMENT_WRITE=false`로 기존 worker가 정산할 수 있는 JSON을 쓴다. 모델의 예측값과 정산 입력은 유지하고 저장용 추론 벡터는 제외한다.
-2. 기존 예보의 정산과 worker 기동을 확인하고 해당 worker 패키지를 롤백 대상으로 보존한다. 이후 별도로 승인한 전환에서 `FORECAST_COMPACT_SETTLEMENT_WRITE=true`를 적용한다.
-3. 전환 후에도 기존·신규 예보 정산과 대기열 추이를 확인한다. 새 포맷을 쓴 뒤에는 두 포맷을 읽는 worker로 복구한다. v1.7.0 worker는 정원만 저장한 예보의 정산을 규격 불일치로 종결할 수 있다.
+1. V79와 두 포맷을 읽는 worker를 먼저 배포한다. 기본 설정인 `FORECAST_COMPACT_SETTLEMENT_WRITE=false`로 기존 worker가 정산할 수 있는 JSON을 쓴다. 모델의 예측값, 정산 입력, 출처 필드는 유지하고 저장용 추론 벡터는 제외한다.
+2. v2, v3 출퇴근, v3 확장 시간대에서 같은 예보를 두 포맷으로 정산했을 때 `label_value`와 `parameter_hash`가 모두 같은지 확인한다. 운영에서 기존 예보 정산과 worker 기동을 확인하고 해당 worker 패키지를 롤백 대상으로 보존한다. 이후 별도로 승인한 전환에서 `FORECAST_COMPACT_SETTLEMENT_WRITE=true`를 적용한다.
+3. 전환 후에도 기존·신규 예보 정산과 대기열 추이를 확인한다. 새 포맷을 쓴 뒤에는 두 포맷을 읽는 worker로 복구한다. v1.7.0 worker가 정원만 저장한 예보의 대기 작업을 처리하면 v2는 `MISSING_REAL_STOP_CONTRACT`, v3는 `INPUT_PROFILE_MISMATCH`로 종결하고 대기 작업을 삭제한다. 두 포맷을 읽는 worker를 다시 시작해도 그 라벨은 자동으로 복구되지 않는다. 자세한 복구 절차는 [운영 RUNBOOK](../deploy/RUNBOOK.md#예보-정산-저장-형식-롤백)을 따른다.
+
+## V79 적용 순서
+
+2026-11-12 dev RDS의 Flyway 이력을 읽기 전용으로 조회했다. 마지막 적용 기록은 `V78__confirmed_history_cursor_index.sql`이고 V79와 V80 기록은 없었다. [PR #310](https://github.com/woowacourse-teams/2026-salmonbus/pull/310)은 dev 대상으로 별도의 V79를 추가한다.
+
+1. #325의 `V79__model_settlement_context.sql`을 main에 먼저 적용하고, 해당 커밋을 dev에 반영한다.
+2. #310을 병합하거나 dev DB에 적용하기 전에 dev를 기준으로 갱신하고 `V79__incremental_alighting_settlement.sql`을 `V80__incremental_alighting_settlement.sql`로 변경한다. 배포 직전에 dev의 적용 이력을 다시 확인한다.
+3. 최종 트리에서 V79와 V80 파일이 하나씩 존재하고, V79 적용 DB에 V80이 이어서 적용되는지 검증한다. 이미 #310의 V79가 적용된 DB를 발견하면 병합·배포를 보류하고 DB별 적용 이력을 대조한다.
 
 ## 운영 이관과 원본 삭제
 

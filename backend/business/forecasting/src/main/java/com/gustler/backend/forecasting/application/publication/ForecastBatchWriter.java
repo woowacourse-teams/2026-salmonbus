@@ -128,7 +128,7 @@ public class ForecastBatchWriter {
                     && statistics.stop(target.stopOrder()).down() != snapshot.source().down()) {
                     continue;
                 }
-                vehiclePredictions.add(alightingForecast(runtime, model, generatedAt,
+                vehiclePredictions.add(alightingForecast(batch, runtime, model, generatedAt,
                     statistics, snapshot, target, extended));
             }
             predictions.addAll(vehiclePredictions);
@@ -207,6 +207,7 @@ public class ForecastBatchWriter {
     }
 
     private SeatForecast alightingForecast(
+        PendingForecastBatch batch,
         RuntimeSnapshot runtime,
         AlightingAwareSeatForecastModel model,
         Instant generatedAt,
@@ -220,6 +221,16 @@ public class ForecastBatchWriter {
         if (!compactSettlementWrite) {
             evidence.put("inputProfile", statistics.profile().input());
             evidence.put("capacityPolicy", "vehicle-capacity-snapshot-v1");
+            evidence.put("asOf", batch.responseReceivedAt().toString());
+            evidence.put("vehicleObservationId", snapshot.vehicleObservationId());
+            evidence.put("sourceBatchId", batch.observationBatchId());
+            if (statistics.confirmedProfile()) {
+                evidence.put("asOf", snapshot.source().receivedAt().toString());
+                evidence.put("tripStartObservationId", snapshot.provenance().tripStartObservationId());
+            }
+            if (extended) {
+                evidence.put("forecastInput", "alighting-extended-six-v1");
+            }
         }
         evidence.put("capacity", snapshot.capacity());
         SeatForecastResult prediction = predict(model, statistics, snapshot, target, extended);

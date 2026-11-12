@@ -215,7 +215,9 @@ class AlightingAwarePublicationLifecycleTest {
         writer.setCompactSettlementWrite(false);
         assertThat(writer.writeForecastsOf(batch, stops, selected)).isEqualTo(1);
         assertThat(jdbc.sql("SELECT feature_snapshot::text FROM seat_forecast WHERE vehicle_observation_id=?")
-            .param(source).query(String.class).single()).contains("inputProfile", "capacityPolicy", "alighting");
+            .param(source).query(String.class).single())
+            .contains("inputProfile", "capacityPolicy", "alighting", "asOf", "vehicleObservationId", "sourceBatchId")
+            .doesNotContain("seat88", "probability80");
         writer.setCompactSettlementWrite(true);
         assertThat(writer.writeForecastsOf(batch, stops, selected)).isEqualTo(1);
         assertThat(count("seat_forecast")).isEqualTo(1);
@@ -316,13 +318,17 @@ class AlightingAwarePublicationLifecycleTest {
         when(feature.provenance()).thenReturn(new AlightingAwareFeatureSnapshot.Provenance(source));
         when(feature.observation()).thenReturn(new ObservedVehicle("current", version, 1, START, 40, null));
         ForecastBatchWriter writer = new ForecastBatchWriter(committer, Clock.fixed(START.plusSeconds(1), ZoneOffset.UTC), quality);
-        writer.setCompactSettlementWrite(true);
         writer.setAlightingAwareFeatures(query);
         writer.setConfirmedInput(confirmedInput);
         PendingForecastBatch batch = new PendingForecastBatch(batchId, version, route, START);
 
         // when
         writer.writeForecastsOf(batch, stops, runtime);
+        assertThat(jdbc.sql("SELECT feature_snapshot::text FROM seat_forecast WHERE vehicle_observation_id=?")
+            .param(source).query(String.class).single())
+            .contains("asOf", "tripStartObservationId", "sourceBatchId", "forecastInput", "alighting-extended-six-v1")
+            .doesNotContain("extendedInputs");
+        writer.setCompactSettlementWrite(true);
         writer.writeForecastsOf(batch, stops, runtime);
         service.settle();
         new JdbcAlightingAwareForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions).settle();
