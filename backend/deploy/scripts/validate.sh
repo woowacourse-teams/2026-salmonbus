@@ -14,11 +14,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 # 같은 DEPLOYMENT_ID 라 그대로 통과한다. 실패했을 때 잠금을 풀려고 잡는다
 claim_deploy
 
-# 상한은 셋이다. 전체, 검사 하나, 요청 하나. 전체는 appspec 의 ValidateService timeout(300초)보다 짧게 둔다.
+# 상한은 넷이다. 전체, 최초 health, 기동 후 검사 하나, 요청 하나. 뒤의 셋은 전체에서 남은 시간을 넘지 않는다.
+# 위 잠금 확인 대기(최대 2초)와 health 실패 뒤 DB 진단(DB_PROBE_SECONDS)은 전체 밖이다.
+# 셋을 더해도 appspec 의 ValidateService timeout(300초)보다 짧게 둔다. 리허설이 세 파일을 읽어 확인한다.
 # CodeDeploy 가 먼저 죽이면 아래 요약도 잠금 정리도 없이 끝난다.
-# 환경변수는 리허설용이다. 실패 시나리오마다 90초씩 기다릴 수 없어서 몇 초로 줄인다. CodeDeploy 환경엔 없다
-TOTAL_SECONDS="${VALIDATE_TOTAL_SECONDS:-240}"      # 검증 전체
-CHECK_SECONDS="${VALIDATE_CHECK_SECONDS:-90}"       # 검사 하나
+# 최초 health 는 JVM 기동과 대기 중인 마이그레이션 전체를 기다린다. 뒤 검사가 쓸 시간을 남기려고 전체보다 짧게 둔다.
+# 환경변수는 리허설용이다. 실패 시나리오마다 240초씩 기다릴 수 없어서 몇 초로 줄인다. CodeDeploy 환경엔 없다
+TOTAL_SECONDS="${VALIDATE_TOTAL_SECONDS:-270}"      # 검증 전체
+CHECK_SECONDS="${VALIDATE_CHECK_SECONDS:-90}"       # 기동 후 검사 하나
+# 최초 health. 리허설이 검사 상한만 줄이면 이것도 같이 줄인다
+STARTUP_SECONDS="${VALIDATE_STARTUP_SECONDS:-${VALIDATE_CHECK_SECONDS:-240}}"
 REQUEST_SECONDS="${VALIDATE_REQUEST_SECONDS:-5}"    # 요청 하나
 RETRY_SECONDS="${VALIDATE_RETRY_SECONDS:-3}"        # 다시 묻기 전 대기
 STARTED=$SECONDS
@@ -53,10 +58,10 @@ curl_reason() {
 # 원하는 문자열이 본문에 올 때까지 묻는다.
 # 시한은 검사 상한과 전체에서 남은 시간 중 짧은 쪽. 요청 하나도 사이의 대기도 그 안에서만 한다
 wait_for() {
-  local stage="$1" url="$2" want="$3" key="$4"
+  local stage="$1" url="$2" want="$3" key="$4" check_seconds="${5:-$CHECK_SECONDS}"
   local budget deadline left max_time out why
   local attempt=0 started=$SECONDS rc=0 code=000 body="" seen=""
-  budget="$(min "$CHECK_SECONDS" "$(remaining)")"
+  budget="$(min "$check_seconds" "$(remaining)")"
   [ "$budget" -gt 0 ] || fail_validate "$stage" "전체 ${TOTAL_SECONDS}초를 앞 검사가 다 썼다"
   deadline=$((SECONDS + budget))
   while :; do
@@ -91,15 +96,15 @@ wait_for() {
   fi
   # health 가 죽었으면 DB 가 안 되는 건지 앱 풀만 굳은 건지 지금 바로 갈라 둔다
   [ "$stage" != health ] || db_probe "health 실패"
-  if [ "$budget" -lt "$CHECK_SECONDS" ]; then
+  if [ "$budget" -lt "$check_seconds" ]; then
     fail_validate "$stage" "시간 초과(전체 ${TOTAL_SECONDS}초 중 남은 ${budget}초) 시도=$attempt 마지막=$why"
   fi
-  fail_validate "$stage" "시간 초과(검사 상한 ${CHECK_SECONDS}초) 시도=$attempt 마지막=$why"
+  fail_validate "$stage" "시간 초과(검사 상한 ${check_seconds}초) 시도=$attempt 마지막=$why"
 }
 
 # DB 까지 보는 것은 /actuator/health 다. 끊기면 503 DOWN 이 온다.
 # /actuator/health/readiness 는 DB 가 끊겨도 200 UP 이라 여기엔 못 쓴다. 실측으로 확인했다
-wait_for health       "$ACTUATOR/health" '"status":"UP"'                    status
+wait_for health       "$ACTUATOR/health" '"status":"UP"'                    status "$STARTUP_SECONDS"
 # 지금 응답하는 것이 방금 놓은 배포 버전이 맞나. 옛 프로세스가 살아 있으면 여기서 걸린다
 wait_for sourcedigest "$ACTUATOR/info"   "\"sourcedigest\":\"$NEW_DIGEST\"" sourcedigest
 wait_for component    "$ACTUATOR/info"   "\"component\":\"$COMPONENT\""     component

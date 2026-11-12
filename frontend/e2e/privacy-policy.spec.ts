@@ -3,6 +3,9 @@ import { test, expect } from "./fixtures/auth";
 
 const POLICY_LINK = "개인정보 처리방침";
 const COOKIE_TABLE = "이름, 만드는 곳, 목적, 담는 정보, 보관 기간 표";
+const BEFORE_NEW_EDITION = new Date("2026-11-13T23:59:59+09:00");
+const NEW_EDITION_START = new Date("2026-11-14T00:00:00+09:00");
+const NOVEMBER_4_PERIOD = "2026년 11월 4일부터 2026년 11월 13일까지 적용";
 
 const policyTitle = (page: Page) => page.getByRole("heading", { level: 1, name: "개인정보 처리방침", exact: true });
 const firstSection = (page: Page) =>
@@ -15,12 +18,11 @@ const currentEditionLink = (page: Page) =>
 const myPagePolicyLink = (page: Page) =>
   page.getByRole("region", { name: "개인정보" }).getByRole("link", { name: POLICY_LINK, exact: true });
 
-async function expectCurrentEdition(page: Page) {
+async function expectEdition(page: Page, effectiveDate: string, period: string) {
   await expect(policyTitle(page)).toBeVisible();
-  await expect(page.getByText(/^2026년 11월 4일부터 적용/)).toBeVisible();
-  await expect(page.getByText("시행일: 2026년 11월 4일", { exact: true })).toBeVisible();
+  await expect(page.getByText(period, { exact: true })).toBeVisible();
+  await expect(page.getByText(`시행일: ${effectiveDate}`, { exact: true })).toBeVisible();
   await expect(firstSection(page)).toBeVisible();
-  await expect(page.getByRole("region", { name: "다른 판" })).toHaveCount(0);
 }
 
 // React는 늦게 받은 화면을 대체 화면 위에 타이머로 드러내서, 멈춘 시계에서는 처리방침이 열리지 않는다.
@@ -37,19 +39,49 @@ function privacyScriptRequests(page: Page): string[] {
   return requests;
 }
 
-test("주소로 바로 들어오면 지금 판의 제목, 시행일, 본문을 보여 주고 새로고침해도 같다", async ({ page }) => {
-  await page.goto("/privacy");
-  await expectCurrentEdition(page);
+for (const { time, effectiveDate, period, otherPeriod, otherPath } of [
+  {
+    time: BEFORE_NEW_EDITION,
+    effectiveDate: "2026년 11월 4일",
+    period: NOVEMBER_4_PERIOD,
+    otherPeriod: "2026년 11월 14일부터 적용 예정",
+    otherPath: "/privacy/2026-11-14",
+  },
+  {
+    time: NEW_EDITION_START,
+    effectiveDate: "2026년 11월 14일",
+    period: "2026년 11월 14일부터 적용",
+    otherPeriod: NOVEMBER_4_PERIOD,
+    otherPath: "/privacy/2026-11-04",
+  },
+]) {
+  test(`주소로 바로 들어오거나 새로고침하면 지금 적용 중인 ${effectiveDate}판을 보여 준다`, async ({ page }) => {
+    await page.clock.setFixedTime(time);
+    await page.goto("/privacy");
+    await expectEdition(page, effectiveDate, period);
 
-  await page.reload();
-  await expectCurrentEdition(page);
-});
+    const otherEditions = page.getByRole("region", { name: "다른 판", exact: true });
+    await expect(otherEditions.getByRole("link", { name: otherPeriod, exact: true })).toHaveAttribute(
+      "href",
+      otherPath,
+    );
 
-test("시행일 주소로 들어오면 그 판을 보여 주고, 지금 판이면 지금 판으로 가는 링크는 없다", async ({ page }) => {
+    await page.reload();
+    await expectEdition(page, effectiveDate, period);
+  });
+}
+
+test("시행일 주소는 같은 판을 보여 주고, 그 판의 적용이 끝나면 지금 판으로 가는 링크를 제공한다", async ({ page }) => {
+  await page.clock.setFixedTime(BEFORE_NEW_EDITION);
   await page.goto("/privacy/2026-11-04");
 
-  await expectCurrentEdition(page);
+  await expectEdition(page, "2026년 11월 4일", NOVEMBER_4_PERIOD);
   await expect(currentEditionLink(page)).toHaveCount(0);
+
+  await page.clock.setFixedTime(NEW_EDITION_START);
+  await page.reload();
+  await expectEdition(page, "2026년 11월 4일", NOVEMBER_4_PERIOD);
+  await expect(currentEditionLink(page)).toHaveAttribute("href", "/privacy");
 });
 
 for (const date of ["2025-01-01", "latest"]) {
