@@ -138,9 +138,12 @@ public final class LocalData {
             TRUNCATE daily_call_quota, observation_batch, vehicle_observation, seat_forecast,
                 forecast_publication, forecast_evaluation_work, forecast_evaluation_result, forecast_evaluation_compact,
                 alighting_forecast_evaluation_work, alighting_forecast_evaluation_result, alighting_evaluation_archive,
+                alighting_settlement_batch_work, alighting_settlement_observation, alighting_settlement_pass,
+                alighting_settlement_projection, alighting_settlement_generation,
                 operational_archive_file, operational_archive_job, operational_archive_boundary, archive_legacy_member, archive_legacy_batch,
                 file_statistics_publication,
                 stop_demand_statistics, demand_statistics_version;
+            UPDATE alighting_settlement_queue_scan SET observation_id=0,stop_order=0,target_kind='',label_version='',complete=false;
             """);
         execute(connection, "UPDATE route SET data_revision=1");
 

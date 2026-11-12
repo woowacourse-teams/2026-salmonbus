@@ -921,7 +921,11 @@ dev에서 기존 V67을 이미 실행했다면 V72 이상 적용과 V67 단독 �
 4. 새 경로를 설정한 뒤 `sudo rm /etc/salmonbus/alighting-cutover-hold`를 실행하고 Worker 배포를 재개한다. 새 Worker의 차량 정원 캐시 준비와 예보·정산을 확인한다. 예보에 저장한 정원으로 정산하며, 이후 관측이 그 정원을 넘으면 `OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT` 사유로 해당 정산을 종료한다.
 5. archive-app은 삭제를 끈 상태로 시작한다. 지원 노선의 현재 판본마다 새 Worker가 `alighting_history_checkpoint`에 저장한 배치가 DB에 존재하는지 확인한다. 이전 날짜의 수집·정산 완료와 S3 재읽기 및 해시 검증 후 삭제를 활성화한다. 마지막 체크포인트 확정 시각에서 90초를 뺀 수신 시각 이후의 자료가 포함된 날짜는 새 체크포인트가 저장될 때까지 `ALIGHTING_HISTORY_REQUIRED`로 보류된다.
 
-정산의 확정 모델은 같은 날짜의 작업을 `forecast.alighting.evaluation.preparation-limit`(기본 500개)까지 한 스냅샷에서 준비하고, 결과 저장은 100개씩 나눈다. 한 tick의 새 준비는 `forecast.alighting.evaluation.maximum-preparations-per-tick`(기본 8회)와 `forecast.alighting.evaluation.maximum-tick-seconds`(기본 30초)로 제한한다. 예산이 끝나면 다음 tick은 마지막 처리 노선 다음부터 순환한다. 이미 준비한 묶음의 저장은 마치며, 실행 중인 SQL을 이 시간 예산으로 강제 종료하지 않는다. 준비·저장 트랜잭션의 기존 15초 제한은 유지한다. 이 예산은 작업량·새 읽기 시작의 제한이며 물리 I/O 바이트나 RDS 크레딧을 직접 제한하는 설정은 아니다.
+정산의 확정 모델은 수집 배치별로 작업을 묶고, 노선·날짜·정류장 구성별로 새 관측과 닫힌 통과 근거를 이어서 저장한다. 준비 한 번에 새 수집 배치를 100개까지 읽으며 재시작 후에도 마지막 커서부터 이어간다. 늦게 들어온 관측이나 원자료 수정·삭제가 이미 읽은 범위에 영향을 주면 해당 근거를 폐기하고 다시 준비한다. 기존 정산 작업의 배치 등록도 커서로 1,000개씩 진행한다. 준비가 끝날 때까지 기존 작업은 삭제하지 않는다.
+
+결과 준비는 `forecast.alighting.evaluation.preparation-limit`(기본 500개), 저장은 100개씩 나눈다. 한 회차의 새 준비는 `forecast.alighting.evaluation.maximum-preparations-per-tick`(기본 8회)와 `forecast.alighting.evaluation.maximum-tick-seconds`(기본 30초)로 제한하고 마지막 처리 노선 다음부터 순환한다. 이미 시작한 준비·저장은 마치며 트랜잭션의 15초 제한은 유지한다. 진행한 작업이 있으면 실행 시간의 1/4만큼 쉬고 다음 회차를 시작한다. 최소 간격은 100ms, 최대 간격과 유휴 간격은 `forecast.settlement-interval`이다. 새 통과 근거가 없는 예측은 입력 변경이나 정산 기한까지 기다린다. 실패한 노선은 기존 재시도 간격을 적용한다.
+
+V79는 증분 정산 저장소와 배치 등록·입력 변경 트리거, 입력 커서 인덱스를 만든다. Worker와 이관·복원 작업을 중지한 상태에서 적용하고 새 Worker를 시작한다. 인덱스 생성에는 기존 배치를 읽는 작업이 필요하며 잠금은 5초, 문장은 120초로 제한한다. 이력 전체를 이 마이그레이션에서 변환하거나 대기 작업을 일괄 등록하지 않는다. 폐기된 근거와 대기 정산이 없는 지난 날짜의 근거는 나누어 정리한다.
 
 `alighting_settlement_history_read`, `alighting_settlement_integrity_read`, `alighting_settlement_prepare`, `alighting_settlement_commit`으로 읽기·준비·저장 시간을 구분한다. `alighting_settlement_page_committed`는 커밋 뒤 처리·완료·재예약 건수를 기록한다. 재기동 후 같은 체크포인트가 유지되는지와 대기 지연, 수집·예보 지연, RDS 읽기량을 함께 확인하고 예산을 조정한다.
 
