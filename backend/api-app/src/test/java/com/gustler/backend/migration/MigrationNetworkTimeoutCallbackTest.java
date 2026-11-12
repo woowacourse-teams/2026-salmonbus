@@ -1,7 +1,16 @@
 package com.gustler.backend.migration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.support.TestDatabase;
 import com.zaxxer.hikari.HikariConfig;
@@ -15,6 +24,7 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.MigrationVersion;
@@ -105,6 +115,84 @@ class MigrationNetworkTimeoutCallbackTest {
     }
 
     @ParameterizedTest
+    @ValueSource(ints = {0, 5})
+    void 원래_소켓_제한이_무제한이거나_설정값보다_길면_줄이지_않는다(final int poolSeconds) throws Exception {
+        final int poolMillis = poolSeconds * 1_000;
+        sql("V1__sleep.sql", "SELECT pg_sleep(3);");
+        try (var database = TestDatabase.create(); var pool = pool(database, poolSeconds)) {
+            var observer = new Observer();
+            var during = new ArrayList<Integer>();
+            var flyway = configure(pool, observer, new MigrationNetworkTimeoutCallback(Duration.ofSeconds(2)))
+                .javaMigrations(new Probe("2", migration -> during.add(migration.getNetworkTimeout())))
+                .load();
+
+            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(2);
+            assertThat(observer.seen).containsExactly(
+                "beforeEachMigrate=" + poolMillis, "afterEachMigrate=" + poolMillis,
+                "beforeEachMigrate=" + poolMillis, "afterEachMigrate=" + poolMillis);
+            assertThat(during).containsExactly(poolMillis);
+            assertPoolTimeout(pool, poolMillis);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 5})
+    void 줄이지_않은_연결은_마이그레이션이_실패해도_원래_소켓_제한을_유지한다(final int poolSeconds) throws Exception {
+        final int poolMillis = poolSeconds * 1_000;
+        sql("V1__fail.sql", "SELECT 1 / 0;");
+        try (var database = TestDatabase.create(); var pool = pool(database, poolSeconds)) {
+            var observer = new Observer();
+            var flyway = configure(pool, observer, new MigrationNetworkTimeoutCallback(Duration.ofSeconds(2))).load();
+
+            assertThatThrownBy(flyway::migrate)
+                .isInstanceOf(FlywayException.class)
+                .rootCause().hasMessageContaining("division by zero");
+            assertThat(observer.seen).containsExactly(
+                "beforeEachMigrate=" + poolMillis, "afterEachMigrateError=" + poolMillis);
+            assertPoolTimeout(pool, poolMillis);
+        }
+    }
+
+    @Test
+    void 소켓_제한을_늘리지_못하면_마이그레이션을_멈추고_되돌리지_않는다() throws Exception {
+        var connection = mock(Connection.class);
+        given(connection.getNetworkTimeout()).willReturn(POOL_TIMEOUT_MILLIS);
+        willThrow(new SQLException("closed")).given(connection).setNetworkTimeout(any(Executor.class), anyInt());
+        var context = context(connection);
+        var callback = new MigrationNetworkTimeoutCallback(Duration.ofSeconds(3));
+
+        assertThatThrownBy(() -> callback.handle(Event.BEFORE_EACH_MIGRATE, context))
+            .isInstanceOf(FlywayException.class)
+            .hasCauseInstanceOf(SQLException.class);
+        callback.handle(Event.AFTER_EACH_MIGRATE_ERROR, context);
+
+        verify(connection, times(1)).setNetworkTimeout(any(Executor.class), anyInt());
+    }
+
+    @Test
+    void 성공한_마이그레이션의_소켓_제한을_되돌리지_못하면_멈춘다() throws Exception {
+        var connection = restoreFailing();
+        var context = context(connection);
+        var callback = new MigrationNetworkTimeoutCallback(Duration.ofSeconds(3));
+        callback.handle(Event.BEFORE_EACH_MIGRATE, context);
+
+        assertThatThrownBy(() -> callback.handle(Event.AFTER_EACH_MIGRATE, context))
+            .isInstanceOf(FlywayException.class)
+            .hasCauseInstanceOf(SQLException.class);
+    }
+
+    @Test
+    void 실패한_마이그레이션의_소켓_제한을_되돌리지_못해도_원래_오류를_가리지_않는다() throws Exception {
+        var connection = restoreFailing();
+        var context = context(connection);
+        var callback = new MigrationNetworkTimeoutCallback(Duration.ofSeconds(3));
+        callback.handle(Event.BEFORE_EACH_MIGRATE, context);
+
+        assertThatCode(() -> callback.handle(Event.AFTER_EACH_MIGRATE_ERROR, context)).doesNotThrowAnyException();
+        verify(connection).setNetworkTimeout(any(Executor.class), eq(POOL_TIMEOUT_MILLIS));
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"PT0S", "PT-1S"})
     void 무제한이나_음수_소켓_제한은_받지_않는다(String timeout) {
         assertThatThrownBy(() -> new MigrationNetworkTimeoutCallback(Duration.parse(timeout)))
@@ -120,13 +208,17 @@ class MigrationNetworkTimeoutCallbackTest {
     }
 
     private static HikariDataSource pool(TestDatabase database) {
+        return pool(database, POOL_TIMEOUT_MILLIS / 1_000);
+    }
+
+    private static HikariDataSource pool(TestDatabase database, final int socketTimeoutSeconds) {
         var config = new HikariConfig();
         config.setJdbcUrl(database.jdbcUrl());
         config.setUsername(database.username());
         config.setPassword(database.password());
         config.setMaximumPoolSize(3);
         config.setMinimumIdle(0);
-        config.addDataSourceProperty("socketTimeout", String.valueOf(POOL_TIMEOUT_MILLIS / 1_000));
+        config.addDataSourceProperty("socketTimeout", String.valueOf(socketTimeoutSeconds));
         return new HikariDataSource(config);
     }
 
@@ -134,6 +226,10 @@ class MigrationNetworkTimeoutCallbackTest {
      * 풀이 지금 빌려줄 수 있는 연결을 한꺼번에 빌려 확인한다. 마이그레이션 연결이 끊기면 Flyway 가 주 연결을 반납하지 못해 그만큼은 빌릴 수 없다.
      */
     private static void assertPoolTimeout(HikariDataSource pool) throws SQLException {
+        assertPoolTimeout(pool, POOL_TIMEOUT_MILLIS);
+    }
+
+    private static void assertPoolTimeout(HikariDataSource pool, final int expectedMillis) throws SQLException {
         var borrowed = new ArrayList<Connection>();
         try {
             final int lendable = pool.getMaximumPoolSize() - pool.getHikariPoolMXBean().getActiveConnections();
@@ -141,12 +237,26 @@ class MigrationNetworkTimeoutCallbackTest {
                 borrowed.add(pool.getConnection());
             }
             assertThat(borrowed).isNotEmpty().allSatisfy(connection ->
-                assertThat(connection.getNetworkTimeout()).isEqualTo(POOL_TIMEOUT_MILLIS));
+                assertThat(connection.getNetworkTimeout()).isEqualTo(expectedMillis));
         } finally {
             for (var connection : borrowed) {
                 connection.close();
             }
         }
+    }
+
+    private static Connection restoreFailing() throws SQLException {
+        var connection = mock(Connection.class);
+        given(connection.getNetworkTimeout()).willReturn(POOL_TIMEOUT_MILLIS);
+        willThrow(new SQLException("closed")).given(connection)
+            .setNetworkTimeout(any(Executor.class), eq(POOL_TIMEOUT_MILLIS));
+        return connection;
+    }
+
+    private static org.flywaydb.core.api.callback.Context context(Connection connection) {
+        var context = mock(org.flywaydb.core.api.callback.Context.class);
+        given(context.getConnection()).willReturn(connection);
+        return context;
     }
 
     /**

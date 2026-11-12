@@ -48,8 +48,10 @@ spring:
       ddl-auto: validate # 스키마의 주인은 Flyway 다. Hibernate 는 대조만 한다.
 
 # Flyway 가 마이그레이션 하나를 실행하는 동안만 그 연결에 쓰는 소켓 읽기 제한이다. 다른 연결은 위 socketTimeout 을 쓴다.
-# 마이그레이션 SQL 의 statement_timeout 중 가장 긴 120초보다 길게 둬야 서버가 먼저 문장을 취소하고 되돌린다.
-# 배포 검증의 최초 health 확인 180초(deploy/scripts/validate.sh)보다는 짧게 둔다. 0(무제한)은 받지 않는다.
+# 연결의 원래 값이 0(무제한)이거나 이 값보다 길면 줄이지 않는다. 이 설정에 0(무제한)은 받지 않는다.
+# statement_timeout 을 둔 마이그레이션은 그 값(가장 긴 것 120초)에서 서버가 먼저 문장을 취소하고 되돌린다.
+# statement_timeout 이 없는 마이그레이션은 이 값에서 연결만 끊기고, 서버 문장은 잠금을 쥔 채 끝까지 돌 수 있다.
+# 배포 검증의 최초 health 확인 180초(deploy/scripts/validate.sh)보다는 짧게 둔다.
 migration:
   network-timeout: 150s
 

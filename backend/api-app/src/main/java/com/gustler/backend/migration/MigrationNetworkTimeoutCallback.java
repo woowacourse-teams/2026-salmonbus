@@ -16,7 +16,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * 마이그레이션 하나를 실행하는 동안 그 연결의 소켓 읽기 제한을 {@code migration.network-timeout}으로 바꾸고, 끝나면 원래 값으로 되돌린다.
+ * 마이그레이션 하나를 실행하는 동안 그 연결의 소켓 읽기 제한을 {@code migration.network-timeout}으로 늘리고, 끝나면 원래 값으로 되돌린다.
+ *
+ * <p>원래 값이 0(무제한)이거나 설정값 이상이면 바꾸지 않고 되돌리지도 않는다. 예를 들어 {@code spring.flyway.url}로 소켓 제한
+ * 없이 둔 Flyway 전용 연결은 무제한으로 남는다.
  *
  * <p>풀의 {@code socketTimeout}보다 오래 걸리는 마이그레이션 문장은 서버가 실행 중이어도 연결이 먼저 끊긴다. 이 콜백은 Flyway 가
  * 마이그레이션에 쓰는 연결에만 적용하고 다른 풀 연결은 바꾸지 않는다. {@code BEFORE_MIGRATE}·{@code AFTER_MIGRATE}는 Flyway 가
@@ -29,6 +32,7 @@ import org.springframework.stereotype.Component;
 public final class MigrationNetworkTimeoutCallback implements Callback {
     private static final Logger LOGGER = LoggerFactory.getLogger(MigrationNetworkTimeoutCallback.class);
     private static final Executor CALLER = Runnable::run;
+    private static final int UNLIMITED = 0;
 
     private final int timeoutMillis;
     private final Map<Connection, Integer> previous = new ConcurrentHashMap<>();
@@ -63,7 +67,11 @@ public final class MigrationNetworkTimeoutCallback implements Callback {
 
     private void extend(Connection connection) {
         try {
-            previous.putIfAbsent(connection, connection.getNetworkTimeout());
+            final int current = connection.getNetworkTimeout();
+            if (current == UNLIMITED || current >= timeoutMillis) {
+                return;
+            }
+            previous.putIfAbsent(connection, current);
             connection.setNetworkTimeout(CALLER, timeoutMillis);
         } catch (SQLException failure) {
             previous.remove(connection);

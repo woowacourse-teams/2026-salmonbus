@@ -186,7 +186,7 @@ readyz        api만. 8080 /readyz가 200 UP이다. 기동이 끝나 트래픽 �
 데이터 사정으로 정상 배포가 롤백될 수 있다. 8080은 `/readyz`로만 본다. `/readyz`는 Spring Boot Actuator의
 readiness 그룹을 `management.endpoint.health.probes.add-additional-paths`로 8080에 연 것이다.
 
-시간 상한은 전체 240초, 최초 health 확인 180초, 이후 검사 하나 90초, 요청 하나 5초다. 최초 health에는 Flyway와 JVM 기동 시간이 포함된다. Flyway가 마이그레이션을 실행하는 연결은 API 연결의 `socketTimeout`(60초) 대신 `migration.network-timeout`(150초)까지 응답을 기다린다. 마이그레이션 SQL의 `statement_timeout`보다 길고 최초 health 확인보다 짧게 둔 값이다. 검사는 3초 간격으로 다시 묻되
+시간 상한은 전체 240초, 최초 health 확인 180초, 이후 검사 하나 90초, 요청 하나 5초다. 최초 health에는 Flyway와 JVM 기동 시간이 포함된다. Flyway가 마이그레이션을 실행하는 연결은 API 연결의 `socketTimeout`(60초) 대신 `migration.network-timeout`(150초)까지 응답을 기다린다. 마이그레이션 SQL의 `statement_timeout`보다 길고 최초 health 확인보다 짧게 둔 값이다. 연결의 원래 값이 0(무제한)이거나 150초보다 길면 줄이지 않는다. `statement_timeout`을 둔 마이그레이션은 서버가 먼저 문장을 취소하고 되돌리지만, 두지 않은 마이그레이션은 150초에 연결만 끊기고 서버 문장은 잠금을 쥔 채 계속 돌 수 있다. 검사는 3초 간격으로 다시 묻되
 남은 시간을 넘기는 요청이나 대기는 하지 않는다. **전체 상한은 appspec의 `ValidateService` timeout(300초)보다
 짧아야 한다.** CodeDeploy가 먼저 훅을 종료하면 아래 요약 로그가 남지 않고 배포 잠금도 풀리지 않는다.
 리허설이 두 값을 읽어 확인한다.
