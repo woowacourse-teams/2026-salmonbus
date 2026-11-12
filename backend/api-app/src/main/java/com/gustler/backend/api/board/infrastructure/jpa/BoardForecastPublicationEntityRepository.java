@@ -1,5 +1,7 @@
 package com.gustler.backend.api.board.infrastructure.jpa;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -11,6 +13,16 @@ import org.springframework.data.repository.query.Param;
 public interface BoardForecastPublicationEntityRepository
     extends Repository<ForecastPublicationJpaEntity, Long> {
     boolean existsByRouteVersionId(Long routeVersionId);
+
+    /**
+     * 기준 관측 묶음마다 발행 ID를 읽는다. 각 행은 발행 ID, 기준 관측 묶음 ID 순서다.
+     */
+    @Query("""
+        SELECT publication.id, publication.sourceBatchId
+        FROM BoardForecastPublicationJpaEntity publication
+        WHERE publication.sourceBatchId IN :batchIds
+        """)
+    List<Object[]> findIdsBySourceBatchIdIn(@Param("batchIds") Collection<Long> batchIds);
 
     /**
      * 판정보드 캐시가 같은 결과인지 가르는 판본 표시를 읽는다.

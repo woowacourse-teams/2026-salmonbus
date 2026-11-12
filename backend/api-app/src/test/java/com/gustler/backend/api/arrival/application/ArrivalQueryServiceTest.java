@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -133,6 +134,17 @@ class ArrivalQueryServiceTest {
             softly.assertThat(result.snapshot().staleAt()).isEqualTo(RECEIVED.plusSeconds(60));
         }
         verify(gateway).request(STATION);
+    }
+
+    @Test
+    void 입구_확인을_마친_정류장_조회는_도착정보를_고를_때_쓴_방문을_함께_돌려준다() {
+        // when
+        KnownStationArrivals known = service.readKnownStation(STATION);
+
+        // then
+        assertThat(known.visits()).extracting(ArrivalVisit::stopSequence).containsExactly(22, 65);
+        assertThat(known.overview().routes()).hasSize(2);
+        verify(repository, times(1)).visits(STATION);
     }
 
     @Test

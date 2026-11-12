@@ -20,8 +20,14 @@ import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentState;
 import com.gustler.backend.api.route.infrastructure.jpa.RouteVersionJpaEntity;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
@@ -104,6 +110,92 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
                 .stream()
                 .map(VehicleObservationJpaEntity::toDomain)
                 .toList();
+        } catch (DataAccessException exception) {
+            throw new ServiceUnavailableException();
+        }
+    }
+
+    @Override
+    public List<BoardSnapshot> findSnapshots(Collection<RouteId> routeIds) {
+        if (!singleQueryEnabled) {
+            return BoardQueryRepository.super.findSnapshots(routeIds);
+        }
+        try {
+            return snapshotReader.findSnapshots(routeIds);
+        } catch (DataAccessException exception) {
+            throw new ServiceUnavailableException();
+        }
+    }
+
+    @Override
+    public Map<Long, List<BoardStop>> findStops(Collection<Long> routeVersionIds) {
+        if (routeVersionIds.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            Map<Long, List<BoardStop>> stops = new LinkedHashMap<>();
+            for (RouteStopJpaEntity stop : routeStopRepository.findAllByRouteVersionIdIn(routeVersionIds)) {
+                stops.computeIfAbsent(stop.routeVersionId(), ignored -> new ArrayList<>()).add(stop.toDomain());
+            }
+            return stops;
+        } catch (DataAccessException exception) {
+            throw new ServiceUnavailableException();
+        }
+    }
+
+    /**
+     * 기준 묶음마다 발행 ID를 먼저 읽고, 그 발행의 예보 중 차량 관측 묶음이 발행의 기준 묶음과 같은 행만 고른다.
+     * 묶음 하나를 읽는 {@link #findPredictions(long)}과 같은 행을 돌려준다.
+     */
+    @Override
+    public Map<Long, List<StoredPrediction>> findPredictions(Collection<Long> observationBatchIds) {
+        if (observationBatchIds.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            Map<Long, Long> batchIdByPublicationId = new HashMap<>();
+            for (Object[] row : forecastPublicationRepository.findIdsBySourceBatchIdIn(observationBatchIds)) {
+                batchIdByPublicationId.put((Long) row[0], (Long) row[1]);
+            }
+            if (batchIdByPublicationId.isEmpty()) {
+                return Map.of();
+            }
+            Map<Long, List<StoredPrediction>> predictions = new LinkedHashMap<>();
+            List<Object[]> rows = seatForecastRepository.findAllByPublicationIdInAndBatchIdIn(
+                batchIdByPublicationId.keySet(), observationBatchIds);
+            for (Object[] row : rows) {
+                Long batchId = (Long) row[1];
+                if (!batchId.equals(batchIdByPublicationId.get((Long) row[0]))) {
+                    continue;
+                }
+                SeatForecastJpaEntity forecast = (SeatForecastJpaEntity) row[2];
+                predictions.computeIfAbsent(batchId, ignored -> new ArrayList<>())
+                    .add(forecast.toDomain(clock.getZone()));
+            }
+            return predictions;
+        } catch (DataAccessException exception) {
+            throw new ServiceUnavailableException();
+        }
+    }
+
+    @Override
+    public Map<Long, List<BoardVehicleObservation>> findObservedVehicles(Map<Long, Long> routeVersionIdByBatchId) {
+        if (routeVersionIdByBatchId.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            Map<Long, List<BoardVehicleObservation>> vehicles = new LinkedHashMap<>();
+            List<Object[]> rows = vehicleObservationRepository.findAllByBatchIdInAndRouteVersionIdIn(
+                routeVersionIdByBatchId.keySet(), Set.copyOf(routeVersionIdByBatchId.values()));
+            for (Object[] row : rows) {
+                Long batchId = (Long) row[0];
+                VehicleObservationJpaEntity observation = (VehicleObservationJpaEntity) row[1];
+                if (observation.routeVersionId() != routeVersionIdByBatchId.get(batchId)) {
+                    continue;
+                }
+                vehicles.computeIfAbsent(batchId, ignored -> new ArrayList<>()).add(observation.toDomain());
+            }
+            return vehicles;
         } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
