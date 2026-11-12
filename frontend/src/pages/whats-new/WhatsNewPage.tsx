@@ -1,21 +1,12 @@
 import { useEffect } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
-import { appHostFrom } from "@/shared/bridge/bridge";
 import { AccountLayout } from "@/shared/components/AccountLayout";
-import { paths } from "@/shared/routing/paths";
+import { MyPageBackLink } from "@/shared/components/MyPageBackLink";
 import { noteHeadingLabelOf } from "@/shared/whats-new/whatsNewCopy";
 import { WHATS_NEW_NOTES } from "@/shared/whats-new/whatsNewNotes";
 import { recordWhatsNewListOpened } from "@/shared/whats-new/whatsNewStorage";
 import * as styles from "./WhatsNewPage.css";
 
 export function WhatsNewPage() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const state: unknown = location.state;
-  const inApp = appHostFrom() !== null;
-  const hasMyPageEntry =
-    state !== null && typeof state === "object" && "fromMyPage" in state && state.fromMyPage === true;
-
   useEffect(() => {
     recordWhatsNewListOpened(WHATS_NEW_NOTES);
   }, []);
@@ -23,40 +14,7 @@ export function WhatsNewPage() {
   return (
     <AccountLayout contentClassName={styles.page}>
       <div className={styles.backTitle}>
-        <Link
-          className={styles.backIcon}
-          to={paths.mypage}
-          aria-label="마이페이지로 돌아가기"
-          replace={inApp}
-          onClick={(event) => {
-            if (
-              !inApp ||
-              !hasMyPageEntry ||
-              event.button !== 0 ||
-              event.metaKey ||
-              event.ctrlKey ||
-              event.shiftKey ||
-              event.altKey
-            )
-              return;
-            event.preventDefault();
-            void navigate(-1);
-          }}
-        >
-          <svg
-            width="17"
-            height="17"
-            viewBox="0 0 17 17"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M13.6 8.5H3.4M7.9 4 3.4 8.5 7.9 13" />
-          </svg>
-        </Link>
+        <MyPageBackLink className={styles.backIcon} />
         <h1 className={styles.title}>새 소식</h1>
       </div>
       {WHATS_NEW_NOTES.length === 0 ? (

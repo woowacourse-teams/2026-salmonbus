@@ -93,6 +93,7 @@ export default function App() {
   const documentLoad = useRef(initialDocumentLoad());
   const webReadyWait = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [historySwipeAllowed, setHistorySwipeAllowed] = useState(true);
 
   const showLoadFailed = () => {
     stopWaitingForWeb();
@@ -146,7 +147,7 @@ export default function App() {
     const message = bridgeMessageFrom(raw);
     if (message?.type === DOCUMENT_STARTED) {
       documentLoad.current = noteDocumentStarted(documentLoad.current);
-      queueNativeMapCommand((view) => view.setHistorySwipeAllowed(true));
+      if (NativeRouteMap !== null) setHistorySwipeAllowed(true);
       return;
     }
     if (message === null || !APP_CAPABILITIES.includes(message.type)) return;
@@ -164,7 +165,7 @@ export default function App() {
     notification: (message) => handleNotificationCommand(message),
     navigation: ({ payload }) => {
       const { allowed } = payload;
-      if (typeof allowed === 'boolean') queueNativeMapCommand((view) => view.setHistorySwipeAllowed(allowed));
+      if (typeof allowed === 'boolean') setHistorySwipeAllowed(allowed);
     },
   };
 
@@ -232,17 +233,12 @@ export default function App() {
   }
 
   function handleMapMessage(raw: string) {
-    queueNativeMapCommand((view) => view.handleMessage(raw));
-  }
-
-  function queueNativeMapCommand(command: (view: NativeRouteMapRef) => Promise<void>) {
     const epoch = documentEpoch.current;
     commandQueue.current = commandQueue.current
       .catch(() => undefined)
       .then(async () => {
-        const view = nativeMapRef.current;
-        if (epoch !== documentEpoch.current || view === null) return;
-        await command(view);
+        if (epoch !== documentEpoch.current) return;
+        await nativeMapRef.current?.handleMessage(raw);
       });
   }
 
@@ -287,6 +283,7 @@ export default function App() {
           <NativeRouteMap
             ref={nativeMapRef}
             style={styles.host}
+            historySwipeAllowed={historySwipeAllowed}
             onMapEvent={(event) => forwardMapEvent(event.nativeEvent.message)}
           >
             {webView}

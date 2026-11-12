@@ -1,13 +1,11 @@
 import { useLayoutEffect } from "react";
 import { matchPath, useLocation } from "react-router";
 import { sendToApp } from "@/shared/bridge/bridge";
-import { paths } from "@/shared/routing/paths";
-
-const tabRoots = [paths.routeSelect, paths.routeMap, paths.favorites, paths.mypage];
+import { bottomTabs } from "@/shared/routing/bottomTabs";
 
 export function AppHistorySwipe() {
   const { pathname } = useLocation();
-  const allowed = !tabRoots.some((root) => matchPath(root, pathname) !== null);
+  const allowed = !bottomTabs.some(({ path }) => matchPath(path, pathname) !== null);
 
   useLayoutEffect(() => {
     const sync = () => sendToApp("navigation.setHistorySwipe", { allowed });

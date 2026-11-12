@@ -60,6 +60,8 @@ Simulator에서는 아래 payload를 파일로 저장하고 `xcrun simctl push b
 
 iOS에서는 WebKit이 이전 화면을 캡처할 때 지도가 함께 찍히도록 네이티브 지도를 WebView의 scroll view 뒤에 둡니다. 스와이프 중에는 `MapNavigationSnapshot.swift`가 현재 지도의 캡처를 scroll view 안에 잠시 넣어 웹 UI와 함께 움직이게 합니다. 웹이 `navigation.setHistorySwipe`로 스와이프를 허용하고 해당 방향의 이력이 있을 때만 지도 가장자리 20pt를 WebView로 전달합니다. 하단 탭에서는 스와이프만 막고 이전 화면 캡처는 유지합니다. 전환 완료·취소·앱 백그라운드 진입 시 캡처를 정리합니다. 제스처 종료 후 WebKit이 scroll view를 원래 부모로 돌려주지 않더라도 1초가 지나면 실제 지도를 복구합니다.
 
+iOS 또는 WebKit이 업데이트되면 `testTabRootsBlockBackSwipeButTheirDetailsCanReturn`과 아래 `MapNavigationSnapshotChecks`를 실행합니다. 실기기에서 판정보드 스와이프를 끝까지 밀었을 때와 중간에 놓아 취소했을 때 지도가 제대로 보이는지도 확인합니다.
+
 `pnpm test`, `pnpm typecheck`, `pnpm lint`로 config plugin, bridge, TypeScript를 검사합니다. Swift와 SDK 연동은 Xcode Simulator build로 검사합니다. DEBUG build의 `[SalmonNativeMap]` 로그는 touch 대상, camera 이동 여부와 zoom, overlay 개수만 기록하며 클라이언트 키나 사용자 좌표를 기록하지 않습니다.
 
 `verification/NativeMapInteractionTests.swift`는 검색 화면에서 가상 3330 노선을 선택해 전체 경로가 상태바 안전 영역과 웹 시트 사이에 들어오는지, iOS 26 이상의 WebView 상단 효과가 지도를 흐리게 덮지 않는지, 지도 이동·시트 드래그·더블탭 확대가 동작하는지 확인합니다. 회전 후 핀치 확대와 가상 노선 재진입에서 방향 초기화 및 카메라 보존도 검증합니다. 저장소의 `scripts/native-map-fixture-api.cjs`를 실행하고 웹 개발 서버의 `API_PROXY_TARGET`을 그 서버로 지정합니다. 앱의 `EXPO_PUBLIC_WEB_URL`은 웹 개발 서버의 `/api/native-map-verification`으로 설정하고, `verification/setup-ui-tests.rb`로 만든 `NativeMapVerification` scheme을 전용 iOS Simulator에서 실행합니다.

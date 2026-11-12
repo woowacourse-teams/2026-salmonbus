@@ -5,13 +5,13 @@ import { Platform, type StyleProp, type ViewStyle } from 'react-native';
 export interface NativeRouteMapRef {
   handleMessage: (message: string) => Promise<void>;
   reset: () => Promise<void>;
-  setHistorySwipeAllowed: (allowed: boolean) => Promise<void>;
 }
 
 interface NativeRouteMapProps {
   ref?: Ref<NativeRouteMapRef>;
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
+  historySwipeAllowed: boolean;
   onMapEvent: (event: { nativeEvent: { message: string } }) => void;
 }
 

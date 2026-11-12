@@ -15,7 +15,7 @@ public final class SalmonNativeMapModule: Module {
         view.reset()
       }
 
-      AsyncFunction("setHistorySwipeAllowed") { (view: NativeRouteMapHostView, allowed: Bool) in
+      Prop("historySwipeAllowed") { (view: NativeRouteMapHostView, allowed: Bool) in
         view.setHistorySwipeAllowed(allowed)
       }
     }
