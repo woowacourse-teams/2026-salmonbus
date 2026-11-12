@@ -203,6 +203,11 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     applyLayout()
   }
 
+  public override func safeAreaInsetsDidChange() {
+    super.safeAreaInsetsDidChange()
+    if homeMounted { setNeedsLayout() }
+  }
+
   func setHistorySwipeAllowed(_ allowed: Bool) {
     navigationSnapshot.setHistorySwipeAllowed(allowed)
   }
@@ -684,7 +689,12 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     mapView.frame = CGRect(x: 0, y: -crop, width: rect.width, height: bufferHeight)
     mapView.logoAlign = .leftBottom
     let logoInset = min(rect.height, (layout.logoBottomInset ?? 0) * bounds.width / layout.viewport.width)
-    mapView.logoMargin = UIEdgeInsets(top: 0, left: 12, bottom: crop + logoInset + 12, right: 0)
+    // 탭 지도에서 웹이 보낸 시트 위치에 SDK의 하단 안전 영역이 더해지므로 한 번 빼 준다.
+    let sdkBottomInset = homeMounted ? mapView.safeAreaInsets.bottom : 0
+    // 탭 지도 로고와 시트 사이 간격을 웹 SDK의 7px에 맞춘다.
+    let logoBottomGap: CGFloat = homeMounted ? 7 : 12
+    let logoBottomMargin = max(0, crop + logoInset + logoBottomGap - sdkBottomInset)
+    mapView.logoMargin = UIEdgeInsets(top: 0, left: 12, bottom: logoBottomMargin, right: 0)
     mapView.accessibilityElementsHidden = layout.captureAll || rect.height < 1
     scheduleInitialFit()
     if homeMounted, !layout.transitioning {
