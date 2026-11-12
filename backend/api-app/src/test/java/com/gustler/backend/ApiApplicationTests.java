@@ -18,6 +18,12 @@ class ApiApplicationTests {
     }
 
     @Test
+    void API의_Flyway가_마이그레이션_연결_소켓_제한_콜백을_등록한다() {
+        assertThat(flyway.getConfiguration().getCallbacks()).anyMatch(callback ->
+            callback instanceof com.gustler.backend.migration.MigrationNetworkTimeoutCallback);
+    }
+
+    @Test
     void GBIS_키_없이_컨텍스트가_뜬다() {
     }
 
