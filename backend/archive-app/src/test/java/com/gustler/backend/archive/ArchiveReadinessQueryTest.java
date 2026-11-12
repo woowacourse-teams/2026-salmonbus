@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -83,6 +84,8 @@ class ArchiveReadinessQueryTest {
         versions.put("최근 축약 정산 시각", compact(RECENT, OLD));
         versions.put("최근 축약 도착 시각", compact(OLD, RECENT));
         versions.put("과거 축약 정산", compact(OLD, OLD));
+        versions.put("여러 배치 중 마지막 배치에만 최근 정산", severalBatches(RECENT));
+        versions.put("여러 배치 모두 과거 정산", severalBatches(OLD));
 
         // when
         Map<String, String> readiness = readiness(versions);
@@ -96,7 +99,9 @@ class ArchiveReadinessQueryTest {
             Map.entry("도착 시각 없는 과거 정산", "READY"),
             Map.entry("최근 축약 정산 시각", "RECENT_CHILD_RECORD"),
             Map.entry("최근 축약 도착 시각", "RECENT_CHILD_RECORD"),
-            Map.entry("과거 축약 정산", "READY"));
+            Map.entry("과거 축약 정산", "READY"),
+            Map.entry("여러 배치 중 마지막 배치에만 최근 정산", "RECENT_CHILD_RECORD"),
+            Map.entry("여러 배치 모두 과거 정산", "READY"));
         assertSamePrevious(versions, readiness);
     }
 
@@ -129,6 +134,9 @@ class ArchiveReadinessQueryTest {
         Map<String, Long> versions = new LinkedHashMap<>();
         versions.put("응답 없는 배치의 예약 시각이 그날", recentOn(OLD, null));
         versions.put("응답 없는 배치의 예약 시각이 다음날", recentOn("2026-11-08T03:00Z", null));
+        versions.put("응답 없는 배치의 예약 시각이 그날 0시 정각", recentOn("2026-11-06T15:00Z", null));
+        versions.put("응답 없는 배치의 예약 시각이 다음날 0시 정각", recentOn("2026-11-07T15:00Z", null));
+        versions.put("응답 없는 배치의 예약 시각이 전날 마지막 분", recentOn("2026-11-06T14:59Z", null));
         versions.put("예약은 그날, 응답은 다음날 0시", recentOn("2026-11-07T14:59Z", "2026-11-07T15:00:01Z"));
         versions.put("예약은 전날, 응답은 그날 0시 정각", recentOn("2026-11-06T14:59Z", "2026-11-06T15:00Z"));
         versions.put("응답이 다음날 0시 정각", recentOn("2026-11-07T14:00Z", "2026-11-07T15:00Z"));
@@ -141,6 +149,9 @@ class ArchiveReadinessQueryTest {
         assertThat(readiness).containsExactly(
             Map.entry("응답 없는 배치의 예약 시각이 그날", "RECENT_CHILD_RECORD"),
             Map.entry("응답 없는 배치의 예약 시각이 다음날", "READY"),
+            Map.entry("응답 없는 배치의 예약 시각이 그날 0시 정각", "RECENT_CHILD_RECORD"),
+            Map.entry("응답 없는 배치의 예약 시각이 다음날 0시 정각", "READY"),
+            Map.entry("응답 없는 배치의 예약 시각이 전날 마지막 분", "READY"),
             Map.entry("예약은 그날, 응답은 다음날 0시", "READY"),
             Map.entry("예약은 전날, 응답은 그날 0시 정각", "RECENT_CHILD_RECORD"),
             Map.entry("응답이 다음날 0시 정각", "READY"),
@@ -159,6 +170,13 @@ class ArchiveReadinessQueryTest {
         versions.put("원본 삭제한 보관의 최근 정산", alighting("PURGED", RECENT, OLD));
         versions.put("원본 삭제한 보관의 최근 사건", alighting("PURGED", OLD, RECENT));
         versions.put("원본이 남은 보관의 최근 정산", alighting("LIVE", RECENT, RECENT));
+        versions.put("과거 원본 옆 원본 삭제한 보관에만 최근 정산", resultAndArchive("PURGED", RECENT));
+        versions.put("과거 원본 옆 원본이 남은 보관에만 최근 정산", resultAndArchive("LIVE", RECENT));
+        versions.put("과거 원본 옆 원본 삭제한 과거 보관", resultAndArchive("PURGED", OLD));
+        versions.put("여러 배치 중 마지막 배치의 원본 삭제한 보관에만 최근 정산", archiveInLastBatch("PURGED"));
+        versions.put("여러 배치 중 마지막 배치의 원본이 남은 보관에만 최근 정산", archiveInLastBatch("LIVE"));
+        versions.put("다음날 배치의 원본 삭제한 보관에만 최근 정산", archiveOn("2026-11-08T03:00Z"));
+        versions.put("전날 배치의 원본 삭제한 보관에만 최근 정산", archiveOn("2026-11-06T03:00Z"));
 
         // when
         Map<String, String> readiness = readiness(versions);
@@ -171,7 +189,14 @@ class ArchiveReadinessQueryTest {
             Map.entry("사건 시각 없는 과거 결과", "READY"),
             Map.entry("원본 삭제한 보관의 최근 정산", "RECENT_CHILD_RECORD"),
             Map.entry("원본 삭제한 보관의 최근 사건", "RECENT_CHILD_RECORD"),
-            Map.entry("원본이 남은 보관의 최근 정산", "READY"));
+            Map.entry("원본이 남은 보관의 최근 정산", "READY"),
+            Map.entry("과거 원본 옆 원본 삭제한 보관에만 최근 정산", "RECENT_CHILD_RECORD"),
+            Map.entry("과거 원본 옆 원본이 남은 보관에만 최근 정산", "READY"),
+            Map.entry("과거 원본 옆 원본 삭제한 과거 보관", "READY"),
+            Map.entry("여러 배치 중 마지막 배치의 원본 삭제한 보관에만 최근 정산", "RECENT_CHILD_RECORD"),
+            Map.entry("여러 배치 중 마지막 배치의 원본이 남은 보관에만 최근 정산", "READY"),
+            Map.entry("다음날 배치의 원본 삭제한 보관에만 최근 정산", "READY"),
+            Map.entry("전날 배치의 원본 삭제한 보관에만 최근 정산", "READY"));
         assertSamePrevious(versions, readiness);
     }
 
@@ -287,6 +312,18 @@ class ArchiveReadinessQueryTest {
         return version;
     }
 
+    private long severalBatches(String lastScoredAt) {
+        final long version = version();
+        for (String at : List.of("2026-11-07T01:00Z", "2026-11-07T02:00Z", OLD)) {
+            final long source = forecast(observation(version, batch(version, at, at)), OLD);
+            jdbc.sql("""
+                INSERT INTO forecast_evaluation_result(vehicle_observation_id,target_stop_order,route_version_id,
+                    scoring_state,scored_at) VALUES(?,2,?,'SKIPPED',CAST(? AS timestamptz))
+                """).params(source, version, at.equals(OLD) ? lastScoredAt : OLD).update();
+        }
+        return version;
+    }
+
     private long compact(String scoredAt, String arrivedAt) {
         final long version = version();
         final long source = forecast(observation(version, batch(version, OLD, OLD)), OLD);
@@ -303,21 +340,60 @@ class ArchiveReadinessQueryTest {
         final long version = version();
         final long source = forecast(observation(version, batch(version, OLD, OLD)), OLD);
         if (storage.equals("result")) {
-            jdbc.sql("""
-                INSERT INTO alighting_forecast_evaluation_result(vehicle_observation_id,target_stop_order,target_kind,
-                    label_version,route_version_id,scoring_state,label_value,pre_observation_id,quality_revision,
-                    scored_at,event_at)
-                VALUES(?,2,'AFTER_ALIGHTING_ESTIMATE','label-v1',?,'SETTLED',12.5,?,1,CAST(? AS timestamptz),
-                    CAST(? AS timestamptz))
-                """).params(source, version, source, scoredAt, eventAt).update();
+            alightingResult(version, source, scoredAt, eventAt);
             return version;
         }
+        alightingArchive(version, source, storage, scoredAt, eventAt);
+        return version;
+    }
+
+    private long resultAndArchive(String storage, String archiveScoredAt) {
+        final long version = version();
+        final long source = forecast(observation(version, batch(version, OLD, OLD)), OLD);
+        alightingResult(version, source, OLD, OLD);
+        alightingArchive(version, source, storage, archiveScoredAt, OLD);
+        return version;
+    }
+
+    private long archiveInLastBatch(String storage) {
+        final long version = version();
+        for (String at : List.of("2026-11-07T01:00Z", "2026-11-07T02:00Z", OLD)) {
+            final long source = forecast(observation(version, batch(version, at, at)), OLD);
+            alightingResult(version, source, OLD, OLD);
+            alightingArchive(version, source, storage, at.equals(OLD) ? RECENT : OLD, OLD);
+        }
+        return version;
+    }
+
+    private long archiveOn(String batchAt) {
+        final long version = version();
+        final long source = forecast(observation(version, batch(version, batchAt, batchAt)), OLD);
+        alightingArchive(version, source, "PURGED", RECENT, OLD);
+        return version;
+    }
+
+    private void alightingResult(final long version, final long source, String scoredAt, String eventAt) {
+        jdbc.sql("""
+            INSERT INTO alighting_forecast_evaluation_result(vehicle_observation_id,target_stop_order,target_kind,
+                label_version,route_version_id,scoring_state,label_value,pre_observation_id,quality_revision,
+                scored_at,event_at)
+            VALUES(?,2,'AFTER_ALIGHTING_ESTIMATE','label-v1',?,'SETTLED',12.5,?,1,CAST(? AS timestamptz),
+                CAST(? AS timestamptz))
+            """).params(source, version, source, scoredAt, eventAt).update();
+    }
+
+    private void alightingArchive(
+        final long version,
+        final long source,
+        String storage,
+        String scoredAt,
+        String eventAt
+    ) {
         jdbc.sql("""
             INSERT INTO alighting_evaluation_archive(vehicle_observation_id,target_stop_order,target_kind,label_version,
                 quality_revision,route_version_id,label_value,scoring_state,event_at,scored_at,object_hash,storage_state)
             VALUES(?,2,'AFTER_ALIGHTING_ESTIMATE','label-v1',1,?,12.5,'SETTLED',CAST(? AS timestamptz),
                 CAST(? AS timestamptz),repeat('a',64),?)
             """).params(source, version, eventAt, scoredAt, storage).update();
-        return version;
     }
 }
