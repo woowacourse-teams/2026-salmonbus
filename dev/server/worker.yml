@@ -38,6 +38,7 @@ forecast:
   enabled: true
   interval: 30s
   settlement-interval: 60s
+  compact-settlement-write: true
 
 model:
   bundle:
