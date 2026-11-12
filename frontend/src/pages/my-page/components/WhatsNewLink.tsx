@@ -8,7 +8,7 @@ interface WhatsNewLinkProps {
 
 export function WhatsNewLink({ className }: WhatsNewLinkProps) {
   return (
-    <Link className={`${menuRow} ${className ?? ""}`} to={paths.whatsNew}>
+    <Link className={`${menuRow} ${className ?? ""}`} to={paths.whatsNew} state={{ fromMyPage: true }}>
       새 소식<span aria-hidden="true">›</span>
     </Link>
   );

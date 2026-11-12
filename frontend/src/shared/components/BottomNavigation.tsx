@@ -1,11 +1,13 @@
 import type { MouseEvent, Ref } from "react";
 import { NavLink, useLocation } from "react-router";
+import { appHostFrom } from "@/shared/bridge/bridge";
 import { paths } from "@/shared/routing/paths";
 import { TabPageGlyph } from "./TabPageGlyph";
 import * as styles from "./BottomNavigation.css";
 
 export function BottomNavigation({ ref, onActiveTabPress }: { ref?: Ref<HTMLElement>; onActiveTabPress?: () => void }) {
   const { pathname } = useLocation();
+  const tabNavigation = appHostFrom() === null ? {} : { replace: true };
   const activeTab =
     pathname === "/"
       ? "home"
@@ -34,7 +36,7 @@ export function BottomNavigation({ ref, onActiveTabPress }: { ref?: Ref<HTMLElem
   return (
     <nav ref={ref} className={styles.navigation} aria-label="주요 메뉴" data-active={activeTab} data-native-map-hit>
       <span className={styles.indicator} data-tab-indicator="" aria-hidden="true" />
-      <NavLink to="/" end className={styles.tab} aria-label="홈" onClick={handleTabClick}>
+      <NavLink to="/" end {...tabNavigation} className={styles.tab} aria-label="홈" onClick={handleTabClick}>
         <svg
           width="20"
           height="20"
@@ -49,13 +51,31 @@ export function BottomNavigation({ ref, onActiveTabPress }: { ref?: Ref<HTMLElem
           <path data-tab-fill="" fillRule="evenodd" d="m3 10 9-7 9 7v10H3Z M9 20v-7h6v7Z" />
         </svg>
       </NavLink>
-      <NavLink to={paths.routeMap} className={styles.tab} aria-label="노선도" onClick={handleTabClick}>
+      <NavLink
+        to={paths.routeMap}
+        {...tabNavigation}
+        className={styles.tab}
+        aria-label="노선도"
+        onClick={handleTabClick}
+      >
         <TabPageGlyph page="routes" />
       </NavLink>
-      <NavLink to={paths.favorites} className={styles.tab} aria-label="즐겨찾기" onClick={handleTabClick}>
+      <NavLink
+        to={paths.favorites}
+        {...tabNavigation}
+        className={styles.tab}
+        aria-label="즐겨찾기"
+        onClick={handleTabClick}
+      >
         <TabPageGlyph page="favorites" />
       </NavLink>
-      <NavLink to={paths.mypage} className={styles.tab} aria-label="마이페이지" onClick={handleTabClick}>
+      <NavLink
+        to={paths.mypage}
+        {...tabNavigation}
+        className={styles.tab}
+        aria-label="마이페이지"
+        onClick={handleTabClick}
+      >
         <TabPageGlyph page="profile" />
       </NavLink>
     </nav>

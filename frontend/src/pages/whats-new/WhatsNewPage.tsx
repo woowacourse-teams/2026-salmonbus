@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Link } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
+import { appHostFrom } from "@/shared/bridge/bridge";
 import { AccountLayout } from "@/shared/components/AccountLayout";
 import { paths } from "@/shared/routing/paths";
 import { noteHeadingLabelOf } from "@/shared/whats-new/whatsNewCopy";
@@ -8,6 +9,13 @@ import { recordWhatsNewListOpened } from "@/shared/whats-new/whatsNewStorage";
 import * as styles from "./WhatsNewPage.css";
 
 export function WhatsNewPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const state: unknown = location.state;
+  const inApp = appHostFrom() !== null;
+  const hasMyPageEntry =
+    state !== null && typeof state === "object" && "fromMyPage" in state && state.fromMyPage === true;
+
   useEffect(() => {
     recordWhatsNewListOpened(WHATS_NEW_NOTES);
   }, []);
@@ -15,7 +23,26 @@ export function WhatsNewPage() {
   return (
     <AccountLayout contentClassName={styles.page}>
       <div className={styles.backTitle}>
-        <Link className={styles.backIcon} to={paths.mypage} aria-label="마이페이지로 돌아가기">
+        <Link
+          className={styles.backIcon}
+          to={paths.mypage}
+          aria-label="마이페이지로 돌아가기"
+          replace={inApp}
+          onClick={(event) => {
+            if (
+              !inApp ||
+              !hasMyPageEntry ||
+              event.button !== 0 ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            )
+              return;
+            event.preventDefault();
+            void navigate(-1);
+          }}
+        >
           <svg
             width="17"
             height="17"

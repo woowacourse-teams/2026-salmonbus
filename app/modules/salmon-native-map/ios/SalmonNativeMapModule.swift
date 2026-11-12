@@ -14,6 +14,10 @@ public final class SalmonNativeMapModule: Module {
       AsyncFunction("reset") { (view: NativeRouteMapHostView) in
         view.reset()
       }
+
+      AsyncFunction("setHistorySwipeAllowed") { (view: NativeRouteMapHostView, allowed: Bool) in
+        view.setHistorySwipeAllowed(allowed)
+      }
     }
   }
 }

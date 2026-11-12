@@ -22,6 +22,7 @@ private final class WebOverlayGate: UIView {
   var mapRect = CGRect.zero
   var webRects: [CGRect] = []
   weak var navigationSnapshot: MapNavigationSnapshot?
+  weak var mapContainer: UIView?
 
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
     guard !isHidden, alpha >= 0.01, isUserInteractionEnabled, bounds.contains(point) else { return nil }
@@ -30,7 +31,9 @@ private final class WebOverlayGate: UIView {
     #if DEBUG
     if event?.type == .touches { NSLog("[SalmonNativeMap] hit target=%@", web ? "web" : "map") }
     #endif
-    return web ? super.hitTest(point, with: event) : nil
+    if web { return super.hitTest(point, with: event) }
+    guard let mapContainer else { return nil }
+    return mapContainer.hitTest(convert(point, to: mapContainer), with: event)
   }
 }
 
@@ -146,6 +149,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     addSubview(mapContainer)
     mapContainer.addSubview(mapView)
     addSubview(gate)
+    gate.mapContainer = mapContainer
     NotificationCenter.default.addObserver(self, selector: #selector(enteredBackground),
                                            name: UIApplication.didEnterBackgroundNotification, object: nil)
     NotificationCenter.default.addObserver(self, selector: #selector(becameActive),
@@ -161,7 +165,10 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   public override func unmountChildComponentView(_ childComponentView: UIView, index: Int) {
-    navigationSnapshot.finish()
+    navigationSnapshot.detachWebView()
+    let mapFrame = mapContainer.convert(mapContainer.bounds, to: self)
+    insertSubview(mapContainer, belowSubview: gate)
+    mapContainer.frame = mapFrame
     childComponentView.removeFromSuperview()
   }
 
@@ -194,6 +201,10 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     navigationSnapshot.attachWebView(in: gate)
     gate.navigationSnapshot = navigationSnapshot
     applyLayout()
+  }
+
+  func setHistorySwipeAllowed(_ allowed: Bool) {
+    navigationSnapshot.setHistorySwipeAllowed(allowed)
   }
 
   public func handleMessage(_ message: String) {
@@ -665,7 +676,9 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     gate.mapRect = rect
     gate.webRects = layout.webRects.map { layout.nativeRect($0, in: bounds) }
     gate.captureAll = layout.captureAll || layout.transitioning || !readySent || failed
-    mapContainer.frame = rect.isNull ? .zero : rect
+    if let parent = mapContainer.superview {
+      mapContainer.frame = rect.isNull ? .zero : convert(rect, to: parent)
+    }
     let bufferHeight = max(bounds.height, rect.height)
     let crop = max(0, (bufferHeight - rect.height) / 2)
     mapView.frame = CGRect(x: 0, y: -crop, width: rect.width, height: bufferHeight)

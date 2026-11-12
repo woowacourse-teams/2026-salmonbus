@@ -66,6 +66,7 @@ const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
   settings: SETTINGS_CAPABILITIES,
   auth: AUTH_CAPABILITIES,
   notification: NOTIFICATION_CAPABILITIES,
+  navigation: NativeRouteMap !== null ? ['navigation.setHistorySwipe'] : [],
 });
 type BridgeDomain = keyof typeof CAPABILITIES_BY_DOMAIN;
 const APP_CAPABILITIES: readonly string[] = Object.values(CAPABILITIES_BY_DOMAIN).flat();
@@ -145,6 +146,7 @@ export default function App() {
     const message = bridgeMessageFrom(raw);
     if (message?.type === DOCUMENT_STARTED) {
       documentLoad.current = noteDocumentStarted(documentLoad.current);
+      queueNativeMapCommand((view) => view.setHistorySwipeAllowed(true));
       return;
     }
     if (message === null || !APP_CAPABILITIES.includes(message.type)) return;
@@ -160,6 +162,10 @@ export default function App() {
     },
     auth: (message) => handleSignIn(message),
     notification: (message) => handleNotificationCommand(message),
+    navigation: ({ payload }) => {
+      const { allowed } = payload;
+      if (typeof allowed === 'boolean') queueNativeMapCommand((view) => view.setHistorySwipeAllowed(allowed));
+    },
   };
 
   function handleSignIn(message: BridgeMessage) {
@@ -226,12 +232,17 @@ export default function App() {
   }
 
   function handleMapMessage(raw: string) {
+    queueNativeMapCommand((view) => view.handleMessage(raw));
+  }
+
+  function queueNativeMapCommand(command: (view: NativeRouteMapRef) => Promise<void>) {
     const epoch = documentEpoch.current;
     commandQueue.current = commandQueue.current
       .catch(() => undefined)
       .then(async () => {
-        if (epoch !== documentEpoch.current) return;
-        await nativeMapRef.current?.handleMessage(raw);
+        const view = nativeMapRef.current;
+        if (epoch !== documentEpoch.current || view === null) return;
+        await command(view);
       });
   }
 
