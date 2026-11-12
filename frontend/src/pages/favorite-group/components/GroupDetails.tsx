@@ -17,8 +17,8 @@ import { EmptyFavoriteGroup } from "@/shared/components/EmptyFavoriteGroup";
 import { favoriteStopLabelOf, sameFavorite, FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
 import * as formStyles from "@/shared/styles/form.css";
 import { isNativeNotificationSupported } from "@/shared/notification/nativeNotification";
-import { useNotificationSettings } from "../hooks/useNotificationSettings";
-import { NotificationRow } from "./NotificationRow";
+import { useNotificationSettings } from "@/shared/hooks/useNotificationSettings";
+import { NotificationRow } from "@/shared/components/notification-row/NotificationRow";
 import * as styles from "./GroupDetails.css";
 
 interface GroupDetailsProps {
@@ -98,6 +98,7 @@ export function GroupDetails({ group, lastGroup }: GroupDetailsProps) {
                     initialSetting={
                       notificationSettings.settings.find((setting) => sameFavorite(setting, favorite)) ?? null
                     }
+                    onSettingChange={(setting) => notificationSettings.replaceSetting(favorite, setting)}
                   />
                 )}
               </li>

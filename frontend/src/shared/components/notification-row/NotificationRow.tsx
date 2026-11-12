@@ -25,9 +25,10 @@ interface NotificationRowProps {
   target: FavoriteTarget;
   stopLabel: string;
   initialSetting: NotificationSetting | null;
+  onSettingChange: (setting: NotificationSetting | null) => void;
 }
 
-export function NotificationRow({ target, stopLabel, initialSetting }: NotificationRowProps) {
+export function NotificationRow({ target, stopLabel, initialSetting, onSettingChange }: NotificationRowProps) {
   const [state, setState] = useState(() => notificationRowStateOf(initialSetting));
   const playResultHaptic = useResultHaptic();
   const permissionAsk = useRef<AbortController | null>(null);
@@ -35,6 +36,8 @@ export function NotificationRow({ target, stopLabel, initialSetting }: Notificat
   function apply(event: NotificationRowEvent) {
     setState((current) => nextNotificationRowState(current, event));
     if (event.type === "saved" || event.type === "failed") playResultHaptic(event.type === "saved");
+    if (event.type === "saved") onSettingChange(event.setting);
+    if (event.type === "removed") onSettingChange(null);
   }
 
   function save(schedule: NotificationSchedule) {
@@ -133,6 +136,14 @@ export function NotificationRow({ target, stopLabel, initialSetting }: Notificat
           onSave={save}
         />
       )}
+    </div>
+  );
+}
+
+export function NotificationRowPlaceholder() {
+  return (
+    <div className={styles.row} aria-hidden="true">
+      <div className={styles.line} />
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { DirectionLabel } from "@/shared/components/DirectionLabel";
 import { stopsAwayLabelOf } from "@/shared/utils/stopsAwayLabelOf";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useOutletContext } from "react-router";
-import type { FavoriteTarget, HomeFavorite } from "@/shared/api/favorites.types";
+import type { HomeFavorite, SavedFavorite } from "@/shared/api/favorites.types";
 import { latestSuccessOf } from "@/shared/api/polledResource";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
@@ -14,12 +14,15 @@ import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
 import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, favoritePath, paths } from "@/shared/routing/paths";
 import { useFavorites } from "@/shared/hooks/useFavorites";
+import { useNotificationSettings, type NotificationSettingsState } from "@/shared/hooks/useNotificationSettings";
+import { isNativeNotificationSupported } from "@/shared/notification/nativeNotification";
 import { playHaptic } from "@/shared/haptic/haptic";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { LoadError } from "@/shared/components/LoadError";
-import { FAVORITES_LOAD_FAILURE_TITLE, MAX_FAVORITES_PER_GROUP } from "@/shared/utils/favoritePolicy";
+import { FAVORITES_LOAD_FAILURE_TITLE, MAX_FAVORITES_PER_GROUP, sameFavorite } from "@/shared/utils/favoritePolicy";
 import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
+import { NotificationRow, NotificationRowPlaceholder } from "@/shared/components/notification-row/NotificationRow";
 import { Notice } from "@/shared/components/Notice";
 import starOutline from "@/shared/assets/icons/star-outline.svg";
 import salmong from "@/shared/assets/images/salmong-logo/salmong-proud.png";
@@ -42,6 +45,7 @@ export function HomeFavorites() {
     summary: { resource: summary, requestState: summaryRequestState },
     retrySummary: retry,
   } = useOutletContext<FavoriteGroupContext>();
+  const notificationSettings = useNotificationSettings(isNativeNotificationSupported());
   const groupTabs = useRef<HTMLDivElement>(null);
   const [ordering, setOrdering] = useState(false);
   useLayoutEffect(() => {
@@ -270,7 +274,8 @@ export function HomeFavorites() {
                   key={favorite.id}
                   favorite={favorite}
                   displayStopName={nameLabels[favorite.id] ?? favorite.stop.name ?? ""}
-                  savedDirection={group?.favorites.find((candidate) => candidate.id === favorite.id)?.direction ?? null}
+                  savedFavorite={group?.favorites.find((candidate) => candidate.id === favorite.id) ?? null}
+                  notificationSettings={notificationSettings}
                   elapsed={Math.max(0, (now - (latest?.receivedAt ?? now)) / 1000)}
                   onRetry={retry}
                 />
@@ -318,12 +323,20 @@ function FavoriteCardsSkeleton({ count }: { count: number }) {
 interface FavoriteCardProps {
   favorite: HomeFavorite;
   displayStopName: string;
-  savedDirection: FavoriteTarget["direction"] | null;
+  savedFavorite: SavedFavorite | null;
+  notificationSettings: NotificationSettingsState;
   elapsed: number;
   onRetry: () => void;
 }
 
-function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRetry }: FavoriteCardProps) {
+function FavoriteCard({
+  favorite,
+  displayStopName,
+  savedFavorite,
+  notificationSettings,
+  elapsed,
+  onRetry,
+}: FavoriteCardProps) {
   if (favorite.status === "ERROR") {
     return (
       <li className={homeStyles.unavailable}>
@@ -332,7 +345,7 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
       </li>
     );
   }
-  const direction = favorite.stop.direction ?? savedDirection;
+  const direction = favorite.stop.direction ?? savedFavorite?.direction ?? null;
   if (!favorite.route.displayName || !favorite.stop.name) {
     return (
       <li className={homeStyles.card}>
@@ -418,6 +431,22 @@ function FavoriteCard({ favorite, displayStopName, savedDirection, elapsed, onRe
           )}
         </div>
       </Link>
+      {savedFavorite && (notificationSettings.status === "loading" || notificationSettings.status === "ready") && (
+        <div className={homeStyles.notification}>
+          {notificationSettings.status === "ready" ? (
+            <NotificationRow
+              target={savedFavorite}
+              stopLabel={favorite.stop.name}
+              initialSetting={
+                notificationSettings.settings.find((setting) => sameFavorite(setting, savedFavorite)) ?? null
+              }
+              onSettingChange={(setting) => notificationSettings.replaceSetting(savedFavorite, setting)}
+            />
+          ) : (
+            <NotificationRowPlaceholder />
+          )}
+        </div>
+      )}
     </li>
   );
 }

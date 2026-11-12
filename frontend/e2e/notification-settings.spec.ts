@@ -296,6 +296,100 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
   });
 });
 
+test.describe("즐겨찾기 탭 카드의 알림 줄", () => {
+  const commuteGroupId = "10000000-0000-4000-8000-000000000003";
+  const weekendGroupId = "10000000-0000-4000-8000-000000000004";
+  let stopName: string;
+  let commuteStopName: string;
+  let target: { routeId: string; stopId: string; direction: "UP" | "DOWN" };
+
+  test.beforeEach(({ api, favorites }) => {
+    const stop = api.data.watch.stops.find((candidate) => candidate.direction === "UP" && candidate.boardingAllowed)!;
+    const commuteStop = api.data.watch.stops.find(
+      (candidate) => candidate.direction === "DOWN" && candidate.boardingAllowed,
+    )!;
+    stopName = stop.name;
+    commuteStopName = commuteStop.name;
+    target = { routeId, stopId: stop.stopId, direction: stop.direction };
+    favorites.groups[0]!.favorites = [storedFavorite(target)];
+    favorites.groups.push(
+      {
+        id: commuteGroupId,
+        name: "통학",
+        favorites: [storedFavorite({ routeId, stopId: commuteStop.stopId, direction: commuteStop.direction }, 4)],
+      },
+      { id: weekendGroupId, name: "주말", favorites: [storedFavorite(target, 5)] },
+    );
+  });
+
+  const cardSwitch = (page: Page, group: string, stop: string) =>
+    page.getByRole("tabpanel", { name: group, exact: true }).getByRole("switch", { name: `${stop} 출발 알림` });
+
+  test("앱에서 카드의 알림을 켜면 저장하고, 다른 그룹 탭에 다녀와도 같은 정류장 카드는 켜진 채로 보인다", async ({
+    page,
+    notifications,
+  }) => {
+    await openInApp(page, { permissionAnswer: "granted" });
+    await page.goto("/favorites");
+    await expect(cardSwitch(page, "즐겨찾기", stopName)).not.toBeChecked();
+    if (captureEnabled) await page.screenshot({ path: test.info().outputPath("favorite-card-notification-off.png") });
+    const sheet = page.getByRole("dialog", { name: "출발 알림" });
+
+    await test.step("스위치를 누르면 판정 보드로 가지 않고 알림 창을 연다", async () => {
+      await cardSwitch(page, "즐겨찾기", stopName).click();
+      await expect(sheet).toBeVisible();
+      await expect(page).toHaveURL("/favorites");
+    });
+
+    await test.step("저장하고 권한을 허용하면 PUT을 보내고 스위치가 켜진다", async () => {
+      await sheet.getByRole("button", { name: "저장", exact: true }).click();
+      await expect(sheet).toBeHidden();
+      await expect(cardSwitch(page, "즐겨찾기", stopName)).toBeChecked();
+      if (captureEnabled) await page.screenshot({ path: test.info().outputPath("favorite-card-notification-on.png") });
+      expect(notifications.requests.filter((request) => request.path === "/api/me/notification-settings")).toEqual([
+        { path: "/api/me/notification-settings", method: "GET", body: null },
+        {
+          path: "/api/me/notification-settings",
+          method: "PUT",
+          body: { ...target, time: "07:30", weekdays: ["MON", "TUE", "WED", "THU", "FRI"] },
+        },
+      ]);
+    });
+
+    await test.step("다른 정류장만 있는 그룹의 카드는 꺼져 있다", async () => {
+      await page.getByRole("tab", { name: "통학", exact: true }).click();
+      await expect(cardSwitch(page, "통학", commuteStopName)).not.toBeChecked();
+    });
+
+    await test.step("처음 그룹으로 돌아오면 카드가 켜진 채로 보인다", async () => {
+      await page.getByRole("tab", { name: "즐겨찾기", exact: true }).click();
+      await expect(cardSwitch(page, "즐겨찾기", stopName)).toBeChecked();
+      await expect(page.getByRole("button", { name: "평일 07:30", exact: true })).toBeVisible();
+    });
+
+    await test.step("같은 정류장을 담은 다른 그룹의 카드도 켜져 있다", async () => {
+      await page.getByRole("tab", { name: "주말", exact: true }).click();
+      await expect(cardSwitch(page, "주말", stopName)).toBeChecked();
+    });
+
+    await test.step("카드에서 끄고 처음 그룹으로 돌아오면 꺼진 채로 보인다", async () => {
+      await cardSwitch(page, "주말", stopName).click();
+      await expect(cardSwitch(page, "주말", stopName)).not.toBeChecked();
+      await page.getByRole("tab", { name: "즐겨찾기", exact: true }).click();
+      await expect(cardSwitch(page, "즐겨찾기", stopName)).not.toBeChecked();
+      expect(notifications.settings).toEqual([]);
+    });
+  });
+
+  test("브라우저에서는 카드에 알림 줄이 없고 알림 설정을 읽지 않는다", async ({ page, notifications }) => {
+    notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
+    await page.goto("/favorites");
+    await expect(page.getByRole("tabpanel").getByText(stopName, { exact: true })).toBeVisible();
+    await expect(page.getByRole("switch")).toHaveCount(0);
+    expect(notifications.requests).toEqual([]);
+  });
+});
+
 const REGISTER_PATH = "/api/me/push-devices";
 const UNREGISTER_PATH = "/api/me/push-devices/unregister";
 
