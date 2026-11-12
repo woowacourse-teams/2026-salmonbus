@@ -160,6 +160,7 @@ class JdbcAlightingAwareForecastEvaluationTest {
             jdbc.sql("DELETE FROM observation_batch WHERE route_version_id=?").param(version).update();
             jdbc.sql("DELETE FROM route_stop WHERE route_version_id=?").param(version).update();
             jdbc.sql("DELETE FROM route_version WHERE id=?").param(version).update();
+            jdbc.sql("DELETE FROM alighting_settlement_generation WHERE route_id=?").param(route).update();
             jdbc.sql("DELETE FROM route WHERE id=?").param(route).update();
             jdbc.sql("DELETE FROM model_deployment WHERE id=?").param(deployment).update();
         });
@@ -1417,6 +1418,41 @@ class JdbcAlightingAwareForecastEvaluationTest {
         assertThat(confirmed.get()).isTrue();
         assertThat(rejections(meters)).isEmpty();
         assertResultMatchesOracle(source, START.plusSeconds(7200));
+    }
+
+    @Test
+    void 정산_커밋이_노선_행을_잡고_있어도_세대_행이_지워진_지난_날짜의_관측_삭제는_기다리지_않는다() throws Exception {
+        // given
+        confirmInputs();
+        jdbc.sql("DELETE FROM alighting_settlement_generation WHERE route_id=?").param(route).update();
+        var holding = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var purge = new TransactionTemplate(transactions);
+        Integer deleted;
+        try (ExecutorService settlement = Executors.newSingleThreadExecutor()) {
+            Future<?> locked = settlement.submit(() -> tx.executeWithoutResult(status -> {
+                quality.lock(version);
+                holding.countDown();
+                await(release);
+            }));
+            try {
+                assertThat(holding.await(5, TimeUnit.SECONDS)).isTrue();
+
+                // when
+                deleted = purge.execute(status -> {
+                    jdbc.sql("SET LOCAL lock_timeout='200ms'").update();
+                    return jdbc.sql("DELETE FROM vehicle_observation WHERE id=?").param(post).update();
+                });
+            } finally {
+                release.countDown();
+            }
+            locked.get(5, TimeUnit.SECONDS);
+        }
+
+        // then
+        assertThat(deleted).isOne();
+        assertThat(jdbc.sql("SELECT generation FROM alighting_settlement_generation WHERE route_id=? AND source_date=?")
+            .params(route, date()).query(Long.class).single()).isOne();
     }
 
     @Test

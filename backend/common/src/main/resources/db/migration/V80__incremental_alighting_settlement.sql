@@ -2,7 +2,7 @@ SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='120s';
 
 CREATE TABLE alighting_settlement_generation (
-    route_id bigint NOT NULL REFERENCES route(id) ON DELETE CASCADE,
+    route_id bigint NOT NULL,
     source_date date NOT NULL,
     generation bigint NOT NULL DEFAULT 0,
     PRIMARY KEY(route_id,source_date)

@@ -43,6 +43,10 @@ import tools.jackson.databind.json.JsonMapper;
  * {@code FOR UPDATE SKIP LOCKED}로 비교한다. 세대가 바뀌었거나 수집 쪽 확정이 그 행을 잡고 있으면 그 트랜잭션을 버리고
  * 다음 회차에 다시 읽는다. 정산은 세대 행을 기다리지 않고 커밋 직전에만 잡으므로 수집 확정이 정산 트랜잭션을 기다리지 않는다.
  *
+ * <p>세대 행은 노선 외래 키 없이 노선·날짜 값으로만 찾는다. 그래서 수집 확정이나 이관 삭제의 트리거가 세대 행을 새로 넣어도
+ * 노선 행을 잠그지 않고, 노선 행을 잡은 정산 결과 커밋·예보 커밋을 기다리지 않는다. 노선이 지워져 남은 행은 그 노선의 근거가 없어
+ * 판정에 쓰이지 않고, 지난 날짜가 되면 정리가 지운다.
+ *
  * <p>새로 읽은 배치나 새 근거가 없으면 근거 행을 다시 쓰지 않는다. 입력 세대만 바뀌었으면 상태는 두고 세대·범위·다음 입력
  * 시각만 고친다. 커서는 마지막으로 읽은 배치에 둔다. 저장 행 수가 0보다 큰 배치만 읽으므로 V78 커서 인덱스로 찾는다.
  */
@@ -302,23 +306,6 @@ final class JdbcSettlementProjection {
     }
 
     private record PersistedPass(long trip, int stop, long chain, Instant at, LocalDate date, long observation, String payload) { }
-
-    /**
-     * 정산할 노선의 오늘과 내일 입력 세대 행을 미리 만든다. 수집 확정 트리거가 세대 행을 처음 넣으면 노선 행을 외래 키로
-     * 확인하는데, 정산 결과 커밋이 그 노선 행을 잡고 있으면 확정이 기다리게 되므로 첫 삽입을 정산 쪽에서 끝내 둔다.
-     */
-    void prepareGenerations(List<Long> routeVersions, LocalDate today) {
-        if (routeVersions.isEmpty()) {
-            return;
-        }
-        write.executeWithoutResult(status -> jdbc.sql("""
-            INSERT INTO alighting_settlement_generation(route_id,source_date)
-            SELECT DISTINCT v.route_id,d.day FROM route_version v
-            CROSS JOIN (VALUES (CAST(:today AS date)),(CAST(:tomorrow AS date))) AS d(day)
-            WHERE v.id IN (:versions)
-            ON CONFLICT DO NOTHING
-            """).param("versions", routeVersions).param("today", today).param("tomorrow", today.plusDays(1)).update());
-    }
 
     boolean cleanup(LocalDate today) {
         return Boolean.TRUE.equals(write.execute(status -> {

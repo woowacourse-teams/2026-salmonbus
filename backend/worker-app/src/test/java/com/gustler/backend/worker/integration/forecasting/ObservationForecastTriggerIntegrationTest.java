@@ -116,7 +116,8 @@ class ObservationForecastTriggerIntegrationTest {
         jdbc.sql("DELETE FROM vehicle_capacity WHERE vehicle_id IN (:vehicleIds)")
             .param("vehicleIds", List.of("trigger-test-vehicle", "capacity-commit-test", "capacity-rollback-test"))
             .update();
-        jdbc.sql("TRUNCATE route, model_deployment, daily_call_quota RESTART IDENTITY CASCADE").update();
+        jdbc.sql("TRUNCATE route, alighting_settlement_generation, model_deployment, daily_call_quota RESTART IDENTITY CASCADE")
+            .update();
     }
 
     @Test

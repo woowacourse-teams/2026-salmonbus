@@ -216,10 +216,6 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         List<Long> ordered = new ArrayList<>(routes.size());
         routes.stream().filter(route -> route > after).forEach(ordered::add);
         routes.stream().filter(route -> route <= after).forEach(ordered::add);
-        isolated("alighting_settlement_generation_prepare", () -> {
-            projections.prepareGenerations(ordered, today);
-            return false;
-        });
         routeRunner.run(ordered, route -> {
             lastRoute.set(route);
             progressed[0] |= settleConfirmedBatches(route, budget);
