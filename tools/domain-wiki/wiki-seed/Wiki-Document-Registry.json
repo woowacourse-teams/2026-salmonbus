@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "documents": [
+    "Home.md",
+    "Policy-Index.md",
+    "Policy-POL-DSP-001.md",
+    "Code-Policy-Map.md"
+  ],
+  "codePaths": ["backend/**", "frontend/**"],
+  "meetingEvidence": [
+    {
+      "pageId": "47775855",
+      "version": "5",
+      "quote": "화면에는 짝이 맞는 가장 최근 쌍(같은 observation batch의 예보 응답과 차량 응답)만 올린다"
+    }
+  ]
+}
