@@ -13,7 +13,9 @@ interface BoardBottomSheetProps {
   onSnapChange: (snap: BoardSheetSnap) => void;
   viewportHeight: number;
   enteringFromMap?: boolean;
-  header: ReactNode;
+  mapHeader: ReactNode;
+  fullHeader: ReactNode;
+  header?: ReactNode;
   children: ReactNode;
 }
 
@@ -31,6 +33,8 @@ export function BoardBottomSheet({
   onSnapChange,
   viewportHeight,
   enteringFromMap = false,
+  mapHeader,
+  fullHeader,
   header,
   children,
 }: BoardBottomSheetProps) {
@@ -42,6 +46,7 @@ export function BoardBottomSheet({
     safeTopRef,
     safeBottomRef,
     height,
+    heights,
     dragging,
     dragHandlers,
     onHandleKeyDown,
@@ -58,44 +63,50 @@ export function BoardBottomSheet({
       return heights;
     },
   });
+  const isFullHeight = snap === "full" && height === heights.full;
 
   return (
-    <section
-      id={id}
-      ref={sheetRef}
-      tabIndex={-1}
-      className={styles.sheet}
-      style={{ height }}
-      data-snap={snap}
-      data-dragging={dragging}
-      data-entering-from-map={enteringFromMap}
-      data-native-map-hit
-      aria-label="판정보드"
-    >
-      <span ref={safeTopRef} className={styles.safeTop} aria-hidden="true" />
-      <span ref={safeBottomRef} className={styles.safeBottom} aria-hidden="true" />
-      <div ref={headerRef} className={styles.header} data-native-map-drag {...dragHandlers}>
-        <div
-          className={styles.handle}
-          role="slider"
-          tabIndex={0}
-          aria-label="판정보드 높이"
-          aria-orientation="vertical"
-          aria-valuemin={0}
-          aria-valuemax={2}
-          aria-valuenow={SNAP_VALUE[snap]}
-          aria-valuetext={SNAP_LABEL[snap]}
-          aria-controls={listId}
-          onKeyDown={onHandleKeyDown}
-          onClick={onHandleClick}
-        >
-          <span className={styles.handleBar} />
+    <>
+      {!isFullHeight && mapHeader}
+      <section
+        id={id}
+        ref={sheetRef}
+        tabIndex={-1}
+        className={styles.sheet}
+        style={{ height }}
+        data-snap={snap}
+        data-dragging={dragging}
+        data-entering-from-map={enteringFromMap}
+        data-native-map-hit
+        aria-label="판정보드"
+      >
+        <span ref={safeTopRef} className={styles.safeTop} aria-hidden="true" />
+        <span ref={safeBottomRef} className={styles.safeBottom} aria-hidden="true" />
+        <div ref={headerRef} className={styles.header} data-native-map-drag {...dragHandlers}>
+          <div
+            className={styles.handle}
+            role="slider"
+            tabIndex={0}
+            aria-label="판정보드 높이"
+            aria-orientation="vertical"
+            aria-valuemin={0}
+            aria-valuemax={2}
+            aria-valuenow={SNAP_VALUE[snap]}
+            aria-valuetext={SNAP_LABEL[snap]}
+            aria-controls={listId}
+            onKeyDown={onHandleKeyDown}
+            onClick={onHandleClick}
+          >
+            <span className={styles.handleBar} />
+          </div>
+          {/* 노선 번호에서 시작한 드래그가 끝날 때까지 포인터를 잡은 요소를 유지한다. */}
+          {snap === "full" && <div hidden={!isFullHeight}>{fullHeader}</div>}
+          {header}
         </div>
-        {header}
-      </div>
-      <div id={listId} className={styles.body} aria-hidden={snap === "minimum" && !dragging}>
-        {children}
-      </div>
-    </section>
+        <div id={listId} className={styles.body} aria-hidden={snap === "minimum" && !dragging}>
+          {children}
+        </div>
+      </section>
+    </>
   );
 }
