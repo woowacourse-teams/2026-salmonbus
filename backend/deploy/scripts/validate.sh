@@ -14,12 +14,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 # 같은 DEPLOYMENT_ID 라 그대로 통과한다. 실패했을 때 잠금을 풀려고 잡는다
 claim_deploy
 
-# 상한은 셋이다. 전체, 검사 하나, 요청 하나. 전체는 appspec 의 ValidateService timeout(300초)보다 짧게 둔다.
+# 상한은 넷이다. 전체, 최초 health, 기동 후 검사 하나, 요청 하나. 뒤의 셋은 전체에서 남은 시간을 넘지 않는다.
+# 위 잠금 확인 대기(최대 2초)와 health 실패 뒤 DB 진단(DB_PROBE_SECONDS)은 전체 밖이다.
+# 셋을 더해도 appspec 의 ValidateService timeout(300초)보다 짧게 둔다. 리허설이 세 파일을 읽어 확인한다.
 # CodeDeploy 가 먼저 죽이면 아래 요약도 잠금 정리도 없이 끝난다.
-# 환경변수는 리허설용이다. 실패 시나리오마다 180초씩 기다릴 수 없어서 몇 초로 줄인다. CodeDeploy 환경엔 없다
-TOTAL_SECONDS="${VALIDATE_TOTAL_SECONDS:-240}"      # 검증 전체
+# 최초 health 는 JVM 기동과 대기 중인 마이그레이션 전체를 기다린다. 뒤 검사가 쓸 시간을 남기려고 전체보다 짧게 둔다.
+# 환경변수는 리허설용이다. 실패 시나리오마다 240초씩 기다릴 수 없어서 몇 초로 줄인다. CodeDeploy 환경엔 없다
+TOTAL_SECONDS="${VALIDATE_TOTAL_SECONDS:-270}"      # 검증 전체
 CHECK_SECONDS="${VALIDATE_CHECK_SECONDS:-90}"       # 기동 후 검사 하나
-STARTUP_SECONDS="${VALIDATE_STARTUP_SECONDS:-${VALIDATE_CHECK_SECONDS:-180}}"
+# 최초 health. 리허설이 검사 상한만 줄이면 이것도 같이 줄인다
+STARTUP_SECONDS="${VALIDATE_STARTUP_SECONDS:-${VALIDATE_CHECK_SECONDS:-240}}"
 REQUEST_SECONDS="${VALIDATE_REQUEST_SECONDS:-5}"    # 요청 하나
 RETRY_SECONDS="${VALIDATE_RETRY_SECONDS:-3}"        # 다시 묻기 전 대기
 STARTED=$SECONDS

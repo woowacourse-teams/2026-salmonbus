@@ -585,14 +585,30 @@ grep -q 'DB 진단(배포 전): 새 연결 실패\. 15초 안에 응답이 없�
   && ok "답이 없으면 15초에 끊고 배포는 간다" || { bad "무응답 로그가 다르다"; sed 's/^/      /' /work/api-preflight.out; }
 [ "$dt" -ge 14 ] && [ "$dt" -le 40 ] && ok "끊는 데 ${dt}초 걸렸다" || bad "15초에 안 끊고 ${dt}초 걸렸다"
 
-# validate.sh 의 전체 상한 기본값이 appspec 의 ValidateService timeout 보다 짧은지 두 파일을 읽어 본다.
+# validate.sh 가 가장 오래 도는 시간이 appspec 의 ValidateService timeout 보다 짧은지 validate.sh·common.sh·appspec 을 읽어 본다.
+# 잠금 확인 대기와 health 실패 뒤 DB 진단은 전체 상한 밖이라 더한다.
 # 길면 CodeDeploy 가 먼저 죽여서 요약도 잠금 정리도 없이 끝난다
-hook_timeout=$(awk '/ValidateService:/{f=1} f && /timeout:/{print $2; exit}' /deploy/appspec-api.yml)
 total_default=$(sed -n 's/.*VALIDATE_TOTAL_SECONDS:-\([0-9]*\)}.*/\1/p' /deploy/scripts/validate.sh)
-if [ -n "$total_default" ] && [ -n "$hook_timeout" ] && [ "$total_default" -lt "$hook_timeout" ]; then
-  ok "전체 상한 기본값 ${total_default}초 < ValidateService timeout ${hook_timeout}초"
+startup_default=$(sed -n 's/^STARTUP_SECONDS=.*:-\([0-9]*\)}}".*/\1/p' /deploy/scripts/validate.sh)
+probe_seconds=$(sed -n 's/^DB_PROBE_SECONDS=\([0-9]*\).*/\1/p' /deploy/scripts/common.sh)
+claim_tries=$(sed -n 's/^MARKER_CLAIM_TRIES=\([0-9]*\).*/\1/p' /deploy/scripts/common.sh)
+claim_wait=$(sed -n 's/^MARKER_CLAIM_WAIT_SECONDS=\([0-9]*\).*/\1/p' /deploy/scripts/common.sh)
+validate_worst=""
+if [ -n "$total_default" ] && [ -n "$probe_seconds" ] && [ -n "$claim_tries" ] && [ -n "$claim_wait" ]; then
+  validate_worst=$(( (claim_tries - 1) * claim_wait + total_default + probe_seconds ))
+fi
+for component in api worker; do
+  hook_timeout=$(awk '/ValidateService:/{f=1} f && /timeout:/{print $2; exit}' "/deploy/appspec-$component.yml")
+  if [ -n "$validate_worst" ] && [ -n "$hook_timeout" ] && [ "$validate_worst" -lt "$hook_timeout" ]; then
+    ok "$component: 잠금 대기·전체 ${total_default}초·DB 진단 ${probe_seconds}초 합 ${validate_worst}초 < ValidateService timeout ${hook_timeout}초"
+  else
+    bad "$component: 검증이 가장 오래 도는 시간(${validate_worst:-?})이 훅 timeout(${hook_timeout:-?})보다 짧지 않다"
+  fi
+done
+if [ -n "$startup_default" ] && [ -n "$total_default" ] && [ "$startup_default" -lt "$total_default" ]; then
+  ok "최초 health 기본값 ${startup_default}초 < 전체 ${total_default}초. 뒤 검사가 쓸 시간이 남는다"
 else
-  bad "전체 상한(${total_default:-?})이 훅 timeout(${hook_timeout:-?})보다 짧지 않다"
+  bad "최초 health(${startup_default:-?})가 전체(${total_default:-?})보다 짧지 않다"
 fi
 
 sec "8. 배포 버전을 셋만 남기는가"

@@ -49,9 +49,10 @@ spring:
 
 # Flyway 가 마이그레이션 하나를 실행하는 동안만 그 연결에 쓰는 소켓 읽기 제한이다. 다른 연결은 위 socketTimeout 을 쓴다.
 # 연결의 원래 값이 0(무제한)이거나 이 값보다 길면 줄이지 않는다. 이 설정에 0(무제한)은 받지 않는다.
-# statement_timeout 을 둔 마이그레이션은 그 값(가장 긴 것 120초)에서 서버가 먼저 문장을 취소하고 되돌린다.
+# 마이그레이션의 statement_timeout 은 이 값보다 짧아야 서버가 먼저 문장을 취소하고 되돌린다. MigrationNetworkTimeoutCallbackTest 가 확인한다.
 # statement_timeout 이 없는 마이그레이션은 이 값에서 연결만 끊기고, 서버 문장은 잠금을 쥔 채 끝까지 돌 수 있다.
-# 배포 검증의 최초 health 확인 180초(deploy/scripts/validate.sh)보다는 짧게 둔다.
+# 이 값은 문장 하나의 상한이라 배포 시간을 보장하지 않는다. 배포 검증의 최초 health 확인(deploy/scripts/validate.sh)은
+# JVM 기동과 대기 중인 마이그레이션 전체를 합친 시간을 덮어야 한다. 넘을 수 있으면 RUNBOOK 의 배포 검증 절을 따른다.
 migration:
   network-timeout: 150s
 

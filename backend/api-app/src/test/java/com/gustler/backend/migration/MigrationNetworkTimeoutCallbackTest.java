@@ -3,6 +3,7 @@ package com.gustler.backend.migration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,6 +18,7 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -24,7 +26,11 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.Executor;
+import java.util.regex.MatchResult;
+import java.util.regex.Pattern;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.MigrationVersion;
@@ -37,9 +43,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
+import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 class MigrationNetworkTimeoutCallbackTest {
     private static final int POOL_TIMEOUT_MILLIS = 1_000;
+    private static final Pattern STATEMENT_TIMEOUT = Pattern.compile("statement_timeout", Pattern.CASE_INSENSITIVE);
+    private static final Pattern STATEMENT_TIMEOUT_SETTING = Pattern.compile(
+        "SET\\s+(?:LOCAL\\s+|SESSION\\s+)?statement_timeout\\s*(?:=|TO)\\s*('[^']*'|[^\\s;]+)"
+            + "|set_config\\s*\\(\\s*'statement_timeout'\\s*,\\s*('[^']*'|[^\\s,)]+)",
+        Pattern.CASE_INSENSITIVE);
+    private static final Pattern TIME_VALUE = Pattern.compile("(\\d+)\\s*(us|ms|s|min|h|d)?");
 
     @TempDir
     Path migrations;
@@ -199,8 +216,76 @@ class MigrationNetworkTimeoutCallbackTest {
             .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void 마이그레이션의_statement_timeout은_마이그레이션_연결_소켓_제한보다_짧다() throws IOException {
+        var networkTimeout = configuredNetworkTimeout();
+
+        var actual = statementTimeouts();
+
+        assertThat(actual).isNotEmpty();
+        actual.forEach((file, timeouts) -> assertThat(timeouts).as(file).allSatisfy(timeout ->
+            assertThat(timeout).isPositive().isLessThan(networkTimeout)));
+    }
+
     private void sql(String name, String body) throws IOException {
         Files.writeString(migrations.resolve(name), body);
+    }
+
+    /**
+     * API 가 실제로 읽는 설정 파일의 값이다. 상수로 따로 두면 설정만 바뀌었을 때 이 검사가 어긋난다.
+     */
+    private static Duration configuredNetworkTimeout() throws IOException {
+        var sources = new YamlPropertySourceLoader()
+            .load("application", new FileSystemResource("src/main/resources/application.yml"));
+        return new Binder(ConfigurationPropertySources.from(sources))
+            .bind("migration.network-timeout", Duration.class)
+            .get();
+    }
+
+    /**
+     * API 의 Flyway 가 읽는 위치의 마이그레이션에서 statement_timeout 설정을 파일별로 모은다.
+     * 해석하지 못한 표기가 있으면 그 파일에서 실패한다. 건너뛰면 새 표기의 긴 값이 이 검사를 빠져나간다.
+     */
+    private static Map<String, List<Duration>> statementTimeouts() throws IOException {
+        var found = new TreeMap<String, List<Duration>>();
+        for (var resource : new PathMatchingResourcePatternResolver().getResources("classpath*:db/migration/*.sql")) {
+            var sql = withoutComments(resource.getContentAsString(StandardCharsets.UTF_8));
+            var timeouts = STATEMENT_TIMEOUT_SETTING.matcher(sql).results()
+                .map(setting -> duration(resource.getFilename(), setting))
+                .toList();
+            assertThat(timeouts)
+                .as("%s 의 statement_timeout 을 모두 해석해야 한다", resource.getFilename())
+                .hasSize((int) STATEMENT_TIMEOUT.matcher(sql).results().count());
+            if (!timeouts.isEmpty()) {
+                found.put(resource.getFilename(), timeouts);
+            }
+        }
+        return found;
+    }
+
+    private static String withoutComments(String sql) {
+        return sql.replaceAll("(?s)/\\*.*?\\*/", " ").replaceAll("--[^\\n]*", " ");
+    }
+
+    /**
+     * PostgreSQL 의 시간 단위를 따른다. 단위가 없으면 statement_timeout 의 기본 단위인 밀리초다.
+     */
+    private static Duration duration(String file, MatchResult setting) {
+        var raw = (setting.group(1) != null ? setting.group(1) : setting.group(2)).replace("'", "").strip();
+        var value = TIME_VALUE.matcher(raw);
+        if (!value.matches()) {
+            return fail("%s 의 statement_timeout 값을 해석할 수 없다: %s", file, raw);
+        }
+        final long amount = Long.parseLong(value.group(1));
+        var unit = value.group(2) == null ? "ms" : value.group(2);
+        return switch (unit) {
+            case "us" -> Duration.ofNanos(amount * 1_000);
+            case "ms" -> Duration.ofMillis(amount);
+            case "s" -> Duration.ofSeconds(amount);
+            case "min" -> Duration.ofMinutes(amount);
+            case "h" -> Duration.ofHours(amount);
+            default -> Duration.ofDays(amount);
+        };
     }
 
     private FluentConfiguration configure(HikariDataSource pool, Observer observer, MigrationNetworkTimeoutCallback callback) {
