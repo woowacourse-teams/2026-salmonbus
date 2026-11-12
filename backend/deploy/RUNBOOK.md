@@ -929,6 +929,30 @@ V79는 증분 정산 저장소와 배치 등록·입력 변경 트리거, 입력
 
 `alighting_settlement_history_read`, `alighting_settlement_integrity_read`, `alighting_settlement_prepare`, `alighting_settlement_commit`으로 읽기·준비·저장 시간을 구분한다. `alighting_settlement_page_committed`는 커밋 뒤 처리·완료·재예약 건수를 기록한다. 재기동 후 같은 체크포인트가 유지되는지와 대기 지연, 수집·예보 지연, RDS 읽기량을 함께 확인하고 예산을 조정한다.
 
+V79 적용 뒤에는 기존 대기 작업을 배치 큐에 등록하는 동안과 등록이 끝난 뒤를 나눠 밀린 작업이 줄어드는지 확인한다. 등록은 `alighting_settlement_queue_scan.complete`가 `true`가 되면 끝난다. 두 구간 모두 5분 단위로 아래 네 값을 같은 표에 기록하고, SQL은 각 5분이 끝날 때 실행한다. 그래프는 「Salmonbus DB 원인 분석」 대시보드에서 본다.
+
+- 신규 유입: `alighting_forecast_evaluation_work`에 추가된 행 수다. 「테이블별 수정 속도」 패널이나 `increase(salmonbus_pg_table_inserts_total{table="alighting_forecast_evaluation_work"}[5m])`로 본다.
+- 실제 완료: `alighting_forecast_evaluation_result`에 추가된 행 수다. `increase(salmonbus_pg_table_inserts_total{table="alighting_forecast_evaluation_result"}[5m])`로 보고, 같은 5분의 `event=alighting_settlement_page_committed` 로그 `completed` 합과 비교한다. 재예약한 `deferred`는 완료에 넣지 않는다. 테이블 카운터는 롤백된 행과 복원 작업이 추가한 결과도 세므로, 두 값이 크게 다르면 로그 합을 기준으로 한다.
+- 가장 오래된 대기 작업의 경과 시간: 아래 SQL의 `oldest_due_age`다. 처리 가능 시각(`next_attempt_at`)이 지난 작업 중 가장 오래 기다린 작업의 대기 시간이다. 재예약하면 처리 가능 시각이 다시 정해지므로 처음 등록된 뒤의 시간은 아니다.
+- RDS 읽기량: CloudWatch `AWS/RDS`의 `ReadThroughput` 5분 평균에 300을 곱한 바이트다. 「읽기 / 쓰기 처리량」 패널로 보고, 「EBS 처리량 크레딧 잔량」(`EBSByteBalance%`)도 함께 적는다.
+
+```sql
+BEGIN READ ONLY;
+SET LOCAL statement_timeout = '3s';
+SELECT now() AS captured_at, s.complete AS backfill_complete, s.observation_id AS backfill_cursor,
+       now() - (SELECT min(next_attempt_at) FROM alighting_forecast_evaluation_work
+                 WHERE next_attempt_at <= now()) AS oldest_due_age
+  FROM alighting_settlement_queue_scan s;
+COMMIT;
+```
+
+```bash
+journalctl -u salmonbus-worker --since '<시작 UTC>' --until '<5분 뒤 UTC>' --no-pager \
+  --grep 'event=alighting_settlement_page_committed' | grep -o 'completed=[0-9]*' | awk -F= '{s+=$2} END {print s+0}'
+```
+
+등록이 끝난 뒤 구간에서 완료가 유입보다 많고 `oldest_due_age`가 줄어야 밀린 작업이 줄어든 것이다. 예산은 두 구간의 기록과 크레딧 잔량 추세를 함께 보고 조정한다.
+
 구 모델 미완료 작업은 V70/V71에서 종료 사유를 남기며 기존 완료 결과를 재작성하지 않는다. V72는 운영 중간 통계·당일 보정 테이블을 제거한다. 이미 발행한 통계·판본·파일 발행 기록은 과거 데이터 해석용으로 유지한다.
 
 개발용 모델은 정확도 검증용이 아닌 8개 노선의 합성 숫자 모델 한 벌이다. 운영 확정 관측 모델의 지원 노선 수와 다르다. 새 개발 환경 초기화는 검증했지만 기존 불변 개발 데이터·모델 파일을 자동 덮어쓰지는 않는다. 기존 환경은 별도 새 데이터 세트로 준비하거나 명시적인 전환 절차가 필요하다.
