@@ -50,7 +50,7 @@ export function HomeOverview({ point, stops, onRefresh }: { point: Point; stops:
     return () => {
       active = false;
     };
-  }, [point]);
+  }, [point, revision]);
 
   const areaLabel = (area?.point === point ? area.label : null) ?? nearbyAreaLabel(point, stops);
   return (

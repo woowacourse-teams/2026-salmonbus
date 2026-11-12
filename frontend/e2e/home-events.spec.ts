@@ -1273,3 +1273,25 @@ test("홈 시트가 닫히는 중 로고로 홈에 다시 들어오면 시트를
   await tab.click();
   await expect(sheet).toHaveAttribute("data-snap", "detail");
 });
+
+test("지역 경계 조각을 받지 못해도 날씨를 새로고침하면 조각을 다시 받아 지역 이름을 표시한다", async ({ page }) => {
+  let failedFirstTile = false;
+  await page.route("**/assets/areas/508_149.*.json", (route) => {
+    if (failedFirstTile) return route.continue();
+    failedFirstTile = true;
+    return route.fulfill({ status: 503 });
+  });
+  const failedTileResponse = page.waitForResponse(
+    (response) => response.url().includes("/assets/areas/508_149.") && response.status() === 503,
+  );
+  await page.goto("/");
+  await failedTileResponse;
+  const weather = page.getByRole("region", { name: "현재 지역 날씨" });
+  const refresh = weather.getByRole("button", { name: "지도 중심 날씨 새로고침" });
+  await expect(refresh).toBeEnabled();
+  await expect(weather.getByText("경기도 성남시 분당구 삼평동 날씨", { exact: true })).toHaveCount(0);
+
+  await refresh.click();
+
+  await expect(weather.getByText("경기도 성남시 분당구 삼평동 날씨", { exact: true })).toBeVisible();
+});
