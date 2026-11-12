@@ -1008,6 +1008,80 @@ describe("네이버 지도 adapter", () => {
     expect(marker.map).toBeNull();
     expect(marker.visible).toBe(false);
   });
+  it("지도 이동은 다음 프레임에 정류장만 갱신하고 화살표는 투영하지 않은 채 idle에서 갱신한다", () => {
+    const { native, adapter, flushFrames } = setup();
+    native.map.zoom = 16;
+    adapter.update(null, "UP", []);
+    const idle = native.events.find((event) => event.name === "idle")!.listener;
+    const centerChanged = native.events.find((event) => event.name === "center_changed")!.listener;
+    // 첫 idle 뒤의 표시 준비 프레임을 먼저 끝내 이동 프레임의 갱신만 남긴다.
+    idle();
+    flushFrames();
+    flushFrames();
+    const marker = native.markers.find((item) => item.options.icon.content.dataset.mapStopSequence === "11")!;
+    const arrows = visibleArrowDirections(native);
+    const pathCoordinates = new Set(native.lines.flatMap((line) => line.path));
+    const projectsPath = () => native.map.projectedCoordinates.some((coordinate) => pathCoordinates.has(coordinate));
+    expect(marker.map).toBe(native.map);
+    expect(arrows.length).toBeGreaterThan(0);
+
+    native.map.projectionOffsetX = -10_000;
+    native.map.projectedCoordinates.length = 0;
+    centerChanged();
+    flushFrames();
+    expect(marker.map).toBeNull();
+    expect(projectsPath()).toBe(false);
+    expect(visibleArrowDirections(native)).toEqual(arrows);
+
+    idle();
+    expect(projectsPath()).toBe(true);
+    expect(visibleArrowDirections(native)).toEqual([]);
+  });
+  it.each(["rotate", "rotation_changed"])("지도 %s는 다음 프레임에 정류장과 화살표를 함께 갱신한다", (eventName) => {
+    const { native, adapter, flushFrames } = setup();
+    native.map.zoom = 16;
+    adapter.update(null, "UP", []);
+    const idle = native.events.find((event) => event.name === "idle")!.listener;
+    const centerChanged = native.events.find((event) => event.name === "center_changed")!.listener;
+    const rotated = native.events.find((event) => event.name === eventName)!.listener;
+    idle();
+    flushFrames();
+    flushFrames();
+    const marker = native.markers.find((item) => item.options.icon.content.dataset.mapStopSequence === "11")!;
+    const arrows = visibleArrowDirections(native);
+    const pathCoordinates = new Set(native.lines.flatMap((line) => line.path));
+    const projectsPath = () => native.map.projectedCoordinates.some((coordinate) => pathCoordinates.has(coordinate));
+    expect(arrows.length).toBeGreaterThan(0);
+
+    native.map.projectionOffsetX = -10_000;
+    native.map.projectedCoordinates.length = 0;
+    rotated();
+    expect(marker.map).toBe(native.map);
+    expect(native.map.projectedCoordinates).toHaveLength(0);
+    flushFrames();
+    expect(marker.map).toBeNull();
+    expect(projectsPath()).toBe(true);
+    expect(visibleArrowDirections(native)).toEqual([]);
+
+    // 같은 프레임에 이동이 먼저 와도 뒤따른 회전의 화살표 갱신을 잃지 않는다.
+    native.map.projectionOffsetX = 0;
+    centerChanged();
+    rotated();
+    flushFrames();
+    expect(marker.map).toBe(native.map);
+    expect(visibleArrowDirections(native)).toEqual(arrows);
+
+    // idle이 회전까지 반영하면 다음 이동 프레임은 다시 정류장만 갱신한다.
+    rotated();
+    idle();
+    native.map.projectionOffsetX = -10_000;
+    native.map.projectedCoordinates.length = 0;
+    centerChanged();
+    flushFrames();
+    expect(marker.map).toBeNull();
+    expect(projectsPath()).toBe(false);
+    expect(visibleArrowDirections(native)).toEqual(arrows);
+  });
   it("화면이 그대로인 idle 이벤트는 마커를 다시 갱신하지 않는다", () => {
     const { native } = setup();
     const updates = native.markers.flatMap((marker) => [

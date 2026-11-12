@@ -622,17 +622,24 @@ export function createNaverRouteMap(
   }
 
   let viewportFrame: number | null = null;
-  const refreshAfterCameraChange = () => {
+  let viewportArrowsPending = false;
+  function refreshAfterCameraChange(withArrows: boolean) {
+    viewportArrowsPending ||= withArrows;
     if (viewportFrame !== null) return;
     // 회전 이벤트가 카메라 갱신보다 먼저 올 수 있어 다음 프레임의 투영 좌표를 사용한다.
     viewportFrame = window.requestAnimationFrame(
       createNativeEventHandler(() => {
         viewportFrame = null;
+        const arrowsPending = viewportArrowsPending;
+        viewportArrowsPending = false;
         refreshStops();
-        refreshArrows();
+        if (arrowsPending) refreshArrows();
       }),
     );
-  };
+  }
+  // 이동은 화살표 배치를 바꾸지 않으므로 화면에 들어오는 정류장만 붙이고, 화살표는 회전과 idle에서 갱신한다.
+  const refreshAfterMove = () => refreshAfterCameraChange(false);
+  const refreshAfterRotation = () => refreshAfterCameraChange(true);
   const listeners = [
     sdk.Event.addListener(map, "click", createNativeEventHandler(onDeselect)),
     sdk.Event.addListener(map, "tap", createNativeEventHandler(onDeselect)),
@@ -656,15 +663,16 @@ export function createNaverRouteMap(
         if (arrowsShowBothDirections !== showBothDirections) refreshArrows();
       }),
     ),
-    sdk.Event.addListener(map, "center_changed", refreshAfterCameraChange),
-    sdk.Event.addListener(map, "rotate", refreshAfterCameraChange),
-    sdk.Event.addListener(map, "rotation_changed", refreshAfterCameraChange),
+    sdk.Event.addListener(map, "center_changed", refreshAfterMove),
+    sdk.Event.addListener(map, "rotate", refreshAfterRotation),
+    sdk.Event.addListener(map, "rotation_changed", refreshAfterRotation),
     sdk.Event.addListener(
       map,
       "idle",
       createNativeEventHandler(() => {
         if (viewportFrame !== null) window.cancelAnimationFrame(viewportFrame);
         viewportFrame = null;
+        viewportArrowsPending = false;
         refreshStops();
         refreshVehicleCounts();
         refreshArrows();
