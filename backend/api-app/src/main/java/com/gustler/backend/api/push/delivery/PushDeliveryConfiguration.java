@@ -35,7 +35,8 @@ public class PushDeliveryConfiguration {
     }
 
     @Bean
-    ApnsClient apnsClient(ApnsProperties properties, ApnsProviderToken providerToken, ObjectMapper objectMapper) {
+    ApnsClient apnsClient(ApnsProperties properties, ApnsProviderToken providerToken, ObjectMapper objectMapper,
+        NotificationMessageResolver messages) {
         ApnsProperties complete = properties.requireComplete();
         return new ApnsClient(
             apnsHttpClient(),
@@ -44,7 +45,8 @@ public class PushDeliveryConfiguration {
             complete.topic(),
             providerToken,
             objectMapper,
-            REQUEST_TIMEOUT
+            REQUEST_TIMEOUT,
+            messages
         );
     }
 
