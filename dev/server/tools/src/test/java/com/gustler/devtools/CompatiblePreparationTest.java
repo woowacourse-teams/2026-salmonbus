@@ -164,6 +164,35 @@ class CompatiblePreparationTest {
         }
     }
 
+    @Test
+    void 증분_정산_초기화_전환의_복구는_검토한_전환의_역방향만_허용하고_기존_데이터는_그대로_검사한다() {
+        // given
+        var previous = new TreeMap<String, String>();
+        for (String name : DataPreparation.FILES) {
+            previous.put("tools/data/" + name, "unchanged");
+        }
+        previous.put("infra/compose.yaml", "unchanged");
+        previous.put("tools/data-contract.sha256", CompatiblePreparation.ENV_MODEL_DATA);
+        var next = new TreeMap<>(previous);
+        next.put("tools/data-contract.sha256", CompatiblePreparation.INCREMENTAL_SETTLEMENT_DATA);
+        var unreviewed = new TreeMap<>(previous);
+        unreviewed.put("tools/data-contract.sha256", "unknown");
+        var changedData = new TreeMap<>(previous);
+        changedData.put("tools/data/routes.json", "changed");
+
+        // when & then
+        assertThatThrownBy(() -> BasisLifecycle.preserveData(revisionWithFiles(next), revisionWithFiles(previous), null))
+            .hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
+        assertThatCode(() -> BasisLifecycle.preserveData(revisionWithFiles(next), revisionWithFiles(previous), null, true))
+            .doesNotThrowAnyException();
+        assertThatThrownBy(() -> BasisLifecycle.preserveData(revisionWithFiles(next), revisionWithFiles(unreviewed), null, true))
+            .hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
+        assertThatThrownBy(() -> BasisLifecycle.preserveData(revisionWithFiles(next), revisionWithFiles(changedData), null, true))
+            .hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
+        assertThatCode(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(next), null, true))
+            .doesNotThrowAnyException();
+    }
+
     private RevisionStore.Revision revisionWithFiles(Map<String, String> files) {
         return new RevisionStore.Revision(1, "dev", "basis", "a".repeat(40), "b".repeat(64),
             "c".repeat(64), false, Map.copyOf(files), "d".repeat(64));

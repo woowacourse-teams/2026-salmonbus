@@ -31,7 +31,18 @@ systemd는 환경 파일의 DB 설정을 사용한다. worker의 GBIS loopback �
 4. 각 앱의 ValidateService가 성공하면 이번 RDS 수동 전환용 drop-in을 제거하고
    저장소의 unit을 사용한다. 다른 drop-in은 수정하지 않는다.
 5. 기반 교체나 이후 hook이 실패하면 기록된 이전 설정·basis·앱 버전 링크를 복구하고
-   원래 실행 중이던 서비스를 기동한다. 복구도 실패하면 수동 확인이 필요한 오류로 남긴다.
+   원래 실행 중이던 서비스를 기동한다. 검토한 초기화 코드 전환(`CompatiblePreparation`)으로
+   바꾼 basis도 이 복구에서는 이전 basis로 되돌린다. 초기 데이터와 인프라 파일은 그대로
+   비교한다. 복구도 실패하면 수동 확인이 필요한 오류로 남긴다.
+
+기반 교체는 `/etc/salmonbus-dev`를 새로 만들고 앱·DB 설정, `arrivals.env`, RDS 대상과 CA만
+옮긴다. 수동 drop-in이 읽는 환경 파일은 `/etc/salmonbus-dev-auth`처럼 이 디렉터리 밖에 둔다.
+앱·인프라 unit이나 drop-in의 `EnvironmentFile`이 이 디렉터리의 다른 파일을 가리키면 앱을
+중지하기 전에 `DEV_UNMANAGED_ENVIRONMENT_FILE`로 거절한다. 다른 커밋의 배포가 basis를 바꾼 뒤
+API 검증 전에 멈춰 남긴 `PREPARED` 준비 기록은 다음 basis 교체를 막지 않고 넘긴다. 넘긴 기록의
+커밋과 단계는 준비 결과의 `supersededCommit`·`supersededPhase`에 남긴다. `API_READY` 기록은 그
+커밋의 worker 배포가 아직 진행 중일 수 있어 계속 막는다. DB 전환 기록과 준비 중에 멈춘 기록도
+계속 막는다.
 
 기반 교체가 필요한 배포에는 공유 dev 중단 시간이 발생한다. 데이터 계약이 바뀌는 변경은
 기존 검증이 거부하므로 별도 이전 계획이 필요하다. 이 배포 경로는 DB를 초기화하거나

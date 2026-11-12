@@ -71,6 +71,17 @@ final class BasisLifecycle {
 
     static void preserveData(RevisionStore.Revision previous, RevisionStore.Revision next,
             DataTransition.Approval approval) {
+        preserveData(previous, next, approval, false);
+    }
+
+    /**
+     * 기존 데이터를 그대로 쓰는 basis 교체인지 확인한다.
+     *
+     * @param restoring 배포 준비 기록으로 직전 basis에 되돌릴 때만 참이다. 검토한 초기화 코드 전환의 역방향을
+     *     더 허용하고, 초기 데이터와 인프라 파일은 그대로 비교한다.
+     */
+    static void preserveData(RevisionStore.Revision previous, RevisionStore.Revision next,
+            DataTransition.Approval approval, final boolean restoring) {
         if (approval != null) approval.verify(previous, next, java.time.Instant.now());
         final boolean retirement = ChatRetirement.permits(previous, next);
         for (var name : List.of("tools/data-contract.sha256", "infra/compose.yaml")) {
@@ -88,7 +99,8 @@ final class BasisLifecycle {
         for (var name : names) {
             if (name.startsWith("tools/data/model-reference/")) continue;
             if (name.equals("tools/data-contract.sha256")
-                    && (approval != null || CompatiblePreparation.permits(previous, next))) continue;
+                    && (approval != null || CompatiblePreparation.permits(previous, next)
+                            || restoring && CompatiblePreparation.permits(next, previous))) continue;
             if (retirement && ChatRetirement.INFRA_FILES.contains(name)) continue;
             if (name.startsWith("tools/data/") || name.equals("tools/data-contract.sha256")
                     || ChatRetirement.INFRA_FILES.contains(name)) {
@@ -132,6 +144,16 @@ final class BasisLifecycle {
     }
 
     Map<String, Object> change(Path incoming, final boolean apply, DataTransition.Approval approval) throws Exception {
+        return change(incoming, apply, approval, false);
+    }
+
+    /** 배포 준비 기록에 남은 직전 basis로 되돌린다. 검토한 초기화 코드 전환을 거꾸로 되돌리는 것도 허용한다. */
+    Map<String, Object> revert(Path previous) throws Exception {
+        return change(previous, true, null, true);
+    }
+
+    private Map<String, Object> change(Path incoming, final boolean apply, DataTransition.Approval approval,
+            final boolean restoring) throws Exception {
         Checks.require(host.root(), "ROOT_REQUIRED");
         var next = RevisionStore.verify(incoming, true);
         Checks.require(next.kind().equals("basis"), "DEV_BASIS_REVISION");
@@ -141,7 +163,8 @@ final class BasisLifecycle {
         Checks.require(
                 !FileOps.exists(journal()) && !FileOps.exists(layout.root().resolve(".deploying")),
                 "DEV_BASIS_RECOVERY_REQUIRED");
-        preserveData(previous, next, approval);
+        preserveData(previous, next, approval, restoring);
+        SettingsPreparation.requireReplaceableEnvironment(layout);
         new Preflight(layout, host).check("prepare", Map.of());
         host.verifyInstance(host.identity());
         DataPreparation.requireStopped(host, "STOP_DEV_APPS_BEFORE_BASIS_CHANGE");
