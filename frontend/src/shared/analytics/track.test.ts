@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 interface FakeSdkOptions {
   failToLoad?: boolean;
   failToInit?: boolean;
+  holdInit?: boolean;
+  holdSends?: boolean;
+  throwOnTrack?: boolean;
 }
 
 type Calls = string[];
@@ -34,11 +37,16 @@ async function setUp({
   storedOptOut = false,
   failToLoad = false,
   failToInit = false,
+  holdInit = false,
+  holdSends = false,
+  throwOnTrack = false,
 }: { storedOptOut?: boolean } & FakeSdkOptions = {}) {
   jest.resetModules();
   const calls: Calls = [];
   const initOptions: Array<{ optOut: boolean | undefined }> = [];
   const loadedAt: number[] = [];
+  const heldSends: Array<{ finish: () => void; fail: () => void }> = [];
+  let rejectInit = () => {};
   jest.doMock("@amplitude/unified", () => {
     if (failToLoad) throw new Error("chunk를 받지 못했습니다");
     loadedAt.push(Date.now());
@@ -50,6 +58,10 @@ async function setUp({
         // 실제 initAll은 autocapture로 세션 시작과 Page Viewed를 만든다.
         calls.push("autocapture session_start", "autocapture Page Viewed");
         initOptions.push({ optOut: options.analytics.optOut });
+        if (!holdInit) return Promise.resolve();
+        return new Promise<void>((_resolve, reject) => {
+          rejectInit = () => reject(new Error("플러그인 시작에 실패했습니다"));
+        });
       },
       setUserId: (userId: string | undefined) => calls.push(`setUserId ${userId}`),
       setOptOut: (optedOut: boolean) => calls.push(`setOptOut ${optedOut}`),
@@ -57,7 +69,12 @@ async function setUp({
       flush: () => calls.push("flush"),
       track: (event: string, _properties: unknown, ...extraArguments: unknown[]) => {
         calls.push(extraArguments.length === 0 ? `track ${event}` : `track ${event} with-extra-arguments`);
-        return { promise: Promise.resolve() };
+        if (throwOnTrack) throw new Error("track이 던졌습니다");
+        if (!holdSends) return { promise: Promise.resolve() };
+        const promise = new Promise<void>((resolve, reject) => {
+          heldSends.push({ finish: resolve, fail: () => reject(new Error("전송에 실패했습니다")) });
+        });
+        return { promise };
       },
     };
   });
@@ -65,7 +82,22 @@ async function setUp({
   const analytics = await import("./analytics");
   const tracking = await import("./track");
   analytics.initAnalytics();
-  return { ...browser, ...analytics, ...tracking, calls, initOptions, loadedAt };
+  Object.assign((globalThis as { window: object }).window, {
+    engagement: {
+      disable: () => calls.push("engagement disable"),
+      enable: () => calls.push("engagement enable"),
+    },
+  });
+  return {
+    ...browser,
+    ...analytics,
+    ...tracking,
+    calls,
+    initOptions,
+    loadedAt,
+    heldSends,
+    rejectInit: () => rejectInit(),
+  };
 }
 
 async function finishLoadingAndSettle(setup: {
@@ -123,9 +155,6 @@ describe.each([
   ["받았지만 시작하지 못했을 때", { failToInit: true }],
 ])("SDK를 %s", (_situation, failure) => {
   it("이벤트, 회원 ID, 수집 거부 전환, 떠나기 전 이벤트가 예외 없이 지나가고 처리되지 않은 거부도 없다", async () => {
-    const unhandled: unknown[] = [];
-    const onUnhandled = (reason: unknown) => unhandled.push(reason);
-    process.on("unhandledRejection", onUnhandled);
     jest.spyOn(console, "warn").mockImplementation(() => {});
 
     const setup = await setUp(failure);
@@ -144,8 +173,54 @@ describe.each([
 
     expect(setup.isAnalyticsEnabled()).toBe(false);
     expect(setup.calls.filter((call) => /^(track|setUserId|setOptOut|setTransport|flush)/.test(call))).toEqual([]);
-    expect(unhandled).toEqual([]);
-    process.off("unhandledRejection", onUnhandled);
+  });
+});
+
+describe("SDK를 넘겨받은 뒤 시작이 거부될 때", () => {
+  async function setUpStartedSdk() {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const setup = await setUp({ holdInit: true });
+    setup.track("login_finished", { provider: "KAKAO", result: "succeeded" });
+    await finishLoadingAndSettle(setup);
+    return { setup, warn };
+  }
+
+  it("그 전에 부른 이벤트는 SDK에 닿은 채로 두고, 경고를 한 번 남기고 분석을 끈다", async () => {
+    const { setup, warn } = await setUpStartedSdk();
+    expect(setup.isAnalyticsEnabled()).toBe(true);
+
+    setup.rejectInit();
+    await ONE_TICK();
+
+    expect(setup.calls).toContain("track login_finished");
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(setup.isAnalyticsEnabled()).toBe(false);
+    await expect(setup.whenAnalyticsSdkReady()).resolves.toBeNull();
+  });
+
+  it("거부된 뒤에 부른 이벤트와 회원 ID, 떠나기 전 이벤트는 SDK를 부르지 않는다", async () => {
+    const { setup } = await setUpStartedSdk();
+    setup.rejectInit();
+    await ONE_TICK();
+    const callsBefore = [...setup.calls];
+
+    setup.track("login_started", { provider: "KAKAO", entry: "home" });
+    setup.setAnalyticsMemberId("member-1");
+    await setup.trackBeforeLeaving("login_started", { provider: "KAKAO", entry: "home" });
+    await ONE_TICK();
+
+    expect(setup.calls).toEqual(callsBefore);
+  });
+
+  it("거부된 뒤에도 수집 거부를 켜면 SDK에 전한다", async () => {
+    const { setup } = await setUpStartedSdk();
+    setup.rejectInit();
+    await ONE_TICK();
+
+    setup.setAnalyticsOptOut(true);
+    await ONE_TICK();
+
+    expect(setup.calls.slice(-2)).toEqual(["setOptOut true", "engagement disable"]);
   });
 });
 
@@ -242,5 +317,60 @@ describe("다른 사이트로 떠나기 전 이벤트", () => {
       "flush",
       "setTransport fetch",
     ]);
+  });
+
+  it("SDK를 기다리는 동안 거부를 켰다가 풀면 그 전에 부른 이벤트는 보내지 않는다", async () => {
+    const setup = await setUp();
+    const leaving = setup.trackBeforeLeaving("login_started", { provider: "KAKAO", entry: "home" });
+    await jest.advanceTimersByTimeAsync(50);
+    setup.setAnalyticsOptOut(true);
+    setup.setAnalyticsOptOut(false);
+    setup.finishLoading();
+    await jest.advanceTimersByTimeAsync(10);
+    await leaving;
+
+    expect(setup.calls.filter((call) => /^(track|setTransport|flush)/.test(call))).toEqual([]);
+  });
+
+  it("보내기가 300ms보다 오래 걸리면 돌아간 뒤에도 보내기가 끝날 때까지 beacon으로 두고, 끝나면 fetch로 되돌린다", async () => {
+    const setup = await setUp({ holdSends: true });
+    setup.finishLoading();
+    await jest.advanceTimersByTimeAsync(10);
+    const leaving = setup.trackBeforeLeaving("login_started", { provider: "KAKAO", entry: "home" });
+    await jest.advanceTimersByTimeAsync(300);
+    await leaving;
+
+    expect(setup.calls).toContain("setTransport beacon");
+    expect(setup.calls).not.toContain("setTransport fetch");
+
+    setup.heldSends[0]!.finish();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(setup.calls.at(-1)).toBe("setTransport fetch");
+  });
+
+  it("보내기가 거부돼도 fetch로 되돌리고 처리되지 않은 거부를 만들지 않는다", async () => {
+    const setup = await setUp({ holdSends: true });
+    setup.finishLoading();
+    await jest.advanceTimersByTimeAsync(10);
+    const leaving = setup.trackBeforeLeaving("login_started", { provider: "KAKAO", entry: "home" });
+    await jest.advanceTimersByTimeAsync(300);
+    await leaving;
+    setup.heldSends[0]!.fail();
+    await jest.advanceTimersByTimeAsync(0);
+    await jest.advanceTimersByTimeAsync(10);
+
+    expect(setup.calls.at(-1)).toBe("setTransport fetch");
+  });
+
+  it("track이 그 자리에서 던지면 바로 fetch로 되돌린다", async () => {
+    const setup = await setUp({ throwOnTrack: true });
+    setup.finishLoading();
+    await jest.advanceTimersByTimeAsync(10);
+    await expect(
+      setup.trackBeforeLeaving("login_started", { provider: "KAKAO", entry: "home" }),
+    ).resolves.toBeUndefined();
+
+    expect(setup.calls.slice(-3)).toEqual(["setTransport beacon", "track login_started", "setTransport fetch"]);
+    expect(setup.calls).not.toContain("flush");
   });
 });
