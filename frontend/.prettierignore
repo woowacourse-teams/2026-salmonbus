@@ -3,4 +3,4 @@ pnpm-lock.yaml
 playwright-report/
 test-results/
 src/pages/privacy/editions/
-src/pages/route-select/home/data/adminAreas.json
+src/pages/route-select/home/data/adminAreaTiles
