@@ -289,6 +289,7 @@ class JdbcAlightingAwareForecastEvaluationTest {
         final int expectedPending
     ) throws Exception {
         // given
+        jdbc.sql("UPDATE alighting_settlement_queue_scan SET complete=true").update();
         if (confirmed) {
             useConfirmedProfile();
         }
@@ -321,9 +322,10 @@ class JdbcAlightingAwareForecastEvaluationTest {
                 assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
 
                 // when
-                service.settle();
+                boolean progressed = service.advance();
 
                 // then
+                assertThat(progressed).isEqualTo(!expectedSettled.isEmpty());
                 assertThat(jdbc.sql("""
                     SELECT vehicle_observation_id
                     FROM alighting_forecast_evaluation_result
@@ -1172,6 +1174,54 @@ class JdbcAlightingAwareForecastEvaluationTest {
         var history = new ConfirmedAlightingAwareEvaluationOracle.History(jdbc, version, date(), through, limit);
         var expected = new ConfirmedAlightingAwareEvaluationOracle(history, date(), through).evaluate(source, 2, confirmedSnapshot());
         assertThat(actual).isEqualTo(expected);
+    }
+
+    @Test
+    void 잠긴_구_모델_작업은_커밋한_행이_있어야_진행으로_보고한다() throws Exception {
+        jdbc.sql("UPDATE alighting_settlement_queue_scan SET complete=true").update();
+        var locked = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var writer = Executors.newSingleThreadExecutor()) {
+            var holding = writer.submit(() -> tx.executeWithoutResult(status -> {
+                jdbc.sql("SELECT vehicle_observation_id FROM alighting_forecast_evaluation_work WHERE vehicle_observation_id=? FOR UPDATE")
+                    .param(source).query(Long.class).single();
+                locked.countDown();
+                try {
+                    assertThat(release.await(15, TimeUnit.SECONDS)).isTrue();
+                } catch (InterruptedException failure) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(failure);
+                }
+            }));
+            try {
+                assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+                assertThat(service.advance()).isFalse();
+                assertThat(count("alighting_forecast_evaluation_result")).isZero();
+                assertThat(count("alighting_forecast_evaluation_work")).isOne();
+            } finally {
+                release.countDown();
+            }
+            holding.get(5, TimeUnit.SECONDS);
+        }
+        assertThat(service.advance()).isTrue();
+        assertThat(count("alighting_forecast_evaluation_result")).isOne();
+        assertThat(count("alighting_forecast_evaluation_work")).isZero();
+    }
+
+    @Test
+    void 구_모델_준비_후_노선_판본이_바뀌면_진행으로_보고하지_않는다() {
+        jdbc.sql("UPDATE alighting_settlement_queue_scan SET complete=true").update();
+        RouteWorkAccess changing = mock(RouteWorkAccess.class, delegatesTo(quality));
+        doAnswer(call -> {
+            jdbc.sql("UPDATE route SET data_revision=data_revision+1 WHERE id=?").param(route).update();
+            return quality.lock(call.getArgument(0, Long.class));
+        }).when(changing).lock(version);
+        var replay = new JdbcAlightingAwareForecastEvaluation(jdbc, changing, Clock.systemUTC(), transactions);
+        assertThat(replay.advance()).isFalse();
+        assertThat(count("alighting_forecast_evaluation_result")).isZero();
+        assertThat(count("alighting_forecast_evaluation_work")).isOne();
+        assertThat(service.advance()).isTrue();
+        assertThat(count("alighting_forecast_evaluation_result")).isOne();
     }
 
     private void groupForecastSources() {

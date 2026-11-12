@@ -335,12 +335,12 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
             if (page == null || page.work().isEmpty()) {
                 return progressed;
             }
-            progressed = true;
             int preparedRemaining = page.work().size();
             while (preparedRemaining > 0) {
                 final int writeLimit = Math.min(PAGE_SIZE, preparedRemaining);
                 Integer processed = WorkerOperationLog.measure("alighting_settlement_commit", route,
                     () -> transaction.execute(status -> writePage(route, writeLimit, dueThrough, page)));
+                progressed |= processed != null && processed > 0;
                 if (processed == null || processed < writeLimit) {
                     return progressed;
                 }
