@@ -8,6 +8,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -189,6 +191,7 @@ public class ArchiveService {
         repository.closeRange(job);
         repository.resetExport(job);
         int number = 0;
+        Set<Long> deployments = new TreeSet<>();
         for (ArchiveTable table : ArchiveTable.values()) {
             String cursor = "[]";
             while (true) {
@@ -196,6 +199,7 @@ public class ArchiveService {
                 if (page.rows().isEmpty()) {
                     break;
                 }
+                deployments.addAll(page.modelDeploymentIds());
                 write(job, number++, table.table, page.rows());
                 cursor = page.cursor();
             }
@@ -209,7 +213,7 @@ public class ArchiveService {
             write(job, number++, "evidence", page.rows());
             cursor = Long.parseLong(page.cursor());
         }
-        List<String> dimensions = repository.dimensions(job);
+        List<String> dimensions = repository.dimensions(job, JSON.writeValueAsString(deployments));
         if (!dimensions.isEmpty()) {
             write(job, number++, "dimensions", dimensions);
         }
