@@ -8,6 +8,15 @@ import org.junit.jupiter.api.Test;
 
 @IntegrationTest
 class ApiApplicationTests {
+    @org.springframework.beans.factory.annotation.Autowired
+    org.flywaydb.core.Flyway flyway;
+
+    @Test
+    void API의_Flyway가_V66_조회_계획_콜백을_등록한다() {
+        assertThat(flyway.getConfiguration().getCallbacks()).anyMatch(callback ->
+            callback instanceof com.gustler.backend.migration.QualityRetirementMigrationCallback);
+    }
+
     @Test
     void GBIS_키_없이_컨텍스트가_뜬다() {
     }

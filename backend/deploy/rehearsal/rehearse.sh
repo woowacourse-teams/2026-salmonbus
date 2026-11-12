@@ -89,6 +89,14 @@ answer() {
 if [ "$comp" = worker ] && ! grep -qx salmonbus-worker /work/running; then
   answer 000 '' 7
 fi
+if [[ "$url" = */health ]] && [ -f /work/health-after-attempts ]; then
+  attempt=$(( $(cat /work/health-attempts 2>/dev/null || echo 0) + 1 ))
+  echo "$attempt" > /work/health-attempts
+  if [ "$attempt" -ge "$(cat /work/health-after-attempts)" ]; then
+    state=UP
+    echo UP > /work/health
+  fi
+fi
 if [ "$state" != "UP" ]; then
   case "$url" in */readyz) answer 503 '{"status":"OUT_OF_SERVICE"}' 0 ;; esac
   answer 503 '{"status":"DOWN"}' 0
@@ -542,6 +550,24 @@ grep -q '단계=sourcedigest 사유=시간 초과(전체 3초 중 남은 [0-9]�
   && ok "검사 상한 90초 대신 전체에서 남은 시간을 썼다" || { bad "사유가 다르다"; grep '배포 검증' /work/api-validate.out | sed 's/^/      /'; }
 [ "$dt" -le 20 ] && ok "배포가 ${dt}초 만에 끝났다" || bad "검사 상한 90초를 기다렸다 (${dt}초)"
 unset VALIDATE_CHECK_SECONDS VALIDATE_RETRY_SECONDS
+
+sec "7-4-1. 초기 기동은 후속 검사보다 긴 예산을 쓰는가"
+echo DOWN > /work/health
+echo 3 > /work/health-after-attempts
+rm -f /work/health-attempts
+make_revision api APISTARTUP abcdef01234 aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff66667777000088889999 "2026-09-02T05:35:00Z"
+VALIDATE_CHECK_SECONDS=1 VALIDATE_STARTUP_SECONDS=6 VALIDATE_RETRY_SECONDS=1 deploy api
+rm -f /work/health-after-attempts /work/health-attempts
+grep -q 'health 확인. 시도=3 ' /work/api-validate.out \
+  && ok "초기 기동은 후속 검사 1초를 지나서도 기다렸다" || bad "초기 기동 예산을 쓰지 않았다"
+
+sec "7-4-2. 초기 기동도 전체 검증 예산을 넘지 않는가"
+echo DOWN > /work/health
+make_revision api APITOTAL abcdef01235 bbbb1111cccc2222dddd3333eeee4444ffff555500006666777788889999aaaa "2026-09-02T05:36:00Z"
+VALIDATE_TOTAL_SECONDS=2 VALIDATE_CHECK_SECONDS=1 VALIDATE_STARTUP_SECONDS=8 VALIDATE_RETRY_SECONDS=1 deploy api fail
+echo UP > /work/health
+grep -q '단계=health 사유=시간 초과(전체 2초 중 남은 [12]초)' /work/api-validate.out \
+  && ok "초기 기동 8초보다 전체 2초를 먼저 적용했다" || bad "초기 기동이 전체 예산을 넘었다"
 
 sec "7-5. DB 가 안 붙거나 답이 없어도 배포는 가나"
 echo DOWN > /work/db
