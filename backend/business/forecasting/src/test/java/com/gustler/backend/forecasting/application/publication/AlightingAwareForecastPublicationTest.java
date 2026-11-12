@@ -57,6 +57,7 @@ class AlightingAwareForecastPublicationTest {
         when(statistics.profile()).thenReturn(new AlightingAwareRouteStatistics.Profile(
             "alighting-original-v1", "alighting-identity-safe-v1", "observed-route-day-max-through-closure-v1"));
         when(statistics.timeCell(any())).thenAnswer(call -> AlightingTimeCell.of(call.getArgument(0), false));
+        writer.setCompactSettlementWrite(true);
         writer.setAlightingAwareFeatures(query);
         return new RuntimeSnapshot(new ActiveModelDeployment(7, "alighting-online-v1", "alighting-test", "b".repeat(64)),
             new SupportedForecastScope(List.of("3330")), model, now.minusSeconds(86400));
@@ -70,9 +71,10 @@ class AlightingAwareForecastPublicationTest {
         when(query.read(10, stops, statistics)).thenReturn(Map.of(100L, snapshot));
         when(snapshot.observation()).thenReturn(new ObservedVehicle("bus", 1, 1, now, 12, null));
         when(snapshot.vehicleObservationId()).thenReturn(100L);
+        when(snapshot.capacity()).thenReturn(44);
         when(snapshot.forTarget(2)).thenReturn(vector);
         when(model.predict(vector)).thenReturn(SeatForecastResult.alighting(3.7, 0.85));
-        when(model.evidence("3330", 2)).thenReturn("{\"route\":\"3330\",\"alighting\":{\"stops\":[]}}");
+        when(model.settlementEvidence("3330")).thenReturn(Map.of(2, "{\"holidays\":[\"2026-12-25\",\"2026-11-20\"],\"alighting\":{\"stops\":[]}}"));
         when(committer.commit(eq(batch), any())).thenReturn(1);
 
         assertThat(writer.writeForecastsOf(batch, stops, runtime)).isEqualTo(1);
@@ -84,7 +86,8 @@ class AlightingAwareForecastPublicationTest {
         assertThat(row.seatFullChanceRaw()).isEqualTo(0.85);
         assertThat(row.demandStatisticsRevision()).isZero();
         assertThat(row.inferenceBundleHash()).isEqualTo("b".repeat(64));
-        assertThat(row.featureSnapshot()).contains("seat88", "probability80", "asOf", "alighting");
+        assertThat(row.featureSnapshot()).isEqualTo("{\"capacity\":44}");
+        assertThat(published.getValue().settlementContext()).contains("[\"2026-11-20\",\"2026-12-25\"]");
     }
 
     @Test

@@ -364,12 +364,13 @@ class OperationalArchiveIntegrationTest {
     @Test
     void 빈_응답과_실패_수집도_원본으로_보존한다() {
         final long id = batch("2026-11-07T03:00Z");
+        final long later = batch("2026-11-08T03:00Z");
         jdbc.sql("UPDATE observation_batch SET" + " outcome='FAILED_UNREADABLE',response_received_at=NULL WHERE id=?")
             .param(id).update();
         MemoryObjects objects = new MemoryObjects();
         service(objects).advance();
         assertSoftly(softly -> {
-            softly.assertThat(count("observation_batch")).isZero();
+            softly.assertThat(jdbc.sql("SELECT id FROM observation_batch").query(Long.class).list()).containsExactly(later);
             softly.assertThat(objects.values.keySet()).anyMatch(k -> k.contains("observation_batch"));
         });
     }

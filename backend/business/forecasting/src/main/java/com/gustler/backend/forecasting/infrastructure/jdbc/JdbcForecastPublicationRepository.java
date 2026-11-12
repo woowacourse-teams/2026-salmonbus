@@ -118,6 +118,9 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
                 publication.qualityRevision(), offset(publication.observedAt()), offset(publication.generatedAt()),
                 offset(publication.publishedAt()), id)
             .update());
+        if (publication.settlementContext() != null) {
+            storeSettlementContext(publication);
+        }
         List<Object[]> rows = publication.predictions()
             .stream()
             .map(prediction -> new Object[] { publicationId, prediction.vehicleObservationId(),
@@ -133,6 +136,22 @@ public class JdbcForecastPublicationRepository implements ForecastPublicationRep
         }
         existing.ifPresent(id -> jdbc.sql(COUNT_PREDICTIONS).params(publication.sourceBatchId(), id).update());
         return existing.isEmpty();
+    }
+
+    private void storeSettlementContext(ForecastPublication publication) {
+        String route = Long.toString(publication.routeVersionId());
+        int inserted = jdbc.sql("""
+            UPDATE model_deployment
+            SET settlement_context = settlement_context || jsonb_build_object(CAST(? AS text), CAST(? AS jsonb))
+            WHERE id = ? AND jsonb_exists(settlement_context, ?) = false
+            """).params(route, publication.settlementContext(), publication.modelDeploymentId(), route).update();
+        if (inserted == 0 && !jdbc.sql("""
+            SELECT (settlement_context -> CAST(? AS text)) IS NOT DISTINCT FROM CAST(? AS jsonb)
+            FROM model_deployment WHERE id = ?
+            """).params(route, publication.settlementContext(), publication.modelDeploymentId())
+            .query(Boolean.class).single()) {
+            throw new IllegalStateException("같은 모델과 노선 판본의 정산 근거가 변경됐다");
+        }
     }
 
     private record ExistingPublication(long id, long modelDeploymentId, boolean alighting) {

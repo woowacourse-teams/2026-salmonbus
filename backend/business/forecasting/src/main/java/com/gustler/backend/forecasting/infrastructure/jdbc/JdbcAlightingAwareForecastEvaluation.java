@@ -423,33 +423,55 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
                     WHERE b.id = ids.observation_batch_id
                     OFFSET 0
                 ) batch
+            ), forecast_details AS MATERIALIZED (
+                SELECT forecast.vehicle_observation_id, forecast.target_stop_order, forecast.feature_snapshot,
+                       forecast.model_deployment_id,
+                       forecast.feature_snapshot = jsonb_build_object('capacity', forecast.feature_snapshot->'capacity')
+                           AS compact
+                FROM (SELECT DISTINCT vehicle_observation_id, target_stop_order FROM work_page) keys
+                CROSS JOIN LATERAL (
+                    SELECT f.* FROM seat_forecast f
+                    WHERE f.vehicle_observation_id=keys.vehicle_observation_id AND f.target_stop_order=keys.target_stop_order
+                    OFFSET 0
+                ) forecast
+            ), settlement_contexts AS MATERIALIZED (
+                SELECT ids.model_deployment_id, deployment.settlement_context->CAST(:route AS text) AS context
+                FROM (SELECT DISTINCT model_deployment_id FROM forecast_details WHERE compact) ids
+                JOIN model_deployment deployment ON deployment.id=ids.model_deployment_id
             )
             SELECT w.vehicle_observation_id, w.target_stop_order, w.target_kind, w.label_version, w.next_attempt_at,
                    CASE WHEN w.label_version = 'alighting-confirmed-capacity-snapshot-v3'
                        THEN coalesce(batch.input_confirmed_at, batch.response_received_at)
-                       ELSE batch.response_received_at END AS source_at, f.feature_snapshot::text,
+                       ELSE batch.response_received_at END AS source_at,
+                   f.compact,
+                   (CASE WHEN NOT f.compact THEN f.feature_snapshot
+                         WHEN jsonb_exists(context.context->'stops', w.target_stop_order::text)
+                         THEN (context.context->'shared') || f.feature_snapshot || jsonb_build_object(
+                             'alighting', jsonb_build_object('stops', context.context->'stops'->(w.target_stop_order::text)))
+                         END)::text AS feature_snapshot,
                    source.vehicle_id, source.vehicle_trip_key, source.quality_direction, source.forecast_eligible
             FROM work_page w
             JOIN source_details source ON source.id = w.vehicle_observation_id
             JOIN batch_details batch ON batch.id = source.observation_batch_id
-            CROSS JOIN LATERAL (
-                SELECT forecast.feature_snapshot
-                FROM seat_forecast forecast
-                WHERE forecast.vehicle_observation_id = w.vehicle_observation_id
-                  AND forecast.target_stop_order = w.target_stop_order
-                OFFSET 0
-            ) f
+            JOIN forecast_details f USING (vehicle_observation_id, target_stop_order)
+            LEFT JOIN settlement_contexts context ON context.model_deployment_id=f.model_deployment_id
             ORDER BY w.next_attempt_at, w.vehicle_observation_id, w.target_stop_order, w.target_kind, w.label_version
             """.formatted(lock ? "FOR UPDATE OF w SKIP LOCKED" : "");
         return jdbc.sql(sql)
             .param("route", route)
             .param("limit", limit)
             .param("dueThrough", dueThrough.atOffset(ZoneOffset.UTC))
-            .query((rs, n) -> new Work(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order"),
-                rs.getString("target_kind"), rs.getString("label_version"), route,
-                rs.getObject("source_at", OffsetDateTime.class).toInstant(), rs.getString("feature_snapshot"),
-                rs.getString("vehicle_id"), rs.getString("vehicle_trip_key"), rs.getLong("quality_direction"),
-                rs.getBoolean("forecast_eligible"), rs.getObject("next_attempt_at", OffsetDateTime.class).toInstant()))
+            .query((rs, n) -> {
+                String snapshot = rs.getString("feature_snapshot");
+                if (rs.getBoolean("compact") && snapshot == null) {
+                    throw new IllegalStateException("예보가 참조하는 모델 판본의 정산 근거가 없다");
+                }
+                return new Work(rs.getLong("vehicle_observation_id"), rs.getInt("target_stop_order"),
+                    rs.getString("target_kind"), rs.getString("label_version"), route,
+                    rs.getObject("source_at", OffsetDateTime.class).toInstant(), snapshot,
+                    rs.getString("vehicle_id"), rs.getString("vehicle_trip_key"), rs.getLong("quality_direction"),
+                    rs.getBoolean("forecast_eligible"), rs.getObject("next_attempt_at", OffsetDateTime.class).toInstant());
+            })
             .list();
     }
 

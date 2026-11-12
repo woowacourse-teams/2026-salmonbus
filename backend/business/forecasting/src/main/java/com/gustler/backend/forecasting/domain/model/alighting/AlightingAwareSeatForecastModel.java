@@ -81,6 +81,10 @@ public final class AlightingAwareSeatForecastModel {
         return evidence.get(route).get(targetStopOrder);
     }
 
+    public Map<Integer, String> settlementEvidence(String route) {
+        return evidence.get(route);
+    }
+
     public String bundleDigest() {
         return bundleDigest;
     }

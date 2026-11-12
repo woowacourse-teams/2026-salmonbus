@@ -42,10 +42,10 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정되어도 다른 파일을 제외해 항상 통과하게 된다. 파일 이름으로 선택하고,
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
-     * <p>이 브랜치는 확정 이력의 커서 조회 인덱스를 더한다.
+     * <p>이 브랜치는 모델 배포에 정산 근거를 보관하는 컬럼을 더한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("confirmed_history_cursor_index");
+        List.of("model_settlement_context");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";
