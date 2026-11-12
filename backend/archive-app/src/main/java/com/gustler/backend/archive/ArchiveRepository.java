@@ -49,6 +49,26 @@ public class ArchiveRepository {
     private record ArchiveRow(String original, String cursor, Long modelDeploymentId) {
     }
 
+    /**
+     * 노선 {@code :v} 의 한국 날짜 {@code [:from, :until)} 배치를 고르는 조건이다. 별칭 {@code b} 가 observation_batch 여야 한다.
+     *
+     * <p>{@code COALESCE(response_received_at, scheduled_at)} 범위와 같은 행을 고른다. 응답 시각이 있으면 응답 시각으로, 없으면 예약
+     * 시각으로 날짜를 정한다. 식 그대로 쓰면 ix_batch_recent_history(route_version_id, response_received_at) 의 범위 조건이 되지 못해 노선 전체
+     * 배치를 읽으므로, 두 갈래로 나눠 인덱스 범위로 읽게 한다. 응답 없는 갈래는 그 노선의 응답 없는 배치를 기간과 상관없이 인덱스에서 읽는다.
+     */
+    private static final String DAY_BATCHES = """
+        b.route_version_id=:v AND ((b.response_received_at>=:from AND b.response_received_at<:until)
+            OR (b.response_received_at IS NULL AND b.scheduled_at>=:from AND b.scheduled_at<:until))""";
+
+    /**
+     * 그 노선·날짜의 배치 id 를 먼저 확정한다.
+     *
+     * <p>EXISTS 안에서는 첫 행을 빨리 찾는 계획을 골라 observation_batch 전체를 읽을 수 있어서, {@code MATERIALIZED} 로 배치 범위를
+     * 인덱스로 먼저 읽게 고정한다.
+     */
+    private static final String DAY_BATCHES_CTE =
+        "WITH day_batches AS MATERIALIZED (SELECT b.id FROM observation_batch b WHERE " + DAY_BATCHES + ")\n";
+
     private OffsetDateTime time(Instant instant) {
         return instant.atOffset(ZoneOffset.UTC);
     }
@@ -121,6 +141,16 @@ public class ArchiveRepository {
         });
     }
 
+    /**
+     * 이관 대상 노선·날짜를 지금 옮겨도 되는지 판정한다.
+     *
+     * <p>보관 기준 뒤에 생긴 예보·정산 기록을 찾을 때는 그 노선·날짜의 배치를 {@code MATERIALIZED} CTE 로 먼저 확정하고, 배치마다
+     * {@code LIMIT 1} 하위 질의로 관측은 (observation_batch_id, source_row_number) 유일 키로, 예보·정산은 기본 키로 따라간다.
+     * seat_forecast 에는 노선 인덱스가 없어 예보 쪽에서 출발하면 표 전체를 읽고, 배치를 먼저 확정하지 않으면 EXISTS 의 첫 행 최적화 때문에
+     * observation_batch 전체를 읽을 수 있다. 관측의 (observation_batch_id,
+     * route_version_id) FK 와 예보·정산의 (vehicle_observation_id, route_version_id) FK 때문에 배치의 노선 조건은 예보·정산의 노선 조건과
+     * 같은 행을 고른다.
+     */
     private String ready(Job job) {
         boolean historyRequired = jdbc.sql("""
             SELECT EXISTS (
@@ -160,27 +190,29 @@ public class ArchiveRepository {
         if (alightingPending) {
             return "ALIGHTING_AWARE_SETTLEMENT_PENDING";
         }
-        final boolean recent = jdbc
-            .sql(
-                """
-                    SELECT EXISTS(SELECT 1 FROM seat_forecast f JOIN vehicle_observation o ON o.id=f.vehicle_observation_id
-                        JOIN observation_batch b ON b.id=o.observation_batch_id
-                        LEFT JOIN forecast_evaluation_result e USING(vehicle_observation_id,target_stop_order)
-                        LEFT JOIN forecast_evaluation_compact c USING(vehicle_observation_id,target_stop_order)
-                        WHERE f.route_version_id=:v AND COALESCE(b.response_received_at,b.scheduled_at)>=:from AND COALESCE(b.response_received_at,b.scheduled_at)<:until
-                          AND (f.generated_at>=:cutoff OR e.scored_at>=:cutoff OR e.arrived_at>=:cutoff
-                            OR c.scored_at>=:cutoff OR c.arrived_at>=:cutoff))
-                    """)
+        final boolean recent = jdbc.sql(DAY_BATCHES_CTE + """
+            SELECT EXISTS(SELECT 1 FROM day_batches d CROSS JOIN LATERAL (
+                SELECT 1 FROM vehicle_observation o JOIN seat_forecast f ON f.vehicle_observation_id=o.id
+                LEFT JOIN forecast_evaluation_result e
+                    ON e.vehicle_observation_id=f.vehicle_observation_id AND e.target_stop_order=f.target_stop_order
+                LEFT JOIN forecast_evaluation_compact c
+                    ON c.vehicle_observation_id=f.vehicle_observation_id AND c.target_stop_order=f.target_stop_order
+                WHERE o.observation_batch_id=d.id AND f.route_version_id=:v
+                  AND (f.generated_at>=:cutoff OR e.scored_at>=:cutoff OR e.arrived_at>=:cutoff
+                    OR c.scored_at>=:cutoff OR c.arrived_at>=:cutoff)
+                LIMIT 1) changed)
+            """)
             .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
             .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
-        final boolean recentAlightingAware = jdbc.sql("""
-            SELECT EXISTS(SELECT 1 FROM alighting_forecast_evaluation_metric e
-                JOIN vehicle_observation o ON o.id=e.vehicle_observation_id
-                JOIN observation_batch b ON b.id=o.observation_batch_id
-                WHERE e.route_version_id=:v AND COALESCE(b.response_received_at,b.scheduled_at)>=:from
-                    AND COALESCE(b.response_received_at,b.scheduled_at)<:until
-                    AND (e.scored_at>=:cutoff OR e.event_at>=:cutoff))
-            """).param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
+        final boolean recentAlightingAware = jdbc.sql(DAY_BATCHES_CTE + """
+            SELECT EXISTS(SELECT 1 FROM day_batches d CROSS JOIN LATERAL (
+                SELECT 1 FROM vehicle_observation o
+                JOIN alighting_forecast_evaluation_metric e ON e.vehicle_observation_id=o.id
+                WHERE o.observation_batch_id=d.id AND e.route_version_id=:v
+                  AND (e.scored_at>=:cutoff OR e.event_at>=:cutoff)
+                LIMIT 1) changed)
+            """)
+            .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
             .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
         if (recent || recentAlightingAware) {
             return "RECENT_CHILD_RECORD";
@@ -286,14 +318,14 @@ public class ArchiveRepository {
                     UNION ALL SELECT jsonb_build_object('table','vehicle_capacity','data',to_jsonb(c))::text FROM vehicle_capacity c
                         WHERE vehicle_id IN(SELECT DISTINCT o.vehicle_id FROM vehicle_observation o
                             JOIN observation_batch b ON b.id=o.observation_batch_id
-                            WHERE o.route_version_id=:v AND COALESCE(b.response_received_at,b.scheduled_at)>=:from AND COALESCE(b.response_received_at,b.scheduled_at)<:until)
+                            WHERE o.route_version_id=:v AND\s""" + DAY_BATCHES + """
+                    )
                     UNION ALL SELECT jsonb_build_object('table','demand_statistics_version','data',to_jsonb(d))::text
                         FROM demand_statistics_version d WHERE d.route_version_id=:v
                     UNION ALL SELECT jsonb_build_object('table','vehicle_capacity_history','data',to_jsonb(h))::text
                         FROM vehicle_capacity_history h WHERE h.vehicle_id IN(SELECT DISTINCT o.vehicle_id
                             FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id
-                            WHERE o.route_version_id=:v AND COALESCE(b.response_received_at,b.scheduled_at)>=:from AND COALESCE(b.response_received_at,b.scheduled_at)<:until)
-                    """)
+                            WHERE o.route_version_id=:v AND\s""" + DAY_BATCHES + ")")
             .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
                 .param("deployments", deploymentIdsJson).query(String.class).list();
         });
