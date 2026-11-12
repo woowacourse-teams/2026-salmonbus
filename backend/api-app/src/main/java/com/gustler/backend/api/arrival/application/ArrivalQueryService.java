@@ -27,9 +27,6 @@ import org.springframework.stereotype.Service;
 /**
  * 현재 정류장 방문 판본과 수신 결과를 조회하고 필요하면 Worker 갱신을 요청한다.
  * 내부 HTTP 대기 중 DB 트랜잭션을 유지하지 않는다.
- *
- * <p>쓸 수 있는 수신본이 있으면 갱신 요청은 {@link ArrivalRefreshDispatcher}에 맡겨 응답을 막지 않는다.
- * 쓸 수 있는 수신본이 없으면 지금처럼 요청 스레드에서 보내고, 대기 자리를 얻었으면 첫 결과를 제한된 시간 기다린다.
  */
 @Service
 public class ArrivalQueryService {
@@ -42,7 +39,6 @@ public class ArrivalQueryService {
     private final ArrivalFreshnessPolicy freshness;
     private final Clock clock;
     private final ArrivalFirstResultPolicy firstResult;
-    private final ArrivalRefreshDispatcher dispatcher;
     private final MeterRegistry meters;
 
     public ArrivalQueryService(
@@ -55,7 +51,7 @@ public class ArrivalQueryService {
     }
 
     /**
-     * 갱신 요청을 모두 요청 스레드에서 보내는 조회 서비스를 만든다.
+     * 조회 시간 지표를 애플리케이션 지표 저장소에 남기지 않는 조회 서비스를 만든다.
      */
     public ArrivalQueryService(
         ArrivalReadRepository repository,
@@ -67,18 +63,6 @@ public class ArrivalQueryService {
         this(repository, gateway, freshness, clock, firstResult, new SimpleMeterRegistry());
     }
 
-    private ArrivalQueryService(
-        ArrivalReadRepository repository,
-        ArrivalRefreshGateway gateway,
-        ArrivalFreshnessPolicy freshness,
-        Clock clock,
-        ArrivalFirstResultPolicy firstResult,
-        MeterRegistry meters
-    ) {
-        this(repository, gateway, freshness, clock, firstResult,
-            ArrivalRefreshDispatcher.synchronous(gateway, clock, meters), meters);
-    }
-
     @Autowired
     public ArrivalQueryService(
         ArrivalReadRepository repository,
@@ -86,7 +70,6 @@ public class ArrivalQueryService {
         ArrivalFreshnessPolicy freshness,
         Clock clock,
         ArrivalFirstResultPolicy firstResult,
-        ArrivalRefreshDispatcher dispatcher,
         MeterRegistry meters
     ) {
         this.firstResult = firstResult;
@@ -94,7 +77,6 @@ public class ArrivalQueryService {
         this.gateway = gateway;
         this.freshness = freshness;
         this.clock = clock;
-        this.dispatcher = dispatcher;
         this.meters = meters;
     }
 
@@ -201,16 +183,12 @@ public class ArrivalQueryService {
     }
 
     private RefreshRequest refreshIfDue(ArrivalQuery query, ArrivalSnapshot snapshot, final boolean waiting) {
-        Instant now = clock.instant();
-        if (!freshness.refreshDue(snapshot, now)) {
+        if (!freshness.refreshDue(snapshot, clock.instant())) {
             return new RefreshRequest("none", new ArrivalRefresh(Status.IDLE, null, snapshot.refreshAfterAt()));
         }
         if (waiting) {
             return new RefreshRequest("wait", timed("wait",
                 () -> gateway.request(query.stationId(), firstResult.maximumWait())));
-        }
-        if (freshness.usable(snapshot, now)) {
-            return new RefreshRequest("dispatch", dispatcher.request(query.stationId(), snapshot));
         }
         return new RefreshRequest("immediate", timed("immediate", () -> gateway.request(query.stationId())));
     }
@@ -234,7 +212,7 @@ public class ArrivalQueryService {
 
     /**
      * 이번 조회가 Worker 갱신을 어떻게 요청했는지와 응답에 실을 갱신 상태다. mode는 none(갱신 시점 전), wait(첫 결과 대기),
-     * dispatch(쓸 수 있는 수신본이 있어 {@link ArrivalRefreshDispatcher}에 맡김), immediate(요청 스레드에서 접수만) 중 하나다.
+     * immediate(요청 스레드에서 접수만) 중 하나다.
      */
     private record RefreshRequest(String mode, ArrivalRefresh refresh) {
     }

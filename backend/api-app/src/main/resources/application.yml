@@ -146,8 +146,6 @@ arrivals:
   internal-token: ${ARRIVAL_INTERNAL_TOKEN:}
   first-result-wait: 500ms # 사용 가능한 수신이 없을 때만 수집 완료를 기다린다. 0ms로 비활성화 가능.
   first-result-max-waiters: 32
-  # 쓸 수 있는 수신본이 있는데 갱신 시점이 지났을 때 Worker 갱신 요청을 응답과 따로 보낸다. false이거나 enabled=false면 요청 스레드에서 보낸다.
-  refresh-async: ${ARRIVALS_REFRESH_ASYNC:true}
 
 board:
   # 확인 질의 통합만 독립적으로 되돌릴 수 있다. false면 기존 JPA 조회를 쓴다.

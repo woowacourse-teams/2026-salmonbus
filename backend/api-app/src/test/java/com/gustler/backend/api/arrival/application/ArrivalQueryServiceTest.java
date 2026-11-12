@@ -21,16 +21,12 @@ import com.gustler.backend.arrival.contract.ArrivalRefresh.Status;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot.Prediction;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot.RouteArrival;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.Executor;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -141,48 +137,6 @@ class ArrivalQueryServiceTest {
     }
 
     @Test
-    void 비동기_실행기를_쓰면_갱신시점이_지난_유효값은_Worker_응답을_기다리지_않고_요청하지_않았을_때의_갱신상태로_돌려준다() {
-        // given
-        List<Runnable> submitted = new ArrayList<>();
-        SimpleMeterRegistry meters = new SimpleMeterRegistry();
-        ArrivalQueryService async = asyncServiceAt(45, submitted::add, meters);
-
-        // when
-        StationArrivalsOverview result = async.get(new ArrivalQuery(STATION, ROUTE, 7L, 22));
-
-        // then
-        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
-            softly.assertThat(result.status()).isEqualTo(ArrivalAvailability.READY);
-            softly.assertThat(result.refresh()).isEqualTo(new ArrivalRefresh(Status.IDLE, null, RECEIVED.plusSeconds(40)));
-            softly.assertThat(result.snapshot().receivedAt()).isEqualTo(RECEIVED);
-            softly.assertThat(submitted).hasSize(1);
-            softly.assertThat(meters.timer("salmonbus.arrival.query.read", "refresh", "dispatch", "usable", "true").count())
-                .isEqualTo(1);
-        }
-        verifyNoInteractions(gateway);
-        submitted.forEach(Runnable::run);
-        verify(gateway).request(STATION);
-    }
-
-    @Test
-    void 비동기_실행기를_써도_쓸_수신본이_없으면_요청_스레드에서_보내고_Worker_답을_싣는다() {
-        // given
-        List<Runnable> submitted = new ArrayList<>();
-        ArrivalRefresh limited = new ArrivalRefresh(Status.DEFERRED, "RATE_LIMITED", RECEIVED.plusSeconds(90));
-        when(gateway.request(STATION)).thenReturn(limited);
-        ArrivalQueryService async = asyncServiceAt(61, submitted::add, new SimpleMeterRegistry());
-
-        // when
-        StationArrivalsOverview result = async.get(new ArrivalQuery(STATION, ROUTE, 7L, 22));
-
-        // then
-        assertThat(result.status()).isEqualTo(ArrivalAvailability.UNAVAILABLE);
-        assertThat(result.refresh()).isEqualTo(limited);
-        assertThat(submitted).isEmpty();
-        verify(gateway).request(STATION);
-    }
-
-    @Test
     void 입구_확인을_마친_정류장_조회는_도착정보를_고를_때_쓴_방문을_함께_돌려준다() {
         // when
         KnownStationArrivals known = service.readKnownStation(STATION);
@@ -191,13 +145,6 @@ class ArrivalQueryServiceTest {
         assertThat(known.visits()).extracting(ArrivalVisit::stopSequence).containsExactly(22, 65);
         assertThat(known.overview().routes()).hasSize(2);
         verify(repository, times(1)).visits(STATION);
-    }
-
-    private ArrivalQueryService asyncServiceAt(final int seconds, Executor executor, SimpleMeterRegistry meters) {
-        Clock clock = Clock.fixed(RECEIVED.plusSeconds(seconds), ZoneOffset.UTC);
-        return new ArrivalQueryService(repository, gateway, new ArrivalFreshnessPolicy(), clock,
-            new ArrivalFirstResultPolicy(Duration.ZERO, 32),
-            ArrivalRefreshDispatcher.async(gateway, executor, clock, 16, meters), meters);
     }
 
     @Test
