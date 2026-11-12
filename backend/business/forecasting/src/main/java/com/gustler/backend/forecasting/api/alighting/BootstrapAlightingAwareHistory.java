@@ -6,12 +6,19 @@ public interface BootstrapAlightingAwareHistory {
 
     record Request(
         String bundleDirectory, long routeVersionId, long sourceOriginBatchId, long throughBatchId,
-        String checkpointDirectory, int batchLimit, int maximumHistoryRows
+        String checkpointDirectory, int batchLimit, int maximumHistoryRows, int maximumCheckpoints, int maximumSeconds
     ) {
+        public Request(String bundleDirectory, long routeVersionId, long sourceOriginBatchId, long throughBatchId,
+            String checkpointDirectory, int batchLimit, int maximumHistoryRows) {
+            this(bundleDirectory, routeVersionId, sourceOriginBatchId, throughBatchId, checkpointDirectory,
+                batchLimit, maximumHistoryRows, 10, 30);
+        }
+
         public Request {
             if (hasMissingPath(bundleDirectory, checkpointDirectory)
                 || hasInvalidCursor(routeVersionId, sourceOriginBatchId, throughBatchId)
-                || hasInvalidLimits(batchLimit, maximumHistoryRows)) {
+                || hasInvalidLimits(batchLimit, maximumHistoryRows)
+                || maximumCheckpoints < 1 || maximumCheckpoints > 1000 || maximumSeconds < 1 || maximumSeconds > 3600) {
                 throw new IllegalArgumentException("Invalid AlightingAware history bootstrap arguments");
             }
         }
@@ -36,7 +43,12 @@ public interface BootstrapAlightingAwareHistory {
 
     record Result(
         long routeVersionId, long sourceOriginBatchId, long throughBatchId, int checkpoints,
-        String checkpointDirectory, String bundleDigest
+        String checkpointDirectory, String bundleDigest, long processedThroughBatchId, boolean complete
     ) {
+        public Result(long routeVersionId, long sourceOriginBatchId, long throughBatchId, int checkpoints,
+            String checkpointDirectory, String bundleDigest) {
+            this(routeVersionId, sourceOriginBatchId, throughBatchId, checkpoints, checkpointDirectory, bundleDigest,
+                throughBatchId, true);
+        }
     }
 }

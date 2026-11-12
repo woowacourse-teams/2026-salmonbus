@@ -77,4 +77,20 @@ class SettlementRouteRunnerTest {
 
         assertThat(attempts.get()).isEqualTo(4);
     }
+    @Test
+    void 예산으로_건너뛴_노선의_재시도_상태를_보존한다() {
+        when(clock.instant()).thenReturn(START);
+        AtomicInteger failures = new AtomicInteger();
+        LongConsumer settle = route -> {
+            if (route == 2) {
+                failures.incrementAndGet();
+                throw new IllegalStateException("retry");
+            }
+        };
+        runner.run(List.of(1L, 2L), settle);
+        AtomicInteger admitted = new AtomicInteger();
+        runner.run(List.of(1L, 2L), settle, () -> admitted.getAndIncrement() < 1);
+        runner.run(List.of(1L, 2L), settle);
+        assertThat(failures.get()).isOne();
+    }
 }

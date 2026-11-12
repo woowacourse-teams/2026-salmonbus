@@ -258,6 +258,29 @@ class JdbcAlightingAwareForecastEvaluationTest {
         assertThat(count("alighting_forecast_evaluation_work")).isZero();
     }
 
+    @Test
+    void 저장_전_발행_입력이_바뀌면_준비한_결과를_저장하지_않는다() {
+        useConfirmedProfile();
+        JdbcClient observing = mock(JdbcClient.class, delegatesTo(jdbc));
+        TransactionTemplate republish = new TransactionTemplate(transactions);
+        republish.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        doAnswer(call -> {
+            republish.executeWithoutResult(status -> jdbc.sql("""
+                UPDATE seat_forecast SET feature_snapshot=feature_snapshot || '{"reissued":true}'::jsonb
+                WHERE vehicle_observation_id=?
+                """).param(source).update());
+            return jdbc.sql(call.getArgument(0, String.class));
+        }).when(observing).sql(contains("WITH raw AS"));
+
+        new JdbcAlightingAwareForecastEvaluation(observing, quality, Clock.systemUTC(), transactions).settle();
+
+        assertThat(count("alighting_forecast_evaluation_result")).isZero();
+        assertThat(count("alighting_forecast_evaluation_work")).isOne();
+        service.settle();
+        assertThat(count("alighting_forecast_evaluation_result")).isOne();
+        assertThat(count("alighting_forecast_evaluation_work")).isZero();
+    }
+
     @ParameterizedTest
     @CsvSource({"true, false, 1", "false, false, 1", "false, true, 2"})
     void 잠기지_않고_계산_범위가_그대로인_정산은_처리한다(
@@ -793,6 +816,116 @@ class JdbcAlightingAwareForecastEvaluationTest {
         assertThat(jdbc.sql("SELECT reason FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=?")
             .param(source).query(String.class).single()).isEqualTo("OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT");
         assertThat(count("alighting_forecast_evaluation_work")).isZero();
+    }
+
+    @Test
+    void 여러_저장_페이지가_같은_준비_이력을_공유한다() {
+        useConfirmedProfile();
+        tx.executeWithoutResult(status -> {
+            for (int seconds = 1; seconds <= 150; seconds++) {
+                long next = observation("shared-" + seconds, seconds, 1, 40);
+                copyForecast(next);
+            }
+            jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at "
+                + "WHERE route_version_id=?").param(version).update();
+        });
+        new JdbcAlightingAwareForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions,
+            50_000, 150_000, 3000, 100, 8, 30).settle();
+        List<String> expected = settlementResults();
+        tx.executeWithoutResult(status -> {
+            jdbc.sql("""
+                INSERT INTO alighting_forecast_evaluation_work(vehicle_observation_id,target_stop_order,target_kind,
+                    label_version,route_version_id)
+                SELECT vehicle_observation_id,target_stop_order,target_kind,label_version,route_version_id
+                FROM alighting_forecast_evaluation_result WHERE route_version_id=?
+                """).param(version).update();
+            jdbc.sql("DELETE FROM alighting_forecast_evaluation_result WHERE route_version_id=?").param(version).update();
+        });
+        JdbcClient observing = mock(JdbcClient.class, delegatesTo(jdbc));
+        var bounded = new JdbcAlightingAwareForecastEvaluation(observing, quality, Clock.systemUTC(), transactions,
+            50_000, 150_000, 3000, 500, 1, 30);
+
+        bounded.settle();
+
+        assertThat(count("alighting_forecast_evaluation_work")).isZero();
+        assertThat(count("alighting_forecast_evaluation_result")).isEqualTo(151);
+        assertThat(settlementResults()).containsExactlyElementsOf(expected);
+        verify(observing).sql(contains("WITH raw AS"));
+        verify(observing).sql(contains("HAVING count(o.id)"));
+        assertThat(jdbc.sql("SELECT scoring_state FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=?")
+            .param(source).query(String.class).single()).isEqualTo("SETTLED");
+    }
+
+    @Test
+    void 읽기_예산을_쓴_노선_다음부터_다음_회차를_시작한다() {
+        long firstRoute = route;
+        long firstVersion = version;
+        long firstDeployment = deployment;
+        jdbc.sql("""
+            INSERT INTO alighting_forecast_evaluation_work(vehicle_observation_id,target_stop_order,target_kind,
+                label_version,route_version_id)
+            SELECT vehicle_observation_id,target_stop_order,seat_target,'unknown-'||n,route_version_id
+            FROM seat_forecast CROSS JOIN generate_series(1,250) n WHERE vehicle_observation_id=?
+            """).param(source).update();
+        jdbc.sql("UPDATE model_deployment SET state='RETIRED' WHERE id=?").param(deployment).update();
+        정산_자료를_준비한다();
+        long secondRoute = route;
+        long secondVersion = version;
+        long secondDeployment = deployment;
+        try {
+            var bounded = new JdbcAlightingAwareForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions,
+                50_000, 150_000, 3000, 100, 1, 30);
+            bounded.settle();
+            assertThat(jdbc.sql("SELECT count(*) FROM alighting_forecast_evaluation_work WHERE route_version_id=?")
+                .param(firstVersion).query(Integer.class).single()).isEqualTo(151);
+            assertThat(count("alighting_forecast_evaluation_work")).isOne();
+            bounded.settle();
+            assertThat(count("alighting_forecast_evaluation_work")).isZero();
+            assertThat(jdbc.sql("SELECT count(*) FROM alighting_forecast_evaluation_work WHERE route_version_id=?")
+                .param(firstVersion).query(Integer.class).single()).isEqualTo(151);
+        } finally {
+            route = firstRoute;
+            version = firstVersion;
+            deployment = firstDeployment;
+            준비한_자료를_정리한다();
+            route = secondRoute;
+            version = secondVersion;
+            deployment = secondDeployment;
+        }
+    }
+
+    @Test
+    void 준비_이력을_공유해도_저장_페이지마다_변경된_입력을_확인한다() {
+        useConfirmedProfile();
+        tx.executeWithoutResult(status -> {
+            for (int seconds = 1; seconds <= 150; seconds++) {
+                copyForecast(observation("changed-" + seconds, seconds, 1, 40));
+            }
+            jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at "
+                + "WHERE route_version_id=?").param(version).update();
+        });
+        java.util.concurrent.atomic.AtomicInteger locks = new java.util.concurrent.atomic.AtomicInteger();
+        RouteWorkAccess changing = mock(RouteWorkAccess.class, delegatesTo(quality));
+        doAnswer(call -> {
+            if (locks.incrementAndGet() == 2) {
+                jdbc.sql("UPDATE route SET data_revision=data_revision+1 WHERE id=?").param(route).update();
+            }
+            return quality.lock(call.getArgument(0, Long.class));
+        }).when(changing).lock(version);
+        var bounded = new JdbcAlightingAwareForecastEvaluation(jdbc, changing, Clock.systemUTC(), transactions,
+            50_000, 150_000, 3000, 500, 1, 30);
+
+        bounded.settle();
+
+        assertThat(count("alighting_forecast_evaluation_result")).isEqualTo(100);
+        assertThat(count("alighting_forecast_evaluation_work")).isEqualTo(51);
+    }
+
+    private List<String> settlementResults() {
+        return jdbc.sql("""
+            SELECT (to_jsonb(result)-'scored_at')::text FROM alighting_forecast_evaluation_result result
+            WHERE route_version_id=? ORDER BY vehicle_observation_id,target_stop_order,target_kind,label_version
+            """).param(version).query(String.class).list();
     }
 
     private void useConfirmedProfile() {

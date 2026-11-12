@@ -1,7 +1,5 @@
 package com.gustler.backend.forecasting.infrastructure.alighting;
 
-import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
-import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
@@ -12,6 +10,8 @@ import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
+import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
+import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import com.gustler.backend.support.ConfirmedTripFixture;
 import java.nio.file.Path;
@@ -267,6 +267,57 @@ class JdbcAlightingAwareFeatureQueryTest {
         Path confirmedCheckpoint = checkpoint.resolve(AlightingAwareRouteStatistics.CONFIRMED_PROFILE);
         assertThat(new AlightingAwareHistorySeedReader(confirmedCheckpoint.toString(), 100).read(version).rank())
             .isEqualTo(2);
+    }
+
+    @Test
+    void 준비_예산에서_멈춘_뒤_같은_경로로_재개하면_완료한_배치를_다시_읽지_않는다() {
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at "
+            + "WHERE route_version_id=?").param(version).update();
+        AlightingAwareRouteStatistics confirmed = new AlightingAwareRouteStatistics(statistics.route(), statistics.stops(),
+            statistics.minutesPerStop(), statistics.tables(), statistics.targetBands(), statistics.holidays(), true);
+        AlightingAwareFeatureVector expected = query().read(sourceBatch, stops, confirmed).get(source).forTarget(2);
+        AlightingAwareHistoryBootstrap bootstrap = new AlightingAwareHistoryBootstrap(jdbc);
+
+        var partial = bootstrap.rebuild(stops, confirmed, first, sourceBatch, 1, 100, checkpoint.toString(), 1, 30);
+        assertThat(partial.complete()).isFalse();
+        assertThat(partial.processedThroughBatchId()).isEqualTo(first);
+        var completed = bootstrap.rebuild(stops, confirmed, first, sourceBatch, 1, 100, checkpoint.toString(), 1, 30);
+        assertThat(completed.complete()).isTrue();
+        assertThat(completed.checkpoints()).isOne();
+        assertThat(completed.processedThroughBatchId()).isEqualTo(sourceBatch);
+        assertThat(bootstrap.rebuild(stops, confirmed, first, sourceBatch, 1, 100, checkpoint.toString(), 1, 30)
+            .checkpoints()).isZero();
+        var actual = new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc)),
+            "", 100, true, checkpoint.toString()).read(sourceBatch, stops, confirmed).get(source).forTarget(2);
+        assertThat(actual.seat88()).containsExactly(expected.seat88());
+        assertThat(actual.probability80()).containsExactly(expected.probability80());
+    }
+
+    @Test
+    void 재개_커서는_같은_확정_시각의_배치를_ID까지_구분한다() {
+        long last = batch(0, 1);
+        observation(last, 3);
+        jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at "
+            + "WHERE route_version_id=?").param(version).update();
+        AlightingAwareRouteStatistics confirmed = new AlightingAwareRouteStatistics(statistics.route(), statistics.stops(),
+            statistics.minutesPerStop(), statistics.tables(), statistics.targetBands(), statistics.holidays(), true);
+        AlightingAwareHistoryBootstrap bootstrap = new AlightingAwareHistoryBootstrap(jdbc);
+        for (long expected : List.of(first, sourceBatch, last)) {
+            var progress = bootstrap.rebuild(stops, confirmed, first, last, 1, 100, checkpoint.toString(), 1, 30);
+            assertThat(progress.processedThroughBatchId()).isEqualTo(expected);
+            assertThat(progress.complete()).isEqualTo(expected == last);
+        }
+        assertThat(AlightingAwareHistorySeedReader.confirmed(checkpoint.toString(), 100).read(version).rank()).isEqualTo(2);
+    }
+
+    @Test
+    void 커서_인덱스가_없으면_과거_이력을_읽기_전에_준비를_거부한다() {
+        jdbc.sql("DROP INDEX ix_batch_confirmed_history").update();
+        AlightingAwareRouteStatistics confirmed = new AlightingAwareRouteStatistics(statistics.route(), statistics.stops(),
+            statistics.minutesPerStop(), statistics.tables(), statistics.targetBands(), statistics.holidays(), true);
+        assertThatThrownBy(() -> new AlightingAwareHistoryBootstrap(jdbc)
+            .rebuild(stops, confirmed, first, sourceBatch, 1, 100, checkpoint.toString(), 1, 30))
+            .hasMessage("ALIGHTING_AWARE_HISTORY_REQUIRES_CURSOR_INDEX");
     }
 
     private JdbcAlightingAwareFeatureQuery query() {

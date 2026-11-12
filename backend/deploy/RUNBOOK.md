@@ -914,8 +914,16 @@ dev에서 기존 V67을 이미 실행했다면 V72 이상 적용과 V67 단독 �
 1. 원본 번들과 서명·해시는 그대로 보존한다. 기존 `les-*` 판본 정보는 읽을 때만 새 이름으로 해석한다.
 2. 새 모델 파일과 설정을 준비하고 Worker 시작 시 `alighting-online-capacity-snapshot-v2` 계산 판본으로 승격하도록 설정한다. 필요하면 기존 `MODEL_BUNDLE_PROMOTE_ON_START` 절차를 사용한다.
 3. API의 Flyway 적용 완료를 확인하고 Worker와 archive-app을 중지한 상태에서 확정 관측 이력 체크포인트를 생성한다. 전환 DB에서 이번 배포 소스의 maintenance JAR로 `alighting-history-bootstrap`을 실행하고 `--checkpoint-directory`에 배포 전용 빈 경로를 지정한다. 전환 표시가 없는 기존 파일은 Worker와 준비 명령에서 거부한다. 지원 노선별 `alighting-confirmed-closure-v2` 파일의 해시와 마지막 배치 ID를 확인하고, Worker 계정에 새 경로의 읽기·쓰기 권한을 준 뒤 `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`를 그 경로로 설정한다.
+   준비 명령은 기본적으로 체크포인트 10개 또는 30초가 지나면 새 읽기를 시작하지 않는다. `--maximum-checkpoints`와 `--maximum-seconds`로 실행 예산을 지정한다. 읽기 SQL에는 15초, 잠금 대기에는 1초 제한이 적용된다. 완료 전에는 JSON의 `status`가 `paused`, 종료 코드가 `2`이며 `checkpoint.processedThroughBatchId`가 마지막 저장 위치다. 같은 번들·원점·목표 배치·체크포인트 경로로 다시 실행해 이어간다. `checkpoint.complete=true`와 종료 코드 `0`을 확인하기 전에는 Worker를 시작하지 않는다. 재실행마다 새 빈 경로를 만들지 않는다.
+
+   V78은 확정시각과 배치 ID의 커서 인덱스를 생성한다. 준비 명령은 이 인덱스가 없거나 유효하지 않으면 이력을 읽기 전에 중단한다. 생성 중 배치 쓰기가 기다리므로 Worker와 이관·복원 작업을 중지한 상태에서 적용한다. 인덱스 생성에도 기존 배치 읽기와 쓰기가 필요하므로 체크포인트 준비와 겹치지 않게 한다. 잠금 획득은 5초, 생성 문장은 120초로 제한하고 실패하면 해당 마이그레이션을 롤백한다. 완료 후 체크포인트 준비를 진행한다.
+
 4. 새 경로를 설정한 뒤 `sudo rm /etc/salmonbus/alighting-cutover-hold`를 실행하고 Worker 배포를 재개한다. 새 Worker의 차량 정원 캐시 준비와 예보·정산을 확인한다. 예보에 저장한 정원으로 정산하며, 이후 관측이 그 정원을 넘으면 `OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT` 사유로 해당 정산을 종료한다.
 5. archive-app은 삭제를 끈 상태로 시작한다. 지원 노선의 현재 판본마다 새 Worker가 `alighting_history_checkpoint`에 저장한 배치가 DB에 존재하는지 확인한다. 이전 날짜의 수집·정산 완료와 S3 재읽기 및 해시 검증 후 삭제를 활성화한다. 마지막 체크포인트 확정 시각에서 90초를 뺀 수신 시각 이후의 자료가 포함된 날짜는 새 체크포인트가 저장될 때까지 `ALIGHTING_HISTORY_REQUIRED`로 보류된다.
+
+정산의 확정 모델은 같은 날짜의 작업을 `forecast.alighting.evaluation.preparation-limit`(기본 500개)까지 한 스냅샷에서 준비하고, 결과 저장은 100개씩 나눈다. 한 tick의 새 준비는 `forecast.alighting.evaluation.maximum-preparations-per-tick`(기본 8회)와 `forecast.alighting.evaluation.maximum-tick-seconds`(기본 30초)로 제한한다. 예산이 끝나면 다음 tick은 마지막 처리 노선 다음부터 순환한다. 이미 준비한 묶음의 저장은 마치며, 실행 중인 SQL을 이 시간 예산으로 강제 종료하지 않는다. 준비·저장 트랜잭션의 기존 15초 제한은 유지한다. 이 예산은 작업량·새 읽기 시작의 제한이며 물리 I/O 바이트나 RDS 크레딧을 직접 제한하는 설정은 아니다.
+
+`alighting_settlement_history_read`, `alighting_settlement_integrity_read`, `alighting_settlement_prepare`, `alighting_settlement_commit`으로 읽기·준비·저장 시간을 구분한다. `alighting_settlement_page_committed`는 커밋 뒤 처리·완료·재예약 건수를 기록한다. 재기동 후 같은 체크포인트가 유지되는지와 대기 지연, 수집·예보 지연, RDS 읽기량을 함께 확인하고 예산을 조정한다.
 
 구 모델 미완료 작업은 V70/V71에서 종료 사유를 남기며 기존 완료 결과를 재작성하지 않는다. V72는 운영 중간 통계·당일 보정 테이블을 제거한다. 이미 발행한 통계·판본·파일 발행 기록은 과거 데이터 해석용으로 유지한다.
 
