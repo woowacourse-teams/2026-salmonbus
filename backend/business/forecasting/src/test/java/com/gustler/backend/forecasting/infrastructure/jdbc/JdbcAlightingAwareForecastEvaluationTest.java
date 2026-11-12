@@ -258,6 +258,29 @@ class JdbcAlightingAwareForecastEvaluationTest {
         assertThat(count("alighting_forecast_evaluation_work")).isZero();
     }
 
+    @Test
+    void 저장_전_발행_입력이_바뀌면_준비한_결과를_저장하지_않는다() {
+        useConfirmedProfile();
+        JdbcClient observing = mock(JdbcClient.class, delegatesTo(jdbc));
+        TransactionTemplate republish = new TransactionTemplate(transactions);
+        republish.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        doAnswer(call -> {
+            republish.executeWithoutResult(status -> jdbc.sql("""
+                UPDATE seat_forecast SET feature_snapshot=feature_snapshot || '{"reissued":true}'::jsonb
+                WHERE vehicle_observation_id=?
+                """).param(source).update());
+            return jdbc.sql(call.getArgument(0, String.class));
+        }).when(observing).sql(contains("WITH raw AS"));
+
+        new JdbcAlightingAwareForecastEvaluation(observing, quality, Clock.systemUTC(), transactions).settle();
+
+        assertThat(count("alighting_forecast_evaluation_result")).isZero();
+        assertThat(count("alighting_forecast_evaluation_work")).isOne();
+        service.settle();
+        assertThat(count("alighting_forecast_evaluation_result")).isOne();
+        assertThat(count("alighting_forecast_evaluation_work")).isZero();
+    }
+
     @ParameterizedTest
     @CsvSource({"true, false, 1", "false, false, 1", "false, true, 2"})
     void 잠기지_않고_계산_범위가_그대로인_정산은_처리한다(

@@ -392,24 +392,55 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         Instant dueThrough,
         final boolean lock
     ) {
+        // Work references both the forecast and the observation, and each observation has a batch.
+        // Select and lock the due keys before joining those required inputs.
+        // Keep the route as the leading sort key so a generic plan can use the route-local due index.
         String sql = """
+            WITH work_page AS MATERIALIZED (
+                SELECT w.vehicle_observation_id, w.target_stop_order, w.target_kind, w.label_version, w.next_attempt_at
+                FROM alighting_forecast_evaluation_work w
+                WHERE w.route_version_id BETWEEN :route AND :route AND w.next_attempt_at <= :dueThrough
+                ORDER BY w.route_version_id, w.next_attempt_at, w.vehicle_observation_id,
+                         w.target_stop_order, w.target_kind, w.label_version
+                LIMIT :limit
+                %s
+            ), source_details AS MATERIALIZED (
+                SELECT source.*
+                FROM (SELECT DISTINCT vehicle_observation_id FROM work_page) ids
+                CROSS JOIN LATERAL (
+                    SELECT o.id, o.observation_batch_id, o.vehicle_id, o.vehicle_trip_key, o.quality_direction,
+                           (o.remaining_seats IS NOT NULL) AS forecast_eligible
+                    FROM operational_observation o
+                    WHERE o.id = ids.vehicle_observation_id
+                    OFFSET 0
+                ) source
+            ), batch_details AS (
+                SELECT batch.*
+                FROM (SELECT DISTINCT observation_batch_id FROM source_details) ids
+                CROSS JOIN LATERAL (
+                    SELECT b.id, b.input_confirmed_at, b.response_received_at
+                    FROM observation_batch b
+                    WHERE b.id = ids.observation_batch_id
+                    OFFSET 0
+                ) batch
+            )
             SELECT w.vehicle_observation_id, w.target_stop_order, w.target_kind, w.label_version, w.next_attempt_at,
                    CASE WHEN w.label_version = 'alighting-confirmed-capacity-snapshot-v3'
                        THEN coalesce(batch.input_confirmed_at, batch.response_received_at)
                        ELSE batch.response_received_at END AS source_at, f.feature_snapshot::text,
-                   source.vehicle_id, source.vehicle_trip_key, source.quality_direction,
-                   (source.remaining_seats IS NOT NULL) AS forecast_eligible
-            FROM alighting_forecast_evaluation_work w
-            JOIN seat_forecast f USING(vehicle_observation_id,target_stop_order)
-            JOIN operational_observation source ON source.id=w.vehicle_observation_id
-            JOIN observation_batch batch ON batch.id=source.observation_batch_id
-            WHERE w.route_version_id = :route AND w.next_attempt_at <= :dueThrough
-            ORDER BY w.next_attempt_at, w.vehicle_observation_id, w.target_stop_order, w.target_kind
-            LIMIT :limit
-            """;
-        if (lock) {
-            sql += "FOR UPDATE OF w SKIP LOCKED";
-        }
+                   source.vehicle_id, source.vehicle_trip_key, source.quality_direction, source.forecast_eligible
+            FROM work_page w
+            JOIN source_details source ON source.id = w.vehicle_observation_id
+            JOIN batch_details batch ON batch.id = source.observation_batch_id
+            CROSS JOIN LATERAL (
+                SELECT forecast.feature_snapshot
+                FROM seat_forecast forecast
+                WHERE forecast.vehicle_observation_id = w.vehicle_observation_id
+                  AND forecast.target_stop_order = w.target_stop_order
+                OFFSET 0
+            ) f
+            ORDER BY w.next_attempt_at, w.vehicle_observation_id, w.target_stop_order, w.target_kind, w.label_version
+            """.formatted(lock ? "FOR UPDATE OF w SKIP LOCKED" : "");
         return jdbc.sql(sql)
             .param("route", route)
             .param("limit", limit)
