@@ -927,6 +927,12 @@ dev에서 기존 V67을 이미 실행했다면 V72 이상 적용과 V67 단독 �
 
 V80은 증분 정산 저장소와 배치 등록·입력 변경 트리거, 입력 커서 인덱스를 만든다. Worker와 이관·복원 작업을 중지한 상태에서 적용하고 새 Worker를 시작한다. 인덱스 생성에는 기존 배치를 읽는 작업이 필요하며 잠금은 5초, 문장은 120초로 제한한다. 이력 전체를 이 마이그레이션에서 변환하거나 대기 작업을 일괄 등록하지 않는다. 폐기된 근거와 대기 정산이 없는 지난 날짜의 근거는 나누어 정리한다.
 
+V80이 포함된 릴리즈는 배포를 시작하기 전에 RDS의 EBS 처리량 크레딧(CloudWatch `AWS/RDS`의 `EBSByteBalance%`)을 확인한다. 크레딧이 바닥나면 두 인덱스 생성이 각각 수십 초에서 2분 가까이 걸려 문장 제한 120초에 걸리거나 API의 최초 health 확인 시간을 넘길 수 있다. 크레딧이 남아 있을 때 커서 인덱스와 거의 같은 V78 인덱스는 운영에서 약 3초 걸렸다.
+
+- 확인 위치: 「Salmonbus DB 원인 분석」 대시보드 「02 읽기와 쓰기 / 디스크 성능」 행의 「EBS 처리량 크레딧 잔량」 패널이다. 이 패널은 최신 값 하나만 보여 주므로 최근 추이는 Grafana Explore에서 `min_over_time(aws_rds_ebsbyte_balance_percent_minimum{dimension_DBInstanceIdentifier="salmonbus-db"}[1h])`로 본다. CloudWatch 5분 표본이 늦게 들어와 최신 값도 5~10분 전 구간의 값이다.
+- 기준: 최근 1시간 최소값이 20% 이상이면 진행한다. 운영은 평소 96~100%다. dev에서는 14~15%일 때 V78 인덱스가 약 1초, 0%일 때 V77 인덱스가 55초 걸렸다.
+- 낮을 때: 배포를 시작하지 않는다. 이관·통계·수동 조회처럼 크레딧을 쓰는 작업을 확인하고 최근 1시간 최소값이 기준을 넘을 때까지 기다린다. Worker와 이관·복원 작업을 중지한 뒤 API 배포 직전에도 패널 값을 다시 본다. 이때 기준보다 낮으면 API 배포를 시작하지 않는다. 아직 V80을 적용하지 않았으므로 이전 Worker와 이관 작업을 다시 시작하고 회복을 기다린다.
+
 `alighting_settlement_history_read`, `alighting_settlement_integrity_read`, `alighting_settlement_prepare`, `alighting_settlement_commit`으로 읽기·준비·저장 시간을 구분한다. `alighting_settlement_page_committed`는 커밋 뒤 처리·완료·재예약 건수를 기록한다. 재기동 후 같은 체크포인트가 유지되는지와 대기 지연, 수집·예보 지연, RDS 읽기량을 함께 확인하고 예산을 조정한다.
 
 V80 적용 뒤에는 기존 대기 작업을 배치 큐에 등록하는 동안과 등록이 끝난 뒤를 나눠 밀린 작업이 줄어드는지 확인한다. 등록은 `alighting_settlement_queue_scan.complete`가 `true`가 되면 끝난다. 두 구간 모두 5분 단위로 아래 네 값을 같은 표에 기록하고, SQL은 각 5분이 끝날 때 실행한다. 그래프는 「Salmonbus DB 원인 분석」 대시보드에서 본다.
