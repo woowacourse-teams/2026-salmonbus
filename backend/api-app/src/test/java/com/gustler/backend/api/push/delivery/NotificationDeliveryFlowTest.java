@@ -433,7 +433,8 @@ class NotificationDeliveryFlowTest {
             TOPIC,
             providerToken,
             MAPPER,
-            Duration.ofSeconds(5)
+            Duration.ofSeconds(5),
+            target -> NotificationMessage.unavailable()
         );
     }
 

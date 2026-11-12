@@ -64,9 +64,9 @@ class ApnsClientTest {
             assertThat(received.pushType()).isEqualTo("alert");
             JsonNode root = MAPPER.readTree(received.body());
             assertThat(root.path("aps").has("target")).isFalse();
-            assertThat(root.path("aps").path("alert").path("title").asText()).isEqualTo("연어버스");
+            assertThat(root.path("aps").path("alert").path("title").asText()).isEqualTo("3330번 · 판교역");
             assertThat(root.path("aps").path("alert").path("body").asText())
-                .isEqualTo("즐겨찾기한 버스를 확인할 시간이에요");
+                .isEqualTo("약 5분 후 도착 · 탑승확률 높음\n도착 시 빈 좌석 42석 예상");
             assertThat(root.path("aps").path("sound").asText()).isEqualTo("default");
             assertThat(root.path("target").path("routeId").asText()).isEqualTo("234000884");
             assertThat(root.path("target").path("stopId").asText()).isEqualTo("203000165");
@@ -201,7 +201,8 @@ class ApnsClientTest {
             "com.salmonbus.app",
             providerToken,
             MAPPER,
-            timeout
+            timeout,
+            target -> new NotificationMessage("3330번 · 판교역", "약 5분 후 도착 · 탑승확률 높음\n도착 시 빈 좌석 42석 예상")
         );
     }
 

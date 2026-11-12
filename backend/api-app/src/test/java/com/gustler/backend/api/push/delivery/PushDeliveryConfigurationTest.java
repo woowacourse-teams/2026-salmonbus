@@ -45,6 +45,7 @@ class PushDeliveryConfigurationTest {
         .withBean(NotificationDeliveryRepository.class, () -> deliveries)
         .withBean(Clock.class, () -> Clock.fixed(NOW, ZoneOffset.UTC))
         .withBean(ObjectMapper.class, ObjectMapper::new)
+        .withBean(NotificationMessageResolver.class, () -> Mockito.mock(NotificationMessageResolver.class))
         .withPropertyValues("push.delivery.cron=-")
         .withInitializer(context -> context.getBeanFactory()
             .setConversionService(ApplicationConversionService.getSharedInstance()));
@@ -138,6 +139,7 @@ class PushDeliveryConfigurationTest {
             .withBean(NotificationDeliveryService.class, () -> service)
             .withBean(Clock.class, Clock::systemUTC)
             .withBean(ObjectMapper.class, ObjectMapper::new)
+            .withBean(NotificationMessageResolver.class, () -> Mockito.mock(NotificationMessageResolver.class))
             .withBean(NotificationDeliveryRepository.class, () -> deliveries)
             .withInitializer(context -> context.getBeanFactory()
                 .setConversionService(ApplicationConversionService.getSharedInstance()))
@@ -173,6 +175,7 @@ class PushDeliveryConfigurationTest {
             .withBean(NotificationDeliveryService.class, () -> service)
             .withBean(Clock.class, Clock::systemUTC)
             .withBean(ObjectMapper.class, ObjectMapper::new)
+            .withBean(NotificationMessageResolver.class, () -> Mockito.mock(NotificationMessageResolver.class))
             .withBean(NotificationDeliveryRepository.class, () -> deliveries)
             .withInitializer(context -> context.getBeanFactory()
                 .setConversionService(ApplicationConversionService.getSharedInstance()))
