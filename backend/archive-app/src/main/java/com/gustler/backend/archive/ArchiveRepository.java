@@ -7,6 +7,8 @@ import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -37,10 +39,14 @@ public class ArchiveRepository {
     public record File(int number, String table, String key, String hash, int rows, int bytes, boolean purged) {
     }
 
-    public record Page(List<String> rows, String cursor) {
+    public record Page(List<String> rows, String cursor, Set<Long> modelDeploymentIds) {
         public Page {
             rows = List.copyOf(rows);
+            modelDeploymentIds = Set.copyOf(modelDeploymentIds);
         }
+    }
+
+    private record ArchiveRow(String original, String cursor, Long modelDeploymentId) {
     }
 
     private OffsetDateTime time(Instant instant) {
@@ -208,15 +214,20 @@ public class ArchiveRepository {
         return transaction.execute(status -> {
             limits();
             owned(job);
-            String sql = "SELECT to_jsonb(t)::text AS original," + table.key() + "::text AS cursor FROM " + table.table
+            String deploymentId = table == ArchiveTable.FORECAST ? "t.model_deployment_id" : "NULL::bigint";
+            String sql = "SELECT to_jsonb(t)::text AS original," + table.key() + "::text AS cursor,"
+                + deploymentId + " AS model_deployment_id FROM " + table.table
                 + " t " + table.selection() + " WHERE " + table.batch() + ".route_version_id=:v AND " + "COALESCE("
                 + table.batch() + ".response_received_at," + table.batch() + ".scheduled_at)>=:from AND " + "COALESCE("
                 + table.batch() + ".response_received_at," + table.batch() + ".scheduled_at)<:until AND "
                 + table.afterCursor() + " ORDER BY " + table.keyOrder() + " LIMIT :limit";
-            List<String[]> rows = jdbc.sql(sql).param("v", job.version()).param("from", time(job.from()))
+            List<ArchiveRow> rows = jdbc.sql(sql).param("v", job.version()).param("from", time(job.from()))
                 .param("until", time(job.until())).param("cursor", cursor).param("limit", limit)
-                .query((rs, n) -> new String[] { rs.getString(1), rs.getString(2) }).list();
-            return new Page(rows.stream().map(row -> row[0]).toList(), nextCursor(rows, cursor));
+                .query((rs, n) -> new ArchiveRow(rs.getString(1), rs.getString(2), rs.getObject(3, Long.class))).list();
+            Set<Long> deployments = table == ArchiveTable.FORECAST
+                ? rows.stream().map(ArchiveRow::modelDeploymentId).collect(Collectors.toSet()) : Set.of();
+            return new Page(rows.stream().map(ArchiveRow::original).toList(),
+                rows.isEmpty() ? cursor : rows.getLast().cursor(), deployments);
         });
     }
 
@@ -248,15 +259,8 @@ public class ArchiveRepository {
                 .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
                 .param("cursor", cursor).param("limit", limit)
                 .query((rs, n) -> new String[] { rs.getString(1), rs.getString(2) }).list();
-            return new Page(rows.stream().map(row -> row[1]).toList(), nextEvidenceCursor(rows, cursor));
+            return new Page(rows.stream().map(row -> row[1]).toList(), nextEvidenceCursor(rows, cursor), Set.of());
         });
-    }
-
-    private String nextCursor(List<String[]> rows, String previous) {
-        if (rows.isEmpty()) {
-            return previous;
-        }
-        return rows.getLast()[1];
     }
 
     private String nextEvidenceCursor(List<String[]> rows, final long previous) {
@@ -266,8 +270,11 @@ public class ArchiveRepository {
         return rows.getLast()[0];
     }
 
-    public List<String> dimensions(Job job) {
-        return jdbc
+    public List<String> dimensions(Job job, String deploymentIdsJson) {
+        return transaction.execute(status -> {
+            limits();
+            owned(job);
+            return jdbc
             .sql(
                 """
                     SELECT jsonb_build_object('table','route_version','data',to_jsonb(v))::text FROM route_version v WHERE id=:v
@@ -275,10 +282,7 @@ public class ArchiveRepository {
                         FROM route r JOIN route_version v ON v.route_id=r.id WHERE v.id=:v
                     UNION ALL SELECT jsonb_build_object('table','route_stop','data',to_jsonb(s))::text FROM route_stop s WHERE route_version_id=:v
                     UNION ALL SELECT jsonb_build_object('table','model_deployment','data',to_jsonb(m))::text FROM model_deployment m
-                        WHERE id IN(SELECT DISTINCT f.model_deployment_id FROM seat_forecast f
-                            JOIN vehicle_observation o ON o.id=f.vehicle_observation_id
-                            JOIN observation_batch b ON b.id=o.observation_batch_id
-                            WHERE f.route_version_id=:v AND COALESCE(b.response_received_at,b.scheduled_at)>=:from AND COALESCE(b.response_received_at,b.scheduled_at)<:until)
+                        WHERE m.id IN (SELECT value::bigint FROM jsonb_array_elements_text(CAST(:deployments AS jsonb)))
                     UNION ALL SELECT jsonb_build_object('table','vehicle_capacity','data',to_jsonb(c))::text FROM vehicle_capacity c
                         WHERE vehicle_id IN(SELECT DISTINCT o.vehicle_id FROM vehicle_observation o
                             JOIN observation_batch b ON b.id=o.observation_batch_id
@@ -291,7 +295,8 @@ public class ArchiveRepository {
                             WHERE o.route_version_id=:v AND COALESCE(b.response_received_at,b.scheduled_at)>=:from AND COALESCE(b.response_received_at,b.scheduled_at)<:until)
                     """)
             .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
-            .query(String.class).list();
+                .param("deployments", deploymentIdsJson).query(String.class).list();
+        });
     }
 
     public List<File> files(Job job) {
