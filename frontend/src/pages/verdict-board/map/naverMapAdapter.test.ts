@@ -987,6 +987,27 @@ describe("네이버 지도 adapter", () => {
     flushFrames();
     expect(setMap).not.toHaveBeenCalled();
   });
+  it("키보드 포커스가 있는 정류장 핀은 화면 밖으로 나가도 연결을 유지하고 포커스가 빠진 뒤 다음 갱신에서 해제한다", () => {
+    const { native, adapter } = setup();
+    native.map.zoom = 16;
+    adapter.update(null, "UP", []);
+    const marker = native.markers.find((item) => item.options.icon.content.dataset.mapStopSequence === "11")!;
+    const originalX = native.map.getProjection().fromCoordToOffset(marker.options.position).x;
+    const idle = native.events.find((event) => event.name === "idle")!.listener;
+    const focusedDocument = globalThis.document as unknown as { activeElement: unknown };
+    expect(marker.map).toBe(native.map);
+
+    focusedDocument.activeElement = marker.options.icon.content;
+    native.map.projectionOffsetX = native.map.size.width + 257 - originalX;
+    idle();
+    expect(marker.map).toBe(native.map);
+    expect(marker.visible).toBe(true);
+
+    focusedDocument.activeElement = null;
+    idle();
+    expect(marker.map).toBeNull();
+    expect(marker.visible).toBe(false);
+  });
   it("화면이 그대로인 idle 이벤트는 마커를 다시 갱신하지 않는다", () => {
     const { native } = setup();
     const updates = native.markers.flatMap((marker) => [

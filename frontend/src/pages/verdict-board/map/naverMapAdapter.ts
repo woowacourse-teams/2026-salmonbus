@@ -416,9 +416,12 @@ export function createNaverRouteMap(
         (isSelected || (!selectedStopOnly && (!hidden || !mappedDirections.has(selection.direction))));
       const screen = eligible ? projection.fromCoordToOffset(stop.naverCoordinate) : undefined;
       const margin = stop.visible ? 256 : 128;
+      // 키보드 포커스가 있는 핀은 화면 밖으로 나가도 지도에서 떼지 않아 포커스 위치를 잃지 않게 한다.
+      const focused = button === document.activeElement;
       const visible =
         eligible &&
         (isSelected ||
+          focused ||
           screen === undefined ||
           !Number.isFinite(screen.x) ||
           !Number.isFinite(screen.y) ||
