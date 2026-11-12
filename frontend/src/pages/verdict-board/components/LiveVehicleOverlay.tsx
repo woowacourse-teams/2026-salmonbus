@@ -8,7 +8,6 @@ import * as styles from "./LiveVehicleOverlay.css";
 interface LiveVehicleOverlayProps {
   routeCanvasRef: RefObject<HTMLDivElement | null>;
   stops: StopView[];
-  selectedSequence: number | null;
   liveVehicleViews: LiveVehicleView[];
   motion: LiveVehicleMotionStore;
   selectedVehicleKey: string | null;
@@ -22,14 +21,13 @@ const EMPTY_ANCHOR_POSITIONS: ReadonlyMap<number, number> = new Map();
 export function LiveVehicleOverlay({
   routeCanvasRef,
   stops,
-  selectedSequence,
   liveVehicleViews,
   motion,
   selectedVehicleKey,
   onVehicleSelect,
 }: LiveVehicleOverlayProps) {
   const markerRefs = useRef(new Map<string, HTMLDivElement>());
-  const anchorPositions = useTimelineAnchorPositions(routeCanvasRef, stops, selectedSequence);
+  const anchorPositions = useTimelineAnchorPositions(routeCanvasRef, stops);
 
   useLayoutEffect(() => {
     const offsets = collisionOffsetsFor(liveVehicleViews);
@@ -74,7 +72,6 @@ export function LiveVehicleOverlay({
 function useTimelineAnchorPositions(
   routeCanvasRef: RefObject<HTMLDivElement | null>,
   stops: StopView[],
-  selectedSequence: number | null,
 ): ReadonlyMap<number, number> {
   const [anchorPositions, setAnchorPositions] = useState(EMPTY_ANCHOR_POSITIONS);
 
@@ -118,7 +115,7 @@ function useTimelineAnchorPositions(
       observer?.disconnect();
       window.removeEventListener("resize", scheduleMeasurement);
     };
-  }, [routeCanvasRef, selectedSequence, stops]);
+  }, [routeCanvasRef, stops]);
 
   return anchorPositions;
 }

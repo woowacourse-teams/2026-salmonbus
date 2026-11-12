@@ -84,7 +84,6 @@ export function StopList({
       <LiveVehicleOverlay
         routeCanvasRef={routeCanvasRef}
         stops={stops}
-        selectedSequence={selectedSequence}
         liveVehicleViews={liveVehicleViews}
         motion={motion}
         selectedVehicleKey={selectedVehicleKey}
