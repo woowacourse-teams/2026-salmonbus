@@ -102,6 +102,7 @@ class ForecastArchiveLifecycleTest {
                 constant(80,NumericTreeEnsemble.Kind.BINARY,0),1.3),
                 Map.of("3330",statistics),Map.of("3330",Map.of(2,evidence(),3,evidence())),"a".repeat(64));
             var writer=new ForecastBatchWriter(committer,Clock.fixed(SOURCE.plusSeconds(1),ZoneOffset.UTC),routeWork);
+            writer.setCompactSettlementWrite(true);
             writer.setAlightingAwareFeatures(query);
             writer.setConfirmedInput(new ConfirmedAlightingAwareInput(jdbc,manager));
             assertThat(writer.writeForecastsOf(new PendingForecastBatch(batch,version,route,SOURCE),stops,

@@ -183,6 +183,7 @@ public final class ConfirmedAlightingAwareWorkerReplay {
             ForecastBatchWriter writer = new ForecastBatchWriter(
                 context.getBean(ForecastBatchCommitter.class), Clock.fixed(source.receivedAt(), ZoneOffset.UTC),
                 quality);
+            writer.setCompactSettlementWrite(true);
             writer.setAlightingAwareFeatures(query);
             writer.setConfirmedInput(context.getBean(ConfirmedAlightingAwareInput.class));
             PendingForecastBatch batch = new PendingForecastBatch(source.batchId(), source.routeVersionId(), routeId,

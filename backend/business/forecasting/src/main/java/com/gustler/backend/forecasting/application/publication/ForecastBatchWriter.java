@@ -25,6 +25,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -45,6 +46,12 @@ public class ForecastBatchWriter {
     private final RouteWorkAccess routeWork;
     private AlightingAwareFeatureQuery alightingFeatures;
     private AlightingAwareInputConfirmation confirmedInput;
+    private boolean compactSettlementWrite;
+
+    @Value("${forecast.compact-settlement-write:false}")
+    public void setCompactSettlementWrite(boolean enabled) {
+        this.compactSettlementWrite = enabled;
+    }
 
     @Autowired(required = false)
     public void setAlightingAwareFeatures(AlightingAwareFeatureQuery alightingFeatures) {
@@ -129,7 +136,7 @@ public class ForecastBatchWriter {
         return commitAlightingAware(batch, new ForecastPublication(batch.observationBatchId(),
             batch.routeVersionId(), runtime.deploymentId(), 0, qualityRevision,
             batch.responseReceivedAt(), generatedAt, generatedAt, predictions,
-            predictions.isEmpty() ? null : settlementContext(model, statistics, predictions)), statistics);
+            !compactSettlementWrite || predictions.isEmpty() ? null : settlementContext(model, statistics, predictions)), statistics);
     }
 
     private int commitAlightingAware(PendingForecastBatch batch, ForecastPublication publication, AlightingAwareRouteStatistics statistics) {
@@ -208,7 +215,13 @@ public class ForecastBatchWriter {
         VehicleStopTarget target,
         final boolean extended
     ) {
-        ObjectNode evidence = JSON.createObjectNode().put("capacity", snapshot.capacity());
+        ObjectNode evidence = compactSettlementWrite ? JSON.createObjectNode()
+            : (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.stopOrder()));
+        if (!compactSettlementWrite) {
+            evidence.put("inputProfile", statistics.profile().input());
+            evidence.put("capacityPolicy", "vehicle-capacity-snapshot-v1");
+        }
+        evidence.put("capacity", snapshot.capacity());
         SeatForecastResult prediction = predict(model, statistics, snapshot, target, extended);
         return SeatForecast.of(snapshot.vehicleObservationId(), target,
             prediction, runtime.deploymentId(), 0, generatedAt)

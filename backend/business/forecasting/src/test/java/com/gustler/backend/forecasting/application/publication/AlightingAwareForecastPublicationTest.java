@@ -57,6 +57,7 @@ class AlightingAwareForecastPublicationTest {
         when(statistics.profile()).thenReturn(new AlightingAwareRouteStatistics.Profile(
             "alighting-original-v1", "alighting-identity-safe-v1", "observed-route-day-max-through-closure-v1"));
         when(statistics.timeCell(any())).thenAnswer(call -> AlightingTimeCell.of(call.getArgument(0), false));
+        writer.setCompactSettlementWrite(true);
         writer.setAlightingAwareFeatures(query);
         return new RuntimeSnapshot(new ActiveModelDeployment(7, "alighting-online-v1", "alighting-test", "b".repeat(64)),
             new SupportedForecastScope(List.of("3330")), model, now.minusSeconds(86400));

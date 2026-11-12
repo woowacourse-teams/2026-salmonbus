@@ -212,7 +212,11 @@ class AlightingAwarePublicationLifecycleTest {
         writer.setAlightingAwareFeatures(featureQuery);
         PendingForecastBatch batch = new PendingForecastBatch(batchId, version, route, START);
 
+        writer.setCompactSettlementWrite(false);
         assertThat(writer.writeForecastsOf(batch, stops, selected)).isEqualTo(1);
+        assertThat(jdbc.sql("SELECT feature_snapshot::text FROM seat_forecast WHERE vehicle_observation_id=?")
+            .param(source).query(String.class).single()).contains("inputProfile", "capacityPolicy", "alighting");
+        writer.setCompactSettlementWrite(true);
         assertThat(writer.writeForecastsOf(batch, stops, selected)).isEqualTo(1);
         assertThat(count("seat_forecast")).isEqualTo(1);
         assertThat(count("forecast_publication")).isEqualTo(1);
@@ -312,6 +316,7 @@ class AlightingAwarePublicationLifecycleTest {
         when(feature.provenance()).thenReturn(new AlightingAwareFeatureSnapshot.Provenance(source));
         when(feature.observation()).thenReturn(new ObservedVehicle("current", version, 1, START, 40, null));
         ForecastBatchWriter writer = new ForecastBatchWriter(committer, Clock.fixed(START.plusSeconds(1), ZoneOffset.UTC), quality);
+        writer.setCompactSettlementWrite(true);
         writer.setAlightingAwareFeatures(query);
         writer.setConfirmedInput(confirmedInput);
         PendingForecastBatch batch = new PendingForecastBatch(batchId, version, route, START);
