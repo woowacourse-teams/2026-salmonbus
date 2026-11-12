@@ -16,7 +16,8 @@ public record ForecastPublication(
     Instant observedAt,
     Instant generatedAt,
     Instant publishedAt,
-    List<SeatForecast> predictions
+    List<SeatForecast> predictions,
+    String settlementContext
 ) {
     public ForecastPublication {
         if (!hasRequiredIdentifiers(sourceBatchId, routeVersionId, modelDeploymentId)) {
@@ -44,6 +45,14 @@ public record ForecastPublication(
                 throw new IllegalArgumentException("같은 차량 관측과 대상 정류장의 예측을 중복 발행할 수 없다");
             }
         }
+    }
+
+    public ForecastPublication(
+        long sourceBatchId, long routeVersionId, long modelDeploymentId, int demandStatisticsRevision,
+        long qualityRevision, Instant observedAt, Instant generatedAt, Instant publishedAt, List<SeatForecast> predictions
+    ) {
+        this(sourceBatchId, routeVersionId, modelDeploymentId, demandStatisticsRevision, qualityRevision,
+            observedAt, generatedAt, publishedAt, predictions, null);
     }
 
     private static boolean hasRequiredIdentifiers(long sourceBatchId, long routeVersionId, long modelDeploymentId) {

@@ -212,7 +212,13 @@ class AlightingAwarePublicationLifecycleTest {
         writer.setAlightingAwareFeatures(featureQuery);
         PendingForecastBatch batch = new PendingForecastBatch(batchId, version, route, START);
 
+        writer.setCompactSettlementWrite(false);
         assertThat(writer.writeForecastsOf(batch, stops, selected)).isEqualTo(1);
+        assertThat(jdbc.sql("SELECT feature_snapshot::text FROM seat_forecast WHERE vehicle_observation_id=?")
+            .param(source).query(String.class).single())
+            .contains("inputProfile", "capacityPolicy", "alighting", "asOf", "vehicleObservationId", "sourceBatchId")
+            .doesNotContain("seat88", "probability80");
+        writer.setCompactSettlementWrite(true);
         assertThat(writer.writeForecastsOf(batch, stops, selected)).isEqualTo(1);
         assertThat(count("seat_forecast")).isEqualTo(1);
         assertThat(count("forecast_publication")).isEqualTo(1);
@@ -221,7 +227,9 @@ class AlightingAwarePublicationLifecycleTest {
         assertThat(jdbc.sql("SELECT input_confirmed_at IS NOT NULL FROM observation_batch WHERE id=?")
             .param(batchId).query(Boolean.class).single()).isTrue();
         assertThat(jdbc.sql("SELECT feature_snapshot::text FROM seat_forecast WHERE vehicle_observation_id=?")
-            .param(source).query(String.class).single()).contains("seat88", "probability80", "asOf");
+            .param(source).query(String.class).single()).isEqualTo("{\"capacity\": 40}");
+        assertThat(jdbc.sql("SELECT settlement_context -> CAST(? AS text) -> 'stops' -> '2' IS NOT NULL FROM model_deployment WHERE id=?")
+            .params(Long.toString(version), deployed).query(Boolean.class).single()).isTrue();
         final double prediction = jdbc.sql("SELECT expected_seats FROM seat_forecast WHERE vehicle_observation_id=?")
             .param(source).query(Double.class).single();
         assertThat(prediction).isCloseTo((10 + 1.3) / 3, within(1e-12));
@@ -316,6 +324,11 @@ class AlightingAwarePublicationLifecycleTest {
 
         // when
         writer.writeForecastsOf(batch, stops, runtime);
+        assertThat(jdbc.sql("SELECT feature_snapshot::text FROM seat_forecast WHERE vehicle_observation_id=?")
+            .param(source).query(String.class).single())
+            .contains("asOf", "tripStartObservationId", "sourceBatchId", "forecastInput", "alighting-extended-six-v1")
+            .doesNotContain("extendedInputs");
+        writer.setCompactSettlementWrite(true);
         writer.writeForecastsOf(batch, stops, runtime);
         service.settle();
         new JdbcAlightingAwareForecastEvaluation(jdbc, quality, Clock.systemUTC(), transactions).settle();
@@ -328,8 +341,8 @@ class AlightingAwarePublicationLifecycleTest {
         assertThat(jdbc.sql("SELECT seat_full_chance FROM seat_forecast WHERE vehicle_observation_id=?")
             .param(source).query(Double.class).single()).isEqualTo(0.8);
         assertThat(jdbc.sql("""
-            SELECT feature_snapshot->'extendedInputs'->>1 FROM seat_forecast WHERE vehicle_observation_id=?
-            """).param(source).query(Double.class).single()).isEqualTo(40);
+            SELECT feature_snapshot::text FROM seat_forecast WHERE vehicle_observation_id=?
+            """).param(source).query(String.class).single()).isEqualTo("{\"capacity\": 40}");
         assertThat(count("alighting_forecast_evaluation_work")).isZero();
         assertThat(count("alighting_forecast_evaluation_result")).isOne();
         assertThat(jdbc.sql("SELECT scoring_state FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=?")

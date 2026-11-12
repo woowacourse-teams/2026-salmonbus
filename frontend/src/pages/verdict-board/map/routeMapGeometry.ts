@@ -212,12 +212,21 @@ function interpolatedCoordinateFor(from: GeoCoordinate, to: GeoCoordinate, fract
 }
 
 // 화면 픽셀 간격으로 샘플링하여 줌아웃에서도 방향이 읽히게 한다.
+export const ROUTE_ARROW_SPACING_PX = 100;
+// 화면 가장자리에 걸친 화살표도 그리도록 화면 밖 이 거리까지 배치한다.
+export const ROUTE_ARROW_VIEWPORT_MARGIN_PX = 16;
+
+function isNearViewport(x: number, y: number, viewport: { width: number; height: number }) {
+  const margin = ROUTE_ARROW_VIEWPORT_MARGIN_PX;
+  return x >= -margin && x <= viewport.width + margin && y >= -margin && y <= viewport.height + margin;
+}
+
 export function routeArrowsFor(
   coordinates: readonly GeoCoordinate[],
-  project: (coordinate: GeoCoordinate) => ScreenPoint,
+  project: (coordinate: GeoCoordinate, index: number) => ScreenPoint,
   viewport: { width: number; height: number },
 ): RouteArrow[] {
-  const spacing = 100;
+  const spacing = ROUTE_ARROW_SPACING_PX;
   const arrows: RouteArrow[] = [];
   const segments: {
     from: GeoCoordinate;
@@ -229,23 +238,28 @@ export function routeArrowsFor(
   }[] = [];
   let nextOffset = spacing / 2;
   let totalLength = 0;
+  let previousEnd: ScreenPoint | undefined;
+  let previousIndex = -1;
   for (let index = 1; index < coordinates.length; index += 1) {
     const from = coordinates[index - 1];
     const to = coordinates[index];
     if (from === undefined || to === undefined) continue;
-    const start = project(from);
-    const end = project(to);
+    const start = previousIndex === index - 1 && previousEnd !== undefined ? previousEnd : project(from, index - 1);
+    const end = project(to, index);
+    previousEnd = end;
+    previousIndex = index;
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const length = Math.hypot(dx, dy);
     if (!Number.isFinite(length) || length === 0) continue;
-    segments.push({ from, to, start, dx, dy, length });
     totalLength += length;
+    if (totalLength < spacing) segments.push({ from, to, start, dx, dy, length });
+    else if (segments.length > 0) segments.length = 0;
     for (; nextOffset < length; nextOffset += spacing) {
       const fraction = nextOffset / length;
       const x = start.x + dx * fraction;
       const y = start.y + dy * fraction;
-      if (x < -16 || x > viewport.width + 16 || y < -16 || y > viewport.height + 16) continue;
+      if (!isNearViewport(x, y, viewport)) continue;
       arrows.push({
         coordinate: interpolatedCoordinateFor(from, to, fraction),
         rotation: Math.atan2(dy, dx) * (180 / Math.PI),
@@ -264,7 +278,7 @@ export function routeArrowsFor(
       const fraction = remaining / length;
       const x = start.x + dx * fraction;
       const y = start.y + dy * fraction;
-      if (x >= -16 && x <= viewport.width + 16 && y >= -16 && y <= viewport.height + 16)
+      if (isNearViewport(x, y, viewport))
         arrows.push({
           coordinate: interpolatedCoordinateFor(from, to, fraction),
           rotation: Math.atan2(dy, dx) * (180 / Math.PI),

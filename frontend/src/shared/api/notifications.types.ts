@@ -13,6 +13,8 @@ export interface NotificationSetting extends FavoriteTarget, NotificationSchedul
   id: string;
 }
 
+export type NotificationSettingChange = { saved: NotificationSetting } | { removedId: string };
+
 export interface NotificationSettings {
   settings: NotificationSetting[];
 }

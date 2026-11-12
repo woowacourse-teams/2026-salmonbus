@@ -13,10 +13,13 @@ public interface SeatForecastEntityRepository
     @Query("""
         SELECT forecast
         FROM BoardSeatForecastJpaEntity forecast
-        JOIN forecast.publication publication
         JOIN FETCH forecast.vehicleObservation observation
         JOIN FETCH forecast.modelDeployment
-        WHERE publication.sourceBatchId = :batchId
+        WHERE forecast.publication.id = (
+            SELECT publication.id
+            FROM BoardForecastPublicationJpaEntity publication
+            WHERE publication.sourceBatchId = :batchId
+        )
           AND observation.observationBatch.id = :batchId
         """)
     List<SeatForecastJpaEntity> findAllByBatchId(@Param("batchId") long batchId);

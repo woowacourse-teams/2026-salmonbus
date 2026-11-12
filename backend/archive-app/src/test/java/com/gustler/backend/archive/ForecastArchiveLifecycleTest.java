@@ -102,6 +102,7 @@ class ForecastArchiveLifecycleTest {
                 constant(80,NumericTreeEnsemble.Kind.BINARY,0),1.3),
                 Map.of("3330",statistics),Map.of("3330",Map.of(2,evidence(),3,evidence())),"a".repeat(64));
             var writer=new ForecastBatchWriter(committer,Clock.fixed(SOURCE.plusSeconds(1),ZoneOffset.UTC),routeWork);
+            writer.setCompactSettlementWrite(true);
             writer.setAlightingAwareFeatures(query);
             writer.setConfirmedInput(new ConfirmedAlightingAwareInput(jdbc,manager));
             assertThat(writer.writeForecastsOf(new PendingForecastBatch(batch,version,route,SOURCE),stops,
@@ -151,6 +152,11 @@ class ForecastArchiveLifecycleTest {
             archive.advance();
             assertThat(jdbc.sql("SELECT id FROM vehicle_observation").query(Long.class).list()).containsExactly(next);
             assertThat(fixture.count("seat_forecast")).isZero();
+            assertThat(objects.values.entrySet().stream()
+                .filter(entry -> entry.getKey().contains("-dimensions-"))
+                .flatMap(entry -> ArchiveFiles.decode(entry.getValue()).stream()))
+                .anySatisfy(row -> assertThat(row).contains("\"table\": \"model_deployment\"", "\"settlement_context\"",
+                    "\"realStopOrders\"", "\"stops\""));
             assertThat(fixture.count("alighting_forecast_evaluation_result")).isZero();
             assertThat(jdbc.sql("SELECT sum(row_count) FROM operational_archive_file WHERE table_name='alighting_forecast_evaluation_result'")
                 .query(Long.class).single()).isEqualTo(2);

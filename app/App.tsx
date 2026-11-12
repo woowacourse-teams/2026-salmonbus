@@ -66,6 +66,7 @@ const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
   settings: SETTINGS_CAPABILITIES,
   auth: AUTH_CAPABILITIES,
   notification: NOTIFICATION_CAPABILITIES,
+  navigation: NativeRouteMap !== null ? ['navigation.setHistorySwipe'] : [],
 });
 type BridgeDomain = keyof typeof CAPABILITIES_BY_DOMAIN;
 const APP_CAPABILITIES: readonly string[] = Object.values(CAPABILITIES_BY_DOMAIN).flat();
@@ -92,6 +93,7 @@ export default function App() {
   const documentLoad = useRef(initialDocumentLoad());
   const webReadyWait = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [historySwipeAllowed, setHistorySwipeAllowed] = useState(true);
 
   const showLoadFailed = () => {
     stopWaitingForWeb();
@@ -145,6 +147,7 @@ export default function App() {
     const message = bridgeMessageFrom(raw);
     if (message?.type === DOCUMENT_STARTED) {
       documentLoad.current = noteDocumentStarted(documentLoad.current);
+      if (NativeRouteMap !== null) setHistorySwipeAllowed(true);
       return;
     }
     if (message === null || !APP_CAPABILITIES.includes(message.type)) return;
@@ -160,6 +163,10 @@ export default function App() {
     },
     auth: (message) => handleSignIn(message),
     notification: (message) => handleNotificationCommand(message),
+    navigation: ({ payload }) => {
+      const { allowed } = payload;
+      if (typeof allowed === 'boolean') setHistorySwipeAllowed(allowed);
+    },
   };
 
   function handleSignIn(message: BridgeMessage) {
@@ -276,6 +283,7 @@ export default function App() {
           <NativeRouteMap
             ref={nativeMapRef}
             style={styles.host}
+            historySwipeAllowed={historySwipeAllowed}
             onMapEvent={(event) => forwardMapEvent(event.nativeEvent.message)}
           >
             {webView}

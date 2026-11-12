@@ -13,25 +13,40 @@ export function nearbyAreaLabel(point: Point, stops: HomeStop[]): string | null 
   return label;
 }
 
+const TILE_DEGREES = 0.25;
+
 export async function lookupAreaLabel(point: Point): Promise<string | null> {
   try {
     // shortcut: 수도권 밖은 시·군·구까지 표시한다. 읍·면·동이 필요해지면 해당 권역의 경계를 포함한다.
-    const { default: areas } = await import("./data/adminAreas.json");
     const [longitude, latitude] = point;
-    const area = areas.find(
-      ({ west, south, east, north, polygons }) =>
-        west <= longitude &&
-        longitude <= east &&
-        south <= latitude &&
-        latitude <= north &&
-        polygons.some(
-          ([outer, ...holes]) => outer && contains(point, outer) && !holes.some((hole) => contains(point, hole)),
-        ),
+    const tileName = `${Math.floor(longitude / TILE_DEGREES)}_${Math.floor(latitude / TILE_DEGREES)}`;
+    const { loadAreaTile } = await import("./homeAreaTiles");
+    const tile = await loadAreaTile(tileName);
+    const area = tile.areas.find(([, polygons]) =>
+      polygons.some(
+        ([outer, ...holes]) =>
+          outer &&
+          contains(point, ringFrom(outer, tile.scale)) &&
+          !holes.some((hole) => contains(point, ringFrom(hole, tile.scale))),
+      ),
     );
-    return area?.label ?? null;
+    return area?.[0] ?? null;
   } catch {
     return null;
   }
+}
+
+function ringFrom(deltas: number[], scale: number): number[][] {
+  const ring: number[][] = [];
+  let x = 0;
+  let y = 0;
+  for (let index = 0; index < deltas.length; index += 2) {
+    x += deltas[index]!;
+    y += deltas[index + 1]!;
+    ring.push([x / scale, y / scale]);
+  }
+  if (ring[0]) ring.push(ring[0]);
+  return ring;
 }
 
 function contains([x, y]: Point, ring: number[][]): boolean {

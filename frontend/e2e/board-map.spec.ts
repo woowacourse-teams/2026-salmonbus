@@ -7,7 +7,7 @@ import {
   routeId,
   targetStopNames,
 } from "./fixtures/mock-data";
-import { test, expect } from "./fixtures/naver-map";
+import { test, expect, type StopPins } from "./fixtures/naver-map";
 import { expectFocusRing } from "./utils/focus-ring";
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
@@ -165,6 +165,61 @@ async function expectMapToFillRegion(page: Page) {
     .toBeLessThanOrEqual(1);
 }
 
+// 지도 adapter의 연결 범위다. 화면 밖 128px 안은 항상 붙이고 256px을 넘으면 떼며, 그 사이는 직전 상태를 유지한다.
+const STOP_ATTACH_MARGIN = 128;
+const STOP_DETACH_MARGIN = 256;
+
+function stopSequences(stops: readonly { direction: "UP" | "DOWN"; sequence: number }[], direction: "UP" | "DOWN") {
+  return stops.filter((stop) => stop.direction === direction).map((stop) => stop.sequence);
+}
+
+function distanceOutsideMap({ width, height }: Pick<StopPins, "width" | "height">, { x, y }: { x: number; y: number }) {
+  return Math.max(-x, x - width, -y, y - height);
+}
+
+async function visibleStopSequences(page: Page) {
+  const sequences = await map(page)
+    .locator("button[data-map-stop-sequence]:visible")
+    .evaluateAll((elements) => elements.map((element) => Number((element as HTMLElement).dataset.mapStopSequence)));
+  return sequences.sort((left, right) => left - right);
+}
+
+/**
+ * 표시할 수 있는 정류장 핀이 지도 화면 위치에 따라 붙고 떨어지는지 확인한다.
+ * kept는 선택·포커스처럼 화면 밖에서도 남아야 하는 핀이다.
+ */
+async function expectStopPinsFollowViewport(
+  page: Page,
+  naverMap: { stopPins: () => Promise<StopPins> },
+  eligible: readonly number[],
+  kept: readonly number[] = [],
+) {
+  await expect
+    .poll(
+      async () => {
+        const viewport = await naverMap.stopPins();
+        const visible = new Set(await visibleStopSequences(page));
+        const required = viewport.pins.filter(
+          (pin) =>
+            kept.includes(pin.sequence) ||
+            (eligible.includes(pin.sequence) && distanceOutsideMap(viewport, pin) <= STOP_ATTACH_MARGIN),
+        );
+        const detached = viewport.pins.filter(
+          (pin) =>
+            !kept.includes(pin.sequence) &&
+            (!eligible.includes(pin.sequence) || distanceOutsideMap(viewport, pin) > STOP_DETACH_MARGIN),
+        );
+        return {
+          required: required.length > 0,
+          hidden: required.filter((pin) => !visible.has(pin.sequence)).map((pin) => pin.sequence),
+          attached: detached.filter((pin) => pin.attached).map((pin) => pin.sequence),
+        };
+      },
+      { intervals: [16] },
+    )
+    .toEqual({ required: true, hidden: [], attached: [] });
+}
+
 async function mapSetSizeCount(page: Page) {
   const count = await map(page).getByTestId("naver-map-test-double").getAttribute("data-set-size-count");
   if (count === null) throw new Error("지도 크기 변경 횟수가 없습니다");
@@ -290,10 +345,17 @@ test("노선 생성 중에는 목록에서 선택한 핀만 표시하고, 준비
   await page.clock.runFor(48);
   await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
   expect(await naverMap.snapshot()).toEqual(camera);
-  await expect(stopPins).toHaveCount(12);
+  const upSequences = stopSequences(api.data.watch.stops, "UP");
+  await expectStopPinsFollowViewport(page, naverMap, upSequences, [11]);
   await expect(busPins).toHaveCount(2);
   await page.clock.runFor(60_000);
   expect(api.requests.geometry).toBe(2);
+
+  await test.step("준비된 지도는 선택하지 않은 정류장도 화면에 들어오면 표시", async () => {
+    await naverMap.panToStop(10);
+    await expect(map(page).locator("button[data-map-stop-sequence='10']")).toBeVisible();
+    await expectStopPinsFollowViewport(page, naverMap, upSequences, [11]);
+  });
 });
 
 for (const reason of ["NOT_COLLECTED", "GENERATION_PENDING"] as const) {
@@ -312,14 +374,20 @@ for (const reason of ["NOT_COLLECTED", "GENERATION_PENDING"] as const) {
     await stop.click();
     await page.clock.runFor(32);
     const pins = map(page).locator("button[data-map-stop-sequence]:visible");
-    const expectedPins = reason === "GENERATION_PENDING" ? 1 : 12;
-    await expect(pins).toHaveCount(expectedPins);
+    const upSequences = stopSequences(api.data.watch.stops, "UP");
+    const expectPins = () =>
+      reason === "GENERATION_PENDING"
+        ? expect(pins).toHaveCount(1)
+        : expectStopPinsFollowViewport(page, naverMap, upSequences, [11]);
+    await expectPins();
+    const shownPins = await visibleStopSequences(page);
     const camera = await naverMap.snapshot();
 
     api.mode.geometry = reason === "GENERATION_PENDING" ? "network-error" : { status: 503 };
     await page.clock.runFor(60_000);
     expect(api.requests.geometry).toBe(2);
-    await expect(pins).toHaveCount(expectedPins);
+    await expectPins();
+    expect(await visibleStopSequences(page)).toEqual(shownPins);
     await expect(stop).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
     expect(await naverMap.snapshot()).toEqual(camera);
@@ -331,10 +399,16 @@ for (const reason of ["NOT_COLLECTED", "GENERATION_PENDING"] as const) {
     expect(api.requests.geometry).toBe(3);
     await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
     await page.clock.runFor(48);
-    await expect(pins).toHaveCount(12);
+    await expectStopPinsFollowViewport(page, naverMap, upSequences, [11]);
     await expect(stop).toHaveAttribute("aria-expanded", "true");
     expect(await naverMap.snapshot()).toEqual(camera);
     await expect(map(page).getByText("잠시 후 자동으로 다시 불러와요.", { exact: false })).toHaveCount(0);
+
+    await test.step("복구한 지도는 선택하지 않은 정류장도 화면에 들어오면 표시", async () => {
+      await naverMap.panToStop(10);
+      await expect(map(page).locator("button[data-map-stop-sequence='10']")).toBeVisible();
+      await expectStopPinsFollowViewport(page, naverMap, upSequences, [11]);
+    });
   });
 }
 
@@ -390,9 +464,16 @@ test("생성 중 지도는 형식이 잘못된 갱신 응답에도 선택을 유
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
   await page.clock.runFor(48);
-  await expect(pins).toHaveCount(12);
+  const upSequences = stopSequences(api.data.watch.stops, "UP");
+  await expectStopPinsFollowViewport(page, naverMap, upSequences, [11]);
   await expect(stop).toHaveAttribute("aria-expanded", "true");
   expect(await naverMap.snapshot()).toEqual(camera);
+
+  await test.step("준비된 지도는 선택하지 않은 정류장도 화면에 들어오면 표시", async () => {
+    await naverMap.panToStop(10);
+    await expect(map(page).locator("button[data-map-stop-sequence='10']")).toBeVisible();
+    await expectStopPinsFollowViewport(page, naverMap, upSequences, [11]);
+  });
 });
 
 test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받아도 기존 지도는 유지한다", async ({ page, api }) => {
@@ -793,6 +874,7 @@ test.describe("지도 첫 화면 준비", () => {
 
 test("첫 화면은 60% 높이에 전체 노선을 맞추고 줌에 따라 정류장만 숨기며 차량·방향 화살표는 유지한다", async ({
   page,
+  api,
   naverMap,
 }) => {
   await openMap(page);
@@ -836,7 +918,9 @@ test("첫 화면은 60% 높이에 전체 노선을 맞추고 줌에 따라 정�
   await expect(sheet(page).getByText("테스트 기점 ↔ 테스트 종점", { exact: true })).toHaveCount(0);
 
   await naverMap.setZoom(14);
-  await expect(map(page).locator("button[data-map-stop-sequence]:visible")).toHaveCount(12);
+  await expectStopPinsFollowViewport(page, naverMap, stopSequences(api.data.watch.stops, "UP"));
+  // 상행 종점 핀이 화면에 들어오게 옮긴 뒤 같은 이름의 반대 방향 종점과 구분되는지 확인한다.
+  await naverMap.panToStop(12);
   await expect(
     map(page).getByRole("button", {
       name: `테스트 종점 ${directionLabels.UP} 정류장 지도에서 선택`,
@@ -901,17 +985,55 @@ test("반복 확대와 이동에도 지도와 마커 DOM을 유지하고 정류�
   await pin.focus();
   const observation = await map(page).evaluateHandle((region) => {
     const layer = region.querySelector('[data-testid="naver-map-test-double"]');
-    const removed: string[] = [];
+    const controls = (window as unknown as { __naverMapTest: { stopPins: () => StopPins } }).__naverMapTest;
+    const stopSelector = "button[data-map-stop-sequence]";
+    const pinElements = new Map<string, Element>();
+    region.querySelectorAll<HTMLElement>(stopSelector).forEach((button) => {
+      pinElements.set(button.dataset.mapStopSequence!, button);
+    });
+    const removedMarkers: string[] = [];
+    const removedStops: { sequence: number; distanceOutside: number }[] = [];
+    const removedSequences = new Set<string>();
+    const reattached: number[] = [];
+    const replaced: number[] = [];
+    const stopButton = (node: HTMLElement) =>
+      node.matches(stopSelector) ? node : node.querySelector<HTMLElement>(stopSelector);
     const observer = new MutationObserver((records) => {
+      // 같은 작업 안의 카메라로 계산해 핀을 뗀 순간의 화면 위치와 비교한다.
+      const viewport = controls.stopPins();
       records.forEach((record) => {
         record.removedNodes.forEach((node) => {
-          if (node instanceof HTMLElement && node.matches("[data-marker-kind], button[data-map-stop-sequence]"))
-            removed.push(node.outerHTML);
+          if (!(node instanceof HTMLElement) || !node.matches(`[data-marker-kind], ${stopSelector}`)) return;
+          const button = stopButton(node);
+          if (button === null) {
+            removedMarkers.push(node.outerHTML);
+            return;
+          }
+          const sequence = button.dataset.mapStopSequence!;
+          const position = viewport.pins.find((item) => String(item.sequence) === sequence);
+          removedStops.push({
+            sequence: Number(sequence),
+            distanceOutside: position
+              ? Math.max(-position.x, position.x - viewport.width, -position.y, position.y - viewport.height)
+              : NaN,
+          });
+          if (pinElements.has(sequence) && pinElements.get(sequence) !== button) replaced.push(Number(sequence));
+          pinElements.set(sequence, button);
+          removedSequences.add(sequence);
+        });
+        record.addedNodes.forEach((node) => {
+          if (!(node instanceof HTMLElement)) return;
+          const button = stopButton(node);
+          if (button === null) return;
+          const sequence = button.dataset.mapStopSequence!;
+          if (pinElements.has(sequence) && pinElements.get(sequence) !== button) replaced.push(Number(sequence));
+          else if (removedSequences.has(sequence)) reattached.push(Number(sequence));
+          pinElements.set(sequence, button);
         });
       });
     });
     observer.observe(region, { childList: true, subtree: true });
-    return { layer, removed, observer };
+    return { layer, removedMarkers, removedStops, reattached, replaced, observer };
   });
 
   for (const zoom of [15, 16, 14]) await naverMap.setZoom(zoom);
@@ -919,12 +1041,26 @@ test("반복 확대와 이동에도 지도와 마커 DOM을 유지하고 정류�
   await page.clock.runFor(32);
 
   await expect(pin).toBeFocused();
-  const changes = await observation.evaluate(({ layer, removed, observer }) => {
+  const changes = await observation.evaluate(({ layer, observer, ...records }) => {
     observer.disconnect();
-    return { mapConnected: layer?.isConnected, removed };
+    return { mapConnected: layer?.isConnected, ...records };
   });
-  expect(changes).toEqual({ mapConnected: true, removed: [] });
   await observation.dispose();
+  expect(changes.mapConnected).toBe(true);
+  // 차량·화살표 마커는 확대와 이동에서 DOM을 바꾸지 않는다.
+  expect(changes.removedMarkers).toEqual([]);
+  // 정류장 핀은 그 순간 연결 범위 밖이던 것만 떼고, 포커스한 핀은 떼지 않는다.
+  expect(changes.removedStops.length).toBeGreaterThan(0);
+  expect(changes.removedStops.map(({ sequence }) => sequence)).not.toContain(11);
+  expect(changes.removedStops.filter(({ distanceOutside }) => !(distanceOutside > STOP_DETACH_MARGIN))).toEqual([]);
+  // 다시 화면에 들어온 핀은 새로 만들지 않고 같은 버튼을 다시 붙인다.
+  expect(changes.reattached.length).toBeGreaterThan(0);
+  expect(changes.replaced).toEqual([]);
+  // 포커스한 핀이 연결 범위 밖으로 나간 경우를 실제로 거쳤는지 확인한다.
+  const viewport = await naverMap.stopPins();
+  const focused = viewport.pins.find((item) => item.sequence === 11);
+  expect(focused?.attached).toBe(true);
+  expect(distanceOutsideMap(viewport, focused!)).toBeGreaterThan(STOP_DETACH_MARGIN);
   expect(await map(page).locator("[data-marker-kind='arrow']:visible").count()).toBeGreaterThan(0);
 });
 

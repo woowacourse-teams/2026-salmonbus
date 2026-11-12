@@ -27,6 +27,11 @@ struct MapNavigationSnapshotChecks {
     let map = SnapshotMapView(frame: host.bounds)
     let overlay = UIView(frame: host.bounds)
     let web = HistoryWebView(frame: host.bounds)
+    let historyPan = TestPanGesture()
+    web.addGestureRecognizer(historyPan)
+    let disabledPan = UIPanGestureRecognizer()
+    disabledPan.isEnabled = false
+    web.addGestureRecognizer(disabledPan)
     overlay.addSubview(web)
     overlay.addSubview(UIView())
     host.addSubview(map)
@@ -34,6 +39,7 @@ struct MapNavigationSnapshotChecks {
     web.allowsBackForwardNavigationGestures = true
     let navigation = MapNavigationSnapshot(mapContainer: map)
     navigation.attachWebView(in: overlay)
+    precondition(map.superview === web, "이전 화면 캡처에 지도를 포함해야 한다")
     func captures(_ x: CGFloat) -> Bool {
       navigation.capturesNavigationEdge(CGPoint(x: x, y: 200), in: overlay)
     }
@@ -41,6 +47,12 @@ struct MapNavigationSnapshotChecks {
     precondition(!captures(1) && !captures(389), "No history must leave map edges available")
     web.backAvailable = true
     precondition(captures(1) && !captures(21) && !captures(389))
+    navigation.setHistorySwipeAllowed(false)
+    precondition(!captures(1) && !historyPan.isEnabled && web.allowsBackForwardNavigationGestures,
+                 "탭에서는 스와이프만 막고 WebKit의 화면 캡처는 유지해야 한다")
+    navigation.setHistorySwipeAllowed(true)
+    precondition(captures(1) && historyPan.isEnabled)
+    precondition(!disabledPan.isEnabled, "WebKit이 꺼 둔 제스처는 활성화하지 않아야 한다")
     web.forwardAvailable = true
     precondition(captures(1) && captures(389) && !captures(195))
 
@@ -82,9 +94,12 @@ struct MapNavigationSnapshotChecks {
     gesture.simulatedState = .began
     navigation.perform(NSSelectorFromString("swiped:"), with: gesture)
     precondition(map.alpha == 0, "A new swipe must still start after timeout recovery")
+    navigation.setHistorySwipeAllowed(false)
+    precondition(historyPan.isEnabled, "진행 중인 뒤로가기 전환은 끝날 때까지 유지해야 한다")
     gesture.simulatedState = .cancelled
     navigation.perform(NSSelectorFromString("swiped:"), with: gesture)
     precondition(map.alpha == 1, "A returned scroll view must restore the map without waiting for the timeout")
+    precondition(!historyPan.isEnabled, "전환이 끝나면 탭에서 스와이프를 다시 막아야 한다")
     window.isHidden = true
     print("PASS: WebView discovery, history edges, RTL, disabled navigation, idempotent cleanup, stuck transition recovery")
   }

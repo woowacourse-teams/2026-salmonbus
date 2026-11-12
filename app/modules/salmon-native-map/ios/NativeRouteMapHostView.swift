@@ -22,6 +22,7 @@ private final class WebOverlayGate: UIView {
   var mapRect = CGRect.zero
   var webRects: [CGRect] = []
   weak var navigationSnapshot: MapNavigationSnapshot?
+  weak var mapContainer: UIView?
 
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
     guard !isHidden, alpha >= 0.01, isUserInteractionEnabled, bounds.contains(point) else { return nil }
@@ -30,7 +31,9 @@ private final class WebOverlayGate: UIView {
     #if DEBUG
     if event?.type == .touches { NSLog("[SalmonNativeMap] hit target=%@", web ? "web" : "map") }
     #endif
-    return web ? super.hitTest(point, with: event) : nil
+    if web { return super.hitTest(point, with: event) }
+    guard let mapContainer else { return nil }
+    return mapContainer.hitTest(convert(point, to: mapContainer), with: event)
   }
 }
 
@@ -146,6 +149,7 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     addSubview(mapContainer)
     mapContainer.addSubview(mapView)
     addSubview(gate)
+    gate.mapContainer = mapContainer
     NotificationCenter.default.addObserver(self, selector: #selector(enteredBackground),
                                            name: UIApplication.didEnterBackgroundNotification, object: nil)
     NotificationCenter.default.addObserver(self, selector: #selector(becameActive),
@@ -161,7 +165,10 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
   }
 
   public override func unmountChildComponentView(_ childComponentView: UIView, index: Int) {
-    navigationSnapshot.finish()
+    navigationSnapshot.detachWebView()
+    let mapFrame = mapContainer.convert(mapContainer.bounds, to: self)
+    insertSubview(mapContainer, belowSubview: gate)
+    mapContainer.frame = mapFrame
     childComponentView.removeFromSuperview()
   }
 
@@ -194,6 +201,15 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     navigationSnapshot.attachWebView(in: gate)
     gate.navigationSnapshot = navigationSnapshot
     applyLayout()
+  }
+
+  public override func safeAreaInsetsDidChange() {
+    super.safeAreaInsetsDidChange()
+    if homeMounted { setNeedsLayout() }
+  }
+
+  func setHistorySwipeAllowed(_ allowed: Bool) {
+    navigationSnapshot.setHistorySwipeAllowed(allowed)
   }
 
   public func handleMessage(_ message: String) {
@@ -665,13 +681,20 @@ public final class NativeRouteMapHostView: ExpoView, NMFMapViewLoadDelegate,
     gate.mapRect = rect
     gate.webRects = layout.webRects.map { layout.nativeRect($0, in: bounds) }
     gate.captureAll = layout.captureAll || layout.transitioning || !readySent || failed
-    mapContainer.frame = rect.isNull ? .zero : rect
+    if let parent = mapContainer.superview {
+      mapContainer.frame = rect.isNull ? .zero : convert(rect, to: parent)
+    }
     let bufferHeight = max(bounds.height, rect.height)
     let crop = max(0, (bufferHeight - rect.height) / 2)
     mapView.frame = CGRect(x: 0, y: -crop, width: rect.width, height: bufferHeight)
     mapView.logoAlign = .leftBottom
     let logoInset = min(rect.height, (layout.logoBottomInset ?? 0) * bounds.width / layout.viewport.width)
-    mapView.logoMargin = UIEdgeInsets(top: 0, left: 12, bottom: crop + logoInset + 12, right: 0)
+    // 탭 지도에서 웹이 보낸 시트 위치에 SDK의 하단 안전 영역이 더해지므로 한 번 빼 준다.
+    let sdkBottomInset = homeMounted ? mapView.safeAreaInsets.bottom : 0
+    // 탭 지도 로고와 시트 사이 간격을 웹 SDK의 7px에 맞춘다.
+    let logoBottomGap: CGFloat = homeMounted ? 7 : 12
+    let logoBottomMargin = max(0, crop + logoInset + logoBottomGap - sdkBottomInset)
+    mapView.logoMargin = UIEdgeInsets(top: 0, left: 12, bottom: logoBottomMargin, right: 0)
     mapView.accessibilityElementsHidden = layout.captureAll || rect.height < 1
     scheduleInitialFit()
     if homeMounted, !layout.transitioning {

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "authority": "git-wiki",
+  "policies": [
+    {
+      "policyId": "POL-DSP-001",
+      "document": "Policy-POL-DSP-001.md",
+      "scope": "route-watch-display",
+      "owner": null,
+      "reviewers": {"fe": null, "be": null},
+      "rules": [
+        {
+          "ruleId": "POL-DSP-001-R2",
+          "status": "draft",
+          "text": "화면에는 같은 수집 묶음에서 읽은 차량 위치와 예보 중 짝이 맞는 가장 최근 쌍만 올리고, 짝이 없는 단독 응답을 표시 쌍으로 선택하지 않는다.",
+          "enforcementScope": "repository",
+          "allowedRepositories": ["woowacourse-teams/2026-salmonbus"],
+          "codePaths": [
+            "frontend/src/pages/verdict-board/boardSnapshotPolicy.ts",
+            "frontend/src/pages/verdict-board/useBoardSnapshot.ts",
+            "frontend/src/pages/verdict-board/VerdictBoardPage.tsx"
+          ],
+          "analysisGuidance": [
+            "짝이 맞는 기존 보드와 차량 상태 뒤에 관측 시각이 다른 보드 갱신이 연속해서 도착할 때 기존 쌍이 보존되는지 추적한다.",
+            "새 쌍이 완성되기 전에는 마지막으로 짝이 맞는 보드와 차량이 함께 선택되는지 확인한다."
+          ],
+          "sourcePageId": "61014037",
+          "sourceVersion": "4",
+          "sourceQuote": "그래서 지도에서 보는 현재 위치와 정류장에서 보는 예보가 서로 다른 관측 시점에서 섞이지 않아요.",
+          "meetingEvidence": {
+            "pageId": "47775855",
+            "version": "5",
+            "url": "https://higgs95.atlassian.net/wiki/spaces/HEM52VQZUW/pages/47775855",
+            "quote": "화면에는 짝이 맞는 가장 최근 쌍(같은 observation batch의 예보 응답과 차량 응답)만 올린다"
+          },
+          "approval": null
+        }
+      ]
+    }
+  ]
+}

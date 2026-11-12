@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { AccountLayout } from "@/shared/components/AccountLayout";
+import { MyPageBackLink } from "@/shared/components/MyPageBackLink";
 import { useStillOnScreen } from "@/shared/routing/stillOnScreen";
 import { useResultHaptic } from "@/shared/haptic/haptic";
 import { LoginButton } from "@/shared/components/LoginButton";
@@ -16,21 +17,7 @@ export function NicknamePage() {
   return (
     <AccountLayout>
       <div className={styles.backTitle}>
-        <Link className={styles.backIcon} to="/mypage" aria-label="마이페이지로 돌아가기">
-          <svg
-            width="17"
-            height="17"
-            viewBox="0 0 17 17"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M13.6 8.5H3.4M7.9 4 3.4 8.5 7.9 13" />
-          </svg>
-        </Link>
+        <MyPageBackLink className={styles.backIcon} />
         <h1 className={styles.title} style={{ margin: 0 }}>
           닉네임 수정
         </h1>

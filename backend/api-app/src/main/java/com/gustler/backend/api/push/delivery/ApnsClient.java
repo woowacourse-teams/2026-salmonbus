@@ -11,6 +11,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import tools.jackson.databind.ObjectMapper;
 
@@ -24,6 +25,7 @@ final class ApnsClient implements ApnsSender {
     private final ApnsProviderToken providerToken;
     private final ObjectMapper objectMapper;
     private final Duration requestTimeout;
+    private final Function<FavoriteTarget, NotificationMessage> messages;
 
     ApnsClient(
         HttpClient http,
@@ -32,7 +34,8 @@ final class ApnsClient implements ApnsSender {
         String topic,
         ApnsProviderToken providerToken,
         ObjectMapper objectMapper,
-        Duration requestTimeout
+        Duration requestTimeout,
+        Function<FavoriteTarget, NotificationMessage> messages
     ) {
         this.http = http;
         this.productionUri = productionUri;
@@ -41,6 +44,7 @@ final class ApnsClient implements ApnsSender {
         this.providerToken = providerToken;
         this.objectMapper = objectMapper;
         this.requestTimeout = requestTimeout;
+        this.messages = messages;
     }
 
     @Override
@@ -73,11 +77,12 @@ final class ApnsClient implements ApnsSender {
 
     private String payload(ClaimedDelivery delivery) {
         FavoriteTarget target = delivery.target();
+        NotificationMessage message = messages.apply(target);
         return objectMapper.writeValueAsString(Map.of(
             "aps", Map.of(
                 "alert", Map.of(
-                    "title", "연어버스",
-                    "body", "즐겨찾기한 버스를 확인할 시간이에요"
+                    "title", message.title(),
+                    "body", message.body()
                 ),
                 "sound", "default"
             ),

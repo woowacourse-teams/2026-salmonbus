@@ -11,6 +11,7 @@ interface NativeRouteMapProps {
   ref?: Ref<NativeRouteMapRef>;
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
+  historySwipeAllowed: boolean;
   onMapEvent: (event: { nativeEvent: { message: string } }) => void;
 }
 

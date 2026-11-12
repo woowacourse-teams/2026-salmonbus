@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.gustler.backend.api.board.application.BoardSnapshot;
 import com.gustler.backend.api.board.application.BoardVehicleObservation;
 import com.gustler.backend.api.board.application.SnapshotObservation;
+import com.gustler.backend.api.board.application.StoredPrediction;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.api.observation.ObservationFreshness;
@@ -85,6 +86,35 @@ class JpaBoardQueryRepositoryIntegrationTest {
         }
         assertThat(repository.findPredictions(earlierBatch)).hasSize(1);
         assertThat(repository.findPredictions(selected.batchId())).isEmpty();
+    }
+
+    @Test
+    void 발행_배치와_차량_관측_배치가_모두_일치하는_예보만_조회한다() {
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = route(fixture, "204000057", now);
+        fixture.insertStop(route, 2, "STOP-2", "다음 정류장", "UP", true);
+        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 2);
+        long otherBatch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 1);
+        long publication = fixture.insertPublication(batch, model, now, now);
+        long otherPublication = fixture.insertPublication(otherBatch, model, now, now);
+        long matchingObservation = fixture.insertObservation(route, batch, 1, "MATCH", 1, "STOP-1", now);
+        long otherPublicationObservation = fixture.insertObservation(route, batch, 2, "OTHER-PUBLICATION", 1,
+            "STOP-1", now);
+        long otherBatchObservation = fixture.insertObservation(route, otherBatch, 1, "OTHER-BATCH", 1,
+            "STOP-1", now);
+        fixture.insertForecast(route, matchingObservation, 2, 1, model, 0.2, 20.0, now);
+        fixture.insertForecast(route, otherPublicationObservation, 2, 1, model, 0.4, 10.0, now);
+        fixture.insertForecast(route, otherBatchObservation, 2, 1, model, 0.8, 5.0, now);
+        jdbcClient.sql("UPDATE seat_forecast SET publication_id = ? WHERE vehicle_observation_id = ?")
+            .params(otherPublication, otherPublicationObservation).update();
+        jdbcClient.sql("UPDATE seat_forecast SET publication_id = ? WHERE vehicle_observation_id = ?")
+            .params(publication, otherBatchObservation).update();
+
+        assertThat(repository.findPredictions(batch)).extracting(StoredPrediction::vehicleId)
+            .containsExactly("MATCH");
+        assertThat(repository.findPredictions(otherBatch)).isEmpty();
     }
 
     @Test

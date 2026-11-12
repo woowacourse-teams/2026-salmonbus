@@ -28,6 +28,7 @@ export const link = style({
   color: "inherit",
   textDecoration: "none",
 });
+export const notification = style({ alignSelf: "stretch", marginTop: 8 });
 export const heading = style({
   display: "grid",
   gridTemplateColumns: "minmax(64px, max-content) minmax(0, 1fr)",
