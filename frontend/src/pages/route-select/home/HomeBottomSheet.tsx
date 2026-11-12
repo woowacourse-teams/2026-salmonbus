@@ -113,11 +113,13 @@ export function HomeBottomSheet({
     },
     [sheetRef, sectionRef],
   );
+  // 닫기 모션은 끝난 뒤에도 끝 위치를 잡고 있다가, 접힘 상태가 그려지는 커밋에서 같이 치운다.
+  // 모션이 끝나자마자 취소하면 시트가 한 프레임 동안 원래 자리에 다시 보인다.
   useLayoutEffect(
     () => () => {
       cancelCloseMotion();
     },
-    [cancelCloseMotion, contentKey],
+    [cancelCloseMotion, contentKey, snap],
   );
   useEffect(() => {
     stationHeadingRef.current?.focus({ preventScroll: true });
@@ -144,9 +146,7 @@ export function HomeBottomSheet({
     );
     closeAnimationRef.current = animation;
     animation.onfinish = () => {
-      if (closeAnimationRef.current !== animation) return;
-      cancelCloseMotion();
-      onSnapChange("collapsed", direction);
+      if (closeAnimationRef.current === animation) onSnapChange("collapsed", direction);
     };
   }
 
