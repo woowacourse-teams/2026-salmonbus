@@ -1,6 +1,10 @@
 import { useEffect, useReducer, useState } from "react";
+import { Link } from "react-router";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { useAuth } from "@/shared/hooks/useAuth";
+import { useFavorites } from "@/shared/hooks/useFavorites";
+import { isNativeNotificationSupported } from "@/shared/notification/nativeNotification";
+import { favoriteGroupPathFor } from "@/shared/routing/paths";
 import { HomeSheetWeather } from "./HomeSheetWeather";
 import { lookupAreaLabel, nearbyAreaLabel } from "./homeAreaLabel";
 import type { HomeStop, Point } from "./homeMapData";
@@ -19,7 +23,15 @@ function greetingFor(now: number): string {
 
 export function HomeOverview({ point, stops, onRefresh }: { point: Point; stops: HomeStop[]; onRefresh: () => void }) {
   const { state: auth } = useAuth();
+  const { groups } = useFavorites();
   const nickname = auth.status === "authenticated" ? auth.member.nickname.trim() : "";
+  const pushTestGroup =
+    __SENTRY_ENVIRONMENT__ === "development" &&
+    window.location.hostname === "dev.salmonbus.com" &&
+    auth.status === "authenticated" &&
+    isNativeNotificationSupported()
+      ? groups.find((group) => group.favorites.length > 0)
+      : undefined;
   const [now, setNow] = useState(Date.now);
   const [revision, retry] = useReducer((value: number) => value + 1, 0);
   const { weather, backgroundKind, loading } = useHomeWeather(point, revision);
@@ -47,6 +59,11 @@ export function HomeOverview({ point, stops, onRefresh }: { point: Point; stops:
         {nickname && <span {...maskedPropsFor(styles.greetingName)}>{nickname}님,</span>}
         {greetingFor(now)}
       </p>
+      {pushTestGroup && (
+        <Link to={favoriteGroupPathFor(pushTestGroup.id)} reloadDocument>
+          dev 출발 알림 테스트
+        </Link>
+      )}
       <HomeSheetWeather
         weather={weather}
         backgroundKind={backgroundKind}
