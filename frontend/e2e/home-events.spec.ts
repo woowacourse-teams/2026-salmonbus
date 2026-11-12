@@ -1219,6 +1219,31 @@ test("탭 시트가 요약 높이에서 접힐 때 아래로 내려간 뒤 사�
   await expect(sheet).toBeInViewport();
 });
 
+test("홈 시트가 접히는 모션이 끝난 뒤 원래 자리에 다시 보이지 않는다", async ({ page }) => {
+  await page.goto("/");
+  const sheet = page.getByRole("region", { name: "홈 정보", exact: true });
+  const tab = page.getByRole("link", { name: "홈", exact: true });
+  for (const snap of ["detail", "full", "detail", "summary"]) {
+    await tab.click();
+    await expect(sheet).toHaveAttribute("data-snap", snap);
+  }
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+
+  const heightOnScreenAfterMotion = await tab.evaluate(async (element: HTMLAnchorElement) => {
+    const surface = document.getElementById("home-bottom-sheet")?.parentElement;
+    if (!surface) return null;
+    element.click();
+    const [closing] = surface.getAnimations();
+    if (!closing) return null;
+    // finished 프라미스는 화면의 onfinish 처리보다 먼저 풀린다. 그 처리가 끝난 뒤의 위치를 보려고 finish 이벤트를 기다린다.
+    await new Promise((resolve) => closing.addEventListener("finish", resolve, { once: true }));
+    if (getComputedStyle(surface).display === "none") return 0;
+    return Math.max(0, window.innerHeight - surface.getBoundingClientRect().top);
+  });
+  expect(heightOnScreenAfterMotion).toBeLessThan(1);
+  await expect(sheet).toBeHidden();
+});
+
 test("홈 시트가 닫히는 중 로고로 홈에 다시 들어오면 시트를 볼 수 있다", async ({ page }) => {
   await page.goto("/");
   const sheet = page.getByRole("region", { name: "홈 정보", exact: true });
