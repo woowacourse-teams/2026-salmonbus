@@ -1,6 +1,6 @@
-type TabPage = "routes" | "favorites" | "profile";
+import type { BottomTabId } from "@/shared/routing/bottomTabs";
 
-export function TabPageGlyph({ page }: { page: TabPage }) {
+export function TabPageGlyph({ page }: { page: BottomTabId }) {
   return (
     <svg
       width="20"
@@ -14,7 +14,9 @@ export function TabPageGlyph({ page }: { page: TabPage }) {
       aria-hidden="true"
       focusable="false"
     >
-      {page === "routes" ? (
+      {page === "home" ? (
+        <path data-tab-fill="" fillRule="evenodd" d="m3 10 9-7 9 7v10H3Z M9 20v-7h6v7Z" />
+      ) : page === "route-map" ? (
         <>
           <circle data-tab-fill="" cx="5" cy="18" r="2.3" />
           <circle data-tab-fill="" cx="19" cy="6" r="2.3" />

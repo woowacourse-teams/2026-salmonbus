@@ -121,6 +121,64 @@ final class NativeMapInteractionTests: XCTestCase {
     attachScreenshot("07-back-link-home-after-cancel")
   }
 
+  func testTabRootsBlockBackSwipeButTheirDetailsCanReturn() throws {
+    let homeLink = app.webViews.links["홈 지도 시나리오 열기"]
+    XCTAssertTrue(homeLink.waitForExistence(timeout: 20))
+    homeLink.tap()
+    let routes = app.webViews.links["노선도"]
+    XCTAssertTrue(routes.waitForExistence(timeout: 20))
+    routes.tap()
+    let route = app.webViews.links.containing(NSPredicate(format: "label CONTAINS %@", "노선 보기")).firstMatch
+    XCTAssertTrue(route.waitForExistence(timeout: 20))
+    let overview = try waitForState("노선도 지도 로딩 완료", timeout: 30) { $0.home && $0.ready && !$0.captureAll }
+    let tabEdgeY = app.frame.height * 0.72
+    coordinate(x: 1, y: tabEdgeY).press(forDuration: 0.05,
+      thenDragTo: coordinate(x: app.frame.width - 6, y: tabEdgeY),
+      withVelocity: .fast, thenHoldForDuration: 0)
+    XCTAssertTrue(route.isHittable, "다른 탭에서 노선도로 이동한 뒤에는 스와이프로 돌아가지 않아야 한다")
+    attachScreenshot("10-route-tab-stays-after-swipe")
+
+    route.tap()
+    let board = try waitForState("판정보드 지도 로딩 완료", timeout: 30) {
+      !$0.home && $0.ready && !$0.captureAll && $0.routeId == "200000001"
+    }
+    let mapEdgeY = CGFloat(board.visibleMapHeight * 0.48)
+    coordinate(x: 1, y: mapEdgeY).press(forDuration: 0.05,
+      thenDragTo: coordinate(x: app.frame.width * 0.25, y: mapEdgeY),
+      withVelocity: .slow, thenHoldForDuration: 0.5)
+    let boardBack = app.webViews.links["노선 선택으로 돌아가기"]
+    XCTAssertTrue(boardBack.isHittable, "짧은 스와이프를 취소하면 판정보드가 유지되어야 한다")
+    boardBack.tap()
+    let returned = try waitForState("뒤로가기로 노선도 지도가 복원됨", timeout: 15) {
+      $0.home && $0.ready && !$0.captureAll && $0.sessionId != overview.sessionId
+    }
+    XCTAssertTrue(route.isHittable)
+    XCTAssertGreaterThan(returned.maximumSwipeOffset, 30)
+    attachScreenshot("11-board-returns-to-route-map")
+
+    app.webViews.links["즐겨찾기"].tap()
+    let favorite = app.webViews.links.containing(NSPredicate(format: "label CONTAINS %@", "3330")).firstMatch
+    XCTAssertTrue(favorite.waitForExistence(timeout: 20))
+    favorite.tap()
+    _ = try waitForState("즐겨찾기에서 연 판정보드 지도 로딩 완료", timeout: 30) {
+      !$0.home && $0.ready && !$0.captureAll && $0.routeId == "200000001"
+    }
+    boardBack.tap()
+    XCTAssertTrue(favorite.waitForExistence(timeout: 15))
+    attachScreenshot("12-board-returns-to-favorites")
+
+    app.webViews.links["마이페이지"].tap()
+    let news = app.webViews.links["새 소식"].firstMatch
+    XCTAssertTrue(news.waitForExistence(timeout: 20))
+    news.tap()
+    let back = app.webViews.links["마이페이지로 돌아가기"]
+    XCTAssertTrue(back.waitForExistence(timeout: 15))
+    back.tap()
+    XCTAssertTrue(news.waitForExistence(timeout: 15))
+    XCTAssertFalse(back.exists)
+    attachScreenshot("13-news-returns-to-my-page")
+  }
+
   func testTwoFingerRotationChangesNativeMapHeading() throws {
     openFixtureRoute()
     let initial = try waitForState("native map is ready before rotation", timeout: 90) {

@@ -13,11 +13,16 @@ export interface BridgeEnvelope extends BridgeMessage {
   v: 1;
 }
 
+interface NavigationCommands {
+  "navigation.setHistorySwipe": { allowed: boolean };
+}
+
 export type AppCommands = NativeMapBridgeCommands &
   HapticCommands &
   SettingsCommands &
   AuthCommands &
-  NotificationCommands;
+  NotificationCommands &
+  NavigationCommands;
 export type AppCommandType = keyof AppCommands;
 
 export type AppEvents = NativeMapBridgeEvents & AuthEvents & NotificationEvents;
