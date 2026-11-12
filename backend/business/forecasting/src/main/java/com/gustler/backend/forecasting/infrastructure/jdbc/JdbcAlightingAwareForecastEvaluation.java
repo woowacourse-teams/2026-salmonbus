@@ -2,6 +2,8 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
+import com.gustler.backend.forecasting.application.AfterCommitTelemetry;
 import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.application.evaluation.AlightingAwareForecastEvaluation;
 import com.gustler.backend.forecasting.application.evaluation.SettlementRouteRunner;
@@ -9,6 +11,7 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObse
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvents;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingPosterior;
+import com.gustler.backend.forecasting.infrastructure.ReadWorkBudget;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -29,9 +32,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -50,6 +56,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForecastEvaluation {
+    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcAlightingAwareForecastEvaluation.class);
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String VERSION = "alighting-capacity-snapshot-v2";
@@ -59,6 +66,10 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         LocalDate.parse("2026-10-05"), LocalDate.parse("2026-10-09"));
     private static final int PAGE_SIZE = 100;
     private final int pendingLimit;
+    private final int preparationLimit;
+    private final int maximumPreparations;
+    private final int maximumTickSeconds;
+    private final AtomicLong lastRoute = new AtomicLong(Long.MIN_VALUE);
     private final int observationLimit;
     private final int confirmedObservationLimit;
     private final JdbcClient jdbc;
@@ -98,7 +109,6 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         this(jdbc, routeWork, clock, transactions, observationLimit, confirmedObservationLimit, 3000);
     }
 
-    @Autowired
     public JdbcAlightingAwareForecastEvaluation(
         JdbcClient jdbc,
         RouteWorkAccess routeWork,
@@ -108,6 +118,28 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         @Value("${forecast.alighting.causal-evaluation.maximum-observation-rows:150000}") final int confirmedObservationLimit,
         @Value("${forecast.pending-limit:3000}") final int pendingLimit
     ) {
+        this(jdbc, routeWork, clock, transactions, observationLimit, confirmedObservationLimit, pendingLimit,
+            500, 8, 30);
+    }
+
+    @Autowired
+    public JdbcAlightingAwareForecastEvaluation(
+        JdbcClient jdbc, RouteWorkAccess routeWork, Clock clock, PlatformTransactionManager transactions,
+        @Value("${forecast.alighting.evaluation.maximum-observation-rows:50000}") int observationLimit,
+        @Value("${forecast.alighting.causal-evaluation.maximum-observation-rows:150000}") int confirmedObservationLimit,
+        @Value("${forecast.pending-limit:3000}") int pendingLimit,
+        @Value("${forecast.alighting.evaluation.preparation-limit:500}") int preparationLimit,
+        @Value("${forecast.alighting.evaluation.maximum-preparations-per-tick:8}") int maximumPreparations,
+        @Value("${forecast.alighting.evaluation.maximum-tick-seconds:30}") int maximumTickSeconds
+    ) {
+        if (preparationLimit < PAGE_SIZE || preparationLimit > 3000
+            || maximumPreparations < 1 || maximumPreparations > 1000
+            || maximumTickSeconds < 1 || maximumTickSeconds > 3600) {
+            throw new IllegalArgumentException("Invalid settlement read budget");
+        }
+        this.preparationLimit = preparationLimit;
+        this.maximumPreparations = maximumPreparations;
+        this.maximumTickSeconds = maximumTickSeconds;
         if (pendingLimit < 1 || pendingLimit > 100_000) {
             throw new IllegalArgumentException("AlightingAware 회차별 처리 예산은 1~100000개여야 한다");
         }
@@ -148,37 +180,72 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
             ) due ON true
             ORDER BY version.id
             """).query(Long.class).list();
-        routeRunner.run(routes, this::settleRoutePages);
+        ReadWorkBudget budget = new ReadWorkBudget(maximumPreparations, Duration.ofSeconds(maximumTickSeconds));
+        long after = lastRoute.get();
+        List<Long> ordered = new ArrayList<>(routes.size());
+        routes.stream().filter(route -> route > after).forEach(ordered::add);
+        routes.stream().filter(route -> route <= after).forEach(ordered::add);
+        routeRunner.run(ordered, route -> {
+            lastRoute.set(route);
+            settleRoutePages(route, budget);
+        }, budget::available);
     }
 
-    private void settleRoutePages(final long route) {
+    private void settleRoutePages(final long route, ReadWorkBudget budget) {
         int remaining = pendingLimit;
         Instant dueThrough = jdbc.sql("SELECT clock_timestamp()")
             .query(OffsetDateTime.class).single().toInstant();
-        while (remaining > 0) {
-            final int pageLimit = Math.min(PAGE_SIZE, remaining);
-            PreparedPage page = preparation.execute(status -> preparePage(route, pageLimit, dueThrough));
+        while (remaining > 0 && budget.tryAcquire()) {
+            final int readLimit = Math.min(preparationLimit, remaining);
+            PreparedPage page = WorkerOperationLog.measure("alighting_settlement_prepare", route,
+                () -> preparation.execute(status -> preparePage(route, readLimit, dueThrough)));
             if (page == null || page.work().isEmpty()) {
                 return;
             }
-            Integer processed = transaction.execute(status -> writePage(route, pageLimit, dueThrough, page));
-            if (processed == null || processed < pageLimit) {
+            int preparedRemaining = page.work().size();
+            while (preparedRemaining > 0) {
+                final int writeLimit = Math.min(PAGE_SIZE, preparedRemaining);
+                Integer processed = WorkerOperationLog.measure("alighting_settlement_commit", route,
+                    () -> transaction.execute(status -> writePage(route, writeLimit, dueThrough, page)));
+                if (processed == null || processed < writeLimit) {
+                    return;
+                }
+                preparedRemaining -= processed;
+                remaining -= processed;
+            }
+            if (!page.moreWork()) {
                 return;
             }
-            remaining -= processed;
         }
     }
 
     private PreparedPage preparePage(final long route, final int limit, Instant dueThrough) {
         final long revision = routeWork.current(route);
         final Instant now = clock.instant();
-        List<Work> work = readWork(route, limit, dueThrough, false);
+        List<Work> selected = readWork(route, limit, dueThrough, false);
+        List<Work> work = preparationScope(selected);
+        boolean moreWork = selected.size() == limit || work.size() < selected.size();
         Map<Work, Outcome> outcomes = new HashMap<>();
         Map<LocalDate, List<Work>> days = work.stream().collect(Collectors.groupingBy(w -> day(w.observedAt())));
         for (Map.Entry<LocalDate, List<Work>> entry : days.entrySet()) {
             prepareDay(route, now, entry.getKey(), entry.getValue(), outcomes);
         }
-        return new PreparedPage(revision, now, work, outcomes);
+        return new PreparedPage(revision, now, work, outcomes, moreWork);
+    }
+
+    private static List<Work> preparationScope(List<Work> work) {
+        if (work.isEmpty()) {
+            return work;
+        }
+        if (work.stream().anyMatch(item -> !isConfirmed(item))) {
+            return work.subList(0, Math.min(PAGE_SIZE, work.size()));
+        }
+        LocalDate date = day(work.getFirst().observedAt());
+        int end = 1;
+        while (end < work.size() && day(work.get(end).observedAt()).equals(date)) {
+            end++;
+        }
+        return work.subList(0, end);
     }
 
     private int writePage(
@@ -194,6 +261,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         Map<LocalDate, Instant> preparedLegacyHorizons = legacyHorizons(page.work(), page.now());
         Map<LocalDate, Instant> lockedLegacyHorizons = legacyHorizons(locked, page.now());
         int processed = 0;
+        int completed = 0;
         for (Work item : locked) {
             if (!page.outcomes().containsKey(item)) {
                 continue;
@@ -206,7 +274,16 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
             }
             writeOutcome(item, page);
             processed++;
+            if (page.outcomes().get(item) != null
+                || Duration.between(item.observedAt(), page.now()).compareTo(Duration.ofHours(2)) > 0) {
+                completed++;
+            }
         }
+        int committedProcessed = processed;
+        int committedCompleted = completed;
+        AfterCommitTelemetry.record(() -> LOGGER.info(
+            "event=alighting_settlement_page_committed routeVersionId={} processed={} completed={} deferred={}",
+            route, committedProcessed, committedCompleted, committedProcessed - committedCompleted));
         return processed;
     }
 
@@ -315,24 +392,55 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         Instant dueThrough,
         final boolean lock
     ) {
+        // Work references both the forecast and the observation, and each observation has a batch.
+        // Select and lock the due keys before joining those required inputs.
+        // Keep the route as the leading sort key so a generic plan can use the route-local due index.
         String sql = """
+            WITH work_page AS MATERIALIZED (
+                SELECT w.vehicle_observation_id, w.target_stop_order, w.target_kind, w.label_version, w.next_attempt_at
+                FROM alighting_forecast_evaluation_work w
+                WHERE w.route_version_id BETWEEN :route AND :route AND w.next_attempt_at <= :dueThrough
+                ORDER BY w.route_version_id, w.next_attempt_at, w.vehicle_observation_id,
+                         w.target_stop_order, w.target_kind, w.label_version
+                LIMIT :limit
+                %s
+            ), source_details AS MATERIALIZED (
+                SELECT source.*
+                FROM (SELECT DISTINCT vehicle_observation_id FROM work_page) ids
+                CROSS JOIN LATERAL (
+                    SELECT o.id, o.observation_batch_id, o.vehicle_id, o.vehicle_trip_key, o.quality_direction,
+                           (o.remaining_seats IS NOT NULL) AS forecast_eligible
+                    FROM operational_observation o
+                    WHERE o.id = ids.vehicle_observation_id
+                    OFFSET 0
+                ) source
+            ), batch_details AS (
+                SELECT batch.*
+                FROM (SELECT DISTINCT observation_batch_id FROM source_details) ids
+                CROSS JOIN LATERAL (
+                    SELECT b.id, b.input_confirmed_at, b.response_received_at
+                    FROM observation_batch b
+                    WHERE b.id = ids.observation_batch_id
+                    OFFSET 0
+                ) batch
+            )
             SELECT w.vehicle_observation_id, w.target_stop_order, w.target_kind, w.label_version, w.next_attempt_at,
                    CASE WHEN w.label_version = 'alighting-confirmed-capacity-snapshot-v3'
                        THEN coalesce(batch.input_confirmed_at, batch.response_received_at)
                        ELSE batch.response_received_at END AS source_at, f.feature_snapshot::text,
-                   source.vehicle_id, source.vehicle_trip_key, source.quality_direction,
-                   (source.remaining_seats IS NOT NULL) AS forecast_eligible
-            FROM alighting_forecast_evaluation_work w
-            JOIN seat_forecast f USING(vehicle_observation_id,target_stop_order)
-            JOIN operational_observation source ON source.id=w.vehicle_observation_id
-            JOIN observation_batch batch ON batch.id=source.observation_batch_id
-            WHERE w.route_version_id = :route AND w.next_attempt_at <= :dueThrough
-            ORDER BY w.next_attempt_at, w.vehicle_observation_id, w.target_stop_order, w.target_kind
-            LIMIT :limit
-            """;
-        if (lock) {
-            sql += "FOR UPDATE OF w SKIP LOCKED";
-        }
+                   source.vehicle_id, source.vehicle_trip_key, source.quality_direction, source.forecast_eligible
+            FROM work_page w
+            JOIN source_details source ON source.id = w.vehicle_observation_id
+            JOIN batch_details batch ON batch.id = source.observation_batch_id
+            CROSS JOIN LATERAL (
+                SELECT forecast.feature_snapshot
+                FROM seat_forecast forecast
+                WHERE forecast.vehicle_observation_id = w.vehicle_observation_id
+                  AND forecast.target_stop_order = w.target_stop_order
+                OFFSET 0
+            ) f
+            ORDER BY w.next_attempt_at, w.vehicle_observation_id, w.target_stop_order, w.target_kind, w.label_version
+            """.formatted(lock ? "FOR UPDATE OF w SKIP LOCKED" : "");
         return jdbc.sql(sql)
             .param("route", route)
             .param("limit", limit)
@@ -648,7 +756,9 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
     ) {
     }
 
-    private record PreparedPage(long revision, Instant now, List<Work> work, Map<Work, Outcome> outcomes) {
+    private record PreparedPage(
+        long revision, Instant now, List<Work> work, Map<Work, Outcome> outcomes, boolean moreWork
+    ) {
     }
 
     /** 한 목표의 결과와 근거 식별자를 같은 트랜잭션으로 저장하기 위한 출력 계약이다. */

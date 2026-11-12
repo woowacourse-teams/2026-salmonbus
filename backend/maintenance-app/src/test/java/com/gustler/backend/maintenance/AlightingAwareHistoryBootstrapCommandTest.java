@@ -76,6 +76,19 @@ class AlightingAwareHistoryBootstrapCommandTest {
         }
     }
 
+    @Test
+    void 한도에_도달한_준비는_완료로_표시하지_않고_재개_위치를_반환한다() {
+        var options = AlightingAwareHistoryBootstrapCommand.parse(arguments("maximum-checkpoints", "1"));
+        assertThat(options.request().maximumCheckpoints()).isOne();
+        Object result = AlightingAwareHistoryBootstrapCommand.invoke(options, request ->
+            new BootstrapAlightingAwareHistory.Result(12, 34, 56, 1, request.checkpointDirectory(),
+                "b".repeat(64), 40, false));
+        assertThat(MaintenanceApplication.exitCode(result)).isEqualTo(2);
+        assertThat(CanonicalJson.stringOf(result)).contains("\"complete\":false", "\"processedThroughBatchId\":40");
+        assertThatThrownBy(() -> AlightingAwareHistoryBootstrapCommand.parse(arguments("maximum-seconds", "0")))
+            .hasMessage("INVALID_ARGUMENT_MAXIMUM_SECONDS");
+    }
+
     private CliArguments arguments(String override, String value) {
         Map<String, String> values = new LinkedHashMap<>();
         values.put("config", directory.resolve("missing.properties").toString());
