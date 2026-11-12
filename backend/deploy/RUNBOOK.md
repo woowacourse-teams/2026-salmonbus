@@ -933,26 +933,48 @@ dev에서 기존 V67을 이미 실행했다면 V72 이상 적용과 V67 단독 �
 4. 새 경로를 설정한 뒤 `sudo rm /etc/salmonbus/alighting-cutover-hold`를 실행하고 Worker 배포를 재개한다. 새 Worker의 차량 정원 캐시 준비와 예보·정산을 확인한다. 예보에 저장한 정원으로 정산하며, 이후 관측이 그 정원을 넘으면 `OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT` 사유로 해당 정산을 종료한다.
 5. archive-app은 삭제를 끈 상태로 시작한다. 지원 노선의 현재 판본마다 새 Worker가 `alighting_history_checkpoint`에 저장한 배치가 DB에 존재하는지 확인한다. 이전 날짜의 수집·정산 완료와 S3 재읽기 및 해시 검증 후 삭제를 활성화한다. 마지막 체크포인트 확정 시각에서 90초를 뺀 수신 시각 이후의 자료가 포함된 날짜는 새 체크포인트가 저장될 때까지 `ALIGHTING_HISTORY_REQUIRED`로 보류된다.
 
-정산의 확정 모델은 수집 배치별로 작업을 묶고, 노선·날짜·정류장 구성별로 새 관측과 닫힌 통과 근거를 이어서 저장한다. 준비 한 번에 새 수집 배치를 100개까지 읽으며 재시작 후에도 마지막 커서부터 이어간다. 늦게 들어온 관측이나 원자료 수정·삭제가 이미 읽은 범위에 영향을 주면 해당 근거를 폐기하고 다시 준비한다. 기존 정산 작업의 배치 등록도 커서로 1,000개씩 진행한다. 준비가 끝날 때까지 기존 작업은 삭제하지 않는다.
+정산의 확정 모델은 수집 배치별로 작업을 묶고, 노선·날짜·정류장 구성별로 새 관측과 닫힌 통과 근거를 이어서 저장한다. 준비 한 번에 새 수집 배치를 100개까지 V78 커서 인덱스(`ix_batch_confirmed_history`)로 읽고, 재시작 후에도 마지막으로 읽은 배치부터 이어간다. 그 배치보다 늦게 커밋된 배치는 다음 준비에서 이어 붙인다. 이미 읽은 배치의 관측이 늦게 들어오거나 수정·삭제되면 해당 근거를 폐기하고 처음부터 다시 준비한다. 새로 읽을 배치가 없으면 근거를 다시 쓰지 않는다. 기존 정산 작업의 배치 등록도 커서로 1,000개씩 진행한다. 준비가 끝날 때까지 기존 작업은 삭제하지 않는다.
 
-결과 준비는 `forecast.alighting.evaluation.preparation-limit`(기본 500개), 저장은 100개씩 나눈다. 한 회차의 새 준비는 `forecast.alighting.evaluation.maximum-preparations-per-tick`(기본 8회)와 `forecast.alighting.evaluation.maximum-tick-seconds`(기본 30초)로 제한하고 마지막 처리 노선 다음부터 순환한다. 이미 시작한 준비·저장은 마치며 트랜잭션의 15초 제한은 유지한다. 진행한 작업이 있으면 실행 시간의 1/4만큼 쉬고 다음 회차를 시작한다. 최소 간격은 100ms, 최대 간격과 유휴 간격은 `forecast.settlement-interval`이다. 새 통과 근거가 없는 예측은 입력 변경이나 정산 기한까지 기다린다. 실패한 노선은 기존 재시도 간격을 적용한다.
+근거 저장과 결과 커밋은 마지막 문장에서 노선·날짜별 입력 세대 행을 `FOR UPDATE SKIP LOCKED`로 다시 확인한다. 그 사이 수집 확정이 같은 날짜의 세대를 올렸거나 지금 그 행을 잡고 있으면 정산 쪽 트랜잭션을 되돌리고 다음 회차에 다시 읽는다. 정산은 세대 행을 기다리지 않고 커밋 직전에만 잡으므로 수집 확정(5초 제한)이 정산 트랜잭션을 기다리지 않는다. 확정이 새 날짜의 세대 행을 처음 넣으면 노선 행 외래 키를 확인하면서 정산 결과 커밋이 잡은 노선 행을 기다리므로, 정산 회차가 처리할 노선의 오늘·내일 세대 행을 미리 만든다. 되돌린 횟수는 `salmonbus_settlement_rejected_total{reason}`과 `event=alighting_settlement_rejected` 로그로 본다. `reason`은 `persist_`(근거 저장) 또는 `commit_`(결과 커밋) 뒤에 `generation_changed`(입력이 바뀜), `generation_busy`(확정이 세대 행을 잡고 있음), `projection_changed`(근거 폐기·교체)가 붙는다. 수집 중에는 새 배치마다 세대가 올라가므로 일부가 되돌려지는 것이 정상이다. 같은 사유가 계속 늘면서 결과 완료가 멈추면 정산 트랜잭션이 길어진 것이다.
 
-V80은 증분 정산 저장소와 배치 등록·입력 변경 트리거, 입력 커서 인덱스를 만든다. Worker와 이관·복원 작업을 중지한 상태에서 적용하고 새 Worker를 시작한다. 인덱스 생성에는 기존 배치를 읽는 작업이 필요하며 잠금은 5초, 문장은 120초로 제한한다. 이력 전체를 이 마이그레이션에서 변환하거나 대기 작업을 일괄 등록하지 않는다. 폐기된 근거와 대기 정산이 없는 지난 날짜의 근거는 나누어 정리한다.
+결과 준비는 `forecast.alighting.evaluation.preparation-limit`(기본 500개), 저장은 100개씩 나눈다. 한 회차의 새 준비는 `forecast.alighting.evaluation.maximum-preparations-per-tick`(기본 8회)와 `forecast.alighting.evaluation.maximum-tick-seconds`(기본 30초)로 제한하고 마지막 처리 노선 다음부터 순환한다. 이미 시작한 준비·저장은 마치며 트랜잭션의 15초 제한은 유지한다. 새 통과 근거가 없는 예측은 입력 변경이나 정산 기한까지 기다린다. 실패한 노선은 기존 재시도 간격을 적용한다.
 
-V80이 포함된 릴리즈는 배포를 시작하기 전에 RDS의 EBS 처리량 크레딧(CloudWatch `AWS/RDS`의 `EBSByteBalance%`)을 확인한다. 크레딧이 바닥나면 두 인덱스 생성이 각각 수십 초에서 2분 가까이 걸려 문장 제한 120초에 걸리거나 API의 최초 health 확인 시간을 넘길 수 있다. 크레딧이 남아 있을 때 커서 인덱스와 거의 같은 V78 인덱스는 운영에서 약 3초 걸렸다.
+회차가 결과 저장(완료·재예약), 새 배치 읽기, 기존 작업 등록, 폐기 근거 정리 중 하나를 커밋했으면 진행한 회차다. 진행한 회차 뒤에는 실행 시간에 `forecast.settlement-rest-ratio`(기본 0.25)를 곱한 만큼 쉬되 `forecast.settlement-minimum-interval`(기본 100ms) 이상, `forecast.settlement-interval` 이하로 쉰다. 진행이 없으면 `forecast.settlement-interval`을 쉬고, 회차가 실패하면 2초부터 두 배씩 최대 60초를 쉰다. 진행이 이어지는 동안 정산 스레드의 점유율은 `1/(1+쉬는 비율)`이고 기본값이면 80%다. 수집 시간에는 새 배치가 계속 들어와 대부분의 회차가 진행으로 끝나므로 이 점유율이 이어진다. 회차 예산(준비 횟수·시간)을 줄이면 한 회차가 짧아질 뿐 점유율은 그대로다. DB 부하를 줄이려면 Worker 환경변수 `FORECAST_SETTLEMENT_REST_RATIO`(1이면 50%, 3이면 25%)나 `FORECAST_SETTLEMENT_MINIMUM_INTERVAL`을 올리고 Worker를 재시작한다. 쉬는 비율을 올리면 밀린 작업이 줄어드는 속도도 그만큼 느려지므로 아래 구간별 기록으로 완료가 유입보다 많은지 함께 본다.
 
-- 확인 위치: 「Salmonbus DB 원인 분석」 대시보드 「02 읽기와 쓰기 / 디스크 성능」 행의 「EBS 처리량 크레딧 잔량」 패널이다. 이 패널은 최신 값 하나만 보여 주므로 최근 추이는 Grafana Explore에서 `min_over_time(aws_rds_ebsbyte_balance_percent_minimum{dimension_DBInstanceIdentifier="salmonbus-db"}[1h])`로 본다. CloudWatch 5분 표본이 늦게 들어와 최신 값도 5~10분 전 구간의 값이다.
-- 기준: 최근 1시간 최소값이 20% 이상이면 진행한다. 운영은 평소 96~100%다. dev에서는 14~15%일 때 V78 인덱스가 약 1초, 0%일 때 V77 인덱스가 55초 걸렸다.
-- 낮을 때: 배포를 시작하지 않는다. 이관·통계·수동 조회처럼 크레딧을 쓰는 작업을 확인하고 최근 1시간 최소값이 기준을 넘을 때까지 기다린다. Worker와 이관·복원 작업을 중지한 뒤 API 배포 직전에도 패널 값을 다시 본다. 이때 기준보다 낮으면 API 배포를 시작하지 않는다. 아직 V80을 적용하지 않았으므로 이전 Worker와 이관 작업을 다시 시작하고 회복을 기다린다.
+폐기 근거 정리는 회차마다 근거 하나에서 관측 색인 1,000행과 통과 근거 1,000행까지 지운다. 정리도 진행이므로 정리할 행이 남아 있으면 최소 간격으로 이어 돈다. 로컬 합성 자료(차량 20대, 정류장 40개, 20초 수집, 18시간)에서 노선·날짜 근거 하나는 관측 색인 64,800행, 통과 근거 15,535행, 약 23MB였고 정리에 65회차가 걸렸다. 노선 20개면 하루 약 1,300회차다. 쉬는 비율을 크게 올리면서 회차가 길면 이 정리량을 따라가지 못할 수 있으므로 아래 근거 저장공간 SQL로 폐기 근거 수를 본다.
 
-`alighting_settlement_history_read`, `alighting_settlement_integrity_read`, `alighting_settlement_prepare`, `alighting_settlement_commit`으로 읽기·준비·저장 시간을 구분한다. `alighting_settlement_page_committed`는 커밋 뒤 처리·완료·재예약 건수를 기록한다. 재기동 후 같은 체크포인트가 유지되는지와 대기 지연, 수집·예보 지연, RDS 읽기량을 함께 확인하고 예산을 조정한다.
+V80은 증분 정산 저장소와 배치 등록·입력 변경 트리거, 구 모델 대기 작업 인덱스(`ix_alighting_legacy_settlement_due`)를 만든다. 입력 커서는 V78 인덱스를 그대로 쓰므로 `observation_batch`에는 인덱스를 새로 만들지 않는다. Worker와 이관·복원 작업을 중지한 상태에서 적용하고 새 Worker를 시작한다. 인덱스 생성에는 `alighting_forecast_evaluation_work` 전체를 읽는 작업이 필요하며 잠금은 5초, 문장은 120초로 제한한다. 이력 전체를 이 마이그레이션에서 변환하거나 대기 작업을 일괄 등록하지 않는다. 폐기된 근거와 대기 정산이 없는 지난 날짜의 근거는 나누어 정리한다.
 
-V80 적용 뒤에는 기존 대기 작업을 배치 큐에 등록하는 동안과 등록이 끝난 뒤를 나눠 밀린 작업이 줄어드는지 확인한다. 등록은 `alighting_settlement_queue_scan.complete`가 `true`가 되면 끝난다. 두 구간 모두 5분 단위로 아래 네 값을 같은 표에 기록하고, SQL은 각 5분이 끝날 때 실행한다. 그래프는 「Salmonbus DB 원인 분석」 대시보드에서 본다.
+V80 트리거는 `observation_batch`와 `vehicle_observation`의 INSERT·UPDATE·DELETE 문장마다 실행된다. 바뀐 행을 전이 테이블로 모은 뒤 노선·날짜마다 입력 세대 행 하나를 올리고, 이미 읽은 범위가 바뀐 근거를 폐기 표시한다. 수집처럼 한 배치씩 바꾸는 문장은 부담이 작다. 여러 노선·날짜를 한 문장으로 바꾸는 대량 UPDATE·DELETE는 문장이 끝날 때까지 전이 테이블과 세대 행 잠금을 유지하고, 이미 읽은 범위를 건드리면 그 날짜의 근거를 처음부터 다시 만든다. 대량 변경은 Worker를 멈춘 시간에 노선·날짜 단위로 나누어 실행한다. 이관 purge는 파일 하나(기본 2,000행)를 한 문장으로 지우고 문장 10초, 잠금 200ms 제한을 둔다. purge가 정산 쪽 잠금을 기다리는 시간은 정산 커밋 한 번 이하다. 로컬(tmpfs, 노선 하나·하루 3,240배치)에서 2,000배치 DELETE는 트리거 없이 23~26ms, V80 트리거로 30~32ms였고 관측 2,000행 DELETE는 80~104ms와 80~89ms로 차이가 없었다. purge가 문장 제한에 걸리면 트리거보다 외래 키 확인과 I/O 크레딧을 먼저 본다.
+
+V80이 포함된 릴리즈는 배포를 시작하기 전에 RDS의 EBS 처리량 크레딧(CloudWatch `AWS/RDS`의 `EBSByteBalance%`)과 여유 저장공간(`FreeStorageSpace`)을 확인한다. V80에서 시간이 걸리는 문장은 `ix_alighting_legacy_settlement_due` 생성 하나이고, 나머지 문장은 로컬에서 합계 0.1초 미만이다. API는 마이그레이션과 기동을 합쳐 최초 health 240초 안에 끝나야 한다. 마이그레이션 연결의 소켓 제한은 문장 하나에 150초, V80 문장 제한은 120초다.
+
+- 예상 소요: 작업 테이블 85만 행(11-12 운영 규모, heap 약 130MiB)이 모두 구 모델 라벨인 상한에서 인덱스는 약 92MiB다. 로컬 SSD에서 1.7~2.8초였고, 크레딧이 남아 있으면 운영에서 약 3초로 본다. 크레딧이 0이면 약 15~56초로 본다(t4g.small 기준 대역폭과 dev V77 크레딧 0 실측 55초에서 환산). 기동 약 30초를 더해도 240초 안에 든다. 작업 테이블이 크게 늘었으면 행 수에 비례해 늘려 잡는다.
+- 크레딧 확인 위치: 「Salmonbus DB 원인 분석」 대시보드 「02 읽기와 쓰기 / 디스크 성능」 행의 「EBS 처리량 크레딧 잔량」 패널이다. 이 패널은 최신 값 하나만 보여 주므로 최근 추이는 Grafana Explore에서 `min_over_time(aws_rds_ebsbyte_balance_percent_minimum{dimension_DBInstanceIdentifier="salmonbus-db"}[1h])`로 본다. CloudWatch 5분 표본이 늦게 들어와 최신 값도 5~10분 전 구간의 값이다.
+- 크레딧 기준: 최근 1시간 최소값이 20% 이상이면 진행한다. 운영은 평소 96~100%다. dev에서는 14~15%일 때 V78 인덱스가 약 1초, 0%일 때 V77 인덱스가 55초 걸렸다.
+- 저장공간 확인 위치: 같은 대시보드 「04 메모리 / 저장 공간 / 재시작」 행의 「DB 저장 공간 여유」 패널이다. 최근 추이는 `min_over_time(aws_rds_free_storage_space_minimum{dimension_DBInstanceIdentifier="salmonbus-db"}[1h])`로 본다.
+- 저장공간 기준: 배포 뒤 늘어나는 양은 V80 인덱스와 WAL 약 0.3GiB에, 대기 작업이 걸친 날짜마다 노선별 근거 약 25MB를 더한 값이다(로컬 합성 자료 추정, 노선 20개면 하루 약 0.5GiB). 최근 1시간 최소값이 이 합의 두 배와 2GiB 중 큰 값 이상이고 그동안 줄어드는 추세가 아니면 진행한다. 대기 작업이 걸친 날짜 수는 아래 SQL의 `pending_days`다. 정리한 근거의 공간은 VACUUM 뒤 같은 테이블이 다시 쓰고, 파일 크기는 줄지 않는다.
+- 낮을 때: 배포를 시작하지 않는다. 크레딧이 낮으면 이관·통계·수동 조회처럼 크레딧을 쓰는 작업을 확인하고 최근 1시간 최소값이 기준을 넘을 때까지 기다린다. 저장공간이 낮거나 줄어드는 중이면 원인을 먼저 처리하거나 저장공간을 늘린다. Worker와 이관·복원 작업을 중지한 뒤 API 배포 직전에도 두 패널 값을 다시 본다. 이때 기준보다 낮으면 API 배포를 시작하지 않는다. 아직 V80을 적용하지 않았으므로 이전 Worker와 이관 작업을 다시 시작하고 회복을 기다린다.
+
+```sql
+BEGIN READ ONLY;
+SET LOCAL statement_timeout = '3s';
+SELECT (b.response_received_at AT TIME ZONE 'Asia/Seoul')::date AS oldest_pending_date,
+       (now() AT TIME ZONE 'Asia/Seoul')::date - (b.response_received_at AT TIME ZONE 'Asia/Seoul')::date + 1 AS pending_days
+  FROM vehicle_observation o JOIN observation_batch b ON b.id = o.observation_batch_id
+ WHERE o.id = (SELECT min(vehicle_observation_id) FROM alighting_forecast_evaluation_work);
+COMMIT;
+```
+
+정산 시간은 Worker 작업 지표 `salmonbus_worker_operation_seconds{operation=...}`와 1초 이상 걸린 작업의 `event=worker_operation status=SLOW` 로그로 본다. `alighting_settlement_tick`은 회차 전체, `alighting_settlement_route`는 노선 하나, `alighting_settlement_prepare`는 근거 준비(확정 모델은 커서 읽기와 근거 저장, 구 모델은 관측 읽기), `alighting_settlement_commit`은 결과 저장 트랜잭션이다. `alighting_settlement_backfill`, `alighting_settlement_cleanup`, `alighting_settlement_generation_prepare`는 기존 작업 등록, 폐기 근거 정리, 세대 행 준비이고 실패해도 노선 정산은 계속한다. 실패는 `event=worker_operation status=FAILED`와 `event=settlement_route_failed`로 남는다. `event=alighting_settlement_page_committed`는 커밋 뒤 처리·완료·재예약 건수를, `event=alighting_settlement_rejected`는 입력 변경으로 되돌린 저장을 기록한다. 대기 지연, 수집·예보 지연, RDS 읽기량을 함께 보고 쉬는 비율과 최소 간격을 조정한다.
+
+V80 적용 뒤에는 기존 대기 작업을 배치 큐에 등록하는 동안과 등록이 끝난 뒤를 나눠 밀린 작업이 줄어드는지 확인한다. 등록은 `alighting_settlement_queue_scan.complete`가 `true`가 되면 끝난다. 두 구간 모두 5분 단위로 아래 다섯 값을 같은 표에 기록하고, SQL은 각 5분이 끝날 때 실행한다. 그래프는 「Salmonbus DB 원인 분석」 대시보드에서 본다.
 
 - 신규 유입: `alighting_forecast_evaluation_work`에 추가된 행 수다. 「테이블별 수정 속도」 패널이나 `increase(salmonbus_pg_table_inserts_total{table="alighting_forecast_evaluation_work"}[5m])`로 본다.
 - 실제 완료: `alighting_forecast_evaluation_result`에 추가된 행 수다. `increase(salmonbus_pg_table_inserts_total{table="alighting_forecast_evaluation_result"}[5m])`로 보고, 같은 5분의 `event=alighting_settlement_page_committed` 로그 `completed` 합과 비교한다. 재예약한 `deferred`는 완료에 넣지 않는다. 테이블 카운터는 롤백된 행과 복원 작업이 추가한 결과도 세므로, 두 값이 크게 다르면 로그 합을 기준으로 한다.
-- 가장 오래된 대기 작업의 경과 시간: 아래 SQL의 `oldest_due_age`다. 처리 가능 시각(`next_attempt_at`)이 지난 작업 중 가장 오래 기다린 작업의 대기 시간이다. 재예약하면 처리 가능 시각이 다시 정해지므로 처음 등록된 뒤의 시간은 아니다.
+- 가장 오래된 대기 작업의 경과 시간: 아래 첫 SQL의 `oldest_due_age`다. 처리 가능 시각(`next_attempt_at`)이 지난 작업 중 가장 오래 기다린 작업의 대기 시간이다. 재예약하면 처리 가능 시각이 다시 정해지므로 처음 등록된 뒤의 시간은 아니다. 확정 모델은 새 통과 근거가 없으면 작업을 재예약하지 않고 정산 기한(관측 뒤 2시간)까지 기다리므로, 수집이 끝난 밤이나 새 근거가 없는 동안 이 값이 약 2시간까지 커지는 것은 정상이다. 2시간을 넘어 계속 커지면 밀린 것이다.
 - RDS 읽기량: CloudWatch `AWS/RDS`의 `ReadThroughput` 5분 평균에 300을 곱한 바이트다. 「읽기 / 쓰기 처리량」 패널로 보고, 「EBS 처리량 크레딧 잔량」(`EBSByteBalance%`)도 함께 적는다.
+- 근거 저장공간: 아래 둘째 SQL의 활성·폐기 근거 수와 근거 테이블 크기다. 「DB 저장 공간 여유」 패널 값도 함께 적는다. 폐기 근거 수가 줄지 않고 쌓이면 정리가 따라가지 못하는 것이다.
 
 ```sql
 BEGIN READ ONLY;
@@ -961,15 +983,21 @@ SELECT now() AS captured_at, s.complete AS backfill_complete, s.observation_id A
        now() - (SELECT min(next_attempt_at) FROM alighting_forecast_evaluation_work
                  WHERE next_attempt_at <= now()) AS oldest_due_age
   FROM alighting_settlement_queue_scan s;
+SELECT count(*) FILTER (WHERE active) AS active_projections, count(*) FILTER (WHERE NOT active) AS retired_projections,
+       pg_size_pretty(pg_total_relation_size('alighting_settlement_observation')
+           + pg_total_relation_size('alighting_settlement_pass')) AS evidence_size
+  FROM alighting_settlement_projection;
 COMMIT;
 ```
+
+첫 SQL은 `ix_alighting_evaluation_due(next_attempt_at, vehicle_observation_id)`의 앞쪽만 읽는다. 다만 완료로 지운 작업 행이 VACUUM 전에 인덱스 앞쪽에 많이 남아 있으면 그 행의 heap을 하나씩 확인한다. 로컬에서 앞쪽 30만 행을 지운 직후 첫 실행은 30만 행을 확인하며 55ms(tmpfs), 다음 실행은 0.4ms였다. 3초 제한에 걸리면 다음 5분에 다시 잰다.
 
 ```bash
 journalctl -u salmonbus-worker --since '<시작 UTC>' --until '<5분 뒤 UTC>' --no-pager \
   --grep 'event=alighting_settlement_page_committed' | grep -o 'completed=[0-9]*' | awk -F= '{s+=$2} END {print s+0}'
 ```
 
-등록이 끝난 뒤 구간에서 완료가 유입보다 많고 `oldest_due_age`가 줄어야 밀린 작업이 줄어든 것이다. 예산은 두 구간의 기록과 크레딧 잔량 추세를 함께 보고 조정한다.
+등록이 끝난 뒤 구간에서 완료가 유입보다 많고 `oldest_due_age`가 줄어야 밀린 작업이 줄어든 것이다. 쉬는 비율과 최소 간격은 두 구간의 기록과 크레딧·저장공간 추세를 함께 보고 조정한다.
 
 구 모델 미완료 작업은 V70/V71에서 종료 사유를 남기며 기존 완료 결과를 재작성하지 않는다. V72는 운영 중간 통계·당일 보정 테이블을 제거한다. 이미 발행한 통계·판본·파일 발행 기록은 과거 데이터 해석용으로 유지한다.
 

@@ -29,6 +29,7 @@ import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.JsonNode;
 
+/** 증분 정산 이전의 전체 이력 정산 계산을 그대로 옮긴 테스트 기준이다. 증분 근거의 결과를 이 계산과 비교한다. */
 final class ConfirmedAlightingAwareEvaluationOracle {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private final History history;

@@ -7,6 +7,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 확정 관측을 확정 시각 순서로 이어 받아 차량별 연결·편도 상태를 유지하고 닫힌 통과를 만든다.
+ *
+ * <p>나누어 받은 결과는 같은 관측을 {@link AlightingAwarePassEvents#resolve}로 한 번에 판정한 결과와 같다.
+ * 같은 확정 시각의 관측은 그 시각이 끝났다고 알려 줄 때까지 모았다가 연결을 먼저, 통과를 나중에 판정한다.
+ * 관측 한도를 넘으면 그 시각을 기록하고 이후 관측을 받지 않는다.
+ */
 public final class AlightingSettlementProjection {
     public record Layout(int turn, List<Integer> stops) {
         public Layout {
@@ -96,6 +103,10 @@ public final class AlightingSettlementProjection {
         }
     }
 
+    /**
+     * {@code through} 이하의 확정 시각이 더 들어오지 않음을 알린다. 모아 둔 같은 시각 관측을 판정하고,
+     * {@code through}보다 30분 넘게 앞선 차량 상태를 버린다. 다음 관측은 그보다 늦으므로 버린 상태와 이어지지 않는다.
+     */
     public void completeThrough(Instant through) {
         if (!pending.isEmpty() && !pending.getFirst().receivedAt().isAfter(through)) {
             flush();

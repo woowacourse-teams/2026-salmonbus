@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 class AlightingSettlementProjectionTest {
@@ -72,7 +73,7 @@ class AlightingSettlementProjectionTest {
 
     @Test
     void 연결_단절과_좌석_누락을_섞어도_전체_판정과_같다() {
-        var random = new java.util.Random(20261112);
+        var random = new Random(20261112);
         List<AlightingAwareObservation> rows = new ArrayList<>();
         int[] positions = new int[5];
         for (int i = 1; i <= 2000; i++) {

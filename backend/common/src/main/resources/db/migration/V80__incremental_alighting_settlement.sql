@@ -94,11 +94,6 @@ CREATE TABLE alighting_settlement_queue_scan (
 );
 INSERT INTO alighting_settlement_queue_scan(id) VALUES(true);
 
-CREATE INDEX ix_batch_settlement_cursor
-    ON observation_batch(route_version_id,input_confirmed_at,id)
-    INCLUDE(response_received_at,stored_rows)
-    WHERE ingestion_origin='LIVE' AND outcome='SUCCESS_ROWS' AND input_confirmed_at IS NOT NULL;
-
 CREATE INDEX ix_alighting_legacy_settlement_due
     ON alighting_forecast_evaluation_work(route_version_id,next_attempt_at,vehicle_observation_id,target_stop_order,target_kind,label_version)
     WHERE label_version NOT IN ('alighting-confirmed-capacity-snapshot-v3','les-confirmed-capacity-snapshot-v3');
@@ -140,24 +135,30 @@ END $$;
 CREATE TRIGGER trg_alighting_settlement_batch AFTER INSERT OR UPDATE ON alighting_forecast_evaluation_work
     FOR EACH ROW EXECUTE FUNCTION register_alighting_settlement_batch();
 
-CREATE FUNCTION invalidate_alighting_settlement(version_key bigint, changed_at timestamptz) RETURNS void
+CREATE FUNCTION invalidate_alighting_settlement(version_keys bigint[], changed_times timestamptz[]) RETURNS void
 LANGUAGE plpgsql AS $$
-DECLARE route_key bigint; day_key date;
+DECLARE changed record;
 BEGIN
-    IF changed_at IS NULL OR NOT isfinite(changed_at) THEN RETURN; END IF;
-    SELECT route_id INTO route_key FROM route_version WHERE id=version_key;
-    IF route_key IS NULL THEN RETURN; END IF;
-    FOR day_key IN
-        SELECT (changed_at AT TIME ZONE 'Asia/Seoul')::date
-        UNION ALL SELECT (changed_at AT TIME ZONE 'Asia/Seoul')::date-1
-            WHERE (changed_at AT TIME ZONE 'Asia/Seoul')::time<time '02:00'
-        ORDER BY 1
+    FOR changed IN
+        SELECT v.route_id,d.day,min(c.changed_at) AS changed_at
+        FROM unnest(version_keys,changed_times) AS c(version_id,changed_at)
+        JOIN route_version v ON v.id=c.version_id
+        CROSS JOIN LATERAL (
+            SELECT (c.changed_at AT TIME ZONE 'Asia/Seoul')::date AS day
+            UNION ALL SELECT (c.changed_at AT TIME ZONE 'Asia/Seoul')::date-1
+                WHERE (c.changed_at AT TIME ZONE 'Asia/Seoul')::time<time '02:00'
+        ) d
+        WHERE c.changed_at IS NOT NULL AND isfinite(c.changed_at)
+        GROUP BY v.route_id,d.day
+        ORDER BY v.route_id,d.day
     LOOP
-        INSERT INTO alighting_settlement_generation(route_id,source_date,generation) VALUES(route_key,day_key,1)
+        INSERT INTO alighting_settlement_generation(route_id,source_date,generation)
+        VALUES(changed.route_id,changed.day,1)
         ON CONFLICT(route_id,source_date) DO UPDATE
             SET generation=alighting_settlement_generation.generation+1;
         UPDATE alighting_settlement_projection SET dirty=true
-            WHERE route_id=route_key AND source_date=day_key AND active AND cursor_at>=changed_at;
+            WHERE route_id=changed.route_id AND source_date=changed.day AND active AND NOT dirty
+              AND cursor_at>=changed.changed_at;
     END LOOP;
 END $$;
 
@@ -165,34 +166,30 @@ CREATE FUNCTION track_alighting_batch_changes() RETURNS trigger LANGUAGE plpgsql
 DECLARE changed record;
 BEGIN
     IF TG_OP='INSERT' THEN
-        FOR changed IN SELECT DISTINCT route_version_id,input_confirmed_at FROM new_batches
-            WHERE ingestion_origin='LIVE' AND outcome='SUCCESS_ROWS'
-              AND input_confirmed_at BETWEEN response_received_at AND response_received_at+interval '90 seconds'
-            ORDER BY route_version_id,input_confirmed_at
-        LOOP PERFORM invalidate_alighting_settlement(changed.route_version_id,changed.input_confirmed_at); END LOOP;
+        PERFORM invalidate_alighting_settlement(array_agg(route_version_id),array_agg(input_confirmed_at))
+        FROM new_batches
+        WHERE ingestion_origin='LIVE' AND outcome='SUCCESS_ROWS'
+          AND input_confirmed_at BETWEEN response_received_at AND response_received_at+interval '90 seconds';
     ELSIF TG_OP='DELETE' THEN
-        FOR changed IN SELECT DISTINCT route_version_id,input_confirmed_at FROM old_batches
-            WHERE ingestion_origin='LIVE' AND outcome='SUCCESS_ROWS'
-              AND input_confirmed_at BETWEEN response_received_at AND response_received_at+interval '90 seconds'
-            ORDER BY route_version_id,input_confirmed_at
-        LOOP PERFORM invalidate_alighting_settlement(changed.route_version_id,changed.input_confirmed_at); END LOOP;
+        PERFORM invalidate_alighting_settlement(array_agg(route_version_id),array_agg(input_confirmed_at))
+        FROM old_batches
+        WHERE ingestion_origin='LIVE' AND outcome='SUCCESS_ROWS'
+          AND input_confirmed_at BETWEEN response_received_at AND response_received_at+interval '90 seconds';
     ELSE
-        FOR changed IN
-            WITH modified AS (
-                SELECT n.id FROM new_batches n JOIN old_batches o USING(id)
-                WHERE (n.route_version_id,n.input_confirmed_at,n.response_received_at,n.ingestion_origin,n.outcome,n.stored_rows)
-                    IS DISTINCT FROM
-                    (o.route_version_id,o.input_confirmed_at,o.response_received_at,o.ingestion_origin,o.outcome,o.stored_rows)
-            ), inputs AS (
-                SELECT b.* FROM old_batches b JOIN modified m USING(id)
-                UNION ALL SELECT b.* FROM new_batches b JOIN modified m USING(id)
-            ) SELECT DISTINCT route_version_id,input_confirmed_at FROM inputs
-                WHERE ingestion_origin='LIVE' AND outcome='SUCCESS_ROWS'
-                  AND input_confirmed_at BETWEEN response_received_at AND response_received_at+interval '90 seconds'
-            ORDER BY route_version_id,input_confirmed_at
-        LOOP PERFORM invalidate_alighting_settlement(changed.route_version_id,changed.input_confirmed_at); END LOOP;
-    END IF;
-    IF TG_OP='UPDATE' THEN
+        PERFORM invalidate_alighting_settlement(array_agg(i.route_version_id),array_agg(i.input_confirmed_at))
+        FROM (
+            SELECT side.route_version_id,side.input_confirmed_at,side.response_received_at,side.ingestion_origin,side.outcome
+            FROM new_batches n JOIN old_batches o USING(id)
+            CROSS JOIN LATERAL (VALUES
+                (o.route_version_id,o.input_confirmed_at,o.response_received_at,o.ingestion_origin,o.outcome),
+                (n.route_version_id,n.input_confirmed_at,n.response_received_at,n.ingestion_origin,n.outcome)
+            ) AS side(route_version_id,input_confirmed_at,response_received_at,ingestion_origin,outcome)
+            WHERE (n.route_version_id,n.input_confirmed_at,n.response_received_at,n.ingestion_origin,n.outcome,n.stored_rows)
+                IS DISTINCT FROM
+                (o.route_version_id,o.input_confirmed_at,o.response_received_at,o.ingestion_origin,o.outcome,o.stored_rows)
+        ) i
+        WHERE i.ingestion_origin='LIVE' AND i.outcome='SUCCESS_ROWS'
+          AND i.input_confirmed_at BETWEEN i.response_received_at AND i.response_received_at+interval '90 seconds';
         FOR changed IN
             SELECT min(o.id) AS observation_id,q.label_version,min(q.retry_at) AS due
             FROM new_batches n JOIN old_batches prior USING(id)
@@ -216,38 +213,31 @@ CREATE FUNCTION track_alighting_observation_changes() RETURNS trigger LANGUAGE p
 DECLARE changed record;
 BEGIN
     IF TG_OP='INSERT' THEN
-        FOR changed IN SELECT DISTINCT b.route_version_id,b.input_confirmed_at
-            FROM new_observations o JOIN observation_batch b ON b.id=o.observation_batch_id
-            WHERE b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS'
-              AND b.input_confirmed_at BETWEEN b.response_received_at AND b.response_received_at+interval '90 seconds'
-            ORDER BY b.route_version_id,b.input_confirmed_at
-        LOOP PERFORM invalidate_alighting_settlement(changed.route_version_id,changed.input_confirmed_at); END LOOP;
+        PERFORM invalidate_alighting_settlement(array_agg(b.route_version_id),array_agg(b.input_confirmed_at))
+        FROM (SELECT DISTINCT observation_batch_id FROM new_observations) o
+        JOIN observation_batch b ON b.id=o.observation_batch_id
+        WHERE b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS'
+          AND b.input_confirmed_at BETWEEN b.response_received_at AND b.response_received_at+interval '90 seconds';
     ELSIF TG_OP='DELETE' THEN
-        FOR changed IN SELECT DISTINCT b.route_version_id,b.input_confirmed_at
-            FROM old_observations o JOIN observation_batch b ON b.id=o.observation_batch_id
-            WHERE b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS'
-              AND b.input_confirmed_at BETWEEN b.response_received_at AND b.response_received_at+interval '90 seconds'
-            ORDER BY b.route_version_id,b.input_confirmed_at
-        LOOP PERFORM invalidate_alighting_settlement(changed.route_version_id,changed.input_confirmed_at); END LOOP;
+        PERFORM invalidate_alighting_settlement(array_agg(b.route_version_id),array_agg(b.input_confirmed_at))
+        FROM (SELECT DISTINCT observation_batch_id FROM old_observations) o
+        JOIN observation_batch b ON b.id=o.observation_batch_id
+        WHERE b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS'
+          AND b.input_confirmed_at BETWEEN b.response_received_at AND b.response_received_at+interval '90 seconds';
     ELSE
-        FOR changed IN
-            WITH modified AS (
-                SELECT n.id FROM new_observations n JOIN old_observations o USING(id)
-                WHERE (n.observation_batch_id,n.route_version_id,n.vehicle_id,n.passed_stop_order,n.stop_order,
-                       n.running_state,n.remaining_seats,n.seat_unknown_reason,n.crowd_level)
-                    IS DISTINCT FROM
-                      (o.observation_batch_id,o.route_version_id,o.vehicle_id,o.passed_stop_order,o.stop_order,
-                       o.running_state,o.remaining_seats,o.seat_unknown_reason,o.crowd_level)
-            ), batches AS (
-                SELECT o.observation_batch_id FROM old_observations o JOIN modified m USING(id)
-                UNION SELECT o.observation_batch_id FROM new_observations o JOIN modified m USING(id)
-            ) SELECT DISTINCT b.route_version_id,b.input_confirmed_at FROM batches x JOIN observation_batch b
-                ON b.id=x.observation_batch_id WHERE b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS'
-                  AND b.input_confirmed_at BETWEEN b.response_received_at AND b.response_received_at+interval '90 seconds'
-            ORDER BY b.route_version_id,b.input_confirmed_at
-        LOOP PERFORM invalidate_alighting_settlement(changed.route_version_id,changed.input_confirmed_at); END LOOP;
-    END IF;
-    IF TG_OP='UPDATE' THEN
+        PERFORM invalidate_alighting_settlement(array_agg(b.route_version_id),array_agg(b.input_confirmed_at))
+        FROM (
+            SELECT DISTINCT side.batch_id
+            FROM new_observations n JOIN old_observations o USING(id)
+            CROSS JOIN LATERAL (VALUES (o.observation_batch_id),(n.observation_batch_id)) AS side(batch_id)
+            WHERE (n.observation_batch_id,n.route_version_id,n.vehicle_id,n.passed_stop_order,n.stop_order,
+                   n.running_state,n.remaining_seats,n.seat_unknown_reason,n.crowd_level)
+                IS DISTINCT FROM
+                  (o.observation_batch_id,o.route_version_id,o.vehicle_id,o.passed_stop_order,o.stop_order,
+                   o.running_state,o.remaining_seats,o.seat_unknown_reason,o.crowd_level)
+        ) x JOIN observation_batch b ON b.id=x.batch_id
+        WHERE b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS'
+          AND b.input_confirmed_at BETWEEN b.response_received_at AND b.response_received_at+interval '90 seconds';
         FOR changed IN
             SELECT n.id AS observation_id,w.label_version,w.next_attempt_at AS due
             FROM new_observations n JOIN old_observations prior USING(id)

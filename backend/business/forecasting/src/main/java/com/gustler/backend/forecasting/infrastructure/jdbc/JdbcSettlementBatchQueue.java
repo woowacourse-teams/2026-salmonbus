@@ -4,12 +4,19 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
+/**
+ * 확정 판본 정산 작업을 수집 배치와 라벨 판본 단위로 묶은 대기열이다. 기존 대기 작업은 커서로 1,000행씩 등록한다.
+ *
+ * <p>배치는 새 작업, 첫 시도, 정산 기한, 사용한 근거의 변경(폐기·세대·통과 근거·판본·다음 입력 도달) 중 하나가 있을 때만
+ * 다시 꺼낸다. 꺼낼 때 2분 임대를 걸고, 같은 임대 토큰을 가진 실행만 결과를 돌려놓는다.
+ */
 final class JdbcSettlementBatchQueue {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String READY = """
@@ -83,7 +90,7 @@ final class JdbcSettlementBatchQueue {
             """.formatted(READY)).param("now", offset(now)).query(Long.class).list();
     }
 
-    Batch claim(long route, Instant now, java.util.Set<Long> blocked) {
+    Batch claim(final long route, Instant now, Set<Long> blocked) {
         return tx.execute(status -> jdbc.sql("""
             UPDATE alighting_settlement_batch_work q SET lease_token=:lease,lease_until=clock_timestamp()+interval '2 minutes'
             FROM (SELECT batch_id,label_version FROM alighting_settlement_batch_work q

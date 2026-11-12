@@ -17,25 +17,44 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+/**
+ * 노선·날짜·정류장 구성별 확정 관측을 커서로 이어 읽어 관측 색인과 닫힌 통과 근거로 저장하고, 그 근거로 정산 목표를 맞춘다.
+ *
+ * <p>읽기는 반복 가능 읽기 스냅숏에서 잠금 없이 한다. 근거 저장과 결과 커밋은 마지막 문장에서 입력 세대 행을
+ * {@code FOR UPDATE SKIP LOCKED}로 비교한다. 세대가 바뀌었거나 수집 쪽 확정이 그 행을 잡고 있으면 그 트랜잭션을 버리고
+ * 다음 회차에 다시 읽는다. 정산은 세대 행을 기다리지 않고 커밋 직전에만 잡으므로 수집 확정이 정산 트랜잭션을 기다리지 않는다.
+ *
+ * <p>새로 읽은 배치나 새 근거가 없으면 근거 행을 다시 쓰지 않는다. 입력 세대만 바뀌었으면 상태는 두고 세대·범위·다음 입력
+ * 시각만 고친다. 커서는 마지막으로 읽은 배치에 둔다. 저장 행 수가 0보다 큰 배치만 읽으므로 V78 커서 인덱스로 찾는다.
+ */
 final class JdbcSettlementProjection {
+    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcSettlementProjection.class);
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final int BATCH_LIMIT = 100;
     private final JdbcClient jdbc;
     private final TransactionTemplate read;
     private final TransactionTemplate write;
+    private Consumer<String> rejections = reason -> { };
 
     record Ref(long id, long route, LocalDate date, long generation, long version, long facts,
                Instant coverage, Instant incomplete, Instant overflow, boolean advanced) {
@@ -44,10 +63,10 @@ final class JdbcSettlementProjection {
         }
     }
 
-    private record Stored(Ref ref, Instant cursor, long batch, Instant next, boolean dirty, byte[] state) { }
+    private record Stored(Ref ref, Instant cursor, long batch, boolean dirty) { }
     private record Batch(long id, Instant at, Integer rows) { }
     private record Input(Stored stored, long generation, List<Batch> batches,
-                         List<AlightingAwareObservation> rows, Map<Long, Long> counts) { }
+                         List<AlightingAwareObservation> rows, Map<Long, Long> counts, byte[] state) { }
 
     JdbcSettlementProjection(JdbcClient jdbc, PlatformTransactionManager transactions) {
         this.jdbc = jdbc;
@@ -59,14 +78,19 @@ final class JdbcSettlementProjection {
         write.setTimeout(15);
     }
 
-    Ref advance(long route, LocalDate date, long revision, int limit, JsonNode snapshot, Instant through) {
+    /** 거절 사유를 받을 수신자를 등록한다. 사유는 단계와 원인을 이은 정해진 값이다. */
+    void rejections(Consumer<String> listener) {
+        rejections = listener;
+    }
+
+    Ref advance(final long route, LocalDate date, final long revision, final int limit, JsonNode snapshot, Instant through) {
         List<Integer> stops = new ArrayList<>();
         snapshot.path("realStopOrders").forEach(value -> stops.add(value.asInt()));
         Layout layout = new Layout(snapshot.path("turn").asInt(), stops);
         String encodedLayout = JSON.writeValueAsString(layout);
-        long logicalRoute = jdbc.sql("SELECT route_id FROM route_version WHERE id=:route")
+        final long logicalRoute = jdbc.sql("SELECT route_id FROM route_version WHERE id=:route")
             .param("route", route).query(Long.class).single();
-        long id = Objects.requireNonNull(write.execute(status -> initialize(logicalRoute, date, revision, limit, encodedLayout)));
+        final long id = Objects.requireNonNull(write.execute(status -> initialize(logicalRoute, date, revision, limit, encodedLayout)));
         Input input = read.execute(status -> inputs(id, logicalRoute, date, limit, through));
         if (input == null || input.stored().dirty()) {
             return null;
@@ -75,14 +99,15 @@ final class JdbcSettlementProjection {
         if (stored.ref().generation() == input.generation() && stored.ref().covers(through)) {
             return stored.ref();
         }
-        AlightingSettlementProjection model = new AlightingSettlementProjection(layout, limit,
-            SettlementProjectionCodec.decode(stored.state(), Snapshot.class));
+        List<Batch> selected = input.batches().stream().filter(batch -> !batch.at().isAfter(through)).limit(BATCH_LIMIT).toList();
+        Instant next = input.batches().size() > selected.size() ? input.batches().get(selected.size()).at() : null;
+        AlightingSettlementProjection model = input.state() == null ? null
+            : new AlightingSettlementProjection(layout, limit, SettlementProjectionCodec.decode(input.state(), Snapshot.class));
         Map<Long, List<AlightingAwareObservation>> rows = input.rows().stream()
             .collect(Collectors.groupingBy(AlightingAwareObservation::batchId));
-        List<Batch> selected = input.batches().stream().filter(batch -> !batch.at().isAfter(through)).limit(BATCH_LIMIT).toList();
         Instant cursor = stored.cursor();
         long cursorBatch = stored.batch();
-        Instant coverage = stored.ref().coverage();
+        Instant coverage = earlier(stored.ref().coverage(), cursor);
         for (Batch batch : selected) {
             if (batch.at().isAfter(cursor)) {
                 coverage = cursor;
@@ -92,33 +117,37 @@ final class JdbcSettlementProjection {
             cursor = batch.at();
             cursorBatch = batch.id();
         }
-        Instant next = input.batches().size() > selected.size() ? input.batches().get(selected.size()).at() : null;
-        if (next == null || next.isAfter(through)) {
-            model.completeThrough(through);
-            coverage = through.isAfter(coverage) ? through : coverage;
-            if (through.isAfter(cursor)) {
-                cursor = through;
-                cursorBatch = Long.MAX_VALUE;
+        if (next == null || next.isAfter(cursor)) {
+            if (model != null) {
+                model.completeThrough(cursor);
             }
-        } else if (next.isAfter(cursor)) {
-            model.completeThrough(cursor);
-            coverage = cursor;
+            coverage = later(coverage, cursor);
         }
-        Snapshot state = model.snapshot();
-        long facts = stored.ref().facts() + (!model.passes().isEmpty()
+        if (next == null || next.isAfter(through)) {
+            coverage = later(coverage, through);
+        }
+        Snapshot state = model == null ? null : model.snapshot();
+        final boolean factsChanged = model != null && (!model.passes().isEmpty()
             || !Objects.equals(state.incompleteAt(), stored.ref().incomplete())
-            || !Objects.equals(state.overflowAt(), stored.ref().overflow()) ? 1 : 0);
+            || !Objects.equals(state.overflowAt(), stored.ref().overflow()));
+        if (selected.isEmpty() && (model == null || model.indexed().isEmpty()) && !factsChanged) {
+            Ref current = new Ref(id, logicalRoute, date, input.generation(), stored.ref().version(), stored.ref().facts(),
+                coverage, stored.ref().incomplete(), stored.ref().overflow(), false);
+            if (stored.ref().generation() == input.generation()) {
+                return current;
+            }
+            return write.execute(status -> catchUp(stored, current, next, status));
+        }
         Ref result = new Ref(id, logicalRoute, date, input.generation(), stored.ref().version() + 1,
-            facts, coverage, state.incompleteAt(), state.overflowAt(), true);
+            stored.ref().facts() + (factsChanged ? 1 : 0), coverage, state.incompleteAt(), state.overflowAt(), true);
         Instant finalCursor = cursor;
-        long finalBatch = cursorBatch;
-        return write.execute(status -> persist(stored, result, finalCursor, finalBatch, next, state, model) ? result : null);
+        final long finalBatch = cursorBatch;
+        return write.execute(status -> persist(stored, result, finalCursor, finalBatch, next, state, model, status));
     }
 
-    private long initialize(long route, LocalDate date, long revision, int limit, String layout) {
+    private long initialize(final long route, LocalDate date, final long revision, final int limit, String layout) {
         jdbc.sql("INSERT INTO alighting_settlement_generation(route_id,source_date) VALUES(:route,:date) ON CONFLICT DO NOTHING")
             .param("route", route).param("date", date).update();
-        generation(route, date, true);
         String hash = digest(layout);
         jdbc.sql("""
             UPDATE alighting_settlement_projection SET active=false
@@ -142,24 +171,28 @@ final class JdbcSettlementProjection {
             .param("revision", revision).param("limit", limit).query(Long.class).single();
     }
 
-    private Input inputs(long id, long route, LocalDate date, int limit, Instant through) {
-        long gen = generation(route, date, false);
-        Stored stored = jdbc.sql("SELECT * FROM alighting_settlement_projection WHERE id=:id").param("id", id)
+    private Input inputs(final long id, final long route, LocalDate date, final int limit, Instant through) {
+        final long gen = jdbc.sql("SELECT generation FROM alighting_settlement_generation WHERE route_id=:route AND source_date=:date")
+            .param("route", route).param("date", date).query(Long.class).single();
+        Stored stored = jdbc.sql("""
+            SELECT input_generation,version,facts_version,coverage_at,incomplete_at,overflow_at,cursor_at,cursor_batch_id,
+                dirty,active
+            FROM alighting_settlement_projection WHERE id=:id
+            """).param("id", id)
             .query((rs, n) -> new Stored(new Ref(id, route, date, rs.getLong("input_generation"), rs.getLong("version"),
                 rs.getLong("facts_version"), instant(rs.getObject("coverage_at", OffsetDateTime.class)),
                 instant(rs.getObject("incomplete_at", OffsetDateTime.class)), instant(rs.getObject("overflow_at", OffsetDateTime.class)), false),
                 instant(rs.getObject("cursor_at", OffsetDateTime.class)), rs.getLong("cursor_batch_id"),
-                instant(rs.getObject("next_input_at", OffsetDateTime.class)), rs.getBoolean("dirty") || !rs.getBoolean("active"),
-                rs.getBytes("state"))).single();
+                rs.getBoolean("dirty") || !rs.getBoolean("active"))).single();
         if (stored.dirty() || ((stored.ref().generation() == gen
             || (stored.ref().overflow() != null && !stored.ref().overflow().isAfter(through))) && stored.ref().covers(through))) {
-            return new Input(stored, gen, List.of(), List.of(), Map.of());
+            return new Input(stored, gen, List.of(), List.of(), Map.of(), null);
         }
         List<Batch> batches = jdbc.sql("""
             SELECT b.id,b.input_confirmed_at,b.stored_rows FROM route_version v
             CROSS JOIN LATERAL (
                 SELECT id,input_confirmed_at,stored_rows FROM observation_batch
-                WHERE route_version_id=v.id AND ingestion_origin='LIVE' AND outcome='SUCCESS_ROWS'
+                WHERE route_version_id=v.id AND ingestion_origin='LIVE' AND outcome='SUCCESS_ROWS' AND stored_rows>0
                   AND input_confirmed_at IS NOT NULL
                   AND input_confirmed_at BETWEEN response_received_at AND response_received_at+interval '90 seconds'
                   AND input_confirmed_at>=:start AND input_confirmed_at<=:end
@@ -167,13 +200,19 @@ final class JdbcSettlementProjection {
                 ORDER BY input_confirmed_at,id LIMIT :limit
             ) b WHERE v.route_id=:route ORDER BY b.input_confirmed_at,b.id LIMIT :limit
             """).param("route", route).param("start", offset(date.atStartOfDay(SEOUL).toInstant()))
-            .param("end", offset(date.plusDays(1).atStartOfDay(SEOUL).toInstant().plusSeconds(7200))).param("cursor", offset(stored.cursor())).param("batch", stored.batch())
+            .param("end", offset(date.plusDays(1).atStartOfDay(SEOUL).toInstant().plusSeconds(7200)))
+            .param("cursor", offset(stored.cursor())).param("batch", stored.batch())
             .param("limit", BATCH_LIMIT + 1)
             .query((rs, n) -> new Batch(rs.getLong("id"), rs.getObject("input_confirmed_at", OffsetDateTime.class).toInstant(),
                 rs.getObject("stored_rows", Integer.class))).list();
         List<Long> ids = batches.stream().filter(batch -> !batch.at().isAfter(through)).limit(BATCH_LIMIT).map(Batch::id).toList();
+        if (ids.isEmpty() && !stored.ref().coverage().isBefore(stored.cursor())) {
+            return new Input(stored, gen, batches, List.of(), Map.of(), null);
+        }
+        byte[] state = jdbc.sql("SELECT state FROM alighting_settlement_projection WHERE id=:id").param("id", id)
+            .query(byte[].class).single();
         if (ids.isEmpty()) {
-            return new Input(stored, gen, batches, List.of(), Map.of());
+            return new Input(stored, gen, batches, List.of(), Map.of(), state);
         }
         Map<Long, Long> counts = jdbc.sql("""
             SELECT observation_batch_id,count(*) AS n FROM vehicle_observation
@@ -199,15 +238,29 @@ final class JdbcSettlementProjection {
                     rs.getInt("crowd_level"), rs.getLong("route_version_id"),
                     rs.getObject("response_received_at", OffsetDateTime.class).toInstant(), false);
             }).list();
-        return new Input(stored, gen, batches, observations, counts);
+        return new Input(stored, gen, batches, observations, counts, state);
     }
 
-    private boolean persist(Stored stored, Ref result, Instant cursor, long batch, Instant next,
-                            Snapshot state, AlightingSettlementProjection model) {
-        if (generation(result.route(), result.date(), true) != result.generation()) {
-            return false;
+    private Ref catchUp(Stored stored, Ref current, Instant next, TransactionStatus status) {
+        Ref result = new Ref(current.id(), current.route(), current.date(), current.generation(), current.version() + 1,
+            current.facts(), current.coverage(), current.incomplete(), current.overflow(), false);
+        final int changed = jdbc.sql("""
+            UPDATE alighting_settlement_projection SET version=:nextVersion,input_generation=:generation,
+                coverage_at=:coverage,next_input_at=:next,updated_at=clock_timestamp()
+            WHERE id=:id AND version=:version AND active AND NOT dirty
+            """).param("nextVersion", result.version()).param("generation", result.generation())
+            .param("coverage", offset(result.coverage())).param("next", offset(next))
+            .param("id", result.id()).param("version", stored.ref().version()).update();
+        if (changed == 0) {
+            rejectAndRollback(status, "persist", "projection_changed", current, null);
+            return null;
         }
-        int changed = jdbc.sql("""
+        return holdsGeneration(status, "persist", current) ? result : null;
+    }
+
+    private Ref persist(Stored stored, Ref result, Instant cursor, final long batch, Instant next,
+                        Snapshot state, AlightingSettlementProjection model, TransactionStatus status) {
+        final int changed = jdbc.sql("""
             UPDATE alighting_settlement_projection SET version=:nextVersion,input_generation=:generation,
                 facts_version=:facts,cursor_at=:cursor,cursor_batch_id=:batch,coverage_at=:coverage,next_input_at=:next,
                 observation_count=:count,incomplete_at=:incomplete,overflow_at=:overflow,state=:state,updated_at=clock_timestamp()
@@ -217,31 +270,55 @@ final class JdbcSettlementProjection {
             .param("next", offset(next)).param("count", state.observations()).param("incomplete", offset(result.incomplete()))
             .param("overflow", offset(result.overflow())).param("state", SettlementProjectionCodec.encode(state))
             .param("id", result.id()).param("version", stored.ref().version()).update();
+        Ref expected = new Ref(result.id(), result.route(), result.date(), result.generation(), stored.ref().version(),
+            stored.ref().facts(), stored.ref().coverage(), stored.ref().incomplete(), stored.ref().overflow(), false);
         if (changed == 0) {
-            return false;
+            rejectAndRollback(status, "persist", "projection_changed", expected, null);
+            return null;
         }
-        jdbc.sql("""
-            INSERT INTO alighting_settlement_observation(projection_id,observation_id,chain_id,stop_order,available_at,known_seats)
-            SELECT :id,x.id,x.chain,x.stop,x."availableAt",x."knownSeats" FROM jsonb_to_recordset(CAST(:rows AS jsonb))
-                AS x(id bigint,chain bigint,stop integer,"availableAt" timestamptz,"knownSeats" boolean)
-            """).param("id", result.id()).param("rows", JSON.writeValueAsString(model.indexed())).update();
-        List<PersistedPass> passes = model.passes().stream().map(pass -> {
-            AlightingAwarePassEvent event = pass.event();
-            return new PersistedPass(event.tripId(), event.stopOrder(), pass.chain(), event.confirmedAt(),
-                event.departure().receivedAt().atZone(SEOUL).toLocalDate(), event.departure().observationId(),
-                java.util.Base64.getEncoder().encodeToString(SettlementProjectionCodec.encode(event)));
-        }).toList();
-        jdbc.sql("""
-            INSERT INTO alighting_settlement_pass(projection_id,trip_id,stop_order,chain_id,confirmed_at,
-                departure_date,departure_observation_id,payload)
-            SELECT :id,x.trip,x.stop,x.chain,x.at,x.date,x.observation,decode(x.payload,'base64')
-            FROM jsonb_to_recordset(CAST(:rows AS jsonb)) AS x(trip bigint,stop integer,chain bigint,
-                at timestamptz,date date,observation bigint,payload text)
-            """).param("id", result.id()).param("rows", JSON.writeValueAsString(passes)).update();
-        return true;
+        if (!model.indexed().isEmpty()) {
+            jdbc.sql("""
+                INSERT INTO alighting_settlement_observation(projection_id,observation_id,chain_id,stop_order,available_at,known_seats)
+                SELECT :id,x.id,x.chain,x.stop,x."availableAt",x."knownSeats" FROM jsonb_to_recordset(CAST(:rows AS jsonb))
+                    AS x(id bigint,chain bigint,stop integer,"availableAt" timestamptz,"knownSeats" boolean)
+                """).param("id", result.id()).param("rows", JSON.writeValueAsString(model.indexed())).update();
+        }
+        if (!model.passes().isEmpty()) {
+            List<PersistedPass> passes = model.passes().stream().map(pass -> {
+                AlightingAwarePassEvent event = pass.event();
+                return new PersistedPass(event.tripId(), event.stopOrder(), pass.chain(), event.confirmedAt(),
+                    event.departure().receivedAt().atZone(SEOUL).toLocalDate(), event.departure().observationId(),
+                    Base64.getEncoder().encodeToString(SettlementProjectionCodec.encode(event)));
+            }).toList();
+            jdbc.sql("""
+                INSERT INTO alighting_settlement_pass(projection_id,trip_id,stop_order,chain_id,confirmed_at,
+                    departure_date,departure_observation_id,payload)
+                SELECT :id,x.trip,x.stop,x.chain,x.at,x.date,x.observation,decode(x.payload,'base64')
+                FROM jsonb_to_recordset(CAST(:rows AS jsonb)) AS x(trip bigint,stop integer,chain bigint,
+                    at timestamptz,date date,observation bigint,payload text)
+                """).param("id", result.id()).param("rows", JSON.writeValueAsString(passes)).update();
+        }
+        return holdsGeneration(status, "persist", expected) ? result : null;
     }
 
     private record PersistedPass(long trip, int stop, long chain, Instant at, LocalDate date, long observation, String payload) { }
+
+    /**
+     * 정산할 노선의 오늘과 내일 입력 세대 행을 미리 만든다. 수집 확정 트리거가 세대 행을 처음 넣으면 노선 행을 외래 키로
+     * 확인하는데, 정산 결과 커밋이 그 노선 행을 잡고 있으면 확정이 기다리게 되므로 첫 삽입을 정산 쪽에서 끝내 둔다.
+     */
+    void prepareGenerations(List<Long> routeVersions, LocalDate today) {
+        if (routeVersions.isEmpty()) {
+            return;
+        }
+        write.executeWithoutResult(status -> jdbc.sql("""
+            INSERT INTO alighting_settlement_generation(route_id,source_date)
+            SELECT DISTINCT v.route_id,d.day FROM route_version v
+            CROSS JOIN (VALUES (CAST(:today AS date)),(CAST(:tomorrow AS date))) AS d(day)
+            WHERE v.id IN (:versions)
+            ON CONFLICT DO NOTHING
+            """).param("versions", routeVersions).param("today", today).param("tomorrow", today.plusDays(1)).update());
+    }
 
     boolean cleanup(LocalDate today) {
         return Boolean.TRUE.equals(write.execute(status -> {
@@ -282,17 +359,63 @@ final class JdbcSettlementProjection {
         }));
     }
 
-    boolean validate(List<Ref> refs) {
-        for (Ref ref : refs.stream().distinct().sorted(java.util.Comparator.comparingLong(Ref::route).thenComparing(Ref::date)).toList()) {
-            if (generation(ref.route(), ref.date(), true) != ref.generation()) {
-                return false;
-            }
+    /**
+     * 준비한 근거가 아직 같은 입력 세대와 판본인지 확인한다. {@code lock}이면 세대 행을 {@code SKIP LOCKED}로 잡아
+     * 커밋까지 다른 입력 변경과 겹치지 않게 하고, 잡지 못하면 거절한다. 거절 사유는 기록하고 트랜잭션 처리는 호출자가 정한다.
+     */
+    boolean validate(List<Ref> refs, final boolean lock) {
+        for (Ref ref : refs.stream().distinct().sorted(Comparator.comparingLong(Ref::route).thenComparing(Ref::date)).toList()) {
             if (!jdbc.sql("SELECT EXISTS(SELECT 1 FROM alighting_settlement_projection WHERE id=:id AND active AND NOT dirty AND version=:version)")
                 .param("id", ref.id()).param("version", ref.version()).query(Boolean.class).single()) {
+                reject("commit", "projection_changed", ref, null);
+                return false;
+            }
+            Long actual = jdbc.sql("SELECT generation FROM alighting_settlement_generation WHERE route_id=:route AND source_date=:date"
+                    + (lock ? " FOR UPDATE SKIP LOCKED" : ""))
+                .param("route", ref.route()).param("date", ref.date()).query(Long.class).optional().orElse(null);
+            if (actual == null) {
+                reject("commit", "generation_busy", ref, null);
+                return false;
+            }
+            if (actual != ref.generation()) {
+                reject("commit", "generation_changed", ref, actual);
                 return false;
             }
         }
         return true;
+    }
+
+    private boolean holdsGeneration(TransactionStatus status, String stage, Ref expected) {
+        Long actual = jdbc.sql("""
+            SELECT generation FROM alighting_settlement_generation WHERE route_id=:route AND source_date=:date
+            FOR UPDATE SKIP LOCKED
+            """).param("route", expected.route()).param("date", expected.date()).query(Long.class).optional().orElse(null);
+        if (actual == null) {
+            rejectAndRollback(status, stage, "generation_busy", expected, null);
+            return false;
+        }
+        if (actual != expected.generation()) {
+            rejectAndRollback(status, stage, "generation_changed", expected, actual);
+            return false;
+        }
+        return true;
+    }
+
+    private void rejectAndRollback(TransactionStatus status, String stage, String reason, Ref expected, Long actual) {
+        status.setRollbackOnly();
+        reject(stage, reason, expected, actual);
+    }
+
+    private void reject(String stage, String reason, Ref expected, Long actual) {
+        LOGGER.info("event=alighting_settlement_rejected stage={} reason={} routeId={} sourceDate={} projectionId={}"
+                + " projectionVersion={} expectedGeneration={} actualGeneration={}",
+            stage, reason, expected.route(), expected.date(), expected.id(), expected.version(), expected.generation(),
+            actual == null ? "-" : actual);
+        try {
+            rejections.accept(stage + "_" + reason);
+        } catch (RuntimeException ignored) {
+            return;
+        }
     }
 
     private record RequestedRow(int ordinal, long source, int target, Instant through) { }
@@ -324,7 +447,7 @@ final class JdbcSettlementProjection {
                     AND p.departure_date=visit.departure_date AND p.confirmed_at<visit.confirmed_at
                 ORDER BY p.confirmed_at DESC,p.departure_observation_id LIMIT 1
             ) previous ON true
-            """).param("requests", JSON.writeValueAsString(java.util.stream.IntStream.range(0, unique.size())
+            """).param("requests", JSON.writeValueAsString(IntStream.range(0, unique.size())
                 .mapToObj(i -> new RequestedRow(i, unique.get(i).source(), unique.get(i).target(), unique.get(i).through())).toList())).param("id", ref.id())
             .query((rs, n) -> Map.entry(unique.get(rs.getInt("ordinal")),
                 new Match(rs.getBoolean("source_present"), pass(rs.getBytes("visit")), pass(rs.getBytes("previous")))))
@@ -357,9 +480,12 @@ final class JdbcSettlementProjection {
         return payload == null ? null : SettlementProjectionCodec.decode(payload, AlightingAwarePassEvent.class);
     }
 
-    private long generation(long route, LocalDate date, boolean lock) {
-        return jdbc.sql("SELECT generation FROM alighting_settlement_generation WHERE route_id=:route AND source_date=:date"
-            + (lock ? " FOR UPDATE" : "")).param("route", route).param("date", date).query(Long.class).single();
+    private static Instant earlier(Instant first, Instant second) {
+        return first.isAfter(second) ? second : first;
+    }
+
+    private static Instant later(Instant first, Instant second) {
+        return first.isBefore(second) ? second : first;
     }
 
     private static Instant instant(OffsetDateTime value) {
