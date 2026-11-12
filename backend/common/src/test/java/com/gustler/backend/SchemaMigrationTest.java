@@ -89,4 +89,11 @@ class SchemaMigrationTest {
             .map(MigrationInfo::getInstalledOn)
             .toList();
     }
+    @Test
+    void 확정_이력_커서_인덱스가_읽기와_쓰기에_사용할_수_있는_상태로_생성된다() {
+        assertThat(jdbcClient.sql("""
+            SELECT indisvalid AND indisready FROM pg_index
+            WHERE indexrelid='ix_batch_confirmed_history'::regclass
+            """).query(Boolean.class).single()).isTrue();
+    }
 }

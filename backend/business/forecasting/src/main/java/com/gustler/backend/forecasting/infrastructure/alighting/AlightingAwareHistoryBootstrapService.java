@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.alighting;
 
-import com.gustler.backend.forecasting.api.alighting.BootstrapAlightingAwareHistory;
 import com.gustler.backend.forecasting.api.alighting.AlightingAwareHistoryBootstrapException;
+import com.gustler.backend.forecasting.api.alighting.BootstrapAlightingAwareHistory;
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureUnavailableException;
 import com.gustler.backend.forecasting.domain.model.ModelRoute;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
@@ -46,13 +46,13 @@ public final class AlightingAwareHistoryBootstrapService implements BootstrapAli
                 .query((row, index) -> new RouteStop(request.routeVersionId(), row.getInt(1), row.getString(2),
                     row.getBoolean(3), RouteDirection.valueOf(row.getString(4))))
                 .list();
-            final int checkpoints = new AlightingAwareHistoryBootstrap(jdbc).rebuild(
+            AlightingAwareHistoryBootstrap.Progress progress = new AlightingAwareHistoryBootstrap(jdbc).rebuild(
                 new RouteStops(request.routeVersionId(), identity.sourceId(), stops, identity.name()), statistics,
                 request.sourceOriginBatchId(), request.throughBatchId(), request.batchLimit(),
-                request.maximumHistoryRows(), checkpointPath.toString());
+                request.maximumHistoryRows(), checkpointPath.toString(), request.maximumCheckpoints(), request.maximumSeconds());
             return new BootstrapAlightingAwareHistory.Result(request.routeVersionId(), request.sourceOriginBatchId(),
                 request.throughBatchId(),
-                checkpoints, checkpointPath.toString(), bundle.digest());
+                progress.checkpoints(), checkpointPath.toString(), bundle.digest(), progress.processedThroughBatchId(), progress.complete());
         } catch (AlightingAwareFeatureUnavailableException failure) {
             String code = failure.getMessage().split(":", 2)[0];
             throw new AlightingAwareHistoryBootstrapException(stableCode(code), failure);

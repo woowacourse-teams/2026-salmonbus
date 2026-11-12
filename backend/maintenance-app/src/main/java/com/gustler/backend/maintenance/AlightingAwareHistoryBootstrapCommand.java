@@ -15,7 +15,7 @@ final class AlightingAwareHistoryBootstrapCommand {
 
     static Options parse(CliArguments arguments) {
         arguments.requireOnly(Set.of("config", "directory", "route-version", "source-origin-batch", "through-batch",
-            "checkpoint-directory", "batch-limit", "maximum-history-rows"));
+            "checkpoint-directory", "batch-limit", "maximum-history-rows", "maximum-checkpoints", "maximum-seconds"));
         Path config = arguments.requiredPath("config");
         BootstrapAlightingAwareHistory.Request request = new BootstrapAlightingAwareHistory.Request(
             arguments.requiredPath("directory").toString(),
@@ -24,7 +24,9 @@ final class AlightingAwareHistoryBootstrapCommand {
             positive(arguments, "through-batch", Long.MAX_VALUE),
             arguments.requiredPath("checkpoint-directory").toString(),
             (int) positive(arguments, "batch-limit", 1000),
-            (int) positive(arguments, "maximum-history-rows", Integer.MAX_VALUE - 1L));
+            (int) positive(arguments, "maximum-history-rows", Integer.MAX_VALUE - 1L),
+            (int) positive(arguments.optional("maximum-checkpoints", "10"), "maximum-checkpoints", 1000),
+            (int) positive(arguments.optional("maximum-seconds", "30"), "maximum-seconds", 3600));
         return new Options(config, request);
     }
 
@@ -34,7 +36,10 @@ final class AlightingAwareHistoryBootstrapCommand {
     }
 
     private static long positive(CliArguments arguments, String name, final long maximum) {
-        String value = arguments.required(name);
+        return positive(arguments.required(name), name, maximum);
+    }
+
+    private static long positive(String value, String name, long maximum) {
         try {
             final long parsed = Long.parseLong(value);
             if (parsed < 1 || parsed > maximum) {

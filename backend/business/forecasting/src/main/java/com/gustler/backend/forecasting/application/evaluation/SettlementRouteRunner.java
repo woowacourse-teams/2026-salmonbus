@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
 import java.util.function.LongConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,8 +24,17 @@ public final class SettlementRouteRunner {
     }
 
     public void run(List<Long> versions, LongConsumer settle) {
+        run(versions, settle, () -> true);
+    }
+
+    public void run(List<Long> versions, LongConsumer settle, BooleanSupplier continueWork) {
         retries.keySet().retainAll(versions);
-        versions.forEach(version -> runRoute(version, settle));
+        for (long version : versions) {
+            if (!continueWork.getAsBoolean()) {
+                return;
+            }
+            runRoute(version, settle);
+        }
     }
 
     private void runRoute(final long version, LongConsumer settle) {

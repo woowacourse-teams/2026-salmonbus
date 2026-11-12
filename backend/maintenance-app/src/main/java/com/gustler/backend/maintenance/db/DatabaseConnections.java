@@ -25,6 +25,8 @@ public final class DatabaseConnections {
         properties.setProperty("ApplicationName", "salmonbus-alighting-history-bootstrap");
         properties.setProperty("options", "-c default_transaction_read_only=on");
         properties.setProperty("readOnlyMode", "always");
+        properties.setProperty("connectTimeout", "5");
+        properties.setProperty("socketTimeout", "20");
         source.setConnectionProperties(properties);
         return new AbstractDataSource() {
             @Override
@@ -40,6 +42,8 @@ public final class DatabaseConnections {
             private Connection readOnly(Connection connection) throws SQLException {
                 try (Statement statement = connection.createStatement()) {
                     statement.execute("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY");
+                    statement.execute("SET statement_timeout=\'15s\'");
+                    statement.execute("SET lock_timeout=\'1s\'");
                     connection.setReadOnly(true);
                     return connection;
                 } catch (SQLException failure) {

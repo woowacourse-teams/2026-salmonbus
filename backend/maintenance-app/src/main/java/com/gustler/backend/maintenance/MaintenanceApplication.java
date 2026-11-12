@@ -1,14 +1,14 @@
 package com.gustler.backend.maintenance;
 
-import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
-import com.gustler.backend.forecasting.api.evaluation.AlightingAwareEvaluationArchive;
-import com.gustler.backend.forecasting.api.alighting.BootstrapAlightingAwareHistory;
 import com.gustler.backend.forecasting.api.alighting.AlightingAwareHistoryBootstrapException;
+import com.gustler.backend.forecasting.api.alighting.BootstrapAlightingAwareHistory;
+import com.gustler.backend.forecasting.api.evaluation.AlightingAwareEvaluationArchive;
+import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
 import com.gustler.backend.forecasting.api.model.InspectModelBundle;
 import com.gustler.backend.forecasting.api.model.ModelLoadException;
-import com.gustler.backend.maintenance.configuration.BundleInspectionCommandConfiguration;
 import com.gustler.backend.maintenance.configuration.AlightingAwareEvaluationRestoreCommandConfiguration;
 import com.gustler.backend.maintenance.configuration.AlightingAwareHistoryBootstrapCommandConfiguration;
+import com.gustler.backend.maintenance.configuration.BundleInspectionCommandConfiguration;
 import java.time.Clock;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -24,7 +24,7 @@ public final class MaintenanceApplication {
     }
 
     /**
-     * 명령 결과를 정규 JSON으로 출력하고 성공은 0, 유지보수 실패는 1로 프로세스를 종료한다.
+     * 명령 결과를 정규 JSON으로 출력하고 완료는 0, 준비 중지는 2, 유지보수 실패는 1로 프로세스를 종료한다.
      */
     public static void main(String[] rawArguments) {
         final int exit = execute(rawArguments);
@@ -34,8 +34,9 @@ public final class MaintenanceApplication {
     private static int execute(String[] rawArguments) {
         try {
             Object result = run(CliArguments.parse(rawArguments));
-            System.out.println(CanonicalJson.stringOf(Map.of("status", "succeeded", "result", result)));
-            return 0;
+            int exit = exitCode(result);
+            System.out.println(CanonicalJson.stringOf(Map.of("status", exit == 0 ? "succeeded" : "paused", "result", result)));
+            return exit;
         } catch (MaintenanceException e) {
             System.err.println(CanonicalJson.stringOf(Map.of("status", "failed", "code", e.code())));
             return 1;
@@ -44,6 +45,15 @@ public final class MaintenanceApplication {
                 .println(CanonicalJson.stringOf(Map.of("status", "failed", "code", "UNEXPECTED_SANITIZED_FAILURE")));
             return 1;
         }
+    }
+
+    static int exitCode(Object result) {
+        if (result instanceof Map<?, ?> values
+            && values.get("checkpoint") instanceof BootstrapAlightingAwareHistory.Result checkpoint
+            && !checkpoint.complete()) {
+            return 2;
+        }
+        return 0;
     }
 
     static Object run(CliArguments arguments) {

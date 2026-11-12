@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvents;
@@ -37,6 +38,7 @@ final class ConfirmedAlightingAwareEvaluation {
     private final Map<Long, Long> chains = new HashMap<>();
     private final Map<List<Integer>, List<AlightingAwarePassEvent>> events = new HashMap<>();
     private List<AlightingAwareObservation> rows;
+    private final Map<Long, AlightingAwareObservation> byId = new HashMap<>();
 
     ConfirmedAlightingAwareEvaluation(History history, LocalDate date, Instant through) {
         this.history = history;
@@ -58,7 +60,7 @@ final class ConfirmedAlightingAwareEvaluation {
         if (history.incompleteAt(through)) {
             return unsupported("SOURCE_HISTORY_INCOMPLETE");
         }
-        AlightingAwareObservation source = rows.stream().filter(row -> row.observationId() == sourceId).findFirst().orElse(null);
+        AlightingAwareObservation source = byId.get(sourceId);
         if (source == null) {
             return unsupported("SOURCE_NOT_IN_CONFIRMED_HISTORY");
         }
@@ -86,6 +88,7 @@ final class ConfirmedAlightingAwareEvaluation {
                 chain = row.observationId();
             }
             chains.put(row.observationId(), chain);
+            byId.put(row.observationId(), row);
             previous = row;
         }
     }
@@ -125,7 +128,7 @@ final class ConfirmedAlightingAwareEvaluation {
 
         private List<AlightingAwareObservation> rowsAt(Instant horizon) {
             if (rows == null) {
-                rows = readRows();
+                rows = WorkerOperationLog.measure("alighting_settlement_history_read", route, this::readRows);
             }
             if (through.equals(horizon)) {
                 return rows;
@@ -200,7 +203,8 @@ final class ConfirmedAlightingAwareEvaluation {
                         .max(Instant::compareTo)
                         .orElseThrow();
                 }
-                firstIncomplete = jdbc.sql("""
+                Instant checkedThrough = checkThrough;
+                firstIncomplete = WorkerOperationLog.measure("alighting_settlement_integrity_read", route, () -> jdbc.sql("""
                     SELECT min(input_confirmed_at) FROM (
                         SELECT b.input_confirmed_at
                         FROM observation_batch b LEFT JOIN vehicle_observation o ON o.observation_batch_id=b.id
@@ -217,10 +221,10 @@ final class ConfirmedAlightingAwareEvaluation {
                     """)
                     .param("route", route)
                     .param("start", offset(start))
-                    .param("through", offset(checkThrough))
+                    .param("through", offset(checkedThrough))
                     .query(OffsetDateTime.class)
                     .optional()
-                    .map(OffsetDateTime::toInstant);
+                    .map(OffsetDateTime::toInstant));
             }
             return firstIncomplete.filter(at -> !at.isAfter(horizon)).isPresent();
         }
