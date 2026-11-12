@@ -217,6 +217,21 @@ describe("노선 방향 화살표", () => {
     { latitude: 0, longitude: 4 },
   ];
   const viewport = { width: 500, height: 100 };
+  it("각 꼭짓점은 한 번만 투영하고 다음 갱신에서는 새 화면 좌표를 사용한다", () => {
+    const indices: number[] = [];
+    let offset = 0;
+    const project = (coordinate: (typeof coordinates)[number], index: number) => {
+      indices.push(index);
+      return { x: coordinate.longitude * 100 + offset, y: 20 };
+    };
+    expect(routeArrowsFor(coordinates, project, viewport)).toHaveLength(4);
+    expect(indices).toEqual([0, 1, 2]);
+
+    indices.length = 0;
+    offset = 1000;
+    expect(routeArrowsFor(coordinates, project, viewport)).toEqual([]);
+    expect(indices).toEqual([0, 1, 2]);
+  });
   it("정류장마다가 아니라 화면의 일정 간격으로 배치한다", () => {
     const arrows = routeArrowsFor(coordinates, (c) => ({ x: c.longitude * 100, y: 20 }), viewport);
     expect(arrows.map((a) => a.coordinate.longitude)).toEqual([0.5, 1.5, 2.5, 3.5]);
