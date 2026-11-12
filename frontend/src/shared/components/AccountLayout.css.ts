@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { PHONE_MEDIA } from "@/shared/styles/media";
+import { tabPageInset, tabPageTop } from "@/shared/styles/tabPageSpacing";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const shell = style({
@@ -15,9 +16,16 @@ export const shell = style({
   paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
 });
 
-export const top = style({ height: "env(safe-area-inset-top, 0px)", background: vars.color.brand, flexShrink: 0 });
+export const tabShell = style([shell, { background: vars.color.surface }]);
 
-export const content = style({ padding: "24px 32px", flex: 1 });
+export const top = style({
+  height: "env(safe-area-inset-top, 0px)",
+  background: vars.color.brand,
+  flexShrink: 0,
+  selectors: { [`${tabShell} &`]: { background: vars.color.surface } },
+});
+
+export const content = style({ padding: `${tabPageTop} ${tabPageInset}`, flex: 1 });
 
 globalStyle(`${shell} button:focus-visible, ${shell} a:focus-visible`, {
   outline: `3px solid ${vars.color.focusRing}`,

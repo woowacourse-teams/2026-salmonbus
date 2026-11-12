@@ -144,6 +144,13 @@ class BasisLifecycleServerTest {
 
     @Test
     void updateAndExplicitRestorePreserveCredentialsHistoryAndModel() throws Exception {
+        var worker = fixture.layout.config().resolve("worker.env");
+        Files.writeString(worker, Files.readString(worker).lines()
+                .filter(line -> !line.startsWith("MODEL_") && !line.startsWith("FORECAST_"))
+                .collect(java.util.stream.Collectors.joining("\n", "", "\n"))
+                + "MODEL_BUNDLE_DIRECTORY=/srv/salmonbus-dev/models/release-2\n"
+                + "MODEL_BUNDLE_PROMOTE_ON_START=false\n"
+                + "FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY=/srv/salmonbus-dev/models/history-2\n");
         var before = secrets();
         var lifecycle = new BasisLifecycle(fixture.layout, host);
         lifecycle.change(incoming, true);

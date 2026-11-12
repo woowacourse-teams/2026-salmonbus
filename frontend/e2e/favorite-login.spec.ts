@@ -8,6 +8,39 @@ import { checkAtBothWidths } from "./utils/widths";
 const test = mergeTests(mapTest, favoritesTest);
 test.use({ reducedMotion: "reduce" });
 
+for (const signedIn of [false, true]) {
+  test(`로그인 상태 확인 실패 후 재시도하면 ${signedIn ? "그룹 선택" : "로그인 안내"} 화면으로 복구한다`, async ({
+    page,
+    auth,
+    api,
+    favorites,
+  }) => {
+    if (!signedIn) auth.member = null;
+    await page.setViewportSize({ width: 320, height: 844 });
+    await page.route("**/api/auth/session", (route) =>
+      route.fulfill({
+        status: 503,
+        json: { code: "SERVICE_UNAVAILABLE", message: "Unavailable", requestId: "session-retry" },
+      }),
+    );
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+    await page.goto(`/routes/${routeId}`);
+    await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "로그인 상태를 확인하지 못했어요.", exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "로그인 / 회원가입", exact: true })).toHaveCount(0);
+    await page.unroute("**/api/auth/session");
+    await dialog.getByRole("button", { name: "다시 시도하기", exact: true }).click();
+    if (signedIn) await expect(page.getByRole("dialog", { name: "저장할 그룹 선택", exact: true })).toBeVisible();
+    else
+      await expect(
+        page.getByRole("dialog").getByRole("link", { name: "로그인 / 회원가입", exact: true }),
+      ).toBeVisible();
+    expect(auth.requests.some((request) => /\/api\/auth\/(kakao|apple)\/start$/.test(request.path))).toBe(false);
+    expect(favorites.requests.some((request) => request.method === "PUT")).toBe(false);
+  });
+}
+
 test("비회원 즐겨찾기 팝업은 320px에서 닫기·로그인 복귀를 지원한다", async ({
   page,
   auth,
@@ -74,13 +107,16 @@ test("비회원 즐겨찾기 팝업은 320px에서 닫기·로그인 복귀를 �
 
   await test.step("돌아온 판정보드에서 별을 다시 눌러 저장한다", async () => {
     await star.click();
-    const selection = page.getByRole("dialog", { name: "저장할 그룹 선택" });
-    await selection.getByRole("checkbox", { name: /즐겨찾기/ }).check();
-    await selection.getByRole("button", { name: "저장", exact: true }).click();
-    await expect(selection).not.toBeVisible();
+    await expect(page.getByText("즐겨찾기에 추가되었습니다", { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(star).toHaveAttribute("aria-pressed", "true");
     expect(favorites.groups[0]!.favorites).toEqual([
       expect.objectContaining({ routeId, stopId: stop.stopId, direction: "DOWN" }),
     ]);
+    await star.click();
+    await expect(page.getByText("즐겨찾기가 해제되었습니다", { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(star).toHaveAttribute("aria-pressed", "false");
+    expect(favorites.groups[0]!.favorites).toHaveLength(0);
   });
 });

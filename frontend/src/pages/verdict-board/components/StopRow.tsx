@@ -1,11 +1,13 @@
 import { useId } from "react";
 import type { ExpandableStopView, StopView } from "./displayPolicy";
-import { stopNameLabel, WAYPOINT_CAPTION } from "./verdictCopy";
+import { NO_VEHICLE_NOTICE, STALE_FORECAST_NOTICE, stopNameLabel, WAYPOINT_CAPTION } from "./verdictCopy";
+import { ActionGuidanceNotice } from "./ActionGuidanceNotice";
+import { HIDDEN_GUIDANCE, type ActionGuidanceView } from "./actionGuidance";
 import { ArrivalForecastCard } from "./ArrivalForecastCard";
 import type { StationArrivalDetails } from "./stationArrivalPolicy";
 import { StopName } from "./StopName";
 import { TimelineMarker, type RoutePosition } from "./TimelineMarker";
-import { VerdictChip } from "./VerdictChip";
+import { VerdictChip } from "@/shared/components/VerdictChip";
 import * as styles from "./StopRow.css";
 import { FavoriteButton, type FavoriteBoardRoute } from "./FavoriteButton";
 
@@ -17,6 +19,7 @@ interface StopRowProps {
   selected: boolean;
   expanded: boolean;
   stationArrivals: StationArrivalDetails | null;
+  guidance?: ActionGuidanceView;
   onToggle: (stop: ExpandableStopView) => void;
   favoriteRoute?: FavoriteBoardRoute;
 }
@@ -31,6 +34,7 @@ export function StopRow({
   selected,
   expanded,
   stationArrivals,
+  guidance = HIDDEN_GUIDANCE,
   onToggle,
   favoriteRoute,
 }: StopRowProps) {
@@ -48,8 +52,8 @@ export function StopRow({
     );
   }
 
-  const boardingStop = stop.kind === "boarding" ? stop : null;
-  const tone = boardingStop === null ? "noVehicle" : boardingStop.tone;
+  const tone = stop.kind === "boarding" ? stop.tone : stop.kind;
+  const emptyNotice = stop.kind === "checking" ? STALE_FORECAST_NOTICE : NO_VEHICLE_NOTICE;
 
   return (
     <li className={styles.stopRow} data-stop-sequence={stop.sequence} data-selected={selected}>
@@ -82,7 +86,12 @@ export function StopRow({
         onClick={expanded ? () => onToggle(stop) : undefined}
       >
         <div id={panelId} className={styles.detailInner}>
-          <ArrivalForecastCard arrivals={boardingStop?.arrivals ?? []} stationArrivals={stationArrivals} />
+          <ArrivalForecastCard
+            arrivals={stop.kind === "boarding" ? stop.arrivals : []}
+            stationArrivals={stationArrivals}
+            emptyNotice={emptyNotice}
+          />
+          {guidance.status === "shown" && <ActionGuidanceNotice line={guidance.line} />}
         </div>
       </div>
     </li>

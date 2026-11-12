@@ -33,6 +33,7 @@ public class ApiDocsConfiguration {
         "/api/v1/routes/{routeId}/watch",
         "/api/v1/routes/{routeId}/board",
         "/api/v1/routes/{routeId}/vehicles",
+        "/api/v1/routes/{routeId}/stations/{stationId}/salmon-action",
         "/api/v2/routes/{routeId}/geometry",
         "/api/v2/stations/{stationId}/arrivals",
         "/api/v2/stations/tiles/{zoom}/{x}/{y}",
@@ -49,6 +50,10 @@ public class ApiDocsConfiguration {
         "/api/me/favorite-selections",
         "/api/me/favorite-order",
         "/api/me/favorites",
+        "/api/me/push-devices",
+        "/api/me/push-devices/unregister",
+        "/api/me/notification-settings",
+        "/api/me/notification-settings/{id}",
         "/api/me/sessions",
         "/api/me/withdrawal/apple"
     );

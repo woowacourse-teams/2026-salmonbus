@@ -47,6 +47,10 @@ final class CliArguments {
         return command;
     }
 
+    String optional(String name, String fallback) {
+        return options.getOrDefault(name, fallback);
+    }
+
     String required(
         String name) {
         String value = options.get(name);

@@ -4,14 +4,20 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { Linking, StyleSheet } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import type { ShouldStartLoadRequest, WebViewNavigationEvent } from 'react-native-webview/lib/WebViewTypes';
+import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 import { LoadFailedView } from './LoadFailedView';
 import { AUTH_CAPABILITIES, SIGN_IN_RESULT, signInRequestFrom, type SignInResult } from './auth/authMessages';
 import { signInNatively } from './auth/signInNatively';
-import { appBootstrapScriptFor, bridgeEventScriptFor, bridgeMessageFrom, type BridgeMessage } from './bridge/bridge';
+import {
+  appBootstrapScriptFor,
+  bridgeEventScriptFor,
+  bridgeMessageFrom,
+  DOCUMENT_STARTED,
+  type BridgeMessage,
+} from './bridge/bridge';
 import { HAPTIC_CAPABILITIES, playHaptic } from './haptic/playHaptic';
 import { NativeRouteMap, type NativeRouteMapRef } from './native-map/NativeRouteMap';
-import { NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
+import { NATIVE_HOME_MAP_CAPABILITIES, NATIVE_MAP_CAPABILITIES } from './native-map/nativeMapMessages';
 import { LOGIN_PROVIDER_ORIGINS, navigationDecisionFor } from './navigation/navigationPolicy';
 import type { NotificationCommandType } from '../frontend/src/shared/notification/notification.types';
 import {
@@ -24,9 +30,10 @@ import { showNotificationsInForeground, watchNotificationTaps } from './notifica
 import { registrationFor } from './notification/registration';
 import {
   initialDocumentLoad,
-  noteDocumentLoad,
+  noteDocumentStarted,
   noteLoadFailure,
-  noteLoadStart,
+  noteWebReady,
+  WEB_READY_TIMEOUT_MS,
 } from './notification/documentLoad';
 import { createTapInbox, type NotificationTap } from './notification/tapInbox';
 import { SETTINGS_CAPABILITIES } from './settings/settingsMessages';
@@ -54,7 +61,7 @@ function domainCapabilitiesOf<T extends DomainCapabilities<T>>(capabilities: T):
 }
 
 const CAPABILITIES_BY_DOMAIN = domainCapabilitiesOf({
-  map: NativeRouteMap !== null ? [...NATIVE_MAP_CAPABILITIES, 'map.selectedStopOnly'] : [],
+  map: NativeRouteMap !== null ? [...NATIVE_MAP_CAPABILITIES, ...NATIVE_HOME_MAP_CAPABILITIES, 'map.selectedStopOnly'] : [],
   haptic: HAPTIC_CAPABILITIES,
   settings: SETTINGS_CAPABILITIES,
   auth: AUTH_CAPABILITIES,
@@ -82,44 +89,47 @@ export default function App() {
   const commandQueue = useRef(Promise.resolve());
   const documentEpoch = useRef(0);
   const signingIn = useRef(false);
-  const documentLoaded = useRef(false);
   const documentLoad = useRef(initialDocumentLoad());
-  const provisionalTap = useRef<NotificationTap | null>(null);
+  const webReadyWait = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const showLoadFailed = () => {
-    const decision = noteLoadFailure(documentLoad.current);
-    documentLoad.current = decision.state;
-    documentLoaded.current = false;
-    const tap = provisionalTap.current;
-    provisionalTap.current = null;
-    if (decision.restore && tap !== null) notificationTaps.restore(tap);
+    stopWaitingForWeb();
+    documentLoad.current = noteLoadFailure();
     resetNativeMap();
     setLoadFailed(true);
     SplashScreen.hide();
   };
   const retryLoad = () => setLoadFailed(false);
   const reloadWebView = () => {
-    documentLoaded.current = false;
+    handleLoadStart();
     webViewRef.current?.reload();
   };
 
   function handleLoadStart() {
-    documentLoaded.current = false;
-    provisionalTap.current = null;
-    documentLoad.current = noteLoadStart(documentLoad.current);
+    stopWaitingForWeb();
+    documentLoad.current = initialDocumentLoad();
     resetNativeMap();
   }
 
-  function handleLoad(event: WebViewNavigationEvent) {
-    const decision = noteDocumentLoad(documentLoad.current, isInAppUrl(event.nativeEvent.url));
-    documentLoad.current = decision.state;
-    documentLoaded.current = decision.documentLoaded;
-    if (!decision.take) return;
-    const heldTap = notificationTaps.take();
-    if (heldTap === null) return;
-    provisionalTap.current = heldTap;
-    sendOpened(null, heldTap.target);
+  function handleLoadEnd(event: { nativeEvent: { url: string } }) {
+    SplashScreen.hide();
+    // 해시만 바뀌면 새 문서 없이 loadStart와 loadEnd만 온다. 로드가 끝난 뒤의 메시지는 지금 문서가 보낸 것이다.
+    documentLoad.current = noteDocumentStarted(documentLoad.current);
+    if (!isInAppUrl(event.nativeEvent.url) || documentLoad.current.ready || documentLoad.current.failed) return;
+    if (!notificationTaps.holding()) return;
+    stopWaitingForWeb();
+    const epoch = documentEpoch.current;
+    webReadyWait.current = setTimeout(() => {
+      webReadyWait.current = null;
+      if (documentEpoch.current === epoch && !documentLoad.current.ready && notificationTaps.holding()) showLoadFailed();
+    }, WEB_READY_TIMEOUT_MS);
+  }
+
+  function stopWaitingForWeb() {
+    if (webReadyWait.current === null) return;
+    clearTimeout(webReadyWait.current);
+    webReadyWait.current = null;
   }
 
   function resetNativeMap() {
@@ -133,6 +143,10 @@ export default function App() {
     if (!isInAppUrl(event.nativeEvent.url)) return;
     const raw = event.nativeEvent.data;
     const message = bridgeMessageFrom(raw);
+    if (message?.type === DOCUMENT_STARTED) {
+      documentLoad.current = noteDocumentStarted(documentLoad.current);
+      return;
+    }
     if (message === null || !APP_CAPABILITIES.includes(message.type)) return;
     const domain = message.type.slice(0, message.type.indexOf('.')) as BridgeDomain;
     handlersByDomain[domain](message, raw);
@@ -170,7 +184,12 @@ export default function App() {
   const notificationHandlers: Record<NotificationCommandType, (requestId: string) => void> = {
     'notification.requestPermission': (requestId) => replyRegistration(requestId, { ask: true }),
     'notification.getRegistration': (requestId) => replyRegistration(requestId, { ask: false }),
-    'notification.takeOpened': (requestId) => sendOpened(requestId, notificationTaps.take()?.target ?? null),
+    'notification.takeOpened': (requestId) => {
+      documentLoad.current = noteWebReady(documentLoad.current);
+      if (documentLoad.current.ready) stopWaitingForWeb();
+      const tap = documentLoad.current.ready ? notificationTaps.take() : null;
+      sendOpened(requestId, tap?.target ?? null);
+    },
   };
 
   function handleNotificationCommand(message: BridgeMessage) {
@@ -194,7 +213,7 @@ export default function App() {
   }
 
   const handleNotificationTap = useEffectEvent((tap: NotificationTap) => {
-    if (notificationTaps.receive(tap, documentLoaded.current && webViewRef.current !== null) !== 'send') return;
+    if (notificationTaps.receive(tap, documentLoad.current.ready && webViewRef.current !== null) !== 'send') return;
     sendOpened(null, tap.target);
   });
 
@@ -222,7 +241,7 @@ export default function App() {
       if (__DEV__) console.warn('지도 모듈이 보낸 이벤트의 envelope 형식이 맞지 않아 버립니다');
       return;
     }
-    webViewRef.current?.injectJavaScript(bridgeEventScriptFor(message));
+    sendToWeb(message);
   }
 
   const webView = (
@@ -241,8 +260,7 @@ export default function App() {
       injectedJavaScriptBeforeContentLoadedForMainFrameOnly
       onMessage={handleMessage}
       onLoadStart={handleLoadStart}
-      onLoad={handleLoad}
-      onLoadEnd={SplashScreen.hide}
+      onLoadEnd={handleLoadEnd}
       onError={showLoadFailed}
       onHttpError={showLoadFailed}
       onContentProcessDidTerminate={reloadWebView}

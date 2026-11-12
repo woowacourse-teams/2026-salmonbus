@@ -1,4 +1,4 @@
-import { keyframes, style, styleVariants } from "@vanilla-extract/css";
+import { style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
 import { card as cardBase, outlinedCard } from "@/shared/styles/surface.css";
 import { pill } from "@/shared/styles/selection.css";
@@ -6,19 +6,13 @@ import { primary, text } from "@/shared/styles/button.css";
 import { modeTransition } from "@/shared/styles/transition.css";
 
 export const section = style([modeTransition, { width: "100%", maxWidth: 356, margin: "0 auto" }]);
-const enterGroup = keyframes({
-  from: { opacity: 0, transform: "translateY(6px)" },
-  to: { opacity: 1, transform: "translateY(0)" },
-});
+export const browseSection = style([section, { display: "flex", flexDirection: "column", flex: 1 }]);
 export const panel = style({
-  transition: "opacity 160ms ease",
-  selectors: { '&[data-loading="true"]': { opacity: 0.45 } },
-  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
+  display: "flex",
+  flexDirection: "column",
+  flex: 1,
 });
-export const panelContent = style({
-  animation: `${enterGroup} 220ms cubic-bezier(0.22, 1, 0.36, 1) both`,
-  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
-});
+export const panelInner = style({ display: "flex", flexDirection: "column", flex: 1 });
 export const card = style([
   cardBase,
   outlinedCard,
@@ -34,12 +28,16 @@ export const link = style({
   color: "inherit",
   textDecoration: "none",
 });
-export const heading = style({ display: "flex", alignItems: "center", gap: 10, minWidth: 0 });
+export const heading = style({
+  display: "grid",
+  gridTemplateColumns: "minmax(64px, max-content) minmax(0, 1fr)",
+  alignItems: "center",
+  gap: 10,
+});
 export const routeBadge = style({ alignSelf: "stretch" });
 export const stopNameAndDirection = style({
   display: "flex",
   flexDirection: "column",
-  flex: 1,
   gap: 3,
   minWidth: 0,
   overflowWrap: "anywhere",
@@ -140,6 +138,19 @@ export const list = style({
   margin: 0,
   listStyle: "none",
 });
+const placeholder = style({
+  display: "block",
+  background: vars.color.mutedChipSurface,
+  borderRadius: vars.radius.badge,
+});
+export const placeholderRoute = style([placeholder, { height: 42, borderRadius: 8 }]);
+export const placeholderStop = style([placeholder, { width: "65%", height: 16 }]);
+export const placeholderDirection = style([placeholder, { width: "40%", height: 12 }]);
+export const placeholderTime = style([placeholder, { width: "24%", height: 14, marginInlineStart: 6 }]);
+export const placeholderSeat = style([
+  placeholder,
+  { width: 148, maxWidth: "55%", height: 22, marginInlineStart: "auto", borderRadius: 999 },
+]);
 export const tabs = style({ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 });
 export const groupTabs = style({
   display: "flex",
@@ -148,12 +159,13 @@ export const groupTabs = style({
   flex: "0 1 auto",
   minWidth: 0,
   overflowX: "auto",
-  padding: 4,
-  margin: -4,
+  padding: "19px 4px 4px",
+  margin: "-19px -4px -4px",
 });
 export const tab = style([
   pill,
   {
+    position: "relative",
     flexShrink: 0,
     cursor: "pointer",
     transition: "background-color 160ms ease, color 160ms ease",
@@ -161,16 +173,26 @@ export const tab = style([
     "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
   },
 ]);
+export const groupMascot = style({
+  position: "absolute",
+  insetBlockStart: -15,
+  insetInlineStart: 4,
+  width: 24,
+  height: 24,
+  objectFit: "contain",
+  rotate: "-8deg",
+  pointerEvents: "none",
+});
 export const homeEdit = style([
   text,
   {
     display: "grid",
     placeItems: "center",
     flexShrink: 0,
-    width: 36,
-    height: 32,
-    padding: "6px 8px",
-    marginLeft: "auto",
+    width: 37,
+    height: 37,
+    padding: 0,
+    marginInlineStart: "auto",
   },
 ]);
 export const homeEmpty = style({
@@ -178,12 +200,14 @@ export const homeEmpty = style({
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  gap: 18,
-  minHeight: 260,
+  gap: 12,
+  marginBlock: "auto",
+  padding: "16px 0",
   color: "#837B74",
   textAlign: "center",
 });
 export const homeEmptyTitle = style({ margin: 0, fontSize: 16, fontWeight: 500 });
+export const addFavoriteFooter = style({ display: "flex", justifyContent: "center", marginTop: 18 });
 export const addFavorite = style([
   primary,
   {
@@ -193,6 +217,14 @@ export const addFavorite = style([
     color: vars.color.textBody,
     boxShadow: "inset 0 0 0 1px #E3DCD5, 0 2px 3px #3B2D2408",
     selectors: {
+      [`${addFavoriteFooter} &`]: {
+        minHeight: 36,
+        padding: "5px 14px",
+        borderRadius: 999,
+        background: "#F5F4F2",
+        fontSize: 12,
+        boxShadow: "none",
+      },
       "&:hover": { background: "#FFFCFA", boxShadow: "inset 0 0 0 1px #D7BFB5, 0 2px 3px #3B2D2408" },
       "&:active": { background: "#F4F0EC", boxShadow: "inset 0 0 0 1px #D7BFB5" },
     },

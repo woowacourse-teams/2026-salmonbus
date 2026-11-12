@@ -17,7 +17,7 @@ test("편집 정보를 다시 조회하는 동안 기존 명칭을 유지하고 
     if (url.pathname === "/api/me/favorites" && !url.searchParams.has("groupId")) await response;
     await route.fallback();
   });
-  await page.goto("/");
+  await page.goto("/favorites");
   const homeCard = page.getByRole("tabpanel").getByRole("listitem").first();
   await expect(homeCard.getByText(stop.name, { exact: true })).toBeVisible();
   const requested = page.waitForRequest((request) => {
@@ -47,7 +47,7 @@ test("편집을 취소하거나 완료하면 열었던 버튼으로 포커스를
   await page.emulateMedia({ reducedMotion: "no-preference" });
   const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
-  await page.goto("/");
+  await page.goto("/favorites");
   const panel = page.getByRole("tabpanel");
   await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
   const edit = page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true });
@@ -64,7 +64,7 @@ test("편집을 취소하거나 완료하면 열었던 버튼으로 포커스를
   await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
 });
 
-test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓은 뒤 완료 토스트를 표시한다", async ({
+test("즐겨찾기 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓은 뒤 완료 토스트를 표시한다", async ({
   page,
   favorites,
   api,
@@ -79,7 +79,7 @@ test("홈 영역이 편집 화면으로 바뀌고 카드를 잡고 이동·놓�
     storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
   ];
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -129,7 +129,7 @@ test("편집 중 삭제는 확인·실패·재시도가 가능하고 다른 그�
   favorites.groups[0]!.name = "출퇴근";
   favorites.groups[0]!.favorites = [removed, kept];
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [storedFavorite(target, 4)] });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   await editor.getByRole("button", { name: "출퇴근 순서 변경", exact: true }).press("ArrowRight");
@@ -176,7 +176,7 @@ test("터치 손잡이를 놓으면 순서가 바뀌고 pointercancel이면 원�
     storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" }),
     storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
   ];
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   const grip = editor.getByRole("button", { name: new RegExp(`${first!.name} 순서 변경$`) });
@@ -211,7 +211,7 @@ test("너비가 다른 그룹 세 개도 가로 손잡이로 맨 뒤에서 맨 �
     { id: secondGroupId, name: "통학", favorites: [] },
     { id: thirdGroupId, name: "주말", favorites: [] },
   );
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   const groupList = editor.getByRole("list", { name: "그룹 순서", exact: true });
@@ -236,13 +236,14 @@ test("너비가 다른 그룹 세 개도 가로 손잡이로 맨 뒤에서 맨 �
 
 test("편집 중 홈 로고를 누르면 미저장 순서를 버리고 일반 홈으로 돌아간다", async ({ page, favorites }) => {
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   await editor.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true }).press("ArrowRight");
   await page.getByRole("link", { name: "연어버스 홈으로 이동", exact: true }).click();
   await expect(editor).toHaveCount(0);
-  await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toBeVisible();
+  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("region", { name: "홈 정보", exact: true })).toBeVisible();
   expect(favorites.groups.map((group) => group.id)).toEqual([defaultGroupId, secondGroupId]);
   expect(favorites.requests.filter((request) => request.method === "PUT")).toHaveLength(0);
 });
@@ -250,7 +251,7 @@ test("편집 중 홈 로고를 누르면 미저장 순서를 버리고 일반 �
 test("편집 중 서버 그룹이 바뀌면 오류 화면을 닫아 새 목록으로 다시 저장할 수 있다", async ({ page, favorites }) => {
   const thirdGroupId = "10000000-0000-4000-8000-000000000004";
   favorites.groups.push({ id: secondGroupId, name: "통학", favorites: [] });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집" }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   await editor.getByRole("button", { name: "즐겨찾기 순서 변경", exact: true }).press("ArrowRight");
@@ -273,14 +274,17 @@ test("빈 그룹 전환과 마지막 즐겨찾기 삭제를 반영한다", async
     name: "통학",
     favorites: [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })],
   });
-  await page.goto("/");
+  await page.goto("/favorites");
   await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
   const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
   const empty = editor.getByText("아직 등록한 정류장이 없어요", { exact: true }).locator("..");
+  const schoolGroup = editor.getByRole("button", { name: "통학", exact: true });
+  await expect(schoolGroup).toHaveAttribute("aria-pressed", "true");
+  await editor.getByRole("button", { name: "즐겨찾기", exact: true }).click();
   await expect(empty).toBeVisible();
   await expect(empty.getByText("0 / 2", { exact: true })).toBeVisible();
   await expect(editor.getByRole("list", { name: "즐겨찾기 순서", exact: true })).toHaveCount(0);
-  await editor.getByRole("button", { name: "통학", exact: true }).click();
+  await schoolGroup.click();
   await expect(empty).toHaveCount(0);
   await editor.getByRole("button", { name: `${stop.name} 삭제`, exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "삭제하기", exact: true }).click();

@@ -7,13 +7,20 @@ let generation = 0;
 let refreshing: Promise<ApiResult<void>> | null = null;
 
 function csrfToken(): string | null {
-  return (
-    document.cookie
-      .split(";")
-      .map((cookie) => cookie.trim())
-      .find((cookie) => cookie.startsWith("__Host-XSRF-TOKEN="))
-      ?.slice(18) ?? null
-  );
+  const cookies = document.cookie.split(";").map((cookie) => cookie.trim());
+  const tokenNames = ["__Host-XSRF-TOKEN="];
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.LOCAL_HTTP_AUTH === "true" &&
+    window.location.origin === "http://localhost:3000"
+  ) {
+    tokenNames.unshift("sb-local-XSRF-TOKEN=");
+  }
+  for (const name of tokenNames) {
+    const cookie = cookies.find((value) => value.startsWith(name));
+    if (cookie !== undefined) return cookie.slice(name.length);
+  }
+  return null;
 }
 
 async function authRequest<T>(url: string, options: RequestOptions = {}): Promise<ApiResult<T>> {

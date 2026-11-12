@@ -1,0 +1,42 @@
+{
+  "holidays": ["2026-10-09", "2026-10-03"],
+  "cells": [
+    {"at": "2026-11-02T05:59:59+09:00", "cell": "work-night", "bin": 1},
+    {"at": "2026-11-02T06:00:00+09:00", "cell": "work-morning", "bin": 0},
+    {"at": "2026-11-02T09:59:59+09:00", "cell": "work-morning", "bin": 7},
+    {"at": "2026-11-02T10:00:00+09:00", "cell": "work-day", "bin": 3},
+    {"at": "2026-11-02T16:59:59+09:00", "cell": "work-day", "bin": 5},
+    {"at": "2026-11-02T17:00:00+09:00", "cell": "work-evening", "bin": 0},
+    {"at": "2026-11-02T20:59:59+09:00", "cell": "work-evening", "bin": 7},
+    {"at": "2026-11-02T21:00:00+09:00", "cell": "work-night", "bin": 7},
+    {"at": "2026-10-31T20:59:59+09:00", "cell": "weekend-day", "bin": 6},
+    {"at": "2026-10-31T21:00:00+09:00", "cell": "weekend-night", "bin": 7},
+    {"at": "2026-10-09T06:00:00+09:00", "cell": "holiday-day", "bin": 2},
+    {"at": "2026-10-09T23:59:59+09:00", "cell": "holiday-night", "bin": 7},
+    {"at": "2026-10-03T06:00:00+09:00", "cell": "holiday-day", "bin": 2}
+  ],
+  "origin": {"at": "2026-10-09T08:12:00+09:00", "seats": 13, "capacity": 44, "passed": 31, "stop": 36},
+  "inputs": [13, 44, 36, 5, 492, 1],
+  "seats": {
+    "schema": "alighting-numeric-hgb-v1",
+    "kind": "regression",
+    "feature_count": 6,
+    "baseline": [0],
+    "classes": [],
+    "leaf_values_include_learning_rate": true,
+    "node_fields": ["feature", "threshold", "missing_left", "left", "right", "value", "leaf"],
+    "trees": [[[[2, 10, false, 1, 2, 0, false], [0, 0, false, 0, 0, 2, true], [0, 0, false, 0, 0, 19, true]]]]
+  },
+  "full": {
+    "schema": "alighting-numeric-hgb-v1",
+    "kind": "binary",
+    "feature_count": 6,
+    "baseline": [0],
+    "classes": [0, 1],
+    "leaf_values_include_learning_rate": true,
+    "node_fields": ["feature", "threshold", "missing_left", "left", "right", "value", "leaf"],
+    "trees": [[[[3, 10, false, 1, 2, 0, false], [0, 0, false, 0, 0, 0, true], [0, 0, false, 0, 0, 1, true]]]]
+  },
+  "expected_seats": 19,
+  "expected_full": 0.5
+}

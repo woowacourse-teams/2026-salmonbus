@@ -128,6 +128,36 @@ describe("알림 탭 대상 꺼내기", () => {
     await expect(opened).resolves.toEqual(TARGET);
   });
 
+  it("준비 신호를 보내기 전에 듣기 시작하므로 앱이 즉시 답해도 대상을 받는다", async () => {
+    const { bridgeWindow, postMessage } = inAppWindow();
+    const target = new EventTarget();
+    postMessage.mockImplementation((raw) => {
+      const { payload } = JSON.parse(raw) as { payload: { requestId: string } };
+      reply(target, "notification.opened", { requestId: payload.requestId, target: TARGET });
+    });
+
+    await expect(takeOpenedNotification(bridgeWindow, target)).resolves.toEqual(TARGET);
+    expect(postMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("로컬 HTTP에서 randomUUID 없이도 앱이 보낸 알림 대상을 받는다", async () => {
+    const randomUUID = Object.getOwnPropertyDescriptor(crypto, "randomUUID");
+    Object.defineProperty(crypto, "randomUUID", { configurable: true, value: undefined });
+    try {
+      const { bridgeWindow, postMessage } = inAppWindow();
+      const target = new EventTarget();
+      const opened = takeOpenedNotification(bridgeWindow, target);
+      const { requestId } = sentRequest(postMessage).payload;
+
+      expect(requestId).toMatch(/^[0-9a-f]{32}$/);
+      reply(target, "notification.opened", { requestId, target: TARGET });
+      await expect(opened).resolves.toEqual(TARGET);
+    } finally {
+      if (randomUUID === undefined) Reflect.deleteProperty(crypto, "randomUUID");
+      else Object.defineProperty(crypto, "randomUUID", randomUUID);
+    }
+  });
+
   it("쌓인 대상이 없으면 null이다", async () => {
     const { bridgeWindow, postMessage } = inAppWindow();
     const target = new EventTarget();

@@ -2,20 +2,12 @@ import { captureEnabled } from "./utils/capture";
 import { checkAtBothWidths } from "./utils/widths";
 import { test, expect } from "./fixtures/auth";
 
-test("320px 비로그인 마이페이지는 x4p8m0 안내를 표시하고 로그인 후 마이페이지로 복귀한다", async ({
-  page,
-  browserName,
-}) => {
+test("320px 비로그인 마이페이지의 상단 버튼으로 로그인한 뒤 마이페이지로 복귀한다", async ({ page, browserName }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/mypage");
-  await expect(page.getByRole("heading", { name: "연어버스에 합류 하세요!", exact: true })).toBeVisible();
-  await expect(page.getByText("자주 타는 노선부터 출퇴근 그룹까지,", { exact: false })).toBeVisible();
-  const profile = page.getByRole("img", { name: "살몽이", exact: true });
-  await expect
-    .poll(() => profile.evaluate((element) => element instanceof HTMLImageElement && element.naturalWidth > 0))
-    .toBe(true);
   const login = page.getByRole("link", { name: "로그인 / 회원가입", exact: true });
   await expect(login).toHaveAttribute("href", "/login?returnTo=%2Fmypage");
+  await expect(login).toBeVisible();
   await expect(page.getByRole("button", { name: "로그아웃", exact: false })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "즐겨찾기 그룹 관리" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "마이페이지", exact: true })).toHaveAttribute("aria-current", "page");
@@ -32,10 +24,10 @@ test("320px 비로그인 마이페이지는 x4p8m0 안내를 표시하고 로그
   await page.getByRole("button", { name: "카카오로 계속하기", exact: true }).click();
   await expect(page).toHaveURL("/mypage");
   await expect(page.getByText("살몽님", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "연어버스에 합류 하세요!", exact: true })).toHaveCount(0);
+  await expect(login).toHaveCount(0);
 });
 
-test("로그인 확인 중이나 오류일 때는 게스트 환영 화면 대신 상태와 재시도를 표시한다", async ({ page, api }) => {
+test("로그인 확인 중에는 상태를 표시하고 오류가 나면 다시 시도할 수 있다", async ({ page, api }) => {
   let fail = true;
   let release = () => {};
   const gate = new Promise<void>((resolve) => {
@@ -54,10 +46,12 @@ test("로그인 확인 중이나 오류일 때는 게스트 환영 화면 대신
   });
   await page.goto("/mypage");
   await expect(page.getByRole("status")).toContainText("로그인 상태를 확인하고 있어요");
-  await expect(page.getByRole("heading", { name: "연어버스에 합류 하세요!", exact: true })).toHaveCount(0);
+  const login = page.getByRole("link", { name: "로그인 / 회원가입", exact: true });
+  await expect(login).toHaveCount(0);
   release();
   await expect(page.getByRole("alert")).toContainText("로그인 상태를 확인하지 못했어요");
   fail = false;
-  await page.getByRole("button", { name: "다시 확인하기", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "연어버스에 합류 하세요!", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(login).toBeVisible();
 });

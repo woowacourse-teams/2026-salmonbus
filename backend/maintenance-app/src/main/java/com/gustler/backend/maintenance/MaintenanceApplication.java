@@ -1,25 +1,15 @@
 package com.gustler.backend.maintenance;
 
+import com.gustler.backend.forecasting.api.alighting.AlightingAwareHistoryBootstrapException;
+import com.gustler.backend.forecasting.api.alighting.BootstrapAlightingAwareHistory;
+import com.gustler.backend.forecasting.api.evaluation.AlightingAwareEvaluationArchive;
 import com.gustler.backend.forecasting.api.evaluation.EvaluationArchiveObjects;
-import com.gustler.backend.forecasting.api.evaluation.LesEvaluationArchive;
-import com.gustler.backend.forecasting.api.les.BootstrapLesHistory;
-import com.gustler.backend.forecasting.api.les.LesHistoryBootstrapException;
 import com.gustler.backend.forecasting.api.model.InspectModelBundle;
 import com.gustler.backend.forecasting.api.model.ModelLoadException;
-import com.gustler.backend.forecasting.api.quality.GetTripQualityStatus;
-import com.gustler.backend.forecasting.api.quality.PreviewTripQuality;
-import com.gustler.backend.forecasting.api.quality.ProcessTripQualityChunk;
-import com.gustler.backend.forecasting.api.quality.TripQualityChunkResult;
-import com.gustler.backend.forecasting.api.quality.TripQualityPreview;
-import com.gustler.backend.forecasting.api.quality.TripQualityStatus;
+import com.gustler.backend.maintenance.configuration.AlightingAwareEvaluationRestoreCommandConfiguration;
+import com.gustler.backend.maintenance.configuration.AlightingAwareHistoryBootstrapCommandConfiguration;
 import com.gustler.backend.maintenance.configuration.BundleInspectionCommandConfiguration;
-import com.gustler.backend.maintenance.configuration.LesEvaluationRestoreCommandConfiguration;
-import com.gustler.backend.maintenance.configuration.LesHistoryBootstrapCommandConfiguration;
-import com.gustler.backend.maintenance.configuration.MaintenanceConfiguration;
 import java.time.Clock;
-import java.time.Instant;
-import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -27,15 +17,14 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.transaction.CannotCreateTransactionException;
 
 /**
- * 유지보수 명령을 선택해 실행하고 정해진 JSON 결과와 종료 코드를 출력한다.
- * 예외 원문과 인증정보는 표준 오류에 노출하지 않는다.
+ * 유지보수 명령을 선택해 실행하고 정해진 JSON 결과와 종료 코드를 출력한다. 예외 원문과 인증정보는 표준 오류에 노출하지 않는다.
  */
 public final class MaintenanceApplication {
     private MaintenanceApplication() {
     }
 
     /**
-     * 명령 결과를 정규 JSON으로 출력하고 성공은 0, 유지보수 실패는 1로 프로세스를 종료한다.
+     * 명령 결과를 정규 JSON으로 출력하고 완료는 0, 준비 중지는 2, 유지보수 실패는 1로 프로세스를 종료한다.
      */
     public static void main(String[] rawArguments) {
         final int exit = execute(rawArguments);
@@ -45,16 +34,26 @@ public final class MaintenanceApplication {
     private static int execute(String[] rawArguments) {
         try {
             Object result = run(CliArguments.parse(rawArguments));
-            System.out.println(CanonicalJson.stringOf(Map.of("status", "succeeded", "result", result)));
-            return 0;
+            int exit = exitCode(result);
+            System.out.println(CanonicalJson.stringOf(Map.of("status", exit == 0 ? "succeeded" : "paused", "result", result)));
+            return exit;
         } catch (MaintenanceException e) {
             System.err.println(CanonicalJson.stringOf(Map.of("status", "failed", "code", e.code())));
             return 1;
         } catch (RuntimeException e) {
-            System.err.println(CanonicalJson.stringOf(
-                Map.of("status", "failed", "code", "UNEXPECTED_SANITIZED_FAILURE")));
+            System.err
+                .println(CanonicalJson.stringOf(Map.of("status", "failed", "code", "UNEXPECTED_SANITIZED_FAILURE")));
             return 1;
         }
+    }
+
+    static int exitCode(Object result) {
+        if (result instanceof Map<?, ?> values
+            && values.get("checkpoint") instanceof BootstrapAlightingAwareHistory.Result checkpoint
+            && !checkpoint.complete()) {
+            return 2;
+        }
+        return 0;
     }
 
     static Object run(CliArguments arguments) {
@@ -63,9 +62,8 @@ public final class MaintenanceApplication {
         case "route-display-export", "route-display-status", "route-display-import", "route-display-disable" ->
             RouteDisplayCommand.run(arguments);
         case "route-display-retry" -> RouteDisplayRetryCommand.run(arguments);
-        case "les-history-bootstrap" -> lesHistoryBootstrap(arguments);
-        case "les-evaluation-restore" -> lesEvaluationRestore(arguments);
-        case "quality-preview", "quality-rebuild", "quality-status" -> quality(arguments);
+        case "alighting-history-bootstrap" -> alightingHistoryBootstrap(arguments);
+        case "alighting-evaluation-restore" -> alightingEvaluationRestore(arguments);
         default -> throw new MaintenanceException("UNKNOWN_COMMAND");
         };
     }
@@ -86,23 +84,21 @@ public final class MaintenanceApplication {
                 "dataThrough", inspected.dataThrough(),
                 "routes", inspected.routes());
         } catch (ModelLoadException error) {
-            Matcher code = Pattern.compile("^\\[([A-Z][A-Z0-9_]*)\\]")
-                .matcher(modelFailureMessage(error));
-            throw new MaintenanceException(
-                bundleRejectionCode(code), error);
+            Matcher code = Pattern.compile("^\\[([A-Z][A-Z0-9_]*)\\]").matcher(modelFailureMessage(error));
+            throw new MaintenanceException(bundleRejectionCode(code), error);
         }
     }
 
-    private static Object lesHistoryBootstrap(CliArguments arguments) {
-        LesHistoryBootstrapCommand.Options options = LesHistoryBootstrapCommand.parse(arguments);
+    private static Object alightingHistoryBootstrap(CliArguments arguments) {
+        AlightingAwareHistoryBootstrapCommand.Options options = AlightingAwareHistoryBootstrapCommand.parse(arguments);
         Configuration configuration = Configuration.load(options.config());
         DatabaseEnvironment environment = DatabaseEnvironment.load(configuration);
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(DatabaseEnvironment.class, () -> environment);
-            context.register(LesHistoryBootstrapCommandConfiguration.class);
+            context.register(AlightingAwareHistoryBootstrapCommandConfiguration.class);
             context.refresh();
-            return LesHistoryBootstrapCommand.invoke(options, context.getBean(BootstrapLesHistory.class));
-        } catch (LesHistoryBootstrapException failure) {
+            return AlightingAwareHistoryBootstrapCommand.invoke(options, context.getBean(BootstrapAlightingAwareHistory.class));
+        } catch (AlightingAwareHistoryBootstrapException failure) {
             throw new MaintenanceException(failure.code(), failure);
         } catch (CannotCreateTransactionException failure) {
             throw new MaintenanceException("DATABASE_CONNECTION_FAILED", failure);
@@ -111,78 +107,24 @@ public final class MaintenanceApplication {
         }
     }
 
-    private static Object lesEvaluationRestore(CliArguments arguments) {
-        LesEvaluationRestoreCommand.Options options = LesEvaluationRestoreCommand.parse(arguments);
-        LocalLesArchive archive = LocalLesArchive.read(options.archiveFile());
+    private static Object alightingEvaluationRestore(CliArguments arguments) {
+        AlightingAwareEvaluationRestoreCommand.Options options = AlightingAwareEvaluationRestoreCommand.parse(arguments);
+        LocalAlightingAwareArchive archive = LocalAlightingAwareArchive.read(options.archiveFile());
         DatabaseEnvironment environment = DatabaseEnvironment.load(Configuration.load(options.config()));
-        LesEvaluationRestoreCommand.authorize(arguments, environment, archive, Clock.systemUTC());
+        AlightingAwareEvaluationRestoreCommand.authorize(arguments, environment, archive, Clock.systemUTC());
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(DatabaseEnvironment.class, () -> environment);
             context.registerBean(EvaluationArchiveObjects.class, () -> archive);
-            context.register(LesEvaluationRestoreCommandConfiguration.class);
+            context.register(AlightingAwareEvaluationRestoreCommandConfiguration.class);
             context.refresh();
-            return LesEvaluationRestoreCommand.invoke(options, context.getBean(LesEvaluationArchive.class));
+            return AlightingAwareEvaluationRestoreCommand.invoke(options, context.getBean(AlightingAwareEvaluationArchive.class));
         } catch (MaintenanceException failure) {
             throw failure;
         } catch (CannotCreateTransactionException failure) {
             throw new MaintenanceException("DATABASE_CONNECTION_FAILED", failure);
         } catch (RuntimeException failure) {
-            throw new MaintenanceException("LES_EVALUATION_RESTORE_FAILED", failure);
+            throw new MaintenanceException("ALIGHTING_AWARE_EVALUATION_RESTORE_FAILED", failure);
         }
-    }
-
-    private static Object quality(CliArguments arguments) {
-        Configuration configuration = Configuration.load(arguments.requiredPath("config"));
-        DatabaseEnvironment environment = DatabaseEnvironment.load(configuration);
-        final long version = Long.parseLong(arguments.required("route-version"));
-        final boolean write = arguments.command().equals("quality-rebuild");
-        if (write && environment.targetKind() != DatabaseEnvironment.TargetKind.LOCAL) {
-            new ApprovalGate(Clock.systemUTC()).require(arguments.requiredPath("approval"),
-                ApprovalGate.ACADEMY_TRIP_QUALITY_REBUILD, null, environment.identitySha256());
-        }
-        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
-            context.registerBean(DatabaseEnvironment.class, () -> environment);
-            context.register(MaintenanceConfiguration.class);
-            context.refresh();
-            if (arguments.command().equals("quality-status")) {
-                return context.getBean(GetTripQualityStatus.class)
-                    .status(version)
-                    .stream()
-                    .map(MaintenanceApplication::statusOutput)
-                    .toList();
-            }
-            Instant until = Instant.parse(arguments.required("until"));
-            if (write) {
-                TripQualityChunkResult result = context.getBean(ProcessTripQualityChunk.class)
-                    .applyChunk(version, until, Integer.parseInt(arguments.required("batch-limit")));
-                return Map.of("processedBatches", result.processedBatches(),
-                    "discoveryCompleted", result.discoveryCompleted(), "completed", result.completed());
-            }
-            TripQualityPreview result = context.getBean(PreviewTripQuality.class).preview(version, until);
-            return Map.of("scope", result.scope(), "sampled_batches", result.sampledBatches(),
-                "sampled_observations", result.sampledObservations(), "sampled_above_range",
-                result.sampledAboveRange());
-        } catch (MaintenanceException e) {
-            throw e;
-        } catch (CannotCreateTransactionException e) {
-            throw new MaintenanceException("DATABASE_CONNECTION_FAILED", e);
-        } catch (RuntimeException e) {
-            throw new MaintenanceException("DATABASE_TRANSACTION_FAILED", e);
-        }
-    }
-
-    private static Map<String, Object> statusOutput(TripQualityStatus status) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("vehicle_id", status.vehicleId());
-        result.put("phase", status.phase());
-        result.put("completed", status.completed());
-        result.put("evidence_observation_id", status.evidenceObservationId());
-        result.put("last_batch_at", dateOf(status.lastBatchAt()));
-        result.put("last_batch_id", status.lastBatchId());
-        result.put("can_release", status.canRelease());
-        result.put("started_at", dateOf(status.startedAt()));
-        result.put("investigated_at", dateOf(status.investigatedAt()));
-        return result;
     }
 
     private static String modelFailureMessage(ModelLoadException error) {
@@ -197,12 +139,5 @@ public final class MaintenanceApplication {
             return "BUNDLE_REJECTED_" + code.group(1);
         }
         return "BUNDLE_REJECTED";
-    }
-
-    private static Date dateOf(Instant timestamp) {
-        if (timestamp == null) {
-            return null;
-        }
-        return Date.from(timestamp);
     }
 }

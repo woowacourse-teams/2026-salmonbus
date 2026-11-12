@@ -91,12 +91,16 @@ test("마이페이지 아래쪽에서 연 처리방침은 맨 위부터 보여 �
   await page.goto("/mypage");
   const privacy = page.getByRole("region", { name: "개인정보" });
   const participation = privacy.getByRole("switch", { name: "서비스 개선에 참여하기" });
+  const tabContent = page.getByRole("region", { name: "선택한 탭 내용", exact: true });
 
-  // 처음 열 때는 짧은 대체 화면이 스크롤을 0으로 당겨서, 코드를 받아 둔 두 번째 열기에서 확인한다.
+  // 마이페이지는 바텀시트 안에서, 처리방침은 문서 전체에서 스크롤한다.
   for (const visit of [1, 2]) {
     await expect(participation).toBeVisible();
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    expect(await page.evaluate(() => window.scrollY), `${visit}번째 열기 전 마이페이지 스크롤`).toBeGreaterThan(0);
+    await tabContent.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+    expect(
+      await tabContent.evaluate((element) => element.scrollTop),
+      `${visit}번째 열기 전 마이페이지 스크롤`,
+    ).toBeGreaterThan(0);
     await privacy.getByRole("link", { name: POLICY_LINK }).click();
     await expect(page).toHaveURL("/privacy");
     await expect(policyTitle(page)).toBeInViewport();
@@ -148,7 +152,7 @@ test("처리방침 코드를 받지 못하면 오류 화면을 보여 주고, �
   await expect(page.getByText("앗, 문제가 생겼어요", { exact: true })).toBeVisible();
 
   await page.unroute(blockPrivacyScript);
-  await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
+  await page.getByRole("button", { name: "새로고침", exact: true }).click();
   await expect(firstSection(page)).toBeVisible();
 });
 

@@ -1,10 +1,10 @@
 import { mergeTests, type Page } from "@playwright/test";
 import { test as mapTest, expect } from "./fixtures/naver-map";
-import { routeId } from "./fixtures/mock-data";
+import { apiPaths, routeId } from "./fixtures/mock-data";
 import type { BridgeEnvelope } from "../src/shared/bridge/bridge.types";
-import { NATIVE_MAP_CAPABILITIES } from "../src/shared/native-map/bridge";
+import { NATIVE_HOME_MAP_CAPABILITIES, NATIVE_MAP_CAPABILITIES } from "../src/shared/native-map/bridge";
 import type { NativeMapCommands, NativeMapEvent, NativeMapSession } from "../src/shared/native-map/protocol";
-import { test as favoritesTest } from "./fixtures/favorites";
+import { storedFavorite, test as favoritesTest } from "./fixtures/favorites";
 import { expectFocusRing, nextFocusKeyFor } from "./utils/focus-ring";
 
 const test = mapTest.extend<{ nativeReady: boolean; appCapabilities: readonly string[] }>({
@@ -35,18 +35,16 @@ test.beforeEach(async ({ page, nativeReady, appCapabilities }) => {
         postMessage(raw: string) {
           const message = JSON.parse(raw) as BridgeEnvelope & { payload: { sessionId: string; revision: number } };
           window.bridgeMessages.push(message);
-          if ((message.type === "map.mount" && nativeReady) || message.type === "map.layout") {
+          const mount = message.type === "map.mount" || message.type === "map.mountHome";
+          if ((mount && nativeReady) || message.type === "map.layout") {
             const { sessionId, revision } = message.payload;
             queueMicrotask(() =>
               window.dispatchEvent(
                 new CustomEvent("salmon:bridge", {
                   detail: {
                     v: 1,
-                    type: message.type === "map.mount" ? "map.ready" : "map.ack",
-                    payload:
-                      message.type === "map.mount"
-                        ? { sessionId, revision }
-                        : { sessionId, revision, appliedRevision: revision },
+                    type: mount ? "map.ready" : "map.ack",
+                    payload: mount ? { sessionId, revision } : { sessionId, revision, appliedRevision: revision },
                   },
                 }),
               ),
@@ -81,7 +79,8 @@ async function expectWebMapBackground(page: Page) {
   );
 }
 async function emit(page: Page, event: NativeMapEvent, sessionId?: string) {
-  const mount = (await messages(page)).find((message) => message.type === "mount")!;
+  const mount = (await messages(page)).find((message) => message.type === "mount" || message.type === "mountHome");
+  if (!mount) throw new Error("앱 지도가 열리지 않았습니다");
   await page.evaluate(
     ({ type, payload }) => window.dispatchEvent(new CustomEvent("salmon:bridge", { detail: { v: 1, type, payload } })),
     {
@@ -90,6 +89,154 @@ async function emit(page: Page, event: NativeMapEvent, sessionId?: string) {
     },
   );
 }
+
+test.describe("홈 지도까지 지원하는 iOS 앱", () => {
+  test.use({ appCapabilities: [...NATIVE_MAP_CAPABILITIES, ...NATIVE_HOME_MAP_CAPABILITIES, "map.selectedStopOnly"] });
+
+  test("홈 나침반을 누르면 홈 지도 세션의 방향을 초기화한다", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "현재 위치로 이동" })).toBeVisible();
+    const compass = page.getByRole("button", { name: "지도를 북쪽으로 돌리기" });
+    const mount = (await messages(page)).find((message) => message.type === "mountHome");
+    expect(mount?.payload.reportRotation).toBe(true);
+    await expect(compass).toHaveCount(0);
+
+    await emit(page, { type: "rotation", payload: { heading: 75 } });
+    await expect(compass).toBeVisible();
+    await compass.click();
+    expect((await messages(page)).filter((message) => message.type === "camera").at(-1)).toMatchObject({
+      sessionId: mount?.sessionId,
+      payload: { command: "resetNorth" },
+    });
+
+    await emit(page, { type: "rotation", payload: { heading: 0 } });
+    await expect(compass).toHaveCount(0);
+  });
+
+  test("노선도와 판정보드를 네이티브로 표시하고 오류가 나면 같은 SDK로 다시 시도한다", async ({ page }) => {
+    await page.route("**/assets/home-events.json", (route) =>
+      route.fulfill({
+        json: {
+          stops: [],
+          routePaths: [
+            [
+              [127.1, 37.39],
+              [127.12, 37.4],
+            ],
+          ],
+        },
+      }),
+    );
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-native-home-map", "true");
+    await test.step("노선도 경로를 열린 홈 지도 세션으로 보낸다", async () => {
+      await page
+        .getByRole("navigation", { name: "주요 메뉴" })
+        .getByRole("link", { name: "노선도", exact: true })
+        .click();
+      await expect
+        .poll(async () =>
+          (await messages(page)).some(
+            (message) => message.type === "updateHome" && message.payload.paths?.length === 1,
+          ),
+        )
+        .toBe(true);
+      expect((await messages(page)).filter((message) => message.type === "mountHome")).toHaveLength(1);
+    });
+    await test.step("판정보드 지도만 실패했을 때 목록을 유지하고 새 네이티브 세션으로 재시도한다", async () => {
+      await page.getByRole("list", { name: "서비스 중 노선" }).getByRole("link", { name: /3330/ }).click();
+      await expect(page.locator("html")).toHaveAttribute("data-shared-native-map-ready", "true");
+      const board = (await messages(page)).find((message) => message.type === "mount");
+      if (!board) throw new Error("판정보드 지도가 열리지 않았습니다");
+      await emit(page, { type: "error", payload: { message: "지도 설정을 확인하지 못했어요" } }, board.sessionId);
+      await expect(page.getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
+      await expect(page.getByRole("region", { name: "판정보드 정류장 목록", exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "지도 다시 불러오기" }).click();
+      await expect(page.locator("html")).toHaveAttribute("data-shared-native-map-ready", "true");
+      const sessions = (await messages(page)).filter((message) => message.type === "mount");
+      expect(sessions).toHaveLength(2);
+      expect(sessions[1]?.sessionId).not.toBe(board.sessionId);
+      await expect(page.getByTestId("naver-map-test-double")).toHaveCount(0);
+    });
+  });
+
+  test("앱의 지도 범위로 정류장을 조회해 핀을 보내고 선택하면 웹 시트를 연다", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const stationId = "206000532";
+    const name = "판교역 검증 정류장";
+    const center = { latitude: 37.394761, longitude: 127.111136 };
+    await page.route("**/api/v2/stations/tiles/14/13976/6354", (route) =>
+      route.fulfill({
+        json: {
+          tile: { zoom: 14, x: 13976, y: 6354 },
+          status: "READY",
+          source: "GBIS",
+          coordinateSystem: "WGS84",
+          stations: [{ stationId, name, point: { x: center.longitude, y: center.latitude } }],
+          baselineDate: "2026-10-20",
+          verifiedAt: null,
+        },
+      }),
+    );
+    await page.route(`**/api/v2/stations/${stationId}`, (route) => route.fulfill({ status: 503, json: {} }));
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-native-home-map", "true");
+    const tileRequested = page.waitForRequest("**/api/v2/stations/tiles/14/13976/6354");
+    await emit(page, {
+      type: "homeViewport",
+      payload: {
+        camera: { center, zoom: 14, heading: 30 },
+        gesture: true,
+        corners: [
+          { latitude: 37.3947, longitude: 127.1111 },
+          { latitude: 37.3948, longitude: 127.1111 },
+          { latitude: 37.3947, longitude: 127.1112 },
+          { latitude: 37.3948, longitude: 127.1112 },
+        ],
+      },
+    });
+    await tileRequested;
+    await expect
+      .poll(async () =>
+        (await messages(page)).some(
+          (message) =>
+            message.type === "updateHome" && message.payload.stations?.stops.some((stop) => stop.id === stationId),
+        ),
+      )
+      .toBe(true);
+
+    await emit(page, { type: "homeStopPress", payload: { id: stationId } });
+    const sheet = page.getByRole("region", { name: "정류장 노선 안내" });
+    await expect(sheet.getByRole("heading", { name })).toBeVisible();
+    await page.clock.runFor(32);
+    const close = await sheet.getByRole("button", { name: "정류장 안내 닫기" }).boundingBox();
+    if (!close) throw new Error("정류장 안내 닫기 버튼의 위치가 없습니다");
+    const layout = (await messages(page)).filter((message) => message.type === "layout").at(-1);
+    const x = close.x + close.width / 2;
+    const y = close.y + close.height / 2;
+    expect(
+      layout?.payload.webRects.some(
+        (rect) => x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height,
+      ),
+    ).toBe(true);
+  });
+
+  test("홈 지도 오류 후 재시도하면 진행 중이던 위치 요청을 정리하고 다시 지도를 연다", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-native-home-map", "true");
+    const first = (await messages(page)).find((message) => message.type === "mountHome");
+    if (!first) throw new Error("홈 지도가 열리지 않았습니다");
+    await page.getByRole("button", { name: "현재 위치로 이동" }).click();
+    await expect(page.getByRole("button", { name: "현재 위치 확인 중" })).toBeDisabled();
+    await emit(page, { type: "error", payload: { message: "주변 지도를 불러오지 못했어요" } });
+    await page.getByRole("button", { name: "지도 다시 불러오기" }).click();
+    await expect(page.getByRole("button", { name: "현재 위치로 이동" })).toBeEnabled();
+    const sessions = (await messages(page)).filter((message) => message.type === "mountHome");
+    expect(sessions).toHaveLength(2);
+    expect(sessions[1]?.sessionId).not.toBe(first.sessionId);
+    await expect(page.getByTestId("naver-map-test-double")).toHaveCount(0);
+  });
+});
 
 test("native host는 JS SDK 없이 scene과 관측별 motion을 보내고 브라우저 UI는 유지한다", async ({ page }) => {
   const sdkRequests: string[] = [];
@@ -101,6 +248,7 @@ test("native host는 JS SDK 없이 scene과 관측별 motion을 보내고 브라
   const mount = initial.find((message) => message.type === "mount");
   expect(mount?.payload.stops.length).toBeGreaterThan(0);
   expect(mount?.payload.paths.length).toBe(2);
+  expect(mount?.payload.directions).toEqual(["UP", "DOWN"]);
   expect(initial.filter((message) => message.type === "motion").length).toBeGreaterThan(0);
   const layouts = initial.filter((message) => message.type === "layout");
   expect(layouts[0]?.payload.captureAll).toBe(true);
@@ -120,6 +268,32 @@ test("native host는 JS SDK 없이 scene과 관측별 motion을 보내고 브라
   expect(
     await page.getByTestId("route-map").evaluate((element) => getComputedStyle(element.parentElement!).backgroundColor),
   ).toBe("rgba(0, 0, 0, 0)");
+});
+
+test("native 지도의 나침반을 누르면 현재 지도 세션에 방향 초기화를 요청한다", async ({ page }) => {
+  await open(page);
+  const compass = page.getByRole("button", { name: "지도를 북쪽으로 돌리기" });
+  const mount = (await messages(page)).find((message) => message.type === "mount");
+  expect(mount?.payload.reportRotation).toBe(true);
+  await expect(compass).toHaveCount(0);
+
+  await emit(page, { type: "rotation", payload: { heading: 75 } });
+  await expect(compass).toBeVisible();
+  await page.clock.runFor(48);
+  const layout = (await messages(page)).filter((message) => message.type === "layout").at(-1);
+  const box = (await compass.boundingBox())!;
+  expect(layout?.payload.webRects.some(({ x, y }) => Math.abs(x - box.x) < 0.1 && Math.abs(y - box.y) < 0.1)).toBe(
+    true,
+  );
+
+  await compass.click();
+  expect((await messages(page)).filter((message) => message.type === "camera").at(-1)).toMatchObject({
+    type: "camera",
+    sessionId: mount?.sessionId,
+    payload: { command: "resetNorth" },
+  });
+  await emit(page, { type: "rotation", payload: { heading: 0 } });
+  await expect(compass).toHaveCount(0);
 });
 
 test("실제 transition 경계와 웹 버튼 영역을 전달하고 native 위치·선택 이벤트를 연결한다", async ({ page }) => {
@@ -300,16 +474,105 @@ test.describe("설정 화면을 열 수 있는 앱", () => {
   });
 });
 
-favoriteNativeTest("즐겨찾기 dialog를 열면 native 지도 입력을 차단하고 닫으면 복구한다", async ({ page, api }) => {
-  await open(page);
-  const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
-  await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.clock.runFor(32);
-  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(true);
-  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
-  await page.clock.runFor(32);
-  expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(false);
+favoriteNativeTest(
+  "즐겨찾기 dialog를 열면 native 지도 입력을 차단하고 닫으면 복구한다",
+  async ({ page, api, favorites }) => {
+    favorites.groups.push({ id: "10000000-0000-4000-8000-000000000004", name: "주말", favorites: [] });
+    await open(page);
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.boardingAllowed)!;
+    await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.clock.runFor(32);
+    expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(true);
+    await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
+    await page.clock.runFor(32);
+    expect((await messages(page)).filter((message) => message.type === "layout").at(-1)?.payload.captureAll).toBe(
+      false,
+    );
+  },
+);
+
+favoriteNativeTest.describe("iOS 네이티브 즐겨찾기 지도", () => {
+  favoriteNativeTest.use({
+    appCapabilities: [...NATIVE_MAP_CAPABILITIES, ...NATIVE_HOME_MAP_CAPABILITIES, "map.selectedStopOnly"],
+  });
+
+  favoriteNativeTest("저장한 노선과 방면 화살표를 홈 지도 세션에 보낸다", async ({ page, api, favorites }) => {
+    const group = favorites.groups[0];
+    const stop = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed);
+    if (!group || !stop) throw new Error("즐겨찾기 검증 데이터가 없습니다");
+    group.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: "DOWN" })];
+    await page.goto("/favorites");
+    await expect(page.locator("html")).toHaveAttribute("data-native-home-map", "true");
+    await expect
+      .poll(async () => {
+        const update = (await messages(page))
+          .filter((message) => message.type === "updateHome" && message.payload.paths?.length)
+          .at(-1);
+        return update?.type === "updateHome"
+          ? (update.payload.paths?.map(({ active, arrows }) => ({ active, arrows })) ?? [])
+          : [];
+      })
+      .toEqual([
+        { active: false, arrows: false },
+        { active: true, arrows: true },
+      ]);
+    await expect(page.getByTestId("naver-map-test-double")).toHaveCount(0);
+  });
+
+  favoriteNativeTest(
+    "시트 전환 중 노선 응답이 오면 전환이 끝난 영역에 노선을 맞춘다",
+    async ({ page, api, favorites }) => {
+      const group = favorites.groups[0];
+      const stop = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed);
+      if (!group || !stop) throw new Error("즐겨찾기 검증 데이터가 없습니다");
+      group.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: "DOWN" })];
+      let releaseGeometry = () => {};
+      const geometryPending = new Promise<void>((resolve) => {
+        releaseGeometry = resolve;
+      });
+      await api.route(async (route) => {
+        if (new URL(route.request().url()).pathname === apiPaths.geometry) await geometryPending;
+        await route.fallback();
+      });
+
+      await page.goto("/");
+      await expect(page.locator("html")).toHaveAttribute("data-native-home-map", "true");
+      await page.addStyleTag({ content: "#home-bottom-sheet { transition-duration: 30s; }" });
+      const sheet = page.locator("#home-bottom-sheet");
+      const fits = async () =>
+        (await messages(page)).flatMap((message) =>
+          message.type === "homeCamera" && message.payload.command === "fit" ? [message.payload] : [],
+        );
+      try {
+        await page.getByRole("link", { name: "즐겨찾기", exact: true }).click();
+        await expect.poll(() => sheet.evaluate((element) => element.getAnimations().length)).toBeGreaterThan(0);
+        await sheet.evaluate((element) => {
+          for (const animation of element.getAnimations()) {
+            animation.pause();
+            animation.currentTime = 120;
+          }
+        });
+        releaseGeometry();
+        await expect
+          .poll(async () =>
+            (await messages(page)).some((message) => message.type === "updateHome" && message.payload.paths?.length),
+          )
+          .toBe(true);
+        await page.clock.runFor(64);
+        expect(await fits()).toHaveLength(0);
+      } finally {
+        releaseGeometry();
+      }
+
+      await sheet.evaluate((element) => element.getAnimations().forEach((animation) => animation.finish()));
+      await page.clock.runFor(64);
+      await expect.poll(fits).toHaveLength(1);
+      const fit = (await fits())[0];
+      const finalTop = await sheet.evaluate((element) => element.getBoundingClientRect().top);
+      expect(fit && fit.visible.y + fit.visible.height).toBeCloseTo(finalTop, 0);
+    },
+  );
 });
 
 test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투명 모드를 정리한다", async ({ page }) => {
@@ -323,6 +586,34 @@ test("native 지도 오류 후에도 웹 목록을 유지하고 앱 전용 투�
 
 test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
   test.use({ nativeReady: false });
+
+  test("앱에서도 노선도 화면을 유지하며 판정보드 지도만 전환한다", async ({ page }) => {
+    await page.goto("/");
+    const nav = page.getByRole("navigation", { name: "주요 메뉴" });
+    await nav.getByRole("link", { name: "노선도", exact: true }).click();
+    const map = page.getByTestId("naver-map-test-double");
+    await expect(map).toBeVisible();
+    const originalMap = (await map.elementHandle())!;
+    await page.getByRole("list", { name: "서비스 중 노선" }).getByRole("link", { name: /3330/ }).click();
+    const board = page.getByRole("region", { name: "판정보드 정류장 목록", exact: true });
+    await expect(board).toBeVisible();
+    await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
+    await expect(map).toBeVisible();
+    expect(await originalMap.evaluate((element) => element.isConnected)).toBe(true);
+
+    await emit(page, { type: "ready", payload: {} });
+    await expect(page.locator("html")).toHaveAttribute("data-shared-native-map-ready", "true");
+    await expect(map).toBeHidden();
+    await expect(board).toBeVisible();
+
+    await emit(page, { type: "error", payload: { message: "지도 설정을 확인하지 못했어요" } });
+    await expect(page.locator("html")).not.toHaveAttribute("data-shared-native-map-ready");
+    await expect(map).toBeVisible();
+    await expect(board).toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole("list", { name: "서비스 중 노선" })).toBeVisible();
+    expect(await originalMap.evaluate((element) => element.isConnected)).toBe(true);
+  });
 
   test("즐겨찾기 정류장을 초기 native scene에 담고 이전 앱용 카메라 명령도 유지한다", async ({ page, api }) => {
     const stop = api.data.watch.stops.find((stop) => stop.direction === "DOWN" && stop.boardingAllowed)!;
@@ -403,7 +694,7 @@ test.describe("native 지도 준비 실패 시 JS 지도 전환", () => {
     await page.goto(`/routes/${routeId}`);
     await expect.poll(async () => (await messages(page)).some((message) => message.type === "mount")).toBe(true);
     await emit(page, { type: "error", payload: { message: "지도 설정을 확인하지 못했어요" } });
-    await expect(page.getByText(/지도를 불러오지 못했어요|지도 설정을 준비 중이에요/)).toBeVisible();
+    await expect(page.getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "판정보드 정류장 목록", exact: true })).toBeVisible();
     await expectWebMapBackground(page);
     const count = (await messages(page)).filter((message) => message.type === "mount").length;

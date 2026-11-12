@@ -1,26 +1,46 @@
-import { isSupportedInApp, sendToApp, subscribeToApp, type BridgeWindow } from "../bridge/bridge";
-import type { AppCommands, AppCommandType, BridgeMessage } from "../bridge/bridge.types";
+import { createBridgeId, isSupportedInApp, sendToApp, subscribeToApp, type BridgeWindow } from "../bridge/bridge";
+import type { AppCommandType, BridgeMessage } from "../bridge/bridge.types";
 import type { NativeMapCommands, NativeMapEvent, NativeMapEvents } from "./protocol";
 
 // NativeMapCommands에 명령이 늘면 여기서 tsc가 막는다. 앱의 app/native-map/nativeMapMessages.ts 목록도 같이 늘린다.
-const nativeMapCommandTypes = {
-  mount: true,
-  updateScene: true,
-  motion: true,
-  layout: true,
-  camera: true,
-  location: true,
-  unmount: true,
-} satisfies Record<keyof NativeMapCommands, true>;
+const nativeMapCommandGroups = {
+  mount: "route",
+  updateScene: "route",
+  motion: "route",
+  layout: "route",
+  camera: "route",
+  location: "route",
+  unmount: "route",
+  mountHome: "home",
+  updateHome: "home",
+  homeCamera: "home",
+} satisfies Record<keyof NativeMapCommands, "route" | "home">;
 
-/** native 지도를 쓰려면 앱이 받아야 하는 메시지 전체. 테스트의 가짜 앱도 이 목록을 쓴다. */
-export const NATIVE_MAP_CAPABILITIES: readonly AppCommandType[] = (
-  Object.keys(nativeMapCommandTypes) as (keyof NativeMapCommands)[]
-).map((type) => `map.${type}` as const);
+function isNativeMapCommandType(type: string): type is keyof NativeMapCommands {
+  return Object.hasOwn(nativeMapCommandGroups, type);
+}
+
+function capabilitiesFor(group: "route" | "home"): readonly AppCommandType[] {
+  return Object.keys(nativeMapCommandGroups)
+    .filter(isNativeMapCommandType)
+    .filter((type) => nativeMapCommandGroups[type] === group)
+    .map((type) => `map.${type}` as const);
+}
+
+/** 판정보드 네이티브 지도의 필수 명령 목록. 홈 지도 명령은 별도로 확인한다. */
+export const NATIVE_MAP_CAPABILITIES = capabilitiesFor("route");
+export const NATIVE_HOME_MAP_CAPABILITIES = capabilitiesFor("home");
 
 // 지도 명령을 전부 받는 앱에서만 native 지도를 사용하고, 브라우저와 옛 앱은 JS SDK를 사용한다.
 export function isNativeMapAvailable(bridgeWindow?: BridgeWindow): boolean {
   return NATIVE_MAP_CAPABILITIES.every((type) => isSupportedInApp(type, bridgeWindow));
+}
+
+export function isNativeHomeMapAvailable(bridgeWindow?: BridgeWindow): boolean {
+  return (
+    isNativeMapAvailable(bridgeWindow) &&
+    NATIVE_HOME_MAP_CAPABILITIES.every((type) => isSupportedInApp(type, bridgeWindow))
+  );
 }
 
 export interface NativeMapChannel {
@@ -31,10 +51,7 @@ export interface NativeMapChannel {
 }
 
 export function createNativeMapChannel(bridgeWindow: BridgeWindow & EventTarget = window): NativeMapChannel {
-  const sessionId =
-    typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const sessionId = createBridgeId();
   const listeners = new Set<(event: NativeMapEvent) => void>();
   let revision = 0;
   let destroyed = false;
@@ -48,9 +65,7 @@ export function createNativeMapChannel(bridgeWindow: BridgeWindow & EventTarget 
     send(type, payload) {
       if (destroyed) return revision;
       revision += 1;
-      // TypeScript는 `map.${T}`와 AppCommands의 키를 이어 주지 못해서, 같은 모양임을 여기서 한 번만 알려 준다.
-      const command = { ...payload, sessionId, revision } as AppCommands[`map.${typeof type}`];
-      sendToApp(`map.${type}`, command, bridgeWindow);
+      sendToApp(`map.${type}`, { ...payload, sessionId, revision }, bridgeWindow);
       return revision;
     },
     subscribe(listener) {
@@ -85,11 +100,23 @@ function selection(value: unknown): boolean {
   return record(value) && (value.direction === "UP" || value.direction === "DOWN") && Number.isInteger(value.sequence);
 }
 
+function camera(value: unknown): boolean {
+  return record(value) && coordinate(value.center) && Number.isFinite(value.zoom) && Number.isFinite(value.heading);
+}
+
 const isValidPayloadFor = {
   ready: () => true,
   mapPress: () => true,
+  rotation: (payload) => typeof payload.heading === "number" && Number.isFinite(payload.heading),
   ack: (payload) => Number.isInteger(payload.appliedRevision),
   stopPress: (payload) => selection(payload.selection),
+  homeStopPress: (payload) => typeof payload.id === "string" && payload.id.length > 0,
+  homeViewport: (payload) =>
+    camera(payload.camera) &&
+    Array.isArray(payload.corners) &&
+    payload.corners.length === 4 &&
+    payload.corners.every(coordinate) &&
+    typeof payload.gesture === "boolean",
   vehiclePress: (payload) => selection(payload.selection) && typeof payload.key === "string",
   locationResult: (payload) =>
     Number.isInteger(payload.requestId) &&

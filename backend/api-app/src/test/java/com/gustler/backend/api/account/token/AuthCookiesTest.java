@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 
@@ -24,7 +25,7 @@ class AuthCookiesTest {
         // given
         HttpHeaders headers = new HttpHeaders();
         OffsetDateTime expiresAt = OffsetDateTime.ofInstant(NOW.plus(Duration.ofDays(30)), ZoneOffset.UTC);
-        IssuedRefreshToken refresh = new IssuedRefreshToken("refresh-value", expiresAt);
+        IssuedRefreshToken refresh = new IssuedRefreshToken("refresh-value", expiresAt, UUID.randomUUID());
 
         // when
         cookies.write(headers, "access-value", refresh);

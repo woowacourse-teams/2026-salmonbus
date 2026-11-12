@@ -39,7 +39,7 @@ class ApiPackageBoundaryTest {
     private static final String[] WORKER_HTTP_CLIENTS = {
         PREFIX + "arrival.infrastructure.http..", PREFIX + "station.infrastructure.http.."
     };
-    private static final List<String> FEATURES = List.of("arrival", "board", "favorite", "route", "station", "vehicle");
+    private static final List<String> FEATURES = List.of("arrival", "board", "favorite", "push", "route", "station", "vehicle");
     private static final List<String> BUSINESS_MODULES = List.of(
         "com.gustler.backend.routecatalog..", "com.gustler.backend.observations..",
         "com.gustler.backend.forecasting..", "com.gustler.backend.arrivals..",

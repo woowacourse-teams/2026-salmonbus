@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { mapControls } from "@/shared/components/mapControls.css";
 import { vars } from "@/shared/styles/tokens.css";
 
 export const region = style({
@@ -10,6 +11,7 @@ export const region = style({
   background: vars.color.surface,
   selectors: { 'html[data-native-map="true"] &': { background: "transparent" } },
 });
+export const sharedRegion = style([region, { background: "transparent" }]);
 export const canvasViewport = style({
   position: "absolute",
   top: "50%",
@@ -40,6 +42,16 @@ export const notice = style({
   textAlign: "center",
   pointerEvents: "auto",
 });
+export const sharedNotice = style([
+  notice,
+  {
+    inset: "auto 58px 14px 58px",
+    padding: "8px 12px",
+    borderRadius: 12,
+    pointerEvents: "none",
+  },
+]);
+export const retryMap = style({ pointerEvents: "auto" });
 const pathNoticeSurface = style({
   position: "absolute",
   zIndex: 30,
@@ -69,26 +81,7 @@ export const geometryToast = style([
   },
 ]);
 export const withheldToast = style([geometryToast, { letterSpacing: "0.025em" }]);
-export const location = style({
-  position: "absolute",
-  bottom: 16,
-  right: 16,
-  zIndex: 30,
-  display: "grid",
-  placeItems: "center",
-  width: 42,
-  height: 42,
-  border: `1px solid ${vars.color.rowDivider}`,
-  borderRadius: 21,
-  background: vars.color.surface,
-  color: vars.color.ink,
-  boxShadow: "0 2px 8px #00000015",
-  cursor: "pointer",
-  selectors: {
-    "&:focus-visible": { outline: `3px solid ${vars.color.focusRing}`, outlineOffset: 2 },
-    "&:disabled": { opacity: 0.65, cursor: "wait" },
-  },
-});
+export const mapControlPosition = style([mapControls, { bottom: 16, right: 16, zIndex: 30 }]);
 export const locationNotice = style({
   position: "absolute",
   bottom: 66,
@@ -103,6 +96,7 @@ export const locationNotice = style({
   textAlign: "center",
   boxShadow: "0 2px 8px #00000015",
 });
+export const locationNoticeWithCompass = style([locationNotice, { right: 66 }]);
 export const locationPromptText = style({ margin: 0 });
 export const locationPromptActions = style({
   display: "flex",

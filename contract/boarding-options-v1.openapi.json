@@ -528,7 +528,11 @@
               "NICKNAME_CHARACTERS",
               "NICKNAME_RESERVED",
               "NICKNAME_TAKEN",
-              "REAUTH_REQUIRED"
+              "REAUTH_REQUIRED",
+              "INVALID_PUSH_DEVICE",
+              "INVALID_NOTIFICATION_SCHEDULE",
+              "NOTIFICATION_TARGET_NOT_FAVORITE",
+              "NOTIFICATION_SETTING_NOT_FOUND"
             ]
           },
           "message": {

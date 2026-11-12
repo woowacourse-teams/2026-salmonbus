@@ -15,6 +15,29 @@ import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
 
 class CompatiblePreparationTest {
+    @Test
+    void 모델_파일_교체는_노선이나_DB_변경으로_취급하지_않는다() {
+        assertThat(CompatiblePreparation.permits(revision(CompatiblePreparation.FIXTURE_DIGEST),
+                revision(CompatiblePreparation.ENV_MODEL_DATA))).isTrue();
+        var previous = new TreeMap<String, String>();
+        previous.put("tools/data-contract.sha256", CompatiblePreparation.ALIGHTING_AWARE_EVALUATION_DATA);
+        previous.put("infra/compose.yaml", "same");
+        previous.put("tools/data/routes.json", "routes");
+        previous.put("tools/data/catalog-routes.json", "catalog");
+        previous.put("tools/data/model-reference/manifest.json", "old");
+        previous.put("tools/data/model-reference/weights.safetensors", "old");
+        var next = new TreeMap<>(previous);
+        next.put("tools/data-contract.sha256", CompatiblePreparation.ENV_MODEL_DATA);
+        next.remove("tools/data/model-reference/weights.safetensors");
+        next.put("tools/data/model-reference/manifest.json", "new");
+        next.put("tools/data/model-reference/base.json", "new");
+        assertThatCode(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(next), null))
+                .doesNotThrowAnyException();
+        next.put("tools/data/routes.json", "different");
+        assertThatThrownBy(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(next), null))
+                .hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
+    }
+
     private RevisionStore.Revision revision(String contract) {
         return revisionWithFiles(Map.of("tools/data-contract.sha256", contract));
     }
@@ -42,12 +65,29 @@ class CompatiblePreparationTest {
     }
 
     @Test
-    void 레스_정산_초기화는_검토한_과거_판에서만_전환한다() {
-        RevisionStore.Revision next = revision(CompatiblePreparation.LES_EVALUATION_DATA);
+    void 하차_반영_정산_초기화는_검토한_과거_판에서만_전환한다() {
+        RevisionStore.Revision next = revision(CompatiblePreparation.ALIGHTING_AWARE_EVALUATION_DATA);
         assertSoftly(softly -> {
             for (String previous : List.of(CompatiblePreparation.PREVIOUS, CompatiblePreparation.COLLECTED_DATA,
                 CompatiblePreparation.EVALUATION_DATA, CompatiblePreparation.NEXT,
-                CompatiblePreparation.FIXTURE_DIGEST, CompatiblePreparation.PREVIOUS_LES_EVALUATION_DATA)) {
+                CompatiblePreparation.FIXTURE_DIGEST, CompatiblePreparation.PREVIOUS_ALIGHTING_AWARE_EVALUATION_DATA)) {
+                softly.assertThat(CompatiblePreparation.permits(revision(previous), next)).isTrue();
+                softly.assertThat(CompatiblePreparation.permits(next, revision(previous))).isFalse();
+            }
+            softly.assertThat(CompatiblePreparation.permits(revision("unknown"), next)).isFalse();
+            softly.assertThat(CompatiblePreparation.permits(next, next)).isFalse();
+            softly.assertThat(CompatiblePreparation.permits(revisionWithFiles(Map.of()), next)).isFalse();
+        });
+    }
+
+    @Test
+    void 원본_보관_초기화는_검토한_과거_판에서만_전환한다() {
+        RevisionStore.Revision next = revision(CompatiblePreparation.ALIGHTING_MODEL_DATA);
+        assertSoftly(softly -> {
+            for (String previous : List.of(CompatiblePreparation.PREVIOUS, CompatiblePreparation.COLLECTED_DATA,
+                CompatiblePreparation.EVALUATION_DATA, CompatiblePreparation.NEXT,
+                CompatiblePreparation.FIXTURE_DIGEST, CompatiblePreparation.PREVIOUS_ALIGHTING_AWARE_EVALUATION_DATA,
+                CompatiblePreparation.ALIGHTING_AWARE_EVALUATION_DATA, CompatiblePreparation.ARCHIVE_DATA)) {
                 softly.assertThat(CompatiblePreparation.permits(revision(previous), next)).isTrue();
                 softly.assertThat(CompatiblePreparation.permits(next, revision(previous))).isFalse();
             }
@@ -68,7 +108,7 @@ class CompatiblePreparationTest {
         }
         oldFiles.put("tools/data-contract.sha256", CompatiblePreparation.PREVIOUS);
         Map<String, String> newFiles = new TreeMap<>(oldFiles);
-        newFiles.put("tools/data-contract.sha256", CompatiblePreparation.LES_EVALUATION_DATA);
+        newFiles.put("tools/data-contract.sha256", CompatiblePreparation.ARCHIVE_DATA);
         RevisionStore.Revision old = revisionWithFiles(oldFiles);
 
         assertThatCode(() -> BasisLifecycle.preserveData(old, revisionWithFiles(newFiles), null))
@@ -90,6 +130,6 @@ class CompatiblePreparationTest {
         String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
             .digest((contract + "\n").getBytes(StandardCharsets.UTF_8)));
 
-        assertThat(hash).isEqualTo(CompatiblePreparation.LES_EVALUATION_DATA);
+        assertThat(hash).isEqualTo(CompatiblePreparation.ENV_MODEL_DATA);
     }
 }

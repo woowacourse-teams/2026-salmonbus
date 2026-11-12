@@ -73,9 +73,27 @@ class SchemaMigrationTest {
         assertThat(actual).isTrue();
     }
 
+    @Test
+    void 마이그레이션을_적용하면_차량별_초기_정원이_등록된다() {
+        // when
+        List<Integer> capacities = jdbcClient.sql("SELECT capacity FROM vehicle_capacity WHERE source_id = 'GBIS'")
+            .query(Integer.class)
+            .list();
+
+        // then
+        assertThat(capacities).hasSize(426).contains(44, 45, 68).allMatch(capacity -> capacity > 0 && capacity <= 70);
+    }
+
     private List<Date> installedOn() {
         return Arrays.stream(flyway.info().applied())
             .map(MigrationInfo::getInstalledOn)
             .toList();
+    }
+    @Test
+    void 확정_이력_커서_인덱스가_읽기와_쓰기에_사용할_수_있는_상태로_생성된다() {
+        assertThat(jdbcClient.sql("""
+            SELECT indisvalid AND indisready FROM pg_index
+            WHERE indexrelid='ix_batch_confirmed_history'::regclass
+            """).query(Boolean.class).single()).isTrue();
     }
 }

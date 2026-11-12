@@ -1,6 +1,5 @@
 package com.gustler.backend.api.vehicle.controller;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -9,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.gustler.backend.api.support.FixedDaytimeClockConfig;
-import com.gustler.backend.support.ConfirmedTripFixture;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -60,33 +58,18 @@ class LiveVehicleApiContractTest {
             .build();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"above_range", "excluded_trip", "unconfirmed_trip", "investigating"})
-    void 품질이_확인되지_않은_잔여석은_숨기고_차량_위치는_유지한다(String reason) throws Exception {
+    @Test
+    void 이관된_제외_관측의_잔여석은_숨기고_차량_위치는_유지한다() throws Exception {
         // given
         RouteContext route = insertCurrentRoute();
         insertStop(route, 5, "205000005", "상행 다섯 번째", "UP");
         final long batch = insertSuccessfulBatch(route, NOW.minusSeconds(20), "SUCCESS_ROWS", 2);
-        int seats = 40;
-        if (reason.equals("above_range")) {
-            seats = 82;
-        }
-        insertObservation(batch, route, 0, "test-bus", 5, "205000005", 2, seats);
+        insertObservation(batch, route, 0, "test-bus", 5, "205000005", 2, 82);
         insertObservation(batch, route, 1, "normal-bus", 5, "205000005", 2, 12);
-        final long observation =
-            jdbcClient.sql("SELECT id FROM vehicle_observation WHERE observation_batch_id=? AND source_row_number=0")
-                .param(batch)
-                .query(Long.class)
-                .single();
-        if (reason.equals("excluded_trip") || reason.equals("unconfirmed_trip")) {
-            ConfirmedTripFixture.include(jdbcClient, observation);
-            jdbcClient.sql("UPDATE vehicle_one_way_trip SET status=? WHERE start_observation_id=?")
-                .params(tripState(reason), observation).update();
-        }
-        if (reason.equals("investigating")) {
-            jdbcClient.sql("INSERT INTO trip_quality_rebuild(route_version_id, vehicle_id, until_at) VALUES (?, ?, ?)")
-                .params(route.routeVersionId(), "test-bus", NOW).update();
-        }
+        jdbcClient.sql("""
+            UPDATE vehicle_observation SET remaining_seats = NULL, seat_unknown_reason = 'REPORTED_UNKNOWN'
+            WHERE observation_batch_id = ? AND source_row_number = 0
+            """).param(batch).update();
 
         // when
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
@@ -95,33 +78,21 @@ class LiveVehicleApiContractTest {
             .andExpect(jsonPath("$.vehicles[0].vehicleId").value("test-bus"))
             .andExpect(jsonPath("$.vehicles[0].currentStopSequence").value(5))
             .andExpect(jsonPath("$.vehicles[0].seat.kind").value("UNKNOWN"))
-            .andExpect(jsonPath("$.vehicles[0].seat.reason").value("QUALITY_WITHHELD"))
+            .andExpect(jsonPath("$.vehicles[0].seat.reason").value("REPORTED_UNKNOWN"))
             .andExpect(jsonPath("$.vehicles[0].seat.remaining").doesNotExist())
             .andExpect(jsonPath("$.vehicles[1].seat.remaining").value(12));
-
-        // then
-        assertThat(jdbcClient.sql("SELECT remaining_seats FROM vehicle_observation WHERE id=?")
-            .param(observation).query(Integer.class).single()).isEqualTo(seats);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"NOT_REPORTED", "REPORTED_UNKNOWN"})
-    void 원래_좌석이_없던_차량은_품질_조사_중에도_원래_사유를_반환한다(String reason) throws Exception {
+    void 좌석이_없던_과거_제외_관측도_원래_사유를_반환한다(String reason) throws Exception {
         // when
         RouteContext route = insertCurrentRoute();
         insertStop(route, 5, "205000005", "예시 정류장", "UP");
         final long batch = insertSuccessfulBatch(route, NOW.minusSeconds(20), "SUCCESS_ROWS", 1);
         insertObservationWithUnknownSeats(batch, route, 0, "test-bus", 5, "205000005", 2, reason);
-        jdbcClient.sql("INSERT INTO trip_quality_rebuild(route_version_id, vehicle_id, until_at) VALUES (?, ?, ?)")
-            .params(route.routeVersionId(), "test-bus", NOW).update();
 
         // then
-        assertThat(
-            jdbcClient.sql("SELECT forecast_eligible FROM forecast_observation_quality WHERE observation_batch_id=?")
-                .param(batch)
-                .query(Boolean.class)
-                .single()).isFalse();
-
         mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", ROUTE_ID))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.vehicles.length()").value(1))
@@ -746,12 +717,5 @@ class LiveVehicleApiContractTest {
     }
 
     private record RouteContext(long routeId, long routeVersionId) {
-    }
-
-    private static String tripState(String reason) {
-        if (reason.equals("excluded_trip")) {
-            return "EXCLUDED";
-        }
-        return "BOUNDARY_UNCONFIRMED";
     }
 }

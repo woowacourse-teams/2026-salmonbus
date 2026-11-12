@@ -67,6 +67,7 @@ class TokenControllerTest {
 
     private UUID memberId;
     private String refreshToken;
+    private UUID familyId;
     private String csrfToken;
 
     @BeforeEach
@@ -76,6 +77,7 @@ class TokenControllerTest {
         changeNickname.change(memberId, "연어팬");
         IssuedRefreshToken issued = refreshTokens.issue(memberId);
         refreshToken = issued.token();
+        familyId = issued.familyId();
         csrfToken = csrfToken();
     }
 
@@ -92,6 +94,8 @@ class TokenControllerTest {
             softly.assertThat(setCookie(actual, REFRESH_COOKIE)).contains("HttpOnly", "Secure", "Path=/;");
             softly.assertThat(cookieValue(actual, REFRESH_COOKIE)).isNotEqualTo(refreshToken);
             softly.assertThat(accessTokens.verify(cookieValue(actual, ACCESS_COOKIE))).contains(memberId);
+            softly.assertThat(accessTokens.decoder().decode(cookieValue(actual, ACCESS_COOKIE)).getClaimAsString("sid"))
+                .isEqualTo(familyId.toString());
         });
     }
 
@@ -109,6 +113,8 @@ class TokenControllerTest {
             softly.assertThat(header(actual, "Cache-Control")).isEqualTo("no-store");
             softly.assertThat(actual.headers().allValues("Set-Cookie")).isEmpty();
             softly.assertThat(accessTokens.verify(body.path("accessToken").asString())).contains(memberId);
+            softly.assertThat(accessTokens.decoder().decode(body.path("accessToken").asString()).getClaimAsString("sid"))
+                .isEqualTo(familyId.toString());
             softly.assertThat(body.path("expiresIn").asLong()).isEqualTo(900);
             softly.assertThat(body.path("refreshToken").asString()).isNotBlank().isNotEqualTo(refreshToken);
             softly.assertThat(body.path("refreshTokenExpiresAt").asString()).isNotBlank();
@@ -270,12 +276,12 @@ class TokenControllerTest {
     void 액세스_토큰이_만료됐어도_리프레시_쿠키가_있으면_갱신_가능으로_알린다() throws Exception {
         // given
         Clock longAgo = Clock.fixed(Instant.now().minus(Duration.ofHours(1)), ZoneOffset.UTC);
-        String expired = new AccessTokens(tokenProperties, longAgo).issue(memberId);
+        String expired = new AccessTokens(tokenProperties, longAgo).issue(memberId, null);
 
         // when
         JsonNode refreshable = session(ACCESS_COOKIE + "=" + expired + "; " + REFRESH_COOKIE + "=" + refreshToken);
         JsonNode anonymous = session("");
-        JsonNode signedIn = session(ACCESS_COOKIE + "=" + accessTokens.issue(memberId));
+        JsonNode signedIn = session(ACCESS_COOKIE + "=" + accessTokens.issue(memberId, null));
 
         // then
         assertSoftly(softly -> {
@@ -290,7 +296,7 @@ class TokenControllerTest {
     @Test
     void 탈퇴한_회원의_토큰이면_로그인_상태를_비로그인으로_답한다() throws Exception {
         // given
-        String accessToken = accessTokens.issue(memberId);
+        String accessToken = accessTokens.issue(memberId, null);
         jdbcClient.sql("DELETE FROM member").update();
 
         // when

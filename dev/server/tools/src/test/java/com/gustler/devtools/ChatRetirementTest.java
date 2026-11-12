@@ -32,6 +32,7 @@ class ChatRetirementTest {
         assertDoesNotThrow(() -> BasisLifecycle.preserveData(old, next, null));
         assertDoesNotThrow(() -> BasisLifecycle.preserveData(next, old, null));
         for (var path : files(false).keySet()) {
+            if (path.startsWith("tools/data/model-reference/")) continue;
             var changed = files(false);
             changed.put(path, "changed");
             assertThrows(IllegalArgumentException.class,

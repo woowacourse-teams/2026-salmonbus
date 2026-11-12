@@ -3,6 +3,7 @@ import {
   exceedsFavoriteLimit,
   favoriteCountFor,
   favoriteErrorOf,
+  favoriteStopLabelOf,
   groupNameError,
   selectedGroups,
 } from "./favoritePolicy";
@@ -19,6 +20,32 @@ const group: FavoriteGroup = {
 };
 
 describe("즐겨찾기 정책", () => {
+  it("작업별 실패 문구를 지정해도 한도 초과와 로그인 만료 안내를 유지한다", () => {
+    const fallback = "즐겨찾기를 저장하지 못했어요. 다시 시도해 주세요.";
+    expect(favoriteErrorOf({ kind: "network", cause: new Error("offline") }, "saveFavorite")).toBe(fallback);
+    expect(
+      favoriteErrorOf(
+        {
+          kind: "contract",
+          status: 409,
+          retryAfterMs: null,
+          error: { code: "FAVORITE_LIMIT_EXCEEDED", message: "한도 초과", requestId: "limit" },
+        },
+        "saveFavorite",
+      ),
+    ).toBe("한 그룹에는 즐겨찾기를 2개까지 저장할 수 있어요.");
+    expect(
+      favoriteErrorOf(
+        {
+          kind: "contract",
+          status: 401,
+          retryAfterMs: null,
+          error: { code: "UNAUTHENTICATED", message: "인증 만료", requestId: "auth" },
+        },
+        "saveFavorite",
+      ),
+    ).toBe("로그인이 만료됐어요. 다시 로그인해 주세요.");
+  });
   it.each(["INVALID_FAVORITE_GROUP_ORDER", "INVALID_FAVORITE_ORDER"] as const)(
     "%s 오류에 목록 갱신 후 순서 저장을 안내한다",
     (code) => {
@@ -62,5 +89,17 @@ describe("즐겨찾기 정책", () => {
   });
   it.each([" 출근 ", "👨‍👩‍👧‍👦".repeat(10), "🇰🇷".repeat(10)])("보이는 문자 기준으로 이름을 검증한다: %s", (name) => {
     expect(groupNameError(name)).toBeNull();
+  });
+  it("카드와 알림 창이 같은 정류장 문구를 쓰게 한다", () => {
+    expect(favoriteStopLabelOf({ stop: { name: "강남역" } }, 0)).toBe("강남역");
+    expect(favoriteStopLabelOf({ stop: { name: "" } }, 0)).toBe("정류장 정보 없음 (즐겨찾기 1)");
+    expect(favoriteStopLabelOf({ stop: {} }, 4)).toBe("정류장 정보 없음 (즐겨찾기 5)");
+    expect(favoriteStopLabelOf(undefined, 0)).toBe("즐겨찾기 1");
+    expect(favoriteStopLabelOf(null, 2)).toBe("즐겨찾기 3");
+  });
+  it("정류장 이름이 없는 즐겨찾기가 여럿이어도 버튼과 스위치 이름이 서로 다르다", () => {
+    const unnamed = [{ stop: {} }, { stop: { name: "" } }];
+    const labels = unnamed.map((item, index) => favoriteStopLabelOf(item, index));
+    expect(new Set(labels).size).toBe(unnamed.length);
   });
 });

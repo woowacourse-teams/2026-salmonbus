@@ -1,63 +1,28 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  initialDocumentLoad,
-  noteDocumentLoad,
-  noteLoadFailure,
-  noteLoadStart,
-} from './documentLoad.ts';
+import { initialDocumentLoad, noteDocumentStarted, noteLoadFailure, noteWebReady } from './documentLoad.ts';
 
-describe('문서 로드와 알림 탭', () => {
-  it('HTTP 실패가 로드보다 먼저면 꺼내지 않고 칸을 비우지 않는다', () => {
-    const started = noteLoadStart(initialDocumentLoad());
-    const failure = noteLoadFailure(started);
-    const load = noteDocumentLoad(failure.state, true);
-
-    assert.equal(failure.restore, false);
-    assert.equal(load.take, false);
-    assert.equal(load.documentLoaded, false);
+describe('문서의 알림 수신 준비', () => {
+  it('문서를 열 때는 준비되지 않고 문서가 시작된 뒤 웹의 준비 신호를 받으면 준비된다', () => {
+    const started = noteDocumentStarted(initialDocumentLoad());
+    assert.equal(started.ready, false);
+    assert.equal(noteWebReady(started).ready, true);
   });
 
-  it('로드 다음에 HTTP나 네트워크 실패가 오면 꺼낸 탭을 도로 넣는다', () => {
-    const started = noteLoadStart(initialDocumentLoad());
-    const load = noteDocumentLoad(started, true);
-    const failure = noteLoadFailure(load.state);
-
-    assert.equal(load.take, true);
-    assert.equal(load.documentLoaded, true);
-    assert.equal(failure.restore, true);
-    assert.equal(failure.state.failed, true);
+  it('새 문서가 시작되기 전에 온 준비 신호는 이전 문서의 것이라 받지 않는다', () => {
+    assert.equal(noteWebReady(initialDocumentLoad()).ready, false);
   });
 
-  it('실패 알림이 두 번 오면 도로 넣기는 한 번이다', () => {
-    const load = noteDocumentLoad(noteLoadStart(initialDocumentLoad()), true);
-    const first = noteLoadFailure(load.state);
-    const second = noteLoadFailure(first.state);
-
-    assert.equal(first.restore, true);
-    assert.equal(second.restore, false);
+  it('실패한 문서는 늦게 준비 신호를 받아도 준비되지 않는다', () => {
+    const failure = noteLoadFailure();
+    assert.equal(failure.ready, false);
+    assert.equal(noteWebReady(failure).ready, false);
   });
 
-  it('실패한 뒤 다시 시도한 로드는 꺼낸다', () => {
-    const failed = noteLoadFailure(noteLoadStart(initialDocumentLoad())).state;
-    const retry = noteDocumentLoad(noteLoadStart(failed), true);
-
-    assert.equal(retry.take, true);
-    assert.equal(retry.documentLoaded, true);
-  });
-
-  it('성공한 로드 다음 다른 문서의 실패는 도로 넣지 않는다', () => {
-    const load = noteDocumentLoad(noteLoadStart(initialDocumentLoad()), true);
-    const next = noteLoadStart(load.state);
-    const failure = noteLoadFailure(next);
-
-    assert.equal(failure.restore, false);
-  });
-
-  it('앱 밖 문서는 꺼내지 않는다', () => {
-    const load = noteDocumentLoad(noteLoadStart(initialDocumentLoad()), false);
-
-    assert.equal(load.take, false);
-    assert.equal(load.documentLoaded, false);
+  it('다시 로드한 문서는 실패 상태를 지우고 새 준비 신호를 받는다', () => {
+    noteWebReady(noteLoadFailure());
+    const retry = noteDocumentStarted(initialDocumentLoad());
+    assert.equal(retry.ready, false);
+    assert.equal(noteWebReady(retry).ready, true);
   });
 });

@@ -16,13 +16,15 @@ import {
   type ArrivalTone,
 } from "./arrivalPolicy";
 
-export type ServiceState = "running" | "outOfService";
+export type ServiceState = "running" | "noVehiclesInService" | "outOfService";
 
 export type BoardScreen =
   | { kind: "loading" }
   | { kind: "forecast"; board: Board; direction: Direction }
   | { kind: "outOfService"; board: Board }
   | { kind: "error"; failure: ApiFailure };
+
+export type BoardFreshness = "fresh" | "refreshFailed" | "expired";
 
 type ServicePhase = "withinTimetable" | "outsideTimetable" | "undetermined";
 
@@ -47,8 +49,13 @@ export interface NoVehicleStopView extends StopViewBase {
   kind: "noVehicle";
 }
 
-export type StopView = BoardingStopView | PassThroughStopView | NoVehicleStopView;
-export type ExpandableStopView = BoardingStopView | NoVehicleStopView;
+export interface CheckingStopView extends StopViewBase {
+  kind: "checking";
+}
+
+export type SourceStopView = BoardingStopView | PassThroughStopView | NoVehicleStopView;
+export type StopView = SourceStopView | CheckingStopView;
+export type ExpandableStopView = BoardingStopView | NoVehicleStopView | CheckingStopView;
 
 export interface DirectionView {
   id: Direction;
@@ -91,7 +98,37 @@ export function serviceStateFor(
   // 실제 운영 시간이라고 하더라도 운행 중인 차량이 하나도 없으면 예측 화면을 보여주지 않는다.
   // 관측한 값일 뿐 계산된 판정이 아니라서, 실제 운영 중 시간대에서만 이 값을 보여준다.
   // 시간표를 못 읽어 판정하지 못한 경우도 예보가 틀린 건 아니므로 판정화면을 보여주되 같은 기준으로 판단한다.
-  return board.vehiclesInService > 0 ? "running" : "outOfService";
+  return board.vehiclesInService > 0 ? "running" : "noVehiclesInService";
+}
+
+export type BoardNotice =
+  | { kind: "noVehiclesInService" }
+  | { kind: "expired"; observedClock: string | null }
+  | { kind: "refreshFailed"; observedClock: string | null };
+
+export function boardFreshnessOf(status: string, expired: boolean): BoardFreshness {
+  if (expired) return "expired";
+  if (status === "refetchError") return "refreshFailed";
+  return "fresh";
+}
+
+export function observedClockOf(observedAt: string): string | null {
+  const match = KST_LOCAL_TIME.exec(observedAt);
+  if (match === null) return null;
+  const [, hours, minutes] = match;
+  if (hours === undefined || minutes === undefined) return null;
+  return `${hours}:${minutes}`;
+}
+
+export function boardNoticeFor(
+  serviceState: ServiceState,
+  freshness: BoardFreshness,
+  observedAt: string,
+): BoardNotice | null {
+  const observedClock = observedClockOf(observedAt);
+  if (freshness === "expired") return { kind: "expired", observedClock };
+  if (freshness === "refreshFailed") return { kind: "refreshFailed", observedClock };
+  return serviceState === "noVehiclesInService" ? { kind: "noVehiclesInService" } : null;
 }
 
 export function directionInfoFor(board: Board, preferred: Direction | null): DirectionInfo {
@@ -99,13 +136,29 @@ export function directionInfoFor(board: Board, preferred: Direction | null): Dir
   return directions.find((directionInfo) => directionInfo.id === preferred) ?? directions[0];
 }
 
-export function stopViewsFor(board: Board, direction: Direction): StopView[] {
+export function stopViewsFor(board: Board, direction: Direction): SourceStopView[] {
   const { turnSequence } = board.route;
 
   return board.stops
     .filter((stop) => stop.direction === direction)
     .sort((left, right) => left.sequence - right.sequence)
     .map((stop) => toStopView(stop, turnSequence));
+}
+
+export function displayedStopViewsFor(board: Board, direction: Direction, freshness: BoardFreshness): StopView[] {
+  const source = stopViewsFor(board, direction);
+  if (freshness !== "expired") return source;
+  return source.map((stop) =>
+    stop.kind === "passThrough"
+      ? stop
+      : {
+          kind: "checking" as const,
+          sequence: stop.sequence,
+          stopId: stop.stopId,
+          name: stop.name,
+          isTurnaround: stop.isTurnaround,
+        },
+  );
 }
 
 export function directionViewsFor(board: Board): DirectionView[] {
@@ -115,7 +168,7 @@ export function directionViewsFor(board: Board): DirectionView[] {
   }));
 }
 
-function toStopView(stop: StopState, turnSequence: number | null): StopView {
+function toStopView(stop: StopState, turnSequence: number | null): SourceStopView {
   const { sequence, stopId, name } = stop;
   const isTurnaround = touchesTurnaround(sequence, turnSequence);
 

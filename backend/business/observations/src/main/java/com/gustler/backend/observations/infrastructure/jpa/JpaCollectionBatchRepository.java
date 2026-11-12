@@ -58,6 +58,16 @@ public class JpaCollectionBatchRepository implements CollectionBatchRepository {
     }
 
     @Override
+    public int closeUnfinished(final long batchId) {
+        return batches.closeUnfinished(batchId);
+    }
+
+    @Override
+    public List<Long> lockUnfinished(final int limit) {
+        return batches.lockUnfinished(limit);
+    }
+
+    @Override
     public void deleteObservationsOf(final long batchId) {
         observations.deleteByObservationBatchId(batchId);
     }

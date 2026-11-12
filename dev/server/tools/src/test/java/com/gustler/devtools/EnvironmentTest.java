@@ -10,6 +10,24 @@ import java.util.Map;
 import java.util.Set;
 
 class EnvironmentTest {
+    @Test
+    void workerModelCanBeSelectedWithoutChangingDatabaseSettings() {
+        var original = new java.util.TreeMap<>(SettingsPreparation.create(null, "a".repeat(40)).get("worker"));
+        original.keySet().removeIf(key -> key.startsWith("MODEL_") || key.startsWith("FORECAST_"));
+        var text = Environment.text(original) + "MODEL_BUNDLE_DIRECTORY=/srv/salmonbus-dev/models/release-2\n"
+                + "MODEL_BUNDLE_PROMOTE_ON_START=true\n"
+                + "FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY=/srv/salmonbus-dev/models/history-2\n";
+        var parsed = Environment.worker(text);
+        assertTrue(parsed.entrySet().containsAll(original.entrySet()));
+        assertEquals("/srv/salmonbus-dev/models/release-2", parsed.get("MODEL_BUNDLE_DIRECTORY"));
+        for (var invalid : java.util.List.of("/etc/model", "/srv/salmonbus-dev/models/../other", "relative")) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> Environment.worker(text.replace("/srv/salmonbus-dev/models/release-2", invalid)));
+        }
+        assertThrows(IllegalArgumentException.class, () -> Environment.worker(text.replace("=true", "=yes")));
+        assertEquals(original, Environment.worker(Environment.text(original)));
+    }
+
     private Map<String, Map<String, String>> settings;
 
     @BeforeEach

@@ -1,4 +1,5 @@
 import type { Direction } from "@/shared/api/routeForecast.types";
+import { DirectionLabel } from "@/shared/components/DirectionLabel";
 import type { DirectionView } from "./displayPolicy";
 import * as styles from "./DirectionTabs.css";
 
@@ -27,9 +28,10 @@ export function DirectionTabs({ directions, selected, animated, onSelect }: Dire
           type="button"
           className={direction.id === selected ? styles.tab.selected : styles.tab.idle}
           aria-pressed={direction.id === selected}
+          aria-label={direction.label}
           onClick={() => onSelect(direction.id)}
         >
-          {direction.label}
+          <DirectionLabel label={direction.label} />
         </button>
       ))}
     </div>

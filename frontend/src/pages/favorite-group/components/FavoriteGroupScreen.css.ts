@@ -8,17 +8,22 @@ export const screen = style({
   color: "#292A2D",
 });
 export const title = style({ display: "flex", alignItems: "center", gap: 10, margin: "0 0 16px", paddingRight: 12 });
-export const titleLabel = style({ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 });
-export const representative = style({
-  flexShrink: 0,
-  padding: "4px 8px",
-  borderRadius: 12,
-  background: "#FFEAE4",
-  color: "#B94130",
-  fontSize: 11,
-  fontWeight: 700,
-  lineHeight: 1.3,
+export const loadError = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 32,
+  // 본문 여백 48px, 제목 영역 51px, 하단 메뉴 공간 100px을 제외한다.
+  minHeight: "calc(100dvh - 199px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))",
+  textAlign: "center",
 });
+export const loadNotice = style({
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+});
+export const titleLabel = style({ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 });
 export const name = style({
   minWidth: 0,
   overflowWrap: "anywhere",

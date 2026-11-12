@@ -1,9 +1,33 @@
-import type { Direction } from "@/shared/api/routeForecast.types";
+import type { BoardRoute, Direction } from "@/shared/api/routeForecast.types";
 import type { GeoCoordinate, RouteMapData, RouteMapStop } from "./routeMapModel";
+
+export const DETAIL_ZOOM = 14;
+export const DEFAULT_STOP_ICON_SIZE = 24;
+
+export function fullPathForDisplay(
+  data: RouteMapData,
+  directions?: BoardRoute["directions"],
+): GeoCoordinate[] | undefined {
+  const { fullPath, paths } = data;
+  if (!fullPath || fullPath.length < 2) return undefined;
+
+  const mappedDirections = new Set(paths.map(({ direction }) => direction));
+  const missingDirection = directions?.some(({ id }) => !mappedDirections.has(id)) ?? mappedDirections.size < 2;
+  return missingDirection ? fullPath : undefined;
+}
 
 export interface ScreenPoint {
   x: number;
   y: number;
+}
+
+export function stopDistanceForZoom(first: ScreenPoint, second: ScreenPoint, zoom: number, targetZoom: number): number {
+  return Math.hypot(first.x - second.x, first.y - second.y) * 2 ** (targetZoom - zoom);
+}
+
+export function stopOverlapForLabelZoom(first: ScreenPoint, second: ScreenPoint, zoom: number): boolean {
+  // 줌과 선택 변경으로 이름표가 움직이지 않도록 기준 줌의 기본 아이콘만 비교하고 밀림 여유 간격은 제외한다.
+  return stopDistanceForZoom(first, second, zoom, DETAIL_ZOOM) < DEFAULT_STOP_ICON_SIZE;
 }
 
 export interface RouteArrow {

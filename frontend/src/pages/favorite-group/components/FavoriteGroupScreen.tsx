@@ -1,13 +1,15 @@
-import { MAX_FAVORITE_GROUPS } from "@/shared/utils/favoritePolicy";
+import { MAX_FAVORITE_GROUPS, FAVORITES_LOAD_FAILURE_TITLE } from "@/shared/utils/favoritePolicy";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { AccountLayout } from "@/shared/components/AccountLayout";
 import { LoginButton } from "@/shared/components/LoginButton";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { RetryButton } from "@/shared/components/RetryButton";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { useFavorites } from "@/shared/hooks/useFavorites";
-import { GroupNameForm } from "./GroupNameForm";
+import { paths } from "@/shared/routing/paths";
+import { GroupNameForm } from "@/shared/components/favorite-editor/GroupNameForm";
 import { GroupDetails } from "./GroupDetails";
 import * as buttons from "@/shared/styles/button.css";
 import * as formStyles from "@/shared/styles/form.css";
@@ -16,14 +18,15 @@ import backArrow from "../assets/back-arrow.svg";
 
 export function FavoriteGroupScreen() {
   const { groupId = "" } = useParams();
-  const { auth, groups, resource, reload } = useFavorites();
+  const { auth, groups, resource, requestState, reload } = useFavorites();
+  const hasGroupData = resource.status === "success" || resource.status === "refetchError";
   const { reload: reloadAuth } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const group = groups.find((candidate) => candidate.id === groupId);
-  const representative = group !== undefined && groups[0]?.id === group.id;
+  const loadFailed = resource.status === "loadingError";
   const editing = auth.status === "authenticated" && group !== undefined && editingId === group.id;
   return (
-    <AccountLayout>
+    <AccountLayout variant="tab">
       <div className={styles.screen}>
         <header {...maskedPropsFor(styles.title)}>
           {editing ? (
@@ -36,7 +39,7 @@ export function FavoriteGroupScreen() {
               <img src={backArrow} width="17" height="17" alt="" draggable={false} />
             </button>
           ) : (
-            <Link to="/mypage" className={styles.back} aria-label="마이페이지로 돌아가기">
+            <Link to={paths.favoriteGroups} className={styles.back} aria-label="그룹 목록으로 돌아가기">
               <img src={backArrow} width="17" height="17" alt="" draggable={false} />
             </Link>
           )}
@@ -44,9 +47,8 @@ export function FavoriteGroupScreen() {
             <h1 className={styles.name}>
               {editing ? "이름 변경" : groupId === "new" ? "그룹 만들기" : (group?.name ?? "그룹 관리")}
             </h1>
-            {!editing && representative && <span className={styles.representative}>대표</span>}
           </div>
-          {group && auth.status === "authenticated" && editingId !== group.id && (
+          {group && auth.status === "authenticated" && editingId !== group.id && !loadFailed && (
             <button
               type="button"
               className={styles.rename}
@@ -58,7 +60,7 @@ export function FavoriteGroupScreen() {
           )}
         </header>
         {auth.status === "anonymous" ? (
-          <LoginButton returnTo="/mypage" />
+          <LoginButton returnTo={paths.favorites} />
         ) : auth.status !== "authenticated" ? (
           <>
             <p role="status" className={formStyles.subtle}>
@@ -66,36 +68,71 @@ export function FavoriteGroupScreen() {
             </p>
             {auth.status === "error" && (
               <button className={buttons.secondary} onClick={() => void reloadAuth()}>
-                다시 확인하기
+                다시 시도하기
               </button>
             )}
           </>
         ) : (
           <>
-            <FavoritesNotice resource={resource} onRetry={reload} />
-            {groupId === "new" ? (
-              groups.length < MAX_FAVORITE_GROUPS && resource.status === "success" ? (
-                <GroupNameForm />
-              ) : (
-                resource.status === "success" && (
-                  <p className={formStyles.error} role="alert">
-                    {`그룹은 ${MAX_FAVORITE_GROUPS}개까지 만들 수 있어요.`}
-                  </p>
-                )
-              )
-            ) : group ? (
-              editing ? (
-                <GroupNameForm key={group.id} group={group} onRenamed={() => setEditingId(null)} />
-              ) : (
-                <GroupDetails key={group.id} group={group} representative={representative} />
-              )
+            {loadFailed ? (
+              <div className={styles.loadError}>
+                <FavoritesNotice resource={resource} requestState={requestState} onRetry={reload}>
+                  {({ retry, retrying }) => (
+                    <div className={styles.loadNotice}>
+                      <p className={formStyles.error} role="alert">
+                        {FAVORITES_LOAD_FAILURE_TITLE}.
+                      </p>
+                      <RetryButton onRetry={retry} busy={retrying}>
+                        {retrying ? "불러오는 중…" : "다시 시도하기"}
+                      </RetryButton>
+                    </div>
+                  )}
+                </FavoritesNotice>
+              </div>
             ) : (
-              resource.status === "success" && (
-                <p className={formStyles.error} role="alert">
-                  그룹을 찾지 못했어요.
-                </p>
-              )
+              <FavoritesNotice resource={resource} requestState={requestState} onRetry={reload}>
+                {({ message, retry, retrying }) => (
+                  <div>
+                    <p className={formStyles.error} role="alert">
+                      {message}
+                    </p>
+                    <RetryButton onRetry={retry} busy={retrying}>
+                      {retrying ? "불러오는 중…" : "다시 시도하기"}
+                    </RetryButton>
+                  </div>
+                )}
+              </FavoritesNotice>
             )}
+            <div hidden={loadFailed}>
+              {groupId === "new" ? (
+                groups.length < MAX_FAVORITE_GROUPS && hasGroupData ? (
+                  <GroupNameForm />
+                ) : (
+                  hasGroupData && (
+                    <p className={formStyles.error} role="alert">
+                      {`그룹은 ${MAX_FAVORITE_GROUPS}개까지 만들 수 있어요.`}
+                    </p>
+                  )
+                )
+              ) : group ? (
+                editing ? (
+                  <GroupNameForm key={group.id} group={group} onRenamed={() => setEditingId(null)} />
+                ) : (
+                  <GroupDetails key={group.id} group={group} lastGroup={groups.length === 1} />
+                )
+              ) : (
+                hasGroupData && (
+                  <>
+                    <p className={formStyles.error} role="alert">
+                      그룹을 찾지 못했어요. 삭제 되었거나 없는 그룹입니다.
+                    </p>
+                    <Link className={buttons.secondary} to={paths.favoriteGroups}>
+                      그룹 목록으로 가기
+                    </Link>
+                  </>
+                )
+              )}
+            </div>
           </>
         )}
       </div>

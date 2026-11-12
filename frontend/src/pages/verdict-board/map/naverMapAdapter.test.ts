@@ -3,13 +3,19 @@ import { boardMock } from "@/shared/api/routeForecast.mock";
 import { liveVehicleViewsFor } from "../components/liveVehiclePolicy";
 import { routeWatchMock } from "@/shared/api/routeForecast.mock";
 import { loadPreviewRouteMapData } from "./routeMapPreview.mock";
-import type { NaverCoordinate, NaverMap, NaverMaps, NaverMarker } from "./naverSdk";
+import type { NaverCoordinate, NaverMap, NaverMaps, NaverMarker } from "@/shared/map/naverSdk";
 import { createNaverRouteMap } from "./naverMapAdapter";
 import type { RouteMapData } from "./routeMapModel";
 
+jest.mock("@/shared/map/mapStopPin.css", () => ({
+  stopPin: "stopPin",
+  stopPinGlyph: "stopPinGlyph",
+  stopPinLabel: "stopPinLabel",
+  stopPinSize: 18,
+}));
+
 jest.mock("./naverMapAdapter.css", () => ({
   stop: "stop",
-  stopName: "name",
   arrow: "arrow",
   bus: "bus",
   busCount: "busCount",
@@ -98,6 +104,7 @@ function createRecordingSdk(glSupported = true) {
   const events: { name: string; listener: () => void }[] = [];
   class MapStub implements NaverMap {
     zoom = 10;
+    rotation = 0;
     center: NaverCoordinate = new CoordinateStub(0, 0);
     size = new SizeStub(400, 350);
     fits = 0;
@@ -107,11 +114,12 @@ function createRecordingSdk(glSupported = true) {
     projectionOffsetX = 0;
     destroyed = false;
     constructor(
-      _element: HTMLElement,
+      private element: HTMLElement,
       public options: ConstructorParameters<NaverMaps["Map"]>[1],
     ) {
       this.center = options.center;
       this.zoom = options.zoom;
+      this.rotation = options.rotation ?? 0;
     }
     getZoom() {
       checkSdk();
@@ -136,6 +144,17 @@ function createRecordingSdk(glSupported = true) {
     setCenter(center: NaverCoordinate) {
       this.center = center;
     }
+    getRotation() {
+      return this.rotation;
+    }
+    setRotation(rotation: number) {
+      this.rotation = rotation;
+    }
+    morph(center: NaverCoordinate, zoom: number) {
+      this.setCenter(center);
+      this.setZoom(zoom);
+    }
+    stop() {}
     fitBounds(
       coordinates: NaverCoordinate[],
       margins: { top: number; right: number; bottom: number; left: number; maxZoom: number },
@@ -148,6 +167,9 @@ function createRecordingSdk(glSupported = true) {
     }
     getSize() {
       return this.size;
+    }
+    getPanes() {
+      return { overlayLayer: this.element };
     }
     setSize(size: SizeStub) {
       this.size = size;
@@ -198,6 +220,7 @@ function createRecordingSdk(glSupported = true) {
     }
   }
   const sdk: NaverMaps = {
+    Position: { BOTTOM_LEFT: 10 },
     glEnabled: true,
     LatLng: CoordinateStub,
     Point: PointStub,
@@ -263,7 +286,7 @@ afterEach(() => {
 
 function setup(
   glSupported = true,
-  { initialized = true, reducedMotion = false, visibleHeight = 350 } = {},
+  { initialized = true, reducedMotion = false, visibleHeight = 350, refitOverviewOnResize = false } = {},
   dataOverrides: Partial<RouteMapData> = {},
 ) {
   const pendingFrames = new Map<number, FrameRequestCallback>();
@@ -332,6 +355,10 @@ function setup(
     onReady,
     onVehicleSelect,
     onDeselect,
+    null,
+    undefined,
+    false,
+    { refitOverviewOnResize },
   );
   const initialize = () => native.events.find((event) => event.name === "init")?.listener();
   if (initialized) initialize();
@@ -371,6 +398,23 @@ function visibleArrowDirections(native: ReturnType<typeof createRecordingSdk>) {
 }
 
 describe("네이버 지도 adapter", () => {
+  it("방향 전환 시 선택한 방향의 정류장만 표시하고 좌표를 유지한다", () => {
+    const { native, adapter } = setup();
+    native.map.zoom = 16;
+    const up = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "11")!;
+    const down = native.markers.find((marker) => marker.options.icon.content.dataset.mapStopSequence === "76")!;
+    const upPosition = up.options.position;
+    const downPosition = down.options.position;
+    adapter.update(null, "UP", []);
+    expect(up.visible).toBe(true);
+    expect(down.visible).toBe(false);
+    adapter.update({ direction: "DOWN", sequence: 76 }, "DOWN", []);
+    expect(up.visible).toBe(false);
+    expect(down.visible).toBe(true);
+    expect(up.options.position).toBe(upPosition);
+    expect(down.options.position).toBe(downPosition);
+  });
+
   it.each(["click", "tap"])("지도 배경의 %s는 카메라 이동 없이 선택 해제를 요청한다", (eventName) => {
     const { native, adapter, onDeselect, onSelect, onVehicleSelect } = setup();
     const selection = { direction: "UP" as const, sequence: 15 };
@@ -435,7 +479,7 @@ describe("네이버 지도 adapter", () => {
     adapter.update(null, "DOWN", []);
     expect(native.lines.every((line) => line.strokeOpacity === 0)).toBe(true);
   });
-  it("한 번 표시한 지도는 확대·방향 전환·추가 idle에서 노선을 숨기거나 준비 콜백을 다시 호출하지 않는다", () => {
+  it("한 번 표시한 지도는 확대와 방향 전환 및 추가 idle에서 노선을 숨기거나 준비 콜백을 다시 호출하지 않는다", () => {
     const { native, adapter, initialize, onReady, flushFrames, pendingFrames } = setup();
     const idle = native.events.find((event) => event.name === "idle")!.listener;
     idle();
@@ -466,7 +510,7 @@ describe("네이버 지도 adapter", () => {
       expect(onReady).not.toHaveBeenCalled();
     });
   }
-  it("초기화 전에 정류장을 선택해도 GL 초기화·idle·두 프레임까지 마커 표시를 기다린다", () => {
+  it("초기화 전에 정류장을 선택해도 GL 초기화와 idle 및 두 프레임까지 마커 표시를 기다린다", () => {
     const { native, adapter, initialize, onReady, flushFrames } = setup(true, { initialized: false });
     const idle = native.events.find((event) => event.name === "idle")!.listener;
     adapter.focus({ direction: "UP", sequence: 15 });
@@ -581,7 +625,7 @@ describe("네이버 지도 adapter", () => {
     ).toEqual(data.paths.flatMap((path) => path.coordinates));
 
     initialize();
-    adapter.resize(400, 600);
+    adapter.resize(400, 600, 350);
     adapter.update(null, "UP", []);
     initialize();
     expect(native.map.fits).toBe(1);
@@ -592,6 +636,48 @@ describe("네이버 지도 adapter", () => {
     expect(native.map.fittedCoordinates.length).toBeGreaterThan(0);
     initialize();
     expect(native.map.fits).toBe(1);
+  });
+  it("검색 진입 후 키보드가 닫히면 시트 위의 최종 영역에 전체 노선을 맞춘다", () => {
+    const { native, adapter, advanceTimers } = setup(true, {
+      visibleHeight: 140,
+      refitOverviewOnResize: true,
+    });
+    const coordinates = native.map.fittedCoordinates;
+    // 공유 지도는 판정보드의 크기 알림을 받기 전에 홈에서 먼저 크기가 바뀔 수 있다.
+    native.map.setSize(new SizeStub(400, 664));
+    adapter.resize(400, 664, 450);
+    advanceTimers(50);
+    adapter.resize(400, 664, 266);
+    advanceTimers(50);
+    expect(native.map.fits).toBe(1);
+
+    advanceTimers(50);
+    expect(native.map.fits).toBe(2);
+    expect(native.map.fitMargins).toEqual({ top: 227, right: 12, bottom: 227, left: 12, maxZoom: 13 });
+    expect(native.map.fittedCoordinates).toEqual(coordinates);
+
+    adapter.resize(400, 680, 272);
+    adapter.focus({ direction: "UP", sequence: 15 });
+    advanceTimers(100);
+    expect(native.map.fits).toBe(2);
+    expect(native.map.zoom).toBe(15);
+  });
+  it("크기 변경 뒤 시트가 지도를 가리면 다시 보일 때 전체 노선을 맞춘다", () => {
+    const { native, adapter, advanceTimers } = setup(true, { refitOverviewOnResize: true });
+
+    adapter.resize(400, 664, 266);
+    adapter.resize(400, 664, 0);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(1);
+
+    adapter.resize(400, 664, 332);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(2);
+    expect(native.map.fitMargins?.top).toBe(194);
+
+    adapter.resize(400, 664, 266);
+    advanceTimers(100);
+    expect(native.map.fits).toBe(2);
   });
   for (const glSupported of [true, false]) {
     it(`${glSupported ? "GL" : "타일"} 지도의 첫 경로를 캔버스에서 잘린 위아래 영역을 제외하고 맞춘다`, () => {
@@ -732,6 +818,38 @@ describe("네이버 지도 adapter", () => {
     zoomChanged();
     expect(visibleArrowDirections(native)).toEqual(["DOWN"]);
   });
+  it("지도 회전 중 노선 화살표를 회전한 경로에 맞춘다", () => {
+    const { native, adapter, flushFrames } = setup(
+      true,
+      {},
+      {
+        paths: [
+          {
+            direction: "UP",
+            coordinates: [
+              { latitude: 37.5, longitude: 127 },
+              { latitude: 37.5, longitude: 127.15 },
+            ],
+          },
+        ],
+      },
+    );
+    const arrow = native.markers.find((marker) => marker.options.icon.content.dataset.mapArrowDirection === "UP");
+    expect(arrow?.options.icon.content.style.transform).toBe("rotate(0deg)");
+    const projection = native.map.getProjection();
+    jest.spyOn(native.map, "getProjection").mockReturnValue({
+      ...projection,
+      fromCoordToOffset(coordinate) {
+        const { x, y } = projection.fromCoordToOffset(coordinate);
+        return { x: 200 - y, y: x };
+      },
+    });
+    native.map.rotation = 90;
+    native.events.find((event) => event.name === "rotate")?.listener();
+    flushFrames();
+    expect(arrow?.options.icon.content.style.transform).toBe("rotate(90deg)");
+    expect(adapter.camera?.().rotation).toBe(90);
+  });
   it("확대와 이동에서 정류장 아이콘과 방향 화살표를 제거하거나 다시 만들지 않는다", () => {
     const { native, adapter } = setup();
     const idle = native.events.find((event) => event.name === "idle")!.listener;
@@ -780,12 +898,12 @@ describe("네이버 지도 adapter", () => {
     idle();
     expect(updates.every((update) => update.mock.calls.length === 0)).toBe(true);
   });
-  it("크기가 같으면 지도 크기와 중심·줌을 다시 설정하지 않는다", () => {
+  it("크기가 같으면 지도 크기와 중심과 줌을 다시 설정하지 않는다", () => {
     const { native, adapter } = setup();
     const setSize = jest.spyOn(native.map, "setSize");
     const setCenter = jest.spyOn(native.map, "setCenter");
     const setZoom = jest.spyOn(native.map, "setZoom");
-    adapter.resize(400, 350);
+    adapter.resize(400, 350, 350);
     expect(setSize).not.toHaveBeenCalled();
     expect(setCenter).not.toHaveBeenCalled();
     expect(setZoom).not.toHaveBeenCalled();
@@ -799,7 +917,7 @@ describe("네이버 지도 adapter", () => {
     const center = native.map.center;
     const setCenter = jest.spyOn(native.map, "setCenter");
     const setZoom = jest.spyOn(native.map, "setZoom");
-    adapter.resize(400, 600);
+    adapter.resize(400, 600, 350);
     expect(native.map.size).toEqual(new SizeStub(400, 600));
     expect(setCenter).not.toHaveBeenCalled();
     expect(setZoom).not.toHaveBeenCalled();
@@ -1083,7 +1201,7 @@ describe("네이버 지도 adapter", () => {
     adapter.moveVehicles([{ key: view.key, sequencePosition: view.vehicle.currentStopSequence + 0.75 }]);
     const latestTarget = bus.options.position;
     expect([latestTarget.lat(), latestTarget.lng()]).not.toEqual([initialTarget.lat(), initialTarget.lng()]);
-    adapter.resize(400, 500);
+    adapter.resize(400, 500, 350);
     flushFrames(280);
     expect(native.map.center.lat()).toBeCloseTo(latestTarget.lat(), 12);
     expect(native.map.center.lng()).toBeCloseTo(latestTarget.lng(), 12);
@@ -1176,7 +1294,7 @@ describe("네이버 지도 adapter", () => {
       expect(pendingFrames.size).toBe(0);
     }
   });
-  it("차량 선택은 포커스와 별개로 유지하고 폴링·선택 변경·해제에도 같은 마커를 사용한다", () => {
+  it("차량 선택은 포커스와 별개로 유지하고 폴링과 선택 변경 및 해제에도 같은 마커를 사용한다", () => {
     const { native, adapter, onVehicleSelect } = setup(true, { reducedMotion: true });
     const views = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP").slice(0, 2);
     const [first, second] = views;
@@ -1288,7 +1406,7 @@ describe("네이버 지도 adapter", () => {
     expect(new Set(zooms).size).toBe(zooms.length);
     expect(native.map.zoom).toBe(16);
   });
-  it("사용자 조작이나 다른 지도 동작·차량 제거는 대기 중인 차량 이동과 포커스를 취소한다", () => {
+  it("사용자 조작이나 다른 지도 동작 및 차량 제거는 대기 중인 차량 이동과 포커스를 취소한다", () => {
     const interruptions = [
       "wheel",
       "touchstart",
@@ -1333,7 +1451,7 @@ describe("네이버 지도 adapter", () => {
       if (interruption !== "destroy") adapter.destroy();
     }
   });
-  it("잔여석만 갱신해도 차량 마커와 핀·이미지 DOM을 그대로 사용한다", () => {
+  it("잔여석만 갱신해도 차량 마커와 핀과 이미지 DOM을 그대로 사용한다", () => {
     const { native, adapter } = setup();
     const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
     adapter.update(null, "UP", [view]);

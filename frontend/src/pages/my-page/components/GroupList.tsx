@@ -1,12 +1,14 @@
 import { MAX_FAVORITE_GROUPS, MAX_FAVORITES_PER_GROUP } from "@/shared/utils/favoritePolicy";
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
+import { favoriteGroupPathFor } from "@/shared/routing/paths";
 import { deleteFavoriteGroup } from "@/shared/api/favorites.api";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { useFavorites } from "@/shared/hooks/useFavorites";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
+import { RetryButton } from "@/shared/components/RetryButton";
 import { GroupOrderEditor } from "./GroupOrderEditor";
 import { Notice } from "@/shared/components/Notice";
 import * as formStyles from "@/shared/styles/form.css";
@@ -16,23 +18,23 @@ import chevronIcon from "../assets/group-chevron.svg";
 import plusIcon from "@/shared/assets/icons/favorite-group-plus.svg";
 
 export function GroupList() {
-  const { groups, resource, reload } = useFavorites();
+  const { groups, resource, requestState, reload } = useFavorites();
   const labelIdPrefix = useId();
   const [mode, setMode] = useState<"view" | "order" | "delete">("view");
   const [selected, setSelected] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [notice, showNotice] = useState({ id: 0, message: "" });
-  const { run, busy, error, setError } = useFavoriteAction();
+  const { run, busy, error, clearError } = useFavoriteAction();
   const editButton = useRef<HTMLButtonElement>(null);
   const deleteButton = useRef<HTMLButtonElement>(null);
   const selectionButton = useRef<HTMLButtonElement>(null);
   const deleting = mode === "delete";
-  const removableGroups = groups.slice(1);
+  const visibleGroups = groups.filter((group) => !deletedIds.includes(group.id));
+  const removableGroups = visibleGroups.length > 1 ? visibleGroups : [];
   const targets = removableGroups.filter((group) => selected.includes(group.id));
-  const changed = targets.length !== selected.length;
-  // 삭제 직후 목록을 다시 받기 전에도 지운 그룹은 남은 삭제 대상으로 세지 않는다.
-  const deletable = removableGroups.some((group) => !deletedIds.includes(group.id));
+  const changed = targets.length !== selected.length || targets.length >= visibleGroups.length;
+  const deletable = removableGroups.length > 0;
   useEffect(() => {
     if (mode === "view") return;
     const trigger = mode === "order" ? editButton : deleteButton;
@@ -44,7 +46,7 @@ export function GroupList() {
     setMode("view");
     setConfirming(false);
     setSelected([]);
-    setError(null);
+    clearError();
     if (count > 0) showNotice((value) => ({ id: value.id + 1, message: `그룹 ${count}개를 삭제했어요` }));
   }
 
@@ -52,16 +54,19 @@ export function GroupList() {
     const [first, ...rest] = targets;
     if (busy || changed || resource.status !== "success" || first === undefined) return;
     const removed: string[] = [];
-    const ok = await run(async () => {
-      let result = await deleteFavoriteGroup(first.id);
-      if (result.ok) removed.push(first.id);
-      for (const group of rest) {
-        if (!result.ok) break;
-        result = await deleteFavoriteGroup(group.id);
-        if (result.ok) removed.push(group.id);
-      }
-      return result;
-    });
+    const ok = await run(
+      async () => {
+        let result = await deleteFavoriteGroup(first.id);
+        if (result.ok) removed.push(first.id);
+        for (const group of rest) {
+          if (!result.ok) break;
+          result = await deleteFavoriteGroup(group.id);
+          if (result.ok) removed.push(group.id);
+        }
+        return result;
+      },
+      { kind: "deleteGroup" },
+    );
     // 중간 실패로 이미 삭제된 그룹도 목록에서 갱신하고 다시 요청하지 않는다.
     if (!ok) reload();
     setSelected((current) => current.filter((id) => !removed.includes(id)));
@@ -81,7 +86,7 @@ export function GroupList() {
   return (
     <section {...maskedPropsFor(styles.section)} aria-label="즐겨찾기 그룹 관리">
       <h2 className={styles.heading}>
-        <span>{`내 그룹  ${groups.length} / ${MAX_FAVORITE_GROUPS}`}</span>
+        <span>{`내 그룹  ${visibleGroups.length} / ${MAX_FAVORITE_GROUPS}`}</span>
         {deleting ? (
           <button className={styles.cancelSelection} disabled={busy} onClick={() => finishDeletion(deletedIds.length)}>
             취소
@@ -98,7 +103,7 @@ export function GroupList() {
                   event.currentTarget.focus();
                   setSelected([]);
                   setDeletedIds([]);
-                  setError(null);
+                  clearError();
                   setMode("delete");
                   reload();
                 }}
@@ -107,7 +112,7 @@ export function GroupList() {
             <button
               ref={editButton}
               className={styles.edit}
-              disabled={groups.length === 0}
+              disabled={visibleGroups.length === 0}
               onClick={() => setMode("order")}
               aria-label="그룹과 즐겨찾기 순서 편집"
             >
@@ -116,15 +121,23 @@ export function GroupList() {
           </span>
         )}
       </h2>
-      <FavoritesNotice resource={resource} onRetry={reload} />
+      <FavoritesNotice resource={resource} requestState={requestState} onRetry={reload}>
+        {({ message, retry, retrying }) => (
+          <div className={styles.loadNotice}>
+            <p className={formStyles.error} role="alert">
+              {message}
+            </p>
+            <RetryButton onRetry={retry} busy={retrying}>
+              {retrying ? "불러오는 중…" : "다시 시도하기"}
+            </RetryButton>
+          </div>
+        )}
+      </FavoritesNotice>
       <ul className={styles.list}>
-        {groups.map((group, index) => {
+        {visibleGroups.map((group) => {
           const info = (
             <span className={styles.info}>
-              <span className={styles.name}>
-                {group.name}
-                {!deleting && index === 0 && " · 대표 그룹"}
-              </span>
+              <span className={styles.name}>{group.name}</span>
               <span className={styles.count}>
                 {group.favorites.length} / {MAX_FAVORITES_PER_GROUP}
               </span>
@@ -133,34 +146,31 @@ export function GroupList() {
           return (
             <li key={group.id}>
               {deleting ? (
-                index === 0 ? (
-                  <div className={styles.group}>
-                    {info}
-                    <span className={styles.representative}>대표 그룹</span>
-                  </div>
-                ) : (
-                  <label className={`${styles.group} ${styles.selection}`}>
-                    {info}
-                    {/* Session Replay는 속성 값을 가리지 못해서, 그룹 이름은 aria-label 대신 숨긴 글자로 둔다. */}
-                    <span id={`${labelIdPrefix}${group.id}`} hidden>
-                      {`${group.name} 삭제 선택`}
-                    </span>
-                    <input
-                      className={styles.checkbox}
-                      type="checkbox"
-                      aria-labelledby={`${labelIdPrefix}${group.id}`}
-                      checked={selected.includes(group.id)}
-                      disabled={busy || resource.status !== "success"}
-                      onChange={(event) => {
-                        setError(null);
-                        const ids = targets.map((target) => target.id);
-                        setSelected(event.target.checked ? [...ids, group.id] : ids.filter((id) => id !== group.id));
-                      }}
-                    />
-                  </label>
-                )
+                <label className={`${styles.group} ${styles.selection}`}>
+                  {info}
+                  {/* Session Replay는 속성 값을 가리지 못해서, 그룹 이름은 aria-label 대신 숨긴 글자로 둔다. */}
+                  <span id={`${labelIdPrefix}${group.id}`} hidden>
+                    {`${group.name} 삭제 선택`}
+                  </span>
+                  <input
+                    className={styles.checkbox}
+                    type="checkbox"
+                    aria-labelledby={`${labelIdPrefix}${group.id}`}
+                    checked={selected.includes(group.id)}
+                    disabled={
+                      busy ||
+                      resource.status !== "success" ||
+                      (!selected.includes(group.id) && targets.length >= visibleGroups.length - 1)
+                    }
+                    onChange={(event) => {
+                      clearError();
+                      const ids = targets.map((target) => target.id);
+                      setSelected(event.target.checked ? [...ids, group.id] : ids.filter((id) => id !== group.id));
+                    }}
+                  />
+                </label>
               ) : (
-                <Link className={styles.group} to={`/mypage/groups/${encodeURIComponent(group.id)}`}>
+                <Link className={styles.group} to={favoriteGroupPathFor(group.id)}>
                   {info}
                   <span className={styles.cardTools}>
                     <img src={chevronIcon} width="18" height="18" alt="" draggable={false} />
@@ -178,7 +188,7 @@ export function GroupList() {
           disabled={busy || changed || selected.length === 0 || resource.status !== "success"}
           onClick={(event) => {
             event.currentTarget.focus();
-            setError(null);
+            clearError();
             setConfirming(true);
           }}
         >
@@ -187,7 +197,7 @@ export function GroupList() {
       ) : (
         resource.status === "success" &&
         groups.length < MAX_FAVORITE_GROUPS && (
-          <Link className={styles.add} to="/mypage/groups/new">
+          <Link className={styles.add} to={favoriteGroupPathFor("new")}>
             <img src={plusIcon} width="18" height="18" alt="" draggable={false} />새 그룹 만들기
           </Link>
         )

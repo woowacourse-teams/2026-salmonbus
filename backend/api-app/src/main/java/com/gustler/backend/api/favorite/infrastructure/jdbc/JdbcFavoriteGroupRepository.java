@@ -1,5 +1,6 @@
 package com.gustler.backend.api.favorite.infrastructure.jdbc;
 
+import com.gustler.backend.api.favorite.FavoritesSaved;
 import com.gustler.backend.api.favorite.application.FavoriteGroupRepository;
 import com.gustler.backend.api.favorite.domain.Favorite;
 import com.gustler.backend.api.favorite.domain.FavoriteDirection;
@@ -19,6 +20,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,9 +58,11 @@ public class JdbcFavoriteGroupRepository implements FavoriteGroupRepository {
         """;
 
     private final JdbcClient jdbcClient;
+    private final ApplicationEventPublisher events;
 
-    public JdbcFavoriteGroupRepository(JdbcClient jdbcClient) {
+    public JdbcFavoriteGroupRepository(JdbcClient jdbcClient, ApplicationEventPublisher events) {
         this.jdbcClient = jdbcClient;
+        this.events = events;
     }
 
     @Override
@@ -109,6 +113,7 @@ public class JdbcFavoriteGroupRepository implements FavoriteGroupRepository {
         MemberFavoriteGroups changed = Objects.requireNonNull(change.apply(current),
             "변경된 즐겨찾기 그룹은 null일 수 없습니다.");
         replace(memberId.get(), changed);
+        events.publishEvent(new FavoritesSaved(memberId.get()));
         return Optional.of(changed);
     }
 

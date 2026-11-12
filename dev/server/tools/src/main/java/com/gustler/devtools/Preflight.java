@@ -82,10 +82,11 @@ final class Preflight {
             default -> throw new IllegalArgumentException("COMPONENT");
         }
         if (component.equals("worker")) {
-            for (var name : Set.of("manifest.json", "weights.safetensors")) {
+            for (var name : Set.of("manifest.json", "base.json", "gate.json", "pool.json")) {
                 Checks.require(
                         Files.isRegularFile(
-                                layout.data().resolve("models/coldstart-20261016/" + name)),
+                                java.nio.file.Path.of(settings.get("worker").getOrDefault("MODEL_BUNDLE_DIRECTORY",
+                                        layout.data().resolve("models/alighting-dev-v1").toString())).resolve(name)),
                         "DEV_MODEL_REQUIRED");
             }
         }

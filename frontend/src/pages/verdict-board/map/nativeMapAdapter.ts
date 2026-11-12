@@ -33,6 +33,7 @@ export function createNativeRouteMap(options: {
   onSelect: (selection: StopSelection) => void;
   onVehicleSelect: (selection: StopSelection, key: string) => void;
   onDeselect: () => void;
+  onRotationChange: (rotation: number) => void;
   onReady: () => void;
   onError: (error: Error, reason?: "timeout" | "auth") => void;
 }): NativeRouteMapAdapter {
@@ -80,6 +81,9 @@ export function createNativeRouteMap(options: {
       case "mapPress":
         onDeselect();
         break;
+      case "rotation":
+        options.onRotationChange(event.payload.heading);
+        break;
       case "error":
         onError(new Error(event.payload.message), nativeMapErrorReasonFrom(event.payload.message));
         break;
@@ -99,8 +103,11 @@ export function createNativeRouteMap(options: {
     ...sceneState,
     routeId: data.routeId,
     referenceVersionId: data.referenceVersionId,
+    directions: board.route.directions.map(({ id }) => id),
     ...(options.preserveCamera && { preserveCamera: true }),
     ...(options.selectedStopOnly && { selectedStopOnly: true }),
+    // 앱이 회전 이벤트를 보낼 때만 나침반을 표시하므로 이전 앱에서도 같은 지도 세션을 사용할 수 있다.
+    reportRotation: true,
     stops: data.stops.flatMap((stop) => {
       const state = board.stops.find((item) => item.direction === stop.direction && item.sequence === stop.sequence);
       if (state === undefined) return [];
@@ -184,6 +191,9 @@ export function createNativeRouteMap(options: {
     // 차량 위치 보간은 iOS의 CADisplayLink가 맡고, 웹 목록은 기존 공통 JS 시계를 사용한다.
     moveVehicles() {},
     resize() {},
+    resetNorth() {
+      channel.send("camera", { command: "resetNorth" });
+    },
     focus(selection) {
       channel.send("camera", { command: "stop", selection });
     },

@@ -30,6 +30,14 @@ export const test = base.extend<{ api: MockApi }>({
       await page.clock.pauseAt(start + 1_000);
       // 실제 SDK는 별도 검증한다. 로컬 키가 있어도 자동 테스트가 외부 지도에 의존하지 않는다.
       await page.route("https://oapi.map.naver.com/**", (route) => route.abort());
+      await page.route("https://api.open-meteo.com/**", (route) =>
+        route.fulfill({
+          json: { current: { temperature_2m: 18, weather_code: 1, is_day: 1, time: observedAt.slice(0, 16) } },
+        }),
+      );
+      await page.route("**/assets/home-events.json", (route) =>
+        route.fulfill({ status: 200, json: { generatedAt: observedAt, events: [] } }),
+      );
 
       const router = await createApiMockRouter(page);
       const api: MockApi = {
@@ -50,6 +58,22 @@ export const test = base.extend<{ api: MockApi }>({
             status: 404,
             headers: { "Cache-Control": "no-store" },
             json: { code: "ENDPOINT_NOT_FOUND", message: "로그인 꺼짐", requestId: "test-auth-off" },
+          });
+          return;
+        }
+        // 연어행동 조회는 기본이 꺼져 있다. 판정보드가 이 GET을 보내므로 응답이 없으면 E2E가 요청을 끊는다.
+        if (request.method() === "GET" && /^\/api\/v1\/routes\/[^/]+\/stations\/[^/]+\/salmon-action$/.test(path)) {
+          await route.fulfill({
+            status: 200,
+            headers: { "Cache-Control": "no-store" },
+            json: { kind: "DISABLED" },
+          });
+          return;
+        }
+        if (/^\/api\/v2\/stations\/tiles\/14\/\d+\/\d+$/.test(path)) {
+          await route.fulfill({
+            status: 404,
+            json: { code: "ENDPOINT_NOT_FOUND", message: "정류장 지도 API 미배포", requestId: "test-station-map-off" },
           });
           return;
         }

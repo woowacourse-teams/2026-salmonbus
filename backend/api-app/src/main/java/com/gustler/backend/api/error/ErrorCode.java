@@ -33,7 +33,7 @@ public enum ErrorCode {
     ),
     FAVORITE_GROUP_NAME_CONFLICT(HttpStatus.CONFLICT, "같은 이름의 즐겨찾기 그룹이 이미 있습니다."),
     FAVORITE_GROUP_NOT_FOUND(HttpStatus.NOT_FOUND, "즐겨찾기 그룹을 찾을 수 없습니다."),
-    LAST_FAVORITE_GROUP(HttpStatus.CONFLICT, "대표 즐겨찾기 그룹은 삭제할 수 없습니다."),
+    LAST_FAVORITE_GROUP(HttpStatus.CONFLICT, "마지막 즐겨찾기 그룹은 삭제할 수 없습니다."),
     INVALID_FAVORITE_ORDER(
         HttpStatus.BAD_REQUEST,
         "현재 즐겨찾기 순서와 요청이 일치하지 않습니다."
@@ -59,7 +59,14 @@ public enum ErrorCode {
     NICKNAME_CHARACTERS(HttpStatus.BAD_REQUEST, "닉네임은 한글, 영문, 숫자만 쓸 수 있습니다."),
     NICKNAME_RESERVED(HttpStatus.BAD_REQUEST, "쓸 수 없는 닉네임입니다."),
     NICKNAME_TAKEN(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다."),
-    REAUTH_REQUIRED(HttpStatus.CONFLICT, "애플 계정으로 한 번 더 인증해야 탈퇴할 수 있습니다.");
+    REAUTH_REQUIRED(HttpStatus.CONFLICT, "애플 계정으로 한 번 더 인증해야 탈퇴할 수 있습니다."),
+    INVALID_PUSH_DEVICE(HttpStatus.BAD_REQUEST, "푸시 기기 정보가 올바르지 않습니다."),
+    INVALID_NOTIFICATION_SCHEDULE(HttpStatus.BAD_REQUEST, "알림 시각과 요일이 올바르지 않습니다."),
+    NOTIFICATION_TARGET_NOT_FAVORITE(
+        HttpStatus.UNPROCESSABLE_CONTENT,
+        "즐겨찾기에 없는 대상입니다."
+    ),
+    NOTIFICATION_SETTING_NOT_FOUND(HttpStatus.NOT_FOUND, "알림 설정을 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;

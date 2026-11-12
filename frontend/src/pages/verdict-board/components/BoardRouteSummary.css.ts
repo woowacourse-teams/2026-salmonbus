@@ -1,61 +1,65 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "@/shared/styles/tokens.css";
+import { TRACK_PADDING } from "./DirectionTabs.css";
+
+const disclosureMotion = `${vars.duration.spring} ${vars.easing.slide}`;
 
 export const summary = style({
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  minHeight: "56px",
-  // 헤더의 공통 간격 10px에 더해 방향 버튼과는 14px을 띄운다.
-  marginBottom: "4px",
-});
-
-export const routeNumber = style({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-  minWidth: "85px",
-  height: "50px",
-  margin: 0,
-  padding: "0 10px",
-  borderRadius: vars.radius.control,
-  backgroundColor: vars.color.liveBus,
-  color: vars.color.onInk,
-  fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  fontSize: "25px",
-  fontWeight: 800,
-  lineHeight: "30px",
-  letterSpacing: "-0.8px",
-  whiteSpace: "nowrap",
-});
-
-export const content = style({
-  display: "flex",
-  flex: 1,
-  flexDirection: "column",
+  display: "grid",
+  justifyItems: "start",
   minWidth: 0,
-  gap: "7px",
-  fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif",
-  containerName: "route-summary",
-  containerType: "inline-size",
+  paddingInlineStart: TRACK_PADDING,
 });
 
-export const endpoints = style({
-  margin: 0,
-  color: vars.color.routeSummary.endpoints,
-  fontSize: "13px",
+export const toggle = style({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  minHeight: "28px",
+  padding: "0 8px 0 0",
+  border: 0,
+  background: "none",
+  color: vars.color.textSubtle,
+  fontSize: "12px",
   fontWeight: 600,
-  lineHeight: "19px",
-  overflowWrap: "anywhere",
+  cursor: "pointer",
 });
+
+export const chevron = style({
+  width: "6px",
+  height: "6px",
+  marginInlineStart: "2px",
+  borderRight: "1.5px solid currentColor",
+  borderBottom: "1.5px solid currentColor",
+  transform: "translateY(-2px) rotate(45deg)",
+  transition: `transform ${disclosureMotion}`,
+  selectors: {
+    [`${toggle}[aria-expanded='true'] &`]: { transform: "translateY(1px) rotate(225deg)" },
+  },
+  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
+});
+
+export const detailsPanel = style({
+  display: "grid",
+  gridTemplateRows: "1fr",
+  opacity: 1,
+  visibility: "visible",
+  transition: `grid-template-rows ${disclosureMotion}, opacity ${disclosureMotion}, visibility ${disclosureMotion}`,
+  selectors: {
+    '&[aria-hidden="true"]': { gridTemplateRows: "0fr", opacity: 0, visibility: "hidden" },
+  },
+  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
+});
+
+export const detailsClip = style({ minHeight: 0, overflow: "hidden" });
 
 export const details = style({
   display: "flex",
-  flexWrap: "wrap",
-  alignItems: "center",
-  gap: "4px 8px",
   margin: 0,
+  gap: "8px",
+  paddingBlockStart: "2px",
+  paddingBlockEnd: "6px",
+  "@media": { "(max-width: 359px)": { gap: "6px" } },
 });
 
 export const detail = style({
@@ -73,37 +77,9 @@ export const detail = style({
       backgroundColor: vars.color.routeSummary.separator,
     },
   },
-  "@container": {
-    "route-summary (max-width: 245px)": {
-      selectors: { "& + &::before": { display: "none" } },
-    },
-  },
-});
-
-export const label = style({
-  position: "absolute",
-  width: "1px",
-  height: "1px",
-  padding: 0,
-  margin: "-1px",
-  overflow: "hidden",
-  clipPath: "inset(50%)",
-  whiteSpace: "nowrap",
-  border: 0,
-});
-
-export const summaryIcon = style({
-  width: "12px",
-  height: "12px",
-  flexShrink: 0,
-  // 글자의 시각적 중심이 line box보다 아래에 있어 아이콘도 같은 높이로 맞춘다.
-  transform: "translateY(1px)",
 });
 
 export const value = style({
-  display: "flex",
-  alignItems: "center",
-  gap: "3px",
   margin: 0,
   color: vars.color.routeSummary.text,
   fontSize: "11px",
@@ -111,4 +87,7 @@ export const value = style({
   lineHeight: 1,
   whiteSpace: "nowrap",
   fontVariantNumeric: "tabular-nums",
+  "@media": { "(max-width: 359px)": { fontSize: "10px" } },
 });
+
+export const label = style([value, { marginInlineEnd: "4px", fontWeight: 700 }]);

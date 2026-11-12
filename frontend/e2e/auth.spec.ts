@@ -21,7 +21,7 @@ for (const loginResult of ["failed", "cancelled"] as const) {
     if (loginResult === "failed") {
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
-      await dialog.getByRole("button", { name: "다시 로그인", exact: true }).click();
+      await dialog.getByRole("button", { name: "확인", exact: true }).click();
       await expect(dialog).not.toBeVisible();
     } else await expect(page.getByText("로그인을 취소했어요.")).toBeVisible();
   });
@@ -48,7 +48,7 @@ test("닉네임 화면에서 로그인 상태 조회 실패 후 다시 확인하
   await expect(page.getByRole("link", { name: "로그인 / 회원가입", exact: true })).toHaveCount(0);
 
   await page.unroute("**/api/auth/session");
-  await page.getByRole("button", { name: "다시 확인하기", exact: true }).click();
+  await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "닉네임", exact: true })).toHaveValue("살몽");
   await expect(page.getByRole("alert")).toBeEmpty();
   expect(auth.requests.some((request) => /\/api\/auth\/(kakao|apple)\/start$/.test(request.path))).toBe(false);
@@ -85,7 +85,7 @@ test("닉네임 저장 실패 후 같은 입력으로 재시도하면 이전 오
   const error = page.getByRole("alert");
   await input.fill("새살몽");
   await save.click();
-  await expect(error).toContainText("요청을 완료하지 못했어요");
+  await expect(error).toContainText("닉네임을 저장하지 못했어요");
   await expect(save).toBeEnabled();
 
   auth.mutationFails = false;
@@ -119,11 +119,19 @@ for (const action of ["로그아웃", "회원탈퇴"] as const) {
     await page.getByRole("button", { name: action, exact: true }).click();
     auth.mutationFails = true;
     await page.getByRole("dialog").getByRole("button", { name: action, exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("요청을 완료하지 못했어요");
+    await expect(page.getByRole("alert")).toContainText(
+      action === "로그아웃" ? "로그아웃하지 못했어요" : "회원탈퇴를 완료하지 못했어요",
+    );
     expect(auth.member).not.toBeNull();
     auth.mutationFails = false;
     await page.getByRole("dialog").getByRole("button", { name: action, exact: true }).click();
     await expect(page).toHaveURL("/");
+    await expect(page.getByRole("region", { name: "홈 정보", exact: true })).toBeVisible();
+    await page
+      .getByRole("navigation", { name: "주요 메뉴" })
+      .getByRole("link", { name: "즐겨찾기", exact: true })
+      .click();
+    await expect(page).toHaveURL("/favorites");
     await expect(page.getByRole("link", { name: "로그인 / 회원가입", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "내 정류장을 저장해 보세요", exact: true })).toBeVisible();
   });
@@ -177,5 +185,5 @@ test("닉네임 저장 중 홈으로 이동하면 늦은 응답이 마이페이�
   await (await response).finished();
   await page.clock.runFor(32);
   await expect(page).toHaveURL("/");
-  await expect(page.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "홈 정보", exact: true })).toBeVisible();
 });

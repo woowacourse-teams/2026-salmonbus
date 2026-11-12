@@ -1,13 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
+import { favoriteGroupPathFor } from "@/shared/routing/paths";
 import type { FavoriteGroup } from "@/shared/api/favorites.types";
-import { saveGroupOrder } from "@/shared/api/favorites.api";
+import { deleteFavoriteGroup, saveGroupOrder } from "@/shared/api/favorites.api";
 import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { SortableList } from "@/shared/components/favorite-editor/SortableList";
 import { useFavorites } from "@/shared/hooks/useFavorites";
-import { useFavoriteGroupDeletion } from "@/shared/hooks/useFavoriteGroupDeletion";
-import { PartialFavoriteOrderNotice } from "@/shared/components/FavoritesNotice";
+import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { moveItem } from "@/shared/utils/moveItem";
 import { MAX_FAVORITE_GROUPS, MAX_FAVORITES_PER_GROUP } from "@/shared/utils/favoritePolicy";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
@@ -25,35 +25,35 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
   const [saved, setSaved] = useState(groups);
   const [draft, setDraft] = useState(groups);
   const [deleting, setDeleting] = useState<FavoriteGroup | null>(null);
-  const { busy, error, setError, run, partial, setPartial, removeGroup } = useFavoriteGroupDeletion(
-    saved,
-    draft,
-    setSaved,
-  );
+  const { busy, failure, error, clearError, run } = useFavoriteAction();
   const labelIdPrefix = useId();
   const done = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     done.current?.focus();
   }, []);
-  const protectedGroup = deleting !== null && draft[0]?.id === deleting.id;
+  const protectedGroup = draft.length === 1;
   async function save() {
     if (busy) return;
     const ids = draft.map((group) => group.id);
-    if (
-      ids.every((id, index) => saved[index]?.id === id) ||
-      (await run(() => saveGroupOrder(ids), { resultHaptic: true }))
-    )
+    if (ids.every((id, index) => saved[index]?.id === id)) {
       onClose(true);
+      return;
+    }
+    const savedOrder = await run(() => saveGroupOrder(ids), {
+      resultHaptic: true,
+      kind: "saveGroupOrder",
+    });
+    if (savedOrder) onClose(true);
   }
   async function remove() {
     if (!deleting || protectedGroup || resource.status !== "success") return;
-    if (await removeGroup(deleting.id)) {
-      setPartial(false);
+    if (await run(() => deleteFavoriteGroup(deleting.id), { kind: "deleteGroup" })) {
       setSaved((current) => current.filter((group) => group.id !== deleting.id));
       setDraft((current) => current.filter((group) => group.id !== deleting.id));
       setDeleting(null);
     } else reload();
   }
+  const doneLabel = failure?.operation === "saveGroupOrder" ? "다시 저장하기" : "완료";
   return (
     <section
       {...maskedPropsFor(styles.section)}
@@ -65,7 +65,7 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
       <h2 className={styles.heading}>
         <span>{`내 그룹  ${draft.length} / ${MAX_FAVORITE_GROUPS}`}</span>
         <button ref={done} className={styles.cancelSelection} disabled={busy} onClick={() => void save()}>
-          완료
+          {doneLabel}
         </button>
       </h2>
       <p id="favorite-sort-help" className={visuallyHidden}>
@@ -83,23 +83,20 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
         render={(group, handle) => (
           <>
             <span className={styles.info}>
-              <span className={styles.name}>
-                {group.name}
-                {draft[0]?.id === group.id && " · 대표 그룹"}
-              </span>
+              <span className={styles.name}>{group.name}</span>
               <span className={styles.count}>
                 {group.favorites.length} / {MAX_FAVORITES_PER_GROUP}
               </span>
             </span>
             <span className={styles.cardTools}>
-              {draft[0]?.id !== group.id ? (
+              {!protectedGroup ? (
                 <button
                   className={`${styles.cardDelete} ${styles.deleteTool}`}
                   aria-labelledby={`${labelIdPrefix}delete-${group.id}`}
                   disabled={busy || resource.status !== "success"}
                   onClick={(event) => {
                     event.currentTarget.focus();
-                    setError(null);
+                    clearError();
                     setDeleting(group);
                   }}
                 >
@@ -120,9 +117,8 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
           {error}
         </p>
       )}
-      {partial && deleting === null && <PartialFavoriteOrderNotice />}
       {draft.length < MAX_FAVORITE_GROUPS && (
-        <Link className={styles.add} to="/mypage/groups/new">
+        <Link className={styles.add} to={favoriteGroupPathFor("new")}>
           <img src={plusIcon} width="18" height="18" alt="" />새 그룹 만들기
         </Link>
       )}
@@ -135,16 +131,13 @@ export function GroupOrderEditor({ onClose }: GroupOrderEditorProps) {
           }}
         >
           <p className={form.subtle}>
-            {protectedGroup
-              ? "대표 그룹은 삭제할 수 없어요."
-              : `이 그룹과 즐겨찾기 ${deleting.favorites.length}개가 함께 삭제돼요. 다른 그룹의 즐겨찾기는 유지돼요.`}
+            이 그룹과 즐겨찾기 {deleting.favorites.length}개가 함께 삭제돼요. 다른 그룹의 즐겨찾기는 유지돼요.
           </p>
           {error && (
             <p className={form.error} role="alert">
               {error}
             </p>
           )}
-          {partial && <PartialFavoriteOrderNotice />}
           <div className={form.actions}>
             <button className={buttons.secondary} disabled={busy} onClick={() => setDeleting(null)}>
               취소

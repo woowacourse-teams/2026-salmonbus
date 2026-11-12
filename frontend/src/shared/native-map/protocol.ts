@@ -19,6 +19,7 @@ export interface NativeMapLayout {
   viewport: { width: number; height: number; offsetTop: number; offsetLeft: number; scale: number };
   mapRect: NativeRect;
   webRects: NativeRect[];
+  logoBottomInset?: number;
   captureAll: boolean;
   transitioning: boolean;
 }
@@ -42,6 +43,8 @@ export interface NativeMapScene extends NativeMapSceneState {
   referenceVersionId: string;
   preserveCamera?: boolean;
   selectedStopOnly?: boolean;
+  reportRotation?: boolean;
+  directions?: Direction[];
   stops: (NativeStopSelection & {
     stopId: string;
     coordinate: NativeCoordinate;
@@ -59,12 +62,39 @@ export interface NativeVehicleMotion {
   path: (NativeCoordinate & { progress: number })[];
   durationMs: number;
 }
+export interface NativeMapCamera {
+  center: NativeCoordinate;
+  zoom: number;
+  heading: number;
+}
+export interface NativeHomeMapContent {
+  stations: {
+    stops: { id: string; name: string; coordinate: NativeCoordinate }[];
+    selectedStopId: string | null;
+  };
+  paths: { coordinates: NativeCoordinate[]; active: boolean; arrows: boolean }[];
+  location: { coordinate: NativeCoordinate | null };
+}
+export type NativeHomeCameraCommand =
+  | { command: "position"; camera: NativeMapCamera }
+  | { command: "center"; coordinate: NativeCoordinate; visible?: NativeRect }
+  | {
+      command: "fit";
+      southwest: NativeCoordinate;
+      northeast: NativeCoordinate;
+      visible: NativeRect;
+      animated: boolean;
+    };
 export type NativeCameraCommand =
   | { command: "stop"; selection: NativeStopSelection }
   | { command: "vehicle"; key: string | null; focusMarker: boolean }
-  | { command: "location"; coordinate: NativeCoordinate };
+  | { command: "location"; coordinate: NativeCoordinate }
+  | { command: "resetNorth" };
 export interface NativeMapCommands {
   mount: NativeMapScene;
+  mountHome: { content: NativeHomeMapContent; camera: NativeMapCamera; reportRotation?: boolean };
+  updateHome: Partial<NativeHomeMapContent>;
+  homeCamera: NativeHomeCameraCommand;
   updateScene: NativeMapSceneState;
   motion: { vehicles: NativeVehicleMotion[] };
   layout: NativeMapLayout;
@@ -76,8 +106,11 @@ export interface NativeMapEvents {
   ready: Record<never, never>;
   ack: { appliedRevision: number };
   stopPress: { selection: NativeStopSelection };
+  homeStopPress: { id: string };
+  homeViewport: { camera: NativeMapCamera; corners: NativeCoordinate[]; gesture: boolean };
   vehiclePress: { selection: NativeStopSelection; key: string };
   mapPress: Record<never, never>;
+  rotation: { heading: number };
   locationResult: {
     requestId: number;
     coordinate?: NativeCoordinate;

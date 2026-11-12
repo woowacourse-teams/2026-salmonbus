@@ -1,4 +1,4 @@
-import { isSupportedInApp, sendToApp, subscribeToApp, type BridgeWindow } from "../bridge/bridge";
+import { createBridgeId, isSupportedInApp, sendToApp, subscribeToApp, type BridgeWindow } from "../bridge/bridge";
 import type { BridgeMessage } from "../bridge/bridge.types";
 import type {
   NotificationCommandType,
@@ -74,7 +74,7 @@ function requestFromApp<T extends { requestId: string | null }>(
   target?: EventTarget,
 ): Promise<T | null> {
   if (!isSupportedInApp(type, bridgeWindow)) return Promise.resolve(null);
-  const requestId = crypto.randomUUID();
+  const requestId = createBridgeId();
   return new Promise((resolve) => {
     const finish = (reply: T | null) => {
       clearTimeout(timer);

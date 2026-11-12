@@ -129,7 +129,7 @@ public class TokenController {
             }
             throw new UnauthenticatedException();
         }
-        String accessToken = accessTokens.issue(rotated.publicId());
+        String accessToken = accessTokens.issue(rotated.publicId(), rotated.next().familyId());
         if (fromBody.isPresent()) {
             return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())

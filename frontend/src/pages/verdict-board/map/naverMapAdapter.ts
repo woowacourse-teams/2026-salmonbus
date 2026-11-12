@@ -3,21 +3,30 @@ import busFrontIcon from "../assets/bus-front.svg";
 import type { StopSelection } from "../components/stopSelection";
 import type { LiveVehicleView } from "../components/liveVehiclePolicy";
 import type { GeoCoordinate, RouteMapData } from "./routeMapModel";
-import { routeArrowsFor, routeMapCoordinateForSequence, type RouteArrow } from "./routeMapGeometry";
-import type { NaverMaps, NaverMarker, NaverPolyline } from "./naverSdk";
+import {
+  DETAIL_ZOOM,
+  fullPathForDisplay,
+  routeArrowsFor,
+  routeMapCoordinateForSequence,
+  type RouteArrow,
+} from "./routeMapGeometry";
+import type { MapFlowSurface } from "@/shared/map/mapFlowSurface";
+import { bindNaverMapCompass } from "@/shared/map/naverMapCompass";
+import type { NaverMap, NaverMaps, NaverMarker } from "@/shared/map/naverSdk";
+import { activeRouteColor, inactiveRouteColor } from "@/shared/map/routeColors";
+import { createMapStopPin } from "@/shared/map/mapStopPin";
 import * as styles from "./naverMapAdapter.css";
 
-const DETAIL_ZOOM = 14;
 const INITIALIZATION_TIMEOUT_MS = 10_000;
 const CAMERA_FOCUS_DURATION_MS = 560;
+const OVERVIEW_RESIZE_SETTLE_MS = 100;
 
 interface StopMarker {
   selection: StopSelection;
   coordinate: GeoCoordinate;
   marker: NaverMarker;
   button: HTMLButtonElement;
-  label: HTMLSpanElement;
-  connector: NaverPolyline | undefined;
+  connector: SVGLineElement | undefined;
   connection: GeoCoordinate | undefined;
   visible: boolean;
 }
@@ -38,6 +47,13 @@ interface ArrowMarker extends RouteArrow {
 export interface RouteMapCamera {
   center: GeoCoordinate;
   zoom: number;
+  rotation: number;
+}
+
+interface NaverRouteMapOptions {
+  sharedMap?: NaverMap;
+  refitOverviewOnResize?: boolean;
+  onRotationChange?: (rotation: number) => void;
 }
 
 export interface RouteMapAdapter {
@@ -49,17 +65,38 @@ export interface RouteMapAdapter {
     selectedVehicleKey?: string | null,
   ) => void;
   moveVehicles: (frames: readonly { key: string; sequencePosition: number }[]) => void;
-  resize: (width: number, height: number) => void;
+  resize: (width: number, height: number, visibleHeight: number) => void;
   focus: (selection: StopSelection, options?: { animate?: boolean }) => void;
   focusVehicle: (key: string | null, options?: { focusMarker?: boolean }) => void;
   showLocation: (coordinate: GeoCoordinate) => void;
+  resetNorth: () => void;
   destroy: () => void;
+}
+
+export function createNaverRouteOverview({ maps, map, element }: MapFlowSurface, data: RouteMapData) {
+  const noop = () => undefined;
+  return createNaverRouteMap(
+    maps,
+    element,
+    null,
+    data,
+    element.clientHeight,
+    noop,
+    noop,
+    noop,
+    noop,
+    noop,
+    null,
+    undefined,
+    false,
+    { sharedMap: map },
+  );
 }
 
 export function createNaverRouteMap(
   sdk: NaverMaps,
   element: HTMLElement,
-  board: Board,
+  board: Board | null,
   data: RouteMapData,
   visibleHeight: number,
   onSelect: (selection: StopSelection) => void,
@@ -70,6 +107,7 @@ export function createNaverRouteMap(
   initialSelection: StopSelection | null = null,
   initialCamera?: RouteMapCamera,
   selectedStopOnly = false,
+  { sharedMap, refitOverviewOnResize = false, onRotationChange }: NaverRouteMapOptions = {},
 ): RouteMapAdapter {
   const createNativeEventHandler = (action: () => void) => () => {
     try {
@@ -86,37 +124,50 @@ export function createNaverRouteMap(
   const first = initialStop?.coordinate ?? data.stops[0]?.coordinate ?? fullPath[0] ?? data.paths[0]?.coordinates[0];
   if (first === undefined) throw new Error("지도 좌표가 없어요");
   const toNaverCoordinate = (coordinate: GeoCoordinate) => new sdk.LatLng(coordinate.latitude, coordinate.longitude);
-  const map = new sdk.Map(element, {
-    center: toNaverCoordinate(initialCamera?.center ?? first),
-    zoom: initialCamera?.zoom ?? (initialStop === undefined ? 10 : 13),
-    size: new sdk.Size(element.clientWidth, element.clientHeight),
-    zoomControl: false,
-    scaleControl: false,
-    mapDataControl: false,
-    // 벡터 지도의 연속 줌에서 노선·마커도 같은 카메라를 따라 움직인다.
-    gl: true,
-    // GL은 마커 좌표를 직접 갱신하므로 이미지 타일용 확대 효과를 중복 적용하지 않는다.
-    overlayZoomEffect: null,
-    scrollWheel: true,
-    disableDoubleClickZoom: false,
-  });
+  const map =
+    sharedMap ??
+    new sdk.Map(element, {
+      center: toNaverCoordinate(initialCamera?.center ?? first),
+      zoom: initialCamera?.zoom ?? (initialStop === undefined ? 10 : 13),
+      rotation: initialCamera?.rotation ?? 0,
+      size: new sdk.Size(element.clientWidth, element.clientHeight),
+      zoomControl: false,
+      scaleControl: false,
+      mapDataControl: false,
+      logoControlOptions: { position: sdk.Position.BOTTOM_LEFT },
+      // 벡터 지도의 연속 줌에서 노선·마커도 같은 카메라를 따라 움직인다.
+      gl: true,
+      disableRotateTilt: false,
+      // GL은 마커 좌표를 직접 갱신하므로 이미지 타일용 확대 효과를 중복 적용하지 않는다.
+      overlayZoomEffect: null,
+      scrollWheel: true,
+      disableDoubleClickZoom: false,
+    });
   let selected: StopSelection | null = initialSelection;
-  let activeDirection: Direction = initialStop?.direction ?? board.route.directions[0].id;
-  let initialFitPending = initialCamera === undefined;
-  let initialized = false;
+  let activeDirection: Direction = initialStop?.direction ?? board?.route.directions[0].id ?? "UP";
+  let initialFitPending = board !== null && initialCamera === undefined;
+  let overviewRefitEnabled = refitOverviewOnResize && initialFitPending && initialStop === undefined;
+  let overviewRefitPending = false;
+  let overviewRefitTimer: number | undefined;
+  let viewportSize = map.getSize();
+  let mapVisibleHeight = visibleHeight;
+  let initialized = sharedMap !== undefined;
   let initialViewIdle = initialCamera !== undefined;
   let initializationFailed = false;
-  let routeRevealed = false;
+  let routeRevealed = board === null;
   let readyNotified = false;
   let readyFrame: number | null = null;
   let destroyed = false;
   // GL 스타일 요청 실패는 SDK 인증 실패 콜백 없이 초기화를 중단할 수 있다.
-  const initializationTimeout = window.setTimeout(() => {
-    if (destroyed || readyNotified || initializationFailed) return;
-    initializationFailed = true;
-    cancelReadyFrame();
-    onError();
-  }, INITIALIZATION_TIMEOUT_MS);
+  const initializationTimeout =
+    board === null
+      ? undefined
+      : window.setTimeout(() => {
+          if (destroyed || readyNotified || initializationFailed) return;
+          initializationFailed = true;
+          cancelReadyFrame();
+          onError();
+        }, INITIALIZATION_TIMEOUT_MS);
 
   function cancelReadyFrame() {
     if (readyFrame === null) return;
@@ -126,6 +177,7 @@ export function createNaverRouteMap(
 
   function notifyReadyAfterFrame() {
     if (
+      board === null ||
       destroyed ||
       initializationFailed ||
       readyNotified ||
@@ -142,7 +194,7 @@ export function createNaverRouteMap(
         if (!routeRevealed) {
           routeRevealed = true;
           paths.forEach(({ direction, line }) => line.setOptions(routePathStyleFor(direction)));
-          fullRouteLine?.setOptions({ strokeColor: "#5B6472", strokeOpacity: 0.95, zIndex: 1 });
+          fullRouteLine?.setOptions({ strokeColor: inactiveRouteColor, strokeOpacity: 0.95, zIndex: 1 });
           refreshStops();
           // 노선의 GPU 그리기를 먼저 예약한 뒤 HTML 마커와 버튼을 함께 공개한다.
           notifyReadyAfterFrame();
@@ -157,7 +209,7 @@ export function createNaverRouteMap(
   function routePathStyleFor(direction: Direction) {
     const active = direction === activeDirection;
     return {
-      strokeColor: active ? "#ED7768" : "#5B6472",
+      strokeColor: active ? activeRouteColor : inactiveRouteColor,
       strokeOpacity: routeRevealed ? 0.95 : 0,
       zIndex: active ? 2 : 1,
     };
@@ -173,17 +225,17 @@ export function createNaverRouteMap(
   }));
   // 전체 형상만 있거나 일부 방향이 미분리된 경우에도 API가 제공한 도로는 그대로 표시한다.
   // 방향을 알 수 없는 전체 선에는 방향별 색상과 화살표를 붙이지 않는다.
-  const fullRouteLine =
-    fullPath.length >= 2 && board.route.directions.some(({ id }) => !mappedDirections.has(id))
-      ? new sdk.Polyline({
-          map,
-          path: fullPath.map(toNaverCoordinate),
-          strokeWeight: 6,
-          strokeColor: "#5B6472",
-          strokeOpacity: 0,
-          zIndex: 1,
-        })
-      : null;
+  const displayedFullPath = fullPathForDisplay(data, board?.route.directions);
+  const fullRouteLine = displayedFullPath
+    ? new sdk.Polyline({
+        map,
+        path: displayedFullPath.map(toNaverCoordinate),
+        strokeWeight: 6,
+        strokeColor: inactiveRouteColor,
+        strokeOpacity: routeRevealed ? 0.95 : 0,
+        zIndex: 1,
+      })
+    : null;
   const arrows: ArrowMarker[] = [];
   let arrowsShowBothDirections: boolean | null = null;
   let userMarker: NaverMarker | null = null;
@@ -192,6 +244,21 @@ export function createNaverRouteMap(
   let vehicleFocusKey: string | null = null;
   let cameraFocusRevision = 0;
   const cameraFocusInterruptEvents = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+
+  function stopOverviewRefit() {
+    if (!overviewRefitEnabled) return;
+    overviewRefitEnabled = false;
+    overviewRefitPending = false;
+    window.clearTimeout(overviewRefitTimer);
+    overviewRefitTimer = undefined;
+    cameraFocusInterruptEvents.forEach((event) => element.removeEventListener(event, stopOverviewRefit, true));
+  }
+
+  if (overviewRefitEnabled) {
+    cameraFocusInterruptEvents.forEach((event) =>
+      element.addEventListener(event, stopOverviewRefit, { passive: true, capture: true }),
+    );
+  }
 
   function cancelCameraFocus() {
     cameraFocusRevision += 1;
@@ -206,6 +273,7 @@ export function createNaverRouteMap(
     if (destroyed || initializationFailed || key === null) return;
     const item = vehicles.get(key);
     if (item === undefined) return;
+    stopOverviewRefit();
     vehicleFocusKey = key;
     animateCamera(
       () => vehicles.get(key)?.coordinate,
@@ -261,27 +329,21 @@ export function createNaverRouteMap(
     else cameraFocusFrame = window.requestAnimationFrame(animate);
   }
   const stops: StopMarker[] = data.stops.flatMap((stop) => {
+    if (board === null) return [];
     const stopState = board.stops.find((item) => item.sequence === stop.sequence && item.direction === stop.direction);
     if (stopState === undefined) return [];
     const selection = { direction: stop.direction, sequence: stop.sequence };
     const terminalStopName =
       board.route.directions.find((direction) => direction.id === stop.direction)?.terminalStopName ??
       (stop.direction === "UP" ? board.route.endStopName : board.route.startStopName);
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = styles.stop;
+    const { button } = createMapStopPin(
+      stopState.name,
+      `${stopState.name} ${terminalStopName} 방면 정류장 지도에서 선택`,
+    );
+    button.className += ` ${styles.stop}`;
     button.dataset.mapStopSequence = String(stop.sequence);
     button.dataset.boardingAllowed = String(stopState.boardingAllowed);
-    button.setAttribute("aria-label", `${stopState.name} ${terminalStopName} 방면 정류장 지도에서 선택`);
     button.setAttribute("aria-pressed", "false");
-    const symbol = document.createElement("span");
-    symbol.className = styles.stopIcon;
-    symbol.setAttribute("aria-hidden", "true");
-    const label = document.createElement("span");
-    label.className = styles.stopName;
-    label.textContent = stopState.name;
-    label.setAttribute("aria-hidden", "true");
-    button.append(symbol, label);
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       createNativeEventHandler(() => focus(selection))();
@@ -289,20 +351,20 @@ export function createNaverRouteMap(
     });
     const connection = stop.pathConnection?.coordinate;
     const coordinate = stopState.boardingAllowed ? stop.coordinate : (connection ?? stop.coordinate);
-    const connector =
-      stopState.boardingAllowed &&
-      connection &&
-      (connection.latitude !== coordinate.latitude || connection.longitude !== coordinate.longitude)
-        ? new sdk.Polyline({
-            map,
-            path: [toNaverCoordinate(coordinate), toNaverCoordinate(connection)],
-            strokeColor: "#5B6472",
-            strokeWeight: 2.5,
-            strokeOpacity: 0,
-            strokeStyle: "shortdot",
-            zIndex: 3,
-          })
-        : undefined;
+    let connector: SVGLineElement | undefined;
+    if (stopState.boardingAllowed && connection) {
+      const namespace = "http://www.w3.org/2000/svg";
+      const overlay = document.createElementNS(namespace, "svg");
+      overlay.setAttribute("class", styles.stopConnector);
+      overlay.setAttribute("aria-hidden", "true");
+      overlay.setAttribute("width", "1");
+      overlay.setAttribute("height", "1");
+      connector = document.createElementNS(namespace, "line");
+      connector.setAttribute("stroke-dasharray", "1 4");
+      connector.setAttribute("visibility", "hidden");
+      overlay.append(connector);
+      button.prepend(overlay);
+    }
     const marker = new sdk.Marker({
       map,
       position: toNaverCoordinate(coordinate),
@@ -310,69 +372,50 @@ export function createNaverRouteMap(
       zIndex: 5,
       clickable: true,
     });
-    return [{ selection, coordinate, marker, button, label, connector, connection, visible: true }];
+    return [{ selection, coordinate, marker, button, connector, connection, visible: true }];
   });
 
   function refreshStops() {
-    const hidden = map.getZoom() < DETAIL_ZOOM;
+    const zoom = map.getZoom();
+    const hidden = zoom < DETAIL_ZOOM;
     const projection = map.getProjection();
-    const display = stops.flatMap((stop) => {
-      const { selection } = stop;
+    for (const stop of stops) {
+      const { selection, coordinate, marker, button, connector, connection } = stop;
       const isSelected = selected?.sequence === selection.sequence && selected.direction === selection.direction;
-      const visible = selectedStopOnly ? isSelected : !hidden || !mappedDirections.has(selection.direction);
+      const visible =
+        selection.direction === activeDirection &&
+        (isSelected || (!selectedStopOnly && (!hidden || !mappedDirections.has(selection.direction))));
       if (stop.visible !== visible) {
         stop.visible = visible;
-        stop.marker.setVisible(visible);
+        marker.setVisible(visible);
       }
-      if (stop.label.hidden !== hidden) stop.label.hidden = hidden;
-      if (selectedStopOnly && !isSelected) return [];
-      return [
-        {
-          ...stop,
-          isSelected,
-          point: projection.fromCoordToOffset(toNaverCoordinate(stop.coordinate)),
-          size: isSelected ? 32 : 24,
-          offsetX: 0,
-        },
-      ];
-    });
-    // 마주 보는 정류장이 겹치면 화면상 선택 영역만 벌린다. 실제 정류장 좌표는 유지한다.
-    for (const up of display.filter((stop) => stop.selection.direction === "UP")) {
-      for (const down of display.filter((stop) => stop.selection.direction === "DOWN")) {
-        const separation = (up.size + down.size) / 2 + 4;
-        const difference = up.point.x - down.point.x;
-        if (Math.abs(difference) >= separation || Math.abs(up.point.y - down.point.y) >= separation) continue;
-        const offset = (separation - difference) / 2;
-        up.offsetX = Math.max(up.offsetX, offset);
-        down.offsetX = Math.min(down.offsetX, -offset);
+      if (!visible) {
+        connector?.setAttribute("visibility", "hidden");
+        continue;
       }
-    }
-    display.forEach(
-      ({ selection, marker, button, isSelected, size, offsetX, point, coordinate, connector, connection }) => {
-        const isActive = selection.direction === activeDirection;
-        if (connector && connection) {
-          const visible = routeRevealed && !hidden && (isActive || isSelected);
-          if (visible) {
-            const start =
-              offsetX === 0
-                ? toNaverCoordinate(coordinate)
-                : projection.fromOffsetToCoord(new sdk.Point(point.x + offsetX, point.y));
-            connector.setPath([start, toNaverCoordinate(connection)]);
-          }
-          connector.setOptions({ strokeColor: "#5B6472", strokeOpacity: visible ? 0.85 : 0, zIndex: 3 });
+      if (connector && connection) {
+        const start = projection.fromCoordToOffset(toNaverCoordinate(coordinate));
+        const end = projection.fromCoordToOffset(toNaverCoordinate(connection));
+        const x = end.x - start.x;
+        const y = end.y - start.y;
+        const connected = routeRevealed && !hidden && (x !== 0 || y !== 0);
+        if (connected) {
+          connector.setAttribute("x2", String(x));
+          connector.setAttribute("y2", String(y));
         }
-        const selectionChanged = button.getAttribute("aria-pressed") !== String(isSelected);
-        const directionChanged = button.dataset.active !== String(isActive);
-        if (selectionChanged) button.setAttribute("aria-pressed", String(isSelected));
-        if (directionChanged) button.dataset.active = String(isActive);
-        const labelAbove = String(offsetX !== 0 && !isActive);
-        if (button.dataset.labelAbove !== labelAbove) button.dataset.labelAbove = labelAbove;
-        if (selectionChanged || directionChanged) marker.setZIndex(isSelected ? 15 : isActive ? 6 : 5);
-        // 아이콘을 다시 설정하면 SDK가 DOM을 재구성하므로 표시 위치만 조정한다.
-        const transform = `translate(${offsetX - (size - 24) / 2}px, ${-(size - 24) / 2}px)`;
-        if (button.style.transform !== transform) button.style.transform = transform;
-      },
-    );
+        connector.setAttribute("visibility", connected ? "visible" : "hidden");
+      }
+      const pressed = String(isSelected);
+      if (button.getAttribute("aria-pressed") !== pressed) {
+        button.setAttribute("aria-pressed", pressed);
+        marker.setZIndex(isSelected ? 15 : 6);
+      }
+      const labelVisible = String(!hidden || isSelected);
+      if (button.dataset.labelVisible !== labelVisible) button.dataset.labelVisible = labelVisible;
+      // 선택한 핀의 클릭 영역이 커져도 핀 중심은 같은 좌표에 둔다.
+      const transform = isSelected ? "translate(-4px, -4px)" : "";
+      if (button.style.transform !== transform) button.style.transform = transform;
+    }
   }
 
   function refreshVehicleCounts() {
@@ -436,7 +479,7 @@ export function createNaverRouteMap(
         item.visible = true;
       }
     });
-    // 필요한 수가 줄어도 제거하지 않고 다음 확대·이동에서 재사용한다.
+    // 필요한 수가 줄어도 제거하지 않고 다음 확대와 이동에서 재사용한다.
     arrows.slice(nextArrows.length).forEach((item) => {
       if (!item.visible) return;
       item.marker.setVisible(false);
@@ -451,6 +494,7 @@ export function createNaverRouteMap(
       (item) => item.sequence === selection.sequence && item.direction === selection.direction,
     );
     if (stop === undefined) return;
+    stopOverviewRefit();
     initialFitPending = false;
     initialViewIdle = false;
     cancelReadyFrame();
@@ -497,7 +541,7 @@ export function createNaverRouteMap(
   // 하드웨어 가속을 사용할 수 없는 환경은 SDK가 이미지 타일 지도로 전환하므로 확대를 정수 단계로 즉시 적용한다.
   // 이때도 마커는 GL 모듈이 transform으로 배치해서, 오버레이 확대 효과를 켜면 그 위치를 덮어써 지도 왼쪽 위로 모인다.
   const useInstantZoom = !map.getOptions("gl");
-  if (useInstantZoom) {
+  if (useInstantZoom && !sharedMap) {
     map.setOptions({ scrollWheel: false, disableDoubleClickZoom: true });
     element.addEventListener("wheel", onWheel, { passive: false });
     element.addEventListener("dblclick", onDoubleClick);
@@ -505,17 +549,9 @@ export function createNaverRouteMap(
   }
 
   const routeCoordinates = fullPath.length > 0 ? fullPath : data.paths.flatMap((path) => path.coordinates);
-  function fitInitialRoute() {
-    if (!initialFitPending) return;
-    if (initialStop !== undefined) {
-      initialFitPending = false;
-      initialViewIdle = true;
-      return;
-    }
-    initialFitPending = false;
-    initialViewIdle = false;
+  function fitOverview() {
     // 고정 캔버스의 위아래에서 잘리는 만큼 여백을 더해 보이는 영역 안에 경로를 맞춘다.
-    const verticalPadding = 28 + Math.max(0, (map.getSize().height - visibleHeight) / 2);
+    const verticalPadding = 28 + Math.max(0, (map.getSize().height - mapVisibleHeight) / 2);
     map.fitBounds(
       (routeCoordinates.length > 0 ? routeCoordinates : data.stops.map((stop) => stop.coordinate)).map(
         toNaverCoordinate,
@@ -526,6 +562,30 @@ export function createNaverRouteMap(
     refreshArrows();
   }
 
+  function fitInitialRoute() {
+    if (!initialFitPending) return;
+    if (initialStop !== undefined) {
+      initialFitPending = false;
+      initialViewIdle = true;
+      return;
+    }
+    initialFitPending = false;
+    initialViewIdle = false;
+    fitOverview();
+  }
+
+  let rotationFrame: number | null = null;
+  const refreshAfterRotation = () => {
+    if (rotationFrame !== null) return;
+    // 회전 이벤트가 카메라 갱신보다 먼저 올 수 있어 다음 프레임의 투영 좌표를 사용한다.
+    rotationFrame = window.requestAnimationFrame(
+      createNativeEventHandler(() => {
+        rotationFrame = null;
+        refreshStops();
+        refreshArrows();
+      }),
+    );
+  };
   const listeners = [
     sdk.Event.addListener(map, "click", createNativeEventHandler(onDeselect)),
     sdk.Event.addListener(map, "tap", createNativeEventHandler(onDeselect)),
@@ -549,10 +609,14 @@ export function createNaverRouteMap(
         if (arrowsShowBothDirections !== showBothDirections) refreshArrows();
       }),
     ),
+    sdk.Event.addListener(map, "rotate", refreshAfterRotation),
+    sdk.Event.addListener(map, "rotation_changed", refreshAfterRotation),
     sdk.Event.addListener(
       map,
       "idle",
       createNativeEventHandler(() => {
+        if (rotationFrame !== null) window.cancelAnimationFrame(rotationFrame);
+        rotationFrame = null;
         refreshStops();
         refreshVehicleCounts();
         refreshArrows();
@@ -561,7 +625,13 @@ export function createNaverRouteMap(
       }),
     ),
   ];
-  if (useInstantZoom) fitInitialRoute();
+  const compass = onRotationChange && bindNaverMapCompass({ maps: sdk, map, element }, onRotationChange, onError);
+  if (sharedMap) {
+    fitInitialRoute();
+    if (board === null) refreshArrows();
+    initialViewIdle = true;
+    notifyReadyAfterFrame();
+  } else if (useInstantZoom) fitInitialRoute();
   else {
     refreshStops();
     refreshArrows();
@@ -683,18 +753,41 @@ export function createNaverRouteMap(
         if (coordinate !== undefined) map.setCenter(toNaverCoordinate(coordinate));
       }
     },
-    resize(width, height) {
+    resize(width, height, nextVisibleHeight) {
       if (width <= 0 || height <= 0) return;
+      const viewportChanged = viewportSize.width !== width || viewportSize.height !== height;
+      const cropChanged = mapVisibleHeight !== nextVisibleHeight;
+      viewportSize = { width, height };
+      mapVisibleHeight = nextVisibleHeight;
       const size = map.getSize();
-      if (size.width === width && size.height === height) return;
-      map.setSize(new sdk.Size(width, height));
-      refreshStops();
-      refreshArrows();
+      if (size.width !== width || size.height !== height) {
+        map.setSize(new sdk.Size(width, height));
+        refreshStops();
+        refreshArrows();
+      }
+      if (!overviewRefitEnabled || (!viewportChanged && !(cropChanged && overviewRefitPending))) return;
+      overviewRefitPending = true;
+      window.clearTimeout(overviewRefitTimer);
+      // 시트가 지도를 완전히 가리면 맞춤을 보류하고, 다시 보이는 높이가 들어올 때 예약한다.
+      if (mapVisibleHeight <= 0) {
+        overviewRefitTimer = undefined;
+        return;
+      }
+      // 키보드가 닫히는 동안 지도 크기와 시트 높이가 함께 바뀌므로 마지막 표시 영역에 맞춘다.
+      overviewRefitTimer = window.setTimeout(
+        createNativeEventHandler(() => {
+          overviewRefitTimer = undefined;
+          overviewRefitPending = false;
+          if (!initialFitPending) fitOverview();
+        }),
+        OVERVIEW_RESIZE_SETTLE_MS,
+      );
     },
     focus,
     focusVehicle,
     showLocation(coordinate) {
       cancelCameraFocus();
+      stopOverviewRefit();
       initialFitPending = false;
       initialViewIdle = false;
       cancelReadyFrame();
@@ -714,13 +807,24 @@ export function createNaverRouteMap(
       map.setCenter(position);
       map.setZoom(Math.max(15, map.getZoom()), false);
     },
+    resetNorth() {
+      cancelCameraFocus();
+      stopOverviewRefit();
+      compass?.resetNorth();
+    },
     camera() {
       const center = map.getCenter();
-      return { center: { latitude: center.lat(), longitude: center.lng() }, zoom: map.getZoom() };
+      return {
+        center: { latitude: center.lat(), longitude: center.lng() },
+        zoom: map.getZoom(),
+        rotation: map.getRotation(),
+      };
     },
     destroy() {
       destroyed = true;
       cancelCameraFocus();
+      stopOverviewRefit();
+      if (rotationFrame !== null) window.cancelAnimationFrame(rotationFrame);
       window.clearTimeout(initializationTimeout);
       initialFitPending = false;
       cancelReadyFrame();
@@ -731,22 +835,20 @@ export function createNaverRouteMap(
           // 인증 실패로 SDK 내부가 비워진 경우에도 나머지 자원을 정리한다.
         }
       };
+      cleanup(() => compass?.destroy());
       listeners.forEach((listener) => cleanup(() => sdk.Event.removeListener(listener)));
-      if (useInstantZoom) {
+      if (useInstantZoom && !sharedMap) {
         cleanup(() => element.removeEventListener("wheel", onWheel));
         cleanup(() => element.removeEventListener("dblclick", onDoubleClick));
         cleanup(() => element.removeEventListener("touchend", onTouchEnd, true));
       }
-      stops.forEach(({ marker, connector }) => {
-        cleanup(() => marker.setMap(null));
-        cleanup(() => connector?.setMap(null));
-      });
+      stops.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       vehicles.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       arrows.forEach(({ marker }) => cleanup(() => marker.setMap(null)));
       paths.forEach(({ line }) => cleanup(() => line.setMap(null)));
       cleanup(() => fullRouteLine?.setMap(null));
       cleanup(() => userMarker?.setMap(null));
-      cleanup(() => map.destroy());
+      if (!sharedMap) cleanup(() => map.destroy());
     },
   };
 }

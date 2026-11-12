@@ -83,7 +83,7 @@ class KakaoWithdrawalTest {
     @Test
     void 탈퇴하면_회원과_로그인을_지우고_카카오_연결을_끊고_인증_쿠키를_지운다() throws Exception {
         // when
-        HttpResponse<String> actual = withdraw(accessTokens.issue(memberId));
+        HttpResponse<String> actual = withdraw(accessTokens.issue(memberId, null));
 
         // then
         List<FakeKakaoServer.TokenRequest> unlinks = kakao.unlinkRequests();
@@ -106,7 +106,7 @@ class KakaoWithdrawalTest {
     @Test
     void 탈퇴한_뒤에는_남은_액세스_토큰과_리프레시_토큰으로_아무것도_할_수_없다() throws Exception {
         // given
-        String accessToken = accessTokens.issue(memberId);
+        String accessToken = accessTokens.issue(memberId, null);
         withdraw(accessToken);
 
         // when
@@ -134,7 +134,7 @@ class KakaoWithdrawalTest {
     @Test
     void 같은_카카오_계정으로_다시_오면_새_회원이다() throws Exception {
         // given
-        withdraw(accessTokens.issue(memberId));
+        withdraw(accessTokens.issue(memberId, null));
 
         // when
         UUID again = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, SUBJECT)).publicId();
@@ -152,7 +152,7 @@ class KakaoWithdrawalTest {
         kakao.answerUnlinkWith(HttpStatus.INTERNAL_SERVER_ERROR.value(), "{\"msg\":\"internal\",\"code\":-1}");
 
         // when
-        HttpResponse<String> actual = withdraw(accessTokens.issue(memberId));
+        HttpResponse<String> actual = withdraw(accessTokens.issue(memberId, null));
 
         // then
         assertSoftly(softly -> {
@@ -180,7 +180,7 @@ class KakaoWithdrawalTest {
         final double notLinkedBefore = notLinkedCount();
 
         // when
-        HttpResponse<String> actual = withdraw(accessTokens.issue(memberId));
+        HttpResponse<String> actual = withdraw(accessTokens.issue(memberId, null));
 
         // then
         assertSoftly(softly -> {
@@ -196,7 +196,7 @@ class KakaoWithdrawalTest {
         UUID appleMember = signIn.signIn(new SocialIdentity(LoginProvider.APPLE, "001.apple")).publicId();
 
         // when
-        HttpResponse<String> actual = withdraw(accessTokens.issue(appleMember));
+        HttpResponse<String> actual = withdraw(accessTokens.issue(appleMember, null));
 
         // then
         assertSoftly(softly -> {
@@ -212,7 +212,7 @@ class KakaoWithdrawalTest {
     void 카카오_회원은_애플_탈퇴_티켓을_받을_수_없다() throws Exception {
         // when
         HttpResponse<String> actual = send(request("/api/me/withdrawal/apple")
-            .header("Authorization", "Bearer " + accessTokens.issue(memberId))
+            .header("Authorization", "Bearer " + accessTokens.issue(memberId, null))
             .POST(HttpRequest.BodyPublishers.noBody()));
 
         // then
@@ -226,7 +226,7 @@ class KakaoWithdrawalTest {
     void CSRF_토큰_없이_쿠키로_탈퇴하려_하면_400이고_지우지_않는다() throws Exception {
         // when
         HttpResponse<String> actual = send(request("/api/me")
-            .header("Cookie", ACCESS_COOKIE + "=" + accessTokens.issue(memberId))
+            .header("Cookie", ACCESS_COOKIE + "=" + accessTokens.issue(memberId, null))
             .DELETE());
 
         // then
@@ -241,7 +241,7 @@ class KakaoWithdrawalTest {
     void Authorization_헤더로_탈퇴하면_CSRF_토큰이_필요_없다() throws Exception {
         // when
         HttpResponse<String> actual = send(request("/api/me")
-            .header("Authorization", "Bearer " + accessTokens.issue(memberId))
+            .header("Authorization", "Bearer " + accessTokens.issue(memberId, null))
             .DELETE());
 
         // then
@@ -265,6 +265,61 @@ class KakaoWithdrawalTest {
             softly.assertThat(code(actual)).isEqualTo("UNAUTHENTICATED");
             softly.assertThat(count("member")).isEqualTo(1);
         });
+    }
+
+    @Test
+    void 탈퇴하면_자기_푸시_기기만_연쇄_삭제한다() throws Exception {
+        UUID other = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "other-push-member")).publicId();
+        jdbcClient.sql("""
+            INSERT INTO push_device (member_id, session_family_id, token, environment, created_at, last_registered_at)
+            SELECT id, ?, ?, 'SANDBOX', now(), now() FROM member WHERE public_id = ?
+            """)
+            .params(refreshTokens.issue(memberId).familyId(), "ab", memberId).update();
+        jdbcClient.sql("""
+            INSERT INTO push_device (member_id, session_family_id, token, environment, created_at, last_registered_at)
+            SELECT id, ?, ?, 'PRODUCTION', now(), now() FROM member WHERE public_id = ?
+            """)
+            .params(refreshTokens.issue(other).familyId(), "cd", other).update();
+
+        HttpResponse<String> response = withdraw(accessTokens.issue(memberId, null));
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.NO_CONTENT.value());
+        assertThat(jdbcClient.sql("SELECT token FROM push_device").query(String.class).list()).containsExactly("cd");
+        assertThat(jdbcClient.sql("SELECT m.public_id FROM push_device p JOIN member m ON m.id = p.member_id")
+            .query(UUID.class).single()).isEqualTo(other);
+    }
+
+    @Test
+    void 탈퇴하면_자기_알림_설정만_연쇄_삭제한다() throws Exception {
+        UUID other = signIn.signIn(new SocialIdentity(LoginProvider.KAKAO, "other-notice-member")).publicId();
+        jdbcClient.sql("""
+            INSERT INTO notification_setting (
+                id, member_id, route_id, stop_id, direction, local_time, weekdays,
+                occurrence_at, created_at, updated_at
+            )
+            SELECT ?, id, '234001739', '214002018', 'UP', TIME '07:40', 31, now(), now(), now()
+            FROM member WHERE public_id = ?
+            """)
+            .params(UUID.randomUUID(), memberId).update();
+        jdbcClient.sql("""
+            INSERT INTO notification_setting (
+                id, member_id, route_id, stop_id, direction, local_time, weekdays,
+                occurrence_at, created_at, updated_at
+            )
+            SELECT ?, id, '234001739', '214002018', 'DOWN', TIME '08:00', 31, now(), now(), now()
+            FROM member WHERE public_id = ?
+            """)
+            .params(UUID.randomUUID(), other).update();
+
+        HttpResponse<String> response = withdraw(accessTokens.issue(memberId, null));
+
+        assertThat(response.statusCode()).isEqualTo(HttpStatus.NO_CONTENT.value());
+        assertThat(jdbcClient.sql("SELECT direction FROM notification_setting").query(String.class).list())
+            .containsExactly("DOWN");
+        assertThat(jdbcClient.sql("""
+            SELECT m.public_id FROM notification_setting setting
+            JOIN member m ON m.id = setting.member_id
+            """).query(UUID.class).single()).isEqualTo(other);
     }
 
     private HttpResponse<String> withdraw(String accessToken) throws IOException, InterruptedException {

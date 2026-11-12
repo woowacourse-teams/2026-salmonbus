@@ -1,6 +1,6 @@
 {
   "name": "salmonbus-frontend",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.20.0",
@@ -11,6 +11,8 @@
     "defaults"
   ],
   "scripts": {
+    "home:collect": "python3 scripts/collect-home-events.py",
+    "home:watch": "python3 -u scripts/collect-home-events.py --watch",
     "dev": "node --env-file-if-exists=env/.env.development node_modules/webpack-cli/bin/cli.js serve --config webpack/webpack.dev.cjs",
     "build": "webpack --config webpack/webpack.prod.cjs",
     "typecheck": "tsc --noEmit",

@@ -10,6 +10,8 @@ public final class ApiDocsTags {
     public static final String AUTH = "로그인";
     public static final String MEMBER = "회원";
     public static final String FAVORITES = "즐겨찾기";
+    public static final String PUSH = "푸시 기기";
+    public static final String NOTIFICATIONS = "알림 설정";
 
     private ApiDocsTags() {
     }
@@ -21,7 +23,9 @@ public final class ApiDocsTags {
             new Tag().name(ARRIVALS).description("정류장별 도착 예정 시각과 현재 잔여 좌석"),
             new Tag().name(AUTH).description("로그인 상태, 토큰 갱신, 로그아웃. 로그인이 켜져 있을 때만 표시"),
             new Tag().name(MEMBER).description("내 정보, 닉네임 변경, 탈퇴. 로그인이 켜져 있을 때만 표시"),
-            new Tag().name(FAVORITES).description("즐겨찾기 그룹 관리와 접근 차량 조회. 로그인이 켜져 있을 때만 표시")
+            new Tag().name(FAVORITES).description("즐겨찾기 그룹 관리와 접근 차량 조회. 로그인이 켜져 있을 때만 표시"),
+            new Tag().name(PUSH).description("푸시 기기 등록과 해제. 로그인이 켜져 있을 때만 표시"),
+            new Tag().name(NOTIFICATIONS).description("정류장 알림 시각과 요일. 로그인이 켜져 있을 때만 표시")
         );
     }
 }

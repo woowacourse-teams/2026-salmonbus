@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Refresh the Salmonbus home map data every six hours.
+
+Parameters:
+  CollectorProjectArn:
+    Type: String
+    Description: ARN of the CodeBuild project using frontend/buildspec.home-events.yml
+    AllowedPattern: "arn:[a-z-]+:codebuild:[a-z0-9-]+:[0-9]{12}:project/.+"
+
+Resources:
+  ScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StartHomeEventsCollector
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: codebuild:StartBuild
+                Resource: !Ref CollectorProjectArn
+  HomeEventsSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(6 hours)
+      State: ENABLED
+      Targets:
+        - Id: HomeEventsCollector
+          Arn: !Ref CollectorProjectArn
+          RoleArn: !GetAtt ScheduleRole.Arn

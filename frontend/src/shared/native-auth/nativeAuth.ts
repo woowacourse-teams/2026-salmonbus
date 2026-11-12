@@ -1,4 +1,4 @@
-import { isSupportedInApp, sendToApp, subscribeToApp, type BridgeWindow } from "../bridge/bridge";
+import { createBridgeId, isSupportedInApp, sendToApp, subscribeToApp, type BridgeWindow } from "../bridge/bridge";
 import type { NativeLoginProvider, NativeSignInFailureReason, NativeSignInResult } from "./nativeAuth.types";
 
 const FAILURE_REASONS: readonly NativeSignInFailureReason[] = ["unavailable", "busy", "error"];
@@ -15,7 +15,7 @@ export function requestNativeSignIn(
   bridgeWindow?: BridgeWindow,
   target?: EventTarget,
 ): Promise<NativeSignInResult> {
-  const id = crypto.randomUUID();
+  const id = createBridgeId();
   return new Promise((resolve) => {
     const unsubscribe = subscribeToApp((message) => {
       if (message.type !== "auth.signInResult") return;

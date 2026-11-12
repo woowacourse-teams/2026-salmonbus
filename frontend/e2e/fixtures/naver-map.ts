@@ -1,4 +1,4 @@
-import type { NaverCoordinate, NaverMap, NaverMaps } from "../../src/pages/verdict-board/map/naverSdk";
+import type { NaverCoordinate, NaverMap, NaverMaps } from "../../src/shared/map/naverSdk";
 import { test as apiTest, expect } from "./api";
 
 interface MapSnapshot {
@@ -13,7 +13,10 @@ interface BrowserMapControls {
   initialize: () => void;
   finishIdle: () => void;
   setZoom: (zoom: number) => void;
+  setRotation: (rotation: number) => void;
+  getRotation: () => number;
   panToStop: (sequence: number) => void;
+  panToPoint: (point: [number, number]) => void;
   snapshot: () => MapSnapshot;
   failNative: (operation: NativeFailure) => void;
 }
@@ -22,7 +25,10 @@ interface MapFixture {
   initialize: () => Promise<void>;
   finishIdle: () => Promise<void>;
   setZoom: (zoom: number) => Promise<void>;
+  setRotation: (rotation: number) => Promise<void>;
+  getRotation: () => Promise<number>;
   panToStop: (sequence: number) => Promise<void>;
+  panToPoint: (point: [number, number]) => Promise<void>;
   snapshot: () => Promise<MapSnapshot>;
   failNative: (operation: NativeFailure) => Promise<void>;
 }
@@ -82,6 +88,7 @@ export const test = apiTest.extend<{
             readonly listeners = new Set<Listener>();
             readonly layer: HTMLDivElement;
             private zoom: number;
+            private rotation: number;
             private center: NaverCoordinate;
             private size: Size;
             private scale = 1;
@@ -95,8 +102,10 @@ export const test = apiTest.extend<{
               private options: ConstructorParameters<NaverMaps["Map"]>[1],
             ) {
               this.zoom = options.zoom;
+              this.rotation = options.rotation ?? 0;
               this.center = options.center;
               this.size = options.size;
+              if (options.logoControlOptions) this.scale = (256 * 2 ** 13) / 360;
               this.layer = document.createElement("div");
               this.layer.dataset.testid = "naver-map-test-double";
               this.layer.style.cssText =
@@ -151,6 +160,9 @@ export const test = apiTest.extend<{
                   this.emit("idle");
                 },
                 setZoom: (zoom) => this.setZoom(zoom),
+                setRotation: (rotation) => this.setRotation(rotation),
+                getRotation: () => this.getRotation(),
+                panToPoint: ([longitude, latitude]) => this.setCenter(new LatLng(latitude, longitude)),
                 panToStop: (sequence) => {
                   const marker = [...this.markers].find(
                     (item) => item.content.dataset.mapStopSequence === String(sequence),
@@ -246,6 +258,24 @@ export const test = apiTest.extend<{
               this.draw();
               this.emit("idle");
             }
+            getRotation() {
+              return this.rotation;
+            }
+            setRotation(rotation: number) {
+              this.rotation = rotation;
+              this.draw();
+              this.emit("rotate");
+              this.emit("idle");
+            }
+            morph(center: NaverCoordinate, zoom: number) {
+              this.center = center;
+              this.setZoom(zoom);
+            }
+            stop() {
+              cancelAnimationFrame(this.zoomFrame);
+              this.zoomFrame = 0;
+              delete this.layer.dataset.zoomAnimating;
+            }
             getSize() {
               return this.size;
             }
@@ -278,6 +308,9 @@ export const test = apiTest.extend<{
             private rendererScale() {
               // GL 초기화 전후에는 같은 줌 값에서도 화면에 투영하는 배율이 달라진다.
               return this.options.gl && this.glInitialized ? 2 : 1;
+            }
+            getPanes() {
+              return { overlayLayer: this.layer };
             }
             getProjection() {
               return {
@@ -454,6 +487,7 @@ export const test = apiTest.extend<{
           window.naver = {
             maps: {
               glEnabled: true,
+              Position: { BOTTOM_LEFT: 10 },
               LatLng,
               Point: MapPoint,
               Size: MapSize,
@@ -484,6 +518,11 @@ export const test = apiTest.extend<{
         setZoom: async (zoom) => {
           await page.evaluate((value) => (window as unknown as TestMapWindow).__naverMapTest.setZoom(value), zoom);
         },
+        setRotation: (rotation) =>
+          page.evaluate((value) => (window as unknown as TestMapWindow).__naverMapTest.setRotation(value), rotation),
+        getRotation: () => page.evaluate(() => (window as unknown as TestMapWindow).__naverMapTest.getRotation()),
+        panToPoint: (point) =>
+          page.evaluate((value) => (window as unknown as TestMapWindow).__naverMapTest.panToPoint(value), point),
         panToStop: async (sequence) => {
           await page.evaluate(
             (value) => (window as unknown as TestMapWindow).__naverMapTest.panToStop(value),
