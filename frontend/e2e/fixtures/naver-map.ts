@@ -9,6 +9,21 @@ interface MapSnapshot {
 
 type NativeFailure = "all" | "update" | "resize" | "frame";
 
+/** 정류장 핀 하나의 지도 연결 여부와 지도 요소 기준 화면 좌표다. 지도에서 뗀 핀도 좌표를 계산한다. */
+export interface StopPin {
+  sequence: number;
+  label: string | null;
+  attached: boolean;
+  x: number;
+  y: number;
+}
+
+export interface StopPins {
+  width: number;
+  height: number;
+  pins: StopPin[];
+}
+
 interface BrowserMapControls {
   initialize: () => void;
   finishIdle: () => void;
@@ -18,6 +33,7 @@ interface BrowserMapControls {
   panToStop: (sequence: number) => void;
   panToPoint: (point: [number, number]) => void;
   snapshot: () => MapSnapshot;
+  stopPins: () => StopPins;
   failNative: (operation: NativeFailure) => void;
 }
 
@@ -30,6 +46,7 @@ interface MapFixture {
   panToStop: (sequence: number) => Promise<void>;
   panToPoint: (point: [number, number]) => Promise<void>;
   snapshot: () => Promise<MapSnapshot>;
+  stopPins: () => Promise<StopPins>;
   failNative: (operation: NativeFailure) => Promise<void>;
 }
 
@@ -84,6 +101,8 @@ export const test = apiTest.extend<{
 
           class FakeMap implements NaverMap {
             readonly markers = new Set<FakeMarker>();
+            // 화면 밖이라 지도에서 뗀 마커도 테스트가 좌표로 찾을 수 있게 한 번이라도 붙은 마커를 기억한다.
+            readonly knownMarkers = new Set<FakeMarker>();
             readonly drawings = new Set<Drawable>();
             readonly listeners = new Set<Listener>();
             readonly layer: HTMLDivElement;
@@ -163,14 +182,30 @@ export const test = apiTest.extend<{
                 setRotation: (rotation) => this.setRotation(rotation),
                 getRotation: () => this.getRotation(),
                 panToPoint: ([longitude, latitude]) => this.setCenter(new LatLng(latitude, longitude)),
+                // 실제 지도처럼 좌표로 이동하므로 지도에서 뗀 정류장으로도 이동할 수 있다.
                 panToStop: (sequence) => {
-                  const marker = [...this.markers].find(
-                    (item) => item.content.dataset.mapStopSequence === String(sequence),
-                  );
-                  if (!marker) throw new Error(`정류장 ${sequence}가 지도에 없습니다`);
+                  const marker = this.stopMarkers().get(String(sequence));
+                  if (!marker) throw new Error(`정류장 ${sequence}의 핀을 만든 적이 없습니다`);
                   this.setCenter(marker.position);
                 },
                 snapshot: () => ({ zoom: this.zoom, latitude: this.center.lat(), longitude: this.center.lng() }),
+                stopPins: () => {
+                  const project = this.getProjection().fromCoordToOffset;
+                  return {
+                    width: this.size.width,
+                    height: this.size.height,
+                    pins: [...this.stopMarkers()].map(([sequence, marker]) => {
+                      const point = project(marker.position);
+                      return {
+                        sequence: Number(sequence),
+                        label: marker.content.getAttribute("aria-label"),
+                        attached: marker.attached,
+                        x: point.x,
+                        y: point.y,
+                      };
+                    }),
+                  };
+                },
                 failNative: (operation) => {
                   const fail = () => {
                     throw new Error("지도 SDK 내부 구현을 사용할 수 없습니다");
@@ -191,6 +226,15 @@ export const test = apiTest.extend<{
               queueMicrotask(() => {
                 if (!holdMapInitialization) this.initialize();
               });
+            }
+            private stopMarkers() {
+              // 같은 지도에 노선을 다시 그리면 나중에 만든 핀이 현재 정류장이다.
+              const latest = new Map<string, FakeMarker>();
+              this.knownMarkers.forEach((marker) => {
+                const sequence = marker.content.dataset.mapStopSequence;
+                if (sequence !== undefined) latest.set(sequence, marker);
+              });
+              return latest;
             }
             private initialize() {
               if (this.glInitialized || !this.layer.isConnected) return;
@@ -336,6 +380,7 @@ export const test = apiTest.extend<{
               this.layer.remove();
               this.listeners.clear();
               this.markers.clear();
+              this.knownMarkers.clear();
               this.drawings.clear();
             }
             draw() {
@@ -371,12 +416,16 @@ export const test = apiTest.extend<{
               this.setZIndex(options.zIndex);
               this.setMap(options.map);
             }
+            get attached() {
+              return this.map !== null;
+            }
             setMap(map: NaverMap | null) {
               this.map?.markers.delete(this);
               this.map = map as FakeMap | null;
               if (this.map === null) this.wrapper.remove();
               else {
                 this.map.markers.add(this);
+                this.map.knownMarkers.add(this);
                 this.map.layer.append(this.wrapper);
                 this.draw();
               }
@@ -530,6 +579,7 @@ export const test = apiTest.extend<{
           );
         },
         snapshot: () => page.evaluate(() => (window as unknown as TestMapWindow).__naverMapTest.snapshot()),
+        stopPins: () => page.evaluate(() => (window as unknown as TestMapWindow).__naverMapTest.stopPins()),
         failNative: (operation) =>
           page.evaluate((value) => (window as unknown as TestMapWindow).__naverMapTest.failNative(value), operation),
       });

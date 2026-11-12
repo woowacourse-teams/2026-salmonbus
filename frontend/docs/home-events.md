@@ -10,16 +10,18 @@
 
 ### 날씨 지역 이름
 
-조회한 지도 중심이 들어가는 행정구역 이름을 표시합니다. 서울·경기·인천은 읍·면·동까지, 다른 지역은 시·군·구까지 표시합니다. 날씨 지역을 확인할 때 경계 파일을 불러옵니다. 행정구역을 찾을 수 없으면 가까운 정류장 이름이나 ‘지도 중심 날씨’를 표시합니다.
+조회한 지도 중심이 들어가는 행정구역 이름을 표시합니다. 서울·경기·인천은 읍·면·동까지, 다른 지역은 시·군·구까지 표시합니다. 날씨 지역을 확인할 때 지도 중심이 속한 0.25도 격자 조각 하나만 불러옵니다. 행정구역을 찾을 수 없으면 가까운 정류장 이름이나 ‘지도 중심 날씨’를 표시합니다.
 
-경계 원본은 [통계청 SGIS](https://sgis.mods.go.kr/view/pss/openDataIntrcn)의 자료(공공누리 제1유형)를 가공한 [VW LAB 행정동 경계 2026-10-01](https://github.com/vuski/admdongkor/tree/master/ver20261001)입니다. 가공 데이터는 [CC BY 4.0](https://github.com/vuski/admdongkor/blob/master/LICENSE-DATA)에 따라 사용하며, 이 앱은 표시 범위에 맞춰 경계를 합치고 단순화했습니다. 경계를 갱신하려면 원본 GeoJSON을 받아 `frontend`에서 아래 명령을 실행합니다.
+경계 원본은 [통계청 SGIS](https://sgis.mods.go.kr/view/pss/openDataIntrcn)의 자료(공공누리 제1유형)를 가공한 [VW LAB 행정동 경계 2026-10-01](https://github.com/vuski/admdongkor/tree/master/ver20261001)입니다. 가공 데이터는 [CC BY 4.0](https://github.com/vuski/admdongkor/blob/master/LICENSE-DATA)에 따라 사용하며, 이 앱은 표시 범위에 맞춰 경계를 합치고 단순화했습니다. 경계를 갱신하려면 원본 GeoJSON을 받아 `frontend`에서 아래 명령을 실행합니다. 마지막 명령은 `adminAreaTiles` 폴더의 `*.json`을 모두 지우고 0.25도 격자 조각으로 다시 만듭니다.
 
 ```sh
+curl -L -o HangJeongDong_ver20261001.geojson \
+  https://raw.githubusercontent.com/vuski/admdongkor/master/ver20261001/HangJeongDong_ver20261001.geojson
 npm exec --yes --package mapshaper@0.7.101 -- mapshaper HangJeongDong_ver20261001.geojson \
   -each 'label = ["11","28","41"].includes(sido) ? adm_nm : sidonm + " " + sggnm' \
   -dissolve label -simplify dp interval=40m keep-shapes \
   -o format=geojson precision=0.00001 /tmp/salmonbus-admin-regions.geojson
-python3 scripts/pack-home-areas.py </tmp/salmonbus-admin-regions.geojson >src/pages/route-select/home/data/adminAreas.json
+python3 scripts/pack-home-areas.py src/pages/route-select/home/data/adminAreaTiles </tmp/salmonbus-admin-regions.geojson
 ```
 
 ## 배포와 갱신

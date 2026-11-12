@@ -165,6 +165,64 @@ class JdbcAlightingAwareForecastEvaluationTest {
             """).params(source, AFTER).query(Integer.class).single()).isZero();
     }
 
+    @ParameterizedTest(name = "{0}")
+    @CsvSource({"v2,false,false", "v3 출퇴근,true,false", "v3 확장,true,true"})
+    void 같은_예보의_전체형과_정원형은_정산값과_계수_해시가_같다(
+        String scenario, boolean confirmed, boolean extended
+    ) {
+        if (confirmed) {
+            useConfirmedProfile();
+            jdbc.sql("UPDATE observation_batch SET ingestion_origin='LIVE',input_confirmed_at=response_received_at "
+                + "WHERE route_version_id=?").param(version).update();
+        }
+        if (extended) {
+            // 이 표본의 실제 하차 시각은 09시대다. 휴일로 표시해 확장 정산을 선택한다.
+            jdbc.sql("""
+                UPDATE seat_forecast SET feature_snapshot=feature_snapshot || '{
+                    "holidays":["2026-01-05"],
+                    "extendedSettlement":{"holiday-day":{"p":0.31,"lam":[2,2,2,2,2,2,2,2],"kappa":1,"r":2}}
+                }'::jsonb WHERE vehicle_observation_id=?
+                """).param(source).update();
+        }
+        String work = jdbc.sql("""
+            SELECT to_jsonb(w)::text FROM alighting_forecast_evaluation_work w WHERE vehicle_observation_id=?
+            """).param(source).query(String.class).single();
+        service.settle();
+        Map<String, Object> full = settledLabelAndParameters();
+        assertThat(full).containsEntry("scoring_state", "SETTLED");
+        assertThat(full.get("label_value")).isNotNull();
+        assertThat(full.get("parameter_hash")).asString().matches("[0-9a-f]{64}");
+
+        tx.executeWithoutResult(status -> {
+            jdbc.sql("""
+                UPDATE model_deployment m SET settlement_context=jsonb_build_object(f.route_version_id::text,
+                    jsonb_build_object('shared', f.feature_snapshot - 'capacity' - 'alighting',
+                        'stops',jsonb_build_object(f.target_stop_order::text, f.feature_snapshot->'alighting'->'stops')))
+                FROM seat_forecast f WHERE m.id=f.model_deployment_id AND f.vehicle_observation_id=?
+                """).param(source).update();
+            jdbc.sql("""
+                UPDATE seat_forecast SET feature_snapshot=jsonb_build_object('capacity',feature_snapshot->'capacity')
+                WHERE vehicle_observation_id=?
+                """).param(source).update();
+            jdbc.sql("DELETE FROM alighting_forecast_evaluation_result WHERE vehicle_observation_id=?")
+                .param(source).update();
+            jdbc.sql("""
+                INSERT INTO alighting_forecast_evaluation_work
+                SELECT (jsonb_populate_record(NULL::alighting_forecast_evaluation_work,CAST(? AS jsonb))).*
+                """).param(work).update();
+        });
+
+        service.settle();
+        assertThat(settledLabelAndParameters()).isEqualTo(full);
+    }
+
+    private Map<String, Object> settledLabelAndParameters() {
+        return jdbc.sql("""
+            SELECT scoring_state,label_value,parameter_hash FROM alighting_forecast_evaluation_result
+            WHERE vehicle_observation_id=? AND target_kind=?
+            """).params(source, AFTER).query().singleRow();
+    }
+
     @Test
     void 발행하면_하차_후_잔여석_정산만_등록한다() {
         assertThat(count("alighting_forecast_evaluation_work")).isOne();

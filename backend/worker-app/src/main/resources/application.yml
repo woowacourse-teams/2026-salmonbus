@@ -87,6 +87,7 @@ walking:
 # 켜는 것은 배포 행이 선 뒤다. 수집(collection.enabled)과 같은 방식으로 끈다.
 forecast:
   enabled: ${FORECAST_ENABLED:false}
+  compact-settlement-write: ${FORECAST_COMPACT_SETTLEMENT_WRITE:false}
   interval: 30s # 관측 저장 이벤트를 놓친 batch를 집으러 가는 주기. 늦게 붙은 예보도 정산 라벨 간격 90초 안에 들게 둔다.
   settlement-interval: 60s # 라벨 회수 주기. 예보와 다른 시계에서 돈다.
   # 이보다 오래된 판에는 예보를 안 붙인다. 앵커가 둘이다.

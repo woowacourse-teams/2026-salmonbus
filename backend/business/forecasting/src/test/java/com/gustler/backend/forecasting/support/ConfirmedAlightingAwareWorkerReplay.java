@@ -15,6 +15,7 @@ import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
+import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
@@ -22,6 +23,7 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRout
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareVehiclePrefix;
+import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingPredictor;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareHistorySeedReader;
 import com.gustler.backend.forecasting.infrastructure.alighting.ConfirmedAlightingAwareInput;
@@ -42,6 +44,7 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -175,12 +178,12 @@ public final class ConfirmedAlightingAwareWorkerReplay {
             AlightingAwareRouteStatistics statistics = model.statistics(stops);
             JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
             new JdbcVehicleCapacityStore(jdbc)), "", 250_000, true, directory);
-            final boolean extended = row.has("extended_inputs");
             ReplayForecast expected = expectedForecast(row, query, source, stops, statistics, bundle);
             maximumFeature = Math.max(maximumFeature, expected.featureDifference());
             ForecastBatchWriter writer = new ForecastBatchWriter(
                 context.getBean(ForecastBatchCommitter.class), Clock.fixed(source.receivedAt(), ZoneOffset.UTC),
                 quality);
+            writer.setCompactSettlementWrite(true);
             writer.setAlightingAwareFeatures(query);
             writer.setConfirmedInput(context.getBean(ConfirmedAlightingAwareInput.class));
             PendingForecastBatch batch = new PendingForecastBatch(source.batchId(), source.routeVersionId(), routeId,
@@ -195,13 +198,6 @@ public final class ConfirmedAlightingAwareWorkerReplay {
                 .params(source.observationId(), row.path("target").asInt()).query(Double.class).single();
             maximumPrediction = Math.max(maximumPrediction,
                 Math.abs(fullProbability - expected.full()));
-            if (extended) {
-                String evidence = jdbc.sql("""
-                    SELECT feature_snapshot::text FROM seat_forecast WHERE vehicle_observation_id=? AND target_stop_order=?
-                    """).params(source.observationId(), row.path("target").asInt()).query(String.class).single();
-                maximumFeature = Math.max(maximumFeature,
-                    compare(row.path("extended_inputs"), vector(JSON.readTree(evidence).path("extendedInputs"))));
-            }
             if (row.path("boundary_probe").asBoolean(false)) {
                 verifyRushEvidence(jdbc, source.observationId(), row.path("target").asInt());
                 boundaryProbes++;
@@ -289,7 +285,7 @@ public final class ConfirmedAlightingAwareWorkerReplay {
                 "published", entry.getValue()[0], "settled", entry.getValue()[1]))
             .toList();
         final boolean extendedReplay = cases.stream().anyMatch(row -> row.has("extended_inputs"));
-        final int restored = restoreFirstSettled(jdbc, tx.getTransactionManager(), routeId, extendedReplay);
+        final int restored = restoreFirstSettled(jdbc, tx.getTransactionManager(), routeId, cases.stream().filter(row -> row.has("extended_inputs")).toList());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("route", route);
         result.put("cases", cases.size());
@@ -318,7 +314,14 @@ public final class ConfirmedAlightingAwareWorkerReplay {
         AlightingAwareInferenceBundle bundle
     ) {
         if (row.has("extended_inputs")) {
-            return new ReplayForecast(row.get("expected_seats").asDouble(), row.get("expected_full").asDouble(), 0);
+            AlightingAwareFeatureSnapshot snapshot =
+                query.readExtended(source.batchId(), stops, statistics).get(source.observationId());
+            VehicleStopTarget target = stops.targetsAheadOf(snapshot.observation()).stream()
+                .filter(candidate -> candidate.stopOrder() == row.path("target").asInt()).findFirst().orElseThrow();
+            boolean offDay = "off".equals(statistics.dayType(snapshot.source().receivedAt()
+                .atZone(ZoneId.of("Asia/Seoul")).toLocalDate()));
+            double difference = compare(row.path("extended_inputs"), ExtendedAlightingPredictor.inputs(snapshot, target, offDay));
+            return new ReplayForecast(row.get("expected_seats").asDouble(), row.get("expected_full").asDouble(), difference);
         }
         AlightingAwareFeatureSnapshot snapshot = query.read(source.batchId(), stops, statistics).get(source.observationId());
         if (snapshot == null) {
@@ -338,14 +341,12 @@ public final class ConfirmedAlightingAwareWorkerReplay {
 
     private static void verifyRushEvidence(JdbcClient jdbc, final long source, final int target) {
         String evidence = jdbc.sql("""
-            SELECT feature_snapshot::text FROM seat_forecast WHERE vehicle_observation_id=? AND target_stop_order=?
+            SELECT (deployment.settlement_context->(forecast.route_version_id::text)
+                    ->'shared'->'extendedSettlement'->'work-day')::text
+            FROM seat_forecast forecast JOIN model_deployment deployment ON deployment.id=forecast.model_deployment_id
+            WHERE forecast.vehicle_observation_id=? AND forecast.target_stop_order=?
             """).params(source, target).query(String.class).single();
-        JsonNode payload = JSON.readTree(evidence);
-        if (payload.path("seat88").size() != 88 || payload.path("probability80").size() != 80
-            || !payload.path("extendedInputs").isMissingNode()) {
-            throw new IllegalStateException("Boundary forecast did not use the rush model");
-        }
-        if (payload.path("extendedSettlement").path("work-day").isMissingNode()) {
+        if (evidence == null) {
             throw new IllegalStateException("Boundary forecast does not preserve the daytime settlement parameters");
         }
     }
@@ -354,9 +355,9 @@ public final class ConfirmedAlightingAwareWorkerReplay {
     }
 
     private static int restoreFirstSettled(
-        JdbcClient jdbc, PlatformTransactionManager transactions, final long route, final boolean extendedReplay
+        JdbcClient jdbc, PlatformTransactionManager transactions, final long route, List<JsonNode> extendedCases
     ) {
-        if (!extendedReplay) {
+        if (extendedCases.isEmpty()) {
             return 0;
         }
         List<Map<String, Object>> keys = jdbc.sql("""
@@ -364,10 +365,13 @@ public final class ConfirmedAlightingAwareWorkerReplay {
                    result.quality_revision,result.label_value
             FROM alighting_forecast_evaluation_result result
             JOIN route_version version ON version.id=result.route_version_id
-            JOIN seat_forecast forecast USING(vehicle_observation_id,target_stop_order)
-            WHERE version.route_id=? AND result.scoring_state='SETTLED' AND forecast.feature_snapshot->'extendedInputs' IS NOT NULL
-            ORDER BY result.scored_at,result.vehicle_observation_id,result.target_stop_order LIMIT 1
-            """).param(route).query().listOfRows();
+            WHERE version.route_id=? AND result.scoring_state='SETTLED'
+            ORDER BY result.scored_at,result.vehicle_observation_id,result.target_stop_order
+            """).param(route).query().listOfRows().stream()
+            .filter(key -> extendedCases.stream().anyMatch(row ->
+                row.path("source_id").asLong() == ((Number) key.get("vehicle_observation_id")).longValue()
+                    && row.path("target").asInt() == ((Number) key.get("target_stop_order")).intValue()))
+            .limit(1).toList();
         if (keys.isEmpty()) {
             return 0;
         }

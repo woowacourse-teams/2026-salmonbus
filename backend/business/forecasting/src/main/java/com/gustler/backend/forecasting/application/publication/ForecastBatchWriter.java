@@ -9,7 +9,6 @@ import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
-import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingPredictor;
@@ -26,12 +25,13 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /** 조회·계산은 트랜잭션 밖에서 수행하고, 발행 확정만 별도 빈에 맡긴다. */
@@ -46,6 +46,12 @@ public class ForecastBatchWriter {
     private final RouteWorkAccess routeWork;
     private AlightingAwareFeatureQuery alightingFeatures;
     private AlightingAwareInputConfirmation confirmedInput;
+    private boolean compactSettlementWrite;
+
+    @Value("${forecast.compact-settlement-write:false}")
+    public void setCompactSettlementWrite(boolean enabled) {
+        this.compactSettlementWrite = enabled;
+    }
 
     @Autowired(required = false)
     public void setAlightingAwareFeatures(AlightingAwareFeatureQuery alightingFeatures) {
@@ -129,7 +135,8 @@ public class ForecastBatchWriter {
         }
         return commitAlightingAware(batch, new ForecastPublication(batch.observationBatchId(),
             batch.routeVersionId(), runtime.deploymentId(), 0, qualityRevision,
-            batch.responseReceivedAt(), generatedAt, generatedAt, predictions), statistics);
+            batch.responseReceivedAt(), generatedAt, generatedAt, predictions,
+            !compactSettlementWrite || predictions.isEmpty() ? null : settlementContext(model, statistics, predictions)), statistics);
     }
 
     private int commitAlightingAware(PendingForecastBatch batch, ForecastPublication publication, AlightingAwareRouteStatistics statistics) {
@@ -166,6 +173,39 @@ public class ForecastBatchWriter {
         }
     }
 
+    private String settlementContext(
+        AlightingAwareSeatForecastModel model, AlightingAwareRouteStatistics statistics, List<SeatForecast> predictions
+    ) {
+        Map<Integer, String> targets = model.settlementEvidence(statistics.route());
+        if (predictions.stream().anyMatch(row -> !targets.containsKey(row.targetStopOrder()))) {
+            throw new IllegalStateException("예보 대상 정류장의 정산 근거가 없다");
+        }
+        JsonNode source = JSON.readTree(targets.values().iterator().next());
+        ObjectNode shared = JSON.createObjectNode();
+        shared.put("capacityPolicy", "vehicle-capacity-snapshot-v1");
+        shared.put("inputProfile", statistics.profile().input());
+        for (String field : List.of("turn", "realStopOrders", "extendedSettlement")) {
+            if (source.has(field)) {
+                shared.set(field, source.get(field));
+            }
+        }
+        if (source.has("holidays")) {
+            List<String> holidays = new ArrayList<>();
+            source.path("holidays").forEach(day -> holidays.add(day.asString()));
+            holidays.sort(String::compareTo);
+            shared.set("holidays", JSON.valueToTree(holidays));
+        }
+        ObjectNode stops = JSON.createObjectNode();
+        targets.forEach((order, evidence) -> {
+            JsonNode parameters = JSON.readTree(evidence).path("alighting").path("stops");
+            stops.set(order.toString(), parameters.isArray() ? parameters : JSON.createArrayNode());
+        });
+        ObjectNode context = JSON.createObjectNode();
+        context.set("shared", shared);
+        context.set("stops", stops);
+        return JSON.writeValueAsString(context);
+    }
+
     private SeatForecast alightingForecast(
         PendingForecastBatch batch,
         RuntimeSnapshot runtime,
@@ -176,18 +216,24 @@ public class ForecastBatchWriter {
         VehicleStopTarget target,
         final boolean extended
     ) {
-        ObjectNode evidence = (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.stopOrder()));
-        evidence.put("asOf", batch.responseReceivedAt().toString());
-        evidence.put("inputProfile", statistics.profile().input());
-        evidence.put("capacityPolicy", "vehicle-capacity-snapshot-v1");
-        evidence.put("capacity", snapshot.capacity());
-        if (statistics.confirmedProfile()) {
-            evidence.put("asOf", snapshot.source().receivedAt().toString());
-            evidence.put("tripStartObservationId", snapshot.provenance().tripStartObservationId());
+        ObjectNode evidence = compactSettlementWrite ? JSON.createObjectNode()
+            : (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.stopOrder()));
+        if (!compactSettlementWrite) {
+            evidence.put("inputProfile", statistics.profile().input());
+            evidence.put("capacityPolicy", "vehicle-capacity-snapshot-v1");
+            evidence.put("asOf", batch.responseReceivedAt().toString());
+            evidence.put("vehicleObservationId", snapshot.vehicleObservationId());
+            evidence.put("sourceBatchId", batch.observationBatchId());
+            if (statistics.confirmedProfile()) {
+                evidence.put("asOf", snapshot.source().receivedAt().toString());
+                evidence.put("tripStartObservationId", snapshot.provenance().tripStartObservationId());
+            }
+            if (extended) {
+                evidence.put("forecastInput", "alighting-extended-six-v1");
+            }
         }
-        evidence.put("vehicleObservationId", snapshot.vehicleObservationId());
-        evidence.put("sourceBatchId", batch.observationBatchId());
-        SeatForecastResult prediction = predict(model, statistics, snapshot, target, evidence, extended);
+        evidence.put("capacity", snapshot.capacity());
+        SeatForecastResult prediction = predict(model, statistics, snapshot, target, extended);
         return SeatForecast.of(snapshot.vehicleObservationId(), target,
             prediction, runtime.deploymentId(), 0, generatedAt)
             .withAlightingAwareEvidence(JSON.writeValueAsString(evidence), model.bundleDigest(), statistics.confirmedProfile()
@@ -199,33 +245,13 @@ public class ForecastBatchWriter {
         AlightingAwareRouteStatistics statistics,
         AlightingAwareFeatureSnapshot snapshot,
         VehicleStopTarget target,
-        ObjectNode evidence,
         final boolean extended
     ) {
         if (extended) {
             ZonedDateTime local = snapshot.source().receivedAt().atZone(ZoneId.of("Asia/Seoul"));
             final boolean offDay = "off".equals(statistics.dayType(local.toLocalDate()));
-            double[] inputs = ExtendedAlightingPredictor.inputs(snapshot, target, offDay);
-            evidence.put("forecastInput", "alighting-extended-six-v1");
-            evidence.set("extendedInputs", nullableVector(inputs));
-            return model.predictExtended(statistics.route(), inputs);
+            return model.predictExtended(statistics.route(), ExtendedAlightingPredictor.inputs(snapshot, target, offDay));
         }
-        AlightingAwareFeatureVector vector = snapshot.forTarget(target.stopOrder());
-        evidence.set("seat88", nullableVector(vector.seat88()));
-        evidence.set("probability80", nullableVector(vector.probability80()));
-        return model.predict(vector);
+        return model.predict(snapshot.forTarget(target.stopOrder()));
     }
-
-    private static ArrayNode nullableVector(double[] vector) {
-        ArrayNode result = JSON.createArrayNode();
-        for (final double value : vector) {
-            if (Double.isNaN(value)) {
-                result.addNull();
-                continue;
-            }
-            result.add(value);
-        }
-        return result;
-    }
-
 }

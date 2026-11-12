@@ -1,0 +1,218 @@
+name: DOMAIN-WIKI-UPDATE
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    outputs:
+      approval_required: ${{ steps.approval_status.outputs.required }}
+      pr_url: ${{ steps.context.outputs.url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ATLASSIAN_EMAIL: ${{ secrets.ATLASSIAN_EMAIL }}
+      ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.KOROGIT_DISCORD_WEBHOOK_URL }}
+      PYTHONPATH: tools/domain-wiki
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Clone Git Wiki without writing
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.wiki.git" .domain-wiki/wiki
+      - name: Find the merged PR and discussion
+        id: context
+        env:
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          mkdir -p .domain-wiki
+          gh api "repos/${REPOSITORY}/commits/${SHA}/pulls" > .domain-wiki/pulls.json
+          jq '[.[] | select(.merged_at != null and .base.ref == "dev")][0] // {}' .domain-wiki/pulls.json > .domain-wiki/pr-full.json
+          jq '{title: (.title // ""), body: (.body // ""), number: .number, url: .html_url}' .domain-wiki/pr-full.json > .domain-wiki/pr.json
+          number="$(jq -r '.number // empty' .domain-wiki/pr-full.json)"
+          url="$(jq -r '.html_url // empty' .domain-wiki/pr-full.json)"
+          echo "number=${number}" >> "$GITHUB_OUTPUT"
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          if [[ -n "$number" ]]; then
+            gh api --paginate --slurp "repos/${REPOSITORY}/issues/${number}/comments" | jq 'add' > .domain-wiki/issue-comments.json
+            gh api --paginate --slurp "repos/${REPOSITORY}/pulls/${number}/comments" | jq 'add' > .domain-wiki/review-comments.json
+            gh api --paginate --slurp "repos/${REPOSITORY}/pulls/${number}/reviews" | jq 'add' > .domain-wiki/reviews.json
+            jq -s 'add' .domain-wiki/issue-comments.json .domain-wiki/review-comments.json .domain-wiki/reviews.json > .domain-wiki/discussion.json
+          else
+            printf '[]\n' > .domain-wiki/discussion.json
+          fi
+      - name: Check AI credentials
+        id: credentials
+        shell: bash
+        run: |
+          if [[ -n "$OPENAI_API_KEY" && -n "$ATLASSIAN_EMAIL" && -n "$ATLASSIAN_API_TOKEN" ]]; then
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+            echo 'Wiki review skipped until secrets are configured.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Prepare Wiki update for human approval
+        if: ${{ steps.credentials.outputs.configured == 'true' }}
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: >-
+          python3 -m domain_wiki.wiki_update_cli
+          --repository . --base "$BASE_SHA" --head "$HEAD_SHA"
+          --wiki-directory .domain-wiki/wiki
+          --seed-directory tools/domain-wiki/wiki-seed
+          --pull-request-context .domain-wiki/pr.json
+          --discussion .domain-wiki/discussion.json
+      - name: Read approval status
+        id: approval_status
+        if: ${{ steps.credentials.outputs.configured == 'true' }}
+        shell: bash
+        run: |
+          if [[ "$(jq -r '.status' .domain-wiki/output/wiki-result.json)" == 'approval-required' ]]; then
+            echo 'required=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'required=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Add approval instructions
+        if: ${{ steps.approval_status.outputs.required == 'true' }}
+        env:
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          {
+            echo
+            echo "- 승인 화면: https://github.com/${REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo '- Actions에서 `Review deployments`를 누른 뒤 `Approve and deploy`를 선택하면 반영됩니다.'
+          } >> .domain-wiki/output/wiki-comment.md
+      - name: Show the exact Wiki changes before approval
+        if: ${{ steps.approval_status.outputs.required == 'true' }}
+        shell: bash
+        run: cat .domain-wiki/output/wiki-comment.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Save approval request
+        if: ${{ steps.credentials.outputs.configured == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: wiki-approval-${{ github.run_id }}
+          path: .domain-wiki/output
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish Wiki review on the merged PR
+        if: ${{ steps.credentials.outputs.configured == 'true' && steps.context.outputs.number != '' }}
+        env:
+          PR_NUMBER: ${{ steps.context.outputs.number }}
+        run: >-
+          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}"
+          --body-file .domain-wiki/output/wiki-comment.md
+      - name: Notify Discord about the Wiki approval
+        if: ${{ steps.credentials.outputs.configured == 'true' }}
+        continue-on-error: true
+        env:
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          if [[ -z "$DISCORD_WEBHOOK_URL" ]]; then
+            echo 'Discord notification skipped because DISCORD_WEBHOOK_URL is not configured.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ "$(jq -r '.status' .domain-wiki/output/wiki-result.json)" != 'approval-required' ]]; then
+            exit 0
+          fi
+          python3 -m domain_wiki.discord_notify_cli \
+            --approval .domain-wiki/output/wiki-approval.json \
+            --result .domain-wiki/output/wiki-result.json \
+            --repository "$REPOSITORY" \
+            --run-id "$GITHUB_RUN_ID" \
+            --send
+
+  approval:
+    needs: review
+    if: ${{ needs.review.outputs.approval_required == 'true' }}
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    environment:
+      name: wiki-update-approval
+      url: ${{ needs.review.outputs.pr_url || format('https://github.com/{0}/actions/runs/{1}', github.repository, github.run_id) }}
+    steps:
+      - name: Record human approval
+        run: echo 'Wiki update approved.' >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    needs: [review, approval]
+    if: ${{ needs.review.outputs.approval_required == 'true' && needs.approval.result == 'success' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: domain-wiki-apply
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONPATH: tools/domain-wiki
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Download the reviewed approval request
+        uses: actions/download-artifact@v4
+        with:
+          name: wiki-approval-${{ github.run_id }}
+          path: .domain-wiki/output
+      - name: Clone current Git Wiki
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.wiki.git" .domain-wiki/wiki
+      - name: Apply the exact human-approved update
+        shell: bash
+        run: |
+          base_sha="$(jq -r '.baseSha' .domain-wiki/output/wiki-approval.json)"
+          head_sha="$(jq -r '.headSha' .domain-wiki/output/wiki-approval.json)"
+          approval_digest="$(jq -r '.approvalDigest' .domain-wiki/output/wiki-approval.json)"
+          python3 -m domain_wiki.wiki_update_cli \
+            --repository . --base "$base_sha" --head "$head_sha" \
+            --wiki-directory .domain-wiki/wiki \
+            --seed-directory tools/domain-wiki/wiki-seed \
+            --pull-request-context /dev/null --discussion /dev/null \
+            --apply-approval .domain-wiki/output/wiki-approval.json \
+            --approval-digest "$approval_digest"
+      - name: Commit and push Wiki changes
+        working-directory: .domain-wiki/wiki
+        shell: bash
+        run: |
+          if git diff --quiet && [[ -z "$(git status --short)" ]]; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git commit -m "docs: 승인된 dev 머지 결과 반영 (${{ github.sha }})"
+          git push origin HEAD
+      - name: Publish applied result on the merged PR
+        shell: bash
+        run: |
+          number="$(jq -r '.pullRequest.number // empty' .domain-wiki/output/wiki-approval.json)"
+          if [[ -n "$number" ]]; then
+            gh pr comment "$number" --repo "${{ github.repository }}" --body-file .domain-wiki/output/wiki-comment.md
+          fi

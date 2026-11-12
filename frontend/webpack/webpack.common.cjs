@@ -38,6 +38,11 @@ module.exports = {
         type: "asset/resource",
       },
       {
+        test: /adminAreaTiles[\\/][^\\/]+\.json$/,
+        type: "asset/resource",
+        generator: { filename: "assets/areas/[name].[contenthash:8][ext]" },
+      },
+      {
         test: /\.md$/i,
         include: path.resolve(__dirname, "../src/pages/privacy/editions"),
         type: "asset/source",

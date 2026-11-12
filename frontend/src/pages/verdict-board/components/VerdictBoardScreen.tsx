@@ -219,14 +219,15 @@ function ObservationErrorSheet({ children }: { children: ReactNode }) {
     <main className={styles.sharedPage} style={{ height: viewport.height, top: viewport.top }}>
       <div className={styles.content}>
         <h1 className={visuallyHidden}>노선 판정보드</h1>
-        <div className={styles.mapSlot}>{snap !== "full" && <BoardBackLink />}</div>
+        <div className={styles.mapSlot} />
         <BoardBottomSheet
           id={sheetId}
           snap={snap}
           onSnapChange={setSnap}
           viewportHeight={viewport.height}
           enteringFromMap
-          header={snap === "full" && <BoardBackLink inHeader />}
+          mapHeader={<BoardBackLink />}
+          fullHeader={<BoardBackLink inHeader />}
         >
           {children}
         </BoardBottomSheet>
@@ -285,7 +286,6 @@ function OutOfServiceSheet({
               quietInitialLoad
             />
           )}
-          {mapVisible && <BoardRouteControls routeName={routeName} />}
         </div>
         <BoardBottomSheet
           id={sheetId}
@@ -293,7 +293,8 @@ function OutOfServiceSheet({
           onSnapChange={setSnap}
           viewportHeight={viewport.height}
           enteringFromMap={shared}
-          header={snap === "full" && <BoardRouteControls routeName={routeName} inHeader />}
+          mapHeader={<BoardRouteControls routeName={routeName} />}
+          fullHeader={<BoardRouteControls routeName={routeName} inHeader />}
         >
           <div className={styles.centeredNotice}>
             <img className={styles.noticeMascot} src={salmongCrying} width={88} height={88} alt="" />
@@ -479,7 +480,6 @@ function OperatingBoard({
               shared && (stationEntry !== null || favoriteMapEntry || quietMapLoadingFrom(locationState))
             }
           />
-          <BoardRouteControls routeName={board.route.displayName} />
         </div>
         <BoardBottomSheet
           id={sheetId}
@@ -487,9 +487,10 @@ function OperatingBoard({
           onSnapChange={setSnap}
           viewportHeight={viewport.height}
           enteringFromMap={shared && stationEntry === null}
+          mapHeader={<BoardRouteControls routeName={board.route.displayName} />}
+          fullHeader={<BoardRouteControls routeName={board.route.displayName} inHeader />}
           header={
             <>
-              {snap === "full" && <BoardRouteControls routeName={board.route.displayName} inHeader />}
               <div className={styles.directionHeader}>
                 <BoardRouteSummary key={board.route.id} board={board} direction={direction} />
                 <DirectionTabs

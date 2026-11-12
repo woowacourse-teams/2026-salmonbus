@@ -1,0 +1,207 @@
+name: DOMAIN-POLICY-REVIEW
+
+on:
+  pull_request_target:
+    branches: [dev]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: domain-policy-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-context:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      available: ${{ steps.generate.outputs.available }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Fetch PR head as untrusted data
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: git fetch --no-tags origin "pull/${PR_NUMBER}/head:refs/remotes/policy-review/head"
+      - name: Select changed TypeScript files
+        id: select
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          mkdir -p .domain-wiki
+          python3 - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+
+          merge_base = subprocess.check_output([
+              "git", "merge-base", os.environ["BASE_SHA"], os.environ["HEAD_SHA"],
+          ], text=True).strip()
+          paths = subprocess.check_output([
+              "git", "diff", "--name-only", "-z", "--no-ext-diff",
+              merge_base, os.environ["HEAD_SHA"], "--",
+          ]).split(b"\0")
+          selected = [
+              path for path in paths
+              if path.startswith(b"frontend/") and path.endswith((b".ts", b".tsx"))
+          ]
+          Path(".domain-wiki/typescript-paths").write_bytes(b"\0".join(selected))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"available={'true' if selected else 'false'}\n")
+          PY
+      - name: Set up Node.js and pnpm
+        if: ${{ steps.select.outputs.available == 'true' }}
+        uses: pnpm/setup@v1
+        with:
+          version: 11.20.0
+          runtime: node@24
+          cache: true
+          cache-dependency-path: frontend/pnpm-lock.yaml
+          package-json-file: frontend/package.json
+          install: false
+      - name: Install trusted TypeScript analyzer
+        if: ${{ steps.select.outputs.available == 'true' }}
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Generate semantic navigation context
+        id: generate
+        if: ${{ steps.select.outputs.available == 'true' }}
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          git worktree add --detach .domain-wiki/head "$HEAD_SHA"
+          if node tools/domain-wiki/scripts/typescript-semantic-context.cjs \
+            .domain-wiki/head "$(pwd)/frontend/node_modules/typescript" \
+            "$HEAD_SHA" .domain-wiki/typescript-paths \
+            > .domain-wiki/semantic-context.json; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            rm -f .domain-wiki/semantic-context.json
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::TypeScript semantic context was unavailable; policy review will continue without it.'
+          fi
+      - name: Save semantic navigation context
+        if: ${{ steps.generate.outputs.available == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: domain-policy-semantic-${{ github.run_id }}
+          path: .domain-wiki/semantic-context.json
+          if-no-files-found: error
+          retention-days: 1
+
+  review:
+    needs: semantic-context
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ATLASSIAN_EMAIL: ${{ secrets.ATLASSIAN_EMAIL }}
+      ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      PYTHONPATH: tools/domain-wiki
+    steps:
+      # pull_request_target에서는 신뢰하는 base SHA의 자동화 코드만 실행한다.
+      # PR head는 git diff의 데이터로만 읽고 절대 실행하지 않는다.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Fetch PR head as untrusted data
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: git fetch --no-tags origin "pull/${PR_NUMBER}/head:refs/remotes/policy-review/head"
+      - name: Clone Git Wiki
+        env:
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          if git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.wiki.git" .domain-wiki/wiki; then
+            exit 0
+          fi
+          mkdir -p .domain-wiki/wiki
+          git -C .domain-wiki/wiki init --quiet
+      - name: Read PR title and body
+        env:
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: >-
+          gh api "repos/${REPOSITORY}/pulls/${PR_NUMBER}"
+          --jq '{title: .title, body: (.body // "")}'
+          > .domain-wiki/pr.json
+      - name: Read semantic navigation context
+        if: ${{ needs.semantic-context.result == 'success' && needs.semantic-context.outputs.available == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: domain-policy-semantic-${{ github.run_id }}
+          path: .domain-wiki
+      - name: Review changed code against active Wiki policies
+        id: policy_review
+        env:
+          REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        shell: bash
+        run: |
+          semantic_args=()
+          if [[ -f .domain-wiki/semantic-context.json ]]; then
+            semantic_args=(--semantic-context .domain-wiki/semantic-context.json)
+          fi
+          python3 -m domain_wiki.policy_issue_cli \
+            --repository . --base "$BASE_SHA" --head "$HEAD_SHA" \
+            --target-repository "$REPOSITORY" --source-url "$PR_URL" \
+            --pull-request-context .domain-wiki/pr.json \
+            --wiki-directory .domain-wiki/wiki \
+            "${semantic_args[@]}"
+      - name: Record a failed review for this head
+        if: ${{ always() && steps.policy_review.outcome == 'failure' }}
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          mkdir -p .domain-wiki/output
+          printf '%s\n' \
+            '<!-- salmonbus-policy-issue-review -->' \
+            '## 정책 검수를 완료하지 못했어요' \
+            '' \
+            "- 검수한 head: \`${HEAD_SHA}\`" \
+            '- 모델 또는 정책 근거를 읽는 중 오류가 발생했습니다.' \
+            '- 이전 검수 결과를 최신 결과로 사용하면 안 됩니다.' \
+            > .domain-wiki/output/policy-comment.md
+      - name: Publish or update policy review comment
+        if: ${{ always() }}
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          if [[ -f .domain-wiki/output/policy-comment.md ]]; then
+            comment_id="$(
+              gh api --paginate --slurp "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+                --jq 'add | map(select(.user.login == "github-actions[bot]" and ((.body // "") | contains("<!-- salmonbus-policy-issue-review -->")))) | last | .id // empty'
+            )"
+            if [[ -n "$comment_id" ]]; then
+              gh api --method PATCH "repos/${REPOSITORY}/issues/comments/${comment_id}" \
+                -F body=@.domain-wiki/output/policy-comment.md >/dev/null
+            else
+              gh api --method POST "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+                -F body=@.domain-wiki/output/policy-comment.md >/dev/null
+            fi
+          fi

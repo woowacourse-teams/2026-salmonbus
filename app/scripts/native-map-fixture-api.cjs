@@ -3,6 +3,9 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const { createApiData } = require('../../frontend/e2e/fixtures/mock-data.ts');
+const authContract = require('../../contract/auth-v1.openapi.json');
+const session = authContract.paths['/api/auth/session'].get.responses['200']
+  .content['application/json'].examples.authenticated.value;
 
 const port = Number(process.env.NATIVE_MAP_FIXTURE_PORT ?? 4310);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -33,22 +36,68 @@ http.createServer((request, response) => {
     direction.lastDepartureTime = '23:59';
   }
   const tile = /^\/api\/v2\/stations\/tiles\/14\/(\d+)\/(\d+)$/.exec(url.pathname);
+  const route = data.watch.route;
+  const stop = data.watch.stops.find(({ boardingAllowed }) => boardingAllowed);
+  if (!stop) throw new Error('검증 노선에는 승차 가능한 정류장이 필요합니다.');
   const homeStation = {
-    stationId: '200000100',
+    stationId: stop.stopId,
     name: '검증 정류장',
     point: { x: 127.111136, y: 37.394761 },
   };
+  const target = { routeId: route.id, stopId: stop.stopId, direction: stop.direction };
+  const group = { id: '10000000-0000-4000-8000-000000000001', name: '즐겨찾기' };
+  const favoriteId = '10000000-0000-4000-8000-000000000002';
 
   const responses = {
+    '/api/auth/session': session,
+    '/api/me/favorite-groups': { groups: [{ ...group, favorites: [{ ...target, id: favoriteId }] }] },
+    '/api/me/favorites': {
+      groups: [{
+        ...group,
+        favorites: [{
+          id: favoriteId,
+          status: 'NO_VEHICLE',
+          route: { id: route.id, displayName: route.displayName, terminalStopName: route.endStopName },
+          stop: { stopId: stop.stopId, name: homeStation.name, direction: stop.direction },
+          approachingVehicles: [],
+        }],
+      }],
+    },
     '/api/v1/routes': data.routes,
     [`/api/v1/routes/${data.watch.route.id}/watch`]: data.watch,
     [`/api/v2/routes/${data.watch.route.id}/geometry`]: data.geometry,
     [`/api/v2/stations/${homeStation.stationId}`]: {
       stationId: homeStation.stationId,
+      name: homeStation.name,
+      point: homeStation.point,
+      coordinateSystem: 'WGS84',
+      regionName: null,
+      direction: null,
+      notice: null,
       generatedAt: data.watch.observedAt,
-      status: 'READY',
-      refresh: { status: 'IDLE', suggestedRefreshAt: data.watch.staleAt },
-      routes: [],
+      status: 'NO_PREDICTION',
+      reason: 'NO_APPROACHING_VEHICLE',
+      snapshot: null,
+      refresh: { status: 'IDLE', reason: null, suggestedRefreshAt: data.watch.staleAt },
+      routes: [{
+        routeId: route.id,
+        name: route.displayName,
+        destinationName: route.endStopName,
+        routeTypeCode: 11,
+        supported: true,
+        service: {
+          routeStatus: route.status,
+          referenceVersionId: route.referenceVersionId,
+          stopSequence: stop.sequence,
+          matchStatus: 'MATCHED',
+          direction: stop.direction,
+          schedule: null,
+          scheduleWindow: 'UNKNOWN',
+        },
+        status: 'NO_PREDICTION',
+        reason: 'NO_APPROACHING_VEHICLE',
+        arrivals: [],
+      }],
     },
   };
   const body = tile ? {
