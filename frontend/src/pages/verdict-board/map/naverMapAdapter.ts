@@ -96,6 +96,18 @@ export function createNaverRouteOverview({ maps, map, element }: MapFlowSurface,
   );
 }
 
+// 지원되는 GL 지도는 한 프레임의 중심과 줌을 함께 전달해 SDK가 중간 상태를 처리하지 않게 한다.
+function combinedCameraUpdate(map: NaverMap) {
+  const minimum = map.getMinZoom?.();
+  const maximum = map.getMaxZoom?.();
+  if (map.updateBy === undefined || minimum === undefined || maximum === undefined) return null;
+  if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || minimum > maximum) return null;
+  return {
+    clampZoom: (zoom: number) => Math.min(maximum, Math.max(minimum, zoom)),
+    apply: (center: NaverCoordinate, zoom: number) => map.updateBy?.(center, zoom),
+  };
+}
+
 export function createNaverRouteMap(
   sdk: NaverMaps,
   element: HTMLElement,
@@ -294,7 +306,7 @@ export function createNaverRouteMap(
   }
 
   function animateCamera(target: () => GeoCoordinate | undefined, minimumZoom: number, onComplete?: () => void) {
-    const cameraMap = map;
+    const combined = useInstantZoom ? null : combinedCameraUpdate(map);
     const revision = cameraFocusRevision;
     const center = map.getCenter();
     const from = { latitude: center.lat(), longitude: center.lng() };
@@ -319,18 +331,8 @@ export function createNaverRouteMap(
         const eased = 1 - (1 - progress) ** 3;
         const nextZoom = startZoom + (targetZoom - startZoom) * eased;
         const zoom = useInstantZoom ? Math.round(nextZoom) : nextZoom;
-        const minimum = cameraMap.getMinZoom?.();
-        const maximum = cameraMap.getMaxZoom?.();
-        const combined =
-          !useInstantZoom &&
-          typeof cameraMap.updateBy === "function" &&
-          minimum !== undefined &&
-          maximum !== undefined &&
-          Number.isFinite(minimum) &&
-          Number.isFinite(maximum) &&
-          minimum <= maximum;
         let appliedZoom: number;
-        if (combined) appliedZoom = Math.min(maximum!, Math.max(minimum!, zoom));
+        if (combined) appliedZoom = combined.clampZoom(zoom);
         else {
           if (map.getZoom() !== zoom) map.setZoom(zoom, false);
           appliedZoom = map.getZoom();
@@ -340,7 +342,7 @@ export function createNaverRouteMap(
           latitude: coordinate.latitude + (from.latitude - coordinate.latitude) * remaining,
           longitude: coordinate.longitude + (from.longitude - coordinate.longitude) * remaining,
         });
-        if (combined && map.getZoom() !== appliedZoom) cameraMap.updateBy!(nextCenter, appliedZoom);
+        if (combined && map.getZoom() !== appliedZoom) combined.apply(nextCenter, appliedZoom);
         else map.setCenter(nextCenter);
         if (progress < 1) cameraFocusFrame = window.requestAnimationFrame(animate);
         else {
