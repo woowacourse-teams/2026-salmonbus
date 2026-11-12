@@ -381,6 +381,48 @@ test.describe("즐겨찾기 탭 카드의 알림 줄", () => {
     });
   });
 
+  test("끄는 요청이 끝나기 전에 같은 정류장을 담은 다른 그룹으로 옮겨도, 요청이 끝나면 그 카드가 꺼진다", async ({
+    page,
+    notifications,
+  }) => {
+    notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
+    let finishDelete = () => {};
+    const deleteHeld = new Promise<void>((resolve) => (finishDelete = resolve));
+    await page.route("**/api/me/notification-settings/*", async (route) => {
+      if (route.request().method() === "DELETE") await deleteHeld;
+      await route.fallback();
+    });
+    await openInApp(page, { permission: "granted" });
+    await page.goto("/favorites");
+    await expect(cardSwitch(page, "즐겨찾기", stopName)).toBeChecked();
+
+    await cardSwitch(page, "즐겨찾기", stopName).click();
+    await page.getByRole("tab", { name: "주말", exact: true }).click();
+    await expect(cardSwitch(page, "주말", stopName)).toBeChecked();
+
+    finishDelete();
+    await expect(cardSwitch(page, "주말", stopName)).not.toBeChecked();
+    expect(notifications.settings).toEqual([]);
+  });
+
+  test("정류장 정보를 불러오지 못한 카드에서도 켜 둔 알림을 끌 수 있고, 끄면 알림 줄이 사라진다", async ({
+    page,
+    favorites,
+    notifications,
+  }) => {
+    notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
+    favorites.statuses[favorites.groups[0]!.favorites[0]!.id] = "ERROR";
+    await openInApp(page, { permission: "granted" });
+    await page.goto("/favorites");
+    const panel = page.getByRole("tabpanel", { name: "즐겨찾기", exact: true });
+    await expect(panel.getByText("정류장 정보를 불러오지 못했어요", { exact: true })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "평일 07:40", exact: true })).toBeVisible();
+
+    await panel.getByRole("switch").click();
+    await expect(panel.getByRole("switch")).toHaveCount(0);
+    expect(notifications.settings).toEqual([]);
+  });
+
   test("브라우저에서는 카드에 알림 줄이 없고 알림 설정을 읽지 않는다", async ({ page, notifications }) => {
     notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
     await page.goto("/favorites");

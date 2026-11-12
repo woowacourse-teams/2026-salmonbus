@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { fetchNotificationSettings } from "@/shared/api/notifications.api";
-import type { NotificationSetting } from "@/shared/api/notifications.types";
+import type { NotificationSetting, NotificationSettingChange } from "@/shared/api/notifications.types";
 import { sameFavorite } from "@/shared/utils/favoritePolicy";
 
 type SettingsLoad = { status: "loading" | "failed" } | { status: "ready"; settings: NotificationSetting[] };
@@ -11,16 +10,15 @@ export type NotificationSettingsState =
   | {
       status: "ready";
       settings: NotificationSetting[];
-      replaceSetting: (target: FavoriteTarget, setting: NotificationSetting | null) => void;
+      applySettingChange: (change: NotificationSettingChange) => void;
     };
 
 export function notificationSettingsWith(
   settings: NotificationSetting[],
-  target: FavoriteTarget,
-  setting: NotificationSetting | null,
+  change: NotificationSettingChange,
 ): NotificationSetting[] {
-  const others = settings.filter((candidate) => !sameFavorite(candidate, target));
-  return setting === null ? others : [...others, setting];
+  if ("removedId" in change) return settings.filter((candidate) => candidate.id !== change.removedId);
+  return [...settings.filter((candidate) => !sameFavorite(candidate, change.saved)), change.saved];
 }
 
 export function useNotificationSettings(enabled: boolean): NotificationSettingsState {
@@ -38,10 +36,10 @@ export function useNotificationSettings(enabled: boolean): NotificationSettingsS
   if (load.status !== "ready") return load;
   return {
     ...load,
-    replaceSetting: (target, setting) =>
+    applySettingChange: (change) =>
       setLoad((current) =>
         current.status === "ready"
-          ? { status: "ready", settings: notificationSettingsWith(current.settings, target, setting) }
+          ? { status: "ready", settings: notificationSettingsWith(current.settings, change) }
           : current,
       ),
   };

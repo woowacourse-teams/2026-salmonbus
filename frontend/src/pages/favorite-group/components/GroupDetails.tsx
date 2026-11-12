@@ -95,10 +95,8 @@ export function GroupDetails({ group, lastGroup }: GroupDetailsProps) {
                   <NotificationRow
                     target={favorite}
                     stopLabel={stopLabel}
-                    initialSetting={
-                      notificationSettings.settings.find((setting) => sameFavorite(setting, favorite)) ?? null
-                    }
-                    onSettingChange={(setting) => notificationSettings.replaceSetting(favorite, setting)}
+                    setting={notificationSettings.settings.find((setting) => sameFavorite(setting, favorite)) ?? null}
+                    onSettingChange={notificationSettings.applySettingChange}
                   />
                 )}
               </li>

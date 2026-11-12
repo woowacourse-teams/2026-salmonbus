@@ -20,7 +20,12 @@ import { playHaptic } from "@/shared/haptic/haptic";
 import { FavoritesNotice } from "@/shared/components/FavoritesNotice";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { LoadError } from "@/shared/components/LoadError";
-import { FAVORITES_LOAD_FAILURE_TITLE, MAX_FAVORITES_PER_GROUP, sameFavorite } from "@/shared/utils/favoritePolicy";
+import {
+  FAVORITES_LOAD_FAILURE_TITLE,
+  MAX_FAVORITES_PER_GROUP,
+  favoriteStopLabelOf,
+  sameFavorite,
+} from "@/shared/utils/favoritePolicy";
 import { FavoriteEditor } from "@/shared/components/favorite-editor/FavoriteEditor";
 import { NotificationRow, NotificationRowPlaceholder } from "@/shared/components/notification-row/NotificationRow";
 import { Notice } from "@/shared/components/Notice";
@@ -269,10 +274,11 @@ export function HomeFavorites() {
               </div>
             )}
             <ul ref={list} className={homeStyles.list}>
-              {favorites.map((favorite) => (
+              {favorites.map((favorite, index) => (
                 <FavoriteCard
                   key={favorite.id}
                   favorite={favorite}
+                  index={index}
                   displayStopName={nameLabels[favorite.id] ?? favorite.stop.name ?? ""}
                   savedFavorite={group?.favorites.find((candidate) => candidate.id === favorite.id) ?? null}
                   notificationSettings={notificationSettings}
@@ -320,8 +326,38 @@ function FavoriteCardsSkeleton({ count }: { count: number }) {
   );
 }
 
+interface CardNotificationProps {
+  target: SavedFavorite;
+  stopLabel: string;
+  notificationSettings: NotificationSettingsState;
+  canTurnOn: boolean;
+}
+
+function CardNotification({ target, stopLabel, notificationSettings, canTurnOn }: CardNotificationProps) {
+  if (notificationSettings.status === "loading")
+    return canTurnOn ? (
+      <div className={homeStyles.notification}>
+        <NotificationRowPlaceholder />
+      </div>
+    ) : null;
+  if (notificationSettings.status !== "ready") return null;
+  const setting = notificationSettings.settings.find((candidate) => sameFavorite(candidate, target)) ?? null;
+  if (setting === null && !canTurnOn) return null;
+  return (
+    <div className={homeStyles.notification}>
+      <NotificationRow
+        target={target}
+        stopLabel={stopLabel}
+        setting={setting}
+        onSettingChange={notificationSettings.applySettingChange}
+      />
+    </div>
+  );
+}
+
 interface FavoriteCardProps {
   favorite: HomeFavorite;
+  index: number;
   displayStopName: string;
   savedFavorite: SavedFavorite | null;
   notificationSettings: NotificationSettingsState;
@@ -331,17 +367,28 @@ interface FavoriteCardProps {
 
 function FavoriteCard({
   favorite,
+  index,
   displayStopName,
   savedFavorite,
   notificationSettings,
   elapsed,
   onRetry,
 }: FavoriteCardProps) {
+  const savedNotification = savedFavorite && (
+    <CardNotification
+      key="notification"
+      target={savedFavorite}
+      stopLabel={favoriteStopLabelOf(favorite, index)}
+      notificationSettings={notificationSettings}
+      canTurnOn={false}
+    />
+  );
   if (favorite.status === "ERROR") {
     return (
       <li className={homeStyles.unavailable}>
         <p className={homeStyles.notice}>{favoriteStatusLabelOf("ERROR")}</p>
         <RetryButton onRetry={onRetry}>다시 시도하기</RetryButton>
+        {savedNotification}
       </li>
     );
   }
@@ -360,6 +407,7 @@ function FavoriteCard({
             />
           )}
         </div>
+        {savedNotification}
       </li>
     );
   }
@@ -431,21 +479,14 @@ function FavoriteCard({
           )}
         </div>
       </Link>
-      {savedFavorite && (notificationSettings.status === "loading" || notificationSettings.status === "ready") && (
-        <div className={homeStyles.notification}>
-          {notificationSettings.status === "ready" ? (
-            <NotificationRow
-              target={savedFavorite}
-              stopLabel={favorite.stop.name}
-              initialSetting={
-                notificationSettings.settings.find((setting) => sameFavorite(setting, savedFavorite)) ?? null
-              }
-              onSettingChange={(setting) => notificationSettings.replaceSetting(savedFavorite, setting)}
-            />
-          ) : (
-            <NotificationRowPlaceholder />
-          )}
-        </div>
+      {savedFavorite && (
+        <CardNotification
+          key="notification"
+          target={savedFavorite}
+          stopLabel={favorite.stop.name}
+          notificationSettings={notificationSettings}
+          canTurnOn
+        />
       )}
     </li>
   );

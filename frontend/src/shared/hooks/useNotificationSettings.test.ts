@@ -14,27 +14,28 @@ const saved = settingOf(target, "20000000-0000-4000-8000-000000000001", "07:40")
 const oppositeSaved = settingOf(oppositeDirection, "20000000-0000-4000-8000-000000000002", "18:20");
 
 describe("알림 설정 목록 고치기", () => {
-  it("같은 대상의 설정이 있으면 새 설정으로 바꿔 넣는다", () => {
+  it("저장한 설정과 같은 대상의 설정이 있으면 새 설정으로 바꿔 넣는다", () => {
     const changed = { ...saved, time: "08:10" };
-    expect(notificationSettingsWith([saved, oppositeSaved], target, changed)).toEqual([oppositeSaved, changed]);
+    expect(notificationSettingsWith([saved, oppositeSaved], { saved: changed })).toEqual([oppositeSaved, changed]);
   });
 
-  it("같은 대상의 설정이 없으면 새로 넣는다", () => {
-    expect(notificationSettingsWith([oppositeSaved], target, saved)).toEqual([oppositeSaved, saved]);
-    expect(notificationSettingsWith([], target, saved)).toEqual([saved]);
+  it("저장한 설정과 같은 대상의 설정이 없으면 새로 넣는다", () => {
+    expect(notificationSettingsWith([oppositeSaved], { saved })).toEqual([oppositeSaved, saved]);
+    expect(notificationSettingsWith([], { saved })).toEqual([saved]);
   });
 
-  it("새 설정이 없으면 그 대상의 설정을 뺀다", () => {
-    expect(notificationSettingsWith([saved, oppositeSaved], target, null)).toEqual([oppositeSaved]);
+  it("지운 설정은 id가 같은 것만 뺀다", () => {
+    expect(notificationSettingsWith([saved, oppositeSaved], { removedId: saved.id })).toEqual([oppositeSaved]);
   });
 
-  it("설정이 없는 대상을 빼도 다른 대상의 설정은 그대로다", () => {
-    expect(notificationSettingsWith([oppositeSaved], target, null)).toEqual([oppositeSaved]);
+  it("늦게 온 삭제 결과는 그 사이 같은 대상에 새로 저장된 설정을 빼지 않는다", () => {
+    const savedAgain = settingOf(target, "20000000-0000-4000-8000-000000000003", "08:10");
+    expect(notificationSettingsWith([savedAgain], { removedId: saved.id })).toEqual([savedAgain]);
   });
 
   it("받은 목록은 고치지 않는다", () => {
     const settings = [saved];
-    notificationSettingsWith(settings, target, null);
+    notificationSettingsWith(settings, { removedId: saved.id });
     expect(settings).toEqual([saved]);
   });
 });

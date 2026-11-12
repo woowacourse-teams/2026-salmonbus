@@ -1,5 +1,9 @@
 import type { ApiResult } from "@/shared/api/client";
-import type { NotificationSchedule, NotificationSetting } from "@/shared/api/notifications.types";
+import type {
+  NotificationSchedule,
+  NotificationSetting,
+  NotificationSettingChange,
+} from "@/shared/api/notifications.types";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import type {
   ApnsEnvironment,
@@ -9,47 +13,25 @@ import type {
 import { NEW_NOTIFICATION_SCHEDULE, notificationErrorOf } from "./notificationPolicy";
 
 export type NotificationRowState =
-  | { status: "off" }
+  | { status: "idle" }
   | { status: "denied" }
-  | { status: "on"; setting: NotificationSetting }
-  | { status: "editing"; schedule: NotificationSchedule; previous: NotificationSetting | null }
+  | { status: "editing"; schedule: NotificationSchedule }
   | { status: "asking"; schedule: NotificationSchedule }
-  | { status: "saving"; schedule: NotificationSchedule; previous: NotificationSetting | null }
-  | { status: "failed"; schedule: NotificationSchedule; previous: NotificationSetting | null; message: string }
-  | { status: "removing"; setting: NotificationSetting }
-  | { status: "removeFailed"; setting: NotificationSetting; message: string };
+  | { status: "saving"; schedule: NotificationSchedule }
+  | { status: "failed"; schedule: NotificationSchedule; message: string }
+  | { status: "removing" }
+  | { status: "removeFailed"; message: string };
 
 export type NotificationRowEvent =
-  | { type: "open" }
+  | { type: "open"; setting: NotificationSetting | null }
   | { type: "cancel" }
-  | { type: "submit"; schedule: NotificationSchedule }
+  | { type: "submit"; schedule: NotificationSchedule; first: boolean }
   | { type: "answered"; status: NotificationPermissionStatus }
   | { type: "saved"; setting: NotificationSetting }
   | { type: "failed"; message: string }
   | { type: "remove" }
-  | { type: "removed" }
+  | { type: "removed"; settingId: string }
   | { type: "removeFailed"; message: string };
-
-export function notificationRowStateOf(setting: NotificationSetting | null): NotificationRowState {
-  return setting === null ? { status: "off" } : { status: "on", setting };
-}
-
-export function shownSettingOf(state: NotificationRowState): NotificationSetting | null {
-  switch (state.status) {
-    case "on":
-    case "removing":
-    case "removeFailed":
-      return state.setting;
-    case "editing":
-    case "saving":
-    case "failed":
-      return state.previous;
-    case "off":
-    case "denied":
-    case "asking":
-      return null;
-  }
-}
 
 export function nextNotificationRowState(
   state: NotificationRowState,
@@ -57,40 +39,37 @@ export function nextNotificationRowState(
 ): NotificationRowState {
   switch (event.type) {
     case "open":
-      if (state.status === "off" || state.status === "denied")
-        return { status: "editing", schedule: NEW_NOTIFICATION_SCHEDULE, previous: null };
-      if (state.status === "on" || state.status === "removeFailed")
-        return { status: "editing", schedule: state.setting, previous: state.setting };
-      return state;
+      return state.status === "idle" || state.status === "denied" || state.status === "removeFailed"
+        ? { status: "editing", schedule: event.setting ?? NEW_NOTIFICATION_SCHEDULE }
+        : state;
     case "cancel":
-      if (state.status === "asking") return { status: "off" };
-      return state.status === "editing" || state.status === "failed" ? notificationRowStateOf(state.previous) : state;
+      return state.status === "asking" || state.status === "editing" || state.status === "failed"
+        ? { status: "idle" }
+        : state;
     case "submit":
       if (state.status !== "editing" && state.status !== "failed") return state;
-      return state.previous === null
-        ? { status: "asking", schedule: event.schedule }
-        : { status: "saving", schedule: event.schedule, previous: state.previous };
+      return { status: event.first ? "asking" : "saving", schedule: event.schedule };
     case "answered":
       if (state.status !== "asking") return state;
-      if (event.status === "granted") return { status: "saving", schedule: state.schedule, previous: null };
-      return event.status === "denied" ? { status: "denied" } : { status: "off" };
+      if (event.status === "granted") return { status: "saving", schedule: state.schedule };
+      return { status: event.status === "denied" ? "denied" : "idle" };
     case "saved":
-      return state.status === "saving" ? { status: "on", setting: event.setting } : state;
+      return state.status === "saving" ? { status: "idle" } : state;
     case "failed":
-      return state.status === "saving"
-        ? { status: "failed", schedule: state.schedule, previous: state.previous, message: event.message }
-        : state;
+      return state.status === "saving" ? { status: "failed", schedule: state.schedule, message: event.message } : state;
     case "remove":
-      return state.status === "on" || state.status === "removeFailed"
-        ? { status: "removing", setting: state.setting }
-        : state;
+      return state.status === "idle" || state.status === "removeFailed" ? { status: "removing" } : state;
     case "removed":
-      return state.status === "removing" ? { status: "off" } : state;
+      return state.status === "removing" ? { status: "idle" } : state;
     case "removeFailed":
-      return state.status === "removing"
-        ? { status: "removeFailed", setting: state.setting, message: event.message }
-        : state;
+      return state.status === "removing" ? { status: "removeFailed", message: event.message } : state;
   }
+}
+
+export function settingChangeOf(event: NotificationRowEvent): NotificationSettingChange | null {
+  if (event.type === "saved") return { saved: event.setting };
+  if (event.type === "removed") return { removedId: event.settingId };
+  return null;
 }
 
 export interface NotificationSaveServices {
@@ -110,7 +89,7 @@ export async function submitNotification(
   apply: (event: NotificationRowEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  apply({ type: "submit", schedule });
+  apply({ type: "submit", schedule, first: previous === null });
   if (previous === null) {
     const registration = await services.requestRegistration();
     if (signal?.aborted) return;
@@ -143,7 +122,7 @@ export async function removeNotification(
     !result.ok && result.failure.kind === "contract" && result.failure.error.code === "NOTIFICATION_SETTING_NOT_FOUND";
   apply(
     result.ok || alreadyRemoved
-      ? { type: "removed" }
+      ? { type: "removed", settingId: setting.id }
       : { type: "removeFailed", message: notificationErrorOf(result.failure) },
   );
 }
