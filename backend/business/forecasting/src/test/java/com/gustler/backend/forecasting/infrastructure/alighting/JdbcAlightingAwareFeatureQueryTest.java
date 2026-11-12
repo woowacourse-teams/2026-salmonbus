@@ -310,6 +310,16 @@ class JdbcAlightingAwareFeatureQueryTest {
         assertThat(AlightingAwareHistorySeedReader.confirmed(checkpoint.toString(), 100).read(version).rank()).isEqualTo(2);
     }
 
+    @Test
+    void 커서_인덱스가_없으면_과거_이력을_읽기_전에_준비를_거부한다() {
+        jdbc.sql("DROP INDEX ix_batch_confirmed_history").update();
+        AlightingAwareRouteStatistics confirmed = new AlightingAwareRouteStatistics(statistics.route(), statistics.stops(),
+            statistics.minutesPerStop(), statistics.tables(), statistics.targetBands(), statistics.holidays(), true);
+        assertThatThrownBy(() -> new AlightingAwareHistoryBootstrap(jdbc)
+            .rebuild(stops, confirmed, first, sourceBatch, 1, 100, checkpoint.toString(), 1, 30))
+            .hasMessage("ALIGHTING_AWARE_HISTORY_REQUIRES_CURSOR_INDEX");
+    }
+
     private JdbcAlightingAwareFeatureQuery query() {
         return new JdbcAlightingAwareFeatureQuery(jdbc, new VehicleCapacityCache(
             new JdbcVehicleCapacityStore(jdbc)), version + ":" + first, 100, true, "");

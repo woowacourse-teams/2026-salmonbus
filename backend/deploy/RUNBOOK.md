@@ -916,7 +916,7 @@ dev에서 기존 V67을 이미 실행했다면 V72 이상 적용과 V67 단독 �
 3. API의 Flyway 적용 완료를 확인하고 Worker와 archive-app을 중지한 상태에서 확정 관측 이력 체크포인트를 생성한다. 전환 DB에서 이번 배포 소스의 maintenance JAR로 `alighting-history-bootstrap`을 실행하고 `--checkpoint-directory`에 배포 전용 빈 경로를 지정한다. 전환 표시가 없는 기존 파일은 Worker와 준비 명령에서 거부한다. 지원 노선별 `alighting-confirmed-closure-v2` 파일의 해시와 마지막 배치 ID를 확인하고, Worker 계정에 새 경로의 읽기·쓰기 권한을 준 뒤 `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`를 그 경로로 설정한다.
    준비 명령은 기본적으로 체크포인트 10개 또는 30초가 지나면 새 읽기를 시작하지 않는다. `--maximum-checkpoints`와 `--maximum-seconds`로 실행 예산을 지정한다. 읽기 SQL에는 15초, 잠금 대기에는 1초 제한이 적용된다. 완료 전에는 JSON의 `status`가 `paused`, 종료 코드가 `2`이며 `checkpoint.processedThroughBatchId`가 마지막 저장 위치다. 같은 번들·원점·목표 배치·체크포인트 경로로 다시 실행해 이어간다. `checkpoint.complete=true`와 종료 코드 `0`을 확인하기 전에는 Worker를 시작하지 않는다. 재실행마다 새 빈 경로를 만들지 않는다.
 
-   V78은 확정시각과 배치 ID의 커서 인덱스를 생성한다. 생성 중 배치 쓰기가 기다리므로 Worker와 이관·복원 작업을 중지한 상태에서 적용한다. 인덱스 생성에도 기존 배치 읽기와 쓰기가 필요하므로 체크포인트 준비와 겹치지 않게 한다. 잠금 획득은 5초, 생성 문장은 120초로 제한하고 실패하면 해당 마이그레이션을 롤백한다. 완료 후 체크포인트 준비를 진행한다.
+   V78은 확정시각과 배치 ID의 커서 인덱스를 생성한다. 준비 명령은 이 인덱스가 없거나 유효하지 않으면 이력을 읽기 전에 중단한다. 생성 중 배치 쓰기가 기다리므로 Worker와 이관·복원 작업을 중지한 상태에서 적용한다. 인덱스 생성에도 기존 배치 읽기와 쓰기가 필요하므로 체크포인트 준비와 겹치지 않게 한다. 잠금 획득은 5초, 생성 문장은 120초로 제한하고 실패하면 해당 마이그레이션을 롤백한다. 완료 후 체크포인트 준비를 진행한다.
 
 4. 새 경로를 설정한 뒤 `sudo rm /etc/salmonbus/alighting-cutover-hold`를 실행하고 Worker 배포를 재개한다. 새 Worker의 차량 정원 캐시 준비와 예보·정산을 확인한다. 예보에 저장한 정원으로 정산하며, 이후 관측이 그 정원을 넘으면 `OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT` 사유로 해당 정산을 종료한다.
 5. archive-app은 삭제를 끈 상태로 시작한다. 지원 노선의 현재 판본마다 새 Worker가 `alighting_history_checkpoint`에 저장한 배치가 DB에 존재하는지 확인한다. 이전 날짜의 수집·정산 완료와 S3 재읽기 및 해시 검증 후 삭제를 활성화한다. 마지막 체크포인트 확정 시각에서 90초를 뺀 수신 시각 이후의 자료가 포함된 날짜는 새 체크포인트가 저장될 때까지 `ALIGHTING_HISTORY_REQUIRED`로 보류된다.

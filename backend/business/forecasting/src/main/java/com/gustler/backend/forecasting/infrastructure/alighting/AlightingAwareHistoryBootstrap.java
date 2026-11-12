@@ -48,6 +48,7 @@ public final class AlightingAwareHistoryBootstrap {
         ReadWorkBudget budget = new ReadWorkBudget(maximumCheckpoints, Duration.ofSeconds(maximumSeconds));
         if (statistics.confirmedProfile()) {
             requireQualityCutover();
+            requireCursorIndex();
         }
         Instant through = through(stops.routeVersionId(), throughBatchId, statistics.confirmedProfile());
         AlightingAwareHistorySeedReader reader = statistics.confirmedProfile()
@@ -100,6 +101,16 @@ public final class AlightingAwareHistoryBootstrap {
             """).query(Boolean.class).single();
         if (!migrated) {
             throw new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_HISTORY_REQUIRES_QUALITY_CUTOVER");
+        }
+    }
+
+    private void requireCursorIndex() {
+        boolean indexed = jdbc.sql("""
+            SELECT coalesce((SELECT indisvalid AND indisready FROM pg_index
+                WHERE indexrelid=to_regclass('ix_batch_confirmed_history')),false)
+            """).query(Boolean.class).single();
+        if (!indexed) {
+            throw new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_HISTORY_REQUIRES_CURSOR_INDEX");
         }
     }
 
