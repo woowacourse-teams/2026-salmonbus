@@ -3,7 +3,6 @@ import { WEEKDAYS, type NotificationSchedule } from "@/shared/api/notifications.
 import { ConfirmDialog } from "@/shared/components/ConfirmDialog";
 import { toggledWeekdaysOf, WEEKDAY_LABELS } from "./notificationPolicy";
 import * as formStyles from "@/shared/styles/form.css";
-import * as groupStyles from "./GroupDetails.css";
 import * as styles from "./NotificationRow.css";
 
 const HOURS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
@@ -35,13 +34,13 @@ export function NotificationSheet({
   return (
     <ConfirmDialog
       className={styles.sheet}
-      titleClassName={groupStyles.dialogTitle}
+      titleClassName={styles.sheetTitle}
       title="출발 알림"
       onCancel={() => {
         if (cancellable) onCancel();
       }}
     >
-      <p className={groupStyles.description}>{stopLabel}</p>
+      <p className={styles.sheetStop}>{stopLabel}</p>
       <div className={styles.field} role="group" aria-labelledby={timeLabelId}>
         <span id={timeLabelId}>시각</span>
         <span className={styles.timeParts}>
@@ -94,11 +93,11 @@ export function NotificationSheet({
           {error}
         </p>
       )}
-      <div className={groupStyles.dialogActions}>
-        <button className={groupStyles.cancel} disabled={!cancellable} onClick={onCancel}>
+      <div className={styles.sheetActions}>
+        <button className={styles.cancel} disabled={!cancellable} onClick={onCancel}>
           취소
         </button>
-        <button className={groupStyles.confirm} disabled={busy} onClick={() => onSave({ time, weekdays })}>
+        <button className={styles.save} disabled={busy} onClick={() => onSave({ time, weekdays })}>
           {busy ? "저장 중…" : "저장"}
         </button>
       </div>

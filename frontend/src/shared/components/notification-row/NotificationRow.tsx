@@ -2,7 +2,11 @@ import { useRef, useState } from "react";
 import { track } from "@/shared/analytics/track";
 import type { FavoriteTarget } from "@/shared/api/favorites.types";
 import { deleteNotificationSetting, saveNotificationSetting } from "@/shared/api/notifications.api";
-import type { NotificationSchedule, NotificationSetting } from "@/shared/api/notifications.types";
+import type {
+  NotificationSchedule,
+  NotificationSetting,
+  NotificationSettingChange,
+} from "@/shared/api/notifications.types";
 import { isSupportedInApp, sendToApp } from "@/shared/bridge/bridge";
 import { Switch } from "@/shared/components/Switch";
 import { useResultHaptic } from "@/shared/haptic/haptic";
@@ -13,38 +17,41 @@ import * as formStyles from "@/shared/styles/form.css";
 import { NotificationSheet } from "./NotificationSheet";
 import {
   nextNotificationRowState,
-  notificationRowStateOf,
   removeNotification,
-  shownSettingOf,
+  settingChangeOf,
   submitNotification,
   type NotificationRowEvent,
+  type NotificationRowState,
 } from "./notificationRowState";
 import * as styles from "./NotificationRow.css";
 
 interface NotificationRowProps {
   target: FavoriteTarget;
   stopLabel: string;
-  initialSetting: NotificationSetting | null;
+  setting: NotificationSetting | null;
+  onSettingChange: (change: NotificationSettingChange) => void;
 }
 
-export function NotificationRow({ target, stopLabel, initialSetting }: NotificationRowProps) {
-  const [state, setState] = useState(() => notificationRowStateOf(initialSetting));
+export function NotificationRow({ target, stopLabel, setting, onSettingChange }: NotificationRowProps) {
+  const [state, setState] = useState<NotificationRowState>({ status: "idle" });
   const playResultHaptic = useResultHaptic();
   const permissionAsk = useRef<AbortController | null>(null);
 
   function apply(event: NotificationRowEvent) {
     setState((current) => nextNotificationRowState(current, event));
     if (event.type === "saved" || event.type === "failed") playResultHaptic(event.type === "saved");
+    const change = settingChangeOf(event);
+    if (change !== null) onSettingChange(change);
   }
 
   function save(schedule: NotificationSchedule) {
     if (state.status !== "editing" && state.status !== "failed") return;
-    const isFirst = state.previous === null;
+    const isFirst = setting === null;
     const ask = new AbortController();
     permissionAsk.current = ask;
     void submitNotification(
       target,
-      state.previous,
+      setting,
       schedule,
       {
         requestRegistration: requestNotificationPermission,
@@ -67,14 +74,13 @@ export function NotificationRow({ target, stopLabel, initialSetting }: Notificat
     );
   }
 
-  const shownSetting = shownSettingOf(state);
   const sheetOpen =
     state.status === "editing" || state.status === "asking" || state.status === "saving" || state.status === "failed";
   const busy = state.status === "asking" || state.status === "saving" || state.status === "removing";
   return (
     <div className={styles.row}>
       <div className={styles.line}>
-        {shownSetting ? (
+        {setting ? (
           <button
             type="button"
             className={styles.summary}
@@ -82,23 +88,23 @@ export function NotificationRow({ target, stopLabel, initialSetting }: Notificat
             disabled={busy}
             onClick={(event) => {
               event.currentTarget.focus();
-              apply({ type: "open" });
+              apply({ type: "open", setting });
             }}
           >
-            {scheduleLabelOf(shownSetting)}
+            {scheduleLabelOf(setting)}
           </button>
         ) : (
           <span className={styles.offLabel}>출발 알림</span>
         )}
         <Switch
-          checked={shownSetting !== null}
+          checked={setting !== null}
           disabled={busy}
           aria-label={`${stopLabel} 출발 알림`}
           onChange={(event) => {
             event.currentTarget.focus();
-            if (event.target.checked) apply({ type: "open" });
-            else if (state.status === "on" || state.status === "removeFailed")
-              void removeNotification(state.setting, deleteNotificationSetting, apply);
+            if (event.target.checked) apply({ type: "open", setting });
+            else if (setting !== null && (state.status === "idle" || state.status === "removeFailed"))
+              void removeNotification(setting, deleteNotificationSetting, apply);
           }}
         />
       </div>
@@ -133,6 +139,14 @@ export function NotificationRow({ target, stopLabel, initialSetting }: Notificat
           onSave={save}
         />
       )}
+    </div>
+  );
+}
+
+export function NotificationRowPlaceholder() {
+  return (
+    <div className={styles.row} aria-hidden="true">
+      <div className={styles.line} />
     </div>
   );
 }

@@ -70,6 +70,25 @@ export const sheet = style({
     "&&::backdrop": { background: "#19151266" },
   },
 });
+export const sheetTitle = style({
+  selectors: {
+    "&&": {
+      margin: "0 0 18px",
+      fontSize: 20,
+      fontWeight: 700,
+      lineHeight: 1.4,
+      letterSpacing: "-0.6px",
+      overflowWrap: "anywhere",
+    },
+  },
+});
+export const sheetStop = style({
+  margin: 0,
+  color: "#837B74",
+  fontSize: 14,
+  lineHeight: 1.65,
+  overflowWrap: "anywhere",
+});
 export const field = style({
   display: "flex",
   alignItems: "center",
@@ -115,3 +134,20 @@ export const weekday = style({
     "&:disabled": { opacity: 0.45, cursor: "default" },
   },
 });
+export const sheetActions = style({ display: "flex", gap: 10, marginTop: 18 });
+export const save = style({
+  flex: 1,
+  minWidth: 0,
+  height: 48,
+  padding: 0,
+  border: 0,
+  borderRadius: 14,
+  background: "#E8533F",
+  color: "#FFFFFF",
+  font: "inherit",
+  fontSize: 14,
+  fontWeight: 700,
+  cursor: "pointer",
+  selectors: { "&:disabled": { opacity: 0.45, cursor: "default" } },
+});
+export const cancel = style([save, { background: "#F1EEEA", color: "#76706A" }]);
