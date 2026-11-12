@@ -133,6 +133,7 @@ class AlightingAwarePublicationLifecycleTest {
             jdbc.sql("DELETE FROM observation_batch WHERE route_version_id=?").param(version).update();
             jdbc.sql("DELETE FROM route_stop WHERE route_version_id=?").param(version).update();
             jdbc.sql("DELETE FROM route_version WHERE id=?").param(version).update();
+            jdbc.sql("DELETE FROM alighting_settlement_generation WHERE route_id=?").param(route).update();
             jdbc.sql("DELETE FROM route WHERE id=?").param(route).update();
             for (final long id : deploymentIds.reversed()) {
                 jdbc.sql("DELETE FROM model_deployment WHERE id=?").param(id).update();

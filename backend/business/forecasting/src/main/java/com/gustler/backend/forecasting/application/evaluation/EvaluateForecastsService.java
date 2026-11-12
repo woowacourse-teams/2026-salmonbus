@@ -16,6 +16,11 @@ public class EvaluateForecastsService implements EvaluateForecasts {
     }
 
     @Override
+    public boolean advance() {
+        return WorkerOperationLog.measure("alighting_settlement_tick", "all", evaluation::advance);
+    }
+
+    @Override
     public void settleArrivalLabels() {
         WorkerOperationLog.run("alighting_settlement_tick", "all", evaluation::settle);
     }

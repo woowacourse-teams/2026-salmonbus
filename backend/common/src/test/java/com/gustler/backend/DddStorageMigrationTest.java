@@ -557,6 +557,15 @@ class DddStorageMigrationTest {
         assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isEqualTo(2);
         assertThat(number("SELECT count(*) FROM forecast_evaluation_result WHERE scoring_state='MODEL_RETIRED'")).isOne();
         assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isZero();
+        execute("""
+            INSERT INTO alighting_settlement_generation(route_id,source_date) VALUES(1,'2026-09-01');
+            INSERT INTO alighting_settlement_projection(route_id,source_date,layout_hash,layout,data_revision,
+                observation_limit,cursor_at,coverage_at,state)
+            VALUES(1,'2026-09-01',repeat('a',64),'{}',1,1000,now(),now(),decode('00','hex'));
+            INSERT INTO alighting_settlement_observation(projection_id,observation_id,chain_id,stop_order,available_at,known_seats)
+            SELECT id,1,1,2,now(),true FROM alighting_settlement_projection;
+            UPDATE alighting_settlement_queue_scan SET observation_id=1,complete=true;
+            """);
         Path root = Path.of("").toAbsolutePath();
         while (root != null
             && !Files.isRegularFile(root.resolve("dev/data/java/com/gustler/localdata/LocalData.java"))) {
@@ -572,6 +581,10 @@ class DddStorageMigrationTest {
         execute(source.substring(start, end));
 
         // then
+        assertThat(number("SELECT count(*) FROM alighting_settlement_observation")).isZero();
+        assertThat(number("SELECT count(*) FROM alighting_settlement_projection")).isZero();
+        assertThat(number("SELECT count(*) FROM alighting_settlement_generation")).isZero();
+        assertThat(number("SELECT count(*) FROM alighting_settlement_queue_scan WHERE observation_id=0 AND NOT complete")).isOne();
         assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_work")).isZero();
         assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_result")).isZero();
         assertThat(number("SELECT count(*) FROM alighting_evaluation_archive")).isZero();
