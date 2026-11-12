@@ -70,9 +70,10 @@ class AlightingAwareForecastPublicationTest {
         when(query.read(10, stops, statistics)).thenReturn(Map.of(100L, snapshot));
         when(snapshot.observation()).thenReturn(new ObservedVehicle("bus", 1, 1, now, 12, null));
         when(snapshot.vehicleObservationId()).thenReturn(100L);
+        when(snapshot.capacity()).thenReturn(44);
         when(snapshot.forTarget(2)).thenReturn(vector);
         when(model.predict(vector)).thenReturn(SeatForecastResult.alighting(3.7, 0.85));
-        when(model.evidence("3330", 2)).thenReturn("{\"route\":\"3330\",\"alighting\":{\"stops\":[]}}");
+        when(model.settlementEvidence("3330")).thenReturn(Map.of(2, "{\"holidays\":[\"2026-12-25\",\"2026-11-20\"],\"alighting\":{\"stops\":[]}}"));
         when(committer.commit(eq(batch), any())).thenReturn(1);
 
         assertThat(writer.writeForecastsOf(batch, stops, runtime)).isEqualTo(1);
@@ -84,7 +85,8 @@ class AlightingAwareForecastPublicationTest {
         assertThat(row.seatFullChanceRaw()).isEqualTo(0.85);
         assertThat(row.demandStatisticsRevision()).isZero();
         assertThat(row.inferenceBundleHash()).isEqualTo("b".repeat(64));
-        assertThat(row.featureSnapshot()).contains("seat88", "probability80", "asOf", "alighting");
+        assertThat(row.featureSnapshot()).isEqualTo("{\"capacity\":44}");
+        assertThat(published.getValue().settlementContext()).contains("[\"2026-11-20\",\"2026-12-25\"]");
     }
 
     @Test

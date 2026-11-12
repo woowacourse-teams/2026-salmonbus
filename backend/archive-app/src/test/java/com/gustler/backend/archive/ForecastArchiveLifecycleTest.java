@@ -151,6 +151,11 @@ class ForecastArchiveLifecycleTest {
             archive.advance();
             assertThat(jdbc.sql("SELECT id FROM vehicle_observation").query(Long.class).list()).containsExactly(next);
             assertThat(fixture.count("seat_forecast")).isZero();
+            assertThat(objects.values.entrySet().stream()
+                .filter(entry -> entry.getKey().contains("-dimensions-"))
+                .flatMap(entry -> ArchiveFiles.decode(entry.getValue()).stream()))
+                .anySatisfy(row -> assertThat(row).contains("\"table\": \"model_deployment\"", "\"settlement_context\"",
+                    "\"realStopOrders\"", "\"stops\""));
             assertThat(fixture.count("alighting_forecast_evaluation_result")).isZero();
             assertThat(jdbc.sql("SELECT sum(row_count) FROM operational_archive_file WHERE table_name='alighting_forecast_evaluation_result'")
                 .query(Long.class).single()).isEqualTo(2);
