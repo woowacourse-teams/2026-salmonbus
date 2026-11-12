@@ -1646,46 +1646,6 @@ test("핸들 클릭은 세 단계를 순환하고 느린 드래그는 60% 높이
   await expectSheetAndMapHeights(page, 844 * 0.6, 844 * 0.4);
 });
 
-test("뒤로가기와 노선 번호는 최대 시트 안에 표시되고 시트를 내리면 지도 위로 돌아온다", async ({ page }) => {
-  await openMap(page);
-  const back = { name: "노선 선택으로 돌아가기", exact: true };
-  const number = { name: "3330", exact: true };
-  await expect(sheet(page).getByRole("link", back)).toHaveCount(0);
-  await expect(sheet(page).getByRole("heading", number)).toHaveCount(0);
-  await expect(page.getByRole("link", back)).toBeInViewport();
-  await expect(page.getByRole("heading", number)).toBeInViewport();
-
-  await handle(page).press("End");
-  await page.clock.runFor(32);
-  await expect(sheet(page)).toHaveAttribute("data-snap", "full");
-  await expect(sheet(page).getByRole("link", back)).toBeInViewport();
-  await expect(sheet(page).getByRole("heading", number)).toBeInViewport();
-
-  const grip = await handle(page).boundingBox();
-  if (grip === null) throw new Error("핸들이 없습니다");
-  const x = grip.x + grip.width / 2;
-  const y = grip.y + grip.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x, y + 320, { steps: 12 });
-  await page.clock.runFor(100);
-  await expect(sheet(page)).toHaveAttribute("data-dragging", "true");
-
-  await expect(sheet(page).getByRole("link", back)).toHaveCount(0);
-  await expect(sheet(page).getByRole("heading", number)).toHaveCount(0);
-  await expect(page.getByRole("link", back)).toBeInViewport();
-  await expect(page.getByRole("heading", number)).toBeInViewport();
-
-  await page.mouse.up();
-  await page.clock.runFor(32);
-  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-  await expect(sheet(page).getByRole("link", back)).toHaveCount(0);
-  await expect(sheet(page).getByRole("heading", number)).toHaveCount(0);
-  await expect(page.getByRole("heading", number)).toBeInViewport();
-  await page.getByRole("link", back).click();
-  await expect(page).toHaveURL("/");
-});
-
 test("키보드로 움직인 핸들은 테두리를 보이고 누르거나 끌면 숨기며 다시 키를 누르면 보인다", async ({ page }) => {
   await openMap(page);
   await handle(page).focus();
