@@ -10,12 +10,16 @@ import com.gustler.backend.arrival.contract.ArrivalRefresh;
 import com.gustler.backend.arrival.contract.ArrivalRefresh.Status;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot.RouteArrival;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -26,11 +30,16 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class ArrivalQueryService {
+    private static final Duration[] LATENCY_BUCKETS = {
+        Duration.ofMillis(25), Duration.ofMillis(50), Duration.ofMillis(100), Duration.ofMillis(250),
+        Duration.ofMillis(500), Duration.ofSeconds(1), Duration.ofSeconds(2)
+    };
     private final ArrivalReadRepository repository;
     private final ArrivalRefreshGateway gateway;
     private final ArrivalFreshnessPolicy freshness;
     private final Clock clock;
     private final ArrivalFirstResultPolicy firstResult;
+    private final MeterRegistry meters;
 
     public ArrivalQueryService(
         ArrivalReadRepository repository,
@@ -41,7 +50,9 @@ public class ArrivalQueryService {
         this(repository, gateway, freshness, clock, new ArrivalFirstResultPolicy(Duration.ZERO, 32));
     }
 
-    @Autowired
+    /**
+     * 조회 시간 지표를 애플리케이션 지표 저장소에 남기지 않는 조회 서비스를 만든다.
+     */
     public ArrivalQueryService(
         ArrivalReadRepository repository,
         ArrivalRefreshGateway gateway,
@@ -49,11 +60,24 @@ public class ArrivalQueryService {
         Clock clock,
         ArrivalFirstResultPolicy firstResult
     ) {
+        this(repository, gateway, freshness, clock, firstResult, new SimpleMeterRegistry());
+    }
+
+    @Autowired
+    public ArrivalQueryService(
+        ArrivalReadRepository repository,
+        ArrivalRefreshGateway gateway,
+        ArrivalFreshnessPolicy freshness,
+        Clock clock,
+        ArrivalFirstResultPolicy firstResult,
+        MeterRegistry meters
+    ) {
         this.firstResult = firstResult;
         this.repository = repository;
         this.gateway = gateway;
         this.freshness = freshness;
         this.clock = clock;
+        this.meters = meters;
     }
 
     // 내부 HTTP 요청 중에 API의 DB 트랜잭션/연결을 유지하지 않는다.
@@ -61,7 +85,7 @@ public class ArrivalQueryService {
      * 조회 대상을 검증하고 필요한 수집을 요청한다. 첫 유효 결과는 제한된 시간만 기다리며 사용할 결과가 없으면 UNAVAILABLE을 반환한다.
      */
     public StationArrivalsOverview get(ArrivalQuery query) {
-        return read(query, true);
+        return read(query, true).overview();
     }
 
     /**
@@ -69,25 +93,28 @@ public class ArrivalQueryService {
      * 기존 정류장 도착정보 API의 입구 조건(우리 노선 방문이 있어야 함)은 바꾸지 않는다.
      */
     public StationArrivalsOverview getForKnownStation(String stationId) {
-        return read(new ArrivalQuery(stationId, null, null, null), false);
+        return readKnownStation(stationId).overview();
     }
 
     /**
-     * 현재 판본에서 이 정류장을 지나는 우리 노선 방문. 정류장 상세가 노선 보드를 고르는 데 쓴다.
+     * {@link #getForKnownStation}과 같이 조회하고, 그 조회가 도착정보를 고르는 데 쓴 우리 노선 방문을 함께 돌려준다.
+     * 정류장 상세가 방문을 다시 읽지 않고 같은 방문으로 노선 보드를 고르게 한다.
      */
-    public List<ArrivalVisit> visits(String stationId) {
-        return repository.visits(stationId);
+    public KnownStationArrivals readKnownStation(String stationId) {
+        return read(new ArrivalQuery(stationId, null, null, null), false);
     }
 
-    private StationArrivalsOverview read(ArrivalQuery query, final boolean requireVisit) {
+    private KnownStationArrivals read(ArrivalQuery query, final boolean requireVisit) {
+        final long startedAt = System.nanoTime();
         List<ArrivalVisit> visits = repository.visits(query.stationId());
         validateTarget(query, visits, requireVisit);
 
         ArrivalSnapshot snapshot = repository.latest(query.stationId()).orElse(null);
         final boolean waiting = !freshness.usable(snapshot, clock.instant()) && firstResult.tryAcquire();
-        ArrivalRefresh refresh;
+        RefreshRequest request;
         try {
-            refresh = refreshIfDue(query, snapshot, waiting);
+            request = refreshIfDue(query, snapshot, waiting);
+            ArrivalRefresh refresh = request.refresh();
             if (shouldReloadAfterWaiting(waiting, refresh)) {
                 snapshot = repository.latest(query.stationId()).orElse(snapshot);
                 if (freshness.usable(snapshot, clock.instant())) {
@@ -95,7 +122,8 @@ public class ArrivalQueryService {
                     visits = repository.visits(query.stationId());
                     validateTarget(query, visits, requireVisit);
                     if (!freshness.refreshDue(snapshot, clock.instant())) {
-                        refresh = new ArrivalRefresh(Status.IDLE, null, snapshot.refreshAfterAt());
+                        request = new RefreshRequest(request.mode(),
+                            new ArrivalRefresh(Status.IDLE, null, snapshot.refreshAfterAt()));
                     }
                 }
             }
@@ -105,6 +133,17 @@ public class ArrivalQueryService {
             }
         }
 
+        StationArrivalsOverview overview = overviewOf(query, visits, snapshot, request.refresh());
+        recordRead(request.mode(), overview, startedAt);
+        return new KnownStationArrivals(overview, visits);
+    }
+
+    private StationArrivalsOverview overviewOf(
+        ArrivalQuery query,
+        List<ArrivalVisit> visits,
+        ArrivalSnapshot snapshot,
+        ArrivalRefresh refresh
+    ) {
         Instant now = clock.instant();
         if (!freshness.usable(snapshot, now)) {
             return new StationArrivalsOverview(query.stationId(), now, ArrivalAvailability.UNAVAILABLE,
@@ -116,6 +155,16 @@ public class ArrivalQueryService {
         String reason = unavailableReason(status, routes);
         return new StationArrivalsOverview(query.stationId(), now, status, reason, snapshot, refresh, routes,
             freshness.cacheMaxAge(snapshot, now));
+    }
+
+    private void recordRead(String mode, StationArrivalsOverview overview, final long startedAt) {
+        Timer.builder("salmonbus.arrival.query.read")
+            .description("도착정보 조회 시간. refresh는 Worker 갱신 요청 방식, usable은 응답에 쓸 수 있는 수신본이 있었는지다")
+            .tag("refresh", mode)
+            .tag("usable", Boolean.toString(freshness.usable(overview.snapshot(), overview.generatedAt())))
+            .serviceLevelObjectives(LATENCY_BUCKETS)
+            .register(meters)
+            .record(Duration.ofNanos(System.nanoTime() - startedAt));
     }
 
     private static boolean shouldReloadAfterWaiting(boolean waiting, ArrivalRefresh refresh) {
@@ -133,14 +182,39 @@ public class ArrivalQueryService {
         return status == Status.IDLE;
     }
 
-    private ArrivalRefresh refreshIfDue(ArrivalQuery query, ArrivalSnapshot snapshot, final boolean waiting) {
+    private RefreshRequest refreshIfDue(ArrivalQuery query, ArrivalSnapshot snapshot, final boolean waiting) {
         if (!freshness.refreshDue(snapshot, clock.instant())) {
-            return new ArrivalRefresh(Status.IDLE, null, snapshot.refreshAfterAt());
+            return new RefreshRequest("none", new ArrivalRefresh(Status.IDLE, null, snapshot.refreshAfterAt()));
         }
         if (waiting) {
-            return gateway.request(query.stationId(), firstResult.maximumWait());
+            return new RefreshRequest("wait", timed("wait",
+                () -> gateway.request(query.stationId(), firstResult.maximumWait())));
         }
-        return gateway.request(query.stationId());
+        return new RefreshRequest("immediate", timed("immediate", () -> gateway.request(query.stationId())));
+    }
+
+    private ArrivalRefresh timed(String mode, Supplier<ArrivalRefresh> request) {
+        final long startedAt = System.nanoTime();
+        ArrivalRefresh reply = request.get();
+        String status = "NONE";
+        if (reply != null && reply.status() != null) {
+            status = reply.status().name();
+        }
+        Timer.builder("salmonbus.arrival.refresh.request")
+            .description("API가 Worker에 보낸 도착정보 갱신 요청 시간")
+            .tag("mode", mode)
+            .tag("status", status)
+            .serviceLevelObjectives(LATENCY_BUCKETS)
+            .register(meters)
+            .record(Duration.ofNanos(System.nanoTime() - startedAt));
+        return reply;
+    }
+
+    /**
+     * 이번 조회가 Worker 갱신을 어떻게 요청했는지와 응답에 실을 갱신 상태다. mode는 none(갱신 시점 전), wait(첫 결과 대기),
+     * immediate(요청 스레드에서 접수만) 중 하나다.
+     */
+    private record RefreshRequest(String mode, ArrivalRefresh refresh) {
     }
 
     private static String unavailableReason(ArrivalSnapshot snapshot) {

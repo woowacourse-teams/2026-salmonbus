@@ -70,9 +70,13 @@ class RouteDisplayLifecycleTest {
 
     private void installAutomatic(RouteGeometry geometry) {
         String digest = RouteDisplaySelector.input(geometry).digest();
+        installArtifact(geometry, AutomaticRouteDisplay.REVISION,
+                json.writeValueAsString(AutomaticRouteDisplay.build(geometry, digest)), null);
+    }
+
+    private void installArtifact(RouteGeometry geometry, String algorithm, String document, String storedSha256) {
+        String digest = RouteDisplaySelector.input(geometry).digest();
         String evidence = geometry.shape().evidence().revision();
-        String algorithm = AutomaticRouteDisplay.REVISION;
-        String document = json.writeValueAsString(AutomaticRouteDisplay.build(geometry, digest));
         jdbc.sql("""
             INSERT INTO route_display_generation_job
                 (generation_key,route_id,input_digest,evidence_revision,algorithm_revision,input_json,status)
@@ -84,7 +88,8 @@ class RouteDisplayLifecycleTest {
                 (generation_key,route_id,input_digest,evidence_revision,algorithm_revision,document,document_sha256)
             VALUES (?,?,?,?,?,?,?) ON CONFLICT DO NOTHING
             """).params(RouteDisplayGeneration.key(digest,evidence,algorithm),geometry.routeId(),digest,
-                    evidence,algorithm,document,RouteDisplayGeneration.sha256(document)).update();
+                    evidence,algorithm,document,
+                    storedSha256 == null ? RouteDisplayGeneration.sha256(document) : storedSha256).update();
     }
 
     private void install(RouteGeometry geometry, double offset) {
@@ -299,4 +304,219 @@ class RouteDisplayLifecycleTest {
         assertThat(expired.canProgress()).isTrue();assertThat(expired.initialAttempt()).isFalse();
     }
 
+
+    private final io.micrometer.core.instrument.simple.SimpleMeterRegistry meters =
+            new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+    private org.springframework.test.web.servlet.MockMvc plain() {
+        return MockMvcBuilders.standaloneSetup(new RouteGeometryController(service)).build();
+    }
+    private org.springframework.test.web.servlet.MockMvc cachedMvc;
+
+    private org.springframework.test.web.servlet.MockMvc cached() {
+        if (cachedMvc == null) {
+            cachedMvc = MockMvcBuilders.standaloneSetup(new RouteGeometryController(service,
+                    new com.gustler.backend.api.route.controller.RouteGeometryResponseCache(
+                            org.springframework.util.unit.DataSize.ofMegabytes(32), java.time.Duration.ofMinutes(10),
+                            java.time.Duration.ofSeconds(1), meters))).build();
+        }
+        return cachedMvc;
+    }
+
+    private double cacheHits() {
+        return meters.counter("salmonbus.route.geometry.cache", "result", "hit").count();
+    }
+
+    /** 캐시를 거친 응답을 먼저 받고, 캐시 없는 응답과 상태·본문·ETag·Cache-Control이 같은지 본다. 응답 status 필드를 준다. */
+    private String sameAsUncached(String ifNoneMatch) throws Exception {
+        String path = "/api/v2/routes/" + ID.value() + "/geometry";
+        var cachedRequest = get(path);
+        var plainRequest = get(path);
+        if (ifNoneMatch != null) {
+            cachedRequest.header("If-None-Match", ifNoneMatch);
+            plainRequest.header("If-None-Match", ifNoneMatch);
+        }
+        var actual = cached().perform(cachedRequest).andReturn().getResponse();
+        var expected = plain().perform(plainRequest).andReturn().getResponse();
+        assertThat(actual.getStatus()).isEqualTo(expected.getStatus());
+        assertThat(actual.getContentAsString()).isEqualTo(expected.getContentAsString());
+        assertThat(actual.getHeader("ETag")).isEqualTo(expected.getHeader("ETag"));
+        assertThat(actual.getHeader("Cache-Control")).isEqualTo(expected.getHeader("Cache-Control"));
+        return expected.getContentAsString().isEmpty() ? null : json.readTree(expected.getContentAsString()).get("status").asText();
+    }
+
+    private String sameAsUncached() throws Exception {
+        return sameAsUncached(null);
+    }
+
+    @Test
+    void 응답캐시는_노선기본정보_정류장좌표_수동형상_변경을_놓치지_않는다() throws Exception {
+        assertThat(sameAsUncached()).isEqualTo("READY");
+        double hits = cacheHits();
+        assertThat(sameAsUncached()).isEqualTo("READY");
+        assertThat(cacheHits()).isEqualTo(hits + 1);
+        String etag = cached().perform(get("/api/v2/routes/" + ID.value() + "/geometry")).andReturn().getResponse().getHeader("ETag");
+        assertThat(sameAsUncached(etag)).isNull();
+
+        jdbc.sql("UPDATE route SET display_name='새 이름'").update();
+        assertThat(sameAsUncached(etag)).isEqualTo("READY");
+
+        jdbc.sql("INSERT INTO route_stop_location_history(route_version_id,stop_order,stop_id,observed_at,x,y)"
+                + " VALUES (?,2,'206000638','2026-10-15T00:00:00Z',127.0101,37.01)")
+                .param(current().referenceVersionId()).update();
+        sameAsUncached();
+        installAutomatic(current());
+        assertThat(sameAsUncached()).isEqualTo("READY");
+
+        install(current(), 0.0001);
+        assertThat(sameAsUncached()).isEqualTo("READY");
+        hits = cacheHits();
+        sameAsUncached();
+        assertThat(cacheHits()).isEqualTo(hits + 1);
+        var shifted = json.writeValueAsString(manual(RouteDisplaySelector.input(current()), 0.0002));
+        jdbc.sql("UPDATE route_display_geometry SET document=CAST(? AS jsonb)").param(shifted).update();
+        assertThat(sameAsUncached()).isEqualTo("READY");
+        jdbc.sql("UPDATE route_display_geometry SET document='{}'::jsonb").update();
+        assertThat(sameAsUncached()).isEqualTo("READY");
+        jdbc.sql("UPDATE route_display_geometry SET disabled_at=CURRENT_TIMESTAMP").update();
+        assertThat(sameAsUncached()).isEqualTo("READY");
+    }
+
+    @Test
+    void 응답캐시는_같은_생성키로_다시_넣은_산출물과_작업상태_형상변경을_놓치지_않는다() throws Exception {
+        RouteGeometry g = current();
+        String digest = RouteDisplaySelector.input(g).digest();
+        String improved = json.writeValueAsString(AutomaticRouteDisplay.build(g, digest));
+        installArtifact(g, RouteDisplayGeneration.SOURCE_REVISION,
+                json.writeValueAsString(AutomaticRouteDisplay.sourceOnly(g, digest)), null);
+        assertThat(sameAsUncached()).isEqualTo("READY");
+
+        jdbc.sql("TRUNCATE route_display_automatic_artifact").update();
+        installArtifact(g, RouteDisplayGeneration.SOURCE_REVISION,
+                json.writeValueAsString(AutomaticRouteDisplay.sourceOnly(g, digest)), null);
+        installArtifact(g, AutomaticRouteDisplay.REVISION, improved.replace("\"revision\"", "\"revision \""),
+                RouteDisplayGeneration.sha256(improved));
+        assertThat(sameAsUncached()).isEqualTo("READY");
+
+        putGenerationJob(g, AutomaticRouteDisplay.REVISION, "RUNNING", 1, 5, "2099-01-01T00:00:00Z");
+        sameAsUncached();
+        putGenerationJob(g, AutomaticRouteDisplay.REVISION, "FAILED", 5, 5, null);
+        assertThat(sameAsUncached()).isEqualTo("READY");
+
+        jdbc.sql("UPDATE route_geometry SET evidence='{}'::jsonb").update();
+        sameAsUncached();
+        jdbc.sql("UPDATE route_geometry SET points='[{\"x\":127,\"y\":37},{\"x\":127.01001,\"y\":37.01},{\"x\":127,\"y\":37}]'::jsonb").update();
+        sameAsUncached();
+        installAutomatic(current());
+        assertThat(sameAsUncached()).isEqualTo("READY");
+        jdbc.sql("DELETE FROM route_geometry").update();
+        assertThat(sameAsUncached()).isEqualTo("UNAVAILABLE");
+    }
+
+    @Test
+    void 저장자료_식별값은_본문만_바꾼_수동형상과_다시넣은_산출물을_구별한다() {
+        RouteGeometry g = current();
+        install(g, 0.0001);
+        String digest = RouteDisplaySelector.input(g).digest();
+        String evidence = g.shape().evidence().revision();
+        List<String> keys = List.of(RouteDisplayGeneration.key(digest, evidence, AutomaticRouteDisplay.REVISION));
+        var before = displays.findStoredInputs(ID.value(), g.referenceVersionId(), digest, evidence, null, keys).orElseThrow().inputs();
+        assertThat(before.manual()).isNotNull();
+        assertThat(before.artifacts()).hasSize(1);
+        assertThat(displays.findStoredInputs(ID.value(), g.referenceVersionId(), digest, evidence, null, keys)
+                .orElseThrow().inputs()).isEqualTo(before);
+
+        jdbc.sql("UPDATE route_display_geometry SET document='{}'::jsonb").update();
+        var manualChanged = displays.findStoredInputs(ID.value(), g.referenceVersionId(), digest, evidence, null, keys)
+                .orElseThrow().inputs();
+        assertThat(manualChanged.manual().contentDigest()).isEqualTo(before.manual().contentDigest());
+        assertThat(manualChanged.manual()).isNotEqualTo(before.manual());
+
+        jdbc.sql("TRUNCATE route_display_automatic_artifact").update();
+        installAutomatic(g);
+        var artifactChanged = displays.findStoredInputs(ID.value(), g.referenceVersionId(), digest, evidence, null, keys)
+                .orElseThrow().inputs();
+        assertThat(artifactChanged.artifacts().getFirst().documentSha256())
+                .isEqualTo(before.artifacts().getFirst().documentSha256());
+        assertThat(artifactChanged.artifacts()).isNotEqualTo(before.artifacts());
+        assertThat(artifactChanged.generationStates()).isEqualTo(before.generationStates());
+    }
+
+    @Autowired javax.sql.DataSource dataSource;
+
+    /** 연결마다 만든 SQL 문 수를 센다. */
+    private static javax.sql.DataSource counting(javax.sql.DataSource target, java.util.concurrent.atomic.AtomicInteger statements) {
+        return (javax.sql.DataSource) java.lang.reflect.Proxy.newProxyInstance(RouteDisplayLifecycleTest.class.getClassLoader(),
+                new Class<?>[]{javax.sql.DataSource.class}, (proxy, method, args) -> {
+                    Object result = invoke(method, target, args);
+                    if (!(result instanceof java.sql.Connection connection)) return result;
+                    return java.lang.reflect.Proxy.newProxyInstance(RouteDisplayLifecycleTest.class.getClassLoader(),
+                            new Class<?>[]{java.sql.Connection.class}, (inner, call, callArgs) -> {
+                                if (call.getName().equals("prepareStatement") || call.getName().equals("createStatement")
+                                        || call.getName().equals("prepareCall")) statements.incrementAndGet();
+                                return invoke(call, connection, callArgs);
+                            });
+                });
+    }
+
+    private static Object invoke(java.lang.reflect.Method method, Object target, Object[] args) throws Throwable {
+        try {
+            return method.invoke(target, args);
+        } catch (java.lang.reflect.InvocationTargetException failure) {
+            throw failure.getCause();
+        }
+    }
+
+    /**
+     * 캐시에 넣지 않는 응답을 포함해 미적중 경로의 SQL 문 수를 예전 조립(저장 자료 식별값을 읽지 않고 문서·상태를 하나씩 읽음)과 실제 DB로 비교한다.
+     * 응답도 예전 조립과 같아야 한다.
+     */
+    private void assertMissPathNoMoreStatements(String expectedStatus) throws Exception {
+        var statements = new java.util.concurrent.atomic.AtomicInteger();
+        var client = JdbcClient.create(counting(dataSource, statements));
+        var sources = new JdbcRouteGeometryQueryRepository(client, json);
+        var stored = new JdbcRouteDisplayRepository(client);
+        RouteDisplayRepository legacyReads = new RouteDisplayRepository() {
+            @Override public Optional<Manual> findManual(String routeId, String digest) { return stored.findManual(routeId, digest); }
+            @Override public Optional<Automatic> findAutomatic(String key, String routeId, String digest, String evidence,
+                    String algorithm) { return stored.findAutomatic(key, routeId, digest, evidence, algorithm); }
+            @Override public Map<String, GenerationState> findGenerationStates(String routeId, String digest,
+                    String evidence, List<String> keys) { return stored.findGenerationStates(routeId, digest, evidence, keys); }
+            @Override public Optional<GenerationState> findSourceRecovery(String routeId, final long versionId) {
+                return stored.findSourceRecovery(routeId, versionId); }
+            @Override public Optional<SourceManifest> findSourceManifest(String id) { return stored.findSourceManifest(id); }
+        };
+        var legacy = new RouteGeometryQueryService(sources, Optional.of(new RouteDisplaySelector(legacyReads, json, true)));
+        var current = new RouteGeometryQueryService(sources, Optional.of(new RouteDisplaySelector(stored, json, true)));
+
+        RouteGeometry expected = legacy.get(ID, null);
+        final int legacyStatements = statements.getAndSet(0);
+        RouteGeometry actual = current.respond(ID, null, new RouteGeometryResponder<RouteGeometry>() {
+            @Override public Optional<RouteGeometry> reuse(RouteGeometryFingerprint fingerprint) { return Optional.empty(); }
+            @Override public RouteGeometry create(RouteGeometry geometry, RouteGeometryFingerprint fingerprint) { return geometry; }
+        });
+        final int missStatements = statements.get();
+
+        assertThat(actual).isEqualTo(expected);
+        assertThat(com.gustler.backend.api.route.dto.RouteGeometryResponse.from(actual, false).status()).isEqualTo(expectedStatus);
+        assertThat(missStatements).isLessThanOrEqualTo(legacyStatements);
+    }
+
+    @Test
+    void 미적중_경로는_실제_DB에서_예전_조립보다_SQL문이_많지_않다() throws Exception {
+        assertMissPathNoMoreStatements("READY");
+
+        install(current(), 0.0001);
+        assertMissPathNoMoreStatements("READY");
+
+        jdbc.sql("UPDATE route_display_geometry SET disabled_at=CURRENT_TIMESTAMP").update();
+        jdbc.sql("TRUNCATE route_display_automatic_artifact").update();
+        assertMissPathNoMoreStatements("UNAVAILABLE");
+
+        putGenerationJob(current(), AutomaticRouteDisplay.REVISION, "FAILED", 5, 5, null);
+        putGenerationJob(current(), RouteDisplayGeneration.SOURCE_REVISION, "FAILED", 5, 5, null);
+        assertMissPathNoMoreStatements("UNAVAILABLE");
+
+        jdbc.sql("DELETE FROM route_geometry").update();
+        assertMissPathNoMoreStatements("UNAVAILABLE");
+    }
 }

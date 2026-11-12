@@ -50,10 +50,21 @@ public class RouteDisplaySelector {
         this.clock = clock.orElseGet(java.time.Clock::systemUTC);
     }
 
+    /** 표시 선택 입력을 읽고 바로 표시 형상을 고른다. {@link #enrich(Prepared)}와 결과가 같다. */
     public RouteGeometry enrich(RouteGeometry geometry) {
+        return enrich(prepare(geometry));
+    }
+
+    /**
+     * {@link #prepare}로 읽은 입력으로 표시 형상을 고른다. 입력을 읽은 시각의 보조 근거와 저장 자료 식별값·상태를 그대로 쓰고,
+     * 문서는 식별값이 있는 것만 읽는다. 그래서 같은 {@link Prepared#fingerprint()}면 결과가 같다.
+     */
+    public RouteGeometry enrich(Prepared prepared) {
+        RouteGeometry geometry = prepared.geometry();
+        Reads reads = prepared.reads();
         if (!enabled) return geometry;
         if (geometry.shape() == null) {
-            var recovery=repository.findSourceRecovery(geometry.routeId(),geometry.referenceVersionId());
+            var recovery=reads.recovery(geometry.routeId(),geometry.referenceVersionId());
             if(recovery.isPresent() && !recovery.get().canProgress()
                     && !recovery.get().status().equals("SUCCEEDED") && !recovery.get().status().equals("SUPERSEDED"))
                 return geometry.withDisplay(new RouteDisplayGeometry(null,Map.of(),Map.of(),
@@ -62,29 +73,27 @@ public class RouteDisplaySelector {
                         List.of(new RouteDisplayGeometry.QualityIssue("SOURCE_RECOVERY_EXHAUSTED",null,null,null)))));
             return geometry;
         }
-        final RouteDisplayInput input;
-        try {
-            input = input(geometry);
-        } catch (IllegalArgumentException invalid) {
+        final RouteDisplayInput input = prepared.input();
+        if (input == null) {
             LOGGER.warn(
                     "event=route_display_source_rejected routeId={} reason=INVALID_INPUT",
                     geometry.routeId());
             return geometry.withDisplay(new RouteDisplayGeometry(null, Map.of(), Map.of(),
                     "invalid-source/" + geometry.shape().id(), Source.AUTOMATIC_FALLBACK,
-                    geometry.shape().evidence().at(clock.instant()).sources(),
+                    prepared.evidence().sources(),
                     new RouteDisplayGeometry.Quality(RouteDisplayGeometry.QualityStatus.WITHHELD,
                             List.of(new RouteDisplayGeometry.QualityIssue("INVALID_SOURCE_INPUT", null, null, null)))));
         }
         String digest = input.digest();
-        var evidence = geometry.shape().evidence().at(clock.instant());
-        var manual = repository.findManual(geometry.routeId(), digest);
+        var evidence = prepared.evidence();
+        var manual = reads.manual(geometry.routeId(), digest);
         if (manual.isPresent()) {
             try {
                 ManualRouteDisplay document =
                         json.readValue(manual.get().document(), ManualRouteDisplay.class);
                 document.validateFor(input);
                 java.util.Optional<RouteDisplayGeometry> source;
-                try { source=storedAutomatic(provenanceInput(geometry,digest),digest,evidence); }
+                try { source=storedAutomatic(reads,provenanceInput(reads,geometry,digest),digest,evidence); }
                 catch(RuntimeException invalidProvenance) { source=java.util.Optional.empty(); }
                 String revision = manual.get().revision() + source
                         .map(value -> "/source/" + RouteDisplayGeneration.sha256(value.revision()))
@@ -97,7 +106,7 @@ public class RouteDisplaySelector {
                         geometry.routeId());
             }
         }
-        try { geometry=provenanceInput(geometry,digest); }
+        try { geometry=provenanceInput(reads,geometry,digest); }
         catch(RuntimeException invalidProvenance) {
             return geometry.withDisplay(new RouteDisplayGeometry(null,Map.of(),Map.of(),
                 "invalid-provenance/"+geometry.shape().id(),Source.AUTOMATIC_FALLBACK,evidence.sources(),
@@ -112,7 +121,7 @@ public class RouteDisplaySelector {
         List<String> keys = algorithms.stream().map(algorithm ->
                 RouteDisplayGeneration.key(digest,evidence.revision(),algorithm,manifestId)).toList();
         for (int i=0; i<algorithms.size(); i++) {
-            var read = readAutomatic(geometry,digest,evidence,algorithms.get(i));
+            var read = readAutomatic(reads,geometry,digest,evidence,algorithms.get(i));
             if (read.found()) terminalKeys.add(keys.get(i));
             if (read.geometry().isEmpty()) continue;
             var value = read.geometry().get();
@@ -124,14 +133,14 @@ public class RouteDisplaySelector {
             if (rejected == null) rejected = value;
         }
         if(fallback!=null && terminalKeys.contains(keys.getFirst()))return geometry.withDisplay(fallback);
-        var states = repository.findGenerationStates(geometry.routeId(),digest,evidence.revision(),keys);
+        var states = reads.states(geometry.routeId(),digest,evidence.revision(),keys);
         var improved=states.get(keys.getFirst());
         boolean initialAttempt=!terminalKeys.contains(keys.getFirst())
                 && (improved==null || improved.canProgress() && improved.initialAttempt());
         if(fallback!=null && !initialAttempt)return geometry.withDisplay(fallback);
         boolean pending = initialAttempt || keys.stream().anyMatch(key -> !terminalKeys.contains(key)
                 && (!states.containsKey(key) || states.get(key).canProgress()));
-        if(!pending)pending=repository.findSourceRecovery(geometry.routeId(),geometry.referenceVersionId())
+        if(!pending)pending=reads.recovery(geometry.routeId(),geometry.referenceVersionId())
                 .map(RouteDisplayRepository.GenerationState::canProgress).orElse(false);
         if (!pending && rejected != null) return geometry.withDisplay(rejected);
         String phase = pending ? "pending/" : "unavailable/";
@@ -143,9 +152,118 @@ public class RouteDisplaySelector {
                 rejected == null ? null : rejected.sourcePaths()));
     }
 
-    private RouteGeometry provenanceInput(RouteGeometry g,String digest) {
+    /**
+     * {@link #enrich}의 결과를 정하는 입력을 한 시각에 모은다. 보조 근거는 이 시각으로 다시 평가하고, 저장 자료는 문서 본문 없이
+     * 식별값과 작업·복구 상태를 한 번에 읽는다(수동 형상 문서만 함께 읽는다).
+     *
+     * <p>{@link #enrich}는 입력 출처가 현재 입력과 맞지 않으면 출처 없는 생성 키로 산출물과 작업을 찾는다. 출처 검증은 문서를 읽어야
+     * 알 수 있으므로, 출처가 있으면 출처 있는 키와 없는 키를 모두 읽는다. 꺼져 있거나 형상이 없거나 입력이 무효이면 저장 자료를 읽지 않는다.
+     */
+    public Prepared prepare(RouteGeometry geometry) {
+        if (!enabled || geometry.shape() == null) {
+            return new Prepared(geometry, null, null, new Reads(repository, null, List.of()), fingerprintWithoutStore(geometry));
+        }
+        var evidence = geometry.shape().evidence().at(clock.instant());
+        RouteDisplayInput input;
+        try {
+            input = input(geometry);
+        } catch (IllegalArgumentException invalid) {
+            return new Prepared(geometry, evidence, null, new Reads(repository, null, List.of()),
+                    java.util.Optional.of(RouteDisplayFingerprint.invalidInput(evidence.revision())));
+        }
+        String digest = input.digest();
+        String manifestId = geometry.shape().sourceManifestId();
+        var keys = new java.util.LinkedHashSet<String>();
+        for (String manifest : manifestId == null ? java.util.Collections.<String>singletonList(null)
+                : java.util.Arrays.asList(manifestId, null)) {
+            for (String algorithm : List.of(AutomaticRouteDisplay.REVISION, RouteDisplayGeneration.SOURCE_REVISION)) {
+                keys.add(RouteDisplayGeneration.key(digest, evidence.revision(), algorithm, manifest));
+            }
+        }
+        List<String> generationKeys = List.copyOf(keys);
+        var stored = repository.findStoredInputs(geometry.routeId(), geometry.referenceVersionId(), digest,
+                evidence.revision(), manifestId, generationKeys);
+        return new Prepared(geometry, evidence, input,
+                new Reads(repository, stored.orElse(null), generationKeys),
+                stored.map(read -> new RouteDisplayFingerprint(true, digest, evidence.revision(), read.inputs())));
+    }
+
+    private java.util.Optional<RouteDisplayFingerprint> fingerprintWithoutStore(RouteGeometry geometry) {
+        if (geometry.shape() == null) return java.util.Optional.empty();
+        return java.util.Optional.of(RouteDisplayFingerprint.disabled());
+    }
+
+    /** {@link #prepare}의 지문만 준다. */
+    public java.util.Optional<RouteDisplayFingerprint> fingerprint(RouteGeometry geometry) {
+        return prepare(geometry).fingerprint();
+    }
+
+    /**
+     * 한 시각에 모은 표시 선택 입력. {@code evidence}는 그 시각으로 다시 평가한 보조 근거이고, {@code input}은 입력이 무효이면 null이다.
+     * {@code fingerprint}가 비어 있으면 결과를 다시 쓰면 안 된다(형상 없음, 저장 자료 식별값을 읽지 못함).
+     */
+    public record Prepared(RouteGeometry geometry,
+            com.gustler.backend.routegeometry.api.RouteShapeEvidence evidence,
+            RouteDisplayInput input,
+            Reads reads,
+            java.util.Optional<RouteDisplayFingerprint> fingerprint) {}
+
+    /**
+     * 표시 선택이 쓰는 저장 자료 조회. {@code stored}가 있으면 그 식별값·상태로 조회를 대신하고 문서는 식별값이 있는 것만 읽는다.
+     * 없으면 저장소를 그대로 조회한다.
+     */
+    public static final class Reads {
+        private final RouteDisplayRepository repository;
+        private final RouteDisplayRepository.StoredRead stored;
+        private final List<String> generationKeys;
+
+        private Reads(RouteDisplayRepository repository, RouteDisplayRepository.StoredRead stored,
+                List<String> generationKeys) {
+            this.repository = repository;
+            this.stored = stored;
+            this.generationKeys = generationKeys;
+        }
+
+        java.util.Optional<RouteDisplayRepository.Manual> manual(String routeId, String digest) {
+            if (stored == null) return repository.findManual(routeId, digest);
+            var row = stored.inputs().manual();
+            if (row == null) return java.util.Optional.empty();
+            return java.util.Optional.of(new RouteDisplayRepository.Manual(stored.manualDocument(), row.contentDigest()));
+        }
+
+        java.util.Optional<RouteDisplayRepository.SourceManifest> sourceManifest(String id) {
+            if (stored != null && stored.inputs().manifest() == null) return java.util.Optional.empty();
+            return repository.findSourceManifest(id);
+        }
+
+        java.util.Optional<RouteDisplayRepository.Automatic> automatic(String key, String routeId, String digest,
+                String evidence, String algorithm) {
+            if (stored != null && generationKeys.contains(key) && stored.inputs().artifacts().stream()
+                    .noneMatch(row -> row.generationKey().equals(key) && row.algorithmRevision().equals(algorithm)))
+                return java.util.Optional.empty();
+            return repository.findAutomatic(key, routeId, digest, evidence, algorithm);
+        }
+
+        Map<String, RouteDisplayRepository.GenerationState> states(String routeId, String digest, String evidence,
+                List<String> keys) {
+            if (stored == null || !generationKeys.containsAll(keys))
+                return repository.findGenerationStates(routeId, digest, evidence, keys);
+            var states = new HashMap<String, RouteDisplayRepository.GenerationState>();
+            stored.inputs().generationStates().forEach((key, state) -> {
+                if (keys.contains(key)) states.put(key, state);
+            });
+            return Map.copyOf(states);
+        }
+
+        java.util.Optional<RouteDisplayRepository.GenerationState> recovery(String routeId, final long versionId) {
+            if (stored == null) return repository.findSourceRecovery(routeId, versionId);
+            return java.util.Optional.ofNullable(stored.inputs().sourceRecovery());
+        }
+    }
+
+    private RouteGeometry provenanceInput(Reads reads,RouteGeometry g,String digest) {
         if(g.shape().sourceManifestId()==null) return g;
-        var m=repository.findSourceManifest(g.shape().sourceManifestId())
+        var m=reads.sourceManifest(g.shape().sourceManifestId())
             .orElseThrow(() -> new IllegalStateException("Input provenance missing"));
         if(m.referenceVersionId()==g.referenceVersionId() && m.inputDigest().equals(digest)
                 && m.evidenceRevision().equals(g.shape().evidence().revision())) return g;
@@ -158,19 +276,19 @@ public class RouteDisplaySelector {
     private record ArtifactRead(boolean found, java.util.Optional<RouteDisplayGeometry> geometry) {}
 
     /** Manual diagnostics may retain an independently verified source path from a withheld result. */
-    private java.util.Optional<RouteDisplayGeometry> storedAutomatic(RouteGeometry geometry, String digest,
+    private java.util.Optional<RouteDisplayGeometry> storedAutomatic(Reads reads, RouteGeometry geometry, String digest,
             com.gustler.backend.routegeometry.api.RouteShapeEvidence evidence) {
         for (String algorithm : List.of(AutomaticRouteDisplay.REVISION,RouteDisplayGeneration.SOURCE_REVISION)) {
-            var result=readAutomatic(geometry,digest,evidence,algorithm);
+            var result=readAutomatic(reads,geometry,digest,evidence,algorithm);
             if(result.geometry().isPresent()) return result.geometry();
         }
         return java.util.Optional.empty();
     }
 
-    private ArtifactRead readAutomatic(RouteGeometry geometry, String digest,
+    private ArtifactRead readAutomatic(Reads reads, RouteGeometry geometry, String digest,
             com.gustler.backend.routegeometry.api.RouteShapeEvidence evidence, String algorithm) {
         String key=RouteDisplayGeneration.key(digest,evidence.revision(),algorithm,geometry.shape().sourceManifestId());
-        var stored=repository.findAutomatic(key,geometry.routeId(),digest,evidence.revision(),algorithm);
+        var stored=reads.automatic(key,geometry.routeId(),digest,evidence.revision(),algorithm);
         if(stored.isEmpty()) return new ArtifactRead(false,java.util.Optional.empty());
         try {
             if(!RouteDisplayGeneration.sha256(stored.get().document()).equals(stored.get().sha256()))

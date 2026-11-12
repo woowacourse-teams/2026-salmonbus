@@ -6,12 +6,16 @@ import com.gustler.backend.api.board.application.BoardSnapshot;
 import com.gustler.backend.api.board.application.BoardVehicleObservation;
 import com.gustler.backend.api.board.application.SnapshotObservation;
 import com.gustler.backend.api.board.application.StoredPrediction;
+import com.gustler.backend.api.board.domain.BoardStop;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.api.observation.ObservationFreshness;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -55,6 +59,90 @@ class JpaBoardQueryRepositoryIntegrationTest {
                 new BoardVehicleObservation(null, 2, 1, 1));
         assertThat(repository.findObservedVehicles(batch, otherRoute.routeVersionId())).isEmpty();
         assertThat(repository.findPredictions(batch)).isEmpty();
+    }
+
+    @Test
+    void 여러_판본과_묶음을_한_번에_읽어도_짝마다_읽은_정류장과_차량과_같다() {
+        // given
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        OffsetDateTime now = OffsetDateTime.now();
+        RouteContext route = route(fixture, "204000057", now);
+        RouteContext otherRoute = route(fixture, "234000050", now);
+        fixture.insertStop(route, 2, "STOP-2", "다음 정류장", "UP", true);
+        final long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 2);
+        final long otherRouteBatch = fixture.insertBatch(otherRoute, now, "SUCCESS_ROWS", 1);
+        final long emptyBatch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
+        fixture.insertObservation(route, batch, 1, "MINE", 1, "STOP-1", now);
+        fixture.insertObservation(otherRoute, otherRouteBatch, 1, "OTHER", 1, "STOP-1", now);
+        Map<Long, Long> pairs = new LinkedHashMap<>();
+        pairs.put(batch, route.routeVersionId());
+        pairs.put(otherRouteBatch, otherRoute.routeVersionId());
+        pairs.put(emptyBatch, route.routeVersionId());
+
+        // when
+        Map<Long, List<BoardStop>> stops = repository.findStops(
+            List.of(route.routeVersionId(), otherRoute.routeVersionId()));
+        Map<Long, List<BoardVehicleObservation>> vehicles = repository.findObservedVehicles(pairs);
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(stops.get(route.routeVersionId()))
+                .containsExactlyElementsOf(repository.findStops(route.routeVersionId()));
+            softly.assertThat(stops.get(otherRoute.routeVersionId()))
+                .containsExactlyElementsOf(repository.findStops(otherRoute.routeVersionId()));
+            softly.assertThat(vehicles.get(batch)).extracting(BoardVehicleObservation::vehicleId)
+                .containsExactly("MINE");
+            softly.assertThat(vehicles.get(batch))
+                .containsExactlyInAnyOrderElementsOf(repository.findObservedVehicles(batch, route.routeVersionId()));
+            softly.assertThat(vehicles.get(otherRouteBatch)).extracting(BoardVehicleObservation::vehicleId)
+                .containsExactly("OTHER");
+            softly.assertThat(vehicles).doesNotContainKey(emptyBatch);
+        }
+    }
+
+    @Test
+    void 여러_묶음의_예보를_한_번에_읽어도_발행_묶음과_차량_관측_묶음이_같은_행만_고른다() {
+        // given
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = route(fixture, "204000057", now);
+        fixture.insertStop(route, 2, "STOP-2", "다음 정류장", "UP", true);
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long batch = fixture.insertBatch(route, now, "SUCCESS_ROWS", 2);
+        final long otherBatch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 2);
+        final long unpublishedBatch = fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_ROWS", 1);
+        final long publication = fixture.insertPublication(batch, model, now, now);
+        final long otherPublication = fixture.insertPublication(otherBatch, model, now, now);
+        final long matching = fixture.insertObservation(route, batch, 1, "MATCH", 1, "STOP-1", now);
+        final long movedToOtherPublication = fixture.insertObservation(route, batch, 2, "OTHER-PUBLICATION", 1,
+            "STOP-1", now);
+        final long otherMatching = fixture.insertObservation(route, otherBatch, 1, "OTHER-MATCH", 1, "STOP-1", now);
+        final long movedToPublication = fixture.insertObservation(route, otherBatch, 2, "OTHER-BATCH", 1,
+            "STOP-1", now);
+        fixture.insertForecast(route, matching, 2, 1, model, 0.2, 20.0, now);
+        fixture.insertForecast(route, movedToOtherPublication, 2, 1, model, 0.4, 10.0, now);
+        fixture.insertForecast(route, otherMatching, 2, 1, model, 0.5, 8.0, now);
+        fixture.insertForecast(route, movedToPublication, 2, 1, model, 0.8, 5.0, now);
+        jdbcClient.sql("UPDATE seat_forecast SET publication_id = ? WHERE vehicle_observation_id = ?")
+            .params(otherPublication, movedToOtherPublication).update();
+        jdbcClient.sql("UPDATE seat_forecast SET publication_id = ? WHERE vehicle_observation_id = ?")
+            .params(publication, movedToPublication).update();
+
+        // when
+        Map<Long, List<StoredPrediction>> predictions = repository.findPredictions(
+            List.of(batch, otherBatch, unpublishedBatch));
+
+        // then
+        try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
+            softly.assertThat(predictions.get(batch)).extracting(StoredPrediction::vehicleId)
+                .containsExactly("MATCH");
+            softly.assertThat(predictions.get(otherBatch)).extracting(StoredPrediction::vehicleId)
+                .containsExactly("OTHER-MATCH");
+            softly.assertThat(predictions.get(batch)).containsExactlyElementsOf(repository.findPredictions(batch));
+            softly.assertThat(predictions.get(otherBatch))
+                .containsExactlyElementsOf(repository.findPredictions(otherBatch));
+            softly.assertThat(predictions).doesNotContainKey(unpublishedBatch);
+        }
     }
 
     @Test

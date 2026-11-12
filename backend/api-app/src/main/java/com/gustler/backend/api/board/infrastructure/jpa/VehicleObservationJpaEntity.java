@@ -51,6 +51,10 @@ public class VehicleObservationJpaEntity {
         return vehicleId;
     }
 
+    public long routeVersionId() {
+        return routeVersionId;
+    }
+
     public BoardVehicleObservation toDomain() {
         return new BoardVehicleObservation(vehicleId, sourceRowNumber, passedStopOrder, stopOrder);
     }

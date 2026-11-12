@@ -2,6 +2,7 @@ package com.gustler.backend.api.station.application;
 
 import com.gustler.backend.api.arrival.ArrivalQuery;
 import com.gustler.backend.api.arrival.application.ArrivalQueryService;
+import com.gustler.backend.api.arrival.application.KnownStationArrivals;
 import com.gustler.backend.api.arrival.application.StationArrivalsOverview;
 import com.gustler.backend.api.arrival.domain.ArrivalVisit;
 import com.gustler.backend.api.arrival.domain.RouteArrivals;
@@ -9,7 +10,11 @@ import com.gustler.backend.api.error.ErrorCode;
 import com.gustler.backend.api.station.StationNotFoundException;
 import com.gustler.backend.api.station.domain.StationInfo;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -31,38 +36,76 @@ import org.springframework.stereotype.Service;
  * <p>우리 노선 행은 방문마다 판정보드를 기준으로 만들고 GBIS 도착정보의 ETA·현재 좌석을 덧붙인다({@link SalmonRouteRows}).
  * 그래서 GBIS 수신이 막혀도 우리 노선 차량과 예보는 나온다. 다른 노선 행은 GBIS 도착정보를 그대로 쓴다.
  * 판정보드 읽기는 {@link StationBoardReader}가 맡는다.
+ *
+ * <p>구간별 시간을 {@code salmonbus.station.detail.phase} 타이머(phase=info, arrivals, boards, total)로, 고른 우리 노선 수를
+ * {@code salmonbus.station.detail.routes}로 남긴다. 정류장 ID처럼 값이 많은 것은 태그로 쓰지 않는다.
  */
 @Service
 public class StationDetailService {
 
     private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
+    private static final Duration[] LATENCY_BUCKETS = {
+        Duration.ofMillis(25), Duration.ofMillis(50), Duration.ofMillis(100), Duration.ofMillis(250),
+        Duration.ofMillis(500), Duration.ofSeconds(1), Duration.ofSeconds(2)
+    };
     private final StationReadRepository stations;
     private final ArrivalQueryService arrivals;
     private final StationBoardReader boards;
     private final Clock clock;
+    private final Timer infoTimer;
+    private final Timer arrivalsTimer;
+    private final Timer boardsTimer;
+    private final Timer totalTimer;
+    private final DistributionSummary routeCounts;
 
     StationDetailService(
         StationReadRepository stations,
         ArrivalQueryService arrivals,
         StationBoardReader boards,
-        Clock clock
+        Clock clock,
+        MeterRegistry meters
     ) {
         this.stations = stations;
         this.arrivals = arrivals;
         this.boards = boards;
         this.clock = clock;
+        this.infoTimer = phaseTimer(meters, "info");
+        this.arrivalsTimer = phaseTimer(meters, "arrivals");
+        this.boardsTimer = phaseTimer(meters, "boards");
+        this.totalTimer = phaseTimer(meters, "total");
+        this.routeCounts = DistributionSummary.builder("salmonbus.station.detail.routes")
+            .description("정류장 상세 한 건이 판정보드를 읽은 우리 노선 수")
+            .serviceLevelObjectives(1, 2, 4, 8, 16)
+            .register(meters);
+    }
+
+    private static Timer phaseTimer(MeterRegistry meters, String phase) {
+        return Timer.builder("salmonbus.station.detail.phase")
+            .description("정류장 상세 조회의 구간별 시간")
+            .tag("phase", phase)
+            .serviceLevelObjectives(LATENCY_BUCKETS)
+            .register(meters);
     }
 
     public StationDetailOverview get(String stationId) {
         if (stationId == null || !stationId.matches("[0-9]{9}")) {
             throw new ArrivalQuery.Failure(ErrorCode.INVALID_REQUEST);
         }
-        StationInfo info = stations.info(stationId).orElseThrow(StationNotFoundException::new);
-        StationArrivalsOverview overview = arrivals.getForKnownStation(stationId);
-        List<ArrivalVisit> visits = arrivals.visits(stationId);
-        Map<String, StationBoardReader.BoardLoad> loaded = boards.read(visits.stream()
+        return totalTimer.record(() -> read(stationId));
+    }
+
+    private StationDetailOverview read(String stationId) {
+        StationInfo info = infoTimer.record(() -> stations.info(stationId))
+            .orElseThrow(StationNotFoundException::new);
+        KnownStationArrivals known = arrivalsTimer.record(() -> arrivals.readKnownStation(stationId));
+        StationArrivalsOverview overview = known.overview();
+        List<ArrivalVisit> visits = known.visits();
+        List<String> routeIds = visits.stream()
             .map(ArrivalVisit::routeId)
-            .toList());
+            .distinct()
+            .toList();
+        routeCounts.record(routeIds.size());
+        Map<String, StationBoardReader.BoardLoad> loaded = boardsTimer.record(() -> boards.read(routeIds));
         Map<String, ArrivalSnapshot.RouteArrival> sources = sourcesOf(overview);
         final boolean received = overview.snapshot() != null;
         LocalTime now = LocalTime.now(clock.withZone(KOREA));

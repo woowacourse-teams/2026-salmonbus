@@ -3,9 +3,9 @@ package com.gustler.backend.api.favorite.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -19,8 +19,10 @@ import com.gustler.backend.api.arrival.domain.ArrivalPrediction;
 import com.gustler.backend.api.arrival.domain.ArrivalVisit;
 import com.gustler.backend.api.arrival.domain.RouteArrivals;
 import com.gustler.backend.arrival.contract.ArrivalSnapshot.Prediction;
-import com.gustler.backend.api.board.application.BoardOverview;
+import com.gustler.backend.api.board.application.BoardBatchRead;
 import com.gustler.backend.api.board.application.BoardQueryService;
+import com.gustler.backend.api.board.application.BoardReadDeadline;
+import com.gustler.backend.api.board.application.BoardReading;
 import com.gustler.backend.api.board.domain.ApproachingVehicle;
 import com.gustler.backend.api.board.domain.Board;
 import com.gustler.backend.api.board.domain.BoardDirection;
@@ -29,6 +31,7 @@ import com.gustler.backend.api.board.domain.ForecastModel;
 import com.gustler.backend.api.board.domain.RouteHeadways;
 import com.gustler.backend.api.board.domain.StopState;
 import com.gustler.backend.api.board.domain.VehicleForecast;
+import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.favorite.FavoriteGroupNotFoundException;
 import com.gustler.backend.api.favorite.application.FavoriteOverview;
 import com.gustler.backend.api.favorite.domain.Favorite;
@@ -39,12 +42,14 @@ import com.gustler.backend.api.favorite.domain.FavoriteGroupName;
 import com.gustler.backend.api.favorite.domain.FavoriteId;
 import com.gustler.backend.api.favorite.domain.FavoriteTarget;
 import com.gustler.backend.api.favorite.domain.MemberFavoriteGroups;
-import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.domain.RouteStatus;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -52,9 +57,13 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -74,9 +83,9 @@ class FavoriteOverviewServiceTest {
         Favorite first = favorite(ROUTE_ID, STOP_ID, FavoriteDirection.UP);
         Favorite second = favorite(ROUTE_ID, "277102323", FavoriteDirection.UP);
         repository.groups = groups(first, second);
-        when(boards.getBoard(any())).thenReturn(new BoardOverview(boardWithStops(ROUTE_ID, List.of(
+        givenBoards(routeId -> boardWithStops(ROUTE_ID, List.of(
             stop(STOP_ID, 1, BoardDirection.UP, 3),
-            stop(second.target().stopId(), 2, BoardDirection.UP, 3))), Duration.ZERO));
+            stop(second.target().stopId(), 2, BoardDirection.UP, 3))));
         CountDownLatch bothStarted = new CountDownLatch(2);
         CountDownLatch secondFinished = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
@@ -110,7 +119,7 @@ class FavoriteOverviewServiceTest {
                 .containsExactly(first.id().value(), second.id().value());
             assertThat(items).allSatisfy(item ->
                 assertThat(item.board().stop().approachingVehicles()).hasSize(3));
-            verify(boards).getBoard(any());
+            verify(boards).readBoards(List.of(ROUTE_ID), BoardReadDeadline.none());
         }
     }
 
@@ -120,20 +129,20 @@ class FavoriteOverviewServiceTest {
         repository.groups = new MemberFavoriteGroups(List.of(
             group(UUID.randomUUID(), "출근", favorite),
             group(UUID.randomUUID(), "퇴근", favorite(ROUTE_ID, STOP_ID, FavoriteDirection.UP))));
-        when(boards.getBoard(any())).thenReturn(new BoardOverview(board(ROUTE_ID, STOP_ID, 3), Duration.ZERO));
+        givenBoards(routeId -> board(ROUTE_ID, STOP_ID, 3));
         when(arrivals.get(any())).thenThrow(new IllegalStateException("수집 Worker 불가"));
 
         FavoriteOverview overview = service.get(MEMBER_ID);
 
         assertThat(overview.groups()).hasSize(2);
-        verify(boards, times(1)).getBoard(any());
+        verify(boards, times(1)).readBoards(List.of(ROUTE_ID), BoardReadDeadline.none());
         verify(arrivals, times(1)).get(any());
     }
 
     @Test
     void 실행기가_포화되어도_요청_스레드에서_조회한다() {
         repository.groups = groups(favorite(ROUTE_ID, STOP_ID, FavoriteDirection.UP));
-        when(boards.getBoard(any())).thenReturn(new BoardOverview(board(ROUTE_ID, STOP_ID, 3), Duration.ZERO));
+        givenBoards(routeId -> board(ROUTE_ID, STOP_ID, 3));
         Thread requestThread = Thread.currentThread();
         when(arrivals.get(any())).thenAnswer(invocation -> {
             assertThat(Thread.currentThread()).isSameAs(requestThread);
@@ -151,7 +160,7 @@ class FavoriteOverviewServiceTest {
     @Test
     void 도착_조회_실패에도_세_차량과_좌석을_유지한다() {
         repository.groups = groups(favorite(ROUTE_ID, STOP_ID, FavoriteDirection.UP));
-        when(boards.getBoard(any())).thenReturn(new BoardOverview(board(ROUTE_ID, STOP_ID, 3), Duration.ZERO));
+        givenBoards(routeId -> board(ROUTE_ID, STOP_ID, 3));
         when(arrivals.get(any())).thenThrow(new IllegalStateException("도착 조회 실패"));
 
         List<FavoriteOverview.Vehicle> vehicles = service.get(MEMBER_ID).groups().getFirst()
@@ -169,7 +178,7 @@ class FavoriteOverviewServiceTest {
     @ValueSource(strings = {"vehicle-0", "vehicle-2"})
     void 표시_순서와_관계없이_원천과_차량_ID가_일치할_때만_ETA를_연결한다(String providedVehicleId) {
         repository.groups = groups(favorite(ROUTE_ID, STOP_ID, FavoriteDirection.UP));
-        when(boards.getBoard(any())).thenReturn(new BoardOverview(board(ROUTE_ID, STOP_ID, 3), Duration.ZERO));
+        givenBoards(routeId -> board(ROUTE_ID, STOP_ID, 3));
         Instant now = Instant.parse("2026-10-27T10:00:00Z");
         ArrivalVisit visit = new ArrivalVisit(ROUTE_ID, ROUTE_ID, 1, 1, "UP", now.minusSeconds(60));
         Prediction source = new Prediction(providedVehicleId, 1, 180, null, 3, null,
@@ -200,9 +209,9 @@ class FavoriteOverviewServiceTest {
         Favorite first = favorite(ROUTE_ID, STOP_ID, FavoriteDirection.UP);
         Favorite second = favorite(ROUTE_ID, "277102323", FavoriteDirection.UP);
         repository.groups = groups(first, second);
-        when(boards.getBoard(any())).thenReturn(new BoardOverview(boardWithStops(ROUTE_ID, List.of(
+        givenBoards(routeId -> boardWithStops(ROUTE_ID, List.of(
             stop(STOP_ID, 1, BoardDirection.UP, 3),
-            stop(second.target().stopId(), 2, BoardDirection.UP, 3))), Duration.ZERO));
+            stop(second.target().stopId(), 2, BoardDirection.UP, 3))));
         Instant now = Instant.parse("2026-10-27T10:00:00Z");
         ArrivalVisit visit = new ArrivalVisit(ROUTE_ID, ROUTE_ID, 1, 2, "UP", now.minusSeconds(60));
         Prediction source = new Prediction("vehicle-0", 1, 180, null, 1, null,
@@ -234,7 +243,7 @@ class FavoriteOverviewServiceTest {
     @Test
     void 그룹과_즐겨찾기_순서대로_최대_세_대의_노선_정류장_항목을_만든다() {
         repository.groups = groups(favorite(ROUTE_ID, STOP_ID, FavoriteDirection.UP));
-        when(boards.getBoard(any())).thenReturn(new BoardOverview(board(ROUTE_ID, STOP_ID, 4), Duration.ZERO));
+        givenBoards(routeId -> board(ROUTE_ID, STOP_ID, 4));
 
         FavoriteOverview.Item item = service.get(MEMBER_ID).groups().getFirst().favorites().getFirst();
 
@@ -253,7 +262,7 @@ class FavoriteOverviewServiceTest {
         Board board = boardWithStops(ROUTE_ID, List.of(
             stop(STOP_ID, 1, BoardDirection.UP, 0),
             stop(STOP_ID, 8, BoardDirection.UP, 0)));
-        when(boards.getBoard(any())).thenReturn(new BoardOverview(board, Duration.ZERO));
+        givenBoards(routeId -> board);
 
         FavoriteOverview.Item item = service.get(MEMBER_ID).groups().getFirst().favorites().getFirst();
 
@@ -266,18 +275,50 @@ class FavoriteOverviewServiceTest {
         Favorite broken = favorite(ROUTE_ID, STOP_ID, FavoriteDirection.UP);
         Favorite available = favorite("204000058", "277102323", FavoriteDirection.UP);
         repository.groups = groups(broken, available);
-        when(boards.getBoard(any())).thenAnswer(invocation -> {
-            String routeId = invocation.getArgument(0, RouteId.class).value();
+        givenBoards(routeId -> {
             if (routeId.equals(ROUTE_ID)) {
                 throw new IllegalStateException("조회 실패");
             }
-            return new BoardOverview(board(routeId, available.target().stopId(), 1), Duration.ZERO);
+            return board(routeId, available.target().stopId(), 1);
         });
 
         List<FavoriteOverview.Item> items = service.get(MEMBER_ID).groups().getFirst().favorites();
 
         assertThat(items).extracting(FavoriteOverview.Item::status)
             .containsExactly(FavoriteOverview.ItemStatus.ERROR, FavoriteOverview.ItemStatus.READY);
+    }
+
+    @Test
+    void 여러_노선의_판정보드를_한_번에_읽고_일괄_조회가_실패하면_모든_항목을_오류로_둔다() {
+        Favorite first = favorite(ROUTE_ID, STOP_ID, FavoriteDirection.UP);
+        Favorite second = favorite("204000058", "277102323", FavoriteDirection.UP);
+        repository.groups = groups(first, second);
+        when(boards.readBoards(anyCollection(), eq(BoardReadDeadline.none()))).thenThrow(new ServiceUnavailableException());
+
+        List<FavoriteOverview.Item> items = service.get(MEMBER_ID).groups().getFirst().favorites();
+
+        assertThat(items).extracting(FavoriteOverview.Item::status)
+            .containsExactly(FavoriteOverview.ItemStatus.ERROR, FavoriteOverview.ItemStatus.ERROR);
+        assertThat(items).extracting(FavoriteOverview.Item::reason)
+            .containsOnly(FavoriteOverview.ItemReason.BOARD_UNAVAILABLE);
+        verify(boards, times(1)).readBoards(List.of(ROUTE_ID, "204000058"), BoardReadDeadline.none());
+        verifyNoInteractions(arrivals);
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void 일괄_조회가_API_오류가_아닌_예외로_실패해도_경고_로그는_한_번만_남긴다(CapturedOutput output) {
+        Favorite first = favorite(ROUTE_ID, STOP_ID, FavoriteDirection.UP);
+        Favorite second = favorite("204000058", "277102323", FavoriteDirection.UP);
+        repository.groups = groups(first, second);
+        when(boards.readBoards(anyCollection(), eq(BoardReadDeadline.none())))
+            .thenThrow(new IllegalStateException("rollback-only"));
+
+        List<FavoriteOverview.Item> items = service.get(MEMBER_ID).groups().getFirst().favorites();
+
+        assertThat(items).extracting(FavoriteOverview.Item::status)
+            .containsExactly(FavoriteOverview.ItemStatus.ERROR, FavoriteOverview.ItemStatus.ERROR);
+        assertThat(output.getOut().split("즐겨찾기 판정보드", -1)).hasSize(2);
     }
 
     @Test
@@ -288,7 +329,7 @@ class FavoriteOverviewServiceTest {
         repository.groups = new MemberFavoriteGroups(List.of(
             group(selectedGroupId, "출근", selected),
             group(UUID.randomUUID(), "퇴근", ignored)));
-        when(boards.getBoard(any())).thenReturn(new BoardOverview(board(ROUTE_ID, STOP_ID, 1), Duration.ZERO));
+        givenBoards(routeId -> board(ROUTE_ID, STOP_ID, 1));
 
         FavoriteOverview overview = service.get(MEMBER_ID, selectedGroupId);
 
@@ -298,8 +339,7 @@ class FavoriteOverviewServiceTest {
                 assertThat(group.favorites()).extracting(FavoriteOverview.Item::target)
                     .containsExactly(selected.target());
             });
-        verify(boards).getBoard(argThat(route -> route.value().equals(ROUTE_ID)));
-        verify(boards, never()).getBoard(argThat(route -> route.value().equals(ignored.target().routeId())));
+        verify(boards).readBoards(List.of(ROUTE_ID), BoardReadDeadline.none());
     }
 
     @Test
@@ -309,6 +349,25 @@ class FavoriteOverviewServiceTest {
         assertThatThrownBy(() -> service.get(MEMBER_ID, UUID.randomUUID()))
             .isInstanceOf(FavoriteGroupNotFoundException.class);
         verifyNoInteractions(boards, arrivals);
+    }
+
+    /**
+     * 판정보드 일괄 조회를 노선마다 {@code boardOf}로 답하게 한다. {@code boardOf}가 던진 예외는 그 노선만의 실패로 담는다.
+     */
+    private void givenBoards(Function<String, Board> boardOf) {
+        when(boards.readBoards(anyCollection(), eq(BoardReadDeadline.none()))).thenAnswer(invocation -> {
+            Collection<String> routeIds = invocation.getArgument(0);
+            Map<String, BoardBatchRead> reads = new LinkedHashMap<>();
+            for (String routeId : routeIds) {
+                try {
+                    reads.put(routeId, new BoardBatchRead(
+                        new BoardReading(boardOf.apply(routeId), 1L, Duration.ZERO), null));
+                } catch (RuntimeException failure) {
+                    reads.put(routeId, BoardBatchRead.failed(failure));
+                }
+            }
+            return reads;
+        });
     }
 
     private static MemberFavoriteGroups groups(Favorite... favorites) {

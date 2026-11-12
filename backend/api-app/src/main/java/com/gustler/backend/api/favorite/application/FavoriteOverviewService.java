@@ -5,8 +5,9 @@ import com.gustler.backend.api.arrival.application.ArrivalQueryService;
 import com.gustler.backend.api.arrival.application.StationArrivalsOverview;
 import com.gustler.backend.api.arrival.domain.ArrivalPrediction;
 import com.gustler.backend.api.arrival.domain.RouteArrivals;
-import com.gustler.backend.api.board.application.BoardOverview;
+import com.gustler.backend.api.board.application.BoardBatchRead;
 import com.gustler.backend.api.board.application.BoardQueryService;
+import com.gustler.backend.api.board.application.BoardReadDeadline;
 import com.gustler.backend.api.board.domain.ApproachingVehicle;
 import com.gustler.backend.api.board.domain.Board;
 import com.gustler.backend.api.board.domain.StopState;
@@ -17,7 +18,6 @@ import com.gustler.backend.api.favorite.domain.Favorite;
 import com.gustler.backend.api.favorite.domain.FavoriteGroup;
 import com.gustler.backend.api.favorite.domain.FavoriteGroupId;
 import com.gustler.backend.api.favorite.domain.MemberFavoriteGroups;
-import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.domain.RouteStatus;
 import java.util.HashMap;
 import java.util.List;
@@ -53,9 +53,9 @@ public class FavoriteOverviewService {
 
     public FavoriteOverview get(UUID memberPublicId, UUID groupId) {
         MemberFavoriteGroups owned = defaultGroupService.ensure(memberPublicId);
-        Map<String, BoardLoad> loadedBoards = new HashMap<>();
         Map<String, CompletableFuture<StationArrivalsOverview>> loadedArrivals = new HashMap<>();
         List<FavoriteGroup> selectedGroups = selectedGroups(owned, groupId);
+        Map<String, BoardLoad> loadedBoards = loadBoards(selectedGroups);
         // 요청 내 중복 제거 Map은 요청 스레드에서만 다룬다. 모두 제출한 뒤 저장 순서로 결합한다.
         List<PendingGroup> pending = selectedGroups.stream()
             .map(group -> new PendingGroup(
@@ -76,7 +76,7 @@ public class FavoriteOverviewService {
         Map<String, CompletableFuture<StationArrivalsOverview>> loadedArrivals) {
         String routeId = favorite.target().routeId();
         String stopId = favorite.target().stopId();
-        BoardLoad load = loadedBoards.computeIfAbsent(routeId, this::loadBoard);
+        BoardLoad load = loadedBoards.get(routeId);
         if (load.board() == null) {
             return CompletableFuture.completedFuture(unavailable(favorite, load.status(), load.reason()));
         }
@@ -183,45 +183,85 @@ public class FavoriteOverviewService {
         return FavoriteOverview.Eta.available(prediction.expectedArrivalAt(), prediction.remainingSeconds());
     }
 
-    private BoardLoad loadBoard(String routeId) {
+    /**
+     * 고른 그룹의 즐겨찾기 노선 판정보드를 한 번에 읽는다. 노선마다 실패를 따로 담고, 일괄 조회 자체가 실패하면
+     * 모든 노선에 그 실패를 담고 로그는 한 번만 남긴다. 실패를 즐겨찾기 상태로 바꾸는 규칙은 노선을 하나씩 읽을 때와 같다.
+     */
+    private Map<String, BoardLoad> loadBoards(List<FavoriteGroup> groups) {
+        List<String> routeIds = groups.stream()
+            .flatMap(group -> group.favorites().stream())
+            .map(favorite -> favorite.target().routeId())
+            .distinct()
+            .toList();
+        Map<String, BoardLoad> loaded = new HashMap<>();
+        if (routeIds.isEmpty()) {
+            return loaded;
+        }
+        Map<String, BoardBatchRead> reads;
         try {
-            BoardOverview overview = boards.getBoard(new RouteId(routeId));
-            return new BoardLoad(overview.board(), null, null);
-        } catch (ApiException exception) {
-            if (exception.code() == ErrorCode.ROUTE_NOT_FOUND) {
-                return new BoardLoad(
-                    null,
-                    FavoriteOverview.ItemStatus.UNAVAILABLE,
-                    FavoriteOverview.ItemReason.TARGET_NOT_IN_CURRENT_ROUTE
-                );
-            }
-            if (exception.code() == ErrorCode.MODEL_OUT_OF_SCOPE) {
-                return new BoardLoad(
-                    null,
-                    FavoriteOverview.ItemStatus.PREPARING,
-                    FavoriteOverview.ItemReason.MODEL_NOT_READY
-                );
-            }
-            if (exception.code() == ErrorCode.NO_RECENT_OBSERVATION) {
-                return new BoardLoad(
-                    null,
-                    FavoriteOverview.ItemStatus.UNAVAILABLE,
-                    FavoriteOverview.ItemReason.OBSERVATION_UNAVAILABLE
-                );
-            }
-            return new BoardLoad(
-                null,
-                FavoriteOverview.ItemStatus.ERROR,
-                FavoriteOverview.ItemReason.BOARD_UNAVAILABLE
-            );
-        } catch (RuntimeException exception) {
-            log.warn("즐겨찾기 판정보드 조회에 실패했습니다. routeId={}", routeId, exception);
+            reads = boards.readBoards(routeIds, BoardReadDeadline.none());
+        } catch (ApiException failure) {
+            routeIds.forEach(routeId -> loaded.put(routeId, failedBoardLoad(failure)));
+            return loaded;
+        } catch (RuntimeException failure) {
+            log.warn("즐겨찾기 판정보드 일괄 조회에 실패했습니다. routes={}", routeIds.size(), failure);
+            routeIds.forEach(routeId -> loaded.put(routeId, failedBoardLoad(null)));
+            return loaded;
+        }
+        reads.forEach((routeId, read) -> loaded.put(routeId, boardLoadOf(routeId, read)));
+        return loaded;
+    }
+
+    private BoardLoad boardLoadOf(String routeId, BoardBatchRead read) {
+        if (read.reading() != null) {
+            return new BoardLoad(read.reading().board(), null, null);
+        }
+        if (read.failure() instanceof ApiException exception) {
+            return failedBoardLoad(exception);
+        }
+        if (read.failure() != null) {
+            log.warn("즐겨찾기 판정보드 조회에 실패했습니다. routeId={}", routeId, read.failure());
+        }
+        return failedBoardLoad(null);
+    }
+
+    /**
+     * 판정보드를 읽지 못한 노선의 상태다. {@code exception}이 null이면 API 오류가 아닌 실패다.
+     */
+    private static BoardLoad failedBoardLoad(ApiException exception) {
+        if (exception == null) {
             return new BoardLoad(
                 null,
                 FavoriteOverview.ItemStatus.ERROR,
                 FavoriteOverview.ItemReason.BOARD_UNAVAILABLE
             );
         }
+        if (exception.code() == ErrorCode.ROUTE_NOT_FOUND) {
+            return new BoardLoad(
+                null,
+                FavoriteOverview.ItemStatus.UNAVAILABLE,
+                FavoriteOverview.ItemReason.TARGET_NOT_IN_CURRENT_ROUTE
+            );
+        }
+        if (exception.code() == ErrorCode.MODEL_OUT_OF_SCOPE) {
+            return new BoardLoad(
+                null,
+                FavoriteOverview.ItemStatus.PREPARING,
+                FavoriteOverview.ItemReason.MODEL_NOT_READY
+            );
+        }
+        if (exception.code() == ErrorCode.NO_RECENT_OBSERVATION) {
+            return new BoardLoad(
+                null,
+                FavoriteOverview.ItemStatus.UNAVAILABLE,
+                FavoriteOverview.ItemReason.OBSERVATION_UNAVAILABLE
+            );
+        }
+        return new BoardLoad(
+            null,
+            FavoriteOverview.ItemStatus.ERROR,
+            FavoriteOverview.ItemReason.BOARD_UNAVAILABLE
+        );
     }
 
     private static List<FavoriteGroup> selectedGroups(MemberFavoriteGroups owned, UUID groupId) {
