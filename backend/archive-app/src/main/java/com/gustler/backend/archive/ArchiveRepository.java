@@ -61,12 +61,19 @@ public class ArchiveRepository {
             jdbc.sql(
                 """
                     INSERT INTO operational_archive_job(id,route_version_id,source_date,cutoff,state,lease_token,lease_until)
-                    SELECT gen_random_uuid(),v.id,c.source_date,:cutoff,'EXPORTING',gen_random_uuid(),'-infinity'
+                    SELECT gen_random_uuid(),v.id,(c.source_at AT TIME ZONE 'Asia/Seoul')::date,
+                        :cutoff,'EXPORTING',gen_random_uuid(),'-infinity'
                     FROM route_version v CROSS JOIN LATERAL (
-                        SELECT (COALESCE(b.response_received_at,b.scheduled_at) AT TIME ZONE 'Asia/Seoul')::date AS source_date
-                        FROM observation_batch b WHERE b.route_version_id=v.id AND COALESCE(b.response_received_at,b.scheduled_at)<:cutoff
-                        ORDER BY COALESCE(b.response_received_at,b.scheduled_at),b.id LIMIT 1
-                    ) c ON CONFLICT(route_version_id,source_date) DO NOTHING
+                        SELECT LEAST(
+                            (SELECT b.response_received_at FROM observation_batch b
+                             WHERE b.route_version_id=v.id AND b.response_received_at<:cutoff
+                             ORDER BY b.response_received_at LIMIT 1),
+                            (SELECT min(b.scheduled_at) FROM observation_batch b
+                             WHERE b.route_version_id=v.id AND b.response_received_at IS NULL AND b.scheduled_at<:cutoff)
+                        ) AS source_at
+                        OFFSET 0
+                    ) c WHERE c.source_at IS NOT NULL
+                    ON CONFLICT(route_version_id,source_date) DO NOTHING
                     """)
                 .param("cutoff", time(cutoff)).update();
             return jdbc.sql("""
