@@ -89,6 +89,14 @@ answer() {
 if [ "$comp" = worker ] && ! grep -qx salmonbus-worker /work/running; then
   answer 000 '' 7
 fi
+if [[ "$url" = */health ]] && [ -f /work/health-after-attempts ]; then
+  attempt=$(( $(cat /work/health-attempts 2>/dev/null || echo 0) + 1 ))
+  echo "$attempt" > /work/health-attempts
+  if [ "$attempt" -ge "$(cat /work/health-after-attempts)" ]; then
+    state=UP
+    echo UP > /work/health
+  fi
+fi
 if [ "$state" != "UP" ]; then
   case "$url" in */readyz) answer 503 '{"status":"OUT_OF_SERVICE"}' 0 ;; esac
   answer 503 '{"status":"DOWN"}' 0
@@ -543,6 +551,24 @@ grep -q '단계=sourcedigest 사유=시간 초과(전체 3초 중 남은 [0-9]�
 [ "$dt" -le 20 ] && ok "배포가 ${dt}초 만에 끝났다" || bad "검사 상한 90초를 기다렸다 (${dt}초)"
 unset VALIDATE_CHECK_SECONDS VALIDATE_RETRY_SECONDS
 
+sec "7-4-1. 초기 기동은 후속 검사보다 긴 예산을 쓰는가"
+echo DOWN > /work/health
+echo 3 > /work/health-after-attempts
+rm -f /work/health-attempts
+make_revision api APISTARTUP abcdef01234 aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff66667777000088889999 "2026-09-02T05:35:00Z"
+VALIDATE_CHECK_SECONDS=1 VALIDATE_STARTUP_SECONDS=6 VALIDATE_RETRY_SECONDS=1 deploy api
+rm -f /work/health-after-attempts /work/health-attempts
+grep -q 'health 확인. 시도=3 ' /work/api-validate.out \
+  && ok "초기 기동은 후속 검사 1초를 지나서도 기다렸다" || bad "초기 기동 예산을 쓰지 않았다"
+
+sec "7-4-2. 초기 기동도 전체 검증 예산을 넘지 않는가"
+echo DOWN > /work/health
+make_revision api APITOTAL abcdef01235 bbbb1111cccc2222dddd3333eeee4444ffff555500006666777788889999aaaa "2026-09-02T05:36:00Z"
+VALIDATE_TOTAL_SECONDS=2 VALIDATE_CHECK_SECONDS=1 VALIDATE_STARTUP_SECONDS=8 VALIDATE_RETRY_SECONDS=1 deploy api fail
+echo UP > /work/health
+grep -q '단계=health 사유=시간 초과(전체 2초 중 남은 [12]초)' /work/api-validate.out \
+  && ok "초기 기동 8초보다 전체 2초를 먼저 적용했다" || bad "초기 기동이 전체 예산을 넘었다"
+
 sec "7-5. DB 가 안 붙거나 답이 없어도 배포는 가나"
 echo DOWN > /work/db
 make_revision api APIv8 iiiiiii9999 88889999aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff666677770000 "2026-09-02T05:40:00Z"
@@ -559,14 +585,30 @@ grep -q 'DB 진단(배포 전): 새 연결 실패\. 15초 안에 응답이 없�
   && ok "답이 없으면 15초에 끊고 배포는 간다" || { bad "무응답 로그가 다르다"; sed 's/^/      /' /work/api-preflight.out; }
 [ "$dt" -ge 14 ] && [ "$dt" -le 40 ] && ok "끊는 데 ${dt}초 걸렸다" || bad "15초에 안 끊고 ${dt}초 걸렸다"
 
-# validate.sh 의 전체 상한 기본값이 appspec 의 ValidateService timeout 보다 짧은지 두 파일을 읽어 본다.
+# validate.sh 가 가장 오래 도는 시간이 appspec 의 ValidateService timeout 보다 짧은지 validate.sh·common.sh·appspec 을 읽어 본다.
+# 잠금 확인 대기와 health 실패 뒤 DB 진단은 전체 상한 밖이라 더한다.
 # 길면 CodeDeploy 가 먼저 죽여서 요약도 잠금 정리도 없이 끝난다
-hook_timeout=$(awk '/ValidateService:/{f=1} f && /timeout:/{print $2; exit}' /deploy/appspec-api.yml)
 total_default=$(sed -n 's/.*VALIDATE_TOTAL_SECONDS:-\([0-9]*\)}.*/\1/p' /deploy/scripts/validate.sh)
-if [ -n "$total_default" ] && [ -n "$hook_timeout" ] && [ "$total_default" -lt "$hook_timeout" ]; then
-  ok "전체 상한 기본값 ${total_default}초 < ValidateService timeout ${hook_timeout}초"
+startup_default=$(sed -n 's/^STARTUP_SECONDS=.*:-\([0-9]*\)}}".*/\1/p' /deploy/scripts/validate.sh)
+probe_seconds=$(sed -n 's/^DB_PROBE_SECONDS=\([0-9]*\).*/\1/p' /deploy/scripts/common.sh)
+claim_tries=$(sed -n 's/^MARKER_CLAIM_TRIES=\([0-9]*\).*/\1/p' /deploy/scripts/common.sh)
+claim_wait=$(sed -n 's/^MARKER_CLAIM_WAIT_SECONDS=\([0-9]*\).*/\1/p' /deploy/scripts/common.sh)
+validate_worst=""
+if [ -n "$total_default" ] && [ -n "$probe_seconds" ] && [ -n "$claim_tries" ] && [ -n "$claim_wait" ]; then
+  validate_worst=$(( (claim_tries - 1) * claim_wait + total_default + probe_seconds ))
+fi
+for component in api worker; do
+  hook_timeout=$(awk '/ValidateService:/{f=1} f && /timeout:/{print $2; exit}' "/deploy/appspec-$component.yml")
+  if [ -n "$validate_worst" ] && [ -n "$hook_timeout" ] && [ "$validate_worst" -lt "$hook_timeout" ]; then
+    ok "$component: 잠금 대기·전체 ${total_default}초·DB 진단 ${probe_seconds}초 합 ${validate_worst}초 < ValidateService timeout ${hook_timeout}초"
+  else
+    bad "$component: 검증이 가장 오래 도는 시간(${validate_worst:-?})이 훅 timeout(${hook_timeout:-?})보다 짧지 않다"
+  fi
+done
+if [ -n "$startup_default" ] && [ -n "$total_default" ] && [ "$startup_default" -lt "$total_default" ]; then
+  ok "최초 health 기본값 ${startup_default}초 < 전체 ${total_default}초. 뒤 검사가 쓸 시간이 남는다"
 else
-  bad "전체 상한(${total_default:-?})이 훅 timeout(${hook_timeout:-?})보다 짧지 않다"
+  bad "최초 health(${startup_default:-?})가 전체(${total_default:-?})보다 짧지 않다"
 fi
 
 sec "8. 배포 버전을 셋만 남기는가"
