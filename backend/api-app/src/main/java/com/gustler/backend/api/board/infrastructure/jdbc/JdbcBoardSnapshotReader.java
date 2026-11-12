@@ -13,6 +13,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -29,7 +31,7 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class JdbcBoardSnapshotReader {
 
-    private static final String SNAPSHOT_SQL = """
+    private static final String SNAPSHOT_SELECT = """
         SELECT v.id AS version_id, r.source_route_id, r.display_name, r.start_stop_name, r.end_stop_name,
                v.turn_sequence, v.up_first_departure_time, v.up_last_departure_time,
                v.down_first_departure_time, v.down_last_departure_time,
@@ -73,7 +75,14 @@ public class JdbcBoardSnapshotReader {
         LEFT JOIN model_deployment model ON model.state='ACTIVE'
 
         LEFT JOIN forecast_publication publication ON publication.source_batch_id=b.id
+        """;
+
+    private static final String SNAPSHOT_SQL = SNAPSHOT_SELECT + """
         WHERE r.source_route_id=:routeId AND v.valid_to IS NULL
+        """;
+
+    private static final String SNAPSHOTS_SQL = SNAPSHOT_SELECT + """
+        WHERE r.source_route_id = ANY(:routeIds) AND v.valid_to IS NULL
         """;
 
     private final JdbcClient jdbcClient;
@@ -85,6 +94,25 @@ public class JdbcBoardSnapshotReader {
             .param("observedSince", OffsetDateTime.now(clock).minus(ObservationFreshness.MAX_WINDOW))
             .query((row, index) -> toSnapshot(row))
             .optional();
+    }
+
+    /**
+     * 여러 노선의 스냅샷을 {@link #findSnapshot}과 같은 SQL 조건으로 한 번에 읽는다. 스냅샷이 없는 노선은 결과에 없다.
+     * 한 노선에 행이 여럿이면 모두 돌려주고 실패 판정은 호출하는 쪽이 한다.
+     */
+    public List<BoardSnapshot> findSnapshots(Collection<RouteId> routeIds) {
+        if (routeIds.isEmpty()) {
+            return List.of();
+        }
+        String[] values = routeIds.stream()
+            .map(RouteId::value)
+            .distinct()
+            .toArray(String[]::new);
+        return jdbcClient.sql(SNAPSHOTS_SQL)
+            .param("routeIds", values)
+            .param("observedSince", OffsetDateTime.now(clock).minus(ObservationFreshness.MAX_WINDOW))
+            .query((row, index) -> toSnapshot(row))
+            .list();
     }
 
     private BoardSnapshot toSnapshot(ResultSet row) throws SQLException {

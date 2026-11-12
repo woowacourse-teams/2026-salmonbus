@@ -17,6 +17,7 @@ import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentEntityRep
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -68,6 +69,32 @@ class JdbcBoardSnapshotReaderIntegrationTest {
     void 등록되지_않은_노선은_두_경로_모두_없다() {
         RouteId id = new RouteId("999999999");
         assertThat(reader.findSnapshot(id)).isEmpty().isEqualTo(legacy.findSnapshot(id));
+    }
+
+    @Test
+    void 여러_노선을_한_번에_읽어도_노선마다_읽은_스냅샷과_같고_없는_노선은_빠진다() {
+        // given
+        BoardDatabaseFixture.RouteContext published = route();
+        BoardDatabaseFixture.RouteContext observed = fixture.insertRoute("234000050", "다른 노선", "기점", "종점",
+            null, "05:00", "23:00", null, null, now().minusDays(1));
+        OffsetDateTime now = now();
+        final long model = fixture.insertModel("active", "ACTIVE", now.minusDays(1));
+        final long publishedBatch = fixture.insertBatch(published, now.minusSeconds(10), "SUCCESS_EMPTY", 0);
+        fixture.insertPublication(publishedBatch, model, now, now);
+        fixture.insertBatch(published, now, "SUCCESS_EMPTY", 0);
+        fixture.insertBatch(observed, now, "SUCCESS_EMPTY", 0);
+        RouteId publishedId = new RouteId(published.sourceRouteId());
+        RouteId observedId = new RouteId(observed.sourceRouteId());
+
+        // when
+        List<BoardSnapshot> snapshots = reader.findSnapshots(
+            List.of(publishedId, new RouteId("999999999"), observedId, publishedId));
+
+        // then
+        assertThat(snapshots).containsExactlyInAnyOrder(
+            reader.findSnapshot(publishedId).orElseThrow(),
+            reader.findSnapshot(observedId).orElseThrow());
+        assertThat(reader.findSnapshots(List.of())).isEmpty();
     }
 
     @Test

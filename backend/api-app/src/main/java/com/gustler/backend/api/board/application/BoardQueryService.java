@@ -17,6 +17,7 @@ import com.gustler.backend.api.route.RouteNotFoundException;
 import com.gustler.backend.api.route.domain.Route;
 import com.gustler.backend.api.route.domain.RouteStatus;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -68,7 +69,151 @@ public class BoardQueryService {
         RouteId routeId) {
         BoardSnapshot snapshot = boardQueryRepository.findSnapshot(routeId)
             .orElseThrow(RouteNotFoundException::new);
-        ForecastModel activeModel = snapshot.activeModel()
+        SnapshotObservation observation = readableObservation(snapshot);
+
+        Board cached = readCache.find(routeId.value(), snapshot);
+        if (cached != null) {
+            return readingOf(cached, observation);
+        }
+
+        List<BoardStop> stops = boardQueryRepository.findStops(
+            snapshot.routeVersionId());
+        if (stops.isEmpty()) {
+            throw new ServiceUnavailableException();
+        }
+        List<StoredPrediction> predictions = publishedPredictions(observation);
+        ForecastModel model = modelOf(predictions, snapshot.activeModel().orElseThrow());
+        List<BoardVehicleObservation> vehicles = boardQueryRepository.findObservedVehicles(
+            observation.batchId(), snapshot.routeVersionId());
+        return assemble(routeId, snapshot, observation, new BoardRows(stops, predictions, model, vehicles));
+    }
+
+    /**
+     * 여러 노선의 판정보드를 한 반복 읽기 트랜잭션에서 읽는다. 결과 순서는 요청 순서이며 같은 노선은 한 번만 담는다.
+     *
+     * <p>노선마다 {@link #readBoard}와 같은 검사·캐시·조립 규칙을 쓴다. 한 노선의 검사·조립 실패는 그 노선의
+     * {@link BoardBatchRead#failure()}로만 남기고 다른 노선은 계속 읽는다. 스냅샷은 한 번에 읽고, 캐시에 없는 노선의
+     * 정류장·예보·차량도 노선 수와 관계없이 종류마다 한 번씩 읽는다. 저장소 조회가 실패하면 트랜잭션을 더 쓸 수 없으므로
+     * 노선별로 나누지 않고 예외를 그대로 던진다.
+     *
+     * <p>스냅샷을 읽은 뒤 {@code deadline}이 지났으면 캐시에 없는 노선 가운데 요청 순서로 첫 유효 노선만 조립하고 나머지는
+     * {@link BoardBatchRead#skipped()}로 둔다. 노선을 하나씩 읽을 때 첫 노선은 시간과 관계없이 읽고 다음 노선부터 마감을 보던 것과
+     * 같다. 캐시에 있는 노선은 이미 읽은 스냅샷만으로 답하므로 마감과 관계없이 담는다. 이미 시작한 조회를 끊지는 않는다.
+     */
+    public Map<String, BoardBatchRead> readBoards(Collection<String> routeIds, BoardReadDeadline deadline) {
+        Map<String, BoardBatchRead> results = new LinkedHashMap<>();
+        Map<String, RouteId> valid = new LinkedHashMap<>();
+        for (String routeId : routeIds) {
+            if (results.containsKey(routeId) || valid.containsKey(routeId)) {
+                continue;
+            }
+            try {
+                valid.put(routeId, new RouteId(routeId));
+            } catch (RuntimeException invalid) {
+                results.put(routeId, BoardBatchRead.failed(invalid));
+            }
+        }
+        if (valid.isEmpty()) {
+            return orderedAs(routeIds, results);
+        }
+        Map<String, List<BoardSnapshot>> snapshots = boardQueryRepository.findSnapshots(valid.values())
+            .stream()
+            .collect(Collectors.groupingBy(snapshot -> snapshot.route().id(), LinkedHashMap::new, Collectors.toList()));
+
+        Map<String, BoardSnapshot> missed = new LinkedHashMap<>();
+        for (String routeId : valid.keySet()) {
+            try {
+                BoardSnapshot snapshot = onlySnapshotOf(snapshots.getOrDefault(routeId, List.of()));
+                SnapshotObservation observation = readableObservation(snapshot);
+                Board cached = readCache.find(routeId, snapshot);
+                if (cached != null) {
+                    results.put(routeId, BoardBatchRead.read(readingOf(cached, observation)));
+                    continue;
+                }
+                missed.put(routeId, snapshot);
+            } catch (RuntimeException failure) {
+                results.put(routeId, BoardBatchRead.failed(failure));
+            }
+        }
+        if (!missed.isEmpty() && deadline.passed()) {
+            String first = valid.keySet().iterator().next();
+            missed.keySet().stream()
+                .filter(routeId -> !routeId.equals(first))
+                .forEach(routeId -> results.put(routeId, BoardBatchRead.skippedByBudget()));
+            missed.keySet().retainAll(Set.of(first));
+        }
+        assembleMissed(missed, results);
+        return orderedAs(routeIds, results);
+    }
+
+    private void assembleMissed(Map<String, BoardSnapshot> missed, Map<String, BoardBatchRead> results) {
+        if (missed.isEmpty()) {
+            return;
+        }
+        List<Long> versionIds = missed.values().stream().map(BoardSnapshot::routeVersionId).distinct().toList();
+        List<Long> publishedBatchIds = missed.values().stream()
+            .map(snapshot -> snapshot.observation().orElseThrow())
+            .filter(SnapshotObservation::forecastPublished)
+            .map(SnapshotObservation::batchId)
+            .distinct()
+            .toList();
+        Map<Long, Long> versionIdByBatchId = new LinkedHashMap<>();
+        missed.values().forEach(snapshot -> versionIdByBatchId.put(
+            snapshot.observation().orElseThrow().batchId(), snapshot.routeVersionId()));
+
+        Map<Long, List<BoardStop>> stops = boardQueryRepository.findStops(versionIds);
+        Map<Long, List<StoredPrediction>> predictions = Map.of();
+        if (!publishedBatchIds.isEmpty()) {
+            predictions = boardQueryRepository.findPredictions(publishedBatchIds);
+        }
+        Map<Long, List<BoardVehicleObservation>> vehicles = boardQueryRepository.findObservedVehicles(versionIdByBatchId);
+
+        for (Map.Entry<String, BoardSnapshot> entry : missed.entrySet()) {
+            BoardSnapshot snapshot = entry.getValue();
+            SnapshotObservation observation = snapshot.observation().orElseThrow();
+            try {
+                List<BoardStop> routeStops = stops.getOrDefault(snapshot.routeVersionId(), List.of());
+                if (routeStops.isEmpty()) {
+                    throw new ServiceUnavailableException();
+                }
+                List<StoredPrediction> published = List.of();
+                if (observation.forecastPublished()) {
+                    published = predictions.getOrDefault(observation.batchId(), List.of());
+                }
+                BoardRows rows = new BoardRows(
+                    routeStops,
+                    published,
+                    modelOf(published, snapshot.activeModel().orElseThrow()),
+                    vehicles.getOrDefault(observation.batchId(), List.of())
+                );
+                BoardReading reading = assemble(new RouteId(entry.getKey()), snapshot, observation, rows);
+                results.put(entry.getKey(), BoardBatchRead.read(reading));
+            } catch (RuntimeException failure) {
+                results.put(entry.getKey(), BoardBatchRead.failed(failure));
+            }
+        }
+    }
+
+    private static Map<String, BoardBatchRead> orderedAs(
+        Collection<String> routeIds,
+        Map<String, BoardBatchRead> results) {
+        Map<String, BoardBatchRead> ordered = new LinkedHashMap<>();
+        routeIds.forEach(routeId -> ordered.putIfAbsent(routeId, results.get(routeId)));
+        return ordered;
+    }
+
+    private static BoardSnapshot onlySnapshotOf(List<BoardSnapshot> snapshots) {
+        if (snapshots.isEmpty()) {
+            throw new RouteNotFoundException();
+        }
+        if (snapshots.size() > 1) {
+            throw new ServiceUnavailableException();
+        }
+        return snapshots.getFirst();
+    }
+
+    private SnapshotObservation readableObservation(BoardSnapshot snapshot) {
+        snapshot.activeModel()
             .orElseThrow(ModelOutOfScopeException::new);
         SnapshotObservation observation = snapshot.observation()
             .orElseThrow(NoRecentObservationException::new);
@@ -80,49 +225,43 @@ public class BoardQueryService {
             || observation.vehiclesInService() < 0) {
             throw new ServiceUnavailableException();
         }
+        return observation;
+    }
 
-        Board cached = readCache.find(routeId.value(), snapshot);
-        if (cached != null) {
-            return new BoardReading(
-                cached,
-                observation.batchId(),
-                cachePolicy.maxAgeAt(observation.observedAt())
-            );
-        }
+    private BoardReading readingOf(Board board, SnapshotObservation observation) {
+        return new BoardReading(
+            board,
+            observation.batchId(),
+            cachePolicy.maxAgeAt(observation.observedAt())
+        );
+    }
 
-        List<BoardStop> stops = boardQueryRepository.findStops(
-            snapshot.routeVersionId());
-        if (stops.isEmpty()) {
-            throw new ServiceUnavailableException();
-        }
-
-        List<StoredPrediction> predictions = publishedPredictions(observation);
-        ForecastModel model = modelOf(predictions, activeModel);
-        List<BoardVehicleObservation> vehicles = boardQueryRepository.findObservedVehicles(
-            observation.batchId(), snapshot.routeVersionId());
-        Map<Integer, Map<Integer, StoredPrediction>> predictionsByStop = predictions.stream()
+    private BoardReading assemble(
+        RouteId routeId,
+        BoardSnapshot snapshot,
+        SnapshotObservation observation,
+        BoardRows rows) {
+        Map<Integer, Map<Integer, StoredPrediction>> predictionsByStop = rows.predictions().stream()
             .collect(Collectors.groupingBy(StoredPrediction::targetStopOrder,
                 Collectors.toMap(StoredPrediction::sourceRowNumber, Function.identity())));
-        List<StopState> stopStates = stops.stream()
-            .map(stop -> toStopState(stop, vehicles, predictionsByStop.getOrDefault(stop.sequence(), Map.of())))
+        List<StopState> stopStates = rows.stops().stream()
+            .map(stop -> toStopState(stop, rows.vehicles(),
+                predictionsByStop.getOrDefault(stop.sequence(), Map.of())))
             .toList();
 
         RouteStatus status = RouteStatus.from(
             snapshot.activeModel().isPresent(),
             observation.forecastPublished());
         Board board = new Board(
-            toBoardRoute(snapshot, stops, status),
+            toBoardRoute(snapshot, rows.stops(), status),
             observation.observedAt(),
             freshnessPolicy.staleAt(observation.observedAt()),
-            model,
+            rows.model(),
             observation.vehiclesInService(),
             stopStates
         );
         readCache.put(routeId.value(), snapshot, board);
-        return new BoardReading(
-            board,
-            observation.batchId(),
-            cachePolicy.maxAgeAt(observation.observedAt()));
+        return readingOf(board, observation);
     }
 
     private static double seatAvailableProbability(
@@ -363,6 +502,17 @@ public class BoardQueryService {
             return requireDepartureTime(schedule.upLastDepartureTime());
         }
         return requireDepartureTime(schedule.downLastDepartureTime());
+    }
+
+    /**
+     * 판정보드 하나를 조립할 때 쓰는 저장 행이다. 정류장은 비어 있지 않고 모델은 예보 행과 맞춰 고른 값이다.
+     */
+    private record BoardRows(
+        List<BoardStop> stops,
+        List<StoredPrediction> predictions,
+        ForecastModel model,
+        List<BoardVehicleObservation> vehicles
+    ) {
     }
 
     /**

@@ -137,6 +137,8 @@ arrivals:
   internal-token: ${ARRIVAL_INTERNAL_TOKEN:}
   first-result-wait: 500ms # 사용 가능한 수신이 없을 때만 수집 완료를 기다린다. 0ms로 비활성화 가능.
   first-result-max-waiters: 32
+  # 쓸 수 있는 수신본이 있는데 갱신 시점이 지났을 때 Worker 갱신 요청을 응답과 따로 보낸다. false이거나 enabled=false면 요청 스레드에서 보낸다.
+  refresh-async: ${ARRIVALS_REFRESH_ASYNC:true}
 
 board:
   # 확인 질의 통합만 독립적으로 되돌릴 수 있다. false면 기존 JPA 조회를 쓴다.
@@ -178,6 +180,14 @@ stations:
 route-geometry:
   presentation:
     enabled: ${ROUTE_GEOMETRY_PRESENTATION_ENABLED:false}
+  # 노선별 기본 응답(READY·PARTIAL)을 그 응답을 정한 입력의 지문과 함께 메모리에 둔다. 지문이 다르면 다시 만든다.
+  response-cache:
+    # 좌표 점 개수로 어림한 크기 합계 상한. 0이면 캐시를 끈다.
+    max-bytes: ${ROUTE_GEOMETRY_RESPONSE_CACHE_MAX_BYTES:32MB}
+    # 지문이 입력을 놓쳤을 때의 안전 상한. 둔 지 이 시간이 지나면 지문이 같아도 다시 만든다. 0보다 커야 한다.
+    max-age: ${ROUTE_GEOMETRY_RESPONSE_CACHE_MAX_AGE:10m}
+    # 같은 지문을 다른 요청이 만들고 있을 때 기다리는 최대 시간. 지나면 직접 만든다.
+    join-timeout: ${ROUTE_GEOMETRY_RESPONSE_CACHE_JOIN_TIMEOUT:1s}
 
 # 연어행동 조회. 기본은 끈다. 켜면 마감(horizon) 안에 닿는 차량들의 출발 만차 확률과 같은 방향 도보를 아래 값으로 비교한다.
 # 그 차량 가운데 확률이 없는 차량이 있거나 이동 후보의 차내 시간이 없으면 추천하지 않는다.

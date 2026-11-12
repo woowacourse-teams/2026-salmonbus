@@ -6,6 +6,7 @@ import com.gustler.backend.api.docs.RouteGeometryApiDocsExamples;
 import com.gustler.backend.api.error.ErrorResponse;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.application.RouteGeometryQueryService;
+import com.gustler.backend.api.route.controller.RouteGeometryResponseCache.CachedRouteGeometry;
 import com.gustler.backend.api.route.dto.RouteGeometryResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -18,6 +19,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,9 +37,16 @@ import org.springframework.web.context.request.WebRequest;
 public class RouteGeometryController {
     private static final CacheControl CACHE = CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic().mustRevalidate();
     private final RouteGeometryQueryService service;
+    private final RouteGeometryResponseCache cache;
 
     public RouteGeometryController(RouteGeometryQueryService service) {
+        this(service, RouteGeometryResponseCache.disabled());
+    }
+
+    @Autowired
+    public RouteGeometryController(RouteGeometryQueryService service, RouteGeometryResponseCache cache) {
         this.service = service;
+        this.cache = cache;
     }
 
     /**
@@ -153,15 +162,23 @@ public class RouteGeometryController {
         @RequestParam(defaultValue = "false") boolean includeDiagnostics,
         WebRequest request
     ) {
-        RouteGeometryResponse response =
-            RouteGeometryResponse.from(service.get(new RouteId(routeId), referenceVersionId), includeDiagnostics);
-        if (response.status().equals("UNAVAILABLE")) {
-            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+        RouteId id = new RouteId(routeId);
+        if (includeDiagnostics || !cache.enabled()) {
+            return respond(CachedRouteGeometry.of(
+                RouteGeometryResponse.from(service.get(id, referenceVersionId), includeDiagnostics)), request);
         }
-        String etag = "W/\"g-" + response.geometryRevision() + "\"";
-        if (request.checkNotModified(etag)) {
-            return ResponseEntity.status(HttpStatus.NOT_MODIFIED).cacheControl(CACHE).eTag(etag).build();
+        try (RouteGeometryResponseCache.Lookup lookup = cache.lookup()) {
+            return respond(service.respond(id, referenceVersionId, lookup), request);
         }
-        return ResponseEntity.ok().cacheControl(CACHE).eTag(etag).body(response);
+    }
+
+    private static ResponseEntity<RouteGeometryResponse> respond(CachedRouteGeometry response, WebRequest request) {
+        if (response.etag() == null) {
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response.body());
+        }
+        if (request.checkNotModified(response.etag())) {
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED).cacheControl(CACHE).eTag(response.etag()).build();
+        }
+        return ResponseEntity.ok().cacheControl(CACHE).eTag(response.etag()).body(response.body());
     }
 }

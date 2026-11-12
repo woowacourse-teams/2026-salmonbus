@@ -35,6 +35,10 @@ public class RouteStopJpaEntity {
     protected RouteStopJpaEntity() {
     }
 
+    public long routeVersionId() {
+        return id.routeVersionId();
+    }
+
     public BoardStop toDomain() {
         return new BoardStop(
             id.stopOrder(),
