@@ -726,6 +726,64 @@ S3 구조:
 - `salmonbus_archive_partition_default_rows`가 0보다 크면 날짜 파티션이 없을 때 들어온 줄이다. 기본 파티션의 줄은 내보내지 않는다. worker의 파티션 유지 작업 실패 로그(`event=pipeline_partition_create_failed`)를 본다.
 - `salmonbus_archive_partition_oldest_pending_days`가 보관 날짜 수보다 계속 크면 대상 파티션이 쌓이고 있다.
 
+### 옛 테이블 내보내기
+
+SAL-434가 지울 옛 테이블 25개(목록은 `deploy/sql/sal434-03-drop-legacy-tables.sql`의 `target_tables`가 정본이고, 이관 앱의 `LegacyExportRepository.TABLES`가 같은 목록인지 시험이 대조한다)를 통째로 S3에 내보낸다. 테이블마다 기본 키 순서로 읽어 조각으로 나누고, 조각마다 올리고 다시 읽어 확인한 뒤 장부 `daily_export`에 한 줄을 적는다. **이 기능은 줄을 지우지 않는다.** 옛 테이블을 지우는 것은 사람이 승인하고 실행하는 `sal434-03`뿐이다. 운영 순서는 「SAL-434 전환 절차」의 6-1번이다.
+
+스위치(`/etc/salmonbus/archive.env`, 바꾸면 이관 서비스만 재시작한다):
+
+| 키 | 기본값 | 뜻 |
+|---|---|---|
+| `ARCHIVE_LEGACY_EXPORT_ENABLED` | `false` | 켜야 빈이 생긴다. 꺼져 있으면 DB를 보지 않는다. `ARCHIVE_ENABLED=true`(줄 단위 이관)와 함께 켜면 기동하지 않는다 |
+| `ARCHIVE_LEGACY_EXPORT_PREFIX` | `salmonbus/prod/lake-v3-legacy/` | `ARCHIVE_PREFIX`·`ARCHIVE_PARTITION_EXPORT_PREFIX`와 서로 포함하면 기동하지 않는다 |
+| `ARCHIVE_LEGACY_EXPORT_INTERVAL` | `1m` | 회차가 끝난 뒤 다음 회차까지 쉬는 시간(10초~24시간). 기동 1분 뒤 첫 회차 |
+| `ARCHIVE_LEGACY_EXPORT_PAGE_SIZE` | `2000` | 한 번에 읽는 줄 수(1~10000) |
+| `ARCHIVE_LEGACY_EXPORT_PAGE_PAUSE` | `200ms` | 페이지 사이 쉬는 시간(0~60초). 쉬는 동안 DB 연결을 쥐지 않는다 |
+| `ARCHIVE_LEGACY_EXPORT_SEGMENT_SIZE` | `64MB` | 조각 하나의 평문 크기 목표(64KB~1GB). 조각 안의 파일은 평문 8MiB 안팎으로 나뉜다 |
+| `ARCHIVE_LEGACY_EXPORT_MAX_ROWS_PER_RUN` | `2000000` | 한 회차에 읽는 최대 줄 수 |
+| `ARCHIVE_LEGACY_EXPORT_MAX_RUN_DURATION` | `10m` | 한 회차의 최대 시간(1초~6시간). 페이지·조각 경계에서 확인하므로 문장 하나만큼 넘을 수 있다 |
+| `ARCHIVE_LEGACY_EXPORT_STATEMENT_TIMEOUT` | `60s` | 페이지 읽기·범위 세기 문장 하나의 제한 시간(1초~10분) |
+
+읽는 방식과 속도 조절:
+
+- 테이블을 목록 순서로 하나씩 처리한다. 페이지는 `SELECT to_jsonb(t)::text, jsonb_build_array(<기본 키>)::text FROM <table> t WHERE (<기본 키>) > (<직전 페이지 마지막 키>) ORDER BY <기본 키> LIMIT <PAGE_SIZE>`다. 기본 키 인덱스를 행 비교로 따라가므로 테이블 앞부분을 다시 읽지 않는다. 페이지마다 읽기 전용 트랜잭션 하나로 읽고 끝내므로 연결은 그 페이지를 읽는 동안에만 쥔다.
+- 세션 설정은 날짜 단위 내보내기와 같다(`extra_float_digits=1`, 시간대 UTC, 병렬 읽기 끔, 문장 제한 시간). 여기에 `bytea_output='hex'`를 더한다.
+- 한 회차는 `MAX_ROWS_PER_RUN`이나 `MAX_RUN_DURATION`에 먼저 닿는 곳에서 멈추고, 그때까지 읽은 줄을 조각 하나로 닫아 장부에 적는다. 다음 회차는 장부의 마지막 조각 `key_to` 다음 키부터 읽는다. 기동할 때도 장부에서 이어 간다.
+- 이관 앱의 예약 작업은 스레드 하나와 DB 연결 1개를 나눠 쓴다. 옛 테이블 내보내기 한 회차가 도는 동안(`MAX_RUN_DURATION`까지) 날짜 단위 내보내기는 기다린다.
+- 걸리는 시간은 운영에서 재야 한다. 읽는 속도의 상한은 대략 `PAGE_SIZE / (페이지 읽는 시간 + PAGE_PAUSE)`이고, 회차 사이에 `INTERVAL`만큼 쉰다. 페이지 하나에 0.3초가 걸린다면 기본값으로 초당 4000줄 안팎, 옛 테이블 약 3억 줄(운영 11-15 기준 `seat_forecast` 1.48억, `forecast_evaluation_result` 1.31억 등)에 하루 가까이 걸린다(추정). 끝난 뒤 범위 다시 세기가 같은 테이블을 한 번 더 읽는다(인덱스만 읽는 계획이 되면 덜 읽는다. 추정).
+- DB가 느려지면 `PAGE_PAUSE`를 늘리거나 `PAGE_SIZE`·`MAX_ROWS_PER_RUN`을 줄이거나 `INTERVAL`을 늘리고 이관 앱을 재시작한다. 멈추려면 스위치를 끄고 재시작한다. 다시 켜면 장부에서 이어 간다. RDS 처리량 크레딧과 `salmonbus_archive_legacy_rows_per_second`를 함께 본다.
+
+S3 구조와 장부:
+
+```
+<prefix><table>/segment=NNNNNN/NNNNNN-<gz sha256>.jsonl.gz
+<prefix><table>/segment=NNNNNN/manifest-<manifest sha256>.json
+```
+
+- 파일 한 줄은 `to_jsonb(row)::text` 원문, 줄 끝 `\n`, gzip이다(날짜 단위 내보내기와 같은 형식). 값이 JSON `null`인(SQL NULL이 아닌) `jsonb` 열이 있는 줄에만 `"$jsonb_null": ["열 이름", ...]` 키가 더 붙는다. `to_jsonb`는 두 값을 똑같이 `null`로 쓰기 때문이다.
+- manifest(JSON)는 `format`(`salmonbus-legacy-segment-v1`), `table`, `segment`, `after`(앞 조각의 `keyTo`, 첫 조각은 `null`), `keyFrom`, `keyTo`, `rows`, `orderBy`(기본 키), `columns`, `exportedAt`, `files`를 담는다. 조각 n은 기본 키가 `after` 초과 `keyTo` 이하인 줄이다. 키는 `jsonb_build_array(<기본 키>)` 텍스트다(예: `[123, 4]`).
+- 장부 `daily_export`: 옛 테이블 조각은 `source_date = 2000-01-01`, `segment`(0부터), `key_from`·`key_to`, `row_count`, `object_key`·`sha256`(manifest의 키와 해시), `verified_at`을 적는다. manifest와 모든 파일을 다시 읽어 해시·줄 수를 확인한 뒤에만 적는다. 적을 때 테이블마다 advisory lock(`pg_advisory_xact_lock(20261116, hashtext(테이블 이름))`)을 잡고, 장부의 마지막 조각 `key_to`가 이 조각의 시작과 같고 번호가 그다음일 때만 적는다. 날짜 단위 내보내기는 같은 테이블에 `segment = 0` 한 줄을 날짜마다 쓴다.
+- 장부에 적지 못한 조각(업로드 도중 끊김 등)은 다음 회차가 같은 키부터 다시 만든다. 이미 올라간 파일은 지우지 않는다.
+- 값: 날짜 단위 내보내기의 값 설명과 같다. 옛 테이블 열 타입(`bigint`, `integer`, `boolean`, `varchar`, `uuid`, `date`, `timestamptz`, `double precision`, `jsonb`, `bytea`, `xid8`, `text`)과 `smallint`, `real`, `numeric`, `char`, `timestamp`, 배열(다차원 포함, `jsonb[]` 제외)이 JSON을 거쳐 같은 값·같은 텍스트로 돌아오는 것을 시험으로 고정했다. 이 밖의 타입(`interval`, `json`, `jsonb[]` 등) 열이 있으면 그 테이블은 `UNSUPPORTED_COLUMN_TYPE`로 실패하고 내보내지 않는다. 기본 키가 없는 테이블은 `PRIMARY_KEY_REQUIRED`로 실패한다(마이그레이션 기준 25개 모두 기본 키가 있다). 배열의 하한이 1이 아니면(`'[0:1]={1,2}'`) 하한이 사라진다.
+
+끝났다는 판정:
+
+1. 마지막 조각 `key_to` 다음 키로 읽은 페이지가 비었다.
+2. 조각마다 그 범위(앞 조각 `key_to` 초과, 자기 `key_to` 이하)를 다시 센 줄 수가 장부의 `row_count`와 같다. 범위가 겹치지 않고 키 공간을 빈틈없이 덮으므로, 이것은 장부 합이 그 순간의 줄 수와 같다는 뜻이다.
+
+둘 다 맞으면 `status=COMPLETE`와 `salmonbus_archive_legacy_complete{table}=1`이다. 다시 세기는 프로세스 안에서 한 번만 하고(기동하면 다시 한다), 회차 상한에 닿으면 다음 회차가 이어 센다. 끝난 테이블도 회차마다 마지막 키 뒤를 한 페이지 읽어 새 줄이 있으면 이어서 내보낸다.
+
+다시 센 값이 장부와 다르면 `status=AUDIT_MISMATCH`(조각 번호, `kind`, `ledgerRows`, `currentRows`, 범위)와 `status=MISMATCH`가 남고 `salmonbus_archive_legacy_mismatched_segments{table}`가 0보다 크다. `kind=ROWS_REMOVED`는 이미 내보낸 범위에서 줄이 지워진 것이고(S3에는 지워진 줄도 있다), `kind=ROWS_ADDED_BEHIND_CURSOR`는 내보낸 범위 안에 새 줄이 들어온 것이다(그 줄은 S3에 없다). 내보내기는 장부를 고치지 않는다. 이대로면 `sal434-03`이 장부 합과 줄 수가 달라 멈춘다. 원인(멈추지 않은 옛 경로, 수동 조작)을 먼저 없앤 뒤, 승인을 받아 그 테이블의 어긋난 조각부터 끝까지의 장부 줄을 지우고(`DELETE FROM daily_export WHERE table_name = '<table>' AND source_date = '2000-01-01' AND segment >= <n>`, S3 파일은 남긴다) 이관 앱을 재시작하면 그 조각의 시작 키부터 다시 내보낸다. 같은 키에서 값만 바뀐 줄은 줄 수로 알아보지 못한다. 그래서 내보내기 전에 옛 경로가 쓰지 않는지 먼저 확인한다.
+
+되살리는 방법은 날짜 단위 내보내기와 같고 두 가지를 더한다. 조각 번호 순서로 manifest를 읽으며 `segment`가 0부터 이어지고 `after`가 앞 조각 `keyTo`와 같은지 본다. `jsonb` 열은 줄의 `$jsonb_null` 배열에 이름이 있으면 JSON `null`로 넣는다(예: `CASE WHEN jsonb_exists(r->'$jsonb_null', 'feature_snapshot') THEN 'null'::jsonb ELSE p.feature_snapshot END`). 시험 `PartitionRestore.restoreLegacy`가 이 절차다.
+
+실패했을 때 보는 것:
+
+- 로그는 `event=legacy_export`다. `status=RUN`(회차 요약: `rows`, `segments`, `completeTables`, `stoppedBy=NONE|ROW_LIMIT|TIME_LIMIT|INTERRUPTED`, `rowsPerSecond`), `SEGMENT`(테이블, 조각 번호, 줄 수, `keyFrom`·`keyTo`, 바이트, 장부 누계), `COMPLETE`, `AUDIT_MISMATCH`, `MISMATCH`, `FAILED reason=<사유>`, `UNSUPPORTED_COLUMNS`, `ABSENT`(테이블이 이미 없다).
+- 지표는 `salmonbus_archive_legacy_exported_rows{table}`(장부 줄 수 합), `salmonbus_archive_legacy_segments{table}`, `salmonbus_archive_legacy_complete{table}`, `salmonbus_archive_legacy_mismatched_segments{table}`, `salmonbus_archive_legacy_complete_tables`, `salmonbus_archive_legacy_rows_per_second`(직전 회차), `salmonbus_archive_legacy_failures{table,reason}`, `salmonbus_archive_rows{stage=legacy_exported,table}`, `salmonbus_archive_bytes{stage=legacy_exported}`, `salmonbus_archive_stage{stage=legacy_page|legacy_segment|legacy_audit}`다. 마지막 키는 지표 라벨에 넣지 않고 `SEGMENT` 로그에 남긴다.
+- `LEDGER_CHANGED`: 장부의 마지막 조각이 기대와 다르다(다른 실행이 먼저 적었거나 사람이 장부를 고쳤다). 다음 회차가 장부를 다시 읽어 이어 간다. `LEDGER_GAP`·`LEDGER_UNVERIFIED`: 장부 조각 번호에 빈틈이 있거나 확인 시각·키가 빈 줄이 있다. 사람이 장부를 확인한다.
+- `MANIFEST_HASH_MISMATCH`, `FILE_HASH_MISMATCH`, `FILE_ROW_COUNT_MISMATCH`, `MANIFEST_ROW_COUNT_MISMATCH`, `MANIFEST_MISMATCH`: 올린 직후 다시 읽은 S3 객체가 다르다. 장부에 적지 않았다.
+
 ## 인증 정보를 출력하지 않고 확인하기
 
 ```bash
@@ -1117,11 +1175,11 @@ journalctl -u salmonbus-worker --since '<시작 UTC>' --until '<5분 뒤 UTC>' -
 
 SAL-434는 예보·채점·보관을 새 경로(`forecast_run`·`forecast_record`·`stop_pass`·`pass_label`·`forecast_unresolved`, 날짜 파티션)로 옮긴다. PR이 머지돼 배포되는 순간 바뀌는 동작은 없다. 새 경로의 스위치는 모두 기본값이 꺼짐이고, Flyway에는 테이블을 더하는 마이그레이션만 있다. 옛 경로는 그대로 돈다.
 
-아래 아홉 차례를 순서대로 진행한다. **차례마다 결과를 보이고 다음으로 넘어간다.** 「승인」 표시가 있는 차례는 실행 전에 따로 승인을 받는다. 트리거·테이블을 지우거나 모양을 바꾸는 일은 Flyway가 아니라 `deploy/sql/sal434-*.sql`을 사람이 실행한다. 이 파일들은 배포 패키지의 `sql/`에 함께 실린다(`/opt/salmonbus/api/current/sql/`). 배포 훅은 이 파일을 실행하지 않는다.
+아래 아홉 차례(6번 뒤의 6-1 포함)를 순서대로 진행한다. **차례마다 결과를 보이고 다음으로 넘어간다.** 「승인」 표시가 있는 차례는 실행 전에 따로 승인을 받는다. 트리거·테이블을 지우거나 모양을 바꾸는 일은 Flyway가 아니라 `deploy/sql/sal434-*.sql`을 사람이 실행한다. 이 파일들은 배포 패키지의 `sql/`에 함께 실린다(`/opt/salmonbus/api/current/sql/`). 배포 훅은 이 파일을 실행하지 않는다.
 
 | 파일 | 차례 | 하는 일 | 되돌리기 |
 | --- | --- | --- | --- |
-| `sal434-01-precheck.sql` | 5·7·8 전후 | 읽기 전용. 건드릴 객체, 크기, 누적 통계, 장부, 가드 판정을 보인다 | 없음 |
+| `sal434-01-precheck.sql` | 5·6-1·7·8 전후 | 읽기 전용. 건드릴 객체, 크기, 누적 통계, 장부(옛 테이블별 실제 줄 수·장부 합·조각 수), 가드 판정을 보인다 | 없음 |
 | `sal434-02-drop-legacy-triggers.sql` | 5 | 옛 정산 트리거 9개와 함수 7개 삭제 | `sal434-02-rollback-recreate-legacy-triggers.sql` |
 | `sal434-03-drop-legacy-tables.sql` | 7 | 옛 테이블 25개와 뷰 9개 삭제 | 없음(S3 내보내기에서만 되살린다) |
 | `sal434-04a-prepare-observation-partition.sql` | 8 | 관측 두 테이블에 `source_date` 열, 확인 제약, 유일 인덱스 준비 | 파일 머리 주석의 문장 |
@@ -1160,6 +1218,7 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 | `FORECAST_PIPELINE` | worker.env | `v1` | `v2`: 새 경로가 본선이고 옛 예보 쓰기·체크포인트를 하지 않는다 |
 | `ARCHIVE_PARTITION_EXPORT_ENABLED` | archive.env | `false` | 닫힌 날짜의 파티션을 테이블마다 S3로 내보내고 다시 읽어 검증한다 |
 | `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED` | archive.env | `false` | 장부에 검증된 파티션을 떼어 내고 지운다 |
+| `ARCHIVE_LEGACY_EXPORT_ENABLED` | archive.env | `false` | 옛 테이블 25개를 기본 키 순서의 조각으로 S3에 내보내고 다시 읽어 검증한다. 지우지 않는다 |
 | `COLLECTION_BULK_INSERT` | worker.env | `false` | 관측을 한 문장으로 넣고 예약·전송을 한 커밋으로 한다 |
 
 내보내기 두 스위치의 이름은 구현 명세(내보내기를 이관 앱에 둔다는 11-15 결정)를 따랐다. 이관 앱 구현과 이름이 다르면 이 표를 먼저 고친다. 스위치를 바꾼 뒤에는 해당 서비스를 재시작해야 반영된다(「환경변수 변경」).
@@ -1191,10 +1250,20 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 
 **6. 날짜 단위 내보내기.** archive.env에 `ARCHIVE_PARTITION_EXPORT_ENABLED=true`를 넣고 이관 앱을 재시작한다. 지우기 스위치는 아직 켜지 않는다.
 - 넘어가는 기준: 하루치를 S3 파일만으로 되살려 예측별 결과가 옛 결과 줄과 맞는다. 그다음 `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED=true`로 새 테이블의 오래된 파티션 삭제를 켠다.
-- 같은 차례에 옛 테이블 25개의 남은 줄도 내보낸다. 7번이 장부를 확인한다. **계약: 옛 테이블마다 `daily_export`에 `table_name`이 그 테이블 이름이고 `verified_at`이 찍힌 줄을 남기고, 그 줄들의 `row_count` 합이 테이블의 줄 수와 같아야 한다.** 내보낸 뒤 그 테이블에 쓰는 것이 없어야 한다.
+- 옛 테이블 25개는 이 스위치가 아니라 6-1번에서 내보낸다.
 - 되돌리기: 스위치를 끈다. 지우기 스위치를 켜기 전까지는 DB의 줄이 그대로다.
 
+**6-1. 옛 테이블 내보내기.** 7번이 장부를 확인한다. **계약: 줄이 있는 옛 테이블마다 `daily_export`에서 `table_name`이 그 테이블이고 `verified_at`이 찍힌 줄의 `row_count` 합이 테이블의 줄 수와 같고, 옛 테이블 조각(`source_date = 2000-01-01`)의 번호가 0부터 빈틈없이 이어져야 한다.** 동작과 설정은 「옛 테이블 내보내기」에 있다.
+1. **줄 단위 이관을 멈춘다.** 노선 판본 이관은 내보낸 줄을 지우므로 함께 돌면 장부와 줄 수가 어긋난다. archive.env에 `ARCHIVE_ENABLED=false`를 넣는다(이 둘을 함께 켜면 이관 앱이 기동하지 않는다).
+2. **옛 경로가 더 쓰지 않는지 확인한다.** 4·5번이 끝나 있어야 한다. `sal434-01-precheck.sql`을 몇 분 간격으로 두 번 실행해 2절의 대상 테이블 `inserts`·`updates`·`deletes`가 늘지 않는지, 3절의 `old_*` 시각이 멈췄는지 본다.
+3. archive.env에 `ARCHIVE_LEGACY_EXPORT_ENABLED=true`를 넣고 이관 앱을 재시작한다. 처음에는 기본값으로 두고 RDS 처리량 크레딧, `api.board` 지연, `salmonbus_archive_legacy_rows_per_second`를 보며 `PAGE_PAUSE`·`PAGE_SIZE`·`MAX_ROWS_PER_RUN`·`INTERVAL`을 조절한다. 걸리는 시간은 운영에서 재야 한다(약 80GB, 3억 줄. 「옛 테이블 내보내기」의 추정 참고).
+4. 진행은 `status=SEGMENT`·`status=RUN` 로그와 `salmonbus_archive_legacy_exported_rows{table}`로 본다. 테이블마다 `status=COMPLETE`와 `salmonbus_archive_legacy_complete{table}=1`이 나오면 끝이다. `status=MISMATCH`가 있으면 원인을 찾고 「옛 테이블 내보내기」의 방법으로 다시 내보낸다.
+5. `sal434-01-precheck.sql`을 `-c "SET sal434.count_legacy_rows = 'exact'"`와 함께 실행해 8-2절에서 테이블마다 `exact_rows`와 `verified_ledger_rows`가 같고 `sal434_03_ledger_check`가 `ok`인지 본다. 옛 테이블 전체를 읽으므로 크레딧이 충분할 때 한다. 출력을 보관한다.
+6. `ARCHIVE_LEGACY_EXPORT_ENABLED=false`로 이관 앱을 재시작하고 7번 승인을 받는다. 켜 둔 채면 회차마다 테이블의 마지막 키 뒤를 읽어 `sal434-03`의 읽기 관찰 가드(120초)가 멈춘다. 5번의 줄 수 확인은 스위치를 끈 뒤에 해도 된다.
+- 되돌리기: 스위치를 끄고 재시작한다. DB의 줄은 그대로이고 장부와 S3 파일은 남는다.
+
 **7. 옛 테이블 삭제(승인).** 다음을 모두 확인한 뒤 실행한다. **이 차례는 되돌릴 수 없다.**
+- 6-1번이 끝났다. 모든 옛 테이블이 `status=COMPLETE`이고 `sal434-01`의 8-2절이 `ok`다. 그 뒤 옛 테이블에 쓴 곳이 없다.
 - api·worker에 옛 테이블을 매핑한 코드가 없는 배포본이 올라가 있다. **이 PR의 api는 `seat_forecast`·`forecast_publication` JPA 엔티티를 갖고 있고 `ddl-auto: validate`라서, 테이블을 지운 뒤 다시 뜨면 스키마 검증에서 멈춘다.** 옛 경로 코드를 지운 후속 배포가 먼저다. SQL은 배포본을 볼 수 없으므로 사람이 확인한다.
 - `BOARD_FORECAST_SOURCE=record`로 api를 재시작했다(`auto`도 옛 테이블을 읽는다).
 - 옛 이관 앱(노선 판본 이관, `ARCHIVE_ENABLED`)이 멈춰 있다. 옛 테이블을 읽는 대시보드·수동 스크립트·저장소 밖 도구(`docs/salmon-action` 추출기 등)를 멈췄다. 가드가 120초 동안 읽기 통계를 보고 읽는 곳이 있으면 멈춘다.
@@ -1211,7 +1280,7 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 - RDS EBS 처리량 크레딧(최근 1시간 최소 20% 이상)과 여유 저장공간을 확인했다. 가드가 옛 테이블 전체(운영 11-15 기준 약 80GB)를 한 번 센다. 쓰기는 막고 읽기는 허용한 채 수십 분이 걸릴 수 있다(추정).
 
 실행 순서는 다음과 같다.
-1. `sal434-01-precheck.sql`을 실행해 보관한다. 5-1절에서 `referencing_is_target=false`인 FK가 관측 두 테이블 쪽(`vehicle_observation`, 운영의 `historical_import_record`·`migration_source_record`)뿐인지, 5-2절에서 대상 밖의 뷰가 `operational_observation`뿐인지, 5-3절이 비었는지, 8-2절에서 줄이 있는 테이블마다 장부가 있는지 본다. 6-1절의 운영 전용 테이블이 대상을 가리키면 사람이 처리 방법을 정한다.
+1. `sal434-01-precheck.sql`을 실행해 보관한다. 5-1절에서 `referencing_is_target=false`인 FK가 관측 두 테이블 쪽(`vehicle_observation`, 운영의 `historical_import_record`·`migration_source_record`)뿐인지, 5-2절에서 대상 밖의 뷰가 `operational_observation`뿐인지, 5-3절이 비었는지, 8-2절에서 줄이 있는 테이블마다 장부 합이 실제 줄 수와 같은지(`sal434_03_ledger_check`) 본다. 6-1절의 운영 전용 테이블이 대상을 가리키면 사람이 처리 방법을 정한다.
 2. `sal434-03-drop-legacy-tables.sql`을 `sal434.confirm_drop`과 함께 실행한다. 지우기 전에 테이블마다 정확한 줄 수와 크기가 NOTICE로 남는다. 출력을 보관한다.
 3. `sal434-01-precheck.sql`을 다시 실행한다. 10절이 `retired`여야 한다. api·worker를 하나씩 재시작해 배포 가드와 스키마 검증을 통과하는지 본다.
 - Flyway는 적용 이력과 파일 체크섬만 보므로 이 뒤의 배포에서도 `validate`·`migrate`가 통과한다(시험으로 확인). 수동으로 지운 상태는 전환이 끝난 뒤 마무리 PR에서 `IF EXISTS` 마이그레이션으로 맞춘다.

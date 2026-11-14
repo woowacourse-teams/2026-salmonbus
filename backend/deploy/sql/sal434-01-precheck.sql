@@ -12,16 +12,22 @@
 --   5. 삭제 대상·관측 두 테이블을 가리키는 FK, 뷰, 함수. 마이그레이션(V1~V81)에 없는 테이블에서 온 것은 따로 표시한다
 --   6. 마이그레이션에 없는 테이블·뷰와 관측·예보 테이블의 인덱스 가운데 마이그레이션에 없는 것
 --   7. 새 테이블의 파티션 목록, 크기, 예상 줄 수. 기본 파티션은 정확히 센다(날짜 파티션이 없어 넘친 줄)
---   8. 내보내기 장부(daily_export) 상태. 삭제 대상 테이블은 sal434-03이 요구하는 "검증된 장부 줄 수 합"도 보인다
+--   8. 내보내기 장부(daily_export) 상태. 삭제 대상 테이블마다 실제 줄 수, sal434-03이 요구하는 "검증된 장부 줄 수 합",
+--      옛 테이블 조각 수와 번호 연속 여부, 마지막 조각 시각, 03의 (라) 판정을 보인다. 실제 줄 수는 64MB 이하 테이블만 센다.
+--      전부 세려면 같은 세션에서 SET sal434.count_legacy_rows = 'exact'; 를 먼저 넣는다. 이때는 옛 테이블 전체(운영 11-15 기준
+--      약 80GB)를 읽어 수십 분이 걸리고 EBS 크레딧을 크게 쓰므로(추정) 문장 제한 시간이 120분으로 늘어난다.
 --   9. 관측 두 테이블의 파티션 전환 준비 상태(sal434-04a·04)
 --  10. 배포 가드(evaluation-work-transition.sh)가 이 DB를 어떻게 판정할지
 --  11. 지금 붙어 있는 연결(application_name별)
 -- 잡는 잠금과 예상 시간: 읽는 테이블마다 ACCESS SHARE. 큰 테이블은 세지 않고 카탈로그 통계만 읽는다. 기본 파티션과
---   작은 장부만 센다. 로컬에서 1초 미만, 운영도 수 초로 본다(추정). statement_timeout 60초, lock_timeout 3초.
+--   작은 장부, 64MB 이하 옛 테이블만 센다. 로컬에서 1초 미만, 운영도 수 초로 본다(추정). statement_timeout 60초
+--   (sal434.count_legacy_rows = 'exact'이면 120분), lock_timeout 3초.
 -- 되돌리기: 바꾸는 것이 없다.
 -- 실행: psql -X -v ON_ERROR_STOP=1 -P pager=off -f sal434-01-precheck.sql > precheck-$(date +%Y%m%d-%H%M).txt
+--   옛 테이블 줄을 모두 셀 때: psql -X -v ON_ERROR_STOP=1 -P pager=off -c "SET sal434.count_legacy_rows = 'exact'" -f sal434-01-precheck.sql
 BEGIN READ ONLY;
-SET LOCAL statement_timeout = '60s';
+SELECT set_config('statement_timeout',
+    CASE WHEN current_setting('sal434.count_legacy_rows', true) = 'exact' THEN '120min' ELSE '60s' END, true) AS statement_timeout;
 SET LOCAL lock_timeout = '3s';
 SET LOCAL search_path = public;
 
@@ -142,16 +148,39 @@ UNION ALL SELECT 'stop_pass_default', count(*) FROM stop_pass_default
 UNION ALL SELECT 'pass_label_default', count(*) FROM pass_label_default
 UNION ALL SELECT 'forecast_unresolved_default', count(*) FROM forecast_unresolved_default;
 
--- 8-1. 내보내기 장부(테이블별).
-SELECT table_name, count(*) AS dates, min(source_date) AS first_date, max(source_date) AS last_date,
+-- 8-1. 내보내기 장부(테이블별). 옛 테이블 조각은 source_date 2000-01-01에 조각마다 한 줄이다.
+SELECT table_name, count(DISTINCT source_date) AS dates, count(*) AS ledger_lines, min(source_date) AS first_date,
+       max(source_date) AS last_date,
        sum(row_count) AS ledger_rows, count(verified_at) AS verified, count(dropped_at) AS dropped,
        sum(row_count) FILTER (WHERE verified_at IS NOT NULL) AS verified_rows, max(exported_at) AS last_exported_at
   FROM daily_export GROUP BY table_name ORDER BY table_name;
--- 8-2. 삭제 대상별로 sal434-03의 (라) 조건을 미리 본다. 정확한 줄 수는 03이 쓰기를 막고 센다. 여기서는 예상 줄 수와 비교한다.
-SELECT t.name, c.reltuples::bigint AS estimated_rows,
-       coalesce((SELECT sum(row_count) FROM daily_export d WHERE d.table_name = t.name AND d.verified_at IS NOT NULL), 0)
-           AS verified_ledger_rows
-  FROM (SELECT name, CASE WHEN ord <= 9 THEN 'view' ELSE 'table' END AS kind, ord FROM unnest(string_to_array(current_setting('sal434.precheck_targets'), ',')) WITH ORDINALITY AS x(name, ord)) t LEFT JOIN pg_class c ON c.oid = to_regclass('public.' || t.name)
+-- 8-2. 삭제 대상별로 sal434-03의 (라) 조건을 미리 본다. exact_rows가 비어 있으면 세지 않은 것이다(머리 주석 8).
+--      03은 쓰기를 막고 다시 센다. 여기서 ok여도 그 사이에 줄이 바뀌면 03이 멈춘다.
+SELECT t.name, CASE WHEN c.oid IS NULL THEN '(없음)' ELSE pg_size_pretty(pg_total_relation_size(c.oid)) END AS total_size,
+       c.reltuples::bigint AS estimated_rows, x.exact_rows, l.verified_ledger_rows, l.segments, l.last_segment,
+       l.last_segment_exported_at, l.unverified_lines,
+       CASE WHEN c.oid IS NULL THEN 'absent'
+            WHEN x.exact_rows IS NULL THEN 'not counted'
+            WHEN x.exact_rows = 0 THEN 'ok(empty)'
+            WHEN x.exact_rows <> l.verified_ledger_rows THEN 'mismatch'
+            WHEN l.segments <> l.last_segment + 1 THEN 'segment gap'
+            ELSE 'ok' END AS sal434_03_ledger_check
+  FROM (SELECT name, CASE WHEN ord <= 9 THEN 'view' ELSE 'table' END AS kind, ord FROM unnest(string_to_array(current_setting('sal434.precheck_targets'), ',')) WITH ORDINALITY AS x(name, ord)) t
+  LEFT JOIN pg_class c ON c.oid = to_regclass('public.' || t.name)
+  CROSS JOIN LATERAL (
+      SELECT coalesce(sum(d.row_count) FILTER (WHERE d.verified_at IS NOT NULL), 0) AS verified_ledger_rows,
+             count(*) FILTER (WHERE d.source_date = DATE '2000-01-01' AND d.verified_at IS NOT NULL) AS segments,
+             coalesce(max(d.segment) FILTER (WHERE d.source_date = DATE '2000-01-01' AND d.verified_at IS NOT NULL), -1)
+                 AS last_segment,
+             max(d.exported_at) FILTER (WHERE d.source_date = DATE '2000-01-01') AS last_segment_exported_at,
+             count(*) FILTER (WHERE d.verified_at IS NULL) AS unverified_lines
+        FROM daily_export d WHERE d.table_name = t.name) l
+  CROSS JOIN LATERAL (
+      SELECT CASE WHEN c.oid IS NOT NULL AND c.relkind = 'r'
+                   AND (current_setting('sal434.count_legacy_rows', true) = 'exact'
+                        OR pg_total_relation_size(c.oid) <= 64 * 1024 * 1024)
+             THEN (xpath('/row/v/text()', query_to_xml(format('SELECT count(*) AS v FROM %I', t.name), false, true, '')))[1]::text::bigint
+             END AS exact_rows) x
  WHERE t.kind = 'table'
  ORDER BY t.ord;
 

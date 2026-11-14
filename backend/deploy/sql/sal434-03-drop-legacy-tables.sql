@@ -1,7 +1,8 @@
 -- SAL-434 옛 예보·정산·평가·보관 테이블 25개와 옛 뷰 9개를 지운다. 자동 실행하지 않는다. 지운 테이블은 되돌릴 수 없다.
 --
--- 언제: RUNBOOK "SAL-434 전환 절차" 7번 차례. 날짜 단위 내보내기가 이 테이블들의 남은 줄을 S3에 내보내고 다시 읽어
---       검증한 뒤(daily_export 장부), 운영 DB 객체 목록을 sal434-01-precheck.sql로 다시 뽑아 보고 승인을 받아 실행한다.
+-- 언제: RUNBOOK "SAL-434 전환 절차" 7번 차례. 이관 앱의 옛 테이블 내보내기(ARCHIVE_LEGACY_EXPORT_ENABLED)가 이 테이블들을
+--       기본 키 순서의 조각으로 S3에 내보내고 다시 읽어 검증한 뒤(daily_export 장부, source_date 2000-01-01, 조각마다 한 줄),
+--       운영 DB 객체 목록과 장부를 sal434-01-precheck.sql로 다시 뽑아 보고 승인을 받아 실행한다.
 -- 반드시 먼저 끝나 있어야 하는 것(SQL이 확인하지 못하는 것 포함):
 --   - 이 테이블을 매핑한 JPA 엔티티가 없는 배포본이 api·worker에 올라가 있다. 이 PR의 api에는 seat_forecast·
 --     forecast_publication 엔티티가 남아 있고(ddl-auto: validate), 테이블을 지운 뒤 api가 다시 뜨면 스키마 검증에서 멈춘다.
@@ -33,7 +34,8 @@
 --        흔적이 있거나, sal434.observe_seconds(기본 120초) 동안 대상 테이블의 읽기(seq_scan·idx_scan)나
 --        쓰기(n_tup_ins·upd·del) 통계가 늘면 멈춘다. 대시보드나 수동 조회가 아직 읽어도 멈춘다.
 --   (라) 내보내기 장부: 줄이 있는 테이블마다 daily_export에서 table_name이 그 테이블이고 verified_at이 있는 줄의
---        row_count 합이 지금 정확한 줄 수와 같아야 한다. 내보내기 코드가 옛 테이블을 이 계약대로 장부에 남겨야 한다.
+--        row_count 합이 지금 정확한 줄 수와 같아야 한다. 또 그 테이블의 옛 테이블 조각(source_date 2000-01-01)은 번호가
+--        0부터 빈틈없이 이어져야 한다. 이관 앱의 옛 테이블 내보내기(LegacyExportService)가 이 계약대로 조각마다 한 줄을 남긴다.
 --        모든 쓰기를 막은 뒤(SHARE 잠금) 센다.
 -- 지우기 전에 테이블마다 정확한 줄 수와 크기를 NOTICE로 남기고, 지운 뒤 장부의 해당 줄에 dropped_at을 찍는다.
 -- 잡는 잠금과 예상 시간: 관찰 동안은 잠금이 없다. 그 뒤 대상 테이블 전체에 SHARE(읽기만 허용)를 잡고 줄을 센다.
@@ -83,6 +85,8 @@ DECLARE
     r record;
     rows_now bigint;
     ledger_rows bigint;
+    segment_count bigint;
+    last_segment integer;
     mismatches text := '';
 BEGIN
     IF target_tables && protected OR target_views && protected THEN
@@ -218,9 +222,13 @@ BEGIN
         EXECUTE format('SELECT count(*) FROM %I', t) INTO rows_now;
         SELECT coalesce(sum(row_count), 0) INTO ledger_rows FROM daily_export
          WHERE table_name = t AND verified_at IS NOT NULL;
-        RAISE NOTICE 'SAL-434: % 줄 % 크기 % 장부(검증됨) %', t, rows_now, pg_size_pretty(pg_total_relation_size(t::regclass)), ledger_rows;
+        SELECT count(*), coalesce(max(segment), -1) INTO segment_count, last_segment FROM daily_export
+         WHERE table_name = t AND source_date = DATE '2000-01-01' AND verified_at IS NOT NULL;
+        RAISE NOTICE 'SAL-434: % 줄 % 크기 % 장부(검증됨) % 조각 %', t, rows_now, pg_size_pretty(pg_total_relation_size(t::regclass)), ledger_rows, segment_count;
         IF rows_now > 0 AND rows_now <> ledger_rows THEN
             mismatches := mismatches || format('%s(줄 %s, 장부 %s) ', t, rows_now, ledger_rows);
+        ELSIF rows_now > 0 AND segment_count <> last_segment + 1 THEN
+            mismatches := mismatches || format('%s(조각 %s개인데 마지막 번호 %s) ', t, segment_count, last_segment);
         END IF;
     END LOOP;
     IF mismatches <> '' THEN

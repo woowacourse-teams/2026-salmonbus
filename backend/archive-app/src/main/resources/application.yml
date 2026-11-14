@@ -33,3 +33,14 @@ archive:
     initial-delay: ${ARCHIVE_PARTITION_EXPORT_INITIAL_DELAY:1m}
     page-size: ${ARCHIVE_PARTITION_EXPORT_PAGE_SIZE:2000}
     lock-timeout: ${ARCHIVE_PARTITION_EXPORT_LOCK_TIMEOUT:2s}
+  legacy-export:
+    enabled: ${ARCHIVE_LEGACY_EXPORT_ENABLED:false}
+    prefix: ${ARCHIVE_LEGACY_EXPORT_PREFIX:salmonbus/prod/lake-v3-legacy/}
+    interval: ${ARCHIVE_LEGACY_EXPORT_INTERVAL:1m}
+    initial-delay: ${ARCHIVE_LEGACY_EXPORT_INITIAL_DELAY:1m}
+    page-size: ${ARCHIVE_LEGACY_EXPORT_PAGE_SIZE:2000}
+    page-pause: ${ARCHIVE_LEGACY_EXPORT_PAGE_PAUSE:200ms}
+    segment-size: ${ARCHIVE_LEGACY_EXPORT_SEGMENT_SIZE:64MB}
+    max-rows-per-run: ${ARCHIVE_LEGACY_EXPORT_MAX_ROWS_PER_RUN:2000000}
+    max-run-duration: ${ARCHIVE_LEGACY_EXPORT_MAX_RUN_DURATION:10m}
+    statement-timeout: ${ARCHIVE_LEGACY_EXPORT_STATEMENT_TIMEOUT:60s}

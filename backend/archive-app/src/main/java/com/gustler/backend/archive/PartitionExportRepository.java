@@ -20,6 +20,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 날짜 파티션 내보내기가 쓰는 카탈로그 조회, 파티션 읽기, 장부({@code daily_export}) 쓰기, 파티션 떼어 지우기를 맡는다.
+ * 장부에서는 {@code segment = 0} 줄만 읽고 쓴다. 다른 조각 번호는 옛 테이블 내보내기({@link LegacyExportRepository})의 몫이다.
  *
  * <p>테이블 이름은 {@link #TABLES} 에서만, 파티션 이름은 이름 규칙과 경계를 모두 확인한 카탈로그 행에서만 오므로 SQL 에 그대로 넣는다.
  * 열 이름과 타입 표기도 카탈로그에서 읽고 허용 문자만 받는다. 값은 언제나 bind 한다. {@code route} 행 잠금은 잡지 않는다.
@@ -244,7 +245,7 @@ public class PartitionExportRepository {
     public Optional<Ledger> ledger(Partition partition) {
         return jdbc.sql("""
             SELECT object_key, row_count, sha256, exported_at, verified_at, dropped_at
-            FROM daily_export WHERE table_name = ? AND source_date = ?
+            FROM daily_export WHERE table_name = ? AND source_date = ? AND segment = 0
             """).params(partition.table(), partition.date()).query(LEDGER)
             .optional();
     }
@@ -286,7 +287,8 @@ public class PartitionExportRepository {
             writeLimits(lockTimeout);
             return jdbc.sql("""
                 UPDATE daily_export SET verified_at = ?
-                WHERE table_name = ? AND source_date = ? AND sha256 = ? AND verified_at IS NULL AND dropped_at IS NULL
+                WHERE table_name = ? AND source_date = ? AND segment = 0 AND sha256 = ? AND verified_at IS NULL
+                    AND dropped_at IS NULL
                 """).params(time(verifiedAt), partition.table(), partition.date(), sha256).update() == 1;
         });
     }
@@ -316,7 +318,7 @@ public class PartitionExportRepository {
             }
             Optional<Ledger> current = jdbc.sql("""
                 SELECT object_key, row_count, sha256, exported_at, verified_at, dropped_at
-                FROM daily_export WHERE table_name = ? AND source_date = ? FOR UPDATE
+                FROM daily_export WHERE table_name = ? AND source_date = ? AND segment = 0 FOR UPDATE
                 """).params(partition.table(), partition.date()).query(LEDGER)
                 .optional();
             if (current.isPresent() && current.get().droppedAt() != null) {
@@ -338,7 +340,8 @@ public class PartitionExportRepository {
             }
             jdbc.sql("ALTER TABLE " + partition.table() + " DETACH PARTITION " + partition.name()).update();
             jdbc.sql("DROP TABLE " + partition.name()).update();
-            jdbc.sql("UPDATE daily_export SET dropped_at = clock_timestamp() WHERE table_name = ? AND source_date = ?")
+            jdbc.sql("UPDATE daily_export SET dropped_at = clock_timestamp()"
+                + " WHERE table_name = ? AND source_date = ? AND segment = 0")
                 .params(partition.table(), partition.date()).update();
             return DropResult.DROPPED;
         });

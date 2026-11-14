@@ -336,6 +336,43 @@ class ForecastPipelineTransitionSqlTest {
     }
 
     @Test
+    void 내보낸_뒤_옛_테이블의_줄이_지워지면_조각_합이_줄_수와_달라_지우지_않는다() throws Exception {
+        // given
+        run("sal434-02-drop-legacy-triggers.sql", FAST);
+        insertForecast("2");
+        writeLedger();
+        execute("DELETE FROM daily_export WHERE table_name = 'seat_forecast'");
+        writeSegment("seat_forecast", 0, 1);
+        writeSegment("seat_forecast", 1, 1);
+        execute("DELETE FROM seat_forecast WHERE vehicle_observation_id = 2");
+
+        // when
+        Throwable removed = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
+
+        // then
+        assertThat(removed).hasMessageContaining("seat_forecast(줄 1, 장부 2)");
+        assertLegacyObjectsPresent();
+    }
+
+    @Test
+    void 옛_테이블_조각_번호에_빈틈이_있으면_합이_맞아도_지우지_않는다() throws Exception {
+        // given
+        run("sal434-02-drop-legacy-triggers.sql", FAST);
+        insertForecast("2");
+        writeLedger();
+        execute("DELETE FROM daily_export WHERE table_name = 'seat_forecast'");
+        writeSegment("seat_forecast", 0, 1);
+        writeSegment("seat_forecast", 2, 1);
+
+        // when
+        Throwable gap = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
+
+        // then
+        assertThat(gap).hasMessageContaining("seat_forecast(조각 2개인데 마지막 번호 2)");
+        assertThat(number("SELECT count(*) FROM seat_forecast")).isEqualTo(2);
+    }
+
+    @Test
     void 옛_테이블과_뷰만_지우고_관측과_다른_영역의_줄은_그대로_두며_두_번_실행해도_된다() throws Exception {
         // given
         String kept = keptRows();
@@ -565,16 +602,23 @@ class ForecastPipelineTransitionSqlTest {
             "SET sal434.count_rows = '" + countMode + "'");
     }
 
-    /** sal434-03의 (라) 계약대로, 줄이 있는 옛 테이블마다 검증된 내보내기 장부 줄을 하나 남긴다. */
+    /** sal434-03의 (라) 계약대로, 줄이 있는 옛 테이블마다 옛 테이블 내보내기의 검증된 조각 0 하나를 장부에 남긴다. */
     private void writeLedger() throws SQLException {
         execute("DELETE FROM daily_export");
         for (String table : LEGACY_TABLES) {
             long rows = number("SELECT count(*) FROM " + table);
             if (rows > 0) {
-                execute("INSERT INTO daily_export VALUES ('" + table + "', DATE '2026-11-01', 'legacy/" + table
-                    + ".jsonl.gz', " + rows + ", repeat('a', 64), now(), now(), NULL)");
+                writeSegment(table, 0, rows);
             }
         }
+    }
+
+    /** 옛 테이블 내보내기가 남기는 모양의 검증된 조각 한 줄이다. 키 범위 값은 장부 대조에 쓰이지 않아 흉내만 낸다. */
+    private void writeSegment(String table, final int segment, final long rows) throws SQLException {
+        execute("INSERT INTO daily_export(table_name, source_date, segment, object_key, row_count, sha256, exported_at,"
+            + " verified_at, key_from, key_to) VALUES ('" + table + "', DATE '2000-01-01', " + segment + ", 'legacy/"
+            + table + "/segment=" + segment + "/manifest.json', " + rows + ", repeat('a', 64), now(), now(), '["
+            + segment + "]', '[" + segment + "]')");
     }
 
     private void insertForecast(String observation) throws SQLException {

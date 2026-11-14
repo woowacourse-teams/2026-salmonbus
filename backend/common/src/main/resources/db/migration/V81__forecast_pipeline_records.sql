@@ -114,6 +114,9 @@ CREATE TABLE forecast_unresolved (
 ) PARTITION BY RANGE (source_date);
 CREATE TABLE forecast_unresolved_default PARTITION OF forecast_unresolved DEFAULT;
 
+-- S3 내보내기 장부다. 날짜 파티션 내보내기는 (테이블, 날짜)마다 segment 0 한 줄을 쓴다.
+-- 옛 테이블 내보내기는 source_date 2000-01-01에 기본 키 순서의 조각마다 한 줄을 쓴다. 조각 n은 조각 n-1의 key_to 다음부터
+-- 자기 key_to까지의 줄이고, key_from·key_to는 조각의 첫 줄·마지막 줄 기본 키를 담은 JSON 배열 텍스트다.
 CREATE TABLE daily_export (
     table_name varchar(63) NOT NULL,
     source_date date NOT NULL,
@@ -123,5 +126,10 @@ CREATE TABLE daily_export (
     exported_at timestamptz NOT NULL,
     verified_at timestamptz,
     dropped_at timestamptz,
-    CONSTRAINT pk_daily_export PRIMARY KEY (table_name, source_date)
+    segment integer NOT NULL DEFAULT 0,
+    key_from text,
+    key_to text,
+    CONSTRAINT pk_daily_export PRIMARY KEY (table_name, source_date, segment),
+    CONSTRAINT ck_daily_export_segment CHECK (segment >= 0),
+    CONSTRAINT ck_daily_export_key_range CHECK ((key_from IS NULL) = (key_to IS NULL))
 );
