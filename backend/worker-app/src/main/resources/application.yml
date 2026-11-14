@@ -67,6 +67,7 @@ collection:
     - "234000879" # 1101
     - "228000393" # 7007-1
     - "200000314" # 4000
+  bulk-insert: ${COLLECTION_BULK_INSERT:false} # 관측을 한 문장으로 넣고 예약·전송을 한 커밋으로(SAL-434, 아직 읽는 곳 없음)
 
 # 계수 파일이 든 디렉터리. manifest.json과 그 안에 선언된 모델 파일이 있어야 한다.
 # 비워 두면 아무것도 안 읽고 예보 배치가 batch 를 안 연다. 계수가 아직 없는 지금의 정상 상태다.
@@ -107,6 +108,18 @@ forecast:
   pending-limit: 3000
   # 한 차량의 뒤 관측을 얼마나 읽나. 첨두 20초 수집이면 400개가 약 133분치라 지평 12의 중앙 소요 26.5분을 덮는다.
   arrival-limit: 400
+  # 새 예보 경로(SAL-434)의 스위치. 기본값은 옛 경로만 도는 지금 상태다.
+  # 전환 순서: shadow.enabled=true → scoring=shadow → pipeline=v2 → scoring=v2.
+  # 셋 가운데 하나라도 기본값이 아니면 새 테이블의 날짜 파티션을 기동 때와 partition-interval마다 미리 만든다.
+  pipeline: ${FORECAST_PIPELINE:v1} # v1: 옛 경로가 본선. v2: 새 경로가 본선
+  shadow:
+    enabled: ${FORECAST_SHADOW_ENABLED:false} # v1일 때 새 경로를 옆에서 돌려 대조하고 새 테이블에 쓴다
+  scoring: ${FORECAST_SCORING:off} # off, shadow, v2
+  lanes: ${FORECAST_LANES:2} # 새 경로의 노선별 실행 줄 수
+  replay-window: ${FORECAST_REPLAY_WINDOW:6h} # 다시 뜰 때 되감는 관측 범위
+  partition-interval: 1h # 오늘부터 사흘 뒤까지 날짜 파티션을 확인하는 주기
+  export:
+    enabled: ${FORECAST_EXPORT_ENABLED:false} # 날짜 단위 내보내기와 파티션 삭제
 
 route-geometry:
   generation:

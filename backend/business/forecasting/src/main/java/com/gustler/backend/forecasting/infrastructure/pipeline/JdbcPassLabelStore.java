@@ -1,0 +1,52 @@
+package com.gustler.backend.forecasting.infrastructure.pipeline;
+
+import static com.gustler.backend.forecasting.infrastructure.pipeline.MultiRowInsert.timestamp;
+
+import com.gustler.backend.forecasting.application.pipeline.PassLabel;
+import com.gustler.backend.forecasting.application.pipeline.PassLabelStore;
+import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
+import java.util.Arrays;
+import java.util.List;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 통과 정답({@code pass_label})과 미해결 예측({@code forecast_unresolved})을 날짜 파티션 테이블에 저장한다.
+ *
+ * <p>쓰기는 호출하는 쪽의 트랜잭션에 참여하며, 트랜잭션 없이 부르면 실패한다. 이미 있는 키는 건너뛴다.
+ */
+@Repository
+public class JdbcPassLabelStore implements PassLabelStore {
+    private static final MultiRowInsert LABELS = new MultiRowInsert("pass_label", List.of(
+        "source_date", "route_id", "trip_start_observation_id", "stop_order", "capacity", "label_version", "state",
+        "reason", "label_value", "previous_last_observation_id", "previous_closure_observation_id",
+        "parameter_hash", "computed_at"));
+
+    private static final MultiRowInsert UNRESOLVED = new MultiRowInsert("forecast_unresolved", List.of(
+        "source_date", "vehicle_observation_id", "target_stop_order", "route_id", "state", "reason", "closed_at"));
+
+    private final JdbcClient jdbc;
+
+    public JdbcPassLabelStore(JdbcClient jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    @Override
+    @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
+    public int saveLabels(List<PassLabel> labels) {
+        return LABELS.insert(jdbc, labels, label -> Arrays.asList(label.sourceDate(), label.routeId(),
+            label.tripStartObservationId(), label.stopOrder(), label.capacity(), label.labelVersion(),
+            label.state().name(), label.reason(), label.labelValue(), label.previousLastObservationId(),
+            label.previousClosureObservationId(), label.parameterHash(), timestamp(label.computedAt())));
+    }
+
+    @Override
+    @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
+    public int saveUnresolved(List<UnresolvedForecast> unresolved) {
+        return UNRESOLVED.insert(jdbc, unresolved, forecast -> Arrays.asList(forecast.sourceDate(),
+            forecast.vehicleObservationId(), forecast.targetStopOrder(), forecast.routeId(), forecast.state().name(),
+            forecast.reason(), timestamp(forecast.closedAt())));
+    }
+}
