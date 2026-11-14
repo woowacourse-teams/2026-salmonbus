@@ -1,5 +1,6 @@
 package com.gustler.backend.archive;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -34,6 +35,12 @@ public class ArchiveRepository {
     private final TransactionTemplate readWork;
     private final TransactionTemplate readOnly;
     private final Duration readTimeout;
+    private HistoryHold historyHold = HistoryHold.CHECKPOINT;
+    private Duration historyHoldWindow = DEFAULT_HISTORY_HOLD_WINDOW;
+    private Clock clock = Clock.systemUTC();
+
+    /** {@link HistoryHold#WINDOW}의 기본 창. worker의 되감기 창 6시간보다 넉넉하게 잡는다. */
+    static final Duration DEFAULT_HISTORY_HOLD_WINDOW = Duration.ofHours(12);
 
     public ArchiveRepository(JdbcClient jdbc, PlatformTransactionManager manager) {
         this(jdbc, manager, DEFAULT_READ_TIMEOUT);
@@ -60,6 +67,39 @@ public class ArchiveRepository {
         readOnly = new TransactionTemplate(manager);
         readOnly.setTimeout((int) readTimeout.toSeconds() + 15);
         readOnly.setReadOnly(true);
+    }
+
+    /**
+     * 최근 관측의 이관을 미루는 기준을 정한다. 기본은 {@link HistoryHold#CHECKPOINT}(옛 동작)다.
+     *
+     * @param hold {@code archive.history-hold}. {@code checkpoint} 또는 {@code window}
+     */
+    @Autowired
+    public void setHistoryHold(@Value("${archive.history-hold:checkpoint}") String hold) {
+        this.historyHold = HistoryHold.parse(hold);
+    }
+
+    /**
+     * {@link HistoryHold#WINDOW}의 창을 정한다. 1시간 이상이어야 한다.
+     *
+     * @param window {@code archive.history-hold-window}
+     */
+    @Autowired
+    public void setHistoryHoldWindow(@Value("${archive.history-hold-window:12h}") Duration window) {
+        if (window.compareTo(Duration.ofHours(1)) < 0) {
+            throw new IllegalArgumentException("archive.history-hold-window 는 1시간 이상이어야 한다: " + window);
+        }
+        this.historyHoldWindow = window;
+    }
+
+    /**
+     * {@link HistoryHold#WINDOW}의 기준 시각을 주는 시계를 정한다. 앱에서는 앱의 시계를 쓴다.
+     *
+     * @param clock 시계
+     */
+    @Autowired(required = false)
+    public void setClock(Clock clock) {
+        this.clock = clock;
     }
 
     public record Job(UUID id, long version, LocalDate date, Instant cutoff, UUID token, String state) {
@@ -202,12 +242,21 @@ public class ArchiveRepository {
     }
 
     /**
-     * 같은 노선 이름의 현재 노선 버전이 하차 예보 입력으로 이 날짜의 관측을 아직 읽어야 하는지 본다.
+     * 하차 예보가 이 날짜의 관측을 아직 읽어야 하는지 본다. 기준은 {@code archive.history-hold}다.
      *
-     * <p>그 날짜의 행이 아니라 현재 노선 버전의 체크포인트를 보므로 경계를 닫은 뒤에도 다시 참이 될 수 있다. 체크포인트를 쓰는 쪽은 노선
-     * 잠금을 잡지 않으므로 파일을 지울 때마다 다시 본다.
+     * <p>{@link HistoryHold#CHECKPOINT}: 같은 노선 이름의 현재 노선 버전의 체크포인트를 본다. 그 날짜의 행이 아니라 현재 노선 버전의
+     * 체크포인트를 보므로 경계를 닫은 뒤에도 다시 참이 될 수 있다. 체크포인트를 쓰는 쪽은 노선 잠금을 잡지 않으므로 파일을 지울 때마다
+     * 다시 본다.
+     *
+     * <p>{@link HistoryHold#WINDOW}: 체크포인트 표를 보지 않는다. 날짜의 끝이 지금부터 {@code archive.history-hold-window} 전보다
+     * 뒤면 참이다. 새 예보 경로는 되감기 창 안의 관측을 다시 읽으므로 그 창보다 최근 자료는 이관하지 않는다. 보관 기준
+     * ({@link ArchiveRetention}, 한국 날짜로 오늘·어제를 남김)이 이미 하루 넘게 남기므로 창이 하루보다 짧으면 지금은 보관 기준이 먼저
+     * 막는다. 이 조건은 보관 기준이 바뀌어도 되감기 창을 지키는 보호선이다.
      */
     private boolean historyRequired(Job job) {
+        if (historyHold == HistoryHold.WINDOW) {
+            return job.until().isAfter(clock.instant().minus(historyHoldWindow));
+        }
         return jdbc.sql("""
             SELECT EXISTS (
                 SELECT 1

@@ -24,6 +24,10 @@ archive:
   interval: ${ARCHIVE_INTERVAL:1s}
   read-timeout: ${ARCHIVE_READ_TIMEOUT:120s}
   purge-pause: ${ARCHIVE_PURGE_PAUSE:0s}
+  # 최근 관측의 줄 단위 이관을 미루는 기준. checkpoint: 옛 예보 경로의 체크포인트 보호선(alighting_history_checkpoint)을 본다.
+  # window: 그 표를 보지 않고 history-hold-window보다 최근인 날짜는 이관하지 않는다. worker를 FORECAST_PIPELINE=v2로 바꿀 때 함께 바꾼다.
+  history-hold: ${ARCHIVE_HISTORY_HOLD:checkpoint}
+  history-hold-window: ${ARCHIVE_HISTORY_HOLD_WINDOW:12h} # worker의 되감기 창(6h)보다 넉넉하게
   partition-export:
     enabled: ${ARCHIVE_PARTITION_EXPORT_ENABLED:false}
     drop-enabled: ${ARCHIVE_PARTITION_EXPORT_DROP_ENABLED:false}
