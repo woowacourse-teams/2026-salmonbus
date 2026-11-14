@@ -659,6 +659,73 @@ salmonbus_archive_rows/bytes/stage meter다. 현재 비웹 앱이므로 meter의
 실행 환경에서 별도 연결해야 하며 구조화 로그는 기존 journal/Loki에서 읽는다.
 삭제는 DB 내부 재사용을 늘리며 RDS 여유 파일 공간의 즉시 축소를 보장하지 않는다.
 
+### 날짜 단위 내보내기
+
+새 예보 경로의 기록 테이블 다섯 개(`forecast_run`, `forecast_record`, `stop_pass`, `pass_label`, `forecast_unresolved`)는 `source_date`(한국 날짜)로 나뉜다. 이관 앱은 닫힌 날짜의 파티션(`<table>_pYYYYMMDD`)을 통째로 S3에 내보내고, 다시 읽어 확인한 뒤, 설정이 허락하면 떼어 지운다. 위의 줄 단위 이관과는 테이블·장부·S3 접두가 겹치지 않고 따로 돈다. 노선 행 잠금은 잡지 않는다.
+
+스위치(`/etc/salmonbus/archive.env`, 바꾸면 이관 서비스만 재시작한다):
+
+| 키 | 기본값 | 뜻 |
+|---|---|---|
+| `ARCHIVE_PARTITION_EXPORT_ENABLED` | `false` | 켜야 빈이 생긴다. 꺼져 있으면 카탈로그도 읽지 않는다 |
+| `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED` | `false` | 확인을 마친 파티션을 떼어 지운다 |
+| `ARCHIVE_PARTITION_EXPORT_RETENTION_DAYS` | `3` | 오늘 포함 DB에 남기는 날 수(2~30). `source_date <= 오늘 - 3`이 대상이다 |
+| `ARCHIVE_PARTITION_EXPORT_PREFIX` | `salmonbus/prod/lake-v3/` | `ARCHIVE_PREFIX`와 서로 포함하면 기동하지 않는다 |
+| `ARCHIVE_PARTITION_EXPORT_INTERVAL` | `1h` | 회차 사이 쉬는 시간(1분~24시간). 기동 1분 뒤 첫 회차 |
+| `ARCHIVE_PARTITION_EXPORT_PAGE_SIZE` | `2000` | 한 번에 읽는 줄 수(1~10000) |
+| `ARCHIVE_PARTITION_EXPORT_LOCK_TIMEOUT` | `2s` | 떼어 지울 때 잠금을 기다리는 시간(100ms~10초) |
+
+값이 범위를 벗어나면 기동하지 않는다. `ARCHIVE_ENABLED`와는 따로 켠다. 두 작업은 같은 스케줄러 스레드와 DB 연결 1개를 나눠 쓰므로 한쪽이 도는 동안 다른 쪽은 기다린다.
+
+켜는 순서:
+
+1. `ARCHIVE_PARTITION_EXPORT_ENABLED=true`, `DROP_ENABLED=false`로 내보내기만 한다. `status=EXPORTED`·`status=VERIFIED` 로그와 `daily_export`의 `verified_at`을 본다.
+2. 하루치를 아래 "되살리는 방법"으로 S3 파일만 써서 되살려 원본 파티션과 줄 단위로 같은지 확인한다. 예측별 결과를 옛 결과 줄과 맞춰 보는 확인도 이 단계에서 한다.
+3. `DROP_ENABLED=true`로 바꾸고 재시작한다. `status=DROPPED`와 `daily_export.dropped_at`을 본다.
+
+S3 구조:
+
+```
+<prefix><table>/source_date=YYYY-MM-DD/NNNNNN-<gz sha256>.jsonl.gz
+<prefix><table>/source_date=YYYY-MM-DD/manifest-<manifest sha256>.json
+```
+
+- 한 줄은 `to_jsonb(row)::text` 원문, 줄 끝 `\n`, gzip이다. 파일 하나는 평문 8MiB 안팎에서 나눈다. 파일 번호 순서로 이어 붙이면 기본 키 순서의 전체 줄이다.
+- manifest(JSON)는 `format`(`salmonbus-partition-v1`), `table`, `sourceDate`, `partition`, `rows`, `orderBy`(기본 키), `columns`(이름과 `format_type` 표기, 부모 테이블 열 순서), `exportedAt`, `files`(`number`, `key`, `sha256`, `rows`, `bytes`)를 담는다.
+- 올릴 때는 줄 단위 이관과 같은 조건부 PUT(`If-None-Match: *`)·SHA-256 체크섬·다시 읽어 바이트 비교를 쓴다. 파일 이름이 내용 해시라 같은 내용을 다시 올려도 겹치지 않는다.
+- 장부 `daily_export`는 (테이블, 날짜)마다 한 줄이고 `object_key`·`sha256`은 manifest의 키와 해시다. manifest와 모든 파일을 다시 읽어 해시·줄 수를 확인한 뒤에만 적는다.
+- 값: float8은 `extra_float_digits=1`로 왕복이 보장되는 최단 표기로 나온다. JSON 숫자로 바뀌며 지수 없이 풀어 쓴다. `NaN`·`Infinity`는 문자열, `-0`은 `0`이 된다(값 비교로는 같다). `timestamptz`는 UTC 오프셋이 붙은 마이크로초 표기, `date`는 `YYYY-MM-DD`, `bigint`는 정수 그대로다.
+
+지우기 전 확인(하나라도 어긋나면 지우지 않는다):
+
+1. `DROP_ENABLED=true`다.
+2. 장부에 그 (테이블, 날짜) 줄이 있고 `verified_at`이 있으며 `dropped_at`이 없다.
+3. 지금 S3에서 manifest를 다시 읽어 SHA-256이 장부와 같고, 모든 파일의 해시·줄 수가 manifest와 같고, 줄 수 합이 장부와 같다.
+4. 잠금 없이 센 파티션 줄 수가 장부와 같다.
+5. 지우는 트랜잭션에서 advisory lock(`pg_try_advisory_xact_lock(20261115, hashtext(파티션 이름))`)을 잡고, 장부 줄을 다시 잠가 보고, 파티션에 `SHARE` 잠금을 잡아 새 줄을 막은 뒤 다시 센 줄 수가 장부와 같다.
+
+그다음 같은 트랜잭션에서 `ALTER TABLE <table> DETACH PARTITION <partition>`, `DROP TABLE <partition>`, `dropped_at`을 적는다. `DETACH`는 부모 테이블과 기본 파티션에 `ACCESS EXCLUSIVE` 잠금을 잡으므로 커밋까지 그 테이블의 읽기·쓰기를 잠깐 막는다. 기본 파티션이 있어 `DETACH CONCURRENTLY`는 쓸 수 없다. 잠금을 `LOCK_TIMEOUT` 안에 못 얻으면 되돌리고 다음 회차에 다시 한다.
+
+되살리는 방법(DB 정의나 장부 없이 S3만으로):
+
+1. `daily_export`나 S3 목록에서 manifest를 고르고 내려받아 SHA-256이 파일 이름의 해시와 같은지 본다.
+2. manifest의 `columns`로 빈 테이블을 만든다. 예: `CREATE TABLE restored_forecast_record (source_date date, vehicle_observation_id bigint, ... , expected_seats double precision[], ...)`.
+3. 파일마다 내려받아 해시를 확인하고 압축을 푼 줄을 넣는다. 예: `INSERT INTO restored_forecast_record SELECT * FROM jsonb_populate_recordset(NULL::restored_forecast_record, '[줄1,줄2,...]'::jsonb)`. 줄이 많으면 텍스트 열 하나인 `staging`에 `\copy staging(line) FROM 'file.jsonl' WITH (FORMAT csv, QUOTE e'\x01', DELIMITER e'\x02')`로 넣은 뒤(기본 텍스트 형식은 JSON의 역슬래시를 바꾼다) `jsonb_populate_record(NULL::restored_..., line::jsonb)`로 넣는다.
+4. 넣은 줄 수가 manifest `rows`와 같은지, 원본이 남아 있으면 `EXCEPT ALL`로 양쪽 차이가 0인지 본다.
+
+이 절차는 테스트 `PartitionRestore`(archive-app 테스트 소스)와 같다. 운영용 정비 명령은 아직 없다.
+
+실패했을 때 보는 것:
+
+- 로그는 `event=partition_export`다. `status=RUN`(회차 요약, `oldestPendingDate`), `EXPORTED`, `VERIFIED`, `DROPPED`, `DEFERRED reason=LOCK_TIMEOUT|BUSY`, `DROP_REFUSED reason=ROW_COUNT_CHANGED`, `FAILED reason=<사유>`, `DEFAULT_ROWS`, `SKIPPED reason=UNEXPECTED_BOUND|ALREADY_DROPPED`.
+- 지표는 `salmonbus_archive_partitions{stage=exported|dropped}`, `salmonbus_archive_rows{stage=partition_exported|partition_dropped}`, `salmonbus_archive_bytes{stage=partition_exported}`, `salmonbus_archive_stage{stage=partition_export|partition_verify|partition_drop}`, `salmonbus_archive_partition_failures{table,reason}`, `salmonbus_archive_partition_deferrals{table,reason}`, `salmonbus_archive_partition_default_rows{table}`, `salmonbus_archive_partition_oldest_pending_days`다. 위의 이관 지표처럼 외부 수집은 따로 연결해야 한다.
+- `ROW_COUNT_CHANGED`: 내보낸 뒤 그 날짜에 줄이 더 들어왔다. 자동으로 다시 내보내지 않는다. 원인을 확인한 뒤 그 (테이블, 날짜)의 `daily_export` 줄을 지우면 다음 회차에 새 manifest로 다시 내보낸다. 이미 올라간 S3 파일은 지우지 않는다.
+- `MANIFEST_HASH_MISMATCH`, `FILE_HASH_MISMATCH`, `FILE_ROW_COUNT_MISMATCH`, `MANIFEST_ROW_COUNT_MISMATCH`, `MANIFEST_MISMATCH`: S3 객체가 장부와 다르다. 지우지 않는다. 객체 버전과 버킷 수명 주기 설정을 확인한다.
+- `EXPORT_CONTENT_MISMATCH`: 다른 실행이 같은 (테이블, 날짜)에 내용이 다른 manifest를 먼저 장부에 적었다. 지우지 않는다. 두 manifest를 비교한다.
+- `LEDGER_DROPPED_PARTITION_PRESENT`: 장부는 지웠다고 하는데 파티션이 있다. 손으로 다시 만든 파티션인지 확인한다.
+- `salmonbus_archive_partition_default_rows`가 0보다 크면 날짜 파티션이 없을 때 들어온 줄이다. 기본 파티션의 줄은 내보내지 않는다. worker의 파티션 유지 작업 실패 로그(`event=pipeline_partition_create_failed`)를 본다.
+- `salmonbus_archive_partition_oldest_pending_days`가 보관 날짜 수보다 계속 크면 대상 파티션이 쌓이고 있다.
+
 ## 인증 정보를 출력하지 않고 확인하기
 
 ```bash
