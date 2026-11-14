@@ -98,7 +98,10 @@ class PartitionExportIntegrationTest {
 
     void forecastRecord(LocalDate date, final long observation, String doubles) {
         jdbc.sql("""
-            INSERT INTO forecast_record VALUES (?, ?, 9223372036854775807, 1, 1, 2, 'vehicle', 3, 100, 101, true, 45,
+            INSERT INTO forecast_record (source_date, vehicle_observation_id, observation_batch_id, source_row_number, route_id,
+                route_version_id, vehicle_id, passed_stop_order, trip_start_observation_id, chain_start_observation_id, down,
+                capacity, extended, target_stop_orders, expected_seats, full_probabilities)
+            VALUES (?, ?, 9223372036854775807, 1, 1, 2, 'vehicle', 3, 100, 101, true, 45,
                 false, (SELECT array_agg(i) FROM generate_series(1, cardinality(CAST(? AS float8[]))) i),
                 CAST(? AS float8[]), CAST(? AS float8[]))
             """).params(date, observation, doubles, doubles, doubles).update();
@@ -106,18 +109,26 @@ class PartitionExportIntegrationTest {
 
     void forecastRun(LocalDate date, final long batch) {
         jdbc.sql("""
-            INSERT INTO forecast_run VALUES (?, ?, 1, 2, '2026-11-12 03:00:00.123456+00', '2026-11-12 03:00:01.000001+00',
+            INSERT INTO forecast_run (source_date, observation_batch_id, route_id, route_version_id, received_at, confirmed_at,
+                model_deployment_id, outcome, prediction_count)
+            VALUES (?, ?, 1, 2, '2026-11-12 03:00:00.123456+00', '2026-11-12 03:00:01.000001+00',
                 NULL, 'PUBLISHED', 3)
             """).params(date, batch).update();
     }
 
     void passLabel(LocalDate date, final int stop) {
         jdbc.sql("""
-            INSERT INTO pass_label VALUES (?, 1, 100, ?, 45, 'v1', 'UNSUPPORTED', 'NO_ARRIVAL', NULL, NULL, 7,
+            INSERT INTO pass_label (source_date, route_id, trip_start_observation_id, stop_order, capacity, label_version,
+                model_deployment_id, state, reason, label_value, previous_last_observation_id,
+                previous_closure_observation_id, parameter_hash, computed_at)
+            VALUES (?, 1, 100, ?, 45, 'v1', 11, 'UNSUPPORTED', 'NO_ARRIVAL', NULL, NULL, 7,
                 NULL, '2026-11-12 23:59:59.999999+00')
             """).params(date, stop).update();
         jdbc.sql("""
-            INSERT INTO pass_label VALUES (?, 1, 100, ?, 45, 'v2', 'SETTLED', NULL, 0.1, 5, 6, ?, '2026-11-12 15:00:00+00')
+            INSERT INTO pass_label (source_date, route_id, trip_start_observation_id, stop_order, capacity, label_version,
+                model_deployment_id, state, reason, label_value, previous_last_observation_id,
+                previous_closure_observation_id, parameter_hash, computed_at)
+            VALUES (?, 1, 100, ?, 45, 'v2', 11, 'SETTLED', NULL, 0.1, 5, 6, ?, '2026-11-12 15:00:00+00')
             """).params(date, stop, "a".repeat(64)).update();
     }
 
@@ -202,7 +213,9 @@ class PartitionExportIntegrationTest {
     void 큰_파티션은_파일을_나누고_페이지를_넘겨도_줄을_빠뜨리지_않는다() {
         partition("forecast_record", DAY);
         jdbc.sql("""
-            INSERT INTO forecast_record
+            INSERT INTO forecast_record (source_date, vehicle_observation_id, observation_batch_id, source_row_number, route_id,
+                route_version_id, vehicle_id, passed_stop_order, trip_start_observation_id, chain_start_observation_id, down,
+                capacity, extended, target_stop_orders, expected_seats, full_probabilities)
             SELECT '2026-11-12', g, 10, 1, 1, 2, 'vehicle', 3, 100, 100, true, 45, false, a.targets, a.seats, a.seats
             FROM generate_series(1, 400) g CROSS JOIN LATERAL (
                 SELECT array_agg(i) AS targets, array_agg(random() * i + g) AS seats FROM generate_series(1, 1000) i) a
@@ -225,7 +238,11 @@ class PartitionExportIntegrationTest {
     void 한국_날짜로_오늘_포함_사흘은_남기고_기본_파티션은_내보내지_않는다() {
         partition("forecast_run", LocalDate.parse("2026-11-12"));
         partition("forecast_run", LocalDate.parse("2026-11-13"));
-        jdbc.sql("INSERT INTO forecast_run VALUES ('2026-11-01', 1, 1, 2, now(), now(), NULL, 'EMPTY', 0)").update();
+        jdbc.sql("""
+            INSERT INTO forecast_run (source_date, observation_batch_id, route_id, route_version_id, received_at,
+                confirmed_at, model_deployment_id, outcome, prediction_count)
+            VALUES ('2026-11-01', 1, 1, 2, now(), now(), NULL, 'EMPTY', 0)
+            """).update();
         MemoryObjects objects = new MemoryObjects();
         SimpleMeterRegistry metrics = new SimpleMeterRegistry();
         clock = Clock.fixed(Instant.parse("2026-11-15T14:59:59Z"), ZoneOffset.UTC);
