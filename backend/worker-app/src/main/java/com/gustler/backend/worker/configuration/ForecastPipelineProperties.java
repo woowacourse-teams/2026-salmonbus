@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * 새 예보 경로의 스위치다. 기본값은 모두 옛 경로만 도는 상태다.
  *
  * <p>운영 전환 순서는 {@code shadow.enabled=true} → {@code scoring=shadow} → {@code pipeline=v2} → {@code scoring=v2}다.
- * 이 묶음은 스위치를 읽어 파티션 유지 작업을 켜는 데만 쓰고, 예보·채점 경로는 뒤 묶음이 이 값을 읽는다.
+ * 파티션 유지 작업과 그림자 실행 줄이 이 값을 읽는다. 새 경로의 본선 전환과 채점은 뒤 묶음이 읽는다.
  *
  * @param pipeline 본선 경로
  * @param shadow 옛 경로 옆에서 새 경로를 돌리는 그림자 실행
@@ -60,7 +60,13 @@ public record ForecastPipelineProperties(
      * 그림자 실행 설정.
      *
      * @param enabled {@code pipeline=v1}일 때 새 경로를 옆에서 돌려 예측값을 대조하고 새 테이블에 쓴다
+     * @param queueCapacity 그림자 실행 줄에 기다릴 수 있는 배치 수. 넘치면 새 배치를 버리고 그 노선의 상태를 버린다
      */
-    public record Shadow(@DefaultValue("false") boolean enabled) {
+    public record Shadow(@DefaultValue("false") boolean enabled, @DefaultValue("200") int queueCapacity) {
+        public Shadow {
+            if (queueCapacity < 1) {
+                throw new IllegalStateException("forecast.shadow.queue-capacity 는 1 이상이어야 한다: " + queueCapacity);
+            }
+        }
     }
 }

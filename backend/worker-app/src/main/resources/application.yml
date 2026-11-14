@@ -22,7 +22,7 @@ spring:
     hikari:
       data-source-properties:
         ApplicationName: salmonbus-worker
-      maximum-pool-size: 3
+      maximum-pool-size: 5 # 수집·예보·정산·통계에 그림자 실행(SAL-434) 스레드가 하나 더 쓴다.
 
   jpa:
     hibernate:
@@ -114,6 +114,7 @@ forecast:
   pipeline: ${FORECAST_PIPELINE:v1} # v1: 옛 경로가 본선. v2: 새 경로가 본선
   shadow:
     enabled: ${FORECAST_SHADOW_ENABLED:false} # v1일 때 새 경로를 옆에서 돌려 대조하고 새 테이블에 쓴다
+    queue-capacity: ${FORECAST_SHADOW_QUEUE_CAPACITY:200} # 넘치면 새 배치를 버리고 그 노선의 메모리 상태를 버린다
   scoring: ${FORECAST_SCORING:off} # off, shadow, v2
   lanes: ${FORECAST_LANES:2} # 새 경로의 노선별 실행 줄 수
   replay-window: ${FORECAST_REPLAY_WINDOW:6h} # 다시 뜰 때 되감는 관측 범위

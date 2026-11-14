@@ -2,6 +2,8 @@ package com.gustler.backend.forecasting.infrastructure.pipeline;
 
 import com.gustler.backend.forecasting.application.pipeline.ForecastBatch;
 import com.gustler.backend.forecasting.application.pipeline.ForecastObservationRow;
+import com.gustler.backend.forecasting.application.pipeline.ObservationBatchRead;
+import com.gustler.backend.forecasting.application.pipeline.ObservationBatchReader;
 import com.gustler.backend.forecasting.application.pipeline.ReplaySource;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import java.sql.ResultSet;
@@ -10,6 +12,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -22,8 +25,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * 착수 시각을 {@code observation_batch.input_confirmed_at}에서 읽는 되감기 원본이다. 옛 경로·그림자(v1)와 같은 시각 축이다.
  * 확정 조건은 옛 경로의 {@code CONFIRMED_INPUT}과 같고, 줄은 거르지 않고 모두 돌려준다(거르기와 줄 수 검사는 예보 단계가 한다).
  * 판본 호환 검사는 옛 경로의 {@code validateHistoricalVersion}과 같은 기준으로 창 안에 나온 판본만 본다. 행 잠금을 잡지 않는다.
+ *
+ * <p>배치 하나를 읽는 {@link #readBatch}도 같은 열·같은 줄 순서·같은 변환을 쓴다. 그림자 실행이 이어 온 상태와 되감은 상태가
+ * 같은 입력을 받게 하려는 것이다.
  */
-public final class JdbcReplaySource implements ReplaySource {
+public final class JdbcReplaySource implements ReplaySource, ObservationBatchReader {
     static final String ROUTE_HISTORY_MISSING = "ALIGHTING_AWARE_ROUTE_HISTORY_MISSING";
     static final String INCOMPATIBLE_VERSION = "ALIGHTING_AWARE_INCOMPATIBLE_HISTORICAL_ROUTE_VERSION:";
     static final String ROW_LIMIT_EXCEEDED = "ALIGHTING_AWARE_HISTORY_ROW_LIMIT_EXCEEDED";
@@ -31,10 +37,13 @@ public final class JdbcReplaySource implements ReplaySource {
         SELECT version.id FROM route_version version JOIN route ON route.id=version.route_id
         WHERE route.display_name=:name ORDER BY version.id
         """;
-    private static final String READ_BATCHES = """
-        SELECT b.id AS batch_id,b.route_version_id,b.response_received_at,b.input_confirmed_at,b.ingestion_origin,
+    private static final String BATCH_COLUMNS = """
+        b.id AS batch_id,b.route_version_id,b.response_received_at,b.input_confirmed_at,b.ingestion_origin,
           b.outcome,b.stored_rows,o.id AS observation_id,o.vehicle_id,o.passed_stop_order,o.stop_order,
-          o.running_state,o.remaining_seats,o.seat_unknown_reason,o.crowd_level
+          o.running_state,o.remaining_seats,o.seat_unknown_reason,o.crowd_level,o.source_row_number
+        """;
+    private static final String READ_BATCHES = """
+        SELECT %s
         FROM observation_batch b LEFT JOIN vehicle_observation o ON o.observation_batch_id=b.id
         WHERE b.route_version_id IN (:versions)
           AND b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS' AND b.stored_rows>0
@@ -44,7 +53,15 @@ public final class JdbcReplaySource implements ReplaySource {
           AND b.response_received_at<=:through AND b.response_received_at>=:from-interval '90 seconds'
         ORDER BY b.input_confirmed_at,b.id,o.vehicle_id,o.id
         LIMIT :limit
-        """;
+        """.formatted(BATCH_COLUMNS);
+    private static final String READ_BATCH = """
+        SELECT %s,b.scheduled_at,version.route_id,route.source_id
+        FROM observation_batch b JOIN route_version version ON version.id=b.route_version_id
+          JOIN route ON route.id=version.route_id
+          LEFT JOIN vehicle_observation o ON o.observation_batch_id=b.id
+        WHERE b.id=:batch
+        ORDER BY o.vehicle_id,o.id
+        """.formatted(BATCH_COLUMNS);
     private static final String READ_STOPS = """
         SELECT stop_order,stop_id,boarding_allowed,direction FROM route_stop WHERE route_version_id=:version ORDER BY stop_order
         """;
@@ -86,6 +103,24 @@ public final class JdbcReplaySource implements ReplaySource {
             }
         }
         return Read.of(batches(rows));
+    }
+
+    @Override
+    public Optional<ObservationBatchRead> readBatch(final long observationBatchId) {
+        List<Placed> rows = jdbc.sql(READ_BATCH)
+            .param("batch", observationBatchId)
+            .query((row, index) -> new Placed(row(row), row.getObject("scheduled_at", OffsetDateTime.class).toInstant(),
+                row.getLong("route_id"), row.getString("source_id")))
+            .list();
+        if (rows.isEmpty()) {
+            return Optional.empty();
+        }
+        Placed head = rows.getFirst();
+        Map<Long, Integer> rowNumbers = new HashMap<>();
+        rows.forEach(placed -> placed.row().observation().ifPresent(
+            observation -> rowNumbers.put(observation.observationId(), placed.row().sourceRowNumber())));
+        ForecastBatch batch = batches(rows.stream().map(Placed::row).toList()).getFirst();
+        return Optional.of(new ObservationBatchRead(batch, head.routeId(), head.scheduledAt(), head.sourceId(), rowNumbers));
     }
 
     private static List<ForecastBatch> batches(List<Row> rows) {
@@ -131,10 +166,14 @@ public final class JdbcReplaySource implements ReplaySource {
                 row.getInt("passed_stop_order"), row.getInt("stop_order"), row.getInt("running_state"),
                 (Integer) row.getObject("remaining_seats"), row.getString("seat_unknown_reason"), row.getInt("crowd_level"));
         }
-        return new Row(row.getLong("batch_id"), row.getLong("route_version_id"),
-            row.getObject("response_received_at", OffsetDateTime.class).toInstant(),
-            row.getObject("input_confirmed_at", OffsetDateTime.class).toInstant(), row.getString("ingestion_origin"),
-            row.getString("outcome"), (Integer) row.getObject("stored_rows"), observation);
+        return new Row(row.getLong("batch_id"), row.getLong("route_version_id"), instant(row, "response_received_at"),
+            instant(row, "input_confirmed_at"), row.getString("ingestion_origin"), row.getString("outcome"),
+            (Integer) row.getObject("stored_rows"), observation, row.getInt("source_row_number"));
+    }
+
+    private static Instant instant(ResultSet row, String column) throws SQLException {
+        OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
     }
 
     private record Row(
@@ -145,11 +184,15 @@ public final class JdbcReplaySource implements ReplaySource {
         String ingestionOrigin,
         String outcome,
         Integer storedRows,
-        ForecastObservationRow row
+        ForecastObservationRow row,
+        int sourceRowNumber
     ) {
         private Optional<ForecastObservationRow> observation() {
             return Optional.ofNullable(row);
         }
+    }
+
+    private record Placed(Row row, Instant scheduledAt, long routeId, String sourceId) {
     }
 
     private record StopRow(int order, String stopId, boolean boardingAllowed, String direction) {

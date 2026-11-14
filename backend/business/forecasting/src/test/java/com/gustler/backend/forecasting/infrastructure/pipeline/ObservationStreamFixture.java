@@ -58,14 +58,31 @@ final class ObservationStreamFixture {
         Instant versionSwitch,
         final long seed
     ) {
+        return insert(jdbc, start, length, interval, versionSwitch, seed, null);
+    }
+
+    /**
+     * 노선 표시 이름을 정해 넣는다. 모델 계수의 노선 이름과 같아야 하는 시험(시간 확장 모델)이 쓴다.
+     * 비워 두면 다른 시험과 겹치지 않는 이름을 만든다.
+     */
+    static Stream insert(
+        JdbcClient jdbc,
+        Instant start,
+        Duration length,
+        Duration interval,
+        Instant versionSwitch,
+        final long seed,
+        String displayName
+    ) {
         jdbc.sql("DROP INDEX IF EXISTS ux_observation_vehicle_per_batch").update();
         Random random = new Random(seed);
         String token = UUID.randomUUID().toString().substring(0, 8);
-        String route = "pipeline-" + token;
+        String key = "pipeline-" + token;
+        String route = displayName == null ? key : displayName;
         final long routeId = jdbc.sql("""
             INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
             VALUES(?,'GBIS',?,?,'A','B') RETURNING id
-            """).params(route, route, route).query(Long.class).single();
+            """).params(key, key, route).query(Long.class).single();
         Map<Long, RouteStops> stops = new LinkedHashMap<>();
         Instant end = start.plus(length);
         if (versionSwitch == null) {

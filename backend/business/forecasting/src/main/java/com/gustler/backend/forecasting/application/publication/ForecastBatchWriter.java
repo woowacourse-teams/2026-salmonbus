@@ -6,12 +6,12 @@ import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatu
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareInputConfirmation;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
-import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
-import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePredictionAssembler;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePredictionAssembler.TargetPrediction;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePredictionAssembler.VehiclePrediction;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
-import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingPredictor;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
 import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
@@ -20,8 +20,11 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,12 +37,20 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 
-/** 조회·계산은 트랜잭션 밖에서 수행하고, 발행 확정만 별도 빈에 맡긴다. */
+/**
+ * 조회·계산은 트랜잭션 밖에서 수행하고, 발행 확정만 별도 빈에 맡긴다.
+ *
+ * <p>확정 판본 배치를 끝내면(발행 커밋, 빈 발행 커밋, 입력 부족으로 발행 없이 실패) 등록된 {@link LegacyForecastListener}에
+ * 결과를 넘긴다. 넘기기는 결과와 반환값·예외에 영향을 주지 않는다.
+ */
 @Component
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastBatchWriter {
     private static final Logger LOGGER = LoggerFactory.getLogger(ForecastBatchWriter.class);
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    /** 입력 조회가 출퇴근 범위 밖이라고 거절한 결과다. 빈 결과와 구분하려고 동일성으로 비교한다. */
+    private static final Map<Long, AlightingAwareFeatureSnapshot> OUT_OF_SCOPE =
+        Collections.unmodifiableMap(new HashMap<>());
 
     private final ForecastBatchCommitter committer;
     private final Clock clock;
@@ -47,6 +58,7 @@ public class ForecastBatchWriter {
     private AlightingAwareFeatureQuery alightingFeatures;
     private AlightingAwareInputConfirmation confirmedInput;
     private boolean compactSettlementWrite;
+    private LegacyForecastListener legacyListener;
 
     @Value("${forecast.compact-settlement-write:false}")
     public void setCompactSettlementWrite(boolean enabled) {
@@ -61,6 +73,12 @@ public class ForecastBatchWriter {
     @Autowired(required = false)
     public void setConfirmedInput(AlightingAwareInputConfirmation confirmedInput) {
         this.confirmedInput = confirmedInput;
+    }
+
+    /** 그림자 실행이 켜졌을 때만 등록된다. */
+    @Autowired(required = false)
+    public void setLegacyForecastListener(LegacyForecastListener legacyListener) {
+        this.legacyListener = legacyListener;
     }
 
     public ForecastBatchWriter(
@@ -103,9 +121,12 @@ public class ForecastBatchWriter {
                 throw new IllegalStateException("확인 시각 입력 확정기가 등록되지 않았다");
             }
             if (!confirmedInput.confirm(batch.observationBatchId(), generatedAt)) {
-                return commitAlightingAware(batch, new ForecastPublication(batch.observationBatchId(), batch.routeVersionId(),
-                    runtime.deploymentId(), 0, qualityRevision, batch.responseReceivedAt(), generatedAt, generatedAt,
-                    List.of()), statistics);
+                final int saved = commitAlightingAware(batch, new ForecastPublication(batch.observationBatchId(),
+                    batch.routeVersionId(), runtime.deploymentId(), 0, qualityRevision, batch.responseReceivedAt(),
+                    generatedAt, generatedAt, List.of()), statistics);
+                notifyLegacy(batch, stops, runtime, statistics, generatedAt, LegacyForecastResult.Kind.NOT_CONFIRMED,
+                    null, List.of());
+                return saved;
             }
         }
         ZonedDateTime localTime = batch.responseReceivedAt().atZone(ZoneId.of("Asia/Seoul"));
@@ -116,27 +137,57 @@ public class ForecastBatchWriter {
                 batch.routeVersionId(), runtime.deploymentId(), 0, qualityRevision,
                 batch.responseReceivedAt(), generatedAt, generatedAt, List.of()), statistics);
         }
-        Map<Long, AlightingAwareFeatureSnapshot> snapshots = readAlightingAwareFeatures(batch, stops, statistics, model.supportsExtendedHours());
+        Map<Long, AlightingAwareFeatureSnapshot> snapshots;
+        try {
+            snapshots = readAlightingAwareFeatures(batch, stops, statistics, model.supportsExtendedHours());
+        } catch (RuntimeException unavailable) {
+            notifyLegacy(batch, stops, runtime, statistics, generatedAt, LegacyForecastResult.Kind.FAILED,
+                unavailable.getMessage(), List.of());
+            throw unavailable;
+        }
+        AlightingAwarePredictionAssembler assembler = new AlightingAwarePredictionAssembler(model, statistics, stops);
         for (AlightingAwareFeatureSnapshot snapshot : snapshots.values()) {
-            final boolean extended = statistics.confirmedProfile() && outsideRush(statistics, snapshot);
-            if (extended && !model.supportsExtendedHours()) {
+            Optional<VehiclePrediction> vehicle = assembler.predict(snapshot);
+            if (vehicle.isEmpty()) {
                 continue;
             }
-            List<SeatForecast> vehiclePredictions = new ArrayList<>();
-            for (VehicleStopTarget target : stops.targetsAheadOf(snapshot.observation())) {
-                if (statistics.confirmedProfile()
-                    && statistics.stop(target.stopOrder()).down() != snapshot.source().down()) {
-                    continue;
-                }
-                vehiclePredictions.add(alightingForecast(batch, runtime, model, generatedAt,
-                    statistics, snapshot, target, extended));
+            for (TargetPrediction target : vehicle.get().targets()) {
+                predictions.add(alightingForecast(batch, runtime, model, generatedAt, statistics, snapshot, target,
+                    vehicle.get().extended()));
             }
-            predictions.addAll(vehiclePredictions);
         }
-        return commitAlightingAware(batch, new ForecastPublication(batch.observationBatchId(),
+        ForecastPublication publication = new ForecastPublication(batch.observationBatchId(),
             batch.routeVersionId(), runtime.deploymentId(), 0, qualityRevision,
             batch.responseReceivedAt(), generatedAt, generatedAt, predictions,
-            !compactSettlementWrite || predictions.isEmpty() ? null : settlementContext(model, statistics, predictions)), statistics);
+            !compactSettlementWrite || predictions.isEmpty() ? null : settlementContext(model, statistics, predictions));
+        final int saved = commitAlightingAware(batch, publication, statistics);
+        notifyLegacy(batch, stops, runtime, statistics, generatedAt,
+            snapshots == OUT_OF_SCOPE ? LegacyForecastResult.Kind.OUT_OF_SCOPE : LegacyForecastResult.Kind.PUBLISHED,
+            null, publication.predictions());
+        return saved;
+    }
+
+    /** 확정 판본 배치의 결과만 넘긴다. 받는 쪽의 실패는 로그만 남기고 옛 경로의 결과를 바꾸지 않는다. */
+    private void notifyLegacy(
+        PendingForecastBatch batch,
+        RouteStops stops,
+        RuntimeSnapshot runtime,
+        AlightingAwareRouteStatistics statistics,
+        Instant generatedAt,
+        LegacyForecastResult.Kind kind,
+        String reason,
+        List<SeatForecast> predictions
+    ) {
+        if (legacyListener == null || !statistics.confirmedProfile()) {
+            return;
+        }
+        try {
+            legacyListener.batchFinished(new LegacyForecastResult(batch, stops, runtime, statistics, generatedAt, kind,
+                reason, kind == LegacyForecastResult.Kind.OUT_OF_SCOPE ? List.of() : predictions));
+        } catch (RuntimeException ignored) {
+            LOGGER.warn("event=forecast_shadow_offer_failed batchId={} exceptionType={}", batch.observationBatchId(),
+                ignored.getClass().getSimpleName());
+        }
     }
 
     private int commitAlightingAware(PendingForecastBatch batch, ForecastPublication publication, AlightingAwareRouteStatistics statistics) {
@@ -144,11 +195,6 @@ public class ForecastBatchWriter {
             return committer.commitConfirmed(batch, publication);
         }
         return committer.commit(batch, publication);
-    }
-
-    private boolean outsideRush(AlightingAwareRouteStatistics statistics, AlightingAwareFeatureSnapshot snapshot) {
-        ZonedDateTime sourceTime = snapshot.source().receivedAt().atZone(ZoneId.of("Asia/Seoul"));
-        return !statistics.timeCell(sourceTime).isRush();
     }
 
     /** 자료 부족은 발행 확정 없이 전파해 복구 뒤 같은 배치를 재처리한다. */
@@ -167,7 +213,7 @@ public class ForecastBatchWriter {
             LOGGER.warn("event=forecast_batch_withheld reason={} batchId={}", error.getMessage(),
                 batch.observationBatchId());
             if ("ALIGHTING_AWARE_OUTSIDE_VALIDATED_RUSH_SCOPE".equals(error.getMessage())) {
-                return Map.of();
+                return OUT_OF_SCOPE;
             }
             throw error;
         }
@@ -213,11 +259,11 @@ public class ForecastBatchWriter {
         Instant generatedAt,
         AlightingAwareRouteStatistics statistics,
         AlightingAwareFeatureSnapshot snapshot,
-        VehicleStopTarget target,
+        TargetPrediction target,
         final boolean extended
     ) {
         ObjectNode evidence = compactSettlementWrite ? JSON.createObjectNode()
-            : (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.stopOrder()));
+            : (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.target().stopOrder()));
         if (!compactSettlementWrite) {
             evidence.put("inputProfile", statistics.profile().input());
             evidence.put("capacityPolicy", "vehicle-capacity-snapshot-v1");
@@ -233,25 +279,9 @@ public class ForecastBatchWriter {
             }
         }
         evidence.put("capacity", snapshot.capacity());
-        SeatForecastResult prediction = predict(model, statistics, snapshot, target, extended);
-        return SeatForecast.of(snapshot.vehicleObservationId(), target,
-            prediction, runtime.deploymentId(), 0, generatedAt)
+        return SeatForecast.of(snapshot.vehicleObservationId(), target.target(),
+            target.result(), runtime.deploymentId(), 0, generatedAt)
             .withAlightingAwareEvidence(JSON.writeValueAsString(evidence), model.bundleDigest(), statistics.confirmedProfile()
                 ? "alighting-confirmed-capacity-snapshot-v3" : "alighting-capacity-snapshot-v2");
-    }
-
-    private SeatForecastResult predict(
-        AlightingAwareSeatForecastModel model,
-        AlightingAwareRouteStatistics statistics,
-        AlightingAwareFeatureSnapshot snapshot,
-        VehicleStopTarget target,
-        final boolean extended
-    ) {
-        if (extended) {
-            ZonedDateTime local = snapshot.source().receivedAt().atZone(ZoneId.of("Asia/Seoul"));
-            final boolean offDay = "off".equals(statistics.dayType(local.toLocalDate()));
-            return model.predictExtended(statistics.route(), ExtendedAlightingPredictor.inputs(snapshot, target, offDay));
-        }
-        return model.predict(snapshot.forTarget(target.stopOrder()));
     }
 }
