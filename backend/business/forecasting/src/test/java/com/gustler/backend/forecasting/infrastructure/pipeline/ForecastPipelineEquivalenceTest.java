@@ -1,0 +1,451 @@
+package com.gustler.backend.forecasting.infrastructure.pipeline;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
+
+import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureUnavailableException;
+import com.gustler.backend.forecasting.application.pipeline.ClosedPass;
+import com.gustler.backend.forecasting.application.pipeline.ForecastBatch;
+import com.gustler.backend.forecasting.application.pipeline.ForecastStage;
+import com.gustler.backend.forecasting.application.pipeline.ForecastStageResult;
+import com.gustler.backend.forecasting.application.pipeline.RouteForecastState;
+import com.gustler.backend.forecasting.application.pipeline.RouteStateReplayer;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
+import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareHistorySeedReader;
+import com.gustler.backend.forecasting.infrastructure.alighting.JdbcAlightingAwareFeatureQuery;
+import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
+import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
+import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import java.nio.ByteBuffer;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.annotation.Transactional;
+
+@ForecastingIntegrationTest
+@Transactional
+class ForecastPipelineEquivalenceTest {
+    private static final Instant EVENING = Instant.parse("2026-10-14T10:00:00Z");
+    private static final Set<String> REPLAY_EXCLUSIONS = Set.of(ForecastStage.TRIP_START_UNKNOWN,
+        ForecastStage.REPLAY_HISTORY_INCOMPLETE);
+    private static final int MAXIMUM_ROWS = 250_000;
+
+    @Autowired
+    JdbcClient jdbc;
+    @TempDir
+    Path checkpoint;
+    private VehicleCapacityCache cache;
+
+    @BeforeEach
+    void setup() {
+        cache = new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc));
+    }
+
+    @Test
+    void 연속_실행에서_옛_경로와_새_경로의_입력과_통과와_상태가_배치마다_같다() {
+        // given
+        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofHours(6),
+            Duration.ofSeconds(30), EVENING.plus(Duration.ofHours(3)), 20261115L);
+        JdbcAlightingAwareFeatureQuery old = new JdbcAlightingAwareFeatureQuery(jdbc, cache,
+            ObservationStreamFixture.origins(jdbc, stream), MAXIMUM_ROWS, false, checkpoint.toString());
+        AlightingAwareHistorySeedReader seeds = AlightingAwareHistorySeedReader.confirmed(checkpoint.toString(), MAXIMUM_ROWS);
+        ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
+        AlightingAwareRouteStatistics statistics = stream.statistics();
+        RouteForecastState state = RouteForecastState.fromVerifiedOrigin(stream.route());
+        Map<String, AlightingAwareObservation> lastByVehicle = new HashMap<>();
+        Map<Long, Long> chainStartByObservation = new HashMap<>();
+        Map<String, List<AlightingAwareObservation>> sequence = new HashMap<>();
+        Tally tally = new Tally();
+
+        // when
+        for (final long batchId : stream.batches()) {
+            ForecastBatch batch = ObservationStreamFixture.read(jdbc, batchId);
+            Map<Long, AlightingAwareFeatureSnapshot> expected = null;
+            String oldFailure = null;
+            try {
+                expected = old.read(batchId, stream.stops(batch.routeVersionId()), statistics);
+            } catch (AlightingAwareFeatureUnavailableException failure) {
+                oldFailure = failure.getMessage();
+            }
+            ForecastStageResult actual = stage.advance(state, statistics, ObservationStreamFixture.SOURCE_ID, batch);
+            if (!batch.confirmed()) {
+                assertThat(oldFailure).isEqualTo("ALIGHTING_AWARE_SOURCE_BATCH_MISSING");
+                assertThat(actual.status()).isEqualTo(ForecastStageResult.Status.NOT_CONFIRMED);
+                assertThat(actual.state()).isSameAs(state);
+                tally.skipped++;
+                continue;
+            }
+            if (oldFailure != null) {
+                assertThat(actual.snapshots()).as("옛 경로가 실패한 배치 %d: %s", batchId, oldFailure).isEmpty();
+                tally.failed++;
+                state = actual.state();
+                continue;
+            }
+            assertThat(actual.status()).isEqualTo(ForecastStageResult.Status.FORECAST);
+            tally.vectors += assertSameSnapshots(batchId, expected, actual.snapshots(), statistics);
+            tally.batches++;
+            tally.snapshots += expected.size();
+            AlightingAwareHistorySeedReader.Seed seed = seeds.read(batch.routeVersionId());
+            assertSameState(batchId, seed, actual.state());
+            record(actual.state(), batchId, lastByVehicle, chainStartByObservation, sequence);
+            List<AlightingAwarePassEvent> closedByOld = seed.events().stream()
+                .filter(event -> event.confirmation().batchId() == batchId).toList();
+            assertThat(actual.closedPasses().stream().map(ClosedPass::event).toList())
+                .as("배치 %d의 닫힌 통과", batchId).containsExactlyInAnyOrderElementsOf(closedByOld);
+            assertThat(actual.unattributedPasses()).isZero();
+            for (ClosedPass pass : actual.closedPasses()) {
+                assertClosedPass(pass, chainStartByObservation, sequence);
+                tally.passes++;
+            }
+            state = actual.state();
+        }
+
+        // then
+        assertThat(coverage(stream)).allSatisfy((scenario, count) -> assertThat(count).as(scenario).isPositive());
+        assertThat(tally.batches).isGreaterThan(600);
+        assertThat(tally.skipped).isGreaterThan(20);
+        assertThat(tally.snapshots).isGreaterThan(2_500);
+        assertThat(tally.vectors).isGreaterThan(9_000);
+        assertThat(tally.passes).isGreaterThan(100);
+        assertThat(tally.failed).isZero();
+    }
+
+    @Test
+    void 출퇴근_범위_밖_배치를_건너뛴_옛_경로와도_범위_안의_입력이_같다() {
+        // given
+        Instant dawn = Instant.parse("2026-10-15T20:00:00Z");
+        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, dawn, Duration.ofMinutes(120),
+            Duration.ofSeconds(30), null, 7L);
+        JdbcAlightingAwareFeatureQuery old = new JdbcAlightingAwareFeatureQuery(jdbc, cache,
+            ObservationStreamFixture.origins(jdbc, stream), MAXIMUM_ROWS, true, checkpoint.toString());
+        ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
+        RouteForecastState state = RouteForecastState.fromVerifiedOrigin(stream.route());
+        int outside = 0;
+        int compared = 0;
+        int vectors = 0;
+
+        // when
+        for (final long batchId : stream.batches()) {
+            ForecastBatch batch = ObservationStreamFixture.read(jdbc, batchId);
+            ForecastStageResult actual = stage.advance(state, stream.statistics(), ObservationStreamFixture.SOURCE_ID, batch);
+            if (!batch.confirmed()) {
+                continue;
+            }
+            try {
+                Map<Long, AlightingAwareFeatureSnapshot> expected = old.read(batchId, stream.stops(batch.routeVersionId()),
+                    stream.statistics());
+                vectors += assertSameSnapshots(batchId, expected, actual.snapshots(), stream.statistics());
+                compared++;
+            } catch (AlightingAwareFeatureUnavailableException failure) {
+                assertThat(failure.getMessage()).isEqualTo("ALIGHTING_AWARE_OUTSIDE_VALIDATED_RUSH_SCOPE");
+                outside++;
+            }
+            state = actual.state();
+        }
+
+        // then
+        assertThat(outside).isGreaterThan(80);
+        assertThat(compared).isGreaterThan(80);
+        assertThat(vectors).isGreaterThan(1_000);
+    }
+
+    @Test
+    void 되감은_뒤_이어_가도_예보한_차량의_입력은_연속_실행과_같고_창이_짧으면_빠지는_차량만_는다() {
+        // given
+        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofHours(6),
+            Duration.ofSeconds(30), EVENING.plus(Duration.ofHours(3)), 20261115L);
+        ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
+        AlightingAwareRouteStatistics statistics = stream.statistics();
+        List<ForecastBatch> batches = stream.batches().stream().map(id -> ObservationStreamFixture.read(jdbc, id)).toList();
+        List<Map<Long, String>> continuous = new ArrayList<>();
+        List<Map<Long, String>> continuousWithheld = new ArrayList<>();
+        RouteForecastState state = RouteForecastState.fromVerifiedOrigin(stream.route());
+        for (ForecastBatch batch : batches) {
+            ForecastStageResult result = stage.advance(state, statistics, ObservationStreamFixture.SOURCE_ID, batch);
+            continuous.add(digests(result.snapshots(), statistics));
+            continuousWithheld.add(withheld(result));
+            state = result.state();
+        }
+        List<Integer> confirmed = new ArrayList<>();
+        for (int index = 0; index < batches.size(); index++) {
+            if (batches.get(index).confirmed()) {
+                confirmed.add(index);
+            }
+        }
+        JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
+        List<Duration> windows = List.of(Duration.ofHours(6), Duration.ofHours(3), Duration.ofMinutes(140),
+            Duration.ofMinutes(100), Duration.ofMinutes(45), Duration.ofMinutes(15));
+        int compared = 0;
+        Map<String, Integer> exclusions = new HashMap<>();
+
+        // when
+        for (final int split : List.of(confirmed.get(300), confirmed.get(520))) {
+            ForecastBatch last = batches.get(split);
+            for (Duration window : windows) {
+                RouteStateReplayer.Result replayed = new RouteStateReplayer(source, stage, window)
+                    .replay(statistics, last.confirmedAt(), last.observationBatchId());
+                assertThat(replayed.succeeded()).as(replayed.failureReason()).isTrue();
+                assertThat(replayed.state().cursor().orElseThrow().observationBatchId()).isEqualTo(last.observationBatchId());
+                RouteForecastState resumed = replayed.state();
+                int same = 0;
+                int excluded = 0;
+                Map<String, Integer> byReason = new HashMap<>();
+                for (int index = split + 1; index < Math.min(batches.size(), split + 181); index++) {
+                    ForecastStageResult result = stage.advance(resumed, statistics, ObservationStreamFixture.SOURCE_ID,
+                        batches.get(index));
+                    Map<Long, String> actual = digests(result.snapshots(), statistics);
+                    Map<Long, String> reasons = withheld(result);
+                    for (Map.Entry<Long, String> entry : actual.entrySet()) {
+                        assertThat(entry.getValue()).as("창 %s, 나눈 지점 %d, 배치 %d, 관측 %d", window, split,
+                            batches.get(index).observationBatchId(), entry.getKey())
+                            .isEqualTo(continuous.get(index).get(entry.getKey()));
+                        same++;
+                    }
+                    for (Long observation : continuous.get(index).keySet()) {
+                        if (!actual.containsKey(observation)) {
+                            assertThat(reasons.get(observation)).isIn(REPLAY_EXCLUSIONS);
+                            byReason.merge(reasons.get(observation), 1, Integer::sum);
+                            excluded++;
+                        }
+                    }
+                    for (Map.Entry<Long, String> reason : reasons.entrySet()) {
+                        if (!REPLAY_EXCLUSIONS.contains(reason.getValue())) {
+                            assertThat(continuousWithheld.get(index)).containsEntry(reason.getKey(), reason.getValue());
+                        }
+                    }
+                    resumed = result.state();
+                }
+                if (window.equals(Duration.ofHours(6))) {
+                    assertThat(excluded).isZero();
+                }
+                if (window.compareTo(Duration.ofMinutes(100)) < 0) {
+                    assertThat(excluded).isPositive();
+                }
+                compared += same;
+                byReason.forEach((reason, count) -> exclusions.merge(reason, count, Integer::sum));
+            }
+        }
+
+        // then
+        assertThat(compared).isGreaterThan(2_000);
+        assertThat(exclusions).containsKeys(ForecastStage.TRIP_START_UNKNOWN, ForecastStage.REPLAY_HISTORY_INCOMPLETE);
+    }
+
+    @Test
+    void 되감기_창에_줄_수가_다른_배치가_있으면_그_노선의_되감기는_실패한다() {
+        // given
+        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofMinutes(20),
+            Duration.ofSeconds(30), null, 11L);
+        ForecastBatch last = lastConfirmed(stream);
+        ForecastBatch broken = stream.batches().stream().map(id -> ObservationStreamFixture.read(jdbc, id))
+            .filter(ForecastBatch::confirmed).toList().get(5);
+        jdbc.sql("UPDATE observation_batch SET stored_rows=stored_rows+1 WHERE id=?").param(broken.observationBatchId())
+            .update();
+        RouteStateReplayer replayer = new RouteStateReplayer(new JdbcReplaySource(jdbc, MAXIMUM_ROWS),
+            new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6));
+
+        // when
+        RouteStateReplayer.Result result = replayer.replay(stream.statistics(), last.confirmedAt(), last.observationBatchId());
+
+        // then
+        assertThat(result.succeeded()).isFalse();
+        assertThat(result.failureReason()).isEqualTo(ForecastStage.SOURCE_ROWS_MISSING);
+    }
+
+    @Test
+    void 되감기_창의_판본_정류장이_통계와_다르면_실패한다() {
+        // given
+        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofMinutes(20),
+            Duration.ofSeconds(30), null, 13L);
+        ForecastBatch last = lastConfirmed(stream);
+        jdbc.sql("UPDATE route_stop SET boarding_allowed=NOT boarding_allowed WHERE route_version_id=? AND stop_order=2")
+            .param(last.routeVersionId()).update();
+        RouteStateReplayer replayer = new RouteStateReplayer(new JdbcReplaySource(jdbc, MAXIMUM_ROWS),
+            new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6));
+
+        // when
+        RouteStateReplayer.Result result = replayer.replay(stream.statistics(), last.confirmedAt(), last.observationBatchId());
+
+        // then
+        assertThat(result.failureReason())
+            .isEqualTo("ALIGHTING_AWARE_INCOMPATIBLE_HISTORICAL_ROUTE_VERSION:" + last.routeVersionId());
+    }
+
+    private Map<String, Long> coverage(ObservationStreamFixture.Stream stream) {
+        String confirmed = """
+            b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS' AND b.stored_rows>0
+            AND b.input_confirmed_at BETWEEN b.response_received_at AND b.response_received_at+interval '90 seconds'
+            """;
+        List<Long> versions = List.copyOf(stream.stopsByVersion().keySet());
+        Map<String, String> scenarios = Map.of(
+            "같은 배치 같은 차량", "SELECT count(*) FROM (SELECT 1 FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND o.vehicle_id IS NOT NULL AND " + confirmed + " GROUP BY b.id,o.vehicle_id HAVING count(*)>1) duplicate",
+            "차량 번호 없는 줄", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND o.vehicle_id IS NULL AND " + confirmed,
+            "좌석 모름", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND o.seat_unknown_reason IS NOT NULL AND " + confirmed,
+            "범위 밖 좌석", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND o.remaining_seats>70 AND " + confirmed,
+            "90초 넘긴 착수", "SELECT count(*) FROM observation_batch b WHERE b.route_version_id IN (:versions) AND b.input_confirmed_at>b.response_received_at+interval '90 seconds'",
+            "빈 배치", "SELECT count(*) FROM observation_batch b WHERE b.route_version_id IN (:versions) AND b.outcome='SUCCESS_EMPTY'",
+            "판본 전환", "SELECT count(DISTINCT b.route_version_id)-1 FROM observation_batch b WHERE b.route_version_id IN (:versions)",
+            "자정 넘김", "SELECT count(DISTINCT (b.input_confirmed_at AT TIME ZONE 'Asia/Seoul')::date)-1 FROM observation_batch b WHERE b.route_version_id IN (:versions)");
+        Map<String, Long> counts = new HashMap<>();
+        scenarios.forEach((scenario, sql) -> counts.put(scenario,
+            jdbc.sql(sql).param("versions", versions).query(Long.class).single()));
+        return counts;
+    }
+
+    private ForecastBatch lastConfirmed(ObservationStreamFixture.Stream stream) {
+        return stream.batches().stream().map(id -> ObservationStreamFixture.read(jdbc, id))
+            .filter(ForecastBatch::confirmed).reduce((first, second) -> second).orElseThrow();
+    }
+
+    private static int assertSameSnapshots(
+        final long batchId,
+        Map<Long, AlightingAwareFeatureSnapshot> expected,
+        List<AlightingAwareFeatureSnapshot> actual,
+        AlightingAwareRouteStatistics statistics
+    ) {
+        Map<Long, AlightingAwareFeatureSnapshot> byObservation = new HashMap<>();
+        actual.forEach(snapshot -> byObservation.put(snapshot.vehicleObservationId(), snapshot));
+        assertThat(byObservation.keySet()).as("배치 %d의 예보 차량", batchId).isEqualTo(expected.keySet());
+        int vectors = 0;
+        for (Map.Entry<Long, AlightingAwareFeatureSnapshot> entry : expected.entrySet()) {
+            AlightingAwareFeatureSnapshot left = entry.getValue();
+            AlightingAwareFeatureSnapshot right = byObservation.get(entry.getKey());
+            assertThat(right.source()).isEqualTo(left.source());
+            assertThat(right.capacity()).isEqualTo(left.capacity());
+            assertThat(right.provenance()).isEqualTo(left.provenance());
+            for (AlightingAwareRouteStatistics.Stop stop : statistics.stops()) {
+                AlightingAwareFeatureVector x = vector(left, stop.order());
+                AlightingAwareFeatureVector y = vector(right, stop.order());
+                if (x == null || y == null) {
+                    assertThat(y).as("배치 %d 관측 %d 목표 %d", batchId, entry.getKey(), stop.order()).isEqualTo(x);
+                    continue;
+                }
+                if (!Arrays.equals(x.seat88(), y.seat88()) || !Arrays.equals(x.probability80(), y.probability80())) {
+                    fail("배치 %d 관측 %d 목표 %d의 입력 벡터가 다르다", batchId, entry.getKey(), stop.order());
+                }
+                vectors++;
+            }
+        }
+        return vectors;
+    }
+
+    private static AlightingAwareFeatureVector vector(AlightingAwareFeatureSnapshot snapshot, final int target) {
+        try {
+            return snapshot.forTarget(target);
+        } catch (IllegalArgumentException unsupported) {
+            return null;
+        }
+    }
+
+    private static void assertSameState(final long batchId, AlightingAwareHistorySeedReader.Seed seed, RouteForecastState state) {
+        assertThat(seed.batchId()).isEqualTo(batchId);
+        assertThat(state.cursor().orElseThrow().rank()).isEqualTo(seed.rank());
+        assertThat(state.observations()).as("배치 %d의 보존 관측", batchId).isEqualTo(seed.observations());
+        assertThat(state.prefix()).as("배치 %d의 누적 상태", batchId).isEqualTo(seed.prefix());
+        assertThat(state.events()).as("배치 %d의 통과 사건", batchId).isEqualTo(seed.events());
+    }
+
+    private static void record(
+        RouteForecastState state,
+        final long batchId,
+        Map<String, AlightingAwareObservation> lastByVehicle,
+        Map<Long, Long> chainStartByObservation,
+        Map<String, List<AlightingAwareObservation>> sequence
+    ) {
+        state.vehicles().values().stream()
+            .map(RouteForecastState.VehicleTrack::last)
+            .filter(observation -> observation.batchId() == batchId)
+            .forEach(observation -> {
+                AlightingAwareObservation previous = lastByVehicle.put(observation.vehicleId(), observation);
+                final long start = observation.startsConfirmedChainAfter(previous)
+                    ? observation.observationId() : chainStartByObservation.get(previous.observationId());
+                chainStartByObservation.put(observation.observationId(), start);
+                sequence.computeIfAbsent(observation.vehicleId(), ignored -> new ArrayList<>()).add(observation);
+            });
+    }
+
+    private static void assertClosedPass(
+        ClosedPass pass,
+        Map<Long, Long> chainStartByObservation,
+        Map<String, List<AlightingAwareObservation>> sequence
+    ) {
+        AlightingAwarePassEvent event = pass.event();
+        assertThat(pass.chainStartObservationId())
+            .isEqualTo(chainStartByObservation.get(event.confirmation().observationId()))
+            .isEqualTo(chainStartByObservation.get(event.arrival().observationId()));
+        Instant reached = null;
+        for (AlightingAwareObservation observation : sequence.get(event.vehicleId())) {
+            if (observation.passedStopOrder() == event.stopOrder() && observation.seats() != null
+                && !observation.receivedAt().isBefore(event.arrival().receivedAt())
+                && !observation.receivedAt().isAfter(event.confirmation().receivedAt())) {
+                reached = observation.receivedAt();
+            }
+        }
+        assertThat(pass.reachedKnownSeatAt()).isEqualTo(reached);
+    }
+
+    private static Map<Long, String> digests(List<AlightingAwareFeatureSnapshot> snapshots, AlightingAwareRouteStatistics statistics) {
+        Map<Long, String> digests = new HashMap<>();
+        for (AlightingAwareFeatureSnapshot snapshot : snapshots) {
+            digests.put(snapshot.vehicleObservationId(), digest(snapshot, statistics));
+        }
+        return digests;
+    }
+
+    private static String digest(AlightingAwareFeatureSnapshot snapshot, AlightingAwareRouteStatistics statistics) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            ByteBuffer header = ByteBuffer.allocate(16);
+            header.putLong(snapshot.capacity()).putLong(snapshot.provenance().tripStartObservationId());
+            digest.update(header.array());
+            for (AlightingAwareRouteStatistics.Stop stop : statistics.stops()) {
+                AlightingAwareFeatureVector vector = vector(snapshot, stop.order());
+                if (vector == null) {
+                    digest.update((byte) 0);
+                    continue;
+                }
+                digest.update((byte) 1);
+                ByteBuffer values = ByteBuffer.allocate((88 + 80) * Long.BYTES);
+                Arrays.stream(vector.seat88()).forEach(value -> values.putLong(Double.doubleToRawLongBits(value)));
+                Arrays.stream(vector.probability80()).forEach(value -> values.putLong(Double.doubleToRawLongBits(value)));
+                digest.update(values.array());
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    private static Map<Long, String> withheld(ForecastStageResult result) {
+        Map<Long, String> reasons = new HashMap<>();
+        result.withheld().forEach(vehicle -> reasons.put(vehicle.observationId(), vehicle.reason()));
+        return reasons;
+    }
+
+    private static final class Tally {
+        private int batches;
+        private int skipped;
+        private int failed;
+        private int snapshots;
+        private int vectors;
+        private int passes;
+    }
+}
