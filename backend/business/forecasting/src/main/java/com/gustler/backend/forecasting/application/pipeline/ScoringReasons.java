@@ -15,7 +15,10 @@ public final class ScoringReasons {
 
     /** 목표가 실정류장 목록의 첫·마지막이거나 실정류장이 아니어서 통과가 생길 수 없다. */
     public static final String TARGET_WITHOUT_PASS = "TARGET_WITHOUT_PASS";
-    /** 같은 연결의 통과가 닫혔으나 기준 시각 10초 뒤 좌석 있는 도달 관측이 없거나 2시간 뒤에 닫혔다. */
+    /**
+     * 같은 연결의 통과가 닫혔으나 기준 시각 10초 뒤 좌석 있는 도달 관측이 없거나 2시간 뒤에 닫혔다. 한 연결·정류장의 통과는
+     * 하나뿐이라 이 예측은 더 짝이 될 수 없으므로 통과가 닫힌 순간(또는 통과가 이미 닫힌 뒤 예보가 온 순간) 닫는다.
+     */
     public static final String PASS_CONDITION_UNMET = "PASS_CONDITION_UNMET";
     /** 기다리는 동안 그 차량의 연결이 바뀌었다. */
     public static final String CHAIN_BROKEN = "CHAIN_BROKEN";
@@ -23,8 +26,6 @@ public final class ScoringReasons {
     public static final String PASS_NOT_CLOSED = "PASS_NOT_CLOSED";
     /** 모델 배포에 그 노선 판본·목표 정류장의 정산 근거가 없다. */
     public static final String SETTLEMENT_EVIDENCE_MISSING = "SETTLEMENT_EVIDENCE_MISSING";
-    /** 같은 통과·같은 정원에 서로 다른 근거로 계산한 정답이 둘 이상이라 저장 키 하나에 담지 못했다. */
-    public static final String LABEL_EVIDENCE_CONFLICT = "LABEL_EVIDENCE_CONFLICT";
     /** 계수나 관측이 계산식의 전제를 어겨 계산이 실패했다. */
     public static final String SETTLEMENT_CALCULATION_FAILED = "SETTLEMENT_CALCULATION_FAILED";
 
@@ -46,7 +47,6 @@ public final class ScoringReasons {
         CHAIN_BROKEN, Optional.of(LEGACY_LOST),
         PASS_NOT_CLOSED, Optional.of(LEGACY_LOST),
         SETTLEMENT_EVIDENCE_MISSING, Optional.empty(),
-        LABEL_EVIDENCE_CONFLICT, Optional.empty(),
         SETTLEMENT_CALCULATION_FAILED, Optional.empty());
 
     private ScoringReasons() {

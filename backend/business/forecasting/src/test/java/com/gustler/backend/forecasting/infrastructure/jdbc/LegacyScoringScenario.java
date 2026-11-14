@@ -7,6 +7,7 @@ import com.gustler.backend.forecasting.api.pipeline.ForecastPublished.VehicleFor
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
+import com.gustler.backend.forecasting.application.pipeline.PassLabelCalculator;
 import com.gustler.backend.forecasting.application.pipeline.ScoredForecast;
 import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
 import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
@@ -56,6 +57,9 @@ final class LegacyScoringScenario {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String LEGACY_LOST = "NO_CLOSED_IDENTITY_SAFE_PASS";
     private static final List<String> TAINTS = List.of("SOURCE_HISTORY_INCOMPLETE", "OBSERVATION_INPUT_LIMIT");
+    /** 새 채점이 마감을 기다리지 않고 바로 닫는 사유. 옛 정산은 마감까지 보므로 그 사이에 생긴 수집 구멍·상한이 옛 결과에만 있다. */
+    private static final List<String> IMMEDIATE = List.of(ScoringReasons.TARGET_WITHOUT_PASS,
+        ScoringReasons.PASS_CONDITION_UNMET);
 
     private final List<Integer> realStops;
     private final int turn;
@@ -135,6 +139,12 @@ final class LegacyScoringScenario {
         forecasts.add(forecast);
     }
 
+    /** 관측 하나의 예측에 쓴 정원. */
+    int forecastCapacity(long observationId) {
+        return forecasts.stream().filter(forecast -> forecast.observationId() == observationId).findFirst()
+            .orElseThrow().capacity();
+    }
+
     List<PassClosed> passes() {
         prepare();
         return passes;
@@ -160,9 +170,12 @@ final class LegacyScoringScenario {
     }
 
     ScoringStage stage(int limit) {
+        return stage(limit, new ConfirmedPassLabelCalculator());
+    }
+
+    ScoringStage stage(int limit, PassLabelCalculator calculator) {
         return new ScoringStage((deployment, version) -> deployment == DEPLOYMENT && version == VERSION
-            ? Optional.of(context) : Optional.empty(), version -> realStops, new ConfirmedPassLabelCalculator(), FIXED,
-            limit);
+            ? Optional.of(context) : Optional.empty(), version -> realStops, calculator, FIXED, limit);
     }
 
     static ScoringResult feed(ScoringStage stage, List<Object> events) {
@@ -187,7 +200,7 @@ final class LegacyScoringScenario {
         Map<List<Object>, PassLabel> labels = new LinkedHashMap<>();
         for (PassLabel label : result.labels()) {
             labels.putIfAbsent(List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
-                label.stopOrder(), label.capacity(), label.labelVersion()), label);
+                label.stopOrder(), label.capacity(), label.labelVersion(), label.modelDeploymentId()), label);
         }
         Map<List<Object>, PassClosed> passByKey = new HashMap<>();
         for (PassClosed pass : passes()) {
@@ -209,7 +222,8 @@ final class LegacyScoringScenario {
         for (ScoredForecast forecast : result.scored()) {
             Key key = new Key(forecast.vehicleObservationId(), forecast.targetStopOrder());
             PassLabel label = labels.get(List.of(forecast.passSourceDate(), forecast.routeId(),
-                forecast.tripStartObservationId(), forecast.stopOrder(), forecast.capacity(), forecast.labelVersion()));
+                forecast.tripStartObservationId(), forecast.stopOrder(), forecast.capacity(), forecast.labelVersion(),
+                forecast.modelDeploymentId()));
             PassClosed pass = passByKey.get(List.of(forecast.passSourceDate(), forecast.routeId(),
                 forecast.tripStartObservationId(), forecast.stopOrder()));
             if (label.state() == PassLabel.State.SETTLED) {
@@ -376,7 +390,7 @@ final class LegacyScoringScenario {
             String reason = scored.reasons().get(key);
             if (actual != null && actual.equals(continuous.get(key)) && !sameDayHistory(key)) {
                 midnight++;
-            } else if (ScoringReasons.TARGET_WITHOUT_PASS.equals(reason) && TAINTS.contains(expected.reason())) {
+            } else if (IMMEDIATE.contains(reason) && TAINTS.contains(expected.reason())) {
                 taint++;
             } else {
                 unexplained.add(new Difference(key, expected, actual, reason));

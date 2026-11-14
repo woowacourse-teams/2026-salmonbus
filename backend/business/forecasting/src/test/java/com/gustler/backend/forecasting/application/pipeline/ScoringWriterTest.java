@@ -68,8 +68,8 @@ class ScoringWriterTest {
     }
 
     private static PassLabel label(long trip) {
-        return new PassLabel(DAY, 7, trip, 3, 40, ScoringReasons.LABEL_VERSION, PassLabel.State.SETTLED, null, 12.5,
-            null, null, null, AT);
+        return new PassLabel(DAY, 7, trip, 3, 40, ScoringReasons.LABEL_VERSION, 3, PassLabel.State.SETTLED, null,
+            12.5, null, null, null, AT);
     }
 
     private static UnresolvedForecast unresolved(long observation) {

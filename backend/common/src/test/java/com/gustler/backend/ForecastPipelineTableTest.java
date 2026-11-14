@@ -79,8 +79,8 @@ class ForecastPipelineTableTest {
     private void insertLabel(String state, String reason, String value) {
         jdbcClient.sql("""
             INSERT INTO pass_label (source_date, route_id, trip_start_observation_id, stop_order, capacity,
-                label_version, state, reason, label_value, computed_at)
-            VALUES (DATE '2030-01-01', 1, 1, 1, 45, 'v1', '%s', %s, %s, now())
+                label_version, model_deployment_id, state, reason, label_value, computed_at)
+            VALUES (DATE '2030-01-01', 1, 1, 1, 45, 'v1', 1, '%s', %s, %s, now())
             """.formatted(state, reason, value)).update();
     }
 }

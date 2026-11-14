@@ -16,7 +16,7 @@ class ScoringReasonsTest {
     @Test
     void 옛_정산이_예외로_멈추던_경우의_사유는_대응하는_옛_사유가_없다() {
         for (String reason : new String[] {ScoringReasons.SETTLEMENT_EVIDENCE_MISSING,
-            ScoringReasons.LABEL_EVIDENCE_CONFLICT, ScoringReasons.SETTLEMENT_CALCULATION_FAILED}) {
+            ScoringReasons.SETTLEMENT_CALCULATION_FAILED}) {
             assertThat(ScoringReasons.legacyReason(reason)).isEmpty();
         }
     }

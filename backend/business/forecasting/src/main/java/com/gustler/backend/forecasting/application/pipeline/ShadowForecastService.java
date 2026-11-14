@@ -331,10 +331,10 @@ public final class ShadowForecastService implements LegacyForecastListener {
         for (PipelineEvents listener : listeners) {
             try {
                 listener.batchSeen(seen);
-                listener.forecastPublished(published);
                 if (!closed.isEmpty()) {
                     listener.passesClosed(closed);
                 }
+                listener.forecastPublished(published);
             } catch (RuntimeException failure) {
                 LOGGER.warn("event=pipeline_event_listener_failed listener={} batchId={} exceptionType={}",
                     listener.getClass().getSimpleName(), published.observationBatchId(),

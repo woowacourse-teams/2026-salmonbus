@@ -20,9 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class JdbcPassLabelStore implements PassLabelStore {
     private static final MultiRowInsert LABELS = new MultiRowInsert("pass_label", List.of(
-        "source_date", "route_id", "trip_start_observation_id", "stop_order", "capacity", "label_version", "state",
-        "reason", "label_value", "previous_last_observation_id", "previous_closure_observation_id",
-        "parameter_hash", "computed_at"));
+        "source_date", "route_id", "trip_start_observation_id", "stop_order", "capacity", "label_version",
+        "model_deployment_id", "state", "reason", "label_value", "previous_last_observation_id",
+        "previous_closure_observation_id", "parameter_hash", "computed_at"));
 
     private static final MultiRowInsert UNRESOLVED = new MultiRowInsert("forecast_unresolved", List.of(
         "source_date", "vehicle_observation_id", "target_stop_order", "route_id", "state", "reason", "closed_at"));
@@ -38,7 +38,7 @@ public class JdbcPassLabelStore implements PassLabelStore {
     public int saveLabels(List<PassLabel> labels) {
         return LABELS.insert(jdbc, labels, label -> Arrays.asList(label.sourceDate(), label.routeId(),
             label.tripStartObservationId(), label.stopOrder(), label.capacity(), label.labelVersion(),
-            label.state().name(), label.reason(), label.labelValue(), label.previousLastObservationId(),
+            label.modelDeploymentId(), label.state().name(), label.reason(), label.labelValue(), label.previousLastObservationId(),
             label.previousClosureObservationId(), label.parameterHash(), timestamp(label.computedAt())));
     }
 

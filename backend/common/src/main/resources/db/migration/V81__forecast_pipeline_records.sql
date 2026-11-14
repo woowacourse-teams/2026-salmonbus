@@ -74,8 +74,10 @@ CREATE TABLE stop_pass (
     CONSTRAINT pk_stop_pass PRIMARY KEY (source_date, route_id, trip_start_observation_id, stop_order)
 ) PARTITION BY RANGE (source_date);
 CREATE INDEX ix_stop_pass_route_closed ON stop_pass (route_id, closed_at);
+CREATE INDEX ix_stop_pass_chain ON stop_pass (route_id, chain_start_observation_id, stop_order);
 CREATE TABLE stop_pass_default PARTITION OF stop_pass DEFAULT;
 
+-- 정답은 모델 배포의 계수로 정해지므로 같은 통과·같은 정원이라도 모델 배포마다 한 줄이다.
 CREATE TABLE pass_label (
     source_date date NOT NULL,
     route_id bigint NOT NULL,
@@ -83,6 +85,7 @@ CREATE TABLE pass_label (
     stop_order integer NOT NULL,
     capacity integer NOT NULL,
     label_version varchar(80) NOT NULL,
+    model_deployment_id bigint NOT NULL,
     state varchar(16) NOT NULL,
     reason varchar(64),
     label_value double precision,
@@ -90,7 +93,8 @@ CREATE TABLE pass_label (
     previous_closure_observation_id bigint,
     parameter_hash char(64),
     computed_at timestamptz NOT NULL,
-    CONSTRAINT pk_pass_label PRIMARY KEY (source_date, route_id, trip_start_observation_id, stop_order, capacity, label_version),
+    CONSTRAINT pk_pass_label PRIMARY KEY (source_date, route_id, trip_start_observation_id, stop_order, capacity, label_version,
+        model_deployment_id),
     CONSTRAINT ck_pass_label_state CHECK (state IN ('SETTLED','UNSUPPORTED')),
     CONSTRAINT ck_pass_label_value CHECK ((state = 'SETTLED') = (label_value IS NOT NULL)),
     CONSTRAINT ck_pass_label_reason CHECK ((state = 'SETTLED') = (reason IS NULL))

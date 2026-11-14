@@ -148,7 +148,7 @@ class ScoringStageTest {
     }
 
     @Test
-    void 도달_관측이_기준_시각_10초_뒤를_넘어야_짝이_되고_아니면_마감_때_조건_불충족으로_닫는다() {
+    void 도달_관측이_기준_시각_10초_뒤를_넘어야_짝이_되고_아니면_통과가_닫힐_때_조건_불충족으로_닫는다() {
         // given
         Instant closed = MORNING.plusSeconds(120);
         stage.accept(forecast(MORNING.minusMillis(1), vehicle(500, "bus-a", 50, 40, 3)));
@@ -161,11 +161,30 @@ class ScoringStageTest {
 
         // then
         assertThat(closing.scored()).extracting(ScoredForecast::vehicleObservationId).containsExactly(500L);
-        assertThat(expired.unresolved()).singleElement().satisfies(closedForecast -> {
+        assertThat(closing.unresolved()).singleElement().satisfies(closedForecast -> {
             assertThat(closedForecast.vehicleObservationId()).isEqualTo(501L);
             assertThat(closedForecast.state()).isEqualTo(UnresolvedForecast.State.LOST);
             assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.PASS_CONDITION_UNMET);
         });
+        assertThat(expired.unresolved()).isEmpty();
+        assertThat(stage.waitingCount()).isZero();
+    }
+
+    @Test
+    void 통과가_이미_닫힌_연결과_정류장의_예측은_받는_순간_조건_불충족으로_닫는다() {
+        // given
+        Instant closed = MORNING.plusSeconds(120);
+        stage.accept(pass("bus-a", 50, 3, closed.minusSeconds(30), closed, 901));
+
+        // when
+        ScoringResult result = stage.accept(forecast(closed.plusSeconds(20), vehicle(502, "bus-a", 50, 40, 3)));
+
+        // then
+        assertThat(result.unresolved()).singleElement().satisfies(closedForecast -> {
+            assertThat(closedForecast.state()).isEqualTo(UnresolvedForecast.State.LOST);
+            assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.PASS_CONDITION_UNMET);
+        });
+        assertThat(stage.waitingCount()).isZero();
     }
 
     @Test
@@ -236,7 +255,7 @@ class ScoringStageTest {
     }
 
     @Test
-    void 같은_통과_같은_정원에_근거가_다른_예측은_먼저_온_근거로_정답을_내고_나머지는_충돌로_닫는다() {
+    void 같은_통과_같은_정원이라도_모델_배포가_다르면_배포마다_자기_계수로_정답을_낸다() {
         // given
         contexts.put(OTHER_DEPLOYMENT, context(0.3, "alighting-confirmed-closure-v2"));
         Instant closed = MORNING.plusSeconds(300);
@@ -248,13 +267,17 @@ class ScoringStageTest {
         ScoringResult result = stage.accept(pass("bus-a", 50, 3, closed.minusSeconds(30), closed, 901));
 
         // then
-        assertThat(result.labels()).singleElement().extracting(PassLabel::state).isEqualTo(PassLabel.State.SETTLED);
-        assertThat(result.scored()).extracting(ScoredForecast::vehicleObservationId).containsExactly(500L);
-        assertThat(result.unresolved()).singleElement().satisfies(closedForecast -> {
-            assertThat(closedForecast.vehicleObservationId()).isEqualTo(501L);
-            assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.LABEL_EVIDENCE_CONFLICT);
-            assertThat(ScoringReasons.legacyReason(closedForecast.reason())).isEmpty();
+        assertThat(result.labels()).extracting(PassLabel::modelDeploymentId).containsExactly(DEPLOYMENT, OTHER_DEPLOYMENT);
+        assertThat(result.labels()).allSatisfy(label -> {
+            assertThat(label.state()).isEqualTo(PassLabel.State.SETTLED);
+            assertThat(label.capacity()).isEqualTo(40);
         });
+        assertThat(result.labels().get(0).labelValue()).isNotEqualTo(result.labels().get(1).labelValue());
+        assertThat(result.labels().get(0).parameterHash()).isNotEqualTo(result.labels().get(1).parameterHash());
+        assertThat(result.scored()).extracting(ScoredForecast::vehicleObservationId, ScoredForecast::modelDeploymentId)
+            .containsExactly(org.assertj.core.groups.Tuple.tuple(500L, DEPLOYMENT),
+                org.assertj.core.groups.Tuple.tuple(501L, OTHER_DEPLOYMENT));
+        assertThat(result.unresolved()).isEmpty();
     }
 
     @Test

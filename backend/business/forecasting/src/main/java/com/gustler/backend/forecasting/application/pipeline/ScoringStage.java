@@ -44,13 +44,19 @@ import tools.jackson.databind.node.ObjectNode;
  *       같은 시각에 닫힌 것이 여럿이면 마지막 관측 번호가 가장 작은 것이다. 차량은 따지지 않는다. 같은 시각에 닫힌 통과는
  *       서로 직전이 되지 않는다.</li>
  *   <li>정답 값은 {@link PassLabelCalculator}가 옛 계산을 그대로 불러 낸다. 근거는 모델 배포의 정산 근거에 예측의 정원과
- *       목표 정류장 계수를 합친 것이다. 정원이 다른 예측은 정원마다 정답을 낸다.</li>
+ *       목표 정류장 계수를 합친 것이다. 한 통과에 짝이 된 예측은 (모델 배포, 정원)마다 정답 하나를 받는다. 한 연결은 한 차량·한
+ *       노선 판본의 관측이므로 한 통과에 짝이 된 예측은 노선 판본이 모두 같다.</li>
  *   <li>예측 기준 시각의 한국 날짜 00시부터 판정 시각까지 관측 상한을 넘었거나 수집 구멍이 있으면 지원 안 함으로 닫는다.
  *       판정 시각은 짝이 된 통과가 닫힌 시각, 마감이면 기준 시각 + 2시간이다. 옛 정산은 실제 평가 시각까지 보았다.</li>
  *   <li>통과가 생길 수 없는 목표(실정류장 목록의 첫·마지막이거나 실정류장이 아닌 목표)는 기다리지 않고 바로 놓침으로 닫는다.</li>
- *   <li>노선 시각이 기준 시각 + 2시간을 넘으면 기다리던 예측을 놓침으로 닫는다. 사유는 같은 연결의 통과가 닫혔으나 조건 불충족,
- *       연결이 바뀜, 통과 없음 순으로 고른다.</li>
+ *   <li>한 연결·정류장의 통과는 하나뿐이다. 그래서 통과가 닫힌 순간 그 통과를 기다리던 예측은 모두 결론이 난다. 짝이 되지
+ *       않은 예측은 그 자리에서 {@link ScoringReasons#PASS_CONDITION_UNMET}(또는 그 시각까지의 수집 구멍·관측 상한 사유)으로
+ *       닫고, 통과가 이미 닫힌 뒤에 온 예측도 받는 순간 같은 사유로 닫는다. 옛 정산은 이런 예측을 마감 때 닫았으므로 마감 전에 생긴
+ *       수집 구멍이 옛 결과에만 보일 수 있다.</li>
+ *   <li>노선 시각이 기준 시각 + 2시간을 넘으면 기다리던 예측을 놓침으로 닫는다. 사유는 연결이 바뀜, 통과 없음 순으로 고른다.</li>
  * </ul>
+ * 따라서 닫힌 통과가 있는 (연결, 정류장)의 예측은 모두 미해결로 닫혔거나 자기 (모델 배포, 정원)의 정답에 짝지어졌다. 두 결과는
+ * 같은 {@link ScoringResult}에 함께 담긴다. 예측별 결과 뷰({@code forecast_outcome})가 이 성질에 기댄다.
  * 새 사유를 옛 사유로 바꾸는 대응표는 {@link ScoringReasons}에 있다.
  *
  * <p>같은 사건을 두 번 넣어도 결과 집합이 같다. 같은 배치의 {@link ObservationBatchSeen}과 {@link ForecastPublished}는
@@ -151,8 +157,8 @@ public final class ScoringStage {
     }
 
     /**
-     * 통과 사건을 받는다. 직전 통과를 찾고, 이 통과를 기다리던 예측 가운데 짝이 되는 것을 골라 정원마다 정답을 낸 뒤 대기에서 뺀다.
-     * 짝이 되지 않는 예측은 대기에 남기고 마감 때 {@link ScoringReasons#PASS_CONDITION_UNMET}으로 닫는다.
+     * 통과 사건을 받는다. 직전 통과를 찾고, 이 통과를 기다리던 예측 가운데 짝이 되는 것을 골라 (모델 배포, 정원)마다 정답을 낸 뒤
+     * 대기에서 뺀다. 짝이 되지 않는 예측도 대기에서 빼고 {@link ScoringReasons#PASS_CONDITION_UNMET}으로 바로 닫는다.
      *
      * @param pass 통과 사건
      * @return 새 정답, 짝이 된 예측, 지원 안 함으로 닫힌 예측, 마감으로 닫힌 예측
@@ -170,17 +176,14 @@ public final class ScoringStage {
         WaitKey key = new WaitKey(pass.chainStartObservationId(), pass.stopOrder());
         state.closedChainStops.merge(key, pass.closedAt(), (left, right) -> left.isAfter(right) ? left : right);
         List<Waiting> matched = new ArrayList<>();
+        List<Waiting> unmet = new ArrayList<>();
         Map<ForecastKey, Waiting> candidates = state.waitingByPass.get(key);
         if (candidates != null) {
             for (Waiting waiting : candidates.values()) {
-                if (matches(pass, waiting)) {
-                    matched.add(waiting);
-                } else {
-                    waiting.passUnmet = true;
-                }
+                (matches(pass, waiting) ? matched : unmet).add(waiting);
             }
         }
-        result = result.plus(score(state, pass, previous, matched, now));
+        result = result.plus(score(state, pass, previous, matched, now)).plus(unmet(state, pass, unmet, now));
         history.merge(pass.closedAt(), pass,
             (kept, added) -> added.lastObservationId() < kept.lastObservationId() ? added : kept);
         return result;
@@ -188,7 +191,8 @@ public final class ScoringStage {
 
     /**
      * 예보 사건을 받는다. 버스별 목표 정류장마다 예측을 대기에 넣는다. 정산 근거가 없거나 근거의 입력 판·정원 정책이 맞지 않거나
-     * 그날 관측 상한·수집 구멍이 이미 있으면 지원 안 함으로, 통과가 생길 수 없는 목표면 놓침으로 바로 닫는다.
+     * 그날 관측 상한·수집 구멍이 이미 있으면 지원 안 함으로, 통과가 생길 수 없는 목표면 놓침으로, 같은 연결의 그 정류장 통과가
+     * 이미 닫혔으면 조건 불충족 놓침으로 바로 닫는다.
      *
      * @param published 예보 사건
      * @return 바로 닫힌 예측과 마감으로 닫힌 예측
@@ -226,8 +230,10 @@ public final class ScoringStage {
                 } else if (!inner.contains(target)) {
                     closed.add(unresolved(waiting, UnresolvedForecast.State.LOST,
                         ScoringReasons.TARGET_WITHOUT_PASS, now));
+                } else if (state.closedChainStops.containsKey(waiting.passKey())) {
+                    closed.add(unresolved(waiting, UnresolvedForecast.State.LOST,
+                        ScoringReasons.PASS_CONDITION_UNMET, now));
                 } else {
-                    waiting.passUnmet = state.closedChainStops.containsKey(waiting.passKey());
                     state.add(waiting);
                 }
             }
@@ -304,15 +310,15 @@ public final class ScoringStage {
             if (taint != null) {
                 unresolved.add(unresolved(waiting, UnresolvedForecast.State.UNSUPPORTED, taint, now));
             } else {
-                groups.computeIfAbsent(new LabelGroup(waiting.modelDeploymentId, waiting.routeVersionId,
-                    waiting.capacity), group -> new ArrayList<>()).add(waiting);
+                groups.computeIfAbsent(new LabelGroup(waiting.modelDeploymentId, waiting.capacity),
+                    group -> new ArrayList<>()).add(waiting);
             }
         }
-        Map<Integer, PassLabelCalculation> byCapacity = new LinkedHashMap<>();
+        List<PassLabel> labels = new ArrayList<>();
         List<ScoredForecast> scored = new ArrayList<>();
         for (Map.Entry<LabelGroup, List<Waiting>> group : groups.entrySet()) {
             LabelGroup labelGroup = group.getKey();
-            JsonNode context = evidence(labelGroup.modelDeploymentId(), labelGroup.routeVersionId());
+            JsonNode context = evidence(labelGroup.modelDeploymentId(), group.getValue().getFirst().routeVersionId);
             JsonNode stops = context == null ? null : context.path("stops").get(String.valueOf(pass.stopOrder()));
             if (stops == null) {
                 group.getValue().forEach(waiting -> unresolved.add(unresolved(waiting,
@@ -320,22 +326,31 @@ public final class ScoringStage {
                 continue;
             }
             PassLabelCalculation calculation = calculate(pass, previous, snapshot(context, stops, labelGroup.capacity()));
-            PassLabelCalculation kept = byCapacity.putIfAbsent(labelGroup.capacity(), calculation);
-            if (kept != null && !kept.equals(calculation)) {
-                group.getValue().forEach(waiting -> unresolved.add(unresolved(waiting,
-                    UnresolvedForecast.State.UNSUPPORTED, ScoringReasons.LABEL_EVIDENCE_CONFLICT, now)));
-                continue;
-            }
+            labels.add(label(pass, previous, labelGroup, calculation, now));
             for (Waiting waiting : group.getValue()) {
                 scored.add(new ScoredForecast(waiting.sourceDate, waiting.key.vehicleObservationId(),
                     waiting.key.targetStopOrder(), pass.routeId(), pass.sourceDate(), pass.tripStartObservationId(),
-                    pass.stopOrder(), labelGroup.capacity(), ScoringReasons.LABEL_VERSION));
+                    pass.stopOrder(), labelGroup.capacity(), ScoringReasons.LABEL_VERSION,
+                    labelGroup.modelDeploymentId()));
             }
         }
-        List<PassLabel> labels = byCapacity.entrySet().stream()
-            .map(entry -> label(pass, previous, entry.getKey(), entry.getValue(), now))
-            .toList();
         return new ScoringResult(labels, unresolved, scored);
+    }
+
+    private static ScoringResult unmet(RouteState state, PassClosed pass, List<Waiting> unmet, Instant now) {
+        if (unmet.isEmpty()) {
+            return ScoringResult.empty();
+        }
+        unmet.sort(Waiting.ORDER);
+        List<UnresolvedForecast> closed = new ArrayList<>();
+        for (Waiting waiting : unmet) {
+            state.remove(waiting);
+            String taint = taint(state, waiting, pass.closedAt());
+            closed.add(taint != null
+                ? unresolved(waiting, UnresolvedForecast.State.UNSUPPORTED, taint, now)
+                : unresolved(waiting, UnresolvedForecast.State.LOST, ScoringReasons.PASS_CONDITION_UNMET, now));
+        }
+        return new ScoringResult(List.of(), closed, List.of());
     }
 
     private PassLabelCalculation calculate(PassClosed pass, PassClosed previous, JsonNode snapshot) {
@@ -346,10 +361,10 @@ public final class ScoringStage {
         }
     }
 
-    private static PassLabel label(PassClosed pass, PassClosed previous, int capacity, PassLabelCalculation calculation,
-        Instant now) {
-        return new PassLabel(pass.sourceDate(), pass.routeId(), pass.tripStartObservationId(), pass.stopOrder(), capacity,
-            ScoringReasons.LABEL_VERSION,
+    private static PassLabel label(PassClosed pass, PassClosed previous, LabelGroup group,
+        PassLabelCalculation calculation, Instant now) {
+        return new PassLabel(pass.sourceDate(), pass.routeId(), pass.tripStartObservationId(), pass.stopOrder(),
+            group.capacity(), ScoringReasons.LABEL_VERSION, group.modelDeploymentId(),
             calculation.settled() ? PassLabel.State.SETTLED : PassLabel.State.UNSUPPORTED, calculation.reason(),
             calculation.value(), previous == null ? null : previous.lastObservationId(),
             previous == null ? null : previous.closureObservationId(), calculation.parameterHash(), now);
@@ -421,9 +436,7 @@ public final class ScoringStage {
         }
         String reason = ScoringReasons.PASS_NOT_CLOSED;
         ChainSeen chain = state.chains.get(waiting.vehicleId);
-        if (waiting.passUnmet || state.closedChainStops.containsKey(waiting.passKey())) {
-            reason = ScoringReasons.PASS_CONDITION_UNMET;
-        } else if (chain != null && chain.chainStartObservationId() != waiting.chainStartObservationId) {
+        if (chain != null && chain.chainStartObservationId() != waiting.chainStartObservationId) {
             reason = ScoringReasons.CHAIN_BROKEN;
         }
         return unresolved(waiting, UnresolvedForecast.State.LOST, reason, now);
@@ -497,7 +510,7 @@ public final class ScoringStage {
     private record EvidenceKey(long modelDeploymentId, long routeVersionId) {
     }
 
-    private record LabelGroup(long modelDeploymentId, long routeVersionId, int capacity) {
+    private record LabelGroup(long modelDeploymentId, int capacity) {
     }
 
     private record ForecastKey(long vehicleObservationId, int targetStopOrder) {
@@ -541,7 +554,6 @@ public final class ScoringStage {
         private final int capacity;
         private final long modelDeploymentId;
         private final long routeVersionId;
-        private boolean passUnmet;
 
         private Waiting(ForecastKey key, long routeId, LocalDate sourceDate, String vehicleId,
             long chainStartObservationId, Instant basis, int capacity, long modelDeploymentId, long routeVersionId) {

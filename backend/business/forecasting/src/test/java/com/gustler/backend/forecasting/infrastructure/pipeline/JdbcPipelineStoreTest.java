@@ -198,9 +198,9 @@ class JdbcPipelineStoreTest {
     @Test
     void 정답과_미해결_예측을_넣고_같은_키를_다시_넣으면_건너뛴다() {
         // given
-        PassLabel settled = new PassLabel(DAY, ROUTE_ID, 500, 3, 45, "alighting-identity-safe-v1",
+        PassLabel settled = new PassLabel(DAY, ROUTE_ID, 500, 3, 45, "alighting-identity-safe-v1", 9,
             PassLabel.State.SETTLED, null, 12.5, 400L, 401L, "a".repeat(64), RECEIVED_AT);
-        PassLabel unsupported = new PassLabel(DAY, ROUTE_ID, 500, 4, 45, "alighting-identity-safe-v1",
+        PassLabel unsupported = new PassLabel(DAY, ROUTE_ID, 500, 4, 45, "alighting-identity-safe-v1", 9,
             PassLabel.State.UNSUPPORTED, "NO_PREVIOUS_PASS", null, null, null, null, RECEIVED_AT);
         UnresolvedForecast lost = new UnresolvedForecast(DAY, 1001, 5, ROUTE_ID, UnresolvedForecast.State.LOST,
             "PASS_NOT_SEEN", RECEIVED_AT);
@@ -218,6 +218,25 @@ class JdbcPipelineStoreTest {
         assertThat(againUnresolved).isZero();
         assertThat(jdbcClient.sql("SELECT label_value FROM pass_label WHERE state = 'SETTLED'")
             .query(Double.class).single()).isEqualTo(12.5);
+    }
+
+    @Test
+    void 같은_통과_같은_정원이라도_모델_배포가_다르면_정답을_따로_넣는다() {
+        // given
+        PassLabel first = new PassLabel(DAY, ROUTE_ID, 500, 3, 45, "alighting-identity-safe-v1", 9,
+            PassLabel.State.SETTLED, null, 12.5, 400L, 401L, "a".repeat(64), RECEIVED_AT);
+        PassLabel second = new PassLabel(DAY, ROUTE_ID, 500, 3, 45, "alighting-identity-safe-v1", 10,
+            PassLabel.State.SETTLED, null, 13.5, 400L, 401L, "b".repeat(64), RECEIVED_AT);
+
+        // when
+        final int inserted = labels.saveLabels(List.of(first, second));
+
+        // then
+        assertThat(inserted).isEqualTo(2);
+        assertThat(jdbcClient.sql("""
+            SELECT model_deployment_id FROM pass_label WHERE route_id = ? AND trip_start_observation_id = 500
+            ORDER BY model_deployment_id
+            """).param(ROUTE_ID).query(Long.class).list()).containsExactly(9L, 10L);
     }
 
     private long count(String table) {

@@ -115,7 +115,13 @@ forecast:
   shadow:
     enabled: ${FORECAST_SHADOW_ENABLED:false} # v1일 때 새 경로를 옆에서 돌려 대조하고 새 테이블에 쓴다
     queue-capacity: ${FORECAST_SHADOW_QUEUE_CAPACITY:200} # 넘치면 새 배치를 버리고 그 노선의 메모리 상태를 버린다
-  scoring: ${FORECAST_SCORING:off} # off, shadow, v2
+  # off, shadow, v2. 그림자 실행(shadow.enabled)이 켜져 있어야 돈다. v2는 지금 shadow와 같다(옛 정산을 끄는 것은 다음 묶음).
+  scoring: ${FORECAST_SCORING:off}
+  scoring-flush-interval: ${FORECAST_SCORING_FLUSH_INTERVAL:5s} # 채점 결과를 모아 한 트랜잭션으로 쓰는 간격
+  scoring-queue-capacity: ${FORECAST_SCORING_QUEUE_CAPACITY:10000} # 넘치면 사건을 버리고 그 노선을 다시 되감는다
+  scoring-comparison-interval: ${FORECAST_SCORING_COMPARISON_INTERVAL:10m} # 새 채점과 옛 정산 결과 대조 간격
+  scoring-comparison-delay: ${FORECAST_SCORING_COMPARISON_DELAY:3h} # 수신 뒤 이만큼 지난 배치만 대조한다
+  scoring-comparison-batch-limit: 1500 # 대조 한 회차에 읽는 예보 실행 수의 상한
   lanes: ${FORECAST_LANES:2} # 새 경로의 노선별 실행 줄 수
   replay-window: ${FORECAST_REPLAY_WINDOW:6h} # 다시 뜰 때 되감는 관측 범위
   partition-interval: 1h # 오늘부터 사흘 뒤까지 날짜 파티션을 확인하는 주기

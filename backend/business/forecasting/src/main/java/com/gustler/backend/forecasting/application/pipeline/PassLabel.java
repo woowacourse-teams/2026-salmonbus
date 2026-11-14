@@ -7,6 +7,9 @@ import java.util.Objects;
 /**
  * 통과 하나의 정답이다. 정답은 통과·직전 통과·정원·모델 계수로 정해지고 예측값과는 무관하다.
  *
+ * <p>계수는 모델 배포마다 다르므로 같은 통과·같은 정원이라도 모델 배포가 다르면 정답이 따로 있다. 저장 키는
+ * (나눔 날짜, 노선, 운행 시작 관측, 정류장, 정원, 정답 판, 모델 배포)이다.
+ *
  * <p>채점됨({@link State#SETTLED})이면 정답 값이 있고 사유가 없다. 지원 안 함({@link State#UNSUPPORTED})이면 정답 값이 없고
  * 사유가 있다. 이 규칙은 {@code pass_label}의 CHECK와 같다.
  *
@@ -16,6 +19,7 @@ import java.util.Objects;
  * @param stopOrder 정류장 순번
  * @param capacity 정답을 계산한 정원
  * @param labelVersion 정답 판
+ * @param modelDeploymentId 정답 계산에 쓴 계수를 낸 모델 배포
  * @param state 정답 상태
  * @param reason 지원 안 함 사유
  * @param labelValue 정답 값
@@ -31,6 +35,7 @@ public record PassLabel(
     int stopOrder,
     int capacity,
     String labelVersion,
+    long modelDeploymentId,
     State state,
     String reason,
     Double labelValue,

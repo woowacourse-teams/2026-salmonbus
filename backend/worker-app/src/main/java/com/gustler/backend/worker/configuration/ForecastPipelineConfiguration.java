@@ -2,6 +2,10 @@ package com.gustler.backend.worker.configuration;
 
 import com.gustler.backend.forecasting.api.pipeline.MaintainPipelinePartitions;
 import com.gustler.backend.worker.scheduling.PipelinePartitionJob;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.SmartInitializingSingleton;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -24,8 +28,24 @@ public class ForecastPipelineConfiguration {
         + " or '${forecast.pipeline:v1}'.equalsIgnoreCase('v2')"
         + " or !'${forecast.scoring:off}'.equalsIgnoreCase('off')";
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ForecastPipelineConfiguration.class);
+
     @Bean
     PipelinePartitionJob pipelinePartitionJob(MaintainPipelinePartitions partitions) {
         return new PipelinePartitionJob(partitions);
+    }
+
+    /** 채점만 켜고 그림자 실행을 켜지 않았으면 채점이 돌지 않는다는 경고를 기동 때 한 번 남긴다. */
+    @Bean
+    SmartInitializingSingleton scoringSwitchWarning(
+        ForecastPipelineProperties properties,
+        @Value("${forecast.enabled:false}") final boolean forecastEnabled
+    ) {
+        return () -> {
+            if (properties.scoringWithoutShadow(forecastEnabled)) {
+                LOGGER.warn("event=pipeline_scoring_inactive scoring={} forecastEnabled={} shadowEnabled={} pipeline={}",
+                    properties.scoring(), forecastEnabled, properties.shadow().enabled(), properties.pipeline());
+            }
+        };
     }
 }

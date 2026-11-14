@@ -210,7 +210,7 @@ class ScoringStageLegacyEquivalenceTest {
         Map<String, Object> rows = new LinkedHashMap<>();
         for (PassLabel label : result.labels()) {
             rows.putIfAbsent("label:" + List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
-                label.stopOrder(), label.capacity(), label.labelVersion()), label);
+                label.stopOrder(), label.capacity(), label.labelVersion(), label.modelDeploymentId()), label);
         }
         for (UnresolvedForecast closed : result.unresolved()) {
             rows.putIfAbsent("unresolved:" + List.of(closed.sourceDate(), closed.vehicleObservationId(),

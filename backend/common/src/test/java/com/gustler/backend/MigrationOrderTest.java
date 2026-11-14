@@ -45,7 +45,7 @@ class MigrationOrderTest {
      * <p>이 브랜치는 새 예보 경로의 날짜 파티션 테이블을 더한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("forecast_pipeline_records");
+        List.of("forecast_pipeline_records", "forecast_outcome_view");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

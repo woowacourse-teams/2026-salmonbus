@@ -11,6 +11,8 @@ import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished.VehicleForecast;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRun;
+import com.gustler.backend.forecasting.application.pipeline.RecentForecastRoutes;
+import com.gustler.backend.forecasting.domain.pipeline.SourceDates;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -34,7 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 실행 줄이 이미 있어도 빠진 기록 줄은 채운다. 날짜 파티션이 없으면 줄은 기본 파티션으로 들어간다.
  */
 @Repository
-public class JdbcForecastRecordStore implements ForecastRecordStore {
+public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForecastRoutes {
     private static final MultiRowInsert RUNS = new MultiRowInsert("forecast_run", List.of(
         "source_date", "observation_batch_id", "route_id", "route_version_id", "received_at", "confirmed_at",
         "model_deployment_id", "outcome", "prediction_count"));
@@ -134,6 +136,20 @@ public class JdbcForecastRecordStore implements ForecastRecordStore {
                 rows.run().routeId(), rows.run().routeVersionId(), rows.run().receivedAt(), rows.run().confirmedAt(),
                 rows.run().modelDeploymentId(), rows.run().outcome(), rows.vehicles()))
             .toList();
+    }
+
+    /** 수신 시각 하한의 하루 전 날짜부터의 파티션만 읽는다. 나눔 날짜(예약 시각의 날짜)는 수신 시각의 날짜보다 늦지 않다. */
+    @Override
+    public List<Long> routesPublishedSince(Instant fromInclusive) {
+        return jdbc.sql("""
+                SELECT /* salmonbus:forecast_run.recent_routes */ DISTINCT route_id
+                FROM forecast_run
+                WHERE source_date >= ? AND received_at >= ?
+                ORDER BY route_id
+                """)
+            .params(SourceDates.of(fromInclusive).minusDays(1), timestamp(fromInclusive))
+            .query(Long.class)
+            .list();
     }
 
     private static ForecastRun run(ResultSet row) throws SQLException {
