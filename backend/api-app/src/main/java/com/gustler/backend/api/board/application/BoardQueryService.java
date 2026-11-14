@@ -16,11 +16,13 @@ import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import com.gustler.backend.api.route.domain.Route;
 import com.gustler.backend.api.route.domain.RouteStatus;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -93,7 +95,8 @@ public class BoardQueryService {
      *
      * <p>노선마다 {@link #readBoard}와 같은 검사·캐시·조립 규칙을 쓴다. 한 노선의 검사·조립 실패는 그 노선의
      * {@link BoardBatchRead#failure()}로만 남기고 다른 노선은 계속 읽는다. 스냅샷은 한 번에 읽고, 캐시에 없는 노선의
-     * 정류장·예보·차량도 노선 수와 관계없이 종류마다 한 번씩 읽는다. 저장소 조회가 실패하면 트랜잭션을 더 쓸 수 없으므로
+     * 정류장·예보·차량도 노선 수와 관계없이 종류마다 한 번씩 읽는다. 예보는 스냅샷이 고른 출처(옛 예보 테이블, 새 예보 기록)마다
+     * 한 번씩 읽는다. 저장소 조회가 실패하면 트랜잭션을 더 쓸 수 없으므로
      * 노선별로 나누지 않고 예외를 그대로 던진다.
      *
      * <p>스냅샷을 읽은 뒤 {@code deadline}이 지났으면 캐시에 없는 노선 가운데 요청 순서로 첫 유효 노선만 조립하고 나머지는
@@ -151,12 +154,18 @@ public class BoardQueryService {
             return;
         }
         List<Long> versionIds = missed.values().stream().map(BoardSnapshot::routeVersionId).distinct().toList();
-        List<Long> publishedBatchIds = missed.values().stream()
+        Set<Long> publishedBatchIds = new LinkedHashSet<>();
+        Map<Long, LocalDate> recordedBatchDates = new LinkedHashMap<>();
+        missed.values().stream()
             .map(snapshot -> snapshot.observation().orElseThrow())
             .filter(SnapshotObservation::forecastPublished)
-            .map(SnapshotObservation::batchId)
-            .distinct()
-            .toList();
+            .forEach(observation -> {
+                if (observation.readsForecastRecords()) {
+                    recordedBatchDates.putIfAbsent(observation.batchId(), observation.forecastDate());
+                } else {
+                    publishedBatchIds.add(observation.batchId());
+                }
+            });
         Map<Long, Long> versionIdByBatchId = new LinkedHashMap<>();
         missed.values().forEach(snapshot -> versionIdByBatchId.put(
             snapshot.observation().orElseThrow().batchId(), snapshot.routeVersionId()));
@@ -164,7 +173,11 @@ public class BoardQueryService {
         Map<Long, List<BoardStop>> stops = boardQueryRepository.findStops(versionIds);
         Map<Long, List<StoredPrediction>> predictions = Map.of();
         if (!publishedBatchIds.isEmpty()) {
-            predictions = boardQueryRepository.findPredictions(publishedBatchIds);
+            predictions = boardQueryRepository.findPredictions(List.copyOf(publishedBatchIds));
+        }
+        Map<Long, List<StoredPrediction>> recordedPredictions = Map.of();
+        if (!recordedBatchDates.isEmpty()) {
+            recordedPredictions = boardQueryRepository.findRecordedPredictions(recordedBatchDates);
         }
         Map<Long, List<BoardVehicleObservation>> vehicles = boardQueryRepository.findObservedVehicles(versionIdByBatchId);
 
@@ -177,7 +190,9 @@ public class BoardQueryService {
                     throw new ServiceUnavailableException();
                 }
                 List<StoredPrediction> published = List.of();
-                if (observation.forecastPublished()) {
+                if (observation.readsForecastRecords()) {
+                    published = recordedPredictions.getOrDefault(observation.batchId(), List.of());
+                } else if (observation.forecastPublished()) {
                     published = predictions.getOrDefault(observation.batchId(), List.of());
                 }
                 BoardRows rows = new BoardRows(
@@ -466,6 +481,9 @@ public class BoardQueryService {
     }
 
     private List<StoredPrediction> publishedPredictions(SnapshotObservation observation) {
+        if (observation.readsForecastRecords()) {
+            return boardQueryRepository.findRecordedPredictions(observation.batchId(), observation.forecastDate());
+        }
         if (observation.forecastPublished()) {
             return boardQueryRepository.findPredictions(observation.batchId());
         }

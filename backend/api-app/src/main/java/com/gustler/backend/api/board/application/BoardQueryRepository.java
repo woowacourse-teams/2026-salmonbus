@@ -2,6 +2,7 @@ package com.gustler.backend.api.board.application;
 
 import com.gustler.backend.api.board.domain.BoardStop;
 import com.gustler.backend.api.route.RouteId;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -70,6 +71,35 @@ public interface BoardQueryRepository {
                 predictions.put(batchId, found);
             }
         }
+        return predictions;
+    }
+
+    /**
+     * 새 예보 기록({@code forecast_run}·{@code forecast_record})에서 지정한 관측 묶음의 저장 예측을 읽는다.
+     * 버스마다 목표 정류장 배열을 펼쳐 {@link #findPredictions(long)}과 같은 모양의 예측으로 돌려준다.
+     *
+     * <p>새 예보 기록을 읽지 않는 저장소는 {@link ForecastSource#RECORD} 출처의 스냅샷을 돌려주지 않으므로 이 메서드가
+     * 불리지 않는다. 그런 저장소를 위한 기본 구현은 예외를 던진다.
+     *
+     * @param observationBatchId 관측 묶음
+     * @param sourceDate 그 묶음의 날짜 파티션
+     */
+    default List<StoredPrediction> findRecordedPredictions(long observationBatchId, LocalDate sourceDate) {
+        throw new UnsupportedOperationException("이 저장소는 새 예보 기록을 읽지 않습니다.");
+    }
+
+    /**
+     * 여러 관측 묶음의 새 예보 기록을 묶음별로 읽는다. 키는 관측 묶음, 값은 그 묶음의 날짜 파티션이다.
+     * 묶음마다 {@link #findRecordedPredictions(long, LocalDate)}과 같은 행이며 예측이 없는 묶음은 결과에 없다.
+     */
+    default Map<Long, List<StoredPrediction>> findRecordedPredictions(Map<Long, LocalDate> sourceDateByBatchId) {
+        Map<Long, List<StoredPrediction>> predictions = new LinkedHashMap<>();
+        sourceDateByBatchId.forEach((batchId, sourceDate) -> {
+            List<StoredPrediction> found = findRecordedPredictions(batchId.longValue(), sourceDate);
+            if (!found.isEmpty()) {
+                predictions.put(batchId, found);
+            }
+        });
         return predictions;
     }
 
