@@ -8,6 +8,8 @@ PASS=0
 printf 'flywayMaxVersion=39\n' > "$TEST_DIRECTORY/new-manifest"
 printf 'flywayMaxVersion=38\n' > "$TEST_DIRECTORY/old-manifest"
 printf 'component=worker\n' > "$TEST_DIRECTORY/broken-manifest"
+printf 'flywayMaxVersion=81\n' > "$TEST_DIRECTORY/pipeline-manifest"
+printf 'flywayMaxVersion=80\n' > "$TEST_DIRECTORY/before-pipeline-manifest"
 
 expect_blocked() {
   if "$@" > "$TEST_DIRECTORY/output" 2>&1; then echo '차단해야 하는 요청을 허용했다' >&2; exit 1; fi
@@ -83,6 +85,25 @@ run_case '전환 후 구 JAR로 돌아가는 자동 재시작을 막는다' '
   SCHEMA=work
   expect_blocked transition_check worker "$TEST_DIRECTORY/old-manifest" runtime
   expect_blocked transition_check api "$TEST_DIRECTORY/old-manifest" runtime
+'
+run_case 'SAL-434 옛 테이블 정리를 마친 DB에서는 새 API·worker의 배포와 기동을 허용한다' '
+  SCHEMA=retired; APPROVED=no; RUNNING=active; WRITERS=3
+  transition_check api "$TEST_DIRECTORY/pipeline-manifest" deploy
+  transition_check worker "$TEST_DIRECTORY/pipeline-manifest" deploy
+  transition_check api "$TEST_DIRECTORY/pipeline-manifest" runtime
+  transition_check worker "$TEST_DIRECTORY/pipeline-manifest" runtime
+  transition_check_deployment worker "$TEST_DIRECTORY/pipeline-manifest"
+'
+run_case 'SAL-434 옛 테이블 정리를 마친 DB에서 V81 이전 JAR로 돌아가는 배포와 기동을 막는다' '
+  SCHEMA=retired
+  expect_blocked transition_check api "$TEST_DIRECTORY/before-pipeline-manifest" deploy
+  expect_blocked transition_check worker "$TEST_DIRECTORY/before-pipeline-manifest" runtime
+  expect_blocked transition_check_deployment api "$TEST_DIRECTORY/new-manifest"
+'
+run_case 'SAL-434 정리 도중의 DB(옛 대기 테이블이나 뷰 하나만 없음)는 여전히 막는다' '
+  SCHEMA=unsupported
+  expect_blocked transition_check api "$TEST_DIRECTORY/pipeline-manifest" deploy
+  expect_blocked transition_check worker "$TEST_DIRECTORY/pipeline-manifest" runtime
 '
 run_case '배포판의 스키마 번호가 없으면 막는다' '
   expect_blocked transition_check api "$TEST_DIRECTORY/broken-manifest" deploy

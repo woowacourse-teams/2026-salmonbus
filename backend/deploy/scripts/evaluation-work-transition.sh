@@ -90,12 +90,18 @@ transition_sql() {
     timeout 15 psql -X -qAt -v ON_ERROR_STOP=1 -c "$sql" 2>/dev/null
 }
 
+# retired: SAL-434의 deploy/sql/sal434-03-drop-legacy-tables.sql이 옛 대기 테이블·뷰와 옛 예보 테이블을 한 트랜잭션에서
+# 지운 상태다. 셋이 모두 없고 새 예보 테이블(V81)이 있어야 한다. 하나만 없는 중간 상태는 계속 unsupported로 막는다.
+# 운영 서버의 /etc/salmonbus/evaluation-work-transition.sh 사본도 이 판정을 쓰므로 03을 실행하기 전에 사본을 바꾼다(RUNBOOK).
 transition_schema() {
   transition_sql "$1" "SELECT CASE
     WHEN EXISTS (SELECT 1 FROM pg_class WHERE oid=to_regclass('public.forecast_evaluation_work') AND relkind='r')
       AND EXISTS (SELECT 1 FROM pg_class WHERE oid=to_regclass('public.forecast_evaluation_pending') AND relkind='v') THEN 'work'
     WHEN EXISTS (SELECT 1 FROM pg_class WHERE oid=to_regclass('public.forecast_evaluation_pending') AND relkind='r') THEN 'pending'
     WHEN to_regclass('public.flyway_schema_history') IS NULL THEN 'empty'
+    WHEN to_regclass('public.forecast_evaluation_work') IS NULL AND to_regclass('public.forecast_evaluation_pending') IS NULL
+      AND to_regclass('public.seat_forecast') IS NULL
+      AND EXISTS (SELECT 1 FROM pg_class WHERE oid=to_regclass('public.forecast_run') AND relkind='p') THEN 'retired'
     ELSE 'unsupported' END"
 }
 
@@ -134,6 +140,10 @@ transition_check() {
   case "$schema" in
     work)
       [ "$version" -ge 39 ] || { transition_error '새 DB 구조에서 구 JAR를 시작할 수 없습니다. DB 복원이 먼저입니다'; return 1; }
+      ;;
+    retired)
+      # 옛 테이블이 없는 DB에서 V81 이전 JAR는 스키마 검증에서 멈춘다. 자동 롤백이 그 JAR로 바꾸는 것을 여기서 막는다.
+      [ "$version" -ge 81 ] || { transition_error '옛 예보 테이블을 정리한 DB에서는 V81 이전 JAR를 시작할 수 없습니다'; return 1; }
       ;;
     pending)
       if [ "$version" -ge 39 ]; then
