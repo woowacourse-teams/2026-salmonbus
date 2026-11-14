@@ -22,3 +22,5 @@ archive:
   prefix: ${ARCHIVE_PREFIX:salmonbus/prod/lake-v2/}
   page-size: ${ARCHIVE_PAGE_SIZE:2000}
   interval: ${ARCHIVE_INTERVAL:1s}
+  read-timeout: ${ARCHIVE_READ_TIMEOUT:120s}
+  purge-pause: ${ARCHIVE_PURGE_PAUSE:0s}

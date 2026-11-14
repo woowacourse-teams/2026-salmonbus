@@ -1,5 +1,6 @@
 package com.gustler.backend.archive;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -10,20 +11,55 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/**
+ * 이관 작업의 상태와 원본 행을 DB에서 읽고 쓴다.
+ *
+ * <p>노선 행 잠금은 예보 발행·하차 정산 저장과 줄을 서는 짧은 구간(경계 닫기, 남은 일 확인, 파일 삭제)에서만 잡고, 이 구간의 문장은
+ * 10초로 제한한다. 그 날짜 전체를 읽는 최근 기록 확인과 내보내기 조회는 노선 잠금 없이 {@code archive.read-timeout} 으로 제한한다.
+ */
 @Repository
 public class ArchiveRepository {
+    static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(120);
+    private static final Duration LOCKED_STATEMENT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration MAX_READ_TIMEOUT = Duration.ofMinutes(4);
     private final JdbcClient jdbc;
     private final TransactionTemplate transaction;
+    private final TransactionTemplate readWork;
+    private final TransactionTemplate readOnly;
+    private final Duration readTimeout;
 
     public ArchiveRepository(JdbcClient jdbc, PlatformTransactionManager manager) {
+        this(jdbc, manager, DEFAULT_READ_TIMEOUT);
+    }
+
+    /**
+     * @param readTimeout 최근 기록 확인과 내보내기 조회의 문장 제한 시간이다. 확인 직전에 갱신한 5분 임대 안에 끝나도록 1초~4분만 받는다.
+     */
+    @Autowired
+    public ArchiveRepository(
+        JdbcClient jdbc,
+        PlatformTransactionManager manager,
+        @Value("${archive.read-timeout:120s}") Duration readTimeout
+    ) {
+        if (readTimeout.compareTo(Duration.ofSeconds(1)) < 0 || readTimeout.compareTo(MAX_READ_TIMEOUT) > 0) {
+            throw new IllegalArgumentException("이관 읽기 제한 시간은 1초~4분이어야 한다");
+        }
         this.jdbc = jdbc;
+        this.readTimeout = readTimeout;
         transaction = new TransactionTemplate(manager);
         transaction.setTimeout(15);
+        readWork = new TransactionTemplate(manager);
+        readWork.setTimeout((int) readTimeout.toSeconds() + 15);
+        readOnly = new TransactionTemplate(manager);
+        readOnly.setTimeout((int) readTimeout.toSeconds() + 15);
+        readOnly.setReadOnly(true);
     }
 
     public record Job(UUID id, long version, LocalDate date, Instant cutoff, UUID token, String state) {
@@ -74,7 +110,11 @@ public class ArchiveRepository {
     }
 
     private void limits() {
-        jdbc.sql("SET LOCAL statement_timeout='10s'").update();
+        limits(LOCKED_STATEMENT_TIMEOUT);
+    }
+
+    private void limits(Duration statementTimeout) {
+        jdbc.sql("SET LOCAL statement_timeout='" + statementTimeout.toMillis() + "ms'").update();
         jdbc.sql("SET LOCAL lock_timeout='200ms'").update();
         jdbc.sql("SET LOCAL max_parallel_workers_per_gather=0").update();
         jdbc.sql("SET LOCAL TIME ZONE 'UTC'").update();
@@ -132,50 +172,14 @@ public class ArchiveRepository {
             .param(job.version()).query(Long.class).single();
     }
 
-    public String readiness(Job job) {
-        return transaction.execute(status -> {
-            limits();
-            owned(job);
-            routeLock(job);
-            return ready(job);
-        });
-    }
-
     /**
-     * 이관 대상 노선·날짜를 지금 옮겨도 되는지 판정한다.
+     * 다른 프로세스가 아직 이 노선·날짜에 할 일이 있는지 본다. 노선 행 잠금 안에서 불러야 한다.
      *
-     * <p>보관 기준 뒤에 생긴 예보·정산 기록을 찾을 때는 그 노선·날짜의 배치를 {@code MATERIALIZED} CTE 로 먼저 확정하고, 배치마다
-     * {@code LIMIT 1} 하위 질의로 관측은 (observation_batch_id, source_row_number) 유일 키로, 예보·정산은 기본 키로 따라간다.
-     * seat_forecast 에는 노선 인덱스가 없어 예보 쪽에서 출발하면 표 전체를 읽고, 배치를 먼저 확정하지 않으면 EXISTS 의 첫 행 최적화 때문에
-     * observation_batch 전체를 읽을 수 있다. 관측의 (observation_batch_id,
-     * route_version_id) FK 와 예보·정산의 (vehicle_observation_id, route_version_id) FK 때문에 배치의 노선 조건은 예보·정산의 노선 조건과
-     * 같은 행을 고른다.
-     *
-     * <p>승하차 정산은 alighting_forecast_evaluation_metric 뷰로 원본과 원본 삭제한 보관을 함께 본다. 뷰의 보관 쪽 갈래에는 보관 상태
-     * WHERE 가 있어 UNION ALL 이 펼쳐지지 않으므로, 관측 id 를 조인 조건으로 주면 보관 표 기본 키로 내려가지 못하고 보관 표를 통째로
-     * 읽는다. 관측마다 {@code LATERAL} 하위 질의 안에서 관측 id 를 주어 두 갈래 모두 기본 키로 읽게 한다.
+     * <p>하차 이력 보존, 수집 미완료, 하차 정산 대기를 차례로 보고 처음 걸린 사유를 낸다. 모두 인덱스 조회라 잠금을 쥐는 시간이 짧다. 없으면
+     * {@code READY} 다.
      */
-    private String ready(Job job) {
-        boolean historyRequired = jdbc.sql("""
-            SELECT EXISTS (
-                SELECT 1
-                FROM route_version archived
-                JOIN route archived_route ON archived_route.id=archived.route_id
-                JOIN route matching ON matching.display_name=archived_route.display_name
-                JOIN route_version active ON active.route_id=matching.id AND active.valid_to IS NULL
-                LEFT JOIN alighting_history_checkpoint current ON current.route_version_id=active.id
-                WHERE archived.id=:version AND (
-                    current.retain_from<:until OR (
-                        current.route_version_id IS NULL AND EXISTS (
-                            SELECT 1 FROM alighting_history_checkpoint previous
-                            JOIN route_version v ON v.id=previous.route_version_id
-                            WHERE v.route_id=active.route_id
-                        )
-                    )
-                )
-            )
-            """).param("version", job.version()).param("until", time(job.until())).query(Boolean.class).single();
-        if (historyRequired) {
+    private String pendingWork(Job job) {
+        if (historyRequired(job)) {
             return "ALIGHTING_HISTORY_REQUIRED";
         }
         final boolean collecting = jdbc.sql("""
@@ -194,51 +198,121 @@ public class ArchiveRepository {
         if (alightingPending) {
             return "ALIGHTING_AWARE_SETTLEMENT_PENDING";
         }
-        final boolean recent = jdbc.sql(DAY_BATCHES_CTE + """
-            SELECT EXISTS(SELECT 1 FROM day_batches d CROSS JOIN LATERAL (
-                SELECT 1 FROM vehicle_observation o JOIN seat_forecast f ON f.vehicle_observation_id=o.id
-                LEFT JOIN forecast_evaluation_result e
-                    ON e.vehicle_observation_id=f.vehicle_observation_id AND e.target_stop_order=f.target_stop_order
-                LEFT JOIN forecast_evaluation_compact c
-                    ON c.vehicle_observation_id=f.vehicle_observation_id AND c.target_stop_order=f.target_stop_order
-                WHERE o.observation_batch_id=d.id AND f.route_version_id=:v
-                  AND (f.generated_at>=:cutoff OR e.scored_at>=:cutoff OR e.arrived_at>=:cutoff
-                    OR c.scored_at>=:cutoff OR c.arrived_at>=:cutoff)
-                LIMIT 1) changed)
-            """)
-            .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
-            .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
-        final boolean recentAlightingAware = jdbc.sql(DAY_BATCHES_CTE + """
-            SELECT EXISTS(SELECT 1 FROM day_batches d CROSS JOIN LATERAL (
-                SELECT o.id FROM vehicle_observation o WHERE o.observation_batch_id=d.id OFFSET 0) o
-            CROSS JOIN LATERAL (
-                SELECT 1 FROM alighting_forecast_evaluation_metric e
-                WHERE e.vehicle_observation_id=o.id AND e.route_version_id=:v
-                  AND (e.scored_at>=:cutoff OR e.event_at>=:cutoff)
-                LIMIT 1) changed)
-            """)
-            .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
-            .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
-        if (recent || recentAlightingAware) {
-            return "RECENT_CHILD_RECORD";
-        }
         return "READY";
     }
 
-    public void closeRange(Job job) {
-        transaction.executeWithoutResult(status -> {
+    /**
+     * 같은 노선 이름의 현재 노선 버전이 하차 예보 입력으로 이 날짜의 관측을 아직 읽어야 하는지 본다.
+     *
+     * <p>그 날짜의 행이 아니라 현재 노선 버전의 체크포인트를 보므로 경계를 닫은 뒤에도 다시 참이 될 수 있다. 체크포인트를 쓰는 쪽은 노선
+     * 잠금을 잡지 않으므로 파일을 지울 때마다 다시 본다.
+     */
+    private boolean historyRequired(Job job) {
+        return jdbc.sql("""
+            SELECT EXISTS (
+                SELECT 1
+                FROM route_version archived
+                JOIN route archived_route ON archived_route.id=archived.route_id
+                JOIN route matching ON matching.display_name=archived_route.display_name
+                JOIN route_version active ON active.route_id=matching.id AND active.valid_to IS NULL
+                LEFT JOIN alighting_history_checkpoint current ON current.route_version_id=active.id
+                WHERE archived.id=:version AND (
+                    current.retain_from<:until OR (
+                        current.route_version_id IS NULL AND EXISTS (
+                            SELECT 1 FROM alighting_history_checkpoint previous
+                            JOIN route_version v ON v.id=previous.route_version_id
+                            WHERE v.route_id=active.route_id
+                        )
+                    )
+                )
+            )
+            """).param("version", job.version()).param("until", time(job.until())).query(Boolean.class).single();
+    }
+
+    /**
+     * 이관 대상 노선·날짜에 보관 기준 시각 뒤에 생긴 예보·정산 기록이 있는지 판정한다. 있으면 {@code RECENT_CHILD_RECORD}, 없으면
+     * {@code READY} 다.
+     *
+     * <p>노선 잠금 없이 읽기 전용 트랜잭션으로 {@code archive.read-timeout} 안에서 읽는다. 경계를 닫은 뒤에 부르면 그 날짜의 예보·정산
+     * 행은 이관 앱이 지우기 전까지 새로 생기거나 바뀌지 않으므로, 한 번 통과한 판정은 기준 시각이 뒤로 가지 않는 한 그대로다.
+     *
+     * <p>그 노선·날짜의 배치를 {@code MATERIALIZED} CTE 로 먼저 확정하고, 배치마다 {@code LIMIT 1} 하위 질의로 관측은
+     * (observation_batch_id, source_row_number) 유일 키로, 예보·정산은 기본 키로 따라간다. seat_forecast 에는 노선 인덱스가 없어 예보
+     * 쪽에서 출발하면 표 전체를 읽고, 배치를 먼저 확정하지 않으면 EXISTS 의 첫 행 최적화 때문에 observation_batch 전체를 읽을 수 있다.
+     * 관측의 (observation_batch_id, route_version_id) FK 와 예보·정산의 (vehicle_observation_id, route_version_id) FK 때문에 배치의 노선
+     * 조건은 예보·정산의 노선 조건과 같은 행을 고른다.
+     *
+     * <p>승하차 정산은 alighting_forecast_evaluation_metric 뷰로 원본과 원본 삭제한 보관을 함께 본다. 뷰의 보관 쪽 갈래에는 보관 상태
+     * WHERE 가 있어 UNION ALL 이 펼쳐지지 않으므로, 관측 id 를 조인 조건으로 주면 보관 표 기본 키로 내려가지 못하고 보관 표를 통째로
+     * 읽는다. 관측마다 {@code LATERAL} 하위 질의 안에서 관측 id 를 주어 두 갈래 모두 기본 키로 읽게 한다.
+     */
+    public String recentRecords(Job job) {
+        return readOnly.execute(status -> {
+            jdbc.sql("SET TRANSACTION READ ONLY").update();
+            limits(readTimeout);
+            final boolean recent = jdbc.sql(DAY_BATCHES_CTE + """
+                SELECT EXISTS(SELECT 1 FROM day_batches d CROSS JOIN LATERAL (
+                    SELECT 1 FROM vehicle_observation o JOIN seat_forecast f ON f.vehicle_observation_id=o.id
+                    LEFT JOIN forecast_evaluation_result e
+                        ON e.vehicle_observation_id=f.vehicle_observation_id AND e.target_stop_order=f.target_stop_order
+                    LEFT JOIN forecast_evaluation_compact c
+                        ON c.vehicle_observation_id=f.vehicle_observation_id AND c.target_stop_order=f.target_stop_order
+                    WHERE o.observation_batch_id=d.id AND f.route_version_id=:v
+                      AND (f.generated_at>=:cutoff OR e.scored_at>=:cutoff OR e.arrived_at>=:cutoff
+                        OR c.scored_at>=:cutoff OR c.arrived_at>=:cutoff)
+                    LIMIT 1) changed)
+                """)
+                .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
+                .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
+            final boolean recentAlightingAware = jdbc.sql(DAY_BATCHES_CTE + """
+                SELECT EXISTS(SELECT 1 FROM day_batches d CROSS JOIN LATERAL (
+                    SELECT o.id FROM vehicle_observation o WHERE o.observation_batch_id=d.id OFFSET 0) o
+                CROSS JOIN LATERAL (
+                    SELECT 1 FROM alighting_forecast_evaluation_metric e
+                    WHERE e.vehicle_observation_id=o.id AND e.route_version_id=:v
+                      AND (e.scored_at>=:cutoff OR e.event_at>=:cutoff)
+                    LIMIT 1) changed)
+                """)
+                .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
+                .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
+            if (recent || recentAlightingAware) {
+                return "RECENT_CHILD_RECORD";
+            }
+            return "READY";
+        });
+    }
+
+    /**
+     * 남은 일이 없으면 이 노선의 이관 경계를 그 날짜 끝까지 닫는다. 닫았으면 {@code READY}, 남은 일이 있으면 닫지 않고 그 사유를 낸다.
+     *
+     * <p>노선 행 잠금 안에서 남은 일을 확인하고 닫으므로, 같은 잠금으로 줄을 서는 예보 발행과 하차 정산 저장은 닫힌 날짜에 새 행을 쓰지
+     * 못한다. 임대를 잃었으면 {@code ARCHIVE_LEASE_LOST} 로 실패한다.
+     */
+    public String closeRange(Job job) {
+        return transaction.execute(status -> {
             limits();
             owned(job);
             routeLock(job);
-            String reason = ready(job);
+            String reason = pendingWork(job);
             if (!reason.equals("READY")) {
-                throw new IllegalStateException(reason);
+                return reason;
             }
             jdbc.sql("""
                 INSERT INTO operational_archive_boundary VALUES(?,?)
                 ON CONFLICT(route_version_id) DO UPDATE SET closed_before=GREATEST(
                     operational_archive_boundary.closed_before,EXCLUDED.closed_before)
                 """).params(job.version(), time(job.until())).update();
+            return "READY";
+        });
+    }
+
+    /** 삭제 시도를 시작할 때 노선 행 잠금 안에서 남은 일을 한 번 다시 본다. 없으면 {@code READY}, 있으면 그 사유를 낸다. */
+    public String purgeReadiness(Job job) {
+        return transaction.execute(status -> {
+            limits();
+            owned(job);
+            routeLock(job);
+            return pendingWork(job);
         });
     }
 
@@ -255,8 +329,8 @@ public class ArchiveRepository {
         String cursor,
         final int limit
     ) {
-        return transaction.execute(status -> {
-            limits();
+        return readWork.execute(status -> {
+            limits(readTimeout);
             owned(job);
             List<ArchiveRow> rows = jdbc.sql(pageSql(table)).param("v", job.version()).param("from", time(job.from()))
                 .param("until", time(job.until())).param("cursor", cursor).param("limit", limit)
@@ -285,8 +359,8 @@ public class ArchiveRepository {
      * 맞추는 계획은 {@code LIMIT} 을 못 채우는 마지막 페이지에서 관측 표 끝까지 읽는다.
      */
     public Page evidence(Job job, final long cursor, final int limit) {
-        return transaction.execute(status -> {
-            limits();
+        return readWork.execute(status -> {
+            limits(readTimeout);
             owned(job);
             List<String[]> rows = jdbc
                 .sql(DAY_BATCHES_CTE + """
@@ -324,8 +398,8 @@ public class ArchiveRepository {
     }
 
     public List<String> dimensions(Job job, String deploymentIdsJson) {
-        return transaction.execute(status -> {
-            limits();
+        return readWork.execute(status -> {
+            limits(readTimeout);
             owned(job);
             return jdbc
             .sql(
@@ -417,13 +491,25 @@ public class ArchiveRepository {
         }
     }
 
+    /**
+     * 검증한 파일 한 개의 원본 행을 노선 행 잠금 안에서 지운다. 지운 행 수를 내고, 이미 지운 파일이면 0 이다.
+     *
+     * <p>임대, 이 날짜까지 닫힌 이관 경계, 하차 이력 보존 조건만 다시 본다. 경계가 닫혀 있지 않으면 {@code ARCHIVE_BOUNDARY_OPEN} 으로
+     * 실패하고, 하차 이력 보존 조건이 생겼으면 아무것도 지우지 않고 {@link ArchiveDeferral} 을 던진다. 키와 행 전체가 파일과 같은 행만
+     * 지우며 지운 수가 파일 행 수와 다르면 트랜잭션째 실패한다.
+     */
     public int purge(Job job, File file, List<String> originals) {
         return transaction.execute(status -> {
             limits();
             owned(job);
             routeLock(job);
-            if (!ready(job).equals("READY")) {
-                throw new IllegalStateException("WORK_NOT_COMPLETED");
+            if (!jdbc.sql("""
+                SELECT EXISTS(SELECT 1 FROM operational_archive_boundary WHERE route_version_id=? AND closed_before>=?)
+                """).params(job.version(), time(job.until())).query(Boolean.class).single()) {
+                throw new IllegalStateException("ARCHIVE_BOUNDARY_OPEN");
+            }
+            if (historyRequired(job)) {
+                throw new ArchiveDeferral("ALIGHTING_HISTORY_REQUIRED");
             }
             if (jdbc.sql("SELECT purged FROM operational_archive_file WHERE job_id=? AND" + " file_number=? FOR UPDATE")
                 .params(job.id(), file.number()).query(Boolean.class).single()) {
@@ -465,10 +551,19 @@ public class ArchiveRepository {
         });
     }
 
+    /** 작업을 60초 뒤로 미루고 임대를 놓는다. */
     public void defer(Job job, String code) {
         jdbc.sql("""
             UPDATE operational_archive_job SET failure_code=?,retry_at=clock_timestamp()+interval '60 seconds',
                 lease_until=clock_timestamp() WHERE id=? AND lease_token=?
             """).params(code.substring(0, Math.min(80, code.length())), job.id(), job.token()).update();
+    }
+
+    /** 작업을 {@code retryAt} 까지 미루고 임대를 놓는다. */
+    public void deferUntil(Job job, String code, Instant retryAt) {
+        jdbc.sql("""
+            UPDATE operational_archive_job SET failure_code=?,retry_at=?,lease_until=clock_timestamp()
+            WHERE id=? AND lease_token=?
+            """).params(code.substring(0, Math.min(80, code.length())), time(retryAt), job.id(), job.token()).update();
     }
 }

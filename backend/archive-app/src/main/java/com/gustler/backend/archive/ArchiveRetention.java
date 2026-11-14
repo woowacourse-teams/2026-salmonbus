@@ -16,6 +16,11 @@ public final class ArchiveRetention {
         return LocalDate.now(clock.withZone(ZONE)).minusDays(1).atStartOfDay(ZONE).toInstant();
     }
 
+    /** 보관 기준 시각이 다음에 바뀌는 때, 곧 {@code clock} 기준 다음 한국 자정이다. */
+    public static Instant nextCutoffChange(Clock clock) {
+        return start(LocalDate.now(clock.withZone(ZONE)).plusDays(1));
+    }
+
     public static Instant start(LocalDate date) {
         return date.atStartOfDay(ZONE).toInstant();
     }

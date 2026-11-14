@@ -202,7 +202,7 @@ class ArchiveReadinessQueryTest {
 
     private Map<String, String> readiness(Map<String, Long> versions) {
         Map<String, String> result = new LinkedHashMap<>();
-        versions.forEach((name, version) -> result.put(name, fixture.repository.readiness(job(version))));
+        versions.forEach((name, version) -> result.put(name, fixture.repository.recentRecords(job(version))));
         return result;
     }
 

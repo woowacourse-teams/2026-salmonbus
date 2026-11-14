@@ -3,6 +3,7 @@ package com.gustler.backend.archive;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.SQLException;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -11,8 +12,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -20,10 +23,21 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.SerializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
+/**
+ * 노선 버전·한국 날짜 하나씩 운영 원본을 S3 로 내보내고, 다시 읽어 검증한 파일의 행만 DB 에서 지운다.
+ *
+ * <p>내보내기 전 작업은 노선 잠금 안에서 남은 일을 확인하며 이관 경계를 닫고, 노선 잠금 없이 최근 기록을 한 번 확인한 뒤 내보낸다.
+ * 내보내기를 마친 작업({@code VERIFIED}, {@code PURGING})은 삭제부터 이어 간다. 삭제는 시도마다 남은 일을 한 번 다시 보고, 파일마다
+ * 임대·경계·하차 이력 보존 조건만 본다. 노선 잠금을 제때 얻지 못하면({@code 55P03}) 같은 단계를 잠시 쉬고 세 번까지 다시 시도한다.
+ */
 @Component
 @ConditionalOnProperty(prefix = "archive", name = "enabled", havingValue = "true")
 public class ArchiveService {
     private static final Logger LOG = LoggerFactory.getLogger(ArchiveService.class);
+    private static final String LOCK_NOT_AVAILABLE = "55P03";
+    private static final int LOCK_RETRIES = 3;
+    private static final Duration DEFAULT_LOCK_RETRY_PAUSE = Duration.ofSeconds(1);
+    private static final Duration MAX_PAUSE = Duration.ofMinutes(1);
     private static final JsonMapper JSON = JsonMapper.builder().enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
         .build();
     private final ArchiveRepository repository;
@@ -33,7 +47,27 @@ public class ArchiveService {
     private final String prefix;
     private final int pageSize;
     private final boolean deleteEnabled;
+    private final Duration purgePause;
+    private final Duration lockRetryPause;
 
+    public ArchiveService(
+        ArchiveRepository repository,
+        ArchiveObjects objects,
+        Clock clock,
+        MeterRegistry metrics,
+        String prefix,
+        final int pageSize,
+        final boolean deleteEnabled
+    ) {
+        this(repository, objects, clock, metrics, prefix, pageSize, deleteEnabled, Duration.ZERO,
+            DEFAULT_LOCK_RETRY_PAUSE);
+    }
+
+    /**
+     * @param purgePause 파일 삭제 사이에 쉬는 시간이다. 재배포 없이 처리량을 줄이는 데 쓴다. 0~1분만 받는다.
+     * @param lockRetryPause 노선 잠금을 얻지 못한 단계를 다시 시도하기 전에 쉬는 시간이다. 0~1분만 받는다.
+     */
+    @Autowired
     public ArchiveService(
         ArchiveRepository repository,
         ArchiveObjects objects,
@@ -41,10 +75,15 @@ public class ArchiveService {
         MeterRegistry metrics,
         @Value("${archive.prefix}") String prefix,
         @Value("${archive.page-size:2000}") final int pageSize,
-        @Value("${archive.delete-enabled:false}") final boolean deleteEnabled
+        @Value("${archive.delete-enabled:false}") final boolean deleteEnabled,
+        @Value("${archive.purge-pause:0s}") Duration purgePause,
+        @Value("${archive.lock-retry-pause:1s}") Duration lockRetryPause
     ) {
         if (!isValidDestination(prefix) || !isValidPageSize(pageSize)) {
             throw new IllegalArgumentException("새 S3 prefix와 1~10000행 페이지가 필요하다");
+        }
+        if (!isValidPause(purgePause) || !isValidPause(lockRetryPause)) {
+            throw new IllegalArgumentException("삭제 사이와 잠금 재시도 전 쉬는 시간은 0~1분이어야 한다");
         }
         this.repository = repository;
         this.objects = objects;
@@ -53,7 +92,14 @@ public class ArchiveService {
         this.prefix = prefix;
         this.pageSize = pageSize;
         this.deleteEnabled = deleteEnabled;
-        LOG.info("event=operational_archive_config enabled=true deleteEnabled={} pageSize={}", deleteEnabled, pageSize);
+        this.purgePause = purgePause;
+        this.lockRetryPause = lockRetryPause;
+        LOG.info("event=operational_archive_config enabled=true deleteEnabled={} pageSize={} purgePauseMs={}",
+            deleteEnabled, pageSize, purgePause.toMillis());
+    }
+
+    private boolean isValidPause(Duration pause) {
+        return !pause.isNegative() && pause.compareTo(MAX_PAUSE) <= 0;
     }
 
     private boolean isValidDestination(String prefix) {
@@ -74,16 +120,19 @@ public class ArchiveService {
         final long started = System.nanoTime();
         try {
             process(job, started);
+        } catch (ArchiveDeferral deferral) {
+            defer(job, deferral.reason());
         } catch (RuntimeException failure) {
             recordFailure(job, failure);
         }
     }
 
     private void process(ArchiveRepository.Job job, final long started) {
-        if (!isReady(job)) {
-            return;
-        }
         if (job.state().equals("EXPORTING")) {
+            close(job);
+            if (hasRecentRecords(job)) {
+                return;
+            }
             export(job);
         }
         verifyManifest(job);
@@ -97,31 +146,93 @@ public class ArchiveService {
             job.id(), job.version(), job.date(), (System.nanoTime() - started) / 1000000);
     }
 
-    private boolean isReady(ArchiveRepository.Job job) {
-        String readiness = repository.readiness(job);
-        if (readiness.equals("READY")) {
-            return true;
+    private void close(ArchiveRepository.Job job) {
+        String reason = withLockRetry(job, "close", () -> repository.closeRange(job));
+        if (!reason.equals("READY")) {
+            throw new ArchiveDeferral(reason);
         }
-        defer(job, readiness);
-        return false;
+    }
+
+    /**
+     * 닫은 날짜의 최근 기록을 노선 잠금 없이 한 번 확인한다. 있으면 보관 기준 시각이 바뀌는 다음 한국 자정까지 보류한다. 닫은 날짜의 행은
+     * 바뀌지 않으므로 그 전에 다시 읽어도 답이 같다.
+     */
+    private boolean hasRecentRecords(ArchiveRepository.Job job) {
+        final long started = System.nanoTime();
+        String reason = repository.recentRecords(job);
+        LOG.info("event=operational_archive status=RECENT_CHECKED archiveId={} routeVersionId={} date={} result={}"
+            + " durationMs={}", job.id(), job.version(), job.date(), reason, (System.nanoTime() - started) / 1000000);
+        metrics.timer("salmonbus_archive_stage", "stage", "recent_check").record(System.nanoTime() - started,
+            TimeUnit.NANOSECONDS);
+        if (reason.equals("READY")) {
+            return false;
+        }
+        repository.deferUntil(job, reason, ArchiveRetention.nextCutoffChange(clock));
+        recordDeferral(job, reason);
+        return true;
     }
 
     private void defer(ArchiveRepository.Job job, String reason) {
         repository.defer(job, reason);
+        recordDeferral(job, reason);
+    }
+
+    private void recordDeferral(ArchiveRepository.Job job, String reason) {
         metrics.counter("salmonbus_archive_jobs", "status", "deferred", "reason", reason).increment();
         LOG.info("event=operational_archive status=DEFERRED archiveId={} routeVersionId={} date={} reason={}",
             job.id(), job.version(), job.date(), reason);
     }
 
+    /**
+     * 노선 잠금을 잡는 한 단계를 실행한다. 잠금 대기 제한({@code 55P03})에 걸리면 쉬었다가 같은 단계를 세 번까지 다시 시도하고, 그래도
+     * 못 얻으면 마지막 실패를 그대로 던진다. 다른 실패는 다시 시도하지 않는다. 단계는 다시 실행해도 결과가 같아야 한다.
+     */
+    private <T> T withLockRetry(ArchiveRepository.Job job, String stage, Supplier<T> step) {
+        for (int retry = 0;; retry++) {
+            try {
+                return step.get();
+            } catch (RuntimeException failure) {
+                if (retry >= LOCK_RETRIES || !sqlState(failure).equals(LOCK_NOT_AVAILABLE)) {
+                    throw failure;
+                }
+                metrics.counter("salmonbus_archive_lock_retries", "stage", stage).increment();
+                LOG.info("event=operational_archive status=LOCK_RETRY archiveId={} routeVersionId={} date={} stage={}"
+                    + " retry={}", job.id(), job.version(), job.date(), stage, retry + 1);
+                pause(lockRetryPause);
+            }
+        }
+    }
+
+    private void pause(Duration duration) {
+        if (duration.isZero()) {
+            return;
+        }
+        try {
+            Thread.sleep(duration);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("ARCHIVE_INTERRUPTED", interrupted);
+        }
+    }
+
     private void purgeVerifiedFiles(ArchiveRepository.Job job) {
         repository.requireDeletionIndexes();
+        String reason = withLockRetry(job, "purge_readiness", () -> repository.purgeReadiness(job));
+        if (!reason.equals("READY")) {
+            throw new ArchiveDeferral(reason);
+        }
+        boolean first = true;
         for (ArchiveRepository.File file : repository.files(job)) {
             if (file.purged()) {
                 continue;
             }
+            if (!first) {
+                pause(purgePause);
+            }
+            first = false;
             List<String> rows = readVerifiedRows(file);
             final long started = System.nanoTime();
-            final int removed = repository.purge(job, file, rows);
+            final int removed = withLockRetry(job, "purge", () -> repository.purge(job, file, rows));
             LOG.info(
                 "event=operational_archive status=PURGED_FILE archiveId={} routeVersionId={} date={}"
                     + " fileNumber={} table={} deletedRows={} fileRows={} fileBytes={} dbDurationMs={}",
@@ -188,7 +299,6 @@ public class ArchiveService {
     }
 
     private void export(ArchiveRepository.Job job) {
-        repository.closeRange(job);
         repository.resetExport(job);
         int number = 0;
         Set<Long> deployments = new TreeSet<>();
