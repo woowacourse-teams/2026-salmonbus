@@ -45,6 +45,17 @@ class ForecastPipelineConfigurationTest {
     }
 
     @Test
+    void 스위치가_기본값이어도_수집이_켜진_worker는_관측_테이블을_위해_파티션_유지_작업을_등록한다() {
+        runner.withPropertyValues("collection.enabled=true").run(context -> {
+            CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
+
+            assertThat(context).hasSingleBean(PipelinePartitionJob.class);
+            assertThat(context.getBean(ForecastPipelineProperties.class).usesPipelineTables()).isFalse();
+            assertThat(partitions.started.await(5, TimeUnit.SECONDS)).isTrue();
+        });
+    }
+
+    @Test
     void 스위치_값을_바인딩하고_기본값을_채운다() {
         runner.withPropertyValues("forecast.pipeline=V2", "forecast.scoring=shadow").run(context -> {
             ForecastPipelineProperties actual = context.getBean(ForecastPipelineProperties.class);

@@ -40,6 +40,17 @@ public record ForecastBatch(
         return !confirmedAt.isBefore(receivedAt) && !confirmedAt.isAfter(receivedAt.plus(MAX_CONFIRMATION_DELAY));
     }
 
+    /**
+     * 착수 시각만 바꾼 배치를 돌려준다. 본선({@code forecast.pipeline=v2})이 처리를 시작할 때 찍은 시각을 넣는 데 쓴다.
+     *
+     * @param at 착수 시각
+     * @return 나머지 값이 같은 배치
+     */
+    public ForecastBatch withConfirmedAt(Instant at) {
+        return new ForecastBatch(observationBatchId, routeVersionId, receivedAt, at, ingestionOrigin, outcome, storedRows,
+            rows);
+    }
+
     /** 저장 줄 수와 실제로 읽은 줄 수가 같은지다. 옛 경로의 {@code CHECK_ROWS}와 같은 뜻이다. */
     public boolean rowsComplete() {
         return storedRows != null && storedRows == rows.size();

@@ -226,30 +226,7 @@ public class ForecastBatchWriter {
         if (predictions.stream().anyMatch(row -> !targets.containsKey(row.targetStopOrder()))) {
             throw new IllegalStateException("예보 대상 정류장의 정산 근거가 없다");
         }
-        JsonNode source = JSON.readTree(targets.values().iterator().next());
-        ObjectNode shared = JSON.createObjectNode();
-        shared.put("capacityPolicy", "vehicle-capacity-snapshot-v1");
-        shared.put("inputProfile", statistics.profile().input());
-        for (String field : List.of("turn", "realStopOrders", "extendedSettlement")) {
-            if (source.has(field)) {
-                shared.set(field, source.get(field));
-            }
-        }
-        if (source.has("holidays")) {
-            List<String> holidays = new ArrayList<>();
-            source.path("holidays").forEach(day -> holidays.add(day.asString()));
-            holidays.sort(String::compareTo);
-            shared.set("holidays", JSON.valueToTree(holidays));
-        }
-        ObjectNode stops = JSON.createObjectNode();
-        targets.forEach((order, evidence) -> {
-            JsonNode parameters = JSON.readTree(evidence).path("alighting").path("stops");
-            stops.set(order.toString(), parameters.isArray() ? parameters : JSON.createArrayNode());
-        });
-        ObjectNode context = JSON.createObjectNode();
-        context.set("shared", shared);
-        context.set("stops", stops);
-        return JSON.writeValueAsString(context);
+        return SettlementContextDocument.of(model, statistics);
     }
 
     private SeatForecast alightingForecast(

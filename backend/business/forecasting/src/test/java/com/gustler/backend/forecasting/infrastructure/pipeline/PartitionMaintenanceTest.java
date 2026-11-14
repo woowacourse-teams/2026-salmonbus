@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -178,6 +179,60 @@ class PartitionMaintenanceTest {
         } finally {
             jdbcClient.sql("DROP OWNED BY " + role).update();
             jdbcClient.sql("DROP ROLE " + role).update();
+        }
+    }
+
+    @Test
+    void 관측_테이블이_일반_테이블이면_새_경로_스위치가_꺼진_수집_worker에서_아무것도_만들지_않는다() {
+        // given
+        PartitionMaintenance maintenance = maintenanceAt(BEFORE_KOREAN_MIDNIGHT);
+        maintenance.setPipelineTables(false);
+
+        // when
+        Report actual = maintenance.maintain();
+
+        // then
+        assertThat(maintenance.managedTables()).isEmpty();
+        assertThat(actual.created()).isEmpty();
+        assertThat(actual.failed()).isEmpty();
+        assertThat(actual.defaultRows()).isEmpty();
+        assertThat(PartitionMaintenance.TABLES).allSatisfy(table -> assertThat(partitionsOf(table)).isEmpty());
+        assertThat(partitionsOf("observation_batch")).isEmpty();
+    }
+
+    @Test
+    void 관측_테이블이_파티션_테이블이면_스위치와_무관하게_수동_SQL과_같은_이름으로_날짜_파티션을_만든다() throws Exception {
+        // given
+        String schema = "observation_partition_" + UUID.randomUUID().toString().replace("-", "");
+        jdbcClient.sql("CREATE SCHEMA " + schema).update();
+        try (Connection connection = database.connection()) {
+            connection.createStatement().execute("SET search_path = " + schema + ", public");
+            for (String table : PartitionMaintenance.OBSERVATION_TABLES) {
+                connection.createStatement().execute("CREATE TABLE " + table
+                    + " (id bigint NOT NULL, source_date date NOT NULL) PARTITION BY RANGE (source_date)");
+                connection.createStatement().execute("CREATE TABLE " + table + "_default PARTITION OF " + table
+                    + " DEFAULT");
+            }
+            connection.createStatement().execute("INSERT INTO vehicle_observation_default VALUES (1, DATE '2029-12-31')");
+            SingleConnectionDataSource scoped = new SingleConnectionDataSource(connection, true);
+            PartitionMaintenance maintenance = new PartitionMaintenance(JdbcClient.create(scoped),
+                new DataSourceTransactionManager(scoped), Clock.fixed(BEFORE_KOREAN_MIDNIGHT, ZoneOffset.UTC));
+            maintenance.setPipelineTables(false);
+
+            // when
+            Report actual = maintenance.maintain();
+
+            // then
+            assertThat(maintenance.managedTables()).containsExactlyElementsOf(PartitionMaintenance.OBSERVATION_TABLES);
+            assertThat(actual.created()).containsExactly("observation_batch_p20300101", "observation_batch_p20300102",
+                "observation_batch_p20300103", "observation_batch_p20300104", "vehicle_observation_p20300101",
+                "vehicle_observation_p20300102", "vehicle_observation_p20300103", "vehicle_observation_p20300104");
+            assertThat(actual.failed()).isEmpty();
+            assertThat(actual.defaultRows()).containsExactlyInAnyOrderEntriesOf(
+                Map.of("observation_batch", 0L, "vehicle_observation", 1L));
+            assertThat(PartitionMaintenance.TABLES).allSatisfy(table -> assertThat(partitionsOf(table)).isEmpty());
+        } finally {
+            jdbcClient.sql("DROP SCHEMA " + schema + " CASCADE").update();
         }
     }
 

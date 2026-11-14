@@ -111,23 +111,24 @@ forecast:
   arrival-limit: 400
   # 새 예보 경로(SAL-434)의 스위치. 기본값은 옛 경로만 도는 지금 상태다.
   # 전환 순서: shadow.enabled=true → scoring=shadow → pipeline=v2 → scoring=v2.
+  # forecast.enabled=true에서 받아들이는 조합은 넷이고 나머지는 기동을 멈춘다(RUNBOOK 「SAL-434 전환 절차」의 스위치 조합표).
+  # (v1, shadow 꺼짐, off) 기본 / (v1, shadow 켜짐, off|shadow) 그림자 / (v2, shadow) / (v2, v2). v2에서 shadow.enabled는 무시한다.
   # 셋 가운데 하나라도 기본값이 아니면 새 테이블의 날짜 파티션을 기동 때와 partition-interval마다 미리 만든다.
-  pipeline: ${FORECAST_PIPELINE:v1} # v1: 옛 경로가 본선. v2: 새 경로가 본선
+  pipeline: ${FORECAST_PIPELINE:v1} # v1: 옛 경로가 본선. v2: 새 경로가 본선(옛 예보 쓰기·체크포인트 없음)
   shadow:
     enabled: ${FORECAST_SHADOW_ENABLED:false} # v1일 때 새 경로를 옆에서 돌려 대조하고 새 테이블에 쓴다
     queue-capacity: ${FORECAST_SHADOW_QUEUE_CAPACITY:200} # 넘치면 새 배치를 버리고 그 노선의 메모리 상태를 버린다
-  # off, shadow, v2. 그림자 실행(shadow.enabled)이 켜져 있어야 돈다. v2는 지금 shadow와 같다(옛 정산을 끄는 것은 다음 묶음).
+  # off, shadow, v2. shadow: 새 채점을 쓰고 v1이면 옛 정산과 대조한다. v2: 옛 정산 작업을 돌리지 않는다(pipeline=v2에서만).
   scoring: ${FORECAST_SCORING:off}
   scoring-flush-interval: ${FORECAST_SCORING_FLUSH_INTERVAL:5s} # 채점 결과를 모아 한 트랜잭션으로 쓰는 간격
   scoring-queue-capacity: ${FORECAST_SCORING_QUEUE_CAPACITY:10000} # 넘치면 사건을 버리고 그 노선을 다시 되감는다
-  scoring-comparison-interval: ${FORECAST_SCORING_COMPARISON_INTERVAL:10m} # 새 채점과 옛 정산 결과 대조 간격
+  scoring-comparison-interval: ${FORECAST_SCORING_COMPARISON_INTERVAL:10m} # 새 채점과 옛 정산 결과 대조 간격(v1에서만)
   scoring-comparison-delay: ${FORECAST_SCORING_COMPARISON_DELAY:3h} # 수신 뒤 이만큼 지난 배치만 대조한다
   scoring-comparison-batch-limit: 1500 # 대조 한 회차에 읽는 예보 실행 수의 상한
-  lanes: ${FORECAST_LANES:2} # 새 경로의 노선별 실행 줄 수
+  lanes: ${FORECAST_LANES:2} # 새 경로 본선의 노선별 실행 줄 수. 같은 노선은 항상 같은 줄에서 순서대로 처리한다
+  lane-queue-capacity: ${FORECAST_LANE_QUEUE_CAPACITY:1000} # 줄 하나의 길이. 넘치면 넣지 않고 다음 줍기(interval)에 맡긴다
   replay-window: ${FORECAST_REPLAY_WINDOW:6h} # 다시 뜰 때 되감는 관측 범위
-  partition-interval: 1h # 오늘부터 사흘 뒤까지 날짜 파티션을 확인하는 주기
-  export:
-    enabled: ${FORECAST_EXPORT_ENABLED:false} # 날짜 단위 내보내기와 파티션 삭제
+  partition-interval: 1h # 오늘부터 사흘 뒤까지 날짜 파티션을 확인하는 주기. 수집이 켜진 worker는 파티션이 된 관측 테이블도 다룬다
 
 route-geometry:
   generation:

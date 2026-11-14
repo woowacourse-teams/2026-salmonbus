@@ -389,6 +389,42 @@ class ForecastSourceEquivalenceTest {
         assertThat(auto.observation().orElseThrow().forecastSource()).isEqualTo(ForecastSource.RECORD);
     }
 
+    @Test
+    void 본선을_새_경로로_바꾸는_순간_옛_발행_뒤의_첫_새_기록부터_자동_선택이_새_기록을_읽고_응답이_끊기지_않는다() {
+        // given
+        RouteContext route = route(ROUTE_ID);
+        Batch shadowed = batchWithVehicles(route, now.minusSeconds(60));
+        publishBoth(shadowed, now.minusSeconds(60));
+        Batch lastLegacy = batchWithVehicles(route, now.minusSeconds(30));
+        publishBoth(lastLegacy, now.minusSeconds(30));
+
+        // when
+        BoardSnapshot beforeFirstRecord = snapshotOf(ForecastSourceSetting.AUTO, ROUTE_ID);
+        Board boardBeforeFirstRecord = boardOf(ForecastSourceSetting.AUTO, ROUTE_ID);
+        Board legacyBoardBeforeFirstRecord = boardOf(ForecastSourceSetting.LEGACY, ROUTE_ID);
+        Batch firstRecord = batchWithVehicles(route, now);
+        publishRecord(firstRecord, now, model);
+        BoardSnapshot afterFirstRecord = snapshotOf(ForecastSourceSetting.AUTO, ROUTE_ID);
+        Board boardAfterFirstRecord = boardOf(ForecastSourceSetting.AUTO, ROUTE_ID);
+        Board recordBoardAfterFirstRecord = boardOf(ForecastSourceSetting.RECORD, ROUTE_ID);
+        Batch late = batchWithVehicles(route, now.plusSeconds(30));
+        insertRun(late.id(), now.plusSeconds(121), model, "LATE", 0);
+        BoardSnapshot afterLateRun = snapshotOf(ForecastSourceSetting.AUTO, ROUTE_ID);
+
+        // then
+        assertThat(beforeFirstRecord.observation().orElseThrow().batchId()).isEqualTo(lastLegacy.id());
+        assertThat(beforeFirstRecord.observation().orElseThrow().forecastSource()).isEqualTo(ForecastSource.LEGACY);
+        assertThat(boardBeforeFirstRecord).isEqualTo(legacyBoardBeforeFirstRecord);
+        assertThat(vehicleAt(boardBeforeFirstRecord, 2, "BUS-A").forecast()).isInstanceOf(VehicleForecast.Available.class);
+        assertThat(boardAfterFirstRecord).isEqualTo(recordBoardAfterFirstRecord);
+        assertThat(vehicleAt(boardAfterFirstRecord, 2, "BUS-A").forecast()).isInstanceOf(VehicleForecast.Available.class);
+        assertThat(afterFirstRecord.observation().orElseThrow().batchId()).isEqualTo(firstRecord.id());
+        assertThat(afterFirstRecord.observation().orElseThrow().forecastSource()).isEqualTo(ForecastSource.RECORD);
+        assertThat(afterLateRun.observation().orElseThrow().batchId()).isEqualTo(late.id());
+        assertThat(afterLateRun.observation().orElseThrow().forecastSource()).isEqualTo(ForecastSource.RECORD);
+        assertThat(afterLateRun).isEqualTo(snapshotOf(ForecastSourceSetting.RECORD, ROUTE_ID));
+    }
+
     private Board boardOf(ForecastSourceSetting source, String routeId) {
         return serviceOf(source).readBoard(new RouteId(routeId)).board();
     }

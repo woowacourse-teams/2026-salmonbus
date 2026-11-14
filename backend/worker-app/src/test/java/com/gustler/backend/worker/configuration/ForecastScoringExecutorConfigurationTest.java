@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.gustler.backend.forecasting.api.pipeline.CompareShadowScoring;
 import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
 import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
+import com.gustler.backend.worker.scheduling.ScoringComparisonJob;
 import com.gustler.backend.worker.scheduling.ScoringExecutor;
 import com.gustler.backend.worker.scheduling.ShadowScoringJob;
 import java.time.Duration;
@@ -37,19 +38,32 @@ class ForecastScoringExecutorConfigurationTest {
             .run(context -> assertThat(context).doesNotHaveBean(ScoringFeed.class));
         runner.withPropertyValues("forecast.enabled=false", "forecast.shadow.enabled=true", "forecast.scoring=shadow")
             .run(context -> assertThat(context).doesNotHaveBean(ScoringFeed.class));
-        runner.withPropertyValues("forecast.enabled=true", "forecast.shadow.enabled=true", "forecast.pipeline=v2",
-            "forecast.scoring=shadow").run(context -> assertThat(context).doesNotHaveBean(ScoringFeed.class));
+        runner.withPropertyValues("forecast.enabled=false", "forecast.pipeline=v2", "forecast.scoring=v2")
+            .run(context -> assertThat(context).doesNotHaveBean(ScoringFeed.class));
     }
 
     @Test
-    void 그림자_실행과_채점을_켜면_채점_줄과_주기_작업을_기본값으로_등록하고_v2도_같이_동작한다() {
+    void 본선이_새_경로이면_채점_줄과_주기_작업을_등록하고_옛_정산_대조_작업은_등록하지_않는다() {
         for (String scoring : new String[] {"shadow", "v2"}) {
+            runner.withPropertyValues("forecast.enabled=true", "forecast.pipeline=v2", "forecast.scoring=" + scoring)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ScoringExecutor.class);
+                    assertThat(context).hasSingleBean(ShadowScoringJob.class);
+                    assertThat(context).doesNotHaveBean(ScoringComparisonJob.class);
+                });
+        }
+    }
+
+    @Test
+    void 그림자_실행과_채점을_켜면_채점_줄과_주기_작업과_옛_정산_대조_작업을_기본값으로_등록한다() {
+        for (String scoring : new String[] {"shadow"}) {
             runner.withPropertyValues("forecast.enabled=true", "forecast.shadow.enabled=true",
                 "forecast.scoring=" + scoring).run(context -> {
                     ForecastPipelineProperties properties = context.getBean(ForecastPipelineProperties.class);
 
                     assertThat(context).hasSingleBean(ScoringExecutor.class);
                     assertThat(context).hasSingleBean(ShadowScoringJob.class);
+                    assertThat(context).hasSingleBean(ScoringComparisonJob.class);
                     assertThat(properties.scoringFlushInterval()).isEqualTo(Duration.ofSeconds(5));
                     assertThat(properties.scoringQueueCapacity()).isEqualTo(10_000);
                     assertThat(properties.scoringComparisonInterval()).isEqualTo(Duration.ofMinutes(10));

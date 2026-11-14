@@ -1099,7 +1099,7 @@ dev에서 기존 V67을 이미 실행했다면 V72 이상 적용과 V67 단독 �
    V78은 확정시각과 배치 ID의 커서 인덱스를 생성한다. 준비 명령은 이 인덱스가 없거나 유효하지 않으면 이력을 읽기 전에 중단한다. 생성 중 배치 쓰기가 기다리므로 Worker와 이관·복원 작업을 중지한 상태에서 적용한다. 인덱스 생성에도 기존 배치 읽기와 쓰기가 필요하므로 체크포인트 준비와 겹치지 않게 한다. 잠금 획득은 5초, 생성 문장은 120초로 제한하고 실패하면 해당 마이그레이션을 롤백한다. 완료 후 체크포인트 준비를 진행한다.
 
 4. 새 경로를 설정한 뒤 `sudo rm /etc/salmonbus/alighting-cutover-hold`를 실행하고 Worker 배포를 재개한다. 새 Worker의 차량 정원 캐시 준비와 예보·정산을 확인한다. 예보에 저장한 정원으로 정산하며, 이후 관측이 그 정원을 넘으면 `OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT` 사유로 해당 정산을 종료한다.
-5. archive-app은 삭제를 끈 상태로 시작한다. 지원 노선의 현재 판본마다 새 Worker가 `alighting_history_checkpoint`에 저장한 배치가 DB에 존재하는지 확인한다. 이전 날짜의 수집·정산 완료와 S3 재읽기 및 해시 검증 후 삭제를 활성화한다. 마지막 체크포인트 확정 시각에서 90초를 뺀 수신 시각 이후의 자료가 포함된 날짜는 새 체크포인트가 저장될 때까지 `ALIGHTING_HISTORY_REQUIRED`로 보류된다.
+5. archive-app은 삭제를 끈 상태로 시작한다. 지원 노선의 현재 판본마다 새 Worker가 `alighting_history_checkpoint`에 저장한 배치가 DB에 존재하는지 확인한다. 이전 날짜의 수집·정산 완료와 S3 재읽기 및 해시 검증 후 삭제를 활성화한다. 마지막 체크포인트 확정 시각에서 90초를 뺀 수신 시각 이후의 자료가 포함된 날짜는 새 체크포인트가 저장될 때까지 `ALIGHTING_HISTORY_REQUIRED`로 보류된다. 이 보류는 `ARCHIVE_HISTORY_HOLD=checkpoint`(기본값)일 때다. 새 예보 경로가 본선이 된 뒤(`ARCHIVE_HISTORY_HOLD=window`)에는 체크포인트 대신 `ARCHIVE_HISTORY_HOLD_WINDOW`보다 최근인 날짜를 같은 사유로 보류한다(「SAL-434 전환 절차」 4-1).
 
 정산의 확정 모델은 수집 배치별로 작업을 묶고, 노선·날짜·정류장 구성별로 새 관측과 닫힌 통과 근거를 이어서 저장한다. 준비 한 번에 새 수집 배치를 100개까지 V78 커서 인덱스(`ix_batch_confirmed_history`)로 읽고, 재시작 후에도 마지막으로 읽은 배치부터 이어간다. 그 배치보다 늦게 커밋된 배치는 다음 준비에서 이어 붙인다. 이미 읽은 배치의 관측이 늦게 들어오거나 수정·삭제되면 해당 근거를 폐기하고 처음부터 다시 준비한다. 새로 읽을 배치가 없으면 근거를 다시 쓰지 않는다. 기존 정산 작업의 배치 등록도 커서로 1,000개씩 진행한다. 준비가 끝날 때까지 기존 작업은 삭제하지 않는다.
 
@@ -1212,10 +1212,14 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 
 | 환경변수 | 파일 | 기본값 | 뜻 |
 | --- | --- | --- | --- |
-| `FORECAST_SHADOW_ENABLED` | worker.env | `false` | 옛 경로 옆에서 새 경로를 돌려 예측값을 대조하고 새 테이블에 쓴다 |
-| `FORECAST_SCORING` | worker.env | `off` | `shadow`: 새 채점을 돌려 옛 결과와 대조한다. `v2`: 새 채점이 본선이고 옛 정산 작업을 돌리지 않는다 |
+| `FORECAST_SHADOW_ENABLED` | worker.env | `false` | `FORECAST_PIPELINE=v1`일 때 옛 경로 옆에서 새 경로를 돌려 예측값을 대조하고 새 테이블에 쓴다. `v2`에서는 무시한다(기동 로그 `event=pipeline_shadow_ignored`) |
+| `FORECAST_SCORING` | worker.env | `off` | `shadow`: 새 채점을 돌려 새 테이블에 쓴다. 옛 정산은 그대로 돈다. `v1`이면 그림자 예보의 사건을 받고 옛 정산과 대조하며, `v2`면 본선의 사건을 받고 대조하지 않는다. `v2`: 새 채점이 본선이고 옛 정산 작업을 돌리지 않는다(`FORECAST_PIPELINE=v2`에서만) |
 | `BOARD_FORECAST_SOURCE` | api.env | `legacy` | `auto`: 노선마다 두 출처 가운데 최신 배치가 더 큰 쪽. `record`: 새 예보 기록만 읽는다 |
-| `FORECAST_PIPELINE` | worker.env | `v1` | `v2`: 새 경로가 본선이고 옛 예보 쓰기·체크포인트를 하지 않는다 |
+| `FORECAST_PIPELINE` | worker.env | `v1` | `v2`: 새 경로가 본선이다. 옛 예보 쓰기(`seat_forecast`·`forecast_publication`), `input_confirmed_at` 갱신, 체크포인트 파일·`alighting_history_checkpoint` 쓰기, `route` 행 잠금을 하지 않는다 |
+| `FORECAST_LANES` | worker.env | `2` | `v2` 본선의 노선별 실행 줄 수. 같은 노선은 항상 같은 줄에서 순서대로 처리한다 |
+| `FORECAST_LANE_QUEUE_CAPACITY` | worker.env | `1000` | 줄 하나의 길이. 넘치면 넣지 않고 다음 줍기(30초)에 맡긴다 |
+| `ARCHIVE_HISTORY_HOLD` | archive.env | `checkpoint` | 최근 관측의 줄 단위 이관을 미루는 기준. `checkpoint`: 옛 체크포인트 보호선을 본다. `window`: 그 표를 보지 않고 `ARCHIVE_HISTORY_HOLD_WINDOW`보다 최근인 날짜를 이관하지 않는다 |
+| `ARCHIVE_HISTORY_HOLD_WINDOW` | archive.env | `12h` | `window`의 창. worker의 되감기 창(`FORECAST_REPLAY_WINDOW`, 6시간)보다 넉넉하게 둔다. 1시간보다 짧으면 이관 앱이 기동하지 않는다 |
 | `ARCHIVE_PARTITION_EXPORT_ENABLED` | archive.env | `false` | 닫힌 날짜의 파티션을 테이블마다 S3로 내보내고 다시 읽어 검증한다 |
 | `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED` | archive.env | `false` | 장부에 검증된 파티션을 떼어 내고 지운다 |
 | `ARCHIVE_LEGACY_EXPORT_ENABLED` | archive.env | `false` | 옛 테이블 25개를 기본 키 순서의 조각으로 S3에 내보내고 다시 읽어 검증한다. 지우지 않는다 |
@@ -1223,23 +1227,52 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 
 내보내기 두 스위치의 이름은 구현 명세(내보내기를 이관 앱에 둔다는 11-15 결정)를 따랐다. 이관 앱 구현과 이름이 다르면 이 표를 먼저 고친다. 스위치를 바꾼 뒤에는 해당 서비스를 재시작해야 반영된다(「환경변수 변경」).
 
+`FORECAST_ENABLED=true`인 worker가 받아들이는 예보 스위치 조합은 아래 넷뿐이다. 나머지 조합은 worker가 기동하지 않고 무엇을 바꿔야 하는지 오류로 남긴다(`FORECAST_SCORING=v2`인데 `FORECAST_PIPELINE=v1`, `FORECAST_SCORING=shadow`인데 그림자도 `v2`도 아님, `FORECAST_PIPELINE=v2`인데 `FORECAST_SCORING=off`). 스위치를 둘 바꿀 때는 한 번에 바꿔 이 표의 한 줄에서 다른 줄로 옮긴다.
+
+| `FORECAST_PIPELINE` | `FORECAST_SHADOW_ENABLED` | `FORECAST_SCORING` | 상태 | 옛 정산 작업 | 채점 대조 |
+| --- | --- | --- | --- | --- | --- |
+| `v1` | `false` | `off` | 기본값. 옛 경로만 돈다 | 돈다 | 없음 |
+| `v1` | `true` | `off` 또는 `shadow` | 그림자 예보(차례 1), 그림자 채점(차례 2) | 돈다 | `shadow`일 때 10분마다 |
+| `v2` | 무시 | `shadow` | 새 예보가 본선(차례 4-1). 옛 정산은 남은 옛 예측만 마저 처리한다 | 돈다 | 없음(옛 예측이 더 생기지 않는다) |
+| `v2` | 무시 | `v2` | 완전 전환(차례 4-2) | 돌지 않는다 | 없음 |
+
 ### 차례
 
 **1. 예보 그림자.** `FORECAST_SHADOW_ENABLED=true`로 worker를 재시작한다.
-- 넘어가는 기준: 7일 동안 새 경로와 옛 경로의 예측값 차이 0건. 기간 중 worker를 일부러 한 번 재시작해 되감기 뒤에도 0건인지 본다. `salmonbus_pipeline_*` 지표(대조한 예측 수, 다른 예측 수, 대조 제외 수)와 worker 로그로 본다.
+- 넘어가는 기준: 7일 동안 새 경로와 옛 경로의 예측값 차이 0건. 기간 중 worker를 일부러 한 번 재시작해 되감기 뒤에도 0건인지 본다. 지표는 `salmonbus_pipeline_shadow_predictions_total{result}`(`same`, `value_differs`, `legacy_only`, `new_only`, `excluded`)와 `salmonbus_pipeline_shadow_batches_total{result}`(`mismatch`, `failed`가 0이어야 한다), 로그는 `event=pipeline_shadow_mismatch`·`pipeline_shadow_value_differs`다. `excluded`는 다시 뜬 직후 운행 시작을 못 본 차량이라 차이로 세지 않는다.
 - 되돌리기: `false`로 재시작한다. 새 테이블에 쓴 줄은 남지만 아무도 읽지 않는다.
 
-**2. 채점 그림자.** `FORECAST_SCORING=shadow`로 worker를 재시작한다.
-- 넘어가는 기준: 7일 동안 설명되지 않는 정답·사유 차이 0건. 미리 적어 둔 차이(수집 구멍 표시, 자정 직후 직전 통과 등)는 사유별로 따로 센다.
+**2. 채점 그림자.** 1번을 켠 채 `FORECAST_SCORING=shadow`로 worker를 재시작한다(그림자 없이 `shadow`만 켜면 worker가 기동하지 않는다).
+- 확인: 기동 뒤 `event=pipeline_scoring_start_rejected`가 없고, `salmonbus_pipeline_scoring_written_total{table="pass_label"}`가 늘며, `salmonbus_pipeline_scoring_waiting`과 `salmonbus_pipeline_scoring_queue`가 쌓이지 않는다. 사건을 버리면 `salmonbus_pipeline_scoring_dropped_total`이 늘고 그 노선을 다시 되감는다(`salmonbus_pipeline_scoring_replays_total{reason,result}`).
+- 대조: 10분마다(`FORECAST_SCORING_COMPARISON_INTERVAL`) 수신 뒤 3시간(`FORECAST_SCORING_COMPARISON_DELAY`)이 지난 배치를 예측마다 옛 정산 결과와 대조해 `salmonbus_pipeline_scoring_compared_total{result}`로 낸다. `same`이 대부분이어야 하고 `unexplained`·`legacy_only`·`new_only`가 0이어야 한다. `intended_hole`(수집 구멍 표시)과 `intended_midnight`(자정 직후 직전 통과)는 미리 적어 둔 차이라 따로 센다. `unexplained`가 나오면 `event=pipeline_scoring_unexplained` 로그(회차마다 5건까지)에서 관측·목표·두 결과를 본다.
+- 넘어가는 기준: 7일 동안 `unexplained` 0건.
 - 되돌리기: `off`로 재시작한다.
 
 **3. 이용자 API 출처.** `BOARD_FORECAST_SOURCE=auto`로 api를 재시작한다.
 - 넘어가는 기준: dev에서 같은 시점의 두 출처 응답을 필드 단위로 대조해 같다. 운영은 `api.board` 지연과 오류율이 전과 같다.
 - 되돌리기: `legacy`로 재시작한다.
 
-**4. 새 경로를 본선으로.** `FORECAST_PIPELINE=v2`로 worker를 재시작하고 관찰한 뒤, `FORECAST_SCORING=v2`로 다시 재시작한다.
-- 넘어가는 기준: 예보 지연, 늦어서 건너뛴 배치(`LATE`) 수, 줄 길이, 채점 대기 수가 운영 관찰 기간 동안 안정적이다. `sal434-01-precheck.sql`의 3절에서 `old_forecast_published`가 멈추고 `new_forecast_run`·`new_stop_pass_closed`가 계속 늘어난다.
-- 되돌리기: `FORECAST_SCORING`과 `FORECAST_PIPELINE`을 되돌리고, 정비 명령 `alighting-history-bootstrap`으로 체크포인트를 다시 만든 뒤 worker를 재시작한다. 옛 테이블과 트리거가 남아 있으므로 이 차례까지는 스위치로 되돌릴 수 있다.
+**4. 새 경로를 본선으로.** 두 번에 나눠 바꾼다. 3번(`BOARD_FORECAST_SOURCE=auto`)이 먼저다. `auto`는 노선마다 최신 배치 쪽을 읽으므로 본선이 바뀐 뒤 첫 새 배치부터 새 기록을 읽는다.
+
+*4-1. 새 예보 본선.* worker.env를 `FORECAST_PIPELINE=v2`, `FORECAST_SCORING=shadow`로 바꾸고(`FORECAST_SHADOW_ENABLED`는 두어도 무시된다) worker를 재시작한다. **같은 때** archive.env에 `ARCHIVE_HISTORY_HOLD=window`를 넣고 이관 앱을 재시작한다. 본선은 `alighting_history_checkpoint`를 더 갱신하지 않으므로 `checkpoint`로 두면 이관 보호선이 멈춘 자리에 남는다(더 오래 미루는 쪽이라 위험하지는 않지만 이관이 쌓인다).
+- 이때 바뀌는 동작:
+  - 수집 커밋 뒤 신호를 받으면 노선별 실행 줄(`forecast-lane-<번호>-`, `FORECAST_LANES`개)에서 배치를 처리한다. 착수 시각은 처리를 시작할 때 찍고 `forecast_run.confirmed_at`에 예측과 한 트랜잭션으로 적는다. 수신 뒤 90초를 넘겼으면 예보 없이 `LATE` 실행 줄만 남긴다. 옛 경로는 착수 시각을 먼저 따로 커밋해서 계산 중에 죽어도 처음 시각으로 다시 예보했지만, 본선은 다시 처리할 때 새 시각으로 판정하므로 그런 배치는 `LATE`가 된다.
+  - 기동 직후와 30초마다(`forecast.interval`) 신선도 창(10분) 안에서 "성공한 배치인데 `forecast_run`도 `input_confirmed_at`도 없는 것"을 줍는다. 옛 경로가 착수 시각을 찍은 배치는 이미 이력에 들어가 있어 다시 처리하지 않는다.
+  - 기동하면 노선 상태가 없으므로 노선마다 첫 배치에서 6시간을 되감는다. 착수 시각은 배치마다 `forecast_run.confirmed_at`이 있으면 그것, 없으면 `input_confirmed_at`이다. 그래서 넘어간 직후에도 옛 경로가 처리한 배치와 본선이 처리한 배치를 빈틈 없이 잇는다.
+  - 모델 배포의 정산 근거(`model_deployment.settlement_context`)는 옛 발행 대신 본선이 (배포, 노선 판본)마다 한 번 적는다. 새 채점이 읽는다.
+  - 옛 정산 작업은 그대로 돌며 남은 옛 예측을 마저 정산한다. 채점 대조 작업은 돌지 않는다.
+- 확인: `salmonbus_pipeline_forecast_batches_total{result}`에서 `published`·`empty`가 늘고 `failed`가 0이다. `salmonbus_pipeline_forecast_replays_total{result="succeeded"}`가 노선 수만큼 한 번씩 늘고 `failed`가 없다. `salmonbus_pipeline_forecast_excluded_total{reason}`은 다시 뜬 직후에만 늘고 곧 멈춘다. `sal434-01-precheck.sql`의 3절에서 `old_forecast_published`가 멈추고 `new_forecast_run`·`new_stop_pass_closed`가 계속 늘어난다.
+- 넘어가는 기준: 운영 관찰 기간 동안 아래가 안정적이다.
+  - 예보 지연: `salmonbus_pipeline_forecast_confirmation_lag_seconds`(수신→착수 분포)와 `salmonbus_pipeline_forecast_batch_duration_seconds`.
+  - 늦어서 건너뛴 배치: `salmonbus_pipeline_forecast_batches_total{result="late"}`. 옛 경로의 수신 뒤 90초 초과 비율과 비슷해야 한다.
+  - 줄 길이: `salmonbus_pipeline_forecast_queue{lane}`. 계속 쌓이면 `FORECAST_LANES`를 늘린다. 넣지 못한 배치는 `salmonbus_pipeline_forecast_rejected_total`.
+  - 채점 대기: `salmonbus_pipeline_scoring_waiting`, `salmonbus_pipeline_scoring_queue`.
+  - DB 연결: worker의 Hikari 풀은 3이고(`application.yml`), 본선의 줄 둘·줍기·수집·옛 정산·채점이 함께 쓴다. 줄은 문장을 실행하는 동안만 연결을 잡지만 `hikaricp_connections_pending`이 자주 0보다 크면 풀 크기를 따로 올린다(이 PR은 바꾸지 않았다).
+- 되돌리기: worker.env를 `FORECAST_PIPELINE=v1`, `FORECAST_SCORING=off`(또는 그림자를 켜고 `shadow`)로 바꾸고, 정비 명령 `alighting-history-bootstrap`으로 체크포인트를 다시 만든 뒤 worker를 재시작한다. archive.env는 `ARCHIVE_HISTORY_HOLD=checkpoint`로 되돌린다. 옛 테이블과 트리거가 남아 있으므로 이 차례까지는 스위치로 되돌릴 수 있다. 본선이 처리한 구간의 배치에는 `input_confirmed_at`이 없어 옛 경로의 이력에 들어가지 않는다(부트스트랩이 다시 만든다).
+
+*4-2. 새 채점 본선.* 4-1이 안정된 뒤 `FORECAST_SCORING=v2`로 worker를 재시작한다. 옛 정산 작업(`ArrivalLabelJob`, 하차 반영 모델의 대기열 채우기·투영 정리·정산)이 등록되지 않는다. 이 작업이 하는 일은 옛 정산뿐이라 다른 일은 멈추지 않는다.
+- 확인: worker 로그에서 `alighting_settlement_tick` 작업 기록이 사라지고, `salmonbus_pipeline_scoring_written_total`은 계속 는다.
+- 되돌리기: `FORECAST_SCORING=shadow`로 재시작하면 옛 정산 작업이 다시 돈다.
 
 **5. 옛 정산 트리거 삭제(승인).** 4번 관찰을 마치고 옛 정산이 멈춘 것을 확인한 뒤 실행한다.
 1. `sal434-01-precheck.sql`을 실행해 보관한다. 4절에 트리거 9개·함수 7개가 보인다.
@@ -1295,7 +1328,7 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 - 이 SQL 뒤에 달라지는 것:
   - 두 테이블 사이의 FK(`fk_observation_batch`)가 없어진다. 관측은 응답을 받은 날, 배치는 예약한 날을 기본값으로 받아 자정 근처에 날짜가 다를 수 있어서, 날짜를 넣은 FK를 둘 수 없다.
   - 유일 제약은 날짜 파티션 안에서만 지킨다(`id`, 노선 판본+시도 키, 배치+줄 번호, 배치+차량). 한 배치의 관측은 한 트랜잭션에서 들어가 같은 날짜가 되므로 배치 안 유일성의 뜻은 그대로다. 시도 키는 예약 시각을 담고 있어 날짜가 다른 같은 키는 생기지 않는다.
-  - worker의 날짜 파티션 유지 작업은 지금 새 예보 테이블 다섯 개만 다룬다. 두 테이블을 그 목록에 넣는 배포가 없으면 사흘 뒤부터 새 줄이 기본 파티션에 쌓인다(동작은 한다). 기본 파티션에 그 날짜의 줄이 생긴 뒤에는 그 날짜 파티션을 만들 수 없다.
+  - 수집이 켜진 worker(`COLLECTION_ENABLED=true`)의 날짜 파티션 유지 작업은 두 테이블이 파티션 테이블(`relkind='p'`)이면 예보 스위치와 무관하게 오늘부터 사흘 뒤까지 같은 이름 규칙(`<테이블>_pYYYYMMDD`)으로 파티션을 미리 만든다. 일반 테이블인 동안에는 카탈로그만 읽는다. 기동 직후 한 번, 그 뒤 1시간마다 돌며 만든 파티션은 `event=pipeline_partitions_created`, 기본 파티션에 쌓인 줄은 `salmonbus_pipeline_partition_default_rows{table}`로 본다. 만들지 못하면 새 줄이 기본 파티션에 쌓이고(동작은 한다), 기본 파티션에 그 날짜의 줄이 생긴 뒤에는 그 날짜 파티션을 만들 수 없다.
 - 되돌리기: `sal434-04-rollback-unpartition-observation-tables.sql`을 `sal434.confirm_partition_rollback`과 함께 실행한다. 날짜·기본 파티션의 줄을 id 그대로 옛 테이블로 옮기고 원래 이름·IDENTITY·FK를 되돌린다. 옮기는 줄이 옛 유일 제약에 걸리면 멈춘다.
 
 **9. 수집 묶음 넣기.** `COLLECTION_BULK_INSERT=true`로 worker를 재시작한다.

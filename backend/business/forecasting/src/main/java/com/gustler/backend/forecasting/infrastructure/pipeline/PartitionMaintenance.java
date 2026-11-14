@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -25,8 +26,13 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 새 예보 경로의 날짜 파티션 테이블 다섯 개에 한국 날짜 기준 오늘부터 {@value #DAYS_AHEAD}일 뒤까지 {@code <table>_pYYYYMMDD}
- * 파티션을 만든다.
+ * 날짜 파티션 테이블에 한국 날짜 기준 오늘부터 {@value #DAYS_AHEAD}일 뒤까지 {@code <table>_pYYYYMMDD} 파티션을 만든다.
+ *
+ * <p>대상은 두 묶음이다. 새 예보 경로의 테이블 다섯 개({@link #TABLES})는 새 경로 스위치가 켜졌을 때만 다룬다
+ * ({@link #setPipelineTables}). 관측 두 테이블({@link #OBSERVATION_TABLES})은 카탈로그에서 파티션 테이블({@code relkind='p'})일
+ * 때만 다룬다. 운영 전환 마지막 단계의 수동 SQL({@code deploy/sql/sal434-04-partition-observation-tables.sql})이 같은 이름 규칙
+ * ({@code <table>_pYYYYMMDD}, 기본 파티션 {@code <table>_default}, 하루 범위 {@code [날짜, 날짜+1)})으로 이 두 테이블을 바꾸기
+ * 전에는 일반 테이블이라 카탈로그만 읽고 아무것도 쓰지 않는다.
  *
  * <p>파티션 하나는 짧은 트랜잭션 하나로 만든다. PostgreSQL은 파티션을 만드는 동안 부모 테이블과 기본 파티션에
  * {@code ACCESS EXCLUSIVE} 잠금을 잡고 기본 파티션을 훑으므로, 잠금 대기를 3초로 묶어 쓰기를 오래 막지 않는다.
@@ -42,6 +48,9 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
     public static final List<String> TABLES =
         List.of("forecast_run", "forecast_record", "stop_pass", "pass_label", "forecast_unresolved");
 
+    /** 파티션 테이블일 때만 다루는 관측 테이블. 기본 파티션은 {@code <table>_default}다. */
+    public static final List<String> OBSERVATION_TABLES = List.of("observation_batch", "vehicle_observation");
+
     /** 오늘에 더해 미리 만드는 날 수. */
     public static final int DAYS_AHEAD = 3;
 
@@ -54,6 +63,7 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
     private final Clock clock;
     private final Map<String, AtomicLong> defaultRowGauges = new ConcurrentHashMap<>();
     private MeterRegistry meters;
+    private boolean pipelineTables = true;
 
     public PartitionMaintenance(JdbcClient jdbc, PlatformTransactionManager transactionManager, Clock clock) {
         this.jdbc = jdbc;
@@ -68,12 +78,38 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
         this.meters = meters;
     }
 
+    /**
+     * 새 예보 테이블 다섯 개를 다룰지 정한다. 새 경로 스위치 하나라도 켜졌을 때 참이며, 직접 만든 객체는 참이다.
+     *
+     * @param pipelineTables 새 예보 테이블을 다루면 참
+     */
+    @Value("#{${forecast.shadow.enabled:false} or '${forecast.pipeline:v1}'.equalsIgnoreCase('v2')"
+        + " or !'${forecast.scoring:off}'.equalsIgnoreCase('off')}")
+    public void setPipelineTables(final boolean pipelineTables) {
+        this.pipelineTables = pipelineTables;
+    }
+
+    /** 이번에 다룰 테이블. 새 예보 테이블(켜졌을 때)과 파티션 테이블이 된 관측 테이블이다. */
+    public List<String> managedTables() {
+        List<String> tables = new ArrayList<>();
+        if (pipelineTables) {
+            tables.addAll(TABLES);
+        }
+        for (String table : OBSERVATION_TABLES) {
+            if (isPartitioned(table)) {
+                tables.add(table);
+            }
+        }
+        return tables;
+    }
+
     @Override
     public Report maintain() {
         final LocalDate today = SourceDates.of(clock.instant());
         List<String> created = new ArrayList<>();
         List<String> failed = new ArrayList<>();
-        for (String table : TABLES) {
+        List<String> tables = managedTables();
+        for (String table : tables) {
             for (int day = 0; day <= DAYS_AHEAD; day++) {
                 final LocalDate date = today.plusDays(day);
                 switch (ensure(table, date)) {
@@ -85,7 +121,7 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
             }
         }
         Map<String, Long> defaultRows = new LinkedHashMap<>();
-        for (String table : TABLES) {
+        for (String table : tables) {
             try {
                 final long rows = countDefaultRows(table);
                 defaultRows.put(table, rows);
@@ -106,7 +142,7 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
     /**
      * 테이블의 한 날짜 파티션이 없으면 만든다. 실패해도 예외를 던지지 않는다.
      *
-     * @param table {@link #TABLES} 가운데 하나
+     * @param table {@link #TABLES} 또는 {@link #OBSERVATION_TABLES} 가운데 하나. 관측 테이블은 파티션 테이블이어야 한다
      * @param date 파티션 날짜
      * @return 이번에 만들었는지, 이미 있었는지, 만들지 못했는지
      */
@@ -140,7 +176,7 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
     /**
      * 테이블의 기본 파티션에 들어 있는 줄 수를 세고 {@code salmonbus.pipeline.partition.default.rows} 지표에 반영한다.
      *
-     * @param table {@link #TABLES} 가운데 하나
+     * @param table {@link #TABLES} 또는 {@link #OBSERVATION_TABLES} 가운데 하나
      * @return 기본 파티션의 줄 수
      */
     public long countDefaultRows(String table) {
@@ -166,6 +202,16 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
                     WHERE inhrelid = to_regclass(?) AND inhparent = to_regclass(?))
                 """)
             .params(partition, table)
+            .query(Boolean.class)
+            .single();
+    }
+
+    private boolean isPartitioned(String table) {
+        return jdbc.sql("""
+                SELECT /* salmonbus:pipeline_partition.is_partitioned */ EXISTS (
+                    SELECT 1 FROM pg_class WHERE oid = to_regclass(?) AND relkind = 'p')
+                """)
+            .param(table)
             .query(Boolean.class)
             .single();
     }
@@ -196,7 +242,7 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
     }
 
     private static void requireKnown(String table) {
-        if (!TABLES.contains(table)) {
+        if (!TABLES.contains(table) && !OBSERVATION_TABLES.contains(table)) {
             throw new IllegalArgumentException("파티션을 관리하지 않는 테이블이다: " + table);
         }
     }

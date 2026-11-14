@@ -17,17 +17,28 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * 착수 시각을 {@code observation_batch.input_confirmed_at}에서 읽는 되감기 원본이다. 옛 경로·그림자(v1)와 같은 시각 축이다.
- * 확정 조건은 옛 경로의 {@code CONFIRMED_INPUT}과 같고, 줄은 거르지 않고 모두 돌려준다(거르기와 줄 수 검사는 예보 단계가 한다).
+ * 되감기 원본이자 배치 하나를 읽는 원본이다. 착수 시각을 어디서 읽는지에 따라 두 축({@link Axis})이 있다.
+ * <ul>
+ *   <li>{@link Axis#BATCH_INPUT}: {@code observation_batch.input_confirmed_at}. 옛 경로·그림자(v1)와 같은 시각 축이다.</li>
+ *   <li>{@link Axis#RECORDED_RUN}: 본선(v2)의 축이다. 배치마다 예보 실행({@code forecast_run})의 착수 시각이 있으면 그것을, 없으면
+ *       {@code input_confirmed_at}을 쓴다. v1에서 v2로 넘어간 직후 되감기 창에는 옛 경로가 처리한 배치({@code input_confirmed_at}만
+ *       있음)와 본선이 처리한 배치({@code forecast_run}만 있음)가 섞이는데, 이 규칙으로 두 출처를 빈틈 없이 잇는다. 그림자가 켜져
+ *       있던 구간은 그림자가 {@code input_confirmed_at}을 실행 줄의 착수 시각으로 썼으므로 두 값이 같다.</li>
+ * </ul>
+ * 어느 축이든 확정 조건은 옛 경로의 {@code CONFIRMED_INPUT}과 같다(정상 수집, 줄이 있는 성공, 수신 뒤 90초 안 착수). 그래서
+ * "상태에 반영된 배치"의 판정이 두 경로에서 같다. 본선이 90초를 넘겨 {@code LATE}로 남긴 배치는 착수 시각이 90초 밖이라 자연히
+ * 빠진다. 실행 결과({@code outcome})로 거르지 않는 것은 옛 경로의 이력이 확정 배치를 결과와 무관하게 모두 담기 때문이다.
+ * 줄은 거르지 않고 모두 돌려준다(거르기와 줄 수 검사는 예보 단계가 한다).
  * 판본 호환 검사는 옛 경로의 {@code validateHistoricalVersion}과 같은 기준으로 창 안에 나온 판본만 본다. 행 잠금을 잡지 않는다.
  *
- * <p>배치 하나를 읽는 {@link #readBatch}도 같은 열·같은 줄 순서·같은 변환을 쓴다. 그림자 실행이 이어 온 상태와 되감은 상태가
- * 같은 입력을 받게 하려는 것이다.
+ * <p>배치 하나를 읽는 {@link #readBatch}도 같은 축·같은 열·같은 줄 순서·같은 변환을 쓴다. 이어 온 상태와 되감은 상태가 같은 입력을
+ * 받게 하려는 것이다. 본선은 이 값이 비어 있는지로 "아직 어느 경로도 처리하지 않은 배치"를 가린다.
  */
 public final class JdbcReplaySource implements ReplaySource, ObservationBatchReader {
     static final String ROUTE_HISTORY_MISSING = "ALIGHTING_AWARE_ROUTE_HISTORY_MISSING";
@@ -42,9 +53,16 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
           b.outcome,b.stored_rows,o.id AS observation_id,o.vehicle_id,o.passed_stop_order,o.stop_order,
           o.running_state,o.remaining_seats,o.seat_unknown_reason,o.crowd_level,o.source_row_number
         """;
+    /** 예보 실행의 나눔 날짜는 배치 예약 시각의 한국 날짜다({@code SourceDates}). 기본 키로 찾으려고 날짜를 같이 준다. */
+    private static final String RECORDED_BATCHES = """
+        (SELECT b.id,b.route_version_id,b.response_received_at,
+            coalesce(r.confirmed_at,b.input_confirmed_at) AS input_confirmed_at,b.ingestion_origin,b.outcome,
+            b.stored_rows,b.scheduled_at
+          FROM observation_batch b LEFT JOIN forecast_run r
+            ON r.source_date=(b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date AND r.observation_batch_id=b.id)""";
     private static final String READ_BATCHES = """
         SELECT %s
-        FROM observation_batch b LEFT JOIN vehicle_observation o ON o.observation_batch_id=b.id
+        FROM %s b LEFT JOIN vehicle_observation o ON o.observation_batch_id=b.id
         WHERE b.route_version_id IN (:versions)
           AND b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS' AND b.stored_rows>0
           AND b.input_confirmed_at>=b.response_received_at
@@ -53,29 +71,53 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
           AND b.response_received_at<=:through AND b.response_received_at>=:from-interval '90 seconds'
         ORDER BY b.input_confirmed_at,b.id,o.vehicle_id,o.id
         LIMIT :limit
-        """.formatted(BATCH_COLUMNS);
+        """;
     private static final String READ_BATCH = """
         SELECT %s,b.scheduled_at,version.route_id,route.source_id
-        FROM observation_batch b JOIN route_version version ON version.id=b.route_version_id
+        FROM %s b JOIN route_version version ON version.id=b.route_version_id
           JOIN route ON route.id=version.route_id
           LEFT JOIN vehicle_observation o ON o.observation_batch_id=b.id
         WHERE b.id=:batch
         ORDER BY o.vehicle_id,o.id
-        """.formatted(BATCH_COLUMNS);
+        """;
     private static final String READ_STOPS = """
         SELECT stop_order,stop_id,boarding_allowed,direction FROM route_stop WHERE route_version_id=:version ORDER BY stop_order
         """;
 
     private final JdbcClient jdbc;
     private final int maximumRows;
+    private final Axis axis;
+    private final String readBatches;
+    private final String readBatch;
 
-    /** {@code maximumRows}는 한 번 되감기에서 읽는 관측 줄의 한도다. 옛 경로의 {@code forecast.alighting.maximum-history-rows}와 같은 뜻이다. */
+    /**
+     * 옛 경로의 축({@link Axis#BATCH_INPUT})으로 읽는다.
+     *
+     * @param maximumRows 한 번 되감기에서 읽는 관측 줄의 한도. 옛 경로의 {@code forecast.alighting.maximum-history-rows}와 같은 뜻이다
+     */
     public JdbcReplaySource(JdbcClient jdbc, final int maximumRows) {
+        this(jdbc, maximumRows, Axis.BATCH_INPUT);
+    }
+
+    /**
+     * @param maximumRows 한 번 되감기에서 읽는 관측 줄의 한도
+     * @param axis 착수 시각을 읽는 축
+     */
+    public JdbcReplaySource(JdbcClient jdbc, final int maximumRows, Axis axis) {
         if (maximumRows < 1) {
             throw new IllegalArgumentException("되감기 줄 한도는 양수여야 한다");
         }
         this.jdbc = jdbc;
         this.maximumRows = maximumRows;
+        this.axis = Objects.requireNonNull(axis);
+        String source = axis == Axis.BATCH_INPUT ? "observation_batch" : RECORDED_BATCHES;
+        this.readBatches = READ_BATCHES.formatted(BATCH_COLUMNS, source);
+        this.readBatch = READ_BATCH.formatted(BATCH_COLUMNS, source);
+    }
+
+    /** 이 원본이 착수 시각을 읽는 축. */
+    public Axis axis() {
+        return axis;
     }
 
     @Override
@@ -84,7 +126,7 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         if (versions.isEmpty()) {
             return Read.failed(ROUTE_HISTORY_MISSING);
         }
-        List<Row> rows = jdbc.sql(READ_BATCHES)
+        List<Row> rows = jdbc.sql(readBatches)
             .param("versions", versions)
             .param("from", from.atOffset(ZoneOffset.UTC))
             .param("through", through.atOffset(ZoneOffset.UTC))
@@ -107,7 +149,7 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
 
     @Override
     public Optional<ObservationBatchRead> readBatch(final long observationBatchId) {
-        List<Placed> rows = jdbc.sql(READ_BATCH)
+        List<Placed> rows = jdbc.sql(readBatch)
             .param("batch", observationBatchId)
             .query((row, index) -> new Placed(row(row), row.getObject("scheduled_at", OffsetDateTime.class).toInstant(),
                 row.getLong("route_id"), row.getString("source_id")))
@@ -202,5 +244,13 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
             }
             return direction.equals(reference.down() ? "DOWN" : "UP");
         }
+    }
+
+    /** 착수 시각을 읽는 축. */
+    public enum Axis {
+        /** {@code observation_batch.input_confirmed_at}. 옛 경로와 그림자의 축이다. */
+        BATCH_INPUT,
+        /** 예보 실행의 착수 시각, 없으면 {@code input_confirmed_at}. 본선의 축이다. */
+        RECORDED_RUN
     }
 }

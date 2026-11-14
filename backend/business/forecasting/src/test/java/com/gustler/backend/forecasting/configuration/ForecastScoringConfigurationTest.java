@@ -8,6 +8,7 @@ import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
 import com.gustler.backend.forecasting.api.pipeline.ShadowForecastFeed;
 import com.gustler.backend.forecasting.application.pipeline.PassLabelStore;
 import com.gustler.backend.forecasting.application.pipeline.PipelineEvents;
+import com.gustler.backend.forecasting.application.pipeline.ShadowForecastService;
 import com.gustler.backend.forecasting.application.pipeline.ShadowScoringService;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
@@ -53,5 +54,17 @@ class ForecastScoringConfigurationTest {
                 assertThat(context).getBean(PipelineEvents.class).isInstanceOf(ShadowScoringService.class);
                 assertThat(context).hasSingleBean(CompareShadowScoring.class);
             });
+    }
+
+    @Test
+    void 본선이_새_경로면_본선의_사건을_받는_채점만_등록하고_옛_정산과_대조하지_않는다() {
+        for (String scoring : new String[] {"shadow", "v2"}) {
+            runner.withPropertyValues("forecast.enabled=true", "forecast.pipeline=v2", "forecast.scoring=" + scoring)
+                .run(context -> {
+                    assertThat(context).getBean(PipelineEvents.class).isInstanceOf(ShadowScoringService.class);
+                    assertThat(context).doesNotHaveBean(CompareShadowScoring.class);
+                    assertThat(context).doesNotHaveBean(ShadowForecastService.class);
+                });
+        }
     }
 }
