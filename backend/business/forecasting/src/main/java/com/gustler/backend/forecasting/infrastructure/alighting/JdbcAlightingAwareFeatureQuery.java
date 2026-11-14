@@ -6,6 +6,7 @@ import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatu
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareBatchContext;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareHistoryCompactor;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
@@ -339,11 +340,12 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
         var known = capacities.findKnownAt(sourceId, sources.stream().map(AlightingAwareObservation::vehicleId).toList(),
             cursor.target().time(), cursor.batchId());
         Map<Long, AlightingAwareFeatureSnapshot> result = new LinkedHashMap<>();
+        AlightingAwareBatchContext context = new AlightingAwareBatchContext(statistics, history, events, cursor.prefix());
         sources.forEach(source -> {
             var capacity = known.get(source.vehicleId());
             if (capacity != null && capacity.seats() >= minimumCapacity(statistics.confirmedProfile())) {
                 result.put(source.observationId(), new AlightingAwareFeatureSnapshot(stops.routeVersionId(), source,
-                    capacity.seats(), statistics, history, events, cursor.prefix()));
+                    capacity.seats(), context));
             } else {
                 String reason = capacity == null ? "VEHICLE_CAPACITY_UNKNOWN" : "VEHICLE_CAPACITY_OUTSIDE_MODEL_SCOPE";
                 LOGGER.info("event=forecast_vehicle_withheld reason={} batchId={} vehicleId={}", reason,

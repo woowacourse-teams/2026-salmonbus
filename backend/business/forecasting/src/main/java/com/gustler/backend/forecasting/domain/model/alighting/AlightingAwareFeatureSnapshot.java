@@ -3,7 +3,6 @@ package com.gustler.backend.forecasting.domain.model.alighting;
 import com.gustler.backend.forecasting.domain.model.ObservedVehicle;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -15,6 +14,8 @@ import java.util.Map;
 /**
  * 하나의 관측 시점의 관측·누적 상태·고정 통계와 차량 정원을 보관한다.
  * 과거 상태를 생략한 단순 시간 창은 받을 수 없으며, 원본 float32 변환 순서를 유지한다.
+ * 목표와 무관한 차량 계산은 처음 필요할 때 한 번만 하고, 차량과도 무관한 계산은 {@link AlightingAwareBatchContext}와 공유한다.
+ * 내부 메모는 동기화하지 않으므로 한 스레드에서만 쓴다.
  */
 public final class AlightingAwareFeatureSnapshot {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
@@ -22,9 +23,17 @@ public final class AlightingAwareFeatureSnapshot {
     private final int capacity;
     private final AlightingAwareObservation source;
     private final AlightingAwareRouteStatistics statistics;
+    private final AlightingAwareBatchContext context;
+    private final AlightingAwareBatchContext.Moment moment;
     private final List<AlightingAwareObservation> history;
     private final List<AlightingAwarePassEvent> events;
     private final Map<String, AlightingAwareVehiclePrefix> prefix;
+    private List<AlightingAwareObservation> ownMemo;
+    private OriginState originMemo;
+    private Preceding precedingMemo;
+    private DayFeatures dayMemo;
+    private boolean trendReady;
+    private double trendMemo;
 
     public AlightingAwareFeatureSnapshot(
         final long routeVersionId,
@@ -46,33 +55,34 @@ public final class AlightingAwareFeatureSnapshot {
         List<AlightingAwarePassEvent> events,
         Map<String, AlightingAwareVehiclePrefix> prefix
     ) {
+        this(routeVersionId, source, capacity, new AlightingAwareBatchContext(statistics, history, events, prefix));
+    }
+
+    /**
+     * 같은 배치의 다른 차량과 배치 계산을 공유하는 스냅샷을 만든다.
+     * 익명 관측이거나 관측 시점까지의 이력에 자기 관측이 없으면 거부한다.
+     */
+    public AlightingAwareFeatureSnapshot(
+        final long routeVersionId,
+        AlightingAwareObservation source,
+        final int capacity,
+        AlightingAwareBatchContext context
+    ) {
         if (!source.hasVehicleIdentity()) {
             throw new IllegalArgumentException("Anonymous observation is not a forecast source");
         }
         this.capacity = capacity;
-        this.prefix = Map.copyOf(prefix);
+        this.prefix = context.prefix();
         this.routeVersionId = routeVersionId;
         this.source = source;
-        this.statistics = statistics;
-        this.history = history.stream().filter(observation -> before(observation, source)).toList();
-        this.events = events.stream()
-            .filter(event -> isAvailable(event, source))
-            .sorted(Comparator.comparing(this::eventTime))
-            .toList();
+        this.statistics = context.statistics();
+        this.context = context;
+        this.moment = context.momentOf(source);
+        this.history = moment.history();
+        this.events = moment.events();
         if (!this.history.contains(source)) {
             throw new IllegalArgumentException("Source observation missing from AlightingAware history");
         }
-    }
-
-    private static boolean isAvailable(AlightingAwarePassEvent event, AlightingAwareObservation source) {
-        return !event.confirmedAt().isAfter(source.receivedAt()) && before(event.confirmation(), source);
-    }
-
-    private static boolean before(AlightingAwareObservation observation, AlightingAwareObservation source) {
-        if (observation.receivedAt().isBefore(source.receivedAt())) {
-            return true;
-        }
-        return observation.receivedAt().equals(source.receivedAt()) && observation.batchId() <= source.batchId();
     }
 
     public int capacity() {
@@ -89,10 +99,7 @@ public final class AlightingAwareFeatureSnapshot {
 
     /** 정산할 운행의 식별자다. 정원은 별도 스냅샷 값으로 고정한다. */
     public Provenance provenance() {
-        List<AlightingAwareObservation> own = history.stream()
-            .filter(row -> row.vehicleId().equals(source.vehicleId()))
-            .sorted(Comparator.comparingLong(AlightingAwareObservation::batchRank)).toList();
-        AlightingAwareVehiclePrefix current = originState(own).state();
+        AlightingAwareVehiclePrefix current = origin().state();
         return new Provenance(current.tripId());
     }
 
@@ -115,21 +122,56 @@ public final class AlightingAwareFeatureSnapshot {
         final int horizon = target - source.passedStopOrder();
         validateTarget(target, horizon);
         ZonedDateTime time = source.receivedAt().atZone(SEOUL);
-        List<AlightingAwareObservation> own = history.stream()
-            .filter(observation -> observation.vehicleId().equals(source.vehicleId()))
-            .sorted(Comparator.comparingLong(AlightingAwareObservation::batchRank))
-            .toList();
-        OriginState origin = originState(own);
-        Preceding preceding = preceding(origin);
+        OriginState origin = origin();
+        Preceding preceding = precedingState();
         Neighbors neighbors = neighbors(target, origin.capacity());
-        Map<Integer, QueueState> queues = queues();
+        Map<Integer, AlightingAwareBatchContext.QueueState> queues = moment.queues();
         PathFeatures path = path(target, time, queues);
-        DayFeatures day = day(origin.tripId());
+        DayFeatures day = dayFeatures();
         QueueEstimate queue = queueEstimate(target, horizon, time, queues, neighbors.betweenSeats());
-        final double trend = trend(own, origin);
+        final double trend = trendValue();
         double[] base = baseFeatures(target, time, origin, preceding);
         double[] extras = extraFeatures(target, time, origin, neighbors, path, day, queue, trend);
         return vectors(target, time, base, extras);
+    }
+
+    private List<AlightingAwareObservation> own() {
+        if (ownMemo == null) {
+            ownMemo = history.stream()
+                .filter(observation -> observation.vehicleId().equals(source.vehicleId()))
+                .sorted(Comparator.comparingLong(AlightingAwareObservation::batchRank))
+                .toList();
+        }
+        return ownMemo;
+    }
+
+    private OriginState origin() {
+        if (originMemo == null) {
+            originMemo = originState(own());
+        }
+        return originMemo;
+    }
+
+    private Preceding precedingState() {
+        if (precedingMemo == null) {
+            precedingMemo = preceding(origin());
+        }
+        return precedingMemo;
+    }
+
+    private DayFeatures dayFeatures() {
+        if (dayMemo == null) {
+            dayMemo = day(origin().tripId());
+        }
+        return dayMemo;
+    }
+
+    private double trendValue() {
+        if (!trendReady) {
+            trendMemo = trend(own(), origin());
+            trendReady = true;
+        }
+        return trendMemo;
     }
 
     private void validateTarget(final int target, final int horizon) {
@@ -274,10 +316,7 @@ public final class AlightingAwareFeatureSnapshot {
     }
 
     private Neighbors neighbors(final int target, final float capacity) {
-        List<AlightingAwareObservation> members = history.stream()
-            .filter(observation -> observation.batchId() == source.batchId())
-            .sorted(Comparator.comparing(AlightingAwareObservation::vehicleId))
-            .toList();
+        List<AlightingAwareObservation> members = moment.members();
         NeighborAccumulator neighbors = new NeighborAccumulator(source.passedStopOrder(), target, capacity);
         for (AlightingAwareObservation member : members) {
             neighbors.accept(member);
@@ -285,19 +324,7 @@ public final class AlightingAwareFeatureSnapshot {
         return neighbors.result();
     }
 
-    private Map<Integer, QueueState> queues() {
-        Map<Integer, QueueState> queues = new HashMap<>();
-        LocalDate day = source.receivedAt().atZone(SEOUL).toLocalDate();
-        for (AlightingAwarePassEvent event : events) {
-            if (!eventTime(event).atZone(SEOUL).toLocalDate().equals(day)) {
-                continue;
-            }
-            queues.computeIfAbsent(event.stopOrder(), ignored -> new QueueState()).accept(event, eventTime(event));
-        }
-        return queues;
-    }
-
-    private PathFeatures path(final int target, ZonedDateTime time, Map<Integer, QueueState> queues) {
+    private PathFeatures path(final int target, ZonedDateTime time, Map<Integer, AlightingAwareBatchContext.QueueState> queues) {
         String day = statistics.dayType(time.toLocalDate());
         final int minute = minute(time);
         double net = 0;
@@ -307,30 +334,26 @@ public final class AlightingAwareFeatureSnapshot {
         double seen = 0;
         for (int stop = source.passedStopOrder() + 1; stop <= target; stop++) {
             net += statistics.cell("net_tab", stop, day, minute);
-            QueueState queue = queues.get(stop);
+            AlightingAwareBatchContext.QueueState queue = queues.get(stop);
             if (queue != null && queue.known(source.receivedAt())) {
                 left += queue.left(statistics.rate(stop, day, minute), source.receivedAt());
-                full += indicator(queue.full >= 1);
+                full += indicator(queue.full() >= 1);
             }
-            final int selected = stop;
-            List<AlightingAwarePassEvent> window = hourEvents().stream().filter(event -> event.stopOrder() == selected).toList();
-            surplus += deviation(window) / (window.size() + 1);
-            seen += window.size();
+            double[] window = moment.stopSurplus(stop);
+            surplus += window[0];
+            seen += window[1];
         }
         return new PathFeatures(net, left, full, surplus, seen);
     }
 
     private DayFeatures day(final long tripId) {
         final boolean down = isDown();
-        List<AlightingAwarePassEvent> direction = hourEvents().stream()
-            .filter(event -> (event.stopOrder() > statistics.turn()) == down)
-            .toList();
-        final double directionRatio = deviation(direction) / (direction.size() + 5);
+        final double directionRatio = moment.directionRatio(down);
         List<AlightingAwarePassEvent> vehicle = events.stream()
             .filter(event -> event.vehicleId().equals(source.vehicleId()) && event.tripId() == tripId)
             .toList();
         vehicle = vehicle.subList(Math.max(0, vehicle.size() - 5), vehicle.size());
-        final double vehicleRatio = deviation(vehicle) / (vehicle.size() + 1);
+        final double vehicleRatio = context.deviation(vehicle) / (vehicle.size() + 1);
         return new DayFeatures(directionRatio, vehicleRatio, vehicle.size());
     }
 
@@ -344,37 +367,14 @@ public final class AlightingAwareFeatureSnapshot {
         return source.stopOrder() == 1 && source.state() != 2;
     }
 
-    private List<AlightingAwarePassEvent> hourEvents() {
-        return events.stream()
-            .filter(event -> !eventTime(event).isBefore(source.receivedAt().minusSeconds(3600)))
-            .toList();
-    }
-
-    private Instant eventTime(AlightingAwarePassEvent event) {
-        if (statistics.confirmedProfile()) {
-            return event.confirmedAt();
-        }
-        return event.departure().receivedAt();
-    }
-
-    private double deviation(List<AlightingAwarePassEvent> events) {
-        double value = 0;
-        for (AlightingAwarePassEvent event : events) {
-            ZonedDateTime time = eventTime(event).atZone(SEOUL);
-            value += event.arrival().seats() - event.departure().seats()
-                - statistics.typicalNet(event.stopOrder(), statistics.dayType(time.toLocalDate()), minute(time));
-        }
-        return value;
-    }
-
     private QueueEstimate queueEstimate(
         final int target,
         final int horizon,
         ZonedDateTime time,
-        Map<Integer, QueueState> queues,
+        Map<Integer, AlightingAwareBatchContext.QueueState> queues,
         final float betweenSeats
     ) {
-        QueueState queue = queues.get(target);
+        AlightingAwareBatchContext.QueueState queue = queues.get(target);
         final boolean known = queue != null && queue.known(source.receivedAt());
         final double rate = statistics.rate(target, statistics.dayType(time.toLocalDate()), minute(time));
         if (!known) {
@@ -383,9 +383,9 @@ public final class AlightingAwareFeatureSnapshot {
             return new QueueEstimate(0, 90, left, leftMine, false);
         }
         final double since = queue.since(source.receivedAt());
-        final double left = Math.max(0, rate * since - queue.boarded);
+        final double left = Math.max(0, rate * since - queue.boarded());
         final double leftMine = Math.max(0, left + rate * horizon * statistics.minutesPerStop() - betweenSeats);
-        return new QueueEstimate(queue.full, since, left, leftMine, true);
+        return new QueueEstimate(queue.full(), since, left, leftMine, true);
     }
 
     private double[] baseFeatures(
@@ -632,35 +632,6 @@ public final class AlightingAwareFeatureSnapshot {
 
         private Neighbors result() {
             return new Neighbors(nearGap, nearSeats, behindGap, betweenCount, betweenSeats);
-        }
-    }
-
-    private static final class QueueState {
-        private Instant clear;
-        private double full;
-        private double boarded;
-
-        private void accept(AlightingAwarePassEvent event, Instant knownAt) {
-            if (event.arrival().seats() >= 1 && event.departure().seats() >= 1) {
-                clear = knownAt;
-                full = 0;
-                boarded = 0;
-                return;
-            }
-            full++;
-            boarded += Math.max(event.arrival().seats() - event.departure().seats(), 0);
-        }
-
-        private double since(Instant now) {
-            return Duration.between(clear, now).toNanos() / 60e9;
-        }
-
-        private boolean known(Instant now) {
-            return clear != null && since(now) <= 90;
-        }
-
-        private double left(final double rate, Instant now) {
-            return Math.max(0, rate * since(now) - boarded);
         }
     }
 }
