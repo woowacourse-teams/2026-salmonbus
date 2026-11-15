@@ -1,10 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureUnavailableException;
 import com.gustler.backend.forecasting.application.pipeline.ClosedPass;
 import com.gustler.backend.forecasting.application.pipeline.ForecastBatch;
 import com.gustler.backend.forecasting.application.pipeline.ForecastStage;
@@ -16,13 +14,10 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeat
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
-import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareHistorySeedReader;
-import com.gustler.backend.forecasting.infrastructure.alighting.JdbcAlightingAwareFeatureQuery;
 import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.nio.ByteBuffer;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -36,11 +31,14 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 예보 단계가 관측 흐름을 한 배치씩 받아 만드는 입력·노선 상태·닫힌 통과를 고정 기대값과 견준다. 기대값은 기준 구현
+ * (dev {@code e98ae3ea}의 입력 조회)이 같은 흐름에 낸 값의 지문이다({@link ForecastInputBaseline}).
+ */
 @ForecastingIntegrationTest
 @Transactional
 class ForecastPipelineEquivalenceTest {
@@ -51,8 +49,6 @@ class ForecastPipelineEquivalenceTest {
 
     @Autowired
     JdbcClient jdbc;
-    @TempDir
-    Path checkpoint;
     private VehicleCapacityCache cache;
 
     @BeforeEach
@@ -61,14 +57,13 @@ class ForecastPipelineEquivalenceTest {
     }
 
     @Test
-    void 연속_실행에서_옛_경로와_새_경로의_입력과_통과와_상태가_배치마다_같다() {
+    void 연속_실행에서_입력과_통과와_상태가_배치마다_기준_기록과_같다() {
         // given
         ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofHours(6),
             Duration.ofSeconds(30), EVENING.plus(Duration.ofHours(3)), 20261115L);
-        JdbcAlightingAwareFeatureQuery old = new JdbcAlightingAwareFeatureQuery(jdbc, cache,
-            ObservationStreamFixture.origins(jdbc, stream), MAXIMUM_ROWS, false, checkpoint.toString());
-        AlightingAwareHistorySeedReader seeds =
-            AlightingAwareHistorySeedReader.confirmed(checkpoint.toString(), MAXIMUM_ROWS);
+        StreamKeys keys = StreamKeys.of(jdbc, stream);
+        ForecastInputDigests digests = new ForecastInputDigests(keys);
+        ForecastInputBaseline baseline = ForecastInputBaseline.read("forecast-input/continuous-20261115");
         ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
         AlightingAwareRouteStatistics statistics = stream.statistics();
         RouteForecastState state = RouteForecastState.fromVerifiedOrigin(stream.route());
@@ -80,38 +75,32 @@ class ForecastPipelineEquivalenceTest {
         // when
         for (final long batchId : stream.batches()) {
             ForecastBatch batch = ObservationStreamFixture.read(jdbc, batchId);
-            Map<Long, AlightingAwareFeatureSnapshot> expected = null;
-            String oldFailure = null;
-            try {
-                expected = old.read(batchId, stream.stops(batch.routeVersionId()), statistics);
-            } catch (AlightingAwareFeatureUnavailableException failure) {
-                oldFailure = failure.getMessage();
-            }
+            ForecastInputBaseline.Batch expected = baseline.batch(keys.batch(batchId));
             ForecastStageResult actual = stage.advance(state, statistics, ObservationStreamFixture.SOURCE_ID, batch);
             if (!batch.confirmed()) {
-                assertThat(oldFailure).isEqualTo("ALIGHTING_AWARE_SOURCE_BATCH_MISSING");
+                assertThat(expected.kind()).isEqualTo(ForecastInputBaseline.Kind.UNCONFIRMED);
+                assertThat(expected.reason()).isEqualTo("ALIGHTING_AWARE_SOURCE_BATCH_MISSING");
                 assertThat(actual.status()).isEqualTo(ForecastStageResult.Status.NOT_CONFIRMED);
                 assertThat(actual.state()).isSameAs(state);
                 tally.skipped++;
                 continue;
             }
-            if (oldFailure != null) {
-                assertThat(actual.snapshots()).as("옛 경로가 실패한 배치 %d: %s", batchId, oldFailure).isEmpty();
+            if (expected.kind() == ForecastInputBaseline.Kind.FAILED) {
+                assertThat(actual.snapshots()).as("입력을 만들지 못한 배치 %d: %s", batchId, expected.reason()).isEmpty();
                 tally.failed++;
                 state = actual.state();
                 continue;
             }
+            assertThat(expected.kind()).isEqualTo(ForecastInputBaseline.Kind.FORECAST);
             assertThat(actual.status()).isEqualTo(ForecastStageResult.Status.FORECAST);
-            tally.vectors += assertSameSnapshots(batchId, expected, actual.snapshots(), statistics);
+            tally.vectors += assertSameSnapshots(batchId, expected, actual.snapshots(), statistics, keys, digests);
             tally.batches++;
-            tally.snapshots += expected.size();
-            AlightingAwareHistorySeedReader.Seed seed = seeds.read(batch.routeVersionId());
-            assertSameState(batchId, seed, actual.state());
+            tally.snapshots += expected.snapshots().size();
+            assertSameState(batchId, expected, actual.state(), digests);
             record(actual.state(), batchId, lastByVehicle, chainStartByObservation, sequence);
-            List<AlightingAwarePassEvent> closedByOld = seed.events().stream()
-                .filter(event -> event.confirmation().batchId() == batchId).toList();
-            assertThat(actual.closedPasses().stream().map(ClosedPass::event).toList())
-                .as("배치 %d의 닫힌 통과", batchId).containsExactlyInAnyOrderElementsOf(closedByOld);
+            List<AlightingAwarePassEvent> closed = actual.closedPasses().stream().map(ClosedPass::event).toList();
+            assertThat(closed).as("배치 %d가 닫은 통과 수", batchId).hasSize(expected.passCount());
+            assertThat(digests.passes(closed)).as("배치 %d의 닫힌 통과", batchId).isEqualTo(expected.passDigest());
             assertThat(actual.unattributedPasses()).isZero();
             for (ClosedPass pass : actual.closedPasses()) {
                 assertClosedPass(pass, chainStartByObservation, sequence);
@@ -134,13 +123,14 @@ class ForecastPipelineEquivalenceTest {
     }
 
     @Test
-    void 출퇴근_범위_밖_배치를_건너뛴_옛_경로와도_범위_안의_입력이_같다() {
+    void 출퇴근_범위_밖_배치를_건너뛰어도_범위_안의_입력이_기준_기록과_같다() {
         // given
         Instant dawn = Instant.parse("2026-10-15T20:00:00Z");
         ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, dawn, Duration.ofMinutes(120),
             Duration.ofSeconds(30), null, 7L);
-        JdbcAlightingAwareFeatureQuery old = new JdbcAlightingAwareFeatureQuery(jdbc, cache,
-            ObservationStreamFixture.origins(jdbc, stream), MAXIMUM_ROWS, true, checkpoint.toString());
+        StreamKeys keys = StreamKeys.of(jdbc, stream);
+        ForecastInputDigests digests = new ForecastInputDigests(keys);
+        ForecastInputBaseline baseline = ForecastInputBaseline.read("forecast-input/rush-only-7");
         ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
         RouteForecastState state = RouteForecastState.fromVerifiedOrigin(stream.route());
         int outside = 0;
@@ -155,13 +145,14 @@ class ForecastPipelineEquivalenceTest {
             if (!batch.confirmed()) {
                 continue;
             }
-            try {
-                Map<Long, AlightingAwareFeatureSnapshot> expected =
-                    old.read(batchId, stream.stops(batch.routeVersionId()), stream.statistics());
-                vectors += assertSameSnapshots(batchId, expected, actual.snapshots(), stream.statistics());
+            ForecastInputBaseline.Batch expected = baseline.batch(keys.batch(batchId));
+            if (expected.kind() == ForecastInputBaseline.Kind.FORECAST) {
+                vectors += assertSameSnapshots(batchId, expected, actual.snapshots(), stream.statistics(), keys,
+                    digests);
                 compared++;
-            } catch (AlightingAwareFeatureUnavailableException failure) {
-                assertThat(failure.getMessage()).isEqualTo("ALIGHTING_AWARE_OUTSIDE_VALIDATED_RUSH_SCOPE");
+            }
+            if (expected.kind() != ForecastInputBaseline.Kind.FORECAST) {
+                assertThat(expected.kind()).isEqualTo(ForecastInputBaseline.Kind.OUT_OF_SCOPE);
                 outside++;
             }
             state = actual.state();
@@ -352,56 +343,46 @@ class ForecastPipelineEquivalenceTest {
             .filter(ForecastBatch::confirmed).reduce((first, second) -> second).orElseThrow();
     }
 
+    /** 예보한 차량이 기대값과 같고 차량마다 기준 관측·정원·운행 시작·입력 벡터의 지문이 같은지 본다. 견준 벡터 수를 돌려준다. */
     private static int assertSameSnapshots(
         final long batchId,
-        Map<Long, AlightingAwareFeatureSnapshot> expected,
+        ForecastInputBaseline.Batch expected,
         List<AlightingAwareFeatureSnapshot> actual,
-        AlightingAwareRouteStatistics statistics
+        AlightingAwareRouteStatistics statistics,
+        StreamKeys keys,
+        ForecastInputDigests digests
     ) {
-        Map<Long, AlightingAwareFeatureSnapshot> byObservation = new HashMap<>();
-        actual.forEach(snapshot -> byObservation.put(snapshot.vehicleObservationId(), snapshot));
-        assertThat(byObservation.keySet()).as("배치 %d의 예보 차량", batchId).isEqualTo(expected.keySet());
+        Map<String, AlightingAwareFeatureSnapshot> byObservation = new HashMap<>();
+        actual.forEach(snapshot -> byObservation.put(keys.observation(snapshot.vehicleObservationId()), snapshot));
+        assertThat(byObservation.keySet()).as("배치 %d의 예보 차량", batchId).isEqualTo(expected.snapshots().keySet());
         int vectors = 0;
-        for (Map.Entry<Long, AlightingAwareFeatureSnapshot> entry : expected.entrySet()) {
-            AlightingAwareFeatureSnapshot left = entry.getValue();
-            AlightingAwareFeatureSnapshot right = byObservation.get(entry.getKey());
-            assertThat(right.source()).isEqualTo(left.source());
-            assertThat(right.capacity()).isEqualTo(left.capacity());
-            assertThat(right.provenance()).isEqualTo(left.provenance());
+        for (Map.Entry<String, String> entry : expected.snapshots().entrySet()) {
+            AlightingAwareFeatureSnapshot snapshot = byObservation.get(entry.getKey());
+            assertThat(digests.snapshot(snapshot, statistics)).as("배치 %d 관측 %s의 입력", batchId, entry.getKey())
+                .isEqualTo(entry.getValue());
             for (AlightingAwareRouteStatistics.Stop stop : statistics.stops()) {
-                AlightingAwareFeatureVector x = vector(left, stop.order());
-                AlightingAwareFeatureVector y = vector(right, stop.order());
-                if (x == null || y == null) {
-                    assertThat(y).as("배치 %d 관측 %d 목표 %d", batchId, entry.getKey(), stop.order()).isEqualTo(x);
-                    continue;
+                if (vector(snapshot, stop.order()) != null) {
+                    vectors++;
                 }
-                if (!Arrays.equals(x.seat88(), y.seat88()) || !Arrays.equals(x.probability80(), y.probability80())) {
-                    fail("배치 %d 관측 %d 목표 %d의 입력 벡터가 다르다", batchId, entry.getKey(), stop.order());
-                }
-                vectors++;
             }
         }
         return vectors;
     }
 
     private static AlightingAwareFeatureVector vector(AlightingAwareFeatureSnapshot snapshot, final int target) {
-        try {
-            return snapshot.forTarget(target);
-        } catch (IllegalArgumentException unsupported) {
-            return null;
-        }
+        return ForecastInputDigests.vectorOrNone(snapshot, target);
     }
 
     private static void assertSameState(
         final long batchId,
-        AlightingAwareHistorySeedReader.Seed seed,
-        RouteForecastState state
+        ForecastInputBaseline.Batch expected,
+        RouteForecastState state,
+        ForecastInputDigests digests
     ) {
-        assertThat(seed.batchId()).isEqualTo(batchId);
-        assertThat(state.cursor().orElseThrow().rank()).isEqualTo(seed.rank());
-        assertThat(state.observations()).as("배치 %d의 보존 관측", batchId).isEqualTo(seed.observations());
-        assertThat(state.prefix()).as("배치 %d의 누적 상태", batchId).isEqualTo(seed.prefix());
-        assertThat(state.events()).as("배치 %d의 통과 사건", batchId).isEqualTo(seed.events());
+        final long rank = state.cursor().orElseThrow().rank();
+        assertThat(rank).isEqualTo(expected.rank());
+        assertThat(digests.state(rank, state.observations(), state.prefix(), state.events()))
+            .as("배치 %d의 보존 관측·누적 상태·통과 사건", batchId).isEqualTo(expected.stateDigest());
     }
 
     private static void record(

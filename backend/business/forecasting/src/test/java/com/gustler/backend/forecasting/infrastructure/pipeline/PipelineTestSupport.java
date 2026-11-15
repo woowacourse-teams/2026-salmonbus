@@ -11,38 +11,10 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.DefaultTransactionDefinition;
 
-/** 새 예보 경로의 통합 시험이 함께 쓰는 모델·시계·트랜잭션 도우미다. */
+/** 예보 경로의 통합 시험이 함께 쓰는 모델·시계 도우미다. */
 final class PipelineTestSupport {
     private PipelineTestSupport() {
-    }
-
-    /** 따로 커밋하는 트랜잭션을 시험 트랜잭션에 합류시킨다. 같은 SQL을 그대로 쓴다. */
-    static PlatformTransactionManager joining(PlatformTransactionManager delegate) {
-        return new PlatformTransactionManager() {
-            @Override
-            public TransactionStatus getTransaction(TransactionDefinition definition) {
-                DefaultTransactionDefinition joined = new DefaultTransactionDefinition(definition);
-                joined.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
-                joined.setReadOnly(false);
-                joined.setIsolationLevel(TransactionDefinition.ISOLATION_DEFAULT);
-                return delegate.getTransaction(joined);
-            }
-
-            @Override
-            public void commit(TransactionStatus status) {
-                delegate.commit(status);
-            }
-
-            @Override
-            public void rollback(TransactionStatus status) {
-                delegate.rollback(status);
-            }
-        };
     }
 
     static NumericTreeEnsemble stumps(

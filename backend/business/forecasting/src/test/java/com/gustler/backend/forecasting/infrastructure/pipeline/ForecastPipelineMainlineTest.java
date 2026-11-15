@@ -7,8 +7,6 @@ import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
-import com.gustler.backend.forecasting.api.pipeline.ShadowForecastTask;
-import com.gustler.backend.forecasting.application.RouteWorkAccess;
 import com.gustler.backend.forecasting.application.deployment.ActiveForecastRuntimeResolver;
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
 import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
@@ -21,10 +19,7 @@ import com.gustler.backend.forecasting.application.pipeline.ReplaySource;
 import com.gustler.backend.forecasting.application.pipeline.RouteForecastState;
 import com.gustler.backend.forecasting.application.pipeline.RouteStateRegistry;
 import com.gustler.backend.forecasting.application.pipeline.RouteStateReplayer;
-import com.gustler.backend.forecasting.application.pipeline.ShadowForecastService;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
-import com.gustler.backend.forecasting.application.publication.ForecastBatchCommitter;
-import com.gustler.backend.forecasting.application.publication.ForecastBatchWriter;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
@@ -35,18 +30,11 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeat
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
-import com.gustler.backend.forecasting.domain.publication.PendingForecastBatch;
-import com.gustler.backend.forecasting.infrastructure.alighting.ConfirmedAlightingAwareInput;
-import com.gustler.backend.forecasting.infrastructure.alighting.JdbcAlightingAwareFeatureQuery;
 import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -60,11 +48,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,20 +59,21 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 새 예보 경로를 본선({@code forecast.pipeline=v2})으로 돌렸을 때를 실제 DB로 본다. 비교 기준은 같은 흐름을 옛 발행 경로로 처리한
- * 결과다. 본선의 착수 시각은 시계에서 찍으므로, 배치마다 옛 경로가 찍었을 착수 시각을 시계에 넣어 두 경로의 조건을 맞춘다.
+ * 예보 경로가 관측 흐름을 처리해 저장한 예측값·실행 결과·닫힌 통과를 실제 DB로 본다. 기대값은 기준 구현(dev {@code e98ae3ea}의
+ * 발행)이 같은 흐름에 낸 값이다({@link ForecastValueBaseline}). 착수 시각은 시계에서 찍으므로, 배치마다 흐름이 정한 착수 시각을
+ * 시계에 넣어 기대값과 조건을 맞춘다.
  *
- * <p>노선별 실행 줄은 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다. 옛 경로의 따로 커밋하는 트랜잭션은 시험 트랜잭션에
- * 합류시킨다.
+ * <p>노선별 실행 줄은 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다.
  */
 @ForecastingIntegrationTest
 @Transactional
 class ForecastPipelineMainlineTest {
     private static final Instant EVENING = Instant.parse("2026-10-14T10:00:00Z");
+    private static final Instant DAWN = Instant.parse("2026-10-15T20:00:00Z");
     private static final String SOURCE_ROUTE_ID = "234001739";
     private static final String MODEL_ROUTE = "6801";
     private static final int MAXIMUM_ROWS = 250_000;
-    private static final List<String> LEGACY_TABLES = List.of("seat_forecast", "forecast_publication",
+    private static final List<String> UNTOUCHED_TABLES = List.of("seat_forecast", "forecast_publication",
         "alighting_forecast_evaluation_work", "alighting_forecast_evaluation_result", "alighting_settlement_batch_work",
         "alighting_history_checkpoint");
 
@@ -96,17 +82,11 @@ class ForecastPipelineMainlineTest {
     @Autowired
     PlatformTransactionManager transactions;
     @Autowired
-    ForecastBatchCommitter committer;
-    @Autowired
-    RouteWorkAccess routeWork;
-    @Autowired
     ModelDeploymentRepository deployments;
     @Autowired
     ForecastRecordStore records;
     @Autowired
     StopPassStore passes;
-    @TempDir
-    Path checkpoint;
     private VehicleCapacityCache cache;
 
     @BeforeEach
@@ -115,24 +95,25 @@ class ForecastPipelineMainlineTest {
     }
 
     @Test
-    void 본선이_새_테이블만_채우고_옛_테이블과_체크포인트를_건드리지_않으며_옛_경로와_예측값이_비트까지_같다() throws IOException {
+    void 첫_배치부터_처리하면_예보_기록만_채우고_예측값과_실행_결과가_기준_기록과_같다() {
         // given
         Harness harness = new Harness(20261201L);
+        ForecastValueBaseline baseline = ForecastValueBaseline.read("forecast/mainline-20261201");
         harness.startMainline(Duration.ofHours(6), 20);
         harness.mainlineFromVerifiedOrigin();
-        Map<String, Long> legacyBefore = legacyCounts();
+        Map<String, Long> untouchedBefore = untouchedCounts();
 
         // when
         harness.batches().forEach(harness::mainline);
 
         // then
-        List<Path> checkpointFiles = checkpointFiles();
+        ForecastValueBaseline.Comparison comparison = baseline.compare(jdbc, harness.keys, harness.batches());
         assertSoftly(softly -> {
-            softly.assertThat(legacyCounts()).isEqualTo(legacyBefore);
+            softly.assertThat(untouchedCounts()).isEqualTo(untouchedBefore);
             softly.assertThat(jdbc.sql("""
-                SELECT count(*) FROM observation_batch WHERE route_version_id IN (:versions) AND input_confirmed_at IS NOT NULL
+                SELECT count(*) FROM observation_batch
+                WHERE route_version_id IN (:versions) AND input_confirmed_at IS NOT NULL
                 """).param("versions", harness.versions()).query(Long.class).single()).isZero();
-            softly.assertThat(checkpointFiles).isEmpty();
             softly.assertThat(runCount(harness)).isEqualTo(harness.batches().size());
             softly.assertThat(jdbc.sql("SELECT count(*) FROM stop_pass WHERE route_id=?")
                 .param(harness.stream.routeId())
@@ -140,51 +121,44 @@ class ForecastPipelineMainlineTest {
             softly.assertThat(harness.counter("batches", "published")).isGreaterThan(300);
             softly.assertThat(harness.counter("batches", "failed")).isZero();
             softly.assertThat(harness.events.published).isEqualTo(harness.batches().size());
-        });
-
-        // when
-        harness.batches().forEach(harness::legacy);
-
-        // then
-        Comparison comparison = compare(harness, Set.copyOf(harness.batches()));
-        assertSoftly(softly -> {
             softly.assertThat(comparison.same()).isGreaterThan(2_000);
             softly.assertThat(comparison.valueDiffers()).isZero();
-            softly.assertThat(comparison.legacyOnly()).isEmpty();
+            softly.assertThat(comparison.baselineOnly()).isEmpty();
             softly.assertThat(comparison.newOnly()).isZero();
         });
-        assertRunOutcomes(harness);
+        assertRunOutcomes(harness, baseline);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void 옛_경로로_처리하다_본선으로_넘어가면_되감기가_두_출처를_이어_처음부터_옛_경로로_처리한_값과_같다(final boolean shadow) {
+    void 입력_확정_시각만_남은_배치와_실행_기록이_있는_배치를_되감기가_이어_그_뒤의_예측값이_기준_기록과_같다(final boolean recorded) {
         // given
         Harness harness = new Harness(20261202L, Duration.ofHours(3));
-        if (shadow) {
-            harness.enableShadow();
-        }
+        ForecastValueBaseline baseline = ForecastValueBaseline.read("forecast/transition-20261202");
         List<Long> batches = harness.batches();
         List<Long> before = batches.subList(0, batches.size() / 2);
         List<Long> after = batches.subList(batches.size() / 2, batches.size());
+        if (recorded) {
+            harness.startMainline(Duration.ofHours(6), 20);
+            harness.mainlineFromVerifiedOrigin();
+            before.forEach(harness::mainline);
+        }
+        harness.confirmInputs(baseline);
 
         // when
-        before.forEach(harness::legacy);
-        harness.disableShadow();
         harness.startMainline(Duration.ofHours(6), 20);
         after.forEach(harness::mainline);
-        after.forEach(harness::legacy);
 
         // then
-        Comparison comparison = compare(harness, Set.copyOf(after));
+        ForecastValueBaseline.Comparison comparison = baseline.compare(jdbc, harness.keys, after);
         assertSoftly(softly -> {
             softly.assertThat(harness.counter("replays", "succeeded")).isOne();
             softly.assertThat(comparison.same()).isGreaterThan(1_000);
             softly.assertThat(comparison.valueDiffers()).isZero();
             softly.assertThat(comparison.newOnly()).isZero();
-            softly.assertThat(comparison.legacyOnly()).isEmpty();
+            softly.assertThat(comparison.baselineOnly()).isEmpty();
             softly.assertThat(harness.excluded()).isZero();
-            if (shadow) {
+            if (recorded) {
                 softly.assertThat(jdbc.sql("""
                     SELECT count(*) FROM forecast_run r JOIN observation_batch b ON b.id=r.observation_batch_id
                     WHERE b.id IN (:batches) AND r.confirmed_at<>b.input_confirmed_at
@@ -194,28 +168,121 @@ class ForecastPipelineMainlineTest {
     }
 
     @Test
-    void 되감기_창이_짧으면_전환_직후_빠지는_차량은_사유와_함께_세고_나머지_예측값은_옛_경로와_같다() {
+    void 되감기_창이_짧으면_되감은_직후_빠지는_차량은_사유와_함께_세고_나머지_예측값은_기준_기록과_같다() {
         // given
         Harness harness = new Harness(20261205L);
+        ForecastValueBaseline baseline = ForecastValueBaseline.read("forecast/short-replay-20261205");
         List<Long> batches = harness.batches();
-        List<Long> before = batches.subList(0, batches.size() / 2);
         List<Long> after = batches.subList(batches.size() / 2, batches.size());
+        harness.confirmInputs(baseline);
 
         // when
-        before.forEach(harness::legacy);
         harness.startMainline(Duration.ofMinutes(45), 20);
         after.forEach(harness::mainline);
-        after.forEach(harness::legacy);
 
         // then
-        Comparison comparison = compare(harness, Set.copyOf(after));
+        ForecastValueBaseline.Comparison comparison = baseline.compare(jdbc, harness.keys, after);
         assertSoftly(softly -> {
             softly.assertThat(harness.excluded()).isPositive();
-            softly.assertThat(comparison.legacyOnly()).isNotEmpty();
-            softly.assertThat(harness.excludedObservations).containsAll(comparison.legacyOnly());
+            softly.assertThat(comparison.baselineOnly()).isNotEmpty();
+            softly.assertThat(harness.excludedObservations).containsAll(comparison.baselineOnly());
             softly.assertThat(comparison.valueDiffers()).isZero();
             softly.assertThat(comparison.newOnly()).isZero();
             softly.assertThat(comparison.same()).isGreaterThan(1_000);
+        });
+    }
+
+    @Test
+    void 노선_판본이_바뀌는_흐름에서도_예측값과_실행_결과와_닫힌_통과가_기준_기록과_같다() {
+        // given
+        Harness harness = new Harness(EVENING, Duration.ofHours(4), EVENING.plus(Duration.ofHours(2)), 20261115L, true,
+            false);
+        ForecastValueBaseline baseline = ForecastValueBaseline.read("forecast/version-switch-20261115");
+        harness.startMainline(Duration.ofHours(6), 20);
+        harness.mainlineFromVerifiedOrigin();
+
+        // when
+        harness.batches().forEach(harness::mainline);
+
+        // then
+        ForecastValueBaseline.Comparison comparison = baseline.compare(jdbc, harness.keys, harness.batches());
+        assertSoftly(softly -> {
+            softly.assertThat(comparison.same()).isGreaterThan(2_000);
+            softly.assertThat(comparison.valueDiffers()).isZero();
+            softly.assertThat(comparison.baselineOnly()).isEmpty();
+            softly.assertThat(comparison.newOnly()).isZero();
+            softly.assertThat(harness.excluded()).isZero();
+            softly.assertThat(harness.counter("batches", "failed")).isZero();
+            softly.assertThat(stopPasses(harness)).isEqualTo(baseline.passes()).hasSizeGreaterThan(50);
+            softly.assertThat(harness.events.published).isEqualTo(harness.batches().size());
+            softly.assertThat(harness.events.seen).isEqualTo(harness.batches().size());
+            softly.assertThat(harness.events.passes).isEqualTo(baseline.passes().size());
+            softly.assertThat(harness.mainline.states().routes()).isOne();
+            softly.assertThat(harness.mainline.states().observations()).isPositive();
+        });
+        assertRunOutcomes(harness, baseline);
+    }
+
+    @Test
+    void 시간_확장_모델이_없으면_출퇴근_범위_밖_배치는_범위_밖으로_남기고_범위_안_예측값은_기준_기록과_같다() {
+        // given
+        Harness harness = new Harness(DAWN, Duration.ofMinutes(120), null, 7L, false, true);
+        ForecastValueBaseline baseline = ForecastValueBaseline.read("forecast/rush-only-7");
+        harness.startMainline(Duration.ofHours(6), 20);
+        harness.mainlineFromVerifiedOrigin();
+
+        // when
+        harness.batches().forEach(harness::mainline);
+
+        // then
+        ForecastValueBaseline.Comparison comparison = baseline.compare(jdbc, harness.keys, harness.batches());
+        final long outside = jdbc.sql("""
+            SELECT count(*) FROM forecast_run WHERE route_version_id IN (:versions) AND outcome='OUT_OF_SCOPE'
+            """).param("versions", harness.versions()).query(Long.class).single();
+        assertSoftly(softly -> {
+            softly.assertThat(outside).isGreaterThan(80);
+            softly.assertThat(comparison.same()).isGreaterThan(300);
+            softly.assertThat(comparison.valueDiffers()).isZero();
+            softly.assertThat(comparison.baselineOnly()).isEmpty();
+            softly.assertThat(comparison.newOnly()).isZero();
+            softly.assertThat(predictionCounts(harness, baseline)).isEqualTo(baseline.predictionCounts());
+        });
+    }
+
+    @Test
+    void 되감기가_실패하면_그_노선은_착수_시각_기준_5분_동안_다시_되감지_않고_예보_없는_실행만_남긴다() {
+        // given
+        Harness harness = new Harness(20261119L, Duration.ofHours(2));
+        harness.startMainline(Duration.ofHours(6), 20);
+        harness.mainlineFromVerifiedOrigin();
+        final long broken = harness.confirmedBatch(20);
+        final long restartAt = harness.confirmedBatch(60);
+        List<Long> batches = harness.batches();
+        List<Long> head = batches.subList(0, batches.indexOf(restartAt));
+        List<Long> tail = batches.subList(batches.indexOf(restartAt), batches.size());
+        head.forEach(harness::mainline);
+
+        // when
+        jdbc.sql("UPDATE observation_batch SET stored_rows=stored_rows+1 WHERE id=?").param(broken).update();
+        harness.mainline.states().remove(harness.stream.route());
+        tail.forEach(harness::mainline);
+
+        // then
+        final double failed = harness.counter("replays", "failed");
+        final double deferred = harness.counter("batches", "replay_deferred");
+        assertSoftly(softly -> {
+            softly.assertThat(failed).isGreaterThanOrEqualTo(2);
+            softly.assertThat(harness.counter("batches", "replay_failed")).isEqualTo(failed);
+            softly.assertThat(deferred).isGreaterThanOrEqualTo((failed - 1) * 6);
+            softly.assertThat(harness.counter("replays", "succeeded")).isZero();
+            softly.assertThat(jdbc.sql("""
+                SELECT count(*) FROM forecast_run r JOIN observation_batch b ON b.id=r.observation_batch_id
+                WHERE r.route_id=? AND b.ingestion_origin='LIVE' AND r.outcome='INPUT_UNAVAILABLE'
+                """).param(harness.stream.routeId()).query(Long.class).single()).isEqualTo((long) (failed + deferred));
+            softly.assertThat(jdbc.sql("SELECT count(*) FROM forecast_record WHERE observation_batch_id IN (:batches)")
+                .param("batches", head).query(Long.class).single()).isPositive();
+            softly.assertThat(jdbc.sql("SELECT count(*) FROM forecast_record WHERE observation_batch_id IN (:batches)")
+                .param("batches", tail).query(Long.class).single()).isZero();
         });
     }
 
@@ -289,18 +356,12 @@ class ForecastPipelineMainlineTest {
         });
     }
 
-    private Map<String, Long> legacyCounts() {
+    private Map<String, Long> untouchedCounts() {
         Map<String, Long> counts = new LinkedHashMap<>();
-        for (String table : LEGACY_TABLES) {
+        for (String table : UNTOUCHED_TABLES) {
             counts.put(table, jdbc.sql("SELECT count(*) FROM " + table).query(Long.class).single());
         }
         return counts;
-    }
-
-    private List<Path> checkpointFiles() throws IOException {
-        try (Stream<Path> files = Files.list(checkpoint)) {
-            return files.toList();
-        }
     }
 
     private long runCount(Harness harness) {
@@ -308,119 +369,88 @@ class ForecastPipelineMainlineTest {
             .query(Long.class).single();
     }
 
-    private Comparison compare(Harness harness, Set<Long> batches) {
-        Map<String, double[]> legacy = new HashMap<>();
-        Map<String, Long> legacyObservations = new HashMap<>();
-        jdbc.sql("""
-            SELECT f.vehicle_observation_id,f.target_stop_order,f.expected_seats,f.seat_full_chance FROM seat_forecast f
-              JOIN vehicle_observation o ON o.id=f.vehicle_observation_id
-            WHERE o.observation_batch_id IN (:batches)
-            """).param("batches", batches).query(row -> {
-                String key = row.getLong(1) + ":" + row.getInt(2);
-                legacy.put(key, new double[] {row.getDouble(3), row.getDouble(4)});
-                legacyObservations.put(key, row.getLong(1));
+    private Set<String> stopPasses(Harness harness) {
+        Set<String> stored = new HashSet<>();
+        jdbc.sql("SELECT trip_start_observation_id,stop_order,closure_observation_id FROM stop_pass WHERE route_id=?")
+            .param(harness.stream.routeId())
+            .query(row -> {
+                stored.add(harness.keys.observation(row.getLong(1)) + " " + row.getInt(2) + " "
+                    + harness.keys.observation(row.getLong(3)));
             });
-        Map<String, double[]> fresh = new HashMap<>();
-        jdbc.sql("""
-            SELECT r.vehicle_observation_id,t.target,t.seats,t.probability FROM forecast_record r,
-              unnest(r.target_stop_orders,r.expected_seats,r.full_probabilities) AS t(target,seats,probability)
-            WHERE r.observation_batch_id IN (:batches)
-            """).param("batches", batches).query(row -> {
-                fresh.put(row.getLong(1) + ":" + row.getInt(2), new double[] {row.getDouble(3), row.getDouble(4)});
-            });
-        int same = 0;
-        int differs = 0;
-        int newOnly = 0;
-        for (Map.Entry<String, double[]> entry : fresh.entrySet()) {
-            double[] other = legacy.get(entry.getKey());
-            if (other == null) {
-                newOnly++;
-                continue;
-            }
-            if (hasSameBits(other, entry.getValue())) {
-                same++;
-                continue;
-            }
-            differs++;
-        }
-        Set<Long> legacyOnly = legacy.keySet().stream()
-            .filter(key -> !fresh.containsKey(key))
-            .map(legacyObservations::get)
-            .collect(Collectors.toCollection(HashSet::new));
-        return new Comparison(same, differs, newOnly, legacyOnly);
+        return stored;
     }
 
-    private static boolean hasSameBits(double[] legacy, double[] fresh) {
-        return Double.doubleToLongBits(legacy[0]) == Double.doubleToLongBits(fresh[0])
-            && Double.doubleToLongBits(legacy[1]) == Double.doubleToLongBits(fresh[1]);
-    }
-
-    private void assertRunOutcomes(Harness harness) {
+    /** 실행 결과가 배치마다 기대값과 같고, 예측을 내는 배치의 예측 수가 기대값과 같은지 본다. */
+    private void assertRunOutcomes(Harness harness, ForecastValueBaseline baseline) {
         Map<String, Long> outcomes = new HashMap<>();
-        jdbc.sql("""
-            SELECT CASE
-                WHEN b.ingestion_origin<>'LIVE' THEN 'INPUT_UNAVAILABLE'
-                WHEN b.outcome='SUCCESS_EMPTY' OR b.stored_rows=0 THEN 'EMPTY'
-                WHEN b.input_confirmed_at>b.response_received_at+interval '90 seconds' THEN 'LATE'
-                WHEN p.prediction_count>0 THEN 'PUBLISHED'
-                ELSE 'EMPTY' END AS expected, r.outcome, count(*)
-            FROM forecast_run r JOIN observation_batch b ON b.id=r.observation_batch_id
-              LEFT JOIN forecast_publication p ON p.source_batch_id=r.observation_batch_id
-            WHERE r.route_id=?
-            GROUP BY 1,2
-            """).param(harness.stream.routeId()).query(row -> {
-                outcomes.put(row.getString(1) + "->" + row.getString(2), row.getLong(3));
+        jdbc.sql("SELECT observation_batch_id,outcome FROM forecast_run WHERE route_id=?")
+            .param(harness.stream.routeId()).query(row -> {
+                ForecastValueBaseline.Run expected = baseline.runs().get(harness.keys.batch(row.getLong(1)));
+                outcomes.merge(expected.outcome() + "->" + row.getString(2), 1L, Long::sum);
             });
         assertThat(outcomes.keySet()).allSatisfy(pair -> {
             String[] sides = pair.split("->");
             assertThat(sides[1]).as(pair).isEqualTo(sides[0]);
         });
         assertThat(outcomes).containsKeys("EMPTY->EMPTY", "LATE->LATE", "PUBLISHED->PUBLISHED");
-        Map<Long, Integer> legacyCounts = new HashMap<>();
-        jdbc.sql(
-            "SELECT source_batch_id,prediction_count FROM forecast_publication WHERE route_version_id IN (:versions)")
-            .param("versions", harness.versions())
-            .query(row -> {
-                legacyCounts.put(row.getLong(1), row.getInt(2));
-            });
-        Map<Long, Integer> freshCounts = new HashMap<>();
+        assertThat(predictionCounts(harness, baseline)).isEqualTo(baseline.predictionCounts());
+    }
+
+    /** 기대값이 예측 수를 적어 둔 배치의 저장된 예측 수다. */
+    private Map<Integer, Integer> predictionCounts(Harness harness, ForecastValueBaseline baseline) {
+        Map<Integer, Integer> counts = new HashMap<>();
         jdbc.sql("SELECT observation_batch_id,prediction_count FROM forecast_run WHERE route_id=?")
             .param(harness.stream.routeId())
             .query(row -> {
-                if (legacyCounts.containsKey(row.getLong(1))) {
-                    freshCounts.put(row.getLong(1), row.getInt(2));
+                final int ordinal = harness.keys.batch(row.getLong(1));
+                if (baseline.predictionCounts().containsKey(ordinal)) {
+                    counts.put(ordinal, row.getInt(2));
                 }
             });
-        assertThat(freshCounts).isEqualTo(legacyCounts);
+        return counts;
     }
 
-    private record Comparison(int same, int valueDiffers, int newOnly, Set<Long> legacyOnly) {
-    }
-
-    /** 흐름 하나와 옛 경로·그림자·본선을 묶는다. */
+    /** 흐름 하나와 예보 경로를 묶는다. */
     private final class Harness {
         private final ObservationStreamFixture.Stream stream;
+        private final StreamKeys keys;
         private final Map<Long, Instant> intendedConfirmation = new HashMap<>();
         private final Map<Long, Meta> meta = new HashMap<>();
         private final PipelineTestSupport.MutableClock clock = new PipelineTestSupport.MutableClock();
-        private final ForecastBatchWriter writer;
         private final RuntimeSnapshot runtime;
         private final AlightingAwareSeatForecastModel model;
         private final Map<Long, RouteStops> stopsByVersion = new HashMap<>();
-        private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
         private final RecordingEvents events = new RecordingEvents();
         private final Set<Long> excludedObservations = new HashSet<>();
+        private final boolean rushOnly;
+        private SimpleMeterRegistry meters = new SimpleMeterRegistry();
         private ForecastPipelineService mainline;
-        private ShadowForecastService shadow;
 
         private Harness(final long seed) {
             this(seed, Duration.ofHours(4));
         }
 
         private Harness(final long seed, Duration length) {
-            stream = ObservationStreamFixture.insert(jdbc, EVENING, length, Duration.ofSeconds(30), null,
+            this(EVENING, length, null, seed, true, false);
+        }
+
+        /**
+         * @param versionSwitch 노선 판본이 바뀌는 시각. 비어 있으면 한 판본이다
+         * @param extended 시간 확장 모델을 함께 둘지
+         * @param rushOnly 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를 예보하지 않을지
+         */
+        private Harness(
+            Instant start,
+            Duration length,
+            Instant versionSwitch,
+            final long seed,
+            final boolean extended,
+            final boolean rushOnly
+        ) {
+            this.rushOnly = rushOnly;
+            stream = ObservationStreamFixture.insert(jdbc, start, length, Duration.ofSeconds(30), versionSwitch,
                 seed, MODEL_ROUTE);
-            String origins = ObservationStreamFixture.origins(jdbc, stream);
+            keys = StreamKeys.of(jdbc, stream);
             jdbc.sql("""
                 SELECT id,input_confirmed_at,route_version_id,response_received_at,ingestion_origin,outcome
                 FROM observation_batch WHERE route_version_id IN (:versions)
@@ -434,21 +464,18 @@ class ForecastPipelineMainlineTest {
                 .param("versions", versions()).update();
             stream.stopsByVersion().forEach((version, stops) -> stopsByVersion.put(version,
                 new RouteStops(version, SOURCE_ROUTE_ID, stops.stops(), stops.routeName())));
-            model = model(seed);
+            model = model(seed, extended);
             runtime = activate(model);
-            writer = new ForecastBatchWriter(committer, clock, routeWork);
-            writer.setAlightingAwareFeatures(new JdbcAlightingAwareFeatureQuery(jdbc, cache, origins, MAXIMUM_ROWS,
-                false, checkpoint.toString()));
-            writer.setConfirmedInput(new ConfirmedAlightingAwareInput(jdbc, PipelineTestSupport.joining(transactions)));
         }
 
-        /** 본선을 새로 띄운다. 노선 상태가 없는 채로 시작하므로 첫 배치가 되감는다. */
+        /** 예보 경로를 새로 띄운다. 노선 상태와 지표가 빈 채로 시작하므로 첫 배치가 되감는다. */
         private void startMainline(Duration replayWindow, final int batchLimit) {
+            meters = new SimpleMeterRegistry();
             JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS, JdbcReplaySource.Axis.RECORDED_RUN);
             ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
             PipelineBatchProcessor processor = new PipelineBatchProcessor("pipeline_forecast", stage,
                 new RouteStateReplayer(source, stage, replayWindow), records, passes,
-                new TransactionTemplate(transactions), List.of(events), new RouteStateRegistry(), false);
+                new TransactionTemplate(transactions), List.of(events), new RouteStateRegistry(), rushOnly);
             mainline = new ForecastPipelineService((key, task) -> {
                 task.run();
                 return true;
@@ -463,22 +490,16 @@ class ForecastPipelineMainlineTest {
             mainline.states().put(statistics(), RouteForecastState.fromVerifiedOrigin(stream.route()));
         }
 
-        private void enableShadow() {
-            JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
-            ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
-            shadow = new ShadowForecastService(ShadowForecastTask::run, stage,
-                new RouteStateReplayer(source, stage, Duration.ofHours(6)), source, records, passes,
-                new TransactionTemplate(transactions), List.of(), new RouteStateRegistry(), false, Clock.systemUTC(),
-                new SimpleMeterRegistry());
-            shadow.states().put(statistics(), RouteForecastState.fromVerifiedOrigin(stream.route()));
-            writer.setLegacyForecastListener(shadow);
+        /**
+         * 기대값 파일에 적힌 배치에 입력 확정 시각을 넣는다. 예보 실행 기록이 없는 배치는 되감기가 이 시각을 착수 시각으로 읽는다.
+         */
+        private void confirmInputs(ForecastValueBaseline baseline) {
+            baseline.confirmed().forEach((ordinal, at) -> jdbc.sql(
+                    "UPDATE observation_batch SET input_confirmed_at=? WHERE id=?")
+                .params(at.atOffset(ZoneOffset.UTC), keys.batchId(ordinal)).update());
         }
 
-        private void disableShadow() {
-            writer.setLegacyForecastListener(null);
-        }
-
-        /** 수집 결과가 성공(줄 있음·빈 응답)인 배치를 처리 순서로. 본선이 처리할 대상이다. */
+        /** 수집 결과가 성공(줄 있음·빈 응답)인 배치를 처리 순서로. 예보 경로가 처리할 대상이다. */
         private List<Long> batches() {
             return stream.batches().stream().filter(batchId -> !meta.get(batchId).outcome().startsWith("FAILED"))
                 .toList();
@@ -534,24 +555,13 @@ class ForecastPipelineMainlineTest {
             }
         }
 
-        /** 본선이 그 배치에서 예보하지 않은 좌석을 아는 차량 관측이다. 대조 제외를 관측 단위로 확인하는 데 쓴다. */
+        /** 그 배치에서 예보하지 않은, 차량 번호가 있는 관측이다. 되감은 직후 빠진 차량을 관측 단위로 확인하는 데 쓴다. */
         private List<Long> withheldObservations(final long batchId) {
             return jdbc.sql("""
                 SELECT o.id FROM vehicle_observation o
                 WHERE o.observation_batch_id=? AND o.vehicle_id IS NOT NULL
                   AND NOT EXISTS (SELECT 1 FROM forecast_record r WHERE r.vehicle_observation_id=o.id)
                 """).param(batchId).query(Long.class).list();
-        }
-
-        /** 옛 경로로 처리한다. 정상 수집이 아닌 배치는 옛 경로가 확정하지 못해 실패하므로 건너뛴다. */
-        private void legacy(final long batchId) {
-            Meta batch = meta.get(batchId);
-            if (!"LIVE".equals(batch.origin())) {
-                return;
-            }
-            clock.at = intendedConfirmation.get(batchId);
-            writer.writeForecastsOf(new PendingForecastBatch(batchId, batch.version(), stream.routeId(),
-                batch.receivedAt()), stopsByVersion.get(batch.version()), runtime);
         }
 
         /** 되감은 직후라 예보에서 뺀 차량 관측 수(두 사유의 합). */
@@ -580,7 +590,7 @@ class ForecastPipelineMainlineTest {
             return counter.count();
         }
 
-        private AlightingAwareSeatForecastModel model(final long seed) {
+        private AlightingAwareSeatForecastModel model(final long seed, final boolean extended) {
             Random random = new Random(seed);
             AlightingAwareSeatPredictor predictor = new AlightingAwareSeatPredictor(
                 PipelineTestSupport.stumps(88, NumericTreeEnsemble.Kind.REGRESSION, new double[] {10}, random),
@@ -590,11 +600,18 @@ class ForecastPipelineMainlineTest {
             for (int order = 1; order <= ObservationStreamFixture.STOP_COUNT; order++) {
                 evidence.put(order, "{}");
             }
-            Map<String, ExtendedAlightingPredictor> extension = Map.of(MODEL_ROUTE, new ExtendedAlightingPredictor(
+            return new AlightingAwareSeatForecastModel(predictor, Map.of(MODEL_ROUTE, stream.statistics()),
+                Map.of(MODEL_ROUTE, evidence), PipelineTestSupport.digest(), extension(extended, random));
+        }
+
+        /** 시간 확장 모델을 둘 때만 난수로 트리를 만든다. */
+        private Map<String, ExtendedAlightingPredictor> extension(final boolean extended, Random random) {
+            if (!extended) {
+                return Map.of();
+            }
+            return Map.of(MODEL_ROUTE, new ExtendedAlightingPredictor(
                 PipelineTestSupport.stumps(6, NumericTreeEnsemble.Kind.REGRESSION, new double[] {8}, random),
                 PipelineTestSupport.stumps(6, NumericTreeEnsemble.Kind.BINARY, new double[] {0}, random)));
-            return new AlightingAwareSeatForecastModel(predictor, Map.of(MODEL_ROUTE, stream.statistics()),
-                Map.of(MODEL_ROUTE, evidence), PipelineTestSupport.digest(), extension);
         }
 
         private RuntimeSnapshot activate(AlightingAwareSeatForecastModel selected) {
