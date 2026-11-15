@@ -1236,9 +1236,10 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 | `v2` | 무시 | `shadow` | 새 예보가 본선(차례 4-1). 옛 정산은 남은 옛 예측만 마저 처리한다 | 돈다 | 없음(옛 예측이 더 생기지 않는다) |
 | `v2` | 무시 | `v2` | 완전 전환(차례 4-2) | 돌지 않는다 | 없음 |
 
-dev와 로컬에서 먼저 해 볼 때는 세 가지를 알고 시작한다.
+dev와 로컬에서 먼저 해 볼 때는 네 가지를 알고 시작한다.
 
 - 새 경로는 확정 프로필(`alighting-confirmed-closure-v2`) 모델만 처리한다. 운영 모델은 확정 프로필이고, dev 서버도 `MODEL_BUNDLE_DIRECTORY`로 같은 번들을 쓰고 있어 그림자부터 그대로 해 볼 수 있다(2026-11-15 확인. 번들을 바꿨으면 `manifest.json`의 `input_profile`을 다시 본다). 저장소의 로컬 기본 모델(`dev/data/model-reference`)은 확정 프로필이 아니다. 그래서 로컬 Docker 구성에서는 그림자를 켜도 새 테이블에 아무것도 쌓이지 않고, `FORECAST_PIPELINE=v2`에서는 그 노선들을 `unsupported_profile`로 건너뛴다(경고 로그 `event=pipeline_forecast_unsupported_profile`). 그러면 예보가 나오지 않고 보드는 발행이 끊긴 것으로 보아 503(`NO_RECENT_OBSERVATION`)을 낸다. `salmonbus_pipeline_forecast_batches_total{result="unsupported_profile"}`가 늘지 않는지로 확인한다.
+- 채점 그림자(2번)는 옛 발행이 모델 배포에 적어 둔 정산 근거(`model_deployment.settlement_context`)를 읽는다. 옛 발행은 `FORECAST_COMPACT_SETTLEMENT_WRITE=true`일 때만 이 근거를 적는다. 운영은 켜져 있다(2026-11-15 확인). 꺼진 환경에서 2번을 켜면 새 채점이 예측을 `SETTLEMENT_EVIDENCE_MISSING`으로 닫아 옛 정산과 대조할 정답이 생기지 않는다. dev 서버는 `dev/server/worker.yml`의 `forecast.compact-settlement-write`를 먼저 본다. 4-1부터는 본선이 근거를 직접 적는다.
 - 개발 데이터 초기화(`reset`, `LocalData --reset-generated`)는 관측 테이블과 옛 예보·정산 테이블만 비우고 새 테이블 다섯 개는 비우지 않는다. 스위치를 켠 뒤 초기화를 돌리면 지워진 관측을 가리키는 줄이 새 테이블에 남는다. 초기화 직후 `TRUNCATE forecast_run, forecast_record, stop_pass, pass_label, forecast_unresolved;`를 실행하고 worker를 재시작한다.
 - 로컬 구성의 프론트 대기 조건(`dev/docker/forecast-ready.sql`)과 스모크 검사(`dev/tests/smoke-local.sh`)는 `forecast_publication`을 본다. 로컬에서 `FORECAST_PIPELINE=v2`로 띄우면 옛 발행이 생기지 않아 프론트가 기다린다. 옛 코드를 지우는 배포에서 이 둘과 초기화 대상을 함께 고친다.
 
