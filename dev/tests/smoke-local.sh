@@ -124,7 +124,10 @@ for attempt in $(seq 1 90); do
   sleep 2
 done
 [[ $progress == '20|8|41' ]] || { echo "Collection/forecast/route counts: $progress" >&2; exit 1; }
-python3 "$ROOT/dev/tests/assert-collection-routes.py" "$api" "$ROOT/dev/data"
+# 예보가 나와야 하는 시간대인지는 앱과 같이 배치의 예보 처리 착수 시각(forecast_run.confirmed_at)으로 판단하므로 DB도 읽는다.
+python3 "$ROOT/dev/tests/assert-collection-routes.py" "$api" "$ROOT/dev/data" \
+  docker exec "$(compose ps --quiet postgres)" \
+  psql -X -q -A -t -v ON_ERROR_STOP=1 -U salmonbus_local -d salmonbus_local -c
 
 containers=$(compose ps --quiet)
 for container in $containers; do

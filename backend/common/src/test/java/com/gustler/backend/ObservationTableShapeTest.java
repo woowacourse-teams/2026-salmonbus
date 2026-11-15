@@ -1,7 +1,6 @@
 package com.gustler.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
 import com.gustler.backend.support.TestDatabase;
 import java.io.IOException;
@@ -9,8 +8,9 @@ import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.SQLWarning;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -67,31 +67,32 @@ class ObservationTableShapeTest {
     void 줄이_없어_마이그레이션이_다시_만든_두_테이블은_전환_SQL로_바꾸고_첫_파티션을_지운_두_테이블과_카탈로그가_같다()
         throws Exception {
         // given
-        try (TestDatabase migrated = TestDatabase.create(); TestDatabase converted = TestDatabase.create()) {
+        try (TestDatabase migrated = TestDatabase.create(); TestDatabase converted = TestDatabase.create();
+            Connection actual = migrated.connection(); Connection expected = converted.connection()) {
+            LocalDate beforeMigration = ForecastPipelineTransitionSqlTest.koreanDate(actual);
+
             // when
             migrate(migrated, null);
+            LocalDate afterMigration = ForecastPipelineTransitionSqlTest.koreanDate(actual);
             migrate(converted, BEFORE_PARTITIONING);
-            try (Connection target = converted.connection()) {
-                execute(target, ROUTE + ";" + BATCHES + ";" + OBSERVATIONS);
-                migrate(converted, null);
-                convertWithManualSql(target);
-                dropInitialPartitions(target);
-            }
+            execute(expected, ROUTE + ";" + BATCHES + ";" + OBSERVATIONS);
+            migrate(converted, null);
+            LocalDate convertedOn = convertWithManualSql(expected);
+            dropInitialPartitions(expected);
 
             // then
-            try (Connection actual = migrated.connection(); Connection expected = converted.connection()) {
-                assumeThat(today(actual)).as("두 DB의 날짜 파티션을 같은 한국 날짜에 만들었다").isEqualTo(today(expected));
-                Map<String, List<String>> expectedCatalog = catalog(expected);
-                Map<String, List<String>> actualCatalog = catalog(actual);
-                SoftAssertions softly = new SoftAssertions();
-                for (String item : CATALOG.keySet()) {
-                    softly.assertThat(actualCatalog.get(item)).as(item).isNotEmpty()
-                        .containsExactlyElementsOf(expectedCatalog.get(item));
-                }
-                softly.assertThat(scalar(actual, incomingForeignKeys())).as("두 테이블을 가리키는 FK").isNull();
-                softly.assertThat(scalar(expected, incomingForeignKeys())).as("두 테이블을 가리키는 FK").isNull();
-                softly.assertAll();
+            LocalDate migratedOn = ForecastPipelineTransitionSqlTest.firstPartitionDate(actual);
+            Map<String, List<String>> expectedCatalog = relativeCatalog(expected, convertedOn);
+            Map<String, List<String>> actualCatalog = relativeCatalog(actual, migratedOn);
+            SoftAssertions softly = new SoftAssertions();
+            for (String item : CATALOG.keySet()) {
+                softly.assertThat(actualCatalog.get(item)).as(item).isNotEmpty()
+                    .containsExactlyElementsOf(expectedCatalog.get(item));
             }
+            softly.assertThat(migratedOn).as("마이그레이션이 만든 첫 날짜 파티션").isBetween(beforeMigration, afterMigration);
+            softly.assertThat(scalar(actual, incomingForeignKeys())).as("두 테이블을 가리키는 FK").isNull();
+            softly.assertThat(scalar(expected, incomingForeignKeys())).as("두 테이블을 가리키는 FK").isNull();
+            softly.assertAll();
         }
     }
 
@@ -102,6 +103,8 @@ class ObservationTableShapeTest {
             migrate(migrated, null);
             try (Connection target = migrated.connection()) {
                 // when
+                execute(target, "BEGIN");
+                LocalDate insertedOn = ForecastPipelineTransitionSqlTest.koreanDate(target);
                 execute(target, ROUTE + ";" + BATCHES + ";" + OBSERVATIONS);
                 execute(target, """
                     INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
@@ -111,15 +114,15 @@ class ObservationTableShapeTest {
                         outcome,normalization_version,collection_strategy_version)
                     VALUES ((now() AT TIME ZONE 'Asia/Seoul')::date + 1,1,now(),1,'k1','RESERVED','n1','c1')
                     """);
+                execute(target, "COMMIT");
 
                 // then
-                String partitionOfToday = "_p" + today(target).replace("-", "");
                 SoftAssertions softly = new SoftAssertions();
-                softly.assertThat(scalar(target, "SELECT string_agg(DISTINCT tableoid::regclass::text, ',')"
-                    + " FROM observation_batch WHERE source_date = (now() AT TIME ZONE 'Asia/Seoul')::date"))
-                    .isEqualTo("observation_batch" + partitionOfToday);
-                softly.assertThat(scalar(target, "SELECT string_agg(DISTINCT tableoid::regclass::text, ',')"
-                    + " FROM vehicle_observation")).isEqualTo("vehicle_observation" + partitionOfToday);
+                softly.assertThat(scalar(target, partitionAndDateOfRows("observation_batch")))
+                    .isEqualTo(partitionAndDate("observation_batch", insertedOn) + ","
+                        + partitionAndDate("observation_batch", insertedOn.plusDays(1)));
+                softly.assertThat(scalar(target, partitionAndDateOfRows("vehicle_observation")))
+                    .isEqualTo(partitionAndDate("vehicle_observation", insertedOn));
                 softly.assertThat(scalar(target, "SELECT count(*) FROM vehicle_observation"
                     + " WHERE observation_batch_id = 999")).isEqualTo("1");
                 softly.assertThat(scalar(target, "SELECT count(*) FROM observation_batch WHERE attempt_key = 'k1'"))
@@ -187,8 +190,8 @@ class ObservationTableShapeTest {
                 Map<String, List<String>> before = catalog(target);
 
                 // when
-                List<String> notices = run(target, "sal434-04-partition-observation-tables.sql",
-                    "SET sal434.confirm_partition = '" + today(target) + "'", "SET sal434.count_rows = 'exact'");
+                List<String> notices = new ArrayList<>();
+                partitionWithManualSql(target, notices);
 
                 // then
                 SoftAssertions softly = new SoftAssertions();
@@ -211,10 +214,17 @@ class ObservationTableShapeTest {
         return target;
     }
 
-    private static void convertWithManualSql(Connection target) throws IOException, SQLException {
+    /** 준비 SQL과 파티션 전환 SQL을 실행하고, 전환 SQL이 날짜 파티션을 만들 때 기준으로 삼은 한국 날짜를 돌려준다. */
+    private static LocalDate convertWithManualSql(Connection target) throws IOException, SQLException {
         run(target, "sal434-04a-prepare-observation-partition.sql");
-        run(target, "sal434-04-partition-observation-tables.sql",
-            "SET sal434.confirm_partition = '" + today(target) + "'", "SET sal434.count_rows = 'exact'");
+        return partitionWithManualSql(target, new ArrayList<>());
+    }
+
+    private static LocalDate partitionWithManualSql(Connection target, List<String> notices)
+        throws IOException, SQLException {
+        execute(target, "SET sal434.count_rows = 'exact'");
+        return ForecastPipelineTransitionSqlTest.runConfirmed(target, notices,
+            "sal434-04-partition-observation-tables.sql", "sal434.confirm_partition");
     }
 
     /** 이관 앱이 첫 파티션을 내보내 확인한 뒤 하는 것처럼 떼어 지운다. */
@@ -225,30 +235,19 @@ class ObservationTableShapeTest {
         }
     }
 
-    /** SQL 파일을 psql처럼 한 연결에서 문장 단위로 실행하고 서버가 알린 글을 돌려준다. */
-    private static List<String> run(Connection target, String file, String... settings)
-        throws IOException, SQLException {
-        List<String> notices = new ArrayList<>();
-        for (String setting : settings) {
-            notices.addAll(execute(target, setting));
-        }
+    /** SQL 파일을 psql처럼 한 연결에서 문장 단위로 실행한다. */
+    private static void run(Connection target, String file) throws IOException, SQLException {
         String script =
             Files.readString(ForecastPipelineTransitionSqlTest.backend().resolve("deploy/sql").resolve(file));
         for (String statement : ForecastPipelineTransitionSqlTest.statements(script)) {
-            notices.addAll(execute(target, statement));
+            execute(target, statement);
         }
-        return notices;
     }
 
-    private static List<String> execute(Connection target, String sql) throws SQLException {
-        List<String> notices = new ArrayList<>();
+    private static void execute(Connection target, String sql) throws SQLException {
         try (Statement statement = target.createStatement()) {
             statement.execute(sql);
-            for (SQLWarning warning = statement.getWarnings(); warning != null; warning = warning.getNextWarning()) {
-                notices.add(warning.getMessage());
-            }
         }
-        return notices;
     }
 
     private static Map<String, List<String>> catalog(Connection target) throws SQLException {
@@ -276,8 +275,30 @@ class ObservationTableShapeTest {
         }
     }
 
-    private static String today(Connection target) throws SQLException {
-        return scalar(target, "SELECT to_char((now() AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD')");
+    /**
+     * 날짜 파티션의 날짜를 첫 날짜 파티션에서 며칠 뒤인지로 바꿔 쓴 카탈로그다.
+     *
+     * @param first 그 DB의 첫 날짜 파티션의 날짜
+     */
+    private static Map<String, List<String>> relativeCatalog(Connection target, LocalDate first)
+        throws SQLException {
+        Map<String, List<String>> relative = new LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> item : catalog(target).entrySet()) {
+            relative.put(item.getKey(), item.getValue().stream()
+                .map(line -> ForecastPipelineTransitionSqlTest.relativeToFirstPartition(line, first))
+                .toList());
+        }
+        return relative;
+    }
+
+    /** 테이블의 줄이 든 파티션과 그 줄의 source_date를 겹치지 않게 날짜 순서로 잇는 조회다. */
+    private static String partitionAndDateOfRows(String table) {
+        return "SELECT string_agg(placed, ',' ORDER BY placed) FROM (SELECT DISTINCT"
+            + " tableoid::regclass::text || ' ' || source_date AS placed FROM " + table + ") placed_rows";
+    }
+
+    private static String partitionAndDate(String table, LocalDate date) {
+        return table + "_p" + date.format(DateTimeFormatter.BASIC_ISO_DATE) + " " + date;
     }
 
     /** 두 테이블의 종류와 저장 파일 번호다. 테이블을 다시 만들거나 다시 쓰면 달라진다. */

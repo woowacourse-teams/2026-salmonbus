@@ -17,7 +17,10 @@ import java.sql.SQLException;
 import java.sql.SQLWarning;
 import java.sql.Statement;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -73,6 +76,7 @@ class ForecastPipelineTransitionSqlTest {
             'invalidate_alighting_settlement', 'enqueue_alighting_settlement_batch')
         """;
     private static final String FAST = "SET sal434.observe_seconds = '1'";
+    private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
     /** 쓰지 않게 된 객체를 지우는 마이그레이션 바로 앞 버전이다. */
     private static final String BEFORE_RETIREMENT = "82";
     private static final String TABLE_NAMES = """
@@ -244,7 +248,7 @@ class ForecastPipelineTransitionSqlTest {
         // when
         List<String> prepared = observationTables();
         List<Map<String, String>> indexes = precheck(connection, "prebuilt_index");
-        run("sal434-04-partition-observation-tables.sql", confirmPartition(), "SET sal434.count_rows = 'storage'");
+        runPartitioning("SET sal434.count_rows = 'storage'");
         List<String> converted = observationTables();
 
         // then
@@ -361,7 +365,7 @@ class ForecastPipelineTransitionSqlTest {
     @Test
     void 승인값이_없거나_옛_정산_트리거가_남아_있으면_옛_테이블을_지우지_않는다() throws Exception {
         // when
-        Throwable withTriggers = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
+        Throwable withTriggers = catchThrowable(() -> runTableDrop(FAST));
 
         // then
         assertThat(withTriggers).hasMessageContaining("sal434-02 먼저");
@@ -400,7 +404,7 @@ class ForecastPipelineTransitionSqlTest {
         writeLedger();
 
         // when
-        Throwable actual = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
+        Throwable actual = catchThrowable(() -> runTableDrop(FAST));
 
         // then
         assertThat(actual).hasMessageContaining("이전 배포본의 이관 앱");
@@ -429,8 +433,7 @@ class ForecastPipelineTransitionSqlTest {
         // when
         Throwable actual;
         try {
-            actual = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql",
-                "SET sal434.observe_seconds = '4'", confirmDrop()));
+            actual = catchThrowable(() -> runTableDrop("SET sal434.observe_seconds = '4'"));
         } finally {
             reading.set(false);
             reader.join();
@@ -453,7 +456,7 @@ class ForecastPipelineTransitionSqlTest {
             """);
 
         // when
-        Throwable foreignKey = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
+        Throwable foreignKey = catchThrowable(() -> runTableDrop(FAST));
 
         // then
         assertThat(foreignKey).hasMessageContaining("manual_forecast_note.fk_manual_note_forecast");
@@ -467,7 +470,7 @@ class ForecastPipelineTransitionSqlTest {
             """);
 
         // when
-        Throwable view = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
+        Throwable view = catchThrowable(() -> runTableDrop(FAST));
 
         // then
         assertThat(view).hasMessageContaining("active_stop_demand_seed_hourly_total");
@@ -482,7 +485,7 @@ class ForecastPipelineTransitionSqlTest {
         execute("UPDATE daily_export SET verified_at = NULL WHERE table_name = 'seat_forecast'");
 
         // when
-        Throwable unverified = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
+        Throwable unverified = catchThrowable(() -> runTableDrop(FAST));
 
         // then
         assertThat(unverified).hasMessageContaining("seat_forecast(줄 1, 장부 0)");
@@ -501,7 +504,7 @@ class ForecastPipelineTransitionSqlTest {
         execute("DELETE FROM seat_forecast WHERE vehicle_observation_id = 2");
 
         // when
-        Throwable removed = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
+        Throwable removed = catchThrowable(() -> runTableDrop(FAST));
 
         // then
         assertThat(removed).hasMessageContaining("seat_forecast(줄 1, 장부 2)");
@@ -519,7 +522,7 @@ class ForecastPipelineTransitionSqlTest {
         writeSegment("seat_forecast", 2, 1);
 
         // when
-        Throwable gap = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
+        Throwable gap = catchThrowable(() -> runTableDrop(FAST));
 
         // then
         SoftAssertions softly = new SoftAssertions();
@@ -536,7 +539,7 @@ class ForecastPipelineTransitionSqlTest {
         writeLedger();
 
         // when
-        run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop());
+        runTableDrop(FAST);
 
         // then
         SoftAssertions softly = new SoftAssertions();
@@ -550,7 +553,7 @@ class ForecastPipelineTransitionSqlTest {
         softly.assertAll();
 
         // when
-        run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop());
+        runTableDrop(FAST);
 
         // then
         assertThat(keptRows()).isEqualTo(kept);
@@ -621,18 +624,23 @@ class ForecastPipelineTransitionSqlTest {
     @Test
     void 수동_SQL로_전환을_마친_DB와_줄이_없어_마이그레이션이_바꾼_DB는_테이블과_뷰와_트리거와_함수가_같다() throws Exception {
         // given
-        try (TestDatabase empty = TestDatabase.create()) {
+        try (TestDatabase empty = TestDatabase.create(); Connection target = empty.connection()) {
+            LocalDate beforeMigration = koreanDate(target);
             flyway(empty).load().migrate();
+            LocalDate afterMigration = koreanDate(target);
 
             // when
             retireLegacyTables();
-            partitionObservations("storage");
+            LocalDate convertedOn = partitionObservations("storage");
             dropInitialPartitions();
 
             // then
-            try (Connection target = empty.connection()) {
-                assertThat(schemaShape(connection)).isEqualTo(schemaShape(target));
-            }
+            LocalDate migratedOn = firstPartitionDate(target);
+            SoftAssertions softly = new SoftAssertions();
+            softly.assertThat(relativeToFirstPartition(schemaShape(connection), convertedOn))
+                .isEqualTo(relativeToFirstPartition(schemaShape(target), migratedOn));
+            softly.assertThat(migratedOn).as("마이그레이션이 만든 첫 날짜 파티션").isBetween(beforeMigration, afterMigration);
+            softly.assertAll();
         }
     }
 
@@ -660,8 +668,7 @@ class ForecastPipelineTransitionSqlTest {
         run("sal434-04a-prepare-observation-partition.sql");
 
         // when
-        Throwable actual = catchThrowable(() -> run("sal434-04-partition-observation-tables.sql",
-            confirmPartition(), "SET sal434.count_rows = 'exact'"));
+        Throwable actual = catchThrowable(() -> runPartitioning("SET sal434.count_rows = 'exact'"));
 
         // then
         SoftAssertions softly = new SoftAssertions();
@@ -681,8 +688,7 @@ class ForecastPipelineTransitionSqlTest {
         run("sal434-04a-prepare-observation-partition.sql");
 
         // when
-        Throwable actual =
-            catchThrowable(() -> run("sal434-04-partition-observation-tables.sql", confirmPartition()));
+        Throwable actual = catchThrowable(() -> runPartitioning());
 
         // then
         SoftAssertions softly = new SoftAssertions();
@@ -715,51 +721,56 @@ class ForecastPipelineTransitionSqlTest {
             + "WHERE oid = 'vehicle_observation_initial'::regclass"))
             .isEqualTo("FOR VALUES FROM ('2000-01-01') TO ('2000-01-02')");
         softly.assertAll();
-        String today = today().replace("-", "");
+        // 새 줄을 한 트랜잭션에서 넣는다. 그 안에서는 now()가 변하지 않아 줄마다 기본값으로 받는 source_date가 같은 날짜다.
+        execute("BEGIN");
+        LocalDate insertedOn = koreanDate(connection);
+        String partitionOfDay = "_p" + insertedOn.format(DateTimeFormatter.BASIC_ISO_DATE);
         execute("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,outcome,
                 normalization_version,collection_strategy_version)
             VALUES(1,now(),1,'after-04','RESERVED','n1','c1')
             """);
-        assertThat(scalar("SELECT tableoid::regclass::text FROM observation_batch WHERE attempt_key = 'after-04'"))
-            .isEqualTo("observation_batch_p" + today);
+        assertThat(scalar("SELECT tableoid::regclass::text || ' ' || source_date FROM observation_batch"
+            + " WHERE attempt_key = 'after-04'"))
+            .isEqualTo("observation_batch" + partitionOfDay + " " + insertedOn);
         execute("""
             INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
                 stop_order,stop_id,running_state,remaining_seats,passed_stop_order)
             SELECT id,1,0,'bus1',1,'st1',1,5,0 FROM observation_batch WHERE attempt_key = 'after-04'
             """);
-        assertThat(scalar("SELECT tableoid::regclass::text || ':' || (id > " + maxObservation
+        assertThat(scalar("SELECT tableoid::regclass::text || ' ' || source_date || ':' || (id > " + maxObservation
             + ") FROM vehicle_observation WHERE vehicle_id = 'bus1' AND source_date <> '2000-01-01'"))
-            .isEqualTo("vehicle_observation_p" + today + ":true");
+            .isEqualTo("vehicle_observation" + partitionOfDay + " " + insertedOn + ":true");
         assertThat(number("SELECT count(*) FROM operational_observation")).isEqualTo(7);
-        assertThat(catchThrowable(() -> execute("""
+        assertThat(failureInTransaction("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,outcome,
                 normalization_version,collection_strategy_version)
             VALUES(1,now(),1,'after-04','RESERVED','n1','c1')
-            """))).hasMessageContaining("duplicate key");
-        assertThat(catchThrowable(() -> execute("""
+            """)).hasMessageContaining("duplicate key");
+        assertThat(failureInTransaction("""
             INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
                 stop_order,stop_id,running_state,remaining_seats,passed_stop_order)
             SELECT id,1,0,'bus2',1,'st1',1,5,0 FROM observation_batch WHERE attempt_key = 'after-04'
-            """))).hasMessageContaining("duplicate key");
-        assertThat(catchThrowable(() -> execute("""
+            """)).hasMessageContaining("duplicate key");
+        assertThat(failureInTransaction("""
             INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
                 stop_order,stop_id,running_state,remaining_seats,passed_stop_order)
             SELECT id,1,1,'bus1',1,'st1',1,5,0 FROM observation_batch WHERE attempt_key = 'after-04'
-            """))).hasMessageContaining("duplicate key");
+            """)).hasMessageContaining("duplicate key");
         // 유일성은 날짜 파티션 안에서만 지킨다. 옛 줄과 같은 시도 키도 다른 날짜면 들어간다(파일 머리 주석의 뜻 변화).
         execute("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,outcome,
                 normalization_version,collection_strategy_version)
             VALUES(1,now(),1,'k1','RESERVED','n1','c1')
             """);
+        execute("COMMIT");
         assertThat(number("SELECT count(*) FROM observation_batch WHERE attempt_key = 'k1'")).isEqualTo(2);
         Flyway flyway = Flyway.configure().dataSource(url, template.username(), template.password()).load();
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
 
         // when
-        run("sal434-04-partition-observation-tables.sql", confirmPartition(), "SET sal434.count_rows = 'exact'");
+        runPartitioning("SET sal434.count_rows = 'exact'");
 
         // then
         assertThat(notices).anySatisfy(notice -> assertThat(notice).contains("이미 파티션 테이블이다"));
@@ -783,8 +794,7 @@ class ForecastPipelineTransitionSqlTest {
 
         // when
         Throwable unconfirmed = catchThrowable(() -> run("sal434-04-rollback-unpartition-observation-tables.sql"));
-        run("sal434-04-rollback-unpartition-observation-tables.sql",
-            "SET sal434.confirm_partition_rollback = '" + today() + "'");
+        runConfirmed("sal434-04-rollback-unpartition-observation-tables.sql", "sal434.confirm_partition_rollback");
 
         // then
         SoftAssertions softly = new SoftAssertions();
@@ -813,7 +823,7 @@ class ForecastPipelineTransitionSqlTest {
         assertThat(rows("observation_batch WHERE attempt_key NOT IN ('between','after-rollback')")).isEqualTo(batches);
 
         // when
-        run("sal434-04-partition-observation-tables.sql", confirmPartition(), "SET sal434.count_rows = 'exact'");
+        runPartitioning("SET sal434.count_rows = 'exact'");
 
         // then
         SoftAssertions afterRepartition = new SoftAssertions();
@@ -829,14 +839,14 @@ class ForecastPipelineTransitionSqlTest {
     private void retireLegacyTables() throws Exception {
         run("sal434-02-drop-legacy-triggers.sql", FAST);
         writeLedger();
-        run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop());
+        runTableDrop(FAST);
     }
 
-    private void partitionObservations(String countMode) throws Exception {
+    /** 관측 두 테이블을 날짜 파티션으로 바꾸고, 날짜 파티션을 만들 때 기준으로 삼은 한국 날짜를 돌려준다. */
+    private LocalDate partitionObservations(String countMode) throws Exception {
         run("drop-historical-import-batch-fks.sql");
         run("sal434-04a-prepare-observation-partition.sql");
-        run("sal434-04-partition-observation-tables.sql", confirmPartition(),
-            "SET sal434.count_rows = '" + countMode + "'");
+        return runPartitioning("SET sal434.count_rows = '" + countMode + "'");
     }
 
     /** 이관 앱이 첫 파티션을 내보내 확인한 뒤 하는 것처럼 떼어 지운다. */
@@ -997,16 +1007,13 @@ class ForecastPipelineTransitionSqlTest {
             "SELECT md5(string_agg(to_jsonb(t)::text, ',' ORDER BY id)) FROM observation_batch t");
     }
 
-    private String confirmDrop() throws SQLException {
-        return "SET sal434.confirm_drop = '" + today() + "'";
+    private void runTableDrop(String... settings) throws IOException, SQLException {
+        runConfirmed("sal434-03-drop-legacy-tables.sql", "sal434.confirm_drop", settings);
     }
 
-    private String confirmPartition() throws SQLException {
-        return "SET sal434.confirm_partition = '" + today() + "'";
-    }
-
-    private String today() throws SQLException {
-        return scalar("SELECT to_char((now() AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD')");
+    /** 파티션 전환 SQL을 실행하고, 그 SQL이 날짜 파티션을 만들 때 기준으로 삼은 한국 날짜를 돌려준다. */
+    private LocalDate runPartitioning(String... settings) throws IOException, SQLException {
+        return runConfirmed("sal434-04-partition-observation-tables.sql", "sal434.confirm_partition", settings);
     }
 
     private void run(String file, String... settings) throws IOException, SQLException {
@@ -1018,20 +1025,117 @@ class ForecastPipelineTransitionSqlTest {
                 execute(statement);
             }
         } catch (SQLException failure) {
-            try (Statement statement = connection.createStatement()) {
-                statement.execute("ROLLBACK");
-            }
+            rollback();
             throw failure;
         }
     }
 
-    private void execute(String sql) throws SQLException {
+    /**
+     * 승인값으로 오늘 한국 날짜를 받는 SQL 파일을 실행하고, 파일이 연 트랜잭션의 한국 날짜를 돌려준다. 실패하면 그 연결의
+     * 트랜잭션을 되돌린다.
+     *
+     * @param confirmation 승인값을 담는 설정 이름
+     */
+    private LocalDate runConfirmed(String file, String confirmation, String... settings)
+        throws IOException, SQLException {
+        for (String setting : settings) {
+            execute(setting);
+        }
+        try {
+            return runConfirmed(connection, notices, file, confirmation);
+        } catch (SQLException failure) {
+            rollback();
+            throw failure;
+        }
+    }
+
+    /**
+     * 승인값으로 오늘 한국 날짜를 받는 SQL 파일을 psql처럼 문장 단위로 실행하고, 파일이 연 트랜잭션의 한국 날짜를 돌려준다.
+     *
+     * <p>파일의 첫 문장 {@code BEGIN}을 실행한 뒤 그 트랜잭션의 한국 날짜를 승인값으로 넣는다. 파일이 승인값과 견주는 날짜도
+     * 같은 트랜잭션의 {@code now()}에서 나오므로, 실행하는 사이 한국 날짜가 바뀌어도 둘은 같다.
+     *
+     * @param notices 서버가 알린 글을 받아 담는 목록
+     * @param confirmation 승인값을 담는 설정 이름
+     */
+    static LocalDate runConfirmed(
+        Connection target,
+        List<String> notices,
+        String file,
+        String confirmation
+    ) throws IOException, SQLException {
+        List<String> script = statements(Files.readString(backend().resolve("deploy/sql").resolve(file)));
+        assertThat(script.getFirst()).as(file + "의 첫 문장").isEqualToIgnoringCase("BEGIN");
+        execute(target, notices, script.getFirst());
+        LocalDate today = koreanDate(target);
+        execute(target, notices, "SET " + confirmation + " = '" + today + "'");
+        for (String statement : script.subList(1, script.size())) {
+            execute(target, notices, statement);
+        }
+        return today;
+    }
+
+    /**
+     * 연결이 열어 둔 트랜잭션이 시작한 시각의 한국 날짜다. 트랜잭션 안에서 {@code now()}는 변하지 않으므로, 같은 트랜잭션에서 넣는
+     * 줄의 기본 {@code source_date}와 같은 날짜다. 트랜잭션을 열지 않았으면 이 조회를 실행한 시각의 날짜다.
+     */
+    static LocalDate koreanDate(Connection target) throws SQLException {
+        try (Statement statement = target.createStatement(); ResultSet row = statement.executeQuery("SELECT now()")) {
+            row.next();
+            return row.getObject(1, OffsetDateTime.class).atZoneSameInstant(KOREA).toLocalDate();
+        }
+    }
+
+    /**
+     * 날짜 파티션의 이름과 경계에 든 날짜를 첫 날짜 파티션에서 며칠 뒤인지로 바꿔 쓴다. 날짜 파티션은 만든 날의 한국 날짜부터
+     * 사흘 뒤까지라, 서로 다른 날짜에 만든 두 DB의 카탈로그도 이렇게 바꾸면 같은 글이 된다.
+     *
+     * @param first 그 DB의 첫 날짜 파티션의 날짜
+     */
+    static String relativeToFirstPartition(String catalog, LocalDate first) {
+        String relative = catalog;
+        for (int day = 0; day <= 4; day++) {
+            LocalDate date = first.plusDays(day);
+            relative = relative.replace("_p" + date.format(DateTimeFormatter.BASIC_ISO_DATE), "_p+" + day)
+                .replace("'" + date + "'", "'+" + day + "'");
+        }
+        return relative;
+    }
+
+    /** 관측 배치 테이블의 날짜 파티션 가운데 가장 이른 날짜다. */
+    static LocalDate firstPartitionDate(Connection target) throws SQLException {
+        return LocalDate.parse(scalarOn(target, """
+            SELECT min(to_date(substring(child.relname from '_p([0-9]{8})$'), 'YYYYMMDD'))
+            FROM pg_inherits link JOIN pg_class child ON child.oid = link.inhrelid
+            WHERE link.inhparent = 'observation_batch'::regclass
+            """));
+    }
+
+    private void rollback() throws SQLException {
         try (Statement statement = connection.createStatement()) {
+            statement.execute("ROLLBACK");
+        }
+    }
+
+    private void execute(String sql) throws SQLException {
+        execute(connection, notices, sql);
+    }
+
+    private static void execute(Connection target, List<String> notices, String sql) throws SQLException {
+        try (Statement statement = target.createStatement()) {
             statement.execute(sql);
             for (SQLWarning warning = statement.getWarnings(); warning != null; warning = warning.getNextWarning()) {
                 notices.add(warning.getMessage());
             }
         }
+    }
+
+    /** 열어 둔 트랜잭션 안에서 실패할 문장을 실행하고 그 실패를 돌려준다. 저장점으로 되돌려 트랜잭션은 이어서 쓸 수 있다. */
+    private Throwable failureInTransaction(String sql) throws SQLException {
+        execute("SAVEPOINT attempt");
+        Throwable failure = catchThrowable(() -> execute(sql));
+        execute("ROLLBACK TO SAVEPOINT attempt");
+        return failure;
     }
 
     private long number(String sql) throws SQLException {

@@ -139,14 +139,13 @@ class VehicleObservationBulkInsertTest {
         List<UpstreamObservationRow> rows = List.of(row(0, "v-0", 1, STOP_1), row(1, "v-0", 2, STOP_2));
 
         // when
-        Throwable failure = failureOf(rows);
+        Rejection rejection = rejectionOf(rows, "ux_observation_vehicle_per_batch_date");
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(failure.getClass()).isEqualTo(DataIntegrityViolationException.class);
-            softly.assertThat(constraintOf(failure))
-                .isEqualTo(todayPartitionIndexOf("ux_observation_vehicle_per_batch_date"));
-            softly.assertThat(sqlStateOf(failure)).isEqualTo("23505");
+            softly.assertThat(rejection.failure().getClass()).isEqualTo(DataIntegrityViolationException.class);
+            softly.assertThat(constraintOf(rejection.failure())).isEqualTo(rejection.partitionIndex());
+            softly.assertThat(sqlStateOf(rejection.failure())).isEqualTo("23505");
         });
     }
 
@@ -156,22 +155,31 @@ class VehicleObservationBulkInsertTest {
         List<UpstreamObservationRow> rows = List.of(row(0, "v-0", 1, STOP_1), row(0, "v-1", 2, STOP_2));
 
         // when
-        Throwable failure = failureOf(rows);
+        Rejection rejection = rejectionOf(rows, "ux_observation_source_row_date");
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(failure.getClass()).isEqualTo(DataIntegrityViolationException.class);
-            softly.assertThat(constraintOf(failure))
-                .isEqualTo(todayPartitionIndexOf("ux_observation_source_row_date"));
-            softly.assertThat(sqlStateOf(failure)).isEqualTo("23505");
+            softly.assertThat(rejection.failure().getClass()).isEqualTo(DataIntegrityViolationException.class);
+            softly.assertThat(constraintOf(rejection.failure())).isEqualTo(rejection.partitionIndex());
+            softly.assertThat(sqlStateOf(rejection.failure())).isEqualTo("23505");
         });
     }
 
     /**
-     * 관측 테이블의 유일 인덱스에 딸린 오늘(한국) 날짜 파티션의 인덱스 이름이다. 줄은 넣는 날의 파티션으로 가고, 유일성 위반은 그
-     * 파티션의 인덱스 이름으로 보고된다.
+     * 유일성 위반으로 거절된 저장과, 그 저장이 지켰어야 할 파티션 인덱스의 이름이다. 줄은 넣는 날(한국)의 파티션으로 가고 유일성
+     * 위반은 그 파티션의 인덱스 이름으로 보고된다. 인덱스 이름은 저장과 같은 트랜잭션에서 읽는다. 트랜잭션 안에서 now() 는 변하지
+     * 않으므로 줄이 기본값으로 받는 source_date 와 같은 날짜의 파티션을 가리킨다.
      */
-    private String todayPartitionIndexOf(String uniqueIndex) {
+    private Rejection rejectionOf(List<UpstreamObservationRow> rows, String uniqueIndex) {
+        return inRollback(() -> {
+            CollectionBatch batch = openBatch();
+            String partitionIndex = partitionIndexOfTransactionDate(uniqueIndex);
+            return new Rejection(catchThrowable(() -> batches.saveObservations(batch, rows)), partitionIndex);
+        });
+    }
+
+    /** 관측 테이블의 유일 인덱스에 딸린, 지금 트랜잭션이 시작한 한국 날짜 파티션의 인덱스 이름이다. */
+    private String partitionIndexOfTransactionDate(String uniqueIndex) {
         return jdbc.sql("""
             SELECT child.relname
             FROM pg_inherits link
@@ -300,5 +308,8 @@ class VehicleObservationBulkInsertTest {
             }
         }
         return null;
+    }
+
+    private record Rejection(Throwable failure, String partitionIndex) {
     }
 }

@@ -72,11 +72,8 @@ class ObservationPartitionExportIntegrationTest {
         Flyway.configure().dataSource(source).load().migrate();
         try (Connection connection = database.connection()) {
             run(connection, "sal434-04a-prepare-observation-partition.sql");
-            String today = jdbc.sql("SELECT to_char((now() AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD')")
-                .query(String.class).single();
-            execute(connection, "SET sal434.confirm_partition = '" + today + "'");
             execute(connection, "SET sal434.count_rows = 'storage'");
-            run(connection, "sal434-04-partition-observation-tables.sql");
+            runConfirmed(connection, "sal434-04-partition-observation-tables.sql", "sal434.confirm_partition");
         }
     }
 
@@ -473,6 +470,25 @@ class ObservationPartitionExportIntegrationTest {
 
     static void run(Connection connection, String file) throws IOException, SQLException {
         for (String statement : statements(Files.readString(sqlDirectory().resolve(file)))) {
+            execute(connection, statement);
+        }
+    }
+
+    /**
+     * 승인값으로 오늘 한국 날짜를 받는 SQL 파일을 실행한다. 파일의 첫 문장 {@code BEGIN} 을 실행한 뒤 그 트랜잭션의 한국 날짜를
+     * 승인값으로 넣는다. 파일이 승인값과 견주는 날짜도 같은 트랜잭션의 {@code now()} 에서 나오므로, 실행하는 사이 한국 날짜가 바뀌어도
+     * 둘은 같다.
+     *
+     * @param confirmation 승인값을 담는 설정 이름
+     */
+    static void runConfirmed(Connection connection, String file, String confirmation)
+        throws IOException, SQLException {
+        List<String> script = statements(Files.readString(sqlDirectory().resolve(file)));
+        assertThat(script.getFirst()).as(file + " 의 첫 문장").isEqualToIgnoringCase("BEGIN");
+        execute(connection, script.getFirst());
+        execute(connection, "SELECT set_config('" + confirmation
+            + "', to_char((now() AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD'), false)");
+        for (String statement : script.subList(1, script.size())) {
             execute(connection, statement);
         }
     }
