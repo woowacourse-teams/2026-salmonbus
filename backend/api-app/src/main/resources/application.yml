@@ -194,7 +194,6 @@ route-geometry:
 
 # 연어행동 조회. 기본은 끈다. 켜면 마감(horizon) 안에 닿는 차량들의 출발 만차 확률과 같은 방향 도보를 아래 값으로 비교한다.
 # 그 차량 가운데 확률이 없는 차량이 있거나 이동 후보의 차내 시간이 없으면 추천하지 않는다.
-# 출발 만차 확률은 DEPARTURE_ZERO 예보만 쓴다. 전광판이 FIRST_POST_STOP_ZERO 예보만 내는 동안에는 켜도 문장이 나오지 않는다.
 salmon:
   action:
     enabled: ${SALMON_ACTION_ENABLED:false}

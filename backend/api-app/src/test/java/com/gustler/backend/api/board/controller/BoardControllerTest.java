@@ -51,7 +51,7 @@ class BoardControllerTest {
     @Test
     void v4_Board와_적응형_캐시를_반환한다() throws Exception {
         // given
-        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Available(0.8, null)));
+        given(boardQueryService.getBoard(any())).willReturn(overview(available(0.8, null, 0.2)));
 
         // when
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
@@ -122,33 +122,36 @@ class BoardControllerTest {
     @Test
     void 접근_차량_응답에_forecast_필드를_포함한다() throws Exception {
         // given
-        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Available(0.8, null)));
+        given(boardQueryService.getBoard(any())).willReturn(overview(available(0.8, null, 0.2)));
 
         // when
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0]", aMapWithSize(3)))
-            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(4)))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(5)))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").doesNotExist())
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.afterAlightingSeatEstimate").doesNotExist())
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].seatAvailableProbability").doesNotExist());
     }
 
     @Test
     void 예보가_있으면_forecast에_AVAILABLE과_예측값을_포함한다() throws Exception {
         // given
-        given(boardQueryService.getBoard(any())).willReturn(overview(new VehicleForecast.Available(0.0, 0.0)));
+        given(boardQueryService.getBoard(any())).willReturn(overview(available(0.0, 0.0, 1.0)));
 
         // when
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(5)))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast", aMapWithSize(7)))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.status").value("AVAILABLE"))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.seatAvailableProbability").value(0.0))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").value(0.0))
             .andExpect(
-                jsonPath("$.stops[0].approachingVehicles[0].forecast.seatTarget").value("FIRST_POST_STOP_OBSERVATION"))
+                jsonPath("$.stops[0].approachingVehicles[0].forecast.seatTarget").value("AFTER_ALIGHTING_ESTIMATE"))
             .andExpect(
-                jsonPath("$.stops[0].approachingVehicles[0].forecast.probabilityTarget").value("FIRST_POST_STOP_ZERO"));
+                jsonPath("$.stops[0].approachingVehicles[0].forecast.probabilityTarget").value("DEPARTURE_ZERO"))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.afterAlightingSeatEstimate").value(0.0))
+            .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.departureFullProbability").value(1.0));
     }
 
     @Test
@@ -163,6 +166,20 @@ class BoardControllerTest {
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.status").value("UNAVAILABLE"))
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.seatAvailableProbability").doesNotExist())
             .andExpect(jsonPath("$.stops[0].approachingVehicles[0].forecast.expectedSeats").doesNotExist());
+    }
+
+    private static VehicleForecast available(
+        final double seatAvailableProbability,
+        Double expectedSeats,
+        final double departureFullProbability
+    ) {
+        return new VehicleForecast.Available(
+            seatAvailableProbability,
+            expectedSeats,
+            "AFTER_ALIGHTING_ESTIMATE",
+            "DEPARTURE_ZERO",
+            departureFullProbability
+        );
     }
 
     private BoardOverview overview(VehicleForecast forecast) {

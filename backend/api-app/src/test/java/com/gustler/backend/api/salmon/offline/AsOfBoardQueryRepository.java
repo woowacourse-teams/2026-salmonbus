@@ -49,12 +49,9 @@ final class AsOfBoardQueryRepository implements BoardQueryRepository {
                flags.published, b.id AS batch_id, b.response_received_at, b.stored_rows, b.source_date,
                model.id AS model_id, model.release_id, model.data_until,
                CASE WHEN b.id IS NULL THEN NULL ELSE concat_ws('|',
-                   'p' || COALESCE(b.confirmed_at::text, '-'),
-                   'g' || COALESCE(b.confirmed_at::text, '-'),
+                   'c' || COALESCE(b.confirmed_at::text, '-'),
                    'n' || COALESCE(b.prediction_count::text, '-'),
-                   'm' || COALESCE(b.model_deployment_id::text, '-'),
-                   'd' || CASE WHEN b.source_date IS NULL THEN '-' ELSE '0' END,
-                   'r' || CASE WHEN b.source_date IS NULL THEN '-' ELSE '1' END) END AS revision
+                   'm' || COALESCE(b.model_deployment_id::text, '-')) END AS revision
         FROM route_version v
         JOIN route r ON r.id=v.route_id
         CROSS JOIN LATERAL (SELECT EXISTS (SELECT 1 FROM forecast_run any_run

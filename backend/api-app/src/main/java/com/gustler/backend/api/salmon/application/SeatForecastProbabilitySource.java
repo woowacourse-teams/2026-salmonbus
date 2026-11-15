@@ -19,20 +19,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import org.springframework.dao.DataAccessException;
 
 /**
  * 판정보드의 좌석 예보에서 도착 항목의 탑승 확률 근사를 만든다.
  *
  * <p>값은 1에서 출발 만석 확률을 뺀 값이고, 줄 맨 뒤에 서 있어도 탈 확률로 읽는다. 조건 이력 없는 주변확률로 내고
- * 출처를 SEAT_FORECAST로 남긴다. 확률 목표가 DEPARTURE_ZERO나 FIRST_POST_STOP_ZERO인 예보만 쓰고,
- * 예보를 찾지 못한 항목에는 입력을 만들지 않는다.
+ * 출처를 SEAT_FORECAST로 남긴다. 예보를 찾지 못한 항목에는 입력을 만들지 않는다.
  */
 public final class SeatForecastProbabilitySource {
-    // 둘 다 목표 정류장을 떠난 뒤 다음 승차 정류장 전의 관측이 0석일 확률이다. 고르는 관측만 다르다(처음, 마지막).
-    private static final Set<String> FULL_DEPARTURE_TARGETS = Set.of("DEPARTURE_ZERO", "FIRST_POST_STOP_ZERO");
-
     /**
      * 도착 항목에서 값을 만들지 못한 원인이다. 앞의 다섯은 목록 전체에 걸리고, 그 목록의 모든 항목에 같은 원인이 붙는다.
      * <ul>
@@ -45,12 +40,10 @@ public final class SeatForecastProbabilitySource {
      *   <li>VEHICLE_NOT_ON_BOARD: 보드의 그 정류장 방문에 이 차량이 없다.</li>
      *   <li>VEHICLE_AMBIGUOUS: 보드의 그 정류장 방문에 같은 차량 ID가 둘 이상이다.</li>
      *   <li>FORECAST_UNAVAILABLE: 보드가 이 차량의 예보를 제공하지 못했다.</li>
-     *   <li>PROBABILITY_TARGET_NOT_USED: 예보의 확률 목표가 쓰는 목표가 아니거나 비어 있다.</li>
      * </ul>
      */
     public enum Cause { LIST_WITHOUT_VEHICLE_ID, BOARD_READ_FAILED, QUERY_FAILED, BOARD_STALE, VISIT_NOT_MATCHED,
-        ENTRY_WITHOUT_VEHICLE_ID, VEHICLE_NOT_ON_BOARD, VEHICLE_AMBIGUOUS, FORECAST_UNAVAILABLE,
-        PROBABILITY_TARGET_NOT_USED }
+        ENTRY_WITHOUT_VEHICLE_ID, VEHICLE_NOT_ON_BOARD, VEHICLE_AMBIGUOUS, FORECAST_UNAVAILABLE }
 
     public sealed interface Lookup permits Found, NotFound {
     }
@@ -157,12 +150,7 @@ public final class SeatForecastProbabilitySource {
         if (!(matched.get(0).forecast() instanceof VehicleForecast.Available available)) {
             return new NotFound(Cause.FORECAST_UNAVAILABLE);
         }
-        String target = available.probabilityTarget();
-        if (target == null || !FULL_DEPARTURE_TARGETS.contains(target)) {
-            return new NotFound(Cause.PROBABILITY_TARGET_NOT_USED);
-        }
-        // 보드는 두 확률 목표 모두에서 seatAvailableProbability에 1에서 만석 확률을 뺀 값을 싣는다.
-        return new Found(available.seatAvailableProbability(), target);
+        return new Found(available.seatAvailableProbability(), available.probabilityTarget());
     }
 
     private static List<EntryLookup> sameForAll(StopList list, NotFound notFound) {

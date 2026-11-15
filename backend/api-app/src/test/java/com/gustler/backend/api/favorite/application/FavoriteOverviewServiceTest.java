@@ -169,7 +169,7 @@ class FavoriteOverviewServiceTest {
         assertThat(vehicles).extracting(vehicle -> vehicle.watch().vehicleId())
             .containsExactly("vehicle-0", "vehicle-1", "vehicle-2");
         assertThat(vehicles).allSatisfy(vehicle ->
-            assertThat(vehicle.watch().forecast()).isEqualTo(new VehicleForecast.Available(0.8, 12.0)));
+            assertThat(vehicle.watch().forecast()).isEqualTo(available()));
         assertThat(vehicles.getFirst().eta().reason()).isEqualTo(FavoriteOverview.EtaReason.ARRIVAL_UNAVAILABLE);
         assertThat(vehicles.get(2).eta().reason()).isEqualTo(FavoriteOverview.EtaReason.ARRIVAL_UNAVAILABLE);
     }
@@ -397,9 +397,13 @@ class FavoriteOverviewServiceTest {
         final int vehicleCount) {
         List<ApproachingVehicle> vehicles = IntStream.range(0, vehicleCount)
             .mapToObj(index -> new ApproachingVehicle("vehicle-" + index, index + 1,
-                new VehicleForecast.Available(0.8, 12.0)))
+                available()))
             .toList();
         return new StopState(sequence, stopId, "강남역", direction, true, vehicles);
+    }
+
+    private static VehicleForecast available() {
+        return new VehicleForecast.Available(0.8, 12.0, "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", 0.2);
     }
 
     private static final class MemoryRepository implements FavoriteGroupRepository {

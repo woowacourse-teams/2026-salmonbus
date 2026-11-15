@@ -37,8 +37,8 @@ public class JdbcBoardSnapshotReader {
     private static final ZoneId SOURCE_DATE_ZONE = ZoneId.of("Asia/Seoul");
 
     /**
-     * {@code revision} 열은 판정보드 캐시가 쓰는 판본 표시로, 착수 시각·예측 수·모델 배포가 바뀌면 달라진다.
-     * 착수 시각을 생성·발행 두 칸에 쓰고, 통계 판 칸은 0, 품질 판 칸은 1로 고정한다.
+     * {@code revision} 열은 판정보드 캐시가 쓰는 판본 표시로, 실행 줄의 착수 시각·예측 수·모델 배포가 바뀌면 달라진다.
+     * 실행 줄이 없는 관측은 세 칸이 모두 {@code -}다.
      */
     private static final String SNAPSHOT_SELECT = """
         SELECT v.id AS version_id, r.source_route_id, r.display_name, r.start_stop_name, r.end_stop_name,
@@ -51,12 +51,9 @@ public class JdbcBoardSnapshotReader {
                flags.published, b.id AS batch_id, b.response_received_at, b.stored_rows, b.source_date,
                model.id AS model_id, model.release_id, model.data_until,
                CASE WHEN b.id IS NULL THEN NULL ELSE concat_ws('|',
-                   'p' || COALESCE(b.confirmed_at::text, '-'),
-                   'g' || COALESCE(b.confirmed_at::text, '-'),
+                   'c' || COALESCE(b.confirmed_at::text, '-'),
                    'n' || COALESCE(b.prediction_count::text, '-'),
-                   'm' || COALESCE(b.model_deployment_id::text, '-'),
-                   'd' || CASE WHEN b.source_date IS NULL THEN '-' ELSE '0' END,
-                   'r' || CASE WHEN b.source_date IS NULL THEN '-' ELSE '1' END) END AS revision
+                   'm' || COALESCE(b.model_deployment_id::text, '-')) END AS revision
         FROM route_version v
         JOIN route r ON r.id=v.route_id
         CROSS JOIN LATERAL (SELECT EXISTS (SELECT 1 FROM forecast_run any_run

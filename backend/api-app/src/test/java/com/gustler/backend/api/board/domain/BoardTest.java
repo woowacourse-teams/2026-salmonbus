@@ -21,7 +21,7 @@ class BoardTest {
     @Test
     void 예보를_준비_중인_노선의_보드에는_좌석_예보를_담을_수_없다() {
         // given
-        List<StopState> stops = stopsApproachedBy(new Available(0.8, 12.0));
+        List<StopState> stops = stopsApproachedBy(available());
 
         // when
         Throwable caughtFailure = catchThrowable(() -> board(RouteStatus.PREPARING, stops));
@@ -49,7 +49,7 @@ class BoardTest {
     @Test
     void 예보가_준비된_노선의_보드는_좌석_예보를_담는다() {
         // given
-        List<StopState> stops = stopsApproachedBy(new Available(0.8, 12.0));
+        List<StopState> stops = stopsApproachedBy(available());
 
         // when
         Board actual = board(RouteStatus.FORECAST_READY, stops);
@@ -57,7 +57,7 @@ class BoardTest {
         // then
         assertThat(actual.stops().getFirst().approachingVehicles())
             .extracting(ApproachingVehicle::forecast)
-            .containsExactly(new Available(0.8, 12.0));
+            .containsExactly(available());
     }
 
     private Board board(
@@ -82,6 +82,10 @@ class BoardTest {
             1,
             stops
         );
+    }
+
+    private static Available available() {
+        return new Available(0.8, 12.0, "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", 0.2);
     }
 
     private List<StopState> stopsApproachedBy(

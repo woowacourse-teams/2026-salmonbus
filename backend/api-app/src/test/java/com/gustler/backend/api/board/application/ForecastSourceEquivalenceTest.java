@@ -111,7 +111,7 @@ class ForecastSourceEquivalenceTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("revision.snapshot"));
-            softly.assertThat(snapshot.revision()).matches("p[^|]+\\|g[^|]+\\|n14\\|m" + model + "\\|d0\\|r1");
+            softly.assertThat(snapshot.revision()).matches("c[^|]+\\|n14\\|m" + model);
             softly.assertThat(snapshot.observation().orElseThrow().batchId()).isEqualTo(batch.id());
         });
     }
@@ -191,7 +191,7 @@ class ForecastSourceEquivalenceTest {
             BoardSnapshot snapshot = snapshotOf(ROUTE_ID);
             softly.assertThat(snapshot.observation().orElseThrow().batchId()).isEqualTo(latest.id());
             softly.assertThat(snapshot.observation().orElseThrow().forecastPublished()).isFalse();
-            softly.assertThat(snapshot.revision()).isEqualTo("p-|g-|n-|m-|d-|r-");
+            softly.assertThat(snapshot.revision()).isEqualTo("c-|n-|m-");
             softly.assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("neverPublished.snapshot"));
         });
     }

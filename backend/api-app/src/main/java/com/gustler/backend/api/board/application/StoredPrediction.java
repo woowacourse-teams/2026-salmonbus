@@ -17,19 +17,6 @@ public record StoredPrediction(
     String seatTarget,
     String probabilityTarget
 ) {
-    public StoredPrediction(
-        final int targetStopOrder,
-        String vehicleId,
-        final int sourceRowNumber,
-        final int stopsToTarget,
-        final double seatFullChance,
-        Double expectedSeats,
-        ForecastModel model
-    ) {
-        this(targetStopOrder, vehicleId, sourceRowNumber, stopsToTarget, seatFullChance, expectedSeats, model,
-            "FIRST_POST_STOP_OBSERVATION", "FIRST_POST_STOP_ZERO");
-    }
-
     public StoredPrediction {
         Objects.requireNonNull(model, "model은 null일 수 없습니다.");
     }

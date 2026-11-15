@@ -300,9 +300,10 @@ public class BoardQueryService {
         }
         return new VehicleForecast.Available(
             seatAvailableProbability(prediction.seatFullChance()),
-            reportableExpectedSeats(prediction.expectedSeats()), prediction.seatTarget(),
+            reportableExpectedSeats(prediction.expectedSeats()),
+            prediction.seatTarget(),
             prediction.probabilityTarget(),
-            departureFullProbability(prediction));
+            prediction.seatFullChance());
     }
 
     /**
@@ -553,12 +554,4 @@ public class BoardQueryService {
             return remainingStops == horizonStops || remainingStops == horizonStops - 1;
         }
     }
-
-    private Double departureFullProbability(StoredPrediction prediction) {
-        if ("DEPARTURE_ZERO".equals(prediction.probabilityTarget())) {
-            return prediction.seatFullChance();
-        }
-        return null;
-    }
-
 }

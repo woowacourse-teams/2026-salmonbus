@@ -225,7 +225,8 @@ class BoardQueryServiceBatchReadTest {
             vehicles.put(batchId, List.of(new BoardVehicleObservation("vehicle-" + batchId, 1, 1, 1)));
             if (published) {
                 predictions.put(batchId, List.of(
-                    new StoredPrediction(3, "vehicle-" + batchId, 1, 2, 0.25, 10.0, ACTIVE_MODEL)));
+                    new StoredPrediction(3, "vehicle-" + batchId, 1, 2, 0.25, 10.0, ACTIVE_MODEL,
+                        "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO")));
             }
         }
 

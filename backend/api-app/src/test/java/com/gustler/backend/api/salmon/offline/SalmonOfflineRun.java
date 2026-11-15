@@ -143,7 +143,7 @@ public final class SalmonOfflineRun {
         report.put("data", data);
         report.put("results", summary.results());
         report.put("outcomesNote", "판정 시각 뒤의 차량 관측에서 읽은 실제 결과다. 판정 입력에는 쓰지 않았다. "
-            + "byFirstObservation은 그 정류장을 떠난 첫 관측(FIRST_POST_STOP_ZERO의 정답), byLastObservation은 다음 승차 "
+            + "byFirstObservation은 그 정류장을 떠난 첫 관측, byLastObservation은 다음 승차 "
             + "정류장 전의 마지막 관측(DEPARTURE_ZERO의 정답)의 남은 좌석을 본다. 1석 이상이면 SEATS_AVAILABLE, 0석이면 "
             + "FULL이다. 시도열 기준(stayByAttempts)은 마감 뒤에 닿은 차량을 만석과 같이 탈 수 없었던 차량으로 세고, 마감 안에 "
             + "닿았는지 모르는 차량은 빈자리가 있어도 모름으로 둔다. 창 기준(stayByWindow)은 첫 관측만 본다. byLastObservation은 DEPARTURE_ZERO 정답의 근사다. "

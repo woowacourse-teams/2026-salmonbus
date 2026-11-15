@@ -61,7 +61,9 @@ class BoardQueryServiceTest {
         "model-snapshot",
         OffsetDateTime.parse("2026-08-25T23:59:59+09:00")
     );
-    private static final String REVISION = "q1|p-|g-|n-|m-|d-|r-";
+    private static final String REVISION = "revision-1";
+    private static final String SEAT_TARGET = "AFTER_ALIGHTING_ESTIMATE";
+    private static final String PROBABILITY_TARGET = "DEPARTURE_ZERO";
 
     @Mock
     private BoardQueryRepository repository;
@@ -470,7 +472,7 @@ class BoardQueryServiceTest {
         assertThat(service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles())
             .containsExactly(
                 new ApproachingVehicle(null, 1, new Unavailable()),
-                new ApproachingVehicle(null, 1, new Available(0.0, 0.0)));
+                new ApproachingVehicle(null, 1, available(0.0, 0.0, 1.0)));
     }
 
     @Test
@@ -504,7 +506,7 @@ class BoardQueryServiceTest {
         List<ApproachingVehicle> vehicles = service.getBoard(ROUTE_ID).board().stops().get(2).approachingVehicles();
 
         // then
-        assertThat(vehicles).containsExactly(new ApproachingVehicle("A", 0, new Available(0.75, 10.0)));
+        assertThat(vehicles).containsExactly(new ApproachingVehicle("A", 0, available(0.75, 10.0, 0.25)));
     }
 
     @Test
@@ -737,11 +739,11 @@ class BoardQueryServiceTest {
     }
 
     @Test
-    void 같은_회차라도_판본_표시가_바뀌면_재발행이나_적격_변경으로_보고_새로_만든다() {
+    void 같은_회차라도_판본_표시가_바뀌면_새로_만든다() {
         // given
         givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
         service.readBoard(ROUTE_ID);
-        givenSnapshot(withRevision("q2|p-|g-|n-|m-|d-|r-"));
+        givenSnapshot(withRevision("revision-2"));
         given(repository.findRecordedPredictions(100L, FORECAST_DATE))
             .willReturn(List.of(prediction(3, "A", 1, 1, 0.9, 1.0)));
 
@@ -753,7 +755,7 @@ class BoardQueryServiceTest {
         assertThat(board.stops())
             .flatExtracting(StopState::approachingVehicles)
             .extracting(ApproachingVehicle::forecast)
-            .containsExactly(new Available(0.09999999999999998, 1.0));
+            .containsExactly(available(0.09999999999999998, 1.0, 0.9));
     }
 
     @Test
@@ -981,7 +983,23 @@ class BoardQueryServiceTest {
             stopsToTarget,
             seatFullChance,
             expectedSeats,
-            model
+            model,
+            SEAT_TARGET,
+            PROBABILITY_TARGET
+        );
+    }
+
+    private static Available available(
+        final double seatAvailableProbability,
+        Double expectedSeats,
+        final double departureFullProbability
+    ) {
+        return new Available(
+            seatAvailableProbability,
+            expectedSeats,
+            SEAT_TARGET,
+            PROBABILITY_TARGET,
+            departureFullProbability
         );
     }
 }

@@ -1,21 +1,21 @@
 package com.gustler.backend.api.board.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.data.Offset.offset;
 
 import com.gustler.backend.api.board.domain.VehicleForecast;
 import org.junit.jupiter.api.Test;
 
 class AlightingAwareForecastResponseTest {
     @Test
-    void 하차_후_좌석과_출발_확률을_목표별로_전달한다() {
+    void 하차_후_좌석과_출발_확률을_목표와_함께_전달한다() {
         ForecastResponse response = ForecastResponse.from(new VehicleForecast.Available(0.15, 3.7,
-            "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO"));
+            "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", 0.85));
         assertThat(response.expectedSeats()).isEqualTo(3.7);
         assertThat(response.afterAlightingSeatEstimate()).isEqualTo(3.7);
-        assertThat(response.departureFullProbability()).isCloseTo(0.85, offset(1e-15));
+        assertThat(response.departureFullProbability()).isEqualTo(0.85);
         assertThat(response.seatAvailableProbability()).isEqualTo(0.15);
         assertThat(response.seatTarget()).isEqualTo("AFTER_ALIGHTING_ESTIMATE");
+        assertThat(response.probabilityTarget()).isEqualTo("DEPARTURE_ZERO");
     }
 
     @Test
@@ -26,11 +26,15 @@ class AlightingAwareForecastResponseTest {
     }
 
     @Test
-    void 기존_출력을_하차_후_좌석으로_표시하지_않는다() {
-        ForecastResponse response = ForecastResponse.from(new VehicleForecast.Available(0.8, 5.2));
-        assertThat(response.seatTarget()).isEqualTo("FIRST_POST_STOP_OBSERVATION");
+    void 기대_좌석이_없으면_하차_후_좌석도_싣지_않고_확률과_목표는_전달한다() {
+        ForecastResponse response = ForecastResponse.from(new VehicleForecast.Available(0.8, null,
+            "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", 0.2));
+        assertThat(response.expectedSeats()).isNull();
         assertThat(response.afterAlightingSeatEstimate()).isNull();
-        assertThat(response.departureFullProbability()).isNull();
+        assertThat(response.seatAvailableProbability()).isEqualTo(0.8);
+        assertThat(response.departureFullProbability()).isEqualTo(0.2);
+        assertThat(response.seatTarget()).isEqualTo("AFTER_ALIGHTING_ESTIMATE");
+        assertThat(response.probabilityTarget()).isEqualTo("DEPARTURE_ZERO");
     }
 
     @Test
@@ -38,6 +42,7 @@ class AlightingAwareForecastResponseTest {
         ForecastResponse response = ForecastResponse.from(new VehicleForecast.Unavailable());
         assertThat(response.seatAvailableProbability()).isNull();
         assertThat(response.seatTarget()).isNull();
+        assertThat(response.probabilityTarget()).isNull();
         assertThat(response.departureFullProbability()).isNull();
     }
 }

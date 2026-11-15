@@ -103,9 +103,9 @@ class FavoriteApiDocsContractTest {
     void 즐겨찾기와_탑승판이_하차_반영_출력_목표를_같은_스키마로_공개한다() {
         JsonNode forecast = document.at("/components/schemas/ForecastResponse/properties");
         assertThat(forecast.path("seatTarget").path("enum")).extracting(JsonNode::asString)
-            .containsExactly("FIRST_POST_STOP_OBSERVATION", "AFTER_ALIGHTING_ESTIMATE");
+            .containsExactly("AFTER_ALIGHTING_ESTIMATE");
         assertThat(forecast.path("probabilityTarget").path("enum")).extracting(JsonNode::asString)
-            .containsExactly("FIRST_POST_STOP_ZERO", "DEPARTURE_ZERO");
+            .containsExactly("DEPARTURE_ZERO");
         assertThat(forecast.path("afterAlightingSeatEstimate").path("format").asString()).isEqualTo("double");
         assertThat(forecast.path("departureFullProbability").path("maximum").intValue()).isEqualTo(1);
         assertThat(forecast.path("seatAvailableProbability").path("description").asString()).contains("개인의 탑승 확률이 아님");

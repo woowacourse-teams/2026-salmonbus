@@ -143,13 +143,13 @@ class JdbcBoardSnapshotReaderIntegrationTest {
     }
 
     @Test
-    void 품질_행이_없어도_관측과_모델을_읽는다() {
+    void 예보_실행_줄이_없어도_관측과_모델을_읽는다() {
         BoardDatabaseFixture.RouteContext route = route();
         OffsetDateTime now = now();
         fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0);
         fixture.insertModel("active", "ACTIVE", now.minusDays(1));
         BoardSnapshot snapshot = snapshotOf(route);
-        assertThat(snapshot.revision()).isEqualTo("p-|g-|n-|m-|d-|r-");
+        assertThat(snapshot.revision()).isEqualTo("c-|n-|m-");
         assertThat(snapshot.activeModel()).isPresent();
     }
 

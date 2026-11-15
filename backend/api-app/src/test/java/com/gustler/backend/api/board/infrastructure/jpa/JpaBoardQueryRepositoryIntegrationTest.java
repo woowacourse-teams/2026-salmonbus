@@ -321,7 +321,7 @@ class JpaBoardQueryRepositoryIntegrationTest {
         BoardSnapshot snapshot = repository.findSnapshot(new RouteId(route.sourceRouteId())).orElseThrow();
 
         // then
-        assertThat(snapshot.revision()).isEqualTo("p-|g-|n-|m-|d-|r-");
+        assertThat(snapshot.revision()).isEqualTo("c-|n-|m-");
     }
 
     private LocalDate sourceDateOf(final long batchId) {

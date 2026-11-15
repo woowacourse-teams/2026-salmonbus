@@ -32,7 +32,7 @@ final class RecordedBoards {
     private static final ZoneId SOURCE_DATE_ZONE = ZoneId.of("Asia/Seoul");
     /** 시험 픽스처는 관측 묶음의 예약 시각을 응답 수신 2초 전으로 둔다. */
     private static final Duration SCHEDULED_BEFORE_RECEIVED = Duration.ofSeconds(2);
-    private static final Pattern REVISION = Pattern.compile("p([^|]+)\\|g([^|]+)\\|n([^|]+)\\|m([^|]+)\\|(.*)");
+    private static final Pattern REVISION = Pattern.compile("c([^|]+)\\|n([^|]+)\\|m([^|]+)");
     private static final DateTimeFormatter DATABASE_TIME = new DateTimeFormatterBuilder()
         .appendPattern("yyyy-MM-dd HH:mm:ss")
         .optionalStart()
@@ -175,11 +175,9 @@ final class RecordedBoards {
         if (!matcher.matches()) {
             return revision;
         }
-        return "p" + databaseTime(matcher.group(1))
-            + "|g" + databaseTime(matcher.group(2))
-            + "|n" + matcher.group(3)
-            + "|m" + modelName(matcher.group(4))
-            + "|" + matcher.group(5);
+        return "c" + databaseTime(matcher.group(1))
+            + "|n" + matcher.group(2)
+            + "|m" + modelName(matcher.group(3));
     }
 
     private String databaseTime(String value) {
