@@ -3,6 +3,7 @@ package com.gustler.backend.worker.scheduling;
 import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -20,9 +21,12 @@ import org.springframework.beans.factory.DisposableBean;
  * <p>같은 열쇠의 일은 항상 같은 줄에서 넣은 순서대로 하나씩 실행되고, 다른 줄의 일은 동시에 실행된다. 스케줄러의 풀 크기를 올리는
  * 방식과 달리 같은 노선이 두 스레드에서 동시에 처리되지 않는다. 줄마다 길이 제한이 있고, 가득 차면 넣지 않고 거짓을 돌려준다
  * (다음 줍기가 다시 넣는다). 일 하나가 실패해도 그 줄은 다음 일을 계속 실행한다. 줄 길이는
- * {@code salmonbus.pipeline.forecast.queue{lane}} 게이지로 낸다. 종료할 때 기다리는 일은 버린다.
+ * {@code salmonbus.pipeline.forecast.queue{lane}} 게이지로 낸다.
+ *
+ * <p>정상 종료 때는 {@link PipelineShutdown}이 {@link #drain}으로 받은 일을 끝까지 실행하게 한다. 그러지 못하고 빈이 파괴되면
+ * 기다리는 일을 버린다.
  */
-public class RouteLanes implements ForecastLanes, DisposableBean {
+public class RouteLanes implements ForecastLanes, DrainableQueue, DisposableBean {
     /** 실행 줄 스레드 이름의 앞부분. */
     public static final String THREAD_PREFIX = "forecast-lane-";
     private static final Logger LOGGER = LoggerFactory.getLogger(RouteLanes.class);
@@ -98,6 +102,12 @@ public class RouteLanes implements ForecastLanes, DisposableBean {
     /** 지금 모든 줄에서 기다리는 일의 수. */
     public int queued() {
         return lanes.stream().mapToInt(lane -> lane.getQueue().size()).sum();
+    }
+
+    /** 모든 줄을 함께 닫고 한도 하나로 기다린다. 닫은 뒤 {@link #submit}은 거짓을 돌려준다. */
+    @Override
+    public QueueDrain drain(Duration timeout) {
+        return QueueDrain.of(lanes, timeout);
     }
 
     @Override

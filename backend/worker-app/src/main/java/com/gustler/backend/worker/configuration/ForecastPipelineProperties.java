@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * 새 예보 경로의 스위치다. 기본값은 모두 옛 경로만 도는 상태다.
  *
  * <p>운영 전환 순서는 {@code shadow.enabled=true} → {@code scoring=shadow} → {@code pipeline=v2} → {@code scoring=v2}다.
- * 파티션 유지 작업, 그림자 실행 줄, 본선의 노선별 실행 줄, 채점 줄이 이 값을 읽는다.
+ * 파티션 유지 작업, 그림자 실행 줄, 본선의 노선별 실행 줄, 채점 줄, 정상 종료 처리가 이 값을 읽는다.
  *
  * <p>예보가 켜진 worker({@code forecast.enabled=true})가 받아들이는 조합은 {@link #requireSupportedCombination()}의 네 가지뿐이고,
  * 나머지는 기동을 멈춘다. 채점의 사건은 그림자 실행({@code pipeline=v1})이나 본선({@code pipeline=v2})에서 온다.
@@ -25,6 +25,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param scoringComparisonDelay 수신 뒤 이만큼 지난 배치만 대조한다. 옛 정산이 결과를 다 적을 시간이다
  * @param scoringComparisonBatchLimit 대조 한 회차에 읽는 예보 실행 수의 상한
  * @param laneQueueCapacity 본선의 노선별 실행 줄 하나에 기다릴 수 있는 배치 수. 넘치면 넣지 않고 다음 줍기에 맡긴다
+ * @param shutdownTimeout 정상 종료 때 실행 줄과 채점 줄이 받은 일을 끝내기를 기다리는 한도. 지나면 남은 일을 버리고 내려간다.
+ *     스프링의 단계별 종료 시한과 더해도 서비스 관리자의 강제 종료 시한보다 짧아야 한다. 0이면 기다리지 않는다
  */
 @ConfigurationProperties("forecast")
 public record ForecastPipelineProperties(
@@ -38,7 +40,8 @@ public record ForecastPipelineProperties(
     @DefaultValue("10m") Duration scoringComparisonInterval,
     @DefaultValue("3h") Duration scoringComparisonDelay,
     @DefaultValue("1500") int scoringComparisonBatchLimit,
-    @DefaultValue("1000") int laneQueueCapacity
+    @DefaultValue("1000") int laneQueueCapacity,
+    @DefaultValue("10s") Duration shutdownTimeout
 ) {
     public ForecastPipelineProperties {
         if (lanes < 1) {
@@ -60,6 +63,9 @@ public record ForecastPipelineProperties(
         if (scoringComparisonBatchLimit < 1) {
             throw new IllegalStateException("forecast.scoring-comparison-batch-limit 는 1 이상이어야 한다: "
                 + scoringComparisonBatchLimit);
+        }
+        if (shutdownTimeout == null || shutdownTimeout.isNegative()) {
+            throw new IllegalStateException("forecast.shutdown-timeout 은 0 이상이어야 한다: " + shutdownTimeout);
         }
     }
 

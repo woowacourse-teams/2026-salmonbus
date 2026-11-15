@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -73,6 +74,69 @@ class ScoringExecutorTest {
             softly.assertThat(meters.get("salmonbus.pipeline.scoring.queue").gauge().value()).isEqualTo(1);
         });
         release.countDown();
+    }
+
+    @Test
+    void 줄을_비우면_받은_일을_순서대로_모두_끝낸_뒤_돌아오고_새_일은_받지_않는다() throws InterruptedException {
+        // given
+        executor = new ScoringExecutor(100, meters);
+        List<Integer> order = new CopyOnWriteArrayList<>();
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch started = new CountDownLatch(1);
+        executor.submit(() -> {
+            started.countDown();
+            await(release);
+            order.add(0);
+        });
+        for (int index = 1; index <= 30; index++) {
+            final int id = index;
+            executor.submit(() -> order.add(id));
+        }
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+        release.countDown();
+
+        // when
+        QueueDrain drained = executor.drain(Duration.ofSeconds(10));
+        List<Integer> orderAtReturn = List.copyOf(order);
+        final boolean accepted = executor.submit(() -> order.add(99));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(drained).isEqualTo(QueueDrain.COMPLETE);
+            softly.assertThat(orderAtReturn).hasSize(31).isSorted();
+            softly.assertThat(accepted).isFalse();
+        });
+    }
+
+    @Test
+    void 한도_안에_끝나지_않으면_기다리던_일을_버리고_버린_수를_돌려준다() throws InterruptedException {
+        // given
+        executor = new ScoringExecutor(100, meters);
+        CountDownLatch never = new CountDownLatch(1);
+        CountDownLatch started = new CountDownLatch(1);
+        List<Integer> ran = new CopyOnWriteArrayList<>();
+        executor.submit(() -> {
+            started.countDown();
+            await(never);
+        });
+        for (int index = 1; index <= 5; index++) {
+            final int id = index;
+            executor.submit(() -> ran.add(id));
+        }
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+
+        // when
+        final long before = System.nanoTime();
+        QueueDrain drained = executor.drain(Duration.ZERO);
+        final long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - before);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(drained).isEqualTo(new QueueDrain(5, 1));
+            softly.assertThat(elapsedMillis).isLessThan(1_000);
+            softly.assertThat(ran).isEmpty();
+        });
+        never.countDown();
     }
 
     private static void await(CountDownLatch latch) {

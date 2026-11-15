@@ -3,6 +3,8 @@ package com.gustler.backend.worker.scheduling;
 import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -17,9 +19,12 @@ import org.springframework.beans.factory.DisposableBean;
  *
  * <p>그림자 실행 스레드와 주기 작업 스레드는 {@link #submit}에서 줄에 넣기만 하고 기다리지 않는다. 줄이 가득 차면 넣지 않고
  * 거짓을 돌려준다. 일 하나가 실패해도 스레드는 다음 일을 계속 실행한다. 줄 길이는 {@code salmonbus.pipeline.scoring.queue}
- * 게이지로 낸다. 종료할 때 기다리는 일은 버린다.
+ * 게이지로 낸다.
+ *
+ * <p>정상 종료 때는 {@link PipelineShutdown}이 {@link #drain}으로 받은 일을 끝까지 실행하게 한다. 그러지 못하고 빈이 파괴되면
+ * 기다리는 일을 버린다.
  */
-public class ScoringExecutor implements ScoringFeed, DisposableBean {
+public class ScoringExecutor implements ScoringFeed, DrainableQueue, DisposableBean {
     /** 채점 스레드 이름의 앞부분. */
     public static final String THREAD_PREFIX = "forecast-scoring-";
     private static final Logger LOGGER = LoggerFactory.getLogger(ScoringExecutor.class);
@@ -66,6 +71,12 @@ public class ScoringExecutor implements ScoringFeed, DisposableBean {
     /** 지금 줄에서 기다리는 일의 수. */
     public int queued() {
         return executor.getQueue().size();
+    }
+
+    /** 닫은 뒤 {@link #submit}은 거짓을 돌려준다. */
+    @Override
+    public QueueDrain drain(Duration timeout) {
+        return QueueDrain.of(List.of(executor), timeout);
     }
 
     @Override

@@ -5,6 +5,7 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.ShadowForecastTask;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -96,6 +97,40 @@ class ShadowForecastExecutorTest {
 
         // then
         assertThat(next.await(5, TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    void 줄을_비우면_받은_일을_모두_끝낸_뒤_돌아오고_그_뒤에_온_일은_버린다() throws InterruptedException {
+        // given
+        executor = new ShadowForecastExecutor(100, null);
+        List<Long> order = new CopyOnWriteArrayList<>();
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch started = new CountDownLatch(1);
+        executor.submit(new Task(0, () -> {
+            started.countDown();
+            await(release);
+            order.add(0L);
+        }));
+        for (long batch = 1; batch <= 20; batch++) {
+            final long id = batch;
+            executor.submit(new Task(id, () -> order.add(id)));
+        }
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+        release.countDown();
+        Task late = new Task(99, () -> order.add(99L));
+
+        // when
+        QueueDrain drained = executor.drain(Duration.ofSeconds(10));
+        List<Long> orderAtReturn = List.copyOf(order);
+        executor.submit(late);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(drained).isEqualTo(QueueDrain.COMPLETE);
+            softly.assertThat(orderAtReturn).hasSize(21).isSorted();
+            softly.assertThat(late.discarded.get()).isOne();
+            softly.assertThat(order).doesNotContain(99L);
+        });
     }
 
     private static void await(CountDownLatch latch) {

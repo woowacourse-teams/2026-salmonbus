@@ -129,6 +129,7 @@ forecast:
   lane-queue-capacity: ${FORECAST_LANE_QUEUE_CAPACITY:1000} # 줄 하나의 길이. 넘치면 넣지 않고 다음 줍기(interval)에 맡긴다
   replay-window: ${FORECAST_REPLAY_WINDOW:6h} # 다시 뜰 때 되감는 관측 범위
   replay-extended-window: ${FORECAST_REPLAY_EXTENDED_WINDOW:12h} # 되감은 상태가 모자랄 때(운행 시작을 못 본 차량, 이력 미완) 한 번 늘려 되감는 범위. 12h를 넘으면 기동하지 않는다
+  shutdown-timeout: ${FORECAST_SHUTDOWN_TIMEOUT:10s} # 정상 종료 때 실행 줄과 채점 줄이 받은 일을 끝내기를 기다리는 한도. 넘기면 남은 일을 버린다
   partition-interval: 1h # 오늘부터 사흘 뒤까지 날짜 파티션을 확인하는 주기. 수집이 켜진 worker는 파티션이 된 관측 테이블도 다룬다
 
 route-geometry:
