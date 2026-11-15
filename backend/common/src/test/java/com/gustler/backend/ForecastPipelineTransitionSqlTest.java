@@ -888,7 +888,7 @@ class ForecastPipelineTransitionSqlTest {
                     1,now(),2,9,now(),now(),NULL,4,2,now());
                 INSERT INTO forecast_record VALUES (DATE '2026-11-01',1,1,0,1,1,'v0',1,1,1,false,45,false,
                     ARRAY[2],ARRAY[1.5]::float8[],ARRAY[0.1]::float8[]);
-                -- 운영에만 있는 객체(prod-schema-20261115.out). 열 이름은 흉내다.
+                -- 운영에만 있는 객체. 열 이름은 흉내다.
                 CREATE TABLE historical_import_batch (id bigint PRIMARY KEY);
                 INSERT INTO historical_import_batch VALUES (7);
                 ALTER TABLE observation_batch ADD COLUMN historical_import_batch_id bigint
