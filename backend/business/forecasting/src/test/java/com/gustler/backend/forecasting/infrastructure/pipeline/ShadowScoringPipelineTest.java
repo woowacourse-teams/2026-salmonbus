@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.ShadowForecastTask;
 import com.gustler.backend.forecasting.application.RouteWorkAccess;
@@ -38,8 +39,6 @@ import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapaci
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.forecasting.infrastructure.jdbc.ConfirmedPassLabelCalculator;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcAlightingAwareForecastEvaluation;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcScoringComparison.Report;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcScoringComparison.Result;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.ByteBuffer;
@@ -75,10 +74,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>옛 발행은 운영과 같이 정산 근거를 모델 배포에 한 번만 적는다({@code forecast.compact-settlement-write=true}). 옛 정산은
  * 흐름을 다 넣은 뒤 마지막 배치 3시간 뒤의 시계로 돌려 모든 예측을 마감 시각까지 본다(옛 정산의 날짜 정리가 흐름의 날짜를
- * 지난날로 보지 않게 한다). 옛 정산은 대기가 있는 모든 노선을 도므로, 다른 시험이
- * 남긴 대기는 시험 트랜잭션 안에서 지워(끝나면 롤백된다) 이 노선만 정산하게 한다. 옛 정산의 배치 꺼내기(`UPDATE … FROM (… LIMIT 1 FOR UPDATE SKIP LOCKED)`)는
- * 중첩 반복 계획이 잡히면 한 번에 여러 배치를 꺼내 실패하므로, 시험 트랜잭션 안에서만 중첩 반복 계획을 끈다. 옛 경로의 따로 커밋하는 트랜잭션은 시험 트랜잭션에
- * 합류시키고, 그림자 실행 줄과 채점 줄은 넣는 즉시 같은 스레드에서 실행한다.
+ * 지난날로 보지 않게 한다). 옛 정산은 대기가 있는 모든 노선을 도므로, 다른 시험이 남긴 대기는 시험 트랜잭션 안에서 지워
+ * (끝나면 롤백된다) 이 노선만 정산하게 한다. 옛 정산의 배치 꺼내기
+ * ({@code UPDATE … FROM (… LIMIT 1 FOR UPDATE SKIP LOCKED)})는 중첩 반복 계획이 잡히면 한 번에 여러 배치를 꺼내 실패하므로,
+ * 시험 트랜잭션 안에서만 중첩 반복 계획을 끈다. 옛 경로의 따로 커밋하는 트랜잭션은 시험 트랜잭션에 합류시키고, 그림자 실행 줄과
+ * 채점 줄은 넣는 즉시 같은 스레드에서 실행한다.
  */
 @ForecastingIntegrationTest
 @Transactional
@@ -109,7 +109,7 @@ class ShadowScoringPipelineTest {
     private VehicleCapacityCache cache;
 
     @BeforeEach
-    void setup() {
+    void 차량_정원_캐시를_준비한다() {
         cache = new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc));
     }
 
@@ -120,13 +120,16 @@ class ShadowScoringPipelineTest {
 
         // when
         harness.processAll(-1, -1);
-        Report report = harness.settleAndCompare();
+        JdbcScoringComparison.Report report = harness.settleAndCompare();
 
         // then
         assertEquivalent(report);
-        assertThat(report.count(Result.SAME)).isGreaterThan(1_000);
-        assertThat(states(harness)).containsKeys("SETTLED", "UNSUPPORTED", "LOST").doesNotContainKey("PENDING");
-        assertThat(legacySettledWithHash(harness)).isPositive();
+        assertSoftly(softly -> {
+            softly.assertThat(report.count(JdbcScoringComparison.Result.SAME)).isGreaterThan(1_000);
+            softly.assertThat(states(harness)).containsKeys("SETTLED", "UNSUPPORTED", "LOST")
+                .doesNotContainKey("PENDING");
+            softly.assertThat(legacySettledWithHash(harness)).isPositive();
+        });
     }
 
     @Test
@@ -137,20 +140,22 @@ class ShadowScoringPipelineTest {
 
         // when
         harness.processAll(switchAt, -1);
-        Report report = harness.settleAndCompare();
+        JdbcScoringComparison.Report report = harness.settleAndCompare();
 
         // then
         assertEquivalent(report);
-        assertThat(jdbc.sql("""
-            SELECT count(DISTINCT model_deployment_id) FROM pass_label WHERE route_id = ?
-            """).param(harness.stream.routeId()).query(Long.class).single()).isEqualTo(2);
-        assertThat(jdbc.sql("""
-            SELECT count(*) FROM (
-                SELECT source_date, trip_start_observation_id, stop_order, capacity FROM pass_label
-                WHERE route_id = ? AND state = 'SETTLED'
-                GROUP BY 1, 2, 3, 4 HAVING count(DISTINCT model_deployment_id) = 2
-                   AND count(DISTINCT parameter_hash) = 2) shared
-            """).param(harness.stream.routeId()).query(Long.class).single()).isPositive();
+        assertSoftly(softly -> {
+            softly.assertThat(jdbc.sql("""
+                SELECT count(DISTINCT model_deployment_id) FROM pass_label WHERE route_id = ?
+                """).param(harness.stream.routeId()).query(Long.class).single()).isEqualTo(2);
+            softly.assertThat(jdbc.sql("""
+                SELECT count(*) FROM (
+                    SELECT source_date, trip_start_observation_id, stop_order, capacity FROM pass_label
+                    WHERE route_id = ? AND state = 'SETTLED'
+                    GROUP BY 1, 2, 3, 4 HAVING count(DISTINCT model_deployment_id) = 2
+                       AND count(DISTINCT parameter_hash) = 2) shared
+                """).param(harness.stream.routeId()).query(Long.class).single()).isPositive();
+        });
     }
 
     @Test
@@ -161,24 +166,29 @@ class ShadowScoringPipelineTest {
 
         // when
         harness.processAll(-1, dropAt);
-        Report report = harness.settleAndCompare();
+        JdbcScoringComparison.Report report = harness.settleAndCompare();
 
         // then
         assertEquivalent(report);
-        assertThat(harness.scoringMeters.find("salmonbus.pipeline.scoring.dropped").counter().count()).isPositive();
-        assertThat(harness.scoringMeters.find("salmonbus.pipeline.scoring.replays").tag("reason", "dropped")
-            .tag("result", "succeeded").counter().count()).isPositive();
+        assertSoftly(softly -> {
+            softly.assertThat(harness.scoringMeters.find("salmonbus.pipeline.scoring.dropped").counter().count())
+                .isPositive();
+            softly.assertThat(harness.scoringMeters.find("salmonbus.pipeline.scoring.replays").tag("reason", "dropped")
+                .tag("result", "succeeded").counter().count()).isPositive();
+        });
     }
 
-    private static void assertEquivalent(Report report) {
-        assertThat(report.unexplained())
-            .as("설명되지 않는 차이: %s", report.unexplained().stream().limit(10).map(String::valueOf)
-                .collect(Collectors.joining("\n")))
-            .isEmpty();
-        assertThat(report.count(Result.LEGACY_ONLY)).isZero();
-        assertThat(report.count(Result.NEW_ONLY)).isZero();
-        assertThat(report.count(Result.PENDING)).isZero();
-        assertThat(report.count(Result.SAME)).isPositive();
+    private static void assertEquivalent(JdbcScoringComparison.Report report) {
+        assertSoftly(softly -> {
+            softly.assertThat(report.unexplained())
+                .as("설명되지 않는 차이: %s", report.unexplained().stream().limit(10).map(String::valueOf)
+                    .collect(Collectors.joining("\n")))
+                .isEmpty();
+            softly.assertThat(report.count(JdbcScoringComparison.Result.LEGACY_ONLY)).isZero();
+            softly.assertThat(report.count(JdbcScoringComparison.Result.NEW_ONLY)).isZero();
+            softly.assertThat(report.count(JdbcScoringComparison.Result.PENDING)).isZero();
+            softly.assertThat(report.count(JdbcScoringComparison.Result.SAME)).isPositive();
+        });
     }
 
     private Map<String, Long> states(Harness harness) {
@@ -222,16 +232,20 @@ class ShadowScoringPipelineTest {
         };
     }
 
-    private static NumericTreeEnsemble stumps(final int features, NumericTreeEnsemble.Kind kind, double[] baseline,
-        Random random) {
+    private static NumericTreeEnsemble stumps(
+        final int features,
+        NumericTreeEnsemble.Kind kind,
+        double[] baseline,
+        Random random
+    ) {
         double[] thresholds = {0.0, 0.5, 1, 2, 5, 10, 30};
         List<List<List<NumericTreeEnsemble.Node>>> iterations = new ArrayList<>();
         for (int iteration = 0; iteration < 24; iteration++) {
             List<List<NumericTreeEnsemble.Node>> trees = new ArrayList<>();
             for (int tree = 0; tree < baseline.length; tree++) {
                 trees.add(List.of(
-                    new NumericTreeEnsemble.Node(random.nextInt(features), thresholds[random.nextInt(thresholds.length)],
-                        random.nextBoolean(), 1, 2, 0, false),
+                    new NumericTreeEnsemble.Node(random.nextInt(features),
+                        thresholds[random.nextInt(thresholds.length)], random.nextBoolean(), 1, 2, 0, false),
                     new NumericTreeEnsemble.Node(0, 0, false, 0, 0, random.nextDouble() - 0.5, true),
                     new NumericTreeEnsemble.Node(0, 0, false, 0, 0, random.nextDouble() - 0.5, true)));
             }
@@ -241,7 +255,7 @@ class ShadowScoringPipelineTest {
     }
 
     /** 정류장마다 옛 정산이 읽는 근거(실정류장, 회차, 휴일, 시간 칸 계수, 정류장 계수)를 만든다. */
-    private static Map<Integer, String> evidence(AlightingAwareRouteStatistics statistics, double probability) {
+    private static Map<Integer, String> evidence(AlightingAwareRouteStatistics statistics, final double probability) {
         String parameters = "\"p\":%s,\"lam\":[1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9],\"kappa\":1,\"r\":2"
             .formatted(probability);
         String cells = AlightingTimeCell.extendedKeys().stream()
@@ -283,8 +297,8 @@ class ShadowScoringPipelineTest {
         private long currentBatch = -1;
 
         private Harness(final long seed) {
-            stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofHours(3), Duration.ofSeconds(30), null,
-                seed, MODEL_ROUTE);
+            stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofMinutes(90), Duration.ofSeconds(30),
+                null, seed, MODEL_ROUTE);
             String origins = ObservationStreamFixture.origins(jdbc, stream);
             jdbc.sql("SELECT id,input_confirmed_at FROM observation_batch WHERE route_version_id IN (:versions)")
                 .param("versions", versions())
@@ -299,8 +313,8 @@ class ShadowScoringPipelineTest {
             model = model(random, 0.12);
             nextModel = model(random, 0.3);
             runtime = activate(model);
-            JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, cache, origins, MAXIMUM_ROWS,
-                false, checkpoint.toString());
+            JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, cache, origins,
+                MAXIMUM_ROWS, false, checkpoint.toString());
             writer = new ForecastBatchWriter(committer, clock, routeWork);
             writer.setAlightingAwareFeatures(query);
             writer.setConfirmedInput(new ConfirmedAlightingAwareInput(jdbc, joining(transactions)));
@@ -347,7 +361,8 @@ class ShadowScoringPipelineTest {
                     batch.receivedAt());
                 try {
                     writer.writeForecastsOf(pending, stopsByVersion.get(batch.version()), runtime);
-                } catch (RuntimeException ignored) {
+                } catch (RuntimeException rejectedByLegacy) {
+                    // 옛 발행이 거부한 배치는 시나리오에서 건너뛰고, 그 배치에서는 채점 줄을 비우지 않는다.
                     continue;
                 }
                 scoring.flush();
@@ -358,10 +373,11 @@ class ShadowScoringPipelineTest {
             scoring.flush();
         }
 
-        private Report settleAndCompare() {
+        private JdbcScoringComparison.Report settleAndCompare() {
             jdbc.sql("DELETE FROM alighting_forecast_evaluation_work WHERE route_version_id NOT IN (:versions)")
                 .param("versions", versions()).update();
-            jdbc.sql("DELETE FROM alighting_settlement_batch_work WHERE route_id <> ?").param(stream.routeId()).update();
+            jdbc.sql("DELETE FROM alighting_settlement_batch_work WHERE route_id <> ?")
+                .param(stream.routeId()).update();
             jdbc.sql("SET LOCAL enable_nestloop = off").update();
             Clock settledAt = Clock.fixed(clock.at, ZoneOffset.UTC);
             JdbcAlightingAwareForecastEvaluation legacy = new JdbcAlightingAwareForecastEvaluation(jdbc, routeWork,
@@ -381,7 +397,7 @@ class ShadowScoringPipelineTest {
                 .single();
         }
 
-        private AlightingAwareSeatForecastModel model(Random random, double probability) {
+        private AlightingAwareSeatForecastModel model(Random random, final double probability) {
             AlightingAwareSeatPredictor predictor = new AlightingAwareSeatPredictor(
                 stumps(88, NumericTreeEnsemble.Kind.REGRESSION, new double[] {10}, random),
                 stumps(88, NumericTreeEnsemble.Kind.MULTICLASS, new double[] {0, 0, 0}, random),
@@ -403,7 +419,12 @@ class ShadowScoringPipelineTest {
         }
     }
 
-    private record Meta(long version, Instant receivedAt, String origin, String outcome) {
+    private record Meta(
+        long version,
+        Instant receivedAt,
+        String origin,
+        String outcome
+    ) {
     }
 
     /** 옛 경로의 착수 시각과 채점의 되감기 기준 시각을 배치마다 정한다. */

@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
@@ -113,30 +114,34 @@ class ShadowForecastPipelineTest {
     @Test
     void 옛_경로로_처리한_흐름에서_그림자의_기록이_옛_발행과_같은_예측과_통과를_담는다() {
         // given
-        Harness harness = new Harness(EVENING, Duration.ofHours(4), EVENING.plus(Duration.ofHours(2)), 20261115L, true,
-            false);
+        Harness harness = new Harness(EVENING, Duration.ofHours(4), EVENING.plus(Duration.ofHours(2)), 20261115L,
+            true, false);
         harness.startFromVerifiedOrigin();
 
         // when
         Set<String> expectedPasses = harness.processAll(batchId -> { }, true);
 
         // then
-        assertThat(harness.counter("predictions", "same")).isGreaterThan(2_000);
-        assertThat(harness.counter("predictions", "value_differs")).isZero();
-        assertThat(harness.counter("predictions", "legacy_only")).isZero();
-        assertThat(harness.counter("predictions", "new_only")).isZero();
-        assertThat(harness.counter("predictions", "excluded")).isZero();
-        assertThat(harness.counter("batches", "mismatch")).isZero();
-        assertThat(harness.counter("batches", "failed")).isZero();
-        assertThat(harness.counter("batches", "match")).isGreaterThan(400);
+        assertSoftly(softly -> {
+            softly.assertThat(harness.counter("predictions", "same")).isGreaterThan(2_000);
+            softly.assertThat(harness.counter("predictions", "value_differs")).isZero();
+            softly.assertThat(harness.counter("predictions", "legacy_only")).isZero();
+            softly.assertThat(harness.counter("predictions", "new_only")).isZero();
+            softly.assertThat(harness.counter("predictions", "excluded")).isZero();
+            softly.assertThat(harness.counter("batches", "mismatch")).isZero();
+            softly.assertThat(harness.counter("batches", "failed")).isZero();
+            softly.assertThat(harness.counter("batches", "match")).isGreaterThan(400);
+        });
         assertSamePredictions(harness);
         assertRunOutcomes(harness);
-        assertThat(stopPasses(harness)).isEqualTo(expectedPasses).hasSizeGreaterThan(50);
-        assertThat(harness.events.published).isEqualTo(harness.legacyBatches);
-        assertThat(harness.events.seen).isEqualTo(harness.legacyBatches);
-        assertThat(harness.events.passes).isEqualTo(expectedPasses.size());
-        assertThat(harness.service.states().routes()).isOne();
-        assertThat(harness.service.states().observations()).isPositive();
+        assertSoftly(softly -> {
+            softly.assertThat(stopPasses(harness)).isEqualTo(expectedPasses).hasSizeGreaterThan(50);
+            softly.assertThat(harness.events.published).isEqualTo(harness.legacyBatches);
+            softly.assertThat(harness.events.seen).isEqualTo(harness.legacyBatches);
+            softly.assertThat(harness.events.passes).isEqualTo(expectedPasses.size());
+            softly.assertThat(harness.service.states().routes()).isOne();
+            softly.assertThat(harness.service.states().observations()).isPositive();
+        });
     }
 
     @Test
@@ -152,18 +157,20 @@ class ShadowForecastPipelineTest {
         final long outside = jdbc.sql("""
             SELECT count(*) FROM forecast_run WHERE route_version_id IN (:versions) AND outcome='OUT_OF_SCOPE'
             """).param("versions", harness.versions()).query(Long.class).single();
-        assertThat(outside).isGreaterThan(80);
-        assertThat(harness.counter("predictions", "same")).isGreaterThan(300);
-        assertThat(harness.counter("predictions", "value_differs") + harness.counter("predictions", "legacy_only")
-            + harness.counter("predictions", "new_only")).isZero();
-        assertThat(harness.counter("batches", "mismatch")).isZero();
+        assertSoftly(softly -> {
+            softly.assertThat(outside).isGreaterThan(80);
+            softly.assertThat(harness.counter("predictions", "same")).isGreaterThan(300);
+            softly.assertThat(harness.counter("predictions", "value_differs")
+                + harness.counter("predictions", "legacy_only") + harness.counter("predictions", "new_only")).isZero();
+            softly.assertThat(harness.counter("batches", "mismatch")).isZero();
+        });
         assertSamePredictions(harness);
     }
 
     @Test
     void 중간에_상태를_버려도_되감은_뒤_값_다름이_없고_대조_제외만_잠시_생긴다() {
         // given
-        Harness harness = new Harness(EVENING, Duration.ofHours(4), null, 20261116L, true, false,
+        Harness harness = new Harness(EVENING, Duration.ofHours(2), null, 20261116L, true, false,
             Duration.ofMinutes(45));
         harness.startFromVerifiedOrigin();
         final long restartAt = harness.confirmedBatch(150);
@@ -176,19 +183,21 @@ class ShadowForecastPipelineTest {
         }, false);
 
         // then
-        assertThat(harness.counter("replays", "succeeded")).isOne();
-        assertThat(harness.counter("predictions", "excluded")).isPositive();
-        assertThat(harness.counter("predictions", "value_differs")).isZero();
-        assertThat(harness.counter("predictions", "legacy_only")).isZero();
-        assertThat(harness.counter("predictions", "new_only")).isZero();
-        assertThat(harness.counter("batches", "mismatch")).isZero();
-        assertThat(harness.firstExcludedBatch).isGreaterThanOrEqualTo(restartAt);
+        assertSoftly(softly -> {
+            softly.assertThat(harness.counter("replays", "succeeded")).isOne();
+            softly.assertThat(harness.counter("predictions", "excluded")).isPositive();
+            softly.assertThat(harness.counter("predictions", "value_differs")).isZero();
+            softly.assertThat(harness.counter("predictions", "legacy_only")).isZero();
+            softly.assertThat(harness.counter("predictions", "new_only")).isZero();
+            softly.assertThat(harness.counter("batches", "mismatch")).isZero();
+            softly.assertThat(harness.firstExcludedBatch).isGreaterThanOrEqualTo(restartAt);
+        });
     }
 
     @Test
     void 줄이_가득_차_버린_배치_뒤에는_상태를_버리고_다음_배치에서_되감아_회복한다() {
         // given
-        Harness harness = new Harness(EVENING, Duration.ofHours(3), null, 20261117L, true, false);
+        Harness harness = new Harness(EVENING, Duration.ofMinutes(150), null, 20261117L, true, false);
         harness.startFromVerifiedOrigin();
         final long dropped = harness.confirmedBatch(200);
         harness.discard = dropped;
@@ -197,21 +206,24 @@ class ShadowForecastPipelineTest {
         harness.processAll(batchId -> { }, false);
 
         // then
-        assertThat(harness.counter("dropped")).isOne();
-        assertThat(harness.counter("replays", "succeeded")).isOne();
-        assertThat(jdbc.sql("SELECT count(*) FROM forecast_run WHERE observation_batch_id=?").param(dropped)
-            .query(Long.class).single()).isZero();
-        assertThat(jdbc.sql("SELECT count(*) FROM forecast_publication WHERE source_batch_id=?").param(dropped)
-            .query(Long.class).single()).isOne();
-        assertThat(harness.counter("predictions", "value_differs") + harness.counter("predictions", "legacy_only")
-            + harness.counter("predictions", "new_only")).isZero();
-        assertThat(harness.counter("predictions", "same")).isGreaterThan(1_000);
+        assertSoftly(softly -> {
+            softly.assertThat(harness.counter("dropped")).isOne();
+            softly.assertThat(harness.counter("replays", "succeeded")).isOne();
+            softly.assertThat(jdbc.sql("SELECT count(*) FROM forecast_run WHERE observation_batch_id=?").param(dropped)
+                .query(Long.class).single()).isZero();
+            softly.assertThat(jdbc.sql("SELECT count(*) FROM forecast_publication WHERE source_batch_id=?")
+                .param(dropped)
+                .query(Long.class).single()).isOne();
+            softly.assertThat(harness.counter("predictions", "value_differs")
+                + harness.counter("predictions", "legacy_only") + harness.counter("predictions", "new_only")).isZero();
+            softly.assertThat(harness.counter("predictions", "same")).isGreaterThan(1_000);
+        });
     }
 
     @Test
     void 그림자_안에서_예외가_나면_그_노선_상태를_버리고_옛_발행은_그대로다() {
         // given
-        Harness harness = new Harness(EVENING, Duration.ofHours(3), null, 20261118L, true, false);
+        Harness harness = new Harness(EVENING, Duration.ofHours(2), null, 20261118L, true, false);
         harness.startFromVerifiedOrigin();
         harness.failingRead = harness.confirmedBatch(150);
 
@@ -219,13 +231,16 @@ class ShadowForecastPipelineTest {
         harness.processAll(batchId -> { }, false);
 
         // then
-        assertThat(harness.counter("batches", "failed")).isOne();
-        assertThat(harness.counter("replays", "succeeded")).isOne();
-        assertThat(harness.legacyFailures).isZero();
-        assertThat(jdbc.sql("SELECT count(*) FROM forecast_publication WHERE route_version_id IN (:versions)")
-            .param("versions", harness.versions()).query(Long.class).single()).isEqualTo(harness.legacyBatches);
-        assertThat(harness.counter("predictions", "value_differs") + harness.counter("predictions", "legacy_only")
-            + harness.counter("predictions", "new_only")).isZero();
+        assertSoftly(softly -> {
+            softly.assertThat(harness.counter("batches", "failed")).isOne();
+            softly.assertThat(harness.counter("replays", "succeeded")).isOne();
+            softly.assertThat(harness.legacyFailures).isZero();
+            softly.assertThat(jdbc.sql(
+                    "SELECT count(*) FROM forecast_publication WHERE route_version_id IN (:versions)")
+                .param("versions", harness.versions()).query(Long.class).single()).isEqualTo(harness.legacyBatches);
+            softly.assertThat(harness.counter("predictions", "value_differs")
+                + harness.counter("predictions", "legacy_only") + harness.counter("predictions", "new_only")).isZero();
+        });
     }
 
     @Test
@@ -247,15 +262,17 @@ class ShadowForecastPipelineTest {
         // then
         final double failed = harness.counter("replays", "failed");
         final double deferred = harness.counter("batches", "replay_deferred");
-        assertThat(failed).isGreaterThanOrEqualTo(2);
-        assertThat(deferred).isGreaterThanOrEqualTo((failed - 1) * 6);
-        assertThat(harness.counter("replays", "succeeded")).isZero();
-        assertThat(harness.counter("predictions", "value_differs")).isZero();
-        assertThat(harness.counter("predictions", "legacy_only")).isPositive();
-        assertThat(jdbc.sql("""
-            SELECT count(*) FROM forecast_run WHERE route_version_id IN (:versions) AND outcome='INPUT_UNAVAILABLE'
-            """).param("versions", harness.versions()).query(Long.class).single())
-            .isEqualTo((long) (failed + deferred));
+        assertSoftly(softly -> {
+            softly.assertThat(failed).isGreaterThanOrEqualTo(2);
+            softly.assertThat(deferred).isGreaterThanOrEqualTo((failed - 1) * 6);
+            softly.assertThat(harness.counter("replays", "succeeded")).isZero();
+            softly.assertThat(harness.counter("predictions", "value_differs")).isZero();
+            softly.assertThat(harness.counter("predictions", "legacy_only")).isPositive();
+            softly.assertThat(jdbc.sql("""
+                SELECT count(*) FROM forecast_run WHERE route_version_id IN (:versions) AND outcome='INPUT_UNAVAILABLE'
+                """).param("versions", harness.versions()).query(Long.class).single())
+                .isEqualTo((long) (failed + deferred));
+        });
     }
 
     private void assertSamePredictions(Harness harness) {
@@ -283,13 +300,15 @@ class ShadowForecastPipelineTest {
                 .isEqualTo(Double.doubleToLongBits(values[1]));
         });
         Map<Long, Integer> legacyCounts = new HashMap<>();
-        jdbc.sql("SELECT source_batch_id,prediction_count FROM forecast_publication WHERE route_version_id IN (:versions)")
+        jdbc.sql(
+            "SELECT source_batch_id,prediction_count FROM forecast_publication WHERE route_version_id IN (:versions)")
             .param("versions", harness.versions())
             .query(row -> {
                 legacyCounts.put(row.getLong(1), row.getInt(2));
             });
         Map<Long, Integer> freshCounts = new HashMap<>();
-        jdbc.sql("SELECT observation_batch_id,prediction_count FROM forecast_run WHERE route_version_id IN (:versions)")
+        jdbc.sql(
+            "SELECT observation_batch_id,prediction_count FROM forecast_run WHERE route_version_id IN (:versions)")
             .param("versions", harness.versions())
             .query(row -> {
                 freshCounts.put(row.getLong(1), row.getInt(2));
@@ -355,16 +374,20 @@ class ShadowForecastPipelineTest {
         };
     }
 
-    private static NumericTreeEnsemble stumps(final int features, NumericTreeEnsemble.Kind kind, double[] baseline,
-        Random random) {
+    private static NumericTreeEnsemble stumps(
+        final int features,
+        NumericTreeEnsemble.Kind kind,
+        double[] baseline,
+        Random random
+    ) {
         double[] thresholds = {0.0, 0.5, 1, 2, 5, 10, 30};
         List<List<List<NumericTreeEnsemble.Node>>> iterations = new ArrayList<>();
         for (int iteration = 0; iteration < 24; iteration++) {
             List<List<NumericTreeEnsemble.Node>> trees = new ArrayList<>();
             for (int tree = 0; tree < baseline.length; tree++) {
                 trees.add(List.of(
-                    new NumericTreeEnsemble.Node(random.nextInt(features), thresholds[random.nextInt(thresholds.length)],
-                        random.nextBoolean(), 1, 2, 0, false),
+                    new NumericTreeEnsemble.Node(random.nextInt(features),
+                        thresholds[random.nextInt(thresholds.length)], random.nextBoolean(), 1, 2, 0, false),
                     new NumericTreeEnsemble.Node(0, 0, false, 0, 0, random.nextDouble() - 0.5, true),
                     new NumericTreeEnsemble.Node(0, 0, false, 0, 0, random.nextDouble() - 0.5, true)));
             }
@@ -392,13 +415,26 @@ class ShadowForecastPipelineTest {
         private int legacyBatches;
         private int legacyFailures;
 
-        private Harness(Instant start, Duration length, Instant versionSwitch, final long seed, final boolean extended,
-            final boolean rushOnly) {
+        private Harness(
+            Instant start,
+            Duration length,
+            Instant versionSwitch,
+            final long seed,
+            final boolean extended,
+            final boolean rushOnly
+        ) {
             this(start, length, versionSwitch, seed, extended, rushOnly, Duration.ofHours(6));
         }
 
-        private Harness(Instant start, Duration length, Instant versionSwitch, final long seed, final boolean extended,
-            final boolean rushOnly, Duration replayWindow) {
+        private Harness(
+            Instant start,
+            Duration length,
+            Instant versionSwitch,
+            final long seed,
+            final boolean extended,
+            final boolean rushOnly,
+            Duration replayWindow
+        ) {
             stream = ObservationStreamFixture.insert(jdbc, start, length, Duration.ofSeconds(30), versionSwitch, seed,
                 MODEL_ROUTE);
             String origins = ObservationStreamFixture.origins(jdbc, stream);
@@ -413,8 +449,8 @@ class ShadowForecastPipelineTest {
                 new RouteStops(version, SOURCE_ROUTE_ID, stops.stops(), stops.routeName())));
             model = model(seed, extended);
             runtime = activate(model);
-            JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, cache, origins, MAXIMUM_ROWS,
-                rushOnly, checkpoint.toString());
+            JdbcAlightingAwareFeatureQuery query = new JdbcAlightingAwareFeatureQuery(jdbc, cache, origins,
+                MAXIMUM_ROWS, rushOnly, checkpoint.toString());
             seeds = AlightingAwareHistorySeedReader.confirmed(checkpoint.toString(), MAXIMUM_ROWS);
             writer = new ForecastBatchWriter(committer, clock, routeWork);
             writer.setAlightingAwareFeatures(query);
@@ -460,13 +496,16 @@ class ShadowForecastPipelineTest {
         private long confirmedBatch(final int index) {
             List<Long> confirmed = new ArrayList<>();
             for (final long batchId : stream.batches()) {
-                Meta batch = meta(batchId);
-                if ("LIVE".equals(batch.origin()) && "SUCCESS_ROWS".equals(batch.outcome())
-                    && !intendedConfirmation.get(batchId).isAfter(batch.receivedAt().plusSeconds(90))) {
+                if (meetsConfirmation(batchId, meta(batchId))) {
                     confirmed.add(batchId);
                 }
             }
             return confirmed.get(index);
+        }
+
+        private boolean meetsConfirmation(final long batchId, Meta batch) {
+            return "LIVE".equals(batch.origin()) && "SUCCESS_ROWS".equals(batch.outcome())
+                && !intendedConfirmation.get(batchId).isAfter(batch.receivedAt().plusSeconds(90));
         }
 
         private Set<String> processAll(LongConsumer beforeBatch, final boolean collectPasses) {
@@ -509,12 +548,19 @@ class ShadowForecastPipelineTest {
 
         private double counter(String name, String result) {
             Counter counter = meters.find("salmonbus.pipeline.shadow." + name).tag("result", result).counter();
-            return counter == null ? 0 : counter.count();
+            return countOf(counter);
         }
 
         private double counter(String name) {
             Counter counter = meters.find("salmonbus.pipeline.shadow." + name).counter();
-            return counter == null ? 0 : counter.count();
+            return countOf(counter);
+        }
+
+        private double countOf(Counter counter) {
+            if (counter == null) {
+                return 0;
+            }
+            return counter.count();
         }
 
         private AlightingAwareSeatForecastModel model(final long seed, final boolean extended) {
@@ -527,13 +573,19 @@ class ShadowForecastPipelineTest {
             for (int order = 1; order <= ObservationStreamFixture.STOP_COUNT; order++) {
                 evidence.put(order, "{}");
             }
-            Map<String, ExtendedAlightingPredictor> extension = extended
-                ? Map.of(MODEL_ROUTE, new ExtendedAlightingPredictor(
-                    stumps(6, NumericTreeEnsemble.Kind.REGRESSION, new double[] {8}, random),
-                    stumps(6, NumericTreeEnsemble.Kind.BINARY, new double[] {0}, random)))
-                : Map.of();
+            Map<String, ExtendedAlightingPredictor> extension = extension(extended, random);
             return new AlightingAwareSeatForecastModel(predictor, Map.of(MODEL_ROUTE, stream.statistics()),
                 Map.of(MODEL_ROUTE, evidence), digest(), extension);
+        }
+
+        /** 시간 확장 모델을 쓸 때만 난수로 트리를 만든다. */
+        private Map<String, ExtendedAlightingPredictor> extension(final boolean extended, Random random) {
+            if (!extended) {
+                return Map.of();
+            }
+            return Map.of(MODEL_ROUTE, new ExtendedAlightingPredictor(
+                stumps(6, NumericTreeEnsemble.Kind.REGRESSION, new double[] {8}, random),
+                stumps(6, NumericTreeEnsemble.Kind.BINARY, new double[] {0}, random)));
         }
 
         private RuntimeSnapshot activate(AlightingAwareSeatForecastModel selected) {

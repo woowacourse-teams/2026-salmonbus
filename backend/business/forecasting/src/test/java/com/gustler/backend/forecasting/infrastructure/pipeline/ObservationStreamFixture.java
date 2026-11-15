@@ -12,6 +12,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,6 +35,7 @@ final class ObservationStreamFixture {
     static final int STOP_COUNT = 14;
     static final int TURN = 7;
     private static final int VIA_STOP = 10;
+    private static final String ROW_PLACEHOLDERS = "(?,?,?,?,?,?,?,?,?,?,?)";
 
     private ObservationStreamFixture() {
     }
@@ -78,27 +81,18 @@ final class ObservationStreamFixture {
         Random random = new Random(seed);
         String token = UUID.randomUUID().toString().substring(0, 8);
         String key = "pipeline-" + token;
-        String route = displayName == null ? key : displayName;
+        String route = routeName(displayName, key);
         final long routeId = jdbc.sql("""
             INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
             VALUES(?,'GBIS',?,?,'A','B') RETURNING id
             """).params(key, key, route).query(Long.class).single();
-        Map<Long, RouteStops> stops = new LinkedHashMap<>();
+        Map<Long, RouteStops> stops = insertVersions(jdbc, routeId, start, versionSwitch, route);
         Instant end = start.plus(length);
-        if (versionSwitch == null) {
-            final long version = version(jdbc, routeId, start.minusSeconds(86400), null);
-            stops.put(version, stops(jdbc, version, route));
-        } else {
-            final long first = version(jdbc, routeId, start.minusSeconds(86400), versionSwitch);
-            stops.put(first, stops(jdbc, first, route));
-            final long second = version(jdbc, routeId, versionSwitch, null);
-            stops.put(second, stops(jdbc, second, route));
-        }
         List<Long> versions = List.copyOf(stops.keySet());
         List<Vehicle> vehicles = vehicles(token, random, start);
         capacities(jdbc, vehicles, start.minusSeconds(86400));
         for (Instant at = start; at.isBefore(end); at = at.plus(interval)) {
-            final long version = versionSwitch == null || at.isBefore(versionSwitch) ? versions.getFirst() : versions.getLast();
+            final long version = versionAt(versions, versionSwitch, at);
             batch(jdbc, random, vehicles, version, at.truncatedTo(ChronoUnit.MICROS));
         }
         List<Long> batches = jdbc.sql("""
@@ -108,13 +102,49 @@ final class ObservationStreamFixture {
         return new Stream(route, routeId, stops, statistics(route, random), batches);
     }
 
+    private static String routeName(String displayName, String key) {
+        if (displayName == null) {
+            return key;
+        }
+        return displayName;
+    }
+
+    /** 판본 전환이 있으면 전환 전·후 두 판본을, 없으면 한 판본을 이 순서로 넣는다. */
+    private static Map<Long, RouteStops> insertVersions(
+        JdbcClient jdbc,
+        final long routeId,
+        Instant start,
+        Instant versionSwitch,
+        String route
+    ) {
+        Map<Long, RouteStops> stops = new LinkedHashMap<>();
+        if (versionSwitch == null) {
+            final long version = version(jdbc, routeId, start.minusSeconds(86400), null);
+            stops.put(version, stops(jdbc, version, route));
+            return stops;
+        }
+        final long first = version(jdbc, routeId, start.minusSeconds(86400), versionSwitch);
+        stops.put(first, stops(jdbc, first, route));
+        final long second = version(jdbc, routeId, versionSwitch, null);
+        stops.put(second, stops(jdbc, second, route));
+        return stops;
+    }
+
+    private static long versionAt(List<Long> versions, Instant versionSwitch, Instant at) {
+        if (versionSwitch == null || at.isBefore(versionSwitch)) {
+            return versions.getFirst();
+        }
+        return versions.getLast();
+    }
+
     /** 배치 하나를 저장된 줄 전부와 함께 읽는다. 줄은 되감기 원본과 같은 순서(차량 번호, 관측 번호)다. */
     static ForecastBatch read(JdbcClient jdbc, final long batchId) {
         List<ForecastObservationRow> rows = jdbc.sql("""
             SELECT id,vehicle_id,passed_stop_order,stop_order,running_state,remaining_seats,seat_unknown_reason,crowd_level
             FROM vehicle_observation WHERE observation_batch_id=? ORDER BY vehicle_id,id
             """).param(batchId).query((row, index) -> new ForecastObservationRow(row.getLong(1), row.getString(2),
-                row.getInt(3), row.getInt(4), row.getInt(5), (Integer) row.getObject(6), row.getString(7), row.getInt(8)))
+                row.getInt(3), row.getInt(4), row.getInt(5), (Integer) row.getObject(6), row.getString(7),
+                row.getInt(8)))
             .list();
         return jdbc.sql("""
             SELECT route_version_id,response_received_at,input_confirmed_at,ingestion_origin,outcome,stored_rows
@@ -133,18 +163,21 @@ final class ObservationStreamFixture {
               AND input_confirmed_at>=response_received_at AND input_confirmed_at<=response_received_at+interval '90 seconds'
             ORDER BY input_confirmed_at,id LIMIT 1
             """).param("versions", List.copyOf(stream.stopsByVersion().keySet())).query(Long.class).single();
-        return String.join(",", stream.stopsByVersion().keySet().stream().map(version -> version + ":" + first).toList());
+        return String.join(",", stream.stopsByVersion().keySet().stream()
+            .map(version -> version + ":" + first)
+            .toList());
     }
 
     private static long version(JdbcClient jdbc, final long routeId, Instant from, Instant to) {
-        return jdbc.sql("INSERT INTO route_version(route_id,content_digest,valid_from,valid_to) VALUES(?,?,?,?) RETURNING id")
-            .params(routeId, "0".repeat(64), at(from), to == null ? null : at(to)).query(Long.class).single();
+        return jdbc.sql(
+            "INSERT INTO route_version(route_id,content_digest,valid_from,valid_to) VALUES(?,?,?,?) RETURNING id")
+            .params(routeId, "0".repeat(64), at(from), atOrNull(to)).query(Long.class).single();
     }
 
     private static RouteStops stops(JdbcClient jdbc, final long version, String route) {
         List<RouteStop> stops = new ArrayList<>();
         for (int order = 1; order <= STOP_COUNT; order++) {
-            RouteDirection direction = order > TURN ? RouteDirection.DOWN : RouteDirection.UP;
+            RouteDirection direction = direction(order);
             final boolean boarding = order != VIA_STOP;
             jdbc.sql("""
                 INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
@@ -153,6 +186,13 @@ final class ObservationStreamFixture {
             stops.add(new RouteStop(version, order, "s" + order, boarding, direction));
         }
         return new RouteStops(version, route, stops, route);
+    }
+
+    private static RouteDirection direction(final int order) {
+        if (order > TURN) {
+            return RouteDirection.DOWN;
+        }
+        return RouteDirection.UP;
     }
 
     private static AlightingAwareRouteStatistics statistics(String route, Random random) {
@@ -204,7 +244,7 @@ final class ObservationStreamFixture {
             if (index == 7) {
                 continue;
             }
-            final int capacity = index == 8 ? 25 : 45;
+            final int capacity = capacity(index);
             jdbc.sql("""
                 INSERT INTO vehicle_capacity(source_id,vehicle_id,capacity,evidence_at) VALUES(?,?,?,?)
                 ON CONFLICT(source_id,vehicle_id) DO UPDATE SET capacity=EXCLUDED.capacity,evidence_at=EXCLUDED.evidence_at
@@ -212,7 +252,33 @@ final class ObservationStreamFixture {
         }
     }
 
-    private static void batch(JdbcClient jdbc, Random random, List<Vehicle> vehicles, final long version, Instant receivedAt) {
+    private static int capacity(final int index) {
+        if (index == 8) {
+            return 25;
+        }
+        return 45;
+    }
+
+    private static void batch(
+        JdbcClient jdbc,
+        Random random,
+        List<Vehicle> vehicles,
+        final long version,
+        Instant receivedAt
+    ) {
+        List<Object[]> rows = observedRows(random, vehicles, receivedAt);
+        final double kind = random.nextDouble();
+        Instant confirmedAt = receivedAt.plusMillis(1000 + random.nextInt(7000))
+            .plusNanos(random.nextInt(1000) * 1000L);
+        BatchHeader header = header(random, rows, kind, receivedAt, confirmedAt);
+        final long batch = insertBatch(jdbc, version, receivedAt, header, storedRows(header.outcome(), rows));
+        if (rows.isEmpty()) {
+            return;
+        }
+        insertObservations(jdbc, batch, version, rows);
+    }
+
+    private static List<Object[]> observedRows(Random random, List<Vehicle> vehicles, Instant receivedAt) {
         List<Object[]> rows = new ArrayList<>();
         for (Vehicle vehicle : vehicles) {
             Object[] row = vehicle.observe(receivedAt);
@@ -229,50 +295,101 @@ final class ObservationStreamFixture {
         if (random.nextDouble() < 0.03) {
             rows.add(new Object[] {null, 3, 4, 1, 12, null, 2});
         }
-        final double kind = random.nextDouble();
-        String origin = "LIVE";
-        String outcome = rows.isEmpty() ? "SUCCESS_EMPTY" : "SUCCESS_ROWS";
-        String failure = null;
-        Instant confirmedAt = receivedAt.plusMillis(1000 + random.nextInt(7000)).plusNanos(random.nextInt(1000) * 1000L);
+        return rows;
+    }
+
+    /** 배치 종류를 정한다. 빈 배치와 실패 배치는 {@code rows}를 비운다. 늦게 착수한 배치만 착수 시각 난수를 하나 더 뽑는다. */
+    private static BatchHeader header(
+        Random random,
+        List<Object[]> rows,
+        final double kind,
+        Instant receivedAt,
+        Instant confirmedAt
+    ) {
         if (kind < 0.02) {
             rows.clear();
-            outcome = "SUCCESS_EMPTY";
-        } else if (kind < 0.04) {
-            confirmedAt = receivedAt.plusSeconds(91 + random.nextInt(110));
-        } else if (kind < 0.05) {
-            rows.clear();
-            outcome = "FAILED_UPSTREAM";
-            failure = "UPSTREAM_ERROR";
-        } else if (kind < 0.06) {
-            origin = "UNVERIFIED";
+            return new BatchHeader("LIVE", "SUCCESS_EMPTY", null, confirmedAt);
         }
-        Integer stored = "FAILED_UPSTREAM".equals(outcome) ? null : rows.size();
-        final long batch = jdbc.sql("""
+        if (kind < 0.04) {
+            return new BatchHeader("LIVE", successOutcome(rows), null,
+                receivedAt.plusSeconds(91 + random.nextInt(110)));
+        }
+        if (kind < 0.05) {
+            rows.clear();
+            return new BatchHeader("LIVE", "FAILED_UPSTREAM", "UPSTREAM_ERROR", confirmedAt);
+        }
+        if (kind < 0.06) {
+            return new BatchHeader("UNVERIFIED", successOutcome(rows), null, confirmedAt);
+        }
+        return new BatchHeader("LIVE", successOutcome(rows), null, confirmedAt);
+    }
+
+    private static String successOutcome(List<Object[]> rows) {
+        if (rows.isEmpty()) {
+            return "SUCCESS_EMPTY";
+        }
+        return "SUCCESS_ROWS";
+    }
+
+    private static Integer storedRows(String outcome, List<Object[]> rows) {
+        if ("FAILED_UPSTREAM".equals(outcome)) {
+            return null;
+        }
+        return rows.size();
+    }
+
+    private static long insertBatch(
+        JdbcClient jdbc,
+        final long version,
+        Instant receivedAt,
+        BatchHeader header,
+        Integer stored
+    ) {
+        return jdbc.sql("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,requested_at,
                 response_received_at,outcome,failure_code,stored_rows,normalization_version,collection_strategy_version,
                 ingestion_origin,input_confirmed_at)
             VALUES(?,?,1,?,?,?,?,?,?,'normalization-v1.0.0','adaptive-kst-v1.0.1',?,?) RETURNING id
-            """).params(version, at(receivedAt), UUID.randomUUID().toString(), at(receivedAt), at(receivedAt), outcome,
-                failure, stored, origin, at(confirmedAt))
+            """).params(version, at(receivedAt), UUID.randomUUID().toString(), at(receivedAt), at(receivedAt),
+                header.outcome(), header.failure(), stored, header.origin(), at(header.confirmedAt()))
             .query(Long.class).single();
+    }
+
+    private static void insertObservations(JdbcClient jdbc, final long batch, final long version, List<Object[]> rows) {
+        List<Object> values = new ArrayList<>();
         for (int index = 0; index < rows.size(); index++) {
             Object[] row = rows.get(index);
             final int stop = (Integer) row[2];
-            jdbc.sql("""
-                INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
-                    passed_stop_order,stop_order,stop_id,running_state,remaining_seats,seat_unknown_reason,crowd_level)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?)
-                """).params(batch, version, index, row[0], row[1], stop, "s" + stop, row[3], row[4], row[5], row[6])
-                .update();
+            values.addAll(Arrays.asList(batch, version, index, row[0], row[1], stop, "s" + stop, row[3],
+                row[4], row[5], row[6]));
         }
+        jdbc.sql("""
+            INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
+                passed_stop_order,stop_order,stop_id,running_state,remaining_seats,seat_unknown_reason,crowd_level)
+            VALUES
+            """ + String.join(",", Collections.nCopies(rows.size(), ROW_PLACEHOLDERS)))
+            .params(values).update();
     }
 
     private static Instant instant(OffsetDateTime time) {
-        return time == null ? null : time.toInstant();
+        if (time == null) {
+            return null;
+        }
+        return time.toInstant();
     }
 
     private static OffsetDateTime at(Instant time) {
         return time.atOffset(ZoneOffset.UTC);
+    }
+
+    private static OffsetDateTime atOrNull(Instant time) {
+        if (time == null) {
+            return null;
+        }
+        return at(time);
+    }
+
+    private record BatchHeader(String origin, String outcome, String failure, Instant confirmedAt) {
     }
 
     /** 노선을 돌며 정류장을 지나고, 가끔 보이지 않거나 운행을 마치고 쉬는 차량이다. */
@@ -286,7 +403,12 @@ final class ObservationStreamFixture {
         private int passed;
         private int seats;
 
-        private Vehicle(String id, final double speed, Random random, Instant start) {
+        private Vehicle(
+            String id,
+            final double speed,
+            Random random,
+            Instant start
+        ) {
             this.id = id;
             this.speed = speed;
             this.random = random;
@@ -304,7 +426,7 @@ final class ObservationStreamFixture {
                     return null;
                 }
                 active = true;
-                passed = random.nextDouble() < 0.8 ? random.nextInt(2) : random.nextInt(STOP_COUNT);
+                passed = restartedPassed();
                 seats = 10 + random.nextInt(36);
             }
             if (at.isBefore(hiddenUntil)) {
@@ -321,7 +443,7 @@ final class ObservationStreamFixture {
             }
             final double move = random.nextDouble();
             if (move < speed) {
-                passed += move < speed * 0.1 ? 2 : 1;
+                passed += stopsMoved(move);
                 seats = Math.clamp(seats + random.nextInt(9) - 5, 0, 45);
             }
             if (passed > STOP_COUNT) {
@@ -334,29 +456,66 @@ final class ObservationStreamFixture {
             }
             final int stop = Math.min(Math.max(passed + 1, 1), STOP_COUNT);
             final int state = runningState(stop);
-            Integer remaining = seats;
-            String reason = null;
             final double quality = random.nextDouble();
-            if (quality < 0.04) {
-                remaining = null;
-                reason = "REPORTED_UNKNOWN";
-            } else if (quality < 0.05) {
-                remaining = 75;
-            }
-            Integer crowd = random.nextDouble() < 0.2 ? null : 1 + random.nextInt(4);
+            Integer remaining = reportedSeats(quality);
+            String reason = unknownReason(quality);
+            Integer crowd = crowd();
             return new Object[] {id, passed, stop, state, remaining, reason, crowd};
+        }
+
+        private int restartedPassed() {
+            if (random.nextDouble() < 0.8) {
+                return random.nextInt(2);
+            }
+            return random.nextInt(STOP_COUNT);
+        }
+
+        private int stopsMoved(final double move) {
+            if (move < speed * 0.1) {
+                return 2;
+            }
+            return 1;
+        }
+
+        /** 4%는 모름, 1%는 범위 밖 좌석(75)으로 보고한다. */
+        private Integer reportedSeats(final double quality) {
+            if (quality < 0.04) {
+                return null;
+            }
+            if (quality < 0.05) {
+                return 75;
+            }
+            return seats;
+        }
+
+        private String unknownReason(final double quality) {
+            if (quality < 0.04) {
+                return "REPORTED_UNKNOWN";
+            }
+            return null;
+        }
+
+        /** 혼잡도를 보고하는 경우에만 값 난수를 하나 더 뽑는다. */
+        private Integer crowd() {
+            if (random.nextDouble() < 0.2) {
+                return null;
+            }
+            return 1 + random.nextInt(4);
         }
 
         /** 첫 정류장과 회차 정류장에서는 방향이 정류장 순번대로 정해지도록 운행 상태를 고정한다. */
         private int runningState(final int stop) {
-            final int state = random.nextDouble() < 0.3 ? 2 : 1;
+            final double draw = random.nextDouble();
             if (stop == 1) {
                 return 2;
             }
             if (stop == TURN) {
                 return 1;
             }
-            return state;
+            if (draw < 0.3) {
+                return 2;
+            }
+            return 1;
         }
     }
 }

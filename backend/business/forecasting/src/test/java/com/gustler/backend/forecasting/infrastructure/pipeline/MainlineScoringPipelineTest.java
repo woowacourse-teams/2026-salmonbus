@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.application.RouteWorkAccess;
@@ -39,8 +40,6 @@ import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapaci
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.forecasting.infrastructure.jdbc.ConfirmedPassLabelCalculator;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcAlightingAwareForecastEvaluation;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcScoringComparison.Report;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcScoringComparison.Result;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Path;
@@ -101,7 +100,7 @@ class MainlineScoringPipelineTest {
     private VehicleCapacityCache cache;
 
     @BeforeEach
-    void setup() {
+    void 차량_정원_캐시를_준비한다() {
         cache = new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc));
     }
 
@@ -114,31 +113,35 @@ class MainlineScoringPipelineTest {
         harness.mainlineAll();
 
         // then
-        assertThat(jdbc.sql("SELECT count(*) FROM pass_label WHERE route_id=? AND state='SETTLED'")
-            .param(harness.stream.routeId()).query(Long.class).single()).isPositive();
-        assertThat(jdbc.sql("SELECT count(*) FROM seat_forecast WHERE route_version_id IN (:versions)")
-            .param("versions", harness.versions()).query(Long.class).single()).isZero();
-        assertThat(jdbc.sql("""
-            SELECT count(*) FROM model_deployment WHERE id=? AND jsonb_exists(settlement_context, ?)
-            """).params(harness.runtime.deploymentId(), Long.toString(harness.versions().getFirst()))
-            .query(Long.class).single()).isOne();
+        assertSoftly(softly -> {
+            softly.assertThat(jdbc.sql("SELECT count(*) FROM pass_label WHERE route_id=? AND state='SETTLED'")
+                .param(harness.stream.routeId()).query(Long.class).single()).isPositive();
+            softly.assertThat(jdbc.sql("SELECT count(*) FROM seat_forecast WHERE route_version_id IN (:versions)")
+                .param("versions", harness.versions()).query(Long.class).single()).isZero();
+            softly.assertThat(jdbc.sql("""
+                SELECT count(*) FROM model_deployment WHERE id=? AND jsonb_exists(settlement_context, ?)
+                """).params(harness.runtime.deploymentId(), Long.toString(harness.versions().getFirst()))
+                .query(Long.class).single()).isOne();
+        });
 
         // when
-        Report report = harness.legacyAndCompare();
+        JdbcScoringComparison.Report report = harness.legacyAndCompare();
 
         // then
-        assertThat(report.unexplained())
-            .as("설명되지 않는 차이: %s", report.unexplained().stream().limit(10).map(String::valueOf)
-                .collect(Collectors.joining("\n")))
-            .isEmpty();
-        assertThat(report.count(Result.LEGACY_ONLY)).isZero();
-        assertThat(report.count(Result.NEW_ONLY)).isZero();
-        assertThat(report.count(Result.PENDING)).isZero();
-        assertThat(report.count(Result.SAME)).isGreaterThan(1_000);
+        assertSoftly(softly -> {
+            softly.assertThat(report.unexplained())
+                .as("설명되지 않는 차이: %s", report.unexplained().stream().limit(10).map(String::valueOf)
+                    .collect(Collectors.joining("\n")))
+                .isEmpty();
+            softly.assertThat(report.count(JdbcScoringComparison.Result.LEGACY_ONLY)).isZero();
+            softly.assertThat(report.count(JdbcScoringComparison.Result.NEW_ONLY)).isZero();
+            softly.assertThat(report.count(JdbcScoringComparison.Result.PENDING)).isZero();
+            softly.assertThat(report.count(JdbcScoringComparison.Result.SAME)).isGreaterThan(1_000);
+        });
     }
 
     /** 정류장마다 옛 정산이 읽는 근거(실정류장, 회차, 휴일, 시간 칸 계수, 정류장 계수)를 만든다. */
-    private static Map<Integer, String> evidence(AlightingAwareRouteStatistics statistics, double probability) {
+    private static Map<Integer, String> evidence(AlightingAwareRouteStatistics statistics, final double probability) {
         String parameters = "\"p\":%s,\"lam\":[1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9],\"kappa\":1,\"r\":2"
             .formatted(probability);
         String cells = AlightingTimeCell.extendedKeys().stream()
@@ -168,8 +171,8 @@ class MainlineScoringPipelineTest {
         private final String origins;
 
         private Harness(final long seed) {
-            stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofHours(3), Duration.ofSeconds(30), null,
-                seed, MODEL_ROUTE);
+            stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofMinutes(90), Duration.ofSeconds(30),
+                null, seed, MODEL_ROUTE);
             origins = ObservationStreamFixture.origins(jdbc, stream);
             jdbc.sql("""
                 SELECT id,input_confirmed_at,route_version_id,response_received_at,ingestion_origin,outcome
@@ -177,8 +180,8 @@ class MainlineScoringPipelineTest {
                 """).param("versions", versions())
                 .query(row -> {
                     intendedConfirmation.put(row.getLong(1), row.getObject(2, OffsetDateTime.class).toInstant());
-                    meta.put(row.getLong(1), new Meta(row.getLong(3), row.getObject(4, OffsetDateTime.class).toInstant(),
-                        row.getString(5), row.getString(6)));
+                    meta.put(row.getLong(1), new Meta(row.getLong(3),
+                        row.getObject(4, OffsetDateTime.class).toInstant(), row.getString(5), row.getString(6)));
                 });
             jdbc.sql("UPDATE observation_batch SET input_confirmed_at=NULL WHERE route_version_id IN (:versions)")
                 .param("versions", versions()).update();
@@ -231,11 +234,11 @@ class MainlineScoringPipelineTest {
         }
 
         /** 같은 흐름을 옛 발행으로 처리하고 옛 정산을 돌린 뒤 새 채점 결과와 대조한다. */
-        private Report legacyAndCompare() {
+        private JdbcScoringComparison.Report legacyAndCompare() {
             Instant settledAt = clock.at;
             ForecastBatchWriter writer = new ForecastBatchWriter(committer, clock, routeWork);
-            writer.setAlightingAwareFeatures(new JdbcAlightingAwareFeatureQuery(jdbc, cache, origins, MAXIMUM_ROWS, false,
-                checkpoint.toString()));
+            writer.setAlightingAwareFeatures(new JdbcAlightingAwareFeatureQuery(jdbc, cache, origins, MAXIMUM_ROWS,
+                false, checkpoint.toString()));
             writer.setConfirmedInput(new ConfirmedAlightingAwareInput(jdbc, PipelineTestSupport.joining(transactions)));
             writer.setCompactSettlementWrite(true);
             for (final long batchId : stream.batches()) {
@@ -249,7 +252,8 @@ class MainlineScoringPipelineTest {
             }
             jdbc.sql("DELETE FROM alighting_forecast_evaluation_work WHERE route_version_id NOT IN (:versions)")
                 .param("versions", versions()).update();
-            jdbc.sql("DELETE FROM alighting_settlement_batch_work WHERE route_id <> ?").param(stream.routeId()).update();
+            jdbc.sql("DELETE FROM alighting_settlement_batch_work WHERE route_id <> ?")
+                .param(stream.routeId()).update();
             jdbc.sql("SET LOCAL enable_nestloop = off").update();
             Clock fixed = Clock.fixed(settledAt, ZoneOffset.UTC);
             JdbcAlightingAwareForecastEvaluation legacy = new JdbcAlightingAwareForecastEvaluation(jdbc, routeWork,
@@ -282,6 +286,11 @@ class MainlineScoringPipelineTest {
         }
     }
 
-    private record Meta(long version, Instant receivedAt, String origin, String outcome) {
+    private record Meta(
+        long version,
+        Instant receivedAt,
+        String origin,
+        String outcome
+    ) {
     }
 }

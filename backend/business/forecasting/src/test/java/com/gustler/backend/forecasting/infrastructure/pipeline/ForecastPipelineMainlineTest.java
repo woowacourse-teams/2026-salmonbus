@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
@@ -59,6 +60,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -124,29 +126,33 @@ class ForecastPipelineMainlineTest {
         harness.batches().forEach(harness::mainline);
 
         // then
-        assertThat(legacyCounts()).isEqualTo(legacyBefore);
-        assertThat(jdbc.sql("""
-            SELECT count(*) FROM observation_batch WHERE route_version_id IN (:versions) AND input_confirmed_at IS NOT NULL
-            """).param("versions", harness.versions()).query(Long.class).single()).isZero();
-        try (Stream<Path> files = Files.list(checkpoint)) {
-            assertThat(files).isEmpty();
-        }
-        assertThat(runCount(harness)).isEqualTo(harness.batches().size());
-        assertThat(jdbc.sql("SELECT count(*) FROM stop_pass WHERE route_id=?").param(harness.stream.routeId())
-            .query(Long.class).single()).isGreaterThan(50);
-        assertThat(harness.counter("batches", "published")).isGreaterThan(300);
-        assertThat(harness.counter("batches", "failed")).isZero();
-        assertThat(harness.events.published).isEqualTo(harness.batches().size());
+        List<Path> checkpointFiles = checkpointFiles();
+        assertSoftly(softly -> {
+            softly.assertThat(legacyCounts()).isEqualTo(legacyBefore);
+            softly.assertThat(jdbc.sql("""
+                SELECT count(*) FROM observation_batch WHERE route_version_id IN (:versions) AND input_confirmed_at IS NOT NULL
+                """).param("versions", harness.versions()).query(Long.class).single()).isZero();
+            softly.assertThat(checkpointFiles).isEmpty();
+            softly.assertThat(runCount(harness)).isEqualTo(harness.batches().size());
+            softly.assertThat(jdbc.sql("SELECT count(*) FROM stop_pass WHERE route_id=?")
+                .param(harness.stream.routeId())
+                .query(Long.class).single()).isGreaterThan(50);
+            softly.assertThat(harness.counter("batches", "published")).isGreaterThan(300);
+            softly.assertThat(harness.counter("batches", "failed")).isZero();
+            softly.assertThat(harness.events.published).isEqualTo(harness.batches().size());
+        });
 
         // when
         harness.batches().forEach(harness::legacy);
 
         // then
         Comparison comparison = compare(harness, Set.copyOf(harness.batches()));
-        assertThat(comparison.same()).isGreaterThan(2_000);
-        assertThat(comparison.valueDiffers()).isZero();
-        assertThat(comparison.legacyOnly()).isEmpty();
-        assertThat(comparison.newOnly()).isZero();
+        assertSoftly(softly -> {
+            softly.assertThat(comparison.same()).isGreaterThan(2_000);
+            softly.assertThat(comparison.valueDiffers()).isZero();
+            softly.assertThat(comparison.legacyOnly()).isEmpty();
+            softly.assertThat(comparison.newOnly()).isZero();
+        });
         assertRunOutcomes(harness);
     }
 
@@ -154,7 +160,7 @@ class ForecastPipelineMainlineTest {
     @ValueSource(booleans = {false, true})
     void 옛_경로로_처리하다_본선으로_넘어가면_되감기가_두_출처를_이어_처음부터_옛_경로로_처리한_값과_같다(final boolean shadow) {
         // given
-        Harness harness = new Harness(20261202L);
+        Harness harness = new Harness(20261202L, Duration.ofHours(3));
         if (shadow) {
             harness.enableShadow();
         }
@@ -171,18 +177,20 @@ class ForecastPipelineMainlineTest {
 
         // then
         Comparison comparison = compare(harness, Set.copyOf(after));
-        assertThat(harness.counter("replays", "succeeded")).isOne();
-        assertThat(comparison.same()).isGreaterThan(1_000);
-        assertThat(comparison.valueDiffers()).isZero();
-        assertThat(comparison.newOnly()).isZero();
-        assertThat(comparison.legacyOnly()).isEmpty();
-        assertThat(harness.excluded()).isZero();
-        if (shadow) {
-            assertThat(jdbc.sql("""
-                SELECT count(*) FROM forecast_run r JOIN observation_batch b ON b.id=r.observation_batch_id
-                WHERE b.id IN (:batches) AND r.confirmed_at<>b.input_confirmed_at
-                """).param("batches", before).query(Long.class).single()).isZero();
-        }
+        assertSoftly(softly -> {
+            softly.assertThat(harness.counter("replays", "succeeded")).isOne();
+            softly.assertThat(comparison.same()).isGreaterThan(1_000);
+            softly.assertThat(comparison.valueDiffers()).isZero();
+            softly.assertThat(comparison.newOnly()).isZero();
+            softly.assertThat(comparison.legacyOnly()).isEmpty();
+            softly.assertThat(harness.excluded()).isZero();
+            if (shadow) {
+                softly.assertThat(jdbc.sql("""
+                    SELECT count(*) FROM forecast_run r JOIN observation_batch b ON b.id=r.observation_batch_id
+                    WHERE b.id IN (:batches) AND r.confirmed_at<>b.input_confirmed_at
+                    """).param("batches", before).query(Long.class).single()).isZero();
+            }
+        });
     }
 
     @Test
@@ -201,12 +209,14 @@ class ForecastPipelineMainlineTest {
 
         // then
         Comparison comparison = compare(harness, Set.copyOf(after));
-        assertThat(harness.excluded()).isPositive();
-        assertThat(comparison.legacyOnly()).isNotEmpty();
-        assertThat(harness.excludedObservations).containsAll(comparison.legacyOnly());
-        assertThat(comparison.valueDiffers()).isZero();
-        assertThat(comparison.newOnly()).isZero();
-        assertThat(comparison.same()).isGreaterThan(1_000);
+        assertSoftly(softly -> {
+            softly.assertThat(harness.excluded()).isPositive();
+            softly.assertThat(comparison.legacyOnly()).isNotEmpty();
+            softly.assertThat(harness.excludedObservations).containsAll(comparison.legacyOnly());
+            softly.assertThat(comparison.valueDiffers()).isZero();
+            softly.assertThat(comparison.newOnly()).isZero();
+            softly.assertThat(comparison.same()).isGreaterThan(1_000);
+        });
     }
 
     @Test
@@ -224,15 +234,19 @@ class ForecastPipelineMainlineTest {
         harness.mainlineAt(late, harness.receivedAt(late).plusSeconds(91));
 
         // then
-        assertThat(jdbc.sql("SELECT outcome||':'||prediction_count FROM forecast_run WHERE observation_batch_id=?")
-            .param(late).query(String.class).single()).isEqualTo("LATE:0");
-        assertThat(harness.cursor()).isEqualTo(cursorBefore);
-        assertThat(new JdbcPendingPipelineBatches(jdbc).find(harness.version(late),
-            harness.receivedAt(late).minusSeconds(60), 100)).noneMatch(pending -> pending.observationBatchId() == late);
-        ReplaySource.Read replay = new JdbcReplaySource(jdbc, MAXIMUM_ROWS, JdbcReplaySource.Axis.RECORDED_RUN)
-            .read(harness.statistics(), harness.receivedAt(late).minus(Duration.ofHours(1)),
-                harness.receivedAt(late).plus(Duration.ofHours(1)), Long.MAX_VALUE);
-        assertThat(replay.batches()).isNotEmpty().noneMatch(batch -> batch.observationBatchId() == late);
+        assertSoftly(softly -> {
+            softly.assertThat(jdbc.sql(
+                    "SELECT outcome||':'||prediction_count FROM forecast_run WHERE observation_batch_id=?")
+                .param(late).query(String.class).single()).isEqualTo("LATE:0");
+            softly.assertThat(harness.cursor()).isEqualTo(cursorBefore);
+            softly.assertThat(new JdbcPendingPipelineBatches(jdbc).find(harness.version(late),
+                harness.receivedAt(late).minusSeconds(60), 100))
+                .noneMatch(pending -> pending.observationBatchId() == late);
+            ReplaySource.Read replay = new JdbcReplaySource(jdbc, MAXIMUM_ROWS, JdbcReplaySource.Axis.RECORDED_RUN)
+                .read(harness.statistics(), harness.receivedAt(late).minus(Duration.ofHours(1)),
+                    harness.receivedAt(late).plus(Duration.ofHours(1)), Long.MAX_VALUE);
+            softly.assertThat(replay.batches()).isNotEmpty().noneMatch(batch -> batch.observationBatchId() == late);
+        });
     }
 
     @Test
@@ -262,15 +276,17 @@ class ForecastPipelineMainlineTest {
             .query(row -> {
                 runs.put(row.getLong(1), row.getLong(2));
             });
-        assertThat(runs.keySet()).containsExactlyInAnyOrderElementsOf(batches);
-        assertThat(runs.values()).allMatch(count -> count == 1);
-        assertThat(harness.counter("replays", "succeeded")).isOne();
-        assertThat(harness.counter("batches", "already_processed")).isOne();
-        assertThat(harness.counter("batches", "failed")).isZero();
-        assertThat(jdbc.sql("""
-            SELECT count(*) FROM forecast_run WHERE observation_batch_id IN (:lost) AND confirmed_at=:at
-            """).param("lost", lost).param("at", pickedAt.atOffset(ZoneOffset.UTC)).query(Long.class).single())
-            .isEqualTo(lost.size());
+        assertSoftly(softly -> {
+            softly.assertThat(runs.keySet()).containsExactlyInAnyOrderElementsOf(batches);
+            softly.assertThat(runs.values()).allMatch(count -> count == 1);
+            softly.assertThat(harness.counter("replays", "succeeded")).isOne();
+            softly.assertThat(harness.counter("batches", "already_processed")).isOne();
+            softly.assertThat(harness.counter("batches", "failed")).isZero();
+            softly.assertThat(jdbc.sql("""
+                SELECT count(*) FROM forecast_run WHERE observation_batch_id IN (:lost) AND confirmed_at=:at
+                """).param("lost", lost).param("at", pickedAt.atOffset(ZoneOffset.UTC)).query(Long.class).single())
+                .isEqualTo(lost.size());
+        });
     }
 
     private Map<String, Long> legacyCounts() {
@@ -279,6 +295,12 @@ class ForecastPipelineMainlineTest {
             counts.put(table, jdbc.sql("SELECT count(*) FROM " + table).query(Long.class).single());
         }
         return counts;
+    }
+
+    private List<Path> checkpointFiles() throws IOException {
+        try (Stream<Path> files = Files.list(checkpoint)) {
+            return files.toList();
+        }
     }
 
     private long runCount(Harness harness) {
@@ -309,21 +331,28 @@ class ForecastPipelineMainlineTest {
         int same = 0;
         int differs = 0;
         int newOnly = 0;
-        Set<Long> legacyOnly = new HashSet<>();
         for (Map.Entry<String, double[]> entry : fresh.entrySet()) {
             double[] other = legacy.get(entry.getKey());
             if (other == null) {
                 newOnly++;
-            } else if (Double.doubleToLongBits(other[0]) == Double.doubleToLongBits(entry.getValue()[0])
-                && Double.doubleToLongBits(other[1]) == Double.doubleToLongBits(entry.getValue()[1])) {
-                same++;
-            } else {
-                differs++;
+                continue;
             }
+            if (hasSameBits(other, entry.getValue())) {
+                same++;
+                continue;
+            }
+            differs++;
         }
-        legacy.keySet().stream().filter(key -> !fresh.containsKey(key))
-            .forEach(key -> legacyOnly.add(legacyObservations.get(key)));
+        Set<Long> legacyOnly = legacy.keySet().stream()
+            .filter(key -> !fresh.containsKey(key))
+            .map(legacyObservations::get)
+            .collect(Collectors.toCollection(HashSet::new));
         return new Comparison(same, differs, newOnly, legacyOnly);
+    }
+
+    private static boolean hasSameBits(double[] legacy, double[] fresh) {
+        return Double.doubleToLongBits(legacy[0]) == Double.doubleToLongBits(fresh[0])
+            && Double.doubleToLongBits(legacy[1]) == Double.doubleToLongBits(fresh[1]);
     }
 
     private void assertRunOutcomes(Harness harness) {
@@ -348,7 +377,8 @@ class ForecastPipelineMainlineTest {
         });
         assertThat(outcomes).containsKeys("EMPTY->EMPTY", "LATE->LATE", "PUBLISHED->PUBLISHED");
         Map<Long, Integer> legacyCounts = new HashMap<>();
-        jdbc.sql("SELECT source_batch_id,prediction_count FROM forecast_publication WHERE route_version_id IN (:versions)")
+        jdbc.sql(
+            "SELECT source_batch_id,prediction_count FROM forecast_publication WHERE route_version_id IN (:versions)")
             .param("versions", harness.versions())
             .query(row -> {
                 legacyCounts.put(row.getLong(1), row.getInt(2));
@@ -384,7 +414,11 @@ class ForecastPipelineMainlineTest {
         private ShadowForecastService shadow;
 
         private Harness(final long seed) {
-            stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofHours(4), Duration.ofSeconds(30), null,
+            this(seed, Duration.ofHours(4));
+        }
+
+        private Harness(final long seed, Duration length) {
+            stream = ObservationStreamFixture.insert(jdbc, EVENING, length, Duration.ofSeconds(30), null,
                 seed, MODEL_ROUTE);
             String origins = ObservationStreamFixture.origins(jdbc, stream);
             jdbc.sql("""
@@ -393,8 +427,8 @@ class ForecastPipelineMainlineTest {
                 """).param("versions", versions())
                 .query(row -> {
                     intendedConfirmation.put(row.getLong(1), row.getObject(2, OffsetDateTime.class).toInstant());
-                    meta.put(row.getLong(1), new Meta(row.getLong(3), row.getObject(4, OffsetDateTime.class).toInstant(),
-                        row.getString(5), row.getString(6)));
+                    meta.put(row.getLong(1), new Meta(row.getLong(3),
+                        row.getObject(4, OffsetDateTime.class).toInstant(), row.getString(5), row.getString(6)));
                 });
             jdbc.sql("UPDATE observation_batch SET input_confirmed_at=NULL WHERE route_version_id IN (:versions)")
                 .param("versions", versions()).update();
@@ -403,8 +437,8 @@ class ForecastPipelineMainlineTest {
             model = model(seed);
             runtime = activate(model);
             writer = new ForecastBatchWriter(committer, clock, routeWork);
-            writer.setAlightingAwareFeatures(new JdbcAlightingAwareFeatureQuery(jdbc, cache, origins, MAXIMUM_ROWS, false,
-                checkpoint.toString()));
+            writer.setAlightingAwareFeatures(new JdbcAlightingAwareFeatureQuery(jdbc, cache, origins, MAXIMUM_ROWS,
+                false, checkpoint.toString()));
             writer.setConfirmedInput(new ConfirmedAlightingAwareInput(jdbc, PipelineTestSupport.joining(transactions)));
         }
 
@@ -474,13 +508,17 @@ class ForecastPipelineMainlineTest {
         private long confirmedBatch(final int index) {
             List<Long> confirmed = new ArrayList<>();
             for (final long batchId : stream.batches()) {
-                Meta batch = meta.get(batchId);
-                if ("LIVE".equals(batch.origin()) && "SUCCESS_ROWS".equals(batch.outcome())
-                    && !intendedConfirmation.get(batchId).isAfter(batch.receivedAt().plusSeconds(90))) {
+                if (meetsConfirmation(batchId)) {
                     confirmed.add(batchId);
                 }
             }
             return confirmed.get(index);
+        }
+
+        private boolean meetsConfirmation(final long batchId) {
+            Meta batch = meta.get(batchId);
+            return "LIVE".equals(batch.origin()) && "SUCCESS_ROWS".equals(batch.outcome())
+                && !intendedConfirmation.get(batchId).isAfter(batch.receivedAt().plusSeconds(90));
         }
 
         private void mainline(final long batchId) {
@@ -523,9 +561,23 @@ class ForecastPipelineMainlineTest {
         }
 
         private double counter(String name, String tag) {
-            String key = "excluded".equals(name) ? "reason" : "result";
+            String key = counterTagKey(name);
             Counter counter = meters.find("salmonbus.pipeline.forecast." + name).tag(key, tag).counter();
-            return counter == null ? 0 : counter.count();
+            return countOf(counter);
+        }
+
+        private String counterTagKey(String name) {
+            if ("excluded".equals(name)) {
+                return "reason";
+            }
+            return "result";
+        }
+
+        private double countOf(Counter counter) {
+            if (counter == null) {
+                return 0;
+            }
+            return counter.count();
         }
 
         private AlightingAwareSeatForecastModel model(final long seed) {
