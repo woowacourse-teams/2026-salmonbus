@@ -1225,7 +1225,7 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 | `ARCHIVE_LEGACY_EXPORT_ENABLED` | archive.env | `false` | 옛 테이블 25개를 기본 키 순서의 조각으로 S3에 내보내고 다시 읽어 검증한다. 지우지 않는다 |
 | `COLLECTION_BULK_INSERT` | worker.env | `false` | 관측을 한 문장으로 넣고 예약·전송을 한 커밋으로 한다 |
 
-내보내기 두 스위치의 이름은 구현 명세(내보내기를 이관 앱에 둔다는 11-15 결정)를 따랐다. 이관 앱 구현과 이름이 다르면 이 표를 먼저 고친다. 스위치를 바꾼 뒤에는 해당 서비스를 재시작해야 반영된다(「환경변수 변경」).
+스위치를 바꾼 뒤에는 해당 서비스를 재시작해야 반영된다(「환경변수 변경」).
 
 `FORECAST_ENABLED=true`인 worker가 받아들이는 예보 스위치 조합은 아래 넷뿐이다. 나머지 조합은 worker가 기동하지 않고 무엇을 바꿔야 하는지 오류로 남긴다(`FORECAST_SCORING=v2`인데 `FORECAST_PIPELINE=v1`, `FORECAST_SCORING=shadow`인데 그림자도 `v2`도 아님, `FORECAST_PIPELINE=v2`인데 `FORECAST_SCORING=off`). 스위치를 둘 바꿀 때는 한 번에 바꿔 이 표의 한 줄에서 다른 줄로 옮긴다.
 
@@ -1235,6 +1235,12 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 | `v1` | `true` | `off` 또는 `shadow` | 그림자 예보(차례 1), 그림자 채점(차례 2) | 돈다 | `shadow`일 때 10분마다 |
 | `v2` | 무시 | `shadow` | 새 예보가 본선(차례 4-1). 옛 정산은 남은 옛 예측만 마저 처리한다 | 돈다 | 없음(옛 예측이 더 생기지 않는다) |
 | `v2` | 무시 | `v2` | 완전 전환(차례 4-2) | 돌지 않는다 | 없음 |
+
+dev와 로컬에서 먼저 해 볼 때는 세 가지를 알고 시작한다.
+
+- 새 경로는 확정 프로필(`alighting-confirmed-closure-v2`) 모델만 처리한다. 운영 모델은 확정 프로필이다. 저장소의 로컬·dev 기본 모델(`dev/data/model-reference`)은 확정 프로필이 아니라서, 그림자를 켜도 새 테이블에 아무것도 쌓이지 않고 `FORECAST_PIPELINE=v2`에서는 그 노선들을 `unsupported_profile`로 건너뛴다. 그러면 예보가 나오지 않고 보드는 발행이 끊긴 것으로 보아 503(`NO_RECENT_OBSERVATION`)을 낸다. dev에서 해 보려면 먼저 확정 프로필 번들을 활성화한다. `salmonbus_pipeline_forecast_batches_total{result="unsupported_profile"}`가 늘지 않는지로 확인한다.
+- 개발 데이터 초기화(`reset`, `LocalData --reset-generated`)는 관측 테이블과 옛 예보·정산 테이블만 비우고 새 테이블 다섯 개는 비우지 않는다. 스위치를 켠 뒤 초기화를 돌리면 지워진 관측을 가리키는 줄이 새 테이블에 남는다. 초기화 직후 `TRUNCATE forecast_run, forecast_record, stop_pass, pass_label, forecast_unresolved;`를 실행하고 worker를 재시작한다.
+- 로컬 구성의 프론트 대기 조건(`dev/docker/forecast-ready.sql`)과 스모크 검사(`dev/tests/smoke-local.sh`)는 `forecast_publication`을 본다. 로컬에서 `FORECAST_PIPELINE=v2`로 띄우면 옛 발행이 생기지 않아 프론트가 기다린다. 옛 코드를 지우는 배포에서 이 둘과 초기화 대상을 함께 고친다.
 
 ### 차례
 
@@ -1267,7 +1273,7 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
   - 늦어서 건너뛴 배치: `salmonbus_pipeline_forecast_batches_total{result="late"}`. 옛 경로의 수신 뒤 90초 초과 비율과 비슷해야 한다.
   - 줄 길이: `salmonbus_pipeline_forecast_queue{lane}`. 계속 쌓이면 `FORECAST_LANES`를 늘린다. 넣지 못한 배치는 `salmonbus_pipeline_forecast_rejected_total`.
   - 채점 대기: `salmonbus_pipeline_scoring_waiting`, `salmonbus_pipeline_scoring_queue`.
-  - DB 연결: worker의 Hikari 풀은 3이고(`application.yml`), 본선의 줄 둘·줍기·수집·옛 정산·채점이 함께 쓴다. 줄은 문장을 실행하는 동안만 연결을 잡지만 `hikaricp_connections_pending`이 자주 0보다 크면 풀 크기를 따로 올린다(이 PR은 바꾸지 않았다).
+  - DB 연결: worker의 Hikari 풀은 5이고(`application.yml`), 본선의 줄 둘·줍기·수집·옛 정산·채점이 함께 쓴다. 줄은 문장을 실행하는 동안만 연결을 잡지만 `hikaricp_connections_pending`이 자주 0보다 크면 풀 크기를 올린다.
 - 되돌리기: worker.env를 `FORECAST_PIPELINE=v1`, `FORECAST_SCORING=off`(또는 그림자를 켜고 `shadow`)로 바꾸고, 정비 명령 `alighting-history-bootstrap`으로 체크포인트를 다시 만든 뒤 worker를 재시작한다. archive.env는 `ARCHIVE_HISTORY_HOLD=checkpoint`로 되돌린다. 옛 테이블과 트리거가 남아 있으므로 이 차례까지는 스위치로 되돌릴 수 있다. 본선이 처리한 구간의 배치에는 `input_confirmed_at`이 없어 옛 경로의 이력에 들어가지 않는다(부트스트랩이 다시 만든다).
 
 *4-2. 새 채점 본선.* 4-1이 안정된 뒤 `FORECAST_SCORING=v2`로 worker를 재시작한다. 옛 정산 작업(`ArrivalLabelJob`, 하차 반영 모델의 대기열 채우기·투영 정리·정산)이 등록되지 않는다. 이 작업이 하는 일은 옛 정산뿐이라 다른 일은 멈추지 않는다.
@@ -1297,10 +1303,10 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 
 **7. 옛 테이블 삭제(승인).** 다음을 모두 확인한 뒤 실행한다. **이 차례는 되돌릴 수 없다.**
 - 6-1번이 끝났다. 모든 옛 테이블이 `status=COMPLETE`이고 `sal434-01`의 8-2절이 `ok`다. 그 뒤 옛 테이블에 쓴 곳이 없다.
-- api·worker에 옛 테이블을 매핑한 코드가 없는 배포본이 올라가 있다. **이 PR의 api는 `seat_forecast`·`forecast_publication` JPA 엔티티를 갖고 있고 `ddl-auto: validate`라서, 테이블을 지운 뒤 다시 뜨면 스키마 검증에서 멈춘다.** 옛 경로 코드를 지운 후속 배포가 먼저다. SQL은 배포본을 볼 수 없으므로 사람이 확인한다.
+- api·worker에 옛 테이블을 매핑한 코드가 없는 배포본이 올라가 있다. **SAL-434 배포본의 api는 `seat_forecast`·`forecast_publication` JPA 엔티티를 갖고 있고 `ddl-auto: validate`라서, 테이블을 지운 뒤 다시 뜨면 스키마 검증에서 멈춘다.** 옛 경로 코드를 지운 후속 배포가 먼저다. SQL은 배포본을 볼 수 없으므로 사람이 확인한다.
 - `BOARD_FORECAST_SOURCE=record`로 api를 재시작했다(`auto`도 옛 테이블을 읽는다).
 - 옛 이관 앱(노선 판본 이관, `ARCHIVE_ENABLED`)이 멈춰 있다. 옛 테이블을 읽는 대시보드·수동 스크립트·저장소 밖 도구(`docs/salmon-action` 추출기 등)를 멈췄다. 가드가 120초 동안 읽기 통계를 보고 읽는 곳이 있으면 멈춘다.
-- **운영 서버의 배포 가드 사본을 바꿨다.** SAL-175 전환 때 `prepare`가 `/etc/salmonbus/evaluation-work-transition.sh`와 서비스 기동 전 검사(`/etc/systemd/system/salmonbus-{api,worker}.service.d/evaluation-work-transition.conf`)를 설치했다. 옛 사본은 7번 뒤의 DB를 "지원하지 않는 상태"로 보고 서비스 재시작을 막는다. 이 PR의 스크립트는 옛 대기 테이블·뷰·`seat_forecast`가 모두 없고 새 예보 테이블이 있는 DB를 `retired`로 받아들인다(V81 이상 배포본만). 하나만 없어진 중간 상태는 계속 막는다.
+- **운영 서버의 배포 가드 사본을 바꿨다.** SAL-175 전환 때 `prepare`가 `/etc/salmonbus/evaluation-work-transition.sh`와 서비스 기동 전 검사(`/etc/systemd/system/salmonbus-{api,worker}.service.d/evaluation-work-transition.conf`)를 설치했다. 옛 사본은 7번 뒤의 DB를 "지원하지 않는 상태"로 보고 서비스 재시작을 막는다. SAL-434 배포본의 스크립트는 옛 대기 테이블·뷰·`seat_forecast`가 모두 없고 새 예보 테이블이 있는 DB를 `retired`로 받아들인다(V81 이상 배포본만). 하나만 없어진 중간 상태는 계속 막는다.
 
   ```bash
   ls -l /etc/salmonbus/evaluation-work-transition.sh /etc/systemd/system/salmonbus-*.service.d/evaluation-work-transition.conf

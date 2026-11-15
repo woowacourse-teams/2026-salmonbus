@@ -4,12 +4,12 @@
 --       기본 키 순서의 조각으로 S3에 내보내고 다시 읽어 검증한 뒤(daily_export 장부, source_date 2000-01-01, 조각마다 한 줄),
 --       운영 DB 객체 목록과 장부를 sal434-01-precheck.sql로 다시 뽑아 보고 승인을 받아 실행한다.
 -- 반드시 먼저 끝나 있어야 하는 것(SQL이 확인하지 못하는 것 포함):
---   - 이 테이블을 매핑한 JPA 엔티티가 없는 배포본이 api·worker에 올라가 있다. 이 PR의 api에는 seat_forecast·
+--   - 이 테이블을 매핑한 JPA 엔티티가 없는 배포본이 api·worker에 올라가 있다. SAL-434 배포본의 api에는 seat_forecast·
 --     forecast_publication 엔티티가 남아 있고(ddl-auto: validate), 테이블을 지운 뒤 api가 다시 뜨면 스키마 검증에서 멈춘다.
 --     옛 경로 코드를 지운 후속 배포가 먼저다. 이 SQL은 배포본을 볼 수 없다.
 --   - BOARD_FORECAST_SOURCE=record(auto·legacy는 seat_forecast를 읽는다), FORECAST_PIPELINE=v2, FORECAST_SCORING=v2.
 --   - 옛 이관 앱(노선 판본 이관)이 멈춰 있다. 운영 서버의 배포 가드 사본(/etc/salmonbus/evaluation-work-transition.sh)이
---     이 PR의 것으로 바뀌어 있다(옛 사본은 이 SQL 뒤의 DB를 "지원하지 않는 상태"로 보고 서비스 기동을 막는다).
+--     SAL-434 배포본의 것으로 바뀌어 있다(옛 사본은 이 SQL 뒤의 DB를 "지원하지 않는 상태"로 보고 서비스 기동을 막는다).
 --   - sal434-02 실행 완료(옛 정산 트리거·함수 없음). 아래 가드가 확인한다.
 -- 지우는 것(삭제 순서. impl-storage-archive.md E-1):
 --   뷰      alighting_evaluation_status, alighting_quality_eligible_metric, alighting_quality_eligible_evaluation,
