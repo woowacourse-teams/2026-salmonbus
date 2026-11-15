@@ -471,6 +471,11 @@ class ObservationPartitionExportIntegrationTest {
             public byte[] read(String key, final int limit) {
                 return delegate.read(key, limit);
             }
+
+            @Override
+            public void release(String prefix) {
+                delegate.release(prefix);
+            }
         };
     }
 

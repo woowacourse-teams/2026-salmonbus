@@ -6,4 +6,6 @@ public interface ArchiveObjects {
 
     byte[] read(String key, final int limit);
 
+    /** {@code prefix} 아래 파일이 담은 줄을 DB에서 지웠음을 알린다. 파일을 계속 보관하는 저장소는 아무 일도 하지 않는다. */
+    void release(String prefix);
 }

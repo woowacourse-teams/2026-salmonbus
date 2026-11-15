@@ -523,6 +523,7 @@ public class PartitionExportService {
         switch (result) {
             case DROPPED -> {
                 recordDropped(partition, ledger, System.nanoTime() - started);
+                releaseStored(partition);
                 return new Outcome(true, exported, true);
             }
             case ROW_COUNT_CHANGED -> {
@@ -542,6 +543,16 @@ public class PartitionExportService {
                 failed(partition, result.name(), null);
                 return new Outcome(false, exported, false);
             }
+        }
+    }
+
+    /** 저장소가 파일을 치우지 못해도 떼어 지운 결과는 그대로다. */
+    private void releaseStored(PartitionExportRepository.Partition partition) {
+        try {
+            objects.release(root(partition));
+        } catch (RuntimeException failure) {
+            LOG.warn("event=partition_export status=RELEASE_FAILED table={} date={}", partition.table(),
+                partition.date(), failure);
         }
     }
 

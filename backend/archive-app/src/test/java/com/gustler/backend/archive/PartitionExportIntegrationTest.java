@@ -5,6 +5,10 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.support.TestDatabase;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.time.Clock;
@@ -24,12 +28,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.support.JdbcTransactionManager;
@@ -79,12 +85,12 @@ class PartitionExportIntegrationTest {
         clock = Clock.fixed(Instant.parse("2026-11-15T03:00:00Z"), ZoneOffset.UTC);
     }
 
-    PartitionExportService service(MemoryObjects objects, final boolean dropEnabled) {
+    PartitionExportService service(ArchiveObjects objects, final boolean dropEnabled) {
         return service(objects, dropEnabled, 1000, new SimpleMeterRegistry(), source);
     }
 
     PartitionExportService service(
-        MemoryObjects objects,
+        ArchiveObjects objects,
         final boolean dropEnabled,
         final int pageSize,
         SimpleMeterRegistry metrics,
@@ -140,6 +146,14 @@ class PartitionExportIntegrationTest {
 
     long count(String sql) {
         return jdbc.sql(sql).query(Long.class).single();
+    }
+
+    static List<Path> filesUnder(Path directory) {
+        try (Stream<Path> paths = Files.walk(directory)) {
+            return paths.filter(Files::isRegularFile).toList();
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
     }
 
     boolean exists(String relation) {
@@ -390,9 +404,10 @@ class PartitionExportIntegrationTest {
         // given
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
+        MemoryObjects objects = new MemoryObjects();
 
         // when
-        service(new MemoryObjects(), false).run();
+        service(objects, false).run();
 
         // then
         assertSoftly(softly -> {
@@ -400,6 +415,79 @@ class PartitionExportIntegrationTest {
             softly.assertThat(count("SELECT count(*) FROM forecast_run_p20261112")).isOne();
             softly.assertThat(ledger("forecast_run", DAY).orElseThrow().get("verified_at")).isNotNull();
             softly.assertThat(ledger("forecast_run", DAY).orElseThrow().get("dropped_at")).isNull();
+            softly.assertThat(objects.released).isEmpty();
+        });
+    }
+
+    @Test
+    void 떼어_지운_날짜만_저장소에_알린다() {
+        // given
+        partition("forecast_run", DAY);
+        partition("forecast_run", DAY.plusDays(1));
+        forecastRun(DAY, 1);
+        forecastRun(DAY.plusDays(1), 2);
+        MemoryObjects objects = new MemoryObjects();
+
+        // when
+        service(objects, true).run();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(exists("forecast_run_p20261112")).isFalse();
+            softly.assertThat(exists("forecast_run_p20261113")).isTrue();
+            softly.assertThat(objects.released).containsExactly(PREFIX + "forecast_run/source_date=2026-11-12/");
+        });
+    }
+
+    @Test
+    void 저장소가_파일을_치우지_못해도_떼어_지운_결과는_그대로다() {
+        // given
+        partition("forecast_run", DAY);
+        forecastRun(DAY, 1);
+        MemoryObjects objects = new MemoryObjects();
+        objects.failRelease = true;
+
+        // when
+        PartitionExportService.RunReport report = service(objects, true).run();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(report.dropped()).isOne();
+            softly.assertThat(exists("forecast_run_p20261112")).isFalse();
+            softly.assertThat(ledger("forecast_run", DAY).orElseThrow().get("dropped_at")).isNotNull();
+        });
+    }
+
+    @Test
+    void 폴더_저장소로도_같은_순서로_내보내고_떼어_지운_날짜의_파일만_치운다(@TempDir Path directory) {
+        // given
+        LocalDate earlier = DAY.minusDays(1);
+        partition("forecast_record", DAY);
+        partition("forecast_run", earlier);
+        forecastRecord(DAY, 1, EDGE_DOUBLES);
+        forecastRecord(DAY, 2, "{1,2}");
+        forecastRun(earlier, 3);
+        jdbc.sql("CREATE TABLE copy_record AS SELECT * FROM forecast_record_p20261112").update();
+        DirectoryArchiveObjects objects = new DirectoryArchiveObjects(directory);
+
+        // when
+        service(objects, false).run();
+        Map<String, Object> exported = ledger("forecast_record", DAY).orElseThrow();
+        PartitionRestore.restore(jdbc, objects, (String) exported.get("object_key"),
+            ((String) exported.get("sha256")).trim(), "restored_directory");
+        forecastRun(earlier, 4);
+        PartitionExportService.RunReport report = service(objects, true).run();
+
+        // then
+        assertSameRows("copy_record", "restored_directory");
+        assertSoftly(softly -> {
+            softly.assertThat(report.dropped()).isOne();
+            softly.assertThat(exists("forecast_record_p20261112")).isFalse();
+            softly.assertThat(ledger("forecast_record", DAY).orElseThrow().get("dropped_at")).isNotNull();
+            softly.assertThat(directory.resolve(PREFIX + "forecast_record/source_date=2026-11-12")).doesNotExist();
+            softly.assertThat(exists("forecast_run_p20261111")).isTrue();
+            softly.assertThat(filesUnder(directory.resolve(PREFIX + "forecast_run/source_date=2026-11-11")))
+                .hasSize(2);
         });
     }
 
@@ -680,7 +768,9 @@ class PartitionExportIntegrationTest {
     static final class MemoryObjects implements ArchiveObjects {
         final Map<String, byte[]> values = new HashMap<>();
         final List<String> puts = new ArrayList<>();
+        final List<String> released = new ArrayList<>();
         boolean failManifestOnce;
+        boolean failRelease;
 
         @Override
         public synchronized void putVerified(String key, byte[] bytes) {
@@ -705,6 +795,14 @@ class PartitionExportIntegrationTest {
                 throw new IllegalStateException("LIMIT");
             }
             return bytes.clone();
+        }
+
+        @Override
+        public synchronized void release(String prefix) {
+            if (failRelease) {
+                throw new IllegalStateException("RELEASE_FAILED");
+            }
+            released.add(prefix);
         }
 
         synchronized List<String> manifestRoots() {
