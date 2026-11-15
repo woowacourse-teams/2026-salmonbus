@@ -41,8 +41,8 @@ tasks.named('test') {
     environment 'ROUTE_GEOMETRY_ENABLED', 'false'
     environment 'ROUTE_GEOMETRY_GENERATION_ENABLED', 'false'
     environment 'GBIS_SERVICE_KEY', 'fake-service-key-for-test'
-    // SharedDevWorkerScheduleTest 가 dev 서버 설정을 상대 경로로 읽는다.
-    inputs.file(rootProject.file('../dev/server/worker.yml'))
+    // SharedDevWorkerScheduleTest 가 dev 서버 설정을, SyntheticFixtureSettingTest 가 로컬 설정을 상대 경로로 읽는다.
+    inputs.files(rootProject.file('../dev/server/worker.yml'), rootProject.file('../dev/config/worker.yml'))
         .withPropertyName('devWorkerConfig')
         .withPathSensitivity(PathSensitivity.NONE)
 }

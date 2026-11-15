@@ -7,6 +7,7 @@ import com.gustler.backend.forecasting.application.deployment.ModelBundleLoader;
 import com.gustler.backend.forecasting.application.deployment.ModelStartupService;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -20,9 +21,15 @@ public class ForecastingModelConfiguration {
         return new LoadedModelRegistry();
     }
 
+    /**
+     * 합성 번들 허용({@code model.bundle.allow-synthetic-fixture})은 기본이 꺼짐이고 로컬 개발 설정 파일에서만 켠다.
+     * 운영과 공유 개발 서버의 설정에는 이 키를 두지 않는다.
+     */
     @Bean
-    public ModelBundleLoader modelBundleLoader() {
-        return new FileModelBundleLoader();
+    public ModelBundleLoader modelBundleLoader(
+        @Value("${model.bundle.allow-synthetic-fixture:false}") final boolean allowSyntheticFixture
+    ) {
+        return new FileModelBundleLoader(allowSyntheticFixture);
     }
 
     @Bean

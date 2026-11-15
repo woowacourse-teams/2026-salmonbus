@@ -141,6 +141,31 @@ class CompatiblePreparationTest {
     }
 
     @Test
+    void 예보_기록_초기화는_검토한_과거_판에서만_전환한다() {
+        // given
+        RevisionStore.Revision next = revision(CompatiblePreparation.FORECAST_RECORD_DATA);
+        List<String> reviewed = List.of(CompatiblePreparation.PREVIOUS, CompatiblePreparation.COLLECTED_DATA,
+            CompatiblePreparation.EVALUATION_DATA, CompatiblePreparation.NEXT, CompatiblePreparation.FIXTURE_DIGEST,
+            CompatiblePreparation.PREVIOUS_ALIGHTING_AWARE_EVALUATION_DATA,
+            CompatiblePreparation.ALIGHTING_AWARE_EVALUATION_DATA, CompatiblePreparation.ARCHIVE_DATA,
+            CompatiblePreparation.ALIGHTING_MODEL_DATA, CompatiblePreparation.SINGLE_MODEL_DATA,
+            CompatiblePreparation.DATABASE_CLOCK_DATA, CompatiblePreparation.ENV_MODEL_DATA,
+            CompatiblePreparation.INCREMENTAL_SETTLEMENT_DATA);
+
+        // then
+        assertSoftly(softly -> {
+            for (String previous : reviewed) {
+                softly.assertThat(CompatiblePreparation.permits(revision(previous), next)).as(previous).isTrue();
+                softly.assertThat(CompatiblePreparation.permits(next, revision(previous))).as(previous).isFalse();
+            }
+            softly.assertThat(CompatiblePreparation.permits(next, next)).isFalse();
+            softly.assertThat(CompatiblePreparation.permits(revision("unknown"), next)).isFalse();
+            softly.assertThat(CompatiblePreparation.permits(next, revision("unknown"))).isFalse();
+            softly.assertThat(CompatiblePreparation.permits(revisionWithFiles(Map.of()), next)).isFalse();
+        });
+    }
+
+    @Test
     void 증분_정산_초기화_전환에도_기존_데이터의_변경과_누락을_거절한다() {
         var previous = new TreeMap<String, String>();
         for (String name : DataPreparation.FILES) {
@@ -176,6 +201,6 @@ class CompatiblePreparationTest {
         String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
             .digest((contract + "\n").getBytes(StandardCharsets.UTF_8)));
 
-        assertThat(hash).isEqualTo(CompatiblePreparation.INCREMENTAL_SETTLEMENT_DATA);
+        assertThat(hash).isEqualTo(CompatiblePreparation.FORECAST_RECORD_DATA);
     }
 }

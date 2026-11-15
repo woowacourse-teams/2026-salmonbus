@@ -1,5 +1,6 @@
 package com.gustler.localdata;
 
+import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
 import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader;
 import java.nio.file.Files;
@@ -11,7 +12,7 @@ import tools.jackson.databind.json.JsonMapper;
 public final class ModelParityCheck {
     public static void main(String[] args) {
         try {
-            var release = new FileModelBundleLoader().filesUnder(ReferenceBundle.DIRECTORY).load();
+            ModelRelease release = new FileModelBundleLoader(true).filesUnder(ReferenceBundle.DIRECTORY).load();
             LocalData.require(ReferenceBundle.DIGEST.equals(release.bundleDigest()),"MODEL_PARITY_IDENTITY");
             var json=JsonMapper.builder().build();
             var golden=json.readTree(Files.readAllBytes(Path.of(ReferenceBundle.DIRECTORY).resolve("golden.json")));

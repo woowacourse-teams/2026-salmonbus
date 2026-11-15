@@ -24,10 +24,3 @@ dependencies {
     testRuntimeOnly 'org.postgresql:postgresql'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
-
-tasks.named('test') {
-    // DddStorageMigrationTest 가 아래 파일을 상대 경로로 찾아 읽는다.
-    inputs.files(rootProject.file('../dev/data/java/com/gustler/localdata/LocalData.java'))
-        .withPropertyName('migrationTransitionSources')
-        .withPathSensitivity(PathSensitivity.NONE)
-}
