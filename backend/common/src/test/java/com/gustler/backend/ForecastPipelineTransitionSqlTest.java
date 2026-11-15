@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
@@ -22,6 +23,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.assertj.core.api.SoftAssertions;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -65,6 +67,27 @@ class ForecastPipelineTransitionSqlTest {
             'invalidate_alighting_settlement', 'enqueue_alighting_settlement_batch')
         """;
     private static final String FAST = "SET sal434.observe_seconds = '1'";
+    /** 쓰지 않게 된 객체를 지우는 마이그레이션 바로 앞 버전이다. */
+    private static final String BEFORE_RETIREMENT = "82";
+    private static final String TABLE_NAMES = """
+        SELECT string_agg(tablename, ',' ORDER BY tablename) FROM pg_tables
+        WHERE schemaname = 'public' AND tablename <> ALL (?)
+        """;
+    private static final String VIEW_NAMES =
+        "SELECT string_agg(viewname, ',' ORDER BY viewname) FROM pg_views WHERE schemaname = 'public'";
+    private static final String TRIGGER_DEFINITIONS = """
+        SELECT string_agg(pg_get_triggerdef(oid), E'\\n' ORDER BY pg_get_triggerdef(oid))
+        FROM pg_trigger WHERE NOT tgisinternal
+        """;
+    private static final String FUNCTION_DEFINITIONS = """
+        SELECT string_agg(pg_get_functiondef(p.oid), E'\\n' ORDER BY p.oid::regprocedure::text)
+        FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f'
+            AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid
+                AND d.deptype = 'e')
+        """;
+    /** 틀 DB에만 흉내로 만들어 둔, 마이그레이션에 없는 테이블이다. */
+    private static final String[] OPERATIONS_ONLY_TABLES =
+        { "historical_import_batch", "historical_import_record", "migration_source_record" };
     /** 마이그레이션에는 없고 운영 DB에 직접 만들어 둔 인덱스다. */
     private static final List<String> OPERATIONS_ONLY_INDEXES = List.of(
         "CREATE INDEX ix_archive_evaluation_arrival_fk ON forecast_evaluation_result(arrival_observation_id)",
@@ -407,6 +430,84 @@ class ForecastPipelineTransitionSqlTest {
     }
 
     @Test
+    void 줄이_있는_DB에서는_마이그레이션이_쓰지_않는_테이블과_뷰와_트리거와_함수를_그대로_둔다() throws Exception {
+        // then
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(number("SELECT count(*) FROM flyway_schema_history WHERE success"
+            + " AND script LIKE '%drop_retired_forecast_objects%'")).isOne();
+        softly.assertThat(number(LEGACY_TRIGGERS)).isEqualTo(9);
+        softly.assertThat(number(LEGACY_FUNCTIONS)).isEqualTo(7);
+        softly.assertAll();
+        assertLegacyObjectsPresent();
+    }
+
+    @Test
+    void 줄이_없는_DB에서는_마이그레이션이_쓰지_않는_테이블과_뷰와_트리거와_함수를_모두_지운다() throws Exception {
+        // given
+        try (TestDatabase empty = TestDatabase.create()) {
+            // when
+            flyway(empty).load().migrate();
+
+            // then
+            try (Connection target = empty.connection()) {
+                SoftAssertions softly = new SoftAssertions();
+                for (String relation : concat(LEGACY_TABLES, LEGACY_VIEWS)) {
+                    softly.assertThat(scalarOn(target, "SELECT to_regclass('public." + relation + "')::text"))
+                        .as(relation).isNull();
+                }
+                softly.assertThat(scalarOn(target, LEGACY_TRIGGERS)).isEqualTo("0");
+                softly.assertThat(scalarOn(target, LEGACY_FUNCTIONS)).isEqualTo("0");
+                softly.assertThat(scalarOn(target, VIEW_NAMES)).isEqualTo("forecast_outcome,operational_observation");
+                softly.assertThat(scalarOn(target, "SELECT count(*) FROM forecast_run")).isEqualTo("0");
+                softly.assertThat(scalarOn(target, "SELECT count(*) FROM vehicle_observation")).isEqualTo("0");
+                softly.assertAll();
+            }
+        }
+    }
+
+    @Test
+    void 쓰지_않는_테이블_하나에_줄이_하나만_있어도_아무것도_지우지_않는다() throws Exception {
+        // given
+        try (TestDatabase single = TestDatabase.create()) {
+            flyway(single).target(BEFORE_RETIREMENT).load().migrate();
+            String before;
+            try (Connection target = single.connection(); Statement statement = target.createStatement()) {
+                statement.execute("""
+                    INSERT INTO model_training_exclusion(release_id, bundle_digest, calculation_version,
+                        statistics_baseline_count, statistics_baseline_not_after, classification, decision_reference,
+                        recorded_at)
+                    VALUES ('r', repeat('a', 64), 'c', 0, now(), 'OPERATOR_EXCLUDED', 'd', now())
+                    """);
+                before = schemaShape(target);
+            }
+
+            // when
+            flyway(single).load().migrate();
+
+            // then
+            try (Connection target = single.connection()) {
+                assertThat(schemaShape(target)).isEqualTo(before);
+            }
+        }
+    }
+
+    @Test
+    void 수동_SQL로_지운_DB와_줄이_없어_마이그레이션이_지운_DB는_테이블과_뷰와_트리거와_함수가_같다() throws Exception {
+        // given
+        try (TestDatabase empty = TestDatabase.create()) {
+            flyway(empty).load().migrate();
+
+            // when
+            retireLegacyTables();
+
+            // then
+            try (Connection target = empty.connection()) {
+                assertThat(schemaShape(connection)).isEqualTo(schemaShape(target));
+            }
+        }
+    }
+
+    @Test
     void 옛_테이블을_지운_뒤에도_Flyway의_검증과_마이그레이션이_통과한다() throws Exception {
         // given
         retireLegacyTables();
@@ -660,16 +761,23 @@ class ForecastPipelineTransitionSqlTest {
             + "ORDER BY (to_jsonb(t) ->> 'id')::bigint) FROM " + tableAndFilter.replaceFirst("^(\\w+)", "$1 t"));
     }
 
-    private String triggerDefinitions() throws SQLException {
-        return scalar("SELECT string_agg(pg_get_triggerdef(oid), E'\\n' ORDER BY pg_get_triggerdef(oid)) "
-            + "FROM pg_trigger WHERE NOT tgisinternal");
-    }
-
-    private String functionDefinitions() throws SQLException {
-        return scalar("SELECT string_agg(pg_get_functiondef(p.oid), E'\\n' ORDER BY p.oid::regprocedure::text) "
-            + "FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prokind = 'f' "
-            + "AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid "
-            + "AND d.deptype = 'e')");
+    /** 테이블·뷰 이름과 사용자 트리거·함수 정의를 한 글로 낸다. 틀 DB에만 있는 테이블은 뺀다. */
+    private static String schemaShape(Connection target) throws SQLException {
+        StringBuilder shape = new StringBuilder();
+        try (PreparedStatement tables = target.prepareStatement(TABLE_NAMES)) {
+            tables.setArray(1, target.createArrayOf("text", OPERATIONS_ONLY_TABLES));
+            try (ResultSet row = tables.executeQuery()) {
+                row.next();
+                shape.append("tables=").append(row.getString(1)).append('\n');
+            }
+        }
+        for (String query : List.of(VIEW_NAMES, TRIGGER_DEFINITIONS, FUNCTION_DEFINITIONS)) {
+            try (Statement statement = target.createStatement(); ResultSet row = statement.executeQuery(query)) {
+                row.next();
+                shape.append(row.getString(1)).append('\n');
+            }
+        }
+        return shape.toString();
     }
 
     private String catalogFingerprint() throws SQLException {
@@ -808,7 +916,7 @@ class ForecastPipelineTransitionSqlTest {
             return template;
         }
         TestDatabase database = TestDatabase.create();
-        Flyway.configure().dataSource(database.jdbcUrl(), database.username(), database.password()).load().migrate();
+        flyway(database).target(BEFORE_RETIREMENT).load().migrate();
         try (Connection setup = database.connection(); Statement statement = setup.createStatement()) {
             statement.execute("""
                 INSERT INTO route(id,public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
@@ -866,8 +974,20 @@ class ForecastPipelineTransitionSqlTest {
                 statement.execute(index);
             }
         }
+        flyway(database).load().migrate();
         template = database;
         return template;
+    }
+
+    private static FluentConfiguration flyway(TestDatabase database) {
+        return Flyway.configure().dataSource(database.jdbcUrl(), database.username(), database.password());
+    }
+
+    private static String scalarOn(Connection target, String sql) throws SQLException {
+        try (Statement statement = target.createStatement(); ResultSet row = statement.executeQuery(sql)) {
+            row.next();
+            return row.getString(1);
+        }
     }
 
     private static void admin(TestDatabase database, String sql) throws SQLException {

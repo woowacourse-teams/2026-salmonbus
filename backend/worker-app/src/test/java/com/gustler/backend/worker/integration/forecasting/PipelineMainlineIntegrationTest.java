@@ -154,8 +154,7 @@ class PipelineMainlineIntegrationTest {
         pipeline.states().remove(ModelRoute.of(SOURCE_ROUTE));
         jdbc.sql("DELETE FROM vehicle_capacity WHERE vehicle_id IN (:vehicles)").param("vehicles", VEHICLES).update();
         jdbc.sql("TRUNCATE forecast_run, forecast_record, stop_pass, pass_label, forecast_unresolved").update();
-        jdbc.sql("TRUNCATE route, alighting_settlement_generation, model_deployment, daily_call_quota CASCADE")
-            .update();
+        jdbc.sql("TRUNCATE route, model_deployment, daily_call_quota CASCADE").update();
     }
 
     @Test
@@ -192,12 +191,6 @@ class PipelineMainlineIntegrationTest {
             softly.assertThat(outcomeCount(OPEN_STOPS, "= 'PENDING'")).isPositive();
             softly.assertThat(outcomeCount(OPEN_STOPS, "<> 'PENDING'")).isZero();
             softly.assertThat(scoredRows()).isPositive();
-            softly.assertThat(count("""
-                SELECT count(*) FROM seat_forecast f JOIN vehicle_observation o ON o.id = f.vehicle_observation_id
-                WHERE o.observation_batch_id IN (:batches)
-                """, batches)).isZero();
-            softly.assertThat(count("SELECT count(*) FROM forecast_publication WHERE source_batch_id IN (:batches)",
-                batches)).isZero();
             softly.assertThat(count("""
                 SELECT count(*) FROM observation_batch WHERE id IN (:batches) AND input_confirmed_at IS NOT NULL
                 """, batches)).isZero();

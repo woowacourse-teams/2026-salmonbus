@@ -42,7 +42,6 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -73,9 +72,6 @@ class ForecastPipelineMainlineTest {
     private static final String SOURCE_ROUTE_ID = "234001739";
     private static final String MODEL_ROUTE = "6801";
     private static final int MAXIMUM_ROWS = 250_000;
-    private static final List<String> UNTOUCHED_TABLES = List.of("seat_forecast", "forecast_publication",
-        "alighting_forecast_evaluation_work", "alighting_forecast_evaluation_result", "alighting_settlement_batch_work",
-        "alighting_history_checkpoint");
 
     @Autowired
     JdbcClient jdbc;
@@ -101,7 +97,6 @@ class ForecastPipelineMainlineTest {
         ForecastValueBaseline baseline = ForecastValueBaseline.read("forecast/mainline-20261201");
         harness.startMainline(Duration.ofHours(6), 20);
         harness.mainlineFromVerifiedOrigin();
-        Map<String, Long> untouchedBefore = untouchedCounts();
 
         // when
         harness.batches().forEach(harness::mainline);
@@ -109,7 +104,6 @@ class ForecastPipelineMainlineTest {
         // then
         ForecastValueBaseline.Comparison comparison = baseline.compare(jdbc, harness.keys, harness.batches());
         assertSoftly(softly -> {
-            softly.assertThat(untouchedCounts()).isEqualTo(untouchedBefore);
             softly.assertThat(jdbc.sql("""
                 SELECT count(*) FROM observation_batch
                 WHERE route_version_id IN (:versions) AND input_confirmed_at IS NOT NULL
@@ -354,14 +348,6 @@ class ForecastPipelineMainlineTest {
                 """).param("lost", lost).param("at", pickedAt.atOffset(ZoneOffset.UTC)).query(Long.class).single())
                 .isEqualTo(lost.size());
         });
-    }
-
-    private Map<String, Long> untouchedCounts() {
-        Map<String, Long> counts = new LinkedHashMap<>();
-        for (String table : UNTOUCHED_TABLES) {
-            counts.put(table, jdbc.sql("SELECT count(*) FROM " + table).query(Long.class).single());
-        }
-        return counts;
     }
 
     private long runCount(Harness harness) {

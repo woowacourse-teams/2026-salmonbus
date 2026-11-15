@@ -38,6 +38,8 @@ import org.springframework.jdbc.support.JdbcTransactionManager;
 class LegacyExportIntegrationTest {
     static final String PREFIX = "salmonbus/test/lake-v3-legacy/";
     static final long MIN_SEGMENT = LegacyExportSettings.MIN_SEGMENT_BYTES;
+    /** 쓰지 않게 된 테이블을 지우는 마이그레이션 바로 앞 버전이다. 그 뒤로는 줄이 있는 DB에만 이 테이블들이 남는다. */
+    static final String BEFORE_RETIREMENT = "82";
     static final List<String> USED = List.of("seat_forecast", "model_training_exclusion",
         "statistics_training_exclusion", "alighting_settlement_generation", "legacy_types", "legacy_without_key",
         "legacy_interval");
@@ -51,8 +53,15 @@ class LegacyExportIntegrationTest {
     void migrate() {
         database = TestDatabase.create();
         source = new DriverManagerDataSource(database.jdbcUrl(), database.username(), database.password());
-        Flyway.configure().dataSource(source).load().migrate();
         jdbc = JdbcClient.create(source);
+        Flyway.configure().dataSource(source).target(BEFORE_RETIREMENT).load().migrate();
+        jdbc.sql("""
+            INSERT INTO model_training_exclusion(release_id, bundle_digest, calculation_version,
+                statistics_baseline_count, statistics_baseline_not_after, classification, decision_reference,
+                recorded_at)
+            VALUES ('kept', repeat('a', 64), 'c', 0, now(), 'OPERATOR_EXCLUDED', 'd', now())
+            """).update();
+        Flyway.configure().dataSource(source).load().migrate();
         jdbc.sql("""
             DO $$ DECLARE r record; BEGIN
                 FOR r IN SELECT conrelid::regclass AS relation, conname FROM pg_constraint

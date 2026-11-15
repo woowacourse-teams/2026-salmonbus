@@ -102,8 +102,6 @@ class MainlineScoringPipelineTest {
             softly.assertThat(comparison.same()).isGreaterThan(1_000);
             softly.assertThat(jdbc.sql("SELECT count(*) FROM pass_label WHERE route_id=? AND state='SETTLED'")
                 .param(harness.stream.routeId()).query(Long.class).single()).isPositive();
-            softly.assertThat(jdbc.sql("SELECT count(*) FROM seat_forecast WHERE route_version_id IN (:versions)")
-                .param("versions", harness.versions()).query(Long.class).single()).isZero();
             softly.assertThat(jdbc.sql("""
                 SELECT count(*) FROM model_deployment WHERE id=? AND jsonb_exists(settlement_context, ?)
                 """).params(harness.runtime.deploymentId(), Long.toString(harness.versions().getFirst()))

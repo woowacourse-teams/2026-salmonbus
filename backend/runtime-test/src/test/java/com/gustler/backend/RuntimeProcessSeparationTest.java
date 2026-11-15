@@ -195,8 +195,6 @@ class RuntimeProcessSeparationTest {
             FROM information_schema.columns
             WHERE table_schema = 'public' AND (
                 (table_name = 'observation_batch' AND column_name = 'forecast_completed_at')
-                OR (table_name = 'seat_forecast'
-                    AND column_name IN ('scoring_state', 'arrival_observation_id', 'seats_on_arrival', 'scored_at'))
                 OR (table_name = 'route' AND column_name = 'quality_revision')
                 OR (table_name = 'route_version'
                     AND column_name IN ('maximum_observation_gap_seconds', 'observation_gap_evidence'))
@@ -404,9 +402,8 @@ class RuntimeProcessSeparationTest {
         assertThat(queryStrings("""
             SELECT DISTINCT event_object_table FROM information_schema.triggers
             WHERE trigger_schema = 'public' AND trigger_name = 'runtime_test_write_audit'
-            """)).contains("observation_batch", "forecast_publication", "forecast_evaluation_work",
-            "forecast_evaluation_result", "route",
-            "daily_call_quota", "model_deployment");
+            """)).contains("observation_batch", "vehicle_observation", "forecast_run", "forecast_record", "stop_pass",
+            "pass_label", "forecast_unresolved", "route", "daily_call_quota", "model_deployment");
         assertNoWrites();
     }
 
@@ -442,8 +439,6 @@ class RuntimeProcessSeparationTest {
             FROM information_schema.columns
             WHERE table_schema = 'public' AND (
                 (table_name = 'observation_batch' AND column_name = 'forecast_completed_at')
-                OR (table_name = 'seat_forecast'
-                    AND column_name IN ('scoring_state', 'arrival_observation_id', 'seats_on_arrival', 'scored_at'))
                 OR (table_name = 'route' AND column_name = 'quality_revision')
                 OR (table_name = 'route_version'
                     AND column_name IN ('maximum_observation_gap_seconds', 'observation_gap_evidence'))
