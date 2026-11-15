@@ -110,8 +110,11 @@ GitHub push 웹훅이 파이프라인을 시작한다. 파이프라인별 웹훅
 릴리즈 PR을 머지하기 전에 후보 커밋으로 bootJar를 만들고 `backend/buildspec.yml`의 패키징과 `deploy/verify-revision.sh`를 실제 JAR에 돌려 통과를 확인한다.
 이 검사는 운영 빌드에서만 실제 JAR로 돈다. dev 빌드는 이 검사를 거치지 않아, v1.0.0은 운영 빌드에서 이 검사에 처음 걸려 실패했다.
 
-dev 파이프라인은 `dev/server/buildspec.yml`로 빌드하고 `dev/server/deploy`의 훅으로 배포한다. dev 배포는 `dev/data/java`·`dev/data/models`·
-`ForecastFeatureContract.java`가 바뀌면 데이터 전환 승인을 요구하며 멈춘다. 그 밖의 변경(마이그레이션 포함)은 이 승인 단계에서 멈추지 않는다.
+dev 파이프라인은 `dev/server/buildspec.yml`로 빌드하고 `dev/server/deploy`의 훅으로 배포한다. dev 배포는 초기 데이터가 달라지는 변경이면
+API의 BeforeInstall에서 `DEV_DATA_CHANGE_REQUIRES_PLAN`으로 멈춘다. 노선 데이터(`dev/data/routes.json`·`catalog-routes.json`)나
+`dev/server/compose.yaml`이 바뀐 경우, 그리고 데이터 계약 지문(`dev/data/java`와 `AlightingAwareFeatureVector.java`로 계산한다)이
+`dev/server/tools`의 `CompatiblePreparation`에 적어 둔 검토 순서를 따르지 않는 값으로 바뀐 경우다.
+그 밖의 변경(마이그레이션, 모델 번들 포함)은 여기서 멈추지 않는다.
 
 ```text
 Source   GitHub main에서 코드를 가져온다
@@ -301,18 +304,6 @@ sudo systemctl restart "salmonbus-${C}"
 한도 10,000회 중 두 노선 수집에 8,556회를 사용한다. `start.sh`는 `restart`를 사용하지 않고
 `stop` 후 프로세스가 완전히 종료됐는지 확인한 다음 `start`를 실행한다.
 
-### 예보 정산 저장 형식 롤백
-
-`FORECAST_COMPACT_SETTLEMENT_WRITE=false`로 두 형식을 읽는 worker를 먼저 배포하고, 기동과 기존 예보 정산을 확인한다.
-이 리비전의 배포 패키지와 소스 지문을 롤백 대상으로 보관한 뒤 `true`로 전환한다.
-
-전환 후 되돌릴 때는 `worker.env`에서 다시 `false`로 설정하고, 보관한 두 형식 지원 리비전으로 worker를 복구한다.
-복구된 worker는 새 예보를 전체 형식으로 쓰고, 이미 정원만 저장한 예보도 계속 정산한다. 운영에서 기존 행을 일괄 수정할 필요는 없다.
-기동 후 정산 대기 건수와 두 오류 사유의 신규 결과를 확인한다.
-
-v1.7.0 worker가 정원만 저장한 예보의 정산 작업을 처리하면 v2는 `MISSING_REAL_STOP_CONTRACT`, v3는 `INPUT_PROFILE_MISMATCH`로 종결하고 대기 작업을 삭제한다.
-이 상태에서 두 형식을 읽는 worker를 다시 올려도 해당 라벨은 자동으로 복구되지 않는다. 그런 결과가 생겼다면 발생 범위와 원관측 보존 여부부터 확인한다.
-
 ## 수집 활성화·비활성화
 
 ```bash
@@ -356,37 +347,6 @@ journalctl -u salmonbus-worker | grep 'event=stop_walk_distances'   # loaded res
 - 지금 적재된 파일과 같으면 `result=UNCHANGED`로 쓰지 않는다. 배포로 재시작할 때마다 같은 파일을 다시 쓰지 않는다.
 - 되돌리려면 이전 파일 두 개를 같은 디렉터리에 두고 재시작한다.
 - 파일이 없으면 `event=stop_walk_distances_missing`을 남기고 건너뛴다. 수집을 끈 Worker는 읽지 않는다.
-
-## 운영 첫 V39 전환
-
-운영 데이터가 있는 DB에서는 prepare 승인 없이 V39가 실행되지 않는다. 승인 없이 새 배포 버전을 내보내면 API의 BeforeInstall에서 멈춘다.
-
-```text
-1. 자동 배포와 정비 작업을 멈춘다. 같은 DB에 붙은 psql 같은 수동 세션은 자동 검사가 막지 않으므로 직접 정리한다
-2. 배포 전 DB 백업을 확인한다. prepare는 백업을 만들거나 검증하지 않는다
-3. 새 배포 버전의 scripts/와 sql/이 나란히 있는 디렉터리에서 실행한다
-   sudo bash scripts/evaluation-work-transition.sh prepare <백업 식별자>
-4. API를 배포한다. API의 Flyway가 V39까지 적용한다
-5. worker를 배포한다. worker는 V39가 적용된 DB에서만 시작한다
-```
-
-prepare는 다음을 확인한 뒤 worker를 멈추고 30분짜리 승인을 DB에 남긴다. 어느 하나라도 안 되면 멈춘다.
-
-- `api.env`와 `worker.env`가 같은 DB를 가리킨다. 호스트·포트·DB 이름·계정이 같아야 한다. URL 쿼리에는 `connectTimeout`·`socketTimeout`·`tcpKeepAlive`와 `options`의 `join_collapse_limit`·`from_collapse_limit`·`geqo_threshold`만 쓸 수 있고, 이 값들은 두 파일에서 달라도 된다. 그 밖의 키는 두 파일에 같은 값으로 들어 있어도 멈추므로, 전환 전에 두 파일에서 빼거나 허용 목록을 먼저 고친다
-- 기존 대기 테이블 구조다. **Flyway 버전은 보지 않는다.** 앞선 시도가 일부 마이그레이션을 남겼는지는 사람이 확인한다
-- worker와 정비 연결이 남아 있지 않다
-
-30분 승인은 API의 BeforeInstall·ApplicationStart·기동 전 검사와 V39 안에서 확인한다. V39가 끝나면 승인 기록은 지워지고 worker에는 시한이 없다.
-
-**V39가 적용된 뒤에는 옛 JAR가 기동 검사에 막힌다.** CodeDeploy 자동 롤백이 옛 배포 버전으로 바꾸면 서비스가 멈춘 채 남는다.
-이전 버전으로 돌아가려면 배포 전 DB와 그 DB에 맞는 이전 배포 파일을 함께 복구한 뒤 실행한다.
-
-```bash
-sudo bash /etc/salmonbus/evaluation-work-transition.sh resume-legacy
-```
-
-DB의 Flyway 최대 버전과 두 앱 `current`의 `flywayMaxVersion`이 같아야 차단이 풀린다. 서비스는 시작하지 않는다.
-V39 전용 롤백 SQL은 V38까지만 되돌리므로 V38 배포 파일이 없으면 쓸 수 없다. V40 이후가 적용된 DB에서는 롤백 SQL이 실행을 거부한다.
 
 ## 도착 정보·노선 형상 켜기
 
@@ -589,79 +549,30 @@ V75는 기존 `push_device` 행을 지운다. 발송 기록은 기기 외래 키
 
 ## 운영 원본 이관
 
-Worker의 정산 단독 S3 이관은 제거했다. `archive-app`은 수집·예보와 별도 프로세스다.
-새 스키마 migration을 API에서 적용하기 전 구 Worker 이관/복원 작업과 수요 재구축을 종료한다.
-V66은 첫 데이터 변경 전에 실행 중인 구 Worker와 미완료 이관/재구축을 검사한다. 조건을 만족하지 못하면 품질 테이블과 뷰를 지우기 전에 전환을 거부한다. 기존 S3 파일은 지우지 않는다.
+`archive-app`은 수집·예보와 별도 프로세스다. 닫힌 날짜의 예보 기록을 S3로 내보내고, SAL-434가 지울 옛 테이블을 통째로 내보낸다.
 
 `deploy/package-archive-revision.sh`가 별도 JAR·unit과 소스/아티팩트 지문을 만든다.
-운영 환경을 `/etc/salmonbus/archive.env`에 설정하고 동일 환경의 새 prefix만 사용한다.
+운영 환경은 `/etc/salmonbus/archive.env`에 설정한다.
 `archive.env.example`은 값 목록이며 실사용 비밀 파일이 아니다.
 프로세스는 `/opt/salmonbus/archive/current/jars/archive-app.jar`에서 실행한다.
 unit의 256MiB heap/384MiB MemoryMax/CPUQuota=50%는 초기 제한값으로 서버 여유에 맞게 확인한다.
 DB 연결은 최대 1개이며 nice만으로 자원 격리가 된다고 보지 않는다.
+웹 서버를 띄우지 않으므로 지표의 외부 수집은 실행 환경에서 따로 연결해야 하며 구조화 로그는 journal과 Loki에서 읽는다.
 
-처음에는 ARCHIVE_ENABLED=true, ARCHIVE_DELETE_ENABLED=false로 보관·재읽기를 검증한다.
-검증된 과거 범위만 지울 때 delete-enabled를 활성화한다.
-먼저 실제 pg_indexes를 확인하고 누락된 삭제 FK 인덱스만
-`deploy/sql/prepare-operational-archive-indexes.sql`로 한 개씩 준비한다.
-큰 테이블 index는 추가 공간과 I/O를 쓰므로 여유를 확인하기 전 자동 실행하지 않는다.
-인덱스가 없으면 새 앱은 보관은 수행하되 원본 삭제를 거부한다. KST 오늘·어제는 보존한다.
-수집·새 모델 정산이 미완료인 노선은 로그에 보류 사유를 남기고 다른 노선으로 진행한다. 구 수요 통계 완료는 기다리지 않는다.
-새 모델의 `alighting_forecast_evaluation_work`도 같은 완료 조건에 포함하며 결과·구 이관 참조를 예보보다 먼저 보관·삭제한다.
-새 모델 정산 근거 중 남아 있는 관측 FK도 준비 SQL의 인덱스 검사를 통과해야 삭제할 수 있다. 정원 근거 관측 FK는 V70에서 제거하며 기존 숫자 ID는 과거 결과 해석용으로만 남긴다.
-`COLLECTION_PENDING`은 RESERVED/DISPATCHING 수집 기록이다. 예보의 2시간 정산 만료와 별개다.
-2026-11-09 읽기 전용 조사에서 과거 실패 기록 687건(모두 관측 0행)이 26개 노선 버전에 남아 있었다.
-이 기록은 이관을 막아 별도 승인한 일회성 작업으로 상태만 종료했다.
-687행을 보존했고 전송 전 중단 133건, 전송 후 결과 미확정 554건으로 구분했다.
-해당 작업의 커밋 후 재조회에서 대상 미완료는 0건이고 outcome 이외의 필드는 모두 동일했다.
-전송 전 예약과 전송 후 결과 미확인을 구분해 종료해야 하며, 오래된 요청을 다시 보내 과거 관측으로 저장하면 안 된다.
-과거 기록을 성공으로 바꾸거나 삭제하지 않는다. 이후 재발 처리는 아래 수집 회차 경계 절차를 따른다.
-삭제 전에 모델 입력 동등성, 확인된 관측 이력 체크포인트와 차량 정원 이력 인계를 확인해야 한다.
-
-전환 기준은 Git 머지 시각이 아니라 구 Worker 이관 중지와 새 버전 배포 완료 시점이다.
-이후 archive-app은 새 prefix만 읽고 쓴다. 옛 S3 다운로드/변환/합치기는 운영 코드에 없다.
-DB에 남은 과거 원본도 기존 완료 판정에 따라 새 prefix로 이관한다. 배포 후 생성 행만으로 제한하지 않는다.
-기존 S3 파일은 배포 뒤 별도 일회성 수동 이관으로 처리한다. 구 writer 중지를 확인한 뒤
-대상 key/version/크기/해시 목록을 고정하고, 새 형식과 경로에 보관해 행 수·키·값·해시를 대조한다.
-기존 정산과 새 관측·예보는 원본 ID/대상 정류장 키로 연결하고, 중복 데이터는 키·해시로 검증한다.
-수동 작업의 완료·검증 전 기존 S3 객체나 archive_legacy_batch의 인계 메타데이터를 지우지 않는다.
-옛 멤버 행은 DB 원본과 함께 먼저 새 S3 원본 파일에 보관되므로 DB에서 삭제돼도 인계 근거는 남는다.
-기존 객체 삭제는 수동 인계 검증·읽기 전환 뒤 정확한 객체 목록으로 별도 수행한다.
-새 파일은 원본 JSONL gzip과 manifest다. 분석 Parquet는 이후 검증 원본에서 만든다.
-운영 과거 재발행·DB 복원은 중지하고 S3 기반 오프라인 작업으로 분리한다.
-
-### 이관 순서와 잠금
-
-내보내기 전 작업은 다음 순서로 진행한다.
-
-1. 노선 행 잠금 안에서 남은 일(하차 이력 보존, 수집 미완료, 하차 정산 대기)을 확인하고, 없으면 그 날짜 끝까지 `operational_archive_boundary`를 닫는다. 남은 일이 있으면 닫지 않고 60초 뒤에 다시 본다.
-2. 닫은 날짜의 최근 기록(보관 기준 시각 뒤의 예보·정산)을 노선 잠금 없이 읽기 전용 트랜잭션으로 한 번 확인한다. 있으면 `RECENT_CHILD_RECORD`로 다음 한국 자정까지 보류한다. 닫은 날짜는 경계로 닫혀 있다.
-3. 노선 잠금 없이 내보내고 S3에서 다시 읽어 검증한다.
-4. 삭제 시도를 시작할 때 노선 잠금 안에서 남은 일을 한 번 다시 본다. 파일마다는 임대, 닫힌 경계, 하차 이력 보존 조건만 보고 지운다. 하차 이력 보존 조건이 생기면 지우지 않고 보류하며, 경계가 닫혀 있지 않으면 `ARCHIVE_BOUNDARY_OPEN`으로 실패한다.
-
-내보내기를 마친 작업(`VERIFIED`, `PURGING`)은 4번부터 이어 간다. 닫힌 날짜에는 예보 발행이 거부되고 하차 정산 대기도 생기지 않으므로 최근 기록 확인을 다시 하지 않는다. 이관 대상 테이블을 바꾸는 마이그레이션이나 `alighting-evaluation-restore`처럼 경계를 보지 않는 정비 작업은 이관 앱을 멈추고 실행한다.
-
-노선 잠금을 쥐는 문장(닫기, 남은 일 확인, 파일 삭제)은 문장 10초, 잠금 200ms로 제한한다. 잠금을 200ms 안에 얻지 못하면(`55P03`) 같은 단계를 1초 쉬고 세 번까지 다시 시도한 뒤 실패로 남긴다. 다시 시도는 `status=LOCK_RETRY` 로그와 `salmonbus_archive_lock_retries` meter로 보인다. 최근 기록 확인과 내보내기 조회는 `ARCHIVE_READ_TIMEOUT`(기본 120초, 1초~4분)으로 제한한다. 최근 기록 확인에 걸린 시간은 `status=RECENT_CHECKED`의 `durationMs`로 남는다.
-
-I/O 크레딧이 내려가면 `ARCHIVE_PURGE_PAUSE`(기본 0초, 최대 1분)로 파일 삭제 사이에 쉬는 시간을 두고 이관 서비스만 재시작한다. 재배포는 필요 없다.
+이전 이관이 S3에 올려 둔 기존 객체는 지우지 않는다. 지울 일이 생기면 인계 검증을 마친 뒤 정확한 객체 목록으로 따로 한다.
 
 ### 옛 이관 기록 테이블의 FK 정리
 
 `historical_import_record`, `migration_source_record`는 SAL-122 이관 도구가 만든 장부이고 Flyway 마이그레이션에는 없다. 두 테이블의 `observation_batch` 참조 FK가 노선 버전 1·2의 08-14~09-02 수집 배치 삭제를 막는다. 별도 승인을 받은 뒤 아래 순서로 FK 제약만 지운다. 테이블과 행은 남긴다.
 
 1. 두 테이블을 행 단위 JSON으로 내보낸다. 예: `\copy (SELECT to_jsonb(t)::text FROM historical_import_record t ORDER BY 1) TO 'historical_import_record.jsonl'`. 줄 수가 `count(*)`와 같은지 확인한다.
-2. gzip으로 묶어 SHA-256을 기록하고 `ARCHIVE_PREFIX` 아래 `manual/historical-import-records/`에 올린다. 다시 내려받아 해시와 줄 수가 같은지 확인한다.
+2. gzip으로 묶어 SHA-256을 기록하고 `ARCHIVE_LEGACY_EXPORT_PREFIX` 아래 `manual/historical-import-records/`에 올린다. 다시 내려받아 해시와 줄 수가 같은지 확인한다.
 3. Worker와 이관 앱을 멈추고 `deploy/sql/drop-historical-import-batch-fks.sql`을 실행한다. 마지막 조회에 두 테이블의 제약이 없어야 한다.
 4. Worker와 이관 앱을 다시 시작한다. 11-13에 운영에 직접 만든 `ix_archive_historical_import_target_batch_fk`는 이 뒤로 쓰이지 않지만 지우는 것은 따로 정한다.
 
-지표는 `event=operational_archive`의 VERIFIED_FILE/DONE/DEFERRED/FAILED와
-salmonbus_archive_rows/bytes/stage meter다. 현재 비웹 앱이므로 meter의 외부 수집은
-실행 환경에서 별도 연결해야 하며 구조화 로그는 기존 journal/Loki에서 읽는다.
-삭제는 DB 내부 재사용을 늘리며 RDS 여유 파일 공간의 즉시 축소를 보장하지 않는다.
-
 ### 날짜 단위 내보내기
 
-새 예보 경로의 기록 테이블 다섯 개(`forecast_run`, `forecast_record`, `stop_pass`, `pass_label`, `forecast_unresolved`)는 `source_date`(한국 날짜)로 나뉜다. 이관 앱은 닫힌 날짜의 파티션(`<table>_pYYYYMMDD`)을 통째로 S3에 내보내고, 다시 읽어 확인한 뒤, 설정이 허락하면 떼어 지운다. 위의 줄 단위 이관과는 테이블·장부·S3 접두가 겹치지 않고 따로 돈다. 노선 행 잠금은 잡지 않는다.
+예보 기록 테이블 다섯 개(`forecast_run`, `forecast_record`, `stop_pass`, `pass_label`, `forecast_unresolved`)는 `source_date`(한국 날짜)로 나뉜다. 이관 앱은 닫힌 날짜의 파티션(`<table>_pYYYYMMDD`)을 통째로 S3에 내보내고, 다시 읽어 확인한 뒤, 설정이 허락하면 떼어 지운다.
 
 스위치(`/etc/salmonbus/archive.env`, 바꾸면 이관 서비스만 재시작한다):
 
@@ -670,17 +581,17 @@ salmonbus_archive_rows/bytes/stage meter다. 현재 비웹 앱이므로 meter의
 | `ARCHIVE_PARTITION_EXPORT_ENABLED` | `false` | 켜야 빈이 생긴다. 꺼져 있으면 카탈로그도 읽지 않는다 |
 | `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED` | `false` | 확인을 마친 파티션을 떼어 지운다 |
 | `ARCHIVE_PARTITION_EXPORT_RETENTION_DAYS` | `3` | 오늘 포함 DB에 남기는 날 수(2~30). `source_date <= 오늘 - 3`이 대상이다 |
-| `ARCHIVE_PARTITION_EXPORT_PREFIX` | `salmonbus/prod/lake-v3/` | `ARCHIVE_PREFIX`와 서로 포함하면 기동하지 않는다 |
+| `ARCHIVE_PARTITION_EXPORT_PREFIX` | `salmonbus/prod/lake-v3/` | S3 키 접두. 영문·숫자·`/`·`_`·`=`·`-`만 쓰고 `/`로 끝낸다. `/`나 `salmonbus-be/`로 시작하면 기동하지 않는다 |
 | `ARCHIVE_PARTITION_EXPORT_INTERVAL` | `1h` | 회차 사이 쉬는 시간(1분~24시간). 기동 1분 뒤 첫 회차 |
 | `ARCHIVE_PARTITION_EXPORT_PAGE_SIZE` | `2000` | 한 번에 읽는 줄 수(1~10000) |
 | `ARCHIVE_PARTITION_EXPORT_LOCK_TIMEOUT` | `2s` | 떼어 지울 때 잠금을 기다리는 시간(100ms~10초) |
 
-값이 범위를 벗어나면 기동하지 않는다. `ARCHIVE_ENABLED`와는 따로 켠다. 두 작업은 같은 스케줄러 스레드와 DB 연결 1개를 나눠 쓰므로 한쪽이 도는 동안 다른 쪽은 기다린다.
+값이 범위를 벗어나면 기동하지 않는다.
 
 켜는 순서:
 
 1. `ARCHIVE_PARTITION_EXPORT_ENABLED=true`, `DROP_ENABLED=false`로 내보내기만 한다. `status=EXPORTED`·`status=VERIFIED` 로그와 `daily_export`의 `verified_at`을 본다.
-2. 하루치를 아래 "되살리는 방법"으로 S3 파일만 써서 되살려 원본 파티션과 줄 단위로 같은지 확인한다. 예측별 결과를 옛 결과 줄과 맞춰 보는 확인도 이 단계에서 한다.
+2. 하루치를 아래 "되살리는 방법"으로 S3 파일만 써서 되살려 원본 파티션과 줄 단위로 같은지 확인한다.
 3. `DROP_ENABLED=true`로 바꾸고 재시작한다. `status=DROPPED`와 `daily_export.dropped_at`을 본다.
 
 S3 구조:
@@ -692,7 +603,7 @@ S3 구조:
 
 - 한 줄은 `to_jsonb(row)::text` 원문, 줄 끝 `\n`, gzip이다. 파일 하나는 평문 8MiB 안팎에서 나눈다. 파일 번호 순서로 이어 붙이면 기본 키 순서의 전체 줄이다.
 - manifest(JSON)는 `format`(`salmonbus-partition-v1`), `table`, `sourceDate`, `partition`, `rows`, `orderBy`(기본 키), `columns`(이름과 `format_type` 표기, 부모 테이블 열 순서), `exportedAt`, `files`(`number`, `key`, `sha256`, `rows`, `bytes`)를 담는다.
-- 올릴 때는 줄 단위 이관과 같은 조건부 PUT(`If-None-Match: *`)·SHA-256 체크섬·다시 읽어 바이트 비교를 쓴다. 파일 이름이 내용 해시라 같은 내용을 다시 올려도 겹치지 않는다.
+- 올릴 때는 조건부 PUT(`If-None-Match: *`)·SHA-256 체크섬·다시 읽어 바이트 비교를 쓴다. 파일 이름이 내용 해시라 같은 내용을 다시 올려도 겹치지 않는다.
 - 장부 `daily_export`는 (테이블, 날짜)마다 한 줄이고 `object_key`·`sha256`은 manifest의 키와 해시다. manifest와 모든 파일을 다시 읽어 해시·줄 수를 확인한 뒤에만 적는다.
 - 값: float8은 `extra_float_digits=1`로 왕복이 보장되는 최단 표기로 나온다. JSON 숫자로 바뀌며 지수 없이 풀어 쓴다. `NaN`·`Infinity`는 문자열, `-0`은 `0`이 된다(값 비교로는 같다). `timestamptz`는 UTC 오프셋이 붙은 마이크로초 표기, `date`는 `YYYY-MM-DD`, `bigint`는 정수 그대로다.
 
@@ -718,7 +629,7 @@ S3 구조:
 실패했을 때 보는 것:
 
 - 로그는 `event=partition_export`다. `status=RUN`(회차 요약, `oldestPendingDate`), `EXPORTED`, `VERIFIED`, `DROPPED`, `DEFERRED reason=LOCK_TIMEOUT|BUSY`, `DROP_REFUSED reason=ROW_COUNT_CHANGED`, `FAILED reason=<사유>`, `DEFAULT_ROWS`, `SKIPPED reason=UNEXPECTED_BOUND|ALREADY_DROPPED`.
-- 지표는 `salmonbus_archive_partitions{stage=exported|dropped}`, `salmonbus_archive_rows{stage=partition_exported|partition_dropped}`, `salmonbus_archive_bytes{stage=partition_exported}`, `salmonbus_archive_stage{stage=partition_export|partition_verify|partition_drop}`, `salmonbus_archive_partition_failures{table,reason}`, `salmonbus_archive_partition_deferrals{table,reason}`, `salmonbus_archive_partition_default_rows{table}`, `salmonbus_archive_partition_oldest_pending_days`다. 위의 이관 지표처럼 외부 수집은 따로 연결해야 한다.
+- 지표는 `salmonbus_archive_partitions{stage=exported|dropped}`, `salmonbus_archive_rows{stage=partition_exported|partition_dropped}`, `salmonbus_archive_bytes{stage=partition_exported}`, `salmonbus_archive_stage{stage=partition_export|partition_verify|partition_drop}`, `salmonbus_archive_partition_failures{table,reason}`, `salmonbus_archive_partition_deferrals{table,reason}`, `salmonbus_archive_partition_default_rows{table}`, `salmonbus_archive_partition_oldest_pending_days`다. 외부 수집은 따로 연결해야 한다.
 - `ROW_COUNT_CHANGED`: 내보낸 뒤 그 날짜에 줄이 더 들어왔다. 자동으로 다시 내보내지 않는다. 원인을 확인한 뒤 그 (테이블, 날짜)의 `daily_export` 줄을 지우면 다음 회차에 새 manifest로 다시 내보낸다. 이미 올라간 S3 파일은 지우지 않는다.
 - `MANIFEST_HASH_MISMATCH`, `FILE_HASH_MISMATCH`, `FILE_ROW_COUNT_MISMATCH`, `MANIFEST_ROW_COUNT_MISMATCH`, `MANIFEST_MISMATCH`: S3 객체가 장부와 다르다. 지우지 않는다. 객체 버전과 버킷 수명 주기 설정을 확인한다.
 - `EXPORT_CONTENT_MISMATCH`: 다른 실행이 같은 (테이블, 날짜)에 내용이 다른 manifest를 먼저 장부에 적었다. 지우지 않는다. 두 manifest를 비교한다.
@@ -734,8 +645,8 @@ SAL-434가 지울 옛 테이블 25개(목록은 `deploy/sql/sal434-03-drop-legac
 
 | 키 | 기본값 | 뜻 |
 |---|---|---|
-| `ARCHIVE_LEGACY_EXPORT_ENABLED` | `false` | 켜야 빈이 생긴다. 꺼져 있으면 DB를 보지 않는다. `ARCHIVE_ENABLED=true`(줄 단위 이관)와 함께 켜면 기동하지 않는다 |
-| `ARCHIVE_LEGACY_EXPORT_PREFIX` | `salmonbus/prod/lake-v3-legacy/` | `ARCHIVE_PREFIX`·`ARCHIVE_PARTITION_EXPORT_PREFIX`와 서로 포함하면 기동하지 않는다 |
+| `ARCHIVE_LEGACY_EXPORT_ENABLED` | `false` | 켜야 빈이 생긴다. 꺼져 있으면 DB를 보지 않는다 |
+| `ARCHIVE_LEGACY_EXPORT_PREFIX` | `salmonbus/prod/lake-v3-legacy/` | `ARCHIVE_PARTITION_EXPORT_PREFIX`와 서로 포함하면 기동하지 않는다 |
 | `ARCHIVE_LEGACY_EXPORT_INTERVAL` | `1m` | 회차가 끝난 뒤 다음 회차까지 쉬는 시간(10초~24시간). 기동 1분 뒤 첫 회차 |
 | `ARCHIVE_LEGACY_EXPORT_PAGE_SIZE` | `2000` | 한 번에 읽는 줄 수(1~10000) |
 | `ARCHIVE_LEGACY_EXPORT_PAGE_PAUSE` | `200ms` | 페이지 사이 쉬는 시간(0~60초). 쉬는 동안 DB 연결을 쥐지 않는다 |
@@ -1019,29 +930,6 @@ current 심볼릭 링크가 가리키는 JAR로 실행된다
 143으로 종료하면 SuccessExitStatus=143이 성공으로 처리한다
 ```
 
-### 운영 데이터 이관 전후 측정
-
-머지 시각이 아니라 실제 배포 revision/sourceDigest와 이관·삭제 활성화 시각을 기준으로 비교한다.
-배포 직전, 실제 S3 검증과 삭제 활성화 직후, 24시간 후에 `sql/measure-operational-archive.sql`을 같은 DB에서
-읽기 전용으로 실행하고 출력과 worker/archive의 `release-manifest.txt`를 보존한다. SQL의 건수 상한에
-도달하거나 5초 타임아웃이면 미측정으로 남긴다. 생산 원본 전체 COUNT로 확대하지 않는다.
-
-- 같은 24시간 구간의 테이블별 INSERT/DELETE 변화량, RDS 여유 공간과 DB 파일 크기를 비교한다.
-  카운터 reset/수집 공백과 저장공간 증설 여부도 확인한다. DELETE는 내부 재사용 공간을 만들지만
-  RDS 여유 공간이나 DB 파일이 즉시 줄어드는 것을 보장하지 않는다.
-- `journalctl -u salmonbus-archive.service --since '<시작 UTC>' --until '<종료 UTC>' --grep='event=operational_archive' -o json --no-pager`
-  로 배포 후 로그를 수집한다. `VERIFIED_FILE`의 rows/bytes는 파일 검증량,
-  `PURGED_FILE`의 deletedRows는 커밋된 테이블별 삭제량이며 fileBytes는 DB에서 확보한 바이트가 아니다.
-  archiveId/fileNumber로 재시도를 구분한다. 커밋 직후 프로세스가 종료되면 로그가 빠질 수 있으므로
-  작업·파일 장부와 PostgreSQL 카운터로 대조한다. DONE 로그의 durationMs는 해당 실행 시도의 시간이다.
-- `DEFERRED`의 reason/date로 수집 미완료, 정산 대기, 삭제 비활성화를 구분한다.
-  가장 오래된 날짜가 전진하는지 확인한다. 오래된 RESERVED/DISPATCHING 기록을 발견해도 측정 중 임의로 종료하거나 삭제하지 않는다.
-- 같은 시간대의 collection_route/forecast_tick/alighting_settlement_tick p95와 실패, DB CPU/잠금 대기를 같이 비교한다.
-  심야 수집 주기와 요일 차이를 구분하며, 데이터 나이를 작업 실행시간이나 처리 지연과 혼동하지 않는다.
-
-프로세스가 웹 서버를 띄우지 않으므로 내부 Micrometer meter가 Grafana에 자동으로 수집된다고 가정하지 않는다.
-현재 결과 대조는 구조화 로그와 DB 장부를 사용한다. 실제 S3 PUT/GET과 보관 원본 대조가 끝나기 전에는 삭제를 활성화하지 않는다.
-
 ## 수집 실패 배치 종료와 알림
 
 수집 저장 예외가 발생하면 원래 `collection_attempt` 실패 로그를 남기고,
@@ -1076,100 +964,7 @@ Discord 알림을 받으면 DB 원인 분석 화면의 수집 실패 및 상태 
 `routeId`, `batchId`, `stage`, `reason`, `sqlState`를 확인한다.
 53100이면 DB 여유 공간과 `could not extend file` 로그를 확인한다. 자동 증설이나 원본 삭제는 하지 않는다.
 23503이면 `referenceRouteVersionId`, `stopOrder`, `stopId`와 노선 갱신 결과를 확인한다.
-자동 종료는 이관을 막는 상태를 정리한 것이며 수집 데이터 복원이나 원인 해결을 뜻하지 않는다.
-
-
-### 하차 반영 단일 모델 전환
-
-이번 전환은 API와 Worker 배포를 나눠 진행한다. 먼저 파이프라인에서 Worker 배포 단계의 자동 진행을 중지하고 Worker 호스트에서 이번 배포 소스의 `sudo bash backend/deploy/scripts/hold-alighting-worker.sh`를 실행한다. 이 명령은 호스트에 systemd 추가 설정과 보류 파일을 만들고 Worker를 중지한다. 이전 배포본이 서비스 유닛을 교체해도 호스트의 추가 설정은 보류 파일이 있는 동안 Worker 시작을 차단한다.
-
-구 API·archive-app과 복원 작업을 중지한다. V66 이전 DB 백업을 만들고 격리 DB에 복원해 스키마 버전과 관측 조회를 확인한다. API에서 배포 버전까지 Flyway를 적용한다. 이전 애플리케이션을 다시 배포해야 할 경우에는 보류 상태에서 검증한 V66 이전 DB와 이전 배포본을 함께 복원한다.
-
-새 API는 V66 트랜잭션에서만 `enable_hashjoin`과 `enable_mergejoin`을 끈다. 작은 정산 대기 작업이 대규모 예측 테이블 전체를 읽는 계획을 피하기 위한 설정이며, V66 성공 후 원래 값으로 복원하고 실패 시 트랜잭션 롤백으로 해제한다. 다른 연결과 후속 마이그레이션에는 적용하지 않는다. 기존 V66 SQL 파일과 체크섬은 유지하므로 이미 적용한 DB에서는 V66을 다시 실행하거나 `repair`할 필요가 없다. 이 동작은 API의 Flyway 콜백이므로 다른 실행 도구로 V66을 적용할 때는 동일한 연결 범위의 설정을 별도로 확인한다.
-
-마이그레이션 성공 뒤 API health 검증만 실패했다면 DB의 적용 버전을 먼저 확인하고 그 스키마에 맞는 새 API를 다시 검증한다. 삭제된 테이블이나 열을 기대하는 구버전 JAR만 자동으로 되돌리면 기동하지 못할 수 있다. Worker의 체크포인트 기동 보류는 계속 유지한다.
-
-dev에서 기존 V67을 이미 실행했다면 V72 이상 적용과 V67 단독 체크섬 불일치를 확인한 뒤 Flyway `repair`와 `validate`를 실행한다. 수정된 V67을 담아 검증을 통과한 패키지를 복구용으로 보관한다. V75 적용 전에는 기존 `push_device` 등록을 확인하고 배포 후 앱에서 기기를 다시 등록한다.
-
-1. 원본 번들과 서명·해시는 그대로 보존한다. 기존 `les-*` 판본 정보는 읽을 때만 새 이름으로 해석한다.
-2. 새 모델 파일과 설정을 준비하고 Worker 시작 시 `alighting-online-capacity-snapshot-v2` 계산 판본으로 승격하도록 설정한다. 필요하면 기존 `MODEL_BUNDLE_PROMOTE_ON_START` 절차를 사용한다.
-3. API의 Flyway 적용 완료를 확인하고 Worker와 archive-app을 중지한 상태에서 확정 관측 이력 체크포인트를 생성한다. 전환 DB에서 이번 배포 소스의 maintenance JAR로 `alighting-history-bootstrap`을 실행하고 `--checkpoint-directory`에 배포 전용 빈 경로를 지정한다. 전환 표시가 없는 기존 파일은 Worker와 준비 명령에서 거부한다. 지원 노선별 `alighting-confirmed-closure-v2` 파일의 해시와 마지막 배치 ID를 확인하고, Worker 계정에 새 경로의 읽기·쓰기 권한을 준 뒤 `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`를 그 경로로 설정한다.
-   준비 명령은 기본적으로 체크포인트 10개 또는 30초가 지나면 새 읽기를 시작하지 않는다. `--maximum-checkpoints`와 `--maximum-seconds`로 실행 예산을 지정한다. 읽기 SQL에는 15초, 잠금 대기에는 1초 제한이 적용된다. 완료 전에는 JSON의 `status`가 `paused`, 종료 코드가 `2`이며 `checkpoint.processedThroughBatchId`가 마지막 저장 위치다. 같은 번들·원점·목표 배치·체크포인트 경로로 다시 실행해 이어간다. `checkpoint.complete=true`와 종료 코드 `0`을 확인하기 전에는 Worker를 시작하지 않는다. 재실행마다 새 빈 경로를 만들지 않는다.
-
-   V78은 확정시각과 배치 ID의 커서 인덱스를 생성한다. 준비 명령은 이 인덱스가 없거나 유효하지 않으면 이력을 읽기 전에 중단한다. 생성 중 배치 쓰기가 기다리므로 Worker와 이관·복원 작업을 중지한 상태에서 적용한다. 인덱스 생성에도 기존 배치 읽기와 쓰기가 필요하므로 체크포인트 준비와 겹치지 않게 한다. 잠금 획득은 5초, 생성 문장은 120초로 제한하고 실패하면 해당 마이그레이션을 롤백한다. 완료 후 체크포인트 준비를 진행한다.
-
-4. 새 경로를 설정한 뒤 `sudo rm /etc/salmonbus/alighting-cutover-hold`를 실행하고 Worker 배포를 재개한다. 새 Worker의 차량 정원 캐시 준비와 예보·정산을 확인한다. 예보에 저장한 정원으로 정산하며, 이후 관측이 그 정원을 넘으면 `OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT` 사유로 해당 정산을 종료한다.
-5. archive-app은 삭제를 끈 상태로 시작한다. 지원 노선의 현재 판본마다 새 Worker가 `alighting_history_checkpoint`에 저장한 배치가 DB에 존재하는지 확인한다. 이전 날짜의 수집·정산 완료와 S3 재읽기 및 해시 검증 후 삭제를 활성화한다. 마지막 체크포인트 확정 시각에서 90초를 뺀 수신 시각 이후의 자료가 포함된 날짜는 새 체크포인트가 저장될 때까지 `ALIGHTING_HISTORY_REQUIRED`로 보류된다. 이 보류는 `ARCHIVE_HISTORY_HOLD=checkpoint`(기본값)일 때다. 새 예보 경로가 본선이 된 뒤(`ARCHIVE_HISTORY_HOLD=window`)에는 체크포인트 대신 `ARCHIVE_HISTORY_HOLD_WINDOW`보다 최근인 날짜를 같은 사유로 보류한다(「SAL-434 전환 절차」 4-1).
-
-정산의 확정 모델은 수집 배치별로 작업을 묶고, 노선·날짜·정류장 구성별로 새 관측과 닫힌 통과 근거를 이어서 저장한다. 준비 한 번에 새 수집 배치를 100개까지 V78 커서 인덱스(`ix_batch_confirmed_history`)로 읽고, 재시작 후에도 마지막으로 읽은 배치부터 이어간다. 그 배치보다 늦게 커밋된 배치는 다음 준비에서 이어 붙인다. 이미 읽은 배치의 관측이 늦게 들어오거나 수정·삭제되면 해당 근거를 폐기하고 처음부터 다시 준비한다. 새로 읽을 배치가 없으면 근거를 다시 쓰지 않는다. 기존 정산 작업의 배치 등록도 커서로 1,000개씩 진행한다. 준비가 끝날 때까지 기존 작업은 삭제하지 않는다.
-
-근거 저장과 결과 커밋은 마지막 문장에서 노선·날짜별 입력 세대 행을 `FOR UPDATE SKIP LOCKED`로 다시 확인한다. 그 사이 수집 확정이 같은 날짜의 세대를 올렸거나 지금 그 행을 잡고 있으면 정산 쪽 트랜잭션을 되돌리고 다음 회차에 다시 읽는다. 정산은 세대 행을 기다리지 않고 커밋 직전에만 잡으므로 수집 확정(5초 제한)이 정산 트랜잭션을 기다리지 않는다. 세대 행에는 노선 외래 키가 없으므로 확정이 새 날짜의 세대 행을 처음 넣어도 노선 행을 잡은 정산 결과 커밋을 기다리지 않는다. 되돌린 횟수는 `salmonbus_settlement_rejected_total{reason}`과 `event=alighting_settlement_rejected` 로그로 본다. `reason`은 `persist_`(근거 저장) 또는 `commit_`(결과 커밋) 뒤에 `generation_changed`(입력이 바뀜), `generation_busy`(확정이 세대 행을 잡고 있음), `projection_changed`(근거 폐기·교체)가 붙는다. 수집 중에는 새 배치마다 세대가 올라가므로 일부가 되돌려지는 것이 정상이다. 같은 사유가 계속 늘면서 결과 완료가 멈추면 정산 트랜잭션이 길어진 것이다.
-
-결과 준비는 `forecast.alighting.evaluation.preparation-limit`(기본 500개), 저장은 100개씩 나눈다. 한 회차의 새 준비는 `forecast.alighting.evaluation.maximum-preparations-per-tick`(기본 8회)와 `forecast.alighting.evaluation.maximum-tick-seconds`(기본 30초)로 제한하고 마지막 처리 노선 다음부터 순환한다. 이미 시작한 준비·저장은 마치며 트랜잭션의 15초 제한은 유지한다. 새 통과 근거가 없는 예측은 입력 변경이나 정산 기한까지 기다린다. 실패한 노선은 기존 재시도 간격을 적용한다.
-
-회차가 결과 저장(완료·재예약), 새 배치 읽기, 기존 작업 등록, 폐기 근거 정리 중 하나를 커밋했으면 진행한 회차다. 진행한 회차 뒤에는 실행 시간에 `forecast.settlement-rest-ratio`(기본 0.25)를 곱한 만큼 쉬되 `forecast.settlement-minimum-interval`(기본 100ms) 이상, `forecast.settlement-interval` 이하로 쉰다. 진행이 없으면 `forecast.settlement-interval`을 쉬고, 회차가 실패하면 2초부터 두 배씩 최대 60초를 쉰다. 진행이 이어지는 동안 정산 스레드의 점유율은 `1/(1+쉬는 비율)`이고 기본값이면 80%다. 수집 시간에는 새 배치가 계속 들어와 대부분의 회차가 진행으로 끝나므로 이 점유율이 이어진다. 회차 예산(준비 횟수·시간)을 줄이면 한 회차가 짧아질 뿐 점유율은 그대로다. DB 부하를 줄이려면 Worker 환경변수 `FORECAST_SETTLEMENT_REST_RATIO`(1이면 50%, 3이면 25%)나 `FORECAST_SETTLEMENT_MINIMUM_INTERVAL`을 올리고 Worker를 재시작한다. 쉬는 비율을 올리면 밀린 작업이 줄어드는 속도도 그만큼 느려지므로 아래 구간별 기록으로 완료가 유입보다 많은지 함께 본다.
-
-폐기 근거 정리는 회차마다 근거 하나에서 관측 색인 1,000행과 통과 근거 1,000행까지 지운다. 정리도 진행이므로 정리할 행이 남아 있으면 최소 간격으로 이어 돈다. 로컬 합성 자료(차량 20대, 정류장 40개, 20초 수집, 18시간)에서 노선·날짜 근거 하나는 관측 색인 64,800행, 통과 근거 15,535행, 약 23MB였고 정리에 65회차가 걸렸다. 노선 20개면 하루 약 1,300회차다. 쉬는 비율을 크게 올리면서 회차가 길면 이 정리량을 따라가지 못할 수 있으므로 아래 근거 저장공간 SQL로 폐기 근거 수를 본다.
-
-V80은 증분 정산 저장소와 배치 등록·입력 변경 트리거, 구 모델 대기 작업 인덱스(`ix_alighting_legacy_settlement_due`)를 만든다. 입력 커서는 V78 인덱스를 그대로 쓰므로 `observation_batch`에는 인덱스를 새로 만들지 않는다. Worker와 이관·복원 작업을 중지한 상태에서 적용하고 새 Worker를 시작한다. 인덱스 생성에는 `alighting_forecast_evaluation_work` 전체를 읽는 작업이 필요하며 잠금은 5초, 문장은 120초로 제한한다. 이력 전체를 이 마이그레이션에서 변환하거나 대기 작업을 일괄 등록하지 않는다. 폐기된 근거와 대기 정산이 없는 지난 날짜의 근거는 나누어 정리한다.
-
-V80 트리거는 `observation_batch`와 `vehicle_observation`의 INSERT·UPDATE·DELETE 문장마다 실행된다. 바뀐 행을 전이 테이블로 모은 뒤 노선·날짜마다 입력 세대 행 하나를 올리고, 이미 읽은 범위가 바뀐 근거를 폐기 표시한다. 수집처럼 한 배치씩 바꾸는 문장은 부담이 작다. 여러 노선·날짜를 한 문장으로 바꾸는 대량 UPDATE·DELETE는 문장이 끝날 때까지 전이 테이블과 세대 행 잠금을 유지하고, 이미 읽은 범위를 건드리면 그 날짜의 근거를 처음부터 다시 만든다. 대량 변경은 Worker를 멈춘 시간에 노선·날짜 단위로 나누어 실행한다. 이관 purge는 파일 하나(기본 2,000행)를 한 문장으로 지우고 문장 10초, 잠금 200ms 제한을 둔다. purge 트리거가 지난 날짜의 세대 행을 다시 넣어도 노선 행은 잠그지 않으므로, 정산 결과 커밋이나 예보 커밋이 노선 행을 잡고 있어도 기다리지 않는다. 다시 넣은 세대 행은 정리가 다시 지운다. purge가 정산 쪽에서 기다릴 수 있는 잠금은 같은 노선·날짜의 세대 행이나 근거 행을 잡은 정산 트랜잭션(근거 저장, 결과 커밋, 정리)뿐이고, 정리가 근거와 세대 행을 지운 지난 날짜에는 이 잠금도 없다. 기다림이 200ms를 넘으면 같은 파일을 세 번까지 다시 시도하고, 그래도 실패하면 다음 시도에 다시 지운다. 로컬(tmpfs, 노선 하나·하루 3,240배치)에서 2,000배치 DELETE는 트리거 없이 23~26ms, V80 트리거로 30~32ms였고 관측 2,000행 DELETE는 80~104ms와 80~89ms로 차이가 없었다. purge가 문장 제한에 걸리면 트리거보다 외래 키 확인과 I/O 크레딧을 먼저 본다.
-
-V80이 포함된 릴리즈는 배포를 시작하기 전에 RDS의 EBS 처리량 크레딧(CloudWatch `AWS/RDS`의 `EBSByteBalance%`)과 여유 저장공간(`FreeStorageSpace`)을 확인한다. V80에서 시간이 걸리는 문장은 `ix_alighting_legacy_settlement_due` 생성 하나이고, 나머지 문장은 로컬에서 합계 0.1초 미만이다. API는 마이그레이션과 기동을 합쳐 최초 health 240초 안에 끝나야 한다. 마이그레이션 연결의 소켓 제한은 문장 하나에 150초, V80 문장 제한은 120초다.
-
-- 예상 소요: 작업 테이블 85만 행(11-12 운영 규모, heap 약 130MiB)이 모두 구 모델 라벨인 상한에서 인덱스는 약 92MiB다. 로컬 SSD에서 1.7~2.8초였고, 크레딧이 남아 있으면 운영에서 약 3초로 본다. 크레딧이 0이면 약 15~56초로 본다(t4g.small 기준 대역폭과 dev V77 크레딧 0 실측 55초에서 환산). 기동 약 30초를 더해도 240초 안에 든다. 작업 테이블이 크게 늘었으면 행 수에 비례해 늘려 잡는다.
-- 크레딧 확인 위치: 「Salmonbus DB 원인 분석」 대시보드 「02 읽기와 쓰기 / 디스크 성능」 행의 「EBS 처리량 크레딧 잔량」 패널이다. 이 패널은 최신 값 하나만 보여 주므로 최근 추이는 Grafana Explore에서 `min_over_time(aws_rds_ebsbyte_balance_percent_minimum{dimension_DBInstanceIdentifier="salmonbus-db"}[1h])`로 본다. CloudWatch 5분 표본이 늦게 들어와 최신 값도 5~10분 전 구간의 값이다.
-- 크레딧 기준: 최근 1시간 최소값이 20% 이상이면 진행한다. 운영은 평소 96~100%다. dev에서는 14~15%일 때 V78 인덱스가 약 1초, 0%일 때 V77 인덱스가 55초 걸렸다.
-- 저장공간 확인 위치: 같은 대시보드 「04 메모리 / 저장 공간 / 재시작」 행의 「DB 저장 공간 여유」 패널이다. 최근 추이는 `min_over_time(aws_rds_free_storage_space_minimum{dimension_DBInstanceIdentifier="salmonbus-db"}[1h])`로 본다.
-- 저장공간 기준: 배포 뒤 늘어나는 양은 V80 인덱스와 WAL 약 0.3GiB에, 대기 작업이 걸친 날짜마다 노선별 근거 약 25MB를 더한 값이다(로컬 합성 자료 추정, 노선 20개면 하루 약 0.5GiB). 최근 1시간 최소값이 이 합의 두 배와 2GiB 중 큰 값 이상이고 그동안 줄어드는 추세가 아니면 진행한다. 대기 작업이 걸친 날짜 수는 아래 SQL의 `pending_days`다. 정리한 근거의 공간은 VACUUM 뒤 같은 테이블이 다시 쓰고, 파일 크기는 줄지 않는다.
-- 낮을 때: 배포를 시작하지 않는다. 크레딧이 낮으면 이관·통계·수동 조회처럼 크레딧을 쓰는 작업을 확인하고 최근 1시간 최소값이 기준을 넘을 때까지 기다린다. 저장공간이 낮거나 줄어드는 중이면 원인을 먼저 처리하거나 저장공간을 늘린다. Worker와 이관·복원 작업을 중지한 뒤 API 배포 직전에도 두 패널 값을 다시 본다. 이때 기준보다 낮으면 API 배포를 시작하지 않는다. 아직 V80을 적용하지 않았으므로 이전 Worker와 이관 작업을 다시 시작하고 회복을 기다린다.
-
-```sql
-BEGIN READ ONLY;
-SET LOCAL statement_timeout = '3s';
-SELECT (b.response_received_at AT TIME ZONE 'Asia/Seoul')::date AS oldest_pending_date,
-       (now() AT TIME ZONE 'Asia/Seoul')::date - (b.response_received_at AT TIME ZONE 'Asia/Seoul')::date + 1 AS pending_days
-  FROM vehicle_observation o JOIN observation_batch b ON b.id = o.observation_batch_id
- WHERE o.id = (SELECT min(vehicle_observation_id) FROM alighting_forecast_evaluation_work);
-COMMIT;
-```
-
-정산 시간은 Worker 작업 지표 `salmonbus_worker_operation_seconds{operation=...}`와 1초 이상 걸린 작업의 `event=worker_operation status=SLOW` 로그로 본다. `alighting_settlement_tick`은 회차 전체, `alighting_settlement_route`는 노선 하나, `alighting_settlement_prepare`는 근거 준비(확정 모델은 커서 읽기와 근거 저장, 구 모델은 관측 읽기), `alighting_settlement_commit`은 결과 저장 트랜잭션이다. `alighting_settlement_backfill`, `alighting_settlement_cleanup`은 기존 작업 등록, 폐기 근거 정리이고 실패해도 노선 정산은 계속한다. 실패는 `event=worker_operation status=FAILED`와 `event=settlement_route_failed`로 남는다. `event=alighting_settlement_page_committed`는 커밋 뒤 처리·완료·재예약 건수를, `event=alighting_settlement_rejected`는 입력 변경으로 되돌린 저장을 기록한다. 대기 지연, 수집·예보 지연, RDS 읽기량을 함께 보고 쉬는 비율과 최소 간격을 조정한다.
-
-V80 적용 뒤에는 기존 대기 작업을 배치 큐에 등록하는 동안과 등록이 끝난 뒤를 나눠 밀린 작업이 줄어드는지 확인한다. 등록은 `alighting_settlement_queue_scan.complete`가 `true`가 되면 끝난다. 두 구간 모두 5분 단위로 아래 다섯 값을 같은 표에 기록하고, SQL은 각 5분이 끝날 때 실행한다. 그래프는 「Salmonbus DB 원인 분석」 대시보드에서 본다.
-
-- 신규 유입: `alighting_forecast_evaluation_work`에 추가된 행 수다. 「테이블별 수정 속도」 패널이나 `increase(salmonbus_pg_table_inserts_total{table="alighting_forecast_evaluation_work"}[5m])`로 본다.
-- 실제 완료: `alighting_forecast_evaluation_result`에 추가된 행 수다. `increase(salmonbus_pg_table_inserts_total{table="alighting_forecast_evaluation_result"}[5m])`로 보고, 같은 5분의 `event=alighting_settlement_page_committed` 로그 `completed` 합과 비교한다. 재예약한 `deferred`는 완료에 넣지 않는다. 테이블 카운터는 롤백된 행과 복원 작업이 추가한 결과도 세므로, 두 값이 크게 다르면 로그 합을 기준으로 한다.
-- 가장 오래된 대기 작업의 경과 시간: 아래 첫 SQL의 `oldest_due_age`다. 처리 가능 시각(`next_attempt_at`)이 지난 작업 중 가장 오래 기다린 작업의 대기 시간이다. 재예약하면 처리 가능 시각이 다시 정해지므로 처음 등록된 뒤의 시간은 아니다. 확정 모델은 새 통과 근거가 없으면 작업을 재예약하지 않고 정산 기한(관측 뒤 2시간)까지 기다리므로, 수집이 끝난 밤이나 새 근거가 없는 동안 이 값이 약 2시간까지 커지는 것은 정상이다. 2시간을 넘어 계속 커지면 밀린 것이다.
-- RDS 읽기량: CloudWatch `AWS/RDS`의 `ReadThroughput` 5분 평균에 300을 곱한 바이트다. 「읽기 / 쓰기 처리량」 패널로 보고, 「EBS 처리량 크레딧 잔량」(`EBSByteBalance%`)도 함께 적는다.
-- 근거 저장공간: 아래 둘째 SQL의 활성·폐기 근거 수와 근거 테이블 크기다. 「DB 저장 공간 여유」 패널 값도 함께 적는다. 폐기 근거 수가 줄지 않고 쌓이면 정리가 따라가지 못하는 것이다.
-
-```sql
-BEGIN READ ONLY;
-SET LOCAL statement_timeout = '3s';
-SELECT now() AS captured_at, s.complete AS backfill_complete, s.observation_id AS backfill_cursor,
-       now() - (SELECT min(next_attempt_at) FROM alighting_forecast_evaluation_work
-                 WHERE next_attempt_at <= now()) AS oldest_due_age
-  FROM alighting_settlement_queue_scan s;
-SELECT count(*) FILTER (WHERE active) AS active_projections, count(*) FILTER (WHERE NOT active) AS retired_projections,
-       pg_size_pretty(pg_total_relation_size('alighting_settlement_observation')
-           + pg_total_relation_size('alighting_settlement_pass')) AS evidence_size
-  FROM alighting_settlement_projection;
-COMMIT;
-```
-
-첫 SQL은 `ix_alighting_evaluation_due(next_attempt_at, vehicle_observation_id)`의 앞쪽만 읽는다. 다만 완료로 지운 작업 행이 VACUUM 전에 인덱스 앞쪽에 많이 남아 있으면 그 행의 heap을 하나씩 확인한다. 로컬에서 앞쪽 30만 행을 지운 직후 첫 실행은 30만 행을 확인하며 55ms(tmpfs), 다음 실행은 0.4ms였다. 3초 제한에 걸리면 다음 5분에 다시 잰다.
-
-```bash
-journalctl -u salmonbus-worker --since '<시작 UTC>' --until '<5분 뒤 UTC>' --no-pager \
-  --grep 'event=alighting_settlement_page_committed' | grep -o 'completed=[0-9]*' | awk -F= '{s+=$2} END {print s+0}'
-```
-
-등록이 끝난 뒤 구간에서 완료가 유입보다 많고 `oldest_due_age`가 줄어야 밀린 작업이 줄어든 것이다. 쉬는 비율과 최소 간격은 두 구간의 기록과 크레딧·저장공간 추세를 함께 보고 조정한다.
-
-구 모델 미완료 작업은 V70/V71에서 종료 사유를 남기며 기존 완료 결과를 재작성하지 않는다. V72는 운영 중간 통계·당일 보정 테이블을 제거한다. 이미 발행한 통계·판본·파일 발행 기록은 과거 데이터 해석용으로 유지한다.
-
-개발용 모델은 정확도 검증용이 아닌 8개 노선의 합성 숫자 모델 한 벌이다. 운영 확정 관측 모델의 지원 노선 수와 다르다. 새 개발 환경 초기화는 검증했지만 기존 불변 개발 데이터·모델 파일을 자동 덮어쓰지는 않는다. 기존 환경은 별도 새 데이터 세트로 준비하거나 명시적인 전환 절차가 필요하다.
+자동 종료는 미완료 상태를 정리한 것이며 수집 데이터 복원이나 원인 해결을 뜻하지 않는다.
 
 ## SAL-434 전환 절차
 
