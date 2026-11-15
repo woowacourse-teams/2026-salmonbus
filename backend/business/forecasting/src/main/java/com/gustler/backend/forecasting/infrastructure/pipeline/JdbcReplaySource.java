@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
+import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.application.pipeline.ForecastBatch;
 import com.gustler.backend.forecasting.application.pipeline.ForecastObservationRow;
 import com.gustler.backend.forecasting.application.pipeline.ObservationBatchRead;
@@ -9,6 +10,7 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRout
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -40,6 +42,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  *
  * <p>배치 하나를 읽는 {@link #readBatch}도 같은 축·같은 열·같은 줄 순서·같은 변환을 쓴다. 이어 온 상태와 되감은 상태가 같은 입력을
  * 받게 하려는 것이다. 본선은 이 값이 비어 있는지로 "아직 어느 경로도 처리하지 않은 배치"를 가린다.
+ *
+ * <p>{@link Axis#RECORDED_RUN} 축의 되감기는 예보 실행이 입력 부족({@code INPUT_UNAVAILABLE})으로 끝난 배치를 따로 알려 준다
+ * ({@link ReplaySource.Read#unforecastRuns}). 그런 배치는 착수 시각이 확정 조건 안이라 이력에 들어가지만, 그 배치가 닫은 통과는
+ * 저장된 적이 없다. {@link Axis#BATCH_INPUT} 축은 예보 실행을 읽지 않으므로 알려 주지 않는다.
  */
 public final class JdbcReplaySource implements ReplaySource, ObservationBatchReader {
     static final String ROUTE_HISTORY_MISSING = "ALIGHTING_AWARE_ROUTE_HISTORY_MISSING";
@@ -54,11 +60,13 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
           b.outcome,b.stored_rows,o.id AS observation_id,o.vehicle_id,o.passed_stop_order,o.stop_order,
           o.running_state,o.remaining_seats,o.seat_unknown_reason,o.crowd_level,o.source_row_number
         """;
+    private static final String RUN_COLUMNS = ",b.run_outcome,b.run_source_date,b.run_route_id";
     /** 예보 실행의 나눔 날짜는 배치 예약 시각의 한국 날짜다({@code SourceDates}). 기본 키로 찾으려고 날짜를 같이 준다. */
     private static final String RECORDED_BATCHES = """
         (SELECT b.id,b.route_version_id,b.response_received_at,
             coalesce(r.confirmed_at,b.input_confirmed_at) AS input_confirmed_at,b.ingestion_origin,b.outcome,
-            b.stored_rows,b.scheduled_at
+            b.stored_rows,b.scheduled_at,r.outcome AS run_outcome,r.source_date AS run_source_date,
+            r.route_id AS run_route_id
           FROM observation_batch b LEFT JOIN forecast_run r
             ON r.source_date=(b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date AND r.observation_batch_id=b.id)""";
     private static final String READ_BATCHES = """
@@ -112,8 +120,16 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         this.maximumRows = maximumRows;
         this.axis = Objects.requireNonNull(axis);
         String source = batchSource(axis);
-        this.readBatches = READ_BATCHES.formatted(BATCH_COLUMNS, source);
-        this.readBatch = READ_BATCH.formatted(BATCH_COLUMNS, source);
+        String columns = batchColumns(axis);
+        this.readBatches = READ_BATCHES.formatted(columns, source);
+        this.readBatch = READ_BATCH.formatted(columns, source);
+    }
+
+    private static String batchColumns(Axis axis) {
+        if (axis == Axis.BATCH_INPUT) {
+            return BATCH_COLUMNS;
+        }
+        return BATCH_COLUMNS + RUN_COLUMNS;
     }
 
     private static String batchSource(Axis axis) {
@@ -151,7 +167,17 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
                 return Read.failed(INCOMPATIBLE_VERSION + version);
             }
         }
-        return Read.of(batches(rows));
+        return Read.of(batches(rows), unforecastRuns(rows));
+    }
+
+    private static Map<Long, UnforecastRun> unforecastRuns(List<Row> rows) {
+        Map<Long, UnforecastRun> runs = new HashMap<>();
+        for (Row row : rows) {
+            if (row.unforecastRun() != null) {
+                runs.put(row.batchId(), row.unforecastRun());
+            }
+        }
+        return runs;
     }
 
     private List<Row> readRows(List<Long> versions, Instant from, Instant through, final long throughBatchId) {
@@ -161,7 +187,7 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
             .param("through", through.atOffset(ZoneOffset.UTC))
             .param("batch", throughBatchId)
             .param("limit", maximumRows + 1)
-            .query((row, index) -> row(row))
+            .query((row, index) -> row(row, axis))
             .list();
     }
 
@@ -169,8 +195,9 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
     public Optional<ObservationBatchRead> readBatch(final long observationBatchId) {
         List<Placed> rows = jdbc.sql(readBatch)
             .param("batch", observationBatchId)
-            .query((row, index) -> new Placed(row(row), row.getObject("scheduled_at", OffsetDateTime.class).toInstant(),
-                row.getLong("route_id"), row.getString("source_id")))
+            .query((row, index) -> new Placed(row(row, axis),
+                row.getObject("scheduled_at", OffsetDateTime.class).toInstant(), row.getLong("route_id"),
+                row.getString("source_id")))
             .list();
         if (rows.isEmpty()) {
             return Optional.empty();
@@ -219,7 +246,7 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         return true;
     }
 
-    private static Row row(ResultSet row) throws SQLException {
+    private static Row row(ResultSet row, Axis axis) throws SQLException {
         Long observationId = (Long) row.getObject("observation_id");
         ForecastObservationRow observation = null;
         if (observationId != null) {
@@ -230,7 +257,18 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         }
         return new Row(row.getLong("batch_id"), row.getLong("route_version_id"), instant(row, "response_received_at"),
             instant(row, "input_confirmed_at"), row.getString("ingestion_origin"), row.getString("outcome"),
-            (Integer) row.getObject("stored_rows"), observation, row.getInt("source_row_number"));
+            (Integer) row.getObject("stored_rows"), observation, row.getInt("source_row_number"),
+            unforecastRun(row, axis));
+    }
+
+    private static UnforecastRun unforecastRun(ResultSet row, Axis axis) throws SQLException {
+        if (axis == Axis.BATCH_INPUT) {
+            return null;
+        }
+        if (!ForecastOutcome.INPUT_UNAVAILABLE.name().equals(row.getString("run_outcome"))) {
+            return null;
+        }
+        return new UnforecastRun(row.getObject("run_source_date", LocalDate.class), row.getLong("run_route_id"));
     }
 
     private static Instant instant(ResultSet row, String column) throws SQLException {
@@ -250,7 +288,8 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         String outcome,
         Integer storedRows,
         ForecastObservationRow row,
-        int sourceRowNumber
+        int sourceRowNumber,
+        UnforecastRun unforecastRun
     ) {
         private Optional<ForecastObservationRow> observation() {
             return Optional.ofNullable(row);

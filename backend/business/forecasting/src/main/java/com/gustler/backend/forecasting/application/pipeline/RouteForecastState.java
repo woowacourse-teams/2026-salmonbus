@@ -127,6 +127,23 @@ public final class RouteForecastState {
         return progress.historyCompleteAt(at);
     }
 
+    /**
+     * 되감은 창이 {@code at} 시각의 예보에 모자란 정도다. 검증된 출발 지점에서 이어 온 상태는 모자람이 없다.
+     * 운행 시작을 보지 못한 차량은 마지막 관측이 {@code at}부터 30분 안인 것만 센다. 그보다 오래 보이지 않은 차량은 다음 관측에서
+     * 새 운행을 시작하므로 창을 늘려도 달라지지 않는다.
+     */
+    public ReplayShortfall replayShortfallAt(Instant at) {
+        if (replayFrom == null) {
+            return ReplayShortfall.NONE;
+        }
+        Instant recent = at.minusSeconds(TRIP_LINK_SECONDS);
+        final int unknown = (int) progress.vehicles.values().stream()
+            .filter(track -> !track.tripStartKnown())
+            .filter(track -> !track.last().receivedAt().isBefore(recent))
+            .count();
+        return new ReplayShortfall(!progress.historyCompleteAt(at), unknown);
+    }
+
     boolean precedes(ForecastBatch batch) {
         if (cursor == null) {
             return true;
@@ -136,6 +153,17 @@ public final class RouteForecastState {
         }
         return batch.confirmedAt().equals(cursor.confirmedAt())
             && batch.observationBatchId() > cursor.observationBatchId();
+    }
+
+    /**
+     * 마지막으로 반영한 배치보다 먼저 수신한 배치인지다. 이런 배치를 반영하면 이력의 순서가 수신 순서와 달라진다.
+     * 반영한 배치가 없으면 거짓이다.
+     */
+    boolean receivedBeforeApplied(ForecastBatch batch) {
+        if (cursor == null) {
+            return false;
+        }
+        return batch.receivedAt().isBefore(cursor.receivedAt());
     }
 
     /** 이 상태 위에 한 배치의 관측을 차례로 반영한 차량 추적이다. 상태 자체는 바꾸지 않는다. */
@@ -224,8 +252,31 @@ public final class RouteForecastState {
         return current;
     }
 
-    /** 마지막으로 반영한 확정 배치의 번호·순위·확정 시각이다. */
-    public record Cursor(long observationBatchId, long rank, Instant confirmedAt) {
+    /** 마지막으로 반영한 확정 배치의 번호·순위·확정 시각·수신 시각이다. */
+    public record Cursor(long observationBatchId, long rank, Instant confirmedAt, Instant receivedAt) {
+    }
+
+    /**
+     * 되감은 창이 모자란 정도다. 이력이 미완이면 노선 전체가, 운행 시작을 보지 못한 차량은 그 차량만 예보에서 빠진다.
+     *
+     * @param historyIncomplete 창 밖 관측이 아직 입력에 영향을 줄 수 있으면 참
+     * @param vehiclesWithoutTripStart 최근에 보인 차량 가운데 운행 시작을 보지 못한 차량 수
+     */
+    public record ReplayShortfall(boolean historyIncomplete, int vehiclesWithoutTripStart) {
+        static final ReplayShortfall NONE = new ReplayShortfall(false, 0);
+
+        /** 예보에서 빠지는 것이 없으면 참이다. */
+        public boolean none() {
+            return !historyIncomplete && vehiclesWithoutTripStart == 0;
+        }
+
+        /** 이쪽이 {@code other}보다 덜 모자라면 참이다. 노선 전체가 빠지는 쪽을 더 모자란 것으로 본다. */
+        boolean lessThan(ReplayShortfall other) {
+            if (historyIncomplete != other.historyIncomplete) {
+                return other.historyIncomplete;
+            }
+            return vehiclesWithoutTripStart < other.vehiclesWithoutTripStart;
+        }
     }
 
     /**

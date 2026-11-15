@@ -37,6 +37,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>예보가 켜져 있고({@code forecast.enabled=true}) {@code forecast.pipeline=v2}일 때만 등록한다. 이때 그림자 실행
  * ({@link ForecastShadowConfiguration})은 조건상 등록되지 않으므로 {@code forecast.shadow.enabled}는 무시된다. 노선별 실행 줄
  * ({@link ForecastLanes})과 신호·주기 호출은 실행하는 앱이 등록한다. 옛 발행 경로의 빈은 그대로 있지만 아무도 부르지 않는다.
+ *
+ * <p>다시 뜰 때 {@code forecast.replay-window}(기본 6시간)만큼 되감고, 되감은 상태가 모자라면
+ * {@code forecast.replay-extended-window}(기본 12시간)로 한 번 늘려 다시 되감는다. 늘린 창은 이관이 최근 관측을 남겨 두는 창
+ * ({@code archive.history-hold-window})보다 길 수 없다.
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnExpression(ForecastMainlineConfiguration.MAINLINE_ENABLED)
@@ -72,13 +76,15 @@ public class ForecastMainlineConfiguration {
         ForecastPolicy policy,
         Clock clock,
         @Value("${forecast.replay-window:6h}") String replayWindow,
+        @Value("${forecast.replay-extended-window:12h}") String replayExtendedWindow,
         @Value("${forecast.alighting.rush-only:true}") final boolean rushOnly
     ) {
         ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(capacities));
         TransactionTemplate transactions = new TransactionTemplate(transactionManager);
         transactions.setTimeout(WRITE_TIMEOUT_SECONDS);
-        PipelineBatchProcessor processor = new PipelineBatchProcessor("pipeline_forecast", stage,
-            new RouteStateReplayer(mainlineReplaySource, stage, DurationStyle.detectAndParse(replayWindow)), records,
+        RouteStateReplayer replayer = new RouteStateReplayer(mainlineReplaySource, stage,
+            DurationStyle.detectAndParse(replayWindow), DurationStyle.detectAndParse(replayExtendedWindow));
+        PipelineBatchProcessor processor = new PipelineBatchProcessor("pipeline_forecast", stage, replayer, records,
             passes, transactions, listeners.orderedStream().toList(), new RouteStateRegistry(), rushOnly);
         ForecastPipelineService service = new ForecastPipelineService(lanes, processor, mainlineReplaySource,
             new JdbcPendingPipelineBatches(jdbc), runtimes, versions, stops, new JdbcSettlementContextWriter(jdbc),

@@ -55,4 +55,15 @@ class ForecastMainlineConfigurationTest {
             assertThat(context.getBean(JdbcReplaySource.class).axis()).isEqualTo(JdbcReplaySource.Axis.RECORDED_RUN);
         });
     }
+
+    @Test
+    void 늘린_되감기_창이_이관이_관측을_남겨_두는_창보다_길면_본선을_만들지_못한다() {
+        runner.withPropertyValues("forecast.enabled=true", "forecast.pipeline=v2",
+                "forecast.replay-extended-window=13h")
+            .run(context -> assertThat(context).hasFailed().getFailure()
+                .hasRootCauseInstanceOf(IllegalArgumentException.class));
+        runner.withPropertyValues("forecast.enabled=true", "forecast.pipeline=v2",
+                "forecast.replay-window=3h", "forecast.replay-extended-window=12h")
+            .run(context -> assertThat(context).hasNotFailed().hasSingleBean(ForecastPipeline.class));
+    }
 }

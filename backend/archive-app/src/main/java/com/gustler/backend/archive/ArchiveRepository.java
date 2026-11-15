@@ -28,7 +28,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Repository
 public class ArchiveRepository {
     static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(120);
-    /** {@link HistoryHold#WINDOW}의 기본 창. worker의 되감기 창 6시간보다 넉넉하게 잡는다. */
+    /** {@link HistoryHold#WINDOW}의 기본 창. worker가 되감는 가장 긴 범위(늘린 되감기 창 12시간)를 덮어야 한다. */
     static final Duration DEFAULT_HISTORY_HOLD_WINDOW = Duration.ofHours(12);
     private static final Duration LOCKED_STATEMENT_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration MAX_READ_TIMEOUT = Duration.ofMinutes(4);

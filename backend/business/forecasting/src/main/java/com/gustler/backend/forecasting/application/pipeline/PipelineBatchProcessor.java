@@ -12,9 +12,14 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRout
 import com.gustler.backend.forecasting.domain.pipeline.SourceDates;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,11 +42,16 @@ import org.springframework.transaction.support.TransactionOperations;
  *   <li>{@link ForecastStage#advance}로 상태를 전진시키고, 옛 경로와 같은 예측 조립 객체
  *       ({@link AlightingAwarePredictionAssembler})로 예측을 만든다. 출퇴근 범위 판정은 옛 경로의 입력 조회와 같은
  *       기준(이 배치의 착수 시각)이다. 이미 반영한 배치면 아무것도 쓰지 않는다.</li>
- *   <li>예보 실행·버스별 기록·닫힌 통과를 한 트랜잭션으로 쓰고, 커밋한 뒤에만 상태를 바꾼다.</li>
+ *   <li>예보 실행·버스별 기록·닫힌 통과를 한 트랜잭션으로 쓰고, 커밋한 뒤에만 상태를 바꾼다. 실행 줄에는 뒤 단계에 넘기는 것과
+ *       같은 수집 사건의 수집 구멍 여부와 관측 줄 수를 함께 적는다. 채점이 다시 뜰 때 이 값으로 그날의 구멍과 줄 수를 되살린다.</li>
  *   <li>사건을 수집 → 통과 → 예보 순서로 {@link PipelineEvents}에 넘긴다.</li>
  * </ol>
  * 예외는 그대로 던진다. 부르는 쪽이 그 노선의 상태를 버린다. {@code route} 행 잠금을 잡지 않고 {@code observation_batch}와 옛 경로의
  * 테이블에 쓰지 않는다. 한 노선의 처리는 한 스레드에서만 해야 한다.
+ *
+ * <p>되감기가 예보 단계를 돌리지 못하고 끝난 배치의 통과를 찾아 주면({@link RouteStateReplayer.Result#recoveredPasses}) 아직
+ * 저장되지 않은 것만 이 배치와 같은 트랜잭션으로 저장하고, 이 배치의 사건보다 먼저 통과 사건으로 넘긴다. 그 통과의 닫힌 시각은 이미
+ * 넘긴 사건들의 시각보다 이르다. 채점 단계는 통과를 닫힌 시각으로 정렬해 두고 직전 통과를 찾으므로 같은 직전 통과와 같은 정답을 낸다.
  */
 public final class PipelineBatchProcessor {
     /** 되감기가 실패한 노선을 다시 되감기까지 기다리는 분. 배치의 착수 시각 기준이다. */
@@ -101,22 +111,24 @@ public final class PipelineBatchProcessor {
      *
      * @param context 노선 판본의 모델 문맥
      * @param read 배치와 배치 밖 값. 배치의 착수 시각이 상태와 90초 판정의 기준이다
-     * @param fallbackConfirmedAt 배치의 착수 시각이 비어 있을 때 실행 줄에 적는 시각
-     * @param requireNewRun 참이면 같은 배치의 실행 줄이 이미 있을 때 저장을 되돌리고 상태를 버린다
+     * @param fallbackConfirmedAt 배치의 착수 시각이 비어 있을 때 실행 줄에 적는 시각. 저장 자릿수(마이크로초)로 잘라 쓴다
+     * @param freshlyConfirmed 부르는 쪽이 이 처리에서 착수 시각을 새로 찍었으면 참이다(본선). 참이면 같은 배치의 실행 줄이 이미 있을
+     *     때 저장을 되돌리고 상태를 버린다. 또 이 노선에서 더 늦게 수신한 배치가 이미 이력에 들어갔으면 이 배치를 이력에 넣지
+     *     않고 아무것도 쓰지 않는다({@link Status#OUT_OF_ORDER}). 옛 경로의 착수 시각을 그대로 따르는 그림자는 거짓이다
      * @return 처리 결과
      */
     public Processed process(
         RouteContext context,
         ObservationBatchRead read,
         Instant fallbackConfirmedAt,
-        final boolean requireNewRun
+        final boolean freshlyConfirmed
     ) {
         AlightingAwareRouteStatistics statistics = context.statistics();
         ForecastBatch batch = read.batch();
-        Resolution resolution = resolve(context, read);
-        Boolean replayed = resolution.replayed();
-        if (resolution.stale()) {
-            return new Processed(Status.STALE, null, 0, Map.of(), null, replayed);
+        Resolution resolution = resolve(context, read, freshlyConfirmed);
+        Replay replay = resolution.replay();
+        if (resolution.skipped() != null) {
+            return Processed.unsaved(resolution.skipped(), null, Map.of(), replay);
         }
         Outcome outcome = resolution.outcome();
         ForecastPublished published = new ForecastPublished(SourceDates.of(read.scheduledAt()),
@@ -126,61 +138,121 @@ public final class PipelineBatchProcessor {
         List<PassClosed> closed = outcome.passes().stream()
             .map(pass -> pass.toEvent(published.sourceDate(), read.routeId()))
             .toList();
+        List<PassClosed> recovered = withoutStored(replay.recovered());
+        ObservationBatchSeen seen = seen(read);
         final boolean saved = Boolean.TRUE.equals(transactions.execute(status -> {
-            if (!records.save(published) && requireNewRun) {
+            if (!records.save(published, seen) && freshlyConfirmed) {
                 status.setRollbackOnly();
                 return false;
             }
-            if (!closed.isEmpty()) {
-                passes.save(closed);
-            }
+            savePasses(closed);
+            savePasses(recovered);
             return true;
         }));
         if (!saved) {
             states.remove(statistics.route());
-            return new Processed(Status.DUPLICATE, published, 0, outcome.excluded(), null, replayed);
+            return Processed.unsaved(Status.DUPLICATE, published, outcome.excluded(), replay);
         }
         applyState(statistics, outcome);
-        publish(seen(read), published, closed);
-        return new Processed(Status.SAVED, published, closed.size(), outcome.excluded(), outcome.special(), replayed);
+        if (freshlyConfirmed && batch.confirmed()) {
+            states.applied(statistics.route(), batch.receivedAt());
+        }
+        logRecovered(statistics, batch, replay, recovered);
+        publish(seen, published, closed, recovered);
+        return new Processed(Status.SAVED, published, closed.size(), outcome.excluded(), outcome.special(),
+            replay.succeeded(), outcome.unattributed(), recovered.size(), replay.extension());
     }
 
-    private Resolution resolve(RouteContext context, ObservationBatchRead read) {
+    private Resolution resolve(RouteContext context, ObservationBatchRead read, final boolean freshlyConfirmed) {
         ForecastBatch batch = read.batch();
         if (!batch.confirmed()) {
-            return Resolution.of(Outcome.withoutState(notConfirmed(batch), null), null);
+            return Resolution.of(Outcome.withoutState(notConfirmed(batch), null), Replay.NONE);
         }
         AlightingAwareRouteStatistics statistics = context.statistics();
+        if (freshlyConfirmed && states.receivedBeforeApplied(statistics.route(), batch.receivedAt())) {
+            return Resolution.skipped(Status.OUT_OF_ORDER, Replay.NONE);
+        }
         Optional<RouteForecastState> state = states.find(statistics);
         if (state.isEmpty() && states.replayDeferred(statistics.route(), batch.confirmedAt())) {
-            return Resolution.of(Outcome.withoutState(ForecastOutcome.INPUT_UNAVAILABLE, "replay_deferred"), null);
+            return Resolution.of(Outcome.withoutState(ForecastOutcome.INPUT_UNAVAILABLE, "replay_deferred"),
+                Replay.NONE);
         }
-        Boolean replayed = null;
+        Replay replay = Replay.NONE;
         if (state.isEmpty()) {
-            RouteStateReplayer.Result replay = replayer.replay(statistics, batch.confirmedAt(),
+            RouteStateReplayer.Result replayed = replayer.replay(statistics, batch.confirmedAt(),
                 batch.observationBatchId() - 1);
-            replayed = replay.succeeded();
-            if (!replay.succeeded()) {
+            replay = Replay.of(replayed);
+            if (!replayed.succeeded()) {
                 LOGGER.warn("event={}_replay_failed route={} batchId={} reason={}", name, statistics.route(),
-                    batch.observationBatchId(), replay.failureReason());
+                    batch.observationBatchId(), replayed.failureReason());
                 states.deferReplay(statistics.route(), batch.confirmedAt().plus(REPLAY_RETRY));
                 Outcome failed = Outcome.withoutState(ForecastOutcome.INPUT_UNAVAILABLE, "replay_failed");
-                return Resolution.of(failed, replayed);
+                return Resolution.of(failed, replay);
             }
-            state = Optional.of(replay.state());
+            state = Optional.of(replayed.state());
         }
-        ForecastStageResult result = stage.advance(state.orElseThrow(), statistics, read.capacitySourceId(), batch);
+        RouteForecastState current = state.orElseThrow();
+        if (freshlyConfirmed && current.receivedBeforeApplied(batch)) {
+            return Resolution.skipped(Status.OUT_OF_ORDER, replay);
+        }
+        ForecastStageResult result = stage.advance(current, statistics, read.capacitySourceId(), batch);
         if (result.status() == ForecastStageResult.Status.STALE) {
-            return Resolution.stale(replayed);
+            return Resolution.skipped(Status.STALE, replay);
         }
-        return Resolution.of(advanced(context, read, result), replayed);
+        return Resolution.of(advanced(context, read, result), replay);
     }
 
+    /** 메모리에 든 착수 시각이 다시 뜬 뒤 DB에서 읽는 값과 같도록 저장 자릿수로 자른다. */
     private static Instant confirmedAtOr(ForecastBatch batch, Instant fallbackConfirmedAt) {
         if (batch.confirmedAt() == null) {
-            return fallbackConfirmedAt;
+            return fallbackConfirmedAt.truncatedTo(ChronoUnit.MICROS);
         }
         return batch.confirmedAt();
+    }
+
+    private void savePasses(List<PassClosed> closed) {
+        if (!closed.isEmpty()) {
+            passes.save(closed);
+        }
+    }
+
+    /**
+     * 되감으며 찾은 통과 가운데 아직 저장되지 않은 것만 남긴다. 같은 실행 줄은 다음 되감기 창에도 들어 있어 같은 통과를 다시 찾는다.
+     * 이미 저장된 통과는 채점이 받았거나 채점의 되감기가 읽으므로 다시 넘기지 않는다.
+     */
+    private List<PassClosed> withoutStored(List<PassClosed> recovered) {
+        if (recovered.isEmpty()) {
+            return recovered;
+        }
+        Set<PassKey> stored = new HashSet<>();
+        for (Map.Entry<Long, List<PassClosed>> route : byRoute(recovered).entrySet()) {
+            Instant from = route.getValue().getFirst().closedAt();
+            Instant until = route.getValue().getLast().closedAt().plus(1, ChronoUnit.MICROS);
+            passes.findClosedBetween(route.getKey(), from, until).forEach(pass -> stored.add(PassKey.of(pass)));
+        }
+        return recovered.stream().filter(pass -> !stored.contains(PassKey.of(pass))).toList();
+    }
+
+    /** 닫힌 순서를 지키면서 노선별로 묶는다. 뒤 단계는 통과를 노선 하나씩 받는다. */
+    private static Map<Long, List<PassClosed>> byRoute(List<PassClosed> closed) {
+        Map<Long, List<PassClosed>> byRoute = new LinkedHashMap<>();
+        for (PassClosed pass : closed) {
+            byRoute.computeIfAbsent(pass.routeId(), ignored -> new ArrayList<>()).add(pass);
+        }
+        return byRoute;
+    }
+
+    private void logRecovered(
+        AlightingAwareRouteStatistics statistics,
+        ForecastBatch batch,
+        Replay replay,
+        List<PassClosed> recovered
+    ) {
+        if (replay.recovered().isEmpty()) {
+            return;
+        }
+        LOGGER.info("event={}_passes_recovered route={} batchId={} found={} saved={}", name, statistics.route(),
+            batch.observationBatchId(), replay.recovered().size(), recovered.size());
     }
 
     private void applyState(AlightingAwareRouteStatistics statistics, Outcome outcome) {
@@ -196,9 +268,9 @@ public final class PipelineBatchProcessor {
     private Outcome advanced(RouteContext context, ObservationBatchRead read, ForecastStageResult result) {
         return switch (result.status()) {
             case REPLAY_REQUIRED -> new Outcome(ForecastOutcome.INPUT_UNAVAILABLE, List.of(), List.of(), Map.of(), null,
-                true, null);
+                true, null, 0);
             case INPUT_UNAVAILABLE -> new Outcome(ForecastOutcome.INPUT_UNAVAILABLE, List.of(), List.of(), Map.of(),
-                result.state(), false, null);
+                result.state(), false, null, 0);
             case NOT_CONFIRMED -> Outcome.withoutState(notConfirmed(read.batch()), null);
             case STALE -> throw new IllegalStateException("이미 반영한 배치는 처리 결과를 만들지 않는다");
             case FORECAST -> forecast(context, read, result);
@@ -212,11 +284,12 @@ public final class PipelineBatchProcessor {
             .forEach(vehicle -> excluded.put(vehicle.observationId(), vehicle.reason()));
         if (outsideScope(context, read.batch())) {
             return new Outcome(ForecastOutcome.OUT_OF_SCOPE, List.of(), result.closedPasses(), excluded, result.state(),
-                false, null);
+                false, null, result.unattributedPasses());
         }
         List<ForecastPublished.VehicleForecast> vehicles = vehicles(context, read, result);
         ForecastOutcome outcome = publishedOutcome(vehicles);
-        return new Outcome(outcome, vehicles, result.closedPasses(), excluded, result.state(), false, null);
+        return new Outcome(outcome, vehicles, result.closedPasses(), excluded, result.state(), false, null,
+            result.unattributedPasses());
     }
 
     private static ForecastOutcome publishedOutcome(List<ForecastPublished.VehicleForecast> vehicles) {
@@ -315,9 +388,16 @@ public final class PipelineBatchProcessor {
         return batch.storedRows();
     }
 
-    private void publish(ObservationBatchSeen seen, ForecastPublished published, List<PassClosed> closed) {
+    private void publish(
+        ObservationBatchSeen seen,
+        ForecastPublished published,
+        List<PassClosed> closed,
+        List<PassClosed> recovered
+    ) {
+        Collection<List<PassClosed>> recoveredByRoute = byRoute(recovered).values();
         for (PipelineEvents listener : listeners) {
             try {
+                recoveredByRoute.forEach(listener::passesClosed);
                 listener.batchSeen(seen);
                 if (!closed.isEmpty()) {
                     listener.passesClosed(closed);
@@ -338,18 +418,26 @@ public final class PipelineBatchProcessor {
         /** 이미 반영한 배치라 아무것도 쓰지 않았다. */
         STALE,
         /** 같은 배치의 실행 줄이 이미 있어 저장을 되돌리고 상태를 버렸다. */
-        DUPLICATE
+        DUPLICATE,
+        /**
+         * 이 노선에서 더 늦게 수신한 배치가 이미 이력에 들어가 있어 아무것도 쓰지 않았다. 실행 줄이 없으므로 다시 주워지고,
+         * 수신 뒤 90초가 지나면 늦음으로 닫힌다.
+         */
+        OUT_OF_ORDER
     }
 
     /**
      * 배치 하나의 처리 결과다.
      *
      * @param status 처리 결과의 종류
-     * @param published 저장한(또는 저장하려던) 예보 실행. {@link Status#STALE}이면 없다
+     * @param published 저장한(또는 저장하려던) 예보 실행. {@link Status#STALE}과 {@link Status#OUT_OF_ORDER}면 없다
      * @param closedPasses 저장한 닫힌 통과 수
      * @param exclusions 되감은 직후라 예보에서 뺀 관측과 사유({@code TRIP_START_UNKNOWN}, {@code REPLAY_HISTORY_INCOMPLETE})
      * @param special 실행 결과와 따로 정해진 배치 분류({@code replay_deferred}, {@code replay_failed}). 없으면 비어 있다
      * @param replayed 이 처리에서 되감았으면 성공 여부, 되감지 않았으면 비어 있다
+     * @param unattributedPasses 이 배치가 닫았지만 연결 시작을 보지 못한 차량이라 저장하지 않은 통과 수
+     * @param recoveredPasses 되감으며 찾아 이 배치와 함께 저장한, 예보 단계를 돌리지 못하고 끝난 배치의 통과 수
+     * @param replayExtension 이 처리의 되감기가 창을 늘려 다시 되감았는지
      */
     public record Processed(
         Status status,
@@ -357,11 +445,25 @@ public final class PipelineBatchProcessor {
         int closedPasses,
         Map<Long, String> exclusions,
         String special,
-        Boolean replayed
+        Boolean replayed,
+        int unattributedPasses,
+        int recoveredPasses,
+        RouteStateReplayer.Extension replayExtension
     ) {
         public Processed {
             Objects.requireNonNull(status);
+            Objects.requireNonNull(replayExtension);
             exclusions = Map.copyOf(exclusions);
+        }
+
+        private static Processed unsaved(
+            Status status,
+            ForecastPublished published,
+            Map<Long, String> exclusions,
+            Replay replay
+        ) {
+            return new Processed(status, published, 0, exclusions, null, replay.succeeded(), 0, 0,
+                replay.extension());
         }
 
         /** 되감은 직후라 예보에서 뺀 관측. */
@@ -380,7 +482,7 @@ public final class PipelineBatchProcessor {
 
     /**
      * 배치 하나의 새 경로 결과다. 다음 상태가 없으면 상태를 바꾸지 않고, {@code dropState}면 상태를 버린다.
-     * {@code special}은 대조와 무관하게 정해진 배치 분류다.
+     * {@code special}은 대조와 무관하게 정해진 배치 분류다. {@code unattributed}는 저장하지 않은 통과 수다.
      */
     private record Outcome(
         ForecastOutcome outcome,
@@ -389,24 +491,44 @@ public final class PipelineBatchProcessor {
         Map<Long, String> excluded,
         RouteForecastState next,
         boolean dropState,
-        String special
+        String special,
+        int unattributed
     ) {
         static Outcome withoutState(ForecastOutcome outcome, String special) {
-            return new Outcome(outcome, List.of(), List.of(), Map.of(), null, false, special);
+            return new Outcome(outcome, List.of(), List.of(), Map.of(), null, false, special, 0);
         }
     }
 
     /**
-     * 상태를 쓰기 전까지의 판정이다. {@code stale}이면 이미 반영한 배치라 결과가 없다.
-     * {@code replayed}는 이 처리에서 되감았으면 성공 여부, 되감지 않았으면 비어 있다.
+     * 상태를 쓰기 전까지의 판정이다. {@code skipped}가 있으면 아무것도 쓰지 않는 배치라 결과가 없다
+     * ({@link Status#STALE}, {@link Status#OUT_OF_ORDER}).
      */
-    private record Resolution(Outcome outcome, Boolean replayed, boolean stale) {
-        static Resolution of(Outcome outcome, Boolean replayed) {
-            return new Resolution(outcome, replayed, false);
+    private record Resolution(Outcome outcome, Replay replay, Status skipped) {
+        static Resolution of(Outcome outcome, Replay replay) {
+            return new Resolution(outcome, replay, null);
         }
 
-        static Resolution stale(Boolean replayed) {
-            return new Resolution(null, replayed, true);
+        static Resolution skipped(Status status, Replay replay) {
+            return new Resolution(null, replay, status);
+        }
+    }
+
+    /**
+     * 이 처리에서 한 되감기다. {@code succeeded}는 되감았으면 성공 여부, 되감지 않았으면 비어 있다.
+     * {@code recovered}는 되감으며 찾은, 예보 단계를 돌리지 못하고 끝난 배치의 통과다.
+     */
+    private record Replay(Boolean succeeded, List<PassClosed> recovered, RouteStateReplayer.Extension extension) {
+        static final Replay NONE = new Replay(null, List.of(), RouteStateReplayer.Extension.NONE);
+
+        static Replay of(RouteStateReplayer.Result result) {
+            return new Replay(result.succeeded(), result.recoveredPasses(), result.extension());
+        }
+    }
+
+    /** {@code stop_pass}의 기본 키다. */
+    private record PassKey(LocalDate sourceDate, long routeId, long tripStartObservationId, int stopOrder) {
+        static PassKey of(PassClosed pass) {
+            return new PassKey(pass.sourceDate(), pass.routeId(), pass.tripStartObservationId(), pass.stopOrder());
         }
     }
 }
