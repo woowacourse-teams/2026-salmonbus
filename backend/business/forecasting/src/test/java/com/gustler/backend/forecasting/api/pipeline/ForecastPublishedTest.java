@@ -91,7 +91,7 @@ class ForecastPublishedTest {
     @Test
     void 처리_결과는_예보_실행_표의_CHECK와_같다() {
         // when
-        Set<String> allowed = SchemaCheck.allowedValues("V81__forecast_pipeline_records.sql", "outcome");
+        Set<String> allowed = SchemaCheck.allowedValues("V81__forecast_records.sql", "outcome");
 
         // then
         assertThat(Arrays.stream(ForecastOutcome.values()).map(Enum::name))

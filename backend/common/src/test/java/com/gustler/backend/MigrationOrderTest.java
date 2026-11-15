@@ -42,10 +42,9 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정되어도 다른 파일을 제외해 항상 통과하게 된다. 파일 이름으로 선택하고,
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
-     * <p>이 브랜치는 새 예보 경로의 날짜 파티션 테이블을 더한다.
+     * <p>이 브랜치는 예보 기록의 날짜 파티션 테이블과 예측 결과 뷰를 더한다.
      */
-    private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS =
-        List.of("forecast_pipeline_records", "forecast_outcome_view", "forecast_outcome_pair_condition");
+    private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS = List.of("forecast_records", "forecast_outcome_view");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

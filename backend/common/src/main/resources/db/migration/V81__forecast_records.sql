@@ -1,6 +1,6 @@
 SET LOCAL lock_timeout = '5s';
 
--- 새 예보 경로가 쓰는 테이블이다. 옛 경로의 테이블은 건드리지 않는다.
+-- 예보 실행·예측 기록·통과·정답·미해결 예측을 담는 테이블이다.
 -- 모두 배치 예약 시각의 한국 날짜(source_date)로 나누고 FK가 없다.
 -- 날짜 파티션(<table>_pYYYYMMDD)은 worker의 유지 작업이 미리 만든다. 없는 날짜의 줄은 기본 파티션으로 들어간다.
 
@@ -121,8 +121,9 @@ CREATE TABLE forecast_unresolved (
 CREATE TABLE forecast_unresolved_default PARTITION OF forecast_unresolved DEFAULT;
 
 -- S3 내보내기 장부다. 날짜 파티션 내보내기는 (테이블, 날짜)마다 segment 0 한 줄을 쓴다.
--- 옛 테이블 내보내기는 source_date 2000-01-01에 기본 키 순서의 조각마다 한 줄을 쓴다. 조각 n은 조각 n-1의 key_to 다음부터
--- 자기 key_to까지의 줄이고, key_from·key_to는 조각의 첫 줄·마지막 줄 기본 키를 담은 JSON 배열 텍스트다.
+-- 날짜로 나뉘지 않은 테이블을 통째로 내보낼 때는 source_date 2000-01-01에 기본 키 순서의 조각마다 한 줄을 쓴다.
+-- 조각 n은 조각 n-1의 key_to 다음부터 자기 key_to까지의 줄이고, key_from·key_to는 조각의 첫 줄·마지막 줄 기본 키를 담은
+-- JSON 배열 텍스트다.
 CREATE TABLE daily_export (
     table_name varchar(63) NOT NULL,
     source_date date NOT NULL,
