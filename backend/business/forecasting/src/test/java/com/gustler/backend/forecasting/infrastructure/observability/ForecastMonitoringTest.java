@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.Mockito.mock;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
 import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Field;
@@ -12,9 +16,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 class ForecastMonitoringTest {
     @Test
@@ -54,6 +61,57 @@ class ForecastMonitoringTest {
             .isEqualTo(1);
         assertThat(registry.get("salmonbus.collection.seat.quality.last.timestamp").gauges())
             .extracting(gauge -> gauge.value()).containsExactlyInAnyOrder(1000.0, 1000.0);
+    }
+
+    @Test
+    void 정확도_집계_로그의_필드_이름과_순서는_대시보드가_읽는_형식_그대로다() {
+        // then
+        assertThat(ForecastMonitoring.ACCURACY_LOG_FORMAT).isEqualTo(
+            "event=forecast_accuracy telemetrySchema=1 routeId={} routeVersionId={} stopOrder={} "
+                + "routeName={} stopName={} stopId={} direction={} modelDeploymentId={} distance={} "
+                + "completed={} maeCount={} absoluteErrorSum={} probabilityCount={} brierSum={} "
+                + "predictedFullSum={} actualFullCount={}");
+    }
+
+    @Test
+    void 새로_저장된_채점_결과를_모아_열쇠마다_한_줄로_남기고_남긴_뒤에는_비운다() {
+        // given
+        ForecastMonitoring monitoring =
+            new ForecastMonitoring(new SimpleMeterRegistry(), mock(DataSource.class), Clock.systemUTC());
+        monitoring.closed(List.of(
+            new ForecastClosed(1, 2, 6, 4, 2, 10.0, 0.25, 3.0, 3),
+            new ForecastClosed(1, 2, 6, 4, 2, Double.NaN, 0.25, 3.0, 3),
+            new ForecastClosed(1, 2, 6, 4, 2, 30.0, 0.25, null, null)));
+
+        // when
+        List<String> lines = accuracyLines(monitoring::flushAccuracy);
+        List<String> again = accuracyLines(monitoring::flushAccuracy);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(lines).containsExactly("event=forecast_accuracy telemetrySchema=1 routeId=1 "
+                + "routeVersionId=2 stopOrder=4 routeName=\"노선 정보 없음\" stopName=\"정류장 정보 없음\" "
+                + "stopId=\"unknown\" direction=\"unknown\" modelDeploymentId=6 distance=1-3 completed=3 maeCount=1 "
+                + "absoluteErrorSum=7.0 probabilityCount=2 brierSum=0.125 predictedFullSum=0.5 actualFullCount=0");
+            softly.assertThat(again).isEmpty();
+        });
+    }
+
+    @Test
+    void 집계_열쇠_상한에_걸려_세지_못한_예측_수를_지표로_낸다() {
+        // given
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        ForecastMonitoring monitoring = new ForecastMonitoring(registry, mock(DataSource.class), Clock.systemUTC());
+        List<ForecastClosed> closed = new ArrayList<>();
+        for (int stop = 1; stop <= ForecastAccuracy.MAXIMUM_KEYS + 3; stop++) {
+            closed.add(new ForecastClosed(1, 2, 6, stop, 2, 10.0, 0.25, 3.0, 3));
+        }
+
+        // when
+        monitoring.closed(closed);
+
+        // then
+        assertThat(registry.get("salmonbus.accuracy.dropped.samples").gauge().value()).isEqualTo(3);
     }
 
     @Test
@@ -166,6 +224,23 @@ class ForecastMonitoringTest {
         assertThat(registry.get("salmonbus.forecast.last.commit.timestamp").gauge().value()).isEqualTo(1060);
         assertThat(registry.get("salmonbus.forecast.last.nonempty.timestamp").gauge().value()).isEqualTo(1030);
         assertThat(registry.get("salmonbus.forecast.last.input.timestamp").gauge().value()).isEqualTo(1020);
+    }
+
+    /** 일을 하는 동안 남은 정확도 집계 로그를 모은다. 이름을 읽지 못했다는 경고는 뺀다. */
+    private static List<String> accuracyLines(Runnable work) {
+        Logger logger = (Logger) LoggerFactory.getLogger(ForecastMonitoring.class);
+        ListAppender<ILoggingEvent> logs = new ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            work.run();
+            return logs.list.stream()
+                .map(ILoggingEvent::getFormattedMessage)
+                .filter(line -> line.startsWith("event=forecast_accuracy "))
+                .toList();
+        } finally {
+            logger.detachAppender(logs);
+        }
     }
 
     private static final class PipelineClock extends Clock {

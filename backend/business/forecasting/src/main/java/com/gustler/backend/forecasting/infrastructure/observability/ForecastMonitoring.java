@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.infrastructure.observability;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
 import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
 import com.gustler.backend.observations.api.CollectionTiming;
 import io.micrometer.core.instrument.Counter;
@@ -13,9 +14,11 @@ import jakarta.annotation.PreDestroy;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -27,11 +30,21 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** 수집과 예보의 진단 지표를 낸다. scrape는 메모리만 읽는다. */
+/**
+ * 수집과 예보의 진단 지표를 낸다. scrape는 메모리만 읽는다. 새로 저장된 채점 결과는 메모리에 모았다가 5분마다
+ * {@code event=forecast_accuracy} 로그로 낸다. 다시 뜨면 모아 둔 것은 사라진다.
+ */
 @Component
 @Profile("observability")
 public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog.Listener {
+    /** 정확도 집계 로그의 형식. 대시보드가 이 필드 이름으로 읽는다. */
+    static final String ACCURACY_LOG_FORMAT =
+        "event=forecast_accuracy telemetrySchema=1 routeId={} routeVersionId={} stopOrder={} "
+            + "routeName={} stopName={} stopId={} direction={} modelDeploymentId={} distance={} "
+            + "completed={} maeCount={} absoluteErrorSum={} probabilityCount={} brierSum={} "
+            + "predictedFullSum={} actualFullCount={}";
     private static final String UNKNOWN_ROUTE_NAME = "노선 정보 없음";
+    private static final StopLabel UNKNOWN_STOP = new StopLabel("정류장 정보 없음", "unknown", "unknown");
     private static final Logger LOGGER = LoggerFactory.getLogger(ForecastMonitoring.class);
     private final MeterRegistry registry;
     private final Counter seatReviews;
@@ -45,6 +58,7 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
     private final JdbcTemplate catalog;
     private final Map<String, Timer> timers = new ConcurrentHashMap<>();
     private final Map<Long, RouteState> routes = new ConcurrentHashMap<>();
+    private final ForecastAccuracy accuracy = new ForecastAccuracy();
     private final AtomicLong heartbeat = new AtomicLong();
     private volatile Map<Long, String> versionNames = Map.of();
     private volatile Map<String, Long> sourceRoutes = Map.of();
@@ -69,6 +83,7 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         Gauge.builder("salmonbus.collection.expected.interval.seconds",
             () -> CollectionTiming.intervalSeconds(clock.instant())).register(registry);
         Gauge.builder("salmonbus.monitoring.heartbeat.timestamp", heartbeat, AtomicLong::get).register(registry);
+        Gauge.builder("salmonbus.accuracy.dropped.samples", accuracy, ForecastAccuracy::dropped).register(registry);
     }
 
     @PostConstruct
@@ -102,6 +117,11 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
             state.pendingAge = pendingAgeSeconds(oldestObservedAt);
             state.pendingCheckedAt = clock.instant().getEpochSecond();
         }
+    }
+
+    @Override
+    public void closed(List<ForecastClosed> closed) {
+        accuracy.add(closed);
     }
 
     @Override
@@ -251,6 +271,53 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         return state;
     }
 
+    /**
+     * 모아 둔 정확도 합계를 꺼내 비우고 열쇠마다 한 줄씩 남긴다. 꺼내는 동안 들어온 결과는 다음 회차에 남는다. 노선·정류장 이름은
+     * 이때 한 번 읽으며, 읽지 못하면 이름 자리에 "정보 없음"을 적는다.
+     */
+    @Scheduled(fixedDelay = 300000, initialDelay = 300000)
+    public void flushAccuracy() {
+        Map<ForecastAccuracy.Key, ForecastAccuracy.Totals> snapshot = accuracy.drain();
+        if (snapshot.isEmpty()) {
+            return;
+        }
+        StopCatalog names = stopCatalog(snapshot.keySet());
+        snapshot.forEach((key, totals) -> {
+            StopLabel stop = names.stop(key.routeVersionId(), key.stopOrder());
+            LOGGER.info(ACCURACY_LOG_FORMAT, key.routeId(), key.routeVersionId(), key.stopOrder(),
+                quote(names.routeName(key.routeVersionId())), quote(stop.name()), quote(stop.stopId()),
+                quote(stop.direction()), key.modelDeploymentId(), key.distance(), totals.completed(),
+                totals.maeCount(), totals.absoluteErrorSum(), totals.probabilityCount(), totals.brierSum(),
+                totals.predictedFullSum(), totals.actualFullCount());
+        });
+    }
+
+    private StopCatalog stopCatalog(Set<ForecastAccuracy.Key> keys) {
+        List<Long> versions = keys.stream().map(ForecastAccuracy.Key::routeVersionId).distinct().sorted().toList();
+        Map<Long, String> routeNames = new HashMap<>();
+        Map<StopKey, StopLabel> stops = new HashMap<>();
+        try {
+            catalog.query("""
+                SELECT /* salmonbus:forecast_monitoring.stop_names */ v.id, r.display_name, s.stop_order, s.name,
+                    s.stop_id, s.direction
+                FROM route_version v
+                JOIN route r ON r.id = v.route_id
+                LEFT JOIN route_stop s ON s.route_version_id = v.id
+                WHERE v.id IN (%s)
+                """.formatted(String.join(", ", Collections.nCopies(versions.size(), "?"))), row -> {
+                routeNames.put(row.getLong("id"), row.getString("display_name"));
+                final int stopOrder = row.getInt("stop_order");
+                if (!row.wasNull()) {
+                    stops.put(new StopKey(row.getLong("id"), stopOrder),
+                        new StopLabel(row.getString("name"), row.getString("stop_id"), row.getString("direction")));
+                }
+            }, versions.toArray());
+        } catch (RuntimeException failure) {
+            LOGGER.warn("event=forecast_accuracy_names_failed exceptionType={}", failure.getClass().getSimpleName());
+        }
+        return new StopCatalog(routeNames, stops);
+    }
+
     static String quote(String value) {
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
             .replace("\t", "\\t") + "\"";
@@ -261,6 +328,23 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
             return fallback;
         }
         return value;
+    }
+
+    private record StopKey(long routeVersionId, int stopOrder) {
+    }
+
+    private record StopLabel(String name, String stopId, String direction) {
+    }
+
+    /** 정확도 로그에 적을 이름이다. 읽지 못한 노선과 정류장은 "정보 없음"으로 답한다. */
+    private record StopCatalog(Map<Long, String> routeNames, Map<StopKey, StopLabel> stops) {
+        private String routeName(final long routeVersionId) {
+            return text(routeNames.get(routeVersionId), UNKNOWN_ROUTE_NAME);
+        }
+
+        private StopLabel stop(final long routeVersionId, final int stopOrder) {
+            return stops.getOrDefault(new StopKey(routeVersionId, stopOrder), UNKNOWN_STOP);
+        }
     }
 
     private static final class RouteState {

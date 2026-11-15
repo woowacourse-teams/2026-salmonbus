@@ -5,6 +5,7 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.assertj.core.groups.Tuple.tuple;
 
 import com.gustler.backend.forecasting.api.pipeline.CollectionResult;
+import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
@@ -546,6 +547,77 @@ class ScoringStageTest {
                 .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.SETTLEMENT_EVIDENCE_MISSING);
             softly.assertThat(after.unresolved()).isEmpty();
             softly.assertThat(late.waitingCount()).isOne();
+        });
+    }
+
+    @Test
+    void 닫힌_예측마다_예측값과_목표까지의_정류장_수를_정답_값과_통과의_마지막_좌석에_묶어_결과_줄과_함께_낸다() {
+        // given
+        Instant first = MORNING.plusSeconds(60);
+        Instant closed = MORNING.plusSeconds(300);
+        ForecastPublished published = forecast(MORNING, new ForecastPublished.VehicleForecast(500, 0, "bus-a", 1, 50,
+            50, false, 40, false, new int[] {3, 5}, new double[] {11.5, 7.25}, new double[] {0.125, 0.5}));
+
+        // when
+        ScoringResult immediate = stage.accept(published);
+        stage.accept(pass("bus-c", 60, 3, first.minusSeconds(20), first, 900));
+        ScoringResult scored = stage.accept(pass("bus-a", 50, 3, closed.minusSeconds(30), closed, 901));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(immediate.closed()).singleElement().satisfies(lost -> {
+                assertThat(lost.unresolved()).isSameAs(immediate.unresolved().getFirst());
+                assertThat(lost.label()).isNull();
+                assertThat(lost.event()).isEqualTo(
+                    new ForecastClosed(ROUTE, VERSION, DEPLOYMENT, 5, 4, 7.25, 0.5, null, null));
+            });
+            softly.assertThat(scored.labels()).singleElement()
+                .extracting(PassLabel::state).isEqualTo(PassLabel.State.SETTLED);
+            softly.assertThat(scored.closed()).singleElement().satisfies(settled -> {
+                assertThat(settled.label()).isSameAs(scored.labels().getFirst());
+                assertThat(settled.unresolved()).isNull();
+                assertThat(settled.event()).isEqualTo(new ForecastClosed(ROUTE, VERSION, DEPLOYMENT, 3, 2, 11.5, 0.125,
+                    scored.labels().getFirst().labelValue(), 18));
+            });
+        });
+    }
+
+    @Test
+    void 정답이_지원_안_함이어도_짝지어진_예측은_통과의_마지막_좌석만_실어_정답_줄과_함께_낸다() {
+        // given
+        Instant closed = MORNING.plusSeconds(300);
+        stage.accept(forecast(MORNING, vehicle(500, "bus-a", 50, 40, 3)));
+
+        // when
+        ScoringResult result = stage.accept(pass("bus-a", 50, 3, closed.minusSeconds(30), closed, 901));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(result.labels()).singleElement()
+                .extracting(PassLabel::reason).isEqualTo("NO_PREVIOUS_PASS");
+            softly.assertThat(result.closed()).singleElement().satisfies(unsupported -> {
+                assertThat(unsupported.label()).isSameAs(result.labels().getFirst());
+                assertThat(unsupported.event()).isEqualTo(
+                    new ForecastClosed(ROUTE, VERSION, DEPLOYMENT, 3, 2, 0.0, 0.0, null, 18));
+            });
+        });
+    }
+
+    @Test
+    void 마감으로_닫힌_예측도_미해결_줄과_함께_하나씩_낸다() {
+        // given
+        stage.accept(forecast(MORNING, vehicle(500, "bus-a", 50, 40, 3, 4)));
+
+        // when
+        ScoringResult result = stage.accept(seen(MORNING.plus(ScoringStage.MATCH_WINDOW).plusSeconds(1)));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(result.unresolved()).hasSize(2);
+            softly.assertThat(result.closed()).extracting(ClosedForecast::unresolved)
+                .containsExactlyElementsOf(result.unresolved());
+            softly.assertThat(result.closed()).extracting(forecast -> forecast.event().targetStopOrder())
+                .containsExactly(3, 4);
         });
     }
 

@@ -50,6 +50,9 @@
   "forecast_monitoring.catalog": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/observability/ForecastMonitoring.java"
   },
+  "forecast_monitoring.stop_names": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/observability/ForecastMonitoring.java"
+  },
   "forecast_record.insert": {
     "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/MultiRowInsert.java"
   },

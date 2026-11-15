@@ -1,11 +1,15 @@
 package com.gustler.backend.forecasting.application.pipeline;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
+import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
@@ -26,6 +30,10 @@ import org.springframework.transaction.support.TransactionOperations;
  *
  * <p>트랜잭션 하나의 시간은 {@link WorkerOperationLog}에 {@value #WRITE_OPERATION} 작업으로 남긴다. 쓸 줄이 없으면 트랜잭션을 열지
  * 않으므로 남기지 않는다.
+ *
+ * <p>닫힌 예측({@link ScoringResult#closed()})은 그 결과 줄이 이번 쓰기에서 새로 들어갔을 때만 {@link Flushed#closed()}로 돌려준다.
+ * 되감기가 이미 저장된 통과와 예측을 다시 계산해 넣으면 그 줄은 키가 이미 있어 들어가지 않으므로, 한 예측은 그 줄을 저장한 쓰기에서
+ * 한 번만 나온다. 같은 줄이 쓰기 대기에 둘 있어도 먼저 넣은 쪽의 예측만 나온다.
  */
 public final class ScoringWriter {
     /** 한 트랜잭션에 쓰는 줄 수의 기본 상한. */
@@ -69,7 +77,8 @@ public final class ScoringWriter {
     }
 
     /**
-     * 채점 결과를 쓰기 대기에 넣는다. 짝지어진 예측({@link ScoringResult#scored()})은 저장하지 않는다.
+     * 채점 결과를 쓰기 대기에 넣는다. 짝지어진 예측({@link ScoringResult#scored()})과 닫힌 예측({@link ScoringResult#closed()})은
+     * 저장하지 않는다.
      *
      * @param result 채점 결과
      */
@@ -94,11 +103,11 @@ public final class ScoringWriter {
      * 기다리는 줄을 모두 쓴다. 줄이 상한 이하면 한 트랜잭션이고, 많으면 넣은 단위의 경계에서 여러 트랜잭션으로 나눠 쓴다. 한
      * 트랜잭션이 실패하면 그 결과를 돌려놓고 예외를 던지며, 그 앞 트랜잭션이 쓴 줄은 저장된 채로 남는다.
      *
-     * @return 새로 넣은 줄 수. 이미 있던 키는 세지 않는다
+     * @return 새로 넣은 줄 수와 그 줄로 닫힌 예측. 이미 있던 키는 세지 않는다
      */
     public Flushed flush() {
         synchronized (writing) {
-            Flushed total = new Flushed(0, 0);
+            Flushed total = Flushed.NONE;
             List<ScoringResult> taken = take();
             while (!taken.isEmpty()) {
                 total = total.plus(write(taken));
@@ -141,10 +150,11 @@ public final class ScoringWriter {
             unresolved.addAll(result.unresolved());
         }
         try {
-            return WorkerOperationLog.measure(WRITE_OPERATION, ALL_ROUTES,
-                () -> Objects.requireNonNull(transactions.execute(status -> new Flushed(
+            Saved saved = WorkerOperationLog.measure(WRITE_OPERATION, ALL_ROUTES,
+                () -> Objects.requireNonNull(transactions.execute(status -> new Saved(
                     saveLabels(labels),
                     saveUnresolved(unresolved)))));
+            return new Flushed(saved.labels().size(), saved.unresolved().size(), closedBy(taken, saved));
         } catch (RuntimeException failure) {
             synchronized (lock) {
                 for (ScoringResult result : taken.reversed()) {
@@ -156,22 +166,42 @@ public final class ScoringWriter {
         }
     }
 
+    /** 꺼낸 결과의 닫힌 예측 가운데 결과 줄이 이번에 새로 들어간 것의 사건이다. 줄은 객체가 같은지로 가린다. */
+    private static List<ForecastClosed> closedBy(List<ScoringResult> taken, Saved saved) {
+        Set<Object> stored = Collections.newSetFromMap(new IdentityHashMap<>());
+        stored.addAll(saved.labels());
+        stored.addAll(saved.unresolved());
+        List<ForecastClosed> closed = new ArrayList<>();
+        for (ScoringResult result : taken) {
+            for (ClosedForecast forecast : result.closed()) {
+                if (stored.contains(forecast.row())) {
+                    closed.add(forecast.event());
+                }
+            }
+        }
+        return closed;
+    }
+
     private static int rows(ScoringResult result) {
         return result.labels().size() + result.unresolved().size();
     }
 
-    private int saveLabels(List<PassLabel> taken) {
+    private List<PassLabel> saveLabels(List<PassLabel> taken) {
         if (taken.isEmpty()) {
-            return 0;
+            return List.of();
         }
         return store.saveLabels(taken);
     }
 
-    private int saveUnresolved(List<UnresolvedForecast> taken) {
+    private List<UnresolvedForecast> saveUnresolved(List<UnresolvedForecast> taken) {
         if (taken.isEmpty()) {
-            return 0;
+            return List.of();
         }
         return store.saveUnresolved(taken);
+    }
+
+    /** 트랜잭션 하나에서 새로 넣은 줄이다. */
+    private record Saved(List<PassLabel> labels, List<UnresolvedForecast> unresolved) {
     }
 
     /**
@@ -179,10 +209,19 @@ public final class ScoringWriter {
      *
      * @param labels 새로 넣은 정답 줄 수
      * @param unresolved 새로 넣은 미해결 줄 수
+     * @param closed 새로 넣은 줄로 닫힌 예측의 사건. 정답 줄 하나에 짝지어진 예측이 여럿이면 사건도 여럿이다
      */
-    public record Flushed(int labels, int unresolved) {
+    public record Flushed(int labels, int unresolved, List<ForecastClosed> closed) {
+        private static final Flushed NONE = new Flushed(0, 0, List.of());
+
+        public Flushed {
+            closed = List.copyOf(closed);
+        }
+
         private Flushed plus(Flushed other) {
-            return new Flushed(labels + other.labels, unresolved + other.unresolved);
+            List<ForecastClosed> merged = new ArrayList<>(closed);
+            merged.addAll(other.closed);
+            return new Flushed(labels + other.labels, unresolved + other.unresolved, merged);
         }
     }
 }

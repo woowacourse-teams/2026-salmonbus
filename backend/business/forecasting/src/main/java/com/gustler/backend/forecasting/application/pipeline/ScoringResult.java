@@ -9,14 +9,22 @@ import java.util.List;
  * @param labels 새 통과 정답
  * @param unresolved 정답을 받지 못하고 닫힌 예측
  * @param scored 정답에 짝지어진 예측. 저장하지 않는다
+ * @param closed 닫힌 예측마다 하나씩, 그 결과가 담긴 줄과 함께다. 저장하지 않는다. 줄은 {@code labels}나 {@code unresolved}에 든
+ *     객체다
  */
-public record ScoringResult(List<PassLabel> labels, List<UnresolvedForecast> unresolved, List<ScoredForecast> scored) {
-    private static final ScoringResult EMPTY = new ScoringResult(List.of(), List.of(), List.of());
+public record ScoringResult(
+    List<PassLabel> labels,
+    List<UnresolvedForecast> unresolved,
+    List<ScoredForecast> scored,
+    List<ClosedForecast> closed
+) {
+    private static final ScoringResult EMPTY = new ScoringResult(List.of(), List.of(), List.of(), List.of());
 
     public ScoringResult {
         labels = List.copyOf(labels);
         unresolved = List.copyOf(unresolved);
         scored = List.copyOf(scored);
+        closed = List.copyOf(closed);
     }
 
     /** 빈 결과를 돌려준다. */
@@ -45,10 +53,12 @@ public record ScoringResult(List<PassLabel> labels, List<UnresolvedForecast> unr
         mergedUnresolved.addAll(other.unresolved);
         List<ScoredForecast> mergedScored = new ArrayList<>(scored);
         mergedScored.addAll(other.scored);
-        return new ScoringResult(mergedLabels, mergedUnresolved, mergedScored);
+        List<ClosedForecast> mergedClosed = new ArrayList<>(closed);
+        mergedClosed.addAll(other.closed);
+        return new ScoringResult(mergedLabels, mergedUnresolved, mergedScored, mergedClosed);
     }
 
     private boolean carriesNothing() {
-        return labels.isEmpty() && unresolved.isEmpty() && scored.isEmpty();
+        return labels.isEmpty() && unresolved.isEmpty() && scored.isEmpty() && closed.isEmpty();
     }
 }

@@ -108,8 +108,8 @@ class ForecastOutcomeViewTest {
         Map<String, Row> actual = view();
 
         // then
-        Map<String, Row> paired = expected(scenario, new ScoringResult(result.labels(), List.of(), result.scored()),
-            actual.keySet());
+        Map<String, Row> paired = expected(scenario,
+            new ScoringResult(result.labels(), List.of(), result.scored(), List.of()), actual.keySet());
         Set<String> unmet = result.unresolved().stream()
             .filter(closed -> closed.reason().equals(ScoringReasons.PASS_CONDITION_UNMET))
             .map(closed -> closed.vehicleObservationId() + ":" + closed.targetStopOrder())

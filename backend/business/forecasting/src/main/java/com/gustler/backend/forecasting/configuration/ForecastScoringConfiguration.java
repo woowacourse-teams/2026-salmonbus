@@ -45,10 +45,13 @@ public class ForecastScoringConfiguration {
         PassLabelStore labels,
         PlatformTransactionManager transactionManager,
         ObjectProvider<MeterRegistry> meters,
+        ObjectProvider<ForecastTelemetry> telemetry,
         Clock clock
     ) {
-        return new ForecastAssembly(jdbc, transactionManager, clock, meters.getIfAvailable())
+        ShadowScoringService service = new ForecastAssembly(jdbc, transactionManager, clock, meters.getIfAvailable())
             .scoring(feed, records, records, passes, labels);
+        telemetry.ifAvailable(service::setTelemetry);
+        return service;
     }
 
     @Bean

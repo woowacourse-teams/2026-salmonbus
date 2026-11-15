@@ -1,8 +1,11 @@
 package com.gustler.backend.worker.integration.forecasting;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.Mockito.when;
 
+import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
 import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
 import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
 import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
@@ -30,12 +33,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -46,12 +52,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  *
  * <p>주기 줍기는 1시간이라 시험 중에는 돌지 않는다. 시험은 줍기를 기동 직후처럼 한 번 불러 노선 판본의 실행 줄 열쇠를 알게 한 뒤,
  * 그 뒤의 처리는 모두 커밋 뒤 신호로만 일어나게 한다. 채점 결과는 주기 쓰기를 기다리지 않고 기다리는 동안 시험이 쓰게 한다.
+ * 진단 수신자({@link ForecastTelemetry})를 하나 등록해 채점이 닫은 예측을 받는지도 본다.
  */
 @SpringBootTest(classes = WorkerApplication.class, properties = {
     "forecast.enabled=true",
     "forecast.interval=1h"
 })
-@Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class })
+@Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class,
+    PipelineMainlineIntegrationTest.Diagnostics.class })
 class PipelineMainlineIntegrationTest {
     private static final String SOURCE_ROUTE = "204000057";
     private static final String VEHICLE = "pipeline-mainline-vehicle";
@@ -87,6 +95,9 @@ class PipelineMainlineIntegrationTest {
 
     @Autowired
     private ShadowScoringCycle scoring;
+
+    @Autowired
+    private ClosedForecasts closedForecasts;
 
     @MockitoBean
     private ForecastRuntime forecastRuntime;
@@ -220,10 +231,18 @@ class PipelineMainlineIntegrationTest {
         collect(FOLLOWING_VEHICLE, SETTLED_STOP, 36);
         collect(FOLLOWING_VEHICLE, SETTLED_STOP + 1, 34);
         final boolean labeled = waitUntil(() -> settledForecasts() == 2, Instant.now().plus(DEADLINE));
+        final boolean reported = waitUntil(() -> settledReports().size() == 2, Instant.now().plus(DEADLINE));
 
         // then
         assertSoftly(softly -> {
             softly.assertThat(labeled).as("마감 안에 뒤 차량의 예측이 정답과 짝지어졌다").isTrue();
+            softly.assertThat(reported).as("정답과 짝지어진 예측을 진단 수신자에 한 번씩 알렸다").isTrue();
+            softly.assertThat(settledReports()).allSatisfy(closed -> {
+                assertThat(closed.routeVersionId()).isEqualTo(routeVersionId);
+                assertThat(closed.modelDeploymentId()).isEqualTo(deploymentId);
+                assertThat(closed.stopsToTarget()).isIn(1, 2);
+                assertThat(closed.departureSeats()).isNotNull();
+            });
             softly.assertThat(jdbc.sql("""
                 SELECT count(*) FROM pass_label
                 WHERE route_id = :route AND stop_order = :stop AND state = 'SETTLED' AND label_value IS NOT NULL
@@ -243,6 +262,14 @@ class PipelineMainlineIntegrationTest {
                 """).param("route", routeId).param("vehicle", FOLLOWING_VEHICLE).param("stop", SETTLED_STOP)
                 .query(Long.class).single()).isZero();
         });
+    }
+
+    /** 진단 수신자가 받은, 이 노선의 목표 정류장을 겨눠 채점됨으로 닫힌 예측이다. */
+    private List<ForecastClosed> settledReports() {
+        return closedForecasts.closed.stream()
+            .filter(closed -> closed.routeId() == routeId && closed.targetStopOrder() == SETTLED_STOP)
+            .filter(closed -> closed.labelSeats() != null)
+            .toList();
     }
 
     /** 뒤 차량이 목표 정류장을 겨눈 예측 가운데 정답과 짝지어진 수다. */
@@ -340,5 +367,23 @@ class PipelineMainlineIntegrationTest {
         }
         scoring.flush();
         return condition.getAsBoolean();
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class Diagnostics {
+        @Bean
+        ClosedForecasts closedForecasts() {
+            return new ClosedForecasts();
+        }
+    }
+
+    /** 채점이 닫았다고 알린 예측을 받은 순서대로 적어 두는 진단 수신자다. */
+    static final class ClosedForecasts implements ForecastTelemetry {
+        private final List<ForecastClosed> closed = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void closed(List<ForecastClosed> reported) {
+            closed.addAll(reported);
+        }
     }
 }

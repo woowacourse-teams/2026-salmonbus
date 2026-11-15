@@ -1,5 +1,7 @@
 package com.gustler.backend.forecasting.application.pipeline;
 
+import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
@@ -41,6 +43,9 @@ import org.slf4j.LoggerFactory;
  * 없는 노선의 마감을 닫는다. 내려갈 때 줄에서 기다리던 사건과 아직 쓰지 못한 결과는 버려진다. 사건은 저장된 기록에서 나온
  * 것이므로 다음 기동의 되감기가 같은 결과를 다시 만든다. 채점 줄이 닫히며 채점 스레드에 중단을 요청하면 기동 직후의 되감기는
  * 돌던 노선까지만 하고 멈춘다. {@code route} 행 잠금을 잡지 않는다.
+ *
+ * <p>쓰기가 커밋되면 새로 들어간 줄로 닫힌 예측을 진단 수신자에 알린다({@link ForecastTelemetry#closed}). 되감기가 다시 계산한 결과는
+ * 줄이 이미 있어 들어가지 않으므로 알리지 않는다. 그래서 한 예측은 그 줄을 저장한 프로세스가 한 번만 알린다.
  */
 public final class ShadowScoringService implements PipelineEvents, ShadowScoringCycle {
     static final long REPLAY_RETRY_SECONDS = 30;
@@ -58,6 +63,7 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
     private final Set<Long> ready = new HashSet<>();
     private final Map<Long, Instant> replayDeferredUntil = new HashMap<>();
     private final Set<Long> stale = ConcurrentHashMap.newKeySet();
+    private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
 
     /**
      * @param feed 채점 스레드의 줄
@@ -88,6 +94,11 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
         this.startupWindow = Objects.requireNonNull(startupWindow);
         this.clock = Objects.requireNonNull(clock);
         this.metrics = new ScoringMetrics(meters, writer);
+    }
+
+    /** 새로 저장한 줄로 닫힌 예측을 알릴 진단 수신자를 정한다. */
+    public void setTelemetry(ForecastTelemetry telemetry) {
+        this.telemetry = Objects.requireNonNull(telemetry);
     }
 
     @Override
@@ -174,12 +185,25 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
         try {
             ScoringWriter.Flushed flushed = writer.flush();
             metrics.written(flushed);
+            reportClosed(flushed.closed());
             return flushed.labels() + flushed.unresolved();
         } catch (RuntimeException failure) {
             metrics.writeFailure();
             LOGGER.warn("event=pipeline_scoring_write_failed pending={} exceptionType={}", writer.pendingCount(),
                 failure.getClass().getSimpleName(), failure);
             return 0;
+        }
+    }
+
+    /** 진단 수신자의 실패는 로그로만 남긴다. 줄은 이미 저장됐다. */
+    private void reportClosed(List<ForecastClosed> closed) {
+        if (closed.isEmpty()) {
+            return;
+        }
+        try {
+            telemetry.closed(closed);
+        } catch (RuntimeException failure) {
+            LOGGER.warn("event=telemetry_delivery_failed exceptionType={}", failure.getClass().getSimpleName());
         }
     }
 

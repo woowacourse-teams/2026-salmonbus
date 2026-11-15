@@ -3,6 +3,8 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
@@ -110,6 +112,79 @@ class ShadowScoringServiceTest {
             softly.assertThat(after.replays("startup")).isOne();
             softly.assertThat(after.replays("not_ready")).isZero();
             softly.assertThat(merged).isEqualTo(continuous(scenario));
+        });
+    }
+
+    @Test
+    void 쓰지_못한_결과를_남기고_다시_떠서_되감아도_닫힌_예측은_그_줄을_저장한_프로세스가_한_번만_알린다() {
+        // given
+        ScoringScenario scenario = ScoringScenario.random(149, START, 500, 7, 0, true);
+        Harness before = new Harness(scenario, scenario.stage(LIMIT));
+        final int cut = cutLeavingUnwrittenResults(scenario);
+        before.deliverUntilCrash(cut);
+        Harness after = before.restartedOnSameStore(scenario.stage(LIMIT));
+
+        // when
+        after.service.start();
+        after.service.flush();
+        final int reportedAfterReplay = after.closed.size();
+        after.deliver(cut, after.events.size());
+
+        // then
+        ScoringStage continuous = scenario.stage(LIMIT);
+        List<Object> events = scenario.events();
+        ScoringResult all = ScoringScenario.feed(continuous, events).plus(continuous.expire(end(events)));
+        assertSoftly(softly -> {
+            softly.assertThat(before.closed).as("내려가기 전에 저장한 결과").isNotEmpty();
+            softly.assertThat(reportedAfterReplay).as("쓰지 못한 결과는 되감은 프로세스가 저장하며 알린다").isPositive();
+            softly.assertThat(after.replays("startup")).isOne();
+            softly.assertThat(before.closed.size() + after.closed.size())
+                .as("닫힌 예측을 빠뜨리지도 두 번 알리지도 않는다")
+                .isEqualTo(all.unresolved().size() + all.scored().size());
+            softly.assertThat(after.stored()).isEqualTo(continuous(scenario));
+        });
+    }
+
+    @Test
+    void 줄이_넘쳐_노선을_다시_되감아도_닫힌_예측은_한_번씩만_알린다() {
+        // given
+        ScoringScenario scenario = ScoringScenario.random(97, START, 500, 7, 0, true);
+        Harness harness = new Harness(scenario, scenario.stage(LIMIT));
+        int[] passes = passIndexes(harness.events);
+        harness.reject = index -> index == passes[passes.length / 3] || index == passes[passes.length / 2] + 1;
+
+        // when
+        harness.deliverAll();
+
+        // then
+        ScoringStage continuous = scenario.stage(LIMIT);
+        List<Object> events = scenario.events();
+        ScoringResult all = ScoringScenario.feed(continuous, events).plus(continuous.expire(end(events)));
+        assertSoftly(softly -> {
+            softly.assertThat(harness.replays("dropped")).isEqualTo(2);
+            softly.assertThat(harness.closed).hasSize(all.unresolved().size() + all.scored().size());
+        });
+    }
+
+    @Test
+    void 진단_수신자가_실패해도_쓰기는_성공으로_끝난다() {
+        // given
+        ScoringScenario scenario = ScoringScenario.random(151, START, 200, 6, 0, true);
+        Harness harness = new Harness(scenario, scenario.stage(LIMIT));
+        harness.service.setTelemetry(new ForecastTelemetry() {
+            @Override
+            public void closed(List<ForecastClosed> closed) {
+                throw new IllegalStateException("수신 실패 흉내");
+            }
+        });
+
+        // when
+        harness.deliverAll();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(harness.counter("write.failures")).isZero();
+            softly.assertThat(harness.stored()).isEqualTo(continuous(scenario)).isNotEmpty();
         });
     }
 
@@ -258,6 +333,27 @@ class ShadowScoringServiceTest {
         });
     }
 
+    /**
+     * 사건 목록 가운데쯤에서, 마지막 주기 쓰기(50번째 사건마다) 뒤에 닫힌 예측이 하나 이상 남는 끊는 자리를 찾는다. 그 자리에서
+     * 멈추면 쓰지 못한 결과가 남는다.
+     */
+    private static int cutLeavingUnwrittenResults(ScoringScenario scenario) {
+        List<Object> events = scenario.events();
+        ScoringStage stage = scenario.stage(LIMIT);
+        int unwritten = 0;
+        for (int index = 0; index < events.size(); index++) {
+            unwritten += ScoringScenario.accept(stage, events.get(index)).closed().size();
+            if (index % 50 == 0) {
+                unwritten = 0;
+                continue;
+            }
+            if (index >= events.size() / 2 && unwritten > 0) {
+                return index + 1;
+            }
+        }
+        throw new AssertionError("쓰지 못한 결과가 남는 자리가 없는 시나리오다");
+    }
+
     /** 주기 쓰기 뒤에 나온 결과를 쓰지 못한 채 멈추고, 그만큼 내려가 있다가 다시 떠서 사건 없이 마감만 닫은 뒤 저장된 줄을 모은다. */
     private static Map<String, Object> storedAfterCrashAndDowntime(ScoringScenario scenario, Duration downtime) {
         Harness before = new Harness(scenario, scenario.stage(LIMIT));
@@ -367,7 +463,8 @@ class ShadowScoringServiceTest {
         private final MutableClock clock;
         private final List<Object> saved;
         private final List<MemoryLabels> generations;
-        private final MemoryLabels labels = new MemoryLabels();
+        private final MemoryLabels labels;
+        private final List<ForecastClosed> closed = new ArrayList<>();
         private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
         private final ShadowScoringService service;
         private IntPredicate reject = index -> false;
@@ -377,7 +474,7 @@ class ShadowScoringServiceTest {
         private int submitted;
 
         private Harness(ScoringScenario scenario, ScoringStage stage) {
-            this(scenario, stage, new MutableClock(), new ArrayList<>(), new ArrayList<>());
+            this(scenario, stage, new MutableClock(), new ArrayList<>(), new ArrayList<>(), new MemoryLabels());
         }
 
         private Harness(
@@ -385,7 +482,8 @@ class ShadowScoringServiceTest {
             ScoringStage stage,
             MutableClock clock,
             List<Object> saved,
-            List<MemoryLabels> generations
+            List<MemoryLabels> generations,
+            MemoryLabels labels
         ) {
             this.scenario = scenario;
             this.events = scenario.events();
@@ -393,7 +491,10 @@ class ShadowScoringServiceTest {
             this.clock = clock;
             this.saved = saved;
             this.generations = generations;
-            generations.add(labels);
+            this.labels = labels;
+            if (!generations.contains(labels)) {
+                generations.add(labels);
+            }
             RecordedScoringEvents recorded = new RecordedScoringEvents(saved, this::savedRows, this::failRead);
             this.service = new ShadowScoringService(task -> {
                 submitted++;
@@ -405,11 +506,22 @@ class ShadowScoringServiceTest {
             }, stage, new ScoringReplay(recorded.forecasts(), recorded.passes()),
                 new ScoringWriter(labels, TransactionOperations.withoutTransaction()),
                 from -> List.of(ScoringScenario.ROUTE), ScoringReplay.DEFAULT_MAX_FORECAST_WINDOW, clock, meters);
+            this.service.setTelemetry(new ForecastTelemetry() {
+                @Override
+                public void closed(List<ForecastClosed> reported) {
+                    closed.addAll(reported);
+                }
+            });
         }
 
         /** 같은 저장소를 보는 새 프로세스를 만든다. 정답·미해결 저장은 새로 시작해 이 프로세스가 쓴 줄만 따로 볼 수 있게 한다. */
         private Harness restarted(ScoringStage fresh) {
-            return new Harness(scenario, fresh, clock, saved, generations);
+            return new Harness(scenario, fresh, clock, saved, generations, new MemoryLabels());
+        }
+
+        /** 정답·미해결 저장까지 이어받는 새 프로세스를 만든다. 앞 프로세스가 저장한 줄은 이미 있는 키로 건너뛴다. */
+        private Harness restartedOnSameStore(ScoringStage fresh) {
+            return new Harness(scenario, fresh, clock, saved, generations, labels);
         }
 
         private Harness restartedAfter(Duration downtime, ScoringStage fresh) {
@@ -534,24 +646,24 @@ class ShadowScoringServiceTest {
         private boolean failing;
 
         @Override
-        public int saveLabels(List<PassLabel> labels) {
+        public List<PassLabel> saveLabels(List<PassLabel> labels) {
             failIfAsked();
-            int inserted = 0;
+            List<PassLabel> inserted = new ArrayList<>();
             for (PassLabel label : labels) {
                 if (rows.putIfAbsent(key(label), label) == null) {
-                    inserted++;
+                    inserted.add(label);
                 }
             }
             return inserted;
         }
 
         @Override
-        public int saveUnresolved(List<UnresolvedForecast> unresolved) {
+        public List<UnresolvedForecast> saveUnresolved(List<UnresolvedForecast> unresolved) {
             failIfAsked();
-            int inserted = 0;
+            List<UnresolvedForecast> inserted = new ArrayList<>();
             for (UnresolvedForecast closed : unresolved) {
                 if (rows.putIfAbsent(key(closed), closed) == null) {
-                    inserted++;
+                    inserted.add(closed);
                 }
             }
             return inserted;

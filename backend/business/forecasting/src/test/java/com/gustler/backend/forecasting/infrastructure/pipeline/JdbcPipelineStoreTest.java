@@ -298,19 +298,53 @@ class JdbcPipelineStoreTest {
             "PASS_NOT_SEEN", RECEIVED_AT);
 
         // when
-        final int insertedLabels = labels.saveLabels(List.of(settled, unsupported));
-        final int insertedUnresolved = labels.saveUnresolved(List.of(lost));
-        final int againLabels = labels.saveLabels(List.of(settled));
-        final int againUnresolved = labels.saveUnresolved(List.of(lost));
+        List<PassLabel> insertedLabels = labels.saveLabels(List.of(settled, unsupported));
+        List<UnresolvedForecast> insertedUnresolved = labels.saveUnresolved(List.of(lost));
+        List<PassLabel> againLabels = labels.saveLabels(List.of(settled));
+        List<UnresolvedForecast> againUnresolved = labels.saveUnresolved(List.of(lost));
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(insertedLabels).isEqualTo(2);
-            softly.assertThat(insertedUnresolved).isOne();
-            softly.assertThat(againLabels).isZero();
-            softly.assertThat(againUnresolved).isZero();
+            softly.assertThat(insertedLabels).hasSize(2);
+            softly.assertThat(insertedUnresolved).hasSize(1);
+            softly.assertThat(againLabels).isEmpty();
+            softly.assertThat(againUnresolved).isEmpty();
             softly.assertThat(jdbcClient.sql("SELECT label_value FROM pass_label WHERE state = 'SETTLED'")
                 .query(Double.class).single()).isEqualTo(12.5);
+        });
+    }
+
+    @Test
+    void 새로_넣은_줄만_받은_객체_그대로_돌려주고_목록_안에서_같은_키가_다시_나오면_앞의_줄만_넣는다() {
+        // given
+        PassLabel stored = new PassLabel(DAY, ROUTE_ID, 500, 3, 45, "alighting-identity-safe-v1", 9,
+            PassLabel.State.SETTLED, null, 12.5, 400L, 401L, "a".repeat(64), RECEIVED_AT);
+        PassLabel first = new PassLabel(DAY, ROUTE_ID, 600, 3, 45, "alighting-identity-safe-v1", 9,
+            PassLabel.State.SETTLED, null, 13.5, 400L, 401L, "a".repeat(64), RECEIVED_AT);
+        PassLabel again = new PassLabel(DAY, ROUTE_ID, 600, 3, 45, "alighting-identity-safe-v1", 9,
+            PassLabel.State.SETTLED, null, 14.5, 400L, 401L, "a".repeat(64), RECEIVED_AT.plusSeconds(1));
+        UnresolvedForecast lost = new UnresolvedForecast(DAY, 1001, 5, ROUTE_ID, UnresolvedForecast.State.LOST,
+            "PASS_NOT_SEEN", RECEIVED_AT);
+        UnresolvedForecast lostAgain = new UnresolvedForecast(DAY, 1001, 5, ROUTE_ID,
+            UnresolvedForecast.State.UNSUPPORTED, "SOURCE_HISTORY_INCOMPLETE", RECEIVED_AT.plusSeconds(1));
+        labels.saveLabels(List.of(stored));
+
+        // when
+        List<PassLabel> insertedLabels = labels.saveLabels(List.of(stored, first, again));
+        List<UnresolvedForecast> insertedUnresolved = labels.saveUnresolved(List.of(lost, lostAgain));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(insertedLabels).hasSize(1);
+            softly.assertThat(insertedLabels.getFirst()).isSameAs(first);
+            softly.assertThat(insertedUnresolved).hasSize(1);
+            softly.assertThat(insertedUnresolved.getFirst()).isSameAs(lost);
+            softly.assertThat(jdbcClient.sql("""
+                SELECT label_value FROM pass_label WHERE route_id = ? AND trip_start_observation_id = 600
+                """).param(ROUTE_ID).query(Double.class).list()).containsExactly(13.5);
+            softly.assertThat(jdbcClient.sql("""
+                SELECT state FROM forecast_unresolved WHERE route_id = ? AND vehicle_observation_id = 1001
+                """).param(ROUTE_ID).query(String.class).list()).containsExactly("LOST");
         });
     }
 
@@ -323,11 +357,11 @@ class JdbcPipelineStoreTest {
             PassLabel.State.SETTLED, null, 13.5, 400L, 401L, "b".repeat(64), RECEIVED_AT);
 
         // when
-        final int inserted = labels.saveLabels(List.of(first, second));
+        List<PassLabel> inserted = labels.saveLabels(List.of(first, second));
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(inserted).isEqualTo(2);
+            softly.assertThat(inserted).hasSize(2);
             softly.assertThat(jdbcClient.sql("""
                 SELECT model_deployment_id FROM pass_label WHERE route_id = ? AND trip_start_observation_id = 500
                 ORDER BY model_deployment_id

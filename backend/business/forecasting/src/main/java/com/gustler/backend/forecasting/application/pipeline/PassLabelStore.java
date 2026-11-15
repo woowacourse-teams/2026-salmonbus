@@ -13,15 +13,16 @@ public interface PassLabelStore {
      * 통과 정답을 넣는다.
      *
      * @param labels 저장할 정답
-     * @return 새로 넣은 줄 수
+     * @return 새로 넣은 정답. 받은 객체를 받은 순서로 돌려준다. 이미 있던 키의 줄과, 목록 안에서 같은 키로 뒤에 다시 나온 줄은 빠진다
      */
-    int saveLabels(List<PassLabel> labels);
+    List<PassLabel> saveLabels(List<PassLabel> labels);
 
     /**
      * 정답을 받지 못한 예측을 넣는다.
      *
      * @param unresolved 저장할 미해결 예측
-     * @return 새로 넣은 줄 수
+     * @return 새로 넣은 미해결 예측. 받은 객체를 받은 순서로 돌려준다. 이미 있던 키의 줄과, 목록 안에서 같은 키로 뒤에 다시 나온 줄은
+     *     빠진다
      */
-    int saveUnresolved(List<UnresolvedForecast> unresolved);
+    List<UnresolvedForecast> saveUnresolved(List<UnresolvedForecast> unresolved);
 }
