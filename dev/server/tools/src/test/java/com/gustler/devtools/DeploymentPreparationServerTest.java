@@ -1,5 +1,7 @@
 package com.gustler.devtools;
 
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -365,6 +367,7 @@ class DeploymentPreparationServerTest {
         assertFalse(Files.exists(fixture.layout.units().resolve("salmonbus-api.service.d/30-dev-rds.conf")));
         assertTrue(Files.exists(fixture.layout.units().resolve("salmonbus-worker.service.d/30-dev-rds.conf")));
         var worker = application(base.resolve("rds-worker"), "worker", "2".repeat(64), "b".repeat(40), null);
+        host.archiveActive = true;
         preparation().complete(worker, Map.of("APPLICATION_NAME", "salmonbus-backend-dev",
                 "DEPLOYMENT_GROUP_NAME", "salmonbus-backend-dev-worker"));
         assertFalse(Files.exists(fixture.layout.units().resolve("salmonbus-worker.service.d/30-dev-rds.conf")));
@@ -378,6 +381,7 @@ class DeploymentPreparationServerTest {
         var worker = application(base.resolve("new-worker"), "worker", "2".repeat(64), "b".repeat(40), null);
         var workerEnvironment = Map.of("APPLICATION_NAME", "salmonbus-backend-dev",
                 "DEPLOYMENT_GROUP_NAME", "salmonbus-backend-dev-worker");
+        host.archiveActive = true;
         preparation().complete(worker, workerEnvironment);
         assertEquals("COMPLETE", Json.read(fixture.layout.data()
                 .resolve("deployment-preparation/current.json")).path("phase").asText());
@@ -385,9 +389,112 @@ class DeploymentPreparationServerTest {
         assertNotEquals(original, RevisionStore.selectedBasis(fixture.layout));
     }
 
+    private Path archiveUnit() {
+        return fixture.layout.units().resolve(RevisionStore.ARCHIVE_UNIT);
+    }
+
+    private String phase() throws Exception {
+        return Json.read(fixture.layout.data().resolve("deployment-preparation/current.json")).path("phase").asText();
+    }
+
+    @Test
+    void 기반_교체를_준비할_때_돌고_있던_이관_앱도_함께_멈춘다() throws Exception {
+        // given
+        Files.writeString(archiveUnit(), "old archive unit\n");
+        host.archiveActive = true;
+
+        // when
+        preparation().prepare(incoming, apiEnvironment);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(host.archiveActive).isFalse();
+            softly.assertThat(host.workerActive).isFalse();
+        });
+    }
+
+    @Test
+    void 이관_앱이_돌고_있으면_기반_교체를_시작하지_않는다() throws Exception {
+        // given
+        host.apiActive = false;
+        host.workerActive = false;
+        host.archiveActive = true;
+
+        // when
+        Throwable failure = catchThrowable(
+            () -> new BasisLifecycle(fixture.layout, host).change(incoming.resolve("basis"), true));
+
+        // then
+        Path selected = RevisionStore.selectedBasis(fixture.layout);
+        assertSoftly(softly -> {
+            softly.assertThat(failure).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("STOP_DEV_APPS_BEFORE_BASIS_CHANGE");
+            softly.assertThat(selected).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void 이관_앱을_처음_설치한_배포가_실패하면_유닛을_지우고_이관_앱을_멈춘다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        Files.writeString(archiveUnit(), "new archive unit\n");
+        host.archiveActive = true;
+
+        // when
+        preparation().recover(incoming, apiEnvironment);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(archiveUnit()).doesNotExist();
+            softly.assertThat(host.archiveActive).isFalse();
+            softly.assertThat(host.workerActive).isTrue();
+        });
+    }
+
+    @Test
+    void 이관_앱이_돌던_서버는_배포가_실패하면_이전_유닛으로_이관_앱을_다시_띄운다() throws Exception {
+        // given
+        Files.writeString(archiveUnit(), "old archive unit\n");
+        host.archiveActive = true;
+        preparation().prepare(incoming, apiEnvironment);
+        Files.writeString(archiveUnit(), "new archive unit\n");
+
+        // when
+        preparation().recover(incoming, apiEnvironment);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(archiveUnit()).hasContent("old archive unit\n");
+            softly.assertThat(host.archiveActive).isTrue();
+        });
+    }
+
+    @Test
+    void 이관_앱이_떠_있지_않으면_worker_배포를_끝난_것으로_적지_않는다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        preparation().complete(incoming, apiEnvironment);
+        Path worker = application(base.resolve("new-worker"), "worker", "2".repeat(64), "b".repeat(40), null);
+        Map<String, String> workerEnvironment = Map.of(
+            "APPLICATION_NAME", "salmonbus-backend-dev",
+            "DEPLOYMENT_GROUP_NAME", "salmonbus-backend-dev-worker");
+
+        // when
+        Throwable failure = catchThrowable(() -> preparation().complete(worker, workerEnvironment));
+
+        // then
+        String phase = phase();
+        assertSoftly(softly -> {
+            softly.assertThat(failure).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("DEV_ARCHIVE_NOT_RUNNING");
+            softly.assertThat(phase).isEqualTo("API_READY");
+        });
+    }
+
     private static class PreparationHost extends Fixtures.FakeHost {
         boolean apiActive = true;
         boolean workerActive = true;
+        boolean archiveActive;
         boolean infraActive = true;
         boolean failLoad;
         List<String> workerStopCommand;
@@ -415,8 +522,12 @@ class DeploymentPreparationServerTest {
                 calls.add(command);
                 var unit = command.stream().filter(value -> value.startsWith("salmonbus-"))
                         .findFirst().orElse("").replace(".service", "");
-                final boolean active = unit.equals("salmonbus-api") ? apiActive
-                        : unit.equals("salmonbus-worker") ? workerActive : infraActive;
+                final boolean active = switch (unit) {
+                    case "salmonbus-api" -> apiActive;
+                    case "salmonbus-worker" -> workerActive;
+                    case "salmonbus-archive" -> archiveActive;
+                    default -> infraActive;
+                };
                 if (command.contains("show")) return new Result(0, active ? "active\n" : "inactive\n", "");
                 if (command.contains("is-active")) return new Result(active ? 0 : 3, active ? "active\n" : "inactive\n", "");
                 if (command.contains("stop") && unit.equals("salmonbus-worker") && workerStopCommand != null) {
@@ -434,6 +545,7 @@ class DeploymentPreparationServerTest {
                     switch (unit) {
                         case "salmonbus-api" -> apiActive = next;
                         case "salmonbus-worker" -> workerActive = next;
+                        case "salmonbus-archive" -> archiveActive = next;
                         default -> infraActive = next;
                     }
                 }

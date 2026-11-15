@@ -7,11 +7,13 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.jar.JarFile;
+import java.util.stream.Stream;
 
 final class Packager {
     private final Path repo;
@@ -207,6 +209,8 @@ final class Packager {
                                     "com.gustler.backend.ApiApplication",
                                     "worker",
                                     "com.gustler.backend.worker.WorkerApplication",
+                                    "archive",
+                                    "com.gustler.backend.archive.ArchiveApplication",
                                     "data",
                                     "com.gustler.localdata.LocalData",
                                     "tools",
@@ -220,7 +224,7 @@ final class Packager {
                     jar.stream()
                             .noneMatch(entry -> entry.getName().matches(".*\\.(pem|key|p12|jks)$")),
                     "PRIVATE_FILE_IN_JAR");
-            if (List.of("api", "worker").contains(component)) {
+            if (List.of("api", "worker", "archive").contains(component)) {
                 Checks.require(
                         jar.stream()
                                 .noneMatch(
@@ -233,6 +237,34 @@ final class Packager {
                         "PREPARATION_CODE_IN_APP_JAR");
             }
         }
+    }
+
+    /** 빌드가 만든 실행 JAR은 앱마다 정확히 하나여야 한다. */
+    private Path applicationJar(String application) throws Exception {
+        List<Path> jars;
+        try (Stream<Path> files = Files.list(repo.resolve("backend/" + application + "-app/build/libs"))) {
+            jars = files.filter(file -> isExecutableJar(file, application)).toList();
+        }
+        Checks.require(jars.size() == 1, "PACKAGE_APP_JAR");
+        checkJar(jars.getFirst(), application);
+        return jars.getFirst();
+    }
+
+    private static boolean isExecutableJar(Path file, String application) {
+        String name = file.getFileName().toString();
+        return name.matches(application + "-app-.*\\.jar") && !name.endsWith("-plain.jar");
+    }
+
+    private String runtimeDigest(String application) throws Exception {
+        String digest = host.run(
+                repo.resolve("backend"),
+                null,
+                Duration.ofSeconds(30),
+                List.of("bash", "deploy/runtime-source-inputs.sh", application))
+            .checked()
+            .strip();
+        Checks.require(digest.matches(RevisionStore.HASH), "PACKAGE_RUNTIME_DIGEST");
+        return digest;
     }
 
     void imageContext(Path output) throws Exception {
@@ -302,23 +334,8 @@ final class Packager {
             RevisionStore.seal(basis, "basis", commit, digest, contract, review);
             for (var component : List.of("api", "worker")) {
                 var directory = stage.resolve(component);
-                List<Path> jars;
-                try (var files =
-                        Files.list(repo.resolve("backend/" + component + "-app/build/libs"))) {
-                    jars =
-                            files.filter(
-                                            p ->
-                                                    p.getFileName()
-                                                                    .toString()
-                                                                    .matches(
-                                                                            component
-                                                                                    + "-app-.*\\.jar")
-                                                            && !p.toString().endsWith("-plain.jar"))
-                                    .toList();
-                }
-                Checks.require(jars.size() == 1, "PACKAGE_APP_JAR");
-                checkJar(jars.getFirst(), component);
-                copy(jars.getFirst(), directory.resolve("jars/" + component + "-app.jar"));
+                Path jar = applicationJar(component);
+                copy(jar, directory.resolve("jars/" + component + "-app.jar"));
                 copy(
                         repo.resolve("dev/server/deploy/appspec-" + component + ".yml"),
                         directory.resolve("appspec.yml"));
@@ -328,29 +345,20 @@ final class Packager {
                 copyApplicationScripts(directory);
                 var unit = "systemd/salmonbus-" + component + ".service";
                 copy(repo.resolve("dev/server/" + unit), directory.resolve(unit));
-                var runtime =
-                        host.run(
-                                        repo.resolve("backend"),
-                                        null,
-                                        Duration.ofSeconds(30),
-                                        List.of(
-                                                "bash",
-                                                "deploy/runtime-source-inputs.sh",
-                                                component))
-                                .checked()
-                                .strip();
-                Checks.require(runtime.matches(RevisionStore.HASH), "PACKAGE_RUNTIME_DIGEST");
-                var appDigest =
-                        FileOps.sha(
-                                (runtime
-                                                + contract
-                                                + digest(
-                                                        List.of(
-                                                                repo.resolve("dev/server/deploy"),
-                                                                repo.resolve("dev/server/" + unit),
-                                                                repo.resolve(
-                                                                        "backend/deploy/scripts"))))
-                                        .getBytes());
+                String runtime = runtimeDigest(component);
+                List<Path> deployInputs = new ArrayList<>(List.of(
+                    repo.resolve("dev/server/deploy"),
+                    repo.resolve("dev/server/" + unit),
+                    repo.resolve("backend/deploy/scripts")));
+                // 이관 앱은 worker 묶음에 함께 싣는다. 지문에도 넣어 이관 앱만 바뀐 묶음도 설치할 때 재시작 대상이 되게 한다.
+                if (component.equals("worker")) {
+                    String archiveUnit = "systemd/" + RevisionStore.ARCHIVE_UNIT;
+                    copy(applicationJar("archive"), directory.resolve(RevisionStore.ARCHIVE_JAR));
+                    copy(repo.resolve("dev/server/" + archiveUnit), directory.resolve(archiveUnit));
+                    runtime += runtimeDigest("archive");
+                    deployInputs.add(repo.resolve("dev/server/" + archiveUnit));
+                }
+                String appDigest = FileOps.sha((runtime + contract + digest(deployInputs)).getBytes());
                 var metadata =
                         new RevisionStore.Revision(
                                 1,
@@ -360,9 +368,7 @@ final class Packager {
                                 appDigest,
                                 contract,
                                 review,
-                                Map.of(
-                                        "jars/" + component + "-app.jar",
-                                        FileOps.sha(jars.getFirst())),
+                                Map.of("jars/" + component + "-app.jar", FileOps.sha(jar)),
                                 "");
                 FileOps.writeNew(
                         directory.resolve("release.env"),

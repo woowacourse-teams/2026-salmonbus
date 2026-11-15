@@ -40,6 +40,7 @@ final class DeploymentPreparation {
             values.put("dropin-" + component,
                     layout.units().resolve(name + ".d/30-dev-rds.conf"));
         }
+        values.put("unit-" + RevisionStore.ARCHIVE_UNIT, layout.units().resolve(RevisionStore.ARCHIVE_UNIT));
         return values;
     }
 
@@ -124,11 +125,16 @@ final class DeploymentPreparation {
                 var target = Deployment.current(base.resolve(link), base.resolve("releases"));
                 state.put(component + "-" + link, target == null ? "" : target.getFileName().toString());
             }
-            var active = host.run(Path.of("/"), null, Duration.ofSeconds(15),
-                    List.of("systemctl", "is-active", "salmonbus-" + component));
-            state.put(component + "-active", active.exit() == 0 && active.stdout().strip().equals("active"));
+            state.put(component + "-active", isActive(component));
         }
+        state.put("archive-active", isActive("archive"));
         return state;
+    }
+
+    private boolean isActive(String component) throws Exception {
+        Host.Result active = host.run(Path.of("/"), null, Duration.ofSeconds(15),
+            List.of("systemctl", "is-active", "salmonbus-" + component));
+        return active.exit() == 0 && active.stdout().strip().equals("active");
     }
 
     private void write(Map<String, Object> state) throws Exception {
@@ -138,12 +144,22 @@ final class DeploymentPreparation {
     }
 
     private void stopApplications() throws Exception {
+        stopArchive();
         for (var component : List.of("worker", "api")) {
             // Allow systemd's 45-second worker shutdown to complete before timing out.
             host.run(Path.of("/"), null, Duration.ofSeconds(75),
                     List.of("systemctl", "stop", "salmonbus-" + component)).checked();
         }
         DataPreparation.requireStopped(host, "STOP_DEV_APPS_BEFORE_PREPARATION");
+    }
+
+    /** 이관 앱은 worker 묶음이 설치한다. worker 묶음을 한 번도 설치하지 않은 서버에는 멈출 유닛이 없다. */
+    private void stopArchive() throws Exception {
+        if (!FileOps.exists(layout.units().resolve(RevisionStore.ARCHIVE_UNIT))) {
+            return;
+        }
+        host.run(Path.of("/"), null, Duration.ofSeconds(75), List.of("systemctl", "stop", "salmonbus-archive"))
+            .checked();
     }
 
     Map<String, Object> recover(Path incoming, Map<String, String> environment) throws Exception {
@@ -206,7 +222,7 @@ final class DeploymentPreparation {
             }
         }
         host.run("systemctl", "daemon-reload");
-        for (var component : List.of("api", "worker")) {
+        for (String component : List.of("api", "worker", "archive")) {
             if (state.path(component + "-active").asBoolean()) {
                 host.run("systemctl", "start", "salmonbus-" + component);
             }
@@ -224,6 +240,7 @@ final class DeploymentPreparation {
         host.verifyInstance(host.identity());
         Environment.identity(Json.read(FileOps.privateText(layout.config().resolve("environment.json")).getBytes()),
                 host.identity());
+        requireArchiveRunning(app);
         try (var lease = FileOps.lock(layout.locks().resolve("salmonbus-dev-preparation.lock"))) {
             removeManualOverride(app.kind());
             if (FileOps.exists(journal())) {
@@ -239,6 +256,14 @@ final class DeploymentPreparation {
             }
         }
         return Map.of("status", "ok", "component", app.kind());
+    }
+
+    /** worker 묶음의 배포는 함께 설치한 이관 앱까지 떠 있어야 끝난다. */
+    private void requireArchiveRunning(RevisionStore.Revision app) throws Exception {
+        if (!app.kind().equals("worker")) {
+            return;
+        }
+        Checks.require(isActive("archive"), "DEV_ARCHIVE_NOT_RUNNING");
     }
 
     private void removeManualOverride(String component) throws Exception {

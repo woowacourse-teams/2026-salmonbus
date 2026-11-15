@@ -98,7 +98,7 @@ final class DataPreparation {
     }
 
     static void requireStopped(Host host, String code) throws Exception {
-        for (var unit : List.of("salmonbus-api.service", "salmonbus-worker.service")) {
+        for (String unit : List.of("salmonbus-api.service", "salmonbus-worker.service", RevisionStore.ARCHIVE_UNIT)) {
             var state =
                     host.run("systemctl", "show", unit, "--property=ActiveState", "--value")
                             .strip();
