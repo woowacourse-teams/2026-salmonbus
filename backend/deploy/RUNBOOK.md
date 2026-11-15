@@ -750,7 +750,7 @@ SAL-434가 지울 옛 테이블 25개(목록은 `deploy/sql/sal434-03-drop-legac
 - 세션 설정은 날짜 단위 내보내기와 같다(`extra_float_digits=1`, 시간대 UTC, 병렬 읽기 끔, 문장 제한 시간). 여기에 `bytea_output='hex'`를 더한다.
 - 한 회차는 `MAX_ROWS_PER_RUN`이나 `MAX_RUN_DURATION`에 먼저 닿는 곳에서 멈추고, 그때까지 읽은 줄을 조각 하나로 닫아 장부에 적는다. 다음 회차는 장부의 마지막 조각 `key_to` 다음 키부터 읽는다. 기동할 때도 장부에서 이어 간다.
 - 이관 앱의 예약 작업은 스레드 하나와 DB 연결 1개를 나눠 쓴다. 옛 테이블 내보내기 한 회차가 도는 동안(`MAX_RUN_DURATION`까지) 날짜 단위 내보내기는 기다린다.
-- 걸리는 시간은 운영에서 재야 한다. 읽는 속도의 상한은 대략 `PAGE_SIZE / (페이지 읽는 시간 + PAGE_PAUSE)`이고, 회차 사이에 `INTERVAL`만큼 쉰다. 페이지 하나에 0.3초가 걸린다면 기본값으로 초당 4000줄 안팎, 옛 테이블 약 3억 줄(운영 11-15 기준 `seat_forecast` 1.48억, `forecast_evaluation_result` 1.31억 등)에 하루 가까이 걸린다(추정). 끝난 뒤 범위 다시 세기가 같은 테이블을 한 번 더 읽는다(인덱스만 읽는 계획이 되면 덜 읽는다. 추정).
+- 걸리는 시간은 운영에서 재야 한다. 읽는 속도의 상한은 대략 `PAGE_SIZE / (페이지 읽는 시간 + PAGE_PAUSE)`이고, 회차 사이에 `INTERVAL`만큼 쉰다. 페이지 하나에 0.3초가 걸린다면 기본값으로 초당 4000줄 안팎이다. 옛 테이블은 수억 줄이고 대부분이 `seat_forecast`와 `forecast_evaluation_result`라서 하루 가까이 걸린다(추정). 끝난 뒤 범위 다시 세기가 같은 테이블을 한 번 더 읽는다(인덱스만 읽는 계획이 되면 덜 읽는다. 추정).
 - DB가 느려지면 `PAGE_PAUSE`를 늘리거나 `PAGE_SIZE`·`MAX_ROWS_PER_RUN`을 줄이거나 `INTERVAL`을 늘리고 이관 앱을 재시작한다. 멈추려면 스위치를 끄고 재시작한다. 다시 켜면 장부에서 이어 간다. RDS 처리량 크레딧과 `salmonbus_archive_legacy_rows_per_second`를 함께 본다.
 
 S3 구조와 장부:
@@ -1247,7 +1247,7 @@ dev와 로컬에서 먼저 해 볼 때는 네 가지를 알고 시작한다.
 
 **시작 전. 저장 공간.** 1번을 켠 뒤부터 새 테이블에 줄이 쌓이고, 6번에서 파티션 삭제를 켜기 전에는 지워지지 않는다. 옛 예보·정산이 쓰는 양은 4번까지 그대로이고 옛 테이블은 7번까지 줄지 않는다. 그래서 1번부터 7번까지 DB는 지금 늘던 속도에 새 테이블 분량을 더한 만큼 늘어난다.
 - 확인: 「DB 저장 공간 여유」 패널(위 V80 배포 전 확인과 같은 위치)에서 최근 며칠의 하루 감소량을 읽고, 지금 여유가 7번까지 걸릴 기간을 버티는지 계산한다. 1·2번의 관찰 기간만 14일이다. RDS 저장 공간 자동 조정이 켜져 있는지도 본다.
-- 모자라면 1번을 켜기 전에 저장 공간을 늘린다. 2026-11-15 운영은 자동 조정이 꺼져 있었고 여유는 그때 속도로 한 주 남짓 분량이었다.
+- 모자라면 1번을 켜기 전에 저장 공간을 늘린다.
 - 1번을 켜고 하루 뒤 `sal434-01-precheck.sql`이 보이는 새 테이블 파티션 크기로 하루 분량을 재서 다시 계산한다. 차례를 넘어갈 때마다 여유를 다시 본다.
 
 **1. 예보 그림자.** `FORECAST_SHADOW_ENABLED=true`로 worker를 재시작한다.
@@ -1301,7 +1301,7 @@ dev와 로컬에서 먼저 해 볼 때는 네 가지를 알고 시작한다.
 **6-1. 옛 테이블 내보내기.** 7번이 장부를 확인한다. **계약: 줄이 있는 옛 테이블마다 `daily_export`에서 `table_name`이 그 테이블이고 `verified_at`이 찍힌 줄의 `row_count` 합이 테이블의 줄 수와 같고, 옛 테이블 조각(`source_date = 2000-01-01`)의 번호가 0부터 빈틈없이 이어져야 한다.** 동작과 설정은 「옛 테이블 내보내기」에 있다.
 1. **줄 단위 이관을 멈춘다.** 노선 판본 이관은 내보낸 줄을 지우므로 함께 돌면 장부와 줄 수가 어긋난다. archive.env에 `ARCHIVE_ENABLED=false`를 넣는다(이 둘을 함께 켜면 이관 앱이 기동하지 않는다).
 2. **옛 경로가 더 쓰지 않는지 확인한다.** 4·5번이 끝나 있어야 한다. `sal434-01-precheck.sql`을 몇 분 간격으로 두 번 실행해 2절의 대상 테이블 `inserts`·`updates`·`deletes`가 늘지 않는지, 3절의 `old_*` 시각이 멈췄는지 본다.
-3. archive.env에 `ARCHIVE_LEGACY_EXPORT_ENABLED=true`를 넣고 이관 앱을 재시작한다. 처음에는 기본값으로 두고 RDS 처리량 크레딧, `api.board` 지연, `salmonbus_archive_legacy_rows_per_second`를 보며 `PAGE_PAUSE`·`PAGE_SIZE`·`MAX_ROWS_PER_RUN`·`INTERVAL`을 조절한다. 걸리는 시간은 운영에서 재야 한다(약 80GB, 3억 줄. 「옛 테이블 내보내기」의 추정 참고).
+3. archive.env에 `ARCHIVE_LEGACY_EXPORT_ENABLED=true`를 넣고 이관 앱을 재시작한다. 처음에는 기본값으로 두고 RDS 처리량 크레딧, `api.board` 지연, `salmonbus_archive_legacy_rows_per_second`를 보며 `PAGE_PAUSE`·`PAGE_SIZE`·`MAX_ROWS_PER_RUN`·`INTERVAL`을 조절한다. 걸리는 시간은 운영에서 재야 한다(「옛 테이블 내보내기」의 추정 참고).
 4. 진행은 `status=SEGMENT`·`status=RUN` 로그와 `salmonbus_archive_legacy_exported_rows{table}`로 본다. 테이블마다 `status=COMPLETE`와 `salmonbus_archive_legacy_complete{table}=1`이 나오면 끝이다. `status=MISMATCH`가 있으면 원인을 찾고 「옛 테이블 내보내기」의 방법으로 다시 내보낸다.
 5. `sal434-01-precheck.sql`을 `-c "SET sal434.count_legacy_rows = 'exact'"`와 함께 실행해 8-2절에서 테이블마다 `exact_rows`와 `verified_ledger_rows`가 같고 `sal434_03_ledger_check`가 `ok`인지 본다. 옛 테이블 전체를 읽으므로 크레딧이 충분할 때 한다. 출력을 보관한다.
 6. `ARCHIVE_LEGACY_EXPORT_ENABLED=false`로 이관 앱을 재시작하고 7번 승인을 받는다. 켜 둔 채면 회차마다 테이블의 마지막 키 뒤를 읽어 `sal434-03`의 읽기 관찰 가드(120초)가 멈춘다. 5번의 줄 수 확인은 스위치를 끈 뒤에 해도 된다.
@@ -1322,7 +1322,7 @@ dev와 로컬에서 먼저 해 볼 때는 네 가지를 알고 시작한다.
   sudo bash /etc/salmonbus/evaluation-work-transition.sh runtime worker && echo 통과
   ```
 
-- RDS EBS 처리량 크레딧(최근 1시간 최소 20% 이상)과 여유 저장공간을 확인했다. 가드가 옛 테이블 전체(운영 11-15 기준 약 80GB)를 한 번 센다. 쓰기는 막고 읽기는 허용한 채 수십 분이 걸릴 수 있다(추정).
+- RDS EBS 처리량 크레딧(최근 1시간 최소 20% 이상)과 여유 저장공간을 확인했다. 가드가 옛 테이블 전체(운영 DB 용량의 대부분)를 한 번 센다. 쓰기는 막고 읽기는 허용한 채 수십 분이 걸릴 수 있다(추정).
 
 실행 순서는 다음과 같다.
 1. `sal434-01-precheck.sql`을 실행해 보관한다. 5-1절에서 `referencing_is_target=false`인 FK가 관측 두 테이블 쪽(`vehicle_observation`, 운영의 `historical_import_record`·`migration_source_record`)뿐인지, 5-2절에서 대상 밖의 뷰가 `operational_observation`뿐인지, 5-3절이 비었는지, 8-2절에서 줄이 있는 테이블마다 장부 합이 실제 줄 수와 같은지(`sal434_03_ledger_check`) 본다. 6-1절의 운영 전용 테이블이 대상을 가리키면 사람이 처리 방법을 정한다.

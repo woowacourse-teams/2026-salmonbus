@@ -39,7 +39,7 @@
 --        모든 쓰기를 막은 뒤(SHARE 잠금) 센다.
 -- 지우기 전에 테이블마다 정확한 줄 수와 크기를 NOTICE로 남기고, 지운 뒤 장부의 해당 줄에 dropped_at을 찍는다.
 -- 잡는 잠금과 예상 시간: 관찰 동안은 잠금이 없다. 그 뒤 대상 테이블 전체에 SHARE(읽기만 허용)를 잡고 줄을 센다.
---   운영 11-15 기준 seat_forecast 37GB·forecast_evaluation_result 31GB 등 합계 약 80GB를 읽으므로 크레딧이 충분해도
+--   seat_forecast·forecast_evaluation_result를 비롯해 운영 DB 용량의 대부분을 읽으므로 크레딧이 충분해도
 --   수십 분이 걸리고 EBS 크레딧을 크게 쓴다(추정). 그동안 대상 테이블에 쓰는 것은 없어야 하고 읽기는 계속된다.
 --   마지막에 DROP이 ACCESS EXCLUSIVE를 잡는다(lock_timeout 5초). statement_timeout 120분.
 -- 여러 번 실행해도 된다. 대상이 이미 없으면 알리고 끝난다.
