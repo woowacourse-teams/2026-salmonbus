@@ -14,6 +14,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -142,9 +143,66 @@ class ForecastMonitoringTest {
         assertThat(monitoring.context("collection_attempt", "234000886")).contains("routeName=\"9300\"");
     }
 
+    @Test
+    void 예보_커밋은_마지막_커밋_시각을_갱신하고_예측이_있는_커밋만_마지막_예보와_입력_시각을_갱신한다() throws Exception {
+        // given
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        PipelineClock clock = new PipelineClock(Instant.ofEpochSecond(1000));
+        ForecastMonitoring monitoring = new ForecastMonitoring(registry, mock(DataSource.class), clock);
+        Method register = ForecastMonitoring.class.getDeclaredMethod("registerRoute", long.class, String.class);
+        register.setAccessible(true);
+        Object state = register.invoke(monitoring, 1L, "9300");
+        Field routes = ForecastMonitoring.class.getDeclaredField("routes");
+        routes.setAccessible(true);
+        ((Map) routes.get(monitoring)).put(1L, state);
+
+        // when
+        monitoring.published(1L, 4L, Instant.ofEpochSecond(990), 0);
+
+        // then
+        assertThat(registry.get("salmonbus.forecast.last.commit.timestamp").gauge().value()).isEqualTo(1000);
+        assertThat(registry.get("salmonbus.forecast.last.nonempty.timestamp").gauge().value()).isNaN();
+        assertThat(registry.get("salmonbus.forecast.last.input.timestamp").gauge().value()).isNaN();
+
+        // when
+        clock.now = Instant.ofEpochSecond(1030);
+        monitoring.published(1L, 4L, Instant.ofEpochSecond(1020), 12);
+        clock.now = Instant.ofEpochSecond(1060);
+        monitoring.published(1L, 4L, Instant.ofEpochSecond(1050), 0);
+        monitoring.published(2L, 5L, Instant.ofEpochSecond(1050), 3);
+
+        // then
+        assertThat(registry.get("salmonbus.forecast.last.commit.timestamp").gauge().value()).isEqualTo(1060);
+        assertThat(registry.get("salmonbus.forecast.last.nonempty.timestamp").gauge().value()).isEqualTo(1030);
+        assertThat(registry.get("salmonbus.forecast.last.input.timestamp").gauge().value()).isEqualTo(1020);
+    }
+
     private SettledEvaluation sample(Double prediction, final boolean usable) {
         return new SettledEvaluation(1, 6, 2, 3, 4, 2, .2, ScoringState.SETTLED,
             5L, 3, Instant.now(), Instant.now(), usable, "private-vehicle", 40, true,
             new EvaluationDiagnostics("3330", "야탑역 광장", "station1", "UP", 6, prediction, .25));
+    }
+
+    private static final class PipelineClock extends Clock {
+        private Instant now;
+
+        private PipelineClock(Instant now) {
+            this.now = now;
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
     }
 }

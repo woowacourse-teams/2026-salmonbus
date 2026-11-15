@@ -47,33 +47,6 @@ tasks.register('verifyAlightingAwareSourceFeatures', JavaExec) {
     }
 }
 
-// 명시한 로컬 원자료만 별도 테스트 DB로 재생하며 운영 DB에 접속하지 않는다.
-tasks.register('verifyAlightingAwareWorkerReplay', JavaExec) {
-    dependsOn testClasses
-    classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'com.gustler.backend.forecasting.support.ConfirmedAlightingAwareWorkerReplay'
-    maxHeapSize = '1g'
-    jvmArgs '-XX:ActiveProcessorCount=1'
-    doFirst {
-        def replaySourceSha = providers.exec {
-            workingDir rootProject.projectDir
-            commandLine 'git', 'rev-parse', 'HEAD'
-        }.standardOutput.asText.get().trim()
-        def dirty = providers.exec {
-            workingDir rootProject.projectDir
-            commandLine 'git', 'status', '--porcelain', '--', 'business/forecasting', 'tools/alighting_model'
-        }.standardOutput.asText.get().trim()
-        if (dirty.isEmpty()) {
-            systemProperty 'alighting.replay.code-sha', replaySourceSha
-        }
-        args providers.gradleProperty('alightingWorkerFixtures').get(), providers.gradleProperty('alightingBundle').get(),
-            providers.gradleProperty('alightingWorkerOutput').get()
-        if (providers.gradleProperty('alightingWorkerRoute').isPresent()) {
-            args providers.gradleProperty('alightingWorkerRoute').get()
-        }
-    }
-}
-
 // 후보 계약 검사와 최종 운영 로더 검사를 구분하며 운영 DB에 적재하지 않는다.
 tasks.register('verifyAlightingAwareServingReadiness', JavaExec) {
     dependsOn testClasses

@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
+import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
@@ -138,6 +139,11 @@ final class MainlineHarness {
 
     void start() {
         start(RouteStateReplayer.DEFAULT_WINDOW, RouteStateReplayer.DEFAULT_EXTENDED_WINDOW, List.of());
+    }
+
+    /** 진단 수신자를 붙인다. {@link #start}를 부른 뒤에 쓴다. */
+    void telemetry(ForecastTelemetry telemetry) {
+        mainline.setTelemetry(telemetry);
     }
 
     /** 노선 상태를 검증된 출발 지점으로 둔다. 흐름의 첫 배치부터 처리할 때 쓴다. */

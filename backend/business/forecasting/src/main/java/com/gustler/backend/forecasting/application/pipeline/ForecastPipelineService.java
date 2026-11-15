@@ -4,7 +4,9 @@ import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
+import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
+import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
@@ -128,7 +130,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
         this.metrics = new PipelineForecastMetrics(meters, processor.states());
     }
 
-    /** 줍기에서 찾은 가장 오래된 처리하지 않은 배치를 옛 경로와 같은 진단 수신자에 알린다. */
+    /** 줍기에서 찾은 가장 오래된 처리하지 않은 배치와 커밋한 예보 실행을 알릴 진단 수신자를 정한다. */
     public void setTelemetry(ForecastTelemetry telemetry) {
         this.telemetry = Objects.requireNonNull(telemetry);
     }
@@ -343,6 +345,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
             metrics.lag(Duration.between(read.batch().receivedAt(), confirmedAt));
         }
         PipelineBatchProcessor.Processed processed = processor.process(context, read.withConfirmedAt(confirmedAt));
+        reportPublished(processed);
         if (processed.replayed() != null) {
             metrics.replay(processed.replayed());
         }
@@ -356,6 +359,26 @@ public final class ForecastPipelineService implements ForecastPipeline {
             case OUT_OF_ORDER -> "out_of_order";
             case SAVED -> savedResult(processed);
         };
+    }
+
+    /**
+     * 예보 실행을 커밋한 배치를 진단 수신자에 알린다. 예측이 없는 실행(늦음·빈 응답·범위 밖)도 커밋으로 알린다. 입력 부족으로 끝난
+     * 실행은 예보를 내지 못한 것이라 알리지 않고, 같은 배치의 실행 줄이 이미 있어 저장하지 않은 처리도 알리지 않는다.
+     */
+    private void reportPublished(PipelineBatchProcessor.Processed processed) {
+        if (processed.status() != PipelineBatchProcessor.Status.SAVED) {
+            return;
+        }
+        ForecastPublished published = processed.published();
+        if (published.outcome() == ForecastOutcome.INPUT_UNAVAILABLE) {
+            return;
+        }
+        try {
+            telemetry.published(published.routeId(), published.routeVersionId(), published.receivedAt(),
+                published.predictionCount());
+        } catch (RuntimeException ignored) {
+            LOGGER.debug("event=pipeline_forecast_telemetry_failed routeVersionId={}", published.routeVersionId());
+        }
     }
 
     private static String savedResult(PipelineBatchProcessor.Processed processed) {
