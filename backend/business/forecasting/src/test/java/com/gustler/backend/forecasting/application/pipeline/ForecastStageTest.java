@@ -321,6 +321,60 @@ class ForecastStageTest {
         });
     }
 
+    @Test
+    void 창_시작에_걸친_연결이_다음_실정류장에_닿지_않고_끊기면_창_시작_뒤_90분부터_연속_실행과_같게_예보한다() {
+        // given
+        List<ForecastBatch> batches = new ArrayList<>();
+        for (int index = 0; index < 650; index++) {
+            List<ForecastObservationRow> rows = new ArrayList<>();
+            if (index < 130) {
+                rows.add(row("c", passedBeforeVanishing(index), 20));
+            }
+            if (index >= 200) {
+                rows.add(row("b", 1, 30));
+            }
+            batches.add(confirmed(index + 1, T0.minusSeconds(3600).plusSeconds(10 + 30L * index), rows));
+        }
+        RouteForecastState continuous = RouteForecastState.fromVerifiedOrigin(ROUTE);
+        RouteForecastState replayed = RouteForecastState.replayingFrom(ROUTE, T0);
+        Map<Integer, Map<String, String>> outcomes = new HashMap<>();
+        int compared = 0;
+
+        // when
+        for (int index = 0; index < batches.size(); index++) {
+            ForecastStageResult expected = stage.advance(continuous, STATISTICS, "GBIS", batches.get(index));
+            continuous = expected.state();
+            if (batches.get(index).confirmedAt().isBefore(T0)) {
+                continue;
+            }
+            ForecastStageResult actual = stage.advance(replayed, STATISTICS, "GBIS", batches.get(index));
+            replayed = actual.state();
+            outcomes.put(index, outcome(actual));
+            Map<Long, List<String>> expectedVectors = vectors(expected.snapshots());
+            for (Map.Entry<Long, List<String>> entry : vectors(actual.snapshots()).entrySet()) {
+                assertThat(entry.getValue()).as("배치 %d 관측 %d", index, entry.getKey())
+                    .isEqualTo(expectedVectors.get(entry.getKey()));
+                compared++;
+            }
+        }
+
+        // then
+        final int checked = compared;
+        assertSoftly(softly -> {
+            softly.assertThat(outcomes.get(299)).containsEntry("b", ForecastStage.REPLAY_HISTORY_INCOMPLETE);
+            softly.assertThat(outcomes.get(300)).containsEntry("b", "FORECAST");
+            softly.assertThat(outcomes.get(649)).containsEntry("b", "FORECAST");
+            softly.assertThat(checked).isEqualTo(350);
+        });
+    }
+
+    private static int passedBeforeVanishing(final int index) {
+        if (index < 100) {
+            return 2;
+        }
+        return 3;
+    }
+
     private static int passedBeforeOrAfterWindow(final int index) {
         if (index < 250) {
             return 3;

@@ -120,6 +120,7 @@ public final class RouteForecastState {
     /**
      * {@code at} 시각의 예보 입력이 창 밖 관측과 무관한지다. 검증된 출발 지점에서 이어 온 상태는 항상 참이다.
      * 되감은 상태는 창 시작 뒤 90분이 지났고, 창 시작에 걸친 연결이 놓쳤을 수 있는 통과의 영향이 끝났을 때 참이다.
+     * 그 연결이 다음 실정류장에 닿지 않고 끊겼으면 놓친 통과가 닫히지 않으므로 영향이 없는 것으로 본다.
      * 통과 하나는 닫힌 시각부터 90분(양 끝 포함) 동안 정류장 대기 상태와 최근 한 시간 편차로 다른 차량의 입력에 들어간다.
      */
     public boolean historyCompleteAt(Instant at) {
@@ -322,7 +323,17 @@ public final class RouteForecastState {
             if (!replayed) {
                 return true;
             }
-            return truncatedPasses.isEmpty() && at.isAfter(historyIncompleteThrough);
+            return !hasOpenTruncatedPass(at) && at.isAfter(historyIncompleteThrough);
+        }
+
+        /**
+         * 창 시작에 걸친 연결이 놓쳤을 수 있는 통과가 {@code at}에도 닫힐 수 있는지다. 그 차량의 마지막 관측 뒤로 연결
+         * 간격이 지났으면 다음 관측은 새 연결을 시작하므로 그 통과는 닫히지 않고, 다른 차량의 입력에도 들어가지 않는다.
+         */
+        private boolean hasOpenTruncatedPass(Instant at) {
+            return truncatedPasses.keySet().stream()
+                .map(vehicles::get)
+                .anyMatch(track -> !track.last().receivedAt().plusSeconds(CHAIN_LINK_SECONDS).isBefore(at));
         }
     }
 }
