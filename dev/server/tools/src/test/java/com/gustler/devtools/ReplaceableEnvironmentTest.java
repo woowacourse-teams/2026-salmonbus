@@ -11,7 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class ReplaceableEnvironmentTest {
-    @TempDir Path base;
+    @TempDir
+    Path base;
     private Layout layout;
 
     @BeforeEach
@@ -31,7 +32,7 @@ class ReplaceableEnvironmentTest {
     }
 
     private void dropIn(String unit, String text) throws Exception {
-        var file = layout.units().resolve(unit + ".d/90-manual.conf");
+        Path file = layout.units().resolve(unit + ".d/90-manual.conf");
         Files.createDirectories(file.getParent());
         Files.writeString(file, text);
     }
@@ -39,7 +40,7 @@ class ReplaceableEnvironmentTest {
     @Test
     void 기반_교체가_다시_만드는_환경_파일과_설정_디렉터리_밖의_파일은_허용한다() throws Exception {
         // given
-        var outside = base.resolve("etc/salmonbus-dev-route-geometry/api.env");
+        Path outside = base.resolve("etc/salmonbus-dev-route-geometry/api.env");
         dropIn("salmonbus-api.service", "[Service]\nEnvironmentFile=" + outside + "\n"
             + "EnvironmentFile=-" + base.resolve("etc/salmonbus-dev-auth/auth.env") + "\nEnvironmentFile=\n");
 
@@ -72,15 +73,10 @@ class ReplaceableEnvironmentTest {
     @Test
     void 저장소의_unit은_기반_교체_뒤에도_남는_환경_파일만_읽는다() throws Exception {
         // given
-        var units = Path.of("../systemd").toAbsolutePath().normalize();
-        try (var files = Files.list(units)) {
-            assertThat(files.map(file -> file.getFileName().toString()).filter(name -> name.endsWith(".service")))
-                .containsExactlyInAnyOrderElementsOf(SettingsPreparation.ENVIRONMENT_UNITS);
-        }
-        for (var unit : SettingsPreparation.ENVIRONMENT_UNITS) {
-            assertThat(Files.readString(units.resolve(unit))).contains("EnvironmentFile=" + Layout.SERVER.config() + "/");
-        }
-        var server = new Layout(layout.root(), Layout.SERVER.config(), layout.data(), layout.locks(), units);
+        Path units = Path.of("../systemd").toAbsolutePath().normalize();
+        assertThat(Files.readString(units.resolve("salmonbus-api.service")))
+            .contains("EnvironmentFile=" + Layout.SERVER.config() + "/");
+        Layout server = new Layout(layout.root(), Layout.SERVER.config(), layout.data(), layout.locks(), units);
 
         // when & then
         assertThatCode(() -> SettingsPreparation.requireReplaceableEnvironment(server)).doesNotThrowAnyException();
@@ -95,5 +91,29 @@ class ReplaceableEnvironmentTest {
         // when & then
         assertThatThrownBy(() -> SettingsPreparation.requireReplaceableEnvironment(layout))
             .hasMessage("DEV_UNMANAGED_ENVIRONMENT_FILE");
+    }
+
+    @Test
+    void 나중에_더한_salmonbus_unit의_drop_in도_설정_디렉터리의_다른_환경_파일을_읽으면_거절한다() throws Exception {
+        // given
+        Files.writeString(layout.units().resolve("salmonbus-added.service"), "[Service]\n"
+            + "EnvironmentFile=" + layout.config().resolve("worker.env") + "\n");
+        dropIn("salmonbus-added.service", "[Service]\nEnvironmentFile="
+            + layout.config().resolve("added.env") + "\n");
+
+        // when & then
+        assertThatThrownBy(() -> SettingsPreparation.requireReplaceableEnvironment(layout))
+            .hasMessage("DEV_UNMANAGED_ENVIRONMENT_FILE");
+    }
+
+    @Test
+    void salmonbus로_시작하지_않는_unit은_검사하지_않는다() throws Exception {
+        // given
+        Files.writeString(layout.units().resolve("docker.service"), "[Service]\n"
+            + "EnvironmentFile=" + layout.config().resolve("docker.env") + "\n");
+        dropIn("docker.service", "[Service]\nEnvironmentFile=" + layout.config().resolve("override.env") + "\n");
+
+        // when & then
+        assertThatCode(() -> SettingsPreparation.requireReplaceableEnvironment(layout)).doesNotThrowAnyException();
     }
 }

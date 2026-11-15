@@ -6,6 +6,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,6 +15,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 @Tag("linux-root")
 class DeploymentPreparationServerTest {
@@ -152,8 +155,12 @@ class DeploymentPreparationServerTest {
             CompatiblePreparation.INCREMENTAL_SETTLEMENT_DATA);
     }
 
-    private void changeCodeContract(String previousContract, String previousDigest,
-            String nextContract, String nextDigest) throws Exception {
+    private void changeCodeContract(
+            String previousContract,
+            String previousDigest,
+            String nextContract,
+            String nextDigest)
+            throws Exception {
         Files.delete(original.resolve("revision.json"));
         Files.writeString(original.resolve("tools/data-contract.sha256"), previousContract + "\n");
         var previous = RevisionStore.seal(original, "basis", "a".repeat(40), "1".repeat(64), "1".repeat(64), false);
@@ -178,13 +185,13 @@ class DeploymentPreparationServerTest {
     void 증분_정산_초기화_계약으로_바꾼_뒤_다음_hook이_실패하면_이전_basis와_앱으로_복구한다() throws Exception {
         // given
         changeToIncrementalSettlementContract();
-        var api = fixture.layout.root().resolve("api/current").toRealPath();
-        var worker = fixture.layout.root().resolve("worker/current").toRealPath();
+        Path api = fixture.layout.root().resolve("api/current").toRealPath();
+        Path worker = fixture.layout.root().resolve("worker/current").toRealPath();
         preparation().prepare(incoming, apiEnvironment);
         assertFalse(Json.read(journal()).path("dataTransition").asBoolean());
 
         // when
-        var result = preparation().recover(incoming, apiEnvironment);
+        Map<String, Object> result = preparation().recover(incoming, apiEnvironment);
 
         // then
         assertEquals(true, result.get("recoveryRequired"));
@@ -194,21 +201,22 @@ class DeploymentPreparationServerTest {
         assertEquals(worker, fixture.layout.root().resolve("worker/current").toRealPath());
         assertTrue(host.apiActive);
         assertTrue(host.workerActive);
-        assertEquals("existing database contents\n", Files.readString(fixture.layout.data().resolve("database-sentinel")));
+        assertEquals("existing database contents\n",
+                Files.readString(fixture.layout.data().resolve("database-sentinel")));
         assertEquals(true, preparation().prepare(incoming, apiEnvironment).get("preparationRequired"));
     }
 
     @Test
     void 기반_교체가_옮기지_않는_설정_파일을_앱이_읽으면_앱을_중지하기_전에_거절한다() throws Exception {
         // given
-        var settings = fixture.layout.config().resolve("route-geometry-api.env");
+        Path settings = fixture.layout.config().resolve("route-geometry-api.env");
         FileOps.writeNew(settings, "ROUTE_GEOMETRY_PRESENTATION_ENABLED=true\n".getBytes(), 0600);
-        var drop = fixture.layout.units().resolve("salmonbus-api.service.d/90-route-geometry.conf");
+        Path drop = fixture.layout.units().resolve("salmonbus-api.service.d/90-route-geometry.conf");
         Files.createDirectories(drop.getParent());
         Files.writeString(drop, "[Service]\nEnvironmentFile=" + settings + "\n");
 
         // when
-        var failure = assertThrows(IllegalArgumentException.class,
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
                 () -> preparation().prepare(incoming, apiEnvironment));
 
         // then
@@ -219,7 +227,7 @@ class DeploymentPreparationServerTest {
         assertTrue(host.workerActive);
         assertTrue(host.calls.stream().noneMatch(c -> c.contains("stop")));
         assertFalse(Files.exists(journal()));
-        var moved = Files.createDirectories(base.resolve("etc/salmonbus-dev-route-geometry")).resolve("api.env");
+        Path moved = Files.createDirectories(base.resolve("etc/salmonbus-dev-route-geometry")).resolve("api.env");
         Files.move(settings, moved);
         Files.writeString(drop, "[Service]\nEnvironmentFile=" + moved + "\n");
         assertEquals(true, preparation().prepare(incoming, apiEnvironment).get("preparationRequired"));
@@ -230,17 +238,16 @@ class DeploymentPreparationServerTest {
     void 다른_커밋의_완료되지_않은_기반_교체_기록은_다음_기반_교체를_막지_않는다() throws Exception {
         // given
         preparation().prepare(incoming, apiEnvironment);
-        var prepared = RevisionStore.selectedBasis(fixture.layout);
-        var later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+        Path prepared = RevisionStore.selectedBasis(fixture.layout);
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
                 basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
 
         // when
-        var result = preparation().prepare(later, apiEnvironment);
+        Map<String, Object> result = preparation().prepare(later, apiEnvironment);
 
         // then
-        assertEquals(true, result.get("preparationRequired"));
-        assertEquals("b".repeat(40), result.get("supersededCommit"));
-        assertEquals("PREPARED", result.get("supersededPhase"));
+        assertEquals(Map.of("status", "ok", "preparationRequired", true, "applicationsRemainStopped", true,
+                "supersededCommit", "b".repeat(40)), result);
         assertNotEquals(prepared, RevisionStore.selectedBasis(fixture.layout));
         assertEquals("c".repeat(40), Json.read(journal()).path("commit").asText());
         assertEquals(RevisionStore.verify(prepared, true).releaseId(),
@@ -252,17 +259,17 @@ class DeploymentPreparationServerTest {
     void DB_전환_기록과_준비_중_기록은_다른_커밋이어도_다음_기반_교체를_막는다() throws Exception {
         // given
         preparation().prepare(incoming, apiEnvironment);
-        var later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
                 basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
-        var state = (tools.jackson.databind.node.ObjectNode) Json.read(journal());
+        ObjectNode state = (ObjectNode) Json.read(journal());
 
-        for (var change : List.<Runnable>of(() -> state.put("dataTransition", true),
+        for (Runnable change : List.<Runnable>of(() -> state.put("dataTransition", true),
                 () -> state.put("dataTransition", false).put("phase", "PREPARING"))) {
             change.run();
             FileOps.atomicFile(journal(), Json.bytes(state), 0600);
 
             // when
-            var failure = assertThrows(IllegalArgumentException.class,
+            IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
                     () -> preparation().prepare(later, apiEnvironment));
 
             // then
@@ -275,23 +282,23 @@ class DeploymentPreparationServerTest {
     void 같은_커밋_기록과_basis가_되돌려진_기록과_DB_전환_여부가_없는_기록은_다음_기반_교체를_막는다() throws Exception {
         // given
         preparation().prepare(incoming, apiEnvironment);
-        var prepared = RevisionStore.selectedBasis(fixture.layout);
-        var preparedReleaseId = RevisionStore.verify(prepared, true).releaseId();
-        var later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+        Path prepared = RevisionStore.selectedBasis(fixture.layout);
+        String preparedReleaseId = RevisionStore.verify(prepared, true).releaseId();
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
                 basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
-        var recorded = (tools.jackson.databind.node.ObjectNode) Json.read(journal());
+        ObjectNode recorded = (ObjectNode) Json.read(journal());
         assertEquals("PREPARED", recorded.path("phase").asText());
 
-        for (var change : List.<java.util.function.Consumer<tools.jackson.databind.node.ObjectNode>>of(
+        for (Consumer<ObjectNode> change : List.<Consumer<ObjectNode>>of(
                 state -> state.put("commit", "c".repeat(40)),
                 state -> state.put("basisReleaseId", preparedReleaseId),
                 state -> state.remove("dataTransition"))) {
-            var state = recorded.deepCopy();
+            ObjectNode state = recorded.deepCopy();
             change.accept(state);
             FileOps.atomicFile(journal(), Json.bytes(state), 0600);
 
             // when
-            var failure = assertThrows(IllegalArgumentException.class,
+            IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
                     () -> preparation().prepare(later, apiEnvironment));
 
             // then
@@ -306,20 +313,69 @@ class DeploymentPreparationServerTest {
         // given
         preparation().prepare(incoming, apiEnvironment);
         preparation().complete(incoming, apiEnvironment);
-        var prepared = RevisionStore.selectedBasis(fixture.layout);
-        var recorded = Json.read(journal());
+        Path prepared = RevisionStore.selectedBasis(fixture.layout);
+        JsonNode recorded = Json.read(journal());
         assertEquals("API_READY", recorded.path("phase").asText());
-        var later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
                 basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
 
         // when
-        var failure = assertThrows(IllegalArgumentException.class,
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
                 () -> preparation().prepare(later, apiEnvironment));
 
         // then
         assertEquals("DEV_PREPARATION_RECOVERY_REQUIRED", failure.getMessage());
         assertEquals(recorded, Json.read(journal()));
         assertEquals(prepared, RevisionStore.selectedBasis(fixture.layout));
+    }
+
+    /** 복구가 basis까지 되돌린 뒤 API 기동에서 실패해 기록이 {@code PREPARED}로 남은 상태를 만든다. */
+    private void stopRecoveryAtApiStart() throws Exception {
+        preparation().prepare(incoming, apiEnvironment);
+        host.failApiStart = true;
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> preparation().recover(incoming, apiEnvironment));
+        assertEquals("DEV_COMMAND_FAILED", failure.getMessage());
+        assertEquals("PREPARED", Json.read(journal()).path("phase").asText());
+        assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
+    }
+
+    @Test
+    void 복구가_basis를_되돌린_뒤_앱_기동에서_멈춘_기록은_다른_커밋의_기반_교체를_막는다() throws Exception {
+        // given
+        stopRecoveryAtApiStart();
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+
+        // when
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> preparation().prepare(later, apiEnvironment));
+
+        // then
+        assertEquals("DEV_PREPARATION_RECOVERY_REQUIRED", failure.getMessage());
+        assertEquals("b".repeat(40), Json.read(journal()).path("commit").asText());
+        assertEquals("PREPARED", Json.read(journal()).path("phase").asText());
+        assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
+        assertFalse(host.apiActive);
+    }
+
+    @Test
+    void 앱_기동에서_멈춘_복구는_같은_커밋의_복구를_다시_돌리면_끝나고_다음_기반_교체를_막지_않는다() throws Exception {
+        // given
+        stopRecoveryAtApiStart();
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+
+        // when
+        Map<String, Object> recovery = preparation().recover(incoming, apiEnvironment);
+
+        // then
+        assertEquals(true, recovery.get("recoveryRequired"));
+        assertEquals("ROLLED_BACK", Json.read(journal()).path("phase").asText());
+        assertTrue(host.apiActive);
+        assertTrue(host.workerActive);
+        assertEquals(Map.of("status", "ok", "preparationRequired", true, "applicationsRemainStopped", true),
+                preparation().prepare(later, apiEnvironment));
     }
 
     @Test
@@ -706,6 +762,7 @@ class DeploymentPreparationServerTest {
         boolean workerActive = true;
         boolean infraActive = true;
         boolean failLoad;
+        boolean failApiStart;
         List<String> workerStopCommand;
 
         @Override
@@ -745,6 +802,10 @@ class DeploymentPreparationServerTest {
                         throw new IllegalStateException(error);
                     }
                 }
+                if (failsApiStart(command, unit)) {
+                    failApiStart = false;
+                    return new Result(1, "", "");
+                }
                 if (command.contains("stop") || command.contains("start")) {
                     final boolean next = command.contains("start");
                     switch (unit) {
@@ -756,6 +817,10 @@ class DeploymentPreparationServerTest {
                 return new Result(0, "", "");
             }
             return super.run(cwd, environment, timeout, command);
+        }
+
+        private boolean failsApiStart(List<String> command, String unit) {
+            return failApiStart && command.contains("start") && unit.equals("salmonbus-api");
         }
     }
 }

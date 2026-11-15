@@ -37,12 +37,29 @@ systemd는 환경 파일의 DB 설정을 사용한다. worker의 GBIS loopback �
 
 기반 교체는 `/etc/salmonbus-dev`를 새로 만들고 앱·DB 설정, `arrivals.env`, RDS 대상과 CA만
 옮긴다. 수동 drop-in이 읽는 환경 파일은 `/etc/salmonbus-dev-auth`처럼 이 디렉터리 밖에 둔다.
-앱·인프라 unit이나 drop-in의 `EnvironmentFile`이 이 디렉터리의 다른 파일을 가리키면 앱을
-중지하기 전에 `DEV_UNMANAGED_ENVIRONMENT_FILE`로 거절한다. 다른 커밋의 배포가 basis를 바꾼 뒤
-API 검증 전에 멈춰 남긴 `PREPARED` 준비 기록은 다음 basis 교체를 막지 않고 넘긴다. 넘긴 기록의
-커밋과 단계는 준비 결과의 `supersededCommit`·`supersededPhase`에 남긴다. `API_READY` 기록은 그
-커밋의 worker 배포가 아직 진행 중일 수 있어 계속 막는다. DB 전환 기록과 준비 중에 멈춘 기록도
-계속 막는다.
+`/etc/systemd/system`에서 이름이 `salmonbus-`로 시작하는 서비스 unit과 그 drop-in을 모두 읽어,
+`EnvironmentFile`이 이 디렉터리의 다른 파일을 가리키면 앱을 중지하기 전에
+`DEV_UNMANAGED_ENVIRONMENT_FILE`로 거절한다.
+
+다른 커밋의 배포가 basis를 바꾼 뒤 API 검증 전에 멈춰 남긴 `PREPARED` 준비 기록은 다음 basis
+교체를 막지 않고 넘긴다. 넘긴 기록의 커밋은 준비 결과의 `supersededCommit`에 남긴다. `API_READY`
+기록은 그 커밋의 worker 배포가 아직 진행 중일 수 있어 계속 막는다. DB 전환 기록, 준비 중에 멈춘
+기록, 복구가 basis를 되돌린 뒤 끝나지 못한 기록도 계속 막는다.
+
+준비 기록이 다음 basis 교체를 `DEV_PREPARATION_RECOVERY_REQUIRED`로 막으면 기록의 상태에 따라
+푼다.
+
+- `API_READY`로 남은 기록: 그 커밋의 worker 배포가 끝나지 않은 것이다. 그 커밋의 파이프라인을
+  다시 실행한다. basis가 이미 그 커밋의 것이면 API 준비는 기반 교체를 건너뛰고, worker의
+  ValidateService가 끝나면 기록이 `COMPLETE`가 된다.
+- 복구가 basis를 되돌린 뒤 앱 기동 실패 등으로 끝나지 못한 기록: 기록은 `PREPARED`나
+  `API_READY`로 남고 basis는 이전 것으로 돌아가 있다. 복구가 멈춘 원인을 해결하고 같은 커밋의
+  배포를 다시 실행한다. 준비가 거절된 뒤 hook이 같은 커밋의 복구를 다시 돌리고, 복구가 끝나면
+  기록이 `ROLLED_BACK`이 된다. 그 실행은 실패로 끝나며 다음 실행부터 기반 교체를 진행한다.
+
+기록을 넘긴 배포는 넘긴 시점의 basis·앱 버전 링크·앱 실행 여부를 이전 상태로 기록한다. 앞 배포가
+앱을 멈춘 채 끝났다면 이 배포가 실패해 복구해도 앱을 기동하지 않고, basis는 넘긴 커밋의 것으로
+돌아간다. 이때 앱은 다음 배포의 ApplicationStart에서 기동한다.
 
 기반 교체가 필요한 배포에는 공유 dev 중단 시간이 발생한다. 데이터 계약이 바뀌는 변경은
 기존 검증이 거부하므로 별도 이전 계획이 필요하다. 이 배포 경로는 DB를 초기화하거나

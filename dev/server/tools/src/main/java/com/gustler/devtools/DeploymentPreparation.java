@@ -85,14 +85,13 @@ final class DeploymentPreparation {
         try (var lease = FileOps.lock(layout.locks().resolve("salmonbus-dev-preparation.lock"))) {
             Checks.require(!FileOps.exists(layout.root().resolve(".deploying")),
                     "DEV_DEPLOYMENT_IN_PROGRESS");
-            var result = new TreeMap<String, Object>(Map.of("status", "ok", "preparationRequired", true,
+            Map<String, Object> result = new TreeMap<>(Map.of("status", "ok", "preparationRequired", true,
                     "applicationsRemainStopped", true));
             if (FileOps.exists(journal())) {
                 var existing = Json.read(FileOps.privateText(journal()).getBytes());
                 if (!List.of("COMPLETE", "ROLLED_BACK").contains(existing.path("phase").asText())) {
                     Checks.require(superseded(existing, app, previous), "DEV_PREPARATION_RECOVERY_REQUIRED");
                     result.put("supersededCommit", existing.path("commit").asText());
-                    result.put("supersededPhase", existing.path("phase").asText());
                 }
             }
             var state = snapshot(app, previous);
@@ -130,10 +129,13 @@ final class DeploymentPreparation {
      * 다른 커밋의 배포가 basis를 바꾼 뒤 끝맺지 못한 기록인지 확인한다.
      *
      * <p>API 검증 전에 멈춘 {@code PREPARED} 기록만 넘긴다. 그 커밋의 worker 배포는 시작되지 않았고, 이 기록으로
-     * 되돌리는 것은 같은 커밋의 hook뿐이라 다음 커밋의 준비를 막을 이유가 없다. 현재 basis가 기록의 직전 basis와
-     * 다를 때, 즉 교체가 끝난 뒤에만 해당한다. {@code API_READY}는 그 커밋의 worker 배포가 아직 진행 중일 수 있어
-     * 계속 막고, DB 전환 기록과 준비 중에 멈춘 기록도 계속 막는다. 넘긴 기록의 커밋과 단계는 준비 결과의
-     * {@code supersededCommit}·{@code supersededPhase}에 남긴다.
+     * 되돌리는 것은 같은 커밋의 hook뿐이라 다음 커밋의 준비를 막을 이유가 없다. {@code API_READY}는 그 커밋의
+     * worker 배포가 아직 진행 중일 수 있어 계속 막고, DB 전환 기록과 준비 중에 멈춘 기록도 계속 막는다. 넘긴
+     * 기록의 커밋은 준비 결과의 {@code supersededCommit}에 남긴다.
+     *
+     * <p>현재 basis가 기록의 직전 basis와 같으면 넘기지 않는다. {@code PREPARED}는 교체가 끝난 뒤에만 적으므로 이
+     * 상태는 그 뒤 basis가 다시 되돌려졌다는 뜻이다. 복구가 basis를 되돌리고 앱 기동에서 멈춘 기록이 그렇다. 이
+     * 기록은 같은 커밋의 복구를 다시 돌려 끝낸다.
      */
     private static boolean superseded(JsonNode state, RevisionStore.Revision app, RevisionStore.Revision basis) {
         return state.path("dataTransition").isBoolean() && !state.path("dataTransition").asBoolean()

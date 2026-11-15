@@ -80,8 +80,11 @@ final class BasisLifecycle {
      * @param restoring 배포 준비 기록으로 직전 basis에 되돌릴 때만 참이다. 검토한 초기화 코드 전환의 역방향을
      *     더 허용하고, 초기 데이터와 인프라 파일은 그대로 비교한다.
      */
-    static void preserveData(RevisionStore.Revision previous, RevisionStore.Revision next,
-            DataTransition.Approval approval, final boolean restoring) {
+    static void preserveData(
+            RevisionStore.Revision previous,
+            RevisionStore.Revision next,
+            DataTransition.Approval approval,
+            final boolean restoring) {
         if (approval != null) approval.verify(previous, next, java.time.Instant.now());
         final boolean retirement = ChatRetirement.permits(previous, next);
         for (var name : List.of("tools/data-contract.sha256", "infra/compose.yaml")) {
@@ -152,8 +155,12 @@ final class BasisLifecycle {
         return change(previous, true, null, true);
     }
 
-    private Map<String, Object> change(Path incoming, final boolean apply, DataTransition.Approval approval,
-            final boolean restoring) throws Exception {
+    private Map<String, Object> change(
+            Path incoming,
+            final boolean apply,
+            DataTransition.Approval approval,
+            final boolean restoring)
+            throws Exception {
         Checks.require(host.root(), "ROOT_REQUIRED");
         var next = RevisionStore.verify(incoming, true);
         Checks.require(next.kind().equals("basis"), "DEV_BASIS_REVISION");

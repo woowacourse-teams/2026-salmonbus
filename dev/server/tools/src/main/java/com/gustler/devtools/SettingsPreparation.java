@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -24,9 +25,7 @@ final class SettingsPreparation {
                     Environment.KEYS.keySet().stream().map(name -> name + ".env"), Stream.of(ArrivalSettings.FILE))
             .collect(Collectors.toUnmodifiableSet());
 
-    /** {@link #requireReplaceableEnvironment}가 {@code EnvironmentFile}을 검사하는 unit이다. 저장소의 unit과 같아야 한다. */
-    static final List<String> ENVIRONMENT_UNITS =
-            List.of("salmonbus-api.service", "salmonbus-worker.service", "salmonbus-dev-infra.service");
+    private static final String UNIT_PREFIX = "salmonbus-";
 
     interface Writer {
         void write(Path path, byte[] content, int mode) throws Exception;
@@ -45,38 +44,80 @@ final class SettingsPreparation {
     }
 
     /**
-     * 앱과 인프라 unit, drop-in의 {@code EnvironmentFile}이 basis 교체 뒤에도 남는 파일만 가리키는지 확인한다.
+     * 이름이 {@code salmonbus-}로 시작하는 서비스 unit과 그 drop-in의 {@code EnvironmentFile}이 basis 교체 뒤에도
+     * 남는 파일만 가리키는지 확인한다. 대상은 목록 없이 unit 디렉터리에서 찾으므로 나중에 더한 unit과 수동
+     * drop-in도 같은 검사를 받는다.
      *
      * <p>basis 교체는 설정 디렉터리를 통째로 바꾸고 관리하는 파일만 옮긴다. 수동 drop-in이 같은 디렉터리의 다른
      * 파일을 읽으면 교체 뒤 앱이 기동하지 못하므로 앱을 멈추기 전에 거절한다. 수동 설정은 설정 디렉터리 밖에 둔다.
      */
     static void requireReplaceableEnvironment(Layout layout) throws Exception {
-        var config = layout.config().normalize();
-        for (var unit : ENVIRONMENT_UNITS) {
-            var files = new ArrayList<Path>();
-            files.add(layout.units().resolve(unit));
-            var dropIns = layout.units().resolve(unit + ".d");
-            if (Files.isDirectory(dropIns)) {
-                try (var entries = Files.list(dropIns)) {
-                    entries.filter(path -> path.getFileName().toString().endsWith(".conf")).sorted().forEach(files::add);
+        Path config = layout.config().normalize();
+        for (Path file : serviceFiles(layout.units())) {
+            for (String line : Files.readAllLines(file)) {
+                Optional<Path> target = environmentFile(line);
+                if (target.isEmpty()) {
+                    continue;
                 }
-            }
-            for (var file : files) {
-                if (!Files.isRegularFile(file)) continue;
-                for (var line : Files.readAllLines(file)) {
-                    final int separator = line.indexOf('=');
-                    if (separator < 0 || !line.substring(0, separator).strip().equals("EnvironmentFile")) continue;
-                    var value = line.substring(separator + 1).strip();
-                    if (value.startsWith("-")) value = value.substring(1);
-                    if (value.isEmpty()) continue;
-                    var path = Path.of(value).normalize();
-                    Checks.require(!path.startsWith(config)
-                                    || config.equals(path.getParent())
-                                            && REPLACED_ENVIRONMENT_FILES.contains(path.getFileName().toString()),
-                            "DEV_UNMANAGED_ENVIRONMENT_FILE");
-                }
+                Checks.require(survivesReplacement(target.get(), config), "DEV_UNMANAGED_ENVIRONMENT_FILE");
             }
         }
+    }
+
+    private static List<Path> serviceFiles(Path units) throws Exception {
+        List<Path> files = new ArrayList<>();
+        for (Path entry : sortedEntries(units)) {
+            String name = entry.getFileName().toString();
+            if (!name.startsWith(UNIT_PREFIX)) {
+                continue;
+            }
+            if (name.endsWith(".service")) {
+                files.add(entry);
+            }
+            if (name.endsWith(".service.d") && Files.isDirectory(entry)) {
+                files.addAll(dropIns(entry));
+            }
+        }
+        return files.stream().filter(Files::isRegularFile).toList();
+    }
+
+    private static List<Path> dropIns(Path directory) throws Exception {
+        return sortedEntries(directory).stream()
+                .filter(path -> path.getFileName().toString().endsWith(".conf"))
+                .toList();
+    }
+
+    private static List<Path> sortedEntries(Path directory) throws Exception {
+        try (Stream<Path> entries = Files.list(directory)) {
+            return entries.sorted().toList();
+        }
+    }
+
+    /** {@code EnvironmentFile=} 줄이 가리키는 경로다. 다른 설정 줄이거나 값을 비운 줄이면 비어 있다. */
+    private static Optional<Path> environmentFile(String line) {
+        final int separator = line.indexOf('=');
+        if (separator < 0) {
+            return Optional.empty();
+        }
+        if (!line.substring(0, separator).strip().equals("EnvironmentFile")) {
+            return Optional.empty();
+        }
+        String value = line.substring(separator + 1).strip();
+        if (value.startsWith("-")) {
+            value = value.substring(1);
+        }
+        if (value.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(Path.of(value).normalize());
+    }
+
+    /** 설정 디렉터리 밖의 파일이거나, 설정 디렉터리 바로 아래에서 basis 교체가 다시 만드는 파일이다. */
+    private static boolean survivesReplacement(Path file, Path config) {
+        if (!file.startsWith(config)) {
+            return true;
+        }
+        return config.equals(file.getParent()) && REPLACED_ENVIRONMENT_FILES.contains(file.getFileName().toString());
     }
 
     static Map<String, Map<String, String>> create(String origin, String revision) {
