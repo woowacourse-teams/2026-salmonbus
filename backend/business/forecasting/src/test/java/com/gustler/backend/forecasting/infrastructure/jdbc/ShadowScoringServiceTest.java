@@ -232,52 +232,29 @@ class ShadowScoringServiceTest {
     }
 
     @Test
-    void 받기를_멈춘_뒤에_온_사건과_주기_호출은_채점_줄에_넣지_않고_버린_사건으로도_세지_않는다() {
+    void 채점_스레드에_중단_요청이_오면_기동_직후_되감기를_돌던_노선까지만_하고_멈춘다() {
         // given
         ScoringScenario scenario = ScoringScenario.random(139, START, 80, 5, 0, true);
-        Harness harness = new Harness(scenario, scenario.stage(LIMIT));
-        final int half = harness.events.size() / 2;
-        harness.deliver(0, half);
-        final int submittedBefore = harness.submitted;
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        RecordedScoringEvents recorded = new RecordedScoringEvents(new ArrayList<>(), List::of,
+            () -> Thread.currentThread().interrupt());
+        ShadowScoringService service = new ShadowScoringService(task -> {
+            task.run();
+            return true;
+        }, scenario.stage(LIMIT), new ScoringReplay(recorded.forecasts(), recorded.passes()),
+            new ScoringWriter(new MemoryLabels(), TransactionOperations.withoutTransaction()),
+            from -> List.of(1L, 2L, 3L), ScoringReplay.DEFAULT_MAX_FORECAST_WINDOW, new MutableClock(), meters);
 
         // when
-        harness.service.stopAccepting();
-        harness.service.stopAccepting();
-        harness.deliver(half, harness.events.size());
-        final boolean started = harness.service.start();
-        final boolean ticked = harness.service.tick();
+        final boolean started = service.start();
+        final boolean interrupted = Thread.interrupted();
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(harness.submitted).isEqualTo(submittedBefore);
-            softly.assertThat(harness.counter("dropped")).isZero();
-            softly.assertThat(started).isFalse();
-            softly.assertThat(ticked).isFalse();
-        });
-    }
-
-    @Test
-    void 마지막_쓰기는_쓰지_못하면_남은_줄_수를_돌려주고_다시_부르면_남은_줄을_모두_쓴다() {
-        // given
-        ScoringScenario scenario = ScoringScenario.random(149, START, 80, 5, 0, true);
-        Harness harness = new Harness(scenario, scenario.stage(LIMIT));
-        harness.labels.failing = true;
-        harness.deliver(0, harness.events.size() / 2);
-        harness.service.stopAccepting();
-
-        // when
-        final int remainingWhileFailing = harness.service.flushRemaining();
-        harness.labels.failing = false;
-        final int remainingAfterRetry = harness.service.flushRemaining();
-        final int remainingAfterAnother = harness.service.flushRemaining();
-
-        // then
-        assertSoftly(softly -> {
-            softly.assertThat(remainingWhileFailing).isPositive();
-            softly.assertThat(remainingAfterRetry).isZero();
-            softly.assertThat(remainingAfterAnother).isZero();
-            softly.assertThat(harness.stored()).hasSize(remainingWhileFailing);
-            softly.assertThat(harness.counter("write.failures")).isPositive();
+            softly.assertThat(started).isTrue();
+            softly.assertThat(interrupted).as("되감기 도중에 온 중단 요청이 남아 있다").isTrue();
+            softly.assertThat(meters.find("salmonbus.pipeline.scoring.replays").tag("reason", "startup").counters())
+                .extracting(Counter::count).containsExactly(1.0);
         });
     }
 

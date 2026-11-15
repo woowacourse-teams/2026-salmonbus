@@ -33,8 +33,8 @@ public record PartitionExportSettings(
      * <li>{@code stop_pass}: 채점 되감기는 예보 범위의 시작에서 {@code DEFAULT_PASS_WINDOW}(26시간) -
      * {@code ScoringStage.IDLE_EXPIRY}(2시간 10분) 더 앞까지 읽는다. 49시간 50분이다.</li>
      * <li>{@code forecast_record}, {@code pass_label}, {@code forecast_unresolved}: 채점 되감기의 예보 범위 26시간이다.</li>
-     * <li>{@code observation_batch}, {@code vehicle_observation}: 예보 되감기({@code RouteStateReplayer})의 늘린 창 상한
-     * {@code MAXIMUM_EXTENDED_WINDOW}(12시간)에 착수 여유 90초를 더한 범위다.</li>
+     * <li>{@code observation_batch}, {@code vehicle_observation}: 예보 되감기({@code RouteStateReplayer})의 늘린 창
+     * {@code DEFAULT_EXTENDED_WINDOW}(12시간)에 착수 여유 90초를 더한 범위다.</li>
      * </ul>
      * 범위는 수신·닫힌 시각으로 재고 파티션은 그보다 조금 이른 예약·저장 시각의 날짜로 나뉘지만, 그 차이는
      * {@link #minimumRetentionDays} 가 날짜로 올림하며 남기는 폭보다 훨씬 짧다.

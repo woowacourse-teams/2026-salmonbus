@@ -11,13 +11,12 @@ import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistr
 import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
 import com.gustler.backend.forecasting.application.pipeline.ForecastStage;
-import com.gustler.backend.forecasting.application.pipeline.PipelineBatchProcessor;
 import com.gustler.backend.forecasting.application.pipeline.PipelineEvents;
 import com.gustler.backend.forecasting.application.pipeline.ReplaySource;
 import com.gustler.backend.forecasting.application.pipeline.RouteForecastState;
-import com.gustler.backend.forecasting.application.pipeline.RouteStateRegistry;
 import com.gustler.backend.forecasting.application.pipeline.RouteStateReplayer;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
+import com.gustler.backend.forecasting.configuration.ForecastAssembly;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
@@ -50,7 +49,6 @@ import java.util.Random;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 흐름 하나와 예보 서비스를 묶는 시험 도우미다. 노선별 실행 줄은 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다.
@@ -67,7 +65,6 @@ final class MainlineHarness {
     static final String REPLAY_FAILURE = "TEST_REPLAY_FAILURE";
     private static final String SOURCE_ROUTE_ID = "234001739";
     private static final String MODEL_ROUTE = "6801";
-    private static final int MAXIMUM_ROWS = 250_000;
 
     final ObservationStreamFixture.Stream stream;
     final PipelineTestSupport.MutableClock clock = new PipelineTestSupport.MutableClock();
@@ -82,6 +79,7 @@ final class MainlineHarness {
     private final Map<Long, Integer> saveFailures = new HashMap<>();
     private final Deque<Runnable> waitingTasks = new ArrayDeque<>();
     private final CommittedBatches committed;
+    private final VehicleCapacityCache capacities;
     private final AlightingAwareSeatForecastModel model;
     private SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private ForecastPipelineService mainline;
@@ -115,9 +113,9 @@ final class MainlineHarness {
             new RouteStops(version, SOURCE_ROUTE_ID, stops.stops(), stops.routeName())));
         model = model(new Random(seed));
         runtime = activate(model);
-        source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
-        stage = new ForecastStage(new CachedVehicleCapacities(
-            new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc))));
+        source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
+        capacities = new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc));
+        stage = new ForecastStage(new CachedVehicleCapacities(capacities));
         committed = new CommittedBatches(new JdbcPendingPipelineBatches(jdbc));
     }
 
@@ -139,12 +137,12 @@ final class MainlineHarness {
             }
             return source.read(statistics, from, through, throughBatchId);
         };
-        PipelineBatchProcessor processor = new PipelineBatchProcessor(stage,
-            new RouteStateReplayer(replays, stage, window, extendedWindow), failingRecords(beans.records()),
-            beans.passes(), new TransactionTemplate(beans.transactions()), events, new RouteStateRegistry(), false);
-        mainline = new ForecastPipelineService(this::submit, processor, source, committed, this::activeRuntime,
-            this::versions, stopsByVersion::get, new JdbcSettlementContextWriter(jdbc),
-            new ForecastPolicy(Duration.ofMinutes(10), batchLimit), clock, meters);
+        ForecastAssembly.Sources sources = new ForecastAssembly.Sources(replays, source, committed,
+            this::activeRuntime, this::versions, stopsByVersion::get);
+        ForecastAssembly.Settings settings = new ForecastAssembly.Settings(
+            new ForecastPolicy(Duration.ofMinutes(10), batchLimit), window, extendedWindow, false);
+        mainline = new ForecastAssembly(jdbc, beans.transactions(), clock, meters).forecast(this::submit, events,
+            sources, capacities, failingRecords(beans.records()), beans.passes(), settings);
         clock.at = EVENING.plus(Duration.ofDays(2));
         mainline.pickUp();
     }

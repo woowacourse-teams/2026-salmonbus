@@ -12,7 +12,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.DisposableBean;
+import org.springframework.context.SmartLifecycle;
+import org.springframework.scheduling.concurrent.ExecutorConfigurationSupport;
 
 /**
  * 예보의 노선별 실행 줄이다. 단일 스레드 실행기({@code forecast-lane-<번호>-})를
@@ -23,22 +24,40 @@ import org.springframework.beans.factory.DisposableBean;
  * (다음 줍기가 다시 넣는다). 일 하나가 실패해도 그 줄은 다음 일을 계속 실행한다. 줄 길이는
  * {@code salmonbus.pipeline.forecast.queue{lane}} 게이지로 낸다.
  *
- * <p>정상 종료 때는 {@link PipelineShutdown}이 {@link #drain}으로 받은 일을 끝까지 실행하게 한다. 그러지 못하고 빈이 파괴되면
- * 기다리는 일을 버린다.
+ * <p>컨텍스트가 닫힐 때는 일을 넣는 수집과 줍기의 스케줄러가 돌던 회차를 끝낸 바로 다음에 닫힌다({@link #stop()}). 그래서 돌던
+ * 수집 회차가 넘긴 배치까지는 받는다. 닫을 때는 새 일을 받지 않고, 줄에서 기다리던 일은 버리고, 돌던 일은 중단시키지 않고 끝나기를
+ * 한도까지 기다린다. 스프링은 수명 주기 빈을 모두 멈춘 뒤에 빈을 파괴하므로 돌던 일은 DB 연결 풀이 닫히기 전에 끝난다. 버린 일이
+ * 처리했을 배치는 다시 뜬 뒤 줍기가 찾는다. 한 번 닫으면 다시 열 수 없어 컨텍스트 일시 정지에는 참여하지 않는다.
  */
-public class RouteLanes implements ForecastLanes, DrainableQueue, DisposableBean {
+public class RouteLanes implements ForecastLanes, SmartLifecycle {
     /** 실행 줄 스레드 이름의 앞부분. */
     public static final String THREAD_PREFIX = "forecast-lane-";
+    /** worker가 쓰는 줄 하나의 길이. */
+    public static final int QUEUE_CAPACITY = 1_000;
+    /**
+     * worker가 닫을 때 돌던 일이 끝나기를 기다리는 한도. 스프링이 스케줄러의 돌던 회차를 기다리는 시한(기본 30초)과 채점 줄의 한도를
+     * 더해도 서비스 유닛의 강제 종료 시한(45초)보다 짧아야 한다.
+     */
+    public static final Duration STOP_WAIT = Duration.ofSeconds(5);
+    /** 스프링의 스케줄러가 돌던 회차를 끝내는 단계의 바로 다음 단계다. 단계가 큰 것부터 멈춘다. */
+    static final int PHASE = ExecutorConfigurationSupport.DEFAULT_PHASE - 1;
     private static final Logger LOGGER = LoggerFactory.getLogger(RouteLanes.class);
 
     private final List<ThreadPoolExecutor> lanes;
+    private final Duration stopWait;
 
     /**
      * @param count 줄 수
      * @param capacity 줄 하나에 기다릴 수 있는 일의 수
+     * @param stopWait 닫을 때 돌던 일이 끝나기를 기다리는 한도. 모든 줄에 한 번 적용한다
      * @param meters 지표 등록기. 없으면 줄 길이 지표를 내지 않는다
      */
-    public RouteLanes(final int count, final int capacity, MeterRegistry meters) {
+    public RouteLanes(
+        final int count,
+        final int capacity,
+        Duration stopWait,
+        MeterRegistry meters
+    ) {
         if (count < 1 || capacity < 1) {
             throw new IllegalArgumentException("줄 수와 줄 길이는 1 이상이어야 한다");
         }
@@ -51,6 +70,7 @@ public class RouteLanes implements ForecastLanes, DrainableQueue, DisposableBean
             }
         }
         this.lanes = List.copyOf(created);
+        this.stopWait = stopWait;
     }
 
     private static ThreadPoolExecutor createLane(final int index, final int capacity) {
@@ -104,14 +124,59 @@ public class RouteLanes implements ForecastLanes, DrainableQueue, DisposableBean
         return lanes.stream().mapToInt(lane -> lane.getQueue().size()).sum();
     }
 
-    /** 모든 줄을 함께 닫고 한도 하나로 기다린다. 닫은 뒤 {@link #submit}은 거짓을 돌려준다. */
+    /** 일하는 스레드는 첫 일이 들어올 때 만들어지므로 시작할 것이 없다. */
     @Override
-    public QueueDrain drain(Duration timeout) {
-        return QueueDrain.of(lanes, timeout);
+    public void start() {
+    }
+
+    /**
+     * 모든 줄을 닫는다. 닫은 뒤 {@link #submit}은 거짓을 돌려준다. 한도 안에 돌던 일이 끝나지 않으면 경고를 남기고 돌아온다. 그
+     * 일은 DB 연결 풀이 닫힌 뒤 실패로 끝날 수 있으며, 트랜잭션이 통째로 되돌려지므로 반쯤 쓴 줄은 남지 않는다.
+     */
+    @Override
+    public void stop() {
+        int discarded = 0;
+        for (ThreadPoolExecutor lane : lanes) {
+            lane.shutdown();
+            discarded += lane.getQueue().drainTo(new ArrayList<>());
+        }
+        final long deadline = System.nanoTime() + stopWait.toNanos();
+        int running = 0;
+        for (ThreadPoolExecutor lane : lanes) {
+            if (!terminatesBy(lane, deadline)) {
+                running++;
+            }
+        }
+        if (running > 0) {
+            LOGGER.warn("event=pipeline_forecast_stop_timeout discarded={} running={} waitMs={}", discarded, running,
+                stopWait.toMillis());
+            return;
+        }
+        LOGGER.info("event=pipeline_forecast_stopped discarded={}", discarded);
+    }
+
+    private static boolean terminatesBy(ThreadPoolExecutor lane, final long deadline) {
+        try {
+            return lane.awaitTermination(deadline - System.nanoTime(), TimeUnit.NANOSECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return lane.isTerminated();
+        }
+    }
+
+    /** 닫기 전에는 참이다. 스프링은 참일 때만 {@link #stop()}을 부른다. */
+    @Override
+    public boolean isRunning() {
+        return !lanes.getFirst().isShutdown();
     }
 
     @Override
-    public void destroy() {
-        lanes.forEach(ThreadPoolExecutor::shutdownNow);
+    public boolean isPauseable() {
+        return false;
+    }
+
+    @Override
+    public int getPhase() {
+        return PHASE;
     }
 }

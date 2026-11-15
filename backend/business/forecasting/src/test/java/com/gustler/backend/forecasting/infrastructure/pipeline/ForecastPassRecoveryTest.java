@@ -4,13 +4,10 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.application.pipeline.PassLabelStore;
 import com.gustler.backend.forecasting.application.pipeline.RouteStateReplayer;
-import com.gustler.backend.forecasting.application.pipeline.ScoringReplay;
-import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
-import com.gustler.backend.forecasting.application.pipeline.ScoringWriter;
 import com.gustler.backend.forecasting.application.pipeline.ShadowScoringService;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
+import com.gustler.backend.forecasting.configuration.ForecastAssembly;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
-import com.gustler.backend.forecasting.infrastructure.jdbc.ConfirmedPassLabelCalculator;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
@@ -28,7 +25,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 되감기가 실패해 예보 단계를 돌리지 못하고 끝난 배치가 닫은 통과를 예보가 다음 되감기에서 되찾는지를 실제 DB와 채점으로 본다.
@@ -209,14 +205,10 @@ class ForecastPassRecoveryTest {
     }
 
     private ShadowScoringService scoring(MainlineHarness harness) {
-        ScoringStage stage = new ScoringStage(new JdbcSettlementContextProvider(jdbc),
-            new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), harness.clock,
-            ScoringStage.DEFAULT_OBSERVATION_LIMIT);
-        return new ShadowScoringService(task -> {
+        return new ForecastAssembly(jdbc, transactions, harness.clock, new SimpleMeterRegistry()).scoring(task -> {
             task.run();
             return true;
-        }, stage, new ScoringReplay(records, passes), new ScoringWriter(labels, new TransactionTemplate(transactions)),
-            records, ScoringReplay.DEFAULT_FORECAST_WINDOW, harness.clock, new SimpleMeterRegistry());
+        }, records, records, passes, labels);
     }
 
     /**

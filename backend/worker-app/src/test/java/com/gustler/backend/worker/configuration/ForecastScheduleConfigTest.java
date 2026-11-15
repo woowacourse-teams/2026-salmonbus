@@ -11,7 +11,6 @@ import com.gustler.backend.observations.api.ObservationDeliveryHook;
 import com.gustler.backend.support.IntegrationTest;
 import com.gustler.backend.worker.scheduling.PipelineForecastTrigger;
 import com.gustler.backend.worker.scheduling.PipelinePartitionJob;
-import com.gustler.backend.worker.scheduling.PipelineShutdown;
 import com.gustler.backend.worker.scheduling.ShadowScoringJob;
 import java.time.Duration;
 import java.util.List;
@@ -29,7 +28,7 @@ class ForecastScheduleConfigTest {
     private ApplicationContext applicationContext;
 
     @Test
-    void 예보를_켜는_것만으로_예보와_채점과_정상_종료_구성이_선다() {
+    void 예보를_켜는_것만으로_예보와_채점과_파티션_유지_구성이_선다() {
         // then
         assertSoftly(softly -> {
             softly.assertThat(applicationContext.getBeanNamesForType(ForecastPipeline.class)).hasSize(1);
@@ -37,7 +36,6 @@ class ForecastScheduleConfigTest {
             softly.assertThat(applicationContext.getBeanNamesForType(ShadowScoringCycle.class)).hasSize(1);
             softly.assertThat(applicationContext.getBeanNamesForType(ScoringFeed.class)).hasSize(1);
             softly.assertThat(applicationContext.getBeanNamesForType(ShadowScoringJob.class)).hasSize(1);
-            softly.assertThat(applicationContext.getBeanNamesForType(PipelineShutdown.class)).hasSize(1);
             softly.assertThat(applicationContext.getBeanNamesForType(PipelinePartitionJob.class)).hasSize(1);
         });
     }

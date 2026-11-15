@@ -13,13 +13,11 @@ import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistr
 import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
 import com.gustler.backend.forecasting.application.pipeline.ForecastStage;
-import com.gustler.backend.forecasting.application.pipeline.PipelineBatchProcessor;
 import com.gustler.backend.forecasting.application.pipeline.PipelineEvents;
 import com.gustler.backend.forecasting.application.pipeline.ReplaySource;
 import com.gustler.backend.forecasting.application.pipeline.RouteForecastState;
-import com.gustler.backend.forecasting.application.pipeline.RouteStateRegistry;
-import com.gustler.backend.forecasting.application.pipeline.RouteStateReplayer;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
+import com.gustler.backend.forecasting.configuration.ForecastAssembly;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
@@ -56,7 +54,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 예보 경로가 관측 흐름을 처리해 저장한 예측값·실행 결과·닫힌 통과를 실제 DB로 본다. 기대값은 기준 구현(dev {@code e98ae3ea}의
@@ -73,7 +70,6 @@ class ForecastPipelineMainlineTest {
     private static final Instant DAWN = Instant.parse("2026-10-15T20:00:00Z");
     private static final String SOURCE_ROUTE_ID = "234001739";
     private static final String MODEL_ROUTE = "6801";
-    private static final int MAXIMUM_ROWS = 250_000;
 
     @Autowired
     JdbcClient jdbc;
@@ -305,7 +301,7 @@ class ForecastPipelineMainlineTest {
             softly.assertThat(new JdbcPendingPipelineBatches(jdbc).find(harness.version(late),
                 harness.receivedAt(late).minusSeconds(60), 100))
                 .noneMatch(pending -> pending.observationBatchId() == late);
-            ReplaySource.Read replay = new JdbcReplaySource(jdbc, MAXIMUM_ROWS)
+            ReplaySource.Read replay = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS)
                 .read(harness.statistics(), harness.receivedAt(late).minus(Duration.ofHours(1)),
                     harness.receivedAt(late).plus(Duration.ofHours(1)), Long.MAX_VALUE);
             softly.assertThat(replay.batches()).isNotEmpty().noneMatch(batch -> batch.observationBatchId() == late);
@@ -461,17 +457,15 @@ class ForecastPipelineMainlineTest {
         /** 예보 경로를 새로 띄운다. 노선 상태와 지표가 빈 채로 시작하므로 첫 배치가 되감는다. */
         private void startMainline(Duration replayWindow, final int batchLimit) {
             meters = new SimpleMeterRegistry();
-            JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
-            ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
-            PipelineBatchProcessor processor = new PipelineBatchProcessor(stage,
-                new RouteStateReplayer(source, stage, replayWindow, replayWindow), records, passes,
-                new TransactionTemplate(transactions), events, new RouteStateRegistry(), rushOnly);
-            mainline = new ForecastPipelineService((key, task) -> {
+            JdbcReplaySource source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
+            ForecastAssembly.Sources sources = new ForecastAssembly.Sources(source, source, committed,
+                () -> Optional.of(runtime), this::versions, stopsByVersion::get);
+            ForecastAssembly.Settings settings = new ForecastAssembly.Settings(
+                new ForecastPolicy(Duration.ofMinutes(10), batchLimit), replayWindow, replayWindow, rushOnly);
+            mainline = new ForecastAssembly(jdbc, transactions, clock, meters).forecast((key, task) -> {
                 task.run();
                 return true;
-            }, processor, source, committed, () -> Optional.of(runtime), this::versions,
-                stopsByVersion::get, new JdbcSettlementContextWriter(jdbc),
-                new ForecastPolicy(Duration.ofMinutes(10), batchLimit), clock, meters);
+            }, events, sources, cache, records, passes, settings);
             clock.at = EVENING.plus(Duration.ofDays(2));
             mainline.pickUp();
         }

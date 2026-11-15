@@ -22,7 +22,6 @@ import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMappe
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.WorkerApplication;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
-import com.gustler.backend.worker.scheduling.PipelineShutdown;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -62,7 +61,16 @@ import org.springframework.transaction.support.TransactionTemplate;
     "forecast.settlement-minimum-interval=1h",
     "forecast.pending-limit=0",
     "forecast.arrival-limit=0",
-    "forecast.alighting.history-seed-directory=/nonexistent"
+    "forecast.alighting.history-seed-directory=/nonexistent",
+    "forecast.alighting.rush-only=false",
+    "forecast.alighting.maximum-history-rows=0",
+    "forecast.alighting.causal-evaluation.maximum-observation-rows=0",
+    "forecast.scoring-flush-interval=0s",
+    "forecast.scoring-queue-capacity=0",
+    "forecast.lane-queue-capacity=0",
+    "forecast.replay-window=0s",
+    "forecast.replay-extended-window=13h",
+    "forecast.shutdown-timeout=-1s"
 })
 @Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class })
 class ObservationCapacitySignalIntegrationTest {
@@ -130,7 +138,6 @@ class ObservationCapacitySignalIntegrationTest {
             softly.assertThat(context.getBeanNamesForType(ForecastLanes.class)).hasSize(1);
             softly.assertThat(context.getBeanNamesForType(ShadowScoringCycle.class)).hasSize(1);
             softly.assertThat(context.getBeanNamesForType(ScoringFeed.class)).hasSize(1);
-            softly.assertThat(context.getBeanNamesForType(PipelineShutdown.class)).hasSize(1);
         });
     }
 

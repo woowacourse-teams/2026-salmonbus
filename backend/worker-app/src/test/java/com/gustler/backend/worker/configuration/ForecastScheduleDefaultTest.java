@@ -3,12 +3,13 @@ package com.gustler.backend.worker.configuration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
+import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
+import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
 import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
 import com.gustler.backend.support.IntegrationTest;
 import com.gustler.backend.worker.scheduling.PipelineForecastTrigger;
 import com.gustler.backend.worker.scheduling.PipelinePartitionJob;
-import com.gustler.backend.worker.scheduling.PipelineShutdown;
 import com.gustler.backend.worker.scheduling.ShadowScoringJob;
 import java.util.List;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
@@ -34,7 +35,8 @@ class ForecastScheduleDefaultTest {
             softly.assertThat(applicationContext.getBeanNamesForType(PipelineForecastTrigger.class)).isEmpty();
             softly.assertThat(applicationContext.getBeanNamesForType(ShadowScoringCycle.class)).isEmpty();
             softly.assertThat(applicationContext.getBeanNamesForType(ShadowScoringJob.class)).isEmpty();
-            softly.assertThat(applicationContext.getBeanNamesForType(PipelineShutdown.class)).isEmpty();
+            softly.assertThat(applicationContext.getBeanNamesForType(ForecastLanes.class)).isEmpty();
+            softly.assertThat(applicationContext.getBeanNamesForType(ScoringFeed.class)).isEmpty();
         }
     }
 
@@ -60,7 +62,6 @@ class ForecastScheduleDefaultTest {
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             softly.assertThat(applicationContext.getBeanNamesForType(PipelinePartitionJob.class)).isEmpty();
-            softly.assertThat(applicationContext.getBeanNamesForType(ForecastPipelineProperties.class)).isEmpty();
             softly.assertThat(registeredTasks).noneMatch(task -> task.contains("PipelinePartitionJob"));
         }
     }

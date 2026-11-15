@@ -38,8 +38,9 @@ import org.slf4j.LoggerFactory;
  *       정답이 빠지지 않는다.</li>
  * </ul>
  * 결과는 {@link #flush()}가 몇 초마다 쓰고, {@link #tick()}이 채점 스레드에서 {@link ScoringStage#expire}를 불러 오래 배치가
- * 없는 노선의 마감을 닫는다. 내려가기 전에는 {@link #stopAccepting()}으로 사건을 더 받지 않게 하고, 채점 줄을 비운 뒤
- * {@link #flushRemaining()}으로 남은 결과를 쓴다. {@code route} 행 잠금을 잡지 않는다.
+ * 없는 노선의 마감을 닫는다. 내려갈 때 줄에서 기다리던 사건과 아직 쓰지 못한 결과는 버려진다. 사건은 저장된 기록에서 나온
+ * 것이므로 다음 기동의 되감기가 같은 결과를 다시 만든다. 채점 줄이 닫히며 채점 스레드에 중단을 요청하면 기동 직후의 되감기는
+ * 돌던 노선까지만 하고 멈춘다. {@code route} 행 잠금을 잡지 않는다.
  */
 public final class ShadowScoringService implements PipelineEvents, ShadowScoringCycle {
     static final long REPLAY_RETRY_SECONDS = 30;
@@ -57,7 +58,6 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
     private final Set<Long> ready = new HashSet<>();
     private final Map<Long, Instant> replayDeferredUntil = new HashMap<>();
     private final Set<Long> stale = ConcurrentHashMap.newKeySet();
-    private volatile boolean stopped;
 
     /**
      * @param feed 채점 스레드의 줄
@@ -122,13 +122,10 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
 
     @Override
     public boolean start() {
-        if (stopped) {
-            return false;
-        }
         return feed.submit(() -> {
             List<Long> routes = recentRoutes.routesPublishedSince(clock.instant().minus(startupWindow));
             for (final long routeId : routes) {
-                if (stopped) {
+                if (Thread.currentThread().isInterrupted()) {
                     break;
                 }
                 if (!ready.contains(routeId)) {
@@ -148,9 +145,6 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
      */
     @Override
     public boolean tick() {
-        if (stopped) {
-            return false;
-        }
         return feed.submit(() -> {
             for (final long routeId : List.copyOf(stale)) {
                 if (stale.remove(routeId)) {
@@ -189,29 +183,7 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
         }
     }
 
-    @Override
-    public void stopAccepting() {
-        stopped = true;
-    }
-
-    /**
-     * 모아 둔 결과를 지금 쓰고 남은 줄 수를 돌려준다. 주기 쓰기가 도는 중이면 그것이 끝난 뒤에 쓴다. 받기를 멈추지는 않으므로
-     * 채점 스레드가 이 호출 뒤에 낸 결과는 들어가지 않는다.
-     *
-     * @return 쓰지 못하고 남은 줄 수
-     */
-    @Override
-    public int flushRemaining() {
-        final int written = flush();
-        final int remaining = writer.pendingCount();
-        LOGGER.info("event=pipeline_scoring_final_write written={} remaining={}", written, remaining);
-        return remaining;
-    }
-
     private void submit(final long routeId, Supplier<ScoringResult> work) {
-        if (stopped) {
-            return;
-        }
         if (!feed.submit(() -> process(routeId, work))) {
             stale.add(routeId);
             metrics.dropped();

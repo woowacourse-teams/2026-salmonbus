@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
@@ -65,7 +66,12 @@ public class CollectionConfig {
             this.collectionTaskScheduler = collectionTaskScheduler;
         }
 
+        /**
+         * 등록기는 만들어지는 즉시 첫 수집을 예약한다. 첫 관측 줄이 그날 파티션에 들어가도록 날짜 파티션 유지 작업이 첫 유지를 끝낸
+         * 뒤에 만든다.
+         */
         @Bean
+        @DependsOn(ForecastPipelineConfiguration.PARTITION_JOB)
         ScheduledTaskRegistrar collectionTaskRegistrar() {
             LOGGER.info("GBIS 키 슬롯 {}개로 수집한다. 슬롯={} 하루 한도 합={}",
                 keyAliases.size(), String.join(",", keyAliases), dailyLimit);

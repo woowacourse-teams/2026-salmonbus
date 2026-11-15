@@ -13,15 +13,21 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
+@ExtendWith(OutputCaptureExtension.class)
 class RouteLanesTest {
+    private static final Duration WAIT = Duration.ofSeconds(10);
+
     @Test
     void 같은_노선의_일은_한_줄에서_넣은_순서대로_하나씩_실행한다() throws Exception {
         // given
-        RouteLanes lanes = new RouteLanes(2, 1000, null);
+        RouteLanes lanes = new RouteLanes(2, 1000, WAIT, null);
         List<Integer> order = Collections.synchronizedList(new ArrayList<>());
         AtomicInteger running = new AtomicInteger();
         AtomicInteger overlapped = new AtomicInteger();
@@ -46,14 +52,14 @@ class RouteLanesTest {
             assertThat(overlapped).hasValue(0);
             assertThat(order).isSorted().hasSize(200);
         } finally {
-            lanes.destroy();
+            lanes.stop();
         }
     }
 
     @Test
     void 다른_줄에_배정된_노선은_동시에_실행한다() throws Exception {
         // given
-        RouteLanes lanes = new RouteLanes(2, 10, null);
+        RouteLanes lanes = new RouteLanes(2, 10, WAIT, null);
         String first = "first";
         String second = keyOnOtherLane(lanes, first);
         CountDownLatch bothRunning = new CountDownLatch(2);
@@ -72,7 +78,7 @@ class RouteLanesTest {
             assertThat(bothRunning.await(5, TimeUnit.SECONDS)).isTrue();
         } finally {
             release.countDown();
-            lanes.destroy();
+            lanes.stop();
         }
     }
 
@@ -82,8 +88,8 @@ class RouteLanesTest {
         List<String> keys = List.of("234001739", "204000057", "234000050", "200000314", "227000038");
 
         // when
-        Map<String, List<Integer>> one = runAll(new RouteLanes(1, 1000, null), keys);
-        Map<String, List<Integer>> two = runAll(new RouteLanes(2, 1000, null), keys);
+        Map<String, List<Integer>> one = runAll(new RouteLanes(1, 1000, WAIT, null), keys);
+        Map<String, List<Integer>> two = runAll(new RouteLanes(2, 1000, WAIT, null), keys);
 
         // then
         assertThat(two).isEqualTo(one);
@@ -93,7 +99,7 @@ class RouteLanesTest {
     @Test
     void 줄이_가득_차면_넣지_않고_거짓을_돌려주며_일이_실패해도_다음_일을_실행한다() throws Exception {
         // given
-        RouteLanes lanes = new RouteLanes(1, 1, new SimpleMeterRegistry());
+        RouteLanes lanes = new RouteLanes(1, 1, WAIT, new SimpleMeterRegistry());
         CountDownLatch release = new CountDownLatch(1);
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch after = new CountDownLatch(1);
@@ -116,61 +122,65 @@ class RouteLanesTest {
             assertThat(after.await(5, TimeUnit.SECONDS)).isTrue();
         } finally {
             release.countDown();
-            lanes.destroy();
+            lanes.stop();
         }
     }
 
     @Test
-    void 줄을_비우면_실행_중인_일과_기다리는_일을_모두_끝낸_뒤_돌아오고_새_일은_받지_않는다() throws Exception {
+    void 닫으면_새_일을_받지_않고_기다리던_일은_버리며_돌던_일은_중단시키지_않고_끝나기를_기다린다(CapturedOutput output)
+        throws Exception {
         // given
-        RouteLanes lanes = new RouteLanes(2, 100, null);
+        RouteLanes lanes = new RouteLanes(2, 100, WAIT, null);
         String first = "first";
         String second = keyOnOtherLane(lanes, first);
         CountDownLatch started = new CountDownLatch(2);
         AtomicInteger finished = new AtomicInteger();
-        try {
-            for (String key : List.of(first, second)) {
-                lanes.submit(key, () -> {
-                    started.countDown();
-                    pause(200);
-                    finished.incrementAndGet();
-                });
-                for (int index = 0; index < 20; index++) {
-                    lanes.submit(key, finished::incrementAndGet);
+        AtomicInteger interrupted = new AtomicInteger();
+        AtomicInteger later = new AtomicInteger();
+        for (String key : List.of(first, second)) {
+            lanes.submit(key, () -> {
+                started.countDown();
+                pause(200);
+                if (Thread.currentThread().isInterrupted()) {
+                    interrupted.incrementAndGet();
                 }
-            }
-            assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
-
-            // when
-            QueueDrain drained = lanes.drain(Duration.ofSeconds(10));
-            final int finishedAtReturn = finished.get();
-            final boolean accepted = lanes.submit(first, finished::incrementAndGet);
-
-            // then
-            assertSoftly(softly -> {
-                softly.assertThat(drained).isEqualTo(QueueDrain.COMPLETE);
-                softly.assertThat(finishedAtReturn).isEqualTo(42);
-                softly.assertThat(accepted).isFalse();
-                softly.assertThat(lanes.queued()).isZero();
+                finished.incrementAndGet();
             });
-        } finally {
-            lanes.destroy();
+            for (int index = 0; index < 20; index++) {
+                lanes.submit(key, later::incrementAndGet);
+            }
         }
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+
+        // when
+        lanes.stop();
+        final int finishedAtReturn = finished.get();
+        final boolean accepted = lanes.submit(first, later::incrementAndGet);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(finishedAtReturn).as("돌던 일은 닫기가 돌아오기 전에 끝났다").isEqualTo(2);
+            softly.assertThat(interrupted).hasValue(0);
+            softly.assertThat(later).as("기다리던 일은 실행하지 않는다").hasValue(0);
+            softly.assertThat(accepted).isFalse();
+            softly.assertThat(lanes.queued()).isZero();
+            softly.assertThat(lanes.isRunning()).isFalse();
+            softly.assertThat(output.getOut()).contains("event=pipeline_forecast_stopped discarded=40")
+                .doesNotContain("event=pipeline_forecast_stop_timeout");
+        });
     }
 
     @Test
-    void 한도_안에_끝나지_않으면_기다리던_일을_버리고_실행_중인_일을_중단시킨_뒤_제시간에_돌아온다() throws Exception {
+    void 돌던_일이_한도_안에_끝나지_않으면_경고를_남기고_제시간에_돌아온다(CapturedOutput output) throws Exception {
         // given
-        RouteLanes lanes = new RouteLanes(1, 10, null);
+        RouteLanes lanes = new RouteLanes(1, 10, Duration.ofMillis(200), null);
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch never = new CountDownLatch(1);
-        AtomicBoolean interrupted = new AtomicBoolean();
         AtomicInteger later = new AtomicInteger();
         try {
             lanes.submit("key", () -> {
                 started.countDown();
                 await(never);
-                interrupted.set(Thread.currentThread().isInterrupted());
             });
             for (int index = 0; index < 3; index++) {
                 lanes.submit("key", later::incrementAndGet);
@@ -179,21 +189,34 @@ class RouteLanesTest {
 
             // when
             final long before = System.nanoTime();
-            QueueDrain drained = lanes.drain(Duration.ofMillis(200));
+            lanes.stop();
             final long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - before);
-            pause(200);
 
             // then
             assertSoftly(softly -> {
-                softly.assertThat(drained).isEqualTo(new QueueDrain(3, 1));
                 softly.assertThat(elapsedMillis).isBetween(150L, 2_000L);
-                softly.assertThat(interrupted).isTrue();
                 softly.assertThat(later).hasValue(0);
+                softly.assertThat(output.getOut())
+                    .contains("event=pipeline_forecast_stop_timeout discarded=3 running=1 waitMs=200");
             });
         } finally {
             never.countDown();
-            lanes.destroy();
         }
+    }
+
+    @Test
+    void 컨텍스트가_닫힐_때_스케줄러가_돌던_회차를_끝낸_바로_다음에_멈추고_일시_정지에는_참여하지_않는다() {
+        // when
+        RouteLanes lanes = new RouteLanes(1, 1, WAIT, null);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(lanes.getPhase()).as("단계가 큰 것부터 멈춘다")
+                .isEqualTo(new ThreadPoolTaskScheduler().getPhase() - 1);
+            softly.assertThat(lanes.isRunning()).as("닫기 전에는 멈출 대상이다").isTrue();
+            softly.assertThat(lanes.isPauseable()).isFalse();
+            softly.assertThat(lanes.isAutoStartup()).isTrue();
+        });
     }
 
     private static Map<String, List<Integer>> runAll(RouteLanes lanes, List<String> keys) throws InterruptedException {
@@ -212,7 +235,7 @@ class RouteLanesTest {
             }
             assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
         } finally {
-            lanes.destroy();
+            lanes.stop();
         }
         Map<String, List<Integer>> copied = new HashMap<>();
         orders.forEach((key, order) -> copied.put(key, List.copyOf(order)));

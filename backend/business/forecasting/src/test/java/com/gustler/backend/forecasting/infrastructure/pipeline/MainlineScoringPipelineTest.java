@@ -7,17 +7,11 @@ import com.gustler.backend.forecasting.application.deployment.ActiveForecastRunt
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
 import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
 import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
-import com.gustler.backend.forecasting.application.pipeline.ForecastStage;
 import com.gustler.backend.forecasting.application.pipeline.PassLabelStore;
-import com.gustler.backend.forecasting.application.pipeline.PipelineBatchProcessor;
 import com.gustler.backend.forecasting.application.pipeline.RouteForecastState;
-import com.gustler.backend.forecasting.application.pipeline.RouteStateRegistry;
-import com.gustler.backend.forecasting.application.pipeline.RouteStateReplayer;
-import com.gustler.backend.forecasting.application.pipeline.ScoringReplay;
-import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
-import com.gustler.backend.forecasting.application.pipeline.ScoringWriter;
 import com.gustler.backend.forecasting.application.pipeline.ShadowScoringService;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
+import com.gustler.backend.forecasting.configuration.ForecastAssembly;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
@@ -31,7 +25,6 @@ import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingP
 import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
 import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
-import com.gustler.backend.forecasting.infrastructure.jdbc.ConfirmedPassLabelCalculator;
 import com.gustler.backend.forecasting.support.CommittedBatches;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -50,7 +43,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 예보 경로가 낸 사건으로 채점을 돌려 저장된 결과를 실제 DB로 본다. 기대값은 기준 구현(dev {@code e98ae3ea}의 발행·정산)이 같은
@@ -65,7 +57,6 @@ class MainlineScoringPipelineTest {
     private static final Instant EVENING = Instant.parse("2026-10-14T09:30:00Z");
     private static final String SOURCE_ROUTE_ID = "234001739";
     private static final String MODEL_ROUTE = "6801";
-    private static final int MAXIMUM_ROWS = 250_000;
     private static final long NEVER = -1;
 
     @Autowired
@@ -237,29 +228,23 @@ class MainlineScoringPipelineTest {
             model = model(random, 0.12);
             nextModel = model(random, 0.3);
             runtime = activate(model);
-            ScoringStage scoringStage = new ScoringStage(new JdbcSettlementContextProvider(jdbc),
-                new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), clock,
-                ScoringStage.DEFAULT_OBSERVATION_LIMIT);
-            scoring = new ShadowScoringService(task -> {
+            scoring = new ForecastAssembly(jdbc, transactions, clock, scoringMeters).scoring(task -> {
                 if (rejectBatch != NEVER && currentBatch == rejectBatch) {
                     return false;
                 }
                 task.run();
                 return true;
-            }, scoringStage, new ScoringReplay(records, passes),
-                new ScoringWriter(labels, new TransactionTemplate(transactions)), records,
-                ScoringReplay.DEFAULT_FORECAST_WINDOW, clock, scoringMeters);
-            JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
-            ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
-            PipelineBatchProcessor processor = new PipelineBatchProcessor(stage,
-                new RouteStateReplayer(source, stage, Duration.ofHours(6), Duration.ofHours(6)), records, passes,
-                new TransactionTemplate(transactions), scoring, new RouteStateRegistry(), false);
-            mainline = new ForecastPipelineService((key, task) -> {
-                task.run();
-                return true;
-            }, processor, source, committed, () -> Optional.of(runtime), this::versions,
-                stopsByVersion::get, new JdbcSettlementContextWriter(jdbc),
-                new ForecastPolicy(Duration.ofMinutes(10), 20), clock, new SimpleMeterRegistry());
+            }, records, records, passes, labels);
+            JdbcReplaySource source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
+            ForecastAssembly.Sources sources = new ForecastAssembly.Sources(source, source, committed,
+                () -> Optional.of(runtime), this::versions, stopsByVersion::get);
+            ForecastAssembly.Settings settings = new ForecastAssembly.Settings(
+                new ForecastPolicy(Duration.ofMinutes(10), 20), Duration.ofHours(6), Duration.ofHours(6), false);
+            mainline = new ForecastAssembly(jdbc, transactions, clock, new SimpleMeterRegistry())
+                .forecast((key, task) -> {
+                    task.run();
+                    return true;
+                }, scoring, sources, cache, records, passes, settings);
             clock.at = EVENING.plus(Duration.ofDays(2));
             mainline.pickUp();
             mainline.states().put(model.statistics(stopsByVersion.values().iterator().next()),

@@ -77,8 +77,7 @@ public final class PipelineBatchProcessor {
      * @param events 커밋 뒤 사건을 받을 뒤 단계. 던진 예외는 로그로 남기고 삼킨다. 저장은 이미 커밋했으므로 이 배치의 처리를
      *               실패로 만들지 않는다
      * @param states 노선 상태 등록부. 이 처리기가 상태를 읽고 바꾼다
-     * @param rushOnly 설정 {@code forecast.alighting.rush-only}. 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를 예보하지
-     *                 않는다
+     * @param rushOnly 참이면 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를 예보하지 않는다
      */
     public PipelineBatchProcessor(
         ForecastStage stage,

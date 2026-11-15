@@ -2,9 +2,11 @@ package com.gustler.backend.worker.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
@@ -55,6 +57,36 @@ class WorkerSchedulingConfigTest {
             collection.shutdown();
             processing.shutdown();
         }
+    }
+
+    @Test
+    void 닫히기_시작하면_실행_시각을_기다리던_다음_수집은_실행하지_않는다() throws Exception {
+        // given
+        ThreadPoolTaskScheduler collection = new WorkerSchedulingConfig().collectionScheduler();
+        AtomicInteger runs = new AtomicInteger();
+        Instant due = Instant.now().plusMillis(300);
+        collection.initialize();
+        try {
+            collection.schedule(runs::incrementAndGet, context -> onceAt(context.lastCompletion(), due));
+
+            // when
+            collection.initiateShutdown();
+            final boolean terminated = collection.getScheduledThreadPoolExecutor()
+                .awaitTermination(600, TimeUnit.MILLISECONDS);
+
+            // then
+            assertThat(terminated).as("남은 예약이 없어 스케줄러가 바로 끝난다").isTrue();
+            assertThat(runs).hasValue(0);
+        } finally {
+            collection.shutdown();
+        }
+    }
+
+    private static Instant onceAt(Instant lastCompletion, Instant due) {
+        if (lastCompletion == null) {
+            return due;
+        }
+        return null;
     }
 
     @Test

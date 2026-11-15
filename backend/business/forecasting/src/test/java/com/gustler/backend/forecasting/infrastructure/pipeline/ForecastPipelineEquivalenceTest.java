@@ -45,7 +45,6 @@ class ForecastPipelineEquivalenceTest {
     private static final Instant EVENING = Instant.parse("2026-10-14T10:00:00Z");
     private static final Set<String> REPLAY_EXCLUSIONS = Set.of(ForecastStage.TRIP_START_UNKNOWN,
         ForecastStage.REPLAY_HISTORY_INCOMPLETE);
-    private static final int MAXIMUM_ROWS = 250_000;
 
     @Autowired
     JdbcClient jdbc;
@@ -194,7 +193,7 @@ class ForecastPipelineEquivalenceTest {
                 confirmed.add(index);
             }
         }
-        JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
+        JdbcReplaySource source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
         List<Duration> windows = List.of(Duration.ofHours(6), Duration.ofHours(3), Duration.ofMinutes(140),
             Duration.ofMinutes(100), Duration.ofMinutes(45), Duration.ofMinutes(15));
         int compared = 0;
@@ -269,7 +268,8 @@ class ForecastPipelineEquivalenceTest {
         jdbc.sql("UPDATE observation_batch SET stored_rows=stored_rows+1 WHERE id=?")
             .param(broken.observationBatchId())
             .update();
-        RouteStateReplayer replayer = new RouteStateReplayer(new JdbcReplaySource(jdbc, MAXIMUM_ROWS),
+        RouteStateReplayer replayer = new RouteStateReplayer(
+            new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS),
             new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6), Duration.ofHours(6));
 
         // when
@@ -292,7 +292,8 @@ class ForecastPipelineEquivalenceTest {
         jdbc.sql(
             "UPDATE route_stop SET boarding_allowed=NOT boarding_allowed WHERE route_version_id=? AND stop_order=2")
             .param(last.routeVersionId()).update();
-        RouteStateReplayer replayer = new RouteStateReplayer(new JdbcReplaySource(jdbc, MAXIMUM_ROWS),
+        RouteStateReplayer replayer = new RouteStateReplayer(
+            new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS),
             new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6), Duration.ofHours(6));
 
         // when

@@ -1,7 +1,6 @@
 package com.gustler.backend.forecasting.application.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
@@ -161,24 +160,6 @@ class RouteStateReplayerTest {
             softly.assertThat(replayed.state().replayFrom()).contains(last.confirmedAt().minus(Duration.ofHours(3)));
             softly.assertThat(replayed.state().cursor().orElseThrow().observationBatchId())
                 .isEqualTo(last.observationBatchId());
-        });
-    }
-
-    @Test
-    void 늘린_창은_이관이_관측을_남겨_두는_열두_시간을_넘을_수_없다() {
-        // given
-        MemorySource source = new MemorySource(List.of());
-
-        // when
-        Throwable tooLong = catchThrowable(() -> new RouteStateReplayer(source, stage, Duration.ofHours(6),
-            Duration.ofHours(13)));
-        Throwable withinHold = catchThrowable(() -> new RouteStateReplayer(source, stage, Duration.ofHours(6),
-            RouteStateReplayer.MAXIMUM_EXTENDED_WINDOW));
-
-        // then
-        assertSoftly(softly -> {
-            softly.assertThat(tooLong).isInstanceOf(IllegalArgumentException.class);
-            softly.assertThat(withinHold).isNull();
         });
     }
 

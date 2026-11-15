@@ -44,6 +44,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * 저장된 적이 없다.
  */
 public final class JdbcReplaySource implements ReplaySource, ObservationBatchReader {
+    /** worker가 한 번 되감기에서 읽는 관측 줄의 한도. 넘으면 그 노선의 되감기가 실패한다. */
+    public static final int DEFAULT_MAXIMUM_ROWS = 250_000;
     static final String ROUTE_HISTORY_MISSING = "ALIGHTING_AWARE_ROUTE_HISTORY_MISSING";
     static final String INCOMPATIBLE_VERSION = "ALIGHTING_AWARE_INCOMPATIBLE_HISTORICAL_ROUTE_VERSION:";
     static final String ROW_LIMIT_EXCEEDED = "ALIGHTING_AWARE_HISTORY_ROW_LIMIT_EXCEEDED";

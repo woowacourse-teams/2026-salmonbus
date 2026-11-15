@@ -3,6 +3,7 @@ package com.gustler.backend.worker.integration.forecasting;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.Mockito.when;
 
+import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
 import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
 import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
@@ -44,12 +45,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * 저장·채점까지 실제 빈으로 흐르는지 본다. 모델 선택({@link ForecastRuntime})만 바꿔 확정 프로필 모델을 준다.
  *
  * <p>주기 줍기는 1시간이라 시험 중에는 돌지 않는다. 시험은 줍기를 기동 직후처럼 한 번 불러 노선 판본의 실행 줄 열쇠를 알게 한 뒤,
- * 그 뒤의 처리는 모두 커밋 뒤 신호로만 일어나게 한다.
+ * 그 뒤의 처리는 모두 커밋 뒤 신호로만 일어나게 한다. 채점 결과는 주기 쓰기를 기다리지 않고 기다리는 동안 시험이 쓰게 한다.
  */
 @SpringBootTest(classes = WorkerApplication.class, properties = {
     "forecast.enabled=true",
-    "forecast.interval=1h",
-    "forecast.scoring-flush-interval=200ms"
+    "forecast.interval=1h"
 })
 @Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class })
 class PipelineMainlineIntegrationTest {
@@ -84,6 +84,9 @@ class PipelineMainlineIntegrationTest {
 
     @Autowired
     private ForecastPipelineService pipeline;
+
+    @Autowired
+    private ShadowScoringCycle scoring;
 
     @MockitoBean
     private ForecastRuntime forecastRuntime;
@@ -326,13 +329,16 @@ class PipelineMainlineIntegrationTest {
             .single();
     }
 
-    private static boolean waitUntil(BooleanSupplier condition, Instant deadline) throws InterruptedException {
+    /** 조건이 참이 되기를 기다린다. 기다리는 동안 채점이 모아 둔 결과를 쓰게 한다. */
+    private boolean waitUntil(BooleanSupplier condition, Instant deadline) throws InterruptedException {
         while (Instant.now().isBefore(deadline)) {
+            scoring.flush();
             if (condition.getAsBoolean()) {
                 return true;
             }
             Thread.sleep(50);
         }
+        scoring.flush();
         return condition.getAsBoolean();
     }
 }

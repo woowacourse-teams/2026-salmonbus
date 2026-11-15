@@ -5,28 +5,21 @@ import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineServ
 import com.gustler.backend.forecasting.application.pipeline.ForecastStage;
 import com.gustler.backend.forecasting.application.pipeline.ForecastStageResult;
 import com.gustler.backend.forecasting.application.pipeline.ObservationBatchRead;
-import com.gustler.backend.forecasting.application.pipeline.PipelineBatchProcessor;
-import com.gustler.backend.forecasting.application.pipeline.RouteStateRegistry;
 import com.gustler.backend.forecasting.application.pipeline.RouteStateReplayer;
 import com.gustler.backend.forecasting.application.pipeline.ScoringReplay;
 import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
-import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
-import com.gustler.backend.forecasting.application.pipeline.ScoringWriter;
 import com.gustler.backend.forecasting.application.pipeline.ShadowScoringService;
+import com.gustler.backend.forecasting.configuration.ForecastAssembly;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
-import com.gustler.backend.forecasting.infrastructure.jdbc.ConfirmedPassLabelCalculator;
 import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcRouteVersionQuery;
 import com.gustler.backend.forecasting.infrastructure.pipeline.CachedVehicleCapacities;
 import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcPendingPipelineBatches;
 import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcReplaySource;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcRouteStructureProvider;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcSettlementContextProvider;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcSettlementContextWriter;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -35,14 +28,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 노선 하나의 하루치 배치를 worker의 예보와 채점에 그대로 흘린다.
  *
- * <p>예보({@link ForecastPipelineService})와 채점({@link ShadowScoringService})을 worker가 등록하는 것과 같은 구성 요소와 같은
- * 기본 설정값으로 묶는다. 구성 요소나 기본값을 바꾸는 변경은 {@code ForecastMainlineConfiguration}과
- * {@code ForecastScoringConfiguration}을 따라 이 클래스에도 반영해야 한다. worker와 다른 것은 세 가지다.
+ * <p>예보({@link ForecastPipelineService})와 채점({@link ShadowScoringService})을 worker의 구성이 쓰는 조립
+ * ({@link ForecastAssembly})과 고정 값으로 묶는다. worker와 다른 것은 세 가지다.
  * <ul>
  *   <li>시계는 {@link WorkerReplayClock}이다. 배치마다 자료에 적힌 착수 시각으로 맞춰, 예보가 찍는 착수 시각이 자료와 같아지게
  *       한다.</li>
@@ -54,9 +45,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 노선 상태는 예보가 스스로 만든다. 그날의 첫 배치에서 저장된 관측을 되감는데, 그 앞의 관측이 DB에 없으므로 빈 상태에서 시작한다.
  */
 final class WorkerReplayPipeline {
-    private static final int MAXIMUM_HISTORY_ROWS = 250_000;
-    private static final int WRITE_TIMEOUT_SECONDS = 15;
-    private static final boolean RUSH_ONLY = true;
+    /** worker 설정 파일의 신선도 창과 한 번에 읽는 배치 수다. */
     private static final ForecastPolicy POLICY = new ForecastPolicy(Duration.ofMinutes(10), 20);
     /** 줄 열쇠를 익히는 줍기에서 어느 배치도 신선도 창에 들지 않게 시계를 마지막 배치 뒤로 보내는 간격. */
     private static final Duration BEYOND_STALENESS = Duration.ofDays(1);
@@ -66,6 +55,7 @@ final class WorkerReplayPipeline {
     private final WorkerReplayClock clock = new WorkerReplayClock();
     private final ConfirmedAlightingAwareWorkerReplay.Stores stores;
     private final RuntimeSnapshot runtime;
+    private final ForecastAssembly assembly;
     private final JdbcReplaySource source;
     private final JdbcRouteVersionQuery routeStops;
     private final ForecastStage stage;
@@ -84,37 +74,27 @@ final class WorkerReplayPipeline {
         List<Long> routeVersionIds
     ) {
         JdbcClient jdbc = stores.jdbc();
-        TransactionTemplate transactions = new TransactionTemplate(stores.transactions());
-        transactions.setTimeout(WRITE_TIMEOUT_SECONDS);
         List<Long> versions = List.copyOf(routeVersionIds);
+        VehicleCapacityCache capacities = new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc));
         this.stores = stores;
         this.runtime = runtime;
-        this.source = new JdbcReplaySource(jdbc, MAXIMUM_HISTORY_ROWS);
+        this.assembly = new ForecastAssembly(jdbc, stores.transactions(), clock, null);
+        this.source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
         this.routeStops = new JdbcRouteVersionQuery(jdbc);
-        this.stage = new ForecastStage(new CachedVehicleCapacities(
-            new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc))));
+        this.stage = new ForecastStage(new CachedVehicleCapacities(capacities));
         this.replayer = new RouteStateReplayer(source, stage, RouteStateReplayer.DEFAULT_WINDOW,
             RouteStateReplayer.DEFAULT_EXTENDED_WINDOW);
         this.committed = new CommittedBatches(new JdbcPendingPipelineBatches(jdbc));
-        ScoringReplay scoringReplay = new ScoringReplay(stores.records(), stores.passes());
-        this.scoring = new ShadowScoringService(task -> {
+        this.scoring = assembly.scoring(task -> {
             task.run();
             return true;
-        }, scoringStage(), scoringReplay, new ScoringWriter(stores.labels(), transactions), stores.records(),
-            scoringReplay.maxForecastWindow(), clock, null);
-        PipelineBatchProcessor processor = new PipelineBatchProcessor(stage, replayer, stores.records(),
-            stores.passes(), transactions, scoring, new RouteStateRegistry(), RUSH_ONLY);
-        this.forecasts = new ForecastPipelineService((routeKey, task) -> {
+        }, stores.records(), stores.records(), stores.passes(), stores.labels());
+        ForecastAssembly.Sources sources = new ForecastAssembly.Sources(source, source, committed,
+            () -> Optional.of(runtime), () -> versions, routeStops);
+        this.forecasts = assembly.forecast((routeKey, task) -> {
             task.run();
             return true;
-        }, processor, source, committed, () -> Optional.of(runtime), () -> versions,
-            routeStops, new JdbcSettlementContextWriter(jdbc), POLICY, clock, null);
-    }
-
-    private ScoringStage scoringStage() {
-        JdbcClient jdbc = stores.jdbc();
-        return new ScoringStage(new JdbcSettlementContextProvider(jdbc), new JdbcRouteStructureProvider(jdbc),
-            new ConfirmedPassLabelCalculator(), clock, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
+        }, scoring, sources, capacities, stores.records(), stores.passes(), ForecastAssembly.Settings.of(POLICY));
     }
 
     /**
@@ -194,7 +174,7 @@ final class WorkerReplayPipeline {
      */
     ScoringResult rescoredThrough(final long routeId, Instant through) {
         return new ScoringReplay(stores.records(), stores.passes())
-            .replay(scoringStage(), routeId, through.plus(1, ChronoUnit.MICROS));
+            .replay(assembly.scoringStage(), routeId, through.plus(1, ChronoUnit.MICROS));
     }
 
     /**

@@ -69,7 +69,7 @@ public final class ScoringStage {
     public static final Duration MINIMUM_LEAD = Duration.ofSeconds(10);
     /** 노선에 배치가 이만큼 없으면 {@link #expire(Instant)}가 벽시계로 마감한다. */
     public static final Duration IDLE_EXPIRY = Duration.ofMinutes(130);
-    /** 하루 관측 상한의 기본값({@code forecast.alighting.causal-evaluation.maximum-observation-rows}). */
+    /** worker가 쓰는 하루 관측 상한. */
     public static final int DEFAULT_OBSERVATION_LIMIT = 150_000;
 
     private static final String CAPACITY_POLICY = "vehicle-capacity-snapshot-v1";

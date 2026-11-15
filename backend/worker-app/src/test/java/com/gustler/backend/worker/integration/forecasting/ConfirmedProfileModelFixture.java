@@ -32,15 +32,26 @@ final class ConfirmedProfileModelFixture {
     }
 
     static AlightingAwareSeatForecastModel model(String route, final int stopCount, final int turn) {
+        return model(List.of(route), stopCount, turn);
+    }
+
+    /** 노선마다 정류장 구성과 계수가 같은 모델을 만든다. */
+    static AlightingAwareSeatForecastModel model(List<String> routes, final int stopCount, final int turn) {
         AlightingAwareSeatPredictor predictor = new AlightingAwareSeatPredictor(
             ensemble(SEAT_FEATURES, NumericTreeEnsemble.Kind.REGRESSION, new double[] {10}),
             ensemble(SEAT_FEATURES, NumericTreeEnsemble.Kind.MULTICLASS, new double[] {0, 0, 0}),
             ensemble(PROBABILITY_FEATURES, NumericTreeEnsemble.Kind.BINARY, new double[] {0}), 1.3);
-        ExtendedAlightingPredictor extended = new ExtendedAlightingPredictor(
-            ensemble(EXTENDED_FEATURES, NumericTreeEnsemble.Kind.REGRESSION, new double[] {8}),
-            ensemble(EXTENDED_FEATURES, NumericTreeEnsemble.Kind.BINARY, new double[] {0}));
-        return new AlightingAwareSeatForecastModel(predictor, Map.of(route, statistics(route, stopCount, turn)),
-            Map.of(route, evidence(stopCount, turn)), "1".repeat(64), Map.of(route, extended));
+        Map<String, AlightingAwareRouteStatistics> statistics = new HashMap<>();
+        Map<String, Map<Integer, String>> evidence = new HashMap<>();
+        Map<String, ExtendedAlightingPredictor> extended = new HashMap<>();
+        for (String route : routes) {
+            statistics.put(route, statistics(route, stopCount, turn));
+            evidence.put(route, evidence(stopCount, turn));
+            extended.put(route, new ExtendedAlightingPredictor(
+                ensemble(EXTENDED_FEATURES, NumericTreeEnsemble.Kind.REGRESSION, new double[] {8}),
+                ensemble(EXTENDED_FEATURES, NumericTreeEnsemble.Kind.BINARY, new double[] {0})));
+        }
+        return new AlightingAwareSeatForecastModel(predictor, statistics, evidence, "1".repeat(64), extended);
     }
 
     private static AlightingAwareRouteStatistics statistics(String route, final int stopCount, final int turn) {

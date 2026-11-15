@@ -4,16 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.PropertySource;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.mock.env.MockEnvironment;
 
 /**
  * 합성 번들 허용({@code model.bundle.allow-synthetic-fixture})을 어느 설정 파일이 켜는지 지킨다.
  * 합성 번들은 실제 관측 없이 만들어 재생·정산 검증을 거치지 않았으므로 운영과 공유 개발 서버의 worker가 받으면 안 된다.
+ * 설정 파일이 켜지 않아도 환경변수로는 켜진다는 것도 적어 둔다.
  */
 class SyntheticFixtureSettingTest {
     private static final String KEY = "model.bundle.allow-synthetic-fixture";
@@ -49,6 +53,21 @@ class SyntheticFixtureSettingTest {
 
         // then
         assertThat(environment.getProperty(KEY, Boolean.class)).isTrue();
+    }
+
+    @Test
+    void 환경변수로_주면_설정_파일이_켜지_않아도_합성_번들_허용이_켜진다() throws Exception {
+        // given
+        MockEnvironment environment = environment(SHARED_DEV);
+        environment.getPropertySources().addFirst(new SystemEnvironmentPropertySource(
+            StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+            Map.of("MODEL_BUNDLE_ALLOW_SYNTHETIC_FIXTURE", "true")));
+
+        // when
+        Boolean allowed = environment.getProperty(KEY, Boolean.class);
+
+        // then
+        assertThat(allowed).as("환경변수를 막는 장치가 없다. 공유 개발 서버는 환경 파일 검사가 이 이름을 거절한다").isTrue();
     }
 
     /** 기본 설정 위에 환경별 설정 파일을 얹은 환경이다. */

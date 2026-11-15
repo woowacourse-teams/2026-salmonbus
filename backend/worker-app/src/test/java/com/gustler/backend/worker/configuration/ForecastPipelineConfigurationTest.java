@@ -9,11 +9,11 @@ import com.gustler.backend.worker.scheduling.PipelinePartitionJob;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.scheduling.config.FixedDelayTask;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 class ForecastPipelineConfigurationTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
@@ -21,11 +21,10 @@ class ForecastPipelineConfigurationTest {
         .withBean(MaintainPipelinePartitions.class, CountingPartitions::new);
 
     @Test
-    void 예보와_수집이_모두_꺼져_있으면_파티션_유지_작업과_설정을_등록하지_않는다() {
+    void 예보와_수집이_모두_꺼져_있으면_파티션_유지_작업을_등록하지_않는다() {
         runner.withPropertyValues("forecast.enabled=false", "collection.enabled=false")
             .run(context -> {
                 assertThat(context).doesNotHaveBean(PipelinePartitionJob.class);
-                assertThat(context).doesNotHaveBean(ForecastPipelineProperties.class);
                 CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
                 assertThat(partitions.calls.get()).isZero();
             });
@@ -33,43 +32,53 @@ class ForecastPipelineConfigurationTest {
     }
 
     @Test
-    void 예보가_켜져_있으면_기동_직후에_파티션을_한_번_만든다() {
+    void 예보가_켜져_있으면_컨텍스트가_뜨기_전에_파티션_유지를_한_번_끝내고_그_뒤로는_한_시간마다_한다() {
         runner.withPropertyValues("forecast.enabled=true").run(context -> {
             CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
-
-            assertThat(context).hasSingleBean(PipelinePartitionJob.class);
-            assertThat(partitions.started.await(5, TimeUnit.SECONDS)).isTrue();
-        });
-    }
-
-    @Test
-    void 예보가_꺼져_있어도_수집이_켜진_worker는_관측_테이블을_위해_파티션_유지_작업을_등록한다() {
-        runner.withPropertyValues("collection.enabled=true").run(context -> {
-            CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
-
-            assertThat(context).hasSingleBean(PipelinePartitionJob.class);
-            assertThat(partitions.started.await(5, TimeUnit.SECONDS)).isTrue();
-        });
-    }
-
-    @Test
-    void 실행_줄과_되감기와_종료_설정의_기본값을_채운다() {
-        runner.withPropertyValues("forecast.enabled=true").run(context -> {
-            ForecastPipelineProperties actual = context.getBean(ForecastPipelineProperties.class);
+            List<FixedDelayTask> tasks = context.getBeansOfType(ScheduledTaskHolder.class).values().stream()
+                .flatMap(holder -> holder.getScheduledTasks().stream())
+                .map(scheduled -> scheduled.getTask())
+                .filter(task -> task.toString().contains("PipelinePartitionJob.preparePartitions"))
+                .map(FixedDelayTask.class::cast)
+                .toList();
 
             assertSoftly(softly -> {
-                softly.assertThat(actual.lanes()).isEqualTo(2);
-                softly.assertThat(actual.laneQueueCapacity()).isEqualTo(1_000);
-                softly.assertThat(actual.replayWindow()).isEqualTo(Duration.ofHours(6));
-                softly.assertThat(actual.shutdownTimeout()).isEqualTo(Duration.ofSeconds(10));
+                softly.assertThat(context.getBeansOfType(PipelinePartitionJob.class)).hasSize(1);
+                softly.assertThat(partitions.calls).as("주기 실행을 기다리지 않고 이미 한 번 끝냈다").hasValue(1);
+                softly.assertThat(tasks).singleElement().satisfies(task -> {
+                    assertThat(task.getInitialDelayDuration()).isEqualTo(Duration.ofHours(1));
+                    assertThat(task.getIntervalDuration()).isEqualTo(Duration.ofHours(1));
+                });
             });
         });
     }
 
     @Test
-    void 노선별_실행_줄_수가_1보다_작으면_기동하지_않는다() {
-        runner.withPropertyValues("forecast.enabled=true", "forecast.lanes=0")
-            .run(context -> assertThat(context).hasFailed());
+    void 예보가_꺼져_있어도_수집이_켜진_worker는_관측_테이블을_위해_컨텍스트가_뜨기_전에_파티션_유지를_한_번_끝낸다() {
+        runner.withPropertyValues("collection.enabled=true").run(context -> {
+            CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
+
+            assertThat(context).hasSingleBean(PipelinePartitionJob.class);
+            assertThat(partitions.calls).hasValue(1);
+        });
+    }
+
+    @Test
+    void 예보_설정이_잘못돼도_수집만_켠_worker의_파티션_유지_작업은_등록한다() {
+        runner.withPropertyValues("collection.enabled=true", "forecast.enabled=false", "forecast.lanes=0",
+                "forecast.staleness=0s")
+            .run(context -> assertThat(context).hasNotFailed().hasSingleBean(PipelinePartitionJob.class));
+    }
+
+    @Test
+    void 첫_유지가_실패해도_컨텍스트는_뜬다() {
+        new ApplicationContextRunner()
+            .withUserConfiguration(WorkerSchedulingConfig.class, ForecastPipelineConfiguration.class)
+            .withBean(MaintainPipelinePartitions.class, () -> () -> {
+                throw new IllegalStateException("db down");
+            })
+            .withPropertyValues("collection.enabled=true")
+            .run(context -> assertThat(context).hasNotFailed().hasSingleBean(PipelinePartitionJob.class));
     }
 
     @Test
@@ -88,12 +97,10 @@ class ForecastPipelineConfigurationTest {
 
     static final class CountingPartitions implements MaintainPipelinePartitions {
         private final AtomicInteger calls = new AtomicInteger();
-        private final CountDownLatch started = new CountDownLatch(1);
 
         @Override
         public MaintainPipelinePartitions.Report maintain() {
             calls.incrementAndGet();
-            started.countDown();
             return new MaintainPipelinePartitions.Report(List.of(), List.of(), Map.of());
         }
     }

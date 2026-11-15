@@ -22,8 +22,9 @@ public class ForecastingModelConfiguration {
     }
 
     /**
-     * 합성 번들 허용({@code model.bundle.allow-synthetic-fixture})은 기본이 꺼짐이고 로컬 개발 설정 파일에서만 켠다.
-     * 운영과 공유 개발 서버의 설정에는 이 키를 두지 않는다.
+     * 합성 번들 허용({@code model.bundle.allow-synthetic-fixture})은 기본이 꺼짐이고, 저장소의 설정 파일 가운데 로컬 개발 설정만
+     * 켠다. 일반 설정 값이라 환경변수({@code MODEL_BUNDLE_ALLOW_SYNTHETIC_FIXTURE})로도 켜지며 코드가 막지 않는다. 켜져 있어도
+     * 번들이 합성 표시를 달고 실행하지 않은 검증을 스스로 밝힌 경우가 아니면 적재 결과가 달라지지 않는다.
      */
     @Bean
     public ModelBundleLoader modelBundleLoader(

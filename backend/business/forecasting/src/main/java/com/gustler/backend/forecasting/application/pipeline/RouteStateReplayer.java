@@ -9,25 +9,26 @@ import java.util.List;
 
 /**
  * 다시 뜰 때 노선 상태를 최근 확정 배치로 되감아 만든다. 예보를 만들지 않고 상태만 전진시킨다.
- * 창의 길이는 설정 {@code forecast.replay-window}(기본 6시간)다. 창 안 어느 배치라도 저장 줄 수와 실제 줄 수가 다르면
+ * 창의 길이는 생성자가 받으며 worker는 {@link #DEFAULT_WINDOW}를 쓴다. 창 안 어느 배치라도 저장 줄 수와 실제 줄 수가 다르면
  * 그 노선의 되감기를 실패로 돌려 예보하지 않게 한다. 창 안에서 운행 시작이 보이지 않은 차량의 처리는 {@link RouteForecastState}를 따른다.
  *
- * <p>되감은 상태가 모자라면({@link RouteForecastState#replayShortfallAt}) 창을 {@code forecast.replay-extended-window}(기본
- * 12시간)로 한 번 늘려 다시 되감는다. 한 운행이나 한 연결이 창보다 길게 이어지는 중에 다시 뜬 경우다. 늘린 창으로 덜 모자라면 그
- * 상태를 쓰고, 그렇지 않거나 늘린 창을 읽지 못하면 처음 되감은 상태를 그대로 쓴다. 모자람이 없으면 두 번째 되감기를 돌리지 않는다.
+ * <p>되감은 상태가 모자라면({@link RouteForecastState#replayShortfallAt}) 창을 한 번 늘려(worker는
+ * {@link #DEFAULT_EXTENDED_WINDOW}) 다시 되감는다. 한 운행이나 한 연결이 창보다 길게 이어지는 중에 다시 뜬 경우다. 늘린 창으로 덜
+ * 모자라면 그 상태를 쓰고, 그렇지 않거나 늘린 창을 읽지 못하면 처음 되감은 상태를 그대로 쓴다. 모자람이 없으면 두 번째 되감기를
+ * 돌리지 않는다.
  *
  * <p>예보 단계를 돌리지 못하고 끝난 배치({@link ReplaySource.Read#unforecastRuns})는 되감으면서 그 배치가 닫은 통과를 함께
  * 판정해 돌려준다. 저장과 전달은 부르는 쪽이 한다.
  */
 public final class RouteStateReplayer {
+    /** 처음 되감는 창. */
     public static final Duration DEFAULT_WINDOW = Duration.ofHours(6);
-    public static final Duration DEFAULT_EXTENDED_WINDOW = Duration.ofHours(12);
     /**
-     * 늘린 창의 상한이다. 이관 앱은 다시 뜬 worker가 다시 읽는 가장 긴 범위({@code PartitionExportSettings.LONGEST_REPLAY})로 보관
-     * 날짜 수의 최솟값을 정하고, 관측은 이 상한까지만 되감는다고 본다. 이 상한을 그 범위보다 길게 늘리려면 그 값도 함께 늘려야 한다.
-     * 그러지 않으면 이관된 관측이 창 안에서 빠진 채로 상태를 만들 수 있다.
+     * 늘려 되감는 창. 관측을 되감는 가장 긴 범위다. 이관 앱은 다시 뜬 worker가 다시 읽는 가장 긴 범위
+     * ({@code PartitionExportSettings.LONGEST_REPLAY})로 보관 날짜 수의 최솟값을 정하고, 관측은 이 창까지만 되감는다고 본다. 이 창을
+     * 그 범위보다 길게 늘리려면 그 값도 함께 늘려야 한다. 그러지 않으면 이관된 관측이 창 안에서 빠진 채로 상태를 만들 수 있다.
      */
-    public static final Duration MAXIMUM_EXTENDED_WINDOW = Duration.ofHours(12);
+    public static final Duration DEFAULT_EXTENDED_WINDOW = Duration.ofHours(12);
     private final ReplaySource source;
     private final ForecastStage stage;
     private final Duration window;
@@ -45,9 +46,6 @@ public final class RouteStateReplayer {
     ) {
         if (window.isNegative() || window.isZero()) {
             throw new IllegalArgumentException("되감기 창은 양수여야 한다");
-        }
-        if (extendedWindow.compareTo(window) > 0 && extendedWindow.compareTo(MAXIMUM_EXTENDED_WINDOW) > 0) {
-            throw new IllegalArgumentException("늘린 되감기 창은 12시간을 넘을 수 없다: " + extendedWindow);
         }
         this.source = source;
         this.stage = stage;
