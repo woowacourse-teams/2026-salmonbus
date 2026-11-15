@@ -364,6 +364,35 @@ class LegacyExportIntegrationTest {
     }
 
     @Test
+    void 같은_키에_다른_내용의_파일이_이미_있으면_조각을_장부에_적지_않는다() {
+        // given
+        seatForecasts(1, 3, 10);
+        PartitionExportIntegrationTest.MemoryObjects earlier = new PartitionExportIntegrationTest.MemoryObjects();
+        service(earlier, List.of("seat_forecast"), settings(MIN_SEGMENT, 1000, 100)).run();
+        String file = earlier.values.keySet().stream()
+            .filter(k -> k.endsWith(".jsonl.gz"))
+            .findFirst()
+            .orElseThrow();
+        jdbc.sql("TRUNCATE daily_export").update();
+        PartitionExportIntegrationTest.MemoryObjects objects = new PartitionExportIntegrationTest.MemoryObjects();
+        objects.values.put(file, ArchiveFiles.encode(List.of("{\"changed\":true}")));
+        SimpleMeterRegistry metrics = new SimpleMeterRegistry();
+
+        // when
+        LegacyExportService.RunReport report =
+            service(objects, List.of("seat_forecast"), settings(MIN_SEGMENT, 1000, 100), metrics).run();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(report.tables()).containsEntry("seat_forecast", LegacyExportService.TableStatus.FAILED);
+            softly.assertThat(ledger("seat_forecast")).isEmpty();
+            softly.assertThat(metrics.get("salmonbus_archive_legacy_failures").tag("reason", "FILE_HASH_MISMATCH")
+                .counter().count()).isOne();
+            softly.assertThat(count("SELECT count(*) FROM seat_forecast")).isEqualTo(6);
+        });
+    }
+
+    @Test
     void 텍스트_복합_키와_uuid_시각_날짜_키_테이블도_조금씩_이어_가며_빠짐없이_내보낸다() {
         // given
         List<String> releases = List.of("a", "B", "b ", "b", "Ä", "가", "z-1", "z_1", "Z");

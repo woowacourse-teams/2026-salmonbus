@@ -17,12 +17,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,7 +50,7 @@ class PartitionExportIntegrationTest {
     TestDatabase database;
     DriverManagerDataSource source;
     JdbcClient jdbc;
-    Clock clock = Clock.fixed(Instant.parse("2026-11-15T03:00:00Z"), ZoneOffset.UTC);
+    Clock clock = Clock.fixed(Instant.parse("2026-11-16T03:00:00Z"), ZoneOffset.UTC);
 
     @BeforeAll
     void migrate() {
@@ -82,7 +82,7 @@ class PartitionExportIntegrationTest {
             """).update();
         jdbc.sql("TRUNCATE forecast_run, forecast_record, stop_pass, pass_label, forecast_unresolved, daily_export")
             .update();
-        clock = Clock.fixed(Instant.parse("2026-11-15T03:00:00Z"), ZoneOffset.UTC);
+        clock = Clock.fixed(Instant.parse("2026-11-16T03:00:00Z"), ZoneOffset.UTC);
     }
 
     PartitionExportService service(ArchiveObjects objects, final boolean dropEnabled) {
@@ -96,8 +96,8 @@ class PartitionExportIntegrationTest {
         SimpleMeterRegistry metrics,
         DriverManagerDataSource dataSource
     ) {
-        PartitionExportSettings settings = new PartitionExportSettings(dropEnabled, 3, PREFIX, Duration.ofHours(1),
-            pageSize, Duration.ofMillis(300));
+        PartitionExportSettings settings = new PartitionExportSettings(dropEnabled,
+            PartitionExportSettings.MIN_RETENTION_DAYS, PREFIX, Duration.ofHours(1), pageSize, Duration.ofMillis(300));
         PartitionExportRepository repository = new PartitionExportRepository(JdbcClient.create(dataSource),
             new JdbcTransactionManager(dataSource), settings.lockTimeout());
         return new PartitionExportService(repository, objects, clock, metrics, settings);
@@ -265,7 +265,7 @@ class PartitionExportIntegrationTest {
     }
 
     @Test
-    void 한국_날짜로_오늘_포함_사흘은_남기고_기본_파티션은_내보내지_않는다() {
+    void 한국_날짜로_오늘_포함_나흘은_남기고_기본_파티션은_내보내지_않는다() {
         // given
         partition("forecast_run", LocalDate.parse("2026-11-12"));
         partition("forecast_run", LocalDate.parse("2026-11-13"));
@@ -276,7 +276,7 @@ class PartitionExportIntegrationTest {
             """).update();
         MemoryObjects objects = new MemoryObjects();
         SimpleMeterRegistry metrics = new SimpleMeterRegistry();
-        clock = Clock.fixed(Instant.parse("2026-11-15T14:59:59Z"), ZoneOffset.UTC);
+        clock = Clock.fixed(Instant.parse("2026-11-16T14:59:59Z"), ZoneOffset.UTC);
 
         // when
         service(objects, false, 1000, metrics, source).run();
@@ -290,7 +290,7 @@ class PartitionExportIntegrationTest {
         });
 
         // when
-        clock = Clock.fixed(Instant.parse("2026-11-15T15:00:00Z"), ZoneOffset.UTC);
+        clock = Clock.fixed(Instant.parse("2026-11-16T15:00:00Z"), ZoneOffset.UTC);
         service(objects, false).run();
 
         // then
@@ -540,6 +540,38 @@ class PartitionExportIntegrationTest {
     }
 
     @Test
+    void 같은_키에_다른_내용의_파일이_이미_있으면_장부에_적지_않고_줄을_지우지_않는다() {
+        // given
+        partition("forecast_run", DAY);
+        forecastRun(DAY, 1);
+        MemoryObjects earlier = new MemoryObjects();
+        service(earlier, false).run();
+        String file = earlier.values.keySet().stream()
+            .filter(k -> k.endsWith(".jsonl.gz"))
+            .findFirst()
+            .orElseThrow();
+        jdbc.sql("TRUNCATE daily_export").update();
+        MemoryObjects objects = new MemoryObjects();
+        objects.values.put(file, ArchiveFiles.encode(List.of("{\"changed\":true}")));
+        SimpleMeterRegistry metrics = new SimpleMeterRegistry();
+
+        // when
+        PartitionExportService.RunReport report = service(objects, true, 1000, metrics, source).run();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(report.exported()).isZero();
+            softly.assertThat(report.dropped()).isZero();
+            softly.assertThat(report.oldestPending()).isEqualTo(DAY);
+            softly.assertThat(ledger("forecast_run", DAY)).isEmpty();
+            softly.assertThat(exists("forecast_run_p20261112")).isTrue();
+            softly.assertThat(count("SELECT count(*) FROM forecast_run_p20261112")).isOne();
+            softly.assertThat(metrics.get("salmonbus_archive_partition_failures").tag("table", "forecast_run")
+                .tag("reason", "FILE_HASH_MISMATCH").counter().count()).isOne();
+        });
+    }
+
+    @Test
     void manifest_해시가_장부와_다르면_지우지_않는다() {
         // given
         partition("forecast_run", DAY);
@@ -592,7 +624,7 @@ class PartitionExportIntegrationTest {
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
         MemoryObjects objects = new MemoryObjects();
-        PartitionExportSettings settings = new PartitionExportSettings(true, 3, PREFIX, Duration.ofHours(1), 1000,
+        PartitionExportSettings settings = new PartitionExportSettings(true, 4, PREFIX, Duration.ofHours(1), 1000,
             Duration.ofMillis(300));
         byte[] otherManifest = new PartitionManifest(PartitionManifest.FORMAT, "forecast_run", DAY.toString(),
             "forecast_run_p20261112", 0, List.of(), List.of(), "2026-11-15T00:00:00Z", List.of()).toBytes();
@@ -743,28 +775,41 @@ class PartitionExportIntegrationTest {
     @Test
     void 관측_테이블이_일반_테이블이면_건너뛰었다고_알리고_예보_기록은_그대로_내보내고_지운다() {
         // given
+        String schema = "observation_plain_" + UUID.randomUUID().toString().replace("-", "");
+        jdbc.sql("CREATE SCHEMA " + schema).update();
+        for (String table : PartitionExportRepository.OBSERVATION_TABLES) {
+            jdbc.sql("CREATE TABLE " + schema + "." + table + " (id bigint NOT NULL)").update();
+        }
+        DriverManagerDataSource plainFirst = new DriverManagerDataSource(
+            database.jdbcUrl() + "?currentSchema=" + schema + ",public", database.username(), database.password());
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
         SimpleMeterRegistry metrics = new SimpleMeterRegistry();
 
-        // when
-        PartitionExportService.RunReport report = service(new MemoryObjects(), true, 1000, metrics, source).run();
+        try {
+            // when
+            PartitionExportService.RunReport report =
+                service(new MemoryObjects(), true, 1000, metrics, plainFirst).run();
 
-        // then
-        assertSoftly(softly -> {
-            softly.assertThat(report.dropped()).isOne();
-            softly.assertThat(jdbc.sql("SELECT table_name FROM daily_export").query(String.class).list())
-                .containsExactly("forecast_run");
-            for (String table : PartitionExportRepository.OBSERVATION_TABLES) {
-                softly.assertThat(metrics.get("salmonbus_archive_partition_deferrals").tag("table", table)
-                    .tag("reason", "NOT_PARTITIONED").counter().count()).as(table).isOne();
-                softly.assertThat(jdbc.sql("SELECT relkind::text FROM pg_class WHERE oid = to_regclass(?)")
-                    .param(table).query(String.class).single()).as(table).isEqualTo("r");
-            }
-        });
+            // then
+            assertSoftly(softly -> {
+                softly.assertThat(report.dropped()).isOne();
+                softly.assertThat(jdbc.sql("SELECT table_name FROM daily_export").query(String.class).list())
+                    .containsExactly("forecast_run");
+                for (String table : PartitionExportRepository.OBSERVATION_TABLES) {
+                    softly.assertThat(metrics.get("salmonbus_archive_partition_deferrals").tag("table", table)
+                        .tag("reason", "NOT_PARTITIONED").counter().count()).as(table).isOne();
+                    softly.assertThat(JdbcClient.create(plainFirst)
+                        .sql("SELECT relkind::text FROM pg_class WHERE oid = to_regclass(?)")
+                        .param(table).query(String.class).single()).as(table).isEqualTo("r");
+                }
+            });
+        } finally {
+            jdbc.sql("DROP SCHEMA " + schema + " CASCADE").update();
+        }
     }
 
-    /** S3 대역이다. 조건부 PUT 처럼 같은 키에 다른 내용을 거부하고, 올린 뒤 다시 읽어 비교한다. */
+    /** S3 대역이다. 조건부 PUT 처럼 같은 키가 이미 있으면 덮어쓰지 않고 그대로 두며, 올린 내용을 다시 읽어 견주지 않는다. */
     static final class MemoryObjects implements ArchiveObjects {
         final Map<String, byte[]> values = new HashMap<>();
         final List<String> puts = new ArrayList<>();
@@ -774,17 +819,11 @@ class PartitionExportIntegrationTest {
 
         @Override
         public synchronized void putVerified(String key, byte[] bytes) {
-            byte[] prior = values.putIfAbsent(key, bytes.clone());
-            if (prior != null && !Arrays.equals(prior, bytes)) {
-                throw new IllegalStateException("OBJECT_CONFLICT");
-            }
+            values.putIfAbsent(key, bytes.clone());
             puts.add(key);
             if (failManifestOnce && key.contains("/manifest-")) {
                 failManifestOnce = false;
                 throw new IllegalStateException("RESPONSE_LOST");
-            }
-            if (!Arrays.equals(bytes, read(key, bytes.length))) {
-                throw new IllegalStateException("READBACK");
             }
         }
 

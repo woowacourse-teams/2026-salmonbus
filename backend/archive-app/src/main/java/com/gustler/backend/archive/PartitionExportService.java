@@ -5,7 +5,6 @@ import io.micrometer.core.instrument.Tags;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -25,16 +24,16 @@ import org.springframework.scheduling.annotation.Scheduled;
  * 허락하면 떼어 지운다.
  *
  * <p>대상은 {@code source_date <= 오늘(한국) - retentionDays} 인 날짜 파티션이고 오래된 날짜부터, 같은 날짜는 테이블 순서로 처리한다.
- * 기본 파티션은 대상이 아니며 줄 수만 지표로 낸다. 파티션 하나의 실패는 그 파티션만 다음 회차로 미루고 다른 파티션은 계속한다.
+ * 보관 날짜 수는 일곱 테이블이 같다. 다시 뜬 worker 가 다시 읽는 줄을 지우지 않도록 설정이 받는 가장 작은 값을
+ * {@link PartitionExportSettings#LONGEST_REPLAY} 로 정한다. 기본 파티션은 대상이 아니며 줄 수만 지표로 낸다. 파티션 하나의 실패는 그
+ * 파티션만 다음 회차로 미루고 다른 파티션은 계속한다.
  *
  * <p>관측 테이블은 다음이 다르다.
  * <ul>
  * <li>파티션 테이블일 때만 다룬다. 일반 테이블이면 회차마다 {@code reason=NOT_PARTITIONED} 로 건너뛰었다고 알리고 아무것도 읽지
  * 않는다.</li>
- * <li>보관 날짜 수는 {@link #observationRetentionDays} 다. 다시 뜬 worker 와 채점이 다시 읽는 범위
- * ({@link #OBSERVATION_READ_WINDOW})를 덮지 못하는 설정이면 그 범위를 덮을 때까지 날짜를 건너뛴다.</li>
- * <li>날짜 파티션으로 바꾸기 전의 줄을 통째로 담은 첫 파티션({@code <table>_legacy})은 여러 날짜가 섞여 있다. 배치 첫 파티션의 모든
- * 시각이 관측 보관 경계 날짜 이하가 되면 그 파티션을 한 덩어리로, 날짜 파티션과 같은 형식·같은 확인 절차로 내보내고 지운다. 장부에는
+ * <li>날짜 파티션으로 바꾸기 전의 줄을 통째로 담은 첫 파티션({@code <table>_initial})은 여러 날짜가 섞여 있다. 배치 첫 파티션의 모든
+ * 시각이 보관 경계 날짜 이하가 되면 그 파티션을 한 덩어리로, 날짜 파티션과 같은 형식·같은 확인 절차로 내보내고 지운다. 장부에는
  * ({@code table_name}, {@link PartitionExportRepository#INITIAL_DATE}, 0) 으로 적고 S3 키의 날짜도 그 날짜다. 관측 줄은 자기
  * 배치보다 먼저 들어올 수 없으므로 관측 첫 파티션의 줄도 그 배치들보다 늦지 않다. 그래서 관측 첫 파티션은 배치 첫 파티션이 준비되었거나
  * 그 장부가 확인을 마쳤을 때 대상이 된다.</li>
@@ -52,11 +51,6 @@ import org.springframework.scheduling.annotation.Scheduled;
  */
 public class PartitionExportService {
     static final int FILE_PLAIN_BYTES = 8 * 1024 * 1024;
-    /**
-     * 관측 테이블을 다시 읽는 가장 긴 범위다. 다시 뜬 worker 는 관측을 최대 12시간 되감고, 채점은 최대 26시간 전 기록까지 다시 읽는다.
-     * 둘 가운데 긴 쪽을 쓴다.
-     */
-    static final Duration OBSERVATION_READ_WINDOW = Duration.ofHours(26);
     private static final String BATCH_TABLE = PartitionExportRepository.OBSERVATION_TABLES.getFirst();
     private static final Logger LOG = LoggerFactory.getLogger(PartitionExportService.class);
     private static final String LOCK_NOT_AVAILABLE = "55P03";
@@ -82,9 +76,8 @@ public class PartitionExportService {
         this.metrics = metrics;
         this.settings = settings;
         metrics.gauge("salmonbus_archive_partition_oldest_pending_days", oldestPendingDays);
-        LOG.info("event=partition_export_config enabled=true dropEnabled={} retentionDays={}"
-            + " observationRetentionDays={} prefix={} intervalMs={}", settings.dropEnabled(), settings.retentionDays(),
-            observationRetentionDays(settings.retentionDays()), settings.prefix(), settings.interval().toMillis());
+        LOG.info("event=partition_export_config enabled=true dropEnabled={} retentionDays={} prefix={} intervalMs={}",
+            settings.dropEnabled(), settings.retentionDays(), settings.prefix(), settings.interval().toMillis());
     }
 
     /**
@@ -102,15 +95,6 @@ public class PartitionExportService {
     /** 오늘(한국)에서 보관 날짜 수를 뺀 날짜다. 이 날짜까지의 파티션이 대상이다. */
     public static LocalDate lastEligibleDate(Clock clock, final int retentionDays) {
         return LocalDate.now(clock.withZone(ArchiveRetention.ZONE)).minusDays(retentionDays);
-    }
-
-    /**
-     * 관측 테이블의 보관 날짜 수다. 날짜 d 의 파티션은 d+1 한국 자정까지 들어온 줄을 담으므로, 보관 날짜 수 n 이면 지우는 줄은 언제나
-     * 지금보다 (n-1)일 이상 앞선다. 그래서 {@link #OBSERVATION_READ_WINDOW} 를 덮는 가장 작은 n 과 설정값 가운데 큰 값을 쓴다.
-     */
-    public static int observationRetentionDays(final int retentionDays) {
-        final long windowDays = (OBSERVATION_READ_WINDOW.toHours() + 23) / 24;
-        return Math.max(retentionDays, (int) windowDays + 1);
     }
 
     @Scheduled(fixedDelayString = "${archive.partition-export.interval:1h}",
@@ -131,7 +115,6 @@ public class PartitionExportService {
         final long started = System.nanoTime();
         LocalDate today = LocalDate.now(clock.withZone(ArchiveRetention.ZONE));
         LocalDate through = lastEligibleDate(clock, settings.retentionDays());
-        LocalDate observationThrough = lastEligibleDate(clock, observationRetentionDays(settings.retentionDays()));
         List<String> observations = partitionedObservationTables();
         List<String> tables = new ArrayList<>(PartitionExportRepository.TABLES);
         tables.addAll(observations);
@@ -139,7 +122,7 @@ public class PartitionExportService {
         List<String> unexpected = new ArrayList<>();
         List<PartitionExportRepository.Partition> partitions = new ArrayList<>(
             repository.datedPartitions(PartitionExportRepository.TABLES, through, unexpected));
-        partitions.addAll(observationPartitions(observations, observationThrough, unexpected));
+        partitions.addAll(observationPartitions(observations, through, unexpected));
         partitions.sort(PartitionExportRepository.ORDER);
         recordUnexpectedBounds(unexpected);
         int exported = 0;

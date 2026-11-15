@@ -22,7 +22,7 @@ archive:
   partition-export:
     enabled: ${ARCHIVE_PARTITION_EXPORT_ENABLED:false}
     drop-enabled: ${ARCHIVE_PARTITION_EXPORT_DROP_ENABLED:false}
-    retention-days: ${ARCHIVE_PARTITION_EXPORT_RETENTION_DAYS:3}
+    retention-days: ${ARCHIVE_PARTITION_EXPORT_RETENTION_DAYS:4}
     prefix: ${ARCHIVE_PARTITION_EXPORT_PREFIX:salmonbus/prod/lake-v3/}
     interval: ${ARCHIVE_PARTITION_EXPORT_INTERVAL:1h}
     initial-delay: ${ARCHIVE_PARTITION_EXPORT_INITIAL_DELAY:1m}

@@ -20,7 +20,7 @@ public class PartitionExportConfiguration {
     @Bean
     PartitionExportSettings partitionExportSettings(
         @Value("${archive.partition-export.drop-enabled:false}") final boolean dropEnabled,
-        @Value("${archive.partition-export.retention-days:3}") final int retentionDays,
+        @Value("${archive.partition-export.retention-days:4}") final int retentionDays,
         @Value("${archive.partition-export.prefix:salmonbus/prod/lake-v3/}") String prefix,
         @Value("${archive.partition-export.interval:1h}") Duration interval,
         @Value("${archive.partition-export.page-size:2000}") final int pageSize,

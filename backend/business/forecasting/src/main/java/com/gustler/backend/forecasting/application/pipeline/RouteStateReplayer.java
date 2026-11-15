@@ -23,9 +23,9 @@ public final class RouteStateReplayer {
     public static final Duration DEFAULT_WINDOW = Duration.ofHours(6);
     public static final Duration DEFAULT_EXTENDED_WINDOW = Duration.ofHours(12);
     /**
-     * 늘린 창의 상한이다. 이관은 다시 뜬 worker가 관측을 이 상한까지만 되감는다는 전제로 관측의 날짜 파티션을 최소 사흘 남긴다.
-     * 이보다 길게 되감으려면 이관의 관측 보관 날짜 수를 함께 늘려야 한다. 그러지 않으면 이관된 관측이 창 안에서 빠진 채로 상태를
-     * 만들 수 있다.
+     * 늘린 창의 상한이다. 이관 앱은 다시 뜬 worker가 다시 읽는 가장 긴 범위({@code PartitionExportSettings.LONGEST_REPLAY})로 보관
+     * 날짜 수의 최솟값을 정하고, 관측은 이 상한까지만 되감는다고 본다. 이 상한을 그 범위보다 길게 늘리려면 그 값도 함께 늘려야 한다.
+     * 그러지 않으면 이관된 관측이 창 안에서 빠진 채로 상태를 만들 수 있다.
      */
     public static final Duration MAXIMUM_EXTENDED_WINDOW = Duration.ofHours(12);
     private final ReplaySource source;

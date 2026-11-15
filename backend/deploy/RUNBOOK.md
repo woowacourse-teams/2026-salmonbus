@@ -580,7 +580,7 @@ DB 연결은 최대 1개이며 nice만으로 자원 격리가 된다고 보지 �
 |---|---|---|
 | `ARCHIVE_PARTITION_EXPORT_ENABLED` | `false` | 켜야 빈이 생긴다. 꺼져 있으면 카탈로그도 읽지 않는다 |
 | `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED` | `false` | 확인을 마친 파티션을 떼어 지운다 |
-| `ARCHIVE_PARTITION_EXPORT_RETENTION_DAYS` | `3` | 오늘 포함 DB에 남기는 날 수(2~30). `source_date <= 오늘 - 3`이 대상이다 |
+| `ARCHIVE_PARTITION_EXPORT_RETENTION_DAYS` | `4` | 오늘 포함 DB에 남기는 날 수(4~30). `source_date <= 오늘 - 4`가 대상이다. 다시 뜬 worker가 다시 읽는 가장 긴 범위(이틀 남짓)를 덮어야 해서 4보다 작으면 기동하지 않는다 |
 | `ARCHIVE_PARTITION_EXPORT_PREFIX` | `salmonbus/prod/lake-v3/` | S3 키 접두. 영문·숫자·`/`·`_`·`=`·`-`만 쓰고 `/`로 끝낸다. `/`나 `salmonbus-be/`로 시작하면 기동하지 않는다 |
 | `ARCHIVE_PARTITION_EXPORT_INTERVAL` | `1h` | 회차 사이 쉬는 시간(1분~24시간). 기동 1분 뒤 첫 회차 |
 | `ARCHIVE_PARTITION_EXPORT_PAGE_SIZE` | `2000` | 한 번에 읽는 줄 수(1~10000) |

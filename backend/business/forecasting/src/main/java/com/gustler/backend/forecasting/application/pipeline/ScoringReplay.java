@@ -40,6 +40,10 @@ import java.util.stream.Stream;
  * 못한다.
  *
  * <p>세 흐름은 (배치 착수 시각, 배치 번호) 순서로 합치고 같은 배치에서는 수집 사실, 통과, 예보 순서로 흘린다.
+ *
+ * <p>이관 앱은 여기서 다시 읽는 가장 긴 범위(수집 사실: 예보 범위의 상한 + 하루 + {@value #INTAKE_MARGIN_MINUTES}분)를
+ * {@code PartitionExportSettings.LONGEST_REPLAY}에 적어 두고 그 범위 안의 날짜 파티션을 지우지 않는다. 범위의 상한을 늘리면 그 값도
+ * 함께 늘린다.
  */
 public final class ScoringReplay {
     /** 예보 기록을 되감는 가장 짧은 범위. 마감(착수 시각 + 2시간)에 수신 뒤 착수까지의 지연 여유를 더한 값이다. */

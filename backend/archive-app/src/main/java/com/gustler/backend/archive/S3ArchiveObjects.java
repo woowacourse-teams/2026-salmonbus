@@ -1,7 +1,6 @@
 package com.gustler.backend.archive;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Base64;
 import org.apache.hc.core5.http.HttpStatus;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -35,10 +34,6 @@ public final class S3ArchiveObjects implements ArchiveObjects, AutoCloseable {
             if (conflict.statusCode() != HttpStatus.SC_PRECONDITION_FAILED) {
                 throw conflict;
             }
-        }
-        // 성공 응답만으로 완료하지 않는다. 항상 실제 객체를 다시 읽는다.
-        if (!Arrays.equals(bytes, read(key, bytes.length))) {
-            throw new IllegalStateException("S3 재읽기 값이 업로드 원본과 다르다");
         }
     }
 
