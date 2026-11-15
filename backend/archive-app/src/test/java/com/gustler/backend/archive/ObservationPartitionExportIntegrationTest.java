@@ -250,8 +250,8 @@ class ObservationPartitionExportIntegrationTest {
             partition("forecast_run", date);
             jdbc.sql("""
                 INSERT INTO forecast_run (source_date, observation_batch_id, route_id, route_version_id, received_at,
-                    confirmed_at, model_deployment_id, outcome, prediction_count)
-                VALUES (?, 1, 1, 2, now(), now(), NULL, 'EMPTY', 0)
+                    confirmed_at, model_deployment_id, outcome, prediction_count, source_incomplete, counted_rows)
+                VALUES (?, 1, 1, 2, now(), now(), NULL, 'EMPTY', 0, false, 0)
                 """).param(date).update();
             for (String table : OBSERVATIONS) {
                 partition(table, date);

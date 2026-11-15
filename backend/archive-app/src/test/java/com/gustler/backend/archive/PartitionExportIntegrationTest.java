@@ -122,9 +122,9 @@ class PartitionExportIntegrationTest {
     void forecastRun(LocalDate date, final long batch) {
         jdbc.sql("""
             INSERT INTO forecast_run (source_date, observation_batch_id, route_id, route_version_id, received_at, confirmed_at,
-                model_deployment_id, outcome, prediction_count)
+                model_deployment_id, outcome, prediction_count, source_incomplete, counted_rows)
             VALUES (?, ?, 1, 2, '2026-11-12 03:00:00.123456+00', '2026-11-12 03:00:01.000001+00',
-                NULL, 'PUBLISHED', 3)
+                NULL, 'PUBLISHED', 3, false, 3)
             """).params(date, batch).update();
     }
 
@@ -271,8 +271,8 @@ class PartitionExportIntegrationTest {
         partition("forecast_run", LocalDate.parse("2026-11-13"));
         jdbc.sql("""
             INSERT INTO forecast_run (source_date, observation_batch_id, route_id, route_version_id, received_at,
-                confirmed_at, model_deployment_id, outcome, prediction_count)
-            VALUES ('2026-11-01', 1, 1, 2, now(), now(), NULL, 'EMPTY', 0)
+                confirmed_at, model_deployment_id, outcome, prediction_count, source_incomplete, counted_rows)
+            VALUES ('2026-11-01', 1, 1, 2, now(), now(), NULL, 'EMPTY', 0, false, 0)
             """).update();
         MemoryObjects objects = new MemoryObjects();
         SimpleMeterRegistry metrics = new SimpleMeterRegistry();

@@ -63,7 +63,7 @@ final class RecordedScoringEvents {
         return rows;
     }
 
-    /** 예보 실행 줄을 읽는 저장소. 수집 사건이 함께 저장된 배치만 수집 사실을 돌려준다. */
+    /** 예보 실행 줄을 읽는 저장소. 수집 사실은 같은 배치의 저장된 수집 사건으로 만든다. */
     ForecastRecordStore forecasts() {
         return new Forecasts();
     }
@@ -117,11 +117,13 @@ final class RecordedScoringEvents {
             List<RecordedBatch> batches = new ArrayList<>();
             for (ForecastPublished published : published(routeId, fromInclusive, toExclusive)) {
                 ObservationBatchSeen seen = seenByBatch.get(published.observationBatchId());
-                if (seen != null) {
-                    batches.add(new RecordedBatch(published.observationBatchId(), routeId, published.receivedAt(),
-                        published.confirmedAt(), published.outcome() == ForecastOutcome.LATE, seen.incomplete(),
-                        seen.countedRows()));
+                if (seen == null) {
+                    throw new IllegalStateException("수집 사건 없이 저장된 예보 사건이다: "
+                        + published.observationBatchId());
                 }
+                batches.add(new RecordedBatch(published.observationBatchId(), routeId, published.receivedAt(),
+                    published.confirmedAt(), published.outcome() == ForecastOutcome.LATE, seen.incomplete(),
+                    seen.countedRows()));
             }
             return batches;
         }

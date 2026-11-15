@@ -71,9 +71,10 @@ final class SyntheticInput {
             observation(1033, 103, 3, "bus-3", 1, 20), observation(1034, 103, 4, "bus-4", 16, 2),
             observation(1035, 103, 5, "bus-5", 14, 20));
         // 예보 착수 시각은 기준 시각 15초 전이고 예측은 다섯 개다. bus-2는 목표 정류장 둘(10, 15)을 한 줄에 담는다.
+        // 묶음의 관측 다섯 줄이 모두 남아 있어 수집 구멍이 아니다.
         write("forecast_run", "source_date,observation_batch_id,route_id,route_version_id,received_at,confirmed_at,"
-                + "model_deployment_id,outcome,prediction_count",
-            "2026-11-10,100,1,10," + BASE.minusSeconds(20) + "," + BASE.minusSeconds(15) + ",1,PUBLISHED,5");
+                + "model_deployment_id,outcome,prediction_count,source_incomplete,counted_rows",
+            "2026-11-10,100,1,10," + BASE.minusSeconds(20) + "," + BASE.minusSeconds(15) + ",1,PUBLISHED,5,f,5");
         write("forecast_record", "source_date,vehicle_observation_id,observation_batch_id,source_row_number,route_id,"
                 + "route_version_id,vehicle_id,passed_stop_order,trip_start_observation_id,chain_start_observation_id,"
                 + "down,capacity,extended,target_stop_orders,expected_seats,full_probabilities",

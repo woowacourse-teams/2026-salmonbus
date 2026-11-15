@@ -120,7 +120,7 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
             run.receivedAt(), run.confirmedAt(), run.modelDeploymentId(), run.outcome(), rows.vehicles());
     }
 
-    /** 수신 시각 하한의 하루 전 날짜부터의 파티션만 읽는다. 수집 사건 없이 저장해 수집 사실이 빈 실행 줄은 돌려주지 않는다. */
+    /** 수신 시각 하한의 하루 전 날짜부터의 파티션만 읽는다. */
     @Override
     public List<RecordedBatch> findRecordedBatchesBetween(
         final long routeId,
@@ -132,7 +132,6 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
                     confirmed_at, outcome, source_incomplete, counted_rows
                 FROM forecast_run
                 WHERE route_id = ? AND source_date >= ? AND received_at >= ? AND received_at < ?
-                    AND counted_rows IS NOT NULL
                 ORDER BY received_at, observation_batch_id
                 """)
             .params(routeId, SourceDates.of(fromInclusive).minusDays(1), timestamp(fromInclusive),

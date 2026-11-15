@@ -75,8 +75,8 @@ final class InputFolder {
                 "tagless", "seat_unknown_reason")),
         new Table("forecast_run", false,
             List.of("source_date", "observation_batch_id", "route_id", "route_version_id", "received_at",
-                "confirmed_at", "outcome", "prediction_count"),
-            List.of("model_deployment_id", "source_incomplete", "counted_rows")),
+                "confirmed_at", "outcome", "prediction_count", "source_incomplete", "counted_rows"),
+            List.of("model_deployment_id")),
         new Table("forecast_record", false,
             List.of("source_date", "vehicle_observation_id", "observation_batch_id", "source_row_number", "route_id",
                 "route_version_id", "vehicle_id", "passed_stop_order", "trip_start_observation_id",
@@ -238,9 +238,10 @@ final class InputFolder {
                 """);
              PreparedStatement run = connection.prepareStatement("""
                 INSERT INTO forecast_run(source_date, observation_batch_id, route_id, route_version_id, received_at,
-                    confirmed_at, outcome, prediction_count)
+                    confirmed_at, outcome, prediction_count, source_incomplete, counted_rows)
                 SELECT (marker.scheduled_at AT TIME ZONE 'Asia/Seoul')::date, marker.id, version.route_id,
-                    marker.route_version_id, marker.response_received_at, CAST(? AS timestamptz), 'EMPTY', 0
+                    marker.route_version_id, marker.response_received_at, CAST(? AS timestamptz), 'EMPTY', 0,
+                    false, 0
                 FROM observation_batch marker
                 JOIN route_version version ON version.id = marker.route_version_id
                 WHERE marker.id = -CAST(? AS bigint)

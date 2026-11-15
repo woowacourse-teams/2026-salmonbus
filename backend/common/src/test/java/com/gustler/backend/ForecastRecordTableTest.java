@@ -59,6 +59,19 @@ class ForecastRecordTableTest {
     }
 
     @Test
+    void 수집_구멍_여부와_관측_줄_수가_없는_실행_줄은_저장되지_않는다() {
+        // when
+        Throwable actual = catchThrowable(() -> jdbcClient.sql("""
+            INSERT INTO forecast_run (source_date, observation_batch_id, route_id, route_version_id, received_at,
+                confirmed_at, outcome, prediction_count)
+            VALUES (DATE '2030-01-01', 1, 1, 1, now(), now(), 'EMPTY', 0)
+            """).update());
+
+        // then
+        assertThat(actual).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void 채점된_정답에_사유가_있으면_저장되지_않는다() {
         // when
         Throwable actual = catchThrowable(() -> insertLabel("SETTLED", "'NO_PREVIOUS_PASS'", "1.5"));

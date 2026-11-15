@@ -139,9 +139,9 @@ class PendingBatchQueryTest {
         }
         jdbc.sql("""
             INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
-                confirmed_at,outcome,prediction_count)
+                confirmed_at,outcome,prediction_count,source_incomplete,counted_rows)
             SELECT (b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date, b.id, v.route_id, b.route_version_id,
-                b.response_received_at, b.response_received_at, 'EMPTY', 0
+                b.response_received_at, b.response_received_at, 'EMPTY', 0, false, 0
             FROM observation_batch b JOIN route_version v ON v.id=b.route_version_id
             WHERE b.attempt_key LIKE 'plan-%' AND b.response_received_at < :recent
             """).param("recent", NOW.minusSeconds(60).atOffset(ZoneOffset.UTC)).update();
@@ -236,9 +236,9 @@ class PendingBatchQueryTest {
     private void run(final long batchId, final long version, Instant receivedAt) {
         jdbc.sql("""
             INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
-                confirmed_at,outcome,prediction_count)
+                confirmed_at,outcome,prediction_count,source_incomplete,counted_rows)
             SELECT (b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date, b.id, v.route_id, b.route_version_id, ?, ?,
-                'EMPTY', 0
+                'EMPTY', 0, false, 0
             FROM observation_batch b JOIN route_version v ON v.id=b.route_version_id WHERE b.id=? AND v.id=?
             """).params(receivedAt.atOffset(ZoneOffset.UTC), receivedAt.atOffset(ZoneOffset.UTC), batchId, version)
             .update();

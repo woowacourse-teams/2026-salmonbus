@@ -382,11 +382,11 @@ class RouteApiContractTest {
         jdbcClient.sql("""
                 INSERT INTO forecast_run (
                     source_date, observation_batch_id, route_id, route_version_id, received_at,
-                    confirmed_at, model_deployment_id, outcome, prediction_count
+                    confirmed_at, model_deployment_id, outcome, prediction_count, source_incomplete, counted_rows
                 )
                 SELECT (batch.scheduled_at AT TIME ZONE 'Asia/Seoul')::date, batch.id, version.route_id,
                        batch.route_version_id, batch.response_received_at,
-                       batch.response_received_at, deployment.id, 'EMPTY', 0
+                       batch.response_received_at, deployment.id, 'EMPTY', 0, false, 0
                 FROM observation_batch batch
                 JOIN route_version version ON version.id = batch.route_version_id
                 CROSS JOIN model_deployment deployment

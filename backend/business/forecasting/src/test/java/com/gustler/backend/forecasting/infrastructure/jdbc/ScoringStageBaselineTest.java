@@ -325,7 +325,7 @@ class ScoringStageBaselineTest {
                 .toList();
         }
 
-        /** 수집 사실 없이 저장한 실행 줄만 있는 저장소를 흉내 낸다. */
+        /** 수집 사실을 돌려주지 않는다. 이 저장소로 되감는 흐름에는 수집 구멍이 없고 관측 줄 수가 상한에 못 미친다. */
         @Override
         public List<RecordedBatch> findRecordedBatchesBetween(
             final long routeId,

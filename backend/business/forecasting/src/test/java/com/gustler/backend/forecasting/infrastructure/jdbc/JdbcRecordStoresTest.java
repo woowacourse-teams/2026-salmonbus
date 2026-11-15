@@ -1,6 +1,5 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import static com.gustler.backend.forecasting.support.ForecastSamples.MODEL_DEPLOYMENT_ID;
 import static com.gustler.backend.forecasting.support.ForecastSamples.ROUTE_ID;
 import static com.gustler.backend.forecasting.support.ForecastSamples.ROUTE_VERSION_ID;
 import static com.gustler.backend.forecasting.support.ForecastSamples.pass;
@@ -23,7 +22,6 @@ import com.gustler.backend.forecasting.application.forecast.UnresolvedForecast;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -155,7 +153,7 @@ class JdbcRecordStoresTest {
     }
 
     @Test
-    void 수집_사실이_적힌_실행_줄의_수집_사실만_사건_순서대로_읽는다() {
+    void 실행_줄의_수집_사실을_수신_시각_범위_안의_것만_사건_순서대로_읽는다() {
         // given
         records.save(published(DAY, 12, RECEIVED_AT.plusSeconds(30), List.of()),
             seen(12, RECEIVED_AT.plusSeconds(30), CollectionResult.SUCCESS, 5, 4));
@@ -165,7 +163,6 @@ class JdbcRecordStoresTest {
             seen(13, RECEIVED_AT.plusSeconds(60), CollectionResult.SUCCESS, 2, 1));
         records.save(skipped(DAY, 14, RECEIVED_AT.plusSeconds(90), ForecastOutcome.EMPTY),
             seen(14, RECEIVED_AT.plusSeconds(90), CollectionResult.EMPTY, 0, 0));
-        insertRunWithoutCollectionFacts(15, RECEIVED_AT.plusSeconds(100));
         records.save(published(DAY, 16, RECEIVED_AT.plusSeconds(120), List.of()),
             seen(16, RECEIVED_AT.plusSeconds(120), CollectionResult.SUCCESS, 1, 1));
 
@@ -388,16 +385,6 @@ class JdbcRecordStoresTest {
     /** 수신 시각이 {@code receivedAt}인 실행 하나의 버스별 기록을 저장소로 다시 읽는다. */
     private List<ForecastPublished.VehicleForecast> storedVehicles(Instant receivedAt) {
         return records.findPublishedBetween(ROUTE_ID, receivedAt, receivedAt.plusMillis(1)).getFirst().vehicles();
-    }
-
-    /** 수집 구멍 여부와 관측 줄 수가 비어 있는 실행 줄을 넣는다. */
-    private void insertRunWithoutCollectionFacts(final long batchId, Instant receivedAt) {
-        jdbcClient.sql("""
-            INSERT INTO forecast_run (source_date, observation_batch_id, route_id, route_version_id, received_at,
-                confirmed_at, model_deployment_id, outcome, prediction_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'EMPTY', 0)
-            """).params(DAY, batchId, ROUTE_ID, ROUTE_VERSION_ID, receivedAt.atOffset(ZoneOffset.UTC),
-            receivedAt.plusSeconds(2).atOffset(ZoneOffset.UTC), MODEL_DEPLOYMENT_ID).update();
     }
 
     private static PassLabel label(final long tripStart, final int stopOrder) {

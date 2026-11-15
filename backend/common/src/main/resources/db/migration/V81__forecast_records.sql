@@ -16,12 +16,12 @@ CREATE TABLE forecast_run (
     prediction_count integer NOT NULL,
     -- 배치의 수집 사실이다. 채점이 다시 뜰 때 그날의 수집 구멍과 관측 줄 수를 관측 줄을 다시 세지 않고 되살리는 데 쓴다.
     -- source_incomplete는 저장 줄 수와 실제로 남은 줄 수가 다른 성공 배치, counted_rows는 하루 관측 상한에 더할 줄 수다.
-    source_incomplete boolean,
-    counted_rows integer,
+    source_incomplete boolean NOT NULL,
+    counted_rows integer NOT NULL,
     CONSTRAINT pk_forecast_run PRIMARY KEY (source_date, observation_batch_id),
     CONSTRAINT ck_forecast_run_outcome CHECK (outcome IN ('PUBLISHED','EMPTY','LATE','OUT_OF_SCOPE','INPUT_UNAVAILABLE')),
     CONSTRAINT ck_forecast_run_count CHECK (prediction_count >= 0),
-    CONSTRAINT ck_forecast_run_collection CHECK ((source_incomplete IS NULL) = (counted_rows IS NULL) AND counted_rows >= 0)
+    CONSTRAINT ck_forecast_run_collection CHECK (counted_rows >= 0)
 ) PARTITION BY RANGE (source_date);
 CREATE INDEX ix_forecast_run_route ON forecast_run (route_version_id, received_at DESC, observation_batch_id DESC);
 CREATE INDEX ix_forecast_run_replay ON forecast_run (route_id, received_at, observation_batch_id);

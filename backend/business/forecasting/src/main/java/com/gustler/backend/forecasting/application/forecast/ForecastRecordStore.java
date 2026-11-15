@@ -37,7 +37,7 @@ public interface ForecastRecordStore {
     List<ForecastPublished> findPublishedBetween(long routeId, Instant fromInclusive, Instant toExclusive);
 
     /**
-     * 노선(모든 판본)의 실행 가운데 수신 시각이 범위 안이고 수집 사실이 적힌 것만 사건 순서(수신 시각, 배치 번호)로 읽는다.
+     * 노선(모든 판본)의 실행 가운데 수신 시각이 범위 안인 것의 수집 사실을 사건 순서(수신 시각, 배치 번호)로 읽는다.
      * 되감기용이다. 버스별 기록은 읽지 않는다.
      *
      * @param routeId 노선

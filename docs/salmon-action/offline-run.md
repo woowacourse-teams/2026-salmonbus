@@ -130,7 +130,7 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 | model_deployment | 아니오 | id, deployment_key, release_id, model_key, model_version, bundle_digest, prediction_target_version, calculation_version, supported_scope_digest, data_until, state | predecessor_deployment_id, activated_at, retired_at |
 | observation_batch | 아니오 | id, route_version_id, scheduled_at, attempt_number, attempt_key, outcome, normalization_version, collection_strategy_version | requested_at, response_received_at, completed_at, http_status, result_code, failure_code, provider_rows, stored_rows, excluded_rows, input_confirmed_at, ingestion_origin |
 | vehicle_observation | 아니오 | id, observation_batch_id, route_version_id, source_row_number, stop_order, stop_id, running_state, passed_stop_order | vehicle_id, vehicle_trip_key, remaining_seats, crowd_level, vehicle_type, route_type, tagless, seat_unknown_reason |
-| forecast_run | 아니오 | source_date, observation_batch_id, route_id, route_version_id, received_at, confirmed_at, outcome, prediction_count | model_deployment_id, source_incomplete, counted_rows |
+| forecast_run | 아니오 | source_date, observation_batch_id, route_id, route_version_id, received_at, confirmed_at, outcome, prediction_count, source_incomplete, counted_rows | model_deployment_id |
 | forecast_record | 아니오 | source_date, vehicle_observation_id, observation_batch_id, source_row_number, route_id, route_version_id, vehicle_id, passed_stop_order, trip_start_observation_id, chain_start_observation_id, down, capacity, extended, target_stop_orders, expected_seats, full_probabilities | 없음 |
 | arrival_snapshot | 아니오 | id, station_id, received_at, refresh_after_at, stale_at, payload | stored_at |
 | route_version_first_publication | 아니오 | route_version_id, first_published_at | 없음 |
@@ -142,7 +142,7 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 - `route_version`: 편도 노선의 보드는 그 방향의 첫차, 막차 시각이 없으면 읽기를 거부한다(제품 동작). 운영에서 뽑을 때 선택 열도 함께 뽑는다.
 - `model_deployment`: 판정 시각에 활성이던 배포는 activated_at과 retired_at으로 고른다. 두 열을 함께 뽑는다.
 - `vehicle_observation`: 남은 좌석(remaining_seats)과 좌석 미제공 사유(seat_unknown_reason) 가운데 정확히 하나가 있어야 한다(DB 제약).
-- `forecast_run`: 관측 묶음 하나를 예보 단계가 처리한 결과다. received_at은 묶음의 응답 수신 시각, confirmed_at은 예보 착수 시각이다. 결과(outcome)가 PUBLISHED인 줄만 예측을 싣지만, 보드는 결과와 무관하게 실행 줄이 있는 묶음을 발행된 묶음으로 고른다(제품 동작).
+- `forecast_run`: 관측 묶음 하나를 예보 단계가 처리한 결과다. received_at은 묶음의 응답 수신 시각, confirmed_at은 예보 착수 시각이다. 결과(outcome)가 PUBLISHED인 줄만 예측을 싣지만, 보드는 결과와 무관하게 실행 줄이 있는 묶음을 발행된 묶음으로 고른다(제품 동작). source_incomplete(저장 줄 수와 실제로 남은 줄 수가 다른 성공 묶음이면 참)와 counted_rows(하루 관측 상한에 더할 줄 수)는 실행기가 읽지 않지만 테이블이 빈 값을 받지 않으므로 함께 뽑는다.
 - `forecast_record`: 차량 한 대의 관측 한 줄당 한 줄이고, 목표 정류장마다의 예측을 세 배열(목표 정류장, 기대 좌석, 만석 확률)에 같은 순서로 담는다. 차량 번호가 있는 관측에만 있다. 예측은 모두 하차 반영 예측이라 보드에서 확률 목표는 언제나 DEPARTURE_ZERO다.
 - `forecast_publication`, `seat_forecast`: 예보 입력이 예보 기록으로 바뀌기 전의 파일이다. 폴더에 있으면 무엇이 바뀌었는지 알리고 적재를 멈춘다. 전환 전에 옛 형식으로 뽑아 둔 파일은 이 판으로 읽을 수 없다. 같은 구간을 지금의 추출 스크립트로 다시 뽑는다(예보 기록이 남아 있는 구간만 예보가 있다).
 - `arrival_snapshot`: payload는 운영 테이블의 payload 열(jsonb) 그대로다. 제품 코드가 `ArrivalSnapshot`으로 읽는다. provider, operation, normalization_version, payload_digest는 실행기가 채운다.

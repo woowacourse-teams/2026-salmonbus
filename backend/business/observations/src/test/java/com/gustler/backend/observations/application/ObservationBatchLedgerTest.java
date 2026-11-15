@@ -525,8 +525,8 @@ class ObservationBatchLedgerTest {
             .query(Long.class).single();
         jdbcClient.sql("""
             INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
-                confirmed_at,outcome,prediction_count)
-            VALUES((CAST(? AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date,?,?,?,?,?,'EMPTY',0)
+                confirmed_at,outcome,prediction_count,source_incomplete,counted_rows)
+            VALUES((CAST(? AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date,?,?,?,?,?,'EMPTY',0,false,0)
             """).params(SCHEDULED_AT, batchId, routeId, routeVersionId, RESPONSE_RECEIVED_AT,
             RESPONSE_RECEIVED_AT.plusSeconds(1)).update();
         String before = batchWithoutOutcome(batchId);
@@ -552,8 +552,8 @@ class ObservationBatchLedgerTest {
             .query(Long.class).single();
         jdbcClient.sql("""
             INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
-                confirmed_at,outcome,prediction_count)
-            VALUES((CAST(? AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date + 1,?,?,?,?,?,'EMPTY',0)
+                confirmed_at,outcome,prediction_count,source_incomplete,counted_rows)
+            VALUES((CAST(? AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date + 1,?,?,?,?,?,'EMPTY',0,false,0)
             """).params(SCHEDULED_AT, batchId, routeId, routeVersionId, RESPONSE_RECEIVED_AT,
             RESPONSE_RECEIVED_AT.plusSeconds(1)).update();
 
@@ -675,8 +675,8 @@ class ObservationBatchLedgerTest {
             .query(Long.class).single();
         jdbcClient.sql("""
             INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
-                confirmed_at,outcome,prediction_count)
-            VALUES((CAST(? AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date + ?,?,?,?,?,?,'EMPTY',0)
+                confirmed_at,outcome,prediction_count,source_incomplete,counted_rows)
+            VALUES((CAST(? AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date + ?,?,?,?,?,?,'EMPTY',0,false,0)
             """).params(SCHEDULED_AT, daysLater, batchId, routeId, routeVersionId, RESPONSE_RECEIVED_AT,
             RESPONSE_RECEIVED_AT.plusSeconds(1)).update();
     }

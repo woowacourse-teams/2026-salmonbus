@@ -87,8 +87,8 @@ class LocalDataResetTest {
     ) throws Exception {
         execute(connection, """
             INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
-                confirmed_at,model_deployment_id,outcome,prediction_count)
-            VALUES(current_date,?,?,?,now(),now(),?,'PUBLISHED',1)
+                confirmed_at,model_deployment_id,outcome,prediction_count,source_incomplete,counted_rows)
+            VALUES(current_date,?,?,?,now(),now(),?,'PUBLISHED',1,false,0)
             """, batchId, routeId, versionId, deploymentId);
         execute(connection, """
             INSERT INTO forecast_record(source_date,vehicle_observation_id,observation_batch_id,source_row_number,
