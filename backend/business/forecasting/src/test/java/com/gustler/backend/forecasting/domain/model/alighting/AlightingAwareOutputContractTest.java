@@ -8,13 +8,12 @@ import org.junit.jupiter.api.Test;
 
 class AlightingAwareOutputContractTest {
     @Test
-    void 독립_좌석과_확률로_좌석_분포를_만들지_않는다() {
+    void 하차_후_좌석과_출발_만석_확률을_독립된_값으로_담는다() {
         SeatForecastResult result = SeatForecastResult.alighting(3.7, 0.85);
-        assertThat(result.distribution()).isNull();
         assertThat(result.expectedSeats()).isEqualTo(3.7);
         assertThat(result.fullChance()).isEqualTo(0.85);
-        assertThat(result.fullChanceRaw()).isEqualTo(0.85);
         assertThat(result.seatTarget()).isEqualTo("AFTER_ALIGHTING_ESTIMATE");
+        assertThat(result.probabilityTarget()).isEqualTo("DEPARTURE_ZERO");
     }
 
     @Test

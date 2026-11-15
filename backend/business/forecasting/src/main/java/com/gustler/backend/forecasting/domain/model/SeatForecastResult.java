@@ -1,66 +1,47 @@
 package com.gustler.backend.forecasting.domain.model;
 
-/** 분포 모델과 독립 좌석 점예측·출발 만석 확률을 함께 수용한다. */
+/**
+ * 목표 정류장 하나의 예측이다. 하차 후 좌석 추정값과 그 정류장을 출발할 때 0석일 확률을 서로 독립된 값으로 담는다.
+ *
+ * @param expectedSeats 하차 후 좌석 추정값. 0 이상 70 이하의 유한한 수다
+ * @param fullChance 출발할 때 0석일 확률. 0 이상 1 이하다
+ * @param seatTarget 좌석 값의 뜻. {@link #ALIGHTING_AWARE_SEAT_TARGET}만 받는다
+ * @param probabilityTarget 확률 값의 뜻. {@link #ALIGHTING_AWARE_PROBABILITY_TARGET}만 받는다
+ */
 public record SeatForecastResult(
-    SeatDistribution distribution,
-    double fullChanceRaw,
     double expectedSeats,
     double fullChance,
     String seatTarget,
     String probabilityTarget
 ) {
 
-    public static final String LEGACY_SEAT_TARGET = "FIRST_POST_STOP_OBSERVATION";
-    public static final String LEGACY_PROBABILITY_TARGET = "FIRST_POST_STOP_ZERO";
     public static final String ALIGHTING_AWARE_SEAT_TARGET = "AFTER_ALIGHTING_ESTIMATE";
     public static final String ALIGHTING_AWARE_PROBABILITY_TARGET = "DEPARTURE_ZERO";
 
-    public SeatForecastResult(SeatDistribution distribution, final double fullChanceRaw) {
-        this(distribution, fullChanceRaw, distribution.expectedSeats(), distribution.fullChance(),
-            LEGACY_SEAT_TARGET, LEGACY_PROBABILITY_TARGET);
-    }
+    private static final double MAXIMUM_SEATS = 70;
 
     public SeatForecastResult {
-        if (!hasValidNumbers(expectedSeats, fullChanceRaw, fullChance)) {
-            throw new IllegalArgumentException("좌석은 유한한 0 이상, 확률은 0~1이어야 한다");
+        if (!hasValidNumbers(expectedSeats, fullChance)) {
+            throw new IllegalArgumentException("좌석은 0 이상 70 이하의 유한한 수, 확률은 0~1이어야 한다");
         }
-        final boolean legacy = isLegacyOutput(distribution, seatTarget, probabilityTarget);
-        final boolean alighting = isAlightingAwareOutput(distribution, seatTarget, probabilityTarget,
-            fullChanceRaw, fullChance, expectedSeats);
-        if (!legacy && !alighting) {
+        if (!ALIGHTING_AWARE_SEAT_TARGET.equals(seatTarget)
+            || !ALIGHTING_AWARE_PROBABILITY_TARGET.equals(probabilityTarget)) {
             throw new IllegalArgumentException("지원하지 않는 예보 출력 계약이다");
         }
     }
 
-    private static boolean hasValidNumbers(
-        final double expectedSeats,
-        final double fullChanceRaw,
-        final double fullChance) {
-        return Double.isFinite(expectedSeats) && expectedSeats >= 0
-            && SeatDistribution.isBetweenZeroAndOne(fullChanceRaw)
-            && SeatDistribution.isBetweenZeroAndOne(fullChance);
-    }
-
-    private static boolean isLegacyOutput(SeatDistribution distribution, String seatTarget, String probabilityTarget) {
-        return LEGACY_SEAT_TARGET.equals(seatTarget)
-            && LEGACY_PROBABILITY_TARGET.equals(probabilityTarget) && distribution != null;
-    }
-
-    private static boolean isAlightingAwareOutput(
-        SeatDistribution distribution,
-        String seatTarget,
-        String probabilityTarget,
-        final double fullChanceRaw,
-        final double fullChance,
-        final double expectedSeats
+    public static SeatForecastResult alighting(
+        final double afterAlightingSeats,
+        final double departureFullProbability
     ) {
-        return ALIGHTING_AWARE_SEAT_TARGET.equals(seatTarget)
-            && ALIGHTING_AWARE_PROBABILITY_TARGET.equals(probabilityTarget) && distribution == null
-            && fullChanceRaw == fullChance && expectedSeats <= 70;
+        return new SeatForecastResult(afterAlightingSeats, departureFullProbability, ALIGHTING_AWARE_SEAT_TARGET,
+            ALIGHTING_AWARE_PROBABILITY_TARGET);
     }
 
-    public static SeatForecastResult alighting(final double afterAlightingSeats, final double departureFullProbability) {
-        return new SeatForecastResult(null, departureFullProbability, afterAlightingSeats,
-            departureFullProbability, ALIGHTING_AWARE_SEAT_TARGET, ALIGHTING_AWARE_PROBABILITY_TARGET);
+    private static boolean hasValidNumbers(final double expectedSeats, final double fullChance) {
+        if (!Double.isFinite(expectedSeats) || expectedSeats < 0 || expectedSeats > MAXIMUM_SEATS) {
+            return false;
+        }
+        return Double.isFinite(fullChance) && fullChance >= 0 && fullChance <= 1;
     }
 }
