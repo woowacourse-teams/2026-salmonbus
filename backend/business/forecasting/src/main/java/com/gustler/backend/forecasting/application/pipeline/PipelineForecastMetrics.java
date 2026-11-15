@@ -24,8 +24,9 @@ import java.util.Locale;
  *   <li>{@code replays{result}}: 노선 상태 되감기의 성공·실패 수</li>
  *   <li>{@code replay.extensions{result}}: 되감은 상태가 모자라 창을 늘려 다시 되감은 수({@code resolved},
  *       {@code unresolved}, {@code failed})</li>
- *   <li>{@code excluded{reason}}: 되감은 직후라 예보에서 뺀 차량 관측 수({@code TRIP_START_UNKNOWN},
- *       {@code REPLAY_HISTORY_INCOMPLETE})</li>
+ *   <li>{@code excluded{reason}}: 예보에서 뺀 차량 관측 수. 되감은 직후라 뺀 것({@code TRIP_START_UNKNOWN},
+ *       {@code REPLAY_HISTORY_INCOMPLETE})과 정원을 모르거나 정원이 모델 범위 밖이라 뺀 것({@code VEHICLE_CAPACITY_UNKNOWN},
+ *       {@code VEHICLE_CAPACITY_OUTSIDE_MODEL_SCOPE})이다</li>
  *   <li>{@code passes.unattributed}: 연결 시작을 보지 못한 차량이 닫아 저장하지 않은 통과 수</li>
  *   <li>{@code passes.recovered}: 예보 단계를 돌리지 못하고 끝난 배치가 닫은 통과를 되감으면서 찾아 저장한 수</li>
  *   <li>{@code rejected}: 줄이 가득 차 넣지 못한 훑기 수. 다음 신호나 줍기가 다시 넣는다</li>

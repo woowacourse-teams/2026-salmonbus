@@ -13,5 +13,146 @@
   },
   "api.other": {
     "source": "backend/api-app/src/main/java/com/gustler/backend/api/http/ApiSqlOrigin.java"
+  },
+  "board.forecast_record": {
+    "source": "backend/api-app/src/main/java/com/gustler/backend/api/board/infrastructure/jdbc/JdbcForecastRecordReader.java"
+  },
+  "board.snapshot": {
+    "source": "backend/api-app/src/main/java/com/gustler/backend/api/board/infrastructure/jdbc/JdbcBoardSnapshotReader.java"
+  },
+  "daily_export.find": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "daily_export.find_segments": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/LegacyExportRepository.java"
+  },
+  "daily_export.insert": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "daily_export.insert_segment": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/LegacyExportRepository.java"
+  },
+  "daily_export.lock": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "daily_export.mark_dropped": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "daily_export.mark_verified": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "forecast.find_unprocessed": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcPendingPipelineBatches.java"
+  },
+  "forecast.read_batch": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcReplaySource.java"
+  },
+  "forecast_monitoring.catalog": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/observability/ForecastMonitoring.java"
+  },
+  "forecast_record.insert": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/MultiRowInsert.java"
+  },
+  "forecast_run.find_between": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcForecastRecordStore.java"
+  },
+  "forecast_run.find_last_unresolved": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcForecastRecordStore.java"
+  },
+  "forecast_run.find_recorded": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcForecastRecordStore.java"
+  },
+  "forecast_run.insert": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/MultiRowInsert.java"
+  },
+  "forecast_run.recent_routes": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcForecastRecordStore.java"
+  },
+  "forecast_unresolved.insert": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/MultiRowInsert.java"
+  },
+  "legacy_export.catalog": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/LegacyExportRepository.java"
+  },
+  "legacy_export.count_range": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/LegacyExportRepository.java"
+  },
+  "legacy_export.read_page": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/LegacyExportRepository.java"
+  },
+  "member.monitoring": {
+    "source": "backend/business/member/src/main/java/com/gustler/backend/member/infrastructure/jdbc/JdbcMemberStatistics.java"
+  },
+  "partition.count_default": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/PartitionMaintenance.java"
+  },
+  "partition.create": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/PartitionMaintenance.java"
+  },
+  "partition.is_attached": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/PartitionMaintenance.java"
+  },
+  "partition.is_partitioned": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/PartitionMaintenance.java"
+  },
+  "partition_export.catalog": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "partition_export.count_before_drop": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "partition_export.count_default": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "partition_export.count_rows": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "partition_export.detach": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "partition_export.drop": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "partition_export.newest_initial_date": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "partition_export.read_page": {
+    "source": "backend/archive-app/src/main/java/com/gustler/backend/archive/PartitionExportRepository.java"
+  },
+  "pass_label.insert": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/MultiRowInsert.java"
+  },
+  "replay.find_versions": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcReplaySource.java"
+  },
+  "replay.read_batches": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcReplaySource.java"
+  },
+  "replay.read_stops": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcReplaySource.java"
+  },
+  "scoring.find_boarding_stops": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcRouteStructureProvider.java"
+  },
+  "scoring.find_real_stops": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcRouteStructureProvider.java"
+  },
+  "settlement_context.compare": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcSettlementContextWriter.java"
+  },
+  "settlement_context.find": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcSettlementContextProvider.java"
+  },
+  "settlement_context.store": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcSettlementContextWriter.java"
+  },
+  "stop_pass.find_between": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcStopPassStore.java"
+  },
+  "stop_pass.find_last_scored": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/JdbcStopPassStore.java"
+  },
+  "stop_pass.insert": {
+    "source": "backend/business/forecasting/src/main/java/com/gustler/backend/forecasting/infrastructure/pipeline/MultiRowInsert.java"
   }
 }

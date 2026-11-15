@@ -219,11 +219,11 @@ class ForecastRestartIntegrationTest {
         assertThat(idle.await(DEADLINE.toSeconds(), TimeUnit.SECONDS)).isTrue();
     }
 
-    private static OffsetDateTime now() {
+    static OffsetDateTime now() {
         return OffsetDateTime.now(SEOUL).truncatedTo(ChronoUnit.MILLIS);
     }
 
-    private static Route insertRoute(JdbcClient stored, String sourceRoute) {
+    static Route insertRoute(JdbcClient stored, String sourceRoute) {
         OffsetDateTime validFrom = OffsetDateTime.now(SEOUL).minusDays(1);
         String vehicle = "restart-" + sourceRoute;
         final long routeId = stored.sql("""
@@ -257,7 +257,7 @@ class ForecastRestartIntegrationTest {
         return "UP";
     }
 
-    private static RuntimeSnapshot insertDeployment(JdbcClient stored, List<Route> routes) {
+    static RuntimeSnapshot insertDeployment(JdbcClient stored, List<Route> routes) {
         OffsetDateTime validFrom = OffsetDateTime.now(SEOUL).minusDays(1);
         List<String> modelRoutes = routes.stream().map(route -> ModelRoute.of(route.sourceRoute())).toList();
         final long deploymentId = stored.sql("""
@@ -274,7 +274,7 @@ class ForecastRestartIntegrationTest {
     }
 
     /** 노선의 차량이 {@code passedStop}을 막 떠난 관측 한 줄을 {@code at}에 받은 것으로 실제 수집 원장에 저장하고 커밋한다. */
-    private static long collect(
+    static long collect(
         ConfigurableApplicationContext context,
         Route route,
         final int passedStop,
@@ -318,7 +318,7 @@ class ForecastRestartIntegrationTest {
     }
 
     /** 배치들의 예보 실행을 배치 순서로 {@code 결과:예측이 있는지}로 적는다. 수신 뒤 90초를 넘겨 착수한 실행은 예측이 없다. */
-    private static List<String> runsOf(JdbcClient stored, List<Long> batches) {
+    static List<String> runsOf(JdbcClient stored, List<Long> batches) {
         return stored.sql("""
             SELECT outcome || ':' || (prediction_count > 0)::text FROM forecast_run
             WHERE observation_batch_id IN (:batches) ORDER BY observation_batch_id
@@ -374,7 +374,7 @@ class ForecastRestartIntegrationTest {
     }
 
     /** 시험이 넣은 노선 하나다. */
-    private record Route(long routeId, long routeVersionId, String sourceRoute, String vehicle) {
+    record Route(long routeId, long routeVersionId, String sourceRoute, String vehicle) {
     }
 
     /**

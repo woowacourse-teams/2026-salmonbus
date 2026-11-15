@@ -26,13 +26,13 @@ class ForecastPipelineConfigurationTest {
             .run(context -> {
                 assertThat(context).doesNotHaveBean(PipelinePartitionJob.class);
                 CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
-                assertThat(partitions.calls.get()).isZero();
+                assertThat(partitions.prepared.get() + partitions.maintained.get()).isZero();
             });
         runner.run(context -> assertThat(context).doesNotHaveBean(PipelinePartitionJob.class));
     }
 
     @Test
-    void 예보가_켜져_있으면_컨텍스트가_뜨기_전에_파티션_유지를_한_번_끝내고_그_뒤로는_한_시간마다_한다() {
+    void 예보가_켜져_있으면_컨텍스트가_뜨기_전에_파티션을_한_번_만들고_그_뒤로는_한_시간마다_유지한다() {
         runner.withPropertyValues("forecast.enabled=true").run(context -> {
             CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
             List<FixedDelayTask> tasks = context.getBeansOfType(ScheduledTaskHolder.class).values().stream()
@@ -44,7 +44,8 @@ class ForecastPipelineConfigurationTest {
 
             assertSoftly(softly -> {
                 softly.assertThat(context.getBeansOfType(PipelinePartitionJob.class)).hasSize(1);
-                softly.assertThat(partitions.calls).as("주기 실행을 기다리지 않고 이미 한 번 끝냈다").hasValue(1);
+                softly.assertThat(partitions.prepared).as("주기 실행을 기다리지 않고 이미 한 번 만들었다").hasValue(1);
+                softly.assertThat(partitions.maintained).as("기동 때는 기본 파티션의 줄 수를 세지 않는다").hasValue(0);
                 softly.assertThat(tasks).singleElement().satisfies(task -> {
                     assertThat(task.getInitialDelayDuration()).isEqualTo(Duration.ofHours(1));
                     assertThat(task.getIntervalDuration()).isEqualTo(Duration.ofHours(1));
@@ -54,12 +55,28 @@ class ForecastPipelineConfigurationTest {
     }
 
     @Test
-    void 예보가_꺼져_있어도_수집이_켜진_worker는_관측_테이블을_위해_컨텍스트가_뜨기_전에_파티션_유지를_한_번_끝낸다() {
+    void 예보가_꺼져_있어도_수집이_켜진_worker는_관측_테이블을_위해_컨텍스트가_뜨기_전에_파티션을_한_번_만든다() {
         runner.withPropertyValues("collection.enabled=true").run(context -> {
             CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
 
             assertThat(context).hasSingleBean(PipelinePartitionJob.class);
-            assertThat(partitions.calls).hasValue(1);
+            assertThat(partitions.prepared).hasValue(1);
+        });
+    }
+
+    @Test
+    void 주기_실행은_파티션을_만들고_기본_파티션의_줄_수까지_센다() {
+        // given
+        CountingPartitions partitions = new CountingPartitions();
+        PipelinePartitionJob job = new PipelinePartitionJob(partitions);
+
+        // when
+        job.preparePartitions();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(partitions.maintained).hasValue(1);
+            softly.assertThat(partitions.prepared).hasValue(0);
         });
     }
 
@@ -74,9 +91,7 @@ class ForecastPipelineConfigurationTest {
     void 첫_유지가_실패해도_컨텍스트는_뜬다() {
         new ApplicationContextRunner()
             .withUserConfiguration(WorkerSchedulingConfig.class, ForecastPipelineConfiguration.class)
-            .withBean(MaintainPipelinePartitions.class, () -> () -> {
-                throw new IllegalStateException("db down");
-            })
+            .withBean(MaintainPipelinePartitions.class, FailingPartitions::new)
             .withPropertyValues("collection.enabled=true")
             .run(context -> assertThat(context).hasNotFailed().hasSingleBean(PipelinePartitionJob.class));
     }
@@ -84,24 +99,45 @@ class ForecastPipelineConfigurationTest {
     @Test
     void 유지_작업이_실패해도_예외를_밖으로_던지지_않는다() {
         // given
-        PipelinePartitionJob job = new PipelinePartitionJob(() -> {
-            throw new IllegalStateException("db down");
-        });
+        PipelinePartitionJob job = new PipelinePartitionJob(new FailingPartitions());
 
         // when
-        Throwable actual = catchThrowable(job::preparePartitions);
+        Throwable first = catchThrowable(job::afterPropertiesSet);
+        Throwable periodic = catchThrowable(job::preparePartitions);
 
         // then
-        assertThat(actual).isNull();
+        assertSoftly(softly -> {
+            softly.assertThat(first).isNull();
+            softly.assertThat(periodic).isNull();
+        });
     }
 
     static final class CountingPartitions implements MaintainPipelinePartitions {
-        private final AtomicInteger calls = new AtomicInteger();
+        private final AtomicInteger prepared = new AtomicInteger();
+        private final AtomicInteger maintained = new AtomicInteger();
+
+        @Override
+        public MaintainPipelinePartitions.Report prepare() {
+            prepared.incrementAndGet();
+            return new MaintainPipelinePartitions.Report(List.of(), List.of(), Map.of());
+        }
 
         @Override
         public MaintainPipelinePartitions.Report maintain() {
-            calls.incrementAndGet();
+            maintained.incrementAndGet();
             return new MaintainPipelinePartitions.Report(List.of(), List.of(), Map.of());
+        }
+    }
+
+    static final class FailingPartitions implements MaintainPipelinePartitions {
+        @Override
+        public MaintainPipelinePartitions.Report prepare() {
+            throw new IllegalStateException("db down");
+        }
+
+        @Override
+        public MaintainPipelinePartitions.Report maintain() {
+            throw new IllegalStateException("db down");
         }
     }
 }

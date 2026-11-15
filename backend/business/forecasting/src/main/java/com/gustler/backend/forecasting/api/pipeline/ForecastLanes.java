@@ -16,4 +16,14 @@ public interface ForecastLanes {
      * @return 넣었으면 참, 줄이 가득 찼거나 멈춰서 넣지 못했으면 거짓
      */
     boolean submit(String routeKey, Runnable task);
+
+    /**
+     * 줄이 닫히기 시작했는지다. 참이면 돌던 일은 처리하던 것 하나만 끝내고 남은 것을 시작하지 않아야 한다. 닫히는 줄은 돌던 일을
+     * 정해진 시간만 기다리고, 그 뒤에는 DB 연결이 닫힌다.
+     *
+     * @return 닫히기 시작했으면 참
+     */
+    default boolean closing() {
+        return false;
+    }
 }

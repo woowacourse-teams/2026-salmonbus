@@ -136,6 +136,7 @@ class RouteLanesTest {
         CountDownLatch started = new CountDownLatch(2);
         AtomicInteger finished = new AtomicInteger();
         AtomicInteger interrupted = new AtomicInteger();
+        AtomicInteger sawClosing = new AtomicInteger();
         AtomicInteger later = new AtomicInteger();
         for (String key : List.of(first, second)) {
             lanes.submit(key, () -> {
@@ -144,6 +145,9 @@ class RouteLanesTest {
                 if (Thread.currentThread().isInterrupted()) {
                     interrupted.incrementAndGet();
                 }
+                if (lanes.closing()) {
+                    sawClosing.incrementAndGet();
+                }
                 finished.incrementAndGet();
             });
             for (int index = 0; index < 20; index++) {
@@ -151,6 +155,7 @@ class RouteLanesTest {
             }
         }
         assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+        final boolean closingBeforeStop = lanes.closing();
 
         // when
         lanes.stop();
@@ -160,6 +165,8 @@ class RouteLanesTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(finishedAtReturn).as("돌던 일은 닫기가 돌아오기 전에 끝났다").isEqualTo(2);
+            softly.assertThat(closingBeforeStop).isFalse();
+            softly.assertThat(sawClosing).as("돌던 일은 줄이 닫히기 시작한 것을 안다").hasValue(2);
             softly.assertThat(interrupted).hasValue(0);
             softly.assertThat(later).as("기다리던 일은 실행하지 않는다").hasValue(0);
             softly.assertThat(accepted).isFalse();

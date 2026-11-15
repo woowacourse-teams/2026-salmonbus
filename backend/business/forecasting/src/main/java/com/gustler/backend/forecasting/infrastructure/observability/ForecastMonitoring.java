@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.infrastructure.observability;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
 import com.gustler.backend.observations.api.CollectionTiming;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -30,6 +31,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("observability")
 public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog.Listener {
+    private static final String UNKNOWN_ROUTE_NAME = "노선 정보 없음";
     private static final Logger LOGGER = LoggerFactory.getLogger(ForecastMonitoring.class);
     private final MeterRegistry registry;
     private final Counter seatReviews;
@@ -44,6 +46,7 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
     private final Map<String, Timer> timers = new ConcurrentHashMap<>();
     private final Map<Long, RouteState> routes = new ConcurrentHashMap<>();
     private final AtomicLong heartbeat = new AtomicLong();
+    private volatile Map<Long, String> versionNames = Map.of();
     private volatile Map<String, Long> sourceRoutes = Map.of();
     private volatile Map<Long, Long> versionRoutes = Map.of();
 
@@ -179,6 +182,9 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
             RouteState state = stateOf(id);
             return " routeName=" + quote(collectionName(state));
         }
+        if (operation.equals(ForecastPipelineService.OPERATION) && route instanceof Number version) {
+            return " routeName=" + quote(text(versionNames.get(version.longValue()), UNKNOWN_ROUTE_NAME));
+        }
         return "";
     }
 
@@ -189,14 +195,17 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         LOGGER.info("event=monitoring_heartbeat component=worker telemetrySchema=1");
         try {
             Map<Long, String> names = new HashMap<>();
+            Map<Long, String> versions = new HashMap<>();
             Map<String, Long> sources = new HashMap<>();
             Map<Long, Long> versionIds = new HashMap<>();
             catalog.query("""
-                SELECT r.id, r.source_route_id, r.display_name, v.id AS version_id FROM route r
+                SELECT /* salmonbus:forecast_monitoring.catalog */ r.id, r.source_route_id, r.display_name,
+                    v.id AS version_id FROM route r
                 JOIN route_version v ON v.route_id = r.id AND v.valid_to IS NULL
                 ORDER BY r.id LIMIT 201
                 """, row -> {
                 names.put(row.getLong("id"), row.getString("display_name"));
+                versions.put(row.getLong("version_id"), row.getString("display_name"));
                 sources.put(row.getString("source_route_id"), row.getLong("id"));
                 versionIds.put(row.getLong("version_id"), row.getLong("id"));
             });
@@ -211,6 +220,7 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
                 return true;
             });
             names.forEach((id, name) -> routes.computeIfAbsent(id, ignored -> registerRoute(id, name)));
+            versionNames = Map.copyOf(versions);
             sourceRoutes = Map.copyOf(sources);
             versionRoutes = Map.copyOf(versionIds);
         } catch (RuntimeException failure) {
@@ -244,6 +254,13 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
     static String quote(String value) {
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
             .replace("\t", "\\t") + "\"";
+    }
+
+    private static String text(String value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        return value;
     }
 
     private static final class RouteState {

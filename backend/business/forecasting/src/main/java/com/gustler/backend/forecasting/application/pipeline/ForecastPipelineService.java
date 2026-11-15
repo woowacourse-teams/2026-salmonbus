@@ -1,5 +1,7 @@
 package com.gustler.backend.forecasting.application.pipeline;
 
+import static com.gustler.backend.diagnostics.Logfmt.quote;
+
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
@@ -65,6 +67,14 @@ import org.slf4j.LoggerFactory;
  * 처리 중 예외가 나면 그 노선의 상태를 버리고 실행 줄 없이 끝낸다. 입력 부족(되감기 실패·통과 판정 실패 등)은
  * {@code INPUT_UNAVAILABLE} 실행 줄을 남겨 다시 읽지 않는다.
  *
+ * <p>실행 줄이 닫히기 시작하면({@link ForecastLanes#closing()}) 훑기는 처리하던 배치 하나만 끝내고 멈춘다. 배치를 읽기만 하고 아직
+ * 하나도 처리하지 않았으면 첫 배치 하나까지만 처리한다. 실패한 배치를 그 자리에서 다시 처리하지도 않는다. 남은 배치는 실행 줄이
+ * 없으므로 다시 뜬 뒤 줍기가 찾는다.
+ *
+ * <p>진단 로그를 세 가지 남긴다. 정원을 모르거나 정원이 모델 범위 밖이라 예보에서 뺀 차량은 배치마다
+ * {@code event=forecast_vehicle_withheld}로, 노선의 모델 배포가 바뀐 것과 모델의 기준 정류장이 맞지 않아 예보하지 못하는 노선은
+ * {@link ForecastModelUsageLog}로, 활성 모델이 없어지거나 다시 생긴 것은 줍기가 한 번씩 남긴다.
+ *
  * <p>{@code observation_batch}를 고치지 않고 {@code route} 행 잠금을 잡지 않는다. 채점이 읽는 모델 배포의 정산
  * 근거({@code model_deployment.settlement_context})는 배치를 착수하기 전에 적는다.
  */
@@ -93,8 +103,10 @@ public final class ForecastPipelineService implements ForecastPipeline {
     private final Set<Long> sweepsQueued = ConcurrentHashMap.newKeySet();
     private final Set<String> contextsStored = ConcurrentHashMap.newKeySet();
     private final Set<String> unsupportedProfilesWarned = ConcurrentHashMap.newKeySet();
+    private final ForecastModelUsageLog modelUsage = new ForecastModelUsageLog();
     private final SettlementContextWriter settlementContexts;
     private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
+    private volatile boolean modelMissing;
 
     /**
      * @param batches 배치를 착수 시각과 함께 읽는 원본. 되감기와 같은 원본이어야 한다
@@ -160,6 +172,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
 
     private void pickUpOnce() {
         Optional<RuntimeSnapshot> runtime = runtimes.resolveActive();
+        reportModelAvailability(runtime);
         if (runtime.isEmpty()) {
             return;
         }
@@ -185,12 +198,29 @@ public final class ForecastPipelineService implements ForecastPipeline {
         }
     }
 
+    /**
+     * 활성 모델이 없어진 때와 다시 생긴 때를 한 번씩 남긴다. 모델이 없는 동안에는 배치를 읽지 않고 실행 줄도 남기지 않는다.
+     */
+    private void reportModelAvailability(Optional<RuntimeSnapshot> runtime) {
+        if (runtime.isEmpty() == modelMissing) {
+            return;
+        }
+        modelMissing = runtime.isEmpty();
+        if (modelMissing) {
+            LOGGER.warn("event=forecast_model_unavailable");
+            return;
+        }
+        LOGGER.info("event=forecast_model_available modelDeploymentId={} releaseId={}", runtime.get().deploymentId(),
+            quote(runtime.get().releaseId()));
+    }
+
     private void reportPending(final long routeVersionId, Optional<PendingPipelineBatches.Pending> oldest) {
         Instant oldestReceivedAt = oldest.map(PendingPipelineBatches.Pending::receivedAt).orElse(null);
         try {
             telemetry.pending(routeVersionId, oldestReceivedAt);
-        } catch (RuntimeException ignored) {
-            LOGGER.debug("event=pipeline_forecast_telemetry_failed routeVersionId={}", routeVersionId);
+        } catch (RuntimeException failure) {
+            LOGGER.warn("event=pipeline_forecast_telemetry_failed routeVersionId={} exceptionType={}",
+                routeVersionId, failure.getClass().getSimpleName());
         }
     }
 
@@ -244,6 +274,9 @@ public final class ForecastPipelineService implements ForecastPipeline {
         List<PendingPipelineBatches.Pending> found = pending.find(routeVersionId, notBefore, policy.batchLimit());
         int finished = 0;
         for (int index = 0; index < found.size(); index++) {
+            if (index > 0 && lanes.closing()) {
+                return false;
+            }
             PendingPipelineBatches.Pending batch = found.get(index);
             String result = processWithRetry(resolved.context(), batch.observationBatchId());
             if (!LEFT_UNPROCESSED.contains(result)) {
@@ -262,7 +295,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
     /** 배치 하나를 처리하고, 예외로 실패하면 그 자리에서 한 번 다시 처리한다. 마지막 처리의 결과 분류를 돌려준다. */
     private String processWithRetry(RouteContext context, final long observationBatchId) {
         String result = measure(context, observationBatchId);
-        if (FAILED.equals(result)) {
+        if (FAILED.equals(result) && !lanes.closing()) {
             metrics.batch(RETRIED);
             result = measure(context, observationBatchId);
         }
@@ -330,6 +363,8 @@ public final class ForecastPipelineService implements ForecastPipeline {
         }
         metrics.replayExtension(processed.replayExtension());
         processed.exclusions().values().forEach(metrics::excluded);
+        processed.withheld().forEach(vehicle -> reportWithheld(observationBatchId, vehicle));
+        reportModelUsed(context, processed);
         metrics.unattributedPasses(processed.unattributedPasses());
         metrics.recoveredPasses(processed.recoveredPasses());
         return switch (processed.status()) {
@@ -355,9 +390,30 @@ public final class ForecastPipelineService implements ForecastPipeline {
         try {
             telemetry.published(published.routeId(), published.routeVersionId(), published.receivedAt(),
                 published.predictionCount());
-        } catch (RuntimeException ignored) {
-            LOGGER.debug("event=pipeline_forecast_telemetry_failed routeVersionId={}", published.routeVersionId());
+        } catch (RuntimeException failure) {
+            LOGGER.warn("event=pipeline_forecast_telemetry_failed routeVersionId={} exceptionType={}",
+                published.routeVersionId(), failure.getClass().getSimpleName());
         }
+    }
+
+    /** 정원 때문에 예보에서 뺀 차량을 배치마다 남긴다. 같은 차량이 다음 배치에서도 빠지면 다시 남긴다. */
+    private void reportWithheld(final long observationBatchId, ForecastStageResult.WithheldVehicle vehicle) {
+        metrics.excluded(vehicle.reason());
+        LOGGER.info("event=forecast_vehicle_withheld reason={} batchId={} vehicleId={}", vehicle.reason(),
+            observationBatchId, vehicle.vehicleId());
+    }
+
+    /** 예측을 한 건 이상 저장한 배치의 모델 배포를 알린다. 노선의 배포가 바뀔 때만 로그가 남는다. */
+    private void reportModelUsed(RouteContext context, PipelineBatchProcessor.Processed processed) {
+        if (processed.status() != PipelineBatchProcessor.Status.SAVED) {
+            return;
+        }
+        ForecastPublished published = processed.published();
+        if (published.predictionCount() == 0) {
+            return;
+        }
+        modelUsage.committed(context.stops().sourceRouteId(), context.stops().routeName(),
+            published.routeVersionId(), published.observationBatchId(), context.runtime());
     }
 
     private static String savedResult(PipelineBatchProcessor.Processed processed) {
@@ -415,11 +471,13 @@ public final class ForecastPipelineService implements ForecastPipeline {
         }
     }
 
-    private static Resolved resolve(RuntimeSnapshot runtime, RouteStops routeStops) {
+    private Resolved resolve(RuntimeSnapshot runtime, RouteStops routeStops) {
         if (!runtime.covers(routeStops.sourceRouteId())) {
             return Resolved.skip("not_covered");
         }
         if (!runtime.model().supportsRoute(routeStops)) {
+            modelUsage.referenceMismatch(routeStops.sourceRouteId(), routeStops.routeName(),
+                routeStops.routeVersionId(), runtime);
             return Resolved.skip("reference_mismatch");
         }
         AlightingAwareRouteStatistics statistics = runtime.model().statistics(routeStops);

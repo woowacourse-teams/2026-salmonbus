@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.application.pipeline;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -22,10 +23,16 @@ import org.springframework.transaction.support.TransactionOperations;
  * 한꺼번에 몰려도 한 트랜잭션이 제한 시간을 넘겨 같은 줄을 끝없이 다시 쓰는 일을 막는다. 한 단위가 상한보다 크면 그 단위만 한
  * 트랜잭션으로 쓴다. 이렇게 쓰므로 저장된 줄이 있으면 그보다 먼저 넣은 결과는 모두 저장돼 있다. 되감기({@link ScoringReplay})가
  * 이 성질로 예보를 다시 읽을 범위를 정한다.
+ *
+ * <p>트랜잭션 하나의 시간은 {@link WorkerOperationLog}에 {@value #WRITE_OPERATION} 작업으로 남긴다. 쓸 줄이 없으면 트랜잭션을 열지
+ * 않으므로 남기지 않는다.
  */
 public final class ScoringWriter {
     /** 한 트랜잭션에 쓰는 줄 수의 기본 상한. */
     public static final int DEFAULT_MAX_ROWS_PER_TRANSACTION = 20_000;
+    /** 쓰기 트랜잭션 하나의 시간을 남기는 {@link WorkerOperationLog} 작업 이름. */
+    public static final String WRITE_OPERATION = "scoring_write";
+    private static final String ALL_ROUTES = "all";
 
     private final PassLabelStore store;
     private final TransactionOperations transactions;
@@ -134,9 +141,10 @@ public final class ScoringWriter {
             unresolved.addAll(result.unresolved());
         }
         try {
-            return Objects.requireNonNull(transactions.execute(status -> new Flushed(
-                saveLabels(labels),
-                saveUnresolved(unresolved))));
+            return WorkerOperationLog.measure(WRITE_OPERATION, ALL_ROUTES,
+                () -> Objects.requireNonNull(transactions.execute(status -> new Flushed(
+                    saveLabels(labels),
+                    saveUnresolved(unresolved)))));
         } catch (RuntimeException failure) {
             synchronized (lock) {
                 for (ScoringResult result : taken.reversed()) {

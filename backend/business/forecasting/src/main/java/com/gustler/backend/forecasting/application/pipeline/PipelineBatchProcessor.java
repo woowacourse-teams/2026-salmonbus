@@ -119,7 +119,7 @@ public final class PipelineBatchProcessor {
         Resolution resolution = resolve(context, read);
         Replay replay = resolution.replay();
         if (resolution.skipped() != null) {
-            return Processed.unsaved(resolution.skipped(), null, Map.of(), replay);
+            return Processed.unsaved(resolution.skipped(), null, Map.of(), List.of(), replay);
         }
         Outcome outcome = resolution.outcome();
         ForecastPublished published = new ForecastPublished(SourceDates.of(read.scheduledAt()),
@@ -141,13 +141,13 @@ public final class PipelineBatchProcessor {
         }));
         if (!saved) {
             states.remove(statistics.route());
-            return Processed.unsaved(Status.DUPLICATE, published, outcome.excluded(), replay);
+            return Processed.unsaved(Status.DUPLICATE, published, outcome.excluded(), outcome.withheld(), replay);
         }
         applyState(statistics, outcome);
         logRecovered(statistics, batch, replay, recovered);
         publish(seen, published, closed, recovered);
-        return new Processed(Status.SAVED, published, closed.size(), outcome.excluded(), outcome.special(),
-            replay.succeeded(), outcome.unattributed(), recovered.size(), replay.extension());
+        return new Processed(Status.SAVED, published, closed.size(), outcome.excluded(), outcome.withheld(),
+            outcome.special(), replay.succeeded(), outcome.unattributed(), recovered.size(), replay.extension());
     }
 
     private Resolution resolve(RouteContext context, ObservationBatchRead read) {
@@ -243,10 +243,10 @@ public final class PipelineBatchProcessor {
 
     private Outcome advanced(RouteContext context, ObservationBatchRead read, ForecastStageResult result) {
         return switch (result.status()) {
-            case REPLAY_REQUIRED -> new Outcome(ForecastOutcome.INPUT_UNAVAILABLE, List.of(), List.of(), Map.of(), null,
-                true, null, 0);
+            case REPLAY_REQUIRED -> new Outcome(ForecastOutcome.INPUT_UNAVAILABLE, List.of(), List.of(), Map.of(),
+                List.of(), null, true, null, 0);
             case INPUT_UNAVAILABLE -> new Outcome(ForecastOutcome.INPUT_UNAVAILABLE, List.of(), List.of(), Map.of(),
-                result.state(), false, null, 0);
+                List.of(), result.state(), false, null, 0);
             case NOT_CONFIRMED -> Outcome.withoutState(notConfirmed(read.batch()), null);
             case STALE -> throw new IllegalStateException("이미 반영한 배치는 처리 결과를 만들지 않는다");
             case FORECAST -> forecast(context, read, result);
@@ -259,12 +259,15 @@ public final class PipelineBatchProcessor {
             .filter(vehicle -> REPLAY_EXCLUSIONS.contains(vehicle.reason()))
             .forEach(vehicle -> excluded.put(vehicle.observationId(), vehicle.reason()));
         if (outsideScope(context, read.batch())) {
-            return new Outcome(ForecastOutcome.OUT_OF_SCOPE, List.of(), result.closedPasses(), excluded, result.state(),
-                false, null, result.unattributedPasses());
+            return new Outcome(ForecastOutcome.OUT_OF_SCOPE, List.of(), result.closedPasses(), excluded, List.of(),
+                result.state(), false, null, result.unattributedPasses());
         }
+        List<ForecastStageResult.WithheldVehicle> withheld = result.withheld().stream()
+            .filter(vehicle -> !REPLAY_EXCLUSIONS.contains(vehicle.reason()))
+            .toList();
         List<ForecastPublished.VehicleForecast> vehicles = vehicles(context, read, result);
         ForecastOutcome outcome = publishedOutcome(vehicles);
-        return new Outcome(outcome, vehicles, result.closedPasses(), excluded, result.state(), false, null,
+        return new Outcome(outcome, vehicles, result.closedPasses(), excluded, withheld, result.state(), false, null,
             result.unattributedPasses());
     }
 
@@ -405,6 +408,8 @@ public final class PipelineBatchProcessor {
      * @param published 저장한(또는 저장하려던) 예보 실행. {@link Status#STALE}과 {@link Status#OUT_OF_ORDER}면 없다
      * @param closedPasses 저장한 닫힌 통과 수
      * @param exclusions 되감은 직후라 예보에서 뺀 관측과 사유({@code TRIP_START_UNKNOWN}, {@code REPLAY_HISTORY_INCOMPLETE})
+     * @param withheld 정원을 모르거나 정원이 모델 범위 밖이라 예보에서 뺀 차량과 사유({@code VEHICLE_CAPACITY_UNKNOWN},
+     *     {@code VEHICLE_CAPACITY_OUTSIDE_MODEL_SCOPE}). 출퇴근 범위 밖이라 배치 전체를 예보하지 않았으면 비어 있다
      * @param special 실행 결과와 따로 정해진 배치 분류({@code replay_deferred}, {@code replay_failed}). 없으면 비어 있다
      * @param replayed 이 처리에서 되감았으면 성공 여부, 되감지 않았으면 비어 있다
      * @param unattributedPasses 이 배치가 닫았지만 연결 시작을 보지 못한 차량이라 저장하지 않은 통과 수
@@ -416,6 +421,7 @@ public final class PipelineBatchProcessor {
         ForecastPublished published,
         int closedPasses,
         Map<Long, String> exclusions,
+        List<ForecastStageResult.WithheldVehicle> withheld,
         String special,
         Boolean replayed,
         int unattributedPasses,
@@ -426,15 +432,17 @@ public final class PipelineBatchProcessor {
             Objects.requireNonNull(status);
             Objects.requireNonNull(replayExtension);
             exclusions = Map.copyOf(exclusions);
+            withheld = List.copyOf(withheld);
         }
 
         private static Processed unsaved(
             Status status,
             ForecastPublished published,
             Map<Long, String> exclusions,
+            List<ForecastStageResult.WithheldVehicle> withheld,
             Replay replay
         ) {
-            return new Processed(status, published, 0, exclusions, null, replay.succeeded(), 0, 0,
+            return new Processed(status, published, 0, exclusions, withheld, null, replay.succeeded(), 0, 0,
                 replay.extension());
         }
 
@@ -455,19 +463,21 @@ public final class PipelineBatchProcessor {
     /**
      * 배치 하나의 처리 결과다. 다음 상태가 없으면 상태를 바꾸지 않고, {@code dropState}면 상태를 버린다.
      * {@code special}은 실행 결과와 따로 정해진 배치 분류다. {@code unattributed}는 저장하지 않은 통과 수다.
+     * {@code excluded}는 되감은 직후라 뺀 관측이고 {@code withheld}는 정원 때문에 뺀 차량이다.
      */
     private record Outcome(
         ForecastOutcome outcome,
         List<ForecastPublished.VehicleForecast> vehicles,
         List<ClosedPass> passes,
         Map<Long, String> excluded,
+        List<ForecastStageResult.WithheldVehicle> withheld,
         RouteForecastState next,
         boolean dropState,
         String special,
         int unattributed
     ) {
         static Outcome withoutState(ForecastOutcome outcome, String special) {
-            return new Outcome(outcome, List.of(), List.of(), Map.of(), null, false, special, 0);
+            return new Outcome(outcome, List.of(), List.of(), Map.of(), List.of(), null, false, special, 0);
         }
     }
 

@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.infrastructure.pipeline;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
@@ -21,6 +22,7 @@ import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentReposito
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
+import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
@@ -86,7 +88,10 @@ final class MainlineHarness {
     private int replayFailures;
     private int batchLimit = 20;
     private boolean laneHeld;
+    private boolean lanesClosing;
     private boolean modelActive = true;
+    private Runnable onSaveFailure = () -> {
+    };
 
     /**
      * @param beans 시험이 주입받은 저장소와 트랜잭션
@@ -130,6 +135,7 @@ final class MainlineHarness {
         meters = new SimpleMeterRegistry();
         waitingTasks.clear();
         laneHeld = false;
+        lanesClosing = false;
         ReplaySource replays = (statistics, from, through, throughBatchId) -> {
             if (replayFailures > 0) {
                 replayFailures--;
@@ -141,7 +147,7 @@ final class MainlineHarness {
             this::activeRuntime, this::versions, stopsByVersion::get);
         ForecastAssembly.Settings settings = new ForecastAssembly.Settings(
             new ForecastPolicy(Duration.ofMinutes(10), batchLimit), window, extendedWindow, false);
-        mainline = new ForecastAssembly(jdbc, beans.transactions(), clock, meters).forecast(this::submit, events,
+        mainline = new ForecastAssembly(jdbc, beans.transactions(), clock, meters).forecast(new Lanes(), events,
             sources, capacities, failingRecords(beans.records()), beans.passes(), settings);
         clock.at = EVENING.plus(Duration.ofDays(2));
         mainline.pickUp();
@@ -185,6 +191,27 @@ final class MainlineHarness {
     /** 줄에서 가장 오래 기다린 일 하나를 실행한다. */
     void runNextTask() {
         waitingTasks.remove().run();
+    }
+
+    /** 실행 줄이 닫히기 시작한 것으로 친다. 넣은 일은 계속 받는다. */
+    void closeLanes() {
+        lanesClosing = true;
+    }
+
+    /** 시험이 넣은 저장 실패가 던져지기 직전에 한 번씩 실행할 일을 정한다. */
+    void onSaveFailure(Runnable task) {
+        onSaveFailure = task;
+    }
+
+    /** 모든 판본의 첫 정류장 번호를 바꿔 모델의 기준 정류장과 맞지 않게 한다. */
+    void breakReference() {
+        stopsByVersion.replaceAll((version, stops) -> {
+            List<RouteStop> changed = new ArrayList<>(stops.stops());
+            RouteStop first = changed.getFirst();
+            changed.set(0, new RouteStop(first.routeVersionId(), first.stopOrder(), first.stopId() + "-moved",
+                first.boardingAllowed(), first.direction()));
+            return new RouteStops(version, stops.sourceRouteId(), changed, stops.routeName());
+        });
     }
 
     /** 활성 모델이 있는지를 정한다. */
@@ -340,6 +367,11 @@ final class MainlineHarness {
         return countOf(meters.find("salmonbus.pipeline.forecast." + name).tag("result", result).counter());
     }
 
+    /** 사유별로 예보에서 뺀 차량 관측 수({@code salmonbus.pipeline.forecast.excluded}). */
+    double excluded(String reason) {
+        return countOf(meters.find("salmonbus.pipeline.forecast.excluded").tag("reason", reason).counter());
+    }
+
     /** 태그 없는 {@code salmonbus.pipeline.forecast.<name>}의 수. */
     double counter(String name) {
         return countOf(meters.find("salmonbus.pipeline.forecast." + name).counter());
@@ -372,6 +404,7 @@ final class MainlineHarness {
             return;
         }
         saveFailures.put(batchId, left - 1);
+        onSaveFailure.run();
         throw new IllegalStateException("시험이 넣은 저장 실패");
     }
 
@@ -410,6 +443,19 @@ final class MainlineHarness {
         LoadedModelRegistry registry = new LoadedModelRegistry();
         new BundleActivation(beans.deployments(), registry).activate(() -> release);
         return new ActiveForecastRuntimeResolver(beans.deployments(), registry).resolveActive().orElseThrow();
+    }
+
+    /** 넣은 일을 바로 실행하거나 붙잡아 두는 실행 줄이다. 닫히기 시작했는지는 시험이 정한다. */
+    private final class Lanes implements ForecastLanes {
+        @Override
+        public boolean submit(String routeKey, Runnable task) {
+            return MainlineHarness.this.submit(routeKey, task);
+        }
+
+        @Override
+        public boolean closing() {
+            return lanesClosing;
+        }
     }
 
     /** 시험이 주입받아 넘기는 것들이다. */

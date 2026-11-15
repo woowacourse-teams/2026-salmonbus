@@ -134,14 +134,15 @@ public class LegacyExportRepository {
 
     public boolean exists(String table) {
         requireTable(table);
-        return jdbc.sql("SELECT to_regclass(?) IS NOT NULL").param("public." + table).query(Boolean.class).single();
+        return jdbc.sql("SELECT /* salmonbus:legacy_export.catalog */ to_regclass(?) IS NOT NULL")
+            .param("public." + table).query(Boolean.class).single();
     }
 
     /** 테이블의 열 이름과 타입을 열 순서대로 낸다. 이름이나 타입 표기가 허용 문자가 아니면 실패한다. */
     public List<PartitionManifest.Column> columns(String table) {
         requireTable(table);
         List<PartitionManifest.Column> columns = jdbc.sql("""
-            SELECT a.attname, format_type(a.atttypid, a.atttypmod)
+            SELECT /* salmonbus:legacy_export.catalog */ a.attname, format_type(a.atttypid, a.atttypmod)
             FROM pg_attribute a
             WHERE a.attrelid = to_regclass(?) AND a.attnum > 0 AND NOT a.attisdropped
             ORDER BY a.attnum
@@ -171,7 +172,7 @@ public class LegacyExportRepository {
     public List<String> primaryKey(String table) {
         requireTable(table);
         List<String> keys = jdbc.sql("""
-            SELECT a.attname
+            SELECT /* salmonbus:legacy_export.catalog */ a.attname
             FROM pg_index i
             CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, position)
             JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
@@ -188,7 +189,8 @@ public class LegacyExportRepository {
     public List<Segment> segments(String table) {
         requireTable(table);
         return jdbc.sql("""
-            SELECT segment, key_from, key_to, row_count, object_key, sha256, exported_at, verified_at
+            SELECT /* salmonbus:daily_export.find_segments */ segment, key_from, key_to, row_count, object_key,
+                sha256, exported_at, verified_at
             FROM daily_export WHERE table_name = ? AND source_date = ? ORDER BY segment
             """).params(table, SOURCE_DATE).query(SEGMENT).list();
     }
@@ -207,8 +209,8 @@ public class LegacyExportRepository {
         final int limit
     ) {
         requireTable(table);
-        StringBuilder sql = new StringBuilder("SELECT " + rowJson(columns) + "::text, jsonb_build_array("
-            + order(keys) + ")::text FROM " + table + " t");
+        StringBuilder sql = new StringBuilder("SELECT /* salmonbus:legacy_export.read_page */ " + rowJson(columns)
+            + "::text, jsonb_build_array(" + order(keys) + ")::text FROM " + table + " t");
         if (after != null) {
             sql.append(" WHERE ").append(compare(columns, keys, ">", "after"));
         }
@@ -246,7 +248,8 @@ public class LegacyExportRepository {
         if (upTo != null) {
             conditions.add(compare(columns, keys, "<=", "upTo"));
         }
-        String sql = "SELECT count(*) FROM " + table + " t" + whereClause(conditions);
+        String sql = "SELECT /* salmonbus:legacy_export.count_range */ count(*) FROM " + table + " t"
+            + whereClause(conditions);
         return readOnly.execute(status -> {
             readLimits();
             JdbcClient.StatementSpec statement = jdbc.sql(sql);
@@ -292,7 +295,8 @@ public class LegacyExportRepository {
                 return RecordResult.LEDGER_CHANGED;
             }
             jdbc.sql("""
-                INSERT INTO daily_export(table_name, source_date, segment, object_key, row_count, sha256, exported_at,
+                INSERT /* salmonbus:daily_export.insert_segment */ INTO daily_export(
+                    table_name, source_date, segment, object_key, row_count, sha256, exported_at,
                     verified_at, key_from, key_to)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """).params(table, SOURCE_DATE, segment.number(), segment.key(), segment.rows(), segment.sha256(),

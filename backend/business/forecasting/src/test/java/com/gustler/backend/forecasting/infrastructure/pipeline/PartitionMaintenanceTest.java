@@ -92,6 +92,35 @@ class PartitionMaintenanceTest {
     }
 
     @Test
+    void 기동_때_부르는_준비는_파티션만_만들고_기본_파티션의_줄_수는_세지_않는다() {
+        // given
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        PartitionMaintenance maintenance = maintenanceAt(BEFORE_KOREAN_MIDNIGHT);
+        maintenance.setMeterRegistry(meters);
+        jdbcClient.sql("""
+            INSERT INTO forecast_unresolved (source_date, vehicle_observation_id, target_stop_order, route_id, state,
+                reason, closed_at)
+            VALUES (DATE '2029-12-01', 1, 3, 7, 'LOST', 'PASS_NOT_CLOSED', now())
+            """).update();
+
+        // when
+        MaintainPipelinePartitions.Report prepared = maintenance.prepare();
+        final int gaugesAfterPrepare = meters.find("salmonbus.pipeline.partition.default.rows").gauges().size();
+        MaintainPipelinePartitions.Report maintained = maintenance.maintain();
+
+        // then
+        final int tables = PartitionMaintenance.TABLES.size() + PartitionMaintenance.OBSERVATION_TABLES.size();
+        assertSoftly(softly -> {
+            softly.assertThat(prepared.created()).hasSize(tables * (PartitionMaintenance.DAYS_AHEAD + 1));
+            softly.assertThat(prepared.failed()).isEmpty();
+            softly.assertThat(prepared.defaultRows()).isEmpty();
+            softly.assertThat(gaugesAfterPrepare).isZero();
+            softly.assertThat(maintained.created()).isEmpty();
+            softly.assertThat(maintained.defaultRows()).containsEntry("forecast_unresolved", 1L);
+        });
+    }
+
+    @Test
     void 이미_있는_파티션은_다시_만들지_않는다() {
         // given
         PartitionMaintenance maintenance = maintenanceAt(BEFORE_KOREAN_MIDNIGHT);

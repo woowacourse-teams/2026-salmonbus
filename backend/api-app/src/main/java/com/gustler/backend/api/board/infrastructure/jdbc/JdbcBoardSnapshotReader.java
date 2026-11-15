@@ -41,7 +41,8 @@ public class JdbcBoardSnapshotReader {
      * 실행 줄이 없는 관측은 세 칸이 모두 {@code -}다.
      */
     private static final String SNAPSHOT_SELECT = """
-        SELECT v.id AS version_id, r.source_route_id, r.display_name, r.start_stop_name, r.end_stop_name,
+        SELECT /* salmonbus:board.snapshot */ v.id AS version_id, r.source_route_id, r.display_name,
+               r.start_stop_name, r.end_stop_name,
                v.turn_sequence, v.up_first_departure_time, v.up_last_departure_time,
                v.down_first_departure_time, v.down_last_departure_time,
                v.weekday_min_headway_minutes, v.weekday_max_headway_minutes,

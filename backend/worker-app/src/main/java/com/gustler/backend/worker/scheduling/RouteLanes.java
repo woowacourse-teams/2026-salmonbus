@@ -26,8 +26,9 @@ import org.springframework.scheduling.concurrent.ExecutorConfigurationSupport;
  *
  * <p>컨텍스트가 닫힐 때는 일을 넣는 수집과 줍기의 스케줄러가 돌던 회차를 끝낸 바로 다음에 닫힌다({@link #stop()}). 그래서 돌던
  * 수집 회차가 넘긴 배치까지는 받는다. 닫을 때는 새 일을 받지 않고, 줄에서 기다리던 일은 버리고, 돌던 일은 중단시키지 않고 끝나기를
- * 한도까지 기다린다. 스프링은 수명 주기 빈을 모두 멈춘 뒤에 빈을 파괴하므로 돌던 일은 DB 연결 풀이 닫히기 전에 끝난다. 버린 일이
- * 처리했을 배치는 다시 뜬 뒤 줍기가 찾는다. 한 번 닫으면 다시 열 수 없어 컨텍스트 일시 정지에는 참여하지 않는다.
+ * 한도까지 기다린다. 돌던 일은 {@link #closing()}을 보고 처리하던 배치 하나만 끝낸다. 스프링은 수명 주기 빈을 모두 멈춘 뒤에 빈을
+ * 파괴하므로 돌던 일은 DB 연결 풀이 닫히기 전에 끝난다. 버린 일이 처리했을 배치는 다시 뜬 뒤 줍기가 찾는다. 한 번 닫으면 다시 열 수
+ * 없어 컨텍스트 일시 정지에는 참여하지 않는다.
  */
 public class RouteLanes implements ForecastLanes, SmartLifecycle {
     /** 실행 줄 스레드 이름의 앞부분. */
@@ -107,6 +108,12 @@ public class RouteLanes implements ForecastLanes, SmartLifecycle {
             LOGGER.warn("event=pipeline_forecast_task_failed routeKey={} exceptionType={}", routeKey,
                 failure.getClass().getSimpleName(), failure);
         }
+    }
+
+    /** 닫기 시작한 뒤로 참이다. 줄을 닫는 스레드가 돌던 일을 기다리는 동안에도 참이다. */
+    @Override
+    public boolean closing() {
+        return lanes.getFirst().isShutdown();
     }
 
     /** 노선 열쇠가 배정되는 줄 번호. */

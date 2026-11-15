@@ -24,7 +24,8 @@ import tools.jackson.databind.json.JsonMapper;
 public final class JdbcSettlementContextProvider implements SettlementContextProvider {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String READ = """
-        SELECT (settlement_context -> CAST(:version AS text))::text FROM model_deployment WHERE id = :deployment
+        SELECT /* salmonbus:settlement_context.find */ (settlement_context -> CAST(:version AS text))::text
+        FROM model_deployment WHERE id = :deployment
         """;
 
     private final JdbcClient jdbc;

@@ -21,14 +21,16 @@ import tools.jackson.databind.json.JsonMapper;
 public final class JdbcRouteStructureProvider implements RouteStructureProvider {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String READ_CONTEXT = """
-        SELECT (settlement_context -> CAST(:version AS text) -> 'shared' -> 'realStopOrders')::text
+        SELECT /* salmonbus:scoring.find_real_stops */
+            (settlement_context -> CAST(:version AS text) -> 'shared' -> 'realStopOrders')::text
         FROM model_deployment
         WHERE jsonb_exists(settlement_context, CAST(:version AS text))
         ORDER BY id DESC
         LIMIT 1
         """;
     private static final String READ_STOPS = """
-        SELECT stop_order FROM route_stop WHERE route_version_id = :version AND boarding_allowed ORDER BY stop_order
+        SELECT /* salmonbus:scoring.find_boarding_stops */ stop_order
+        FROM route_stop WHERE route_version_id = :version AND boarding_allowed ORDER BY stop_order
         """;
 
     private final JdbcClient jdbc;

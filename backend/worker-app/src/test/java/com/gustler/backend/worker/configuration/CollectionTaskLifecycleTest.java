@@ -57,7 +57,7 @@ class CollectionTaskLifecycleTest {
         }
 
         // then
-        assertThat(order).containsExactly("partitions_maintained", "collection_scheduled");
+        assertThat(order).containsExactly("partitions_prepared", "collection_scheduled");
     }
 
     /**
@@ -75,9 +75,18 @@ class CollectionTaskLifecycleTest {
             () -> new GbisProperties("https://example.invalid", "fixture", 10000));
         context.registerBean("collectionTaskScheduler", TaskScheduler.class, () -> scheduler);
         context.registerBean("calibrationTaskScheduler", TaskScheduler.class, () -> mock(TaskScheduler.class));
-        context.registerBean(MaintainPipelinePartitions.class, () -> () -> {
-            order.add("partitions_maintained");
-            return new MaintainPipelinePartitions.Report(List.of(), List.of(), Map.of());
+        context.registerBean(MaintainPipelinePartitions.class, () -> new MaintainPipelinePartitions() {
+            @Override
+            public MaintainPipelinePartitions.Report prepare() {
+                order.add("partitions_prepared");
+                return new MaintainPipelinePartitions.Report(List.of(), List.of(), Map.of());
+            }
+
+            @Override
+            public MaintainPipelinePartitions.Report maintain() {
+                order.add("partitions_maintained");
+                return new MaintainPipelinePartitions.Report(List.of(), List.of(), Map.of());
+            }
         });
         context.register(ScheduledCollection.class, ForecastPipelineConfiguration.class);
         return context;

@@ -103,17 +103,26 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
     }
 
     @Override
+    public Report prepare() {
+        return create(managedTables());
+    }
+
+    @Override
     public Report maintain() {
+        List<String> tables = managedTables();
+        Report created = create(tables);
+        return new Report(created.created(), created.failed(), defaultRowsOf(tables));
+    }
+
+    private Report create(List<String> tables) {
         LocalDate today = SourceDates.of(clock.instant());
         List<String> created = new ArrayList<>();
         List<String> failed = new ArrayList<>();
-        List<String> tables = managedTables();
         ensurePartitions(tables, today, created, failed);
-        Map<String, Long> defaultRows = defaultRowsOf(tables);
         if (!created.isEmpty()) {
             LOGGER.info("event=pipeline_partitions_created partitions={}", created);
         }
-        return new Report(created, failed, defaultRows);
+        return new Report(created, failed, Map.of());
     }
 
     /** 테이블마다 오늘부터 {@value #DAYS_AHEAD}일 뒤까지 파티션을 확인하고, 만든 것과 실패한 것의 이름을 각 목록에 더한다. */
@@ -170,8 +179,9 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
         try {
             transactions.executeWithoutResult(status -> {
                 jdbc.sql("SET LOCAL lock_timeout = '%s'".formatted(LOCK_TIMEOUT)).update();
-                jdbc.sql("CREATE TABLE IF NOT EXISTS %s PARTITION OF %s FOR VALUES FROM ('%s') TO ('%s')"
-                    .formatted(partition, table, date, date.plusDays(1))).update();
+                jdbc.sql("CREATE /* salmonbus:partition.create */ TABLE IF NOT EXISTS %s PARTITION OF %s "
+                    .formatted(partition, table)
+                    + "FOR VALUES FROM ('%s') TO ('%s')".formatted(date, date.plusDays(1))).update();
             });
         } catch (DataAccessException failure) {
             if (isPartitionOf(partition, table)) {
@@ -196,7 +206,7 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
      */
     public long countDefaultRows(String table) {
         requireKnown(table);
-        final long rows = jdbc.sql("SELECT /* salmonbus:pipeline_partition.count_default */ count(*) FROM %s_default"
+        final long rows = jdbc.sql("SELECT /* salmonbus:partition.count_default */ count(*) FROM %s_default"
             .formatted(table)).query(Long.class).single();
         if (meters != null) {
             defaultRowGauges.computeIfAbsent(table, name -> meters.gauge(
@@ -213,7 +223,7 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
 
     private boolean isPartitionOf(String partition, String table) {
         return jdbc.sql("""
-                SELECT EXISTS (SELECT 1 FROM pg_inherits
+                SELECT /* salmonbus:partition.is_attached */ EXISTS (SELECT 1 FROM pg_inherits
                     WHERE inhrelid = to_regclass(?) AND inhparent = to_regclass(?))
                 """)
             .params(partition, table)
@@ -223,7 +233,7 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
 
     private boolean isPartitioned(String table) {
         return jdbc.sql("""
-                SELECT /* salmonbus:pipeline_partition.is_partitioned */ EXISTS (
+                SELECT /* salmonbus:partition.is_partitioned */ EXISTS (
                     SELECT 1 FROM pg_class WHERE oid = to_regclass(?) AND relkind = 'p')
                 """)
             .param(table)

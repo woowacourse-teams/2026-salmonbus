@@ -189,7 +189,8 @@ public class PartitionExportRepository {
     /** 테이블이 파티션 테이블({@code relkind = 'p'})인지 본다. */
     public boolean isPartitioned(String table) {
         requireTable(table);
-        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM pg_class WHERE oid = to_regclass(?) AND relkind = 'p')")
+        return jdbc.sql("SELECT /* salmonbus:partition_export.catalog */ EXISTS ("
+            + "SELECT 1 FROM pg_class WHERE oid = to_regclass(?) AND relkind = 'p')")
             .param(table).query(Boolean.class).single();
     }
 
@@ -203,8 +204,8 @@ public class PartitionExportRepository {
         if (times.isEmpty()) {
             throw new IllegalStateException("TIME_COLUMN_REQUIRED");
         }
-        String sql = "SELECT (max(greatest(" + String.join(",", times) + ")) AT TIME ZONE 'Asia/Seoul')::date FROM "
-            + Partition.initial(table).name();
+        String sql = "SELECT /* salmonbus:partition_export.newest_initial_date */ (max(greatest("
+            + String.join(",", times) + ")) AT TIME ZONE 'Asia/Seoul')::date FROM " + Partition.initial(table).name();
         List<LocalDate> newest = readOnly.execute(status -> {
             readLimits();
             return jdbc.sql(sql).query((rs, n) -> rs.getObject(1, LocalDate.class)).list();
@@ -214,7 +215,7 @@ public class PartitionExportRepository {
 
     private List<String> timeColumns(String table) {
         List<String> columns = jdbc.sql("""
-            SELECT a.attname
+            SELECT /* salmonbus:partition_export.catalog */ a.attname
             FROM pg_attribute a
             WHERE a.attrelid = to_regclass(?) AND a.attnum > 0 AND NOT a.attisdropped
                 AND a.atttypid = 'timestamptz'::regtype
@@ -232,7 +233,8 @@ public class PartitionExportRepository {
     private List<String[]> attachedPartitions(List<String> tables) {
         String parents = String.join(",", tables.stream().map(t -> "to_regclass('" + t + "')").toList());
         return jdbc.sql("""
-            SELECT p.relname, c.relname, pg_get_expr(c.relpartbound, c.oid)
+            SELECT /* salmonbus:partition_export.catalog */ p.relname, c.relname,
+                pg_get_expr(c.relpartbound, c.oid)
             FROM pg_inherits i
             JOIN pg_class c ON c.oid = i.inhrelid
             JOIN pg_class p ON p.oid = i.inhparent
@@ -248,7 +250,7 @@ public class PartitionExportRepository {
     public List<PartitionManifest.Column> columns(String table) {
         requireTable(table);
         List<PartitionManifest.Column> columns = jdbc.sql("""
-            SELECT a.attname, format_type(a.atttypid, a.atttypmod)
+            SELECT /* salmonbus:partition_export.catalog */ a.attname, format_type(a.atttypid, a.atttypmod)
             FROM pg_attribute a
             WHERE a.attrelid = to_regclass(?) AND a.attnum > 0 AND NOT a.attisdropped
             ORDER BY a.attnum
@@ -280,7 +282,7 @@ public class PartitionExportRepository {
 
     private List<String> primaryKey(String table) {
         return jdbc.sql("""
-            SELECT a.attname
+            SELECT /* salmonbus:partition_export.catalog */ a.attname
             FROM pg_index i
             CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, position)
             JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
@@ -291,7 +293,7 @@ public class PartitionExportRepository {
 
     private List<String> uniqueKey(String table) {
         return jdbc.sql("""
-            SELECT a.attname
+            SELECT /* salmonbus:partition_export.catalog */ a.attname
             FROM (
                 SELECT c.conrelid, c.conkey
                 FROM pg_constraint c
@@ -322,8 +324,8 @@ public class PartitionExportRepository {
         final int limit
     ) {
         String order = String.join(",", keys.stream().map(k -> "t." + k).toList());
-        StringBuilder sql = new StringBuilder("SELECT to_jsonb(t)::text, jsonb_build_array(" + order + ")::text FROM ")
-            .append(partition.name()).append(" t");
+        StringBuilder sql = new StringBuilder("SELECT /* salmonbus:partition_export.read_page */ to_jsonb(t)::text, "
+            + "jsonb_build_array(" + order + ")::text FROM ").append(partition.name()).append(" t");
         if (cursor != null) {
             List<String> bounds = IntStream.range(0, keys.size())
                 .mapToObj(i -> "(CAST(:cursor AS jsonb)->>" + i + ")::" + typeOf(columns, keys.get(i)))
@@ -372,18 +374,21 @@ public class PartitionExportRepository {
             if (!hasDefaultPartition(table)) {
                 return 0L;
             }
-            return jdbc.sql("SELECT count(*) FROM " + table + "_default").query(Long.class).single();
+            return jdbc.sql("SELECT /* salmonbus:partition_export.count_default */ count(*) FROM " + table
+                + "_default").query(Long.class).single();
         });
     }
 
     private boolean hasDefaultPartition(String table) {
-        return jdbc.sql("SELECT to_regclass(?) IS NOT NULL").param(table + "_default").query(Boolean.class).single();
+        return jdbc.sql("SELECT /* salmonbus:partition_export.catalog */ to_regclass(?) IS NOT NULL")
+            .param(table + "_default").query(Boolean.class).single();
     }
 
     /** 파티션이 지금 부모 테이블에 붙어 있는지 본다. */
     public boolean attached(Partition partition) {
         return jdbc.sql("""
-            SELECT EXISTS (SELECT 1 FROM pg_inherits WHERE inhrelid = to_regclass(?) AND inhparent = to_regclass(?))
+            SELECT /* salmonbus:partition_export.catalog */ EXISTS (
+                SELECT 1 FROM pg_inherits WHERE inhrelid = to_regclass(?) AND inhparent = to_regclass(?))
             """).params(partition.name(), partition.table()).query(Boolean.class).single();
     }
 
@@ -391,13 +396,15 @@ public class PartitionExportRepository {
     public long count(Partition partition) {
         return readOnly.execute(status -> {
             readLimits();
-            return jdbc.sql("SELECT count(*) FROM " + partition.name()).query(Long.class).single();
+            return jdbc.sql("SELECT /* salmonbus:partition_export.count_rows */ count(*) FROM " + partition.name())
+                .query(Long.class).single();
         });
     }
 
     public Optional<Ledger> ledger(Partition partition) {
         return jdbc.sql("""
-            SELECT object_key, row_count, sha256, exported_at, verified_at, dropped_at
+            SELECT /* salmonbus:daily_export.find */ object_key, row_count, sha256, exported_at, verified_at,
+                dropped_at
             FROM daily_export WHERE table_name = ? AND source_date = ? AND segment = 0
             """).params(partition.table(), partition.date()).query(LEDGER)
             .optional();
@@ -432,7 +439,8 @@ public class PartitionExportRepository {
                 return new LedgerWrite(false, existing.get());
             }
             jdbc.sql("""
-                INSERT INTO daily_export(table_name, source_date, object_key, row_count, sha256, exported_at, verified_at)
+                INSERT /* salmonbus:daily_export.insert */ INTO daily_export(
+                    table_name, source_date, object_key, row_count, sha256, exported_at, verified_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """).params(partition.table(), partition.date(), ledger.key(), ledger.rows(), ledger.sha256(),
                 time(ledger.exportedAt()), time(ledger.verifiedAt())).update();
@@ -445,7 +453,7 @@ public class PartitionExportRepository {
         return write.execute(status -> {
             writeLimits(lockTimeout);
             return jdbc.sql("""
-                UPDATE daily_export SET verified_at = ?
+                UPDATE /* salmonbus:daily_export.mark_verified */ daily_export SET verified_at = ?
                 WHERE table_name = ? AND source_date = ? AND segment = 0 AND sha256 = ? AND verified_at IS NULL
                     AND dropped_at IS NULL
                 """).params(time(verifiedAt), partition.table(), partition.date(), sha256).update() == 1;
@@ -486,7 +494,8 @@ public class PartitionExportRepository {
                 return DropResult.GONE;
             }
             jdbc.sql("LOCK TABLE " + partition.name() + " IN SHARE MODE").update();
-            final long rows = jdbc.sql("SELECT count(*) FROM " + partition.name()).query(Long.class).single();
+            final long rows = jdbc.sql("SELECT /* salmonbus:partition_export.count_before_drop */ count(*) FROM "
+                + partition.name()).query(Long.class).single();
             if (rows != expected.rows()) {
                 status.setRollbackOnly();
                 return DropResult.ROW_COUNT_CHANGED;
@@ -498,7 +507,8 @@ public class PartitionExportRepository {
 
     private Optional<Ledger> lockLedger(Partition partition) {
         return jdbc.sql("""
-            SELECT object_key, row_count, sha256, exported_at, verified_at, dropped_at
+            SELECT /* salmonbus:daily_export.lock */ object_key, row_count, sha256, exported_at, verified_at,
+                dropped_at
             FROM daily_export WHERE table_name = ? AND source_date = ? AND segment = 0 FOR UPDATE
             """).params(partition.table(), partition.date()).query(LEDGER)
             .optional();
@@ -511,9 +521,10 @@ public class PartitionExportRepository {
     }
 
     private void detachAndDrop(Partition partition) {
-        jdbc.sql("ALTER TABLE " + partition.table() + " DETACH PARTITION " + partition.name()).update();
-        jdbc.sql("DROP TABLE " + partition.name()).update();
-        jdbc.sql("UPDATE daily_export SET dropped_at = clock_timestamp()"
+        jdbc.sql("ALTER /* salmonbus:partition_export.detach */ TABLE " + partition.table() + " DETACH PARTITION "
+            + partition.name()).update();
+        jdbc.sql("DROP /* salmonbus:partition_export.drop */ TABLE " + partition.name()).update();
+        jdbc.sql("UPDATE /* salmonbus:daily_export.mark_dropped */ daily_export SET dropped_at = clock_timestamp()"
             + " WHERE table_name = ? AND source_date = ? AND segment = 0")
             .params(partition.table(), partition.date()).update();
     }

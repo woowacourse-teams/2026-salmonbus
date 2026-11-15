@@ -56,7 +56,7 @@ class PipelineForecastTriggerTest {
     }
 
     @Test
-    void 줍기는_기동_직후와_주기적으로_예보_전용_스케줄러에서_돈다() throws Exception {
+    void 줍기의_주기_실행은_한_주기_뒤에_시작해_예보_전용_스케줄러에서_돈다() throws Exception {
         // when
         trigger.pickUp();
 
@@ -65,7 +65,8 @@ class PipelineForecastTriggerTest {
         assertSoftly(softly -> {
             softly.assertThat(pipeline.pickUps).isOne();
             softly.assertThat(scheduled.scheduler()).isEqualTo("forecastTaskScheduler");
-            softly.assertThat(scheduled.initialDelay()).isZero();
+            softly.assertThat(scheduled.initialDelayString()).as("기동 직후의 첫 줍기는 모델을 올린 쪽이 부른다")
+                .isEqualTo("${forecast.interval}");
             softly.assertThat(scheduled.fixedDelayString()).isEqualTo("${forecast.interval}");
         });
     }

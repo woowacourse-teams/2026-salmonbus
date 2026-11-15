@@ -1,8 +1,10 @@
 package com.gustler.backend.forecasting.infrastructure.observability;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.Mockito.mock;
 
+import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -52,6 +54,28 @@ class ForecastMonitoringTest {
             .isEqualTo(1);
         assertThat(registry.get("salmonbus.collection.seat.quality.last.timestamp").gauges())
             .extracting(gauge -> gauge.value()).containsExactlyInAnyOrder(1000.0, 1000.0);
+    }
+
+    @Test
+    void 예보_배치_작업_로그에는_노선_판본의_노선_이름을_붙인다() throws Exception {
+        // given
+        ForecastMonitoring monitoring =
+            new ForecastMonitoring(new SimpleMeterRegistry(), mock(DataSource.class), Clock.systemUTC());
+        Field versions = ForecastMonitoring.class.getDeclaredField("versionNames");
+        versions.setAccessible(true);
+        versions.set(monitoring, Map.of(4L, "9300"));
+
+        // when
+        String known = monitoring.context(ForecastPipelineService.OPERATION, 4L);
+        String unknown = monitoring.context(ForecastPipelineService.OPERATION, 5L);
+        String pickUp = monitoring.context("pipeline_forecast_pickup", "all");
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(known).isEqualTo(" routeName=\"9300\"");
+            softly.assertThat(unknown).isEqualTo(" routeName=\"노선 정보 없음\"");
+            softly.assertThat(pickUp).isEmpty();
+        });
     }
 
     @Test

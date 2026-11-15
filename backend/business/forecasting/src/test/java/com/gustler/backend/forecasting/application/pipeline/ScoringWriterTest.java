@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import com.gustler.backend.diagnostics.WorkerOperationLog;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -121,6 +122,36 @@ class ScoringWriterTest {
             softly.assertThat(pendingAfterFailure).isEqualTo(4);
             softly.assertThat(store.writes).containsExactly(List.of(10L, 11L), List.of(1L, 12L), List.of(2L, 13L));
         });
+    }
+
+    @Test
+    void 쓰기_트랜잭션마다_걸린_시간을_채점_쓰기_작업으로_남기고_쓸_줄이_없으면_남기지_않는다() {
+        // given
+        List<String> operations = new ArrayList<>();
+        WorkerOperationLog.Listener listener = (operation, route, nanos, failed) -> operations
+            .add(operation + ":" + route + ":" + failed);
+        MemoryStore store = new MemoryStore();
+        ScoringWriter writer = new ScoringWriter(store, new CountingTransactions(store), 1);
+        WorkerOperationLog.setListener(listener);
+        try {
+            writer.flush();
+            writer.add(new ScoringResult(List.of(label(1)), List.of(unresolved(10)), List.of()));
+            writer.add(new ScoringResult(List.of(label(2)), List.of(unresolved(11)), List.of()));
+            store.failures = 1;
+
+            // when
+            Throwable failure = catchThrowable(writer::flush);
+            writer.flush();
+
+            // then
+            assertSoftly(softly -> {
+                softly.assertThat(failure).isInstanceOf(IllegalStateException.class);
+                softly.assertThat(operations).containsExactly("scoring_write:all:true", "scoring_write:all:false",
+                    "scoring_write:all:false");
+            });
+        } finally {
+            WorkerOperationLog.clearListener(listener);
+        }
     }
 
     private static PassLabel label(final long trip) {

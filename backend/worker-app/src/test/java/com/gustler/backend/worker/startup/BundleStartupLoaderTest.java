@@ -14,6 +14,7 @@ import com.gustler.backend.forecasting.api.model.ModelLoadResult.NotConfigured;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Promoted;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Rejected;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Reloaded;
+import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
 import com.gustler.backend.worker.configuration.ModelBundleProperties;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,6 +58,34 @@ class BundleStartupLoaderTest {
 
         // then
         assertThat(commands).containsExactly(new LoadConfiguredModelCommand("/srv/model", true));
+    }
+
+    @Test
+    void 예보가_켜져_있으면_모델을_올린_뒤에_첫_줍기를_한_번_돌린다() {
+        // given
+        List<String> order = new ArrayList<>();
+        BundleStartupLoader loader = new BundleStartupLoader(new ModelBundleProperties("/srv/model", false),
+            command -> {
+                order.add("load");
+                return new Reloaded("release-A");
+            });
+        loader.setForecastPipeline(new ForecastPipeline() {
+            @Override
+            public void batchStored(final long observationBatchId, final long routeVersionId) {
+                order.add("signal");
+            }
+
+            @Override
+            public void pickUp() {
+                order.add("pickUp");
+            }
+        });
+
+        // when
+        loader.loadConfiguredBundle();
+
+        // then
+        assertThat(order).containsExactly("load", "pickUp");
     }
 
     @ParameterizedTest

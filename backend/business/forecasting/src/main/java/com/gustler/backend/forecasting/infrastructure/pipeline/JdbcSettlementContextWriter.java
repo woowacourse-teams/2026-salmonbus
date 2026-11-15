@@ -17,7 +17,7 @@ public final class JdbcSettlementContextWriter implements SettlementContextWrite
     public void store(final long modelDeploymentId, final long routeVersionId, String context) {
         String route = Long.toString(routeVersionId);
         final int inserted = jdbc.sql("""
-            UPDATE model_deployment
+            UPDATE /* salmonbus:settlement_context.store */ model_deployment
             SET settlement_context = settlement_context || jsonb_build_object(CAST(? AS text), CAST(? AS jsonb))
             WHERE id = ? AND jsonb_exists(settlement_context, ?) = false
             """).params(route, context, modelDeploymentId, route).update();
@@ -28,7 +28,8 @@ public final class JdbcSettlementContextWriter implements SettlementContextWrite
 
     private boolean hasSameStoredContext(final long modelDeploymentId, String route, String context) {
         return jdbc.sql("""
-            SELECT (settlement_context -> CAST(? AS text)) IS NOT DISTINCT FROM CAST(? AS jsonb)
+            SELECT /* salmonbus:settlement_context.compare */
+                (settlement_context -> CAST(? AS text)) IS NOT DISTINCT FROM CAST(? AS jsonb)
             FROM model_deployment WHERE id = ?
             """).params(route, context, modelDeploymentId).query(Boolean.class).single();
     }

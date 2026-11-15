@@ -50,7 +50,8 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
     static final String INCOMPATIBLE_VERSION = "ALIGHTING_AWARE_INCOMPATIBLE_HISTORICAL_ROUTE_VERSION:";
     static final String ROW_LIMIT_EXCEEDED = "ALIGHTING_AWARE_HISTORY_ROW_LIMIT_EXCEEDED";
     private static final String READ_VERSIONS = """
-        SELECT version.id FROM route_version version JOIN route ON route.id=version.route_id
+        SELECT /* salmonbus:replay.find_versions */ version.id
+        FROM route_version version JOIN route ON route.id=version.route_id
         WHERE route.display_name=:name ORDER BY version.id
         """;
     private static final String BATCH_COLUMNS = """
@@ -69,7 +70,7 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
             ON r.source_date=(b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date AND r.observation_batch_id=b.id)""";
     private static final String COLUMNS = BATCH_COLUMNS + RUN_COLUMNS;
     private static final String READ_BATCHES = """
-        SELECT %s
+        SELECT /* salmonbus:replay.read_batches */ %s
         FROM %s b LEFT JOIN vehicle_observation o ON o.observation_batch_id=b.id
         WHERE b.route_version_id IN (:versions)
           AND b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS' AND b.stored_rows>0
@@ -81,7 +82,7 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         LIMIT :limit
         """.formatted(COLUMNS, RECORDED_BATCHES);
     private static final String READ_BATCH = """
-        SELECT %s,b.scheduled_at,version.route_id,route.source_id
+        SELECT /* salmonbus:forecast.read_batch */ %s,b.scheduled_at,version.route_id,route.source_id
         FROM %s b JOIN route_version version ON version.id=b.route_version_id
           JOIN route ON route.id=version.route_id
           LEFT JOIN vehicle_observation o ON o.observation_batch_id=b.id
@@ -89,7 +90,8 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         ORDER BY o.vehicle_id,o.id
         """.formatted(COLUMNS, RECORDED_BATCHES);
     private static final String READ_STOPS = """
-        SELECT stop_order,stop_id,boarding_allowed,direction FROM route_stop WHERE route_version_id=:version ORDER BY stop_order
+        SELECT /* salmonbus:replay.read_stops */ stop_order,stop_id,boarding_allowed,direction
+        FROM route_stop WHERE route_version_id=:version ORDER BY stop_order
         """;
 
     private final JdbcClient jdbc;

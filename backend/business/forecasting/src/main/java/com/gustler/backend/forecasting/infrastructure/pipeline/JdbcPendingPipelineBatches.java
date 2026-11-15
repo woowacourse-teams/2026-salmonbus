@@ -19,7 +19,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  */
 public final class JdbcPendingPipelineBatches implements PendingPipelineBatches {
     static final String FIND = """
-        SELECT /* salmonbus:pipeline_forecast.find_unprocessed */ b.id, b.route_version_id, b.response_received_at
+        SELECT /* salmonbus:forecast.find_unprocessed */ b.id, b.route_version_id, b.response_received_at
         FROM observation_batch b
         WHERE b.route_version_id = :routeVersionId
           AND b.response_received_at IS NOT NULL
