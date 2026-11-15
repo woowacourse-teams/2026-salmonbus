@@ -2,7 +2,7 @@
 
 ## 무엇을 하는가
 
-입력 폴더에 담긴 과거 자료(도착 스냅샷, 관측 묶음, 차량 관측, 예보 발행, 좌석 예보)를 로컬 임시 PostgreSQL에 넣고, 판정 시각마다 제품의 대기 판정 코드를 그대로 돌려 집계를 쓴다. 그다음 판정 시각 뒤의 차량 관측에서 실제 결과를 읽어 판정과 맞춰 본다. SAL-392가 답하려는 질문 가운데 사유 코드 분포, 판정하지 못한 이유(Gap) 분포, 좌석 예보 확률이 비는 원인, 근사 확률과 대기 실패 위험이 실제 결과와 맞는 정도, 독립 가정이 틀리는 정도를 세는 도구다.
+입력 폴더에 담긴 과거 자료(도착 스냅샷, 관측 묶음, 차량 관측, 예보 실행 줄, 예보 기록)를 로컬 임시 PostgreSQL에 넣고, 판정 시각마다 제품의 대기 판정 코드를 그대로 돌려 집계를 쓴다. 그다음 판정 시각 뒤의 차량 관측에서 실제 결과를 읽어 판정과 맞춰 본다. SAL-392가 답하려는 질문 가운데 사유 코드 분포, 판정하지 못한 이유(Gap) 분포, 좌석 예보 확률이 비는 원인, 근사 확률과 대기 실패 위험이 실제 결과와 맞는 정도, 독립 가정이 틀리는 정도를 세는 도구다.
 
 - 운영 DB, 운영 서버, 실서비스 API 키에 접속하지 않는다. 입력은 사람이 미리 뽑아 둔 파일이다.
 - 제품 코드는 `ArrivalStopSource`, `SeatForecastProbabilitySource`, `BoardQueryService`, `ActionDecider`를 고치지 않고 쓴다. DB 읽기 두 곳(`ArrivalReadRepository`, `BoardQueryRepository`)만 "판정 시각 기준"으로 읽는 실행기 전용 구현으로 바꿔 끼운다.
@@ -53,7 +53,7 @@ retention만 늘리면 이미 조회된 정류장의 행만 더 남는다. 조�
 
 ## 입력 폴더 뽑기
 
-`scripts/extract_offline_input.sh`가 PostgreSQL에서 아래 "입력 폴더 규격"대로 뽑는다. 읽기 전용 SELECT만 쓰고 번호판과 예보의 특징 값은 뽑지 않는다.
+`scripts/extract_offline_input.sh`가 PostgreSQL에서 아래 "입력 폴더 규격"대로 뽑는다. 읽기 전용 SELECT만 쓰고 번호판은 뽑지 않는다.
 
 ```
 PGHOST=... PGPORT=... PGDATABASE=... PGUSER=... PGPASSWORD=... \
@@ -63,7 +63,7 @@ PGHOST=... PGPORT=... PGDATABASE=... PGUSER=... PGPASSWORD=... \
 
 - 인자는 판정 구간의 시작과 끝, 새 출력 폴더, 노선의 source_route_id(여러 개 가능)다.
 - 운영 DB에서 돌릴 때는 운영 조회 승인 뒤, 출퇴근 시간(KST 07시부터 10시, 17시부터 20시) 밖에 실행한다. 스크립트가 그 시간대에는 멈춘다. 로컬 DB로 시험할 때만 `SALMON_EXTRACT_LOCAL=1`로 이 검사를 끈다.
-- 관측 묶음과 차량 관측은 시작 10분 전부터 끝 2시간 뒤까지 뽑는다. 보드가 판정 시각의 10분 전 묶음까지 보고, 실제 결과는 판정 뒤 2시간까지 찾기 때문이다. 예보 발행과 좌석 예보는 시작 10분 전부터 끝까지, 도착 스냅샷은 시작부터 끝까지다.
+- 관측 묶음과 차량 관측은 시작 10분 전부터 끝 2시간 뒤까지 뽑는다. 보드가 판정 시각의 10분 전 묶음까지 보고, 실제 결과는 판정 뒤 2시간까지 찾기 때문이다. 예보 실행 줄(forecast_run)과 예보 기록(forecast_record)은 배치 수신 시각으로 시작 10분 전부터 끝까지, 도착 스냅샷은 시작부터 끝까지다.
 - 한 시간씩 끊어 읽고 조회 사이에 2초 쉰다. 조회마다 출퇴근 시간인지 다시 보고 그 시간에 들어서면 멈춘다. 멈춘 폴더에는 `INCOMPLETE` 파일이 남는다. 끝까지 뽑았을 때만 이 파일을 지운다.
 - 운영 추출의 첫 파일에서 확인할 것: `arrival_snapshot`의 payload 안 receivedAt 표기(문자열인지 숫자인지). 실행기는 payload를 제품과 같은 방식으로 읽으므로 그대로 읽힐 것으로 보지만 운영 자료로 확인한 적은 없다.
 
@@ -117,8 +117,9 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 ```
 
 - 따옴표 없는 빈 칸은 NULL로 읽는다(COPY의 CSV 규칙과 같다).
+- 배열 열(`forecast_record`의 target_stop_orders, expected_seats, full_probabilities)은 COPY가 쓰는 PostgreSQL 배열 표기 그대로다. 원소를 쉼표로 이어 중괄호로 감싸고, 빈 원소는 `NULL`이다. 원소가 둘 이상이면 쉼표가 들어 있어 칸 전체를 따옴표로 감싼다(예: `{15}`, `"{10,15}"`, `"{NULL,2.5}"`).
 - 열 순서는 자유다. 규격에 없는 열이 있거나 필수 열이 빠지면 적재를 멈춘다.
-- `vehicle_observation.plate_number`(번호판)와 `seat_forecast.feature_snapshot`(예보의 특징 값)은 받지 않는다. 뽑을 때 열 목록에서 뺀다.
+- `vehicle_observation.plate_number`(번호판)는 받지 않는다. 뽑을 때 열 목록에서 뺀다.
 - 행의 ID는 원래 값을 그대로 쓴다. 테이블끼리 ID로 이어지기 때문이다.
 
 | 파일 | 필수 | 필수 열 | 선택 열 |
@@ -129,8 +130,8 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 | model_deployment | 아니오 | id, deployment_key, release_id, model_key, model_version, bundle_digest, prediction_target_version, calculation_version, supported_scope_digest, data_until, state | predecessor_deployment_id, activated_at, retired_at |
 | observation_batch | 아니오 | id, route_version_id, scheduled_at, attempt_number, attempt_key, outcome, normalization_version, collection_strategy_version | requested_at, response_received_at, completed_at, http_status, result_code, failure_code, provider_rows, stored_rows, excluded_rows, input_confirmed_at, ingestion_origin |
 | vehicle_observation | 아니오 | id, observation_batch_id, route_version_id, source_row_number, stop_order, stop_id, running_state, passed_stop_order | vehicle_id, vehicle_trip_key, remaining_seats, crowd_level, vehicle_type, route_type, tagless, seat_unknown_reason |
-| forecast_publication | 아니오 | id, source_batch_id, route_version_id, observed_at, published_at, prediction_count | model_deployment_id, demand_statistics_revision, quality_revision, generated_at, provenance |
-| seat_forecast | 아니오 | vehicle_observation_id, target_stop_order, route_version_id, stops_to_target, model_deployment_id, demand_statistics_revision, seat_full_chance_raw, seat_full_chance, generated_at, publication_id | expected_seats, quality_revision, evaluation_detail_required, seat_target, probability_target, label_version, inference_bundle_hash |
+| forecast_run | 아니오 | source_date, observation_batch_id, route_id, route_version_id, received_at, confirmed_at, outcome, prediction_count | model_deployment_id, source_incomplete, counted_rows |
+| forecast_record | 아니오 | source_date, vehicle_observation_id, observation_batch_id, source_row_number, route_id, route_version_id, vehicle_id, passed_stop_order, trip_start_observation_id, chain_start_observation_id, down, capacity, extended, target_stop_orders, expected_seats, full_probabilities | 없음 |
 | arrival_snapshot | 아니오 | id, station_id, received_at, refresh_after_at, stale_at, payload | stored_at |
 | route_version_first_publication | 아니오 | route_version_id, first_published_at | 없음 |
 | decision | 아니오 | route_id, station_id, stop_sequence, decision_at (이 순서 그대로) | 없음 |
@@ -141,14 +142,16 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 - `route_version`: 편도 노선의 보드는 그 방향의 첫차, 막차 시각이 없으면 읽기를 거부한다(제품 동작). 운영에서 뽑을 때 선택 열도 함께 뽑는다.
 - `model_deployment`: 판정 시각에 활성이던 배포는 activated_at과 retired_at으로 고른다. 두 열을 함께 뽑는다.
 - `vehicle_observation`: 남은 좌석(remaining_seats)과 좌석 미제공 사유(seat_unknown_reason) 가운데 정확히 하나가 있어야 한다(DB 제약).
-- `seat_forecast`: seat_target과 probability_target이 없으면 DB 기본값(FIRST_POST_STOP_OBSERVATION, FIRST_POST_STOP_ZERO)이 들어간다. 하차 뒤 좌석 계약(AFTER_ALIGHTING_ESTIMATE) 행은 label_version과 inference_bundle_hash가 있어야 하고, 특징 값은 실행기가 빈 객체로 채운다.
+- `forecast_run`: 관측 묶음 하나를 예보 단계가 처리한 결과다. received_at은 묶음의 응답 수신 시각, confirmed_at은 예보 착수 시각이다. 결과(outcome)가 PUBLISHED인 줄만 예측을 싣지만, 보드는 결과와 무관하게 실행 줄이 있는 묶음을 발행된 묶음으로 고른다(제품 동작).
+- `forecast_record`: 차량 한 대의 관측 한 줄당 한 줄이고, 목표 정류장마다의 예측을 세 배열(목표 정류장, 기대 좌석, 만석 확률)에 같은 순서로 담는다. 차량 번호가 있는 관측에만 있다. 예측은 모두 하차 반영 예측이라 보드에서 확률 목표는 언제나 DEPARTURE_ZERO다.
+- `forecast_publication`, `seat_forecast`: 예보 입력이 예보 기록으로 바뀌기 전의 파일이다. 폴더에 있으면 무엇이 바뀌었는지 알리고 적재를 멈춘다. 전환 전에 옛 형식으로 뽑아 둔 파일은 이 판으로 읽을 수 없다. 같은 구간을 지금의 추출 스크립트로 다시 뽑는다(예보 기록이 남아 있는 구간만 예보가 있다).
 - `arrival_snapshot`: payload는 운영 테이블의 payload 열(jsonb) 그대로다. 제품 코드가 `ArrivalSnapshot`으로 읽는다. provider, operation, normalization_version, payload_digest는 실행기가 채운다.
 - `ineligible_observation`, `route_data_quality`: 제품이 그 표와 예보 적격 뷰를 없앴다. 폴더에 이 파일이 있으면 적재를 멈춘다.
-- `route_version_first_publication`: 그 판본의 첫 발행 시각이다. 입력에는 판정 구간의 발행만 들어 있어서, 이 파일이 없으면 구간 안에 발행이 없는 판본을 "발행이 한 번도 없던 판본"과 구분하지 못한다. 제품은 발행이 있던 판본에서 최근 발행 묶음이 없으면 최근 관측 없음으로 거부하고, 발행이 한 번도 없던 판본에서는 예보 없이 가장 늦은 묶음을 보여 준다. 실행기는 이 파일의 시각에 예보 없는 표시용 발행을 넣어 제품과 같은 쪽으로 읽는다. 파일이 없어 발행 없는 판본으로 읽힌 판정은 `diagnostics.boardAtDecision`에 `READ_UNPUBLISHED`로 따로 센다.
+- `route_version_first_publication`: 그 판본의 가장 이른 예보 실행 줄의 착수 시각이다(열 이름은 first_published_at). 입력에는 판정 구간의 실행 줄만 들어 있어서, 이 파일이 없으면 구간 안에 실행 줄이 없는 판본을 "발행이 한 번도 없던 판본"과 구분하지 못한다. 제품은 실행 줄이 있던 판본에서 최근 묶음이 없으면 최근 관측 없음으로 거부하고, 실행 줄이 한 번도 없던 판본에서는 예보 없이 가장 늦은 묶음을 보여 준다. 실행기는 이 파일의 시각에 예측 없는 표시용 실행 줄(EMPTY)을 넣어 제품과 같은 쪽으로 읽는다. 파일이 없어 발행 없는 판본으로 읽힌 판정은 `diagnostics.boardAtDecision`에 `READ_UNPUBLISHED`로 따로 센다. 추출 스크립트는 DB에 남은 실행 줄 가운데 가장 이른 것을 뽑으므로, 내보낸 뒤 지운 날짜 파티션이 있으면 실제 첫 착수보다 늦은 시각이 들어간다.
 - 폴더에 `INCOMPLETE` 파일이 있으면 추출이 중간에 멈춘 폴더다. 실행기는 그 폴더를 읽지 않는다.
 - `decision`: 판정할 자리를 직접 적는다. route_id는 public_route_id이고 decision_at은 `2026-11-10T00:00:00Z` 같은 ISO-8601 시각이다. 이 파일이 있으면 적힌 자리만 판정한다.
 
-구간을 잡을 때: 판정 구간을 [S, E]라 하면 관측 묶음과 차량 관측, 예보 발행, 좌석 예보는 S의 10분 전부터 뽑는다. 보드가 판정 시각의 10분 전까지의 묶음을 보기 때문이다.
+구간을 잡을 때: 판정 구간을 [S, E]라 하면 관측 묶음과 차량 관측, 예보 실행 줄, 예보 기록은 S의 10분 전부터 뽑는다. 보드가 판정 시각의 10분 전까지의 묶음을 보기 때문이다.
 
 ## 판정할 자리
 
@@ -163,17 +166,19 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 |---|---|---|
 | 정류장의 노선 방문 | T에 유효하던 노선 판본(valid_from <= T, valid_to가 비었거나 T보다 뒤) | 제품은 지금 판본(valid_to가 빈 것) |
 | 도착 스냅샷 | received_at <= T인 것 가운데 가장 최근 것 | 제품은 시각 조건 없이 가장 최근 것 |
-| 보드의 관측 묶음 | T까지 발행된(published_at <= T) 묶음 가운데, 수신 시각이 T의 10분 전부터 T 사이이고 가장 늦은 것. 발행이 하나도 없는 판본은 같은 구간의 가장 늦은 정상 묶음 | 제품은 지금 DB에 있는 발행을 본다 |
+| 보드의 관측 묶음 | T까지 착수한(confirmed_at <= T) 예보 실행 줄이 있는 묶음 가운데, 수신 시각이 T의 10분 전부터 T 사이이고 가장 늦은 것. 그런 실행 줄이 하나도 없는 판본은 같은 구간의 가장 늦은 정상 묶음 | 제품은 지금 DB에 있는 실행 줄을 본다 |
+| 묶음의 예보 | 그 묶음의 실행 줄이 T까지 착수했고 결과가 PUBLISHED일 때 그 기록 | 제품은 시각 조건 없이 PUBLISHED 실행 줄의 기록 |
 | 활성 모델 | activated_at <= T이고 retired_at이 비었거나 T보다 뒤인 배포. activated_at이 빈 ACTIVE 배포는 언제나 활성으로 본다 | 제품은 state가 ACTIVE인 배포 |
-| 묶음의 정류장, 예보, 차량 | 묶음 ID와 판본 ID로 읽는다 | 같다 |
+| 묶음의 정류장, 차량 | 묶음 ID와 판본 ID로 읽는다 | 같다 |
 | 신선도 | 제품의 `BoardFreshnessPolicy`, `ArrivalStopSource`에 T로 맞춘 시계와 판정 시각을 준다 | 같다 |
 
 시계를 지금에 두면 실행기 구현과 제품 저장소 구현이 같은 값을 돌려준다. `AsOfReadContractTest`가 같은 DB에서 둘을 비교한다.
 
+실행 줄을 자르는 시각은 착수 시각(confirmed_at)이다. 실행 줄에는 저장된 시각이 따로 없다. 예보 단계는 착수한 뒤 예측을 계산해 실행 줄과 기록을 함께 한 번 저장하고, 그 줄을 다시 쓰지 않는다. 그래서 실행 줄이 가진 시각 가운데 착수 시각이 제품에 보이기 시작한 때와 가장 가깝다. 묶음의 수신 시각(received_at)으로 자르면 예보를 시작하기도 전의 묶음을 발행된 묶음으로 고르게 된다.
+
 되살리지 못하는 것
 
-- 보드는 그 묶음의 좌석 예보를 전부 읽는다. 예보 적격 뷰와 편도 제외는 쓰지 않는다.
-- 재발행으로 예보 행이 덮였으면 덮인 뒤의 값을 읽는다. 재발행은 발행 시각(published_at)도 재발행 시각으로 덮는다(`JdbcForecastPublicationRepository`의 갱신 문). 그래서 원래 발행과 재발행 사이의 판정 시각에서는 그 묶음이 아직 발행 전으로 보이고, 실행기는 더 앞의 묶음을 고른다.
+- 착수부터 저장까지의 지연은 되살리지 않는다. 착수와 저장 사이의 판정 시각에서는 제품이 아직 보지 못한 묶음을 실행기가 고른다.
 - 도착 스냅샷이 수신된 뒤 DB에 저장되기까지의 지연은 되살리지 않는다.
 - `BoardQueryService`의 읽기 트랜잭션(반복 읽기)은 걸지 않는다. 임시 DB는 적재 뒤 바뀌지 않아 결과에 영향이 없다.
 
@@ -184,11 +189,11 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 시도 한 건(도착 항목의 차량 한 대)의 결과
 
 - 그 차량의 판정 시각까지의 마지막 관측에서 시작해 뒤 관측을 시각 순서로 따라간다.
-- 첫 관측 기준: 통과 순번이 그 정류장 순번과 같은 첫 관측의 남은 좌석. FIRST_POST_STOP_ZERO 예보의 정산(`ArrivalLabelResolver`)이 고르는 관측이다.
+- 첫 관측 기준: 통과 순번이 그 정류장 순번과 같은 첫 관측의 남은 좌석. 확률 목표 FIRST_POST_STOP_ZERO가 정답으로 보는 관측이다.
 - 마지막 관측 기준: 통과 순번이 그 정류장 순번 이상이고 다음 승차 정류장 순번 미만인 관측 가운데 마지막의 남은 좌석. 다음 승차 정류장을 지난 관측이 있어야 확정한다. DEPARTURE_ZERO 예보의 정답을 흉내 낸 근사다. 제품(`LesPassEvents`)은 모델 번들의 정차 순번으로 다음 정류장을 정하고 5순번까지의 후퇴를 허용하는데, 실행기는 route_stop의 승차 가능 정류장을 쓰고 순번이 되돌아가면 끊는다.
 - 남은 좌석이 1 이상이면 `SEATS_AVAILABLE`, 0이면 `FULL`, 그 밖은 `UNKNOWN/<이유>`다.
-- 추적을 끊는 조건은 제품 정산(`ArrivalLabelResolver`)을 따른다. 연속 관측 간격이 90초를 넘거나, 통과 순번이 되돌아가거나, 운행 방향이 출발점과 다르면 `LOST`다. 방향은 `operational_observation.quality_direction`이다. 판정 뒤 2시간까지만 본다.
-- 제품 정산과 다른 점: 제품은 예보의 원 관측에서 시작해 예보 계산 시각 뒤의 관측만 보는데, 시도의 결과는 판정 시각에서 시작한다(예보가 아니라 판정이 기준이다). 품질 판정을 아직 받지 않은 관측에서 기다리는 규칙은 쓰지 않는다. 보드 차량 진단(`boardVehicleOutcomes`)은 제품처럼 보드 묶음의 관측에서 시작하고 예보 계산 시각까지의 관측을 건너뛴다.
+- 연속 관측 간격이 90초를 넘거나, 통과 순번이 되돌아가거나, 운행 방향이 출발점과 다르면 `LOST`다. 방향은 `operational_observation.quality_direction`이다. 판정 뒤 2시간까지만 본다.
+- 제품 정산과 다른 점: 제품은 예보의 원 관측에서 시작해 예보 계산 시각 뒤의 관측만 보는데, 시도의 결과는 판정 시각에서 시작한다(예보가 아니라 판정이 기준이다). 품질 판정을 아직 받지 않은 관측에서 기다리는 규칙은 쓰지 않는다. 보드 차량 진단(`boardVehicleOutcomes`)은 제품처럼 보드 묶음의 관측에서 시작하고 예보 착수 시각(confirmed_at)까지의 관측을 건너뛴다.
 
 | 이유 | 뜻 |
 |---|---|
@@ -222,7 +227,7 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 | notice, candidates | "측정용 값이며 제품 값이 아님", "후보 미연결" |
 | codeCommit | 실행한 코드의 커밋. 커밋하지 않은 변경이 있으면 `+uncommitted`가 붙는다 |
 | settings, settingsNotUsedInThisRun | 쓴 설정 값 전부와, 이번 실행에서 결과에 영향이 없는 값의 이름 |
-| data | 테이블별 적재 행 수, 판정 자리의 출처와 건수, 판정 시각과 자료의 시각 범위, 확률 목표별 좌석 예보 수 |
+| data | 테이블별 적재 행 수, 판정 자리의 출처와 건수, 판정 시각과 자료의 시각 범위(예보는 착수 시각 `forecastConfirmedAt`), 예보 실행 줄의 결과별 수(`forecastRunsByOutcome`), 예보 기록의 예측 수(`recordedPredictions`, 배열 원소 수의 합). 표시용 실행 줄은 세지 않는다 |
 | results.reasonCodes | 사유 코드별 판정 수 |
 | results.arrivalLists, entriesPerList, attemptsPerDecision | 도착 목록의 상태, 목록의 항목 수, 창 안 시도 수의 분포 |
 | results.stayEvaluations, stayGaps | 대기 평가의 상태(평가 가능, 확인된 공집합, 근거 부족)와 Gap의 종류, 목록 역할, 결측 사유별 수 |
@@ -254,9 +259,9 @@ COPY (SELECT <열 목록> FROM <테이블> WHERE <구간 조건>) TO STDOUT WITH
 
 ## 검증
 
-- `AsOfReadContractTest`: 판정 시각 기준 읽기와 제품 저장소의 대조, 과거 시각의 읽기 규칙
-- `SalmonOfflineRunTest`: 합성 입력 폴더를 임시 DB에 넣고 실행기를 끝까지 돌려 집계와 줄 단위 결과를 확인
-- `PassOutcomeTest`: 실제 결과를 찾는 규칙. 제품 정산의 테스트(`ArrivalLabelResolverTest`)와 같은 입력에 같은 결과를 내는지 본다
+- `AsOfReadContractTest`: 판정 시각 기준 읽기와 제품 저장소의 대조, 과거 시각의 읽기 규칙. 판정 시각 뒤에 착수한 실행 줄과 그 기록이 섞이지 않는지도 본다
+- `SalmonOfflineRunTest`: 합성 입력 폴더를 임시 DB에 넣고 실행기를 끝까지 돌려 집계와 줄 단위 결과를 확인. 예보 기록으로 바뀌기 전의 예보 파일이 든 폴더를 거절하는지도 본다
+- `PassOutcomeTest`: 실제 결과를 찾는 규칙. 첫 관측 기준과 마지막 관측 기준이 고르는 관측, 추적을 끊는 조건을 본다
 - `CsvRowsTest`, `RunSettingsTest`: CSV 읽기 규칙, 설정 파일 읽기
 - `docs/salmon-action/scripts/preservation_cost.py --self-test`: 보존 견적, worker의 현재 보존 값, 추출 열, 출퇴근 시각의 중단. `ArrivalRateLimitDrainTest`는 같은 버킷을 Java로 센다.
 

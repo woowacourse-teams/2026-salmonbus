@@ -20,7 +20,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * 판정 입력을 만들 때는 쓰지 않는다(판정 시각 뒤의 자료다).
  */
 final class ObservationTrail {
-    /** 제품 정산이 도착을 기다리는 한도와 같다(ArrivalLabelResolver.LONGEST_WAIT_FOR_ARRIVAL). */
+    /** 제품 채점이 예측과 통과를 맞추는 창(ScoringStage.MATCH_WINDOW)과 같다. */
     private static final Duration LONGEST_WAIT = Duration.ofHours(2);
 
     enum Timeliness { IN_TIME, LATE, UNSURE }
