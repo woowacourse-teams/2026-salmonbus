@@ -103,7 +103,7 @@ public class VehicleObservationJpaEntity {
         applySeats(observation.remainingSeats());
     }
 
-    /** 한 문장 저장이 받은 관측 번호를 붙인다. 이 엔티티는 영속성 컨텍스트에 들어가지 않는다. */
+    /** 저장 문장이 돌려준 관측 번호를 붙인다. 이 엔티티는 영속성 컨텍스트에 들어가지 않는다. */
     void insertedAs(final long observationId) {
         this.id = observationId;
     }

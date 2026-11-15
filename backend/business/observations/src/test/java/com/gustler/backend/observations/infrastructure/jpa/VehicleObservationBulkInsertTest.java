@@ -21,12 +21,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PSQLException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 관측 한 문장 저장이 JPA 저장과 같은 문장 경계·예외를 갖는지 확인한다.
+ * 관측 저장이 INSERT 한 문장으로 끝나는지, 저장 번호를 입력 순서대로 붙이는지, 제약 위반을 어떤 예외로 알리는지 확인한다.
  * 모든 확인은 롤백하는 트랜잭션 안에서 해 DB 에 남기지 않는다.
  */
 @ObservationIntegrationTest
@@ -37,15 +38,6 @@ class VehicleObservationBulkInsertTest {
     private static final String STOP_3 = "208000069";
     private static final String UNKNOWN_STOP = "206000564";
     private static final OffsetDateTime SCHEDULED_AT = OffsetDateTime.parse("2026-08-19T11:14:00+09:00");
-
-    @Autowired
-    private ObservationBatchEntityRepository batchEntities;
-
-    @Autowired
-    private VehicleObservationEntityRepository observationEntities;
-
-    @Autowired
-    private VehicleObservationBulkInsert bulkInsert;
 
     @Autowired
     private CollectionBatchRepository batches;
@@ -64,12 +56,12 @@ class VehicleObservationBulkInsertTest {
     }
 
     @Test
-    void 켜짐_저장은_관측_INSERT_문장을_한_번만_낸다() {
+    void 관측_INSERT_문장을_한_번만_낸다() {
         // when
         final int statements = inRollback(() -> {
             CollectionBatch batch = openBatch();
             countInsertStatements();
-            repository(true).saveObservations(batch, List.of(row(0, "v-0", 1, STOP_1),
+            batches.saveObservations(batch, List.of(row(0, "v-0", 1, STOP_1),
                 row(1, "v-1", 2, STOP_2), row(2, "v-2", 3, STOP_3)));
             return insertStatementCount();
         });
@@ -79,27 +71,12 @@ class VehicleObservationBulkInsertTest {
     }
 
     @Test
-    void 꺼짐_저장은_관측_한_줄마다_INSERT_문장을_낸다() {
+    void 관측이_없으면_문장을_내지_않는다() {
         // when
         final int statements = inRollback(() -> {
             CollectionBatch batch = openBatch();
             countInsertStatements();
-            repository(false).saveObservations(batch, List.of(row(0, "v-0", 1, STOP_1),
-                row(1, "v-1", 2, STOP_2), row(2, "v-2", 3, STOP_3)));
-            return insertStatementCount();
-        });
-
-        // then
-        assertThat(statements).isEqualTo(3);
-    }
-
-    @Test
-    void 켜짐_저장은_관측이_없으면_문장을_내지_않는다() {
-        // when
-        final int statements = inRollback(() -> {
-            CollectionBatch batch = openBatch();
-            countInsertStatements();
-            assertThat(repository(true).saveObservations(batch, List.of())).isEmpty();
+            assertThat(batches.saveObservations(batch, List.of())).isEmpty();
             return insertStatementCount();
         });
 
@@ -108,11 +85,11 @@ class VehicleObservationBulkInsertTest {
     }
 
     @Test
-    void 켜짐_저장은_입력_순서대로_같은_상류_행의_저장_번호를_붙여_반환한다() {
+    void 입력_순서대로_같은_상류_행의_저장_번호를_붙여_반환한다() {
         // when
         List<List<StoredObservations.Row>> returnedAndStored = inRollback(() -> {
             CollectionBatch batch = openBatch();
-            List<StoredObservations.Row> returned = repository(true).saveObservations(batch,
+            List<StoredObservations.Row> returned = batches.saveObservations(batch,
                 List.of(row(4, "v-4", 3, STOP_3), row(0, "v-0", 1, STOP_1), row(2, null, 2, STOP_2)));
             return List.of(returned, returned.stream().map(row -> storedRowOf(row.observationId())).toList());
         });
@@ -125,11 +102,11 @@ class VehicleObservationBulkInsertTest {
     }
 
     @Test
-    void 켜짐_저장의_번호는_입력_순서대로_오른다() {
+    void 저장_번호는_입력_순서대로_오른다() {
         // when
         List<Integer> sourceRowsById = inRollback(() -> {
             CollectionBatch batch = openBatch();
-            repository(true).saveObservations(batch, List.of(row(4, "v-4", 3, STOP_3),
+            batches.saveObservations(batch, List.of(row(4, "v-4", 3, STOP_3),
                 row(0, "v-0", 1, STOP_1), row(2, "v-2", 2, STOP_2)));
             return jdbc.sql("SELECT source_row_number FROM vehicle_observation WHERE observation_batch_id = ? "
                     + "ORDER BY id")
@@ -141,67 +118,58 @@ class VehicleObservationBulkInsertTest {
     }
 
     @Test
-    void 정류장_FK_위반은_꺼짐과_같은_예외와_제약_이름으로_실패한다() {
+    void 정류장_FK_위반은_제약_이름을_담은_무결성_예외로_실패한다() {
         // given
         List<UpstreamObservationRow> rows = List.of(row(0, "v-0", 1, STOP_1), row(1, "v-1", 1, UNKNOWN_STOP));
 
         // when
-        Throwable jpa = failureOf(false, rows);
-        Throwable bulk = failureOf(true, rows);
+        Throwable failure = failureOf(rows);
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(jpa.getClass()).isEqualTo(bulk.getClass());
-            softly.assertThat(constraintOf(bulk)).isEqualTo(constraintOf(jpa)).isEqualTo("fk_observation_route_stop");
-            softly.assertThat(sqlStateOf(bulk)).isEqualTo(sqlStateOf(jpa)).isEqualTo("23503");
+            softly.assertThat(failure.getClass()).isEqualTo(DataIntegrityViolationException.class);
+            softly.assertThat(constraintOf(failure)).isEqualTo("fk_observation_route_stop");
+            softly.assertThat(sqlStateOf(failure)).isEqualTo("23503");
         });
     }
 
     @Test
-    void 같은_배치의_차량_중복은_꺼짐과_같은_예외와_제약_이름으로_실패한다() {
+    void 같은_배치의_차량_중복은_제약_이름을_담은_무결성_예외로_실패한다() {
         // given
         List<UpstreamObservationRow> rows = List.of(row(0, "v-0", 1, STOP_1), row(1, "v-0", 2, STOP_2));
 
         // when
-        Throwable jpa = failureOf(false, rows);
-        Throwable bulk = failureOf(true, rows);
+        Throwable failure = failureOf(rows);
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(jpa.getClass()).isEqualTo(bulk.getClass());
-            softly.assertThat(constraintOf(bulk))
-                .isEqualTo(constraintOf(jpa))
-                .isEqualTo("ux_observation_vehicle_per_batch");
-            softly.assertThat(sqlStateOf(bulk)).isEqualTo(sqlStateOf(jpa)).isEqualTo("23505");
+            softly.assertThat(failure.getClass()).isEqualTo(DataIntegrityViolationException.class);
+            softly.assertThat(constraintOf(failure)).isEqualTo("ux_observation_vehicle_per_batch");
+            softly.assertThat(sqlStateOf(failure)).isEqualTo("23505");
         });
     }
 
     @Test
-    void 상류_행_번호_중복은_꺼짐과_같은_예외와_제약_이름으로_실패한다() {
+    void 상류_행_번호_중복은_제약_이름을_담은_무결성_예외로_실패한다() {
         // given
         List<UpstreamObservationRow> rows = List.of(row(0, "v-0", 1, STOP_1), row(0, "v-1", 2, STOP_2));
 
         // when
-        Throwable jpa = failureOf(false, rows);
-        Throwable bulk = failureOf(true, rows);
+        Throwable failure = failureOf(rows);
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(jpa.getClass()).isEqualTo(bulk.getClass());
-            softly.assertThat(constraintOf(bulk)).isEqualTo(constraintOf(jpa)).isEqualTo("ux_observation_source_row");
-            softly.assertThat(sqlStateOf(bulk)).isEqualTo(sqlStateOf(jpa)).isEqualTo("23505");
+            softly.assertThat(failure.getClass()).isEqualTo(DataIntegrityViolationException.class);
+            softly.assertThat(constraintOf(failure)).isEqualTo("ux_observation_source_row");
+            softly.assertThat(sqlStateOf(failure)).isEqualTo("23505");
         });
     }
 
-    private Throwable failureOf(final boolean bulk, List<UpstreamObservationRow> rows) {
+    private Throwable failureOf(List<UpstreamObservationRow> rows) {
         return inRollback(() -> {
             CollectionBatch batch = openBatch();
-            return catchThrowable(() -> repository(bulk).saveObservations(batch, rows));
+            return catchThrowable(() -> batches.saveObservations(batch, rows));
         });
-    }
-
-    private JpaCollectionBatchRepository repository(final boolean bulk) {
-        return new JpaCollectionBatchRepository(batchEntities, observationEntities, bulkInsert, bulk);
     }
 
     private <T> T inRollback(Supplier<T> work) {

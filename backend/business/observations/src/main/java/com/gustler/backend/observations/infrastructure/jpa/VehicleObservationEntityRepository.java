@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /**
- * 수집 배치별 차량 관측을 저장·조회·삭제하는 JPA 경계다.
+ * 수집 배치별 차량 관측을 지우는 JPA 경계다. 관측 저장은 {@link VehicleObservationBulkInsert}가 한다.
  */
 public interface VehicleObservationEntityRepository extends JpaRepository<VehicleObservationJpaEntity, Long> {
     /**

@@ -19,12 +19,12 @@ import org.springframework.stereotype.Component;
 /**
  * 한 배치의 관측을 INSERT 한 문장으로 저장한다.
  *
- * <p>열 값은 JPA 저장과 같은 {@link VehicleObservationJpaEntity} 생성자로 만들고, JPA 매핑이 넣는 열만 같은 순서로 넣는다.
- * 매핑하지 않은 열은 JPA 저장처럼 DB 기본값을 받는다.
+ * <p>열 값은 {@link VehicleObservationJpaEntity} 생성자로 만들고 그 엔티티가 매핑한 열만 넣는다.
+ * 매핑하지 않은 열은 DB 기본값을 받는다.
  * 새 관측 번호는 RETURNING 의 줄 순서가 아니라 (배치, 상류 행 번호)로 각 줄에 대응시킨다.
  * 같은 배치 안의 상류 행 번호는 ux_observation_source_row 로 유일하다.
- * 호출자의 트랜잭션에 참여한다. 제약 위반은 JPA 저장과 같은 {@link DataIntegrityViolationException}으로 던진다.
- * JdbcTemplate 은 중복 키를 그 하위 종류인 {@link DuplicateKeyException}으로 바꾸므로 원인을 유지한 채 다시 던진다.
+ * 호출자의 트랜잭션에 참여한다. 제약 위반은 어느 제약이든 하위 종류가 아닌 {@link DataIntegrityViolationException}으로 던진다.
+ * JdbcTemplate 은 중복 키만 하위 종류인 {@link DuplicateKeyException}으로 바꾸므로 원인을 유지한 채 다시 던진다.
  */
 @Component
 public class VehicleObservationBulkInsert {
