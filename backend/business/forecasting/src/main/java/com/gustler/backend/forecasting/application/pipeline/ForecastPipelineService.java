@@ -59,6 +59,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
     public static final String OPERATION = "pipeline_forecast_batch";
     private static final Logger LOGGER = LoggerFactory.getLogger(ForecastPipelineService.class);
     private static final Set<String> SUCCESS = Set.of("SUCCESS_ROWS", "SUCCESS_EMPTY");
+    private static final String UNSUPPORTED_PROFILE = "unsupported_profile";
 
     private final ForecastLanes lanes;
     private final PipelineBatchProcessor processor;
@@ -73,6 +74,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
     private final Map<Long, String> laneKeys = new ConcurrentHashMap<>();
     private final Set<Long> queued = ConcurrentHashMap.newKeySet();
     private final Set<String> contextsStored = ConcurrentHashMap.newKeySet();
+    private final Set<String> unsupportedProfilesWarned = ConcurrentHashMap.newKeySet();
     private final SettlementContextWriter settlementContexts;
     private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
 
@@ -298,7 +300,27 @@ public final class ForecastPipelineService implements ForecastPipeline {
         }
         RouteStops routeStops = stops.readStops(routeVersionId);
         laneKeys.putIfAbsent(routeVersionId, routeStops.sourceRouteId());
-        return resolve(runtime.get(), routeStops);
+        Resolved resolved = resolve(runtime.get(), routeStops);
+        warnUnsupportedProfileOnce(runtime.get().deploymentId(), routeVersionId, resolved);
+        return resolved;
+    }
+
+    /**
+     * 확정 프로필이 아닌 모델의 노선은 새 경로가 예보하지 못한다. 실행 줄도 남지 않아 보드는 발행이 끊긴 것으로 본다.
+     * (모델 배포, 노선 판본)마다 한 번만 경고한다.
+     */
+    private void warnUnsupportedProfileOnce(
+        final long modelDeploymentId,
+        final long routeVersionId,
+        Resolved resolved
+    ) {
+        if (!UNSUPPORTED_PROFILE.equals(resolved.skipped())) {
+            return;
+        }
+        if (unsupportedProfilesWarned.add(modelDeploymentId + ":" + routeVersionId)) {
+            LOGGER.warn("event=pipeline_forecast_unsupported_profile routeVersionId={} modelDeploymentId={}",
+                routeVersionId, modelDeploymentId);
+        }
     }
 
     private static Resolved resolve(RuntimeSnapshot runtime, RouteStops routeStops) {
@@ -310,7 +332,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
         }
         AlightingAwareRouteStatistics statistics = runtime.model().statistics(routeStops);
         if (!statistics.confirmedProfile()) {
-            return Resolved.skip("unsupported_profile");
+            return Resolved.skip(UNSUPPORTED_PROFILE);
         }
         return new Resolved(new RouteContext(statistics, routeStops, runtime), null);
     }
