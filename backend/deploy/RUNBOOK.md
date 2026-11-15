@@ -1244,6 +1244,11 @@ dev와 로컬에서 먼저 해 볼 때는 세 가지를 알고 시작한다.
 
 ### 차례
 
+**시작 전. 저장 공간.** 1번을 켠 뒤부터 새 테이블에 줄이 쌓이고, 6번에서 파티션 삭제를 켜기 전에는 지워지지 않는다. 옛 예보·정산이 쓰는 양은 4번까지 그대로이고 옛 테이블은 7번까지 줄지 않는다. 그래서 1번부터 7번까지 DB는 지금 늘던 속도에 새 테이블 분량을 더한 만큼 늘어난다.
+- 확인: 「DB 저장 공간 여유」 패널(위 V80 배포 전 확인과 같은 위치)에서 최근 며칠의 하루 감소량을 읽고, 지금 여유가 7번까지 걸릴 기간을 버티는지 계산한다. 1·2번의 관찰 기간만 14일이다. RDS 저장 공간 자동 조정이 켜져 있는지도 본다.
+- 모자라면 1번을 켜기 전에 저장 공간을 늘린다. 2026-11-15 운영은 자동 조정이 꺼져 있었고 여유는 그때 속도로 한 주 남짓 분량이었다.
+- 1번을 켜고 하루 뒤 `sal434-01-precheck.sql`이 보이는 새 테이블 파티션 크기로 하루 분량을 재서 다시 계산한다. 차례를 넘어갈 때마다 여유를 다시 본다.
+
 **1. 예보 그림자.** `FORECAST_SHADOW_ENABLED=true`로 worker를 재시작한다.
 - 넘어가는 기준: 7일 동안 새 경로와 옛 경로의 예측값 차이 0건. 기간 중 worker를 일부러 한 번 재시작해 되감기 뒤에도 0건인지 본다. 지표는 `salmonbus_pipeline_shadow_predictions_total{result}`(`same`, `value_differs`, `legacy_only`, `new_only`, `excluded`)와 `salmonbus_pipeline_shadow_batches_total{result}`(`mismatch`, `failed`가 0이어야 한다), 로그는 `event=pipeline_shadow_mismatch`·`pipeline_shadow_value_differs`다. `excluded`는 다시 뜬 직후 운행 시작을 못 본 차량이라 차이로 세지 않는다.
 - 되돌리기: `false`로 재시작한다. 새 테이블에 쓴 줄은 남지만 아무도 읽지 않는다.
