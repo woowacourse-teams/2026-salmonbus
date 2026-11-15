@@ -8,6 +8,7 @@ import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
 import com.gustler.backend.forecasting.application.pipeline.PassLabelStore;
 import com.gustler.backend.forecasting.application.pipeline.ScoredForecast;
+import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
 import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
 import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
@@ -18,6 +19,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -25,7 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 채점 단계가 낸 결과를 새 테이블에 저장한 뒤 예측별 결과 뷰({@code forecast_outcome})가 채점이 짝지은 결과를 그대로 보이는지 본다.
- * 사건과 예보·통과 기록은 모두 저장하고, 채점에는 앞부분만 흘려 아직 대기 중인 예측도 섞는다.
+ * 사건과 예보·통과 기록은 모두 저장하고, 채점에는 앞부분만 흘려 아직 대기 중인 예측도 섞는다. 미해결 줄을 저장하지 않은 상태에서도
+ * 채점이 짝짓지 않은 예측에 정답이 붙지 않는지 본다.
  */
 @ForecastingIntegrationTest
 @Transactional
@@ -86,6 +90,38 @@ class ForecastOutcomeViewTest {
             softly.assertThat(stage.waitingCount()).isZero();
             softly.assertThat(actual).isEqualTo(expected(scenario, result, actual.keySet()));
             softly.assertThat(actual.values()).extracting(Row::state).doesNotContain("PENDING").contains("SETTLED");
+        });
+    }
+
+    @Test
+    void 미해결_줄이_하나도_저장되지_않아도_채점이_짝짓지_않은_예측에는_정답이_붙지_않는다() {
+        // given
+        LegacyScoringScenario scenario = LegacyScoringScenario.random(89, Instant.parse("2026-01-05T07:30:00Z"), 400, 7,
+            0, true);
+        List<Object> events = scenario.events();
+        store(events);
+        ScoringStage stage = scenario.stage(LIMIT);
+        ScoringResult result = LegacyScoringScenario.feed(stage, events)
+            .plus(stage.expire(Instant.parse("2026-01-06T00:00:00Z")));
+        labels.saveLabels(result.labels());
+
+        // when
+        Map<String, Row> actual = view();
+
+        // then
+        Map<String, Row> paired = expected(scenario, new ScoringResult(result.labels(), List.of(), result.scored()),
+            actual.keySet());
+        Set<String> unmet = result.unresolved().stream()
+            .filter(closed -> closed.reason().equals(ScoringReasons.PASS_CONDITION_UNMET))
+            .map(closed -> closed.vehicleObservationId() + ":" + closed.targetStopOrder())
+            .collect(Collectors.toSet());
+        Map<String, Row> lost = withState(actual, "LOST");
+        assertSoftly(softly -> {
+            softly.assertThat(withLabel(actual)).isEqualTo(withLabel(paired));
+            softly.assertThat(lost.keySet()).isNotEmpty().isSubsetOf(unmet);
+            softly.assertThat(lost.values()).extracting(Row::reason).containsOnly(ScoringReasons.PASS_CONDITION_UNMET);
+            softly.assertThat(actual.values()).filteredOn(row -> row.closure() == null).extracting(Row::state)
+                .containsOnly("PENDING", "LOST");
         });
     }
 
@@ -184,6 +220,19 @@ class ForecastOutcomeViewTest {
 
     private static int capacity(LegacyScoringScenario scenario, final long observation) {
         return scenario.forecastCapacity(observation);
+    }
+
+    /** 통과의 근거 관측이 채워진 줄, 곧 정답이 붙은 예측만 고른다. */
+    private static Map<String, Row> withLabel(Map<String, Row> rows) {
+        return rows.entrySet().stream()
+            .filter(entry -> entry.getValue().closure() != null)
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    private static Map<String, Row> withState(Map<String, Row> rows, String state) {
+        return rows.entrySet().stream()
+            .filter(entry -> entry.getValue().state().equals(state))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private record Row(
