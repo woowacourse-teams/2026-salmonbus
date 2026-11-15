@@ -1173,7 +1173,7 @@ journalctl -u salmonbus-worker --since '<시작 UTC>' --until '<5분 뒤 UTC>' -
 
 ## SAL-434 전환 절차
 
-SAL-434는 예보·채점·보관을 새 경로(`forecast_run`·`forecast_record`·`stop_pass`·`pass_label`·`forecast_unresolved`, 날짜 파티션)로 옮긴다. PR이 머지돼 배포되는 순간 바뀌는 동작은 없다. 새 경로의 스위치는 모두 기본값이 꺼짐이고, Flyway에는 테이블을 더하는 마이그레이션만 있다. 옛 경로는 그대로 돈다.
+SAL-434는 예보·채점·보관을 새 경로(`forecast_run`·`forecast_record`·`stop_pass`·`pass_label`·`forecast_unresolved`, 날짜 파티션)로 옮긴다. PR이 머지돼 배포되는 순간 바뀌는 동작은 없다. 새 경로의 스위치는 모두 기본값이 꺼짐이고, Flyway에는 새 테이블(V81)과 그 테이블을 읽는 뷰(V82, V83)를 더하는 마이그레이션만 있다. V83은 `forecast_outcome` 뷰의 정의만 바꾸고 열은 V82와 같다. 옛 경로는 그대로 돈다.
 
 아래 아홉 차례(6번 뒤의 6-1 포함)를 순서대로 진행한다. **차례마다 결과를 보이고 다음으로 넘어간다.** 「승인」 표시가 있는 차례는 실행 전에 따로 승인을 받는다. 트리거·테이블을 지우거나 모양을 바꾸는 일은 Flyway가 아니라 `deploy/sql/sal434-*.sql`을 사람이 실행한다. 이 파일들은 배포 패키지의 `sql/`에 함께 실린다(`/opt/salmonbus/api/current/sql/`). 배포 훅은 이 파일을 실행하지 않는다.
 
@@ -1218,8 +1218,10 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 | `FORECAST_PIPELINE` | worker.env | `v1` | `v2`: 새 경로가 본선이다. 옛 예보 쓰기(`seat_forecast`·`forecast_publication`), `input_confirmed_at` 갱신, 체크포인트 파일·`alighting_history_checkpoint` 쓰기, `route` 행 잠금을 하지 않는다 |
 | `FORECAST_LANES` | worker.env | `2` | `v2` 본선의 노선별 실행 줄 수. 같은 노선은 항상 같은 줄에서 순서대로 처리한다 |
 | `FORECAST_LANE_QUEUE_CAPACITY` | worker.env | `1000` | 줄 하나의 길이. 넘치면 넣지 않고 다음 줍기(30초)에 맡긴다 |
+| `FORECAST_REPLAY_EXTENDED_WINDOW` | worker.env | `12h` | 6시간(`FORECAST_REPLAY_WINDOW`)을 되감은 상태가 모자랄 때 한 번 늘려 되감는 범위. 12시간을 넘으면 worker가 기동하지 않는다 |
+| `FORECAST_SHUTDOWN_TIMEOUT` | worker.env | `10s` | 정상 종료 때 실행 줄과 채점 줄이 받은 일을 끝내기를 기다리는 한도. 넘기면 남은 일을 버린다. 스프링의 단계별 종료 시한(30초)과 더한 값이 systemd의 `TimeoutStopSec`(45초) 안이어야 한다 |
 | `ARCHIVE_HISTORY_HOLD` | archive.env | `checkpoint` | 최근 관측의 줄 단위 이관을 미루는 기준. `checkpoint`: 옛 체크포인트 보호선을 본다. `window`: 그 표를 보지 않고 `ARCHIVE_HISTORY_HOLD_WINDOW`보다 최근인 날짜를 이관하지 않는다 |
-| `ARCHIVE_HISTORY_HOLD_WINDOW` | archive.env | `12h` | `window`의 창. worker의 되감기 창(`FORECAST_REPLAY_WINDOW`, 6시간)보다 넉넉하게 둔다. 1시간보다 짧으면 이관 앱이 기동하지 않는다 |
+| `ARCHIVE_HISTORY_HOLD_WINDOW` | archive.env | `12h` | `window`의 창. worker가 되감는 가장 긴 범위(`FORECAST_REPLAY_EXTENDED_WINDOW`, 12시간) 이상으로 둔다. 1시간보다 짧으면 이관 앱이 기동하지 않는다 |
 | `ARCHIVE_PARTITION_EXPORT_ENABLED` | archive.env | `false` | 닫힌 날짜의 파티션을 테이블마다 S3로 내보내고 다시 읽어 검증한다 |
 | `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED` | archive.env | `false` | 장부에 검증된 파티션을 떼어 내고 지운다 |
 | `ARCHIVE_LEGACY_EXPORT_ENABLED` | archive.env | `false` | 옛 테이블 25개를 기본 키 순서의 조각으로 S3에 내보내고 다시 읽어 검증한다. 지우지 않는다 |
@@ -1257,6 +1259,7 @@ dev와 로컬에서 먼저 해 볼 때는 네 가지를 알고 시작한다.
 **2. 채점 그림자.** 1번을 켠 채 `FORECAST_SCORING=shadow`로 worker를 재시작한다(그림자 없이 `shadow`만 켜면 worker가 기동하지 않는다).
 - 확인: 기동 뒤 `event=pipeline_scoring_start_rejected`가 없고, `salmonbus_pipeline_scoring_written_total{table="pass_label"}`가 늘며, `salmonbus_pipeline_scoring_waiting`과 `salmonbus_pipeline_scoring_queue`가 쌓이지 않는다. 사건을 버리면 `salmonbus_pipeline_scoring_dropped_total`이 늘고 그 노선을 다시 되감는다(`salmonbus_pipeline_scoring_replays_total{reason,result}`).
 - 대조: 10분마다(`FORECAST_SCORING_COMPARISON_INTERVAL`) 수신 뒤 3시간(`FORECAST_SCORING_COMPARISON_DELAY`)이 지난 배치를 예측마다 옛 정산 결과와 대조해 `salmonbus_pipeline_scoring_compared_total{result}`로 낸다. `same`이 대부분이어야 하고 `unexplained`·`legacy_only`·`new_only`가 0이어야 한다. `intended_hole`(수집 구멍 표시)과 `intended_midnight`(자정 직후 직전 통과)는 미리 적어 둔 차이라 따로 센다. `unexplained`가 나오면 `event=pipeline_scoring_unexplained` 로그(회차마다 5건까지)에서 관측·목표·두 결과를 본다.
+- 다시 뜬 뒤: 채점은 노선마다 저장까지 마친 마지막 사건에서 130분 앞부터(길어도 26시간) 예보와 통과를 다시 읽어, 멈춘 동안 닫지 못한 예측을 닫는다. 수집 구멍과 관측 상한 기억은 `forecast_run`의 `source_incomplete`·`counted_rows`에서 되살린다. 26시간보다 오래 멈췄다면 그 앞의 예측은 닫히지 않은 채 남는다. 기동할 때 최근 26시간에 예보가 있던 노선을 모두 한 번 되감으므로, 이력이 있는 상태에서 처음 켜면 첫 기동의 채점 되감기가 길다.
 - 넘어가는 기준: 7일 동안 `unexplained` 0건.
 - 되돌리기: `off`로 재시작한다.
 
@@ -1268,12 +1271,16 @@ dev와 로컬에서 먼저 해 볼 때는 네 가지를 알고 시작한다.
 
 *4-1. 새 예보 본선.* worker.env를 `FORECAST_PIPELINE=v2`, `FORECAST_SCORING=shadow`로 바꾸고(`FORECAST_SHADOW_ENABLED`는 두어도 무시된다) worker를 재시작한다. **같은 때** archive.env에 `ARCHIVE_HISTORY_HOLD=window`를 넣고 이관 앱을 재시작한다. 본선은 `alighting_history_checkpoint`를 더 갱신하지 않으므로 `checkpoint`로 두면 이관 보호선이 멈춘 자리에 남는다(더 오래 미루는 쪽이라 위험하지는 않지만 이관이 쌓인다).
 - 이때 바뀌는 동작:
-  - 수집 커밋 뒤 신호를 받으면 노선별 실행 줄(`forecast-lane-<번호>-`, `FORECAST_LANES`개)에서 배치를 처리한다. 착수 시각은 처리를 시작할 때 찍고 `forecast_run.confirmed_at`에 예측과 한 트랜잭션으로 적는다. 수신 뒤 90초를 넘겼으면 예보 없이 `LATE` 실행 줄만 남긴다. 옛 경로는 착수 시각을 먼저 따로 커밋해서 계산 중에 죽어도 처음 시각으로 다시 예보했지만, 본선은 다시 처리할 때 새 시각으로 판정하므로 그런 배치는 `LATE`가 된다.
+  - 수집 커밋 뒤 신호를 받으면 노선별 실행 줄(`forecast-lane-<번호>-`, `FORECAST_LANES`개)에서 배치를 처리한다. 착수 시각은 처리를 시작할 때 찍고(DB 저장 자릿수인 마이크로초로 자른다) `forecast_run.confirmed_at`에 예측과 한 트랜잭션으로 적는다. 수신 뒤 90초를 넘겼으면 예보 없이 `LATE` 실행 줄만 남긴다. 옛 경로는 착수 시각을 먼저 따로 커밋해서 계산 중에 죽어도 처음 시각으로 다시 예보했지만, 본선은 다시 처리할 때 새 시각으로 판정하므로 그런 배치는 `LATE`가 된다.
   - 기동 직후와 30초마다(`forecast.interval`) 신선도 창(10분) 안에서 "성공한 배치인데 `forecast_run`도 `input_confirmed_at`도 없는 것"을 줍는다. 옛 경로가 착수 시각을 찍은 배치는 이미 이력에 들어가 있어 다시 처리하지 않는다.
   - 기동하면 노선 상태가 없으므로 노선마다 첫 배치에서 6시간을 되감는다. 착수 시각은 배치마다 `forecast_run.confirmed_at`이 있으면 그것, 없으면 `input_confirmed_at`이다. 그래서 넘어간 직후에도 옛 경로가 처리한 배치와 본선이 처리한 배치를 빈틈 없이 잇는다.
+  - 되감은 상태가 모자라면(최근에 보인 차량의 운행 시작을 보지 못했거나 이력이 미완) `FORECAST_REPLAY_EXTENDED_WINDOW`로 한 번 더 되감는다(`salmonbus_pipeline_forecast_replay_extensions_total{result}`: `resolved`, `unresolved`, `failed`). 그래도 모자라면 지금처럼 그 차량이나 노선을 예보에서 뺀다. 연결 시작을 보지 못한 차량이 닫아서 저장하지 못한 통과는 `salmonbus_pipeline_forecast_passes_unattributed_total`로 센다.
+  - 되감기에 실패하는 등 예보 단계를 돌리지 못하고 끝난 배치가 닫았을 통과는, 다음에 그 노선을 되감을 때 찾아 저장하고 채점에 넘긴다(`salmonbus_pipeline_forecast_passes_recovered_total`).
+  - 처리 중 예외가 난 배치는 같은 줄에서 한 번 다시 처리한다(`salmonbus_pipeline_forecast_batches_total{result="retried"}`). 또 실패하면 그 노선의 다음 배치가 그 배치부터 수신 순서로 다시 시도하고(`held`, 로그 `event=pipeline_forecast_held`), 수신 뒤 90초가 지나면 `LATE`로 닫는다. 한 배치가 계속 실패하면 그 노선의 예보가 최대 90초쯤 밀린다. 앞서 반영한 배치보다 먼저 수신한 배치가 뒤늦게 오면 이력에 넣지 않는다(`out_of_order`).
+  - 정상 종료(배포, 재시작) 때는 수집과 줍기를 먼저 멈추고, 실행 줄과 채점 줄이 받은 일을 끝낸 뒤 채점 결과를 마지막으로 쓰고(`event=pipeline_scoring_final_write`) DB 연결을 닫는다. 한도는 `FORECAST_SHUTDOWN_TIMEOUT`이다. 다 끝내면 `event=pipeline_shutdown_drained`, 한도를 넘겨 남은 일을 버리면 `event=pipeline_shutdown_abandoned`(버린 수가 필드에 있다), 단계가 실패하면 `event=pipeline_shutdown_stage_failed`가 남는다. 버린 배치는 다시 뜬 뒤 줍기가 잡고, 수신 뒤 90초가 지났으면 `LATE`가 된다. 강제 종료에서는 이 처리가 돌지 않는다.
   - 모델 배포의 정산 근거(`model_deployment.settlement_context`)는 옛 발행 대신 본선이 (배포, 노선 판본)마다 한 번 적는다. 새 채점이 읽는다.
   - 옛 정산 작업은 그대로 돌며 남은 옛 예측을 마저 정산한다. 채점 대조 작업은 돌지 않는다.
-- 확인: `salmonbus_pipeline_forecast_batches_total{result}`에서 `published`·`empty`가 늘고 `failed`가 0이다. `salmonbus_pipeline_forecast_replays_total{result="succeeded"}`가 노선 수만큼 한 번씩 늘고 `failed`가 없다. `salmonbus_pipeline_forecast_excluded_total{reason}`은 다시 뜬 직후에만 늘고 곧 멈춘다. `sal434-01-precheck.sql`의 3절에서 `old_forecast_published`가 멈추고 `new_forecast_run`·`new_stop_pass_closed`가 계속 늘어난다.
+- 확인: `salmonbus_pipeline_forecast_batches_total{result}`에서 `published`·`empty`가 늘고 `failed`가 0이다. `salmonbus_pipeline_forecast_replays_total{result="succeeded"}`가 노선 수만큼 한 번씩 늘고 `failed`가 없다. `salmonbus_pipeline_forecast_excluded_total{reason}`은 다시 뜬 직후에만 늘고 곧 멈춘다. 재시작한 뒤에는 앞 프로세스의 마지막 로그가 `event=pipeline_shutdown_drained`인지 본다. `sal434-01-precheck.sql`의 3절에서 `old_forecast_published`가 멈추고 `new_forecast_run`·`new_stop_pass_closed`가 계속 늘어난다.
 - 넘어가는 기준: 운영 관찰 기간 동안 아래가 안정적이다.
   - 예보 지연: `salmonbus_pipeline_forecast_confirmation_lag_seconds`(수신→착수 분포)와 `salmonbus_pipeline_forecast_batch_duration_seconds`.
   - 늦어서 건너뛴 배치: `salmonbus_pipeline_forecast_batches_total{result="late"}`. 옛 경로의 수신 뒤 90초 초과 비율과 비슷해야 한다.
