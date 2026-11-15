@@ -62,7 +62,7 @@ final class ConfirmedAlightingAwareEvaluation {
         final double label = AlightingPosterior.afterSeats(fitted, visit.arrival().seats(),
             visit.departure().seats(),
             capacity, gap, previous.departure().seats() == 0, bin);
-        return new PassLabelOutcome("SETTLED", label, null, visit, previous, digest(parameters.toString()), capacity);
+        return new PassLabelOutcome("SETTLED", label, null, digest(parameters.toString()), capacity);
     }
 
     private static JsonNode findParameters(JsonNode snapshot, final int stop, String band) {
