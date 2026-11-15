@@ -3,6 +3,7 @@ package com.gustler.backend.api.board.application;
 import com.gustler.backend.api.board.domain.Board;
 import com.gustler.backend.api.board.domain.BoardRoute;
 import com.gustler.backend.api.board.domain.ForecastModel;
+import com.gustler.backend.api.observation.ObservationFreshness;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -32,6 +33,8 @@ final class RecordedBoards {
     private static final ZoneId SOURCE_DATE_ZONE = ZoneId.of("Asia/Seoul");
     /** 시험 픽스처는 관측 묶음의 예약 시각을 응답 수신 2초 전으로 둔다. */
     private static final Duration SCHEDULED_BEFORE_RECEIVED = Duration.ofSeconds(2);
+    /** 기대 응답을 기록한 때의 조회 창이다. 심야가 아닌 시간의 값이다. */
+    private static final Duration RECORDED_WINDOW = Duration.ofMinutes(5);
     private static final Pattern REVISION = Pattern.compile("c([^|]+)\\|n([^|]+)\\|m([^|]+)");
     private static final DateTimeFormatter DATABASE_TIME = new DateTimeFormatterBuilder()
         .appendPattern("yyyy-MM-dd HH:mm:ss")
@@ -103,11 +106,20 @@ final class RecordedBoards {
         return new Board(
             namedRoute,
             shifted(board.observedAt()),
-            shifted(board.staleAt()),
+            recordedStaleAt(board),
             model(board.model()),
             board.vehiclesInService(),
             board.stops()
         ).toString();
+    }
+
+    /**
+     * 만료 시각을 기록한 때의 조회 창으로 옮겨 적는다. 조회 창은 관측 시각이 심야인지에 따라 달라서 그대로 적으면 시험을 돌리는
+     * 시간대에 따라 글이 달라진다. 만료 시각이 조회 창 규칙과 어긋난 만큼은 그대로 더해 기대 응답과 달라지게 한다.
+     */
+    private OffsetDateTime recordedStaleAt(Board board) {
+        Duration offRule = Duration.between(ObservationFreshness.staleAt(board.observedAt()), board.staleAt());
+        return shifted(board.observedAt()).plus(RECORDED_WINDOW).plus(offRule);
     }
 
     String snapshot(BoardSnapshot snapshot) {
