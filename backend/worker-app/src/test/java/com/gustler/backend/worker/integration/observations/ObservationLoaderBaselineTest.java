@@ -212,7 +212,7 @@ class ObservationLoaderBaselineTest {
 
     private List<String> observations() {
         return jdbc.sql("""
-            SELECT ((to_jsonb(observation) - 'id') || jsonb_build_object(
+            SELECT ((to_jsonb(observation) - 'id' - 'source_date') || jsonb_build_object(
                 'observation_batch_id', CASE observation.observation_batch_id
                     WHEN :batchId THEN CAST(:batch AS text)
                     ELSE CAST(observation.observation_batch_id AS text) END,
@@ -226,7 +226,7 @@ class ObservationLoaderBaselineTest {
 
     private String batch() {
         return jdbc.sql("""
-            SELECT (to_jsonb(batch) || jsonb_build_object(
+            SELECT ((to_jsonb(batch) - 'source_date') || jsonb_build_object(
                 'id', CAST(:batch AS text),
                 'route_version_id', CASE batch.route_version_id
                     WHEN :routeVersionId THEN CAST(:routeVersion AS text)

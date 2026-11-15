@@ -144,7 +144,8 @@ class VehicleObservationBulkInsertTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(failure.getClass()).isEqualTo(DataIntegrityViolationException.class);
-            softly.assertThat(constraintOf(failure)).isEqualTo("ux_observation_vehicle_per_batch");
+            softly.assertThat(constraintOf(failure))
+                .isEqualTo(todayPartitionIndexOf("ux_observation_vehicle_per_batch_date"));
             softly.assertThat(sqlStateOf(failure)).isEqualTo("23505");
         });
     }
@@ -160,9 +161,26 @@ class VehicleObservationBulkInsertTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(failure.getClass()).isEqualTo(DataIntegrityViolationException.class);
-            softly.assertThat(constraintOf(failure)).isEqualTo("ux_observation_source_row");
+            softly.assertThat(constraintOf(failure))
+                .isEqualTo(todayPartitionIndexOf("ux_observation_source_row_date"));
             softly.assertThat(sqlStateOf(failure)).isEqualTo("23505");
         });
+    }
+
+    /**
+     * 관측 테이블의 유일 인덱스에 딸린 오늘(한국) 날짜 파티션의 인덱스 이름이다. 줄은 넣는 날의 파티션으로 가고, 유일성 위반은 그
+     * 파티션의 인덱스 이름으로 보고된다.
+     */
+    private String todayPartitionIndexOf(String uniqueIndex) {
+        return jdbc.sql("""
+            SELECT child.relname
+            FROM pg_inherits link
+            JOIN pg_class child ON child.oid = link.inhrelid
+            JOIN pg_index child_index ON child_index.indexrelid = child.oid
+            WHERE link.inhparent = to_regclass(?)
+              AND child_index.indrelid = to_regclass(
+                  'vehicle_observation_p' || to_char((now() AT TIME ZONE 'Asia/Seoul')::date, 'YYYYMMDD'))
+            """).param(uniqueIndex).query(String.class).single();
     }
 
     private Throwable failureOf(List<UpstreamObservationRow> rows) {

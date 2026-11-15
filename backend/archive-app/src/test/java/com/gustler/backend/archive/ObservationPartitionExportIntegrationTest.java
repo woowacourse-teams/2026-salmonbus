@@ -35,14 +35,16 @@ import org.springframework.jdbc.support.JdbcTransactionManager;
 
 /**
  * 관측 두 테이블을 운영 전환 SQL({@code deploy/sql/sal434-04a·04})로 날짜 파티션 테이블로 바꾼 격리 DB 에서, 날짜 파티션과 첫
- * 파티션({@code <table>_legacy})의 내보내기·확인·떼어 지우기를 검증한다. 전환 SQL 이 요구하는 옛 트리거와 들어오는 FK 는 이 DB 에서만
- * 미리 지운다.
+ * 파티션({@code <table>_initial})의 내보내기·확인·떼어 지우기를 검증한다. 줄이 없는 DB 는 마이그레이션이 두 테이블을 처음부터 파티션
+ * 테이블로 만들므로, 그 마이그레이션 앞에서 배치 한 줄을 넣어 두 테이블을 일반 테이블로 남긴 뒤 전환 SQL 을 실행한다.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ObservationPartitionExportIntegrationTest {
     static final String PREFIX = "salmonbus/test/lake-v3/";
     static final LocalDate DAY = LocalDate.parse("2026-11-12");
     static final List<String> OBSERVATIONS = List.of("observation_batch", "vehicle_observation");
+    /** 줄이 없는 관측 테이블을 파티션 테이블로 다시 만드는 마이그레이션 바로 앞 버전이다. */
+    static final String BEFORE_PARTITIONING = "83";
     TestDatabase database;
     DriverManagerDataSource source;
     JdbcClient jdbc;
@@ -53,24 +55,21 @@ class ObservationPartitionExportIntegrationTest {
     void partitionObservationTables() throws Exception {
         database = TestDatabase.create();
         source = new DriverManagerDataSource(database.jdbcUrl(), database.username(), database.password());
-        Flyway.configure().dataSource(source).load().migrate();
+        Flyway.configure().dataSource(source).target(BEFORE_PARTITIONING).load().migrate();
         jdbc = JdbcClient.create(source);
+        final long route = jdbc.sql("INSERT INTO"
+            + " route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)"
+            + " VALUES('test','GBIS','test','3330','A','B') RETURNING id").query(Long.class).single();
+        version = jdbc.sql("INSERT INTO route_version(route_id,content_digest,valid_from) VALUES(?,?,'2026-01-01')"
+            + " RETURNING id").params(route, "0".repeat(64)).query(Long.class).single();
+        jdbc.sql("INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)"
+            + " VALUES(?,1,'s1','S1','UP',true),(?,2,'s2','S2','UP',true)").params(version, version).update();
         jdbc.sql("""
-            DO $$ DECLARE r record; BEGIN
-                FOR r IN SELECT conrelid::regclass AS owner, conname FROM pg_constraint
-                    WHERE contype = 'f'
-                        AND confrelid IN ('observation_batch'::regclass, 'vehicle_observation'::regclass)
-                        AND NOT (conrelid = 'vehicle_observation'::regclass
-                            AND confrelid = 'observation_batch'::regclass) LOOP
-                    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.owner, r.conname);
-                END LOOP;
-                FOR r IN SELECT tgrelid::regclass AS owner, tgname FROM pg_trigger
-                    WHERE NOT tgisinternal
-                        AND tgrelid IN ('observation_batch'::regclass, 'vehicle_observation'::regclass) LOOP
-                    EXECUTE format('DROP TRIGGER %I ON %s', r.tgname, r.owner);
-                END LOOP;
-            END $$
-            """).update();
+            INSERT INTO observation_batch(route_version_id, scheduled_at, attempt_number, attempt_key, outcome,
+                normalization_version, collection_strategy_version)
+            VALUES (?, now(), 1, 'before-partitioning', 'RESERVED', 'n', 'c')
+            """).param(version).update();
+        Flyway.configure().dataSource(source).load().migrate();
         try (Connection connection = database.connection()) {
             run(connection, "sal434-04a-prepare-observation-partition.sql");
             String today = jdbc.sql("SELECT to_char((now() AT TIME ZONE 'Asia/Seoul')::date, 'YYYY-MM-DD')")
@@ -79,13 +78,6 @@ class ObservationPartitionExportIntegrationTest {
             execute(connection, "SET sal434.count_rows = 'storage'");
             run(connection, "sal434-04-partition-observation-tables.sql");
         }
-        final long route = jdbc.sql("INSERT INTO"
-            + " route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)"
-            + " VALUES('test','GBIS','test','3330','A','B') RETURNING id").query(Long.class).single();
-        version = jdbc.sql("INSERT INTO route_version(route_id,content_digest,valid_from) VALUES(?,?,'2026-01-01')"
-            + " RETURNING id").params(route, "0".repeat(64)).query(Long.class).single();
-        jdbc.sql("INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)"
-            + " VALUES(?,1,'s1','S1','UP',true),(?,2,'s2','S2','UP',true)").params(version, version).update();
     }
 
     @AfterAll
@@ -110,24 +102,19 @@ class ObservationPartitionExportIntegrationTest {
             END $$
             """).update();
         for (String table : OBSERVATIONS) {
-            jdbc.sql("CREATE TABLE IF NOT EXISTS " + table + "_legacy PARTITION OF " + table
+            jdbc.sql("CREATE TABLE IF NOT EXISTS " + table + "_initial PARTITION OF " + table
                 + " FOR VALUES FROM ('2000-01-01') TO ('2000-01-02')").update();
         }
-        clock = Clock.fixed(Instant.parse("2026-11-15T03:00:00Z"), ZoneOffset.UTC);
+        clock = Clock.fixed(Instant.parse("2026-11-16T03:00:00Z"), ZoneOffset.UTC);
     }
 
     PartitionExportService service(ArchiveObjects objects, final boolean dropEnabled) {
-        return service(objects, dropEnabled, 3, new SimpleMeterRegistry());
+        return service(objects, dropEnabled, new SimpleMeterRegistry());
     }
 
-    PartitionExportService service(
-        ArchiveObjects objects,
-        final boolean dropEnabled,
-        final int retentionDays,
-        SimpleMeterRegistry metrics
-    ) {
-        PartitionExportSettings settings = new PartitionExportSettings(dropEnabled, retentionDays, PREFIX,
-            Duration.ofHours(1), 2, Duration.ofMillis(300));
+    PartitionExportService service(ArchiveObjects objects, final boolean dropEnabled, SimpleMeterRegistry metrics) {
+        PartitionExportSettings settings = new PartitionExportSettings(dropEnabled,
+            PartitionExportSettings.MIN_RETENTION_DAYS, PREFIX, Duration.ofHours(1), 2, Duration.ofMillis(300));
         PartitionExportRepository repository = new PartitionExportRepository(jdbc, new JdbcTransactionManager(source),
             settings.lockTimeout());
         return new PartitionExportService(repository, objects, clock, metrics, settings);
@@ -171,7 +158,7 @@ class ObservationPartitionExportIntegrationTest {
 
     void copy() {
         for (String table : OBSERVATIONS) {
-            jdbc.sql("CREATE TABLE copy_" + table + "_legacy AS SELECT * FROM " + table + "_legacy").update();
+            jdbc.sql("CREATE TABLE copy_" + table + "_initial AS SELECT * FROM " + table + "_initial").update();
             if (exists(table + "_p20261112")) {
                 jdbc.sql("CREATE TABLE copy_" + table + "_p20261112 AS SELECT * FROM " + table + "_p20261112")
                     .update();
@@ -214,7 +201,7 @@ class ObservationPartitionExportIntegrationTest {
     /** 첫 파티션과 날짜 파티션의 줄이 하나도 빠지지 않고 그대로 남았는지 본다. */
     void assertRowsKept() {
         for (String table : OBSERVATIONS) {
-            assertSameRows("copy_" + table + "_legacy", table + "_legacy");
+            assertSameRows("copy_" + table + "_initial", table + "_initial");
             if (exists("copy_" + table + "_p20261112")) {
                 assertSameRows("copy_" + table + "_p20261112", table + "_p20261112");
             }
@@ -259,28 +246,33 @@ class ObservationPartitionExportIntegrationTest {
     }
 
     @Test
-    void 보관_날짜_수가_다시_읽는_범위를_덮지_못하면_관측_날짜는_건너뛰고_예보_기록은_내보낸다() {
+    void 관측_테이블과_예보_기록_테이블은_같은_보관_날짜_수로_같은_날짜까지_내보내고_지운다() {
         // given
         LocalDate recent = DAY.plusDays(1);
-        partition("forecast_run", recent);
-        jdbc.sql("""
-            INSERT INTO forecast_run (source_date, observation_batch_id, route_id, route_version_id, received_at,
-                confirmed_at, model_deployment_id, outcome, prediction_count)
-            VALUES (?, 1, 1, 2, now(), now(), NULL, 'EMPTY', 0)
-            """).param(recent).update();
-        for (String table : OBSERVATIONS) {
-            partition(table, recent);
+        for (LocalDate date : List.of(DAY, recent)) {
+            partition("forecast_run", date);
+            jdbc.sql("""
+                INSERT INTO forecast_run (source_date, observation_batch_id, route_id, route_version_id, received_at,
+                    confirmed_at, model_deployment_id, outcome, prediction_count)
+                VALUES (?, 1, 1, 2, now(), now(), NULL, 'EMPTY', 0)
+                """).param(date).update();
+            for (String table : OBSERVATIONS) {
+                partition(table, date);
+            }
         }
+        batch(DAY, "2026-11-12T01:00:00Z", "2026-11-12T01:00:30Z");
         batch(recent, "2026-11-13T01:00:00Z", "2026-11-13T01:00:30Z");
 
         // when
-        service(new PartitionExportIntegrationTest.MemoryObjects(), true, 2, new SimpleMeterRegistry()).run();
+        service(new PartitionExportIntegrationTest.MemoryObjects(), true).run();
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(jdbc.sql("SELECT table_name FROM daily_export WHERE source_date <> '2000-01-01'")
-                .query(String.class).list()).containsExactly("forecast_run");
-            softly.assertThat(exists("forecast_run_p20261113")).isFalse();
+            softly.assertThat(jdbc.sql("SELECT table_name || ' ' || source_date FROM daily_export"
+                + " WHERE source_date <> '2000-01-01' AND dropped_at IS NOT NULL ORDER BY 1")
+                .query(String.class).list()).containsExactly("forecast_run 2026-11-12",
+                    "observation_batch 2026-11-12", "vehicle_observation 2026-11-12");
+            softly.assertThat(exists("forecast_run_p20261113")).isTrue();
             softly.assertThat(count("SELECT count(*) FROM observation_batch_p20261113")).isOne();
             softly.assertThat(count("SELECT count(*) FROM vehicle_observation_p20261113")).isEqualTo(2);
         });
@@ -306,7 +298,7 @@ class ObservationPartitionExportIntegrationTest {
         assertRowsKept();
 
         // when
-        clock = Clock.fixed(Instant.parse("2026-11-16T03:00:00Z"), ZoneOffset.UTC);
+        clock = Clock.fixed(Instant.parse("2026-11-17T03:00:00Z"), ZoneOffset.UTC);
         PartitionExportService.RunReport report = service(objects, true).run();
 
         // then
@@ -315,22 +307,22 @@ class ObservationPartitionExportIntegrationTest {
         assertSoftly(softly -> {
             softly.assertThat(report.dropped()).isEqualTo(2);
             softly.assertThat(report.oldestPending()).isNull();
-            softly.assertThat(exists("observation_batch_legacy")).isFalse();
-            softly.assertThat(exists("vehicle_observation_legacy")).isFalse();
+            softly.assertThat(exists("observation_batch_initial")).isFalse();
+            softly.assertThat(exists("vehicle_observation_initial")).isFalse();
             softly.assertThat(jdbc.sql("SELECT table_name || ' ' || source_date || ' ' || segment || ' ' || row_count"
                 + " FROM daily_export WHERE dropped_at IS NOT NULL ORDER BY 1").query(String.class).list())
                 .containsExactly("observation_batch 2000-01-01 0 2", "vehicle_observation 2000-01-01 0 4");
             softly.assertThat((String) ledger.get("object_key"))
                 .startsWith(PREFIX + "observation_batch/source_date=2000-01-01/manifest-");
-            softly.assertThat(manifest.partition()).isEqualTo("observation_batch_legacy");
+            softly.assertThat(manifest.partition()).isEqualTo("observation_batch_initial");
             softly.assertThat(manifest.sourceDate()).isEqualTo("2000-01-01");
             softly.assertThat(objects.manifestRoots()).containsExactly("observation_batch/source_date=2000-01-01",
                 "vehicle_observation/source_date=2000-01-01");
         });
         restoreAndCompare(objects, "observation_batch", PartitionExportRepository.INITIAL_DATE,
-            "copy_observation_batch_legacy");
+            "copy_observation_batch_initial");
         restoreAndCompare(objects, "vehicle_observation", PartitionExportRepository.INITIAL_DATE,
-            "copy_vehicle_observation_legacy");
+            "copy_vehicle_observation_initial");
     }
 
     @Test
@@ -346,18 +338,18 @@ class ObservationPartitionExportIntegrationTest {
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(exists("observation_batch_legacy")).isFalse();
+            softly.assertThat(exists("observation_batch_initial")).isFalse();
             softly.assertThat(ledger("vehicle_observation", PartitionExportRepository.INITIAL_DATE)).isEmpty();
         });
-        assertSameRows("copy_vehicle_observation_legacy", "vehicle_observation_legacy");
+        assertSameRows("copy_vehicle_observation_initial", "vehicle_observation_initial");
 
         // when
         service(objects, true).run();
 
         // then
-        assertThat(exists("vehicle_observation_legacy")).isFalse();
+        assertThat(exists("vehicle_observation_initial")).isFalse();
         restoreAndCompare(objects, "vehicle_observation", PartitionExportRepository.INITIAL_DATE,
-            "copy_vehicle_observation_legacy");
+            "copy_vehicle_observation_initial");
     }
 
     @Test
@@ -396,7 +388,7 @@ class ObservationPartitionExportIntegrationTest {
         SimpleMeterRegistry metrics = new SimpleMeterRegistry();
 
         // when
-        PartitionExportService.RunReport report = service(objects, true, 3, metrics).run();
+        PartitionExportService.RunReport report = service(objects, true, metrics).run();
 
         // then
         assertSoftly(softly -> {
@@ -439,7 +431,7 @@ class ObservationPartitionExportIntegrationTest {
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(exists("observation_batch_legacy")).isFalse();
+            softly.assertThat(exists("observation_batch_initial")).isFalse();
             softly.assertThat(exists("observation_batch_p20261112")).isTrue();
             softly.assertThat(ledger("observation_batch", DAY).orElseThrow().get("dropped_at")).isNull();
         });
@@ -452,7 +444,7 @@ class ObservationPartitionExportIntegrationTest {
         // then
         assertThat(exists("observation_batch_p20261112")).isFalse();
         restoreAndCompare(objects, "observation_batch", PartitionExportRepository.INITIAL_DATE,
-            "copy_observation_batch_legacy");
+            "copy_observation_batch_initial");
         restoreAndCompare(objects, "observation_batch", DAY, "copy_observation_batch_p20261112");
     }
 

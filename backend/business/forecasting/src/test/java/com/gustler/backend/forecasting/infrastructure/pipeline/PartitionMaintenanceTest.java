@@ -57,6 +57,14 @@ class PartitionMaintenanceTest {
             }
             jdbcClient.sql("DELETE FROM " + table + "_default").update();
         }
+        // 관측 테이블에는 마이그레이션이 만든 날짜 파티션이 있다. 시험이 만든 2030년 파티션만 지운다.
+        for (String table : PartitionMaintenance.OBSERVATION_TABLES) {
+            for (String partition : partitionsOf(table)) {
+                if (partition.startsWith(table + "_p2030")) {
+                    jdbcClient.sql("DROP TABLE " + partition).update();
+                }
+            }
+        }
     }
 
     @Test
@@ -68,13 +76,17 @@ class PartitionMaintenanceTest {
         MaintainPipelinePartitions.Report actual = maintenance.maintain();
 
         // then
+        List<String> tables = new ArrayList<>(PartitionMaintenance.TABLES);
+        tables.addAll(PartitionMaintenance.OBSERVATION_TABLES);
         assertSoftly(softly -> {
-            softly.assertThat(actual.created())
-                .hasSize(PartitionMaintenance.TABLES.size() * (PartitionMaintenance.DAYS_AHEAD + 1));
+            softly.assertThat(maintenance.managedTables()).containsExactlyElementsOf(tables);
+            softly.assertThat(actual.created()).hasSize(tables.size() * (PartitionMaintenance.DAYS_AHEAD + 1));
             softly.assertThat(actual.failed()).isEmpty();
             softly.assertThat(partitionsOf("stop_pass")).containsExactly("stop_pass_p20300101", "stop_pass_p20300102",
                 "stop_pass_p20300103", "stop_pass_p20300104");
-            softly.assertThat(actual.defaultRows()).containsOnlyKeys(PartitionMaintenance.TABLES)
+            softly.assertThat(partitionsOf("vehicle_observation")).contains("vehicle_observation_p20300101",
+                "vehicle_observation_p20300102", "vehicle_observation_p20300103", "vehicle_observation_p20300104");
+            softly.assertThat(actual.defaultRows()).containsOnlyKeys(tables)
                 .allSatisfy((table, rows) -> assertThat(rows).isZero());
         });
     }
@@ -197,24 +209,37 @@ class PartitionMaintenanceTest {
     }
 
     @Test
-    void 관측_테이블이_일반_테이블이면_새_경로_스위치가_꺼진_수집_worker에서_아무것도_만들지_않는다() {
+    void 관측_테이블이_일반_테이블이면_새_경로_스위치가_꺼진_수집_worker에서_아무것도_만들지_않는다() throws Exception {
         // given
-        PartitionMaintenance maintenance = maintenanceAt(BEFORE_KOREAN_MIDNIGHT);
-        maintenance.setPipelineTables(false);
+        String schema = "observation_plain_" + UUID.randomUUID().toString().replace("-", "");
+        jdbcClient.sql("CREATE SCHEMA " + schema).update();
+        try (Connection connection = database.connection()) {
+            connection.createStatement().execute("SET search_path = " + schema + ", public");
+            for (String table : PartitionMaintenance.OBSERVATION_TABLES) {
+                connection.createStatement().execute("CREATE TABLE " + table + " (id bigint NOT NULL)");
+            }
+            SingleConnectionDataSource scoped = new SingleConnectionDataSource(connection, true);
+            PartitionMaintenance maintenance = new PartitionMaintenance(JdbcClient.create(scoped),
+                new DataSourceTransactionManager(scoped), Clock.fixed(BEFORE_KOREAN_MIDNIGHT, ZoneOffset.UTC));
+            maintenance.setPipelineTables(false);
 
-        // when
-        MaintainPipelinePartitions.Report actual = maintenance.maintain();
+            // when
+            MaintainPipelinePartitions.Report actual = maintenance.maintain();
 
-        // then
-        assertSoftly(softly -> {
-            softly.assertThat(maintenance.managedTables()).isEmpty();
-            softly.assertThat(actual.created()).isEmpty();
-            softly.assertThat(actual.failed()).isEmpty();
-            softly.assertThat(actual.defaultRows()).isEmpty();
-            softly.assertThat(PartitionMaintenance.TABLES)
-                .allSatisfy(table -> assertThat(partitionsOf(table)).isEmpty());
-            softly.assertThat(partitionsOf("observation_batch")).isEmpty();
-        });
+            // then
+            assertSoftly(softly -> {
+                softly.assertThat(maintenance.managedTables()).isEmpty();
+                softly.assertThat(actual.created()).isEmpty();
+                softly.assertThat(actual.failed()).isEmpty();
+                softly.assertThat(actual.defaultRows()).isEmpty();
+                softly.assertThat(PartitionMaintenance.TABLES)
+                    .allSatisfy(table -> assertThat(partitionsOf(table)).isEmpty());
+                softly.assertThat(jdbcClient.sql("SELECT count(*) FROM pg_class WHERE relnamespace = ?::regnamespace")
+                    .param(schema).query(Long.class).single()).isEqualTo(2);
+            });
+        } finally {
+            jdbcClient.sql("DROP SCHEMA " + schema + " CASCADE").update();
+        }
     }
 
     @Test

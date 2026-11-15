@@ -78,7 +78,7 @@ public class PartitionExportRepository {
 
     /**
      * 내보낼 파티션 하나. 날짜 파티션의 {@code name} 은 {@code <table>_pYYYYMMDD} 이고, 관측 테이블의 첫 파티션은
-     * {@code <table>_legacy} 에 날짜 {@link #INITIAL_DATE} 다.
+     * {@code <table>_initial} 에 날짜 {@link #INITIAL_DATE} 다.
      */
     public record Partition(String table, LocalDate date, String name) {
         static Partition of(String table, LocalDate date) {
@@ -86,7 +86,7 @@ public class PartitionExportRepository {
         }
 
         static Partition initial(String table) {
-            return new Partition(table, INITIAL_DATE, table + "_legacy");
+            return new Partition(table, INITIAL_DATE, table + "_initial");
         }
 
         /** 여러 날짜의 줄이 섞인 첫 파티션이면 참이다. */
@@ -168,7 +168,7 @@ public class PartitionExportRepository {
     }
 
     /**
-     * 관측 테이블에 붙은 첫 파티션({@code <table>_legacy})을 낸다. 없으면 비어 있다. 이름은 맞는데 경계가 정확히
+     * 관측 테이블에 붙은 첫 파티션({@code <table>_initial})을 낸다. 없으면 비어 있다. 이름은 맞는데 경계가 정확히
      * {@link #INITIAL_DATE} 하루가 아니면 {@code unexpected} 에 담고 내지 않는다.
      */
     public Optional<Partition> initialPartition(String table, List<String> unexpected) {

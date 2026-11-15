@@ -492,13 +492,15 @@ class ForecastPipelineTransitionSqlTest {
     }
 
     @Test
-    void 수동_SQL로_지운_DB와_줄이_없어_마이그레이션이_지운_DB는_테이블과_뷰와_트리거와_함수가_같다() throws Exception {
+    void 수동_SQL로_전환을_마친_DB와_줄이_없어_마이그레이션이_바꾼_DB는_테이블과_뷰와_트리거와_함수가_같다() throws Exception {
         // given
         try (TestDatabase empty = TestDatabase.create()) {
             flyway(empty).load().migrate();
 
             // when
             retireLegacyTables();
+            partitionObservations("storage");
+            dropInitialPartitions();
 
             // then
             try (Connection target = empty.connection()) {
@@ -583,7 +585,7 @@ class ForecastPipelineTransitionSqlTest {
         softly.assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'vehicle_observation'::regclass"))
             .isEqualTo("p");
         softly.assertThat(scalar("SELECT pg_get_expr(relpartbound, oid) FROM pg_class "
-            + "WHERE oid = 'vehicle_observation_legacy'::regclass"))
+            + "WHERE oid = 'vehicle_observation_initial'::regclass"))
             .isEqualTo("FOR VALUES FROM ('2000-01-01') TO ('2000-01-02')");
         softly.assertAll();
         String today = today().replace("-", "");
@@ -664,7 +666,7 @@ class ForecastPipelineTransitionSqlTest {
             .isEqualTo("r");
         softly.assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'vehicle_observation'::regclass"))
             .isEqualTo("r");
-        softly.assertThat(scalar("SELECT to_regclass('public.observation_batch_legacy')::text")).isNull();
+        softly.assertThat(scalar("SELECT to_regclass('public.observation_batch_initial')::text")).isNull();
         softly.assertThat(number("SELECT count(*) FROM observation_batch WHERE attempt_key = 'between'")).isOne();
         softly.assertThat(number("SELECT count(*) FROM vehicle_observation WHERE vehicle_id = 'bus7'")).isOne();
         softly.assertThat(scalar("SELECT convalidated::text FROM pg_constraint WHERE conname = 'fk_observation_batch'"))
@@ -708,6 +710,14 @@ class ForecastPipelineTransitionSqlTest {
         run("sal434-04a-prepare-observation-partition.sql");
         run("sal434-04-partition-observation-tables.sql", confirmPartition(),
             "SET sal434.count_rows = '" + countMode + "'");
+    }
+
+    /** 이관 앱이 첫 파티션을 내보내 확인한 뒤 하는 것처럼 떼어 지운다. */
+    private void dropInitialPartitions() throws SQLException {
+        for (String table : List.of("vehicle_observation", "observation_batch")) {
+            execute("ALTER TABLE " + table + " DETACH PARTITION " + table + "_initial");
+            execute("DROP TABLE " + table + "_initial");
+        }
     }
 
     /** sal434-03의 (라) 계약대로, 줄이 있는 옛 테이블마다 옛 테이블 내보내기의 검증된 조각 0 하나를 장부에 남긴다. */
@@ -1004,7 +1014,7 @@ class ForecastPipelineTransitionSqlTest {
         return url.substring(url.lastIndexOf('/') + 1);
     }
 
-    private static Path backend() {
+    static Path backend() {
         Path directory = Path.of("").toAbsolutePath();
         while (directory != null
             && !Files.isRegularFile(directory.resolve("deploy/sql/sal434-01-precheck.sql"))) {

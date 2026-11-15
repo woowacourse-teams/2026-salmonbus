@@ -1,11 +1,13 @@
 -- SAL-434 관측 두 테이블(observation_batch, vehicle_observation)을 날짜 파티션 테이블로 바꾼다. 자동 실행하지 않는다.
 --
--- 언제: RUNBOOK "SAL-434 전환 절차" 8번 차례. sal434-03(옛 테이블 삭제)과 sal434-04a(준비)가 끝난 뒤, dev에서 같은 절차를
---       리허설하고 승인을 받은 뒤 실행한다. 수집이 뜸한 시간(02~05시)에 한다.
+-- 대상: 두 테이블에 줄이 있는 DB. 줄이 없는 DB는 마이그레이션(V84)이 두 테이블을 처음부터 파티션 테이블로 만든다.
+--       이 파일로 바꾼 DB에서 첫 파티션(<이름>_initial)을 내보내 지우고 나면 V84가 만든 DB와 같은 스키마가 된다(시험이 대조한다).
+-- 언제: RUNBOOK 「SAL-434 전환 절차」의 차례대로. sal434-03(옛 테이블 삭제)과 sal434-04a(준비)가 끝난 뒤, 줄이 있는 dev DB에서
+--       같은 절차를 리허설하고 승인을 받은 뒤 실행한다. 수집이 뜸한 시간(02~05시)에 한다.
 -- 실행 전 조건:
 --   - 두 테이블을 가리키는 FK가 두 테이블 사이의 fk_observation_batch 말고는 없다. 운영에만 있는
 --     historical_import_record·migration_source_record의 FK는 drop-historical-import-batch-fks.sql로 먼저 지운다.
---   - 두 테이블에 사용자 트리거가 없다(sal434-02 실행 완료). 옛 이관 앱이 멈춰 있다.
+--   - 두 테이블에 사용자 트리거가 없다(sal434-02 실행 완료).
 --   - sal434-04a의 마지막 조회에서 인덱스 다섯 개가 모두 valid이고 확인 제약 두 개가 validated다.
 --   - 실행 계정이 두 테이블의 소유자다(운영은 worker 계정이 모든 테이블의 소유자다).
 --   - 실행자가 같은 세션에서 아래 두 값을 넣는다. 넣지 않으면 아무것도 바꾸지 않고 멈춘다.
@@ -19,7 +21,7 @@
 --   2. vehicle_observation → observation_batch 합성 FK(fk_observation_batch)를 지운다. 파티션 부모를 가리키는 FK는
 --      부모의 유일 제약에 파티션 키가 있어야 하는데, 관측 줄의 source_date가 배치의 source_date와 같다는 보장이 없어서다
 --      (관측은 응답을 받은 날, 배치는 예약한 날의 기본값을 받는다. 자정 근처에서 다를 수 있다).
---   3. 옛 테이블 이름을 <이름>_legacy로 바꾸고, 같은 열·기본값·확인 제약을 가진 파티션 부모를 원래 이름으로 만든다.
+--   3. 옛 테이블 이름을 <이름>_initial로 바꾸고, 같은 열·기본값·확인 제약을 가진 파티션 부모를 원래 이름으로 만든다.
 --      - IDENTITY: PostgreSQL 18은 IDENTITY 열이 있는 테이블을 파티션으로 붙이지 못한다(실험으로 확인).
 --        옛 테이블의 IDENTITY를 떼고, 부모에 IDENTITY를 새로 달아 옛 시퀀스의 다음 값(과 max(id)+1 중 큰 값)부터 잇는다.
 --      - source_date 기본값: 부모는 (now() AT TIME ZONE 'Asia/Seoul')::date. 파티션 부모의 열 기본값으로 쓸 수 있고,
@@ -27,30 +29,33 @@
 --      - 유일 제약: 파티션 키를 넣은 것으로 다시 잡는다. id(id, source_date), 시도 키(route_version_id, attempt_key, source_date),
 --        배치 안 줄 번호(observation_batch_id, source_row_number, source_date), 배치 안 차량(부분 유일 인덱스).
 --        한 배치의 관측은 한 트랜잭션(같은 now())에서 들어가므로 같은 날짜가 되어, 배치 안 유일성의 뜻은 그대로다.
---        옛 PK(id)와 ux_batch_context·ux_observation_context는 옛 파티션에만 남는다(부모 PK는 두지 않는다. 옛 파티션에
+--        옛 PK(id)와 ux_batch_context·ux_observation_context는 첫 파티션에만 남는다(부모 PK는 두지 않는다. 첫 파티션에
 --        PK가 이미 있어 같은 부모 PK로 붙일 수 없다는 것을 실험으로 확인했다).
 --      - 일반 인덱스: ix_batch_recent_history, ix_batch_forecast_candidates, ix_batch_unfinished_recovery,
 --        ix_batch_confirmed_history, ix_observation_vehicle_capacity는 같은 정의로 부모에 만들고 옛 인덱스를 붙인다
---        (옛 인덱스 이름은 <이름>_legacy로 바뀐다). 운영에만 있는 수동 인덱스(ix_archive_* 등)는 옛 파티션에만 남긴다.
+--        (옛 인덱스 이름은 <이름>_initial로 바뀐다). 운영에만 있는 수동 인덱스(ix_archive_* 등)는 첫 파티션에만 남긴다.
 --      - 나가는 FK(route_version, route_stop, 운영의 historical_import_batch 등)는 부모에 같은 정의로 만들고 옛 FK를 붙인다.
 --        붙일 때 다시 확인하지 않는다(실험으로 확인).
 --      - NOT VALID 확인 제약(ck_observation_seat_quality_status)은 부모에도 NOT VALID로 만든다. 확인된 제약으로 만들면
 --        ATTACH가 거절하고, pg_get_constraintdef로 되읽은 식으로 만들어도 저장된 식의 모양이 달라 "다른 정의"로 거절한다
 --        (둘 다 실험으로 확인). 그래서 V66의 원래 식을 이 파일에 적어 두고 그것으로 만든다. 모르는 NOT VALID 제약이 있으면 멈춘다.
 --      - 권한(GRANT)은 옛 테이블의 것을 부모에 그대로 준다.
---   4. 옛 테이블을 FOR VALUES FROM ('2000-01-01') TO ('2000-01-02') 파티션으로 붙인다. 04a의 확인 제약 덕분에 줄을 읽지 않는다.
+--   4. 옛 테이블을 FOR VALUES FROM ('2000-01-01') TO ('2000-01-02') 파티션(첫 파티션)으로 붙인다. 04a의 확인 제약 덕분에 줄을
+--      읽지 않는다.
 --      붙이는 동안 새 인덱스가 만들어지면(정의가 맞지 않으면 PostgreSQL이 만든다) 실패로 보고 되돌린다.
 --   5. 오늘(한국)부터 사흘 뒤까지의 날짜 파티션 <이름>_pYYYYMMDD와 기본 파티션 <이름>_default를 만든다.
 --   6. 두 테이블을 읽는 뷰(operational_observation 등)를 같은 정의로 다시 만든다. 뷰는 이름이 아니라 OID로 테이블을
---      가리켜서 그대로 두면 옛 파티션만 본다.
+--      가리켜서 그대로 두면 첫 파티션만 본다.
 -- 잡는 잠금과 예상 시간: 두 테이블과 그 뷰에 ACCESS EXCLUSIVE. lock_timeout 5초. storage면 카탈로그만 바꿔 로컬 100만 줄에서
 --   1초 미만이다. exact면 두 테이블을 두 번씩 읽는다(로컬 100만 줄 약 0.2초, 운영 관측 테이블은 분 단위로 본다. 추정).
 --   이 동안 수집·예보·API 조회가 기다린다. statement_timeout 15분.
--- 여러 번 실행해도 된다. 이미 파티션 테이블이면 알리고 끝난다. 날짜 파티션은 없을 때만 만든다.
+-- 여러 번 실행해도 된다. 두 테이블이 이미 파티션 테이블이면(이 파일이 끝났거나 V84가 만든 DB) 알리고 끝난다.
 -- 되돌리기: sal434-04-rollback-unpartition-observation-tables.sql. 날짜 파티션에 들어온 줄을 옛 테이블로 옮기고
---   원래 이름·IDENTITY·FK를 되돌린다.
--- 전환 뒤 해야 하는 것: worker의 날짜 파티션 유지 작업은 지금 새 예보 테이블 다섯 개만 다룬다. 두 테이블을 그 목록에 넣지
---   않으면 사흘 뒤부터 새 줄은 기본 파티션으로 들어간다(동작은 한다). 부모 통계는 ANALYZE observation_batch; 로 따로 모은다.
+--   원래 이름·IDENTITY·FK를 되돌린다. 첫 파티션이 붙어 있는 동안에만 되돌릴 수 있다.
+-- 전환 뒤: 수집이나 예보가 켜진 worker의 날짜 파티션 유지 작업이 기동 직후와 그 뒤 한 시간마다 두 테이블의 날짜 파티션을
+--   사흘 앞까지 만든다(두 테이블이 파티션 테이블인지는 카탈로그에서 읽으므로 재시작하지 않아도 된다). 이관 앱은 닫힌 날짜 파티션과,
+--   줄이 모두 보관 날짜를 지난 첫 파티션을 내보내고 설정이 허락하면 떼어 지운다. 파티션 부모의 통계는 자동으로 모이지 않으므로
+--   ANALYZE observation_batch; ANALYZE vehicle_observation; 로 따로 모은다.
 -- 실행: psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_partition = '...'" -c "SET sal434.count_rows = '...'" -f 이 파일
 BEGIN;
 SET LOCAL lock_timeout = '5s';
@@ -60,15 +65,15 @@ SET LOCAL search_path = public;
 DO $$
 DECLARE
     today constant date := (now() AT TIME ZONE 'Asia/Seoul')::date;
-    legacy_date constant date := DATE '2000-01-01';
+    initial_date constant date := DATE '2000-01-01';
     confirm text := nullif(current_setting('sal434.confirm_partition', true), '');
     count_mode text := nullif(current_setting('sal434.count_rows', true), '');
     tables constant text[] := ARRAY['observation_batch', 'vehicle_observation'];
     -- 부모에 다시 만드는 일반 인덱스. 없는 것은 건너뛴다.
     copied_indexes constant text[] := ARRAY['ix_batch_recent_history', 'ix_batch_forecast_candidates',
         'ix_batch_unfinished_recovery', 'ix_batch_confirmed_history', 'ix_observation_vehicle_capacity'];
-    -- 옛 파티션에만 남겨도 되는 유일 인덱스. 이 밖의 유일 인덱스가 있으면 뜻을 확인해야 하므로 멈춘다.
-    legacy_only_unique constant text[] := ARRAY['pk_observation_batch', 'ux_batch_attempt', 'ux_batch_context',
+    -- 첫 파티션에만 남겨도 되는 유일 인덱스. 이 밖의 유일 인덱스가 있으면 뜻을 확인해야 하므로 멈춘다.
+    initial_only_unique constant text[] := ARRAY['pk_observation_batch', 'ux_batch_attempt', 'ux_batch_context',
         'ux_observation_batch_historical_semantic', 'pk_vehicle_observation', 'ux_observation_source_row',
         'ux_observation_context', 'ux_observation_vehicle_per_batch'];
     -- NOT VALID 확인 제약의 원래 식(V66__retire_trip_quality.sql).
@@ -79,11 +84,11 @@ DECLARE
         AND seat_quality_status IN ('REVIEW', 'OUTLIER', 'HISTORICAL') AND seat_quality_status IS NOT NULL
         AND remaining_seats IS NULL
     )$chk$);
-    prebuilt constant text[] := ARRAY['ux_observation_batch_id_date_legacy', 'ux_batch_attempt_date_legacy',
-        'ux_vehicle_observation_id_date_legacy', 'ux_observation_source_row_date_legacy',
-        'ux_observation_vehicle_per_batch_date_legacy'];
+    prebuilt constant text[] := ARRAY['ux_observation_batch_id_date_initial', 'ux_batch_attempt_date_initial',
+        'ux_vehicle_observation_id_date_initial', 'ux_observation_source_row_date_initial',
+        'ux_observation_vehicle_per_batch_date_initial'];
     t text;
-    legacy text;
+    initial text;
     kinds text;
     problems text;
     r record;
@@ -104,14 +109,8 @@ BEGIN
       FROM unnest(tables) WITH ORDINALITY AS x(name, ord)
       LEFT JOIN pg_class ON oid = to_regclass('public.' || name);
     IF kinds = 'pp' THEN
-        IF to_regclass('public.observation_batch_legacy') IS NOT NULL
-           AND to_regclass('public.vehicle_observation_legacy') IS NOT NULL
-           AND (SELECT relispartition FROM pg_class WHERE oid = 'observation_batch_legacy'::regclass)
-           AND (SELECT relispartition FROM pg_class WHERE oid = 'vehicle_observation_legacy'::regclass) THEN
-            RAISE NOTICE 'SAL-434: 두 테이블은 이미 파티션 테이블이다. 바꾸는 것 없이 끝난다';
-            RETURN;
-        END IF;
-        RAISE EXCEPTION 'SAL-434: 두 테이블이 파티션 테이블이지만 옛 파티션(<이름>_legacy)이 붙어 있지 않다. 상태를 사람이 확인한다';
+        RAISE NOTICE 'SAL-434: 두 테이블은 이미 파티션 테이블이다. 바꾸는 것 없이 끝난다';
+        RETURN;
     ELSIF kinds IS DISTINCT FROM 'rr' THEN
         RAISE EXCEPTION 'SAL-434: 두 테이블이 모두 일반 테이블이어야 한다(지금 relkind %). 중간 상태이므로 멈춘다', kinds;
     END IF;
@@ -122,8 +121,8 @@ BEGIN
     IF count_mode IS NULL OR count_mode NOT IN ('exact', 'storage') THEN
         RAISE EXCEPTION 'SAL-434: SET sal434.count_rows = ''exact'' 또는 ''storage'' 를 골라 넣는다(파일 머리 설명)';
     END IF;
-    IF to_regclass('public.observation_batch_legacy') IS NOT NULL OR to_regclass('public.vehicle_observation_legacy') IS NOT NULL THEN
-        RAISE EXCEPTION 'SAL-434: <이름>_legacy 관계가 이미 있다. 이전 시도의 흔적이므로 사람이 확인한다';
+    IF to_regclass('public.observation_batch_initial') IS NOT NULL OR to_regclass('public.vehicle_observation_initial') IS NOT NULL THEN
+        RAISE EXCEPTION 'SAL-434: <이름>_initial 관계가 이미 있다. 이전 시도의 흔적이므로 사람이 확인한다';
     END IF;
 
     -- 소유자: 부모는 실행 계정 소유로 만들어지므로 같아야 한다.
@@ -167,8 +166,8 @@ BEGIN
             RAISE EXCEPTION 'SAL-434: %.source_date 가 없거나 모양이 다르다(sal434-04a 먼저)', t;
         END IF;
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = t::regclass
-                       AND conname = 'ck_' || t || '_legacy_date' AND convalidated) THEN
-            RAISE EXCEPTION 'SAL-434: ck_%_legacy_date 가 없거나 확인되지 않았다(sal434-04a 먼저)', t;
+                       AND conname = 'ck_' || t || '_initial_date' AND convalidated) THEN
+            RAISE EXCEPTION 'SAL-434: ck_%_initial_date 가 없거나 확인되지 않았다(sal434-04a 먼저)', t;
         END IF;
     END LOOP;
     SELECT string_agg(name, ', ') INTO problems
@@ -183,7 +182,7 @@ BEGIN
     SELECT string_agg(c.relname, ', ') INTO problems
       FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
      WHERE i.indrelid = ANY (ARRAY['observation_batch'::regclass, 'vehicle_observation'::regclass]) AND i.indisunique
-       AND NOT c.relname = ANY (legacy_only_unique || prebuilt);
+       AND NOT c.relname = ANY (initial_only_unique || prebuilt);
     IF problems IS NOT NULL THEN
         RAISE EXCEPTION 'SAL-434: 알지 못하는 유일 인덱스가 있다. 파티션 뒤에 뜻을 지킬 방법을 정한 뒤 이 파일에 더한다: %', problems;
     END IF;
@@ -224,7 +223,7 @@ BEGIN
     END LOOP;
 
     FOREACH t IN ARRAY tables LOOP
-        legacy := t || '_legacy';
+        initial := t || '_initial';
 
         -- 미리 만든 유일 인덱스를 제약으로 바꾼다. 부모의 유일 제약은 제약이 붙은 인덱스만 붙인다(실험으로 확인).
         FOR r IN SELECT c.relname FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
@@ -245,20 +244,20 @@ BEGIN
 
         index_oids := ARRAY(SELECT indexrelid FROM pg_index WHERE indrelid = t::regclass);
 
-        EXECUTE format('ALTER TABLE %I RENAME TO %I', t, legacy);
+        EXECUTE format('ALTER TABLE %I RENAME TO %I', t, initial);
         FOR r IN SELECT c.relname FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
-                  WHERE i.indrelid = legacy::regclass AND c.relname = ANY (copied_indexes) LOOP
-            EXECUTE format('ALTER INDEX %I RENAME TO %I', r.relname, left(r.relname || '_legacy', 63));
+                  WHERE i.indrelid = initial::regclass AND c.relname = ANY (copied_indexes) LOOP
+            EXECUTE format('ALTER INDEX %I RENAME TO %I', r.relname, left(r.relname || '_initial', 63));
         END LOOP;
-        EXECUTE format('ALTER TABLE %I ALTER COLUMN id DROP IDENTITY', legacy);
+        EXECUTE format('ALTER TABLE %I ALTER COLUMN id DROP IDENTITY', initial);
 
         EXECUTE format('CREATE TABLE %I (LIKE %I INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING STORAGE INCLUDING COMMENTS)'
-            ' PARTITION BY RANGE (source_date)', t, legacy);
-        EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', t, 'ck_' || t || '_legacy_date');
+            ' PARTITION BY RANGE (source_date)', t, initial);
+        EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', t, 'ck_' || t || '_initial_date');
         -- NOT VALID 확인 제약은 부모에도 NOT VALID로 둔다. pg_get_constraintdef로 되읽은 식은 저장된 식과 모양이 달라
         -- ATTACH가 "다른 정의"로 거절하므로(실험으로 확인) 마이그레이션의 원래 식으로 만든다.
         FOR r IN SELECT conname FROM pg_constraint
-                  WHERE conrelid = legacy::regclass AND contype = 'c' AND NOT convalidated LOOP
+                  WHERE conrelid = initial::regclass AND contype = 'c' AND NOT convalidated LOOP
             IF NOT not_valid_checks ? r.conname THEN
                 RAISE EXCEPTION 'SAL-434: 알지 못하는 NOT VALID 확인 제약 %.% 가 있다', t, r.conname;
             END IF;
@@ -282,9 +281,10 @@ BEGIN
 
         -- 일반 인덱스: 옛 정의의 테이블 이름만 부모로 바꿔 원래 이름으로 만든다.
         FOR r IN SELECT c.relname, pg_get_indexdef(i.indexrelid) AS def FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
-                  WHERE i.indrelid = legacy::regclass AND c.relname = ANY (ARRAY(SELECT left(x || '_legacy', 63) FROM unnest(copied_indexes) x)) LOOP
-            def := regexp_replace(r.def, '^CREATE INDEX \S+ ON public\.' || legacy || ' ',
-                format('CREATE INDEX %I ON public.%I ', left(r.relname, length(r.relname) - length('_legacy')), t));
+                  WHERE i.indrelid = initial::regclass AND c.relname = ANY (ARRAY(SELECT left(x || '_initial', 63) FROM unnest(copied_indexes) x))
+                  ORDER BY c.relname LOOP
+            def := regexp_replace(r.def, '^CREATE INDEX \S+ ON public\.' || initial || ' ',
+                format('CREATE INDEX %I ON public.%I ', left(r.relname, length(r.relname) - length('_initial')), t));
             IF def = r.def THEN
                 RAISE EXCEPTION 'SAL-434: 인덱스 정의를 옮기지 못했다: %', r.def;
             END IF;
@@ -293,40 +293,40 @@ BEGIN
 
         -- 나가는 FK.
         FOR r IN SELECT conname, pg_get_constraintdef(oid) AS def FROM pg_constraint
-                  WHERE conrelid = legacy::regclass AND contype = 'f' LOOP
+                  WHERE conrelid = initial::regclass AND contype = 'f' ORDER BY conname LOOP
             EXECUTE format('ALTER TABLE %I ADD CONSTRAINT %I %s', t, r.conname, r.def);
         END LOOP;
 
         -- 권한.
         FOR r IN SELECT a.privilege_type, a.grantee, a.is_grantable
                    FROM pg_class c, aclexplode(c.relacl) a
-                  WHERE c.oid = legacy::regclass AND a.grantee <> c.relowner LOOP
+                  WHERE c.oid = initial::regclass AND a.grantee <> c.relowner LOOP
             EXECUTE format('GRANT %s ON %I TO %s%s', r.privilege_type, t,
                 CASE WHEN r.grantee = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(r.grantee)) END,
                 CASE WHEN r.is_grantable THEN ' WITH GRANT OPTION' ELSE '' END);
         END LOOP;
 
-        EXECUTE format('ALTER TABLE %I ATTACH PARTITION %I FOR VALUES FROM (%L) TO (%L)', t, legacy, legacy_date, legacy_date + 1);
+        EXECUTE format('ALTER TABLE %I ATTACH PARTITION %I FOR VALUES FROM (%L) TO (%L)', t, initial, initial_date, initial_date + 1);
 
-        -- 붙이면서 옛 파티션에 새 인덱스를 만들었다면 정의가 어긋난 것이다. 운영에서는 큰 인덱스를 잠금 안에서 만들게 되므로 멈춘다.
+        -- 붙이면서 첫 파티션에 새 인덱스를 만들었다면 정의가 어긋난 것이다. 운영에서는 큰 인덱스를 잠금 안에서 만들게 되므로 멈춘다.
         SELECT string_agg(c.relname, ', ') INTO problems
           FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
-         WHERE i.indrelid = legacy::regclass AND NOT i.indexrelid = ANY (index_oids);
+         WHERE i.indrelid = initial::regclass AND NOT i.indexrelid = ANY (index_oids);
         IF problems IS NOT NULL THEN
-            RAISE EXCEPTION 'SAL-434: 옛 파티션을 붙이면서 인덱스를 새로 만들었다(정의 불일치): %', problems;
+            RAISE EXCEPTION 'SAL-434: 첫 파티션을 붙이면서 인덱스를 새로 만들었다(정의 불일치): %', problems;
         END IF;
         SELECT string_agg(c.relname, ', ') INTO problems
           FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
          WHERE i.indrelid = t::regclass AND NOT i.indisvalid;
         IF problems IS NOT NULL THEN
-            RAISE EXCEPTION 'SAL-434: 부모 인덱스가 유효하지 않다(옛 파티션의 인덱스가 붙지 않음): %', problems;
+            RAISE EXCEPTION 'SAL-434: 부모 인덱스가 유효하지 않다(첫 파티션의 인덱스가 붙지 않음): %', problems;
         END IF;
         SELECT string_agg(conname, ', ') INTO problems
-          FROM pg_constraint WHERE conrelid = legacy::regclass AND contype = 'f' AND conparentid = 0;
+          FROM pg_constraint WHERE conrelid = initial::regclass AND contype = 'f' AND conparentid = 0;
         IF problems IS NOT NULL THEN
-            RAISE EXCEPTION 'SAL-434: 옛 파티션의 FK가 부모 FK에 붙지 않았다: %', problems;
+            RAISE EXCEPTION 'SAL-434: 첫 파티션의 FK가 부모 FK에 붙지 않았다: %', problems;
         END IF;
-        IF pg_relation_filenode(legacy::regclass) IS DISTINCT FROM (filenode ->> t)::oid THEN
+        IF pg_relation_filenode(initial::regclass) IS DISTINCT FROM (filenode ->> t)::oid THEN
             RAISE EXCEPTION 'SAL-434: 옛 테이블의 저장 파일이 바뀌었다. 줄을 다시 쓴 것이므로 되돌린다';
         END IF;
 
@@ -343,8 +343,8 @@ BEGIN
         EXECUTE format('CREATE OR REPLACE VIEW %s AS %s', r.name, r.def);
         IF EXISTS (SELECT 1 FROM pg_depend dep JOIN pg_rewrite rw ON rw.oid = dep.objid
                     WHERE dep.classid = 'pg_rewrite'::regclass AND rw.ev_class = r.name::regclass
-                      AND dep.refobjid IN ('observation_batch_legacy'::regclass, 'vehicle_observation_legacy'::regclass)) THEN
-            RAISE EXCEPTION 'SAL-434: 뷰 % 가 아직 옛 파티션을 직접 읽는다', r.name;
+                      AND dep.refobjid IN ('observation_batch_initial'::regclass, 'vehicle_observation_initial'::regclass)) THEN
+            RAISE EXCEPTION 'SAL-434: 뷰 % 가 아직 첫 파티션을 직접 읽는다', r.name;
         END IF;
         RAISE NOTICE 'SAL-434: 뷰 % 를 파티션 부모 위로 다시 만들었다', r.name;
     END LOOP;

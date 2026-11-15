@@ -32,7 +32,8 @@ import java.util.Map;
  *   <li>DB 가 매기는 배치 번호와 노선 판본 번호는 이 테스트가 준비한 것과 같으면 {@code "batch"}, {@code "routeVersion"}으로 적는다</li>
  *   <li>DB 가 매기는 관측 번호는 그 관측의 상류 행 번호로 적는다. 관측 줄에서는 {@code id}를 빼고, 정원 기록의 근거 관측은
  *       {@code evidence_source_row}로, 훅 입력의 관측은 첫 칸으로 적는다</li>
- *   <li>DB 시계로 채우는 정원 기록의 {@code updated_at}은 뺀다</li>
+ *   <li>DB 시계로 채우는 정원 기록의 {@code updated_at}과, 관측·배치 줄을 넣은 날의 한국 날짜가 들어가는 {@code source_date}는
+ *       뺀다</li>
  * </ul>
  *
  * <p>관측·배치·정원 표에 열을 더하면 그 열이 모든 줄에 나타나고, 수집 주기·정규화 판본을 올리면 배치 줄의 그 값이 달라진다.

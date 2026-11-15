@@ -28,7 +28,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * 한 배치의 같은 차량 중복과 차량 번호 없는 줄, 빈 배치·늦게 착수한 배치·정상 수집이 아닌 배치·실패 배치,
  * 노선 판본 전환을 섞는다. 같은 씨앗이면 같은 흐름이다.
  * 수집은 같은 배치에 같은 차량을 두 번 넣지 않지만(고유 색인) 예보 읽기는 그 경우를 따로 거르므로, 그 규칙까지 대조하려고
- * 테스트 트랜잭션 안에서 고유 색인을 지운다. 트랜잭션이 롤백되면 색인도 돌아온다.
+ * 테스트 트랜잭션 안에서 고유 색인을 지운다. 트랜잭션이 롤백되면 색인도 돌아온다. 색인 이름은 관측 테이블이 날짜 파티션 테이블인지에
+ * 따라 다르므로 둘 다 지운다.
  */
 final class ObservationStreamFixture {
     static final String SOURCE_ID = "GBIS";
@@ -77,7 +78,8 @@ final class ObservationStreamFixture {
         final long seed,
         String displayName
     ) {
-        jdbc.sql("DROP INDEX IF EXISTS ux_observation_vehicle_per_batch").update();
+        jdbc.sql("DROP INDEX IF EXISTS ux_observation_vehicle_per_batch, ux_observation_vehicle_per_batch_date")
+            .update();
         Random random = new Random(seed);
         String token = UUID.randomUUID().toString().substring(0, 8);
         String key = "pipeline-" + token;
