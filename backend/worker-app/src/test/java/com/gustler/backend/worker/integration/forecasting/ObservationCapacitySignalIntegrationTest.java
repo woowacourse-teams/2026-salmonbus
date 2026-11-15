@@ -1,13 +1,17 @@
 package com.gustler.backend.worker.integration.forecasting;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
+import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
+import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
+import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.gbis.api.GbisLocationResult;
@@ -18,6 +22,7 @@ import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMappe
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.WorkerApplication;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
+import com.gustler.backend.worker.scheduling.PipelineShutdown;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -32,6 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -40,8 +46,24 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 수집이 커밋한 정원이 예보 신호보다 먼저 worker 메모리에 반영되는지 본다. 활성 모델이 없어 예보는 배치를 줄에 넣지 않는다.
+ *
+ * <p>worker가 읽지 않는 예보 설정 키를 함께 준다. 서버의 환경 파일에 그런 키가 남아 있어도 기동과 구성이 달라지지 않아야 한다.
  */
-@SpringBootTest(classes = WorkerApplication.class, properties = { "forecast.enabled=true", "forecast.interval=1h" })
+@SpringBootTest(classes = WorkerApplication.class, properties = {
+    "forecast.enabled=true",
+    "forecast.interval=1h",
+    "forecast.pipeline=v1",
+    "forecast.shadow.enabled=true",
+    "forecast.shadow.queue-capacity=0",
+    "forecast.scoring=off",
+    "forecast.scoring-comparison-interval=0s",
+    "forecast.compact-settlement-write=true",
+    "forecast.settlement-interval=0s",
+    "forecast.settlement-minimum-interval=1h",
+    "forecast.pending-limit=0",
+    "forecast.arrival-limit=0",
+    "forecast.alighting.history-seed-directory=/nonexistent"
+})
 @Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class })
 class ObservationCapacitySignalIntegrationTest {
     private static final String SOURCE_ROUTE = "204000057";
@@ -60,6 +82,9 @@ class ObservationCapacitySignalIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private ApplicationContext context;
 
     @MockitoBean
     private ForecastRuntime forecastRuntime;
@@ -95,6 +120,18 @@ class ObservationCapacitySignalIntegrationTest {
         jdbc.sql("DELETE FROM vehicle_capacity WHERE vehicle_id IN (:vehicleIds)").param("vehicleIds", VEHICLES)
             .update();
         jdbc.sql("TRUNCATE route, daily_call_quota CASCADE").update();
+    }
+
+    @Test
+    void 읽지_않는_예보_설정_키가_남아_있어도_예보와_채점_구성이_선다() {
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(context.getBeanNamesForType(ForecastPipeline.class)).hasSize(1);
+            softly.assertThat(context.getBeanNamesForType(ForecastLanes.class)).hasSize(1);
+            softly.assertThat(context.getBeanNamesForType(ShadowScoringCycle.class)).hasSize(1);
+            softly.assertThat(context.getBeanNamesForType(ScoringFeed.class)).hasSize(1);
+            softly.assertThat(context.getBeanNamesForType(PipelineShutdown.class)).hasSize(1);
+        });
     }
 
     @Test
