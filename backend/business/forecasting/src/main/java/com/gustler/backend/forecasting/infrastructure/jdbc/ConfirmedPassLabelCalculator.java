@@ -16,7 +16,7 @@ import tools.jackson.databind.JsonNode;
 public final class ConfirmedPassLabelCalculator implements PassLabelCalculator {
     @Override
     public PassLabelCalculation calculate(PassClosed pass, PassClosed previous, JsonNode evidence) {
-        JdbcAlightingAwareForecastEvaluation.Outcome outcome = ConfirmedAlightingAwareEvaluation.afterSeats(
+        PassLabelOutcome outcome = ConfirmedAlightingAwareEvaluation.afterSeats(
             event(pass), previousEvent(previous), evidence);
         if ("SETTLED".equals(outcome.state())) {
             return new PassLabelCalculation(true, outcome.label(), null, outcome.parameterHash(), outcome.capacity());

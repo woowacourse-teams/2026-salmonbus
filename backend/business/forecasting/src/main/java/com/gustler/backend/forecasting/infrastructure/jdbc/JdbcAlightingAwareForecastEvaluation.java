@@ -39,7 +39,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BinaryOperator;
 import java.util.function.BooleanSupplier;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
@@ -258,9 +257,9 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
                     blocked.add(batch.id());
                     continue;
                 }
-                Map<Work, Outcome> outcomes = new HashMap<>();
+                Map<Work, PassLabelOutcome> outcomes = new HashMap<>();
                 for (Work item : work) {
-                    Outcome unsupported = confirmedPrecondition(item);
+                    PassLabelOutcome unsupported = confirmedPrecondition(item);
                     if (unsupported != null) {
                         outcomes.put(item, unsupported);
                     }
@@ -306,7 +305,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
                             outcomes.put(item, item.eligible()
                                 ? projections.evaluate(ref, evaluationThrough(item, now), JSON.readTree(item.snapshot()),
                                     matches.get(new JdbcSettlementProjection.Request(item.id(), item.stop(), evaluationThrough(item, now))))
-                                : Outcome.unsupported("SOURCE_QUALITY_EXCLUDED"));
+                                : PassLabelOutcome.unsupported("SOURCE_QUALITY_EXCLUDED"));
                         }
                     });
                 }
@@ -334,16 +333,16 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         return progressed;
     }
 
-    private static Outcome confirmedPrecondition(Work work) {
+    private static PassLabelOutcome confirmedPrecondition(Work work) {
         if (!work.eligible()) {
-            return Outcome.unsupported("SOURCE_QUALITY_EXCLUDED");
+            return PassLabelOutcome.unsupported("SOURCE_QUALITY_EXCLUDED");
         }
         JsonNode snapshot = JSON.readTree(work.snapshot());
         if (!canonical(snapshot.path("inputProfile").asText()).equals(AlightingAwareRouteStatistics.CONFIRMED_PROFILE)) {
-            return Outcome.unsupported("INPUT_PROFILE_MISMATCH");
+            return PassLabelOutcome.unsupported("INPUT_PROFILE_MISMATCH");
         }
         if (!snapshot.path("capacityPolicy").asText().equals("vehicle-capacity-snapshot-v1")) {
-            return Outcome.unsupported("CAPACITY_POLICY_MISMATCH");
+            return PassLabelOutcome.unsupported("CAPACITY_POLICY_MISMATCH");
         }
         return null;
     }
@@ -387,7 +386,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         List<Work> selected = readWork(route, limit, dueThrough, false);
         List<Work> work = preparationScope(selected);
         boolean moreWork = selected.size() == limit || work.size() < selected.size();
-        Map<Work, Outcome> outcomes = new HashMap<>();
+        Map<Work, PassLabelOutcome> outcomes = new HashMap<>();
         Map<LocalDate, List<Work>> days = work.stream().collect(Collectors.groupingBy(w -> day(w.observedAt())));
         for (Map.Entry<LocalDate, List<Work>> entry : days.entrySet()) {
             prepareDay(route, now, entry.getKey(), entry.getValue(), outcomes);
@@ -454,7 +453,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
     }
 
     private void writeOutcome(Work item, PreparedPage page) {
-        Outcome outcome = page.outcomes().get(item);
+        PassLabelOutcome outcome = page.outcomes().get(item);
         if (outcome == null) {
             defer(item, page.revision(), page.now(), "NO_CLOSED_IDENTITY_SAFE_PASS");
             return;
@@ -480,7 +479,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         Instant now,
         LocalDate date,
         List<Work> work,
-        Map<Work, Outcome> outcomes
+        Map<Work, PassLabelOutcome> outcomes
     ) {
         List<Work> legacyWork = work.stream()
             .filter(item -> !isConfirmed(item))
@@ -627,7 +626,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
             .list();
     }
 
-    private Outcome evaluateWork(
+    private PassLabelOutcome evaluateWork(
         Work work,
         List<Evidence> evidence,
         Map<Long, Evidence> byId,
@@ -636,16 +635,16 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         String sourceProblem
     ) {
         if (!canonical(work.version()).equals(VERSION)) {
-            return Outcome.unsupported("MODEL_CONTRACT_RETIRED");
+            return PassLabelOutcome.unsupported("MODEL_CONTRACT_RETIRED");
         }
         if (inputLimit) {
-            return Outcome.unsupported("OBSERVATION_INPUT_LIMIT");
+            return PassLabelOutcome.unsupported("OBSERVATION_INPUT_LIMIT");
         }
         if (sourceProblem != null) {
-            return Outcome.unsupported(sourceProblem);
+            return PassLabelOutcome.unsupported(sourceProblem);
         }
         if (!work.eligible()) {
-            return Outcome.unsupported("SOURCE_QUALITY_EXCLUDED");
+            return PassLabelOutcome.unsupported("SOURCE_QUALITY_EXCLUDED");
         }
         return evaluate(work, evidence, byId, eventCache);
     }
@@ -685,7 +684,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
             .param("through", offset(through)).query(String.class).optional().orElse(null);
     }
 
-    private Outcome evaluate(
+    private PassLabelOutcome evaluate(
         Work work,
         List<Evidence> evidence,
         Map<Long, Evidence> byId,
@@ -700,7 +699,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
             stops.add(value.intValue());
         }
         if (stops.isEmpty()) {
-            return Outcome.unsupported("MISSING_REAL_STOP_CONTRACT");
+            return PassLabelOutcome.unsupported("MISSING_REAL_STOP_CONTRACT");
         }
         List<AlightingAwarePassEvent> events = eventCache.computeIfAbsent(List.copyOf(stops),
             key -> AlightingAwarePassEvents.resolve(evidence.stream().map(Evidence::row).toList(), key)
@@ -713,7 +712,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         return evaluateAfterAlighting(work, evidence, snapshot, events, event);
     }
 
-    private Outcome evaluateAfterAlighting(
+    private PassLabelOutcome evaluateAfterAlighting(
         Work work,
         List<Evidence> evidence,
         JsonNode snapshot,
@@ -725,7 +724,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         final int minute = local.getHour() * 60 + local.getMinute();
         String band = fittedBand(minute);
         if (isOutsideFittedDays(band, local)) {
-            return Outcome.unsupported("OUTSIDE_FITTED_BAND", event);
+            return PassLabelOutcome.unsupported("OUTSIDE_FITTED_BAND", event);
         }
         JsonNode parameters = null;
         for (JsonNode row : snapshot.path("alighting").path("stops")) {
@@ -735,31 +734,31 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
             }
         }
         if (parameters == null) {
-            return Outcome.unsupported("NO_FITTED_STOP_PARAMETERS", event);
+            return PassLabelOutcome.unsupported("NO_FITTED_STOP_PARAMETERS", event);
         }
         Optional<AlightingAwarePassEvent> previous = events.stream()
             .filter(previousEvent -> isPreviousPass(work, previousEvent, departure))
             .max(Comparator.comparing(e -> e.firstDeparture().receivedAt()));
         if (previous.isEmpty()) {
-            return Outcome.unsupported("NO_PREVIOUS_PASS", event);
+            return PassLabelOutcome.unsupported("NO_PREVIOUS_PASS", event);
         }
         final double gap = Duration.between(previous.get().firstDeparture().receivedAt(), departure).toMillis()
             / 60000.0;
         if (gap <= .2 || gap > 60) {
-            return Outcome.unsupported("UNSUPPORTED_HEADWAY", event);
+            return PassLabelOutcome.unsupported("UNSUPPORTED_HEADWAY", event);
         }
         int capacity = snapshot.path("capacity").asInt();
         if (!snapshot.path("capacityPolicy").asText().equals("vehicle-capacity-snapshot-v1")
             || capacity < 30 || capacity > 70) {
-            return Outcome.unsupported("CAPACITY_SNAPSHOT_INVALID", event);
+            return PassLabelOutcome.unsupported("CAPACITY_SNAPSHOT_INVALID", event);
         }
         if (event.arrival().seats() > capacity || event.departure().seats() > capacity) {
-            return Outcome.unsupported("OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT", event);
+            return PassLabelOutcome.unsupported("OBSERVATION_EXCEEDS_CAPACITY_SNAPSHOT", event);
         }
         return calculatePosterior(event, previous.get(), capacity, parameters, gap, minute, band);
     }
 
-    private Outcome calculatePosterior(
+    private PassLabelOutcome calculatePosterior(
         AlightingAwarePassEvent event,
         AlightingAwarePassEvent previous,
         final int capacity,
@@ -770,7 +769,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
     ) {
         double[] lambda = new double[8];
         if (parameters.path("lam").size() != 8) {
-            return Outcome.unsupported("INVALID_PARAMETER_DIMENSION", event);
+            return PassLabelOutcome.unsupported("INVALID_PARAMETER_DIMENSION", event);
         }
         for (int i = 0; i < 8; i++) {
             lambda[i] = parameters.path("lam").get(i).doubleValue();
@@ -782,7 +781,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         final int bin = Math.max(0, Math.min(7, (minute - bandStart(band)) / 30));
         final double label = AlightingPosterior.afterSeats(fitted, Math.min(event.arrival().seats(), cap),
             Math.min(event.departure().seats(), cap), cap, gap, previous.departure().seats() == 0, bin);
-        return new Outcome("SETTLED", label, null, event, previous, null, digest(parameters.toString()), cap);
+        return new PassLabelOutcome("SETTLED", label, null, event, previous, null, digest(parameters.toString()), cap);
     }
 
     private static boolean matchesWork(Work work, AlightingAwarePassEvent event, Map<Long, Evidence> byId) {
@@ -841,7 +840,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         String reason
     ) {
         if (Duration.between(work.observedAt(), now).compareTo(Duration.ofHours(2)) > 0) {
-            finish(work, revision, now, new Outcome("LOST", null, reason, null, null, null, null, null));
+            finish(work, revision, now, new PassLabelOutcome("LOST", null, reason, null, null, null, null, null));
             return;
         }
         reschedule(work, reason);
@@ -861,7 +860,7 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
         Work work,
         final long revision,
         Instant now,
-        Outcome outcome
+        PassLabelOutcome outcome
     ) {
         jdbc.sql(
             """
@@ -931,88 +930,12 @@ public class JdbcAlightingAwareForecastEvaluation implements AlightingAwareForec
     }
 
     private record PreparedPage(
-        long revision, Instant now, List<Work> work, Map<Work, Outcome> outcomes, boolean moreWork, List<JdbcSettlementProjection.Ref> refs
+        long revision,
+        Instant now,
+        List<Work> work,
+        Map<Work, PassLabelOutcome> outcomes,
+        boolean moreWork,
+        List<JdbcSettlementProjection.Ref> refs
     ) {
-    }
-
-    /** 한 목표의 결과와 근거 식별자를 같은 트랜잭션으로 저장하기 위한 출력 계약이다. */
-    record Outcome(
-        String state,
-        Double label,
-        String reason,
-        AlightingAwarePassEvent event,
-        AlightingAwarePassEvent previous,
-        AlightingAwareObservation capacityObservation,
-        String parameterHash,
-        Integer capacity
-    ) {
-        static Outcome unsupported(String reason) {
-            return unsupported(reason, null);
-        }
-
-        static Outcome unsupported(String reason, AlightingAwarePassEvent event) {
-            return new Outcome("UNSUPPORTED", null, reason, event, null, null, null, null);
-        }
-
-        Long preObservationId() {
-            return eventObservationId(event, AlightingAwarePassEvent::arrival);
-        }
-
-        Long postObservationId() {
-            return eventObservationId(event, AlightingAwarePassEvent::departure);
-        }
-
-        Long closureObservationId() {
-            return eventObservationId(event, AlightingAwarePassEvent::confirmation);
-        }
-
-        Long previousPostObservationId() {
-            return eventObservationId(previous, AlightingAwarePassEvent::departure);
-        }
-
-        Long previousClosureObservationId() {
-            return eventObservationId(previous, AlightingAwarePassEvent::confirmation);
-        }
-
-        private Long eventObservationId(AlightingAwarePassEvent pass, Function<AlightingAwarePassEvent, AlightingAwareObservation> observation) {
-            if (pass == null) {
-                return null;
-            }
-            return observation.apply(pass).observationId();
-        }
-
-        Long capacityObservationId() {
-            if (capacityObservation == null) {
-                return null;
-            }
-            return capacityObservation.observationId();
-        }
-
-        OffsetDateTime eventAt() {
-            if (event == null) {
-                return null;
-            }
-            if (event.arrival().confirmedProfile()) {
-                return offset(event.departure().receivedAt());
-            }
-            return offset(event.firstDeparture().receivedAt());
-        }
-
-        OffsetDateTime knownAt() {
-            if (event == null) {
-                return null;
-            }
-            if (previous != null && previous.confirmedAt().isAfter(event.confirmedAt())) {
-                return offset(previous.confirmedAt());
-            }
-            return offset(event.confirmedAt());
-        }
-
-        String capacityPolicy() {
-            if (capacity == null) {
-                return null;
-            }
-            return "vehicle-capacity-snapshot-v1";
-        }
     }
 }

@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.domain.publication;
+package com.gustler.backend.forecasting.domain.route;
 
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 

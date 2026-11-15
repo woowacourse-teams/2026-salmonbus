@@ -20,7 +20,7 @@ final class ConfirmedAlightingAwareEvaluation {
     private ConfirmedAlightingAwareEvaluation() {
     }
 
-    static JdbcAlightingAwareForecastEvaluation.Outcome afterSeats(
+    static PassLabelOutcome afterSeats(
         AlightingAwarePassEvent visit, AlightingAwarePassEvent previous, JsonNode snapshot
     ) {
         Instant departure = visit.departure().receivedAt();
@@ -62,7 +62,7 @@ final class ConfirmedAlightingAwareEvaluation {
         final double label = AlightingPosterior.afterSeats(fitted, visit.arrival().seats(),
             visit.departure().seats(),
             capacity, gap, previous.departure().seats() == 0, bin);
-        return new JdbcAlightingAwareForecastEvaluation.Outcome("SETTLED", label, null, visit, previous, null,
+        return new PassLabelOutcome("SETTLED", label, null, visit, previous, null,
             digest(parameters.toString()), capacity);
     }
 
@@ -85,8 +85,8 @@ final class ConfirmedAlightingAwareEvaluation {
         return false;
     }
 
-    private static JdbcAlightingAwareForecastEvaluation.Outcome unsupported(String reason) {
-        return JdbcAlightingAwareForecastEvaluation.Outcome.unsupported(reason);
+    private static PassLabelOutcome unsupported(String reason) {
+        return PassLabelOutcome.unsupported(reason);
     }
 
     private static String digest(String value) {

@@ -10,7 +10,7 @@ import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineServ
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
-import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
+import com.gustler.backend.forecasting.domain.route.RouteStopsQuery;
 import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcReplaySource;

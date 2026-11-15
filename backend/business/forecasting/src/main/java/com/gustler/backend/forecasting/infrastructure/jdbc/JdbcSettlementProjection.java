@@ -441,21 +441,21 @@ final class JdbcSettlementProjection {
             .list().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    JdbcAlightingAwareForecastEvaluation.Outcome evaluate(Ref ref, Instant through, JsonNode snapshot, Match match) {
+    PassLabelOutcome evaluate(Ref ref, Instant through, JsonNode snapshot, Match match) {
         if (!canonical(snapshot.path("inputProfile").asText()).equals(AlightingAwareRouteStatistics.CONFIRMED_PROFILE)) {
-            return JdbcAlightingAwareForecastEvaluation.Outcome.unsupported("INPUT_PROFILE_MISMATCH");
+            return PassLabelOutcome.unsupported("INPUT_PROFILE_MISMATCH");
         }
         if (!snapshot.path("capacityPolicy").asText().equals("vehicle-capacity-snapshot-v1")) {
-            return JdbcAlightingAwareForecastEvaluation.Outcome.unsupported("CAPACITY_POLICY_MISMATCH");
+            return PassLabelOutcome.unsupported("CAPACITY_POLICY_MISMATCH");
         }
         if (ref.overflow() != null && !ref.overflow().isAfter(through)) {
-            return JdbcAlightingAwareForecastEvaluation.Outcome.unsupported("OBSERVATION_INPUT_LIMIT");
+            return PassLabelOutcome.unsupported("OBSERVATION_INPUT_LIMIT");
         }
         if (ref.incomplete() != null && !ref.incomplete().isAfter(through)) {
-            return JdbcAlightingAwareForecastEvaluation.Outcome.unsupported("SOURCE_HISTORY_INCOMPLETE");
+            return PassLabelOutcome.unsupported("SOURCE_HISTORY_INCOMPLETE");
         }
         if (!match.sourcePresent()) {
-            return JdbcAlightingAwareForecastEvaluation.Outcome.unsupported("SOURCE_NOT_IN_CONFIRMED_HISTORY");
+            return PassLabelOutcome.unsupported("SOURCE_NOT_IN_CONFIRMED_HISTORY");
         }
         if (match.visit() == null) {
             return null;

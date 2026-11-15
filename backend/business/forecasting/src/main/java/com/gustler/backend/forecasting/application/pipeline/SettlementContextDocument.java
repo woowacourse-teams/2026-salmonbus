@@ -1,4 +1,4 @@
-package com.gustler.backend.forecasting.application.publication;
+package com.gustler.backend.forecasting.application.pipeline;
 
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;

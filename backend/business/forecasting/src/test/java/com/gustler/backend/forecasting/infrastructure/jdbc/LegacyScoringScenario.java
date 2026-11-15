@@ -350,7 +350,7 @@ final class LegacyScoringScenario {
         for (Instant through : candidates(source, target, times, deadline, limit)) {
             ConfirmedAlightingAwareEvaluationOracle oracle = oracles.computeIfAbsent(List.of(day, through, continuous),
                 key -> oracle(day, through, limit, continuous));
-            JdbcAlightingAwareForecastEvaluation.Outcome outcome = oracle.evaluate(source.observationId(), target,
+            PassLabelOutcome outcome = oracle.evaluate(source.observationId(), target,
                 snapshot);
             if (outcome != null) {
                 return verdict(outcome);
@@ -459,7 +459,7 @@ final class LegacyScoringScenario {
         return batch.hole() && !batch.at().isBefore(dayStart) && !batch.at().isAfter(through);
     }
 
-    private static Verdict verdict(JdbcAlightingAwareForecastEvaluation.Outcome outcome) {
+    private static Verdict verdict(PassLabelOutcome outcome) {
         if (!outcome.state().equals("SETTLED")) {
             return Verdict.of(outcome.state(), outcome.reason());
         }

@@ -46,7 +46,7 @@ final class ConfirmedAlightingAwareEvaluationOracle {
         this.through = through;
     }
 
-    JdbcAlightingAwareForecastEvaluation.Outcome evaluate(final long sourceId, final int target, JsonNode snapshot) {
+    PassLabelOutcome evaluate(final long sourceId, final int target, JsonNode snapshot) {
         if (!canonical(snapshot.path("inputProfile").asText()).equals(AlightingAwareRouteStatistics.CONFIRMED_PROFILE)) {
             return unsupported("INPUT_PROFILE_MISMATCH");
         }
@@ -288,8 +288,8 @@ final class ConfirmedAlightingAwareEvaluationOracle {
         return at.atOffset(ZoneOffset.UTC);
     }
 
-    private static JdbcAlightingAwareForecastEvaluation.Outcome unsupported(String reason) {
-        return JdbcAlightingAwareForecastEvaluation.Outcome.unsupported(reason);
+    private static PassLabelOutcome unsupported(String reason) {
+        return PassLabelOutcome.unsupported(reason);
     }
 
 }
