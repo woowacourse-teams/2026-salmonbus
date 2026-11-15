@@ -1,7 +1,13 @@
 """Export real confirmed-time replay cases with a source-derived midnight prefix.
 
-The prefix is an explicit input to this bounded replay, not evidence that an
-online bootstrap ran. No quality assignment from production is available.
+The Worker replay (Gradle task verifyAlightingAwareWorkerReplay) inserts only the
+day observations and lets the forecast build its route state from them, so the
+day starts from an empty history. It reads the prefix observations as vehicle
+capacity evidence only; the prefix trip state is not loaded. A case whose inputs
+depend on a trip that began before the day therefore fails the replay instead of
+being verified. The source feature check still reads the full prefix. Neither is
+evidence that an online bootstrap ran. No quality assignment from production is
+available.
 """
 import argparse
 import json
