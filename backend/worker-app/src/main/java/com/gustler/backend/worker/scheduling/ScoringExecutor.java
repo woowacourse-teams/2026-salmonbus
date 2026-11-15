@@ -17,7 +17,7 @@ import org.springframework.beans.factory.DisposableBean;
 /**
  * 채점 줄이다. 전용 단일 스레드({@code forecast-scoring-})와 길이 제한이 있는 줄로 일을 넣은 순서대로 하나씩 실행한다.
  *
- * <p>그림자 실행 스레드와 주기 작업 스레드는 {@link #submit}에서 줄에 넣기만 하고 기다리지 않는다. 줄이 가득 차면 넣지 않고
+ * <p>예보 실행 줄의 스레드와 주기 작업 스레드는 {@link #submit}에서 줄에 넣기만 하고 기다리지 않는다. 줄이 가득 차면 넣지 않고
  * 거짓을 돌려준다. 일 하나가 실패해도 스레드는 다음 일을 계속 실행한다. 줄 길이는 {@code salmonbus.pipeline.scoring.queue}
  * 게이지로 낸다.
  *

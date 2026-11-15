@@ -23,8 +23,9 @@ public final class RouteStateReplayer {
     public static final Duration DEFAULT_WINDOW = Duration.ofHours(6);
     public static final Duration DEFAULT_EXTENDED_WINDOW = Duration.ofHours(12);
     /**
-     * 늘린 창의 상한이다. 이관이 되감기를 위해 최근 관측을 남겨 두는 창({@code archive.history-hold-window}의 기본값)과 같다.
-     * 이보다 길게 되감으면 이관된 관측이 창 안에 빠진 채로 상태를 만들 수 있다.
+     * 늘린 창의 상한이다. 이관은 다시 뜬 worker가 관측을 이 상한까지만 되감는다는 전제로 관측의 날짜 파티션을 최소 사흘 남긴다.
+     * 이보다 길게 되감으려면 이관의 관측 보관 날짜 수를 함께 늘려야 한다. 그러지 않으면 이관된 관측이 창 안에서 빠진 채로 상태를
+     * 만들 수 있다.
      */
     public static final Duration MAXIMUM_EXTENDED_WINDOW = Duration.ofHours(12);
     private final ReplaySource source;

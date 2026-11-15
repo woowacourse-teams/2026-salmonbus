@@ -14,8 +14,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record ForecastProperties(
     boolean enabled,
     Duration interval,
-    Duration settlementInterval,
-    Duration statisticsInterval,
     Duration staleness,
     int batchLimit,
     int pendingLimit,

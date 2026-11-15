@@ -8,8 +8,6 @@ import org.junit.jupiter.api.Test;
 
 class ForecastPropertiesTest {
     private static final Duration INTERVAL = Duration.ofSeconds(10);
-    private static final Duration SETTLEMENT_INTERVAL = Duration.ofSeconds(60);
-    private static final Duration STATISTICS_INTERVAL = Duration.ofHours(6);
     private static final int BATCH_LIMIT = 20;
     private static final int PENDING_LIMIT = 3000;
     private static final int ARRIVAL_LIMIT = 400;
@@ -54,8 +52,6 @@ class ForecastPropertiesTest {
     private static ForecastProperties propertiesWith(
         Duration staleness
     ) {
-        return new ForecastProperties(
-            true, INTERVAL, SETTLEMENT_INTERVAL, STATISTICS_INTERVAL,
-            staleness, BATCH_LIMIT, PENDING_LIMIT, ARRIVAL_LIMIT);
+        return new ForecastProperties(true, INTERVAL, staleness, BATCH_LIMIT, PENDING_LIMIT, ARRIVAL_LIMIT);
     }
 }

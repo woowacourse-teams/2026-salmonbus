@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 
 /**
- * 본선({@code forecast.pipeline=v2})의 노선별 실행 줄이다. 단일 스레드 실행기({@code forecast-lane-<번호>-})를
+ * 예보의 노선별 실행 줄이다. 단일 스레드 실행기({@code forecast-lane-<번호>-})를
  * {@code forecast.lanes}개 두고, 노선 열쇠의 해시로 줄 하나에 고정 배정한다.
  *
  * <p>같은 열쇠의 일은 항상 같은 줄에서 넣은 순서대로 하나씩 실행되고, 다른 줄의 일은 동시에 실행된다. 스케줄러의 풀 크기를 올리는

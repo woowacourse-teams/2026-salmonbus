@@ -248,7 +248,7 @@ class MainlineScoringPipelineTest {
             }, scoringStage, new ScoringReplay(records, passes),
                 new ScoringWriter(labels, new TransactionTemplate(transactions)), records,
                 ScoringReplay.DEFAULT_FORECAST_WINDOW, clock, scoringMeters);
-            JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS, JdbcReplaySource.Axis.RECORDED_RUN);
+            JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
             ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
             PipelineBatchProcessor processor = new PipelineBatchProcessor("pipeline_forecast", stage,
                 new RouteStateReplayer(source, stage, Duration.ofHours(6)), records, passes,

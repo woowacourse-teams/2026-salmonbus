@@ -3,14 +3,11 @@ package com.gustler.backend.worker.configuration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.forecasting.api.pipeline.CompareShadowScoring;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
-import com.gustler.backend.forecasting.api.pipeline.ShadowForecastTask;
 import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
 import com.gustler.backend.worker.scheduling.PipelineShutdown;
 import com.gustler.backend.worker.scheduling.RouteLanes;
 import com.gustler.backend.worker.scheduling.ScoringExecutor;
-import com.gustler.backend.worker.scheduling.ShadowForecastExecutor;
 import com.zaxxer.hikari.HikariDataSource;
 import java.time.Duration;
 import java.time.Instant;
@@ -32,19 +29,15 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @ExtendWith(OutputCaptureExtension.class)
 class ForecastPipelineShutdownConfigurationTest {
-    private static final String[] MAINLINE = {
-        "forecast.enabled=true", "forecast.pipeline=v2", "forecast.scoring=v2"
-    };
+    private static final String ENABLED = "forecast.enabled=true";
 
     private final List<String> events = new CopyOnWriteArrayList<>();
     private final RecordingCycle cycle = new RecordingCycle(events);
     private final CountDownLatch release = new CountDownLatch(1);
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
-        .withUserConfiguration(WorkerSchedulingConfig.class, ForecastShadowExecutorConfiguration.class,
-            ForecastMainlineExecutorConfiguration.class, ForecastScoringExecutorConfiguration.class,
-            ForecastPipelineShutdownConfiguration.class)
+        .withUserConfiguration(WorkerSchedulingConfig.class, ForecastMainlineExecutorConfiguration.class,
+            ForecastScoringExecutorConfiguration.class, ForecastPipelineShutdownConfiguration.class)
         .withBean(ForecastPipeline.class, NoPipeline::new)
-        .withBean(CompareShadowScoring.class, () -> () -> { })
         .withPropertyValues("forecast.interval=1h", "forecast.scoring-flush-interval=1h");
 
     @AfterEach
@@ -53,53 +46,23 @@ class ForecastPipelineShutdownConfigurationTest {
     }
 
     @Test
-    void 새_경로_스위치가_기본값이거나_예보가_꺼져_있으면_종료_처리를_등록하지_않는다() {
-        runner.withPropertyValues("forecast.enabled=true")
+    void 예보가_꺼져_있으면_종료_처리를_등록하지_않는다() {
+        runner.withPropertyValues("forecast.enabled=false")
             .run(context -> assertThat(context).doesNotHaveBean(PipelineShutdown.class));
-        runner.withPropertyValues("forecast.enabled=false", "forecast.pipeline=v2", "forecast.scoring=v2")
-            .run(context -> assertThat(context).doesNotHaveBean(PipelineShutdown.class));
-        runner.withPropertyValues("forecast.enabled=false", "forecast.shadow.enabled=true")
-            .run(context -> assertThat(context).doesNotHaveBean(PipelineShutdown.class));
+        runner.run(context -> assertThat(context).doesNotHaveBean(PipelineShutdown.class));
     }
 
     @Test
-    void 그림자_실행만_켜면_그림자_실행_줄만_비운다() {
-        runner.withPropertyValues("forecast.enabled=true", "forecast.shadow.enabled=true")
-            .run(context -> {
-                // given
-                ShadowForecastExecutor shadow = context.getBean(ShadowForecastExecutor.class);
-                AtomicInteger ran = new AtomicInteger();
-                for (int index = 0; index < 10; index++) {
-                    shadow.submit(new Task(ran));
-                }
-                Task late = new Task(ran);
-
-                // when
-                context.getBean(PipelineShutdown.class).stop();
-                final int ranAtReturn = ran.get();
-                shadow.submit(late);
-
-                // then
-                assertThat(context).doesNotHaveBean(RouteLanes.class).doesNotHaveBean(ScoringExecutor.class);
-                assertSoftly(softly -> {
-                    softly.assertThat(ranAtReturn).isEqualTo(10);
-                    softly.assertThat(late.discarded).as("닫힌 줄은 새 일을 버린다").hasValue(1);
-                });
-            });
-    }
-
-    @Test
-    void 그림자_실행과_채점을_켜면_그림자_실행_줄과_채점_줄을_비우고_마지막_쓰기를_한다() {
+    void 종료_처리는_노선별_실행_줄과_채점_줄을_비우고_마지막_쓰기를_한다() {
         runner.withBean(ShadowScoringCycle.class, () -> cycle)
-            .withPropertyValues("forecast.enabled=true", "forecast.shadow.enabled=true", "forecast.scoring=shadow")
+            .withPropertyValues(ENABLED)
             .run(context -> {
                 // given
-                ShadowForecastExecutor shadow = context.getBean(ShadowForecastExecutor.class);
+                RouteLanes lanes = context.getBean(RouteLanes.class);
                 ScoringExecutor scoring = context.getBean(ScoringExecutor.class);
                 AtomicInteger scored = new AtomicInteger();
-                AtomicInteger ran = new AtomicInteger();
                 for (int index = 0; index < 10; index++) {
-                    shadow.submit(new Task(ran, () -> scoring.submit(scored::incrementAndGet)));
+                    lanes.submit("route-" + index, () -> scoring.submit(scored::incrementAndGet));
                 }
 
                 // when
@@ -107,42 +70,12 @@ class ForecastPipelineShutdownConfigurationTest {
 
                 // then
                 assertSoftly(softly -> {
-                    softly.assertThat(ran).hasValue(10);
                     softly.assertThat(scored).hasValue(10);
+                    softly.assertThat(lanes.submit("route-0", scored::incrementAndGet)).isFalse();
                     softly.assertThat(scoring.submit(scored::incrementAndGet)).isFalse();
                     softly.assertThat(events).containsExactly("stop_accepting", "final_write");
                 });
             });
-    }
-
-    @Test
-    void 본선이_새_경로이면_채점이_그림자든_본선이든_노선별_실행_줄과_채점_줄을_비우고_마지막_쓰기를_한다() {
-        for (String scoringMode : new String[] {"shadow", "v2"}) {
-            events.clear();
-            runner.withBean(ShadowScoringCycle.class, () -> cycle)
-                .withPropertyValues("forecast.enabled=true", "forecast.pipeline=v2", "forecast.scoring=" + scoringMode)
-                .run(context -> {
-                    // given
-                    RouteLanes lanes = context.getBean(RouteLanes.class);
-                    ScoringExecutor scoring = context.getBean(ScoringExecutor.class);
-                    AtomicInteger scored = new AtomicInteger();
-                    for (int index = 0; index < 10; index++) {
-                        lanes.submit("route-" + index, () -> scoring.submit(scored::incrementAndGet));
-                    }
-
-                    // when
-                    context.getBean(PipelineShutdown.class).stop();
-
-                    // then
-                    assertThat(context).doesNotHaveBean(ShadowForecastExecutor.class);
-                    assertSoftly(softly -> {
-                        softly.assertThat(scored).hasValue(10);
-                        softly.assertThat(lanes.submit("route-0", scored::incrementAndGet)).isFalse();
-                        softly.assertThat(scoring.submit(scored::incrementAndGet)).isFalse();
-                        softly.assertThat(events).containsExactly("stop_accepting", "final_write");
-                    });
-                });
-        }
     }
 
     @Test
@@ -161,7 +94,7 @@ class ForecastPipelineShutdownConfigurationTest {
         // when
         runner.withBean(ShadowScoringCycle.class, () -> cycle)
             .withBean("dataSource", HikariDataSource.class, () -> pool)
-            .withPropertyValues(MAINLINE)
+            .withPropertyValues(ENABLED)
             .run(context -> {
                 RouteLanes lanes = context.getBean(RouteLanes.class);
                 ScoringExecutor scoring = context.getBean(ScoringExecutor.class);
@@ -219,7 +152,7 @@ class ForecastPipelineShutdownConfigurationTest {
 
         // when
         runner.withBean(ShadowScoringCycle.class, () -> cycle)
-            .withPropertyValues(MAINLINE)
+            .withPropertyValues(ENABLED)
             .withPropertyValues("forecast.shutdown-timeout=200ms", "forecast.lanes=1")
             .run(context -> {
                 RouteLanes lanes = context.getBean(RouteLanes.class);
@@ -246,11 +179,11 @@ class ForecastPipelineShutdownConfigurationTest {
     @Test
     void 종료_한도의_기본값은_10초이고_음수이면_기동하지_않는다() {
         runner.withBean(ShadowScoringCycle.class, () -> cycle)
-            .withPropertyValues(MAINLINE)
+            .withPropertyValues(ENABLED)
             .run(context -> assertThat(context.getBean(ForecastPipelineProperties.class).shutdownTimeout())
                 .isEqualTo(Duration.ofSeconds(10)));
         runner.withBean(ShadowScoringCycle.class, () -> cycle)
-            .withPropertyValues(MAINLINE)
+            .withPropertyValues(ENABLED)
             .withPropertyValues("forecast.shutdown-timeout=-1s")
             .run(context -> assertThat(context).hasFailed());
     }
@@ -346,42 +279,6 @@ class ForecastPipelineShutdownConfigurationTest {
         public void close() {
             events.add("pool_closed");
             super.close();
-        }
-    }
-
-    private static final class Task implements ShadowForecastTask {
-        private final AtomicInteger ran;
-        private final Runnable body;
-        private final AtomicInteger discarded = new AtomicInteger();
-
-        private Task(AtomicInteger ran) {
-            this(ran, () -> { });
-        }
-
-        private Task(AtomicInteger ran, Runnable body) {
-            this.ran = ran;
-            this.body = body;
-        }
-
-        @Override
-        public long observationBatchId() {
-            return 0;
-        }
-
-        @Override
-        public String route() {
-            return "route";
-        }
-
-        @Override
-        public void run() {
-            body.run();
-            ran.incrementAndGet();
-        }
-
-        @Override
-        public void discard() {
-            discarded.incrementAndGet();
         }
     }
 

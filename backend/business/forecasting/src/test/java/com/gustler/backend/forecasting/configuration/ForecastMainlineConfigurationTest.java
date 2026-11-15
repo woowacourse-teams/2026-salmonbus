@@ -39,31 +39,34 @@ class ForecastMainlineConfigurationTest {
         .withBean(Clock.class, Clock::systemUTC);
 
     @Test
-    void 본선이_옛_경로이거나_예보가_꺼져_있으면_새_경로_본선을_만들지_않는다() {
-        runner.withPropertyValues("forecast.enabled=true")
+    void 예보가_꺼져_있으면_예보_구성_요소를_만들지_않는다() {
+        runner.withPropertyValues("forecast.enabled=false")
             .run(context -> assertThat(context).doesNotHaveBean(ForecastPipeline.class));
-        runner.withPropertyValues("forecast.enabled=true", "forecast.pipeline=v1", "forecast.shadow.enabled=true")
-            .run(context -> assertThat(context).doesNotHaveBean(ForecastPipeline.class));
-        runner.withPropertyValues("forecast.enabled=false", "forecast.pipeline=v2")
-            .run(context -> assertThat(context).doesNotHaveBean(ForecastPipeline.class));
+        runner.run(context -> assertThat(context).doesNotHaveBean(ForecastPipeline.class));
     }
 
     @Test
-    void 본선을_새_경로로_바꾸면_착수_시각을_예보_실행에서_먼저_읽는_되감기로_본선을_등록한다() {
-        runner.withPropertyValues("forecast.enabled=true", "forecast.pipeline=V2").run(context -> {
+    void 예보가_켜져_있으면_되감기_원본과_예보_서비스를_등록한다() {
+        runner.withPropertyValues("forecast.enabled=true").run(context -> {
             assertThat(context).getBean(ForecastPipeline.class).isInstanceOf(ForecastPipelineService.class);
-            assertThat(context.getBean(JdbcReplaySource.class).axis()).isEqualTo(JdbcReplaySource.Axis.RECORDED_RUN);
+            assertThat(context).hasSingleBean(JdbcReplaySource.class);
         });
     }
 
     @Test
-    void 늘린_되감기_창이_이관이_관측을_남겨_두는_창보다_길면_본선을_만들지_못한다() {
-        runner.withPropertyValues("forecast.enabled=true", "forecast.pipeline=v2",
-                "forecast.replay-extended-window=13h")
+    void 읽지_않는_설정_키가_남아_있어도_예보가_켜져_있으면_등록한다() {
+        runner.withPropertyValues("forecast.enabled=true", "forecast.pipeline=v1", "forecast.shadow.enabled=true",
+                "forecast.scoring=off")
+            .run(context -> assertThat(context).hasNotFailed().hasSingleBean(ForecastPipeline.class));
+    }
+
+    @Test
+    void 늘린_되감기_창이_상한보다_길면_예보_서비스를_만들지_못한다() {
+        runner.withPropertyValues("forecast.enabled=true", "forecast.replay-extended-window=13h")
             .run(context -> assertThat(context).hasFailed().getFailure()
                 .hasRootCauseInstanceOf(IllegalArgumentException.class));
-        runner.withPropertyValues("forecast.enabled=true", "forecast.pipeline=v2",
-                "forecast.replay-window=3h", "forecast.replay-extended-window=12h")
+        runner.withPropertyValues("forecast.enabled=true", "forecast.replay-window=3h",
+                "forecast.replay-extended-window=12h")
             .run(context -> assertThat(context).hasNotFailed().hasSingleBean(ForecastPipeline.class));
     }
 }

@@ -30,24 +30,25 @@ import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
- * 관측 배치 하나를 새 경로로 처리하는 공통 단계다. 그림자 실행({@link ShadowForecastService})과
- * 본선({@link ForecastPipelineService})이 같은 이 코드를 쓴다. 둘이 다른 것은 착수 시각의 출처와 옛 결과와의 대조뿐이다.
+ * 관측 배치 하나를 예보하고 저장하는 단계다.
  *
  * <p>한 번의 처리는 다음 순서다. 착수 시각은 부르는 쪽이 {@link ObservationBatchRead#batch()}에 넣어 넘긴다.
  * <ol>
- *   <li>옛 경로의 확정 조건(정상 수집, 줄이 있는 성공, 수신 뒤 90초 안 착수)을 만족하지 않는 배치는 상태에 넣지 않고 그 사유
+ *   <li>확정 조건(정상 수집, 줄이 있는 성공, 수신 뒤 90초 안 착수)을 만족하지 않는 배치는 상태에 넣지 않고 그 사유
  *       ({@code LATE}, {@code EMPTY}, {@code INPUT_UNAVAILABLE})만 실행 줄로 남긴다.</li>
+ *   <li>이 노선에서 더 늦게 수신한 배치가 이미 이력에 들어갔으면 이 배치를 이력에 넣지 않고 아무것도 쓰지 않는다
+ *       ({@link Status#OUT_OF_ORDER}).</li>
  *   <li>노선 상태가 없으면 이 배치 직전까지 되감아 만든다({@link RouteStateReplayer}). 되감기가 실패하면 그 노선은 착수 시각 기준
  *       {@value #REPLAY_RETRY_MINUTES}분 동안 되감지 않고 예보 없이 {@code INPUT_UNAVAILABLE} 실행 줄만 남긴다.</li>
- *   <li>{@link ForecastStage#advance}로 상태를 전진시키고, 옛 경로와 같은 예측 조립 객체
- *       ({@link AlightingAwarePredictionAssembler})로 예측을 만든다. 출퇴근 범위 판정은 옛 경로의 입력 조회와 같은
- *       기준(이 배치의 착수 시각)이다. 이미 반영한 배치면 아무것도 쓰지 않는다.</li>
- *   <li>예보 실행·버스별 기록·닫힌 통과를 한 트랜잭션으로 쓰고, 커밋한 뒤에만 상태를 바꾼다. 실행 줄에는 뒤 단계에 넘기는 것과
- *       같은 수집 사건의 수집 구멍 여부와 관측 줄 수를 함께 적는다. 채점이 다시 뜰 때 이 값으로 그날의 구멍과 줄 수를 되살린다.</li>
+ *   <li>{@link ForecastStage#advance}로 상태를 전진시키고 예측 조립 객체({@link AlightingAwarePredictionAssembler})로 예측을
+ *       만든다. 출퇴근 범위 판정의 기준 시각은 이 배치의 착수 시각이다. 이미 반영한 배치면 아무것도 쓰지 않는다.</li>
+ *   <li>예보 실행·버스별 기록·닫힌 통과를 한 트랜잭션으로 쓰고, 커밋한 뒤에만 상태를 바꾼다. 같은 배치의 실행 줄이 이미 있으면
+ *       저장을 되돌리고 상태를 버린다({@link Status#DUPLICATE}). 실행 줄에는 뒤 단계에 넘기는 것과 같은 수집 사건의 수집 구멍
+ *       여부와 관측 줄 수를 함께 적는다. 채점이 다시 뜰 때 이 값으로 그날의 구멍과 줄 수를 되살린다.</li>
  *   <li>사건을 수집 → 통과 → 예보 순서로 {@link PipelineEvents}에 넘긴다.</li>
  * </ol>
- * 예외는 그대로 던진다. 부르는 쪽이 그 노선의 상태를 버린다. {@code route} 행 잠금을 잡지 않고 {@code observation_batch}와 옛 경로의
- * 테이블에 쓰지 않는다. 한 노선의 처리는 한 스레드에서만 해야 한다.
+ * 예외는 그대로 던진다. 부르는 쪽이 그 노선의 상태를 버린다. {@code route} 행 잠금을 잡지 않고 {@code observation_batch}에 쓰지
+ * 않는다. 한 노선의 처리는 한 스레드에서만 해야 한다.
  *
  * <p>되감기가 예보 단계를 돌리지 못하고 끝난 배치의 통과를 찾아 주면({@link RouteStateReplayer.Result#recoveredPasses}) 아직
  * 저장되지 않은 것만 이 배치와 같은 트랜잭션으로 저장하고, 이 배치의 사건보다 먼저 통과 사건으로 넘긴다. 그 통과의 닫힌 시각은 이미
@@ -72,12 +73,12 @@ public final class PipelineBatchProcessor {
     private final boolean rushOnly;
 
     /**
-     * @param name 로그 사건 이름의 앞부분. 예: {@code pipeline_shadow}
+     * @param name 로그 사건 이름의 앞부분. 예: {@code pipeline_forecast}
      * @param transactions 저장 트랜잭션
      * @param listeners 커밋 뒤 사건을 받을 뒤 단계
      * @param states 노선 상태 등록부. 이 처리기가 상태를 읽고 바꾼다
-     * @param rushOnly 옛 경로의 {@code forecast.alighting.rush-only}. 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를
-     *                 예보하지 않는다
+     * @param rushOnly 설정 {@code forecast.alighting.rush-only}. 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를 예보하지
+     *                 않는다
      */
     public PipelineBatchProcessor(
         String name,
@@ -110,22 +111,15 @@ public final class PipelineBatchProcessor {
      * 배치 하나를 처리한다.
      *
      * @param context 노선 판본의 모델 문맥
-     * @param read 배치와 배치 밖 값. 배치의 착수 시각이 상태와 90초 판정의 기준이다
-     * @param fallbackConfirmedAt 배치의 착수 시각이 비어 있을 때 실행 줄에 적는 시각. 저장 자릿수(마이크로초)로 잘라 쓴다
-     * @param freshlyConfirmed 부르는 쪽이 이 처리에서 착수 시각을 새로 찍었으면 참이다(본선). 참이면 같은 배치의 실행 줄이 이미 있을
-     *     때 저장을 되돌리고 상태를 버린다. 또 이 노선에서 더 늦게 수신한 배치가 이미 이력에 들어갔으면 이 배치를 이력에 넣지
-     *     않고 아무것도 쓰지 않는다({@link Status#OUT_OF_ORDER}). 옛 경로의 착수 시각을 그대로 따르는 그림자는 거짓이다
+     * @param read 배치와 배치 밖 값. 부르는 쪽이 이 처리에서 찍은 착수 시각을 배치에 넣어 넘긴다. 이 시각이 상태와 90초 판정의
+     *     기준이고 실행 줄에 그대로 적힌다. 메모리의 상태가 든 시각과 다시 뜬 뒤 DB에서 읽는 시각이 같도록 저장
+     *     자릿수(마이크로초)로 자른 값이어야 한다
      * @return 처리 결과
      */
-    public Processed process(
-        RouteContext context,
-        ObservationBatchRead read,
-        Instant fallbackConfirmedAt,
-        final boolean freshlyConfirmed
-    ) {
+    public Processed process(RouteContext context, ObservationBatchRead read) {
         AlightingAwareRouteStatistics statistics = context.statistics();
         ForecastBatch batch = read.batch();
-        Resolution resolution = resolve(context, read, freshlyConfirmed);
+        Resolution resolution = resolve(context, read);
         Replay replay = resolution.replay();
         if (resolution.skipped() != null) {
             return Processed.unsaved(resolution.skipped(), null, Map.of(), replay);
@@ -133,15 +127,14 @@ public final class PipelineBatchProcessor {
         Outcome outcome = resolution.outcome();
         ForecastPublished published = new ForecastPublished(SourceDates.of(read.scheduledAt()),
             batch.observationBatchId(), read.routeId(), batch.routeVersionId(), batch.receivedAt(),
-            confirmedAtOr(batch, fallbackConfirmedAt), context.runtime().deploymentId(),
-            outcome.outcome(), outcome.vehicles());
+            batch.confirmedAt(), context.runtime().deploymentId(), outcome.outcome(), outcome.vehicles());
         List<PassClosed> closed = outcome.passes().stream()
             .map(pass -> pass.toEvent(published.sourceDate(), read.routeId()))
             .toList();
         List<PassClosed> recovered = withoutStored(replay.recovered());
         ObservationBatchSeen seen = seen(read);
         final boolean saved = Boolean.TRUE.equals(transactions.execute(status -> {
-            if (!records.save(published, seen) && freshlyConfirmed) {
+            if (!records.save(published, seen)) {
                 status.setRollbackOnly();
                 return false;
             }
@@ -154,7 +147,7 @@ public final class PipelineBatchProcessor {
             return Processed.unsaved(Status.DUPLICATE, published, outcome.excluded(), replay);
         }
         applyState(statistics, outcome);
-        if (freshlyConfirmed && batch.confirmed()) {
+        if (batch.confirmed()) {
             states.applied(statistics.route(), batch.receivedAt());
         }
         logRecovered(statistics, batch, replay, recovered);
@@ -163,13 +156,13 @@ public final class PipelineBatchProcessor {
             replay.succeeded(), outcome.unattributed(), recovered.size(), replay.extension());
     }
 
-    private Resolution resolve(RouteContext context, ObservationBatchRead read, final boolean freshlyConfirmed) {
+    private Resolution resolve(RouteContext context, ObservationBatchRead read) {
         ForecastBatch batch = read.batch();
         if (!batch.confirmed()) {
             return Resolution.of(Outcome.withoutState(notConfirmed(batch), null), Replay.NONE);
         }
         AlightingAwareRouteStatistics statistics = context.statistics();
-        if (freshlyConfirmed && states.receivedBeforeApplied(statistics.route(), batch.receivedAt())) {
+        if (states.receivedBeforeApplied(statistics.route(), batch.receivedAt())) {
             return Resolution.skipped(Status.OUT_OF_ORDER, Replay.NONE);
         }
         Optional<RouteForecastState> state = states.find(statistics);
@@ -192,7 +185,7 @@ public final class PipelineBatchProcessor {
             state = Optional.of(replayed.state());
         }
         RouteForecastState current = state.orElseThrow();
-        if (freshlyConfirmed && current.receivedBeforeApplied(batch)) {
+        if (current.receivedBeforeApplied(batch)) {
             return Resolution.skipped(Status.OUT_OF_ORDER, replay);
         }
         ForecastStageResult result = stage.advance(current, statistics, read.capacitySourceId(), batch);
@@ -200,14 +193,6 @@ public final class PipelineBatchProcessor {
             return Resolution.skipped(Status.STALE, replay);
         }
         return Resolution.of(advanced(context, read, result), replay);
-    }
-
-    /** 메모리에 든 착수 시각이 다시 뜬 뒤 DB에서 읽는 값과 같도록 저장 자릿수로 자른다. */
-    private static Instant confirmedAtOr(ForecastBatch batch, Instant fallbackConfirmedAt) {
-        if (batch.confirmedAt() == null) {
-            return fallbackConfirmedAt.truncatedTo(ChronoUnit.MICROS);
-        }
-        return batch.confirmedAt();
     }
 
     private void savePasses(List<PassClosed> closed) {
@@ -299,7 +284,7 @@ public final class PipelineBatchProcessor {
         return ForecastOutcome.PUBLISHED;
     }
 
-    /** 옛 경로의 입력 조회({@code validateScope})와 같다. 기준 시각은 이 배치의 착수 시각이다. */
+    /** 시간 확장 모델이 없을 때 출퇴근 범위 밖인지다. 기준 시각은 이 배치의 착수 시각이다. */
     private boolean outsideScope(RouteContext context, ForecastBatch batch) {
         if (!rushOnly || context.runtime().model().supportsExtendedHours()) {
             return false;
@@ -350,7 +335,7 @@ public final class PipelineBatchProcessor {
         return rowNumber;
     }
 
-    /** 확정 조건을 만족하지 않는 배치의 사유다. 정상 수집이 아닌 배치는 옛 경로가 확정하지 않고 실패한다. */
+    /** 확정 조건을 만족하지 않는 배치의 사유다. 정상 수집이 아니거나 시각이 빠진 배치는 입력 부족으로 본다. */
     private static ForecastOutcome notConfirmed(ForecastBatch batch) {
         if (lacksLiveTiming(batch)) {
             return ForecastOutcome.INPUT_UNAVAILABLE;
@@ -481,8 +466,8 @@ public final class PipelineBatchProcessor {
     }
 
     /**
-     * 배치 하나의 새 경로 결과다. 다음 상태가 없으면 상태를 바꾸지 않고, {@code dropState}면 상태를 버린다.
-     * {@code special}은 대조와 무관하게 정해진 배치 분류다. {@code unattributed}는 저장하지 않은 통과 수다.
+     * 배치 하나의 처리 결과다. 다음 상태가 없으면 상태를 바꾸지 않고, {@code dropState}면 상태를 버린다.
+     * {@code special}은 실행 결과와 따로 정해진 배치 분류다. {@code unattributed}는 저장하지 않은 통과 수다.
      */
     private record Outcome(
         ForecastOutcome outcome,

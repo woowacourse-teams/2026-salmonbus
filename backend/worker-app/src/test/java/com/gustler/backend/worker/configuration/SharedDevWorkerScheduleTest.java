@@ -39,8 +39,6 @@ class SharedDevWorkerScheduleTest {
             softly.assertThat(devCollection.routeIds()).containsExactlyElementsOf(productionCollection.routeIds());
             softly.assertThat(devForecast.enabled()).isTrue();
             softly.assertThat(devForecast.interval()).isEqualTo(productionForecast.interval());
-            softly.assertThat(devForecast.settlementInterval()).isEqualTo(productionForecast.settlementInterval());
-            softly.assertThat(devForecast.statisticsInterval()).isEqualTo(productionForecast.statisticsInterval());
             softly.assertThat(devForecast.pendingLimit()).isEqualTo(productionForecast.pendingLimit());
         }
     }

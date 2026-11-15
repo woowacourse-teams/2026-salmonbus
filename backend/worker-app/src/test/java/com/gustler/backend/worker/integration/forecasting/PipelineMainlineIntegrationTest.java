@@ -40,17 +40,14 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * 새 예보 경로를 본선으로 켠 worker({@code forecast.pipeline=v2}, {@code forecast.scoring=v2})를 실제로 조립해, 수집 원장이 커밋한
- * 관측이 신호·노선별 실행 줄·본선 서비스·저장·채점까지 실제 빈으로 흐르는지 본다. 모델 선택({@link ForecastRuntime})만 바꿔
- * 확정 프로필 모델을 준다.
+ * 예보를 켠 worker({@code forecast.enabled=true})를 실제로 조립해, 수집 원장이 커밋한 관측이 신호·노선별 실행 줄·예보 서비스·
+ * 저장·채점까지 실제 빈으로 흐르는지 본다. 모델 선택({@link ForecastRuntime})만 바꿔 확정 프로필 모델을 준다.
  *
  * <p>주기 줍기는 1시간이라 시험 중에는 돌지 않는다. 시험은 줍기를 기동 직후처럼 한 번 불러 노선 판본의 실행 줄 열쇠를 알게 한 뒤,
  * 그 뒤의 처리는 모두 커밋 뒤 신호로만 일어나게 한다.
  */
 @SpringBootTest(classes = WorkerApplication.class, properties = {
     "forecast.enabled=true",
-    "forecast.pipeline=v2",
-    "forecast.scoring=v2",
     "forecast.interval=1h",
     "forecast.scoring-flush-interval=200ms"
 })

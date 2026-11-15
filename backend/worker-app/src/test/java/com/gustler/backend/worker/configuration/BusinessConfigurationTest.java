@@ -23,8 +23,6 @@ class BusinessConfigurationTest {
     private static final String ENVIRONMENT_NAME = "FORECAST_STALENESS";
     private static final String[] VALID_FORECAST_SETTINGS = {
         "forecast.interval=10s",
-        "forecast.settlement-interval=60s",
-        "forecast.statistics-interval=6h",
         "forecast.staleness=5m",
         "forecast.batch-limit=20",
         "forecast.pending-limit=3000",

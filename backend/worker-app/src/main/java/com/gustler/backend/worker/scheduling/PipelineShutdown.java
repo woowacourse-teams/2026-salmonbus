@@ -17,7 +17,7 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
- * 정상 종료 때 새 예보 경로가 받은 일을 끝까지 처리하고 내려가게 한다. 컨텍스트가 닫힐 때 다음 순서로 한 번 돈다.
+ * 정상 종료 때 예보와 채점이 받은 일을 끝까지 처리하고 내려가게 한다. 컨텍스트가 닫힐 때 다음 순서로 한 번 돈다.
  *
  * <ol>
  *   <li>수집 스케줄러의 남은 예약을 취소하고, 수집과 줍기 스케줄러가 돌던 회차를 끝내기를 기다린다. 채점 주기 작업도 더 돌지 않게
@@ -129,7 +129,7 @@ public final class PipelineShutdown implements SmartLifecycle {
 
     /**
      * 수집과 줍기가 새 회차를 시작하지 않게 하고 돌던 회차가 끝나기를 기다린다. 줍기 스케줄러에 이미 들어가 있는 일은 취소하지 않고
-     * 끝나기를 기다린다. 본선이 옛 경로일 때 그 일은 옛 예보 한 건이고 그림자 실행은 그 뒤에 일을 받는다.
+     * 끝나기를 기다린다.
      *
      * @return 마감까지 끝나지 않은 스케줄러 수
      */
@@ -235,11 +235,11 @@ public final class PipelineShutdown implements SmartLifecycle {
     }
 
     /**
-     * 종료 때 다루는 구성 요소다. 스위치 조합에 따라 없는 것은 빈 목록이고, 그 단계는 아무 일도 하지 않는다.
+     * 종료 때 다루는 구성 요소다. 없는 것은 빈 목록이고, 그 단계는 아무 일도 하지 않는다.
      *
      * @param collection 수집 스케줄러. 남은 예약을 취소하고 돌던 회차를 기다린다
-     * @param pickup 줍기와 옛 예보가 도는 스케줄러. 들어가 있는 일이 끝나기를 기다린다
-     * @param forecast 예보 실행 줄. 본선의 노선별 실행 줄이나 그림자 실행 줄이다
+     * @param pickup 줍기가 도는 스케줄러. 들어가 있는 일이 끝나기를 기다린다
+     * @param forecast 노선별 예보 실행 줄
      * @param scoring 채점 줄
      * @param scoringTicks 채점 주기 작업의 스케줄러
      * @param cycles 채점. 사건 받기를 멈추고 마지막 쓰기를 한다

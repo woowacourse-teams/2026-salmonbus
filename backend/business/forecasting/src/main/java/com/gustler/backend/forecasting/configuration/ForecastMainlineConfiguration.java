@@ -23,7 +23,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.convert.DurationStyle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,22 +32,18 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 새 예보 경로를 본선으로 돌리는 구성 요소를 등록한다({@code forecast.pipeline=v2}).
+ * 예보를 돌리는 구성 요소를 등록한다.
  *
- * <p>예보가 켜져 있고({@code forecast.enabled=true}) {@code forecast.pipeline=v2}일 때만 등록한다. 이때 그림자 실행
- * ({@link ForecastShadowConfiguration})은 조건상 등록되지 않으므로 {@code forecast.shadow.enabled}는 무시된다. 노선별 실행 줄
- * ({@link ForecastLanes})과 신호·주기 호출은 실행하는 앱이 등록한다. 옛 발행 경로의 빈은 그대로 있지만 아무도 부르지 않는다.
+ * <p>예보가 켜져 있을 때({@code forecast.enabled=true})만 등록한다. 노선별 실행 줄({@link ForecastLanes})과 신호·주기 호출은
+ * 실행하는 앱이 같은 조건으로 등록한다.
  *
  * <p>다시 뜰 때 {@code forecast.replay-window}(기본 6시간)만큼 되감고, 되감은 상태가 모자라면
- * {@code forecast.replay-extended-window}(기본 12시간)로 한 번 늘려 다시 되감는다. 늘린 창은 이관이 최근 관측을 남겨 두는 창
- * ({@code archive.history-hold-window})보다 길 수 없다.
+ * {@code forecast.replay-extended-window}(기본 12시간)로 한 번 늘려 다시 되감는다. 늘린 창은 12시간을 넘을 수 없다. 이관은 관측의
+ * 날짜 파티션을 최소 사흘 남기므로 이 창 안의 관측은 항상 남아 있다.
  */
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnExpression(ForecastMainlineConfiguration.MAINLINE_ENABLED)
+@ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastMainlineConfiguration {
-    /** 본선을 켜는 조건. 실행하는 앱의 줄·신호 등록 조건과 같아야 한다. */
-    public static final String MAINLINE_ENABLED = "${forecast.enabled:false}"
-        + " and '${forecast.pipeline:v1}'.equalsIgnoreCase('v2')";
     private static final int WRITE_TIMEOUT_SECONDS = 15;
 
     @Bean
@@ -55,7 +51,7 @@ public class ForecastMainlineConfiguration {
         JdbcClient jdbc,
         @Value("${forecast.alighting.maximum-history-rows:250000}") final int maximumRows
     ) {
-        return new JdbcReplaySource(jdbc, maximumRows, JdbcReplaySource.Axis.RECORDED_RUN);
+        return new JdbcReplaySource(jdbc, maximumRows);
     }
 
     @Bean

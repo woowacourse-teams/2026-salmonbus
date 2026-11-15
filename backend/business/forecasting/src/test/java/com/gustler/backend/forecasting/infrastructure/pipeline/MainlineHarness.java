@@ -103,7 +103,7 @@ final class MainlineHarness {
             new RouteStops(version, SOURCE_ROUTE_ID, stops.stops(), stops.routeName())));
         model = model(new Random(seed));
         runtime = activate(model);
-        source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS, JdbcReplaySource.Axis.RECORDED_RUN);
+        source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
         stage = new ForecastStage(new CachedVehicleCapacities(
             new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc))));
     }

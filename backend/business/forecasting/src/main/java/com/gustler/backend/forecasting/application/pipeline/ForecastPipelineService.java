@@ -342,8 +342,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
         if (read.batch().receivedAt() != null) {
             metrics.lag(Duration.between(read.batch().receivedAt(), confirmedAt));
         }
-        PipelineBatchProcessor.Processed processed = processor.process(context, read.withConfirmedAt(confirmedAt),
-            confirmedAt, true);
+        PipelineBatchProcessor.Processed processed = processor.process(context, read.withConfirmedAt(confirmedAt));
         if (processed.replayed() != null) {
             metrics.replay(processed.replayed());
         }

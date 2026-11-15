@@ -28,11 +28,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * 날짜 파티션 테이블에 한국 날짜 기준 오늘부터 {@value #DAYS_AHEAD}일 뒤까지 {@code <table>_pYYYYMMDD} 파티션을 만든다.
  *
- * <p>대상은 두 묶음이다. 새 예보 경로의 테이블 다섯 개({@link #TABLES})는 새 경로 스위치가 켜졌을 때만 다룬다
- * ({@link #setPipelineTables}). 관측 두 테이블({@link #OBSERVATION_TABLES})은 카탈로그에서 파티션 테이블({@code relkind='p'})일
- * 때만 다룬다. 운영 전환 마지막 단계의 수동 SQL({@code deploy/sql/sal434-04-partition-observation-tables.sql})이 같은 이름 규칙
- * ({@code <table>_pYYYYMMDD}, 기본 파티션 {@code <table>_default}, 하루 범위 {@code [날짜, 날짜+1)})으로 이 두 테이블을 바꾸기
- * 전에는 일반 테이블이라 카탈로그만 읽고 아무것도 쓰지 않는다.
+ * <p>대상은 두 묶음이다. 예보 기록 테이블 다섯 개({@link #TABLES})는 예보가 켜졌을 때만 다룬다({@link #setPipelineTables}).
+ * 관측 두 테이블({@link #OBSERVATION_TABLES})은 카탈로그에서 파티션 테이블({@code relkind='p'})일 때만 다룬다. 수동 SQL
+ * ({@code deploy/sql/sal434-04-partition-observation-tables.sql})이 같은 이름 규칙({@code <table>_pYYYYMMDD}, 기본 파티션
+ * {@code <table>_default}, 하루 범위 {@code [날짜, 날짜+1)})으로 이 두 테이블을 바꾸기 전에는 일반 테이블이라 카탈로그만 읽고
+ * 아무것도 쓰지 않는다.
  *
  * <p>파티션 하나는 짧은 트랜잭션 하나로 만든다. PostgreSQL은 파티션을 만드는 동안 부모 테이블과 기본 파티션에
  * {@code ACCESS EXCLUSIVE} 잠금을 잡고 기본 파티션을 훑으므로, 잠금 대기를 3초로 묶어 쓰기를 오래 막지 않는다.
@@ -79,17 +79,16 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
     }
 
     /**
-     * 새 예보 테이블 다섯 개를 다룰지 정한다. 새 경로 스위치 하나라도 켜졌을 때 참이며, 직접 만든 객체는 참이다.
+     * 예보 기록 테이블 다섯 개를 다룰지 정한다. 예보가 켜졌을 때({@code forecast.enabled=true}) 참이며, 직접 만든 객체는 참이다.
      *
-     * @param pipelineTables 새 예보 테이블을 다루면 참
+     * @param pipelineTables 예보 기록 테이블을 다루면 참
      */
-    @Value("#{${forecast.shadow.enabled:false} or '${forecast.pipeline:v1}'.equalsIgnoreCase('v2')"
-        + " or !'${forecast.scoring:off}'.equalsIgnoreCase('off')}")
+    @Value("${forecast.enabled:false}")
     public void setPipelineTables(final boolean pipelineTables) {
         this.pipelineTables = pipelineTables;
     }
 
-    /** 이번에 다룰 테이블. 새 예보 테이블(켜졌을 때)과 파티션 테이블이 된 관측 테이블이다. */
+    /** 이번에 다룰 테이블. 예보 기록 테이블(예보가 켜졌을 때)과 파티션 테이블인 관측 테이블이다. */
     public List<String> managedTables() {
         List<String> tables = new ArrayList<>();
         if (pipelineTables) {

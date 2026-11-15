@@ -13,8 +13,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class ForecastPipelineConfigurationTest {
@@ -23,58 +21,54 @@ class ForecastPipelineConfigurationTest {
         .withBean(MaintainPipelinePartitions.class, CountingPartitions::new);
 
     @Test
-    void 스위치가_모두_기본값이면_파티션_유지_작업과_스위치_설정을_등록하지_않는다() {
-        runner.withPropertyValues("forecast.pipeline=v1", "forecast.shadow.enabled=false", "forecast.scoring=off")
+    void 예보와_수집이_모두_꺼져_있으면_파티션_유지_작업과_설정을_등록하지_않는다() {
+        runner.withPropertyValues("forecast.enabled=false", "collection.enabled=false")
             .run(context -> {
                 assertThat(context).doesNotHaveBean(PipelinePartitionJob.class);
                 assertThat(context).doesNotHaveBean(ForecastPipelineProperties.class);
                 CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
                 assertThat(partitions.calls.get()).isZero();
             });
+        runner.run(context -> assertThat(context).doesNotHaveBean(PipelinePartitionJob.class));
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"forecast.shadow.enabled=true", "forecast.pipeline=v2", "forecast.scoring=shadow",
-        "forecast.scoring=v2"})
-    void 스위치_하나라도_켜면_기동_직후에_파티션을_한_번_만든다(String switchOn) {
-        runner.withPropertyValues(switchOn).run(context -> {
+    @Test
+    void 예보가_켜져_있으면_기동_직후에_파티션을_한_번_만든다() {
+        runner.withPropertyValues("forecast.enabled=true").run(context -> {
             CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
 
             assertThat(context).hasSingleBean(PipelinePartitionJob.class);
-            assertThat(context.getBean(ForecastPipelineProperties.class).usesPipelineTables()).isTrue();
             assertThat(partitions.started.await(5, TimeUnit.SECONDS)).isTrue();
         });
     }
 
     @Test
-    void 스위치가_기본값이어도_수집이_켜진_worker는_관측_테이블을_위해_파티션_유지_작업을_등록한다() {
+    void 예보가_꺼져_있어도_수집이_켜진_worker는_관측_테이블을_위해_파티션_유지_작업을_등록한다() {
         runner.withPropertyValues("collection.enabled=true").run(context -> {
             CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
 
             assertThat(context).hasSingleBean(PipelinePartitionJob.class);
-            assertThat(context.getBean(ForecastPipelineProperties.class).usesPipelineTables()).isFalse();
             assertThat(partitions.started.await(5, TimeUnit.SECONDS)).isTrue();
         });
     }
 
     @Test
-    void 스위치_값을_바인딩하고_기본값을_채운다() {
-        runner.withPropertyValues("forecast.pipeline=V2", "forecast.scoring=shadow").run(context -> {
+    void 실행_줄과_되감기와_종료_설정의_기본값을_채운다() {
+        runner.withPropertyValues("forecast.enabled=true").run(context -> {
             ForecastPipelineProperties actual = context.getBean(ForecastPipelineProperties.class);
 
             assertSoftly(softly -> {
-                softly.assertThat(actual.pipeline()).isEqualTo(ForecastPipelineProperties.Pipeline.V2);
-                softly.assertThat(actual.scoring()).isEqualTo(ForecastPipelineProperties.Scoring.SHADOW);
-                softly.assertThat(actual.shadow().enabled()).isFalse();
                 softly.assertThat(actual.lanes()).isEqualTo(2);
+                softly.assertThat(actual.laneQueueCapacity()).isEqualTo(1_000);
                 softly.assertThat(actual.replayWindow()).isEqualTo(Duration.ofHours(6));
+                softly.assertThat(actual.shutdownTimeout()).isEqualTo(Duration.ofSeconds(10));
             });
         });
     }
 
     @Test
     void 노선별_실행_줄_수가_1보다_작으면_기동하지_않는다() {
-        runner.withPropertyValues("forecast.shadow.enabled=true", "forecast.lanes=0")
+        runner.withPropertyValues("forecast.enabled=true", "forecast.lanes=0")
             .run(context -> assertThat(context).hasFailed());
     }
 

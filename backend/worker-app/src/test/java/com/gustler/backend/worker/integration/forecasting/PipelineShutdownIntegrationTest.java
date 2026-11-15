@@ -52,7 +52,7 @@ import org.springframework.test.context.MergedContextConfiguration;
 import org.springframework.test.context.SmartContextLoader;
 
 /**
- * 새 예보 경로를 본선으로 켠 worker를 실제로 띄운 뒤 닫아, 실행 줄에 쌓여 있던 배치와 채점이 모아 둔 결과가 DB 연결 풀이 닫히기
+ * 예보를 켠 worker를 실제로 띄운 뒤 닫아, 실행 줄에 쌓여 있던 배치와 채점이 모아 둔 결과가 DB 연결 풀이 닫히기
  * 전에 모두 저장되는지 본다.
  *
  * <p>닫힌 뒤의 DB를 봐야 하므로 DB와 컨텍스트를 시험이 직접 만든다. 컨텍스트가 만든 시험 DB는 컨텍스트가 닫힐 때 지워지고, 캐시된
@@ -245,8 +245,6 @@ class PipelineShutdownIntegrationTest {
     /** 띄울 worker의 설정이다. 시험 클래스가 아니라 설정을 적어 두는 자리여서 시험 메서드가 없다. */
     @SpringBootTest(classes = WorkerApplication.class, properties = {
         "forecast.enabled=true",
-        "forecast.pipeline=v2",
-        "forecast.scoring=v2",
         "forecast.interval=1h",
         "forecast.scoring-flush-interval=1h",
         "forecast.shutdown-timeout=30s"

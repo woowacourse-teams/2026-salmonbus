@@ -309,7 +309,7 @@ class ForecastPipelineMainlineTest {
             softly.assertThat(new JdbcPendingPipelineBatches(jdbc).find(harness.version(late),
                 harness.receivedAt(late).minusSeconds(60), 100))
                 .noneMatch(pending -> pending.observationBatchId() == late);
-            ReplaySource.Read replay = new JdbcReplaySource(jdbc, MAXIMUM_ROWS, JdbcReplaySource.Axis.RECORDED_RUN)
+            ReplaySource.Read replay = new JdbcReplaySource(jdbc, MAXIMUM_ROWS)
                 .read(harness.statistics(), harness.receivedAt(late).minus(Duration.ofHours(1)),
                     harness.receivedAt(late).plus(Duration.ofHours(1)), Long.MAX_VALUE);
             softly.assertThat(replay.batches()).isNotEmpty().noneMatch(batch -> batch.observationBatchId() == late);
@@ -471,7 +471,7 @@ class ForecastPipelineMainlineTest {
         /** 예보 경로를 새로 띄운다. 노선 상태와 지표가 빈 채로 시작하므로 첫 배치가 되감는다. */
         private void startMainline(Duration replayWindow, final int batchLimit) {
             meters = new SimpleMeterRegistry();
-            JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS, JdbcReplaySource.Axis.RECORDED_RUN);
+            JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
             ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
             PipelineBatchProcessor processor = new PipelineBatchProcessor("pipeline_forecast", stage,
                 new RouteStateReplayer(source, stage, replayWindow), records, passes,

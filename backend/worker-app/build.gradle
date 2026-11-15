@@ -40,9 +40,6 @@ tasks.named('test') {
     environment 'ARRIVALS_ENABLED', 'false'
     environment 'ROUTE_GEOMETRY_ENABLED', 'false'
     environment 'ROUTE_GEOMETRY_GENERATION_ENABLED', 'false'
-    environment 'FORECAST_PIPELINE', 'v1'
-    environment 'FORECAST_SHADOW_ENABLED', 'false'
-    environment 'FORECAST_SCORING', 'off'
     environment 'GBIS_SERVICE_KEY', 'fake-service-key-for-test'
     // SharedDevWorkerScheduleTest 가 dev 서버 설정을 상대 경로로 읽는다.
     inputs.file(rootProject.file('../dev/server/worker.yml'))
