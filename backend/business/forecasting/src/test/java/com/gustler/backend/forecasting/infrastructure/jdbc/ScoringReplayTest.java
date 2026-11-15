@@ -45,7 +45,7 @@ class ScoringReplayTest {
         ScoringReplay replay = new ScoringReplay(stores, stores);
 
         // when
-        replay.replay(emptyStage(), LegacyScoringScenario.ROUTE, NOW);
+        replay.replay(emptyStage(), ScoringScenario.ROUTE, NOW);
 
         // then
         Instant forecastFrom = scoredThrough.minus(Duration.ofMinutes(130));
@@ -66,7 +66,7 @@ class ScoringReplayTest {
         ScoringReplay replay = new ScoringReplay(stores, stores);
 
         // when
-        replay.replay(emptyStage(), LegacyScoringScenario.ROUTE, NOW);
+        replay.replay(emptyStage(), ScoringScenario.ROUTE, NOW);
 
         // then
         assertSoftly(softly -> {
@@ -84,7 +84,7 @@ class ScoringReplayTest {
         ScoringReplay replay = new ScoringReplay(stores, stores);
 
         // when
-        replay.replay(emptyStage(), LegacyScoringScenario.ROUTE, NOW);
+        replay.replay(emptyStage(), ScoringScenario.ROUTE, NOW);
 
         // then
         assertThat(stores.forecastFrom).isEqualTo(lastUnresolved.minus(Duration.ofMinutes(130)));
@@ -97,7 +97,7 @@ class ScoringReplayTest {
         ScoringReplay replay = new ScoringReplay(stores, stores);
 
         // when
-        replay.replay(emptyStage(), LegacyScoringScenario.ROUTE, NOW);
+        replay.replay(emptyStage(), ScoringScenario.ROUTE, NOW);
 
         // then
         assertThat(stores.forecastFrom).isEqualTo(NOW.minus(Duration.ofHours(26)));
@@ -110,7 +110,7 @@ class ScoringReplayTest {
         ScoringReplay replay = new ScoringReplay(stores, stores);
 
         // when
-        replay.replay(emptyStage(), LegacyScoringScenario.ROUTE, NOW);
+        replay.replay(emptyStage(), ScoringScenario.ROUTE, NOW);
 
         // then
         assertThat(stores.forecastFrom).isEqualTo(NOW.minus(Duration.ofHours(26)));
@@ -119,9 +119,9 @@ class ScoringReplayTest {
     @Test
     void 수집_구멍이_있던_날에_상태를_버리고_되감아도_연속_실행과_결과_집합이_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(151, START, 600, 6, 0.004, true);
+        ScoringScenario scenario = ScoringScenario.random(151, START, 600, 6, 0.004, true);
         List<Object> events = scenario.events();
-        Map<String, Object> continuous = storedRows(LegacyScoringScenario.feed(scenario.stage(LIMIT), events));
+        Map<String, Object> continuous = storedRows(ScoringScenario.feed(scenario.stage(LIMIT), events));
         final int firstHole = firstHoleIndex(events);
 
         for (int cut : List.of(batchStart(events, firstHole + 1),
@@ -139,9 +139,9 @@ class ScoringReplayTest {
     void 관측_상한을_넘기_전과_넘은_뒤_어디서_되감아도_연속_실행과_결과_집합이_같다() {
         // given
         final int limit = 500;
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(157, START, 600, 6, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(157, START, 600, 6, 0, true);
         List<Object> events = scenario.events();
-        Map<String, Object> continuous = storedRows(LegacyScoringScenario.feed(scenario.stage(limit), events));
+        Map<String, Object> continuous = storedRows(ScoringScenario.feed(scenario.stage(limit), events));
         final int overflow = overflowIndex(events, limit);
 
         for (int cut : List.of(batchStart(events, overflow / 2),
@@ -157,20 +157,20 @@ class ScoringReplayTest {
 
     /** {@code cut} 앞의 사건을 저장된 것으로 보고 그 자리에서 상태를 버리고 되감은 뒤 나머지 사건을 이어 넣는다. */
     private static Map<String, Object> storedRowsWithReplayAt(
-        LegacyScoringScenario scenario,
+        ScoringScenario scenario,
         List<Object> events,
         final int cut,
         final int limit
     ) {
         ScoringStage stage = scenario.stage(limit);
         List<Object> saved = events.subList(0, cut);
-        ScoringResult before = LegacyScoringScenario.feed(stage, saved);
+        ScoringResult before = ScoringScenario.feed(stage, saved);
         Instant now = saved.stream().map(ScoringReplayTest::time).max(Instant::compareTo).orElseThrow().plusMillis(1);
         RecordedScoringEvents recorded = new RecordedScoringEvents(saved,
             () -> RecordedScoringEvents.rowsOf(before));
         ScoringResult replayed = new ScoringReplay(recorded.forecasts(), recorded.passes())
-            .replay(stage, LegacyScoringScenario.ROUTE, now);
-        ScoringResult after = LegacyScoringScenario.feed(stage, events.subList(cut, events.size()));
+            .replay(stage, ScoringScenario.ROUTE, now);
+        ScoringResult after = ScoringScenario.feed(stage, events.subList(cut, events.size()));
         return storedRows(before.plus(replayed).plus(after));
     }
 
@@ -240,7 +240,7 @@ class ScoringReplayTest {
 
     private static ScoringStage emptyStage() {
         return new ScoringStage((deployment, version) -> Optional.empty(), version -> List.of(),
-            new ConfirmedPassLabelCalculator(), LegacyScoringScenario.FIXED);
+            new ConfirmedPassLabelCalculator(), ScoringScenario.FIXED);
     }
 
     /** 아무 기록도 돌려주지 않고 되감기가 읽은 범위만 적어 둔다. */

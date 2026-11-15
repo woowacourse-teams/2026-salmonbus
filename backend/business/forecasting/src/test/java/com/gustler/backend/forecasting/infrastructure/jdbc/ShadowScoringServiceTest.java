@@ -46,7 +46,7 @@ class ShadowScoringServiceTest {
     @Test
     void 줄이_넘쳐_버린_사건이_있어도_그_노선을_되감아_연속_실행과_결과_집합이_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(97, START, 500, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(97, START, 500, 7, 0, true);
         Harness harness = new Harness(scenario, scenario.stage(LIMIT));
         int[] passes = passIndexes(harness.events);
         harness.reject = index -> index == passes[passes.length / 3] || index == passes[passes.length / 2] + 1;
@@ -65,7 +65,7 @@ class ShadowScoringServiceTest {
     @Test
     void 처리_중_예외가_나면_노선_상태를_버리고_다음_사건에서_되감아_연속_실행과_결과_집합이_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(101, START, 500, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(101, START, 500, 7, 0, true);
         AtomicInteger calls = new AtomicInteger();
         PassLabelCalculator real = new ConfirmedPassLabelCalculator();
         PassLabelCalculator failingOnce = (pass, previous, evidence) -> {
@@ -90,7 +90,7 @@ class ShadowScoringServiceTest {
     @Test
     void 다시_뜨면_최근_예보가_있는_노선을_되감아_기다리던_예측을_다시_만들고_이어_간다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(103, START, 500, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(103, START, 500, 7, 0, true);
         Harness before = new Harness(scenario, scenario.stage(LIMIT));
         final int cut = before.events.size() / 2;
         before.deliver(0, cut);
@@ -116,7 +116,7 @@ class ShadowScoringServiceTest {
     @Test
     void 되감기가_실패한_노선은_30초_동안_사건을_처리하지_않고_그_뒤에_되감아_결과를_맞춘다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(107, START, 500, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(107, START, 500, 7, 0, true);
         Harness harness = new Harness(scenario, scenario.stage(LIMIT));
         harness.failingReads = 1;
 
@@ -135,7 +135,7 @@ class ShadowScoringServiceTest {
     @Test
     void 쓰지_못한_결과를_남기고_30분_내려가_있다_다시_떠도_그_전에_발행된_예측을_모두_닫고_연속_실행과_결과_집합이_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(127, START, 700, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(127, START, 700, 7, 0, true);
 
         // when
         Map<String, Object> stored = storedAfterCrashAndDowntime(scenario, Duration.ofMinutes(30));
@@ -150,7 +150,7 @@ class ShadowScoringServiceTest {
     @Test
     void 쓰지_못한_결과를_남기고_3시간_내려가_있다_다시_떠도_그_전에_발행된_예측을_모두_닫고_연속_실행과_결과_집합이_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(127, START, 700, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(127, START, 700, 7, 0, true);
 
         // when
         Map<String, Object> stored = storedAfterCrashAndDowntime(scenario, Duration.ofHours(3));
@@ -162,7 +162,7 @@ class ShadowScoringServiceTest {
     @Test
     void 오래_내려가_있다_되감은_직후에_다시_내려가도_닫히지_못한_예측을_다시_읽어_연속_실행과_결과_집합이_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(173, START, 700, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(173, START, 700, 7, 0, true);
         Harness first = new Harness(scenario, scenario.stage(LIMIT));
         first.deliverUntilCrash(first.events.size());
         Harness second = first.restartedAfter(Duration.ofHours(3), scenario.stage(LIMIT));
@@ -184,7 +184,7 @@ class ShadowScoringServiceTest {
     @Test
     void 수집_구멍이_있던_날에_다시_떠도_그_구멍으로_닫혔어야_할_예측을_지원_안_함으로_닫아_연속_실행과_결과_집합이_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(131, START, 600, 7, 0.004, true);
+        ScoringScenario scenario = ScoringScenario.random(131, START, 600, 7, 0.004, true);
         Harness before = new Harness(scenario, scenario.stage(LIMIT));
         final int firstHole = firstHoleIndex(before.events);
         final int cut = firstHole + (before.events.size() - firstHole) / 2;
@@ -211,7 +211,7 @@ class ShadowScoringServiceTest {
     @Test
     void 되감기가_오래_실패하다_성공하면_그사이_닫힌_통과의_정답이_빠지지_않고_연속_실행과_결과_집합이_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(137, START, 1300, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(137, START, 1300, 7, 0, true);
         Harness harness = new Harness(scenario, scenario.stage(LIMIT));
         final int failFrom = harness.events.size() * 15 / 100;
         final int failUntil = harness.events.size() * 75 / 100;
@@ -234,7 +234,7 @@ class ShadowScoringServiceTest {
     @Test
     void 받기를_멈춘_뒤에_온_사건과_주기_호출은_채점_줄에_넣지_않고_버린_사건으로도_세지_않는다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(139, START, 80, 5, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(139, START, 80, 5, 0, true);
         Harness harness = new Harness(scenario, scenario.stage(LIMIT));
         final int half = harness.events.size() / 2;
         harness.deliver(0, half);
@@ -259,7 +259,7 @@ class ShadowScoringServiceTest {
     @Test
     void 마지막_쓰기는_쓰지_못하면_남은_줄_수를_돌려주고_다시_부르면_남은_줄을_모두_쓴다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(149, START, 80, 5, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(149, START, 80, 5, 0, true);
         Harness harness = new Harness(scenario, scenario.stage(LIMIT));
         harness.labels.failing = true;
         harness.deliver(0, harness.events.size() / 2);
@@ -282,7 +282,7 @@ class ShadowScoringServiceTest {
     }
 
     /** 주기 쓰기 뒤에 나온 결과를 쓰지 못한 채 멈추고, 그만큼 내려가 있다가 다시 떠서 사건 없이 마감만 닫은 뒤 저장된 줄을 모은다. */
-    private static Map<String, Object> storedAfterCrashAndDowntime(LegacyScoringScenario scenario, Duration downtime) {
+    private static Map<String, Object> storedAfterCrashAndDowntime(ScoringScenario scenario, Duration downtime) {
         Harness before = new Harness(scenario, scenario.stage(LIMIT));
         before.deliverUntilCrash(before.events.size());
         Harness after = before.restartedAfter(downtime, scenario.stage(LIMIT));
@@ -295,10 +295,10 @@ class ShadowScoringServiceTest {
      * 마지막 사건 때까지 닫히지 못한 예측 가운데 가장 오래 기다린 시간이다. 내려가 있던 시간이 짧을 때는 이 시간이 길어야, 되감기가
      * 고정 2시간 10분만 읽던 때와의 차이가 드러난다.
      */
-    private static Duration longestWaitAtEnd(LegacyScoringScenario scenario) {
+    private static Duration longestWaitAtEnd(ScoringScenario scenario) {
         List<Object> events = scenario.events();
         ScoringStage stage = scenario.stage(LIMIT);
-        LegacyScoringScenario.feed(stage, events);
+        ScoringScenario.feed(stage, events);
         Map<Long, Instant> confirmedAt = new HashMap<>();
         for (Object event : events) {
             if (event instanceof ForecastPublished published) {
@@ -350,10 +350,10 @@ class ShadowScoringServiceTest {
         return indexes.stream().mapToInt(Integer::intValue).toArray();
     }
 
-    private static Map<String, Object> continuous(LegacyScoringScenario scenario) {
+    private static Map<String, Object> continuous(ScoringScenario scenario) {
         ScoringStage stage = scenario.stage(LIMIT);
         List<Object> events = scenario.events();
-        ScoringResult result = LegacyScoringScenario.feed(stage, events).plus(stage.expire(end(events)));
+        ScoringResult result = ScoringScenario.feed(stage, events).plus(stage.expire(end(events)));
         Map<String, Object> rows = new HashMap<>();
         result.labels().forEach(label -> rows.putIfAbsent(key(label), label));
         result.unresolved().forEach(closed -> rows.putIfAbsent(key(closed), closed));
@@ -384,7 +384,7 @@ class ShadowScoringServiceTest {
 
     /** 배치의 기록을 저장한 뒤 그 배치의 사건을 채점에 넘기는 흉내다. */
     private static final class Harness {
-        private final LegacyScoringScenario scenario;
+        private final ScoringScenario scenario;
         private final List<Object> events;
         private final ScoringStage stage;
         private final MutableClock clock;
@@ -399,12 +399,12 @@ class ShadowScoringServiceTest {
         private int failingReads;
         private int submitted;
 
-        private Harness(LegacyScoringScenario scenario, ScoringStage stage) {
+        private Harness(ScoringScenario scenario, ScoringStage stage) {
             this(scenario, stage, new MutableClock(), new ArrayList<>(), new ArrayList<>());
         }
 
         private Harness(
-            LegacyScoringScenario scenario,
+            ScoringScenario scenario,
             ScoringStage stage,
             MutableClock clock,
             List<Object> saved,
@@ -427,7 +427,7 @@ class ShadowScoringServiceTest {
                 return true;
             }, stage, new ScoringReplay(recorded.forecasts(), recorded.passes()),
                 new ScoringWriter(labels, TransactionOperations.withoutTransaction()),
-                from -> List.of(LegacyScoringScenario.ROUTE), ScoringReplay.DEFAULT_MAX_FORECAST_WINDOW, clock, meters);
+                from -> List.of(ScoringScenario.ROUTE), ScoringReplay.DEFAULT_MAX_FORECAST_WINDOW, clock, meters);
         }
 
         /** 같은 저장소를 보는 새 프로세스를 만든다. 정답·미해결 저장은 새로 시작해 이 프로세스가 쓴 줄만 따로 볼 수 있게 한다. */

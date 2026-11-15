@@ -30,12 +30,16 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
-class ScoringStageLegacyEquivalenceTest {
+/**
+ * 채점 단계가 {@link ScoringScenario}의 흐름에서 기록해 둔 기대값({@link ScoringScenarioBaseline})과 예측마다 같은 결과를 내는지
+ * 확인한다. 기대값은 다시 만들 수 없으므로 흐름을 만드는 순서와 씨앗·배치 수·차량 수를 바꾸지 않는다.
+ */
+class ScoringStageBaselineTest {
     private static final Instant START = Instant.parse("2026-01-05T00:00:00Z");
     private static final int LIMIT = 150_000;
 
     @Test
-    void 준비_경계_사이에_30분이_지나_버린_차량도_옛_정산과_예측마다_같다() {
+    void 준비_경계_사이에_30분이_지나_버린_차량도_예측마다_기준_기록과_같다() {
         // given
         Drives scenario = new Drives();
         final int last = 5000;
@@ -47,15 +51,15 @@ class ScoringStageLegacyEquivalenceTest {
         drive(scenario, "expire-f", last + 1812, 20, List.of(3, 3, 4, 4, 5), List.of(21, 19, 17, 15, 13));
 
         // when
-        LegacyScoringScenario.Comparison comparison = scenario.build().compare(LIMIT);
+        ScoringScenarioBaseline.Comparison comparison = compare(scenario.build(), "expired-gap", LIMIT);
 
         // then
-        assertEquivalent(comparison);
-        assertThat(comparison.legacyOutcomes()).containsKey("SETTLED:null");
+        assertSameAsBaseline(comparison);
+        assertThat(comparison.expectedOutcomes()).containsKey("SETTLED:null");
     }
 
     @Test
-    void 자정부터_02시까지_이어지는_운행도_옛_정산과_예측마다_같다() {
+    void 자정부터_02시까지_이어지는_운행도_예측마다_기준_기록과_같다() {
         // given
         Drives scenario = new Drives();
         final int midnight = 15 * 3600;
@@ -65,18 +69,18 @@ class ScoringStageLegacyEquivalenceTest {
             List.of(31, 30, 28, 26, 24, 22, 20, 18, 16));
 
         // when
-        LegacyScoringScenario.Comparison comparison = scenario.build().compare(LIMIT);
+        ScoringScenarioBaseline.Comparison comparison = compare(scenario.build(), "overnight", LIMIT);
 
         // then
-        assertEquivalent(comparison);
+        assertSameAsBaseline(comparison);
         assertSoftly(softly -> {
             softly.assertThat(comparison.midnightScope()).isPositive();
-            softly.assertThat(comparison.legacyOutcomes()).containsKey("SETTLED:null");
+            softly.assertThat(comparison.expectedOutcomes()).containsKey("SETTLED:null");
         });
     }
 
     @Test
-    void 여러_차량과_끊긴_연결이_섞여도_옛_정산과_예측마다_같다() {
+    void 여러_차량과_끊긴_연결이_섞여도_예측마다_기준_기록과_같다() {
         // given
         Drives scenario = new Drives();
         drive(scenario, "multi-a", 1000, 20, List.of(1, 1, 2, 2, 3, 3), List.of(30, 28, 25, 22, 20, 18));
@@ -88,90 +92,86 @@ class ScoringStageLegacyEquivalenceTest {
         drive(scenario, "multi-a", 1220, 20, List.of(3, 4, 4, 5), List.of(18, 15, 12, 10));
 
         // when
-        LegacyScoringScenario.Comparison comparison = scenario.build().compare(LIMIT);
+        ScoringScenarioBaseline.Comparison comparison = compare(scenario.build(), "broken-chains", LIMIT);
 
         // then
-        assertEquivalent(comparison);
-        assertThat(comparison.legacyOutcomes()).containsKey("SETTLED:null");
+        assertSameAsBaseline(comparison);
+        assertThat(comparison.expectedOutcomes()).containsKey("SETTLED:null");
     }
 
     @Test
-    void 출근_시간_무작위_운행_700배치도_옛_정산과_예측마다_같다() {
+    void 출근_시간_무작위_운행_700배치도_예측마다_기준_기록과_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(11, Instant.parse("2026-01-04T21:00:00Z"), 700, 7,
-            0, true);
+        ScoringScenario scenario = ScoringScenario.random(11, Instant.parse("2026-01-04T21:00:00Z"), 700, 7, 0, true);
 
         // when
-        LegacyScoringScenario.Comparison comparison = scenario.compare(LIMIT);
+        ScoringScenarioBaseline.Comparison comparison = compare(scenario, "morning-11", LIMIT);
 
         // then
-        assertEquivalent(comparison);
-        assertThat(comparison.legacyOutcomes()).containsKeys("SETTLED:null", "LOST:NO_CLOSED_IDENTITY_SAFE_PASS",
+        assertSameAsBaseline(comparison);
+        assertThat(comparison.expectedOutcomes()).containsKeys("SETTLED:null", "LOST:NO_CLOSED_IDENTITY_SAFE_PASS",
             "UNSUPPORTED:UNSUPPORTED_HEADWAY", "UNSUPPORTED:NO_PREVIOUS_PASS",
             "UNSUPPORTED:CAPACITY_EVIDENCE_MISMATCH");
     }
 
     @Test
-    void 낮에서_퇴근_시간으로_넘어가는_무작위_운행도_옛_정산과_예측마다_같다() {
+    void 낮에서_퇴근_시간으로_넘어가는_무작위_운행도_예측마다_기준_기록과_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(23, Instant.parse("2026-01-05T07:00:00Z"), 700, 7,
-            0, true);
+        ScoringScenario scenario = ScoringScenario.random(23, Instant.parse("2026-01-05T07:00:00Z"), 700, 7, 0, true);
 
         // when
-        LegacyScoringScenario.Comparison comparison = scenario.compare(LIMIT);
+        ScoringScenarioBaseline.Comparison comparison = compare(scenario, "evening-23", LIMIT);
 
         // then
-        assertEquivalent(comparison);
-        assertThat(comparison.legacyOutcomes()).containsKeys("SETTLED:null",
+        assertSameAsBaseline(comparison);
+        assertThat(comparison.expectedOutcomes()).containsKeys("SETTLED:null",
             "UNSUPPORTED:NO_FITTED_STOP_PARAMETERS");
     }
 
     @Test
-    void 자정을_넘는_무작위_운행도_자정_범위_차이_밖에서는_옛_정산과_같다() {
+    void 자정을_넘는_무작위_운행도_자정_범위_차이_밖에서는_기준_기록과_같다() {
         // given
-        LegacyScoringScenario withoutExtended = LegacyScoringScenario.random(37, Instant.parse("2026-01-05T14:00:00Z"),
+        ScoringScenario withoutExtended = ScoringScenario.random(37, Instant.parse("2026-01-05T14:00:00Z"),
             600, 6, 0, false);
-        LegacyScoringScenario withExtended = LegacyScoringScenario.random(71, Instant.parse("2026-01-05T14:20:00Z"),
+        ScoringScenario withExtended = ScoringScenario.random(71, Instant.parse("2026-01-05T14:20:00Z"),
             600, 8, 0, true, List.of());
 
         // when
-        LegacyScoringScenario.Comparison outside = withoutExtended.compare(LIMIT);
-        LegacyScoringScenario.Comparison extended = withExtended.compare(LIMIT);
+        ScoringScenarioBaseline.Comparison outside = compare(withoutExtended, "midnight-37", LIMIT);
+        ScoringScenarioBaseline.Comparison extended = compare(withExtended, "midnight-extended-71", LIMIT);
 
         // then
-        assertEquivalent(outside);
-        assertEquivalent(extended);
+        assertSameAsBaseline(outside);
+        assertSameAsBaseline(extended);
         assertSoftly(softly -> {
-            softly.assertThat(outside.legacyOutcomes()).containsKey("UNSUPPORTED:OUTSIDE_FITTED_BAND");
-            softly.assertThat(extended.legacyOutcomes()).containsKeys("SETTLED:null", "UNSUPPORTED:NO_PREVIOUS_PASS");
+            softly.assertThat(outside.expectedOutcomes()).containsKey("UNSUPPORTED:OUTSIDE_FITTED_BAND");
+            softly.assertThat(extended.expectedOutcomes()).containsKeys("SETTLED:null", "UNSUPPORTED:NO_PREVIOUS_PASS");
         });
     }
 
     @Test
-    void 수집_구멍과_관측_상한이_있는_무작위_운행은_구멍_시점_차이_밖에서는_옛_정산과_같다() {
+    void 수집_구멍과_관측_상한이_있는_무작위_운행은_구멍_시점_차이_밖에서는_기준_기록과_같다() {
         // given
-        LegacyScoringScenario holes = LegacyScoringScenario.random(41, Instant.parse("2026-01-04T21:30:00Z"), 600, 6,
-            0.004, true);
-        LegacyScoringScenario overflow = LegacyScoringScenario.random(43, Instant.parse("2026-01-04T21:30:00Z"), 600, 6,
-            0, true);
+        ScoringScenario holes = ScoringScenario.random(41, Instant.parse("2026-01-04T21:30:00Z"), 600, 6, 0.004, true);
+        ScoringScenario overflow = ScoringScenario.random(43, Instant.parse("2026-01-04T21:30:00Z"), 600, 6, 0, true);
 
         // when
-        LegacyScoringScenario.Comparison withHoles = holes.compare(LIMIT);
-        LegacyScoringScenario.Comparison withLimit = overflow.compare(500);
+        ScoringScenarioBaseline.Comparison withHoles = compare(holes, "holes-41", LIMIT);
+        ScoringScenarioBaseline.Comparison withLimit = compare(overflow, "row-limit-43", 500);
 
         // then
-        assertEquivalent(withHoles);
-        assertEquivalent(withLimit);
+        assertSameAsBaseline(withHoles);
+        assertSameAsBaseline(withLimit);
         assertSoftly(softly -> {
-            softly.assertThat(withHoles.legacyOutcomes()).containsKey("UNSUPPORTED:SOURCE_HISTORY_INCOMPLETE");
-            softly.assertThat(withLimit.legacyOutcomes()).containsKey("UNSUPPORTED:OBSERVATION_INPUT_LIMIT");
+            softly.assertThat(withHoles.expectedOutcomes()).containsKey("UNSUPPORTED:SOURCE_HISTORY_INCOMPLETE");
+            softly.assertThat(withLimit.expectedOutcomes()).containsKey("UNSUPPORTED:OBSERVATION_INPUT_LIMIT");
         });
     }
 
     @Test
     void 같은_사건을_두_번_넣어도_결과_집합이_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(53, Instant.parse("2026-01-04T21:00:00Z"), 400, 6,
+        ScoringScenario scenario = ScoringScenario.random(53, Instant.parse("2026-01-04T21:00:00Z"), 400, 6,
             0.002, true);
         List<Object> events = scenario.events();
         List<Object> doubled = new ArrayList<>();
@@ -181,8 +181,8 @@ class ScoringStageLegacyEquivalenceTest {
         }
 
         // when
-        ScoringResult once = LegacyScoringScenario.feed(scenario.stage(LIMIT), events);
-        ScoringResult twice = LegacyScoringScenario.feed(scenario.stage(LIMIT), doubled);
+        ScoringResult once = ScoringScenario.feed(scenario.stage(LIMIT), events);
+        ScoringResult twice = ScoringScenario.feed(scenario.stage(LIMIT), doubled);
 
         // then
         assertSoftly(softly -> {
@@ -196,23 +196,22 @@ class ScoringStageLegacyEquivalenceTest {
     @Test
     void 중간에_상태를_버리고_되감은_뒤_이어_가도_연속_실행과_결과_집합이_같다() {
         // given
-        LegacyScoringScenario scenario = LegacyScoringScenario.random(61, Instant.parse("2026-01-05T14:30:00Z"), 600, 6,
-            0, true);
+        ScoringScenario scenario = ScoringScenario.random(61, Instant.parse("2026-01-05T14:30:00Z"), 600, 6, 0, true);
         List<Object> events = scenario.events();
-        LegacyScoringScenario.Scored continuous = scenario.scored(
-            LegacyScoringScenario.feed(scenario.stage(LIMIT), events));
-        Map<String, Object> continuousRows = storedRows(LegacyScoringScenario.feed(scenario.stage(LIMIT), events));
+        ScoringScenario.Scored continuous = scenario.scored(
+            ScoringScenario.feed(scenario.stage(LIMIT), events));
+        Map<String, Object> continuousRows = storedRows(ScoringScenario.feed(scenario.stage(LIMIT), events));
 
-        for (int cut : List.of(events.size() / 3, events.size() / 2, events.size() * 4 / 5)) {
+        for (final int cut : List.of(events.size() / 3, events.size() / 2, events.size() * 4 / 5)) {
             ScoringStage stage = scenario.stage(LIMIT);
-            ScoringResult before = LegacyScoringScenario.feed(stage, events.subList(0, cut));
-            Instant now = events.subList(0, cut).stream().map(ScoringStageLegacyEquivalenceTest::time)
+            ScoringResult before = ScoringScenario.feed(stage, events.subList(0, cut));
+            Instant now = events.subList(0, cut).stream().map(ScoringStageBaselineTest::time)
                 .max(Instant::compareTo).orElseThrow().plusMillis(1);
 
             // when
             ScoringResult replayed = new ScoringReplay(new MemoryForecasts(events.subList(0, cut)),
-                new MemoryPasses(events.subList(0, cut))).replay(stage, LegacyScoringScenario.ROUTE, now);
-            ScoringResult after = LegacyScoringScenario.feed(stage, events.subList(cut, events.size()));
+                new MemoryPasses(events.subList(0, cut))).replay(stage, ScoringScenario.ROUTE, now);
+            ScoringResult after = ScoringScenario.feed(stage, events.subList(cut, events.size()));
 
             // then
             ScoringResult all = before.plus(replayed).plus(after);
@@ -245,10 +244,16 @@ class ScoringStageLegacyEquivalenceTest {
         };
     }
 
-    private static void assertEquivalent(LegacyScoringScenario.Comparison comparison) {
-        System.out.printf("equivalence forecasts=%d equal=%d midnight=%d taint=%d unexplained=%d outcomes=%s%n",
+    /** 그 이름의 기대값과 견준다. 관측 상한이 {@code limit}인 채점 단계에 흐름을 다 흘리고 마감한 결과를 쓴다. */
+    private static ScoringScenarioBaseline.Comparison compare(ScoringScenario scenario, String name, final int limit) {
+        ScoringScenarioBaseline baseline = ScoringScenarioBaseline.read("scoring-stage/" + name);
+        return baseline.compare(scenario, scenario.scoredToDeadline(limit));
+    }
+
+    private static void assertSameAsBaseline(ScoringScenarioBaseline.Comparison comparison) {
+        System.out.printf("baseline forecasts=%d equal=%d midnight=%d taint=%d unexplained=%d outcomes=%s%n",
             comparison.forecasts(), comparison.equal(), comparison.midnightScope(), comparison.taintTiming(),
-            comparison.unexplained().size(), comparison.legacyOutcomes());
+            comparison.unexplained().size(), comparison.expectedOutcomes());
         assertSoftly(softly -> {
             softly.assertThat(comparison.unexplained())
                 .as("설명되지 않는 차이: %s", comparison.unexplained().stream().limit(10).map(String::valueOf)
@@ -258,7 +263,7 @@ class ScoringStageLegacyEquivalenceTest {
         });
     }
 
-    /** 옛 정산 통합 테스트의 {@code drive}와 같다. 관측을 모아 두었다가 {@link Drives#build()}에서 시각 순으로 넣는다. */
+    /** 차량 하나의 관측을 일정한 간격으로 모아 둔다. {@link Drives#build()}가 시각 순으로 넣는다. */
     private static void drive(
         Drives drives,
         String vehicle,
@@ -284,10 +289,10 @@ class ScoringStageLegacyEquivalenceTest {
     private static final class Drives {
         private final List<Drive> observations = new ArrayList<>();
 
-        private LegacyScoringScenario build() {
+        private ScoringScenario build() {
             List<Integer> real = List.of(1, 2, 3, 4, 5);
-            LegacyScoringScenario scenario = new LegacyScoringScenario(real, 9,
-                LegacyScoringScenario.context(real, 9, List.of(1, 2, 3, 4, 5), true, List.of(), List.of()));
+            ScoringScenario scenario = new ScoringScenario(real, 9,
+                ScoringScenario.context(real, 9, List.of(1, 2, 3, 4, 5), true, List.of(), List.of()));
             observations.stream().sorted(Comparator.comparingInt(Drive::seconds)).forEach(drive -> {
                 final long batch = scenario.batch(START.plusSeconds(drive.seconds()), false);
                 final long observation = scenario.row(batch, drive.vehicle(), drive.stop(), drive.seats());

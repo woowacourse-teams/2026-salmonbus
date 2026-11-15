@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
+import com.gustler.backend.forecasting.support.Baseline;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;

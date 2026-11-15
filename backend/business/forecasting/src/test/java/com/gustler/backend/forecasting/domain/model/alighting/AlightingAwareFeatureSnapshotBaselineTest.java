@@ -12,22 +12,26 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
-/** 배치·차량·목표 세 단으로 나눈 입력 계산이 원본 사본과 비트 단위로 같은 결과와 같은 예외를 내는지 고정 시드 입력으로 확인한다. */
-class AlightingAwareFeatureSnapshotEquivalenceTest {
+/**
+ * 배치·차량·목표 세 단으로 나눈 입력 계산이 고정 시드 입력에서 기록해 둔 기대값({@link FeatureSnapshotBaseline})과 비트 단위로 같은
+ * 결과와 같은 예외를 내는지 확인한다. 기대값은 다시 만들 수 없으므로 노선·관측을 만드는 흐름과 난수를 뽑는 순서를 바꾸지 않는다.
+ */
+class AlightingAwareFeatureSnapshotBaselineTest {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final List<String> TABLES =
         List.of("lam", "lam_base", "net_tab", "full_tab", "dep_tab", "stop_net_base");
 
     @Test
-    void 배치를_공유해도_모든_목표의_입력과_예외가_원본과_같다() {
+    void 배치를_공유해도_모든_목표의_입력과_예외가_기준_기록과_같다() {
         // given
         Random random = new Random(434L);
+        FeatureSnapshotBaseline baseline = FeatureSnapshotBaseline.read("feature-snapshot/shared-batches-434");
         Tally tally = new Tally();
 
         // when
@@ -36,13 +40,14 @@ class AlightingAwareFeatureSnapshotEquivalenceTest {
             List<List<AlightingAwareObservation>> batches = simulate(random, route);
             for (int pick = 0; pick < 6; pick++) {
                 final int sourceBatch = batches.size() / 3 + random.nextInt(batches.size() * 2 / 3);
-                compareBatch(random, route, batches, sourceBatch, tally);
+                compareBatch(random, route, batches, sourceBatch, baseline, scenario + "." + pick, tally);
             }
         }
 
         // then
         assertSoftly(softly -> {
             softly.assertThat(tally.mismatches).isEmpty();
+            softly.assertThat(baseline.unread()).isEmpty();
             softly.assertThat(tally.batches).isGreaterThanOrEqualTo(300);
             softly.assertThat(tally.vectors).isGreaterThanOrEqualTo(3000);
             softly.assertThat(tally.snapshotsWithVector).isGreaterThan(tally.snapshots * 3 / 4);
@@ -56,8 +61,9 @@ class AlightingAwareFeatureSnapshotEquivalenceTest {
     }
 
     @Test
-    void 원본이_거부하는_입력은_같은_시점에_같은_예외로_거부한다() {
+    void 거부할_입력은_기준_기록과_같은_시점에_같은_예외로_거부한다() {
         // given
+        FeatureSnapshotBaseline baseline = FeatureSnapshotBaseline.read("feature-snapshot/rejections");
         Route route = fixedRoute();
         Instant now = Instant.parse("2026-10-15T23:30:00Z");
         AlightingAwareObservation earlier = row(route, 1, 0, now.minusSeconds(30), "bus", 3, 20);
@@ -69,17 +75,18 @@ class AlightingAwareFeatureSnapshotEquivalenceTest {
         Tally tally = new Tally();
 
         // when
-        compareOne(route, source, 0, history, List.of(), Map.of(), List.of(5, 6), tally, failures);
-        compareOne(route, source, 71, history, List.of(), Map.of(), List.of(5), tally, failures);
-        compareOne(route, source, 40, history, List.of(), Map.of(),
+        compareOne(baseline, "capacity-0", route, source, 0, history, List.of(5, 6), tally, failures);
+        compareOne(baseline, "capacity-71", route, source, 71, history, List.of(5), tally, failures);
+        compareOne(baseline, "unsupported-targets", route, source, 40, history,
             List.of(4, 17, route.statistics.largestStopOrder() + 1), tally, failures);
-        compareOne(route, unknownSeats, 40, history, List.of(), Map.of(), List.of(5), tally, failures);
-        compareOne(route, anonymous, 40, history, List.of(), Map.of(), List.of(5), tally, failures);
-        compareOne(route, source, 40, List.of(earlier), List.of(), Map.of(), List.of(5), tally, failures);
+        compareOne(baseline, "unknown-seats", route, unknownSeats, 40, history, List.of(5), tally, failures);
+        compareOne(baseline, "anonymous", route, anonymous, 40, history, List.of(5), tally, failures);
+        compareOne(baseline, "missing-source", route, source, 40, List.of(earlier), List.of(5), tally, failures);
 
         // then
         assertSoftly(softly -> {
             softly.assertThat(tally.mismatches).isEmpty();
+            softly.assertThat(baseline.unread()).isEmpty();
             softly.assertThat(failures).contains("Invalid vehicle capacity snapshot",
                 "Unsupported AlightingAware target", "Unknown current seats",
                 "Anonymous observation is not a forecast source",
@@ -92,6 +99,8 @@ class AlightingAwareFeatureSnapshotEquivalenceTest {
         Route route,
         List<List<AlightingAwareObservation>> batches,
         final int sourceBatch,
+        FeatureSnapshotBaseline baseline,
+        String name,
         Tally tally
     ) {
         Instant asOf = batches.get(sourceBatch).getFirst().receivedAt();
@@ -125,28 +134,29 @@ class AlightingAwareFeatureSnapshotEquivalenceTest {
         tally.eventsSeen += events.size();
 
         AlightingAwareBatchContext context = new AlightingAwareBatchContext(route.statistics, history, events, prefix);
-        List<Pair> snapshots = new ArrayList<>();
+        List<Integer> targets = IntStream.rangeClosed(0, route.statistics.largestStopOrder() + 1).boxed().toList();
+        List<Vehicle> vehicles = new ArrayList<>();
         for (AlightingAwareObservation source : batches.get(sourceBatch)) {
             final int capacity = capacity(random);
-            Outcome legacy = outcome(() -> new LegacyAlightingAwareFeatureSnapshot(route.routeVersionId, source,
-                capacity, route.statistics, history, events, prefix));
+            String key = name + "." + source.observationId();
+            FeatureSnapshotBaseline.Expected expected = baseline.vehicle(key);
             Outcome current = outcome(() -> new AlightingAwareFeatureSnapshot(route.routeVersionId, source, capacity,
                 context));
-            compare("constructor " + source.observationId(), legacy, current, tally);
-            if (legacy.error() != null) {
-                tally.failures.merge(String.valueOf(legacy.error().getMessage()), 1, Integer::sum);
+            compare("constructor " + key, expected.rejection(), current, tally);
+            if (expected.rejection() != null) {
+                tally.failures.merge(String.valueOf(expected.rejection().message()), 1, Integer::sum);
             }
-            if (legacy.value() != null && current.value() != null) {
-                snapshots.add(new Pair((LegacyAlightingAwareFeatureSnapshot) legacy.value(),
-                    (AlightingAwareFeatureSnapshot) current.value(), random.nextBoolean()));
+            if (expected.rejection() == null && current.value() != null) {
+                vehicles.add(new Vehicle(key, expected, (AlightingAwareFeatureSnapshot) current.value(), targets,
+                    random.nextBoolean()));
             }
         }
         tally.batches++;
-        if (snapshots.size() > 1) {
+        if (vehicles.size() > 1) {
             tally.batchesWithSeveralVehicles++;
         }
         List<int[]> calls = new ArrayList<>();
-        for (int vehicle = 0; vehicle < snapshots.size(); vehicle++) {
+        for (int vehicle = 0; vehicle < vehicles.size(); vehicle++) {
             for (int target = 0; target <= route.statistics.largestStopOrder() + 1; target++) {
                 calls.add(new int[] { vehicle, target });
                 if (random.nextInt(5) == 0) {
@@ -155,120 +165,148 @@ class AlightingAwareFeatureSnapshotEquivalenceTest {
             }
         }
         Collections.shuffle(calls, random);
-        for (Pair pair : snapshots) {
-            if (pair.provenanceFirst()) {
-                compareAccessors(pair, tally);
+        for (Vehicle vehicle : vehicles) {
+            if (vehicle.provenanceFirst) {
+                compareAccessors(vehicle, tally);
             }
         }
         Set<Integer> reached = new HashSet<>();
         for (int[] call : calls) {
-            Pair pair = snapshots.get(call[0]);
-            if (compareTarget(pair, call[1], tally)) {
+            Vehicle vehicle = vehicles.get(call[0]);
+            if (compareTarget(vehicle, call[1], tally)) {
                 reached.add(call[0]);
             }
         }
-        tally.snapshots += snapshots.size();
+        tally.snapshots += vehicles.size();
         tally.snapshotsWithVector += reached.size();
-        for (Pair pair : snapshots) {
-            compareAccessors(pair, tally);
+        for (Vehicle vehicle : vehicles) {
+            compareAccessors(vehicle, tally);
+            compareDigest(vehicle, tally);
         }
     }
 
     private static void compareOne(
+        FeatureSnapshotBaseline baseline,
+        String name,
         Route route,
         AlightingAwareObservation source,
         final int capacity,
         List<AlightingAwareObservation> history,
-        List<AlightingAwarePassEvent> events,
-        Map<String, AlightingAwareVehiclePrefix> prefix,
         List<Integer> targets,
         Tally tally,
         List<String> failures
     ) {
-        Outcome legacy = outcome(() -> new LegacyAlightingAwareFeatureSnapshot(route.routeVersionId, source, capacity,
-            route.statistics, history, events, prefix));
+        FeatureSnapshotBaseline.Expected expected = baseline.vehicle(name);
         Outcome current = outcome(() -> new AlightingAwareFeatureSnapshot(route.routeVersionId, source, capacity,
-            route.statistics, history, events, prefix));
-        compare("constructor", legacy, current, tally);
-        if (legacy.error() != null) {
-            failures.add(legacy.error().getMessage());
+            route.statistics, history, List.of(), Map.of()));
+        compare("constructor " + name, expected.rejection(), current, tally);
+        if (expected.rejection() != null) {
+            failures.add(expected.rejection().message());
             return;
         }
-        Pair pair = new Pair((LegacyAlightingAwareFeatureSnapshot) legacy.value(),
-            (AlightingAwareFeatureSnapshot) current.value(), false);
+        if (current.value() == null) {
+            return;
+        }
+        Vehicle vehicle = new Vehicle(name, expected, (AlightingAwareFeatureSnapshot) current.value(), targets, false);
         for (final int target : targets) {
-            Outcome expected = outcome(() -> pair.legacy().forTarget(target));
-            compareTarget(pair, target, tally);
-            if (expected.error() != null) {
-                failures.add(expected.error().getMessage());
+            compareTarget(vehicle, target, tally);
+            FeatureSnapshotBaseline.Rejection rejection = vehicle.expectedRejection(target);
+            if (rejection != null) {
+                failures.add(rejection.message());
             }
         }
-        compareAccessors(pair, tally);
+        compareAccessors(vehicle, tally);
+        compareDigest(vehicle, tally);
     }
 
-    private static boolean compareTarget(Pair pair, final int target, Tally tally) {
-        Outcome legacy = outcome(() -> pair.legacy().forTarget(target));
-        Outcome current = outcome(() -> pair.current().forTarget(target));
+    private static boolean compareTarget(Vehicle vehicle, final int target, Tally tally) {
+        FeatureSnapshotBaseline.Rejection expected = vehicle.expectedRejection(target);
+        Outcome current = outcome(() -> vehicle.snapshot.forTarget(target));
         tally.attempts++;
-        countTargetOutcome(legacy, tally);
-        compare("target " + pair.legacy().vehicleObservationId() + "->" + target, legacy, current, tally);
-        return legacy.error() == null;
+        countTargetOutcome(expected, tally);
+        compare("target " + vehicle.key + "->" + target, expected, current, tally);
+        if (expected == null && current.value() instanceof AlightingAwareFeatureVector vector) {
+            vehicle.remember(target, vector, tally);
+        }
+        return expected == null;
     }
 
-    private static void countTargetOutcome(Outcome legacy, Tally tally) {
-        if (legacy.error() != null) {
-            tally.failures.merge(String.valueOf(legacy.error().getMessage()), 1, Integer::sum);
+    private static void countTargetOutcome(FeatureSnapshotBaseline.Rejection expected, Tally tally) {
+        if (expected != null) {
+            tally.failures.merge(String.valueOf(expected.message()), 1, Integer::sum);
             return;
         }
         tally.vectors++;
     }
 
-    private static void compareAccessors(Pair pair, Tally tally) {
-        String name = "accessors " + pair.legacy().vehicleObservationId();
-        compare(name + " provenance", outcome(() -> pair.legacy().provenance().tripStartObservationId()),
-            outcome(() -> pair.current().provenance().tripStartObservationId()), tally);
-        compare(name + " observation", outcome(() -> pair.legacy().observation()),
-            outcome(() -> pair.current().observation()), tally);
-        compare(name + " capacity", outcome(() -> pair.legacy().capacity()),
-            outcome(() -> pair.current().capacity()), tally);
-        compare(name + " id", outcome(() -> pair.legacy().vehicleObservationId()),
-            outcome(() -> pair.current().vehicleObservationId()), tally);
-        compare(name + " source", outcome(() -> pair.legacy().source()), outcome(() -> pair.current().source()),
-            tally);
+    private static void compareAccessors(Vehicle vehicle, Tally tally) {
+        Outcome tripStart = outcome(() -> vehicle.snapshot.provenance().tripStartObservationId());
+        if (!sameTripStart(vehicle.expected, tripStart)) {
+            tally.mismatches.add("accessors " + vehicle.key + " provenance: " + vehicle.expected.tripStart() + " "
+                + vehicle.expected.tripStartRejection() + " / " + tripStart);
+        }
+        vehicle.rememberValues(values(vehicle.snapshot), tally);
     }
 
+    private static boolean sameTripStart(FeatureSnapshotBaseline.Expected expected, Outcome current) {
+        if (expected.tripStartRejection() != null) {
+            return sameOutcome(expected.tripStartRejection(), current);
+        }
+        return current.error() == null && expected.tripStart().equals(current.value());
+    }
+
+    /** 목표와 무관한 값(관측 값, 정원, 기준 관측 번호, 기준 관측)을 글로 적는다. 값 대신 예외가 나면 그 예외를 적는다. */
+    private static String values(AlightingAwareFeatureSnapshot snapshot) {
+        return String.join("\n",
+            "observation=" + text(outcome(() -> FeatureSnapshotBaseline.text(snapshot.observation()))),
+            "capacity=" + text(outcome(() -> snapshot.capacity())),
+            "id=" + text(outcome(() -> snapshot.vehicleObservationId())),
+            "source=" + text(outcome(() -> FeatureSnapshotBaseline.text(snapshot.source()))));
+    }
+
+    private static String text(Outcome outcome) {
+        if (outcome.error() != null) {
+            return "!" + outcome.error().getClass().getName();
+        }
+        return String.valueOf(outcome.value());
+    }
+
+    private static void compareDigest(Vehicle vehicle, Tally tally) {
+        String actual = vehicle.digest();
+        if (!vehicle.expected.digest().equals(actual)) {
+            tally.mismatches.add("values " + vehicle.key + ": " + vehicle.expected.digest() + " / " + actual);
+        }
+    }
+
+    /** 기대값이 거부면 같은 예외를 냈는지, 아니면 예외 없이 값을 냈는지 본다. */
     private static void compare(
         String name,
-        Outcome legacy,
+        FeatureSnapshotBaseline.Rejection expected,
         Outcome current,
         Tally tally
     ) {
-        if (!sameOutcome(legacy, current)) {
-            tally.mismatches.add(name + ": " + legacy + " / " + current);
+        if (!sameOutcome(expected, current)) {
+            tally.mismatches.add(name + ": " + describe(expected) + " / " + current);
         }
     }
 
-    private static boolean sameOutcome(Outcome legacy, Outcome current) {
-        if (legacy.error() != null || current.error() != null) {
-            if (legacy.error() == null || current.error() == null) {
-                return false;
-            }
-            if (legacy.error().getClass() != current.error().getClass()) {
-                return false;
-            }
-            return legacy.error() instanceof NullPointerException
-                || Objects.equals(legacy.error().getMessage(), current.error().getMessage());
+    private static String describe(FeatureSnapshotBaseline.Rejection expected) {
+        if (expected == null) {
+            return "예외 없음";
         }
-        if (legacy.value() instanceof LegacyAlightingAwareFeatureSnapshot
-            || current.value() instanceof AlightingAwareFeatureSnapshot) {
-            return true;
+        return expected.toString();
+    }
+
+    private static boolean sameOutcome(FeatureSnapshotBaseline.Rejection expected, Outcome current) {
+        if (expected == null) {
+            return current.error() == null;
         }
-        if (legacy.value() instanceof AlightingAwareFeatureVector expected
-            && current.value() instanceof AlightingAwareFeatureVector actual) {
-            return Arrays.equals(expected.seat88(), actual.seat88())
-                && Arrays.equals(expected.probability80(), actual.probability80());
-        }
-        return Objects.equals(legacy.value(), current.value());
+        return current.error() != null && expected.matches(current.error());
+    }
+
+    private static boolean sameVector(AlightingAwareFeatureVector first, AlightingAwareFeatureVector second) {
+        return Arrays.equals(first.seat88(), second.seat88())
+            && Arrays.equals(first.probability80(), second.probability80());
     }
 
     private static Outcome outcome(Supplier<Object> call) {
@@ -526,11 +564,61 @@ class AlightingAwareFeatureSnapshotEquivalenceTest {
         }
     }
 
-    private record Pair(
-        LegacyAlightingAwareFeatureSnapshot legacy,
-        AlightingAwareFeatureSnapshot current,
-        boolean provenanceFirst
-    ) {
+    /** 기대값과 견주는 차량 하나. 목표마다 처음 받은 입력 벡터와 처음 읽은 값을 기억해 두었다가 지문을 만든다. */
+    private static final class Vehicle {
+        private final String key;
+        private final FeatureSnapshotBaseline.Expected expected;
+        private final AlightingAwareFeatureSnapshot snapshot;
+        private final List<Integer> targets;
+        private final boolean provenanceFirst;
+        private final Map<Integer, AlightingAwareFeatureVector> vectors = new HashMap<>();
+        private String values;
+
+        private Vehicle(
+            String key,
+            FeatureSnapshotBaseline.Expected expected,
+            AlightingAwareFeatureSnapshot snapshot,
+            List<Integer> targets,
+            final boolean provenanceFirst
+        ) {
+            this.key = key;
+            this.expected = expected;
+            this.snapshot = snapshot;
+            this.targets = targets;
+            this.provenanceFirst = provenanceFirst;
+        }
+
+        /** 그 목표의 기대 거부 사유. 입력 벡터를 내야 하는 목표면 비어 있다. */
+        private FeatureSnapshotBaseline.Rejection expectedRejection(final int target) {
+            return expected.targets().get(targets.indexOf(target));
+        }
+
+        /** 같은 목표를 다시 불러 받은 입력 벡터가 처음과 다르면 불일치로 적는다. */
+        private void remember(final int target, AlightingAwareFeatureVector vector, Tally tally) {
+            AlightingAwareFeatureVector first = vectors.putIfAbsent(target, vector);
+            if (first != null && !sameVector(first, vector)) {
+                tally.mismatches.add("repeated target " + key + "->" + target);
+            }
+        }
+
+        /** 다시 읽은 값이 처음과 다르면 불일치로 적는다. */
+        private void rememberValues(String read, Tally tally) {
+            if (values == null) {
+                values = read;
+                return;
+            }
+            if (!values.equals(read)) {
+                tally.mismatches.add("repeated accessors " + key + ": " + values + " / " + read);
+            }
+        }
+
+        private String digest() {
+            List<AlightingAwareFeatureVector> ordered = new ArrayList<>();
+            for (final int target : targets) {
+                ordered.add(vectors.get(target));
+            }
+            return FeatureSnapshotBaseline.digest(values, ordered);
+        }
     }
 
     private record Outcome(Object value, RuntimeException error) {

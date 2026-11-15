@@ -31,35 +31,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
-import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.JsonNodeFactory;
-import tools.jackson.databind.node.ObjectNode;
 
 /**
- * 같은 관측 흐름을 옛 정산 기준({@link ConfirmedAlightingAwareEvaluationOracle})과 새 채점 단계에 함께 흘려 예측별 결과를 맞춘다.
+ * 채점 단계에 흘릴 관측 흐름과 예보를 만들고 채점 결과를 예측 단위로 모은다. 관측에서 {@link AlightingAwarePassEvents#resolve}로
+ * 판정한 통과를 사건으로 만든다.
  *
- * <p>옛 결과는 정산이 배치마다 한 번씩 평가하는 이상적인 일정으로 정한다. 예측 기준 시각부터 2시간 안의 평가 시각을 차례로 보며
- * 처음 나온 결과가 그 예측의 결과이고, 끝까지 없으면 놓침이다. 평가는 예측 기준 시각의 한국 날짜 00시부터 평가 시각까지의 관측만
- * 쓴다(옛 투영과 같은 날짜별 범위). 새 채점에는 같은 관측을 날짜 구분 없이 {@link AlightingAwarePassEvents#resolve}로 판정한
- * 통과를 사건으로 만들어 흘린다.
+ * <p>{@link ScoringScenarioBaseline}의 기대값은 여기서 만드는 흐름에 묶여 있다. 관측·예보를 만드는 순서와
+ * {@link #random(long, Instant, int, int, double, boolean)}이 난수를 뽑는 순서를 바꾸면 기대값과 견줄 수 없다.
  */
-final class LegacyScoringScenario {
+final class ScoringScenario {
     static final long ROUTE = 7L;
     static final long VERSION = 70L;
     static final long DEPLOYMENT = 3L;
     static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     static final Clock FIXED = Clock.fixed(Instant.parse("2030-01-01T00:00:00Z"), ZoneOffset.UTC);
     private static final JsonMapper JSON = JsonMapper.builder().build();
-    private static final String LEGACY_LOST = "NO_CLOSED_IDENTITY_SAFE_PASS";
-    private static final List<String> TAINTS = List.of("SOURCE_HISTORY_INCOMPLETE", "OBSERVATION_INPUT_LIMIT");
-    /** 새 채점이 마감을 기다리지 않고 바로 닫는 사유. 옛 정산은 마감까지 보므로 그 사이에 생긴 수집 구멍·상한이 옛 결과에만 있다. */
-    private static final List<String> IMMEDIATE = List.of(ScoringReasons.TARGET_WITHOUT_PASS,
-        ScoringReasons.PASS_CONDITION_UNMET);
 
     private final List<Integer> realStops;
     private final int turn;
@@ -75,7 +65,7 @@ final class LegacyScoringScenario {
     private Map<Long, Long> chains;
     private Map<Long, Long> trips;
 
-    LegacyScoringScenario(List<Integer> realStops, final int turn, JsonNode context) {
+    ScoringScenario(List<Integer> realStops, final int turn, JsonNode context) {
         this.realStops = List.copyOf(realStops);
         this.turn = turn;
         this.context = context;
@@ -97,17 +87,17 @@ final class LegacyScoringScenario {
     record Key(long observationId, int target) {
     }
 
-    /** 대조 열이다. 정답 값은 비트로 비교한다. 근거 관측 번호·정원·계수 해시는 채점됨에만 있다. */
+    /** 예측 하나의 채점 결과에서 견주는 열이다. 정답 값은 비트로 담는다. 근거 관측 번호·정원·계수 해시는 채점됨에만 있다. */
     record Verdict(
         String state,
         String reason,
         Long labelBits,
         String hash,
         Integer capacity,
-        Long pre,
-        Long post,
+        Long arrival,
+        Long last,
         Long closure,
-        Long previousPost,
+        Long previousLast,
         Long previousClosure
     ) {
         static Verdict of(String state, String reason) {
@@ -115,26 +105,7 @@ final class LegacyScoringScenario {
         }
     }
 
-    record Difference(
-        Key key,
-        Verdict legacy,
-        Verdict scored,
-        String newReason
-    ) {
-    }
-
-    /** 대조 결과. 차이는 설명된 종류별로 센다. */
-    record Comparison(
-        int forecasts,
-        Map<String, Integer> legacyOutcomes,
-        int equal,
-        int midnightScope,
-        int taintTiming,
-        List<Difference> unexplained
-    ) {
-    }
-
-    /** 새 채점이 낸 결과를 예측 단위로 모은 것. */
+    /** 채점 결과를 예측 단위로 모은 것. */
     record Scored(
         Map<Key, Verdict> verdicts,
         Map<Key, String> reasons,
@@ -247,7 +218,7 @@ final class LegacyScoringScenario {
         };
     }
 
-    /** 새 채점 결과를 예측 단위로 바꾼다. 저장소처럼 같은 키는 처음 것만 남긴다. */
+    /** 채점 결과를 예측 단위로 바꾼다. 저장소처럼 같은 키는 처음 것만 남긴다. */
     Scored scored(ScoringResult result) {
         Map<List<Object>, PassLabel> labels = firstLabelsByKey(result);
         Map<List<Object>, PassClosed> passByKey = passesByKey();
@@ -315,167 +286,13 @@ final class LegacyScoringScenario {
         }
     }
 
-    /** 옛 정산 기준으로 예측마다 결과를 낸다. */
-    Map<Key, Verdict> legacy(final int limit) {
-        return legacy(limit, false);
-    }
-
-    private Map<Key, Verdict> legacy(final int limit, final boolean continuous) {
-        prepare();
-        Map<List<Object>, ConfirmedAlightingAwareEvaluationOracle> oracles = new HashMap<>();
-        Map<Key, Verdict> verdicts = new LinkedHashMap<>();
-        TreeSet<Instant> times = new TreeSet<>(batches.stream().map(Batch::at).toList());
-        for (Forecast forecast : forecasts) {
-            AlightingAwareObservation source = rowById.get(forecast.observationId());
-            for (int target : forecast.targets()) {
-                verdicts.put(new Key(source.observationId(), target),
-                    legacyVerdict(source, target, forecast.capacity(), times, oracles, limit, continuous));
-            }
-        }
-        return verdicts;
-    }
-
-    private Verdict legacyVerdict(
-        AlightingAwareObservation source,
-        final int target,
-        final int capacity,
-        TreeSet<Instant> times,
-        Map<List<Object>, ConfirmedAlightingAwareEvaluationOracle> oracles,
-        final int limit,
-        final boolean continuous
-    ) {
-        LocalDate day = source.receivedAt().atZone(SEOUL).toLocalDate();
-        Instant deadline = source.receivedAt().plus(ScoringStage.MATCH_WINDOW);
-        JsonNode snapshot = snapshot(target, capacity);
-        for (Instant through : candidates(source, target, times, deadline, limit)) {
-            ConfirmedAlightingAwareEvaluationOracle oracle = oracles.computeIfAbsent(List.of(day, through, continuous),
-                key -> oracle(day, through, limit, continuous));
-            PassLabelOutcome outcome = oracle.evaluate(source.observationId(), target,
-                snapshot);
-            if (outcome != null) {
-                return verdict(outcome);
-            }
-        }
-        return Verdict.of("LOST", LEGACY_LOST);
-    }
-
-    /**
-     * 옛 평가 결과가 바뀔 수 있는 평가 시각만 고른다. 결과는 같은 차량이 목표를 지나 통과가 닫히는 배치, 수집 구멍·관측 상한이
-     * 생기는 배치에서만 비어 있지 않게 바뀐다. 첫 평가 시각과 마지막 평가 시각도 넣는다.
-     */
-    private List<Instant> candidates(
-        AlightingAwareObservation source,
-        final int target,
-        TreeSet<Instant> times,
-        Instant deadline,
-        final int limit
-    ) {
-        TreeSet<Instant> chosen = new TreeSet<>();
-        Instant first = times.ceiling(source.receivedAt());
-        Instant last = times.floor(deadline);
-        if (hasNoEvaluationTime(first, last)) {
-            return List.of();
-        }
-        chosen.add(first);
-        chosen.add(last);
-        LocalDate day = source.receivedAt().atZone(SEOUL).toLocalDate();
-        Instant dayStart = day.atStartOfDay(SEOUL).toInstant();
-        long counted = 0;
-        for (Batch batch : batches) {
-            if (batch.at().isBefore(dayStart) || batch.at().isAfter(last)) {
-                continue;
-            }
-            counted += batch.rows().size();
-            final boolean inWindow = !batch.at().isBefore(first);
-            if (!inWindow) {
-                continue;
-            }
-            if (batch.hole() || counted > limit) {
-                chosen.add(batch.at());
-            }
-            for (AlightingAwareObservation row : batch.rows()) {
-                if (row.vehicleId().equals(source.vehicleId()) && row.passedStopOrder() > target) {
-                    chosen.add(batch.at());
-                }
-            }
-        }
-        return List.copyOf(chosen);
-    }
-
-    private static boolean hasNoEvaluationTime(Instant first, Instant last) {
-        return first == null || last == null || first.isAfter(last);
-    }
-
-    private ConfirmedAlightingAwareEvaluationOracle oracle(
-        LocalDate day,
-        Instant through,
-        final int limit,
-        final boolean continuous
-    ) {
-        Instant start = windowStart(day, continuous);
-        Instant dayStart = day.atStartOfDay(SEOUL).toInstant();
-        List<AlightingAwareObservation> window = rows.stream()
-            .filter(row -> !row.receivedAt().isBefore(start) && !row.receivedAt().isAfter(through))
-            .sorted(Comparator.comparing(AlightingAwareObservation::receivedAt)
-                .thenComparingLong(AlightingAwareObservation::batchId)
-                .thenComparingLong(AlightingAwareObservation::observationId))
-            .limit(windowRowLimit(limit, continuous))
-            .sorted(Comparator.comparing(AlightingAwareObservation::vehicleId)
-                .thenComparing(AlightingAwareObservation::receivedAt)
-                .thenComparingLong(AlightingAwareObservation::batchId)
-                .thenComparingLong(AlightingAwareObservation::observationId))
-            .toList();
-        Instant firstHole = batches.stream()
-            .filter(batch -> isHoleBetween(batch, dayStart, through))
-            .map(Batch::at).min(Instant::compareTo).orElse(null);
-        return new ConfirmedAlightingAwareEvaluationOracle(new ConfirmedAlightingAwareEvaluationOracle.History(window,
-            through, historyLimit(limit, continuous), firstHole), day, through);
-    }
-
-    /** 연속 기준은 날짜 경계 없이 처음 관측부터 본다. */
-    private static Instant windowStart(LocalDate day, final boolean continuous) {
-        if (continuous) {
-            return Instant.MIN;
-        }
-        return day.atStartOfDay(SEOUL).toInstant();
-    }
-
-    /** 상한을 넘었는지 알 수 있게 상한보다 한 줄 더 읽는다. 연속 기준은 상한을 두지 않는다. */
-    private static long windowRowLimit(final int limit, final boolean continuous) {
-        if (continuous) {
-            return Long.MAX_VALUE;
-        }
-        return limit + 1L;
-    }
-
-    private static int historyLimit(final int limit, final boolean continuous) {
-        if (continuous) {
-            return Integer.MAX_VALUE - 1;
-        }
-        return limit;
-    }
-
-    private static boolean isHoleBetween(Batch batch, Instant dayStart, Instant through) {
-        return batch.hole() && !batch.at().isBefore(dayStart) && !batch.at().isAfter(through);
-    }
-
-    private static Verdict verdict(PassLabelOutcome outcome) {
-        if (!outcome.state().equals("SETTLED")) {
-            return Verdict.of(outcome.state(), outcome.reason());
-        }
-        return new Verdict("SETTLED", null, Double.doubleToLongBits(outcome.label()), outcome.parameterHash(),
-            outcome.capacity(), outcome.preObservationId(), outcome.postObservationId(), outcome.closureObservationId(),
-            outcome.previousPostObservationId(), outcome.previousClosureObservationId());
-    }
-
-    /** 옛 결과와 새 결과를 예측 단위로 맞추고 차이를 설명된 종류로 나눈다. */
-    Comparison compare(final int limit) {
-        Map<Key, Verdict> legacy = legacy(limit);
+    /** 모든 사건을 흘리고 마지막 배치 3시간 뒤에 마감한 채점 결과를 예측 단위로 모은다. 마감 뒤에도 기다리는 예측이 있으면 실패다. */
+    Scored scoredToDeadline(final int limit) {
         ScoringStage stage = stage(limit);
         ScoringResult result = feed(stage, events())
             .plus(stage.expire(batches.getLast().at().plus(Duration.ofHours(3))));
         assertNothingWaits(stage);
-        return compare(legacy, scored(result), limit);
+        return scored(result);
     }
 
     private static void assertNothingWaits(ScoringStage stage) {
@@ -484,62 +301,12 @@ final class LegacyScoringScenario {
         }
     }
 
-    Comparison compare(Map<Key, Verdict> legacy, Scored scored, final int limit) {
-        Map<Key, Verdict> continuous = null;
-        Map<String, Integer> outcomes = new TreeMap<>();
-        int equal = 0;
-        int midnight = 0;
-        int taint = 0;
-        List<Difference> unexplained = new ArrayList<>();
-        for (Map.Entry<Key, Verdict> entry : legacy.entrySet()) {
-            Key key = entry.getKey();
-            Verdict expected = entry.getValue();
-            outcomes.merge(expected.state() + ":" + expected.reason(), 1, Integer::sum);
-            Verdict actual = scored.verdicts().get(key);
-            if (expected.equals(actual)) {
-                equal++;
-                continue;
-            }
-            if (continuous == null) {
-                continuous = legacy(limit, true);
-            }
-            String reason = scored.reasons().get(key);
-            if (isMidnightScope(key, actual, continuous)) {
-                midnight++;
-                continue;
-            }
-            if (IMMEDIATE.contains(reason) && TAINTS.contains(expected.reason())) {
-                taint++;
-                continue;
-            }
-            unexplained.add(new Difference(key, expected, actual, reason));
-        }
-        addScoredOnly(legacy, scored, unexplained);
-        return new Comparison(legacy.size(), outcomes, equal, midnight, taint, unexplained);
-    }
-
-    /** 날짜 경계 없이 본 옛 결과와는 같고, 그날 00시 이전 이력이 있어 자정 범위 차이로 설명되는지 본다. */
-    private boolean isMidnightScope(Key key, Verdict actual, Map<Key, Verdict> continuous) {
-        return actual != null && actual.equals(continuous.get(key)) && !sameDayHistory(key);
-    }
-
-    private static void addScoredOnly(Map<Key, Verdict> legacy, Scored scored, List<Difference> unexplained) {
-        if (scored.verdicts().size() == legacy.size()) {
-            return;
-        }
-        for (Key key : scored.verdicts().keySet()) {
-            if (!legacy.containsKey(key)) {
-                unexplained.add(new Difference(key, null, scored.verdicts().get(key), scored.reasons().get(key)));
-            }
-        }
-    }
-
-    /** 예측 기준 관측의 차량이 그날 00시 이전부터 같은 연결로 이어졌는지(자정 범위 차이가 생길 수 있는지) 본다. */
-    private boolean sameDayHistory(Key key) {
+    /** 예측 기준 관측의 차량이 그날 00시 전 3시간 안에도 관측되어, 자정을 넘겨 이어진 운행일 수 있는지 본다. */
+    boolean continuesFromPreviousDay(Key key) {
         AlightingAwareObservation source = rowById.get(key.observationId());
         Instant dayStart = source.receivedAt().atZone(SEOUL).toLocalDate().atStartOfDay(SEOUL).toInstant();
         Instant earliest = source.receivedAt().minus(Duration.ofHours(3));
-        return rows.stream().noneMatch(row -> isEarlierSameVehicle(row, source, dayStart, earliest));
+        return rows.stream().anyMatch(row -> isEarlierSameVehicle(row, source, dayStart, earliest));
     }
 
     private static boolean isEarlierSameVehicle(
@@ -625,17 +392,6 @@ final class LegacyScoringScenario {
             ForecastOutcome.PUBLISHED, vehicles);
     }
 
-    /** 새 채점 단계와 같은 방법으로 옛 정산이 예보 행에서 펼치는 근거를 만든다. */
-    JsonNode snapshot(final int target, final int capacity) {
-        ObjectNode snapshot = JsonNodeFactory.instance.objectNode();
-        for (Map.Entry<String, JsonNode> field : context.path("shared").properties()) {
-            snapshot.set(field.getKey(), field.getValue());
-        }
-        snapshot.put("capacity", capacity);
-        snapshot.putObject("alighting").set("stops", context.path("stops").get(String.valueOf(target)));
-        return snapshot;
-    }
-
     static boolean isDown(final int stop, final int state, final int turn) {
         return stop > turn || (stop == turn && state == 2) || (stop == 1 && state != 2);
     }
@@ -656,7 +412,7 @@ final class LegacyScoringScenario {
             ("\"p\":0.12,\"lam\":[%s,%s,%s,%s,%s,%s,%s,%s],\"kappa\":1,\"r\":2")
             .formatted(rate, rate + .1, rate + .2, rate + .3, rate + .4, rate + .5, rate + .6, rate + .7);
         List<String> stops = new ArrayList<>();
-        for (int target : targets) {
+        for (final int target : targets) {
             List<String> entries = new ArrayList<>();
             for (String band : List.of("morning", "evening")) {
                 if (band.equals("evening") && missingEvening.contains(target)) {
@@ -687,7 +443,7 @@ final class LegacyScoringScenario {
      * 고정 시드로 여러 차량의 운행을 만든다. 정류장은 1~9이고 5는 실정류장이 아니다. 차량은 대략 45초마다 한 정류장을 지나며,
      * 가끔 관측이 빠지거나 90초 넘게 끊기고, 좌석이 비거나 정원이 바뀐다. 끝 정류장에 닿으면 몇 분에서 수십 분 쉰 뒤 다시 출발한다.
      */
-    static LegacyScoringScenario random(
+    static ScoringScenario random(
         final long seed,
         Instant start,
         final int batchCount,
@@ -699,7 +455,7 @@ final class LegacyScoringScenario {
     }
 
     /** {@code missingExtended} 칸의 비첨두 계수를 뺀 근거로 {@link #random(long, Instant, int, int, double, boolean)}과 같이 만든다. */
-    static LegacyScoringScenario random(
+    static ScoringScenario random(
         final long seed,
         Instant start,
         final int batchCount,
@@ -710,7 +466,7 @@ final class LegacyScoringScenario {
     ) {
         List<Integer> real = List.of(1, 2, 3, 4, 6, 7, 8, 9);
         List<Integer> targets = List.of(2, 3, 4, 5, 6, 7, 8, 9);
-        LegacyScoringScenario scenario = new LegacyScoringScenario(real, 20,
+        ScoringScenario scenario = new ScoringScenario(real, 20,
             context(real, 20, targets, extended, List.of(7), missingExtended));
         Random random = new Random(seed);
         List<SimulatedVehicle> vehicles = new ArrayList<>();
@@ -758,7 +514,7 @@ final class LegacyScoringScenario {
         }
 
         /** 난수를 뽑는 순서와 횟수가 시나리오를 정하므로, 조건마다 뽑던 자리를 그대로 지킨다. */
-        private void step(LegacyScoringScenario scenario, final long batch, Instant at, Random random) {
+        private void step(ScoringScenario scenario, final long batch, Instant at, Random random) {
             if (!active) {
                 if (at.isBefore(nextStart)) {
                     return;

@@ -6,6 +6,7 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObse
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareVehiclePrefix;
+import com.gustler.backend.forecasting.support.Baseline;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

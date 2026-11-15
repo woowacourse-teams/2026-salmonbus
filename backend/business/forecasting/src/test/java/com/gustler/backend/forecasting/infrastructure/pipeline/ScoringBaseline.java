@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
 import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
+import com.gustler.backend.forecasting.support.Baseline;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;

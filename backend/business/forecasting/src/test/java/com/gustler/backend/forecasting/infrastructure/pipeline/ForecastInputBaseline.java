@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
+import com.gustler.backend.forecasting.support.Baseline;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;

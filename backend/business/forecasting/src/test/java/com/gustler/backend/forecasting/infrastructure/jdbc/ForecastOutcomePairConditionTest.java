@@ -75,7 +75,7 @@ class ForecastOutcomePairConditionTest {
             forecast(1, BASIS, vehicle(paired, "bus-a", 50)),
             forecast(2, BASIS.plusSeconds(50), vehicle(unmet, "bus-a", 50)),
             pass);
-        ScoringResult result = LegacyScoringScenario.feed(stage(), events);
+        ScoringResult result = ScoringScenario.feed(stage(), events);
         store(events);
         labels.saveLabels(result.labels());
 
@@ -114,7 +114,7 @@ class ForecastOutcomePairConditionTest {
             pass("bus-b", 51, reachedAt, closedAt, 5),
             pass("bus-c", 52, windowEnd.minusSeconds(30), windowEnd, 6),
             pass("bus-d", 53, windowEnd.minusSeconds(30), windowEnd.plus(MICROSECOND), 7));
-        ScoringResult result = LegacyScoringScenario.feed(stage(), events);
+        ScoringResult result = ScoringScenario.feed(stage(), events);
         store(events);
         labels.saveLabels(result.labels());
 
@@ -141,7 +141,7 @@ class ForecastOutcomePairConditionTest {
             forecast(1, BASIS, vehicle(500, "bus-a", 50)),
             forecast(2, BASIS.plusSeconds(1), vehicle(unsupported, "bus-a", 50)),
             pass("bus-a", 50, BASIS.plusSeconds(60), BASIS.plusSeconds(120), 3));
-        ScoringResult result = LegacyScoringScenario.feed(stage(), events);
+        ScoringResult result = ScoringScenario.feed(stage(), events);
         store(events);
         labels.saveLabels(result.labels());
         labels.saveUnresolved(List.of(new UnresolvedForecast(SourceDates.of(BASIS), unsupported, TARGET, ROUTE,
@@ -186,9 +186,9 @@ class ForecastOutcomePairConditionTest {
     }
 
     private static ScoringStage stage() {
-        JsonNode context = LegacyScoringScenario.context(REAL_STOPS, 9, List.of(2, 3, 4), true, List.of(), List.of());
+        JsonNode context = ScoringScenario.context(REAL_STOPS, 9, List.of(2, 3, 4), true, List.of(), List.of());
         return new ScoringStage((deployment, version) -> Optional.of(context), version -> REAL_STOPS,
-            ForecastOutcomePairConditionTest::settled, LegacyScoringScenario.FIXED);
+            ForecastOutcomePairConditionTest::settled, ScoringScenario.FIXED);
     }
 
     private static PassLabelCalculator.PassLabelCalculation settled(
