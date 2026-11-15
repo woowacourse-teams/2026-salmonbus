@@ -257,7 +257,7 @@ class PartitionMaintenanceTest {
     }
 
     @Test
-    void 관측_테이블이_일반_테이블이면_새_경로_스위치가_꺼진_수집_worker에서_아무것도_만들지_않는다() throws Exception {
+    void 관측_테이블이_일반_테이블이면_예보가_꺼진_수집_worker에서_아무것도_만들지_않는다() throws Exception {
         // given
         String schema = "observation_plain_" + UUID.randomUUID().toString().replace("-", "");
         jdbcClient.sql("CREATE SCHEMA " + schema).update();
@@ -291,7 +291,7 @@ class PartitionMaintenanceTest {
     }
 
     @Test
-    void 관측_테이블이_파티션_테이블이면_스위치와_무관하게_수동_SQL과_같은_이름으로_날짜_파티션을_만든다() throws Exception {
+    void 관측_테이블이_파티션_테이블이면_예보가_꺼져도_수동_SQL과_같은_이름으로_날짜_파티션을_만든다() throws Exception {
         // given
         String schema = "observation_partition_" + UUID.randomUUID().toString().replace("-", "");
         jdbcClient.sql("CREATE SCHEMA " + schema).update();
