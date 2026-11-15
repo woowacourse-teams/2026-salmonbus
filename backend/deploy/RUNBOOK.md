@@ -1058,8 +1058,8 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 - `GET /api/v1/routes`의 `status`가 노선마다 `FORECAST_READY`로 바뀐다.
 - worker 지표 `salmonbus_forecast_batches_total{result}`에서 `published`·`empty`가 늘고 `failed`·`unsupported_profile`이 0이다. `salmonbus_forecast_replays_total{result="succeeded"}`가 노선 수만큼 한 번씩 늘고 `failed`가 없다.
 - 노선의 첫 배치 몇 개 가운데 `late`가 얼마나 되는지 본다. 되감기가 길어 앞 노선에 밀리면 수신 뒤 90초를 넘겨 `late`가 된다(줄은 생긴다). 계속 `late`면 `FORECAST_LANES`를 늘린다.
-- 통과가 닫히기 시작하면 `salmonbus_scoring_written_total{table="pass_label"}`이 는다. `salmonbus_scoring_waiting`과 `salmonbus_scoring_queue`가 쌓이지 않는다.
-- `salmonbus_partition_default_rows{table}`가 0이다. 0보다 크면 그 날짜의 파티션이 없을 때 들어온 줄이다.
+- 통과가 닫히기 시작하면 `salmonbus_scoring_written_total{table="pass_label"}`이 는다. `salmonbus_scoring_queue`와 `salmonbus_scoring_pending_rows`가 쌓이지 않는다. `salmonbus_scoring_waiting`은 통과를 기다리는 예측 수라 배포 뒤 한동안 는다. 예측은 늦어도 예보 2시간 뒤에 닫히므로 그 뒤에도 계속 늘면 채점이 밀리는 것이다.
+- 기동 로그에 `event=partition_create_failed`와 `event=partition_maintenance_incomplete`가 없다. 기본 파티션의 줄 수(`salmonbus_partition_default_rows{table}`)는 기동 때 세지 않아 첫 주기 실행(기동 한 시간 뒤)부터 나온다. 0보다 크면 그 날짜의 파티션이 없을 때 들어온 줄이다. 그 전에는 아래 `sal434-01-precheck.sql`의 7절이 센 값을 본다.
 - `sal434-01-precheck.sql`을 실행해 보관한다. 3절의 `new_forecast_run`·`new_stop_pass_closed`·`new_pass_label_computed`가 최근이고 `old_*` 시각이 배포 시각에서 멈췄는지 본다.
 - 보드의 좌석 예측이 다시 나오는지 화면에서 본다.
 
