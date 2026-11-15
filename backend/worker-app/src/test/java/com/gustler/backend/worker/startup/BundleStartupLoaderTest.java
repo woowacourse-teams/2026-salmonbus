@@ -6,6 +6,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.gustler.backend.forecasting.api.forecast.RunForecasts;
 import com.gustler.backend.forecasting.api.model.LoadConfiguredModelCommand;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Activated;
@@ -14,7 +15,6 @@ import com.gustler.backend.forecasting.api.model.ModelLoadResult.NotConfigured;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Promoted;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Rejected;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Reloaded;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
 import com.gustler.backend.worker.configuration.ModelBundleProperties;
 import java.util.ArrayList;
 import java.util.List;
@@ -69,7 +69,7 @@ class BundleStartupLoaderTest {
                 order.add("load");
                 return new Reloaded("release-A");
             });
-        loader.setForecastPipeline(new ForecastPipeline() {
+        loader.setRunForecasts(new RunForecasts() {
             @Override
             public void batchStored(final long observationBatchId, final long routeVersionId) {
                 order.add("signal");

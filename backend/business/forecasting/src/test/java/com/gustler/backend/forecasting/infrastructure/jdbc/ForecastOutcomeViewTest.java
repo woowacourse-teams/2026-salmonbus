@@ -2,19 +2,19 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
-import com.gustler.backend.forecasting.api.pipeline.PassClosed;
-import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
-import com.gustler.backend.forecasting.application.pipeline.PassLabel;
-import com.gustler.backend.forecasting.application.pipeline.PassLabelStore;
-import com.gustler.backend.forecasting.application.pipeline.ScoredForecast;
-import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
-import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
-import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
-import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
-import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
+import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
+import com.gustler.backend.forecasting.api.forecast.PassClosed;
+import com.gustler.backend.forecasting.application.forecast.ForecastRecordStore;
+import com.gustler.backend.forecasting.application.forecast.PassLabel;
+import com.gustler.backend.forecasting.application.forecast.PassLabelStore;
+import com.gustler.backend.forecasting.application.forecast.ScoredForecast;
+import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
+import com.gustler.backend.forecasting.application.forecast.ScoringResult;
+import com.gustler.backend.forecasting.application.forecast.ScoringStage;
+import com.gustler.backend.forecasting.application.forecast.StopPassStore;
+import com.gustler.backend.forecasting.application.forecast.UnresolvedForecast;
+import com.gustler.backend.forecasting.support.ForecastSamples;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
-import com.gustler.backend.forecasting.support.PipelineSamples;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -127,7 +127,7 @@ class ForecastOutcomeViewTest {
     private void store(List<Object> events) {
         for (Object event : events) {
             if (event instanceof ForecastPublished published) {
-                records.save(published, PipelineSamples.seenWithoutRows(published));
+                records.save(published, ForecastSamples.seenWithoutRows(published));
                 continue;
             }
             if (event instanceof PassClosed pass) {

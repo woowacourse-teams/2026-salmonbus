@@ -3,8 +3,8 @@ package com.gustler.backend.worker.integration.forecasting;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
-import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
+import com.gustler.backend.forecasting.api.forecast.ScoringCycle;
+import com.gustler.backend.forecasting.application.forecast.ScoringStage;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
@@ -18,7 +18,7 @@ import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMappe
 import com.gustler.backend.support.TestDatabase;
 import com.gustler.backend.worker.WorkerApplication;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
-import com.gustler.backend.worker.scheduling.PipelineForecastTrigger;
+import com.gustler.backend.worker.scheduling.ForecastTrigger;
 import com.gustler.backend.worker.scheduling.RouteLanes;
 import com.zaxxer.hikari.HikariDataSource;
 import java.time.Duration;
@@ -132,7 +132,7 @@ class ForecastRestartIntegrationTest {
             RuntimeSnapshot runtime = insertDeployment(stored, List.of(continuous, interrupted, running, delayed),
                 validFrom);
             selected.select(runtime);
-            first.getBean(PipelineForecastTrigger.class).pickUp();
+            first.getBean(ForecastTrigger.class).pickUp();
             for (final int passedStop : PASSED_STOPS) {
                 collect(first, continuous, passedStop);
             }
@@ -172,13 +172,13 @@ class ForecastRestartIntegrationTest {
                 softly.assertThat(waitingRunsAtClose).as("기다리던 배치는 닫을 때 처리하지 않는다").isEmpty();
                 softly.assertThat(delayedRunAtClose).isEmpty();
                 softly.assertThat(firstPool.isClosed()).isTrue();
-                softly.assertThat(closingLog).contains("event=pipeline_forecast_stopped discarded=2")
-                    .contains("event=pipeline_scoring_stopped")
-                    .doesNotContain("event=pipeline_forecast_failed")
-                    .doesNotContain("event=pipeline_forecast_sweep_failed")
-                    .doesNotContain("event=pipeline_forecast_task_failed")
-                    .doesNotContain("event=pipeline_scoring_failed")
-                    .doesNotContain("event=pipeline_scoring_replay_failed")
+                softly.assertThat(closingLog).contains("event=forecast_stopped discarded=2")
+                    .contains("event=scoring_stopped")
+                    .doesNotContain("event=forecast_failed")
+                    .doesNotContain("event=forecast_sweep_failed")
+                    .doesNotContain("event=forecast_task_failed")
+                    .doesNotContain("event=scoring_failed")
+                    .doesNotContain("event=scoring_replay_failed")
                     .doesNotContain("stop_timeout")
                     .doesNotContain("has been closed");
                 softly.assertThat(restarted.settled()).as("다시 뜬 뒤 마감 안에 남은 배치의 예보와 채점이 끝났다").isTrue();
@@ -211,7 +211,7 @@ class ForecastRestartIntegrationTest {
         ConfigurableApplicationContext second = startWorker();
         try {
             second.getBean(SelectedRuntime.class).select(runtime);
-            second.getBean(PipelineForecastTrigger.class).pickUp();
+            second.getBean(ForecastTrigger.class).pickUp();
             final boolean settled = waitUntil(second, () -> runs(stored, interrupted).size() == PASSED_STOPS.size()
                 && !runsOf(stored, List.of(delayedBatch)).isEmpty()
                 && closedForecasts(stored, interrupted, "<> 'PENDING'") == CLOSED_FORECASTS);
@@ -327,7 +327,7 @@ class ForecastRestartIntegrationTest {
     /** 조건이 참이 되기를 기다린다. 기다리는 동안 채점이 모아 둔 결과를 쓰게 한다. */
     private static boolean waitUntil(ConfigurableApplicationContext context, BooleanSupplier condition)
         throws InterruptedException {
-        ShadowScoringCycle scoring = context.getBean(ShadowScoringCycle.class);
+        ScoringCycle scoring = context.getBean(ScoringCycle.class);
         Instant deadline = Instant.now().plus(DEADLINE);
         while (Instant.now().isBefore(deadline)) {
             scoring.flush();

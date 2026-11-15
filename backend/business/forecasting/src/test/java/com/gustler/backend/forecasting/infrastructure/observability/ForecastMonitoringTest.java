@@ -7,8 +7,8 @@ import static org.mockito.Mockito.mock;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
-import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
+import com.gustler.backend.forecasting.api.forecast.ForecastClosed;
+import com.gustler.backend.forecasting.application.forecast.RunForecastsService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -124,9 +124,9 @@ class ForecastMonitoringTest {
         versions.set(monitoring, Map.of(4L, "9300"));
 
         // when
-        String known = monitoring.context(ForecastPipelineService.OPERATION, 4L);
-        String unknown = monitoring.context(ForecastPipelineService.OPERATION, 5L);
-        String pickUp = monitoring.context("pipeline_forecast_pickup", "all");
+        String known = monitoring.context(RunForecastsService.OPERATION, 4L);
+        String unknown = monitoring.context(RunForecastsService.OPERATION, 5L);
+        String pickUp = monitoring.context("forecast_pickup", "all");
 
         // then
         assertSoftly(softly -> {
@@ -196,7 +196,7 @@ class ForecastMonitoringTest {
     void 예보_커밋은_마지막_커밋_시각을_갱신하고_예측이_있는_커밋만_마지막_예보와_입력_시각을_갱신한다() throws Exception {
         // given
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        PipelineClock clock = new PipelineClock(Instant.ofEpochSecond(1000));
+        SettableClock clock = new SettableClock(Instant.ofEpochSecond(1000));
         ForecastMonitoring monitoring = new ForecastMonitoring(registry, mock(DataSource.class), clock);
         Method register = ForecastMonitoring.class.getDeclaredMethod("registerRoute", long.class, String.class);
         register.setAccessible(true);
@@ -243,10 +243,10 @@ class ForecastMonitoringTest {
         }
     }
 
-    private static final class PipelineClock extends Clock {
+    private static final class SettableClock extends Clock {
         private Instant now;
 
-        private PipelineClock(Instant now) {
+        private SettableClock(Instant now) {
             this.now = now;
         }
 

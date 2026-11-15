@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.support;
 
-import com.gustler.backend.forecasting.application.pipeline.PendingPipelineBatches;
+import com.gustler.backend.forecasting.application.forecast.PendingBatches;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -13,12 +13,12 @@ import java.util.Set;
  * 읽으므로, 아직 수집하지 않은 것으로 칠 배치를 가려야 시험이 정한 배치만 그 시각에 처리된다. 조건과 순서는 감싼 조회의 것을 그대로
  * 쓴다.
  */
-public final class CommittedBatches implements PendingPipelineBatches {
-    private final PendingPipelineBatches delegate;
+public final class CommittedBatches implements PendingBatches {
+    private final PendingBatches delegate;
     private final Set<Long> committed = new HashSet<>();
     private Runnable afterNextFind;
 
-    public CommittedBatches(PendingPipelineBatches delegate) {
+    public CommittedBatches(PendingBatches delegate) {
         this.delegate = delegate;
     }
 

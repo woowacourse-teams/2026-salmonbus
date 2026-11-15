@@ -1,7 +1,7 @@
 -- SAL-434 이전 배포본의 예보·정산·평가·보관이 쓰던 테이블 25개와 뷰 9개를 지운다. 자동 실행하지 않는다. 지운 테이블은 되돌릴 수 없다.
 --
 -- 대상: 이 테이블들에 줄이 있는 DB. 줄이 없는 DB는 마이그레이션(V83)이 같은 테이블과 뷰를 지운다. 이 파일로 지운 DB와 V83이 지운
---       DB는 같은 스키마가 된다(ForecastPipelineTransitionSqlTest가 대조한다).
+--       DB는 같은 스키마가 된다(TransitionSqlTest가 대조한다).
 -- 언제: RUNBOOK 「SAL-434 전환 절차」의 차례대로. sal434-02-drop-legacy-triggers.sql을 실행했고, 이관 앱의 옛 테이블 내보내기
 --       (ARCHIVE_LEGACY_EXPORT_ENABLED)가 이 테이블들을 기본 키 순서의 조각으로 S3에 내보내고 다시 읽어 확인한 뒤(daily_export 장부,
 --       source_date 2000-01-01, 조각마다 한 줄. 테이블마다 로그 status=COMPLETE), sal434-01-precheck.sql로 객체 목록과 장부를
@@ -53,7 +53,7 @@
 --   없어야 하고 읽기는 계속된다. 마지막에 DROP이 ACCESS EXCLUSIVE를 잡는다(lock_timeout 5초). statement_timeout 120분.
 -- 여러 번 실행해도 된다. 대상이 이미 없으면 알리고 끝난다.
 -- Flyway: 이 SQL 뒤에도 validate·migrate는 통과한다. Flyway는 적용 이력과 파일 체크섬만 보고 테이블 존재는 보지 않는다
---   (ForecastPipelineTransitionSqlTest로 확인).
+--   (TransitionSqlTest로 확인).
 -- 실행: psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '...'" -f sal434-03-drop-legacy-tables.sql
 BEGIN;
 SET LOCAL lock_timeout = '5s';

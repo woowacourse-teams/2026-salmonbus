@@ -3,9 +3,9 @@ package com.gustler.backend.forecasting.support;
 import com.gustler.backend.forecasting.application.deployment.ActiveForecastRuntimeResolver;
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
 import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
-import com.gustler.backend.forecasting.application.pipeline.PassLabelStore;
-import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
-import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
+import com.gustler.backend.forecasting.application.forecast.PassLabelStore;
+import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
+import com.gustler.backend.forecasting.application.forecast.StopPassStore;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
@@ -13,7 +13,7 @@ import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareInferenceBundle;
 import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareServingBundle;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcForecastRecordStore;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcForecastRecordStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,7 +44,7 @@ import tools.jackson.databind.json.JsonMapper;
  * <ol>
  *   <li>파일의 해시를 확인하고 노선·판본·정류장·그날의 배치와 관측을 DB에 넣는다({@link WorkerReplayLoader}).</li>
  *   <li>그날의 배치를 착수 시각 순서로 예보에 넣는다. 예보가 실행·예측 기록·닫힌 통과를 저장하고, 통과가 닫힐 때 채점이 정답을
- *       저장한다({@link WorkerReplayPipeline}).</li>
+ *       저장한다({@link WorkerReplayRunner}).</li>
  *   <li>사례마다 입력·예측·정답과 정답의 근거를 기대값과 견준다({@link WorkerReplayVerification}).</li>
  * </ol>
  * 출력 폴더에 노선마다 {@code <노선>.json}을, 끝에 {@code report.json}을 쓴다. 번들의 노선이 모두 통과해야 보고서가 통과다. 통과하지
@@ -202,12 +202,12 @@ public final class ConfirmedAlightingAwareWorkerReplay {
     private Map<String, Object> replay(WorkerReplayFixture fixture) {
         final long routeId = new WorkerReplayLoader(stores.jdbc()).load(fixture);
         List<Long> versions = fixture.versions().stream().map(WorkerReplayFixture.Version::id).sorted().toList();
-        WorkerReplayPipeline pipeline = new WorkerReplayPipeline(stores, runtime, versions);
+        WorkerReplayRunner runner = new WorkerReplayRunner(stores, runtime, versions);
         Set<Long> caseBatches = fixture.cases().stream()
             .map(row -> fixture.observation(row.path("source_id").asLong()).batchId())
             .collect(Collectors.toSet());
-        pipeline.run(fixture.batches(), caseBatches);
-        return new WorkerReplayVerification(stores.jdbc(), pipeline, bundle, model, fixture, routeId).result();
+        runner.run(fixture.batches(), caseBatches);
+        return new WorkerReplayVerification(stores.jdbc(), runner, bundle, model, fixture, routeId).result();
     }
 
     /** 노선 결과를 묶은 보고서다. 재생한 노선 수가 번들의 노선 수(노선 하나만 재생했으면 1)와 같고 모두 통과해야 통과다. */

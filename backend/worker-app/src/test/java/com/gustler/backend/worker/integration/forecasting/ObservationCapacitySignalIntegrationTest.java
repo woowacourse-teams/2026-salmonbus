@@ -8,10 +8,10 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
-import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
-import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
-import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
+import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
+import com.gustler.backend.forecasting.api.forecast.RunForecasts;
+import com.gustler.backend.forecasting.api.forecast.ScoringCycle;
+import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.gbis.api.GbisLocationResult;
@@ -51,11 +51,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest(classes = WorkerApplication.class, properties = {
     "forecast.enabled=true",
     "forecast.interval=1h",
-    "forecast.pipeline=v1",
-    "forecast.shadow.enabled=true",
-    "forecast.shadow.queue-capacity=0",
-    "forecast.scoring=off",
-    "forecast.scoring-comparison-interval=0s",
     "forecast.compact-settlement-write=true",
     "forecast.settlement-interval=0s",
     "forecast.settlement-minimum-interval=1h",
@@ -64,13 +59,7 @@ import org.springframework.transaction.support.TransactionTemplate;
     "forecast.alighting.history-seed-directory=/nonexistent",
     "forecast.alighting.rush-only=false",
     "forecast.alighting.maximum-history-rows=0",
-    "forecast.alighting.causal-evaluation.maximum-observation-rows=0",
-    "forecast.scoring-flush-interval=0s",
-    "forecast.scoring-queue-capacity=0",
-    "forecast.lane-queue-capacity=0",
-    "forecast.replay-window=0s",
-    "forecast.replay-extended-window=13h",
-    "forecast.shutdown-timeout=-1s"
+    "forecast.alighting.causal-evaluation.maximum-observation-rows=0"
 })
 @Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class })
 class ObservationCapacitySignalIntegrationTest {
@@ -98,7 +87,7 @@ class ObservationCapacitySignalIntegrationTest {
     private ForecastRuntime forecastRuntime;
 
     @MockitoSpyBean
-    private ForecastPipeline pipeline;
+    private RunForecasts forecasts;
 
     private long routeVersionId;
 
@@ -134,9 +123,9 @@ class ObservationCapacitySignalIntegrationTest {
     void 읽지_않는_예보_설정_키가_남아_있어도_예보와_채점_구성이_선다() {
         // then
         assertSoftly(softly -> {
-            softly.assertThat(context.getBeanNamesForType(ForecastPipeline.class)).hasSize(1);
+            softly.assertThat(context.getBeanNamesForType(RunForecasts.class)).hasSize(1);
             softly.assertThat(context.getBeanNamesForType(ForecastLanes.class)).hasSize(1);
-            softly.assertThat(context.getBeanNamesForType(ShadowScoringCycle.class)).hasSize(1);
+            softly.assertThat(context.getBeanNamesForType(ScoringCycle.class)).hasSize(1);
             softly.assertThat(context.getBeanNamesForType(ScoringFeed.class)).hasSize(1);
         });
     }
@@ -154,18 +143,18 @@ class ObservationCapacitySignalIntegrationTest {
         doAnswer(invocation -> {
             seenAtSignal.set(vehicleCapacities.find("GBIS", List.of(vehicleId)).get(vehicleId).seats());
             return invocation.callRealMethod();
-        }).when(pipeline).batchStored(anyLong(), eq(routeVersionId));
+        }).when(forecasts).batchStored(anyLong(), eq(routeVersionId));
 
         // when
         final long batchId = collectWithSeats(vehicleId, 45);
 
         // then
-        verify(pipeline, timeout(SIGNAL_DEADLINE.toMillis())).batchStored(batchId, routeVersionId);
+        verify(forecasts, timeout(SIGNAL_DEADLINE.toMillis())).batchStored(batchId, routeVersionId);
         assertThat(seenAtSignal.get()).isEqualTo(45);
         assertThat(readCapacity(vehicleId)).contains(45);
         final long nextBatchId = collectWithSeats(vehicleId, 44);
         assertThat(readCapacity(vehicleId)).contains(45);
-        verify(pipeline, timeout(SIGNAL_DEADLINE.toMillis())).batchStored(nextBatchId, routeVersionId);
+        verify(forecasts, timeout(SIGNAL_DEADLINE.toMillis())).batchStored(nextBatchId, routeVersionId);
     }
 
     @Test

@@ -1,17 +1,17 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.api.pipeline.CollectionResult;
-import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
-import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
-import com.gustler.backend.forecasting.api.pipeline.PassClosed;
-import com.gustler.backend.forecasting.application.pipeline.PassLabel;
-import com.gustler.backend.forecasting.application.pipeline.PassLabelCalculator;
-import com.gustler.backend.forecasting.application.pipeline.ScoredForecast;
-import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
-import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
-import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
-import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
+import com.gustler.backend.forecasting.api.forecast.CollectionResult;
+import com.gustler.backend.forecasting.api.forecast.ForecastOutcome;
+import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
+import com.gustler.backend.forecasting.api.forecast.ObservationBatchSeen;
+import com.gustler.backend.forecasting.api.forecast.PassClosed;
+import com.gustler.backend.forecasting.application.forecast.PassLabel;
+import com.gustler.backend.forecasting.application.forecast.PassLabelCalculator;
+import com.gustler.backend.forecasting.application.forecast.ScoredForecast;
+import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
+import com.gustler.backend.forecasting.application.forecast.ScoringResult;
+import com.gustler.backend.forecasting.application.forecast.ScoringStage;
+import com.gustler.backend.forecasting.application.forecast.UnresolvedForecast;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvents;
@@ -188,7 +188,7 @@ final class ScoringScenario {
     }
 
     ScoringStage stage(final int limit) {
-        return stage(limit, new ConfirmedPassLabelCalculator());
+        return stage(limit, new AlightingAwarePassLabelCalculator());
     }
 
     ScoringStage stage(final int limit, PassLabelCalculator calculator) {

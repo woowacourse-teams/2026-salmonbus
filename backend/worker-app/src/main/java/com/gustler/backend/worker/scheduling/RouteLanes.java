@@ -1,6 +1,6 @@
 package com.gustler.backend.worker.scheduling;
 
-import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
+import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
@@ -22,7 +22,7 @@ import org.springframework.scheduling.concurrent.ExecutorConfigurationSupport;
  * <p>같은 열쇠의 일은 항상 같은 줄에서 넣은 순서대로 하나씩 실행되고, 다른 줄의 일은 동시에 실행된다. 스케줄러의 풀 크기를 올리는
  * 방식과 달리 같은 노선이 두 스레드에서 동시에 처리되지 않는다. 줄마다 길이 제한이 있고, 가득 차면 넣지 않고 거짓을 돌려준다
  * (다음 줍기가 다시 넣는다). 일 하나가 실패해도 그 줄은 다음 일을 계속 실행한다. 줄 길이는
- * {@code salmonbus.pipeline.forecast.queue{lane}} 게이지로 낸다.
+ * {@code salmonbus.forecast.queue{lane}} 게이지로 낸다.
  *
  * <p>컨텍스트가 닫힐 때는 일을 넣는 수집과 줍기의 스케줄러가 돌던 회차를 끝낸 바로 다음에 닫힌다({@link #stop()}). 그래서 돌던
  * 수집 회차가 넘긴 배치까지는 받는다. 닫을 때는 새 일을 받지 않고, 줄에서 기다리던 일은 버리고, 돌던 일은 중단시키지 않고 끝나기를
@@ -85,7 +85,7 @@ public class RouteLanes implements ForecastLanes, SmartLifecycle {
     }
 
     private static void registerQueueGauge(MeterRegistry meters, ThreadPoolExecutor executor, final int index) {
-        Gauge.builder("salmonbus.pipeline.forecast.queue", executor, pool -> pool.getQueue().size())
+        Gauge.builder("salmonbus.forecast.queue", executor, pool -> pool.getQueue().size())
             .tag("lane", String.valueOf(index))
             .strongReference(true)
             .register(meters);
@@ -105,7 +105,7 @@ public class RouteLanes implements ForecastLanes, SmartLifecycle {
         try {
             task.run();
         } catch (RuntimeException failure) {
-            LOGGER.warn("event=pipeline_forecast_task_failed routeKey={} exceptionType={}", routeKey,
+            LOGGER.warn("event=forecast_task_failed routeKey={} exceptionType={}", routeKey,
                 failure.getClass().getSimpleName(), failure);
         }
     }
@@ -155,11 +155,11 @@ public class RouteLanes implements ForecastLanes, SmartLifecycle {
             }
         }
         if (running > 0) {
-            LOGGER.warn("event=pipeline_forecast_stop_timeout discarded={} running={} waitMs={}", discarded, running,
+            LOGGER.warn("event=forecast_stop_timeout discarded={} running={} waitMs={}", discarded, running,
                 stopWait.toMillis());
             return;
         }
-        LOGGER.info("event=pipeline_forecast_stopped discarded={}", discarded);
+        LOGGER.info("event=forecast_stopped discarded={}", discarded);
     }
 
     private static boolean terminatesBy(ThreadPoolExecutor lane, final long deadline) {

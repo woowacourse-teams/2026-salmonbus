@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
-import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
+import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
+import com.gustler.backend.forecasting.application.forecast.ScoringStage;
 import com.gustler.backend.forecasting.support.Baseline;
 import java.util.ArrayList;
 import java.util.HashMap;

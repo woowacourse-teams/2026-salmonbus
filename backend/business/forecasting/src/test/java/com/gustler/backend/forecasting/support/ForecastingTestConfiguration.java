@@ -2,8 +2,8 @@ package com.gustler.backend.forecasting.support;
 
 import com.gustler.backend.config.ClockConfig;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
-import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
-import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
+import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
+import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
 import com.gustler.backend.forecasting.configuration.ForecastingConfiguration;
 import com.gustler.backend.observations.configuration.ObservationPersistenceConfiguration;
 import com.gustler.backend.support.PostgresTestContainer;

@@ -8,7 +8,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import com.gustler.backend.forecasting.api.pipeline.MaintainPipelinePartitions;
+import com.gustler.backend.forecasting.api.forecast.MaintainPartitions;
 import com.gustler.backend.worker.configuration.CollectionConfig.ScheduledCollection;
 import com.gustler.backend.worker.scheduling.AdaptiveCollectionTrigger;
 import com.gustler.backend.worker.scheduling.CollectionScheduler;
@@ -75,20 +75,20 @@ class CollectionTaskLifecycleTest {
             () -> new GbisProperties("https://example.invalid", "fixture", 10000));
         context.registerBean("collectionTaskScheduler", TaskScheduler.class, () -> scheduler);
         context.registerBean("calibrationTaskScheduler", TaskScheduler.class, () -> mock(TaskScheduler.class));
-        context.registerBean(MaintainPipelinePartitions.class, () -> new MaintainPipelinePartitions() {
+        context.registerBean(MaintainPartitions.class, () -> new MaintainPartitions() {
             @Override
-            public MaintainPipelinePartitions.Report prepare() {
+            public MaintainPartitions.Report prepare() {
                 order.add("partitions_prepared");
-                return new MaintainPipelinePartitions.Report(List.of(), List.of(), Map.of());
+                return new MaintainPartitions.Report(List.of(), List.of(), Map.of());
             }
 
             @Override
-            public MaintainPipelinePartitions.Report maintain() {
+            public MaintainPartitions.Report maintain() {
                 order.add("partitions_maintained");
-                return new MaintainPipelinePartitions.Report(List.of(), List.of(), Map.of());
+                return new MaintainPartitions.Report(List.of(), List.of(), Map.of());
             }
         });
-        context.register(ScheduledCollection.class, ForecastPipelineConfiguration.class);
+        context.register(ScheduledCollection.class, PartitionConfiguration.class);
         return context;
     }
 }

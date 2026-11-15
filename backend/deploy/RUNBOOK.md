@@ -634,7 +634,7 @@ S3 구조:
 - `MANIFEST_HASH_MISMATCH`, `FILE_HASH_MISMATCH`, `FILE_ROW_COUNT_MISMATCH`, `MANIFEST_ROW_COUNT_MISMATCH`, `MANIFEST_MISMATCH`: S3 객체가 장부와 다르다. 지우지 않는다. 객체 버전과 버킷 수명 주기 설정을 확인한다.
 - `EXPORT_CONTENT_MISMATCH`: 다른 실행이 같은 (테이블, 날짜)에 내용이 다른 manifest를 먼저 장부에 적었다. 지우지 않는다. 두 manifest를 비교한다.
 - `LEDGER_DROPPED_PARTITION_PRESENT`: 장부는 지웠다고 하는데 파티션이 있다. 손으로 다시 만든 파티션인지 확인한다.
-- `salmonbus_archive_partition_default_rows`가 0보다 크면 날짜 파티션이 없을 때 들어온 줄이다. 기본 파티션의 줄은 내보내지 않는다. worker의 파티션 유지 작업 실패 로그(`event=pipeline_partition_create_failed`)를 본다.
+- `salmonbus_archive_partition_default_rows`가 0보다 크면 날짜 파티션이 없을 때 들어온 줄이다. 기본 파티션의 줄은 내보내지 않는다. worker의 파티션 유지 작업 실패 로그(`event=partition_create_failed`)를 본다.
 - `salmonbus_archive_partition_oldest_pending_days`가 보관 날짜 수보다 계속 크면 대상 파티션이 쌓이고 있다.
 
 ### 옛 테이블 내보내기
@@ -1035,7 +1035,7 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 
 dev와 로컬에서 먼저 해 볼 때는 네 가지를 알고 시작한다.
 
-- 새 경로는 확정 프로필(`alighting-confirmed-closure-v2`) 모델만 처리한다. 운영 모델은 확정 프로필이고, dev 서버도 `MODEL_BUNDLE_DIRECTORY`로 같은 번들을 쓰고 있어 그림자부터 그대로 해 볼 수 있다(2026-11-15 확인. 번들을 바꿨으면 `manifest.json`의 `input_profile`을 다시 본다). 저장소의 로컬 기본 모델(`dev/data/model-reference`)은 확정 프로필이 아니다. 그래서 로컬 Docker 구성에서는 그림자를 켜도 새 테이블에 아무것도 쌓이지 않고, `FORECAST_PIPELINE=v2`에서는 그 노선들을 `unsupported_profile`로 건너뛴다(경고 로그 `event=pipeline_forecast_unsupported_profile`). 그러면 예보가 나오지 않고 보드는 발행이 끊긴 것으로 보아 503(`NO_RECENT_OBSERVATION`)을 낸다. `salmonbus_pipeline_forecast_batches_total{result="unsupported_profile"}`가 늘지 않는지로 확인한다.
+- 새 경로는 확정 프로필(`alighting-confirmed-closure-v2`) 모델만 처리한다. 운영 모델은 확정 프로필이고, dev 서버도 `MODEL_BUNDLE_DIRECTORY`로 같은 번들을 쓰고 있어 그림자부터 그대로 해 볼 수 있다(2026-11-15 확인. 번들을 바꿨으면 `manifest.json`의 `input_profile`을 다시 본다). 저장소의 로컬 기본 모델(`dev/data/model-reference`)은 확정 프로필이 아니다. 그래서 로컬 Docker 구성에서는 그림자를 켜도 새 테이블에 아무것도 쌓이지 않고, `FORECAST_PIPELINE=v2`에서는 그 노선들을 `unsupported_profile`로 건너뛴다(경고 로그 `event=forecast_unsupported_profile`). 그러면 예보가 나오지 않고 보드는 발행이 끊긴 것으로 보아 503(`NO_RECENT_OBSERVATION`)을 낸다. `salmonbus_forecast_batches_total{result="unsupported_profile"}`가 늘지 않는지로 확인한다.
 - 채점 그림자(2번)는 옛 발행이 모델 배포에 적어 둔 정산 근거(`model_deployment.settlement_context`)를 읽는다. 옛 발행은 `FORECAST_COMPACT_SETTLEMENT_WRITE=true`일 때만 이 근거를 적는다. 운영은 켜져 있다(2026-11-15 확인). 꺼진 환경에서 2번을 켜면 새 채점이 예측을 `SETTLEMENT_EVIDENCE_MISSING`으로 닫아 옛 정산과 대조할 정답이 생기지 않는다. dev 서버는 `dev/server/worker.yml`의 `forecast.compact-settlement-write`를 먼저 본다. 4-1부터는 본선이 근거를 직접 적는다.
 - 개발 데이터 초기화(`reset`, `LocalData --reset-generated`)는 관측 테이블과 옛 예보·정산 테이블만 비우고 새 테이블 다섯 개는 비우지 않는다. 스위치를 켠 뒤 초기화를 돌리면 지워진 관측을 가리키는 줄이 새 테이블에 남는다. 초기화 직후 `TRUNCATE forecast_run, forecast_record, stop_pass, pass_label, forecast_unresolved;`를 실행하고 worker를 재시작한다.
 - 로컬 구성의 프론트 대기 조건(`dev/docker/forecast-ready.sql`)과 스모크 검사(`dev/tests/smoke-local.sh`)는 `forecast_publication`을 본다. 로컬에서 `FORECAST_PIPELINE=v2`로 띄우면 옛 발행이 생기지 않아 프론트가 기다린다. 옛 코드를 지우는 배포에서 이 둘과 초기화 대상을 함께 고친다.
@@ -1052,8 +1052,8 @@ dev와 로컬에서 먼저 해 볼 때는 네 가지를 알고 시작한다.
 - 되돌리기: `false`로 재시작한다. 새 테이블에 쓴 줄은 남지만 아무도 읽지 않는다.
 
 **2. 채점 그림자.** 1번을 켠 채 `FORECAST_SCORING=shadow`로 worker를 재시작한다(그림자 없이 `shadow`만 켜면 worker가 기동하지 않는다).
-- 확인: 기동 뒤 `event=pipeline_scoring_start_rejected`가 없고, `salmonbus_pipeline_scoring_written_total{table="pass_label"}`가 늘며, `salmonbus_pipeline_scoring_waiting`과 `salmonbus_pipeline_scoring_queue`가 쌓이지 않는다. 사건을 버리면 `salmonbus_pipeline_scoring_dropped_total`이 늘고 그 노선을 다시 되감는다(`salmonbus_pipeline_scoring_replays_total{reason,result}`).
-- 대조: 10분마다(`FORECAST_SCORING_COMPARISON_INTERVAL`) 수신 뒤 3시간(`FORECAST_SCORING_COMPARISON_DELAY`)이 지난 배치를 예측마다 옛 정산 결과와 대조해 `salmonbus_pipeline_scoring_compared_total{result}`로 낸다. `same`이 대부분이어야 하고 `unexplained`·`legacy_only`·`new_only`가 0이어야 한다. `intended_hole`(수집 구멍 표시)과 `intended_midnight`(자정 직후 직전 통과)는 미리 적어 둔 차이라 따로 센다. `unexplained`가 나오면 `event=pipeline_scoring_unexplained` 로그(회차마다 5건까지)에서 관측·목표·두 결과를 본다.
+- 확인: 기동 뒤 `event=scoring_start_rejected`가 없고, `salmonbus_scoring_written_total{table="pass_label"}`가 늘며, `salmonbus_scoring_waiting`과 `salmonbus_scoring_queue`가 쌓이지 않는다. 사건을 버리면 `salmonbus_scoring_dropped_total`이 늘고 그 노선을 다시 되감는다(`salmonbus_scoring_replays_total{reason,result}`).
+- 대조: 10분마다(`FORECAST_SCORING_COMPARISON_INTERVAL`) 수신 뒤 3시간(`FORECAST_SCORING_COMPARISON_DELAY`)이 지난 배치를 예측마다 옛 정산 결과와 대조해 `salmonbus_scoring_compared_total{result}`로 낸다. `same`이 대부분이어야 하고 `unexplained`·`legacy_only`·`new_only`가 0이어야 한다. `intended_hole`(수집 구멍 표시)과 `intended_midnight`(자정 직후 직전 통과)는 미리 적어 둔 차이라 따로 센다. `unexplained`가 나오면 `event=scoring_unexplained` 로그(회차마다 5건까지)에서 관측·목표·두 결과를 본다.
 - 다시 뜬 뒤: 채점은 노선마다 저장까지 마친 마지막 사건에서 130분 앞부터(길어도 26시간) 예보와 통과를 다시 읽어, 멈춘 동안 닫지 못한 예측을 닫는다. 수집 구멍과 관측 상한 기억은 `forecast_run`의 `source_incomplete`·`counted_rows`에서 되살린다. 26시간보다 오래 멈췄다면 그 앞의 예측은 닫히지 않은 채 남는다. 기동할 때 최근 26시간에 예보가 있던 노선을 모두 한 번 되감으므로, 이력이 있는 상태에서 처음 켜면 첫 기동의 채점 되감기가 길다.
 - 넘어가는 기준: 7일 동안 `unexplained` 0건.
 - 되돌리기: `off`로 재시작한다.
@@ -1069,23 +1069,23 @@ dev와 로컬에서 먼저 해 볼 때는 네 가지를 알고 시작한다.
   - 수집 커밋 뒤 신호를 받으면 노선별 실행 줄(`forecast-lane-<번호>-`, `FORECAST_LANES`개)에서 배치를 처리한다. 착수 시각은 처리를 시작할 때 찍고(DB 저장 자릿수인 마이크로초로 자른다) `forecast_run.confirmed_at`에 예측과 한 트랜잭션으로 적는다. 수신 뒤 90초를 넘겼으면 예보 없이 `LATE` 실행 줄만 남긴다. 옛 경로는 착수 시각을 먼저 따로 커밋해서 계산 중에 죽어도 처음 시각으로 다시 예보했지만, 본선은 다시 처리할 때 새 시각으로 판정하므로 그런 배치는 `LATE`가 된다.
   - 기동 직후와 30초마다(`forecast.interval`) 신선도 창(10분) 안에서 "성공한 배치인데 `forecast_run`도 `input_confirmed_at`도 없는 것"을 줍는다. 옛 경로가 착수 시각을 찍은 배치는 이미 이력에 들어가 있어 다시 처리하지 않는다.
   - 기동하면 노선 상태가 없으므로 노선마다 첫 배치에서 6시간을 되감는다. 착수 시각은 배치마다 `forecast_run.confirmed_at`이 있으면 그것, 없으면 `input_confirmed_at`이다. 그래서 넘어간 직후에도 옛 경로가 처리한 배치와 본선이 처리한 배치를 빈틈 없이 잇는다.
-  - 되감은 상태가 모자라면(최근에 보인 차량의 운행 시작을 보지 못했거나 이력이 미완) `FORECAST_REPLAY_EXTENDED_WINDOW`로 한 번 더 되감는다(`salmonbus_pipeline_forecast_replay_extensions_total{result}`: `resolved`, `unresolved`, `failed`). 그래도 모자라면 지금처럼 그 차량이나 노선을 예보에서 뺀다. 연결 시작을 보지 못한 차량이 닫아서 저장하지 못한 통과는 `salmonbus_pipeline_forecast_passes_unattributed_total`로 센다.
-  - 되감기에 실패하는 등 예보 단계를 돌리지 못하고 끝난 배치가 닫았을 통과는, 다음에 그 노선을 되감을 때 찾아 저장하고 채점에 넘긴다(`salmonbus_pipeline_forecast_passes_recovered_total`).
-  - 처리 중 예외가 난 배치는 같은 줄에서 한 번 다시 처리한다(`salmonbus_pipeline_forecast_batches_total{result="retried"}`). 또 실패하면 그 노선의 다음 배치가 그 배치부터 수신 순서로 다시 시도하고(`held`, 로그 `event=pipeline_forecast_held`), 수신 뒤 90초가 지나면 `LATE`로 닫는다. 한 배치가 계속 실패하면 그 노선의 예보가 최대 90초쯤 밀린다. 앞서 반영한 배치보다 먼저 수신한 배치가 뒤늦게 오면 이력에 넣지 않는다(`out_of_order`).
-  - 정상 종료(배포, 재시작) 때는 수집과 줍기를 먼저 멈추고, 실행 줄과 채점 줄이 받은 일을 끝낸 뒤 채점 결과를 마지막으로 쓰고(`event=pipeline_scoring_final_write`) DB 연결을 닫는다. 한도는 `FORECAST_SHUTDOWN_TIMEOUT`이다. 다 끝내면 `event=pipeline_shutdown_drained`, 한도를 넘겨 남은 일을 버리면 `event=pipeline_shutdown_abandoned`(버린 수가 필드에 있다), 단계가 실패하면 `event=pipeline_shutdown_stage_failed`가 남는다. 버린 배치는 다시 뜬 뒤 줍기가 잡고, 수신 뒤 90초가 지났으면 `LATE`가 된다. 강제 종료에서는 이 처리가 돌지 않는다.
+  - 되감은 상태가 모자라면(최근에 보인 차량의 운행 시작을 보지 못했거나 이력이 미완) `FORECAST_REPLAY_EXTENDED_WINDOW`로 한 번 더 되감는다(`salmonbus_forecast_replay_extensions_total{result}`: `resolved`, `unresolved`, `failed`). 그래도 모자라면 지금처럼 그 차량이나 노선을 예보에서 뺀다. 연결 시작을 보지 못한 차량이 닫아서 저장하지 못한 통과는 `salmonbus_forecast_passes_unattributed_total`로 센다.
+  - 되감기에 실패하는 등 예보 단계를 돌리지 못하고 끝난 배치가 닫았을 통과는, 다음에 그 노선을 되감을 때 찾아 저장하고 채점에 넘긴다(`salmonbus_forecast_passes_recovered_total`).
+  - 처리 중 예외가 난 배치는 같은 줄에서 한 번 다시 처리한다(`salmonbus_forecast_batches_total{result="retried"}`). 또 실패하면 그 노선의 다음 배치가 그 배치부터 수신 순서로 다시 시도하고(`held`, 로그 `event=forecast_held`), 수신 뒤 90초가 지나면 `LATE`로 닫는다. 한 배치가 계속 실패하면 그 노선의 예보가 최대 90초쯤 밀린다. 앞서 반영한 배치보다 먼저 수신한 배치가 뒤늦게 오면 이력에 넣지 않는다(`out_of_order`).
+  - 정상 종료(배포, 재시작) 때는 수집과 줍기를 먼저 멈추고, 실행 줄과 채점 줄이 받은 일을 끝낸 뒤 채점 결과를 마지막으로 쓰고(`event=scoring_final_write`) DB 연결을 닫는다. 한도는 `FORECAST_SHUTDOWN_TIMEOUT`이다. 다 끝내면 `event=pipeline_shutdown_drained`, 한도를 넘겨 남은 일을 버리면 `event=pipeline_shutdown_abandoned`(버린 수가 필드에 있다), 단계가 실패하면 `event=pipeline_shutdown_stage_failed`가 남는다. 버린 배치는 다시 뜬 뒤 줍기가 잡고, 수신 뒤 90초가 지났으면 `LATE`가 된다. 강제 종료에서는 이 처리가 돌지 않는다.
   - 모델 배포의 정산 근거(`model_deployment.settlement_context`)는 옛 발행 대신 본선이 (배포, 노선 판본)마다 한 번 적는다. 새 채점이 읽는다.
   - 옛 정산 작업은 그대로 돌며 남은 옛 예측을 마저 정산한다. 채점 대조 작업은 돌지 않는다.
-- 확인: `salmonbus_pipeline_forecast_batches_total{result}`에서 `published`·`empty`가 늘고 `failed`가 0이다. `salmonbus_pipeline_forecast_replays_total{result="succeeded"}`가 노선 수만큼 한 번씩 늘고 `failed`가 없다. `salmonbus_pipeline_forecast_excluded_total{reason}`은 다시 뜬 직후에만 늘고 곧 멈춘다. 재시작한 뒤에는 앞 프로세스의 마지막 로그가 `event=pipeline_shutdown_drained`인지 본다. `sal434-01-precheck.sql`의 3절에서 `old_forecast_published`가 멈추고 `new_forecast_run`·`new_stop_pass_closed`가 계속 늘어난다.
+- 확인: `salmonbus_forecast_batches_total{result}`에서 `published`·`empty`가 늘고 `failed`가 0이다. `salmonbus_forecast_replays_total{result="succeeded"}`가 노선 수만큼 한 번씩 늘고 `failed`가 없다. `salmonbus_forecast_excluded_total{reason}`은 다시 뜬 직후에만 늘고 곧 멈춘다. 재시작한 뒤에는 앞 프로세스의 마지막 로그가 `event=pipeline_shutdown_drained`인지 본다. `sal434-01-precheck.sql`의 3절에서 `old_forecast_published`가 멈추고 `new_forecast_run`·`new_stop_pass_closed`가 계속 늘어난다.
 - 넘어가는 기준: 운영 관찰 기간 동안 아래가 안정적이다.
-  - 예보 지연: `salmonbus_pipeline_forecast_confirmation_lag_seconds`(수신→착수 분포)와 `salmonbus_pipeline_forecast_batch_duration_seconds`.
-  - 늦어서 건너뛴 배치: `salmonbus_pipeline_forecast_batches_total{result="late"}`. 옛 경로의 수신 뒤 90초 초과 비율과 비슷해야 한다.
-  - 줄 길이: `salmonbus_pipeline_forecast_queue{lane}`. 계속 쌓이면 `FORECAST_LANES`를 늘린다. 넣지 못한 배치는 `salmonbus_pipeline_forecast_rejected_total`.
-  - 채점 대기: `salmonbus_pipeline_scoring_waiting`, `salmonbus_pipeline_scoring_queue`.
+  - 예보 지연: `salmonbus_forecast_confirmation_lag_seconds`(수신→착수 분포)와 `salmonbus_forecast_batch_duration_seconds`.
+  - 늦어서 건너뛴 배치: `salmonbus_forecast_batches_total{result="late"}`. 옛 경로의 수신 뒤 90초 초과 비율과 비슷해야 한다.
+  - 줄 길이: `salmonbus_forecast_queue{lane}`. 계속 쌓이면 `FORECAST_LANES`를 늘린다. 넣지 못한 배치는 `salmonbus_forecast_rejected_total`.
+  - 채점 대기: `salmonbus_scoring_waiting`, `salmonbus_scoring_queue`.
   - DB 연결: worker의 Hikari 풀은 5이고(`application.yml`), 본선의 줄 둘·줍기·수집·옛 정산·채점이 함께 쓴다. 줄은 문장을 실행하는 동안만 연결을 잡지만 `hikaricp_connections_pending`이 자주 0보다 크면 풀 크기를 올린다.
 - 되돌리기: worker.env를 `FORECAST_PIPELINE=v1`, `FORECAST_SCORING=off`(또는 그림자를 켜고 `shadow`)로 바꾸고, 정비 명령 `alighting-history-bootstrap`으로 체크포인트를 다시 만든 뒤 worker를 재시작한다. archive.env는 `ARCHIVE_HISTORY_HOLD=checkpoint`로 되돌린다. 옛 테이블과 트리거가 남아 있으므로 이 차례까지는 스위치로 되돌릴 수 있다. 본선이 처리한 구간의 배치에는 `input_confirmed_at`이 없어 옛 경로의 이력에 들어가지 않는다(부트스트랩이 다시 만든다).
 
 *4-2. 새 채점 본선.* 4-1이 안정된 뒤 `FORECAST_SCORING=v2`로 worker를 재시작한다. 옛 정산 작업(`ArrivalLabelJob`, 하차 반영 모델의 대기열 채우기·투영 정리·정산)이 등록되지 않는다. 이 작업이 하는 일은 옛 정산뿐이라 다른 일은 멈추지 않는다.
-- 확인: worker 로그에서 `alighting_settlement_tick` 작업 기록이 사라지고, `salmonbus_pipeline_scoring_written_total`은 계속 는다.
+- 확인: worker 로그에서 `alighting_settlement_tick` 작업 기록이 사라지고, `salmonbus_scoring_written_total`은 계속 는다.
 - 되돌리기: `FORECAST_SCORING=shadow`로 재시작하면 옛 정산 작업이 다시 돈다.
 
 **5. 옛 정산 트리거 삭제(승인).** 4번 관찰을 마치고 옛 정산이 멈춘 것을 확인한 뒤 실행한다.
@@ -1142,7 +1142,7 @@ dev와 로컬에서 먼저 해 볼 때는 네 가지를 알고 시작한다.
 - 이 SQL 뒤에 달라지는 것:
   - 두 테이블 사이의 FK(`fk_observation_batch`)가 없어진다. 관측은 응답을 받은 날, 배치는 예약한 날을 기본값으로 받아 자정 근처에 날짜가 다를 수 있어서, 날짜를 넣은 FK를 둘 수 없다.
   - 유일 제약은 날짜 파티션 안에서만 지킨다(`id`, 노선 판본+시도 키, 배치+줄 번호, 배치+차량). 한 배치의 관측은 한 트랜잭션에서 들어가 같은 날짜가 되므로 배치 안 유일성의 뜻은 그대로다. 시도 키는 예약 시각을 담고 있어 날짜가 다른 같은 키는 생기지 않는다.
-  - 수집이 켜진 worker(`COLLECTION_ENABLED=true`)의 날짜 파티션 유지 작업은 두 테이블이 파티션 테이블(`relkind='p'`)이면 예보 스위치와 무관하게 오늘부터 사흘 뒤까지 같은 이름 규칙(`<테이블>_pYYYYMMDD`)으로 파티션을 미리 만든다. 일반 테이블인 동안에는 카탈로그만 읽는다. 기동 직후 한 번, 그 뒤 1시간마다 돌며 만든 파티션은 `event=pipeline_partitions_created`, 기본 파티션에 쌓인 줄은 `salmonbus_pipeline_partition_default_rows{table}`로 본다. 만들지 못하면 새 줄이 기본 파티션에 쌓이고(동작은 한다), 기본 파티션에 그 날짜의 줄이 생긴 뒤에는 그 날짜 파티션을 만들 수 없다.
+  - 수집이 켜진 worker(`COLLECTION_ENABLED=true`)의 날짜 파티션 유지 작업은 두 테이블이 파티션 테이블(`relkind='p'`)이면 예보 스위치와 무관하게 오늘부터 사흘 뒤까지 같은 이름 규칙(`<테이블>_pYYYYMMDD`)으로 파티션을 미리 만든다. 일반 테이블인 동안에는 카탈로그만 읽는다. 기동 직후 한 번, 그 뒤 1시간마다 돌며 만든 파티션은 `event=partitions_created`, 기본 파티션에 쌓인 줄은 `salmonbus_partition_default_rows{table}`로 본다. 만들지 못하면 새 줄이 기본 파티션에 쌓이고(동작은 한다), 기본 파티션에 그 날짜의 줄이 생긴 뒤에는 그 날짜 파티션을 만들 수 없다.
 - 되돌리기: `sal434-04-rollback-unpartition-observation-tables.sql`을 `sal434.confirm_partition_rollback`과 함께 실행한다. 날짜·기본 파티션의 줄을 id 그대로 옛 테이블로 옮기고 원래 이름·IDENTITY·FK를 되돌린다. 옮기는 줄이 옛 유일 제약에 걸리면 멈춘다.
 
 **9. 수집 묶음 넣기.** `COLLECTION_BULK_INSERT=true`로 worker를 재시작한다.

@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.api;
 
-import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
+import com.gustler.backend.forecasting.api.forecast.ForecastClosed;
 import java.time.Instant;
 import java.util.List;
 

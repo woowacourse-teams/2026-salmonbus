@@ -3,11 +3,11 @@ package com.gustler.localdata;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
-import com.gustler.backend.forecasting.application.pipeline.ForecastBatch;
-import com.gustler.backend.forecasting.application.pipeline.ForecastObservationRow;
-import com.gustler.backend.forecasting.application.pipeline.ForecastStage;
-import com.gustler.backend.forecasting.application.pipeline.ForecastStageResult;
-import com.gustler.backend.forecasting.application.pipeline.RouteForecastState;
+import com.gustler.backend.forecasting.application.forecast.ForecastBatch;
+import com.gustler.backend.forecasting.application.forecast.ForecastObservationRow;
+import com.gustler.backend.forecasting.application.forecast.ForecastStage;
+import com.gustler.backend.forecasting.application.forecast.ForecastStageResult;
+import com.gustler.backend.forecasting.application.forecast.RouteForecastState;
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
 import com.gustler.backend.forecasting.domain.model.RouteStop;

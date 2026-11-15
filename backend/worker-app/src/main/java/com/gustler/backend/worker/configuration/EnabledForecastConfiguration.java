@@ -1,12 +1,12 @@
 package com.gustler.backend.worker.configuration;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
-import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
-import com.gustler.backend.worker.scheduling.PipelineForecastTrigger;
+import com.gustler.backend.forecasting.api.forecast.RunForecasts;
+import com.gustler.backend.forecasting.api.forecast.ScoringCycle;
+import com.gustler.backend.worker.scheduling.ForecastTrigger;
 import com.gustler.backend.worker.scheduling.RouteLanes;
 import com.gustler.backend.worker.scheduling.ScoringExecutor;
-import com.gustler.backend.worker.scheduling.ShadowScoringJob;
+import com.gustler.backend.worker.scheduling.ScoringJob;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -42,8 +42,8 @@ public class EnabledForecastConfiguration {
     }
 
     @Bean
-    PipelineForecastTrigger pipelineForecastTrigger(ForecastPipeline pipeline) {
-        return new PipelineForecastTrigger(pipeline);
+    ForecastTrigger forecastTrigger(RunForecasts forecasts) {
+        return new ForecastTrigger(forecasts);
     }
 
     @Bean
@@ -61,7 +61,7 @@ public class EnabledForecastConfiguration {
     }
 
     @Bean
-    ShadowScoringJob shadowScoringJob(ShadowScoringCycle cycle) {
-        return new ShadowScoringJob(cycle);
+    ScoringJob scoringJob(ScoringCycle cycle) {
+        return new ScoringJob(cycle);
     }
 }

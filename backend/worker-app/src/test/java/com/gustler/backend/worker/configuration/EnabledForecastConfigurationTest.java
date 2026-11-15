@@ -4,15 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
-import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
-import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
-import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
+import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
+import com.gustler.backend.forecasting.api.forecast.RunForecasts;
+import com.gustler.backend.forecasting.api.forecast.ScoringCycle;
+import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
 import com.gustler.backend.observations.api.ObservationDeliveryHook;
-import com.gustler.backend.worker.scheduling.PipelineForecastTrigger;
+import com.gustler.backend.worker.scheduling.ForecastTrigger;
 import com.gustler.backend.worker.scheduling.RouteLanes;
 import com.gustler.backend.worker.scheduling.ScoringExecutor;
-import com.gustler.backend.worker.scheduling.ShadowScoringJob;
+import com.gustler.backend.worker.scheduling.ScoringJob;
 import com.zaxxer.hikari.HikariDataSource;
 import java.time.Duration;
 import java.util.List;
@@ -43,8 +43,8 @@ class EnabledForecastConfigurationTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(ConfigurationPropertiesAutoConfiguration.class))
         .withUserConfiguration(WorkerSchedulingConfig.class, EnabledForecastConfiguration.class)
-        .withBean(ForecastPipeline.class, NoPipeline::new)
-        .withBean(ShadowScoringCycle.class, NoCycle::new)
+        .withBean(RunForecasts.class, NoForecasts::new)
+        .withBean(ScoringCycle.class, NoCycle::new)
         .withPropertyValues(VALID_SETTINGS);
 
     @Test
@@ -64,7 +64,7 @@ class EnabledForecastConfigurationTest {
                 assertThat(context).doesNotHaveBean(ForecastLanes.class);
                 assertThat(context).doesNotHaveBean(ObservationDeliveryHook.class);
                 assertThat(context).doesNotHaveBean(ScoringFeed.class);
-                assertThat(context).doesNotHaveBean(ShadowScoringJob.class);
+                assertThat(context).doesNotHaveBean(ScoringJob.class);
                 assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values())
                     .allSatisfy(holder -> assertThat(holder.getScheduledTasks()).isEmpty());
                 assertThat(forecastThreads()).as("이 구성이 새로 띄운 스레드가 없다").isSubsetOf(threadsBefore);
@@ -95,11 +95,11 @@ class EnabledForecastConfigurationTest {
                         .isEqualTo(new ForecastPolicy(Duration.ofMinutes(5), 20));
                     softly.assertThat(context.getBean(RouteLanes.class).count()).isEqualTo(3);
                     softly.assertThat(context.getBean(ObservationDeliveryHook.class))
-                        .isInstanceOf(PipelineForecastTrigger.class);
+                        .isInstanceOf(ForecastTrigger.class);
                     softly.assertThat(context.getBeansOfType(ScoringExecutor.class)).hasSize(1);
-                    softly.assertThat(context.getBeansOfType(ShadowScoringJob.class)).hasSize(1);
-                    softly.assertThat(tasks).anyMatch(task -> task.contains("PipelineForecastTrigger.pickUp"))
-                        .anyMatch(task -> task.contains("ShadowScoringJob.flush"));
+                    softly.assertThat(context.getBeansOfType(ScoringJob.class)).hasSize(1);
+                    softly.assertThat(tasks).anyMatch(task -> task.contains("ForecastTrigger.pickUp"))
+                        .anyMatch(task -> task.contains("ScoringJob.flush"));
                 });
             });
     }
@@ -111,7 +111,7 @@ class EnabledForecastConfigurationTest {
                 List<FixedDelayTask> flushes = context.getBeansOfType(ScheduledTaskHolder.class).values().stream()
                     .flatMap(holder -> holder.getScheduledTasks().stream())
                     .map(scheduled -> scheduled.getTask())
-                    .filter(task -> task.toString().contains("ShadowScoringJob.flush"))
+                    .filter(task -> task.toString().contains("ScoringJob.flush"))
                     .map(FixedDelayTask.class::cast)
                     .toList();
 
@@ -130,18 +130,15 @@ class EnabledForecastConfigurationTest {
 
     @Test
     void 읽지_않는_설정_키가_남아_있어도_예보가_켜져_있으면_등록한다() {
-        runner.withPropertyValues("forecast.enabled=true", "forecast.pipeline=v1", "forecast.shadow.enabled=true",
-                "forecast.shadow.queue-capacity=0", "forecast.scoring=off", "forecast.scoring-comparison-delay=-1s",
-                "forecast.scoring-comparison-interval=0s", "forecast.scoring-comparison-batch-limit=0",
-                "forecast.scoring-flush-interval=0s", "forecast.scoring-queue-capacity=0",
-                "forecast.lane-queue-capacity=0", "forecast.replay-window=0s", "forecast.replay-extended-window=13h",
-                "forecast.shutdown-timeout=-1s")
+        runner.withPropertyValues("forecast.enabled=true", "forecast.compact-settlement-write=true",
+                "forecast.settlement-interval=0s", "forecast.settlement-minimum-interval=0s",
+                "forecast.pending-limit=0", "forecast.arrival-limit=0")
             .run(context -> {
                 assertThat(context).hasNotFailed();
                 assertThat(context).hasSingleBean(RouteLanes.class);
                 assertThat(context).hasSingleBean(ScoringExecutor.class);
-                assertThat(context).hasSingleBean(ShadowScoringJob.class);
-                assertThat(context).getBean(ObservationDeliveryHook.class).isInstanceOf(PipelineForecastTrigger.class);
+                assertThat(context).hasSingleBean(ScoringJob.class);
+                assertThat(context).getBean(ObservationDeliveryHook.class).isInstanceOf(ForecastTrigger.class);
             });
     }
 
@@ -288,7 +285,7 @@ class EnabledForecastConfigurationTest {
         }
     }
 
-    private static final class NoPipeline implements ForecastPipeline {
+    private static final class NoForecasts implements RunForecasts {
         @Override
         public void batchStored(final long observationBatchId, final long routeVersionId) {
         }
@@ -298,7 +295,7 @@ class EnabledForecastConfigurationTest {
         }
     }
 
-    private static final class NoCycle implements ShadowScoringCycle {
+    private static final class NoCycle implements ScoringCycle {
         @Override
         public boolean start() {
             return true;

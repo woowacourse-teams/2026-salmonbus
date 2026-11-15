@@ -2,8 +2,8 @@ package com.gustler.backend.forecasting.infrastructure.observability;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
-import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
-import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
+import com.gustler.backend.forecasting.api.forecast.ForecastClosed;
+import com.gustler.backend.forecasting.application.forecast.RunForecastsService;
 import com.gustler.backend.observations.api.CollectionTiming;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -202,7 +202,7 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
             RouteState state = stateOf(id);
             return " routeName=" + quote(collectionName(state));
         }
-        if (operation.equals(ForecastPipelineService.OPERATION) && route instanceof Number version) {
+        if (operation.equals(RunForecastsService.OPERATION) && route instanceof Number version) {
             return " routeName=" + quote(text(versionNames.get(version.longValue()), UNKNOWN_ROUTE_NAME));
         }
         return "";

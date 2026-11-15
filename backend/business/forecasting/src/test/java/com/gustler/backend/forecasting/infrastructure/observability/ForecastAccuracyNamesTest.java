@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
+import com.gustler.backend.forecasting.api.forecast.ForecastClosed;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;

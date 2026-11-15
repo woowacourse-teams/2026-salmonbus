@@ -1,9 +1,10 @@
 package com.gustler.backend.forecasting.support;
 
-import com.gustler.backend.forecasting.application.pipeline.PassLabel;
-import com.gustler.backend.forecasting.application.pipeline.ScoredForecast;
-import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
-import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
+import com.gustler.backend.forecasting.application.forecast.PassLabel;
+import com.gustler.backend.forecasting.application.forecast.ScoredForecast;
+import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
+import com.gustler.backend.forecasting.application.forecast.ScoringResult;
+import com.gustler.backend.forecasting.domain.forecast.SourceDates;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
@@ -13,7 +14,6 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePred
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingPredictor;
-import com.gustler.backend.forecasting.domain.pipeline.SourceDates;
 import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareInferenceBundle;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -54,7 +54,7 @@ final class WorkerReplayVerification {
     private static final Map<String, String> EVIDENCE = evidenceColumns();
 
     private final JdbcClient jdbc;
-    private final WorkerReplayPipeline pipeline;
+    private final WorkerReplayRunner runner;
     private final AlightingAwareInferenceBundle bundle;
     private final AlightingAwareSeatForecastModel model;
     private final WorkerReplayFixture fixture;
@@ -62,24 +62,24 @@ final class WorkerReplayVerification {
     private final Map<Long, WorkerReplayFixture.Batch> batches = new HashMap<>();
     private final Tally tally = new Tally();
     private long restartedBatchId = NO_BATCH;
-    private WorkerReplayPipeline.Restarted restarted;
+    private WorkerReplayRunner.Restarted restarted;
 
     /**
-     * @param pipeline 이 노선의 배치를 이미 모두 흘린 예보·채점
+     * @param runner 이 노선의 배치를 이미 모두 흘린 예보·채점
      * @param bundle 재생한 번들
      * @param model 번들에서 읽은 모델
      * @param routeId 자료를 넣은 노선
      */
     WorkerReplayVerification(
         JdbcClient jdbc,
-        WorkerReplayPipeline pipeline,
+        WorkerReplayRunner runner,
         AlightingAwareInferenceBundle bundle,
         AlightingAwareSeatForecastModel model,
         WorkerReplayFixture fixture,
         final long routeId
     ) {
         this.jdbc = jdbc;
-        this.pipeline = pipeline;
+        this.runner = runner;
         this.bundle = bundle;
         this.model = model;
         this.fixture = fixture;
@@ -184,7 +184,7 @@ final class WorkerReplayVerification {
         AlightingAwareObservation source,
         final int target
     ) {
-        WorkerReplayPipeline.Restarted restart = restartedAt(source.batchId());
+        WorkerReplayRunner.Restarted restart = restartedAt(source.batchId());
         if (restart == null) {
             tally.failures.add(failure(row, "restart", "FORECAST_RUN_MISSING"));
             return Optional.empty();
@@ -199,9 +199,9 @@ final class WorkerReplayVerification {
     }
 
     /** 사례는 기준 관측의 착수 시각 순서라 같은 배치가 이어진다. 직전 배치 하나만 들고 있는다. */
-    private WorkerReplayPipeline.Restarted restartedAt(final long batchId) {
+    private WorkerReplayRunner.Restarted restartedAt(final long batchId) {
         if (restartedBatchId != batchId) {
-            restarted = pipeline.restartedAt(batchId).orElse(null);
+            restarted = runner.restartedAt(batchId).orElse(null);
             restartedBatchId = batchId;
         }
         return restarted;
@@ -209,7 +209,7 @@ final class WorkerReplayVerification {
 
     private Forecast expectedForecast(
         JsonNode row,
-        WorkerReplayPipeline.Restarted restart,
+        WorkerReplayRunner.Restarted restart,
         AlightingAwareFeatureSnapshot snapshot,
         final int target
     ) {
@@ -231,7 +231,7 @@ final class WorkerReplayVerification {
 
     private static Forecast expectedExtended(
         JsonNode row,
-        WorkerReplayPipeline.Restarted restart,
+        WorkerReplayRunner.Restarted restart,
         AlightingAwareFeatureSnapshot snapshot,
         final int target
     ) {
@@ -247,7 +247,7 @@ final class WorkerReplayVerification {
     }
 
     private Optional<SeatForecastResult> restartedPrediction(
-        WorkerReplayPipeline.Restarted restart,
+        WorkerReplayRunner.Restarted restart,
         AlightingAwareFeatureSnapshot snapshot,
         final int target
     ) {
@@ -400,7 +400,7 @@ final class WorkerReplayVerification {
             return 0;
         }
         Settled settled = first.get();
-        ScoringResult rescored = pipeline.rescoredThrough(routeId, settled.closedAt());
+        ScoringResult rescored = runner.rescoredThrough(routeId, settled.closedAt());
         Optional<PassLabel> label = rescored.scored().stream()
             .filter(settled::isForecastOf)
             .findFirst()

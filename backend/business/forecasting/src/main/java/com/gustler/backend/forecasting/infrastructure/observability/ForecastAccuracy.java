@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.observability;
 
-import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
+import com.gustler.backend.forecasting.api.forecast.ForecastClosed;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

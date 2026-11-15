@@ -71,7 +71,7 @@ public class CollectionConfig {
          * 뒤에 만든다.
          */
         @Bean
-        @DependsOn(ForecastPipelineConfiguration.PARTITION_JOB)
+        @DependsOn(PartitionConfiguration.PARTITION_JOB)
         ScheduledTaskRegistrar collectionTaskRegistrar() {
             LOGGER.info("GBIS 키 슬롯 {}개로 수집한다. 슬롯={} 하루 한도 합={}",
                 keyAliases.size(), String.join(",", keyAliases), dailyLimit);

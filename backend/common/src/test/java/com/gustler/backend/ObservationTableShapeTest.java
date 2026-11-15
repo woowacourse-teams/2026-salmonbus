@@ -69,11 +69,11 @@ class ObservationTableShapeTest {
         // given
         try (TestDatabase migrated = TestDatabase.create(); TestDatabase converted = TestDatabase.create();
             Connection actual = migrated.connection(); Connection expected = converted.connection()) {
-            LocalDate beforeMigration = ForecastPipelineTransitionSqlTest.koreanDate(actual);
+            LocalDate beforeMigration = TransitionSqlTest.koreanDate(actual);
 
             // when
             migrate(migrated, null);
-            LocalDate afterMigration = ForecastPipelineTransitionSqlTest.koreanDate(actual);
+            LocalDate afterMigration = TransitionSqlTest.koreanDate(actual);
             migrate(converted, BEFORE_PARTITIONING);
             execute(expected, ROUTE + ";" + BATCHES + ";" + OBSERVATIONS);
             migrate(converted, null);
@@ -81,7 +81,7 @@ class ObservationTableShapeTest {
             dropInitialPartitions(expected);
 
             // then
-            LocalDate migratedOn = ForecastPipelineTransitionSqlTest.firstPartitionDate(actual);
+            LocalDate migratedOn = TransitionSqlTest.firstPartitionDate(actual);
             Map<String, List<String>> expectedCatalog = relativeCatalog(expected, convertedOn);
             Map<String, List<String>> actualCatalog = relativeCatalog(actual, migratedOn);
             SoftAssertions softly = new SoftAssertions();
@@ -104,7 +104,7 @@ class ObservationTableShapeTest {
             try (Connection target = migrated.connection()) {
                 // when
                 execute(target, "BEGIN");
-                LocalDate insertedOn = ForecastPipelineTransitionSqlTest.koreanDate(target);
+                LocalDate insertedOn = TransitionSqlTest.koreanDate(target);
                 execute(target, ROUTE + ";" + BATCHES + ";" + OBSERVATIONS);
                 execute(target, """
                     INSERT INTO vehicle_observation(observation_batch_id,route_version_id,source_row_number,vehicle_id,
@@ -223,7 +223,7 @@ class ObservationTableShapeTest {
     private static LocalDate partitionWithManualSql(Connection target, List<String> notices)
         throws IOException, SQLException {
         execute(target, "SET sal434.count_rows = 'exact'");
-        return ForecastPipelineTransitionSqlTest.runConfirmed(target, notices,
+        return TransitionSqlTest.runConfirmed(target, notices,
             "sal434-04-partition-observation-tables.sql", "sal434.confirm_partition");
     }
 
@@ -238,8 +238,8 @@ class ObservationTableShapeTest {
     /** SQL 파일을 psql처럼 한 연결에서 문장 단위로 실행한다. */
     private static void run(Connection target, String file) throws IOException, SQLException {
         String script =
-            Files.readString(ForecastPipelineTransitionSqlTest.backend().resolve("deploy/sql").resolve(file));
-        for (String statement : ForecastPipelineTransitionSqlTest.statements(script)) {
+            Files.readString(TransitionSqlTest.backend().resolve("deploy/sql").resolve(file));
+        for (String statement : TransitionSqlTest.statements(script)) {
             execute(target, statement);
         }
     }
@@ -285,7 +285,7 @@ class ObservationTableShapeTest {
         Map<String, List<String>> relative = new LinkedHashMap<>();
         for (Map.Entry<String, List<String>> item : catalog(target).entrySet()) {
             relative.put(item.getKey(), item.getValue().stream()
-                .map(line -> ForecastPipelineTransitionSqlTest.relativeToFirstPartition(line, first))
+                .map(line -> TransitionSqlTest.relativeToFirstPartition(line, first))
                 .toList());
         }
         return relative;

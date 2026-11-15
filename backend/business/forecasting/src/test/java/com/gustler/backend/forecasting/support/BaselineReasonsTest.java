@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
+import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
 import org.junit.jupiter.api.Test;
 
 class BaselineReasonsTest {

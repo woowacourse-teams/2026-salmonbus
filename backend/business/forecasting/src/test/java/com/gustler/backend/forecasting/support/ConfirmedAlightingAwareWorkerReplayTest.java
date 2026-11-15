@@ -3,10 +3,10 @@ package com.gustler.backend.forecasting.support;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.forecasting.application.pipeline.PassLabelStore;
-import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
+import com.gustler.backend.forecasting.application.forecast.PassLabelStore;
+import com.gustler.backend.forecasting.application.forecast.StopPassStore;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcForecastRecordStore;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcForecastRecordStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

@@ -78,7 +78,7 @@ class ScoringExecutorTest {
         assertSoftly(softly -> {
             softly.assertThat(queued).isTrue();
             softly.assertThat(rejected).isFalse();
-            softly.assertThat(meters.get("salmonbus.pipeline.scoring.queue").gauge().value()).isEqualTo(1);
+            softly.assertThat(meters.get("salmonbus.scoring.queue").gauge().value()).isEqualTo(1);
         });
         release.countDown();
     }
@@ -116,8 +116,8 @@ class ScoringExecutorTest {
             softly.assertThat(ran).as("기다리던 일은 실행하지 않는다").isEmpty();
             softly.assertThat(accepted).isFalse();
             softly.assertThat(executor.isRunning()).isFalse();
-            softly.assertThat(output.getOut()).contains("event=pipeline_scoring_stopped discarded=30")
-                .doesNotContain("event=pipeline_scoring_stop_timeout");
+            softly.assertThat(output.getOut()).contains("event=scoring_stopped discarded=30")
+                .doesNotContain("event=scoring_stop_timeout");
         });
     }
 
@@ -147,7 +147,7 @@ class ScoringExecutorTest {
         assertSoftly(softly -> {
             softly.assertThat(elapsedMillis).isGreaterThanOrEqualTo(150L);
             softly.assertThat(ran).isEmpty();
-            softly.assertThat(output.getOut()).contains("event=pipeline_scoring_stop_timeout discarded=5 waitMs=200");
+            softly.assertThat(output.getOut()).contains("event=scoring_stop_timeout discarded=5 waitMs=200");
         });
         release.countDown();
     }

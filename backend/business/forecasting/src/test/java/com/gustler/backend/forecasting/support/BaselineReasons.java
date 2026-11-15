@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.support;
 
-import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
+import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
 import java.util.Map;
 import java.util.Optional;
 

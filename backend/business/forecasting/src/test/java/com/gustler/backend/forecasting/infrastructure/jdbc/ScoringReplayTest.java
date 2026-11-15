@@ -3,18 +3,18 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
-import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
-import com.gustler.backend.forecasting.api.pipeline.PassClosed;
-import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
-import com.gustler.backend.forecasting.application.pipeline.PassLabel;
-import com.gustler.backend.forecasting.application.pipeline.RecordedBatch;
-import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
-import com.gustler.backend.forecasting.application.pipeline.ScoringReplay;
-import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
-import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
-import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
-import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
+import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
+import com.gustler.backend.forecasting.api.forecast.ObservationBatchSeen;
+import com.gustler.backend.forecasting.api.forecast.PassClosed;
+import com.gustler.backend.forecasting.application.forecast.ForecastRecordStore;
+import com.gustler.backend.forecasting.application.forecast.PassLabel;
+import com.gustler.backend.forecasting.application.forecast.RecordedBatch;
+import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
+import com.gustler.backend.forecasting.application.forecast.ScoringReplay;
+import com.gustler.backend.forecasting.application.forecast.ScoringResult;
+import com.gustler.backend.forecasting.application.forecast.ScoringStage;
+import com.gustler.backend.forecasting.application.forecast.StopPassStore;
+import com.gustler.backend.forecasting.application.forecast.UnresolvedForecast;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -236,7 +236,7 @@ class ScoringReplayTest {
 
     private static ScoringStage emptyStage() {
         return new ScoringStage((deployment, version) -> Optional.empty(), version -> List.of(),
-            new ConfirmedPassLabelCalculator(), ScoringScenario.FIXED, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
+            new AlightingAwarePassLabelCalculator(), ScoringScenario.FIXED, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
     }
 
     /** 아무 기록도 돌려주지 않고 되감기가 읽은 범위만 적어 둔다. */

@@ -173,8 +173,8 @@ class RouteLanesTest {
                 softly.assertThat(accepted).isFalse();
                 softly.assertThat(lanes.queued()).isZero();
                 softly.assertThat(lanes.isRunning()).isFalse();
-                softly.assertThat(output.getOut()).contains("event=pipeline_forecast_stopped discarded=40")
-                    .doesNotContain("event=pipeline_forecast_stop_timeout");
+                softly.assertThat(output.getOut()).contains("event=forecast_stopped discarded=40")
+                    .doesNotContain("event=forecast_stop_timeout");
             });
         } finally {
             lanes.stop();
@@ -208,7 +208,7 @@ class RouteLanesTest {
                 softly.assertThat(elapsedMillis).isGreaterThanOrEqualTo(150L);
                 softly.assertThat(later).hasValue(0);
                 softly.assertThat(output.getOut())
-                    .contains("event=pipeline_forecast_stop_timeout discarded=3 running=1 waitMs=200");
+                    .contains("event=forecast_stop_timeout discarded=3 running=1 waitMs=200");
             });
         } finally {
             never.countDown();

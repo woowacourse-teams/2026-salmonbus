@@ -3,7 +3,7 @@ package com.gustler.backend.forecasting.infrastructure.observability;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.forecasting.api.pipeline.ForecastClosed;
+import com.gustler.backend.forecasting.api.forecast.ForecastClosed;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

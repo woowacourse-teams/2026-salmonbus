@@ -3,14 +3,14 @@ package com.gustler.backend.worker.configuration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
-import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
-import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
-import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
+import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
+import com.gustler.backend.forecasting.api.forecast.RunForecasts;
+import com.gustler.backend.forecasting.api.forecast.ScoringCycle;
+import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
 import com.gustler.backend.support.IntegrationTest;
-import com.gustler.backend.worker.scheduling.PipelineForecastTrigger;
-import com.gustler.backend.worker.scheduling.PipelinePartitionJob;
-import com.gustler.backend.worker.scheduling.ShadowScoringJob;
+import com.gustler.backend.worker.scheduling.ForecastTrigger;
+import com.gustler.backend.worker.scheduling.PartitionJob;
+import com.gustler.backend.worker.scheduling.ScoringJob;
 import java.util.List;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
@@ -31,10 +31,10 @@ class ForecastScheduleDefaultTest {
     void 기본_설정은_예보_배치를_꺼둔다() {
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
-            softly.assertThat(applicationContext.getBeanNamesForType(ForecastPipeline.class)).isEmpty();
-            softly.assertThat(applicationContext.getBeanNamesForType(PipelineForecastTrigger.class)).isEmpty();
-            softly.assertThat(applicationContext.getBeanNamesForType(ShadowScoringCycle.class)).isEmpty();
-            softly.assertThat(applicationContext.getBeanNamesForType(ShadowScoringJob.class)).isEmpty();
+            softly.assertThat(applicationContext.getBeanNamesForType(RunForecasts.class)).isEmpty();
+            softly.assertThat(applicationContext.getBeanNamesForType(ForecastTrigger.class)).isEmpty();
+            softly.assertThat(applicationContext.getBeanNamesForType(ScoringCycle.class)).isEmpty();
+            softly.assertThat(applicationContext.getBeanNamesForType(ScoringJob.class)).isEmpty();
             softly.assertThat(applicationContext.getBeanNamesForType(ForecastLanes.class)).isEmpty();
             softly.assertThat(applicationContext.getBeanNamesForType(ScoringFeed.class)).isEmpty();
         }
@@ -61,8 +61,8 @@ class ForecastScheduleDefaultTest {
 
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
-            softly.assertThat(applicationContext.getBeanNamesForType(PipelinePartitionJob.class)).isEmpty();
-            softly.assertThat(registeredTasks).noneMatch(task -> task.contains("PipelinePartitionJob"));
+            softly.assertThat(applicationContext.getBeanNamesForType(PartitionJob.class)).isEmpty();
+            softly.assertThat(registeredTasks).noneMatch(task -> task.contains("PartitionJob"));
         }
     }
 

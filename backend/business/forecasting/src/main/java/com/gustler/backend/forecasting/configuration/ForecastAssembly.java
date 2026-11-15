@@ -1,34 +1,34 @@
 package com.gustler.backend.forecasting.configuration;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
-import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
-import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
-import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
-import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
-import com.gustler.backend.forecasting.application.pipeline.ForecastStage;
-import com.gustler.backend.forecasting.application.pipeline.ObservationBatchReader;
-import com.gustler.backend.forecasting.application.pipeline.PassLabelStore;
-import com.gustler.backend.forecasting.application.pipeline.PendingPipelineBatches;
-import com.gustler.backend.forecasting.application.pipeline.PipelineBatchProcessor;
-import com.gustler.backend.forecasting.application.pipeline.PipelineEvents;
-import com.gustler.backend.forecasting.application.pipeline.RecentForecastRoutes;
-import com.gustler.backend.forecasting.application.pipeline.ReplaySource;
-import com.gustler.backend.forecasting.application.pipeline.RouteStateRegistry;
-import com.gustler.backend.forecasting.application.pipeline.RouteStateReplayer;
-import com.gustler.backend.forecasting.application.pipeline.ScoringReplay;
-import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
-import com.gustler.backend.forecasting.application.pipeline.ScoringWriter;
-import com.gustler.backend.forecasting.application.pipeline.ShadowScoringService;
-import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
+import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
+import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
+import com.gustler.backend.forecasting.application.forecast.ForecastBatchProcessor;
+import com.gustler.backend.forecasting.application.forecast.ForecastEvents;
+import com.gustler.backend.forecasting.application.forecast.ForecastRecordStore;
+import com.gustler.backend.forecasting.application.forecast.ForecastStage;
+import com.gustler.backend.forecasting.application.forecast.ObservationBatchReader;
+import com.gustler.backend.forecasting.application.forecast.PassLabelStore;
+import com.gustler.backend.forecasting.application.forecast.PendingBatches;
+import com.gustler.backend.forecasting.application.forecast.RecentForecastRoutes;
+import com.gustler.backend.forecasting.application.forecast.ReplaySource;
+import com.gustler.backend.forecasting.application.forecast.RouteStateRegistry;
+import com.gustler.backend.forecasting.application.forecast.RouteStateReplayer;
+import com.gustler.backend.forecasting.application.forecast.RunForecastsService;
+import com.gustler.backend.forecasting.application.forecast.ScoringReplay;
+import com.gustler.backend.forecasting.application.forecast.ScoringService;
+import com.gustler.backend.forecasting.application.forecast.ScoringStage;
+import com.gustler.backend.forecasting.application.forecast.ScoringWriter;
+import com.gustler.backend.forecasting.application.forecast.StopPassStore;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.route.RouteStopsQuery;
 import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
+import com.gustler.backend.forecasting.infrastructure.capacity.CachedVehicleCapacities;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
-import com.gustler.backend.forecasting.infrastructure.jdbc.ConfirmedPassLabelCalculator;
-import com.gustler.backend.forecasting.infrastructure.pipeline.CachedVehicleCapacities;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcRouteStructureProvider;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcSettlementContextProvider;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcSettlementContextWriter;
+import com.gustler.backend.forecasting.infrastructure.jdbc.AlightingAwarePassLabelCalculator;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcRouteStructureProvider;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcSettlementContextProvider;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcSettlementContextWriter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
@@ -80,7 +80,7 @@ public final class ForecastAssembly {
      * @param passes 통과 기록 저장소
      * @param labels 정답·미해결 저장소
      */
-    public ShadowScoringService scoring(
+    public ScoringService scoring(
         ScoringFeed feed,
         ForecastRecordStore forecasts,
         RecentForecastRoutes recentRoutes,
@@ -88,14 +88,14 @@ public final class ForecastAssembly {
         PassLabelStore labels
     ) {
         ScoringReplay replay = new ScoringReplay(forecasts, passes);
-        return new ShadowScoringService(feed, scoringStage(), replay, new ScoringWriter(labels, transactions),
+        return new ScoringService(feed, scoringStage(), replay, new ScoringWriter(labels, transactions),
             recentRoutes, replay.maxForecastWindow(), clock, meters);
     }
 
     /** 저장된 정산 근거와 노선 구조로 판정하는 채점 단계를 만든다. 부를 때마다 상태가 빈 새 단계다. */
     public ScoringStage scoringStage() {
         return new ScoringStage(new JdbcSettlementContextProvider(jdbc), new JdbcRouteStructureProvider(jdbc),
-            new ConfirmedPassLabelCalculator(), clock, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
+            new AlightingAwarePassLabelCalculator(), clock, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
     }
 
     /**
@@ -107,9 +107,9 @@ public final class ForecastAssembly {
      * @param records 예보 기록 저장소
      * @param passes 통과 기록 저장소
      */
-    public ForecastPipelineService forecast(
+    public RunForecastsService forecast(
         ForecastLanes lanes,
-        PipelineEvents events,
+        ForecastEvents events,
         Sources sources,
         VehicleCapacityCache capacities,
         ForecastRecordStore records,
@@ -119,9 +119,9 @@ public final class ForecastAssembly {
         ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(capacities));
         RouteStateReplayer replayer = new RouteStateReplayer(sources.replays(), stage, settings.replayWindow(),
             settings.replayExtendedWindow());
-        PipelineBatchProcessor processor = new PipelineBatchProcessor(stage, replayer, records, passes, transactions,
+        ForecastBatchProcessor processor = new ForecastBatchProcessor(stage, replayer, records, passes, transactions,
             events, new RouteStateRegistry(), settings.rushOnly());
-        return new ForecastPipelineService(lanes, processor, sources.batches(), sources.pending(), sources.runtimes(),
+        return new RunForecastsService(lanes, processor, sources.batches(), sources.pending(), sources.runtimes(),
             sources.versions(), sources.stops(), new JdbcSettlementContextWriter(jdbc), settings.policy(), clock,
             meters);
     }
@@ -139,7 +139,7 @@ public final class ForecastAssembly {
     public record Sources(
         ReplaySource replays,
         ObservationBatchReader batches,
-        PendingPipelineBatches pending,
+        PendingBatches pending,
         ForecastRuntime runtimes,
         RouteVersionQuery versions,
         RouteStopsQuery stops

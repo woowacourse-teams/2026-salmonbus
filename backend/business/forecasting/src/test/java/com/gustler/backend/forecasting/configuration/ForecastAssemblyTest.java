@@ -3,8 +3,8 @@ package com.gustler.backend.forecasting.configuration;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
-import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
-import com.gustler.backend.forecasting.infrastructure.pipeline.JdbcReplaySource;
+import com.gustler.backend.forecasting.application.forecast.ScoringStage;
+import com.gustler.backend.forecasting.infrastructure.jdbc.JdbcReplaySource;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
