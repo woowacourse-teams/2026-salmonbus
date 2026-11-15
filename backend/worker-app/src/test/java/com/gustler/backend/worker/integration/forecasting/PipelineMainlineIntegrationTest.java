@@ -3,6 +3,8 @@ package com.gustler.backend.worker.integration.forecasting;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.Mockito.when;
 
+import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
+import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
@@ -56,6 +58,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 class PipelineMainlineIntegrationTest {
     private static final String SOURCE_ROUTE = "204000057";
     private static final String VEHICLE = "pipeline-mainline-vehicle";
+    private static final String LEAD_VEHICLE = "pipeline-mainline-lead";
+    private static final String FOLLOWING_VEHICLE = "pipeline-mainline-following";
+    private static final List<String> VEHICLES = List.of(VEHICLE, LEAD_VEHICLE, FOLLOWING_VEHICLE);
+    private static final int SETTLED_STOP = 3;
+    /** 짝짓기 조건(도달 관측이 예측 기준 시각보다 {@link ScoringStage#MINIMUM_LEAD} 뒤)에 여유를 더한 대기다. */
+    private static final Duration LEAD_WAIT = ScoringStage.MINIMUM_LEAD.plusMillis(500);
+    /** 옛 정산이 받는 최소 배차 간격(직전 통과와 0.2분)에 여유를 더한 대기다. */
+    private static final Duration HEADWAY_WAIT = Duration.ofMillis(12_500);
     private static final int STOP_COUNT = 10;
     private static final int TURN = 8;
     private static final int CAPACITY = 45;
@@ -74,6 +84,9 @@ class PipelineMainlineIntegrationTest {
 
     @Autowired
     private PipelineForecastTrigger trigger;
+
+    @Autowired
+    private ForecastPipelineService pipeline;
 
     @MockitoBean
     private ForecastRuntime forecastRuntime;
@@ -97,10 +110,12 @@ class PipelineMainlineIntegrationTest {
             """).param("route", routeId).param("digest", "0".repeat(64)).param("at", validFrom).param("turn", TURN)
             .query(Long.class).single();
         insertStops();
-        jdbc.sql("""
-            INSERT INTO vehicle_capacity (source_id, vehicle_id, capacity, evidence_at)
-            VALUES ('GBIS', :vehicle, :capacity, :at)
-            """).param("vehicle", VEHICLE).param("capacity", CAPACITY).param("at", validFrom).update();
+        for (String vehicle : VEHICLES) {
+            jdbc.sql("""
+                INSERT INTO vehicle_capacity (source_id, vehicle_id, capacity, evidence_at)
+                VALUES ('GBIS', :vehicle, :capacity, :at)
+                """).param("vehicle", vehicle).param("capacity", CAPACITY).param("at", validFrom).update();
+        }
         deploymentId = jdbc.sql("""
             INSERT INTO model_deployment (deployment_key, release_id, model_key, model_version, bundle_digest,
                 prediction_target_version, calculation_version, supported_scope_digest, data_until, state)
@@ -133,13 +148,17 @@ class PipelineMainlineIntegrationTest {
         return "UP";
     }
 
+    /**
+     * 넣은 자료와 본선의 노선 상태를 지운다. 본선과 채점은 노선·배치·관측·배포 번호로 메모리 상태를 들고 있어 번호를 되돌리면
+     * 다음 시험이 앞 시험의 상태를 이어받는다. 그래서 번호를 되돌리지 않는다.
+     */
     @AfterEach
     void 저장한_자료를_정리한다() {
-        jdbc.sql("DELETE FROM vehicle_capacity WHERE vehicle_id = ?").param(VEHICLE).update();
+        pipeline.states().remove(ModelRoute.of(SOURCE_ROUTE));
+        jdbc.sql("DELETE FROM vehicle_capacity WHERE vehicle_id IN (:vehicles)").param("vehicles", VEHICLES).update();
         jdbc.sql("TRUNCATE forecast_run, forecast_record, stop_pass, pass_label, forecast_unresolved").update();
-        jdbc.sql("""
-            TRUNCATE route, alighting_settlement_generation, model_deployment, daily_call_quota RESTART IDENTITY CASCADE
-            """).update();
+        jdbc.sql("TRUNCATE route, alighting_settlement_generation, model_deployment, daily_call_quota CASCADE")
+            .update();
     }
 
     @Test
@@ -189,13 +208,88 @@ class PipelineMainlineIntegrationTest {
         });
     }
 
-    /** 차량 하나가 {@code passedStop}을 막 떠난 관측 한 줄을 실제 수집 원장으로 저장하고 커밋한다. */
+    @Test
+    void 예보_기준_시각_10초_뒤에_목표에_닿고_앞_차량의_직전_통과가_있으면_채점이_짝을_지어_정답을_쓴다()
+        throws InterruptedException {
+        // given
+        List<Long> lead = new ArrayList<>();
+        for (int passedStop = 1; passedStop <= SETTLED_STOP + 1; passedStop++) {
+            lead.add(collect(LEAD_VEHICLE, passedStop, 30 - passedStop));
+        }
+        collect(FOLLOWING_VEHICLE, 1, 40);
+        final long beforeTarget = collect(FOLLOWING_VEHICLE, SETTLED_STOP - 1, 38);
+        Instant leadDeparted = waitForConfirmation(lead.get(SETTLED_STOP - 1));
+        Instant basis = waitForConfirmation(beforeTarget);
+        Instant reachable = later(basis.plus(LEAD_WAIT), leadDeparted.plus(HEADWAY_WAIT));
+        waitUntil(() -> Instant.now().isAfter(reachable), reachable.plusSeconds(1));
+
+        // when
+        collect(FOLLOWING_VEHICLE, SETTLED_STOP, 36);
+        collect(FOLLOWING_VEHICLE, SETTLED_STOP + 1, 34);
+        final boolean labeled = waitUntil(() -> settledForecasts() == 2, Instant.now().plus(DEADLINE));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(labeled).as("마감 안에 뒤 차량의 예측이 정답과 짝지어졌다").isTrue();
+            softly.assertThat(jdbc.sql("""
+                SELECT count(*) FROM pass_label
+                WHERE route_id = :route AND stop_order = :stop AND state = 'SETTLED' AND label_value IS NOT NULL
+                  AND previous_last_observation_id IS NOT NULL AND parameter_hash IS NOT NULL
+                """).param("route", routeId).param("stop", SETTLED_STOP).query(Long.class).single()).isOne();
+            softly.assertThat(jdbc.sql("""
+                SELECT count(*) FROM forecast_outcome outcome
+                JOIN pass_label label ON label.route_id = outcome.route_id AND label.stop_order = :stop
+                WHERE outcome.route_id = :route AND outcome.vehicle_id = :vehicle AND outcome.target_stop_order = :stop
+                  AND outcome.state = 'SETTLED' AND outcome.label_value = label.label_value
+                """).param("route", routeId).param("vehicle", FOLLOWING_VEHICLE).param("stop", SETTLED_STOP)
+                .query(Long.class).single()).isEqualTo(2);
+            softly.assertThat(jdbc.sql("""
+                SELECT count(*) FROM forecast_unresolved u JOIN forecast_record r
+                  ON r.source_date = u.source_date AND r.vehicle_observation_id = u.vehicle_observation_id
+                WHERE u.route_id = :route AND r.vehicle_id = :vehicle AND u.target_stop_order = :stop
+                """).param("route", routeId).param("vehicle", FOLLOWING_VEHICLE).param("stop", SETTLED_STOP)
+                .query(Long.class).single()).isZero();
+        });
+    }
+
+    /** 뒤 차량이 목표 정류장을 겨눈 예측 가운데 정답과 짝지어진 수다. */
+    private long settledForecasts() {
+        return jdbc.sql("""
+            SELECT count(*) FROM forecast_outcome
+            WHERE route_id = :route AND vehicle_id = :vehicle AND target_stop_order = :stop AND state = 'SETTLED'
+            """).param("route", routeId).param("vehicle", FOLLOWING_VEHICLE).param("stop", SETTLED_STOP)
+            .query(Long.class).single();
+    }
+
+    /** 본선이 배치를 처리하고 예보 실행 줄에 적은 착수 시각을 기다려 돌려준다. */
+    private Instant waitForConfirmation(final long batchId) throws InterruptedException {
+        waitUntil(() -> confirmedAt(batchId).isPresent(), Instant.now().plus(DEADLINE));
+        return confirmedAt(batchId).orElseThrow();
+    }
+
+    private Optional<Instant> confirmedAt(final long batchId) {
+        return jdbc.sql("SELECT confirmed_at FROM forecast_run WHERE observation_batch_id = ?").param(batchId)
+            .query(OffsetDateTime.class).optional().map(OffsetDateTime::toInstant);
+    }
+
+    private static Instant later(Instant left, Instant right) {
+        if (left.isAfter(right)) {
+            return left;
+        }
+        return right;
+    }
+
     private long collect(final int passedStop, final int seats) {
+        return collect(VEHICLE, passedStop, seats);
+    }
+
+    /** 차량 하나가 {@code passedStop}을 막 떠난 관측 한 줄을 실제 수집 원장으로 저장하고 커밋한다. */
+    private long collect(String vehicle, final int passedStop, final int seats) {
         OffsetDateTime at = OffsetDateTime.now(SEOUL).truncatedTo(ChronoUnit.MILLIS);
         final long batchId = ledger.reserve(new CollectionPlan(routeVersionId, at, UUID.randomUUID().toString()), at)
             .batchId();
         ledger.markDispatching(batchId, at, at, "a");
-        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation("경기70아0001", VEHICLE, 0,
+        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation("경기70아0001", vehicle, 0,
             SOURCE_ROUTE, 11, "s" + passedStop, passedStop, 2, seats, 1, 1);
         ledger.conclude(batchId,
             received -> GbisObservationMapper.response(new GbisLocationResult.Success(

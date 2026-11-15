@@ -3,6 +3,7 @@ package com.gustler.backend.worker.integration.forecasting;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
 import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.IntStream;
 
 /**
  * 새 예보 경로가 처리하는 확정 프로필 모델을 만든다. 통계는 진짜 객체이고 트리는 잎 하나짜리라 예측값이 상수다.
@@ -38,7 +40,7 @@ final class ConfirmedProfileModelFixture {
             ensemble(EXTENDED_FEATURES, NumericTreeEnsemble.Kind.REGRESSION, new double[] {8}),
             ensemble(EXTENDED_FEATURES, NumericTreeEnsemble.Kind.BINARY, new double[] {0}));
         return new AlightingAwareSeatForecastModel(predictor, Map.of(route, statistics(route, stopCount, turn)),
-            Map.of(route, evidence(stopCount)), "1".repeat(64), Map.of(route, extended));
+            Map.of(route, evidence(stopCount, turn)), "1".repeat(64), Map.of(route, extended));
     }
 
     private static AlightingAwareRouteStatistics statistics(String route, final int stopCount, final int turn) {
@@ -71,11 +73,22 @@ final class ConfirmedProfileModelFixture {
         return cells;
     }
 
-    /** 정류장마다 빈 정산 근거다. 새 채점의 근거 확인(정류장 계수 칸이 있는지)을 통과한다. */
-    private static Map<Integer, String> evidence(final int stopCount) {
+    /**
+     * 정류장마다 옛 정산이 읽는 근거다. 시간 확장 칸 계수와 출퇴근 두 띠의 정류장 계수를 모두 넣어, 통과가 어느 시각에 닫혀도
+     * 정답을 계산할 수 있다.
+     */
+    private static Map<Integer, String> evidence(final int stopCount, final int turn) {
+        String parameters = "\"p\":0.3,\"lam\":[1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9],\"kappa\":1,\"r\":2";
+        String cells = String.join(",", AlightingTimeCell.extendedKeys().stream()
+            .map(key -> "\"%s\":{%s}".formatted(key, parameters))
+            .toList());
+        String realStops = IntStream.rangeClosed(1, stopCount).boxed().toList().toString();
         Map<Integer, String> evidence = new HashMap<>();
         for (int order = 1; order <= stopCount; order++) {
-            evidence.put(order, "{}");
+            evidence.put(order, """
+                {"turn":%d,"realStopOrders":%s,"holidays":[],"extendedSettlement":{%s},
+                 "alighting":{"stops":[{"stop":%d,"band":"morning",%s},{"stop":%d,"band":"evening",%s}]}}
+                """.formatted(turn, realStops, cells, order, parameters, order, parameters));
         }
         return evidence;
     }
