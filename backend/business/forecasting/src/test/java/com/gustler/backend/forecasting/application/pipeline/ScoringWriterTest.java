@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.application.pipeline;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -29,10 +29,12 @@ class ScoringWriterTest {
         ScoringWriter.Flushed flushed = writer.flush();
 
         // then
-        assertThat(flushed).isEqualTo(new ScoringWriter.Flushed(2, 1));
-        assertThat(transactions.calls.get()).isOne();
-        assertThat(store.labels).extracting(PassLabel::tripStartObservationId).containsExactly(1L, 2L);
-        assertThat(writer.pendingCount()).isZero();
+        assertSoftly(softly -> {
+            softly.assertThat(flushed).isEqualTo(new ScoringWriter.Flushed(2, 1));
+            softly.assertThat(transactions.calls.get()).isOne();
+            softly.assertThat(store.labels).extracting(PassLabel::tripStartObservationId).containsExactly(1L, 2L);
+            softly.assertThat(writer.pendingCount()).isZero();
+        });
     }
 
     @Test
@@ -45,8 +47,10 @@ class ScoringWriterTest {
         ScoringWriter.Flushed flushed = writer.flush();
 
         // then
-        assertThat(flushed).isEqualTo(new ScoringWriter.Flushed(0, 0));
-        assertThat(transactions.calls.get()).isZero();
+        assertSoftly(softly -> {
+            softly.assertThat(flushed).isEqualTo(new ScoringWriter.Flushed(0, 0));
+            softly.assertThat(transactions.calls.get()).isZero();
+        });
     }
 
     @Test
@@ -63,16 +67,18 @@ class ScoringWriterTest {
         ScoringWriter.Flushed flushed = writer.flush();
 
         // then
-        assertThat(flushed.labels()).isEqualTo(2);
-        assertThat(store.labels).extracting(PassLabel::tripStartObservationId).containsExactly(1L, 2L);
+        assertSoftly(softly -> {
+            softly.assertThat(flushed.labels()).isEqualTo(2);
+            softly.assertThat(store.labels).extracting(PassLabel::tripStartObservationId).containsExactly(1L, 2L);
+        });
     }
 
-    private static PassLabel label(long trip) {
+    private static PassLabel label(final long trip) {
         return new PassLabel(DAY, 7, trip, 3, 40, ScoringReasons.LABEL_VERSION, 3, PassLabel.State.SETTLED, null,
             12.5, null, null, null, AT);
     }
 
-    private static UnresolvedForecast unresolved(long observation) {
+    private static UnresolvedForecast unresolved(final long observation) {
         return new UnresolvedForecast(DAY, observation, 3, 7, UnresolvedForecast.State.LOST,
             ScoringReasons.PASS_NOT_CLOSED, AT);
     }

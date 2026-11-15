@@ -45,8 +45,7 @@ public record PartitionExportSettings(
         if (retentionDays < MIN_RETENTION_DAYS || retentionDays > MAX_RETENTION_DAYS) {
             throw new IllegalArgumentException("보관 날짜 수는 2~30일이어야 한다");
         }
-        if (prefix == null || !prefix.matches("[a-zA-Z0-9/_=-]+/") || prefix.startsWith("/")
-            || prefix.startsWith("salmonbus-be/")) {
+        if (isUnusablePrefix(prefix)) {
             throw new IllegalArgumentException("날짜 내보내기에는 새 S3 접두가 필요하다");
         }
         if (interval.compareTo(Duration.ofMinutes(1)) < 0 || interval.compareTo(Duration.ofHours(24)) > 0) {
@@ -58,5 +57,10 @@ public record PartitionExportSettings(
         if (lockTimeout.compareTo(Duration.ofMillis(100)) < 0 || lockTimeout.compareTo(Duration.ofSeconds(10)) > 0) {
             throw new IllegalArgumentException("파티션 지우기 잠금 대기는 100ms~10초여야 한다");
         }
+    }
+
+    private static boolean isUnusablePrefix(String prefix) {
+        return prefix == null || !prefix.matches("[a-zA-Z0-9/_=-]+/") || prefix.startsWith("/")
+            || prefix.startsWith("salmonbus-be/");
     }
 }

@@ -134,7 +134,12 @@ final class ConfirmedAlightingAwareEvaluationOracle {
          * DB 대신 이미 읽은 관측으로 이력을 만든다. {@code rows}는 DB 이력과 같은 범위·순서(차량, 확정 시각, 배치, 관측)이고
          * 확정 시각 순 앞에서 {@code limit + 1}줄까지만 담는다. {@code firstIncomplete}는 범위 안 첫 수집 구멍의 확정 시각이다.
          */
-        History(List<AlightingAwareObservation> rows, Instant through, final int limit, Instant firstIncomplete) {
+        History(
+            List<AlightingAwareObservation> rows,
+            Instant through,
+            final int limit,
+            Instant firstIncomplete
+        ) {
             this.jdbc = null;
             this.route = 0;
             this.start = null;

@@ -66,7 +66,12 @@ public class PartitionExportService {
     }
 
     /** 처리한 회차의 요약이다. {@code oldestPending} 은 대상인데 이번 회차에 끝내지 못한 가장 오래된 날짜다. */
-    public record RunReport(int exported, int dropped, int pending, LocalDate oldestPending) {
+    public record RunReport(
+        int exported,
+        int dropped,
+        int pending,
+        LocalDate oldestPending
+    ) {
     }
 
     /** 오늘(한국)에서 보관 날짜 수를 뺀 날짜다. 이 날짜까지의 파티션이 대상이다. */
@@ -95,19 +100,19 @@ public class PartitionExportService {
         recordDefaultRows();
         List<String> unexpected = new ArrayList<>();
         List<PartitionExportRepository.Partition> partitions = repository.datedPartitions(through, unexpected);
-        for (String name : unexpected) {
-            metrics.counter("salmonbus_archive_partition_failures", "table", "none", "reason", "UNEXPECTED_BOUND")
-                .increment();
-            LOG.warn("event=partition_export status=SKIPPED partition={} reason=UNEXPECTED_BOUND", name);
-        }
+        recordUnexpectedBounds(unexpected);
         int exported = 0;
         int dropped = 0;
         int pending = 0;
         LocalDate oldest = null;
         for (PartitionExportRepository.Partition partition : partitions) {
             Outcome outcome = processSafely(partition);
-            exported += outcome.exported ? 1 : 0;
-            dropped += outcome.dropped ? 1 : 0;
+            if (outcome.exported) {
+                exported++;
+            }
+            if (outcome.dropped) {
+                dropped++;
+            }
             if (!outcome.done) {
                 pending++;
                 if (oldest == null) {
@@ -115,11 +120,33 @@ public class PartitionExportService {
                 }
             }
         }
-        oldestPendingDays.set(oldest == null ? 0 : ChronoUnit.DAYS.between(oldest, today));
+        oldestPendingDays.set(pendingDays(oldest, today));
         LOG.info("event=partition_export status=RUN through={} partitions={} exported={} dropped={} pending={}"
             + " oldestPendingDate={} durationMs={}", through, partitions.size(), exported, dropped, pending,
-            oldest == null ? "none" : oldest, (System.nanoTime() - started) / 1000000);
+            dateOrNone(oldest), (System.nanoTime() - started) / 1000000);
         return new RunReport(exported, dropped, pending, oldest);
+    }
+
+    private void recordUnexpectedBounds(List<String> unexpected) {
+        for (String name : unexpected) {
+            metrics.counter("salmonbus_archive_partition_failures", "table", "none", "reason", "UNEXPECTED_BOUND")
+                .increment();
+            LOG.warn("event=partition_export status=SKIPPED partition={} reason=UNEXPECTED_BOUND", name);
+        }
+    }
+
+    private static long pendingDays(LocalDate oldest, LocalDate today) {
+        if (oldest == null) {
+            return 0;
+        }
+        return ChronoUnit.DAYS.between(oldest, today);
+    }
+
+    private static String dateOrNone(LocalDate date) {
+        if (date == null) {
+            return "none";
+        }
+        return date.toString();
     }
 
     private record Outcome(boolean done, boolean exported, boolean dropped) {
@@ -131,38 +158,50 @@ public class PartitionExportService {
         } catch (RuntimeException failure) {
             if (sqlState(failure).equals(LOCK_NOT_AVAILABLE)) {
                 deferred(partition, "LOCK_TIMEOUT");
-            } else {
-                failed(partition, failureCode(failure), failure);
+                return new Outcome(false, false, false);
             }
+            failed(partition, failureCode(failure), failure);
             return new Outcome(false, false, false);
         }
     }
 
     private Outcome process(PartitionExportRepository.Partition partition) {
         Optional<PartitionExportRepository.Ledger> found = repository.ledger(partition);
-        boolean exported = false;
-        PartitionExportRepository.Ledger ledger;
         if (found.isEmpty()) {
-            ledger = export(partition);
-            exported = true;
-        } else {
-            ledger = found.get();
-            if (ledger.droppedAt() != null) {
-                if (repository.attached(partition)) {
-                    throw new IllegalStateException("LEDGER_DROPPED_PARTITION_PRESENT");
-                }
-                return new Outcome(true, false, false);
-            }
-            if (ledger.verifiedAt() == null) {
-                verifyStored(partition, ledger);
-                Instant verifiedAt = clock.instant();
-                if (!repository.markVerified(partition, ledger.sha256(), verifiedAt)) {
-                    throw new IllegalStateException("LEDGER_CHANGED");
-                }
-                ledger = new PartitionExportRepository.Ledger(ledger.key(), ledger.rows(), ledger.sha256(),
-                    ledger.exportedAt(), verifiedAt, null);
-            }
+            return dropIfEnabled(partition, export(partition), true);
         }
+        PartitionExportRepository.Ledger ledger = found.get();
+        if (ledger.droppedAt() != null) {
+            if (repository.attached(partition)) {
+                throw new IllegalStateException("LEDGER_DROPPED_PARTITION_PRESENT");
+            }
+            return new Outcome(true, false, false);
+        }
+        return dropIfEnabled(partition, verifiedLedger(partition, ledger), false);
+    }
+
+    /** 확인 시각이 비어 있으면 S3 를 다시 읽어 확인하고 장부에 확인 시각을 적은 장부 줄을 낸다. */
+    private PartitionExportRepository.Ledger verifiedLedger(
+        PartitionExportRepository.Partition partition,
+        PartitionExportRepository.Ledger ledger
+    ) {
+        if (ledger.verifiedAt() != null) {
+            return ledger;
+        }
+        verifyStored(partition, ledger);
+        Instant verifiedAt = clock.instant();
+        if (!repository.markVerified(partition, ledger.sha256(), verifiedAt)) {
+            throw new IllegalStateException("LEDGER_CHANGED");
+        }
+        return new PartitionExportRepository.Ledger(ledger.key(), ledger.rows(), ledger.sha256(),
+            ledger.exportedAt(), verifiedAt, null);
+    }
+
+    private Outcome dropIfEnabled(
+        PartitionExportRepository.Partition partition,
+        PartitionExportRepository.Ledger ledger,
+        final boolean exported
+    ) {
         if (!settings.dropEnabled()) {
             return new Outcome(true, exported, false);
         }
@@ -218,17 +257,30 @@ public class PartitionExportService {
         verifyStored(partition, exported);
         PartitionExportRepository.Ledger verified = new PartitionExportRepository.Ledger(key, total, sha,
             exported.exportedAt(), clock.instant(), null);
+        return recordVerified(partition, verified, manifest, bytes);
+    }
+
+    /**
+     * 확인한 내보내기를 장부에 적는다. 다른 실행이 먼저 적었으면 그 줄이 같은 내용일 때만 그 줄을 내고, 다르면
+     * {@code EXPORT_CONTENT_MISMATCH} 로 실패한다.
+     */
+    private PartitionExportRepository.Ledger recordVerified(
+        PartitionExportRepository.Partition partition,
+        PartitionExportRepository.Ledger verified,
+        PartitionManifest manifest,
+        final long bytes
+    ) {
         PartitionExportRepository.LedgerWrite written = repository.recordVerified(partition, verified);
         if (written.inserted()) {
             metrics.counter("salmonbus_archive_partitions", "stage", "exported", "table", partition.table())
                 .increment();
             metrics.counter("salmonbus_archive_rows", "stage", "partition_exported", "table", partition.table())
-                .increment(total);
+                .increment(verified.rows());
             metrics.counter("salmonbus_archive_bytes", "stage", "partition_exported").increment(bytes);
             return verified;
         }
         PartitionExportRepository.Ledger other = written.ledger();
-        if (other.sha256().equals(sha) || sameContent(other, manifest)) {
+        if (other.sha256().equals(verified.sha256()) || sameContent(other, manifest)) {
             LOG.info("event=partition_export status=ALREADY_EXPORTED table={} date={} key={}", partition.table(),
                 partition.date(), other.key());
             return other;
@@ -273,10 +325,30 @@ public class PartitionExportService {
             throw new IllegalStateException("MANIFEST_HASH_MISMATCH");
         }
         PartitionManifest manifest = PartitionManifest.parse(manifestBytes);
-        if (!PartitionManifest.FORMAT.equals(manifest.format()) || !partition.table().equals(manifest.table())
-            || !partition.date().toString().equals(manifest.sourceDate()) || manifest.rows() != ledger.rows()) {
+        if (differsFromLedger(manifest, partition, ledger)) {
             throw new IllegalStateException("MANIFEST_MISMATCH");
         }
+        final long rows = storedRows(manifest);
+        if (rows != ledger.rows()) {
+            throw new IllegalStateException("MANIFEST_ROW_COUNT_MISMATCH");
+        }
+        final long nanos = System.nanoTime() - started;
+        metrics.timer("salmonbus_archive_stage", "stage", "partition_verify").record(nanos, TimeUnit.NANOSECONDS);
+        LOG.info("event=partition_export status=VERIFIED table={} date={} rows={} files={} durationMs={}",
+            partition.table(), partition.date(), rows, manifest.files().size(), nanos / 1000000);
+    }
+
+    private static boolean differsFromLedger(
+        PartitionManifest manifest,
+        PartitionExportRepository.Partition partition,
+        PartitionExportRepository.Ledger ledger
+    ) {
+        return !PartitionManifest.FORMAT.equals(manifest.format()) || !partition.table().equals(manifest.table())
+            || !partition.date().toString().equals(manifest.sourceDate()) || manifest.rows() != ledger.rows();
+    }
+
+    /** manifest 의 파일을 지금 S3 에서 다시 읽어 해시·줄 수를 확인하고 줄 수 합을 낸다. */
+    private long storedRows(PartitionManifest manifest) {
         long rows = 0;
         for (PartitionManifest.FileEntry file : manifest.files()) {
             byte[] bytes = objects.read(file.key(), file.bytes());
@@ -288,17 +360,14 @@ public class PartitionExportService {
             }
             rows += file.rows();
         }
-        if (rows != ledger.rows()) {
-            throw new IllegalStateException("MANIFEST_ROW_COUNT_MISMATCH");
-        }
-        final long nanos = System.nanoTime() - started;
-        metrics.timer("salmonbus_archive_stage", "stage", "partition_verify").record(nanos, TimeUnit.NANOSECONDS);
-        LOG.info("event=partition_export status=VERIFIED table={} date={} rows={} files={} durationMs={}",
-            partition.table(), partition.date(), rows, manifest.files().size(), nanos / 1000000);
+        return rows;
     }
 
-    private Outcome drop(PartitionExportRepository.Partition partition, PartitionExportRepository.Ledger ledger,
-        final boolean exported) {
+    private Outcome drop(
+        PartitionExportRepository.Partition partition,
+        PartitionExportRepository.Ledger ledger,
+        final boolean exported
+    ) {
         verifyStored(partition, ledger);
         final long current = repository.count(partition);
         if (current != ledger.rows()) {
@@ -309,15 +378,7 @@ public class PartitionExportService {
         PartitionExportRepository.DropResult result = repository.drop(partition, ledger);
         switch (result) {
             case DROPPED -> {
-                final long nanos = System.nanoTime() - started;
-                metrics.counter("salmonbus_archive_partitions", "stage", "dropped", "table", partition.table())
-                    .increment();
-                metrics.counter("salmonbus_archive_rows", "stage", "partition_dropped", "table", partition.table())
-                    .increment(ledger.rows());
-                metrics.timer("salmonbus_archive_stage", "stage", "partition_drop").record(nanos,
-                    TimeUnit.NANOSECONDS);
-                LOG.info("event=partition_export status=DROPPED table={} date={} partition={} rows={} durationMs={}",
-                    partition.table(), partition.date(), partition.name(), ledger.rows(), nanos / 1000000);
+                recordDropped(partition, ledger, System.nanoTime() - started);
                 return new Outcome(true, exported, true);
             }
             case ROW_COUNT_CHANGED -> {
@@ -340,12 +401,37 @@ public class PartitionExportService {
         }
     }
 
-    private void rowCountChanged(PartitionExportRepository.Partition partition, PartitionExportRepository.Ledger ledger,
-        final long current) {
+    private void recordDropped(
+        PartitionExportRepository.Partition partition,
+        PartitionExportRepository.Ledger ledger,
+        final long nanos
+    ) {
+        metrics.counter("salmonbus_archive_partitions", "stage", "dropped", "table", partition.table())
+            .increment();
+        metrics.counter("salmonbus_archive_rows", "stage", "partition_dropped", "table", partition.table())
+            .increment(ledger.rows());
+        metrics.timer("salmonbus_archive_stage", "stage", "partition_drop").record(nanos, TimeUnit.NANOSECONDS);
+        LOG.info("event=partition_export status=DROPPED table={} date={} partition={} rows={} durationMs={}",
+            partition.table(), partition.date(), partition.name(), ledger.rows(), nanos / 1000000);
+    }
+
+    /** {@code current} 가 음수면 지우는 트랜잭션 안에서 센 값이라 로그에 {@code locked} 로 남긴다. */
+    private void rowCountChanged(
+        PartitionExportRepository.Partition partition,
+        PartitionExportRepository.Ledger ledger,
+        final long current
+    ) {
         metrics.counter("salmonbus_archive_partition_failures", "table", partition.table(), "reason",
             "ROW_COUNT_CHANGED").increment();
         LOG.warn("event=partition_export status=DROP_REFUSED table={} date={} reason=ROW_COUNT_CHANGED ledgerRows={}"
-            + " currentRows={}", partition.table(), partition.date(), ledger.rows(), current < 0 ? "locked" : current);
+            + " currentRows={}", partition.table(), partition.date(), ledger.rows(), currentRowsLabel(current));
+    }
+
+    private static String currentRowsLabel(final long current) {
+        if (current < 0) {
+            return "locked";
+        }
+        return Long.toString(current);
     }
 
     private void deferred(PartitionExportRepository.Partition partition, String reason) {
@@ -359,8 +445,21 @@ public class PartitionExportService {
         metrics.counter("salmonbus_archive_partition_failures", "table", partition.table(), "reason", reason)
             .increment();
         LOG.warn("event=partition_export status=FAILED table={} date={} reason={} failureType={} sqlState={}",
-            partition.table(), partition.date(), reason, failure == null ? "none" : failure.getClass().getSimpleName(),
-            failure == null ? "NONE" : sqlState(failure));
+            partition.table(), partition.date(), reason, failureType(failure), failureSqlState(failure));
+    }
+
+    private static String failureType(RuntimeException failure) {
+        if (failure == null) {
+            return "none";
+        }
+        return failure.getClass().getSimpleName();
+    }
+
+    private static String failureSqlState(RuntimeException failure) {
+        if (failure == null) {
+            return "NONE";
+        }
+        return sqlState(failure);
     }
 
     private void recordDefaultRows() {
@@ -381,10 +480,14 @@ public class PartitionExportService {
 
     private static String failureCode(RuntimeException failure) {
         String message = failure.getMessage();
-        if (failure instanceof IllegalStateException && message != null && message.matches("[A-Za-z_]{1,80}")) {
+        if (hasSafeFailureCode(failure, message)) {
             return message;
         }
         return failure.getClass().getSimpleName();
+    }
+
+    private static boolean hasSafeFailureCode(RuntimeException failure, String message) {
+        return failure instanceof IllegalStateException && message != null && message.matches("[A-Za-z_]{1,80}");
     }
 
     private static String sqlState(Throwable failure) {

@@ -1,7 +1,8 @@
 package com.gustler.backend.forecasting.application.publication;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -46,7 +47,8 @@ class ForecastBatchWriterLegacyListenerTest {
     private final AlightingAwareInputConfirmation confirmation = mock(AlightingAwareInputConfirmation.class);
     private final AlightingAwareSeatForecastModel model = mock(AlightingAwareSeatForecastModel.class);
     private final AlightingAwareRouteStatistics statistics = mock(AlightingAwareRouteStatistics.class);
-    private final ForecastBatchWriter writer = new ForecastBatchWriter(committer, Clock.fixed(now, ZoneOffset.UTC), quality);
+    private final ForecastBatchWriter writer =
+        new ForecastBatchWriter(committer, Clock.fixed(now, ZoneOffset.UTC), quality);
     private final List<LegacyForecastResult> received = new ArrayList<>();
 
     private RuntimeSnapshot runtime(final boolean confirmed) {
@@ -63,7 +65,8 @@ class ForecastBatchWriterLegacyListenerTest {
         writer.setAlightingAwareFeatures(query);
         writer.setConfirmedInput(confirmation);
         writer.setLegacyForecastListener(received::add);
-        return new RuntimeSnapshot(new ActiveModelDeployment(7, "alighting-online-v1", "alighting-test", "b".repeat(64)),
+        return new RuntimeSnapshot(
+            new ActiveModelDeployment(7, "alighting-online-v1", "alighting-test", "b".repeat(64)),
             new SupportedForecastScope(List.of("3330")), model, now.minusSeconds(86400));
     }
 
@@ -96,12 +99,14 @@ class ForecastBatchWriterLegacyListenerTest {
         // then
         ArgumentCaptor<ForecastPublication> published = ArgumentCaptor.forClass(ForecastPublication.class);
         verify(committer).commitConfirmed(eq(batch), published.capture());
-        assertThat(saved).isOne();
-        assertThat(received).singleElement().satisfies(result -> {
-            assertThat(result.kind()).isEqualTo(LegacyForecastResult.Kind.PUBLISHED);
-            assertThat(result.generatedAt()).isEqualTo(now);
-            assertThat(result.statistics()).isSameAs(statistics);
-            assertThat(result.predictions()).isEqualTo(published.getValue().predictions()).hasSize(1);
+        assertSoftly(softly -> {
+            softly.assertThat(saved).isOne();
+            softly.assertThat(received).singleElement().satisfies(result -> {
+                assertThat(result.kind()).isEqualTo(LegacyForecastResult.Kind.PUBLISHED);
+                assertThat(result.generatedAt()).isEqualTo(now);
+                assertThat(result.statistics()).isSameAs(statistics);
+                assertThat(result.predictions()).isEqualTo(published.getValue().predictions()).hasSize(1);
+            });
         });
     }
 
@@ -122,9 +127,11 @@ class ForecastBatchWriterLegacyListenerTest {
         // then
         verify(committer).commitConfirmed(eq(late), any());
         verify(committer).commitConfirmed(eq(batch), any());
-        assertThat(received).extracting(LegacyForecastResult::kind)
-            .containsExactly(LegacyForecastResult.Kind.NOT_CONFIRMED, LegacyForecastResult.Kind.OUT_OF_SCOPE);
-        assertThat(received).allSatisfy(result -> assertThat(result.predictions()).isEmpty());
+        assertSoftly(softly -> {
+            softly.assertThat(received).extracting(LegacyForecastResult::kind)
+                .containsExactly(LegacyForecastResult.Kind.NOT_CONFIRMED, LegacyForecastResult.Kind.OUT_OF_SCOPE);
+            softly.assertThat(received).allSatisfy(result -> assertThat(result.predictions()).isEmpty());
+        });
     }
 
     @Test
@@ -135,12 +142,16 @@ class ForecastBatchWriterLegacyListenerTest {
         when(query.read(10, stops, statistics))
             .thenThrow(new AlightingAwareFeatureUnavailableException("ALIGHTING_AWARE_HISTORY_ORIGIN_UNVERIFIED"));
 
-        // when, then
-        assertThatThrownBy(() -> writer.writeForecastsOf(batch, stops, runtime))
-            .hasMessage("ALIGHTING_AWARE_HISTORY_ORIGIN_UNVERIFIED");
-        assertThat(received).singleElement().satisfies(result -> {
-            assertThat(result.kind()).isEqualTo(LegacyForecastResult.Kind.FAILED);
-            assertThat(result.reason()).isEqualTo("ALIGHTING_AWARE_HISTORY_ORIGIN_UNVERIFIED");
+        // when
+        Throwable thrown = catchThrowable(() -> writer.writeForecastsOf(batch, stops, runtime));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(thrown).hasMessage("ALIGHTING_AWARE_HISTORY_ORIGIN_UNVERIFIED");
+            softly.assertThat(received).singleElement().satisfies(result -> {
+                assertThat(result.kind()).isEqualTo(LegacyForecastResult.Kind.FAILED);
+                assertThat(result.reason()).isEqualTo("ALIGHTING_AWARE_HISTORY_ORIGIN_UNVERIFIED");
+            });
         });
     }
 

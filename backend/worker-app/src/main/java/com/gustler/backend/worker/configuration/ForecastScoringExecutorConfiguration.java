@@ -29,7 +29,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @ConditionalOnExpression(ForecastScoringExecutorConfiguration.SCORING_ENABLED)
 public class ForecastScoringExecutorConfiguration {
     static final String SCORING_ENABLED = "(" + ForecastShadowExecutorConfiguration.SHADOW_ENABLED + " or "
-        + ForecastMainlineExecutorConfiguration.MAINLINE_ENABLED + ") and !'${forecast.scoring:off}'.equalsIgnoreCase('off')";
+        + ForecastMainlineExecutorConfiguration.MAINLINE_ENABLED + ")"
+        + " and !'${forecast.scoring:off}'.equalsIgnoreCase('off')";
     static final String COMPARISON_ENABLED = ForecastShadowExecutorConfiguration.SHADOW_ENABLED
         + " and !'${forecast.scoring:off}'.equalsIgnoreCase('off')";
 

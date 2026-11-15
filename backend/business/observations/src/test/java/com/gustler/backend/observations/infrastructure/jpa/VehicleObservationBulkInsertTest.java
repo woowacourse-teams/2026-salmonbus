@@ -2,12 +2,13 @@ package com.gustler.backend.observations.infrastructure.jpa;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.observations.domain.CollectionBatch;
 import com.gustler.backend.observations.domain.CollectionBatchRepository;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.RemainingSeats;
-import com.gustler.backend.observations.domain.StoredObservations.Row;
+import com.gustler.backend.observations.domain.StoredObservations;
 import com.gustler.backend.observations.domain.UpstreamObservationRow;
 import com.gustler.backend.observations.domain.VehicleObservation;
 import com.gustler.backend.observations.support.ObservationIntegrationTest;
@@ -109,15 +110,17 @@ class VehicleObservationBulkInsertTest {
     @Test
     void 켜짐_저장은_입력_순서대로_같은_상류_행의_저장_번호를_붙여_반환한다() {
         // when
-        List<List<Row>> returnedAndStored = inRollback(() -> {
+        List<List<StoredObservations.Row>> returnedAndStored = inRollback(() -> {
             CollectionBatch batch = openBatch();
-            List<Row> returned = repository(true).saveObservations(batch, List.of(row(4, "v-4", 3, STOP_3),
-                row(0, "v-0", 1, STOP_1), row(2, null, 2, STOP_2)));
+            List<StoredObservations.Row> returned = repository(true).saveObservations(batch,
+                List.of(row(4, "v-4", 3, STOP_3), row(0, "v-0", 1, STOP_1), row(2, null, 2, STOP_2)));
             return List.of(returned, returned.stream().map(row -> storedRowOf(row.observationId())).toList());
         });
 
         // then
-        assertThat(returnedAndStored.get(0)).extracting(Row::vehicleId).containsExactly("v-4", "v-0", null);
+        assertThat(returnedAndStored.get(0))
+            .extracting(StoredObservations.Row::vehicleId)
+            .containsExactly("v-4", "v-0", null);
         assertThat(returnedAndStored.get(0)).containsExactlyElementsOf(returnedAndStored.get(1));
     }
 
@@ -147,9 +150,11 @@ class VehicleObservationBulkInsertTest {
         Throwable bulk = failureOf(true, rows);
 
         // then
-        assertThat(jpa.getClass()).isEqualTo(bulk.getClass());
-        assertThat(constraintOf(bulk)).isEqualTo(constraintOf(jpa)).isEqualTo("fk_observation_route_stop");
-        assertThat(sqlStateOf(bulk)).isEqualTo(sqlStateOf(jpa)).isEqualTo("23503");
+        assertSoftly(softly -> {
+            softly.assertThat(jpa.getClass()).isEqualTo(bulk.getClass());
+            softly.assertThat(constraintOf(bulk)).isEqualTo(constraintOf(jpa)).isEqualTo("fk_observation_route_stop");
+            softly.assertThat(sqlStateOf(bulk)).isEqualTo(sqlStateOf(jpa)).isEqualTo("23503");
+        });
     }
 
     @Test
@@ -162,9 +167,13 @@ class VehicleObservationBulkInsertTest {
         Throwable bulk = failureOf(true, rows);
 
         // then
-        assertThat(jpa.getClass()).isEqualTo(bulk.getClass());
-        assertThat(constraintOf(bulk)).isEqualTo(constraintOf(jpa)).isEqualTo("ux_observation_vehicle_per_batch");
-        assertThat(sqlStateOf(bulk)).isEqualTo(sqlStateOf(jpa)).isEqualTo("23505");
+        assertSoftly(softly -> {
+            softly.assertThat(jpa.getClass()).isEqualTo(bulk.getClass());
+            softly.assertThat(constraintOf(bulk))
+                .isEqualTo(constraintOf(jpa))
+                .isEqualTo("ux_observation_vehicle_per_batch");
+            softly.assertThat(sqlStateOf(bulk)).isEqualTo(sqlStateOf(jpa)).isEqualTo("23505");
+        });
     }
 
     @Test
@@ -177,9 +186,11 @@ class VehicleObservationBulkInsertTest {
         Throwable bulk = failureOf(true, rows);
 
         // then
-        assertThat(jpa.getClass()).isEqualTo(bulk.getClass());
-        assertThat(constraintOf(bulk)).isEqualTo(constraintOf(jpa)).isEqualTo("ux_observation_source_row");
-        assertThat(sqlStateOf(bulk)).isEqualTo(sqlStateOf(jpa)).isEqualTo("23505");
+        assertSoftly(softly -> {
+            softly.assertThat(jpa.getClass()).isEqualTo(bulk.getClass());
+            softly.assertThat(constraintOf(bulk)).isEqualTo(constraintOf(jpa)).isEqualTo("ux_observation_source_row");
+            softly.assertThat(sqlStateOf(bulk)).isEqualTo(sqlStateOf(jpa)).isEqualTo("23505");
+        });
     }
 
     private Throwable failureOf(final boolean bulk, List<UpstreamObservationRow> rows) {
@@ -240,31 +251,54 @@ class VehicleObservationBulkInsertTest {
         return jdbc.sql("SELECT count(*) FROM test_observation_insert_statement").query(Integer.class).single();
     }
 
-    private Row storedRowOf(final long observationId) {
+    private StoredObservations.Row storedRowOf(final long observationId) {
         return jdbc.sql("""
             SELECT id, vehicle_id, remaining_seats, passed_stop_order, crowd_level, stop_order, running_state
             FROM vehicle_observation WHERE id = ?
-            """).param(observationId).query((resultSet, rowNumber) -> new Row(resultSet.getLong("id"),
-                resultSet.getString("vehicle_id"), resultSet.getObject("remaining_seats", Integer.class),
+            """).param(observationId).query((resultSet, rowNumber) -> new StoredObservations.Row(
+                resultSet.getLong("id"),
+                resultSet.getString("vehicle_id"),
+                resultSet.getObject("remaining_seats", Integer.class),
                 resultSet.getObject("passed_stop_order", Integer.class),
-                resultSet.getObject("crowd_level", Integer.class), resultSet.getObject("stop_order", Integer.class),
+                resultSet.getObject("crowd_level", Integer.class),
+                resultSet.getObject("stop_order", Integer.class),
                 resultSet.getObject("running_state", Integer.class)))
             .single();
     }
 
-    private static UpstreamObservationRow row(final int sourceRow, String vehicleId, final int stopOrder,
-        String stopId) {
+    private static UpstreamObservationRow row(
+        final int sourceRow,
+        String vehicleId,
+        final int stopOrder,
+        String stopId
+    ) {
         return new UpstreamObservationRow(sourceRow, new VehicleObservation(vehicleId, "경기70아0001", stopOrder,
             stopId, 2, RemainingSeats.from(30), 3, 0, 11, 1));
     }
 
     private static String constraintOf(Throwable failure) {
-        return firstInChain(failure, cause -> cause instanceof PSQLException postgres
-            && postgres.getServerErrorMessage() != null ? postgres.getServerErrorMessage().getConstraint() : null);
+        return firstInChain(failure, VehicleObservationBulkInsertTest::constraintNameOf);
+    }
+
+    private static String constraintNameOf(Throwable cause) {
+        if (!(cause instanceof PSQLException postgres)) {
+            return null;
+        }
+        if (postgres.getServerErrorMessage() == null) {
+            return null;
+        }
+        return postgres.getServerErrorMessage().getConstraint();
     }
 
     private static String sqlStateOf(Throwable failure) {
-        return firstInChain(failure, cause -> cause instanceof PSQLException postgres ? postgres.getSQLState() : null);
+        return firstInChain(failure, VehicleObservationBulkInsertTest::postgresSqlStateOf);
+    }
+
+    private static String postgresSqlStateOf(Throwable cause) {
+        if (cause instanceof PSQLException postgres) {
+            return postgres.getSQLState();
+        }
+        return null;
     }
 
     private static String firstInChain(Throwable failure, Function<Throwable, String> read) {

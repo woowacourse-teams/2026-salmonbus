@@ -54,6 +54,15 @@ public class ScoringExecutor implements ScoringFeed, DisposableBean {
         }
     }
 
+    private static void runSafely(Runnable task) {
+        try {
+            task.run();
+        } catch (RuntimeException failure) {
+            LOGGER.warn("event=pipeline_scoring_task_failed exceptionType={}", failure.getClass().getSimpleName(),
+                failure);
+        }
+    }
+
     /** 지금 줄에서 기다리는 일의 수. */
     public int queued() {
         return executor.getQueue().size();
@@ -62,14 +71,5 @@ public class ScoringExecutor implements ScoringFeed, DisposableBean {
     @Override
     public void destroy() {
         executor.shutdownNow();
-    }
-
-    private static void runSafely(Runnable task) {
-        try {
-            task.run();
-        } catch (RuntimeException failure) {
-            LOGGER.warn("event=pipeline_scoring_task_failed exceptionType={}", failure.getClass().getSimpleName(),
-                failure);
-        }
     }
 }

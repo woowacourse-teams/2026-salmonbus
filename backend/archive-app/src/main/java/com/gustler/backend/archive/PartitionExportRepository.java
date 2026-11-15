@@ -67,8 +67,14 @@ public class PartitionExportRepository {
     }
 
     /** 장부 한 줄. {@code key} 와 {@code sha256} 은 manifest 의 키와 해시다. */
-    public record Ledger(String key, long rows, String sha256, Instant exportedAt, Instant verifiedAt,
-        Instant droppedAt) {
+    public record Ledger(
+        String key,
+        long rows,
+        String sha256,
+        Instant exportedAt,
+        Instant verifiedAt,
+        Instant droppedAt
+    ) {
     }
 
     /** 키 순서 한 페이지. {@code cursor} 는 마지막 줄의 키를 담은 JSON 배열이다. */
@@ -105,15 +111,8 @@ public class PartitionExportRepository {
      * 기본 파티션과 규칙에 맞지 않는 파티션은 내지 않는다. 이름은 규칙에 맞는데 경계가 다른 파티션은 {@code unexpected} 에 담는다.
      */
     public List<Partition> datedPartitions(LocalDate through, List<String> unexpected) {
-        List<String[]> rows = jdbc.sql("""
-            SELECT p.relname, c.relname, pg_get_expr(c.relpartbound, c.oid)
-            FROM pg_inherits i
-            JOIN pg_class c ON c.oid = i.inhrelid
-            JOIN pg_class p ON p.oid = i.inhparent
-            WHERE i.inhparent IN (""" + String.join(",", TABLES.stream().map(t -> "to_regclass('" + t + "')").toList())
-            + ")").query((rs, n) -> new String[] { rs.getString(1), rs.getString(2), rs.getString(3) }).list();
         List<Partition> found = new ArrayList<>();
-        for (String[] row : rows) {
+        for (String[] row : attachedPartitions()) {
             Matcher name = Pattern.compile(Pattern.quote(row[0]) + "_p(\\d{8})").matcher(row[1]);
             if (!name.matches()) {
                 continue;
@@ -135,6 +134,18 @@ public class PartitionExportRepository {
         }
         found.sort(Comparator.comparing(Partition::date).thenComparing(p -> TABLES.indexOf(p.table())));
         return found;
+    }
+
+    /** 다섯 부모 테이블에 붙은 파티션마다 {부모 이름, 파티션 이름, 경계 표기} 를 낸다. */
+    private List<String[]> attachedPartitions() {
+        String parents = String.join(",", TABLES.stream().map(t -> "to_regclass('" + t + "')").toList());
+        return jdbc.sql("""
+            SELECT p.relname, c.relname, pg_get_expr(c.relpartbound, c.oid)
+            FROM pg_inherits i
+            JOIN pg_class c ON c.oid = i.inhrelid
+            JOIN pg_class p ON p.oid = i.inhparent
+            WHERE i.inhparent IN (""" + parents + ")")
+            .query((rs, n) -> new String[] { rs.getString(1), rs.getString(2), rs.getString(3) }).list();
     }
 
     private static String expectedBound(LocalDate date) {
@@ -181,14 +192,20 @@ public class PartitionExportRepository {
      * <p>읽기 전용 트랜잭션 하나로 읽고 페이지마다 끝낸다. {@code extra_float_digits=1} 로 float8 이 왕복이 보장되는 최단 표기로
      * 나오게 하고, 시간대를 UTC 로 고정한다.
      */
-    public Page page(Partition partition, List<PartitionManifest.Column> columns, List<String> keys, String cursor,
-        final int limit) {
+    public Page page(
+        Partition partition,
+        List<PartitionManifest.Column> columns,
+        List<String> keys,
+        String cursor,
+        final int limit
+    ) {
         String order = String.join(",", keys.stream().map(k -> "t." + k).toList());
         StringBuilder sql = new StringBuilder("SELECT to_jsonb(t)::text, jsonb_build_array(" + order + ")::text FROM ")
             .append(partition.name()).append(" t");
         if (cursor != null) {
             List<String> bounds = IntStream.range(0, keys.size())
-                .mapToObj(i -> "(CAST(:cursor AS jsonb)->>" + i + ")::" + typeOf(columns, keys.get(i))).toList();
+                .mapToObj(i -> "(CAST(:cursor AS jsonb)->>" + i + ")::" + typeOf(columns, keys.get(i)))
+                .toList();
             sql.append(" WHERE (").append(order).append(")>(").append(String.join(",", bounds)).append(")");
         }
         sql.append(" ORDER BY ").append(order).append(" LIMIT :limit");
@@ -199,13 +216,23 @@ public class PartitionExportRepository {
                 statement = statement.param("cursor", cursor);
             }
             List<String[]> rows = statement.query((rs, n) -> new String[] { rs.getString(1), rs.getString(2) }).list();
-            return new Page(rows.stream().map(r -> r[0]).toList(), rows.isEmpty() ? cursor : rows.getLast()[1]);
+            return new Page(rows.stream().map(r -> r[0]).toList(), nextCursor(rows, cursor));
         });
     }
 
+    private static String nextCursor(List<String[]> rows, String cursor) {
+        if (rows.isEmpty()) {
+            return cursor;
+        }
+        return rows.getLast()[1];
+    }
+
     private static String typeOf(List<PartitionManifest.Column> columns, String key) {
-        return columns.stream().filter(c -> c.name().equals(key)).findFirst()
-            .orElseThrow(() -> new IllegalStateException("PRIMARY_KEY_COLUMN_MISSING")).type();
+        return columns.stream()
+            .filter(c -> c.name().equals(key))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("PRIMARY_KEY_COLUMN_MISSING"))
+            .type();
     }
 
     private void readLimits() {
@@ -220,11 +247,15 @@ public class PartitionExportRepository {
         requireTable(table);
         return readOnly.execute(status -> {
             readLimits();
-            if (!jdbc.sql("SELECT to_regclass(?) IS NOT NULL").param(table + "_default").query(Boolean.class).single()) {
+            if (!hasDefaultPartition(table)) {
                 return 0L;
             }
             return jdbc.sql("SELECT count(*) FROM " + table + "_default").query(Long.class).single();
         });
+    }
+
+    private boolean hasDefaultPartition(String table) {
+        return jdbc.sql("SELECT to_regclass(?) IS NOT NULL").param(table + "_default").query(Boolean.class).single();
     }
 
     /** 파티션이 지금 부모 테이블에 붙어 있는지 본다. */
@@ -251,11 +282,17 @@ public class PartitionExportRepository {
     }
 
     private static Instant instant(OffsetDateTime time) {
-        return time == null ? null : time.toInstant();
+        if (time == null) {
+            return null;
+        }
+        return time.toInstant();
     }
 
     private static OffsetDateTime time(Instant instant) {
-        return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
+        if (instant == null) {
+            return null;
+        }
+        return instant.atOffset(ZoneOffset.UTC);
     }
 
     /**
@@ -316,17 +353,11 @@ public class PartitionExportRepository {
                 .params(ADVISORY_NAMESPACE, partition.name()).query(Boolean.class).single()) {
                 return DropResult.BUSY;
             }
-            Optional<Ledger> current = jdbc.sql("""
-                SELECT object_key, row_count, sha256, exported_at, verified_at, dropped_at
-                FROM daily_export WHERE table_name = ? AND source_date = ? AND segment = 0 FOR UPDATE
-                """).params(partition.table(), partition.date()).query(LEDGER)
-                .optional();
+            Optional<Ledger> current = lockLedger(partition);
             if (current.isPresent() && current.get().droppedAt() != null) {
                 return DropResult.ALREADY_DROPPED;
             }
-            if (current.isEmpty() || current.get().verifiedAt() == null || current.get().droppedAt() != null
-                || current.get().rows() != expected.rows() || !current.get().sha256().equals(expected.sha256())
-                || !current.get().key().equals(expected.key())) {
+            if (current.isEmpty() || differsFromVerified(current.get(), expected)) {
                 return DropResult.LEDGER_CHANGED;
             }
             if (!attached(partition)) {
@@ -338,13 +369,31 @@ public class PartitionExportRepository {
                 status.setRollbackOnly();
                 return DropResult.ROW_COUNT_CHANGED;
             }
-            jdbc.sql("ALTER TABLE " + partition.table() + " DETACH PARTITION " + partition.name()).update();
-            jdbc.sql("DROP TABLE " + partition.name()).update();
-            jdbc.sql("UPDATE daily_export SET dropped_at = clock_timestamp()"
-                + " WHERE table_name = ? AND source_date = ? AND segment = 0")
-                .params(partition.table(), partition.date()).update();
+            detachAndDrop(partition);
             return DropResult.DROPPED;
         });
+    }
+
+    private Optional<Ledger> lockLedger(Partition partition) {
+        return jdbc.sql("""
+            SELECT object_key, row_count, sha256, exported_at, verified_at, dropped_at
+            FROM daily_export WHERE table_name = ? AND source_date = ? AND segment = 0 FOR UPDATE
+            """).params(partition.table(), partition.date()).query(LEDGER)
+            .optional();
+    }
+
+    /** 확인 시각이 없거나, 지운 시각이 있거나, 줄 수·해시·키가 {@code expected} 와 다르면 참이다. */
+    private static boolean differsFromVerified(Ledger current, Ledger expected) {
+        return current.verifiedAt() == null || current.droppedAt() != null || current.rows() != expected.rows()
+            || !current.sha256().equals(expected.sha256()) || !current.key().equals(expected.key());
+    }
+
+    private void detachAndDrop(Partition partition) {
+        jdbc.sql("ALTER TABLE " + partition.table() + " DETACH PARTITION " + partition.name()).update();
+        jdbc.sql("DROP TABLE " + partition.name()).update();
+        jdbc.sql("UPDATE daily_export SET dropped_at = clock_timestamp()"
+            + " WHERE table_name = ? AND source_date = ? AND segment = 0")
+            .params(partition.table(), partition.date()).update();
     }
 
     private void writeLimits(Duration lockWait) {

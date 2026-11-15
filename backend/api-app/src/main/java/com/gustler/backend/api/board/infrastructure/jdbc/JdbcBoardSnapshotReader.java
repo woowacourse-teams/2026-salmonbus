@@ -270,17 +270,34 @@ public class JdbcBoardSnapshotReader {
         final boolean recordPublished = row.getBoolean("record_published");
         Long legacyBatchId = row.getObject("batch_id", Long.class);
         Long recordBatchId = row.getObject("record_batch_id", Long.class);
-        final boolean recordIsNewer = recordBatchId != null && (legacyBatchId == null || recordBatchId > legacyBatchId);
-        if (recordPublished && (!legacyPublished || recordIsNewer)) {
+        final boolean recordIsNewer = isNewerBatch(recordBatchId, legacyBatchId);
+        if (prefersRecord(recordPublished, legacyPublished, recordIsNewer)) {
             return snapshotOf(row, recordedObservationOf(row, "record_batch_id", "record_response_received_at",
                 "record_stored_rows", "record_source_date", true), row.getString("record_revision"));
         }
         return toSnapshot(row);
     }
 
-    private Optional<SnapshotObservation> recordedObservationOf(ResultSet row, String batchColumn,
-        String receivedColumn, String storedRowsColumn, String sourceDateColumn, final boolean published)
-        throws SQLException {
+    private static boolean isNewerBatch(Long recordBatchId, Long legacyBatchId) {
+        return recordBatchId != null && (legacyBatchId == null || recordBatchId > legacyBatchId);
+    }
+
+    private static boolean prefersRecord(
+        final boolean recordPublished,
+        final boolean legacyPublished,
+        final boolean recordIsNewer
+    ) {
+        return recordPublished && (!legacyPublished || recordIsNewer);
+    }
+
+    private Optional<SnapshotObservation> recordedObservationOf(
+        ResultSet row,
+        String batchColumn,
+        String receivedColumn,
+        String storedRowsColumn,
+        String sourceDateColumn,
+        final boolean published
+    ) throws SQLException {
         Long batchId = row.getObject(batchColumn, Long.class);
         if (batchId == null) {
             return Optional.empty();
@@ -306,8 +323,11 @@ public class JdbcBoardSnapshotReader {
         return snapshotOf(row, observationOf(row, batchId), row.getString("revision"));
     }
 
-    private BoardSnapshot snapshotOf(ResultSet row, Optional<SnapshotObservation> observation, String revision)
-        throws SQLException {
+    private BoardSnapshot snapshotOf(
+        ResultSet row,
+        Optional<SnapshotObservation> observation,
+        String revision
+    ) throws SQLException {
         Long modelId = row.getObject("model_id", Long.class);
         return new BoardSnapshot(
             row.getLong("version_id"),

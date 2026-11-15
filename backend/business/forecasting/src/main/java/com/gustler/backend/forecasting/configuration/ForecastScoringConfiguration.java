@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.configuration;
 
 import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
 import com.gustler.backend.forecasting.application.pipeline.PassLabelStore;
+import com.gustler.backend.forecasting.application.pipeline.PipelineEvents;
 import com.gustler.backend.forecasting.application.pipeline.ScoringReplay;
 import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
 import com.gustler.backend.forecasting.application.pipeline.ScoringWriter;
@@ -28,9 +29,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 새 예보 경로가 넘긴 사건으로 새 채점을 돌리는 구성 요소를 등록한다.
  *
  * <p>{@code forecast.scoring}이 {@code off}가 아니고 사건을 낼 예보 경로가 돌 때만 등록한다. 사건은 그림자 예보
- * ({@link ForecastShadowConfiguration#SHADOW_ENABLED}, {@code pipeline=v1})나 본선({@link ForecastMainlineConfiguration#MAINLINE_ENABLED},
- * {@code pipeline=v2})에서 온다. 두 경로 모두 같은 {@link com.gustler.backend.forecasting.application.pipeline.PipelineEvents}
- * 구현(이 채점)에 사건을 넘긴다. {@code shadow}와 {@code v2}의 채점 동작은 같다. 다른 것은 옛 정산 작업을 실행하는 앱이 돌리는지
+ * ({@link ForecastShadowConfiguration#SHADOW_ENABLED}, {@code pipeline=v1})나
+ * 본선({@link ForecastMainlineConfiguration#MAINLINE_ENABLED}, {@code pipeline=v2})에서 온다. 두 경로 모두 같은
+ * {@link PipelineEvents} 구현(이 채점)에 사건을 넘긴다. {@code shadow}와 {@code v2}의 채점 동작은 같다. 다른 것은 옛 정산 작업을 실행하는 앱이 돌리는지
  * ({@code v2}면 돌리지 않는다)와 옛 정산과의 대조다. 대조({@link JdbcScoringComparison})는 옛 예보가 계속 나오는
  * {@code pipeline=v1}에서만 등록한다. 일을 실행할 줄({@link ScoringFeed})과 주기 작업은 실행하는 앱이 등록한다.
  */

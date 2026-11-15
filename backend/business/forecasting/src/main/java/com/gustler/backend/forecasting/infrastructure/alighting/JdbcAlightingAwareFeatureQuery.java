@@ -340,7 +340,8 @@ public class JdbcAlightingAwareFeatureQuery implements AlightingAwareFeatureQuer
         var known = capacities.findKnownAt(sourceId, sources.stream().map(AlightingAwareObservation::vehicleId).toList(),
             cursor.target().time(), cursor.batchId());
         Map<Long, AlightingAwareFeatureSnapshot> result = new LinkedHashMap<>();
-        AlightingAwareBatchContext context = new AlightingAwareBatchContext(statistics, history, events, cursor.prefix());
+        AlightingAwareBatchContext context =
+            new AlightingAwareBatchContext(statistics, history, events, cursor.prefix());
         sources.forEach(source -> {
             var capacity = known.get(source.vehicleId());
             if (capacity != null && capacity.seats() >= minimumCapacity(statistics.confirmedProfile())) {

@@ -2,6 +2,7 @@ package com.gustler.backend.api.board;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.Mockito.mock;
 
 import com.gustler.backend.api.board.infrastructure.ForecastSourceBoardQueryRepository;
@@ -17,9 +18,11 @@ class ForecastSourceSettingTest {
 
     @Test
     void 설정_이름을_대소문자와_앞뒤_공백_없이_읽는다() {
-        assertThat(ForecastSourceSetting.of("legacy")).isEqualTo(ForecastSourceSetting.LEGACY);
-        assertThat(ForecastSourceSetting.of(" RECORD ")).isEqualTo(ForecastSourceSetting.RECORD);
-        assertThat(ForecastSourceSetting.of("Auto")).isEqualTo(ForecastSourceSetting.AUTO);
+        assertSoftly(softly -> {
+            softly.assertThat(ForecastSourceSetting.of("legacy")).isEqualTo(ForecastSourceSetting.LEGACY);
+            softly.assertThat(ForecastSourceSetting.of(" RECORD ")).isEqualTo(ForecastSourceSetting.RECORD);
+            softly.assertThat(ForecastSourceSetting.of("Auto")).isEqualTo(ForecastSourceSetting.AUTO);
+        });
     }
 
     @ParameterizedTest

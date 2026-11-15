@@ -17,11 +17,18 @@ public final class ConfirmedPassLabelCalculator implements PassLabelCalculator {
     @Override
     public PassLabelCalculation calculate(PassClosed pass, PassClosed previous, JsonNode evidence) {
         JdbcAlightingAwareForecastEvaluation.Outcome outcome = ConfirmedAlightingAwareEvaluation.afterSeats(
-            event(pass), previous == null ? null : event(previous), evidence);
+            event(pass), previousEvent(previous), evidence);
         if ("SETTLED".equals(outcome.state())) {
             return new PassLabelCalculation(true, outcome.label(), null, outcome.parameterHash(), outcome.capacity());
         }
         return PassLabelCalculation.unsupported(outcome.reason());
+    }
+
+    private static AlightingAwarePassEvent previousEvent(PassClosed previous) {
+        if (previous == null) {
+            return null;
+        }
+        return event(previous);
     }
 
     private static AlightingAwarePassEvent event(PassClosed pass) {
@@ -37,8 +44,13 @@ public final class ConfirmedPassLabelCalculator implements PassLabelCalculator {
             departure, pass.closedAt(), first, confirmation);
     }
 
-    private static AlightingAwareObservation observation(PassClosed pass, long id, Instant confirmedAt,
-        Instant receivedAt, Integer seats) {
+    private static AlightingAwareObservation observation(
+        PassClosed pass,
+        final long id,
+        Instant confirmedAt,
+        Instant receivedAt,
+        Integer seats
+    ) {
         return new AlightingAwareObservation(id, pass.closureBatchId(), 0, confirmedAt, pass.vehicleId(),
             pass.stopOrder(), pass.stopOrder(), 0, seats, 0, Math.max(1, pass.routeVersionId()), receivedAt, false);
     }

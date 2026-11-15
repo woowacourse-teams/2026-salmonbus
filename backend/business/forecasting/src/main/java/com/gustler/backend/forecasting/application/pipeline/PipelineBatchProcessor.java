@@ -3,13 +3,11 @@ package com.gustler.backend.forecasting.application.pipeline;
 import com.gustler.backend.forecasting.api.pipeline.CollectionResult;
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPublished.VehicleForecast;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePredictionAssembler;
-import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePredictionAssembler.VehiclePrediction;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.pipeline.SourceDates;
 import java.time.Duration;
@@ -27,8 +25,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
- * 관측 배치 하나를 새 경로로 처리하는 공통 단계다. 그림자 실행({@link ShadowForecastService})과 본선({@link ForecastPipelineService})이
- * 같은 이 코드를 쓴다. 둘이 다른 것은 착수 시각의 출처와 옛 결과와의 대조뿐이다.
+ * 관측 배치 하나를 새 경로로 처리하는 공통 단계다. 그림자 실행({@link ShadowForecastService})과
+ * 본선({@link ForecastPipelineService})이 같은 이 코드를 쓴다. 둘이 다른 것은 착수 시각의 출처와 옛 결과와의 대조뿐이다.
  *
  * <p>한 번의 처리는 다음 순서다. 착수 시각은 부르는 쪽이 {@link ObservationBatchRead#batch()}에 넣어 넘긴다.
  * <ol>
@@ -36,9 +34,9 @@ import org.springframework.transaction.support.TransactionOperations;
  *       ({@code LATE}, {@code EMPTY}, {@code INPUT_UNAVAILABLE})만 실행 줄로 남긴다.</li>
  *   <li>노선 상태가 없으면 이 배치 직전까지 되감아 만든다({@link RouteStateReplayer}). 되감기가 실패하면 그 노선은 착수 시각 기준
  *       {@value #REPLAY_RETRY_MINUTES}분 동안 되감지 않고 예보 없이 {@code INPUT_UNAVAILABLE} 실행 줄만 남긴다.</li>
- *   <li>{@link ForecastStage#advance}로 상태를 전진시키고, 옛 경로와 같은 예측 조립 객체({@link AlightingAwarePredictionAssembler})로
- *       예측을 만든다. 출퇴근 범위 판정은 옛 경로의 입력 조회와 같은 기준(이 배치의 착수 시각)이다. 이미 반영한 배치면 아무것도 쓰지
- *       않는다.</li>
+ *   <li>{@link ForecastStage#advance}로 상태를 전진시키고, 옛 경로와 같은 예측 조립 객체
+ *       ({@link AlightingAwarePredictionAssembler})로 예측을 만든다. 출퇴근 범위 판정은 옛 경로의 입력 조회와 같은
+ *       기준(이 배치의 착수 시각)이다. 이미 반영한 배치면 아무것도 쓰지 않는다.</li>
  *   <li>예보 실행·버스별 기록·닫힌 통과를 한 트랜잭션으로 쓰고, 커밋한 뒤에만 상태를 바꾼다.</li>
  *   <li>사건을 수집 → 통과 → 예보 순서로 {@link PipelineEvents}에 넘긴다.</li>
  * </ol>
@@ -68,7 +66,8 @@ public final class PipelineBatchProcessor {
      * @param transactions 저장 트랜잭션
      * @param listeners 커밋 뒤 사건을 받을 뒤 단계
      * @param states 노선 상태 등록부. 이 처리기가 상태를 읽고 바꾼다
-     * @param rushOnly 옛 경로의 {@code forecast.alighting.rush-only}. 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를 예보하지 않는다
+     * @param rushOnly 옛 경로의 {@code forecast.alighting.rush-only}. 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를
+     *                 예보하지 않는다
      */
     public PipelineBatchProcessor(
         String name,
@@ -114,38 +113,15 @@ public final class PipelineBatchProcessor {
     ) {
         AlightingAwareRouteStatistics statistics = context.statistics();
         ForecastBatch batch = read.batch();
-        Outcome outcome = null;
-        Boolean replayed = null;
-        if (!batch.confirmed()) {
-            outcome = Outcome.withoutState(notConfirmed(batch), null);
-        } else {
-            Optional<RouteForecastState> state = states.find(statistics);
-            if (state.isEmpty() && states.replayDeferred(statistics.route(), batch.confirmedAt())) {
-                outcome = Outcome.withoutState(ForecastOutcome.INPUT_UNAVAILABLE, "replay_deferred");
-            } else if (state.isEmpty()) {
-                RouteStateReplayer.Result result = replayer.replay(statistics, batch.confirmedAt(),
-                    batch.observationBatchId() - 1);
-                replayed = result.succeeded();
-                if (result.succeeded()) {
-                    state = Optional.of(result.state());
-                } else {
-                    LOGGER.warn("event={}_replay_failed route={} batchId={} reason={}", name, statistics.route(),
-                        batch.observationBatchId(), result.failureReason());
-                    states.deferReplay(statistics.route(), batch.confirmedAt().plus(REPLAY_RETRY));
-                    outcome = Outcome.withoutState(ForecastOutcome.INPUT_UNAVAILABLE, "replay_failed");
-                }
-            }
-            if (outcome == null) {
-                ForecastStageResult result = stage.advance(state.orElseThrow(), statistics, read.capacitySourceId(), batch);
-                if (result.status() == ForecastStageResult.Status.STALE) {
-                    return new Processed(Status.STALE, null, 0, Map.of(), null, replayed);
-                }
-                outcome = advanced(context, read, result);
-            }
+        Resolution resolution = resolve(context, read);
+        Boolean replayed = resolution.replayed();
+        if (resolution.stale()) {
+            return new Processed(Status.STALE, null, 0, Map.of(), null, replayed);
         }
+        Outcome outcome = resolution.outcome();
         ForecastPublished published = new ForecastPublished(SourceDates.of(read.scheduledAt()),
             batch.observationBatchId(), read.routeId(), batch.routeVersionId(), batch.receivedAt(),
-            batch.confirmedAt() == null ? fallbackConfirmedAt : batch.confirmedAt(), context.runtime().deploymentId(),
+            confirmedAtOr(batch, fallbackConfirmedAt), context.runtime().deploymentId(),
             outcome.outcome(), outcome.vehicles());
         List<PassClosed> closed = outcome.passes().stream()
             .map(pass -> pass.toEvent(published.sourceDate(), read.routeId()))
@@ -164,13 +140,57 @@ public final class PipelineBatchProcessor {
             states.remove(statistics.route());
             return new Processed(Status.DUPLICATE, published, 0, outcome.excluded(), null, replayed);
         }
-        if (outcome.dropState()) {
-            states.remove(statistics.route());
-        } else if (outcome.next() != null) {
-            states.put(statistics, outcome.next());
-        }
+        applyState(statistics, outcome);
         publish(seen(read), published, closed);
         return new Processed(Status.SAVED, published, closed.size(), outcome.excluded(), outcome.special(), replayed);
+    }
+
+    private Resolution resolve(RouteContext context, ObservationBatchRead read) {
+        ForecastBatch batch = read.batch();
+        if (!batch.confirmed()) {
+            return Resolution.of(Outcome.withoutState(notConfirmed(batch), null), null);
+        }
+        AlightingAwareRouteStatistics statistics = context.statistics();
+        Optional<RouteForecastState> state = states.find(statistics);
+        if (state.isEmpty() && states.replayDeferred(statistics.route(), batch.confirmedAt())) {
+            return Resolution.of(Outcome.withoutState(ForecastOutcome.INPUT_UNAVAILABLE, "replay_deferred"), null);
+        }
+        Boolean replayed = null;
+        if (state.isEmpty()) {
+            RouteStateReplayer.Result replay = replayer.replay(statistics, batch.confirmedAt(),
+                batch.observationBatchId() - 1);
+            replayed = replay.succeeded();
+            if (!replay.succeeded()) {
+                LOGGER.warn("event={}_replay_failed route={} batchId={} reason={}", name, statistics.route(),
+                    batch.observationBatchId(), replay.failureReason());
+                states.deferReplay(statistics.route(), batch.confirmedAt().plus(REPLAY_RETRY));
+                Outcome failed = Outcome.withoutState(ForecastOutcome.INPUT_UNAVAILABLE, "replay_failed");
+                return Resolution.of(failed, replayed);
+            }
+            state = Optional.of(replay.state());
+        }
+        ForecastStageResult result = stage.advance(state.orElseThrow(), statistics, read.capacitySourceId(), batch);
+        if (result.status() == ForecastStageResult.Status.STALE) {
+            return Resolution.stale(replayed);
+        }
+        return Resolution.of(advanced(context, read, result), replayed);
+    }
+
+    private static Instant confirmedAtOr(ForecastBatch batch, Instant fallbackConfirmedAt) {
+        if (batch.confirmedAt() == null) {
+            return fallbackConfirmedAt;
+        }
+        return batch.confirmedAt();
+    }
+
+    private void applyState(AlightingAwareRouteStatistics statistics, Outcome outcome) {
+        if (outcome.dropState()) {
+            states.remove(statistics.route());
+            return;
+        }
+        if (outcome.next() != null) {
+            states.put(statistics, outcome.next());
+        }
     }
 
     private Outcome advanced(RouteContext context, ObservationBatchRead read, ForecastStageResult result) {
@@ -194,9 +214,16 @@ public final class PipelineBatchProcessor {
             return new Outcome(ForecastOutcome.OUT_OF_SCOPE, List.of(), result.closedPasses(), excluded, result.state(),
                 false, null);
         }
-        List<VehicleForecast> vehicles = vehicles(context, read, result);
-        ForecastOutcome outcome = vehicles.isEmpty() ? ForecastOutcome.EMPTY : ForecastOutcome.PUBLISHED;
+        List<ForecastPublished.VehicleForecast> vehicles = vehicles(context, read, result);
+        ForecastOutcome outcome = publishedOutcome(vehicles);
         return new Outcome(outcome, vehicles, result.closedPasses(), excluded, result.state(), false, null);
+    }
+
+    private static ForecastOutcome publishedOutcome(List<ForecastPublished.VehicleForecast> vehicles) {
+        if (vehicles.isEmpty()) {
+            return ForecastOutcome.EMPTY;
+        }
+        return ForecastOutcome.PUBLISHED;
     }
 
     /** 옛 경로의 입력 조회({@code validateScope})와 같다. 기준 시각은 이 배치의 착수 시각이다. */
@@ -207,16 +234,16 @@ public final class PipelineBatchProcessor {
         return !context.statistics().timeCell(batch.confirmedAt().atZone(SourceDates.KOREA)).isRush();
     }
 
-    private static List<VehicleForecast> vehicles(
+    private static List<ForecastPublished.VehicleForecast> vehicles(
         RouteContext context,
         ObservationBatchRead read,
         ForecastStageResult result
     ) {
         AlightingAwarePredictionAssembler assembler = new AlightingAwarePredictionAssembler(context.runtime().model(),
             context.statistics(), context.stops());
-        List<VehicleForecast> vehicles = new ArrayList<>();
+        List<ForecastPublished.VehicleForecast> vehicles = new ArrayList<>();
         for (AlightingAwareFeatureSnapshot snapshot : result.snapshots()) {
-            Optional<VehiclePrediction> prediction = assembler.predict(snapshot);
+            Optional<AlightingAwarePredictionAssembler.VehiclePrediction> prediction = assembler.predict(snapshot);
             if (prediction.isEmpty() || prediction.get().targets().isEmpty()) {
                 continue;
             }
@@ -232,25 +259,41 @@ public final class PipelineBatchProcessor {
             }
             RouteForecastState.VehicleTrack track = result.state().vehicles().get(snapshot.source().vehicleId());
             Integer rowNumber = read.sourceRowNumbers().get(snapshot.vehicleObservationId());
-            vehicles.add(new VehicleForecast(snapshot.vehicleObservationId(), rowNumber == null ? 0 : rowNumber,
-                snapshot.source().vehicleId(), snapshot.source().passedStopOrder(),
-                snapshot.provenance().tripStartObservationId(), track.chainStartObservationId(), snapshot.source().down(),
-                snapshot.capacity(), prediction.get().extended(), stops, seats, probabilities));
+            vehicles.add(new ForecastPublished.VehicleForecast(snapshot.vehicleObservationId(),
+                rowNumberOrZero(rowNumber), snapshot.source().vehicleId(), snapshot.source().passedStopOrder(),
+                snapshot.provenance().tripStartObservationId(), track.chainStartObservationId(),
+                snapshot.source().down(), snapshot.capacity(), prediction.get().extended(), stops, seats,
+                probabilities));
         }
-        vehicles.sort(Comparator.comparingInt(VehicleForecast::sourceRowNumber)
-            .thenComparingLong(VehicleForecast::vehicleObservationId));
+        vehicles.sort(Comparator.comparingInt(ForecastPublished.VehicleForecast::sourceRowNumber)
+            .thenComparingLong(ForecastPublished.VehicleForecast::vehicleObservationId));
         return vehicles;
+    }
+
+    private static int rowNumberOrZero(Integer rowNumber) {
+        if (rowNumber == null) {
+            return 0;
+        }
+        return rowNumber;
     }
 
     /** 확정 조건을 만족하지 않는 배치의 사유다. 정상 수집이 아닌 배치는 옛 경로가 확정하지 않고 실패한다. */
     private static ForecastOutcome notConfirmed(ForecastBatch batch) {
-        if (!"LIVE".equals(batch.ingestionOrigin()) || batch.confirmedAt() == null || batch.receivedAt() == null) {
+        if (lacksLiveTiming(batch)) {
             return ForecastOutcome.INPUT_UNAVAILABLE;
         }
-        if (!"SUCCESS_ROWS".equals(batch.outcome()) || batch.storedRows() == null || batch.storedRows() <= 0) {
+        if (lacksStoredRows(batch)) {
             return ForecastOutcome.EMPTY;
         }
         return ForecastOutcome.LATE;
+    }
+
+    private static boolean lacksLiveTiming(ForecastBatch batch) {
+        return !"LIVE".equals(batch.ingestionOrigin()) || batch.confirmedAt() == null || batch.receivedAt() == null;
+    }
+
+    private static boolean lacksStoredRows(ForecastBatch batch) {
+        return !"SUCCESS_ROWS".equals(batch.outcome()) || batch.storedRows() == null || batch.storedRows() <= 0;
     }
 
     private static ObservationBatchSeen seen(ObservationBatchRead read) {
@@ -261,8 +304,15 @@ public final class PipelineBatchProcessor {
             default -> CollectionResult.FAILED;
         };
         return new ObservationBatchSeen(batch.observationBatchId(), read.routeId(), batch.routeVersionId(),
-            read.scheduledAt(), batch.receivedAt(), result, batch.storedRows() == null ? 0 : batch.storedRows(),
+            read.scheduledAt(), batch.receivedAt(), result, storedRowsOrZero(batch),
             batch.rows().size());
+    }
+
+    private static int storedRowsOrZero(ForecastBatch batch) {
+        if (batch.storedRows() == null) {
+            return 0;
+        }
+        return batch.storedRows();
     }
 
     private void publish(ObservationBatchSeen seen, ForecastPublished published, List<PassClosed> closed) {
@@ -320,8 +370,11 @@ public final class PipelineBatchProcessor {
         }
 
         /** 저장한 버스별 예측. 저장하지 않았으면 빈 목록이다. */
-        public List<VehicleForecast> vehicles() {
-            return published == null ? List.of() : published.vehicles();
+        public List<ForecastPublished.VehicleForecast> vehicles() {
+            if (published == null) {
+                return List.of();
+            }
+            return published.vehicles();
         }
     }
 
@@ -331,7 +384,7 @@ public final class PipelineBatchProcessor {
      */
     private record Outcome(
         ForecastOutcome outcome,
-        List<VehicleForecast> vehicles,
+        List<ForecastPublished.VehicleForecast> vehicles,
         List<ClosedPass> passes,
         Map<Long, String> excluded,
         RouteForecastState next,
@@ -340,6 +393,20 @@ public final class PipelineBatchProcessor {
     ) {
         static Outcome withoutState(ForecastOutcome outcome, String special) {
             return new Outcome(outcome, List.of(), List.of(), Map.of(), null, false, special);
+        }
+    }
+
+    /**
+     * 상태를 쓰기 전까지의 판정이다. {@code stale}이면 이미 반영한 배치라 결과가 없다.
+     * {@code replayed}는 이 처리에서 되감았으면 성공 여부, 되감지 않았으면 비어 있다.
+     */
+    private record Resolution(Outcome outcome, Boolean replayed, boolean stale) {
+        static Resolution of(Outcome outcome, Boolean replayed) {
+            return new Resolution(outcome, replayed, false);
+        }
+
+        static Resolution stale(Boolean replayed) {
+            return new Resolution(null, replayed, true);
         }
     }
 }

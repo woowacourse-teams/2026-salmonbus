@@ -1,7 +1,7 @@
 package com.gustler.backend.archive;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
@@ -111,11 +111,14 @@ class ArchiveCloseFirstTest {
             Instant.parse(DAY.replace("Z", ":00Z")), Instant.parse("2026-11-09T03:00:00Z"),
             Instant.parse("2026-11-09T03:00:00Z"), List.of());
 
-        // when & then
-        assertThatThrownBy(() -> new TransactionTemplate(manager).execute(status -> publications.save(publication)))
-            .isInstanceOf(IllegalStateException.class);
+        // when
+        Throwable publishFailure = catchThrowable(
+            () -> new TransactionTemplate(manager).execute(status -> publications.save(publication)));
         new JdbcAlightingAwareForecastEvaluation(jdbc, new JdbcRouteWorkAccess(jdbc), fixture.clock, manager).settle();
+
+        // then
         assertSoftly(softly -> {
+            softly.assertThat(publishFailure).isInstanceOf(IllegalStateException.class);
             softly.assertThat(boundary()).isEqualTo(DAY_END);
             softly.assertThat(fixture.count("forecast_publication")).isZero();
             softly.assertThat(fixture.count("alighting_forecast_evaluation_work")).isZero();
@@ -162,12 +165,15 @@ class ArchiveCloseFirstTest {
             // when
             String recent = repository.recentRecords(job);
             ArchiveRepository.Page page = repository.page(job, ArchiveTable.OBSERVATION, "[]", 10);
+            Throwable closeFailure = catchThrowable(() -> repository.closeRange(job));
 
             // then
-            assertThat(recent).isEqualTo("READY");
-            assertThat(page.rows()).hasSize(1);
-            assertThatThrownBy(() -> repository.closeRange(job))
-                .satisfies(failure -> assertThat(sqlState(failure)).isEqualTo("55P03"));
+            assertSoftly(softly -> {
+                softly.assertThat(recent).isEqualTo("READY");
+                softly.assertThat(page.rows()).hasSize(1);
+                softly.assertThat(closeFailure).isNotNull();
+                softly.assertThat(sqlState(closeFailure)).isEqualTo("55P03");
+            });
         }
     }
 
@@ -283,7 +289,7 @@ class ArchiveCloseFirstTest {
         assertThat(jobValue("state")).isEqualTo("VERIFIED");
         ArchiveRepository noRecentCheck = new ArchiveRepository(jdbc, manager) {
             @Override
-            public String recentRecords(Job job) {
+            public String recentRecords(ArchiveRepository.Job job) {
                 throw new AssertionError("내보낸 작업에서 최근 기록을 다시 확인했다");
             }
         };
@@ -366,8 +372,10 @@ class ArchiveCloseFirstTest {
         final long elapsed = System.nanoTime() - started;
 
         // then
-        assertThat(jobValue("state")).isEqualTo("DONE");
-        assertThat(Duration.ofNanos(elapsed)).isGreaterThanOrEqualTo(Duration.ofMillis(100 * (files - 1)));
+        assertSoftly(softly -> {
+            softly.assertThat(jobValue("state")).isEqualTo("DONE");
+            softly.assertThat(Duration.ofNanos(elapsed)).isGreaterThanOrEqualTo(Duration.ofMillis(100 * (files - 1)));
+        });
     }
 
     private ArchiveService service(Objects objects, final boolean deleteEnabled) {
@@ -439,7 +447,10 @@ class ArchiveCloseFirstTest {
 
     private static double retries(SimpleMeterRegistry metrics, String stage) {
         Counter counter = metrics.find("salmonbus_archive_lock_retries").tag("stage", stage).counter();
-        return counter == null ? 0 : counter.count();
+        if (counter == null) {
+            return 0;
+        }
+        return counter.count();
     }
 
     private static String sqlState(Throwable failure) {
@@ -539,12 +550,17 @@ class ArchiveCloseFirstTest {
         @Override
         public byte[] read(String key, final int limit) {
             byte[] bytes = super.read(key, limit);
-            if (onPurgeRead != null && published && !key.contains("/manifest-")) {
+            if (interruptsPurgeRead(key)) {
                 Runnable hook = onPurgeRead;
                 onPurgeRead = null;
                 hook.run();
             }
             return bytes;
+        }
+
+        /** 끼어들 동작이 남아 있고, manifest 를 올린 뒤 데이터 파일을 읽을 때 참이다. */
+        private boolean interruptsPurgeRead(String key) {
+            return onPurgeRead != null && published && !key.contains("/manifest-");
         }
     }
 }

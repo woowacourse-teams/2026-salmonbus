@@ -22,7 +22,10 @@ public class ForecastShadowExecutorConfiguration {
         + " and '${forecast.pipeline:v1}'.equalsIgnoreCase('v1')";
 
     @Bean
-    ShadowForecastExecutor shadowForecastExecutor(ForecastPipelineProperties properties, ObjectProvider<MeterRegistry> meters) {
+    ShadowForecastExecutor shadowForecastExecutor(
+        ForecastPipelineProperties properties,
+        ObjectProvider<MeterRegistry> meters
+    ) {
         return new ShadowForecastExecutor(properties.shadow().queueCapacity(), meters.getIfAvailable());
     }
 }

@@ -55,11 +55,15 @@ public final class ScoringReplay {
      * @param forecastWindow 예보 기록을 되감는 범위. 0보다 길다
      * @param passWindow 통과 기록을 되감는 범위. 예보 범위보다 짧지 않다
      */
-    public ScoringReplay(ForecastRecordStore forecasts, StopPassStore passes, Duration forecastWindow,
-        Duration passWindow) {
+    public ScoringReplay(
+        ForecastRecordStore forecasts,
+        StopPassStore passes,
+        Duration forecastWindow,
+        Duration passWindow
+    ) {
         this.forecasts = Objects.requireNonNull(forecasts, "예보 기록 저장소가 필요하다");
         this.passes = Objects.requireNonNull(passes, "통과 기록 저장소가 필요하다");
-        if (forecastWindow == null || forecastWindow.isNegative() || forecastWindow.isZero()) {
+        if (isNotPositive(forecastWindow)) {
             throw new IllegalArgumentException("예보 범위는 0보다 길어야 한다: " + forecastWindow);
         }
         if (passWindow == null || passWindow.compareTo(forecastWindow) < 0) {
@@ -67,6 +71,10 @@ public final class ScoringReplay {
         }
         this.forecastWindow = forecastWindow;
         this.passWindow = passWindow;
+    }
+
+    private static boolean isNotPositive(Duration window) {
+        return window == null || window.isNegative() || window.isZero();
     }
 
     /**
@@ -77,7 +85,7 @@ public final class ScoringReplay {
      * @param now 되감기 기준 시각. 이 시각 이전에 수신·닫힌 기록만 읽는다
      * @return 다시 흘리며 나온 결과
      */
-    public ScoringResult replay(ScoringStage stage, long routeId, Instant now) {
+    public ScoringResult replay(ScoringStage stage, final long routeId, Instant now) {
         stage.discard(routeId);
         List<Event> events = new ArrayList<>();
         for (PassClosed pass : passes.findClosedBetween(routeId, now.minus(passWindow), now)) {
@@ -89,9 +97,16 @@ public final class ScoringReplay {
         events.sort(ORDER);
         ScoringResult result = ScoringResult.empty();
         for (Event event : events) {
-            result = result.plus(event.pass() != null ? stage.accept(event.pass()) : stage.accept(event.published()));
+            result = result.plus(accept(stage, event));
         }
         return result;
+    }
+
+    private static ScoringResult accept(ScoringStage stage, Event event) {
+        if (event.pass() != null) {
+            return stage.accept(event.pass());
+        }
+        return stage.accept(event.published());
     }
 
     private record Event(Instant at, long batchId, int rank, PassClosed pass, ForecastPublished published) {

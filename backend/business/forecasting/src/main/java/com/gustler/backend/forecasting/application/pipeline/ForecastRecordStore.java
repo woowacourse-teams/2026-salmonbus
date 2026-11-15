@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.application.pipeline;
 
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPublished.VehicleForecast;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -40,7 +39,7 @@ public interface ForecastRecordStore {
      * @param observationBatchId 관측 배치
      * @return 기록이 없으면 빈 목록
      */
-    List<VehicleForecast> findRecords(LocalDate sourceDate, long observationBatchId);
+    List<ForecastPublished.VehicleForecast> findRecords(LocalDate sourceDate, long observationBatchId);
 
     /**
      * 노선(모든 판본)의 실행을 수신 시각이 범위 안에 든 것만 사건 순서(수신 시각, 배치 번호)로 읽어 사건으로 되살린다.

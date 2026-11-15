@@ -1,10 +1,10 @@
 package com.gustler.backend.worker.scheduling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
-import com.gustler.backend.observations.api.ObservationDeliveryBatch.Kind;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +29,7 @@ class PipelineForecastTriggerTest {
     void 관측_저장이_커밋된_뒤에만_그_배치를_본선에_넘긴다() {
         // given
         TransactionSynchronizationManager.initSynchronization();
-        trigger.record(batch(Kind.STORED));
+        trigger.record(batch(ObservationDeliveryBatch.Kind.STORED));
         assertThat(pipeline.stored).isEmpty();
 
         // when
@@ -43,8 +43,8 @@ class PipelineForecastTriggerTest {
     void 롤백된_관측과_관측_삭제_전달은_넘기지_않는다() {
         // given
         TransactionSynchronizationManager.initSynchronization();
-        trigger.record(batch(Kind.STORED));
-        trigger.record(batch(Kind.CLEARED));
+        trigger.record(batch(ObservationDeliveryBatch.Kind.STORED));
+        trigger.record(batch(ObservationDeliveryBatch.Kind.CLEARED));
 
         // when
         TransactionSynchronizationManager.getSynchronizations()
@@ -62,14 +62,23 @@ class PipelineForecastTriggerTest {
 
         // then
         Scheduled scheduled = PipelineForecastTrigger.class.getMethod("pickUp").getAnnotation(Scheduled.class);
-        assertThat(pipeline.pickUps).isOne();
-        assertThat(scheduled.scheduler()).isEqualTo("forecastTaskScheduler");
-        assertThat(scheduled.initialDelay()).isZero();
-        assertThat(scheduled.fixedDelayString()).isEqualTo("${forecast.interval}");
+        assertSoftly(softly -> {
+            softly.assertThat(pipeline.pickUps).isOne();
+            softly.assertThat(scheduled.scheduler()).isEqualTo("forecastTaskScheduler");
+            softly.assertThat(scheduled.initialDelay()).isZero();
+            softly.assertThat(scheduled.fixedDelayString()).isEqualTo("${forecast.interval}");
+        });
     }
 
-    private static ObservationDeliveryBatch batch(Kind kind) {
-        return new ObservationDeliveryBatch(11L, 7L, 1, kind, kind == Kind.STORED ? Instant.EPOCH : null, List.of());
+    private static ObservationDeliveryBatch batch(ObservationDeliveryBatch.Kind kind) {
+        return new ObservationDeliveryBatch(11L, 7L, 1, kind, observedAt(kind), List.of());
+    }
+
+    private static Instant observedAt(ObservationDeliveryBatch.Kind kind) {
+        if (kind == ObservationDeliveryBatch.Kind.STORED) {
+            return Instant.EPOCH;
+        }
+        return null;
     }
 
     private static final class RecordingPipeline implements ForecastPipeline {

@@ -82,8 +82,12 @@ public class LegacyExportRepository {
         this(jdbc, manager, statementTimeout, TABLES);
     }
 
-    LegacyExportRepository(JdbcClient jdbc, PlatformTransactionManager manager, Duration statementTimeout,
-        List<String> tables) {
+    LegacyExportRepository(
+        JdbcClient jdbc,
+        PlatformTransactionManager manager,
+        Duration statementTimeout,
+        List<String> tables
+    ) {
         for (String table : tables) {
             require(IDENTIFIER, table);
         }
@@ -98,8 +102,16 @@ public class LegacyExportRepository {
     }
 
     /** 장부의 조각 한 줄. 키는 JSON 배열 텍스트이고 {@code key}·{@code sha256} 은 manifest 의 키와 해시다. */
-    public record Segment(int number, String keyFrom, String keyTo, long rows, String key, String sha256,
-        Instant exportedAt, Instant verifiedAt) {
+    public record Segment(
+        int number,
+        String keyFrom,
+        String keyTo,
+        long rows,
+        String key,
+        String sha256,
+        Instant exportedAt,
+        Instant verifiedAt
+    ) {
     }
 
     /** 기본 키 순서 한 페이지. 키는 첫 줄과 마지막 줄의 기본 키를 담은 JSON 배열 텍스트이며 빈 페이지면 {@code null} 이다. */
@@ -111,18 +123,15 @@ public class LegacyExportRepository {
 
     /** 조각을 장부에 적은 결과. */
     public enum RecordResult {
-        /** 적었다. */
         INSERTED,
         /** 장부의 마지막 조각이 기대와 달라 적지 않았다. 다른 실행이 먼저 적었거나 사람이 장부를 고쳤다. */
         LEDGER_CHANGED
     }
 
-    /** 내보내는 테이블 목록이다. */
     public List<String> tables() {
         return tables;
     }
 
-    /** 테이블이 지금 있는지 본다. */
     public boolean exists(String table) {
         requireTable(table);
         return jdbc.sql("SELECT to_regclass(?) IS NOT NULL").param("public." + table).query(Boolean.class).single();
@@ -190,8 +199,13 @@ public class LegacyExportRepository {
      * <p>읽기 전용 트랜잭션 하나로 읽고 바로 끝내므로 DB 연결은 이 페이지를 읽는 동안에만 쥔다. 기본 키 인덱스를 행 비교로 따라간다.
      * 세션 설정은 {@link #readLimits()} 를 따른다.
      */
-    public Page page(String table, List<PartitionManifest.Column> columns, List<String> keys, String after,
-        final int limit) {
+    public Page page(
+        String table,
+        List<PartitionManifest.Column> columns,
+        List<String> keys,
+        String after,
+        final int limit
+    ) {
         requireTable(table);
         StringBuilder sql = new StringBuilder("SELECT " + rowJson(columns) + "::text, jsonb_build_array("
             + order(keys) + ")::text FROM " + table + " t");
@@ -217,8 +231,13 @@ public class LegacyExportRepository {
      * 기본 키가 {@code after} 보다 크고 {@code upTo} 이하인 줄을 센다. 경계가 {@code null} 이면 그쪽은 열려 있다. 조각 하나가
      * 맡는 범위를 다시 세어 장부와 맞춰 보는 데 쓴다.
      */
-    public long countRange(String table, List<PartitionManifest.Column> columns, List<String> keys, String after,
-        String upTo) {
+    public long countRange(
+        String table,
+        List<PartitionManifest.Column> columns,
+        List<String> keys,
+        String after,
+        String upTo
+    ) {
         requireTable(table);
         List<String> conditions = new ArrayList<>();
         if (after != null) {
@@ -227,8 +246,7 @@ public class LegacyExportRepository {
         if (upTo != null) {
             conditions.add(compare(columns, keys, "<=", "upTo"));
         }
-        String sql = "SELECT count(*) FROM " + table + " t"
-            + (conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions));
+        String sql = "SELECT count(*) FROM " + table + " t" + whereClause(conditions);
         return readOnly.execute(status -> {
             readLimits();
             JdbcClient.StatementSpec statement = jdbc.sql(sql);
@@ -240,6 +258,13 @@ public class LegacyExportRepository {
             }
             return statement.query(Long.class).single();
         });
+    }
+
+    private static String whereClause(List<String> conditions) {
+        if (conditions.isEmpty()) {
+            return "";
+        }
+        return " WHERE " + String.join(" AND ", conditions);
     }
 
     /**
@@ -262,7 +287,7 @@ public class LegacyExportRepository {
                     return RecordResult.LEDGER_CHANGED;
                 }
             }
-            String lastKey = current.isEmpty() ? null : current.getLast().keyTo();
+            String lastKey = lastKeyTo(current);
             if (segment.number() != current.size() || !Objects.equals(lastKey, expectedAfter)) {
                 return RecordResult.LEDGER_CHANGED;
             }
@@ -274,6 +299,13 @@ public class LegacyExportRepository {
                 time(segment.exportedAt()), time(segment.verifiedAt()), segment.keyFrom(), segment.keyTo()).update();
             return RecordResult.INSERTED;
         });
+    }
+
+    private static String lastKeyTo(List<Segment> segments) {
+        if (segments.isEmpty()) {
+            return null;
+        }
+        return segments.getLast().keyTo();
     }
 
     /**
@@ -293,7 +325,9 @@ public class LegacyExportRepository {
      * 더한다.
      */
     static String rowJson(List<PartitionManifest.Column> columns) {
-        List<String> jsonb = columns.stream().filter(c -> c.type().equals("jsonb")).map(c -> "t." + c.name())
+        List<String> jsonb = columns.stream()
+            .filter(c -> c.type().equals("jsonb"))
+            .map(c -> "t." + c.name())
             .toList();
         if (jsonb.isEmpty()) {
             return "to_jsonb(t)";
@@ -309,8 +343,12 @@ public class LegacyExportRepository {
         return String.join(",", keys.stream().map(k -> "t." + k).toList());
     }
 
-    private static String compare(List<PartitionManifest.Column> columns, List<String> keys, String operator,
-        String parameter) {
+    private static String compare(
+        List<PartitionManifest.Column> columns,
+        List<String> keys,
+        String operator,
+        String parameter
+    ) {
         List<String> bounds = IntStream.range(0, keys.size())
             .mapToObj(i -> "(CAST(:" + parameter + " AS jsonb)->>" + i + ")::" + keyType(columns, keys.get(i)))
             .toList();
@@ -318,8 +356,11 @@ public class LegacyExportRepository {
     }
 
     private static String keyType(List<PartitionManifest.Column> columns, String key) {
-        String type = columns.stream().filter(c -> c.name().equals(key)).findFirst()
-            .orElseThrow(() -> new IllegalStateException("PRIMARY_KEY_COLUMN_MISSING")).type();
+        String type = columns.stream()
+            .filter(c -> c.name().equals(key))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("PRIMARY_KEY_COLUMN_MISSING"))
+            .type();
         return baseType(type);
     }
 
@@ -328,11 +369,17 @@ public class LegacyExportRepository {
     }
 
     private static Instant instant(OffsetDateTime time) {
-        return time == null ? null : time.toInstant();
+        if (time == null) {
+            return null;
+        }
+        return time.toInstant();
     }
 
     private static OffsetDateTime time(Instant instant) {
-        return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
+        if (instant == null) {
+            return null;
+        }
+        return instant.atOffset(ZoneOffset.UTC);
     }
 
     private void requireTable(String table) {

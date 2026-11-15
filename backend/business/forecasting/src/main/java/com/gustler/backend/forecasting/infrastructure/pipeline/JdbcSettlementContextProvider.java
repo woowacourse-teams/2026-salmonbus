@@ -56,12 +56,7 @@ public final class JdbcSettlementContextProvider implements SettlementContextPro
         if (checked != null && now.isBefore(checked.plus(MISSING_RETRY))) {
             return Optional.empty();
         }
-        Optional<String> text = jdbc.sql(READ)
-            .param("version", Long.toString(routeVersionId))
-            .param("deployment", modelDeploymentId)
-            .query((row, index) -> Optional.ofNullable(row.getString(1)))
-            .optional()
-            .flatMap(value -> value);
+        Optional<String> text = readContext(modelDeploymentId, routeVersionId);
         if (text.isEmpty()) {
             missing.put(key, now);
             return Optional.empty();
@@ -70,6 +65,15 @@ public final class JdbcSettlementContextProvider implements SettlementContextPro
         found.put(key, context);
         missing.remove(key);
         return Optional.of(context);
+    }
+
+    private Optional<String> readContext(final long modelDeploymentId, final long routeVersionId) {
+        return jdbc.sql(READ)
+            .param("version", Long.toString(routeVersionId))
+            .param("deployment", modelDeploymentId)
+            .query((row, index) -> Optional.ofNullable(row.getString(1)))
+            .optional()
+            .flatMap(value -> value);
     }
 
     private record Key(long modelDeploymentId, long routeVersionId) {

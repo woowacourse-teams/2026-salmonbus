@@ -3,9 +3,9 @@ package com.gustler.backend.archive;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.archive.PartitionExportIntegrationTest.MemoryObjects;
 import com.gustler.backend.support.TestDatabase;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.sql.Date;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -108,12 +108,20 @@ class LegacyExportIntegrationTest {
         return new LegacyExportRepository(jdbc, new JdbcTransactionManager(source), Duration.ofSeconds(30), tables);
     }
 
-    LegacyExportService service(MemoryObjects objects, List<String> tables, LegacyExportSettings settings,
-        SimpleMeterRegistry metrics) {
+    LegacyExportService service(
+        PartitionExportIntegrationTest.MemoryObjects objects,
+        List<String> tables,
+        LegacyExportSettings settings,
+        SimpleMeterRegistry metrics
+    ) {
         return new LegacyExportService(repository(tables), objects, clock, metrics, settings, pauses::add);
     }
 
-    LegacyExportService service(MemoryObjects objects, List<String> tables, LegacyExportSettings settings) {
+    LegacyExportService service(
+        PartitionExportIntegrationTest.MemoryObjects objects,
+        List<String> tables,
+        LegacyExportSettings settings
+    ) {
         return service(objects, tables, settings, new SimpleMeterRegistry());
     }
 
@@ -156,7 +164,7 @@ class LegacyExportIntegrationTest {
         return jdbc.sql(sql).query(Long.class).single();
     }
 
-    long restore(MemoryObjects objects, String table, String target) {
+    long restore(PartitionExportIntegrationTest.MemoryObjects objects, String table, String target) {
         List<String[]> segments = ledger(table).stream()
             .map(row -> new String[] { (String) row.get("object_key"), ((String) row.get("sha256")).trim() }).toList();
         return PartitionRestore.restoreLegacy(jdbc, objects, table, segments, target);
@@ -182,7 +190,7 @@ class LegacyExportIntegrationTest {
     void 옛_테이블을_기본_키_순서의_여러_조각으로_내보내고_장부_합이_줄_수와_같으며_S3_조각만으로_되살린다() {
         // given
         seatForecasts(1, 40, 4000);
-        MemoryObjects objects = new MemoryObjects();
+        PartitionExportIntegrationTest.MemoryObjects objects = new PartitionExportIntegrationTest.MemoryObjects();
         SimpleMeterRegistry metrics = new SimpleMeterRegistry();
 
         // when
@@ -202,7 +210,7 @@ class LegacyExportIntegrationTest {
             for (int i = 0; i < ledger.size(); i++) {
                 Map<String, Object> row = ledger.get(i);
                 softly.assertThat(row.get("segment")).isEqualTo(i);
-                softly.assertThat(row.get("source_date")).isEqualTo(java.sql.Date.valueOf(LocalDate.of(2000, 1, 1)));
+                softly.assertThat(row.get("source_date")).isEqualTo(Date.valueOf(LocalDate.of(2000, 1, 1)));
                 softly.assertThat(row.get("verified_at")).isNotNull();
                 softly.assertThat(row.get("dropped_at")).isNull();
                 softly.assertThat((String) row.get("object_key"))
@@ -216,8 +224,10 @@ class LegacyExportIntegrationTest {
         });
         LegacySegmentManifest second = LegacySegmentManifest.parse(objects.values.get(
             (String) ledger.get(1).get("object_key")));
-        assertThat(second.after()).isEqualTo(ledger.get(0).get("key_to"));
-        assertThat(second.orderBy()).containsExactly("vehicle_observation_id", "target_stop_order");
+        assertSoftly(softly -> {
+            softly.assertThat(second.after()).isEqualTo(ledger.get(0).get("key_to"));
+            softly.assertThat(second.orderBy()).containsExactly("vehicle_observation_id", "target_stop_order");
+        });
         assertThat(restore(objects, "seat_forecast", "restored_seat_forecast")).isEqualTo(80);
         assertSameRows("seat_forecast", "restored_seat_forecast");
     }
@@ -227,7 +237,7 @@ class LegacyExportIntegrationTest {
         // given
         seatForecasts(1, 5, 10);
         exclusion("release", 1);
-        MemoryObjects objects = new MemoryObjects();
+        PartitionExportIntegrationTest.MemoryObjects objects = new PartitionExportIntegrationTest.MemoryObjects();
         LegacyExportService service = service(objects, List.of("seat_forecast", "model_training_exclusion"),
             settings(MIN_SEGMENT, 3, 2));
 
@@ -297,19 +307,22 @@ class LegacyExportIntegrationTest {
             Duration.ofMillis(7), MIN_SEGMENT, 1_000_000, Duration.ofSeconds(3), Duration.ofSeconds(30));
 
         // when
-        LegacyExportService.RunReport report = service(new MemoryObjects(), List.of("seat_forecast"), settings).run();
+        LegacyExportService.RunReport report = service(new PartitionExportIntegrationTest.MemoryObjects(),
+            List.of("seat_forecast"), settings).run();
 
         // then
-        assertThat(report.stoppedBy()).isEqualTo(LegacyExportService.StopReason.TIME_LIMIT);
-        assertThat(report.rows()).isPositive().isLessThan(20);
-        assertThat(ledgerRows("seat_forecast")).isEqualTo(report.rows());
+        assertSoftly(softly -> {
+            softly.assertThat(report.stoppedBy()).isEqualTo(LegacyExportService.StopReason.TIME_LIMIT);
+            softly.assertThat(report.rows()).isPositive().isLessThan(20);
+            softly.assertThat(ledgerRows("seat_forecast")).isEqualTo(report.rows());
+        });
     }
 
     @Test
     void 조각을_올리다_끊기면_장부에_적지_않고_다음_회차가_같은_키부터_다시_만든다() {
         // given
         seatForecasts(1, 3, 10);
-        MemoryObjects objects = new MemoryObjects();
+        PartitionExportIntegrationTest.MemoryObjects objects = new PartitionExportIntegrationTest.MemoryObjects();
         objects.failManifestOnce = true;
         SimpleMeterRegistry metrics = new SimpleMeterRegistry();
         LegacyExportService service = service(objects, List.of("seat_forecast"), settings(MIN_SEGMENT, 1000, 100),
@@ -319,21 +332,26 @@ class LegacyExportIntegrationTest {
         LegacyExportService.RunReport failed = service.run();
 
         // then
-        assertThat(failed.tables()).containsEntry("seat_forecast", LegacyExportService.TableStatus.FAILED);
-        assertThat(ledger("seat_forecast")).isEmpty();
-        assertThat(metrics.get("salmonbus_archive_legacy_failures").tag("reason", "RESPONSE_LOST").counter().count())
-            .isOne();
+        assertSoftly(softly -> {
+            softly.assertThat(failed.tables()).containsEntry("seat_forecast", LegacyExportService.TableStatus.FAILED);
+            softly.assertThat(ledger("seat_forecast")).isEmpty();
+            softly.assertThat(metrics.get("salmonbus_archive_legacy_failures").tag("reason", "RESPONSE_LOST")
+                .counter().count()).isOne();
+        });
 
         // when
         LegacyExportService.RunReport retried = service.run();
 
         // then
-        assertThat(retried.tables()).containsEntry("seat_forecast", LegacyExportService.TableStatus.COMPLETE);
-        assertThat(ledger("seat_forecast")).singleElement().satisfies(row -> {
-            assertThat(row.get("segment")).isEqualTo(0);
-            assertThat(row.get("row_count")).isEqualTo(6L);
+        assertSoftly(softly -> {
+            softly.assertThat(retried.tables())
+                .containsEntry("seat_forecast", LegacyExportService.TableStatus.COMPLETE);
+            softly.assertThat(ledger("seat_forecast")).singleElement().satisfies(row -> {
+                assertThat(row.get("segment")).isEqualTo(0);
+                assertThat(row.get("row_count")).isEqualTo(6L);
+            });
+            softly.assertThat(count("SELECT count(*) FROM seat_forecast")).isEqualTo(6);
         });
-        assertThat(count("SELECT count(*) FROM seat_forecast")).isEqualTo(6);
     }
 
     @Test
@@ -357,7 +375,7 @@ class LegacyExportIntegrationTest {
             """).update();
         List<String> tables = List.of("model_training_exclusion", "statistics_training_exclusion",
             "alighting_settlement_generation");
-        MemoryObjects objects = new MemoryObjects();
+        PartitionExportIntegrationTest.MemoryObjects objects = new PartitionExportIntegrationTest.MemoryObjects();
         LegacyExportService service = service(objects, tables, settings(MIN_SEGMENT, 4, 3));
 
         // when
@@ -400,17 +418,20 @@ class LegacyExportIntegrationTest {
                 NULL, NULL, NULL, NULL, NULL, NULL, 0.1, 1.1754944e-38, '-Infinity', NULL, 'null', NULL, NULL, NULL,
                 NULL, NULL, NULL, NULL)
             """).update();
-        MemoryObjects objects = new MemoryObjects();
+        PartitionExportIntegrationTest.MemoryObjects objects = new PartitionExportIntegrationTest.MemoryObjects();
 
         // when
         LegacyExportService.RunReport report = service(objects, List.of("legacy_types"),
             settings(MIN_SEGMENT, 1000, 1)).run();
 
         // then
-        assertThat(report.tables()).containsEntry("legacy_types", LegacyExportService.TableStatus.COMPLETE);
-        assertThat(ledger("legacy_types")).singleElement().satisfies(row -> {
-            assertThat(row.get("key_from")).isEqualTo("[\"\", \"-infinity\", \"00000000-0000-0000-0000-000000000002\"]");
-            assertThat(row.get("row_count")).isEqualTo(3L);
+        assertSoftly(softly -> {
+            softly.assertThat(report.tables()).containsEntry("legacy_types", LegacyExportService.TableStatus.COMPLETE);
+            softly.assertThat(ledger("legacy_types")).singleElement().satisfies(row -> {
+                assertThat(row.get("key_from"))
+                    .isEqualTo("[\"\", \"-infinity\", \"00000000-0000-0000-0000-000000000002\"]");
+                assertThat(row.get("row_count")).isEqualTo(3L);
+            });
         });
         assertThat(restore(objects, "legacy_types", "restored_legacy_types")).isEqualTo(3);
         assertSameRows("legacy_types", "restored_legacy_types");
@@ -421,7 +442,10 @@ class LegacyExportIntegrationTest {
 
     @Test
     void 옛_테이블_25개는_모두_기본_키가_있고_열_타입은_모두_왕복을_확인한_타입이다() {
+        // given
         LegacyExportRepository repository = repository(LegacyExportRepository.TABLES);
+
+        // then
         assertSoftly(softly -> {
             for (String table : LegacyExportRepository.TABLES) {
                 softly.assertThat(repository.exists(table)).as(table).isTrue();
@@ -436,7 +460,7 @@ class LegacyExportIntegrationTest {
     void 내보내는_중에_커서_뒤로_줄이_더_들어오면_다음_회차에_따라잡는다() {
         // given
         seatForecasts(1, 3, 10);
-        MemoryObjects objects = new MemoryObjects();
+        PartitionExportIntegrationTest.MemoryObjects objects = new PartitionExportIntegrationTest.MemoryObjects();
         LegacyExportService service = service(objects, List.of("seat_forecast"), settings(MIN_SEGMENT, 4, 10));
         service.run();
 
@@ -446,9 +470,12 @@ class LegacyExportIntegrationTest {
         LegacyExportService.RunReport third = service.run();
 
         // then
-        assertThat(second.rows()).isEqualTo(4);
-        assertThat(third.tables()).containsEntry("seat_forecast", LegacyExportService.TableStatus.COMPLETE);
-        assertThat(ledgerRows("seat_forecast")).isEqualTo(10).isEqualTo(count("SELECT count(*) FROM seat_forecast"));
+        assertSoftly(softly -> {
+            softly.assertThat(second.rows()).isEqualTo(4);
+            softly.assertThat(third.tables()).containsEntry("seat_forecast", LegacyExportService.TableStatus.COMPLETE);
+            softly.assertThat(ledgerRows("seat_forecast")).isEqualTo(10)
+                .isEqualTo(count("SELECT count(*) FROM seat_forecast"));
+        });
         assertThat(restore(objects, "seat_forecast", "restored_seat_forecast")).isEqualTo(10);
         assertSameRows("seat_forecast", "restored_seat_forecast");
     }
@@ -457,7 +484,7 @@ class LegacyExportIntegrationTest {
     void 이미_내보낸_범위의_줄이_지워지면_장부를_고치지_않고_어긋남을_지표와_로그로_알린다() {
         // given
         seatForecasts(1, 5, 10);
-        MemoryObjects objects = new MemoryObjects();
+        PartitionExportIntegrationTest.MemoryObjects objects = new PartitionExportIntegrationTest.MemoryObjects();
         LegacyExportSettings settings = settings(MIN_SEGMENT, 4, 10);
         LegacyExportService first = service(objects, List.of("seat_forecast"), settings);
         for (int run = 0; run < 4; run++) {
@@ -490,7 +517,7 @@ class LegacyExportIntegrationTest {
         exclusion("b", 1);
         exclusion("d", 1);
         exclusion("f", 1);
-        MemoryObjects objects = new MemoryObjects();
+        PartitionExportIntegrationTest.MemoryObjects objects = new PartitionExportIntegrationTest.MemoryObjects();
         LegacyExportService service = service(objects, List.of("model_training_exclusion"),
             settings(MIN_SEGMENT, 2, 10));
         service.run();
@@ -503,11 +530,13 @@ class LegacyExportIntegrationTest {
             settings(MIN_SEGMENT, 2, 10), metrics).run();
 
         // then
-        assertThat(report.tables()).containsEntry("model_training_exclusion",
-            LegacyExportService.TableStatus.MISMATCH);
-        assertThat(metrics.get("salmonbus_archive_legacy_failures").tag("reason", "ROWS_ADDED_BEHIND_CURSOR")
-            .counter().count()).isOne();
-        assertThat(ledgerRows("model_training_exclusion")).isEqualTo(3);
+        assertSoftly(softly -> {
+            softly.assertThat(report.tables()).containsEntry("model_training_exclusion",
+                LegacyExportService.TableStatus.MISMATCH);
+            softly.assertThat(metrics.get("salmonbus_archive_legacy_failures").tag("reason", "ROWS_ADDED_BEHIND_CURSOR")
+                .counter().count()).isOne();
+            softly.assertThat(ledgerRows("model_training_exclusion")).isEqualTo(3);
+        });
     }
 
     @Test
@@ -519,7 +548,7 @@ class LegacyExportIntegrationTest {
         SimpleMeterRegistry metrics = new SimpleMeterRegistry();
 
         // when
-        LegacyExportService.RunReport report = service(new MemoryObjects(),
+        LegacyExportService.RunReport report = service(new PartitionExportIntegrationTest.MemoryObjects(),
             List.of("legacy_absent", "legacy_without_key", "legacy_interval", "seat_forecast"),
             settings(MIN_SEGMENT, 1000, 10), metrics).run();
 
@@ -542,13 +571,17 @@ class LegacyExportIntegrationTest {
     void 다른_실행이_먼저_조각을_적으면_겹쳐_적지_않고_다음_회차에_장부를_다시_읽어_이어_간다() {
         // given
         seatForecasts(1, 4, 10);
-        MemoryObjects objects = new MemoryObjects();
+        PartitionExportIntegrationTest.MemoryObjects objects = new PartitionExportIntegrationTest.MemoryObjects();
         LegacyExportSettings settings = settings(MIN_SEGMENT, 1000, 3);
         LegacyExportService other = service(objects, List.of("seat_forecast"), settings);
         LegacyExportRepository racing = new LegacyExportRepository(jdbc, new JdbcTransactionManager(source),
             Duration.ofSeconds(30), List.of("seat_forecast")) {
             @Override
-            public RecordResult record(String table, Segment segment, String expectedAfter) {
+            public LegacyExportRepository.RecordResult record(
+                String table,
+                LegacyExportRepository.Segment segment,
+                String expectedAfter
+            ) {
                 other.run();
                 return super.record(table, segment, expectedAfter);
             }
@@ -560,18 +593,22 @@ class LegacyExportIntegrationTest {
         LegacyExportService.RunReport report = mine.run();
 
         // then
-        assertThat(report.tables()).containsEntry("seat_forecast", LegacyExportService.TableStatus.FAILED);
-        assertThat(metrics.get("salmonbus_archive_legacy_failures").tag("reason", "LEDGER_CHANGED").counter()
-            .count()).isOne();
-        assertThat(ledger("seat_forecast")).singleElement()
-            .satisfies(row -> assertThat(row.get("row_count")).isEqualTo(8L));
+        assertSoftly(softly -> {
+            softly.assertThat(report.tables()).containsEntry("seat_forecast", LegacyExportService.TableStatus.FAILED);
+            softly.assertThat(metrics.get("salmonbus_archive_legacy_failures").tag("reason", "LEDGER_CHANGED")
+                .counter().count()).isOne();
+            softly.assertThat(ledger("seat_forecast")).singleElement()
+                .satisfies(row -> assertThat(row.get("row_count")).isEqualTo(8L));
+        });
 
         // when
         LegacyExportService.RunReport next = service(objects, List.of("seat_forecast"), settings).run();
 
         // then
-        assertThat(next.tables()).containsEntry("seat_forecast", LegacyExportService.TableStatus.COMPLETE);
-        assertThat(next.segments()).isZero();
-        assertThat(ledgerRows("seat_forecast")).isEqualTo(8);
+        assertSoftly(softly -> {
+            softly.assertThat(next.tables()).containsEntry("seat_forecast", LegacyExportService.TableStatus.COMPLETE);
+            softly.assertThat(next.segments()).isZero();
+            softly.assertThat(ledgerRows("seat_forecast")).isEqualTo(8);
+        });
     }
 }

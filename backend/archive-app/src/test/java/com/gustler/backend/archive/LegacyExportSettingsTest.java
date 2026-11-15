@@ -37,19 +37,30 @@ class LegacyExportSettingsTest {
         .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
         .withPropertyValues("archive.prefix=salmonbus/prod/lake-v2/");
 
-    static LegacyExportSettings settings(String prefix, Duration interval, final int pageSize, Duration pause,
-        final long segmentBytes, final long maxRows, Duration maxRun, Duration statementTimeout) {
+    static LegacyExportSettings settings(
+        String prefix,
+        Duration interval,
+        final int pageSize,
+        Duration pause,
+        final long segmentBytes,
+        final long maxRows,
+        Duration maxRun,
+        Duration statementTimeout
+    ) {
         return new LegacyExportSettings(prefix, interval, pageSize, pause, segmentBytes, maxRows, maxRun,
             statementTimeout);
     }
 
     @Test
     void 범위를_벗어난_설정값은_받지_않는다() {
+        // given
         Duration minute = Duration.ofMinutes(1);
         Duration pause = Duration.ofMillis(200);
-        long segment = 64L * 1024 * 1024;
+        final long segment = 64L * 1024 * 1024;
         Duration run = Duration.ofMinutes(10);
         Duration statement = Duration.ofSeconds(60);
+
+        // then
         for (Runnable invalid : List.<Runnable>of(
             () -> settings("salmonbus/prod/lake-v3-legacy", minute, 2000, pause, segment, 1000, run, statement),
             () -> settings("/salmonbus/legacy/", minute, 2000, pause, segment, 1000, run, statement),

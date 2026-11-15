@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
@@ -57,9 +57,11 @@ class ShadowScoringServiceTest {
         harness.deliverAll();
 
         // then
-        assertThat(harness.counter("dropped")).isEqualTo(2);
-        assertThat(harness.replays("dropped")).isEqualTo(2);
-        assertThat(harness.stored()).isEqualTo(continuous(scenario)).isNotEmpty();
+        assertSoftly(softly -> {
+            softly.assertThat(harness.counter("dropped")).isEqualTo(2);
+            softly.assertThat(harness.replays("dropped")).isEqualTo(2);
+            softly.assertThat(harness.stored()).isEqualTo(continuous(scenario)).isNotEmpty();
+        });
     }
 
     @Test
@@ -80,9 +82,11 @@ class ShadowScoringServiceTest {
         harness.deliverAll();
 
         // then
-        assertThat(harness.counter("failures")).isOne();
-        assertThat(harness.replays("not_ready")).isEqualTo(2);
-        assertThat(harness.stored()).isEqualTo(continuous(scenario)).isNotEmpty();
+        assertSoftly(softly -> {
+            softly.assertThat(harness.counter("failures")).isOne();
+            softly.assertThat(harness.replays("not_ready")).isEqualTo(2);
+            softly.assertThat(harness.stored()).isEqualTo(continuous(scenario)).isNotEmpty();
+        });
     }
 
     @Test
@@ -100,13 +104,15 @@ class ShadowScoringServiceTest {
         after.deliver(cut, after.events.size());
 
         // then
-        assertThat(started).isTrue();
-        assertThat(waitingAfterStart).isPositive();
-        assertThat(after.replays("startup")).isOne();
-        assertThat(after.replays("not_ready")).isZero();
         Map<String, Object> merged = new HashMap<>(before.stored());
         after.stored().forEach(merged::putIfAbsent);
-        assertThat(merged).isEqualTo(continuous(scenario));
+        assertSoftly(softly -> {
+            softly.assertThat(started).isTrue();
+            softly.assertThat(waitingAfterStart).isPositive();
+            softly.assertThat(after.replays("startup")).isOne();
+            softly.assertThat(after.replays("not_ready")).isZero();
+            softly.assertThat(merged).isEqualTo(continuous(scenario));
+        });
     }
 
     @Test
@@ -120,10 +126,12 @@ class ShadowScoringServiceTest {
         harness.deliverAll();
 
         // then
-        assertThat(harness.replays("not_ready", false)).isOne();
-        assertThat(harness.replays("failure")).isOne();
-        assertThat(harness.counter("skipped")).isPositive();
-        assertThat(harness.stored()).isEqualTo(continuous(scenario)).isNotEmpty();
+        assertSoftly(softly -> {
+            softly.assertThat(harness.replays("not_ready", false)).isOne();
+            softly.assertThat(harness.replays("failure")).isOne();
+            softly.assertThat(harness.counter("skipped")).isPositive();
+            softly.assertThat(harness.stored()).isEqualTo(continuous(scenario)).isNotEmpty();
+        });
     }
 
     private static int[] passIndexes(List<Object> events) {
@@ -151,8 +159,8 @@ class ShadowScoringServiceTest {
     }
 
     private static String key(PassLabel label) {
-        return "label:" + List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(), label.stopOrder(),
-            label.capacity(), label.labelVersion(), label.modelDeploymentId());
+        return "label:" + List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
+            label.stopOrder(), label.capacity(), label.labelVersion(), label.modelDeploymentId());
     }
 
     private static String key(UnresolvedForecast closed) {
@@ -166,6 +174,26 @@ class ShadowScoringServiceTest {
             case ObservationBatchSeen seen -> seen.receivedAt();
             default -> throw new IllegalArgumentException(String.valueOf(event));
         };
+    }
+
+    private static boolean isReceivedBetween(
+        ForecastPublished event,
+        final long routeId,
+        Instant fromInclusive,
+        Instant toExclusive
+    ) {
+        return event.routeId() == routeId
+            && !event.receivedAt().isBefore(fromInclusive) && event.receivedAt().isBefore(toExclusive);
+    }
+
+    private static boolean isClosedBetween(
+        PassClosed pass,
+        final long routeId,
+        Instant fromInclusive,
+        Instant toExclusive
+    ) {
+        return pass.routeId() == routeId
+            && !pass.closedAt().isBefore(fromInclusive) && pass.closedAt().isBefore(toExclusive);
     }
 
     /** 사건을 저장한 뒤 그림자 채점에 넘기는 흉내다. */
@@ -187,8 +215,14 @@ class ShadowScoringServiceTest {
             this(scenario, stage, new MutableClock(), new ArrayList<>(), new ArrayList<>(), new MemoryLabels());
         }
 
-        private Harness(LegacyScoringScenario scenario, ScoringStage stage, MutableClock clock,
-            List<ForecastPublished> forecasts, List<PassClosed> passes, MemoryLabels labels) {
+        private Harness(
+            LegacyScoringScenario scenario,
+            ScoringStage stage,
+            MutableClock clock,
+            List<ForecastPublished> forecasts,
+            List<PassClosed> passes,
+            MemoryLabels labels
+        ) {
             this.scenario = scenario;
             this.events = scenario.events();
             this.stage = stage;
@@ -219,7 +253,7 @@ class ShadowScoringServiceTest {
             service.flush();
         }
 
-        private void deliver(int from, int to) {
+        private void deliver(final int from, final int to) {
             for (int index = from; index < to; index++) {
                 current = index;
                 Object event = events.get(index);
@@ -255,17 +289,32 @@ class ShadowScoringServiceTest {
 
         private double counter(String name) {
             Counter counter = meters.find("salmonbus.pipeline.scoring." + name).counter();
-            return counter == null ? 0 : counter.count();
+            return countOf(counter);
         }
 
         private double replays(String reason) {
             return replays(reason, true);
         }
 
-        private double replays(String reason, boolean succeeded) {
+        private double replays(String reason, final boolean succeeded) {
             Counter counter = meters.find("salmonbus.pipeline.scoring.replays").tag("reason", reason)
-                .tag("result", succeeded ? "succeeded" : "failed").counter();
-            return counter == null ? 0 : counter.count();
+                .tag("result", resultTag(succeeded)).counter();
+            return countOf(counter);
+        }
+
+        private static String resultTag(final boolean succeeded) {
+            if (succeeded) {
+                return "succeeded";
+            }
+            return "failed";
+        }
+
+        /** 한 번도 늘지 않은 계수기는 등록되지 않으므로 0으로 본다. */
+        private static double countOf(Counter counter) {
+            if (counter == null) {
+                return 0;
+            }
+            return counter.count();
         }
 
         private final class MemoryForecasts implements ForecastRecordStore {
@@ -275,24 +324,31 @@ class ShadowScoringServiceTest {
             }
 
             @Override
-            public Optional<ForecastRun> findLatestRun(long routeVersionId, Set<ForecastOutcome> outcomes) {
+            public Optional<ForecastRun> findLatestRun(final long routeVersionId, Set<ForecastOutcome> outcomes) {
                 throw new UnsupportedOperationException();
             }
 
             @Override
-            public List<ForecastPublished.VehicleForecast> findRecords(LocalDate sourceDate, long observationBatchId) {
+            public List<ForecastPublished.VehicleForecast> findRecords(
+                LocalDate sourceDate,
+                final long observationBatchId
+            ) {
                 throw new UnsupportedOperationException();
             }
 
             @Override
-            public List<ForecastPublished> findPublishedBetween(long routeId, Instant fromInclusive,
-                Instant toExclusive) {
+            public List<ForecastPublished> findPublishedBetween(
+                final long routeId,
+                Instant fromInclusive,
+                Instant toExclusive
+            ) {
                 if (failingReads > 0) {
                     failingReads--;
                     throw new IllegalStateException("읽기 실패 흉내");
                 }
-                return forecasts.stream().filter(event -> event.routeId() == routeId
-                    && !event.receivedAt().isBefore(fromInclusive) && event.receivedAt().isBefore(toExclusive)).toList();
+                return forecasts.stream()
+                    .filter(event -> isReceivedBetween(event, routeId, fromInclusive, toExclusive))
+                    .toList();
             }
         }
 
@@ -303,9 +359,14 @@ class ShadowScoringServiceTest {
             }
 
             @Override
-            public List<PassClosed> findClosedBetween(long routeId, Instant fromInclusive, Instant toExclusive) {
-                return passes.stream().filter(pass -> pass.routeId() == routeId
-                    && !pass.closedAt().isBefore(fromInclusive) && pass.closedAt().isBefore(toExclusive)).toList();
+            public List<PassClosed> findClosedBetween(
+                final long routeId,
+                Instant fromInclusive,
+                Instant toExclusive
+            ) {
+                return passes.stream()
+                    .filter(pass -> isClosedBetween(pass, routeId, fromInclusive, toExclusive))
+                    .toList();
             }
         }
     }
@@ -317,7 +378,9 @@ class ShadowScoringServiceTest {
         public int saveLabels(List<PassLabel> labels) {
             int inserted = 0;
             for (PassLabel label : labels) {
-                inserted += rows.putIfAbsent(key(label), label) == null ? 1 : 0;
+                if (rows.putIfAbsent(key(label), label) == null) {
+                    inserted++;
+                }
             }
             return inserted;
         }
@@ -326,7 +389,9 @@ class ShadowScoringServiceTest {
         public int saveUnresolved(List<UnresolvedForecast> unresolved) {
             int inserted = 0;
             for (UnresolvedForecast closed : unresolved) {
-                inserted += rows.putIfAbsent(key(closed), closed) == null ? 1 : 0;
+                if (rows.putIfAbsent(key(closed), closed) == null) {
+                    inserted++;
+                }
             }
             return inserted;
         }

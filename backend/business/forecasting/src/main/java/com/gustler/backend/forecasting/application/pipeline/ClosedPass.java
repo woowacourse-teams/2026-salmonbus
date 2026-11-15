@@ -34,6 +34,7 @@ public record ClosedPass(
             event.vehicleId(), chainStartObservationId, last.receivedAt().atZone(SourceDates.KOREA).toLocalDate(),
             arrival.observationId(), arrival.seats(), arrival.receivedAt(), arrival.sourceReceivedAt(),
             first.observationId(), first.receivedAt(), last.observationId(), last.seats(), last.receivedAt(),
-            last.sourceReceivedAt(), reachedKnownSeatAt, closure.observationId(), closure.batchId(), event.confirmedAt());
+            last.sourceReceivedAt(), reachedKnownSeatAt, closure.observationId(), closure.batchId(),
+            event.confirmedAt());
     }
 }

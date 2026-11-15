@@ -84,6 +84,13 @@ public final class AlightingAwareBatchContext {
         return time.getHour() * 60 + time.getMinute();
     }
 
+    private static int directionIndex(final boolean down) {
+        if (down) {
+            return 1;
+        }
+        return 0;
+    }
+
     private record MomentKey(Instant receivedAt, long batchId) {
     }
 
@@ -166,11 +173,15 @@ public final class AlightingAwareBatchContext {
             return hourEvents;
         }
 
-        /** 한 정류장의 최근 한 시간 편차 비율과 사건 수를 {@code [편차 / (수 + 1), 수]}로 돌려준다. 돌려준 배열은 바꾸지 않는다. */
+        /**
+         * 한 정류장의 최근 한 시간 편차 비율과 사건 수를 {@code [편차 / (수 + 1), 수]}로 돌려준다. 돌려준 배열은 바꾸지 않는다.
+         */
         double[] stopSurplus(final int stop) {
             double[] cell = surplusByStop.get(stop);
             if (cell == null) {
-                List<AlightingAwarePassEvent> window = hourEvents().stream().filter(event -> event.stopOrder() == stop).toList();
+                List<AlightingAwarePassEvent> window = hourEvents().stream()
+                    .filter(event -> event.stopOrder() == stop)
+                    .toList();
                 cell = new double[] { deviation(window) / (window.size() + 1), window.size() };
                 surplusByStop.put(stop, cell);
             }
@@ -179,7 +190,7 @@ public final class AlightingAwareBatchContext {
 
         /** 한 방향의 최근 한 시간 편차 비율이다. */
         double directionRatio(final boolean down) {
-            final int index = down ? 1 : 0;
+            final int index = directionIndex(down);
             Double cached = directionRatios[index];
             if (cached == null) {
                 List<AlightingAwarePassEvent> direction = hourEvents().stream()

@@ -201,20 +201,30 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
     }
 
     private boolean prepare(final long routeId) {
-        String reason = "not_ready";
-        if (stale.remove(routeId)) {
-            ready.remove(routeId);
-            reason = "dropped";
-        } else if (ready.contains(routeId)) {
+        String reason = rebuildReason(routeId);
+        if (reason == null) {
             return true;
-        } else if (replayDeferredUntil.containsKey(routeId)) {
-            reason = "failure";
         }
         Instant deferred = replayDeferredUntil.get(routeId);
         if (deferred != null && clock.instant().isBefore(deferred)) {
             return false;
         }
         return rebuild(routeId, reason);
+    }
+
+    /** 되감아야 하면 그 사유를, 이미 준비된 노선이면 null을 돌려준다. 버린 사건이 있던 노선은 준비 표시를 지운다. */
+    private String rebuildReason(final long routeId) {
+        if (stale.remove(routeId)) {
+            ready.remove(routeId);
+            return "dropped";
+        }
+        if (ready.contains(routeId)) {
+            return null;
+        }
+        if (replayDeferredUntil.containsKey(routeId)) {
+            return "failure";
+        }
+        return "not_ready";
     }
 
     private boolean rebuild(final long routeId, String reason) {

@@ -33,7 +33,8 @@ class ForecastMainlineExecutorConfigurationTest {
     @Test
     void 본선이_새_경로이면_줄_수만큼_실행_줄과_수집_신호와_줍기_작업을_등록한다() {
         runner.withPropertyValues("forecast.enabled=true", "forecast.pipeline=v2", "forecast.scoring=v2",
-            "forecast.lanes=3").run(context -> {
+                "forecast.lanes=3")
+            .run(context -> {
                 assertThat(context.getBean(RouteLanes.class).count()).isEqualTo(3);
                 assertThat(context).getBean(ObservationDeliveryHook.class).isInstanceOf(PipelineForecastTrigger.class);
                 assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values().stream()

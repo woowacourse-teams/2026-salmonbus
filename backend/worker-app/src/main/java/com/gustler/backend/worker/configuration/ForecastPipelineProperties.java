@@ -44,9 +44,7 @@ public record ForecastPipelineProperties(
         if (lanes < 1) {
             throw new IllegalStateException("forecast.lanes 는 1 이상이어야 한다: " + lanes);
         }
-        if (replayWindow == null || replayWindow.isNegative() || replayWindow.isZero()) {
-            throw new IllegalStateException("forecast.replay-window 는 0보다 길어야 한다: " + replayWindow);
-        }
+        requirePositive("forecast.replay-window", replayWindow);
         requirePositive("forecast.scoring-flush-interval", scoringFlushInterval);
         requirePositive("forecast.scoring-comparison-interval", scoringComparisonInterval);
         if (scoringComparisonDelay == null || scoringComparisonDelay.isNegative()) {
@@ -66,9 +64,13 @@ public record ForecastPipelineProperties(
     }
 
     private static void requirePositive(String name, Duration value) {
-        if (value == null || value.isNegative() || value.isZero()) {
+        if (isNotPositive(value)) {
             throw new IllegalStateException(name + " 는 0보다 길어야 한다: " + value);
         }
+    }
+
+    private static boolean isNotPositive(Duration value) {
+        return value == null || value.isNegative() || value.isZero();
     }
 
     /** 새 경로가 쓰는 테이블이 필요한 상태인지 돌려준다. 하나라도 기본값이 아니면 참이다. */
@@ -104,7 +106,11 @@ public record ForecastPipelineProperties(
      * @return 채점을 켰으나 그림자 실행({@code shadow.enabled}, {@code pipeline=v1})도 본선({@code pipeline=v2})도 돌지 않으면 참
      */
     public boolean scoringWithoutShadow(final boolean forecastEnabled) {
-        return scoring != Scoring.OFF && !(forecastEnabled && (pipeline == Pipeline.V2 || shadow.enabled()));
+        return scoring != Scoring.OFF && !runsEventProducingPipeline(forecastEnabled);
+    }
+
+    private boolean runsEventProducingPipeline(final boolean forecastEnabled) {
+        return forecastEnabled && (pipeline == Pipeline.V2 || shadow.enabled());
     }
 
     /**
@@ -125,7 +131,7 @@ public record ForecastPipelineProperties(
             throw new IllegalStateException("forecast.scoring=v2 는 forecast.pipeline=v2 일 때만 쓴다."
                 + " 옛 경로가 본선이면 옛 정산을 끌 수 없다");
         }
-        if (pipeline == Pipeline.V1 && scoring == Scoring.SHADOW && !shadow.enabled()) {
+        if (scoresShadowWithoutShadowRun()) {
             throw new IllegalStateException("forecast.scoring=shadow 는 forecast.shadow.enabled=true 또는"
                 + " forecast.pipeline=v2 와 함께 쓴다. 채점에 넘길 사건이 없다");
         }
@@ -133,6 +139,10 @@ public record ForecastPipelineProperties(
             throw new IllegalStateException("forecast.pipeline=v2 는 forecast.scoring=shadow 또는 v2 와 함께 쓴다."
                 + " 새 예보의 채점이 어디에도 남지 않는다");
         }
+    }
+
+    private boolean scoresShadowWithoutShadowRun() {
+        return pipeline == Pipeline.V1 && scoring == Scoring.SHADOW && !shadow.enabled();
     }
 
     /** 본선이 새 경로인데 그림자 스위치가 켜져 있어 무시하는지 돌려준다. */

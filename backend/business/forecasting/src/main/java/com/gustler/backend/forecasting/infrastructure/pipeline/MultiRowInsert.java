@@ -55,12 +55,18 @@ final class MultiRowInsert {
     }
 
     static OffsetDateTime timestamp(Instant instant) {
-        return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
+        if (instant == null) {
+            return null;
+        }
+        return instant.atOffset(ZoneOffset.UTC);
     }
 
     static Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
-        return value == null ? null : value.toInstant();
+        if (value == null) {
+            return null;
+        }
+        return value.toInstant();
     }
 
     static SqlArrayValue integers(int[] values) {
@@ -83,6 +89,9 @@ final class MultiRowInsert {
 
     static Long nullableLong(ResultSet row, String column) throws SQLException {
         final long value = row.getLong(column);
-        return row.wasNull() ? null : value;
+        if (row.wasNull()) {
+            return null;
+        }
+        return value;
     }
 }

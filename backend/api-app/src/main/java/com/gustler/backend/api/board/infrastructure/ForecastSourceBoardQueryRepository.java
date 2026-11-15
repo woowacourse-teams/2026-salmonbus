@@ -124,8 +124,10 @@ public class ForecastSourceBoardQueryRepository implements BoardQueryRepository 
     }
 
     @Override
-    public List<BoardVehicleObservation> findObservedVehicles(final long observationBatchId,
-        final long routeVersionId) {
+    public List<BoardVehicleObservation> findObservedVehicles(
+        final long observationBatchId,
+        final long routeVersionId
+    ) {
         return legacy.findObservedVehicles(observationBatchId, routeVersionId);
     }
 

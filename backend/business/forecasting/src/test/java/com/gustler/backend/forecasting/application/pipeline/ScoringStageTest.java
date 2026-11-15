@@ -1,11 +1,12 @@
 package com.gustler.backend.forecasting.application.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import com.gustler.backend.forecasting.api.pipeline.CollectionResult;
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPublished.VehicleForecast;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
@@ -60,11 +61,14 @@ class ScoringStageTest {
             .plus(stage.accept(pass("bus-a", 50, 3, together.minusSeconds(40), together, 901)));
 
         // then
-        assertThat(result.labels()).hasSize(2).allSatisfy(label -> {
-            assertThat(label.previousLastObservationId()).isEqualTo(lastObservation(900));
-            assertThat(label.previousClosureObservationId()).isEqualTo(900);
+        assertSoftly(softly -> {
+            softly.assertThat(result.labels()).hasSize(2).allSatisfy(label -> {
+                assertThat(label.previousLastObservationId()).isEqualTo(lastObservation(900));
+                assertThat(label.previousClosureObservationId()).isEqualTo(900);
+            });
+            softly.assertThat(result.scored()).extracting(ScoredForecast::vehicleObservationId)
+                .containsExactlyInAnyOrder(500L, 501L);
         });
-        assertThat(result.scored()).extracting(ScoredForecast::vehicleObservationId).containsExactlyInAnyOrder(500L, 501L);
     }
 
     @Test
@@ -117,14 +121,16 @@ class ScoringStageTest {
             902));
 
         // then
-        assertThat(yesterday.labels()).singleElement().satisfies(label -> {
-            assertThat(label.state()).isEqualTo(PassLabel.State.SETTLED);
-            assertThat(label.previousLastObservationId()).isEqualTo(lastObservation(900));
-            assertThat(label.sourceDate()).isEqualTo(LocalDate.of(2026, 1, 6));
-        });
-        assertThat(today.labels()).singleElement().satisfies(label -> {
-            assertThat(label.reason()).isEqualTo("NO_PREVIOUS_PASS");
-            assertThat(label.previousLastObservationId()).isNull();
+        assertSoftly(softly -> {
+            softly.assertThat(yesterday.labels()).singleElement().satisfies(label -> {
+                assertThat(label.state()).isEqualTo(PassLabel.State.SETTLED);
+                assertThat(label.previousLastObservationId()).isEqualTo(lastObservation(900));
+                assertThat(label.sourceDate()).isEqualTo(LocalDate.of(2026, 1, 6));
+            });
+            softly.assertThat(today.labels()).singleElement().satisfies(label -> {
+                assertThat(label.reason()).isEqualTo("NO_PREVIOUS_PASS");
+                assertThat(label.previousLastObservationId()).isNull();
+            });
         });
     }
 
@@ -141,10 +147,13 @@ class ScoringStageTest {
 
         // then
         assertThat(result.labels()).extracting(PassLabel::capacity).containsExactly(40, 45);
-        assertThat(result.labels()).allSatisfy(label -> assertThat(label.state()).isEqualTo(PassLabel.State.SETTLED));
-        assertThat(result.labels().get(0).labelValue()).isNotEqualTo(result.labels().get(1).labelValue());
-        assertThat(result.scored()).extracting(ScoredForecast::capacity).containsExactly(40, 45);
-        assertThat(stage.waitingCount()).isZero();
+        assertSoftly(softly -> {
+            softly.assertThat(result.labels())
+                .allSatisfy(label -> assertThat(label.state()).isEqualTo(PassLabel.State.SETTLED));
+            softly.assertThat(result.labels().get(0).labelValue()).isNotEqualTo(result.labels().get(1).labelValue());
+            softly.assertThat(result.scored()).extracting(ScoredForecast::capacity).containsExactly(40, 45);
+            softly.assertThat(stage.waitingCount()).isZero();
+        });
     }
 
     @Test
@@ -160,14 +169,16 @@ class ScoringStageTest {
         ScoringResult expired = stage.accept(seen(MORNING.plus(Duration.ofHours(3))));
 
         // then
-        assertThat(closing.scored()).extracting(ScoredForecast::vehicleObservationId).containsExactly(500L);
-        assertThat(closing.unresolved()).singleElement().satisfies(closedForecast -> {
-            assertThat(closedForecast.vehicleObservationId()).isEqualTo(501L);
-            assertThat(closedForecast.state()).isEqualTo(UnresolvedForecast.State.LOST);
-            assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.PASS_CONDITION_UNMET);
+        assertSoftly(softly -> {
+            softly.assertThat(closing.scored()).extracting(ScoredForecast::vehicleObservationId).containsExactly(500L);
+            softly.assertThat(closing.unresolved()).singleElement().satisfies(closedForecast -> {
+                assertThat(closedForecast.vehicleObservationId()).isEqualTo(501L);
+                assertThat(closedForecast.state()).isEqualTo(UnresolvedForecast.State.LOST);
+                assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.PASS_CONDITION_UNMET);
+            });
+            softly.assertThat(expired.unresolved()).isEmpty();
+            softly.assertThat(stage.waitingCount()).isZero();
         });
-        assertThat(expired.unresolved()).isEmpty();
-        assertThat(stage.waitingCount()).isZero();
     }
 
     @Test
@@ -180,11 +191,13 @@ class ScoringStageTest {
         ScoringResult result = stage.accept(forecast(closed.plusSeconds(20), vehicle(502, "bus-a", 50, 40, 3)));
 
         // then
-        assertThat(result.unresolved()).singleElement().satisfies(closedForecast -> {
-            assertThat(closedForecast.state()).isEqualTo(UnresolvedForecast.State.LOST);
-            assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.PASS_CONDITION_UNMET);
+        assertSoftly(softly -> {
+            softly.assertThat(result.unresolved()).singleElement().satisfies(closedForecast -> {
+                assertThat(closedForecast.state()).isEqualTo(UnresolvedForecast.State.LOST);
+                assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.PASS_CONDITION_UNMET);
+            });
+            softly.assertThat(stage.waitingCount()).isZero();
         });
-        assertThat(stage.waitingCount()).isZero();
     }
 
     @Test
@@ -199,13 +212,15 @@ class ScoringStageTest {
         ScoringResult late = stage.accept(pass("bus-b", 51, 3, closed.minusSeconds(30), closed.plusMillis(1), 902));
 
         // then
-        assertThat(onTime.scored()).extracting(ScoredForecast::vehicleObservationId).containsExactly(500L);
-        assertThat(onTime.unresolved()).singleElement().satisfies(closedForecast -> {
-            assertThat(closedForecast.vehicleObservationId()).isEqualTo(499L);
-            assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.PASS_NOT_CLOSED);
+        assertSoftly(softly -> {
+            softly.assertThat(onTime.scored()).extracting(ScoredForecast::vehicleObservationId).containsExactly(500L);
+            softly.assertThat(onTime.unresolved()).singleElement().satisfies(closedForecast -> {
+                assertThat(closedForecast.vehicleObservationId()).isEqualTo(499L);
+                assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.PASS_NOT_CLOSED);
+            });
+            softly.assertThat(late.scored()).isEmpty();
+            softly.assertThat(late.labels()).isEmpty();
         });
-        assertThat(late.scored()).isEmpty();
-        assertThat(late.labels()).isEmpty();
     }
 
     @Test
@@ -214,13 +229,16 @@ class ScoringStageTest {
         ScoringResult result = stage.accept(forecast(MORNING, vehicle(500, "bus-a", 50, 40, 1, 3, 5, 6)));
 
         // then
-        assertThat(result.unresolved()).extracting(UnresolvedForecast::targetStopOrder).containsExactly(1, 5, 6);
-        assertThat(result.unresolved()).allSatisfy(closed -> {
-            assertThat(closed.state()).isEqualTo(UnresolvedForecast.State.LOST);
-            assertThat(closed.reason()).isEqualTo(ScoringReasons.TARGET_WITHOUT_PASS);
-            assertThat(ScoringReasons.legacyReason(closed.reason())).contains("NO_CLOSED_IDENTITY_SAFE_PASS");
+        assertSoftly(softly -> {
+            softly.assertThat(result.unresolved()).extracting(UnresolvedForecast::targetStopOrder)
+                .containsExactly(1, 5, 6);
+            softly.assertThat(result.unresolved()).allSatisfy(closed -> {
+                assertThat(closed.state()).isEqualTo(UnresolvedForecast.State.LOST);
+                assertThat(closed.reason()).isEqualTo(ScoringReasons.TARGET_WITHOUT_PASS);
+                assertThat(ScoringReasons.legacyReason(closed.reason())).contains("NO_CLOSED_IDENTITY_SAFE_PASS");
+            });
+            softly.assertThat(stage.waitingCount()).isOne();
         });
-        assertThat(stage.waitingCount()).isOne();
     }
 
     @Test
@@ -233,10 +251,12 @@ class ScoringStageTest {
         ScoringResult expired = stage.accept(seen(MORNING.plus(Duration.ofHours(2)).plusSeconds(1)));
 
         // then
-        assertThat(expired.unresolved()).extracting(UnresolvedForecast::vehicleObservationId, UnresolvedForecast::reason)
-            .containsExactly(org.assertj.core.groups.Tuple.tuple(500L, ScoringReasons.CHAIN_BROKEN),
-                org.assertj.core.groups.Tuple.tuple(501L, ScoringReasons.PASS_NOT_CLOSED));
-        assertThat(stage.waitingCount()).isOne();
+        assertSoftly(softly -> {
+            softly.assertThat(expired.unresolved())
+                .extracting(UnresolvedForecast::vehicleObservationId, UnresolvedForecast::reason)
+                .containsExactly(tuple(500L, ScoringReasons.CHAIN_BROKEN), tuple(501L, ScoringReasons.PASS_NOT_CLOSED));
+            softly.assertThat(stage.waitingCount()).isOne();
+        });
     }
 
     @Test
@@ -249,9 +269,11 @@ class ScoringStageTest {
         ScoringResult idle = stage.expire(MORNING.plus(ScoringStage.IDLE_EXPIRY).plusSeconds(1));
 
         // then
-        assertThat(tooEarly.unresolved()).isEmpty();
-        assertThat(idle.unresolved()).singleElement()
-            .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.PASS_NOT_CLOSED);
+        assertSoftly(softly -> {
+            softly.assertThat(tooEarly.unresolved()).isEmpty();
+            softly.assertThat(idle.unresolved()).singleElement()
+                .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.PASS_NOT_CLOSED);
+        });
     }
 
     @Test
@@ -267,17 +289,21 @@ class ScoringStageTest {
         ScoringResult result = stage.accept(pass("bus-a", 50, 3, closed.minusSeconds(30), closed, 901));
 
         // then
-        assertThat(result.labels()).extracting(PassLabel::modelDeploymentId).containsExactly(DEPLOYMENT, OTHER_DEPLOYMENT);
-        assertThat(result.labels()).allSatisfy(label -> {
-            assertThat(label.state()).isEqualTo(PassLabel.State.SETTLED);
-            assertThat(label.capacity()).isEqualTo(40);
+        assertThat(result.labels()).extracting(PassLabel::modelDeploymentId)
+            .containsExactly(DEPLOYMENT, OTHER_DEPLOYMENT);
+        assertSoftly(softly -> {
+            softly.assertThat(result.labels()).allSatisfy(label -> {
+                assertThat(label.state()).isEqualTo(PassLabel.State.SETTLED);
+                assertThat(label.capacity()).isEqualTo(40);
+            });
+            softly.assertThat(result.labels().get(0).labelValue()).isNotEqualTo(result.labels().get(1).labelValue());
+            softly.assertThat(result.labels().get(0).parameterHash())
+                .isNotEqualTo(result.labels().get(1).parameterHash());
+            softly.assertThat(result.scored())
+                .extracting(ScoredForecast::vehicleObservationId, ScoredForecast::modelDeploymentId)
+                .containsExactly(tuple(500L, DEPLOYMENT), tuple(501L, OTHER_DEPLOYMENT));
+            softly.assertThat(result.unresolved()).isEmpty();
         });
-        assertThat(result.labels().get(0).labelValue()).isNotEqualTo(result.labels().get(1).labelValue());
-        assertThat(result.labels().get(0).parameterHash()).isNotEqualTo(result.labels().get(1).parameterHash());
-        assertThat(result.scored()).extracting(ScoredForecast::vehicleObservationId, ScoredForecast::modelDeploymentId)
-            .containsExactly(org.assertj.core.groups.Tuple.tuple(500L, DEPLOYMENT),
-                org.assertj.core.groups.Tuple.tuple(501L, OTHER_DEPLOYMENT));
-        assertThat(result.unresolved()).isEmpty();
     }
 
     @Test
@@ -309,11 +335,13 @@ class ScoringStageTest {
             vehicle(501, "bus-a", 50, 40, 3)));
 
         // then
-        assertThat(missing.unresolved()).singleElement()
-            .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.SETTLEMENT_EVIDENCE_MISSING);
-        assertThat(mismatch.unresolved()).singleElement()
-            .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.INPUT_PROFILE_MISMATCH);
-        assertThat(stage.waitingCount()).isZero();
+        assertSoftly(softly -> {
+            softly.assertThat(missing.unresolved()).singleElement()
+                .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.SETTLEMENT_EVIDENCE_MISSING);
+            softly.assertThat(mismatch.unresolved()).singleElement()
+                .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.INPUT_PROFILE_MISMATCH);
+            softly.assertThat(stage.waitingCount()).isZero();
+        });
     }
 
     @Test
@@ -334,21 +362,24 @@ class ScoringStageTest {
         ScoringResult later = stage.accept(forecast(closed.plusSeconds(60), vehicle(502, "bus-d", 52, 40, 3)));
 
         // then
-        assertThat(settled.labels()).singleElement().extracting(PassLabel::state).isEqualTo(PassLabel.State.SETTLED);
-        assertThat(tainted.unresolved()).singleElement().satisfies(closedForecast -> {
-            assertThat(closedForecast.vehicleObservationId()).isEqualTo(501L);
-            assertThat(closedForecast.state()).isEqualTo(UnresolvedForecast.State.UNSUPPORTED);
-            assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.SOURCE_HISTORY_INCOMPLETE);
+        assertSoftly(softly -> {
+            softly.assertThat(settled.labels()).singleElement()
+                .extracting(PassLabel::state).isEqualTo(PassLabel.State.SETTLED);
+            softly.assertThat(tainted.unresolved()).singleElement().satisfies(closedForecast -> {
+                assertThat(closedForecast.vehicleObservationId()).isEqualTo(501L);
+                assertThat(closedForecast.state()).isEqualTo(UnresolvedForecast.State.UNSUPPORTED);
+                assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.SOURCE_HISTORY_INCOMPLETE);
+            });
+            softly.assertThat(tainted.labels()).isEmpty();
+            softly.assertThat(later.unresolved()).singleElement()
+                .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.SOURCE_HISTORY_INCOMPLETE);
         });
-        assertThat(tainted.labels()).isEmpty();
-        assertThat(later.unresolved()).singleElement()
-            .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.SOURCE_HISTORY_INCOMPLETE);
     }
 
     @Test
     void 늦게_착수한_배치의_줄_수_차이는_수집_구멍으로_보지_않는다() {
         // given
-        long batch = batches.incrementAndGet();
+        final long batch = batches.incrementAndGet();
         stage.accept(new ObservationBatchSeen(batch, ROUTE, VERSION, MORNING.minusSeconds(200),
             MORNING.minusSeconds(190), CollectionResult.SUCCESS, 3, 2));
         stage.accept(new ForecastPublished(day(MORNING), batch, ROUTE, VERSION, MORNING.minusSeconds(190),
@@ -358,8 +389,10 @@ class ScoringStageTest {
         ScoringResult result = stage.accept(forecast(MORNING, vehicle(500, "bus-a", 50, 40, 3)));
 
         // then
-        assertThat(result.unresolved()).isEmpty();
-        assertThat(stage.waitingCount()).isOne();
+        assertSoftly(softly -> {
+            softly.assertThat(result.unresolved()).isEmpty();
+            softly.assertThat(stage.waitingCount()).isOne();
+        });
     }
 
     @Test
@@ -371,32 +404,58 @@ class ScoringStageTest {
         stage.discard(ROUTE);
 
         // then
-        assertThat(stage.waitingCount()).isZero();
-        assertThat(stage.waitingCount(ROUTE)).isZero();
+        assertSoftly(softly -> {
+            softly.assertThat(stage.waitingCount()).isZero();
+            softly.assertThat(stage.waitingCount(ROUTE)).isZero();
+        });
     }
 
-    private ForecastPublished forecast(Instant confirmedAt, VehicleForecast... vehicles) {
+    private ForecastPublished forecast(Instant confirmedAt, ForecastPublished.VehicleForecast... vehicles) {
         return forecast(confirmedAt, DEPLOYMENT, vehicles);
     }
 
-    private ForecastPublished forecast(Instant confirmedAt, long deployment, VehicleForecast... vehicles) {
+    private ForecastPublished forecast(
+        Instant confirmedAt,
+        final long deployment,
+        ForecastPublished.VehicleForecast... vehicles
+    ) {
         return new ForecastPublished(day(confirmedAt), batches.incrementAndGet(), ROUTE, VERSION,
             confirmedAt.minusSeconds(2), confirmedAt, deployment, ForecastOutcome.PUBLISHED, List.of(vehicles));
     }
 
-    private static VehicleForecast vehicle(long observation, String vehicle, long chain, int capacity, int... targets) {
-        return new VehicleForecast(observation, 0, vehicle, 1, chain, chain, false, capacity, false, targets,
-            new double[targets.length], new double[targets.length]);
+    private static ForecastPublished.VehicleForecast vehicle(
+        final long observation,
+        String vehicle,
+        final long chain,
+        final int capacity,
+        int... targets
+    ) {
+        return new ForecastPublished.VehicleForecast(observation, 0, vehicle, 1, chain, chain, false, capacity, false,
+            targets, new double[targets.length], new double[targets.length]);
     }
 
-    private PassClosed pass(String vehicle, long chain, int stop, Instant lastAt, Instant closedAt, long closure) {
+    private PassClosed pass(
+        String vehicle,
+        final long chain,
+        final int stop,
+        Instant lastAt,
+        Instant closedAt,
+        final long closure
+    ) {
         return pass(vehicle, chain, stop, lastAt, lastAt, closedAt, closure);
     }
 
-    private PassClosed pass(String vehicle, long chain, int stop, Instant lastAt, Instant reachedAt, Instant closedAt,
-        long closure) {
-        return new PassClosed(day(closedAt), ROUTE, chain, stop, VERSION, vehicle, chain, day(lastAt), closure - 300, 20,
-            lastAt.minusSeconds(40), lastAt.minusSeconds(42), closure - 200, lastAt.minusSeconds(20),
+    private PassClosed pass(
+        String vehicle,
+        final long chain,
+        final int stop,
+        Instant lastAt,
+        Instant reachedAt,
+        Instant closedAt,
+        final long closure
+    ) {
+        return new PassClosed(day(closedAt), ROUTE, chain, stop, VERSION, vehicle, chain, day(lastAt), closure - 300,
+            20, lastAt.minusSeconds(40), lastAt.minusSeconds(42), closure - 200, lastAt.minusSeconds(20),
             lastObservation(closure), 18, lastAt, lastAt.minusSeconds(2), reachedAt, closure, batches.incrementAndGet(),
             closedAt);
     }
@@ -410,7 +469,7 @@ class ScoringStageTest {
             2);
     }
 
-    private static long lastObservation(long closure) {
+    private static long lastObservation(final long closure) {
         return closure - 100;
     }
 
@@ -418,8 +477,9 @@ class ScoringStageTest {
         return at.atZone(SEOUL).toLocalDate();
     }
 
-    private static JsonNode context(double probability, String inputProfile) {
-        String parameters = "\"p\":%s,\"lam\":[1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5],\"kappa\":1,\"r\":2".formatted(probability);
+    private static JsonNode context(final double probability, String inputProfile) {
+        String parameters = "\"p\":%s,\"lam\":[1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5],\"kappa\":1,\"r\":2"
+            .formatted(probability);
         StringBuilder stops = new StringBuilder();
         for (int stop = 1; stop <= 6; stop++) {
             if (stop > 1) {

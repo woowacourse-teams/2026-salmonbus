@@ -81,8 +81,8 @@ public class ForecastMainlineConfiguration {
             new RouteStateReplayer(mainlineReplaySource, stage, DurationStyle.detectAndParse(replayWindow)), records,
             passes, transactions, listeners.orderedStream().toList(), new RouteStateRegistry(), rushOnly);
         ForecastPipelineService service = new ForecastPipelineService(lanes, processor, mainlineReplaySource,
-            new JdbcPendingPipelineBatches(jdbc), runtimes, versions, stops, new JdbcSettlementContextWriter(jdbc), policy, clock,
-            meters.getIfAvailable());
+            new JdbcPendingPipelineBatches(jdbc), runtimes, versions, stops, new JdbcSettlementContextWriter(jdbc),
+            policy, clock, meters.getIfAvailable());
         telemetry.ifAvailable(service::setTelemetry);
         return service;
     }

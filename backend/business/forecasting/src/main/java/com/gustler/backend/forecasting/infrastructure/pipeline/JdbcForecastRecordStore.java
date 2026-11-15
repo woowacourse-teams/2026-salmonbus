@@ -8,7 +8,6 @@ import static com.gustler.backend.forecasting.infrastructure.pipeline.MultiRowIn
 
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPublished.VehicleForecast;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRun;
 import com.gustler.backend.forecasting.application.pipeline.RecentForecastRoutes;
@@ -94,7 +93,7 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
     }
 
     @Override
-    public List<VehicleForecast> findRecords(LocalDate sourceDate, final long observationBatchId) {
+    public List<ForecastPublished.VehicleForecast> findRecords(LocalDate sourceDate, final long observationBatchId) {
         return jdbc.sql("""
                 SELECT /* salmonbus:forecast_record.find_batch */ %s
                 FROM forecast_record record
@@ -107,8 +106,11 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
     }
 
     @Override
-    public List<ForecastPublished> findPublishedBetween(final long routeId, Instant fromInclusive,
-        Instant toExclusive) {
+    public List<ForecastPublished> findPublishedBetween(
+        final long routeId,
+        Instant fromInclusive,
+        Instant toExclusive
+    ) {
         Map<RunKey, RunRows> runs = new LinkedHashMap<>();
         jdbc.sql("""
                 SELECT /* salmonbus:forecast_run.find_between */ run.source_date, run.observation_batch_id,
@@ -132,10 +134,14 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
             });
         return runs.values()
             .stream()
-            .map(rows -> new ForecastPublished(rows.run().sourceDate(), rows.run().observationBatchId(),
-                rows.run().routeId(), rows.run().routeVersionId(), rows.run().receivedAt(), rows.run().confirmedAt(),
-                rows.run().modelDeploymentId(), rows.run().outcome(), rows.vehicles()))
+            .map(JdbcForecastRecordStore::published)
             .toList();
+    }
+
+    private static ForecastPublished published(RunRows rows) {
+        ForecastRun run = rows.run();
+        return new ForecastPublished(run.sourceDate(), run.observationBatchId(), run.routeId(), run.routeVersionId(),
+            run.receivedAt(), run.confirmedAt(), run.modelDeploymentId(), run.outcome(), rows.vehicles());
     }
 
     /** 수신 시각 하한의 하루 전 날짜부터의 파티션만 읽는다. 나눔 날짜(예약 시각의 날짜)는 수신 시각의 날짜보다 늦지 않다. */
@@ -159,17 +165,17 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
             ForecastOutcome.valueOf(row.getString("outcome")), row.getInt("prediction_count"));
     }
 
-    private static VehicleForecast vehicle(ResultSet row) throws SQLException {
-        return new VehicleForecast(row.getLong("vehicle_observation_id"), row.getInt("source_row_number"),
-            row.getString("vehicle_id"), row.getInt("passed_stop_order"), row.getLong("trip_start_observation_id"),
-            row.getLong("chain_start_observation_id"), row.getBoolean("down"), row.getInt("capacity"),
-            row.getBoolean("extended"), integers(row, "target_stop_orders"), doubles(row, "expected_seats"),
-            doubles(row, "full_probabilities"));
+    private static ForecastPublished.VehicleForecast vehicle(ResultSet row) throws SQLException {
+        return new ForecastPublished.VehicleForecast(row.getLong("vehicle_observation_id"),
+            row.getInt("source_row_number"), row.getString("vehicle_id"), row.getInt("passed_stop_order"),
+            row.getLong("trip_start_observation_id"), row.getLong("chain_start_observation_id"),
+            row.getBoolean("down"), row.getInt("capacity"), row.getBoolean("extended"),
+            integers(row, "target_stop_orders"), doubles(row, "expected_seats"), doubles(row, "full_probabilities"));
     }
 
     private record RunKey(LocalDate sourceDate, long observationBatchId) {
     }
 
-    private record RunRows(ForecastRun run, List<VehicleForecast> vehicles) {
+    private record RunRows(ForecastRun run, List<ForecastPublished.VehicleForecast> vehicles) {
     }
 }

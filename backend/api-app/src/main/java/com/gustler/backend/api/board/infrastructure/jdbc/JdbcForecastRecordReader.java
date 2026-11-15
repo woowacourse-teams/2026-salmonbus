@@ -94,12 +94,19 @@ public class JdbcForecastRecordReader {
             row.getString("vehicle_id"),
             row.getInt("source_row_number"),
             targetStopOrder - row.getInt("passed_stop_order"),
-            fullProbability == null ? Double.NaN : fullProbability,
+            probabilityOrNaN(fullProbability),
             row.getObject("expected_seats", Double.class),
             new ForecastModel(modelId, row.getString("release_id"), timeAt(row, "data_until")),
             SEAT_TARGET,
             PROBABILITY_TARGET
         );
+    }
+
+    private static double probabilityOrNaN(Double fullProbability) {
+        if (fullProbability == null) {
+            return Double.NaN;
+        }
+        return fullProbability;
     }
 
     private OffsetDateTime timeAt(ResultSet row, String column) throws SQLException {

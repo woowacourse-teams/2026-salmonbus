@@ -18,10 +18,12 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -57,16 +59,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * 결과는 {@code salmonbus.pipeline.scoring.compared{result}}로 센다. 한 스레드에서만 부른다.
  */
 public final class JdbcScoringComparison implements CompareShadowScoring {
-    /** 대조 분류. 지표 태그 값이 이름의 소문자다. */
-    public enum Result {
-        SAME, INTENDED_HOLE, INTENDED_MIDNIGHT, UNEXPLAINED, LEGACY_ONLY, NEW_ONLY, PENDING;
-
-        /** 지표 태그 값. */
-        public String tag() {
-            return name().toLowerCase(java.util.Locale.ROOT);
-        }
-    }
-
     private static final Logger LOGGER = LoggerFactory.getLogger(JdbcScoringComparison.class);
     private static final String LEGACY_KIND = "AFTER_ALIGHTING_ESTIMATE";
     private static final Set<String> TAINTS = Set.of(ScoringReasons.SOURCE_HISTORY_INCOMPLETE,
@@ -110,8 +102,8 @@ public final class JdbcScoringComparison implements CompareShadowScoring {
     private final Duration delay;
     private final int batchLimit;
     private final MeterRegistry meters;
+    private final Instant start;
     private long cursor = -1;
-    private Instant start;
 
     /**
      * @param jdbc DB 접근
@@ -121,11 +113,17 @@ public final class JdbcScoringComparison implements CompareShadowScoring {
      * @param batchLimit 한 회차에 읽는 예보 실행 수의 상한. 1 이상이다
      * @param meters 지표 등록기. 없으면 지표를 내지 않는다
      */
-    public JdbcScoringComparison(JdbcClient jdbc, Clock clock, Duration delay, Duration lookback, final int batchLimit,
-        MeterRegistry meters) {
+    public JdbcScoringComparison(
+        JdbcClient jdbc,
+        Clock clock,
+        Duration delay,
+        Duration lookback,
+        final int batchLimit,
+        MeterRegistry meters
+    ) {
         this.jdbc = Objects.requireNonNull(jdbc);
         this.clock = Objects.requireNonNull(clock);
-        if (delay == null || delay.isNegative() || lookback == null || lookback.isNegative()) {
+        if (hasMissingOrNegativeWindow(delay, lookback)) {
             throw new IllegalArgumentException("대조 지연과 시작 범위는 0 이상이어야 한다");
         }
         if (batchLimit < 1) {
@@ -135,6 +133,10 @@ public final class JdbcScoringComparison implements CompareShadowScoring {
         this.batchLimit = batchLimit;
         this.meters = meters;
         this.start = clock.instant().minus(lookback);
+    }
+
+    private static boolean hasMissingOrNegativeWindow(Duration delay, Duration lookback) {
+        return delay == null || delay.isNegative() || lookback == null || lookback.isNegative();
     }
 
     @Override
@@ -153,33 +155,11 @@ public final class JdbcScoringComparison implements CompareShadowScoring {
         int remaining = batchLimit;
         while (remaining > 0) {
             final int chunk = Math.min(CHUNK, remaining);
-            List<Run> runs = jdbc.sql(READ_RUNS)
-                .param("fromDate", SourceDates.of(cursor < 0 ? start : through).minusDays(cursor < 0 ? 1 : 2))
-                .param("cursor", cursor)
-                .param("limit", chunk)
-                .query((row, index) -> new Run(row.getObject("source_date", LocalDate.class),
-                    row.getLong("observation_batch_id"), instant(row, "received_at")))
-                .list();
-            List<Run> selected = new ArrayList<>();
-            boolean reachedThrough = false;
-            for (Run run : runs) {
-                if (run.receivedAt().isAfter(through)) {
-                    reachedThrough = true;
-                    break;
-                }
-                if (cursor < 0 && run.receivedAt().isBefore(start)) {
-                    continue;
-                }
-                selected.add(run);
-            }
-            if (!selected.isEmpty()) {
-                report = report.plus(compare(selected));
-                cursor = selected.getLast().observationBatchId();
-            } else if (!reachedThrough && !runs.isEmpty()) {
-                cursor = runs.getLast().observationBatchId();
-            }
+            List<Run> runs = readRuns(through, chunk);
+            Selection selection = select(runs, through);
+            report = compareAndAdvance(report, runs, selection);
             remaining -= chunk;
-            if (reachedThrough || runs.size() < chunk) {
+            if (selection.reachedThrough() || runs.size() < chunk) {
                 break;
             }
         }
@@ -187,29 +167,60 @@ public final class JdbcScoringComparison implements CompareShadowScoring {
         return report;
     }
 
+    private List<Run> readRuns(Instant through, final int chunk) {
+        return jdbc.sql(READ_RUNS)
+            .param("fromDate", runsFromDate(through))
+            .param("cursor", cursor)
+            .param("limit", chunk)
+            .query((row, index) -> new Run(row.getObject("source_date", LocalDate.class),
+                row.getLong("observation_batch_id"), instant(row, "received_at")))
+            .list();
+    }
+
+    /** 처음 회차는 시작 시각의 하루 전, 그 뒤로는 대조 상한 시각의 이틀 전 날짜부터 읽는다. */
+    private LocalDate runsFromDate(Instant through) {
+        if (cursor < 0) {
+            return SourceDates.of(start).minusDays(1);
+        }
+        return SourceDates.of(through).minusDays(2);
+    }
+
+    /** 대조 상한보다 늦은 배치를 만나면 멈추고, 처음 회차에는 시작 시각보다 이른 배치를 건너뛴다. */
+    private Selection select(List<Run> runs, Instant through) {
+        List<Run> selected = new ArrayList<>();
+        for (Run run : runs) {
+            if (run.receivedAt().isAfter(through)) {
+                return new Selection(selected, true);
+            }
+            if (cursor < 0 && run.receivedAt().isBefore(start)) {
+                continue;
+            }
+            selected.add(run);
+        }
+        return new Selection(selected, false);
+    }
+
+    /** 고른 배치가 있으면 대조하고 커서를 마지막 고른 배치로, 없으면 상한에 닿지 않았을 때만 읽은 배치 끝으로 옮긴다. */
+    private Report compareAndAdvance(Report report, List<Run> runs, Selection selection) {
+        if (!selection.runs().isEmpty()) {
+            Report compared = report.plus(compare(selection.runs()));
+            cursor = selection.runs().getLast().observationBatchId();
+            return compared;
+        }
+        if (!selection.reachedThrough() && !runs.isEmpty()) {
+            cursor = runs.getLast().observationBatchId();
+        }
+        return report;
+    }
+
     private Report compare(List<Run> runs) {
         List<Long> batches = runs.stream().map(Run::observationBatchId).toList();
-        Set<LocalDate> dates = new LinkedHashSet<>();
-        runs.forEach(run -> dates.add(run.sourceDate()));
-        Map<Key, Fresh> fresh = new LinkedHashMap<>();
-        jdbc.sql(READ_FRESH).param("dates", List.copyOf(dates)).param("batches", batches)
-            .query(row -> {
-                Fresh value = fresh(row);
-                fresh.put(value.key(), value);
-            });
-        Map<Key, Verdict> legacy = new LinkedHashMap<>();
-        jdbc.sql(READ_LEGACY).param("batches", batches).param("kind", LEGACY_KIND)
-            .param("label", ScoringReasons.LABEL_VERSION)
-            .query(row -> {
-                legacy.put(new Key(row.getLong("vehicle_observation_id"), row.getInt("target_stop_order")),
-                    legacyVerdict(row));
-            });
-        Set<Key> legacyPending = new LinkedHashSet<>();
-        jdbc.sql(READ_LEGACY_PENDING).param("batches", batches).param("kind", LEGACY_KIND)
-            .param("label", ScoringReasons.LABEL_VERSION)
-            .query(row -> {
-                legacyPending.add(new Key(row.getLong(1), row.getInt(2)));
-            });
+        Set<LocalDate> dates = runs.stream()
+            .map(Run::sourceDate)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<Key, Fresh> fresh = readFresh(dates, batches);
+        Map<Key, Verdict> legacy = readLegacy(batches);
+        Set<Key> legacyPending = readLegacyPending(batches);
         Map<Result, Long> counts = new TreeMap<>();
         List<Difference> unexplained = new ArrayList<>();
         for (Fresh value : fresh.values()) {
@@ -228,6 +239,37 @@ public final class JdbcScoringComparison implements CompareShadowScoring {
         return new Report(runs.size(), counts, unexplained);
     }
 
+    private Map<Key, Fresh> readFresh(Set<LocalDate> dates, List<Long> batches) {
+        Map<Key, Fresh> fresh = new LinkedHashMap<>();
+        jdbc.sql(READ_FRESH).param("dates", List.copyOf(dates)).param("batches", batches)
+            .query(row -> {
+                Fresh value = fresh(row);
+                fresh.put(value.key(), value);
+            });
+        return fresh;
+    }
+
+    private Map<Key, Verdict> readLegacy(List<Long> batches) {
+        Map<Key, Verdict> legacy = new LinkedHashMap<>();
+        jdbc.sql(READ_LEGACY).param("batches", batches).param("kind", LEGACY_KIND)
+            .param("label", ScoringReasons.LABEL_VERSION)
+            .query(row -> {
+                legacy.put(new Key(row.getLong("vehicle_observation_id"), row.getInt("target_stop_order")),
+                    legacyVerdict(row));
+            });
+        return legacy;
+    }
+
+    private Set<Key> readLegacyPending(List<Long> batches) {
+        Set<Key> legacyPending = new LinkedHashSet<>();
+        jdbc.sql(READ_LEGACY_PENDING).param("batches", batches).param("kind", LEGACY_KIND)
+            .param("label", ScoringReasons.LABEL_VERSION)
+            .query(row -> {
+                legacyPending.add(new Key(row.getLong(1), row.getInt(2)));
+            });
+        return legacyPending;
+    }
+
     /**
      * 새 결과 하나를 옛 결과와 견줘 분류한다.
      *
@@ -241,7 +283,7 @@ public final class JdbcScoringComparison implements CompareShadowScoring {
             return Result.PENDING;
         }
         if (legacy == null) {
-            return legacyPending ? Result.PENDING : Result.NEW_ONLY;
+            return unmatchedResult(legacyPending);
         }
         if (legacy.equals(fresh.verdict())) {
             return Result.SAME;
@@ -253,6 +295,13 @@ public final class JdbcScoringComparison implements CompareShadowScoring {
             return Result.INTENDED_MIDNIGHT;
         }
         return Result.UNEXPLAINED;
+    }
+
+    private static Result unmatchedResult(final boolean legacyPending) {
+        if (legacyPending) {
+            return Result.PENDING;
+        }
+        return Result.NEW_ONLY;
     }
 
     private void record(Report report) {
@@ -274,18 +323,22 @@ public final class JdbcScoringComparison implements CompareShadowScoring {
         Key key = new Key(row.getLong("vehicle_observation_id"), row.getInt("target_stop_order"));
         String state = row.getString("state");
         String reason = row.getString("reason");
-        Verdict verdict;
+        Verdict verdict = freshVerdict(row, state, reason);
+        return new Fresh(key, instant(row, "confirmed_at"), verdict, reason);
+    }
+
+    private static Verdict freshVerdict(ResultSet row, String state, String reason) throws SQLException {
         if ("SETTLED".equals(state)) {
-            verdict = new Verdict(state, null, Double.doubleToLongBits(row.getDouble("label_value")),
+            return new Verdict(state, null, Double.doubleToLongBits(row.getDouble("label_value")),
                 row.getString("parameter_hash"), row.getInt("capacity"), nullableLong(row, "arrival_observation_id"),
                 nullableLong(row, "last_observation_id"), nullableLong(row, "closure_observation_id"),
-                nullableLong(row, "previous_last_observation_id"), nullableLong(row, "previous_closure_observation_id"));
-        } else if ("PENDING".equals(state)) {
-            verdict = Verdict.of(state, null);
-        } else {
-            verdict = Verdict.of(state, ScoringReasons.legacyReason(reason).orElse("NONE:" + reason));
+                nullableLong(row, "previous_last_observation_id"),
+                nullableLong(row, "previous_closure_observation_id"));
         }
-        return new Fresh(key, instant(row, "confirmed_at"), verdict, reason);
+        if ("PENDING".equals(state)) {
+            return Verdict.of(state, null);
+        }
+        return Verdict.of(state, ScoringReasons.legacyReason(reason).orElse("NONE:" + reason));
     }
 
     private static Verdict legacyVerdict(ResultSet row) throws SQLException {
@@ -294,12 +347,32 @@ public final class JdbcScoringComparison implements CompareShadowScoring {
             return Verdict.of(state, row.getString("reason"));
         }
         return new Verdict(state, null, Double.doubleToLongBits(row.getDouble("label_value")),
-            row.getString("parameter_hash"), (Integer) row.getObject("capacity"), nullableLong(row, "pre_observation_id"),
-            nullableLong(row, "post_observation_id"), nullableLong(row, "closure_observation_id"),
-            nullableLong(row, "previous_post_observation_id"), nullableLong(row, "previous_closure_observation_id"));
+            row.getString("parameter_hash"), (Integer) row.getObject("capacity"),
+            nullableLong(row, "pre_observation_id"), nullableLong(row, "post_observation_id"),
+            nullableLong(row, "closure_observation_id"), nullableLong(row, "previous_post_observation_id"),
+            nullableLong(row, "previous_closure_observation_id"));
+    }
+
+    /** 대조 분류. 지표 태그 값이 이름의 소문자다. */
+    public enum Result {
+        SAME, INTENDED_HOLE, INTENDED_MIDNIGHT, UNEXPLAINED, LEGACY_ONLY, NEW_ONLY, PENDING;
+
+        /** 지표 태그 값. */
+        public String tag() {
+            return name().toLowerCase(Locale.ROOT);
+        }
     }
 
     private record Run(LocalDate sourceDate, long observationBatchId, Instant receivedAt) {
+    }
+
+    /**
+     * 한 묶음에서 대조할 예보 실행.
+     *
+     * @param runs 고른 예보 실행. 읽은 순서 그대로다
+     * @param reachedThrough 대조 상한보다 늦은 배치를 만나 멈췄으면 참
+     */
+    private record Selection(List<Run> runs, boolean reachedThrough) {
     }
 
     /**
@@ -325,8 +398,18 @@ public final class JdbcScoringComparison implements CompareShadowScoring {
      * @param previousPost 직전 통과의 마지막 관측
      * @param previousClosure 직전 통과를 닫은 관측
      */
-    public record Verdict(String state, String reason, Long labelBits, String hash, Integer capacity, Long pre,
-                          Long post, Long closure, Long previousPost, Long previousClosure) {
+    public record Verdict(
+        String state,
+        String reason,
+        Long labelBits,
+        String hash,
+        Integer capacity,
+        Long pre,
+        Long post,
+        Long closure,
+        Long previousPost,
+        Long previousClosure
+    ) {
         static Verdict of(String state, String reason) {
             return new Verdict(state, reason, null, null, null, null, null, null, null, null);
         }

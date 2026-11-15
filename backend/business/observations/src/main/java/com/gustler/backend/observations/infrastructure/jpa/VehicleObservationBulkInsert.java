@@ -1,7 +1,7 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
 import com.gustler.backend.observations.domain.SeatUnknownReason;
-import com.gustler.backend.observations.domain.StoredObservations.Row;
+import com.gustler.backend.observations.domain.StoredObservations;
 import com.gustler.backend.observations.domain.UpstreamObservationRow;
 import java.sql.Array;
 import java.sql.Connection;
@@ -62,7 +62,11 @@ public class VehicleObservationBulkInsert {
     /**
      * 관측을 한 문장으로 넣고 입력 순서대로 저장 식별자가 붙은 행을 반환한다. 빈 목록이면 문장을 내지 않는다.
      */
-    public List<Row> insert(final long batchId, final long routeVersionId, List<UpstreamObservationRow> rows) {
+    public List<StoredObservations.Row> insert(
+        final long batchId,
+        final long routeVersionId,
+        List<UpstreamObservationRow> rows
+    ) {
         if (rows.isEmpty()) {
             return List.of();
         }
@@ -70,11 +74,11 @@ public class VehicleObservationBulkInsert {
             .map(row -> new VehicleObservationJpaEntity(batchId, routeVersionId, row))
             .toList();
         Map<Integer, Long> idsBySourceRow = insertReturningIds(batchId, routeVersionId, entities);
+        for (VehicleObservationJpaEntity entity : entities) {
+            entity.insertedAs(idOf(idsBySourceRow, entity.getSourceRowNumber()));
+        }
         return entities.stream()
-            .map(entity -> {
-                entity.insertedAs(idOf(idsBySourceRow, entity.getSourceRowNumber()));
-                return entity.storedRow();
-            })
+            .map(VehicleObservationJpaEntity::storedRow)
             .toList();
     }
 

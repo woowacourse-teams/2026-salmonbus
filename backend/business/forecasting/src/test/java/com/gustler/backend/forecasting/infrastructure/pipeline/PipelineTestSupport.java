@@ -45,16 +45,20 @@ final class PipelineTestSupport {
         };
     }
 
-    static NumericTreeEnsemble stumps(final int features, NumericTreeEnsemble.Kind kind, double[] baseline,
-        Random random) {
+    static NumericTreeEnsemble stumps(
+        final int features,
+        NumericTreeEnsemble.Kind kind,
+        double[] baseline,
+        Random random
+    ) {
         double[] thresholds = {0.0, 0.5, 1, 2, 5, 10, 30};
         List<List<List<NumericTreeEnsemble.Node>>> iterations = new ArrayList<>();
         for (int iteration = 0; iteration < 24; iteration++) {
             List<List<NumericTreeEnsemble.Node>> trees = new ArrayList<>();
             for (int tree = 0; tree < baseline.length; tree++) {
                 trees.add(List.of(
-                    new NumericTreeEnsemble.Node(random.nextInt(features), thresholds[random.nextInt(thresholds.length)],
-                        random.nextBoolean(), 1, 2, 0, false),
+                    new NumericTreeEnsemble.Node(random.nextInt(features),
+                        thresholds[random.nextInt(thresholds.length)], random.nextBoolean(), 1, 2, 0, false),
                     new NumericTreeEnsemble.Node(0, 0, false, 0, 0, random.nextDouble() - 0.5, true),
                     new NumericTreeEnsemble.Node(0, 0, false, 0, 0, random.nextDouble() - 0.5, true)));
             }

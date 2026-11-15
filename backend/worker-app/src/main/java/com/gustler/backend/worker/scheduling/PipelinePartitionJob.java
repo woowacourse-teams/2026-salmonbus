@@ -1,7 +1,6 @@
 package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.forecasting.api.pipeline.MaintainPipelinePartitions;
-import com.gustler.backend.forecasting.api.pipeline.MaintainPipelinePartitions.Report;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -25,7 +24,7 @@ public class PipelinePartitionJob {
         scheduler = "calibrationTaskScheduler")
     public void preparePartitions() {
         try {
-            Report report = partitions.maintain();
+            MaintainPipelinePartitions.Report report = partitions.maintain();
             if (!report.failed().isEmpty()) {
                 LOGGER.warn("event=pipeline_partition_maintenance_incomplete failed={}", report.failed());
             }

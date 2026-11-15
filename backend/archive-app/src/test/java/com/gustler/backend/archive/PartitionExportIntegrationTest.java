@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,8 +83,13 @@ class PartitionExportIntegrationTest {
         return service(objects, dropEnabled, 1000, new SimpleMeterRegistry(), source);
     }
 
-    PartitionExportService service(MemoryObjects objects, final boolean dropEnabled, final int pageSize,
-        SimpleMeterRegistry metrics, DriverManagerDataSource dataSource) {
+    PartitionExportService service(
+        MemoryObjects objects,
+        final boolean dropEnabled,
+        final int pageSize,
+        SimpleMeterRegistry metrics,
+        DriverManagerDataSource dataSource
+    ) {
         PartitionExportSettings settings = new PartitionExportSettings(dropEnabled, 3, PREFIX, Duration.ofHours(1),
             pageSize, Duration.ofMillis(300));
         PartitionExportRepository repository = new PartitionExportRepository(JdbcClient.create(dataSource),
@@ -159,6 +165,7 @@ class PartitionExportIntegrationTest {
 
     @Test
     void 파티션_하나를_내보내고_S3_파일만으로_배열_시각_NULL까지_같은_줄을_되살린다() {
+        // given
         partition("forecast_record", DAY);
         partition("forecast_run", DAY);
         partition("pass_label", DAY);
@@ -168,8 +175,10 @@ class PartitionExportIntegrationTest {
         passLabel(DAY, 4);
         MemoryObjects objects = new MemoryObjects();
 
+        // when
         PartitionExportService.RunReport report = service(objects, false).run();
 
+        // then
         assertThat(report.exported()).isEqualTo(3);
         Map<String, Object> ledger = ledger("forecast_record", DAY).orElseThrow();
         String key = (String) ledger.get("object_key");
@@ -211,6 +220,7 @@ class PartitionExportIntegrationTest {
 
     @Test
     void 큰_파티션은_파일을_나누고_페이지를_넘겨도_줄을_빠뜨리지_않는다() {
+        // given
         partition("forecast_record", DAY);
         jdbc.sql("""
             INSERT INTO forecast_record (source_date, vehicle_observation_id, observation_batch_id, source_row_number, route_id,
@@ -222,13 +232,19 @@ class PartitionExportIntegrationTest {
             """).update();
         MemoryObjects objects = new MemoryObjects();
 
+        // when
         service(objects, false, 7, new SimpleMeterRegistry(), source).run();
 
+        // then
         Map<String, Object> ledger = ledger("forecast_record", DAY).orElseThrow();
         PartitionManifest manifest = PartitionManifest.parse(objects.values.get((String) ledger.get("object_key")));
-        assertThat(manifest.files()).hasSizeGreaterThan(1);
-        assertThat(manifest.files()).allSatisfy(file -> assertThat(file.bytes()).isLessThan(ArchiveFiles.MAX_BYTES));
-        assertThat(manifest.files().stream().mapToLong(PartitionManifest.FileEntry::rows).sum()).isEqualTo(400);
+        assertSoftly(softly -> {
+            softly.assertThat(manifest.files()).hasSizeGreaterThan(1);
+            softly.assertThat(manifest.files())
+                .allSatisfy(file -> assertThat(file.bytes()).isLessThan(ArchiveFiles.MAX_BYTES));
+            softly.assertThat(manifest.files().stream().mapToLong(PartitionManifest.FileEntry::rows).sum())
+                .isEqualTo(400);
+        });
         PartitionRestore.restore(jdbc, objects, (String) ledger.get("object_key"),
             ((String) ledger.get("sha256")).trim(), "restored_large");
         assertSameRows("forecast_record_p20261112", "restored_large");
@@ -236,6 +252,7 @@ class PartitionExportIntegrationTest {
 
     @Test
     void 한국_날짜로_오늘_포함_사흘은_남기고_기본_파티션은_내보내지_않는다() {
+        // given
         partition("forecast_run", LocalDate.parse("2026-11-12"));
         partition("forecast_run", LocalDate.parse("2026-11-13"));
         jdbc.sql("""
@@ -247,23 +264,33 @@ class PartitionExportIntegrationTest {
         SimpleMeterRegistry metrics = new SimpleMeterRegistry();
         clock = Clock.fixed(Instant.parse("2026-11-15T14:59:59Z"), ZoneOffset.UTC);
 
+        // when
         service(objects, false, 1000, metrics, source).run();
 
-        assertThat(jdbc.sql("SELECT source_date FROM daily_export").query(LocalDate.class).list())
-            .containsExactly(LocalDate.parse("2026-11-12"));
-        assertThat(metrics.get("salmonbus_archive_partition_default_rows").tag("table", "forecast_run").gauge()
-            .value()).isEqualTo(1.0);
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(jdbc.sql("SELECT source_date FROM daily_export").query(LocalDate.class).list())
+                .containsExactly(LocalDate.parse("2026-11-12"));
+            softly.assertThat(metrics.get("salmonbus_archive_partition_default_rows").tag("table", "forecast_run")
+                .gauge().value()).isEqualTo(1.0);
+        });
 
+        // when
         clock = Clock.fixed(Instant.parse("2026-11-15T15:00:00Z"), ZoneOffset.UTC);
         service(objects, false).run();
 
-        assertThat(jdbc.sql("SELECT source_date FROM daily_export ORDER BY source_date").query(LocalDate.class).list())
-            .containsExactly(LocalDate.parse("2026-11-12"), LocalDate.parse("2026-11-13"));
-        assertThat(count("SELECT count(*) FROM forecast_run_default")).isOne();
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(jdbc.sql("SELECT source_date FROM daily_export ORDER BY source_date")
+                .query(LocalDate.class).list())
+                .containsExactly(LocalDate.parse("2026-11-12"), LocalDate.parse("2026-11-13"));
+            softly.assertThat(count("SELECT count(*) FROM forecast_run_default")).isOne();
+        });
     }
 
     @Test
     void 오래된_날짜부터_같은_날짜는_테이블_순서로_처리한다() {
+        // given
         partition("forecast_record", LocalDate.parse("2026-11-12"));
         partition("stop_pass", LocalDate.parse("2026-11-10"));
         partition("forecast_run", LocalDate.parse("2026-11-11"));
@@ -271,8 +298,10 @@ class PartitionExportIntegrationTest {
         partition("forecast_run", LocalDate.parse("2026-11-13"));
         MemoryObjects objects = new MemoryObjects();
 
+        // when
         service(objects, false).run();
 
+        // then
         assertThat(objects.manifestRoots()).containsExactly("forecast_run/source_date=2026-11-10",
             "stop_pass/source_date=2026-11-10", "forecast_run/source_date=2026-11-11",
             "forecast_record/source_date=2026-11-12");
@@ -280,6 +309,7 @@ class PartitionExportIntegrationTest {
 
     @Test
     void 이미_내보낸_날짜는_다시_올리지_않는다() {
+        // given
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
         MemoryObjects objects = new MemoryObjects();
@@ -287,8 +317,10 @@ class PartitionExportIntegrationTest {
         final int puts = objects.puts.size();
         Object exportedAt = ledger("forecast_run", DAY).orElseThrow().get("exported_at");
 
+        // when
         PartitionExportService.RunReport report = service(objects, false).run();
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(report.exported()).isZero();
             softly.assertThat(report.pending()).isZero();
@@ -299,13 +331,16 @@ class PartitionExportIntegrationTest {
 
     @Test
     void 업로드가_중간에_실패하면_장부를_남기지_않고_다음_회차에_다시_올린다() {
+        // given
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
         MemoryObjects objects = new MemoryObjects();
         objects.failManifestOnce = true;
 
+        // when
         PartitionExportService.RunReport failed = service(objects, true).run();
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(failed.pending()).isOne();
             softly.assertThat(failed.oldestPending()).isEqualTo(DAY);
@@ -313,8 +348,10 @@ class PartitionExportIntegrationTest {
             softly.assertThat(exists("forecast_run_p20261112")).isTrue();
         });
 
+        // when
         PartitionExportService.RunReport retried = service(objects, true).run();
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(retried.dropped()).isOne();
             softly.assertThat(retried.oldestPending()).isNull();
@@ -325,14 +362,17 @@ class PartitionExportIntegrationTest {
 
     @Test
     void 확인을_마친_파티션을_떼어_지우고_S3_파일만으로_되살린다() {
+        // given
         partition("forecast_record", DAY);
         forecastRecord(DAY, 1, EDGE_DOUBLES);
         forecastRecord(DAY, 2, "{1,2}");
         jdbc.sql("CREATE TABLE copy_record AS SELECT * FROM forecast_record_p20261112").update();
         MemoryObjects objects = new MemoryObjects();
 
+        // when
         PartitionExportService.RunReport report = service(objects, true).run();
 
+        // then
         Map<String, Object> ledger = ledger("forecast_record", DAY).orElseThrow();
         assertSoftly(softly -> {
             softly.assertThat(report.dropped()).isOne();
@@ -347,11 +387,14 @@ class PartitionExportIntegrationTest {
 
     @Test
     void 지우기가_꺼져_있으면_내보내고_확인만_한다() {
+        // given
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
 
+        // when
         service(new MemoryObjects(), false).run();
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(exists("forecast_run_p20261112")).isTrue();
             softly.assertThat(count("SELECT count(*) FROM forecast_run_p20261112")).isOne();
@@ -362,6 +405,7 @@ class PartitionExportIntegrationTest {
 
     @Test
     void 내보낸_뒤_줄이_늘면_지우지_않는다() {
+        // given
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
         MemoryObjects objects = new MemoryObjects();
@@ -369,8 +413,10 @@ class PartitionExportIntegrationTest {
         forecastRun(DAY, 2);
         SimpleMeterRegistry metrics = new SimpleMeterRegistry();
 
+        // when
         PartitionExportService.RunReport report = service(objects, true, 1000, metrics, source).run();
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(report.dropped()).isZero();
             softly.assertThat(report.oldestPending()).isEqualTo(DAY);
@@ -383,15 +429,21 @@ class PartitionExportIntegrationTest {
 
     @Test
     void S3_파일이_장부와_다르면_지우지_않는다() {
+        // given
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
         MemoryObjects objects = new MemoryObjects();
         service(objects, false).run();
-        String file = objects.values.keySet().stream().filter(k -> k.endsWith(".jsonl.gz")).findFirst().orElseThrow();
+        String file = objects.values.keySet().stream()
+            .filter(k -> k.endsWith(".jsonl.gz"))
+            .findFirst()
+            .orElseThrow();
         objects.values.put(file, ArchiveFiles.encode(List.of("{\"changed\":true}")));
 
+        // when
         PartitionExportService.RunReport report = service(objects, true).run();
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(report.dropped()).isZero();
             softly.assertThat(exists("forecast_run_p20261112")).isTrue();
@@ -401,14 +453,17 @@ class PartitionExportIntegrationTest {
 
     @Test
     void manifest_해시가_장부와_다르면_지우지_않는다() {
+        // given
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
         MemoryObjects objects = new MemoryObjects();
         service(objects, false).run();
         jdbc.sql("UPDATE daily_export SET sha256 = ?").param("0".repeat(64)).update();
 
+        // when
         PartitionExportService.RunReport report = service(objects, true).run();
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(report.dropped()).isZero();
             softly.assertThat(exists("forecast_run_p20261112")).isTrue();
@@ -417,6 +472,7 @@ class PartitionExportIntegrationTest {
 
     @Test
     void 확인_시각이_없는_장부는_다시_읽어_확인한_뒤에만_지운다() {
+        // given
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
         MemoryObjects objects = new MemoryObjects();
@@ -425,21 +481,26 @@ class PartitionExportIntegrationTest {
         String manifest = (String) ledger("forecast_run", DAY).orElseThrow().get("object_key");
         byte[] original = objects.values.remove(manifest);
 
+        // when
         service(objects, true).run();
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(exists("forecast_run_p20261112")).isTrue();
             softly.assertThat(ledger("forecast_run", DAY).orElseThrow().get("verified_at")).isNull();
         });
 
+        // when
         objects.values.put(manifest, original);
         service(objects, true).run();
 
+        // then
         assertThat(exists("forecast_run_p20261112")).isFalse();
     }
 
     @Test
     void 다른_실행이_장부에_다른_내용을_먼저_적으면_실패로_남기고_지우지_않는다() {
+        // given
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
         MemoryObjects objects = new MemoryObjects();
@@ -452,7 +513,10 @@ class PartitionExportIntegrationTest {
         PartitionExportRepository racing = new PartitionExportRepository(jdbc, new JdbcTransactionManager(source),
             settings.lockTimeout()) {
             @Override
-            public LedgerWrite recordVerified(Partition partition, Ledger ledger) {
+            public PartitionExportRepository.LedgerWrite recordVerified(
+                PartitionExportRepository.Partition partition,
+                PartitionExportRepository.Ledger ledger
+            ) {
                 jdbc.sql("""
                     INSERT INTO daily_export(table_name, source_date, object_key, row_count, sha256, exported_at,
                         verified_at) VALUES ('forecast_run', '2026-11-12', ?, 0, ?, now(), now())
@@ -462,9 +526,11 @@ class PartitionExportIntegrationTest {
         };
         SimpleMeterRegistry metrics = new SimpleMeterRegistry();
 
+        // when
         PartitionExportService.RunReport report = new PartitionExportService(racing, objects, clock, metrics, settings)
             .run();
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(report.dropped()).isZero();
             softly.assertThat(exists("forecast_run_p20261112")).isTrue();
@@ -476,6 +542,7 @@ class PartitionExportIntegrationTest {
 
     @Test
     void 잠금을_얻지_못하면_지우지_않고_다음_회차에_지운다() throws Exception {
+        // given
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
         MemoryObjects objects = new MemoryObjects();
@@ -485,11 +552,13 @@ class PartitionExportIntegrationTest {
             reader.setAutoCommit(false);
             statement.execute("SELECT count(*) FROM forecast_run");
 
+            // when
             blocked = service(objects, true, 1000, metrics, source).run();
 
             reader.rollback();
         }
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(blocked.dropped()).isZero();
             softly.assertThat(exists("forecast_run_p20261112")).isTrue();
@@ -498,14 +567,19 @@ class PartitionExportIntegrationTest {
                 .counter().count()).isOne();
         });
 
+        // when
         PartitionExportService.RunReport retried = service(objects, true).run();
 
-        assertThat(retried.dropped()).isOne();
-        assertThat(exists("forecast_run_p20261112")).isFalse();
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(retried.dropped()).isOne();
+            softly.assertThat(exists("forecast_run_p20261112")).isFalse();
+        });
     }
 
     @Test
     void 다른_실행이_같은_파티션을_지우는_중이면_건드리지_않는다() throws Exception {
+        // given
         partition("forecast_run", DAY);
         forecastRun(DAY, 1);
         MemoryObjects objects = new MemoryObjects();
@@ -516,11 +590,13 @@ class PartitionExportIntegrationTest {
             statement.execute("SELECT pg_advisory_xact_lock(" + PartitionExportRepository.ADVISORY_NAMESPACE
                 + ", hashtext('forecast_run_p20261112'))");
 
+            // when
             service(objects, true, 1000, metrics, source).run();
 
             other.rollback();
         }
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(exists("forecast_run_p20261112")).isTrue();
             softly.assertThat(metrics.get("salmonbus_archive_partition_deferrals").tag("reason", "BUSY").counter()
@@ -530,6 +606,7 @@ class PartitionExportIntegrationTest {
 
     @Test
     void 두_실행이_동시에_돌아도_한_번만_내보내고_한_번만_지운다() throws Exception {
+        // given
         partition("forecast_run", DAY);
         partition("forecast_record", DAY);
         forecastRun(DAY, 1);
@@ -544,6 +621,8 @@ class PartitionExportIntegrationTest {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch start = new CountDownLatch(1);
         List<Future<PartitionExportService.RunReport>> runs = new ArrayList<>();
+
+        // when
         try {
             for (PartitionExportService each : services) {
                 runs.add(executor.submit(() -> {
@@ -560,6 +639,7 @@ class PartitionExportIntegrationTest {
         }
         service(objects, true).run();
 
+        // then
         assertSoftly(softly -> {
             softly.assertThat(exists("forecast_run_p20261112")).isFalse();
             softly.assertThat(exists("forecast_record_p20261112")).isFalse();
@@ -581,7 +661,7 @@ class PartitionExportIntegrationTest {
         @Override
         public synchronized void putVerified(String key, byte[] bytes) {
             byte[] prior = values.putIfAbsent(key, bytes.clone());
-            if (prior != null && !java.util.Arrays.equals(prior, bytes)) {
+            if (prior != null && !Arrays.equals(prior, bytes)) {
                 throw new IllegalStateException("OBJECT_CONFLICT");
             }
             puts.add(key);
@@ -589,7 +669,7 @@ class PartitionExportIntegrationTest {
                 failManifestOnce = false;
                 throw new IllegalStateException("RESPONSE_LOST");
             }
-            if (!java.util.Arrays.equals(bytes, read(key, bytes.length))) {
+            if (!Arrays.equals(bytes, read(key, bytes.length))) {
                 throw new IllegalStateException("READBACK");
             }
         }
@@ -604,8 +684,10 @@ class PartitionExportIntegrationTest {
         }
 
         synchronized List<String> manifestRoots() {
-            return puts.stream().filter(k -> k.contains("/manifest-"))
-                .map(k -> k.substring(PREFIX.length(), k.indexOf("/manifest-"))).toList();
+            return puts.stream()
+                .filter(k -> k.contains("/manifest-"))
+                .map(k -> k.substring(PREFIX.length(), k.indexOf("/manifest-")))
+                .toList();
         }
     }
 }

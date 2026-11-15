@@ -111,7 +111,12 @@ public class LegacyExportService {
     }
 
     /** 처리한 회차의 요약이다. */
-    public record RunReport(long rows, int segments, Map<String, TableStatus> tables, StopReason stoppedBy) {
+    public record RunReport(
+        long rows,
+        int segments,
+        Map<String, TableStatus> tables,
+        StopReason stoppedBy
+    ) {
         public RunReport {
             tables = Map.copyOf(tables);
         }
@@ -144,7 +149,7 @@ public class LegacyExportService {
             statuses.put(table, result.status);
             segments += result.segments;
         }
-        long complete = statuses.values().stream().filter(s -> s == TableStatus.COMPLETE).count();
+        final long complete = statuses.values().stream().filter(s -> s == TableStatus.COMPLETE).count();
         completeTables.set(complete);
         final long rows = settings.maxRowsPerRun() - budget.rowsLeft;
         final long millis = Math.max(1, (System.nanoTime() - started) / 1000000);
@@ -169,14 +174,21 @@ public class LegacyExportService {
             if (stop != StopReason.NONE) {
                 return true;
             }
-            if (Thread.currentThread().isInterrupted()) {
-                stop = StopReason.INTERRUPTED;
-            } else if (rowsLeft <= 0) {
-                stop = StopReason.ROW_LIMIT;
-            } else if (!clock.instant().isBefore(deadline)) {
-                stop = StopReason.TIME_LIMIT;
-            }
+            stop = reachedLimit();
             return stop != StopReason.NONE;
+        }
+
+        private StopReason reachedLimit() {
+            if (Thread.currentThread().isInterrupted()) {
+                return StopReason.INTERRUPTED;
+            }
+            if (rowsLeft <= 0) {
+                return StopReason.ROW_LIMIT;
+            }
+            if (!clock.instant().isBefore(deadline)) {
+                return StopReason.TIME_LIMIT;
+            }
+            return StopReason.NONE;
         }
     }
 
@@ -238,25 +250,12 @@ public class LegacyExportService {
             }
             return new TableRun(TableStatus.ABSENT, 0);
         }
-        List<PartitionManifest.Column> columns = repository.columns(table);
-        List<String> unsupported = LegacyExportRepository.unsupportedColumns(columns);
-        if (!unsupported.isEmpty()) {
-            LOG.warn("event=legacy_export status=UNSUPPORTED_COLUMNS table={} columns={}", table, unsupported);
-            throw new IllegalStateException("UNSUPPORTED_COLUMN_TYPE");
-        }
+        List<PartitionManifest.Column> columns = supportedColumns(table);
         List<String> keys = repository.primaryKey(table);
-        List<LegacyExportRepository.Segment> ledger = new ArrayList<>(repository.segments(table));
-        for (int i = 0; i < ledger.size(); i++) {
-            if (ledger.get(i).number() != i) {
-                throw new IllegalStateException("LEDGER_GAP");
-            }
-            if (ledger.get(i).verifiedAt() == null || ledger.get(i).keyTo() == null) {
-                throw new IllegalStateException("LEDGER_UNVERIFIED");
-            }
-        }
+        List<LegacyExportRepository.Segment> ledger = verifiedLedger(table);
         state.ledger(ledger);
         int written = 0;
-        String cursor = ledger.isEmpty() ? null : ledger.getLast().keyTo();
+        String cursor = lastKeyTo(ledger);
         SegmentWriter writer = null;
         boolean reachedEnd = false;
         while (!budget.exhausted()) {
@@ -295,6 +294,37 @@ public class LegacyExportService {
         return new TableRun(audit(table, columns, keys, ledger, state, budget), written);
     }
 
+    private List<PartitionManifest.Column> supportedColumns(String table) {
+        List<PartitionManifest.Column> columns = repository.columns(table);
+        List<String> unsupported = LegacyExportRepository.unsupportedColumns(columns);
+        if (!unsupported.isEmpty()) {
+            LOG.warn("event=legacy_export status=UNSUPPORTED_COLUMNS table={} columns={}", table, unsupported);
+            throw new IllegalStateException("UNSUPPORTED_COLUMN_TYPE");
+        }
+        return columns;
+    }
+
+    /** 장부의 조각을 수정 가능한 목록으로 낸다. 번호에 빈틈이 있거나 확인을 마치지 않은 조각이 있으면 실패한다. */
+    private List<LegacyExportRepository.Segment> verifiedLedger(String table) {
+        List<LegacyExportRepository.Segment> ledger = new ArrayList<>(repository.segments(table));
+        for (int i = 0; i < ledger.size(); i++) {
+            if (ledger.get(i).number() != i) {
+                throw new IllegalStateException("LEDGER_GAP");
+            }
+            if (ledger.get(i).verifiedAt() == null || ledger.get(i).keyTo() == null) {
+                throw new IllegalStateException("LEDGER_UNVERIFIED");
+            }
+        }
+        return ledger;
+    }
+
+    private static String lastKeyTo(List<LegacyExportRepository.Segment> ledger) {
+        if (ledger.isEmpty()) {
+            return null;
+        }
+        return ledger.getLast().keyTo();
+    }
+
     /** 한 조각에 들어갈 줄을 평문 8MiB 안팎의 파일로 나눠 바로 올리고, 닫을 때 쓸 값을 모은다. */
     private final class SegmentWriter {
         final String table;
@@ -310,7 +340,12 @@ public class LegacyExportService {
         long gzipBytes;
         long rows;
 
-        SegmentWriter(String table, final int number, String after, String keyFrom) {
+        SegmentWriter(
+            String table,
+            final int number,
+            String after,
+            String keyFrom
+        ) {
             this.table = table;
             this.number = number;
             this.after = after;
@@ -349,8 +384,12 @@ public class LegacyExportService {
         }
     }
 
-    private LegacyExportRepository.Segment close(SegmentWriter writer, List<PartitionManifest.Column> columns,
-        List<String> keys, TableState state) {
+    private LegacyExportRepository.Segment close(
+        SegmentWriter writer,
+        List<PartitionManifest.Column> columns,
+        List<String> keys,
+        TableState state
+    ) {
         writer.flush();
         LegacySegmentManifest manifest = new LegacySegmentManifest(LegacySegmentManifest.FORMAT, writer.table,
             writer.number, writer.after, writer.keyFrom, writer.keyTo, writer.rows, keys, columns,
@@ -365,7 +404,11 @@ public class LegacyExportService {
         if (repository.record(writer.table, segment, writer.after) != LegacyExportRepository.RecordResult.INSERTED) {
             throw new IllegalStateException("LEDGER_CHANGED");
         }
-        final long nanos = System.nanoTime() - writer.started;
+        recordSegment(writer, state, key, System.nanoTime() - writer.started);
+        return segment;
+    }
+
+    private void recordSegment(SegmentWriter writer, TableState state, String key, final long nanos) {
         metrics.timer("salmonbus_archive_stage", "stage", "legacy_segment").record(nanos, TimeUnit.NANOSECONDS);
         metrics.counter("salmonbus_archive_rows", "stage", "legacy_exported", "table", writer.table)
             .increment(writer.rows);
@@ -376,20 +419,43 @@ public class LegacyExportService {
             + " keyFrom={} keyTo={} key={} durationMs={} ledgerRows={}", writer.table, writer.number, writer.rows,
             writer.files.size(), writer.plainBytes, writer.gzipBytes, writer.keyFrom, writer.keyTo, key,
             nanos / 1000000, state.exportedRows.get());
-        return segment;
     }
 
     /** 조각의 manifest 와 파일을 지금 S3 에서 다시 읽어 확인한다. 어긋나면 사유 코드를 담은 예외를 던진다. */
-    private void verifyStored(String table, final int number, String key, String sha, final long rows, String keyTo) {
+    private void verifyStored(
+        String table,
+        final int number,
+        String key,
+        String sha,
+        final long rows,
+        String keyTo
+    ) {
         byte[] manifestBytes = objects.read(key, ArchiveFiles.MAX_BYTES);
         if (!ArchiveFiles.digest(manifestBytes).equals(sha)) {
             throw new IllegalStateException("MANIFEST_HASH_MISMATCH");
         }
         LegacySegmentManifest manifest = LegacySegmentManifest.parse(manifestBytes);
-        if (!LegacySegmentManifest.FORMAT.equals(manifest.format()) || !table.equals(manifest.table())
-            || manifest.segment() != number || manifest.rows() != rows || !keyTo.equals(manifest.keyTo())) {
+        if (differsFromSegment(manifest, table, number, rows, keyTo)) {
             throw new IllegalStateException("MANIFEST_MISMATCH");
         }
+        if (storedRows(manifest) != rows) {
+            throw new IllegalStateException("MANIFEST_ROW_COUNT_MISMATCH");
+        }
+    }
+
+    private static boolean differsFromSegment(
+        LegacySegmentManifest manifest,
+        String table,
+        final int number,
+        final long rows,
+        String keyTo
+    ) {
+        return !LegacySegmentManifest.FORMAT.equals(manifest.format()) || !table.equals(manifest.table())
+            || manifest.segment() != number || manifest.rows() != rows || !keyTo.equals(manifest.keyTo());
+    }
+
+    /** manifest 의 파일을 지금 S3 에서 다시 읽어 해시·줄 수를 확인하고 줄 수 합을 낸다. */
+    private long storedRows(LegacySegmentManifest manifest) {
         long stored = 0;
         for (PartitionManifest.FileEntry file : manifest.files()) {
             byte[] bytes = objects.read(file.key(), file.bytes());
@@ -401,17 +467,21 @@ public class LegacyExportService {
             }
             stored += file.rows();
         }
-        if (stored != rows) {
-            throw new IllegalStateException("MANIFEST_ROW_COUNT_MISMATCH");
-        }
+        return stored;
     }
 
     /**
      * 끝까지 내보낸 테이블의 조각 범위를 차례로 다시 세어 장부와 맞춘다. 회차 상한에 닿으면 멈추고 다음 회차가 이어 센다. 이미 맞춰 본
      * 조각은 장부의 해시가 그대로인 동안 다시 세지 않는다.
      */
-    private TableStatus audit(String table, List<PartitionManifest.Column> columns, List<String> keys,
-        List<LegacyExportRepository.Segment> ledger, TableState state, Budget budget) {
+    private TableStatus audit(
+        String table,
+        List<PartitionManifest.Column> columns,
+        List<String> keys,
+        List<LegacyExportRepository.Segment> ledger,
+        TableState state,
+        Budget budget
+    ) {
         final long started = System.nanoTime();
         while (state.auditedShas.size() < ledger.size()) {
             if (budget.exhausted()) {
@@ -420,12 +490,12 @@ public class LegacyExportService {
             }
             final int index = state.auditedShas.size();
             LegacyExportRepository.Segment segment = ledger.get(index);
-            String after = index == 0 ? null : ledger.get(index - 1).keyTo();
+            String after = keyBefore(ledger, index);
             final long current = repository.countRange(table, columns, keys, after, segment.keyTo());
             if (current != segment.rows()) {
                 state.mismatchedSegments.add(index);
                 state.mismatched.set(state.mismatchedSegments.size());
-                String kind = current < segment.rows() ? "ROWS_REMOVED" : "ROWS_ADDED_BEHIND_CURSOR";
+                String kind = mismatchKind(current, segment.rows());
                 metrics.counter("salmonbus_archive_legacy_failures", "table", table, "reason", kind).increment();
                 LOG.warn("event=legacy_export status=AUDIT_MISMATCH table={} segment={} kind={} ledgerRows={}"
                     + " currentRows={} after={} keyTo={}", table, index, kind, segment.rows(), current, after,
@@ -449,6 +519,20 @@ public class LegacyExportService {
         return TableStatus.COMPLETE;
     }
 
+    private static String keyBefore(List<LegacyExportRepository.Segment> ledger, final int index) {
+        if (index == 0) {
+            return null;
+        }
+        return ledger.get(index - 1).keyTo();
+    }
+
+    private static String mismatchKind(final long current, final long ledgerRows) {
+        if (current < ledgerRows) {
+            return "ROWS_REMOVED";
+        }
+        return "ROWS_ADDED_BEHIND_CURSOR";
+    }
+
     private void gauge(String name, Tags tags, AtomicLong value) {
         Gauge.builder(name, value, AtomicLong::get).tags(tags).strongReference(true).register(metrics);
     }
@@ -459,10 +543,14 @@ public class LegacyExportService {
 
     private static String failureCode(RuntimeException failure) {
         String message = failure.getMessage();
-        if (failure instanceof IllegalStateException && message != null && message.matches("[A-Za-z_]{1,80}")) {
+        if (hasSafeFailureCode(failure, message)) {
             return message;
         }
         return failure.getClass().getSimpleName();
+    }
+
+    private static boolean hasSafeFailureCode(RuntimeException failure, String message) {
+        return failure instanceof IllegalStateException && message != null && message.matches("[A-Za-z_]{1,80}");
     }
 
     private static String sqlState(Throwable failure) {

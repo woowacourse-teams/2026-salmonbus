@@ -156,16 +156,17 @@ public class BoardQueryService {
         List<Long> versionIds = missed.values().stream().map(BoardSnapshot::routeVersionId).distinct().toList();
         Set<Long> publishedBatchIds = new LinkedHashSet<>();
         Map<Long, LocalDate> recordedBatchDates = new LinkedHashMap<>();
-        missed.values().stream()
+        List<SnapshotObservation> publishedObservations = missed.values().stream()
             .map(snapshot -> snapshot.observation().orElseThrow())
             .filter(SnapshotObservation::forecastPublished)
-            .forEach(observation -> {
-                if (observation.readsForecastRecords()) {
-                    recordedBatchDates.putIfAbsent(observation.batchId(), observation.forecastDate());
-                } else {
-                    publishedBatchIds.add(observation.batchId());
-                }
-            });
+            .toList();
+        for (SnapshotObservation observation : publishedObservations) {
+            if (observation.readsForecastRecords()) {
+                recordedBatchDates.putIfAbsent(observation.batchId(), observation.forecastDate());
+                continue;
+            }
+            publishedBatchIds.add(observation.batchId());
+        }
         Map<Long, Long> versionIdByBatchId = new LinkedHashMap<>();
         missed.values().forEach(snapshot -> versionIdByBatchId.put(
             snapshot.observation().orElseThrow().batchId(), snapshot.routeVersionId()));
@@ -189,12 +190,7 @@ public class BoardQueryService {
                 if (routeStops.isEmpty()) {
                     throw new ServiceUnavailableException();
                 }
-                List<StoredPrediction> published = List.of();
-                if (observation.readsForecastRecords()) {
-                    published = recordedPredictions.getOrDefault(observation.batchId(), List.of());
-                } else if (observation.forecastPublished()) {
-                    published = predictions.getOrDefault(observation.batchId(), List.of());
-                }
+                List<StoredPrediction> published = storedPredictionsOf(observation, recordedPredictions, predictions);
                 BoardRows rows = new BoardRows(
                     routeStops,
                     published,
@@ -207,6 +203,20 @@ public class BoardQueryService {
                 results.put(entry.getKey(), BoardBatchRead.failed(failure));
             }
         }
+    }
+
+    private static List<StoredPrediction> storedPredictionsOf(
+        SnapshotObservation observation,
+        Map<Long, List<StoredPrediction>> recordedPredictions,
+        Map<Long, List<StoredPrediction>> predictions
+    ) {
+        if (observation.readsForecastRecords()) {
+            return recordedPredictions.getOrDefault(observation.batchId(), List.of());
+        }
+        if (observation.forecastPublished()) {
+            return predictions.getOrDefault(observation.batchId(), List.of());
+        }
+        return List.of();
     }
 
     private static Map<String, BoardBatchRead> orderedAs(

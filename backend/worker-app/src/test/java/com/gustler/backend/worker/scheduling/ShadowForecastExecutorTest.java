@@ -1,6 +1,7 @@
 package com.gustler.backend.worker.scheduling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.ShadowForecastTask;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -71,11 +72,13 @@ class ShadowForecastExecutorTest {
         final long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - before);
 
         // then
-        assertThat(elapsedMillis).isLessThan(1_000);
-        assertThat(fourth.discarded.get()).isOne();
-        assertThat(second.discarded.get() + third.discarded.get()).isZero();
-        assertThat(executor.queued()).isEqualTo(2);
-        assertThat(meters.get("salmonbus.pipeline.shadow.queue").gauge().value()).isEqualTo(2);
+        assertSoftly(softly -> {
+            softly.assertThat(elapsedMillis).isLessThan(1_000);
+            softly.assertThat(fourth.discarded.get()).isOne();
+            softly.assertThat(second.discarded.get() + third.discarded.get()).isZero();
+            softly.assertThat(executor.queued()).isEqualTo(2);
+            softly.assertThat(meters.get("salmonbus.pipeline.shadow.queue").gauge().value()).isEqualTo(2);
+        });
         release.countDown();
     }
 

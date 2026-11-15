@@ -1,6 +1,7 @@
 package com.gustler.backend.worker.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.CompareShadowScoring;
 import com.gustler.backend.forecasting.api.pipeline.ScoringFeed;
@@ -58,17 +59,20 @@ class ForecastScoringExecutorConfigurationTest {
     void 그림자_실행과_채점을_켜면_채점_줄과_주기_작업과_옛_정산_대조_작업을_기본값으로_등록한다() {
         for (String scoring : new String[] {"shadow"}) {
             runner.withPropertyValues("forecast.enabled=true", "forecast.shadow.enabled=true",
-                "forecast.scoring=" + scoring).run(context -> {
+                    "forecast.scoring=" + scoring)
+                .run(context -> {
                     ForecastPipelineProperties properties = context.getBean(ForecastPipelineProperties.class);
 
                     assertThat(context).hasSingleBean(ScoringExecutor.class);
                     assertThat(context).hasSingleBean(ShadowScoringJob.class);
                     assertThat(context).hasSingleBean(ScoringComparisonJob.class);
-                    assertThat(properties.scoringFlushInterval()).isEqualTo(Duration.ofSeconds(5));
-                    assertThat(properties.scoringQueueCapacity()).isEqualTo(10_000);
-                    assertThat(properties.scoringComparisonInterval()).isEqualTo(Duration.ofMinutes(10));
-                    assertThat(properties.scoringComparisonDelay()).isEqualTo(Duration.ofHours(3));
-                    assertThat(properties.scoringWithoutShadow(true)).isFalse();
+                    assertSoftly(softly -> {
+                        softly.assertThat(properties.scoringFlushInterval()).isEqualTo(Duration.ofSeconds(5));
+                        softly.assertThat(properties.scoringQueueCapacity()).isEqualTo(10_000);
+                        softly.assertThat(properties.scoringComparisonInterval()).isEqualTo(Duration.ofMinutes(10));
+                        softly.assertThat(properties.scoringComparisonDelay()).isEqualTo(Duration.ofHours(3));
+                        softly.assertThat(properties.scoringWithoutShadow(true)).isFalse();
+                    });
                 });
         }
     }
@@ -76,7 +80,8 @@ class ForecastScoringExecutorConfigurationTest {
     @Test
     void 채점_줄_길이가_1보다_작으면_기동하지_않는다() {
         runner.withPropertyValues("forecast.enabled=true", "forecast.shadow.enabled=true", "forecast.scoring=shadow",
-            "forecast.scoring-queue-capacity=0").run(context -> assertThat(context).hasFailed());
+                "forecast.scoring-queue-capacity=0")
+            .run(context -> assertThat(context).hasFailed());
     }
 
     @Test

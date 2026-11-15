@@ -22,11 +22,15 @@ public final class JdbcSettlementContextWriter implements SettlementContextWrite
             SET settlement_context = settlement_context || jsonb_build_object(CAST(? AS text), CAST(? AS jsonb))
             WHERE id = ? AND jsonb_exists(settlement_context, ?) = false
             """).params(route, context, modelDeploymentId, route).update();
-        if (inserted == 0 && !jdbc.sql("""
-            SELECT (settlement_context -> CAST(? AS text)) IS NOT DISTINCT FROM CAST(? AS jsonb)
-            FROM model_deployment WHERE id = ?
-            """).params(route, context, modelDeploymentId).query(Boolean.class).single()) {
+        if (inserted == 0 && !hasSameStoredContext(modelDeploymentId, route, context)) {
             throw new IllegalStateException("같은 모델과 노선 판본의 정산 근거가 변경됐다");
         }
+    }
+
+    private boolean hasSameStoredContext(final long modelDeploymentId, String route, String context) {
+        return jdbc.sql("""
+            SELECT (settlement_context -> CAST(? AS text)) IS NOT DISTINCT FROM CAST(? AS jsonb)
+            FROM model_deployment WHERE id = ?
+            """).params(route, context, modelDeploymentId).query(Boolean.class).single();
     }
 }

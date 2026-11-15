@@ -2,6 +2,7 @@ package com.gustler.backend.archive;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -33,15 +34,23 @@ class PartitionExportSettingsTest {
         .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
         .withPropertyValues("archive.prefix=salmonbus/prod/lake-v2/");
 
-    PartitionExportSettings settings(final int retentionDays, String prefix, Duration interval, final int pageSize,
-        Duration lockTimeout) {
+    PartitionExportSettings settings(
+        final int retentionDays,
+        String prefix,
+        Duration interval,
+        final int pageSize,
+        Duration lockTimeout
+    ) {
         return new PartitionExportSettings(false, retentionDays, prefix, interval, pageSize, lockTimeout);
     }
 
     @Test
     void 범위를_벗어난_설정값은_받지_않는다() {
+        // given
         Duration hour = Duration.ofHours(1);
         Duration second = Duration.ofSeconds(1);
+
+        // then
         for (Runnable invalid : List.<Runnable>of(
             () -> settings(1, "salmonbus/prod/lake-v3/", hour, 2000, second),
             () -> settings(31, "salmonbus/prod/lake-v3/", hour, 2000, second),
@@ -68,12 +77,17 @@ class PartitionExportSettingsTest {
 
     @Test
     void 대상_날짜는_한국_자정에_바뀐다() {
-        assertThat(PartitionExportService.lastEligibleDate(
-            Clock.fixed(Instant.parse("2026-11-15T14:59:59Z"), ZoneOffset.UTC), 3))
-            .isEqualTo(LocalDate.parse("2026-11-12"));
-        assertThat(PartitionExportService.lastEligibleDate(
-            Clock.fixed(Instant.parse("2026-11-15T15:00:00Z"), ZoneOffset.UTC), 3))
-            .isEqualTo(LocalDate.parse("2026-11-13"));
+        // when
+        LocalDate beforeMidnight = PartitionExportService.lastEligibleDate(
+            Clock.fixed(Instant.parse("2026-11-15T14:59:59Z"), ZoneOffset.UTC), 3);
+        LocalDate atMidnight = PartitionExportService.lastEligibleDate(
+            Clock.fixed(Instant.parse("2026-11-15T15:00:00Z"), ZoneOffset.UTC), 3);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(beforeMidnight).isEqualTo(LocalDate.parse("2026-11-12"));
+            softly.assertThat(atMidnight).isEqualTo(LocalDate.parse("2026-11-13"));
+        });
     }
 
     @Test

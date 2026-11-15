@@ -47,7 +47,15 @@ public final class SettlementContextDocument {
         if (targets == null || targets.isEmpty()) {
             throw new IllegalStateException("노선의 정산 근거가 없다: " + statistics.route());
         }
-        JsonNode source = JSON.readTree(targets.values().iterator().next());
+        ObjectNode shared = sharedContext(JSON.readTree(targets.values().iterator().next()), statistics);
+        ObjectNode stops = stopsContext(targets);
+        ObjectNode context = JSON.createObjectNode();
+        context.set("shared", shared);
+        context.set("stops", stops);
+        return JSON.writeValueAsString(context);
+    }
+
+    private static ObjectNode sharedContext(JsonNode source, AlightingAwareRouteStatistics statistics) {
         ObjectNode shared = JSON.createObjectNode();
         shared.put("capacityPolicy", "vehicle-capacity-snapshot-v1");
         shared.put("inputProfile", statistics.profile().input());
@@ -62,14 +70,22 @@ public final class SettlementContextDocument {
             holidays.sort(String::compareTo);
             shared.set("holidays", JSON.valueToTree(holidays));
         }
+        return shared;
+    }
+
+    private static ObjectNode stopsContext(Map<Integer, String> targets) {
         ObjectNode stops = JSON.createObjectNode();
         targets.forEach((order, evidence) -> {
             JsonNode parameters = JSON.readTree(evidence).path("alighting").path("stops");
-            stops.set(order.toString(), parameters.isArray() ? parameters : JSON.createArrayNode());
+            stops.set(order.toString(), stopParameters(parameters));
         });
-        ObjectNode context = JSON.createObjectNode();
-        context.set("shared", shared);
-        context.set("stops", stops);
-        return JSON.writeValueAsString(context);
+        return stops;
+    }
+
+    private static JsonNode stopParameters(JsonNode parameters) {
+        if (parameters.isArray()) {
+            return parameters;
+        }
+        return JSON.createArrayNode();
     }
 }

@@ -63,9 +63,9 @@ public class ForecastShadowConfiguration {
         ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(capacities));
         TransactionTemplate transactions = new TransactionTemplate(transactionManager);
         transactions.setTimeout(WRITE_TIMEOUT_SECONDS);
-        return new ShadowForecastService(feed, stage, new RouteStateReplayer(shadowReplaySource, stage,
-            DurationStyle.detectAndParse(replayWindow)),
-            shadowReplaySource, records, passes, transactions, listeners.orderedStream().toList(), new RouteStateRegistry(),
-            rushOnly, clock, meters.getIfAvailable());
+        return new ShadowForecastService(feed, stage,
+            new RouteStateReplayer(shadowReplaySource, stage, DurationStyle.detectAndParse(replayWindow)),
+            shadowReplaySource, records, passes, transactions, listeners.orderedStream().toList(),
+            new RouteStateRegistry(), rushOnly, clock, meters.getIfAvailable());
     }
 }

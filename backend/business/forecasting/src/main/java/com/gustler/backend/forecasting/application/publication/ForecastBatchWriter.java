@@ -8,8 +8,6 @@ import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePredictionAssembler;
-import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePredictionAssembler.TargetPrediction;
-import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePredictionAssembler.VehiclePrediction;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.publication.ForecastPublication;
@@ -147,11 +145,11 @@ public class ForecastBatchWriter {
         }
         AlightingAwarePredictionAssembler assembler = new AlightingAwarePredictionAssembler(model, statistics, stops);
         for (AlightingAwareFeatureSnapshot snapshot : snapshots.values()) {
-            Optional<VehiclePrediction> vehicle = assembler.predict(snapshot);
+            Optional<AlightingAwarePredictionAssembler.VehiclePrediction> vehicle = assembler.predict(snapshot);
             if (vehicle.isEmpty()) {
                 continue;
             }
-            for (TargetPrediction target : vehicle.get().targets()) {
+            for (AlightingAwarePredictionAssembler.TargetPrediction target : vehicle.get().targets()) {
                 predictions.add(alightingForecast(batch, runtime, model, generatedAt, statistics, snapshot, target,
                     vehicle.get().extended()));
             }
@@ -159,12 +157,30 @@ public class ForecastBatchWriter {
         ForecastPublication publication = new ForecastPublication(batch.observationBatchId(),
             batch.routeVersionId(), runtime.deploymentId(), 0, qualityRevision,
             batch.responseReceivedAt(), generatedAt, generatedAt, predictions,
-            !compactSettlementWrite || predictions.isEmpty() ? null : settlementContext(model, statistics, predictions));
+            compactSettlementContext(model, statistics, predictions));
         final int saved = commitAlightingAware(batch, publication, statistics);
-        notifyLegacy(batch, stops, runtime, statistics, generatedAt,
-            snapshots == OUT_OF_SCOPE ? LegacyForecastResult.Kind.OUT_OF_SCOPE : LegacyForecastResult.Kind.PUBLISHED,
-            null, publication.predictions());
+        notifyLegacy(batch, stops, runtime, statistics, generatedAt, publishedKind(snapshots), null,
+            publication.predictions());
         return saved;
+    }
+
+    /** 압축 모드에서 예보가 있을 때만 정산 근거를 만들고, 그 밖에는 {@code null}이다. */
+    private String compactSettlementContext(
+        AlightingAwareSeatForecastModel model,
+        AlightingAwareRouteStatistics statistics,
+        List<SeatForecast> predictions
+    ) {
+        if (!compactSettlementWrite || predictions.isEmpty()) {
+            return null;
+        }
+        return settlementContext(model, statistics, predictions);
+    }
+
+    private LegacyForecastResult.Kind publishedKind(Map<Long, AlightingAwareFeatureSnapshot> snapshots) {
+        if (snapshots == OUT_OF_SCOPE) {
+            return LegacyForecastResult.Kind.OUT_OF_SCOPE;
+        }
+        return LegacyForecastResult.Kind.PUBLISHED;
     }
 
     /** 확정 판본 배치의 결과만 넘긴다. 받는 쪽의 실패는 로그만 남기고 옛 경로의 결과를 바꾸지 않는다. */
@@ -183,11 +199,18 @@ public class ForecastBatchWriter {
         }
         try {
             legacyListener.batchFinished(new LegacyForecastResult(batch, stops, runtime, statistics, generatedAt, kind,
-                reason, kind == LegacyForecastResult.Kind.OUT_OF_SCOPE ? List.of() : predictions));
-        } catch (RuntimeException ignored) {
+                reason, offeredPredictions(kind, predictions)));
+        } catch (RuntimeException failure) {
             LOGGER.warn("event=forecast_shadow_offer_failed batchId={} exceptionType={}", batch.observationBatchId(),
-                ignored.getClass().getSimpleName());
+                failure.getClass().getSimpleName());
         }
+    }
+
+    private List<SeatForecast> offeredPredictions(LegacyForecastResult.Kind kind, List<SeatForecast> predictions) {
+        if (kind == LegacyForecastResult.Kind.OUT_OF_SCOPE) {
+            return List.of();
+        }
+        return predictions;
     }
 
     private int commitAlightingAware(PendingForecastBatch batch, ForecastPublication publication, AlightingAwareRouteStatistics statistics) {
@@ -236,11 +259,10 @@ public class ForecastBatchWriter {
         Instant generatedAt,
         AlightingAwareRouteStatistics statistics,
         AlightingAwareFeatureSnapshot snapshot,
-        TargetPrediction target,
+        AlightingAwarePredictionAssembler.TargetPrediction target,
         final boolean extended
     ) {
-        ObjectNode evidence = compactSettlementWrite ? JSON.createObjectNode()
-            : (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.target().stopOrder()));
+        ObjectNode evidence = baseEvidence(model, statistics, target);
         if (!compactSettlementWrite) {
             evidence.put("inputProfile", statistics.profile().input());
             evidence.put("capacityPolicy", "vehicle-capacity-snapshot-v1");
@@ -260,5 +282,16 @@ public class ForecastBatchWriter {
             target.result(), runtime.deploymentId(), 0, generatedAt)
             .withAlightingAwareEvidence(JSON.writeValueAsString(evidence), model.bundleDigest(), statistics.confirmedProfile()
                 ? "alighting-confirmed-capacity-snapshot-v3" : "alighting-capacity-snapshot-v2");
+    }
+
+    private ObjectNode baseEvidence(
+        AlightingAwareSeatForecastModel model,
+        AlightingAwareRouteStatistics statistics,
+        AlightingAwarePredictionAssembler.TargetPrediction target
+    ) {
+        if (compactSettlementWrite) {
+            return JSON.createObjectNode();
+        }
+        return (ObjectNode) JSON.readTree(model.evidence(statistics.route(), target.target().stopOrder()));
     }
 }

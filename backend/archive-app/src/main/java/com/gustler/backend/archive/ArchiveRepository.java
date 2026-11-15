@@ -28,6 +28,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Repository
 public class ArchiveRepository {
     static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(120);
+    /** {@link HistoryHold#WINDOW}의 기본 창. worker의 되감기 창 6시간보다 넉넉하게 잡는다. */
+    static final Duration DEFAULT_HISTORY_HOLD_WINDOW = Duration.ofHours(12);
     private static final Duration LOCKED_STATEMENT_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration MAX_READ_TIMEOUT = Duration.ofMinutes(4);
     private final JdbcClient jdbc;
@@ -38,9 +40,6 @@ public class ArchiveRepository {
     private HistoryHold historyHold = HistoryHold.CHECKPOINT;
     private Duration historyHoldWindow = DEFAULT_HISTORY_HOLD_WINDOW;
     private Clock clock = Clock.systemUTC();
-
-    /** {@link HistoryHold#WINDOW}의 기본 창. worker의 되감기 창 6시간보다 넉넉하게 잡는다. */
-    static final Duration DEFAULT_HISTORY_HOLD_WINDOW = Duration.ofHours(12);
 
     public ArchiveRepository(JdbcClient jdbc, PlatformTransactionManager manager) {
         this(jdbc, manager, DEFAULT_READ_TIMEOUT);
@@ -94,8 +93,6 @@ public class ArchiveRepository {
 
     /**
      * {@link HistoryHold#WINDOW}의 기준 시각을 주는 시계를 정한다. 앱에서는 앱의 시계를 쓴다.
-     *
-     * @param clock 시계
      */
     @Autowired(required = false)
     public void setClock(Clock clock) {
@@ -299,36 +296,44 @@ public class ArchiveRepository {
         return readOnly.execute(status -> {
             jdbc.sql("SET TRANSACTION READ ONLY").update();
             limits(readTimeout);
-            final boolean recent = jdbc.sql(DAY_BATCHES_CTE + """
-                SELECT EXISTS(SELECT 1 FROM day_batches d CROSS JOIN LATERAL (
-                    SELECT 1 FROM vehicle_observation o JOIN seat_forecast f ON f.vehicle_observation_id=o.id
-                    LEFT JOIN forecast_evaluation_result e
-                        ON e.vehicle_observation_id=f.vehicle_observation_id AND e.target_stop_order=f.target_stop_order
-                    LEFT JOIN forecast_evaluation_compact c
-                        ON c.vehicle_observation_id=f.vehicle_observation_id AND c.target_stop_order=f.target_stop_order
-                    WHERE o.observation_batch_id=d.id AND f.route_version_id=:v
-                      AND (f.generated_at>=:cutoff OR e.scored_at>=:cutoff OR e.arrived_at>=:cutoff
-                        OR c.scored_at>=:cutoff OR c.arrived_at>=:cutoff)
-                    LIMIT 1) changed)
-                """)
-                .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
-                .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
-            final boolean recentAlightingAware = jdbc.sql(DAY_BATCHES_CTE + """
-                SELECT EXISTS(SELECT 1 FROM day_batches d CROSS JOIN LATERAL (
-                    SELECT o.id FROM vehicle_observation o WHERE o.observation_batch_id=d.id OFFSET 0) o
-                CROSS JOIN LATERAL (
-                    SELECT 1 FROM alighting_forecast_evaluation_metric e
-                    WHERE e.vehicle_observation_id=o.id AND e.route_version_id=:v
-                      AND (e.scored_at>=:cutoff OR e.event_at>=:cutoff)
-                    LIMIT 1) changed)
-                """)
-                .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
-                .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
+            final boolean recent = hasRecentForecastRecord(job);
+            final boolean recentAlightingAware = hasRecentAlightingAwareRecord(job);
             if (recent || recentAlightingAware) {
                 return "RECENT_CHILD_RECORD";
             }
             return "READY";
         });
+    }
+
+    private boolean hasRecentForecastRecord(Job job) {
+        return jdbc.sql(DAY_BATCHES_CTE + """
+            SELECT EXISTS(SELECT 1 FROM day_batches d CROSS JOIN LATERAL (
+                SELECT 1 FROM vehicle_observation o JOIN seat_forecast f ON f.vehicle_observation_id=o.id
+                LEFT JOIN forecast_evaluation_result e
+                    ON e.vehicle_observation_id=f.vehicle_observation_id AND e.target_stop_order=f.target_stop_order
+                LEFT JOIN forecast_evaluation_compact c
+                    ON c.vehicle_observation_id=f.vehicle_observation_id AND c.target_stop_order=f.target_stop_order
+                WHERE o.observation_batch_id=d.id AND f.route_version_id=:v
+                  AND (f.generated_at>=:cutoff OR e.scored_at>=:cutoff OR e.arrived_at>=:cutoff
+                    OR c.scored_at>=:cutoff OR c.arrived_at>=:cutoff)
+                LIMIT 1) changed)
+            """)
+            .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
+            .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
+    }
+
+    private boolean hasRecentAlightingAwareRecord(Job job) {
+        return jdbc.sql(DAY_BATCHES_CTE + """
+            SELECT EXISTS(SELECT 1 FROM day_batches d CROSS JOIN LATERAL (
+                SELECT o.id FROM vehicle_observation o WHERE o.observation_batch_id=d.id OFFSET 0) o
+            CROSS JOIN LATERAL (
+                SELECT 1 FROM alighting_forecast_evaluation_metric e
+                WHERE e.vehicle_observation_id=o.id AND e.route_version_id=:v
+                  AND (e.scored_at>=:cutoff OR e.event_at>=:cutoff)
+                LIMIT 1) changed)
+            """)
+            .param("v", job.version()).param("from", time(job.from())).param("until", time(job.until()))
+            .param("cutoff", time(job.cutoff())).query(Boolean.class).single();
     }
 
     /**

@@ -7,10 +7,10 @@ import static com.gustler.backend.forecasting.support.PipelineSamples.published;
 import static com.gustler.backend.forecasting.support.PipelineSamples.skipped;
 import static com.gustler.backend.forecasting.support.PipelineSamples.vehicle;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPublished.VehicleForecast;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRun;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
@@ -56,12 +56,15 @@ class JdbcPipelineStoreTest {
         final boolean inserted = records.save(published);
 
         // then
-        assertThat(inserted).isTrue();
-        assertThat(count("forecast_run")).isOne();
-        assertThat(records.findRecords(DAY, 11)).extracting(VehicleForecast::vehicleObservationId)
-            .containsExactly(1001L, 1002L, 1003L);
-        assertThat(jdbcClient.sql("SELECT prediction_count FROM forecast_run").query(Integer.class).single())
-            .isEqualTo(9);
+        assertSoftly(softly -> {
+            softly.assertThat(inserted).isTrue();
+            softly.assertThat(count("forecast_run")).isOne();
+            softly.assertThat(records.findRecords(DAY, 11))
+                .extracting(ForecastPublished.VehicleForecast::vehicleObservationId)
+                .containsExactly(1001L, 1002L, 1003L);
+            softly.assertThat(jdbcClient.sql("SELECT prediction_count FROM forecast_run").query(Integer.class).single())
+                .isEqualTo(9);
+        });
     }
 
     @Test
@@ -74,9 +77,11 @@ class JdbcPipelineStoreTest {
         final boolean inserted = records.save(published);
 
         // then
-        assertThat(inserted).isFalse();
-        assertThat(count("forecast_run")).isOne();
-        assertThat(count("forecast_record")).isEqualTo(2);
+        assertSoftly(softly -> {
+            softly.assertThat(inserted).isFalse();
+            softly.assertThat(count("forecast_run")).isOne();
+            softly.assertThat(count("forecast_record")).isEqualTo(2);
+        });
     }
 
     @Test
@@ -85,20 +90,20 @@ class JdbcPipelineStoreTest {
         double[] seats = {0.1, 1.0 / 3.0, Math.nextUp(1.0), -0.0, Double.MIN_VALUE, 1.0e300};
         double[] probabilities = {Double.MIN_NORMAL, 0.9999999999999999, 0.5, 0.0, 1.0 / 7.0, 2.5e-17};
         int[] targets = {12, 3, 7, 1, 30, 2};
-        VehicleForecast vehicle = new VehicleForecast(1001, 1, "bus-1001", 2, 900, 950, true, 49, true, targets,
-            seats, probabilities);
+        ForecastPublished.VehicleForecast vehicle = new ForecastPublished.VehicleForecast(1001, 1, "bus-1001", 2,
+            900, 950, true, 49, true, targets, seats, probabilities);
         records.save(published(DAY, 11, RECEIVED_AT, List.of(vehicle)));
 
         // when
-        VehicleForecast actual = records.findRecords(DAY, 11).getFirst();
+        ForecastPublished.VehicleForecast actual = records.findRecords(DAY, 11).getFirst();
 
         // then
-        assertThat(actual).isEqualTo(vehicle);
-        assertThat(actual.targetStopOrders()).containsExactly(targets);
-        assertThat(Arrays.stream(actual.expectedSeats()).mapToLong(Double::doubleToRawLongBits).toArray())
-            .containsExactly(Arrays.stream(seats).mapToLong(Double::doubleToRawLongBits).toArray());
-        assertThat(Arrays.stream(actual.fullProbabilities()).mapToLong(Double::doubleToRawLongBits).toArray())
-            .containsExactly(Arrays.stream(probabilities).mapToLong(Double::doubleToRawLongBits).toArray());
+        assertSoftly(softly -> {
+            softly.assertThat(actual).isEqualTo(vehicle);
+            softly.assertThat(actual.targetStopOrders()).containsExactly(targets);
+            softly.assertThat(rawBits(actual.expectedSeats())).containsExactly(rawBits(seats));
+            softly.assertThat(rawBits(actual.fullProbabilities())).containsExactly(rawBits(probabilities));
+        });
     }
 
     @Test
@@ -114,11 +119,14 @@ class JdbcPipelineStoreTest {
         records.save(published(DAY.plusDays(1), 12, RECEIVED_AT.plusSeconds(86_400), List.of(vehicle(1002, 1))));
 
         // then
-        assertThat(jdbcClient.sql("""
-            SELECT tableoid::regclass::text FROM forecast_record ORDER BY vehicle_observation_id
-            """).query(String.class).list()).containsExactly("forecast_record_p20300101", "forecast_record_default");
-        assertThat(jdbcClient.sql("SELECT tableoid::regclass::text FROM forecast_run").query(String.class).list())
-            .containsOnly("forecast_run_default");
+        assertSoftly(softly -> {
+            softly.assertThat(jdbcClient.sql("""
+                SELECT tableoid::regclass::text FROM forecast_record ORDER BY vehicle_observation_id
+                """).query(String.class).list())
+                .containsExactly("forecast_record_p20300101", "forecast_record_default");
+            softly.assertThat(jdbcClient.sql("SELECT tableoid::regclass::text FROM forecast_run")
+                .query(String.class).list()).containsOnly("forecast_run_default");
+        });
     }
 
     @Test
@@ -134,10 +142,12 @@ class JdbcPipelineStoreTest {
         Optional<ForecastRun> other = records.findLatestRun(ROUTE_VERSION_ID + 1, Set.of(ForecastOutcome.values()));
 
         // then
-        assertThat(latest).map(ForecastRun::observationBatchId).contains(13L);
-        assertThat(latest).map(ForecastRun::modelDeploymentId).isEmpty();
-        assertThat(published).map(ForecastRun::observationBatchId).contains(11L);
-        assertThat(other).isEmpty();
+        assertSoftly(softly -> {
+            softly.assertThat(latest).map(ForecastRun::observationBatchId).contains(13L);
+            softly.assertThat(latest).map(ForecastRun::modelDeploymentId).isEmpty();
+            softly.assertThat(published).map(ForecastRun::observationBatchId).contains(11L);
+            softly.assertThat(other).isEmpty();
+        });
     }
 
     @Test
@@ -174,10 +184,12 @@ class JdbcPipelineStoreTest {
         final int again = passes.save(List.of(early));
 
         // then
-        assertThat(inserted).isEqualTo(3);
-        assertThat(again).isZero();
-        assertThat(passes.findClosedBetween(ROUTE_ID, RECEIVED_AT, RECEIVED_AT.plusSeconds(61)))
-            .containsExactly(early, open, late);
+        assertSoftly(softly -> {
+            softly.assertThat(inserted).isEqualTo(3);
+            softly.assertThat(again).isZero();
+            softly.assertThat(passes.findClosedBetween(ROUTE_ID, RECEIVED_AT, RECEIVED_AT.plusSeconds(61)))
+                .containsExactly(early, open, late);
+        });
     }
 
     @Test
@@ -191,8 +203,10 @@ class JdbcPipelineStoreTest {
         final int actual = passes.save(many);
 
         // then
-        assertThat(actual).isEqualTo(MultiRowInsert.ROWS_PER_STATEMENT + 1);
-        assertThat(count("stop_pass")).isEqualTo(MultiRowInsert.ROWS_PER_STATEMENT + 1);
+        assertSoftly(softly -> {
+            softly.assertThat(actual).isEqualTo(MultiRowInsert.ROWS_PER_STATEMENT + 1);
+            softly.assertThat(count("stop_pass")).isEqualTo(MultiRowInsert.ROWS_PER_STATEMENT + 1);
+        });
     }
 
     @Test
@@ -212,12 +226,14 @@ class JdbcPipelineStoreTest {
         final int againUnresolved = labels.saveUnresolved(List.of(lost));
 
         // then
-        assertThat(insertedLabels).isEqualTo(2);
-        assertThat(insertedUnresolved).isOne();
-        assertThat(againLabels).isZero();
-        assertThat(againUnresolved).isZero();
-        assertThat(jdbcClient.sql("SELECT label_value FROM pass_label WHERE state = 'SETTLED'")
-            .query(Double.class).single()).isEqualTo(12.5);
+        assertSoftly(softly -> {
+            softly.assertThat(insertedLabels).isEqualTo(2);
+            softly.assertThat(insertedUnresolved).isOne();
+            softly.assertThat(againLabels).isZero();
+            softly.assertThat(againUnresolved).isZero();
+            softly.assertThat(jdbcClient.sql("SELECT label_value FROM pass_label WHERE state = 'SETTLED'")
+                .query(Double.class).single()).isEqualTo(12.5);
+        });
     }
 
     @Test
@@ -232,11 +248,17 @@ class JdbcPipelineStoreTest {
         final int inserted = labels.saveLabels(List.of(first, second));
 
         // then
-        assertThat(inserted).isEqualTo(2);
-        assertThat(jdbcClient.sql("""
-            SELECT model_deployment_id FROM pass_label WHERE route_id = ? AND trip_start_observation_id = 500
-            ORDER BY model_deployment_id
-            """).param(ROUTE_ID).query(Long.class).list()).containsExactly(9L, 10L);
+        assertSoftly(softly -> {
+            softly.assertThat(inserted).isEqualTo(2);
+            softly.assertThat(jdbcClient.sql("""
+                SELECT model_deployment_id FROM pass_label WHERE route_id = ? AND trip_start_observation_id = 500
+                ORDER BY model_deployment_id
+                """).param(ROUTE_ID).query(Long.class).list()).containsExactly(9L, 10L);
+        });
+    }
+
+    private static long[] rawBits(double[] values) {
+        return Arrays.stream(values).mapToLong(Double::doubleToRawLongBits).toArray();
     }
 
     private long count(String table) {

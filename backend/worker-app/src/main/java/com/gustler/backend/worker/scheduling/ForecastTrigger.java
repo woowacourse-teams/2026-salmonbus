@@ -28,7 +28,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @ConditionalOnExpression(ForecastTrigger.LEGACY_PIPELINE)
 public class ForecastTrigger implements ObservationDeliveryHook {
     /** 옛 경로가 본선인 조건. */
-    static final String LEGACY_PIPELINE = "${forecast.enabled:false} and '${forecast.pipeline:v1}'.equalsIgnoreCase('v1')";
+    static final String LEGACY_PIPELINE = "${forecast.enabled:false}"
+        + " and '${forecast.pipeline:v1}'.equalsIgnoreCase('v1')";
     private final PublishPendingForecasts service;
     private final TaskExecutor forecastTaskScheduler;
     private final Set<Long> pendingRoutes = ConcurrentHashMap.newKeySet();

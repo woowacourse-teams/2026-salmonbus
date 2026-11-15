@@ -84,7 +84,7 @@ public interface BoardQueryRepository {
      * @param observationBatchId 관측 묶음
      * @param sourceDate 그 묶음의 날짜 파티션
      */
-    default List<StoredPrediction> findRecordedPredictions(long observationBatchId, LocalDate sourceDate) {
+    default List<StoredPrediction> findRecordedPredictions(final long observationBatchId, LocalDate sourceDate) {
         throw new UnsupportedOperationException("이 저장소는 새 예보 기록을 읽지 않습니다.");
     }
 

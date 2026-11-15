@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.infrastructure.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.application.alighting.AlightingAwareFeatureUnavailableException;
 import com.gustler.backend.forecasting.application.pipeline.ClosedPass;
@@ -66,7 +67,8 @@ class ForecastPipelineEquivalenceTest {
             Duration.ofSeconds(30), EVENING.plus(Duration.ofHours(3)), 20261115L);
         JdbcAlightingAwareFeatureQuery old = new JdbcAlightingAwareFeatureQuery(jdbc, cache,
             ObservationStreamFixture.origins(jdbc, stream), MAXIMUM_ROWS, false, checkpoint.toString());
-        AlightingAwareHistorySeedReader seeds = AlightingAwareHistorySeedReader.confirmed(checkpoint.toString(), MAXIMUM_ROWS);
+        AlightingAwareHistorySeedReader seeds =
+            AlightingAwareHistorySeedReader.confirmed(checkpoint.toString(), MAXIMUM_ROWS);
         ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
         AlightingAwareRouteStatistics statistics = stream.statistics();
         RouteForecastState state = RouteForecastState.fromVerifiedOrigin(stream.route());
@@ -119,13 +121,16 @@ class ForecastPipelineEquivalenceTest {
         }
 
         // then
-        assertThat(coverage(stream)).allSatisfy((scenario, count) -> assertThat(count).as(scenario).isPositive());
-        assertThat(tally.batches).isGreaterThan(600);
-        assertThat(tally.skipped).isGreaterThan(20);
-        assertThat(tally.snapshots).isGreaterThan(2_500);
-        assertThat(tally.vectors).isGreaterThan(9_000);
-        assertThat(tally.passes).isGreaterThan(100);
-        assertThat(tally.failed).isZero();
+        Map<String, Long> coverage = coverage(stream);
+        assertSoftly(softly -> {
+            softly.assertThat(coverage).allSatisfy((scenario, count) -> assertThat(count).as(scenario).isPositive());
+            softly.assertThat(tally.batches).isGreaterThan(600);
+            softly.assertThat(tally.skipped).isGreaterThan(20);
+            softly.assertThat(tally.snapshots).isGreaterThan(2_500);
+            softly.assertThat(tally.vectors).isGreaterThan(9_000);
+            softly.assertThat(tally.passes).isGreaterThan(100);
+            softly.assertThat(tally.failed).isZero();
+        });
     }
 
     @Test
@@ -145,13 +150,14 @@ class ForecastPipelineEquivalenceTest {
         // when
         for (final long batchId : stream.batches()) {
             ForecastBatch batch = ObservationStreamFixture.read(jdbc, batchId);
-            ForecastStageResult actual = stage.advance(state, stream.statistics(), ObservationStreamFixture.SOURCE_ID, batch);
+            ForecastStageResult actual =
+                stage.advance(state, stream.statistics(), ObservationStreamFixture.SOURCE_ID, batch);
             if (!batch.confirmed()) {
                 continue;
             }
             try {
-                Map<Long, AlightingAwareFeatureSnapshot> expected = old.read(batchId, stream.stops(batch.routeVersionId()),
-                    stream.statistics());
+                Map<Long, AlightingAwareFeatureSnapshot> expected =
+                    old.read(batchId, stream.stops(batch.routeVersionId()), stream.statistics());
                 vectors += assertSameSnapshots(batchId, expected, actual.snapshots(), stream.statistics());
                 compared++;
             } catch (AlightingAwareFeatureUnavailableException failure) {
@@ -162,9 +168,14 @@ class ForecastPipelineEquivalenceTest {
         }
 
         // then
-        assertThat(outside).isGreaterThan(80);
-        assertThat(compared).isGreaterThan(80);
-        assertThat(vectors).isGreaterThan(1_000);
+        final int outsideBatches = outside;
+        final int comparedBatches = compared;
+        final int comparedVectors = vectors;
+        assertSoftly(softly -> {
+            softly.assertThat(outsideBatches).isGreaterThan(80);
+            softly.assertThat(comparedBatches).isGreaterThan(80);
+            softly.assertThat(comparedVectors).isGreaterThan(1_000);
+        });
     }
 
     @Test
@@ -174,7 +185,9 @@ class ForecastPipelineEquivalenceTest {
             Duration.ofSeconds(30), EVENING.plus(Duration.ofHours(3)), 20261115L);
         ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
         AlightingAwareRouteStatistics statistics = stream.statistics();
-        List<ForecastBatch> batches = stream.batches().stream().map(id -> ObservationStreamFixture.read(jdbc, id)).toList();
+        List<ForecastBatch> batches = stream.batches().stream()
+            .map(id -> ObservationStreamFixture.read(jdbc, id))
+            .toList();
         List<Map<Long, String>> continuous = new ArrayList<>();
         List<Map<Long, String>> continuousWithheld = new ArrayList<>();
         RouteForecastState state = RouteForecastState.fromVerifiedOrigin(stream.route());
@@ -203,7 +216,8 @@ class ForecastPipelineEquivalenceTest {
                 RouteStateReplayer.Result replayed = new RouteStateReplayer(source, stage, window)
                     .replay(statistics, last.confirmedAt(), last.observationBatchId());
                 assertThat(replayed.succeeded()).as(replayed.failureReason()).isTrue();
-                assertThat(replayed.state().cursor().orElseThrow().observationBatchId()).isEqualTo(last.observationBatchId());
+                assertThat(replayed.state().cursor().orElseThrow().observationBatchId())
+                    .isEqualTo(last.observationBatchId());
                 RouteForecastState resumed = replayed.state();
                 int same = 0;
                 int excluded = 0;
@@ -245,8 +259,12 @@ class ForecastPipelineEquivalenceTest {
         }
 
         // then
-        assertThat(compared).isGreaterThan(2_000);
-        assertThat(exclusions).containsKeys(ForecastStage.TRIP_START_UNKNOWN, ForecastStage.REPLAY_HISTORY_INCOMPLETE);
+        final int comparedVectors = compared;
+        assertSoftly(softly -> {
+            softly.assertThat(comparedVectors).isGreaterThan(2_000);
+            softly.assertThat(exclusions)
+                .containsKeys(ForecastStage.TRIP_START_UNKNOWN, ForecastStage.REPLAY_HISTORY_INCOMPLETE);
+        });
     }
 
     @Test
@@ -257,17 +275,21 @@ class ForecastPipelineEquivalenceTest {
         ForecastBatch last = lastConfirmed(stream);
         ForecastBatch broken = stream.batches().stream().map(id -> ObservationStreamFixture.read(jdbc, id))
             .filter(ForecastBatch::confirmed).toList().get(5);
-        jdbc.sql("UPDATE observation_batch SET stored_rows=stored_rows+1 WHERE id=?").param(broken.observationBatchId())
+        jdbc.sql("UPDATE observation_batch SET stored_rows=stored_rows+1 WHERE id=?")
+            .param(broken.observationBatchId())
             .update();
         RouteStateReplayer replayer = new RouteStateReplayer(new JdbcReplaySource(jdbc, MAXIMUM_ROWS),
             new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6));
 
         // when
-        RouteStateReplayer.Result result = replayer.replay(stream.statistics(), last.confirmedAt(), last.observationBatchId());
+        RouteStateReplayer.Result result =
+            replayer.replay(stream.statistics(), last.confirmedAt(), last.observationBatchId());
 
         // then
-        assertThat(result.succeeded()).isFalse();
-        assertThat(result.failureReason()).isEqualTo(ForecastStage.SOURCE_ROWS_MISSING);
+        assertSoftly(softly -> {
+            softly.assertThat(result.succeeded()).isFalse();
+            softly.assertThat(result.failureReason()).isEqualTo(ForecastStage.SOURCE_ROWS_MISSING);
+        });
     }
 
     @Test
@@ -276,13 +298,15 @@ class ForecastPipelineEquivalenceTest {
         ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofMinutes(20),
             Duration.ofSeconds(30), null, 13L);
         ForecastBatch last = lastConfirmed(stream);
-        jdbc.sql("UPDATE route_stop SET boarding_allowed=NOT boarding_allowed WHERE route_version_id=? AND stop_order=2")
+        jdbc.sql(
+            "UPDATE route_stop SET boarding_allowed=NOT boarding_allowed WHERE route_version_id=? AND stop_order=2")
             .param(last.routeVersionId()).update();
         RouteStateReplayer replayer = new RouteStateReplayer(new JdbcReplaySource(jdbc, MAXIMUM_ROWS),
             new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6));
 
         // when
-        RouteStateReplayer.Result result = replayer.replay(stream.statistics(), last.confirmedAt(), last.observationBatchId());
+        RouteStateReplayer.Result result =
+            replayer.replay(stream.statistics(), last.confirmedAt(), last.observationBatchId());
 
         // then
         assertThat(result.failureReason())
@@ -296,14 +320,27 @@ class ForecastPipelineEquivalenceTest {
             """;
         List<Long> versions = List.copyOf(stream.stopsByVersion().keySet());
         Map<String, String> scenarios = Map.of(
-            "같은 배치 같은 차량", "SELECT count(*) FROM (SELECT 1 FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND o.vehicle_id IS NOT NULL AND " + confirmed + " GROUP BY b.id,o.vehicle_id HAVING count(*)>1) duplicate",
-            "차량 번호 없는 줄", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND o.vehicle_id IS NULL AND " + confirmed,
-            "좌석 모름", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND o.seat_unknown_reason IS NOT NULL AND " + confirmed,
-            "범위 밖 좌석", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND o.remaining_seats>70 AND " + confirmed,
-            "90초 넘긴 착수", "SELECT count(*) FROM observation_batch b WHERE b.route_version_id IN (:versions) AND b.input_confirmed_at>b.response_received_at+interval '90 seconds'",
-            "빈 배치", "SELECT count(*) FROM observation_batch b WHERE b.route_version_id IN (:versions) AND b.outcome='SUCCESS_EMPTY'",
-            "판본 전환", "SELECT count(DISTINCT b.route_version_id)-1 FROM observation_batch b WHERE b.route_version_id IN (:versions)",
-            "자정 넘김", "SELECT count(DISTINCT (b.input_confirmed_at AT TIME ZONE 'Asia/Seoul')::date)-1 FROM observation_batch b WHERE b.route_version_id IN (:versions)");
+            "같은 배치 같은 차량", "SELECT count(*) FROM (SELECT 1 FROM vehicle_observation o JOIN "
+                + "observation_batch b ON b.id=o.observation_batch_id WHERE b.route_version_id IN "
+                + "(:versions) AND o.vehicle_id IS NOT NULL AND " + confirmed
+                + " GROUP BY b.id,o.vehicle_id HAVING count(*)>1) duplicate",
+            "차량 번호 없는 줄", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b "
+                + "ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND o.vehicle_id "
+                + "IS NULL AND " + confirmed,
+            "좌석 모름", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b "
+                + "ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND "
+                + "o.seat_unknown_reason IS NOT NULL AND " + confirmed,
+            "범위 밖 좌석", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b "
+                + "ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND "
+                + "o.remaining_seats>70 AND " + confirmed,
+            "90초 넘긴 착수", "SELECT count(*) FROM observation_batch b WHERE b.route_version_id IN "
+                + "(:versions) AND b.input_confirmed_at>b.response_received_at+interval '90 seconds'",
+            "빈 배치", "SELECT count(*) FROM observation_batch b WHERE b.route_version_id IN "
+                + "(:versions) AND b.outcome='SUCCESS_EMPTY'",
+            "판본 전환", "SELECT count(DISTINCT b.route_version_id)-1 FROM observation_batch b "
+                + "WHERE b.route_version_id IN (:versions)",
+            "자정 넘김", "SELECT count(DISTINCT (b.input_confirmed_at AT TIME ZONE "
+                + "'Asia/Seoul')::date)-1 FROM observation_batch b WHERE b.route_version_id IN (:versions)");
         Map<String, Long> counts = new HashMap<>();
         scenarios.forEach((scenario, sql) -> counts.put(scenario,
             jdbc.sql(sql).param("versions", versions).query(Long.class).single()));
@@ -355,7 +392,11 @@ class ForecastPipelineEquivalenceTest {
         }
     }
 
-    private static void assertSameState(final long batchId, AlightingAwareHistorySeedReader.Seed seed, RouteForecastState state) {
+    private static void assertSameState(
+        final long batchId,
+        AlightingAwareHistorySeedReader.Seed seed,
+        RouteForecastState state
+    ) {
         assertThat(seed.batchId()).isEqualTo(batchId);
         assertThat(state.cursor().orElseThrow().rank()).isEqualTo(seed.rank());
         assertThat(state.observations()).as("배치 %d의 보존 관측", batchId).isEqualTo(seed.observations());
@@ -375,11 +416,21 @@ class ForecastPipelineEquivalenceTest {
             .filter(observation -> observation.batchId() == batchId)
             .forEach(observation -> {
                 AlightingAwareObservation previous = lastByVehicle.put(observation.vehicleId(), observation);
-                final long start = observation.startsConfirmedChainAfter(previous)
-                    ? observation.observationId() : chainStartByObservation.get(previous.observationId());
+                final long start = chainStart(observation, previous, chainStartByObservation);
                 chainStartByObservation.put(observation.observationId(), start);
                 sequence.computeIfAbsent(observation.vehicleId(), ignored -> new ArrayList<>()).add(observation);
             });
+    }
+
+    private static long chainStart(
+        AlightingAwareObservation observation,
+        AlightingAwareObservation previous,
+        Map<Long, Long> chainStartByObservation
+    ) {
+        if (observation.startsConfirmedChainAfter(previous)) {
+            return observation.observationId();
+        }
+        return chainStartByObservation.get(previous.observationId());
     }
 
     private static void assertClosedPass(
@@ -393,16 +444,26 @@ class ForecastPipelineEquivalenceTest {
             .isEqualTo(chainStartByObservation.get(event.arrival().observationId()));
         Instant reached = null;
         for (AlightingAwareObservation observation : sequence.get(event.vehicleId())) {
-            if (observation.passedStopOrder() == event.stopOrder() && observation.seats() != null
-                && !observation.receivedAt().isBefore(event.arrival().receivedAt())
-                && !observation.receivedAt().isAfter(event.confirmation().receivedAt())) {
+            if (hasKnownSeatWithinPass(observation, event)) {
                 reached = observation.receivedAt();
             }
         }
         assertThat(pass.reachedKnownSeatAt()).isEqualTo(reached);
     }
 
-    private static Map<Long, String> digests(List<AlightingAwareFeatureSnapshot> snapshots, AlightingAwareRouteStatistics statistics) {
+    private static boolean hasKnownSeatWithinPass(
+        AlightingAwareObservation observation,
+        AlightingAwarePassEvent event
+    ) {
+        return observation.passedStopOrder() == event.stopOrder() && observation.seats() != null
+            && !observation.receivedAt().isBefore(event.arrival().receivedAt())
+            && !observation.receivedAt().isAfter(event.confirmation().receivedAt());
+    }
+
+    private static Map<Long, String> digests(
+        List<AlightingAwareFeatureSnapshot> snapshots,
+        AlightingAwareRouteStatistics statistics
+    ) {
         Map<Long, String> digests = new HashMap<>();
         for (AlightingAwareFeatureSnapshot snapshot : snapshots) {
             digests.put(snapshot.vehicleObservationId(), digest(snapshot, statistics));
@@ -425,7 +486,8 @@ class ForecastPipelineEquivalenceTest {
                 digest.update((byte) 1);
                 ByteBuffer values = ByteBuffer.allocate((88 + 80) * Long.BYTES);
                 Arrays.stream(vector.seat88()).forEach(value -> values.putLong(Double.doubleToRawLongBits(value)));
-                Arrays.stream(vector.probability80()).forEach(value -> values.putLong(Double.doubleToRawLongBits(value)));
+                Arrays.stream(vector.probability80())
+                    .forEach(value -> values.putLong(Double.doubleToRawLongBits(value)));
                 digest.update(values.array());
             }
             return HexFormat.of().formatHex(digest.digest());

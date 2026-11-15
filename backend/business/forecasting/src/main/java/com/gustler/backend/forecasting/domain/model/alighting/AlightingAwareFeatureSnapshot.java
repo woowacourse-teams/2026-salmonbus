@@ -324,7 +324,11 @@ public final class AlightingAwareFeatureSnapshot {
         return neighbors.result();
     }
 
-    private PathFeatures path(final int target, ZonedDateTime time, Map<Integer, AlightingAwareBatchContext.QueueState> queues) {
+    private PathFeatures path(
+        final int target,
+        ZonedDateTime time,
+        Map<Integer, AlightingAwareBatchContext.QueueState> queues
+    ) {
         String day = statistics.dayType(time.toLocalDate());
         final int minute = minute(time);
         double net = 0;

@@ -52,9 +52,9 @@ public record ObservationBatchSeen(
      * @param result 수집 결과
      */
     public ObservationBatchSeen(
-        long observationBatchId,
-        long routeId,
-        long routeVersionId,
+        final long observationBatchId,
+        final long routeId,
+        final long routeVersionId,
         Instant scheduledAt,
         Instant receivedAt,
         CollectionResult result

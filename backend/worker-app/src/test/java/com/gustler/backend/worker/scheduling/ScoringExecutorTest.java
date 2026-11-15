@@ -1,6 +1,7 @@
 package com.gustler.backend.worker.scheduling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
@@ -66,9 +67,11 @@ class ScoringExecutorTest {
         final boolean rejected = executor.submit(() -> { });
 
         // then
-        assertThat(queued).isTrue();
-        assertThat(rejected).isFalse();
-        assertThat(meters.get("salmonbus.pipeline.scoring.queue").gauge().value()).isEqualTo(1);
+        assertSoftly(softly -> {
+            softly.assertThat(queued).isTrue();
+            softly.assertThat(rejected).isFalse();
+            softly.assertThat(meters.get("salmonbus.pipeline.scoring.queue").gauge().value()).isEqualTo(1);
+        });
         release.countDown();
     }
 

@@ -2,6 +2,7 @@ package com.gustler.backend.worker.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.MaintainPipelinePartitions;
 import com.gustler.backend.worker.scheduling.PipelinePartitionJob;
@@ -27,7 +28,8 @@ class ForecastPipelineConfigurationTest {
             .run(context -> {
                 assertThat(context).doesNotHaveBean(PipelinePartitionJob.class);
                 assertThat(context).doesNotHaveBean(ForecastPipelineProperties.class);
-                assertThat(((CountingPartitions) context.getBean(MaintainPipelinePartitions.class)).calls.get()).isZero();
+                CountingPartitions partitions = (CountingPartitions) context.getBean(MaintainPipelinePartitions.class);
+                assertThat(partitions.calls.get()).isZero();
             });
     }
 
@@ -60,11 +62,13 @@ class ForecastPipelineConfigurationTest {
         runner.withPropertyValues("forecast.pipeline=V2", "forecast.scoring=shadow").run(context -> {
             ForecastPipelineProperties actual = context.getBean(ForecastPipelineProperties.class);
 
-            assertThat(actual.pipeline()).isEqualTo(ForecastPipelineProperties.Pipeline.V2);
-            assertThat(actual.scoring()).isEqualTo(ForecastPipelineProperties.Scoring.SHADOW);
-            assertThat(actual.shadow().enabled()).isFalse();
-            assertThat(actual.lanes()).isEqualTo(2);
-            assertThat(actual.replayWindow()).isEqualTo(Duration.ofHours(6));
+            assertSoftly(softly -> {
+                softly.assertThat(actual.pipeline()).isEqualTo(ForecastPipelineProperties.Pipeline.V2);
+                softly.assertThat(actual.scoring()).isEqualTo(ForecastPipelineProperties.Scoring.SHADOW);
+                softly.assertThat(actual.shadow().enabled()).isFalse();
+                softly.assertThat(actual.lanes()).isEqualTo(2);
+                softly.assertThat(actual.replayWindow()).isEqualTo(Duration.ofHours(6));
+            });
         });
     }
 
@@ -93,10 +97,10 @@ class ForecastPipelineConfigurationTest {
         private final CountDownLatch started = new CountDownLatch(1);
 
         @Override
-        public Report maintain() {
+        public MaintainPipelinePartitions.Report maintain() {
             calls.incrementAndGet();
             started.countDown();
-            return new Report(List.of(), List.of(), Map.of());
+            return new MaintainPipelinePartitions.Report(List.of(), List.of(), Map.of());
         }
     }
 }

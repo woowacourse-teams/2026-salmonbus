@@ -133,7 +133,8 @@ public final class ForecastPipelineService implements ForecastPipeline {
         try {
             WorkerOperationLog.run("pipeline_forecast_pickup", "all", this::pickUpOnce);
         } catch (RuntimeException alreadyLogged) {
-            LOGGER.warn("event=pipeline_forecast_pickup_failed exceptionType={}", alreadyLogged.getClass().getSimpleName());
+            LOGGER.warn("event=pipeline_forecast_pickup_failed exceptionType={}",
+                alreadyLogged.getClass().getSimpleName());
         }
     }
 
@@ -150,7 +151,8 @@ public final class ForecastPipelineService implements ForecastPipeline {
                 if (resolve(runtime.get(), routeStops).context() == null) {
                     continue;
                 }
-                List<PendingPipelineBatches.Pending> found = pending.find(routeVersionId, notBefore, policy.batchLimit());
+                List<PendingPipelineBatches.Pending> found =
+                    pending.find(routeVersionId, notBefore, policy.batchLimit());
                 reportPending(routeVersionId, found);
                 for (PendingPipelineBatches.Pending batch : found) {
                     enqueue(batch.observationBatchId(), routeVersionId, routeStops.sourceRouteId());
@@ -163,7 +165,9 @@ public final class ForecastPipelineService implements ForecastPipeline {
     }
 
     private void reportPending(final long routeVersionId, List<PendingPipelineBatches.Pending> found) {
-        Instant oldest = found.stream().map(PendingPipelineBatches.Pending::receivedAt).min(Instant::compareTo)
+        Instant oldest = found.stream()
+            .map(PendingPipelineBatches.Pending::receivedAt)
+            .min(Instant::compareTo)
             .orElse(null);
         try {
             telemetry.pending(routeVersionId, oldest);
@@ -204,28 +208,31 @@ public final class ForecastPipelineService implements ForecastPipeline {
      */
     String process(final long observationBatchId, final long routeVersionId) {
         final long started = System.nanoTime();
+        String result = classify(observationBatchId, routeVersionId);
+        metrics.batch(result);
+        metrics.duration(Duration.ofNanos(System.nanoTime() - started));
+        return result;
+    }
+
+    /** 처리 중 예외가 나면 그 노선의 상태를 버리고 {@code failed}로 분류한다. */
+    private String classify(final long observationBatchId, final long routeVersionId) {
         String route = null;
-        String result;
         try {
             Resolved resolved = resolve(routeVersionId);
             if (resolved.context() == null) {
-                result = resolved.skipped();
-            } else {
-                RouteContext context = resolved.context();
-                route = context.route();
-                result = process(context, observationBatchId);
+                return resolved.skipped();
             }
+            RouteContext context = resolved.context();
+            route = context.route();
+            return process(context, observationBatchId);
         } catch (RuntimeException failure) {
             if (route != null) {
                 processor.states().remove(route);
             }
-            LOGGER.warn("event=pipeline_forecast_failed route={} batchId={} exceptionType={}", route, observationBatchId,
-                failure.getClass().getSimpleName(), failure);
-            result = "failed";
+            LOGGER.warn("event=pipeline_forecast_failed route={} batchId={} exceptionType={}", route,
+                observationBatchId, failure.getClass().getSimpleName(), failure);
+            return "failed";
         }
-        metrics.batch(result);
-        metrics.duration(Duration.ofNanos(System.nanoTime() - started));
-        return result;
     }
 
     private String process(RouteContext context, final long observationBatchId) {
@@ -254,9 +261,15 @@ public final class ForecastPipelineService implements ForecastPipeline {
         return switch (processed.status()) {
             case STALE -> "stale";
             case DUPLICATE -> "duplicate";
-            case SAVED -> processed.special() != null ? processed.special()
-                : processed.published().outcome().name().toLowerCase(Locale.ROOT);
+            case SAVED -> savedResult(processed);
         };
+    }
+
+    private static String savedResult(PipelineBatchProcessor.Processed processed) {
+        if (processed.special() != null) {
+            return processed.special();
+        }
+        return processed.published().outcome().name().toLowerCase(Locale.ROOT);
     }
 
     /**

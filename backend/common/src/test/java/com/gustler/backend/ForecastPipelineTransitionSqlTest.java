@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.flywaydb.core.Flyway;
+import org.assertj.core.api.SoftAssertions;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -66,10 +67,10 @@ class ForecastPipelineTransitionSqlTest {
 
     private static TestDatabase template;
 
+    private final List<String> notices = new ArrayList<>();
     private String name;
     private String url;
     private Connection connection;
-    private final List<String> notices = new ArrayList<>();
 
     @BeforeEach
     void 운영과_비슷한_원본을_복제한다() throws Exception {
@@ -103,8 +104,10 @@ class ForecastPipelineTransitionSqlTest {
         run("sal434-01-precheck.sql");
 
         // then
-        assertThat(catalogFingerprint()).isEqualTo(before);
-        assertThat(guardState()).isEqualTo("work");
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(catalogFingerprint()).isEqualTo(before);
+        softly.assertThat(guardState()).isEqualTo("work");
+        softly.assertAll();
 
         // when
         retireLegacyTables();
@@ -122,9 +125,11 @@ class ForecastPipelineTransitionSqlTest {
         run("sal434-02-drop-legacy-triggers.sql", FAST);
 
         // then
-        assertThat(number(LEGACY_TRIGGERS)).isZero();
-        assertThat(number(LEGACY_FUNCTIONS)).isZero();
-        long work = number("SELECT count(*) FROM alighting_forecast_evaluation_work");
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(number(LEGACY_TRIGGERS)).isZero();
+        softly.assertThat(number(LEGACY_FUNCTIONS)).isZero();
+        softly.assertAll();
+        final long work = number("SELECT count(*) FROM alighting_forecast_evaluation_work");
         execute("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,outcome,
                 normalization_version,collection_strategy_version,ingestion_origin,response_received_at,
@@ -158,9 +163,11 @@ class ForecastPipelineTransitionSqlTest {
         Throwable actual = catchThrowable(() -> run("sal434-02-drop-legacy-triggers.sql", FAST));
 
         // then
-        assertThat(actual).hasMessageContaining("옛 정산이");
-        assertThat(number(LEGACY_TRIGGERS)).isEqualTo(9);
-        assertThat(number(LEGACY_FUNCTIONS)).isEqualTo(7);
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(actual).hasMessageContaining("옛 정산이");
+        softly.assertThat(number(LEGACY_TRIGGERS)).isEqualTo(9);
+        softly.assertThat(number(LEGACY_FUNCTIONS)).isEqualTo(7);
+        softly.assertAll();
     }
 
     @Test
@@ -181,8 +188,10 @@ class ForecastPipelineTransitionSqlTest {
         Throwable notScoring = catchThrowable(() -> run("sal434-02-drop-legacy-triggers.sql", FAST));
 
         // then
-        assertThat(notScoring).hasMessageContaining("새 채점");
-        assertThat(number(LEGACY_TRIGGERS)).isEqualTo(9);
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(notScoring).hasMessageContaining("새 채점");
+        softly.assertThat(number(LEGACY_TRIGGERS)).isEqualTo(9);
+        softly.assertAll();
     }
 
     @Test
@@ -197,9 +206,11 @@ class ForecastPipelineTransitionSqlTest {
         run("sal434-02-rollback-recreate-legacy-triggers.sql");
 
         // then
-        assertThat(triggerDefinitions()).isEqualTo(triggers);
-        assertThat(functionDefinitions()).isEqualTo(functions);
-        long work = number("SELECT count(*) FROM alighting_forecast_evaluation_work");
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(triggerDefinitions()).isEqualTo(triggers);
+        softly.assertThat(functionDefinitions()).isEqualTo(functions);
+        softly.assertAll();
+        final long work = number("SELECT count(*) FROM alighting_forecast_evaluation_work");
         insertForecast("2");
         assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_work")).isEqualTo(work + 1);
     }
@@ -368,8 +379,10 @@ class ForecastPipelineTransitionSqlTest {
         Throwable gap = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
 
         // then
-        assertThat(gap).hasMessageContaining("seat_forecast(조각 2개인데 마지막 번호 2)");
-        assertThat(number("SELECT count(*) FROM seat_forecast")).isEqualTo(2);
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(gap).hasMessageContaining("seat_forecast(조각 2개인데 마지막 번호 2)");
+        softly.assertThat(number("SELECT count(*) FROM seat_forecast")).isEqualTo(2);
+        softly.assertAll();
     }
 
     @Test
@@ -383,14 +396,16 @@ class ForecastPipelineTransitionSqlTest {
         run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop());
 
         // then
+        SoftAssertions softly = new SoftAssertions();
         for (String relation : concat(LEGACY_TABLES, LEGACY_VIEWS)) {
-            assertThat(scalar("SELECT to_regclass('public." + relation + "')::text")).as(relation).isNull();
+            softly.assertThat(scalar("SELECT to_regclass('public." + relation + "')::text")).as(relation).isNull();
         }
-        assertThat(keptRows()).isEqualTo(kept);
-        assertThat(number("SELECT count(*) FROM operational_observation")).isEqualTo(6);
-        assertThat(number("SELECT count(*) FROM daily_export WHERE dropped_at IS NOT NULL")).isPositive();
-        assertThat(notices).anySatisfy(notice -> assertThat(notice).contains("seat_forecast 줄 1 크기"));
-        assertThat(guardState()).isEqualTo("retired");
+        softly.assertThat(keptRows()).isEqualTo(kept);
+        softly.assertThat(number("SELECT count(*) FROM operational_observation")).isEqualTo(6);
+        softly.assertThat(number("SELECT count(*) FROM daily_export WHERE dropped_at IS NOT NULL")).isPositive();
+        softly.assertThat(notices).anySatisfy(notice -> assertThat(notice).contains("seat_forecast 줄 1 크기"));
+        softly.assertThat(guardState()).isEqualTo("retired");
+        softly.assertAll();
 
         // when
         run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop());
@@ -410,8 +425,10 @@ class ForecastPipelineTransitionSqlTest {
         MigrateResult result = flyway.migrate();
 
         // then
-        assertThat(result.migrationsExecuted).isZero();
-        assertThat(scalar("SELECT to_regclass('public.seat_forecast')::text")).isNull();
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(result.migrationsExecuted).isZero();
+        softly.assertThat(scalar("SELECT to_regclass('public.seat_forecast')::text")).isNull();
+        softly.assertAll();
     }
 
     @Test
@@ -425,9 +442,13 @@ class ForecastPipelineTransitionSqlTest {
             confirmPartition(), "SET sal434.count_rows = 'exact'"));
 
         // then
-        assertThat(actual).hasMessageContaining("historical_import_record.fk_historical_import_record_target");
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'observation_batch'::regclass")).isEqualTo("r");
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'vehicle_observation'::regclass")).isEqualTo("r");
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(actual).hasMessageContaining("historical_import_record.fk_historical_import_record_target");
+        softly.assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'observation_batch'::regclass"))
+            .isEqualTo("r");
+        softly.assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'vehicle_observation'::regclass"))
+            .isEqualTo("r");
+        softly.assertAll();
     }
 
     @Test
@@ -438,11 +459,15 @@ class ForecastPipelineTransitionSqlTest {
         run("sal434-04a-prepare-observation-partition.sql");
 
         // when
-        Throwable actual = catchThrowable(() -> run("sal434-04-partition-observation-tables.sql", confirmPartition()));
+        Throwable actual =
+            catchThrowable(() -> run("sal434-04-partition-observation-tables.sql", confirmPartition()));
 
         // then
-        assertThat(actual).hasMessageContaining("sal434.count_rows");
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'observation_batch'::regclass")).isEqualTo("r");
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(actual).hasMessageContaining("sal434.count_rows");
+        softly.assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'observation_batch'::regclass"))
+            .isEqualTo("r");
+        softly.assertAll();
     }
 
     @Test
@@ -451,18 +476,23 @@ class ForecastPipelineTransitionSqlTest {
         retireLegacyTables();
         String batches = rows("observation_batch");
         String observations = rows("vehicle_observation");
-        long maxObservation = number("SELECT max(id) FROM vehicle_observation");
+        final long maxObservation = number("SELECT max(id) FROM vehicle_observation");
 
         // when
         partitionObservations("exact");
 
         // then
-        assertThat(rows("observation_batch")).isEqualTo(batches);
-        assertThat(rows("vehicle_observation")).isEqualTo(observations);
-        assertThat(notices).anySatisfy(notice -> assertThat(notice).contains("vehicle_observation 줄 수 전후 같음 6"));
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'vehicle_observation'::regclass")).isEqualTo("p");
-        assertThat(scalar("SELECT pg_get_expr(relpartbound, oid) FROM pg_class WHERE oid = 'vehicle_observation_legacy'::regclass"))
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(rows("observation_batch")).isEqualTo(batches);
+        softly.assertThat(rows("vehicle_observation")).isEqualTo(observations);
+        softly.assertThat(notices)
+            .anySatisfy(notice -> assertThat(notice).contains("vehicle_observation 줄 수 전후 같음 6"));
+        softly.assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'vehicle_observation'::regclass"))
+            .isEqualTo("p");
+        softly.assertThat(scalar("SELECT pg_get_expr(relpartbound, oid) FROM pg_class "
+            + "WHERE oid = 'vehicle_observation_legacy'::regclass"))
             .isEqualTo("FOR VALUES FROM ('2000-01-01') TO ('2000-01-02')");
+        softly.assertAll();
         String today = today().replace("-", "");
         execute("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,outcome,
@@ -527,7 +557,7 @@ class ForecastPipelineTransitionSqlTest {
                 stop_order,stop_id,running_state,remaining_seats,passed_stop_order)
             SELECT id,1,0,'bus7',1,'st1',1,5,0 FROM observation_batch WHERE attempt_key = 'between';
             """);
-        long newBatch = number("SELECT id FROM observation_batch WHERE attempt_key = 'between'");
+        final long newBatch = number("SELECT id FROM observation_batch WHERE attempt_key = 'between'");
 
         // when
         Throwable unconfirmed = catchThrowable(() -> run("sal434-04-rollback-unpartition-observation-tables.sql"));
@@ -535,32 +565,43 @@ class ForecastPipelineTransitionSqlTest {
             "SET sal434.confirm_partition_rollback = '" + today() + "'");
 
         // then
-        assertThat(unconfirmed).hasMessageContaining("승인값");
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'observation_batch'::regclass")).isEqualTo("r");
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'vehicle_observation'::regclass")).isEqualTo("r");
-        assertThat(scalar("SELECT to_regclass('public.observation_batch_legacy')::text")).isNull();
-        assertThat(number("SELECT count(*) FROM observation_batch WHERE attempt_key = 'between'")).isOne();
-        assertThat(number("SELECT count(*) FROM vehicle_observation WHERE vehicle_id = 'bus7'")).isOne();
-        assertThat(scalar("SELECT convalidated::text FROM pg_constraint WHERE conname = 'fk_observation_batch'"))
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(unconfirmed).hasMessageContaining("승인값");
+        softly.assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'observation_batch'::regclass"))
+            .isEqualTo("r");
+        softly.assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'vehicle_observation'::regclass"))
+            .isEqualTo("r");
+        softly.assertThat(scalar("SELECT to_regclass('public.observation_batch_legacy')::text")).isNull();
+        softly.assertThat(number("SELECT count(*) FROM observation_batch WHERE attempt_key = 'between'")).isOne();
+        softly.assertThat(number("SELECT count(*) FROM vehicle_observation WHERE vehicle_id = 'bus7'")).isOne();
+        softly.assertThat(scalar("SELECT convalidated::text FROM pg_constraint WHERE conname = 'fk_observation_batch'"))
             .isEqualTo("true");
-        assertThat(scalar("SELECT attidentity::text FROM pg_attribute WHERE attrelid = 'observation_batch'::regclass AND attname = 'id'"))
+        softly.assertThat(scalar("SELECT attidentity::text FROM pg_attribute "
+            + "WHERE attrelid = 'observation_batch'::regclass AND attname = 'id'"))
             .isEqualTo("a");
-        assertThat(number("SELECT count(*) FROM operational_observation")).isEqualTo(7);
+        softly.assertThat(number("SELECT count(*) FROM operational_observation")).isEqualTo(7);
+        softly.assertAll();
         execute("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,outcome,
                 normalization_version,collection_strategy_version)
             VALUES(1,now(),1,'after-rollback','RESERVED','n1','c1')
             """);
-        assertThat(number("SELECT id FROM observation_batch WHERE attempt_key = 'after-rollback'")).isGreaterThan(newBatch);
+        assertThat(number("SELECT id FROM observation_batch WHERE attempt_key = 'after-rollback'"))
+            .isGreaterThan(newBatch);
         assertThat(rows("observation_batch WHERE attempt_key NOT IN ('between','after-rollback')")).isEqualTo(batches);
 
         // when
         run("sal434-04-partition-observation-tables.sql", confirmPartition(), "SET sal434.count_rows = 'exact'");
 
         // then
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid = 'observation_batch'::regclass")).isEqualTo("p");
-        assertThat(number("SELECT count(*) FROM observation_batch WHERE attempt_key IN ('between','after-rollback')"))
+        SoftAssertions afterRepartition = new SoftAssertions();
+        afterRepartition.assertThat(
+                scalar("SELECT relkind::text FROM pg_class WHERE oid = 'observation_batch'::regclass"))
+            .isEqualTo("p");
+        afterRepartition.assertThat(
+                number("SELECT count(*) FROM observation_batch WHERE attempt_key IN ('between','after-rollback')"))
             .isEqualTo(2);
+        afterRepartition.assertAll();
     }
 
     @Test
@@ -579,8 +620,10 @@ class ForecastPipelineTransitionSqlTest {
         execute("ROLLBACK");
 
         // then
-        assertThat(halfway).isEqualTo("unsupported");
-        assertThat(guardState()).isEqualTo("work");
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(halfway).isEqualTo("unsupported");
+        softly.assertThat(guardState()).isEqualTo("work");
+        softly.assertAll();
 
         // when
         retireLegacyTables();
@@ -606,7 +649,7 @@ class ForecastPipelineTransitionSqlTest {
     private void writeLedger() throws SQLException {
         execute("DELETE FROM daily_export");
         for (String table : LEGACY_TABLES) {
-            long rows = number("SELECT count(*) FROM " + table);
+            final long rows = number("SELECT count(*) FROM " + table);
             if (rows > 0) {
                 writeSegment(table, 0, rows);
             }
@@ -649,8 +692,8 @@ class ForecastPipelineTransitionSqlTest {
     }
 
     private String rows(String tableAndFilter) throws SQLException {
-        return scalar("SELECT string_agg((to_jsonb(t) - 'source_date')::text, ',' ORDER BY (to_jsonb(t) ->> 'id')::bigint) FROM "
-            + tableAndFilter.replaceFirst("^(\\w+)", "$1 t"));
+        return scalar("SELECT string_agg((to_jsonb(t) - 'source_date')::text, ',' "
+            + "ORDER BY (to_jsonb(t) ->> 'id')::bigint) FROM " + tableAndFilter.replaceFirst("^(\\w+)", "$1 t"));
     }
 
     private String triggerDefinitions() throws SQLException {
@@ -734,49 +777,75 @@ class ForecastPipelineTransitionSqlTest {
         StringBuilder current = new StringBuilder();
         int index = 0;
         while (index < script.length()) {
-            char c = script.charAt(index);
+            final char c = script.charAt(index);
             if (c == '-' && script.startsWith("--", index)) {
-                int end = script.indexOf('\n', index);
-                index = end < 0 ? script.length() : end;
-            } else if (c == '/' && script.startsWith("/*", index)) {
+                index = lineCommentEnd(script, index);
+                continue;
+            }
+            if (c == '/' && script.startsWith("/*", index)) {
                 index = script.indexOf("*/", index) + 2;
-            } else if (c == '\'' || c == '"') {
-                int end = index + 1;
-                while (true) {
-                    end = script.indexOf(c, end);
-                    if (end + 1 < script.length() && script.charAt(end + 1) == c) {
-                        end += 2;
-                        continue;
-                    }
-                    break;
-                }
+                continue;
+            }
+            if (c == '\'' || c == '"') {
+                final int end = closingQuote(script, index, c);
                 current.append(script, index, end + 1);
                 index = end + 1;
-            } else if (c == '$') {
-                Matcher tag = Pattern.compile("\\$[A-Za-z_]*\\$").matcher(script).region(index, script.length());
-                if (tag.lookingAt()) {
-                    int end = script.indexOf(tag.group(), tag.end()) + tag.group().length();
-                    current.append(script, index, end);
-                    index = end;
-                } else {
-                    current.append(c);
-                    index++;
-                }
-            } else if (c == ';') {
-                if (!current.toString().isBlank()) {
-                    statements.add(current.toString().strip());
-                }
+                continue;
+            }
+            if (c == '$') {
+                index = appendDollarQuoted(script, index, current);
+                continue;
+            }
+            if (c == ';') {
+                addStatement(statements, current);
                 current.setLength(0);
                 index++;
-            } else {
-                current.append(c);
-                index++;
+                continue;
             }
+            current.append(c);
+            index++;
         }
+        addStatement(statements, current);
+        return statements;
+    }
+
+    private static int lineCommentEnd(String script, final int index) {
+        final int end = script.indexOf('\n', index);
+        if (end < 0) {
+            return script.length();
+        }
+        return end;
+    }
+
+    /** 두 번 겹친 따옴표는 문자열 안의 따옴표로 보고 건너뛴다. */
+    private static int closingQuote(String script, final int start, final char quote) {
+        int end = start + 1;
+        while (true) {
+            end = script.indexOf(quote, end);
+            if (end + 1 < script.length() && script.charAt(end + 1) == quote) {
+                end += 2;
+                continue;
+            }
+            return end;
+        }
+    }
+
+    /** 달러 따옴표면 닫는 태그까지, 아니면 {@code $} 한 글자만 붙이고 다음 위치를 돌려준다. */
+    private static int appendDollarQuoted(String script, final int index, StringBuilder current) {
+        Matcher tag = Pattern.compile("\\$[A-Za-z_]*\\$").matcher(script).region(index, script.length());
+        if (!tag.lookingAt()) {
+            current.append(script.charAt(index));
+            return index + 1;
+        }
+        final int end = script.indexOf(tag.group(), tag.end()) + tag.group().length();
+        current.append(script, index, end);
+        return end;
+    }
+
+    private static void addStatement(List<String> statements, StringBuilder current) {
         if (!current.toString().isBlank()) {
             statements.add(current.toString().strip());
         }
-        return statements;
     }
 
     private static synchronized TestDatabase template() throws Exception {
@@ -849,7 +918,8 @@ class ForecastPipelineTransitionSqlTest {
 
     private static void admin(TestDatabase database, String sql) throws SQLException {
         String maintenance = database.jdbcUrl().replace(databaseName(database), "postgres");
-        try (Connection connection = DriverManager.getConnection(maintenance, database.username(), database.password());
+        try (Connection connection =
+                DriverManager.getConnection(maintenance, database.username(), database.password());
             Statement statement = connection.createStatement()) {
             statement.execute(sql);
         }
@@ -862,7 +932,8 @@ class ForecastPipelineTransitionSqlTest {
 
     private static Path backend() {
         Path directory = Path.of("").toAbsolutePath();
-        while (directory != null && !Files.isRegularFile(directory.resolve("deploy/scripts/evaluation-work-transition.sh"))) {
+        while (directory != null
+            && !Files.isRegularFile(directory.resolve("deploy/scripts/evaluation-work-transition.sh"))) {
             directory = directory.getParent();
         }
         if (directory == null) {

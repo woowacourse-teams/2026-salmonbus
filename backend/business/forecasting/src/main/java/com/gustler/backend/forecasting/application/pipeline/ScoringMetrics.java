@@ -42,7 +42,7 @@ final class ScoringMetrics {
         lag = Timer.builder(PREFIX + "lag").register(meters);
     }
 
-    void waiting(int count) {
+    void waiting(final int count) {
         waiting.set(count);
     }
 
@@ -62,8 +62,22 @@ final class ScoringMetrics {
         for (ScoredForecast scored : result.scored()) {
             PassLabel label = labels.get(List.of(scored.passSourceDate(), scored.routeId(),
                 scored.tripStartObservationId(), scored.stopOrder(), scored.capacity(), scored.modelDeploymentId()));
-            count("scored", label == null ? "UNKNOWN" : label.state().name(), label == null ? null : label.reason());
+            count("scored", labelState(label), labelReason(label));
         }
+    }
+
+    private static String labelState(PassLabel label) {
+        if (label == null) {
+            return "UNKNOWN";
+        }
+        return label.state().name();
+    }
+
+    private static String labelReason(PassLabel label) {
+        if (label == null) {
+            return null;
+        }
+        return label.reason();
     }
 
     void lag(Duration elapsed) {
@@ -74,9 +88,16 @@ final class ScoringMetrics {
 
     void replay(String reason, final boolean succeeded) {
         if (meters != null) {
-            meters.counter(PREFIX + "replays", "reason", reason, "result", succeeded ? "succeeded" : "failed")
+            meters.counter(PREFIX + "replays", "reason", reason, "result", replayResult(succeeded))
                 .increment();
         }
+    }
+
+    private static String replayResult(final boolean succeeded) {
+        if (succeeded) {
+            return "succeeded";
+        }
+        return "failed";
     }
 
     void dropped() {
@@ -104,8 +125,15 @@ final class ScoringMetrics {
     }
 
     private void count(String kind, String state, String reason) {
-        meters.counter(PREFIX + "results", "kind", kind, "state", state, "reason", reason == null ? "none" : reason)
+        meters.counter(PREFIX + "results", "kind", kind, "state", state, "reason", reasonTag(reason))
             .increment();
+    }
+
+    private static String reasonTag(String reason) {
+        if (reason == null) {
+            return "none";
+        }
+        return reason;
     }
 
     private void increment(String name) {

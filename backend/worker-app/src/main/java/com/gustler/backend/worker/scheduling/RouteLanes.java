@@ -40,20 +40,30 @@ public class RouteLanes implements ForecastLanes, DisposableBean {
         }
         List<ThreadPoolExecutor> created = new ArrayList<>(count);
         for (int index = 0; index < count; index++) {
-            String prefix = THREAD_PREFIX + index + "-";
-            ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(capacity), runnable -> {
-                    Thread thread = new Thread(runnable, prefix + "1");
-                    thread.setDaemon(true);
-                    return thread;
-                }, new ThreadPoolExecutor.AbortPolicy());
+            ThreadPoolExecutor executor = createLane(index, capacity);
             created.add(executor);
             if (meters != null) {
-                Gauge.builder("salmonbus.pipeline.forecast.queue", executor, pool -> pool.getQueue().size())
-                    .tag("lane", String.valueOf(index)).strongReference(true).register(meters);
+                registerQueueGauge(meters, executor, index);
             }
         }
         this.lanes = List.copyOf(created);
+    }
+
+    private static ThreadPoolExecutor createLane(final int index, final int capacity) {
+        String prefix = THREAD_PREFIX + index + "-";
+        return new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<>(capacity), runnable -> {
+                Thread thread = new Thread(runnable, prefix + "1");
+                thread.setDaemon(true);
+                return thread;
+            }, new ThreadPoolExecutor.AbortPolicy());
+    }
+
+    private static void registerQueueGauge(MeterRegistry meters, ThreadPoolExecutor executor, final int index) {
+        Gauge.builder("salmonbus.pipeline.forecast.queue", executor, pool -> pool.getQueue().size())
+            .tag("lane", String.valueOf(index))
+            .strongReference(true)
+            .register(meters);
     }
 
     @Override
@@ -63,6 +73,15 @@ public class RouteLanes implements ForecastLanes, DisposableBean {
             return true;
         } catch (RejectedExecutionException full) {
             return false;
+        }
+    }
+
+    private static void runSafely(String routeKey, Runnable task) {
+        try {
+            task.run();
+        } catch (RuntimeException failure) {
+            LOGGER.warn("event=pipeline_forecast_task_failed routeKey={} exceptionType={}", routeKey,
+                failure.getClass().getSimpleName(), failure);
         }
     }
 
@@ -84,14 +103,5 @@ public class RouteLanes implements ForecastLanes, DisposableBean {
     @Override
     public void destroy() {
         lanes.forEach(ThreadPoolExecutor::shutdownNow);
-    }
-
-    private static void runSafely(String routeKey, Runnable task) {
-        try {
-            task.run();
-        } catch (RuntimeException failure) {
-            LOGGER.warn("event=pipeline_forecast_task_failed routeKey={} exceptionType={}", routeKey,
-                failure.getClass().getSimpleName(), failure);
-        }
     }
 }

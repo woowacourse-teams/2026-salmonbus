@@ -1,13 +1,12 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
-import com.gustler.backend.forecasting.api.pipeline.ForecastPublished.VehicleForecast;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
-import com.gustler.backend.forecasting.application.pipeline.PassLabelCalculator.PassLabelCalculation;
+import com.gustler.backend.forecasting.application.pipeline.PassLabelCalculator;
 import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
 import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
@@ -21,6 +20,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,9 +45,9 @@ class JdbcScoringSourcesTest {
         FROM (SELECT settlement_context -> CAST(:version AS text) AS context FROM model_deployment WHERE id = :deployment) c
         """;
 
+    private final AtomicLong batches = new AtomicLong(100);
     @Autowired
     JdbcClient jdbc;
-    private final AtomicLong batches = new AtomicLong(100);
     private long version;
     private long deployment;
 
@@ -56,10 +56,9 @@ class JdbcScoringSourcesTest {
         version = 900_000 + Math.abs(UUID.randomUUID().getMostSignificantBits() % 100_000);
         String parameters = """
             "r": 2.0, "kappa": 1.000, "p": 0.1200, "lam": [1.50, 15e-1, 1.6, 1.7000, 1.8, 1.9, 2.0, 2.10]""";
-        StringBuilder cells = new StringBuilder();
-        for (String key : AlightingTimeCell.extendedKeys()) {
-            cells.append(cells.isEmpty() ? "" : ",").append("\"%s\":{%s}".formatted(key, parameters));
-        }
+        String cells = AlightingTimeCell.extendedKeys().stream()
+            .map(key -> "\"%s\":{%s}".formatted(key, parameters))
+            .collect(Collectors.joining(","));
         String context = """
             {"%d": {"stops": {"3": [{"band": "evening", %s, "stop": 3}, {"stop": 3, "band": "morning", %s}]},
               "shared": {"turn": 9, "realStopOrders": [5, 1, 2, 3, 4], "holidays": ["2026-01-01"],
@@ -89,9 +88,11 @@ class JdbcScoringSourcesTest {
         ScoringResult result = stage.accept(current);
 
         // then
-        PassLabelCalculation legacy = legacy(current, previous, 40);
-        assertThat(legacy.settled()).isTrue();
-        assertThat(result.labels()).singleElement().satisfies(label -> assertSame(label, legacy));
+        PassLabelCalculator.PassLabelCalculation legacy = legacy(current, previous, 40);
+        assertSoftly(softly -> {
+            softly.assertThat(legacy.settled()).isTrue();
+            softly.assertThat(result.labels()).singleElement().satisfies(label -> assertSame(label, legacy));
+        });
     }
 
     @Test
@@ -108,9 +109,11 @@ class JdbcScoringSourcesTest {
         ScoringResult result = stage.accept(current);
 
         // then
-        PassLabelCalculation legacy = legacy(current, previous, 45);
-        assertThat(legacy.settled()).isTrue();
-        assertThat(result.labels()).singleElement().satisfies(label -> assertSame(label, legacy));
+        PassLabelCalculator.PassLabelCalculation legacy = legacy(current, previous, 45);
+        assertSoftly(softly -> {
+            softly.assertThat(legacy.settled()).isTrue();
+            softly.assertThat(result.labels()).singleElement().satisfies(label -> assertSame(label, legacy));
+        });
     }
 
     @Test
@@ -125,13 +128,16 @@ class JdbcScoringSourcesTest {
             """).params(Long.toString(version + 1), Long.toString(version), deployment).update();
 
         // when
-        boolean foundAgain = provider.find(deployment, version + 1).isPresent();
-        boolean foundByFreshProvider = new JdbcSettlementContextProvider(jdbc, CLOCK).find(deployment, version + 1)
+        final boolean foundAgain = provider.find(deployment, version + 1).isPresent();
+        final boolean foundByFreshProvider = new JdbcSettlementContextProvider(jdbc, CLOCK)
+            .find(deployment, version + 1)
             .isPresent();
 
         // then
-        assertThat(foundAgain).isFalse();
-        assertThat(foundByFreshProvider).isTrue();
+        assertSoftly(softly -> {
+            softly.assertThat(foundAgain).isFalse();
+            softly.assertThat(foundByFreshProvider).isTrue();
+        });
     }
 
     @Test
@@ -157,15 +163,20 @@ class JdbcScoringSourcesTest {
         List<Integer> fallback = provider.realStopOrders(bare);
 
         // then
-        assertThat(recorded).containsExactly(5, 1, 2, 3, 4);
-        assertThat(fallback).containsExactly(1, 2, 4);
+        assertSoftly(softly -> {
+            softly.assertThat(recorded).containsExactly(5, 1, 2, 3, 4);
+            softly.assertThat(fallback).containsExactly(1, 2, 4);
+        });
     }
 
-    private static void assertSame(PassLabel label, PassLabelCalculation legacy) {
-        assertThat(label.state()).isEqualTo(PassLabel.State.SETTLED);
-        assertThat(label.parameterHash()).isEqualTo(legacy.parameterHash());
-        assertThat(Double.doubleToLongBits(label.labelValue())).isEqualTo(Double.doubleToLongBits(legacy.value()));
-        assertThat(label.capacity()).isEqualTo(legacy.capacity());
+    private static void assertSame(PassLabel label, PassLabelCalculator.PassLabelCalculation legacy) {
+        assertSoftly(softly -> {
+            softly.assertThat(label.state()).isEqualTo(PassLabel.State.SETTLED);
+            softly.assertThat(label.parameterHash()).isEqualTo(legacy.parameterHash());
+            softly.assertThat(Double.doubleToLongBits(label.labelValue()))
+                .isEqualTo(Double.doubleToLongBits(legacy.value()));
+            softly.assertThat(label.capacity()).isEqualTo(legacy.capacity());
+        });
     }
 
     private ScoringStage stage() {
@@ -173,7 +184,7 @@ class JdbcScoringSourcesTest {
             new ConfirmedPassLabelCalculator(), CLOCK);
     }
 
-    private PassLabelCalculation legacy(PassClosed pass, PassClosed previous, final int capacity) {
+    private PassLabelCalculator.PassLabelCalculation legacy(PassClosed pass, PassClosed previous, final int capacity) {
         String evidence = jdbc.sql(LEGACY_EVIDENCE)
             .param("capacity", capacity)
             .param("target", Integer.toString(pass.stopOrder()))
@@ -183,14 +194,26 @@ class JdbcScoringSourcesTest {
         return new ConfirmedPassLabelCalculator().calculate(pass, previous, JSON.readTree(evidence));
     }
 
-    private ForecastPublished forecast(Instant confirmedAt, long observation, String vehicle, long chain, int capacity) {
-        VehicleForecast forecast = new VehicleForecast(observation, 0, vehicle, 1, chain, chain, false, capacity, false,
-            new int[] {3}, new double[1], new double[1]);
+    private ForecastPublished forecast(
+        Instant confirmedAt,
+        final long observation,
+        String vehicle,
+        final long chain,
+        final int capacity
+    ) {
+        ForecastPublished.VehicleForecast forecast = new ForecastPublished.VehicleForecast(observation, 0, vehicle, 1,
+            chain, chain, false, capacity, false, new int[] {3}, new double[1], new double[1]);
         return new ForecastPublished(SourceDates.of(confirmedAt), batches.incrementAndGet(), 7L, version,
             confirmedAt.minusSeconds(2), confirmedAt, deployment, ForecastOutcome.PUBLISHED, List.of(forecast));
     }
 
-    private PassClosed pass(String vehicle, long chain, Instant lastAt, Instant closedAt, long closure) {
+    private PassClosed pass(
+        String vehicle,
+        final long chain,
+        Instant lastAt,
+        Instant closedAt,
+        final long closure
+    ) {
         return new PassClosed(SourceDates.of(closedAt), 7L, chain, 3, version, vehicle, chain, SourceDates.of(lastAt),
             closure - 300, 20, lastAt.minusSeconds(40), lastAt.minusSeconds(42), closure - 200, lastAt.minusSeconds(20),
             closure - 100, 18, lastAt, lastAt.minusSeconds(2), lastAt, closure, batches.incrementAndGet(), closedAt);

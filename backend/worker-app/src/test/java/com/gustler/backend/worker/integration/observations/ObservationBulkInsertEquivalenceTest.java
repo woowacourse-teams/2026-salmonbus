@@ -1,9 +1,10 @@
 package com.gustler.backend.worker.integration.observations;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.gbis.api.GbisLocationResult;
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
+import com.gustler.backend.gbis.api.dto.BusLocationResponse;
 import com.gustler.backend.observations.api.CollectionQualityHook;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
 import com.gustler.backend.observations.api.ObservationDeliveryHook;
@@ -148,7 +149,7 @@ class ObservationBulkInsertEquivalenceTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("수집_응답")
-    void 켜짐과_꺼짐은_같은_관측과_배치_결과와_훅_입력을_남긴다(String scenario, List<BusLocation> buses) {
+    void 켜짐과_꺼짐은_같은_관측과_배치_결과와_훅_입력을_남긴다(String scenario, List<BusLocationResponse.BusLocation> buses) {
         // when
         Outcome jpa = storeAndRollBack(false, buses);
         Outcome bulk = storeAndRollBack(true, buses);
@@ -161,7 +162,7 @@ class ObservationBulkInsertEquivalenceTest {
     @Test
     void 켜짐에서도_좌석_품질_훅이_가린_좌석은_전달되지_않고_정원은_올라간다() {
         // given
-        List<BusLocation> buses = List.of(
+        List<BusLocationResponse.BusLocation> buses = List.of(
             bus("eq-1", "경기70아0001", NORMAL_BUS, STOP_1, 1, DEPARTED, 71, 3),
             bus("eq-2", "경기70아0002", NORMAL_BUS, STOP_2, 2, DEPARTED, 43, 3));
 
@@ -169,15 +170,17 @@ class ObservationBulkInsertEquivalenceTest {
         Outcome bulk = storeAndRollBack(true, buses);
 
         // then
-        assertThat(bulk.delivered()).contains(Arrays.asList(0, "eq-1", null, 1, 3, 1, DEPARTED),
-            Arrays.asList(1, "eq-2", 43, 2, 3, 2, DEPARTED));
-        assertThat(bulk.observations().getFirst()).contains("\"seat_quality_status\": \"REVIEW\"",
-            "\"reported_remaining_seats\": 71");
-        assertThat(bulk.capacities()).singleElement().asString().contains("\"vehicle_id\": \"eq-2\"",
-            "\"capacity\": 43", "\"evidence_source_row\": 1");
+        assertSoftly(softly -> {
+            softly.assertThat(bulk.delivered()).contains(Arrays.asList(0, "eq-1", null, 1, 3, 1, DEPARTED),
+                Arrays.asList(1, "eq-2", 43, 2, 3, 2, DEPARTED));
+            softly.assertThat(bulk.observations().getFirst()).contains("\"seat_quality_status\": \"REVIEW\"",
+                "\"reported_remaining_seats\": 71");
+            softly.assertThat(bulk.capacities()).singleElement().asString().contains("\"vehicle_id\": \"eq-2\"",
+                "\"capacity\": 43", "\"evidence_source_row\": 1");
+        });
     }
 
-    private Outcome storeAndRollBack(final boolean bulk, List<BusLocation> buses) {
+    private Outcome storeAndRollBack(final boolean bulk, List<BusLocationResponse.BusLocation> buses) {
         RecordingHooks recording = new RecordingHooks();
         List<CollectionQualityHook> hooks = new ArrayList<>(qualityHooks);
         hooks.add(recording);
@@ -220,19 +223,35 @@ class ObservationBulkInsertEquivalenceTest {
     private Map<Long, Integer> sourceRowsById() {
         return jdbc.sql("SELECT id, source_row_number FROM vehicle_observation WHERE observation_batch_id = ?")
             .param(batchId)
-            .query((resultSet, rowNumber) -> Map.entry(resultSet.getLong("id"), resultSet.getInt("source_row_number")))
-            .list().stream()
+            .query((resultSet, rowNumber) -> Map.entry(
+                resultSet.getLong("id"),
+                resultSet.getInt("source_row_number")))
+            .list()
+            .stream()
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    private static BusLocation bus(String vehicleId, String plateNumber, final int vehicleType, String stopId,
-        Integer stopOrder, final int runningState, Integer remainingSeats, Integer crowdLevel) {
-        return new BusLocation(plateNumber, vehicleId, vehicleType, ROUTE_3330, 11, stopId, stopOrder, runningState,
-            remainingSeats, crowdLevel, 1);
+    private static BusLocationResponse.BusLocation bus(
+        String vehicleId,
+        String plateNumber,
+        final int vehicleType,
+        String stopId,
+        Integer stopOrder,
+        final int runningState,
+        Integer remainingSeats,
+        Integer crowdLevel
+    ) {
+        return new BusLocationResponse.BusLocation(plateNumber, vehicleId, vehicleType, ROUTE_3330, 11, stopId,
+            stopOrder, runningState, remainingSeats, crowdLevel, 1);
     }
 
-    private record Outcome(List<String> observations, String batch, List<String> capacities, List<List<Object>> stored,
-        List<List<Object>> delivered) {
+    private record Outcome(
+        List<String> observations,
+        String batch,
+        List<String> capacities,
+        List<List<Object>> stored,
+        List<List<Object>> delivered
+    ) {
     }
 
     /** 품질 훅과 전달 훅이 받은 값을 관측 번호 대신 상류 행 번호로 남긴다. 좌석을 가리지 않는다. */

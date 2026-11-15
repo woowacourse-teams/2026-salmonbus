@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
@@ -110,9 +111,16 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         this.jdbc = jdbc;
         this.maximumRows = maximumRows;
         this.axis = Objects.requireNonNull(axis);
-        String source = axis == Axis.BATCH_INPUT ? "observation_batch" : RECORDED_BATCHES;
+        String source = batchSource(axis);
         this.readBatches = READ_BATCHES.formatted(BATCH_COLUMNS, source);
         this.readBatch = READ_BATCH.formatted(BATCH_COLUMNS, source);
+    }
+
+    private static String batchSource(Axis axis) {
+        if (axis == Axis.BATCH_INPUT) {
+            return "observation_batch";
+        }
+        return RECORDED_BATCHES;
     }
 
     /** 이 원본이 착수 시각을 읽는 축. */
@@ -121,12 +129,33 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
     }
 
     @Override
-    public Read read(AlightingAwareRouteStatistics statistics, Instant from, Instant through, final long throughBatchId) {
+    public Read read(
+        AlightingAwareRouteStatistics statistics,
+        Instant from,
+        Instant through,
+        final long throughBatchId
+    ) {
         List<Long> versions = jdbc.sql(READ_VERSIONS).param("name", statistics.route()).query(Long.class).list();
         if (versions.isEmpty()) {
             return Read.failed(ROUTE_HISTORY_MISSING);
         }
-        List<Row> rows = jdbc.sql(readBatches)
+        List<Row> rows = readRows(versions, from, through, throughBatchId);
+        if (rows.size() > maximumRows) {
+            return Read.failed(ROW_LIMIT_EXCEEDED);
+        }
+        Set<Long> seenVersions = rows.stream()
+            .map(Row::routeVersionId)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        for (final long version : seenVersions) {
+            if (!isCompatible(version, statistics)) {
+                return Read.failed(INCOMPATIBLE_VERSION + version);
+            }
+        }
+        return Read.of(batches(rows));
+    }
+
+    private List<Row> readRows(List<Long> versions, Instant from, Instant through, final long throughBatchId) {
+        return jdbc.sql(readBatches)
             .param("versions", versions)
             .param("from", from.atOffset(ZoneOffset.UTC))
             .param("through", through.atOffset(ZoneOffset.UTC))
@@ -134,17 +163,6 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
             .param("limit", maximumRows + 1)
             .query((row, index) -> row(row))
             .list();
-        if (rows.size() > maximumRows) {
-            return Read.failed(ROW_LIMIT_EXCEEDED);
-        }
-        Set<Long> seenVersions = new LinkedHashSet<>();
-        rows.forEach(row -> seenVersions.add(row.routeVersionId()));
-        for (final long version : seenVersions) {
-            if (!isCompatible(version, statistics)) {
-                return Read.failed(INCOMPATIBLE_VERSION + version);
-            }
-        }
-        return Read.of(batches(rows));
     }
 
     @Override
@@ -162,7 +180,8 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         rows.forEach(placed -> placed.row().observation().ifPresent(
             observation -> rowNumbers.put(observation.observationId(), placed.row().sourceRowNumber())));
         ForecastBatch batch = batches(rows.stream().map(Placed::row).toList()).getFirst();
-        return Optional.of(new ObservationBatchRead(batch, head.routeId(), head.scheduledAt(), head.sourceId(), rowNumbers));
+        return Optional.of(
+            new ObservationBatchRead(batch, head.routeId(), head.scheduledAt(), head.sourceId(), rowNumbers));
     }
 
     private static List<ForecastBatch> batches(List<Row> rows) {
@@ -206,7 +225,8 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         if (observationId != null) {
             observation = new ForecastObservationRow(observationId, row.getString("vehicle_id"),
                 row.getInt("passed_stop_order"), row.getInt("stop_order"), row.getInt("running_state"),
-                (Integer) row.getObject("remaining_seats"), row.getString("seat_unknown_reason"), row.getInt("crowd_level"));
+                (Integer) row.getObject("remaining_seats"), row.getString("seat_unknown_reason"),
+                row.getInt("crowd_level"));
         }
         return new Row(row.getLong("batch_id"), row.getLong("route_version_id"), instant(row, "response_received_at"),
             instant(row, "input_confirmed_at"), row.getString("ingestion_origin"), row.getString("outcome"),
@@ -215,7 +235,10 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
 
     private static Instant instant(ResultSet row, String column) throws SQLException {
         OffsetDateTime value = row.getObject(column, OffsetDateTime.class);
-        return value == null ? null : value.toInstant();
+        if (value == null) {
+            return null;
+        }
+        return value.toInstant();
     }
 
     private record Row(
@@ -242,7 +265,14 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
             if (!stopId.equals(reference.id()) || boardingAllowed != reference.boardingAllowed()) {
                 return false;
             }
-            return direction.equals(reference.down() ? "DOWN" : "UP");
+            return direction.equals(directionName(reference.down()));
+        }
+
+        private static String directionName(final boolean down) {
+            if (down) {
+                return "DOWN";
+            }
+            return "UP";
         }
     }
 

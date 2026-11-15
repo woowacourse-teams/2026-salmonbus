@@ -1,7 +1,7 @@
 package com.gustler.backend.archive;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
@@ -51,8 +51,10 @@ class ArchiveHistoryHoldTest {
         service(new ArchiveRepository(fixture.jdbc, manager)).advance();
 
         // then
-        assertThat(failureCode()).isEqualTo("ALIGHTING_HISTORY_REQUIRED");
-        assertThat(fixture.count("observation_batch")).isOne();
+        assertSoftly(softly -> {
+            softly.assertThat(failureCode()).isEqualTo("ALIGHTING_HISTORY_REQUIRED");
+            softly.assertThat(fixture.count("observation_batch")).isOne();
+        });
     }
 
     @Test
@@ -65,8 +67,10 @@ class ArchiveHistoryHoldTest {
         service(repository).advance();
 
         // then
-        assertThat(fixture.count("observation_batch")).isZero();
-        assertThat(fixture.count("vehicle_observation")).isZero();
+        assertSoftly(softly -> {
+            softly.assertThat(fixture.count("observation_batch")).isZero();
+            softly.assertThat(fixture.count("vehicle_observation")).isZero();
+        });
     }
 
     @Test
@@ -79,18 +83,27 @@ class ArchiveHistoryHoldTest {
         service(repository).advance();
 
         // then
-        assertThat(fixture.count("alighting_history_checkpoint")).isZero();
-        assertThat(failureCode()).isEqualTo("ALIGHTING_HISTORY_REQUIRED");
-        assertThat(fixture.count("observation_batch")).isOne();
+        assertSoftly(softly -> {
+            softly.assertThat(fixture.count("alighting_history_checkpoint")).isZero();
+            softly.assertThat(failureCode()).isEqualTo("ALIGHTING_HISTORY_REQUIRED");
+            softly.assertThat(fixture.count("observation_batch")).isOne();
+        });
     }
 
     @Test
     void 모르는_기준이나_1시간보다_짧은_창은_받지_않는다() {
+        // given
         ArchiveRepository repository = new ArchiveRepository(fixture.jdbc, manager);
 
-        assertThatThrownBy(() -> repository.setHistoryHold("latest")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> repository.setHistoryHoldWindow(Duration.ofMinutes(59)))
-            .isInstanceOf(IllegalArgumentException.class);
+        // when
+        Throwable unknownHold = catchThrowable(() -> repository.setHistoryHold("latest"));
+        Throwable shortWindow = catchThrowable(() -> repository.setHistoryHoldWindow(Duration.ofMinutes(59)));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(unknownHold).isInstanceOf(IllegalArgumentException.class);
+            softly.assertThat(shortWindow).isInstanceOf(IllegalArgumentException.class);
+        });
     }
 
     private void protectedByCheckpoint() {

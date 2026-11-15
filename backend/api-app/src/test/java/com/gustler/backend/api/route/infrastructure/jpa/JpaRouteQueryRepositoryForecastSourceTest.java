@@ -3,7 +3,6 @@ package com.gustler.backend.api.route.infrastructure.jpa;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
-import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -39,8 +38,8 @@ class JpaRouteQueryRepositoryForecastSourceTest {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         route(fixture, NO_FORECAST, now);
-        RouteContext legacyOnly = route(fixture, LEGACY_ONLY, now);
-        RouteContext recordOnly = route(fixture, RECORD_ONLY, now);
+        BoardDatabaseFixture.RouteContext legacyOnly = route(fixture, LEGACY_ONLY, now);
+        BoardDatabaseFixture.RouteContext recordOnly = route(fixture, RECORD_ONLY, now);
         fixture.insertPublication(fixture.insertBatch(legacyOnly, now, "SUCCESS_EMPTY", 0), model, now, now);
         final long batch = fixture.insertBatch(recordOnly, now, "SUCCESS_EMPTY", 0);
         jdbc.sql("""
@@ -75,7 +74,11 @@ class JpaRouteQueryRepositoryForecastSourceTest {
         return repository.findForecastPublishedRouteIds();
     }
 
-    private static RouteContext route(BoardDatabaseFixture fixture, String routeId, OffsetDateTime now) {
+    private static BoardDatabaseFixture.RouteContext route(
+        BoardDatabaseFixture fixture,
+        String routeId,
+        OffsetDateTime now
+    ) {
         return fixture.insertRoute(routeId, "노선-" + routeId, "기점", "종점", null,
             "05:00", "23:00", null, null, now.minusDays(1));
     }

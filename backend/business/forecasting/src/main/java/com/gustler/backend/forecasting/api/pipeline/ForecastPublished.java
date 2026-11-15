@@ -108,7 +108,8 @@ public record ForecastPublished(
             if (targetStopOrders.length == 0) {
                 throw new IllegalArgumentException("목표 정류장이 하나 이상 필요하다");
             }
-            if (expectedSeats.length != targetStopOrders.length || fullProbabilities.length != targetStopOrders.length) {
+            if (expectedSeats.length != targetStopOrders.length
+                || fullProbabilities.length != targetStopOrders.length) {
                 throw new IllegalArgumentException("목표 정류장·기대 좌석·만석 확률의 길이가 다르다: %d, %d, %d"
                     .formatted(targetStopOrders.length, expectedSeats.length, fullProbabilities.length));
             }

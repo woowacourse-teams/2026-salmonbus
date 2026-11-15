@@ -36,7 +36,7 @@ public record ScoringResult(List<PassLabel> labels, List<UnresolvedForecast> unr
      * @return 합친 결과
      */
     public ScoringResult plus(ScoringResult other) {
-        if (other.labels.isEmpty() && other.unresolved.isEmpty() && other.scored.isEmpty()) {
+        if (other.carriesNothing()) {
             return this;
         }
         List<PassLabel> mergedLabels = new ArrayList<>(labels);
@@ -46,5 +46,9 @@ public record ScoringResult(List<PassLabel> labels, List<UnresolvedForecast> unr
         List<ScoredForecast> mergedScored = new ArrayList<>(scored);
         mergedScored.addAll(other.scored);
         return new ScoringResult(mergedLabels, mergedUnresolved, mergedScored);
+    }
+
+    private boolean carriesNothing() {
+        return labels.isEmpty() && unresolved.isEmpty() && scored.isEmpty();
     }
 }

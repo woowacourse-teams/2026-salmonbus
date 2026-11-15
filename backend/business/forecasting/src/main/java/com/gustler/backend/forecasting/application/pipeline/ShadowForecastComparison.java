@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.application.pipeline;
 
-import com.gustler.backend.forecasting.api.pipeline.ForecastPublished.VehicleForecast;
+import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.domain.publication.SeatForecast;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -37,11 +37,11 @@ public final class ShadowForecastComparison {
      */
     public static ShadowForecastComparison compare(
         List<SeatForecast> legacy,
-        List<VehicleForecast> fresh,
+        List<ForecastPublished.VehicleForecast> fresh,
         Set<Long> excludedObservations
     ) {
         Map<Key, double[]> news = new LinkedHashMap<>();
-        for (VehicleForecast vehicle : fresh) {
+        for (ForecastPublished.VehicleForecast vehicle : fresh) {
             int[] targets = vehicle.targetStopOrders();
             double[] seats = vehicle.expectedSeats();
             double[] probabilities = vehicle.fullProbabilities();
@@ -56,11 +56,10 @@ public final class ShadowForecastComparison {
             Key key = new Key(old.vehicleObservationId(), old.targetStopOrder());
             double[] candidate = news.remove(key);
             if (candidate == null) {
-                counts.merge(excludedObservations.contains(key.observationId()) ? Result.EXCLUDED : Result.LEGACY_ONLY, 1,
-                    Integer::sum);
+                counts.merge(unmatchedResult(excludedObservations, key), 1, Integer::sum);
                 continue;
             }
-            final double oldSeats = old.expectedSeats() == null ? Double.NaN : old.expectedSeats();
+            final double oldSeats = seatsOrNaN(old);
             if (sameBits(oldSeats, candidate[0]) && sameBits(old.seatFullChance(), candidate[1])) {
                 counts.merge(Result.SAME, 1, Integer::sum);
                 continue;
@@ -75,6 +74,20 @@ public final class ShadowForecastComparison {
             counts.merge(Result.NEW_ONLY, news.size(), Integer::sum);
         }
         return new ShadowForecastComparison(counts, differences);
+    }
+
+    private static Result unmatchedResult(Set<Long> excludedObservations, Key key) {
+        if (excludedObservations.contains(key.observationId())) {
+            return Result.EXCLUDED;
+        }
+        return Result.LEGACY_ONLY;
+    }
+
+    private static double seatsOrNaN(SeatForecast old) {
+        if (old.expectedSeats() == null) {
+            return Double.NaN;
+        }
+        return old.expectedSeats();
     }
 
     private static boolean sameBits(final double left, final double right) {

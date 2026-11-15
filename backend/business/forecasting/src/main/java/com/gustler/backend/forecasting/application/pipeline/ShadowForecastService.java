@@ -30,8 +30,8 @@ import org.springframework.transaction.support.TransactionOperations;
  *   <li>옛 경로가 확정하지 않은 배치는 상태에 넣지 않고 그 사유({@code LATE}, {@code EMPTY})만 실행 줄로 남긴다.</li>
  *   <li>노선 상태가 없으면 이 배치 직전까지 되감아 만든다({@link RouteStateReplayer}). 되감기가 실패하면 그 노선은 착수 시각 기준
  *       {@value #REPLAY_RETRY_MINUTES}분 동안 되감지 않고 예보 없이 실행 줄만 남긴다.</li>
- *   <li>{@link ForecastStage#advance}로 상태를 전진시키고, 옛 경로와 같은 예측 조립 객체({@link AlightingAwarePredictionAssembler})로
- *       예측을 만든다. 출퇴근 범위 판정은 옛 경로의 입력 조회와 같은 기준이다.</li>
+ *   <li>{@link ForecastStage#advance}로 상태를 전진시키고, 옛 경로와 같은 예측 조립 객체
+ *       ({@link AlightingAwarePredictionAssembler})로 예측을 만든다. 출퇴근 범위 판정은 옛 경로의 입력 조회와 같은 기준이다.</li>
  *   <li>예측 실행·버스별 기록·닫힌 통과를 한 트랜잭션으로 쓰고, 커밋한 뒤에만 상태를 바꾼다.</li>
  *   <li>옛 예측과 (관측, 목표)마다 비트 단위로 대조해 지표·경고 로그를 남기고, 사건을 {@link PipelineEvents}에 넘긴다.</li>
  * </ol>
@@ -61,7 +61,8 @@ public final class ShadowForecastService implements LegacyForecastListener {
     private int warningsInWindow;
 
     /**
-     * @param rushOnly 옛 경로의 {@code forecast.alighting.rush-only}. 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를 예보하지 않는다
+     * @param rushOnly 옛 경로의 {@code forecast.alighting.rush-only}. 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를
+     *                 예보하지 않는다
      * @param meters 지표 등록기. 없으면 지표를 내지 않는다
      */
     public ShadowForecastService(
@@ -141,17 +142,33 @@ public final class ShadowForecastService implements LegacyForecastListener {
         ShadowForecastComparison comparison = ShadowForecastComparison.compare(legacy.predictions(),
             processed.vehicles(), processed.excluded());
         metrics.predictions(comparison);
-        String result = processed.special() != null ? processed.special() : classify(legacy, outcome, comparison);
+        String result = batchResult(processed, legacy, outcome, comparison);
         if (comparison.mismatches() > 0 || "mismatch".equals(result)) {
             warnMismatch(legacy, outcome, comparison);
         }
         return count(result);
     }
 
+    private static String batchResult(
+        PipelineBatchProcessor.Processed processed,
+        LegacyForecastResult legacy,
+        ForecastOutcome outcome,
+        ShadowForecastComparison comparison
+    ) {
+        if (processed.special() != null) {
+            return processed.special();
+        }
+        return classify(legacy, outcome, comparison);
+    }
+
     /** 옛 결과와 새 결과가 같은 뜻인지와 예측 대조로 배치를 분류한다. */
-    private static String classify(LegacyForecastResult legacy, ForecastOutcome outcome, ShadowForecastComparison comparison) {
+    private static String classify(
+        LegacyForecastResult legacy,
+        ForecastOutcome outcome,
+        ShadowForecastComparison comparison
+    ) {
         final boolean sameMeaning = switch (legacy.kind()) {
-            case PUBLISHED -> outcome == (legacy.predictions().isEmpty() ? ForecastOutcome.EMPTY : ForecastOutcome.PUBLISHED);
+            case PUBLISHED -> outcome == publishedMeaning(legacy);
             case NOT_CONFIRMED -> outcome == ForecastOutcome.LATE || outcome == ForecastOutcome.EMPTY;
             case OUT_OF_SCOPE -> outcome == ForecastOutcome.OUT_OF_SCOPE;
             case FAILED -> outcome == ForecastOutcome.INPUT_UNAVAILABLE;
@@ -162,10 +179,24 @@ public final class ShadowForecastService implements LegacyForecastListener {
         if (sameMeaning) {
             return "match";
         }
-        return comparison.count(ShadowForecastComparison.Result.EXCLUDED) > 0 ? "excluded" : "mismatch";
+        if (comparison.count(ShadowForecastComparison.Result.EXCLUDED) > 0) {
+            return "excluded";
+        }
+        return "mismatch";
     }
 
-    private void warnMismatch(LegacyForecastResult legacy, ForecastOutcome outcome, ShadowForecastComparison comparison) {
+    private static ForecastOutcome publishedMeaning(LegacyForecastResult legacy) {
+        if (legacy.predictions().isEmpty()) {
+            return ForecastOutcome.EMPTY;
+        }
+        return ForecastOutcome.PUBLISHED;
+    }
+
+    private void warnMismatch(
+        LegacyForecastResult legacy,
+        ForecastOutcome outcome,
+        ShadowForecastComparison comparison
+    ) {
         if (!allowWarning()) {
             return;
         }

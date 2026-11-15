@@ -5,8 +5,8 @@ import static com.gustler.backend.forecasting.support.PipelineSamples.skipped;
 import static com.gustler.backend.forecasting.support.PipelineSamples.vehicle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.forecasting.api.pipeline.ForecastPublished.VehicleForecast;
 import com.gustler.backend.support.SchemaCheck;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,18 +21,21 @@ class ForecastPublishedTest {
 
     @Test
     void 목표_정류장과_예측_배열의_길이가_다르면_만들지_않는다() {
-        assertThatThrownBy(() -> new VehicleForecast(1, 1, "bus", 4, 1, 1, false, 45, false, new int[] {5, 6},
-            new double[] {1.0}, new double[] {0.1, 0.2}))
+        assertThatThrownBy(() -> new ForecastPublished.VehicleForecast(1, 1, "bus", 4, 1, 1, false, 45, false,
+            new int[] {5, 6}, new double[] {1.0}, new double[] {0.1, 0.2}))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("길이");
     }
 
     @Test
     void 목표_정류장이_없거나_겹치면_만들지_않는다() {
-        assertThatThrownBy(() -> new VehicleForecast(1, 1, "bus", 4, 1, 1, false, 45, false, new int[0],
-            new double[0], new double[0])).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new VehicleForecast(1, 1, "bus", 4, 1, 1, false, 45, false, new int[] {5, 5},
-            new double[] {1.0, 2.0}, new double[] {0.1, 0.2})).isInstanceOf(IllegalArgumentException.class);
+        assertSoftly(softly -> {
+            softly.assertThatThrownBy(() -> new ForecastPublished.VehicleForecast(1, 1, "bus", 4, 1, 1, false, 45,
+                false, new int[0], new double[0], new double[0])).isInstanceOf(IllegalArgumentException.class);
+            softly.assertThatThrownBy(() -> new ForecastPublished.VehicleForecast(1, 1, "bus", 4, 1, 1, false, 45,
+                false, new int[] {5, 5}, new double[] {1.0, 2.0}, new double[] {0.1, 0.2}))
+                .isInstanceOf(IllegalArgumentException.class);
+        });
     }
 
     @Test
@@ -40,8 +43,8 @@ class ForecastPublishedTest {
         // given
         int[] targets = {5, 6};
         double[] seats = {1.0, 2.0};
-        VehicleForecast forecast = new VehicleForecast(1, 1, "bus", 4, 1, 1, false, 45, false, targets, seats,
-            new double[] {0.1, 0.2});
+        ForecastPublished.VehicleForecast forecast = new ForecastPublished.VehicleForecast(1, 1, "bus", 4, 1, 1,
+            false, 45, false, targets, seats, new double[] {0.1, 0.2});
 
         // when
         targets[0] = 99;
@@ -49,17 +52,21 @@ class ForecastPublishedTest {
         forecast.expectedSeats()[1] = 99.0;
 
         // then
-        assertThat(forecast.targetStopOrders()).containsExactly(5, 6);
-        assertThat(forecast.expectedSeats()).containsExactly(1.0, 2.0);
+        assertSoftly(softly -> {
+            softly.assertThat(forecast.targetStopOrders()).containsExactly(5, 6);
+            softly.assertThat(forecast.expectedSeats()).containsExactly(1.0, 2.0);
+        });
     }
 
     @Test
     void 발행한_결과만_버스별_예측을_싣는다() {
-        assertThatThrownBy(() -> new ForecastPublished(DAY, 1, 7, 70, RECEIVED_AT, RECEIVED_AT, 3L,
-            ForecastOutcome.PUBLISHED, List.of())).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new ForecastPublished(DAY, 1, 7, 70, RECEIVED_AT, RECEIVED_AT, 3L,
-            ForecastOutcome.LATE, List.of(vehicle(101, 1)))).isInstanceOf(IllegalArgumentException.class);
-        assertThat(skipped(DAY, 1, RECEIVED_AT, ForecastOutcome.LATE).vehicles()).isEmpty();
+        assertSoftly(softly -> {
+            softly.assertThatThrownBy(() -> new ForecastPublished(DAY, 1, 7, 70, RECEIVED_AT, RECEIVED_AT, 3L,
+                ForecastOutcome.PUBLISHED, List.of())).isInstanceOf(IllegalArgumentException.class);
+            softly.assertThatThrownBy(() -> new ForecastPublished(DAY, 1, 7, 70, RECEIVED_AT, RECEIVED_AT, 3L,
+                ForecastOutcome.LATE, List.of(vehicle(101, 1)))).isInstanceOf(IllegalArgumentException.class);
+            softly.assertThat(skipped(DAY, 1, RECEIVED_AT, ForecastOutcome.LATE).vehicles()).isEmpty();
+        });
     }
 
     @Test
@@ -87,14 +94,17 @@ class ForecastPublishedTest {
         Set<String> allowed = SchemaCheck.allowedValues("V81__forecast_pipeline_records.sql", "outcome");
 
         // then
-        assertThat(Arrays.stream(ForecastOutcome.values()).map(Enum::name)).containsExactlyInAnyOrderElementsOf(allowed);
+        assertThat(Arrays.stream(ForecastOutcome.values()).map(Enum::name))
+            .containsExactlyInAnyOrderElementsOf(allowed);
     }
 
     @Test
     void 응답을_받은_배치는_수신_시각이_있어야_한다() {
-        assertThatThrownBy(() -> new ObservationBatchSeen(1, 7, 70, RECEIVED_AT, null, CollectionResult.EMPTY))
-            .isInstanceOf(IllegalArgumentException.class);
-        assertThat(new ObservationBatchSeen(1, 7, 70, RECEIVED_AT, null, CollectionResult.FAILED).receivedAt())
-            .isNull();
+        assertSoftly(softly -> {
+            softly.assertThatThrownBy(() -> new ObservationBatchSeen(1, 7, 70, RECEIVED_AT, null,
+                CollectionResult.EMPTY)).isInstanceOf(IllegalArgumentException.class);
+            softly.assertThat(new ObservationBatchSeen(1, 7, 70, RECEIVED_AT, null, CollectionResult.FAILED)
+                .receivedAt()).isNull();
+        });
     }
 }

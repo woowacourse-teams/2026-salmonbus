@@ -38,8 +38,9 @@ public class JdbcPassLabelStore implements PassLabelStore {
     public int saveLabels(List<PassLabel> labels) {
         return LABELS.insert(jdbc, labels, label -> Arrays.asList(label.sourceDate(), label.routeId(),
             label.tripStartObservationId(), label.stopOrder(), label.capacity(), label.labelVersion(),
-            label.modelDeploymentId(), label.state().name(), label.reason(), label.labelValue(), label.previousLastObservationId(),
-            label.previousClosureObservationId(), label.parameterHash(), timestamp(label.computedAt())));
+            label.modelDeploymentId(), label.state().name(), label.reason(), label.labelValue(),
+            label.previousLastObservationId(), label.previousClosureObservationId(), label.parameterHash(),
+            timestamp(label.computedAt())));
     }
 
     @Override

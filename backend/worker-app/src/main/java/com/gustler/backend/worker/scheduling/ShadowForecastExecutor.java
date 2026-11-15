@@ -54,16 +54,6 @@ public class ShadowForecastExecutor implements ShadowForecastFeed, DisposableBea
         }
     }
 
-    /** 지금 줄에서 기다리는 일의 수. */
-    public int queued() {
-        return executor.getQueue().size();
-    }
-
-    @Override
-    public void destroy() {
-        executor.shutdownNow();
-    }
-
     private static void runSafely(ShadowForecastTask task) {
         try {
             task.run();
@@ -80,5 +70,15 @@ public class ShadowForecastExecutor implements ShadowForecastFeed, DisposableBea
             LOGGER.warn("event=pipeline_shadow_discard_failed route={} batchId={} exceptionType={}", task.route(),
                 task.observationBatchId(), failure.getClass().getSimpleName());
         }
+    }
+
+    /** 지금 줄에서 기다리는 일의 수. */
+    public int queued() {
+        return executor.getQueue().size();
+    }
+
+    @Override
+    public void destroy() {
+        executor.shutdownNow();
     }
 }

@@ -1,15 +1,15 @@
 package com.gustler.backend.forecasting.application.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.forecasting.application.pipeline.ForecastStageResult.Status;
-import com.gustler.backend.forecasting.application.pipeline.ForecastStageResult.WithheldVehicle;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureVector;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareObservation;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareVehiclePrefix;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,10 +49,10 @@ class ForecastStageTest {
         // then
         assertSoftly(softly -> {
             for (ForecastStageResult result : results) {
-                softly.assertThat(result.status()).isEqualTo(Status.NOT_CONFIRMED);
+                softly.assertThat(result.status()).isEqualTo(ForecastStageResult.Status.NOT_CONFIRMED);
                 softly.assertThat(result.state()).isSameAs(state);
             }
-            softly.assertThat(boundary.status()).isEqualTo(Status.FORECAST);
+            softly.assertThat(boundary.status()).isEqualTo(ForecastStageResult.Status.FORECAST);
             softly.assertThat(boundary.state().cursor().orElseThrow().rank()).isZero();
             softly.assertThat(boundary.state().observations().getFirst().batchRank()).isZero();
         });
@@ -109,24 +109,28 @@ class ForecastStageTest {
         ForecastStageResult result = stage.advance(state, STATISTICS, "GBIS", missing);
 
         // then
-        assertThat(result.status()).isEqualTo(Status.REPLAY_REQUIRED);
-        assertThat(result.reason()).isEqualTo(ForecastStage.SOURCE_ROWS_MISSING);
-        assertThat(result.state()).isSameAs(state);
+        assertSoftly(softly -> {
+            softly.assertThat(result.status()).isEqualTo(ForecastStageResult.Status.REPLAY_REQUIRED);
+            softly.assertThat(result.reason()).isEqualTo(ForecastStage.SOURCE_ROWS_MISSING);
+            softly.assertThat(result.state()).isSameAs(state);
+        });
     }
 
     @Test
     void 이미_반영한_배치를_다시_받으면_상태를_바꾸지_않는다() {
         // given
         ForecastBatch batch = confirmed(1, T0, row("a", 2, 10));
-        RouteForecastState state = stage.advance(RouteForecastState.fromVerifiedOrigin(ROUTE), STATISTICS, "GBIS", batch)
-            .state();
+        RouteForecastState state = stage.advance(RouteForecastState.fromVerifiedOrigin(ROUTE), STATISTICS, "GBIS",
+            batch).state();
 
         // when
         ForecastStageResult again = stage.advance(state, STATISTICS, "GBIS", batch);
 
         // then
-        assertThat(again.status()).isEqualTo(Status.STALE);
-        assertThat(again.state()).isSameAs(state);
+        assertSoftly(softly -> {
+            softly.assertThat(again.status()).isEqualTo(ForecastStageResult.Status.STALE);
+            softly.assertThat(again.state()).isSameAs(state);
+        });
     }
 
     @Test
@@ -139,23 +143,23 @@ class ForecastStageTest {
         }
         RouteForecastState before = state;
         List<AlightingAwareObservation> observations = List.copyOf(before.observations());
-        var prefix = Map.copyOf(before.prefix());
-        var events = List.copyOf(before.events());
-        var vehicles = Map.copyOf(before.vehicles());
-        var cursor = before.cursor().orElseThrow();
+        Map<String, AlightingAwareVehiclePrefix> prefix = Map.copyOf(before.prefix());
+        List<AlightingAwarePassEvent> events = List.copyOf(before.events());
+        Map<String, RouteForecastState.VehicleTrack> vehicles = Map.copyOf(before.vehicles());
+        RouteForecastState.Cursor cursor = before.cursor().orElseThrow();
         ForecastBatch next = confirmed(5, T0.plusSeconds(120), row("a", 4, 15), row("b", 3, 20));
         ForecastStage failing = new ForecastStage((source, ids, at, batch) -> {
             throw new IllegalStateException("capacity store down");
         });
 
         // when
-        assertThatThrownBy(() -> failing.advance(before, STATISTICS, "GBIS", next))
-            .isInstanceOf(IllegalStateException.class);
+        Throwable failure = catchThrowable(() -> failing.advance(before, STATISTICS, "GBIS", next));
         ForecastStageResult retried = stage.advance(before, STATISTICS, "GBIS", next);
         ForecastStageResult fresh = stage.advance(before, STATISTICS, "GBIS", next);
 
         // then
         assertSoftly(softly -> {
+            softly.assertThat(failure).isInstanceOf(IllegalStateException.class);
             softly.assertThat(before.observations()).isEqualTo(observations);
             softly.assertThat(before.prefix()).isEqualTo(prefix);
             softly.assertThat(before.events()).isEqualTo(events);
@@ -163,7 +167,9 @@ class ForecastStageTest {
             softly.assertThat(before.cursor()).contains(cursor);
             softly.assertThat(retried.state().observations()).isEqualTo(fresh.state().observations());
             softly.assertThat(retried.snapshots()).extracting(AlightingAwareFeatureSnapshot::vehicleObservationId)
-                .isEqualTo(fresh.snapshots().stream().map(AlightingAwareFeatureSnapshot::vehicleObservationId).toList());
+                .isEqualTo(fresh.snapshots().stream()
+                    .map(AlightingAwareFeatureSnapshot::vehicleObservationId)
+                    .toList());
             softly.assertThat(retried.snapshots()).isNotEmpty();
         });
     }
@@ -190,8 +196,9 @@ class ForecastStageTest {
         }
 
         // then
-        long firstChain = observations.getFirst();
-        long secondChain = observations.get(6);
+        final long firstChain = observations.getFirst();
+        final long secondChain = observations.get(6);
+        RouteForecastState last = state;
         Map<Integer, Long> chainByStop = new HashMap<>();
         closed.forEach(pass -> chainByStop.put(pass.event().stopOrder(), pass.chainStartObservationId()));
         assertSoftly(softly -> {
@@ -200,8 +207,8 @@ class ForecastStageTest {
             softly.assertThat(chainByStop.get(4)).isEqualTo(secondChain);
             softly.assertThat(chainByStop.get(5)).isEqualTo(secondChain);
             softly.assertThat(closed).allSatisfy(pass -> softly.assertThat(pass.reachedKnownSeatAt()).isNotNull());
+            softly.assertThat(last.vehicles().get("a").chainStartObservationId()).isEqualTo(secondChain);
         });
-        assertThat(state.vehicles().get("a").chainStartObservationId()).isEqualTo(secondChain);
     }
 
     @Test
@@ -248,7 +255,7 @@ class ForecastStageTest {
         for (int index = 0; index < 600; index++) {
             Instant at = T0.plusSeconds(10 + 30L * index);
             List<ForecastObservationRow> rows = new ArrayList<>();
-            rows.add(row("c", index < 250 ? 3 : 4, 20));
+            rows.add(row("c", passedBeforeOrAfterWindow(index), 20));
             if (index >= 100) {
                 rows.add(row("b", 2 + (index - 100) / 60, 30));
             }
@@ -273,7 +280,7 @@ class ForecastStageTest {
         List<ForecastBatch> batches = new ArrayList<>();
         for (int index = 0; index < 650; index++) {
             List<ForecastObservationRow> rows = new ArrayList<>();
-            rows.add(row("c", index < 100 ? 2 : index < 370 ? 3 : 4, 20));
+            rows.add(row("c", passedAcrossWindow(index), 20));
             if (index >= 200) {
                 rows.add(row("b", 1, 30));
             }
@@ -303,7 +310,7 @@ class ForecastStageTest {
         }
 
         // then
-        int checked = compared;
+        final int checked = compared;
         assertSoftly(softly -> {
             softly.assertThat(outcomes.get(369)).containsEntry("b", ForecastStage.REPLAY_HISTORY_INCOMPLETE);
             softly.assertThat(outcomes.get(370)).containsEntry("b", ForecastStage.REPLAY_HISTORY_INCOMPLETE);
@@ -312,6 +319,23 @@ class ForecastStageTest {
             softly.assertThat(outcomes.get(600)).containsEntry("c", ForecastStage.TRIP_START_UNKNOWN);
             softly.assertThat(checked).isGreaterThan(90);
         });
+    }
+
+    private static int passedBeforeOrAfterWindow(final int index) {
+        if (index < 250) {
+            return 3;
+        }
+        return 4;
+    }
+
+    private static int passedAcrossWindow(final int index) {
+        if (index < 100) {
+            return 2;
+        }
+        if (index < 370) {
+            return 3;
+        }
+        return 4;
     }
 
     private static Map<Long, List<String>> vectors(List<AlightingAwareFeatureSnapshot> snapshots) {
@@ -333,7 +357,7 @@ class ForecastStageTest {
 
     private static Map<String, String> outcome(ForecastStageResult result) {
         Map<String, String> outcome = new HashMap<>();
-        for (WithheldVehicle vehicle : result.withheld()) {
+        for (ForecastStageResult.WithheldVehicle vehicle : result.withheld()) {
             outcome.put(vehicle.vehicleId(), vehicle.reason());
         }
         for (AlightingAwareFeatureSnapshot snapshot : result.snapshots()) {

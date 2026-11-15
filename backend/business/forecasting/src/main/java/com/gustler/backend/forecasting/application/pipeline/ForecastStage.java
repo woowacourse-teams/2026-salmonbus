@@ -1,7 +1,5 @@
 package com.gustler.backend.forecasting.application.pipeline;
 
-import com.gustler.backend.forecasting.application.pipeline.ForecastStageResult.Status;
-import com.gustler.backend.forecasting.application.pipeline.ForecastStageResult.WithheldVehicle;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareBatchContext;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareFeatureSnapshot;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareHistoryCompactor;
@@ -64,7 +62,11 @@ public final class ForecastStage {
     }
 
     /** 예보 없이 상태만 전진시킨다. 되감기가 쓴다. 정원을 조회하지 않고 통과 목록도 만들지 않는다. */
-    ForecastStageResult replay(RouteForecastState state, AlightingAwareRouteStatistics statistics, ForecastBatch batch) {
+    ForecastStageResult replay(
+        RouteForecastState state,
+        AlightingAwareRouteStatistics statistics,
+        ForecastBatch batch
+    ) {
         return apply(state, statistics, batch, null, false);
     }
 
@@ -77,13 +79,14 @@ public final class ForecastStage {
     ) {
         requireSameRoute(state, statistics);
         if (!batch.confirmed()) {
-            return ForecastStageResult.unchanged(Status.NOT_CONFIRMED, BATCH_NOT_CONFIRMED, state);
+            return ForecastStageResult.unchanged(ForecastStageResult.Status.NOT_CONFIRMED, BATCH_NOT_CONFIRMED, state);
         }
         if (!state.precedes(batch)) {
-            return ForecastStageResult.unchanged(Status.STALE, BATCH_ALREADY_APPLIED, state);
+            return ForecastStageResult.unchanged(ForecastStageResult.Status.STALE, BATCH_ALREADY_APPLIED, state);
         }
         if (!batch.rowsComplete()) {
-            return ForecastStageResult.unchanged(Status.REPLAY_REQUIRED, SOURCE_ROWS_MISSING, state);
+            return ForecastStageResult.unchanged(
+                ForecastStageResult.Status.REPLAY_REQUIRED, SOURCE_ROWS_MISSING, state);
         }
         RouteForecastState.Cursor cursor = new RouteForecastState.Cursor(batch.observationBatchId(), state.nextRank(),
             batch.confirmedAt());
@@ -94,14 +97,15 @@ public final class ForecastStage {
         List<AlightingAwarePassEvent> events;
         try {
             events = AlightingAwareHistoryCompactor.resolve(
-                new AlightingAwareHistoryCompactor.History(state.prefix(), history, state.events()), statistics.realStopOrders());
+                new AlightingAwareHistoryCompactor.History(state.prefix(), history, state.events()),
+                statistics.realStopOrders());
         } catch (IllegalArgumentException ambiguous) {
             RouteForecastState held = state.next(progress, state.prefix(), history, state.events(), cursor);
-            return new ForecastStageResult(Status.INPUT_UNAVAILABLE, AMBIGUOUS_PASS, held, List.of(), List.of(), 0,
-                List.of());
+            return new ForecastStageResult(ForecastStageResult.Status.INPUT_UNAVAILABLE, AMBIGUOUS_PASS, held,
+                List.of(), List.of(), 0, List.of());
         }
         List<AlightingAwareFeatureSnapshot> snapshots = new ArrayList<>();
-        List<WithheldVehicle> withheld = new ArrayList<>();
+        List<ForecastStageResult.WithheldVehicle> withheld = new ArrayList<>();
         if (forecast) {
             snapshots(state, statistics, batch, capacitySourceId, progress, history, events, snapshots, withheld);
         }
@@ -111,7 +115,8 @@ public final class ForecastStage {
         retained.sort(RETAINED_ORDER);
         RouteForecastState next = state.next(progress, compact.prefix(), retained, compact.events(), cursor);
         if (!forecast) {
-            return new ForecastStageResult(Status.FORECAST, null, next, List.of(), List.of(), 0, List.of());
+            return new ForecastStageResult(ForecastStageResult.Status.FORECAST, null, next, List.of(), List.of(), 0,
+                List.of());
         }
         List<ClosedPass> closed = new ArrayList<>();
         int unattributed = 0;
@@ -126,7 +131,8 @@ public final class ForecastStage {
             }
             closed.add(new ClosedPass(event, track.chainStartObservationId(), reachedKnownSeatAt(event, history)));
         }
-        return new ForecastStageResult(Status.FORECAST, null, next, snapshots, closed, unattributed, withheld);
+        return new ForecastStageResult(ForecastStageResult.Status.FORECAST, null, next, snapshots, closed,
+            unattributed, withheld);
     }
 
     private void snapshots(
@@ -138,7 +144,7 @@ public final class ForecastStage {
         List<AlightingAwareObservation> history,
         List<AlightingAwarePassEvent> events,
         List<AlightingAwareFeatureSnapshot> snapshots,
-        List<WithheldVehicle> withheld
+        List<ForecastStageResult.WithheldVehicle> withheld
     ) {
         List<AlightingAwareObservation> candidates = new ArrayList<>();
         final boolean complete = progress.historyCompleteAt(batch.confirmedAt());
@@ -146,13 +152,12 @@ public final class ForecastStage {
             if (!isEligibleSource(source, batch.observationBatchId())) {
                 continue;
             }
-            if (!complete) {
-                withheld.add(withheld(source, REPLAY_HISTORY_INCOMPLETE));
-            } else if (!progress.tripStartKnown(source.vehicleId())) {
-                withheld.add(withheld(source, TRIP_START_UNKNOWN));
-            } else {
-                candidates.add(source);
+            String historyReason = historyWithholdReason(complete, progress, source);
+            if (historyReason != null) {
+                withheld.add(withheld(source, historyReason));
+                continue;
             }
+            candidates.add(source);
         }
         if (candidates.isEmpty()) {
             return;
@@ -160,17 +165,41 @@ public final class ForecastStage {
         Map<String, Integer> known = capacities.knownAt(capacitySourceId,
             candidates.stream().map(AlightingAwareObservation::vehicleId).toList(), batch.confirmedAt(),
             batch.observationBatchId());
-        AlightingAwareBatchContext context = new AlightingAwareBatchContext(statistics, history, events, state.prefix());
+        AlightingAwareBatchContext context =
+            new AlightingAwareBatchContext(statistics, history, events, state.prefix());
         for (AlightingAwareObservation source : candidates) {
             Integer capacity = known.get(source.vehicleId());
-            if (capacity == null) {
-                withheld.add(withheld(source, VEHICLE_CAPACITY_UNKNOWN));
-            } else if (capacity < MINIMUM_CAPACITY) {
-                withheld.add(withheld(source, VEHICLE_CAPACITY_OUTSIDE_MODEL_SCOPE));
-            } else {
-                snapshots.add(new AlightingAwareFeatureSnapshot(batch.routeVersionId(), source, capacity, context));
+            String capacityReason = capacityWithholdReason(capacity);
+            if (capacityReason != null) {
+                withheld.add(withheld(source, capacityReason));
+                continue;
             }
+            snapshots.add(new AlightingAwareFeatureSnapshot(batch.routeVersionId(), source, capacity, context));
         }
+    }
+
+    private static String historyWithholdReason(
+        final boolean complete,
+        RouteForecastState.Progress progress,
+        AlightingAwareObservation source
+    ) {
+        if (!complete) {
+            return REPLAY_HISTORY_INCOMPLETE;
+        }
+        if (!progress.tripStartKnown(source.vehicleId())) {
+            return TRIP_START_UNKNOWN;
+        }
+        return null;
+    }
+
+    private static String capacityWithholdReason(Integer capacity) {
+        if (capacity == null) {
+            return VEHICLE_CAPACITY_UNKNOWN;
+        }
+        if (capacity < MINIMUM_CAPACITY) {
+            return VEHICLE_CAPACITY_OUTSIDE_MODEL_SCOPE;
+        }
+        return null;
     }
 
     /**
@@ -200,10 +229,14 @@ public final class ForecastStage {
 
     private static Integer knownSeats(ForecastObservationRow row) {
         Integer seats = row.remainingSeats();
-        if (seats == null || seats < 0 || seats > MAXIMUM_SEATS || row.seatUnknownReason() != null) {
+        if (isSeatUnknown(seats, row)) {
             return null;
         }
         return seats;
+    }
+
+    private static boolean isSeatUnknown(Integer seats, ForecastObservationRow row) {
+        return seats == null || seats < 0 || seats > MAXIMUM_SEATS || row.seatUnknownReason() != null;
     }
 
     private static boolean isDown(final int stop, final int state, final int turn) {
@@ -214,8 +247,8 @@ public final class ForecastStage {
         return source.batchId() == batchId && source.hasVehicleIdentity() && source.seats() != null;
     }
 
-    private static WithheldVehicle withheld(AlightingAwareObservation source, String reason) {
-        return new WithheldVehicle(source.observationId(), source.vehicleId(), reason);
+    private static ForecastStageResult.WithheldVehicle withheld(AlightingAwareObservation source, String reason) {
+        return new ForecastStageResult.WithheldVehicle(source.observationId(), source.vehicleId(), reason);
     }
 
     /**
@@ -227,8 +260,7 @@ public final class ForecastStage {
         Instant until = event.confirmation().receivedAt();
         Instant latest = null;
         for (AlightingAwareObservation observation : history) {
-            if (!observation.vehicleId().equals(event.vehicleId()) || observation.passedStopOrder() != event.stopOrder()
-                || observation.seats() == null) {
+            if (lacksKnownSeatAtStop(observation, event)) {
                 continue;
             }
             Instant at = observation.receivedAt();
@@ -240,6 +272,12 @@ public final class ForecastStage {
             }
         }
         return latest;
+    }
+
+    private static boolean lacksKnownSeatAtStop(AlightingAwareObservation observation, AlightingAwarePassEvent event) {
+        return !observation.vehicleId().equals(event.vehicleId())
+            || observation.passedStopOrder() != event.stopOrder()
+            || observation.seats() == null;
     }
 
     private static void requireSameRoute(RouteForecastState state, AlightingAwareRouteStatistics statistics) {

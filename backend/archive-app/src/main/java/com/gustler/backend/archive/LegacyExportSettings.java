@@ -5,8 +5,8 @@ import java.time.Duration;
 /**
  * 옛 테이블 내보내기의 설정값이다. 만들 때 값을 검사하고, 범위를 벗어나면 {@link IllegalArgumentException} 으로 기동을 막는다.
  *
- * <p>읽는 속도는 {@code pageSize}, {@code pagePause}, {@code maxRowsPerRun}, {@code maxRunDuration}, {@code interval} 로 조절한다.
- * 한 회차는 줄 수나 시간 가운데 먼저 닿는 상한에서 멈추고, 그때까지 읽은 줄을 조각 하나로 닫아 장부에 적는다.
+ * <p>읽는 속도는 {@code pageSize}, {@code pagePause}, {@code maxRowsPerRun}, {@code maxRunDuration},
+ * {@code interval} 로 조절한다. 한 회차는 줄 수나 시간 가운데 먼저 닿는 상한에서 멈추고, 그때까지 읽은 줄을 조각 하나로 닫아 장부에 적는다.
  *
  * @param prefix S3 키 접두. 줄 단위 이관과 날짜 파티션 내보내기의 접두와 서로 포함하지 않아야 한다.
  * @param interval 회차가 끝난 뒤 다음 회차까지 쉬는 시간. 10초~24시간.
@@ -56,8 +56,7 @@ public record LegacyExportSettings(
     }
 
     public LegacyExportSettings {
-        if (prefix == null || !prefix.matches("[a-zA-Z0-9/_=-]+/") || prefix.startsWith("/")
-            || prefix.startsWith("salmonbus-be/")) {
+        if (isUnusablePrefix(prefix)) {
             throw new IllegalArgumentException("옛 테이블 내보내기에는 새 S3 접두가 필요하다");
         }
         if (interval.compareTo(Duration.ofSeconds(10)) < 0 || interval.compareTo(Duration.ofHours(24)) > 0) {
@@ -82,5 +81,10 @@ public record LegacyExportSettings(
             || statementTimeout.compareTo(Duration.ofMinutes(10)) > 0) {
             throw new IllegalArgumentException("문장 제한 시간은 1초~10분이어야 한다");
         }
+    }
+
+    private static boolean isUnusablePrefix(String prefix) {
+        return prefix == null || !prefix.matches("[a-zA-Z0-9/_=-]+/") || prefix.startsWith("/")
+            || prefix.startsWith("salmonbus-be/");
     }
 }

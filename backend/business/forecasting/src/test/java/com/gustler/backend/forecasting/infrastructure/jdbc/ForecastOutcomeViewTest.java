@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
@@ -57,11 +57,13 @@ class ForecastOutcomeViewTest {
 
         // then
         Map<String, Row> expected = expected(scenario, result, actual.keySet());
-        assertThat(actual).isEqualTo(expected);
-        assertThat(actual.values()).extracting(Row::state)
-            .contains("SETTLED", "UNSUPPORTED", "LOST", "PENDING");
-        assertThat(actual.values().stream().filter(row -> row.state().equals("PENDING")).count())
-            .isGreaterThanOrEqualTo(stage.waitingCount());
+        assertSoftly(softly -> {
+            softly.assertThat(actual).isEqualTo(expected);
+            softly.assertThat(actual.values()).extracting(Row::state)
+                .contains("SETTLED", "UNSUPPORTED", "LOST", "PENDING");
+            softly.assertThat(actual.values().stream().filter(row -> row.state().equals("PENDING")).count())
+                .isGreaterThanOrEqualTo(stage.waitingCount());
+        });
     }
 
     @Test
@@ -80,16 +82,20 @@ class ForecastOutcomeViewTest {
         Map<String, Row> actual = view();
 
         // then
-        assertThat(stage.waitingCount()).isZero();
-        assertThat(actual).isEqualTo(expected(scenario, result, actual.keySet()));
-        assertThat(actual.values()).extracting(Row::state).doesNotContain("PENDING").contains("SETTLED");
+        assertSoftly(softly -> {
+            softly.assertThat(stage.waitingCount()).isZero();
+            softly.assertThat(actual).isEqualTo(expected(scenario, result, actual.keySet()));
+            softly.assertThat(actual.values()).extracting(Row::state).doesNotContain("PENDING").contains("SETTLED");
+        });
     }
 
     private void store(List<Object> events) {
         for (Object event : events) {
             if (event instanceof ForecastPublished published) {
                 records.save(published);
-            } else if (event instanceof PassClosed pass) {
+                continue;
+            }
+            if (event instanceof PassClosed pass) {
                 passes.save(List.of(pass));
             }
         }
@@ -121,18 +127,13 @@ class ForecastOutcomeViewTest {
     }
 
     /** 채점 결과에서 예측마다 기대하는 줄을 만든다. 결과가 없는 예측은 채점 전이다. */
-    private static Map<String, Row> expected(LegacyScoringScenario scenario, ScoringResult result,
-        Iterable<String> predictions) {
-        Map<List<Object>, PassLabel> labelByKey = new HashMap<>();
-        for (PassLabel label : result.labels()) {
-            labelByKey.putIfAbsent(List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
-                label.stopOrder(), label.capacity(), label.labelVersion(), label.modelDeploymentId()), label);
-        }
-        Map<List<Object>, PassClosed> passByKey = new HashMap<>();
-        for (PassClosed pass : scenario.passes()) {
-            passByKey.put(List.of(pass.sourceDate(), pass.routeId(), pass.tripStartObservationId(), pass.stopOrder()),
-                pass);
-        }
+    private static Map<String, Row> expected(
+        LegacyScoringScenario scenario,
+        ScoringResult result,
+        Iterable<String> predictions
+    ) {
+        Map<List<Object>, PassLabel> labelByKey = labelsByKey(result);
+        Map<List<Object>, PassClosed> passByKey = passesByKey(scenario);
         Map<String, Row> expected = new LinkedHashMap<>();
         for (String prediction : predictions) {
             expected.put(prediction, null);
@@ -155,7 +156,7 @@ class ForecastOutcomeViewTest {
         }
         for (Map.Entry<String, Row> entry : expected.entrySet()) {
             if (entry.getValue() == null) {
-                long observation = Long.parseLong(entry.getKey().split(":")[0]);
+                final long observation = Long.parseLong(entry.getKey().split(":")[0]);
                 entry.setValue(new Row("PENDING", null, null, null, capacity(scenario, observation),
                     LegacyScoringScenario.DEPLOYMENT, null, null, null, null, null));
             }
@@ -163,12 +164,40 @@ class ForecastOutcomeViewTest {
         return expected;
     }
 
-    private static int capacity(LegacyScoringScenario scenario, long observation) {
+    private static Map<List<Object>, PassLabel> labelsByKey(ScoringResult result) {
+        Map<List<Object>, PassLabel> labelByKey = new HashMap<>();
+        for (PassLabel label : result.labels()) {
+            labelByKey.putIfAbsent(List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
+                label.stopOrder(), label.capacity(), label.labelVersion(), label.modelDeploymentId()), label);
+        }
+        return labelByKey;
+    }
+
+    private static Map<List<Object>, PassClosed> passesByKey(LegacyScoringScenario scenario) {
+        Map<List<Object>, PassClosed> passByKey = new HashMap<>();
+        for (PassClosed pass : scenario.passes()) {
+            passByKey.put(List.of(pass.sourceDate(), pass.routeId(), pass.tripStartObservationId(), pass.stopOrder()),
+                pass);
+        }
+        return passByKey;
+    }
+
+    private static int capacity(LegacyScoringScenario scenario, final long observation) {
         return scenario.forecastCapacity(observation);
     }
 
-    private record Row(String state, String reason, Double labelValue, String parameterHash, int capacity,
-                       long modelDeploymentId, Long arrival, Long last, Long closure, Long previousLast,
-                       Long previousClosure) {
+    private record Row(
+        String state,
+        String reason,
+        Double labelValue,
+        String parameterHash,
+        int capacity,
+        long modelDeploymentId,
+        Long arrival,
+        Long last,
+        Long closure,
+        Long previousLast,
+        Long previousClosure
+    ) {
     }
 }

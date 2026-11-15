@@ -1,21 +1,25 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
+import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
+import com.gustler.backend.forecasting.application.pipeline.ForecastRun;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
 import com.gustler.backend.forecasting.application.pipeline.ScoringReplay;
 import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
 import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
 import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
-import com.gustler.backend.forecasting.infrastructure.jdbc.LegacyScoringScenario.Comparison;
-import com.gustler.backend.forecasting.infrastructure.jdbc.LegacyScoringScenario.Scored;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,7 +46,7 @@ class ScoringStageLegacyEquivalenceTest {
         drive(scenario, "expire-f", last + 1812, 20, List.of(3, 3, 4, 4, 5), List.of(21, 19, 17, 15, 13));
 
         // when
-        Comparison comparison = scenario.build().compare(LIMIT);
+        LegacyScoringScenario.Comparison comparison = scenario.build().compare(LIMIT);
 
         // then
         assertEquivalent(comparison);
@@ -60,12 +64,14 @@ class ScoringStageLegacyEquivalenceTest {
             List.of(31, 30, 28, 26, 24, 22, 20, 18, 16));
 
         // when
-        Comparison comparison = scenario.build().compare(LIMIT);
+        LegacyScoringScenario.Comparison comparison = scenario.build().compare(LIMIT);
 
         // then
         assertEquivalent(comparison);
-        assertThat(comparison.midnightScope()).isPositive();
-        assertThat(comparison.legacyOutcomes()).containsKey("SETTLED:null");
+        assertSoftly(softly -> {
+            softly.assertThat(comparison.midnightScope()).isPositive();
+            softly.assertThat(comparison.legacyOutcomes()).containsKey("SETTLED:null");
+        });
     }
 
     @Test
@@ -73,14 +79,15 @@ class ScoringStageLegacyEquivalenceTest {
         // given
         Drives scenario = new Drives();
         drive(scenario, "multi-a", 1000, 20, List.of(1, 1, 2, 2, 3, 3), List.of(30, 28, 25, 22, 20, 18));
-        drive(scenario, "multi-c", 1005, 20, List.of(1, 1, 2, 2, 3, 3, 4), Arrays.asList(30, 30, null, null, 20, 20, 15));
+        drive(scenario, "multi-c", 1005, 20, List.of(1, 1, 2, 2, 3, 3, 4),
+            Arrays.asList(30, 30, null, null, 20, 20, 15));
         drive(scenario, "multi-b", 1010, 20, List.of(1, 1, 2), List.of(35, 33, 30));
         drive(scenario, "multi-b", 1040, 1, List.of(2), List.of(31));
         drive(scenario, "multi-b", 1070, 20, List.of(2, 3, 3, 4, 4, 5), List.of(29, 27, 26, 24, 23, 21));
         drive(scenario, "multi-a", 1220, 20, List.of(3, 4, 4, 5), List.of(18, 15, 12, 10));
 
         // when
-        Comparison comparison = scenario.build().compare(LIMIT);
+        LegacyScoringScenario.Comparison comparison = scenario.build().compare(LIMIT);
 
         // then
         assertEquivalent(comparison);
@@ -94,7 +101,7 @@ class ScoringStageLegacyEquivalenceTest {
             0, true);
 
         // when
-        Comparison comparison = scenario.compare(LIMIT);
+        LegacyScoringScenario.Comparison comparison = scenario.compare(LIMIT);
 
         // then
         assertEquivalent(comparison);
@@ -110,7 +117,7 @@ class ScoringStageLegacyEquivalenceTest {
             0, true);
 
         // when
-        Comparison comparison = scenario.compare(LIMIT);
+        LegacyScoringScenario.Comparison comparison = scenario.compare(LIMIT);
 
         // then
         assertEquivalent(comparison);
@@ -127,14 +134,16 @@ class ScoringStageLegacyEquivalenceTest {
             600, 8, 0, true, List.of());
 
         // when
-        Comparison outside = withoutExtended.compare(LIMIT);
-        Comparison extended = withExtended.compare(LIMIT);
+        LegacyScoringScenario.Comparison outside = withoutExtended.compare(LIMIT);
+        LegacyScoringScenario.Comparison extended = withExtended.compare(LIMIT);
 
         // then
         assertEquivalent(outside);
         assertEquivalent(extended);
-        assertThat(outside.legacyOutcomes()).containsKey("UNSUPPORTED:OUTSIDE_FITTED_BAND");
-        assertThat(extended.legacyOutcomes()).containsKeys("SETTLED:null", "UNSUPPORTED:NO_PREVIOUS_PASS");
+        assertSoftly(softly -> {
+            softly.assertThat(outside.legacyOutcomes()).containsKey("UNSUPPORTED:OUTSIDE_FITTED_BAND");
+            softly.assertThat(extended.legacyOutcomes()).containsKeys("SETTLED:null", "UNSUPPORTED:NO_PREVIOUS_PASS");
+        });
     }
 
     @Test
@@ -146,14 +155,16 @@ class ScoringStageLegacyEquivalenceTest {
             0, true);
 
         // when
-        Comparison withHoles = holes.compare(LIMIT);
-        Comparison withLimit = overflow.compare(500);
+        LegacyScoringScenario.Comparison withHoles = holes.compare(LIMIT);
+        LegacyScoringScenario.Comparison withLimit = overflow.compare(500);
 
         // then
         assertEquivalent(withHoles);
         assertEquivalent(withLimit);
-        assertThat(withHoles.legacyOutcomes()).containsKey("UNSUPPORTED:SOURCE_HISTORY_INCOMPLETE");
-        assertThat(withLimit.legacyOutcomes()).containsKey("UNSUPPORTED:OBSERVATION_INPUT_LIMIT");
+        assertSoftly(softly -> {
+            softly.assertThat(withHoles.legacyOutcomes()).containsKey("UNSUPPORTED:SOURCE_HISTORY_INCOMPLETE");
+            softly.assertThat(withLimit.legacyOutcomes()).containsKey("UNSUPPORTED:OBSERVATION_INPUT_LIMIT");
+        });
     }
 
     @Test
@@ -173,10 +184,12 @@ class ScoringStageLegacyEquivalenceTest {
         ScoringResult twice = LegacyScoringScenario.feed(scenario.stage(LIMIT), doubled);
 
         // then
-        assertThat(Set.copyOf(twice.labels())).isEqualTo(Set.copyOf(once.labels()));
-        assertThat(Set.copyOf(twice.unresolved())).isEqualTo(Set.copyOf(once.unresolved()));
-        assertThat(Set.copyOf(twice.scored())).isEqualTo(Set.copyOf(once.scored()));
-        assertThat(once.labels()).isNotEmpty();
+        assertSoftly(softly -> {
+            softly.assertThat(Set.copyOf(twice.labels())).isEqualTo(Set.copyOf(once.labels()));
+            softly.assertThat(Set.copyOf(twice.unresolved())).isEqualTo(Set.copyOf(once.unresolved()));
+            softly.assertThat(Set.copyOf(twice.scored())).isEqualTo(Set.copyOf(once.scored()));
+            softly.assertThat(once.labels()).isNotEmpty();
+        });
     }
 
     @Test
@@ -185,7 +198,8 @@ class ScoringStageLegacyEquivalenceTest {
         LegacyScoringScenario scenario = LegacyScoringScenario.random(61, Instant.parse("2026-01-05T14:30:00Z"), 600, 6,
             0, true);
         List<Object> events = scenario.events();
-        Scored continuous = scenario.scored(LegacyScoringScenario.feed(scenario.stage(LIMIT), events));
+        LegacyScoringScenario.Scored continuous = scenario.scored(
+            LegacyScoringScenario.feed(scenario.stage(LIMIT), events));
         Map<String, Object> continuousRows = storedRows(LegacyScoringScenario.feed(scenario.stage(LIMIT), events));
 
         for (int cut : List.of(events.size() / 3, events.size() / 2, events.size() * 4 / 5)) {
@@ -201,8 +215,10 @@ class ScoringStageLegacyEquivalenceTest {
 
             // then
             ScoringResult all = before.plus(replayed).plus(after);
-            assertThat(storedRows(all)).as("cut=%d", cut).isEqualTo(continuousRows);
-            assertThat(scenario.scored(all).verdicts()).as("cut=%d", cut).isEqualTo(continuous.verdicts());
+            assertSoftly(softly -> {
+                softly.assertThat(storedRows(all)).as("cut=%d", cut).isEqualTo(continuousRows);
+                softly.assertThat(scenario.scored(all).verdicts()).as("cut=%d", cut).isEqualTo(continuous.verdicts());
+            });
         }
     }
 
@@ -223,31 +239,44 @@ class ScoringStageLegacyEquivalenceTest {
         return switch (event) {
             case PassClosed pass -> pass.closedAt();
             case ForecastPublished published -> published.confirmedAt();
-            case com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen seen -> seen.receivedAt();
+            case ObservationBatchSeen seen -> seen.receivedAt();
             default -> throw new IllegalArgumentException(String.valueOf(event));
         };
     }
 
-    private static void assertEquivalent(Comparison comparison) {
+    private static void assertEquivalent(LegacyScoringScenario.Comparison comparison) {
         System.out.printf("equivalence forecasts=%d equal=%d midnight=%d taint=%d unexplained=%d outcomes=%s%n",
             comparison.forecasts(), comparison.equal(), comparison.midnightScope(), comparison.taintTiming(),
             comparison.unexplained().size(), comparison.legacyOutcomes());
-        assertThat(comparison.unexplained())
-            .as("설명되지 않는 차이: %s", comparison.unexplained().stream().limit(10).map(String::valueOf)
-                .collect(Collectors.joining("\n")))
-            .isEmpty();
-        assertThat(comparison.forecasts()).isPositive();
+        assertSoftly(softly -> {
+            softly.assertThat(comparison.unexplained())
+                .as("설명되지 않는 차이: %s", comparison.unexplained().stream().limit(10).map(String::valueOf)
+                    .collect(Collectors.joining("\n")))
+                .isEmpty();
+            softly.assertThat(comparison.forecasts()).isPositive();
+        });
     }
 
     /** 옛 정산 통합 테스트의 {@code drive}와 같다. 관측을 모아 두었다가 {@link Drives#build()}에서 시각 순으로 넣는다. */
-    private static void drive(Drives drives, String vehicle, int start, int step, List<Integer> stops,
-        List<Integer> seats) {
+    private static void drive(
+        Drives drives,
+        String vehicle,
+        final int start,
+        final int step,
+        List<Integer> stops,
+        List<Integer> seats
+    ) {
         for (int i = 0; i < stops.size(); i++) {
             drives.observations.add(new Drive(start + i * step, vehicle, stops.get(i), seats.get(i)));
         }
     }
 
-    private record Drive(int seconds, String vehicle, int stop, Integer seats) {
+    private record Drive(
+        int seconds,
+        String vehicle,
+        int stop,
+        Integer seats
+    ) {
     }
 
     /** 관측마다 배치 하나이고 좌석이 있는 관측은 모든 목표(1~5)를 정원 40으로 예측한다. */
@@ -258,9 +287,9 @@ class ScoringStageLegacyEquivalenceTest {
             List<Integer> real = List.of(1, 2, 3, 4, 5);
             LegacyScoringScenario scenario = new LegacyScoringScenario(real, 9,
                 LegacyScoringScenario.context(real, 9, List.of(1, 2, 3, 4, 5), true, List.of(), List.of()));
-            observations.stream().sorted(java.util.Comparator.comparingInt(Drive::seconds)).forEach(drive -> {
-                long batch = scenario.batch(START.plusSeconds(drive.seconds()), false);
-                long observation = scenario.row(batch, drive.vehicle(), drive.stop(), drive.seats());
+            observations.stream().sorted(Comparator.comparingInt(Drive::seconds)).forEach(drive -> {
+                final long batch = scenario.batch(START.plusSeconds(drive.seconds()), false);
+                final long observation = scenario.row(batch, drive.vehicle(), drive.stop(), drive.seats());
                 if (drive.seats() != null) {
                     scenario.forecast(observation, 40, 1, 2, 3, 4, 5);
                 }
@@ -283,21 +312,37 @@ class ScoringStageLegacyEquivalenceTest {
         }
 
         @Override
-        public Optional<com.gustler.backend.forecasting.application.pipeline.ForecastRun> findLatestRun(
-            long routeVersionId, Set<com.gustler.backend.forecasting.api.pipeline.ForecastOutcome> outcomes) {
+        public Optional<ForecastRun> findLatestRun(final long routeVersionId, Set<ForecastOutcome> outcomes) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public List<ForecastPublished.VehicleForecast> findRecords(java.time.LocalDate sourceDate,
-            long observationBatchId) {
+        public List<ForecastPublished.VehicleForecast> findRecords(
+            LocalDate sourceDate,
+            final long observationBatchId
+        ) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public List<ForecastPublished> findPublishedBetween(long routeId, Instant fromInclusive, Instant toExclusive) {
-            return published.stream().filter(event -> event.routeId() == routeId
-                && !event.receivedAt().isBefore(fromInclusive) && event.receivedAt().isBefore(toExclusive)).toList();
+        public List<ForecastPublished> findPublishedBetween(
+            final long routeId,
+            Instant fromInclusive,
+            Instant toExclusive
+        ) {
+            return published.stream()
+                .filter(event -> isReceivedBetween(event, routeId, fromInclusive, toExclusive))
+                .toList();
+        }
+
+        private static boolean isReceivedBetween(
+            ForecastPublished event,
+            final long routeId,
+            Instant fromInclusive,
+            Instant toExclusive
+        ) {
+            return event.routeId() == routeId
+                && !event.receivedAt().isBefore(fromInclusive) && event.receivedAt().isBefore(toExclusive);
         }
     }
 
@@ -314,9 +359,20 @@ class ScoringStageLegacyEquivalenceTest {
         }
 
         @Override
-        public List<PassClosed> findClosedBetween(long routeId, Instant fromInclusive, Instant toExclusive) {
-            return passes.stream().filter(pass -> pass.routeId() == routeId && !pass.closedAt().isBefore(fromInclusive)
-                && pass.closedAt().isBefore(toExclusive)).toList();
+        public List<PassClosed> findClosedBetween(final long routeId, Instant fromInclusive, Instant toExclusive) {
+            return passes.stream()
+                .filter(pass -> isClosedBetween(pass, routeId, fromInclusive, toExclusive))
+                .toList();
+        }
+
+        private static boolean isClosedBetween(
+            PassClosed pass,
+            final long routeId,
+            Instant fromInclusive,
+            Instant toExclusive
+        ) {
+            return pass.routeId() == routeId
+                && !pass.closedAt().isBefore(fromInclusive) && pass.closedAt().isBefore(toExclusive);
         }
     }
 }

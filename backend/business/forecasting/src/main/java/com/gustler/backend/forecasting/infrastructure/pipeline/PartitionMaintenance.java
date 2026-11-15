@@ -105,13 +105,28 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
 
     @Override
     public Report maintain() {
-        final LocalDate today = SourceDates.of(clock.instant());
+        LocalDate today = SourceDates.of(clock.instant());
         List<String> created = new ArrayList<>();
         List<String> failed = new ArrayList<>();
         List<String> tables = managedTables();
+        ensurePartitions(tables, today, created, failed);
+        Map<String, Long> defaultRows = defaultRowsOf(tables);
+        if (!created.isEmpty()) {
+            LOGGER.info("event=pipeline_partitions_created partitions={}", created);
+        }
+        return new Report(created, failed, defaultRows);
+    }
+
+    /** 테이블마다 오늘부터 {@value #DAYS_AHEAD}일 뒤까지 파티션을 확인하고, 만든 것과 실패한 것의 이름을 각 목록에 더한다. */
+    private void ensurePartitions(
+        List<String> tables,
+        LocalDate today,
+        List<String> created,
+        List<String> failed
+    ) {
         for (String table : tables) {
             for (int day = 0; day <= DAYS_AHEAD; day++) {
-                final LocalDate date = today.plusDays(day);
+                LocalDate date = today.plusDays(day);
                 switch (ensure(table, date)) {
                     case CREATED -> created.add(partitionName(table, date));
                     case FAILED -> failed.add(partitionName(table, date));
@@ -120,6 +135,10 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
                 }
             }
         }
+    }
+
+    /** 기본 파티션 줄 수를 테이블 순서대로 센다. 세지 못한 테이블은 경고 로그만 남기고 결과에서 뺀다. */
+    private Map<String, Long> defaultRowsOf(List<String> tables) {
         Map<String, Long> defaultRows = new LinkedHashMap<>();
         for (String table : tables) {
             try {
@@ -133,10 +152,7 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
                     sqlState(failure));
             }
         }
-        if (!created.isEmpty()) {
-            LOGGER.info("event=pipeline_partitions_created partitions={}", created);
-        }
-        return new Report(created, failed, defaultRows);
+        return defaultRows;
     }
 
     /**
@@ -238,7 +254,10 @@ public class PartitionMaintenance implements MaintainPipelinePartitions {
     }
 
     private static String sqlState(DataAccessException failure) {
-        return failure.getMostSpecificCause() instanceof SQLException sql ? sql.getSQLState() : null;
+        if (failure.getMostSpecificCause() instanceof SQLException sql) {
+            return sql.getSQLState();
+        }
+        return null;
     }
 
     private static void requireKnown(String table) {

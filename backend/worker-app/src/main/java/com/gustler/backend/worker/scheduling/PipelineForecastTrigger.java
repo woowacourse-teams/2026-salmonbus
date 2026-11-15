@@ -2,7 +2,6 @@ package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
 import com.gustler.backend.observations.api.ObservationDeliveryBatch;
-import com.gustler.backend.observations.api.ObservationDeliveryBatch.Kind;
 import com.gustler.backend.observations.api.ObservationDeliveryHook;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Propagation;
@@ -36,7 +35,7 @@ public class PipelineForecastTrigger implements ObservationDeliveryHook {
     @Override
     @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public void record(ObservationDeliveryBatch batch) {
-        if (batch.kind() != Kind.STORED) {
+        if (batch.kind() != ObservationDeliveryBatch.Kind.STORED) {
             return;
         }
         final long batchId = batch.batchId();

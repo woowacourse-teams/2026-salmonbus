@@ -23,10 +23,15 @@ final class ShadowForecastMetrics {
         if (meters == null) {
             return;
         }
-        Gauge.builder(PREFIX + "state.routes", states, RouteStateRegistry::routes).strongReference(true).register(meters);
-        Gauge.builder(PREFIX + "state.observations", states, RouteStateRegistry::observations).strongReference(true)
+        Gauge.builder(PREFIX + "state.routes", states, RouteStateRegistry::routes)
+            .strongReference(true)
             .register(meters);
-        Gauge.builder(PREFIX + "state.events", states, RouteStateRegistry::events).strongReference(true).register(meters);
+        Gauge.builder(PREFIX + "state.observations", states, RouteStateRegistry::observations)
+            .strongReference(true)
+            .register(meters);
+        Gauge.builder(PREFIX + "state.events", states, RouteStateRegistry::events)
+            .strongReference(true)
+            .register(meters);
     }
 
     void predictions(ShadowForecastComparison comparison) {
@@ -52,7 +57,14 @@ final class ShadowForecastMetrics {
 
     void replay(final boolean succeeded) {
         if (meters != null) {
-            meters.counter(PREFIX + "replays", "result", succeeded ? "succeeded" : "failed").increment();
+            meters.counter(PREFIX + "replays", "result", replayResult(succeeded)).increment();
         }
+    }
+
+    private static String replayResult(final boolean succeeded) {
+        if (succeeded) {
+            return "succeeded";
+        }
+        return "failed";
     }
 }

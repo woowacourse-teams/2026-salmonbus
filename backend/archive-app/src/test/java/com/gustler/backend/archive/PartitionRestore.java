@@ -25,8 +25,13 @@ final class PartitionRestore {
      * @param target 새로 만들 테이블 이름. 이미 있으면 실패한다.
      * @return 되살린 줄 수
      */
-    static long restore(JdbcClient jdbc, ArchiveObjects objects, String manifestKey, String manifestSha,
-        String target) {
+    static long restore(
+        JdbcClient jdbc,
+        ArchiveObjects objects,
+        String manifestKey,
+        String manifestSha,
+        String target
+    ) {
         byte[] manifestBytes = objects.read(manifestKey, ArchiveFiles.MAX_BYTES);
         if (!ArchiveFiles.digest(manifestBytes).equals(manifestSha)) {
             throw new IllegalStateException("MANIFEST_HASH_MISMATCH");
@@ -48,8 +53,13 @@ final class PartitionRestore {
      * @param target 새로 만들 테이블 이름. 이미 있으면 실패한다.
      * @return 되살린 줄 수
      */
-    static long restoreLegacy(JdbcClient jdbc, ArchiveObjects objects, String table, List<String[]> segments,
-        String target) {
+    static long restoreLegacy(
+        JdbcClient jdbc,
+        ArchiveObjects objects,
+        String table,
+        List<String[]> segments,
+        String target
+    ) {
         if (segments.isEmpty()) {
             throw new IllegalArgumentException("되살릴 조각이 없다");
         }
@@ -62,15 +72,15 @@ final class PartitionRestore {
                 throw new IllegalStateException("MANIFEST_HASH_MISMATCH");
             }
             LegacySegmentManifest manifest = LegacySegmentManifest.parse(manifestBytes);
-            if (!LegacySegmentManifest.FORMAT.equals(manifest.format()) || !table.equals(manifest.table())
-                || manifest.segment() != number || !Objects.equals(manifest.after(), previousKeyTo)) {
+            if (breaksChain(manifest, table, number, previousKeyTo)) {
                 throw new IllegalStateException("SEGMENT_CHAIN_BROKEN");
+            }
+            if (columns != null && !columns.equals(manifest.columns())) {
+                throw new IllegalStateException("SEGMENT_COLUMNS_CHANGED");
             }
             if (columns == null) {
                 columns = manifest.columns();
                 create(jdbc, target, columns);
-            } else if (!columns.equals(manifest.columns())) {
-                throw new IllegalStateException("SEGMENT_COLUMNS_CHANGED");
             }
             final long rows = insert(jdbc, objects, target, columns, manifest.files());
             if (rows != manifest.rows()) {
@@ -80,6 +90,16 @@ final class PartitionRestore {
             previousKeyTo = manifest.keyTo();
         }
         return restored;
+    }
+
+    private static boolean breaksChain(
+        LegacySegmentManifest manifest,
+        String table,
+        final int number,
+        String previousKeyTo
+    ) {
+        return !LegacySegmentManifest.FORMAT.equals(manifest.format()) || !table.equals(manifest.table())
+            || manifest.segment() != number || !Objects.equals(manifest.after(), previousKeyTo);
     }
 
     private static void create(JdbcClient jdbc, String target, List<PartitionManifest.Column> columns) {
@@ -93,12 +113,14 @@ final class PartitionRestore {
      * 파일의 줄을 넣는다. {@code jsonb} 열은 줄의 {@link LegacyExportRepository#JSONB_NULL} 표시에 이름이 있으면 SQL NULL 이 아니라
      * JSON {@code null} 로 넣는다.
      */
-    private static long insert(JdbcClient jdbc, ArchiveObjects objects, String target,
-        List<PartitionManifest.Column> columns, List<PartitionManifest.FileEntry> files) {
-        String select = String.join(", ", columns.stream().map(c -> c.type().equals("jsonb")
-            ? "CASE WHEN jsonb_exists(r->'" + LegacyExportRepository.JSONB_NULL + "', '" + c.name()
-                + "') THEN CAST('null' AS jsonb) ELSE p." + c.name() + " END"
-            : "p." + c.name()).toList());
+    private static long insert(
+        JdbcClient jdbc,
+        ArchiveObjects objects,
+        String target,
+        List<PartitionManifest.Column> columns,
+        List<PartitionManifest.FileEntry> files
+    ) {
+        String select = String.join(", ", columns.stream().map(PartitionRestore::selectColumn).toList());
         long restored = 0;
         for (PartitionManifest.FileEntry file : files) {
             byte[] bytes = objects.read(file.key(), file.bytes());
@@ -111,6 +133,14 @@ final class PartitionRestore {
                 + target + ", r) p").param("rows", "[" + String.join(",", lines) + "]").update();
         }
         return restored;
+    }
+
+    private static String selectColumn(PartitionManifest.Column column) {
+        if (column.type().equals("jsonb")) {
+            return "CASE WHEN jsonb_exists(r->'" + LegacyExportRepository.JSONB_NULL + "', '" + column.name()
+                + "') THEN CAST('null' AS jsonb) ELSE p." + column.name() + " END";
+        }
+        return "p." + column.name();
     }
 
     private static String require(Pattern pattern, String value) {

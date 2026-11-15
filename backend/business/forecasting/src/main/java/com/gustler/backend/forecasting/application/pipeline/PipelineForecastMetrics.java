@@ -15,8 +15,8 @@ import java.time.Duration;
  *   <li>{@code batches{result}}: 결과별 배치 수. 실행 결과({@code published}, {@code empty}, {@code late}, {@code out_of_scope},
  *       {@code input_unavailable})와 저장하지 않은 사유({@code already_processed}, {@code stale}, {@code duplicate},
  *       {@code no_model}, {@code inactive_version}, {@code not_covered}, {@code reference_mismatch},
- *       {@code unsupported_profile}, {@code missing}, {@code not_success}, {@code failed}), 되감기 사유({@code replay_deferred},
- *       {@code replay_failed})</li>
+ *       {@code unsupported_profile}, {@code missing}, {@code not_success}, {@code failed}), 되감기 사유
+ *       ({@code replay_deferred}, {@code replay_failed})</li>
  *   <li>{@code replays{result}}: 노선 상태 되감기의 성공·실패 수</li>
  *   <li>{@code excluded{reason}}: 되감은 직후라 예보에서 뺀 차량 관측 수({@code TRIP_START_UNKNOWN},
  *       {@code REPLAY_HISTORY_INCOMPLETE})</li>
@@ -40,10 +40,15 @@ final class PipelineForecastMetrics {
         }
         lag = Timer.builder(PREFIX + "confirmation.lag").publishPercentileHistogram().register(meters);
         duration = Timer.builder(PREFIX + "batch.duration").publishPercentileHistogram().register(meters);
-        Gauge.builder(PREFIX + "state.routes", states, RouteStateRegistry::routes).strongReference(true).register(meters);
-        Gauge.builder(PREFIX + "state.observations", states, RouteStateRegistry::observations).strongReference(true)
+        Gauge.builder(PREFIX + "state.routes", states, RouteStateRegistry::routes)
+            .strongReference(true)
             .register(meters);
-        Gauge.builder(PREFIX + "state.events", states, RouteStateRegistry::events).strongReference(true).register(meters);
+        Gauge.builder(PREFIX + "state.observations", states, RouteStateRegistry::observations)
+            .strongReference(true)
+            .register(meters);
+        Gauge.builder(PREFIX + "state.events", states, RouteStateRegistry::events)
+            .strongReference(true)
+            .register(meters);
     }
 
     void lag(Duration value) {
@@ -66,8 +71,15 @@ final class PipelineForecastMetrics {
 
     void replay(final boolean succeeded) {
         if (meters != null) {
-            meters.counter(PREFIX + "replays", "result", succeeded ? "succeeded" : "failed").increment();
+            meters.counter(PREFIX + "replays", "result", replayResult(succeeded)).increment();
         }
+    }
+
+    private static String replayResult(final boolean succeeded) {
+        if (succeeded) {
+            return "succeeded";
+        }
+        return "failed";
     }
 
     void excluded(String reason) {

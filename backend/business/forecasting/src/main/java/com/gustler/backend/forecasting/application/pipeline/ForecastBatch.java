@@ -34,10 +34,14 @@ public record ForecastBatch(
         if (!"LIVE".equals(ingestionOrigin) || !"SUCCESS_ROWS".equals(outcome)) {
             return false;
         }
-        if (storedRows == null || storedRows <= 0 || receivedAt == null || confirmedAt == null) {
+        if (isMissingRowsOrTiming()) {
             return false;
         }
         return !confirmedAt.isBefore(receivedAt) && !confirmedAt.isAfter(receivedAt.plus(MAX_CONFIRMATION_DELAY));
+    }
+
+    private boolean isMissingRowsOrTiming() {
+        return storedRows == null || storedRows <= 0 || receivedAt == null || confirmedAt == null;
     }
 
     /**
@@ -47,8 +51,8 @@ public record ForecastBatch(
      * @return 나머지 값이 같은 배치
      */
     public ForecastBatch withConfirmedAt(Instant at) {
-        return new ForecastBatch(observationBatchId, routeVersionId, receivedAt, at, ingestionOrigin, outcome, storedRows,
-            rows);
+        return new ForecastBatch(observationBatchId, routeVersionId, receivedAt, at, ingestionOrigin, outcome,
+            storedRows, rows);
     }
 
     /** 저장 줄 수와 실제로 읽은 줄 수가 같은지다. 옛 경로의 {@code CHECK_ROWS}와 같은 뜻이다. */

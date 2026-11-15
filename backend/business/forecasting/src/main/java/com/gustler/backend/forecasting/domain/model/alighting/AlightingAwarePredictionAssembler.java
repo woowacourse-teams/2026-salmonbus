@@ -15,7 +15,8 @@ import java.util.Optional;
  * 옛 발행 경로({@code ForecastBatchWriter})와 새 예보 경로(그림자)가 같은 객체로 예측해 두 경로의 값이 비트 단위로 같게 한다.
  *
  * <p>목표 정류장은 {@link RouteStops#targetsAheadOf}가 고르고, 확정 판본은 차량 방향과 다른 방향의 정류장을 뺀다.
- * 확정 판본에서 스냅샷 기준 관측이 출퇴근 시간 밖이면 시간 확장 모델로 예측하고, 모델이 시간 확장을 지원하지 않으면 그 차량은 예측하지 않는다.
+ * 확정 판본에서 스냅샷 기준 관측이 출퇴근 시간 밖이면 시간 확장 모델로 예측하고, 모델이 시간 확장을 지원하지 않으면
+ * 그 차량은 예측하지 않는다.
  * 그 밖에는 출퇴근 모델에 {@link AlightingAwareFeatureSnapshot#forTarget} 입력을 넣는다.
  *
  * <p>한 배치(같은 모델·통계·정류장)에 하나를 만들어 쓴다. 상태가 없어 스레드 안전하지만, 스냅샷은 만든 스레드에서만 쓴다.
@@ -50,7 +51,7 @@ public final class AlightingAwarePredictionAssembler {
         }
         List<TargetPrediction> targets = new ArrayList<>();
         for (VehicleStopTarget target : stops.targetsAheadOf(snapshot.observation())) {
-            if (statistics.confirmedProfile() && statistics.stop(target.stopOrder()).down() != snapshot.source().down()) {
+            if (isOppositeDirection(snapshot, target)) {
                 continue;
             }
             targets.add(new TargetPrediction(target, predict(snapshot, target, extended)));
@@ -58,16 +59,27 @@ public final class AlightingAwarePredictionAssembler {
         return Optional.of(new VehiclePrediction(snapshot, extended, targets));
     }
 
+    private boolean isOppositeDirection(AlightingAwareFeatureSnapshot snapshot, VehicleStopTarget target) {
+        return statistics.confirmedProfile() && statistics.stop(target.stopOrder()).down() != snapshot.source().down();
+    }
+
     private boolean outsideRush(AlightingAwareFeatureSnapshot snapshot) {
         ZonedDateTime sourceTime = snapshot.source().receivedAt().atZone(SEOUL);
         return !statistics.timeCell(sourceTime).isRush();
     }
 
-    private SeatForecastResult predict(AlightingAwareFeatureSnapshot snapshot, VehicleStopTarget target, final boolean extended) {
+    private SeatForecastResult predict(
+        AlightingAwareFeatureSnapshot snapshot,
+        VehicleStopTarget target,
+        final boolean extended
+    ) {
         if (extended) {
             ZonedDateTime local = snapshot.source().receivedAt().atZone(SEOUL);
             final boolean offDay = "off".equals(statistics.dayType(local.toLocalDate()));
-            return model.predictExtended(statistics.route(), ExtendedAlightingPredictor.inputs(snapshot, target, offDay));
+            return model.predictExtended(
+                statistics.route(),
+                ExtendedAlightingPredictor.inputs(snapshot, target, offDay)
+            );
         }
         return model.predict(snapshot.forTarget(target.stopOrder()));
     }
@@ -79,7 +91,11 @@ public final class AlightingAwarePredictionAssembler {
      * @param extended 시간 확장 모델로 예측했으면 참
      * @param targets 목표 정류장별 예측. 정류장 순서다
      */
-    public record VehiclePrediction(AlightingAwareFeatureSnapshot snapshot, boolean extended, List<TargetPrediction> targets) {
+    public record VehiclePrediction(
+        AlightingAwareFeatureSnapshot snapshot,
+        boolean extended,
+        List<TargetPrediction> targets
+    ) {
         public VehiclePrediction {
             targets = List.copyOf(targets);
         }

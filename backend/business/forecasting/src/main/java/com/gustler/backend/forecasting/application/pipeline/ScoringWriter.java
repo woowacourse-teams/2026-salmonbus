@@ -68,8 +68,8 @@ public final class ScoringWriter {
         }
         try {
             return Objects.requireNonNull(transactions.execute(status -> new Flushed(
-                takenLabels.isEmpty() ? 0 : store.saveLabels(takenLabels),
-                takenUnresolved.isEmpty() ? 0 : store.saveUnresolved(takenUnresolved))));
+                saveLabels(takenLabels),
+                saveUnresolved(takenUnresolved))));
         } catch (RuntimeException failure) {
             synchronized (lock) {
                 takenLabels.addAll(labels);
@@ -79,6 +79,20 @@ public final class ScoringWriter {
             }
             throw failure;
         }
+    }
+
+    private int saveLabels(List<PassLabel> taken) {
+        if (taken.isEmpty()) {
+            return 0;
+        }
+        return store.saveLabels(taken);
+    }
+
+    private int saveUnresolved(List<UnresolvedForecast> taken) {
+        if (taken.isEmpty()) {
+            return 0;
+        }
+        return store.saveUnresolved(taken);
     }
 
     /**
