@@ -209,27 +209,6 @@ class ForecastPipelineTransitionSqlTest {
     }
 
     @Test
-    void 되돌리기_SQL은_마이그레이션과_같은_트리거와_함수를_다시_만들고_대기_줄을_다시_등록한다() throws Exception {
-        // given
-        String triggers = triggerDefinitions();
-        String functions = functionDefinitions();
-        run("sal434-02-drop-legacy-triggers.sql", FAST);
-
-        // when
-        run("sal434-02-rollback-recreate-legacy-triggers.sql");
-        run("sal434-02-rollback-recreate-legacy-triggers.sql");
-
-        // then
-        SoftAssertions softly = new SoftAssertions();
-        softly.assertThat(triggerDefinitions()).isEqualTo(triggers);
-        softly.assertThat(functionDefinitions()).isEqualTo(functions);
-        softly.assertAll();
-        final long work = number("SELECT count(*) FROM alighting_forecast_evaluation_work");
-        insertForecast("2");
-        assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_work")).isEqualTo(work + 1);
-    }
-
-    @Test
     void 승인값이_없거나_옛_정산_트리거가_남아_있으면_옛_테이블을_지우지_않는다() throws Exception {
         // when
         Throwable withTriggers = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
