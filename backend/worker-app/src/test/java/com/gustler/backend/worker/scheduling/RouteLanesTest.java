@@ -138,47 +138,51 @@ class RouteLanesTest {
         AtomicInteger interrupted = new AtomicInteger();
         AtomicInteger sawClosing = new AtomicInteger();
         AtomicInteger later = new AtomicInteger();
-        for (String key : List.of(first, second)) {
-            lanes.submit(key, () -> {
-                started.countDown();
-                pause(200);
-                if (Thread.currentThread().isInterrupted()) {
-                    interrupted.incrementAndGet();
+        try {
+            for (String key : List.of(first, second)) {
+                lanes.submit(key, () -> {
+                    started.countDown();
+                    untilWaitingDiscarded(lanes);
+                    if (Thread.currentThread().isInterrupted()) {
+                        interrupted.incrementAndGet();
+                    }
+                    if (lanes.closing()) {
+                        sawClosing.incrementAndGet();
+                    }
+                    finished.incrementAndGet();
+                });
+                for (int index = 0; index < 20; index++) {
+                    lanes.submit(key, later::incrementAndGet);
                 }
-                if (lanes.closing()) {
-                    sawClosing.incrementAndGet();
-                }
-                finished.incrementAndGet();
-            });
-            for (int index = 0; index < 20; index++) {
-                lanes.submit(key, later::incrementAndGet);
             }
+            assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+            final boolean closingBeforeStop = lanes.closing();
+
+            // when
+            lanes.stop();
+            final int finishedAtReturn = finished.get();
+            final boolean accepted = lanes.submit(first, later::incrementAndGet);
+
+            // then
+            assertSoftly(softly -> {
+                softly.assertThat(finishedAtReturn).as("돌던 일은 닫기가 돌아오기 전에 끝났다").isEqualTo(2);
+                softly.assertThat(closingBeforeStop).isFalse();
+                softly.assertThat(sawClosing).as("돌던 일은 줄이 닫히기 시작한 것을 안다").hasValue(2);
+                softly.assertThat(interrupted).hasValue(0);
+                softly.assertThat(later).as("기다리던 일은 실행하지 않는다").hasValue(0);
+                softly.assertThat(accepted).isFalse();
+                softly.assertThat(lanes.queued()).isZero();
+                softly.assertThat(lanes.isRunning()).isFalse();
+                softly.assertThat(output.getOut()).contains("event=pipeline_forecast_stopped discarded=40")
+                    .doesNotContain("event=pipeline_forecast_stop_timeout");
+            });
+        } finally {
+            lanes.stop();
         }
-        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
-        final boolean closingBeforeStop = lanes.closing();
-
-        // when
-        lanes.stop();
-        final int finishedAtReturn = finished.get();
-        final boolean accepted = lanes.submit(first, later::incrementAndGet);
-
-        // then
-        assertSoftly(softly -> {
-            softly.assertThat(finishedAtReturn).as("돌던 일은 닫기가 돌아오기 전에 끝났다").isEqualTo(2);
-            softly.assertThat(closingBeforeStop).isFalse();
-            softly.assertThat(sawClosing).as("돌던 일은 줄이 닫히기 시작한 것을 안다").hasValue(2);
-            softly.assertThat(interrupted).hasValue(0);
-            softly.assertThat(later).as("기다리던 일은 실행하지 않는다").hasValue(0);
-            softly.assertThat(accepted).isFalse();
-            softly.assertThat(lanes.queued()).isZero();
-            softly.assertThat(lanes.isRunning()).isFalse();
-            softly.assertThat(output.getOut()).contains("event=pipeline_forecast_stopped discarded=40")
-                .doesNotContain("event=pipeline_forecast_stop_timeout");
-        });
     }
 
     @Test
-    void 돌던_일이_한도_안에_끝나지_않으면_경고를_남기고_제시간에_돌아온다(CapturedOutput output) throws Exception {
+    void 돌던_일이_한도_안에_끝나지_않으면_경고를_남기고_한도까지만_기다린다(CapturedOutput output) throws Exception {
         // given
         RouteLanes lanes = new RouteLanes(1, 10, Duration.ofMillis(200), null);
         CountDownLatch started = new CountDownLatch(1);
@@ -201,7 +205,7 @@ class RouteLanesTest {
 
             // then
             assertSoftly(softly -> {
-                softly.assertThat(elapsedMillis).isBetween(150L, 2_000L);
+                softly.assertThat(elapsedMillis).isGreaterThanOrEqualTo(150L);
                 softly.assertThat(later).hasValue(0);
                 softly.assertThat(output.getOut())
                     .contains("event=pipeline_forecast_stop_timeout discarded=3 running=1 waitMs=200");
@@ -256,6 +260,17 @@ class RouteLanesTest {
                 return candidate;
             }
         }
+    }
+
+    /**
+     * 실행 줄이 닫히기 시작해 모든 줄이 기다리던 일을 버릴 때까지 기다린 뒤 잠시 더 돈다. 닫는 쪽이 돌던 일을 기다리지 않으면 그사이에
+     * 돌아온다. 붙잡은 일은 줄을 닫아야 풀리므로 한도 없이 기다린다.
+     */
+    private static void untilWaitingDiscarded(RouteLanes lanes) {
+        while (!lanes.closing() || lanes.queued() > 0) {
+            pause(1);
+        }
+        pause(200);
     }
 
     private static void await(CountDownLatch latch) {

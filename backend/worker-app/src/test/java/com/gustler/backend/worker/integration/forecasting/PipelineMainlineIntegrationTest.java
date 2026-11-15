@@ -26,9 +26,7 @@ import com.gustler.backend.worker.scheduling.PipelineForecastTrigger;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -53,12 +51,15 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * <p>주기 줍기는 1시간이라 시험 중에는 돌지 않는다. 시험은 줍기를 기동 직후처럼 한 번 불러 노선 판본의 실행 줄 열쇠를 알게 한 뒤,
  * 그 뒤의 처리는 모두 커밋 뒤 신호로만 일어나게 한다. 채점 결과는 주기 쓰기를 기다리지 않고 기다리는 동안 시험이 쓰게 한다.
  * 진단 수신자({@link ForecastTelemetry})를 하나 등록해 채점이 닫은 예측을 받는지도 본다.
+ *
+ * <p>worker의 시계는 시험이 옮긴다({@link ManualClock}). 수집할 때마다 한 회차씩 옮기고, 예보와 도달 사이의 간격이나 앞뒤 차량의
+ * 간격이 필요하면 그만큼 옮긴다. 착수 시각과 채점의 판정이 실제로 흐른 시간에 기대지 않는다.
  */
 @SpringBootTest(classes = WorkerApplication.class, properties = {
     "forecast.enabled=true",
     "forecast.interval=1h"
 })
-@Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class,
+@Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class, ManualClock.Replacement.class,
     PipelineMainlineIntegrationTest.Diagnostics.class })
 class PipelineMainlineIntegrationTest {
     private static final String SOURCE_ROUTE = "204000057";
@@ -67,10 +68,14 @@ class PipelineMainlineIntegrationTest {
     private static final String FOLLOWING_VEHICLE = "pipeline-mainline-following";
     private static final List<String> VEHICLES = List.of(VEHICLE, LEAD_VEHICLE, FOLLOWING_VEHICLE);
     private static final int SETTLED_STOP = 3;
-    /** 짝짓기 조건(도달 관측이 예측 기준 시각보다 {@link ScoringStage#MINIMUM_LEAD} 뒤)에 여유를 더한 대기다. */
-    private static final Duration LEAD_WAIT = ScoringStage.MINIMUM_LEAD.plusMillis(500);
-    /** 정답 계산이 받는 최소 배차 간격(직전 통과와 0.2분)에 여유를 더한 대기다. */
-    private static final Duration HEADWAY_WAIT = Duration.ofMillis(12_500);
+    /** 예측 기준 시각부터 도달 관측까지 두는 간격이다. 짝짓기 조건({@link ScoringStage#MINIMUM_LEAD}보다 뒤)을 채운다. */
+    private static final Duration LEAD = ScoringStage.MINIMUM_LEAD.plusMillis(500);
+    /** 앞 차량의 통과부터 뒤 차량의 통과까지 두는 간격이다. 정답 계산이 받는 최소 배차 간격(0.2분)을 채운다. */
+    private static final Duration HEADWAY = Duration.ofMillis(12_500);
+    /** 수집 한 회차마다 시계를 옮기는 간격이다. */
+    private static final Duration ROUND = Duration.ofMillis(100);
+    /** 요청부터 응답 수신까지의 시간이다. */
+    private static final Duration RESPONSE_TIME = Duration.ofMillis(1);
     private static final int STOP_COUNT = 10;
     private static final int TURN = 8;
     private static final int CAPACITY = 45;
@@ -78,7 +83,7 @@ class PipelineMainlineIntegrationTest {
     private static final List<Integer> OPEN_STOPS = List.of(6, 7, 8);
     /** 통과가 닫히는 정류장 2~5를 목표로 한 예측 수다. 1~4번 정류장을 떠난 배치가 각각 4·3·2·1개를 낸다. */
     private static final int CLOSED_FORECASTS = 10;
-    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    /** 예보와 채점이 끝나기를 기다리는 한도다. 넘기면 시험이 실패한다. 판정에 드는 시각은 여기서 나오지 않는다. */
     private static final Duration DEADLINE = Duration.ofSeconds(20);
 
     @Autowired
@@ -99,6 +104,9 @@ class PipelineMainlineIntegrationTest {
     @Autowired
     private ClosedForecasts closedForecasts;
 
+    @Autowired
+    private ManualClock clock;
+
     @MockitoBean
     private ForecastRuntime forecastRuntime;
 
@@ -108,7 +116,7 @@ class PipelineMainlineIntegrationTest {
 
     @BeforeEach
     void 확정_프로필_모델로_예보할_노선을_준비한다() {
-        OffsetDateTime validFrom = OffsetDateTime.now(SEOUL).minusDays(1);
+        OffsetDateTime validFrom = clock.now().minusDays(1);
         String modelRoute = ModelRoute.of(SOURCE_ROUTE);
         routeId = jdbc.sql("""
             INSERT INTO route (public_route_id, source_id, source_route_id, display_name, start_stop_name,
@@ -224,8 +232,7 @@ class PipelineMainlineIntegrationTest {
         final long beforeTarget = collect(FOLLOWING_VEHICLE, SETTLED_STOP - 1, 38);
         Instant leadDeparted = waitForConfirmation(lead.get(SETTLED_STOP - 1));
         Instant basis = waitForConfirmation(beforeTarget);
-        Instant reachable = later(basis.plus(LEAD_WAIT), leadDeparted.plus(HEADWAY_WAIT));
-        waitUntil(() -> Instant.now().isAfter(reachable), reachable.plusSeconds(1));
+        clock.moveTo(later(basis.plus(LEAD), leadDeparted.plus(HEADWAY)));
 
         // when
         collect(FOLLOWING_VEHICLE, SETTLED_STOP, 36);
@@ -303,18 +310,23 @@ class PipelineMainlineIntegrationTest {
         return collect(VEHICLE, passedStop, seats);
     }
 
-    /** 차량 하나가 {@code passedStop}을 막 떠난 관측 한 줄을 실제 수집 원장으로 저장하고 커밋한다. */
+    /**
+     * 차량 하나가 {@code passedStop}을 막 떠난 관측 한 줄을 실제 수집 원장으로 저장하고 커밋한다. 시계를 한 회차 옮긴 시각에 요청하고,
+     * 응답을 받은 시각까지 시계를 옮긴 뒤에 저장한다. 그래서 예보의 착수 시각은 수신 시각보다 이르지 않다.
+     */
     private long collect(String vehicle, final int passedStop, final int seats) {
-        OffsetDateTime at = OffsetDateTime.now(SEOUL).truncatedTo(ChronoUnit.MILLIS);
+        clock.advance(ROUND);
+        OffsetDateTime at = clock.now();
         final long batchId = ledger.reserve(new CollectionPlan(routeVersionId, at, UUID.randomUUID().toString()), at)
             .batchId();
         ledger.markDispatching(batchId, at, at, "a");
         BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation("경기70아0001", vehicle, 0,
             SOURCE_ROUTE, 11, "s" + passedStop, passedStop, 2, seats, 1, 1);
+        clock.advance(RESPONSE_TIME);
         ledger.conclude(batchId,
             received -> GbisObservationMapper.response(new GbisLocationResult.Success(
                 at.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.S")), List.of(bus)), received),
-            at.plusNanos(1_000_000));
+            clock.now());
         return batchId;
     }
 

@@ -16,7 +16,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * <p>운영 DB의 두 테이블이 날짜 파티션 테이블로 바뀌면 이 시험과, 두 테이블이 일반 테이블일 때를 받는 코드 갈래를 함께 지운다.
  */
 @Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class, UnpartitionedObservationTables.class,
-    PipelineMainlineIntegrationTest.Diagnostics.class })
+    ManualClock.Replacement.class, PipelineMainlineIntegrationTest.Diagnostics.class })
 class PipelineMainlineUnpartitionedIntegrationTest extends PipelineMainlineIntegrationTest {
     @Autowired
     private JdbcClient catalog;

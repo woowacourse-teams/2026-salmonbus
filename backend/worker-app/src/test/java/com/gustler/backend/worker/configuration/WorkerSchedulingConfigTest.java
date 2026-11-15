@@ -2,6 +2,7 @@ package com.gustler.backend.worker.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
@@ -11,6 +12,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 class WorkerSchedulingConfigTest {
+    /** 지금부터 예약의 실행 시각까지의 시간이다. 시험이 끝나기 전에는 오지 않는 시각이어야 닫기가 실행 시각보다 먼저다. */
+    private static final Duration DISTANT = Duration.ofHours(1);
+    /** 스케줄러가 끝나기를 기다리는 한도다. 예약이 남아 있으면 실행 시각까지 끝나지 않으므로 이 한도를 넘긴다. */
+    private static final Duration TERMINATION_WAIT = Duration.ofSeconds(10);
+
     @Test
     void 이관이_외부_응답을_기다려도_수집과_실시간_처리는_실행되고_통계는_겹치지_않는다() throws Exception {
         // given
@@ -64,7 +70,7 @@ class WorkerSchedulingConfigTest {
         // given
         ThreadPoolTaskScheduler collection = new WorkerSchedulingConfig().collectionScheduler();
         AtomicInteger runs = new AtomicInteger();
-        Instant due = Instant.now().plusMillis(300);
+        Instant due = Instant.now().plus(DISTANT);
         collection.initialize();
         try {
             collection.schedule(runs::incrementAndGet, context -> onceAt(context.lastCompletion(), due));
@@ -72,7 +78,7 @@ class WorkerSchedulingConfigTest {
             // when
             collection.initiateShutdown();
             final boolean terminated = collection.getScheduledThreadPoolExecutor()
-                .awaitTermination(600, TimeUnit.MILLISECONDS);
+                .awaitTermination(TERMINATION_WAIT.toSeconds(), TimeUnit.SECONDS);
 
             // then
             assertThat(terminated).as("남은 예약이 없어 스케줄러가 바로 끝난다").isTrue();

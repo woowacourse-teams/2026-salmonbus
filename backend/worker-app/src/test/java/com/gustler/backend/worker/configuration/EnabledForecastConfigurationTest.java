@@ -226,7 +226,7 @@ class EnabledForecastConfigurationTest {
                     started.countDown();
                     untilClosing(collection);
                     accepted.set(lanes.submit("key", () -> {
-                        pause(400);
+                        untilClosed(lanes);
                         events.add("last_round_forecast");
                     }));
                     pause(100);
@@ -242,19 +242,24 @@ class EnabledForecastConfigurationTest {
         });
     }
 
-    /** 컨텍스트가 닫히기 시작해 스케줄러가 새 일을 받지 않게 된 뒤에도 잠시 더 돈다. */
+    /**
+     * 컨텍스트가 닫히기 시작해 스케줄러가 새 일을 받지 않게 된 뒤에도 잠시 더 돈다. 컨텍스트는 시험이 끝날 때 반드시 닫히므로 한도
+     * 없이 기다린다.
+     */
     private static void untilClosing(ThreadPoolTaskScheduler scheduler) {
-        final long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (!scheduler.getScheduledThreadPoolExecutor().isShutdown() && System.nanoTime() < until) {
+        while (!scheduler.getScheduledThreadPoolExecutor().isShutdown()) {
             pause(5);
         }
         pause(200);
     }
 
-    /** 실행 줄이 닫힌 것을 본 뒤에도 잠시 더 돈다. 닫는 쪽이 기다리지 않으면 그사이 연결 풀이 먼저 닫힌다. */
+    /**
+     * 실행 줄이 닫히고 기다리던 일을 모두 버린 것을 본 뒤에도 잠시 더 돈다. 닫는 쪽이 기다리지 않으면 그사이 연결 풀이 먼저 닫힌다.
+     * 실행 줄은 스케줄러가 돌던 회차를 끝낸 뒤에 닫히므로, 회차가 넘긴 일이 이것을 기다리면 회차보다 늦게 끝난다. 컨텍스트는 시험이
+     * 끝날 때 반드시 닫히므로 한도 없이 기다린다.
+     */
     private static void untilClosed(RouteLanes lanes) {
-        final long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (lanes.isRunning() && System.nanoTime() < until) {
+        while (lanes.isRunning() || lanes.queued() > 0) {
             pause(5);
         }
         pause(200);

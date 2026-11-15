@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.pipeline.ShadowScoringCycle;
+import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
@@ -23,9 +24,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -61,6 +60,9 @@ import org.springframework.test.context.SmartContextLoader;
  * <p>닫힌 뒤의 DB를 봐야 하고 같은 DB로 두 번 띄워야 하므로 DB와 컨텍스트를 시험이 직접 만든다. 컨텍스트가 만든 시험 DB는 컨텍스트가
  * 닫힐 때 지워진다. 설정은 다른 통합 시험과 같은 방식으로 읽도록 {@link Worker}에 적는다. 실행 줄을 하나로 두어 붙잡은 일 하나가
  * 뒤의 일을 모두 기다리게 한다.
+ *
+ * <p>두 worker는 시험이 옮기는 시계 하나를 함께 쓴다({@link ManualClock}). 닫았다 다시 띄우는 데 실제로 걸린 시간은 착수 시각에
+ * 들어가지 않고, 그사이 흐른 것으로 치는 시간({@link #DOWNTIME})은 시험이 정한다.
  */
 @ExtendWith(OutputCaptureExtension.class)
 class ForecastRestartIntegrationTest {
@@ -74,9 +76,19 @@ class ForecastRestartIntegrationTest {
     private static final int CLOSED_FORECASTS = 10;
     /** 수신 뒤 착수까지 허용하는 90초를 넘긴 시간이다. 줍기가 찾는 신선도 창보다는 짧다. */
     private static final Duration PAST_CONFIRMATION_LIMIT = Duration.ofMinutes(3);
+    /** 수집 한 회차마다 시계를 옮기는 간격이다. */
+    private static final Duration ROUND = Duration.ofMillis(100);
+    /** 요청부터 응답 수신까지의 시간이다. */
+    private static final Duration RESPONSE_TIME = Duration.ofMillis(1);
+    /**
+     * 닫았다 다시 띄우는 동안 흐른 것으로 치는 시간이다. 끊긴 노선의 회차를 모두 더해도 채점의 짝짓기 간격
+     * ({@link ScoringStage#MINIMUM_LEAD})에 못 미치게 둔다. 그 간격을 넘기면 닫기 전의 예측이 다시 뜬 뒤에 도달한 통과와 짝이 되어,
+     * 끊지 않고 이어서 처리한 노선과 채점 결과가 달라지는 것이 맞다.
+     */
+    private static final Duration DOWNTIME = ScoringStage.MINIMUM_LEAD.dividedBy(2);
     /** 실행 줄이 닫힌 뒤에도 돌던 일이 더 도는 시간이다. 닫는 쪽이 기다리지 않으면 그사이 연결 풀이 먼저 닫힌다. */
     private static final long RUNNING_AFTER_CLOSE_MILLIS = 500;
-    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    /** 예보와 채점이 끝나기를 기다리는 한도다. 넘기면 시험이 실패한다. 판정에 드는 시각은 여기서 나오지 않는다. */
     private static final Duration DEADLINE = Duration.ofSeconds(30);
     /** 노선의 배치를 그 노선 안의 순번으로 바꾼다. 배치 번호는 노선마다 달라 노선끼리 견줄 때 쓴다. */
     private static final String ORDINALS = """
@@ -85,6 +97,8 @@ class ForecastRestartIntegrationTest {
             FROM forecast_run WHERE route_id = :route
         )
         """;
+
+    private static final ManualClock CLOCK = new ManualClock();
 
     private static TestDatabase database;
 
@@ -110,31 +124,33 @@ class ForecastRestartIntegrationTest {
             HikariDataSource firstPool = first.getBean(DataSource.class).unwrap(HikariDataSource.class);
             SelectedRuntime selected = first.getBean(SelectedRuntime.class);
             RouteLanes lanes = first.getBean(RouteLanes.class);
-            Route continuous = insertRoute(stored, "204000057");
-            Route interrupted = insertRoute(stored, "234000050");
-            Route running = insertRoute(stored, "204000070");
-            Route delayed = insertRoute(stored, "234000886");
-            RuntimeSnapshot runtime = insertDeployment(stored, List.of(continuous, interrupted, running, delayed));
+            OffsetDateTime validFrom = CLOCK.now().minusDays(1);
+            Route continuous = insertRoute(stored, "204000057", validFrom);
+            Route interrupted = insertRoute(stored, "234000050", validFrom);
+            Route running = insertRoute(stored, "204000070", validFrom);
+            Route delayed = insertRoute(stored, "234000886", validFrom);
+            RuntimeSnapshot runtime = insertDeployment(stored, List.of(continuous, interrupted, running, delayed),
+                validFrom);
             selected.select(runtime);
             first.getBean(PipelineForecastTrigger.class).pickUp();
             for (final int passedStop : PASSED_STOPS) {
-                collect(first, continuous, passedStop, now());
+                collect(first, continuous, passedStop);
             }
             assertThat(waitUntil(first, () -> closedForecasts(stored, continuous, "<> 'PENDING'") == CLOSED_FORECASTS))
                 .as("끊지 않는 노선은 닫기 전에 예보와 채점을 모두 마쳤다").isTrue();
             for (final int passedStop : PASSED_STOPS.subList(0, PROCESSED_BEFORE_CLOSE)) {
-                collect(first, interrupted, passedStop, now());
+                collect(first, interrupted, passedStop);
             }
             assertThat(waitUntil(first, () -> runs(stored, interrupted).size() == PROCESSED_BEFORE_CLOSE)).isTrue();
             awaitIdle(lanes);
             CountDownLatch held = selected.holdNextSweepUntilClosed(lanes);
-            final long runningBatch = collect(first, running, 1, now());
+            final long runningBatch = collect(first, running, 1);
             assertThat(held.await(DEADLINE.toSeconds(), TimeUnit.SECONDS)).as("돌던 일이 실행 줄을 붙잡았다").isTrue();
             List<Long> waitingBatches = new ArrayList<>();
             for (final int passedStop : PASSED_STOPS.subList(PROCESSED_BEFORE_CLOSE, PASSED_STOPS.size())) {
-                waitingBatches.add(collect(first, interrupted, passedStop, now()));
+                waitingBatches.add(collect(first, interrupted, passedStop));
             }
-            final long delayedBatch = collect(first, delayed, 1, now().minus(PAST_CONFIRMATION_LIMIT));
+            final long delayedBatch = store(first, delayed, 1, CLOCK.now().minus(PAST_CONFIRMATION_LIMIT));
             assertThat(lanes.queued()).as("두 노선의 처리가 실행 줄에서 기다린다").isEqualTo(2);
 
             // when
@@ -143,6 +159,7 @@ class ForecastRestartIntegrationTest {
             List<String> runningRunAtClose = runsOf(stored, List.of(runningBatch));
             List<String> waitingRunsAtClose = runsOf(stored, waitingBatches);
             List<String> delayedRunAtClose = runsOf(stored, List.of(delayedBatch));
+            CLOCK.advance(DOWNTIME);
             Restarted restarted = restart(stored, runtime, interrupted, delayedBatch);
             Scored uninterrupted = scored(stored, continuous);
             List<String> waitingRuns = runsOf(stored, waitingBatches);
@@ -219,12 +236,12 @@ class ForecastRestartIntegrationTest {
         assertThat(idle.await(DEADLINE.toSeconds(), TimeUnit.SECONDS)).isTrue();
     }
 
-    static OffsetDateTime now() {
-        return OffsetDateTime.now(SEOUL).truncatedTo(ChronoUnit.MILLIS);
-    }
-
-    static Route insertRoute(JdbcClient stored, String sourceRoute) {
-        OffsetDateTime validFrom = OffsetDateTime.now(SEOUL).minusDays(1);
+    /**
+     * 노선과 그 판본·정류장, 차량의 정원을 넣는다.
+     *
+     * @param validFrom 판본이 유효해지고 정원을 알게 된 시각. worker의 시계보다 앞이어야 예보가 그 정원을 쓴다
+     */
+    static Route insertRoute(JdbcClient stored, String sourceRoute, OffsetDateTime validFrom) {
         String vehicle = "restart-" + sourceRoute;
         final long routeId = stored.sql("""
             INSERT INTO route (public_route_id, source_id, source_route_id, display_name, start_stop_name,
@@ -257,8 +274,7 @@ class ForecastRestartIntegrationTest {
         return "UP";
     }
 
-    static RuntimeSnapshot insertDeployment(JdbcClient stored, List<Route> routes) {
-        OffsetDateTime validFrom = OffsetDateTime.now(SEOUL).minusDays(1);
+    static RuntimeSnapshot insertDeployment(JdbcClient stored, List<Route> routes, OffsetDateTime validFrom) {
         List<String> modelRoutes = routes.stream().map(route -> ModelRoute.of(route.sourceRoute())).toList();
         final long deploymentId = stored.sql("""
             INSERT INTO model_deployment (deployment_key, release_id, model_key, model_version, bundle_digest,
@@ -273,8 +289,23 @@ class ForecastRestartIntegrationTest {
             ConfirmedProfileModelFixture.model(modelRoutes, STOP_COUNT, TURN), validFrom.toInstant());
     }
 
-    /** 노선의 차량이 {@code passedStop}을 막 떠난 관측 한 줄을 {@code at}에 받은 것으로 실제 수집 원장에 저장하고 커밋한다. */
-    static long collect(
+    /**
+     * 노선의 차량이 {@code passedStop}을 막 떠난 관측 한 줄을 지금 수집한 것으로 저장한다. worker의 시계를 한 회차 옮긴 시각에
+     * 요청하고, 응답을 받은 시각까지 시계를 옮긴 뒤에 저장한다. 그래서 예보의 착수 시각은 수신 시각보다 이르지 않다.
+     */
+    static long collect(ConfigurableApplicationContext context, Route route, final int passedStop) {
+        ManualClock clock = context.getBean(ManualClock.class);
+        clock.advance(ROUND);
+        OffsetDateTime at = clock.now();
+        clock.advance(RESPONSE_TIME);
+        return store(context, route, passedStop, at);
+    }
+
+    /**
+     * 노선의 차량이 {@code passedStop}을 막 떠난 관측 한 줄을 {@code at}에 요청해 {@link #RESPONSE_TIME} 뒤에 받은 것으로 실제 수집
+     * 원장에 저장하고 커밋한다. 시계는 옮기지 않는다.
+     */
+    private static long store(
         ConfigurableApplicationContext context,
         Route route,
         final int passedStop,
@@ -289,7 +320,7 @@ class ForecastRestartIntegrationTest {
         ledger.conclude(batchId,
             received -> GbisObservationMapper.response(new GbisLocationResult.Success(
                 at.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.S")), List.of(bus)), received),
-            at.plusNanos(1_000_000));
+            at.plus(RESPONSE_TIME));
         return batchId;
     }
 
@@ -432,6 +463,13 @@ class ForecastRestartIntegrationTest {
         SelectedRuntime selectedRuntime() {
             return new SelectedRuntime();
         }
+
+        /** 닫은 worker와 다시 띄운 worker가 같은 시계를 이어 쓴다. */
+        @Bean
+        @Primary
+        ManualClock manualClock() {
+            return CLOCK;
+        }
     }
 
     /** 시험이 고른 모델을 돌려주는 모델 선택이다. 시험이 시키면 모델을 묻는 실행 줄 스레드를 한 번 붙잡는다. */
@@ -467,10 +505,13 @@ class ForecastRestartIntegrationTest {
     }
 
     private record Hold(RouteLanes lanes, CountDownLatch held) {
+        /**
+         * 실행 줄이 닫히고 기다리던 일을 모두 버릴 때까지 스레드를 붙잡은 뒤 잠시 더 돈다. 기다리던 일이 버려지기 전에 풀어 주면 그 일이
+         * 이어서 돌 수 있다. 시험은 끝날 때 컨텍스트를 반드시 닫으므로 한도 없이 기다린다.
+         */
         private void untilClosed() {
             held.countDown();
-            final long until = System.nanoTime() + DEADLINE.toNanos();
-            while (lanes.isRunning() && System.nanoTime() < until) {
+            while (lanes.isRunning() || lanes.queued() > 0) {
                 pause(10);
             }
             pause(RUNNING_AFTER_CLOSE_MILLIS);
