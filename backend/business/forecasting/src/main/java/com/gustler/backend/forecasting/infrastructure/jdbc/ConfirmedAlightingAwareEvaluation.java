@@ -13,7 +13,7 @@ import java.time.ZonedDateTime;
 import java.util.HexFormat;
 import tools.jackson.databind.JsonNode;
 
-/** 확인 시각으로 닫힌 방문과 같은 날 직전 통과를 예보 당시의 차량 정원·계수와 연결해 새 정답 판본의 하차 후 잔여석을 계산한다. */
+/** 확인 시각으로 닫힌 방문과 같은 날 직전 통과를 예보 당시의 차량 정원·계수와 연결해 하차 후 잔여석(정답)을 계산한다. */
 final class ConfirmedAlightingAwareEvaluation {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
@@ -62,8 +62,7 @@ final class ConfirmedAlightingAwareEvaluation {
         final double label = AlightingPosterior.afterSeats(fitted, visit.arrival().seats(),
             visit.departure().seats(),
             capacity, gap, previous.departure().seats() == 0, bin);
-        return new PassLabelOutcome("SETTLED", label, null, visit, previous, null,
-            digest(parameters.toString()), capacity);
+        return new PassLabelOutcome("SETTLED", label, null, visit, previous, digest(parameters.toString()), capacity);
     }
 
     private static JsonNode findParameters(JsonNode snapshot, final int stop, String band) {

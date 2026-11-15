@@ -29,8 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 새 예보 경로를 본선으로 돌린다({@code forecast.pipeline=v2}). 옛 발행 경로({@code PublishPendingForecastsService},
- * {@code ForecastBatchWriter})를 대신해 수집이 커밋한 배치를 처리한다.
+ * 수집이 커밋한 배치를 예보한다.
  *
  * <p>배치는 노선별 실행 줄({@link ForecastLanes})에서 처리한다. 줄 열쇠는 노선 판본의 GBIS 노선 ID다. 노선 상태의 단위(모델 노선
  * 이름)는 이 ID로 정해지므로 같은 상태를 쓰는 배치는 항상 같은 줄에서 순서대로 처리되고, 다른 노선은 다른 줄에서 동시에 처리된다.
@@ -39,14 +38,14 @@ import org.slf4j.LoggerFactory;
  *
  * <p>줄에서 배치 하나는 이렇게 처리한다.
  * <ol>
- *   <li>옛 경로와 같은 판정으로 모델 문맥을 정한다. 활성 모델이 없거나, 활성 판본이 아니거나, 모델이 노선을 지원하지 않으면 실행
- *       줄 없이 끝낸다(옛 경로도 발행하지 않는다). 확정 판본 통계가 아니면 새 경로가 처리할 수 없어 같은 방식으로 끝낸다.</li>
- *   <li>배치를 줄과 함께 읽는다. 예보 실행 줄이나 옛 경로의 착수 시각이 이미 있으면 처리한 배치라 끝낸다. 줍기와 신호가 같은 배치를
- *       두 번 넣어도 여기서 걸러진다.</li>
+ *   <li>모델 문맥을 정한다. 활성 모델이 없거나, 활성 판본이 아니거나, 모델이 노선을 지원하지 않으면 실행 줄 없이 끝낸다. 확정
+ *       판본 통계가 아니어도 처리할 수 없어 같은 방식으로 끝낸다.</li>
+ *   <li>배치를 줄과 함께 읽는다. 착수 시각이 이미 있으면(예보 실행 줄이나 배치의 {@code input_confirmed_at}) 처리한 배치라
+ *       끝낸다. 줍기와 신호가 같은 배치를 두 번 넣어도 여기서 걸러진다.</li>
  *   <li>착수 시각을 이때 찍는다. 시계 값을 저장 자릿수(마이크로초)로 자른 값이다. 메모리의 노선 상태가 든 시각과 다시 뜬 뒤
  *       DB에서 되감아 읽는 시각이 같아야 하기 때문이다. 이 시각으로 90초 판정을 하고, 실행 줄에 적고, 노선 상태와 되감기의 순서로
  *       쓴다. {@code observation_batch}에는 적지 않는다.</li>
- *   <li>나머지(90초 판정, 되감기, 상태 전진, 예측 조립, 한 트랜잭션 저장, 커밋 뒤 상태 교체와 사건)는 그림자와 같은
+ *   <li>나머지(90초 판정, 되감기, 상태 전진, 예측 조립, 한 트랜잭션 저장, 커밋 뒤 상태 교체와 사건)는
  *       {@link PipelineBatchProcessor}가 한다.</li>
  * </ol>
  * 처리 중 예외가 나면 그 노선의 상태를 버리고 실행 줄 없이 끝낸다. 입력 부족(되감기 실패·통과 판정 실패 등)은
@@ -66,9 +65,8 @@ import org.slf4j.LoggerFactory;
  * 배치는 이력에 넣지 않고 실행 줄 없이 둔다({@link PipelineBatchProcessor.Status#OUT_OF_ORDER}). 그 배치는 다음 줍기마다 같은
  * 판정을 받다가 수신 뒤 90초가 지나면 {@code LATE}로 닫힌다.
  *
- * <p>옛 예보 쓰기({@code seat_forecast}, {@code forecast_publication}), {@code input_confirmed_at} 갱신, 체크포인트 파일과
- * {@code alighting_history_checkpoint} 쓰기, {@code route} 행 잠금을 하지 않는다. 옛 발행 저장이 하던 일 가운데 모델 배포의 정산
- * 근거({@code model_deployment.settlement_context}) 적기만은 새 채점이 읽으므로 이어서 한다.
+ * <p>{@code observation_batch}를 고치지 않고 {@code route} 행 잠금을 잡지 않는다. 채점이 읽는 모델 배포의 정산
+ * 근거({@code model_deployment.settlement_context})는 배치를 착수하기 전에 적는다.
  */
 public final class ForecastPipelineService implements ForecastPipeline {
     /** 배치 하나의 처리 시간을 남기는 {@link WorkerOperationLog} 작업 이름. */
@@ -99,9 +97,9 @@ public final class ForecastPipelineService implements ForecastPipeline {
     private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
 
     /**
-     * @param batches 착수 시각을 {@code forecast_run}에서 먼저 읽는 원본({@code RECORDED_RUN} 축)
-     * @param settlementContexts 모델 배포에 정산 근거를 적는 곳. 옛 발행 저장이 하던 일이다
-     * @param policy 신선도 창과 한 번에 줍는 배치 수. 옛 경로와 같은 값이다
+     * @param batches 배치를 착수 시각과 함께 읽는 원본. 되감기와 같은 원본이어야 한다
+     * @param settlementContexts 모델 배포에 정산 근거를 적는 곳
+     * @param policy 신선도 창과 한 번에 줍는 배치 수
      * @param meters 지표 등록기. 없으면 지표를 내지 않는다
      */
     public ForecastPipelineService(
@@ -389,8 +387,8 @@ public final class ForecastPipelineService implements ForecastPipeline {
     }
 
     /**
-     * 모델 배포에 이 노선 판본의 정산 근거를 (배포, 판본)마다 한 번 적는다. 새 채점이 읽는다. 옛 경로에서는 옛 발행 저장이 예측이 있는
-     * 첫 발행에서 적었다. 근거는 모델과 통계만으로 정해지므로 같은 값이다. 모델에 이 노선의 근거가 없으면 적지 않는다.
+     * 모델 배포에 이 노선 판본의 정산 근거를 (배포, 판본)마다 한 번 적는다. 채점이 읽는다. 근거는 모델과 통계만으로 정해진다.
+     * 모델에 이 노선의 근거가 없으면 적지 않는다.
      */
     private void storeSettlementContext(RouteContext context) {
         String key = context.runtime().deploymentId() + ":" + context.stops().routeVersionId();
@@ -403,7 +401,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
         contextsStored.add(key);
     }
 
-    /** 옛 경로의 노선 진입({@code writeForecastsOfRoute})과 같은 판정이다. */
+    /** 활성 모델, 활성 판본, 모델의 노선 지원 여부로 모델 문맥을 정한다. */
     private Resolved resolve(final long routeVersionId) {
         Optional<RuntimeSnapshot> runtime = runtimes.resolveActive();
         if (runtime.isEmpty()) {
@@ -420,7 +418,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
     }
 
     /**
-     * 확정 프로필이 아닌 모델의 노선은 새 경로가 예보하지 못한다. 실행 줄도 남지 않아 보드는 발행이 끊긴 것으로 본다.
+     * 확정 프로필이 아닌 모델의 노선은 예보하지 못한다. 실행 줄도 남지 않아 보드는 예보가 끊긴 것으로 본다.
      * (모델 배포, 노선 판본)마다 한 번만 경고한다.
      */
     private void warnUnsupportedProfileOnce(

@@ -14,7 +14,7 @@ import java.util.Set;
 import java.util.stream.IntStream;
 
 /**
- * 새 예보 경로가 처리하는 확정 프로필 모델을 만든다. 통계는 진짜 객체이고 트리는 잎 하나짜리라 예측값이 상수다.
+ * 예보가 처리하는 확정 프로필 모델을 만든다. 통계는 진짜 객체이고 트리는 잎 하나짜리라 예측값이 상수다.
  * 출퇴근 모델과 시간 확장 모델을 모두 넣어 시험을 도는 시각과 무관하게 예측이 나온다.
  *
  * <p>정류장은 {@code s1}부터 {@code s<stopCount>}까지이고, {@code turn} 이하가 상행, 그 뒤가 하행이며 모두 승차할 수 있다.
@@ -74,7 +74,7 @@ final class ConfirmedProfileModelFixture {
     }
 
     /**
-     * 정류장마다 옛 정산이 읽는 근거다. 시간 확장 칸 계수와 출퇴근 두 띠의 정류장 계수를 모두 넣어, 통과가 어느 시각에 닫혀도
+     * 정류장마다 정답 계산이 읽는 근거다. 시간 확장 칸 계수와 출퇴근 두 띠의 정류장 계수를 모두 넣어, 통과가 어느 시각에 닫혀도
      * 정답을 계산할 수 있다.
      */
     private static Map<Integer, String> evidence(final int stopCount, final int turn) {

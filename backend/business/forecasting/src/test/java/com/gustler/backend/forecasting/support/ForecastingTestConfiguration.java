@@ -23,11 +23,9 @@ class ForecastingTestConfiguration {
     @Bean
     ForecastPolicy forecastPolicy(
         @Value("${forecast.staleness}") Duration staleness,
-        @Value("${forecast.batch-limit}") final int batchLimit,
-        @Value("${forecast.pending-limit}") final int pendingLimit,
-        @Value("${forecast.arrival-limit}") final int arrivalLimit
+        @Value("${forecast.batch-limit}") final int batchLimit
     ) {
-        return new ForecastPolicy(staleness, batchLimit, pendingLimit, arrivalLimit);
+        return new ForecastPolicy(staleness, batchLimit);
     }
 
     /** 실행하는 앱이 등록하는 노선별 실행 줄 대신, 넣은 일을 부른 스레드에서 바로 실행한다. */

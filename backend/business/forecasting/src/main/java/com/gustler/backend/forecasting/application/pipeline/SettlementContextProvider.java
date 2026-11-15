@@ -7,8 +7,9 @@ import tools.jackson.databind.JsonNode;
  * 모델 배포가 노선 판본마다 한 번 적어 둔 정산 근거({@code model_deployment.settlement_context -> 노선 판본})를 돌려준다.
  *
  * <p>근거의 모양은 {@code {"shared":{capacityPolicy,inputProfile,turn,realStopOrders,[extendedSettlement],[holidays]},
- * "stops":{"목표 정류장":[{stop,band,lam,p,kappa,r}]}}}이다. 계수 해시({@code parameter_hash})가 옛 정산과 같으려면 구현은
- * DB가 돌려준 jsonb 텍스트를 그대로 읽어 만든 노드를 돌려줘야 한다. 다른 경로로 다시 직렬화하면 키 순서가 달라질 수 있다.
+ * "stops":{"목표 정류장":[{stop,band,lam,p,kappa,r}]}}}이다. 계수 해시({@code parameter_hash})는 계수 노드의 글자 표현에서
+ * 나오므로, 구현은 DB가 돌려준 jsonb 텍스트를 그대로 읽어 만든 노드를 돌려줘야 한다. 다른 경로로 다시 직렬화하면 키 순서가 달라져
+ * 해시가 바뀔 수 있다.
  * 돌려준 노드는 읽기만 하며 바꾸지 않는다.
  */
 public interface SettlementContextProvider {

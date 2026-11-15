@@ -50,8 +50,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 흐름 하나와 새 예보 경로의 본선을 묶는 시험 도우미다. 노선별 실행 줄은 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다.
- * 본선의 착수 시각은 시계에서 찍으므로 신호마다 시계를 정해 넣는다.
+ * 흐름 하나와 예보 서비스를 묶는 시험 도우미다. 노선별 실행 줄은 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다.
+ * 착수 시각은 시계에서 찍으므로 신호마다 시계를 정해 넣는다.
  *
  * <p>예보 실행 저장과 되감기 읽기에 실패를 끼워 넣을 수 있다. 저장 실패는 아무것도 쓰기 전에 던진다. 시험 트랜잭션 하나에 모든
  * 쓰기가 합류하므로 실패한 저장이 되돌려지지 않기 때문이다.
@@ -110,7 +110,7 @@ final class MainlineHarness {
     }
 
     /**
-     * 본선을 새로 띄운다. 메모리의 노선 상태·실패한 배치의 기억·지표가 모두 빈 채로 시작하므로 다시 뜬 것과 같다.
+     * 예보 서비스를 새로 띄운다. 메모리의 노선 상태·실패한 배치의 기억·지표가 모두 빈 채로 시작하므로 다시 뜬 것과 같다.
      *
      * @param extendedWindow 되감은 상태가 모자랄 때 늘려 되감는 창
      * @param listeners 커밋 뒤 사건을 받을 뒤 단계
@@ -132,7 +132,7 @@ final class MainlineHarness {
             return true;
         }, processor, source, new JdbcPendingPipelineBatches(jdbc), () -> Optional.of(runtime), this::versions,
             stopsByVersion::get, new JdbcSettlementContextWriter(jdbc),
-            new ForecastPolicy(Duration.ofMinutes(10), 20, 3000, 400), clock, meters);
+            new ForecastPolicy(Duration.ofMinutes(10), 20), clock, meters);
         clock.at = EVENING.plus(Duration.ofDays(2));
         mainline.pickUp();
     }
@@ -177,7 +177,7 @@ final class MainlineHarness {
         replayFailures = 1;
     }
 
-    /** 수집 결과가 성공(줄 있음·빈 응답)인 배치를 처리 순서로. 본선이 처리할 대상이다. */
+    /** 수집 결과가 성공(줄 있음·빈 응답)인 배치를 처리 순서로. 예보가 처리할 대상이다. */
     List<Long> batches() {
         return stream.batches().stream().filter(batchId -> !meta.get(batchId).outcome().startsWith("FAILED"))
             .toList();

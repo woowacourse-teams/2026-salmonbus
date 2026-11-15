@@ -4,9 +4,9 @@ import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 통과 하나의 정답을 옛 정산과 같은 식으로 계산한다.
+ * 통과 하나의 정답을 계산한다.
  *
- * <p>구현은 옛 확정 판 정산의 계산({@code ConfirmedAlightingAwareEvaluation.afterSeats})을 그대로 불러야 한다. 판정 순서는
+ * <p>구현은 확정 판 정답 계산({@code ConfirmedAlightingAwareEvaluation.afterSeats})을 그대로 불러야 한다. 판정 순서는
  * 시간 칸 계수 없음, 직전 통과 없음, 앞차 간격, 정류장 계수 없음, 정원 근거, 정원 초과 관측, 계수 길이, 채점됨이다. 계수나 관측이
  * 계산식의 전제를 어기면 {@link IllegalArgumentException}을 던질 수 있다.
  */

@@ -7,7 +7,7 @@ import java.time.Duration;
 import java.util.Locale;
 
 /**
- * 본선({@code forecast.pipeline=v2})의 지표다. 이름은 {@code salmonbus.pipeline.forecast.*}로 모으며 옛 경로의 지표와 겹치지 않는다.
+ * 예보의 지표다. 이름은 {@code salmonbus.pipeline.forecast.*}로 모은다.
  * 지표 등록기가 없으면 아무것도 하지 않는다. 줄 길이는 실행하는 앱의 줄이 {@code salmonbus.pipeline.forecast.queue}로 낸다.
  *
  * <ul>

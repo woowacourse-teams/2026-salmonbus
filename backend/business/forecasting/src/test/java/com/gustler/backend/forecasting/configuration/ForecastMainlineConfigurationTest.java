@@ -35,7 +35,7 @@ class ForecastMainlineConfigurationTest {
         .withBean(ForecastRuntime.class, () -> Optional::empty)
         .withBean(RouteVersionQuery.class, () -> List::of)
         .withBean(RouteStopsQuery.class, () -> mock(RouteStopsQuery.class))
-        .withBean(ForecastPolicy.class, () -> new ForecastPolicy(Duration.ofMinutes(10), 20, 3000, 400))
+        .withBean(ForecastPolicy.class, () -> new ForecastPolicy(Duration.ofMinutes(10), 20))
         .withBean(Clock.class, Clock::systemUTC);
 
     @Test

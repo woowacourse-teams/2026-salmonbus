@@ -3,12 +3,6 @@ package com.gustler.backend.forecasting.infrastructure.observability;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
-import com.gustler.backend.forecasting.domain.evaluation.EvaluationDiagnostics;
-import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
-import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -16,11 +10,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
 
 class ForecastMonitoringTest {
     @Test
@@ -60,31 +52,6 @@ class ForecastMonitoringTest {
             .isEqualTo(1);
         assertThat(registry.get("salmonbus.collection.seat.quality.last.timestamp").gauges())
             .extracting(gauge -> gauge.value()).containsExactlyInAnyOrder(1000.0, 1000.0);
-    }
-
-    @Test
-    void 좌석오차는_예측좌석으로_계산하고_누락과_제외는_정답으로_세지_않는다() {
-        // when
-        Logger logger = (Logger) LoggerFactory.getLogger(ForecastMonitoring.class);
-        ListAppender<ILoggingEvent> logs = new ListAppender<>();
-        logs.start();
-        logger.addAppender(logs);
-        try {
-            ForecastMonitoring monitoring =
-                new ForecastMonitoring(new SimpleMeterRegistry(), mock(DataSource.class), Clock.systemUTC());
-            monitoring.settled(List.of(sample(10.0, true), sample(null, true), sample(30.0, false)));
-            monitoring.flushAccuracy();
-            String line = logs.list.getFirst().getFormattedMessage();
-
-            // then
-            assertThat(line).contains("routeName=\"3330\"", "stopName=\"야탑역 광장\"", "completed=3", "maeCount=1",
-                "absoluteErrorSum=7.0", "probabilityCount=2", "brierSum=0.125")
-                .doesNotContain("private-vehicle");
-            monitoring.flushAccuracy();
-            assertThat(logs.list).hasSize(1);
-        } finally {
-            logger.detachAppender(logs);
-        }
     }
 
     @Test
@@ -175,12 +142,6 @@ class ForecastMonitoringTest {
         assertThat(registry.get("salmonbus.forecast.last.commit.timestamp").gauge().value()).isEqualTo(1060);
         assertThat(registry.get("salmonbus.forecast.last.nonempty.timestamp").gauge().value()).isEqualTo(1030);
         assertThat(registry.get("salmonbus.forecast.last.input.timestamp").gauge().value()).isEqualTo(1020);
-    }
-
-    private SettledEvaluation sample(Double prediction, final boolean usable) {
-        return new SettledEvaluation(1, 6, 2, 3, 4, 2, .2, ScoringState.SETTLED,
-            5L, 3, Instant.now(), Instant.now(), usable, "private-vehicle", 40, true,
-            new EvaluationDiagnostics("3330", "야탑역 광장", "station1", "UP", 6, prediction, .25));
     }
 
     private static final class PipelineClock extends Clock {

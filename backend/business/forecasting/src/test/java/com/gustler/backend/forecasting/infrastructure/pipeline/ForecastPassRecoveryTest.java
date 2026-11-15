@@ -31,8 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 되감기가 실패해 예보 단계를 돌리지 못하고 끝난 배치가 닫은 통과를 본선이 다음 되감기에서 되찾는지를 실제 DB와 새 채점으로 본다.
- * 비교 기준은 같은 흐름을 실패 없이 처리한 결과다. 두 번을 같은 시험 트랜잭션에서 차례로 돌리고, 사이에 새 경로의 줄만 지운다.
+ * 되감기가 실패해 예보 단계를 돌리지 못하고 끝난 배치가 닫은 통과를 예보가 다음 되감기에서 되찾는지를 실제 DB와 채점으로 본다.
+ * 비교 기준은 같은 흐름을 실패 없이 처리한 결과다. 두 번을 같은 시험 트랜잭션에서 차례로 돌리고, 사이에 예보 기록 테이블의 줄만 지운다.
  */
 @ForecastingIntegrationTest
 @Transactional
@@ -174,7 +174,7 @@ class ForecastPassRecoveryTest {
     }
 
     /**
-     * 흐름 전체를 본선과 새 채점으로 처리한다. {@code failing}이 있으면 그 배치에서 노선 상태를 버리고 되감기를 한 번 실패시킨다.
+     * 흐름 전체를 예보와 채점으로 처리한다. {@code failing}이 있으면 그 배치에서 노선 상태를 버리고 되감기를 한 번 실패시킨다.
      * 되감기가 성공하고 열 배치 뒤에 노선 상태를 한 번 더 버려, 같은 실행 줄이 든 창을 다시 되감게 한다.
      */
     private Run run(MainlineHarness harness, Long failing) {

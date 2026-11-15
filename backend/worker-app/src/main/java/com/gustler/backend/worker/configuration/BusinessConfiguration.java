@@ -52,8 +52,7 @@ public class BusinessConfiguration {
             ConfigurableEnvironment environment
         ) {
             requireStalenessFromConfigurationFile(environment);
-            return new ForecastPolicy(properties.staleness(), properties.batchLimit(), properties.pendingLimit(),
-                properties.arrivalLimit());
+            return new ForecastPolicy(properties.staleness(), properties.batchLimit());
         }
 
     }

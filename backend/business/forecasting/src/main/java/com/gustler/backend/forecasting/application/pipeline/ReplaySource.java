@@ -8,8 +8,6 @@ import java.util.Map;
 
 /**
  * 되감기에 쓸 확정 배치를 관측과 함께 읽는 포트다.
- * 구현은 착수 시각의 출처에 따라 둘이다. 옛 경로가 쓰는 {@code observation_batch.input_confirmed_at}(그림자·v1)와
- * 새 예보 실행 기록의 확정 시각(v2)이다. 어느 쪽을 쓸지는 설정으로 고른다.
  */
 public interface ReplaySource {
     /**

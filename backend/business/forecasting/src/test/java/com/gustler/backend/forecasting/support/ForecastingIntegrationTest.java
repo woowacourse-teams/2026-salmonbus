@@ -21,9 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
         "spring.datasource.hikari.minimum-idle=1",
         "forecast.enabled=true",
         "forecast.staleness=5m",
-        "forecast.batch-limit=20",
-        "forecast.pending-limit=3000",
-        "forecast.arrival-limit=400"
+        "forecast.batch-limit=20"
     }
 )
 public @interface ForecastingIntegrationTest {

@@ -13,7 +13,7 @@ class ForecastPolicyTest {
         for (Duration duration : new Duration[] {Duration.ofMinutes(5), Duration.ofMinutes(6), Duration.ofHours(1)}) {
 
             // then
-            assertThat(new ForecastPolicy(duration, 20, 3000, 400).staleness()).isEqualTo(duration);
+            assertThat(new ForecastPolicy(duration, 20).staleness()).isEqualTo(duration);
         }
     }
 
@@ -24,7 +24,7 @@ class ForecastPolicyTest {
 
         // when
         Throwable phaseFailure1 = catchThrowable(
-            () -> new ForecastPolicy(Duration.ofHours(1).plusSeconds(1), 20, 3000, 400));
+            () -> new ForecastPolicy(Duration.ofHours(1).plusSeconds(1), 20));
 
         // then
         assertThat(phaseFailure1)

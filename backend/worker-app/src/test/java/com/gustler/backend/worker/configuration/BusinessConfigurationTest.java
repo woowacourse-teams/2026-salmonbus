@@ -24,9 +24,7 @@ class BusinessConfigurationTest {
     private static final String[] VALID_FORECAST_SETTINGS = {
         "forecast.interval=10s",
         "forecast.staleness=5m",
-        "forecast.batch-limit=20",
-        "forecast.pending-limit=3000",
-        "forecast.arrival-limit=400"
+        "forecast.batch-limit=20"
     };
 
     @Test

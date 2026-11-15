@@ -37,7 +37,7 @@ public record ForecastStageResult(
         NOT_CONFIRMED,
         /** 이미 반영한 배치보다 늦지 않아 상태를 바꾸지 않았다. */
         STALE,
-        /** 상태에 관측은 넣었지만 통과 판정이 실패해 예보하지 않았다. 옛 경로가 같은 배치에서 실패하는 경우와 같다. */
+        /** 상태에 관측은 넣었지만 통과 판정이 실패해 예보하지 않았다. */
         INPUT_UNAVAILABLE,
         /** 입력이 불완전해 이 상태로 이어 갈 수 없다. 호출한 쪽은 상태를 버리고 되감아야 한다. */
         REPLAY_REQUIRED

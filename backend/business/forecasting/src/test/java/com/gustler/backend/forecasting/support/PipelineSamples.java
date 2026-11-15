@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
-/** 새 예보 경로 사건의 시험용 값을 만든다. FK가 없는 테이블이라 노선·관측 행 없이 번호만 맞춘다. */
+/** 예보·채점 사건의 시험용 값을 만든다. FK가 없는 테이블이라 노선·관측 행 없이 번호만 맞춘다. */
 public final class PipelineSamples {
     public static final long ROUTE_ID = 7L;
     public static final long ROUTE_VERSION_ID = 70L;

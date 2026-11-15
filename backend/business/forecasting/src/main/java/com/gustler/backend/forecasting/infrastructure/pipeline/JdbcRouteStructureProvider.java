@@ -12,11 +12,10 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * 노선 판본의 실정류장 순번을 읽는다.
  *
- * <p>옛 통과 판정은 두 곳에서 같은 목록을 쓴다. 옛 정산의 통과 투영({@code JdbcSettlementProjection.advance})은 정산 근거의
- * {@code shared.realStopOrders}를, 새 예보 단계는 모델 통계의 {@code realStopOrders()}(확정 판은 승차 가능 정류장)를 쓰며, 앞의
- * 것은 옛 발행이 뒤의 것을 그대로 옮겨 적은 값이다. 그래서 먼저 그 노선 판본의 정산 근거가 적힌 가장 최근 모델 배포에서
- * {@code shared.realStopOrders}를 읽는다. 근거가 아직 없으면 {@code route_stop}의 승차 가능 정류장을 돌려준다. 새 예보 단계는 이
- * 표와 모델 통계의 정류장 구성(순번·정류장·승차 가능·방향)이 같은 판본만 되감으므로 두 출처는 같은 목록이다.
+ * <p>예보 단계는 모델 통계의 {@code realStopOrders()}(확정 판은 승차 가능 정류장)로 통과를 판정하고, 정산 근거의
+ * {@code shared.realStopOrders}는 그 목록을 그대로 옮겨 적은 값이다. 그래서 먼저 그 노선 판본의 정산 근거가 적힌 가장 최근 모델
+ * 배포에서 {@code shared.realStopOrders}를 읽는다. 근거가 아직 없으면 {@code route_stop}의 승차 가능 정류장을 돌려준다. 예보 단계는
+ * 이 표와 모델 통계의 정류장 구성(순번·정류장·승차 가능·방향)이 같은 판본만 되감으므로 두 출처는 같은 목록이다.
  * 행 잠금을 잡지 않는다.
  */
 public final class JdbcRouteStructureProvider implements RouteStructureProvider {

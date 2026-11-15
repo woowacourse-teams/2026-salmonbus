@@ -9,7 +9,7 @@ import java.util.Map;
 public interface VehicleCapacities {
     /**
      * 차량 번호별 좌석 정원을 돌려준다. 정원을 모르는 차량은 결과에 없다.
-     * 판정 기준은 옛 경로의 {@code VehicleCapacityCache.findKnownAt}과 같다.
+     * 판정 기준은 {@code VehicleCapacityCache.findKnownAt}과 같다.
      */
     Map<String, Integer> knownAt(String sourceId, List<String> vehicleIds, Instant at, long observationBatchId);
 }

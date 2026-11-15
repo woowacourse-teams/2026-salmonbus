@@ -32,8 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 모델 배포의 정산 근거를 읽는 JDBC 구현이 옛 확정 판 정산과 같은 근거·같은 계수 해시를 내는지 본다. 옛 정산은 압축 저장한 예측의
- * 근거를 {@code (context->'shared') || 예측 근거 || {"alighting":{"stops": context->'stops'->목표}}}의 jsonb 텍스트로 받아 읽는다.
+ * 모델 배포의 정산 근거를 읽는 JDBC 구현이 기준과 같은 근거·같은 계수 해시를 내는지 본다. 기준은 근거를
+ * {@code (context->'shared') || 예측 근거 || {"alighting":{"stops": context->'stops'->목표}}}의 jsonb 텍스트로 받아 읽은 값이다.
  */
 @ForecastingIntegrationTest
 @Transactional

@@ -34,7 +34,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 본선({@code forecast.pipeline=v2})이 착수 시각과 이력의 순서를 지키는지를 실제 DB로 본다.
+ * 예보가 착수 시각과 이력의 순서를 지키는지를 실제 DB로 본다.
  * 착수 시각은 메모리의 노선 상태와 다시 뜬 뒤 DB에서 되감은 상태가 같은 값을 써야 하고, 한 노선의 이력에는 배치가 수신 순서대로만
  * 들어가야 한다.
  */
@@ -306,7 +306,7 @@ class ForecastPipelineOrderTest {
         }
     }
 
-    /** 본선이 버스별 기록을 만드는 것과 같은 규칙으로 (관측, 목표)마다 기대 좌석과 만석 확률의 비트를 만든다. */
+    /** 예보가 버스별 기록을 만드는 것과 같은 규칙으로 (관측, 목표)마다 기대 좌석과 만석 확률의 비트를 만든다. */
     private static Map<String, List<Long>> predictionBits(
         AlightingAwarePredictionAssembler assembler,
         List<AlightingAwareFeatureSnapshot> snapshots

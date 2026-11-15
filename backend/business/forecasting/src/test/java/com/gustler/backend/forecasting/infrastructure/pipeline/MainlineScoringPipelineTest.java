@@ -258,7 +258,7 @@ class MainlineScoringPipelineTest {
                 return true;
             }, processor, source, new JdbcPendingPipelineBatches(jdbc), () -> Optional.of(runtime), this::versions,
                 stopsByVersion::get, new JdbcSettlementContextWriter(jdbc),
-                new ForecastPolicy(Duration.ofMinutes(10), 20, 3000, 400), clock, new SimpleMeterRegistry());
+                new ForecastPolicy(Duration.ofMinutes(10), 20), clock, new SimpleMeterRegistry());
             clock.at = EVENING.plus(Duration.ofDays(2));
             mainline.pickUp();
             mainline.states().put(model.statistics(stopsByVersion.values().iterator().next()),

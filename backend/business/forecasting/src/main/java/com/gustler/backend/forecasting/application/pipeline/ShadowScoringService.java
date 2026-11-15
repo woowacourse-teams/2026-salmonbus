@@ -21,8 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 그림자 예보가 커밋 뒤에 넘긴 사건을 채점 단계({@link ScoringStage})에 차례로 흘리고 결과를 {@link ScoringWriter}에 모으는
- * 그림자 채점이다({@code forecast.scoring=shadow}). 옛 정산은 그대로 본선으로 돈다.
+ * 예보가 커밋 뒤에 넘긴 사건을 채점 단계({@link ScoringStage})에 차례로 흘리고 결과를 {@link ScoringWriter}에 모으는 채점이다.
  *
  * <p>사건을 받는 쪽({@link PipelineEvents})은 일을 {@link ScoringFeed}에 넣기만 한다. 채점 단계는 동시 호출을 지원하지 않으므로
  * 채점 단계와 노선 준비 표시는 그 줄의 전용 스레드에서만 만진다. 노선마다 다음 규칙을 지킨다.
@@ -40,7 +39,7 @@ import org.slf4j.LoggerFactory;
  * </ul>
  * 결과는 {@link #flush()}가 몇 초마다 쓰고, {@link #tick()}이 채점 스레드에서 {@link ScoringStage#expire}를 불러 오래 배치가
  * 없는 노선의 마감을 닫는다. 내려가기 전에는 {@link #stopAccepting()}으로 사건을 더 받지 않게 하고, 채점 줄을 비운 뒤
- * {@link #flushRemaining()}으로 남은 결과를 쓴다. {@code route} 행 잠금을 잡지 않고 옛 정산 테이블에 쓰지 않는다.
+ * {@link #flushRemaining()}으로 남은 결과를 쓴다. {@code route} 행 잠금을 잡지 않는다.
  */
 public final class ShadowScoringService implements PipelineEvents, ShadowScoringCycle {
     static final long REPLAY_RETRY_SECONDS = 30;

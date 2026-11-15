@@ -481,7 +481,7 @@ class ForecastPipelineMainlineTest {
                 return true;
             }, processor, source, new JdbcPendingPipelineBatches(jdbc), () -> Optional.of(runtime), this::versions,
                 stopsByVersion::get, new JdbcSettlementContextWriter(jdbc),
-                new ForecastPolicy(Duration.ofMinutes(10), batchLimit, 3000, 400), clock, meters);
+                new ForecastPolicy(Duration.ofMinutes(10), batchLimit), clock, meters);
             clock.at = EVENING.plus(Duration.ofDays(2));
             mainline.pickUp();
         }

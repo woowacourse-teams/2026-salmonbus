@@ -61,7 +61,7 @@ class PipelineMainlineIntegrationTest {
     private static final int SETTLED_STOP = 3;
     /** 짝짓기 조건(도달 관측이 예측 기준 시각보다 {@link ScoringStage#MINIMUM_LEAD} 뒤)에 여유를 더한 대기다. */
     private static final Duration LEAD_WAIT = ScoringStage.MINIMUM_LEAD.plusMillis(500);
-    /** 옛 정산이 받는 최소 배차 간격(직전 통과와 0.2분)에 여유를 더한 대기다. */
+    /** 정답 계산이 받는 최소 배차 간격(직전 통과와 0.2분)에 여유를 더한 대기다. */
     private static final Duration HEADWAY_WAIT = Duration.ofMillis(12_500);
     private static final int STOP_COUNT = 10;
     private static final int TURN = 8;
@@ -146,7 +146,7 @@ class PipelineMainlineIntegrationTest {
     }
 
     /**
-     * 넣은 자료와 본선의 노선 상태를 지운다. 본선과 채점은 노선·배치·관측·배포 번호로 메모리 상태를 들고 있어 번호를 되돌리면
+     * 넣은 자료와 예보의 노선 상태를 지운다. 예보와 채점은 노선·배치·관측·배포 번호로 메모리 상태를 들고 있어 번호를 되돌리면
      * 다음 시험이 앞 시험의 상태를 이어받는다. 그래서 번호를 되돌리지 않는다.
      */
     @AfterEach
@@ -258,7 +258,7 @@ class PipelineMainlineIntegrationTest {
             .query(Long.class).single();
     }
 
-    /** 본선이 배치를 처리하고 예보 실행 줄에 적은 착수 시각을 기다려 돌려준다. */
+    /** 예보가 배치를 처리하고 예보 실행 줄에 적은 착수 시각을 기다려 돌려준다. */
     private Instant waitForConfirmation(final long batchId) throws InterruptedException {
         waitUntil(() -> confirmedAt(batchId).isPresent(), Instant.now().plus(DEADLINE));
         return confirmedAt(batchId).orElseThrow();

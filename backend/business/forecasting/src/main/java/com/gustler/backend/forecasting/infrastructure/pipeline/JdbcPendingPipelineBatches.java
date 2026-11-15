@@ -8,7 +8,7 @@ import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * 본선이 처리하지 않은 배치를 읽는다. 예보 실행은 기본 키(나눔 날짜, 배치)로 찾는다. 나눔 날짜는 배치 예약 시각의 한국 날짜다.
+ * 예보가 처리하지 않은 배치를 읽는다. 예보 실행은 기본 키(나눔 날짜, 배치)로 찾는다. 나눔 날짜는 배치 예약 시각의 한국 날짜다.
  */
 public final class JdbcPendingPipelineBatches implements PendingPipelineBatches {
     private static final String FIND = """

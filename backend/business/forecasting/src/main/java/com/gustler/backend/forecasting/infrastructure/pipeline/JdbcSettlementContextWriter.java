@@ -4,8 +4,7 @@ import com.gustler.backend.forecasting.application.pipeline.SettlementContextWri
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * 모델 배포의 {@code settlement_context}에 노선 판본 키로 정산 근거를 더한다. 옛 발행 저장소({@code JdbcForecastPublicationRepository})와
- * 같은 문장이라 두 경로가 적은 값은 jsonb로 같다. 이미 키가 있으면 바꾸지 않고 값이 같은지만 본다.
+ * 모델 배포의 {@code settlement_context}에 노선 판본 키로 정산 근거를 더한다. 이미 키가 있으면 바꾸지 않고 값이 같은지만 본다.
  */
 public final class JdbcSettlementContextWriter implements SettlementContextWriter {
     private final JdbcClient jdbc;

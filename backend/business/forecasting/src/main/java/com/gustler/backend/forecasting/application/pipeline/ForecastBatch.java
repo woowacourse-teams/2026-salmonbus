@@ -6,8 +6,8 @@ import java.util.List;
 
 /**
  * 예보 단계에 넣는 관측 배치 하나다. 수신 시각은 {@code response_received_at}, 착수 시각은 이 배치의 입력을 확정한 시각이다.
- * 줄 목록은 배치에 저장된 모든 줄이며, 옛 경로의 읽기 순서와 같도록 차량 번호 순(DB 정렬)으로 넘긴다.
- * 수집 출처·결과·저장 줄 수는 옛 경로의 확정 조건({@code CONFIRMED_INPUT})을 판정하는 데 쓴다.
+ * 줄 목록은 배치에 저장된 모든 줄이며 차량 번호 순(DB 정렬)으로 넘긴다.
+ * 수집 출처·결과·저장 줄 수는 확정 조건({@link #confirmed()})을 판정하는 데 쓴다.
  */
 public record ForecastBatch(
     long observationBatchId,
@@ -19,7 +19,7 @@ public record ForecastBatch(
     Integer storedRows,
     List<ForecastObservationRow> rows
 ) {
-    /** 수신 뒤 이 시간 안에 착수해야 확정 입력이다. 옛 경로의 {@code interval '90 seconds'}와 같다. */
+    /** 수신 뒤 이 시간 안에 착수해야 확정 입력이다. */
     public static final Duration MAX_CONFIRMATION_DELAY = Duration.ofSeconds(90);
 
     public ForecastBatch {
@@ -45,7 +45,7 @@ public record ForecastBatch(
     }
 
     /**
-     * 착수 시각만 바꾼 배치를 돌려준다. 본선({@code forecast.pipeline=v2})이 처리를 시작할 때 찍은 시각을 넣는 데 쓴다.
+     * 착수 시각만 바꾼 배치를 돌려준다. 예보가 처리를 시작할 때 찍은 시각을 넣는 데 쓴다.
      *
      * @param at 착수 시각
      * @return 나머지 값이 같은 배치
@@ -55,7 +55,7 @@ public record ForecastBatch(
             storedRows, rows);
     }
 
-    /** 저장 줄 수와 실제로 읽은 줄 수가 같은지다. 옛 경로의 {@code CHECK_ROWS}와 같은 뜻이다. */
+    /** 저장 줄 수와 실제로 읽은 줄 수가 같은지다. */
     public boolean rowsComplete() {
         return storedRows != null && storedRows == rows.size();
     }

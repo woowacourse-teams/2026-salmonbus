@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/** 옛 경로와 같은 {@link VehicleCapacityCache#findKnownAt}으로 예보 시점에 알려진 정원을 찾는다. */
+/** {@link VehicleCapacityCache#findKnownAt}으로 예보 시점에 알려진 정원을 찾는다. */
 public final class CachedVehicleCapacities implements VehicleCapacities {
     private final VehicleCapacityCache cache;
 

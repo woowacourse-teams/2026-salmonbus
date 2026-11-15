@@ -1,10 +1,9 @@
 package com.gustler.backend.forecasting.application.pipeline;
 
 /**
- * 모델 배포에 노선 판본의 정산 근거를 한 번 적는 포트다. 새 채점이 이 근거를 읽는다.
+ * 모델 배포에 노선 판본의 정산 근거를 한 번 적는 포트다. 채점이 이 근거를 읽는다.
  *
- * <p>옛 경로에서는 옛 발행 저장이 이 일을 했다. 본선({@code forecast.pipeline=v2})은 옛 발행을 쓰지 않으므로 직접 적는다. 이미 같은 값이
- * 있으면 아무것도 하지 않고, 다른 값이 있으면 거절한다. 행 잠금을 잡지 않는다.
+ * <p>이미 같은 값이 있으면 아무것도 하지 않고, 다른 값이 있으면 거절한다. 행 잠금을 잡지 않는다.
  */
 public interface SettlementContextWriter {
     /**

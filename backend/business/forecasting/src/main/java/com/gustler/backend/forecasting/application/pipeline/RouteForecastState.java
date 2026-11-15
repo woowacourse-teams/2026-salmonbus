@@ -13,8 +13,7 @@ import java.util.Optional;
 /**
  * 노선 하나(같은 표시 이름의 호환 판본 전체)의 예보 이력 상태다. 불변이며, 전진은 {@link ForecastStage}가 새 객체로 돌려준다.
  *
- * <p>차량별 누적 상태·보존 창의 관측·보존 창의 통과 사건·마지막으로 반영한 배치는 옛 경로가 체크포인트 파일에 두는 것과
- * 같은 내용이다.
+ * <p>차량별 누적 상태·보존 창의 관측·보존 창의 통과 사건·마지막으로 반영한 배치를 든다.
  * 여기에 차량별 추적({@link VehicleTrack})을 더 든다. 추적은 차량의 마지막 관측, 지금 연결의 시작 관측 번호,
  * 연결 시작과 운행 시작을 실제로 보았는지를 담는다. 연결의 시작은 {@code AlightingAwareHistoryCompactor}와 같은
  * {@link AlightingAwareObservation#startsConfirmedChainAfter} 판정으로 정한다.

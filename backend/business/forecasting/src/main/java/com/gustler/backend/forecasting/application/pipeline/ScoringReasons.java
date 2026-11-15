@@ -4,13 +4,13 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 새 채점 단계가 쓰는 정답 판·사유 이름과, 옛 정산 결과와 대조할 때 쓰는 사유 대응표다.
+ * 채점 단계가 쓰는 정답 판·사유 이름과, 세분한 사유를 묶은 이름으로 바꾸는 대응표다.
  *
- * <p>옛 확정 판 정산의 사유 이름은 그대로 쓴다. 새로 나눈 사유는 {@link #legacyReason(String)}이 옛 이름으로 바꾼다. 옛 정산에
- * 대응하는 결과가 없는 사유(옛 정산은 예외로 노선 정산을 멈춘다)는 빈 값을 돌려준다. 대응표는 이 클래스 한 곳에만 둔다.
+ * <p>놓친 예측의 사유는 원인별로 나눠 저장한다. {@link #legacyReason(String)}은 나눈 사유를 하나로 묶은 이름으로 바꾸고, 묶은 이름이
+ * 없는 사유는 빈 값을 돌려준다. 기준 계산과 견줄 때 쓴다. 대응표는 이 클래스 한 곳에만 둔다.
  */
 public final class ScoringReasons {
-    /** 새 채점이 내는 정답 판. 옛 확정 판 예보의 {@code label_version}과 같다. */
+    /** 채점이 내는 정답 판({@code label_version}). */
     public static final String LABEL_VERSION = "alighting-confirmed-capacity-snapshot-v3";
 
     /** 목표가 실정류장 목록의 첫·마지막이거나 실정류장이 아니어서 통과가 생길 수 없다. */
@@ -29,16 +29,16 @@ public final class ScoringReasons {
     /** 계수나 관측이 계산식의 전제를 어겨 계산이 실패했다. */
     public static final String SETTLEMENT_CALCULATION_FAILED = "SETTLEMENT_CALCULATION_FAILED";
 
-    /** 근거의 입력 판이 확정 판이 아니다(옛 사유 2). */
+    /** 근거의 입력 판이 확정 판이 아니다. */
     public static final String INPUT_PROFILE_MISMATCH = "INPUT_PROFILE_MISMATCH";
-    /** 근거의 정원 정책이 차량 정원 스냅숏이 아니다(옛 사유 3). */
+    /** 근거의 정원 정책이 차량 정원 스냅숏이 아니다. */
     public static final String CAPACITY_POLICY_MISMATCH = "CAPACITY_POLICY_MISMATCH";
-    /** 그날 관측이 상한을 넘었다(옛 사유 4). */
+    /** 그날 관측이 상한을 넘었다. */
     public static final String OBSERVATION_INPUT_LIMIT = "OBSERVATION_INPUT_LIMIT";
-    /** 그날 저장 줄 수와 실제 줄 수가 다른 배치가 있었다(옛 사유 5). */
+    /** 그날 저장 줄 수와 실제 줄 수가 다른 배치가 있었다. */
     public static final String SOURCE_HISTORY_INCOMPLETE = "SOURCE_HISTORY_INCOMPLETE";
 
-    /** 옛 정산이 놓친 예측에 쓰던 사유. */
+    /** 놓친 예측의 사유를 원인으로 나누지 않고 하나로 묶은 이름. */
     public static final String LEGACY_LOST = "NO_CLOSED_IDENTITY_SAFE_PASS";
 
     private static final Map<String, Optional<String>> LEGACY = Map.of(
@@ -53,10 +53,10 @@ public final class ScoringReasons {
     }
 
     /**
-     * 새 사유를 옛 정산의 사유 이름으로 바꾼다. 대응표에 없는 사유는 옛 이름과 같다.
+     * 사유를 묶은 이름으로 바꾼다. 대응표에 없는 사유는 그대로 돌려준다.
      *
-     * @param reason 새 채점의 사유
-     * @return 옛 사유. 옛 정산에 대응하는 결과가 없으면 빈 값
+     * @param reason 채점의 사유
+     * @return 묶은 이름. 묶은 이름이 없는 사유면 빈 값
      */
     public static Optional<String> legacyReason(String reason) {
         return LEGACY.getOrDefault(reason, Optional.ofNullable(reason));

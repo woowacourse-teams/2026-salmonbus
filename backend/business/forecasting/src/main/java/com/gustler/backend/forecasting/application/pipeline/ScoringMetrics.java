@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 그림자 채점의 지표다. 이름은 {@code salmonbus.pipeline.scoring.*}로 모은다. 지표 등록기가 없으면 아무것도 하지 않는다.
+ * 채점의 지표다. 이름은 {@code salmonbus.pipeline.scoring.*}로 모은다. 지표 등록기가 없으면 아무것도 하지 않는다.
  *
  * <ul>
  *   <li>{@code waiting}: 통과를 기다리는 예측 수(게이지). 채점 스레드가 일마다 갱신한다</li>

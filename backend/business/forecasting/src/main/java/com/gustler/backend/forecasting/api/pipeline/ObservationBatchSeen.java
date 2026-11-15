@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * 관측 배치 하나가 수집 단계를 지났다는 사건이다. 예보를 만들지 않은 배치도 채점 단계가 시간을 전진시킬 수 있게 모든 배치가 낸다.
  *
- * <p>수집 실패는 {@link CollectionResult#FAILED}로 안다. 옛 정산이 수집 구멍({@code SOURCE_HISTORY_INCOMPLETE})으로 보던 것은
+ * <p>수집 실패는 {@link CollectionResult#FAILED}로 안다. 수집 구멍({@code SOURCE_HISTORY_INCOMPLETE})은
  * 실패 배치가 아니라 저장 줄 수({@code storedRows})와 실제로 남은 관측 줄 수({@code savedRows})가 다른 성공 배치다. 채점 단계는
  * 성공 배치에서 두 값이 다르면 구멍으로 보고, {@code savedRows}를 하루 관측 상한({@code OBSERVATION_INPUT_LIMIT}) 계산에 더한다.
  * 실패한 배치는 응답을 받지 못했을 수 있어 수신 시각이 비어 있을 수 있고, 성공·빈 응답 배치는 수신 시각이 반드시 있다.
@@ -62,7 +62,7 @@ public record ObservationBatchSeen(
         this(observationBatchId, routeId, routeVersionId, scheduledAt, receivedAt, result, 0, 0);
     }
 
-    /** 옛 정산이 수집 구멍으로 보던 배치인지 돌려준다. 저장 줄 수가 있는 성공 배치에서 실제 줄 수가 다르면 참이다. */
+    /** 수집 구멍인 배치인지 돌려준다. 저장 줄 수가 있는 성공 배치에서 실제 줄 수가 다르면 참이다. */
     public boolean incomplete() {
         return result == CollectionResult.SUCCESS && storedRows > 0 && storedRows != savedRows;
     }

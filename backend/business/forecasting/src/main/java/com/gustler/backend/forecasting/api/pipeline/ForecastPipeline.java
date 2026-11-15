@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.api.pipeline;
 
 /**
- * 본선({@code forecast.pipeline=v2})의 진입점이다. 실행하는 앱(worker)이 수집 커밋 뒤와 주기적으로 부른다.
+ * 예보의 진입점이다. 실행하는 앱(worker)이 수집 커밋 뒤와 주기적으로 부른다.
  *
  * <p>두 메서드 모두 일을 노선별 실행 줄({@link ForecastLanes})에 넣기만 하고 예외를 던지지 않는다. 같은 배치를 여러 번 넣어도
  * 한 번만 처리된 것과 결과가 같다.

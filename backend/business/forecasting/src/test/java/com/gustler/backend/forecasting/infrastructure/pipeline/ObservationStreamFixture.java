@@ -155,19 +155,6 @@ final class ObservationStreamFixture {
             .single();
     }
 
-    /** 옛 경로의 출발 지점 설정이다. 판본마다 호환 판본 전체의 첫 확정 배치를 가리킨다. */
-    static String origins(JdbcClient jdbc, Stream stream) {
-        final long first = jdbc.sql("""
-            SELECT id FROM observation_batch WHERE route_version_id IN (:versions)
-              AND ingestion_origin='LIVE' AND outcome='SUCCESS_ROWS' AND stored_rows>0
-              AND input_confirmed_at>=response_received_at AND input_confirmed_at<=response_received_at+interval '90 seconds'
-            ORDER BY input_confirmed_at,id LIMIT 1
-            """).param("versions", List.copyOf(stream.stopsByVersion().keySet())).query(Long.class).single();
-        return String.join(",", stream.stopsByVersion().keySet().stream()
-            .map(version -> version + ":" + first)
-            .toList());
-    }
-
     private static long version(JdbcClient jdbc, final long routeId, Instant from, Instant to) {
         return jdbc.sql(
             "INSERT INTO route_version(route_id,content_digest,valid_from,valid_to) VALUES(?,?,?,?) RETURNING id")

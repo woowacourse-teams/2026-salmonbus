@@ -35,28 +35,27 @@ import tools.jackson.databind.node.ObjectNode;
  * 되감기는 그 자리에 예보 실행 줄에 적어 둔 수집 사실을 {@link #restore}로 넣는다. 예보 단계가 되감으며 되찾은 통과는 노선 시각보다
  * 이른 닫힌 시각으로 늦게 올 수 있다. 그런 통과도 닫힌 시각으로 직전 통과와 짝을 찾으며 노선 시각은 되돌리지 않는다.
  *
- * <p>판정은 옛 확정 판 정산과 같다.
+ * <p>판정 규칙은 다음과 같다.
  * <ul>
  *   <li>짝: 같은 노선·같은 연결 시작 관측·같은 목표 정류장의 통과이고, 통과가 예측 기준 시각(착수 시각) + 2시간 안에 닫혔으며,
  *       목표에 정확히 도달한 좌석 있는 관측 가운데 가장 늦은 것이 기준 시각 + 10초보다 뒤다.</li>
  *   <li>직전 통과: 같은 노선·같은 정류장·같은 출발 날짜에서 닫힌 시각이 엄격히 더 이른 통과 가운데 가장 늦게 닫힌 것이다.
  *       같은 시각에 닫힌 것이 여럿이면 마지막 관측 번호가 가장 작은 것이다. 차량은 따지지 않는다. 같은 시각에 닫힌 통과는
  *       서로 직전이 되지 않는다.</li>
- *   <li>정답 값은 {@link PassLabelCalculator}가 옛 계산을 그대로 불러 낸다. 근거는 모델 배포의 정산 근거에 예측의 정원과
+ *   <li>정답 값은 {@link PassLabelCalculator}가 낸다. 근거는 모델 배포의 정산 근거에 예측의 정원과
  *       목표 정류장 계수를 합친 것이다. 한 통과에 짝이 된 예측은 (모델 배포, 정원)마다 정답 하나를 받는다. 한 연결은 한 차량·한
  *       노선 판본의 관측이므로 한 통과에 짝이 된 예측은 노선 판본이 모두 같다.</li>
  *   <li>예측 기준 시각의 한국 날짜 00시부터 판정 시각까지 관측 상한을 넘었거나 수집 구멍이 있으면 지원 안 함으로 닫는다.
- *       판정 시각은 짝이 된 통과가 닫힌 시각, 마감이면 기준 시각 + 2시간이다. 옛 정산은 실제 평가 시각까지 보았다.</li>
+ *       판정 시각은 짝이 된 통과가 닫힌 시각, 마감이면 기준 시각 + 2시간이다.</li>
  *   <li>통과가 생길 수 없는 목표(실정류장 목록의 첫·마지막이거나 실정류장이 아닌 목표)는 기다리지 않고 바로 놓침으로 닫는다.</li>
  *   <li>한 연결·정류장의 통과는 하나뿐이다. 그래서 통과가 닫힌 순간 그 통과를 기다리던 예측은 모두 결론이 난다. 짝이 되지
  *       않은 예측은 그 자리에서 {@link ScoringReasons#PASS_CONDITION_UNMET}(또는 그 시각까지의 수집 구멍·관측 상한 사유)으로
- *       닫고, 통과가 이미 닫힌 뒤에 온 예측도 받는 순간 같은 사유로 닫는다. 옛 정산은 이런 예측을 마감 때 닫았으므로 마감 전에 생긴
- *       수집 구멍이 옛 결과에만 보일 수 있다.</li>
+ *       닫고, 통과가 이미 닫힌 뒤에 온 예측도 받는 순간 같은 사유로 닫는다.</li>
  *   <li>노선 시각이 기준 시각 + 2시간을 넘으면 기다리던 예측을 놓침으로 닫는다. 사유는 연결이 바뀜, 통과 없음 순으로 고른다.</li>
  * </ul>
  * 따라서 닫힌 통과가 있는 (연결, 정류장)의 예측은 모두 미해결로 닫혔거나 자기 (모델 배포, 정원)의 정답에 짝지어졌다. 두 결과는
  * 같은 {@link ScoringResult}에 함께 담긴다. 예측별 결과 뷰({@code forecast_outcome})가 이 성질에 기댄다.
- * 새 사유를 옛 사유로 바꾸는 대응표는 {@link ScoringReasons}에 있다.
+ * 사유 이름은 {@link ScoringReasons}에 있다.
  *
  * <p>같은 사건을 두 번 넣어도 결과 집합이 같다. 같은 배치의 {@link ObservationBatchSeen}과 {@link ForecastPublished}는
  * 3시간 안에 다시 오면 건너뛰고, 다시 온 {@link PassClosed}는 기다리는 예측이 이미 빠져 있어 새 결과를 내지 않는다.
@@ -70,7 +69,7 @@ public final class ScoringStage {
     public static final Duration MINIMUM_LEAD = Duration.ofSeconds(10);
     /** 노선에 배치가 이만큼 없으면 {@link #expire(Instant)}가 벽시계로 마감한다. */
     public static final Duration IDLE_EXPIRY = Duration.ofMinutes(130);
-    /** 옛 정산의 하루 관측 상한 기본값({@code forecast.alighting.causal-evaluation.maximum-observation-rows}). */
+    /** 하루 관측 상한의 기본값({@code forecast.alighting.causal-evaluation.maximum-observation-rows}). */
     public static final int DEFAULT_OBSERVATION_LIMIT = 150_000;
 
     private static final String CAPACITY_POLICY = "vehicle-capacity-snapshot-v1";
@@ -92,7 +91,7 @@ public final class ScoringStage {
     private final Map<Long, Set<Integer>> passStops = new HashMap<>();
 
     /**
-     * 옛 정산의 하루 관측 상한 기본값으로 채점 단계를 만든다.
+     * 하루 관측 상한의 기본값으로 채점 단계를 만든다.
      *
      * @param contexts 모델 배포의 정산 근거
      * @param structures 노선 판본의 실정류장
@@ -645,7 +644,7 @@ public final class ScoringStage {
 
     /**
      * 예측의 정산 근거를 찾는다. 찾은 근거는 계속 기억한다. 근거가 없으면 그것을 확인한 시각을 기억해 두고, 그 시각보다 뒤에 착수한
-     * 예측을 받을 때만 다시 묻는다. 본선은 배치를 착수하기 전에 근거를 적으므로, 확인한 뒤에 착수한 예측에는 그사이 근거가 생겼을 수
+     * 예측을 받을 때만 다시 묻는다. 예보는 배치를 착수하기 전에 근거를 적으므로, 확인한 뒤에 착수한 예측에는 그사이 근거가 생겼을 수
      * 있고 확인하기 전에 착수한 예측(되감기로 다시 받는 지난 예측)에는 그럴 수 없다. 그래서 근거가 없는 노선도 배치마다 한 번,
      * 되감기에서는 한 번만 묻는다. 일정 시간 동안 "없음"으로 기억하면 그사이 근거가 적혀도 그 뒤의 예측이 근거 없음으로 닫히고, 먼저
      * 쓴 미해결 줄은 다시 고칠 수 없다.

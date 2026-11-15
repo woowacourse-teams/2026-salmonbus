@@ -16,10 +16,9 @@ import java.util.Map;
 /**
  * 확정 판본 하차 모델의 관측 배치 하나를 노선 상태 위에서 처리한다. 상태는 메모리에 있고 파일·DB에 쓰지 않는다.
  *
- * <p>옛 경로({@code JdbcAlightingAwareFeatureQuery.read})의 도메인 호출 순서를 그대로 따른다.
- * 상태의 관측·사건에 이번 배치 관측을 더해 {@link AlightingAwareHistoryCompactor#resolve}로 통과 사건을 만들고,
+ * <p>상태의 관측·사건에 이번 배치 관측을 더해 {@link AlightingAwareHistoryCompactor#resolve}로 통과 사건을 만들고,
  * 이번 배치의 좌석을 아는 차량마다 정원을 확인해 {@link AlightingAwareBatchContext}를 공유하는 스냅샷을 만든 뒤,
- * {@link AlightingAwareHistoryCompactor#compact}로 보존 창을 줄여 새 상태를 만든다. 계산식은 새로 쓰지 않는다.
+ * {@link AlightingAwareHistoryCompactor#compact}로 보존 창을 줄여 새 상태를 만든다. 계산식은 도메인 객체의 것을 그대로 쓴다.
  *
  * <p>노선 판본이 활성 판본인지, 출퇴근 범위 안인지는 호출한 쪽이 정한다. 이 클래스는 상태를 바꾸지 않으며 스레드 안전하다.
  * 단, 돌려준 스냅샷은 한 스레드에서만 쓴다.
@@ -49,7 +48,7 @@ public final class ForecastStage {
     /**
      * 배치 하나로 상태를 전진시키고 예보 입력을 만든다.
      * 확정 조건을 만족하지 않거나 이미 반영한 배치면 상태를 그대로 돌려준다. 줄 수가 저장 줄 수와 다르면 되감기를 요구한다.
-     * 통과 판정이 모호하다고 실패하면 옛 경로처럼 예보하지 않되, 관측은 상태에 넣어 다음 배치가 같은 이력을 다시 판정하게 한다.
+     * 통과 판정이 모호하다고 실패하면 예보하지 않되, 관측은 상태에 넣어 다음 배치가 같은 이력을 다시 판정하게 한다.
      * 정원 조회가 실패하면 예외를 그대로 던지며, 받은 상태는 바뀌지 않는다.
      */
     public ForecastStageResult advance(
@@ -222,7 +221,7 @@ public final class ForecastStage {
     }
 
     /**
-     * 옛 경로의 {@code READ_CONFIRMED_HISTORY}와 같은 규칙으로 줄을 관측으로 바꾼다.
+     * 줄을 관측으로 바꾼다.
      * 차량 번호가 없는 줄과, 같은 배치에 둘 이상 나온 차량의 줄은 모두 뺀다. 좌석은 0~70이고 모름 사유가 없을 때만 값이다.
      * 확정 시각은 착수 시각, 물리 시각은 수신 시각이며 방향은 통계의 회차 지점으로 정한다.
      */

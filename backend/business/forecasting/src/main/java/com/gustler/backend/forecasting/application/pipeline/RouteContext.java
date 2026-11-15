@@ -6,10 +6,9 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRout
 import java.util.Objects;
 
 /**
- * 배치 하나를 새 경로로 처리할 때 쓰는 노선 판본의 모델 문맥이다. 처리 하나는 이 값을 한 번 정해 끝까지 쓴다.
+ * 배치 하나를 처리할 때 쓰는 노선 판본의 모델 문맥이다. 처리 하나는 이 값을 한 번 정해 끝까지 쓴다.
  *
- * <p>그림자 실행은 옛 경로가 그 배치에 쓴 값을 그대로 넘기고, 본선({@code forecast.pipeline=v2})은 옛 경로와 같은 판정(활성 모델,
- * 활성 판본, 모델이 노선을 지원하는지)으로 직접 정한다. 통계는 확정 판본이어야 한다.
+ * <p>활성 모델, 활성 판본, 모델이 노선을 지원하는지를 보고 정한다. 통계는 확정 판본이어야 한다.
  *
  * @param statistics 모델이 이 노선에 쓰는 확정 판본 통계. 노선 상태의 단위({@code statistics.route()})를 정한다
  * @param stops 배치 노선 판본의 정류장

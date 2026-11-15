@@ -6,7 +6,7 @@ import java.time.ZoneId;
 import java.util.Objects;
 
 /**
- * 새 예보 경로 테이블의 나눔 기준 날짜({@code source_date})를 정하는 유일한 곳이다.
+ * 예보 기록 테이블의 나눔 기준 날짜({@code source_date})를 정하는 유일한 곳이다.
  *
  * <p>기준은 관측 배치의 예약 시각({@code observation_batch.scheduled_at})의 한국 날짜다. 수신 시각은 예약 때 비어 있고
  * 실패한 배치는 끝까지 비어 있어 기준으로 쓰지 않는다. 예보 실행·예보 기록은 그 배치의 날짜, 통과·정답은 닫은 배치의 날짜,

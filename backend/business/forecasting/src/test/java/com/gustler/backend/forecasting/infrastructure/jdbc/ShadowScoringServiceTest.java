@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
- * 그림자 채점이 사건을 버리거나 처리 중 예외가 나거나 다시 떠도, 저장된 기록을 되감아 연속 실행과 같은 결과 집합을 쓰는지 본다.
+ * 채점이 사건을 버리거나 처리 중 예외가 나거나 다시 떠도, 저장된 기록을 되감아 연속 실행과 같은 결과 집합을 쓰는지 본다.
  * 줄은 넣는 즉시 같은 스레드에서 실행한다. 저장소는 메모리에 두고, 예보 경로처럼 배치의 실행 줄(수집 사실 포함)과 통과를 먼저
  * 저장한 뒤에 그 배치의 사건을 넘긴다.
  */
@@ -382,7 +382,7 @@ class ShadowScoringServiceTest {
         };
     }
 
-    /** 배치의 기록을 저장한 뒤 그 배치의 사건을 그림자 채점에 넘기는 흉내다. */
+    /** 배치의 기록을 저장한 뒤 그 배치의 사건을 채점에 넘기는 흉내다. */
     private static final class Harness {
         private final LegacyScoringScenario scenario;
         private final List<Object> events;

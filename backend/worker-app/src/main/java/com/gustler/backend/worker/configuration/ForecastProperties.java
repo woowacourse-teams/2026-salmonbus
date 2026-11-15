@@ -5,7 +5,7 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 예보 배치와 라벨 회수 배치의 설정.
+ * 예보 배치의 설정.
  *
  * <p>기본값은 꺼짐이다. 계수 번들이 없어 활성 배포가 하나도 없는 상태에서 배치를 켜면
  * 아무 값도 내지 않으면서 몇 초마다 빈 질의만 실행한다. 배포 행이 생성된 뒤에 켠다.
@@ -15,9 +15,7 @@ public record ForecastProperties(
     boolean enabled,
     Duration interval,
     Duration staleness,
-    int batchLimit,
-    int pendingLimit,
-    int arrivalLimit
+    int batchLimit
 ) {
     /**
      * 신선도 창의 상한.
@@ -32,8 +30,6 @@ public record ForecastProperties(
         requirePositive("forecast.staleness", staleness);
         requireAtMost("forecast.staleness", staleness, MAX_STALENESS);
         requirePositive("forecast.batch-limit", batchLimit);
-        requirePositive("forecast.pending-limit", pendingLimit);
-        requirePositive("forecast.arrival-limit", arrivalLimit);
     }
 
     private static void requirePositive(

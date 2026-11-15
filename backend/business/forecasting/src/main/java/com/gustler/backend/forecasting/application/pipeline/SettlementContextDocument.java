@@ -12,9 +12,8 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * 모델 배포에 노선 판본마다 한 번 적는 정산 근거({@code model_deployment.settlement_context -> 노선 판본})의 JSON을 만든다.
  *
- * <p>옛 발행 경로(정산 근거를 압축해 적는 모드)와 새 예보 경로의 본선이 같은 이 코드를 쓴다. 근거는 모델과 노선 통계만으로 정해지며,
- * 새 채점({@code JdbcSettlementContextProvider})과 옛 정산이 이 문서를 읽어 계수 해시를 만든다. 키 순서와 숫자 표기를 바꾸면 해시가
- * 달라지므로 만드는 순서를 바꾸지 않는다.
+ * <p>근거는 모델과 노선 통계만으로 정해지며, 채점({@code JdbcSettlementContextProvider})이 이 문서를 읽어 계수 해시를 만든다. 키
+ * 순서와 숫자 표기를 바꾸면 해시가 달라지므로 만드는 순서를 바꾸지 않는다.
  */
 public final class SettlementContextDocument {
     private static final JsonMapper JSON = JsonMapper.builder().build();
