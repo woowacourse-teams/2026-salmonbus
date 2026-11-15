@@ -1,6 +1,7 @@
 package com.gustler.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.gustler.backend.support.TestDatabase;
@@ -64,6 +65,23 @@ class ForecastPipelineTransitionSqlTest {
             'invalidate_alighting_settlement', 'enqueue_alighting_settlement_batch')
         """;
     private static final String FAST = "SET sal434.observe_seconds = '1'";
+    /** 마이그레이션에는 없고 운영 DB에 직접 만들어 둔 인덱스다. */
+    private static final List<String> OPERATIONS_ONLY_INDEXES = List.of(
+        "CREATE INDEX ix_archive_evaluation_arrival_fk ON forecast_evaluation_result(arrival_observation_id)",
+        "CREATE INDEX ix_archive_compact_arrival_fk ON forecast_evaluation_compact(arrival_observation_id)",
+        "CREATE INDEX ix_archive_forecast_publication_fk ON seat_forecast(publication_id)",
+        "CREATE INDEX ix_archive_batch_date"
+            + " ON observation_batch(route_version_id,(COALESCE(response_received_at,scheduled_at)),id)",
+        "CREATE INDEX ix_archive_alighting_pre_observation_id"
+            + " ON alighting_forecast_evaluation_result(pre_observation_id)",
+        "CREATE INDEX ix_archive_alighting_post_observation_id"
+            + " ON alighting_forecast_evaluation_result(post_observation_id)",
+        "CREATE INDEX ix_archive_alighting_closure_observation_id"
+            + " ON alighting_forecast_evaluation_result(closure_observation_id)",
+        "CREATE INDEX ix_archive_alighting_previous_post_observation_id"
+            + " ON alighting_forecast_evaluation_result(previous_post_observation_id)",
+        "CREATE INDEX ix_archive_alighting_previous_closure_observation_id"
+            + " ON alighting_forecast_evaluation_result(previous_closure_observation_id)");
 
     private static TestDatabase template;
 
@@ -104,19 +122,15 @@ class ForecastPipelineTransitionSqlTest {
         run("sal434-01-precheck.sql");
 
         // then
-        SoftAssertions softly = new SoftAssertions();
-        softly.assertThat(catalogFingerprint()).isEqualTo(before);
-        softly.assertThat(guardState()).isEqualTo("work");
-        softly.assertAll();
+        assertThat(catalogFingerprint()).isEqualTo(before);
 
         // when
         retireLegacyTables();
         run("sal434-01-precheck.sql");
         partitionObservations("storage");
-        run("sal434-01-precheck.sql");
 
         // then
-        assertThat(guardState()).isEqualTo("retired");
+        assertThatCode(() -> run("sal434-01-precheck.sql")).doesNotThrowAnyException();
     }
 
     @Test
@@ -404,7 +418,6 @@ class ForecastPipelineTransitionSqlTest {
         softly.assertThat(number("SELECT count(*) FROM operational_observation")).isEqualTo(6);
         softly.assertThat(number("SELECT count(*) FROM daily_export WHERE dropped_at IS NOT NULL")).isPositive();
         softly.assertThat(notices).anySatisfy(notice -> assertThat(notice).contains("seat_forecast 줄 1 크기"));
-        softly.assertThat(guardState()).isEqualTo("retired");
         softly.assertAll();
 
         // when
@@ -604,34 +617,6 @@ class ForecastPipelineTransitionSqlTest {
         afterRepartition.assertAll();
     }
 
-    @Test
-    void 배포_가드는_정리를_마친_DB를_받아들이고_정리_도중의_DB는_계속_막는다() throws Exception {
-        // given
-        assertThat(guardState()).isEqualTo("work");
-        execute("""
-            BEGIN;
-            DROP VIEW training_eligible_seat_forecast;
-            DROP VIEW forecast_evaluation;
-            DROP VIEW forecast_evaluation_pending;
-            """);
-
-        // when
-        String halfway = guardState();
-        execute("ROLLBACK");
-
-        // then
-        SoftAssertions softly = new SoftAssertions();
-        softly.assertThat(halfway).isEqualTo("unsupported");
-        softly.assertThat(guardState()).isEqualTo("work");
-        softly.assertAll();
-
-        // when
-        retireLegacyTables();
-
-        // then
-        assertThat(guardState()).isEqualTo("retired");
-    }
-
     private void retireLegacyTables() throws Exception {
         run("sal434-02-drop-legacy-triggers.sql", FAST);
         writeLedger();
@@ -712,15 +697,6 @@ class ForecastPipelineTransitionSqlTest {
         return scalar("SELECT md5(string_agg(c.oid::text || c.relname || c.relkind::text, ',' ORDER BY c.oid)) "
             + "FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace") + scalar(
             "SELECT md5(string_agg(to_jsonb(t)::text, ',' ORDER BY id)) FROM observation_batch t");
-    }
-
-    /** 배포 가드 스크립트의 transition_schema SQL을 그대로 꺼내 이 DB에서 실행한다. */
-    private String guardState() throws IOException, SQLException {
-        String script = Files.readString(backend().resolve("deploy/scripts/evaluation-work-transition.sh"));
-        Matcher matcher = Pattern.compile("transition_schema\\(\\) \\{\\s*transition_sql \"\\$1\" \"(.*?)\"\\s*\\}",
-            Pattern.DOTALL).matcher(script);
-        assertThat(matcher.find()).as("transition_schema의 SQL").isTrue();
-        return scalar(matcher.group(1));
     }
 
     private String confirmDrop() throws SQLException {
@@ -907,8 +883,7 @@ class ForecastPipelineTransitionSqlTest {
                 INSERT INTO historical_import_record VALUES (1, 1);
                 INSERT INTO migration_source_record VALUES (1, 2);
                 """);
-            for (String index : statements(Files.readString(
-                backend().resolve("deploy/sql/prepare-operational-archive-indexes.sql")))) {
+            for (String index : OPERATIONS_ONLY_INDEXES) {
                 statement.execute(index);
             }
         }
@@ -933,7 +908,7 @@ class ForecastPipelineTransitionSqlTest {
     private static Path backend() {
         Path directory = Path.of("").toAbsolutePath();
         while (directory != null
-            && !Files.isRegularFile(directory.resolve("deploy/scripts/evaluation-work-transition.sh"))) {
+            && !Files.isRegularFile(directory.resolve("deploy/sql/sal434-01-precheck.sql"))) {
             directory = directory.getParent();
         }
         if (directory == null) {

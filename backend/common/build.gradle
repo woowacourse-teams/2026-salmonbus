@@ -27,10 +27,7 @@ dependencies {
 
 tasks.named('test') {
     // DddStorageMigrationTest 가 아래 파일을 상대 경로로 찾아 읽는다.
-    inputs.files(
-        rootProject.file('../dev/data/java/com/gustler/localdata/LocalData.java'),
-        rootProject.file('deploy/sql/rollback-observation-evaluation-work.sql'),
-        rootProject.file('deploy/sql/prepare-evaluation-work-transition.sql'))
+    inputs.files(rootProject.file('../dev/data/java/com/gustler/localdata/LocalData.java'))
         .withPropertyName('migrationTransitionSources')
         .withPathSensitivity(PathSensitivity.NONE)
 }

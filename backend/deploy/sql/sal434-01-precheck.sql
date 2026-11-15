@@ -17,8 +17,7 @@
 --      전부 세려면 같은 세션에서 SET sal434.count_legacy_rows = 'exact'; 를 먼저 넣는다. 이때는 옛 테이블 전체(운영 DB
 --      용량의 대부분)를 읽어 수십 분이 걸리고 EBS 크레딧을 크게 쓰므로(추정) 문장 제한 시간이 120분으로 늘어난다.
 --   9. 관측 두 테이블의 파티션 전환 준비 상태(sal434-04a·04)
---  10. 배포 가드(evaluation-work-transition.sh)가 이 DB를 어떻게 판정할지
---  11. 지금 붙어 있는 연결(application_name별)
+--  10. 지금 붙어 있는 연결(application_name별)
 -- 잡는 잠금과 예상 시간: 읽는 테이블마다 ACCESS SHARE. 큰 테이블은 세지 않고 카탈로그 통계만 읽는다. 기본 파티션과
 --   작은 장부, 64MB 이하 옛 테이블만 센다. 로컬에서 1초 미만, 운영도 수 초로 본다(추정). statement_timeout 60초
 --   (sal434.count_legacy_rows = 'exact'이면 120분), lock_timeout 3초.
@@ -206,18 +205,7 @@ SELECT name AS prebuilt_index, i.indisvalid AS valid, i.indisready AS ready,
   LEFT JOIN pg_index i ON i.indexrelid = to_regclass('public.' || name)
  ORDER BY 1;
 
--- 10. 배포 가드(deploy/scripts/evaluation-work-transition.sh의 transition_schema)가 내릴 판정. 같은 조건을 그대로 옮겼다.
-SELECT CASE
-    WHEN EXISTS (SELECT 1 FROM pg_class WHERE oid=to_regclass('public.forecast_evaluation_work') AND relkind='r')
-      AND EXISTS (SELECT 1 FROM pg_class WHERE oid=to_regclass('public.forecast_evaluation_pending') AND relkind='v') THEN 'work'
-    WHEN EXISTS (SELECT 1 FROM pg_class WHERE oid=to_regclass('public.forecast_evaluation_pending') AND relkind='r') THEN 'pending'
-    WHEN to_regclass('public.flyway_schema_history') IS NULL THEN 'empty'
-    WHEN to_regclass('public.forecast_evaluation_work') IS NULL AND to_regclass('public.forecast_evaluation_pending') IS NULL
-      AND to_regclass('public.seat_forecast') IS NULL
-      AND EXISTS (SELECT 1 FROM pg_class WHERE oid=to_regclass('public.forecast_run') AND relkind='p') THEN 'retired'
-    ELSE 'unsupported' END AS deployment_guard_state;
-
--- 11. 지금 붙어 있는 연결. 02·03·04 전에 옛 이관(salmonbus-archive)·정비 연결을 확인한다.
+-- 10. 지금 붙어 있는 연결. 02·03·04 전에 옛 이관(salmonbus-archive)·정비 연결을 확인한다.
 SELECT coalesce(nullif(application_name, ''), '(없음)') AS application_name, state, count(*) AS connections,
        min(backend_start) AS oldest_backend, min(xact_start) AS oldest_transaction
   FROM pg_stat_activity

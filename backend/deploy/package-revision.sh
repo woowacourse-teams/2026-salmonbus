@@ -34,7 +34,7 @@ pack() {
   cp deploy/scripts/*.sh "$out/scripts/"; chmod +x "$out/scripts/"*.sh
   # 배포 훅은 sql/을 실행하지 않는다. 운영자가 서버의 배포판 폴더에서 수동으로 실행할 파일만 싣는다.
   # SAL-434 전환 SQL(sal434-*.sql)은 RUNBOOK "SAL-434 전환 절차"의 차례에 승인을 받고 실행한다.
-  cp deploy/sql/*evaluation-work*.sql deploy/sql/sal434-*.sql "$out/sql/"
+  cp deploy/sql/sal434-*.sql "$out/sql/"
   cp "deploy/systemd/salmonbus-$component.service" "$out/systemd/"
   {
     echo "component=$component"

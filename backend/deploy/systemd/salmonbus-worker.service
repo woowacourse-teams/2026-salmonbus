@@ -2,7 +2,6 @@
 Description=salmonbus 수집·예보 Worker
 After=network-online.target
 Wants=network-online.target
-ConditionPathExists=!/etc/salmonbus/alighting-cutover-hold
 # api 와 서로 Requires 를 걸지 않는다. 한쪽 장애가 다른 쪽을 내리면 안 된다
 
 [Service]
@@ -17,8 +16,6 @@ Environment=MODEL_BUNDLE_DIRECTORY=/var/lib/salmonbus/model/current
 Environment=MODEL_BUNDLE_PROMOTE_ON_START=false
 # 정류장 쌍 도보 거리 파일도 사람이 갖다 놓는다. 기동할 때 지금 적재된 묶음과 다르면 바꾸고, 같으면 쓰지 않는다
 Environment=WALK_DISTANCES_DIRECTORY=/var/lib/salmonbus/walking/current
-
-# 배포 후 검증된 완료 정산의 이관·삭제를 실행한다. worker.env에서 각각 false로 중지할 수 있다.
 
 # 값을 유닛에 직접 쓰지 않는다. 위 Environment= 보다 뒤에 와서 필요하면 덮어쓴다
 EnvironmentFile=/etc/salmonbus/worker.env

@@ -480,37 +480,6 @@ class DddStorageMigrationTest {
     }
 
     @Test
-    void V39_스키마를_이전_구조로_되돌린_뒤_최신으로_다시_전환해도_미완료_예보가_보존된다() throws Exception {
-        // given
-        preparePendingTransition();
-        migrate("38");
-        approveEvaluationTransition();
-        migrate("39");
-        Path directory = Path.of("").toAbsolutePath();
-        while (directory != null
-            && !Files.isRegularFile(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"))) {
-            directory = directory.getParent();
-        }
-        if (directory == null) {
-            throw new IllegalStateException("롤백 SQL을 찾을 수 없다");
-        }
-        String rollback = Files.readString(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"));
-
-        // when
-        execute(rollback);
-
-        // then
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass"))
-            .isEqualTo("r");
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isOne();
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();
-        approveEvaluationTransition();
-        migrate("39");
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isOne();
-    }
-
-    @Test
     void 최신_스키마에서도_로컬_초기화는_평가와_이관_기록을_비우고_노선은_보존한다() throws Exception {
         // given
         preparePendingTransition();
@@ -655,27 +624,6 @@ class DddStorageMigrationTest {
         assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
     }
 
-    @Test
-    void worker_연결이_남아_있으면_전환을_승인하지_않는다() throws Exception {
-        // given
-        preparePendingTransition();
-        migrate("38");
-        try (
-            Connection worker = DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                POSTGRES.getPassword());
-            Statement statement = worker.createStatement()) {
-            statement.execute("SET application_name='salmonbus-worker'");
-
-            // when
-            assertThatThrownBy(this::approveEvaluationTransition).hasMessageContaining("worker 또는 정비 연결이 남아 있다");
-            execute("ROLLBACK");
-
-            // then
-            assertThat(scalar("SELECT to_regclass('sal175_evaluation_transition')::text")).isNull();
-            assertPendingTablePreserved();
-        }
-    }
-
     private void assertPendingTablePreserved() throws SQLException {
         assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass"))
             .isEqualTo("r");
@@ -683,47 +631,18 @@ class DddStorageMigrationTest {
         assertThat(scalar("SELECT to_regclass('forecast_evaluation_work')::text")).isNull();
     }
 
-    @Test
-    void worker_연결이_남아_있으면_이전_DB_구조로_되돌리지_않는다() throws Exception {
-        // given
-        preparePendingTransition();
-        migrate("38");
-        approveEvaluationTransition();
-        migrate("39");
-        Path directory = Path.of("").toAbsolutePath();
-        while (directory != null
-            && !Files.isRegularFile(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"))) {
-            directory = directory.getParent();
-        }
-        assertThat(directory).isNotNull();
-        String rollback = Files.readString(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"));
-        try (
-            Connection worker = DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                POSTGRES.getPassword());
-            Statement statement = worker.createStatement()) {
-            statement.execute("SET application_name='salmonbus-worker'");
-
-            // when
-            assertThatThrownBy(() -> execute(rollback)).hasMessageContaining("worker 또는 정비 연결이 남아 있다");
-            execute("ROLLBACK");
-
-            // then
-            assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
-            assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass"))
-                .isEqualTo("v");
-            assertThat(number("SELECT count(*) FROM flyway_schema_history WHERE version='39' AND success")).isOne();
-        }
-    }
-
-    private void approveEvaluationTransition() throws Exception {
-        Path directory = Path.of("").toAbsolutePath();
-        while (directory != null
-            && !Files.isRegularFile(directory.resolve("deploy/sql/prepare-evaluation-work-transition.sql"))) {
-            directory = directory.getParent();
-        }
-        assertThat(directory).isNotNull();
-        execute("SET salmonbus.backup_reference='isolated-test-backup'");
-        execute(Files.readString(directory.resolve("deploy/sql/prepare-evaluation-work-transition.sql")));
+    /** V39는 운행 데이터가 있는 DB에서 만료되지 않은 승인 기록이 있어야 진행한다. */
+    private void approveEvaluationTransition() throws SQLException {
+        execute("""
+            CREATE TABLE IF NOT EXISTS sal175_evaluation_transition (
+                id integer PRIMARY KEY CHECK(id=1),
+                backup_reference text NOT NULL CHECK(backup_reference<>''),
+                expires_at timestamptz NOT NULL
+            );
+            INSERT INTO sal175_evaluation_transition(id,backup_reference,expires_at)
+            VALUES(1,'isolated-test-backup',clock_timestamp()+interval '30 minutes')
+            ON CONFLICT(id) DO UPDATE SET backup_reference=EXCLUDED.backup_reference,expires_at=EXCLUDED.expires_at
+            """);
     }
 
     private void insertRoute() throws SQLException {
