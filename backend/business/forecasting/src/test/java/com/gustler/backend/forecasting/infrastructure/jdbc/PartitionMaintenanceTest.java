@@ -7,6 +7,8 @@ import com.gustler.backend.forecasting.api.forecast.MaintainPartitions;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import com.gustler.backend.support.TestDatabase;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import java.sql.Connection;
 import java.time.Clock;
 import java.time.Instant;
@@ -89,6 +91,23 @@ class PartitionMaintenanceTest {
             softly.assertThat(actual.defaultRows()).containsOnlyKeys(tables)
                 .allSatisfy((table, rows) -> assertThat(rows).isZero());
         });
+    }
+
+    @Test
+    void 만든_파티션_수와_기본_파티션의_줄_수를_Prometheus_이름으로_내보낸다() {
+        // given
+        PrometheusMeterRegistry meters = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        PartitionMaintenance maintenance = maintenanceAt(BEFORE_KOREAN_MIDNIGHT);
+        maintenance.setMeterRegistry(meters);
+
+        // when
+        maintenance.maintain();
+
+        // then
+        final int created = PartitionMaintenance.DAYS_AHEAD + 1;
+        assertThat(meters.scrape()).contains(
+            "salmonbus_partition_creations_total{table=\"forecast_run\"} " + created + ".0",
+            "salmonbus_partition_default_rows{table=\"forecast_run\"} 0");
     }
 
     @Test
