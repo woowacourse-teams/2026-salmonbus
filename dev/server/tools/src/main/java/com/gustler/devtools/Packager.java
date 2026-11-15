@@ -100,7 +100,6 @@ final class Packager {
                 repo.resolve("dev/server/tools/src/main"),
                 repo.resolve("dev/server/tools/build.gradle"),
                 repo.resolve("dev/server/tools/settings.gradle"),
-                repo.resolve("backend/deploy/sql/prepare-evaluation-work-transition.sql"),
                 repo.resolve("dev/server/api.yml"),
                 repo.resolve("dev/server/worker.yml"),
                 repo.resolve("dev/server/replay.json"),
@@ -271,8 +270,6 @@ final class Packager {
             checkJar(dataJar, "data");
             copy(tools, basis.resolve("tools/shared-dev-tools.jar"));
             copy(dataJar, basis.resolve("tools/shared-dev-data.jar"));
-            copy(repo.resolve("backend/deploy/sql/prepare-evaluation-work-transition.sql"),
-                    basis.resolve("tools/prepare-evaluation-work-transition.sql"));
             FileOps.writeNew(
                     basis.resolve("tools/data-contract.sha256"),
                     (preparationContract() + "\n").getBytes(),

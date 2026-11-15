@@ -31,10 +31,10 @@ class CompatiblePreparationTest {
         next.remove("tools/data/model-reference/weights.safetensors");
         next.put("tools/data/model-reference/manifest.json", "new");
         next.put("tools/data/model-reference/base.json", "new");
-        assertThatCode(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(next), null))
+        assertThatCode(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(next)))
                 .doesNotThrowAnyException();
         next.put("tools/data/routes.json", "different");
-        assertThatThrownBy(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(next), null))
+        assertThatThrownBy(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(next)))
                 .hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
     }
 
@@ -111,10 +111,10 @@ class CompatiblePreparationTest {
         newFiles.put("tools/data-contract.sha256", CompatiblePreparation.ARCHIVE_DATA);
         RevisionStore.Revision old = revisionWithFiles(oldFiles);
 
-        assertThatCode(() -> BasisLifecycle.preserveData(old, revisionWithFiles(newFiles), null))
+        assertThatCode(() -> BasisLifecycle.preserveData(old, revisionWithFiles(newFiles)))
             .doesNotThrowAnyException();
         newFiles.put("tools/data/routes.json", "changed");
-        assertThatThrownBy(() -> BasisLifecycle.preserveData(old, revisionWithFiles(newFiles), null))
+        assertThatThrownBy(() -> BasisLifecycle.preserveData(old, revisionWithFiles(newFiles)))
             .isInstanceOf(IllegalArgumentException.class).hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
     }
 
@@ -150,16 +150,16 @@ class CompatiblePreparationTest {
         previous.put("tools/data-contract.sha256", CompatiblePreparation.ENV_MODEL_DATA);
         var next = new TreeMap<>(previous);
         next.put("tools/data-contract.sha256", CompatiblePreparation.INCREMENTAL_SETTLEMENT_DATA);
-        assertThatCode(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(next), null))
+        assertThatCode(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(next)))
             .doesNotThrowAnyException();
         for (String path : previous.keySet().stream().filter(key -> (key.startsWith("tools/data/")
             && !key.startsWith("tools/data/model-reference/")) || key.equals("infra/compose.yaml")).toList()) {
             var changed = new TreeMap<>(next);
             changed.put(path, "changed");
-            assertThatThrownBy(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(changed), null))
+            assertThatThrownBy(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(changed)))
                 .hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
             changed.remove(path);
-            assertThatThrownBy(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(changed), null))
+            assertThatThrownBy(() -> BasisLifecycle.preserveData(revisionWithFiles(previous), revisionWithFiles(changed)))
                 .hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
         }
     }

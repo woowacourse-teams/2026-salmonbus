@@ -62,7 +62,6 @@ final class Preflight {
                 var app =
                         RevisionStore.verify(
                                 layout.root().resolve(component + "/current").toRealPath(), true);
-                DataTransition.requireApplication(layout, app);
                 Checks.require(
                         app.basisDigest().equals(basis.basisDigest()), "DEV_BASIS_UPDATE_REQUIRED");
                 var file = layout.root().resolve(component + "/current/release.env");

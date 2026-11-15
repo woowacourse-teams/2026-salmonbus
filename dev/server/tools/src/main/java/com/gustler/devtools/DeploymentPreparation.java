@@ -14,16 +14,10 @@ import java.util.UUID;
 final class DeploymentPreparation {
     private final Layout layout;
     private final Host host;
-    private final DataTransition transition;
 
     DeploymentPreparation(Layout layout, Host host) {
-        this(layout, host, new DataTransition());
-    }
-
-    DeploymentPreparation(Layout layout, Host host, DataTransition transition) {
         this.layout = layout;
         this.host = host;
-        this.transition = transition;
     }
 
     private Path directory() {
@@ -70,14 +64,9 @@ final class DeploymentPreparation {
         RevisionStore.requireReady(layout, previous);
         final boolean basisChange = !previous.basisDigest().equals(next.basisDigest());
         if (!basisChange) {
-            DataTransition.requireApplication(layout, app);
             return Map.of("status", "ok", "preparationRequired", false);
         }
-        var dataChange = !java.util.Objects.equals(previous.files().get("tools/data-contract.sha256"),
-                next.files().get("tools/data-contract.sha256"));
-        var approval = dataChange && !CompatiblePreparation.permits(previous, next)
-                ? DataTransition.approval(layout, previous, next) : null;
-        BasisLifecycle.preserveData(previous, next, approval);
+        BasisLifecycle.preserveData(previous, next);
         FileOps.directory(directory(), 0700);
         Checks.require((FileOps.attribute(directory(), "mode") & 0777) == 0700,
                 "DEV_PREPARATION_DIRECTORY");
@@ -90,27 +79,16 @@ final class DeploymentPreparation {
                         "DEV_PREPARATION_RECOVERY_REQUIRED");
             }
             var state = snapshot(app, previous);
-            state.put("dataTransition", approval != null);
             write(state);
             try {
                 stopApplications();
-                new BasisLifecycle(layout, host).change(nextPath, true, approval);
+                new BasisLifecycle(layout, host).change(nextPath, true);
                 new Preflight(layout, host).check("prepare", Map.of());
-                if (approval != null) {
-                    approval.verify(previous, next, java.time.Instant.now());
-                    installTransitionGuards(next);
-                    transition.approveDatabase(layout, nextPath, approval);
-                }
                 state.put("phase", "PREPARED");
                 write(state);
                 return Map.of("status", "ok", "preparationRequired", true,
                         "applicationsRemainStopped", true);
             } catch (Exception error) {
-                if (approval != null) {
-                    state.put("phase", "RECOVERY_REQUIRED");
-                    write(state);
-                    throw new IllegalArgumentException("DEV_DATA_TRANSITION_RECOVERY_REQUIRED");
-                }
                 try {
                     restore(Json.read(Json.bytes(state)));
                 } catch (Exception recovery) {
@@ -153,37 +131,6 @@ final class DeploymentPreparation {
         return state;
     }
 
-    private Path transitionGuard(String component) {
-        return layout.units().resolve("salmonbus-" + component + ".service.d/40-data-transition.conf");
-    }
-
-    private void installTransitionGuards(RevisionStore.Revision basis) throws Exception {
-        // 이전 CodeDeploy 번들의 도구로 돌아가도 전환 중인 DB에 이전 앱을 시작하지 못한다.
-        var tools = layout.root().resolve("basis/releases/" + basis.releaseId() + "/tools/shared-dev-tools.jar");
-        Checks.require(tools.toString().matches("/[a-zA-Z0-9/_.-]+"),
-                "DEV_DATA_TRANSITION_TOOL_PATH");
-        for (var component : List.of("api", "worker")) {
-            var file = transitionGuard(component);
-            FileOps.directory(file.getParent(), 0755);
-            FileOps.atomicFile(file, ("# SAL-175 dev data transition\n[Service]\n"
-                    + "ExecStartPre=+/usr/bin/java -Xms16m -Xmx64m -jar " + tools
-                    + " preflight " + component + "\n").getBytes(), 0644);
-        }
-        host.run("systemctl", "daemon-reload");
-    }
-
-    private void removeTransitionGuards() throws Exception {
-        for (var component : List.of("api", "worker")) {
-            var file = transitionGuard(component);
-            if (!FileOps.exists(file)) continue;
-            FileOps.protectedFile(file, "DEV_DATA_TRANSITION_GUARD");
-            Checks.require(Files.readString(file).startsWith("# SAL-175 dev data transition\n"),
-                    "DEV_DATA_TRANSITION_GUARD");
-            Files.delete(file);
-        }
-        host.run("systemctl", "daemon-reload");
-    }
-
     private void write(Map<String, Object> state) throws Exception {
         FileOps.atomicFile(journal(), Json.bytes(state), 0600);
         var id = state.get("backupId").toString();
@@ -209,15 +156,6 @@ final class DeploymentPreparation {
                 return Map.of("status", "ok", "recoveryRequired", false);
             }
             var state = Json.read(FileOps.privateText(journal()).getBytes());
-            if (List.of("COMPLETE", "ROLLED_BACK").contains(state.path("phase").asText())) {
-                return Map.of("status", "ok", "recoveryRequired", false);
-            }
-            if (state.path("dataTransition").asBoolean() && !state.path("phase").asText().equals("COMPLETE")) {
-                stopApplications();
-                ((tools.jackson.databind.node.ObjectNode) state).put("phase", "RECOVERY_REQUIRED");
-                FileOps.atomicFile(journal(), Json.bytes(state), 0600);
-                throw new IllegalArgumentException("DEV_DATA_TRANSITION_RECOVERY_REQUIRED");
-            }
             if (!app.commit().equals(state.path("commit").asText())
                     || !List.of("PREPARING", "PREPARED", "API_READY").contains(state.path("phase").asText())) {
                 return Map.of("status", "ok", "recoveryRequired", false);
@@ -280,7 +218,6 @@ final class DeploymentPreparation {
 
     Map<String, Object> complete(Path incoming, Map<String, String> environment) throws Exception {
         var app = application(incoming, environment);
-        DataTransition.requireApplication(layout, app);
         var basis = RevisionStore.verify(RevisionStore.selectedBasis(layout), true);
         RevisionStore.requireReady(layout, basis);
         RevisionStore.routing(app, environment, basis);
@@ -298,9 +235,6 @@ final class DeploymentPreparation {
                     FileOps.atomicFile(journal(), Json.bytes(state), 0600);
                     FileOps.atomicFile(directory().resolve(state.path("backupId").asText()).resolve("state.json"),
                             Json.bytes(state), 0600);
-                    if (app.kind().equals("worker") && state.path("dataTransition").asBoolean()) {
-                        removeTransitionGuards();
-                    }
                 }
             }
         }

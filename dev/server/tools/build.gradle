@@ -15,11 +15,9 @@ java {
 dependencies {
     implementation 'tools.jackson.core:jackson-databind:3.1.4'
     implementation 'org.apache.commons:commons-compress:1.28.0'
-    runtimeOnly 'org.postgresql:postgresql:42.7.11'
     testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
     testImplementation 'org.assertj:assertj-core:3.27.7'
     testImplementation 'org.junit.platform:junit-platform-launcher:6.0.3'
-    testImplementation 'org.testcontainers:testcontainers-postgresql:2.0.5'
 }
 
 tasks.named('test') {
@@ -30,7 +28,6 @@ tasks.named('test') {
 
 tasks.named('processTestResources') {
     from '../../../backend/deploy/runtime-source-inputs.sh'
-    from '../../../backend/deploy/sql/prepare-evaluation-work-transition.sql'
 }
 
 tasks.register('serverTest', Test) {

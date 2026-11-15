@@ -69,9 +69,7 @@ final class BasisLifecycle {
         return path;
     }
 
-    static void preserveData(RevisionStore.Revision previous, RevisionStore.Revision next,
-            DataTransition.Approval approval) {
-        if (approval != null) approval.verify(previous, next, java.time.Instant.now());
+    static void preserveData(RevisionStore.Revision previous, RevisionStore.Revision next) {
         final boolean retirement = ChatRetirement.permits(previous, next);
         for (var name : List.of("tools/data-contract.sha256", "infra/compose.yaml")) {
             Checks.require(previous.files().containsKey(name) && next.files().containsKey(name),
@@ -87,8 +85,7 @@ final class BasisLifecycle {
         names.addAll(next.files().keySet());
         for (var name : names) {
             if (name.startsWith("tools/data/model-reference/")) continue;
-            if (name.equals("tools/data-contract.sha256")
-                    && (approval != null || CompatiblePreparation.permits(previous, next))) continue;
+            if (name.equals("tools/data-contract.sha256") && CompatiblePreparation.permits(previous, next)) continue;
             if (retirement && ChatRetirement.INFRA_FILES.contains(name)) continue;
             if (name.startsWith("tools/data/") || name.equals("tools/data-contract.sha256")
                     || ChatRetirement.INFRA_FILES.contains(name)) {
@@ -128,10 +125,6 @@ final class BasisLifecycle {
     }
 
     Map<String, Object> change(Path incoming, final boolean apply) throws Exception {
-        return change(incoming, apply, null);
-    }
-
-    Map<String, Object> change(Path incoming, final boolean apply, DataTransition.Approval approval) throws Exception {
         Checks.require(host.root(), "ROOT_REQUIRED");
         var next = RevisionStore.verify(incoming, true);
         Checks.require(next.kind().equals("basis"), "DEV_BASIS_REVISION");
@@ -141,7 +134,7 @@ final class BasisLifecycle {
         Checks.require(
                 !FileOps.exists(journal()) && !FileOps.exists(layout.root().resolve(".deploying")),
                 "DEV_BASIS_RECOVERY_REQUIRED");
-        preserveData(previous, next, approval);
+        preserveData(previous, next);
         new Preflight(layout, host).check("prepare", Map.of());
         host.verifyInstance(host.identity());
         DataPreparation.requireStopped(host, "STOP_DEV_APPS_BEFORE_BASIS_CHANGE");

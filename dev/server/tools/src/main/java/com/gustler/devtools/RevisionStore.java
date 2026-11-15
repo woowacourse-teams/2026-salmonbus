@@ -284,7 +284,6 @@ final class RevisionStore {
                     !Files.readString(marker).startsWith("basis "), "DEV_BASIS_UPDATE_IN_PROGRESS");
         }
         var metadata = verify(incoming, true);
-        DataTransition.requireApplication(layout, metadata);
         var basis = verify(selectedBasis(layout), true);
         requireReady(layout, basis);
         routing(metadata, environment, basis);
