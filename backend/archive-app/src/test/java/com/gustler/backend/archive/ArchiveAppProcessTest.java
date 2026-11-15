@@ -20,7 +20,6 @@ class ArchiveAppProcessTest {
                 softly.assertThat(names).anyMatch(n -> n.endsWith("ArchiveApplication.class"));
                 softly.assertThat(names).noneMatch(
                     n -> n.contains("/worker-app-") || n.contains("/forecasting-") || n.contains("/observations-"));
-                softly.assertThat(names).noneMatch(n -> n.endsWith("LegacyArchiveReader.class"));
             });
         }
     }

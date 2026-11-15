@@ -280,10 +280,7 @@ class RuntimeProcessSeparationTest {
             "DB_URL", database.jdbcUrl() + (querySeparator(database.jdbcUrl()))
                 + "ApplicationName=" + DISABLED_WORKER_APPLICATION_NAME,
             "MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE", "health,info,scheduledtasks",
-            "FORECAST_INTERVAL", "100ms",
-            "FORECAST_SETTLEMENT_INTERVAL", "100ms",
-            "FORECAST_STATISTICS_INTERVAL", "100ms",
-            "FORECAST_QUALITY_INVESTIGATION_INTERVAL", "100ms"
+            "FORECAST_INTERVAL", "100ms"
         ), workerLog);
         awaitHealthy(worker, workerPort, workerLog);
     }

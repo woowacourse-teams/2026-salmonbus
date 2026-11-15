@@ -3,7 +3,6 @@ package com.gustler.backend.maintenance;
 import com.gustler.backend.support.LoopbackRelay;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -12,14 +11,9 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -41,8 +35,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Testcontainers
 class MaintenanceProcessTest {
-    private static final Instant START = Instant.parse("2026-09-21T00:00:00Z");
-    private static final Instant UNTIL = START.plusSeconds(60);
     private static final AtomicInteger DATABASE_SEQUENCE = new AtomicInteger();
     private static LoopbackRelay loopback;
     private static final JsonMapper JSON = JsonMapper.builder()
@@ -62,9 +54,9 @@ class MaintenanceProcessTest {
     private int processSequence;
 
     @Test
-    void 폐기한_이관_명령은_실제_JAR에서도_종료코드_1로_거절한다() throws Exception {
+    void 모르는_명령은_실제_JAR에서도_종료코드_1로_거절한다() throws Exception {
         // when
-        Result result = execute("archive-import");
+        Result result = execute("unknown-command");
 
         // then
         assertThat(result.exitCode()).isEqualTo(1);
@@ -74,7 +66,7 @@ class MaintenanceProcessTest {
     }
 
     @Test
-    void 정비_JAR에는_다른_실행_앱과_완료된_이관_자원이_없다() throws Exception {
+    void 정비_JAR에는_다른_실행_앱과_마이그레이션_자원이_없다() throws Exception {
         // when
         List<String> forbidden = new ArrayList<>();
         try (ZipFile jar = new ZipFile(jar().toFile())) {
@@ -109,7 +101,7 @@ class MaintenanceProcessTest {
         return name.startsWith("com/gustler/backend/api/") || name.startsWith("com/gustler/backend/worker/")
             || name.startsWith("com/gustler/backend/migration/") || name.startsWith("software/amazon/awssdk/")
             || name.startsWith("com/amazonaws/")
-            || name.startsWith("db/migration/") || name.startsWith("db/historical-migration/");
+            || name.startsWith("db/migration/");
     }
 
     @Test
@@ -271,31 +263,5 @@ class MaintenanceProcessTest {
         }
     }
     private record Failure(String status, String code) {
-    }
-    private record PreviewOutput(String status, Preview result) {
-    }
-    private record Preview(String scope, @JsonProperty("sampled_batches")
-        long sampledBatches,
-        @JsonProperty("sampled_observations")
-        long sampledObservations, @JsonProperty("sampled_above_range")
-        long sampledAboveRange) {
-    }
-    private record ChunkOutput(String status, Chunk result) {
-    }
-    private record Chunk(int processedBatches, boolean discoveryCompleted, boolean completed) {
-    }
-    private record StatusOutput(String status, List<StatusRow> result) {
-    }
-    private record StatusRow(@JsonProperty("vehicle_id")
-        String vehicleId, String phase, boolean completed,
-        @JsonProperty("evidence_observation_id")
-        Long evidenceObservationId, @JsonProperty("last_batch_at")
-        Instant lastBatchAt,
-        @JsonProperty("last_batch_id")
-        long lastBatchId, @JsonProperty("can_release")
-        boolean canRelease,
-        @JsonProperty("started_at")
-        Instant startedAt, @JsonProperty("investigated_at")
-        Instant investigatedAt) {
     }
 }
