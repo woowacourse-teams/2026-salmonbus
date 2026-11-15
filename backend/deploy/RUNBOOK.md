@@ -639,7 +639,7 @@ S3 구조:
 
 ### 옛 테이블 내보내기
 
-SAL-434가 지울 옛 테이블 25개(목록은 `deploy/sql/sal434-03-drop-legacy-tables.sql`의 `target_tables`가 정본이고, 이관 앱의 `LegacyExportRepository.TABLES`가 같은 목록인지 시험이 대조한다)를 통째로 S3에 내보낸다. 테이블마다 기본 키 순서로 읽어 조각으로 나누고, 조각마다 올리고 다시 읽어 확인한 뒤 장부 `daily_export`에 한 줄을 적는다. **이 기능은 줄을 지우지 않는다.** 옛 테이블을 지우는 것은 사람이 승인하고 실행하는 `sal434-03`뿐이다. 운영 순서는 「SAL-434 전환 절차」의 6-1번이다.
+SAL-434가 지울 옛 테이블 25개(목록은 `deploy/sql/sal434-03-drop-legacy-tables.sql`의 `target_tables`가 정본이고, 이관 앱의 `LegacyExportRepository.TABLES`가 같은 목록인지 시험이 대조한다)를 통째로 S3에 내보낸다. 테이블마다 기본 키 순서로 읽어 조각으로 나누고, 조각마다 올리고 다시 읽어 확인한 뒤 장부 `daily_export`에 한 줄을 적는다. **이 기능은 줄을 지우지 않는다.** 옛 테이블을 지우는 것은 사람이 승인하고 실행하는 `sal434-03`뿐이다. 운영 순서는 「SAL-434 전환 절차」의 6번이다.
 
 스위치(`/etc/salmonbus/archive.env`, 바꾸면 이관 서비스만 재시작한다):
 
@@ -661,7 +661,7 @@ SAL-434가 지울 옛 테이블 25개(목록은 `deploy/sql/sal434-03-drop-legac
 - 세션 설정은 날짜 단위 내보내기와 같다(`extra_float_digits=1`, 시간대 UTC, 병렬 읽기 끔, 문장 제한 시간). 여기에 `bytea_output='hex'`를 더한다.
 - 한 회차는 `MAX_ROWS_PER_RUN`이나 `MAX_RUN_DURATION`에 먼저 닿는 곳에서 멈추고, 그때까지 읽은 줄을 조각 하나로 닫아 장부에 적는다. 다음 회차는 장부의 마지막 조각 `key_to` 다음 키부터 읽는다. 기동할 때도 장부에서 이어 간다.
 - 이관 앱의 예약 작업은 스레드 하나와 DB 연결 1개를 나눠 쓴다. 옛 테이블 내보내기 한 회차가 도는 동안(`MAX_RUN_DURATION`까지) 날짜 단위 내보내기는 기다린다.
-- 걸리는 시간은 운영에서 재야 한다. 읽는 속도의 상한은 대략 `PAGE_SIZE / (페이지 읽는 시간 + PAGE_PAUSE)`이고, 회차 사이에 `INTERVAL`만큼 쉰다. 페이지 하나에 0.3초가 걸린다면 기본값으로 초당 4000줄 안팎이다. 옛 테이블은 수억 줄이고 대부분이 `seat_forecast`와 `forecast_evaluation_result`라서 하루 가까이 걸린다(추정). 끝난 뒤 범위 다시 세기가 같은 테이블을 한 번 더 읽는다(인덱스만 읽는 계획이 되면 덜 읽는다. 추정).
+- 걸리는 시간은 운영에서 재야 한다. 읽는 속도의 상한은 대략 `PAGE_SIZE / (페이지 읽는 시간 + PAGE_PAUSE)`이고, 회차 사이에 `INTERVAL`만큼 쉰다. 페이지 하나에 0.3초가 걸린다면 기본값으로 초당 4000줄 안팎이다. 옛 테이블은 줄이 많고 대부분이 `seat_forecast`와 `forecast_evaluation_result`라서 하루 가까이 걸릴 수 있다(추정). 끝난 뒤 범위 다시 세기가 같은 테이블을 한 번 더 읽는다(인덱스만 읽는 계획이 되면 덜 읽는다. 추정).
 - DB가 느려지면 `PAGE_PAUSE`를 늘리거나 `PAGE_SIZE`·`MAX_ROWS_PER_RUN`을 줄이거나 `INTERVAL`을 늘리고 이관 앱을 재시작한다. 멈추려면 스위치를 끄고 재시작한다. 다시 켜면 장부에서 이어 간다. RDS 처리량 크레딧과 `salmonbus_archive_legacy_rows_per_second`를 함께 본다.
 
 S3 구조와 장부:
@@ -968,19 +968,40 @@ Discord 알림을 받으면 DB 원인 분석 화면의 수집 실패 및 상태 
 
 ## SAL-434 전환 절차
 
-SAL-434는 예보·채점·보관을 새 경로(`forecast_run`·`forecast_record`·`stop_pass`·`pass_label`·`forecast_unresolved`, 날짜 파티션)로 옮긴다. PR이 머지돼 배포되는 순간 바뀌는 동작은 없다. 새 경로의 스위치는 모두 기본값이 꺼짐이고, Flyway에는 새 테이블(V81)과 그 테이블을 읽는 뷰(V82, V83)를 더하는 마이그레이션만 있다. V83은 `forecast_outcome` 뷰의 정의만 바꾸고 열은 V82와 같다. 옛 경로는 그대로 돈다.
+SAL-434는 예보·채점·보관을 예보 기록 테이블 다섯 개(`forecast_run`, `forecast_record`, `stop_pass`, `pass_label`, `forecast_unresolved`)로 옮긴다. 다섯 테이블은 `source_date`(한국 날짜)로 나눈 파티션 테이블이다. 켜고 끄는 설정은 없다. 이 배포본이 올라가면 api와 worker는 예보 기록 테이블만 읽고 쓴다.
 
-아래 아홉 차례(6번 뒤의 6-1 포함)를 순서대로 진행한다. **차례마다 결과를 보이고 다음으로 넘어간다.** 「승인」 표시가 있는 차례는 실행 전에 따로 승인을 받는다. 트리거·테이블을 지우거나 모양을 바꾸는 일은 Flyway가 아니라 `deploy/sql/sal434-*.sql`을 사람이 실행한다. 이 파일들은 배포 패키지의 `sql/`에 함께 실린다(`/opt/salmonbus/api/current/sql/`). 배포 훅은 이 파일을 실행하지 않는다.
+DB에 줄이 있는지에 따라 할 일이 갈린다.
 
-| 파일 | 차례 | 하는 일 | 되돌리기 |
-| --- | --- | --- | --- |
-| `sal434-01-precheck.sql` | 5·6-1·7·8 전후 | 읽기 전용. 건드릴 객체, 크기, 누적 통계, 장부(옛 테이블별 실제 줄 수·장부 합·조각 수), 가드 판정을 보인다 | 없음 |
-| `sal434-02-drop-legacy-triggers.sql` | 5 | 옛 정산 트리거 9개와 함수 7개 삭제 | `sal434-02-rollback-recreate-legacy-triggers.sql` |
-| `sal434-03-drop-legacy-tables.sql` | 7 | 옛 테이블 25개와 뷰 9개 삭제 | 없음(S3 내보내기에서만 되살린다) |
-| `sal434-04a-prepare-observation-partition.sql` | 8 | 관측 두 테이블에 `source_date` 열, 확인 제약, 유일 인덱스 준비 | 파일 머리 주석의 문장 |
-| `sal434-04-partition-observation-tables.sql` | 8 | 관측 두 테이블을 날짜 파티션으로 바꿈 | `sal434-04-rollback-unpartition-observation-tables.sql` |
+- **줄이 없는 DB**(로컬, 새로 만든 환경): 마이그레이션이 다 한다. V83이 이전 배포본의 테이블·뷰·트리거를 지우고 V84가 관측 두 테이블(`observation_batch`, `vehicle_observation`)을 날짜 파티션으로 다시 만든다. 이 절에서 할 일은 없다.
+- **줄이 있는 DB**(운영, 공유 dev 서버): 마이그레이션은 예보 기록 테이블(V81)과 뷰(V82)만 더한다. V83과 V84는 줄이 있으면 아무것도 바꾸지 않는다. 이전 배포본의 테이블을 지우고 관측 테이블을 파티션으로 바꾸는 일은 아래 순서대로 사람이 `deploy/sql/sal434-*.sql`을 실행해서 한다. 끝까지 하면 줄이 없던 DB와 같은 스키마가 된다(테스트 `TransitionSqlTest`, `ObservationTableShapeTest`가 대조한다).
+
+SQL 파일은 배포 패키지의 `sql/`에 함께 실린다(`/opt/salmonbus/api/current/sql/`). 배포 훅은 이 파일을 실행하지 않는다.
+
+| 파일 | 하는 일 | 되돌리기 |
+| --- | --- | --- |
+| `sal434-01-precheck.sql` | 읽기 전용. 건드릴 객체, 크기, 누적 통계, 이전 배포본과 지금 배포본이 쓴 마지막 시각, 내보내기 장부, 파티션을 보인다 | 바꾸는 것이 없다 |
+| `sal434-02-drop-legacy-triggers.sql` | 이전 배포본의 정산 트리거 9개와 함수 7개 삭제 | 없다 |
+| `sal434-03-drop-legacy-tables.sql` | 이전 배포본의 테이블 25개와 뷰 9개 삭제 | 없다(줄은 S3 내보내기에서만 되살린다) |
+| `sal434-04a-prepare-observation-partition.sql` | 관측 두 테이블에 `source_date` 열, 확인 제약, 유일 인덱스 준비 | 파일 머리 주석의 문장 |
+| `sal434-04-partition-observation-tables.sql` | 관측 두 테이블을 날짜 파티션으로 바꿈 | `sal434-04-rollback-unpartition-observation-tables.sql`(첫 파티션이 남아 있는 동안) |
 
 각 파일의 머리 주석에 실행 조건, 잡는 잠금, 예상 시간, 가드가 있다. 가드가 맞지 않으면 파일은 아무것도 바꾸지 않고 `SAL-434:`로 시작하는 오류로 멈춘다. 오류 문구에 무엇을 먼저 해야 하는지 적혀 있다.
+
+### 순서
+
+**차례마다 결과를 보이고 다음으로 넘어간다.** 「승인」이 붙은 차례는 실행 전에 따로 승인을 받는다. 3번부터는 이전 배포본으로 되돌리지 않기로 정한 뒤에 한다.
+
+| # | 하는 일 | 승인 | 되돌리기 |
+| --- | --- | --- | --- |
+| 1 | 배포 전 확인 | | |
+| 2 | 배포와 배포 직후 확인 | | 조건이 맞으면 된다(「한쪽만 실패했을 때와 되돌리기」) |
+| 3 | 서버에 남은 예전 기동 전 검사 걷기 | | 파일을 되돌려 놓는다 |
+| 4 | 이관 앱 교체, 날짜 단위 내보내기 | | 이관 서비스를 멈춘다. 지운 파티션은 S3에서만 되살린다 |
+| 5 | 옛 정산 트리거 삭제(`sal434-02`) | 승인 | 없다 |
+| 6 | 옛 테이블 내보내기 | | 내보내기를 끈다. DB의 줄은 그대로다 |
+| 7 | 옛 테이블 삭제(`sal434-03`) | 승인 | 없다 |
+| 8 | 관측 테이블 날짜 나눔(`sal434-04a`, `sal434-04`) | 승인 | 첫 파티션이 남아 있는 동안 |
+| 9 | 후속 정리 | | |
 
 ### DB에 붙는 방법
 
@@ -1003,148 +1024,181 @@ psql -X -v ON_ERROR_STOP=1 -P pager=off -f sal434-01-precheck.sql > ~/sal434-pre
 psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +%F)'" -f sal434-03-drop-legacy-tables.sql
 ```
 
-### 스위치
+### 배포하면 바뀌는 것
 
-| 환경변수 | 파일 | 기본값 | 뜻 |
-| --- | --- | --- | --- |
-| `FORECAST_SHADOW_ENABLED` | worker.env | `false` | `FORECAST_PIPELINE=v1`일 때 옛 경로 옆에서 새 경로를 돌려 예측값을 대조하고 새 테이블에 쓴다. `v2`에서는 무시한다(기동 로그 `event=pipeline_shadow_ignored`) |
-| `FORECAST_SCORING` | worker.env | `off` | `shadow`: 새 채점을 돌려 새 테이블에 쓴다. 옛 정산은 그대로 돈다. `v1`이면 그림자 예보의 사건을 받고 옛 정산과 대조하며, `v2`면 본선의 사건을 받고 대조하지 않는다. `v2`: 새 채점이 본선이고 옛 정산 작업을 돌리지 않는다(`FORECAST_PIPELINE=v2`에서만) |
-| `BOARD_FORECAST_SOURCE` | api.env | `legacy` | `auto`: 노선마다 두 출처 가운데 최신 배치가 더 큰 쪽. `record`: 새 예보 기록만 읽는다 |
-| `FORECAST_PIPELINE` | worker.env | `v1` | `v2`: 새 경로가 본선이다. 옛 예보 쓰기(`seat_forecast`·`forecast_publication`), `input_confirmed_at` 갱신, 체크포인트 파일·`alighting_history_checkpoint` 쓰기, `route` 행 잠금을 하지 않는다 |
-| `FORECAST_LANES` | worker.env | `2` | `v2` 본선의 노선별 실행 줄 수. 같은 노선은 항상 같은 줄에서 순서대로 처리한다 |
-| `FORECAST_LANE_QUEUE_CAPACITY` | worker.env | `1000` | 줄 하나의 길이. 넘치면 넣지 않고 다음 줍기(30초)에 맡긴다 |
-| `FORECAST_REPLAY_EXTENDED_WINDOW` | worker.env | `12h` | 6시간(`FORECAST_REPLAY_WINDOW`)을 되감은 상태가 모자랄 때 한 번 늘려 되감는 범위. 12시간을 넘으면 worker가 기동하지 않는다 |
-| `FORECAST_SHUTDOWN_TIMEOUT` | worker.env | `10s` | 정상 종료 때 실행 줄과 채점 줄이 받은 일을 끝내기를 기다리는 한도. 넘기면 남은 일을 버린다. 스프링의 단계별 종료 시한(30초)과 더한 값이 systemd의 `TimeoutStopSec`(45초) 안이어야 한다 |
-| `ARCHIVE_HISTORY_HOLD` | archive.env | `checkpoint` | 최근 관측의 줄 단위 이관을 미루는 기준. `checkpoint`: 옛 체크포인트 보호선을 본다. `window`: 그 표를 보지 않고 `ARCHIVE_HISTORY_HOLD_WINDOW`보다 최근인 날짜를 이관하지 않는다 |
-| `ARCHIVE_HISTORY_HOLD_WINDOW` | archive.env | `12h` | `window`의 창. worker가 되감는 가장 긴 범위(`FORECAST_REPLAY_EXTENDED_WINDOW`, 12시간) 이상으로 둔다. 1시간보다 짧으면 이관 앱이 기동하지 않는다 |
-| `ARCHIVE_PARTITION_EXPORT_ENABLED` | archive.env | `false` | 닫힌 날짜의 파티션을 테이블마다 S3로 내보내고 다시 읽어 검증한다 |
-| `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED` | archive.env | `false` | 장부에 검증된 파티션을 떼어 내고 지운다 |
-| `ARCHIVE_LEGACY_EXPORT_ENABLED` | archive.env | `false` | 옛 테이블 25개를 기본 키 순서의 조각으로 S3에 내보내고 다시 읽어 검증한다. 지우지 않는다 |
-| `COLLECTION_BULK_INSERT` | worker.env | `false` | 관측을 한 문장으로 넣고 예약·전송을 한 커밋으로 한다 |
+배포는 api가 먼저이고 worker가 다음이다. api가 바뀐 순간부터 worker가 바뀌어 노선마다 첫 예보 실행 줄(`forecast_run`)을 쓸 때까지, 예보 기록 테이블이 비어 있어 아래처럼 보인다. 이 배포 한 번뿐이다. 다음 배포부터는 예보 실행 줄이 이미 있다.
 
-스위치를 바꾼 뒤에는 해당 서비스를 재시작해야 반영된다(「환경변수 변경」).
+| 화면·API | 그동안 보이는 것 |
+| --- | --- |
+| 노선 목록(`GET /api/v1/routes`) | 모든 노선이 `PREPARING`. 프론트는 `FORECAST_READY` 노선만 목록에 넣으므로 노선 검색과 노선도가 빈다 |
+| 보드(`/board`, `/watch`) | 200으로 열리고 차량 위치는 나온다. 좌석 예측은 없다(`forecast.status=UNAVAILABLE`) |
+| 즐겨찾기 | 항목이 `PREPARING`("도착 예보를 준비하고 있어요") |
+| 정류장 상세 | 노선 줄은 나오고 좌석 예측만 빈다 |
+| 예약 알림 | 좌석 정보 없이 나간다. 나간 알림은 되돌릴 수 없다 |
 
-`FORECAST_ENABLED=true`인 worker가 받아들이는 예보 스위치 조합은 아래 넷뿐이다. 나머지 조합은 worker가 기동하지 않고 무엇을 바꿔야 하는지 오류로 남긴다(`FORECAST_SCORING=v2`인데 `FORECAST_PIPELINE=v1`, `FORECAST_SCORING=shadow`인데 그림자도 `v2`도 아님, `FORECAST_PIPELINE=v2`인데 `FORECAST_SCORING=off`). 스위치를 둘 바꿀 때는 한 번에 바꿔 이 표의 한 줄에서 다른 줄로 옮긴다.
+- 끝나는 조건은 노선마다 따로다. 그 노선의 성공한 수집 배치 하나를 새 worker가 처리해 예보 실행 줄을 쓰면 끝난다. 차량이 없는 빈 응답, 예보 시간 밖, 수신 뒤 90초를 넘긴 배치도 줄을 남긴다. 수집 한도가 소진됐거나 모델이 지원하지 않는 노선은 줄이 생기지 않는다.
+- 새 worker는 기동하면 날짜 파티션을 확인하고, 수집 한 회차를 돌고, 모델을 올린 직후 처리하지 않은 배치를 줍는다. 노선의 첫 배치는 메모리에 상태가 없어 저장된 관측 6시간(모자라면 12시간)을 되감는다. 착수 시각은 `forecast_run.confirmed_at`이 있으면 그것, 없으면 이전 배포본이 찍은 `input_confirmed_at`을 쓴다. 그래서 이전 배포본이 처리한 배치와 이어진다.
+- 노선 목록 응답은 `Cache-Control: public, max-age=300`이다. 프론트는 목록을 주기적으로 다시 묻지 않으므로, 예보 실행 줄이 생긴 뒤에도 브라우저에 따라 길면 5분 동안 빈 목록이 다시 쓰일 수 있다. CloudFront는 이 응답을 캐시하지 않는다(2026-11-16 응답 헤더로 확인).
+- 모델 배포의 정산 근거(`model_deployment.settlement_context`)는 새 worker가 (배포, 노선 판본)마다 한 번 적는다. 이미 적힌 값이 다르면 그 노선은 예보 실행 줄을 쓰지 못한다(`event=forecast_failed`). 운영 모델에서는 이전 배포본이 적어 둔 값과 새 배포본이 만든 값이 같은 것을 확인했다(2026-11-16).
+- 이관 앱은 배포 파이프라인 밖이라 이전 배포본 그대로 돈다. 4번에서 사람이 바꾼다. 그때까지 예보 기록 테이블은 내보내지도 지워지지도 않고 쌓인다.
+- 이전 배포본의 테이블·뷰·트리거는 그대로 남는다. 새 배포본은 읽지도 쓰지도 않는다.
 
-| `FORECAST_PIPELINE` | `FORECAST_SHADOW_ENABLED` | `FORECAST_SCORING` | 상태 | 옛 정산 작업 | 채점 대조 |
-| --- | --- | --- | --- | --- | --- |
-| `v1` | `false` | `off` | 기본값. 옛 경로만 돈다 | 돈다 | 없음 |
-| `v1` | `true` | `off` 또는 `shadow` | 그림자 예보(차례 1), 그림자 채점(차례 2) | 돈다 | `shadow`일 때 10분마다 |
-| `v2` | 무시 | `shadow` | 새 예보가 본선(차례 4-1). 옛 정산은 남은 옛 예측만 마저 처리한다 | 돈다 | 없음(옛 예측이 더 생기지 않는다) |
-| `v2` | 무시 | `v2` | 완전 전환(차례 4-2) | 돌지 않는다 | 없음 |
+### 1. 배포 전 확인
 
-dev와 로컬에서 먼저 해 볼 때는 네 가지를 알고 시작한다.
+- **시간.** 수집이 30초 간격으로 돌고(04시 이후), 수집 한도가 남아 있고, 이용과 알림이 적은 때를 고른다. 새벽 4~6시나 한산한 낮이 맞다. 01~04시는 수집이 10분 간격이고 보드 캐시가 10분까지 붙어 빈 화면이 오래 남는다. 한도가 소진된 뒤에는 자정까지 성공한 배치가 없어 그때까지 끝나지 않는다. 출퇴근 시간과 알림이 몰린 시간도 피한다.
+- **모델.** 활성 모델 배포가 확정 프로필(`alighting-confirmed-closure-v2`) 번들이어야 한다. 번들 `manifest.json`의 `input_profile`로 확인한다. 아니면 새 worker는 그 노선을 건너뛰고(`event=forecast_unsupported_profile`) 예보 실행 줄이 생기지 않는다.
+- **저장 공간.** 배포 뒤 예보 기록 테이블에 줄이 쌓이고, 이전 배포본의 테이블은 7번까지 줄지 않는다. RDS 여유 저장 공간이 4~7번에 걸릴 기간을 버티는지 본다. 모자라면 배포 전에 늘린다.
+- **되돌릴 배포본.** `/opt/salmonbus/{api,worker}/previous`가 SAL-434 직전 버전을 가리키는 것은 SAL-434를 한 번만 배포했을 때다. 두 번 배포했다면 되돌릴 릴리즈를 새로 빌드해야 한다.
+- 이전 배포본이 쓰던 `worker.env`·`archive.env`의 키는 지우지 않고 둔다. 새 배포본은 읽지 않고, 되돌리면 이전 배포본이 다시 쓴다.
 
-- 새 경로는 확정 프로필(`alighting-confirmed-closure-v2`) 모델만 처리한다. 운영 모델은 확정 프로필이고, dev 서버도 `MODEL_BUNDLE_DIRECTORY`로 같은 번들을 쓰고 있어 그림자부터 그대로 해 볼 수 있다(2026-11-15 확인. 번들을 바꿨으면 `manifest.json`의 `input_profile`을 다시 본다). 저장소의 로컬 기본 모델(`dev/data/model-reference`)은 확정 프로필이 아니다. 그래서 로컬 Docker 구성에서는 그림자를 켜도 새 테이블에 아무것도 쌓이지 않고, `FORECAST_PIPELINE=v2`에서는 그 노선들을 `unsupported_profile`로 건너뛴다(경고 로그 `event=forecast_unsupported_profile`). 그러면 예보가 나오지 않고 보드는 발행이 끊긴 것으로 보아 503(`NO_RECENT_OBSERVATION`)을 낸다. `salmonbus_forecast_batches_total{result="unsupported_profile"}`가 늘지 않는지로 확인한다.
-- 채점 그림자(2번)는 옛 발행이 모델 배포에 적어 둔 정산 근거(`model_deployment.settlement_context`)를 읽는다. 옛 발행은 `FORECAST_COMPACT_SETTLEMENT_WRITE=true`일 때만 이 근거를 적는다. 운영은 켜져 있다(2026-11-15 확인). 꺼진 환경에서 2번을 켜면 새 채점이 예측을 `SETTLEMENT_EVIDENCE_MISSING`으로 닫아 옛 정산과 대조할 정답이 생기지 않는다. dev 서버는 `dev/server/worker.yml`의 `forecast.compact-settlement-write`를 먼저 본다. 4-1부터는 본선이 근거를 직접 적는다.
-- 개발 데이터 초기화(`reset`, `LocalData --reset-generated`)는 관측 테이블과 옛 예보·정산 테이블만 비우고 새 테이블 다섯 개는 비우지 않는다. 스위치를 켠 뒤 초기화를 돌리면 지워진 관측을 가리키는 줄이 새 테이블에 남는다. 초기화 직후 `TRUNCATE forecast_run, forecast_record, stop_pass, pass_label, forecast_unresolved;`를 실행하고 worker를 재시작한다.
-- 로컬 구성의 프론트 대기 조건(`dev/docker/forecast-ready.sql`)과 스모크 검사(`dev/tests/smoke-local.sh`)는 `forecast_publication`을 본다. 로컬에서 `FORECAST_PIPELINE=v2`로 띄우면 옛 발행이 생기지 않아 프론트가 기다린다. 옛 코드를 지우는 배포에서 이 둘과 초기화 대상을 함께 고친다.
+### 2. 배포와 배포 직후 확인
 
-### 차례
+「배포하기」대로 배포한다. worker까지 올라간 뒤 다음을 본다.
 
-**시작 전. 저장 공간.** 1번을 켠 뒤부터 새 테이블에 줄이 쌓이고, 6번에서 파티션 삭제를 켜기 전에는 지워지지 않는다. 옛 예보·정산이 쓰는 양은 4번까지 그대로이고 옛 테이블은 7번까지 줄지 않는다. 그래서 1번부터 7번까지 DB는 지금 늘던 속도에 새 테이블 분량을 더한 만큼 늘어난다.
-- 확인: 「DB 저장 공간 여유」 패널(위 V80 배포 전 확인과 같은 위치)에서 최근 며칠의 하루 감소량을 읽고, 지금 여유가 7번까지 걸릴 기간을 버티는지 계산한다. 1·2번의 관찰 기간만 14일이다. RDS 저장 공간 자동 조정이 켜져 있는지도 본다.
-- 모자라면 1번을 켜기 전에 저장 공간을 늘린다.
-- 1번을 켜고 하루 뒤 `sal434-01-precheck.sql`이 보이는 새 테이블 파티션 크기로 하루 분량을 재서 다시 계산한다. 차례를 넘어갈 때마다 여유를 다시 본다.
+- `GET /api/v1/routes`의 `status`가 노선마다 `FORECAST_READY`로 바뀐다.
+- worker 지표 `salmonbus_forecast_batches_total{result}`에서 `published`·`empty`가 늘고 `failed`·`unsupported_profile`이 0이다. `salmonbus_forecast_replays_total{result="succeeded"}`가 노선 수만큼 한 번씩 늘고 `failed`가 없다.
+- 노선의 첫 배치 몇 개 가운데 `late`가 얼마나 되는지 본다. 되감기가 길어 앞 노선에 밀리면 수신 뒤 90초를 넘겨 `late`가 된다(줄은 생긴다). 계속 `late`면 `FORECAST_LANES`를 늘린다.
+- 통과가 닫히기 시작하면 `salmonbus_scoring_written_total{table="pass_label"}`이 는다. `salmonbus_scoring_waiting`과 `salmonbus_scoring_queue`가 쌓이지 않는다.
+- `salmonbus_partition_default_rows{table}`가 0이다. 0보다 크면 그 날짜의 파티션이 없을 때 들어온 줄이다.
+- `sal434-01-precheck.sql`을 실행해 보관한다. 3절의 `new_forecast_run`·`new_stop_pass_closed`·`new_pass_label_computed`가 최근이고 `old_*` 시각이 배포 시각에서 멈췄는지 본다.
+- 보드의 좌석 예측이 다시 나오는지 화면에서 본다.
 
-**1. 예보 그림자.** `FORECAST_SHADOW_ENABLED=true`로 worker를 재시작한다.
-- 넘어가는 기준: 7일 동안 새 경로와 옛 경로의 예측값 차이 0건. 기간 중 worker를 일부러 한 번 재시작해 되감기 뒤에도 0건인지 본다. 지표는 `salmonbus_pipeline_shadow_predictions_total{result}`(`same`, `value_differs`, `legacy_only`, `new_only`, `excluded`)와 `salmonbus_pipeline_shadow_batches_total{result}`(`mismatch`, `failed`가 0이어야 한다), 로그는 `event=pipeline_shadow_mismatch`·`pipeline_shadow_value_differs`다. `excluded`는 다시 뜬 직후 운행 시작을 못 본 차량이라 차이로 세지 않는다.
-- 되돌리기: `false`로 재시작한다. 새 테이블에 쓴 줄은 남지만 아무도 읽지 않는다.
+### 한쪽만 실패했을 때와 되돌리기
 
-**2. 채점 그림자.** 1번을 켠 채 `FORECAST_SCORING=shadow`로 worker를 재시작한다(그림자 없이 `shadow`만 켜면 worker가 기동하지 않는다).
-- 확인: 기동 뒤 `event=scoring_start_rejected`가 없고, `salmonbus_scoring_written_total{table="pass_label"}`가 늘며, `salmonbus_scoring_waiting`과 `salmonbus_scoring_queue`가 쌓이지 않는다. 사건을 버리면 `salmonbus_scoring_dropped_total`이 늘고 그 노선을 다시 되감는다(`salmonbus_scoring_replays_total{reason,result}`).
-- 대조: 10분마다(`FORECAST_SCORING_COMPARISON_INTERVAL`) 수신 뒤 3시간(`FORECAST_SCORING_COMPARISON_DELAY`)이 지난 배치를 예측마다 옛 정산 결과와 대조해 `salmonbus_scoring_compared_total{result}`로 낸다. `same`이 대부분이어야 하고 `unexplained`·`legacy_only`·`new_only`가 0이어야 한다. `intended_hole`(수집 구멍 표시)과 `intended_midnight`(자정 직후 직전 통과)는 미리 적어 둔 차이라 따로 센다. `unexplained`가 나오면 `event=scoring_unexplained` 로그(회차마다 5건까지)에서 관측·목표·두 결과를 본다.
-- 다시 뜬 뒤: 채점은 노선마다 저장까지 마친 마지막 사건에서 130분 앞부터(길어도 26시간) 예보와 통과를 다시 읽어, 멈춘 동안 닫지 못한 예측을 닫는다. 수집 구멍과 관측 상한 기억은 `forecast_run`의 `source_incomplete`·`counted_rows`에서 되살린다. 26시간보다 오래 멈췄다면 그 앞의 예측은 닫히지 않은 채 남는다. 기동할 때 최근 26시간에 예보가 있던 노선을 모두 한 번 되감으므로, 이력이 있는 상태에서 처음 켜면 첫 기동의 채점 되감기가 길다.
-- 넘어가는 기준: 7일 동안 `unexplained` 0건.
-- 되돌리기: `off`로 재시작한다.
+**worker 배포만 실패했을 때.** CodeDeploy가 worker만 직전 버전으로 되돌리고 api는 새 버전으로 남는다.
 
-**3. 이용자 API 출처.** `BOARD_FORECAST_SOURCE=auto`로 api를 재시작한다.
-- 넘어가는 기준: dev에서 같은 시점의 두 출처 응답을 필드 단위로 대조해 같다. 운영은 `api.board` 지연과 오류율이 전과 같다.
-- 되돌리기: `legacy`로 재시작한다.
+- 예보 실행 줄이 하나도 없으면: 「배포하면 바뀌는 것」의 상태가 이어진다. 이전 worker는 이전 테이블에 예보와 정산을 계속 쓰므로 자료는 잃지 않는다. worker를 고쳐 다시 배포하거나 api도 수동으로 되돌린다.
+- 새 worker가 예보 실행 줄을 한 줄이라도 쓴 뒤면: 그 노선은 목록에 `FORECAST_READY`로 뜨는데, 마지막 예보 실행 줄의 관측이 신선도(5분, 01~04시는 10분)를 넘기면 보드가 503(`NO_RECENT_OBSERVATION`)이 된다. **바로 api도 수동으로 되돌린다**(「롤백」의 수동 롤백).
 
-**4. 새 경로를 본선으로.** 두 번에 나눠 바꾼다. 3번(`BOARD_FORECAST_SOURCE=auto`)이 먼저다. `auto`는 노선마다 최신 배치 쪽을 읽으므로 본선이 바뀐 뒤 첫 새 배치부터 새 기록을 읽는다.
+**둘 다 되돌릴 때.** worker를 먼저 되돌리고 바로 api를 되돌린다. api를 먼저 되돌리면 이전 worker가 첫 발행을 낼 때까지 모든 보드가 503이다.
 
-*4-1. 새 예보 본선.* worker.env를 `FORECAST_PIPELINE=v2`, `FORECAST_SCORING=shadow`로 바꾸고(`FORECAST_SHADOW_ENABLED`는 두어도 무시된다) worker를 재시작한다. **같은 때** archive.env에 `ARCHIVE_HISTORY_HOLD=window`를 넣고 이관 앱을 재시작한다. 본선은 `alighting_history_checkpoint`를 더 갱신하지 않으므로 `checkpoint`로 두면 이관 보호선이 멈춘 자리에 남는다(더 오래 미루는 쪽이라 위험하지는 않지만 이관이 쌓인다).
-- 이때 바뀌는 동작:
-  - 수집 커밋 뒤 신호를 받으면 노선별 실행 줄(`forecast-lane-<번호>-`, `FORECAST_LANES`개)에서 배치를 처리한다. 착수 시각은 처리를 시작할 때 찍고(DB 저장 자릿수인 마이크로초로 자른다) `forecast_run.confirmed_at`에 예측과 한 트랜잭션으로 적는다. 수신 뒤 90초를 넘겼으면 예보 없이 `LATE` 실행 줄만 남긴다. 옛 경로는 착수 시각을 먼저 따로 커밋해서 계산 중에 죽어도 처음 시각으로 다시 예보했지만, 본선은 다시 처리할 때 새 시각으로 판정하므로 그런 배치는 `LATE`가 된다.
-  - 기동 직후와 30초마다(`forecast.interval`) 신선도 창(10분) 안에서 "성공한 배치인데 `forecast_run`도 `input_confirmed_at`도 없는 것"을 줍는다. 옛 경로가 착수 시각을 찍은 배치는 이미 이력에 들어가 있어 다시 처리하지 않는다.
-  - 기동하면 노선 상태가 없으므로 노선마다 첫 배치에서 6시간을 되감는다. 착수 시각은 배치마다 `forecast_run.confirmed_at`이 있으면 그것, 없으면 `input_confirmed_at`이다. 그래서 넘어간 직후에도 옛 경로가 처리한 배치와 본선이 처리한 배치를 빈틈 없이 잇는다.
-  - 되감은 상태가 모자라면(최근에 보인 차량의 운행 시작을 보지 못했거나 이력이 미완) `FORECAST_REPLAY_EXTENDED_WINDOW`로 한 번 더 되감는다(`salmonbus_forecast_replay_extensions_total{result}`: `resolved`, `unresolved`, `failed`). 그래도 모자라면 지금처럼 그 차량이나 노선을 예보에서 뺀다. 연결 시작을 보지 못한 차량이 닫아서 저장하지 못한 통과는 `salmonbus_forecast_passes_unattributed_total`로 센다.
-  - 되감기에 실패하는 등 예보 단계를 돌리지 못하고 끝난 배치가 닫았을 통과는, 다음에 그 노선을 되감을 때 찾아 저장하고 채점에 넘긴다(`salmonbus_forecast_passes_recovered_total`).
-  - 처리 중 예외가 난 배치는 같은 줄에서 한 번 다시 처리한다(`salmonbus_forecast_batches_total{result="retried"}`). 또 실패하면 그 노선의 다음 배치가 그 배치부터 수신 순서로 다시 시도하고(`held`, 로그 `event=forecast_held`), 수신 뒤 90초가 지나면 `LATE`로 닫는다. 한 배치가 계속 실패하면 그 노선의 예보가 최대 90초쯤 밀린다. 앞서 반영한 배치보다 먼저 수신한 배치가 뒤늦게 오면 이력에 넣지 않는다(`out_of_order`).
-  - 정상 종료(배포, 재시작) 때는 수집과 줍기를 먼저 멈추고, 실행 줄과 채점 줄이 받은 일을 끝낸 뒤 채점 결과를 마지막으로 쓰고(`event=scoring_final_write`) DB 연결을 닫는다. 한도는 `FORECAST_SHUTDOWN_TIMEOUT`이다. 다 끝내면 `event=pipeline_shutdown_drained`, 한도를 넘겨 남은 일을 버리면 `event=pipeline_shutdown_abandoned`(버린 수가 필드에 있다), 단계가 실패하면 `event=pipeline_shutdown_stage_failed`가 남는다. 버린 배치는 다시 뜬 뒤 줍기가 잡고, 수신 뒤 90초가 지났으면 `LATE`가 된다. 강제 종료에서는 이 처리가 돌지 않는다.
-  - 모델 배포의 정산 근거(`model_deployment.settlement_context`)는 옛 발행 대신 본선이 (배포, 노선 판본)마다 한 번 적는다. 새 채점이 읽는다.
-  - 옛 정산 작업은 그대로 돌며 남은 옛 예측을 마저 정산한다. 채점 대조 작업은 돌지 않는다.
-- 확인: `salmonbus_forecast_batches_total{result}`에서 `published`·`empty`가 늘고 `failed`가 0이다. `salmonbus_forecast_replays_total{result="succeeded"}`가 노선 수만큼 한 번씩 늘고 `failed`가 없다. `salmonbus_forecast_excluded_total{reason}`은 다시 뜬 직후에만 늘고 곧 멈춘다. 재시작한 뒤에는 앞 프로세스의 마지막 로그가 `event=pipeline_shutdown_drained`인지 본다. `sal434-01-precheck.sql`의 3절에서 `old_forecast_published`가 멈추고 `new_forecast_run`·`new_stop_pass_closed`가 계속 늘어난다.
-- 넘어가는 기준: 운영 관찰 기간 동안 아래가 안정적이다.
-  - 예보 지연: `salmonbus_forecast_confirmation_lag_seconds`(수신→착수 분포)와 `salmonbus_forecast_batch_duration_seconds`.
-  - 늦어서 건너뛴 배치: `salmonbus_forecast_batches_total{result="late"}`. 옛 경로의 수신 뒤 90초 초과 비율과 비슷해야 한다.
-  - 줄 길이: `salmonbus_forecast_queue{lane}`. 계속 쌓이면 `FORECAST_LANES`를 늘린다. 넣지 못한 배치는 `salmonbus_forecast_rejected_total`.
-  - 채점 대기: `salmonbus_scoring_waiting`, `salmonbus_scoring_queue`.
-  - DB 연결: worker의 Hikari 풀은 5이고(`application.yml`), 본선의 줄 둘·줍기·수집·옛 정산·채점이 함께 쓴다. 줄은 문장을 실행하는 동안만 연결을 잡지만 `hikaricp_connections_pending`이 자주 0보다 크면 풀 크기를 올린다.
-- 되돌리기: worker.env를 `FORECAST_PIPELINE=v1`, `FORECAST_SCORING=off`(또는 그림자를 켜고 `shadow`)로 바꾸고, 정비 명령 `alighting-history-bootstrap`으로 체크포인트를 다시 만든 뒤 worker를 재시작한다. archive.env는 `ARCHIVE_HISTORY_HOLD=checkpoint`로 되돌린다. 옛 테이블과 트리거가 남아 있으므로 이 차례까지는 스위치로 되돌릴 수 있다. 본선이 처리한 구간의 배치에는 `input_confirmed_at`이 없어 옛 경로의 이력에 들어가지 않는다(부트스트랩이 다시 만든다).
+| 시점 | 되돌릴 수 있는가 | 알아 둘 것 |
+| --- | --- | --- |
+| 배포 뒤, 5번(`sal434-02`) 전 | 된다 | 이전 worker는 정비 명령 없이 서버의 체크포인트 파일에서 이어 간다. 새 worker가 돈 구간의 예측과 정답은 예보 기록 테이블에만 있고 이전 테이블에는 없다. 되돌린 직후 운행 중이던 차량은 그 운행이 끝날 때까지 짧은 이력으로 예측된다. 이전 worker가 "신선도 창을 지난 미발행 배치" 경고를 반복해 남기는데 새 worker 구간의 흔적이다 |
+| 5번 뒤 | 예보와 조회만 된다 | 정산 대기 줄이 생기지 않고 이전 정산 작업은 지워진 함수를 불러 실패한다. 트리거를 되살리는 SQL은 없다(정의는 V69·V80에 있다) |
+| 7번(`sal434-03`) 뒤 | 안 된다 | 이전 api는 지워진 테이블을 매핑하고 있어 기동하지 못한다 |
 
-*4-2. 새 채점 본선.* 4-1이 안정된 뒤 `FORECAST_SCORING=v2`로 worker를 재시작한다. 옛 정산 작업(`ArrivalLabelJob`, 하차 반영 모델의 대기열 채우기·투영 정리·정산)이 등록되지 않는다. 이 작업이 하는 일은 옛 정산뿐이라 다른 일은 멈추지 않는다.
-- 확인: worker 로그에서 `alighting_settlement_tick` 작업 기록이 사라지고, `salmonbus_scoring_written_total`은 계속 는다.
-- 되돌리기: `FORECAST_SCORING=shadow`로 재시작하면 옛 정산 작업이 다시 돈다.
+되돌린 뒤 다시 SAL-434를 올리면 예보 실행 줄이 이미 있어 첫 배포와 모양이 다르다. 노선 목록은 비지 않고, 보드는 새 worker의 첫 예보 실행 줄이 생길 때까지 503이다.
 
-**5. 옛 정산 트리거 삭제(승인).** 4번 관찰을 마치고 옛 정산이 멈춘 것을 확인한 뒤 실행한다.
+### 3. 서버에 남은 예전 기동 전 검사 걷기
+
+운영 서버에는 예전 전환(SAL-175) 때 설치한 기동 전 검사가 저장소 밖에 남아 있다. api·worker가 시작할 때마다 서버의 스크립트 사본이 DB를 보고, 이전 배포본의 대기 테이블과 뷰가 있어야 통과시킨다. **이 검사를 둔 채 7번을 실행하면 그 뒤로 api·worker가 다시 뜨지 못한다.** 지금 배포본에는 이 검사가 없다. 7번 전에 반드시 걷는다.
+
+```bash
+ls -l /etc/salmonbus/evaluation-work-transition.sh /etc/salmonbus/evaluation-work-hold \
+      /etc/systemd/system/salmonbus-api.service.d/ /etc/systemd/system/salmonbus-worker.service.d/
+D=~/sal434-retired-guards-$(date +%Y%m%d); mkdir -p "$D"
+sudo mv /etc/systemd/system/salmonbus-api.service.d/evaluation-work-transition.conf "$D/api-evaluation-work-transition.conf"
+sudo mv /etc/systemd/system/salmonbus-worker.service.d/evaluation-work-transition.conf "$D/worker-evaluation-work-transition.conf"
+sudo mv /etc/systemd/system/salmonbus-worker.service.d/alighting-cutover-hold.conf "$D/"
+sudo mv /etc/salmonbus/evaluation-work-transition.sh /etc/salmonbus/evaluation-work-hold "$D/"
+sudo systemctl daemon-reload
+systemctl cat salmonbus-api salmonbus-worker | grep -n 'evaluation-work\|cutover-hold'    # 아무것도 나오지 않아야 한다
+```
+
+- 서비스는 재시작하지 않는다. 다음 시작부터 검사 없이 뜬다.
+- 같은 폴더의 다른 드롭인(로그인, 도착 정보 등)은 건드리지 않는다.
+- 되돌리려면 옮겨 둔 파일을 제자리에 놓고 `daemon-reload`한다. 이전 배포본으로 되돌릴 때 이 검사가 없어도 이전 배포본은 뜬다.
+
+### 4. 이관 앱 교체, 날짜 단위 내보내기
+
+이전 배포본의 이관 앱은 노선·날짜 단위로 줄을 S3에 옮기고 지운다. 지금 배포본의 이관 앱은 닫힌 날짜의 파티션을 통째로 내보낸다(「운영 원본 이관」). 이관 앱은 CodeDeploy 대상이 아니다. 같은 커밋의 빌드가 만든 묶음(`build/revision/archive`: JAR, unit, `release-manifest.txt`)을 사람이 서버에 올린다.
+
+1. 이관 서비스를 멈춘다(`sudo systemctl stop salmonbus-archive`). 이전 배포본의 줄 단위 이관이 여기서 끝난다.
+2. 묶음을 `/opt/salmonbus/archive/` 아래 새 폴더에 풀고 `current`를 그 폴더로 옮긴다. unit 파일을 `/etc/systemd/system/salmonbus-archive.service`에 놓고 `daemon-reload`한다. 새 unit은 `SuccessExitStatus=143`이라 멈출 때 실패로 남지 않는다.
+3. `/etc/salmonbus/archive.env`에서 이전 키(`ARCHIVE_ENABLED`, `ARCHIVE_DELETE_ENABLED`, `ARCHIVE_PREFIX`, `ARCHIVE_PAGE_SIZE`, `ARCHIVE_INTERVAL`)를 지우고 `ARCHIVE_PARTITION_EXPORT_ENABLED=true`를 넣는다. 지우기(`ARCHIVE_PARTITION_EXPORT_DROP_ENABLED`)는 아직 켜지 않는다. 키와 기본값은 `deploy/archive.env.example`에 있다.
+4. 서비스를 시작한다. `event=partition_export_config`와 `status=EXPORTED`·`status=VERIFIED` 로그, `daily_export`의 `verified_at`을 본다. 보관 날짜 수는 4일이라 배포한 지 나흘이 지나야 첫 대상 날짜가 생긴다.
+5. 하루치를 「날짜 단위 내보내기」의 "되살리는 방법"으로 S3 파일만 써서 되살려 원본 파티션과 줄 단위로 같은지 확인한다.
+6. `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED=true`로 바꾸고 재시작한다. `status=DROPPED`와 `daily_export.dropped_at`을 본다.
+
+관측 두 테이블은 8번을 마칠 때까지 일반 테이블이라 날짜 단위 내보내기가 건너뛴다. 이전 배포본의 이관 앱이 S3에 올려 둔 객체는 지우지 않는다.
+
+### 5. 옛 정산 트리거 삭제(승인)
+
+지금 배포본으로 며칠 운영해 예보와 채점이 쌓이는 것을 확인하고, 이전 배포본으로 되돌리지 않기로 정한 뒤 실행한다.
+
 1. `sal434-01-precheck.sql`을 실행해 보관한다. 4절에 트리거 9개·함수 7개가 보인다.
-2. `sal434-02-drop-legacy-triggers.sql`을 실행한다. 가드가 최근 15분 안의 옛 정산 흔적(근거 저장, 배치 임대)과 옛 예보 발행, 90초 동안의 옛 정산·예보 테이블 쓰기를 보고, 새 채점의 통과 기록이 24시간 안에 있는지 본다. 약 90초 걸린다.
-3. 다시 `sal434-01-precheck.sql`을 실행해 4절이 비었는지 본다.
+2. `sal434-02-drop-legacy-triggers.sql`을 실행한다. 가드가 최근 15분 안의 이전 정산 흔적(근거 저장, 배치 임대)과 이전 예보 발행, 90초 동안의 이전 정산·예보 테이블 쓰기를 보고, 지금 배포본의 닫힌 통과(`stop_pass`)와 정답 계산(`pass_label`)이 둘 다 24시간 안에 있는지 본다. 약 90초 걸린다.
+3. 다시 `sal434-01-precheck.sql`을 실행해 4절과 5-3절이 비었는지 본다.
+
 - 넘어가는 기준: 트리거가 없어진 뒤 수집·예보·채점 지표가 그대로다.
-- 되돌리기: `sal434-02-rollback-recreate-legacy-triggers.sql`을 실행한 뒤 4번의 되돌리기를 한다. 이 SQL은 활성 옛 정산 근거를 모두 무효로 표시해 처음부터 다시 만들게 한다. 트리거가 없던 동안 발행한 예측의 옛 정산 대기 줄은 다시 생기지 않는다. 7번 뒤에는 쓸 수 없다.
+- 이 뒤로 이전 배포본으로 되돌리면 이전 정산이 돌지 못한다.
 
-**6. 날짜 단위 내보내기.** archive.env에 `ARCHIVE_PARTITION_EXPORT_ENABLED=true`를 넣고 이관 앱을 재시작한다. 지우기 스위치는 아직 켜지 않는다.
-- 넘어가는 기준: 하루치를 S3 파일만으로 되살려 예측별 결과가 옛 결과 줄과 맞는다. 그다음 `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED=true`로 새 테이블의 오래된 파티션 삭제를 켠다.
-- 옛 테이블 25개는 이 스위치가 아니라 6-1번에서 내보낸다.
-- 되돌리기: 스위치를 끈다. 지우기 스위치를 켜기 전까지는 DB의 줄이 그대로다.
+### 6. 옛 테이블 내보내기
 
-**6-1. 옛 테이블 내보내기.** 7번이 장부를 확인한다. **계약: 줄이 있는 옛 테이블마다 `daily_export`에서 `table_name`이 그 테이블이고 `verified_at`이 찍힌 줄의 `row_count` 합이 테이블의 줄 수와 같고, 옛 테이블 조각(`source_date = 2000-01-01`)의 번호가 0부터 빈틈없이 이어져야 한다.** 동작과 설정은 「옛 테이블 내보내기」에 있다.
-1. **줄 단위 이관을 멈춘다.** 노선 판본 이관은 내보낸 줄을 지우므로 함께 돌면 장부와 줄 수가 어긋난다. archive.env에 `ARCHIVE_ENABLED=false`를 넣는다(이 둘을 함께 켜면 이관 앱이 기동하지 않는다).
-2. **옛 경로가 더 쓰지 않는지 확인한다.** 4·5번이 끝나 있어야 한다. `sal434-01-precheck.sql`을 몇 분 간격으로 두 번 실행해 2절의 대상 테이블 `inserts`·`updates`·`deletes`가 늘지 않는지, 3절의 `old_*` 시각이 멈췄는지 본다.
-3. archive.env에 `ARCHIVE_LEGACY_EXPORT_ENABLED=true`를 넣고 이관 앱을 재시작한다. 처음에는 기본값으로 두고 RDS 처리량 크레딧, `api.board` 지연, `salmonbus_archive_legacy_rows_per_second`를 보며 `PAGE_PAUSE`·`PAGE_SIZE`·`MAX_ROWS_PER_RUN`·`INTERVAL`을 조절한다. 걸리는 시간은 운영에서 재야 한다(「옛 테이블 내보내기」의 추정 참고).
-4. 진행은 `status=SEGMENT`·`status=RUN` 로그와 `salmonbus_archive_legacy_exported_rows{table}`로 본다. 테이블마다 `status=COMPLETE`와 `salmonbus_archive_legacy_complete{table}=1`이 나오면 끝이다. `status=MISMATCH`가 있으면 원인을 찾고 「옛 테이블 내보내기」의 방법으로 다시 내보낸다.
-5. `sal434-01-precheck.sql`을 `-c "SET sal434.count_legacy_rows = 'exact'"`와 함께 실행해 8-2절에서 테이블마다 `exact_rows`와 `verified_ledger_rows`가 같고 `sal434_03_ledger_check`가 `ok`인지 본다. 옛 테이블 전체를 읽으므로 크레딧이 충분할 때 한다. 출력을 보관한다.
-6. `ARCHIVE_LEGACY_EXPORT_ENABLED=false`로 이관 앱을 재시작하고 7번 승인을 받는다. 켜 둔 채면 회차마다 테이블의 마지막 키 뒤를 읽어 `sal434-03`의 읽기 관찰 가드(120초)가 멈춘다. 5번의 줄 수 확인은 스위치를 끈 뒤에 해도 된다.
+7번이 장부를 확인한다. **계약: 줄이 있는 옛 테이블마다 `daily_export`에서 `table_name`이 그 테이블이고 `verified_at`이 찍힌 줄의 `row_count` 합이 테이블의 줄 수와 같고, 옛 테이블 조각(`source_date = 2000-01-01`)의 번호가 0부터 빈틈없이 이어져야 한다.** 동작과 설정은 「옛 테이블 내보내기」에 있다.
+
+1. **옛 테이블에 쓰는 곳이 없는지 확인한다.** 4번에서 이전 배포본의 이관 앱을 멈췄고 5번이 끝나 있어야 한다. `sal434-01-precheck.sql`을 몇 분 간격으로 두 번 실행해 2절의 대상 테이블 `inserts`·`updates`·`deletes`가 늘지 않는지, 3절의 `old_*` 시각이 멈췄는지 본다.
+2. archive.env에 `ARCHIVE_LEGACY_EXPORT_ENABLED=true`를 넣고 이관 앱을 재시작한다. 처음에는 기본값으로 두고 RDS 처리량 크레딧, 보드 응답 지연, `salmonbus_archive_legacy_rows_per_second`를 보며 `PAGE_PAUSE`·`PAGE_SIZE`·`MAX_ROWS_PER_RUN`·`INTERVAL`을 조절한다. 걸리는 시간은 운영에서 재야 한다.
+3. 진행은 `status=SEGMENT`·`status=RUN` 로그와 `salmonbus_archive_legacy_exported_rows{table}`로 본다. 테이블마다 `status=COMPLETE`와 `salmonbus_archive_legacy_complete{table}=1`이 나오면 끝이다. `status=MISMATCH`가 있으면 원인을 찾고 「옛 테이블 내보내기」의 방법으로 다시 내보낸다.
+4. `ARCHIVE_LEGACY_EXPORT_ENABLED=false`로 이관 앱을 재시작한다. 켜 둔 채면 회차마다 테이블의 마지막 키 뒤를 읽어 `sal434-03`의 읽기 관찰(120초)이 멈춘다.
+5. `sal434-01-precheck.sql`을 실행해 8-2절에서 옛 테이블 조각 번호가 이어지는지, 작은 테이블의 줄 수가 장부와 같은지 본다. 큰 테이블의 줄 수는 3번의 `status=COMPLETE`와 7번의 가드가 확인한다. 출력을 보관하고 7번 승인을 받는다.
+
 - 되돌리기: 스위치를 끄고 재시작한다. DB의 줄은 그대로이고 장부와 S3 파일은 남는다.
 
-**7. 옛 테이블 삭제(승인).** 다음을 모두 확인한 뒤 실행한다. **이 차례는 되돌릴 수 없다.**
-- 6-1번이 끝났다. 모든 옛 테이블이 `status=COMPLETE`이고 `sal434-01`의 8-2절이 `ok`다. 그 뒤 옛 테이블에 쓴 곳이 없다.
-- api·worker에 옛 테이블을 매핑한 코드가 없는 배포본이 올라가 있다. **SAL-434 배포본의 api는 `seat_forecast`·`forecast_publication` JPA 엔티티를 갖고 있고 `ddl-auto: validate`라서, 테이블을 지운 뒤 다시 뜨면 스키마 검증에서 멈춘다.** 옛 경로 코드를 지운 후속 배포가 먼저다. SQL은 배포본을 볼 수 없으므로 사람이 확인한다.
-- `BOARD_FORECAST_SOURCE=record`로 api를 재시작했다(`auto`도 옛 테이블을 읽는다).
-- 옛 이관 앱(노선 판본 이관, `ARCHIVE_ENABLED`)이 멈춰 있다. 옛 테이블을 읽는 대시보드·수동 스크립트·저장소 밖 도구(`docs/salmon-action` 추출기 등)를 멈췄다. 가드가 120초 동안 읽기 통계를 보고 읽는 곳이 있으면 멈춘다.
-- **운영 서버의 배포 가드 사본을 바꿨다.** SAL-175 전환 때 `prepare`가 `/etc/salmonbus/evaluation-work-transition.sh`와 서비스 기동 전 검사(`/etc/systemd/system/salmonbus-{api,worker}.service.d/evaluation-work-transition.conf`)를 설치했다. 옛 사본은 7번 뒤의 DB를 "지원하지 않는 상태"로 보고 서비스 재시작을 막는다. SAL-434 배포본의 스크립트는 옛 대기 테이블·뷰·`seat_forecast`가 모두 없고 새 예보 테이블이 있는 DB를 `retired`로 받아들인다(V81 이상 배포본만). 하나만 없어진 중간 상태는 계속 막는다.
+### 7. 옛 테이블 삭제(승인)
 
-  ```bash
-  ls -l /etc/salmonbus/evaluation-work-transition.sh /etc/systemd/system/salmonbus-*.service.d/evaluation-work-transition.conf
-  # 사본이 있으면 이번 배포판의 스크립트로 바꾼다. 서비스는 재시작하지 않는다
-  sudo install -m 644 -o root -g root /opt/salmonbus/api/current/scripts/evaluation-work-transition.sh /etc/salmonbus/evaluation-work-transition.sh
-  sudo bash /etc/salmonbus/evaluation-work-transition.sh runtime api && echo 통과      # 지금은 work로 통과해야 한다
-  sudo bash /etc/salmonbus/evaluation-work-transition.sh runtime worker && echo 통과
-  ```
+다음을 모두 확인한 뒤 실행한다. **이 차례는 되돌릴 수 없다.**
 
-- RDS EBS 처리량 크레딧(최근 1시간 최소 20% 이상)과 여유 저장공간을 확인했다. 가드가 옛 테이블 전체(운영 DB 용량의 대부분)를 한 번 센다. 쓰기는 막고 읽기는 허용한 채 수십 분이 걸릴 수 있다(추정).
+- 3번을 마쳤다(서버의 예전 기동 전 검사가 없다). SQL은 서버의 파일을 볼 수 없다.
+- 5번과 6번을 마쳤다. 모든 옛 테이블이 `status=COMPLETE`이고 옛 테이블 내보내기를 껐다.
+- 옛 테이블을 읽는 대시보드·수동 조회·저장소 밖 도구(모델 학습 자료 추출 등)를 멈췄다. 가드가 120초 동안 읽기 통계를 보고 읽는 곳이 있으면 멈춘다. `sal434-01-precheck.sql`도 옛 테이블을 읽으므로 이 관찰과 겹쳐 실행하지 않는다.
+- RDS 처리량 크레딧과 여유 저장 공간을 확인했다. 가드가 쓰기를 막은 채 옛 테이블 전체를 한 번 센다. 읽기는 허용되지만 오래 걸릴 수 있다. 쓰기가 뜸한 시간에 한다.
 
 실행 순서는 다음과 같다.
-1. `sal434-01-precheck.sql`을 실행해 보관한다. 5-1절에서 `referencing_is_target=false`인 FK가 관측 두 테이블 쪽(`vehicle_observation`, 운영의 `historical_import_record`·`migration_source_record`)뿐인지, 5-2절에서 대상 밖의 뷰가 `operational_observation`뿐인지, 5-3절이 비었는지, 8-2절에서 줄이 있는 테이블마다 장부 합이 실제 줄 수와 같은지(`sal434_03_ledger_check`) 본다. 6-1절의 운영 전용 테이블이 대상을 가리키면 사람이 처리 방법을 정한다.
+
+1. `sal434-01-precheck.sql`을 실행해 보관한다. 5-1절에서 `referencing_is_target=false`인 FK가 관측 두 테이블 쪽(`vehicle_observation`, 운영의 `historical_import_record`·`migration_source_record`)뿐인지, 5-2절에서 대상 밖의 뷰가 `operational_observation`뿐인지, 5-3절이 비었는지 본다. 6-1절의 운영 전용 테이블이 대상을 가리키면 사람이 처리 방법을 정한다.
 2. `sal434-03-drop-legacy-tables.sql`을 `sal434.confirm_drop`과 함께 실행한다. 지우기 전에 테이블마다 정확한 줄 수와 크기가 NOTICE로 남는다. 출력을 보관한다.
-3. `sal434-01-precheck.sql`을 다시 실행한다. 10절이 `retired`여야 한다. api·worker를 하나씩 재시작해 배포 가드와 스키마 검증을 통과하는지 본다.
-- Flyway는 적용 이력과 파일 체크섬만 보므로 이 뒤의 배포에서도 `validate`·`migrate`가 통과한다(시험으로 확인). 수동으로 지운 상태는 전환이 끝난 뒤 마무리 PR에서 `IF EXISTS` 마이그레이션으로 맞춘다.
+3. `sal434-01-precheck.sql`을 다시 실행해 2절의 대상이 없는지 본다. api·worker를 하나씩 재시작해 그대로 뜨는지 본다.
 
-**8. 관측 테이블 날짜 나눔(승인), 이관 앱 내림.** dev에서 같은 절차를 먼저 해 보고 걸린 시간을 기록한다. 수집이 뜸한 02~05시에 한다.
-1. 운영에만 있는 `historical_import_record`·`migration_source_record`의 FK가 남아 있으면 「옛 이관 기록 테이블의 FK 정리」로 먼저 지운다. 04가 이 FK를 보고 멈춘다.
+Flyway는 적용 이력과 파일 체크섬만 보므로 이 뒤의 배포에서도 `validate`·`migrate`가 통과한다(테스트로 확인).
+
+### 8. 관측 테이블 날짜 나눔(승인)
+
+공유 dev 서버에서 같은 절차를 먼저 해 보고 걸린 시간을 기록한다. 수집이 뜸한 02~05시에 한다.
+
+1. 운영에만 있는 `historical_import_record`·`migration_source_record`의 FK가 남아 있으면 「옛 이관 기록 테이블의 FK 정리」로 먼저 지운다. `sal434-04`가 이 FK를 보고 멈춘다.
 2. `sal434-04a-prepare-observation-partition.sql`을 실행한다. 열 추가는 바로 끝나고, 확인 제약 확인과 유일 인덱스 다섯 개 생성은 쓰기를 막지 않지만 테이블을 여러 번 읽는다(크레딧 확인). 마지막 조회에서 다섯 인덱스가 모두 `valid`여야 한다.
-3. `sal434-04-partition-observation-tables.sql`을 `sal434.confirm_partition`, `sal434.count_rows`와 함께 실행한다. `exact`는 잠금을 잡은 채 두 테이블을 바꾸기 전과 뒤에 세어 대조한다. 그동안 수집 쓰기가 기다린다. `storage`는 세지 않고 저장 파일이 그대로 파티션이 됐는지만 본다. dev 리허설에서 `exact`에 걸린 시간을 보고 고른다.
-4. `sal434-01-precheck.sql`의 7·9절에서 `observation_batch_legacy`·`vehicle_observation_legacy`, 오늘부터 사흘 뒤까지의 날짜 파티션, 기본 파티션을 확인한다. 수집 한 회차 뒤 새 줄이 오늘 파티션에 들어갔는지 본다.
+3. `sal434-04-partition-observation-tables.sql`을 `sal434.confirm_partition`, `sal434.count_rows`와 함께 실행한다. `exact`는 잠금을 잡은 채 두 테이블을 바꾸기 전과 뒤에 세어 대조한다. 그동안 수집 쓰기가 기다린다. `storage`는 세지 않고 저장 파일이 그대로 파티션이 됐는지만 본다. dev에서 `exact`에 걸린 시간을 보고 고른다.
+4. `sal434-01-precheck.sql`의 7·9절에서 첫 파티션(`observation_batch_initial`, `vehicle_observation_initial`), 오늘부터 사흘 뒤까지의 날짜 파티션, 기본 파티션을 확인한다. 수집 한 회차 뒤 새 줄이 오늘 파티션에 들어갔는지 본다.
 5. 부모 통계를 모은다: `ANALYZE observation_batch; ANALYZE vehicle_observation;`(파티션 전체에서 표본을 읽는다).
-6. 이관 앱(`salmonbus-archive`)의 옛 노선 판본 이관을 내린다. 이관 앱은 CodeDeploy 대상이 아니므로 서버에서 서비스를 멈추고 지운다.
-- 이 SQL 뒤에 달라지는 것:
-  - 두 테이블 사이의 FK(`fk_observation_batch`)가 없어진다. 관측은 응답을 받은 날, 배치는 예약한 날을 기본값으로 받아 자정 근처에 날짜가 다를 수 있어서, 날짜를 넣은 FK를 둘 수 없다.
-  - 유일 제약은 날짜 파티션 안에서만 지킨다(`id`, 노선 판본+시도 키, 배치+줄 번호, 배치+차량). 한 배치의 관측은 한 트랜잭션에서 들어가 같은 날짜가 되므로 배치 안 유일성의 뜻은 그대로다. 시도 키는 예약 시각을 담고 있어 날짜가 다른 같은 키는 생기지 않는다.
-  - 수집이 켜진 worker(`COLLECTION_ENABLED=true`)의 날짜 파티션 유지 작업은 두 테이블이 파티션 테이블(`relkind='p'`)이면 예보 스위치와 무관하게 오늘부터 사흘 뒤까지 같은 이름 규칙(`<테이블>_pYYYYMMDD`)으로 파티션을 미리 만든다. 일반 테이블인 동안에는 카탈로그만 읽는다. 기동 직후 한 번, 그 뒤 1시간마다 돌며 만든 파티션은 `event=partitions_created`, 기본 파티션에 쌓인 줄은 `salmonbus_partition_default_rows{table}`로 본다. 만들지 못하면 새 줄이 기본 파티션에 쌓이고(동작은 한다), 기본 파티션에 그 날짜의 줄이 생긴 뒤에는 그 날짜 파티션을 만들 수 없다.
-- 되돌리기: `sal434-04-rollback-unpartition-observation-tables.sql`을 `sal434.confirm_partition_rollback`과 함께 실행한다. 날짜·기본 파티션의 줄을 id 그대로 옛 테이블로 옮기고 원래 이름·IDENTITY·FK를 되돌린다. 옮기는 줄이 옛 유일 제약에 걸리면 멈춘다.
 
-**9. 수집 묶음 넣기.** `COLLECTION_BULK_INSERT=true`로 worker를 재시작한다.
-- 넘어가는 기준: 수집 지표(회차 시간, 실패, 하루 한도 사용량)가 전과 같다.
-- 되돌리기: `false`로 재시작한다.
+이 SQL 뒤에 달라지는 것:
+
+- 두 테이블 사이의 FK(`fk_observation_batch`)가 없어진다. 관측은 응답을 받은 날, 배치는 예약한 날을 기본값으로 받아 자정 근처에 날짜가 다를 수 있어서, 날짜를 넣은 FK를 둘 수 없다.
+- 유일 제약은 날짜 파티션 안에서만 지킨다(`id`, 노선 판본+시도 키, 배치+줄 번호, 배치+차량). 한 배치의 관측은 한 트랜잭션에서 들어가 같은 날짜가 되므로 배치 안 유일성의 뜻은 그대로다.
+- worker의 파티션 유지 작업이 두 테이블의 날짜 파티션도 사흘 앞까지 만든다. 두 테이블이 파티션 테이블인지는 카탈로그에서 읽으므로 재시작하지 않아도 된다.
+- 이관 앱이 관측 두 테이블의 닫힌 날짜 파티션도 내보내고 지운다. 바꾸기 전 줄을 담은 첫 파티션은 줄이 모두 보관 날짜를 지난 뒤 내보내고 지운다. 그러면 V84가 만든 DB와 같은 스키마가 된다.
+
+되돌리기: `sal434-04-rollback-unpartition-observation-tables.sql`을 `sal434.confirm_partition_rollback`과 함께 실행한다. 날짜·기본 파티션의 줄을 id 그대로 옛 테이블로 옮기고 원래 이름·IDENTITY·FK를 되돌린다. 이관 앱이 첫 파티션을 지운 뒤에는 되돌릴 수 없다.
+
+### 9. 후속 정리
+
+전환이 끝난 뒤 따로 PR을 올려 지운다.
+
+- 수동 SQL(`deploy/sql/sal434-*.sql`)과 그 테스트, 이관 앱의 옛 테이블 내보내기(`ARCHIVE_LEGACY_EXPORT_*`)
+- `observation_batch.input_confirmed_at`을 읽는 되감기의 대비 경로. 이전 배포본이 처리한 배치가 되감기 창(12시간)을 벗어난 뒤에는 쓰이지 않는다
+- 서버 `worker.env`에 남은 이전 키(`FORECAST_COMPACT_SETTLEMENT_WRITE`, `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`, `FORECAST_ARCHIVE_ENABLED`, `FORECAST_ARCHIVE_DELETE_ENABLED`)와 서버의 체크포인트 폴더. dev 서버는 `worker.env`의 `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`를 지운 뒤 dev 도구가 이 키를 허용하는 부분도 지운다
+- 3번에서 옮겨 둔 파일
+
+### 공유 dev 서버
+
+dev 서버 DB도 줄이 있는 DB다. dev 배포 도구는 자료를 그대로 두므로, 배포 뒤 dev는 운영이 배포 직후에 놓이는 것과 같은 상태가 된다(이전 테이블 25개가 남고 관측 두 테이블은 일반 테이블). 운영보다 먼저 같은 순서를 밟아 걸리는 시간을 잰다.
+
+- dev는 worker 묶음에 이관 앱을 함께 싣는다(`dev/server/systemd/salmonbus-archive.service`). 내보낸 파일은 S3 대신 서버 폴더에 둔다. 4번의 교체는 배포가 한다.
+- dev worker 유닛에도 `alighting-cutover-hold.conf` 드롭인이 남아 있다. 3번처럼 옮겨 둔다.
+- dev의 이전 테이블 자료는 모의 수집으로 만든 것이라 보존하지 않아도 된다. 6번은 둘 가운데 고른다. 운영과 같은 순서로 내보내기까지 해 보거나(유닛에 `ARCHIVE_LEGACY_EXPORT_ENABLED=true`를 드롭인으로 준다), 승인을 받아 이전 테이블을 비운 뒤 7번으로 간다(줄이 없는 테이블은 장부를 보지 않는다). dev DB에 쓰는 일이므로 어느 쪽이든 승인을 받는다.
+- 8번은 `sal434.count_rows = 'exact'`로 실행해 잠금을 잡고 있던 시간을 기록한다.
+- dev 서버는 메모리 여유가 작다. 이관 앱이 더해진 뒤 `free -m`으로 스왑이 늘지 않는지 본다.
+
+### 운영 중 참고
+
+- **설정.** worker의 예보 설정은 `FORECAST_ENABLED`와 `FORECAST_LANES`(노선별 실행 줄 수, 기본 2)뿐이다. 나머지 값은 `application.yml`에 있고 환경변수로 바꾸지 않는다.
+- **순서.** 예보는 노선 판본마다 처리하지 않은 배치를 수신 순서로 읽어 차례로 처리한다. 같은 노선은 항상 같은 실행 줄에서 돈다. 수집이 커밋한 뒤의 신호와 30초마다 도는 줍기가 이 처리를 깨운다. 처리 중 예외가 난 배치는 한 번 다시 하고, 또 실패하면 수신 뒤 90초가 지날 때까지 그 노선의 뒤 배치를 붙잡는다(`event=forecast_sweep_blocked`). 한 배치가 계속 실패하면 그 노선의 예보가 최대 90초쯤 밀린다.
+- **기동.** 날짜 파티션 확인 → 수집 시작 → 모델 적재 직후 첫 줍기 순서다. 채점은 노선마다 저장까지 마친 마지막 사건에서 130분 앞부터(길어도 26시간) 예보와 통과를 다시 읽어, 멈춘 동안 닫지 못한 예측을 닫는다. 26시간보다 오래 멈췄다면 그 앞의 예측은 닫히지 않은 채 남는다.
+- **종료.** 정상 종료(배포, 재시작) 때 실행 줄과 채점 줄이 받은 일을 끝내고 닫힌다. 다 끝내면 `event=forecast_stopped`·`event=scoring_stopped`, 시한을 넘기면 `event=forecast_stop_timeout`·`event=scoring_stop_timeout`이 남는다. 끝내지 못한 배치는 다시 뜬 뒤 줍기가 잡고, 수신 뒤 90초가 지났으면 `LATE`가 된다. 기다리는 시간의 합은 systemd의 `TimeoutStopSec`(45초) 안이다.
+- **로그.** `event=forecast_model_used`(쓴 모델), `forecast_route_skipped`·`forecast_unsupported_profile`(건너뛴 노선), `forecast_vehicle_withheld`(예보에서 뺀 차량과 사유), `forecast_replay_failed`(되감기 실패), `forecast_passes_recovered`(되감기에서 되찾은 통과), `scoring_write_failed`, `partitions_created`·`partition_create_failed`·`partition_default_rows`, `forecast_accuracy`(5분마다 정확도 집계)다.
+- **지표.** 예보는 `salmonbus_forecast_*`(`batches_total{result}`, `confirmation_lag_seconds`, `batch_duration_seconds`, `queue{lane}`, `rejected_total`, `unrouted_total`, `replays_total`, `replay_extensions_total`, `excluded_total{reason}`, `passes_recovered_total`, `passes_unattributed_total`), 채점은 `salmonbus_scoring_*`(`written_total{table}`, `results_total`, `waiting`, `queue`, `pending_rows`, `dropped_total`, `write_failures_total`, `replays_total`), 파티션은 `salmonbus_partition_*`(`created_total`, `default_rows{table}`, `failures_total`)이다. worker 작업 시간은 `salmonbus_worker_operation_seconds{operation}`의 `forecast_batch`·`forecast_pickup`·`scoring_write`로 본다.
+- **DB 연결.** worker의 연결 풀은 5개이고 실행 줄 둘·줍기·수집·채점이 함께 쓴다. `hikaricp_connections_pending`이 자주 0보다 크면 풀 크기를 올린다.
+- **worker는 한 대만 띄운다.** 두 대가 자정에 걸쳐 같은 수집을 하면 날짜가 다른 파티션에 같은 시도 키가 한 줄씩 들어갈 수 있다(유일 제약은 날짜 안에서만 지킨다).
+- **개발 데이터 초기화.** `LocalData --reset-generated`는 관측 테이블, 예보 기록 테이블, 내보내기 장부를 함께 비운다.
