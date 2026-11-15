@@ -12,11 +12,16 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
 import java.sql.Statement;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
@@ -31,11 +36,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * SAL-434 운영 전환 수동 SQL({@code deploy/sql/sal434-*.sql})과 배포 가드의 DB 판정을 PostgreSQL 18에서 확인한다.
+ * SAL-434 전환 수동 SQL({@code deploy/sql/sal434-*.sql})과, 줄이 없는 DB에서 같은 일을 하는 마이그레이션을 PostgreSQL 18에서
+ * 확인한다.
  *
  * <p>마이그레이션을 끝까지 적용한 DB에 운영에만 있는 객체(수동 인덱스, 옛 이관 기록 테이블과 그 FK, 배치의 이관 묶음 FK)를
- * 흉내 내고 옛 경로의 줄을 넣은 것을 원본으로 한 번 만든다. 시험마다 그 원본을 복제한 새 DB를 쓴다. SQL 파일은 psql처럼
- * 한 연결에서 문장 단위로 실행하고, 실패하면 그 연결의 트랜잭션을 되돌린다.
+ * 흉내 내고 이전 배포본이 쓰던 테이블에 줄을 넣은 것을 원본으로 한 번 만든다. 시험마다 그 원본을 복제한 새 DB를 쓴다. SQL 파일은
+ * psql처럼 한 연결에서 문장 단위로 실행하고, 실패하면 그 연결의 트랜잭션을 되돌린다.
  */
 class ForecastPipelineTransitionSqlTest {
     private static final List<String> LEGACY_TABLES = List.of("alighting_settlement_pass",
@@ -157,6 +163,101 @@ class ForecastPipelineTransitionSqlTest {
     }
 
     @Test
+    void 사전_확인은_마이그레이션이_만든_테이블과_날짜_파티션을_마이그레이션에_없는_것으로_보이지_않는다() throws Exception {
+        // given
+        try (TestDatabase empty = TestDatabase.create()) {
+            flyway(empty).load().migrate();
+
+            // when
+            List<String> plain = outsideMigrations(connection);
+            retireLegacyTables();
+            partitionObservations("storage");
+            List<String> converted = outsideMigrations(connection);
+            List<String> migrated;
+            try (Connection target = empty.connection()) {
+                migrated = outsideMigrations(target);
+            }
+
+            // then
+            SoftAssertions softly = new SoftAssertions();
+            softly.assertThat(plain).as("줄이 있어 관측 테이블이 일반 테이블인 DB").containsExactly(OPERATIONS_ONLY_TABLES);
+            softly.assertThat(converted).as("수동 SQL로 관측 테이블을 날짜 파티션으로 바꾼 DB")
+                .containsExactly(OPERATIONS_ONLY_TABLES);
+            softly.assertThat(migrated).as("줄이 없어 마이그레이션이 관측 테이블을 날짜 파티션으로 만든 DB").isEmpty();
+            softly.assertAll();
+        }
+    }
+
+    @Test
+    void 사전_확인은_옛_테이블마다_장부가_줄_수와_맞는지와_조각_번호가_이어지는지를_보인다() throws Exception {
+        // given
+        run("sal434-02-drop-legacy-triggers.sql", FAST);
+        insertForecast("2");
+        writeLedger();
+
+        // when
+        Map<String, String> matched = ledgerState("seat_forecast");
+        Map<String, String> empty = ledgerState("archive_legacy_member");
+        execute("DELETE FROM daily_export WHERE table_name = 'seat_forecast'");
+        writeSegment("seat_forecast", 0, 1);
+        writeSegment("seat_forecast", 2, 1);
+        Map<String, String> gap = ledgerState("seat_forecast");
+        execute("DELETE FROM seat_forecast WHERE vehicle_observation_id = 2");
+        Map<String, String> removed = ledgerState("seat_forecast");
+
+        // then
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(matched).containsEntry("exact_rows", "2").containsEntry("verified_ledger_rows", "2")
+            .containsEntry("segments_contiguous", "t").containsEntry("sal434_03_ledger_check", "ok");
+        softly.assertThat(empty).containsEntry("exact_rows", "0").containsEntry("sal434_03_ledger_check", "ok(empty)");
+        softly.assertThat(gap).containsEntry("segments", "2").containsEntry("last_segment", "2")
+            .containsEntry("segments_contiguous", "f").containsEntry("sal434_03_ledger_check", "segment gap");
+        softly.assertThat(removed).containsEntry("exact_rows", "1").containsEntry("verified_ledger_rows", "2")
+            .containsEntry("sal434_03_ledger_check", "mismatch");
+        softly.assertAll();
+    }
+
+    @Test
+    void 사전_확인은_정답을_마지막으로_계산한_시각을_보인다() throws Exception {
+        // given
+        execute("UPDATE pass_label SET computed_at = timestamptz '2026-11-15T03:04:05Z'");
+
+        // when
+        String computed = evidence("new_pass_label_computed");
+        execute("DELETE FROM pass_label");
+        String none = evidence("new_pass_label_computed");
+
+        // then
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(OffsetDateTime.parse(computed).toInstant()).isEqualTo(Instant.parse("2026-11-15T03:04:05Z"));
+        softly.assertThat(none).isNull();
+        softly.assertAll();
+    }
+
+    @Test
+    void 사전_확인은_관측_테이블의_전환_준비와_바꾼_뒤의_첫_파티션을_보인다() throws Exception {
+        // given
+        retireLegacyTables();
+        run("drop-historical-import-batch-fks.sql");
+        run("sal434-04a-prepare-observation-partition.sql");
+
+        // when
+        List<String> prepared = observationTables();
+        List<Map<String, String>> indexes = precheck(connection, "prebuilt_index");
+        run("sal434-04-partition-observation-tables.sql", confirmPartition(), "SET sal434.count_rows = 'storage'");
+        List<String> converted = observationTables();
+
+        // then
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(prepared).containsExactly("observation_batch:r:t:t", "vehicle_observation:r:t:t");
+        softly.assertThat(indexes).hasSize(5).allSatisfy(index ->
+            assertThat(index).containsEntry("valid", "t").containsEntry("ready", "t"));
+        softly.assertThat(converted).containsExactly("observation_batch:p:t:null", "observation_batch_initial:r:t:t",
+            "vehicle_observation:p:t:null", "vehicle_observation_initial:r:t:t");
+        softly.assertAll();
+    }
+
+    @Test
     void 옛_정산_트리거를_지운_뒤에도_관측과_예측을_저장하고_대기_줄은_더_생기지_않는다() throws Exception {
         // when
         run("sal434-02-drop-legacy-triggers.sql", FAST);
@@ -201,14 +302,14 @@ class ForecastPipelineTransitionSqlTest {
 
         // then
         SoftAssertions softly = new SoftAssertions();
-        softly.assertThat(actual).hasMessageContaining("옛 정산이");
+        softly.assertThat(actual).hasMessageContaining("옛 정산이").hasMessageContaining("이전 배포본으로 되돌린 worker");
         softly.assertThat(number(LEGACY_TRIGGERS)).isEqualTo(9);
         softly.assertThat(number(LEGACY_FUNCTIONS)).isEqualTo(7);
         softly.assertAll();
     }
 
     @Test
-    void 옛_예보가_아직_발행하거나_새_채점이_돌지_않으면_트리거를_지우지_않는다() throws Exception {
+    void 옛_예보가_아직_발행하거나_닫힌_통과가_쌓이지_않으면_트리거를_지우지_않는다() throws Exception {
         // given
         execute("UPDATE forecast_publication SET published_at = now()");
 
@@ -216,18 +317,44 @@ class ForecastPipelineTransitionSqlTest {
         Throwable published = catchThrowable(() -> run("sal434-02-drop-legacy-triggers.sql", FAST));
 
         // then
-        assertThat(published).hasMessageContaining("옛 예보가");
+        assertThat(published).hasMessageContaining("옛 예보가").hasMessageContaining("SAL-434 배포본이 worker에");
 
         // given
         execute("UPDATE forecast_publication SET published_at = now() - interval '2 hours'; DELETE FROM stop_pass");
 
         // when
-        Throwable notScoring = catchThrowable(() -> run("sal434-02-drop-legacy-triggers.sql", FAST));
+        Throwable notClosing = catchThrowable(() -> run("sal434-02-drop-legacy-triggers.sql", FAST));
 
         // then
         SoftAssertions softly = new SoftAssertions();
-        softly.assertThat(notScoring).hasMessageContaining("새 채점");
+        softly.assertThat(notClosing).hasMessageContaining("닫힌 통과(stop_pass)가 24시간 안에 없다")
+            .hasMessageContaining("예보가 돌고 있는지");
         softly.assertThat(number(LEGACY_TRIGGERS)).isEqualTo(9);
+        softly.assertAll();
+    }
+
+    @Test
+    void 통과는_쌓였는데_정답이_쌓이지_않았으면_트리거를_지우지_않는다() throws Exception {
+        // given
+        execute("UPDATE pass_label SET computed_at = now() - interval '25 hours'");
+
+        // when
+        Throwable stale = catchThrowable(() -> run("sal434-02-drop-legacy-triggers.sql", FAST));
+
+        // then
+        assertThat(stale).hasMessageContaining("정답(pass_label)").hasMessageContaining("채점 지표");
+
+        // given
+        execute("DELETE FROM pass_label");
+
+        // when
+        Throwable none = catchThrowable(() -> run("sal434-02-drop-legacy-triggers.sql", FAST));
+
+        // then
+        SoftAssertions softly = new SoftAssertions();
+        softly.assertThat(none).hasMessageContaining("정답(pass_label)").hasMessageContaining("채점 지표");
+        softly.assertThat(number(LEGACY_TRIGGERS)).isEqualTo(9);
+        softly.assertThat(number(LEGACY_FUNCTIONS)).isEqualTo(7);
         softly.assertAll();
     }
 
@@ -261,7 +388,7 @@ class ForecastPipelineTransitionSqlTest {
     }
 
     @Test
-    void 옛_경로의_최근_흔적이_있으면_옛_테이블을_지우지_않는다() throws Exception {
+    void 이전_배포본의_이관_앱이_최근에_작업했으면_옛_테이블을_지우지_않는다() throws Exception {
         // given
         run("sal434-02-drop-legacy-triggers.sql", FAST);
         execute("""
@@ -276,7 +403,7 @@ class ForecastPipelineTransitionSqlTest {
         Throwable actual = catchThrowable(() -> run("sal434-03-drop-legacy-tables.sql", FAST, confirmDrop()));
 
         // then
-        assertThat(actual).hasMessageContaining("옛 이관 앱");
+        assertThat(actual).hasMessageContaining("이전 배포본의 이관 앱");
         assertLegacyObjectsPresent();
     }
 
@@ -739,6 +866,80 @@ class ForecastPipelineTransitionSqlTest {
             + segment + "]', '[" + segment + "]')");
     }
 
+    private static List<String> outsideMigrations(Connection target) throws IOException, SQLException {
+        return precheck(target, "not_in_migrations").stream().map(row -> row.get("not_in_migrations")).toList();
+    }
+
+    private String evidence(String name) throws IOException, SQLException {
+        return precheck(connection, "evidence").stream()
+            .filter(row -> name.equals(row.get("evidence")))
+            .findFirst()
+            .orElseThrow()
+            .get("latest");
+    }
+
+    private Map<String, String> ledgerState(String table) throws IOException, SQLException {
+        return precheck(connection, "sal434_03_ledger_check").stream()
+            .filter(row -> table.equals(row.get("name")))
+            .findFirst()
+            .orElseThrow();
+    }
+
+    /** 사전 확인이 보인 관측 테이블마다 이름, 종류, source_date 열 유무, 첫 파티션 날짜 제약의 확인 여부를 잇는다. */
+    private List<String> observationTables() throws IOException, SQLException {
+        return precheck(connection, "initial_date_check_validated").stream()
+            .map(row -> String.join(":", row.get("relname"), row.get("relkind"), row.get("has_source_date"),
+                String.valueOf(row.get("initial_date_check_validated"))))
+            .toList();
+    }
+
+    /** 사전 확인을 실행하고, 열 이름에 {@code column}이 있는 결과 표 하나의 줄을 열 이름과 값으로 돌려준다. */
+    private static List<Map<String, String>> precheck(Connection target, String column)
+        throws IOException, SQLException {
+        List<List<Map<String, String>>> matched = new ArrayList<>();
+        try (Statement statement = target.createStatement()) {
+            for (String sql : statements(Files.readString(backend().resolve("deploy/sql/sal434-01-precheck.sql")))) {
+                if (!statement.execute(sql)) {
+                    continue;
+                }
+                try (ResultSet result = statement.getResultSet()) {
+                    if (labels(result).contains(column)) {
+                        matched.add(rowsOf(result));
+                    }
+                }
+            }
+        } catch (SQLException failure) {
+            try (Statement statement = target.createStatement()) {
+                statement.execute("ROLLBACK");
+            }
+            throw failure;
+        }
+        assertThat(matched).as("사전 확인에서 " + column + " 열이 있는 결과 표").hasSize(1);
+        return matched.getFirst();
+    }
+
+    private static List<String> labels(ResultSet result) throws SQLException {
+        ResultSetMetaData metadata = result.getMetaData();
+        List<String> labels = new ArrayList<>();
+        for (int index = 1; index <= metadata.getColumnCount(); index++) {
+            labels.add(metadata.getColumnLabel(index));
+        }
+        return labels;
+    }
+
+    private static List<Map<String, String>> rowsOf(ResultSet result) throws SQLException {
+        List<String> labels = labels(result);
+        List<Map<String, String>> rows = new ArrayList<>();
+        while (result.next()) {
+            Map<String, String> row = new LinkedHashMap<>();
+            for (String label : labels) {
+                row.put(label, result.getString(label));
+            }
+            rows.add(row);
+        }
+        return rows;
+    }
+
     private void insertForecast(String observation) throws SQLException {
         execute("""
             INSERT INTO seat_forecast(vehicle_observation_id,target_stop_order,route_version_id,stops_to_target,
@@ -961,6 +1162,8 @@ class ForecastPipelineTransitionSqlTest {
                     1,now(),2,9,now(),now(),NULL,4,2,now());
                 INSERT INTO forecast_record VALUES (DATE '2026-11-01',1,1,0,1,1,'v0',1,1,1,false,45,false,
                     ARRAY[2],ARRAY[1.5]::float8[],ARRAY[0.1]::float8[]);
+                INSERT INTO pass_label VALUES ((now() AT TIME ZONE 'Asia/Seoul')::date,1,1,2,45,'label1',1,'SETTLED',
+                    NULL,1.5,NULL,NULL,NULL,now());
                 -- 운영에만 있는 객체. 열 이름은 흉내다.
                 CREATE TABLE historical_import_batch (id bigint PRIMARY KEY);
                 INSERT INTO historical_import_batch VALUES (7);
