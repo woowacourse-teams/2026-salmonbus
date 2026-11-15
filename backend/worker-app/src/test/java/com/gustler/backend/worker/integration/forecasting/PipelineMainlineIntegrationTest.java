@@ -1,0 +1,254 @@
+package com.gustler.backend.worker.integration.forecasting;
+
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
+import static org.mockito.Mockito.when;
+
+import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
+import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
+import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
+import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
+import com.gustler.backend.forecasting.domain.model.ModelRoute;
+import com.gustler.backend.gbis.api.GbisLocationResult;
+import com.gustler.backend.gbis.api.dto.BusLocationResponse;
+import com.gustler.backend.observations.application.ObservationBatchLedger;
+import com.gustler.backend.observations.domain.CollectionPlan;
+import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
+import com.gustler.backend.support.PostgresTestContainer;
+import com.gustler.backend.worker.WorkerApplication;
+import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
+import com.gustler.backend.worker.scheduling.PipelineForecastTrigger;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.BooleanSupplier;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+/**
+ * 새 예보 경로를 본선으로 켠 worker({@code forecast.pipeline=v2}, {@code forecast.scoring=v2})를 실제로 조립해, 수집 원장이 커밋한
+ * 관측이 신호·노선별 실행 줄·본선 서비스·저장·채점까지 실제 빈으로 흐르는지 본다. 모델 선택({@link ForecastRuntime})만 바꿔
+ * 확정 프로필 모델을 준다.
+ *
+ * <p>주기 줍기는 1시간이라 시험 중에는 돌지 않는다. 시험은 줍기를 기동 직후처럼 한 번 불러 노선 판본의 실행 줄 열쇠를 알게 한 뒤,
+ * 그 뒤의 처리는 모두 커밋 뒤 신호로만 일어나게 한다.
+ */
+@SpringBootTest(classes = WorkerApplication.class, properties = {
+    "forecast.enabled=true",
+    "forecast.pipeline=v2",
+    "forecast.scoring=v2",
+    "forecast.interval=1h",
+    "forecast.scoring-flush-interval=200ms"
+})
+@Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class })
+class PipelineMainlineIntegrationTest {
+    private static final String SOURCE_ROUTE = "204000057";
+    private static final String VEHICLE = "pipeline-mainline-vehicle";
+    private static final int STOP_COUNT = 10;
+    private static final int TURN = 8;
+    private static final int CAPACITY = 45;
+    private static final List<Integer> CLOSED_STOPS = List.of(2, 3, 4, 5);
+    private static final List<Integer> OPEN_STOPS = List.of(6, 7, 8);
+    /** 통과가 닫히는 정류장 2~5를 목표로 한 예측 수다. 1~4번 정류장을 떠난 배치가 각각 4·3·2·1개를 낸다. */
+    private static final int CLOSED_FORECASTS = 10;
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    private static final Duration DEADLINE = Duration.ofSeconds(20);
+
+    @Autowired
+    private ObservationBatchLedger ledger;
+
+    @Autowired
+    private JdbcClient jdbc;
+
+    @Autowired
+    private PipelineForecastTrigger trigger;
+
+    @MockitoBean
+    private ForecastRuntime forecastRuntime;
+
+    private long routeId;
+    private long routeVersionId;
+    private long deploymentId;
+
+    @BeforeEach
+    void 확정_프로필_모델로_예보할_노선을_준비한다() {
+        OffsetDateTime validFrom = OffsetDateTime.now(SEOUL).minusDays(1);
+        String modelRoute = ModelRoute.of(SOURCE_ROUTE);
+        routeId = jdbc.sql("""
+            INSERT INTO route (public_route_id, source_id, source_route_id, display_name, start_stop_name,
+                end_stop_name)
+            VALUES (:source, 'GBIS', :source, :name, '출발', '도착') RETURNING id
+            """).param("source", SOURCE_ROUTE).param("name", modelRoute).query(Long.class).single();
+        routeVersionId = jdbc.sql("""
+            INSERT INTO route_version (route_id, content_digest, valid_from, turn_sequence)
+            VALUES (:route, :digest, :at, :turn) RETURNING id
+            """).param("route", routeId).param("digest", "0".repeat(64)).param("at", validFrom).param("turn", TURN)
+            .query(Long.class).single();
+        insertStops();
+        jdbc.sql("""
+            INSERT INTO vehicle_capacity (source_id, vehicle_id, capacity, evidence_at)
+            VALUES ('GBIS', :vehicle, :capacity, :at)
+            """).param("vehicle", VEHICLE).param("capacity", CAPACITY).param("at", validFrom).update();
+        deploymentId = jdbc.sql("""
+            INSERT INTO model_deployment (deployment_key, release_id, model_key, model_version, bundle_digest,
+                prediction_target_version, calculation_version, supported_scope_digest, data_until, state)
+            VALUES (?, 'pipeline-mainline-test', 'seat-full-chance', '1', ?, 'SEAT_FULL_CHANCE_V1', 'CALCULATION_V1',
+                ?, ?, 'ACTIVE')
+            RETURNING id
+            """).params(UUID.randomUUID(), "1".repeat(64), "0".repeat(64), validFrom).query(Long.class).single();
+        RuntimeSnapshot runtime = new RuntimeSnapshot(
+            new ActiveModelDeployment(deploymentId, "CALCULATION_V1", "pipeline-mainline-test", "1".repeat(64)),
+            new SupportedForecastScope(List.of(modelRoute)),
+            ConfirmedProfileModelFixture.model(modelRoute, STOP_COUNT, TURN), validFrom.toInstant());
+        when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
+        trigger.pickUp();
+    }
+
+    private void insertStops() {
+        for (int order = 1; order <= STOP_COUNT; order++) {
+            jdbc.sql("""
+                INSERT INTO route_stop (route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
+                VALUES (:version, :order, :stop, :name, :direction, true)
+                """).param("version", routeVersionId).param("order", order).param("stop", "s" + order)
+                .param("name", "정류장" + order).param("direction", direction(order)).update();
+        }
+    }
+
+    private static String direction(final int order) {
+        if (order > TURN) {
+            return "DOWN";
+        }
+        return "UP";
+    }
+
+    @AfterEach
+    void 저장한_자료를_정리한다() {
+        jdbc.sql("DELETE FROM vehicle_capacity WHERE vehicle_id = ?").param(VEHICLE).update();
+        jdbc.sql("TRUNCATE forecast_run, forecast_record, stop_pass, pass_label, forecast_unresolved").update();
+        jdbc.sql("""
+            TRUNCATE route, alighting_settlement_generation, model_deployment, daily_call_quota RESTART IDENTITY CASCADE
+            """).update();
+    }
+
+    @Test
+    void 수집_원장이_커밋한_관측이_신호로_본선_예보와_통과_채점까지_흐르고_옛_경로의_테이블은_건드리지_않는다()
+        throws InterruptedException {
+        // given
+        List<Integer> passedStops = List.of(1, 2, 3, 4, 5, 6);
+
+        // when
+        List<Long> batches = new ArrayList<>();
+        for (int index = 0; index < passedStops.size(); index++) {
+            batches.add(collect(passedStops.get(index), 30 - index * 2));
+        }
+        final boolean settled = waitUntil(() -> hasSettled(batches), Instant.now().plus(DEADLINE));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(settled).as("마감 안에 예보·통과·채점이 모두 끝났다").isTrue();
+            softly.assertThat(count("""
+                SELECT count(*) FROM forecast_run
+                WHERE observation_batch_id IN (:batches) AND outcome = 'PUBLISHED' AND prediction_count > 0
+                  AND confirmed_at >= received_at AND confirmed_at <= received_at + interval '90 seconds'
+                """, batches)).isEqualTo(batches.size());
+            softly.assertThat(count("""
+                SELECT count(DISTINCT observation_batch_id) FROM forecast_record
+                WHERE observation_batch_id IN (:batches) AND vehicle_id = :vehicle
+                  AND cardinality(target_stop_orders) > 0
+                  AND cardinality(expected_seats) = cardinality(target_stop_orders)
+                  AND cardinality(full_probabilities) = cardinality(target_stop_orders)
+                """, batches)).isEqualTo(batches.size());
+            softly.assertThat(passStops()).containsExactlyElementsOf(CLOSED_STOPS);
+            softly.assertThat(outcomeCount(CLOSED_STOPS, "<> 'PENDING'")).isEqualTo(CLOSED_FORECASTS);
+            softly.assertThat(outcomeCount(CLOSED_STOPS, "= 'PENDING'")).isZero();
+            softly.assertThat(outcomeCount(OPEN_STOPS, "= 'PENDING'")).isPositive();
+            softly.assertThat(outcomeCount(OPEN_STOPS, "<> 'PENDING'")).isZero();
+            softly.assertThat(scoredRows()).isPositive();
+            softly.assertThat(count("""
+                SELECT count(*) FROM seat_forecast f JOIN vehicle_observation o ON o.id = f.vehicle_observation_id
+                WHERE o.observation_batch_id IN (:batches)
+                """, batches)).isZero();
+            softly.assertThat(count("SELECT count(*) FROM forecast_publication WHERE source_batch_id IN (:batches)",
+                batches)).isZero();
+            softly.assertThat(count("""
+                SELECT count(*) FROM observation_batch WHERE id IN (:batches) AND input_confirmed_at IS NOT NULL
+                """, batches)).isZero();
+            softly.assertThat(hasSettlementContext()).isTrue();
+        });
+    }
+
+    /** 차량 하나가 {@code passedStop}을 막 떠난 관측 한 줄을 실제 수집 원장으로 저장하고 커밋한다. */
+    private long collect(final int passedStop, final int seats) {
+        OffsetDateTime at = OffsetDateTime.now(SEOUL).truncatedTo(ChronoUnit.MILLIS);
+        final long batchId = ledger.reserve(new CollectionPlan(routeVersionId, at, UUID.randomUUID().toString()), at)
+            .batchId();
+        ledger.markDispatching(batchId, at, at, "a");
+        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation("경기70아0001", VEHICLE, 0,
+            SOURCE_ROUTE, 11, "s" + passedStop, passedStop, 2, seats, 1, 1);
+        ledger.conclude(batchId,
+            received -> GbisObservationMapper.response(new GbisLocationResult.Success(
+                at.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.S")), List.of(bus)), received),
+            at.plusNanos(1_000_000));
+        return batchId;
+    }
+
+    private boolean hasSettled(List<Long> batches) {
+        return count("SELECT count(*) FROM forecast_run WHERE observation_batch_id IN (:batches)", batches)
+            == batches.size()
+            && passStops().size() == CLOSED_STOPS.size()
+            && outcomeCount(CLOSED_STOPS, "= 'PENDING'") == 0
+            && outcomeCount(CLOSED_STOPS, "<> 'PENDING'") > 0;
+    }
+
+    private long count(String sql, List<Long> batches) {
+        return jdbc.sql(sql).param("batches", batches).param("vehicle", VEHICLE).query(Long.class).single();
+    }
+
+    private List<Integer> passStops() {
+        return jdbc.sql("SELECT stop_order FROM stop_pass WHERE route_id = ? ORDER BY stop_order").param(routeId)
+            .query(Integer.class).list();
+    }
+
+    private long outcomeCount(List<Integer> targets, String stateCondition) {
+        return jdbc.sql("""
+            SELECT count(*) FROM forecast_outcome
+            WHERE route_id = :route AND target_stop_order IN (:targets) AND state
+            """ + stateCondition).param("route", routeId).param("targets", targets).query(Long.class).single();
+    }
+
+    private long scoredRows() {
+        return jdbc.sql("""
+            SELECT (SELECT count(*) FROM pass_label WHERE route_id = :route)
+                 + (SELECT count(*) FROM forecast_unresolved WHERE route_id = :route)
+            """).param("route", routeId).query(Long.class).single();
+    }
+
+    private boolean hasSettlementContext() {
+        return jdbc.sql("""
+            SELECT jsonb_exists(settlement_context, :version) FROM model_deployment WHERE id = :deployment
+            """).param("version", Long.toString(routeVersionId)).param("deployment", deploymentId).query(Boolean.class)
+            .single();
+    }
+
+    private static boolean waitUntil(BooleanSupplier condition, Instant deadline) throws InterruptedException {
+        while (Instant.now().isBefore(deadline)) {
+            if (condition.getAsBoolean()) {
+                return true;
+            }
+            Thread.sleep(50);
+        }
+        return condition.getAsBoolean();
+    }
+}
