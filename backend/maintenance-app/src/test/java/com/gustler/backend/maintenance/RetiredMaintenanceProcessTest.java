@@ -14,7 +14,8 @@ class RetiredMaintenanceProcessTest {
     Path directory;
 
     @ParameterizedTest
-    @ValueSource(strings = {"quality-preview", "quality-rebuild", "quality-status", "archive-import"})
+    @ValueSource(strings = {"quality-preview", "quality-rebuild", "quality-status", "archive-import",
+        "alighting-history-bootstrap", "alighting-evaluation-restore"})
     void 폐기한_명령은_실제_JAR에서도_종료코드_1로_거절한다(String command) throws Exception {
         // given
         Path stdout = directory.resolve("stdout.txt");
