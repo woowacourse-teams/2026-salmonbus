@@ -189,7 +189,7 @@ class MainlineScoringPipelineTest {
                 new RouteStops(version, SOURCE_ROUTE_ID, stops.stops(), stops.routeName())));
             model = model(new Random(seed));
             runtime = activate(model);
-            ScoringStage scoringStage = new ScoringStage(new JdbcSettlementContextProvider(jdbc, clock),
+            ScoringStage scoringStage = new ScoringStage(new JdbcSettlementContextProvider(jdbc),
                 new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), clock);
             scoring = new ShadowScoringService(task -> {
                 task.run();

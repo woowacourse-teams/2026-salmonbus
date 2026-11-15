@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.application.pipeline;
 
 import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
 
-import com.gustler.backend.forecasting.api.pipeline.CollectionResult;
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
@@ -32,7 +31,9 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * <p>한 스레드에서 사건을 차례로 받는다. DB를 읽지 않고 메모리 상태만 쓰며 동시 호출을 지원하지 않는다. 노선 안의 사건은 배치의
  * 확정 시각 순서로 들어와야 하고, 같은 배치에서는 {@link ObservationBatchSeen}, {@link PassClosed}들, {@link ForecastPublished}
- * 순서다. 노선의 시각은 받은 사건의 시각(확정 시각, 수집 사건은 수신 시각) 가운데 가장 늦은 값이다.
+ * 순서다. 노선의 시각은 받은 사건의 시각(확정 시각, 수집 사건은 수신 시각) 가운데 가장 늦은 값이다. 수집 사건은 저장되지 않으므로
+ * 되감기는 그 자리에 예보 실행 줄에 적어 둔 수집 사실을 {@link #restore}로 넣는다. 예보 단계가 되감으며 되찾은 통과는 노선 시각보다
+ * 이른 닫힌 시각으로 늦게 올 수 있다. 그런 통과도 닫힌 시각으로 직전 통과와 짝을 찾으며 노선 시각은 되돌리지 않는다.
  *
  * <p>판정은 옛 확정 판 정산과 같다.
  * <ul>
@@ -87,6 +88,7 @@ public final class ScoringStage {
     private final int observationLimit;
     private final Map<Long, RouteState> routes = new HashMap<>();
     private final Map<EvidenceKey, JsonNode> evidence = new HashMap<>();
+    private final Map<EvidenceKey, Instant> evidenceMissingAt = new HashMap<>();
     private final Map<Long, Set<Integer>> passStops = new HashMap<>();
 
     /**
@@ -95,7 +97,7 @@ public final class ScoringStage {
      * @param contexts 모델 배포의 정산 근거
      * @param structures 노선 판본의 실정류장
      * @param calculator 정답 계산
-     * @param clock 정답 계산 시각과 미해결 닫은 시각의 출처
+     * @param clock 정답 계산 시각, 미해결 닫은 시각, 정산 근거가 없음을 확인한 시각의 출처
      */
     public ScoringStage(
         SettlementContextProvider contexts,
@@ -112,7 +114,7 @@ public final class ScoringStage {
      * @param contexts 모델 배포의 정산 근거
      * @param structures 노선 판본의 실정류장
      * @param calculator 정답 계산
-     * @param clock 정답 계산 시각과 미해결 닫은 시각의 출처
+     * @param clock 정답 계산 시각, 미해결 닫은 시각, 정산 근거가 없음을 확인한 시각의 출처
      * @param observationLimit 하루(00시부터 다음 날 02시까지) 관측 상한. 1 이상이다
      */
     public ScoringStage(
@@ -144,20 +146,8 @@ public final class ScoringStage {
         if (state.seenBatches.containsKey(seen.observationBatchId())) {
             return ScoringResult.empty();
         }
-        Instant at = seenAt(seen);
-        state.seenBatches.put(seen.observationBatchId(), at);
-        for (PendingBatch pending : List.copyOf(state.pendingBatches.values())) {
-            state.pendingBatches.remove(pending.batchId());
-            recordBatch(state, pending, pending.fallbackAt());
-        }
-        Instant now = clock.instant();
-        ScoringResult result = advance(state, at, now);
-        final int counted = countedRows(seen);
-        if (seen.incomplete() || counted > 0) {
-            state.pendingBatches.put(seen.observationBatchId(),
-                new PendingBatch(seen.observationBatchId(), seen.incomplete(), counted, at));
-        }
-        return result;
+        return see(state, new PendingBatch(seen.observationBatchId(), seen.incomplete(), seen.countedRows(),
+            seenAt(seen)));
     }
 
     private static Instant seenAt(ObservationBatchSeen seen) {
@@ -167,11 +157,37 @@ public final class ScoringStage {
         return seen.receivedAt();
     }
 
-    private static int countedRows(ObservationBatchSeen seen) {
-        if (seen.result() == CollectionResult.SUCCESS && seen.storedRows() > 0) {
-            return seen.savedRows();
+    /**
+     * 되감기에서 저장된 배치의 수집 사실을 되살린다. 그 배치의 수집 사건을 받은 뒤 같은 배치의 예보 사건이 수집 구멍과 관측 줄 수를
+     * 착수 시각에 기록하던 것과 결과가 같다. 늦게 착수한 배치는 기록하지 않는다. 같은 노선의 배치는 착수 시각 순서로, 같은 배치의
+     * 통과·예보 사건보다 먼저 넣어야 한다. 이미 본 배치면 건너뛰므로 되감은 뒤에 같은 배치의 수집 사건이 와도 두 번 세지 않는다.
+     *
+     * @param batch 저장된 수집 사실
+     * @return 마감으로 닫힌 예측
+     */
+    public ScoringResult restore(RecordedBatch batch) {
+        RouteState state = route(batch.routeId());
+        if (state.seenBatches.containsKey(batch.observationBatchId())) {
+            return ScoringResult.empty();
         }
-        return 0;
+        ScoringResult result = see(state, new PendingBatch(batch.observationBatchId(), batch.incomplete(),
+            batch.countedRows(), batch.receivedAt()));
+        resolveBatch(state, batch.observationBatchId(), batch.confirmedAt(), batch.late());
+        return result;
+    }
+
+    private ScoringResult see(RouteState state, PendingBatch seen) {
+        state.seenBatches.put(seen.batchId(), seen.fallbackAt());
+        for (PendingBatch pending : List.copyOf(state.pendingBatches.values())) {
+            state.pendingBatches.remove(pending.batchId());
+            recordBatch(state, pending, pending.fallbackAt());
+        }
+        Instant now = clock.instant();
+        ScoringResult result = advance(state, seen.fallbackAt(), now);
+        if (seen.incomplete() || seen.rows() > 0) {
+            state.pendingBatches.put(seen.batchId(), seen);
+        }
+        return result;
     }
 
     /**
@@ -252,7 +268,8 @@ public final class ScoringStage {
         if (!published.outcome().carriesForecasts()) {
             return result;
         }
-        JsonNode context = evidence(published.modelDeploymentId(), published.routeVersionId());
+        JsonNode context = evidence(published.modelDeploymentId(), published.routeVersionId(),
+            published.confirmedAt());
         Set<Integer> inner = passStops(published.routeVersionId());
         List<UnresolvedForecast> closed = new ArrayList<>();
         for (ForecastPublished.VehicleForecast vehicle : published.vehicles()) {
@@ -381,7 +398,8 @@ public final class ScoringStage {
         List<ScoredForecast> scored = new ArrayList<>();
         for (Map.Entry<LabelGroup, List<Waiting>> group : groups.entrySet()) {
             LabelGroup labelGroup = group.getKey();
-            JsonNode context = evidence(labelGroup.modelDeploymentId(), group.getValue().getFirst().routeVersionId);
+            Waiting first = group.getValue().getFirst();
+            JsonNode context = evidence(labelGroup.modelDeploymentId(), first.routeVersionId, first.basis);
             JsonNode stops = stopEvidence(context, pass.stopOrder());
             if (stops == null) {
                 group.getValue().forEach(waiting -> unresolved.add(unresolved(waiting,
@@ -625,7 +643,14 @@ public final class ScoringStage {
         return kept;
     }
 
-    private JsonNode evidence(Long modelDeploymentId, final long routeVersionId) {
+    /**
+     * 예측의 정산 근거를 찾는다. 찾은 근거는 계속 기억한다. 근거가 없으면 그것을 확인한 시각을 기억해 두고, 그 시각보다 뒤에 착수한
+     * 예측을 받을 때만 다시 묻는다. 본선은 배치를 착수하기 전에 근거를 적으므로, 확인한 뒤에 착수한 예측에는 그사이 근거가 생겼을 수
+     * 있고 확인하기 전에 착수한 예측(되감기로 다시 받는 지난 예측)에는 그럴 수 없다. 그래서 근거가 없는 노선도 배치마다 한 번,
+     * 되감기에서는 한 번만 묻는다. 일정 시간 동안 "없음"으로 기억하면 그사이 근거가 적혀도 그 뒤의 예측이 근거 없음으로 닫히고, 먼저
+     * 쓴 미해결 줄은 다시 고칠 수 없다.
+     */
+    private JsonNode evidence(Long modelDeploymentId, final long routeVersionId, Instant confirmedAt) {
         if (modelDeploymentId == null) {
             return null;
         }
@@ -634,10 +659,18 @@ public final class ScoringStage {
         if (cached != null) {
             return cached;
         }
-        JsonNode found = contexts.find(modelDeploymentId, routeVersionId).orElse(null);
-        if (found != null) {
-            evidence.put(key, found);
+        Instant missingAt = evidenceMissingAt.get(key);
+        if (missingAt != null && !confirmedAt.isAfter(missingAt)) {
+            return null;
         }
+        Instant asked = clock.instant();
+        JsonNode found = contexts.find(modelDeploymentId, routeVersionId).orElse(null);
+        if (found == null) {
+            evidenceMissingAt.put(key, asked);
+            return null;
+        }
+        evidence.put(key, found);
+        evidenceMissingAt.remove(key);
         return found;
     }
 

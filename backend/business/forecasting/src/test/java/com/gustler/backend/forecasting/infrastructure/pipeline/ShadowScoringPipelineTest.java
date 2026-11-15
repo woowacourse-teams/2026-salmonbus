@@ -321,7 +321,7 @@ class ShadowScoringPipelineTest {
             writer.setCompactSettlementWrite(true);
             JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
             ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
-            ScoringStage scoringStage = new ScoringStage(new JdbcSettlementContextProvider(jdbc, clock),
+            ScoringStage scoringStage = new ScoringStage(new JdbcSettlementContextProvider(jdbc),
                 new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), clock);
             scoring = new ShadowScoringService(task -> {
                 if (rejectBatch >= 0 && currentBatch == rejectBatch) {

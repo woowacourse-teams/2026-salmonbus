@@ -7,8 +7,11 @@ import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
 import com.gustler.backend.forecasting.application.pipeline.PassLabelCalculator;
+import com.gustler.backend.forecasting.application.pipeline.ScoredForecast;
+import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
 import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
 import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
+import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
 import com.gustler.backend.forecasting.domain.pipeline.SourceDates;
 import com.gustler.backend.forecasting.infrastructure.jdbc.ConfirmedPassLabelCalculator;
@@ -117,26 +120,50 @@ class JdbcScoringSourcesTest {
     }
 
     @Test
-    void 정산_근거가_없는_노선_판본은_빈_값이고_잠시_다시_묻지_않는다() {
+    void 정산_근거가_없는_노선_판본은_빈_값이고_근거가_적힌_뒤에_다시_물으면_찾는다() {
         // given
-        JdbcSettlementContextProvider provider = new JdbcSettlementContextProvider(jdbc, CLOCK);
-        provider.find(deployment, version + 1);
-        jdbc.sql("""
-            UPDATE model_deployment SET settlement_context = settlement_context
-                || jsonb_build_object(CAST(? AS text), settlement_context -> CAST(? AS text))
-            WHERE id = ?
-            """).params(Long.toString(version + 1), Long.toString(version), deployment).update();
+        JdbcSettlementContextProvider provider = new JdbcSettlementContextProvider(jdbc);
+        final boolean foundBefore = provider.find(deployment, version + 1).isPresent();
+        copyEvidenceTo(version + 1);
 
         // when
         final boolean foundAgain = provider.find(deployment, version + 1).isPresent();
-        final boolean foundByFreshProvider = new JdbcSettlementContextProvider(jdbc, CLOCK)
-            .find(deployment, version + 1)
-            .isPresent();
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(foundAgain).isFalse();
-            softly.assertThat(foundByFreshProvider).isTrue();
+            softly.assertThat(foundBefore).isFalse();
+            softly.assertThat(foundAgain).isTrue();
+        });
+    }
+
+    @Test
+    void 근거가_없음을_확인한_직후에_근거가_적히면_다음_배치의_예측은_근거_없음으로_닫히지_않고_채점된다() {
+        // given
+        final long late = routeVersionWithStops(5);
+        PipelineTestSupport.MutableClock clock = new PipelineTestSupport.MutableClock();
+        ScoringStage stage = new ScoringStage(new JdbcSettlementContextProvider(jdbc),
+            new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), clock);
+        Instant closed = MORNING.plusSeconds(300);
+        clock.at = MORNING.plusMillis(5);
+        ScoringResult withoutEvidence = stage.accept(forecast(late, MORNING, 500, "bus-a", 50, 40));
+        copyEvidenceTo(late);
+        clock.at = MORNING.plusSeconds(20).plusMillis(5);
+
+        // when
+        ScoringResult afterEvidence = stage.accept(forecast(late, MORNING.plusSeconds(20), 501, "bus-a", 50, 40));
+        final int waiting = stage.waitingCount();
+        stage.accept(pass("bus-c", 60, closed.minusSeconds(200), closed.minusSeconds(180), 900));
+        clock.at = closed.plusMillis(5);
+        ScoringResult scored = stage.accept(pass("bus-a", 50, closed.minusSeconds(30), closed, 901));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(withoutEvidence.unresolved()).extracting(UnresolvedForecast::reason)
+                .containsExactly(ScoringReasons.SETTLEMENT_EVIDENCE_MISSING);
+            softly.assertThat(afterEvidence.unresolved()).isEmpty();
+            softly.assertThat(waiting).isOne();
+            softly.assertThat(scored.labels()).extracting(PassLabel::state).containsExactly(PassLabel.State.SETTLED);
+            softly.assertThat(scored.scored()).extracting(ScoredForecast::vehicleObservationId).containsExactly(501L);
         });
     }
 
@@ -180,8 +207,35 @@ class JdbcScoringSourcesTest {
     }
 
     private ScoringStage stage() {
-        return new ScoringStage(new JdbcSettlementContextProvider(jdbc, CLOCK), new JdbcRouteStructureProvider(jdbc),
+        return new ScoringStage(new JdbcSettlementContextProvider(jdbc), new JdbcRouteStructureProvider(jdbc),
             new ConfirmedPassLabelCalculator(), CLOCK);
+    }
+
+    /** 근거가 있는 노선 판본의 근거를 다른 판본 키로 옮겨 적는다. 예보 경로가 근거를 뒤늦게 적는 것을 흉내 낸다. */
+    private void copyEvidenceTo(final long target) {
+        jdbc.sql("""
+            UPDATE model_deployment SET settlement_context = settlement_context
+                || jsonb_build_object(CAST(? AS text), settlement_context -> CAST(? AS text))
+            WHERE id = ?
+            """).params(Long.toString(target), Long.toString(version), deployment).update();
+    }
+
+    /** 정산 근거가 없고 승차 가능 정류장이 1번부터 이어지는 노선 판본을 만든다. */
+    private long routeVersionWithStops(final int stopCount) {
+        final long routeId = jdbc.sql("""
+            INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
+            VALUES(:key,'GBIS',:key,:key,'A','B') RETURNING id
+            """).param("key", "scoring-" + UUID.randomUUID().toString().substring(0, 8)).query(Long.class).single();
+        final long created = jdbc.sql("""
+            INSERT INTO route_version(route_id,content_digest,valid_from) VALUES(?,?,?) RETURNING id
+            """).params(routeId, "0".repeat(64), offset(MORNING)).query(Long.class).single();
+        for (int order = 1; order <= stopCount; order++) {
+            jdbc.sql("""
+                INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
+                VALUES(?,?,?,?,'UP',true)
+                """).params(created, order, "s" + order, "정류장" + order).update();
+        }
+        return created;
     }
 
     private PassLabelCalculator.PassLabelCalculation legacy(PassClosed pass, PassClosed previous, final int capacity) {
@@ -201,9 +255,20 @@ class JdbcScoringSourcesTest {
         final long chain,
         final int capacity
     ) {
+        return forecast(version, confirmedAt, observation, vehicle, chain, capacity);
+    }
+
+    private ForecastPublished forecast(
+        final long routeVersion,
+        Instant confirmedAt,
+        final long observation,
+        String vehicle,
+        final long chain,
+        final int capacity
+    ) {
         ForecastPublished.VehicleForecast forecast = new ForecastPublished.VehicleForecast(observation, 0, vehicle, 1,
             chain, chain, false, capacity, false, new int[] {3}, new double[1], new double[1]);
-        return new ForecastPublished(SourceDates.of(confirmedAt), batches.incrementAndGet(), 7L, version,
+        return new ForecastPublished(SourceDates.of(confirmedAt), batches.incrementAndGet(), 7L, routeVersion,
             confirmedAt.minusSeconds(2), confirmedAt, deployment, ForecastOutcome.PUBLISHED, List.of(forecast));
     }
 

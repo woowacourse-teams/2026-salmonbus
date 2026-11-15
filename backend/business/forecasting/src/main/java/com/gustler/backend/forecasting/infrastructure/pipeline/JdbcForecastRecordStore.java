@@ -8,14 +8,17 @@ import static com.gustler.backend.forecasting.infrastructure.pipeline.MultiRowIn
 
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
+import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRun;
 import com.gustler.backend.forecasting.application.pipeline.RecentForecastRoutes;
+import com.gustler.backend.forecasting.application.pipeline.RecordedBatch;
 import com.gustler.backend.forecasting.domain.pipeline.SourceDates;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -32,13 +35,15 @@ import org.springframework.transaction.annotation.Transactional;
  * 예보 실행과 버스별 예보 기록을 날짜 파티션 테이블에 저장하고 읽는다.
  *
  * <p>쓰기는 호출하는 쪽의 트랜잭션에 참여하며, 트랜잭션 없이 부르면 실패한다. 실행 줄과 기록 줄 모두 이미 있는 키를 건너뛰므로
- * 실행 줄이 이미 있어도 빠진 기록 줄은 채운다. 날짜 파티션이 없으면 줄은 기본 파티션으로 들어간다.
+ * 실행 줄이 이미 있어도 빠진 기록 줄은 채운다. 날짜 파티션이 없으면 줄은 기본 파티션으로 들어간다. 수집 사건과 함께 저장한 실행
+ * 줄에는 수집 구멍 여부({@code source_incomplete})와 하루 관측 상한에 더할 줄 수({@code counted_rows})를 적고, 수집 사건 없이
+ * 저장한 줄은 두 열을 비워 둔다.
  */
 @Repository
 public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForecastRoutes {
     private static final MultiRowInsert RUNS = new MultiRowInsert("forecast_run", List.of(
         "source_date", "observation_batch_id", "route_id", "route_version_id", "received_at", "confirmed_at",
-        "model_deployment_id", "outcome", "prediction_count"));
+        "model_deployment_id", "outcome", "prediction_count", "source_incomplete", "counted_rows"));
 
     private static final MultiRowInsert RECORDS = new MultiRowInsert("forecast_record", List.of(
         "source_date", "vehicle_observation_id", "observation_batch_id", "source_row_number", "route_id",
@@ -61,9 +66,24 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
     @Override
     @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public boolean save(ForecastPublished published) {
+        return insert(published, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
+    public boolean save(ForecastPublished published, ObservationBatchSeen seen) {
+        if (seen.observationBatchId() != published.observationBatchId()) {
+            throw new IllegalArgumentException("예보 사건과 수집 사건의 배치가 다르다: %d, %d"
+                .formatted(published.observationBatchId(), seen.observationBatchId()));
+        }
+        return insert(published, seen.incomplete(), seen.countedRows());
+    }
+
+    private boolean insert(ForecastPublished published, Boolean sourceIncomplete, Integer countedRows) {
         final int runs = RUNS.insert(jdbc, List.of(published), run -> Arrays.asList(run.sourceDate(),
             run.observationBatchId(), run.routeId(), run.routeVersionId(), timestamp(run.receivedAt()),
-            timestamp(run.confirmedAt()), run.modelDeploymentId(), run.outcome().name(), run.predictionCount()));
+            timestamp(run.confirmedAt()), run.modelDeploymentId(), run.outcome().name(), run.predictionCount(),
+            sourceIncomplete, countedRows));
         RECORDS.insert(jdbc, published.vehicles(), vehicle -> Arrays.asList(published.sourceDate(),
             vehicle.vehicleObservationId(), published.observationBatchId(), vehicle.sourceRowNumber(),
             published.routeId(), published.routeVersionId(), vehicle.vehicleId(), vehicle.passedStopOrder(),
@@ -142,6 +162,61 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
         ForecastRun run = rows.run();
         return new ForecastPublished(run.sourceDate(), run.observationBatchId(), run.routeId(), run.routeVersionId(),
             run.receivedAt(), run.confirmedAt(), run.modelDeploymentId(), run.outcome(), rows.vehicles());
+    }
+
+    /** 수신 시각 하한의 하루 전 날짜부터의 파티션만 읽는다. 수집 사건 없이 저장해 수집 사실이 빈 실행 줄은 돌려주지 않는다. */
+    @Override
+    public List<RecordedBatch> findRecordedBatchesBetween(
+        final long routeId,
+        Instant fromInclusive,
+        Instant toExclusive
+    ) {
+        return jdbc.sql("""
+                SELECT /* salmonbus:forecast_run.find_recorded */ observation_batch_id, route_id, received_at,
+                    confirmed_at, outcome, source_incomplete, counted_rows
+                FROM forecast_run
+                WHERE route_id = ? AND source_date >= ? AND received_at >= ? AND received_at < ?
+                    AND counted_rows IS NOT NULL
+                ORDER BY received_at, observation_batch_id
+                """)
+            .params(routeId, SourceDates.of(fromInclusive).minusDays(1), timestamp(fromInclusive),
+                timestamp(toExclusive))
+            .query((row, index) -> new RecordedBatch(row.getLong("observation_batch_id"), row.getLong("route_id"),
+                instant(row, "received_at"), instant(row, "confirmed_at"),
+                ForecastOutcome.valueOf(row.getString("outcome")) == ForecastOutcome.LATE,
+                row.getBoolean("source_incomplete"), row.getInt("counted_rows")))
+            .list();
+    }
+
+    /**
+     * 늦게 수신한 실행부터 보며 미해결 줄이 있는 첫 실행에서 멈춘다. 실행은 {@code (route_id, received_at)} 인덱스로, 버스별 기록은 배치
+     * 인덱스로, 미해결 줄은 기본 키의 앞 열로 찾는다. 수신 시각 하한의 하루 전 날짜부터의 파티션만 읽는다.
+     */
+    @Override
+    public Optional<Instant> findLastUnresolvedConfirmedAt(
+        final long routeId,
+        Instant fromInclusive,
+        Instant toExclusive
+    ) {
+        return jdbc.sql("""
+                SELECT /* salmonbus:forecast_run.find_last_unresolved */ run.confirmed_at
+                FROM forecast_run run
+                WHERE run.route_id = ? AND run.source_date >= ? AND run.received_at >= ? AND run.received_at < ?
+                    AND run.outcome = 'PUBLISHED'
+                    AND EXISTS (
+                        SELECT 1 FROM forecast_record record
+                        JOIN forecast_unresolved closed ON closed.source_date = record.source_date
+                            AND closed.vehicle_observation_id = record.vehicle_observation_id
+                        WHERE record.source_date = run.source_date
+                            AND record.observation_batch_id = run.observation_batch_id)
+                ORDER BY run.received_at DESC, run.observation_batch_id DESC
+                LIMIT 1
+                """)
+            .params(routeId, SourceDates.of(fromInclusive).minusDays(1), timestamp(fromInclusive),
+                timestamp(toExclusive))
+            .query(OffsetDateTime.class)
+            .optional()
+            .map(OffsetDateTime::toInstant);
     }
 
     /** 수신 시각 하한의 하루 전 날짜부터의 파티션만 읽는다. 나눔 날짜(예약 시각의 날짜)는 수신 시각의 날짜보다 늦지 않다. */

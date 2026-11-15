@@ -10,6 +10,7 @@ import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRun;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
+import com.gustler.backend.forecasting.application.pipeline.RecordedBatch;
 import com.gustler.backend.forecasting.application.pipeline.ScoringReplay;
 import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
 import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
@@ -312,6 +313,11 @@ class ScoringStageLegacyEquivalenceTest {
         }
 
         @Override
+        public boolean save(ForecastPublished event, ObservationBatchSeen seen) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public Optional<ForecastRun> findLatestRun(final long routeVersionId, Set<ForecastOutcome> outcomes) {
             throw new UnsupportedOperationException();
         }
@@ -333,6 +339,26 @@ class ScoringStageLegacyEquivalenceTest {
             return published.stream()
                 .filter(event -> isReceivedBetween(event, routeId, fromInclusive, toExclusive))
                 .toList();
+        }
+
+        /** 수집 사실 없이 저장한 실행 줄만 있는 저장소를 흉내 낸다. */
+        @Override
+        public List<RecordedBatch> findRecordedBatchesBetween(
+            final long routeId,
+            Instant fromInclusive,
+            Instant toExclusive
+        ) {
+            return List.of();
+        }
+
+        /** 미해결 줄이 저장된 예측을 모르는 저장소를 흉내 낸다. 되감기는 예보 범위의 상한까지 읽는다. */
+        @Override
+        public Optional<Instant> findLastUnresolvedConfirmedAt(
+            final long routeId,
+            Instant fromInclusive,
+            Instant toExclusive
+        ) {
+            return Optional.empty();
         }
 
         private static boolean isReceivedBetween(
@@ -363,6 +389,16 @@ class ScoringStageLegacyEquivalenceTest {
             return passes.stream()
                 .filter(pass -> isClosedBetween(pass, routeId, fromInclusive, toExclusive))
                 .toList();
+        }
+
+        /** 정답이 저장된 통과를 모르는 저장소를 흉내 낸다. 되감기는 예보 범위의 상한까지 읽는다. */
+        @Override
+        public Optional<Instant> findLastScoredClosedAt(
+            final long routeId,
+            Instant fromInclusive,
+            Instant toExclusive
+        ) {
+            return Optional.empty();
         }
 
         private static boolean isClosedBetween(

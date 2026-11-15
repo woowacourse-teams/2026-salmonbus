@@ -5,10 +5,13 @@ import static com.gustler.backend.forecasting.infrastructure.pipeline.MultiRowIn
 
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
+import com.gustler.backend.forecasting.domain.pipeline.SourceDates;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
@@ -67,5 +70,31 @@ public class JdbcStopPassStore implements StopPassStore {
                 instant(row, "last_received_at"), instant(row, "reached_known_seat_at"),
                 row.getLong("closure_observation_id"), row.getLong("closure_batch_id"), instant(row, "closed_at")))
             .list();
+    }
+
+    /**
+     * 닫힌 시각이 늦은 통과부터 보며 정답 줄이 있는 첫 통과에서 멈춘다. 통과는 {@code (route_id, closed_at)} 인덱스로, 정답은 기본 키의
+     * 앞 열로 찾는다. 닫힌 시각 하한의 하루 전 날짜부터의 파티션만 읽는다. 나눔 날짜(닫은 배치 예약 시각의 날짜)는 닫힌 시각의 날짜보다
+     * 늦지 않다.
+     */
+    @Override
+    public Optional<Instant> findLastScoredClosedAt(final long routeId, Instant fromInclusive, Instant toExclusive) {
+        return jdbc.sql("""
+                SELECT /* salmonbus:stop_pass.find_last_scored */ pass.closed_at
+                FROM stop_pass pass
+                WHERE pass.route_id = ? AND pass.source_date >= ? AND pass.closed_at >= ? AND pass.closed_at < ?
+                    AND EXISTS (
+                        SELECT 1 FROM pass_label label
+                        WHERE label.source_date = pass.source_date AND label.route_id = pass.route_id
+                            AND label.trip_start_observation_id = pass.trip_start_observation_id
+                            AND label.stop_order = pass.stop_order)
+                ORDER BY pass.closed_at DESC
+                LIMIT 1
+                """)
+            .params(routeId, SourceDates.of(fromInclusive).minusDays(1), timestamp(fromInclusive),
+                timestamp(toExclusive))
+            .query(OffsetDateTime.class)
+            .optional()
+            .map(OffsetDateTime::toInstant);
     }
 }

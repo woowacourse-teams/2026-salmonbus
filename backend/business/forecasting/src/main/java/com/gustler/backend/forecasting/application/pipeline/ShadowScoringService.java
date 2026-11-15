@@ -28,15 +28,19 @@ import org.slf4j.LoggerFactory;
  * 채점 단계와 노선 준비 표시는 그 줄의 전용 스레드에서만 만진다. 노선마다 다음 규칙을 지킨다.
  * <ul>
  *   <li>노선의 사건을 처음 처리하기 전에 {@link ScoringReplay}로 저장된 기록을 되감아 상태를 만든다. 기동 직후에는
- *       {@link #start()}가 최근 예보가 있는 노선을 모두 미리 되감는다. 사건은 커밋 뒤에만 오므로 되감기가 그 사건을 이미
- *       읽었을 수 있으나, 채점 단계는 같은 사건을 다시 받아도 결과 집합이 같다.</li>
+ *       {@link #start()}가 되감기의 예보 범위 상한 안에 예보가 있던 노선을 모두 미리 되감는다. 내려가 있던 동안 마감이 지난
+ *       예측은 그 뒤 사건이 오지 않는 노선에서도 이 되감기와 {@link #tick()}의 마감으로 닫힌다. 사건은 커밋 뒤에만 오므로
+ *       되감기가 그 사건을 이미 읽었을 수 있으나, 채점 단계는 같은 사건을 다시 받아도 결과 집합이 같다.</li>
  *   <li>줄이 가득 차 사건을 버렸으면 그 노선을 다시 되감아야 한다고 표시하고, 다음 일에서 상태를 버리고 되감는다.</li>
  *   <li>처리 중 예외가 나면 그 노선의 상태를 버린다({@link ScoringStage#discard}). 다음 사건이 다시 되감는다.</li>
  *   <li>되감기가 실패하면 {@value #REPLAY_RETRY_SECONDS}초 동안 그 노선의 사건을 처리하지 않고 건너뛴다. 되감지 못한 상태로
- *       처리하면 직전 통과가 빠진 정답이 저장되어 고칠 수 없기 때문이다. 건너뛴 사건은 저장돼 있어 다음 되감기가 읽는다.</li>
+ *       처리하면 직전 통과가 빠진 정답이 저장되어 고칠 수 없기 때문이다. 건너뛴 사건은 저장돼 있어 다음 되감기가 읽는다.
+ *       되감기는 채점이 그 노선을 저장까지 마친 사건 시각부터 예보를 다시 읽으므로, 실패가 오래 이어져도 그사이 닫힌 통과의
+ *       정답이 빠지지 않는다.</li>
  * </ul>
- * 결과는 {@link #flush()}가 몇 초마다 한 트랜잭션으로 쓰고, {@link #tick()}이 채점 스레드에서 {@link ScoringStage#expire}를
- * 불러 오래 배치가 없는 노선의 마감을 닫는다. {@code route} 행 잠금을 잡지 않고 옛 정산 테이블에 쓰지 않는다.
+ * 결과는 {@link #flush()}가 몇 초마다 쓰고, {@link #tick()}이 채점 스레드에서 {@link ScoringStage#expire}를 불러 오래 배치가
+ * 없는 노선의 마감을 닫는다. 내려가기 전에는 {@link #stopAccepting()}으로 사건을 더 받지 않게 하고, 채점 줄을 비운 뒤
+ * {@link #flushRemaining()}으로 남은 결과를 쓴다. {@code route} 행 잠금을 잡지 않고 옛 정산 테이블에 쓰지 않는다.
  */
 public final class ShadowScoringService implements PipelineEvents, ShadowScoringCycle {
     static final long REPLAY_RETRY_SECONDS = 30;
@@ -54,6 +58,7 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
     private final Set<Long> ready = new HashSet<>();
     private final Map<Long, Instant> replayDeferredUntil = new HashMap<>();
     private final Set<Long> stale = ConcurrentHashMap.newKeySet();
+    private volatile boolean stopped;
 
     /**
      * @param feed 채점 스레드의 줄
@@ -61,7 +66,8 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
      * @param replay 저장된 기록으로 노선 상태를 다시 만드는 되감기
      * @param writer 결과를 모아 쓰는 쓰기
      * @param recentRoutes 기동 직후 되감을 노선
-     * @param startupWindow 기동 직후 되감을 노선을 고르는 최근 예보 범위
+     * @param startupWindow 기동 직후 되감을 노선을 고르는 최근 예보 범위. 되감기의 예보 범위 상한
+     *     ({@link ScoringReplay#maxForecastWindow()})보다 짧으면 그사이에만 예보가 있던 노선은 다음 사건이 올 때까지 되감지 않는다
      * @param clock 되감기 기준 시각과 마감 시각
      * @param meters 지표 등록기. 없으면 지표를 내지 않는다
      */
@@ -117,9 +123,15 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
 
     @Override
     public boolean start() {
+        if (stopped) {
+            return false;
+        }
         return feed.submit(() -> {
             List<Long> routes = recentRoutes.routesPublishedSince(clock.instant().minus(startupWindow));
             for (final long routeId : routes) {
+                if (stopped) {
+                    break;
+                }
                 if (!ready.contains(routeId)) {
                     rebuild(routeId, "startup");
                 }
@@ -137,6 +149,9 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
      */
     @Override
     public boolean tick() {
+        if (stopped) {
+            return false;
+        }
         return feed.submit(() -> {
             for (final long routeId : List.copyOf(stale)) {
                 if (stale.remove(routeId)) {
@@ -156,8 +171,8 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
     }
 
     /**
-     * 모아 둔 결과를 한 트랜잭션으로 쓴다. 주기 작업이 부르며 채점 스레드가 아니어도 된다. 실패하면 줄을 남겨 두고 다음 회차에
-     * 다시 쓰며 예외를 밖으로 내지 않는다.
+     * 모아 둔 결과를 쓴다. 주기 작업이 부르며 채점 스레드가 아니어도 된다. 실패하면 줄을 남겨 두고 다음 회차에 다시 쓰며 예외를
+     * 밖으로 내지 않는다.
      *
      * @return 이번에 새로 넣은 정답·미해결 줄 수. 실패하면 0
      */
@@ -175,7 +190,29 @@ public final class ShadowScoringService implements PipelineEvents, ShadowScoring
         }
     }
 
+    @Override
+    public void stopAccepting() {
+        stopped = true;
+    }
+
+    /**
+     * 모아 둔 결과를 지금 쓰고 남은 줄 수를 돌려준다. 주기 쓰기가 도는 중이면 그것이 끝난 뒤에 쓴다. 받기를 멈추지는 않으므로
+     * 채점 스레드가 이 호출 뒤에 낸 결과는 들어가지 않는다.
+     *
+     * @return 쓰지 못하고 남은 줄 수
+     */
+    @Override
+    public int flushRemaining() {
+        final int written = flush();
+        final int remaining = writer.pendingCount();
+        LOGGER.info("event=pipeline_scoring_final_write written={} remaining={}", written, remaining);
+        return remaining;
+    }
+
     private void submit(final long routeId, Supplier<ScoringResult> work) {
+        if (stopped) {
+            return;
+        }
         if (!feed.submit(() -> process(routeId, work))) {
             stale.add(routeId);
             metrics.dropped();

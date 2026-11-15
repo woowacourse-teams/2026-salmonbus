@@ -58,13 +58,13 @@ public class ForecastScoringConfiguration {
         Clock clock,
         @Value("${forecast.alighting.causal-evaluation.maximum-observation-rows:150000}") final int observationLimit
     ) {
-        ScoringStage stage = new ScoringStage(new JdbcSettlementContextProvider(jdbc, clock),
+        ScoringStage stage = new ScoringStage(new JdbcSettlementContextProvider(jdbc),
             new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), clock, observationLimit);
         TransactionTemplate transactions = new TransactionTemplate(transactionManager);
         transactions.setTimeout(WRITE_TIMEOUT_SECONDS);
-        return new ShadowScoringService(feed, stage, new ScoringReplay(records, passes),
-            new ScoringWriter(labels, transactions), records, ScoringReplay.DEFAULT_FORECAST_WINDOW, clock,
-            meters.getIfAvailable());
+        ScoringReplay replay = new ScoringReplay(records, passes);
+        return new ShadowScoringService(feed, stage, replay, new ScoringWriter(labels, transactions), records,
+            replay.maxForecastWindow(), clock, meters.getIfAvailable());
     }
 
     /** 옛 정산과의 대조. 옛 예보가 계속 나오는 {@code pipeline=v1}에서만 등록한다. */

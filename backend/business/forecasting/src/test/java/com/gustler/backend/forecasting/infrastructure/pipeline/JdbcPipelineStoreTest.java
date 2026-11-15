@@ -7,13 +7,17 @@ import static com.gustler.backend.forecasting.support.PipelineSamples.published;
 import static com.gustler.backend.forecasting.support.PipelineSamples.skipped;
 import static com.gustler.backend.forecasting.support.PipelineSamples.vehicle;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import com.gustler.backend.forecasting.api.pipeline.CollectionResult;
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
+import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRun;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
+import com.gustler.backend.forecasting.application.pipeline.RecordedBatch;
 import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Instant;
@@ -171,6 +175,114 @@ class JdbcPipelineStoreTest {
     }
 
     @Test
+    void 수집_사건과_함께_저장한_실행_줄의_수집_사실만_사건_순서대로_읽는다() {
+        // given
+        records.save(published(DAY, 12, RECEIVED_AT.plusSeconds(30), List.of()),
+            seen(12, RECEIVED_AT.plusSeconds(30), CollectionResult.SUCCESS, 5, 4));
+        records.save(published(DAY, 11, RECEIVED_AT, List.of(vehicle(1001, 1))),
+            seen(11, RECEIVED_AT, CollectionResult.SUCCESS, 3, 3));
+        records.save(skipped(DAY, 13, RECEIVED_AT.plusSeconds(60), ForecastOutcome.LATE),
+            seen(13, RECEIVED_AT.plusSeconds(60), CollectionResult.SUCCESS, 2, 1));
+        records.save(skipped(DAY, 14, RECEIVED_AT.plusSeconds(90), ForecastOutcome.EMPTY),
+            seen(14, RECEIVED_AT.plusSeconds(90), CollectionResult.EMPTY, 0, 0));
+        records.save(published(DAY, 15, RECEIVED_AT.plusSeconds(100), List.of()));
+        records.save(published(DAY, 16, RECEIVED_AT.plusSeconds(120), List.of()),
+            seen(16, RECEIVED_AT.plusSeconds(120), CollectionResult.SUCCESS, 1, 1));
+
+        // when
+        List<RecordedBatch> actual = records.findRecordedBatchesBetween(ROUTE_ID, RECEIVED_AT,
+            RECEIVED_AT.plusSeconds(120));
+
+        // then
+        assertThat(actual).containsExactly(
+            new RecordedBatch(11, ROUTE_ID, RECEIVED_AT, RECEIVED_AT.plusSeconds(2), false, false, 3),
+            new RecordedBatch(12, ROUTE_ID, RECEIVED_AT.plusSeconds(30), RECEIVED_AT.plusSeconds(32), false, true,
+                4),
+            new RecordedBatch(13, ROUTE_ID, RECEIVED_AT.plusSeconds(60), RECEIVED_AT.plusSeconds(155), true, true,
+                1),
+            new RecordedBatch(14, ROUTE_ID, RECEIVED_AT.plusSeconds(90), RECEIVED_AT.plusSeconds(185), false, false,
+                0));
+    }
+
+    @Test
+    void 수집_사건_없이_저장한_실행_줄은_수집_사실_두_열이_비어_있다() {
+        // given
+        records.save(published(DAY, 11, RECEIVED_AT, List.of(vehicle(1001, 1))));
+
+        // when
+        final long empty = jdbcClient.sql("""
+            SELECT count(*) FROM forecast_run WHERE source_incomplete IS NULL AND counted_rows IS NULL
+            """).query(Long.class).single();
+
+        // then
+        assertThat(empty).isOne();
+    }
+
+    @Test
+    void 예보_사건과_수집_사건의_배치가_다르면_저장하지_않는다() {
+        // when
+        Throwable actual = catchThrowable(() -> records.save(published(DAY, 11, RECEIVED_AT, List.of()),
+            seen(12, RECEIVED_AT, CollectionResult.SUCCESS, 1, 1)));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(actual).hasMessageContaining("배치가 다르다");
+            softly.assertThat(count("forecast_run")).isZero();
+        });
+    }
+
+    @Test
+    void 정답이_저장된_통과_가운데_범위_안에서_가장_늦게_닫힌_것의_닫힌_시각을_찾는다() {
+        // given
+        passes.save(List.of(pass(DAY, 500, 3, RECEIVED_AT), pass(DAY, 600, 3, RECEIVED_AT.plusSeconds(60)),
+            pass(DAY, 700, 3, RECEIVED_AT.plusSeconds(120))));
+        labels.saveLabels(List.of(label(500, 3), label(600, 3), label(900, 3)));
+
+        // when
+        Optional<Instant> last = passes.findLastScoredClosedAt(ROUTE_ID, RECEIVED_AT, RECEIVED_AT.plusSeconds(300));
+        Optional<Instant> earlier = passes.findLastScoredClosedAt(ROUTE_ID, RECEIVED_AT, RECEIVED_AT.plusSeconds(60));
+        Optional<Instant> unscored = passes.findLastScoredClosedAt(ROUTE_ID, RECEIVED_AT.plusSeconds(61),
+            RECEIVED_AT.plusSeconds(300));
+        Optional<Instant> otherRoute = passes.findLastScoredClosedAt(ROUTE_ID + 1, RECEIVED_AT,
+            RECEIVED_AT.plusSeconds(300));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(last).contains(RECEIVED_AT.plusSeconds(60));
+            softly.assertThat(earlier).contains(RECEIVED_AT);
+            softly.assertThat(unscored).isEmpty();
+            softly.assertThat(otherRoute).isEmpty();
+        });
+    }
+
+    @Test
+    void 미해결_줄이_저장된_예측을_가진_실행_가운데_범위_안에서_가장_늦게_수신한_것의_착수_시각을_찾는다() {
+        // given
+        records.save(published(DAY, 11, RECEIVED_AT, List.of(vehicle(1001, 1))));
+        records.save(published(DAY, 12, RECEIVED_AT.plusSeconds(30), List.of(vehicle(1002, 1), vehicle(1003, 2))));
+        records.save(published(DAY, 13, RECEIVED_AT.plusSeconds(60), List.of(vehicle(1004, 1))));
+        labels.saveUnresolved(List.of(unresolved(1001, 5), unresolved(1003, 7), unresolved(9999, 5)));
+
+        // when
+        Optional<Instant> last = records.findLastUnresolvedConfirmedAt(ROUTE_ID, RECEIVED_AT,
+            RECEIVED_AT.plusSeconds(300));
+        Optional<Instant> earlier = records.findLastUnresolvedConfirmedAt(ROUTE_ID, RECEIVED_AT,
+            RECEIVED_AT.plusSeconds(30));
+        Optional<Instant> open = records.findLastUnresolvedConfirmedAt(ROUTE_ID, RECEIVED_AT.plusSeconds(31),
+            RECEIVED_AT.plusSeconds(300));
+        Optional<Instant> otherRoute = records.findLastUnresolvedConfirmedAt(ROUTE_ID + 1, RECEIVED_AT,
+            RECEIVED_AT.plusSeconds(300));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(last).contains(RECEIVED_AT.plusSeconds(32));
+            softly.assertThat(earlier).contains(RECEIVED_AT.plusSeconds(2));
+            softly.assertThat(open).isEmpty();
+            softly.assertThat(otherRoute).isEmpty();
+        });
+    }
+
+    @Test
     void 통과를_여러_줄_넣고_닫힌_순서대로_읽으며_다시_넣으면_건너뛴다() {
         // given
         PassClosed late = pass(DAY, 500, 3, RECEIVED_AT.plusSeconds(60));
@@ -255,6 +367,27 @@ class JdbcPipelineStoreTest {
                 ORDER BY model_deployment_id
                 """).param(ROUTE_ID).query(Long.class).list()).containsExactly(9L, 10L);
         });
+    }
+
+    private static ObservationBatchSeen seen(
+        final long batchId,
+        Instant receivedAt,
+        CollectionResult result,
+        final int storedRows,
+        final int savedRows
+    ) {
+        return new ObservationBatchSeen(batchId, ROUTE_ID, ROUTE_VERSION_ID, receivedAt.minusSeconds(3), receivedAt,
+            result, storedRows, savedRows);
+    }
+
+    private static PassLabel label(final long tripStart, final int stopOrder) {
+        return new PassLabel(DAY, ROUTE_ID, tripStart, stopOrder, 45, "alighting-identity-safe-v1", 9,
+            PassLabel.State.SETTLED, null, 12.5, null, null, "a".repeat(64), RECEIVED_AT);
+    }
+
+    private static UnresolvedForecast unresolved(final long vehicleObservationId, final int targetStopOrder) {
+        return new UnresolvedForecast(DAY, vehicleObservationId, targetStopOrder, ROUTE_ID,
+            UnresolvedForecast.State.LOST, "PASS_NOT_CLOSED", RECEIVED_AT);
     }
 
     private static long[] rawBits(double[] values) {

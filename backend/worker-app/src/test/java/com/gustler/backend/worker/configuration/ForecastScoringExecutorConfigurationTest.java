@@ -110,5 +110,14 @@ class ForecastScoringExecutorConfigurationTest {
         public int flush() {
             return 0;
         }
+
+        @Override
+        public void stopAccepting() {
+        }
+
+        @Override
+        public int flushRemaining() {
+            return 0;
+        }
     }
 }

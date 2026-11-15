@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -396,6 +397,156 @@ class ScoringStageTest {
     }
 
     @Test
+    void 되감은_수집_사실의_구멍은_수집_사건과_예보_사건으로_받았을_때와_같이_그_뒤의_예측을_닫는다() {
+        // given
+        Instant holeAt = MORNING.minusSeconds(600);
+        final long batch = batches.incrementAndGet();
+        ScoringStage restored = stageAt(CLOCK, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
+        stage.accept(new ObservationBatchSeen(batch, ROUTE, VERSION, holeAt.minusSeconds(5), holeAt.minusSeconds(2),
+            CollectionResult.SUCCESS, 3, 2));
+        stage.accept(new ForecastPublished(day(holeAt), batch, ROUTE, VERSION, holeAt.minusSeconds(2), holeAt,
+            DEPLOYMENT, ForecastOutcome.EMPTY, List.of()));
+        ForecastPublished forecast = forecast(MORNING, vehicle(500, "bus-a", 50, 40, 3));
+
+        // when
+        restored.restore(new RecordedBatch(batch, ROUTE, holeAt.minusSeconds(2), holeAt, false, true, 2));
+        ScoringResult afterRestore = restored.accept(forecast);
+        ScoringResult afterEvents = stage.accept(forecast);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(afterRestore.unresolved()).singleElement()
+                .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.SOURCE_HISTORY_INCOMPLETE);
+            softly.assertThat(afterRestore.unresolved()).isEqualTo(afterEvents.unresolved());
+        });
+    }
+
+    @Test
+    void 되감은_수집_사실의_구멍은_착수_시각에_기록되어_그보다_먼저_닫힌_통과의_예측은_닫지_않는다() {
+        // given
+        Instant closed = MORNING.plusSeconds(300);
+        Instant holeAt = closed.plusSeconds(10);
+        stage.accept(forecast(MORNING, vehicle(500, "bus-a", 50, 40, 3), vehicle(501, "bus-b", 51, 40, 3)));
+        stage.accept(pass("bus-c", 60, 3, closed.minusSeconds(200), closed.minusSeconds(180), 900));
+        ScoringResult before = stage.accept(pass("bus-a", 50, 3, closed.minusSeconds(30), closed, 901));
+
+        // when
+        stage.restore(new RecordedBatch(batches.incrementAndGet(), ROUTE, holeAt.minusSeconds(2), holeAt, false,
+            true, 2));
+        ScoringResult after = stage.accept(pass("bus-b", 51, 3, closed.plusSeconds(20), closed.plusSeconds(40), 902));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(before.labels()).singleElement()
+                .extracting(PassLabel::state).isEqualTo(PassLabel.State.SETTLED);
+            softly.assertThat(after.labels()).isEmpty();
+            softly.assertThat(after.unresolved()).singleElement()
+                .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.SOURCE_HISTORY_INCOMPLETE);
+        });
+    }
+
+    @Test
+    void 되감은_늦은_배치의_줄_수_차이는_수집_구멍으로_보지_않는다() {
+        // given
+        stage.restore(new RecordedBatch(batches.incrementAndGet(), ROUTE, MORNING.minusSeconds(190),
+            MORNING.minusSeconds(90), true, true, 2));
+
+        // when
+        ScoringResult result = stage.accept(forecast(MORNING, vehicle(500, "bus-a", 50, 40, 3)));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(result.unresolved()).isEmpty();
+            softly.assertThat(stage.waitingCount()).isOne();
+        });
+    }
+
+    @Test
+    void 되감은_배치의_수집_사건이_다시_와도_관측_줄_수를_두_번_세지_않는다() {
+        // given
+        Instant at = MORNING.minusSeconds(600);
+        final long batch = batches.incrementAndGet();
+        ScoringStage limited = stageAt(CLOCK, 5);
+        limited.restore(new RecordedBatch(batch, ROUTE, at.minusSeconds(2), at, false, false, 3));
+
+        // when
+        limited.accept(new ObservationBatchSeen(batch, ROUTE, VERSION, at.minusSeconds(5), at.minusSeconds(2),
+            CollectionResult.SUCCESS, 3, 3));
+        limited.accept(new ForecastPublished(day(at), batch, ROUTE, VERSION, at.minusSeconds(2), at, DEPLOYMENT,
+            ForecastOutcome.EMPTY, List.of()));
+        ScoringResult result = limited.accept(forecast(MORNING, vehicle(500, "bus-a", 50, 40, 3)));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(result.unresolved()).isEmpty();
+            softly.assertThat(limited.waitingCount()).isOne();
+        });
+    }
+
+    @Test
+    void 되감은_수집_사실의_줄_수가_하루_상한을_넘으면_그_뒤의_예측을_관측_상한으로_닫는다() {
+        // given
+        Instant at = MORNING.minusSeconds(600);
+        ScoringStage limited = stageAt(CLOCK, 5);
+        limited.restore(new RecordedBatch(batches.incrementAndGet(), ROUTE, at.minusSeconds(2), at, false, false,
+            3));
+        limited.restore(new RecordedBatch(batches.incrementAndGet(), ROUTE, at.plusSeconds(13), at.plusSeconds(15),
+            false, false, 3));
+
+        // when
+        ScoringResult result = limited.accept(forecast(MORNING, vehicle(500, "bus-a", 50, 40, 3)));
+
+        // then
+        assertThat(result.unresolved()).singleElement()
+            .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.OBSERVATION_INPUT_LIMIT);
+    }
+
+    @Test
+    void 근거가_없는_노선_판본은_없음을_확인하기_전에_착수한_예측을_여러_번_받아도_한_번만_묻는다() {
+        // given
+        AtomicInteger asked = new AtomicInteger();
+        MutableClock clock = new MutableClock(MORNING.plusSeconds(600));
+        ScoringStage asking = new ScoringStage((deployment, version) -> {
+            asked.incrementAndGet();
+            return Optional.empty();
+        }, version -> List.of(1, 2, 3, 4, 5), new ConfirmedPassLabelCalculator(), clock);
+
+        // when
+        ScoringResult result = asking.accept(forecast(MORNING, vehicle(500, "bus-a", 50, 40, 3)))
+            .plus(asking.accept(forecast(MORNING.plusSeconds(15), vehicle(501, "bus-a", 50, 40, 3))))
+            .plus(asking.accept(forecast(MORNING.plusSeconds(30), vehicle(502, "bus-a", 50, 40, 3))));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(asked).hasValue(1);
+            softly.assertThat(result.unresolved()).extracting(UnresolvedForecast::reason)
+                .containsOnly(ScoringReasons.SETTLEMENT_EVIDENCE_MISSING).hasSize(3);
+        });
+    }
+
+    @Test
+    void 근거_없음을_확인한_뒤에_착수한_예측을_받으면_다시_묻고_근거가_생겼으면_기다린다() {
+        // given
+        MutableClock clock = new MutableClock(MORNING.plusMillis(5));
+        ScoringStage late = stageAt(clock, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
+        ScoringResult before = late.accept(forecast(MORNING, OTHER_DEPLOYMENT, vehicle(500, "bus-a", 50, 40, 3)));
+        contexts.put(OTHER_DEPLOYMENT, context(0.12, "alighting-confirmed-closure-v2"));
+        clock.at = MORNING.plusSeconds(15).plusMillis(5);
+
+        // when
+        ScoringResult after = late.accept(forecast(MORNING.plusSeconds(15), OTHER_DEPLOYMENT,
+            vehicle(501, "bus-a", 50, 40, 3)));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(before.unresolved()).singleElement()
+                .extracting(UnresolvedForecast::reason).isEqualTo(ScoringReasons.SETTLEMENT_EVIDENCE_MISSING);
+            softly.assertThat(after.unresolved()).isEmpty();
+            softly.assertThat(late.waitingCount()).isOne();
+        });
+    }
+
+    @Test
     void 상태를_버린_노선은_기다리던_예측이_없다() {
         // given
         stage.accept(forecast(MORNING, vehicle(500, "bus-a", 50, 40, 3)));
@@ -408,6 +559,11 @@ class ScoringStageTest {
             softly.assertThat(stage.waitingCount()).isZero();
             softly.assertThat(stage.waitingCount(ROUTE)).isZero();
         });
+    }
+
+    private ScoringStage stageAt(Clock clock, final int observationLimit) {
+        return new ScoringStage((deployment, version) -> Optional.ofNullable(contexts.get(deployment)),
+            version -> List.of(5, 1, 2, 3, 4, 2), new ConfirmedPassLabelCalculator(), clock, observationLimit);
     }
 
     private ForecastPublished forecast(Instant confirmedAt, ForecastPublished.VehicleForecast... vehicles) {
@@ -494,5 +650,28 @@ class ScoringStageTest {
             {"shared":{"capacityPolicy":"vehicle-capacity-snapshot-v1","inputProfile":"%s","turn":9,
               "realStopOrders":[1,2,3,4,5],"extendedSettlement":{%s}},"stops":{%s}}
             """.formatted(inputProfile, extended, stops));
+    }
+
+    private static final class MutableClock extends Clock {
+        private Instant at;
+
+        private MutableClock(Instant at) {
+            this.at = at;
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return at;
+        }
     }
 }

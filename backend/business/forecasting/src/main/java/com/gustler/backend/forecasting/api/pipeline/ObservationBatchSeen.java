@@ -66,4 +66,12 @@ public record ObservationBatchSeen(
     public boolean incomplete() {
         return result == CollectionResult.SUCCESS && storedRows > 0 && storedRows != savedRows;
     }
+
+    /** 하루 관측 상한 계산에 더할 줄 수를 돌려준다. 저장 줄 수가 있는 성공 배치면 실제로 남은 줄 수, 아니면 0이다. */
+    public int countedRows() {
+        if (result == CollectionResult.SUCCESS && storedRows > 0) {
+            return savedRows;
+        }
+        return 0;
+    }
 }

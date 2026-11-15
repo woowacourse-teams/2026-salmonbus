@@ -3,6 +3,7 @@ package com.gustler.backend.forecasting.application.pipeline;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 닫힌 통과({@code stop_pass})를 저장하고 읽는다.
@@ -29,4 +30,15 @@ public interface StopPassStore {
      * @return 통과 목록
      */
     List<PassClosed> findClosedBetween(long routeId, Instant fromInclusive, Instant toExclusive);
+
+    /**
+     * 노선의 통과 가운데 정답({@code pass_label})이 저장된 것 중 가장 늦게 닫힌 것의 닫힌 시각을 찾는다. 채점이 그 노선을 저장까지
+     * 마친 사건 시각이며, 되감기가 예보를 어디서부터 다시 읽을지 정하는 데 쓴다.
+     *
+     * @param routeId 노선
+     * @param fromInclusive 닫힌 시각 하한(포함)
+     * @param toExclusive 닫힌 시각 상한(제외)
+     * @return 범위 안에 정답이 저장된 통과가 없으면 빈 값
+     */
+    Optional<Instant> findLastScoredClosedAt(long routeId, Instant fromInclusive, Instant toExclusive);
 }
