@@ -79,8 +79,8 @@ class WatchBoardApiContractTest {
         final long published = fixture.insertBatch(route, publishedAt, "SUCCESS_ROWS", 1);
         final long observation = fixture.insertObservation(route, published, 1, "V1", 1, "STOP-1",
             1, DEPARTED, 7, null);
-        fixture.insertPublication(published, model, publishedAt.plusSeconds(1), publishedAt.plusSeconds(2));
-        fixture.insertForecast(route, observation, 3, 2, model, 0.3, 4.0, publishedAt.plusSeconds(1));
+        fixture.insertPublication(published, model, publishedAt.plusSeconds(2));
+        fixture.insertForecast(observation, 3, model, 0.3, 4.0);
         final long newer = fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_ROWS", 1);
         fixture.insertObservation(route, newer, 1, "V1", 2, "STOP-2", 1, ARRIVING, 3, null);
 
@@ -113,8 +113,8 @@ class WatchBoardApiContractTest {
         final long published = fixture.insertBatch(route, publishedAt, "SUCCESS_ROWS", 2);
         final long first = fixture.insertObservation(route, published, 1, "V1", 1, "STOP-1", 1, DEPARTED, 7, null);
         fixture.insertObservation(route, published, 2, "V2", 3, "STOP-3", 2, ARRIVING, null, "REPORTED_UNKNOWN");
-        fixture.insertPublication(published, model, publishedAt.plusSeconds(1), publishedAt.plusSeconds(2));
-        fixture.insertForecast(route, first, 3, 2, model, 0.3, 4.0, publishedAt.plusSeconds(1));
+        fixture.insertPublication(published, model, publishedAt.plusSeconds(2));
+        fixture.insertForecast(first, 3, model, 0.3, 4.0);
 
         // when
         MvcResult watch = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID)).andReturn();
@@ -139,7 +139,7 @@ class WatchBoardApiContractTest {
         fixture.insertObservation(route, published, 1, "V1", 1, "STOP-1", 1, DEPARTED, 7, null);
         fixture.insertObservation(route, published, 2, "V2", 2, "STOP-2", 1, ARRIVING, 5, null);
         fixture.insertObservation(route, published, 3, "V3", 3, "STOP-3", 2, ARRIVING, 3, null);
-        fixture.insertPublication(published, model, publishedAt.plusSeconds(1), publishedAt.plusSeconds(2));
+        fixture.insertPublication(published, model, publishedAt.plusSeconds(2));
 
         // when
         JsonNode watch = bodyOf(mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID)).andReturn());
@@ -172,7 +172,7 @@ class WatchBoardApiContractTest {
         OffsetDateTime publishedAt = now.minusMinutes(1);
         final long published = fixture.insertBatch(route, publishedAt, "SUCCESS_ROWS", 1);
         fixture.insertObservation(route, published, 1, "V1", 1, "STOP-1", 1, DEPARTED, 7, null);
-        fixture.insertPublication(published, model, publishedAt.plusSeconds(1), publishedAt.plusSeconds(2));
+        fixture.insertPublication(published, model, publishedAt.plusSeconds(2));
         fixture.updateHeadway(route, "weekday", 10, 20);
         fixture.updateHeadway(route, "holiday", 16, 35);
 
@@ -200,7 +200,7 @@ class WatchBoardApiContractTest {
         fixture.insertObservation(route, published, 1, "V1", 1, "STOP-1", 1, DEPARTED, 0, null);
         fixture.insertObservation(route, published, 2, "V2", 2, "STOP-2", 1, ARRIVING, null, "NOT_REPORTED");
         fixture.insertObservation(route, published, 3, "V3", 3, "STOP-3", 3, IN_TRANSIT, 12, null);
-        fixture.insertPublication(published, model, publishedAt.plusSeconds(1), publishedAt.plusSeconds(2));
+        fixture.insertPublication(published, model, publishedAt.plusSeconds(2));
 
         // when
         JsonNode watch = bodyOf(mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID)).andReturn());
@@ -244,7 +244,7 @@ class WatchBoardApiContractTest {
         fixture.insertObservation(currentRoute, current, 1, "NEW", 1, "STOP-1", 1, DEPARTED, 5, null);
         final long old = fixture.insertBatch(oldRoute, now.minusSeconds(20), "SUCCESS_ROWS", 1);
         fixture.insertObservation(oldRoute, old, 1, "OLD", 1, "STOP-1", 1, DEPARTED, 5, null);
-        fixture.insertPublication(old, model, now.minusSeconds(19), now.minusSeconds(18));
+        fixture.insertPublication(old, model, now.minusSeconds(18));
 
         // when
         ResultActions httpResponse4 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));
@@ -264,7 +264,7 @@ class WatchBoardApiContractTest {
         RouteContext route = insertRoundTripRoute();
         final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         final long empty = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(empty, model, now.minusSeconds(59), now.minusSeconds(58));
+        fixture.insertPublication(empty, model, now.minusSeconds(58));
 
         // when
         ResultActions httpResponse5 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));
@@ -283,7 +283,7 @@ class WatchBoardApiContractTest {
         RouteContext route = insertRoundTripRoute();
         final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         final long stale = fixture.insertBatch(route, now.minusMinutes(5).minusSeconds(1), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(stale, model, now.minusMinutes(5), now.minusMinutes(5));
+        fixture.insertPublication(stale, model, now.minusMinutes(5));
         fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_ROWS", 1);
 
         // when
@@ -343,7 +343,7 @@ class WatchBoardApiContractTest {
         RouteContext route = insertRoundTripRoute();
         final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         final long empty = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(empty, model, now.minusSeconds(59), now.minusSeconds(58));
+        fixture.insertPublication(empty, model, now.minusSeconds(58));
 
         // when
         ResultActions httpResponse11 = mockMvc.perform(head("/api/v1/routes/{routeId}/watch", ROUTE_ID));
@@ -361,7 +361,7 @@ class WatchBoardApiContractTest {
         final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         OffsetDateTime observedAt = now.minusMinutes(4).minusSeconds(50);
         final long batch = fixture.insertBatch(route, observedAt, "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(batch, model, observedAt.plusSeconds(1), observedAt.plusSeconds(2));
+        fixture.insertPublication(batch, model, observedAt.plusSeconds(2));
 
         // when
         ResultActions httpResponse12 = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));

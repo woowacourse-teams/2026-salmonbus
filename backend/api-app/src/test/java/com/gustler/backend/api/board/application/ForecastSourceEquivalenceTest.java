@@ -4,15 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.api.board.ForecastSourceSetting;
 import com.gustler.backend.api.board.NoRecentObservationException;
 import com.gustler.backend.api.board.domain.ApproachingVehicle;
 import com.gustler.backend.api.board.domain.Board;
 import com.gustler.backend.api.board.domain.StopState;
 import com.gustler.backend.api.board.domain.VehicleForecast;
-import com.gustler.backend.api.board.infrastructure.ForecastSourceBoardQueryRepository;
-import com.gustler.backend.api.board.infrastructure.jdbc.JdbcBoardSnapshotReader;
-import com.gustler.backend.api.board.infrastructure.jdbc.JdbcForecastRecordReader;
 import com.gustler.backend.api.board.infrastructure.jpa.JpaBoardQueryRepository;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.error.ServiceUnavailableException;
@@ -24,7 +20,6 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,11 +28,15 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 같은 예측을 옛 예보 테이블과 새 예보 기록에 넣었을 때 두 출처의 탑승판이 필드 하나까지 같은지 확인한다.
+ * 예보 기록에서 읽은 탑승판·스냅샷이 기록해 둔 기대 응답과 필드 하나까지 같은지 확인한다.
+ *
+ * <p>기대 응답은 시험 자원 {@code board/forecast-source-equivalence.txt}에 있다. 같은 예측을 이전 저장 테이블에서 읽던 조회와 예보 기록에서 읽는
+ * 조회가 같은 응답을 내던 때 기록했고, 비교 방법은 {@link RecordedBoards}가 정한다.
  */
 @IntegrationTest
 @Transactional
 class ForecastSourceEquivalenceTest {
+    private static final Map<String, String> RECORDED = RecordedBoards.load("/board/forecast-source-equivalence.txt");
     private static final String ROUTE_ID = "204000057";
     private static final String OTHER_ROUTE_ID = "234000050";
     private static final int STOP_COUNT = 14;
@@ -49,13 +48,7 @@ class ForecastSourceEquivalenceTest {
     private Clock clock;
 
     @Autowired
-    private JpaBoardQueryRepository jpaBoardQueryRepository;
-
-    @Autowired
-    private JdbcBoardSnapshotReader snapshotReader;
-
-    @Autowired
-    private JdbcForecastRecordReader recordReader;
+    private JpaBoardQueryRepository repository;
 
     @Autowired
     private BoardFreshnessPolicy freshnessPolicy;
@@ -66,62 +59,60 @@ class ForecastSourceEquivalenceTest {
     private BoardDatabaseFixture fixture;
     private OffsetDateTime now;
     private long model;
+    private RecordedBoards format;
 
     @BeforeEach
     void setUp() {
         fixture = new BoardDatabaseFixture(jdbc);
         now = OffsetDateTime.now(clock).withNano(0);
         model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        format = new RecordedBoards(now).model(model, "active");
     }
 
     @Test
-    void 예측이_있는_차량과_없는_차량_목표_12개와_비어_있는_기대_좌석을_두_출처가_같게_읽는다() {
+    void 예측이_있는_차량과_없는_차량_목표_12개와_비어_있는_기대_좌석을_기록한_응답과_같게_읽는다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        Batch batch = batchWithVehicles(route, now);
-        publishBoth(batch, now);
+        Batch batch = name(batchWithVehicles(route, now), "batch");
+        publish(batch, now, model);
 
         // when
-        Board legacy = boardOf(ForecastSourceSetting.LEGACY, ROUTE_ID);
-        Board record = boardOf(ForecastSourceSetting.RECORD, ROUTE_ID);
+        Board board = boardOf(ROUTE_ID);
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(record).isEqualTo(legacy);
-            softly.assertThat(legacy.route().status()).isEqualTo(RouteStatus.FORECAST_READY);
-            ApproachingVehicle first = vehicleAt(legacy, 2, "BUS-A");
+            softly.assertThat(format.board(board)).isEqualTo(RECORDED.get("vehicles.board"));
+            softly.assertThat(board.route().status()).isEqualTo(RouteStatus.FORECAST_READY);
+            ApproachingVehicle first = vehicleAt(board, 2, "BUS-A");
             softly.assertThat(first.forecast()).isEqualTo(new VehicleForecast.Available(
                 0.9, 18.0, "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", 0.1));
-            softly.assertThat(((VehicleForecast.Available) vehicleAt(legacy, 5, "BUS-A").forecast()).expectedSeats())
+            softly.assertThat(((VehicleForecast.Available) vehicleAt(board, 5, "BUS-A").forecast()).expectedSeats())
                 .isNull();
-            softly.assertThat(((VehicleForecast.Available) vehicleAt(legacy, 6, "BUS-A").forecast()).expectedSeats())
+            softly.assertThat(((VehicleForecast.Available) vehicleAt(board, 6, "BUS-A").forecast()).expectedSeats())
                 .isNull();
-            softly.assertThat(((VehicleForecast.Available) vehicleAt(legacy, 7, "BUS-A").forecast()).expectedSeats())
+            softly.assertThat(((VehicleForecast.Available) vehicleAt(board, 7, "BUS-A").forecast()).expectedSeats())
                 .isNull();
-            softly.assertThat(vehicleAt(legacy, 13, "BUS-A").forecast()).isInstanceOf(VehicleForecast.Available.class);
-            softly.assertThat(vehicleAt(legacy, 2, null).forecast()).isInstanceOf(VehicleForecast.Unavailable.class);
-            softly.assertThat(vehicleAt(legacy, 5, "BUS-B").forecast()).isInstanceOf(VehicleForecast.Unavailable.class);
+            softly.assertThat(vehicleAt(board, 13, "BUS-A").forecast()).isInstanceOf(VehicleForecast.Available.class);
+            softly.assertThat(vehicleAt(board, 2, null).forecast()).isInstanceOf(VehicleForecast.Unavailable.class);
+            softly.assertThat(vehicleAt(board, 5, "BUS-B").forecast()).isInstanceOf(VehicleForecast.Unavailable.class);
         });
     }
 
     @Test
-    void 판본_표시는_출처_표시만_다르고_옛_출처는_지금과_같은_모양이다() {
+    void 판본_표시는_기록한_판본_표시와_같고_출처_표시가_없다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        Batch batch = batchWithVehicles(route, now);
-        publishBoth(batch, now);
+        Batch batch = name(batchWithVehicles(route, now), "batch");
+        publish(batch, now, model);
 
         // when
-        BoardSnapshot legacy = snapshotOf(ForecastSourceSetting.LEGACY, ROUTE_ID);
-        BoardSnapshot record = snapshotOf(ForecastSourceSetting.RECORD, ROUTE_ID);
+        BoardSnapshot snapshot = snapshotOf(ROUTE_ID);
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(legacy.revision()).matches("p[^|]+\\|g[^|]+\\|n14\\|m" + model + "\\|d0\\|r1");
-            softly.assertThat(record.revision()).isEqualTo(legacy.revision() + "|R");
-            softly.assertThat(record.observation().orElseThrow().forecastSource()).isEqualTo(ForecastSource.RECORD);
-            softly.assertThat(record.observation().orElseThrow().batchId()).isEqualTo(batch.id());
-            softly.assertThat(record).isNotEqualTo(legacy);
+            softly.assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("revision.snapshot"));
+            softly.assertThat(snapshot.revision()).matches("p[^|]+\\|g[^|]+\\|n14\\|m" + model + "\\|d0\\|r1");
+            softly.assertThat(snapshot.observation().orElseThrow().batchId()).isEqualTo(batch.id());
         });
     }
 
@@ -129,25 +120,21 @@ class ForecastSourceEquivalenceTest {
     void 예측이_0건인_실행도_빈_발행처럼_최신_배치가_되고_예보는_없다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        Batch older = batchWithVehicles(route, now.minusSeconds(30));
-        publishBoth(older, now.minusSeconds(29));
-        Batch newer = batchWithVehicles(route, now);
-        fixture.insertPublication(newer.id(), model, now, now);
-        productionRevisions(newer.id());
-        insertRun(newer.id(), now, model, "EMPTY", 0);
+        Batch older = name(batchWithVehicles(route, now.minusSeconds(30)), "older");
+        publish(older, now.minusSeconds(29), model);
+        Batch newer = name(batchWithVehicles(route, now), "newer");
+        fixture.insertRun(newer.id(), model, "EMPTY", now);
 
         // when
-        Board legacy = boardOf(ForecastSourceSetting.LEGACY, ROUTE_ID);
-        Board record = boardOf(ForecastSourceSetting.RECORD, ROUTE_ID);
+        Board board = boardOf(ROUTE_ID);
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(record).isEqualTo(legacy);
-            softly.assertThat(legacy.observedAt()).isEqualTo(now);
-            softly.assertThat(legacy.route().status()).isEqualTo(RouteStatus.FORECAST_READY);
-            softly.assertThat(vehicleAt(legacy, 2, "BUS-A").forecast()).isInstanceOf(VehicleForecast.Unavailable.class);
-            softly.assertThat(snapshotOf(ForecastSourceSetting.RECORD, ROUTE_ID).revision())
-                .isEqualTo(snapshotOf(ForecastSourceSetting.LEGACY, ROUTE_ID).revision() + "|R");
+            softly.assertThat(format.board(board)).isEqualTo(RECORDED.get("emptyRun.board"));
+            softly.assertThat(board.observedAt()).isEqualTo(now);
+            softly.assertThat(board.route().status()).isEqualTo(RouteStatus.FORECAST_READY);
+            softly.assertThat(vehicleAt(board, 2, "BUS-A").forecast()).isInstanceOf(VehicleForecast.Unavailable.class);
+            softly.assertThat(format.snapshot(snapshotOf(ROUTE_ID))).isEqualTo(RECORDED.get("emptyRun.snapshot"));
         });
     }
 
@@ -155,321 +142,293 @@ class ForecastSourceEquivalenceTest {
     void 예보하지_않은_실행_결과도_최신_배치로_잡혀_예보_없음이_된다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        Batch older = batchWithVehicles(route, now.minusSeconds(30));
-        publishBoth(older, now.minusSeconds(29));
-        Batch newer = batchWithVehicles(route, now);
-        fixture.insertPublication(newer.id(), model, now, now);
-        insertRun(newer.id(), now, null, "LATE", 0);
+        Batch older = name(batchWithVehicles(route, now.minusSeconds(30)), "older");
+        publish(older, now.minusSeconds(29), model);
+        Batch newer = name(batchWithVehicles(route, now), "newer");
+        fixture.insertRun(newer.id(), null, "LATE", now);
 
         // when
-        Board legacy = boardOf(ForecastSourceSetting.LEGACY, ROUTE_ID);
-        Board record = boardOf(ForecastSourceSetting.RECORD, ROUTE_ID);
+        Board board = boardOf(ROUTE_ID);
 
         // then
-        assertThat(record).isEqualTo(legacy);
-        assertThat(vehicleAt(record, 2, "BUS-A").forecast()).isInstanceOf(VehicleForecast.Unavailable.class);
+        assertThat(format.board(board)).isEqualTo(RECORDED.get("lateRun.board"));
+        assertThat(vehicleAt(board, 2, "BUS-A").forecast()).isInstanceOf(VehicleForecast.Unavailable.class);
     }
 
     @Test
-    void 발행된_배치가_신선도_창_밖이면_두_출처_모두_최근_관측이_없다() {
+    void 발행된_배치가_신선도_창_밖이면_최근_관측이_없다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
         OffsetDateTime old = now.minusMinutes(10).minusSeconds(5);
-        Batch stale = batchWithVehicles(route, old);
-        publishBoth(stale, old);
-        fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0);
+        Batch stale = name(batchWithVehicles(route, old), "stale");
+        publish(stale, old, model);
+        format.batch(fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0), "latest");
 
         // when
-        Throwable legacy = catchThrowable(() -> boardOf(ForecastSourceSetting.LEGACY, ROUTE_ID));
-        Throwable record = catchThrowable(() -> boardOf(ForecastSourceSetting.RECORD, ROUTE_ID));
+        Throwable actual = catchThrowable(() -> boardOf(ROUTE_ID));
 
         // then
-        assertThat(legacy).isInstanceOf(NoRecentObservationException.class);
-        assertThat(record).isInstanceOf(NoRecentObservationException.class);
-        assertThat(snapshotOf(ForecastSourceSetting.RECORD, ROUTE_ID).observation()).isEmpty();
+        assertThat(actual).isInstanceOf(NoRecentObservationException.class);
+        assertThat(RecordedBoards.failure(actual)).isEqualTo(RECORDED.get("stale.failure"));
+        assertThat(snapshotOf(ROUTE_ID).observation()).isEmpty();
+        assertThat(format.snapshot(snapshotOf(ROUTE_ID))).isEqualTo(RECORDED.get("stale.snapshot"));
     }
 
     @Test
-    void 노선에_발행이_한_번도_없으면_두_출처_모두_최신_정상_관측으로_읽는다() {
+    void 노선에_발행이_한_번도_없으면_최신_정상_관측으로_읽는다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        batchWithVehicles(route, now.minusSeconds(20));
-        Batch latest = batchWithVehicles(route, now);
+        name(batchWithVehicles(route, now.minusSeconds(20)), "earlier");
+        Batch latest = name(batchWithVehicles(route, now), "latest");
 
         // when
-        Board legacy = boardOf(ForecastSourceSetting.LEGACY, ROUTE_ID);
-        Board record = boardOf(ForecastSourceSetting.RECORD, ROUTE_ID);
+        Board board = boardOf(ROUTE_ID);
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(record).isEqualTo(legacy);
-            softly.assertThat(legacy.route().status()).isEqualTo(RouteStatus.PREPARING);
-            BoardSnapshot recordSnapshot = snapshotOf(ForecastSourceSetting.RECORD, ROUTE_ID);
-            softly.assertThat(recordSnapshot.observation().orElseThrow().batchId()).isEqualTo(latest.id());
-            softly.assertThat(recordSnapshot.observation().orElseThrow().forecastPublished()).isFalse();
-            softly.assertThat(snapshotOf(ForecastSourceSetting.LEGACY, ROUTE_ID).revision())
-                .isEqualTo("p-|g-|n-|m-|d-|r-");
-            softly.assertThat(recordSnapshot.revision()).isEqualTo("p-|g-|n-|m-|d-|r-|R");
+            softly.assertThat(format.board(board)).isEqualTo(RECORDED.get("neverPublished.board"));
+            softly.assertThat(board.route().status()).isEqualTo(RouteStatus.PREPARING);
+            BoardSnapshot snapshot = snapshotOf(ROUTE_ID);
+            softly.assertThat(snapshot.observation().orElseThrow().batchId()).isEqualTo(latest.id());
+            softly.assertThat(snapshot.observation().orElseThrow().forecastPublished()).isFalse();
+            softly.assertThat(snapshot.revision()).isEqualTo("p-|g-|n-|m-|d-|r-");
+            softly.assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("neverPublished.snapshot"));
         });
     }
 
     @Test
-    void 옛_출처는_예측의_모델이_섞이면_서비스_불가이고_새_출처는_실행_줄의_모델_하나로_읽는다() {
+    void 예측의_모델은_실행_줄의_모델_하나로_읽는다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        Batch batch = batchWithVehicles(route, now);
-        publishBoth(batch, now);
-        final long retired = fixture.insertModel("model-retired", "RETIRED", now.minusDays(2));
-        jdbc.sql("""
-            UPDATE seat_forecast SET model_deployment_id=? WHERE vehicle_observation_id=? AND target_stop_order=2
-            """).params(retired, batch.busA()).update();
+        Batch batch = name(batchWithVehicles(route, now), "batch");
+        publish(batch, now, model);
 
         // when
-        Throwable legacy = catchThrowable(() -> boardOf(ForecastSourceSetting.LEGACY, ROUTE_ID));
-        Board record = boardOf(ForecastSourceSetting.RECORD, ROUTE_ID);
+        Board board = boardOf(ROUTE_ID);
 
         // then
-        assertThat(legacy).isInstanceOf(ServiceUnavailableException.class);
-        assertThat(record.model().releaseId()).isEqualTo("model-active");
+        assertThat(format.board(board)).isEqualTo(RECORDED.get("mixedModels.board"));
+        assertThat(board.model().releaseId()).isEqualTo("model-active");
     }
 
     @Test
-    void 모든_예측이_활성이_아닌_모델이면_두_출처_모두_그_모델을_응답한다() {
+    void 모든_예측이_활성이_아닌_모델이면_그_모델을_응답한다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        Batch batch = batchWithVehicles(route, now);
+        Batch batch = name(batchWithVehicles(route, now), "batch");
         final long retired = fixture.insertModel("model-retired", "RETIRED", now.minusDays(2));
-        publishLegacy(batch, now, retired);
-        publishRecord(batch, now, retired);
+        format.model(retired, "retired");
+        publish(batch, now, retired);
 
         // when
-        Board legacy = boardOf(ForecastSourceSetting.LEGACY, ROUTE_ID);
-        Board record = boardOf(ForecastSourceSetting.RECORD, ROUTE_ID);
+        Board board = boardOf(ROUTE_ID);
 
         // then
-        assertThat(record).isEqualTo(legacy);
-        assertThat(record.model().releaseId()).isEqualTo("model-retired");
+        assertThat(format.board(board)).isEqualTo(RECORDED.get("retiredModel.board"));
+        assertThat(board.model().releaseId()).isEqualTo("model-retired");
     }
 
     @Test
-    void 새_출처에서_실행_줄의_모델_배포를_찾을_수_없으면_서비스_불가다() {
+    void 실행_줄의_모델_배포를_찾을_수_없으면_서비스_불가다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
         Batch batch = batchWithVehicles(route, now);
-        publishRecord(batch, now, Long.MAX_VALUE);
+        publish(batch, now, Long.MAX_VALUE);
 
         // when
-        Throwable actual = catchThrowable(() -> boardOf(ForecastSourceSetting.RECORD, ROUTE_ID));
+        Throwable actual = catchThrowable(() -> boardOf(ROUTE_ID));
 
         // then
         assertThat(actual).isInstanceOf(ServiceUnavailableException.class);
+        assertThat(RecordedBoards.failure(actual)).isEqualTo(RECORDED.get("missingModel.failure"));
     }
 
     @Test
-    void 일괄_읽기도_두_출처가_노선마다_같은_판정보드를_낸다() {
+    void 일괄_읽기도_노선마다_기록한_판정보드를_낸다() {
         // given
         BoardDatabaseFixture.RouteContext published = route(ROUTE_ID);
         BoardDatabaseFixture.RouteContext observed = route(OTHER_ROUTE_ID);
-        publishBoth(batchWithVehicles(published, now), now);
-        batchWithVehicles(observed, now);
+        publish(name(batchWithVehicles(published, now), "published"), now, model);
+        name(batchWithVehicles(observed, now), "observed");
         List<String> routeIds = List.of(ROUTE_ID, "999999999", OTHER_ROUTE_ID);
 
         // when
-        Map<String, BoardBatchRead> legacy = serviceOf(ForecastSourceSetting.LEGACY)
-            .readBoards(routeIds, BoardReadDeadline.none());
-        Map<String, BoardBatchRead> record = serviceOf(ForecastSourceSetting.RECORD)
-            .readBoards(routeIds, BoardReadDeadline.none());
+        Map<String, BoardBatchRead> reads = service().readBoards(routeIds, BoardReadDeadline.none());
 
         // then
-        assertThat(record.keySet()).containsExactlyElementsOf(legacy.keySet());
+        assertThat(reads.keySet()).containsExactlyElementsOf(routeIds);
+        assertThat(format.batchReads(reads)).isEqualTo(RECORDED.get("batchRead.reads"));
         for (String routeId : List.of(ROUTE_ID, OTHER_ROUTE_ID)) {
-            assertThat(record.get(routeId).reading()).isEqualTo(legacy.get(routeId).reading());
-            assertThat(record.get(routeId).reading().board())
-                .isEqualTo(boardOf(ForecastSourceSetting.RECORD, routeId));
+            BoardReading reading = reads.get(routeId).reading();
+            assertThat(reading.board()).isEqualTo(boardOf(routeId));
+            assertThat(reading.cacheMaxAge()).isEqualTo(cachePolicy.maxAgeAt(reading.board().observedAt()));
         }
-        assertThat(record.get("999999999").failure()).isInstanceOf(legacy.get("999999999").failure().getClass());
     }
 
     @Test
-    void 새_출처에서_새_배치가_오면_판본_표시가_바뀌어_캐시한_판정보드를_다시_만든다() {
+    void 새_배치가_오면_판본_표시가_바뀌어_캐시한_판정보드를_다시_만든다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        publishRecord(batchWithVehicles(route, now.minusSeconds(20)), now.minusSeconds(20), model);
-        BoardQueryService service = new BoardQueryService(sourceOf(ForecastSourceSetting.RECORD), freshnessPolicy,
-            cachePolicy, new BoardReadCache(true, null));
+        publish(batchWithVehicles(route, now.minusSeconds(20)), now.minusSeconds(20), model);
+        BoardQueryService service = new BoardQueryService(repository, freshnessPolicy, cachePolicy,
+            new BoardReadCache(true, null));
         Board first = service.readBoard(new RouteId(ROUTE_ID)).board();
-        String firstRevision = snapshotOf(ForecastSourceSetting.RECORD, ROUTE_ID).revision();
+        String firstRevision = snapshotOf(ROUTE_ID).revision();
         assertThat(service.readBoard(new RouteId(ROUTE_ID)).board()).isSameAs(first);
 
         // when
-        publishRecord(batchWithVehicles(route, now), now, model);
+        publish(batchWithVehicles(route, now), now, model);
         Board second = service.readBoard(new RouteId(ROUTE_ID)).board();
 
         // then
         assertThat(second.observedAt()).isEqualTo(now);
         assertThat(second).isNotEqualTo(first);
-        assertThat(snapshotOf(ForecastSourceSetting.RECORD, ROUTE_ID).revision()).isNotEqualTo(firstRevision);
+        assertThat(snapshotOf(ROUTE_ID).revision()).isNotEqualTo(firstRevision);
     }
 
     @Test
-    void 자동_선택은_옛_출처의_배치가_더_최신이면_옛_출처를_쓴다() {
+    void 실행_줄이_없는_더_최신_관측보다_실행_줄이_있는_배치를_읽는다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        Batch older = batchWithVehicles(route, now.minusSeconds(20));
-        Batch newer = batchWithVehicles(route, now);
-        publishRecord(older, now.minusSeconds(20), model);
-        publishLegacy(newer, now, model);
+        Batch older = name(batchWithVehicles(route, now.minusSeconds(20)), "older");
+        name(batchWithVehicles(route, now), "newer");
+        publish(older, now.minusSeconds(20), model);
 
         // when
-        BoardSnapshot auto = snapshotOf(ForecastSourceSetting.AUTO, ROUTE_ID);
+        BoardSnapshot snapshot = snapshotOf(ROUTE_ID);
 
         // then
-        assertThat(auto).isEqualTo(snapshotOf(ForecastSourceSetting.LEGACY, ROUTE_ID));
-        assertThat(auto.observation().orElseThrow().batchId()).isEqualTo(newer.id());
-        assertThat(boardOf(ForecastSourceSetting.AUTO, ROUTE_ID))
-            .isEqualTo(boardOf(ForecastSourceSetting.LEGACY, ROUTE_ID));
+        assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("recordOlder.snapshot"));
+        assertThat(snapshot.observation().orElseThrow().batchId()).isEqualTo(older.id());
+        assertThat(format.board(boardOf(ROUTE_ID))).isEqualTo(RECORDED.get("recordOlder.board"));
     }
 
     @Test
-    void 자동_선택은_새_출처의_배치가_더_최신이면_새_출처를_쓴다() {
+    void 실행_줄이_있는_최신_배치를_읽는다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        Batch older = batchWithVehicles(route, now.minusSeconds(20));
-        Batch newer = batchWithVehicles(route, now);
-        publishLegacy(older, now.minusSeconds(20), model);
-        publishRecord(newer, now, model);
+        name(batchWithVehicles(route, now.minusSeconds(20)), "older");
+        Batch newer = name(batchWithVehicles(route, now), "newer");
+        publish(newer, now, model);
 
         // when
-        BoardSnapshot auto = snapshotOf(ForecastSourceSetting.AUTO, ROUTE_ID);
+        BoardSnapshot snapshot = snapshotOf(ROUTE_ID);
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(auto).isEqualTo(snapshotOf(ForecastSourceSetting.RECORD, ROUTE_ID));
-            softly.assertThat(auto.observation().orElseThrow().batchId()).isEqualTo(newer.id());
-            softly.assertThat(auto.observation().orElseThrow().forecastSource()).isEqualTo(ForecastSource.RECORD);
-            softly.assertThat(boardOf(ForecastSourceSetting.AUTO, ROUTE_ID))
-                .isEqualTo(boardOf(ForecastSourceSetting.RECORD, ROUTE_ID));
+            softly.assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("recordNewer.snapshot"));
+            softly.assertThat(snapshot.observation().orElseThrow().batchId()).isEqualTo(newer.id());
+            softly.assertThat(format.board(boardOf(ROUTE_ID))).isEqualTo(RECORDED.get("recordNewer.board"));
         });
     }
 
     @Test
-    void 자동_선택은_두_출처의_배치가_같으면_옛_출처를_쓴다() {
+    void 실행_줄이_하나인_배치를_읽는다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        publishBoth(batchWithVehicles(route, now), now);
+        publish(name(batchWithVehicles(route, now), "batch"), now, model);
 
         // when
-        BoardSnapshot auto = snapshotOf(ForecastSourceSetting.AUTO, ROUTE_ID);
+        BoardSnapshot snapshot = snapshotOf(ROUTE_ID);
 
         // then
-        assertThat(auto).isEqualTo(snapshotOf(ForecastSourceSetting.LEGACY, ROUTE_ID));
-        assertThat(auto.observation().orElseThrow().forecastSource()).isEqualTo(ForecastSource.LEGACY);
+        assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("sameBatch.snapshot"));
+        assertThat(format.board(boardOf(ROUTE_ID))).isEqualTo(RECORDED.get("sameBatch.board"));
     }
 
     @Test
-    void 자동_선택은_한_출처에만_예보가_있으면_그_출처를_쓴다() {
+    void 노선마다_실행_줄이_있는_배치_또는_최신_정상_관측을_읽는다() {
         // given
-        BoardDatabaseFixture.RouteContext recordOnly = route(ROUTE_ID);
-        BoardDatabaseFixture.RouteContext legacyOnly = route(OTHER_ROUTE_ID);
-        publishRecord(batchWithVehicles(recordOnly, now.minusSeconds(20)), now.minusSeconds(20), model);
-        batchWithVehicles(recordOnly, now);
-        publishLegacy(batchWithVehicles(legacyOnly, now.minusSeconds(20)), now.minusSeconds(20), model);
-        batchWithVehicles(legacyOnly, now);
+        BoardDatabaseFixture.RouteContext recorded = route(ROUTE_ID);
+        BoardDatabaseFixture.RouteContext observedOnly = route(OTHER_ROUTE_ID);
+        publish(name(batchWithVehicles(recorded, now.minusSeconds(20)), "recorded"), now.minusSeconds(20), model);
+        name(batchWithVehicles(recorded, now), "recordedLatest");
+        name(batchWithVehicles(observedOnly, now.minusSeconds(20)), "observedOnlyEarlier");
+        name(batchWithVehicles(observedOnly, now), "observedOnlyLatest");
 
         // when
-        BoardSnapshot recordAuto = snapshotOf(ForecastSourceSetting.AUTO, ROUTE_ID);
-        BoardSnapshot legacyAuto = snapshotOf(ForecastSourceSetting.AUTO, OTHER_ROUTE_ID);
+        BoardSnapshot recordedSnapshot = snapshotOf(ROUTE_ID);
+        BoardSnapshot observedOnlySnapshot = snapshotOf(OTHER_ROUTE_ID);
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(recordAuto).isEqualTo(snapshotOf(ForecastSourceSetting.RECORD, ROUTE_ID));
-            softly.assertThat(recordAuto.observation().orElseThrow().observedAt()).isEqualTo(now.minusSeconds(20));
-            softly.assertThat(legacyAuto).isEqualTo(snapshotOf(ForecastSourceSetting.LEGACY, OTHER_ROUTE_ID));
-            softly.assertThat(legacyAuto.observation().orElseThrow().observedAt()).isEqualTo(now.minusSeconds(20));
-            softly.assertThat(snapshotsOf(ForecastSourceSetting.AUTO, ROUTE_ID, OTHER_ROUTE_ID))
-                .containsExactlyInAnyOrder(recordAuto, legacyAuto);
+            softly.assertThat(format.snapshot(recordedSnapshot)).isEqualTo(RECORDED.get("oneSource.recorded.snapshot"));
+            softly.assertThat(recordedSnapshot.observation().orElseThrow().observedAt())
+                .isEqualTo(now.minusSeconds(20));
+            softly.assertThat(format.snapshot(observedOnlySnapshot))
+                .isEqualTo(RECORDED.get("oneSource.observedOnly.snapshot"));
+            softly.assertThat(observedOnlySnapshot.observation().orElseThrow().observedAt()).isEqualTo(now);
+            List<BoardSnapshot> many = repository.findSnapshots(
+                Stream.of(ROUTE_ID, OTHER_ROUTE_ID).map(RouteId::new).toList());
+            softly.assertThat(many).containsExactlyInAnyOrder(recordedSnapshot, observedOnlySnapshot);
+            softly.assertThat(String.join(" || ", many.stream().map(format::snapshot).sorted().toList()))
+                .isEqualTo(RECORDED.get("oneSource.many"));
         });
     }
 
     @Test
-    void 자동_선택은_옛_출처의_발행이_신선도_창_밖이면_새_출처를_쓴다() {
+    void 신선도_창_밖의_관측보다_창_안의_실행_줄_배치를_읽는다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
         OffsetDateTime old = now.minusMinutes(10).minusSeconds(5);
-        publishLegacy(batchWithVehicles(route, old), old, model);
-        Batch fresh = batchWithVehicles(route, now);
-        publishRecord(fresh, now, model);
+        name(batchWithVehicles(route, old), "old");
+        Batch fresh = name(batchWithVehicles(route, now), "fresh");
+        publish(fresh, now, model);
 
         // when
-        BoardSnapshot auto = snapshotOf(ForecastSourceSetting.AUTO, ROUTE_ID);
+        BoardSnapshot snapshot = snapshotOf(ROUTE_ID);
 
         // then
-        assertThat(auto.observation().orElseThrow().batchId()).isEqualTo(fresh.id());
-        assertThat(auto.observation().orElseThrow().forecastSource()).isEqualTo(ForecastSource.RECORD);
+        assertThat(snapshot.observation().orElseThrow().batchId()).isEqualTo(fresh.id());
+        assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("staleObservation.snapshot"));
     }
 
     @Test
-    void 본선을_새_경로로_바꾸는_순간_옛_발행_뒤의_첫_새_기록부터_자동_선택이_새_기록을_읽고_응답이_끊기지_않는다() {
+    void 실행_줄이_생길_때마다_그_배치를_읽고_예보하지_않은_실행도_최신_배치가_된다() {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
-        Batch shadowed = batchWithVehicles(route, now.minusSeconds(60));
-        publishBoth(shadowed, now.minusSeconds(60));
-        Batch lastLegacy = batchWithVehicles(route, now.minusSeconds(30));
-        publishBoth(lastLegacy, now.minusSeconds(30));
+        publish(name(batchWithVehicles(route, now.minusSeconds(60)), "first"), now.minusSeconds(60), model);
+        Batch second = name(batchWithVehicles(route, now.minusSeconds(30)), "second");
+        publish(second, now.minusSeconds(30), model);
 
         // when
-        BoardSnapshot beforeFirstRecord = snapshotOf(ForecastSourceSetting.AUTO, ROUTE_ID);
-        Board boardBeforeFirstRecord = boardOf(ForecastSourceSetting.AUTO, ROUTE_ID);
-        Board legacyBoardBeforeFirstRecord = boardOf(ForecastSourceSetting.LEGACY, ROUTE_ID);
-        Batch firstRecord = batchWithVehicles(route, now);
-        publishRecord(firstRecord, now, model);
-        BoardSnapshot afterFirstRecord = snapshotOf(ForecastSourceSetting.AUTO, ROUTE_ID);
-        Board boardAfterFirstRecord = boardOf(ForecastSourceSetting.AUTO, ROUTE_ID);
-        Board recordBoardAfterFirstRecord = boardOf(ForecastSourceSetting.RECORD, ROUTE_ID);
-        Batch late = batchWithVehicles(route, now.plusSeconds(30));
-        insertRun(late.id(), now.plusSeconds(121), model, "LATE", 0);
-        BoardSnapshot afterLateRun = snapshotOf(ForecastSourceSetting.AUTO, ROUTE_ID);
+        BoardSnapshot beforeThird = snapshotOf(ROUTE_ID);
+        Board boardBeforeThird = boardOf(ROUTE_ID);
+        Batch third = name(batchWithVehicles(route, now), "third");
+        publish(third, now, model);
+        BoardSnapshot afterThird = snapshotOf(ROUTE_ID);
+        Board boardAfterThird = boardOf(ROUTE_ID);
+        Batch late = name(batchWithVehicles(route, now.plusSeconds(30)), "late");
+        fixture.insertRun(late.id(), model, "LATE", now.plusSeconds(121));
+        BoardSnapshot afterLateRun = snapshotOf(ROUTE_ID);
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(beforeFirstRecord.observation().orElseThrow().batchId()).isEqualTo(lastLegacy.id());
-            softly.assertThat(beforeFirstRecord.observation().orElseThrow().forecastSource())
-                .isEqualTo(ForecastSource.LEGACY);
-            softly.assertThat(boardBeforeFirstRecord).isEqualTo(legacyBoardBeforeFirstRecord);
-            softly.assertThat(vehicleAt(boardBeforeFirstRecord, 2, "BUS-A").forecast())
+            softly.assertThat(beforeThird.observation().orElseThrow().batchId()).isEqualTo(second.id());
+            softly.assertThat(format.snapshot(beforeThird)).isEqualTo(RECORDED.get("sequence.beforeThird.snapshot"));
+            softly.assertThat(format.board(boardBeforeThird)).isEqualTo(RECORDED.get("sequence.beforeThird.board"));
+            softly.assertThat(vehicleAt(boardBeforeThird, 2, "BUS-A").forecast())
                 .isInstanceOf(VehicleForecast.Available.class);
-            softly.assertThat(boardAfterFirstRecord).isEqualTo(recordBoardAfterFirstRecord);
-            softly.assertThat(vehicleAt(boardAfterFirstRecord, 2, "BUS-A").forecast())
+            softly.assertThat(afterThird.observation().orElseThrow().batchId()).isEqualTo(third.id());
+            softly.assertThat(format.snapshot(afterThird)).isEqualTo(RECORDED.get("sequence.afterThird.snapshot"));
+            softly.assertThat(format.board(boardAfterThird)).isEqualTo(RECORDED.get("sequence.afterThird.board"));
+            softly.assertThat(vehicleAt(boardAfterThird, 2, "BUS-A").forecast())
                 .isInstanceOf(VehicleForecast.Available.class);
-            softly.assertThat(afterFirstRecord.observation().orElseThrow().batchId()).isEqualTo(firstRecord.id());
-            softly.assertThat(afterFirstRecord.observation().orElseThrow().forecastSource())
-                .isEqualTo(ForecastSource.RECORD);
             softly.assertThat(afterLateRun.observation().orElseThrow().batchId()).isEqualTo(late.id());
-            softly.assertThat(afterLateRun.observation().orElseThrow().forecastSource())
-                .isEqualTo(ForecastSource.RECORD);
-            softly.assertThat(afterLateRun).isEqualTo(snapshotOf(ForecastSourceSetting.RECORD, ROUTE_ID));
+            softly.assertThat(format.snapshot(afterLateRun)).isEqualTo(RECORDED.get("sequence.afterLate.snapshot"));
         });
     }
 
-    private Board boardOf(ForecastSourceSetting source, String routeId) {
-        return serviceOf(source).readBoard(new RouteId(routeId)).board();
+    private Board boardOf(String routeId) {
+        return service().readBoard(new RouteId(routeId)).board();
     }
 
-    private BoardQueryService serviceOf(ForecastSourceSetting source) {
-        return new BoardQueryService(sourceOf(source), freshnessPolicy, cachePolicy, new BoardReadCache(false, null));
+    private BoardQueryService service() {
+        return new BoardQueryService(repository, freshnessPolicy, cachePolicy, new BoardReadCache(false, null));
     }
 
-    private BoardSnapshot snapshotOf(ForecastSourceSetting source, String routeId) {
-        Optional<BoardSnapshot> snapshot = sourceOf(source).findSnapshot(new RouteId(routeId));
-        return snapshot.orElseThrow();
-    }
-
-    private List<BoardSnapshot> snapshotsOf(ForecastSourceSetting source, String... routeIds) {
-        return sourceOf(source).findSnapshots(Stream.of(routeIds).map(RouteId::new).toList());
-    }
-
-    private ForecastSourceBoardQueryRepository sourceOf(ForecastSourceSetting source) {
-        return new ForecastSourceBoardQueryRepository(jpaBoardQueryRepository, snapshotReader, recordReader, source);
+    private BoardSnapshot snapshotOf(String routeId) {
+        return repository.findSnapshot(new RouteId(routeId)).orElseThrow();
     }
 
     private static ApproachingVehicle vehicleAt(Board board, final int stopSequence, String vehicleId) {
@@ -489,7 +448,20 @@ class ForecastSourceEquivalenceTest {
         for (int sequence = 1; sequence <= STOP_COUNT; sequence++) {
             fixture.insertStop(route, sequence, "STOP-" + sequence, "정류장-" + sequence, "UP", true);
         }
+        format.version(route.routeVersionId(), routeName(routeId));
         return route;
+    }
+
+    private Batch name(Batch batch, String name) {
+        format.batch(batch.id(), name);
+        return batch;
+    }
+
+    private static String routeName(String routeId) {
+        if (routeId.equals(ROUTE_ID)) {
+            return "route";
+        }
+        return "other";
     }
 
     /**
@@ -500,33 +472,11 @@ class ForecastSourceEquivalenceTest {
         final long busA = fixture.insertObservation(route, batch, 1, "BUS-A", 1, "STOP-1", receivedAt);
         final long busB = fixture.insertObservation(route, batch, 2, "BUS-B", 2, "STOP-2", receivedAt);
         fixture.insertObservation(route, batch, 3, null, 1, "STOP-1", receivedAt);
-        return new Batch(route, batch, busA, busB);
+        return new Batch(batch, busA, busB);
     }
 
-    private void publishBoth(Batch batch, OffsetDateTime at) {
-        publishLegacy(batch, at, model);
-        publishRecord(batch, at, model);
-    }
-
-    /** 옛 경로가 하차 반영 모델로 쓴 모양이다. 목표 5·6은 기대 좌석이 비어 있고 7은 무한대다. */
-    private void publishLegacy(Batch batch, OffsetDateTime at, final long modelId) {
-        fixture.insertPublication(batch.id(), modelId, at, at);
-        productionRevisions(batch.id());
-        for (int target = 2; target <= 13; target++) {
-            fixture.insertForecast(batch.route(), batch.busA(), target, target - 1, modelId, chanceOf(target),
-                legacySeatsOf(target), at);
-        }
-        fixture.insertForecast(batch.route(), batch.busB(), 3, 1, modelId, 0.4, 2.5, at);
-        fixture.insertForecast(batch.route(), batch.busB(), 4, 2, modelId, 0.6, 1.0, at);
-        jdbc.sql("""
-            UPDATE seat_forecast SET seat_target='AFTER_ALIGHTING_ESTIMATE', probability_target='DEPARTURE_ZERO',
-                label_version='alighting-identity-safe-v1', feature_snapshot='{}'::jsonb, inference_bundle_hash=?
-            WHERE vehicle_observation_id IN (?, ?)
-            """).params("b".repeat(64), batch.busA(), batch.busB()).update();
-    }
-
-    /** 새 경로가 같은 예측을 쓴 모양이다. 목표 5는 비어 있는 원소, 6은 NaN, 7은 무한대다. */
-    private void publishRecord(Batch batch, OffsetDateTime at, final long modelId) {
+    /** 목표 5는 비어 있는 원소, 6은 NaN, 7은 무한대다. */
+    private void publish(Batch batch, OffsetDateTime at, final long modelId) {
         insertRun(batch.id(), at, modelId, "PUBLISHED", 14);
         StringBuilder chances = new StringBuilder();
         StringBuilder seats = new StringBuilder();
@@ -535,7 +485,7 @@ class ForecastSourceEquivalenceTest {
             String separator = separatorBefore(target);
             targets.append(separator).append(target);
             chances.append(separator).append(chanceOf(target));
-            seats.append(separator).append(recordSeatsOf(target));
+            seats.append(separator).append(seatsOf(target));
         }
         insertRecord(batch.busA(), "{" + targets + "}", "{" + seats + "}", "{" + chances + "}");
         insertRecord(batch.busB(), "{3,4}", "{2.5,1.0}", "{0.4,0.6}");
@@ -552,28 +502,13 @@ class ForecastSourceEquivalenceTest {
         return target / 20.0;
     }
 
-    private static Double legacySeatsOf(final int target) {
-        return switch (target) {
-            case 5, 6 -> null;
-            case 7 -> Double.POSITIVE_INFINITY;
-            default -> 20.0 - target;
-        };
-    }
-
-    private static String recordSeatsOf(final int target) {
+    private static String seatsOf(final int target) {
         return switch (target) {
             case 5 -> "NULL";
             case 6 -> "NaN";
             case 7 -> "Infinity";
             default -> String.valueOf(20.0 - target);
         };
-    }
-
-    /** 운영의 옛 발행은 통계 판 0, 품질 판 1이다. 픽스처의 통계 판 1을 운영 값으로 맞춘다. */
-    private void productionRevisions(final long batchId) {
-        jdbc.sql("""
-            UPDATE forecast_publication SET demand_statistics_revision=0, quality_revision=1 WHERE source_batch_id=?
-            """).param(batchId).update();
     }
 
     private void insertRun(
@@ -621,6 +556,6 @@ class ForecastSourceEquivalenceTest {
             .update();
     }
 
-    private record Batch(BoardDatabaseFixture.RouteContext route, long id, long busA, long busB) {
+    private record Batch(long id, long busA, long busB) {
     }
 }

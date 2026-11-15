@@ -17,10 +17,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * 새 예보 경로의 예보 기록({@code forecast_run}·{@code forecast_record})을 탑승판의 저장 예측으로 읽는다.
+ * 예보 기록({@code forecast_run}·{@code forecast_record})을 탑승판의 저장 예측으로 읽는다.
  *
  * <p>버스당 한 줄의 목표 정류장·기대 좌석·만석 확률 배열을 목표 정류장마다 한 예측으로 펼친다. 예보와 차량을 붙이는 키는
- * 옛 예보와 같은 (목표 정류장, 배치 안 줄 번호)다. 새 경로는 하차 반영 모델만 쓰므로 예측 목표는
+ * (목표 정류장, 배치 안 줄 번호)다. 예보는 하차 반영 모델만 내므로 예측 목표는
  * {@value #SEAT_TARGET}·{@value #PROBABILITY_TARGET}로 고정이고, 모델은 실행 줄의 모델 배포다.
  * 예측을 실은 실행 줄({@code PUBLISHED})의 기록만 읽으며, 날짜 파티션 조건을 함께 걸어 해당 파티션만 읽는다.
  * 호출자의 반복 읽기 트랜잭션에 참여한다.
@@ -28,9 +28,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 @RequiredArgsConstructor
 public class JdbcForecastRecordReader {
-    /** 옛 경로 {@code SeatForecastResult.ALIGHTING_AWARE_SEAT_TARGET}과 같은 값이다. */
+    /** 예보 쪽 {@code SeatForecastResult.ALIGHTING_AWARE_SEAT_TARGET}과 같은 값이다. */
     static final String SEAT_TARGET = "AFTER_ALIGHTING_ESTIMATE";
-    /** 옛 경로 {@code SeatForecastResult.ALIGHTING_AWARE_PROBABILITY_TARGET}과 같은 값이다. */
+    /** 예보 쪽 {@code SeatForecastResult.ALIGHTING_AWARE_PROBABILITY_TARGET}과 같은 값이다. */
     static final String PROBABILITY_TARGET = "DEPARTURE_ZERO";
 
     private static final String PREDICTIONS_SQL = """

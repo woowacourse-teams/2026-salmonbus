@@ -17,6 +17,7 @@ import com.gustler.backend.api.route.domain.Route;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -27,8 +28,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  *
  * <p>묶음 고르기는 제품 조회(JdbcBoardSnapshotReader)에 세 조건을 더했다. 노선 판본은 그 시각에 유효하던 것,
  * 발행은 그 시각까지 발행된 것(published_at), 활성 모델은 그 시각에 활성이던 배포다(활성 시각이 빈 ACTIVE 배포는
- * 언제나 활성으로 본다). 시계가 지금이면 제품 구현과 같은 값을 돌려준다. 예보 판본 문자열도 제품과 같이 발행 열만 잇고,
- * 배치는 그 묶음의 좌석 예보를 전부 읽는다.
+ * 언제나 활성으로 본다). 예보 판본 문자열은 발행 열만 잇고, 예보는 그 묶음의 좌석 예보를 전부 읽는다.
+ *
+ * <p>입력 폴더는 발행 표시({@code forecast_publication})와 좌석 예보({@code seat_forecast})를 담는다. 제품 조회는 예보
+ * 기록({@code forecast_run}·{@code forecast_record})을 읽으므로, 발행된 관측의 날짜 파티션은 제품과 같이 묶음 예약 시각의
+ * 한국 날짜로 채우고 예보를 읽을 때는 쓰지 않는다.
  */
 final class AsOfBoardQueryRepository implements BoardQueryRepository {
     private static final String SNAPSHOT_SQL = """
@@ -40,6 +44,7 @@ final class AsOfBoardQueryRepository implements BoardQueryRepository {
                v.sunday_min_headway_minutes, v.sunday_max_headway_minutes,
                v.holiday_min_headway_minutes, v.holiday_max_headway_minutes,
                flags.published, b.id AS batch_id, b.response_received_at, b.stored_rows,
+               (b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date AS source_date,
                model.id AS model_id, model.release_id, model.data_until,
                CASE WHEN b.id IS NULL THEN NULL ELSE concat_ws('|',
                    'p' || COALESCE(publication.published_at::text, '-'),
@@ -55,7 +60,7 @@ final class AsOfBoardQueryRepository implements BoardQueryRepository {
             ORDER BY p.observed_at DESC,p.source_batch_id DESC LIMIT 1) newest ON true
         CROSS JOIN LATERAL (SELECT newest.source_batch_id IS NOT NULL AS published) flags
         LEFT JOIN LATERAL (
-            (SELECT candidate.id, candidate.response_received_at, candidate.stored_rows
+            (SELECT candidate.id, candidate.response_received_at, candidate.stored_rows, candidate.scheduled_at
             FROM observation_batch candidate
             JOIN forecast_publication selected_publication ON selected_publication.source_batch_id=candidate.id
                 AND selected_publication.route_version_id=candidate.route_version_id
@@ -66,7 +71,7 @@ final class AsOfBoardQueryRepository implements BoardQueryRepository {
               AND selected_publication.published_at <= :at
             ORDER BY candidate.response_received_at DESC, candidate.id DESC LIMIT 1)
             UNION ALL
-            (SELECT candidate.id, candidate.response_received_at, candidate.stored_rows
+            (SELECT candidate.id, candidate.response_received_at, candidate.stored_rows, candidate.scheduled_at
             FROM observation_batch candidate
             WHERE NOT flags.published AND candidate.route_version_id=v.id
               AND candidate.outcome IN ('SUCCESS_ROWS','SUCCESS_EMPTY')
@@ -113,7 +118,7 @@ final class AsOfBoardQueryRepository implements BoardQueryRepository {
     }
 
     @Override
-    public List<StoredPrediction> findPredictions(long observationBatchId) {
+    public List<StoredPrediction> findRecordedPredictions(final long observationBatchId, LocalDate sourceDate) {
         return jdbc.sql("""
             SELECT forecast.target_stop_order, observation.vehicle_id, observation.source_row_number,
                    forecast.stops_to_target, forecast.seat_full_chance, forecast.expected_seats,
@@ -141,9 +146,10 @@ final class AsOfBoardQueryRepository implements BoardQueryRepository {
     private BoardSnapshot snapshotOf(ResultSet row) throws SQLException {
         Long batchId = row.getObject("batch_id", Long.class);
         Long modelId = row.getObject("model_id", Long.class);
+        final boolean published = row.getBoolean("published");
         Optional<SnapshotObservation> observation = batchId == null ? Optional.empty()
             : Optional.of(new SnapshotObservation(batchId, timeAt(row, row.findColumn("response_received_at")),
-                row.getObject("stored_rows", Integer.class), row.getBoolean("published")));
+                row.getObject("stored_rows", Integer.class), published, sourceDateOf(row, published)));
         Optional<ForecastModel> model = modelId == null ? Optional.empty()
             : Optional.of(new ForecastModel(modelId, row.getString("release_id"),
                 timeAt(row, row.findColumn("data_until"))));
@@ -157,6 +163,13 @@ final class AsOfBoardQueryRepository implements BoardQueryRepository {
                 new RouteHeadways(headwayOf(row, "weekday"), headwayOf(row, "saturday"), headwayOf(row, "sunday"),
                     headwayOf(row, "holiday"))),
             observation, model, row.getString("revision"));
+    }
+
+    private static LocalDate sourceDateOf(ResultSet row, final boolean published) throws SQLException {
+        if (!published) {
+            return null;
+        }
+        return row.getObject("source_date", LocalDate.class);
     }
 
     private OffsetDateTime timeAt(ResultSet row, int column) throws SQLException {

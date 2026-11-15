@@ -86,7 +86,7 @@ class DatabaseFailureContractTest {
         fixture.insertStop(route, 3, "STOP-3", "종점", "DOWN", true);
         final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         final long batch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(batch, model, now, now);
+        fixture.insertPublication(batch, model, now);
 
         mockMvc.perform(get("/api/v1/routes/204000057/board"))
             .andExpect(status().isOk());

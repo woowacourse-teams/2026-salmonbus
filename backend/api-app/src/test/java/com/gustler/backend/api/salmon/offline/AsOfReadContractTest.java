@@ -14,6 +14,7 @@ import com.gustler.backend.arrival.contract.ArrivalSnapshot.RouteArrival;
 import com.gustler.backend.support.IntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -26,7 +27,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * 판정 시각 기준 읽기 어댑터가 제품 저장소와 같은 규칙으로 읽는지 본다. 시계를 지금에 두면 두 구현이 같은 값을 돌려줘야 하고,
- * 시계를 과거에 두면 그 시각 뒤에 생긴 자료가 보이지 않아야 한다.
+ * 시계를 과거에 두면 그 시각 뒤에 생긴 자료가 보이지 않아야 한다. 어댑터는 입력 폴더의 발행 표시·좌석 예보를, 제품 저장소는
+ * 예보 기록을 읽으므로 두 구현을 견주는 시험은 같은 예측을 양쪽에 넣는다.
  */
 @IntegrationTest
 @Transactional
@@ -46,19 +48,25 @@ class AsOfReadContractTest {
     @Test
     void 시계가_지금이면_발행된_묶음과_그_정류장_예보_차량을_제품_저장소와_똑같이_읽는다() {
         BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbc);
+        OfflineForecastRows offline = new OfflineForecastRows(jdbc);
         OffsetDateTime now = OffsetDateTime.now().withNano(0);
         RouteContext route = routeWithStops(fixture, now);
         long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         long earlier = fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_ROWS", 1);
-        fixture.insertPublication(earlier, model, now.minusSeconds(110), now.minusSeconds(100));
+        offline.insertPublication(earlier, model, now.minusSeconds(100), now.minusSeconds(100));
+        fixture.insertPublication(earlier, model, now.minusSeconds(100));
         long latest = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 3);
-        fixture.insertPublication(latest, model, now.minusSeconds(50), now.minusSeconds(40));
+        offline.insertPublication(latest, model, now.minusSeconds(40), now.minusSeconds(40));
+        fixture.insertPublication(latest, model, now.minusSeconds(40));
         long near = fixture.insertObservation(route, latest, 1, "bus-1", 2, "STOP-2", now);
         long far = fixture.insertObservation(route, latest, 2, "bus-2", 1, "STOP-1", now);
         long third = fixture.insertObservation(route, latest, 3, "bus-3", 1, "STOP-1", now);
-        fixture.insertForecast(route, near, 3, 1, model, 0.2, 20.0, now.minusSeconds(50));
-        fixture.insertForecast(route, far, 3, 2, model, 0.4, null, now.minusSeconds(50));
-        fixture.insertForecast(route, third, 3, 2, model, 0.6, 5.0, now.minusSeconds(50));
+        offline.insertForecast(near, 3, 1, 0.2, 20.0);
+        offline.insertForecast(far, 3, 2, 0.4, null);
+        offline.insertForecast(third, 3, 2, 0.6, 5.0);
+        fixture.insertForecast(near, 3, model, 0.2, 20.0);
+        fixture.insertForecast(far, 3, model, 0.4, null);
+        fixture.insertForecast(third, 3, model, 0.6, 5.0);
         fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
 
         AsOfBoardQueryRepository boards = new AsOfBoardQueryRepository(jdbc, new AsOfClock(Instant.now()));
@@ -68,8 +76,9 @@ class AsOfReadContractTest {
         assertThat(boards.findSnapshot(new RouteId(ROUTE))).contains(expected);
         assertThat(boards.findStops(route.routeVersionId()))
             .isEqualTo(productBoards.findStops(route.routeVersionId()));
-        assertThat(boards.findPredictions(latest)).hasSize(3)
-            .containsExactlyInAnyOrderElementsOf(productBoards.findPredictions(latest));
+        LocalDate sourceDate = expected.observation().orElseThrow().forecastDate();
+        assertThat(boards.findRecordedPredictions(latest, sourceDate)).hasSize(3)
+            .containsExactlyInAnyOrderElementsOf(productBoards.findRecordedPredictions(latest, sourceDate));
         assertThat(boards.findObservedVehicles(latest, route.routeVersionId())).hasSize(3)
             .containsExactlyInAnyOrderElementsOf(productBoards.findObservedVehicles(latest, route.routeVersionId()));
     }
@@ -94,13 +103,14 @@ class AsOfReadContractTest {
     @Test
     void 판정_시각까지_발행된_묶음_가운데_관측이_가장_늦은_것을_고른다() {
         BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbc);
+        OfflineForecastRows offline = new OfflineForecastRows(jdbc);
         OffsetDateTime now = OffsetDateTime.now().withNano(0);
         RouteContext route = routeWithStops(fixture, now);
         long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         long first = fixture.insertBatch(route, now.minusMinutes(4), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(first, model, now.minusSeconds(235), now.minusSeconds(230));
+        offline.insertPublication(first, model, now.minusSeconds(235), now.minusSeconds(230));
         long second = fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(second, model, now.minusSeconds(70), now.minusSeconds(60));
+        offline.insertPublication(second, model, now.minusSeconds(70), now.minusSeconds(60));
         AsOfClock clock = new AsOfClock(now.toInstant());
         AsOfBoardQueryRepository boards = new AsOfBoardQueryRepository(jdbc, clock);
 
@@ -118,12 +128,13 @@ class AsOfReadContractTest {
     @Test
     void 판정_시각까지_발행이_하나도_없던_판본은_그때의_가장_늦은_정상_묶음을_발행_없는_관측으로_고른다() {
         BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbc);
+        OfflineForecastRows offline = new OfflineForecastRows(jdbc);
         OffsetDateTime now = OffsetDateTime.now().withNano(0);
         RouteContext route = routeWithStops(fixture, now);
         long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         long raw = fixture.insertBatch(route, now.minusMinutes(6), "SUCCESS_EMPTY", 0);
         long published = fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(published, model, now.minusSeconds(70), now.minusSeconds(60));
+        offline.insertPublication(published, model, now.minusSeconds(70), now.minusSeconds(60));
         long later = fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_EMPTY", 0);
         AsOfClock clock = new AsOfClock(now.minusMinutes(5).toInstant());
         AsOfBoardQueryRepository boards = new AsOfBoardQueryRepository(jdbc, clock);

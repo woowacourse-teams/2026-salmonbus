@@ -3,6 +3,7 @@ package com.gustler.backend.api.board.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -29,6 +30,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -48,6 +50,7 @@ class BoardQueryServiceTest {
     private static final OffsetDateTime OBSERVED_AT = OffsetDateTime.parse(
         "2026-08-27T08:00:00+09:00"
     );
+    private static final LocalDate FORECAST_DATE = LocalDate.of(2026, 8, 27);
     private static final ForecastModel ACTIVE_MODEL = new ForecastModel(
         9L,
         "model-active",
@@ -121,7 +124,7 @@ class BoardQueryServiceTest {
             REVISION
         )));
         given(repository.findStops(1L)).willReturn(roundTripStops());
-        given(repository.findPredictions(100L)).willReturn(List.of());
+        given(repository.findRecordedPredictions(100L, FORECAST_DATE)).willReturn(List.of());
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of());
 
         // when
@@ -288,7 +291,7 @@ class BoardQueryServiceTest {
         // when
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(roundTripStops());
-        given(repository.findPredictions(100L)).willReturn(List.of());
+        given(repository.findRecordedPredictions(100L, FORECAST_DATE)).willReturn(List.of());
 
         // then
         assertThat(service.getBoard(ROUTE_ID).board().model()).isEqualTo(ACTIVE_MODEL);
@@ -304,7 +307,7 @@ class BoardQueryServiceTest {
         );
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(roundTripStops());
-        given(repository.findPredictions(100L)).willReturn(List.of(
+        given(repository.findRecordedPredictions(100L, FORECAST_DATE)).willReturn(List.of(
             prediction(3, "A", 1, 1, 0.2, 10.0),
             prediction(3, "B", 2, 2, 0.3, 11.0, anotherModel)
         ));
@@ -387,7 +390,7 @@ class BoardQueryServiceTest {
             stop(1, "기점", BoardDirection.UP, true),
             stop(2, "종점", BoardDirection.UP, true)
         ));
-        given(repository.findPredictions(100L)).willReturn(List.of());
+        given(repository.findRecordedPredictions(100L, FORECAST_DATE)).willReturn(List.of());
 
         // when
         Board board = service.getBoard(ROUTE_ID).board();
@@ -412,7 +415,7 @@ class BoardQueryServiceTest {
             stop(2, "회차점", BoardDirection.DOWN, true),
             stop(3, "종점", BoardDirection.DOWN, true)
         ));
-        given(repository.findPredictions(100L)).willReturn(List.of());
+        given(repository.findRecordedPredictions(100L, FORECAST_DATE)).willReturn(List.of());
 
         // then
 
@@ -602,7 +605,7 @@ class BoardQueryServiceTest {
     void 발행되지_않은_관측이면_예보를_조회하지_않고_모든_차량을_예보_없음으로_둔_준비_중_보드를_만든다() {
         // given
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(snapshotObserving(
-            new SnapshotObservation(100L, OBSERVED_AT, 2, false))));
+            new SnapshotObservation(100L, OBSERVED_AT, 2, false, null))));
         given(repository.findStops(1L)).willReturn(roundTripStops());
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of(
             new BoardVehicleObservation("A", 1, 2, 2),
@@ -622,7 +625,7 @@ class BoardQueryServiceTest {
         assertThat(actual.board().stops().get(2).approachingVehicles())
             .extracting(ApproachingVehicle::forecast)
             .containsExactly(new Unavailable(), new Unavailable());
-        verify(repository, never()).findPredictions(anyLong());
+        verify(repository, never()).findRecordedPredictions(anyLong(), any());
     }
 
     @Test
@@ -641,7 +644,7 @@ class BoardQueryServiceTest {
     void 발행되지_않은_관측도_5분을_넘으면_최근_관측_없음_오류다() {
         // given
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(snapshotObserving(
-            new SnapshotObservation(100L, OBSERVED_AT.minusMinutes(1), 2, false))));
+            new SnapshotObservation(100L, OBSERVED_AT.minusMinutes(1), 2, false, null))));
 
         // when
         Throwable caughtFailure = catchThrowable(() -> service.getBoard(ROUTE_ID));
@@ -666,7 +669,7 @@ class BoardQueryServiceTest {
         assertThat(second.observationBatchId()).isEqualTo(100L);
         verify(repository, times(2)).findSnapshot(ROUTE_ID);
         verify(repository, times(1)).findStops(1L);
-        verify(repository, times(1)).findPredictions(100L);
+        verify(repository, times(1)).findRecordedPredictions(100L, FORECAST_DATE);
         verify(repository, times(1)).findObservedVehicles(100L, 1L);
         assertThat(meters.get("board.read.cache").tag("result", "hit").counter().count()).isEqualTo(1);
         assertThat(meters.get("board.read.cache").tag("result", "miss").counter().count()).isEqualTo(1);
@@ -677,10 +680,10 @@ class BoardQueryServiceTest {
         // given
         given(repository.findStops(1L)).willReturn(roundTripStops());
         given(repository.findObservedVehicles(100L, 1L)).willReturn(List.of());
-        givenSnapshot(withObservation(new SnapshotObservation(100L, OBSERVED_AT, 4, false)));
+        givenSnapshot(withObservation(new SnapshotObservation(100L, OBSERVED_AT, 4, false, null)));
         RouteStatus preparing = service.readBoard(ROUTE_ID).board().route().status();
         givenSnapshot(roundTripSnapshot());
-        given(repository.findPredictions(100L)).willReturn(List.of());
+        given(repository.findRecordedPredictions(100L, FORECAST_DATE)).willReturn(List.of());
 
         // when
         RouteStatus published = service.readBoard(ROUTE_ID).board().route().status();
@@ -689,7 +692,7 @@ class BoardQueryServiceTest {
         assertThat(preparing).isEqualTo(RouteStatus.PREPARING);
         assertThat(published).isEqualTo(RouteStatus.FORECAST_READY);
         verify(repository, times(2)).findStops(1L);
-        verify(repository).findPredictions(100L);
+        verify(repository).findRecordedPredictions(100L, FORECAST_DATE);
     }
 
     @Test
@@ -721,8 +724,8 @@ class BoardQueryServiceTest {
         // given
         givenRoundTripBoard(List.of());
         service.readBoard(ROUTE_ID);
-        givenSnapshot(withObservation(new SnapshotObservation(101L, OBSERVED_AT, 4, true)));
-        given(repository.findPredictions(101L)).willReturn(List.of());
+        givenSnapshot(withObservation(new SnapshotObservation(101L, OBSERVED_AT, 4, true, FORECAST_DATE)));
+        given(repository.findRecordedPredictions(101L, FORECAST_DATE)).willReturn(List.of());
         given(repository.findObservedVehicles(101L, 1L)).willReturn(List.of());
 
         // when
@@ -739,13 +742,14 @@ class BoardQueryServiceTest {
         givenRoundTripBoard(List.of(prediction(3, "A", 1, 1, 0.2, 10.0)));
         service.readBoard(ROUTE_ID);
         givenSnapshot(withRevision("q2|p-|g-|n-|m-|d-|r-"));
-        given(repository.findPredictions(100L)).willReturn(List.of(prediction(3, "A", 1, 1, 0.9, 1.0)));
+        given(repository.findRecordedPredictions(100L, FORECAST_DATE))
+            .willReturn(List.of(prediction(3, "A", 1, 1, 0.9, 1.0)));
 
         // when
         Board board = service.readBoard(ROUTE_ID).board();
 
         // then
-        verify(repository, times(2)).findPredictions(100L);
+        verify(repository, times(2)).findRecordedPredictions(100L, FORECAST_DATE);
         assertThat(board.stops())
             .flatExtracting(StopState::approachingVehicles)
             .extracting(ApproachingVehicle::forecast)
@@ -895,7 +899,7 @@ class BoardQueryServiceTest {
     private void givenRoundTripBoard(List<StoredPrediction> predictions) {
         given(repository.findSnapshot(ROUTE_ID)).willReturn(Optional.of(roundTripSnapshot()));
         given(repository.findStops(1L)).willReturn(roundTripStops());
-        given(repository.findPredictions(100L)).willReturn(predictions);
+        given(repository.findRecordedPredictions(100L, FORECAST_DATE)).willReturn(predictions);
         given(repository.findObservedVehicles(100L, 1L)).willReturn(predictions.stream()
                 .map(p -> new BoardVehicleObservation(p.vehicleId(), p.sourceRowNumber(),
                     p.targetStopOrder() - p.stopsToTarget(), p.targetStopOrder() - p.stopsToTarget()))
@@ -909,7 +913,7 @@ class BoardQueryServiceTest {
             stop(1, "기점", BoardDirection.UP, true),
             stop(2, "회차점", BoardDirection.UP, false),
             stop(targetSequence, "종점", BoardDirection.DOWN, true)));
-        given(repository.findPredictions(100L)).willReturn(List.of());
+        given(repository.findRecordedPredictions(100L, FORECAST_DATE)).willReturn(List.of());
         given(repository.findObservedVehicles(100L, 1L)).willReturn(vehicles);
     }
 
@@ -922,7 +926,7 @@ class BoardQueryServiceTest {
     }
 
     private SnapshotObservation observation() {
-        return new SnapshotObservation(100L, OBSERVED_AT, 4, true);
+        return new SnapshotObservation(100L, OBSERVED_AT, 4, true, FORECAST_DATE);
     }
 
     private List<BoardStop> roundTripStops() {

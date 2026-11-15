@@ -24,11 +24,6 @@ public interface BoardQueryRepository {
     List<BoardStop> findStops(long routeVersionId);
 
     /**
-     * 지정한 관측 묶음에 속하는 저장 예측을 읽는다. 조회 중 예측을 새로 계산하거나 저장하지 않는다.
-     */
-    List<StoredPrediction> findPredictions(long observationBatchId);
-
-    /**
      * 지정한 관측 묶음과 노선 판본에 속하는 차량만 읽는다. 다른 판본의 위치를 섞지 않는다.
      */
     List<BoardVehicleObservation> findObservedVehicles(long observationBatchId, long routeVersionId);
@@ -60,36 +55,16 @@ public interface BoardQueryRepository {
     }
 
     /**
-     * 여러 관측 묶음의 저장 예측을 묶음별로 읽는다. 묶음마다 {@link #findPredictions(long)}과 같은 행이다.
-     * 예측이 없는 묶음은 결과에 없다.
-     */
-    default Map<Long, List<StoredPrediction>> findPredictions(Collection<Long> observationBatchIds) {
-        Map<Long, List<StoredPrediction>> predictions = new LinkedHashMap<>();
-        for (Long batchId : observationBatchIds) {
-            List<StoredPrediction> found = findPredictions(batchId.longValue());
-            if (!found.isEmpty()) {
-                predictions.put(batchId, found);
-            }
-        }
-        return predictions;
-    }
-
-    /**
-     * 새 예보 기록({@code forecast_run}·{@code forecast_record})에서 지정한 관측 묶음의 저장 예측을 읽는다.
-     * 버스마다 목표 정류장 배열을 펼쳐 {@link #findPredictions(long)}과 같은 모양의 예측으로 돌려준다.
-     *
-     * <p>새 예보 기록을 읽지 않는 저장소는 {@link ForecastSource#RECORD} 출처의 스냅샷을 돌려주지 않으므로 이 메서드가
-     * 불리지 않는다. 그런 저장소를 위한 기본 구현은 예외를 던진다.
+     * 예보 기록({@code forecast_run}·{@code forecast_record})에서 지정한 관측 묶음의 저장 예측을 읽는다.
+     * 버스마다 목표 정류장 배열을 목표 정류장마다 한 예측으로 펼친다. 조회 중 예측을 새로 계산하거나 저장하지 않는다.
      *
      * @param observationBatchId 관측 묶음
      * @param sourceDate 그 묶음의 날짜 파티션
      */
-    default List<StoredPrediction> findRecordedPredictions(final long observationBatchId, LocalDate sourceDate) {
-        throw new UnsupportedOperationException("이 저장소는 새 예보 기록을 읽지 않습니다.");
-    }
+    List<StoredPrediction> findRecordedPredictions(long observationBatchId, LocalDate sourceDate);
 
     /**
-     * 여러 관측 묶음의 새 예보 기록을 묶음별로 읽는다. 키는 관측 묶음, 값은 그 묶음의 날짜 파티션이다.
+     * 여러 관측 묶음의 예보 기록을 묶음별로 읽는다. 키는 관측 묶음, 값은 그 묶음의 날짜 파티션이다.
      * 묶음마다 {@link #findRecordedPredictions(long, LocalDate)}과 같은 행이며 예측이 없는 묶음은 결과에 없다.
      */
     default Map<Long, List<StoredPrediction>> findRecordedPredictions(Map<Long, LocalDate> sourceDateByBatchId) {
