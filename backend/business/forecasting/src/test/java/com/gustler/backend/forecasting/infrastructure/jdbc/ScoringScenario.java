@@ -17,6 +17,7 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePass
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvents;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
+import com.gustler.backend.forecasting.support.BaselineReasons;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -163,8 +164,8 @@ final class ScoringScenario {
         List<Object> events = new ArrayList<>();
         for (Batch batch : batches) {
             final int saved = batch.rows().size();
-            events.add(new ObservationBatchSeen(batch.id(), ROUTE, VERSION, batch.at().minusSeconds(5),
-                batch.receivedAt(), collectionResult(saved, batch.hole()), storedRows(saved, batch.hole()), saved));
+            events.add(new ObservationBatchSeen(batch.id(), ROUTE, VERSION, batch.receivedAt(),
+                collectionResult(saved, batch.hole()), storedRows(saved, batch.hole()), saved));
             events.addAll(closedIn.getOrDefault(batch.id(), List.of()));
             events.add(published(batch));
         }
@@ -228,14 +229,14 @@ final class ScoringScenario {
         for (UnresolvedForecast closed : unresolved.values()) {
             Key key = new Key(closed.vehicleObservationId(), closed.targetStopOrder());
             put(verdicts, key, Verdict.of(closed.state().name(),
-                ScoringReasons.legacyReason(closed.reason()).orElse("NONE:" + closed.reason())));
+                BaselineReasons.recordedName(closed.reason()).orElse("NONE:" + closed.reason())));
             reasons.put(key, closed.reason());
         }
         for (ScoredForecast forecast : result.scored()) {
             Key key = new Key(forecast.vehicleObservationId(), forecast.targetStopOrder());
             PassLabel label = labels.get(List.of(forecast.passSourceDate(), forecast.routeId(),
-                forecast.tripStartObservationId(), forecast.stopOrder(), forecast.capacity(), forecast.labelVersion(),
-                forecast.modelDeploymentId()));
+                forecast.tripStartObservationId(), forecast.stopOrder(), forecast.capacity(),
+                ScoringReasons.LABEL_VERSION, forecast.modelDeploymentId()));
             PassClosed pass = passByKey.get(List.of(forecast.passSourceDate(), forecast.routeId(),
                 forecast.tripStartObservationId(), forecast.stopOrder()));
             if (label.state() == PassLabel.State.SETTLED) {
@@ -246,7 +247,7 @@ final class ScoringScenario {
                 continue;
             }
             put(verdicts, key, Verdict.of("UNSUPPORTED",
-                ScoringReasons.legacyReason(label.reason()).orElse("NONE:" + label.reason())));
+                BaselineReasons.recordedName(label.reason()).orElse("NONE:" + label.reason())));
             reasons.put(key, label.reason());
         }
         return new Scored(verdicts, reasons, labels.size(), unresolved.size());

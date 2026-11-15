@@ -8,6 +8,7 @@ import com.gustler.backend.forecasting.api.pipeline.ForecastLanes;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPipeline;
 import com.gustler.backend.forecasting.application.pipeline.ForecastPipelineService;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
+import com.gustler.backend.forecasting.application.pipeline.PipelineEvents;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
 import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.route.RouteStopsQuery;
@@ -32,6 +33,7 @@ class ForecastMainlineConfigurationTest {
         .withBean(ForecastRecordStore.class, () -> mock(ForecastRecordStore.class))
         .withBean(StopPassStore.class, () -> mock(StopPassStore.class))
         .withBean(PlatformTransactionManager.class, () -> mock(PlatformTransactionManager.class))
+        .withBean(PipelineEvents.class, () -> mock(PipelineEvents.class))
         .withBean(ForecastRuntime.class, () -> Optional::empty)
         .withBean(RouteVersionQuery.class, () -> List::of)
         .withBean(RouteStopsQuery.class, () -> mock(RouteStopsQuery.class))

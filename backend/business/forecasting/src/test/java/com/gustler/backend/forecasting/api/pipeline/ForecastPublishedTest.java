@@ -99,12 +99,12 @@ class ForecastPublishedTest {
     }
 
     @Test
-    void 응답을_받은_배치는_수신_시각이_있어야_한다() {
+    void 수집_사건에는_수신_시각이_있어야_한다() {
         assertSoftly(softly -> {
-            softly.assertThatThrownBy(() -> new ObservationBatchSeen(1, 7, 70, RECEIVED_AT, null,
-                CollectionResult.EMPTY)).isInstanceOf(IllegalArgumentException.class);
-            softly.assertThat(new ObservationBatchSeen(1, 7, 70, RECEIVED_AT, null, CollectionResult.FAILED)
-                .receivedAt()).isNull();
+            softly.assertThatThrownBy(() -> new ObservationBatchSeen(1, 7, 70, null, CollectionResult.EMPTY, 0, 0))
+                .isInstanceOf(NullPointerException.class);
+            softly.assertThatThrownBy(() -> new ObservationBatchSeen(1, 7, 70, null, CollectionResult.SUCCESS, 3, 3))
+                .isInstanceOf(NullPointerException.class);
         });
     }
 }

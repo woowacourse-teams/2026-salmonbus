@@ -282,7 +282,8 @@ class ConfirmedAlightingAwareWorkerReplayTest {
     }
 
     @Test
-    void 수신_순서와_착수_순서가_뒤집혀_예보_실행이_남지_않은_배치가_있으면_실패_목록에_남기고_실패로_끝낸다() throws IOException {
+    void 수신_순서와_착수_순서가_뒤집혀_자료의_착수_시각에_실행되지_않은_배치가_있으면_실패_목록에_남기고_실패로_끝낸다()
+        throws IOException {
         // given
         SyntheticWorkerReplay synthetic = SyntheticWorkerReplay.rush();
         synthetic.confirmLate(3, Duration.ofSeconds(35));

@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
-import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
 import com.gustler.backend.forecasting.support.Baseline;
+import com.gustler.backend.forecasting.support.BaselineReasons;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -18,7 +18,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * <ul>
  *   <li>{@code hash 번호 계수해시}: 채점됨 줄이 번호로 가리키는 계수 해시</li>
  *   <li>{@code v 관측 목표 SETTLED 정답값 해시번호 정원 도착전관측 마지막관측 닫은관측 직전마지막관측 직전닫은관측}: 채점된 예측</li>
- *   <li>{@code v 관측 목표 상태 사유}: 채점되지 않고 닫힌 예측. 사유는 {@link ScoringReasons#legacyReason}의 이름이다</li>
+ *   <li>{@code v 관측 목표 상태 사유}: 채점되지 않고 닫힌 예측. 사유는 {@link BaselineReasons#recordedName}의 이름이다</li>
  * </ul>
  */
 final class ScoringBaseline {
@@ -104,7 +104,7 @@ final class ScoringBaseline {
         if ("PENDING".equals(state)) {
             return Verdict.of(state, null);
         }
-        return Verdict.of(state, ScoringReasons.legacyReason(reason).orElse("NONE:" + reason));
+        return Verdict.of(state, BaselineReasons.recordedName(reason).orElse("NONE:" + reason));
     }
 
     /** 견주는 열. 채점됨이 아니면 상태와 사유만 채운다. 관측은 흐름의 이름이고 없으면 {@code -}다. */

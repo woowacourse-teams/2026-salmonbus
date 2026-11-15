@@ -204,7 +204,7 @@ class ForecastPipelineEquivalenceTest {
         for (final int split : List.of(confirmed.get(300), confirmed.get(520))) {
             ForecastBatch last = batches.get(split);
             for (Duration window : windows) {
-                RouteStateReplayer.Result replayed = new RouteStateReplayer(source, stage, window)
+                RouteStateReplayer.Result replayed = new RouteStateReplayer(source, stage, window, window)
                     .replay(statistics, last.confirmedAt(), last.observationBatchId());
                 assertThat(replayed.succeeded()).as(replayed.failureReason()).isTrue();
                 assertThat(replayed.state().cursor().orElseThrow().observationBatchId())
@@ -270,7 +270,7 @@ class ForecastPipelineEquivalenceTest {
             .param(broken.observationBatchId())
             .update();
         RouteStateReplayer replayer = new RouteStateReplayer(new JdbcReplaySource(jdbc, MAXIMUM_ROWS),
-            new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6));
+            new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6), Duration.ofHours(6));
 
         // when
         RouteStateReplayer.Result result =
@@ -293,7 +293,7 @@ class ForecastPipelineEquivalenceTest {
             "UPDATE route_stop SET boarding_allowed=NOT boarding_allowed WHERE route_version_id=? AND stop_order=2")
             .param(last.routeVersionId()).update();
         RouteStateReplayer replayer = new RouteStateReplayer(new JdbcReplaySource(jdbc, MAXIMUM_ROWS),
-            new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6));
+            new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6), Duration.ofHours(6));
 
         // when
         RouteStateReplayer.Result result =

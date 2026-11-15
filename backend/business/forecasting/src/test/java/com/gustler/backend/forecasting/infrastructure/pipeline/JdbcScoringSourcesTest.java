@@ -94,7 +94,7 @@ class JdbcScoringSourcesTest {
         PassLabelCalculator.PassLabelCalculation legacy = legacy(current, previous, 40);
         assertSoftly(softly -> {
             softly.assertThat(legacy.settled()).isTrue();
-            softly.assertThat(result.labels()).singleElement().satisfies(label -> assertSame(label, legacy));
+            softly.assertThat(result.labels()).singleElement().satisfies(label -> assertSame(label, legacy, 40));
         });
     }
 
@@ -115,7 +115,7 @@ class JdbcScoringSourcesTest {
         PassLabelCalculator.PassLabelCalculation legacy = legacy(current, previous, 45);
         assertSoftly(softly -> {
             softly.assertThat(legacy.settled()).isTrue();
-            softly.assertThat(result.labels()).singleElement().satisfies(label -> assertSame(label, legacy));
+            softly.assertThat(result.labels()).singleElement().satisfies(label -> assertSame(label, legacy, 45));
         });
     }
 
@@ -142,7 +142,8 @@ class JdbcScoringSourcesTest {
         final long late = routeVersionWithStops(5);
         PipelineTestSupport.MutableClock clock = new PipelineTestSupport.MutableClock();
         ScoringStage stage = new ScoringStage(new JdbcSettlementContextProvider(jdbc),
-            new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), clock);
+            new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), clock,
+            ScoringStage.DEFAULT_OBSERVATION_LIMIT);
         Instant closed = MORNING.plusSeconds(300);
         clock.at = MORNING.plusMillis(5);
         ScoringResult withoutEvidence = stage.accept(forecast(late, MORNING, 500, "bus-a", 50, 40));
@@ -196,19 +197,23 @@ class JdbcScoringSourcesTest {
         });
     }
 
-    private static void assertSame(PassLabel label, PassLabelCalculator.PassLabelCalculation legacy) {
+    private static void assertSame(
+        PassLabel label,
+        PassLabelCalculator.PassLabelCalculation legacy,
+        final int capacity
+    ) {
         assertSoftly(softly -> {
             softly.assertThat(label.state()).isEqualTo(PassLabel.State.SETTLED);
             softly.assertThat(label.parameterHash()).isEqualTo(legacy.parameterHash());
             softly.assertThat(Double.doubleToLongBits(label.labelValue()))
                 .isEqualTo(Double.doubleToLongBits(legacy.value()));
-            softly.assertThat(label.capacity()).isEqualTo(legacy.capacity());
+            softly.assertThat(label.capacity()).isEqualTo(capacity);
         });
     }
 
     private ScoringStage stage() {
         return new ScoringStage(new JdbcSettlementContextProvider(jdbc), new JdbcRouteStructureProvider(jdbc),
-            new ConfirmedPassLabelCalculator(), CLOCK);
+            new ConfirmedPassLabelCalculator(), CLOCK, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
     }
 
     /** 근거가 있는 노선 판본의 근거를 다른 판본 키로 옮겨 적는다. 예보 경로가 근거를 뒤늦게 적는 것을 흉내 낸다. */

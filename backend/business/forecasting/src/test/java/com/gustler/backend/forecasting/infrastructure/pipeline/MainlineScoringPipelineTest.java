@@ -32,6 +32,7 @@ import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsembl
 import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.forecasting.infrastructure.jdbc.ConfirmedPassLabelCalculator;
+import com.gustler.backend.forecasting.support.CommittedBatches;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
@@ -206,6 +207,7 @@ class MainlineScoringPipelineTest {
         private final PipelineTestSupport.MutableClock clock = new PipelineTestSupport.MutableClock();
         private final Map<Long, RouteStops> stopsByVersion = new HashMap<>();
         private final SimpleMeterRegistry scoringMeters = new SimpleMeterRegistry();
+        private final CommittedBatches committed = new CommittedBatches(new JdbcPendingPipelineBatches(jdbc));
         private final AlightingAwareSeatForecastModel model;
         private final AlightingAwareSeatForecastModel nextModel;
         private final ShadowScoringService scoring;
@@ -236,7 +238,8 @@ class MainlineScoringPipelineTest {
             nextModel = model(random, 0.3);
             runtime = activate(model);
             ScoringStage scoringStage = new ScoringStage(new JdbcSettlementContextProvider(jdbc),
-                new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), clock);
+                new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), clock,
+                ScoringStage.DEFAULT_OBSERVATION_LIMIT);
             scoring = new ShadowScoringService(task -> {
                 if (rejectBatch != NEVER && currentBatch == rejectBatch) {
                     return false;
@@ -248,13 +251,13 @@ class MainlineScoringPipelineTest {
                 ScoringReplay.DEFAULT_FORECAST_WINDOW, clock, scoringMeters);
             JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
             ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
-            PipelineBatchProcessor processor = new PipelineBatchProcessor("pipeline_forecast", stage,
-                new RouteStateReplayer(source, stage, Duration.ofHours(6)), records, passes,
-                new TransactionTemplate(transactions), List.of(scoring), new RouteStateRegistry(), false);
+            PipelineBatchProcessor processor = new PipelineBatchProcessor(stage,
+                new RouteStateReplayer(source, stage, Duration.ofHours(6), Duration.ofHours(6)), records, passes,
+                new TransactionTemplate(transactions), scoring, new RouteStateRegistry(), false);
             mainline = new ForecastPipelineService((key, task) -> {
                 task.run();
                 return true;
-            }, processor, source, new JdbcPendingPipelineBatches(jdbc), () -> Optional.of(runtime), this::versions,
+            }, processor, source, committed, () -> Optional.of(runtime), this::versions,
                 stopsByVersion::get, new JdbcSettlementContextWriter(jdbc),
                 new ForecastPolicy(Duration.ofMinutes(10), 20), clock, new SimpleMeterRegistry());
             clock.at = EVENING.plus(Duration.ofDays(2));
@@ -285,6 +288,7 @@ class MainlineScoringPipelineTest {
                 }
                 currentBatch = batchId;
                 clock.at = intendedConfirmation.get(batchId);
+                committed.commit(batchId);
                 mainline.batchStored(batchId, batch.version());
                 scoring.flush();
             }

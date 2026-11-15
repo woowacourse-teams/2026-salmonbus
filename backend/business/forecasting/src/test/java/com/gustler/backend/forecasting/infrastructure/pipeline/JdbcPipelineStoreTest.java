@@ -1,9 +1,11 @@
 package com.gustler.backend.forecasting.infrastructure.pipeline;
 
+import static com.gustler.backend.forecasting.support.PipelineSamples.MODEL_DEPLOYMENT_ID;
 import static com.gustler.backend.forecasting.support.PipelineSamples.ROUTE_ID;
 import static com.gustler.backend.forecasting.support.PipelineSamples.ROUTE_VERSION_ID;
 import static com.gustler.backend.forecasting.support.PipelineSamples.pass;
 import static com.gustler.backend.forecasting.support.PipelineSamples.published;
+import static com.gustler.backend.forecasting.support.PipelineSamples.seenWithoutRows;
 import static com.gustler.backend.forecasting.support.PipelineSamples.skipped;
 import static com.gustler.backend.forecasting.support.PipelineSamples.vehicle;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,17 +17,16 @@ import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
-import com.gustler.backend.forecasting.application.pipeline.ForecastRun;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
 import com.gustler.backend.forecasting.application.pipeline.RecordedBatch;
 import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,13 +58,13 @@ class JdbcPipelineStoreTest {
             List.of(vehicle(1003, 3), vehicle(1001, 1), vehicle(1002, 2)));
 
         // when
-        final boolean inserted = records.save(published);
+        final boolean inserted = save(published);
 
         // then
         assertSoftly(softly -> {
             softly.assertThat(inserted).isTrue();
             softly.assertThat(count("forecast_run")).isOne();
-            softly.assertThat(records.findRecords(DAY, 11))
+            softly.assertThat(storedVehicles(RECEIVED_AT))
                 .extracting(ForecastPublished.VehicleForecast::vehicleObservationId)
                 .containsExactly(1001L, 1002L, 1003L);
             softly.assertThat(jdbcClient.sql("SELECT prediction_count FROM forecast_run").query(Integer.class).single())
@@ -75,10 +76,10 @@ class JdbcPipelineStoreTest {
     void 같은_배치를_다시_저장하면_건너뛰고_줄이_늘지_않는다() {
         // given
         ForecastPublished published = published(DAY, 11, RECEIVED_AT, List.of(vehicle(1001, 1), vehicle(1002, 2)));
-        records.save(published);
+        save(published);
 
         // when
-        final boolean inserted = records.save(published);
+        final boolean inserted = save(published);
 
         // then
         assertSoftly(softly -> {
@@ -96,10 +97,10 @@ class JdbcPipelineStoreTest {
         int[] targets = {12, 3, 7, 1, 30, 2};
         ForecastPublished.VehicleForecast vehicle = new ForecastPublished.VehicleForecast(1001, 1, "bus-1001", 2,
             900, 950, true, 49, true, targets, seats, probabilities);
-        records.save(published(DAY, 11, RECEIVED_AT, List.of(vehicle)));
+        save(published(DAY, 11, RECEIVED_AT, List.of(vehicle)));
 
         // when
-        ForecastPublished.VehicleForecast actual = records.findRecords(DAY, 11).getFirst();
+        ForecastPublished.VehicleForecast actual = storedVehicles(RECEIVED_AT).getFirst();
 
         // then
         assertSoftly(softly -> {
@@ -119,8 +120,8 @@ class JdbcPipelineStoreTest {
             """).update();
 
         // when
-        records.save(published(DAY, 11, RECEIVED_AT, List.of(vehicle(1001, 1))));
-        records.save(published(DAY.plusDays(1), 12, RECEIVED_AT.plusSeconds(86_400), List.of(vehicle(1002, 1))));
+        save(published(DAY, 11, RECEIVED_AT, List.of(vehicle(1001, 1))));
+        save(published(DAY.plusDays(1), 12, RECEIVED_AT.plusSeconds(86_400), List.of(vehicle(1002, 1))));
 
         // then
         assertSoftly(softly -> {
@@ -134,36 +135,15 @@ class JdbcPipelineStoreTest {
     }
 
     @Test
-    void 노선_판본의_최신_실행을_고른_처리_결과_안에서_찾는다() {
-        // given
-        records.save(published(DAY, 11, RECEIVED_AT, List.of(vehicle(1001, 1))));
-        records.save(published(DAY, 12, RECEIVED_AT.plusSeconds(30), List.of()));
-        records.save(skipped(DAY, 13, RECEIVED_AT.plusSeconds(60), ForecastOutcome.LATE));
-
-        // when
-        Optional<ForecastRun> latest = records.findLatestRun(ROUTE_VERSION_ID, Set.of(ForecastOutcome.values()));
-        Optional<ForecastRun> published = records.findLatestRun(ROUTE_VERSION_ID, Set.of(ForecastOutcome.PUBLISHED));
-        Optional<ForecastRun> other = records.findLatestRun(ROUTE_VERSION_ID + 1, Set.of(ForecastOutcome.values()));
-
-        // then
-        assertSoftly(softly -> {
-            softly.assertThat(latest).map(ForecastRun::observationBatchId).contains(13L);
-            softly.assertThat(latest).map(ForecastRun::modelDeploymentId).isEmpty();
-            softly.assertThat(published).map(ForecastRun::observationBatchId).contains(11L);
-            softly.assertThat(other).isEmpty();
-        });
-    }
-
-    @Test
     void 노선의_실행을_수신_시각_범위로_사건_순서대로_되살린다() {
         // given
         ForecastPublished second = published(DAY, 12, RECEIVED_AT.plusSeconds(30),
             List.of(vehicle(1012, 2), vehicle(1011, 1)));
         ForecastPublished first = skipped(DAY, 11, RECEIVED_AT, ForecastOutcome.OUT_OF_SCOPE);
         ForecastPublished outside = published(DAY, 13, RECEIVED_AT.plusSeconds(60), List.of(vehicle(1013, 1)));
-        records.save(second);
-        records.save(outside);
-        records.save(first);
+        save(second);
+        save(outside);
+        save(first);
 
         // when
         List<ForecastPublished> actual = records.findPublishedBetween(ROUTE_ID, RECEIVED_AT,
@@ -175,7 +155,7 @@ class JdbcPipelineStoreTest {
     }
 
     @Test
-    void 수집_사건과_함께_저장한_실행_줄의_수집_사실만_사건_순서대로_읽는다() {
+    void 수집_사실이_적힌_실행_줄의_수집_사실만_사건_순서대로_읽는다() {
         // given
         records.save(published(DAY, 12, RECEIVED_AT.plusSeconds(30), List.of()),
             seen(12, RECEIVED_AT.plusSeconds(30), CollectionResult.SUCCESS, 5, 4));
@@ -185,7 +165,7 @@ class JdbcPipelineStoreTest {
             seen(13, RECEIVED_AT.plusSeconds(60), CollectionResult.SUCCESS, 2, 1));
         records.save(skipped(DAY, 14, RECEIVED_AT.plusSeconds(90), ForecastOutcome.EMPTY),
             seen(14, RECEIVED_AT.plusSeconds(90), CollectionResult.EMPTY, 0, 0));
-        records.save(published(DAY, 15, RECEIVED_AT.plusSeconds(100), List.of()));
+        insertRunWithoutCollectionFacts(15, RECEIVED_AT.plusSeconds(100));
         records.save(published(DAY, 16, RECEIVED_AT.plusSeconds(120), List.of()),
             seen(16, RECEIVED_AT.plusSeconds(120), CollectionResult.SUCCESS, 1, 1));
 
@@ -202,20 +182,6 @@ class JdbcPipelineStoreTest {
                 1),
             new RecordedBatch(14, ROUTE_ID, RECEIVED_AT.plusSeconds(90), RECEIVED_AT.plusSeconds(185), false, false,
                 0));
-    }
-
-    @Test
-    void 수집_사건_없이_저장한_실행_줄은_수집_사실_두_열이_비어_있다() {
-        // given
-        records.save(published(DAY, 11, RECEIVED_AT, List.of(vehicle(1001, 1))));
-
-        // when
-        final long empty = jdbcClient.sql("""
-            SELECT count(*) FROM forecast_run WHERE source_incomplete IS NULL AND counted_rows IS NULL
-            """).query(Long.class).single();
-
-        // then
-        assertThat(empty).isOne();
     }
 
     @Test
@@ -258,9 +224,9 @@ class JdbcPipelineStoreTest {
     @Test
     void 미해결_줄이_저장된_예측을_가진_실행_가운데_범위_안에서_가장_늦게_수신한_것의_착수_시각을_찾는다() {
         // given
-        records.save(published(DAY, 11, RECEIVED_AT, List.of(vehicle(1001, 1))));
-        records.save(published(DAY, 12, RECEIVED_AT.plusSeconds(30), List.of(vehicle(1002, 1), vehicle(1003, 2))));
-        records.save(published(DAY, 13, RECEIVED_AT.plusSeconds(60), List.of(vehicle(1004, 1))));
+        save(published(DAY, 11, RECEIVED_AT, List.of(vehicle(1001, 1))));
+        save(published(DAY, 12, RECEIVED_AT.plusSeconds(30), List.of(vehicle(1002, 1), vehicle(1003, 2))));
+        save(published(DAY, 13, RECEIVED_AT.plusSeconds(60), List.of(vehicle(1004, 1))));
         labels.saveUnresolved(List.of(unresolved(1001, 5), unresolved(1003, 7), unresolved(9999, 5)));
 
         // when
@@ -376,8 +342,28 @@ class JdbcPipelineStoreTest {
         final int storedRows,
         final int savedRows
     ) {
-        return new ObservationBatchSeen(batchId, ROUTE_ID, ROUTE_VERSION_ID, receivedAt.minusSeconds(3), receivedAt,
-            result, storedRows, savedRows);
+        return new ObservationBatchSeen(batchId, ROUTE_ID, ROUTE_VERSION_ID, receivedAt, result, storedRows,
+            savedRows);
+    }
+
+    /** 수집 구멍과 관측 줄 수가 없는 수집 사건과 함께 저장한다. */
+    private boolean save(ForecastPublished published) {
+        return records.save(published, seenWithoutRows(published));
+    }
+
+    /** 수신 시각이 {@code receivedAt}인 실행 하나의 버스별 기록을 저장소로 다시 읽는다. */
+    private List<ForecastPublished.VehicleForecast> storedVehicles(Instant receivedAt) {
+        return records.findPublishedBetween(ROUTE_ID, receivedAt, receivedAt.plusMillis(1)).getFirst().vehicles();
+    }
+
+    /** 수집 구멍 여부와 관측 줄 수가 비어 있는 실행 줄을 넣는다. */
+    private void insertRunWithoutCollectionFacts(final long batchId, Instant receivedAt) {
+        jdbcClient.sql("""
+            INSERT INTO forecast_run (source_date, observation_batch_id, route_id, route_version_id, received_at,
+                confirmed_at, model_deployment_id, outcome, prediction_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'EMPTY', 0)
+            """).params(DAY, batchId, ROUTE_ID, ROUTE_VERSION_ID, receivedAt.atOffset(ZoneOffset.UTC),
+            receivedAt.plusSeconds(2).atOffset(ZoneOffset.UTC), MODEL_DEPLOYMENT_ID).update();
     }
 
     private static PassLabel label(final long tripStart, final int stopOrder) {

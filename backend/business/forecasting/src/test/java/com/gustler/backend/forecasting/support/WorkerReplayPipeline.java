@@ -46,7 +46,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <ul>
  *   <li>시계는 {@link WorkerReplayClock}이다. 배치마다 자료에 적힌 착수 시각으로 맞춰, 예보가 찍는 착수 시각이 자료와 같아지게
  *       한다.</li>
- *   <li>노선별 실행 줄과 채점 줄은 넣은 일을 부른 스레드에서 바로 실행한다. 배치는 재생이 정한 순서로 하나씩 처리된다.</li>
+ *   <li>노선별 실행 줄과 채점 줄은 넣은 일을 부른 스레드에서 바로 실행한다. 자료의 배치는 미리 모두 DB에 있고, 예보는 재생이
+ *       커밋한 것으로 친 배치만 본다({@link CommittedBatches}). 그래서 배치는 재생이 정한 순서로 하나씩 처리된다.</li>
  *   <li>처리할 노선 판본은 유효 기간과 무관하게 자료의 판본 전부다. 지난 날을 재생하므로 그날의 판본이 지금은 닫혀 있을 수
  *       있다.</li>
  * </ul>
@@ -71,6 +72,7 @@ final class WorkerReplayPipeline {
     private final RouteStateReplayer replayer;
     private final ShadowScoringService scoring;
     private final ForecastPipelineService forecasts;
+    private final CommittedBatches committed;
 
     /**
      * @param runtime 재생에 쓰는 활성 배포와 모델
@@ -93,18 +95,19 @@ final class WorkerReplayPipeline {
             new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc))));
         this.replayer = new RouteStateReplayer(source, stage, RouteStateReplayer.DEFAULT_WINDOW,
             RouteStateReplayer.DEFAULT_EXTENDED_WINDOW);
+        this.committed = new CommittedBatches(new JdbcPendingPipelineBatches(jdbc));
         ScoringReplay scoringReplay = new ScoringReplay(stores.records(), stores.passes());
         this.scoring = new ShadowScoringService(task -> {
             task.run();
             return true;
         }, scoringStage(), scoringReplay, new ScoringWriter(stores.labels(), transactions), stores.records(),
             scoringReplay.maxForecastWindow(), clock, null);
-        PipelineBatchProcessor processor = new PipelineBatchProcessor("pipeline_forecast", stage, replayer,
-            stores.records(), stores.passes(), transactions, List.of(scoring), new RouteStateRegistry(), RUSH_ONLY);
+        PipelineBatchProcessor processor = new PipelineBatchProcessor(stage, replayer, stores.records(),
+            stores.passes(), transactions, scoring, new RouteStateRegistry(), RUSH_ONLY);
         this.forecasts = new ForecastPipelineService((routeKey, task) -> {
             task.run();
             return true;
-        }, processor, source, new JdbcPendingPipelineBatches(jdbc), () -> Optional.of(runtime), () -> versions,
+        }, processor, source, committed, () -> Optional.of(runtime), () -> versions,
             routeStops, new JdbcSettlementContextWriter(jdbc), POLICY, clock, null);
     }
 
@@ -133,6 +136,7 @@ final class WorkerReplayPipeline {
         forecasts.pickUp();
         for (WorkerReplayFixture.Batch batch : batches) {
             clock.moveTo(batch.confirmedAt());
+            committed.commit(batch.id());
             forecasts.batchStored(batch.id(), batch.routeVersionId());
             if (resignaled.contains(batch.id())) {
                 signalAgain(batch);

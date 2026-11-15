@@ -35,7 +35,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 예보를 돌리는 구성 요소를 등록한다.
  *
  * <p>예보가 켜져 있을 때({@code forecast.enabled=true})만 등록한다. 노선별 실행 줄({@link ForecastLanes})과 신호·주기 호출은
- * 실행하는 앱이 같은 조건으로 등록한다.
+ * 실행하는 앱이 같은 조건으로 등록한다. 커밋한 뒤의 사건을 받을 뒤 단계({@link PipelineEvents})는 채점 구성이 같은 조건으로
+ * 등록한다.
  *
  * <p>다시 뜰 때 {@code forecast.replay-window}(기본 6시간)만큼 되감고, 되감은 상태가 모자라면
  * {@code forecast.replay-extended-window}(기본 12시간)로 한 번 늘려 다시 되감는다. 늘린 창은 12시간을 넘을 수 없다. 이관은 관측의
@@ -63,7 +64,7 @@ public class ForecastMainlineConfiguration {
         ForecastRecordStore records,
         StopPassStore passes,
         PlatformTransactionManager transactionManager,
-        ObjectProvider<PipelineEvents> listeners,
+        PipelineEvents events,
         ObjectProvider<MeterRegistry> meters,
         ObjectProvider<ForecastTelemetry> telemetry,
         ForecastRuntime runtimes,
@@ -80,8 +81,8 @@ public class ForecastMainlineConfiguration {
         transactions.setTimeout(WRITE_TIMEOUT_SECONDS);
         RouteStateReplayer replayer = new RouteStateReplayer(mainlineReplaySource, stage,
             DurationStyle.detectAndParse(replayWindow), DurationStyle.detectAndParse(replayExtendedWindow));
-        PipelineBatchProcessor processor = new PipelineBatchProcessor("pipeline_forecast", stage, replayer, records,
-            passes, transactions, listeners.orderedStream().toList(), new RouteStateRegistry(), rushOnly);
+        PipelineBatchProcessor processor = new PipelineBatchProcessor(stage, replayer, records, passes, transactions,
+            events, new RouteStateRegistry(), rushOnly);
         ForecastPipelineService service = new ForecastPipelineService(lanes, processor, mainlineReplaySource,
             new JdbcPendingPipelineBatches(jdbc), runtimes, versions, stops, new JdbcSettlementContextWriter(jdbc),
             policy, clock, meters.getIfAvailable());

@@ -1,5 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
+import com.gustler.backend.forecasting.application.pipeline.PassLabelCalculator;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwarePassEvent;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingPosterior;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
@@ -20,7 +21,7 @@ final class ConfirmedAlightingAwareEvaluation {
     private ConfirmedAlightingAwareEvaluation() {
     }
 
-    static PassLabelOutcome afterSeats(
+    static PassLabelCalculator.PassLabelCalculation afterSeats(
         AlightingAwarePassEvent visit, AlightingAwarePassEvent previous, JsonNode snapshot
     ) {
         Instant departure = visit.departure().receivedAt();
@@ -62,7 +63,7 @@ final class ConfirmedAlightingAwareEvaluation {
         final double label = AlightingPosterior.afterSeats(fitted, visit.arrival().seats(),
             visit.departure().seats(),
             capacity, gap, previous.departure().seats() == 0, bin);
-        return new PassLabelOutcome("SETTLED", label, null, digest(parameters.toString()), capacity);
+        return new PassLabelCalculator.PassLabelCalculation(true, label, null, digest(parameters.toString()));
     }
 
     private static JsonNode findParameters(JsonNode snapshot, final int stop, String band) {
@@ -84,8 +85,8 @@ final class ConfirmedAlightingAwareEvaluation {
         return false;
     }
 
-    private static PassLabelOutcome unsupported(String reason) {
-        return PassLabelOutcome.unsupported(reason);
+    private static PassLabelCalculator.PassLabelCalculation unsupported(String reason) {
+        return PassLabelCalculator.PassLabelCalculation.unsupported(reason);
     }
 
     private static String digest(String value) {

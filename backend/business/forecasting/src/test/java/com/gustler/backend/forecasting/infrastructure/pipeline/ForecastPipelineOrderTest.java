@@ -36,7 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 예보가 착수 시각과 이력의 순서를 지키는지를 실제 DB로 본다.
  * 착수 시각은 메모리의 노선 상태와 다시 뜬 뒤 DB에서 되감은 상태가 같은 값을 써야 하고, 한 노선의 이력에는 배치가 수신 순서대로만
- * 들어가야 한다.
+ * 들어가야 한다. 순서는 노선 판본의 처리하지 않은 배치를 수신 순서로 읽어 차례로 처리하는 것으로 지킨다.
  */
 @ForecastingIntegrationTest
 @Transactional
@@ -68,7 +68,8 @@ class ForecastPipelineOrderTest {
 
         // when
         RouteStateReplayer.Result replayed = new RouteStateReplayer(harness.source, harness.stage,
-            Duration.ofHours(6)).replay(harness.statistics(), cursor.confirmedAt(), cursor.observationBatchId());
+            Duration.ofHours(6), Duration.ofHours(6))
+            .replay(harness.statistics(), cursor.confirmedAt(), cursor.observationBatchId());
 
         // then
         assertSoftly(softly -> {
@@ -141,8 +142,8 @@ class ForecastPipelineOrderTest {
             softly.assertThat(inversions(harness)).isZero();
             softly.assertThat(harness.counter("batches", "retried")).isOne();
             softly.assertThat(harness.counter("batches", "failed")).isEqualTo(failures - 1);
-            softly.assertThat(harness.counter("batches", "held")).isZero();
-            softly.assertThat(harness.counter("batches", "already_processed")).isOne();
+            softly.assertThat(harness.runCount(failing)).isOne();
+            softly.assertThat(harness.counter("batches", "already_processed")).isZero();
         });
     }
 
@@ -168,8 +169,7 @@ class ForecastPipelineOrderTest {
             for (final long batchId : run.subList(0, 3)) {
                 softly.assertThat(harness.runOutcome(batchId)).as("배치 %d", batchId).isEmpty();
             }
-            softly.assertThat(harness.counter("batches", "held")).isEqualTo(2);
-            softly.assertThat(harness.counter("batches", "retried")).isOne();
+            softly.assertThat(harness.counter("batches", "retried")).isEqualTo(3);
             softly.assertThat(harness.counter("batches", "failed")).isEqualTo(3);
         });
 
@@ -207,7 +207,9 @@ class ForecastPipelineOrderTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void 뒤_배치가_먼저_이력에_들어갔으면_앞_배치는_이력에_넣지_않고_수신_뒤_90초가_지나면_늦음으로_닫는다(final boolean restarted) {
+    void 먼저_받은_배치가_나중에_커밋돼_뒤_배치가_먼저_이력에_들어갔으면_앞_배치는_이력에_넣지_않고_90초_뒤_늦음으로_닫는다(
+        final boolean restarted
+    ) {
         // given
         MainlineHarness harness = harness(20261304L, Duration.ofMinutes(40));
         harness.start();
@@ -236,12 +238,261 @@ class ForecastPipelineOrderTest {
 
         // then
         RouteStateReplayer.Result replayed = new RouteStateReplayer(harness.source, harness.stage,
-            Duration.ofHours(6)).replay(harness.statistics(), harness.runConfirmedAt(later), later);
+            Duration.ofHours(6), Duration.ofHours(6))
+            .replay(harness.statistics(), harness.runConfirmedAt(later), later);
         assertSoftly(softly -> {
             softly.assertThat(harness.runOutcome(earlier)).contains("LATE");
             softly.assertThat(rankOf(replayed.state(), earlier)).isEmpty();
             softly.assertThat(replayed.state().cursor().orElseThrow().observationBatchId()).isEqualTo(later);
             softly.assertThat(inversions(harness)).isZero();
+        });
+    }
+
+    @Test
+    void 신호를_잃은_앞_배치가_있으면_뒤_배치의_신호가_둘을_수신_순서대로_처리한다() {
+        // given
+        MainlineHarness harness = harness(20261303L, Duration.ofMinutes(40));
+        harness.start();
+        harness.fromVerifiedOrigin();
+        List<Long> pair = harness.consecutiveConfirmed(30, 2);
+        final long earlier = pair.get(0);
+        final long later = pair.get(1);
+        processBefore(harness, earlier);
+        harness.commit(earlier);
+        Instant signaledAt = harness.receivedAt(later).plusSeconds(2);
+
+        // when
+        harness.signal(later, signaledAt);
+
+        // then
+        RouteForecastState state = harness.state().orElseThrow();
+        assertSoftly(softly -> {
+            softly.assertThat(harness.runOutcome(earlier)).get().isIn(FORECAST_OUTCOMES);
+            softly.assertThat(harness.runOutcome(later)).get().isIn(FORECAST_OUTCOMES);
+            softly.assertThat(harness.runConfirmedAt(earlier)).isEqualTo(signaledAt);
+            softly.assertThat(harness.runConfirmedAt(later)).isEqualTo(signaledAt);
+            softly.assertThat(rankOf(state, later))
+                .isEqualTo(OptionalLong.of(rankOf(state, earlier).orElseThrow() + 1));
+            softly.assertThat(inversions(harness)).isZero();
+            softly.assertThat(harness.counter("batches", "out_of_order")).isZero();
+        });
+    }
+
+    @Test
+    void 다시_뜬_뒤의_줍기는_처리하지_않은_배치를_수신_순서대로_처리한다() {
+        // given
+        MainlineHarness harness = harness(20261303L, Duration.ofMinutes(40));
+        harness.start();
+        harness.fromVerifiedOrigin();
+        List<Long> run = harness.consecutiveConfirmed(30, 3);
+        processBefore(harness, run.get(0));
+        run.forEach(harness::commit);
+        harness.start();
+        Instant pickedAt = harness.receivedAt(run.get(2)).plusSeconds(5);
+
+        // when
+        harness.pickUp(pickedAt);
+
+        // then
+        RouteForecastState state = harness.state().orElseThrow();
+        assertSoftly(softly -> {
+            for (final long batchId : run) {
+                softly.assertThat(harness.runOutcome(batchId)).as("배치 %d", batchId).get().isIn(FORECAST_OUTCOMES);
+                softly.assertThat(harness.runConfirmedAt(batchId)).isEqualTo(pickedAt);
+            }
+            softly.assertThat(state.cursor().orElseThrow().observationBatchId()).isEqualTo(run.get(2));
+            softly.assertThat(rankOf(state, run.get(1)))
+                .isEqualTo(OptionalLong.of(rankOf(state, run.get(0)).orElseThrow() + 1));
+            softly.assertThat(rankOf(state, run.get(2)))
+                .isEqualTo(OptionalLong.of(rankOf(state, run.get(1)).orElseThrow() + 1));
+            softly.assertThat(inversions(harness)).isZero();
+        });
+    }
+
+    @Test
+    void 같은_판본의_처리가_줄에서_기다리는_동안_온_신호는_일을_겹쳐_넣지_않고_한_번에_수신_순서대로_처리된다() {
+        // given
+        MainlineHarness harness = harness(20261303L, Duration.ofMinutes(40));
+        harness.start();
+        harness.fromVerifiedOrigin();
+        List<Long> pair = harness.consecutiveConfirmed(30, 2);
+        final long earlier = pair.get(0);
+        final long later = pair.get(1);
+        processBefore(harness, earlier);
+        harness.holdLane();
+
+        // when
+        harness.signal(earlier, harness.receivedAt(earlier).plusSeconds(2));
+        harness.signal(later, harness.receivedAt(later).plusSeconds(2));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(harness.waitingTasks()).isOne();
+            softly.assertThat(harness.runOutcome(earlier)).isEmpty();
+            softly.assertThat(harness.runOutcome(later)).isEmpty();
+        });
+
+        // when
+        harness.runNextTask();
+
+        // then
+        RouteForecastState state = harness.state().orElseThrow();
+        assertSoftly(softly -> {
+            softly.assertThat(harness.waitingTasks()).isZero();
+            softly.assertThat(harness.runOutcome(earlier)).get().isIn(FORECAST_OUTCOMES);
+            softly.assertThat(harness.runOutcome(later)).get().isIn(FORECAST_OUTCOMES);
+            softly.assertThat(rankOf(state, later))
+                .isEqualTo(OptionalLong.of(rankOf(state, earlier).orElseThrow() + 1));
+            softly.assertThat(harness.counter("rejected")).isZero();
+        });
+    }
+
+    @Test
+    void 처리하지_않은_배치를_읽은_뒤에_커밋된_배치의_신호는_다음_처리를_줄에_넣어_잃지_않는다() {
+        // given
+        MainlineHarness harness = harness(20261303L, Duration.ofMinutes(40));
+        harness.start();
+        harness.fromVerifiedOrigin();
+        List<Long> pair = harness.consecutiveConfirmed(30, 2);
+        final long earlier = pair.get(0);
+        final long later = pair.get(1);
+        processBefore(harness, earlier);
+        harness.holdLane();
+        harness.signal(earlier, harness.receivedAt(earlier).plusSeconds(2));
+        harness.afterNextPendingRead(() -> harness.signal(later, harness.receivedAt(later).plusSeconds(2)));
+
+        // when
+        harness.runNextTask();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(harness.runOutcome(earlier)).get().isIn(FORECAST_OUTCOMES);
+            softly.assertThat(harness.runOutcome(later)).isEmpty();
+            softly.assertThat(harness.waitingTasks()).isOne();
+        });
+
+        // when
+        harness.runNextTask();
+
+        // then
+        RouteForecastState state = harness.state().orElseThrow();
+        assertSoftly(softly -> {
+            softly.assertThat(harness.runOutcome(later)).get().isIn(FORECAST_OUTCOMES);
+            softly.assertThat(rankOf(state, later))
+                .isEqualTo(OptionalLong.of(rankOf(state, earlier).orElseThrow() + 1));
+            softly.assertThat(inversions(harness)).isZero();
+            softly.assertThat(harness.waitingTasks()).isZero();
+        });
+    }
+
+    @Test
+    void 한_번에_읽는_한도보다_많이_쌓였으면_이어서_읽어_모두_수신_순서대로_처리한다() {
+        // given
+        MainlineHarness harness = harness(20261303L, Duration.ofMinutes(40));
+        harness.batchLimit(2);
+        harness.start();
+        harness.fromVerifiedOrigin();
+        List<Long> run = harness.consecutiveConfirmed(30, 3);
+        processBefore(harness, run.get(0));
+        harness.commit(run.get(0));
+        harness.commit(run.get(1));
+        harness.holdLane();
+        harness.signal(run.get(2), harness.receivedAt(run.get(2)).plusSeconds(2));
+
+        // when
+        harness.runNextTask();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(harness.runOutcome(run.get(0))).get().isIn(FORECAST_OUTCOMES);
+            softly.assertThat(harness.runOutcome(run.get(1))).get().isIn(FORECAST_OUTCOMES);
+            softly.assertThat(harness.runOutcome(run.get(2))).isEmpty();
+            softly.assertThat(harness.waitingTasks()).isOne();
+        });
+
+        // when
+        harness.runNextTask();
+
+        // then
+        RouteForecastState state = harness.state().orElseThrow();
+        assertSoftly(softly -> {
+            softly.assertThat(harness.runOutcome(run.get(2))).get().isIn(FORECAST_OUTCOMES);
+            softly.assertThat(rankOf(state, run.get(1)))
+                .isEqualTo(OptionalLong.of(rankOf(state, run.get(0)).orElseThrow() + 1));
+            softly.assertThat(rankOf(state, run.get(2)))
+                .isEqualTo(OptionalLong.of(rankOf(state, run.get(1)).orElseThrow() + 1));
+            softly.assertThat(inversions(harness)).isZero();
+            softly.assertThat(harness.waitingTasks()).isZero();
+        });
+    }
+
+    @Test
+    void 한도만큼_읽은_배치가_모두_실행_없이_남으면_같은_배치를_이어서_다시_읽지_않는다() {
+        // given
+        MainlineHarness harness = harness(20261303L, Duration.ofMinutes(40));
+        harness.batchLimit(2);
+        harness.start();
+        harness.fromVerifiedOrigin();
+        List<Long> run = harness.consecutiveConfirmed(30, 3);
+        processBefore(harness, run.get(0));
+        harness.signal(run.get(2), harness.receivedAt(run.get(2)).plusSeconds(2));
+        harness.holdLane();
+        harness.commit(run.get(0));
+        harness.signal(run.get(1), harness.receivedAt(run.get(2)).plusSeconds(4));
+        final int sweepLimit = 5;
+
+        // when
+        int sweeps = 0;
+        while (harness.waitingTasks() > 0 && sweeps < sweepLimit) {
+            harness.runNextTask();
+            sweeps++;
+        }
+
+        // then
+        final int ranSweeps = sweeps;
+        assertSoftly(softly -> {
+            softly.assertThat(ranSweeps).isOne();
+            softly.assertThat(harness.waitingTasks()).isZero();
+            softly.assertThat(harness.counter("batches", "out_of_order")).isEqualTo(2);
+            softly.assertThat(harness.runOutcome(run.get(0))).isEmpty();
+            softly.assertThat(harness.runOutcome(run.get(1))).isEmpty();
+        });
+    }
+
+    @Test
+    void 활성_모델이_없는_동안_쌓인_배치는_읽지_않고_모델이_생긴_뒤의_신호가_수신_순서대로_처리한다() {
+        // given
+        MainlineHarness harness = harness(20261303L, Duration.ofMinutes(40));
+        harness.start();
+        harness.fromVerifiedOrigin();
+        List<Long> run = harness.consecutiveConfirmed(30, 3);
+        processBefore(harness, run.get(0));
+        harness.modelActive(false);
+        harness.signal(run.get(0), harness.receivedAt(run.get(0)).plusSeconds(2));
+        harness.signal(run.get(1), harness.receivedAt(run.get(1)).plusSeconds(2));
+        final double skippedWithoutModel = harness.counter("batches", "no_model");
+        Optional<String> outcomeWithoutModel = harness.runOutcome(run.get(0));
+        harness.modelActive(true);
+        Instant signaledAt = harness.receivedAt(run.get(2)).plusSeconds(2);
+
+        // when
+        harness.signal(run.get(2), signaledAt);
+
+        // then
+        RouteForecastState state = harness.state().orElseThrow();
+        assertSoftly(softly -> {
+            softly.assertThat(skippedWithoutModel).isEqualTo(2);
+            softly.assertThat(outcomeWithoutModel).isEmpty();
+            for (final long batchId : run) {
+                softly.assertThat(harness.runOutcome(batchId)).as("배치 %d", batchId).get().isIn(FORECAST_OUTCOMES);
+                softly.assertThat(harness.runConfirmedAt(batchId)).isEqualTo(signaledAt);
+            }
+            softly.assertThat(rankOf(state, run.get(1)))
+                .isEqualTo(OptionalLong.of(rankOf(state, run.get(0)).orElseThrow() + 1));
+            softly.assertThat(rankOf(state, run.get(2)))
+                .isEqualTo(OptionalLong.of(rankOf(state, run.get(1)).orElseThrow() + 1));
+            softly.assertThat(inversions(harness)).isZero();
+            softly.assertThat(harness.counter("batches", "no_model")).isEqualTo(2);
         });
     }
 

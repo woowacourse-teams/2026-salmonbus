@@ -103,7 +103,7 @@ class PipelineShutdownIntegrationTest {
             for (int index = 0; index < PASSED_STOPS.size(); index++) {
                 batches.add(collect(context, routeVersionId, PASSED_STOPS.get(index), 30 - index * 2));
             }
-            assertThat(lanes.queued()).as("닫기 전에는 넣은 배치가 모두 실행 줄에서 기다린다").isEqualTo(batches.size());
+            assertThat(lanes.queued()).as("닫기 전에는 넣은 배치의 처리가 실행 줄에서 기다린다").isOne();
 
             // when
             context.close();
@@ -142,7 +142,10 @@ class PipelineShutdownIntegrationTest {
         return (ConfigurableApplicationContext) loader.loadContext(configuration);
     }
 
-    /** 컨텍스트가 닫히기 시작할 때까지 실행 줄을 붙잡는 일이다. 뒤에 넣은 배치는 닫기가 시작된 뒤에야 처리된다. */
+    /**
+     * 컨텍스트가 닫히기 시작할 때까지 실행 줄을 붙잡는 일이다. 뒤에 넣은 배치는 닫기가 시작된 뒤에야 처리된다. 같은 노선 판본의
+     * 배치는 줄에서 기다리는 일 하나가 수신 순서로 모두 처리한다.
+     */
     private static Runnable untilClosing(ConfigurableApplicationContext context) {
         CountDownLatch closing = new CountDownLatch(1);
         context.addApplicationListener(new ApplicationListener<ContextClosedEvent>() {

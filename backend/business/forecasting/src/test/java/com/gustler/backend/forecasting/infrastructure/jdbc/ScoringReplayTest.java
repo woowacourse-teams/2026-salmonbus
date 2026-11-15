@@ -3,12 +3,10 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
-import com.gustler.backend.forecasting.application.pipeline.ForecastRun;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
 import com.gustler.backend.forecasting.application.pipeline.RecordedBatch;
 import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
@@ -19,13 +17,11 @@ import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
 import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -240,7 +236,7 @@ class ScoringReplayTest {
 
     private static ScoringStage emptyStage() {
         return new ScoringStage((deployment, version) -> Optional.empty(), version -> List.of(),
-            new ConfirmedPassLabelCalculator(), ScoringScenario.FIXED);
+            new ConfirmedPassLabelCalculator(), ScoringScenario.FIXED, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
     }
 
     /** 아무 기록도 돌려주지 않고 되감기가 읽은 범위만 적어 둔다. */
@@ -310,25 +306,7 @@ class ScoringReplayTest {
         }
 
         @Override
-        public boolean save(ForecastPublished published) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public boolean save(ForecastPublished published, ObservationBatchSeen seen) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Optional<ForecastRun> findLatestRun(final long routeVersionId, Set<ForecastOutcome> outcomes) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public List<ForecastPublished.VehicleForecast> findRecords(
-            LocalDate sourceDate,
-            final long observationBatchId
-        ) {
             throw new UnsupportedOperationException();
         }
 

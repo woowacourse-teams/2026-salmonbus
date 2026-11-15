@@ -5,14 +5,12 @@ import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
-import com.gustler.backend.forecasting.application.pipeline.ForecastRun;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
 import com.gustler.backend.forecasting.application.pipeline.RecordedBatch;
 import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
 import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -81,25 +79,7 @@ final class RecordedScoringEvents {
 
     private final class Forecasts implements ForecastRecordStore {
         @Override
-        public boolean save(ForecastPublished published) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public boolean save(ForecastPublished published, ObservationBatchSeen seen) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Optional<ForecastRun> findLatestRun(final long routeVersionId, Set<ForecastOutcome> outcomes) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public List<ForecastPublished.VehicleForecast> findRecords(
-            LocalDate sourceDate,
-            final long observationBatchId
-        ) {
             throw new UnsupportedOperationException();
         }
 

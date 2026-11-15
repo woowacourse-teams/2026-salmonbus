@@ -11,6 +11,7 @@ import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
 import com.gustler.backend.forecasting.infrastructure.jdbc.ConfirmedPassLabelCalculator;
+import com.gustler.backend.forecasting.support.BaselineReasons;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -46,7 +47,8 @@ class ScoringStageTest {
     void 채점_단계를_준비한다() {
         contexts.put(DEPLOYMENT, context(0.12, "alighting-confirmed-closure-v2"));
         stage = new ScoringStage((deployment, version) -> Optional.ofNullable(contexts.get(deployment)),
-            version -> List.of(5, 1, 2, 3, 4, 2), new ConfirmedPassLabelCalculator(), CLOCK);
+            version -> List.of(5, 1, 2, 3, 4, 2), new ConfirmedPassLabelCalculator(), CLOCK,
+            ScoringStage.DEFAULT_OBSERVATION_LIMIT);
     }
 
     @Test
@@ -236,7 +238,7 @@ class ScoringStageTest {
             softly.assertThat(result.unresolved()).allSatisfy(closed -> {
                 assertThat(closed.state()).isEqualTo(UnresolvedForecast.State.LOST);
                 assertThat(closed.reason()).isEqualTo(ScoringReasons.TARGET_WITHOUT_PASS);
-                assertThat(ScoringReasons.legacyReason(closed.reason())).contains("NO_CLOSED_IDENTITY_SAFE_PASS");
+                assertThat(BaselineReasons.recordedName(closed.reason())).contains("NO_CLOSED_IDENTITY_SAFE_PASS");
             });
             softly.assertThat(stage.waitingCount()).isOne();
         });
@@ -381,8 +383,8 @@ class ScoringStageTest {
     void 늦게_착수한_배치의_줄_수_차이는_수집_구멍으로_보지_않는다() {
         // given
         final long batch = batches.incrementAndGet();
-        stage.accept(new ObservationBatchSeen(batch, ROUTE, VERSION, MORNING.minusSeconds(200),
-            MORNING.minusSeconds(190), CollectionResult.SUCCESS, 3, 2));
+        stage.accept(new ObservationBatchSeen(batch, ROUTE, VERSION, MORNING.minusSeconds(190),
+            CollectionResult.SUCCESS, 3, 2));
         stage.accept(new ForecastPublished(day(MORNING), batch, ROUTE, VERSION, MORNING.minusSeconds(190),
             MORNING.minusSeconds(90), null, ForecastOutcome.LATE, List.of()));
 
@@ -402,7 +404,7 @@ class ScoringStageTest {
         Instant holeAt = MORNING.minusSeconds(600);
         final long batch = batches.incrementAndGet();
         ScoringStage restored = stageAt(CLOCK, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
-        stage.accept(new ObservationBatchSeen(batch, ROUTE, VERSION, holeAt.minusSeconds(5), holeAt.minusSeconds(2),
+        stage.accept(new ObservationBatchSeen(batch, ROUTE, VERSION, holeAt.minusSeconds(2),
             CollectionResult.SUCCESS, 3, 2));
         stage.accept(new ForecastPublished(day(holeAt), batch, ROUTE, VERSION, holeAt.minusSeconds(2), holeAt,
             DEPLOYMENT, ForecastOutcome.EMPTY, List.of()));
@@ -470,7 +472,7 @@ class ScoringStageTest {
         limited.restore(new RecordedBatch(batch, ROUTE, at.minusSeconds(2), at, false, false, 3));
 
         // when
-        limited.accept(new ObservationBatchSeen(batch, ROUTE, VERSION, at.minusSeconds(5), at.minusSeconds(2),
+        limited.accept(new ObservationBatchSeen(batch, ROUTE, VERSION, at.minusSeconds(2),
             CollectionResult.SUCCESS, 3, 3));
         limited.accept(new ForecastPublished(day(at), batch, ROUTE, VERSION, at.minusSeconds(2), at, DEPLOYMENT,
             ForecastOutcome.EMPTY, List.of()));
@@ -509,7 +511,8 @@ class ScoringStageTest {
         ScoringStage asking = new ScoringStage((deployment, version) -> {
             asked.incrementAndGet();
             return Optional.empty();
-        }, version -> List.of(1, 2, 3, 4, 5), new ConfirmedPassLabelCalculator(), clock);
+        }, version -> List.of(1, 2, 3, 4, 5), new ConfirmedPassLabelCalculator(), clock,
+            ScoringStage.DEFAULT_OBSERVATION_LIMIT);
 
         // when
         ScoringResult result = asking.accept(forecast(MORNING, vehicle(500, "bus-a", 50, 40, 3)))
@@ -617,12 +620,11 @@ class ScoringStageTest {
     }
 
     private ObservationBatchSeen seen(Instant at) {
-        return new ObservationBatchSeen(batches.incrementAndGet(), ROUTE, VERSION, at, at, CollectionResult.EMPTY);
+        return new ObservationBatchSeen(batches.incrementAndGet(), ROUTE, VERSION, at, CollectionResult.EMPTY, 0, 0);
     }
 
     private ObservationBatchSeen holeBatch(Instant at) {
-        return new ObservationBatchSeen(batches.incrementAndGet(), ROUTE, VERSION, at, at, CollectionResult.SUCCESS, 3,
-            2);
+        return new ObservationBatchSeen(batches.incrementAndGet(), ROUTE, VERSION, at, CollectionResult.SUCCESS, 3, 2);
     }
 
     private static long lastObservation(final long closure) {

@@ -16,12 +16,7 @@ import tools.jackson.databind.JsonNode;
 public final class ConfirmedPassLabelCalculator implements PassLabelCalculator {
     @Override
     public PassLabelCalculation calculate(PassClosed pass, PassClosed previous, JsonNode evidence) {
-        PassLabelOutcome outcome = ConfirmedAlightingAwareEvaluation.afterSeats(
-            event(pass), previousEvent(previous), evidence);
-        if ("SETTLED".equals(outcome.state())) {
-            return new PassLabelCalculation(true, outcome.label(), null, outcome.parameterHash(), outcome.capacity());
-        }
-        return PassLabelCalculation.unsupported(outcome.reason());
+        return ConfirmedAlightingAwareEvaluation.afterSeats(event(pass), previousEvent(previous), evidence);
     }
 
     private static AlightingAwarePassEvent previousEvent(PassClosed previous) {

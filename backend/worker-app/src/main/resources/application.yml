@@ -96,11 +96,11 @@ forecast:
   # 예보가 없어진다. 넓히면 오래된 배치가 줍기 한도를 채워 새 배치가 밀린다.
   # 환경변수로는 바꾸지 않는다. 값을 바꾸려면 두 곳을 같이 고치고 계약 테스트를 통과해야 한다.
   staleness: 10m
-  batch-limit: 20 # 한 번 줍기에서 노선 판본마다 줄에 넣는 배치 수의 상한.
+  batch-limit: 20 # 노선 판본의 처리하지 않은 배치를 한 번에 읽는 수의 상한. 다 찼고 처리를 마친 배치가 있으면 이어서 읽는다
   scoring-flush-interval: ${FORECAST_SCORING_FLUSH_INTERVAL:5s} # 채점 결과를 모아 한 트랜잭션으로 쓰는 간격
   scoring-queue-capacity: ${FORECAST_SCORING_QUEUE_CAPACITY:10000} # 넘치면 사건을 버리고 그 노선을 다시 되감는다
   lanes: ${FORECAST_LANES:2} # 노선별 실행 줄 수. 같은 노선은 항상 같은 줄에서 순서대로 처리한다
-  lane-queue-capacity: ${FORECAST_LANE_QUEUE_CAPACITY:1000} # 줄 하나의 길이. 넘치면 넣지 않고 다음 줍기(interval)에 맡긴다
+  lane-queue-capacity: ${FORECAST_LANE_QUEUE_CAPACITY:1000} # 줄 하나에서 기다릴 수 있는 일의 수. 넘치면 넣지 않고 다음 신호나 줍기(interval)에 맡긴다
   replay-window: ${FORECAST_REPLAY_WINDOW:6h} # 다시 뜰 때 되감는 관측 범위
   replay-extended-window: ${FORECAST_REPLAY_EXTENDED_WINDOW:12h} # 되감은 상태가 모자랄 때(운행 시작을 못 본 차량, 이력 미완) 한 번 늘려 되감는 범위. 12h를 넘으면 기동하지 않는다
   shutdown-timeout: ${FORECAST_SHUTDOWN_TIMEOUT:10s} # 정상 종료 때 실행 줄과 채점 줄이 받은 일을 끝내기를 기다리는 한도. 넘기면 남은 일을 버린다

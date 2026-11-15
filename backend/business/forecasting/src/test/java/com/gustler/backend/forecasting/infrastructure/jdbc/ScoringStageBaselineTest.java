@@ -3,12 +3,10 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
 import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import com.gustler.backend.forecasting.application.pipeline.ForecastRecordStore;
-import com.gustler.backend.forecasting.application.pipeline.ForecastRun;
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
 import com.gustler.backend.forecasting.application.pipeline.RecordedBatch;
 import com.gustler.backend.forecasting.application.pipeline.ScoringReplay;
@@ -17,7 +15,6 @@ import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
 import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -313,25 +310,7 @@ class ScoringStageBaselineTest {
         }
 
         @Override
-        public boolean save(ForecastPublished event) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
         public boolean save(ForecastPublished event, ObservationBatchSeen seen) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public Optional<ForecastRun> findLatestRun(final long routeVersionId, Set<ForecastOutcome> outcomes) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public List<ForecastPublished.VehicleForecast> findRecords(
-            LocalDate sourceDate,
-            final long observationBatchId
-        ) {
             throw new UnsupportedOperationException();
         }
 

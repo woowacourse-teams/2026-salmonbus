@@ -31,17 +31,31 @@ import org.slf4j.LoggerFactory;
 /**
  * 수집이 커밋한 배치를 예보한다.
  *
- * <p>배치는 노선별 실행 줄({@link ForecastLanes})에서 처리한다. 줄 열쇠는 노선 판본의 GBIS 노선 ID다. 노선 상태의 단위(모델 노선
- * 이름)는 이 ID로 정해지므로 같은 상태를 쓰는 배치는 항상 같은 줄에서 순서대로 처리되고, 다른 노선은 다른 줄에서 동시에 처리된다.
- * 판본과 열쇠의 짝은 {@link #pickUp()}이 정류장을 읽을 때 기억한다. 신호({@link #batchStored})는 수집 스레드에서 DB를 읽지 않으려고
- * 아직 짝을 모르는 판본의 배치를 넣지 않고 다음 줍기에 맡긴다.
+ * <p>노선별 실행 줄({@link ForecastLanes})에 넣는 일은 하나뿐이다. 노선 판본의 처리하지 않은 배치를 DB에서 수신 순서로 읽어
+ * 앞에서부터 차례로 처리하는 훑기다. 수집의 신호({@link #batchStored})와 주기 줍기({@link #pickUp()})는 둘 다 훑기를 줄에 넣기만
+ * 한다. 줄 열쇠는 노선 판본의 GBIS 노선 ID다. 노선 상태의 단위(모델 노선 이름)는 이 ID로 정해지므로 같은 상태를 쓰는 배치는 항상
+ * 같은 줄에서 처리되고, 다른 노선은 다른 줄에서 동시에 처리된다. 판본과 열쇠의 짝은 줍기가 정류장을 읽을 때 기억한다. 신호는 수집
+ * 스레드에서 DB를 읽지 않으려고 아직 짝을 모르는 판본의 훑기를 넣지 않고 다음 줍기에 맡긴다.
  *
- * <p>줄에서 배치 하나는 이렇게 처리한다.
+ * <p>한 노선의 이력에는 배치가 수신 순서대로만 들어가야 한다. 뒤 배치가 먼저 들어가면 앞 배치가 더 늦은 착수 시각으로 뒤에 붙어
+ * 연결과 운행이 끊긴 것으로 판정된다. 이 순서는 훑기가 읽는 순서(수신 시각, 배치 번호)와 줄의 단일 스레드로 지킨다.
+ * <ul>
+ *   <li>같은 판본의 훑기가 줄에서 이미 기다리고 있으면 겹쳐 넣지 않는다. 기다림 표시는 훑기가 시작할 때 내리고 배치는 그 뒤에
+ *       읽으므로, 도는 중에 커밋된 배치는 그 훑기가 읽었거나 새로 넣은 다음 훑기가 읽는다.</li>
+ *   <li>예외로 실패한 배치는 그 자리에서 한 번 다시 처리한다. 또 실패하면 그 훑기를 거기서 멈춰 뒤 배치가 앞지르지 않게 한다.
+ *       실패한 배치는 실행 줄이 없으므로 다음 훑기에서 다시 맨 앞이 된다.</li>
+ *   <li>실패한 배치가 수신 뒤 90초를 넘겼으면 건너뛰고 뒤 배치를 처리한다. 그 뒤에 처리되면 {@code LATE}로 닫혀 이력에 들어가지
+ *       않으므로 순서가 뒤집히지 않는다. 그래서 한 배치가 계속 실패해도 그 노선은 길어야 90초 밀린다.</li>
+ *   <li>한 번에 읽는 한도만큼 읽었고 그 가운데 처리를 마친 배치가 있으면 남은 배치가 있을 수 있으므로 훑기를 한 번 더 넣는다.
+ *       마친 배치가 하나도 없으면 같은 배치를 다시 읽을 뿐이므로 다음 신호나 줍기에 맡긴다.</li>
+ * </ul>
+ * 신호를 잃었거나 처리 중에 죽어 남은 배치는 신선도 창 안에서 줍기가 찾아 훑기를 넣는다.
+ *
+ * <p>훑기는 먼저 모델 문맥을 정한다. 활성 모델이 없거나, 활성 판본이 아니거나, 모델이 노선을 지원하지 않거나, 확정 판본 통계가
+ * 아니면 배치를 읽지 않고 끝낸다. 배치 하나는 이렇게 처리한다.
  * <ol>
- *   <li>모델 문맥을 정한다. 활성 모델이 없거나, 활성 판본이 아니거나, 모델이 노선을 지원하지 않으면 실행 줄 없이 끝낸다. 확정
- *       판본 통계가 아니어도 처리할 수 없어 같은 방식으로 끝낸다.</li>
  *   <li>배치를 줄과 함께 읽는다. 착수 시각이 이미 있으면(예보 실행 줄이나 배치의 {@code input_confirmed_at}) 처리한 배치라
- *       끝낸다. 줍기와 신호가 같은 배치를 두 번 넣어도 여기서 걸러진다.</li>
+ *       끝낸다.</li>
  *   <li>착수 시각을 이때 찍는다. 시계 값을 저장 자릿수(마이크로초)로 자른 값이다. 메모리의 노선 상태가 든 시각과 다시 뜬 뒤
  *       DB에서 되감아 읽는 시각이 같아야 하기 때문이다. 이 시각으로 90초 판정을 하고, 실행 줄에 적고, 노선 상태와 되감기의 순서로
  *       쓴다. {@code observation_batch}에는 적지 않는다.</li>
@@ -49,21 +63,7 @@ import org.slf4j.LoggerFactory;
  *       {@link PipelineBatchProcessor}가 한다.</li>
  * </ol>
  * 처리 중 예외가 나면 그 노선의 상태를 버리고 실행 줄 없이 끝낸다. 입력 부족(되감기 실패·통과 판정 실패 등)은
- * {@code INPUT_UNAVAILABLE} 실행 줄을 남겨 다시 줍지 않는다.
- *
- * <p>한 노선의 이력에는 배치가 수신 순서대로만 들어가야 한다. 뒤 배치가 먼저 들어가면 앞 배치가 더 늦은 착수 시각으로 뒤에 붙어
- * 연결과 운행이 끊긴 것으로 판정된다. 그래서 예외로 실패한 배치를 이렇게 다룬다.
- * <ul>
- *   <li>같은 줄에서 바로 한 번 다시 처리한다.</li>
- *   <li>그래도 실패하면 그 배치를 메모리에 기억한다({@link HeldBatches}). 그 노선의 다음 배치는 기억한 배치를 먼저 다시 처리하고,
- *       또 실패하면 자기도 처리하지 않고 뒤에서 기다린다.</li>
- *   <li>기억한 배치는 수신 뒤 90초가 지나면 더는 기다리게 하지 않는다. 그 뒤에 처리되면 {@code LATE}로 닫혀 이력에 들어가지
- *       않으므로 순서가 뒤집히지 않는다. 그래서 한 배치가 계속 실패해도 그 노선은 길어야 90초 밀린다.</li>
- * </ul>
- * 기억한 배치와 기다리는 배치는 실행 줄이 없으므로 신선도 창 안에서는 줍기도 다시 넣는다. 기억은 메모리에만 있다. 다시 뜬
- * 직후에는 줍기가 처리하지 않은 배치를 수신 순서로 넣는다. 그래도 신호와 줍기가 엇갈려 뒤 배치가 먼저 이력에 들어갔으면, 앞
- * 배치는 이력에 넣지 않고 실행 줄 없이 둔다({@link PipelineBatchProcessor.Status#OUT_OF_ORDER}). 그 배치는 다음 줍기마다 같은
- * 판정을 받다가 수신 뒤 90초가 지나면 {@code LATE}로 닫힌다.
+ * {@code INPUT_UNAVAILABLE} 실행 줄을 남겨 다시 읽지 않는다.
  *
  * <p>{@code observation_batch}를 고치지 않고 {@code route} 행 잠금을 잡지 않는다. 채점이 읽는 모델 배포의 정산
  * 근거({@code model_deployment.settlement_context})는 배치를 착수하기 전에 적는다.
@@ -76,7 +76,8 @@ public final class ForecastPipelineService implements ForecastPipeline {
     private static final String UNSUPPORTED_PROFILE = "unsupported_profile";
     private static final String FAILED = "failed";
     private static final String RETRIED = "retried";
-    private static final String HELD = "held";
+    /** 실행 줄을 남기지 못한 처리의 결과 분류다. 그런 배치는 처리하지 않은 배치 조회에 다시 나온다. */
+    private static final Set<String> LEFT_UNPROCESSED = Set.of(FAILED, "stale", "out_of_order");
 
     private final ForecastLanes lanes;
     private final PipelineBatchProcessor processor;
@@ -89,17 +90,16 @@ public final class ForecastPipelineService implements ForecastPipeline {
     private final Clock clock;
     private final PipelineForecastMetrics metrics;
     private final Map<Long, String> laneKeys = new ConcurrentHashMap<>();
-    private final Set<Long> queued = ConcurrentHashMap.newKeySet();
+    private final Set<Long> sweepsQueued = ConcurrentHashMap.newKeySet();
     private final Set<String> contextsStored = ConcurrentHashMap.newKeySet();
     private final Set<String> unsupportedProfilesWarned = ConcurrentHashMap.newKeySet();
-    private final Map<String, HeldBatches> heldByKey = new ConcurrentHashMap<>();
     private final SettlementContextWriter settlementContexts;
     private ForecastTelemetry telemetry = ForecastTelemetry.NONE;
 
     /**
      * @param batches 배치를 착수 시각과 함께 읽는 원본. 되감기와 같은 원본이어야 한다
      * @param settlementContexts 모델 배포에 정산 근거를 적는 곳
-     * @param policy 신선도 창과 한 번에 줍는 배치 수
+     * @param policy 신선도 창과 한 번에 읽는 배치 수
      * @param meters 지표 등록기. 없으면 지표를 내지 않는다
      */
     public ForecastPipelineService(
@@ -128,7 +128,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
         this.metrics = new PipelineForecastMetrics(meters, processor.states());
     }
 
-    /** 줍기에서 찾은 가장 오래된 처리하지 않은 배치와 커밋한 예보 실행을 알릴 진단 수신자를 정한다. */
+    /** 줍기가 찾은 가장 오래된 처리하지 않은 배치와 커밋한 예보 실행을 알릴 진단 수신자를 정한다. */
     public void setTelemetry(ForecastTelemetry telemetry) {
         this.telemetry = Objects.requireNonNull(telemetry);
     }
@@ -145,7 +145,7 @@ public final class ForecastPipelineService implements ForecastPipeline {
             metrics.unrouted();
             return;
         }
-        enqueue(new Queued(observationBatchId, routeVersionId, key, clock.instant()));
+        requestSweep(key, routeVersionId);
     }
 
     @Override
@@ -171,12 +171,12 @@ public final class ForecastPipelineService implements ForecastPipeline {
                 if (resolve(runtime.get(), routeStops).context() == null) {
                     continue;
                 }
-                List<PendingPipelineBatches.Pending> found =
-                    pending.find(routeVersionId, notBefore, policy.batchLimit());
-                reportPending(routeVersionId, found);
-                for (PendingPipelineBatches.Pending batch : found) {
-                    enqueue(new Queued(batch.observationBatchId(), routeVersionId, routeStops.sourceRouteId(),
-                        batch.receivedAt()));
+                Optional<PendingPipelineBatches.Pending> oldest = pending.find(routeVersionId, notBefore, 1)
+                    .stream()
+                    .findFirst();
+                reportPending(routeVersionId, oldest);
+                if (oldest.isPresent()) {
+                    requestSweep(routeStops.sourceRouteId(), routeVersionId);
                 }
             } catch (RuntimeException failure) {
                 LOGGER.warn("event=pipeline_forecast_pickup_route_failed routeVersionId={} exceptionType={}",
@@ -185,102 +185,94 @@ public final class ForecastPipelineService implements ForecastPipeline {
         }
     }
 
-    private void reportPending(final long routeVersionId, List<PendingPipelineBatches.Pending> found) {
-        Instant oldest = found.stream()
-            .map(PendingPipelineBatches.Pending::receivedAt)
-            .min(Instant::compareTo)
-            .orElse(null);
+    private void reportPending(final long routeVersionId, Optional<PendingPipelineBatches.Pending> oldest) {
+        Instant oldestReceivedAt = oldest.map(PendingPipelineBatches.Pending::receivedAt).orElse(null);
         try {
-            telemetry.pending(routeVersionId, oldest);
+            telemetry.pending(routeVersionId, oldestReceivedAt);
         } catch (RuntimeException ignored) {
             LOGGER.debug("event=pipeline_forecast_telemetry_failed routeVersionId={}", routeVersionId);
         }
     }
 
-    private void enqueue(Queued batch) {
-        if (!queued.add(batch.observationBatchId())) {
+    /** 노선 판본의 훑기를 줄에 넣는다. 그 판본의 훑기가 줄에서 이미 기다리고 있으면 넣지 않는다. */
+    private void requestSweep(String key, final long routeVersionId) {
+        if (!sweepsQueued.add(routeVersionId)) {
             return;
         }
-        final boolean accepted;
+        if (!submitted(key, () -> sweep(key, routeVersionId))) {
+            sweepsQueued.remove(routeVersionId);
+            metrics.rejected();
+        }
+    }
+
+    private boolean submitted(String key, Runnable task) {
         try {
-            accepted = lanes.submit(batch.key(), () -> run(batch));
+            return lanes.submit(key, task);
         } catch (RuntimeException failure) {
-            queued.remove(batch.observationBatchId());
-            metrics.rejected();
-            return;
-        }
-        if (!accepted) {
-            queued.remove(batch.observationBatchId());
-            metrics.rejected();
+            return false;
         }
     }
 
     /**
-     * 줄에서 꺼낸 배치를 처리한다. 노선별 실행 줄의 스레드에서만 부른다. 예외를 던지지 않는다.
-     * 앞서 실패해 기다리는 배치가 있으면 그것부터 수신 순서로 다시 처리하고, 아직 이력에 들어갈 수 있는 배치가 또 실패하면 이 배치도
-     * 처리하지 않고 뒤에서 기다리게 한다. 이 배치가 이미 이력에 들어갈 수 없으면 기다리지 않고 바로 처리한다.
-     * 줍기가 기다리는 배치를 한꺼번에 다시 넣어도 맨 앞 배치만 다시 처리한다. 뒤에서 기다리는 배치는 맨 앞이 풀릴 때 함께 처리된다.
+     * 줄에서 꺼낸 훑기를 실행한다. 노선별 실행 줄의 스레드에서만 부른다. 예외를 던지지 않는다.
+     * 기다림 표시를 배치를 읽기 전에 내린다. 그래야 읽은 뒤에 커밋된 배치의 신호가 다음 훑기를 넣는다.
      */
-    private void run(Queued batch) {
-        queued.remove(batch.observationBatchId());
-        HeldBatches held = heldByKey.computeIfAbsent(batch.key(), key -> new HeldBatches());
-        if (held.waitsBehindOther(batch.observationBatchId()) && canStillEnterHistory(batch)) {
-            return;
-        }
-        final boolean wasHeld = held.contains(batch.observationBatchId());
-        final boolean blocked = retryHeld(held);
-        if (wasHeld) {
-            return;
-        }
-        if (blocked && canStillEnterHistory(batch)) {
-            metrics.batch(HELD);
-            hold(held, batch);
-            return;
-        }
-        processWithRetry(held, batch);
-    }
-
-    /**
-     * 기다리는 배치를 수신 순서로 다시 처리한다. 아직 이력에 들어갈 수 있는 배치가 또 실패하면 거기서 멈추고 참을 돌려준다.
-     * 수신 뒤 90초가 지난 배치는 다시 처리해도 이력에 들어가지 않으므로 실패해도 뒤 배치를 막지 않는다.
-     */
-    private boolean retryHeld(HeldBatches held) {
-        while (!held.isEmpty()) {
-            HeldBatches.Held head = held.head();
-            String result = process(head.observationBatchId(), head.routeVersionId());
-            metrics.batch(result);
-            if (FAILED.equals(result) && !startedAt().isAfter(head.releaseAt())) {
-                return true;
+    private void sweep(String key, final long routeVersionId) {
+        sweepsQueued.remove(routeVersionId);
+        try {
+            if (sweepOnce(routeVersionId)) {
+                requestSweep(key, routeVersionId);
             }
-            held.removeHead();
+        } catch (RuntimeException failure) {
+            LOGGER.warn("event=pipeline_forecast_sweep_failed routeVersionId={} exceptionType={}", routeVersionId,
+                failure.getClass().getSimpleName(), failure);
         }
-        return false;
     }
 
-    /** 예외로 실패하면 같은 줄에서 바로 한 번 다시 처리하고, 그래도 실패하면 뒤 배치가 앞지르지 않게 기억해 둔다. */
-    private void processWithRetry(HeldBatches held, Queued batch) {
-        String result = process(batch.observationBatchId(), batch.routeVersionId());
-        if (!FAILED.equals(result)) {
-            metrics.batch(result);
-            return;
+    /**
+     * 노선 판본의 처리하지 않은 배치를 수신 순서로 한 번 읽어 차례로 처리한다.
+     *
+     * @return 한도만큼 읽었고 그 가운데 처리를 마쳐 다음 조회에서 빠지는 배치가 있어, 남은 배치를 바로 이어서 훑어야 하면 참
+     */
+    private boolean sweepOnce(final long routeVersionId) {
+        Resolved resolved = resolve(routeVersionId);
+        if (resolved.context() == null) {
+            metrics.batch(resolved.skipped());
+            return false;
         }
-        metrics.batch(RETRIED);
-        String retried = process(batch.observationBatchId(), batch.routeVersionId());
-        metrics.batch(retried);
-        if (FAILED.equals(retried) && canStillEnterHistory(batch)) {
-            hold(held, batch);
+        Instant notBefore = clock.instant().minus(policy.staleness());
+        List<PendingPipelineBatches.Pending> found = pending.find(routeVersionId, notBefore, policy.batchLimit());
+        int finished = 0;
+        for (int index = 0; index < found.size(); index++) {
+            PendingPipelineBatches.Pending batch = found.get(index);
+            String result = processWithRetry(resolved.context(), batch.observationBatchId());
+            if (!LEFT_UNPROCESSED.contains(result)) {
+                finished++;
+                continue;
+            }
+            if (FAILED.equals(result) && canStillEnterHistory(batch)) {
+                LOGGER.warn("event=pipeline_forecast_sweep_blocked routeVersionId={} batchId={} waiting={}",
+                    routeVersionId, batch.observationBatchId(), found.size() - index - 1);
+                return false;
+            }
         }
+        return finished > 0 && found.size() >= policy.batchLimit();
+    }
+
+    /** 배치 하나를 처리하고, 예외로 실패하면 그 자리에서 한 번 다시 처리한다. 마지막 처리의 결과 분류를 돌려준다. */
+    private String processWithRetry(RouteContext context, final long observationBatchId) {
+        String result = measure(context, observationBatchId);
+        if (FAILED.equals(result)) {
+            metrics.batch(RETRIED);
+            result = measure(context, observationBatchId);
+        }
+        metrics.batch(result);
+        return result;
     }
 
     /** 지금 착수해도 수신 뒤 90초 안일 수 있는지다. 거짓이면 처리해도 늦음으로 닫혀 이력에 들어가지 않는다. */
-    private boolean canStillEnterHistory(Queued batch) {
-        return !startedAt().isAfter(batch.releaseAt());
-    }
-
-    private void hold(HeldBatches held, Queued batch) {
-        held.add(new HeldBatches.Held(batch.observationBatchId(), batch.routeVersionId(), batch.releaseAt()));
-        LOGGER.warn("event=pipeline_forecast_held routeKey={} batchId={} held={}", batch.key(),
-            batch.observationBatchId(), held.size());
+    private boolean canStillEnterHistory(PendingPipelineBatches.Pending batch) {
+        return !startedAt().isAfter(batch.receivedAt().plus(ForecastBatch.MAX_CONFIRMATION_DELAY));
     }
 
     /** 처리를 시작하는 시각이다. 저장 자릿수(마이크로초)로 자른다. */
@@ -289,37 +281,26 @@ public final class ForecastPipelineService implements ForecastPipeline {
     }
 
     /**
-     * 배치 하나를 한 번 처리한다. 노선별 실행 줄의 스레드에서만 부른다. 예외를 던지지 않는다.
+     * 배치 하나를 한 번 처리하고 걸린 시간을 남긴다. 노선별 실행 줄의 스레드에서만 부른다. 예외를 던지지 않는다.
      *
-     * @param observationBatchId 관측 배치
-     * @param routeVersionId 배치의 노선 판본
      * @return 이 처리의 결과 분류({@code salmonbus.pipeline.forecast.batches}의 태그)
      */
-    private String process(final long observationBatchId, final long routeVersionId) {
-        return WorkerOperationLog.measure(OPERATION, routeVersionId, () -> {
+    private String measure(RouteContext context, final long observationBatchId) {
+        return WorkerOperationLog.measure(OPERATION, context.stops().routeVersionId(), () -> {
             final long started = System.nanoTime();
-            String result = classify(observationBatchId, routeVersionId);
+            String result = classify(context, observationBatchId);
             metrics.duration(Duration.ofNanos(System.nanoTime() - started));
             return result;
         });
     }
 
     /** 처리 중 예외가 나면 그 노선의 상태를 버리고 {@code failed}로 분류한다. */
-    private String classify(final long observationBatchId, final long routeVersionId) {
-        String route = null;
+    private String classify(RouteContext context, final long observationBatchId) {
         try {
-            Resolved resolved = resolve(routeVersionId);
-            if (resolved.context() == null) {
-                return resolved.skipped();
-            }
-            RouteContext context = resolved.context();
-            route = context.route();
             return process(context, observationBatchId);
         } catch (RuntimeException failure) {
-            if (route != null) {
-                processor.states().remove(route);
-            }
-            LOGGER.warn("event=pipeline_forecast_failed route={} batchId={} exceptionType={}", route,
+            processor.states().remove(context.route());
+            LOGGER.warn("event=pipeline_forecast_failed route={} batchId={} exceptionType={}", context.route(),
                 observationBatchId, failure.getClass().getSimpleName(), failure);
             return FAILED;
         }
@@ -411,7 +392,6 @@ public final class ForecastPipelineService implements ForecastPipeline {
             return Resolved.skip("inactive_version");
         }
         RouteStops routeStops = stops.readStops(routeVersionId);
-        laneKeys.putIfAbsent(routeVersionId, routeStops.sourceRouteId());
         Resolved resolved = resolve(runtime.get(), routeStops);
         warnUnsupportedProfileOnce(runtime.get().deploymentId(), routeVersionId, resolved);
         return resolved;
@@ -453,20 +433,6 @@ public final class ForecastPipelineService implements ForecastPipeline {
     private record Resolved(RouteContext context, String skipped) {
         static Resolved skip(String reason) {
             return new Resolved(null, reason);
-        }
-    }
-
-    /**
-     * 줄에 넣은 배치 하나다.
-     *
-     * @param key 노선 열쇠
-     * @param receivedNoLaterThan 배치의 수신 시각보다 이르지 않은 시각. 줍기는 수신 시각을, 신호는 신호를 받은 시각을 넣는다.
-     *     이 배치를 언제까지 기다리게 할지 정하는 데 쓴다
-     */
-    private record Queued(long observationBatchId, long routeVersionId, String key, Instant receivedNoLaterThan) {
-        /** 이 시각이 지나 착수하면 수신 뒤 90초를 넘긴 것이 확실하다. */
-        private Instant releaseAt() {
-            return receivedNoLaterThan.plus(ForecastBatch.MAX_CONFIRMATION_DELAY);
         }
     }
 }

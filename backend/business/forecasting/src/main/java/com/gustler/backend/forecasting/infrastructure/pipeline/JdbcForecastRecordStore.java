@@ -25,7 +25,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
@@ -35,9 +34,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 예보 실행과 버스별 예보 기록을 날짜 파티션 테이블에 저장하고 읽는다.
  *
  * <p>쓰기는 호출하는 쪽의 트랜잭션에 참여하며, 트랜잭션 없이 부르면 실패한다. 실행 줄과 기록 줄 모두 이미 있는 키를 건너뛰므로
- * 실행 줄이 이미 있어도 빠진 기록 줄은 채운다. 날짜 파티션이 없으면 줄은 기본 파티션으로 들어간다. 수집 사건과 함께 저장한 실행
- * 줄에는 수집 구멍 여부({@code source_incomplete})와 하루 관측 상한에 더할 줄 수({@code counted_rows})를 적고, 수집 사건 없이
- * 저장한 줄은 두 열을 비워 둔다.
+ * 실행 줄이 이미 있어도 빠진 기록 줄은 채운다. 날짜 파티션이 없으면 줄은 기본 파티션으로 들어간다. 실행 줄에는 같은 배치의 수집
+ * 사건이 알려 주는 수집 구멍 여부({@code source_incomplete})와 하루 관측 상한에 더할 줄 수({@code counted_rows})를 적는다.
  */
 @Repository
 public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForecastRoutes {
@@ -65,25 +63,15 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
 
     @Override
     @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
-    public boolean save(ForecastPublished published) {
-        return insert(published, null, null);
-    }
-
-    @Override
-    @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public boolean save(ForecastPublished published, ObservationBatchSeen seen) {
         if (seen.observationBatchId() != published.observationBatchId()) {
             throw new IllegalArgumentException("예보 사건과 수집 사건의 배치가 다르다: %d, %d"
                 .formatted(published.observationBatchId(), seen.observationBatchId()));
         }
-        return insert(published, seen.incomplete(), seen.countedRows());
-    }
-
-    private boolean insert(ForecastPublished published, Boolean sourceIncomplete, Integer countedRows) {
         final int runs = RUNS.insert(jdbc, List.of(published), run -> Arrays.asList(run.sourceDate(),
             run.observationBatchId(), run.routeId(), run.routeVersionId(), timestamp(run.receivedAt()),
             timestamp(run.confirmedAt()), run.modelDeploymentId(), run.outcome().name(), run.predictionCount(),
-            sourceIncomplete, countedRows));
+            seen.incomplete(), seen.countedRows()));
         RECORDS.insert(jdbc, published.vehicles(), vehicle -> Arrays.asList(published.sourceDate(),
             vehicle.vehicleObservationId(), published.observationBatchId(), vehicle.sourceRowNumber(),
             published.routeId(), published.routeVersionId(), vehicle.vehicleId(), vehicle.passedStopOrder(),
@@ -91,38 +79,6 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
             vehicle.extended(), integers(vehicle.targetStopOrders()), doubles(vehicle.expectedSeats()),
             doubles(vehicle.fullProbabilities())));
         return runs == 1;
-    }
-
-    @Override
-    public Optional<ForecastRun> findLatestRun(final long routeVersionId, Set<ForecastOutcome> outcomes) {
-        if (outcomes.isEmpty()) {
-            throw new IllegalArgumentException("고를 처리 결과가 하나 이상 필요하다");
-        }
-        return jdbc.sql("""
-                SELECT /* salmonbus:forecast_run.find_latest */ source_date, observation_batch_id, route_id,
-                    route_version_id, received_at, confirmed_at, model_deployment_id, outcome, prediction_count
-                FROM forecast_run
-                WHERE route_version_id = :routeVersionId AND outcome IN (:outcomes)
-                ORDER BY received_at DESC, observation_batch_id DESC
-                LIMIT 1
-                """)
-            .param("routeVersionId", routeVersionId)
-            .param("outcomes", outcomes.stream().map(Enum::name).toList())
-            .query((row, index) -> run(row))
-            .optional();
-    }
-
-    @Override
-    public List<ForecastPublished.VehicleForecast> findRecords(LocalDate sourceDate, final long observationBatchId) {
-        return jdbc.sql("""
-                SELECT /* salmonbus:forecast_record.find_batch */ %s
-                FROM forecast_record record
-                WHERE record.source_date = ? AND record.observation_batch_id = ?
-                ORDER BY record.source_row_number, record.vehicle_observation_id
-                """.formatted(RECORD_COLUMNS))
-            .params(sourceDate, observationBatchId)
-            .query((row, index) -> vehicle(row))
-            .list();
     }
 
     @Override

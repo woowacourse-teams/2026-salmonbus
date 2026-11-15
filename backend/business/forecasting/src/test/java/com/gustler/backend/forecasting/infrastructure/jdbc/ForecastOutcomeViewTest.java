@@ -14,6 +14,7 @@ import com.gustler.backend.forecasting.application.pipeline.ScoringStage;
 import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
 import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.forecasting.support.PipelineSamples;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -126,7 +127,7 @@ class ForecastOutcomeViewTest {
     private void store(List<Object> events) {
         for (Object event : events) {
             if (event instanceof ForecastPublished published) {
-                records.save(published);
+                records.save(published, PipelineSamples.seenWithoutRows(published));
                 continue;
             }
             if (event instanceof PassClosed pass) {
@@ -179,7 +180,7 @@ class ForecastOutcomeViewTest {
         }
         for (ScoredForecast scored : result.scored()) {
             PassLabel label = labelByKey.get(List.of(scored.passSourceDate(), scored.routeId(),
-                scored.tripStartObservationId(), scored.stopOrder(), scored.capacity(), scored.labelVersion(),
+                scored.tripStartObservationId(), scored.stopOrder(), scored.capacity(), ScoringReasons.LABEL_VERSION,
                 scored.modelDeploymentId()));
             PassClosed pass = passByKey.get(List.of(scored.passSourceDate(), scored.routeId(),
                 scored.tripStartObservationId(), scored.stopOrder()));

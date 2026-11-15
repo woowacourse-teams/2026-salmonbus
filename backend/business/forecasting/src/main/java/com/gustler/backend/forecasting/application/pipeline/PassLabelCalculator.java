@@ -23,15 +23,14 @@ public interface PassLabelCalculator {
     PassLabelCalculation calculate(PassClosed pass, PassClosed previous, JsonNode evidence);
 
     /**
-     * 정답 계산 결과다. 채점됨이면 값·계수 해시·정원이 있고 사유가 없다. 지원 안 함이면 사유만 있다.
+     * 정답 계산 결과다. 채점됨이면 값·계수 해시가 있고 사유가 없다. 지원 안 함이면 사유만 있다.
      *
      * @param settled 채점됨이면 참
      * @param value 정답 값
      * @param reason 지원 안 함 사유
      * @param parameterHash 계산에 쓴 계수의 SHA-256 16진수
-     * @param capacity 계산에 쓴 정원
      */
-    record PassLabelCalculation(boolean settled, Double value, String reason, String parameterHash, Integer capacity) {
+    record PassLabelCalculation(boolean settled, Double value, String reason, String parameterHash) {
         public PassLabelCalculation {
             if (settled != (value != null) || settled == (reason != null)) {
                 throw new IllegalArgumentException("채점됨은 값만, 지원 안 함은 사유만 가진다");
@@ -45,7 +44,7 @@ public interface PassLabelCalculator {
          * @return 결과
          */
         public static PassLabelCalculation unsupported(String reason) {
-            return new PassLabelCalculation(false, null, reason, null, null);
+            return new PassLabelCalculation(false, null, reason, null);
         }
     }
 }

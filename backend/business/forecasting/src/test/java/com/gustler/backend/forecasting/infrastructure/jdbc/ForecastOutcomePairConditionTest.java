@@ -17,6 +17,7 @@ import com.gustler.backend.forecasting.application.pipeline.StopPassStore;
 import com.gustler.backend.forecasting.application.pipeline.UnresolvedForecast;
 import com.gustler.backend.forecasting.domain.pipeline.SourceDates;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
+import com.gustler.backend.forecasting.support.PipelineSamples;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -188,7 +189,7 @@ class ForecastOutcomePairConditionTest {
     private static ScoringStage stage() {
         JsonNode context = ScoringScenario.context(REAL_STOPS, 9, List.of(2, 3, 4), true, List.of(), List.of());
         return new ScoringStage((deployment, version) -> Optional.of(context), version -> REAL_STOPS,
-            ForecastOutcomePairConditionTest::settled, ScoringScenario.FIXED);
+            ForecastOutcomePairConditionTest::settled, ScoringScenario.FIXED, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
     }
 
     private static PassLabelCalculator.PassLabelCalculation settled(
@@ -196,7 +197,7 @@ class ForecastOutcomePairConditionTest {
         PassClosed previous,
         JsonNode evidence
     ) {
-        return new PassLabelCalculator.PassLabelCalculation(true, LABEL_VALUE, null, PARAMETER_HASH, CAPACITY);
+        return new PassLabelCalculator.PassLabelCalculation(true, LABEL_VALUE, null, PARAMETER_HASH);
     }
 
     private static ForecastPublished forecast(
@@ -236,7 +237,7 @@ class ForecastOutcomePairConditionTest {
     private void store(List<Object> events) {
         for (Object event : events) {
             if (event instanceof ForecastPublished published) {
-                records.save(published);
+                records.save(published, PipelineSamples.seenWithoutRows(published));
                 continue;
             }
             if (event instanceof PassClosed pass) {

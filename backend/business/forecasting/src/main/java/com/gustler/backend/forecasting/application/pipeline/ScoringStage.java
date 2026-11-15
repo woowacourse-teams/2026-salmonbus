@@ -91,23 +91,6 @@ public final class ScoringStage {
     private final Map<Long, Set<Integer>> passStops = new HashMap<>();
 
     /**
-     * 하루 관측 상한의 기본값으로 채점 단계를 만든다.
-     *
-     * @param contexts 모델 배포의 정산 근거
-     * @param structures 노선 판본의 실정류장
-     * @param calculator 정답 계산
-     * @param clock 정답 계산 시각, 미해결 닫은 시각, 정산 근거가 없음을 확인한 시각의 출처
-     */
-    public ScoringStage(
-        SettlementContextProvider contexts,
-        RouteStructureProvider structures,
-        PassLabelCalculator calculator,
-        Clock clock
-    ) {
-        this(contexts, structures, calculator, clock, DEFAULT_OBSERVATION_LIMIT);
-    }
-
-    /**
      * 채점 단계를 만든다.
      *
      * @param contexts 모델 배포의 정산 근거
@@ -134,7 +117,7 @@ public final class ScoringStage {
     }
 
     /**
-     * 수집 사건을 받는다. 노선 시각을 수신 시각(없으면 예약 시각)까지 전진시키고, 수집 구멍과 관측 줄 수를 그 배치의 확정 시각에
+     * 수집 사건을 받는다. 노선 시각을 수신 시각까지 전진시키고, 수집 구멍과 관측 줄 수를 그 배치의 확정 시각에
      * 기록한다. 확정 시각은 같은 배치의 다음 사건에서 알며, 다음 배치의 수집 사건이 먼저 오면 수신 시각으로 기록한다.
      *
      * @param seen 수집 사건
@@ -146,14 +129,7 @@ public final class ScoringStage {
             return ScoringResult.empty();
         }
         return see(state, new PendingBatch(seen.observationBatchId(), seen.incomplete(), seen.countedRows(),
-            seenAt(seen)));
-    }
-
-    private static Instant seenAt(ObservationBatchSeen seen) {
-        if (seen.receivedAt() == null) {
-            return seen.scheduledAt();
-        }
-        return seen.receivedAt();
+            seen.receivedAt()));
     }
 
     /**
@@ -409,10 +385,9 @@ public final class ScoringStage {
                 calculate(pass, previous, snapshot(context, stops, labelGroup.capacity()));
             labels.add(label(pass, previous, labelGroup, calculation, now));
             for (Waiting waiting : group.getValue()) {
-                scored.add(new ScoredForecast(waiting.sourceDate, waiting.key.vehicleObservationId(),
-                    waiting.key.targetStopOrder(), pass.routeId(), pass.sourceDate(), pass.tripStartObservationId(),
-                    pass.stopOrder(), labelGroup.capacity(), ScoringReasons.LABEL_VERSION,
-                    labelGroup.modelDeploymentId()));
+                scored.add(new ScoredForecast(waiting.key.vehicleObservationId(), waiting.key.targetStopOrder(),
+                    pass.routeId(), pass.sourceDate(), pass.tripStartObservationId(), pass.stopOrder(),
+                    labelGroup.capacity(), labelGroup.modelDeploymentId()));
             }
         }
         return new ScoringResult(labels, unresolved, scored);

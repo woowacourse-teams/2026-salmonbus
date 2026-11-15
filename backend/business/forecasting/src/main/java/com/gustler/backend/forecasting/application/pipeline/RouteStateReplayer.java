@@ -33,11 +33,6 @@ public final class RouteStateReplayer {
     private final Duration window;
     private final Duration extendedWindow;
 
-    /** 창을 늘리지 않는 되감기를 만든다. */
-    public RouteStateReplayer(ReplaySource source, ForecastStage stage, Duration window) {
-        this(source, stage, window, window);
-    }
-
     /**
      * @param window 처음 되감는 창
      * @param extendedWindow 되감은 상태가 모자랄 때 한 번 늘려 되감는 창. {@code window}보다 길지 않으면 늘리지 않는다

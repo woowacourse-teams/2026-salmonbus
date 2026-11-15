@@ -15,7 +15,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,14 +31,16 @@ import org.springframework.transaction.support.TransactionOperations;
 /**
  * 관측 배치 하나를 예보하고 저장하는 단계다.
  *
- * <p>한 번의 처리는 다음 순서다. 착수 시각은 부르는 쪽이 {@link ObservationBatchRead#batch()}에 넣어 넘긴다.
+ * <p>수집에 성공한 배치(줄 있음·빈 응답)만 받는다. 한 번의 처리는 다음 순서다. 착수 시각은 부르는 쪽이
+ * {@link ObservationBatchRead#batch()}에 넣어 넘긴다.
  * <ol>
  *   <li>확정 조건(정상 수집, 줄이 있는 성공, 수신 뒤 90초 안 착수)을 만족하지 않는 배치는 상태에 넣지 않고 그 사유
  *       ({@code LATE}, {@code EMPTY}, {@code INPUT_UNAVAILABLE})만 실행 줄로 남긴다.</li>
- *   <li>이 노선에서 더 늦게 수신한 배치가 이미 이력에 들어갔으면 이 배치를 이력에 넣지 않고 아무것도 쓰지 않는다
- *       ({@link Status#OUT_OF_ORDER}).</li>
  *   <li>노선 상태가 없으면 이 배치 직전까지 되감아 만든다({@link RouteStateReplayer}). 되감기가 실패하면 그 노선은 착수 시각 기준
  *       {@value #REPLAY_RETRY_MINUTES}분 동안 되감지 않고 예보 없이 {@code INPUT_UNAVAILABLE} 실행 줄만 남긴다.</li>
+ *   <li>상태가 마지막으로 반영한 배치보다 먼저 수신한 배치면 이력에 넣지 않고 아무것도 쓰지 않는다
+ *       ({@link Status#OUT_OF_ORDER}). 부르는 쪽은 배치를 수신 순서로 넘기므로, 수집이 먼저 받은 배치를 나중에 커밋했을 때만
+ *       생긴다.</li>
  *   <li>{@link ForecastStage#advance}로 상태를 전진시키고 예측 조립 객체({@link AlightingAwarePredictionAssembler})로 예측을
  *       만든다. 출퇴근 범위 판정의 기준 시각은 이 배치의 착수 시각이다. 이미 반영한 배치면 아무것도 쓰지 않는다.</li>
  *   <li>예보 실행·버스별 기록·닫힌 통과를 한 트랜잭션으로 쓰고, 커밋한 뒤에만 상태를 바꾼다. 같은 배치의 실행 줄이 이미 있으면
@@ -62,42 +63,39 @@ public final class PipelineBatchProcessor {
     private static final Set<String> REPLAY_EXCLUSIONS = Set.of(ForecastStage.TRIP_START_UNKNOWN,
         ForecastStage.REPLAY_HISTORY_INCOMPLETE);
 
-    private final String name;
     private final ForecastStage stage;
     private final RouteStateReplayer replayer;
     private final ForecastRecordStore records;
     private final StopPassStore passes;
     private final TransactionOperations transactions;
-    private final List<PipelineEvents> listeners;
+    private final PipelineEvents events;
     private final RouteStateRegistry states;
     private final boolean rushOnly;
 
     /**
-     * @param name 로그 사건 이름의 앞부분. 예: {@code pipeline_forecast}
      * @param transactions 저장 트랜잭션
-     * @param listeners 커밋 뒤 사건을 받을 뒤 단계
+     * @param events 커밋 뒤 사건을 받을 뒤 단계. 던진 예외는 로그로 남기고 삼킨다. 저장은 이미 커밋했으므로 이 배치의 처리를
+     *               실패로 만들지 않는다
      * @param states 노선 상태 등록부. 이 처리기가 상태를 읽고 바꾼다
      * @param rushOnly 설정 {@code forecast.alighting.rush-only}. 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를 예보하지
      *                 않는다
      */
     public PipelineBatchProcessor(
-        String name,
         ForecastStage stage,
         RouteStateReplayer replayer,
         ForecastRecordStore records,
         StopPassStore passes,
         TransactionOperations transactions,
-        List<PipelineEvents> listeners,
+        PipelineEvents events,
         RouteStateRegistry states,
         final boolean rushOnly
     ) {
-        this.name = Objects.requireNonNull(name);
         this.stage = Objects.requireNonNull(stage);
         this.replayer = Objects.requireNonNull(replayer);
         this.records = Objects.requireNonNull(records);
         this.passes = Objects.requireNonNull(passes);
         this.transactions = Objects.requireNonNull(transactions);
-        this.listeners = List.copyOf(listeners);
+        this.events = Objects.requireNonNull(events);
         this.states = Objects.requireNonNull(states);
         this.rushOnly = rushOnly;
     }
@@ -147,9 +145,6 @@ public final class PipelineBatchProcessor {
             return Processed.unsaved(Status.DUPLICATE, published, outcome.excluded(), replay);
         }
         applyState(statistics, outcome);
-        if (batch.confirmed()) {
-            states.applied(statistics.route(), batch.receivedAt());
-        }
         logRecovered(statistics, batch, replay, recovered);
         publish(seen, published, closed, recovered);
         return new Processed(Status.SAVED, published, closed.size(), outcome.excluded(), outcome.special(),
@@ -162,9 +157,6 @@ public final class PipelineBatchProcessor {
             return Resolution.of(Outcome.withoutState(notConfirmed(batch), null), Replay.NONE);
         }
         AlightingAwareRouteStatistics statistics = context.statistics();
-        if (states.receivedBeforeApplied(statistics.route(), batch.receivedAt())) {
-            return Resolution.skipped(Status.OUT_OF_ORDER, Replay.NONE);
-        }
         Optional<RouteForecastState> state = states.find(statistics);
         if (state.isEmpty() && states.replayDeferred(statistics.route(), batch.confirmedAt())) {
             return Resolution.of(Outcome.withoutState(ForecastOutcome.INPUT_UNAVAILABLE, "replay_deferred"),
@@ -176,7 +168,7 @@ public final class PipelineBatchProcessor {
                 batch.observationBatchId() - 1);
             replay = Replay.of(replayed);
             if (!replayed.succeeded()) {
-                LOGGER.warn("event={}_replay_failed route={} batchId={} reason={}", name, statistics.route(),
+                LOGGER.warn("event=pipeline_forecast_replay_failed route={} batchId={} reason={}", statistics.route(),
                     batch.observationBatchId(), replayed.failureReason());
                 states.deferReplay(statistics.route(), batch.confirmedAt().plus(REPLAY_RETRY));
                 Outcome failed = Outcome.withoutState(ForecastOutcome.INPUT_UNAVAILABLE, "replay_failed");
@@ -236,8 +228,8 @@ public final class PipelineBatchProcessor {
         if (replay.recovered().isEmpty()) {
             return;
         }
-        LOGGER.info("event={}_passes_recovered route={} batchId={} found={} saved={}", name, statistics.route(),
-            batch.observationBatchId(), replay.recovered().size(), recovered.size());
+        LOGGER.info("event=pipeline_forecast_passes_recovered route={} batchId={} found={} saved={}",
+            statistics.route(), batch.observationBatchId(), replay.recovered().size(), recovered.size());
     }
 
     private void applyState(AlightingAwareRouteStatistics statistics, Outcome outcome) {
@@ -359,11 +351,10 @@ public final class PipelineBatchProcessor {
         CollectionResult result = switch (batch.outcome()) {
             case "SUCCESS_ROWS" -> CollectionResult.SUCCESS;
             case "SUCCESS_EMPTY" -> CollectionResult.EMPTY;
-            default -> CollectionResult.FAILED;
+            default -> throw new IllegalArgumentException("수집에 성공한 배치만 처리한다: " + batch.outcome());
         };
         return new ObservationBatchSeen(batch.observationBatchId(), read.routeId(), batch.routeVersionId(),
-            read.scheduledAt(), batch.receivedAt(), result, storedRowsOrZero(batch),
-            batch.rows().size());
+            batch.receivedAt(), result, storedRowsOrZero(batch), batch.rows().size());
     }
 
     private static int storedRowsOrZero(ForecastBatch batch) {
@@ -379,20 +370,17 @@ public final class PipelineBatchProcessor {
         List<PassClosed> closed,
         List<PassClosed> recovered
     ) {
-        Collection<List<PassClosed>> recoveredByRoute = byRoute(recovered).values();
-        for (PipelineEvents listener : listeners) {
-            try {
-                recoveredByRoute.forEach(listener::passesClosed);
-                listener.batchSeen(seen);
-                if (!closed.isEmpty()) {
-                    listener.passesClosed(closed);
-                }
-                listener.forecastPublished(published);
-            } catch (RuntimeException failure) {
-                LOGGER.warn("event=pipeline_event_listener_failed listener={} batchId={} exceptionType={}",
-                    listener.getClass().getSimpleName(), published.observationBatchId(),
-                    failure.getClass().getSimpleName(), failure);
+        try {
+            byRoute(recovered).values().forEach(events::passesClosed);
+            events.batchSeen(seen);
+            if (!closed.isEmpty()) {
+                events.passesClosed(closed);
             }
+            events.forecastPublished(published);
+        } catch (RuntimeException failure) {
+            LOGGER.warn("event=pipeline_event_listener_failed listener={} batchId={} exceptionType={}",
+                events.getClass().getSimpleName(), published.observationBatchId(),
+                failure.getClass().getSimpleName(), failure);
         }
     }
 
@@ -405,8 +393,8 @@ public final class PipelineBatchProcessor {
         /** 같은 배치의 실행 줄이 이미 있어 저장을 되돌리고 상태를 버렸다. */
         DUPLICATE,
         /**
-         * 이 노선에서 더 늦게 수신한 배치가 이미 이력에 들어가 있어 아무것도 쓰지 않았다. 실행 줄이 없으므로 다시 주워지고,
-         * 수신 뒤 90초가 지나면 늦음으로 닫힌다.
+         * 노선 상태가 마지막으로 반영한 배치보다 먼저 수신한 배치라 아무것도 쓰지 않았다. 실행 줄이 없으므로 다음 훑기가 다시
+         * 처리하고, 수신 뒤 90초가 지나면 늦음으로 닫힌다.
          */
         OUT_OF_ORDER
     }

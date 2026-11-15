@@ -13,14 +13,10 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>되감기가 실패한 노선은 정한 시각까지 다시 되감지 않도록 표시해 둔다. 창 안에 불완전한 배치가 있으면 창이 그 배치를 지날 때까지
  * 되감기가 계속 실패하므로, 배치마다 몇 시간치 관측을 다시 읽지 않게 하려는 것이다.
- *
- * <p>노선마다 이력에 들어간 배치 가운데 가장 늦은 수신 시각을 따로 기억한다. 상태를 버려도 남는다. 상태가 없어 예보하지 못한 배치도
- * 실행 줄이 남으면 다음 되감기의 이력에 들어가므로, 그런 배치보다 먼저 수신한 배치가 뒤늦게 들어오는 것을 가리는 데 쓴다.
  */
 public final class RouteStateRegistry {
     private final Map<String, Entry> states = new ConcurrentHashMap<>();
     private final Map<String, Instant> replayDeferredUntil = new ConcurrentHashMap<>();
-    private final Map<String, Instant> latestReceived = new ConcurrentHashMap<>();
 
     /**
      * 노선의 상태를 돌려준다. 통계 객체가 다르면 상태를 버리고 빈 값을 돌려준다.
@@ -75,24 +71,6 @@ public final class RouteStateRegistry {
         }
         replayDeferredUntil.remove(route, until);
         return false;
-    }
-
-    /** 노선의 이력에 수신 시각이 {@code receivedAt}인 배치가 들어갔다고 기억한다. 예보 단계 스레드에서 저장을 커밋한 뒤에 부른다. */
-    public void applied(String route, Instant receivedAt) {
-        latestReceived.merge(route, receivedAt, RouteStateRegistry::later);
-    }
-
-    /** 수신 시각이 {@code receivedAt}인 배치가 이 노선의 이력에 들어간 배치보다 먼저 수신한 것인지다. */
-    public boolean receivedBeforeApplied(String route, Instant receivedAt) {
-        Instant latest = latestReceived.get(route);
-        return latest != null && receivedAt.isBefore(latest);
-    }
-
-    private static Instant later(Instant kept, Instant added) {
-        if (added.isAfter(kept)) {
-            return added;
-        }
-        return kept;
     }
 
     /** 들고 있는 노선 상태 수. */

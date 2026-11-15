@@ -31,6 +31,7 @@ import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingP
 import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
 import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
+import com.gustler.backend.forecasting.support.CommittedBatches;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.InvocationTargetException;
@@ -38,7 +39,9 @@ import java.lang.reflect.Proxy;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +55,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * 흐름 하나와 예보 서비스를 묶는 시험 도우미다. 노선별 실행 줄은 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다.
  * 착수 시각은 시계에서 찍으므로 신호마다 시계를 정해 넣는다.
+ *
+ * <p>흐름의 배치는 미리 모두 DB에 있다. 예보는 수집이 커밋한 것으로 친 배치만 본다({@link CommittedBatches}). 신호는 그 배치를
+ * 커밋한 것으로 치고 알리므로, 앞선 배치가 모두 처리돼 있으면 신호 하나가 그 배치 하나를 그 시각에 처리한다.
  *
  * <p>예보 실행 저장과 되감기 읽기에 실패를 끼워 넣을 수 있다. 저장 실패는 아무것도 쓰기 전에 던진다. 시험 트랜잭션 하나에 모든
  * 쓰기가 합류하므로 실패한 저장이 되돌려지지 않기 때문이다.
@@ -74,10 +80,15 @@ final class MainlineHarness {
     private final Map<Long, Meta> meta = new HashMap<>();
     private final Map<Long, RouteStops> stopsByVersion = new HashMap<>();
     private final Map<Long, Integer> saveFailures = new HashMap<>();
+    private final Deque<Runnable> waitingTasks = new ArrayDeque<>();
+    private final CommittedBatches committed;
     private final AlightingAwareSeatForecastModel model;
     private SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private ForecastPipelineService mainline;
     private int replayFailures;
+    private int batchLimit = 20;
+    private boolean laneHeld;
+    private boolean modelActive = true;
 
     /**
      * @param beans 시험이 주입받은 저장소와 트랜잭션
@@ -107,16 +118,20 @@ final class MainlineHarness {
         source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
         stage = new ForecastStage(new CachedVehicleCapacities(
             new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc))));
+        committed = new CommittedBatches(new JdbcPendingPipelineBatches(jdbc));
     }
 
     /**
-     * 예보 서비스를 새로 띄운다. 메모리의 노선 상태·실패한 배치의 기억·지표가 모두 빈 채로 시작하므로 다시 뜬 것과 같다.
+     * 예보 서비스를 새로 띄운다. 메모리의 노선 상태·줄에서 기다리던 일·지표가 모두 빈 채로 시작하므로 다시 뜬 것과 같다. 커밋한
+     * 것으로 친 배치는 그대로다.
      *
      * @param extendedWindow 되감은 상태가 모자랄 때 늘려 되감는 창
-     * @param listeners 커밋 뒤 사건을 받을 뒤 단계
+     * @param events 커밋 뒤 사건을 받을 뒤 단계
      */
-    void start(Duration window, Duration extendedWindow, List<PipelineEvents> listeners) {
+    void start(Duration window, Duration extendedWindow, PipelineEvents events) {
         meters = new SimpleMeterRegistry();
+        waitingTasks.clear();
+        laneHeld = false;
         ReplaySource replays = (statistics, from, through, throughBatchId) -> {
             if (replayFailures > 0) {
                 replayFailures--;
@@ -124,21 +139,59 @@ final class MainlineHarness {
             }
             return source.read(statistics, from, through, throughBatchId);
         };
-        PipelineBatchProcessor processor = new PipelineBatchProcessor("pipeline_forecast", stage,
+        PipelineBatchProcessor processor = new PipelineBatchProcessor(stage,
             new RouteStateReplayer(replays, stage, window, extendedWindow), failingRecords(beans.records()),
-            beans.passes(), new TransactionTemplate(beans.transactions()), listeners, new RouteStateRegistry(), false);
-        mainline = new ForecastPipelineService((key, task) -> {
-            task.run();
-            return true;
-        }, processor, source, new JdbcPendingPipelineBatches(jdbc), () -> Optional.of(runtime), this::versions,
-            stopsByVersion::get, new JdbcSettlementContextWriter(jdbc),
-            new ForecastPolicy(Duration.ofMinutes(10), 20), clock, meters);
+            beans.passes(), new TransactionTemplate(beans.transactions()), events, new RouteStateRegistry(), false);
+        mainline = new ForecastPipelineService(this::submit, processor, source, committed, this::activeRuntime,
+            this::versions, stopsByVersion::get, new JdbcSettlementContextWriter(jdbc),
+            new ForecastPolicy(Duration.ofMinutes(10), batchLimit), clock, meters);
         clock.at = EVENING.plus(Duration.ofDays(2));
         mainline.pickUp();
     }
 
     void start() {
-        start(RouteStateReplayer.DEFAULT_WINDOW, RouteStateReplayer.DEFAULT_EXTENDED_WINDOW, List.of());
+        start(RouteStateReplayer.DEFAULT_WINDOW, RouteStateReplayer.DEFAULT_EXTENDED_WINDOW, new NoEvents());
+    }
+
+    private boolean submit(String routeKey, Runnable task) {
+        if (laneHeld) {
+            waitingTasks.add(task);
+            return true;
+        }
+        task.run();
+        return true;
+    }
+
+    private Optional<RuntimeSnapshot> activeRuntime() {
+        if (!modelActive) {
+            return Optional.empty();
+        }
+        return Optional.of(runtime);
+    }
+
+    /** 한 번에 읽는 배치 수의 한도를 정한다. {@link #start}를 부르기 전에 쓴다. */
+    void batchLimit(final int limit) {
+        batchLimit = limit;
+    }
+
+    /** 이제부터 줄에 넣은 일을 바로 실행하지 않고 기다리게 한다. {@link #runNextTask()}로 하나씩 실행한다. */
+    void holdLane() {
+        laneHeld = true;
+    }
+
+    /** 줄에서 기다리는 일의 수. */
+    int waitingTasks() {
+        return waitingTasks.size();
+    }
+
+    /** 줄에서 가장 오래 기다린 일 하나를 실행한다. */
+    void runNextTask() {
+        waitingTasks.remove().run();
+    }
+
+    /** 활성 모델이 있는지를 정한다. */
+    void modelActive(final boolean active) {
+        modelActive = active;
     }
 
     /** 진단 수신자를 붙인다. {@link #start}를 부른 뒤에 쓴다. */
@@ -156,10 +209,32 @@ final class MainlineHarness {
         mainline.states().remove(stream.route());
     }
 
-    /** 수집이 배치를 커밋했다는 신호를 {@code at} 시각에 넣는다. */
+    /** 수집이 배치를 커밋했다고 치고 그 신호를 {@code at} 시각에 넣는다. */
     void signal(final long batchId, Instant at) {
         clock.at = at;
+        committed.commit(batchId);
         mainline.batchStored(batchId, meta.get(batchId).version());
+    }
+
+    /** 수집이 배치를 커밋했다고 치되 신호는 넣지 않는다. 잃은 신호다. */
+    void commit(final long batchId) {
+        committed.commit(batchId);
+    }
+
+    /** 다음 처리하지 않은 배치 조회가 배치를 읽은 직후에 한 번 실행할 일을 정한다. */
+    void afterNextPendingRead(Runnable task) {
+        committed.afterNextFind(task);
+    }
+
+    /** 커밋한 것으로 친 배치를 모두 잊는다. 예보 기록을 지우고 흐름을 처음부터 다시 처리할 때 쓴다. */
+    void rewindCollection() {
+        committed.forgetAll();
+    }
+
+    /** {@code at} 시각에 주기 줍기를 한 번 돌린다. */
+    void pickUp(Instant at) {
+        clock.at = at;
+        mainline.pickUp();
     }
 
     /** 흐름이 정한 착수 시각에 신호를 넣는다. */
@@ -248,6 +323,12 @@ final class MainlineHarness {
     Optional<String> runOutcome(final long batchId) {
         return jdbc.sql("SELECT outcome FROM forecast_run WHERE observation_batch_id=?").param(batchId)
             .query(String.class).optional();
+    }
+
+    /** 그 배치의 예보 실행 줄 수. */
+    long runCount(final long batchId) {
+        return jdbc.sql("SELECT count(*) FROM forecast_run WHERE observation_batch_id=?").param(batchId)
+            .query(Long.class).single();
     }
 
     /** 그 배치의 예보 실행에 적힌 착수 시각. */
@@ -344,6 +425,42 @@ final class MainlineHarness {
     }
 
     private record Meta(long version, Instant receivedAt, String origin, String outcome) {
+    }
+
+    /** 사건을 받아 아무것도 하지 않는 뒤 단계다. */
+    static final class NoEvents implements PipelineEvents {
+        @Override
+        public void batchSeen(ObservationBatchSeen seen) {
+        }
+
+        @Override
+        public void forecastPublished(ForecastPublished published) {
+        }
+
+        @Override
+        public void passesClosed(List<PassClosed> passes) {
+        }
+    }
+
+    /** 사건마다 두 뒤 단계에 차례로 넘긴다. */
+    record BothEvents(PipelineEvents first, PipelineEvents second) implements PipelineEvents {
+        @Override
+        public void batchSeen(ObservationBatchSeen seen) {
+            first.batchSeen(seen);
+            second.batchSeen(seen);
+        }
+
+        @Override
+        public void forecastPublished(ForecastPublished published) {
+            first.forecastPublished(published);
+            second.forecastPublished(published);
+        }
+
+        @Override
+        public void passesClosed(List<PassClosed> passes) {
+            first.passesClosed(passes);
+            second.passesClosed(passes);
+        }
     }
 
     /** 뒤 단계가 받은 통과 사건을 받은 순서대로 적어 둔다. */

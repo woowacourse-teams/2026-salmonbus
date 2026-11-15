@@ -32,6 +32,7 @@ import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingP
 import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
 import com.gustler.backend.forecasting.infrastructure.capacity.JdbcVehicleCapacityStore;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
+import com.gustler.backend.forecasting.support.CommittedBatches;
 import com.gustler.backend.forecasting.support.ForecastingIntegrationTest;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -62,7 +63,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 발행)이 같은 흐름에 낸 값이다({@link ForecastValueBaseline}). 착수 시각은 시계에서 찍으므로, 배치마다 흐름이 정한 착수 시각을
  * 시계에 넣어 기대값과 조건을 맞춘다.
  *
- * <p>노선별 실행 줄은 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다.
+ * <p>노선별 실행 줄은 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다. 흐름의 배치는 미리 모두 DB에 있고, 예보는
+ * 수집이 커밋한 것으로 친 배치만 본다({@link CommittedBatches}). 그래서 신호 하나가 그 배치 하나를 그 시각에 처리한다.
  */
 @ForecastingIntegrationTest
 @Transactional
@@ -324,6 +326,7 @@ class ForecastPipelineMainlineTest {
 
         // when
         harness.mainline.states().remove(harness.stream.route());
+        lost.forEach(harness.committed::commit);
         Instant pickedAt = harness.receivedAt(lost.getLast()).plusSeconds(20);
         harness.clock.at = pickedAt;
         harness.mainline.pickUp();
@@ -341,7 +344,7 @@ class ForecastPipelineMainlineTest {
             softly.assertThat(runs.keySet()).containsExactlyInAnyOrderElementsOf(batches);
             softly.assertThat(runs.values()).allMatch(count -> count == 1);
             softly.assertThat(harness.counter("replays", "succeeded")).isOne();
-            softly.assertThat(harness.counter("batches", "already_processed")).isOne();
+            softly.assertThat(harness.counter("batches", "already_processed")).isZero();
             softly.assertThat(harness.counter("batches", "failed")).isZero();
             softly.assertThat(jdbc.sql("""
                 SELECT count(*) FROM forecast_run WHERE observation_batch_id IN (:lost) AND confirmed_at=:at
@@ -409,6 +412,7 @@ class ForecastPipelineMainlineTest {
         private final RecordingEvents events = new RecordingEvents();
         private final Set<Long> excludedObservations = new HashSet<>();
         private final boolean rushOnly;
+        private final CommittedBatches committed = new CommittedBatches(new JdbcPendingPipelineBatches(jdbc));
         private SimpleMeterRegistry meters = new SimpleMeterRegistry();
         private ForecastPipelineService mainline;
 
@@ -459,13 +463,13 @@ class ForecastPipelineMainlineTest {
             meters = new SimpleMeterRegistry();
             JdbcReplaySource source = new JdbcReplaySource(jdbc, MAXIMUM_ROWS);
             ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
-            PipelineBatchProcessor processor = new PipelineBatchProcessor("pipeline_forecast", stage,
-                new RouteStateReplayer(source, stage, replayWindow), records, passes,
-                new TransactionTemplate(transactions), List.of(events), new RouteStateRegistry(), rushOnly);
+            PipelineBatchProcessor processor = new PipelineBatchProcessor(stage,
+                new RouteStateReplayer(source, stage, replayWindow, replayWindow), records, passes,
+                new TransactionTemplate(transactions), events, new RouteStateRegistry(), rushOnly);
             mainline = new ForecastPipelineService((key, task) -> {
                 task.run();
                 return true;
-            }, processor, source, new JdbcPendingPipelineBatches(jdbc), () -> Optional.of(runtime), this::versions,
+            }, processor, source, committed, () -> Optional.of(runtime), this::versions,
                 stopsByVersion::get, new JdbcSettlementContextWriter(jdbc),
                 new ForecastPolicy(Duration.ofMinutes(10), batchLimit), clock, meters);
             clock.at = EVENING.plus(Duration.ofDays(2));
@@ -535,6 +539,7 @@ class ForecastPipelineMainlineTest {
         private void mainlineAt(final long batchId, Instant at) {
             clock.at = at;
             final double before = excluded();
+            committed.commit(batchId);
             mainline.batchStored(batchId, version(batchId));
             if (excluded() > before) {
                 excludedObservations.addAll(withheldObservations(batchId));

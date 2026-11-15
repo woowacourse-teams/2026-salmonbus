@@ -16,7 +16,7 @@ import java.util.List;
  */
 public interface PipelineEvents {
     /**
-     * 수집 단계를 지난 배치를 알린다. 예보를 만들지 않은 배치도 알린다.
+     * 예보 실행을 저장한 배치를 알린다. 예측을 내지 않은 실행도 알린다.
      *
      * @param seen 배치 사건
      */

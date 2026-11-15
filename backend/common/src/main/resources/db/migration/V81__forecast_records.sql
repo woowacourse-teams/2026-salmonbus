@@ -16,7 +16,6 @@ CREATE TABLE forecast_run (
     prediction_count integer NOT NULL,
     -- 배치의 수집 사실이다. 채점이 다시 뜰 때 그날의 수집 구멍과 관측 줄 수를 관측 줄을 다시 세지 않고 되살리는 데 쓴다.
     -- source_incomplete는 저장 줄 수와 실제로 남은 줄 수가 다른 성공 배치, counted_rows는 하루 관측 상한에 더할 줄 수다.
-    -- 수집 사건 없이 저장한 줄은 둘 다 비어 있다.
     source_incomplete boolean,
     counted_rows integer,
     CONSTRAINT pk_forecast_run PRIMARY KEY (source_date, observation_batch_id),

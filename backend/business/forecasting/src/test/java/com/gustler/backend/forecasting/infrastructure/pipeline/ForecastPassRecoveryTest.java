@@ -64,6 +64,7 @@ class ForecastPassRecoveryTest {
         final long failing = batchClosingAwaitedPassSoonAfter(harness, continuous);
         NEW_TABLES.forEach(table -> jdbc.sql("DELETE FROM " + table + " WHERE route_id=?")
             .param(harness.stream.routeId()).update());
+        harness.rewindCollection();
 
         // when
         Run recovered = run(harness, failing);
@@ -116,12 +117,13 @@ class ForecastPassRecoveryTest {
         Map<String, String> continuous = passesClosedBy(harness, tail);
         NEW_TABLES.forEach(table -> jdbc.sql("DELETE FROM " + table + " WHERE route_id=?")
             .param(harness.stream.routeId()).update());
+        harness.rewindCollection();
         harness.start();
         harness.fromVerifiedOrigin();
         batches.subList(0, restartAt).forEach(harness::signal);
 
         // when
-        harness.start(shortWindow, shortWindow, List.of());
+        harness.start(shortWindow, shortWindow, new MainlineHarness.NoEvents());
         tail.forEach(harness::signal);
 
         // then
@@ -181,7 +183,7 @@ class ForecastPassRecoveryTest {
         MainlineHarness.RecordedPasses delivered = new MainlineHarness.RecordedPasses();
         ShadowScoringService scoring = scoring(harness);
         harness.start(RouteStateReplayer.DEFAULT_WINDOW, RouteStateReplayer.DEFAULT_EXTENDED_WINDOW,
-            List.of(scoring, delivered));
+            new MainlineHarness.BothEvents(scoring, delivered));
         harness.fromVerifiedOrigin();
         List<Long> batches = harness.batches();
         int dropAt = -1;
@@ -208,7 +210,8 @@ class ForecastPassRecoveryTest {
 
     private ShadowScoringService scoring(MainlineHarness harness) {
         ScoringStage stage = new ScoringStage(new JdbcSettlementContextProvider(jdbc),
-            new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), harness.clock);
+            new JdbcRouteStructureProvider(jdbc), new ConfirmedPassLabelCalculator(), harness.clock,
+            ScoringStage.DEFAULT_OBSERVATION_LIMIT);
         return new ShadowScoringService(task -> {
             task.run();
             return true;

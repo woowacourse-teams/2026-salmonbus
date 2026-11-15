@@ -83,7 +83,7 @@ class RouteStateReplayerTest {
         // given
         List<ForecastBatch> batches = stream(840, 300, 810);
         MemorySource source = new MemorySource(batches);
-        RouteStateReplayer replayer = new RouteStateReplayer(source, stage, Duration.ofHours(6));
+        RouteStateReplayer replayer = new RouteStateReplayer(source, stage, Duration.ofHours(6), Duration.ofHours(6));
         ForecastBatch last = batches.get(780);
 
         // when
@@ -238,10 +238,10 @@ class RouteStateReplayerTest {
         ForecastBatch last = batches.get(holeEnd - 1);
 
         // when
-        RouteStateReplayer.Result shortWindow = new RouteStateReplayer(source, stage, Duration.ofHours(3))
-            .replay(STATISTICS, last.confirmedAt(), last.observationBatchId());
-        RouteStateReplayer.Result longWindow = new RouteStateReplayer(source, stage, Duration.ofHours(6))
-            .replay(STATISTICS, last.confirmedAt(), last.observationBatchId());
+        RouteStateReplayer.Result shortWindow = new RouteStateReplayer(source, stage, Duration.ofHours(3),
+            Duration.ofHours(3)).replay(STATISTICS, last.confirmedAt(), last.observationBatchId());
+        RouteStateReplayer.Result longWindow = new RouteStateReplayer(source, stage, Duration.ofHours(6),
+            Duration.ofHours(6)).replay(STATISTICS, last.confirmedAt(), last.observationBatchId());
 
         // then
         List<PassClosed> withoutBroken = continuous.stream().filter(pass -> !"g".equals(pass.vehicleId())).toList();

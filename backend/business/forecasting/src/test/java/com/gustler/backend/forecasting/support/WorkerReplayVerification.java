@@ -2,6 +2,7 @@ package com.gustler.backend.forecasting.support;
 
 import com.gustler.backend.forecasting.application.pipeline.PassLabel;
 import com.gustler.backend.forecasting.application.pipeline.ScoredForecast;
+import com.gustler.backend.forecasting.application.pipeline.ScoringReasons;
 import com.gustler.backend.forecasting.application.pipeline.ScoringResult;
 import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
@@ -18,15 +19,14 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.JsonNode;
 
@@ -138,13 +138,19 @@ final class WorkerReplayVerification {
         return hours;
     }
 
-    /** 예보 실행이 남지 않은 배치가 있으면 그날을 끝까지 재생하지 못한 것이다. */
+    /**
+     * 자료에 적힌 착수 시각의 예보 실행이 남지 않은 배치가 있으면 그날을 자료대로 재생하지 못한 것이다. 수신 순서와 착수 순서가
+     * 뒤집힌 자료의 배치는 예보가 이력에 넣지 않고 나중에 늦음으로 닫으므로 실행의 착수 시각이 자료와 다르다.
+     */
     private void reportUnappliedBatches() {
-        Set<Long> applied = new HashSet<>(jdbc.sql("SELECT observation_batch_id FROM forecast_run WHERE route_id=?")
-            .param(routeId).query(Long.class).list());
+        Map<Long, Instant> appliedAt = new HashMap<>();
+        jdbc.sql("SELECT observation_batch_id, confirmed_at FROM forecast_run WHERE route_id=?").param(routeId)
+            .query(row -> {
+                appliedAt.put(row.getLong(1), row.getObject(2, OffsetDateTime.class).toInstant());
+            });
         List<Long> unapplied = fixture.batches().stream()
+            .filter(batch -> !batch.confirmedAt().truncatedTo(ChronoUnit.MICROS).equals(appliedAt.get(batch.id())))
             .map(WorkerReplayFixture.Batch::id)
-            .filter(batchId -> !applied.contains(batchId))
             .toList();
         if (unapplied.isEmpty()) {
             return;
@@ -418,7 +424,7 @@ final class WorkerReplayVerification {
 
     private static List<Object> labelKey(ScoredForecast scored) {
         return List.of(scored.passSourceDate(), scored.routeId(), scored.tripStartObservationId(), scored.stopOrder(),
-            scored.capacity(), scored.labelVersion(), scored.modelDeploymentId());
+            scored.capacity(), ScoringReasons.LABEL_VERSION, scored.modelDeploymentId());
     }
 
     private static Map<String, Object> failure(JsonNode row, String kind, Object detail) {

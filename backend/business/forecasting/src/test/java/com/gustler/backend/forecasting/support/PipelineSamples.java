@@ -1,7 +1,9 @@
 package com.gustler.backend.forecasting.support;
 
+import com.gustler.backend.forecasting.api.pipeline.CollectionResult;
 import com.gustler.backend.forecasting.api.pipeline.ForecastOutcome;
 import com.gustler.backend.forecasting.api.pipeline.ForecastPublished;
+import com.gustler.backend.forecasting.api.pipeline.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.pipeline.PassClosed;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -47,6 +49,14 @@ public final class PipelineSamples {
     ) {
         return new ForecastPublished(sourceDate, batchId, ROUTE_ID, ROUTE_VERSION_ID, receivedAt,
             receivedAt.plusSeconds(95), null, outcome, List.of());
+    }
+
+    /**
+     * 예보 사건과 같은 배치의 수집 사건이다. 저장 줄 수와 실제 줄 수를 0으로 두므로 수집 구멍과 관측 상한 계산에 들어가지 않는다.
+     */
+    public static ObservationBatchSeen seenWithoutRows(ForecastPublished published) {
+        return new ObservationBatchSeen(published.observationBatchId(), published.routeId(),
+            published.routeVersionId(), published.receivedAt(), CollectionResult.EMPTY, 0, 0);
     }
 
     public static PassClosed pass(
