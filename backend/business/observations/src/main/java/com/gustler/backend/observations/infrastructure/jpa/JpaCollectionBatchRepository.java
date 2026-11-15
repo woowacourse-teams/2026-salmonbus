@@ -5,6 +5,8 @@ import com.gustler.backend.observations.domain.CollectionBatchRepository;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.StoredObservations.Row;
 import com.gustler.backend.observations.domain.UpstreamObservationRow;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,6 +45,11 @@ public class JpaCollectionBatchRepository implements CollectionBatchRepository {
     public Optional<CollectionBatch> findByPlan(CollectionPlan plan) {
         return batches.findByRouteVersionIdAndAttemptKey(plan.routeVersionId(), plan.attemptKey())
             .map(ObservationBatchJpaEntity::toDomain);
+    }
+
+    @Override
+    public Optional<OffsetDateTime> findForecastStart(final long batchId) {
+        return batches.findForecastStart(batchId).map(start -> start.atOffset(ZoneOffset.UTC));
     }
 
     @Override

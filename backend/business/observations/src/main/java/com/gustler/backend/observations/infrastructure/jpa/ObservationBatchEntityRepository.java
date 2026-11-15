@@ -1,5 +1,6 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +13,17 @@ import org.springframework.data.repository.query.Param;
  */
 public interface ObservationBatchEntityRepository extends JpaRepository<ObservationBatchJpaEntity, Long> {
     Optional<ObservationBatchJpaEntity> findByRouteVersionIdAndAttemptKey(long routeVersionId, String attemptKey);
+
+    /** 배치의 예보 실행 기록에 적힌 착수 시각이다. 예보 실행은 기본 키(배치 예약 시각의 한국 날짜, 배치)로 찾는다. */
+    @Query(value = """
+        SELECT run.confirmed_at
+        FROM observation_batch batch
+        JOIN forecast_run run
+            ON run.source_date = (batch.scheduled_at AT TIME ZONE 'Asia/Seoul')::date
+           AND run.observation_batch_id = batch.id
+        WHERE batch.id = :id
+        """, nativeQuery = true)
+    Optional<Instant> findForecastStart(@Param("id") long batchId);
 
     /**
      * 응답·관측·예보 실행 기록이 없는 미완료 배치의 상태만 종료로 바꾼다. 예보 실행은 기본 키(배치 예약 시각의 한국 날짜, 배치)로

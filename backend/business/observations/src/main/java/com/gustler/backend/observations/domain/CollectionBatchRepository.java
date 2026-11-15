@@ -1,6 +1,7 @@
 package com.gustler.backend.observations.domain;
 
 import com.gustler.backend.observations.domain.StoredObservations.Row;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -10,6 +11,9 @@ public interface CollectionBatchRepository {
      * 같은 노선 판본과 시도 키의 수집 묶음을 찾는다. 없으면 빈 값이며 새 묶음을 만들지 않는다.
      */
     Optional<CollectionBatch> findByPlan(CollectionPlan plan);
+
+    /** 이 배치로 예보를 착수한 시각이다. 예보가 이 배치를 쓰지 않았으면 비어 있다. */
+    Optional<OffsetDateTime> findForecastStart(long batchId);
 
     /**
      * 이미 존재해야 하는 수집 묶음을 읽는다. 없는 식별자는 필수 조회 실패로 처리한다.

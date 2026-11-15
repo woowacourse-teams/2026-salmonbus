@@ -330,6 +330,42 @@ class ObservationBatchLedgerTest {
     }
 
     @Test
+    void 예보가_쓴_배치는_같은_계획으로_다시_열지_않고_관측과_시도_횟수와_호출_횟수를_그대로_둔다() {
+        // given
+        insertStop();
+        final long batchId = dispatchedBatch();
+        BusLocation bus = new BusLocation("경기70아0001", VEHICLE_ID, 0,
+            ROUTE_204000057, 11, STOP_ID, 1, 2, 43, 3, 1);
+        ledger.conclude(batchId, reply(new GbisLocationResult.Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT);
+        insertForecastRun(batchId, 0);
+
+        // when
+        Throwable reopened = catchThrowable(() -> ledger.reserve(plan(), RESERVED_AT));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(reopened).isInstanceOf(InputAlreadyConfirmedException.class);
+            softly.assertThat(jdbcClient.sql("SELECT count(*) FROM vehicle_observation WHERE observation_batch_id = ?")
+                .param(batchId).query(Integer.class).single()).isOne();
+            softly.assertThat(attemptNumberOf(batchId)).isOne();
+            softly.assertThat(reservedCallsOn(KOREA_8_19)).isOne();
+        });
+    }
+
+    @Test
+    void 다른_날짜의_예보_실행_기록은_같은_계획을_다시_여는_것을_막지_않는다() {
+        // given
+        final long batchId = dispatchedBatch();
+        insertForecastRun(batchId, 1);
+
+        // when
+        ledger.reserve(plan(), RESERVED_AT);
+
+        // then
+        assertThat(attemptNumberOf(batchId)).isEqualTo(2);
+    }
+
+    @Test
     void 같은_계획을_재시도하면_수집_묶음은_한_행으로_남는다() {
         // given
         ledger.reserve(plan(), RESERVED_AT);
@@ -633,6 +669,18 @@ class ObservationBatchLedgerTest {
     }
 
     /** 입력 확인 시각이 적힌 배치를 만든다. 예보 실행 기록이 생기기 전에 처리된 배치가 이 열에 착수 시각을 갖고 있다. */
+    /** 배치 예약 시각의 한국 날짜에서 {@code daysLater}일 뒤 날짜로 예보 실행 기록을 넣는다. */
+    private void insertForecastRun(final long batchId, final int daysLater) {
+        final long routeId = jdbcClient.sql("SELECT route_id FROM route_version WHERE id=?").param(routeVersionId)
+            .query(Long.class).single();
+        jdbcClient.sql("""
+            INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
+                confirmed_at,outcome,prediction_count)
+            VALUES((CAST(? AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date + ?,?,?,?,?,?,'EMPTY',0)
+            """).params(SCHEDULED_AT, daysLater, batchId, routeId, routeVersionId, RESPONSE_RECEIVED_AT,
+            RESPONSE_RECEIVED_AT.plusSeconds(1)).update();
+    }
+
     private long confirmSuccessfulInput() {
         final long batchId = dispatchedBatch();
         ledger.conclude(batchId, reply(new GbisLocationResult.NoVehicles(QUERY_TIME)), RESPONSE_RECEIVED_AT);
