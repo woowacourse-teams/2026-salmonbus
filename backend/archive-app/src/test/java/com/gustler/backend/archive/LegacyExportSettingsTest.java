@@ -34,8 +34,7 @@ class LegacyExportSettingsTest {
         .withBean(PlatformTransactionManager.class, () -> mock(PlatformTransactionManager.class))
         .withBean(ArchiveObjects.class, () -> objects)
         .withBean(Clock.class, Clock::systemUTC)
-        .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
-        .withPropertyValues("archive.prefix=salmonbus/prod/lake-v2/");
+        .withBean(MeterRegistry.class, SimpleMeterRegistry::new);
 
     static LegacyExportSettings settings(
         String prefix,
@@ -85,10 +84,10 @@ class LegacyExportSettingsTest {
 
     @Test
     void 다른_이관의_S3_접두와_겹치면_받지_않는다() {
-        for (String prefix : List.of("salmonbus/prod/lake-v2/", "salmonbus/prod/lake-v3/legacy/", "salmonbus/")) {
+        for (String prefix : List.of("salmonbus/prod/lake-v3/legacy/", "salmonbus/")) {
             assertThatThrownBy(() -> new LegacyExportSettings(prefix, Duration.ofMinutes(1), 2000,
                 Duration.ofMillis(200), 64L * 1024 * 1024, 1000, Duration.ofMinutes(10), Duration.ofSeconds(60),
-                "salmonbus/prod/lake-v2/", "salmonbus/prod/lake-v3/")).isInstanceOf(IllegalArgumentException.class);
+                "salmonbus/prod/lake-v3/")).isInstanceOf(IllegalArgumentException.class);
         }
     }
 
@@ -106,7 +105,7 @@ class LegacyExportSettingsTest {
     }
 
     @Test
-    void 스위치가_켜지면_기본값으로_빈을_만들고_줄_단위_이관이_켜져_있거나_값이_잘못되면_기동하지_않는다() {
+    void 스위치가_켜지면_기본값으로_빈을_만들고_값이_잘못되면_기동하지_않는다() {
         runner.withPropertyValues("archive.legacy-export.enabled=true").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(LegacyExportSettings.class)).isEqualTo(new LegacyExportSettings(PREFIX,
@@ -114,8 +113,6 @@ class LegacyExportSettingsTest {
                 Duration.ofMinutes(10), Duration.ofSeconds(60)));
             assertThat(context).hasSingleBean(LegacyExportService.class);
         });
-        runner.withPropertyValues("archive.legacy-export.enabled=true", "archive.enabled=true")
-            .run(context -> assertThat(context).hasFailed());
         runner.withPropertyValues("archive.legacy-export.enabled=true", "archive.legacy-export.page-size=0")
             .run(context -> assertThat(context).hasFailed());
         runner.withPropertyValues("archive.legacy-export.enabled=true",

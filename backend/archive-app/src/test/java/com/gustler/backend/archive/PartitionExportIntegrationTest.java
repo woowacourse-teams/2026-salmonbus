@@ -652,6 +652,30 @@ class PartitionExportIntegrationTest {
         assertSameRows("copy_record", "restored_concurrent");
     }
 
+    @Test
+    void 관측_테이블이_일반_테이블이면_건너뛰었다고_알리고_예보_기록은_그대로_내보내고_지운다() {
+        // given
+        partition("forecast_run", DAY);
+        forecastRun(DAY, 1);
+        SimpleMeterRegistry metrics = new SimpleMeterRegistry();
+
+        // when
+        PartitionExportService.RunReport report = service(new MemoryObjects(), true, 1000, metrics, source).run();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(report.dropped()).isOne();
+            softly.assertThat(jdbc.sql("SELECT table_name FROM daily_export").query(String.class).list())
+                .containsExactly("forecast_run");
+            for (String table : PartitionExportRepository.OBSERVATION_TABLES) {
+                softly.assertThat(metrics.get("salmonbus_archive_partition_deferrals").tag("table", table)
+                    .tag("reason", "NOT_PARTITIONED").counter().count()).as(table).isOne();
+                softly.assertThat(jdbc.sql("SELECT relkind::text FROM pg_class WHERE oid = to_regclass(?)")
+                    .param(table).query(String.class).single()).as(table).isEqualTo("r");
+            }
+        });
+    }
+
     /** S3 대역이다. 조건부 PUT 처럼 같은 키에 다른 내용을 거부하고, 올린 뒤 다시 읽어 비교한다. */
     static final class MemoryObjects implements ArchiveObjects {
         final Map<String, byte[]> values = new HashMap<>();

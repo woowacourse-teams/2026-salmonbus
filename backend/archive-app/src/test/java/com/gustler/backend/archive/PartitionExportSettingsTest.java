@@ -31,8 +31,7 @@ class PartitionExportSettingsTest {
         .withBean(PlatformTransactionManager.class, () -> mock(PlatformTransactionManager.class))
         .withBean(ArchiveObjects.class, () -> objects)
         .withBean(Clock.class, Clock::systemUTC)
-        .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
-        .withPropertyValues("archive.prefix=salmonbus/prod/lake-v2/");
+        .withBean(MeterRegistry.class, SimpleMeterRegistry::new);
 
     PartitionExportSettings settings(
         final int retentionDays,
@@ -68,14 +67,6 @@ class PartitionExportSettingsTest {
     }
 
     @Test
-    void 줄_단위_이관과_S3_접두가_겹치면_받지_않는다() {
-        for (String prefix : List.of("salmonbus/prod/lake-v2/", "salmonbus/prod/lake-v2/partition/", "salmonbus/")) {
-            assertThatThrownBy(() -> new PartitionExportSettings(false, 3, prefix, Duration.ofHours(1), 2000,
-                Duration.ofSeconds(2), "salmonbus/prod/lake-v2/")).isInstanceOf(IllegalArgumentException.class);
-        }
-    }
-
-    @Test
     void 대상_날짜는_한국_자정에_바뀐다() {
         // when
         LocalDate beforeMidnight = PartitionExportService.lastEligibleDate(
@@ -87,6 +78,15 @@ class PartitionExportSettingsTest {
         assertSoftly(softly -> {
             softly.assertThat(beforeMidnight).isEqualTo(LocalDate.parse("2026-11-12"));
             softly.assertThat(atMidnight).isEqualTo(LocalDate.parse("2026-11-13"));
+        });
+    }
+
+    @Test
+    void 관측_보관_날짜_수는_다시_읽는_범위를_덮는_사흘_이상이다() {
+        assertSoftly(softly -> {
+            softly.assertThat(PartitionExportService.observationRetentionDays(2)).isEqualTo(3);
+            softly.assertThat(PartitionExportService.observationRetentionDays(3)).isEqualTo(3);
+            softly.assertThat(PartitionExportService.observationRetentionDays(7)).isEqualTo(7);
         });
     }
 
@@ -115,7 +115,7 @@ class PartitionExportSettingsTest {
         runner.withPropertyValues("archive.partition-export.enabled=true",
             "archive.partition-export.retention-days=1").run(context -> assertThat(context).hasFailed());
         runner.withPropertyValues("archive.partition-export.enabled=true",
-            "archive.partition-export.prefix=salmonbus/prod/lake-v2/").run(context -> assertThat(context).hasFailed());
+            "archive.partition-export.prefix=salmonbus/prod/lake-v3").run(context -> assertThat(context).hasFailed());
         verifyNoInteractions(jdbc, objects);
     }
 }

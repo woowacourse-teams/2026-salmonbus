@@ -8,7 +8,7 @@ import java.time.Duration;
  * <p>읽는 속도는 {@code pageSize}, {@code pagePause}, {@code maxRowsPerRun}, {@code maxRunDuration},
  * {@code interval} 로 조절한다. 한 회차는 줄 수나 시간 가운데 먼저 닿는 상한에서 멈추고, 그때까지 읽은 줄을 조각 하나로 닫아 장부에 적는다.
  *
- * @param prefix S3 키 접두. 줄 단위 이관과 날짜 파티션 내보내기의 접두와 서로 포함하지 않아야 한다.
+ * @param prefix S3 키 접두. 날짜 파티션 내보내기의 접두와 서로 포함하지 않아야 한다.
  * @param interval 회차가 끝난 뒤 다음 회차까지 쉬는 시간. 10초~24시간.
  * @param pageSize 한 번에 읽는 줄 수. 1~10000줄.
  * @param pagePause 페이지 사이에 쉬는 시간. 0~60초. 쉬는 동안 DB 연결을 쥐지 않는다.
@@ -32,7 +32,6 @@ public record LegacyExportSettings(
     static final long MAX_ROWS_PER_RUN = 1_000_000_000L;
 
     /**
-     * @param lineArchivePrefix 줄 단위 이관의 S3 접두. 비교에만 쓴다.
      * @param partitionPrefix 날짜 파티션 내보내기의 S3 접두. 비교에만 쓴다.
      */
     public LegacyExportSettings(
@@ -44,14 +43,11 @@ public record LegacyExportSettings(
         long maxRowsPerRun,
         Duration maxRunDuration,
         Duration statementTimeout,
-        String lineArchivePrefix,
         String partitionPrefix
     ) {
         this(prefix, interval, pageSize, pagePause, segmentBytes, maxRowsPerRun, maxRunDuration, statementTimeout);
-        for (String other : new String[] { lineArchivePrefix, partitionPrefix }) {
-            if (prefix.startsWith(other) || other.startsWith(prefix)) {
-                throw new IllegalArgumentException("옛 테이블 내보내기 접두는 다른 이관 접두와 겹치지 않아야 한다");
-            }
+        if (prefix.startsWith(partitionPrefix) || partitionPrefix.startsWith(prefix)) {
+            throw new IllegalArgumentException("옛 테이블 내보내기 접두는 다른 이관 접두와 겹치지 않아야 한다");
         }
     }
 

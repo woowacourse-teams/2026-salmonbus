@@ -24,11 +24,9 @@ public class PartitionExportConfiguration {
         @Value("${archive.partition-export.prefix:salmonbus/prod/lake-v3/}") String prefix,
         @Value("${archive.partition-export.interval:1h}") Duration interval,
         @Value("${archive.partition-export.page-size:2000}") final int pageSize,
-        @Value("${archive.partition-export.lock-timeout:2s}") Duration lockTimeout,
-        @Value("${archive.prefix}") String lineArchivePrefix
+        @Value("${archive.partition-export.lock-timeout:2s}") Duration lockTimeout
     ) {
-        return new PartitionExportSettings(dropEnabled, retentionDays, prefix, interval, pageSize, lockTimeout,
-            lineArchivePrefix);
+        return new PartitionExportSettings(dropEnabled, retentionDays, prefix, interval, pageSize, lockTimeout);
     }
 
     @Bean

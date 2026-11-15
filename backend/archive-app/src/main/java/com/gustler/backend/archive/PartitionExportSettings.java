@@ -7,7 +7,7 @@ import java.time.Duration;
  *
  * @param dropEnabled 확인을 마친 파티션을 떼어 지울지다. 꺼져 있으면 내보내고 확인만 한다.
  * @param retentionDays DB 에 남기는 한국 날짜 수(오늘 포함)다. {@code source_date <= 오늘 - retentionDays} 인 날짜가 대상이다. 2~30일.
- * @param prefix S3 키 접두다. 줄 단위 이관의 {@code archive.prefix} 와 서로 포함하지 않아야 한다.
+ * @param prefix S3 키 접두다.
  * @param interval 회차 사이 쉬는 시간이다. 1분~24시간.
  * @param pageSize 파티션을 한 번에 읽는 줄 수다. 1~10000줄.
  * @param lockTimeout 파티션을 떼어 지울 때 잠금을 기다리는 시간이다. 100ms~10초.
@@ -22,24 +22,6 @@ public record PartitionExportSettings(
 ) {
     static final int MIN_RETENTION_DAYS = 2;
     static final int MAX_RETENTION_DAYS = 30;
-
-    /**
-     * @param lineArchivePrefix 줄 단위 이관의 S3 접두다. 두 형식의 파일이 섞이지 않게 비교에만 쓴다.
-     */
-    public PartitionExportSettings(
-        boolean dropEnabled,
-        int retentionDays,
-        String prefix,
-        Duration interval,
-        int pageSize,
-        Duration lockTimeout,
-        String lineArchivePrefix
-    ) {
-        this(dropEnabled, retentionDays, prefix, interval, pageSize, lockTimeout);
-        if (prefix.startsWith(lineArchivePrefix) || lineArchivePrefix.startsWith(prefix)) {
-            throw new IllegalArgumentException("날짜 내보내기 접두는 줄 단위 이관 접두와 겹치지 않아야 한다");
-        }
-    }
 
     public PartitionExportSettings {
         if (retentionDays < MIN_RETENTION_DAYS || retentionDays > MAX_RETENTION_DAYS) {

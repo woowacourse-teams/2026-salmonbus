@@ -22,13 +22,30 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 날짜 파티션 내보내기가 쓰는 카탈로그 조회, 파티션 읽기, 장부({@code daily_export}) 쓰기, 파티션 떼어 지우기를 맡는다.
  * 장부에서는 {@code segment = 0} 줄만 읽고 쓴다. 다른 조각 번호는 옛 테이블 내보내기({@link LegacyExportRepository})의 몫이다.
  *
- * <p>테이블 이름은 {@link #TABLES} 에서만, 파티션 이름은 이름 규칙과 경계를 모두 확인한 카탈로그 행에서만 오므로 SQL 에 그대로 넣는다.
- * 열 이름과 타입 표기도 카탈로그에서 읽고 허용 문자만 받는다. 값은 언제나 bind 한다. {@code route} 행 잠금은 잡지 않는다.
+ * <p>테이블 이름은 {@link #TABLES}·{@link #OBSERVATION_TABLES} 에서만, 파티션 이름은 이름 규칙과 경계를 모두 확인한 카탈로그 행에서만
+ * 오므로 SQL 에 그대로 넣는다. 열 이름과 타입 표기도 카탈로그에서 읽고 허용 문자만 받는다. 값은 언제나 bind 한다. {@code route} 행
+ * 잠금은 잡지 않는다.
  */
 public class PartitionExportRepository {
     /** 날짜 파티션을 내보내는 테이블이다. forecasting 모듈 {@code PartitionMaintenance.TABLES} 와 같은 목록, 같은 순서다. */
     public static final List<String> TABLES =
         List.of("forecast_run", "forecast_record", "stop_pass", "pass_label", "forecast_unresolved");
+
+    /**
+     * 날짜 파티션 테이블일 때만 내보내는 관측 테이블이다. forecasting 모듈 {@code PartitionMaintenance.OBSERVATION_TABLES} 와 같은
+     * 목록, 같은 순서다. 배치 테이블이 먼저다.
+     */
+    public static final List<String> OBSERVATION_TABLES = List.of("observation_batch", "vehicle_observation");
+
+    /**
+     * 관측 테이블을 날짜 파티션으로 바꿀 때 바꾸기 전의 줄을 통째로 담아 붙인 첫 파티션의 날짜다. 그 파티션의 줄은 모두 이 날짜를
+     * {@code source_date} 로 갖고, 장부에도 이 날짜로 적는다.
+     */
+    public static final LocalDate INITIAL_DATE = LocalDate.parse("2000-01-01");
+
+    /** 처리 순서. 날짜가 이른 것부터, 같은 날짜는 {@link #TABLES} 다음 {@link #OBSERVATION_TABLES} 의 순서다. */
+    public static final Comparator<Partition> ORDER =
+        Comparator.comparing(Partition::date).thenComparing(partition -> ordinal(partition.table()));
 
     static final int ADVISORY_NAMESPACE = 20261115;
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(120);
@@ -59,10 +76,22 @@ public class PartitionExportRepository {
         write.setTimeout((int) DROP_STATEMENT_TIMEOUT.toSeconds() + 15);
     }
 
-    /** 날짜 파티션 하나. {@code name} 은 {@code <table>_pYYYYMMDD} 다. */
+    /**
+     * 내보낼 파티션 하나. 날짜 파티션의 {@code name} 은 {@code <table>_pYYYYMMDD} 이고, 관측 테이블의 첫 파티션은
+     * {@code <table>_legacy} 에 날짜 {@link #INITIAL_DATE} 다.
+     */
     public record Partition(String table, LocalDate date, String name) {
         static Partition of(String table, LocalDate date) {
             return new Partition(table, date, table + "_p" + date.format(SUFFIX));
+        }
+
+        static Partition initial(String table) {
+            return new Partition(table, INITIAL_DATE, table + "_legacy");
+        }
+
+        /** 여러 날짜의 줄이 섞인 첫 파티션이면 참이다. */
+        public boolean isInitial() {
+            return date.equals(INITIAL_DATE);
         }
     }
 
@@ -105,14 +134,16 @@ public class PartitionExportRepository {
     }
 
     /**
-     * 다섯 테이블의 날짜 파티션 가운데 날짜가 {@code through} 이하인 것을 날짜, 테이블 순서로 낸다.
+     * {@code tables} 의 날짜 파티션 가운데 날짜가 {@code through} 이하인 것을 {@link #ORDER} 순서로 낸다.
      *
      * <p>{@code pg_inherits} 에서 부모에 붙은 파티션을 읽고, 이름이 {@code <table>_pYYYYMMDD} 이며 경계가 정확히 그 하루인 것만 고른다.
-     * 기본 파티션과 규칙에 맞지 않는 파티션은 내지 않는다. 이름은 규칙에 맞는데 경계가 다른 파티션은 {@code unexpected} 에 담는다.
+     * 기본 파티션, 관측 테이블의 첫 파티션, 규칙에 맞지 않는 파티션은 내지 않는다. 이름은 규칙에 맞는데 경계가 다른 파티션은
+     * {@code unexpected} 에 담는다.
      */
-    public List<Partition> datedPartitions(LocalDate through, List<String> unexpected) {
+    public List<Partition> datedPartitions(List<String> tables, LocalDate through, List<String> unexpected) {
+        tables.forEach(PartitionExportRepository::requireTable);
         List<Partition> found = new ArrayList<>();
-        for (String[] row : attachedPartitions()) {
+        for (String[] row : attachedPartitions(tables)) {
             Matcher name = Pattern.compile(Pattern.quote(row[0]) + "_p(\\d{8})").matcher(row[1]);
             if (!name.matches()) {
                 continue;
@@ -132,13 +163,74 @@ public class PartitionExportRepository {
                 found.add(Partition.of(row[0], date));
             }
         }
-        found.sort(Comparator.comparing(Partition::date).thenComparing(p -> TABLES.indexOf(p.table())));
+        found.sort(ORDER);
         return found;
     }
 
-    /** 다섯 부모 테이블에 붙은 파티션마다 {부모 이름, 파티션 이름, 경계 표기} 를 낸다. */
-    private List<String[]> attachedPartitions() {
-        String parents = String.join(",", TABLES.stream().map(t -> "to_regclass('" + t + "')").toList());
+    /**
+     * 관측 테이블에 붙은 첫 파티션({@code <table>_legacy})을 낸다. 없으면 비어 있다. 이름은 맞는데 경계가 정확히
+     * {@link #INITIAL_DATE} 하루가 아니면 {@code unexpected} 에 담고 내지 않는다.
+     */
+    public Optional<Partition> initialPartition(String table, List<String> unexpected) {
+        requireObservationTable(table);
+        Partition initial = Partition.initial(table);
+        for (String[] row : attachedPartitions(List.of(table))) {
+            if (!row[1].equals(initial.name())) {
+                continue;
+            }
+            if (expectedBound(INITIAL_DATE).equals(row[2])) {
+                return Optional.of(initial);
+            }
+            unexpected.add(row[1]);
+        }
+        return Optional.empty();
+    }
+
+    /** 테이블이 파티션 테이블({@code relkind = 'p'})인지 본다. */
+    public boolean isPartitioned(String table) {
+        requireTable(table);
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM pg_class WHERE oid = to_regclass(?) AND relkind = 'p')")
+            .param(table).query(Boolean.class).single();
+    }
+
+    /**
+     * 관측 테이블 첫 파티션의 줄이 가진 가장 늦은 시각의 한국 날짜다. 부모 테이블의 {@code timestamptz} 열을 모두 보고 그 가운데 가장
+     * 늦은 값을 쓴다. 줄이 없으면 비어 있다. 첫 파티션을 끝까지 읽으므로 읽기 제한 시간 안에서 돈다.
+     */
+    public Optional<LocalDate> newestInitialDate(String table) {
+        requireObservationTable(table);
+        List<String> times = timeColumns(table);
+        if (times.isEmpty()) {
+            throw new IllegalStateException("TIME_COLUMN_REQUIRED");
+        }
+        String sql = "SELECT (max(greatest(" + String.join(",", times) + ")) AT TIME ZONE 'Asia/Seoul')::date FROM "
+            + Partition.initial(table).name();
+        List<LocalDate> newest = readOnly.execute(status -> {
+            readLimits();
+            return jdbc.sql(sql).query((rs, n) -> rs.getObject(1, LocalDate.class)).list();
+        });
+        return Optional.ofNullable(newest.getFirst());
+    }
+
+    private List<String> timeColumns(String table) {
+        List<String> columns = jdbc.sql("""
+            SELECT a.attname
+            FROM pg_attribute a
+            WHERE a.attrelid = to_regclass(?) AND a.attnum > 0 AND NOT a.attisdropped
+                AND a.atttypid = 'timestamptz'::regtype
+            ORDER BY a.attnum
+            """).param(table).query(String.class).list();
+        for (String column : columns) {
+            if (!IDENTIFIER.matcher(column).matches()) {
+                throw new IllegalStateException("UNSUPPORTED_COLUMN");
+            }
+        }
+        return columns;
+    }
+
+    /** {@code tables} 의 부모 테이블에 붙은 파티션마다 {부모 이름, 파티션 이름, 경계 표기} 를 낸다. */
+    private List<String[]> attachedPartitions(List<String> tables) {
+        String parents = String.join(",", tables.stream().map(t -> "to_regclass('" + t + "')").toList());
         return jdbc.sql("""
             SELECT p.relname, c.relname, pg_get_expr(c.relpartbound, c.oid)
             FROM pg_inherits i
@@ -169,10 +261,25 @@ public class PartitionExportRepository {
         return columns;
     }
 
-    /** 부모 테이블의 기본 키 열을 키 순서대로 낸다. 기본 키가 없으면 실패한다. */
-    public List<String> primaryKey(String table) {
+    /**
+     * 파일 안 줄의 정렬 열을 키 순서대로 낸다. 부모 테이블의 기본 키이고, 기본 키가 없으면 열이 모두 {@code NOT NULL} 인 유일 제약
+     * 가운데 열이 가장 적은 것(같으면 이름 순서로 앞선 것)이다. 관측 테이블의 파티션 부모는 기본 키 없이 파티션 키를 넣은 유일 제약만
+     * 갖는다. 둘 다 없으면 실패한다.
+     */
+    public List<String> orderKey(String table) {
         requireTable(table);
-        List<String> keys = jdbc.sql("""
+        List<String> keys = primaryKey(table);
+        if (keys.isEmpty()) {
+            keys = uniqueKey(table);
+        }
+        if (keys.isEmpty()) {
+            throw new IllegalStateException("PRIMARY_KEY_REQUIRED");
+        }
+        return keys;
+    }
+
+    private List<String> primaryKey(String table) {
+        return jdbc.sql("""
             SELECT a.attname
             FROM pg_index i
             CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, position)
@@ -180,10 +287,25 @@ public class PartitionExportRepository {
             WHERE i.indrelid = to_regclass(?) AND i.indisprimary
             ORDER BY k.position
             """).param(table).query(String.class).list();
-        if (keys.isEmpty()) {
-            throw new IllegalStateException("PRIMARY_KEY_REQUIRED");
-        }
-        return keys;
+    }
+
+    private List<String> uniqueKey(String table) {
+        return jdbc.sql("""
+            SELECT a.attname
+            FROM (
+                SELECT c.conrelid, c.conkey
+                FROM pg_constraint c
+                WHERE c.conrelid = to_regclass(?) AND c.contype = 'u'
+                    AND NOT EXISTS (
+                        SELECT 1 FROM pg_attribute n
+                        WHERE n.attrelid = c.conrelid AND n.attnum = ANY (c.conkey) AND NOT n.attnotnull)
+                ORDER BY cardinality(c.conkey), c.conname
+                LIMIT 1
+            ) u
+            CROSS JOIN LATERAL unnest(u.conkey) WITH ORDINALITY AS k(attnum, position)
+            JOIN pg_attribute a ON a.attrelid = u.conrelid AND a.attnum = k.attnum
+            ORDER BY k.position
+            """).param(table).query(String.class).list();
     }
 
     /**
@@ -403,8 +525,21 @@ public class PartitionExportRepository {
     }
 
     private static void requireTable(String table) {
-        if (!TABLES.contains(table)) {
+        if (!TABLES.contains(table) && !OBSERVATION_TABLES.contains(table)) {
             throw new IllegalArgumentException("날짜 내보내기 대상이 아닌 테이블이다: " + table);
         }
+    }
+
+    private static void requireObservationTable(String table) {
+        if (!OBSERVATION_TABLES.contains(table)) {
+            throw new IllegalArgumentException("첫 파티션을 두는 관측 테이블이 아니다: " + table);
+        }
+    }
+
+    private static int ordinal(String table) {
+        if (TABLES.contains(table)) {
+            return TABLES.indexOf(table);
+        }
+        return TABLES.size() + OBSERVATION_TABLES.indexOf(table);
     }
 }

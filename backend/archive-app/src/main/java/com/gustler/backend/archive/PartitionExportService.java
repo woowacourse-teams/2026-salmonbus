@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.Tags;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -20,11 +21,24 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 
 /**
- * 새 예보 경로의 기록 테이블 다섯 개에서 닫힌 한국 날짜의 파티션을 통째로 S3 에 내보내고, 다시 읽어 확인한 뒤, 설정이 허락하면 떼어
- * 지운다.
+ * 예보 기록 테이블 다섯 개와 관측 테이블 두 개에서 닫힌 한국 날짜의 파티션을 통째로 S3 에 내보내고, 다시 읽어 확인한 뒤, 설정이
+ * 허락하면 떼어 지운다.
  *
  * <p>대상은 {@code source_date <= 오늘(한국) - retentionDays} 인 날짜 파티션이고 오래된 날짜부터, 같은 날짜는 테이블 순서로 처리한다.
  * 기본 파티션은 대상이 아니며 줄 수만 지표로 낸다. 파티션 하나의 실패는 그 파티션만 다음 회차로 미루고 다른 파티션은 계속한다.
+ *
+ * <p>관측 테이블은 다음이 다르다.
+ * <ul>
+ * <li>파티션 테이블일 때만 다룬다. 일반 테이블이면 회차마다 {@code reason=NOT_PARTITIONED} 로 건너뛰었다고 알리고 아무것도 읽지
+ * 않는다.</li>
+ * <li>보관 날짜 수는 {@link #observationRetentionDays} 다. 다시 뜬 worker 와 채점이 다시 읽는 범위
+ * ({@link #OBSERVATION_READ_WINDOW})를 덮지 못하는 설정이면 그 범위를 덮을 때까지 날짜를 건너뛴다.</li>
+ * <li>날짜 파티션으로 바꾸기 전의 줄을 통째로 담은 첫 파티션({@code <table>_legacy})은 여러 날짜가 섞여 있다. 배치 첫 파티션의 모든
+ * 시각이 관측 보관 경계 날짜 이하가 되면 그 파티션을 한 덩어리로, 날짜 파티션과 같은 형식·같은 확인 절차로 내보내고 지운다. 장부에는
+ * ({@code table_name}, {@link PartitionExportRepository#INITIAL_DATE}, 0) 으로 적고 S3 키의 날짜도 그 날짜다. 관측 줄은 자기
+ * 배치보다 먼저 들어올 수 없으므로 관측 첫 파티션의 줄도 그 배치들보다 늦지 않다. 그래서 관측 첫 파티션은 배치 첫 파티션이 준비되었거나
+ * 그 장부가 확인을 마쳤을 때 대상이 된다.</li>
+ * </ul>
  *
  * <p>파티션을 지우는 경로는 하나다. 다음을 모두 통과해야 {@link PartitionExportRepository#drop} 을 부른다.
  * <ol>
@@ -34,10 +48,16 @@ import org.springframework.scheduling.annotation.Scheduled;
  * 줄 수 합이 장부와 같다.</li>
  * <li>지우는 트랜잭션 안에서 새 줄을 막은 뒤 센 파티션의 줄 수가 장부와 같다.</li>
  * </ol>
- * 줄 단위 이관({@link ArchiveService})과 테이블·장부·S3 접두를 함께 쓰지 않으며 {@code route} 행 잠금을 잡지 않는다.
+ * {@code route} 행 잠금을 잡지 않는다.
  */
 public class PartitionExportService {
     static final int FILE_PLAIN_BYTES = 8 * 1024 * 1024;
+    /**
+     * 관측 테이블을 다시 읽는 가장 긴 범위다. 다시 뜬 worker 는 관측을 최대 12시간 되감고, 채점은 최대 26시간 전 기록까지 다시 읽는다.
+     * 둘 가운데 긴 쪽을 쓴다.
+     */
+    static final Duration OBSERVATION_READ_WINDOW = Duration.ofHours(26);
+    private static final String BATCH_TABLE = PartitionExportRepository.OBSERVATION_TABLES.getFirst();
     private static final Logger LOG = LoggerFactory.getLogger(PartitionExportService.class);
     private static final String LOCK_NOT_AVAILABLE = "55P03";
     private final PartitionExportRepository repository;
@@ -47,6 +67,7 @@ public class PartitionExportService {
     private final PartitionExportSettings settings;
     private final Map<String, AtomicLong> defaultRows = new ConcurrentHashMap<>();
     private final AtomicLong oldestPendingDays = new AtomicLong();
+    private LocalDate initialNewest;
 
     public PartitionExportService(
         PartitionExportRepository repository,
@@ -61,11 +82,15 @@ public class PartitionExportService {
         this.metrics = metrics;
         this.settings = settings;
         metrics.gauge("salmonbus_archive_partition_oldest_pending_days", oldestPendingDays);
-        LOG.info("event=partition_export_config enabled=true dropEnabled={} retentionDays={} prefix={} intervalMs={}",
-            settings.dropEnabled(), settings.retentionDays(), settings.prefix(), settings.interval().toMillis());
+        LOG.info("event=partition_export_config enabled=true dropEnabled={} retentionDays={}"
+            + " observationRetentionDays={} prefix={} intervalMs={}", settings.dropEnabled(), settings.retentionDays(),
+            observationRetentionDays(settings.retentionDays()), settings.prefix(), settings.interval().toMillis());
     }
 
-    /** 처리한 회차의 요약이다. {@code oldestPending} 은 대상인데 이번 회차에 끝내지 못한 가장 오래된 날짜다. */
+    /**
+     * 처리한 회차의 요약이다. {@code oldestPending} 은 대상인데 이번 회차에 끝내지 못한 가장 오래된 날짜다. 관측 첫 파티션은
+     * {@code pending} 에는 세지만 날짜가 없으므로 {@code oldestPending} 에는 넣지 않는다.
+     */
     public record RunReport(
         int exported,
         int dropped,
@@ -77,6 +102,15 @@ public class PartitionExportService {
     /** 오늘(한국)에서 보관 날짜 수를 뺀 날짜다. 이 날짜까지의 파티션이 대상이다. */
     public static LocalDate lastEligibleDate(Clock clock, final int retentionDays) {
         return LocalDate.now(clock.withZone(ArchiveRetention.ZONE)).minusDays(retentionDays);
+    }
+
+    /**
+     * 관측 테이블의 보관 날짜 수다. 날짜 d 의 파티션은 d+1 한국 자정까지 들어온 줄을 담으므로, 보관 날짜 수 n 이면 지우는 줄은 언제나
+     * 지금보다 (n-1)일 이상 앞선다. 그래서 {@link #OBSERVATION_READ_WINDOW} 를 덮는 가장 작은 n 과 설정값 가운데 큰 값을 쓴다.
+     */
+    public static int observationRetentionDays(final int retentionDays) {
+        final long windowDays = (OBSERVATION_READ_WINDOW.toHours() + 23) / 24;
+        return Math.max(retentionDays, (int) windowDays + 1);
     }
 
     @Scheduled(fixedDelayString = "${archive.partition-export.interval:1h}",
@@ -97,9 +131,16 @@ public class PartitionExportService {
         final long started = System.nanoTime();
         LocalDate today = LocalDate.now(clock.withZone(ArchiveRetention.ZONE));
         LocalDate through = lastEligibleDate(clock, settings.retentionDays());
-        recordDefaultRows();
+        LocalDate observationThrough = lastEligibleDate(clock, observationRetentionDays(settings.retentionDays()));
+        List<String> observations = partitionedObservationTables();
+        List<String> tables = new ArrayList<>(PartitionExportRepository.TABLES);
+        tables.addAll(observations);
+        recordDefaultRows(tables);
         List<String> unexpected = new ArrayList<>();
-        List<PartitionExportRepository.Partition> partitions = repository.datedPartitions(through, unexpected);
+        List<PartitionExportRepository.Partition> partitions = new ArrayList<>(
+            repository.datedPartitions(PartitionExportRepository.TABLES, through, unexpected));
+        partitions.addAll(observationPartitions(observations, observationThrough, unexpected));
+        partitions.sort(PartitionExportRepository.ORDER);
         recordUnexpectedBounds(unexpected);
         int exported = 0;
         int dropped = 0;
@@ -115,7 +156,7 @@ public class PartitionExportService {
             }
             if (!outcome.done) {
                 pending++;
-                if (oldest == null) {
+                if (oldest == null && !partition.isInitial()) {
                     oldest = partition.date();
                 }
             }
@@ -125,6 +166,109 @@ public class PartitionExportService {
             + " oldestPendingDate={} durationMs={}", through, partitions.size(), exported, dropped, pending,
             dateOrNone(oldest), (System.nanoTime() - started) / 1000000);
         return new RunReport(exported, dropped, pending, oldest);
+    }
+
+    /** 파티션 테이블이 된 관측 테이블을 낸다. 일반 테이블이면 건너뛰었다고 지표와 로그로 알린다. */
+    private List<String> partitionedObservationTables() {
+        List<String> partitioned = new ArrayList<>();
+        for (String table : PartitionExportRepository.OBSERVATION_TABLES) {
+            if (isPartitioned(table)) {
+                partitioned.add(table);
+                continue;
+            }
+            metrics.counter("salmonbus_archive_partition_deferrals", "table", table, "reason", "NOT_PARTITIONED")
+                .increment();
+            LOG.info("event=partition_export status=SKIPPED table={} reason=NOT_PARTITIONED", table);
+        }
+        return partitioned;
+    }
+
+    private boolean isPartitioned(String table) {
+        try {
+            return repository.isPartitioned(table);
+        } catch (RuntimeException failure) {
+            metrics.counter("salmonbus_archive_partition_failures", "table", table, "reason", "CATALOG_FAILED")
+                .increment();
+            LOG.warn("event=partition_export status=FAILED table={} reason=CATALOG_FAILED failureType={} sqlState={}",
+                table, failure.getClass().getSimpleName(), sqlState(failure));
+            return false;
+        }
+    }
+
+    /**
+     * 파티션 테이블이 된 관측 테이블의 대상 파티션이다. 준비된 첫 파티션과 {@code through} 이하의 날짜 파티션이다. 카탈로그를 읽지
+     * 못하면 이번 회차에는 관측 테이블을 건너뛰고 예보 기록 테이블은 계속한다.
+     */
+    private List<PartitionExportRepository.Partition> observationPartitions(
+        List<String> observations,
+        LocalDate through,
+        List<String> unexpected
+    ) {
+        if (observations.isEmpty()) {
+            return List.of();
+        }
+        try {
+            return listObservationPartitions(observations, through, unexpected);
+        } catch (RuntimeException failure) {
+            metrics.counter("salmonbus_archive_partition_failures", "table", BATCH_TABLE, "reason", "CATALOG_FAILED")
+                .increment();
+            LOG.warn("event=partition_export status=FAILED table={} reason=CATALOG_FAILED failureType={} sqlState={}",
+                String.join(",", observations), failure.getClass().getSimpleName(), sqlState(failure));
+            return List.of();
+        }
+    }
+
+    private List<PartitionExportRepository.Partition> listObservationPartitions(
+        List<String> observations,
+        LocalDate through,
+        List<String> unexpected
+    ) {
+        List<PartitionExportRepository.Partition> partitions = new ArrayList<>();
+        List<PartitionExportRepository.Partition> initials = new ArrayList<>();
+        for (String table : observations) {
+            repository.initialPartition(table, unexpected).ifPresent(initials::add);
+        }
+        if (!initials.isEmpty() && initialRowsSettled(through)) {
+            partitions.addAll(initials);
+        }
+        partitions.addAll(repository.datedPartitions(observations, through, unexpected));
+        return partitions;
+    }
+
+    /**
+     * 관측 첫 파티션을 지워도 되는 때인지 본다. 배치 첫 파티션이 붙어 있으면 그 줄의 가장 늦은 시각이 {@code through} 이하의 날짜일
+     * 때 참이다. 이미 떼어 지웠으면 그 장부가 확인을 마쳤을 때 참이다. 가장 늦은 날짜를 기억해 두고 그 날짜가 {@code through} 를 넘는
+     * 동안에는 다시 읽지 않는다. 읽기에 실패하면 거짓이다.
+     */
+    private boolean initialRowsSettled(LocalDate through) {
+        PartitionExportRepository.Partition batches = PartitionExportRepository.Partition.initial(BATCH_TABLE);
+        try {
+            if (!repository.attached(batches)) {
+                return repository.ledger(batches).filter(ledger -> ledger.verifiedAt() != null).isPresent();
+            }
+            if (initialNewest != null && initialNewest.isAfter(through)) {
+                initialWaiting(through);
+                return false;
+            }
+            Optional<LocalDate> newest = repository.newestInitialDate(BATCH_TABLE);
+            if (newest.isEmpty()) {
+                return true;
+            }
+            initialNewest = newest.get();
+            if (initialNewest.isAfter(through)) {
+                initialWaiting(through);
+                return false;
+            }
+            return true;
+        } catch (RuntimeException failure) {
+            failed(batches, failureCode(failure), failure);
+            return false;
+        }
+    }
+
+    private void initialWaiting(LocalDate through) {
+        LOG.info("event=partition_export status=SKIPPED table={} date={} reason=ROWS_TOO_RECENT newestDate={}"
+            + " through={}", BATCH_TABLE, PartitionExportRepository.INITIAL_DATE, initialNewest, through);
     }
 
     private void recordUnexpectedBounds(List<String> unexpected) {
@@ -211,7 +355,7 @@ public class PartitionExportService {
     private PartitionExportRepository.Ledger export(PartitionExportRepository.Partition partition) {
         final long started = System.nanoTime();
         List<PartitionManifest.Column> columns = repository.columns(partition.table());
-        List<String> keys = repository.primaryKey(partition.table());
+        List<String> keys = repository.orderKey(partition.table());
         List<PartitionManifest.FileEntry> files = new ArrayList<>();
         List<String> buffer = new ArrayList<>();
         long bufferBytes = 0;
@@ -462,8 +606,8 @@ public class PartitionExportService {
         return sqlState(failure);
     }
 
-    private void recordDefaultRows() {
-        for (String table : PartitionExportRepository.TABLES) {
+    private void recordDefaultRows(List<String> tables) {
+        for (String table : tables) {
             try {
                 final long rows = repository.defaultRows(table);
                 defaultRows.computeIfAbsent(table, name -> metrics.gauge("salmonbus_archive_partition_default_rows",
