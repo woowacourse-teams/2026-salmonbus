@@ -6,11 +6,31 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 final class SettingsPreparation {
+    /**
+     * basis 교체가 설정 디렉터리를 새로 만든 뒤에도 남는 환경 파일이다. {@link #replacement}가 옮기는
+     * {@link Environment#KEYS}의 설정과 {@link ArrivalSettings#FILE}에서 만든다. arrivals.env가 없으면 앱 설치가 만든다.
+     */
+    static final Set<String> REPLACED_ENVIRONMENT_FILES = Stream.concat(
+                    Environment.KEYS.keySet().stream().map(name -> name + ".env"), Stream.of(ArrivalSettings.FILE))
+            .collect(Collectors.toUnmodifiableSet());
+
+    private static final String UNIT_PREFIX = "salmonbus-";
+
+    /** systemd가 읽을 때 풀어 쓰는 와일드카드와 {@code %} specifier다. 이런 값은 경로만 보고 어느 파일인지 정할 수 없다. */
+    private static final Pattern EXPANDED_BY_SYSTEMD = Pattern.compile("[*?\\[%]");
+
     interface Writer {
         void write(Path path, byte[] content, int mode) throws Exception;
     }
@@ -25,6 +45,139 @@ final class SettingsPreparation {
     SettingsPreparation(Layout layout, Writer writer) {
         this.layout = layout;
         this.writer = writer;
+    }
+
+    /**
+     * 이름이 {@code salmonbus-}로 시작하는 서비스 unit과 그 drop-in의 {@code EnvironmentFile}이 basis 교체 뒤에도
+     * 남는 파일만 가리키는지 확인한다. 대상은 목록 없이 unit 디렉터리에서 찾으므로 나중에 더한 unit과 수동
+     * drop-in도 같은 검사를 받는다.
+     *
+     * <p>basis 교체는 설정 디렉터리를 통째로 바꾸고 관리하는 파일만 옮긴다. 수동 drop-in이 같은 디렉터리의 다른
+     * 파일을 읽으면 교체 뒤 앱이 기동하지 못하므로 앱을 멈추기 전에 거절한다. 수동 설정은 설정 디렉터리 밖에 둔다.
+     *
+     * <p>줄은 systemd와 같은 방식으로 읽는다. 역슬래시로 끝난 줄은 다음 줄과 한 설정이고, 주석 줄은 그 사이에 있어도 건너뛴다.
+     */
+    static void requireReplaceableEnvironment(Layout layout) throws Exception {
+        Path config = layout.config().normalize();
+        for (Path file : serviceFiles(layout.units())) {
+            for (String line : joinedLines(Files.readAllLines(file))) {
+                Optional<String> value = environmentFile(line);
+                if (value.isEmpty()) {
+                    continue;
+                }
+                Checks.require(survivesReplacement(value.get(), config), "DEV_UNMANAGED_ENVIRONMENT_FILE");
+            }
+        }
+    }
+
+    /** 주석 줄을 빼고, 역슬래시로 끝난 줄을 다음 줄과 잇는다. systemd는 그 역슬래시를 공백으로 바꿔 읽는다. */
+    private static List<String> joinedLines(List<String> lines) {
+        List<String> joined = new ArrayList<>();
+        StringBuilder pending = new StringBuilder();
+        for (String line : lines) {
+            if (isComment(line)) {
+                continue;
+            }
+            if (continues(line)) {
+                pending.append(line, 0, line.length() - 1).append(' ');
+                continue;
+            }
+            joined.add(pending.append(line).toString());
+            pending.setLength(0);
+        }
+        if (!pending.isEmpty()) {
+            joined.add(pending.toString());
+        }
+        return joined;
+    }
+
+    private static boolean isComment(String line) {
+        String text = line.stripLeading();
+        return text.startsWith("#") || text.startsWith(";");
+    }
+
+    /** 줄 끝의 역슬래시가 홀수 개면 다음 줄로 이어진다. 짝수 개는 역슬래시 글자를 적은 것이다. */
+    private static boolean continues(String line) {
+        int backslashes = 0;
+        while (backslashes < line.length() && line.charAt(line.length() - 1 - backslashes) == '\\') {
+            backslashes++;
+        }
+        return backslashes % 2 == 1;
+    }
+
+    private static List<Path> serviceFiles(Path units) throws Exception {
+        List<Path> files = new ArrayList<>();
+        for (Path entry : sortedEntries(units)) {
+            String name = entry.getFileName().toString();
+            if (!name.startsWith(UNIT_PREFIX)) {
+                continue;
+            }
+            if (name.endsWith(".service")) {
+                files.add(entry);
+            }
+            if (name.endsWith(".service.d") && Files.isDirectory(entry)) {
+                files.addAll(dropIns(entry));
+            }
+        }
+        return files.stream().filter(Files::isRegularFile).toList();
+    }
+
+    private static List<Path> dropIns(Path directory) throws Exception {
+        return sortedEntries(directory).stream()
+                .filter(path -> path.getFileName().toString().endsWith(".conf"))
+                .toList();
+    }
+
+    private static List<Path> sortedEntries(Path directory) throws Exception {
+        try (Stream<Path> entries = Files.list(directory)) {
+            return entries.sorted().toList();
+        }
+    }
+
+    /** {@code EnvironmentFile=} 줄의 값이다. 다른 설정 줄이거나 값을 비운 줄이면 비어 있다. */
+    private static Optional<String> environmentFile(String line) {
+        final int separator = line.indexOf('=');
+        if (separator < 0) {
+            return Optional.empty();
+        }
+        if (!line.substring(0, separator).strip().equals("EnvironmentFile")) {
+            return Optional.empty();
+        }
+        String value = line.substring(separator + 1).strip();
+        if (value.startsWith("-")) {
+            value = value.substring(1);
+        }
+        if (value.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(value);
+    }
+
+    /**
+     * 설정 디렉터리 밖의 파일이거나, 설정 디렉터리 바로 아래에서 basis 교체가 다시 만드는 파일이다. 와일드카드나 specifier가 든
+     * 값은 어느 파일을 읽을지 정할 수 없으므로 남지 않는 것으로 본다. 심볼릭 링크는 가리키는 실제 파일로도 확인한다. 밖에 둔
+     * 링크가 설정 디렉터리의 다른 파일을 가리키면 교체 뒤 링크가 끊긴다. 실제 파일은 적힌 경로 그대로 찾는다. 링크 뒤의
+     * {@code ..}를 먼저 줄이면 systemd가 읽는 파일과 다른 경로가 된다.
+     */
+    private static boolean survivesReplacement(String value, Path config) throws Exception {
+        if (EXPANDED_BY_SYSTEMD.matcher(value).find()) {
+            return false;
+        }
+        Path written = Path.of(value);
+        if (!survives(written.normalize(), config)) {
+            return false;
+        }
+        if (!Files.exists(written) || !Files.exists(config)) {
+            return true;
+        }
+        return survives(written.toRealPath(), config.toRealPath());
+    }
+
+    private static boolean survives(Path file, Path config) {
+        if (!file.startsWith(config)) {
+            return true;
+        }
+        return config.equals(file.getParent()) && REPLACED_ENVIRONMENT_FILES.contains(file.getFileName().toString());
     }
 
     static Map<String, Map<String, String>> create(String origin, String revision) {

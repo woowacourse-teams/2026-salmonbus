@@ -78,18 +78,25 @@ final class DeploymentPreparation {
         var approval = dataChange && !CompatiblePreparation.permits(previous, next)
                 ? DataTransition.approval(layout, previous, next) : null;
         BasisLifecycle.preserveData(previous, next, approval);
+        SettingsPreparation.requireReplaceableEnvironment(layout);
         FileOps.directory(directory(), 0700);
         Checks.require((FileOps.attribute(directory(), "mode") & 0777) == 0700,
                 "DEV_PREPARATION_DIRECTORY");
         try (var lease = FileOps.lock(layout.locks().resolve("salmonbus-dev-preparation.lock"))) {
             Checks.require(!FileOps.exists(layout.root().resolve(".deploying")),
                     "DEV_DEPLOYMENT_IN_PROGRESS");
+            Map<String, Object> result = new TreeMap<>(Map.of("status", "ok", "preparationRequired", true,
+                    "applicationsRemainStopped", true));
+            Map<String, Boolean> running = runningServices();
             if (FileOps.exists(journal())) {
                 var existing = Json.read(FileOps.privateText(journal()).getBytes());
-                Checks.require(List.of("COMPLETE", "ROLLED_BACK").contains(existing.path("phase").asText()),
-                        "DEV_PREPARATION_RECOVERY_REQUIRED");
+                if (!List.of("COMPLETE", "ROLLED_BACK").contains(existing.path("phase").asText())) {
+                    Checks.require(superseded(existing, app, previous) && stillRunning(existing, running),
+                            "DEV_PREPARATION_RECOVERY_REQUIRED");
+                    result.put("supersededCommit", existing.path("commit").asText());
+                }
             }
-            var state = snapshot(app, previous);
+            var state = snapshot(app, previous, running);
             state.put("dataTransition", approval != null);
             write(state);
             try {
@@ -103,8 +110,7 @@ final class DeploymentPreparation {
                 }
                 state.put("phase", "PREPARED");
                 write(state);
-                return Map.of("status", "ok", "preparationRequired", true,
-                        "applicationsRemainStopped", true);
+                return result;
             } catch (Exception error) {
                 if (approval != null) {
                     state.put("phase", "RECOVERY_REQUIRED");
@@ -121,7 +127,27 @@ final class DeploymentPreparation {
         }
     }
 
-    private Map<String, Object> snapshot(RevisionStore.Revision app, RevisionStore.Revision basis) throws Exception {
+    /**
+     * 다른 커밋의 배포가 basis를 바꾼 뒤 끝맺지 못한 기록인지 확인한다.
+     *
+     * <p>API 검증 전에 멈춘 {@code PREPARED} 기록만 넘긴다. 그 커밋의 worker 배포는 시작되지 않았고, 이 기록으로
+     * 되돌리는 것은 같은 커밋의 hook뿐이라 다음 커밋의 준비를 막을 이유가 없다. {@code API_READY}는 그 커밋의
+     * worker 배포가 아직 진행 중일 수 있어 계속 막고, DB 전환 기록과 준비 중에 멈춘 기록도 계속 막는다. 넘긴
+     * 기록의 커밋은 준비 결과의 {@code supersededCommit}에 남긴다.
+     *
+     * <p>현재 basis가 기록의 직전 basis와 같으면 넘기지 않는다. {@code PREPARED}는 교체가 끝난 뒤에만 적으므로 이
+     * 상태는 그 뒤 basis가 다시 되돌려졌다는 뜻이다. 복구가 basis를 되돌리고 앱 기동에서 멈춘 기록이 그렇다. 이
+     * 기록은 같은 커밋의 복구를 다시 돌려 끝낸다.
+     */
+    private static boolean superseded(JsonNode state, RevisionStore.Revision app, RevisionStore.Revision basis) {
+        return state.path("dataTransition").isBoolean() && !state.path("dataTransition").asBoolean()
+                && "PREPARED".equals(state.path("phase").asText())
+                && !app.commit().equals(state.path("commit").asText())
+                && !basis.releaseId().equals(state.path("basisReleaseId").asText());
+    }
+
+    private Map<String, Object> snapshot(
+            RevisionStore.Revision app, RevisionStore.Revision basis, Map<String, Boolean> running) throws Exception {
         var state = new TreeMap<String, Object>();
         var id = UUID.randomUUID().toString();
         var backup = directory().resolve(id);
@@ -146,11 +172,36 @@ final class DeploymentPreparation {
                 var target = Deployment.current(base.resolve(link), base.resolve("releases"));
                 state.put(component + "-" + link, target == null ? "" : target.getFileName().toString());
             }
-            var active = host.run(Path.of("/"), null, Duration.ofSeconds(15),
-                    List.of("systemctl", "is-active", "salmonbus-" + component));
-            state.put(component + "-active", active.exit() == 0 && active.stdout().strip().equals("active"));
+            state.put(component + "-active", running.get(component));
         }
         return state;
+    }
+
+    /** API와 worker가 지금 도는지 한 번만 읽는다. 기록을 넘길지 정할 때와 새 복구 기준에 같은 값을 쓴다. */
+    private Map<String, Boolean> runningServices() throws Exception {
+        Map<String, Boolean> running = new TreeMap<>();
+        for (String component : List.of("api", "worker")) {
+            Host.Result result = host.run(Path.of("/"), null, Duration.ofSeconds(15),
+                    List.of("systemctl", "is-active", "salmonbus-" + component));
+            running.put(component, result.exit() == 0 && result.stdout().strip().equals("active"));
+        }
+        return running;
+    }
+
+    /**
+     * 넘기려는 기록이 남을 때 돌고 있던 서비스가 지금도 도는지 확인한다.
+     *
+     * <p>꺼져 있으면 그 배포가 서비스를 멈춘 채 끝났다는 뜻이다. 이 상태를 새 복구 기준으로 저장하면 다음 배포가
+     * 실패했을 때 서비스를 다시 띄우지 않고 복구를 끝낸다. 그래서 넘기지 않고 계속 막는다. 다른 배포가 서비스를
+     * 다시 띄운 뒤라면 넘기고, 그때의 basis와 서비스 상태가 새 복구 기준이 된다.
+     */
+    private static boolean stillRunning(JsonNode state, Map<String, Boolean> running) {
+        for (String component : List.of("api", "worker")) {
+            if (state.path(component + "-active").asBoolean() && !running.get(component)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private Path transitionGuard(String component) {
@@ -249,7 +300,7 @@ final class DeploymentPreparation {
         Checks.require(previous.matches(RevisionStore.HASH), "DEV_PREPARATION_BACKUP");
         var basis = RevisionStore.verify(RevisionStore.selectedBasis(layout), true);
         if (!basis.releaseId().equals(previous)) {
-            new BasisLifecycle(layout, host).change(layout.root().resolve("basis/releases/" + previous), true);
+            new BasisLifecycle(layout, host).revert(layout.root().resolve("basis/releases/" + previous));
         }
         for (var component : List.of("api", "worker")) {
             var base = layout.root().resolve(component);
