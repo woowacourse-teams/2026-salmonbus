@@ -122,7 +122,7 @@ CREATE TABLE forecast_unresolved_default PARTITION OF forecast_unresolved DEFAUL
 -- S3 내보내기 장부다. 날짜 파티션 내보내기는 (테이블, 날짜)마다 segment 0 한 줄을 쓴다.
 -- 날짜로 나뉘지 않은 테이블을 통째로 내보낼 때는 source_date 2000-01-01에 기본 키 순서의 조각마다 한 줄을 쓴다.
 -- 조각 n은 조각 n-1의 key_to 다음부터 자기 key_to까지의 줄이고, key_from·key_to는 조각의 첫 줄·마지막 줄 기본 키를 담은
--- JSON 배열 텍스트다.
+-- JSON 배열 텍스트다. read_started_at은 그 조각의 첫 페이지를 읽기 직전 시각이다. 그 뒤에 원본에서 바뀐 값은 조각에 없을 수 있다.
 CREATE TABLE daily_export (
     table_name varchar(63) NOT NULL,
     source_date date NOT NULL,
@@ -135,7 +135,9 @@ CREATE TABLE daily_export (
     segment integer NOT NULL DEFAULT 0,
     key_from text,
     key_to text,
+    read_started_at timestamptz,
     CONSTRAINT pk_daily_export PRIMARY KEY (table_name, source_date, segment),
     CONSTRAINT ck_daily_export_segment CHECK (segment >= 0),
-    CONSTRAINT ck_daily_export_key_range CHECK ((key_from IS NULL) = (key_to IS NULL))
+    CONSTRAINT ck_daily_export_key_range CHECK ((key_from IS NULL) = (key_to IS NULL)),
+    CONSTRAINT ck_daily_export_read_started CHECK ((key_to IS NULL) = (read_started_at IS NULL))
 );

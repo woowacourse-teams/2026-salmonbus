@@ -417,23 +417,42 @@ class TransitionSqlTest {
         run("sal434-02-drop-legacy-triggers.sql", FAST);
         writeArchiveJobTrace("now() - interval '75 minutes'");
         writeLedger();
-        execute("UPDATE daily_export SET exported_at = now() - interval '90 minutes'");
+        execute("UPDATE daily_export SET read_started_at = now() - interval '95 minutes',"
+            + " exported_at = now() - interval '90 minutes'");
 
         // when
         Throwable actual = catchThrowable(() -> runTableDrop(FAST));
 
         // then
-        assertThat(actual).hasMessageContaining("첫 조각").hasMessageContaining("처음부터 다시 내보낸다");
+        assertThat(actual).hasMessageContaining("읽기 시작한 시각").hasMessageContaining("처음부터 다시 내보낸다");
         assertLegacyObjectsPresent();
     }
 
     @Test
-    void 이전_배포본의_마지막_흔적이_옛_테이블을_내보내기_전의_것이면_지운다() throws Exception {
+    void 첫_페이지를_읽은_뒤_조각을_닫기_전에_이전_배포본이_썼으면_지우지_않는다() throws Exception {
+        // given
+        run("sal434-02-drop-legacy-triggers.sql", FAST);
+        writeArchiveJobTrace("now() - interval '80 minutes'");
+        writeLedger();
+        execute("UPDATE daily_export SET read_started_at = now() - interval '90 minutes',"
+            + " exported_at = now() - interval '70 minutes'");
+
+        // when
+        Throwable actual = catchThrowable(() -> runTableDrop(FAST));
+
+        // then
+        assertThat(actual).hasMessageContaining("읽기 시작한 시각").hasMessageContaining("처음부터 다시 내보낸다");
+        assertLegacyObjectsPresent();
+    }
+
+    @Test
+    void 이전_배포본의_마지막_흔적이_옛_테이블을_읽기_전의_것이면_지운다() throws Exception {
         // given
         run("sal434-02-drop-legacy-triggers.sql", FAST);
         writeArchiveJobTrace("now() - interval '4 hours'");
         writeLedger();
-        execute("UPDATE daily_export SET exported_at = now() - interval '90 minutes'");
+        execute("UPDATE daily_export SET read_started_at = now() - interval '95 minutes',"
+            + " exported_at = now() - interval '90 minutes'");
 
         // when
         runTableDrop(FAST);
@@ -909,10 +928,10 @@ class TransitionSqlTest {
 
     /** 옛 테이블 내보내기가 남기는 모양의 검증된 조각 한 줄이다. 키 범위 값은 장부 대조에 쓰이지 않아 흉내만 낸다. */
     private void writeSegment(String table, final int segment, final long rows) throws SQLException {
-        execute("INSERT INTO daily_export(table_name, source_date, segment, object_key, row_count, sha256, exported_at,"
-            + " verified_at, key_from, key_to) VALUES ('" + table + "', DATE '2000-01-01', " + segment + ", 'legacy/"
-            + table + "/segment=" + segment + "/manifest.json', " + rows + ", repeat('a', 64), now(), now(), '["
-            + segment + "]', '[" + segment + "]')");
+        execute("INSERT INTO daily_export(table_name, source_date, segment, object_key, row_count, sha256,"
+            + " read_started_at, exported_at, verified_at, key_from, key_to) VALUES ('" + table
+            + "', DATE '2000-01-01', " + segment + ", 'legacy/" + table + "/segment=" + segment + "/manifest.json', "
+            + rows + ", repeat('a', 64), now(), now(), now(), '[" + segment + "]', '[" + segment + "]')");
     }
 
     private static List<String> outsideMigrations(Connection target) throws IOException, SQLException {

@@ -43,8 +43,10 @@
 --        작업, 옛 평가 보관 기록의 변경이 있거나, sal434.observe_seconds(기본 120초) 동안 대상 테이블의 읽기(seq_scan·idx_scan)나
 --        쓰기(n_tup_ins·upd·del) 통계가 늘면 멈춘다. 대시보드나 수동 조회, 켜 둔 옛 테이블 내보내기, 이 관찰과 겹쳐 실행한
 --        sal434-01-precheck.sql이 읽어도 멈춘다.
---        위 흔적이 옛 테이블 내보내기의 첫 조각(daily_export.exported_at)보다 늦어도 멈춘다. 내보낸 조각에는 그 뒤에 바뀐 값이
---        없고, 줄 수만으로는 값이 바뀐 줄을 가리지 못하기 때문이다. 손으로 고친 값은 흔적이 남지 않으니 고친 사람이 다시 내보낸다.
+--        위 흔적이 옛 테이블 내보내기가 첫 페이지를 읽기 시작한 시각(daily_export.read_started_at 가운데 가장 이른 값)보다
+--        늦어도 멈춘다. 읽은 뒤에 바뀐 값은 조각에 없을 수 있고, 줄 수만으로는 값이 바뀐 줄을 가리지 못하기 때문이다. 조각을 닫은
+--        시각(exported_at)과 견주면 첫 페이지를 읽고 조각을 닫기 전에 바뀐 값을 놓친다. 손으로 고친 값은 흔적이 남지 않으니 고친
+--        사람이 다시 내보낸다.
 --   (라) 내보내기 장부: 줄이 있는 테이블마다 daily_export에서 table_name이 그 테이블이고 verified_at이 있는 줄의
 --        row_count 합이 지금 정확한 줄 수와 같아야 한다. 또 그 테이블의 옛 테이블 조각(source_date 2000-01-01)은 번호가
 --        0부터 빈틈없이 이어져야 한다. 이관 앱의 옛 테이블 내보내기(LegacyExportService)가 이 계약대로 조각마다 한 줄을 남긴다.
@@ -90,7 +92,7 @@ DECLARE
     problems text;
     latest timestamptz;
     newest timestamptz;
-    first_export timestamptz;
+    first_read timestamptz;
     before jsonb;
     after jsonb;
     t text;
@@ -215,11 +217,11 @@ BEGIN
         END IF;
     END IF;
 
-    -- (다) 내보낸 뒤의 흔적. 내보낸 조각에는 그 뒤에 바뀐 값이 없다. 줄 수가 같아도 값이 다를 수 있으므로 지우지 않는다.
-    SELECT min(exported_at) INTO first_export FROM daily_export
+    -- (다) 내보내기가 읽기 시작한 뒤의 흔적. 읽은 뒤에 바뀐 값은 조각에 없을 수 있다. 줄 수가 같아도 값이 다를 수 있으므로 지우지 않는다.
+    SELECT min(read_started_at) INTO first_read FROM daily_export
      WHERE source_date = DATE '2000-01-01' AND table_name = ANY (existing_tables);
-    IF newest > first_export THEN
-        RAISE EXCEPTION 'SAL-434: 옛 테이블 내보내기의 첫 조각(%) 뒤에 이전 배포본이 옛 테이블을 썼다(마지막 흔적 %). 내보낸 조각에 그 뒤에 바뀐 값이 없을 수 있어 지우지 않는다. 이전 배포본을 멈춘 뒤 backend/deploy/RUNBOOK.md 「옛 테이블 내보내기」의 방법으로 처음부터 다시 내보낸다.', first_export, newest;
+    IF newest > first_read THEN
+        RAISE EXCEPTION 'SAL-434: 옛 테이블 내보내기가 첫 페이지를 읽기 시작한 시각(%) 뒤에 이전 배포본이 옛 테이블을 썼다(마지막 흔적 %). 읽은 뒤에 바뀐 값이 조각에 없을 수 있어 지우지 않는다. 이전 배포본을 멈춘 뒤 backend/deploy/RUNBOOK.md 「옛 테이블 내보내기」의 방법으로 처음부터 다시 내보낸다.', first_read, newest;
     END IF;
 
     -- (다) 읽기·쓰기 통계 관찰. 다른 세션의 통계는 트랜잭션이 끝난 뒤 반영된다. 쉬는 세션의 것은 10초쯤 걸릴 수 있다.

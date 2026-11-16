@@ -32,7 +32,8 @@ import org.springframework.scheduling.annotation.Scheduled;
  * <p>끝났다는 판정: 마지막 조각 다음 키로 읽은 페이지가 비었고, 모든 조각의 키 범위(앞 조각 {@code key_to} 초과, 자기 {@code key_to}
  * 이하)를 다시 센 줄 수가 장부와 같으면 그 테이블을 끝났다고 본다. 범위가 서로 겹치지 않고 빈틈없이 키 공간을 덮으므로 이 판정은 장부
  * 합이 그 순간의 줄 수와 같다는 뜻이다. 다시 센 값이 다르면 이미 내보낸 범위에서 줄이 지워졌거나(적음) 커서 뒤에 들어왔다(많음).
- * 이때 장부를 고치지 않고 지표·로그로 알린다. 같은 키에서 값만 바뀐 줄은 줄 수로 알아보지 못한다.
+ * 이때 장부를 고치지 않고 지표·로그로 알린다. 같은 키에서 값만 바뀐 줄은 줄 수로 알아보지 못한다. 그래서 조각마다 첫 페이지를
+ * 읽기 직전 시각을 장부에 남기고, 옛 테이블을 지우는 SQL 이 그 뒤의 쓰기 흔적을 보면 멈춘다.
  */
 public class LegacyExportService {
     private static final Logger LOG = LoggerFactory.getLogger(LegacyExportService.class);
@@ -260,6 +261,7 @@ public class LegacyExportService {
         boolean reachedEnd = false;
         while (!budget.exhausted()) {
             final int limit = (int) Math.min(settings.pageSize(), budget.rowsLeft);
+            Instant beforeRead = clock.instant();
             final long pageStarted = System.nanoTime();
             LegacyExportRepository.Page page = repository.page(table, columns, keys, cursor, limit);
             metrics.timer("salmonbus_archive_stage", "stage", "legacy_page").record(System.nanoTime() - pageStarted,
@@ -269,7 +271,7 @@ public class LegacyExportService {
                 break;
             }
             if (writer == null) {
-                writer = new SegmentWriter(table, ledger.size(), cursor, page.firstKey());
+                writer = new SegmentWriter(table, ledger.size(), cursor, page.firstKey(), beforeRead);
             }
             writer.add(page.rows());
             writer.keyTo = page.lastKey();
@@ -331,6 +333,7 @@ public class LegacyExportService {
         final int number;
         final String after;
         final String keyFrom;
+        final Instant readStarted;
         final long started = System.nanoTime();
         final List<PartitionManifest.FileEntry> files = new ArrayList<>();
         final List<String> buffer = new ArrayList<>();
@@ -344,12 +347,14 @@ public class LegacyExportService {
             String table,
             final int number,
             String after,
-            String keyFrom
+            String keyFrom,
+            Instant readStarted
         ) {
             this.table = table;
             this.number = number;
             this.after = after;
             this.keyFrom = keyFrom;
+            this.readStarted = readStarted;
         }
 
         void add(List<String> page) {
@@ -400,7 +405,8 @@ public class LegacyExportService {
         objects.putVerified(key, manifestBytes);
         verifyStored(writer.table, writer.number, key, sha, writer.rows, writer.keyTo);
         LegacyExportRepository.Segment segment = new LegacyExportRepository.Segment(writer.number, writer.keyFrom,
-            writer.keyTo, writer.rows, key, sha, Instant.parse(manifest.exportedAt()), clock.instant());
+            writer.keyTo, writer.rows, key, sha, writer.readStarted, Instant.parse(manifest.exportedAt()),
+            clock.instant());
         if (repository.record(writer.table, segment, writer.after) != LegacyExportRepository.RecordResult.INSERTED) {
             throw new IllegalStateException("LEDGER_CHANGED");
         }

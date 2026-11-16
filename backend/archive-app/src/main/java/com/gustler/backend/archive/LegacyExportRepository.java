@@ -65,7 +65,8 @@ public class LegacyExportRepository {
 
     private static final RowMapper<Segment> SEGMENT = (rs, n) -> new Segment(rs.getInt(1), rs.getString(2),
         rs.getString(3), rs.getLong(4), rs.getString(5), rs.getString(6).trim(),
-        instant(rs.getObject(7, OffsetDateTime.class)), instant(rs.getObject(8, OffsetDateTime.class)));
+        instant(rs.getObject(7, OffsetDateTime.class)), instant(rs.getObject(8, OffsetDateTime.class)),
+        instant(rs.getObject(9, OffsetDateTime.class)));
 
     private final JdbcClient jdbc;
     private final List<String> tables;
@@ -101,7 +102,12 @@ public class LegacyExportRepository {
         write.setTimeout((int) LEDGER_TIMEOUT.toSeconds() + 15);
     }
 
-    /** 장부의 조각 한 줄. 키는 JSON 배열 텍스트이고 {@code key}·{@code sha256} 은 manifest 의 키와 해시다. */
+    /**
+     * 장부의 조각 한 줄. 키는 JSON 배열 텍스트이고 {@code key}·{@code sha256} 은 manifest 의 키와 해시다.
+     *
+     * <p>{@code readStartedAt} 은 조각의 첫 페이지를 읽기 직전 시각이다. 그 뒤에 원본에서 바뀐 값은 조각에 없을 수 있어서, 옛 테이블을
+     * 지우는 SQL 이 이 시각 뒤의 쓰기 흔적을 보면 멈춘다. {@code exportedAt} 은 조각을 닫은 시각이다.
+     */
     public record Segment(
         int number,
         String keyFrom,
@@ -109,6 +115,7 @@ public class LegacyExportRepository {
         long rows,
         String key,
         String sha256,
+        Instant readStartedAt,
         Instant exportedAt,
         Instant verifiedAt
     ) {
@@ -190,7 +197,7 @@ public class LegacyExportRepository {
         requireTable(table);
         return jdbc.sql("""
             SELECT /* salmonbus:daily_export.find_segments */ segment, key_from, key_to, row_count, object_key,
-                sha256, exported_at, verified_at
+                sha256, read_started_at, exported_at, verified_at
             FROM daily_export WHERE table_name = ? AND source_date = ? ORDER BY segment
             """).params(table, SOURCE_DATE).query(SEGMENT).list();
     }
@@ -296,11 +303,12 @@ public class LegacyExportRepository {
             }
             jdbc.sql("""
                 INSERT /* salmonbus:daily_export.insert_segment */ INTO daily_export(
-                    table_name, source_date, segment, object_key, row_count, sha256, exported_at,
-                    verified_at, key_from, key_to)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    table_name, source_date, segment, object_key, row_count, sha256, read_started_at,
+                    exported_at, verified_at, key_from, key_to)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """).params(table, SOURCE_DATE, segment.number(), segment.key(), segment.rows(), segment.sha256(),
-                time(segment.exportedAt()), time(segment.verifiedAt()), segment.keyFrom(), segment.keyTo()).update();
+                time(segment.readStartedAt()), time(segment.exportedAt()), time(segment.verifiedAt()),
+                segment.keyFrom(), segment.keyTo()).update();
             return RecordResult.INSERTED;
         });
     }

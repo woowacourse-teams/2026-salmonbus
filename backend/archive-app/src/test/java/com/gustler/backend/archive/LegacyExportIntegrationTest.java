@@ -6,6 +6,7 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import com.gustler.backend.support.TestDatabase;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Date;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -239,6 +240,61 @@ class LegacyExportIntegrationTest {
         });
         assertThat(restore(objects, "seat_forecast", "restored_seat_forecast")).isEqualTo(80);
         assertSameRows("seat_forecast", "restored_seat_forecast");
+    }
+
+    @Test
+    void 조각마다_첫_페이지를_읽기_직전_시각을_장부에_남긴다() {
+        // given
+        seatForecasts(1, 40, 4000);
+        Instant start = Instant.parse("2026-11-15T03:00:00Z");
+        AtomicLong pagesRead = new AtomicLong();
+        clock = new Clock() {
+            @Override
+            public ZoneId getZone() {
+                return ZoneOffset.UTC;
+            }
+
+            @Override
+            public Clock withZone(ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public Instant instant() {
+                return start.plusSeconds(pagesRead.get());
+            }
+        };
+        LegacyExportRepository reading = new LegacyExportRepository(jdbc, new JdbcTransactionManager(source),
+            Duration.ofSeconds(30), List.of("seat_forecast")) {
+            @Override
+            public LegacyExportRepository.Page page(
+                String table,
+                List<PartitionManifest.Column> columns,
+                List<String> keys,
+                String after,
+                final int limit
+            ) {
+                pagesRead.incrementAndGet();
+                return super.page(table, columns, keys, after, limit);
+            }
+        };
+        LegacyExportService service = new LegacyExportService(reading,
+            new PartitionExportIntegrationTest.MemoryObjects(), clock, new SimpleMeterRegistry(),
+            settings(MIN_SEGMENT, 1_000_000, 7), pauses::add);
+
+        // when
+        service.run();
+
+        // then
+        List<Map<String, Object>> ledger = ledger("seat_forecast");
+        assertSoftly(softly -> {
+            softly.assertThat(ledger).hasSizeGreaterThanOrEqualTo(2);
+            softly.assertThat(((Timestamp) ledger.getFirst().get("read_started_at")).toInstant()).isEqualTo(start);
+            for (Map<String, Object> row : ledger) {
+                softly.assertThat(((Timestamp) row.get("read_started_at")).toInstant())
+                    .isBefore(((Timestamp) row.get("exported_at")).toInstant());
+            }
+        });
     }
 
     @Test
