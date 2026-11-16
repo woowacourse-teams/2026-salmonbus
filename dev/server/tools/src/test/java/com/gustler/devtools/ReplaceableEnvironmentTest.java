@@ -182,6 +182,31 @@ class ReplaceableEnvironmentTest {
     }
 
     @Test
+    void 설정_디렉터리_밖의_링크가_안쪽의_다른_환경_파일을_가리키면_거절한다() throws Exception {
+        // given
+        Path target = Files.writeString(layout.config().resolve("custom.env"), "A=1\n");
+        Path link = Files.createDirectories(base.resolve("etc/salmonbus-extra")).resolve("api.env");
+        Files.createSymbolicLink(link, target);
+        dropIn("salmonbus-api.service", "[Service]\nEnvironmentFile=" + link + "\n");
+
+        // when & then
+        assertThatThrownBy(() -> SettingsPreparation.requireReplaceableEnvironment(layout))
+            .hasMessage("DEV_UNMANAGED_ENVIRONMENT_FILE");
+    }
+
+    @Test
+    void 설정_디렉터리_밖의_링크가_기반_교체가_다시_만드는_환경_파일을_가리키면_허용한다() throws Exception {
+        // given
+        Path target = Files.writeString(layout.config().resolve("api.env"), "A=1\n");
+        Path link = Files.createDirectories(base.resolve("etc/salmonbus-extra")).resolve("api.env");
+        Files.createSymbolicLink(link, target);
+        dropIn("salmonbus-api.service", "[Service]\nEnvironmentFile=" + link + "\n");
+
+        // when & then
+        assertThatCode(() -> SettingsPreparation.requireReplaceableEnvironment(layout)).doesNotThrowAnyException();
+    }
+
+    @Test
     void salmonbus로_시작하지_않는_unit은_검사하지_않는다() throws Exception {
         // given
         Files.writeString(layout.units().resolve("docker.service"), "[Service]\n"

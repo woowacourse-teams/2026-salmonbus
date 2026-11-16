@@ -155,13 +155,24 @@ final class SettingsPreparation {
 
     /**
      * 설정 디렉터리 밖의 파일이거나, 설정 디렉터리 바로 아래에서 basis 교체가 다시 만드는 파일이다. 와일드카드나 specifier가 든
-     * 값은 어느 파일을 읽을지 정할 수 없으므로 남지 않는 것으로 본다.
+     * 값은 어느 파일을 읽을지 정할 수 없으므로 남지 않는 것으로 본다. 심볼릭 링크는 가리키는 실제 파일로도 확인한다. 밖에 둔
+     * 링크가 설정 디렉터리의 다른 파일을 가리키면 교체 뒤 링크가 끊긴다.
      */
-    private static boolean survivesReplacement(String value, Path config) {
+    private static boolean survivesReplacement(String value, Path config) throws Exception {
         if (EXPANDED_BY_SYSTEMD.matcher(value).find()) {
             return false;
         }
         Path file = Path.of(value).normalize();
+        if (!survives(file, config)) {
+            return false;
+        }
+        if (!Files.exists(file) || !Files.exists(config)) {
+            return true;
+        }
+        return survives(file.toRealPath(), config.toRealPath());
+    }
+
+    private static boolean survives(Path file, Path config) {
         if (!file.startsWith(config)) {
             return true;
         }

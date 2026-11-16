@@ -40,7 +40,8 @@ systemd는 환경 파일의 DB 설정을 사용한다. worker의 GBIS loopback �
 `/etc/systemd/system`에서 이름이 `salmonbus-`로 시작하는 서비스 unit과 그 drop-in을 모두 읽어,
 `EnvironmentFile`이 이 디렉터리의 다른 파일을 가리키면 앱을 중지하기 전에
 `DEV_UNMANAGED_ENVIRONMENT_FILE`로 거절한다. 와일드카드나 `%` specifier가 든 값도 어느 파일을 읽는지
-정할 수 없어 같은 오류로 거절하므로, `EnvironmentFile`에는 경로를 그대로 적는다.
+정할 수 없어 같은 오류로 거절하므로, `EnvironmentFile`에는 경로를 그대로 적는다. 심볼릭 링크는 가리키는
+실제 파일로도 검사한다.
 
 다른 커밋의 배포가 basis를 바꾼 뒤 API 검증 전에 멈춰 남긴 `PREPARED` 준비 기록은 다음 basis
 교체를 막지 않고 넘긴다. 넘긴 기록의 커밋은 준비 결과의 `supersededCommit`에 남긴다. 다만 그 기록이
