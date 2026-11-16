@@ -12,20 +12,20 @@ public interface CollectionBatchRepository {
      */
     Optional<CollectionBatch> findByPlan(CollectionPlan plan);
 
+    /** 이 배치로 예보를 착수한 시각이다. 예보가 이 배치를 쓰지 않았으면 비어 있다. */
+    Optional<OffsetDateTime> findForecastStart(long batchId);
+
     /**
      * 이미 존재해야 하는 수집 묶음을 읽는다. 없는 식별자는 필수 조회 실패로 처리한다.
      */
     CollectionBatch getById(long batchId);
-
-    /** 기존 확인 시각을 유지하며 첫 입력 확인을 원자적으로 저장한다. */
-    void confirmInputOnce(long batchId, OffsetDateTime at);
 
     /**
      * 수집 상태를 저장하고 식별자를 반환한다. 호출자가 여는 트랜잭션 안에서 할당량 예약과 함께 사용할 수 있다.
      */
     long save(CollectionBatch batch);
 
-    /** 응답·관측·발행이 없는 미완료 배치만 종료한다. 이미 끝난 배치는 변경하지 않는다. */
+    /** 응답·관측·예보 실행 기록이 없는 미완료 배치만 종료한다. 이미 끝난 배치는 변경하지 않는다. */
     int closeUnfinished(long batchId);
 
     /** 회차 사이에 남은 미완료를 잠근다. 다른 작업이 잠근 배치는 기다리지 않는다. */

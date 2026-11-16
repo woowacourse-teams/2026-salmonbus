@@ -16,6 +16,7 @@ import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import com.gustler.backend.api.route.domain.Route;
 import com.gustler.backend.api.route.domain.RouteStatus;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -151,20 +152,20 @@ public class BoardQueryService {
             return;
         }
         List<Long> versionIds = missed.values().stream().map(BoardSnapshot::routeVersionId).distinct().toList();
-        List<Long> publishedBatchIds = missed.values().stream()
+        Map<Long, LocalDate> forecastDateByBatchId = new LinkedHashMap<>();
+        missed.values().stream()
             .map(snapshot -> snapshot.observation().orElseThrow())
             .filter(SnapshotObservation::forecastPublished)
-            .map(SnapshotObservation::batchId)
-            .distinct()
-            .toList();
+            .forEach(observation -> forecastDateByBatchId.putIfAbsent(
+                observation.batchId(), observation.forecastDate()));
         Map<Long, Long> versionIdByBatchId = new LinkedHashMap<>();
         missed.values().forEach(snapshot -> versionIdByBatchId.put(
             snapshot.observation().orElseThrow().batchId(), snapshot.routeVersionId()));
 
         Map<Long, List<BoardStop>> stops = boardQueryRepository.findStops(versionIds);
         Map<Long, List<StoredPrediction>> predictions = Map.of();
-        if (!publishedBatchIds.isEmpty()) {
-            predictions = boardQueryRepository.findPredictions(publishedBatchIds);
+        if (!forecastDateByBatchId.isEmpty()) {
+            predictions = boardQueryRepository.findRecordedPredictions(forecastDateByBatchId);
         }
         Map<Long, List<BoardVehicleObservation>> vehicles = boardQueryRepository.findObservedVehicles(versionIdByBatchId);
 
@@ -299,9 +300,10 @@ public class BoardQueryService {
         }
         return new VehicleForecast.Available(
             seatAvailableProbability(prediction.seatFullChance()),
-            reportableExpectedSeats(prediction.expectedSeats()), prediction.seatTarget(),
+            reportableExpectedSeats(prediction.expectedSeats()),
+            prediction.seatTarget(),
             prediction.probabilityTarget(),
-            departureFullProbability(prediction));
+            prediction.seatFullChance());
     }
 
     /**
@@ -467,7 +469,7 @@ public class BoardQueryService {
 
     private List<StoredPrediction> publishedPredictions(SnapshotObservation observation) {
         if (observation.forecastPublished()) {
-            return boardQueryRepository.findPredictions(observation.batchId());
+            return boardQueryRepository.findRecordedPredictions(observation.batchId(), observation.forecastDate());
         }
         return List.of();
     }
@@ -552,12 +554,4 @@ public class BoardQueryService {
             return remainingStops == horizonStops || remainingStops == horizonStops - 1;
         }
     }
-
-    private Double departureFullProbability(StoredPrediction prediction) {
-        if ("DEPARTURE_ZERO".equals(prediction.probabilityTarget())) {
-            return prediction.seatFullChance();
-        }
-        return null;
-    }
-
 }

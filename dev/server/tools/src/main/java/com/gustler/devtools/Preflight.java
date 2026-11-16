@@ -53,6 +53,8 @@ final class Preflight {
         switch (component) {
             case "prepare" -> {}
             case "infra" -> Environment.effective(settings.get("infra"), effective);
+            // 이관 앱은 worker와 같은 DB에 붙어 파티션을 지운다. 검증한 worker 설정 그대로일 때만 뜨게 한다.
+            case "archive" -> Environment.effective(settings.get("worker"), effective);
             case "api", "worker" -> {
                 Checks.require(
                         !FileOps.exists(layout.root().resolve("basis/operation.json")),
@@ -62,7 +64,6 @@ final class Preflight {
                 var app =
                         RevisionStore.verify(
                                 layout.root().resolve(component + "/current").toRealPath(), true);
-                DataTransition.requireApplication(layout, app);
                 Checks.require(
                         app.basisDigest().equals(basis.basisDigest()), "DEV_BASIS_UPDATE_REQUIRED");
                 var file = layout.root().resolve(component + "/current/release.env");

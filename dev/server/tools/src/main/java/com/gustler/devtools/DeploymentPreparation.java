@@ -14,16 +14,10 @@ import java.util.UUID;
 final class DeploymentPreparation {
     private final Layout layout;
     private final Host host;
-    private final DataTransition transition;
 
     DeploymentPreparation(Layout layout, Host host) {
-        this(layout, host, new DataTransition());
-    }
-
-    DeploymentPreparation(Layout layout, Host host, DataTransition transition) {
         this.layout = layout;
         this.host = host;
-        this.transition = transition;
     }
 
     private Path directory() {
@@ -46,6 +40,7 @@ final class DeploymentPreparation {
             values.put("dropin-" + component,
                     layout.units().resolve(name + ".d/30-dev-rds.conf"));
         }
+        values.put("unit-" + RevisionStore.ARCHIVE_UNIT, layout.units().resolve(RevisionStore.ARCHIVE_UNIT));
         return values;
     }
 
@@ -70,47 +65,37 @@ final class DeploymentPreparation {
         RevisionStore.requireReady(layout, previous);
         final boolean basisChange = !previous.basisDigest().equals(next.basisDigest());
         if (!basisChange) {
-            DataTransition.requireApplication(layout, app);
             return Map.of("status", "ok", "preparationRequired", false);
         }
-        var dataChange = !java.util.Objects.equals(previous.files().get("tools/data-contract.sha256"),
-                next.files().get("tools/data-contract.sha256"));
-        var approval = dataChange && !CompatiblePreparation.permits(previous, next)
-                ? DataTransition.approval(layout, previous, next) : null;
-        BasisLifecycle.preserveData(previous, next, approval);
+        BasisLifecycle.preserveData(previous, next);
+        SettingsPreparation.requireReplaceableEnvironment(layout);
         FileOps.directory(directory(), 0700);
         Checks.require((FileOps.attribute(directory(), "mode") & 0777) == 0700,
                 "DEV_PREPARATION_DIRECTORY");
         try (var lease = FileOps.lock(layout.locks().resolve("salmonbus-dev-preparation.lock"))) {
             Checks.require(!FileOps.exists(layout.root().resolve(".deploying")),
                     "DEV_DEPLOYMENT_IN_PROGRESS");
+            Map<String, Object> result = new TreeMap<>(Map.of("status", "ok", "preparationRequired", true,
+                    "applicationsRemainStopped", true));
+            Map<String, Boolean> running = runningServices();
             if (FileOps.exists(journal())) {
                 var existing = Json.read(FileOps.privateText(journal()).getBytes());
-                Checks.require(List.of("COMPLETE", "ROLLED_BACK").contains(existing.path("phase").asText()),
-                        "DEV_PREPARATION_RECOVERY_REQUIRED");
+                if (!List.of("COMPLETE", "ROLLED_BACK").contains(existing.path("phase").asText())) {
+                    Checks.require(superseded(existing, app, previous) && stillRunning(existing, running),
+                            "DEV_PREPARATION_RECOVERY_REQUIRED");
+                    result.put("supersededCommit", existing.path("commit").asText());
+                }
             }
-            var state = snapshot(app, previous);
-            state.put("dataTransition", approval != null);
+            var state = snapshot(app, previous, running);
             write(state);
             try {
                 stopApplications();
-                new BasisLifecycle(layout, host).change(nextPath, true, approval);
+                new BasisLifecycle(layout, host).change(nextPath, true);
                 new Preflight(layout, host).check("prepare", Map.of());
-                if (approval != null) {
-                    approval.verify(previous, next, java.time.Instant.now());
-                    installTransitionGuards(next);
-                    transition.approveDatabase(layout, nextPath, approval);
-                }
                 state.put("phase", "PREPARED");
                 write(state);
-                return Map.of("status", "ok", "preparationRequired", true,
-                        "applicationsRemainStopped", true);
+                return result;
             } catch (Exception error) {
-                if (approval != null) {
-                    state.put("phase", "RECOVERY_REQUIRED");
-                    write(state);
-                    throw new IllegalArgumentException("DEV_DATA_TRANSITION_RECOVERY_REQUIRED");
-                }
                 try {
                     restore(Json.read(Json.bytes(state)));
                 } catch (Exception recovery) {
@@ -121,7 +106,28 @@ final class DeploymentPreparation {
         }
     }
 
-    private Map<String, Object> snapshot(RevisionStore.Revision app, RevisionStore.Revision basis) throws Exception {
+    /**
+     * 다른 커밋의 배포가 basis를 바꾼 뒤 끝맺지 못한 기록인지 확인한다.
+     *
+     * <p>API 검증 전에 멈춘 {@code PREPARED} 기록만 넘긴다. 그 커밋의 worker 배포는 시작되지 않았고, 이 기록으로
+     * 되돌리는 것은 같은 커밋의 hook뿐이라 다음 커밋의 준비를 막을 이유가 없다. {@code API_READY}는 그 커밋의
+     * worker 배포가 아직 진행 중일 수 있어 계속 막고, 준비 중에 멈춘 기록도 계속 막는다. 이전 도구가 DB 전환을
+     * 하다가 남긴 기록({@code dataTransition}이 참)도 계속 막는다. 넘긴 기록의 커밋은 준비 결과의
+     * {@code supersededCommit}에 남긴다.
+     *
+     * <p>현재 basis가 기록의 직전 basis와 같으면 넘기지 않는다. {@code PREPARED}는 교체가 끝난 뒤에만 적으므로 이
+     * 상태는 그 뒤 basis가 다시 되돌려졌다는 뜻이다. 복구가 basis를 되돌리고 앱 기동에서 멈춘 기록이 그렇다. 이
+     * 기록은 같은 커밋의 복구를 다시 돌려 끝낸다.
+     */
+    private static boolean superseded(JsonNode state, RevisionStore.Revision app, RevisionStore.Revision basis) {
+        return !state.path("dataTransition").asBoolean(false)
+                && "PREPARED".equals(state.path("phase").asText())
+                && !app.commit().equals(state.path("commit").asText())
+                && !basis.releaseId().equals(state.path("basisReleaseId").asText());
+    }
+
+    private Map<String, Object> snapshot(
+            RevisionStore.Revision app, RevisionStore.Revision basis, Map<String, Boolean> running) throws Exception {
         var state = new TreeMap<String, Object>();
         var id = UUID.randomUUID().toString();
         var backup = directory().resolve(id);
@@ -146,42 +152,43 @@ final class DeploymentPreparation {
                 var target = Deployment.current(base.resolve(link), base.resolve("releases"));
                 state.put(component + "-" + link, target == null ? "" : target.getFileName().toString());
             }
-            var active = host.run(Path.of("/"), null, Duration.ofSeconds(15),
-                    List.of("systemctl", "is-active", "salmonbus-" + component));
-            state.put(component + "-active", active.exit() == 0 && active.stdout().strip().equals("active"));
+            state.put(component + "-active", running.get(component));
         }
+        state.put("archive-active", running.get("archive"));
         return state;
     }
 
-    private Path transitionGuard(String component) {
-        return layout.units().resolve("salmonbus-" + component + ".service.d/40-data-transition.conf");
+    private boolean isActive(String component) throws Exception {
+        Host.Result active = host.run(Path.of("/"), null, Duration.ofSeconds(15),
+            List.of("systemctl", "is-active", "salmonbus-" + component));
+        return active.exit() == 0 && active.stdout().strip().equals("active");
     }
 
-    private void installTransitionGuards(RevisionStore.Revision basis) throws Exception {
-        // 이전 CodeDeploy 번들의 도구로 돌아가도 전환 중인 DB에 이전 앱을 시작하지 못한다.
-        var tools = layout.root().resolve("basis/releases/" + basis.releaseId() + "/tools/shared-dev-tools.jar");
-        Checks.require(tools.toString().matches("/[a-zA-Z0-9/_.-]+"),
-                "DEV_DATA_TRANSITION_TOOL_PATH");
-        for (var component : List.of("api", "worker")) {
-            var file = transitionGuard(component);
-            FileOps.directory(file.getParent(), 0755);
-            FileOps.atomicFile(file, ("# SAL-175 dev data transition\n[Service]\n"
-                    + "ExecStartPre=+/usr/bin/java -Xms16m -Xmx64m -jar " + tools
-                    + " preflight " + component + "\n").getBytes(), 0644);
+    /** API, worker, 이관 앱이 지금 도는지 한 번만 읽는다. 기록을 넘길지 정할 때와 새 복구 기준에 같은 값을 쓴다. */
+    private Map<String, Boolean> runningServices() throws Exception {
+        Map<String, Boolean> running = new TreeMap<>();
+        for (String component : List.of("api", "worker", "archive")) {
+            Host.Result result = host.run(Path.of("/"), null, Duration.ofSeconds(15),
+                    List.of("systemctl", "is-active", "salmonbus-" + component));
+            running.put(component, result.exit() == 0 && result.stdout().strip().equals("active"));
         }
-        host.run("systemctl", "daemon-reload");
+        return running;
     }
 
-    private void removeTransitionGuards() throws Exception {
-        for (var component : List.of("api", "worker")) {
-            var file = transitionGuard(component);
-            if (!FileOps.exists(file)) continue;
-            FileOps.protectedFile(file, "DEV_DATA_TRANSITION_GUARD");
-            Checks.require(Files.readString(file).startsWith("# SAL-175 dev data transition\n"),
-                    "DEV_DATA_TRANSITION_GUARD");
-            Files.delete(file);
+    /**
+     * 넘기려는 기록이 남을 때 돌고 있던 서비스가 지금도 도는지 확인한다.
+     *
+     * <p>꺼져 있으면 그 배포가 서비스를 멈춘 채 끝났다는 뜻이다. 이 상태를 새 복구 기준으로 저장하면 다음 배포가
+     * 실패했을 때 서비스를 다시 띄우지 않고 복구를 끝낸다. 그래서 넘기지 않고 계속 막는다. 다른 배포가 서비스를
+     * 다시 띄운 뒤라면 넘기고, 그때의 basis와 서비스 상태가 새 복구 기준이 된다.
+     */
+    private static boolean stillRunning(JsonNode state, Map<String, Boolean> running) {
+        for (String component : List.of("api", "worker", "archive")) {
+            if (state.path(component + "-active").asBoolean() && !running.get(component)) {
+                return false;
+            }
         }
-        host.run("systemctl", "daemon-reload");
+        return true;
     }
 
     private void write(Map<String, Object> state) throws Exception {
@@ -191,12 +198,22 @@ final class DeploymentPreparation {
     }
 
     private void stopApplications() throws Exception {
+        stopArchive();
         for (var component : List.of("worker", "api")) {
             // Allow systemd's 45-second worker shutdown to complete before timing out.
             host.run(Path.of("/"), null, Duration.ofSeconds(75),
                     List.of("systemctl", "stop", "salmonbus-" + component)).checked();
         }
         DataPreparation.requireStopped(host, "STOP_DEV_APPS_BEFORE_PREPARATION");
+    }
+
+    /** 이관 앱은 worker 묶음이 설치한다. worker 묶음을 한 번도 설치하지 않은 서버에는 멈출 유닛이 없다. */
+    private void stopArchive() throws Exception {
+        if (!FileOps.exists(layout.units().resolve(RevisionStore.ARCHIVE_UNIT))) {
+            return;
+        }
+        host.run(Path.of("/"), null, Duration.ofSeconds(75), List.of("systemctl", "stop", "salmonbus-archive"))
+            .checked();
     }
 
     Map<String, Object> recover(Path incoming, Map<String, String> environment) throws Exception {
@@ -209,15 +226,6 @@ final class DeploymentPreparation {
                 return Map.of("status", "ok", "recoveryRequired", false);
             }
             var state = Json.read(FileOps.privateText(journal()).getBytes());
-            if (List.of("COMPLETE", "ROLLED_BACK").contains(state.path("phase").asText())) {
-                return Map.of("status", "ok", "recoveryRequired", false);
-            }
-            if (state.path("dataTransition").asBoolean() && !state.path("phase").asText().equals("COMPLETE")) {
-                stopApplications();
-                ((tools.jackson.databind.node.ObjectNode) state).put("phase", "RECOVERY_REQUIRED");
-                FileOps.atomicFile(journal(), Json.bytes(state), 0600);
-                throw new IllegalArgumentException("DEV_DATA_TRANSITION_RECOVERY_REQUIRED");
-            }
             if (!app.commit().equals(state.path("commit").asText())
                     || !List.of("PREPARING", "PREPARED", "API_READY").contains(state.path("phase").asText())) {
                 return Map.of("status", "ok", "recoveryRequired", false);
@@ -249,7 +257,7 @@ final class DeploymentPreparation {
         Checks.require(previous.matches(RevisionStore.HASH), "DEV_PREPARATION_BACKUP");
         var basis = RevisionStore.verify(RevisionStore.selectedBasis(layout), true);
         if (!basis.releaseId().equals(previous)) {
-            new BasisLifecycle(layout, host).change(layout.root().resolve("basis/releases/" + previous), true);
+            new BasisLifecycle(layout, host).revert(layout.root().resolve("basis/releases/" + previous));
         }
         for (var component : List.of("api", "worker")) {
             var base = layout.root().resolve(component);
@@ -268,7 +276,7 @@ final class DeploymentPreparation {
             }
         }
         host.run("systemctl", "daemon-reload");
-        for (var component : List.of("api", "worker")) {
+        for (String component : List.of("api", "worker", "archive")) {
             if (state.path(component + "-active").asBoolean()) {
                 host.run("systemctl", "start", "salmonbus-" + component);
             }
@@ -280,13 +288,13 @@ final class DeploymentPreparation {
 
     Map<String, Object> complete(Path incoming, Map<String, String> environment) throws Exception {
         var app = application(incoming, environment);
-        DataTransition.requireApplication(layout, app);
         var basis = RevisionStore.verify(RevisionStore.selectedBasis(layout), true);
         RevisionStore.requireReady(layout, basis);
         RevisionStore.routing(app, environment, basis);
         host.verifyInstance(host.identity());
         Environment.identity(Json.read(FileOps.privateText(layout.config().resolve("environment.json")).getBytes()),
                 host.identity());
+        requireArchiveRunning(app);
         try (var lease = FileOps.lock(layout.locks().resolve("salmonbus-dev-preparation.lock"))) {
             removeManualOverride(app.kind());
             if (FileOps.exists(journal())) {
@@ -298,13 +306,18 @@ final class DeploymentPreparation {
                     FileOps.atomicFile(journal(), Json.bytes(state), 0600);
                     FileOps.atomicFile(directory().resolve(state.path("backupId").asText()).resolve("state.json"),
                             Json.bytes(state), 0600);
-                    if (app.kind().equals("worker") && state.path("dataTransition").asBoolean()) {
-                        removeTransitionGuards();
-                    }
                 }
             }
         }
         return Map.of("status", "ok", "component", app.kind());
+    }
+
+    /** worker 묶음의 배포는 함께 설치한 이관 앱까지 떠 있어야 끝난다. */
+    private void requireArchiveRunning(RevisionStore.Revision app) throws Exception {
+        if (!app.kind().equals("worker")) {
+            return;
+        }
+        Checks.require(isActive("archive"), "DEV_ARCHIVE_NOT_RUNNING");
     }
 
     private void removeManualOverride(String component) throws Exception {

@@ -3,60 +3,41 @@ package com.gustler.backend.forecasting.domain.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SeatForecastResultTest {
-    @Test
-    void 만석_확률은_분포의_0석_남을_확률이다() {
-        // given
-        SeatForecastResult result = new SeatForecastResult(seatDistribution(), 0.35);
-
+    @ParameterizedTest
+    @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
+    void 만석_확률은_0과_1_사이의_수다(final double notChance) {
         // when
-        final double actual = result.fullChance();
+        Throwable caughtFailure = catchThrowable(() -> SeatForecastResult.alighting(3.0, notChance));
 
         // then
-        assertThat(actual).isEqualTo(0.2);
-    }
-
-    @Test
-    void 보정_전_만석_확률은_분포와_따로_들고_있다() {
-        // given
-        SeatForecastResult result = new SeatForecastResult(seatDistribution(), 0.35);
-
-        // when
-        final double actual = result.fullChanceRaw();
-
-        // then
-        assertThat(actual).isEqualTo(0.35);
-    }
-
-    @Test
-    void 예보는_좌석_분포를_반드시_들고_있다() {
-        // when
-        Throwable caughtFailure = catchThrowable(() -> new SeatForecastResult(null, 0.35));
-
-        // then
-        assertThat(caughtFailure)
-            .isNotNull()
-            .isInstanceOf(NullPointerException.class);
+        assertThat(caughtFailure).isInstanceOf(IllegalArgumentException.class);
     }
 
     @ParameterizedTest
-    @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
-    void 보정_전_만석_확률은_0과_1_사이의_수다(final double notChance) {
+    @ValueSource(doubles = {-0.1, 70.1, Double.NaN, Double.POSITIVE_INFINITY})
+    void 좌석은_0_이상_70_이하의_유한한_수다(final double notSeats) {
         // when
-        Throwable caughtFailure = catchThrowable(() -> new SeatForecastResult(seatDistribution(), notChance));
+        Throwable caughtFailure = catchThrowable(() -> SeatForecastResult.alighting(notSeats, 0.5));
 
         // then
-        assertThat(caughtFailure)
-            .isNotNull()
-            .isInstanceOf(IllegalArgumentException.class);
+        assertThat(caughtFailure).isInstanceOf(IllegalArgumentException.class);
     }
 
-    private SeatDistribution seatDistribution() {
-        return new SeatDistribution(List.of(0.2, 0.3, 0.5));
+    @Test
+    void 하차_후_좌석과_출발_만석_확률이_아닌_출력은_만들_수_없다() {
+        // when
+        Throwable seatTarget = catchThrowable(() -> new SeatForecastResult(3.0, 0.5, "FIRST_POST_STOP_OBSERVATION",
+            SeatForecastResult.ALIGHTING_AWARE_PROBABILITY_TARGET));
+        Throwable probabilityTarget = catchThrowable(() -> new SeatForecastResult(3.0, 0.5,
+            SeatForecastResult.ALIGHTING_AWARE_SEAT_TARGET, "FIRST_POST_STOP_ZERO"));
+
+        // then
+        assertThat(seatTarget).isInstanceOf(IllegalArgumentException.class);
+        assertThat(probabilityTarget).isInstanceOf(IllegalArgumentException.class);
     }
 }

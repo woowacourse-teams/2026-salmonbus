@@ -37,7 +37,6 @@ import com.gustler.backend.api.salmon.offline.PassOutcome.Unknown;
 import com.gustler.backend.api.salmon.offline.RunSettings.SettingSet;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -110,7 +109,7 @@ final class StayRun implements AutoCloseable {
     private final AsOfArrivalReadRepository visits;
     private final ObservationTrail trail;
     private final JdbcClient jdbc;
-    private final Map<Long, Optional<Instant>> generatedAtByBatch = new HashMap<>();
+    private final Map<Long, Optional<Instant>> confirmedAtByBatch = new HashMap<>();
 
     StayRun(JdbcClient jdbc, SettingSet settings) {
         this.jdbc = jdbc;
@@ -187,22 +186,21 @@ final class StayRun implements AutoCloseable {
         }
     }
 
-    // 예보는 보드의 관측 묶음에서 나왔으므로, 실제 결과는 그 묶음의 관측 시각 뒤에서 찾고 예보 계산 시각까지의 관측은
+    // 예보는 보드의 관측 묶음에서 나왔으므로, 실제 결과는 그 묶음의 관측 시각 뒤에서 찾고 예보 착수 시각까지의 관측은
     // 건너뛴다(제품 정산과 같은 출발점).
     private List<BoardVehicle> forecastVehiclesOf(BoardReading reading, StopState stop) {
         Board board = reading.board();
         long versionId = Long.parseLong(board.route().referenceVersionId());
-        Optional<Instant> generatedAt = generatedAtByBatch.computeIfAbsent(reading.observationBatchId(),
-            batchId -> jdbc.sql("SELECT generated_at FROM forecast_publication WHERE source_batch_id = ?")
-                .param(batchId).query((row, index) -> Optional.ofNullable(row.getTimestamp(1)))
-                .optional().flatMap(found -> found).map(Timestamp::toInstant));
+        Optional<Instant> confirmedAt = confirmedAtByBatch.computeIfAbsent(reading.observationBatchId(),
+            batchId -> jdbc.sql("SELECT confirmed_at FROM forecast_run WHERE observation_batch_id = ?")
+                .param(batchId).query((row, index) -> row.getTimestamp(1).toInstant()).optional());
         List<BoardVehicle> vehicles = new ArrayList<>();
         for (ApproachingVehicle vehicle : stop.approachingVehicles()) {
             if (vehicle.forecast() instanceof VehicleForecast.Available available && vehicle.vehicleId() != null) {
                 vehicles.add(new BoardVehicle(versionId + ":" + stop.sequence() + ":" + vehicle.vehicleId(),
                     available.seatAvailableProbability(), trail.outcomeOf(versionId,
                         Optional.of(vehicle.vehicleId()), stop.sequence(), board.observedAt().toInstant(),
-                        generatedAt)));
+                        confirmedAt)));
             }
         }
         return vehicles;

@@ -1,14 +1,8 @@
 package com.gustler.backend.worker.configuration;
 
 import com.gustler.backend.config.ClockConfig;
-import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.configuration.ForecastingConfiguration;
 import com.gustler.backend.observations.configuration.ObservationPersistenceConfiguration;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.convert.DurationStyle;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -16,7 +10,7 @@ import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.StandardEnvironment;
 
 /**
- * Worker 설정을 업무 정책으로 변환하고 필수 정책 설정의 출처와 값을 확인한다.
+ * Worker가 쓰는 업무 모듈의 구성을 가져오고 필수 정책 설정의 출처를 확인한다.
  */
 @Configuration
 @Import({ClockConfig.class, ObservationPersistenceConfiguration.class, ForecastingConfiguration.class})
@@ -40,21 +34,5 @@ public class BusinessConfiguration {
             throw new IllegalStateException(
                 "%s 는 환경변수로 바꾸지 않는다. FORECAST_STALENESS 를 지우고 설정 파일에서 정한다".formatted(STALENESS));
         }
-    }
-
-    @Configuration(proxyBeanMethods = false)
-    @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
-    @EnableConfigurationProperties(ForecastProperties.class)
-    static class ForecastPolicies {
-        @Bean
-        ForecastPolicy forecastPolicy(
-            ForecastProperties properties,
-            ConfigurableEnvironment environment
-        ) {
-            requireStalenessFromConfigurationFile(environment);
-            return new ForecastPolicy(properties.staleness(), properties.batchLimit(), properties.pendingLimit(),
-                properties.arrivalLimit());
-        }
-
     }
 }

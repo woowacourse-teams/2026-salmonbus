@@ -29,8 +29,8 @@ class FixtureDigestCompatibilityTest {
         var after = files(CompatiblePreparation.FIXTURE_DIGEST);
 
         // when / then
-        assertDoesNotThrow(() -> BasisLifecycle.preserveData(revision(before), revision(after), null));
-        assertDoesNotThrow(() -> BasisLifecycle.preserveData(revision(after), revision(before), null));
+        assertDoesNotThrow(() -> BasisLifecycle.preserveData(revision(before), revision(after)));
+        assertDoesNotThrow(() -> BasisLifecycle.preserveData(revision(after), revision(before)));
         assertEquals("a7dea7fd5aaccbee29e343b932bc658fb20e4131847fd50370e8f5305492513d", before.get("tools/data/routes.json"));
         assertEquals("0c1d09aec2660e03475c7a82930fc3632432c177b148c7b7d7689f74ffd3997a", before.get("tools/data/catalog-routes.json"));
     }
@@ -47,10 +47,10 @@ class FixtureDigestCompatibilityTest {
             var changed = new TreeMap<>(after);
             changed.put(name, "changed");
             assertEquals("DEV_DATA_CHANGE_REQUIRES_PLAN", assertThrows(IllegalArgumentException.class,
-                () -> BasisLifecycle.preserveData(revision(before), revision(changed), null), name).getMessage());
+                () -> BasisLifecycle.preserveData(revision(before), revision(changed)), name).getMessage());
             changed.remove(name);
             assertEquals("DEV_DATA_CHANGE_REQUIRES_PLAN", assertThrows(IllegalArgumentException.class,
-                () -> BasisLifecycle.preserveData(revision(before), revision(changed), null), name).getMessage());
+                () -> BasisLifecycle.preserveData(revision(before), revision(changed)), name).getMessage());
         }
     }
 }

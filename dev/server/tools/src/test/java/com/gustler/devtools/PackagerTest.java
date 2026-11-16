@@ -66,6 +66,102 @@ class PackagerTest {
         assertEquals(42, running.waitFor(), output);
     }
 
+    private record StartRun(int exit, String calls, String output) {
+    }
+
+    /**
+     * worker 묶음의 시작 스크립트를 가짜 systemctl 로 돌린다. {@code active} 는 떠 있는 유닛 이름을 빈칸으로 이은 것이고, 멈춘 유닛은
+     * 거기서 빠진다. {@code failingStart} 유닛은 시작에 실패한다.
+     */
+    private StartRun startWorkerBundle(String changed, String active, String failingStart) throws Exception {
+        Path repo = Path.of("../../..").toAbsolutePath().normalize();
+        Path bundle = Files.createTempDirectory(root, "worker-");
+        new Packager(repo, new Host()).copyApplicationScripts(bundle);
+        Path scripts = bundle.resolve("scripts");
+        Path calls = bundle.resolve("calls");
+        Path marker = bundle.resolve("change-marker");
+        Files.writeString(marker, "changed=" + changed + "\nreason=fixture\n");
+        Files.writeString(scripts.resolve("common.sh"), """
+                set -euo pipefail
+                COMPONENT=worker
+                UNIT=salmonbus-worker
+                CURRENT=/opt/salmonbus-dev/worker/current
+                JAR=$CURRENT/jars/worker-app.jar
+                CHANGED="$CHANGE_MARKER"
+                claim_deploy() { :; }
+                unit_pid() { echo 123; }
+                log() { :; }
+                pgrep() { return 1; }
+                systemctl() {
+                  if [ "$1" = is-active ]; then
+                    case " $ACTIVE " in *" $3 "*) return 0 ;; esac
+                    return 1
+                  fi
+                  echo "$*" >> "$CALLS"
+                  if [ "$1" = stop ]; then ACTIVE="${ACTIVE/$2/}"; fi
+                  [ "$*" != "start $FAILING_START" ]
+                }
+                """);
+        ProcessBuilder process = new ProcessBuilder("bash", scripts.resolve("start-body.sh").toString())
+            .redirectErrorStream(true);
+        process.environment().putAll(Map.of(
+            "CALLS", calls.toString(),
+            "CHANGE_MARKER", marker.toString(),
+            "ACTIVE", active,
+            "FAILING_START", failingStart));
+        Process running = process.start();
+        String output = new String(running.getInputStream().readAllBytes());
+        final int exit = running.waitFor();
+        if (Files.notExists(calls)) {
+            return new StartRun(exit, "", output);
+        }
+        return new StartRun(exit, Files.readString(calls), output);
+    }
+
+    @Test
+    void 바뀐_worker_묶음은_worker와_이관_앱을_차례로_멈췄다가_띄운다() throws Exception {
+        // when
+        StartRun run = startWorkerBundle("yes", "salmonbus-worker salmonbus-archive", "");
+
+        // then
+        assertEquals(0, run.exit(), run.output());
+        assertEquals(
+            "stop salmonbus-worker\nstart salmonbus-worker\nstop salmonbus-archive\nstart salmonbus-archive\n",
+            run.calls());
+    }
+
+    @Test
+    void 바뀐_것이_없고_둘_다_떠_있으면_worker도_이관_앱도_다시_띄우지_않는다() throws Exception {
+        // when
+        StartRun run = startWorkerBundle("no", "salmonbus-worker salmonbus-archive", "");
+
+        // then
+        assertEquals(0, run.exit(), run.output());
+        assertEquals("", run.calls());
+    }
+
+    @Test
+    void 바뀐_것이_없어도_이관_앱이_떠_있지_않으면_이관_앱만_띄운다() throws Exception {
+        // when
+        StartRun run = startWorkerBundle("no", "salmonbus-worker", "");
+
+        // then
+        assertEquals(0, run.exit(), run.output());
+        assertEquals("stop salmonbus-archive\nstart salmonbus-archive\n", run.calls());
+    }
+
+    @Test
+    void 이관_앱을_띄우지_못하면_worker_묶음의_시작_단계가_실패한다() throws Exception {
+        // when
+        StartRun run = startWorkerBundle("yes", "salmonbus-worker salmonbus-archive", "salmonbus-archive");
+
+        // then
+        assertNotEquals(0, run.exit(), run.output());
+        assertEquals(
+            "stop salmonbus-worker\nstart salmonbus-worker\nstop salmonbus-archive\nstart salmonbus-archive\n",
+            run.calls());
+    }
+
     private Path archive(String architecture, String entry) throws Exception {
         var path = root.resolve("image-" + java.util.UUID.randomUUID() + ".tar");
         var config = Json.bytes(Map.of("architecture", architecture, "os", "linux"));

@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.domain.model.alighting;
 
-/** 과거에 발행한 번들·체크포인트·정산 계약 식별자의 읽기 호환만 제공한다. */
+/** 이전 접두({@code les-}, {@code LES_})로 적힌 번들·정산 근거의 식별자를 지금 이름으로 읽게 한다. */
 public final class AlightingAwareIdentifiers {
     private AlightingAwareIdentifiers() {
     }

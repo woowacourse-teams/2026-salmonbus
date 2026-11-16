@@ -7,6 +7,7 @@ import com.gustler.backend.observations.api.ObservationDeliveryHook;
 import com.gustler.backend.observations.domain.CollectionBatch;
 import com.gustler.backend.observations.domain.CollectionBatchRepository;
 import com.gustler.backend.observations.domain.CollectionPlan;
+import com.gustler.backend.observations.domain.InputAlreadyConfirmedException;
 import com.gustler.backend.observations.domain.ObservationBatchReservation;
 import com.gustler.backend.observations.domain.ObservationReply;
 import com.gustler.backend.observations.domain.ObservationResponse;
@@ -102,6 +103,7 @@ public class ObservationBatchLedger implements CloseUnfinishedCollections {
     /**
      * 같은 계획의 수집 배치가 이미 있으면 그 행을 다시 연다.
      * ux_batch_attempt 가 계획 하나당 묶음 하나만 허용하므로 새 행을 넣을 수 없다.
+     * 다시 열면 지난 시도의 관측을 지우므로, 예보가 이미 쓴 배치는 다시 열지 않는다.
      */
     private long open(CollectionPlan plan, final boolean reserved) {
         Optional<CollectionBatch> existing = batches.findByPlan(plan);
@@ -109,6 +111,10 @@ public class ObservationBatchLedger implements CloseUnfinishedCollections {
             return batches.save(CollectionBatch.start(plan, reserved));
         }
         CollectionBatch batch = existing.orElseThrow();
+        Optional<OffsetDateTime> forecastStart = batches.findForecastStart(batch.id());
+        if (forecastStart.isPresent()) {
+            throw new InputAlreadyConfirmedException(batch.id(), forecastStart.get());
+        }
         batch.startAttempt(reserved);
         batches.deleteObservationsOf(batch.id());
         final long batchId = batches.save(batch);

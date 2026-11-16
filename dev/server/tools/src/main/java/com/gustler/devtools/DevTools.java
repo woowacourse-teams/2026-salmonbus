@@ -52,12 +52,6 @@ public final class DevTools {
             throws Exception {
         Checks.require(args.length > 0, "COMMAND_REQUIRED");
         switch (args[0]) {
-            case "approve-data-transition" -> {
-                var options = options(args, Set.of("--bundle", "--backup-reference"), Set.of());
-                Json.output(DataTransition.authorize(layout, host,
-                        Path.of(required(options, "--bundle")).toAbsolutePath(),
-                        required(options, "--backup-reference")));
-            }
             case "prepare-deployment", "recover-deployment", "complete-deployment" -> {
                 var options = options(args, Set.of("--bundle"), Set.of());
                 var incoming = Path.of(required(options, "--bundle")).toAbsolutePath();

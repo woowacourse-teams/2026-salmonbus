@@ -6,8 +6,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 class EnvironmentTest {
     @Test
@@ -26,6 +28,22 @@ class EnvironmentTest {
         }
         assertThrows(IllegalArgumentException.class, () -> Environment.worker(text.replace("=true", "=yes")));
         assertEquals(original, Environment.worker(Environment.text(original)));
+    }
+
+    @Test
+    void 합성_번들_허용은_worker_환경_변수로_넣을_수_없다() {
+        // given
+        Map<String, String> worker = new TreeMap<>(SettingsPreparation.create(null, "a".repeat(40)).get("worker"));
+        worker.keySet().removeIf(key -> key.startsWith("MODEL_") || key.startsWith("FORECAST_"));
+        String text = Environment.text(worker);
+
+        // then
+        for (String name : List.of("MODEL_BUNDLE_ALLOW_SYNTHETIC_FIXTURE", "MODEL_BUNDLE_ALLOWSYNTHETICFIXTURE")) {
+            IllegalArgumentException rejected = assertThrows(IllegalArgumentException.class,
+                () -> Environment.worker(text + name + "=true\n"), name);
+            assertEquals("ENV_KEYS", rejected.getMessage(), name);
+        }
+        assertEquals(worker, Environment.worker(text));
     }
 
     private Map<String, Map<String, String>> settings;

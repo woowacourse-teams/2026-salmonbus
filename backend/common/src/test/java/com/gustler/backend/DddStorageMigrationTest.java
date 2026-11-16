@@ -480,132 +480,6 @@ class DddStorageMigrationTest {
     }
 
     @Test
-    void V39_스키마를_이전_구조로_되돌린_뒤_최신으로_다시_전환해도_미완료_예보가_보존된다() throws Exception {
-        // given
-        preparePendingTransition();
-        migrate("38");
-        approveEvaluationTransition();
-        migrate("39");
-        Path directory = Path.of("").toAbsolutePath();
-        while (directory != null
-            && !Files.isRegularFile(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"))) {
-            directory = directory.getParent();
-        }
-        if (directory == null) {
-            throw new IllegalStateException("롤백 SQL을 찾을 수 없다");
-        }
-        String rollback = Files.readString(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"));
-
-        // when
-        execute(rollback);
-
-        // then
-        assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass"))
-            .isEqualTo("r");
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isOne();
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isOne();
-        approveEvaluationTransition();
-        migrate("39");
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isOne();
-    }
-
-    @Test
-    void 최신_스키마에서도_로컬_초기화는_평가와_이관_기록을_비우고_노선은_보존한다() throws Exception {
-        // given
-        preparePendingTransition();
-        migrate("38");
-        approveEvaluationTransition();
-        migrate("57");
-        execute("""
-            INSERT INTO evaluation_archive_batch(id,route_version_id,quality_revision,lease_token,lease_until,row_count)
-            VALUES('00000000-0000-0000-0000-000000000002',1,7,
-                   '00000000-0000-0000-0000-000000000003',now(),1);
-            INSERT INTO evaluation_archive_member(vehicle_observation_id,target_stop_order,route_version_id,batch_id,original_sha256)
-            VALUES(1,2,1,'00000000-0000-0000-0000-000000000002',repeat('a',64));
-            INSERT INTO file_statistics_publication(route_version_id,input_sha256,calculation_version,revision)
-            VALUES(1,repeat('b',64),'calc1',1);
-            UPDATE evaluation_archive_scan SET observation_id=1,stop_order=2,next_attempt_at=now()
-            """);
-        // AlightingAware 예보의 자동 등록 작업, 소수 결과와 검증된 이관 참조를 모두 남긴다.
-        execute("""
-            INSERT INTO forecast_publication(source_batch_id,route_version_id,model_deployment_id,
-                demand_statistics_revision,quality_revision,observed_at,generated_at,published_at,prediction_count)
-            VALUES(2,1,1,0,7,'2026-09-01T00:01:00Z','2026-09-01T00:01:01Z','2026-09-01T00:01:01Z',1);
-            INSERT INTO seat_forecast(vehicle_observation_id,target_stop_order,route_version_id,stops_to_target,
-                model_deployment_id,demand_statistics_revision,seat_full_chance_raw,seat_full_chance,
-                generated_at,quality_revision,publication_id,seat_target,probability_target,label_version,
-                feature_snapshot,inference_bundle_hash)
-            SELECT 2,3,1,1,1,0,.5,.5,'2026-09-01T00:01:01Z',7,id,
-                'AFTER_ALIGHTING_ESTIMATE','DEPARTURE_ZERO','alighting-identity-safe-v1','{}'::jsonb,repeat('c',64)
-            FROM forecast_publication WHERE source_batch_id=2;
-            INSERT INTO les_forecast_evaluation_result(vehicle_observation_id,target_stop_order,target_kind,
-                label_version,route_version_id,scoring_state,label_value,pre_observation_id,post_observation_id,
-                closure_observation_id,quality_revision,scored_at)
-            VALUES(2,3,'AFTER_ALIGHTING_ESTIMATE','alighting-identity-safe-v1',1,'SETTLED',12.5,1,2,2,7,now()),
-                  (2,3,'DEPARTURE_ZERO','alighting-identity-safe-v1',1,'SETTLED',1,1,2,2,7,now());
-            INSERT INTO les_evaluation_archive(vehicle_observation_id,target_stop_order,target_kind,label_version,
-                quality_revision,route_version_id,label_value,scoring_state,scored_at,object_hash,storage_state)
-            VALUES(2,3,'AFTER_ALIGHTING_ESTIMATE','alighting-identity-safe-v1',7,1,12.5,'SETTLED',now(),repeat('d',64),'LIVE')
-            """);
-        assertThat(number("SELECT count(*) FROM les_forecast_evaluation_work")).isEqualTo(2);
-        execute("UPDATE evaluation_archive_batch SET abandoned_at=now()");
-        migrate("latest");
-        assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_work")).isZero();
-        assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_result")).isEqualTo(2);
-        assertThat(number("SELECT count(*) FROM alighting_evaluation_archive")).isOne();
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isEqualTo(2);
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_result WHERE scoring_state='MODEL_RETIRED'")).isOne();
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isZero();
-        execute("""
-            INSERT INTO alighting_settlement_generation(route_id,source_date) VALUES(1,'2026-09-01');
-            INSERT INTO alighting_settlement_projection(route_id,source_date,layout_hash,layout,data_revision,
-                observation_limit,cursor_at,coverage_at,state)
-            VALUES(1,'2026-09-01',repeat('a',64),'{}',1,1000,now(),now(),decode('00','hex'));
-            INSERT INTO alighting_settlement_observation(projection_id,observation_id,chain_id,stop_order,available_at,known_seats)
-            SELECT id,1,1,2,now(),true FROM alighting_settlement_projection;
-            UPDATE alighting_settlement_queue_scan SET observation_id=1,complete=true;
-            """);
-        Path root = Path.of("").toAbsolutePath();
-        while (root != null
-            && !Files.isRegularFile(root.resolve("dev/data/java/com/gustler/localdata/LocalData.java"))) {
-            root = root.getParent();
-        }
-        assertThat(root).as("로컬 초기화 소스가 있는 저장소 루트").isNotNull();
-        String source = Files.readString(root.resolve("dev/data/java/com/gustler/localdata/LocalData.java"));
-        final int start = source.indexOf("TRUNCATE ", source.indexOf("private static void resetGenerated"));
-        assertThat(start).isGreaterThanOrEqualTo(0);
-        final int end = source.indexOf("\"\"\"", start);
-
-        // when
-        execute(source.substring(start, end));
-
-        // then
-        assertThat(number("SELECT count(*) FROM alighting_settlement_observation")).isZero();
-        assertThat(number("SELECT count(*) FROM alighting_settlement_projection")).isZero();
-        assertThat(number("SELECT count(*) FROM alighting_settlement_generation")).isZero();
-        assertThat(number("SELECT count(*) FROM alighting_settlement_queue_scan WHERE observation_id=0 AND NOT complete")).isOne();
-        assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_work")).isZero();
-        assertThat(number("SELECT count(*) FROM alighting_forecast_evaluation_result")).isZero();
-        assertThat(number("SELECT count(*) FROM alighting_evaluation_archive")).isZero();
-        assertThat(number("SELECT count(*) FROM alighting_evaluation_status")).isZero();
-        assertThat(number("SELECT count(*) FROM forecast_publication")).isZero();
-        assertThat(number("SELECT count(*) FROM vehicle_observation")).isZero();
-        assertThat(number("SELECT count(*) FROM observation_batch")).isZero();
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isZero();
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_pending")).isZero();
-        assertThat(number("SELECT count(*) FROM forecast_evaluation_result")).isZero();
-        assertThat(number("SELECT count(*) FROM archive_legacy_member")).isZero();
-        assertThat(number("SELECT count(*) FROM archive_legacy_batch")).isZero();
-        assertThat(number("SELECT count(*) FROM file_statistics_publication")).isZero();
-        assertThat(number("SELECT count(*) FROM operational_archive_job")).isZero();
-        assertThat(number("SELECT count(*) FROM route")).isOne();
-        assertThat(number("SELECT count(*) FROM route_version")).isOne();
-        assertThat(number("SELECT count(*) FROM route_stop")).isEqualTo(3);
-        assertThat(number("SELECT count(*) FROM model_deployment")).isOne();
-    }
-
-    @Test
     void 전환_승인이_없으면_기존_대기_테이블을_바꾸지_않는다() throws Exception {
         // given
         preparePendingTransition();
@@ -655,27 +529,6 @@ class DddStorageMigrationTest {
         assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
     }
 
-    @Test
-    void worker_연결이_남아_있으면_전환을_승인하지_않는다() throws Exception {
-        // given
-        preparePendingTransition();
-        migrate("38");
-        try (
-            Connection worker = DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                POSTGRES.getPassword());
-            Statement statement = worker.createStatement()) {
-            statement.execute("SET application_name='salmonbus-worker'");
-
-            // when
-            assertThatThrownBy(this::approveEvaluationTransition).hasMessageContaining("worker 또는 정비 연결이 남아 있다");
-            execute("ROLLBACK");
-
-            // then
-            assertThat(scalar("SELECT to_regclass('sal175_evaluation_transition')::text")).isNull();
-            assertPendingTablePreserved();
-        }
-    }
-
     private void assertPendingTablePreserved() throws SQLException {
         assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass"))
             .isEqualTo("r");
@@ -683,47 +536,18 @@ class DddStorageMigrationTest {
         assertThat(scalar("SELECT to_regclass('forecast_evaluation_work')::text")).isNull();
     }
 
-    @Test
-    void worker_연결이_남아_있으면_이전_DB_구조로_되돌리지_않는다() throws Exception {
-        // given
-        preparePendingTransition();
-        migrate("38");
-        approveEvaluationTransition();
-        migrate("39");
-        Path directory = Path.of("").toAbsolutePath();
-        while (directory != null
-            && !Files.isRegularFile(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"))) {
-            directory = directory.getParent();
-        }
-        assertThat(directory).isNotNull();
-        String rollback = Files.readString(directory.resolve("deploy/sql/rollback-observation-evaluation-work.sql"));
-        try (
-            Connection worker = DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                POSTGRES.getPassword());
-            Statement statement = worker.createStatement()) {
-            statement.execute("SET application_name='salmonbus-worker'");
-
-            // when
-            assertThatThrownBy(() -> execute(rollback)).hasMessageContaining("worker 또는 정비 연결이 남아 있다");
-            execute("ROLLBACK");
-
-            // then
-            assertThat(number("SELECT count(*) FROM forecast_evaluation_work")).isOne();
-            assertThat(scalar("SELECT relkind::text FROM pg_class WHERE oid='forecast_evaluation_pending'::regclass"))
-                .isEqualTo("v");
-            assertThat(number("SELECT count(*) FROM flyway_schema_history WHERE version='39' AND success")).isOne();
-        }
-    }
-
-    private void approveEvaluationTransition() throws Exception {
-        Path directory = Path.of("").toAbsolutePath();
-        while (directory != null
-            && !Files.isRegularFile(directory.resolve("deploy/sql/prepare-evaluation-work-transition.sql"))) {
-            directory = directory.getParent();
-        }
-        assertThat(directory).isNotNull();
-        execute("SET salmonbus.backup_reference='isolated-test-backup'");
-        execute(Files.readString(directory.resolve("deploy/sql/prepare-evaluation-work-transition.sql")));
+    /** V39는 운행 데이터가 있는 DB에서 만료되지 않은 승인 기록이 있어야 진행한다. */
+    private void approveEvaluationTransition() throws SQLException {
+        execute("""
+            CREATE TABLE IF NOT EXISTS sal175_evaluation_transition (
+                id integer PRIMARY KEY CHECK(id=1),
+                backup_reference text NOT NULL CHECK(backup_reference<>''),
+                expires_at timestamptz NOT NULL
+            );
+            INSERT INTO sal175_evaluation_transition(id,backup_reference,expires_at)
+            VALUES(1,'isolated-test-backup',clock_timestamp()+interval '30 minutes')
+            ON CONFLICT(id) DO UPDATE SET backup_reference=EXCLUDED.backup_reference,expires_at=EXCLUDED.expires_at
+            """);
     }
 
     private void insertRoute() throws SQLException {

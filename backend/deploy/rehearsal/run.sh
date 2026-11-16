@@ -11,4 +11,4 @@ python3 "$HERE/../observability/test_application_metrics_dashboard.py"
 docker run --rm \
   -v "$HERE":/rehearse:ro \
   -v "$HERE/..":/deploy:ro \
-  amazonlinux:2023 bash -c 'bash /rehearse/rehearse.sh && bash /rehearse/test-evaluation-work-transition.sh && bash /deploy/rehearsal/test-verify-revision.sh'
+  amazonlinux:2023 bash -c 'bash /rehearse/rehearse.sh && bash /deploy/rehearsal/test-verify-revision.sh'

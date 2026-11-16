@@ -10,6 +10,8 @@ import java.util.TreeMap;
 final class RevisionStore {
     static final String HASH = "[0-9a-f]{64}";
     static final String APPLICATION = "salmonbus-backend-dev";
+    static final String ARCHIVE_JAR = "jars/archive-app.jar";
+    static final String ARCHIVE_UNIT = "salmonbus-archive.service";
     private static final Set<String> FIELDS =
             Set.of(
                     "formatVersion",
@@ -271,6 +273,19 @@ final class RevisionStore {
                 "DEV_DEPLOYMENT_GROUP");
     }
 
+    /**
+     * 설치할 worker 묶음에는 이관 앱의 JAR과 유닛이 함께 실려 있어야 한다. 서버에 이미 설치된 묶음은 이관 앱 없이 만들어졌을 수
+     * 있으므로 {@link #verify}에서는 요구하지 않고 새로 들어온 묶음에만 요구한다.
+     */
+    private static void requireArchive(Revision revision) {
+        if (!revision.kind().equals("worker")) {
+            return;
+        }
+        Checks.require(
+            revision.files().containsKey(ARCHIVE_JAR) && revision.files().containsKey("systemd/" + ARCHIVE_UNIT),
+            "REVISION_ARCHIVE_MISSING");
+    }
+
     static Revision component(
             Path incoming, Layout layout, Host host, Map<String, String> environment)
             throws Exception {
@@ -284,10 +299,10 @@ final class RevisionStore {
                     !Files.readString(marker).startsWith("basis "), "DEV_BASIS_UPDATE_IN_PROGRESS");
         }
         var metadata = verify(incoming, true);
-        DataTransition.requireApplication(layout, metadata);
         var basis = verify(selectedBasis(layout), true);
         requireReady(layout, basis);
         routing(metadata, environment, basis);
+        requireArchive(metadata);
         new Preflight(layout, host).check("prepare", Map.of());
         for (var path :
                 java.util.List.of(

@@ -1,5 +1,7 @@
 package com.gustler.devtools;
 
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -9,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 @Tag("linux-root")
@@ -47,6 +50,11 @@ class DeploymentServerTest {
     }
 
     private Path incoming(String component, String digest, String jar) throws Exception {
+        return sealed(unsealed(component, jar), component, digest);
+    }
+
+    /** 봉인하기 전의 묶음이다. worker 묶음에는 이관 앱의 JAR과 유닛이 함께 실린다. */
+    private Path unsealed(String component, String jar) throws Exception {
         var directory = Files.createTempDirectory(base, "incoming-");
         Files.createDirectory(directory.resolve("jars"));
         Files.createDirectory(directory.resolve("systemd"));
@@ -54,6 +62,14 @@ class DeploymentServerTest {
         Files.writeString(
                 directory.resolve("systemd/salmonbus-" + component + ".service"),
                 "fixture unit " + component);
+        if (component.equals("worker")) {
+            Files.writeString(directory.resolve(RevisionStore.ARCHIVE_JAR), "archive fixture");
+            Files.writeString(directory.resolve("systemd/" + RevisionStore.ARCHIVE_UNIT), "fixture unit archive");
+        }
+        return directory;
+    }
+
+    private Path sealed(Path directory, String component, String digest) throws Exception {
         var value =
                 new RevisionStore.Revision(
                         1,
@@ -104,6 +120,79 @@ class DeploymentServerTest {
         staging(component, incoming);
         return new Deployment(fixture.layout, fixture.host)
                 .install(incoming, environment(component));
+    }
+
+    @Test
+    void worker_묶음을_설치하면_이관_앱의_JAR과_유닛도_설치하고_켠다() throws Exception {
+        // given
+        Path worker = incoming("worker", "2".repeat(64), "worker initial");
+
+        // when
+        install("worker", worker);
+
+        // then
+        Path unit = fixture.layout.units().resolve("salmonbus-archive.service");
+        Path jar = fixture.layout.root().resolve("worker/current/jars/archive-app.jar");
+        assertSoftly(softly -> {
+            softly.assertThat(unit).hasContent("fixture unit archive");
+            softly.assertThat(jar).hasContent("archive fixture");
+            softly.assertThat(fixture.host.calls).contains(List.of("systemctl", "enable", "salmonbus-archive.service"));
+        });
+    }
+
+    @Test
+    void api_묶음을_설치할_때는_이관_앱의_유닛을_건드리지_않는다() throws Exception {
+        // given
+        Path api = incoming("api", "1".repeat(64), "api initial");
+
+        // when
+        install("api", api);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(fixture.layout.units().resolve("salmonbus-archive.service")).doesNotExist();
+            softly.assertThat(fixture.host.calls).noneMatch(call -> call.contains("salmonbus-archive.service"));
+        });
+    }
+
+    @Test
+    void 이관_앱이_빠진_worker_묶음은_설치하지_않는다() throws Exception {
+        // given
+        Path directory = unsealed("worker", "worker initial");
+        Files.delete(directory.resolve(RevisionStore.ARCHIVE_JAR));
+        Path worker = sealed(directory, "worker", "2".repeat(64));
+        staging("worker", worker);
+
+        // when
+        Throwable failure = catchThrowable(
+            () -> new Deployment(fixture.layout, fixture.host).install(worker, environment("worker")));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(failure).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("REVISION_ARCHIVE_MISSING");
+            softly.assertThat(fixture.host.calls).isEmpty();
+            softly.assertThat(fixture.layout.root().resolve("worker/current")).doesNotExist();
+        });
+    }
+
+    @Test
+    void 이관_앱의_유닛만_바뀐_worker_묶음도_재시작을_요청한다() throws Exception {
+        // given
+        install("worker", incoming("worker", "2".repeat(64), "first compile"));
+        Path directory = unsealed("worker", "second compile");
+        Files.writeString(directory.resolve("systemd/salmonbus-archive.service"), "changed unit archive");
+        Path update = sealed(directory, "worker", "2".repeat(64));
+
+        // when
+        Map<String, Object> result = install("worker", update);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(result.get("restartRequired")).isEqualTo(true);
+            softly.assertThat(fixture.layout.units().resolve("salmonbus-archive.service"))
+                .hasContent("changed unit archive");
+        });
     }
 
     @Test

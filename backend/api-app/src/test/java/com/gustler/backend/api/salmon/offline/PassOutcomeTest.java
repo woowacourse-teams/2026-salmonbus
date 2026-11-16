@@ -14,10 +14,8 @@ import java.util.OptionalInt;
 import org.junit.jupiter.api.Test;
 
 /**
- * 첫 관측 기준(first)이 제품 정산(ArrivalLabelResolver)과 같은 관측을 고르는지 본다. forecasting 모듈은 api-app의 의존이
- * 아니라 그 클래스를 부를 수 없어서, ArrivalLabelResolverTest의 사례(대상 49, 예보 때 통과 순번 44)를 같은 입력으로 옮겨
- * 같은 결과를 기대한다. 제품의 SETTLED는 좌석 수, SEAT_MISSING은 SEAT_MISSING, SKIPPED는 SKIPPED, LOST는 LOST,
- * 아직 닿지 않음(PENDING)은 NOT_REACHED에 대응한다.
+ * 첫 관측 기준(first)과 마지막 관측 기준(last)이 고르는 관측, 추적을 끊는 조건을 본다. 사례는 대상 정류장 순번 49,
+ * 판정 때 통과 순번 44인 차량 한 대다.
  */
 class PassOutcomeTest {
     private static final Instant START = Instant.parse("2026-08-25T08:30:00Z");

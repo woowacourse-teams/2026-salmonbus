@@ -19,7 +19,8 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>노선 204000057은 정류장 20개(순번 n의 정류장 ID는 2280000nn)를 지나고, 기준 시각 20초 전의 관측 묶음 하나에
  * 차량 다섯 대가 있다. 차량의 통과 순번은 bus-4가 14, bus-1이 13, bus-5가 12, bus-2가 9, bus-3이 1이다.
- * 그 뒤 60초 간격의 묶음 셋(발행 없음)에 같은 차량들의 뒤 관측이 있다. 실제 결과 대조가 이 관측을 읽는다.
+ * 첫 묶음에만 예보 실행 줄과 하차 반영 예측이 있다. 그 뒤 60초 간격의 묶음 셋(실행 줄 없음)에 같은 차량들의 뒤 관측이
+ * 있다. 실제 결과 대조가 이 관측을 읽는다.
  * 노선 204000099는 public_route_id와 source_route_id가 다르다.
  */
 final class SyntheticInput {
@@ -69,15 +70,18 @@ final class SyntheticInput {
             observation(1031, 103, 1, "bus-1", 16, 0), observation(1032, 103, 2, "bus-2", 11, 3),
             observation(1033, 103, 3, "bus-3", 1, 20), observation(1034, 103, 4, "bus-4", 16, 2),
             observation(1035, 103, 5, "bus-5", 14, 20));
-        write("forecast_publication", "id,source_batch_id,route_version_id,model_deployment_id,"
-                + "demand_statistics_revision,quality_revision,observed_at,generated_at,published_at,prediction_count",
-            "500,100,10,1,1,1," + BASE.minusSeconds(20) + "," + BASE.minusSeconds(15) + "," + BASE.minusSeconds(10)
-                + ",5");
-        write("seat_forecast", "vehicle_observation_id,target_stop_order,route_version_id,stops_to_target,"
-                + "model_deployment_id,demand_statistics_revision,seat_full_chance_raw,seat_full_chance,generated_at,"
-                + "publication_id,seat_target,probability_target,label_version,inference_bundle_hash",
-            forecast(1004, 15, 1, 0.3, false), forecast(1001, 15, 2, 0.5, true), forecast(1005, 15, 3, 0.4, false),
-            forecast(1002, 15, 6, 0.2, false), forecast(1002, 10, 1, 0.9, false));
+        // 예보 착수 시각은 기준 시각 15초 전이고 예측은 다섯 개다. bus-2는 목표 정류장 둘(10, 15)을 한 줄에 담는다.
+        // 묶음의 관측 다섯 줄이 모두 남아 있어 수집 구멍이 아니다.
+        write("forecast_run", "source_date,observation_batch_id,route_id,route_version_id,received_at,confirmed_at,"
+                + "model_deployment_id,outcome,prediction_count,source_incomplete,counted_rows",
+            "2026-11-10,100,1,10," + BASE.minusSeconds(20) + "," + BASE.minusSeconds(15) + ",1,PUBLISHED,5,f,5");
+        write("forecast_record", "source_date,vehicle_observation_id,observation_batch_id,source_row_number,route_id,"
+                + "route_version_id,vehicle_id,passed_stop_order,trip_start_observation_id,chain_start_observation_id,"
+                + "down,capacity,extended,target_stop_orders,expected_seats,full_probabilities",
+            record(1004, 4, "bus-4", 14, "{15}", "{NULL}", "{0.3}"),
+            record(1001, 1, "bus-1", 13, "{15}", "{NULL}", "{0.5}"),
+            record(1005, 5, "bus-5", 12, "{15}", "{NULL}", "{0.4}"),
+            record(1002, 2, "bus-2", 9, "{10,15}", "{NULL,NULL}", "{0.9,0.2}"));
     }
 
     /** 정류장 순번이 곧 정류장인 노선 204000057의 도착 스냅샷을 더한다. */
@@ -110,10 +114,16 @@ final class SyntheticInput {
         return this;
     }
 
-    /** 판정 구간의 발행이 입력에 하나도 없는 경우를 만든다. */
+    /** 판정 구간의 예보 실행 줄이 입력에 하나도 없는 경우를 만든다. */
     SyntheticInput withoutPublications() throws IOException {
-        Files.delete(folder.resolve("forecast_publication.csv"));
-        Files.delete(folder.resolve("seat_forecast.csv"));
+        Files.delete(folder.resolve("forecast_run.csv"));
+        Files.delete(folder.resolve("forecast_record.csv"));
+        return this;
+    }
+
+    /** 예보 기록으로 바뀌기 전의 형식으로 뽑은 예보 파일을 폴더에 더한다. */
+    SyntheticInput withPreRecordForecastFile(String table) throws IOException {
+        write(table, "id", "1");
         return this;
     }
 
@@ -149,13 +159,18 @@ final class SyntheticInput {
             + stationOf(passedStopOrder) + ",2," + remainingSeats + "," + passedStopOrder;
     }
 
-    private static String forecast(long observationId, int target, int stopsToTarget, double fullChance,
-                                   boolean afterAlighting) {
-        String contract = afterAlighting
-            ? "AFTER_ALIGHTING_ESTIMATE,DEPARTURE_ZERO,synthetic-label," + "e".repeat(64)
-            : "FIRST_POST_STOP_OBSERVATION,FIRST_POST_STOP_ZERO,,";
-        return observationId + "," + target + ",10," + stopsToTarget + ",1,1," + fullChance + "," + fullChance + ","
-            + BASE.minusSeconds(15) + ",500," + contract;
+    private static String record(
+        final long observationId,
+        final int row,
+        String vehicleId,
+        final int passedStopOrder,
+        String targets,
+        String expectedSeats,
+        String fullProbabilities
+    ) {
+        return String.join(",", "2026-11-10", String.valueOf(observationId), "100", String.valueOf(row), "1", "10",
+            vehicleId, String.valueOf(passedStopOrder), String.valueOf(observationId), String.valueOf(observationId),
+            "f", "45", "f", quoted(targets), quoted(expectedSeats), quoted(fullProbabilities));
     }
 
     private static String quoted(String value) {

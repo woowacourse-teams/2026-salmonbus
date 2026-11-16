@@ -1,11 +1,15 @@
 package com.gustler.devtools;
 
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,6 +17,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 @Tag("linux-root")
 class DeploymentPreparationServerTest {
@@ -21,8 +26,6 @@ class DeploymentPreparationServerTest {
     private PreparationHost host;
     private Path original;
     private Path incoming;
-    private boolean databaseApproved;
-    private boolean failDatabaseApproval;
     private final Map<String, String> apiEnvironment = Map.of(
             "APPLICATION_NAME", "salmonbus-backend-dev",
             "DEPLOYMENT_GROUP_NAME", "salmonbus-backend-dev-api");
@@ -108,15 +111,7 @@ class DeploymentPreparationServerTest {
     }
 
     private DeploymentPreparation preparation() {
-        return new DeploymentPreparation(fixture.layout, host, new DataTransition() {
-            @Override
-            void approveDatabase(Layout layout, Path basis, Approval approval) {
-                assertFalse(host.apiActive);
-                assertFalse(host.workerActive);
-                if (failDatabaseApproval) throw new IllegalArgumentException("DB 승인 실패");
-                databaseApproved = true;
-            }
-        });
+        return new DeploymentPreparation(fixture.layout, host);
     }
 
     private void changeDataContract() throws Exception {
@@ -128,38 +123,347 @@ class DeploymentPreparationServerTest {
         RevisionStore.seal(incoming, "api", "b".repeat(40), "3".repeat(64), "2".repeat(64), false);
     }
 
-    private void approveDataContract() throws Exception {
-        var directory = fixture.layout.data().resolve("deployment-preparation");
-        FileOps.directory(directory, 0700);
-        FileOps.atomicFile(directory.resolve("approval.json"), Json.bytes(Map.of(
-                "transition", "SAL-175",
-                "fromReleaseId", RevisionStore.verify(original, true).releaseId(),
-                "toReleaseId", RevisionStore.verify(incoming.resolve("basis"), true).releaseId(),
-                "backupReference", "dev-before-sal175",
-                "expiresAt", java.time.Instant.now().plusSeconds(900).toString())), 0600);
+    private void changeFixtureCodeContract() throws Exception {
+        changeCodeContract("116160aff97c67af1d1802ea7b985003889654365ee56b1a63783b713f30a5f1",
+            CompatiblePreparation.NEXT, "a0169df87d0dbc8f488b562039beec76412275ecc077174d4f855dc5a1af2ee1",
+            CompatiblePreparation.FIXTURE_DIGEST);
     }
 
-    private void changeFixtureCodeContract() throws Exception {
+    /** 증분 하차 정산을 도입하며 바뀐 초기화 코드 계약이다. */
+    private void changeToIncrementalSettlementContract() throws Exception {
+        changeCodeContract("b8f27458cfea4714baaadee80f8f3da737d325803d4820b8768ea0344c647e7a",
+            CompatiblePreparation.ENV_MODEL_DATA, "adb3a9c2848d4e36da66dc27d1562bc44d6e5e9af014d53c92ca5762f0402de6",
+            CompatiblePreparation.INCREMENTAL_SETTLEMENT_DATA);
+    }
+
+    private void changeCodeContract(
+            String previousContract,
+            String previousDigest,
+            String nextContract,
+            String nextDigest)
+            throws Exception {
         Files.delete(original.resolve("revision.json"));
-        Files.writeString(original.resolve("tools/data-contract.sha256"),
-            "116160aff97c67af1d1802ea7b985003889654365ee56b1a63783b713f30a5f1\n");
+        Files.writeString(original.resolve("tools/data-contract.sha256"), previousContract + "\n");
         var previous = RevisionStore.seal(original, "basis", "a".repeat(40), "1".repeat(64), "1".repeat(64), false);
-        assertEquals(CompatiblePreparation.NEXT, previous.files().get("tools/data-contract.sha256"));
+        assertEquals(previousDigest, previous.files().get("tools/data-contract.sha256"));
         original = Files.move(original, original.resolveSibling(previous.releaseId()));
         Deployment.setLink(fixture.layout.root().resolve("basis/current"), original);
         RevisionStore.ready(fixture.layout, previous);
         var next = incoming.resolve("basis");
         Files.delete(next.resolve("revision.json"));
-        Files.writeString(next.resolve("tools/data-contract.sha256"),
-            "a0169df87d0dbc8f488b562039beec76412275ecc077174d4f855dc5a1af2ee1\n");
+        Files.writeString(next.resolve("tools/data-contract.sha256"), nextContract + "\n");
         var candidate = RevisionStore.seal(next, "basis", "b".repeat(40), "2".repeat(64), "2".repeat(64), false);
-        assertEquals(CompatiblePreparation.FIXTURE_DIGEST, candidate.files().get("tools/data-contract.sha256"));
+        assertEquals(nextDigest, candidate.files().get("tools/data-contract.sha256"));
         Files.delete(incoming.resolve("revision.json"));
         RevisionStore.seal(incoming, "api", "b".repeat(40), "3".repeat(64), "2".repeat(64), false);
     }
 
+    private Path journal() {
+        return fixture.layout.data().resolve("deployment-preparation/current.json");
+    }
+
     @Test
-    void 파일_검증용_지문_분리는_DB_전환_없이_준비하고_다음_hook_실패에도_복구한다() throws Exception {
+    void 증분_정산_초기화_계약으로_바꾼_뒤_다음_hook이_실패하면_이전_basis와_앱으로_복구한다() throws Exception {
+        // given
+        changeToIncrementalSettlementContract();
+        Path api = fixture.layout.root().resolve("api/current").toRealPath();
+        Path worker = fixture.layout.root().resolve("worker/current").toRealPath();
+        preparation().prepare(incoming, apiEnvironment);
+
+        // when
+        Map<String, Object> result = preparation().recover(incoming, apiEnvironment);
+
+        // then
+        assertEquals(true, result.get("recoveryRequired"));
+        assertEquals("ROLLED_BACK", Json.read(journal()).path("phase").asText());
+        assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
+        assertEquals(api, fixture.layout.root().resolve("api/current").toRealPath());
+        assertEquals(worker, fixture.layout.root().resolve("worker/current").toRealPath());
+        assertTrue(host.apiActive);
+        assertTrue(host.workerActive);
+        assertEquals("existing database contents\n",
+                Files.readString(fixture.layout.data().resolve("database-sentinel")));
+        assertEquals(true, preparation().prepare(incoming, apiEnvironment).get("preparationRequired"));
+    }
+
+    @Test
+    void 기반_교체가_옮기지_않는_설정_파일을_앱이_읽으면_앱을_중지하기_전에_거절한다() throws Exception {
+        // given
+        Path settings = fixture.layout.config().resolve("route-geometry-api.env");
+        FileOps.writeNew(settings, "ROUTE_GEOMETRY_PRESENTATION_ENABLED=true\n".getBytes(), 0600);
+        Path drop = fixture.layout.units().resolve("salmonbus-api.service.d/90-route-geometry.conf");
+        Files.createDirectories(drop.getParent());
+        Files.writeString(drop, "[Service]\nEnvironmentFile=" + settings + "\n");
+
+        // when
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> preparation().prepare(incoming, apiEnvironment));
+
+        // then
+        assertEquals("DEV_UNMANAGED_ENVIRONMENT_FILE", failure.getMessage());
+        assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
+        assertTrue(Files.exists(settings));
+        assertTrue(host.apiActive);
+        assertTrue(host.workerActive);
+        assertTrue(host.calls.stream().noneMatch(c -> c.contains("stop")));
+        assertFalse(Files.exists(journal()));
+        Path moved = Files.createDirectories(base.resolve("etc/salmonbus-dev-route-geometry")).resolve("api.env");
+        Files.move(settings, moved);
+        Files.writeString(drop, "[Service]\nEnvironmentFile=" + moved + "\n");
+        assertEquals(true, preparation().prepare(incoming, apiEnvironment).get("preparationRequired"));
+        assertEquals("ROUTE_GEOMETRY_PRESENTATION_ENABLED=true\n", Files.readString(moved));
+    }
+
+    @Test
+    void 다른_커밋의_완료되지_않은_기반_교체_기록은_서비스가_다시_돌고_있으면_다음_기반_교체를_막지_않는다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        host.apiActive = true;
+        host.workerActive = true;
+        Path prepared = RevisionStore.selectedBasis(fixture.layout);
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+
+        // when
+        Map<String, Object> result = preparation().prepare(later, apiEnvironment);
+
+        // then
+        assertEquals(Map.of("status", "ok", "preparationRequired", true, "applicationsRemainStopped", true,
+                "supersededCommit", "b".repeat(40)), result);
+        assertNotEquals(prepared, RevisionStore.selectedBasis(fixture.layout));
+        assertEquals("c".repeat(40), Json.read(journal()).path("commit").asText());
+        assertEquals(RevisionStore.verify(prepared, true).releaseId(),
+                Json.read(journal()).path("basisReleaseId").asText());
+        assertEquals("PREPARED", Json.read(journal()).path("phase").asText());
+    }
+
+    @Test
+    void 이전_도구가_DB_전환_없이_남긴_기록도_다른_커밋이면_다음_기반_교체를_막지_않는다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        host.apiActive = true;
+        host.workerActive = true;
+        ObjectNode state = (ObjectNode) Json.read(journal());
+        state.put("dataTransition", false);
+        FileOps.atomicFile(journal(), Json.bytes(state), 0600);
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+
+        // when
+        Map<String, Object> result = preparation().prepare(later, apiEnvironment);
+
+        // then
+        assertEquals("b".repeat(40), result.get("supersededCommit"));
+        assertEquals("c".repeat(40), Json.read(journal()).path("commit").asText());
+    }
+
+    @Test
+    void 앞선_배포가_멈춘_서비스가_꺼진_채면_다른_커밋의_기반_교체_기록을_넘기지_않는다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        Path prepared = RevisionStore.selectedBasis(fixture.layout);
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+
+        // when
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> preparation().prepare(later, apiEnvironment));
+
+        // then
+        assertEquals("DEV_PREPARATION_RECOVERY_REQUIRED", failure.getMessage());
+        assertEquals(prepared, RevisionStore.selectedBasis(fixture.layout));
+        assertEquals("b".repeat(40), Json.read(journal()).path("commit").asText());
+        assertEquals("PREPARED", Json.read(journal()).path("phase").asText());
+    }
+
+    @Test
+    void 앞선_배포가_멈춘_이관_앱이_꺼진_채면_다른_커밋의_기반_교체_기록을_넘기지_않는다() throws Exception {
+        // given
+        Files.writeString(archiveUnit(), "old archive unit\n");
+        host.archiveActive = true;
+        preparation().prepare(incoming, apiEnvironment);
+        host.apiActive = true;
+        host.workerActive = true;
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+
+        // when
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> preparation().prepare(later, apiEnvironment));
+
+        // then
+        assertEquals("DEV_PREPARATION_RECOVERY_REQUIRED", failure.getMessage());
+        assertEquals("b".repeat(40), Json.read(journal()).path("commit").asText());
+    }
+
+    @Test
+    void 기록을_넘길지_정할_때와_새_복구_기준에_한_번_읽은_서비스_상태를_쓴다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        host.apiActive = true;
+        host.workerActive = true;
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+        host.calls.clear();
+
+        // when
+        preparation().prepare(later, apiEnvironment);
+
+        // then
+        assertEquals(1, host.calls.stream()
+                .filter(call -> call.contains("is-active") && call.contains("salmonbus-worker")).count());
+        assertEquals(1, host.calls.stream()
+                .filter(call -> call.contains("is-active") && call.contains("salmonbus-api")).count());
+        assertTrue(Json.read(journal()).path("worker-active").asBoolean());
+        assertTrue(Json.read(journal()).path("api-active").asBoolean());
+    }
+
+    @Test
+    void 기록을_넘긴_배포가_실패하면_넘기기_직전의_basis와_돌고_있던_서비스로_복구한다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        host.apiActive = true;
+        host.workerActive = true;
+        Path prepared = RevisionStore.selectedBasis(fixture.layout);
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+        preparation().prepare(later, apiEnvironment);
+
+        // when
+        Map<String, Object> result = preparation().recover(later, apiEnvironment);
+
+        // then
+        assertEquals(true, result.get("recoveryRequired"));
+        assertEquals("ROLLED_BACK", Json.read(journal()).path("phase").asText());
+        assertEquals(prepared, RevisionStore.selectedBasis(fixture.layout));
+        assertTrue(host.apiActive);
+        assertTrue(host.workerActive);
+    }
+
+    @Test
+    void DB_전환_기록과_준비_중_기록은_다른_커밋이어도_다음_기반_교체를_막는다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+        ObjectNode state = (ObjectNode) Json.read(journal());
+
+        for (Runnable change : List.<Runnable>of(() -> state.put("dataTransition", true),
+                () -> state.put("dataTransition", false).put("phase", "PREPARING"))) {
+            change.run();
+            FileOps.atomicFile(journal(), Json.bytes(state), 0600);
+
+            // when
+            IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                    () -> preparation().prepare(later, apiEnvironment));
+
+            // then
+            assertEquals("DEV_PREPARATION_RECOVERY_REQUIRED", failure.getMessage());
+            assertEquals("b".repeat(40), Json.read(journal()).path("commit").asText());
+        }
+    }
+
+    @Test
+    void 같은_커밋_기록과_basis가_되돌려진_기록은_다음_기반_교체를_막는다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        Path prepared = RevisionStore.selectedBasis(fixture.layout);
+        String preparedReleaseId = RevisionStore.verify(prepared, true).releaseId();
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+        ObjectNode recorded = (ObjectNode) Json.read(journal());
+        assertEquals("PREPARED", recorded.path("phase").asText());
+
+        for (Consumer<ObjectNode> change : List.<Consumer<ObjectNode>>of(
+                state -> state.put("commit", "c".repeat(40)),
+                state -> state.put("basisReleaseId", preparedReleaseId))) {
+            ObjectNode state = recorded.deepCopy();
+            change.accept(state);
+            FileOps.atomicFile(journal(), Json.bytes(state), 0600);
+
+            // when
+            IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                    () -> preparation().prepare(later, apiEnvironment));
+
+            // then
+            assertEquals("DEV_PREPARATION_RECOVERY_REQUIRED", failure.getMessage());
+            assertEquals(state, Json.read(journal()));
+            assertEquals(prepared, RevisionStore.selectedBasis(fixture.layout));
+        }
+    }
+
+    @Test
+    void API_검증까지_끝난_다른_커밋의_기록은_그_커밋의_worker_배포가_남아_있을_수_있어_다음_기반_교체를_막는다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        preparation().complete(incoming, apiEnvironment);
+        Path prepared = RevisionStore.selectedBasis(fixture.layout);
+        JsonNode recorded = Json.read(journal());
+        assertEquals("API_READY", recorded.path("phase").asText());
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+
+        // when
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> preparation().prepare(later, apiEnvironment));
+
+        // then
+        assertEquals("DEV_PREPARATION_RECOVERY_REQUIRED", failure.getMessage());
+        assertEquals(recorded, Json.read(journal()));
+        assertEquals(prepared, RevisionStore.selectedBasis(fixture.layout));
+    }
+
+    /** 복구가 basis까지 되돌린 뒤 API 기동에서 실패해 기록이 {@code PREPARED}로 남은 상태를 만든다. */
+    private void stopRecoveryAtApiStart() throws Exception {
+        preparation().prepare(incoming, apiEnvironment);
+        host.failApiStart = true;
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> preparation().recover(incoming, apiEnvironment));
+        assertEquals("DEV_COMMAND_FAILED", failure.getMessage());
+        assertEquals("PREPARED", Json.read(journal()).path("phase").asText());
+        assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
+    }
+
+    @Test
+    void 복구가_basis를_되돌린_뒤_앱_기동에서_멈춘_기록은_다른_커밋의_기반_교체를_막는다() throws Exception {
+        // given
+        stopRecoveryAtApiStart();
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+
+        // when
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> preparation().prepare(later, apiEnvironment));
+
+        // then
+        assertEquals("DEV_PREPARATION_RECOVERY_REQUIRED", failure.getMessage());
+        assertEquals("b".repeat(40), Json.read(journal()).path("commit").asText());
+        assertEquals("PREPARED", Json.read(journal()).path("phase").asText());
+        assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
+        assertFalse(host.apiActive);
+    }
+
+    @Test
+    void 앱_기동에서_멈춘_복구는_같은_커밋의_복구를_다시_돌리면_끝나고_다음_기반_교체를_막지_않는다() throws Exception {
+        // given
+        stopRecoveryAtApiStart();
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+
+        // when
+        Map<String, Object> recovery = preparation().recover(incoming, apiEnvironment);
+
+        // then
+        assertEquals(true, recovery.get("recoveryRequired"));
+        assertEquals("ROLLED_BACK", Json.read(journal()).path("phase").asText());
+        assertTrue(host.apiActive);
+        assertTrue(host.workerActive);
+        assertEquals(Map.of("status", "ok", "preparationRequired", true, "applicationsRemainStopped", true),
+                preparation().prepare(later, apiEnvironment));
+    }
+
+    @Test
+    void 파일_검증용_지문_분리를_준비하고_다음_hook_실패에도_복구한다() throws Exception {
         // given
         changeFixtureCodeContract();
         var existingData = Files.createDirectories(fixture.layout.data().resolve("data")).resolve("routes.json");
@@ -169,10 +473,6 @@ class DeploymentPreparationServerTest {
         preparation().prepare(incoming, apiEnvironment);
 
         // then
-        assertFalse(databaseApproved);
-        assertFalse(Json.read(fixture.layout.data().resolve("deployment-preparation/current.json"))
-            .path("dataTransition").asBoolean());
-        assertFalse(Files.exists(fixture.layout.units().resolve("salmonbus-api.service.d/40-data-transition.conf")));
         assertEquals("existing route fixture bytes", Files.readString(existingData));
         assertEquals(true, preparation().recover(incoming, apiEnvironment).get("recoveryRequired"));
         assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
@@ -197,7 +497,6 @@ class DeploymentPreparationServerTest {
         assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
         assertTrue(host.apiActive);
         assertTrue(host.workerActive);
-        assertFalse(databaseApproved);
         assertEquals("ROLLED_BACK", Json.read(fixture.layout.data()
             .resolve("deployment-preparation/current.json")).path("phase").asText());
     }
@@ -205,8 +504,6 @@ class DeploymentPreparationServerTest {
     @Test
     void 복구_완료_기록은_다음_실패에서_서비스를_다시_중지하지_않는다() throws Exception {
         // given
-        changeDataContract();
-        approveDataContract();
         preparation().prepare(incoming, apiEnvironment);
         var journal = fixture.layout.data().resolve("deployment-preparation/current.json");
         var state = (tools.jackson.databind.node.ObjectNode) Json.read(journal);
@@ -218,8 +515,6 @@ class DeploymentPreparationServerTest {
 
         // when
         var result = preparation().recover(incoming, apiEnvironment);
-        var oldWorker = RevisionStore.verify(fixture.layout.root().resolve("worker/current").toRealPath(), true);
-        DataTransition.requireApplication(fixture.layout, oldWorker);
 
         // then
         assertEquals(false, result.get("recoveryRequired"));
@@ -230,30 +525,7 @@ class DeploymentPreparationServerTest {
     }
 
     @Test
-    void 만료된_승인은_앱을_중지하거나_복구_기록을_만들기_전에_거절한다() throws Exception {
-        // given
-        changeDataContract();
-        approveDataContract();
-        var file = fixture.layout.data().resolve("deployment-preparation/approval.json");
-        var approval = (tools.jackson.databind.node.ObjectNode) Json.read(file);
-        approval.put("expiresAt", java.time.Instant.now().minusSeconds(1).toString());
-        FileOps.atomicFile(file, Json.bytes(approval), 0600);
-
-        // when
-        var failure = assertThrows(IllegalArgumentException.class,
-                () -> preparation().prepare(incoming, apiEnvironment));
-        var recovery = preparation().recover(incoming, apiEnvironment);
-
-        // then
-        assertEquals("DEV_DATA_TRANSITION_APPROVAL", failure.getMessage());
-        assertEquals(false, recovery.get("recoveryRequired"));
-        assertTrue(host.apiActive);
-        assertTrue(host.workerActive);
-        assertFalse(Files.exists(fixture.layout.data().resolve("deployment-preparation/current.json")));
-    }
-
-    @Test
-    void 승인_없이_데이터_계약을_바꾸면_앱을_중지하기_전에_거절한다() throws Exception {
+    void 검토하지_않은_데이터_계약_변경은_앱을_중지하기_전에_거절한다() throws Exception {
         // given
         changeDataContract();
 
@@ -263,108 +535,6 @@ class DeploymentPreparationServerTest {
 
         // then
         assertEquals("DEV_DATA_CHANGE_REQUIRES_PLAN", failure.getMessage());
-        assertTrue(host.apiActive);
-        assertTrue(host.workerActive);
-        assertFalse(databaseApproved);
-    }
-
-    @Test
-    void 승인_명령은_정확한_두_배포판만_기록하고_앱이나_DB를_변경하지_않는다() throws Exception {
-        // given
-        changeDataContract();
-
-        // when
-        var result = DataTransition.authorize(fixture.layout, host, incoming, "dev-before-sal175");
-
-        // then
-        assertEquals(false, result.get("databaseChanged"));
-        assertEquals(false, result.get("backupVerifiedByTool"));
-        assertTrue(host.apiActive);
-        assertTrue(host.workerActive);
-        assertFalse(databaseApproved);
-        var approval = DataTransition.approval(fixture.layout,
-                RevisionStore.verify(original, true), RevisionStore.verify(incoming.resolve("basis"), true));
-        assertEquals("dev-before-sal175", approval.backupReference());
-        assertEquals(0600, FileOps.attribute(fixture.layout.data()
-                .resolve("deployment-preparation/approval.json"), "mode") & 0777);
-    }
-
-    @Test
-    void 승인된_계약_변경은_데이터를_보존하고_두_앱을_멈춘_뒤_DB_전환을_준비한다() throws Exception {
-        // given
-        changeDataContract();
-        approveDataContract();
-
-        // when
-        preparation().prepare(incoming, apiEnvironment);
-
-        // then
-        assertTrue(databaseApproved);
-        assertFalse(host.apiActive);
-        assertFalse(host.workerActive);
-        assertEquals("existing database contents\n", Files.readString(fixture.layout.data().resolve("database-sentinel")));
-        assertNotEquals(original, RevisionStore.selectedBasis(fixture.layout));
-        DataTransition.requireApplication(fixture.layout, RevisionStore.verify(incoming, true));
-        assertTrue(Files.readString(fixture.layout.units().resolve("salmonbus-worker.service.d/40-data-transition.conf"))
-                .contains("basis/releases/" + RevisionStore.verify(incoming.resolve("basis"), true).releaseId()));
-        var oldWorker = RevisionStore.verify(fixture.layout.root().resolve("worker/current").toRealPath(), true);
-        assertThrows(IllegalArgumentException.class, () -> DataTransition.requireApplication(fixture.layout, oldWorker));
-    }
-
-    @Test
-    void 전환_준비_뒤_배포가_실패하면_이전_앱을_자동으로_다시_켜지_않는다() throws Exception {
-        // given
-        changeDataContract();
-        approveDataContract();
-        preparation().prepare(incoming, apiEnvironment);
-
-        // when
-        assertThrows(IllegalArgumentException.class, () -> preparation().recover(incoming, apiEnvironment));
-
-        // then
-        assertFalse(host.apiActive);
-        assertFalse(host.workerActive);
-        assertNotEquals(original, RevisionStore.selectedBasis(fixture.layout));
-        assertEquals("RECOVERY_REQUIRED", Json.read(fixture.layout.data()
-                .resolve("deployment-preparation/current.json")).path("phase").asText());
-        assertThrows(IllegalArgumentException.class, () -> DataTransition.requireApplication(
-                fixture.layout, RevisionStore.verify(incoming, true)));
-        assertTrue(Files.exists(fixture.layout.units().resolve("salmonbus-worker.service.d/40-data-transition.conf")));
-    }
-
-    @Test
-    void DB_승인에_실패해도_이전_앱을_자동으로_다시_켜지_않는다() throws Exception {
-        // given
-        changeDataContract();
-        approveDataContract();
-        failDatabaseApproval = true;
-
-        // when
-        assertThrows(IllegalArgumentException.class, () -> preparation().prepare(incoming, apiEnvironment));
-
-        // then
-        assertFalse(databaseApproved);
-        assertFalse(host.apiActive);
-        assertFalse(host.workerActive);
-    }
-
-    @Test
-    void 계약_변경을_승인해도_노선_테스트_데이터까지_바꾸지는_못한다() throws Exception {
-        // given
-        changeDataContract();
-        var next = incoming.resolve("basis");
-        Files.delete(next.resolve("revision.json"));
-        Files.writeString(next.resolve("tools/data/routes.json"), "changed routes");
-        RevisionStore.seal(next, "basis", "b".repeat(40), "2".repeat(64), "2".repeat(64), false);
-        Files.delete(incoming.resolve("revision.json"));
-        RevisionStore.seal(incoming, "api", "b".repeat(40), "3".repeat(64), "2".repeat(64), false);
-        approveDataContract();
-
-        // when
-        assertThrows(IllegalArgumentException.class, () -> preparation().prepare(incoming, apiEnvironment));
-
-        // then
-        assertFalse(databaseApproved);
         assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
         assertTrue(host.apiActive);
         assertTrue(host.workerActive);
@@ -373,26 +543,27 @@ class DeploymentPreparationServerTest {
     }
 
     @Test
-    void API_검증이_끝나야_새_worker를_시작할_수_있다() throws Exception {
+    void 검토한_계약_변경도_노선_테스트_데이터까지_바꾸지는_못한다() throws Exception {
         // given
-        changeDataContract();
-        approveDataContract();
-        preparation().prepare(incoming, apiEnvironment);
-        var worker = application(base.resolve("transition-worker"), "worker", "2".repeat(64), "b".repeat(40), null);
-        var metadata = RevisionStore.verify(worker, true);
-        assertThrows(IllegalArgumentException.class, () -> DataTransition.requireApplication(fixture.layout, metadata));
+        changeFixtureCodeContract();
+        var next = incoming.resolve("basis");
+        Files.delete(next.resolve("revision.json"));
+        Files.writeString(next.resolve("tools/data/routes.json"), "changed routes");
+        RevisionStore.seal(next, "basis", "b".repeat(40), "2".repeat(64), "2".repeat(64), false);
+        Files.delete(incoming.resolve("revision.json"));
+        RevisionStore.seal(incoming, "api", "b".repeat(40), "3".repeat(64), "2".repeat(64), false);
 
         // when
-        preparation().complete(incoming, apiEnvironment);
+        var failure = assertThrows(IllegalArgumentException.class,
+                () -> preparation().prepare(incoming, apiEnvironment));
 
         // then
-        DataTransition.requireApplication(fixture.layout, metadata);
-        preparation().complete(worker, Map.of("APPLICATION_NAME", "salmonbus-backend-dev",
-                "DEPLOYMENT_GROUP_NAME", "salmonbus-backend-dev-worker"));
-        assertEquals("COMPLETE", Json.read(fixture.layout.data()
-                .resolve("deployment-preparation/current.json")).path("phase").asText());
-        assertFalse(Files.exists(fixture.layout.units().resolve("salmonbus-worker.service.d/40-data-transition.conf")));
-        assertFalse(Files.exists(fixture.layout.units().resolve("salmonbus-api.service.d/40-data-transition.conf")));
+        assertEquals("DEV_DATA_CHANGE_REQUIRES_PLAN", failure.getMessage());
+        assertEquals(original, RevisionStore.selectedBasis(fixture.layout));
+        assertTrue(host.apiActive);
+        assertTrue(host.workerActive);
+        assertFalse(Files.exists(fixture.layout.data().resolve("deployment-preparation/current.json")));
+        assertTrue(host.calls.stream().noneMatch(c -> c.contains("stop")));
     }
 
     @Test
@@ -519,6 +690,7 @@ class DeploymentPreparationServerTest {
         assertFalse(Files.exists(fixture.layout.units().resolve("salmonbus-api.service.d/30-dev-rds.conf")));
         assertTrue(Files.exists(fixture.layout.units().resolve("salmonbus-worker.service.d/30-dev-rds.conf")));
         var worker = application(base.resolve("rds-worker"), "worker", "2".repeat(64), "b".repeat(40), null);
+        host.archiveActive = true;
         preparation().complete(worker, Map.of("APPLICATION_NAME", "salmonbus-backend-dev",
                 "DEPLOYMENT_GROUP_NAME", "salmonbus-backend-dev-worker"));
         assertFalse(Files.exists(fixture.layout.units().resolve("salmonbus-worker.service.d/30-dev-rds.conf")));
@@ -532,16 +704,123 @@ class DeploymentPreparationServerTest {
         var worker = application(base.resolve("new-worker"), "worker", "2".repeat(64), "b".repeat(40), null);
         var workerEnvironment = Map.of("APPLICATION_NAME", "salmonbus-backend-dev",
                 "DEPLOYMENT_GROUP_NAME", "salmonbus-backend-dev-worker");
+        host.archiveActive = true;
         preparation().complete(worker, workerEnvironment);
+        assertEquals("COMPLETE", Json.read(fixture.layout.data()
+                .resolve("deployment-preparation/current.json")).path("phase").asText());
         assertEquals(false, preparation().recover(incoming, apiEnvironment).get("recoveryRequired"));
         assertNotEquals(original, RevisionStore.selectedBasis(fixture.layout));
+    }
+
+    private Path archiveUnit() {
+        return fixture.layout.units().resolve(RevisionStore.ARCHIVE_UNIT);
+    }
+
+    private String phase() throws Exception {
+        return Json.read(fixture.layout.data().resolve("deployment-preparation/current.json")).path("phase").asText();
+    }
+
+    @Test
+    void 기반_교체를_준비할_때_돌고_있던_이관_앱도_함께_멈춘다() throws Exception {
+        // given
+        Files.writeString(archiveUnit(), "old archive unit\n");
+        host.archiveActive = true;
+
+        // when
+        preparation().prepare(incoming, apiEnvironment);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(host.archiveActive).isFalse();
+            softly.assertThat(host.workerActive).isFalse();
+        });
+    }
+
+    @Test
+    void 이관_앱이_돌고_있으면_기반_교체를_시작하지_않는다() throws Exception {
+        // given
+        host.apiActive = false;
+        host.workerActive = false;
+        host.archiveActive = true;
+
+        // when
+        Throwable failure = catchThrowable(
+            () -> new BasisLifecycle(fixture.layout, host).change(incoming.resolve("basis"), true));
+
+        // then
+        Path selected = RevisionStore.selectedBasis(fixture.layout);
+        assertSoftly(softly -> {
+            softly.assertThat(failure).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("STOP_DEV_APPS_BEFORE_BASIS_CHANGE");
+            softly.assertThat(selected).isEqualTo(original);
+        });
+    }
+
+    @Test
+    void 이관_앱을_처음_설치한_배포가_실패하면_유닛을_지우고_이관_앱을_멈춘다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        Files.writeString(archiveUnit(), "new archive unit\n");
+        host.archiveActive = true;
+
+        // when
+        preparation().recover(incoming, apiEnvironment);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(archiveUnit()).doesNotExist();
+            softly.assertThat(host.archiveActive).isFalse();
+            softly.assertThat(host.workerActive).isTrue();
+        });
+    }
+
+    @Test
+    void 이관_앱이_돌던_서버는_배포가_실패하면_이전_유닛으로_이관_앱을_다시_띄운다() throws Exception {
+        // given
+        Files.writeString(archiveUnit(), "old archive unit\n");
+        host.archiveActive = true;
+        preparation().prepare(incoming, apiEnvironment);
+        Files.writeString(archiveUnit(), "new archive unit\n");
+
+        // when
+        preparation().recover(incoming, apiEnvironment);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(archiveUnit()).hasContent("old archive unit\n");
+            softly.assertThat(host.archiveActive).isTrue();
+        });
+    }
+
+    @Test
+    void 이관_앱이_떠_있지_않으면_worker_배포를_끝난_것으로_적지_않는다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        preparation().complete(incoming, apiEnvironment);
+        Path worker = application(base.resolve("new-worker"), "worker", "2".repeat(64), "b".repeat(40), null);
+        Map<String, String> workerEnvironment = Map.of(
+            "APPLICATION_NAME", "salmonbus-backend-dev",
+            "DEPLOYMENT_GROUP_NAME", "salmonbus-backend-dev-worker");
+
+        // when
+        Throwable failure = catchThrowable(() -> preparation().complete(worker, workerEnvironment));
+
+        // then
+        String phase = phase();
+        assertSoftly(softly -> {
+            softly.assertThat(failure).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("DEV_ARCHIVE_NOT_RUNNING");
+            softly.assertThat(phase).isEqualTo("API_READY");
+        });
     }
 
     private static class PreparationHost extends Fixtures.FakeHost {
         boolean apiActive = true;
         boolean workerActive = true;
+        boolean archiveActive;
         boolean infraActive = true;
         boolean failLoad;
+        boolean failApiStart;
         List<String> workerStopCommand;
 
         @Override
@@ -567,8 +846,12 @@ class DeploymentPreparationServerTest {
                 calls.add(command);
                 var unit = command.stream().filter(value -> value.startsWith("salmonbus-"))
                         .findFirst().orElse("").replace(".service", "");
-                final boolean active = unit.equals("salmonbus-api") ? apiActive
-                        : unit.equals("salmonbus-worker") ? workerActive : infraActive;
+                final boolean active = switch (unit) {
+                    case "salmonbus-api" -> apiActive;
+                    case "salmonbus-worker" -> workerActive;
+                    case "salmonbus-archive" -> archiveActive;
+                    default -> infraActive;
+                };
                 if (command.contains("show")) return new Result(0, active ? "active\n" : "inactive\n", "");
                 if (command.contains("is-active")) return new Result(active ? 0 : 3, active ? "active\n" : "inactive\n", "");
                 if (command.contains("stop") && unit.equals("salmonbus-worker") && workerStopCommand != null) {
@@ -581,17 +864,26 @@ class DeploymentPreparationServerTest {
                         throw new IllegalStateException(error);
                     }
                 }
+                if (failsApiStart(command, unit)) {
+                    failApiStart = false;
+                    return new Result(1, "", "");
+                }
                 if (command.contains("stop") || command.contains("start")) {
                     final boolean next = command.contains("start");
                     switch (unit) {
                         case "salmonbus-api" -> apiActive = next;
                         case "salmonbus-worker" -> workerActive = next;
+                        case "salmonbus-archive" -> archiveActive = next;
                         default -> infraActive = next;
                     }
                 }
                 return new Result(0, "", "");
             }
             return super.run(cwd, environment, timeout, command);
+        }
+
+        private boolean failsApiStart(List<String> command, String unit) {
+            return failApiStart && command.contains("start") && unit.equals("salmonbus-api");
         }
     }
 }

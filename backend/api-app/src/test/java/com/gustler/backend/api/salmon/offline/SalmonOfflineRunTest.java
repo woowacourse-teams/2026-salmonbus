@@ -59,8 +59,10 @@ class SalmonOfflineRunTest {
         assertThat(data.path("decisionSource").asString()).isEqualTo("arrival_snapshot");
         assertThat(data.path("decisions").asInt()).isEqualTo(8);
         assertThat(data.path("decisionStopVisits").asInt()).isEqualTo(7);
-        assertThat(data.path("inputRows").path("seat_forecast").asInt()).isEqualTo(5);
-        assertThat(data.path("seatForecastsByProbabilityTarget").path("DEPARTURE_ZERO").asInt()).isEqualTo(1);
+        assertThat(data.path("inputRows").path("forecast_run").asInt()).isEqualTo(1);
+        assertThat(data.path("inputRows").path("forecast_record").asInt()).isEqualTo(4);
+        assertThat(countsOf(data.path("forecastRunsByOutcome"))).containsExactly("PUBLISHED=1");
+        assertThat(data.path("recordedPredictions").asInt()).isEqualTo(5);
         assertThat(data.path("decisionAt").path("to").asString()).isEqualTo(BASE.plusSeconds(40).toString());
 
         JsonNode results = summary.path("results");
@@ -86,8 +88,7 @@ class SalmonOfflineRunTest {
 
         JsonNode all = results.path("seatForecastLookups").path("allEntries");
         assertThat(all.path("entries").asInt()).isEqualTo(11);
-        assertThat(countsOf(all.path("foundByProbabilityTarget")))
-            .containsExactlyInAnyOrder("DEPARTURE_ZERO=2", "FIRST_POST_STOP_ZERO=2");
+        assertThat(countsOf(all.path("foundByProbabilityTarget"))).containsExactly("DEPARTURE_ZERO=4");
         assertThat(countsOf(all.path("notFoundByCause"))).containsExactlyInAnyOrder("BOARD_READ_FAILED=1",
             "FORECAST_UNAVAILABLE=1", "LIST_WITHOUT_VEHICLE_ID=1", "VEHICLE_NOT_ON_BOARD=4");
         assertThat(countsOf(all.path("boardReadFailedByError"))).containsExactly("ROUTE_NOT_FOUND=1");
@@ -259,7 +260,7 @@ class SalmonOfflineRunTest {
         assertThat(rows.get(1)).startsWith(ROUTE + "," + stationOf(15) + ",15," + BASE
             + ",NO_MOVE_NO_CANDIDATE,QUERIED,2,2,EVALUABLE,0.15");
         assertThat(rows.get(1)).endsWith(
-            ",INDEP+SEAT_FORECAST_PROXY,,1*:FOUND/FIRST_POST_STOP_ZERO|2*:FOUND/DEPARTURE_ZERO,READ,3,3,"
+            ",INDEP+SEAT_FORECAST_PROXY,,1*:FOUND/DEPARTURE_ZERO|2*:FOUND/DEPARTURE_ZERO,READ,3,3,"
             + "1:FULL|2:FULL,1:SEATS_AVAILABLE|2:FULL,1:IN_TIME|2:IN_TIME,FAIL,SUCCESS,FAIL");
         assertThat(rows.get(2)).endsWith(",ABSTAIN_STAY_UNDEFINED,QUERIED,1,1,INSUFFICIENT,,,"
             + "PROBABILITY_UNKNOWN/-/-,1*:VEHICLE_NOT_ON_BOARD/BEYOND_HORIZON,READ,3,0,"
@@ -293,13 +294,34 @@ class SalmonOfflineRunTest {
             .containsExactlyInAnyOrder("LIST_UNAVAILABLE/CURRENT/NOT_PROVIDED=1",
                 "LIST_UNAVAILABLE/CURRENT/STALE=1");
         JsonNode all = results.path("seatForecastLookups").path("allEntries");
-        assertThat(countsOf(all.path("foundByProbabilityTarget")))
-            .containsExactlyInAnyOrder("DEPARTURE_ZERO=1", "FIRST_POST_STOP_ZERO=1");
+        assertThat(countsOf(all.path("foundByProbabilityTarget"))).containsExactly("DEPARTURE_ZERO=2");
         assertThat(all.path("notFoundByCause").isEmpty()).isTrue();
         JsonNode board = summary.path("diagnostics").path("boardAtDecision");
         assertThat(countsOf(board.path("status"))).containsExactlyInAnyOrder("NO_RECENT_OBSERVATION=1", "READ=2");
         assertThat(countsOf(board.path("vehiclesAtStop"))).containsExactlyInAnyOrder("1=1", "3=1");
         assertThat(countsOf(board.path("vehiclesWithForecastAtStop"))).containsExactlyInAnyOrder("0=1", "3=1");
+    }
+
+    @Test
+    void 예보_기록으로_바뀌기_전의_발행_파일이_있는_입력_폴더는_무엇이_바뀌었는지_알리고_멈춘다() throws Exception {
+        Path input = new SyntheticInput(Files.createDirectory(workspace.resolve("input")))
+            .withPreRecordForecastFile("forecast_publication").folder();
+
+        assertThatThrownBy(() -> SalmonOfflineRun.run(input, settings(), workspace.resolve("output"), "test-commit"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("forecast_publication")
+            .hasMessageContaining("forecast_run.csv(.gz)와 forecast_record.csv(.gz)");
+    }
+
+    @Test
+    void 예보_기록으로_바뀌기_전의_좌석_예보_파일만_있어도_멈춘다() throws Exception {
+        Path input = new SyntheticInput(Files.createDirectory(workspace.resolve("input")))
+            .withoutPublications().withPreRecordForecastFile("seat_forecast").folder();
+
+        assertThatThrownBy(() -> SalmonOfflineRun.run(input, settings(), workspace.resolve("output"), "test-commit"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("seat_forecast")
+            .hasMessageContaining("forecast_record.csv(.gz)");
     }
 
     @Test

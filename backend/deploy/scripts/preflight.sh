@@ -3,9 +3,6 @@
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 claim_deploy
 
-source "$(dirname "${BASH_SOURCE[0]}")/evaluation-work-transition.sh"
-transition_check_deployment "$COMPONENT" "$MANIFEST"
-
 log "$COMPONENT 배포 준비를 본다"
 
 # 유닛이 /usr/bin/java 를 쓴다. PATH 에 java 가 있어도 유닛이 그걸 쓰는 건 아니다

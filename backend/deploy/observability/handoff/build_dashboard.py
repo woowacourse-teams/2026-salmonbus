@@ -44,9 +44,9 @@ base='{unit="salmonbus-worker.service"} |= "event=forecast_accuracy " | logfmt |
 group='routeId,routeVersionId,stopOrder,routeName,stopName,stopId,direction,modelDeploymentId,distance'
 def total(field): return f'sum by ({group}) (sum_over_time({base} | unwrap {field} | __error__="" [$__range]))'
 for title, numerator, denominator, unit, description in [
-    ('정류장별 평균 좌석 오차 (MAE)', 'absoluteErrorSum','maeCount','short','0에 가까울수록 좌석 오차가 작다. 유효 expected_seats가 있는 평가만 포함. 완료 표본·누락을 함께 본다.'),
+    ('정류장별 평균 좌석 오차 (MAE)', 'absoluteErrorSum','maeCount','short','0에 가까울수록 좌석 오차가 작다. 채점됨으로 닫히고 기대 좌석이 유효한 예측만 포함. 완료 표본·누락을 함께 본다.'),
     ('정류장별 만석 확률 오차 (Brier)', 'brierSum','probabilityCount','short','표시된 만석 확률과 실제 만석 여부의 제곱 오차. 낮을수록 좋으며 순수한 확률 보정 지표는 아니다.'),
-    ('정산 완료분 중 좌석 평가 가능 비율', 'maeCount','completed','percentunit','전체 발행 예보의 평가 커버리지가 아니다. Writer가 전달한 완료분만 분모이며 PENDING 및 별도 일괄 품질 제외는 포함하지 않는다.')]:
+    ('닫힌 예측 중 좌석 오차를 잰 비율', 'maeCount','completed','percentunit','분모는 채점이 닫은 예측 전체다(놓침·지원 안 함 포함). 아직 닫히지 않은 예측은 들어가지 않는다.')]:
     add(title, f'{total(numerator)} / ({total(denominator)} > 0)',loki,'table',unit,description,True)
 add('정류장별 좌석 평가 표본 수', total('maeCount'),loki,'table',description='선택 기간에 출력된 집계. 동일 차량의 반복 예보도 각 평가 단위로 센다.',instant=True)
 add('정류장별 만석 확률 평가 표본 수',total('probabilityCount'),loki,'table',instant=True)

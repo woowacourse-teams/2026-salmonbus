@@ -3,7 +3,7 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
-import com.gustler.backend.forecasting.domain.publication.RouteStopsQuery;
+import com.gustler.backend.forecasting.domain.route.RouteStopsQuery;
 import com.gustler.backend.forecasting.domain.route.RouteVersionQuery;
 import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;

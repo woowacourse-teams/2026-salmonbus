@@ -1,11 +1,15 @@
 package com.gustler.devtools;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -261,6 +265,40 @@ class SettingsServerTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new Preflight(fixture.layout, fixture.host).check("prepare", Map.of()));
+    }
+
+    private Map<String, String> archiveEnvironment() throws Exception {
+        fixture.settings();
+        Map<String, String> worker = Environment.load(fixture.layout.config()).get("worker");
+        return Environment.combined(worker, Map.of("ARCHIVE_DIRECTORY", "/srv/salmonbus-dev/archive"));
+    }
+
+    @Test
+    void 이관_앱의_기동_검증은_worker_설정_그대로이면_통과한다() throws Exception {
+        // given
+        Map<String, String> effective = archiveEnvironment();
+
+        // when
+        Throwable failure = catchThrowable(
+            () -> new Preflight(fixture.layout, fixture.host).check("archive", effective));
+
+        // then
+        assertThat(failure).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"DB_URL", "SPRING_DATASOURCE_URL"})
+    void 이관_앱의_기동_검증은_DB_접속_값이_worker_설정과_다르면_막는다(String key) throws Exception {
+        // given
+        Map<String, String> effective = Environment.combined(
+            archiveEnvironment(), Map.of(key, "jdbc:postgresql://other.example.test:5432/other"));
+
+        // when
+        Throwable failure = catchThrowable(
+            () -> new Preflight(fixture.layout, fixture.host).check("archive", effective));
+
+        // then
+        assertThat(failure).isInstanceOf(IllegalArgumentException.class).hasMessage("DEV_EFFECTIVE_ENV");
     }
 
     public static class LockProbe {

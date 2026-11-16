@@ -17,6 +17,8 @@ def combine_extended(runtime, replays, source_digest, code_sha, routes, substitu
         for row in report['routes']:
             cells = row['extended_hours']
             off_peak = any(cell['cell'] not in ('work-morning', 'work-evening') for cell in cells)
+            # restored_targets counts off-peak settlements that the Worker replay recomputed, bit for bit,
+            # from the stored forecast and pass records alone (the scoring state rebuilt after a restart).
             if row.get('passed') is not True or (off_peak and row.get('restored_targets', 0) < 1):
                 raise ValueError(f'Publication, settlement or restore failed: {path.name}/{row["route"]}')
             if any(cell['route'] != row['route'] for cell in cells):

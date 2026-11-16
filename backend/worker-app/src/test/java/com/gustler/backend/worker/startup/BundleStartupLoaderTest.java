@@ -6,6 +6,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.gustler.backend.forecasting.api.forecast.RunForecasts;
 import com.gustler.backend.forecasting.api.model.LoadConfiguredModelCommand;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Activated;
@@ -57,6 +58,34 @@ class BundleStartupLoaderTest {
 
         // then
         assertThat(commands).containsExactly(new LoadConfiguredModelCommand("/srv/model", true));
+    }
+
+    @Test
+    void 예보가_켜져_있으면_모델을_올린_뒤에_첫_줍기를_한_번_돌린다() {
+        // given
+        List<String> order = new ArrayList<>();
+        BundleStartupLoader loader = new BundleStartupLoader(new ModelBundleProperties("/srv/model", false),
+            command -> {
+                order.add("load");
+                return new Reloaded("release-A");
+            });
+        loader.setRunForecasts(new RunForecasts() {
+            @Override
+            public void batchStored(final long observationBatchId, final long routeVersionId) {
+                order.add("signal");
+            }
+
+            @Override
+            public void pickUp() {
+                order.add("pickUp");
+            }
+        });
+
+        // when
+        loader.loadConfiguredBundle();
+
+        // then
+        assertThat(order).containsExactly("load", "pickUp");
     }
 
     @ParameterizedTest

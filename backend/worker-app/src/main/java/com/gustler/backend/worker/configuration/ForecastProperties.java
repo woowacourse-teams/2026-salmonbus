@@ -3,23 +3,26 @@ package com.gustler.backend.worker.configuration;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
- * 예보 배치와 라벨 회수 배치의 설정.
+ * 예보와 채점의 설정.
  *
- * <p>기본값은 꺼짐이다. 계수 번들이 없어 활성 배포가 하나도 없는 상태에서 배치를 켜면
+ * <p>기본값은 꺼짐이다. 계수 번들이 없어 활성 배포가 하나도 없는 상태에서 켜면
  * 아무 값도 내지 않으면서 몇 초마다 빈 질의만 실행한다. 배포 행이 생성된 뒤에 켠다.
+ *
+ * @param interval 수집 신호를 놓쳤거나 처리 중에 멈춘 배치를 다시 줍는 주기
+ * @param staleness 수신한 지 이보다 오래된 배치는 줍지 않는다
+ * @param batchLimit 노선 판본의 처리하지 않은 배치를 한 번에 읽는 수의 상한
+ * @param lanes 노선별 실행 줄 수. 같은 노선은 항상 같은 줄에서 순서대로 처리한다
  */
 @ConfigurationProperties("forecast")
 public record ForecastProperties(
     boolean enabled,
     Duration interval,
-    Duration settlementInterval,
-    Duration statisticsInterval,
     Duration staleness,
     int batchLimit,
-    int pendingLimit,
-    int arrivalLimit
+    @DefaultValue("2") int lanes
 ) {
     /**
      * 신선도 창의 상한.
@@ -34,8 +37,7 @@ public record ForecastProperties(
         requirePositive("forecast.staleness", staleness);
         requireAtMost("forecast.staleness", staleness, MAX_STALENESS);
         requirePositive("forecast.batch-limit", batchLimit);
-        requirePositive("forecast.pending-limit", pendingLimit);
-        requirePositive("forecast.arrival-limit", arrivalLimit);
+        requirePositive("forecast.lanes", lanes);
     }
 
     private static void requirePositive(

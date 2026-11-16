@@ -34,16 +34,16 @@ class CollectionBatchTest {
     }
 
     @Test
-    void 입력으로_확정한_배치는_다시_열_수_없다() {
+    void 입력_확인_시각이_있는_배치는_다시_열_수_없다() {
         // given
-        CollectionBatch batch = dispatched();
-        batch.conclude(EMPTY, RECEIVED);
-
-        // when
-        batch.confirmInput(RECEIVED.plusSeconds(1));
-
-        // then
-        assertThat(batch.state().inputConfirmedAt()).isEqualTo(RECEIVED.plusSeconds(1));
+        CollectionBatch concluded = dispatched();
+        concluded.conclude(EMPTY, RECEIVED);
+        State state = concluded.state();
+        CollectionBatch batch = CollectionBatch.restore(new State(state.id(), state.routeVersionId(),
+            state.scheduledAt(), state.attemptKey(), state.attemptNumber(), state.requestedAt(),
+            state.responseReceivedAt(), RECEIVED.plusSeconds(1), state.outcome(), state.failureCode(),
+            state.resultCode(), state.providerRows(), state.storedRows(), state.excludedRows(),
+            state.normalizationVersion(), state.collectionStrategyVersion()));
 
         // when
         Throwable phaseFailure1 = catchThrowable(() -> batch.startAttempt(true));
@@ -51,19 +51,6 @@ class CollectionBatchTest {
         // then
         assertThat(phaseFailure1)
             .isNotNull().isInstanceOf(InputAlreadyConfirmedException.class);
-    }
-
-    @Test
-    void 재처리해도_첫_입력_확인_시각을_유지한다() {
-        // given
-        CollectionBatch batch = dispatched();
-        batch.conclude(EMPTY, RECEIVED);
-        batch.confirmInput(RECEIVED.plusSeconds(1));
-
-        // when
-        batch.confirmInput(RECEIVED.plusSeconds(30));
-
-        // then
         assertThat(batch.state().inputConfirmedAt()).isEqualTo(RECEIVED.plusSeconds(1));
     }
 

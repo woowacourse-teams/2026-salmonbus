@@ -77,18 +77,7 @@ final class Deployment {
                                 : 0644);
             }
         }
-        var unit = "salmonbus-" + metadata.kind() + ".service";
-        var target = layout.units().resolve(unit);
-        var source = release.resolve("systemd/" + unit);
-        if (FileOps.exists(target)) {
-            FileOps.protectedFile(target, "DEV_UNIT_FILE");
-        }
-        final boolean changedUnit = !FileOps.exists(target) || Files.mismatch(source, target) != -1;
-        if (changedUnit) {
-            FileOps.atomicFile(target, Files.readAllBytes(source), 0644);
-            host.run("systemctl", "daemon-reload");
-        }
-        host.run("systemctl", "enable", unit);
+        final boolean changedUnit = installUnits(release, metadata.kind());
         if (!release.equals(current)) {
             if (current != null) {
                 setLink(base.resolve("previous"), current);
@@ -111,5 +100,30 @@ final class Deployment {
                 changed,
                 "previousAvailable",
                 current != null || previous != null);
+    }
+
+    /** 묶음의 유닛을 설치하고 하나라도 바뀌었는지 낸다. worker 묶음에는 이관 앱의 유닛이 함께 실려 있다. */
+    private boolean installUnits(Path release, String kind) throws Exception {
+        final boolean changed = installUnit(release, "salmonbus-" + kind + ".service");
+        if (!kind.equals("worker")) {
+            return changed;
+        }
+        final boolean changedArchive = installUnit(release, RevisionStore.ARCHIVE_UNIT);
+        return changed || changedArchive;
+    }
+
+    private boolean installUnit(Path release, String unit) throws Exception {
+        Path target = layout.units().resolve(unit);
+        Path source = release.resolve("systemd/" + unit);
+        if (FileOps.exists(target)) {
+            FileOps.protectedFile(target, "DEV_UNIT_FILE");
+        }
+        final boolean changed = !FileOps.exists(target) || Files.mismatch(source, target) != -1;
+        if (changed) {
+            FileOps.atomicFile(target, Files.readAllBytes(source), 0644);
+            host.run("systemctl", "daemon-reload");
+        }
+        host.run("systemctl", "enable", unit);
+        return changed;
     }
 }

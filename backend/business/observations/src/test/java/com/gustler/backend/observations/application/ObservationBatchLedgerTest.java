@@ -11,7 +11,6 @@ import com.gustler.backend.gbis.api.GbisLocationResult.NoVehicles;
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
-import com.gustler.backend.observations.api.CollectionInputs;
 import com.gustler.backend.observations.api.CollectionQualityHook;
 import com.gustler.backend.observations.api.VehicleObservationsStored;
 import com.gustler.backend.observations.domain.CollectionPlan;
@@ -74,9 +73,6 @@ class ObservationBatchLedgerTest {
     private JdbcClient jdbcClient;
 
     @Autowired
-    private CollectionInputs collectionInputs;
-
-    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @Autowired
@@ -94,7 +90,7 @@ class ObservationBatchLedgerTest {
         failingQualityHook.fail = false;
         failingQualityHook.afterCalls = 0;
         jdbcClient.sql("""
-            TRUNCATE vehicle_observation, observation_batch, route_stop, route_version, route,
+            TRUNCATE vehicle_observation, observation_batch, forecast_run, route_stop, route_version, route,
                 daily_call_quota RESTART IDENTITY CASCADE
             """).update();
     }
@@ -334,6 +330,42 @@ class ObservationBatchLedgerTest {
     }
 
     @Test
+    void 예보가_쓴_배치는_같은_계획으로_다시_열지_않고_관측과_시도_횟수와_호출_횟수를_그대로_둔다() {
+        // given
+        insertStop();
+        final long batchId = dispatchedBatch();
+        BusLocation bus = new BusLocation("경기70아0001", VEHICLE_ID, 0,
+            ROUTE_204000057, 11, STOP_ID, 1, 2, 43, 3, 1);
+        ledger.conclude(batchId, reply(new GbisLocationResult.Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT);
+        insertForecastRun(batchId, 0);
+
+        // when
+        Throwable reopened = catchThrowable(() -> ledger.reserve(plan(), RESERVED_AT));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(reopened).isInstanceOf(InputAlreadyConfirmedException.class);
+            softly.assertThat(jdbcClient.sql("SELECT count(*) FROM vehicle_observation WHERE observation_batch_id = ?")
+                .param(batchId).query(Integer.class).single()).isOne();
+            softly.assertThat(attemptNumberOf(batchId)).isOne();
+            softly.assertThat(reservedCallsOn(KOREA_8_19)).isOne();
+        });
+    }
+
+    @Test
+    void 다른_날짜의_예보_실행_기록은_같은_계획을_다시_여는_것을_막지_않는다() {
+        // given
+        final long batchId = dispatchedBatch();
+        insertForecastRun(batchId, 1);
+
+        // when
+        ledger.reserve(plan(), RESERVED_AT);
+
+        // then
+        assertThat(attemptNumberOf(batchId)).isEqualTo(2);
+    }
+
+    @Test
     void 같은_계획을_재시도하면_수집_묶음은_한_행으로_남는다() {
         // given
         ledger.reserve(plan(), RESERVED_AT);
@@ -486,6 +518,56 @@ class ObservationBatchLedgerTest {
     }
 
     @Test
+    void 예보_실행_기록이_있는_배치는_미완료_상태라도_정리하지_않는다() {
+        // given
+        final long batchId = dispatchedBatch();
+        final long routeId = jdbcClient.sql("SELECT route_id FROM route_version WHERE id=?").param(routeVersionId)
+            .query(Long.class).single();
+        jdbcClient.sql("""
+            INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
+                confirmed_at,outcome,prediction_count,source_incomplete,counted_rows)
+            VALUES((CAST(? AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date,?,?,?,?,?,'EMPTY',0,false,0)
+            """).params(SCHEDULED_AT, batchId, routeId, routeVersionId, RESPONSE_RECEIVED_AT,
+            RESPONSE_RECEIVED_AT.plusSeconds(1)).update();
+        String before = batchWithoutOutcome(batchId);
+
+        // when
+        final int closed = ledger.closeUnfinished(batchId);
+        List<Long> closedInRound = ledger.closePreviousRound();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(closed).isZero();
+            softly.assertThat(closedInRound).isEmpty();
+            softly.assertThat(outcomeOf(batchId)).isEqualTo("DISPATCHING");
+            softly.assertThat(batchWithoutOutcome(batchId)).isEqualTo(before);
+        });
+    }
+
+    @Test
+    void 다른_날짜의_예보_실행_기록은_미완료_정리를_막지_않는다() {
+        // given
+        final long batchId = dispatchedBatch();
+        final long routeId = jdbcClient.sql("SELECT route_id FROM route_version WHERE id=?").param(routeVersionId)
+            .query(Long.class).single();
+        jdbcClient.sql("""
+            INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
+                confirmed_at,outcome,prediction_count,source_incomplete,counted_rows)
+            VALUES((CAST(? AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date + 1,?,?,?,?,?,'EMPTY',0,false,0)
+            """).params(SCHEDULED_AT, batchId, routeId, routeVersionId, RESPONSE_RECEIVED_AT,
+            RESPONSE_RECEIVED_AT.plusSeconds(1)).update();
+
+        // when
+        final int closed = ledger.closeUnfinished(batchId);
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(closed).isOne();
+            softly.assertThat(outcomeOf(batchId)).isEqualTo("UNKNOWN_AFTER_DISPATCH");
+        });
+    }
+
+    @Test
     void 다음_회차에서_오래된_미완료를_백건까지만_종료한다() {
         jdbcClient.sql("""
             INSERT INTO observation_batch(route_version_id,scheduled_at,attempt_number,attempt_key,outcome,
@@ -562,22 +644,16 @@ class ObservationBatchLedgerTest {
     }
 
     @Test
-    void 실시간_수집은_LIVE로_기록하고_확인_시각은_한_번만_저장한다() {
+    void 실시간_수집은_LIVE로_기록한다() {
         // given
-        final long batchId = confirmSuccessfulInput();
+        final long batchId = dispatchedBatch();
 
         // when
-        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
-            collectionInputs.confirmInput(batchId, RESPONSE_RECEIVED_AT.plusSeconds(30).toInstant()));
+        ledger.conclude(batchId, reply(new GbisLocationResult.NoVehicles(QUERY_TIME)), RESPONSE_RECEIVED_AT);
 
         // then
-        assertSoftly(softly -> {
-            softly.assertThat(jdbcClient.sql("SELECT ingestion_origin FROM observation_batch WHERE id=?")
-                .param(batchId).query(String.class).single()).isEqualTo("LIVE");
-            softly.assertThat(jdbcClient.sql("SELECT input_confirmed_at FROM observation_batch WHERE id=?")
-                .param(batchId).query(OffsetDateTime.class).single().toInstant())
-                .isEqualTo(RESPONSE_RECEIVED_AT.plusSeconds(1).toInstant());
-        });
+        assertThat(jdbcClient.sql("SELECT ingestion_origin FROM observation_batch WHERE id=?")
+            .param(batchId).query(String.class).single()).isEqualTo("LIVE");
     }
 
     private int quotaRowCount() {
@@ -592,11 +668,24 @@ class ObservationBatchLedgerTest {
             ALREADY_USED_UP, ALREADY_USED_UP).update();
     }
 
+    /** 입력 확인 시각이 적힌 배치를 만든다. 예보 실행 기록이 생기기 전에 처리된 배치가 이 열에 착수 시각을 갖고 있다. */
+    /** 배치 예약 시각의 한국 날짜에서 {@code daysLater}일 뒤 날짜로 예보 실행 기록을 넣는다. */
+    private void insertForecastRun(final long batchId, final int daysLater) {
+        final long routeId = jdbcClient.sql("SELECT route_id FROM route_version WHERE id=?").param(routeVersionId)
+            .query(Long.class).single();
+        jdbcClient.sql("""
+            INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
+                confirmed_at,outcome,prediction_count,source_incomplete,counted_rows)
+            VALUES((CAST(? AS timestamptz) AT TIME ZONE 'Asia/Seoul')::date + ?,?,?,?,?,?,'EMPTY',0,false,0)
+            """).params(SCHEDULED_AT, daysLater, batchId, routeId, routeVersionId, RESPONSE_RECEIVED_AT,
+            RESPONSE_RECEIVED_AT.plusSeconds(1)).update();
+    }
+
     private long confirmSuccessfulInput() {
         final long batchId = dispatchedBatch();
         ledger.conclude(batchId, reply(new GbisLocationResult.NoVehicles(QUERY_TIME)), RESPONSE_RECEIVED_AT);
-        new TransactionTemplate(transactionManager).executeWithoutResult(
-            status -> collectionInputs.confirmInput(batchId, RESPONSE_RECEIVED_AT.plusSeconds(1).toInstant()));
+        jdbcClient.sql("UPDATE observation_batch SET input_confirmed_at=? WHERE id=?")
+            .params(RESPONSE_RECEIVED_AT.plusSeconds(1), batchId).update();
         return batchId;
     }
 

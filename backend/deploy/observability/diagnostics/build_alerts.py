@@ -43,7 +43,7 @@ work=f'((salmonbus_forecast_pending_age_seconds{base} > 0) or (time() - salmonbu
 rule('salmonbus-diag-forecast-pending','관측 수집 후 예보 배치 처리 중단',
      f'{commit_age} and on(route_id,route_name) {work} and on(route_id,route_name) ((time() - {last}) < 300) and on(route_id,route_name) (salmonbus_collection_usable_rows{base} > 0) and on() {period}',
      300,'1m','[긴급] {{ $labels.route_name }}번 예보 배치 처리 중단',
-     '마지막 예보 배치 커밋 또는 재시작 후 첫 수집 시도로부터 {{ $values.A.Value }}초 경과. 관측은 최신이지만 처리 대상이 남았거나 예보 회차 관측이 멈췄습니다. forecast_write_and_commit, 모델 상태, 잠금과 연결 대기를 확인하세요. 정상 0건 예보 커밋은 갱신으로 인정합니다. 최근 10분 안에 심야 수집 주기가 있었다면 알림을 보류합니다. 한 번도 대상 조회를 하지 않은 노선은 별도 확인합니다.')
+     '마지막 예보 배치 커밋 또는 재시작 후 첫 수집 시도로부터 {{ $values.A.Value }}초 경과. 관측은 최신이지만 처리 대상이 남았거나 예보 회차 관측이 멈췄습니다. worker 작업 forecast_batch, 모델 상태, 잠금과 연결 대기를 확인하세요. 정상 0건 예보 커밋은 갱신으로 인정합니다. 최근 10분 안에 심야 수집 주기가 있었다면 알림을 보류합니다. 한 번도 대상 조회를 하지 않은 노선은 별도 확인합니다.')
 expr='(1 - min by(job) (up{job=~"salmonbus/(api|worker|postgres)"}))'
 for job in ['api','worker','postgres']:expr+=f' or absent(up{{job="salmonbus/{job}"}})'
 rule('salmonbus-diag-monitoring','앱 또는 DB 지표 수집 중단',expr,0,'3m',

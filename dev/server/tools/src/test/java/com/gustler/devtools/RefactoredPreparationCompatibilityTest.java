@@ -75,13 +75,13 @@ class RefactoredPreparationCompatibilityTest {
         RevisionStore.Revision next = revision(nextFiles);
 
         if (path.startsWith("tools/data/model-reference/")) {
-            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> BasisLifecycle.preserveData(previous, next, null));
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> BasisLifecycle.preserveData(previous, next));
             return;
         }
 
         // when
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> BasisLifecycle.preserveData(previous, next, null));
+                () -> BasisLifecycle.preserveData(previous, next));
 
         // then
         assertEquals("DEV_DATA_CHANGE_REQUIRES_PLAN", exception.getMessage());

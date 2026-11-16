@@ -1,0 +1,12 @@
+# 정류장 20개짜리 고정 노선에서 거부되는 입력을 종류마다 하나씩 본 입력 계산 결과. 기준 구현(dev e98ae3ea의 입력 계산)이 같은 입력에 낸 값이다. 그 구현은 저장소에 없어 다시 만들 수 없으므로 노선·관측을 만드는 흐름을 바꾸면 견줄 수 없다. 줄 형식은 FeatureSnapshotBaseline에 적혀 있다.
+e 1 java.lang.IllegalArgumentException Invalid vehicle capacity snapshot
+e 2 java.lang.IllegalArgumentException Unsupported AlightingAware target
+e 3 java.lang.IllegalArgumentException Unknown current seats
+e 4 java.lang.IllegalArgumentException Anonymous observation is not a forecast source
+e 5 java.lang.IllegalArgumentException Source observation missing from AlightingAware history
+s capacity-0 !1 12 f9d067e2f43221fd02092e827f29313c0d523c897a7452e53480a3fcf2aa51ad
+s capacity-71 !1 1 8e666e2805a5498b99d0c07154c54e42f5010897a3569a73c6a90ed4c1164197
+s unsupported-targets 1 222 73f6718d0d259538b3f225027c271ac567aded9e5189591aeea0bce28814a0ff
+s unknown-seats 3 3 46ca7ecc658aaac07f9e040366188f8c91d8bedece32a3735357cf4385dbdead
+x anonymous 4
+x missing-source 5

@@ -14,6 +14,7 @@ import com.gustler.backend.arrival.contract.ArrivalSnapshot.RouteArrival;
 import com.gustler.backend.support.IntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -26,7 +27,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * 판정 시각 기준 읽기 어댑터가 제품 저장소와 같은 규칙으로 읽는지 본다. 시계를 지금에 두면 두 구현이 같은 값을 돌려줘야 하고,
- * 시계를 과거에 두면 그 시각 뒤에 생긴 자료가 보이지 않아야 한다.
+ * 시계를 과거에 두면 그 시각 뒤에 생긴 자료(착수 시각이 뒤인 예보 실행 줄과 그 기록 포함)가 보이지 않아야 한다.
  */
 @IntegrationTest
 @Transactional
@@ -50,15 +51,15 @@ class AsOfReadContractTest {
         RouteContext route = routeWithStops(fixture, now);
         long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         long earlier = fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_ROWS", 1);
-        fixture.insertPublication(earlier, model, now.minusSeconds(110), now.minusSeconds(100));
+        fixture.insertPublication(earlier, model, now.minusSeconds(100));
         long latest = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 3);
-        fixture.insertPublication(latest, model, now.minusSeconds(50), now.minusSeconds(40));
+        fixture.insertPublication(latest, model, now.minusSeconds(40));
         long near = fixture.insertObservation(route, latest, 1, "bus-1", 2, "STOP-2", now);
         long far = fixture.insertObservation(route, latest, 2, "bus-2", 1, "STOP-1", now);
         long third = fixture.insertObservation(route, latest, 3, "bus-3", 1, "STOP-1", now);
-        fixture.insertForecast(route, near, 3, 1, model, 0.2, 20.0, now.minusSeconds(50));
-        fixture.insertForecast(route, far, 3, 2, model, 0.4, null, now.minusSeconds(50));
-        fixture.insertForecast(route, third, 3, 2, model, 0.6, 5.0, now.minusSeconds(50));
+        fixture.insertForecast(near, 3, model, 0.2, 20.0);
+        fixture.insertForecast(far, 3, model, 0.4, null);
+        fixture.insertForecast(third, 3, model, 0.6, 5.0);
         fixture.insertBatch(route, now, "SUCCESS_ROWS", 1);
 
         AsOfBoardQueryRepository boards = new AsOfBoardQueryRepository(jdbc, new AsOfClock(Instant.now()));
@@ -68,8 +69,9 @@ class AsOfReadContractTest {
         assertThat(boards.findSnapshot(new RouteId(ROUTE))).contains(expected);
         assertThat(boards.findStops(route.routeVersionId()))
             .isEqualTo(productBoards.findStops(route.routeVersionId()));
-        assertThat(boards.findPredictions(latest)).hasSize(3)
-            .containsExactlyInAnyOrderElementsOf(productBoards.findPredictions(latest));
+        LocalDate sourceDate = expected.observation().orElseThrow().forecastDate();
+        assertThat(boards.findRecordedPredictions(latest, sourceDate)).hasSize(3)
+            .containsExactlyInAnyOrderElementsOf(productBoards.findRecordedPredictions(latest, sourceDate));
         assertThat(boards.findObservedVehicles(latest, route.routeVersionId())).hasSize(3)
             .containsExactlyInAnyOrderElementsOf(productBoards.findObservedVehicles(latest, route.routeVersionId()));
     }
@@ -92,21 +94,21 @@ class AsOfReadContractTest {
     }
 
     @Test
-    void 판정_시각까지_발행된_묶음_가운데_관측이_가장_늦은_것을_고른다() {
+    void 판정_시각까지_착수한_예보_실행_줄이_있는_묶음_가운데_관측이_가장_늦은_것을_고른다() {
         BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbc);
         OffsetDateTime now = OffsetDateTime.now().withNano(0);
         RouteContext route = routeWithStops(fixture, now);
         long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         long first = fixture.insertBatch(route, now.minusMinutes(4), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(first, model, now.minusSeconds(235), now.minusSeconds(230));
+        fixture.insertPublication(first, model, now.minusSeconds(230));
         long second = fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(second, model, now.minusSeconds(70), now.minusSeconds(60));
+        fixture.insertPublication(second, model, now.minusSeconds(60));
         AsOfClock clock = new AsOfClock(now.toInstant());
         AsOfBoardQueryRepository boards = new AsOfBoardQueryRepository(jdbc, clock);
 
         assertThat(batchAt(boards)).isEqualTo(second);
 
-        // 둘째 묶음은 관측이 판정 시각보다 앞이지만 발행이 뒤라서, 그 시각의 보드는 아직 첫째 묶음을 본다.
+        // 둘째 묶음은 관측이 판정 시각보다 앞이지만 예보 착수가 뒤라서, 그 시각의 보드는 아직 첫째 묶음을 본다.
         clock.moveTo(now.minusSeconds(90).toInstant());
         assertThat(batchAt(boards)).isEqualTo(first);
 
@@ -116,29 +118,81 @@ class AsOfReadContractTest {
     }
 
     @Test
-    void 판정_시각까지_발행이_하나도_없던_판본은_그때의_가장_늦은_정상_묶음을_발행_없는_관측으로_고른다() {
+    void 판정_시각까지_예보_실행_줄이_하나도_없던_판본은_그때의_가장_늦은_정상_묶음을_발행_없는_관측으로_고른다() {
         BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbc);
         OffsetDateTime now = OffsetDateTime.now().withNano(0);
         RouteContext route = routeWithStops(fixture, now);
         long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         long raw = fixture.insertBatch(route, now.minusMinutes(6), "SUCCESS_EMPTY", 0);
         long published = fixture.insertBatch(route, now.minusMinutes(2), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(published, model, now.minusSeconds(70), now.minusSeconds(60));
+        fixture.insertPublication(published, model, now.minusSeconds(60));
         long later = fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_EMPTY", 0);
         AsOfClock clock = new AsOfClock(now.minusMinutes(5).toInstant());
         AsOfBoardQueryRepository boards = new AsOfBoardQueryRepository(jdbc, clock);
 
-        // 첫 발행이 판정 시각보다 뒤라서, 그 시각의 보드는 이 판본을 발행 없는 판본으로 본다.
+        // 첫 예보 착수가 판정 시각보다 뒤라서, 그 시각의 보드는 이 판본을 발행 없는 판본으로 본다.
         BoardSnapshot beforeFirstPublication = boards.findSnapshot(new RouteId(ROUTE)).orElseThrow();
         assertThat(beforeFirstPublication.observation().orElseThrow().batchId()).isEqualTo(raw);
         assertThat(beforeFirstPublication.observation().orElseThrow().forecastPublished()).isFalse();
 
-        // 발행이 생긴 뒤에는 더 늦은 미발행 묶음이 있어도 발행된 묶음을 고른다. 판정 시각 뒤의 묶음은 보지 않는다.
+        // 실행 줄이 생긴 뒤에는 실행 줄 없는 더 늦은 묶음이 있어도 실행 줄이 있는 묶음을 고른다. 판정 시각 뒤의 묶음은 보지 않는다.
         clock.moveTo(now.minusSeconds(45).toInstant());
         assertThat(batchAt(boards)).isEqualTo(published);
         clock.moveTo(now.toInstant());
         assertThat(batchAt(boards)).isEqualTo(published);
         assertThat(later).isGreaterThan(published);
+    }
+
+    @Test
+    void 시계가_지금이면_예측_없는_실행_줄만_있는_묶음도_제품_저장소와_똑같이_고른다() {
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbc);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = routeWithStops(fixture, now);
+        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        long published = fixture.insertBatch(route, now.minusMinutes(3), "SUCCESS_ROWS", 1);
+        fixture.insertPublication(published, model, now.minusSeconds(170));
+        fixture.insertForecast(fixture.insertObservation(route, published, 1, "bus-1", 2, "STOP-2", now), 3, model,
+            0.3, 10.0);
+        long late = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 1);
+        fixture.insertRun(late, null, "LATE", now.minusSeconds(50));
+
+        AsOfBoardQueryRepository boards = new AsOfBoardQueryRepository(jdbc, new AsOfClock(Instant.now()));
+
+        BoardSnapshot expected = productBoards.findSnapshot(new RouteId(ROUTE)).orElseThrow();
+        assertThat(expected.observation().orElseThrow().batchId()).isEqualTo(late);
+        assertThat(boards.findSnapshot(new RouteId(ROUTE))).contains(expected);
+        LocalDate sourceDate = expected.observation().orElseThrow().forecastDate();
+        assertThat(boards.findRecordedPredictions(late, sourceDate)).isEmpty();
+        assertThat(productBoards.findRecordedPredictions(late, sourceDate)).isEmpty();
+    }
+
+    @Test
+    void 판정_시각_뒤에_착수한_예보_실행_줄의_기록은_읽지_않는다() {
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbc);
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        RouteContext route = routeWithStops(fixture, now);
+        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        long earlier = fixture.insertBatch(route, now.minusMinutes(3), "SUCCESS_ROWS", 1);
+        fixture.insertPublication(earlier, model, now.minusSeconds(170));
+        fixture.insertForecast(fixture.insertObservation(route, earlier, 1, "bus-1", 1, "STOP-1", now), 3, model,
+            0.5, null);
+        long latest = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_ROWS", 1);
+        fixture.insertPublication(latest, model, now.minusSeconds(20));
+        fixture.insertForecast(fixture.insertObservation(route, latest, 1, "bus-1", 2, "STOP-2", now), 3, model,
+            0.2, 20.0);
+        AsOfClock clock = new AsOfClock(now.minusSeconds(40).toInstant());
+        AsOfBoardQueryRepository boards = new AsOfBoardQueryRepository(jdbc, clock);
+
+        // 둘째 묶음은 판정 시각보다 먼저 수신했지만 예보 착수가 뒤라서, 그 시각에는 묶음도 기록도 없던 것으로 읽는다.
+        BoardSnapshot beforeLatestRun = boards.findSnapshot(new RouteId(ROUTE)).orElseThrow();
+        assertThat(beforeLatestRun.observation().orElseThrow().batchId()).isEqualTo(earlier);
+        assertThat(boards.findRecordedPredictions(earlier, sourceDateOf(earlier))).singleElement()
+            .satisfies(prediction -> assertThat(prediction.seatFullChance()).isEqualTo(0.5));
+        assertThat(boards.findRecordedPredictions(latest, sourceDateOf(latest))).isEmpty();
+
+        clock.moveTo(now.toInstant());
+        assertThat(boards.findRecordedPredictions(latest, sourceDateOf(latest))).hasSize(1)
+            .containsExactlyElementsOf(productBoards.findRecordedPredictions(latest, sourceDateOf(latest)));
     }
 
     @Test
@@ -223,6 +277,11 @@ class AsOfReadContractTest {
 
         clock.moveTo(now.minusSeconds(60));
         assertThat(arrivals.latest(STATION)).isEmpty();
+    }
+
+    private LocalDate sourceDateOf(final long batchId) {
+        return jdbc.sql("SELECT source_date FROM forecast_run WHERE observation_batch_id = ?").param(batchId)
+            .query(LocalDate.class).single();
     }
 
     private static Optional<Long> modelAt(AsOfBoardQueryRepository boards) {

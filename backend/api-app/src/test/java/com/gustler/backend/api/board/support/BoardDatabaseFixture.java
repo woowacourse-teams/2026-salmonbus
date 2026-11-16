@@ -1,6 +1,7 @@
 package com.gustler.backend.api.board.support;
 
 import com.gustler.backend.support.ConfirmedTripFixture;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -221,35 +222,43 @@ public class BoardDatabaseFixture {
             .single();
     }
 
-    public long insertPublication(
+    /**
+     * 관측 묶음의 예보 실행 줄을 예측 0건(EMPTY)으로 넣는다. {@link #insertForecast}로 예측을 더하면 PUBLISHED가 된다.
+     */
+    public void insertPublication(
         final long batchId,
         final long modelDeploymentId,
-        OffsetDateTime generatedAt,
-        OffsetDateTime publishedAt
+        OffsetDateTime confirmedAt
     ) {
-        final long publicationId = jdbcClient.sql("""
-                INSERT INTO forecast_publication (
-                    source_batch_id, route_version_id,
-                    model_deployment_id, demand_statistics_revision, quality_revision,
-                    observed_at, generated_at, published_at, prediction_count
+        insertRun(batchId, modelDeploymentId, "EMPTY", confirmedAt);
+    }
+
+    /**
+     * 관측 묶음의 예보 실행 줄을 예측 없이 넣는다. 날짜 파티션은 묶음 예약 시각의 한국 날짜다.
+     */
+    public void insertRun(
+        final long batchId,
+        Long modelDeploymentId,
+        String outcome,
+        OffsetDateTime confirmedAt
+    ) {
+        jdbcClient.sql("""
+                INSERT INTO forecast_run (
+                    source_date, observation_batch_id, route_id, route_version_id, received_at,
+                    confirmed_at, model_deployment_id, outcome, prediction_count, source_incomplete, counted_rows
                 )
-                SELECT id, route_version_id,
-                       :modelDeploymentId, 1, 1,
-                       response_received_at, :generatedAt, :publishedAt, 0
-                FROM observation_batch WHERE id = :batchId
-                RETURNING id
+                SELECT (batch.scheduled_at AT TIME ZONE 'Asia/Seoul')::date, batch.id, version.route_id,
+                       batch.route_version_id, batch.response_received_at,
+                       :confirmedAt, :modelDeploymentId, :outcome, 0, false, 0
+                FROM observation_batch batch
+                JOIN route_version version ON version.id = batch.route_version_id
+                WHERE batch.id = :batchId
                 """)
             .param("batchId", batchId)
             .param("modelDeploymentId", modelDeploymentId)
-            .param("generatedAt", generatedAt)
-            .param("publishedAt", publishedAt)
-            .query(Long.class)
-            .single();
-        jdbcClient.sql("UPDATE observation_batch SET input_confirmed_at = :publishedAt WHERE id = :batchId")
-            .param("batchId", batchId)
-            .param("publishedAt", publishedAt)
+            .param("outcome", outcome)
+            .param("confirmedAt", confirmedAt)
             .update();
-        return publicationId;
     }
 
     /**
@@ -309,65 +318,64 @@ public class BoardDatabaseFixture {
                 .single());
     }
 
+    /**
+     * 관측 한 줄의 목표 정류장 예측 하나를 예보 기록에 더하고 실행 줄을 PUBLISHED로 바꾼다.
+     * 관측 묶음에 그 모델의 실행 줄이 먼저 있어야 한다. 예보 기록은 차량 번호가 있는 관측에만 있다.
+     */
     public void insertForecast(
-        RouteContext route,
         final long observationId,
         final int targetStopOrder,
-        final int stopsToTarget,
         final long modelDeploymentId,
         final double seatFullChance,
-        Double expectedSeats,
-        OffsetDateTime generatedAt
+        Double expectedSeats
     ) {
-        final long publicationId = jdbcClient.sql("""
-                SELECT publication.id
-                FROM forecast_publication publication
+        LocalDate sourceDate = jdbcClient.sql("""
+                SELECT run.source_date
+                FROM forecast_run run
                 JOIN vehicle_observation observation
-                    ON observation.observation_batch_id = publication.source_batch_id
+                    ON observation.observation_batch_id = run.observation_batch_id
                 WHERE observation.id = :observationId
-                  AND publication.model_deployment_id = :modelDeploymentId
-                  AND publication.generated_at = :generatedAt
+                  AND run.model_deployment_id = :modelDeploymentId
                 """)
             .param("observationId", observationId)
             .param("modelDeploymentId", modelDeploymentId)
-            .param("generatedAt", generatedAt)
-            .query(Long.class)
+            .query(LocalDate.class)
             .single();
         jdbcClient.sql("""
-                INSERT INTO seat_forecast (
-                    publication_id, vehicle_observation_id, target_stop_order, route_version_id,
-                    stops_to_target, model_deployment_id, demand_statistics_revision,
-                    seat_full_chance_raw, seat_full_chance, expected_seats,
-                    generated_at, quality_revision
-                ) VALUES (
-                    :publicationId, :observationId, :targetStopOrder, :routeVersionId,
-                    :stopsToTarget, :modelDeploymentId, 1,
-                    :seatFullChance, :seatFullChance, :expectedSeats,
-                    :generatedAt, 1
+                INSERT INTO forecast_record (
+                    source_date, vehicle_observation_id, observation_batch_id, source_row_number,
+                    route_id, route_version_id, vehicle_id, passed_stop_order,
+                    trip_start_observation_id, chain_start_observation_id, down, capacity, extended,
+                    target_stop_orders, expected_seats, full_probabilities
                 )
+                SELECT :sourceDate, observation.id, observation.observation_batch_id, observation.source_row_number,
+                       version.route_id, observation.route_version_id, observation.vehicle_id,
+                       observation.passed_stop_order, observation.id, observation.id, false, 45, false,
+                       ARRAY[:targetStopOrder], ARRAY[CAST(:expectedSeats AS double precision)],
+                       ARRAY[CAST(:seatFullChance AS double precision)]
+                FROM vehicle_observation observation
+                JOIN route_version version ON version.id = observation.route_version_id
+                WHERE observation.id = :observationId
+                ON CONFLICT (source_date, vehicle_observation_id) DO UPDATE SET
+                    target_stop_orders = forecast_record.target_stop_orders || EXCLUDED.target_stop_orders,
+                    expected_seats = forecast_record.expected_seats || EXCLUDED.expected_seats,
+                    full_probabilities = forecast_record.full_probabilities || EXCLUDED.full_probabilities
                 """)
-            .param("publicationId", publicationId)
+            .param("sourceDate", sourceDate)
             .param("observationId", observationId)
             .param("targetStopOrder", targetStopOrder)
-            .param("routeVersionId", route.routeVersionId())
-            .param("stopsToTarget", stopsToTarget)
-            .param("modelDeploymentId", modelDeploymentId)
-            .param("seatFullChance", seatFullChance)
             .param("expectedSeats", expectedSeats)
-            .param("generatedAt", generatedAt)
+            .param("seatFullChance", seatFullChance)
             .update();
         jdbcClient.sql("""
-                INSERT INTO forecast_evaluation_work (
-                    vehicle_observation_id, route_version_id
-                ) VALUES (:observationId, :routeVersionId) ON CONFLICT DO NOTHING
+                UPDATE forecast_run SET outcome = 'PUBLISHED', prediction_count = prediction_count + 1
+                FROM vehicle_observation observation
+                WHERE observation.id = :observationId
+                  AND forecast_run.source_date = :sourceDate
+                  AND forecast_run.observation_batch_id = observation.observation_batch_id
                 """)
             .param("observationId", observationId)
-            .param("targetStopOrder", targetStopOrder)
-            .param("routeVersionId", route.routeVersionId())
-            .update();
-        jdbcClient.sql(
-        "UPDATE forecast_publication SET prediction_count = prediction_count + 1 WHERE id = :publicationId")
-            .param("publicationId", publicationId)
+            .param("sourceDate", sourceDate)
             .update();
     }
 

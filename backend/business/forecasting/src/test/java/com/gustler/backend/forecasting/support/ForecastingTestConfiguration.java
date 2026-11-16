@@ -2,6 +2,8 @@ package com.gustler.backend.forecasting.support;
 
 import com.gustler.backend.config.ClockConfig;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
+import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
+import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
 import com.gustler.backend.forecasting.configuration.ForecastingConfiguration;
 import com.gustler.backend.observations.configuration.ObservationPersistenceConfiguration;
 import com.gustler.backend.support.PostgresTestContainer;
@@ -21,11 +23,26 @@ class ForecastingTestConfiguration {
     @Bean
     ForecastPolicy forecastPolicy(
         @Value("${forecast.staleness}") Duration staleness,
-        @Value("${forecast.batch-limit}") final int batchLimit,
-        @Value("${forecast.pending-limit}") final int pendingLimit,
-        @Value("${forecast.arrival-limit}") final int arrivalLimit
+        @Value("${forecast.batch-limit}") final int batchLimit
     ) {
-        return new ForecastPolicy(staleness, batchLimit, pendingLimit, arrivalLimit);
+        return new ForecastPolicy(staleness, batchLimit);
     }
 
+    /** 실행하는 앱이 등록하는 노선별 실행 줄 대신, 넣은 일을 부른 스레드에서 바로 실행한다. */
+    @Bean
+    ForecastLanes forecastLanes() {
+        return (routeKey, task) -> {
+            task.run();
+            return true;
+        };
+    }
+
+    /** 실행하는 앱이 등록하는 채점 줄 대신, 넣은 일을 부른 스레드에서 바로 실행한다. */
+    @Bean
+    ScoringFeed scoringFeed() {
+        return task -> {
+            task.run();
+            return true;
+        };
+    }
 }

@@ -191,5 +191,8 @@
     30
   ],
   "source_reference": "2026-11-04 AlightingAware handoff; samples3.py and exp2.py",
-  "serving_ready": false
+  "serving_ready": false,
+  "input_profile": "alighting-confirmed-closure-v2",
+  "label_version": "alighting-confirmed-routeband-v2",
+  "capacity_policy": "observed-vehicle-prefix-max-through-closure-v2"
 }

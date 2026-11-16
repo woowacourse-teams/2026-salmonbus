@@ -8,11 +8,8 @@ import org.junit.jupiter.api.Test;
 
 class ForecastPropertiesTest {
     private static final Duration INTERVAL = Duration.ofSeconds(10);
-    private static final Duration SETTLEMENT_INTERVAL = Duration.ofSeconds(60);
-    private static final Duration STATISTICS_INTERVAL = Duration.ofHours(6);
     private static final int BATCH_LIMIT = 20;
-    private static final int PENDING_LIMIT = 3000;
-    private static final int ARRIVAL_LIMIT = 400;
+    private static final int LANES = 2;
 
     private static final Duration LONGEST_ALLOWED_STALENESS = ForecastProperties.MAX_STALENESS;
     private static final Duration TOO_LONG_STALENESS = LONGEST_ALLOWED_STALENESS.plusSeconds(1);
@@ -51,11 +48,21 @@ class ForecastPropertiesTest {
             .hasMessage("forecast.staleness 는 0보다 길어야 한다: PT0S");
     }
 
+    @Test
+    void 노선별_실행_줄_수가_1보다_작으면_기동을_막는다() {
+        // when
+        Throwable caughtFailure = catchThrowable(
+            () -> new ForecastProperties(true, INTERVAL, LONGEST_ALLOWED_STALENESS, BATCH_LIMIT, 0));
+
+        // then
+        assertThat(caughtFailure)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("forecast.lanes 는 1 이상이어야 한다: 0");
+    }
+
     private static ForecastProperties propertiesWith(
         Duration staleness
     ) {
-        return new ForecastProperties(
-            true, INTERVAL, SETTLEMENT_INTERVAL, STATISTICS_INTERVAL,
-            staleness, BATCH_LIMIT, PENDING_LIMIT, ARRIVAL_LIMIT);
+        return new ForecastProperties(true, INTERVAL, staleness, BATCH_LIMIT, LANES);
     }
 }

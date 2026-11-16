@@ -10,7 +10,6 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.sql.Types;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -25,13 +24,16 @@ import java.util.stream.Stream;
  * 입력 폴더의 규격과 적재. 파일은 테이블 이름에 .csv 또는 .csv.gz를 붙인 이름이고 첫 줄은 열 이름이다.
  *
  * <p>운영 DB에서 {@code COPY (SELECT ...) TO STDOUT WITH (FORMAT csv, HEADER)}로 뽑은 모양을 그대로 받는다.
- * 번호판(plate_number)과 예보의 특징 값(feature_snapshot)은 받지 않는다. 규격에 없는 열이 있으면 적재를 멈춘다.
+ * 번호판(plate_number)은 받지 않는다. 규격에 없는 열이 있으면 적재를 멈춘다. 예보 기록의 배열 열은 COPY가 쓰는
+ * PostgreSQL 배열 표기({@code {15,16}}, 빈 원소는 {@code NULL}) 그대로 받는다.
  */
 final class InputFolder {
     static final String DECISION_FILE = "decision";
     private static final String FIRST_PUBLICATION = "route_version_first_publication";
     /** 제품이 표를 없앤 뒤에도 예전 추출 폴더에 남을 수 있는 파일. 있으면 적재를 멈춘다. */
     private static final List<String> RETIRED_FILES = List.of("ineligible_observation", "route_data_quality");
+    /** 예보 입력이 예보 기록(forecast_run, forecast_record)으로 바뀌기 전의 예보 파일. 있으면 적재를 멈춘다. */
+    private static final List<String> PRE_RECORD_FORECAST_FILES = List.of("forecast_publication", "seat_forecast");
     private static final int BATCH_SIZE = 1_000;
 
     record Table(String name, boolean mandatory, List<String> required, List<String> optional,
@@ -71,17 +73,16 @@ final class InputFolder {
                 "running_state", "passed_stop_order"),
             List.of("vehicle_id", "vehicle_trip_key", "remaining_seats", "crowd_level", "vehicle_type", "route_type",
                 "tagless", "seat_unknown_reason")),
-        new Table("forecast_publication", false,
-            List.of("id", "source_batch_id", "route_version_id", "observed_at", "published_at", "prediction_count"),
-            List.of("model_deployment_id", "demand_statistics_revision", "quality_revision", "generated_at",
-                "provenance")),
-        new Table("seat_forecast", false,
-            List.of("vehicle_observation_id", "target_stop_order", "route_version_id", "stops_to_target",
-                "model_deployment_id", "demand_statistics_revision", "seat_full_chance_raw", "seat_full_chance",
-                "generated_at", "publication_id"),
-            List.of("expected_seats", "quality_revision", "evaluation_detail_required", "seat_target",
-                "probability_target", "label_version", "inference_bundle_hash"),
-            InputFolder::forecastFeatureSnapshot),
+        new Table("forecast_run", false,
+            List.of("source_date", "observation_batch_id", "route_id", "route_version_id", "received_at",
+                "confirmed_at", "outcome", "prediction_count", "source_incomplete", "counted_rows"),
+            List.of("model_deployment_id")),
+        new Table("forecast_record", false,
+            List.of("source_date", "vehicle_observation_id", "observation_batch_id", "source_row_number", "route_id",
+                "route_version_id", "vehicle_id", "passed_stop_order", "trip_start_observation_id",
+                "chain_start_observation_id", "down", "capacity", "extended", "target_stop_orders", "expected_seats",
+                "full_probabilities"),
+            List.of()),
         new Table("arrival_snapshot", false,
             List.of("id", "station_id", "received_at", "refresh_after_at", "stale_at", "payload"),
             List.of("stored_at"), InputFolder::snapshotContract));
@@ -99,11 +100,8 @@ final class InputFolder {
             throw new IllegalArgumentException(String.join(", ", retired)
                 + " 파일은 받지 않는다. 제품이 그 표와 예보 적격 뷰를 더 이상 읽지 않는다");
         }
+        rejectPreRecordForecasts(folder);
         Map<String, Integer> loaded = new LinkedHashMap<>();
-        try (Statement statement = connection.createStatement()) {
-            // 하차 뒤 좌석 예보를 넣을 때마다 평가 작업 행을 만드는 트리거다. 실행기는 평가를 돌리지 않는다.
-            statement.execute("ALTER TABLE seat_forecast DISABLE TRIGGER trg_alighting_evaluation_work");
-        }
         for (Table table : TABLES) {
             Optional<Path> file = fileOf(folder, table.name());
             if (file.isEmpty() && table.mandatory()) {
@@ -115,6 +113,17 @@ final class InputFolder {
         loaded.put(FIRST_PUBLICATION, firstPublication.isEmpty() ? 0
             : markFirstPublications(connection, firstPublication.get()));
         return loaded;
+    }
+
+    private static void rejectPreRecordForecasts(Path folder) {
+        List<String> found = PRE_RECORD_FORECAST_FILES.stream().filter(name -> fileOf(folder, name).isPresent())
+            .toList();
+        if (found.isEmpty()) {
+            return;
+        }
+        throw new IllegalArgumentException(String.join(", ", found) + " 파일은 읽지 않는다. 예보 입력은 예보 기록 "
+            + "forecast_run.csv(.gz)와 forecast_record.csv(.gz)로 바뀌었다. 이 폴더는 예보 기록으로 바뀌기 전의 형식이라 "
+            + "그대로 돌리면 예보 없이 판정하게 된다. 같은 구간을 지금의 추출 스크립트로 다시 뽑는다");
     }
 
     static Optional<Path> fileOf(Path folder, String name) {
@@ -188,24 +197,12 @@ final class InputFolder {
         }
     }
 
-    // 하차 뒤 좌석 예보 행은 특징 값이 비어 있으면 DB 제약에 걸린다. 실행기는 특징 값을 읽지 않아 빈 객체로 채운다.
-    private static Map<String, String> forecastFeatureSnapshot(Map<String, String> row) {
-        return "AFTER_ALIGHTING_ESTIMATE".equals(row.get("seat_target"))
-            ? Map.of("feature_snapshot", "{}") : nullOf("feature_snapshot");
-    }
-
     private static Map<String, String> snapshotContract(Map<String, String> row) {
         Map<String, String> filled = new LinkedHashMap<>();
         filled.put("provider", ArrivalSnapshot.PROVIDER);
         filled.put("operation", ArrivalSnapshot.OPERATION);
         filled.put("normalization_version", ArrivalSnapshot.NORMALIZATION_VERSION);
         filled.put("payload_digest", digestOf(row.get("payload")));
-        return filled;
-    }
-
-    private static Map<String, String> nullOf(String column) {
-        Map<String, String> filled = new LinkedHashMap<>();
-        filled.put(column, null);
         return filled;
     }
 
@@ -219,9 +216,9 @@ final class InputFolder {
     }
 
     /**
-     * 입력에는 판정 구간의 발행만 들어 있다. 그 전에 이미 발행이 있던 판본을 "발행이 한 번도 없는 판본"으로 읽지 않도록,
-     * 판본의 첫 발행 시각에 예보 없는 표시용 발행을 하나 넣는다. 묶음의 관측 시각을 하루 앞에 둬서 보드가 고르는 일은 없다.
-     * 입력에 그 시각 이전의 발행이 이미 있으면 넣지 않는다.
+     * 입력에는 판정 구간의 예보 실행 줄만 들어 있다. 그 전에 이미 실행 줄이 있던 판본을 "발행이 한 번도 없는 판본"으로 읽지
+     * 않도록, 판본의 첫 착수 시각에 예측 없는 표시용 실행 줄(EMPTY)을 하나 넣는다. 묶음의 수신 시각을 하루 앞에 둬서 보드가
+     * 고르는 일은 없다. 입력에 그 시각 이전의 실행 줄이 이미 있으면 넣지 않는다.
      */
     private static int markFirstPublications(Connection connection, Path file) throws IOException, SQLException {
         int marked = 0;
@@ -235,17 +232,19 @@ final class InputFolder {
                     'offline-marker', 'offline-marker'
                 FROM route_version version
                 WHERE version.id = CAST(? AS bigint) AND NOT EXISTS (
-                    SELECT 1 FROM forecast_publication publication
-                    WHERE publication.route_version_id = version.id
-                      AND publication.published_at <= CAST(? AS timestamptz))
+                    SELECT 1 FROM forecast_run run
+                    WHERE run.route_version_id = version.id
+                      AND run.confirmed_at <= CAST(? AS timestamptz))
                 """);
-             PreparedStatement publication = connection.prepareStatement("""
-                INSERT INTO forecast_publication(id, source_batch_id, route_version_id, observed_at, published_at,
-                    prediction_count, provenance)
-                OVERRIDING SYSTEM VALUE
-                SELECT marker.id, marker.id, marker.route_version_id, marker.response_received_at,
-                    CAST(? AS timestamptz), 0, 'LEGACY_UNKNOWN'
-                FROM observation_batch marker WHERE marker.id = -CAST(? AS bigint)
+             PreparedStatement run = connection.prepareStatement("""
+                INSERT INTO forecast_run(source_date, observation_batch_id, route_id, route_version_id, received_at,
+                    confirmed_at, outcome, prediction_count, source_incomplete, counted_rows)
+                SELECT (marker.scheduled_at AT TIME ZONE 'Asia/Seoul')::date, marker.id, version.route_id,
+                    marker.route_version_id, marker.response_received_at, CAST(? AS timestamptz), 'EMPTY', 0,
+                    false, 0
+                FROM observation_batch marker
+                JOIN route_version version ON version.id = marker.route_version_id
+                WHERE marker.id = -CAST(? AS bigint)
                 """)) {
             headerOf(rows, new Table(FIRST_PUBLICATION, false, List.of("route_version_id", "first_published_at"),
                 List.of()), file);
@@ -258,9 +257,9 @@ final class InputFolder {
                 batch.setString(3, version);
                 batch.setString(4, publishedAt);
                 if (batch.executeUpdate() == 1) {
-                    publication.setString(1, publishedAt);
-                    publication.setString(2, version);
-                    publication.executeUpdate();
+                    run.setString(1, publishedAt);
+                    run.setString(2, version);
+                    run.executeUpdate();
                     marked++;
                 }
             }

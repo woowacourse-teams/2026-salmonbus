@@ -3,17 +3,9 @@ package com.gustler.backend.api.board.infrastructure.jdbc;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.api.board.application.BoardSnapshot;
-import com.gustler.backend.api.board.infrastructure.jpa.BoardForecastPublicationEntityRepository;
-import com.gustler.backend.api.board.infrastructure.jpa.BoardObservationBatchEntityRepository;
-import com.gustler.backend.api.board.infrastructure.jpa.BoardRouteStopEntityRepository;
-import com.gustler.backend.api.board.infrastructure.jpa.BoardRouteVersionEntityRepository;
-import com.gustler.backend.api.board.infrastructure.jpa.BoardVehicleObservationEntityRepository;
-import com.gustler.backend.api.board.infrastructure.jpa.JpaBoardQueryRepository;
-import com.gustler.backend.api.board.infrastructure.jpa.SeatForecastEntityRepository;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.observation.ObservationFreshness;
 import com.gustler.backend.api.route.RouteId;
-import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentEntityRepository;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -23,9 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 @IntegrationTest
@@ -41,34 +31,17 @@ class JdbcBoardSnapshotReaderIntegrationTest {
     @Autowired
     private Clock clock;
 
-    @Autowired
-    private ApplicationContext context;
-
     private BoardDatabaseFixture fixture;
-
-    private JpaBoardQueryRepository legacy;
 
     @BeforeEach
     void setUp() {
         fixture = new BoardDatabaseFixture(jdbc);
-        legacy = new JpaBoardQueryRepository(
-            clock,
-            context.getBean(BoardRouteVersionEntityRepository.class),
-            context.getBean(BoardObservationBatchEntityRepository.class),
-            context.getBean(BoardRouteStopEntityRepository.class),
-            context.getBean(SeatForecastEntityRepository.class),
-            context.getBean(BoardVehicleObservationEntityRepository.class),
-            context.getBean(ModelDeploymentEntityRepository.class),
-            context.getBean(BoardForecastPublicationEntityRepository.class),
-            reader
-        );
-        ReflectionTestUtils.setField(legacy, "singleQueryEnabled", false);
     }
 
     @Test
-    void 등록되지_않은_노선은_두_경로_모두_없다() {
+    void 등록되지_않은_노선은_스냅샷이_없다() {
         RouteId id = new RouteId("999999999");
-        assertThat(reader.findSnapshot(id)).isEmpty().isEqualTo(legacy.findSnapshot(id));
+        assertThat(reader.findSnapshot(id)).isEmpty();
     }
 
     @Test
@@ -80,7 +53,7 @@ class JdbcBoardSnapshotReaderIntegrationTest {
         OffsetDateTime now = now();
         final long model = fixture.insertModel("active", "ACTIVE", now.minusDays(1));
         final long publishedBatch = fixture.insertBatch(published, now.minusSeconds(10), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(publishedBatch, model, now, now);
+        fixture.insertPublication(publishedBatch, model, now);
         fixture.insertBatch(published, now, "SUCCESS_EMPTY", 0);
         fixture.insertBatch(observed, now, "SUCCESS_EMPTY", 0);
         RouteId publishedId = new RouteId(published.sourceRouteId());
@@ -106,7 +79,7 @@ class JdbcBoardSnapshotReaderIntegrationTest {
                 sunday_min_headway_minutes=20, sunday_max_headway_minutes=35,
                 holiday_min_headway_minutes=30, holiday_max_headway_minutes=40 WHERE id=?
             """).param(route.routeVersionId()).update();
-        BoardSnapshot snapshot = same(route);
+        BoardSnapshot snapshot = snapshotOf(route);
         assertThat(snapshot.observation()).isEmpty();
         assertThat(snapshot.activeModel()).isEmpty();
         assertThat(snapshot.revision()).isNull();
@@ -120,14 +93,14 @@ class JdbcBoardSnapshotReaderIntegrationTest {
         OffsetDateTime now = now();
         final long older = fixture.insertBatch(route, now.minusSeconds(20), "SUCCESS_EMPTY", 0);
         final long newer = fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0);
-        assertThat(same(route).observation().orElseThrow().batchId()).isEqualTo(newer);
+        assertThat(snapshotOf(route).observation().orElseThrow().batchId()).isEqualTo(newer);
         final long model = fixture.insertModel("active", "ACTIVE", now.minusDays(1));
-        fixture.insertPublication(older, model, now, now);
-        BoardSnapshot firstPublication = same(route);
+        fixture.insertPublication(older, model, now);
+        BoardSnapshot firstPublication = snapshotOf(route);
         assertThat(firstPublication.observation().orElseThrow().batchId()).isEqualTo(older);
         assertThat(firstPublication.observation().orElseThrow().forecastPublished()).isTrue();
-        fixture.insertPublication(newer, model, now, now);
-        assertThat(same(route).observation().orElseThrow().batchId()).isEqualTo(newer);
+        fixture.insertPublication(newer, model, now);
+        assertThat(snapshotOf(route).observation().orElseThrow().batchId()).isEqualTo(newer);
     }
 
     @ParameterizedTest
@@ -139,10 +112,10 @@ class JdbcBoardSnapshotReaderIntegrationTest {
         final long second = fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0);
         if (published) {
             final long model = fixture.insertModel("active", "ACTIVE", now.minusDays(1));
-            fixture.insertPublication(first, model, now, now.plusSeconds(1));
-            fixture.insertPublication(second, model, now, now);
+            fixture.insertPublication(first, model, now.plusSeconds(1));
+            fixture.insertPublication(second, model, now);
         }
-        assertThat(same(route).observation().orElseThrow().batchId()).isEqualTo(second);
+        assertThat(snapshotOf(route).observation().orElseThrow().batchId()).isEqualTo(second);
     }
 
     @Test
@@ -152,9 +125,9 @@ class JdbcBoardSnapshotReaderIntegrationTest {
         OffsetDateTime old = now.minus(ObservationFreshness.MAX_WINDOW).minusSeconds(5);
         final long batch = fixture.insertBatch(route, old, "SUCCESS_EMPTY", 0);
         final long model = fixture.insertModel("active", "ACTIVE", now.minusDays(1));
-        fixture.insertPublication(batch, model, old, old);
+        fixture.insertPublication(batch, model, old);
         fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0);
-        assertThat(same(route).observation()).isEmpty();
+        assertThat(snapshotOf(route).observation()).isEmpty();
     }
 
     @Test
@@ -164,19 +137,19 @@ class JdbcBoardSnapshotReaderIntegrationTest {
         final long model = fixture.insertModel("active", "ACTIVE", now.minusDays(1));
         final long earlier = fixture.insertBatch(route, now.minusSeconds(20), "SUCCESS_EMPTY", 0);
         final long later = fixture.insertBatch(route, now.minusSeconds(10), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(earlier, model, now, now.plusSeconds(2));
-        fixture.insertPublication(later, model, now, now);
-        assertThat(same(route).observation().orElseThrow().batchId()).isEqualTo(later);
+        fixture.insertPublication(earlier, model, now.plusSeconds(2));
+        fixture.insertPublication(later, model, now);
+        assertThat(snapshotOf(route).observation().orElseThrow().batchId()).isEqualTo(later);
     }
 
     @Test
-    void 품질_행이_없어도_관측과_모델을_읽는다() {
+    void 예보_실행_줄이_없어도_관측과_모델을_읽는다() {
         BoardDatabaseFixture.RouteContext route = route();
         OffsetDateTime now = now();
         fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0);
         fixture.insertModel("active", "ACTIVE", now.minusDays(1));
-        BoardSnapshot snapshot = same(route);
-        assertThat(snapshot.revision()).isEqualTo("p-|g-|n-|m-|d-|r-");
+        BoardSnapshot snapshot = snapshotOf(route);
+        assertThat(snapshot.revision()).isEqualTo("c-|n-|m-");
         assertThat(snapshot.activeModel()).isPresent();
     }
 
@@ -186,13 +159,11 @@ class JdbcBoardSnapshotReaderIntegrationTest {
         OffsetDateTime now = now();
         final long normal = fixture.insertBatch(route, now.minusSeconds(10), "SUCCESS_EMPTY", 0);
         fixture.insertBatch(route, now, "FAILED_UNREADABLE", null);
-        assertThat(same(route).observation().orElseThrow().batchId()).isEqualTo(normal);
+        assertThat(snapshotOf(route).observation().orElseThrow().batchId()).isEqualTo(normal);
     }
 
-    private BoardSnapshot same(BoardDatabaseFixture.RouteContext route) {
-        RouteId id = new RouteId(route.sourceRouteId());
-        assertThat(reader.findSnapshot(id)).isEqualTo(legacy.findSnapshot(id));
-        return reader.findSnapshot(id).orElseThrow();
+    private BoardSnapshot snapshotOf(BoardDatabaseFixture.RouteContext route) {
+        return reader.findSnapshot(new RouteId(route.sourceRouteId())).orElseThrow();
     }
 
     private BoardDatabaseFixture.RouteContext route() {

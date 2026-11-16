@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from causal_source import available_time
+from causal_source import available_time, confirmation_time
 from causal_events import build_events
 from causal_prepare import frozen_rows
 from causal_train import partitions, validate_periods
@@ -29,6 +29,14 @@ class CausalDataTest(unittest.TestCase):
 
     def metadata(self):
         return dict(turn=9, stops=[dict(order=i, boardingAllowed=True) for i in range(1, 6)])
+
+    def test_forecast_run_start_is_the_confirmation_and_batches_without_a_run_keep_their_own(self):
+        batch = pd.Series(['2026-11-01T00:00:05Z', None, '2026-11-01T00:00:07Z'])
+        run = pd.Series([None, '2026-11-01T00:00:06Z', '2026-11-01T00:00:09Z'])
+        result = confirmation_time(batch, run)
+        self.assertEqual(result.tolist(),
+                         ['2026-11-01T00:00:05Z', '2026-11-01T00:00:06Z', '2026-11-01T00:00:09Z'])
+        self.assertTrue(confirmation_time(pd.Series([None]), pd.Series([None])).isna().all())
 
     def test_departure_is_not_available_until_next_stop_witness(self):
         o, events = build_events(self.observations(), self.metadata())

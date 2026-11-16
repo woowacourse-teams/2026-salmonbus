@@ -20,7 +20,6 @@ class ArchiveAppProcessTest {
                 softly.assertThat(names).anyMatch(n -> n.endsWith("ArchiveApplication.class"));
                 softly.assertThat(names).noneMatch(
                     n -> n.contains("/worker-app-") || n.contains("/forecasting-") || n.contains("/observations-"));
-                softly.assertThat(names).noneMatch(n -> n.endsWith("LegacyArchiveReader.class"));
             });
         }
     }
@@ -30,7 +29,7 @@ class ArchiveAppProcessTest {
         Path log = Path.of("build/reports/archive-boot.log");
         Files.createDirectories(log.getParent());
         Process process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-            "-Xmx128m", "-jar", System.getProperty("archive.boot.jar"), "--archive.enabled=false",
+            "-Xmx128m", "-jar", System.getProperty("archive.boot.jar"),
             "--spring.datasource.url=jdbc:postgresql://127.0.0.1:1/unused", "--spring.datasource.username=test",
             "--spring.datasource.password=test", "--spring.main.banner-mode=off").redirectErrorStream(true)
             .redirectOutput(log.toFile()).start();
@@ -47,7 +46,7 @@ class ArchiveAppProcessTest {
             }
             String output = Files.readString(log);
             assertThat(output).contains("Started ArchiveApplication").doesNotContain("APPLICATION FAILED TO START",
-                "event=operational_archive");
+                "event=partition_export", "event=legacy_export");
         } finally {
             process.destroy();
             if (!process.waitFor(5, TimeUnit.SECONDS)) {

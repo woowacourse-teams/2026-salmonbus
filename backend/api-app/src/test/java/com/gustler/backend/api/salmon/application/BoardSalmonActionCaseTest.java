@@ -227,11 +227,11 @@ class BoardSalmonActionCaseTest {
     }
 
     @Test
-    void 출발_만차확률이_아니면_근거_부족이다() {
+    void 전광판이_그_차량의_예보를_제공하지_못하면_근거_부족이다() {
         BoardQueryService boards = mock(BoardQueryService.class);
         BoardingOptionsQueryService walks = mock(BoardingOptionsQueryService.class);
-        ApproachingVehicle firstPost = new ApproachingVehicle("bus", 1, new VehicleForecast.Available(0.7, 12.0));
-        given(boards.readBoard(ROUTE_ID)).willReturn(reading(board(OBSERVED, STALE, firstPost)));
+        ApproachingVehicle unforecast = new ApproachingVehicle("bus", 1, new VehicleForecast.Unavailable());
+        given(boards.readBoard(ROUTE_ID)).willReturn(reading(board(OBSERVED, STALE, unforecast)));
 
         assertThat(decide(cases(boards, walks, clock(OBSERVED)))).isEqualTo(Terminal.ABSTAIN_EVIDENCE);
         then(walks).should(never()).get(any());

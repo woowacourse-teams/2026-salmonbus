@@ -112,19 +112,22 @@ curl --fail --silent --show-error "$api/api/docs/openapi/swagger-config" \
   | python3 -c 'import json, sys; assert json.load(sys.stdin)["supportedSubmitMethods"] == []'
 curl --fail --silent --show-error "$frontend/" >/dev/null
 
-# 수집 20개 노선과 새 모델 지원 8개 노선의 발행을 확인한다.
-# 지원 시간 밖에는 빈 발행이 정상이다. 수치·정산·이관 연결은 별도 실제 PG 통합 테스트에서 검증한다.
+# 수집 20개 노선과 모델 지원 8개 노선의 예보 실행을 확인한다.
+# 지원 시간 밖에는 예측 없는 실행 줄(OUT_OF_SCOPE)이 정상이다. 수치와 채점은 별도 실제 PG 통합 테스트에서 검증한다.
 progress=''
 for attempt in $(seq 1 90); do
   progress=$(compose exec -T postgres psql -X -q -A -t -v ON_ERROR_STOP=1 -U salmonbus_local -d salmonbus_local -c "
     SELECT (SELECT count(DISTINCT route_version_id) FROM vehicle_observation),
-           (SELECT count(DISTINCT route_version_id) FROM forecast_publication),
+           (SELECT count(DISTINCT route_version_id) FROM forecast_run WHERE outcome IN ('PUBLISHED','OUT_OF_SCOPE')),
            (SELECT count(*) FROM route);")
   [[ $progress == '20|8|41' ]] && break
   sleep 2
 done
-[[ $progress == '20|8|41' ]] || { echo "Collection/forecast/settlement/route counts: $progress" >&2; exit 1; }
-python3 "$ROOT/dev/tests/assert-collection-routes.py" "$api" "$ROOT/dev/data"
+[[ $progress == '20|8|41' ]] || { echo "Collection/forecast/route counts: $progress" >&2; exit 1; }
+# 예보가 나와야 하는 시간대인지는 앱과 같이 배치의 예보 처리 착수 시각(forecast_run.confirmed_at)으로 판단하므로 DB도 읽는다.
+python3 "$ROOT/dev/tests/assert-collection-routes.py" "$api" "$ROOT/dev/data" \
+  docker exec "$(compose ps --quiet postgres)" \
+  psql -X -q -A -t -v ON_ERROR_STOP=1 -U salmonbus_local -d salmonbus_local -c
 
 containers=$(compose ps --quiet)
 for container in $containers; do

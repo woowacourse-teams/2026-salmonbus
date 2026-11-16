@@ -15,6 +15,20 @@ import tools.jackson.databind.json.JsonMapper;
  * 허용한 파일 경계 안에서 모델 번들 입력을 열고 파일 기반 로더에 전달한다.
  */
 public final class FileModelBundleLoader implements ModelBundleLoader {
+    private final boolean allowSyntheticFixture;
+
+    public FileModelBundleLoader() {
+        this(false);
+    }
+
+    /**
+     * @param allowSyntheticFixture 재생·정산 검증을 실행하지 않았다고 스스로 밝힌 합성 번들을 받을지다. 그런 번들은 실제 관측 없이
+     *     만든 것이라 로컬 개발 적재에서만 켠다. 꺼져 있으면 거절한다
+     */
+    public FileModelBundleLoader(final boolean allowSyntheticFixture) {
+        this.allowSyntheticFixture = allowSyntheticFixture;
+    }
+
     @Override
     public ModelBundleFiles filesUnder(String directory) {
         Path path = Path.of(directory);
@@ -23,7 +37,7 @@ public final class FileModelBundleLoader implements ModelBundleLoader {
             JsonNode manifest = readManifest(files);
             if (manifest.has("schema") && "alighting-inference-bundle-v1".equals(canonical(manifest.get("schema").asString()))) {
                 try {
-                    return AlightingAwareServingBundle.load(path);
+                    return AlightingAwareServingBundle.load(path, allowSyntheticFixture);
                 } catch (IOException | IllegalArgumentException error) {
                     throw new BundleRejectedException("하차 반영 서빙 번들 검증 실패", error);
                 }

@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
 import com.gustler.backend.forecasting.domain.model.SeatUnknownReason;
 import com.gustler.backend.support.SchemaCheck;
 import java.util.Arrays;
@@ -19,15 +18,4 @@ class StoredValueContractTest {
         assertThat(Arrays.stream(SeatUnknownReason.values())
             .map(Enum::name)).containsAll(stored);
     }
-
-    @Test
-    void 평가_상태는_평가_표의_CHECK와_같다() {
-        // when
-        Set<String> allowed = SchemaCheck.allowedValues("V71__retire_seat_distribution_evaluation.sql", "scoring_state");
-
-        // then
-        assertThat(Arrays.stream(ScoringState.values())
-            .map(Enum::name)).containsExactlyInAnyOrderElementsOf(allowed);
-    }
-
 }

@@ -31,12 +31,64 @@ systemd는 환경 파일의 DB 설정을 사용한다. worker의 GBIS loopback �
 4. 각 앱의 ValidateService가 성공하면 이번 RDS 수동 전환용 drop-in을 제거하고
    저장소의 unit을 사용한다. 다른 drop-in은 수정하지 않는다.
 5. 기반 교체나 이후 hook이 실패하면 기록된 이전 설정·basis·앱 버전 링크를 복구하고
-   원래 실행 중이던 서비스를 기동한다. 복구도 실패하면 수동 확인이 필요한 오류로 남긴다.
+   원래 실행 중이던 서비스를 기동한다. 검토한 초기화 코드 전환(`CompatiblePreparation`)으로
+   바꾼 basis도 이 복구에서는 이전 basis로 되돌린다. 초기 데이터와 인프라 파일은 그대로
+   비교한다. 복구도 실패하면 수동 확인이 필요한 오류로 남긴다.
+
+기반 교체는 `/etc/salmonbus-dev`를 새로 만들고 앱·DB 설정, `arrivals.env`, RDS 대상과 CA만
+옮긴다. 수동 drop-in이 읽는 환경 파일은 `/etc/salmonbus-dev-auth`처럼 이 디렉터리 밖에 둔다.
+`/etc/systemd/system`에서 이름이 `salmonbus-`로 시작하는 서비스 unit과 그 drop-in을 모두 읽어,
+`EnvironmentFile`이 이 디렉터리의 다른 파일을 가리키면 앱을 중지하기 전에
+`DEV_UNMANAGED_ENVIRONMENT_FILE`로 거절한다. 와일드카드나 `%` specifier가 든 값도 어느 파일을 읽는지
+정할 수 없어 같은 오류로 거절하므로, `EnvironmentFile`에는 경로를 그대로 적는다. 심볼릭 링크는 가리키는
+실제 파일로도 검사한다.
+
+다른 커밋의 배포가 basis를 바꾼 뒤 API 검증 전에 멈춰 남긴 `PREPARED` 준비 기록은 다음 basis
+교체를 막지 않고 넘긴다. 넘긴 기록의 커밋은 준비 결과의 `supersededCommit`에 남긴다. 다만 그 기록이
+남을 때 돌고 있던 API나 worker, 이관 앱이 지금 꺼져 있으면 넘기지 않고 막는다. 앞선 배포가 서비스를 멈춘 채
+끝난 것이라, 그 상태를 복구 기준으로 삼으면 다음 배포가 실패했을 때 서비스가 꺼진 채 남기 때문이다. `API_READY`
+기록은 그 커밋의 worker 배포가 아직 진행 중일 수 있어 계속 막는다. 이전 도구가 DB 전환 중에 남긴 기록(`dataTransition`이
+참), 준비 중에 멈춘 기록, 복구가 basis를 되돌린 뒤 끝나지 못한 기록도 계속 막는다.
+
+준비 기록이 다음 basis 교체를 `DEV_PREPARATION_RECOVERY_REQUIRED`로 막으면 기록의 상태에 따라
+푼다.
+
+- `API_READY`로 남은 기록: 그 커밋의 worker 배포가 끝나지 않은 것이다. 그 커밋의 파이프라인을
+  다시 실행한다. basis가 이미 그 커밋의 것이면 API 준비는 기반 교체를 건너뛰고, worker의
+  ValidateService가 끝나면 기록이 `COMPLETE`가 된다.
+- 복구가 basis를 되돌린 뒤 앱 기동 실패 등으로 끝나지 못한 기록: 기록은 `PREPARED`나
+  `API_READY`로 남고 basis는 이전 것으로 돌아가 있다. 복구가 멈춘 원인을 해결하고 같은 커밋의
+  배포를 다시 실행한다. 준비가 거절된 뒤 hook이 같은 커밋의 복구를 다시 돌리고, 복구가 끝나면
+  기록이 `ROLLED_BACK`이 된다. 그 실행은 실패로 끝나며 다음 실행부터 기반 교체를 진행한다.
+
+기록을 넘긴 배포는 넘긴 시점의 basis·앱 버전 링크·앱 실행 여부를 이전 상태로 기록한다. 앞 배포가
+앱을 멈춘 채 끝났다면 이 배포가 실패해 복구해도 앱을 기동하지 않고, basis는 넘긴 커밋의 것으로
+돌아간다. 이때 앱은 다음 배포의 ApplicationStart에서 기동한다.
 
 기반 교체가 필요한 배포에는 공유 dev 중단 시간이 발생한다. 데이터 계약이 바뀌는 변경은
 기존 검증이 거부하므로 별도 이전 계획이 필요하다. 이 배포 경로는 DB를 초기화하거나
 기존 데이터를 다시 복사하지 않는다. 새 Flyway migration은 기존 앱 기동 경로를 따르며,
 배포 설정 원복이 DB schema나 새 데이터를 되돌리지는 않는다.
+
+## 닫힌 날짜의 기록 정리
+
+공유 dev도 운영과 같은 이관 앱(`archive-app`)을 실행한다. 예보 기록 테이블 다섯 개에서 닫힌 한국 날짜의
+파티션을 내보내고, 다시 읽어 확인하고, 장부(`daily_export`)에 기록한 뒤 떼어 지운다. 오늘을 포함한 3일 치는
+DB에 남긴다. 관측 테이블은 날짜 파티션 테이블로 바꾼 DB에서만 같은 방식으로 정리한다.
+
+운영과 다른 점은 파일을 두는 곳이다. S3에 쓰지 않고 `/srv/salmonbus-dev/archive`에 쓰며, 파티션을 지운 날짜의
+파일은 함께 지운다. 폴더는 서비스가 시작할 때 앱 실행 계정 소유로 만든다.
+
+별도 배포 단계는 없다. worker 배포 번들에 이관 앱의 JAR와 unit(`salmonbus-archive.service`)을 함께 싣는다.
+worker의 AfterInstall이 unit을 설치하고, ApplicationStart가 worker와 같은 규칙으로 이관 앱을 정지하고 기동한다.
+변경이 없고 실행 중이면 그대로 두고, 실행 중이 아니면 기동한다. worker의 ValidateService는 이관 앱이 실행 중이어야
+성공한다. 이관 앱의 소스나 unit만 바뀌어도 worker 번들의 소스 지문이 바뀌므로 worker도 함께 재시작한다.
+
+DB 연결 값은 `worker.env`를 읽는다. 기동 검증은 실제 환경 변수가 검증한 worker 설정과 같을 때만 통과한다.
+기반 설정 교체와 초기 데이터 준비처럼 API와 worker를 정지하고 하는 작업은 이관 앱도 정지해야 진행한다.
+자동 배포의 기반 교체는 이관 앱을 함께 정지하고, 실패하면 이전 unit과 실행 상태로 복구한다.
+
+로그는 `journalctl -u salmonbus-archive`에서 `event=partition_export`의 `status`로 확인한다.
 
 ## 2026-10-15 데이터 전환 기록
 

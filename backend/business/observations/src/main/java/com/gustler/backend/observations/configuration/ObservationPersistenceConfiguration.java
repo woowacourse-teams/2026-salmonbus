@@ -1,6 +1,5 @@
 package com.gustler.backend.observations.configuration;
 
-import com.gustler.backend.observations.application.CollectionInputService;
 import org.springframework.boot.autoconfigure.AutoConfigurationExcludeFilter;
 import org.springframework.boot.context.TypeExcludeFilter;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
@@ -8,7 +7,6 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.ComponentScan.Filter;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
-import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 /**
@@ -21,6 +19,5 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 })
 @EntityScan("com.gustler.backend.observations.infrastructure.jpa")
 @EnableJpaRepositories("com.gustler.backend.observations.infrastructure.jpa")
-@Import(CollectionInputService.class)
 public class ObservationPersistenceConfiguration {
 }
