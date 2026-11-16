@@ -33,9 +33,17 @@ final class CompatiblePreparation {
 
     static final String INCREMENTAL_SETTLEMENT_DATA = "897fc772b958bf1d8e01aee94f08a45e7785489475752c112d0b3c63a90ff041";
 
+    // SAL-434: 초기화가 예보 실행·통과·정답 기록과 내보내기 장부를 비운다. 개발용 번들은 확정 입력 계약의 합성 번들로 읽는다.
+    static final String FORECAST_RECORD_DATA = "243e042be0c60a181e4f365a3aac03aa69f3413d4e9c07a0a0d1b1efe7e50449";
+
     private static final List<String> REVIEWED_ORDER = List.of(
-        PREVIOUS, COLLECTED_DATA, EVALUATION_DATA, NEXT, PREVIOUS_ALIGHTING_AWARE_EVALUATION_DATA, ALIGHTING_AWARE_EVALUATION_DATA,
-        ARCHIVE_DATA, ALIGHTING_MODEL_DATA, SINGLE_MODEL_DATA, DATABASE_CLOCK_DATA, ENV_MODEL_DATA, INCREMENTAL_SETTLEMENT_DATA);
+        PREVIOUS, COLLECTED_DATA, EVALUATION_DATA, NEXT, PREVIOUS_ALIGHTING_AWARE_EVALUATION_DATA,
+        ALIGHTING_AWARE_EVALUATION_DATA, ARCHIVE_DATA, ALIGHTING_MODEL_DATA, SINGLE_MODEL_DATA, DATABASE_CLOCK_DATA,
+        ENV_MODEL_DATA, INCREMENTAL_SETTLEMENT_DATA, FORECAST_RECORD_DATA);
+
+    private static final List<String> REVIEWED_AFTER_FIXTURE_DIGEST = List.of(
+        NEXT, ALIGHTING_AWARE_EVALUATION_DATA, ARCHIVE_DATA, ALIGHTING_MODEL_DATA, ENV_MODEL_DATA,
+        INCREMENTAL_SETTLEMENT_DATA, FORECAST_RECORD_DATA);
 
     static boolean permits(RevisionStore.Revision previous, RevisionStore.Revision next) {
         String from = previous.files().get("tools/data-contract.sha256");
@@ -44,8 +52,7 @@ final class CompatiblePreparation {
             return false;
         }
         if (FIXTURE_DIGEST.equals(from)) {
-            return NEXT.equals(to) || ALIGHTING_AWARE_EVALUATION_DATA.equals(to) || ARCHIVE_DATA.equals(to)
-                    || ALIGHTING_MODEL_DATA.equals(to) || ENV_MODEL_DATA.equals(to) || INCREMENTAL_SETTLEMENT_DATA.equals(to);
+            return REVIEWED_AFTER_FIXTURE_DIGEST.contains(to);
         }
         if (FIXTURE_DIGEST.equals(to)) {
             return NEXT.equals(from);

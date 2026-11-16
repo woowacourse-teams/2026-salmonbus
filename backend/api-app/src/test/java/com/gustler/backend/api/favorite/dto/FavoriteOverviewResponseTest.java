@@ -30,7 +30,7 @@ class FavoriteOverviewResponseTest {
         List<FavoriteOverview.Vehicle> vehicles = IntStream.range(0, 3)
             .mapToObj(index -> new FavoriteOverview.Vehicle(
                 new ApproachingVehicle("vehicle-" + index, index + 1,
-                    new VehicleForecast.Available(0.8, 12.0)),
+                    new VehicleForecast.Available(0.8, 12.0, "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", 0.2)),
                 FavoriteOverview.Eta.unavailable(FavoriteOverview.EtaReason.ARRIVAL_UNAVAILABLE)))
             .toList();
         FavoriteOverview.Item item = new FavoriteOverview.Item(UUID.randomUUID(), TARGET,
@@ -56,7 +56,7 @@ class FavoriteOverviewResponseTest {
             List.of(new DirectionInfo(BoardDirection.UP, "안양역 방면", "기점", "안양역", "05:00", "23:00")),
             "12", RouteHeadways.none());
         ApproachingVehicle watch = new ApproachingVehicle("vehicle-1", 2,
-            new VehicleForecast.Available(0.8, 12.0));
+            new VehicleForecast.Available(0.8, 12.0, "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", 0.2));
         FavoriteOverview.Stop stop = new FavoriteOverview.Stop(
             TARGET.stopId(),
             "강남역",

@@ -29,7 +29,7 @@ class NotificationMessageResolverTest {
 
     @Test
     void 같은_차량의_도착시간과_예상좌석을_두_줄로_보낸다() {
-        board(new VehicleForecast.Available(0.7, 42.9), NOW.plusSeconds(60));
+        board(available(0.7, 42.9), NOW.plusSeconds(60));
         arrivals("vehicle", 3);
         assertThat(resolver.apply(TARGET)).isEqualTo(new NotificationMessage("3330번 · 판교역",
             "약 5분 후 도착 · 탑승확률 높음\n도착 시 빈 좌석 42석 예상"));
@@ -37,7 +37,7 @@ class NotificationMessageResolverTest {
 
     @Test
     void 다른_차량이나_다른_방문의_도착시간은_연결하지_않는다() {
-        board(new VehicleForecast.Available(0, 0.0), NOW.plusSeconds(60));
+        board(available(0, 0.0), NOW.plusSeconds(60));
         arrivals("other", 3);
         assertThat(resolver.apply(TARGET).body()).isEqualTo(
             "도착 정보 없음 · 탑승확률 매우 낮음\n도착 시 빈 좌석 0석 예상");
@@ -47,7 +47,7 @@ class NotificationMessageResolverTest {
 
     @Test
     void 조회실패나_만료된_예보를_숫자로_보내지_않는다() {
-        board(new VehicleForecast.Available(1, 42.0), NOW);
+        board(available(1, 42.0), NOW);
         assertThat(resolver.apply(TARGET).body()).doesNotContain("42", "높음");
         when(boards.getBoard(any())).thenThrow(new IllegalStateException());
         assertThat(resolver.apply(TARGET)).isEqualTo(NotificationMessage.unavailable());
@@ -61,6 +61,11 @@ class NotificationMessageResolverTest {
             "약 5분 후 도착 · 탑승확률 정보 없음\n예상 빈 좌석 정보 없음");
         when(arrivals.get(any())).thenThrow(new IllegalStateException());
         assertThat(resolver.apply(TARGET).body()).startsWith("도착 정보 없음");
+    }
+
+    private static VehicleForecast available(final double seatAvailableProbability, Double expectedSeats) {
+        return new VehicleForecast.Available(seatAvailableProbability, expectedSeats,
+            "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", 1.0d - seatAvailableProbability);
     }
 
     private void board(VehicleForecast forecast, Instant staleAt) {

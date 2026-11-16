@@ -68,7 +68,7 @@ class WatchBoardNightCacheApiContractTest {
         fixture.insertStop(route, 3, "STOP-3", "종점", "DOWN", true);
         final long model = fixture.insertModel("night-model", "ACTIVE", NOW.minusDays(1));
         final long batch = fixture.insertBatch(route, observedAt, "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(batch, model, observedAt, observedAt);
+        fixture.insertPublication(batch, model, observedAt);
 
         // when
         ResultActions httpResponse = mockMvc.perform(get("/api/v1/routes/{routeId}/watch", ROUTE_ID));

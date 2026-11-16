@@ -16,9 +16,7 @@ final class DataPreparation {
         "model-reference/boundaries.json",
         "model-reference/constants.json",
         "model-reference/evidence-feature_parity.json",
-        "model-reference/evidence-historical_replay.json",
         "model-reference/evidence-runtime_validation.json",
-        "model-reference/evidence-settlement.json",
         "model-reference/feature-contract.json",
         "model-reference/gate.json",
         "model-reference/golden.json",
@@ -35,9 +33,7 @@ final class DataPreparation {
         "model-reference/statistics-9300.json",
         "model-reference/statistics-manifest.json",
         "model-reference/verification-feature_parity.json",
-        "model-reference/verification-historical_replay.json",
         "model-reference/verification-runtime_validation.json",
-        "model-reference/verification-settlement.json",
         "model-reference/verification-source-manifest.json");
     private final Layout layout;
     private final Host host;
@@ -102,7 +98,7 @@ final class DataPreparation {
     }
 
     static void requireStopped(Host host, String code) throws Exception {
-        for (var unit : List.of("salmonbus-api.service", "salmonbus-worker.service")) {
+        for (String unit : List.of("salmonbus-api.service", "salmonbus-worker.service", RevisionStore.ARCHIVE_UNIT)) {
             var state =
                     host.run("systemctl", "show", unit, "--property=ActiveState", "--value")
                             .strip();

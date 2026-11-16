@@ -3,72 +3,44 @@ package com.gustler.backend.api.board.infrastructure.jpa;
 import com.gustler.backend.api.board.application.BoardQueryRepository;
 import com.gustler.backend.api.board.application.BoardSnapshot;
 import com.gustler.backend.api.board.application.BoardVehicleObservation;
-import com.gustler.backend.api.board.application.DepartureSchedule;
-import com.gustler.backend.api.board.application.SnapshotObservation;
 import com.gustler.backend.api.board.application.StoredPrediction;
 import com.gustler.backend.api.board.domain.BoardStop;
-import com.gustler.backend.api.board.domain.ForecastModel;
-import com.gustler.backend.api.board.domain.HeadwayRange;
-import com.gustler.backend.api.board.domain.RouteHeadways;
 import com.gustler.backend.api.board.infrastructure.jdbc.JdbcBoardSnapshotReader;
+import com.gustler.backend.api.board.infrastructure.jdbc.JdbcForecastRecordReader;
 import com.gustler.backend.api.error.ServiceUnavailableException;
-import com.gustler.backend.api.observation.ObservationFreshness;
 import com.gustler.backend.api.route.RouteId;
-import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentEntityRepository;
-import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentJpaEntity;
-import com.gustler.backend.api.route.infrastructure.jpa.ModelDeploymentState;
-import com.gustler.backend.api.route.infrastructure.jpa.RouteVersionJpaEntity;
-import java.time.Clock;
-import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 /**
  * 쓰기 모듈의 엔티티를 참조하지 않고 탑승판에 필요한 노선·모델·관측·예보를 조회한다.
+ *
+ * <p>스냅샷은 {@link JdbcBoardSnapshotReader}, 예보는 {@link JdbcForecastRecordReader}로 읽는다.
+ * DB 조회가 실패하면 예보 없음으로 다루지 않고 서비스 불가로 바꾼다.
  */
 @Repository
 @RequiredArgsConstructor
 public class JpaBoardQueryRepository implements BoardQueryRepository {
-    private static final Pageable FIRST_RESULT = PageRequest.of(0, 1);
-
-    private final Clock clock;
-    private final BoardRouteVersionEntityRepository routeVersionRepository;
-    private final BoardObservationBatchEntityRepository observationBatchRepository;
     private final BoardRouteStopEntityRepository routeStopRepository;
-    private final SeatForecastEntityRepository seatForecastRepository;
     private final BoardVehicleObservationEntityRepository vehicleObservationRepository;
-    private final ModelDeploymentEntityRepository modelDeploymentRepository;
-    private final BoardForecastPublicationEntityRepository forecastPublicationRepository;
     private final JdbcBoardSnapshotReader snapshotReader;
-
-    @Value("${board.snapshot.single-query.enabled:true}")
-    private boolean singleQueryEnabled = true;
-
-    @Value("${board.read-cache.enabled:true}")
-    private boolean readCacheEnabled = true;
+    private final JdbcForecastRecordReader recordReader;
 
     @Override
     public Optional<BoardSnapshot> findSnapshot(
         RouteId routeId
     ) {
         try {
-            if (singleQueryEnabled) {
-                return snapshotReader.findSnapshot(routeId);
-            }
-            return routeVersionRepository.findCurrent(routeId.value())
-                .map(this::toSnapshot);
+            return snapshotReader.findSnapshot(routeId);
         } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
@@ -89,17 +61,9 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
     }
 
     @Override
-    public List<StoredPrediction> findPredictions(
-        final long observationBatchId
-    ) {
-        try {
-            return seatForecastRepository.findAllByBatchId(observationBatchId)
-                .stream()
-                .map(forecast -> forecast.toDomain(clock.getZone()))
-                .toList();
-        } catch (DataAccessException exception) {
-            throw new ServiceUnavailableException();
-        }
+    public List<StoredPrediction> findRecordedPredictions(final long observationBatchId, LocalDate sourceDate) {
+        return findRecordedPredictions(Map.of(observationBatchId, sourceDate))
+            .getOrDefault(observationBatchId, List.of());
     }
 
     @Override
@@ -117,9 +81,6 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
 
     @Override
     public List<BoardSnapshot> findSnapshots(Collection<RouteId> routeIds) {
-        if (!singleQueryEnabled) {
-            return BoardQueryRepository.super.findSnapshots(routeIds);
-        }
         try {
             return snapshotReader.findSnapshots(routeIds);
         } catch (DataAccessException exception) {
@@ -143,36 +104,10 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
         }
     }
 
-    /**
-     * 기준 묶음마다 발행 ID를 먼저 읽고, 그 발행의 예보 중 차량 관측 묶음이 발행의 기준 묶음과 같은 행만 고른다.
-     * 묶음 하나를 읽는 {@link #findPredictions(long)}과 같은 행을 돌려준다.
-     */
     @Override
-    public Map<Long, List<StoredPrediction>> findPredictions(Collection<Long> observationBatchIds) {
-        if (observationBatchIds.isEmpty()) {
-            return Map.of();
-        }
+    public Map<Long, List<StoredPrediction>> findRecordedPredictions(Map<Long, LocalDate> sourceDateByBatchId) {
         try {
-            Map<Long, Long> batchIdByPublicationId = new HashMap<>();
-            for (Object[] row : forecastPublicationRepository.findIdsBySourceBatchIdIn(observationBatchIds)) {
-                batchIdByPublicationId.put((Long) row[0], (Long) row[1]);
-            }
-            if (batchIdByPublicationId.isEmpty()) {
-                return Map.of();
-            }
-            Map<Long, List<StoredPrediction>> predictions = new LinkedHashMap<>();
-            List<Object[]> rows = seatForecastRepository.findAllByPublicationIdInAndBatchIdIn(
-                batchIdByPublicationId.keySet(), observationBatchIds);
-            for (Object[] row : rows) {
-                Long batchId = (Long) row[1];
-                if (!batchId.equals(batchIdByPublicationId.get((Long) row[0]))) {
-                    continue;
-                }
-                SeatForecastJpaEntity forecast = (SeatForecastJpaEntity) row[2];
-                predictions.computeIfAbsent(batchId, ignored -> new ArrayList<>())
-                    .add(forecast.toDomain(clock.getZone()));
-            }
-            return predictions;
+            return recordReader.findPredictions(sourceDateByBatchId);
         } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
@@ -199,82 +134,5 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
         } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }
-    }
-
-    private BoardSnapshot toSnapshot(
-        RouteVersionJpaEntity routeVersion
-    ) {
-        final boolean forecastPublished = forecastPublicationRepository.existsByRouteVersionId(routeVersion.id());
-        Optional<SnapshotObservation> observation = latestObservationOf(routeVersion, forecastPublished)
-            .stream()
-            .findFirst()
-            .map(batch -> batch.toDomain(clock.getZone(), forecastPublished));
-        Optional<ForecastModel> activeModel = modelDeploymentRepository
-            .findByState(ModelDeploymentState.ACTIVE)
-            .map(this::toModel);
-
-        return new BoardSnapshot(
-            routeVersion.id(),
-            routeVersion.toRoute(),
-            routeVersion.turnSequence(),
-            new DepartureSchedule(
-                routeVersion.upFirstDepartureTime(),
-                routeVersion.upLastDepartureTime(),
-                routeVersion.downFirstDepartureTime(),
-                routeVersion.downLastDepartureTime(),
-                headwaysOf(routeVersion)
-            ),
-            observation,
-            activeModel,
-            revisionOf(routeVersion.id(), observation)
-        );
-    }
-
-    private String revisionOf(final long versionId, Optional<SnapshotObservation> observation) {
-        if (!readCacheEnabled) {
-            return null;
-        }
-        return observation
-            .flatMap(selected -> forecastPublicationRepository.findBoardRevision(versionId, selected.batchId()))
-            .orElse(null);
-    }
-
-    private RouteHeadways headwaysOf(
-        RouteVersionJpaEntity routeVersion
-    ) {
-        return new RouteHeadways(
-            headwayOf(routeVersion.weekdayMinHeadwayMinutes(), routeVersion.weekdayMaxHeadwayMinutes()),
-            headwayOf(routeVersion.saturdayMinHeadwayMinutes(), routeVersion.saturdayMaxHeadwayMinutes()),
-            headwayOf(routeVersion.sundayMinHeadwayMinutes(), routeVersion.sundayMaxHeadwayMinutes()),
-            headwayOf(routeVersion.holidayMinHeadwayMinutes(), routeVersion.holidayMaxHeadwayMinutes())
-        );
-    }
-
-    private HeadwayRange headwayOf(
-        Integer minMinutes,
-        Integer maxMinutes
-    ) {
-        return HeadwayRange.of(minMinutes, maxMinutes).orElse(null);
-    }
-
-    private List<ObservationBatchJpaEntity> latestObservationOf(
-        RouteVersionJpaEntity routeVersion,
-        final boolean forecastPublished
-    ) {
-        OffsetDateTime observedSince = OffsetDateTime.now(clock).minus(ObservationFreshness.MAX_WINDOW);
-        if (forecastPublished) {
-            return observationBatchRepository.findLatestPublished(routeVersion, observedSince, FIRST_RESULT);
-        }
-        return observationBatchRepository.findLatestObserved(routeVersion, observedSince, FIRST_RESULT);
-    }
-
-    private ForecastModel toModel(
-        ModelDeploymentJpaEntity model
-    ) {
-        return new ForecastModel(
-            model.id(),
-            model.releaseId(),
-            model.dataUntil().atZoneSameInstant(clock.getZone()).toOffsetDateTime()
-        );
     }
 }

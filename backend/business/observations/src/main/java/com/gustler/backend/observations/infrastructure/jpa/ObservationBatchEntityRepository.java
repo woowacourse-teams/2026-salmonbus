@@ -1,6 +1,6 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,11 +14,21 @@ import org.springframework.data.repository.query.Param;
 public interface ObservationBatchEntityRepository extends JpaRepository<ObservationBatchJpaEntity, Long> {
     Optional<ObservationBatchJpaEntity> findByRouteVersionIdAndAttemptKey(long routeVersionId, String attemptKey);
 
-    @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(value = "UPDATE observation_batch SET input_confirmed_at=:at WHERE id=:id AND input_confirmed_at IS NULL",
-        nativeQuery = true)
-    int confirmInputOnce(@Param("id") long batchId, @Param("at") OffsetDateTime at);
+    /** 배치의 예보 실행 기록에 적힌 착수 시각이다. 예보 실행은 기본 키(배치 예약 시각의 한국 날짜, 배치)로 찾는다. */
+    @Query(value = """
+        SELECT run.confirmed_at
+        FROM observation_batch batch
+        JOIN forecast_run run
+            ON run.source_date = (batch.scheduled_at AT TIME ZONE 'Asia/Seoul')::date
+           AND run.observation_batch_id = batch.id
+        WHERE batch.id = :id
+        """, nativeQuery = true)
+    Optional<Instant> findForecastStart(@Param("id") long batchId);
 
+    /**
+     * 응답·관측·예보 실행 기록이 없는 미완료 배치의 상태만 종료로 바꾼다. 예보 실행은 기본 키(배치 예약 시각의 한국 날짜, 배치)로
+     * 찾는다.
+     */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
         UPDATE observation_batch batch
@@ -35,7 +45,9 @@ public interface ObservationBatchEntityRepository extends JpaRepository<Observat
               SELECT 1 FROM vehicle_observation observation WHERE observation.observation_batch_id = batch.id
           )
           AND NOT EXISTS (
-              SELECT 1 FROM forecast_publication publication WHERE publication.source_batch_id = batch.id
+              SELECT 1 FROM forecast_run run
+              WHERE run.source_date = (batch.scheduled_at AT TIME ZONE 'Asia/Seoul')::date
+                AND run.observation_batch_id = batch.id
           )
         """, nativeQuery = true)
     int closeUnfinished(@Param("id") long batchId);
@@ -51,7 +63,9 @@ public interface ObservationBatchEntityRepository extends JpaRepository<Observat
               SELECT 1 FROM vehicle_observation observation WHERE observation.observation_batch_id = batch.id
           )
           AND NOT EXISTS (
-              SELECT 1 FROM forecast_publication publication WHERE publication.source_batch_id = batch.id
+              SELECT 1 FROM forecast_run run
+              WHERE run.source_date = (batch.scheduled_at AT TIME ZONE 'Asia/Seoul')::date
+                AND run.observation_batch_id = batch.id
           )
         ORDER BY batch.scheduled_at, batch.id
         LIMIT :limit

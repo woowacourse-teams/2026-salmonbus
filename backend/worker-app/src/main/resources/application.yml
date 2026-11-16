@@ -22,7 +22,7 @@ spring:
     hikari:
       data-source-properties:
         ApplicationName: salmonbus-worker
-      maximum-pool-size: 3
+      maximum-pool-size: 5 # 수집, 예보 줍기와 노선별 실행 줄, 채점, 파티션 유지가 나눠 쓴다.
 
   jpa:
     hibernate:
@@ -76,6 +76,10 @@ model:
     # 도는 배포와 계수 파일의 신원이 다를 때만 본다. 꺼져 있으면 안 올리고 경고만 남긴다.
     # 계수를 갈아 끼우거나 옛 계수로 되돌릴 때 사람이 켠다. 켠 채로 두면 재기동마다 올라간다.
     promote-on-start: ${MODEL_BUNDLE_PROMOTE_ON_START:false}
+    # 재생·정산 검증을 실행하지 않았다고 밝힌 합성 번들을 받을지다. 실제 관측 없이 만든 번들이라 저장소의 설정 파일 가운데 로컬 개발
+    # 설정만 켠다. 자리표시자는 두지 않았지만 일반 설정 값이라 환경변수 MODEL_BUNDLE_ALLOW_SYNTHETIC_FIXTURE 로도 켜진다. 운영 env 에
+    # 넣지 않는다. 켜져 있어도 번들이 합성 표시를 달고 실행하지 않은 검증을 밝힌 경우가 아니면 적재 결과가 달라지지 않는다.
+    allow-synthetic-fixture: false
 
 # 정류장 쌍 도보 거리 파일(stop-walk-distances.csv.gz·json)이 든 디렉터리. 계수 파일처럼 사람이 갖다 놓는다.
 # 기동할 때 지금 적재된 묶음과 다르면 stop_walk_distance 를 통째로 바꾼다. 비워 두거나 파일이 없으면 건너뛴다.
@@ -83,30 +87,19 @@ walking:
   distances:
     directory: ${WALK_DISTANCES_DIRECTORY:}
 
-# 예보 배치와 라벨 회수 배치. 계수 번들이 없어 도는 배포가 하나도 없으므로 꺼둔 채로 낸다.
+# 예보와 채점. 계수 번들이 없어 도는 배포가 하나도 없으면 꺼둔 채로 둔다.
 # 켜는 것은 배포 행이 선 뒤다. 수집(collection.enabled)과 같은 방식으로 끈다.
 forecast:
   enabled: ${FORECAST_ENABLED:false}
-  compact-settlement-write: ${FORECAST_COMPACT_SETTLEMENT_WRITE:false}
-  interval: 30s # 관측 저장 이벤트를 놓친 batch를 집으러 가는 주기. 늦게 붙은 예보도 정산 라벨 간격 90초 안에 들게 둔다.
-  settlement-interval: 60s # 라벨 회수 주기. 예보와 다른 시계에서 돈다.
-  # 진행한 회차 뒤에는 실행 시간 × settlement-rest-ratio를 쉬되 settlement-minimum-interval 이상, settlement-interval 이하로 쉰다.
-  # 진행이 이어지는 동안 정산 스레드 점유율은 1/(1+비율)이다. 0.25면 80%, 1이면 50%, 3이면 25%다.
-  settlement-minimum-interval: ${FORECAST_SETTLEMENT_MINIMUM_INTERVAL:100ms}
-  settlement-rest-ratio: ${FORECAST_SETTLEMENT_REST_RATIO:0.25}
-  # 이보다 오래된 판에는 예보를 안 붙인다. 앵커가 둘이다.
-  # 학습: 회수가 도착 후보를 예보 낸 시각 뒤에서만 찾는데 관측과 90초 넘게 벌어지면 전부 끊김으로 닫힌다.
-  # 조회: /board 가 관측 5분이 지난 판을 안 쓴다. 5분 밖은 두 쓸모가 다 없다.
-  # 이 창은 api-app BoardFreshnessPolicy.FRESHNESS_WINDOW 이상이어야 한다. 좁히면 그 사이 판이
-  # 영영 발행되지 않아 보드가 집을 최신 발행이 없어진다. 넓히면 오래된 판이 회차를 채워 새 판이 밀린다.
+  interval: 30s # 수집 신호를 놓쳤거나 처리 중에 멈춘 배치를 다시 줍는 주기. 수신 뒤 90초 안에 착수해야 예보하므로 그보다 짧게 둔다.
+  # 수신한 지 이보다 오래된 배치는 줍지 않는다. /board 는 관측 5분이 지난 배치를 쓰지 않으므로 더 오래된 배치는 처리해도 쓸 곳이 없다.
+  # 이 창은 api-app BoardFreshnessPolicy.FRESHNESS_WINDOW 이상이어야 한다. 좁히면 그 사이 배치가 처리되지 않아 보드가 고를 최신
+  # 예보가 없어진다. 넓히면 오래된 배치가 줍기 한도를 채워 새 배치가 밀린다.
   # 환경변수로는 바꾸지 않는다. 값을 바꾸려면 두 곳을 같이 고치고 계약 테스트를 통과해야 한다.
   staleness: 10m
-  batch-limit: 20 # 한 회차에 예보를 붙일 판의 수.
-  # 한 회차에 회수를 시도할 예보 줄 수. 노선당 하루 89만~98만 행이 들어오니 두 노선이면 약 187만 행이다.
-  # 60초마다 도니 하루 1,440회, 회차당 1,300행이면 겨우 맞고 여유가 없다. 세 배로 잡았다.
-  pending-limit: 3000
-  # 한 차량의 뒤 관측을 얼마나 읽나. 첨두 20초 수집이면 400개가 약 133분치라 지평 12의 중앙 소요 26.5분을 덮는다.
-  arrival-limit: 400
+  batch-limit: 20 # 노선 판본의 처리하지 않은 배치를 한 번에 읽는 수의 상한. 다 찼고 처리를 마친 배치가 있으면 이어서 읽는다
+  lanes: ${FORECAST_LANES:2} # 노선별 실행 줄 수. 같은 노선은 항상 같은 줄에서 순서대로 처리한다. 줄 길이가 계속 쌓이면 늘린다
+  partition-interval: 1h # 오늘부터 사흘 뒤까지 날짜 파티션을 확인하는 주기. 수집이 켜진 worker는 파티션이 된 관측 테이블도 다룬다
 
 route-geometry:
   generation:

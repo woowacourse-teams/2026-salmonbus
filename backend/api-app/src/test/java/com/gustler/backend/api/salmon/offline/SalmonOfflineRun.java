@@ -133,18 +133,17 @@ public final class SalmonOfflineRun {
             "후보를 연결하지 않아 사유 코드는 ABSTAIN_STAY_UNDEFINED, STAY_SCAN_NOT_TRIGGERED, "
                 + "NO_MOVE_NO_CANDIDATE만 나온다. NO_MOVE_NO_CANDIDATE는 대기 위험이 탐색 역치 이상이라 "
                 + "후보를 조회했을 판정이라는 뜻이다",
-            "보드는 그 묶음의 좌석 예보를 전부 읽는다. 예보 적격 뷰와 편도 제외는 쓰지 않는다",
             "도착 스냅샷은 수신 시각(received_at)이 판정 시각 이전인 것을 본다. 수신과 저장 사이의 지연은 되살리지 않는다",
-            "재발행된 묶음은 발행 시각(published_at)도 재발행 시각으로 덮여 있다. 원래 발행과 재발행 사이의 판정 시각에서는 "
-                + "그 묶음이 아직 발행 전으로 보여 더 앞의 묶음을 고른다",
-            "입력에 route_version_first_publication이 없고 판정 구간의 발행도 없으면, 그 판본을 발행이 한 번도 없던 "
+            "예보 실행 줄(forecast_run)은 착수 시각(confirmed_at)이 판정 시각 이전인 것을 본다. 착수부터 저장까지의 지연은 "
+                + "되살리지 않는다",
+            "입력에 route_version_first_publication이 없고 판정 구간의 예보 실행 줄도 없으면, 그 판본을 발행이 한 번도 없던 "
                 + "판본으로 읽는다. 그런 판정은 diagnostics.boardAtDecision의 READ_UNPUBLISHED로 센다",
             "entry_lookups와 seatForecastLookups의 windowAttempts는 대기 위험 계산에 들어간 시도(창 안)만 센다",
             "판정 시각은 스냅샷의 수신 시각이다. 사용자가 실제로 판정을 받는 시각(수신 뒤 0초에서 60초 사이)과 다를 수 있다"));
         report.put("data", data);
         report.put("results", summary.results());
         report.put("outcomesNote", "판정 시각 뒤의 차량 관측에서 읽은 실제 결과다. 판정 입력에는 쓰지 않았다. "
-            + "byFirstObservation은 그 정류장을 떠난 첫 관측(FIRST_POST_STOP_ZERO의 정답), byLastObservation은 다음 승차 "
+            + "byFirstObservation은 그 정류장을 떠난 첫 관측, byLastObservation은 다음 승차 "
             + "정류장 전의 마지막 관측(DEPARTURE_ZERO의 정답)의 남은 좌석을 본다. 1석 이상이면 SEATS_AVAILABLE, 0석이면 "
             + "FULL이다. 시도열 기준(stayByAttempts)은 마감 뒤에 닿은 차량을 만석과 같이 탈 수 없었던 차량으로 세고, 마감 안에 "
             + "닿았는지 모르는 차량은 빈자리가 있어도 모름으로 둔다. 창 기준(stayByWindow)은 첫 관측만 본다. byLastObservation은 DEPARTURE_ZERO 정답의 근사다. "
@@ -183,12 +182,14 @@ public final class SalmonOfflineRun {
             + "FROM arrival_snapshot"));
         data.put("observationBatchReceivedAt", rangeOf(jdbc, "SELECT min(response_received_at), "
             + "max(response_received_at) FROM observation_batch"));
-        data.put("forecastPublishedAt", rangeOf(jdbc, "SELECT min(published_at), max(published_at) "
-            + "FROM forecast_publication"));
-        data.put("seatForecastsByProbabilityTarget", jdbc.sql("SELECT probability_target, count(*) "
-            + "FROM seat_forecast GROUP BY probability_target ORDER BY probability_target")
+        data.put("forecastConfirmedAt", rangeOf(jdbc, "SELECT min(confirmed_at), max(confirmed_at) "
+            + "FROM forecast_run WHERE observation_batch_id > 0"));
+        data.put("forecastRunsByOutcome", jdbc.sql("SELECT outcome, count(*) FROM forecast_run "
+            + "WHERE observation_batch_id > 0 GROUP BY outcome ORDER BY outcome")
             .query((row, index) -> Map.entry(row.getString(1), row.getLong(2))).list().stream()
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, Long::sum, LinkedHashMap::new)));
+        data.put("recordedPredictions", jdbc.sql("SELECT COALESCE(sum(cardinality(target_stop_orders)), 0) "
+            + "FROM forecast_record").query(Long.class).single());
         return data;
     }
 

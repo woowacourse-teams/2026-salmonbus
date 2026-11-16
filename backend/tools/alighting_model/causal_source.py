@@ -19,6 +19,11 @@ def available_time(received, confirmed):
     return confirmed.where(received.notna() & confirmed.notna() & (confirmed >= received))
 
 
+def confirmation_time(batch_confirmed, run_started):
+    """The forecast run records when a batch was taken as input; batches without a run keep their own stamp."""
+    return run_started.where(run_started.notna(), batch_confirmed)
+
+
 def prepare(source, output, all_routes=False):
     if output.exists():
         raise ValueError('Output exists; preserve source receipts')
@@ -52,7 +57,8 @@ def prepare(source, output, all_routes=False):
                                      for _, s in st.iterrows()])
     receipts = {}
     batches = []
-    audit = dict(origin_policy='LIVE only', availability='input_confirmed_at >= response_received_at',
+    audit = dict(origin_policy='LIVE only',
+                 availability='forecast_run.confirmed_at, else input_confirmed_at >= response_received_at',
                  max_latency_seconds=90, batch_rows=0, eligible_batches=0, observation_rows=0,
                  eligible_observations=0, source_hashes={})
     manifest = {r['file']: r['sha256'] for r in
@@ -62,6 +68,16 @@ def prepare(source, output, all_routes=False):
         if actual != manifest.get(path.name):
             raise ValueError(f'Collection source digest changed: {path.name}')
         audit['source_hashes'][path.name] = actual
+    runs = []
+    for path in sorted(source.glob('forecast_run_*.csv.gz')):
+        pin_source(path)
+        runs.append(pd.read_csv(path, usecols=['observation_batch_id', 'confirmed_at']))
+    started = pd.Series(dtype='object')
+    if runs:
+        run = pd.concat(runs, ignore_index=True)
+        if run.observation_batch_id.duplicated().any():
+            raise ValueError('Duplicate forecast run identity')
+        started = run.set_index('observation_batch_id').confirmed_at
     columns = ['id', 'route_version_id', 'response_received_at', 'input_confirmed_at',
                'outcome', 'ingestion_origin', 'stored_rows']
     for path in sorted(source.glob('observation_batch_*.csv.gz')):
@@ -71,7 +87,8 @@ def prepare(source, output, all_routes=False):
         b = b[b.route_version_id.isin(names) & (b.ingestion_origin == 'LIVE')
               & (b.outcome == 'SUCCESS_ROWS') & (b.stored_rows > 0)].copy()
         received = pd.to_datetime(b.response_received_at, utc=True, format='ISO8601')
-        confirmed = pd.to_datetime(b.input_confirmed_at, utc=True, format='ISO8601')
+        confirmed = pd.to_datetime(confirmation_time(b.input_confirmed_at, b.id.map(started)),
+                                   utc=True, format='ISO8601')
         b['received'] = available_time(received, confirmed)
         b['source_received'] = received
         b = b[b.received.notna() & ((b.received - received).dt.total_seconds() <= 90)]

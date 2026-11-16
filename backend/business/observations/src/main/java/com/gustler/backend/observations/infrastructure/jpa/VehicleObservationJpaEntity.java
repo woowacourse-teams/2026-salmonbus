@@ -16,6 +16,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
@@ -27,6 +28,7 @@ import lombok.NoArgsConstructor;
  */
 @Entity(name = "VehicleObservation")
 @Table(name = "vehicle_observation")
+@Getter(AccessLevel.PACKAGE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VehicleObservationJpaEntity {
     @Id
@@ -99,6 +101,11 @@ public class VehicleObservationJpaEntity {
         this.routeType = observation.routeType();
         this.tagless = observation.tagless();
         applySeats(observation.remainingSeats());
+    }
+
+    /** 저장 문장이 돌려준 관측 번호를 붙인다. 이 엔티티는 영속성 컨텍스트에 들어가지 않는다. */
+    void insertedAs(final long observationId) {
+        this.id = observationId;
     }
 
     public Row storedRow() {

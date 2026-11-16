@@ -239,6 +239,7 @@ class SalmonRouteRowsTest {
     }
 
     private static VehicleForecast available(final double probability) {
-        return new VehicleForecast.Available(probability, 10.0);
+        return new VehicleForecast.Available(probability, 10.0,
+            "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", 1.0d - probability);
     }
 }

@@ -6,6 +6,7 @@ import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.StoredObservations.Row;
 import com.gustler.backend.observations.domain.UpstreamObservationRow;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -21,11 +22,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class JpaCollectionBatchRepository implements CollectionBatchRepository {
     private final ObservationBatchEntityRepository batches;
     private final VehicleObservationEntityRepository observations;
+    private final VehicleObservationBulkInsert bulkInsert;
 
-    public JpaCollectionBatchRepository(ObservationBatchEntityRepository batches,
-        VehicleObservationEntityRepository observations) {
+    public JpaCollectionBatchRepository(
+        ObservationBatchEntityRepository batches,
+        VehicleObservationEntityRepository observations,
+        VehicleObservationBulkInsert bulkInsert
+    ) {
         this.batches = batches;
         this.observations = observations;
+        this.bulkInsert = bulkInsert;
     }
 
     @Override
@@ -35,16 +41,13 @@ public class JpaCollectionBatchRepository implements CollectionBatchRepository {
     }
 
     @Override
-    public CollectionBatch getById(final long batchId) {
-        return batches.findById(batchId).orElseThrow().toDomain();
+    public Optional<OffsetDateTime> findForecastStart(final long batchId) {
+        return batches.findForecastStart(batchId).map(start -> start.atOffset(ZoneOffset.UTC));
     }
 
     @Override
-    public void confirmInputOnce(final long batchId, OffsetDateTime at) {
-        final int changed = batches.confirmInputOnce(batchId, at);
-        if (changed == 0 && !batches.existsById(batchId)) {
-            throw new IllegalArgumentException("수집 배치가 없다: " + batchId);
-        }
+    public CollectionBatch getById(final long batchId) {
+        return batches.findById(batchId).orElseThrow().toDomain();
     }
 
     @Override
@@ -72,13 +75,13 @@ public class JpaCollectionBatchRepository implements CollectionBatchRepository {
         observations.deleteByObservationBatchId(batchId);
     }
 
+    /**
+     * 관측은 JDBC 로 같은 트랜잭션의 커넥션에 INSERT 한 문장으로 넣는다. 그 전에 영속성 컨텍스트의 대기 변경을 먼저 내보내
+     * 문장이 JPA 로 바꾼 행을 보게 한다. 넣은 관측은 영속성 컨텍스트에 올리지 않는다.
+     */
     @Override
     public List<Row> saveObservations(CollectionBatch batch, List<UpstreamObservationRow> rows) {
-        return observations.saveAll(rows.stream()
-            .map(row -> new VehicleObservationJpaEntity(batch.id(), batch.routeVersionId(), row))
-            .toList())
-            .stream()
-            .map(VehicleObservationJpaEntity::storedRow)
-            .toList();
+        observations.flush();
+        return bulkInsert.insert(batch.id(), batch.routeVersionId(), rows);
     }
 }

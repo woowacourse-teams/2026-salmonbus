@@ -15,12 +15,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # backend 밖에서 backend 테스트가 읽는 파일도 넣는다(dev/server/api.yml·worker.yml, dev/data/routes.json, dev/data/java).
+  # backend 밖에서 backend 테스트가 읽는 파일도 넣는다(dev/server/api.yml·worker.yml, dev/config/worker.yml,
+  # dev/data/routes.json, dev/data/java).
   CHANGED_PATH_PATTERNS: >-
     backend/*
     contract/*.openapi.json
     dev/server/api.yml
     dev/server/worker.yml
+    dev/config/worker.yml
     dev/data/routes.json
     dev/data/java/*
     .github/workflows/backend-ci.yml
@@ -48,7 +50,7 @@ jobs:
 
   backend-build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
       checks: write

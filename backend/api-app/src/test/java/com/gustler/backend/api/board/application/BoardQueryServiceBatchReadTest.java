@@ -18,6 +18,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.Test;
 
 class BoardQueryServiceBatchReadTest {
     private static final OffsetDateTime OBSERVED_AT = OffsetDateTime.parse("2026-08-27T08:00:00+09:00");
+    private static final LocalDate FORECAST_DATE = LocalDate.of(2026, 8, 27);
     private static final ForecastModel ACTIVE_MODEL = new ForecastModel(
         9L, "model-active", OffsetDateTime.parse("2026-08-26T23:59:59+09:00"));
     private static final String FIRST = "204000057";
@@ -211,7 +213,7 @@ class BoardQueryServiceBatchReadTest {
                 new Route(routeId, "노선-" + routeId, "기점", "회차점"),
                 2,
                 new DepartureSchedule("04:50", "23:30", "05:00", "23:30", RouteHeadways.none()),
-                Optional.of(new SnapshotObservation(batchId, observedAt, 4, published)),
+                Optional.of(new SnapshotObservation(batchId, observedAt, 4, published, forecastDateOf(published))),
                 Optional.ofNullable(model),
                 "revision-" + batchId
             ));
@@ -223,8 +225,16 @@ class BoardQueryServiceBatchReadTest {
             vehicles.put(batchId, List.of(new BoardVehicleObservation("vehicle-" + batchId, 1, 1, 1)));
             if (published) {
                 predictions.put(batchId, List.of(
-                    new StoredPrediction(3, "vehicle-" + batchId, 1, 2, 0.25, 10.0, ACTIVE_MODEL)));
+                    new StoredPrediction(3, "vehicle-" + batchId, 1, 2, 0.25, 10.0, ACTIVE_MODEL,
+                        "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO")));
             }
+        }
+
+        private static LocalDate forecastDateOf(final boolean published) {
+            if (published) {
+                return FORECAST_DATE;
+            }
+            return null;
         }
 
         @Override
@@ -242,7 +252,7 @@ class BoardQueryServiceBatchReadTest {
         }
 
         @Override
-        public List<StoredPrediction> findPredictions(final long observationBatchId) {
+        public List<StoredPrediction> findRecordedPredictions(final long observationBatchId, LocalDate sourceDate) {
             return predictions.getOrDefault(observationBatchId, List.of());
         }
 
@@ -270,10 +280,10 @@ class BoardQueryServiceBatchReadTest {
         }
 
         @Override
-        public Map<Long, List<StoredPrediction>> findPredictions(Collection<Long> observationBatchIds) {
+        public Map<Long, List<StoredPrediction>> findRecordedPredictions(Map<Long, LocalDate> sourceDateByBatchId) {
             batchCalls.add("predictions");
-            requestedPredictionBatches.addAll(observationBatchIds);
-            return BoardQueryRepository.super.findPredictions(observationBatchIds);
+            requestedPredictionBatches.addAll(sourceDateByBatchId.keySet());
+            return BoardQueryRepository.super.findRecordedPredictions(sourceDateByBatchId);
         }
 
         @Override

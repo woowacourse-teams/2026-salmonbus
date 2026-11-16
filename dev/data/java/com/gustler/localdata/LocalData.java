@@ -1,5 +1,6 @@
 package com.gustler.localdata;
 
+import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
 import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader;
 import java.nio.file.Files;
@@ -82,7 +83,7 @@ public final class LocalData {
                                 """, inspection.bundleDigest()).equals("0"), "UNOWNED_ACTIVE_MODEL");
                             verify(connection, data, args[1]);
                             verify(connection, catalog, args[1], false);
-                            resetGenerated(connection, data);
+                            resetGenerated(connection);
                         }
                     } else {
                         require(!reset, "FIXTURE_REQUIRED_FOR_RESET");
@@ -106,10 +107,7 @@ public final class LocalData {
                         "UNOWNED_ACTIVE_MODEL");
                     verify(connection, data, args[1]);
                     verify(connection, catalog, args[1], false);
-                    var anchors = LocalForecastHistory.prepare(connection,inspection.routes());
                     connection.commit();
-                    step="HISTORY";
-                    LocalForecastHistory.write(anchors,Path.of(args[1]).getParent().resolve("alighting-history"));
                 } catch (Exception error) {
                     connection.rollback();
                     throw error;
@@ -133,20 +131,12 @@ public final class LocalData {
         }
     }
 
-    private static void resetGenerated(Connection connection, RouteDataset data) throws Exception {
+    /** 수집과 예보가 만든 줄과 내보내기 장부를 비운다. 노선·정류장·모델 배포는 남긴다. */
+    static void resetGenerated(Connection connection) throws Exception {
         execute(connection, """
-            TRUNCATE daily_call_quota, observation_batch, vehicle_observation, seat_forecast,
-                forecast_publication, forecast_evaluation_work, forecast_evaluation_result, forecast_evaluation_compact,
-                alighting_forecast_evaluation_work, alighting_forecast_evaluation_result, alighting_evaluation_archive,
-                alighting_settlement_batch_work, alighting_settlement_observation, alighting_settlement_pass,
-                alighting_settlement_projection, alighting_settlement_generation,
-                operational_archive_file, operational_archive_job, operational_archive_boundary, archive_legacy_member, archive_legacy_batch,
-                file_statistics_publication,
-                stop_demand_statistics, demand_statistics_version;
-            UPDATE alighting_settlement_queue_scan SET observation_id=0,stop_order=0,target_kind='',label_version='',complete=false;
+            TRUNCATE daily_call_quota, observation_batch, vehicle_observation,
+                forecast_run, forecast_record, stop_pass, pass_label, forecast_unresolved, daily_export
             """);
-        execute(connection, "UPDATE route SET data_revision=1");
-
     }
 
     static long seedRoute(Connection connection, RouteDataset.Route route) throws Exception {
@@ -208,18 +198,19 @@ public final class LocalData {
 
     private static void recoverCollectorOnly(Connection connection, RouteDataset data) throws Exception {
         require(scalar(connection, "SELECT count(*) FROM route").equals(String.valueOf(data.routes().size())), "RECOVERY_STATE_UNSUPPORTED");
-        require(scalar(connection, "SELECT count(*) FROM model_deployment").equals("0")
-            && scalar(connection, "SELECT count(*) FROM seat_forecast").equals("0")
-            && scalar(connection, "SELECT count(*) FROM forecast_publication").equals("0")
-            && scalar(connection, "SELECT count(*) FROM stop_demand_statistics").equals("0"), "RECOVERY_STATE_UNSUPPORTED");
+        require(hasNoModelOrForecast(connection), "RECOVERY_STATE_UNSUPPORTED");
         require(scalar(connection, """
             SELECT count(*) FROM vehicle_observation
             WHERE vehicle_id IS NULL OR plate_number IS NULL
                OR vehicle_id !~ '^L[0-9a-f]{8}-[0-9]{9}-[0-9]+[UD]$'
                OR plate_number !~ '^LOCAL-[0-9]+(-[0-5])?-[UD]$'
             """).equals("0") && !scalar(connection, "SELECT count(*) FROM vehicle_observation").equals("0"), "RECOVERY_REQUIRES_MOCK_OBSERVATIONS");
-        require(scalar(connection, "SELECT count(*) FROM route WHERE data_revision<>1").equals("0"), "RECOVERY_STATE_UNSUPPORTED");
         verify(connection, data, ReferenceBundle.DIRECTORY);
+    }
+
+    private static boolean hasNoModelOrForecast(Connection connection) throws Exception {
+        return scalar(connection, "SELECT count(*) FROM model_deployment").equals("0")
+            && scalar(connection, "SELECT count(*) FROM forecast_run").equals("0");
     }
 
     private static void verify(Connection connection, RouteDataset data, String modelDirectory) throws Exception {
@@ -228,7 +219,7 @@ public final class LocalData {
 
     static void verify(Connection connection, RouteDataset data, String modelDirectory, final boolean modelSupported) throws Exception {
         JdbcClient jdbc = JdbcClient.create(new SingleConnectionDataSource(connection, true));
-        var release = modelSupported ? new FileModelBundleLoader().filesUnder(modelDirectory).load() : null;
+        ModelRelease release = loadRelease(modelDirectory, modelSupported);
         for (RouteDataset.Route route : data.routes()) {
             final long versionId;
             try (var query = statement(connection, """
@@ -281,6 +272,13 @@ public final class LocalData {
         }
     }
 
+    /** 저장소의 개발용 번들은 합성 번들이라, 개발 데이터 준비 도구는 합성 번들을 허용해 읽는다. */
+    private static ModelRelease loadRelease(String modelDirectory, final boolean modelSupported) {
+        if (!modelSupported) {
+            return null;
+        }
+        return new FileModelBundleLoader(true).filesUnder(modelDirectory).load();
+    }
 
     private static PreparedStatement statement(Connection connection, String sql, Object... args) throws Exception {
         PreparedStatement statement = connection.prepareStatement(sql);

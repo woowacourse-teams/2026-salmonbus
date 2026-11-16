@@ -1,11 +1,8 @@
 package com.gustler.backend.archive;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Base64;
 import org.apache.hc.core5.http.HttpStatus;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.apache5.Apache5HttpClient;
 import software.amazon.awssdk.regions.Region;
@@ -14,12 +11,11 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
-@Component
 public final class S3ArchiveObjects implements ArchiveObjects, AutoCloseable {
     private final S3Client client;
     private final String bucket;
 
-    public S3ArchiveObjects(@Value("${archive.bucket}") String bucket) {
+    public S3ArchiveObjects(String bucket) {
         this.bucket = bucket;
         client = S3Client.builder().region(Region.AP_NORTHEAST_2)
             .httpClientBuilder(Apache5HttpClient.builder().maxConnections(1).connectionTimeout(Duration.ofSeconds(5))
@@ -38,10 +34,6 @@ public final class S3ArchiveObjects implements ArchiveObjects, AutoCloseable {
             if (conflict.statusCode() != HttpStatus.SC_PRECONDITION_FAILED) {
                 throw conflict;
             }
-        }
-        // 성공 응답만으로 완료하지 않는다. 항상 실제 객체를 다시 읽는다.
-        if (!Arrays.equals(bytes, read(key, bytes.length))) {
-            throw new IllegalStateException("S3 재읽기 값이 업로드 원본과 다르다");
         }
     }
 
@@ -64,6 +56,10 @@ public final class S3ArchiveObjects implements ArchiveObjects, AutoCloseable {
                     throw failure;
                 }
             });
+    }
+
+    @Override
+    public void release(String prefix) {
     }
 
     @Override

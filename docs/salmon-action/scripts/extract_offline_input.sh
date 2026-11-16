@@ -2,15 +2,16 @@
 # 연어행동 오프라인 실행기(docs/salmon-action/offline-run.md)의 입력 폴더를 PostgreSQL에서 뽑는다.
 #
 # 운영 DB에서 돌릴 때는 운영 조회 승인 뒤, 출퇴근 시간(KST 07시부터 10시, 17시부터 20시) 밖에 실행한다.
-# 읽기 전용 SELECT만 쓴다(세션을 읽기 전용으로 열고 문장 제한 시간을 30초로 둔다). 번호판(plate_number)과
-# 예보의 특징 값(feature_snapshot)은 뽑지 않는다. 출력에는 차량 ID가 들어 있으니 저장소 밖에 두고 공유하지 않는다.
+# 읽기 전용 SELECT만 쓴다(세션을 읽기 전용으로 열고 문장 제한 시간을 30초로 둔다). 번호판(plate_number)은 뽑지 않는다.
+# 출력에는 차량 ID가 들어 있으니 저장소 밖에 두고 공유하지 않는다.
 #
 # 사용: 접속 정보는 psql의 환경 변수(PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD)로 준다.
 #   extract_offline_input.sh <판정 구간 시작> <판정 구간 끝> <새 출력 폴더> <노선 source_route_id> [노선 ...]
 #   예: extract_offline_input.sh 2026-11-12T10:00:00+09:00 2026-11-12T13:00:00+09:00 /tmp/salmon-input 204000057
 #
 # 뽑는 구간: 관측 묶음과 차량 관측은 시작 10분 전부터 끝 2시간 뒤까지(보드가 10분 전 묶음까지 보고, 실제 결과는
-# 판정 뒤 2시간까지 찾는다). 예보 발행과 좌석 예보는 시작 10분 전부터 끝까지. 도착 스냅샷은 시작부터 끝까지.
+# 판정 뒤 2시간까지 찾는다). 예보 실행 줄(forecast_run)과 예보 기록(forecast_record)은 배치 수신 시각으로 시작 10분 전부터
+# 끝까지. 도착 스냅샷은 시작부터 끝까지.
 # 한 시간씩 끊어 읽고 조회 사이에 2초 쉰다. 조회마다 출퇴근 시간인지 다시 보고, 그 시간에 들어서면 멈춘다.
 # 멈춘 폴더에는 INCOMPLETE 파일이 남는다.
 #
@@ -117,13 +118,15 @@ copy_all model_deployment "SELECT id, deployment_key, release_id, model_key, mod
     predecessor_deployment_id, activated_at, retired_at
   FROM model_deployment ORDER BY id"
 
-# 그 판본에서 가장 이른 묶음의 발행 시각. 입력에는 판정 구간의 발행만 들어가므로, 그 전에 발행이 있던 판본인지를
-# 실행기가 이것으로 안다. 판본마다 인덱스(route_version_id, observed_at) 끝의 한 행만 읽는다.
-copy_all route_version_first_publication "SELECT version.id AS route_version_id, first.published_at AS first_published_at
+# 그 판본에서 가장 이른 예보 실행 줄의 착수 시각. 입력에는 판정 구간의 실행 줄만 들어가므로, 그 전에 실행 줄이 있던
+# 판본인지를 실행기가 이것으로 안다. 실행 줄은 노선마다 수신 순서대로 쌓이므로 판본마다 인덱스
+# (route_version_id, received_at) 끝의 한 행만 읽는다. 내보낸 뒤 지운 날짜 파티션은 보지 못하므로 남은 것 가운데 가장 이른
+# 줄이다.
+copy_all route_version_first_publication "SELECT version.id AS route_version_id, first.confirmed_at AS first_published_at
   FROM route_version version
-  CROSS JOIN LATERAL (SELECT publication.published_at FROM forecast_publication publication
-    WHERE publication.route_version_id = version.id
-    ORDER BY publication.observed_at, publication.source_batch_id LIMIT 1) first
+  CROSS JOIN LATERAL (SELECT run.confirmed_at FROM forecast_run run
+    WHERE run.route_version_id = version.id
+    ORDER BY run.received_at, run.observation_batch_id LIMIT 1) first
   WHERE version.id IN (${versions}) ORDER BY version.id"
 
 copy_hourly observation_batch "SELECT id, route_version_id, scheduled_at, attempt_number, attempt_key, outcome,
@@ -143,25 +146,27 @@ copy_hourly vehicle_observation "SELECT observation.id, observation.observation_
   WHERE batch.route_version_id IN (${versions})
     AND batch.response_received_at >= :'from' AND batch.response_received_at < :'to'
   ORDER BY observation.id" "10 minutes" "2 hours"
-copy_hourly forecast_publication "SELECT publication.id, publication.source_batch_id, publication.route_version_id,
-    publication.observed_at, publication.published_at, publication.prediction_count,
-    publication.model_deployment_id, publication.demand_statistics_revision, publication.quality_revision,
-    publication.generated_at, publication.provenance
-  FROM forecast_publication publication
-  WHERE publication.route_version_id IN (${versions})
-    AND publication.observed_at >= :'from' AND publication.observed_at < :'to'
-  ORDER BY publication.id" "10 minutes" "0 minutes"
-copy_hourly seat_forecast "SELECT forecast.vehicle_observation_id, forecast.target_stop_order,
-    forecast.route_version_id, forecast.stops_to_target, forecast.model_deployment_id,
-    forecast.demand_statistics_revision, forecast.seat_full_chance_raw, forecast.seat_full_chance,
-    forecast.generated_at, forecast.publication_id, forecast.expected_seats, forecast.quality_revision,
-    forecast.evaluation_detail_required, forecast.seat_target, forecast.probability_target,
-    forecast.label_version, forecast.inference_bundle_hash
-  FROM seat_forecast forecast
-  JOIN forecast_publication publication ON publication.id = forecast.publication_id
-  WHERE publication.route_version_id IN (${versions})
-    AND publication.observed_at >= :'from' AND publication.observed_at < :'to'
-  ORDER BY forecast.vehicle_observation_id, forecast.target_stop_order" "10 minutes" "0 minutes"
+# 실행 줄과 기록은 배치 예약 시각의 한국 날짜(source_date)로 나뉜다. 조각의 수신 구간이 걸칠 수 있는 날짜 파티션만 읽는다.
+# 예약에서 수신까지는 수집 한 번의 시간이라 수신 시각의 한국 날짜 하루 전부터 보면 빠뜨리지 않는다.
+runs_in_window="run.route_version_id IN (${versions})
+    AND run.source_date >= (:'from'::timestamptz AT TIME ZONE 'Asia/Seoul')::date - 1
+    AND run.source_date <= (:'to'::timestamptz AT TIME ZONE 'Asia/Seoul')::date
+    AND run.received_at >= :'from' AND run.received_at < :'to'"
+copy_hourly forecast_run "SELECT run.source_date, run.observation_batch_id, run.route_id, run.route_version_id,
+    run.received_at, run.confirmed_at, run.model_deployment_id, run.outcome, run.prediction_count,
+    run.source_incomplete, run.counted_rows
+  FROM forecast_run run
+  WHERE ${runs_in_window}
+  ORDER BY run.received_at, run.observation_batch_id" "10 minutes" "0 minutes"
+copy_hourly forecast_record "SELECT record.source_date, record.vehicle_observation_id, record.observation_batch_id,
+    record.source_row_number, record.route_id, record.route_version_id, record.vehicle_id, record.passed_stop_order,
+    record.trip_start_observation_id, record.chain_start_observation_id, record.down, record.capacity,
+    record.extended, record.target_stop_orders, record.expected_seats, record.full_probabilities
+  FROM forecast_record record
+  JOIN forecast_run run ON run.source_date = record.source_date
+    AND run.observation_batch_id = record.observation_batch_id
+  WHERE ${runs_in_window}
+  ORDER BY record.observation_batch_id, record.source_row_number" "10 minutes" "0 minutes"
 copy_hourly arrival_snapshot "SELECT snapshot.id, snapshot.station_id, snapshot.received_at,
     snapshot.refresh_after_at, snapshot.stale_at, snapshot.stored_at, snapshot.payload
   FROM arrival_snapshot snapshot

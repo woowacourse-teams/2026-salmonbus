@@ -41,11 +41,11 @@ class BoardQueryServiceBatchReadIntegrationTest {
         RouteContext observed = route(fixture, "234000050", now);
         final long publishedBatch = fixture.insertBatch(published, now, "SUCCESS_ROWS", 2);
         final long observedBatch = fixture.insertBatch(observed, now, "SUCCESS_ROWS", 1);
-        fixture.insertPublication(publishedBatch, model, now, now);
+        fixture.insertPublication(publishedBatch, model, now);
         final long forecasted = fixture.insertObservation(published, publishedBatch, 1, "PUBLISHED", 1, "STOP-1", now);
         fixture.insertObservation(published, publishedBatch, 2, "PLAIN", 1, "STOP-1", now);
         fixture.insertObservation(observed, observedBatch, 1, "OBSERVED", 1, "STOP-1", now);
-        fixture.insertForecast(published, forecasted, 2, 1, model, 0.2, 20.0, now);
+        fixture.insertForecast(forecasted, 2, model, 0.2, 20.0);
         List<String> routeIds = List.of(published.sourceRouteId(), "999999999", observed.sourceRouteId());
 
         // when

@@ -2,9 +2,8 @@ package com.gustler.backend.forecasting.infrastructure.observability;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
-import com.gustler.backend.forecasting.domain.evaluation.EvaluationDiagnostics;
-import com.gustler.backend.forecasting.domain.evaluation.ScoringState;
-import com.gustler.backend.forecasting.domain.evaluation.SettledEvaluation;
+import com.gustler.backend.forecasting.api.forecast.ForecastClosed;
+import com.gustler.backend.forecasting.application.forecast.RunForecastsService;
 import com.gustler.backend.observations.api.CollectionTiming;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -15,9 +14,11 @@ import jakarta.annotation.PreDestroy;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -29,10 +30,21 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** scrape는 메모리만 읽는다. 새로 커밋된 정산 결과를 5분 단위로 묶는다. */
+/**
+ * 수집과 예보의 진단 지표를 낸다. scrape는 메모리만 읽는다. 새로 저장된 채점 결과는 메모리에 모았다가 5분마다
+ * {@code event=forecast_accuracy} 로그로 낸다. 다시 뜨면 모아 둔 것은 사라진다.
+ */
 @Component
 @Profile("observability")
 public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog.Listener {
+    /** 정확도 집계 로그의 형식. 대시보드가 이 필드 이름으로 읽는다. */
+    static final String ACCURACY_LOG_FORMAT =
+        "event=forecast_accuracy telemetrySchema=1 routeId={} routeVersionId={} stopOrder={} "
+            + "routeName={} stopName={} stopId={} direction={} modelDeploymentId={} distance={} "
+            + "completed={} maeCount={} absoluteErrorSum={} probabilityCount={} brierSum={} "
+            + "predictedFullSum={} actualFullCount={}";
+    private static final String UNKNOWN_ROUTE_NAME = "노선 정보 없음";
+    private static final StopLabel UNKNOWN_STOP = new StopLabel("정류장 정보 없음", "unknown", "unknown");
     private static final Logger LOGGER = LoggerFactory.getLogger(ForecastMonitoring.class);
     private final MeterRegistry registry;
     private final Counter seatReviews;
@@ -46,8 +58,7 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
     private final JdbcTemplate catalog;
     private final Map<String, Timer> timers = new ConcurrentHashMap<>();
     private final Map<Long, RouteState> routes = new ConcurrentHashMap<>();
-    private final Map<Key, Totals> accuracy = new HashMap<>();
-    private final AtomicLong dropped = new AtomicLong();
+    private final ForecastAccuracy accuracy = new ForecastAccuracy();
     private final AtomicLong heartbeat = new AtomicLong();
     private volatile Map<Long, String> versionNames = Map.of();
     private volatile Map<String, Long> sourceRoutes = Map.of();
@@ -72,7 +83,7 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         Gauge.builder("salmonbus.collection.expected.interval.seconds",
             () -> CollectionTiming.intervalSeconds(clock.instant())).register(registry);
         Gauge.builder("salmonbus.monitoring.heartbeat.timestamp", heartbeat, AtomicLong::get).register(registry);
-        Gauge.builder("salmonbus.accuracy.dropped.samples", dropped, AtomicLong::get).register(registry);
+        Gauge.builder("salmonbus.accuracy.dropped.samples", accuracy, ForecastAccuracy::dropped).register(registry);
     }
 
     @PostConstruct
@@ -109,62 +120,8 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
     }
 
     @Override
-    public synchronized void settled(List<SettledEvaluation> results) {
-        for (SettledEvaluation result : results) {
-            EvaluationDiagnostics d = result.diagnostics();
-            if (d == null) {
-                dropped.incrementAndGet();
-                continue;
-            }
-            Key key = new Key(result.routeId(), result.routeVersionId(), result.targetStopOrder(),
-                text(d.routeName(), "노선 정보 없음"), text(d.stopName(), "정류장 정보 없음"), text(d.stopId(), "unknown"),
-                text(d.direction(), "unknown"), d.modelDeploymentId(), distance(result.stopsToTarget()));
-            if (!accuracy.containsKey(key) && accuracy.size() >= 5000) {
-                dropped.incrementAndGet();
-                continue;
-            }
-            Totals totals = accuracy.computeIfAbsent(key, ignored -> new Totals());
-            totals.completed++;
-            final boolean eligible = isEligibleForAccuracy(result);
-            if (!eligible) {
-                continue;
-            }
-            if (hasValidExpectedSeats(d.expectedSeats())) {
-                totals.maeCount++;
-                totals.absoluteError += Math.abs(d.expectedSeats() - result.seatsOnArrival());
-            }
-            if (hasValidFullChance(d.fullChance())) {
-                final double actual = actualFullOutcome(result);
-                totals.probabilityCount++;
-                totals.brierSum += Math.pow(d.fullChance() - actual, 2);
-                totals.predictedFullSum += d.fullChance();
-                totals.actualFullCount += (long) actual;
-            }
-        }
-    }
-
-    private boolean isEligibleForAccuracy(SettledEvaluation result) {
-        if (result.state() != ScoringState.SETTLED || !result.usableForCalibration()) {
-            return false;
-        }
-        if (!result.targetBoardingAllowed() || result.seatsOnArrival() == null) {
-            return false;
-        }
-        return result.seatsOnArrival() >= 0;
-    }
-
-    private boolean hasValidExpectedSeats(Double expectedSeats) {
-        if (expectedSeats == null || !Double.isFinite(expectedSeats)) {
-            return false;
-        }
-        return expectedSeats >= 0;
-    }
-
-    private boolean hasValidFullChance(final double fullChance) {
-        if (!Double.isFinite(fullChance) || fullChance < 0) {
-            return false;
-        }
-        return fullChance <= 1;
+    public void closed(List<ForecastClosed> closed) {
+        accuracy.add(closed);
     }
 
     @Override
@@ -180,7 +137,7 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         }
         final double now = clock.instant().toEpochMilli() / 1000.0;
         state.committedAt = now;
-        // 0행 발행은 배치 완료일 수 있지만 사용자에게 제공할 새 예보는 아니다.
+        // 예측이 없는 커밋은 배치를 끝낸 것이지만 사용자에게 보일 예보를 낸 것은 아니다.
         if (predictions > 0) {
             state.nonemptyAt = now;
             state.observedAt = observedAt.toEpochMilli() / 1000.0;
@@ -245,27 +202,13 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
             RouteState state = stateOf(id);
             return " routeName=" + quote(collectionName(state));
         }
-        if (!(route instanceof Number number)) {
-            return "";
-        }
-        if (usesVersionName(operation)) {
-            return nameContext(versionNames.get(number.longValue()));
-        }
-        if (operation.equals("same_day_read")) {
-            RouteState state = routes.get(number.longValue());
-            return nameContext(stateName(state));
+        if (operation.equals(RunForecastsService.OPERATION) && route instanceof Number version) {
+            return " routeName=" + quote(text(versionNames.get(version.longValue()), UNKNOWN_ROUTE_NAME));
         }
         return "";
     }
 
-    private boolean usesVersionName(String operation) {
-        if (operation.startsWith("forecast_") || operation.startsWith("statistics_")) {
-            return true;
-        }
-        return operation.equals("settlement_pending_forecasts") || operation.equals("settlement_arrival_candidates");
-    }
-
-    /** 활성 노선 카탈로그만 1분마다 조회한다. 평가 테이블 재스캔은 없다. */
+    /** 활성 노선 카탈로그만 1분마다 조회한다. */
     @Scheduled(fixedDelay = 60000)
     public void refreshCatalogAndHeartbeat() {
         heartbeat.set(clock.instant().getEpochSecond());
@@ -276,7 +219,8 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
             Map<String, Long> sources = new HashMap<>();
             Map<Long, Long> versionIds = new HashMap<>();
             catalog.query("""
-                SELECT r.id, r.source_route_id, r.display_name, v.id AS version_id FROM route r
+                SELECT /* salmonbus:forecast_monitoring.catalog */ r.id, r.source_route_id, r.display_name,
+                    v.id AS version_id FROM route r
                 JOIN route_version v ON v.route_id = r.id AND v.valid_to IS NULL
                 ORDER BY r.id LIMIT 201
                 """, row -> {
@@ -328,23 +272,50 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
     }
 
     /**
-     * 메모리의 정확도 집계를 한 스냅샷으로 꺼내 비우고 기존 key=value 로그로 기록한다. 집계 중 새 결과는 다음 구간에 남긴다.
+     * 모아 둔 정확도 합계를 꺼내 비우고 열쇠마다 한 줄씩 남긴다. 꺼내는 동안 들어온 결과는 다음 회차에 남는다. 노선·정류장 이름은
+     * 이때 한 번 읽으며, 읽지 못하면 이름 자리에 "정보 없음"을 적는다.
      */
     @Scheduled(fixedDelay = 300000, initialDelay = 300000)
     public void flushAccuracy() {
-        Map<Key, Totals> snapshot;
-        synchronized (this) {
-            snapshot = new HashMap<>(accuracy);
-            accuracy.clear();
+        Map<ForecastAccuracy.Key, ForecastAccuracy.Totals> snapshot = accuracy.drain();
+        if (snapshot.isEmpty()) {
+            return;
         }
-        snapshot.forEach((key, t) -> LOGGER.info(
-            "event=forecast_accuracy telemetrySchema=1 routeId={} routeVersionId={} stopOrder={} "
-                + "routeName={} stopName={} stopId={} direction={} modelDeploymentId={} distance={} "
-                + "completed={} maeCount={} absoluteErrorSum={} probabilityCount={} brierSum={} "
-                + "predictedFullSum={} actualFullCount={}",
-            key.routeId, key.version, key.stop, quote(key.routeName), quote(key.stopName), quote(key.stopId),
-            quote(key.direction), key.model, key.distance, t.completed, t.maeCount, t.absoluteError, t.probabilityCount,
-            t.brierSum, t.predictedFullSum, t.actualFullCount));
+        StopCatalog names = stopCatalog(snapshot.keySet());
+        snapshot.forEach((key, totals) -> {
+            StopLabel stop = names.stop(key.routeVersionId(), key.stopOrder());
+            LOGGER.info(ACCURACY_LOG_FORMAT, key.routeId(), key.routeVersionId(), key.stopOrder(),
+                quote(names.routeName(key.routeVersionId())), quote(stop.name()), quote(stop.stopId()),
+                quote(stop.direction()), key.modelDeploymentId(), key.distance(), totals.completed(),
+                totals.maeCount(), totals.absoluteErrorSum(), totals.probabilityCount(), totals.brierSum(),
+                totals.predictedFullSum(), totals.actualFullCount());
+        });
+    }
+
+    private StopCatalog stopCatalog(Set<ForecastAccuracy.Key> keys) {
+        List<Long> versions = keys.stream().map(ForecastAccuracy.Key::routeVersionId).distinct().sorted().toList();
+        Map<Long, String> routeNames = new HashMap<>();
+        Map<StopKey, StopLabel> stops = new HashMap<>();
+        try {
+            catalog.query("""
+                SELECT /* salmonbus:forecast_monitoring.stop_names */ v.id, r.display_name, s.stop_order, s.name,
+                    s.stop_id, s.direction
+                FROM route_version v
+                JOIN route r ON r.id = v.route_id
+                LEFT JOIN route_stop s ON s.route_version_id = v.id
+                WHERE v.id IN (%s)
+                """.formatted(String.join(", ", Collections.nCopies(versions.size(), "?"))), row -> {
+                routeNames.put(row.getLong("id"), row.getString("display_name"));
+                final int stopOrder = row.getInt("stop_order");
+                if (!row.wasNull()) {
+                    stops.put(new StopKey(row.getLong("id"), stopOrder),
+                        new StopLabel(row.getString("name"), row.getString("stop_id"), row.getString("direction")));
+                }
+            }, versions.toArray());
+        } catch (RuntimeException failure) {
+            LOGGER.warn("event=forecast_accuracy_names_failed exceptionType={}", failure.getClass().getSimpleName());
+        }
+        return new StopCatalog(routeNames, stops);
     }
 
     static String quote(String value) {
@@ -359,23 +330,21 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         return value;
     }
 
-    private static String distance(final int stops) {
-        if (stops <= 3) {
-            return "1-3";
-        }
-        if (stops <= 6) {
-            return "4-6";
-        }
-        return "7-12";
+    private record StopKey(long routeVersionId, int stopOrder) {
     }
 
-    private record Key(long routeId, long version, int stop, String routeName, String stopName, String stopId,
-        String direction, long model, String distance) {
+    private record StopLabel(String name, String stopId, String direction) {
     }
 
-    private static final class Totals {
-        long completed, maeCount, probabilityCount, actualFullCount;
-        double absoluteError, brierSum, predictedFullSum;
+    /** 정확도 로그에 적을 이름이다. 읽지 못한 노선과 정류장은 "정보 없음"으로 답한다. */
+    private record StopCatalog(Map<Long, String> routeNames, Map<StopKey, StopLabel> stops) {
+        private String routeName(final long routeVersionId) {
+            return text(routeNames.get(routeVersionId), UNKNOWN_ROUTE_NAME);
+        }
+
+        private StopLabel stop(final long routeVersionId, final int stopOrder) {
+            return stops.getOrDefault(new StopKey(routeVersionId, stopOrder), UNKNOWN_STOP);
+        }
     }
 
     private static final class RouteState {
@@ -404,17 +373,6 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         return state.name;
     }
 
-    private static String stateName(RouteState state) {
-        if (state == null) {
-            return null;
-        }
-        return state.name;
-    }
-
-    private static String nameContext(String name) {
-        return " routeName=" + quote(text(name, "노선 정보 없음"));
-    }
-
     private static String operationOutcome(final boolean failed) {
         if (failed) {
             return "failed";
@@ -427,12 +385,5 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
             return 0;
         }
         return Math.max(0, Duration.between(oldestObservedAt, clock.instant()).toSeconds());
-    }
-
-    private static double actualFullOutcome(SettledEvaluation result) {
-        if (result.seatsOnArrival() == 0) {
-            return 1;
-        }
-        return 0;
     }
 }

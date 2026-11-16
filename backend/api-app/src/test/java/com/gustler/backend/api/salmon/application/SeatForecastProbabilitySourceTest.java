@@ -68,7 +68,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -128,36 +127,6 @@ class SeatForecastProbabilitySourceTest {
             .probabilitiesFor(PUBLIC_ROUTE, STATION, 5, list, NOW);
 
         assertThat(supply.inputs()).isEmpty();
-    }
-
-    @Test
-    void 확률_목표가_FIRST_POST_STOP_ZERO인_예보에서도_1에서_만석_확률을_뺀_값을_만든다() {
-        boardIs(boardOf(stopOf(5, STATION, new ApproachingVehicle("bus-1", 2,
-            new VehicleForecast.Available(0.7, 12.0, "FIRST_POST_STOP_OBSERVATION", "FIRST_POST_STOP_ZERO")))));
-
-        ProbabilitySupply supply = source(visitsOf(visit(STATION, 5)))
-            .probabilitiesFor(PUBLIC_ROUTE, STATION, 5, listOf(entry("first", 4, "bus-1")), NOW);
-
-        assertThat(supply.inputs()).singleElement().satisfies(input -> {
-            assertThat(input.attempt()).isEqualTo("first");
-            assertThat(input.tag()).isEqualTo(ValueTag.MARG);
-            assertThat(input.condition()).isEmpty();
-            assertThat(input.value()).isCloseTo(0.7, within(TOLERANCE));
-            assertThat(input.origin()).isEqualTo(ValueOrigin.SEAT_FORECAST);
-        });
-    }
-
-    @Test
-    void 그_밖의_확률_목표와_확률_목표를_모르는_예보는_쓰지_않는다() {
-        SeatForecastProbabilitySource source = source(visitsOf(visit(STATION, 5)));
-
-        for (String target : Arrays.asList("ARRIVAL_ZERO", null)) {
-            boardIs(boardOf(stopOf(5, STATION, new ApproachingVehicle("bus-1", 2,
-                new VehicleForecast.Available(0.7, 12.0, "FIRST_POST_STOP_OBSERVATION", target, 0.3)))));
-
-            assertThat(source.probabilitiesFor(PUBLIC_ROUTE, STATION, 5, listOf(entry("first", 4, "bus-1")), NOW)
-                .inputs()).as("%s", target).isEmpty();
-        }
     }
 
     @Test
@@ -263,8 +232,7 @@ class SeatForecastProbabilitySourceTest {
 
     @Test
     void 항목마다_값과_그_값을_낸_예보의_확률_목표를_돌려준다() {
-        boardIs(boardOf(stopOf(5, STATION, departureFull("bus-1", 0.3), new ApproachingVehicle("bus-2", 4,
-            new VehicleForecast.Available(0.4, 12.0, "FIRST_POST_STOP_OBSERVATION", "FIRST_POST_STOP_ZERO")))));
+        boardIs(boardOf(stopOf(5, STATION, departureFull("bus-1", 0.3), departureFull("bus-2", 0.6))));
 
         List<EntryLookup> lookups = lookupsFor(listOf(entry("first", 4, "bus-1"), entry("second", 11, "bus-2")));
 
@@ -275,7 +243,7 @@ class SeatForecastProbabilitySourceTest {
         });
         assertThat(lookups.get(1).lookup()).isInstanceOfSatisfying(Found.class, found -> {
             assertThat(found.value()).isCloseTo(0.4, within(TOLERANCE));
-            assertThat(found.probabilityTarget()).isEqualTo("FIRST_POST_STOP_ZERO");
+            assertThat(found.probabilityTarget()).isEqualTo("DEPARTURE_ZERO");
         });
     }
 
@@ -391,18 +359,6 @@ class SeatForecastProbabilitySourceTest {
 
         assertThat(lookupsFor(listOf(entry("first", 4, "bus-1")))).extracting(EntryLookup::lookup)
             .containsExactly(new NotFound(Cause.FORECAST_UNAVAILABLE));
-    }
-
-    @Test
-    void 쓰지_않는_확률_목표의_예보만_있는_항목은_원인이_쓰지_않는_확률_목표다() {
-        for (String target : Arrays.asList("ARRIVAL_ZERO", null)) {
-            boardIs(boardOf(stopOf(5, STATION, new ApproachingVehicle("bus-1", 2,
-                new VehicleForecast.Available(0.7, 12.0, "FIRST_POST_STOP_OBSERVATION", target, 0.3)))));
-
-            assertThat(lookupsFor(listOf(entry("first", 4, "bus-1")))).as("%s", target)
-                .extracting(EntryLookup::lookup)
-                .containsExactly(new NotFound(Cause.PROBABILITY_TARGET_NOT_USED));
-        }
     }
 
     @Test

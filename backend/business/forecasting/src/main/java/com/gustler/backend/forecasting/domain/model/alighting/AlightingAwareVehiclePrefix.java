@@ -2,7 +2,7 @@ package com.gustler.backend.forecasting.domain.model.alighting;
 
 import java.time.Instant;
 
-/** 관측 창 이전의 운행 상태다. capacity와 capacityObservation은 과거 체크포인트 읽기 호환에만 남긴다. */
+/** 관측 창 이전의 운행 상태다. capacity와 capacityObservation은 입력 계산이 읽지 않는다. */
 public record AlightingAwareVehiclePrefix(
     float capacity,
     double fullStreak,

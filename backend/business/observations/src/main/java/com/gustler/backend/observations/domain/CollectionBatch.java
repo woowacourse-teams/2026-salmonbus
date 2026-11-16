@@ -3,7 +3,7 @@ package com.gustler.backend.observations.domain;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 
-/** 한 수집 계획의 현재 시도와 결과, 입력 확정 여부를 관리한다. */
+/** 한 수집 계획의 현재 시도와 결과를 관리한다. 입력 확인 시각이 적힌 배치는 다시 열지 않는다. */
 public final class CollectionBatch {
     private final Long id;
     private final long routeVersionId;
@@ -11,11 +11,11 @@ public final class CollectionBatch {
     private final String attemptKey;
     private final String normalizationVersion;
     private final String collectionStrategyVersion;
+    private final OffsetDateTime inputConfirmedAt;
 
     private int attemptNumber;
     private OffsetDateTime requestedAt;
     private OffsetDateTime responseReceivedAt;
-    private OffsetDateTime inputConfirmedAt;
     private ObservationBatchOutcome outcome;
     private ObservationBatchFailureCode failureCode;
     private Integer resultCode;
@@ -110,12 +110,6 @@ public final class CollectionBatch {
         excludedRows = collected.excludedRows().size();
     }
 
-    public void confirmInput(OffsetDateTime confirmedAt) {
-        if (inputConfirmedAt == null) {
-            inputConfirmedAt = confirmedAt;
-        }
-    }
-
     public Long id() {
         return id;
     }
@@ -125,7 +119,7 @@ public final class CollectionBatch {
     }
 
     /**
-     * 현재 수집 생명주기의 저장 가능한 스냅샷을 만든다. 시도·응답·입력 확정 상태를 하나의 판본으로 전달한다.
+     * 현재 수집 생명주기의 저장 가능한 스냅샷을 만든다. 시도·응답 상태와 읽어 온 입력 확인 시각을 하나의 판본으로 전달한다.
      */
     public State state() {
         return new State(id, routeVersionId, scheduledAt, attemptKey, attemptNumber, requestedAt,

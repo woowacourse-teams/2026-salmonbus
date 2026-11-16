@@ -11,6 +11,7 @@ EnvironmentFile=/etc/salmonbus/archive.env
 ExecStart=/usr/bin/java -Xms32m -Xmx256m -jar /opt/salmonbus/archive/current/jars/archive-app.jar
 Restart=on-failure
 RestartSec=10
+SuccessExitStatus=143
 Nice=10
 CPUQuota=50%
 MemoryMax=384M

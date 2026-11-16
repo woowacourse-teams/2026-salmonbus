@@ -23,7 +23,7 @@ services:
     volumes:
       - ./dev/docker:/local-tools:ro
       - settings-data:/local-settings:ro
-      - postgres-data:/var/lib/postgresql
+      - postgres-data-v4:/var/lib/postgresql
     depends_on:
       settings-init:
         condition: service_completed_successfully
@@ -107,8 +107,7 @@ services:
       - ./dev/docker:/local-tools:ro
       - settings-data:/local-settings:ro
       - ./dev/data:/local/data:ro
-      - model-data:/local/models
-      - forecast-history-data:/local/models/alighting-history
+      - model-data-v4:/local/models
     depends_on:
       api:
         condition: service_healthy
@@ -155,8 +154,7 @@ services:
       - settings-data:/local-settings:ro
       - ./dev/config/worker.yml:/local/config/worker.yml:ro
       - ./dev/data:/local/station-data:ro
-      - model-data:/local/models:ro
-      - forecast-history-data:/local/models/alighting-history
+      - model-data-v4:/local/models:ro
     depends_on:
       local-init:
         condition: service_completed_successfully
@@ -271,6 +269,6 @@ networks:
 
 volumes:
   settings-data:
-  postgres-data:
-  model-data:
-  forecast-history-data:
+  # DB와 모델은 초기 데이터 판(local-data-v4)에 묶인다. 판을 올릴 때 이름도 같이 올려 새 볼륨에서 시작한다.
+  postgres-data-v4:
+  model-data-v4:

@@ -38,8 +38,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class BoardSalmonActionCase implements SalmonActionCase {
-    private static final String DEPARTURE_ZERO = "DEPARTURE_ZERO";
-
     private final BoardQueryService boards;
     private final SalmonDueArrivals arrivals;
     private final BoardingOptionsQueryService walks;
@@ -122,10 +120,9 @@ public class BoardSalmonActionCase implements SalmonActionCase {
         List<ApproachingVehicle> vehicles = stops.getFirst().approachingVehicles().stream()
             .filter(vehicle -> vehicleId.equals(vehicle.vehicleId()))
             .toList();
-        if (vehicles.size() != 1 || !(vehicles.getFirst().forecast() instanceof VehicleForecast.Available available)
-            || !DEPARTURE_ZERO.equals(available.probabilityTarget())) {
+        if (vehicles.size() != 1 || !(vehicles.getFirst().forecast() instanceof VehicleForecast.Available available)) {
             return Optional.empty();
         }
-        return Optional.ofNullable(available.departureFullProbability());
+        return Optional.of(available.departureFullProbability());
     }
 }

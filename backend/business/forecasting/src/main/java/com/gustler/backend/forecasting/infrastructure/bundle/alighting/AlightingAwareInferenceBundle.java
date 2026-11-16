@@ -33,6 +33,9 @@ public final class AlightingAwareInferenceBundle {
         "3330", "1650", "9007", "9300", "6011", "3000", "5600", "3500");
     private static final String SEAT_ORDER = "f4e11ff4c97b5fa88ef22ec37169c2698da0020efb2a746ea35012108dbd7d18";
     private static final String FULL_ORDER = "c00e89b56ec334f88aec52842102d2745097ac18222c06194f2affa9df4e2095";
+    private static final List<String> SERVING_CHECKS = List.of(
+        "feature_parity", "historical_replay", "settlement", "runtime_validation");
+    private static final List<String> OBSERVATION_BOUND_CHECKS = List.of("historical_replay", "settlement");
     private final AlightingAwareSeatPredictor predictor;
     private final Map<String, JsonNode> statistics;
     private final JsonNode manifest;
@@ -74,17 +77,29 @@ public final class AlightingAwareInferenceBundle {
     }
 
     public static AlightingAwareInferenceBundle load(Path directory) throws IOException {
-        return load(directory, false);
+        return load(directory, false, false);
     }
 
     /** 고정 통계 준비용. 비활성 번들도 읽되 파일·입력 계약 검증은 그대로 수행한다. */
     public static AlightingAwareInferenceBundle loadForStatistics(Path directory) throws IOException {
         JsonNode manifest = JSON.readTree(readFile(directory.resolve("manifest.json")));
-        return load(directory, bool(manifest, "serving_ready"));
+        return load(directory, bool(manifest, "serving_ready"), false);
     }
 
     public static AlightingAwareInferenceBundle loadForServing(Path directory) throws IOException {
-        return load(directory, true);
+        return load(directory, true, false);
+    }
+
+    /**
+     * 서빙 번들을 적재한다. 합성 번들은 실제 관측이 없어 재생·정산 검증을 실행할 수 없다. 그런 번들은 실행하지 않은 검증을
+     * {@code runtime.unverified_checks}에 적고 {@code synthetic_fixture}로 표시한다.
+     *
+     * @param allowSyntheticFixture 그렇게 표시한 합성 번들을 받을지다. 로컬 개발 적재에서만 켠다. 꺼져 있으면 거절한다.
+     *     켜도 수치 대조와 후보 런타임 검증은 다른 확정 번들과 똑같이 검사한다
+     */
+    public static AlightingAwareInferenceBundle loadForServing(Path directory, final boolean allowSyntheticFixture)
+        throws IOException {
+        return load(directory, true, allowSyntheticFixture);
     }
 
     public String digest() {
@@ -109,7 +124,11 @@ public final class AlightingAwareInferenceBundle {
         return Set.copyOf(dates);
     }
 
-    private static AlightingAwareInferenceBundle load(Path directory, final boolean serving) throws IOException {
+    private static AlightingAwareInferenceBundle load(
+        Path directory,
+        final boolean serving,
+        final boolean allowSyntheticFixture
+    ) throws IOException {
         require(!Files.isSymbolicLink(directory), "번들 디렉터리는 symlink가 아니어야 한다");
         byte[] manifestBytes = readFile(directory.resolve("manifest.json"));
         JsonNode manifest = JSON.readTree(manifestBytes);
@@ -140,7 +159,7 @@ public final class AlightingAwareInferenceBundle {
             require(AlightingAwareConfirmedServingVerification.isConfirmed(files), "확정 입력이 필요한 시간 확장 모델이다");
         }
         if (serving) {
-            verifyServing(manifest, files);
+            verifyServing(manifest, files, allowSyntheticFixture);
             verifyGolden(predictor, required(files, "golden.json"));
             verifyGolden(predictor, required(files, "boundaries.json"));
         }
@@ -226,7 +245,11 @@ public final class AlightingAwareInferenceBundle {
         }
     }
 
-    private static void verifyServing(JsonNode manifest, Map<String, JsonNode> files) {
+    private static void verifyServing(
+        JsonNode manifest,
+        Map<String, JsonNode> files,
+        final boolean allowSyntheticFixture
+    ) {
         JsonNode runtime = manifest.get("runtime");
         require(runtime != null && runtime.isObject(), "서빙 계약이 없다");
         require(text(runtime, "feature_contract_version").equals("alighting-online-v1"), "서빙 입력 판이 다르다");
@@ -261,7 +284,12 @@ public final class AlightingAwareInferenceBundle {
             require(text(original.get("files"), name).equals(text(manifest.get("files"), name)),
                 "검증 이후 원본 파일이 바뀌었다: " + name);
         }
-        for (String check : List.of("feature_parity", "historical_replay", "settlement", "runtime_validation")) {
+        List<String> unverified = unverifiedChecks(manifest, runtime, confirmed, allowSyntheticFixture);
+        for (String check : SERVING_CHECKS) {
+            if (unverified.contains(check)) {
+                require(lacksVerificationFiles(files, check), "실행하지 않은 검증의 영수증이 있다: " + check);
+                continue;
+            }
             JsonNode receipt = required(files, "verification-" + check + ".json");
             require(hasMatchingVerification(receipt, check, sourceDigest, manifest),
                 "서빙 검증 증거가 다르다: " + check);
@@ -270,6 +298,37 @@ public final class AlightingAwareInferenceBundle {
                 AlightingAwareConfirmedServingVerification.verify(check, receipt, evidence, sourceDigest, routes);
             }
         }
+    }
+
+    /**
+     * 합성 번들이 실행하지 않았다고 밝힌 검증이다. 밝히지 않은 번들은 빈 목록이라 모든 검증을 요구한다.
+     * 실제 관측이 있어야 하는 재생·정산 검증만 적을 수 있고, 적은 검증은 영수증과 증거가 번들에 없어야 한다.
+     */
+    private static List<String> unverifiedChecks(
+        JsonNode manifest,
+        JsonNode runtime,
+        final boolean confirmed,
+        final boolean allowSyntheticFixture
+    ) {
+        if (!runtime.has("unverified_checks")) {
+            return List.of();
+        }
+        require(allowSyntheticFixture, "합성 번들은 로컬 개발 적재에서만 받는다");
+        require(manifest.has("synthetic_fixture") && bool(manifest, "synthetic_fixture"), "합성 번들 표시가 없다");
+        require(confirmed, "합성 번들도 확정 입력 계약을 따라야 한다");
+        List<String> checks = texts(runtime.get("unverified_checks"));
+        require(isObservationBoundSelection(checks), "생략할 수 없는 검증이다");
+        return checks;
+    }
+
+    private static boolean isObservationBoundSelection(List<String> checks) {
+        return !checks.isEmpty() && checks.stream().distinct().count() == checks.size()
+            && OBSERVATION_BOUND_CHECKS.containsAll(checks);
+    }
+
+    private static boolean lacksVerificationFiles(Map<String, JsonNode> files, String check) {
+        return !files.containsKey("verification-" + check + ".json")
+            && !files.containsKey("evidence-" + check + ".json");
     }
 
     private static List<String> holidayWeekendSubstitutions(JsonNode node) {

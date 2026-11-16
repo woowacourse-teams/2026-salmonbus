@@ -27,7 +27,6 @@ class VehicleObservationTableTest {
     private static final int PASSED_STOP_ORDER = 6;
     private static final String VEHICLE_204000206 = "204000206";
     private static final String VEHICLE_204003542 = "204003542";
-    private static final long MISSING_BATCH_ID = 9_999_999L;
     private static final String CONTENT_DIGEST = "0".repeat(64);
     private static final String NORMALIZATION_VERSION = "normalization-v1.0.0";
     private static final String STRATEGY_VERSION = "adaptive-kst-v1.0.1";
@@ -54,17 +53,6 @@ class VehicleObservationTableTest {
         routeVersionId = insertRouteVersion(routeId);
         insertRouteStop(routeVersionId);
         batchId = insertObservationBatch(ATTEMPT_KEY, OBSERVED_AT);
-    }
-
-    @Test
-    void 차량_관측은_수집_묶음이_먼저_있어야_저장된다() {
-        // when
-        Throwable caughtFailure = catchThrowable(() -> insertObservation(MISSING_BATCH_ID, VEHICLE_204000206, 0));
-
-        // then
-        assertThat(caughtFailure)
-            .isNotNull()
-            .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

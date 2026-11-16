@@ -1,6 +1,5 @@
 package com.gustler.backend.api.board.infrastructure.jpa;
 
-import com.gustler.backend.api.board.application.SnapshotObservation;
 import com.gustler.backend.api.route.infrastructure.jpa.RouteVersionJpaEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -12,7 +11,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 
 /**
  * API 조회에서 수집 배치의 결과와 수신 시각을 읽는 매핑이다.
@@ -39,17 +37,5 @@ public class ObservationBatchJpaEntity {
     private Integer storedRows;
 
     protected ObservationBatchJpaEntity() {
-    }
-
-    public SnapshotObservation toDomain(
-        ZoneId zoneId,
-        final boolean forecastPublished
-    ) {
-        return new SnapshotObservation(
-            id,
-            responseReceivedAt.atZoneSameInstant(zoneId).toOffsetDateTime(),
-            storedRows,
-            forecastPublished
-        );
     }
 }

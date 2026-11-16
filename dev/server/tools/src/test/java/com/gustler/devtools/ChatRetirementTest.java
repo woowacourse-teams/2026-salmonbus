@@ -29,17 +29,17 @@ class ChatRetirementTest {
     void exactInfrastructureRetirementAndRollbackPreserveAllBusinessData() {
         var old = revision(files(true));
         var next = revision(files(false));
-        assertDoesNotThrow(() -> BasisLifecycle.preserveData(old, next, null));
-        assertDoesNotThrow(() -> BasisLifecycle.preserveData(next, old, null));
+        assertDoesNotThrow(() -> BasisLifecycle.preserveData(old, next));
+        assertDoesNotThrow(() -> BasisLifecycle.preserveData(next, old));
         for (var path : files(false).keySet()) {
             if (path.startsWith("tools/data/model-reference/")) continue;
             var changed = files(false);
             changed.put(path, "changed");
             assertThrows(IllegalArgumentException.class,
-                    () -> BasisLifecycle.preserveData(old, revision(changed), null), path);
+                    () -> BasisLifecycle.preserveData(old, revision(changed)), path);
             changed.remove(path);
             assertThrows(IllegalArgumentException.class,
-                    () -> BasisLifecycle.preserveData(old, revision(changed), null), path);
+                    () -> BasisLifecycle.preserveData(old, revision(changed)), path);
         }
     }
 
@@ -49,7 +49,7 @@ class ChatRetirementTest {
             var old = files(true);
             old.put(path, "unreviewed");
             assertThrows(IllegalArgumentException.class,
-                    () -> BasisLifecycle.preserveData(revision(old), revision(files(false)), null), path);
+                    () -> BasisLifecycle.preserveData(revision(old), revision(files(false))), path);
         }
     }
 

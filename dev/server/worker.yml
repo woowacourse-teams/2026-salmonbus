@@ -33,12 +33,8 @@ route-geometry:
   include-catalog: true
 
 forecast:
-  alighting:
-    history-seed-directory: ${FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY:/srv/salmonbus-dev/models/alighting-history}
   enabled: true
   interval: 30s
-  settlement-interval: 60s
-  compact-settlement-write: true
 
 model:
   bundle:

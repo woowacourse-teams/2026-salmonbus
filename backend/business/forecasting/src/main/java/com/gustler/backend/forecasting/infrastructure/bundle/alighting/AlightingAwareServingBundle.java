@@ -24,7 +24,15 @@ public final class AlightingAwareServingBundle {
     }
 
     public static ModelRelease load(Path directory) throws IOException {
-        AlightingAwareInferenceBundle bundle = AlightingAwareInferenceBundle.loadForServing(directory);
+        return load(directory, false);
+    }
+
+    /**
+     * @param allowSyntheticFixture {@link AlightingAwareInferenceBundle#loadForServing(Path, boolean)}와 같은 뜻이다
+     */
+    public static ModelRelease load(Path directory, final boolean allowSyntheticFixture) throws IOException {
+        AlightingAwareInferenceBundle bundle =
+            AlightingAwareInferenceBundle.loadForServing(directory, allowSyntheticFixture);
         JsonNode runtime = bundle.manifest().get("runtime");
         return ModelRelease.alighting(runtime.get("release_id").asString(), bundle.digest(),
             runtime.get("data_through").asString(), new SupportedForecastScope(bundle.routes()), readModel(bundle));

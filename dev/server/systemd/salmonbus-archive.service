@@ -1,0 +1,36 @@
+# 운영과 같은 이관 앱을 띄우고, 내보낸 파일만 S3 대신 서버 폴더에 둔다.
+# JAR 은 worker 묶음에 함께 실려 오고 DB 접속 값은 worker 와 같은 파일에서 읽는다.
+[Unit]
+Description=salmonbus dev Archive
+After=network-online.target salmonbus-dev-infra.service
+Wants=network-online.target
+Requires=salmonbus-dev-infra.service
+RequiresMountsFor=/srv/salmonbus-dev
+
+[Service]
+Type=simple
+User=salmonbus
+Group=salmonbus
+EnvironmentFile=/etc/salmonbus-dev/worker.env
+Environment=ARCHIVE_DIRECTORY=/srv/salmonbus-dev/archive
+Environment=ARCHIVE_PARTITION_EXPORT_ENABLED=true
+Environment=ARCHIVE_PARTITION_EXPORT_DROP_ENABLED=true
+Environment=ARCHIVE_PARTITION_EXPORT_PREFIX=salmonbus/dev/lake-v3/
+UnsetEnvironment=JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS CLASSPATH
+ExecStartPre=+/usr/bin/java -Xms16m -Xmx64m -jar /opt/salmonbus-dev/tools/shared-dev-tools.jar preflight archive
+ExecStartPre=+/usr/bin/install -d -o salmonbus -g salmonbus -m 0750 /srv/salmonbus-dev/archive
+ExecStart=/usr/bin/java -Xms32m -Xmx256m -jar /opt/salmonbus-dev/worker/current/jars/archive-app.jar
+Restart=on-failure
+RestartSec=10
+SuccessExitStatus=143
+Nice=10
+CPUQuota=50%
+MemoryMax=384M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
