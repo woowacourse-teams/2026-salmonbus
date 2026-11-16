@@ -43,7 +43,9 @@ systemd는 환경 파일의 DB 설정을 사용한다. worker의 GBIS loopback �
 정할 수 없어 같은 오류로 거절하므로, `EnvironmentFile`에는 경로를 그대로 적는다.
 
 다른 커밋의 배포가 basis를 바꾼 뒤 API 검증 전에 멈춰 남긴 `PREPARED` 준비 기록은 다음 basis
-교체를 막지 않고 넘긴다. 넘긴 기록의 커밋은 준비 결과의 `supersededCommit`에 남긴다. `API_READY`
+교체를 막지 않고 넘긴다. 넘긴 기록의 커밋은 준비 결과의 `supersededCommit`에 남긴다. 다만 그 기록이
+남을 때 돌고 있던 API나 worker가 지금 꺼져 있으면 넘기지 않고 막는다. 앞선 배포가 서비스를 멈춘 채
+끝난 것이라, 그 상태를 복구 기준으로 삼으면 다음 배포가 실패했을 때 서비스가 꺼진 채 남기 때문이다. `API_READY`
 기록은 그 커밋의 worker 배포가 아직 진행 중일 수 있어 계속 막는다. DB 전환 기록, 준비 중에 멈춘
 기록, 복구가 basis를 되돌린 뒤 끝나지 못한 기록도 계속 막는다.
 

@@ -90,7 +90,8 @@ final class DeploymentPreparation {
             if (FileOps.exists(journal())) {
                 var existing = Json.read(FileOps.privateText(journal()).getBytes());
                 if (!List.of("COMPLETE", "ROLLED_BACK").contains(existing.path("phase").asText())) {
-                    Checks.require(superseded(existing, app, previous), "DEV_PREPARATION_RECOVERY_REQUIRED");
+                    Checks.require(superseded(existing, app, previous) && stillRunning(existing),
+                            "DEV_PREPARATION_RECOVERY_REQUIRED");
                     result.put("supersededCommit", existing.path("commit").asText());
                 }
             }
@@ -169,11 +170,31 @@ final class DeploymentPreparation {
                 var target = Deployment.current(base.resolve(link), base.resolve("releases"));
                 state.put(component + "-" + link, target == null ? "" : target.getFileName().toString());
             }
-            var active = host.run(Path.of("/"), null, Duration.ofSeconds(15),
-                    List.of("systemctl", "is-active", "salmonbus-" + component));
-            state.put(component + "-active", active.exit() == 0 && active.stdout().strip().equals("active"));
+            state.put(component + "-active", active(component));
         }
         return state;
+    }
+
+    private boolean active(String component) throws Exception {
+        Host.Result result = host.run(Path.of("/"), null, Duration.ofSeconds(15),
+                List.of("systemctl", "is-active", "salmonbus-" + component));
+        return result.exit() == 0 && result.stdout().strip().equals("active");
+    }
+
+    /**
+     * 넘기려는 기록이 남을 때 돌고 있던 서비스가 지금도 도는지 확인한다.
+     *
+     * <p>꺼져 있으면 그 배포가 서비스를 멈춘 채 끝났다는 뜻이다. 이 상태를 새 복구 기준으로 저장하면 다음 배포가
+     * 실패했을 때 서비스를 다시 띄우지 않고 복구를 끝낸다. 그래서 넘기지 않고 계속 막는다. 다른 배포가 서비스를
+     * 다시 띄운 뒤라면 넘기고, 그때의 basis와 서비스 상태가 새 복구 기준이 된다.
+     */
+    private boolean stillRunning(JsonNode state) throws Exception {
+        for (String component : List.of("api", "worker")) {
+            if (state.path(component + "-active").asBoolean() && !active(component)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private Path transitionGuard(String component) {

@@ -235,9 +235,11 @@ class DeploymentPreparationServerTest {
     }
 
     @Test
-    void 다른_커밋의_완료되지_않은_기반_교체_기록은_다음_기반_교체를_막지_않는다() throws Exception {
+    void 다른_커밋의_완료되지_않은_기반_교체_기록은_서비스가_다시_돌고_있으면_다음_기반_교체를_막지_않는다() throws Exception {
         // given
         preparation().prepare(incoming, apiEnvironment);
+        host.apiActive = true;
+        host.workerActive = true;
         Path prepared = RevisionStore.selectedBasis(fixture.layout);
         Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
                 basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
@@ -253,6 +255,47 @@ class DeploymentPreparationServerTest {
         assertEquals(RevisionStore.verify(prepared, true).releaseId(),
                 Json.read(journal()).path("basisReleaseId").asText());
         assertEquals("PREPARED", Json.read(journal()).path("phase").asText());
+    }
+
+    @Test
+    void 앞선_배포가_멈춘_서비스가_꺼진_채면_다른_커밋의_기반_교체_기록을_넘기지_않는다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        Path prepared = RevisionStore.selectedBasis(fixture.layout);
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+
+        // when
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> preparation().prepare(later, apiEnvironment));
+
+        // then
+        assertEquals("DEV_PREPARATION_RECOVERY_REQUIRED", failure.getMessage());
+        assertEquals(prepared, RevisionStore.selectedBasis(fixture.layout));
+        assertEquals("b".repeat(40), Json.read(journal()).path("commit").asText());
+        assertEquals("PREPARED", Json.read(journal()).path("phase").asText());
+    }
+
+    @Test
+    void 기록을_넘긴_배포가_실패하면_넘기기_직전의_basis와_돌고_있던_서비스로_복구한다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        host.apiActive = true;
+        host.workerActive = true;
+        Path prepared = RevisionStore.selectedBasis(fixture.layout);
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+        preparation().prepare(later, apiEnvironment);
+
+        // when
+        Map<String, Object> result = preparation().recover(later, apiEnvironment);
+
+        // then
+        assertEquals(true, result.get("recoveryRequired"));
+        assertEquals("ROLLED_BACK", Json.read(journal()).path("phase").asText());
+        assertEquals(prepared, RevisionStore.selectedBasis(fixture.layout));
+        assertTrue(host.apiActive);
+        assertTrue(host.workerActive);
     }
 
     @Test
