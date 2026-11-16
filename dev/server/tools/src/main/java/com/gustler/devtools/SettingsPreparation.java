@@ -156,20 +156,21 @@ final class SettingsPreparation {
     /**
      * 설정 디렉터리 밖의 파일이거나, 설정 디렉터리 바로 아래에서 basis 교체가 다시 만드는 파일이다. 와일드카드나 specifier가 든
      * 값은 어느 파일을 읽을지 정할 수 없으므로 남지 않는 것으로 본다. 심볼릭 링크는 가리키는 실제 파일로도 확인한다. 밖에 둔
-     * 링크가 설정 디렉터리의 다른 파일을 가리키면 교체 뒤 링크가 끊긴다.
+     * 링크가 설정 디렉터리의 다른 파일을 가리키면 교체 뒤 링크가 끊긴다. 실제 파일은 적힌 경로 그대로 찾는다. 링크 뒤의
+     * {@code ..}를 먼저 줄이면 systemd가 읽는 파일과 다른 경로가 된다.
      */
     private static boolean survivesReplacement(String value, Path config) throws Exception {
         if (EXPANDED_BY_SYSTEMD.matcher(value).find()) {
             return false;
         }
-        Path file = Path.of(value).normalize();
-        if (!survives(file, config)) {
+        Path written = Path.of(value);
+        if (!survives(written.normalize(), config)) {
             return false;
         }
-        if (!Files.exists(file) || !Files.exists(config)) {
+        if (!Files.exists(written) || !Files.exists(config)) {
             return true;
         }
-        return survives(file.toRealPath(), config.toRealPath());
+        return survives(written.toRealPath(), config.toRealPath());
     }
 
     private static boolean survives(Path file, Path config) {

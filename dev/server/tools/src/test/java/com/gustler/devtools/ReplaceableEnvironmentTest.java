@@ -207,6 +207,20 @@ class ReplaceableEnvironmentTest {
     }
 
     @Test
+    void 링크_뒤에_상위_디렉터리를_붙여_안쪽의_다른_환경_파일을_읽어도_거절한다() throws Exception {
+        // given
+        Files.writeString(layout.config().resolve("custom.env"), "A=1\n");
+        Path inside = Files.createDirectory(layout.config().resolve("sub"));
+        Path link = Files.createDirectories(base.resolve("etc/salmonbus-extra")).resolve("hop");
+        Files.createSymbolicLink(link, inside);
+        dropIn("salmonbus-api.service", "[Service]\nEnvironmentFile=" + link + "/../custom.env\n");
+
+        // when & then
+        assertThatThrownBy(() -> SettingsPreparation.requireReplaceableEnvironment(layout))
+            .hasMessage("DEV_UNMANAGED_ENVIRONMENT_FILE");
+    }
+
+    @Test
     void salmonbus로_시작하지_않는_unit은_검사하지_않는다() throws Exception {
         // given
         Files.writeString(layout.units().resolve("docker.service"), "[Service]\n"
