@@ -107,6 +107,48 @@ class ReplaceableEnvironmentTest {
     }
 
     @Test
+    void 역슬래시로_이어_쓴_EnvironmentFile도_한_설정으로_읽어_거절한다() throws Exception {
+        // given
+        dropIn("salmonbus-api.service", "[Service]\nEnvironmentFile=\\\n"
+            + layout.config().resolve("extra.env") + "\n");
+
+        // when & then
+        assertThatThrownBy(() -> SettingsPreparation.requireReplaceableEnvironment(layout))
+            .hasMessage("DEV_UNMANAGED_ENVIRONMENT_FILE");
+    }
+
+    @Test
+    void 역슬래시로_이어_쓴_줄도_기반_교체가_다시_만드는_환경_파일이면_허용한다() throws Exception {
+        // given
+        dropIn("salmonbus-api.service", "[Service]\nEnvironmentFile=\\\n"
+            + layout.config().resolve("api.env") + "\nRestart=always\n");
+
+        // when & then
+        assertThatCode(() -> SettingsPreparation.requireReplaceableEnvironment(layout)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void 와일드카드가_든_EnvironmentFile은_읽을_파일을_정할_수_없어_거절한다() throws Exception {
+        // given
+        dropIn("salmonbus-api.service", "[Service]\nEnvironmentFile="
+            + base.resolve("etc/salmonbus-de[v]/extra.env") + "\n");
+
+        // when & then
+        assertThatThrownBy(() -> SettingsPreparation.requireReplaceableEnvironment(layout))
+            .hasMessage("DEV_UNMANAGED_ENVIRONMENT_FILE");
+    }
+
+    @Test
+    void specifier가_든_EnvironmentFile도_읽을_파일을_정할_수_없어_거절한다() throws Exception {
+        // given
+        dropIn("salmonbus-worker.service", "[Service]\nEnvironmentFile=%E/salmonbus-dev/extra.env\n");
+
+        // when & then
+        assertThatThrownBy(() -> SettingsPreparation.requireReplaceableEnvironment(layout))
+            .hasMessage("DEV_UNMANAGED_ENVIRONMENT_FILE");
+    }
+
+    @Test
     void salmonbus로_시작하지_않는_unit은_검사하지_않는다() throws Exception {
         // given
         Files.writeString(layout.units().resolve("docker.service"), "[Service]\n"

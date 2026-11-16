@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -26,6 +27,9 @@ final class SettingsPreparation {
             .collect(Collectors.toUnmodifiableSet());
 
     private static final String UNIT_PREFIX = "salmonbus-";
+
+    /** systemd가 읽을 때 풀어 쓰는 와일드카드와 {@code %} specifier다. 이런 값은 경로만 보고 어느 파일인지 정할 수 없다. */
+    private static final Pattern EXPANDED_BY_SYSTEMD = Pattern.compile("[*?\\[%]");
 
     interface Writer {
         void write(Path path, byte[] content, int mode) throws Exception;
@@ -50,18 +54,38 @@ final class SettingsPreparation {
      *
      * <p>basis 교체는 설정 디렉터리를 통째로 바꾸고 관리하는 파일만 옮긴다. 수동 drop-in이 같은 디렉터리의 다른
      * 파일을 읽으면 교체 뒤 앱이 기동하지 못하므로 앱을 멈추기 전에 거절한다. 수동 설정은 설정 디렉터리 밖에 둔다.
+     *
+     * <p>줄은 systemd와 같은 방식으로 읽는다. 역슬래시로 끝난 줄은 다음 줄과 한 설정이다.
      */
     static void requireReplaceableEnvironment(Layout layout) throws Exception {
         Path config = layout.config().normalize();
         for (Path file : serviceFiles(layout.units())) {
-            for (String line : Files.readAllLines(file)) {
-                Optional<Path> target = environmentFile(line);
-                if (target.isEmpty()) {
+            for (String line : joinedLines(Files.readAllLines(file))) {
+                Optional<String> value = environmentFile(line);
+                if (value.isEmpty()) {
                     continue;
                 }
-                Checks.require(survivesReplacement(target.get(), config), "DEV_UNMANAGED_ENVIRONMENT_FILE");
+                Checks.require(survivesReplacement(value.get(), config), "DEV_UNMANAGED_ENVIRONMENT_FILE");
             }
         }
+    }
+
+    /** 역슬래시로 끝난 줄을 다음 줄과 잇는다. systemd는 그 역슬래시를 공백으로 바꿔 읽는다. */
+    private static List<String> joinedLines(List<String> lines) {
+        List<String> joined = new ArrayList<>();
+        StringBuilder pending = new StringBuilder();
+        for (String line : lines) {
+            if (line.endsWith("\\")) {
+                pending.append(line, 0, line.length() - 1).append(' ');
+                continue;
+            }
+            joined.add(pending.append(line).toString());
+            pending.setLength(0);
+        }
+        if (!pending.isEmpty()) {
+            joined.add(pending.toString());
+        }
+        return joined;
     }
 
     private static List<Path> serviceFiles(Path units) throws Exception {
@@ -93,8 +117,8 @@ final class SettingsPreparation {
         }
     }
 
-    /** {@code EnvironmentFile=} 줄이 가리키는 경로다. 다른 설정 줄이거나 값을 비운 줄이면 비어 있다. */
-    private static Optional<Path> environmentFile(String line) {
+    /** {@code EnvironmentFile=} 줄의 값이다. 다른 설정 줄이거나 값을 비운 줄이면 비어 있다. */
+    private static Optional<String> environmentFile(String line) {
         final int separator = line.indexOf('=');
         if (separator < 0) {
             return Optional.empty();
@@ -109,11 +133,18 @@ final class SettingsPreparation {
         if (value.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(Path.of(value).normalize());
+        return Optional.of(value);
     }
 
-    /** 설정 디렉터리 밖의 파일이거나, 설정 디렉터리 바로 아래에서 basis 교체가 다시 만드는 파일이다. */
-    private static boolean survivesReplacement(Path file, Path config) {
+    /**
+     * 설정 디렉터리 밖의 파일이거나, 설정 디렉터리 바로 아래에서 basis 교체가 다시 만드는 파일이다. 와일드카드나 specifier가 든
+     * 값은 어느 파일을 읽을지 정할 수 없으므로 남지 않는 것으로 본다.
+     */
+    private static boolean survivesReplacement(String value, Path config) {
+        if (EXPANDED_BY_SYSTEMD.matcher(value).find()) {
+            return false;
+        }
+        Path file = Path.of(value).normalize();
         if (!file.startsWith(config)) {
             return true;
         }
