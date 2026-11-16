@@ -51,9 +51,10 @@ import org.springframework.transaction.support.TransactionOperations;
  * 예외는 그대로 던진다. 부르는 쪽이 그 노선의 상태를 버린다. {@code route} 행 잠금을 잡지 않고 {@code observation_batch}에 쓰지
  * 않는다. 한 노선의 처리는 한 스레드에서만 해야 한다.
  *
- * <p>되감기가 예보 단계를 돌리지 못하고 끝난 배치의 통과를 찾아 주면({@link RouteStateReplayer.Result#recoveredPasses}) 아직
- * 저장되지 않은 것만 이 배치와 같은 트랜잭션으로 저장하고, 이 배치의 사건보다 먼저 통과 사건으로 넘긴다. 그 통과의 닫힌 시각은 이미
- * 넘긴 사건들의 시각보다 이르다. 채점 단계는 통과를 닫힌 시각으로 정렬해 두고 직전 통과를 찾으므로 같은 직전 통과와 같은 정답을 낸다.
+ * <p>되감기가 닫은 통과가 저장되지 않은 배치(예보 단계를 돌리지 못하고 끝난 배치, 이전 배포본이 처리한 배치)의 통과를 찾아 주면
+ * ({@link RouteStateReplayer.Result#recoveredPasses}) 아직 저장되지 않은 것만 이 배치와 같은 트랜잭션으로 저장하고, 이 배치의
+ * 사건보다 먼저 통과 사건으로 넘긴다. 그 통과의 닫힌 시각은 이미 넘긴 사건들의 시각보다 이르다. 채점 단계는 통과를 닫힌 시각으로
+ * 정렬해 두고 직전 통과를 찾으므로 같은 직전 통과와 같은 정답을 낸다.
  */
 public final class ForecastBatchProcessor {
     /** 되감기가 실패한 노선을 다시 되감기까지 기다리는 분. 배치의 착수 시각 기준이다. */
@@ -413,7 +414,7 @@ public final class ForecastBatchProcessor {
      * @param special 실행 결과와 따로 정해진 배치 분류({@code replay_deferred}, {@code replay_failed}). 없으면 비어 있다
      * @param replayed 이 처리에서 되감았으면 성공 여부, 되감지 않았으면 비어 있다
      * @param unattributedPasses 이 배치가 닫았지만 연결 시작을 보지 못한 차량이라 저장하지 않은 통과 수
-     * @param recoveredPasses 되감으며 찾아 이 배치와 함께 저장한, 예보 단계를 돌리지 못하고 끝난 배치의 통과 수
+     * @param recoveredPasses 되감으며 찾아 이 배치와 함께 저장한, 닫은 통과가 저장되지 않은 배치의 통과 수
      * @param replayExtension 이 처리의 되감기가 창을 늘려 다시 되감았는지
      */
     public record Processed(
@@ -497,7 +498,7 @@ public final class ForecastBatchProcessor {
 
     /**
      * 이 처리에서 한 되감기다. {@code succeeded}는 되감았으면 성공 여부, 되감지 않았으면 비어 있다.
-     * {@code recovered}는 되감으며 찾은, 예보 단계를 돌리지 못하고 끝난 배치의 통과다.
+     * {@code recovered}는 되감으며 찾은, 닫은 통과가 저장되지 않은 배치의 통과다.
      */
     private record Replay(Boolean succeeded, List<PassClosed> recovered, RouteStateReplayer.Extension extension) {
         static final Replay NONE = new Replay(null, List.of(), RouteStateReplayer.Extension.NONE);

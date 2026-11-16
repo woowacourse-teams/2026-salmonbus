@@ -17,8 +17,8 @@ import java.util.List;
  * 모자라면 그 상태를 쓰고, 그렇지 않거나 늘린 창을 읽지 못하면 처음 되감은 상태를 그대로 쓴다. 모자람이 없으면 두 번째 되감기를
  * 돌리지 않는다.
  *
- * <p>예보 단계를 돌리지 못하고 끝난 배치({@link ReplaySource.Read#unforecastRuns})는 되감으면서 그 배치가 닫은 통과를 함께
- * 판정해 돌려준다. 저장과 전달은 부르는 쪽이 한다.
+ * <p>닫은 통과가 저장되지 않은 배치({@link ReplaySource.Read#unforecastRuns})는 되감으면서 그 배치가 닫은 통과를 함께 판정해
+ * 돌려준다. 예보 단계를 돌리지 못하고 끝난 배치와 이전 배포본이 처리한 배치다. 저장과 전달은 부르는 쪽이 한다.
  */
 public final class RouteStateReplayer {
     /** 처음 되감는 창. */
@@ -133,7 +133,7 @@ public final class RouteStateReplayer {
     /**
      * 되감은 상태와 반영한 배치 수, 또는 실패 사유다. 실패면 상태가 없다.
      *
-     * @param recoveredPasses 예보 단계를 돌리지 못하고 끝난 배치가 닫은 통과. 닫힌 순서다. 이미 저장된 것이 섞여 있을 수 있다
+     * @param recoveredPasses 닫은 통과가 저장되지 않은 배치가 닫은 통과. 닫힌 순서다. 이미 저장된 것이 섞여 있을 수 있다
      * @param extension 창을 늘려 다시 되감았는지
      */
     public record Result(

@@ -6,6 +6,7 @@ import com.gustler.backend.forecasting.application.forecast.ForecastObservationR
 import com.gustler.backend.forecasting.application.forecast.ObservationBatchRead;
 import com.gustler.backend.forecasting.application.forecast.ObservationBatchReader;
 import com.gustler.backend.forecasting.application.forecast.ReplaySource;
+import com.gustler.backend.forecasting.domain.forecast.SourceDates;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -39,9 +40,15 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * <p>배치 하나를 읽는 {@link #readBatch}도 같은 열·같은 줄 순서·같은 변환을 쓴다. 이어 온 상태와 되감은 상태가 같은 입력을 받게
  * 하려는 것이다. 읽은 착수 시각이 비어 있으면 아직 처리하지 않은 배치다.
  *
- * <p>되감기는 예보 실행이 입력 부족({@code INPUT_UNAVAILABLE})으로 끝난 배치를 따로 알려 준다
- * ({@link ReplaySource.Read#unforecastRuns}). 그런 배치는 착수 시각이 확정 조건 안이라 이력에 들어가지만, 그 배치가 닫은 통과는
- * 저장된 적이 없다.
+ * <p>되감기는 닫은 통과가 저장되지 않은 배치를 따로 알려 준다({@link ReplaySource.Read#unforecastRuns}). 두 가지다.
+ * <ul>
+ *   <li>예보 실행이 입력 부족({@code INPUT_UNAVAILABLE})으로 끝난 배치. 착수 시각이 확정 조건 안이라 이력에 들어가지만 예보 단계를
+ *       돌리지 못했다.</li>
+ *   <li>예보 실행 줄이 없고 {@code input_confirmed_at}만 있는 배치. 이전 배포본이 처리했고, 이전 배포본은 통과를 {@code stop_pass}에
+ *       쓰지 않았다. 나눔 날짜가 되감기 기준 시각의 한국 날짜보다 이른 배치는 알리지 않는다. 그 날짜에는 예보 기록 테이블의 날짜
+ *       파티션이 없어 통과가 기본 파티션에 들어가고, 채점은 같은 출발 날짜의 통과만 직전 통과로 쓰므로 기준 날짜의 통과에는 쓰이지
+ *       않는다.</li>
+ * </ul>
  */
 public final class JdbcReplaySource implements ReplaySource, ObservationBatchReader {
     /** worker가 한 번 되감기에서 읽는 관측 줄의 한도. 넘으면 그 노선의 되감기가 실패한다. */
@@ -50,7 +57,7 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
     static final String INCOMPATIBLE_VERSION = "ALIGHTING_AWARE_INCOMPATIBLE_HISTORICAL_ROUTE_VERSION:";
     static final String ROW_LIMIT_EXCEEDED = "ALIGHTING_AWARE_HISTORY_ROW_LIMIT_EXCEEDED";
     private static final String READ_VERSIONS = """
-        SELECT /* salmonbus:replay.find_versions */ version.id
+        SELECT /* salmonbus:replay.find_versions */ version.id,version.route_id
         FROM route_version version JOIN route ON route.id=version.route_id
         WHERE route.display_name=:name ORDER BY version.id
         """;
@@ -59,13 +66,13 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
           b.outcome,b.stored_rows,o.id AS observation_id,o.vehicle_id,o.passed_stop_order,o.stop_order,
           o.running_state,o.remaining_seats,o.seat_unknown_reason,o.crowd_level,o.source_row_number
         """;
-    private static final String RUN_COLUMNS = ",b.run_outcome,b.run_source_date,b.run_route_id";
+    private static final String RUN_COLUMNS = ",b.run_outcome,b.batch_source_date,b.run_route_id";
     /** 예보 실행의 나눔 날짜는 배치 예약 시각의 한국 날짜다({@code SourceDates}). 기본 키로 찾으려고 날짜를 같이 준다. */
     private static final String RECORDED_BATCHES = """
         (SELECT b.id,b.route_version_id,b.response_received_at,
             coalesce(r.confirmed_at,b.input_confirmed_at) AS input_confirmed_at,b.ingestion_origin,b.outcome,
-            b.stored_rows,b.scheduled_at,r.outcome AS run_outcome,r.source_date AS run_source_date,
-            r.route_id AS run_route_id
+            b.stored_rows,b.scheduled_at,r.outcome AS run_outcome,
+            (b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date AS batch_source_date,r.route_id AS run_route_id
           FROM observation_batch b LEFT JOIN forecast_run r
             ON r.source_date=(b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date AND r.observation_batch_id=b.id)""";
     private static final String COLUMNS = BATCH_COLUMNS + RUN_COLUMNS;
@@ -115,11 +122,14 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         Instant through,
         final long throughBatchId
     ) {
-        List<Long> versions = jdbc.sql(READ_VERSIONS).param("name", statistics.route()).query(Long.class).list();
-        if (versions.isEmpty()) {
+        Map<Long, Long> routesByVersion = new LinkedHashMap<>();
+        jdbc.sql(READ_VERSIONS).param("name", statistics.route()).query(row -> {
+            routesByVersion.put(row.getLong(1), row.getLong(2));
+        });
+        if (routesByVersion.isEmpty()) {
             return Read.failed(ROUTE_HISTORY_MISSING);
         }
-        List<Row> rows = readRows(versions, from, through, throughBatchId);
+        List<Row> rows = readRows(List.copyOf(routesByVersion.keySet()), from, through, throughBatchId);
         if (rows.size() > maximumRows) {
             return Read.failed(ROW_LIMIT_EXCEEDED);
         }
@@ -131,14 +141,29 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
                 return Read.failed(INCOMPATIBLE_VERSION + version);
             }
         }
-        return Read.of(batches(rows), unforecastRuns(rows));
+        return Read.of(batches(rows), unforecastRuns(rows, routesByVersion, SourceDates.of(through)));
     }
 
-    private static Map<Long, UnforecastRun> unforecastRuns(List<Row> rows) {
+    /**
+     * 닫은 통과가 저장되지 않은 배치를 고른다. 되감기가 읽은 줄은 모두 착수 시각이 있으므로, 예보 실행 줄이 없는 배치는 이전 배포본이
+     * 처리한 배치다.
+     *
+     * @param routesByVersion 노선 판본별 노선
+     * @param replayDate 되감기 기준 시각의 한국 날짜
+     */
+    private static Map<Long, UnforecastRun> unforecastRuns(
+        List<Row> rows,
+        Map<Long, Long> routesByVersion,
+        LocalDate replayDate
+    ) {
         Map<Long, UnforecastRun> runs = new HashMap<>();
         for (Row row : rows) {
             if (row.unforecastRun() != null) {
                 runs.put(row.batchId(), row.unforecastRun());
+                continue;
+            }
+            if (!row.recorded() && !row.sourceDate().isBefore(replayDate)) {
+                runs.put(row.batchId(), new UnforecastRun(row.sourceDate(), routesByVersion.get(row.routeVersionId())));
             }
         }
         return runs;
@@ -222,6 +247,7 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         return new Row(row.getLong("batch_id"), row.getLong("route_version_id"), instant(row, "response_received_at"),
             instant(row, "input_confirmed_at"), row.getString("ingestion_origin"), row.getString("outcome"),
             (Integer) row.getObject("stored_rows"), observation, row.getInt("source_row_number"),
+            row.getString("run_outcome") != null, row.getObject("batch_source_date", LocalDate.class),
             unforecastRun(row));
     }
 
@@ -229,7 +255,7 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         if (!ForecastOutcome.INPUT_UNAVAILABLE.name().equals(row.getString("run_outcome"))) {
             return null;
         }
-        return new UnforecastRun(row.getObject("run_source_date", LocalDate.class), row.getLong("run_route_id"));
+        return new UnforecastRun(row.getObject("batch_source_date", LocalDate.class), row.getLong("run_route_id"));
     }
 
     private static Instant instant(ResultSet row, String column) throws SQLException {
@@ -240,6 +266,9 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         return value.toInstant();
     }
 
+    /**
+     * 읽은 줄 하나다. {@code recorded}는 그 배치의 예보 실행 줄이 있는지, {@code sourceDate}는 배치의 나눔 날짜다.
+     */
     private record Row(
         long batchId,
         long routeVersionId,
@@ -250,6 +279,8 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
         Integer storedRows,
         ForecastObservationRow row,
         int sourceRowNumber,
+        boolean recorded,
+        LocalDate sourceDate,
         UnforecastRun unforecastRun
     ) {
         private Optional<ForecastObservationRow> observation() {

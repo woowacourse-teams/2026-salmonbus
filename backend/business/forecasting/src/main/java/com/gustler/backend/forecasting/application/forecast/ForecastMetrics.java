@@ -28,7 +28,8 @@ import java.util.Locale;
  *       {@code REPLAY_HISTORY_INCOMPLETE})과 정원을 모르거나 정원이 모델 범위 밖이라 뺀 것({@code VEHICLE_CAPACITY_UNKNOWN},
  *       {@code VEHICLE_CAPACITY_OUTSIDE_MODEL_SCOPE})이다</li>
  *   <li>{@code passes.unattributed}: 연결 시작을 보지 못한 차량이 닫아 저장하지 않은 통과 수</li>
- *   <li>{@code passes.recovered}: 예보 단계를 돌리지 못하고 끝난 배치가 닫은 통과를 되감으면서 찾아 저장한 수</li>
+ *   <li>{@code passes.recovered}: 예보 단계를 돌리지 못하고 끝난 배치나 이전 배포본이 처리한 배치가 닫은 통과를 되감으면서 찾아
+ *       저장한 수</li>
  *   <li>{@code rejected}: 줄이 가득 차 넣지 못한 훑기 수. 다음 신호나 줍기가 다시 넣는다</li>
  *   <li>{@code unrouted}: 노선 열쇠를 아직 몰라 훑기를 넣지 않은 신호 수. 다음 줍기가 넣는다</li>
  *   <li>{@code state.routes}, {@code state.observations}, {@code state.events}: 들고 있는 상태의 크기(게이지)</li>
