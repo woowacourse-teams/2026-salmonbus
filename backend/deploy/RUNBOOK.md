@@ -1076,13 +1076,13 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 | --- | --- | --- |
 | 배포 뒤, 5번(`sal434-02`) 전 | 된다 | 이전 worker는 정비 명령 없이 서버의 체크포인트 파일에서 이어 간다. 새 worker가 돈 구간의 예측과 정답은 예보 기록 테이블에만 있고 이전 테이블에는 없다. 되돌린 직후 운행 중이던 차량은 그 운행이 끝날 때까지 짧은 이력으로 예측된다. 이전 worker가 "신선도 창을 지난 미발행 배치" 경고를 반복해 남기는데 새 worker 구간의 흔적이다 |
 | 5번 뒤 | 예보와 조회만 된다 | 정산 대기 줄이 생기지 않고 이전 정산 작업은 지워진 함수를 불러 실패한다. 트리거를 되살리는 SQL은 없다(정의는 V69·V80에 있다) |
-| 7번(`sal434-03`) 뒤 | 안 된다 | 이전 api는 지워진 테이블을 매핑하고 있어 기동하지 못한다 |
+| 7번(`sal434-03`) 뒤 | 안 된다 | 이전 배포본의 훅으로 배포하면 `BeforeInstall`에서 `SAL-175: 지원하지 않는 DB 상태입니다`로 멈추고 서비스는 그대로 돈다. 수동 롤백은 `restart`가 성공으로 돌아오지만 이전 api가 지워진 테이블을 찾다가 죽고 다시 뜨기를 반복한다. 그때는 `current`를 SAL-434 릴리즈로 되돌리고 재시작한다 |
 
 되돌린 뒤 다시 SAL-434를 올리면 예보 실행 줄이 이미 있어 첫 배포와 모양이 다르다. 노선 목록은 비지 않고, 보드는 새 worker의 첫 예보 실행 줄이 생길 때까지 503이다.
 
 ### 3. 서버에 남은 예전 기동 전 검사 걷기
 
-운영 서버에는 예전 전환(SAL-175) 때 설치한 기동 전 검사가 저장소 밖에 남아 있다. api·worker가 시작할 때마다 서버의 스크립트 사본이 DB를 보고, 이전 배포본의 대기 테이블과 뷰가 있어야 통과시킨다. **이 검사를 둔 채 7번을 실행하면 그 뒤로 api·worker가 다시 뜨지 못한다.** 지금 배포본에는 이 검사가 없다. 7번 전에 반드시 걷는다.
+운영 서버에는 예전 전환(SAL-175) 때 운영자가 설치한 기동 전 검사와 worker 보류 조건(`alighting-cutover-hold`)이 저장소 밖에 남아 있다. 배포는 이것을 깔지도 지우지도 않는다. api·worker가 시작할 때마다 서버의 스크립트 사본이 DB를 보고, 이전 배포본의 대기 테이블과 뷰가 있어야 통과시킨다. **이 검사를 둔 채 7번을 실행하면 그 뒤로 api·worker가 다시 뜨지 못한다.** 지금 배포본에는 이 검사가 없다. 7번 전에 반드시 걷는다.
 
 ```bash
 ls -l /etc/salmonbus/evaluation-work-transition.sh /etc/salmonbus/evaluation-work-hold \
@@ -1099,6 +1099,7 @@ systemctl cat salmonbus-api salmonbus-worker | grep -n 'evaluation-work\|cutover
 - 서비스는 재시작하지 않는다. 다음 시작부터 검사 없이 뜬다.
 - 같은 폴더의 다른 드롭인(로그인, 도착 정보 등)은 건드리지 않는다.
 - 되돌리려면 옮겨 둔 파일을 제자리에 놓고 `daemon-reload`한다. 이전 배포본으로 되돌릴 때 이 검사가 없어도 이전 배포본은 뜬다.
+- 이 검사를 둔 채 7번을 실행했다면 떠 있는 프로세스는 계속 돌지만 재시작이 `Job for salmonbus-….service failed because the control process exited with error code`로 끝나고, journal에 `SAL-175: 지원하지 않는 DB 상태입니다`가 5초마다 남는다. 위 명령으로 검사를 걷으면 다음 재시도에서 재시작 명령 없이 뜬다.
 
 ### 4. 이관 앱 교체, 날짜 단위 내보내기
 
@@ -1106,10 +1107,11 @@ systemctl cat salmonbus-api salmonbus-worker | grep -n 'evaluation-work\|cutover
 
 1. 이관 서비스를 멈춘다(`sudo systemctl stop salmonbus-archive`). 이전 배포본의 줄 단위 이관이 여기서 끝난다.
 2. 묶음을 `/opt/salmonbus/archive/` 아래 새 폴더에 풀고 `current`를 그 폴더로 옮긴다. unit 파일을 `/etc/systemd/system/salmonbus-archive.service`에 놓고 `daemon-reload`한다. 새 unit은 `SuccessExitStatus=143`이라 멈출 때 실패로 남지 않는다.
-3. `/etc/salmonbus/archive.env`에서 이전 키(`ARCHIVE_ENABLED`, `ARCHIVE_DELETE_ENABLED`, `ARCHIVE_PREFIX`, `ARCHIVE_PAGE_SIZE`, `ARCHIVE_INTERVAL`)를 지우고 `ARCHIVE_PARTITION_EXPORT_ENABLED=true`를 넣는다. 지우기(`ARCHIVE_PARTITION_EXPORT_DROP_ENABLED`)는 아직 켜지 않는다. 키와 기본값은 `deploy/archive.env.example`에 있다.
-4. 서비스를 시작한다. `event=partition_export_config`와 `status=EXPORTED`·`status=VERIFIED` 로그, `daily_export`의 `verified_at`을 본다. 보관 날짜 수는 4일이라 배포한 지 나흘이 지나야 첫 대상 날짜가 생긴다.
-5. 하루치를 「날짜 단위 내보내기」의 "되살리는 방법"으로 S3 파일만 써서 되살려 원본 파티션과 줄 단위로 같은지 확인한다.
-6. `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED=true`로 바꾸고 재시작한다. `status=DROPPED`와 `daily_export.dropped_at`을 본다.
+3. S3 접두가 이전 배포본의 `ARCHIVE_PREFIX`(기본 `salmonbus/prod/lake-v2/`)에서 `salmonbus/prod/lake-v3/`(옛 테이블 내보내기는 `salmonbus/prod/lake-v3-legacy/`)로 바뀐다. 이관 앱이 쓰는 인스턴스 역할이 새 접두에 올리기와 읽기(`s3:PutObject`, `s3:GetObject`)를 할 수 있는지 역할 정책에서 먼저 확인한다. 권한이 없으면 내보내기가 `status=FAILED`로 남고 줄은 지워지지 않는다.
+4. `/etc/salmonbus/archive.env`에서 이전 키(`ARCHIVE_ENABLED`, `ARCHIVE_DELETE_ENABLED`, `ARCHIVE_PREFIX`, `ARCHIVE_PAGE_SIZE`, `ARCHIVE_INTERVAL`)를 지우고 `ARCHIVE_PARTITION_EXPORT_ENABLED=true`를 넣는다. 지우기(`ARCHIVE_PARTITION_EXPORT_DROP_ENABLED`)는 아직 켜지 않는다. 키와 기본값은 `deploy/archive.env.example`에 있다.
+5. 서비스를 시작한다. `event=partition_export_config`와 `status=EXPORTED`·`status=VERIFIED` 로그, `daily_export`의 `verified_at`을 본다. 보관 날짜 수는 4일이라 배포한 지 나흘이 지나야 첫 대상 날짜가 생긴다.
+6. 하루치를 「날짜 단위 내보내기」의 "되살리는 방법"으로 S3 파일만 써서 되살려 원본 파티션과 줄 단위로 같은지 확인한다.
+7. `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED=true`로 바꾸고 재시작한다. `status=DROPPED`와 `daily_export.dropped_at`을 본다.
 
 관측 두 테이블은 8번을 마칠 때까지 일반 테이블이라 날짜 단위 내보내기가 건너뛴다. 이전 배포본의 이관 앱이 S3에 올려 둔 객체는 지우지 않는다.
 
@@ -1189,14 +1191,14 @@ dev 서버 DB도 줄이 있는 DB다. dev 배포 도구는 자료를 그대로 �
 - dev worker 유닛에도 `alighting-cutover-hold.conf` 드롭인이 남아 있다. 3번처럼 옮겨 둔다.
 - dev의 이전 테이블 자료는 모의 수집으로 만든 것이라 보존하지 않아도 된다. 6번은 둘 가운데 고른다. 운영과 같은 순서로 내보내기까지 해 보거나(유닛에 `ARCHIVE_LEGACY_EXPORT_ENABLED=true`를 드롭인으로 준다), 승인을 받아 이전 테이블을 비운 뒤 7번으로 간다(줄이 없는 테이블은 장부를 보지 않는다). dev DB에 쓰는 일이므로 어느 쪽이든 승인을 받는다.
 - 8번은 `sal434.count_rows = 'exact'`로 실행해 잠금을 잡고 있던 시간을 기록한다.
-- dev 서버는 메모리 여유가 작다. 이관 앱이 더해진 뒤 `free -m`으로 스왑이 늘지 않는지 본다.
+- dev 서버는 메모리 여유가 작다. 이관 앱이 더해진 뒤 `free -m`으로 스왑이 늘지 않는지 본다. dev worker의 힙 한도(`-Xmx384m`)는 다시 뜬 직후에 빠듯할 수 있다. 노선마다 관측과 예측을 다시 읽으면서 힙을 한꺼번에 쓰기 때문이다. 배포 직후 worker 로그에 `OutOfMemoryError`가 없는지, `jvm_gc_pause_seconds_count`가 기동 뒤에도 계속 빠르게 늘지 않는지 본다. 모자라면 `dev/server/systemd/salmonbus-worker.service`의 `-Xmx`를 올린다.
 
 ### 운영 중 참고
 
 - **설정.** worker의 예보 설정은 `FORECAST_ENABLED`와 `FORECAST_LANES`(노선별 실행 줄 수, 기본 2)뿐이다. 나머지 값은 `application.yml`에 있고 환경변수로 바꾸지 않는다.
 - **순서.** 예보는 노선 판본마다 처리하지 않은 배치를 수신 순서로 읽어 차례로 처리한다. 같은 노선은 항상 같은 실행 줄에서 돈다. 수집이 커밋한 뒤의 신호와 30초마다 도는 줍기가 이 처리를 깨운다. 처리 중 예외가 난 배치는 한 번 다시 하고, 또 실패하면 수신 뒤 90초가 지날 때까지 그 노선의 뒤 배치를 붙잡는다(`event=forecast_sweep_blocked`). 한 배치가 계속 실패하면 그 노선의 예보가 최대 90초쯤 밀린다.
-- **기동.** 날짜 파티션 확인 → 수집 시작 → 모델 적재 직후 첫 줍기 순서다. 채점은 노선마다 저장까지 마친 마지막 사건에서 130분 앞부터(길어도 26시간) 예보와 통과를 다시 읽어, 멈춘 동안 닫지 못한 예측을 닫는다. 26시간보다 오래 멈췄다면 그 앞의 예측은 닫히지 않은 채 남는다.
-- **종료.** 정상 종료(배포, 재시작) 때 실행 줄과 채점 줄이 받은 일을 끝내고 닫힌다. 다 끝내면 `event=forecast_stopped`·`event=scoring_stopped`, 시한을 넘기면 `event=forecast_stop_timeout`·`event=scoring_stop_timeout`이 남는다. 끝내지 못한 배치는 다시 뜬 뒤 줍기가 잡고, 수신 뒤 90초가 지났으면 `LATE`가 된다. 기다리는 시간의 합은 systemd의 `TimeoutStopSec`(45초) 안이다.
+- **기동.** 날짜 파티션 확인 → 수집 시작 → 모델 적재 직후 첫 줍기 순서다. 채점은 노선마다 저장까지 마친 마지막 사건에서 130분 앞부터(길어도 26시간) 예보와 통과를 다시 읽어, 멈춘 동안 닫지 못한 예측을 닫는다. 26시간보다 오래 멈췄다면 그 앞의 예측은 닫히지 않은 채 남는다. 다시 뜬 직후 노선의 첫 배치는 관측을 다시 읽느라 1초를 넘길 수 있고, 그때 `event=worker_operation status=SLOW operation=forecast_batch`가 노선마다 한 번 남는다. 앞 노선의 되감기를 기다리는 동안 뒤 노선의 첫 예보가 늦어진다.
+- **종료.** 정상 종료(배포, 재시작) 때 실행 줄과 채점 줄은 돌던 일을 끝내고 닫힌다. 줄에서 기다리던 일은 버리고 그 수를 `discarded=`로 남긴다. 다 끝내면 `event=forecast_stopped`·`event=scoring_stopped`, 시한을 넘기면 `event=forecast_stop_timeout`·`event=scoring_stop_timeout`이 남는다. 버렸거나 끝내지 못한 배치는 다시 뜬 뒤 줍기가 잡고, 수신 뒤 90초가 지났으면 `LATE`가 된다. 버린 채점은 기동 때의 되감기가 채운다. 기다리는 시간의 합은 systemd의 `TimeoutStopSec`(45초) 안이다.
 - **로그.** `event=forecast_model_used`(쓴 모델), `forecast_route_skipped`·`forecast_unsupported_profile`(건너뛴 노선), `forecast_vehicle_withheld`(예보에서 뺀 차량과 사유), `forecast_replay_failed`(되감기 실패), `forecast_passes_recovered`(되감기에서 되찾은 통과), `scoring_write_failed`, `partitions_created`·`partition_create_failed`·`partition_default_rows`, `forecast_accuracy`(5분마다 정확도 집계)다.
 - **지표.** 예보는 `salmonbus_forecast_*`(`batches_total{result}`, `confirmation_lag_seconds`, `batch_duration_seconds`, `queue{lane}`, `rejected_total`, `unrouted_total`, `replays_total`, `replay_extensions_total`, `excluded_total{reason}`, `passes_recovered_total`, `passes_unattributed_total`), 채점은 `salmonbus_scoring_*`(`written_total{table}`, `results_total`, `waiting`, `queue`, `pending_rows`, `dropped_total`, `write_failures_total`, `replays_total`), 파티션은 `salmonbus_partition_*`(`creations_total{table}`, `default_rows{table}`, `failures_total`)이다. worker 작업 시간은 `salmonbus_worker_operation_seconds{operation}`의 `forecast_batch`·`forecast_pickup`·`scoring_write`로 본다.
 - **DB 연결.** worker의 연결 풀은 5개이고 실행 줄 둘·줍기·수집·채점이 함께 쓴다. `hikaricp_connections_pending`이 자주 0보다 크면 풀 크기를 올린다.
