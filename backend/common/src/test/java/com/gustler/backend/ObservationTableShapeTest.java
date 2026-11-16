@@ -315,7 +315,7 @@ class ObservationTableShapeTest {
 
     /**
      * 견주는 항목이다. IDENTITY 시퀀스의 시작 값만은 넣지 않는다. 전환 SQL은 있던 줄의 다음 번호부터 잇고 다시 만든 테이블은 1부터
-     * 시작하기 때문이다.
+     * 시작하기 때문이다. 열 옵션에서는 {@code pg_attver}를 뺀다. PostgreSQL 18.7부터 모든 열에 붙고 테이블마다 값이 다르다.
      */
     private static Map<String, String> catalogQueries() {
         Map<String, String> queries = new LinkedHashMap<>();
@@ -338,7 +338,9 @@ class ObservationTableShapeTest {
                 format_type(a.atttypid, a.atttypmod), a.attnotnull, coalesce(pg_get_expr(d.adbin, d.adrelid), '-'),
                 'identity=' || a.attidentity::text, 'generated=' || a.attgenerated::text, a.attstorage,
                 'compression=' || a.attcompression::text, a.attcollation::regcollation,
-                coalesce(a.attstattarget::text, '-'), coalesce(a.attoptions::text, '-'),
+                coalesce(a.attstattarget::text, '-'),
+                coalesce((SELECT array_agg(o ORDER BY o) FROM unnest(a.attoptions) o
+                    WHERE split_part(o, '=', 1) <> 'pg_attver')::text, '-'),
                 coalesce(col_description(c.oid, a.attnum), '-'), a.attislocal, a.attinhcount)
             FROM rel c
             JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
