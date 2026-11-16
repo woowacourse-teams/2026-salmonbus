@@ -128,6 +128,39 @@ class ReplaceableEnvironmentTest {
     }
 
     @Test
+    void 이어_쓴_줄_사이의_주석은_건너뛰고_다음_줄과_잇는다() throws Exception {
+        // given
+        dropIn("salmonbus-api.service", "[Service]\nEnvironmentFile=\\\n# 배포 설정\n; 메모\n"
+            + layout.config().resolve("extra.env") + "\n");
+
+        // when & then
+        assertThatThrownBy(() -> SettingsPreparation.requireReplaceableEnvironment(layout))
+            .hasMessage("DEV_UNMANAGED_ENVIRONMENT_FILE");
+    }
+
+    @Test
+    void 역슬래시로_끝난_주석은_다음_줄과_잇지_않는다() throws Exception {
+        // given
+        dropIn("salmonbus-api.service", "[Service]\n# 메모 \\\nEnvironmentFile="
+            + layout.config().resolve("extra.env") + "\n");
+
+        // when & then
+        assertThatThrownBy(() -> SettingsPreparation.requireReplaceableEnvironment(layout))
+            .hasMessage("DEV_UNMANAGED_ENVIRONMENT_FILE");
+    }
+
+    @Test
+    void 역슬래시_두_개로_끝난_줄은_다음_줄과_잇지_않는다() throws Exception {
+        // given
+        dropIn("salmonbus-api.service", "[Service]\nDescription=api\\\\\nEnvironmentFile="
+            + layout.config().resolve("extra.env") + "\n");
+
+        // when & then
+        assertThatThrownBy(() -> SettingsPreparation.requireReplaceableEnvironment(layout))
+            .hasMessage("DEV_UNMANAGED_ENVIRONMENT_FILE");
+    }
+
+    @Test
     void 와일드카드가_든_EnvironmentFile은_읽을_파일을_정할_수_없어_거절한다() throws Exception {
         // given
         dropIn("salmonbus-api.service", "[Service]\nEnvironmentFile="

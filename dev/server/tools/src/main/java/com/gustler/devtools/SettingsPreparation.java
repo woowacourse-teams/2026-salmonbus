@@ -55,7 +55,7 @@ final class SettingsPreparation {
      * <p>basis 교체는 설정 디렉터리를 통째로 바꾸고 관리하는 파일만 옮긴다. 수동 drop-in이 같은 디렉터리의 다른
      * 파일을 읽으면 교체 뒤 앱이 기동하지 못하므로 앱을 멈추기 전에 거절한다. 수동 설정은 설정 디렉터리 밖에 둔다.
      *
-     * <p>줄은 systemd와 같은 방식으로 읽는다. 역슬래시로 끝난 줄은 다음 줄과 한 설정이다.
+     * <p>줄은 systemd와 같은 방식으로 읽는다. 역슬래시로 끝난 줄은 다음 줄과 한 설정이고, 주석 줄은 그 사이에 있어도 건너뛴다.
      */
     static void requireReplaceableEnvironment(Layout layout) throws Exception {
         Path config = layout.config().normalize();
@@ -70,12 +70,15 @@ final class SettingsPreparation {
         }
     }
 
-    /** 역슬래시로 끝난 줄을 다음 줄과 잇는다. systemd는 그 역슬래시를 공백으로 바꿔 읽는다. */
+    /** 주석 줄을 빼고, 역슬래시로 끝난 줄을 다음 줄과 잇는다. systemd는 그 역슬래시를 공백으로 바꿔 읽는다. */
     private static List<String> joinedLines(List<String> lines) {
         List<String> joined = new ArrayList<>();
         StringBuilder pending = new StringBuilder();
         for (String line : lines) {
-            if (line.endsWith("\\")) {
+            if (isComment(line)) {
+                continue;
+            }
+            if (continues(line)) {
                 pending.append(line, 0, line.length() - 1).append(' ');
                 continue;
             }
@@ -86,6 +89,20 @@ final class SettingsPreparation {
             joined.add(pending.toString());
         }
         return joined;
+    }
+
+    private static boolean isComment(String line) {
+        String text = line.stripLeading();
+        return text.startsWith("#") || text.startsWith(";");
+    }
+
+    /** 줄 끝의 역슬래시가 홀수 개면 다음 줄로 이어진다. 짝수 개는 역슬래시 글자를 적은 것이다. */
+    private static boolean continues(String line) {
+        int backslashes = 0;
+        while (backslashes < line.length() && line.charAt(line.length() - 1 - backslashes) == '\\') {
+            backslashes++;
+        }
+        return backslashes % 2 == 1;
     }
 
     private static List<Path> serviceFiles(Path units) throws Exception {
