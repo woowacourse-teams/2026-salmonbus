@@ -1045,7 +1045,7 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 
 ### 1. 배포 전 확인
 
-- **시간.** 수집이 30초 간격으로 돌고(04시 이후), 수집 한도가 남아 있고, 이용과 알림이 적은 때를 고른다. 새벽 4~6시나 한산한 낮이 맞다. 01~04시는 수집이 10분 간격이고 보드 캐시가 10분까지 붙어 빈 화면이 오래 남는다. 한도가 소진된 뒤에는 자정까지 성공한 배치가 없어 그때까지 끝나지 않는다. 출퇴근 시간과 알림이 몰린 시간도 피한다.
+- **시간.** 수집이 30초 간격으로 돌고(04시 이후), 수집 한도가 남아 있고, 이용과 알림이 적은 때를 고른다. 새벽 4~6시가 가장 낫고 한산한 낮도 된다. 서버가 2코어라 worker가 다시 뜬 직후에는 노선들이 관측을 다시 읽는 차례를 기다린다. 관측이 촘촘한 낮에는 뒤쪽 노선의 첫 배치가 수신 뒤 90초를 넘겨 `late`로 남을 수 있고(다음 배치부터 정상이다), 새벽 4~6시는 다시 읽을 관측이 절반쯤이라 여유가 있다. 같은 사양의 서버에서 잰 계산 속도로 어림한 것이라 dev 배포에서 실제 값을 잰다. 01~04시는 수집이 10분 간격이고 보드 캐시가 10분까지 붙어 빈 화면이 오래 남는다. 한도가 소진된 뒤에는 자정까지 성공한 배치가 없어 그때까지 끝나지 않는다. 출퇴근 시간과 알림이 몰린 시간도 피한다.
 - **모델.** 활성 모델 배포가 확정 프로필(`alighting-confirmed-closure-v2`) 번들이어야 한다. 번들 `manifest.json`의 `input_profile`로 확인한다. 아니면 새 worker는 그 노선을 건너뛰고(`event=forecast_unsupported_profile`) 예보 실행 줄이 생기지 않는다.
 - **저장 공간.** 배포 뒤 예보 기록 테이블에 줄이 쌓이고, 이전 배포본의 테이블은 7번까지 줄지 않는다. RDS 여유 저장 공간이 4~7번에 걸릴 기간을 버티는지 본다. 모자라면 배포 전에 늘린다.
 - **되돌릴 배포본.** `/opt/salmonbus/{api,worker}/previous`가 SAL-434 직전 버전을 가리키는 것은 SAL-434를 한 번만 배포했을 때다. 두 번 배포했다면 되돌릴 릴리즈를 새로 빌드해야 한다.
@@ -1057,7 +1057,8 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 
 - `GET /api/v1/routes`의 `status`가 노선마다 `FORECAST_READY`로 바뀐다.
 - worker 지표 `salmonbus_forecast_batches_total{result}`에서 `published`·`empty`가 늘고 `failed`·`unsupported_profile`이 0이다. `salmonbus_forecast_replays_total{result="succeeded"}`가 노선 수만큼 한 번씩 늘고 `failed`가 없다.
-- 노선의 첫 배치 몇 개 가운데 `late`가 얼마나 되는지 본다. 되감기가 길어 앞 노선에 밀리면 수신 뒤 90초를 넘겨 `late`가 된다(줄은 생긴다). 계속 `late`면 `FORECAST_LANES`를 늘린다.
+- 노선의 첫 배치 몇 개 가운데 `late`가 얼마나 되는지 본다. 되감기가 길어 앞 노선에 밀리면 수신 뒤 90초를 넘겨 `late`가 된다(줄은 생긴다). 다시 뜬 직후 뒤쪽 노선의 첫 배치만 `late`면 차례를 기다린 것이고 다음 배치부터 풀린다. 실행 줄(`FORECAST_LANES`)은 서버의 코어 수보다 늘려도 이 대기가 줄지 않는다. 그 뒤에도 계속 `late`면 `salmonbus_forecast_queue{lane}`과 서버 CPU를 본다.
+- 서버의 가용 메모리가 작고 스왑을 쓴다. 새 worker는 다시 뜬 직후 힙을 한도까지 쓴다. `free -m`으로 스왑이 급히 늘지 않는지, worker 로그에 `OutOfMemoryError`가 없는지 본다.
 - 통과가 닫히기 시작하면 `salmonbus_scoring_written_total{table="pass_label"}`이 는다. `salmonbus_scoring_queue`와 `salmonbus_scoring_pending_rows`가 쌓이지 않는다. `salmonbus_scoring_waiting`은 통과를 기다리는 예측 수라 배포 뒤 한동안 는다. 예측은 늦어도 예보 2시간 뒤에 닫히므로 그 뒤에도 계속 늘면 채점이 밀리는 것이다.
 - 기동 로그에 `event=partition_create_failed`와 `event=partition_maintenance_incomplete`가 없다. 기본 파티션의 줄 수(`salmonbus_partition_default_rows{table}`)는 기동 때 세지 않아 첫 주기 실행(기동 한 시간 뒤)부터 나온다. 0보다 크면 그 날짜의 파티션이 없을 때 들어온 줄이다. 그 전에는 아래 `sal434-01-precheck.sql`의 7절이 센 값을 본다.
 - `sal434-01-precheck.sql`을 실행해 보관한다. 3절의 `new_forecast_run`·`new_stop_pass_closed`·`new_pass_label_computed`가 최근이고 `old_*` 시각이 배포 시각에서 멈췄는지 본다.
@@ -1107,7 +1108,7 @@ systemctl cat salmonbus-api salmonbus-worker | grep -n 'evaluation-work\|cutover
 
 1. 이관 서비스를 멈춘다(`sudo systemctl stop salmonbus-archive`). 이전 배포본의 줄 단위 이관이 여기서 끝난다.
 2. 묶음을 `/opt/salmonbus/archive/` 아래 새 폴더에 풀고 `current`를 그 폴더로 옮긴다. unit 파일을 `/etc/systemd/system/salmonbus-archive.service`에 놓고 `daemon-reload`한다. 새 unit은 `SuccessExitStatus=143`이라 멈출 때 실패로 남지 않는다.
-3. S3 접두가 이전 배포본의 `ARCHIVE_PREFIX`(기본 `salmonbus/prod/lake-v2/`)에서 `salmonbus/prod/lake-v3/`(옛 테이블 내보내기는 `salmonbus/prod/lake-v3-legacy/`)로 바뀐다. 이관 앱이 쓰는 인스턴스 역할이 새 접두에 올리기와 읽기(`s3:PutObject`, `s3:GetObject`)를 할 수 있는지 역할 정책에서 먼저 확인한다. 권한이 없으면 내보내기가 `status=FAILED`로 남고 줄은 지워지지 않는다.
+3. S3 접두가 이전 배포본의 `ARCHIVE_PREFIX`(기본 `salmonbus/prod/lake-v2/`)에서 `salmonbus/prod/lake-v3/`(옛 테이블 내보내기는 `salmonbus/prod/lake-v3-legacy/`)로 바뀐다. 이관 앱은 인스턴스 역할로 S3에 붙는다. 그 역할이 새 접두에 올리기와 읽기(`s3:PutObject`, `s3:GetObject`)를 할 수 있는지 먼저 본다. 서버에서는 역할 정책을 읽을 수 없으므로 없는 키에 조건을 건 요청으로 확인한다. `aws s3api put-object --bucket <버킷> --key salmonbus/prod/lake-v3/_probe-none --if-match '"00000000000000000000000000000000"'`와 `aws s3api get-object --bucket <버킷> --key salmonbus/prod/lake-v3/_probe-none /dev/null`이 `NoSuchKey`로 끝나면 권한이 있고 `AccessDenied`면 없다(키가 없어 객체는 만들어지지 않는다). `lake-v3-legacy/`도 같은 방법으로 본다. 권한이 없으면 내보내기가 `status=FAILED`로 남고 줄은 지워지지 않는다.
 4. `/etc/salmonbus/archive.env`에서 이전 키(`ARCHIVE_ENABLED`, `ARCHIVE_DELETE_ENABLED`, `ARCHIVE_PREFIX`, `ARCHIVE_PAGE_SIZE`, `ARCHIVE_INTERVAL`)를 지우고 `ARCHIVE_PARTITION_EXPORT_ENABLED=true`를 넣는다. 지우기(`ARCHIVE_PARTITION_EXPORT_DROP_ENABLED`)는 아직 켜지 않는다. 키와 기본값은 `deploy/archive.env.example`에 있다.
 5. 서비스를 시작한다. `event=partition_export_config`와 `status=EXPORTED`·`status=VERIFIED` 로그, `daily_export`의 `verified_at`을 본다. 보관 날짜 수는 4일이라 배포한 지 나흘이 지나야 첫 대상 날짜가 생긴다.
 6. 하루치를 「날짜 단위 내보내기」의 "되살리는 방법"으로 S3 파일만 써서 되살려 원본 파티션과 줄 단위로 같은지 확인한다.
