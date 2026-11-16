@@ -277,6 +277,28 @@ class DeploymentPreparationServerTest {
     }
 
     @Test
+    void 기록을_넘길지_정할_때와_새_복구_기준에_한_번_읽은_서비스_상태를_쓴다() throws Exception {
+        // given
+        preparation().prepare(incoming, apiEnvironment);
+        host.apiActive = true;
+        host.workerActive = true;
+        Path later = application(base.resolve("later-api"), "api", "4".repeat(64), "c".repeat(40),
+                basis(base.resolve("later-basis"), "4".repeat(64), "c".repeat(40)));
+        host.calls.clear();
+
+        // when
+        preparation().prepare(later, apiEnvironment);
+
+        // then
+        assertEquals(1, host.calls.stream()
+                .filter(call -> call.contains("is-active") && call.contains("salmonbus-worker")).count());
+        assertEquals(1, host.calls.stream()
+                .filter(call -> call.contains("is-active") && call.contains("salmonbus-api")).count());
+        assertTrue(Json.read(journal()).path("worker-active").asBoolean());
+        assertTrue(Json.read(journal()).path("api-active").asBoolean());
+    }
+
+    @Test
     void 기록을_넘긴_배포가_실패하면_넘기기_직전의_basis와_돌고_있던_서비스로_복구한다() throws Exception {
         // given
         preparation().prepare(incoming, apiEnvironment);

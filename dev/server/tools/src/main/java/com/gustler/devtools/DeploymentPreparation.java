@@ -87,15 +87,16 @@ final class DeploymentPreparation {
                     "DEV_DEPLOYMENT_IN_PROGRESS");
             Map<String, Object> result = new TreeMap<>(Map.of("status", "ok", "preparationRequired", true,
                     "applicationsRemainStopped", true));
+            Map<String, Boolean> running = runningServices();
             if (FileOps.exists(journal())) {
                 var existing = Json.read(FileOps.privateText(journal()).getBytes());
                 if (!List.of("COMPLETE", "ROLLED_BACK").contains(existing.path("phase").asText())) {
-                    Checks.require(superseded(existing, app, previous) && stillRunning(existing),
+                    Checks.require(superseded(existing, app, previous) && stillRunning(existing, running),
                             "DEV_PREPARATION_RECOVERY_REQUIRED");
                     result.put("supersededCommit", existing.path("commit").asText());
                 }
             }
-            var state = snapshot(app, previous);
+            var state = snapshot(app, previous, running);
             state.put("dataTransition", approval != null);
             write(state);
             try {
@@ -145,7 +146,8 @@ final class DeploymentPreparation {
                 && !basis.releaseId().equals(state.path("basisReleaseId").asText());
     }
 
-    private Map<String, Object> snapshot(RevisionStore.Revision app, RevisionStore.Revision basis) throws Exception {
+    private Map<String, Object> snapshot(
+            RevisionStore.Revision app, RevisionStore.Revision basis, Map<String, Boolean> running) throws Exception {
         var state = new TreeMap<String, Object>();
         var id = UUID.randomUUID().toString();
         var backup = directory().resolve(id);
@@ -170,15 +172,20 @@ final class DeploymentPreparation {
                 var target = Deployment.current(base.resolve(link), base.resolve("releases"));
                 state.put(component + "-" + link, target == null ? "" : target.getFileName().toString());
             }
-            state.put(component + "-active", active(component));
+            state.put(component + "-active", running.get(component));
         }
         return state;
     }
 
-    private boolean active(String component) throws Exception {
-        Host.Result result = host.run(Path.of("/"), null, Duration.ofSeconds(15),
-                List.of("systemctl", "is-active", "salmonbus-" + component));
-        return result.exit() == 0 && result.stdout().strip().equals("active");
+    /** API와 worker가 지금 도는지 한 번만 읽는다. 기록을 넘길지 정할 때와 새 복구 기준에 같은 값을 쓴다. */
+    private Map<String, Boolean> runningServices() throws Exception {
+        Map<String, Boolean> running = new TreeMap<>();
+        for (String component : List.of("api", "worker")) {
+            Host.Result result = host.run(Path.of("/"), null, Duration.ofSeconds(15),
+                    List.of("systemctl", "is-active", "salmonbus-" + component));
+            running.put(component, result.exit() == 0 && result.stdout().strip().equals("active"));
+        }
+        return running;
     }
 
     /**
@@ -188,9 +195,9 @@ final class DeploymentPreparation {
      * 실패했을 때 서비스를 다시 띄우지 않고 복구를 끝낸다. 그래서 넘기지 않고 계속 막는다. 다른 배포가 서비스를
      * 다시 띄운 뒤라면 넘기고, 그때의 basis와 서비스 상태가 새 복구 기준이 된다.
      */
-    private boolean stillRunning(JsonNode state) throws Exception {
+    private static boolean stillRunning(JsonNode state, Map<String, Boolean> running) {
         for (String component : List.of("api", "worker")) {
-            if (state.path(component + "-active").asBoolean() && !active(component)) {
+            if (state.path(component + "-active").asBoolean() && !running.get(component)) {
                 return false;
             }
         }
