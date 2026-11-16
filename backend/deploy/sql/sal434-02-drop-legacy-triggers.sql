@@ -112,7 +112,7 @@ BEGIN
         RAISE EXCEPTION 'SAL-434: 통과는 쌓이는데 오늘·어제 날짜의 정답(pass_label) 가운데 24시간 안에 계산한 것이 없다(마지막 %). 채점이 돌고 있는지 채점 지표와 worker 로그를 확인한다', latest;
     END IF;
 
-    -- 다. 쓰기 통계를 관찰한다. 다른 세션의 통계는 트랜잭션이 끝난 뒤 최대 1초 안에 반영된다.
+    -- 다. 쓰기 통계를 관찰한다. 다른 세션의 통계는 트랜잭션이 끝난 뒤 반영된다. 쉬는 세션의 것은 10초쯤 걸릴 수 있다.
     SELECT jsonb_object_agg(relname, n_tup_ins + n_tup_upd) INTO before
       FROM pg_stat_user_tables WHERE schemaname = 'public' AND relname = ANY (watched);
     PERFORM pg_sleep(observe_seconds);

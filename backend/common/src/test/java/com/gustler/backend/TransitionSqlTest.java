@@ -412,6 +412,37 @@ class TransitionSqlTest {
     }
 
     @Test
+    void 옛_테이블을_내보낸_뒤에_이전_배포본이_썼으면_한_시간이_지났어도_지우지_않는다() throws Exception {
+        // given
+        run("sal434-02-drop-legacy-triggers.sql", FAST);
+        writeArchiveJobTrace("now() - interval '75 minutes'");
+        writeLedger();
+        execute("UPDATE daily_export SET exported_at = now() - interval '90 minutes'");
+
+        // when
+        Throwable actual = catchThrowable(() -> runTableDrop(FAST));
+
+        // then
+        assertThat(actual).hasMessageContaining("첫 조각").hasMessageContaining("처음부터 다시 내보낸다");
+        assertLegacyObjectsPresent();
+    }
+
+    @Test
+    void 이전_배포본의_마지막_흔적이_옛_테이블을_내보내기_전의_것이면_지운다() throws Exception {
+        // given
+        run("sal434-02-drop-legacy-triggers.sql", FAST);
+        writeArchiveJobTrace("now() - interval '4 hours'");
+        writeLedger();
+        execute("UPDATE daily_export SET exported_at = now() - interval '90 minutes'");
+
+        // when
+        runTableDrop(FAST);
+
+        // then
+        assertThat(scalar("SELECT to_regclass('public.seat_forecast')::text")).isNull();
+    }
+
+    @Test
     void 관찰하는_동안_누가_옛_테이블을_읽으면_지우지_않는다() throws Exception {
         // given
         run("sal434-02-drop-legacy-triggers.sql", FAST);
@@ -866,6 +897,14 @@ class TransitionSqlTest {
                 writeSegment(table, 0, rows);
             }
         }
+    }
+
+    /** 이전 배포본의 이관 앱이 그 시각에 작업한 흔적 한 줄이다. */
+    private void writeArchiveJobTrace(String at) throws SQLException {
+        execute("INSERT INTO operational_archive_job(id,route_version_id,source_date,cutoff,state,lease_token,"
+            + "lease_until,created_at,last_attempt_at) VALUES('00000000-0000-0000-0000-000000000011',1,"
+            + "'2026-11-01'," + at + ",'EXPORTING','00000000-0000-0000-0000-000000000012'," + at + "," + at + ","
+            + at + ")");
     }
 
     /** 옛 테이블 내보내기가 남기는 모양의 검증된 조각 한 줄이다. 키 범위 값은 장부 대조에 쓰이지 않아 흉내만 낸다. */

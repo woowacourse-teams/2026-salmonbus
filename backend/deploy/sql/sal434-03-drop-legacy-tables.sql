@@ -43,6 +43,8 @@
 --        작업, 옛 평가 보관 기록의 변경이 있거나, sal434.observe_seconds(기본 120초) 동안 대상 테이블의 읽기(seq_scan·idx_scan)나
 --        쓰기(n_tup_ins·upd·del) 통계가 늘면 멈춘다. 대시보드나 수동 조회, 켜 둔 옛 테이블 내보내기, 이 관찰과 겹쳐 실행한
 --        sal434-01-precheck.sql이 읽어도 멈춘다.
+--        위 흔적이 옛 테이블 내보내기의 첫 조각(daily_export.exported_at)보다 늦어도 멈춘다. 내보낸 조각에는 그 뒤에 바뀐 값이
+--        없고, 줄 수만으로는 값이 바뀐 줄을 가리지 못하기 때문이다. 손으로 고친 값은 흔적이 남지 않으니 고친 사람이 다시 내보낸다.
 --   (라) 내보내기 장부: 줄이 있는 테이블마다 daily_export에서 table_name이 그 테이블이고 verified_at이 있는 줄의
 --        row_count 합이 지금 정확한 줄 수와 같아야 한다. 또 그 테이블의 옛 테이블 조각(source_date 2000-01-01)은 번호가
 --        0부터 빈틈없이 이어져야 한다. 이관 앱의 옛 테이블 내보내기(LegacyExportService)가 이 계약대로 조각마다 한 줄을 남긴다.
@@ -87,6 +89,8 @@ DECLARE
     targets oid[];
     problems text;
     latest timestamptz;
+    newest timestamptz;
+    first_export timestamptz;
     before jsonb;
     after jsonb;
     t text;
@@ -173,12 +177,14 @@ BEGIN
     -- (다) 최근 흔적.
     IF to_regclass('public.alighting_settlement_projection') IS NOT NULL THEN
         SELECT max(updated_at) INTO latest FROM alighting_settlement_projection;
+        newest := greatest(newest, latest);
         IF latest > now() - quiet THEN
             RAISE EXCEPTION 'SAL-434: 옛 정산이 % 에 근거를 저장했다. SAL-434 배포본에는 옛 정산이 없다. 이전 배포본으로 되돌린 worker가 돌고 있지 않은지 확인하고, 마지막 흔적에서 % 이 지난 뒤 다시 실행한다', latest, quiet;
         END IF;
     END IF;
     IF to_regclass('public.alighting_settlement_batch_work') IS NOT NULL THEN
         SELECT max(lease_until) INTO latest FROM alighting_settlement_batch_work;
+        newest := greatest(newest, latest);
         IF latest > now() - quiet THEN
             RAISE EXCEPTION 'SAL-434: 옛 정산이 배치를 잡았다(임대 만료 %). SAL-434 배포본에는 옛 정산이 없다. 이전 배포본으로 되돌린 worker가 돌고 있지 않은지 확인하고, 임대 만료에서 % 이 지난 뒤 다시 실행한다', latest, quiet;
         END IF;
@@ -188,12 +194,14 @@ BEGIN
           FROM route_version v
           CROSS JOIN LATERAL (SELECT published_at FROM forecast_publication f WHERE f.route_version_id = v.id
                                ORDER BY f.observed_at DESC, f.source_batch_id DESC LIMIT 1) p;
+        newest := greatest(newest, latest);
         IF latest > now() - quiet THEN
             RAISE EXCEPTION 'SAL-434: 옛 예보가 % 에 발행했다. SAL-434 배포본이 worker에 올라가 있는지, 이전 배포본으로 되돌린 worker가 돌고 있지 않은지 확인하고, 마지막 발행에서 % 이 지난 뒤 다시 실행한다', latest, quiet;
         END IF;
     END IF;
     IF to_regclass('public.operational_archive_job') IS NOT NULL THEN
         SELECT max(greatest(last_attempt_at, created_at, completed_at)) INTO latest FROM operational_archive_job;
+        newest := greatest(newest, latest);
         IF latest > now() - quiet THEN
             RAISE EXCEPTION 'SAL-434: 이전 배포본의 이관 앱(줄 단위 이관)이 % 에 작업했다. 그 이관 앱이 아직 돌고 있지 않은지 확인하고, 마지막 작업에서 % 이 지난 뒤 다시 실행한다', latest, quiet;
         END IF;
@@ -201,12 +209,20 @@ BEGIN
     IF to_regclass('public.archive_legacy_batch') IS NOT NULL THEN
         SELECT max(greatest(lease_until, created_at, verified_at, purged_at, restored_at, abandoned_at)) INTO latest
           FROM archive_legacy_batch;
+        newest := greatest(newest, latest);
         IF latest > now() - quiet THEN
             RAISE EXCEPTION 'SAL-434: 옛 평가 보관 기록(archive_legacy_batch)이 % 에 바뀌었다. SAL-434 배포본은 이 테이블을 쓰지 않는다. 쓴 곳을 찾아 멈추고, 그때부터 % 이 지난 뒤 다시 실행한다', latest, quiet;
         END IF;
     END IF;
 
-    -- (다) 읽기·쓰기 통계 관찰. 다른 세션의 통계는 트랜잭션이 끝난 뒤 최대 1초 안에 반영된다.
+    -- (다) 내보낸 뒤의 흔적. 내보낸 조각에는 그 뒤에 바뀐 값이 없다. 줄 수가 같아도 값이 다를 수 있으므로 지우지 않는다.
+    SELECT min(exported_at) INTO first_export FROM daily_export
+     WHERE source_date = DATE '2000-01-01' AND table_name = ANY (existing_tables);
+    IF newest > first_export THEN
+        RAISE EXCEPTION 'SAL-434: 옛 테이블 내보내기의 첫 조각(%) 뒤에 이전 배포본이 옛 테이블을 썼다(마지막 흔적 %). 내보낸 조각에 그 뒤에 바뀐 값이 없을 수 있어 지우지 않는다. 이전 배포본을 멈춘 뒤 backend/deploy/RUNBOOK.md 「옛 테이블 내보내기」의 방법으로 처음부터 다시 내보낸다.', first_export, newest;
+    END IF;
+
+    -- (다) 읽기·쓰기 통계 관찰. 다른 세션의 통계는 트랜잭션이 끝난 뒤 반영된다. 쉬는 세션의 것은 10초쯤 걸릴 수 있다.
     SELECT jsonb_object_agg(relname, jsonb_build_array(seq_scan + coalesce(idx_scan, 0), n_tup_ins + n_tup_upd + n_tup_del))
       INTO before FROM pg_stat_user_tables WHERE relid = ANY (targets);
     PERFORM pg_sleep(observe_seconds);
