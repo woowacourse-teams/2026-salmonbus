@@ -243,6 +243,49 @@ class ObservationPartitionExportIntegrationTest {
     }
 
     @Test
+    void 기본_파티션에_든_관측_줄은_수동_SQL로_제_날짜_파티션에_옮긴_뒤에야_내보내고_S3_파일만으로_옮기기_전과_같게_되살린다()
+        throws Exception {
+        // given
+        batch(DAY, "2026-11-12T01:00:00Z", "2026-11-12T01:00:30Z");
+        batch(DAY, "2026-11-12T02:00:00Z", "2026-11-12T02:00:30Z");
+        for (String table : OBSERVATIONS) {
+            jdbc.sql("CREATE TABLE copy_" + table + "_default AS SELECT * FROM " + table + "_default").update();
+        }
+        PartitionExportIntegrationTest.MemoryObjects objects = new PartitionExportIntegrationTest.MemoryObjects();
+
+        // when
+        service(objects, true).run();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(count("SELECT count(*) FROM daily_export WHERE source_date = '2026-11-12'")).isZero();
+            softly.assertThat(count("SELECT count(*) FROM observation_batch_default")).isEqualTo(2);
+            softly.assertThat(count("SELECT count(*) FROM vehicle_observation_default")).isEqualTo(4);
+        });
+
+        // when
+        try (Connection connection = database.connection()) {
+            for (String table : OBSERVATIONS) {
+                execute(connection, "SET salmonbus.default_rows_table = '" + table + "'");
+                run(connection, "move-partition-default-rows.sql");
+            }
+        }
+        service(objects, true).run();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(jdbc.sql("SELECT table_name || ' ' || row_count FROM daily_export"
+                + " WHERE source_date = '2026-11-12' AND dropped_at IS NOT NULL ORDER BY 1")
+                .query(String.class).list()).containsExactly("observation_batch 2", "vehicle_observation 4");
+            softly.assertThat(count("SELECT count(*) FROM observation_batch")).isZero();
+            softly.assertThat(count("SELECT count(*) FROM vehicle_observation")).isZero();
+        });
+        for (String table : OBSERVATIONS) {
+            restoreAndCompare(objects, table, DAY, "copy_" + table + "_default");
+        }
+    }
+
+    @Test
     void 관측_테이블과_예보_기록_테이블은_같은_보관_날짜_수로_같은_날짜까지_내보내고_지운다() {
         // given
         LocalDate recent = DAY.plusDays(1);

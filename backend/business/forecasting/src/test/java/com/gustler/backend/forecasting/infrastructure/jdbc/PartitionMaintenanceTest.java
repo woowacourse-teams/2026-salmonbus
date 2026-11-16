@@ -9,7 +9,10 @@ import com.gustler.backend.support.TestDatabase;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.Statement;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -226,6 +229,42 @@ class PartitionMaintenanceTest {
     }
 
     @Test
+    void 기본_파티션의_줄을_수동_SQL로_옮기면_다음_유지_작업이_실패_없이_돌고_기본_파티션에_남은_줄이_없다() throws Exception {
+        // given
+        jdbcClient.sql("""
+            INSERT INTO forecast_unresolved (source_date, vehicle_observation_id, target_stop_order, route_id, state,
+                reason, closed_at)
+            VALUES (?, 1, 5, 7, 'LOST', 'PASS_NOT_SEEN', now())
+            """).param(DAY).update();
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        PartitionMaintenance maintenance = maintenanceAt(BEFORE_KOREAN_MIDNIGHT);
+        maintenance.setMeterRegistry(meters);
+        MaintainPartitions.Report before = maintenance.maintain();
+
+        // when
+        moveDefaultRows("forecast_unresolved");
+        MaintainPartitions.Report actual = maintenance.maintain();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(before.failed()).containsExactly("forecast_unresolved_p20300101");
+            softly.assertThat(actual.failed()).isEmpty();
+            softly.assertThat(actual.created()).isEmpty();
+            softly.assertThat(actual.defaultRows()).containsEntry("forecast_unresolved", 0L);
+            softly.assertThat(maintenance.ensure("forecast_unresolved", DAY))
+                .isEqualTo(PartitionMaintenance.Outcome.EXISTING);
+            softly.assertThat(partitionsOf("forecast_unresolved")).containsExactly("forecast_unresolved_p20300101",
+                "forecast_unresolved_p20300102", "forecast_unresolved_p20300103", "forecast_unresolved_p20300104");
+            softly.assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_unresolved_p20300101").query(Long.class)
+                .single()).isOne();
+            softly.assertThat(meters.counter("salmonbus.partition.failures", "table", "forecast_unresolved",
+                "reason", "default_rows").count()).isOne();
+            softly.assertThat(meters.get("salmonbus.partition.default.rows")
+                .tag("table", "forecast_unresolved").gauge().value()).isZero();
+        });
+    }
+
+    @Test
     void 테이블_소유자가_아니면_예외_없이_실패로_남긴다() throws Exception {
         // given
         String role = "partition_writer_" + UUID.randomUUID().toString().replace("-", "");
@@ -340,6 +379,21 @@ class PartitionMaintenanceTest {
             throw new IllegalStateException(interrupted);
         }
         return PartitionMaintenance.TABLES.stream().map(table -> maintenance.ensure(table, DAY)).toList();
+    }
+
+    /**
+     * 기본 파티션에 든 줄을 제 날짜 파티션으로 옮기는 수동 SQL({@code deploy/sql/move-partition-default-rows.sql})을 한 연결에서
+     * 실행한다. 파일의 문장은 드라이버가 차례로 보낸다.
+     */
+    private void moveDefaultRows(String table) throws Exception {
+        Path directory = Path.of("").toAbsolutePath();
+        while (!Files.isRegularFile(directory.resolve("deploy/sql/move-partition-default-rows.sql"))) {
+            directory = directory.getParent();
+        }
+        try (Connection connection = database.connection(); Statement statement = connection.createStatement()) {
+            statement.execute("SET salmonbus.default_rows_table = '" + table + "'");
+            statement.execute(Files.readString(directory.resolve("deploy/sql/move-partition-default-rows.sql")));
+        }
     }
 
     private PartitionMaintenance maintenanceAt(Instant now) {

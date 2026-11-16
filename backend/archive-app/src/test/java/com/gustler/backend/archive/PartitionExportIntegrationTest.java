@@ -400,6 +400,56 @@ class PartitionExportIntegrationTest {
     }
 
     @Test
+    void 기본_파티션에_든_줄은_수동_SQL로_제_날짜_파티션에_옮긴_뒤에야_내보내고_S3_파일만으로_옮기기_전과_같게_되살린다()
+        throws Exception {
+        // given
+        List<String> tables = List.of("forecast_record", "forecast_run");
+        forecastRecord(DAY, 1, EDGE_DOUBLES);
+        forecastRecord(DAY, 2, "{0.7302,1e-7,123456789.12345679}");
+        forecastRun(DAY, 7);
+        for (String table : tables) {
+            jdbc.sql("CREATE TABLE copy_" + table + " AS SELECT * FROM " + table + "_default").update();
+        }
+        MemoryObjects objects = new MemoryObjects();
+
+        // when
+        PartitionExportService.RunReport before = service(objects, true).run();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(before.exported()).isZero();
+            softly.assertThat(count("SELECT count(*) FROM daily_export")).isZero();
+            softly.assertThat(objects.values).isEmpty();
+            softly.assertThat(count("SELECT count(*) FROM forecast_record_default")).isEqualTo(2);
+        });
+
+        // when
+        try (Connection connection = database.connection()) {
+            for (String table : tables) {
+                ObservationPartitionExportIntegrationTest.execute(connection,
+                    "SET salmonbus.default_rows_table = '" + table + "'");
+                ObservationPartitionExportIntegrationTest.run(connection, "move-partition-default-rows.sql");
+            }
+        }
+        PartitionExportService.RunReport actual = service(objects, true).run();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(actual.exported()).isEqualTo(2);
+            softly.assertThat(actual.dropped()).isEqualTo(2);
+            softly.assertThat(count("SELECT count(*) FROM forecast_record")).isZero();
+            softly.assertThat(count("SELECT count(*) FROM forecast_run")).isZero();
+        });
+        for (String table : tables) {
+            Map<String, Object> ledger = ledger(table, DAY).orElseThrow();
+            assertThat(ledger.get("dropped_at")).as(table).isNotNull();
+            PartitionRestore.restore(jdbc, objects, (String) ledger.get("object_key"),
+                ((String) ledger.get("sha256")).trim(), "restored_" + table);
+            assertSameRows("copy_" + table, "restored_" + table);
+        }
+    }
+
+    @Test
     void 지우기가_꺼져_있으면_내보내고_확인만_한다() {
         // given
         partition("forecast_run", DAY);

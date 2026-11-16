@@ -634,8 +634,49 @@ S3 구조:
 - `MANIFEST_HASH_MISMATCH`, `FILE_HASH_MISMATCH`, `FILE_ROW_COUNT_MISMATCH`, `MANIFEST_ROW_COUNT_MISMATCH`, `MANIFEST_MISMATCH`: S3 객체가 장부와 다르다. 지우지 않는다. 객체 버전과 버킷 수명 주기 설정을 확인한다.
 - `EXPORT_CONTENT_MISMATCH`: 다른 실행이 같은 (테이블, 날짜)에 내용이 다른 manifest를 먼저 장부에 적었다. 지우지 않는다. 두 manifest를 비교한다.
 - `LEDGER_DROPPED_PARTITION_PRESENT`: 장부는 지웠다고 하는데 파티션이 있다. 손으로 다시 만든 파티션인지 확인한다.
-- `salmonbus_archive_partition_default_rows`가 0보다 크면 날짜 파티션이 없을 때 들어온 줄이다. 기본 파티션의 줄은 내보내지 않는다. worker의 파티션 유지 작업 실패 로그(`event=partition_create_failed`)를 본다.
+- `salmonbus_archive_partition_default_rows`가 0보다 크면 날짜 파티션이 없을 때 들어온 줄이다. 기본 파티션의 줄은 내보내지 않는다. worker의 파티션 유지 작업 실패 로그(`event=partition_create_failed`)를 보고 「기본 파티션에 든 줄 옮기기」를 따른다.
 - `salmonbus_archive_partition_oldest_pending_days`가 보관 날짜 수보다 계속 크면 대상 파티션이 쌓이고 있다.
+
+### 기본 파티션에 든 줄 옮기기
+
+날짜 파티션이 없을 때 들어온 줄은 기본 파티션(`<table>_default`)으로 간다. 그 줄이 남아 있는 동안 PostgreSQL은 그 날짜의 파티션을 만들지 못하고(`event=partition_create_failed reason=default_rows`, SQLSTATE 23514), 이관 앱은 기본 파티션을 내보내지 않는다. 그래서 파티션을 만들지 못한 원인을 고쳐도 그 날짜의 줄은 S3 보관본에 들어가지 않고 DB에서 지워지지도 않는다. 기본 파티션에 줄이 쌓여 있으면 새 날짜 파티션을 만들 때마다 PostgreSQL이 기본 파티션 전체를 읽고, 그동안 그 테이블의 읽기와 쓰기가 기다린다.
+
+`deploy/sql/move-partition-default-rows.sql`이 기본 파티션의 줄을 제 날짜 파티션으로 옮긴다. 옮긴 날짜는 다른 날짜와 똑같이 이관 앱이 내보내고 지운다. 파일은 배포 패키지의 `sql/`에 함께 실린다(`/opt/salmonbus/api/current/sql/`). 실행 조건, 잡는 잠금, 걸리는 시간은 파일 머리 주석에 있다. DB에는 「SAL-434 전환 절차」의 "DB에 붙는 방법"대로 테이블 소유자(운영은 worker 계정)로 붙는다.
+
+알아채는 곳은 worker의 `salmonbus_partition_default_rows{table}`과 `event=partition_default_rows`(한 시간마다), 이관 앱의 `salmonbus_archive_partition_default_rows{table}`과 `status=DEFAULT_ROWS`(회차마다)다.
+
+1. **원인을 먼저 없앤다.** worker 로그 `event=partition_create_failed`의 `reason`을 본다. `permission`이면 worker 계정이 그 테이블의 소유자가 아니다. `lock_timeout`이면 다음 주기 실행이 다시 만든다. `default_rows`는 지금 이 상태다. 원인이 남아 있으면 줄을 옮겨도 다음 날짜에서 되풀이된다.
+2. **줄 수를 본다.** 테이블을 고르지 않고 실행하면 아무것도 바꾸지 않고 일곱 테이블의 기본 파티션에 든 줄 수를 날짜별로 알린다.
+   ```bash
+   psql -X -v ON_ERROR_STOP=1 -f move-partition-default-rows.sql
+   ```
+3. **옮길 때를 정한다.** 옮기는 동안 그 테이블에 `ACCESS EXCLUSIVE` 잠금을 쥐어 수집·예보·채점·API 조회가 기다린다. 기다리던 쓰기는 끝난 뒤 새 파티션으로 들어가므로 worker를 멈추지 않아도 되고, 오늘 날짜의 줄도 옮길 수 있다. 쥐는 시간은 줄 수에 비례하고 기본 한도는 60초다. 기본 파티션의 줄도 부모 테이블로 읽히므로 옮기기 전에도 조회와 예보는 그대로 돈다. 줄이 많으면 수집이 뜸한 02~05시에 한다.
+4. **테이블마다 옮긴다.** 한 번 실행에 한 테이블이고 테이블마다 한 트랜잭션이다. 일반 테이블인 관측 테이블(전환 8번 전)과 기본 파티션이 빈 테이블은 알리고 넘어간다.
+   ```bash
+   for t in forecast_run forecast_record stop_pass pass_label forecast_unresolved observation_batch vehicle_observation; do
+     psql -X -v ON_ERROR_STOP=1 -c "SET salmonbus.default_rows_table = '$t'" -f move-partition-default-rows.sql || break
+   done
+   ```
+   날짜마다 `DEFAULT-ROWS: <table> 의 <날짜> 줄 N 개를 <partition> 로 옮겼다. 줄 수와 값이 옮기기 전과 같다`가 남는다. SQL이 지운 줄 수, 넣은 줄 수, 새 파티션의 줄 수를 맞춰 보고 유일 키로 짝지은 줄을 모든 열까지 견준 뒤에만 커밋한다. 오류로 멈추면 그 테이블은 아무것도 바뀌지 않았다. 잠금을 5초 안에 못 얻었거나(`55P03`) 한도 60초를 넘겼으면(`57014`) 다시 실행한다. 한도에 계속 걸리면 `-c "SET salmonbus.default_rows_timeout = '10min'"`으로 늘리거나 `-c "SET salmonbus.default_rows_date = 'YYYY-MM-DD'"`로 날짜를 하나씩 옮긴다. 이때는 그 시간만큼 API 조회가 기다리다 실패할 수 있다(API의 DB 소켓 제한 60초).
+5. **옮긴 뒤 확인한다.** 2번을 다시 실행해 일곱 테이블이 모두 `기본 파티션은 비어 있다`인지 본다. worker의 다음 주기 실행(길어도 한 시간 뒤)부터 `event=partition_create_failed`가 없고 `salmonbus_partition_default_rows`가 0이어야 한다. 옮기는 동안 worker의 파티션 유지나 이관 앱의 떼어 지우기가 겹쳤다면 그쪽에 `reason=lock_timeout`·`status=DEFERRED reason=LOCK_TIMEOUT`이 한 번 남고 다음 회차에 다시 한다.
+6. **보관본을 확인한다.** 옮긴 날짜가 보관 날짜 수를 지나면(`source_date <= 오늘 - ARCHIVE_PARTITION_EXPORT_RETENTION_DAYS`) 이관 앱의 다음 회차가 내보낸다. 이미 지난 날짜면 옮긴 직후의 회차다. 그 (테이블, 날짜)의 `status=EXPORTED`·`status=VERIFIED` 로그와 `daily_export.verified_at`을 본다.
+
+**옮긴 날짜를 S3에서 되살려 원본과 견주기.** 옮긴 날짜마다 한 번, 원본 파티션이 DB에 남아 있을 때 한다.
+
+1. 지우기가 켜져 있으면 이관 앱은 내보낸 회차에 바로 파티션을 떼어 지운다. 원본과 견주려면 옮긴 날짜가 내보내기 대상이 되기 전에 `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED=false`로 이관 서비스를 재시작해 둔다. 이미 보관 날짜 수를 지난 날짜라면 줄을 옮기기 전에 끈다. 내보내기는 계속되고 지우기만 멈춘다. 그동안 다른 날짜의 파티션도 지워지지 않으므로 오래 두지 않는다.
+2. 그 (테이블, 날짜)의 `status=VERIFIED`가 남은 뒤 「날짜 단위 내보내기」의 "되살리는 방법" 1~3으로 S3 파일만 써서 `restored_<table>`을 만든다.
+3. 원본 파티션과 줄 단위로 견준다. 첫 조회는 0이어야 하고, 둘째 조회의 세 값은 서로 같아야 한다.
+   ```sql
+   SELECT count(*) FROM ((SELECT * FROM <table>_pYYYYMMDD EXCEPT ALL SELECT * FROM restored_<table>)
+       UNION ALL (SELECT * FROM restored_<table> EXCEPT ALL SELECT * FROM <table>_pYYYYMMDD)) different;
+   SELECT (SELECT count(*) FROM <table>_pYYYYMMDD) AS partition_rows, (SELECT count(*) FROM restored_<table>) AS restored_rows,
+          (SELECT row_count FROM daily_export WHERE table_name = '<table>' AND source_date = 'YYYY-MM-DD' AND segment = 0) AS ledger_rows;
+   ```
+4. `DROP TABLE restored_<table>`으로 되살린 테이블을 지우고 `ARCHIVE_PARTITION_EXPORT_DROP_ENABLED=true`로 되돌려 재시작한다. 다음 회차에 `status=DROPPED`와 `daily_export.dropped_at`을 본다.
+
+같은 흐름(기본 파티션의 줄 → 옮기기 → 내보내기 → S3 파일만으로 되살려 옮기기 전의 줄과 대조 → 떼어 지우기)을 테스트 `PartitionExportIntegrationTest`와 `ObservationPartitionExportIntegrationTest`가 예보 기록 테이블과 관측 테이블에서 확인한다. SQL 자체는 `DefaultPartitionRowsSqlTest`가 일곱 테이블에서 확인한다.
+
+**옮기지 않는 줄.** `DEFAULT-ROWS: <table> 의 <날짜> 는 내보내기 장부에 이미 있다` 경고가 남은 날짜는 옮기지 않는다. 그 날짜를 이미 내보낸 뒤에 들어온 줄이다. 같은 날짜의 파티션을 다시 만들면 이관 앱이 `LEDGER_DROPPED_PARTITION_PRESENT`나 `ROW_COUNT_CHANGED`로 멈춘다. 보관 날짜 수보다 늦게 그 날짜의 줄을 쓴 경로가 있다는 뜻이므로 원인을 먼저 찾는다. 이 줄을 보관본에 넣는 절차는 아직 정하지 않았다. 줄은 기본 파티션에 그대로 두고 따로 정한다.
 
 ### 옛 테이블 내보내기
 
@@ -1061,7 +1102,7 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 - 첫 배포에서는 새 worker가 노선마다 첫 배치를 처리할 때, 이전 배포본이 그날 처리한 배치가 닫은 통과를 관측에서 되찾아 `stop_pass`에 함께 저장한다. 배포 뒤 처음 닫히는 통과의 정답을 내려면 직전 통과가 있어야 하기 때문이다. `salmonbus_forecast_passes_recovered_total`이 한 번 크게 늘고, 채점 지연 지표에 긴 값이 한 번 들어간다. 전날 배치가 닫은 통과는 되찾지 않는다.
 - 서버의 가용 메모리가 작고 스왑을 쓴다. 새 worker는 다시 뜬 직후 힙을 한도까지 쓴다. `free -m`으로 스왑이 급히 늘지 않는지, worker 로그에 `OutOfMemoryError`가 없는지 본다.
 - 통과가 닫히기 시작하면 `salmonbus_scoring_written_total{table="pass_label"}`이 는다. `salmonbus_scoring_queue`와 `salmonbus_scoring_pending_rows`가 쌓이지 않는다. `salmonbus_scoring_waiting`은 통과를 기다리는 예측 수라 배포 뒤 한동안 는다. 예측은 늦어도 예보 2시간 뒤에 닫히므로 그 뒤에도 계속 늘면 채점이 밀리는 것이다.
-- 기동 로그에 `event=partition_create_failed`와 `event=partition_maintenance_incomplete`가 없다. 기본 파티션의 줄 수(`salmonbus_partition_default_rows{table}`)는 기동 때 세지 않아 첫 주기 실행(기동 한 시간 뒤)부터 나온다. 0보다 크면 그 날짜의 파티션이 없을 때 들어온 줄이다. 그 전에는 아래 `sal434-01-precheck.sql`의 7절이 센 값을 본다.
+- 기동 로그에 `event=partition_create_failed`와 `event=partition_maintenance_incomplete`가 없다. 기본 파티션의 줄 수(`salmonbus_partition_default_rows{table}`)는 기동 때 세지 않아 첫 주기 실행(기동 한 시간 뒤)부터 나온다. 0보다 크면 그 날짜의 파티션이 없을 때 들어온 줄이다. 「기본 파티션에 든 줄 옮기기」로 옮긴다. 그 전에는 아래 `sal434-01-precheck.sql`의 7절이 센 값을 본다.
 - `sal434-01-precheck.sql`을 실행해 보관한다. 3절의 `new_forecast_run`·`new_stop_pass_closed`·`new_pass_label_computed`가 최근이고 `old_*` 시각이 배포 시각에서 멈췄는지 본다.
 - 보드의 좌석 예측이 다시 나오는지 화면에서 본다.
 
@@ -1180,7 +1221,7 @@ Flyway는 적용 이력과 파일 체크섬만 보므로 이 뒤의 배포에서
 
 전환이 끝난 뒤 따로 PR을 올려 지운다.
 
-- 수동 SQL(`deploy/sql/sal434-*.sql`)과 그 테스트, 이관 앱의 옛 테이블 내보내기(`ARCHIVE_LEGACY_EXPORT_*`)
+- 수동 SQL(`deploy/sql/sal434-*.sql`)과 그 테스트, 이관 앱의 옛 테이블 내보내기(`ARCHIVE_LEGACY_EXPORT_*`). `move-partition-default-rows.sql`과 `DefaultPartitionRowsSqlTest`는 전환 뒤에도 쓰므로 남긴다. 이 테스트가 `TransitionSqlTest`에서 빌려 쓰는 문장 나누기는 그때 함께 옮긴다
 - `observation_batch.input_confirmed_at`을 읽는 되감기의 대비 경로. 이전 배포본이 처리한 배치가 되감기 창(12시간)을 벗어난 뒤에는 쓰이지 않는다
 - 서버 `worker.env`에 남은 이전 키(`FORECAST_COMPACT_SETTLEMENT_WRITE`, `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`, `FORECAST_ARCHIVE_ENABLED`, `FORECAST_ARCHIVE_DELETE_ENABLED`)와 서버의 체크포인트 폴더. dev 서버는 `worker.env`의 `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`를 지운 뒤 dev 도구가 이 키를 허용하는 부분도 지운다
 - 3번에서 옮겨 둔 파일
