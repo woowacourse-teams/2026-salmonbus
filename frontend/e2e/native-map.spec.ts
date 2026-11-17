@@ -160,6 +160,47 @@ test.describe("홈 지도까지 지원하는 iOS 앱", () => {
     });
   });
 
+  test("정류장 API가 정상인 홈에서는 home-events를 받지 않고 노선도를 열 때 받아 경로를 보낸다", async ({ page }) => {
+    await page.route("**/api/v2/stations/tiles/14/*/*", (route) => {
+      const [zoom, x, y] = new URL(route.request().url()).pathname.split("/").slice(-3).map(Number);
+      return route.fulfill({
+        json: { tile: { zoom, x, y }, coordinateSystem: "WGS84", status: "READY", stations: [] },
+      });
+    });
+    await page.route("**/assets/home-events.json", (route) =>
+      route.fulfill({
+        json: {
+          stops: [],
+          routePaths: [
+            [
+              [127.1, 37.39],
+              [127.12, 37.4],
+            ],
+          ],
+        },
+      }),
+    );
+    const feedRequests: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/assets/home-events.json") feedRequests.push(request.url());
+    });
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-native-home-map", "true");
+    await expect(page.getByRole("region", { name: "홈 정보", exact: true })).toBeVisible();
+    expect(feedRequests).toEqual([]);
+
+    await page
+      .getByRole("navigation", { name: "주요 메뉴" })
+      .getByRole("link", { name: "노선도", exact: true })
+      .click();
+    await expect
+      .poll(async () =>
+        (await messages(page)).some((message) => message.type === "updateHome" && message.payload.paths?.length === 1),
+      )
+      .toBe(true);
+    expect(feedRequests).toHaveLength(1);
+  });
+
   test("앱의 지도 범위로 정류장을 조회해 핀을 보내고 선택하면 웹 시트를 연다", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     const stationId = "206000532";

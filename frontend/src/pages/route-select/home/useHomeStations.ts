@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchStationTile, type StationTileResult } from "@/shared/api/stationMap.api";
 import type { HomeStop } from "./homeMapData";
 
-export function useHomeStations(tileKey: string, fallback: HomeStop[]) {
+export function useHomeStations(tileKey: string) {
   const tiles = useMemo(() => (tileKey ? tileKey.split(",") : []), [tileKey]);
   const [catalogUnavailable, setCatalogUnavailable] = useState(false);
   const [results, setResults] = useState<Record<string, StationTileResult>>({});
@@ -77,7 +77,6 @@ export function useHomeStations(tileKey: string, fallback: HomeStop[]) {
   }, [tiles, catalogUnavailable]);
 
   const stops = useMemo(() => {
-    if (catalogUnavailable) return fallback;
     const stopsById = new Map<string, HomeStop>();
     for (const tile of tiles) {
       for (const { stationId, name, point } of results[tile]?.stations ?? []) {
@@ -85,10 +84,11 @@ export function useHomeStations(tileKey: string, fallback: HomeStop[]) {
       }
     }
     return [...stopsById.values()];
-  }, [catalogUnavailable, fallback, results, tiles]);
+  }, [results, tiles]);
 
   return {
     stops,
+    catalogUnavailable,
     hasError: !catalogUnavailable && failedScope === tiles,
     retry: () => retryFailed.current?.(),
   };

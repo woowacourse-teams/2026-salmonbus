@@ -146,12 +146,14 @@ export function RouteSelectScreen({
   const [locating, setLocating] = useState(false);
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const [stationTileKey, setStationTileKey] = useState("");
-  const { stops: fallbackStops, routePaths } = useHomeMapData();
   const {
-    stops,
+    stops: stationStops,
+    catalogUnavailable,
     hasError: stationTilesFailed,
     retry: retryStationTiles,
-  } = useHomeStations(showStops ? stationTileKey : "", fallbackStops);
+  } = useHomeStations(showStops ? stationTileKey : "");
+  const { stops: fallbackStops, routePaths } = useHomeMapData(isRouteMap || catalogUnavailable);
+  const stops = catalogUnavailable ? fallbackStops : stationStops;
   const sheetLabel = selectedStop
     ? "정류장 노선 안내"
     : isRouteMap
