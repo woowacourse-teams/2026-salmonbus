@@ -243,6 +243,24 @@ for (const { path, shows } of directEntries) {
   });
 }
 
+test("화면 청크는 window load가 끝난 뒤에 받아 직접 진입에서 load 이벤트를 미루지 않는다", async ({ page }) => {
+  const initial = await initialScriptsOf(page, "/favorites");
+  await page.goto("/favorites");
+  await expect(page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true })).toBeVisible();
+  const timing = await page.evaluate((initialScripts) => {
+    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
+    const chunks = performance
+      .getEntriesByType("resource")
+      .filter((entry) => /\.js$/.test(new URL(entry.name).pathname) && new URL(entry.name).origin === location.origin)
+      .filter((entry) => !initialScripts.includes(entry.name))
+      .map((entry) => entry.startTime);
+    return { loadEventStart: navigation.loadEventStart, chunks };
+  }, initial);
+  expect(timing.loadEventStart).toBeGreaterThan(0);
+  expect(timing.chunks.length).toBeGreaterThan(0);
+  for (const start of timing.chunks) expect(start).toBeGreaterThanOrEqual(timing.loadEventStart);
+});
+
 test.describe("홈 native 지도가 있는 앱", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(
