@@ -3,21 +3,14 @@ import { matchPath, Navigate, Outlet, Route, Routes, useParams } from "react-rou
 import { RouteSearchPage } from "@/pages/route-search";
 import { RouteSelectPage } from "@/pages/route-select";
 import { RouteNetworkPage } from "@/pages/route-select/RouteNetworkPage";
+import { VerdictBoardPage } from "@/pages/verdict-board";
 import { favoriteGroupPathFor, paths } from "@/shared/routing/paths";
 import { FocusKeepingNavigationContext } from "@/shared/routing/focusKeepingNavigation";
 import { useFocusKeepingNavigation } from "./useFocusKeepingNavigation";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
 import { ErrorView } from "@/shared/components/ErrorView";
 import { lazyRouteElement } from "./lazyPage";
-import {
-  boardPage,
-  favoriteGroupPage,
-  favoritesPage,
-  loginPage,
-  myPage,
-  nicknamePage,
-  whatsNewPage,
-} from "./lazyPages";
+import { favoriteGroupPage, favoritesPage, loginPage, myPage, nicknamePage, whatsNewPage } from "./lazyPages";
 import { AccountLayout } from "@/shared/components/AccountLayout";
 import { AppRouteFallback } from "./RouteFallback";
 
@@ -60,7 +53,7 @@ const shellTabs = [
   { path: paths.favoriteGroups, title: "즐겨찾기 그룹 관리", element: favoritesElement },
   { path: paths.mypage, title: "마이페이지", element: lazyRouteElement(myPage, "sheet") },
   { path: paths.routeSearch, title: "노선 검색", element: <RouteSearchPage /> },
-  { path: paths.board, title: "노선 판정보드", element: lazyRouteElement(boardPage, "page") },
+  { path: paths.board, title: "노선 판정보드", element: <VerdictBoardPage /> },
 ];
 
 const pagesWithNavigation = [

@@ -4,11 +4,9 @@ import { pageNameFor, type LazyPageName, type PagePreloadEntry } from "@/shared/
 import { afterWindowLoad } from "@/shared/routing/windowLoad";
 import { createLazyPage } from "./lazyPage";
 
-const boardGroup = createPageLoader(() => afterWindowLoad().then(() => import("@/pages/verdict-board")));
 const favoritesGroup = createPageLoader(() => afterWindowLoad().then(() => import("./lazyGroups/favorites")));
 const accountGroup = createPageLoader(() => afterWindowLoad().then(() => import("./lazyGroups/account")));
 
-export const boardPage = createLazyPage("board", boardGroup, (group) => group.VerdictBoardPage);
 export const favoritesPage = createLazyPage("favorites", favoritesGroup, (group) => group.FavoritesPage);
 export const favoriteGroupPage = createLazyPage("favorite-group", favoritesGroup, (group) => group.FavoriteGroupPage);
 export const myPage = createLazyPage("mypage", accountGroup, (group) => group.MyPage);
@@ -17,7 +15,6 @@ export const nicknamePage = createLazyPage("nickname", accountGroup, (group) => 
 export const whatsNewPage = createLazyPage("whats-new", accountGroup, (group) => group.WhatsNewPage);
 
 export const lazyPagePreloads: readonly PagePreloadEntry[] = [
-  { name: "board", paths: [paths.board, paths.routeSearch], preload: boardPage.preload },
   { name: "favorites", paths: [paths.favorites, paths.favoriteGroups], preload: favoritesPage.preload },
   {
     name: "favorite-group",
@@ -33,7 +30,6 @@ export const lazyPagePreloads: readonly PagePreloadEntry[] = [
 export const idlePrefetchPages: readonly LazyPageName[] = ["favorites", "mypage"];
 
 const initialLoads: Record<LazyPageName, () => Promise<unknown>> = {
-  board: boardGroup.load,
   favorites: favoritesGroup.load,
   "favorite-group": favoritesGroup.load,
   mypage: accountGroup.load,
