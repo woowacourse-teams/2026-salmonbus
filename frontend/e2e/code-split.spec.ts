@@ -145,13 +145,18 @@ function guestLogin(page: Page) {
   return page.getByRole("link", { name: "로그인 / 회원가입", exact: true });
 }
 
-async function settlePrefetchedHome(page: Page, assets: ReturnType<typeof trackAssets>) {
+async function settlePrefetchedHome(page: Page) {
   const initial = await initialScriptsOf(page, "/");
+  const prefetched = new Set<string>();
+  page.on("response", async (response) => {
+    const url = new URL(response.url());
+    if (!isAppAsset(url) || !url.pathname.endsWith(".js")) return;
+    const body = await response.text().catch(() => "");
+    for (const marker of [FAVORITES_CHUNK, ACCOUNT_CHUNK]) if (body.includes(marker)) prefetched.add(marker);
+  });
   await settleHome(page);
   await page.clock.runFor(1_000);
-  await expect
-    .poll(() => assets.requested.filter((url) => url.endsWith(".js") && !initial.includes(url)).length)
-    .toBeGreaterThan(1);
+  await expect.poll(() => prefetched.size).toBe(2);
   await page.waitForLoadState("networkidle");
   return initial;
 }
@@ -161,7 +166,7 @@ test("홈 첫 스크립트에는 다른 화면 코드가 없고, 쉬는 시간�
 }) => {
   await watchFallback(page);
   const assets = trackAssets(page);
-  const initial = await settlePrefetchedHome(page, assets);
+  const initial = await settlePrefetchedHome(page);
   for (const src of initial) {
     const body = await (await page.request.get(src)).text();
     expect(body).not.toContain(FAVORITES_CHUNK);
@@ -182,7 +187,7 @@ test("홈 첫 스크립트에는 다른 화면 코드가 없고, 쉬는 시간�
 test("검색에서 노선을 고르면 새 청크 없이 판정보드로 바뀌고 홈 지도는 그대로 둔다", async ({ page }) => {
   await watchFallback(page);
   const assets = trackAssets(page);
-  await settlePrefetchedHome(page, assets);
+  await settlePrefetchedHome(page);
   const home = assets.requested.length;
   const map = await homeMap(page).elementHandle();
 
