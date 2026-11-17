@@ -1447,3 +1447,27 @@ test("home-events 응답이 늦는 동안 노선도를 나갔다 들어와도 �
   await expectRouteNetwork(page);
   expect(feedRequests).toHaveLength(1);
 });
+
+test("홈에서 노선도 탭을 누르기 시작하면 이동 전에 home-events를 미리 받고 이동한 뒤 다시 받지 않는다", async ({
+  page,
+}) => {
+  await serveStationTiles(page);
+  await page.route("**/assets/home-events.json", (route) => route.fulfill({ json: feedWithRoute }));
+  const feedRequests = recordFeedRequests(page);
+  const routeMapTab = page
+    .getByRole("navigation", { name: "주요 메뉴" })
+    .getByRole("link", { name: "노선도", exact: true });
+
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "판교역 API 정류장" })).toBeVisible();
+  expect(feedRequests).toEqual([]);
+
+  const prefetched = page.waitForResponse((response) => response.url().endsWith("/assets/home-events.json"));
+  await routeMapTab.dispatchEvent("pointerdown");
+  await prefetched;
+  await expect(page).toHaveURL("/");
+
+  await routeMapTab.click();
+  await expectRouteNetwork(page);
+  expect(feedRequests).toHaveLength(1);
+});

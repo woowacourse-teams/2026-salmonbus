@@ -22,6 +22,7 @@ export interface HomeMapFeed {
   getSnapshot: () => HomeMapFeedState;
   subscribe: (listener: () => void) => () => void;
   subscribeNeeded: (listener: () => void) => () => void;
+  prefetch: () => void;
 }
 
 export function createHomeMapFeed(deps: HomeMapFeedDeps): HomeMapFeed {
@@ -110,7 +111,7 @@ export function createHomeMapFeed(deps: HomeMapFeedDeps): HomeMapFeed {
     };
   }
 
-  return { getSnapshot: () => state, subscribe, subscribeNeeded };
+  return { getSnapshot: () => state, subscribe, subscribeNeeded, prefetch: ensureFresh };
 }
 
 export const homeMapFeed = createHomeMapFeed({

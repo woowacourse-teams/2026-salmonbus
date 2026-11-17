@@ -1,11 +1,19 @@
 import type { MouseEvent, Ref } from "react";
 import { NavLink, useLocation } from "react-router";
 import { appHostFrom } from "@/shared/bridge/bridge";
-import { bottomTabs } from "@/shared/routing/bottomTabs";
+import { bottomTabs, type BottomTabId } from "@/shared/routing/bottomTabs";
 import { TabPageGlyph } from "./TabPageGlyph";
 import * as styles from "./BottomNavigation.css";
 
-export function BottomNavigation({ ref, onActiveTabPress }: { ref?: Ref<HTMLElement>; onActiveTabPress?: () => void }) {
+export function BottomNavigation({
+  ref,
+  onActiveTabPress,
+  onTabIntent,
+}: {
+  ref?: Ref<HTMLElement>;
+  onActiveTabPress?: () => void;
+  onTabIntent?: (tab: BottomTabId) => void;
+}) {
   const { pathname } = useLocation();
   const tabNavigation = appHostFrom() === null ? {} : { replace: true };
   const activeTab =
@@ -40,6 +48,8 @@ export function BottomNavigation({ ref, onActiveTabPress }: { ref?: Ref<HTMLElem
           className={styles.tab}
           aria-label={label}
           onClick={handleTabClick}
+          onPointerDown={onTabIntent && (() => onTabIntent(id))}
+          onFocus={onTabIntent && (() => onTabIntent(id))}
         >
           <TabPageGlyph page={id} />
         </NavLink>

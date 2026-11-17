@@ -217,4 +217,44 @@ describe("homeMapFeed", () => {
     expect(feed.getSnapshot().status).toBe("error");
     expect(feed.getSnapshot().data).toBe(loaded);
   });
+  it("미리 받기는 필요한 곳 없이 한 번 요청하고 이어서 필요해지면 그 요청에 합류한다", async () => {
+    const pending = deferred<Response>();
+    const { feed, fetch } = setup([() => pending.promise]);
+    feed.prefetch();
+    feed.prefetch();
+    await flush();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(feed.getSnapshot().status).toBe("loading");
+    feed.subscribeNeeded(() => {});
+    await flush();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    pending.resolve(Response.json(FEED));
+    await flush();
+    expect(feed.getSnapshot().status).toBe("ready");
+    expect(feed.getSnapshot().data.stops.map((stop) => stop.id)).toEqual(["10001"]);
+  });
+
+  it("미리 받은 뒤 300초 안에는 다시 요청하지 않는다", async () => {
+    const { feed, fetch, setNow } = setup();
+    feed.prefetch();
+    await flush();
+    setNow(299_999);
+    feed.prefetch();
+    feed.subscribeNeeded(() => {});
+    await flush();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("미리 받기가 실패하면 스스로 다시 시도하지 않고 필요해질 때 바로 다시 받는다", async () => {
+    const { feed, fetch, advance } = setup([async () => new Response(null, { status: 503 })]);
+    feed.prefetch();
+    await flush();
+    expect(feed.getSnapshot().status).toBe("error");
+    await advance(60_000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    feed.subscribeNeeded(() => {});
+    await flush();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(feed.getSnapshot().status).toBe("ready");
+  });
 });
