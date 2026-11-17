@@ -215,3 +215,69 @@ describe("겹친 변경 요청", () => {
     expect(services.fetchSession).not.toHaveBeenCalled();
   });
 });
+
+describe("세션을 조회하는 시점", () => {
+  function createPage(visibilityState: DocumentVisibilityState) {
+    return Object.assign(new EventTarget(), { visibilityState });
+  }
+
+  function createStartedStore() {
+    const services = createFakeServices();
+    services.fetchSession.mockResolvedValue(sessionFor(MEMBER));
+    const store = createAuthStore(services);
+    const windowEvents = new EventTarget();
+    const page = createPage("visible");
+    const stop = store.init(windowEvents, page);
+    return { services, store, windowEvents, page, stop };
+  }
+
+  it("시작할 때 한 번 조회한다", () => {
+    const { services } = createStartedStore();
+
+    expect(services.fetchSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("창이 focus를 받으면 다시 조회한다", () => {
+    const { services, windowEvents } = createStartedStore();
+
+    windowEvents.dispatchEvent(new Event("focus"));
+
+    expect(services.fetchSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("탭이 보이는 상태로 바뀌면 다시 조회하고, 숨은 상태로 바뀌면 조회하지 않는다", () => {
+    const { services, page } = createStartedStore();
+
+    page.visibilityState = "hidden";
+    page.dispatchEvent(new Event("visibilitychange"));
+    expect(services.fetchSession).toHaveBeenCalledTimes(1);
+
+    page.visibilityState = "visible";
+    page.dispatchEvent(new Event("visibilitychange"));
+    expect(services.fetchSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("해제한 뒤에는 focus와 visibilitychange에 조회하지 않는다", () => {
+    const { services, windowEvents, page, stop } = createStartedStore();
+
+    stop();
+    windowEvents.dispatchEvent(new Event("focus"));
+    page.dispatchEvent(new Event("visibilitychange"));
+
+    expect(services.fetchSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("해제하면 응답을 기다리던 조회의 결과를 버린다", async () => {
+    let answerSession: (result: ApiResult<AuthSession>) => void = () => {};
+    const services = createFakeServices();
+    services.fetchSession.mockReturnValue(new Promise((resolve) => (answerSession = resolve)));
+    const store = createAuthStore(services);
+    const stop = store.init(new EventTarget(), createPage("visible"));
+
+    stop();
+    answerSession(sessionFor(MEMBER));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(store.authState()).toEqual({ status: "loading" });
+  });
+});

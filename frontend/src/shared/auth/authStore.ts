@@ -1,5 +1,11 @@
+import { fetchSession, logout, updateNickname, withdraw } from "../api/auth.api";
 import type { AuthSession, Member } from "../api/auth.types";
 import type { ApiResult } from "../api/client";
+import {
+  allowDeviceRegistration,
+  registerDeviceIfGranted,
+  unregisterThisDevice,
+} from "../notification/useNotificationRegistration";
 
 export type AuthState =
   | { status: "loading" }
@@ -16,6 +22,10 @@ export interface AuthServices {
   unregisterThisDevice: () => Promise<void>;
   allowDeviceRegistration: () => void;
   registerDeviceIfGranted: () => Promise<void>;
+}
+
+interface VisibilitySource extends EventTarget {
+  readonly visibilityState: DocumentVisibilityState;
 }
 
 export function createAuthStore(services: AuthServices) {
@@ -86,8 +96,37 @@ export function createAuthStore(services: AuthServices) {
     return result;
   }
 
-  return { subscribe, authState, reload, changeNickname, signOut, withdraw };
+  function init(windowEvents: EventTarget = window, page: VisibilitySource = document): () => void {
+    void reload();
+    const onFocus = () => {
+      void reload();
+    };
+    const onVisible = () => {
+      if (page.visibilityState === "visible") void reload();
+    };
+    windowEvents.addEventListener("focus", onFocus);
+    page.addEventListener("visibilitychange", onVisible);
+    return () => {
+      revision += 1;
+      windowEvents.removeEventListener("focus", onFocus);
+      page.removeEventListener("visibilitychange", onVisible);
+    };
+  }
+
+  return { subscribe, authState, reload, changeNickname, signOut, withdraw, init };
 }
+
+export const authStore = createAuthStore({
+  fetchSession,
+  updateNickname,
+  logout,
+  withdraw,
+  unregisterThisDevice,
+  allowDeviceRegistration,
+  registerDeviceIfGranted,
+});
+
+export const initAuth = authStore.init;
 
 function stateOf(result: ApiResult<AuthSession>): AuthState {
   if (result.ok)
