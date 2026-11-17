@@ -7,12 +7,15 @@ import { AppErrorBoundary } from "@/app/AppErrorBoundary";
 import { initAnalytics } from "@/shared/analytics/analytics";
 import { initInputMethod } from "@/shared/input-method/inputMethod";
 import { initOpenedNotifications } from "@/shared/notification/openedNotificationInbox";
+import { STARTUP_MARKS, observeStartupDom, startupMarker } from "@/shared/startup/startupMarks";
 
 const container = document.getElementById("root");
 if (!container) {
   throw new Error("root 요소를 찾을 수 없습니다");
 }
 
+startupMarker.mark(STARTUP_MARKS.webEntry);
+observeStartupDom(container);
 initAnalytics();
 initInputMethod();
 initOpenedNotifications();
