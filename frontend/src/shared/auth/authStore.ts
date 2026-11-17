@@ -10,11 +10,18 @@ export type AuthState =
 
 export interface AuthServices {
   fetchSession: () => Promise<ApiResult<AuthSession>>;
+  updateNickname: (nickname: string) => Promise<ApiResult<Member>>;
+  logout: () => Promise<ApiResult<void>>;
+  withdraw: () => Promise<ApiResult<void | { startUrl: string }>>;
+  unregisterThisDevice: () => Promise<void>;
+  allowDeviceRegistration: () => void;
+  registerDeviceIfGranted: () => Promise<void>;
 }
 
 export function createAuthStore(services: AuthServices) {
   let state: AuthState = { status: "loading" };
   let revision = 0;
+  let mutations = 0;
   const listeners = new Set<() => void>();
 
   function setState(next: AuthState) {
@@ -35,13 +42,51 @@ export function createAuthStore(services: AuthServices) {
   }
 
   async function reload(): Promise<void> {
+    if (mutations > 0) return;
     const current = ++revision;
     const result = await services.fetchSession();
     if (current !== revision) return;
     setState(stateOf(result));
   }
 
-  return { subscribe, authState, reload };
+  async function changeNickname(nickname: string) {
+    mutations += 1;
+    const current = ++revision;
+    const result = await services.updateNickname(nickname);
+    mutations -= 1;
+    if (current === revision) {
+      if (result.ok) setState({ status: "authenticated", member: result.body });
+      else if ("status" in result.failure && result.failure.status === 401) setState({ status: "anonymous" });
+    }
+    return result;
+  }
+
+  async function signOut() {
+    mutations += 1;
+    const current = ++revision;
+    await services.unregisterThisDevice();
+    const result = await services.logout();
+    mutations -= 1;
+    if (current === revision && result.ok) setState({ status: "anonymous" });
+    if (current === revision && !result.ok) {
+      services.allowDeviceRegistration();
+      void services.registerDeviceIfGranted();
+    }
+    return result;
+  }
+
+  async function withdraw() {
+    mutations += 1;
+    const current = ++revision;
+    const result = await services.withdraw();
+    mutations -= 1;
+    if (current === revision && result.ok && result.body === undefined) setState({ status: "anonymous" });
+    if (current === revision && !result.ok && "status" in result.failure && result.failure.status === 401)
+      setState({ status: "anonymous" });
+    return result;
+  }
+
+  return { subscribe, authState, reload, changeNickname, signOut, withdraw };
 }
 
 function stateOf(result: ApiResult<AuthSession>): AuthState {
