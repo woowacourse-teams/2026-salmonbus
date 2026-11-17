@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { matchPath, Navigate, Outlet, Route, Routes, useParams } from "react-router";
 import { RouteSearchPage } from "@/pages/route-search";
 import { RouteSelectPage } from "@/pages/route-select";
@@ -16,13 +16,28 @@ import {
   loginPage,
   myPage,
   nicknamePage,
-  privacyPage,
   whatsNewPage,
 } from "./lazyPages";
+import { AccountLayout } from "@/shared/components/AccountLayout";
 import { AppRouteFallback } from "./RouteFallback";
 
 const favoritesElement = lazyRouteElement(favoritesPage, "sheet");
-const privacyElement = lazyRouteElement(privacyPage, "page");
+
+const PrivacyPage = lazy(async () => ({
+  default: (await import(/* webpackChunkName: "privacy" */ "@/pages/privacy")).PrivacyPage,
+}));
+
+const privacyPage = (
+  <Suspense
+    fallback={
+      <AccountLayout>
+        <p role="status">처리방침을 불러오고 있어요…</p>
+      </AccountLayout>
+    }
+  >
+    <PrivacyPage />
+  </Suspense>
+);
 
 function NavigationLayout() {
   return (
@@ -45,15 +60,15 @@ const shellTabs = [
   { path: paths.favoriteGroups, title: "즐겨찾기 그룹 관리", element: favoritesElement },
   { path: paths.mypage, title: "마이페이지", element: lazyRouteElement(myPage, "sheet") },
   { path: paths.routeSearch, title: "노선 검색", element: <RouteSearchPage /> },
-  { path: paths.board, title: "노선 판정보드", element: lazyRouteElement(boardPage, "held") },
+  { path: paths.board, title: "노선 판정보드", element: lazyRouteElement(boardPage, "page") },
 ];
 
 const pagesWithNavigation = [
   { path: paths.nickname, title: "닉네임 수정", element: lazyRouteElement(nicknamePage, "page") },
   { path: paths.favoriteGroup, title: "즐겨찾기 그룹 관리", element: lazyRouteElement(favoriteGroupPage, "page") },
   { path: paths.legacyFavoriteGroup, title: "즐겨찾기 그룹 관리", element: <LegacyFavoriteGroupRedirect /> },
-  { path: paths.privacy, title: "개인정보 처리방침", element: privacyElement },
-  { path: paths.privacyEdition, title: "개인정보 처리방침", element: privacyElement },
+  { path: paths.privacy, title: "개인정보 처리방침", element: privacyPage },
+  { path: paths.privacyEdition, title: "개인정보 처리방침", element: privacyPage },
   { path: paths.whatsNew, title: "새 소식", element: lazyRouteElement(whatsNewPage, "page") },
 ];
 

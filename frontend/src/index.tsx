@@ -7,8 +7,8 @@ import { AppErrorBoundary } from "@/app/AppErrorBoundary";
 import { initAnalytics } from "@/shared/analytics/analytics";
 import { initInputMethod } from "@/shared/input-method/inputMethod";
 import { initOpenedNotifications } from "@/shared/notification/openedNotificationInbox";
-import { initPagePreload } from "@/shared/routing/pagePreload";
-import { lazyPagePreloads } from "@/app/lazyPages";
+import { initPagePreload, prefetchWhenIdle } from "@/shared/routing/pagePreload";
+import { idlePrefetchPages, lazyPagePreloads, loadInitialPage } from "@/app/lazyPages";
 
 const container = document.getElementById("root");
 if (!container) {
@@ -19,11 +19,16 @@ initAnalytics();
 initInputMethod();
 initOpenedNotifications();
 initPagePreload(lazyPagePreloads);
+prefetchWhenIdle(idlePrefetchPages);
 
-createRoot(container, errorTrackingRootOptions).render(
-  <StrictMode>
-    <AppErrorBoundary>
-      <App />
-    </AppErrorBoundary>
-  </StrictMode>,
+const root = createRoot(container, errorTrackingRootOptions);
+
+void loadInitialPage(window.location.pathname).then(() =>
+  root.render(
+    <StrictMode>
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
+    </StrictMode>,
+  ),
 );

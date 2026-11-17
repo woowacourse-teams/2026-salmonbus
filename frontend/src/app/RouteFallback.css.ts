@@ -18,9 +18,3 @@ export const app = style({
   minHeight: "100dvh",
   background: vars.color.background,
 });
-
-export const sheet = style({
-  display: "flex",
-  justifyContent: "center",
-  padding: "32px 16px",
-});

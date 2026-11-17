@@ -7,10 +7,9 @@ const noop = () => undefined;
 const entries: PagePreloadEntry[] = [
   { name: "board", paths: [paths.board, paths.routeSearch], preload: noop },
   { name: "favorites", paths: [paths.favorites, paths.favoriteGroups], preload: noop },
-  { name: "favorite-group", paths: [paths.favoriteGroup], preload: noop },
+  { name: "favorite-group", paths: [paths.favoriteGroup, paths.legacyFavoriteGroup], preload: noop },
   { name: "mypage", paths: [paths.mypage], preload: noop },
   { name: "nickname", paths: [paths.nickname], preload: noop },
-  { name: "privacy", paths: [paths.privacy, paths.privacyEdition], preload: noop },
 ];
 
 describe("pageNameFor", () => {
@@ -20,16 +19,19 @@ describe("pageNameFor", () => {
     ["/favorites", "favorites"],
     ["/favorites/groups", "favorites"],
     ["/favorites/groups/g1", "favorite-group"],
+    ["/mypage/groups/g1", "favorite-group"],
     ["/mypage", "mypage"],
     ["/mypage/nickname", "nickname"],
-    ["/privacy/2026-01-01", "privacy"],
   ])("%s는 %s 페이지로 매칭한다", (pathname, name) => {
     expect(pageNameFor(entries, pathname)).toBe(name);
   });
 
-  test.each(["/", "/route-map", "/mypage/whats-new", "/unknown"])("등록되지 않은 경로 %s는 null이다", (pathname) => {
-    expect(pageNameFor(entries, pathname)).toBeNull();
-  });
+  test.each(["/", "/route-map", "/mypage/whats-new", "/privacy", "/privacy/2026-01-01", "/unknown"])(
+    "등록되지 않은 경로 %s는 null이다",
+    (pathname) => {
+      expect(pageNameFor(entries, pathname)).toBeNull();
+    },
+  );
 });
 
 describe("internalPathnameOf", () => {

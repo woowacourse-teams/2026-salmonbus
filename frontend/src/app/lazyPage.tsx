@@ -2,7 +2,6 @@ import {
   Component,
   createElement,
   startTransition,
-  Suspense,
   use,
   type ComponentType,
   type ReactElement,
@@ -13,24 +12,19 @@ import { LoadError } from "@/shared/components/LoadError";
 import { RetryButton } from "@/shared/components/RetryButton";
 import type { PageLoader, PageLoadStatus } from "@/shared/routing/pageLoader";
 import type { LazyPageName } from "@/shared/routing/pagePreload";
-import { PageRouteFallback, ROUTE_LOADING_MESSAGE, SheetRouteFallback } from "./RouteFallback";
 
 export interface LazyPage {
   readonly name: LazyPageName;
   readonly Page: ComponentType;
-  readonly loadingMessage: string;
   preload: () => void;
   retry: () => void;
   status: () => PageLoadStatus;
 }
 
-export type LazyRouteBoundary = "held" | "sheet" | "page";
-
 export function createLazyPage<M>(
   name: LazyPageName,
   group: PageLoader<M>,
   pick: (module: M) => ComponentType,
-  loadingMessage = ROUTE_LOADING_MESSAGE,
 ): LazyPage {
   function Page() {
     const snapshot = group.snapshot();
@@ -41,7 +35,6 @@ export function createLazyPage<M>(
   return {
     name,
     Page,
-    loadingMessage,
     preload: () => {
       group.load().catch(() => undefined);
     },
@@ -101,18 +94,10 @@ class RouteErrorBoundary extends Component<RouteErrorBoundaryProps, RouteErrorBo
   }
 }
 
-export function lazyRouteElement(page: LazyPage, boundary: LazyRouteBoundary): ReactElement {
-  const variant = boundary === "sheet" ? "sheet" : "page";
-  const content = (
+export function lazyRouteElement(page: LazyPage, variant: "sheet" | "page"): ReactElement {
+  return (
     <RouteErrorBoundary key={page.name} page={page} variant={variant}>
       <page.Page />
     </RouteErrorBoundary>
-  );
-  if (boundary === "held") return content;
-  const fallback = boundary === "sheet" ? <SheetRouteFallback /> : <PageRouteFallback message={page.loadingMessage} />;
-  return (
-    <Suspense key={page.name} fallback={fallback}>
-      {content}
-    </Suspense>
   );
 }

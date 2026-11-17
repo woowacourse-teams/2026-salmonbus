@@ -1,7 +1,7 @@
 import { matchPath } from "react-router";
+import { afterWindowLoad } from "./windowLoad";
 
-export type LazyPageName =
-  "board" | "favorites" | "favorite-group" | "mypage" | "login" | "nickname" | "whats-new" | "privacy";
+export type LazyPageName = "board" | "favorites" | "favorite-group" | "mypage" | "login" | "nickname" | "whats-new";
 
 export interface PagePreloadEntry {
   name: LazyPageName;
@@ -51,4 +51,17 @@ export function initPagePreload(entries: readonly PagePreloadEntry[]): void {
   if (listening) return;
   listening = true;
   document.addEventListener("pointerdown", preloadLinkTarget, { capture: true, passive: true });
+}
+
+function whenIdle(task: () => void): void {
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(task);
+  else window.setTimeout(task, 1);
+}
+
+export function prefetchWhenIdle(names: readonly LazyPageName[]): void {
+  void afterWindowLoad().then(() => {
+    whenIdle(() => {
+      for (const name of names) preloadPage(name);
+    });
+  });
 }
