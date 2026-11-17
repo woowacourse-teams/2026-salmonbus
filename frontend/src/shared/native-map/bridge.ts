@@ -1,6 +1,6 @@
 import { createBridgeId, isSupportedInApp, sendToApp, subscribeToApp, type BridgeWindow } from "../bridge/bridge";
 import type { AppCommandType, BridgeMessage } from "../bridge/bridge.types";
-import { startupMarker } from "../startup/startupMarks";
+import { flushStartupDom, startupMarker } from "../startup/startupMarks";
 import { createNativeMapStageTracker, type NativeMapStageTracker } from "./nativeMapStages";
 import type { NativeMapCommands, NativeMapEvent, NativeMapEvents } from "./protocol";
 
@@ -62,7 +62,10 @@ function observeStage(observe: () => void) {
 
 export function createNativeMapChannel(
   bridgeWindow: BridgeWindow & EventTarget = window,
-  stages: NativeMapStageTracker = createNativeMapStageTracker(startupMarker.mark),
+  stages: NativeMapStageTracker = createNativeMapStageTracker((name) => {
+    flushStartupDom();
+    startupMarker.mark(name);
+  }),
 ): NativeMapChannel {
   const sessionId = createBridgeId();
   const listeners = new Set<(event: NativeMapEvent) => void>();

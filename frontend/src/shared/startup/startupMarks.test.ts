@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
-import { STARTUP_MARKS, createStartupMarker, observeStartupDom, type StartupMarkName } from "./startupMarks";
+import {
+  STARTUP_MARKS,
+  createStartupMarker,
+  flushStartupDom,
+  observeStartupDom,
+  type StartupMarkName,
+} from "./startupMarks";
 
 type Callback = () => void;
 
@@ -148,6 +154,37 @@ describe("시작 DOM 관찰", () => {
       expect(names).toEqual([STARTUP_MARKS.mapWebTransparent]);
     },
   );
+
+  it("flushStartupDom은 관찰 콜백을 기다리지 않고 지금 DOM으로 바로 찍는다", () => {
+    Object.assign(globalThis, { MutationObserver: FakeObserver });
+    const { root, state } = fakeRoot();
+    const { html, attributes } = fakeHtml();
+    const { names, marker } = recorder();
+    const stop = observeStartupDom(root, html, marker);
+    state.child = true;
+    state.main = true;
+    attributes.set("data-native-home-map", "true");
+    flushStartupDom();
+    flushStartupDom();
+    expect(names).toEqual([
+      STARTUP_MARKS.webFirstCommit,
+      STARTUP_MARKS.webShellCommit,
+      STARTUP_MARKS.mapWebTransparent,
+    ]);
+    expect(FakeObserver.all.every((observer) => observer.target === null)).toBe(true);
+    stop();
+  });
+
+  it("정리한 뒤의 flushStartupDom은 찍지 않는다", () => {
+    Object.assign(globalThis, { MutationObserver: FakeObserver });
+    const { root, state } = fakeRoot();
+    const { names, marker } = recorder();
+    const stop = observeStartupDom(root, fakeHtml().html, marker);
+    stop();
+    state.child = true;
+    flushStartupDom();
+    expect(names).toEqual([]);
+  });
 
   it("정리 함수는 두 관찰을 모두 끝낸다", () => {
     Object.assign(globalThis, { MutationObserver: FakeObserver });

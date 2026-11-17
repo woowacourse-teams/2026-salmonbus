@@ -36,6 +36,12 @@ export function createStartupMarker(clock: Pick<Performance, "mark"> | undefined
 
 export const startupMarker: StartupMarker = createStartupMarker(globalThis.performance);
 
+const pendingDomChecks = new Set<() => void>();
+
+export function flushStartupDom() {
+  pendingDomChecks.forEach((check) => check());
+}
+
 const TRANSPARENT_ATTRIBUTES = ["data-native-home-map", "data-shared-native-map-ready"] as const;
 
 function isTransparent(html: HTMLElement): boolean {
@@ -66,16 +72,30 @@ export function observeStartupDom(
     marker.mark(STARTUP_MARKS.mapWebTransparent);
     return true;
   };
-  const rootObserver = new MutationObserver(() => {
-    if (checkRoot()) rootObserver.disconnect();
-  });
-  const htmlObserver = new MutationObserver(() => {
-    if (checkHtml()) htmlObserver.disconnect();
-  });
-  if (!checkRoot()) rootObserver.observe(root, { childList: true, subtree: true });
-  if (!checkHtml()) htmlObserver.observe(html, { attributes: true, attributeFilter: [...TRANSPARENT_ATTRIBUTES] });
+  const rootObserver = new MutationObserver(() => flushRoot());
+  const htmlObserver = new MutationObserver(() => flushHtml());
+  const flushRoot = () => {
+    if (!checkRoot()) return;
+    rootObserver.disconnect();
+    pendingDomChecks.delete(flushRoot);
+  };
+  const flushHtml = () => {
+    if (!checkHtml()) return;
+    htmlObserver.disconnect();
+    pendingDomChecks.delete(flushHtml);
+  };
+  if (!checkRoot()) {
+    rootObserver.observe(root, { childList: true, subtree: true });
+    pendingDomChecks.add(flushRoot);
+  }
+  if (!checkHtml()) {
+    htmlObserver.observe(html, { attributes: true, attributeFilter: [...TRANSPARENT_ATTRIBUTES] });
+    pendingDomChecks.add(flushHtml);
+  }
   return () => {
     rootObserver.disconnect();
     htmlObserver.disconnect();
+    pendingDomChecks.delete(flushRoot);
+    pendingDomChecks.delete(flushHtml);
   };
 }
