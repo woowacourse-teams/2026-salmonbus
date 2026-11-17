@@ -1,12 +1,13 @@
 import { createPageLoader } from "@/shared/routing/pageLoader";
 import { paths } from "@/shared/routing/paths";
+import { afterWindowLoad } from "@/shared/routing/windowLoad";
 import type { PagePreloadEntry } from "@/shared/routing/pagePreload";
 import { createLazyPage } from "./lazyPage";
 
-const boardGroup = createPageLoader(() => import("@/pages/verdict-board"));
-const favoritesGroup = createPageLoader(() => import("./lazyGroups/favorites"));
-const accountGroup = createPageLoader(() => import("./lazyGroups/account"));
-const privacyGroup = createPageLoader(() => import("@/pages/privacy"));
+const boardGroup = createPageLoader(() => afterWindowLoad().then(() => import("@/pages/verdict-board")));
+const favoritesGroup = createPageLoader(() => afterWindowLoad().then(() => import("./lazyGroups/favorites")));
+const accountGroup = createPageLoader(() => afterWindowLoad().then(() => import("./lazyGroups/account")));
+const privacyGroup = createPageLoader(() => afterWindowLoad().then(() => import("@/pages/privacy")));
 
 export const boardPage = createLazyPage("board", boardGroup, (group) => group.VerdictBoardPage);
 export const favoritesPage = createLazyPage("favorites", favoritesGroup, (group) => group.FavoritesPage);
