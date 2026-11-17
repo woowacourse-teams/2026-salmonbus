@@ -7,7 +7,6 @@ import { NATIVE_HOME_MAP_CAPABILITIES, NATIVE_MAP_CAPABILITIES } from "../src/sh
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
 
 const LOADING = "화면을 불러오고 있어요…";
-const PRIVACY_LOADING = "처리방침을 불러오고 있어요…";
 const LOAD_FAILED = "화면을 불러오지 못했어요";
 const APP_ERROR = "앗, 문제가 생겼어요";
 
@@ -57,11 +56,41 @@ async function interceptNewScripts(page: Page, known: readonly string[], handle:
   );
 }
 
-function delayed(ms: number): ChunkHandler {
-  return async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, ms));
-    await route.fallback();
+interface ChunkGate {
+  handle: ChunkHandler;
+  held: () => number;
+  release: () => void;
+}
+
+function gate(): ChunkGate {
+  let open = () => undefined as void;
+  const released = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let held = 0;
+  return {
+    handle: async (route) => {
+      held += 1;
+      await released;
+      await route.fallback();
+    },
+    held: () => held,
+    release: () => open(),
   };
+}
+
+async function watchFallback(page: Page) {
+  await page.addInitScript((text) => {
+    const marker = window as unknown as { fallbackSeen?: boolean };
+    marker.fallbackSeen = false;
+    new MutationObserver(() => {
+      if (document.body?.textContent?.includes(text)) marker.fallbackSeen = true;
+    }).observe(document, { subtree: true, childList: true, characterData: true });
+  }, LOADING);
+}
+
+function fallbackSeen(page: Page) {
+  return page.evaluate(() => (window as unknown as { fallbackSeen?: boolean }).fallbackSeen);
 }
 
 function failing(times: number): ChunkHandler {
@@ -93,19 +122,29 @@ function guestLogin(page: Page) {
   return page.getByRole("link", { name: "로그인 / 회원가입", exact: true });
 }
 
-test("홈에 머무는 동안에는 다른 화면 청크를 받지 않고, 탭을 누를 때 받는다", async ({ page }) => {
+test("홈은 다른 화면 청크 없이 그리고, 쉬는 시간에 탭 화면 청크를 미리 받아 탭을 누를 때 다시 받지 않는다", async ({
+  page,
+}) => {
+  await watchFallback(page);
   const assets = trackAssets(page);
   await settleHome(page);
   const home = assets.requested.length;
   await page.waitForTimeout(2_000);
   expect(assets.after(home)).toEqual([]);
 
+  await page.clock.runFor(1_000);
+  await expect.poll(() => assets.after(home).filter((url) => url.endsWith(".js")).length).toBeGreaterThan(1);
+  await page.waitForLoadState("networkidle");
+  const prefetched = assets.requested.length;
+
   await tab(page, "마이페이지").click();
   await expect(page).toHaveURL("/mypage");
   await expect(guestLogin(page)).toBeVisible();
-  const mypage = assets.after(home);
-  expect(mypage.length).toBeGreaterThan(0);
-  expect(mypage.filter((url) => assets.requested.slice(0, home).includes(url))).toEqual([]);
+  await tab(page, "즐겨찾기").click();
+  await expect(page).toHaveURL("/favorites");
+  await expect(page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true })).toBeVisible();
+  expect(assets.after(prefetched)).toEqual([]);
+  expect(await fallbackSeen(page)).toBe(false);
 });
 
 test("검색을 열면 입력창에 포커스가 가고 판정보드 청크를 미리 받으며, 다시 들어가도 다시 받지 않는다", async ({
@@ -131,40 +170,87 @@ test("검색을 열면 입력창에 포커스가 가고 판정보드 청크를 �
 });
 
 test("판정보드 청크가 늦으면 검색 화면을 유지하다가 보드로 바꾸고 홈 지도는 그대로 둔다", async ({ page }) => {
+  await watchFallback(page);
   const assets = trackAssets(page);
   await settleHome(page);
   const map = await homeMap(page).elementHandle();
-  await interceptNewScripts(page, assets.requested, delayed(5_000));
+  const chunks = gate();
+  await interceptNewScripts(page, assets.requested, chunks.handle);
 
   await openRouteSearch(page);
   await routeSearchInput(page).fill("3330");
   await page.getByRole("button", { name: /^3330번 노선, (새 노선, )?테스트 기점부터 테스트 종점 구간$/ }).click();
+  await expect.poll(chunks.held).toBeGreaterThan(0);
   await expect(routeSearchInput(page)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "3330", exact: true })).toHaveCount(0);
   await expect(page.getByText(LOADING, { exact: true })).toHaveCount(0);
+
+  chunks.release();
   await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
   await expect(page).toHaveURL(`/routes/${routeId}`);
-  await expect(page.getByText(LOADING, { exact: true })).toHaveCount(0);
+  expect(await fallbackSeen(page)).toBe(false);
   expect(await map!.evaluate((node) => node.isConnected)).toBe(true);
 });
 
-test("마이페이지 청크가 늦으면 시트 안에 불러오는 중을 보이고 탭과 홈 지도는 그대로다", async ({ page }) => {
+const sheetTabs: { name: string; path: string; shows: (page: Page) => ReturnType<Page["getByRole"]> }[] = [
+  {
+    name: "즐겨찾기",
+    path: "/favorites",
+    shows: (page) => page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true }),
+  },
+  { name: "마이페이지", path: "/mypage", shows: guestLogin },
+];
+
+for (const { name, path, shows } of sheetTabs) {
+  test(`${name} 탭 화면 청크가 늦으면 홈 화면을 유지하다가 바꾸고 불러오는 중 화면을 보이지 않는다`, async ({
+    page,
+  }) => {
+    await watchFallback(page);
+    const assets = trackAssets(page);
+    await settleHome(page);
+    const map = await homeMap(page).elementHandle();
+    const chunks = gate();
+    await interceptNewScripts(page, assets.requested, chunks.handle);
+
+    await tab(page, name).click();
+    await expect.poll(chunks.held).toBeGreaterThan(0);
+    await expect(page).toHaveURL(path);
+    await expect(tab(page, "홈")).toHaveAttribute("aria-current", "page");
+    await expect(shows(page)).toHaveCount(0);
+    await expect(page.getByText(LOADING, { exact: true })).toHaveCount(0);
+    expect(await map!.evaluate((node) => node.isConnected)).toBe(true);
+
+    chunks.release();
+    await expect(shows(page)).toBeVisible();
+    await expect(tab(page, name)).toHaveAttribute("aria-current", "page");
+    expect(await fallbackSeen(page)).toBe(false);
+    expect(await map!.evaluate((node) => node.isConnected)).toBe(true);
+  });
+}
+
+test("전체 화면 청크가 늦으면 즐겨찾기 화면을 유지하다가 로그인 화면으로 바꾼다", async ({ page }) => {
+  await watchFallback(page);
   const assets = trackAssets(page);
   await settleHome(page);
-  const map = await homeMap(page).elementHandle();
-  await interceptNewScripts(page, assets.requested, delayed(2_000));
+  await tab(page, "즐겨찾기").click();
+  const card = page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true });
+  await expect(card).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  const chunks = gate();
+  await interceptNewScripts(page, assets.requested, chunks.handle);
 
-  await tab(page, "마이페이지").click();
-  await expect(page.getByRole("status").filter({ hasText: LOADING })).toBeVisible();
-  await expect(tab(page, "마이페이지")).toHaveAttribute("aria-current", "page");
-  await expect(guestLogin(page)).toHaveCount(0);
-  expect(await map!.evaluate((node) => node.isConnected)).toBe(true);
+  await card.getByRole("link", { name: "로그인 / 회원가입", exact: true }).click();
+  await expect.poll(chunks.held).toBeGreaterThan(0);
+  await expect(card).toBeVisible();
+  await expect(page.getByText(LOADING, { exact: true })).toHaveCount(0);
 
-  await expect(guestLogin(page)).toBeVisible();
-  await expect(page.getByRole("status").filter({ hasText: LOADING })).toHaveCount(0);
-  expect(await map!.evaluate((node) => node.isConnected)).toBe(true);
+  chunks.release();
+  await expect(page.getByRole("button", { name: "카카오로 계속하기", exact: true })).toBeVisible();
+  expect(await fallbackSeen(page)).toBe(false);
 });
 
 test("시트 화면 청크가 실패하면 시트 안에 오류를 보이고 다시 시도하면 화면을 보인다", async ({ page }) => {
+  await watchFallback(page);
   const assets = trackAssets(page);
   await settleHome(page);
   await interceptNewScripts(page, assets.requested, failing(1));
@@ -176,6 +262,7 @@ test("시트 화면 청크가 실패하면 시트 안에 오류를 보이고 다
   await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
   await expect(guestLogin(page)).toBeVisible();
   await expect(page.getByText(LOAD_FAILED, { exact: true })).toHaveCount(0);
+  expect(await fallbackSeen(page)).toBe(false);
 });
 
 test("판정보드 청크가 실패하면 오류를 보이고 다시 시도하면 보드를 보인다", async ({ page }) => {
@@ -213,7 +300,7 @@ test("페이지 화면 청크가 두 번 실패하면 새로고침을 권하고 
   await expect(page.getByRole("button", { name: "카카오로 계속하기", exact: true })).toBeVisible();
 });
 
-const directEntries: { path: string; shows: (page: Page) => ReturnType<Page["getByRole"]> }[] = [
+const directEntries: { path: string; url?: string; shows: (page: Page) => ReturnType<Page["getByRole"]> }[] = [
   {
     path: `/routes/${routeId}`,
     shows: (page) => page.getByRole("heading", { name: "3330", exact: true }),
@@ -227,39 +314,51 @@ const directEntries: { path: string; shows: (page: Page) => ReturnType<Page["get
   { path: "/login", shows: (page) => page.getByRole("button", { name: "카카오로 계속하기", exact: true }) },
   { path: "/mypage/nickname", shows: (page) => page.getByRole("heading", { name: "닉네임 수정", exact: true }) },
   { path: "/favorites/groups/group-1", shows: (page) => page.getByRole("heading", { name: "그룹 관리", exact: true }) },
+  {
+    path: "/mypage/groups/group-1",
+    url: "/favorites/groups/group-1",
+    shows: (page) => page.getByRole("heading", { name: "그룹 관리", exact: true }),
+  },
   { path: "/mypage/whats-new", shows: (page) => page.getByRole("heading", { name: "새 소식", exact: true }) },
-  { path: "/privacy", shows: (page) => page.getByRole("heading", { name: /개인정보 처리방침/ }) },
 ];
 
-for (const { path, shows } of directEntries) {
-  test(`${path}에 직접 들어가면 불러오는 중을 지나 그 화면을 보인다`, async ({ page }) => {
+for (const { path, url, shows } of directEntries) {
+  test(`${path}에 직접 들어가면 불러오는 중 화면 없이 그 화면을 보인다`, async ({ page }) => {
+    await watchFallback(page);
     await page.goto(path);
     await expect(shows(page)).toBeVisible();
-    await expect(page).toHaveURL(path);
-    await expect(page.getByText(LOADING, { exact: true })).toHaveCount(0);
-    await expect(page.getByText(PRIVACY_LOADING, { exact: true })).toHaveCount(0);
+    await expect(page).toHaveURL(url ?? path);
+    expect(await fallbackSeen(page)).toBe(false);
     await expect(page.getByText(APP_ERROR, { exact: true })).toHaveCount(0);
     await expect(page.getByText(LOAD_FAILED, { exact: true })).toHaveCount(0);
   });
 }
 
-test("화면 청크는 window load가 끝난 뒤에 받아 직접 진입에서 load 이벤트를 미루지 않는다", async ({ page }) => {
-  const initial = await initialScriptsOf(page, "/favorites");
-  await page.goto("/favorites");
-  await expect(page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true })).toBeVisible();
-  const timing = await page.evaluate((initialScripts) => {
-    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
-    const chunks = performance
-      .getEntriesByType("resource")
-      .filter((entry) => /\.js$/.test(new URL(entry.name).pathname) && new URL(entry.name).origin === location.origin)
-      .filter((entry) => !initialScripts.includes(entry.name))
-      .map((entry) => entry.startTime);
-    return { loadEventStart: navigation.loadEventStart, chunks };
-  }, initial);
-  expect(timing.loadEventStart).toBeGreaterThan(0);
-  expect(timing.chunks.length).toBeGreaterThan(0);
-  for (const start of timing.chunks) expect(start).toBeGreaterThanOrEqual(timing.loadEventStart);
-});
+const loadOrderEntries = directEntries.filter(({ path }) =>
+  [`/routes/${routeId}`, "/favorites", "/mypage", "/login"].includes(path),
+);
+
+for (const { path, shows } of loadOrderEntries) {
+  test(`${path} 직접 진입에서 화면 청크는 window load가 끝난 뒤에 받아 load 이벤트를 미루지 않는다`, async ({
+    page,
+  }) => {
+    const initial = await initialScriptsOf(page, path);
+    await page.goto(path);
+    await expect(shows(page)).toBeVisible();
+    const timing = await page.evaluate((initialScripts) => {
+      const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
+      const chunks = performance
+        .getEntriesByType("resource")
+        .filter((entry) => /\.js$/.test(new URL(entry.name).pathname) && new URL(entry.name).origin === location.origin)
+        .filter((entry) => !initialScripts.includes(entry.name))
+        .map((entry) => entry.startTime);
+      return { loadEventStart: navigation.loadEventStart, chunks };
+    }, initial);
+    expect(timing.loadEventStart).toBeGreaterThan(0);
+    expect(timing.chunks.length).toBeGreaterThan(0);
+    for (const start of timing.chunks) expect(start).toBeGreaterThanOrEqual(timing.loadEventStart);
+  });
+}
 
 test.describe("홈 native 지도가 있는 앱", () => {
   test.beforeEach(async ({ page }) => {
