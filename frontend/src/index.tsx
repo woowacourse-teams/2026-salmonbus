@@ -7,6 +7,8 @@ import { AppErrorBoundary } from "@/app/AppErrorBoundary";
 import { initAnalytics } from "@/shared/analytics/analytics";
 import { initInputMethod } from "@/shared/input-method/inputMethod";
 import { initOpenedNotifications } from "@/shared/notification/openedNotificationInbox";
+import { initPagePreload } from "@/shared/routing/pagePreload";
+import { lazyPagePreloads } from "@/app/lazyPages";
 
 const container = document.getElementById("root");
 if (!container) {
@@ -16,6 +18,7 @@ if (!container) {
 initAnalytics();
 initInputMethod();
 initOpenedNotifications();
+initPagePreload(lazyPagePreloads);
 
 createRoot(container, errorTrackingRootOptions).render(
   <StrictMode>

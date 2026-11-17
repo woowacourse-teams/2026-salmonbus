@@ -13,6 +13,7 @@ import { Notice } from "@/shared/components/Notice";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { paths } from "@/shared/routing/paths";
 import { useNavigateKeepingFocus } from "@/shared/routing/focusKeepingNavigation";
+import { preloadPage } from "@/shared/routing/pagePreload";
 import { routeSearchStateFor } from "@/shared/routing/routeSearchEntry";
 import { SEARCH_ENTRY_LABEL, SEARCH_ENTRY_PROMPT } from "../routeSelectCopy";
 import { RouteNetworkTitle } from "../RouteNetworkPage";
@@ -218,9 +219,14 @@ export function RouteSelectScreen({
   const navigateKeepingFocus = useNavigateKeepingFocus();
 
   // iOS에서 숫자 키패드를 열 수 있도록 입력창을 누른 뒤 검색 화면으로 이동한다.
-  const openRouteSearch = () => navigateKeepingFocus(paths.routeSearch, { mapFlow: true });
-  const openRouteSearchWith = (input: string) =>
+  const openRouteSearch = () => {
+    preloadPage("board");
+    navigateKeepingFocus(paths.routeSearch, { mapFlow: true });
+  };
+  const openRouteSearchWith = (input: string) => {
+    preloadPage("board");
     navigateKeepingFocus(paths.routeSearch, { ...routeSearchStateFor(input), mapFlow: true });
+  };
 
   function selectStop(id: string) {
     if (selectedStop?.id === id) {
@@ -228,7 +234,9 @@ export function RouteSelectScreen({
       return;
     }
     const stop = stops.find((item) => item.id === id);
-    if (stop) setSheet({ key: location.key, tab: tabSheet, station: { stop, snap: "detail" } });
+    if (!stop) return;
+    preloadPage("board");
+    setSheet({ key: location.key, tab: tabSheet, station: { stop, snap: "detail" } });
   }
 
   const homeMapProps = {
