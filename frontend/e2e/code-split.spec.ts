@@ -211,7 +211,7 @@ test.describe("홈 native 지도가 있는 앱", () => {
       if (new URL(request.url()).hostname === "oapi.map.naver.com") sdkRequests.push(request.url());
     });
     await page.goto("/");
-    await expect(page.locator("html")).toHaveAttribute("data-native-home-map", "true");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("연어버스");
     await openRouteSearch(page);
     await pickRoute(page);
     await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
