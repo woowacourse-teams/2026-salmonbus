@@ -805,10 +805,22 @@ export function createNaverRouteMap(
           item.count.style.transform = `translateY(${-index * 20}px)`;
         }),
       );
-      // 최초 이동이 끝나면 핀과 같은 보간 좌표를 사용해 카메라만 따라간다.
+      // 홀수 크기의 지도 중심은 반 픽셀이어서 SDK 반올림 오차로 핀이 1px씩 왕복할 수 있다.
+      // 차량 좌표는 유지하고 카메라만 최대 반 픽셀 옮겨, 추적 핀이 정수 픽셀에 놓이게 한다.
       if (vehicleFocusKey !== null && cameraFocusFrame === null) {
         const coordinate = vehicles.get(vehicleFocusKey)?.coordinate;
-        if (coordinate !== undefined) map.setCenter(toNaverCoordinate(coordinate));
+        if (coordinate !== undefined) {
+          const position = toNaverCoordinate(coordinate);
+          const { width, height } = map.getSize();
+          const offsetX = width / 2 - Math.round(width / 2);
+          const offsetY = height / 2 - Math.round(height / 2);
+          if (offsetX === 0 && offsetY === 0) map.setCenter(position);
+          else {
+            const projection = map.getProjection();
+            const point = projection.fromCoordToOffset(position);
+            map.setCenter(projection.fromOffsetToCoord(new sdk.Point(point.x + offsetX, point.y + offsetY)));
+          }
+        }
       }
     },
     resize(width, height, nextVisibleHeight) {
