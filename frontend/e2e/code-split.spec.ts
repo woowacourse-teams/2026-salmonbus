@@ -145,19 +145,28 @@ function guestLogin(page: Page) {
   return page.getByRole("link", { name: "로그인 / 회원가입", exact: true });
 }
 
-test("홈은 다른 화면 청크 없이 그리고, 쉬는 시간에 탭 화면 청크를 미리 받아 탭을 누를 때 다시 받지 않는다", async ({
+async function settlePrefetchedHome(page: Page, assets: ReturnType<typeof trackAssets>) {
+  const initial = await initialScriptsOf(page, "/");
+  await settleHome(page);
+  await page.clock.runFor(1_000);
+  await expect
+    .poll(() => assets.requested.filter((url) => url.endsWith(".js") && !initial.includes(url)).length)
+    .toBeGreaterThan(1);
+  await page.waitForLoadState("networkidle");
+  return initial;
+}
+
+test("홈 첫 스크립트에는 다른 화면 코드가 없고, 쉬는 시간에 탭 화면 청크를 미리 받아 탭을 누를 때 다시 받지 않는다", async ({
   page,
 }) => {
   await watchFallback(page);
   const assets = trackAssets(page);
-  await settleHome(page);
-  const home = assets.requested.length;
-  await page.waitForTimeout(2_000);
-  expect(assets.after(home)).toEqual([]);
-
-  await page.clock.runFor(1_000);
-  await expect.poll(() => assets.after(home).filter((url) => url.endsWith(".js")).length).toBeGreaterThan(1);
-  await page.waitForLoadState("networkidle");
+  const initial = await settlePrefetchedHome(page, assets);
+  for (const src of initial) {
+    const body = await (await page.request.get(src)).text();
+    expect(body).not.toContain(FAVORITES_CHUNK);
+    expect(body).not.toContain(ACCOUNT_CHUNK);
+  }
   const prefetched = assets.requested.length;
 
   await tab(page, "마이페이지").click();
@@ -173,7 +182,7 @@ test("홈은 다른 화면 청크 없이 그리고, 쉬는 시간에 탭 화면 
 test("검색에서 노선을 고르면 새 청크 없이 판정보드로 바뀌고 홈 지도는 그대로 둔다", async ({ page }) => {
   await watchFallback(page);
   const assets = trackAssets(page);
-  await settleHome(page);
+  await settlePrefetchedHome(page, assets);
   const home = assets.requested.length;
   const map = await homeMap(page).elementHandle();
 
