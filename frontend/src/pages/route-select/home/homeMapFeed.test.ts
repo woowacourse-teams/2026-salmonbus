@@ -117,7 +117,23 @@ describe("homeMapFeed", () => {
     expect(feed.getSnapshot().data).toBe(loaded);
     await flush();
     expect(fetch).toHaveBeenCalledTimes(2);
+    expect(feed.getSnapshot().data).not.toBe(loaded);
     expect(feed.getSnapshot().data.routePaths).toHaveLength(1);
+  });
+
+  it("모두 떠난 뒤 요청이 끝나도 결과를 보관하고 다시 필요해지면 요청하지 않는다", async () => {
+    const pending = deferred<Response>();
+    const { feed, fetch } = setup([() => pending.promise]);
+    const leave = feed.subscribeNeeded(() => {});
+    await flush();
+    leave();
+    pending.resolve(Response.json(FEED));
+    await flush();
+    expect(feed.getSnapshot().status).toBe("ready");
+    feed.subscribeNeeded(() => {});
+    await flush();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(feed.getSnapshot().data.stops.map((stop) => stop.id)).toEqual(["10001"]);
   });
 
   it("같은 내용으로 다시 받으면 데이터 참조를 유지한다", async () => {
