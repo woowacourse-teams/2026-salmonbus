@@ -1,6 +1,7 @@
 package com.gustler.backend.worker.scheduling;
 
 import com.gustler.backend.diagnostics.WorkerOperationLog;
+import com.gustler.backend.forecasting.api.model.CheckActiveModelCoverage;
 import com.gustler.backend.observations.api.CloseUnfinishedCollections;
 import com.gustler.backend.observations.api.CollectObservations;
 import com.gustler.backend.worker.configuration.CollectionProperties;
@@ -20,23 +21,41 @@ public class CollectionScheduler {
     private final CollectionProperties properties;
     private final CollectObservations collector;
     private final CloseUnfinishedCollections unfinished;
+    private final CheckActiveModelCoverage modelCoverage;
 
     public CollectionScheduler(
         CollectionProperties properties,
         CollectObservations collector,
-        CloseUnfinishedCollections unfinished
+        CloseUnfinishedCollections unfinished,
+        CheckActiveModelCoverage modelCoverage
     ) {
         this.properties = properties;
         this.collector = collector;
         this.unfinished = unfinished;
+        this.modelCoverage = modelCoverage;
     }
 
     public void collectAllRoutes() {
-        if (properties.routeIds().isEmpty()) {
+        List<String> routes = properties.routeIds();
+        if (routes.isEmpty()) {
             return;
         }
         closePreviousRound();
-        properties.routeIds().forEach(this::collectSafely);
+        var requiresForecast = properties.forecastRequiredRouteIds();
+        final boolean canCollectNewRoutes = properties.allowPreforecastObservations()
+            || routes.stream().noneMatch(requiresForecast::contains)
+            || activeModelCovers(routes);
+        routes.stream().filter(id -> canCollectNewRoutes || !requiresForecast.contains(id)).forEach(this::collectSafely);
+    }
+
+    private boolean activeModelCovers(List<String> routes) {
+        try {
+            return modelCoverage.coversAll(routes);
+        } catch (RuntimeException unavailable) {
+            LOGGER.warn("event=collection_forecast_scope_unavailable exceptionType={}",
+                unavailable.getClass().getSimpleName());
+            return false;
+        }
     }
 
     /** 같은 단일 수집 스레드에서, 새 회차가 시작되기 전에만 이전 기록을 정리한다. */

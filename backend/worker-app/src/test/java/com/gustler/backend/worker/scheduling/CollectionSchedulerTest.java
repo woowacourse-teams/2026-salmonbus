@@ -11,10 +11,12 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.gustler.backend.diagnostics.WorkerOperationLog;
+import com.gustler.backend.forecasting.api.model.CheckActiveModelCoverage;
 import com.gustler.backend.observations.api.CloseUnfinishedCollections;
 import com.gustler.backend.observations.application.ObservationCollector;
 import com.gustler.backend.worker.configuration.CollectionProperties;
 import java.util.List;
+import java.util.Set;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,8 +40,35 @@ class CollectionSchedulerTest {
     @Mock
     private CloseUnfinishedCollections unfinished;
 
+    @Mock
+    private CheckActiveModelCoverage modelCoverage;
+
     @InjectMocks
     private CollectionScheduler scheduler;
+
+    @Test
+    void 기존_노선은_수집하고_번들이_없으면_새_노선은_기다린다() {
+        given(properties.routeIds()).willReturn(List.of(ROUTE_3330, "234001476", "222000209"));
+        given(properties.forecastRequiredRouteIds()).willReturn(Set.of("234001476", "222000209"));
+        given(modelCoverage.coversAll(properties.routeIds())).willReturn(false);
+
+        scheduler.collectAllRoutes();
+
+        then(collector).should().collectOnce(ROUTE_3330);
+        then(collector).shouldHaveNoMoreInteractions();
+    }
+
+    @Test
+    void 모든_수집_노선을_지원하는_활성_번들이_있으면_신규_노선을_함께_수집한다() {
+        List<String> routes = List.of(ROUTE_3330, "234001476", "222000209");
+        given(properties.routeIds()).willReturn(routes);
+        given(properties.forecastRequiredRouteIds()).willReturn(Set.of("234001476", "222000209"));
+        given(modelCoverage.coversAll(routes)).willReturn(true);
+
+        scheduler.collectAllRoutes();
+
+        routes.forEach(route -> then(collector).should().collectOnce(route));
+    }
 
     @Test
     void 설정에_적힌_노선을_모두_돈다() {

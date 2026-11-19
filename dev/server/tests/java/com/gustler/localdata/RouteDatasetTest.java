@@ -20,7 +20,7 @@ class RouteDatasetTest {
             RouteDataset.readCatalog(directory.resolve("catalog-routes.json")).routes().stream()).toList();
 
         // when / then
-        assertThat(routes).hasSize(41);
+        assertThat(routes).hasSize(45);
         for (var route : routes) {
             assertThat(route.versionDigest()).isEqualTo(RouteContentDigest.of(route.domainStops()).value())
                 .isNotEqualTo(route.contentDigest());
