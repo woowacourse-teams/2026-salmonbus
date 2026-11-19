@@ -5,6 +5,7 @@ import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAw
 import com.gustler.backend.forecasting.application.deployment.ModelBundleFiles;
 import com.gustler.backend.forecasting.application.deployment.ModelBundleLoader;
 import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareServingBundle;
+import com.gustler.backend.forecasting.infrastructure.bundle.alighting.TransferredServingBundle;
 import java.io.IOException;
 import java.nio.file.Path;
 import tools.jackson.core.JacksonException;
@@ -34,21 +35,24 @@ public final class FileModelBundleLoader implements ModelBundleLoader {
         Path path = Path.of(directory);
         BundleFiles files = BundleFiles.under(path);
         return () -> {
-            JsonNode manifest = readManifest(files);
-            if (manifest.has("schema") && "alighting-inference-bundle-v1".equals(canonical(manifest.get("schema").asString()))) {
-                try {
-                    return AlightingAwareServingBundle.load(path, allowSyntheticFixture);
-                } catch (IOException | IllegalArgumentException error) {
-                    throw new BundleRejectedException("하차 반영 서빙 번들 검증 실패", error);
-                }
+            byte[] bytes = files.readManifest();
+            JsonNode manifest = readManifest(bytes);
+            String schema = canonical(manifest.path("schema").asString(""));
+            try {
+                return switch (schema) {
+                    case "alighting-inference-bundle-v1" -> AlightingAwareServingBundle.load(path, allowSyntheticFixture);
+                    case TransferredServingBundle.SCHEMA -> TransferredServingBundle.load(path, bytes, manifest);
+                    default -> throw new BundleRejectedException("지원이 종료된 좌석분포 모델 번들이다");
+                };
+            } catch (IOException | IllegalArgumentException error) {
+                throw new BundleRejectedException("하차 반영 서빙 번들 검증 실패", error);
             }
-            throw new BundleRejectedException("지원이 종료된 좌석분포 모델 번들이다");
         };
     }
 
-    private static JsonNode readManifest(BundleFiles files) {
+    private static JsonNode readManifest(byte[] bytes) {
         try {
-            JsonNode manifest = JsonMapper.builder().build().readTree(files.readManifest());
+            JsonNode manifest = JsonMapper.builder().build().readTree(bytes);
             if (!manifest.isObject()) {
                 throw new BundleRejectedException("모델 manifest는 JSON 객체여야 한다");
             }
