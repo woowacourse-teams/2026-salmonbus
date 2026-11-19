@@ -13,6 +13,7 @@ import { Notice } from "@/shared/components/Notice";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { paths } from "@/shared/routing/paths";
 import { useNavigateKeepingFocus } from "@/shared/routing/focusKeepingNavigation";
+import type { BottomTabId } from "@/shared/routing/bottomTabs";
 import { routeSearchStateFor } from "@/shared/routing/routeSearchEntry";
 import { SEARCH_ENTRY_LABEL, SEARCH_ENTRY_PROMPT } from "../routeSelectCopy";
 import { RouteNetworkTitle } from "../RouteNetworkPage";
@@ -23,6 +24,7 @@ import { NativeHomeMap } from "../home/NativeHomeMap";
 import { HomeStopRoutes } from "../home/HomeStopRoutes";
 import { HomeOverview } from "../home/HomeOverview";
 import { DEFAULT_LOCATION, distanceMeters, type HomeStop, type Point } from "../home/homeMapData";
+import { homeMapFeed } from "../home/homeMapFeed";
 import { useHomeMapData } from "../home/useHomeMapData";
 import { useHomeStations } from "../home/useHomeStations";
 import * as homeStyles from "../home/HomeScreen.css";
@@ -61,6 +63,10 @@ interface FavoriteMapTransition {
 }
 
 const INITIAL_TAB_SHEET: TabSheetState = { snap: "summary", direction: "larger" };
+
+function prefetchTabData(tab: BottomTabId) {
+  if (tab === "route-map") homeMapFeed.prefetch();
+}
 
 export function RouteSelectScreen({
   favoriteSelection,
@@ -146,12 +152,14 @@ export function RouteSelectScreen({
   const [locating, setLocating] = useState(false);
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const [stationTileKey, setStationTileKey] = useState("");
-  const { stops: fallbackStops, routePaths } = useHomeMapData();
   const {
-    stops,
+    stops: stationStops,
+    catalogUnavailable,
     hasError: stationTilesFailed,
     retry: retryStationTiles,
-  } = useHomeStations(showStops ? stationTileKey : "", fallbackStops);
+  } = useHomeStations(showStops ? stationTileKey : "");
+  const { stops: fallbackStops, routePaths } = useHomeMapData(isRouteMap || catalogUnavailable);
+  const stops = catalogUnavailable ? fallbackStops : stationStops;
   const sheetLabel = selectedStop
     ? "정류장 노선 안내"
     : isRouteMap
@@ -370,7 +378,11 @@ export function RouteSelectScreen({
         </NativeMapFlowContext>
       )}
       {!overlayOpen && !selectedStop && (
-        <BottomNavigation ref={navigationRef} onActiveTabPress={() => sheetControlsRef.current?.stepHeight()} />
+        <BottomNavigation
+          ref={navigationRef}
+          onActiveTabPress={() => sheetControlsRef.current?.stepHeight()}
+          onTabIntent={prefetchTabData}
+        />
       )}
       {typeof notice === "string" && <Notice key={location.key} message={notice} />}
       {isHome && <WhatsNewOnEntry />}

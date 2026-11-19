@@ -1,4 +1,4 @@
-import { mergeTests } from "@playwright/test";
+import { mergeTests, type Page } from "@playwright/test";
 import { test, expect } from "./fixtures/naver-map";
 import { test as authTest, testMember } from "./fixtures/auth";
 import { apiPaths, observedAt, routeId } from "./fixtures/mock-data";
@@ -1294,4 +1294,180 @@ test("지역 경계 조각을 받지 못해도 날씨를 새로고침하면 조�
   await refresh.click();
 
   await expect(weather.getByText("경기도 성남시 분당구 삼평동 날씨", { exact: true })).toBeVisible();
+});
+
+const feedWithRoute = {
+  generatedAt: observedAt,
+  events: [],
+  stops: [{ id: "10001", name: "공원 앞", point: pangyoPoint, routes: [] }],
+  routePaths: [[pangyoPoint, [127.29, 37.22]]],
+};
+
+async function serveStationTiles(page: Page, status: () => number = () => 200) {
+  await page.route("**/api/v2/stations/tiles/14/*/*", (route) => {
+    const [zoom, x, y] = new URL(route.request().url()).pathname.split("/").slice(-3).map(Number);
+    if (status() !== 200) return route.fulfill({ status: status() });
+    return route.fulfill({
+      json: {
+        tile: { zoom, x, y },
+        coordinateSystem: "WGS84",
+        status: "READY",
+        stations:
+          x === 13976 && y === 6354
+            ? [{ stationId: "206000532", name: "판교역 API", point: { x: pangyoPoint[0], y: pangyoPoint[1] } }]
+            : [],
+      },
+    });
+  });
+}
+
+function recordFeedRequests(page: Page) {
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/assets/home-events.json") requests.push(request.url());
+  });
+  return requests;
+}
+
+async function expectRouteNetwork(page: Page) {
+  await expect(page.getByRole("list", { name: "서비스 중 노선" })).toBeVisible();
+  await page.clock.runFor(64);
+  await expect(page.getByTestId("home-route-network").locator("defs > path")).toHaveAttribute("d", /^M[^ML]+L[^ML]+$/);
+}
+
+test("정류장 API가 정상이면 홈과 다른 탭에서 home-events를 받지 않고 노선도에 들어갈 때 한 번만 받는다", async ({
+  page,
+}) => {
+  await serveStationTiles(page);
+  await page.route("**/assets/home-events.json", (route) => route.fulfill({ json: feedWithRoute }));
+  const feedRequests = recordFeedRequests(page);
+  const nav = page.getByRole("navigation", { name: "주요 메뉴" });
+  const panel = page.getByRole("region", { name: "선택한 탭 내용" });
+
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "판교역 API 정류장" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "공원 앞 정류장" })).toHaveCount(0);
+  for (const tab of ["즐겨찾기", "마이페이지"]) {
+    await nav.getByRole("link", { name: tab, exact: true }).click();
+    await expect(panel.getByRole("heading", { name: tab, exact: true })).toBeVisible();
+  }
+  expect(feedRequests).toEqual([]);
+
+  await nav.getByRole("link", { name: "노선도", exact: true }).click();
+  await expectRouteNetwork(page);
+  expect(feedRequests).toHaveLength(1);
+
+  await nav.getByRole("link", { name: "홈", exact: true }).click();
+  await expect(page.getByRole("region", { name: "홈 정보", exact: true })).toBeVisible();
+  await nav.getByRole("link", { name: "노선도", exact: true }).click();
+  await expectRouteNetwork(page);
+  expect(feedRequests).toHaveLength(1);
+});
+
+test("노선도로 바로 들어오면 정류장 API와 상관없이 home-events를 바로 받는다", async ({ page }) => {
+  await serveStationTiles(page);
+  await page.route("**/assets/home-events.json", (route) => route.fulfill({ json: feedWithRoute }));
+  const feedRequests = recordFeedRequests(page);
+
+  await page.goto("/route-map");
+  await expectRouteNetwork(page);
+  expect(feedRequests).toHaveLength(1);
+});
+
+test("정류장 API가 미지원이면 home-events의 정류장을 표시하고 노선도에서 다시 받지 않는다", async ({ page }) => {
+  await page.route("**/assets/home-events.json", (route) => route.fulfill({ json: feedWithRoute }));
+  const feedRequests = recordFeedRequests(page);
+
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "공원 앞 정류장" })).toBeVisible();
+  expect(feedRequests).toHaveLength(1);
+
+  await page.getByRole("navigation", { name: "주요 메뉴" }).getByRole("link", { name: "노선도", exact: true }).click();
+  await expectRouteNetwork(page);
+  expect(feedRequests).toHaveLength(1);
+});
+
+test("정류장 API가 503이면 미지원으로 보지 않고 home-events를 받지 않는다", async ({ page }) => {
+  let tileStatus = 503;
+  await serveStationTiles(page, () => tileStatus);
+  await page.route("**/assets/home-events.json", (route) => route.fulfill({ json: feedWithRoute }));
+  const feedRequests = recordFeedRequests(page);
+
+  await page.goto("/");
+  await expect(page.getByText("주변 정류장을 모두 불러오지 못했어요.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "공원 앞 정류장" })).toHaveCount(0);
+  tileStatus = 200;
+  await page.getByRole("button", { name: "정류장 다시 불러오기" }).click();
+  await expect(page.getByRole("button", { name: "판교역 API 정류장" })).toBeVisible();
+  expect(feedRequests).toEqual([]);
+});
+
+test("home-events가 잘못된 JSON이면 노선도에 다시 들어올 때 다시 받아 경로를 그린다", async ({ page }) => {
+  await serveStationTiles(page);
+  let attempts = 0;
+  await page.route("**/assets/home-events.json", (route) =>
+    ++attempts === 1
+      ? route.fulfill({ status: 200, contentType: "application/json", body: "<html>" })
+      : route.fulfill({ json: feedWithRoute }),
+  );
+  const feedRequests = recordFeedRequests(page);
+  const nav = page.getByRole("navigation", { name: "주요 메뉴" });
+  const brokenFeed = page.waitForResponse((response) => response.url().endsWith("/assets/home-events.json"));
+
+  await page.goto("/route-map");
+  await (await brokenFeed).finished();
+  await expect(page.getByRole("list", { name: "서비스 중 노선" })).toBeVisible();
+  await nav.getByRole("link", { name: "홈", exact: true }).click();
+  await expect(page.getByRole("region", { name: "홈 정보", exact: true })).toBeVisible();
+  await nav.getByRole("link", { name: "노선도", exact: true }).click();
+  await expectRouteNetwork(page);
+  expect(feedRequests).toHaveLength(2);
+});
+
+test("home-events 응답이 늦는 동안 노선도를 나갔다 들어와도 요청을 한 번만 보낸다", async ({ page }) => {
+  await serveStationTiles(page);
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/assets/home-events.json", async (route) => {
+    await released;
+    await route.fulfill({ json: feedWithRoute });
+  });
+  const feedRequests = recordFeedRequests(page);
+  const nav = page.getByRole("navigation", { name: "주요 메뉴" });
+  const feedRequest = page.waitForRequest((request) => request.url().endsWith("/assets/home-events.json"));
+
+  await page.goto("/route-map");
+  await feedRequest;
+  await nav.getByRole("link", { name: "홈", exact: true }).click();
+  await expect(page.getByRole("region", { name: "홈 정보", exact: true })).toBeVisible();
+  await nav.getByRole("link", { name: "노선도", exact: true }).click();
+  release();
+  await expectRouteNetwork(page);
+  expect(feedRequests).toHaveLength(1);
+});
+
+test("홈에서 노선도 탭을 누르기 시작하면 이동 전에 home-events를 미리 받고 이동한 뒤 다시 받지 않는다", async ({
+  page,
+}) => {
+  await serveStationTiles(page);
+  await page.route("**/assets/home-events.json", (route) => route.fulfill({ json: feedWithRoute }));
+  const feedRequests = recordFeedRequests(page);
+  const routeMapTab = page
+    .getByRole("navigation", { name: "주요 메뉴" })
+    .getByRole("link", { name: "노선도", exact: true });
+
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "판교역 API 정류장" })).toBeVisible();
+  expect(feedRequests).toEqual([]);
+
+  const prefetched = page.waitForResponse((response) => response.url().endsWith("/assets/home-events.json"));
+  await routeMapTab.dispatchEvent("pointerdown");
+  await prefetched;
+  await expect(page).toHaveURL("/");
+
+  await routeMapTab.click();
+  await expectRouteNetwork(page);
+  expect(feedRequests).toHaveLength(1);
 });
