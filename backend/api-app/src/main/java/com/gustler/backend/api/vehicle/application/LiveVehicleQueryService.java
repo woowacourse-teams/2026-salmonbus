@@ -1,6 +1,5 @@
 package com.gustler.backend.api.vehicle.application;
 
-import com.gustler.backend.api.route.ObservationOnlyRoutes;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import com.gustler.backend.api.vehicle.domain.ObservedVehicle;
@@ -35,7 +34,6 @@ public class LiveVehicleQueryService {
      * 현재 판본의 최신 관측을 조회해 화면 상태를 계산한다. 모형 지원 여부와 관측 부재·신선도를 별도로 판단한다.
      */
     public LiveVehicleOverview getLiveVehicles(RouteId routeId) {
-        ObservationOnlyRoutes.requirePublic(routeId);
         VehicleSnapshot snapshot = vehicleQueryRepository.findLatestSnapshot(routeId)
             .orElseThrow(RouteNotFoundException::new);
         OffsetDateTime observedAt = snapshot.observedAt();
