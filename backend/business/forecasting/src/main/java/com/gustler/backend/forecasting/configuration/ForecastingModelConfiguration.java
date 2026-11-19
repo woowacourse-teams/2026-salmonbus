@@ -1,10 +1,12 @@
 package com.gustler.backend.forecasting.configuration;
 
+import com.gustler.backend.forecasting.api.model.CheckActiveModelCoverage;
 import com.gustler.backend.forecasting.application.deployment.ActiveForecastRuntimeResolver;
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
 import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
 import com.gustler.backend.forecasting.application.deployment.ModelBundleLoader;
 import com.gustler.backend.forecasting.application.deployment.ModelStartupService;
+import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentRepository;
 import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,6 +48,13 @@ public class ForecastingModelConfiguration {
         BundleActivation activation
     ) {
         return new ModelStartupService(loader, deployments, bundles, activation);
+    }
+
+    @Bean
+    public CheckActiveModelCoverage checkActiveModelCoverage(ForecastRuntime runtime) {
+        return routeIds -> runtime.resolveActive()
+            .filter(snapshot -> routeIds.stream().allMatch(snapshot::covers))
+            .isPresent();
     }
 
     @Bean

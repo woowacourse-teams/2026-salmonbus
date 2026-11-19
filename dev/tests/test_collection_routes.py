@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 import sys
 import unittest
+from urllib.error import HTTPError
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("collection_routes", Path(__file__).with_name("assert-collection-routes.py"))
@@ -97,10 +98,14 @@ class CollectionRoutesTest(unittest.TestCase):
         def reply(url, timeout):
             if url.endswith("/api/v1/routes"):
                 payload = {"routes": [{"id": r["routeId"], "displayName": r["displayName"],
-                    "status": "FORECAST_READY" if r["routeId"] in supported else "PREPARING"} for r in routes]}
+                    "status": "FORECAST_READY" if r["routeId"] in supported else "PREPARING"} for r in routes
+                    if r["routeId"] not in checks.OBSERVATION_ONLY]}
             else:
-                route_id = url.split("/")[-2]
-                seen.append(route_id)
+                route_id, endpoint = url.split("/")[-2:]
+                seen.append((route_id, endpoint))
+                if route_id in checks.OBSERVATION_ONLY:
+                    body = io.BytesIO(b'{"code":"ROUTE_NOT_FOUND"}')
+                    raise HTTPError(url, 404, "Not found", None, body)
                 has_model = route_id in supported
                 forecast = {"status": "AVAILABLE" if has_model and forecasts_available else "UNAVAILABLE"}
                 payload = self.body(route_id, "FORECAST_READY" if has_model else "PREPARING", forecast)
@@ -121,13 +126,17 @@ class CollectionRoutesTest(unittest.TestCase):
             checks.verify("http://127.0.0.1:1", data, query)
         return seen, queries
 
-    def test_실제_노선_파일과_합성_API응답으로_20개_전체를_검사한다(self):
+    def test_노선_파일로_기존_20개_보드와_비공개_5개_직접_링크를_검사한다(self):
         for hour, forecasts_available in [(8, True), (22, False)]:
             with self.subTest(hour=hour):
                 observed_at = f"2026-11-10T{hour:02d}:09:01.69585+09:00"
                 seen, queries = self.verify_with(observed_at, f"2026-11-10T{hour:02d}:09:03+09:00",
                                                  forecasts_available)
-                self.assertEqual(len(seen), 20)
+                self.assertEqual(sum(route not in checks.OBSERVATION_ONLY for route, _ in seen), 20)
+                self.assertEqual(
+                    {(route, endpoint) for route, endpoint in seen if route in checks.OBSERVATION_ONLY},
+                    {(route, endpoint) for route in checks.OBSERVATION_ONLY
+                     for endpoint in ("board", "watch", "vehicles")})
                 self.assertEqual(len(queries), 1)
                 self.assertIn(f">= {checks.microseconds(checks.parse_observed_at(observed_at))}", queries[0])
 

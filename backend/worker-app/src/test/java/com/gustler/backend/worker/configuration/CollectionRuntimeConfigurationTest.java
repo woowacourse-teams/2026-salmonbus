@@ -1,18 +1,46 @@
 package com.gustler.backend.worker.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.mock;
 
+import com.gustler.backend.forecasting.api.model.CheckActiveModelCoverage;
 import com.gustler.backend.gbis.api.GbisClientOptions;
 import com.gustler.backend.gbis.api.GbisKey;
+import com.gustler.backend.observations.api.CloseUnfinishedCollections;
+import com.gustler.backend.observations.api.CollectObservations;
 import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.quota.api.CallQuotaPolicy;
+import com.gustler.backend.worker.scheduling.CollectionScheduler;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 class CollectionRuntimeConfigurationTest {
     private static final String BASE_URL = "https://gbis.test";
     private static final int DAILY_LIMIT = 10_000;
+
+    @Test
+    void 사전_관측을_켜면_모델이_없어도_신규_노선을_기존과_함께_수집한다() {
+        String existing = "204000057";
+        String newRoute = "234001476";
+        CollectionProperties properties = new CollectionProperties(true, List.of(existing, newRoute), null,
+            Set.of(newRoute), true);
+        CollectObservations collector = mock(CollectObservations.class);
+        CloseUnfinishedCollections unfinished = List::of;
+        var coverage = new StaticListableBeanFactory().getBeanProvider(CheckActiveModelCoverage.class);
+        CollectionRuntimeConfiguration configuration = new CollectionRuntimeConfiguration();
+
+        CollectionScheduler scheduler = configuration.collectionScheduler(
+            properties, collector, unfinished, coverage, false
+        );
+        scheduler.collectAllRoutes();
+
+        then(collector).should().collectOnce(existing);
+        then(collector).should().collectOnce(newRoute);
+    }
 
     @Test
     void 호출_한도가_돌려_쓰는_슬롯과_GBIS_클라이언트가_아는_슬롯이_같다() {

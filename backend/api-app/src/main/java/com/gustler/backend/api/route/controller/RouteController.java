@@ -40,9 +40,9 @@ public class RouteController {
      */
     @GetMapping
     @Operation(summary = "현재 노선 목록",
-        description = "현재 판본이 있는 노선을 반환합니다. 예보 준비 상태는 노선마다 `status`로 구분합니다.")
+        description = "현재 판본이 있는 공개 노선을 반환합니다. 예보 준비 상태는 노선마다 `status`로 구분합니다.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "현재 판본이 있는 노선 목록",
+        @ApiResponse(responseCode = "200", description = "현재 판본이 있는 공개 노선 목록",
             headers = @Header(name = "Cache-Control", description = "public, max-age=300",
                 schema = @Schema(type = "string")),
             content =
