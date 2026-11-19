@@ -47,7 +47,7 @@ final class AlightingAwareConfirmedServingVerification {
         require(receipt.path("verified_cases").asInt() == cases, "검증 사례 수가 원본 결과와 다르다");
     }
 
-    private static int verifiedCases(String check, JsonNode result, List<String> routes) {
+    static int verifiedCases(String check, JsonNode result, List<String> routes) {
         return switch (check) {
         case "feature_parity" -> verifyNumeric(result);
         case "runtime_validation" -> verifyRuntime(result, routes);
