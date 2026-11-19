@@ -39,11 +39,46 @@ Simulator에서는 아래 payload를 파일로 저장하고 `xcrun simctl push b
 
 실기기 token과 실제 수신은 App ID(`com.salmonbus.app`)에 Push Notifications를 켜고 APNs 키를 만든 뒤 `dev-testflight` 프로필(dev 웹, TestFlight 설치)로 확인합니다.
 
+## 시작 단계
+
+앱 시작은 문서 로드, 웹 shell 준비, native 지도 준비, 웹 투명화, 첫 정류장 선택 가능 순서로 진행됩니다. 지금 구간별 제한시간은 다음과 같습니다.
+
+| 구간 | 현재 제한 | 만료 시 화면 | 코드 |
+| --- | --- | --- | --- |
+| loadStart → loadEnd | 앱 코드에는 없음. WebKit 네트워크 timeout에 의존(실기기 미검증) | 스플래시가 계속 보임 | `App.tsx`의 `handleLoadStart`, `handleLoadEnd` |
+| loadEnd → 웹 JS 동작 확인 | 알림 탭을 보관 중일 때만 10초(`WEB_READY_TIMEOUT_MS`). 일반 cold launch에는 없음 | 탭 보관 시 `LoadFailedView`. 그 외에는 빈 화면이 계속됨 | `App.tsx`의 `handleLoadEnd`, `notification/documentLoad.ts` |
+| `notification.takeOpened` 응답 | 웹 5초 | 대상 없음으로 진행 | `frontend/src/shared/notification/nativeNotification.ts`의 `TAKE_OPENED_TIMEOUT_MS` |
+| `map.mountHome` → `map.ready` | 웹 15초와 native 15초 | 웹의 "주변 지도를 불러오지 못했어요"와 다시 시도 버튼 | `frontend/src/pages/route-select/home/NativeHomeMap.tsx`, `NativeRouteMapHostView.swift`의 `initializationTimer` |
+| ready → 웹 투명화 | 같은 콜백 안 | 해당 없음 | `NativeHomeMap.tsx`의 `html[data-native-home-map]` |
+| 투명화 → 지도 터치 개방 | 없음. `map.layout`과 `map.ack` 왕복에 의존 | 웹이 터치를 계속 받음 | `NativeRouteMapHostView.swift`의 터치 gate |
+| 웹 지도 SDK 로드 | 10초 | 웹 오류 안내 | `frontend/src/shared/map/naverSdk.ts` |
+
+`onLoadEnd`는 조건 없이 스플래시를 내립니다. 네트워크 오류와 HTTP 오류(`onError`, `onHttpError`)는 `showLoadFailed`로 가서 타이머를 지우고 지도를 reset한 뒤 `LoadFailedView`를 띄웁니다. 스플래시는 한 번 내리면 다시 띄울 수 없어서, 재로드와 WebView 프로세스 종료 뒤에는 스플래시가 없습니다.
+
+웹은 문서마다 이름당 한 번 `performance.mark`를 찍습니다. 네트워크로 보내지 않고 분석 수집 거부와 관계없이 찍습니다. 이름은 `frontend/src/shared/startup/startupMarks.ts`의 `STARTUP_MARKS`에 있습니다.
+
+| 마커 | 찍는 시점 |
+| --- | --- |
+| `salmon:web:entry` | 웹 엔트리 실행 |
+| `salmon:web:first-commit` | `#root`에 첫 자식이 생김 |
+| `salmon:web:shell-commit` | `#root` 안에 첫 `<main>`이 생김. 오류 화면의 `<main>`도 포함 |
+| `salmon:map:native-mount` | 지도 채널이 `map.mount` 또는 `map.mountHome`을 처음 보냄 |
+| `salmon:map:native-ready` | `map.ready`를 처음 받음 |
+| `salmon:map:native-error` | `map.error`를 처음 받음 |
+| `salmon:map:web-transparent` | `html`의 `data-native-home-map` 또는 `data-shared-native-map-ready`가 `"true"`가 됨 |
+| `salmon:map:stops-interactive` | native 경로에서 ready를 받았고, 정류장이 1개 이상 실린 `mountHome`·`updateHome`·`mount`를 보냈고, `captureAll`과 `transitioning`이 모두 false인 `map.layout`이 적용됐다는 `map.ack`를 받음 |
+| `salmon:map:sdk-start`, `sdk-ready`, `create`, `init` | 이름만 정해 둠. 웹 지도 SDK 경로의 호출 지점은 아직 없음 |
+
+`stops-interactive`는 메시지 왕복으로 추정한 값입니다. 실제 핀 탭 가능 시점은 실기기 영상으로 확인합니다. 마커는 Safari Web Inspector나 브라우저 개발자 도구에서 `performance.getEntriesByType("mark")`로 읽습니다.
+
+`startup/startupReadiness.ts`는 위 단계를 이벤트로 받는 순수 상태 머신입니다. `CURRENT_STARTUP_POLICY`는 지금 동작(loadEnd에 스플래시 해제, 탭 보관 중에만 10초 대기)을 그대로 옮긴 값이고, `App.tsx`에는 연결하지 않았습니다. 새 제한시간과 스플래시 해제 조건은 실기기 근거를 모은 뒤 정합니다.
+
 ## 코드 위치
 
 - `bridge/bridge.ts`: 앱 정보(`window.__SALMONBUS_APP__`) 주입과 새 문서 시작 알림, 웹과 주고받는 envelope 검증, 웹으로 이벤트 전달
 - `auth/`: 로그인 메시지 검사(`authMessages.ts`)와 Apple, 카카오 SDK 호출(`signInNatively.ts`)
 - `notification/`: 알림 메시지 검사와 APNs 환경 판단(`notificationMessages.ts`), 권한과 token(`registration.ts`), 알림 탭 칸(`tapInbox.ts`)과 탭 감시(`openedNotifications.ts`)
+- `startup/startupReadiness.ts`: 앱 시작 단계 상태 머신과 지금 정책(`App.tsx`에 미연결)
 - `native-map/NativeRouteMap.tsx`: native view의 TypeScript 계약
 - `native-map/nativeMapMessages.ts`: 앱이 받는 지도 메시지 목록(웹의 `NATIVE_MAP_CAPABILITIES`와 같음)
 - `haptic/playHaptic.ts`: 진동 종류를 iOS 진동에 연결하는 표. 종류 목록은 웹의 `HapticKind`를 import type으로 읽고, 다르면 `pnpm typecheck`가 실패

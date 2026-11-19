@@ -4,6 +4,8 @@ import {
   NATIVE_MAP_CAPABILITIES as APP_NATIVE_MAP_CAPABILITIES,
 } from "../../../../app/native-map/nativeMapMessages";
 import { BRIDGE_EVENT } from "../bridge/bridge";
+import { STARTUP_MARKS, type StartupMarkName } from "../startup/startupMarks";
+import { createNativeMapStageTracker, type NativeMapStageTracker } from "./nativeMapStages";
 import type { NativeMapEvent } from "./protocol";
 import {
   NATIVE_HOME_MAP_CAPABILITIES,
@@ -101,6 +103,92 @@ describe("native map 채널", () => {
       if (randomUUID === undefined) Reflect.deleteProperty(crypto, "randomUUID");
       else Object.defineProperty(crypto, "randomUUID", randomUUID);
     }
+  });
+});
+
+describe("native map 채널의 단계 추적", () => {
+  const layout = {
+    viewport: { width: 390, height: 844, offsetTop: 0, offsetLeft: 0, scale: 1 },
+    mapRect: { x: 0, y: 0, width: 390, height: 400 },
+    webRects: [],
+    captureAll: false,
+    transitioning: false,
+  };
+  const content = {
+    stations: {
+      stops: [{ id: "a", name: "가", coordinate: { latitude: 37.39, longitude: 127.11 } }],
+      selectedStopId: null,
+    },
+    paths: [],
+    location: { coordinate: null },
+  };
+  const camera = { center: { latitude: 37.39, longitude: 127.11 }, zoom: 14, heading: 0 };
+
+  function reply(bridgeWindow: EventTarget, sessionId: string, type: string, payload: object = {}) {
+    bridgeWindow.dispatchEvent(
+      new CustomEvent(BRIDGE_EVENT, { detail: { v: 1, type, payload: { sessionId, revision: 1, ...payload } } }),
+    );
+  }
+
+  it("보낸 메시지는 그대로 두고, 보낸 뒤와 받은 이벤트마다 추적기를 부른다", () => {
+    const { bridgeWindow, postMessage } = appWindow([...NATIVE_MAP_CAPABILITIES, ...NATIVE_HOME_MAP_CAPABILITIES]);
+    const names: StartupMarkName[] = [];
+    const channel = createNativeMapChannel(
+      bridgeWindow,
+      createNativeMapStageTracker((name) => void names.push(name)),
+    );
+    const order: string[] = [];
+    postMessage.mockImplementation(() => void order.push("post"));
+    channel.subscribe(() => void order.push("listener"));
+    channel.send("mountHome", { content, camera });
+    reply(bridgeWindow, channel.sessionId, "map.ready");
+    const layoutRevision = channel.send("layout", layout);
+    reply(bridgeWindow, channel.sessionId, "map.ack", { appliedRevision: layoutRevision });
+    expect(names).toEqual([
+      STARTUP_MARKS.mapNativeMount,
+      STARTUP_MARKS.mapNativeReady,
+      STARTUP_MARKS.mapStopsInteractive,
+    ]);
+    expect(JSON.parse(postMessage.mock.calls[0]?.[0] ?? "")).toEqual({
+      v: 1,
+      type: "map.mountHome",
+      payload: { content, camera, sessionId: channel.sessionId, revision: 1 },
+    });
+    expect(order).toEqual(["post", "listener", "post", "listener"]);
+    channel.destroy();
+  });
+
+  it("추적기가 실패해도 메시지와 이벤트 전달은 그대로다", () => {
+    const { bridgeWindow, postMessage } = appWindow();
+    const failing: NativeMapStageTracker = {
+      sent: () => {
+        throw new Error("sent");
+      },
+      received: () => {
+        throw new Error("received");
+      },
+    };
+    const channel = createNativeMapChannel(bridgeWindow, failing);
+    const listener = jest.fn<(event: NativeMapEvent) => void>();
+    channel.subscribe(listener);
+    expect(channel.send("location", { requestId: 1 })).toBe(1);
+    reply(bridgeWindow, channel.sessionId, "map.ready");
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+    channel.destroy();
+  });
+
+  it("destroy 뒤의 send와 이벤트, 다른 세션의 이벤트는 추적기에 넘기지 않는다", () => {
+    const { bridgeWindow } = appWindow();
+    const sent = jest.fn<NativeMapStageTracker["sent"]>();
+    const received = jest.fn<NativeMapStageTracker["received"]>();
+    const channel = createNativeMapChannel(bridgeWindow, { sent, received });
+    reply(bridgeWindow, "old", "map.ready");
+    channel.destroy();
+    channel.send("location", { requestId: 1 });
+    reply(bridgeWindow, channel.sessionId, "map.ready");
+    expect(sent).not.toHaveBeenCalled();
+    expect(received).not.toHaveBeenCalled();
   });
 });
 
