@@ -12,7 +12,6 @@ import com.gustler.backend.api.board.domain.ForecastModel;
 import com.gustler.backend.api.board.domain.StopState;
 import com.gustler.backend.api.board.domain.VehicleForecast;
 import com.gustler.backend.api.error.ServiceUnavailableException;
-import com.gustler.backend.api.route.ObservationOnlyRoutes;
 import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import com.gustler.backend.api.route.domain.Route;
@@ -69,7 +68,6 @@ public class BoardQueryService {
 
     public BoardReading readBoard(
         RouteId routeId) {
-        ObservationOnlyRoutes.requirePublic(routeId);
         BoardSnapshot snapshot = boardQueryRepository.findSnapshot(routeId)
             .orElseThrow(RouteNotFoundException::new);
         SnapshotObservation observation = readableObservation(snapshot);
@@ -112,7 +110,6 @@ public class BoardQueryService {
             }
             try {
                 RouteId id = new RouteId(routeId);
-                ObservationOnlyRoutes.requirePublic(id);
                 valid.put(routeId, id);
             } catch (RuntimeException invalid) {
                 results.put(routeId, BoardBatchRead.failed(invalid));
