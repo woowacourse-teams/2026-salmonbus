@@ -82,7 +82,9 @@ class CollectionTwentyRoutesTest {
     @Test
     void 추가한_12개_노선의_관측을_수집한다() {
         // given
-        assertThat(properties.routeIds()).hasSize(20);
+        assertThat(properties.routeIds()).hasSize(25);
+        assertThat(properties.forecastRequiredRouteIds()).containsExactlyInAnyOrder(
+            "234001476", "222000209", "227000016", "234000079", "234000015");
 
         // when
         scheduler.collectAllRoutes();

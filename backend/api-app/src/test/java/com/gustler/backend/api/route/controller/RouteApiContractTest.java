@@ -6,11 +6,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.gustler.backend.api.board.support.BoardDatabaseFixture;
+import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.support.IntegrationTest;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -242,6 +246,28 @@ class RouteApiContractTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.routes.length()").value(1))
             .andExpect(jsonPath("$.routes[0].id").value("204000057"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"234001476", "222000209", "227000016", "234000079", "234000015"})
+    void 내부_관측_노선은_관측과_예보_기록이_있어도_좌석_서비스에_공개하지_않는다(String routeId)
+            throws Exception {
+        OffsetDateTime now = OffsetDateTime.now();
+        BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
+        RouteContext route = fixture.insertRoute(routeId, "내부 관측 노선", "기점", "종점", null,
+            "05:00", "23:00", null, null, now.minusDays(1));
+        fixture.insertStop(route, 1, "STOP-1", "기점", "UP", true);
+        final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
+        final long batch = fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_ROWS", 1);
+        fixture.insertObservation(route, batch, 1, "V1", 1, "STOP-1", 1, 2, 8, null);
+        fixture.insertPublication(batch, model, now);
+
+        mockMvc.perform(get("/api/v1/routes"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.routes").isEmpty());
+        mockMvc.perform(get("/api/v1/routes/{routeId}/board", routeId)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", routeId)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", routeId)).andExpect(status().isNotFound());
     }
 
     private long insertRoute(

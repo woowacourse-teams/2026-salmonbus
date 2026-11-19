@@ -21,7 +21,8 @@ final class ReplayEngine {
         "upstream-error", "timeout");
     private static final List<String> REFERENCE_ROUTES = List.of("1650", "3330", "9007", "9300", "6011", "3000", "5600", "3500");
     static final List<String> REPLAY_ROUTES = java.util.stream.Stream.concat(REFERENCE_ROUTES.stream(),
-        List.of("1151", "9000", "1500-2", "8100", "1150", "G8110", "6801", "6003", "3100", "1101", "7007-1", "4000").stream()).toList();
+        List.of("1151", "9000", "1500-2", "8100", "1150", "G8110", "6801", "6003", "3100", "1101", "7007-1", "4000",
+            "M2323", "M2352", "9302", "500-1", "1007").stream()).toList();
     static final List<String> HEADWAY_FIELDS = List.of("peekAlloc", "nPeekAlloc", "satPeekAlloc", "satNPeekAlloc",
         "sunPeekAlloc", "sunNPeekAlloc", "wePeekAlloc", "weNPeekAlloc");
     private static final DateTimeFormatter QUERY_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
@@ -168,9 +169,17 @@ final class ReplayEngine {
         };
     }
 
+    private int routeType(Route route) {
+        return switch (route.routeId()) {
+            case "234001476", "222000209" -> 14;
+            default -> 11;
+        };
+    }
+
     private Map<String, Object> info(Route route) {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("routeName", route.displayName());
+        item.put("routeTypeCd", routeType(route));
         item.put("startStationName", route.startStopName());
         item.put("endStationName", route.endStopName());
         item.put("upFirstTime", route.timetable().upFirstDepartureTime());
@@ -303,7 +312,7 @@ final class ReplayEngine {
                 row.put("staOrder", stop.sequence());
                 row.put("routeId", route.routeId());
                 row.put("routeName", route.displayName());
-                row.put("routeTypeCd", 11);
+                row.put("routeTypeCd", routeType(route));
                 Stop destination = route.stops().get(direction.equals("U") ? route.turnSequence() - 1 : route.stops().size() - 1);
                 row.put("routeDestId", destination.stationId());
                 row.put("routeDestName", destination.name());
@@ -374,7 +383,7 @@ final class ReplayEngine {
         }
         value.put("lowPlate", 2);
         value.put("routeId", route.routeId());
-        value.put("routeTypeCd", 11);
+        value.put("routeTypeCd", routeType(route));
         value.put("stationId", stop.stationId());
         value.put("stationSeq", sequence);
         value.put("stateCd", phase);

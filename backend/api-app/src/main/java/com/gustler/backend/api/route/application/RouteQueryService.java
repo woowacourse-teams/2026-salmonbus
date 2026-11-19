@@ -1,5 +1,6 @@
 package com.gustler.backend.api.route.application;
 
+import com.gustler.backend.api.route.ObservationOnlyRoutes;
 import com.gustler.backend.api.route.domain.CurrentRoute;
 import com.gustler.backend.api.route.domain.Route;
 import com.gustler.backend.api.route.domain.RouteStatus;
@@ -28,6 +29,7 @@ public class RouteQueryService {
         Set<String> forecastPublishedRouteIds = routeQueryRepository.findForecastPublishedRouteIds();
 
         return new RouteOverview(routes.stream()
+            .filter(route -> !ObservationOnlyRoutes.includes(route.id()))
             .map(route -> new CurrentRoute(
                 route,
                 RouteStatus.from(activeModelExists, forecastPublishedRouteIds.contains(route.id()))

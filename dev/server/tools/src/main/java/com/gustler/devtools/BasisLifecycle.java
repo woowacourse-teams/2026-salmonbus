@@ -69,6 +69,9 @@ final class BasisLifecycle {
         return path;
     }
 
+    private static final String CATALOG_BEFORE_JAMSIL = "0c1d09aec2660e03475c7a82930fc3632432c177b148c7b7d7689f74ffd3997a";
+    private static final String CATALOG_WITH_JAMSIL = "f8c678bb58bc39f1b8dc5dc01c3c903dfdde63391ad42b3c7fe7c03071abcf4d";
+
     static void preserveData(RevisionStore.Revision previous, RevisionStore.Revision next) {
         preserveData(previous, next, false);
     }
@@ -95,6 +98,9 @@ final class BasisLifecycle {
         names.addAll(next.files().keySet());
         for (var name : names) {
             if (name.startsWith("tools/data/model-reference/")) continue;
+            if (name.equals("tools/data/catalog-routes.json") && permitsJamsilCatalog(previous, next, restoring)) {
+                continue;
+            }
             if (name.equals("tools/data-contract.sha256") && permitsPreparationChange(previous, next, restoring)) {
                 continue;
             }
@@ -106,6 +112,17 @@ final class BasisLifecycle {
                         "DEV_DATA_CHANGE_REQUIRES_PLAN");
             }
         }
+    }
+
+    private static boolean permitsJamsilCatalog(
+        RevisionStore.Revision previous,
+        RevisionStore.Revision next,
+        final boolean restoring
+    ) {
+        String before = previous.files().get("tools/data/catalog-routes.json");
+        String after = next.files().get("tools/data/catalog-routes.json");
+        return (CATALOG_BEFORE_JAMSIL.equals(before) && CATALOG_WITH_JAMSIL.equals(after))
+            || (restoring && CATALOG_WITH_JAMSIL.equals(before) && CATALOG_BEFORE_JAMSIL.equals(after));
     }
 
     /** 검토한 초기화 코드 전환은 앞으로만 허용하고, 되돌릴 때만 같은 전환의 역방향을 더 허용한다. */

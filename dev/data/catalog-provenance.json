@@ -10,11 +10,11 @@
     "uniqueStationIds": 204
   },
   "scope": "Pangyo station/Baekhyeon and Techno Valley 1/Sampyeong; metadata only; no synthetic vehicle/statistics/model for catalog-only routes",
-  "catalogRouteCount": 33,
-  "catalogStopCount": 2572,
+  "catalogRouteCount": 37,
+  "catalogStopCount": 2802,
   "existingReplayModelRouteCount": 8,
-  "totalRouteCount": 41,
-  "catalogRoutesSha256": "0c1d09aec2660e03475c7a82930fc3632432c177b148c7b7d7689f74ffd3997a",
+  "totalRouteCount": 45,
+  "catalogRoutesSha256": "f8c678bb58bc39f1b8dc5dc01c3c903dfdde63391ad42b3c7fe7c03071abcf4d",
   "selection": "Authenticated GBIS snapshot: all observed vehicles report known seats and valid route/vehicle/phase/station reference; excludes morning-only 5700A",
   "excluded": [
     "8106: one observed vehicle reports unknown seats",
@@ -55,5 +55,20 @@
       "sha256": "a60abac307467c97b8b1969e96203c171e160ca96869a2b4715b043f93230544"
     }
   ],
-  "authenticatedObservationSummarySha256": "e5b680fe2d5e88e1c8266fd3bc5ea2b421eaf4156b958fccc502f4555d116829"
+  "authenticatedObservationSummarySha256": "e5b680fe2d5e88e1c8266fd3bc5ea2b421eaf4156b958fccc502f4555d116829",
+  "jamsilAddition": {
+    "date": "2026-11-19",
+    "baseCatalogRoutesSha256": "0c1d09aec2660e03475c7a82930fc3632432c177b148c7b7d7689f74ffd3997a",
+    "source": "GBIS getBusRouteInfoItemv2 and getBusRouteStationListv2",
+    "routeIds": [
+      "234001476",
+      "222000209",
+      "227000016",
+      "234000079"
+    ],
+    "reusedCatalogRouteIds": [
+      "234000015"
+    ],
+    "additionalStopVisits": 230
+  }
 }
