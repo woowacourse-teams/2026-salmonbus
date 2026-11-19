@@ -15,7 +15,6 @@ public final class SourceBoundDisplayCurves {
     public static final double SOURCE_LEASH_METRES = 2;
     private static final double CERTIFIED_LEASH = SOURCE_LEASH_METRES - .01;
     private static final double STOP_SUPPORT_METRES = 8;
-    // Leave headroom under the 5° screen regression check, which matches positions by drawn arclength.
     private static final double NEW_CURVE_ANGLE_BUDGET = 4;
     private SourceBoundDisplayCurves() {}
 
@@ -219,8 +218,6 @@ public final class SourceBoundDisplayCurves {
         if (!topologyAvailable) notes.add(direction + ":BASELINE_CROSSING_PROTECTION_UNAVAILABLE");
 
         if (!geometry.hasVerifiedTurn() && !corners.isEmpty()) return assembleCorners(source, frame, corners, notes);
-        // Neighbouring curves can pass in isolation and still introduce a sharp join together.
-        // Reject only curves touching the offending source intervals. Bound regeneration work.
         for (int attempt = 0; attempt < 6 && !corners.isEmpty(); attempt++) {
             Built built = assembleCorners(source, frame, corners, notes);
             var regressions = curveRegressions(built);
@@ -236,7 +233,6 @@ public final class SourceBoundDisplayCurves {
                 else entry.setValue(smaller);
             }
         }
-        // The caller checks these surviving proposals together, and subdivides if they still conflict.
         if (corners.isEmpty()) notes.add(direction + ":NO_ELIGIBLE_SOURCE_BOUND_CURVE");
         return assembleCorners(source, frame, corners, notes);
     }
@@ -260,7 +256,6 @@ public final class SourceBoundDisplayCurves {
         return new Built(mapping, Map.copyOf(corners), bound, List.copyOf(notes));
     }
 
-    /** Compare bends on the same occurrence. Only an angle window that touches a modified corner can change. */
     private static RegressionIntervals curveRegressions(Built built) {
         var map = built.mapping();
         var source = new Line(map.referencePoints(), map.metricFrame());
@@ -278,7 +273,6 @@ public final class SourceBoundDisplayCurves {
             }
             for (var span : windows.ranges.entrySet()) {
                 double lo = Math.max(0, span.getKey()), hi = Math.min(source.length(), span.getValue());
-                // Sample sub-metre positions for short windows: a one-metre grid skips abrupt tangent changes.
                 double step = radius <= 5 ? .25 : 1;
                 for (double s = Math.ceil(lo / step) * step; s <= hi; s += step) {
                     checkAngle(source, display, axis, s, interpolate(s, axis, display.chain), radius, problems);

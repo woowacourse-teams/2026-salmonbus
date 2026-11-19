@@ -75,6 +75,14 @@ class SourceStopOccurrenceWitnessTest {
                         .isEqualTo(prior.connections().get(stop.stopSequence()).point());
             }
         }
+        var repeated = new ArrayList<>(oldPaths.up().points());
+        repeated.add(p(191, 15));
+        repeated.add(oldPaths.up().points().getLast());
+        var repeatedTurn = new RouteDisplayGeometry(new RoutePaths(new RoutePaths.Path(repeated), oldPaths.down()),
+                prior.connections(), prior.stationPositions(), revision, prior.source(), prior.evidence(), prior.quality(), oldPaths);
+        var rebuilt = AutomaticRouteDisplay.buildDetailed(route, digest, repeatedTurn);
+        assertThat(rebuilt.selectedStage()).isNotEqualTo("PUBLISHED_PATH_VERIFIED_TURN");
+        assertThat(rebuilt.geometry().paths().up().points().getLast()).isEqualTo(p(200, 0));
         assertThat(AutomaticRouteDisplay.buildDetailed(route, "changed", prior).selectedStage())
                 .isNotEqualTo("PUBLISHED_PATH_VERIFIED_TURN");
     }

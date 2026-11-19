@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Repartition a certified, unchanged polyline. No point is moved, interpolated or looked up by nearest XY. */
 final class PublishedTurnBoundary {
     private PublishedTurnBoundary() {}
 
@@ -50,7 +49,8 @@ final class PublishedTurnBoundary {
             if (previous == null) return null;
             Connection next;
             if (stop.stopSequence() == source.turnSequence()) {
-                if (!stop.direction().equals("UP") || !previous.point().equals(asDisplayPoint(seam))) return null;
+                if (!stop.direction().equals("UP") || previous.segmentIndex() != oldTurn - 1
+                        || !previous.point().equals(asDisplayPoint(seam))) return null;
                 next = new Connection(asDisplayPoint(points.get(newTurn)), newTurn - 1, 1);
                 double gap = RouteStopAlignment.distance(stop.point(), points.get(newTurn));
                 if (gap > RouteStopAlignment.MAX_OFFSET) return null;
@@ -72,7 +72,6 @@ final class PublishedTurnBoundary {
                 prior.source(), prior.evidence(), new Quality(status, issues), verified.paths());
     }
 
-    /** The fragment crossed by the seam must follow the raw vertices in traversal order, including the literal turn. */
     private static int locateTurn(List<Point> display, int start, RouteGeometry source, RoutePathSplitter.Split split, int target) {
         var raw = source.points();
         var roles = EvidenceRoutePaths.classify(source).classifications();
@@ -86,7 +85,6 @@ final class PublishedTurnBoundary {
             var labels = roles.getOrDefault(rawPoint, List.of());
             if (i != target && (labels.isEmpty() || labels.stream().anyMatch(role -> role.type() == 1))) return -1;
             int next = index + step;
-            // Only intermediate type-2 nodes can have been removed by the published simplifier.
             if (next >= 0 && next < display.size() && display.get(next).equals(rawPoint)) {
                 index = next;
             } else if (i == target || !labels.stream().allMatch(role -> role.type() == 2)) {

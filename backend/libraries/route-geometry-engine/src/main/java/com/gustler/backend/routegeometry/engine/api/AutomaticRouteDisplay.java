@@ -51,8 +51,6 @@ public final class AutomaticRouteDisplay {
         return buildPrepared(projected(geometry), inputDigest);
     }
 
-    /** With no reusable published line, round small regions of the verified raw line.
-     * Each accepted subset is checked as a complete route; a rejected proposal cannot replace it. */
     private static BuildDetails buildFromSource(RouteShapeInput.Prepared source, String digest) {
         var paths = source.paths();
         var evaluated = evaluate(source, paths, paths, false);
@@ -69,7 +67,6 @@ public final class AutomaticRouteDisplay {
         var pending = new ArrayDeque<List<SourceBoundDisplayCurves.CornerId>>();
         pending.add(ids);
         var accepted = new HashSet<SourceBoundDisplayCurves.CornerId>();
-        // Bound worker time on ambiguous networks. Untried regions retain the original source line.
         for (int attempt = 0; !pending.isEmpty() && attempt < 32; attempt++) {
             var group = pending.removeFirst();
             var selected = new HashSet<>(accepted);

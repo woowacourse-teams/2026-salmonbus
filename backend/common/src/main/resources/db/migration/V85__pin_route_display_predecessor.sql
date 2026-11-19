@@ -1,4 +1,3 @@
--- Freeze the optional published input at discovery; retries must use the same shape.
 ALTER TABLE route_display_generation_job
     ADD COLUMN previous_display_key varchar(64) CHECK (previous_display_key ~ '^[0-9a-f]{64}$');
 

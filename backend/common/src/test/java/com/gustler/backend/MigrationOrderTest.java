@@ -42,7 +42,6 @@ class MigrationOrderTest {
      * 번호가 거꾸로 배정되어도 다른 파일을 제외해 항상 통과하게 된다. 파일 이름으로 선택하고,
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
-     * <p>이 브랜치는 지도 생성 작업에서 이전 게시 경로의 키를 고정하는 열을 추가한다.
      */
     private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS = List.of("pin_route_display_predecessor");
 

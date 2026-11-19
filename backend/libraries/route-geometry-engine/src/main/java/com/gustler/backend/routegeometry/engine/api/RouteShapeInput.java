@@ -2,7 +2,6 @@ package com.gustler.backend.routegeometry.engine.api;
 
 import java.util.List;
 
-/** A generation attempt uses the same direction boundary through alignment, simplification and curve checks. */
 interface RouteShapeInput {
     RouteGeometry.Shape shape();
     List<RouteGeometry.Stop> busStops();

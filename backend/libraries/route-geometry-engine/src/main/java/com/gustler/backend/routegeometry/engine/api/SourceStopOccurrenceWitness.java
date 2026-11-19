@@ -24,7 +24,6 @@ final class SourceStopOccurrenceWitness {
                        double[] chain,double[] rawProgress,SourceBoundDisplayCurves.TerminalSubsegmentSupport cut,int literalCut) {}
     private static Assessment failed(String reason) {return new Assessment(Map.of(),List.of(reason));}
 
-    /** Only an explicitly shared station visit can replace a projected direction boundary. */
     static RouteShapeInput.Prepared sharedTurn(RouteGeometry source) {
         var shape = source.shape();
         if (shape == null || source.turnSequence() == null || !hasBoundManifest(shape) || !hasCurrentWebRoles(shape)) return null;

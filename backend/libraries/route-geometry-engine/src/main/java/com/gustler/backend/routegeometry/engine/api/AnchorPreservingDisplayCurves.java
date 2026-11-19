@@ -63,7 +63,6 @@ public final class AnchorPreservingDisplayCurves {
         List<LocatedPatch> accepted = new ArrayList<>();
         Result best = new Result(current, 0, List.of(), List.of());
         String failure = null;
-        // Recheck the complete combined output. When one proposal fails, retain independently valid regions.
         for (int attempt = 0; !pending.isEmpty() && attempt < 32; attempt++) {
             var group = pending.removeFirst();
             var trial = new ArrayList<>(accepted);
@@ -306,7 +305,6 @@ public final class AnchorPreservingDisplayCurves {
         Line(List<Point> p,SourceBoundDisplayCurves.Frame f){points=p;frame=f;xy=p.stream().map(v->xy(v,f)).toList();chain=new double[p.size()];for(int i=1;i<p.size();i++)chain[i]=chain[i-1]+distance(xy.get(i-1),xy.get(i));}
         double length(){return chain[chain.length-1];}
         int segment(double s) {
-            // Upper bound selects the outgoing segment after any coincident vertices.
             int lo = 0, hi = chain.length;
             while (lo < hi) {
                 int mid = (lo + hi) >>> 1;
