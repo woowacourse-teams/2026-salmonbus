@@ -26,7 +26,7 @@ public record RouteGeometry(
         Integer turnSequence,
         List<Stop> busStops,
         Shape shape,
-        RouteDisplayGeometry display) {
+        RouteDisplayGeometry display) implements RouteShapeInput {
     public RouteGeometry(
             String routeId,
             long referenceVersionId,

@@ -23,16 +23,20 @@ public final class AnchorPreservingDisplayCurves {
     private record Built(SourceBoundDisplayCurves.Correspondence mapping,List<AnchorProof> proofs) {}
 
     public static Result build(RouteGeometry geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> baselineConnections) {
+        return build((RouteShapeInput) geometry, current, baselineConnections);
+    }
+
+    static Result build(RouteShapeInput geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> baselineConnections) {
         return build(geometry,current,baselineConnections,false);
     }
-    static Result buildWithTurnSupport(RouteGeometry geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> baselineConnections) {
+    static Result buildWithTurnSupport(RouteShapeInput geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> baselineConnections) {
         return build(geometry,current,baselineConnections,true);
     }
-    private static Result build(RouteGeometry geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> baselineConnections,boolean supportTurn) {
+    private static Result build(RouteShapeInput geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> baselineConnections,boolean supportTurn) {
         try {return checkedBuild(geometry,current,baselineConnections,supportTurn);}
         catch(IllegalArgumentException|ArithmeticException e) {return new Result(current,0,List.of(),List.of("ANCHOR_CURVE_FALLBACK:"+e.getMessage()));}
     }
-    private static Result checkedBuild(RouteGeometry geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> connections,boolean supportTurn) {
+    private static Result checkedBuild(RouteShapeInput geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> connections,boolean supportTurn) {
         require(current.referenceDomain().contains("NODE_BASELINE"),"UNSUPPORTED_REFERENCE_DOMAIN");
         var classified=EvidenceRoutePaths.classify(geometry).classifications();
         Map<Point,Integer> counts=new HashMap<>();for(var m:current.correspondences().values())for(var p:m.referencePoints())counts.merge(p,1,Integer::sum);
@@ -69,7 +73,7 @@ public final class AnchorPreservingDisplayCurves {
                 current.continuousControlHullCertified(),current.serializedChordCorrespondenceCertified(),notes);
         return new Result(plan,proofs.size(),proofs,notes);
     }
-    private static Built direction(RouteGeometry geometry,String direction,SourceBoundDisplayCurves.Correspondence old,
+    private static Built direction(RouteShapeInput geometry,String direction,SourceBoundDisplayCurves.Correspondence old,
             Map<Integer,Connection> connections,Map<Point,List<com.gustler.backend.routegeometry.api.RouteShapeEvidence.TypedPoint>> classified,
             Set<Point> shared,List<Point> topology,boolean supportTurn) {
         var frame=old.metricFrame();var source=new Line(old.referencePoints(),frame);TreeMap<Double,Point> anchors=new TreeMap<>();

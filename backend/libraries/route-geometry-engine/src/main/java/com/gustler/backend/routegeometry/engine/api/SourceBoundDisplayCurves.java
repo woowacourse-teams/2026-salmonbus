@@ -48,6 +48,10 @@ public final class SourceBoundDisplayCurves {
     private record Built(Correspondence mapping,int curves,double bound,List<String> notes) {}
 
     public static Plan build(RouteGeometry geometry,RoutePaths reference,Map<Integer,Connection> referenceConnections) {
+        return build((RouteShapeInput) geometry, reference, referenceConnections);
+    }
+
+    static Plan build(RouteShapeInput geometry,RoutePaths reference,Map<Integer,Connection> referenceConnections) {
         var classified=EvidenceRoutePaths.classify(geometry).classifications();
         Map<Point,Integer> occurrences=new HashMap<>();
         for(var path:List.of(reference.up(),reference.down()))for(Point point:path.points())occurrences.merge(point,1,Integer::sum);
@@ -70,7 +74,7 @@ public final class SourceBoundDisplayCurves {
         return new Plan("VALIDATED_NODE_BASELINE_METRIC_ARCLENGTH_NOT_ORIGINAL_RAW_PROGRESS",paths,mappings,metrics,count,bound,true,true,notes);
     }
 
-    static Plan withTurnSupport(RouteGeometry geometry,Plan current,Map<Integer,Connection> connections) {
+    static Plan withTurnSupport(RouteShapeInput geometry,Plan current,Map<Integer,Connection> connections) {
         var classified=EvidenceRoutePaths.classify(geometry).classifications();
         var contacts=RouteDisplayTopology.contacts(current.paths());var rendered=RouteDisplayTopology.rendererContacts(current.paths());
         if(!contacts.complete()||!rendered.complete())return current;
@@ -127,7 +131,7 @@ public final class SourceBoundDisplayCurves {
                 current.continuousControlHullCertified(),current.serializedChordCorrespondenceCertified(),notes);
     }
 
-    private static Built buildPath(RouteGeometry geometry,String direction,List<Point> reference,
+    private static Built buildPath(RouteShapeInput geometry,String direction,List<Point> reference,
             Map<Point,List<com.gustler.backend.routegeometry.api.RouteShapeEvidence.TypedPoint>> classified,
             Map<Integer,Connection> connections,Set<Point> shared,List<Point> protectedCrossings,boolean topologyAvailable) {
         var terminalSupport=terminalSubsegmentSupport(geometry,direction,reference,connections,classified);
@@ -142,8 +146,8 @@ public final class SourceBoundDisplayCurves {
                 int i=connection.segmentIndex();protectedProgress.add(source.chain[i]+connection.segmentFraction()*(source.chain[i+1]-source.chain[i]));
             }
         }
-        List<Point> output=new ArrayList<>();List<Double> mapping=new ArrayList<>();List<String> notes=new ArrayList<>();
-        append(output,mapping,reference.getFirst(),0);int curves=0;double bound=0;
+        Map<Integer,Corner> corners = new LinkedHashMap<>();
+        List<String> notes = new ArrayList<>();
         for(int i=1;i<reference.size()-1;i++) {
             var labels=classified.getOrDefault(reference.get(i),List.of()).stream().filter(p->direction.equals(p.direction())).toList();
             boolean boundShape=topologyAvailable && !shared.contains(reference.get(i)) && !labels.isEmpty() && labels.stream().allMatch(p->p.type()==3)
@@ -169,24 +173,76 @@ public final class SourceBoundDisplayCurves {
                     }
                 }
             }
-            if(corner==null)append(output,mapping,reference.get(i),source.chain[i]);
-            else {
-                for(int j=0;j<corner.points().size();j++)append(output,mapping,corner.points().get(j),corner.sourceProgress().get(j));
-                curves++;bound=Math.max(bound,corner.bound());
+            if (corner != null) corners.put(i, corner);
+        }
+        terminalSupport.ifPresent(proof -> notes.add(direction + ":TERMINAL_SUBSEGMENT_SUPPORT_CERTIFIED:sourceSegment="
+                + proof.sourceSegmentIndex() + ":fraction=" + proof.sourceFraction()));
+        if (!topologyAvailable) notes.add(direction + ":BASELINE_CROSSING_PROTECTION_UNAVAILABLE");
+
+        if (!geometry.hasVerifiedTurn() && !corners.isEmpty()) return assembleCorners(source, frame, corners, notes);
+        // Neighbouring curves can pass in isolation and still introduce a sharp join together.
+        // Reject only curves touching the offending source intervals. Bound regeneration work.
+        for (int attempt = 0; attempt < 3 && !corners.isEmpty(); attempt++) {
+            Built built = assembleCorners(source, frame, corners, notes);
+            var regressions = new RegressionIntervals();
+            curvature(built.mapping(), regressions);
+            if (regressions.ranges.isEmpty()) return built;
+            boolean removed = corners.values().removeIf(c -> regressions.overlaps(
+                    c.sourceProgress().getFirst(), c.sourceProgress().getLast()));
+            if (!removed) break;
+        }
+        notes.add(direction + ":NO_ELIGIBLE_SOURCE_BOUND_CURVE");
+        return assembleCorners(source, frame, Map.of(), notes);
+    }
+
+    private static Built assembleCorners(Line source, Frame frame, Map<Integer, Corner> corners, List<String> notes) {
+        List<Point> points = new ArrayList<>();
+        List<Double> progress = new ArrayList<>();
+        double bound = 0;
+        for (int i = 0; i < source.points.size(); i++) {
+            Corner corner = corners.get(i);
+            if (corner == null) {
+                append(points, progress, source.points.get(i), source.chain[i]);
+            } else {
+                for (int j = 0; j < corner.points().size(); j++) {
+                    append(points, progress, corner.points().get(j), corner.sourceProgress().get(j));
+                }
+                bound = Math.max(bound, corner.bound());
             }
         }
-        append(output,mapping,reference.getLast(),source.length());
-        terminalSupport.ifPresent(proof->notes.add(direction+":TERMINAL_SUBSEGMENT_SUPPORT_CERTIFIED:sourceSegment="+proof.sourceSegmentIndex()+":fraction="+proof.sourceFraction()));
-        if(curves==0)notes.add(direction+":NO_ELIGIBLE_SOURCE_BOUND_CURVE");
-        if(!topologyAvailable)notes.add(direction+":BASELINE_CROSSING_PROTECTION_UNAVAILABLE");
-        return new Built(new Correspondence(reference,output,mapping,source.length(),frame),curves,bound,notes);
+        var mapping = new Correspondence(source.points, points, progress, source.length(), frame);
+        return new Built(mapping, corners.size(), bound, notes);
+    }
+
+    private static final class RegressionIntervals {
+        private final NavigableMap<Double,Double> ranges = new TreeMap<>();
+
+        void add(double start, double end) {
+            var previous = ranges.floorEntry(start);
+            if (previous != null && previous.getValue() >= start) {
+                start = previous.getKey();
+                end = Math.max(end, previous.getValue());
+            }
+            var next = ranges.higherEntry(start);
+            while (next != null && next.getKey() <= end) {
+                end = Math.max(end, next.getValue());
+                ranges.remove(next.getKey());
+                next = ranges.higherEntry(start);
+            }
+            ranges.put(start, end);
+        }
+
+        boolean overlaps(double start, double end) {
+            var last = ranges.floorEntry(end);
+            return last != null && last.getValue() >= start;
+        }
     }
 
     /** A derived endpoint is not assigned a TYPE role. This witness supports
      * only the directed remainder of one actual original-source segment. */
     record TerminalSubsegmentSupport(int referenceEndpointIndex,int sourceSegmentIndex,double sourceFraction) {}
 
-    static Optional<TerminalSubsegmentSupport> terminalSubsegmentSupport(RouteGeometry geometry,String direction,
+    static Optional<TerminalSubsegmentSupport> terminalSubsegmentSupport(RouteShapeInput geometry,String direction,
             List<Point> reference,Map<Integer,Connection> referenceConnections,
             Map<Point,List<com.gustler.backend.routegeometry.api.RouteShapeEvidence.TypedPoint>> classified) {
         if(geometry.paths()==null || reference.size()<2 || !(direction.equals("UP") || direction.equals("DOWN")))return Optional.empty();
@@ -330,6 +386,10 @@ public final class SourceBoundDisplayCurves {
     }
 
     public static Curvature curvature(Correspondence mapping) {
+        return curvature(mapping, null);
+    }
+
+    private static Curvature curvature(Correspondence mapping, RegressionIntervals regressions) {
         Line reference=new Line(mapping.referencePoints(),mapping.metricFrame()),display=new Line(mapping.displayPoints(),mapping.metricFrame());
         double[] sourceAtVertex=mapping.referenceProgressAtDisplayVertices().stream().mapToDouble(Double::doubleValue).toArray();
         int samples=0,beforeCount=0,afterCount=0;double beforeMax=0,afterMax=0;boolean noRegression=true;
@@ -338,15 +398,27 @@ public final class SourceBoundDisplayCurves {
         for(double s=5;s<reference.length()-5;s+=1) {
             double at=interpolate(s,sourceAtVertex,display.chain);double before=reference.angleAt(s),after=display.angleAt(at);
             samples++;if(before>60)beforeCount++;if(after>60)afterCount++;beforeMax=Math.max(beforeMax,before);afterMax=Math.max(afterMax,after);
-            if(after>60 && after>before+5)noRegression=false;
+            if (after > 60 && after > before + 5) {
+                noRegression = false;
+                if (regressions != null) recordWindow(regressions, at, display, sourceAtVertex);
+            }
         }
         // Native vertices are additional guard locations, never extra count
         // denominator entries. This catches a narrow new join between1m samples.
         for(int i=1;i<display.xy.size()-1;i++) {
             double before=reference.angleAt(sourceAtVertex[i]),after=display.angleAt(display.chain[i]);
-            if(after>60 && after>before+5)noRegression=false;
+            if (after > 60 && after > before + 5) {
+                noRegression = false;
+                if (regressions != null) recordWindow(regressions, display.chain[i], display, sourceAtVertex);
+            }
         }
         return new Curvature(samples,beforeCount,afterCount,beforeMax,afterMax,noRegression);
+    }
+
+    private static void recordWindow(RegressionIntervals intervals, double at, Line display, double[] sourceAtVertex) {
+        double start = interpolate(Math.max(0, at - 5), display.chain, sourceAtVertex);
+        double end = interpolate(Math.min(display.length(), at + 5), display.chain, sourceAtVertex);
+        intervals.add(start, end);
     }
 
     public static boolean endpointsPreserved(RoutePaths reference,RoutePaths candidate) {

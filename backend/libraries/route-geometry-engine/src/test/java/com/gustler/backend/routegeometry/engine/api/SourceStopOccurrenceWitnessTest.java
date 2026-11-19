@@ -24,6 +24,32 @@ class SourceStopOccurrenceWitnessTest {
     }
     private Map<Integer,Connection> align(RouteGeometry g,RoutePaths paths){var result=new HashMap<Integer,Connection>();for(String d:List.of("UP","DOWN")){var alignment=RouteStopAlignment.align(d.equals("UP")?paths.up().points():paths.down().points(),g.busStops().stream().filter(s->s.direction().equals(d)).toList(),d.equals("UP"));assertThat(alignment.usable()).isTrue();result.putAll(alignment.connections());}return result;}
     private RouteGeometry proof(RouteGeometry g,List<RouteShapeEvidence.TypedPoint> typed,String manifest,List<RouteShapeEvidence.Source> sources){return new RouteGeometry(g.routeId(),g.referenceVersionId(),g.name(),g.startPoint(),g.endPoint(),g.turnSequence(),g.busStops(),new Shape(g.shape().id(),g.shape().receivedAt(),g.points(),new RouteShapeEvidence("GBIS_API",sources,typed),manifest));}
+    @Test
+    void splitsAtTheVerifiedSharedVisitEvenWhenThePinIsCloserToAnEarlierSegment() {
+        var source = geometry(0, 85, true);
+        var stops = new ArrayList<>(source.busStops());
+        var turn = stops.get(2);
+        stops.set(2, new Stop(turn.stationId(), turn.stopSequence(), turn.name(), turn.direction(), true, p(191, -85)));
+        for (boolean merged : List.of(false, true)) {
+            var points = new ArrayList<>(source.points());
+            if (merged) points.remove(5);
+            var shape = new Shape(UUID.randomUUID(), Instant.EPOCH, points, source.shape().evidence(), "a".repeat(64));
+            var route = new RouteGeometry("new-route", 1, "new", "start", "end", 3, stops, shape);
+            var projected = route.paths().up().points().getLast();
+            assertThat(projected).isNotEqualTo(p(200, 0));
+            var result = AutomaticRouteDisplay.build(route, "test");
+            assertThat(result.paths().up().points().getLast()).isEqualTo(p(200, 0));
+            assertThat(result.paths().down().points().getFirst()).isEqualTo(p(200, 0));
+            assertThat(result.connections()).hasSize(stops.size());
+            assertThat(result.stationPositions()).isEmpty();
+            assertThat(result.quality().issues()).anyMatch(i -> i.code().equals("STOP_CONNECTION_GAP") && i.sequence() == 3);
+            assertThat(AutomaticRouteDisplay.sourceOnly(route, "test").sourcePaths()).isEqualTo(result.sourcePaths());
+            var unbound = proof(route, shape.evidence().webPoints(), null, shape.evidence().sources());
+            assertThat(SourceStopOccurrenceWitness.sharedTurn(unbound)).isNull();
+            assertThat(AutomaticRouteDisplay.build(unbound, "test").sourcePaths()).isEqualTo(unbound.paths());
+        }
+    }
+
     private Connection at(List<Point> path,int segment,double fraction){var p=RouteStopAlignment.interpolate(path.get(segment),path.get(segment+1),fraction);return new Connection(new RouteDisplayInput.Point(p.x(),p.y()),segment,fraction);}
 
     @Test void largeGapWithWholeOrderedRolesIsReviewAndPreservesRawGpsAndWarnings(){var g=geometry(35,0,true);var result=AutomaticRouteDisplay.build(g,"test");assertThat(result.quality().status()).isEqualTo(RouteDisplayGeometry.QualityStatus.REVIEW_REQUIRED);assertThat(result.connections()).hasSize(5);assertThat(result.quality().issues()).anyMatch(i->i.code().equals("STOP_CONNECTION_GAP")&&i.sequence()==1);assertThat(g.busStops().getFirst().point()).isEqualTo(p(50,35));assertThat(result.stationPositions()).isEmpty();}

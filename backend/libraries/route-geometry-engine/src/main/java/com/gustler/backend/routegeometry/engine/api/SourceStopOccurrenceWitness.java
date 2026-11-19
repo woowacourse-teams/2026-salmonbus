@@ -24,16 +24,59 @@ final class SourceStopOccurrenceWitness {
                        double[] chain,double[] rawProgress,SourceBoundDisplayCurves.TerminalSubsegmentSupport cut,int literalCut) {}
     private static Assessment failed(String reason) {return new Assessment(Map.of(),List.of(reason));}
 
-    static Assessment assess(RouteGeometry geometry,RoutePaths paths,Map<Integer,Connection> connections) {
+    /** Only an explicitly shared station visit can replace a projected direction boundary. */
+    static RouteShapeInput.Prepared sharedTurn(RouteGeometry source) {
+        var shape = source.shape();
+        if (shape == null || source.turnSequence() == null || !hasBoundManifest(shape) || !hasCurrentWebRoles(shape)) return null;
+        var stops = source.busStops();
+        if (stops.size() < 3 || source.turnSequence() <= stops.getFirst().stopSequence()
+                || source.turnSequence() >= stops.getLast().stopSequence()) return null;
+
+        var classification = EvidenceRoutePaths.classify(source);
+        if (!classification.normalization().equals("FULL_POINT_ORDER_V1")
+                || classification.unmatchedPoints() != 0) return null;
+        var roles = shape.evidence().webPoints();
+        int index = 0;
+        while (index < roles.size() && roles.get(index).direction().equals("UP")) index++;
+        if (index == 0 || index >= roles.size() || roles.get(index - 1).type() != 1
+                || roles.get(index).type() != 1 || !roles.get(index - 1).point().equals(roles.get(index).point())) return null;
+
+        if (!classification.sharedBoundaryMerged() && !source.points().get(index - 1).equals(source.points().get(index))) {
+            return null;
+        }
+        var split = RoutePathSplitter.atSharedVertex(source.points(), index - 1);
+        if (split == null) return null;
+        var prepared = new RouteShapeInput.Prepared(source, split, true);
+        var up = stops.stream().filter(s -> s.direction().equals("UP")).toList();
+        var down = stops.stream().filter(s -> s.direction().equals("DOWN")).toList();
+        if (up.isEmpty() || down.isEmpty()) return null;
+        var upAlignment = RouteStopAlignment.align(split.paths().up().points(), up, true);
+        var downAlignment = RouteStopAlignment.align(split.paths().down().points(), down, false);
+        if (!upAlignment.usable() || !downAlignment.usable()) return null;
+        var connections = new HashMap<>(upAlignment.connections());
+        connections.putAll(downAlignment.connections());
+        var assessment = assess(prepared, split.paths(), connections);
+        var turn = up.getLast();
+        return turn.stopSequence() == source.turnSequence() && assessment.supports(turn) ? prepared : null;
+    }
+
+    private static boolean hasBoundManifest(RouteGeometry.Shape shape) {
+        return shape.sourceManifestId() != null && shape.sourceManifestId().matches("[a-fA-F0-9]{64}")
+                && shape.unboundSourceManifestId() == null;
+    }
+
+    private static boolean hasCurrentWebRoles(RouteGeometry.Shape shape) {
+        return shape.evidence().sources().stream().anyMatch(s -> s.id().equals("GBIS_WEB")
+                && s.status().equals("AVAILABLE") && s.digest() != null && !s.digest().isBlank() && s.validUntil() == null);
+    }
+
+    static Assessment assess(RouteShapeInput geometry,RoutePaths paths,Map<Integer,Connection> connections) {
         if(geometry.shape()==null || paths==null || geometry.paths()==null)return failed("SOURCE_PATH_UNAVAILABLE");
         var shape=geometry.shape();
-        if(shape.sourceManifestId()==null || !shape.sourceManifestId().matches("[a-fA-F0-9]{64}")
-                || shape.unboundSourceManifestId()!=null)return failed("SOURCE_PROVENANCE_UNBOUND");
+        if(!hasBoundManifest(shape))return failed("SOURCE_PROVENANCE_UNBOUND");
         // Finite WEB deadlines are not yet revisioned by the source lifecycle.
         // Do not publish a witness which could outlive that evidence in cache.
-        if(shape.evidence().sources().stream().noneMatch(s->s.id().equals("GBIS_WEB") && s.status().equals("AVAILABLE")
-                && s.digest()!=null && !s.digest().isBlank() && s.validUntil()==null))
-            return failed("CURRENT_SOURCE_ROLE_EVIDENCE_UNAVAILABLE");
+        if(!hasCurrentWebRoles(shape))return failed("CURRENT_SOURCE_ROLE_EVIDENCE_UNAVAILABLE");
         var classified=EvidenceRoutePaths.classify(geometry);
         if(classified.unmatchedPoints()!=0 || classified.classifications().isEmpty()
                 || !(classified.normalization().equals("FULL_POINT_ORDER_V1") || classified.normalization().equals("OFFICIAL_VISIBLE_SUBSEQUENCE_V1")))
@@ -154,7 +197,7 @@ final class SourceStopOccurrenceWitness {
 
     /** A curve must map its ACTUAL serialized connection back inside the same
      * baseline visit window. Same XY on another lap is insufficient. */
-    static Assessment throughCurve(RouteGeometry geometry,RoutePaths reference,Map<Integer,Connection> before,
+    static Assessment throughCurve(RouteShapeInput geometry,RoutePaths reference,Map<Integer,Connection> before,
             SourceBoundDisplayCurves.Plan plan,Map<Integer,Connection> after) {
         var base=assess(geometry,reference,before);if(!base.reasons().isEmpty())return base;
         if(!plan.continuousControlHullCertified() || !plan.serializedChordCorrespondenceCertified()
@@ -173,7 +216,7 @@ final class SourceStopOccurrenceWitness {
         }
         return new Assessment(result,List.of());
     }
-    private static List<Row> rows(RouteGeometry geometry,String normalization) {
+    private static List<Row> rows(RouteShapeInput geometry,String normalization) {
         var typed=geometry.shape().evidence().webPoints();
         if(normalization.equals("OFFICIAL_VISIBLE_SUBSEQUENCE_V1"))typed=typed.stream().filter(p->p.type()!=2).toList();
         boolean down=false;int boundary=-1;
@@ -207,7 +250,7 @@ final class SourceStopOccurrenceWitness {
     }
     /** Literal source-vertex terminal cuts need no interpolated support point.
      * Recompute both ordered alignments and the original100m/15m trim policy. */
-    private static int literalTerminalCut(RouteGeometry geometry,String direction,List<Point> original,List<Point> candidate,Map<Integer,Connection> connections) {
+    private static int literalTerminalCut(RouteShapeInput geometry,String direction,List<Point> original,List<Point> candidate,Map<Integer,Connection> connections) {
         boolean start=direction.equals("UP");Point boundary=start?candidate.getFirst():candidate.getLast();
         if(boundary.equals(start?original.getFirst():original.getLast()))return -1;
         int index=original.indexOf(boundary);if(index<0 || original.lastIndexOf(boundary)!=index)return -1;
