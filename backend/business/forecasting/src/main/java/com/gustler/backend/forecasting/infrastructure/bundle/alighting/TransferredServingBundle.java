@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,13 +32,12 @@ public final class TransferredServingBundle {
             "전이 모델이 서빙 준비 상태가 아니다");
         Path base = directory.resolve("base");
         Path next = directory.resolve("candidate");
-        AlightingAwareInferenceBundle parent = AlightingAwareInferenceBundle.loadForServing(base);
+        VerifiedBase parent = verifiedBase(base, manifest.path("base_sha256").asString(""));
         AlightingAwareInferenceBundle candidate = AlightingAwareInferenceBundle.load(next);
-        require(parent.digest().equals(manifest.path("base_sha256").asString(""))
-            && candidate.digest().equals(manifest.path("candidate_sha256").asString(""))
+        require(candidate.digest().equals(manifest.path("candidate_sha256").asString(""))
             && parent.digest().equals(candidate.manifest().path("parent_manifest_sha256").asString("")),
             "검증한 운영 번들과 후보의 연결이 다르다");
-        Set<String> additions = unchangedBase(parent, candidate, base, next);
+        Set<String> additions = unchangedBase(parent, candidate, next);
         byte[] bytes = read(directory.resolve("transfer-evidence.json"), 4_194_304);
         require(Sha256.of(bytes).equals(manifest.path("evidence_sha256").asString("")), "전이 모델 검증 파일이 바뀌었다");
         String releaseId = manifest.path("release_id").asString("");
@@ -59,31 +59,55 @@ public final class TransferredServingBundle {
             AlightingAwareServingBundle.readModel(candidate, digest));
     }
 
+    private record VerifiedBase(
+        String digest, List<String> routes, Set<LocalDate> holidays, JsonNode hashes, String full, JsonNode features,
+        Map<String, String> reference, Map<String, String> extension
+    ) {
+    }
+
+    private static VerifiedBase verifiedBase(Path directory, String expectedDigest) throws IOException {
+        AlightingAwareInferenceBundle parent = AlightingAwareInferenceBundle.loadForServing(directory);
+        require(parent.digest().equals(expectedDigest), "기존 서빙 번들의 해시가 다르다");
+        JsonNode hours = parent.extendedHours();
+        require(hours != null, "기존 번들에 시간 확장 모델이 없다");
+        JsonNode hashes = parent.manifest().path("files");
+        Map<String, JsonNode> references = references(directory, hashes);
+        Map<String, String> reference = new HashMap<>();
+        Map<String, String> extension = new HashMap<>();
+        for (String route : parent.routes()) {
+            reference.put(route, fingerprint(references.get(route)));
+            extension.put(route, fingerprint(hours.path("routes").path(route)));
+        }
+        return new VerifiedBase(parent.digest(), parent.routes(), parent.holidays(), hashes, fingerprint(hours.path("full")),
+            hours.path("features"), Map.copyOf(reference), Map.copyOf(extension));
+    }
+
+    private static String fingerprint(JsonNode value) {
+        return Sha256.of(JSON.writeValueAsBytes(value));
+    }
+
     private static Set<String> unchangedBase(
-        AlightingAwareInferenceBundle parent,
+        VerifiedBase parent,
         AlightingAwareInferenceBundle candidate,
-        Path base,
         Path next
     ) throws IOException {
         Set<String> additions = new HashSet<>(candidate.routes());
         require(additions.containsAll(parent.routes()) && additions.removeAll(parent.routes()) && !additions.isEmpty(),
             "전이 모델은 기존 노선을 유지하고 새 노선을 추가해야 한다");
-        JsonNode before = parent.manifest().path("files");
+        JsonNode before = parent.hashes();
         JsonNode after = candidate.manifest().path("files");
         for (String filename : SHARED_FILES) {
             require(before.has(filename) && before.get(filename).equals(after.path(filename)), "공통 모델 변경: " + filename);
         }
         require(parent.holidays().equals(candidate.holidays()), "공휴일 달력이 바뀌었다");
-        JsonNode oldHours = parent.extendedHours();
         JsonNode newHours = candidate.extendedHours();
-        require(oldHours != null && newHours != null && oldHours.path("full").equals(newHours.path("full"))
-            && oldHours.path("features").equals(newHours.path("features")), "공통 시간 확장 모델이 바뀌었다");
-        Map<String, JsonNode> oldRef = references(base, before);
+        require(newHours != null && parent.full().equals(fingerprint(newHours.path("full")))
+            && parent.features().equals(newHours.path("features")), "공통 시간 확장 모델이 바뀌었다");
         Map<String, JsonNode> newRef = references(next, after);
         for (String route : parent.routes()) {
             String name = "statistics-" + route + ".json";
-            require(before.get(name).equals(after.path(name)) && oldRef.get(route).equals(newRef.get(route))
-                && oldHours.path("routes").get(route).equals(newHours.path("routes").path(route)),
+            require(before.get(name).equals(after.path(name)) && parent.reference().get(route).equals(fingerprint(newRef.get(route)))
+                && parent.extension().get(route).equals(fingerprint(newHours.path("routes").path(route))),
                 "기존 노선 참조·가중치 변경: " + route);
         }
         JsonNode receipt = checkedJson(next, "transfer-receipt.json", after);
