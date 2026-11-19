@@ -1,6 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import type { AuthSession, Member } from "../api/auth.types";
-import type { ApiResult } from "../api/client";
+import type { AuthSession, Member } from "@/shared/api/auth.types";
+import type { ApiError, ApiResult } from "@/shared/api/client";
 import { createAuthStore, type AuthServices, type AuthState } from "./authStore";
 
 const MEMBER: Member = { id: "3f2b8c1e-5a47-4d09-9e6b-0c1d2e3f4a5b", nickname: "살몽", provider: "KAKAO" };
@@ -22,7 +22,16 @@ function sessionFor(member: Member): ApiResult<AuthSession> {
 }
 
 const NO_CONTENT = succeeded<void>(undefined, 204);
-const TIMED_OUT: ApiResult<void> = { ok: false, failure: { kind: "timeout" } };
+const TIMED_OUT: ApiError = { ok: false, failure: { kind: "timeout" } };
+const UNAUTHENTICATED: ApiError = {
+  ok: false,
+  failure: {
+    kind: "contract",
+    error: { code: "UNAUTHENTICATED", message: "로그인이 필요합니다.", requestId: "test" },
+    status: 401,
+    retryAfterMs: null,
+  },
+};
 
 function createFakeServices() {
   return {
@@ -75,9 +84,13 @@ describe("세션 조회", () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
-  it("닉네임이 다른 응답이 오면 새 객체를 돌려주고 구독자를 부른다", async () => {
+  it.each<[keyof Member, Member]>([
+    ["id", { ...MEMBER, id: "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a" }],
+    ["nickname", RENAMED],
+    ["provider", { ...MEMBER, provider: "APPLE" }],
+  ])("회원 정보 중 %s 값이 다른 응답이 오면 새 객체를 돌려주고 구독자를 부른다", async (_field, changed) => {
     const services = createFakeServices();
-    services.fetchSession.mockResolvedValueOnce(sessionFor(MEMBER)).mockResolvedValueOnce(sessionFor(RENAMED));
+    services.fetchSession.mockResolvedValueOnce(sessionFor(MEMBER)).mockResolvedValueOnce(sessionFor(changed));
     const store = createAuthStore(services);
     await store.reload();
     const before = store.authState();
@@ -87,7 +100,7 @@ describe("세션 조회", () => {
     await store.reload();
 
     expect(store.authState()).not.toBe(before);
-    expect(store.authState()).toEqual({ status: "authenticated", member: RENAMED });
+    expect(store.authState()).toEqual({ status: "authenticated", member: changed });
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
@@ -144,6 +157,56 @@ describe("변경 요청과 세션 조회", () => {
     await store.reload();
 
     expect(services.fetchSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("변경 요청의 결과", () => {
+  function createMemberStore() {
+    const services = createFakeServices();
+    services.fetchSession.mockResolvedValue(sessionFor(MEMBER));
+    return { services, store: createAuthStore(services) };
+  }
+
+  it("탈퇴가 다시 인증할 주소를 돌려주면 회원 상태를 그대로 둔다", async () => {
+    const reauth = succeeded({ startUrl: "/api/auth/apple/start?intent=withdraw&ticket=test" });
+    const { services, store } = createMemberStore();
+    services.withdraw.mockResolvedValue(reauth);
+    await store.reload();
+    const before = store.authState();
+
+    const result = await store.withdraw();
+
+    expect(result).toBe(reauth);
+    expect(store.authState()).toBe(before);
+  });
+
+  it.each<[string, (store: AuthStore) => Promise<unknown>]>([
+    ["닉네임 변경", (store) => store.changeNickname(RENAMED.nickname)],
+    ["탈퇴", (store) => store.withdraw()],
+  ])("%s 요청이 401로 실패하면 비회원으로 바꾼다", async (_name, mutate) => {
+    const { services, store } = createMemberStore();
+    services.updateNickname.mockResolvedValue(UNAUTHENTICATED);
+    services.withdraw.mockResolvedValue(UNAUTHENTICATED);
+    await store.reload();
+
+    await mutate(store);
+
+    expect(store.authState()).toEqual({ status: "anonymous" });
+  });
+
+  it.each<[string, (store: AuthStore) => Promise<unknown>]>([
+    ["닉네임 변경", (store) => store.changeNickname(RENAMED.nickname)],
+    ["탈퇴", (store) => store.withdraw()],
+  ])("%s 요청이 401이 아닌 이유로 실패하면 회원 상태를 그대로 둔다", async (_name, mutate) => {
+    const { services, store } = createMemberStore();
+    services.updateNickname.mockResolvedValue(TIMED_OUT);
+    services.withdraw.mockResolvedValue(TIMED_OUT);
+    await store.reload();
+    const before = store.authState();
+
+    await mutate(store);
+
+    expect(store.authState()).toBe(before);
   });
 });
 

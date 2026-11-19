@@ -1,11 +1,11 @@
-import { fetchSession, logout, updateNickname, withdraw } from "../api/auth.api";
-import type { AuthSession, Member } from "../api/auth.types";
-import type { ApiResult } from "../api/client";
+import { fetchSession, logout, updateNickname, withdraw } from "@/shared/api/auth.api";
+import type { AuthSession, Member } from "@/shared/api/auth.types";
+import type { ApiResult } from "@/shared/api/client";
 import {
   allowDeviceRegistration,
   registerDeviceIfGranted,
   unregisterThisDevice,
-} from "../notification/useNotificationRegistration";
+} from "@/shared/notification/useNotificationRegistration";
 
 export type AuthState =
   | { status: "loading" }
