@@ -50,6 +50,41 @@ class SourceStopOccurrenceWitnessTest {
         }
     }
 
+    @Test
+    void keeps_the_published_round_trip_and_non_turn_connections_only_for_matching_input() {
+        var base = geometry(0, 0, true);
+        var stops = new ArrayList<>(base.busStops());
+        stops.set(2, new Stop("turn", 3, "turn", "UP", true, p(191, -10)));
+        var route = new RouteGeometry("123456789", 1, "test", "start", "end", 3, stops, base.shape());
+        var oldPaths = route.paths();
+        assertThat(oldPaths.up().points().getLast()).isNotEqualTo(p(200, 0));
+        String digest = RouteDisplayGeneration.input(route).digest();
+        var status = RouteDisplayGeometry.QualityStatus.PASSED;
+        String revision = AutomaticRouteDisplay.PREVIOUS_REVISION + "/" + digest + "/" + route.shape().evidence().revision() + "/" + status;
+        var prior = new RouteDisplayGeometry(oldPaths, align(route, oldPaths), Map.of(), revision,
+                RouteDisplayGeometry.Source.AUTOMATIC_FALLBACK, route.shape().evidence().sources(),
+                new RouteDisplayGeometry.Quality(status, List.of()), oldPaths);
+        var result = AutomaticRouteDisplay.buildDetailed(route, digest, prior);
+        assertThat(result.selectedStage()).isEqualTo("PUBLISHED_PATH_VERIFIED_TURN");
+        var paths = result.geometry().paths();
+        assertThat(paths.up().points().getLast()).isEqualTo(p(200, 0));
+        assertThat(roundTrip(paths)).containsExactlyElementsOf(roundTrip(oldPaths));
+        for (var stop : stops) {
+            if (stop.stopSequence() != route.turnSequence()) {
+                assertThat(result.geometry().connections().get(stop.stopSequence()).point())
+                        .isEqualTo(prior.connections().get(stop.stopSequence()).point());
+            }
+        }
+        assertThat(AutomaticRouteDisplay.buildDetailed(route, "changed", prior).selectedStage())
+                .isNotEqualTo("PUBLISHED_PATH_VERIFIED_TURN");
+    }
+
+    private static List<Point> roundTrip(RoutePaths paths) {
+        var points = new ArrayList<>(paths.up().points());
+        points.addAll(paths.down().points().subList(1, paths.down().points().size()));
+        return points;
+    }
+
     private Connection at(List<Point> path,int segment,double fraction){var p=RouteStopAlignment.interpolate(path.get(segment),path.get(segment+1),fraction);return new Connection(new RouteDisplayInput.Point(p.x(),p.y()),segment,fraction);}
 
     @Test void largeGapWithWholeOrderedRolesIsReviewAndPreservesRawGpsAndWarnings(){var g=geometry(35,0,true);var result=AutomaticRouteDisplay.build(g,"test");assertThat(result.quality().status()).isEqualTo(RouteDisplayGeometry.QualityStatus.REVIEW_REQUIRED);assertThat(result.connections()).hasSize(5);assertThat(result.quality().issues()).anyMatch(i->i.code().equals("STOP_CONNECTION_GAP")&&i.sequence()==1);assertThat(g.busStops().getFirst().point()).isEqualTo(p(50,35));assertThat(result.stationPositions()).isEmpty();}

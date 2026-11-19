@@ -662,7 +662,8 @@ class TransitionSqlTest {
             }
 
             // when
-            flyway(single).load().migrate();
+            // V83·V84의 조건부 전환만 비교한다. 뒤에 추가된 마이그레이션은 별도로 스키마를 변경할 수 있다.
+            flyway(single).target("84").load().migrate();
 
             // then
             try (Connection target = single.connection()) {

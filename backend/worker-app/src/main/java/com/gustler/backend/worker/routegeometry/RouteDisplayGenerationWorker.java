@@ -4,6 +4,8 @@ import com.gustler.backend.routegeometry.engine.api.AutomaticRouteDisplay;
 import com.gustler.backend.routegeometry.engine.api.RouteDisplayGeneration;
 import com.gustler.backend.routegeometry.engine.api.RouteGeometry;
 import com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry;
+import com.gustler.backend.routegeometry.engine.api.accuracy.GeometryPayloadFingerprint;
+import com.gustler.backend.routegeometry.engine.api.accuracy.RouteAccuracyVerifier;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Optional;
@@ -93,7 +95,7 @@ public class RouteDisplayGenerationWorker {
             }
             var generated=job.algorithmRevision().equals(RouteDisplayGeneration.SOURCE_REVISION)
                 ? AutomaticRouteDisplay.sourceOnly(snapshot,job.inputDigest())
-                : AutomaticRouteDisplay.build(snapshot,job.inputDigest());
+                : AutomaticRouteDisplay.buildDetailed(snapshot,job.inputDigest(),previousDisplay(job)).geometry();
             generated=baselineProof(job,snapshot,generated);
             String document=json.writeValueAsString(generated);
             if(!generated.equals(json.readValue(document,RouteDisplayGeometry.class)))
@@ -138,6 +140,30 @@ public class RouteDisplayGenerationWorker {
                 job.routeId(),job.generationKey(),job.attempts(),outcome,elapsedMillis(started));
         return "PUBLISHED".equals(outcome);
     }
+    private RouteDisplayGeometry previousDisplay(JdbcRouteDisplayGenerationStore.Job job) {
+        var previous = store.previousDisplay(job);
+        if (previous.isEmpty()) return null;
+        var stored = previous.get();
+        try {
+            if (!RouteDisplayGeneration.sha256(stored.document()).equals(stored.sha256())) {
+                throw new IllegalArgumentException("Previous display checksum mismatch");
+            }
+            var value = json.readValue(stored.document(), RouteDisplayGeometry.class);
+            var proof = value.accuracyProof();
+            if (proof == null || !job.inputDigest().equals(proof.inputDigest())
+                    || !stored.sourceManifest().equals(proof.sourceManifestId())
+                    || !RouteAccuracyVerifier.REVISION.equals(proof.verifierRevision())
+                    || proof.grade() != RouteAccuracyVerifier.Grade.UNEVALUATED
+                    || !GeometryPayloadFingerprint.of(value).equals(proof.geometryDigest())) {
+                throw new IllegalArgumentException("Previous display proof mismatch");
+            }
+            return value;
+        } catch (RuntimeException invalid) {
+            LOG.warn("event=route_display_predecessor_rejected routeId={} generationKey={}", job.routeId(), job.generationKey());
+            return null;
+        }
+    }
+
     /** The baseline has no adopted native model inputs; caller-supplied grades cannot promote it. */
     private RouteDisplayGeometry baselineProof(JdbcRouteDisplayGenerationStore.Job job,RouteGeometry input,RouteDisplayGeometry output) {
         var evaluated=input.shape().evidenceEvaluatedAt()==null ? job.createdAt() : input.shape().evidenceEvaluatedAt();

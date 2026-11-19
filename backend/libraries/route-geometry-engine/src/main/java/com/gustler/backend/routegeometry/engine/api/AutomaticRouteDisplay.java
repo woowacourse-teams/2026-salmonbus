@@ -11,7 +11,8 @@ import java.util.*;
 
 /** 자동 후보는 최종 방문·끝점·교차 검사를 거친다. 요청에서 외부 도로 조회나 임의의 핀 이동을 하지 않는다. */
 public final class AutomaticRouteDisplay {
-    public static final String REVISION = "automatic-quality-v10";
+    public static final String REVISION = "automatic-quality-v11";
+    public static final String PREVIOUS_REVISION = "automatic-quality-v9";
 
     private AutomaticRouteDisplay() {}
 
@@ -34,12 +35,59 @@ public final class AutomaticRouteDisplay {
     }
 
     public static BuildDetails buildDetailed(RouteGeometry geometry,String inputDigest) {
+        return buildDetailed(geometry, inputDigest, null);
+    }
+
+    public static BuildDetails buildDetailed(RouteGeometry geometry, String inputDigest, RouteDisplayGeometry prior) {
         var shared = SourceStopOccurrenceWitness.sharedTurn(geometry);
         if (shared != null) {
-            var candidate = buildPrepared(shared, inputDigest);
+            var retained = PublishedTurnBoundary.repartition(shared, inputDigest, prior);
+            if (retained != null) {
+                return new BuildDetails(retained, "PUBLISHED_PATH_VERIFIED_TURN", 0, 0, false, false, null, List.of());
+            }
+            var candidate = buildFromSource(shared, inputDigest);
             if (usableBaseline(candidate.geometry())) return candidate;
         }
         return buildPrepared(projected(geometry), inputDigest);
+    }
+
+    /** With no reusable published line, round small regions of the verified raw line.
+     * Each accepted subset is checked as a complete route; a rejected proposal cannot replace it. */
+    private static BuildDetails buildFromSource(RouteShapeInput.Prepared source, String digest) {
+        var paths = source.paths();
+        var evaluated = evaluate(source, paths, paths, false);
+        if (evaluated.blocked()) {
+            return new BuildDetails(result(source, digest, null, Map.of(), QualityStatus.WITHHELD, evaluated.issues()),
+                    "SOURCE_FALLBACK", 0, 0, false, false, null, List.of());
+        }
+        var grade = evaluated.issues().isEmpty() ? QualityStatus.PASSED : QualityStatus.REVIEW_REQUIRED;
+        var base = result(source, digest, paths, evaluated.connections(), grade, evaluated.issues());
+        var best = new BuildDetails(base, "VERIFIED_SOURCE_TURN", 0, 0, false, false, null, List.of());
+        var candidates = SourceBoundDisplayCurves.candidates(source, paths, base.connections());
+        var ids = candidates.ids();
+        if (ids.isEmpty()) return best;
+        var pending = new ArrayDeque<List<SourceBoundDisplayCurves.CornerId>>();
+        pending.add(ids);
+        var accepted = new HashSet<SourceBoundDisplayCurves.CornerId>();
+        // Bound worker time on ambiguous networks. Untried regions retain the original source line.
+        for (int attempt = 0; !pending.isEmpty() && attempt < 32; attempt++) {
+            var group = pending.removeFirst();
+            var selected = new HashSet<>(accepted);
+            selected.addAll(group);
+            var plan = candidates.checkedSubset(selected);
+            var candidate = plan.map(p -> checkCurvePlan(source, digest, base, p).geometry());
+            if (candidate.isPresent()) {
+                accepted = selected;
+                var acceptedPlan = plan.orElseThrow();
+                best = new BuildDetails(candidate.get(), "SOURCE_BOUND_CURVE", 0, acceptedPlan.curveCount(),
+                        true, false, acceptedPlan, List.of());
+            } else if (group.size() > 1) {
+                int middle = group.size() / 2;
+                pending.addLast(group.subList(0, middle));
+                pending.addLast(group.subList(middle, group.size()));
+            }
+        }
+        return best;
     }
 
     private static RouteShapeInput projected(RouteGeometry geometry) {

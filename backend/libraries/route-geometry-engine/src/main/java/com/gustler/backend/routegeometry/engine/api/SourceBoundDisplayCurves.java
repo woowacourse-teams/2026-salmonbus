@@ -15,6 +15,8 @@ public final class SourceBoundDisplayCurves {
     public static final double SOURCE_LEASH_METRES = 2;
     private static final double CERTIFIED_LEASH = SOURCE_LEASH_METRES - .01;
     private static final double STOP_SUPPORT_METRES = 8;
+    // Leave headroom under the 5° screen regression check, which matches positions by drawn arclength.
+    private static final double NEW_CURVE_ANGLE_BUDGET = 4;
     private SourceBoundDisplayCurves() {}
 
     public record Frame(double originX, double originY, double xMetresPerDegree,
@@ -45,13 +47,57 @@ public final class SourceBoundDisplayCurves {
     }
     private record XY(double x,double y) {}
     private record Corner(List<Point> points,List<Double> sourceProgress,double bound) {}
-    private record Built(Correspondence mapping,int curves,double bound,List<String> notes) {}
+    private record Built(Correspondence mapping, Map<Integer,Corner> corners, double bound, List<String> notes) {}
+    record CornerId(String direction, int vertex) {}
+    record Candidates(Built up, Built down) {
+        List<CornerId> ids() {
+            var result = new ArrayList<CornerId>();
+            up.corners().keySet().stream().sorted().forEach(i -> result.add(new CornerId("UP", i)));
+            down.corners().keySet().stream().sorted().forEach(i -> result.add(new CornerId("DOWN", i)));
+            return result;
+        }
+
+        Plan all() { return plan(up, down); }
+
+        Optional<Plan> checkedSubset(Set<CornerId> selected) {
+            var a = selected(up, "UP", selected);
+            var b = selected(down, "DOWN", selected);
+            if (!curveRegressions(a).ranges.isEmpty() || !curveRegressions(b).ranges.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(plan(a, b));
+        }
+
+        private Built selected(Built leg, String direction, Set<CornerId> selected) {
+            var kept = new HashMap<>(leg.corners());
+            kept.keySet().removeIf(i -> !selected.contains(new CornerId(direction, i)));
+            if (kept.size() == leg.corners().size()) return leg;
+            var m = leg.mapping();
+            return assembleCorners(new Line(m.referencePoints(), m.metricFrame()), m.metricFrame(), kept, List.of());
+        }
+
+        private static Plan plan(Built up, Built down) {
+            var maps = Map.of("UP", up.mapping(), "DOWN", down.mapping());
+            Map<String,Curvature> metrics = new HashMap<>();
+            if (!up.corners().isEmpty()) metrics.put("UP", curvature(up.mapping()));
+            if (!down.corners().isEmpty()) metrics.put("DOWN", curvature(down.mapping()));
+            var paths = new RoutePaths(new RoutePaths.Path(up.mapping().displayPoints()), new RoutePaths.Path(down.mapping().displayPoints()));
+            var notes = new ArrayList<>(up.notes());
+            notes.addAll(down.notes());
+            return new Plan("VALIDATED_NODE_BASELINE_METRIC_ARCLENGTH_NOT_ORIGINAL_RAW_PROGRESS", paths, maps, metrics,
+                    up.corners().size() + down.corners().size(), Math.max(up.bound(), down.bound()), true, true, notes);
+        }
+    }
 
     public static Plan build(RouteGeometry geometry,RoutePaths reference,Map<Integer,Connection> referenceConnections) {
         return build((RouteShapeInput) geometry, reference, referenceConnections);
     }
 
     static Plan build(RouteShapeInput geometry,RoutePaths reference,Map<Integer,Connection> referenceConnections) {
+        return candidates(geometry, reference, referenceConnections).all();
+    }
+
+    static Candidates candidates(RouteShapeInput geometry, RoutePaths reference, Map<Integer,Connection> referenceConnections) {
         var classified=EvidenceRoutePaths.classify(geometry).classifications();
         Map<Point,Integer> occurrences=new HashMap<>();
         for(var path:List.of(reference.up(),reference.down()))for(Point point:path.points())occurrences.merge(point,1,Integer::sum);
@@ -62,16 +108,9 @@ public final class SourceBoundDisplayCurves {
         for(var contact:contacts.values()){protectedCrossings.add(contact.first());protectedCrossings.add(contact.last());}
         for(var contact:rendererContacts.values()){protectedCrossings.add(contact.first());protectedCrossings.add(contact.last());}
         boolean topologyAvailable=crossings.complete() && renderedCrossings.complete() && contacts.complete() && rendererContacts.complete();
-        Map<String,Correspondence> mappings=new LinkedHashMap<>();Map<String,Curvature> metrics=new LinkedHashMap<>();
-        List<String> notes=new ArrayList<>();int count=0;double bound=0;
-        for(String direction:List.of("UP","DOWN")) {
-            var path=direction.equals("UP")?reference.up():reference.down();
-            Built built=buildPath(geometry,direction,path.points(),classified,referenceConnections,shared,protectedCrossings,topologyAvailable);
-            mappings.put(direction,built.mapping());count+=built.curves();bound=Math.max(bound,built.bound());notes.addAll(built.notes());
-            if(built.curves()>0)metrics.put(direction,curvature(built.mapping()));
-        }
-        var paths=new RoutePaths(new RoutePaths.Path(mappings.get("UP").displayPoints()),new RoutePaths.Path(mappings.get("DOWN").displayPoints()));
-        return new Plan("VALIDATED_NODE_BASELINE_METRIC_ARCLENGTH_NOT_ORIGINAL_RAW_PROGRESS",paths,mappings,metrics,count,bound,true,true,notes);
+        return new Candidates(
+                buildPath(geometry, "UP", reference.up().points(), classified, referenceConnections, shared, protectedCrossings, topologyAvailable),
+                buildPath(geometry, "DOWN", reference.down().points(), classified, referenceConnections, shared, protectedCrossings, topologyAvailable));
     }
 
     static Plan withTurnSupport(RouteShapeInput geometry,Plan current,Map<Integer,Connection> connections) {
@@ -182,17 +221,24 @@ public final class SourceBoundDisplayCurves {
         if (!geometry.hasVerifiedTurn() && !corners.isEmpty()) return assembleCorners(source, frame, corners, notes);
         // Neighbouring curves can pass in isolation and still introduce a sharp join together.
         // Reject only curves touching the offending source intervals. Bound regeneration work.
-        for (int attempt = 0; attempt < 3 && !corners.isEmpty(); attempt++) {
+        for (int attempt = 0; attempt < 6 && !corners.isEmpty(); attempt++) {
             Built built = assembleCorners(source, frame, corners, notes);
-            var regressions = new RegressionIntervals();
-            curvature(built.mapping(), regressions);
+            var regressions = curveRegressions(built);
             if (regressions.ranges.isEmpty()) return built;
-            boolean removed = corners.values().removeIf(c -> regressions.overlaps(
-                    c.sourceProgress().getFirst(), c.sourceProgress().getLast()));
-            if (!removed) break;
+            for (var iterator = corners.entrySet().iterator(); iterator.hasNext();) {
+                var entry = iterator.next();
+                var progress = entry.getValue().sourceProgress();
+                double start = progress.getFirst(), end = progress.getLast();
+                if (!regressions.overlaps(start, end)) continue;
+                double trim = (end - start) / 4;
+                Corner smaller = attempt < 4 && trim >= .5 ? corner(source, entry.getKey(), trim, frame) : null;
+                if (smaller == null) iterator.remove();
+                else entry.setValue(smaller);
+            }
         }
-        notes.add(direction + ":NO_ELIGIBLE_SOURCE_BOUND_CURVE");
-        return assembleCorners(source, frame, Map.of(), notes);
+        // The caller checks these surviving proposals together, and subdivides if they still conflict.
+        if (corners.isEmpty()) notes.add(direction + ":NO_ELIGIBLE_SOURCE_BOUND_CURVE");
+        return assembleCorners(source, frame, corners, notes);
     }
 
     private static Built assembleCorners(Line source, Frame frame, Map<Integer, Corner> corners, List<String> notes) {
@@ -211,7 +257,58 @@ public final class SourceBoundDisplayCurves {
             }
         }
         var mapping = new Correspondence(source.points, points, progress, source.length(), frame);
-        return new Built(mapping, corners.size(), bound, notes);
+        return new Built(mapping, Map.copyOf(corners), bound, List.copyOf(notes));
+    }
+
+    /** Compare bends on the same occurrence. Only an angle window that touches a modified corner can change. */
+    private static RegressionIntervals curveRegressions(Built built) {
+        var map = built.mapping();
+        var source = new Line(map.referencePoints(), map.metricFrame());
+        var display = new Line(map.displayPoints(), map.metricFrame());
+        double[] axis = map.referenceProgressAtDisplayVertices().stream().mapToDouble(Double::doubleValue).toArray();
+        var problems = new RegressionIntervals();
+        for (double radius : new double[]{2, 5, 10, 20, 40}) {
+            var windows = new RegressionIntervals();
+            for (var part : built.corners().values()) {
+                double start = part.sourceProgress().getFirst(), end = part.sourceProgress().getLast();
+                double left = interpolate(start, axis, display.chain) - radius;
+                double right = interpolate(end, axis, display.chain) + radius;
+                windows.add(Math.min(start - radius, interpolate(left, display.chain, axis)),
+                        Math.max(end + radius, interpolate(right, display.chain, axis)));
+            }
+            for (var span : windows.ranges.entrySet()) {
+                double lo = Math.max(0, span.getKey()), hi = Math.min(source.length(), span.getValue());
+                // Sample sub-metre positions for short windows: a one-metre grid skips abrupt tangent changes.
+                double step = radius <= 5 ? .25 : 1;
+                for (double s = Math.ceil(lo / step) * step; s <= hi; s += step) {
+                    checkAngle(source, display, axis, s, interpolate(s, axis, display.chain), radius, problems);
+                }
+                for (int i = lowerBound(axis, lo); i < axis.length && axis[i] <= hi; i++) {
+                    checkAngle(source, display, axis, axis[i], display.chain[i], radius, problems);
+                }
+                for (int i = lowerBound(source.chain, lo); i < source.chain.length && source.chain[i] <= hi; i++) {
+                    double s = source.chain[i];
+                    checkAngle(source, display, axis, s, interpolate(s, axis, display.chain), radius, problems);
+                }
+                double end = interpolate(hi, axis, display.chain);
+                for (double t = Math.ceil(interpolate(lo, axis, display.chain) / step) * step; t <= end; t += step) {
+                    checkAngle(source, display, axis, interpolate(t, display.chain, axis), t, radius, problems);
+                }
+            }
+        }
+        return problems;
+    }
+
+    private static int lowerBound(double[] sorted, double value) {
+        int i = Arrays.binarySearch(sorted, value);
+        return i < 0 ? -i - 1 : i;
+    }
+
+    private static void checkAngle(Line source, Line display, double[] axis, double s, double t,
+                                   double radius, RegressionIntervals problems) {
+        if (display.angleAt(t, radius) > source.angleAt(s, radius) + NEW_CURVE_ANGLE_BUDGET) {
+            problems.add(interpolate(t - radius, display.chain, axis), interpolate(t + radius, display.chain, axis));
+        }
     }
 
     private static final class RegressionIntervals {
@@ -386,10 +483,7 @@ public final class SourceBoundDisplayCurves {
     }
 
     public static Curvature curvature(Correspondence mapping) {
-        return curvature(mapping, null);
-    }
 
-    private static Curvature curvature(Correspondence mapping, RegressionIntervals regressions) {
         Line reference=new Line(mapping.referencePoints(),mapping.metricFrame()),display=new Line(mapping.displayPoints(),mapping.metricFrame());
         double[] sourceAtVertex=mapping.referenceProgressAtDisplayVertices().stream().mapToDouble(Double::doubleValue).toArray();
         int samples=0,beforeCount=0,afterCount=0;double beforeMax=0,afterMax=0;boolean noRegression=true;
@@ -400,7 +494,6 @@ public final class SourceBoundDisplayCurves {
             samples++;if(before>60)beforeCount++;if(after>60)afterCount++;beforeMax=Math.max(beforeMax,before);afterMax=Math.max(afterMax,after);
             if (after > 60 && after > before + 5) {
                 noRegression = false;
-                if (regressions != null) recordWindow(regressions, at, display, sourceAtVertex);
             }
         }
         // Native vertices are additional guard locations, never extra count
@@ -409,16 +502,9 @@ public final class SourceBoundDisplayCurves {
             double before=reference.angleAt(sourceAtVertex[i]),after=display.angleAt(display.chain[i]);
             if (after > 60 && after > before + 5) {
                 noRegression = false;
-                if (regressions != null) recordWindow(regressions, display.chain[i], display, sourceAtVertex);
             }
         }
         return new Curvature(samples,beforeCount,afterCount,beforeMax,afterMax,noRegression);
-    }
-
-    private static void recordWindow(RegressionIntervals intervals, double at, Line display, double[] sourceAtVertex) {
-        double start = interpolate(Math.max(0, at - 5), display.chain, sourceAtVertex);
-        double end = interpolate(Math.min(display.length(), at + 5), display.chain, sourceAtVertex);
-        intervals.add(start, end);
     }
 
     public static boolean endpointsPreserved(RoutePaths reference,RoutePaths candidate) {
@@ -458,6 +544,10 @@ public final class SourceBoundDisplayCurves {
             double fraction=(position-chain[i])/(chain[i+1]-chain[i]);XY a=xy.get(i),b=xy.get(i+1);
             return new XY(a.x+fraction*(b.x-a.x),a.y+fraction*(b.y-a.y));
         }
-        double angleAt(double position){XY p=at(position);return angle(sub(p,at(Math.max(0,position-5))),sub(at(Math.min(length(),position+5)),p));}
+        double angleAt(double position) { return angleAt(position, 5); }
+        double angleAt(double position, double radius) {
+            XY p = at(position);
+            return angle(sub(p, at(Math.max(0, position - radius))), sub(at(Math.min(length(), position + radius)), p));
+        }
     }
 }

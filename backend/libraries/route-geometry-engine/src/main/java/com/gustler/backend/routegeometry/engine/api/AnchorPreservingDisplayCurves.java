@@ -20,7 +20,8 @@ public final class AnchorPreservingDisplayCurves {
     private record Knot(double s,Point p) {}
     private record Piece(List<Point> points,List<Double> source,double bound) {}
     private record Patch(double start,double end,List<Point> points,List<Double> source,AnchorProof proof) {}
-    private record Built(SourceBoundDisplayCurves.Correspondence mapping,List<AnchorProof> proofs) {}
+    private record Leg(SourceBoundDisplayCurves.Correspondence floor, NavigableMap<Double,Point> anchors, List<Patch> patches) {}
+    private record LocatedPatch(String direction, Patch patch) {}
 
     public static Result build(RouteGeometry geometry,SourceBoundDisplayCurves.Plan current,Map<Integer,Connection> baselineConnections) {
         return build((RouteShapeInput) geometry, current, baselineConnections);
@@ -47,13 +48,51 @@ public final class AnchorPreservingDisplayCurves {
         List<Point> protectedTopology=new ArrayList<>(crossings.points());protectedTopology.addAll(rendererCrossings.points());
         for(var c:contacts.values()){protectedTopology.add(c.first());protectedTopology.add(c.last());}
         for(var c:rendererContacts.values()){protectedTopology.add(c.first());protectedTopology.add(c.last());}
-        Map<String,SourceBoundDisplayCurves.Correspondence> mappings=new LinkedHashMap<>();List<AnchorProof> proofs=new ArrayList<>();
-        for(String direction:List.of("UP","DOWN")) {
-            var old=current.correspondences().get(direction);require(old!=null,"MISSING_DIRECTION_MAPPING");
-            var built=direction(geometry,direction,old,connections,classified,shared,protectedTopology,supportTurn);
-            mappings.put(direction,built.mapping());proofs.addAll(built.proofs());
+        Map<String,Leg> legs = new LinkedHashMap<>();
+        var proposed = new ArrayList<LocatedPatch>();
+        for (String direction : List.of("UP", "DOWN")) {
+            var old = current.correspondences().get(direction);
+            require(old != null, "MISSING_DIRECTION_MAPPING");
+            var leg = direction(geometry,direction,old,connections,classified,shared,protectedTopology,supportTurn);
+            legs.put(direction, leg);
+            leg.patches().forEach(p -> proposed.add(new LocatedPatch(direction, p)));
         }
-        if(proofs.isEmpty())return new Result(current,0,List.of(),List.of("NO_CERTIFIED_ANCHOR_CURVE"));
+        if (proposed.isEmpty()) return new Result(current,0,List.of(),List.of("NO_CERTIFIED_ANCHOR_CURVE"));
+        var pending = new ArrayDeque<List<LocatedPatch>>();
+        pending.add(proposed);
+        List<LocatedPatch> accepted = new ArrayList<>();
+        Result best = new Result(current, 0, List.of(), List.of());
+        String failure = null;
+        // Recheck the complete combined output. When one proposal fails, retain independently valid regions.
+        for (int attempt = 0; !pending.isEmpty() && attempt < 32; attempt++) {
+            var group = pending.removeFirst();
+            var trial = new ArrayList<>(accepted);
+            trial.addAll(group);
+            try {
+                best = validatePatches(current, legs, trial, supportTurn);
+                accepted = trial;
+            } catch (IllegalArgumentException | ArithmeticException rejected) {
+                failure = rejected.getMessage();
+                if (group.size() > 1) {
+                    int middle = group.size() / 2;
+                    pending.addLast(group.subList(0, middle));
+                    pending.addLast(group.subList(middle, group.size()));
+                }
+            }
+        }
+        return best.anchoredCornerCount() > 0 ? best
+                : new Result(current, 0, List.of(), List.of("ANCHOR_CURVE_FALLBACK:" + failure));
+    }
+
+    private static Result validatePatches(SourceBoundDisplayCurves.Plan current, Map<String,Leg> legs,
+                                          List<LocatedPatch> included, boolean supportTurn) {
+        Map<String,SourceBoundDisplayCurves.Correspondence> mappings = new LinkedHashMap<>();
+        var proofs = new ArrayList<AnchorProof>();
+        for (var entry : legs.entrySet()) {
+            var patches = included.stream().filter(p -> p.direction().equals(entry.getKey())).map(LocatedPatch::patch).toList();
+            mappings.put(entry.getKey(), apply(entry.getValue(), patches));
+            patches.forEach(p -> proofs.add(p.proof()));
+        }
         var paths=new RoutePaths(new RoutePaths.Path(mappings.get("UP").displayPoints()),new RoutePaths.Path(mappings.get("DOWN").displayPoints()));
         require(SourceBoundDisplayCurves.endpointsPreserved(current.paths(),paths),"ANCHOR_ENDPOINT_CHANGED");
         require(RouteDisplayTopology.noNewCrossings(current.paths(),paths),"ANCHOR_NEW_CROSSING");
@@ -73,7 +112,7 @@ public final class AnchorPreservingDisplayCurves {
                 current.continuousControlHullCertified(),current.serializedChordCorrespondenceCertified(),notes);
         return new Result(plan,proofs.size(),proofs,notes);
     }
-    private static Built direction(RouteShapeInput geometry,String direction,SourceBoundDisplayCurves.Correspondence old,
+    private static Leg direction(RouteShapeInput geometry,String direction,SourceBoundDisplayCurves.Correspondence old,
             Map<Integer,Connection> connections,Map<Point,List<com.gustler.backend.routegeometry.api.RouteShapeEvidence.TypedPoint>> classified,
             Set<Point> shared,List<Point> topology,boolean supportTurn) {
         var frame=old.metricFrame();var source=new Line(old.referencePoints(),frame);TreeMap<Double,Point> anchors=new TreeMap<>();
@@ -124,7 +163,14 @@ public final class AnchorPreservingDisplayCurves {
             }
             if(accepted!=null&&(patches.isEmpty()||patches.getLast().end()<accepted.start()))patches.add(accepted);
         }
-        if(patches.isEmpty())return new Built(old,List.of());
+        return new Leg(old, anchors, patches);
+    }
+
+    private static SourceBoundDisplayCurves.Correspondence apply(Leg leg, List<Patch> patches) {
+        var old = leg.floor();
+        if (patches.isEmpty()) return old;
+        var frame = old.metricFrame();
+        var anchors = leg.anchors();
         TreeMap<Double,Point> output=new TreeMap<>();for(int i=0;i<old.displayPoints().size();i++)output.put(old.referenceProgressAtDisplayVertices().get(i),old.displayPoints().get(i));
         for(var patch:patches) {output.subMap(patch.start(),true,patch.end(),true).clear();for(int i=0;i<patch.points().size();i++)output.put(patch.source().get(i),patch.points().get(i));}
         // Insert the actual baseline anchor point, never its GPS marker or a nearest road foot.
@@ -134,7 +180,7 @@ public final class AnchorPreservingDisplayCurves {
             output.put(a.getKey(),a.getValue());
         }
         var mapping=new SourceBoundDisplayCurves.Correspondence(old.referencePoints(),new ArrayList<>(output.values()),new ArrayList<>(output.keySet()),old.referenceLengthMetres(),frame);
-        return new Built(mapping,patches.stream().map(Patch::proof).toList());
+        return mapping;
     }
     private static boolean supportedEndpoint(int index,Optional<SourceBoundDisplayCurves.TerminalSubsegmentSupport> terminal,Optional<TurnSubsegmentSupport.Witness> turn) {
         return terminal.isPresent() && terminal.get().referenceEndpointIndex()==index
@@ -259,8 +305,23 @@ public final class AnchorPreservingDisplayCurves {
         final List<Point> points;final List<XY> xy;final double[] chain;final SourceBoundDisplayCurves.Frame frame;
         Line(List<Point> p,SourceBoundDisplayCurves.Frame f){points=p;frame=f;xy=p.stream().map(v->xy(v,f)).toList();chain=new double[p.size()];for(int i=1;i<p.size();i++)chain[i]=chain[i-1]+distance(xy.get(i-1),xy.get(i));}
         double length(){return chain[chain.length-1];}
-        int segment(double s){if(s<=0)return 0;if(s>=length())return points.size()-2;int i=Arrays.binarySearch(chain,s);return i>=0?Math.min(i,points.size()-2):-i-2;}
-        XY at(double s){int i=segment(s);double f=(s-chain[i])/(chain[i+1]-chain[i]);return add(xy.get(i),mul(sub(xy.get(i+1),xy.get(i)),f));}
+        int segment(double s) {
+            // Upper bound selects the outgoing segment after any coincident vertices.
+            int lo = 0, hi = chain.length;
+            while (lo < hi) {
+                int mid = (lo + hi) >>> 1;
+                if (chain[mid] <= s) lo = mid + 1;
+                else hi = mid;
+            }
+            return Math.clamp(lo - 1, 0, points.size() - 2);
+        }
+        XY at(double s) {
+            int i = segment(s);
+            if (s == chain[i]) return xy.get(i);
+            if (s == chain[i + 1]) return xy.get(i + 1);
+            double fraction = (s - chain[i]) / (chain[i + 1] - chain[i]);
+            return add(xy.get(i), mul(sub(xy.get(i + 1), xy.get(i)), fraction));
+        }
         Point pointAt(double s){int i=segment(s);if(s==chain[i])return points.get(i);if(s==chain[i+1])return points.get(i+1);double f=(s-chain[i])/(chain[i+1]-chain[i]);var a=points.get(i);var b=points.get(i+1);return new Point(a.x()+f*(b.x()-a.x()),a.y()+f*(b.y()-a.y()));}
         double angleAt(double s){var a=sub(at(s),at(Math.max(0,s-5)));var b=sub(at(Math.min(length(),s+5)),at(s));return Math.hypot(a.x,a.y)<=NUMERICAL||Math.hypot(b.x,b.y)<=NUMERICAL?0:angle(a,b);}
     }
