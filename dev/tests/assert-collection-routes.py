@@ -10,8 +10,8 @@ import urllib.request
 from pathlib import Path
 
 ADDED = {"204000081", "234000002", "234000313", "234000878", "234000882", "204000082",
-         "234001739", "233000266", "204000170", "234000879", "228000393", "200000314"}
-OBSERVATION_ONLY = {"234001476", "222000209", "227000016", "234000079", "234000015"}
+         "234001739", "233000266", "204000170", "234000879", "228000393", "200000314",
+         "234001476", "222000209", "227000016", "234000079", "234000015"}
 
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
@@ -103,11 +103,7 @@ def verify(api, data, query):
     status, body = get("/api/v1/routes")
     assert status == 200, f"노선 목록 HTTP {status}"
     listed = {route["id"]: route for route in body["routes"]}
-    assert set(listed) == {route["routeId"] for route in reference + catalog} - OBSERVATION_ONLY
-    for route_id in sorted(OBSERVATION_ONLY):
-        for endpoint in ("board", "watch", "vehicles"):
-            status, body = get(f"/api/v1/routes/{route_id}/{endpoint}")
-            assert status == 404 and body["code"] == "ROUTE_NOT_FOUND", f"{route_id}/{endpoint}: HTTP {status}"
+    assert set(listed) == {route["routeId"] for route in reference + catalog}
     failures = []
     boards = {}
     for route in reference + catalog:
@@ -137,7 +133,7 @@ def verify(api, data, query):
         except (AssertionError, KeyError) as error:
             failures.append(f"{route_id}: {error}")
     assert not failures, "\n".join(failures)
-    print(f"내부 관측 5개 비공개, 기존 20개 보드와 모델 지원 {len(supported_ids)}개 예보 확인 완료")
+    print(f"공개 노선 보드와 모델 지원 {len(supported_ids)}개 예보 확인 완료")
 
 
 if __name__ == "__main__":

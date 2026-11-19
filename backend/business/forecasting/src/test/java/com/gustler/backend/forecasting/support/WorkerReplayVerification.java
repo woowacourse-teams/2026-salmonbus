@@ -213,6 +213,10 @@ final class WorkerReplayVerification {
         AlightingAwareFeatureSnapshot snapshot,
         final int target
     ) {
+        if (row.has("cell") && !row.path("cell").asString().equals(
+            restart.statistics().timeCell(snapshot.source().receivedAt().atZone(SEOUL)).key())) {
+            throw new IllegalArgumentException("재생 입력의 실제 시간대가 기대값과 다르다");
+        }
         if (row.has("extended_inputs")) {
             return expectedExtended(row, restart, snapshot, target);
         }

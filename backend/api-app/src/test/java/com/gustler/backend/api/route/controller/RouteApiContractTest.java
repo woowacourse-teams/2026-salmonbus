@@ -250,24 +250,37 @@ class RouteApiContractTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"234001476", "222000209", "227000016", "234000079", "234000015"})
-    void 내부_관측_노선은_관측과_예보_기록이_있어도_좌석_서비스에_공개하지_않는다(String routeId)
-            throws Exception {
+    void 잠실_노선은_공개하고_예보_발행_여부로_준비_상태를_구분한다(String routeId) throws Exception {
         OffsetDateTime now = OffsetDateTime.now();
         BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
-        RouteContext route = fixture.insertRoute(routeId, "내부 관측 노선", "기점", "종점", null,
+        RouteContext route = fixture.insertRoute(routeId, "잠실 노선", "기점", "종점", null,
             "05:00", "23:00", null, null, now.minusDays(1));
         fixture.insertStop(route, 1, "STOP-1", "기점", "UP", true);
+        fixture.insertStop(route, 2, "STOP-2", "종점", "UP", true);
         final long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
         final long batch = fixture.insertBatch(route, now.minusSeconds(30), "SUCCESS_ROWS", 1);
-        fixture.insertObservation(route, batch, 1, "V1", 1, "STOP-1", 1, 2, 8, null);
-        fixture.insertPublication(batch, model, now);
+        final long observation = fixture.insertObservation(route, batch, 1, "V1", 1, "STOP-1", 1, 2, 8, null);
 
         mockMvc.perform(get("/api/v1/routes"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.routes").isEmpty());
-        mockMvc.perform(get("/api/v1/routes/{routeId}/board", routeId)).andExpect(status().isNotFound());
-        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", routeId)).andExpect(status().isNotFound());
-        mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", routeId)).andExpect(status().isNotFound());
+            .andExpect(jsonPath("$.routes[0].id").value(routeId))
+            .andExpect(jsonPath("$.routes[0].status").value("PREPARING"));
+
+        fixture.insertRun(batch, model, "PUBLISHED", now);
+        fixture.insertForecast(observation, 2, model, 0.25, 6.5);
+
+        mockMvc.perform(get("/api/v1/routes"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.routes[0].status").value("FORECAST_READY"));
+        mockMvc.perform(get("/api/v1/routes/{routeId}/board", routeId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.route.status").value("FORECAST_READY"));
+        mockMvc.perform(get("/api/v1/routes/{routeId}/watch", routeId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.route.id").value(routeId))
+            .andExpect(jsonPath("$.stops[1].approachingVehicles[0].forecast.expectedSeats").value(6.5));
+        mockMvc.perform(get("/api/v1/routes/{routeId}/vehicles", routeId))
+            .andExpect(status().isOk());
     }
 
     private long insertRoute(
