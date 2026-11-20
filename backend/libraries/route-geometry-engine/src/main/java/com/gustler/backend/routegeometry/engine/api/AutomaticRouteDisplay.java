@@ -11,7 +11,7 @@ import java.util.*;
 
 /** 자동 후보는 최종 방문·끝점·교차 검사를 거친다. 요청에서 외부 도로 조회나 임의의 핀 이동을 하지 않는다. */
 public final class AutomaticRouteDisplay {
-    public static final String REVISION = "automatic-quality-v13";
+    public static final String REVISION = "automatic-quality-v14";
     public static final String PREVIOUS_REVISION = "automatic-quality-v9";
 
     private AutomaticRouteDisplay() {}
@@ -47,11 +47,25 @@ public final class AutomaticRouteDisplay {
         if (fullOrder) {
             var retained = PublishedTurnBoundary.repartition(shared, inputDigest, prior, PREVIOUS_REVISION);
             if (retained != null) {
+                var junctions = SharedJunctions.find(shared, classification, retained.paths());
+                if (!junctions.isEmpty()) {
+                    var rebuilt = buildOnVerifiedTurn(shared, inputDigest, classification, fullOrder);
+                    var next = rebuilt.geometry().paths();
+                    if (usableBaseline(rebuilt.geometry()) && junctions.stream().anyMatch(j -> j.removedFrom(next))
+                            && RouteDisplayTopology.noNewCrossings(retained.paths(), next)
+                            && RouteDisplayTopology.noNewRendererCrossings(retained.paths(), next)
+                            && RouteDisplayTopology.noNewContacts(retained.paths(), next)
+                            && RouteDisplayTopology.noNewSpike(retained.paths(), next)) return rebuilt;
+                }
                 return new BuildDetails(retained, "PUBLISHED_PATH_VERIFIED_TURN", 0, 0, false, false, null, List.of());
             }
         }
+        return buildOnVerifiedTurn(shared, inputDigest, classification, fullOrder);
+    }
 
-        var projected = buildPrepared(projected(geometry), inputDigest);
+    private static BuildDetails buildOnVerifiedTurn(RouteShapeInput.Prepared shared, String inputDigest,
+            EvidenceRoutePaths.Classification classification, boolean fullOrder) {
+        var projected = buildPrepared(projected(shared.source()), inputDigest);
         if (usableBaseline(projected.geometry())) {
             var corrected = PublishedTurnBoundary.repartition(shared, inputDigest, projected.geometry(), REVISION);
             if (corrected != null) {
