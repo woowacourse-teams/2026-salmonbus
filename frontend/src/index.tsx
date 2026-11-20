@@ -5,6 +5,7 @@ import "@/shared/styles/reset.css";
 import { App } from "@/app/App";
 import { AppErrorBoundary } from "@/app/AppErrorBoundary";
 import { initAnalytics } from "@/shared/analytics/analytics";
+import { initAuth } from "@/shared/auth/authStore";
 import { initInputMethod } from "@/shared/input-method/inputMethod";
 import { initOpenedNotifications } from "@/shared/notification/openedNotificationInbox";
 
@@ -16,6 +17,7 @@ if (!container) {
 initAnalytics();
 initInputMethod();
 initOpenedNotifications();
+initAuth();
 
 createRoot(container, errorTrackingRootOptions).render(
   <StrictMode>
