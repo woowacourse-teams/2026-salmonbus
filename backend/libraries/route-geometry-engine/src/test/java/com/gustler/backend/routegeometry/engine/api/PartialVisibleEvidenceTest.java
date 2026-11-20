@@ -74,6 +74,33 @@ class PartialVisibleEvidenceTest {
         }
     }
 
+    @Test void fullPointOrderWithChangedInteriorGeometryCanCertifyOnlyTheSharedTurn() {
+        var g = drift(10);
+        var points = new ArrayList<>(g.points());
+        points.add(1, p(5, 40));
+        var roles = g.shape().evidence().webPoints();
+        var full = changed(g, points, roles);
+        var stops = new ArrayList<>(full.busStops());
+        stops.set(1, new Stop("B", 2, "B", "UP", true, p(535, -48)));
+        var route = new RouteGeometry(full.routeId(), 1, "full", "A", "B", 2, stops, full.shape());
+        var classified = EvidenceRoutePaths.classify(route);
+        assertThat(classified.normalization()).isEqualTo("FULL_POINT_ORDER_V1");
+        assertThat(classified.unmatchedPoints()).isEqualTo(2);
+        var verified = SourceStopOccurrenceWitness.sharedTurn(route);
+        assertThat(verified).isNotNull();
+        var display = AutomaticRouteDisplay.build(route, "test");
+        assertThat(display.paths()).isEqualTo(verified.paths());
+        assertThat(display.connections()).hasSize(stops.size());
+        assertThat(SourceStopOccurrenceWitness.assess(verified, display.paths(), display.connections()).visits().keySet())
+                .containsExactly(2);
+        for (int index : List.of(0, 25, 26, points.size() - 1)) {
+            var changedPoints = new ArrayList<>(points);
+            changedPoints.set(11, original().points().get(10));
+            changedPoints.set(index, p(800, 300));
+            assertThat(SourceStopOccurrenceWitness.sharedTurn(changed(route, changedPoints, roles))).isNull();
+        }
+    }
+
     @Test void visibleEvidenceCannotVerifyADisplacedOrMissingTurnVisit() {
         assertThat(SourceStopOccurrenceWitness.sharedTurn(drift(24))).isNull();
         var g = original();

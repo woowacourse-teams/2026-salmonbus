@@ -34,8 +34,7 @@ final class SourceStopOccurrenceWitness {
         var classification = EvidenceRoutePaths.classify(source);
         if (classification.classifications().isEmpty()) return null;
         boolean visible = classification.usesVisibleOrder();
-        if (!visible && !(classification.normalization().equals("FULL_POINT_ORDER_V1")
-                && classification.unmatchedPoints() == 0)) return null;
+        if (!visible && !classification.normalization().equals("FULL_POINT_ORDER_V1")) return null;
         var roles = indexedRoles(shape, visible);
         int index = 0;
         while (index < roles.size() && roles.get(index).direction().equals("UP")) index++;
@@ -79,7 +78,8 @@ final class SourceStopOccurrenceWitness {
         // Do not publish a witness which could outlive that evidence in cache.
         if(!hasCurrentWebRoles(shape))return failed("CURRENT_SOURCE_ROLE_EVIDENCE_UNAVAILABLE");
         var classified=EvidenceRoutePaths.classify(geometry);
-        boolean partialTurn = geometry.hasVerifiedTurn() && classified.normalization().equals("PARTIAL_VISIBLE_SUBSEQUENCE_V1");
+        boolean partialTurn = geometry.hasVerifiedTurn() && classified.unmatchedPoints() > 0
+                && (classified.usesVisibleOrder() || classified.normalization().equals("FULL_POINT_ORDER_V1"));
         if (classified.classifications().isEmpty() || !(partialTurn || classified.unmatchedPoints() == 0
                 && (classified.normalization().equals("FULL_POINT_ORDER_V1") || classified.normalization().equals("OFFICIAL_VISIBLE_SUBSEQUENCE_V1"))))
             return failed("WHOLE_SOURCE_ROLE_ORDER_UNPROVEN");
@@ -234,8 +234,9 @@ final class SourceStopOccurrenceWitness {
         List<Row> result=new ArrayList<>();
         for(int i=0;i<typed.size();i++) {var role=typed.get(i);var roles=merge && i==boundary?List.of(role,typed.get(++i)):List.of(role);int index=result.size();
             for (var p : roles) {
-                if (p.type() == 3 && classified.normalization().equals("PARTIAL_VISIBLE_SUBSEQUENCE_V1")) continue;
-                if (RouteStopAlignment.distance(geometry.points().get(index), new Point(p.point().x(), p.point().y())) > 4) return null;
+                if (RouteStopAlignment.distance(geometry.points().get(index), new Point(p.point().x(), p.point().y())) <= 4) continue;
+                if (classified.unmatchedPoints() == 0 || index == 0 || index == geometry.points().size() - 1
+                        || (p.type() != 2 && p.type() != 3)) return null;
             }
             result.add(new Row(index,roles));}
         return result;

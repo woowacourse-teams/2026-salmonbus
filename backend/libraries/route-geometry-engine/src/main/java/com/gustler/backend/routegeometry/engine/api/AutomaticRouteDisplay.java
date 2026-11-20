@@ -41,7 +41,10 @@ public final class AutomaticRouteDisplay {
     public static BuildDetails buildDetailed(RouteGeometry geometry, String inputDigest, RouteDisplayGeometry prior) {
         var shared = SourceStopOccurrenceWitness.sharedTurn(geometry);
         if (shared != null) {
-            if (EvidenceRoutePaths.classify(shared).usesVisibleOrder()) return buildVisible(shared, inputDigest);
+            var classification = EvidenceRoutePaths.classify(shared);
+            if (classification.usesVisibleOrder() || classification.unmatchedPoints() > 0) {
+                return buildOnVerifiedSource(shared, inputDigest);
+            }
             var retained = PublishedTurnBoundary.repartition(shared, inputDigest, prior, PREVIOUS_REVISION);
             if (retained != null) {
                 return new BuildDetails(retained, "PUBLISHED_PATH_VERIFIED_TURN", 0, 0, false, false, null, List.of());
@@ -52,7 +55,7 @@ public final class AutomaticRouteDisplay {
         return buildPrepared(projected(geometry), inputDigest);
     }
 
-    private static BuildDetails buildVisible(RouteShapeInput.Prepared shared, String digest) {
+    private static BuildDetails buildOnVerifiedSource(RouteShapeInput.Prepared shared, String digest) {
         var projected = buildPrepared(projected(shared.source()), digest);
         if (usableBaseline(projected.geometry())) {
             var corrected = PublishedTurnBoundary.repartition(shared, digest, projected.geometry(), REVISION);
