@@ -110,6 +110,34 @@ class RouteSourceProvenanceGenerationTest {
         assertThat(jdbc.sql("SELECT source_manifest_id FROM route_display_automatic_artifact").query(String.class).list())
             .containsExactlyInAnyOrder(manifest,manifest);
     }
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void discovery_pins_only_the_predecessor_available_at_that_time(boolean publishedBeforeDiscovery) {
+        String manifest = capture(current(), START);
+        var input = current();
+        String digest = RouteDisplayGeneration.input(input).digest();
+        String evidence = input.shape().evidence().revision();
+        String revision = AutomaticRouteDisplay.PREVIOUS_REVISION;
+        String previousKey = RouteDisplayGeneration.key(digest, evidence, revision, manifest);
+        String document = "{\"previous\":true}";
+        store.enqueue(previousKey, ROUTE, digest, evidence, revision, json.writeValueAsString(input), manifest);
+        var previousJob = store.claim(Duration.ofMinutes(1)).orElseThrow();
+        if (!publishedBeforeDiscovery) worker.discover(ROUTE);
+        assertThat(store.complete(previousJob, document, RouteDisplayGeneration.sha256(document))).isTrue();
+        worker.discover(ROUTE);
+        var sourceOnly = store.claim(Duration.ofMinutes(1)).orElseThrow();
+        assertThat(sourceOnly.algorithmRevision()).isEqualTo(RouteDisplayGeneration.SOURCE_REVISION);
+        assertThat(store.previousDisplay(sourceOnly)).isEmpty();
+        var full = store.claim(Duration.ofMinutes(1)).orElseThrow();
+        assertThat(full.algorithmRevision()).isEqualTo(AutomaticRouteDisplay.REVISION);
+        if (publishedBeforeDiscovery) {
+            assertThat(store.previousDisplay(full)).contains(new JdbcRouteDisplayGenerationStore.PublishedInput(
+                    document, RouteDisplayGeneration.sha256(document), manifest));
+        } else {
+            assertThat(store.previousDisplay(full)).isEmpty();
+        }
+    }
+
     @Test void repeated_identical_acquisition_keeps_semantic_jobs_and_first_consumed_provenance() {
         String first=capture(current(),START);
         worker.discover(ROUTE);drain();

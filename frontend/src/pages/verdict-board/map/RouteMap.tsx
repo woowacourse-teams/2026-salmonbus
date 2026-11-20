@@ -476,20 +476,18 @@ export function RouteMap(props: RouteMapProps) {
     mapState.status !== "loading" && mapState.data === data ? mapState : { status: "loading" as const };
   const preparing = geometryStatus === "preparing" || geometryStatus === "generating";
   const quietPreparation = quietInitialLoad && (geometryStatus === "loading" || preparing);
-  const withheld = geometryStatus === "withheld";
-  const geometryNotice = preparing ? "노선을 준비 중이에요" : withheld ? "현재 노선을 표시할 수 없어요" : null;
-  const stopInfoNotice = withheld ? "정류장 정보는 확인 가능해요" : "정류장 목록은 계속 확인할 수 있어요";
   const sharedMapFailed = !useNativeMap && mapFlow?.status === "error";
   const unavailableMessage =
     currentMapState.status === "error"
       ? currentMapState.message
       : sharedMapFailed
         ? "지도를 불러오지 못했어요"
-        : data === null && !quietPreparation
-          ? (geometryNotice ??
-            (geometryStatus === "error" || geometryStatus === "retrying"
+        : data === null && !quietPreparation && geometryStatus !== "withheld"
+          ? preparing
+            ? "노선을 준비 중이에요"
+            : geometryStatus === "error" || geometryStatus === "retrying"
               ? "지도를 불러오지 못했어요"
-              : "지도 정보를 준비 중이에요"))
+              : "지도 정보를 준비 중이에요"
           : null;
   const ready = currentMapState.status === "ready";
   const canRetryNativeMap = nativeHomeMap && currentMapState.status === "error";
@@ -535,7 +533,7 @@ export function RouteMap(props: RouteMapProps) {
         <div className={shared ? styles.sharedNotice : styles.notice} role="status" data-native-map-hit>
           <span>{unavailableMessage}</span>
           {geometryStatus === "retrying" && <span>잠시 후 자동으로 다시 불러와요.</span>}
-          <span>{stopInfoNotice}</span>
+          <span>정류장 목록은 계속 확인할 수 있어요</span>
           {canRetryNativeMap && (
             <div className={styles.retryMap}>
               <RetryButton
@@ -550,26 +548,9 @@ export function RouteMap(props: RouteMapProps) {
           )}
         </div>
       ) : null}
-      {data !== null &&
-      ready &&
-      (geometryRetrying ||
-        (!quietPreparation &&
-          (geometryNotice !== null || !data.paths.some((path) => path.direction === activeDirection)))) ? (
-        <div
-          className={
-            withheld ? styles.withheldToast : geometryNotice === null ? styles.pathNotice : styles.geometryToast
-          }
-          role="status"
-        >
-          {geometryRetrying
-            ? "지도를 갱신하지 못했어요. 잠시 후 자동으로 다시 불러와요."
-            : (geometryNotice ?? "방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요")}
-          {withheld && (
-            <>
-              <br />
-              {stopInfoNotice}
-            </>
-          )}
+      {data !== null && ready && (geometryRetrying || (!quietPreparation && preparing)) ? (
+        <div className={styles.geometryToast} role="status">
+          {geometryRetrying ? "지도를 갱신하지 못했어요. 잠시 후 자동으로 다시 불러와요." : "노선을 준비 중이에요"}
         </div>
       ) : null}
       {data !== null && ready ? (

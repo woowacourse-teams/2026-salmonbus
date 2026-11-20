@@ -14,7 +14,7 @@ import java.util.Map;
 final class EvidenceRoutePaths {
     private EvidenceRoutePaths() {}
 
-    static RoutePaths build(RouteGeometry geometry) {
+    static RoutePaths build(RouteShapeInput geometry) {
         RoutePaths original = geometry.paths();
         if (original == null) return null;
         Classification alignment = classify(geometry);
@@ -78,7 +78,7 @@ final class EvidenceRoutePaths {
 
     /** Sequential role removal preserves a validated whole bundle as the
      * lower floor before atomic shared-role or curve changes. */
-    static RoutePaths buildSequentialFloor(RouteGeometry geometry) {
+    static RoutePaths buildSequentialFloor(RouteShapeInput geometry) {
         RoutePaths original = geometry.paths();
         if (original == null) return null;
         Classification alignment = classifyFull(geometry);
@@ -108,7 +108,7 @@ final class EvidenceRoutePaths {
             List<Point> other,
             String direction,
             Map<Point, List<TypedPoint>> classifications,
-            RouteGeometry geometry,
+            RouteShapeInput geometry,
             RouteDisplayTopology.Crossings crossings,
             Map<Point, Double> angles, RouteDisplayTopology.Contacts contacts, RouteDisplayTopology.Contacts rendererContacts) {
         for (int i = points.size() - 2; i > 0; i--) {
@@ -139,13 +139,17 @@ final class EvidenceRoutePaths {
             int matchedPoints,
             int unmatchedPoints,
             boolean sharedBoundaryMerged,String normalization) {
+        boolean usesVisibleOrder() {
+            return normalization.equals("OFFICIAL_VISIBLE_SUBSEQUENCE_V1") || normalization.equals("PARTIAL_VISIBLE_SUBSEQUENCE_V1");
+        }
+
         Classification(Map<Point,List<TypedPoint>> classifications,int matchedPoints,int unmatchedPoints,boolean sharedBoundaryMerged) {
             this(classifications,matchedPoints,unmatchedPoints,sharedBoundaryMerged,"FULL_POINT_ORDER_V1");
         }
     }
 
     /** 좌표를 이동하지 않고 분류만 대응한다. 중복 회차점 이외 삽입·삭제는 추측하지 않는다. */
-    static Classification classify(RouteGeometry geometry) {
+    static Classification classify(RouteShapeInput geometry) {
         Classification full=classifyFull(geometry),visible=classifyVisible(geometry);
         if(visible==null || visible.unmatchedPoints()>0 && !full.classifications().isEmpty())return full;
         if(full.classifications().isEmpty() || full.unmatchedPoints()>0 || geometry.shape().evidence().selectedSource().equals("GBIS_WEB"))return visible;
@@ -161,7 +165,7 @@ final class EvidenceRoutePaths {
     private static java.util.Set<String> signatures(List<TypedPoint> points) {
         var result=new java.util.HashSet<String>();points.forEach(p->result.add(p.direction()+":"+p.type()));return result;
     }
-    private static Classification classifyFull(RouteGeometry geometry) {
+    private static Classification classifyFull(RouteShapeInput geometry) {
         var typed = geometry.shape().evidence().webPoints();
         var raw = geometry.points();
         if (raw.size() > 10000 || typed.isEmpty())
@@ -206,7 +210,7 @@ final class EvidenceRoutePaths {
      * primary shape. The visible sequence keeps its indices (optionally the single
      * shared turn duplicate); unmatched interior shape points are protected.
      * Never infer nearest-point or insertion matching. */
-    private static Classification classifyVisible(RouteGeometry geometry) {
+    private static Classification classifyVisible(RouteShapeInput geometry) {
         var typed=geometry.shape().evidence().webPoints();var raw=geometry.points();
         if(raw.size()>10000 || typed.isEmpty() || typed.stream().noneMatch(p->p.type()==2))return null;
         boolean down=false;int transition=-1;
@@ -263,7 +267,7 @@ final class EvidenceRoutePaths {
                 unmatched.isEmpty()?"OFFICIAL_VISIBLE_SUBSEQUENCE_V1":"PARTIAL_VISIBLE_SUBSEQUENCE_V1");
     }
 
-    static boolean preservesPartialSegments(RouteGeometry geometry,RoutePaths candidate,Classification classified) {
+    static boolean preservesPartialSegments(RouteShapeInput geometry,RoutePaths candidate,Classification classified) {
         if(!classified.normalization().equals("PARTIAL_VISIBLE_SUBSEQUENCE_V1"))return true;
         var original=geometry.paths();
         if(original==null || candidate==null)return false;

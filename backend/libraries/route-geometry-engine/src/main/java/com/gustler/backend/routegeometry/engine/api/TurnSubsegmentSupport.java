@@ -10,11 +10,11 @@ final class TurnSubsegmentSupport {
 
     record Witness(int referenceEndpointIndex, int rawSegmentIndex, double rawFraction) {}
 
-    static Optional<Witness> certify(RouteGeometry geometry, String direction, List<Point> reference,
+    static Optional<Witness> certify(RouteShapeInput geometry, String direction, List<Point> reference,
             Map<Integer, Connection> connections, Map<Point, List<TypedPoint>> classified,
             Optional<SourceBoundDisplayCurves.TerminalSubsegmentSupport> terminal) {
         if (reference.size() < 2 || !(direction.equals("UP") || direction.equals("DOWN"))) return Optional.empty();
-        var split = RoutePathSplitter.splitWithBoundary(geometry);
+        var split = geometry.directionBoundary();
         if (split == null || !(split.sourceFraction() > 0 && split.sourceFraction() < 1)) return Optional.empty();
         boolean start = direction.equals("DOWN");
         int endpoint = start ? 0 : reference.size() - 1;

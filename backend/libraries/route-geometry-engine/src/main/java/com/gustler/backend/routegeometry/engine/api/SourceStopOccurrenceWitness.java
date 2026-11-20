@@ -24,21 +24,66 @@ final class SourceStopOccurrenceWitness {
                        double[] chain,double[] rawProgress,SourceBoundDisplayCurves.TerminalSubsegmentSupport cut,int literalCut) {}
     private static Assessment failed(String reason) {return new Assessment(Map.of(),List.of(reason));}
 
-    static Assessment assess(RouteGeometry geometry,RoutePaths paths,Map<Integer,Connection> connections) {
+    static RouteShapeInput.Prepared sharedTurn(RouteGeometry source) {
+        var shape = source.shape();
+        if (shape == null || source.turnSequence() == null || !hasBoundManifest(shape) || !hasCurrentWebRoles(shape)) return null;
+        var stops = source.busStops();
+        if (stops.size() < 3 || source.turnSequence() <= stops.getFirst().stopSequence()
+                || source.turnSequence() >= stops.getLast().stopSequence()) return null;
+
+        var classification = EvidenceRoutePaths.classify(source);
+        if (classification.classifications().isEmpty()) return null;
+        boolean visible = classification.usesVisibleOrder();
+        if (!visible && !classification.normalization().equals("FULL_POINT_ORDER_V1")) return null;
+        var roles = indexedRoles(shape, visible);
+        int index = 0;
+        while (index < roles.size() && roles.get(index).direction().equals("UP")) index++;
+        if (index == 0 || index >= roles.size() || roles.get(index - 1).type() != 1
+                || roles.get(index).type() != 1 || !roles.get(index - 1).point().equals(roles.get(index).point())) return null;
+
+        if (!classification.sharedBoundaryMerged() && !source.points().get(index - 1).equals(source.points().get(index))) {
+            return null;
+        }
+        var split = RoutePathSplitter.atSharedVertex(source.points(), index - 1);
+        if (split == null) return null;
+        var prepared = new RouteShapeInput.Prepared(source, split, true);
+        var up = stops.stream().filter(s -> s.direction().equals("UP")).toList();
+        var down = stops.stream().filter(s -> s.direction().equals("DOWN")).toList();
+        if (up.isEmpty() || down.isEmpty()) return null;
+        var upAlignment = RouteStopAlignment.align(split.paths().up().points(), up, true);
+        var downAlignment = RouteStopAlignment.align(split.paths().down().points(), down, false);
+        if (!upAlignment.usable() || !downAlignment.usable()) return null;
+        var connections = new HashMap<>(upAlignment.connections());
+        connections.putAll(downAlignment.connections());
+        var assessment = assess(prepared, split.paths(), connections);
+        var turn = up.getLast();
+        return turn.stopSequence() == source.turnSequence() && assessment.supports(turn) ? prepared : null;
+    }
+
+    private static boolean hasBoundManifest(RouteGeometry.Shape shape) {
+        return shape.sourceManifestId() != null && shape.sourceManifestId().matches("[a-fA-F0-9]{64}")
+                && shape.unboundSourceManifestId() == null;
+    }
+
+    private static boolean hasCurrentWebRoles(RouteGeometry.Shape shape) {
+        return shape.evidence().sources().stream().anyMatch(s -> s.id().equals("GBIS_WEB")
+                && s.status().equals("AVAILABLE") && s.digest() != null && !s.digest().isBlank() && s.validUntil() == null);
+    }
+
+    static Assessment assess(RouteShapeInput geometry,RoutePaths paths,Map<Integer,Connection> connections) {
         if(geometry.shape()==null || paths==null || geometry.paths()==null)return failed("SOURCE_PATH_UNAVAILABLE");
         var shape=geometry.shape();
-        if(shape.sourceManifestId()==null || !shape.sourceManifestId().matches("[a-fA-F0-9]{64}")
-                || shape.unboundSourceManifestId()!=null)return failed("SOURCE_PROVENANCE_UNBOUND");
+        if(!hasBoundManifest(shape))return failed("SOURCE_PROVENANCE_UNBOUND");
         // Finite WEB deadlines are not yet revisioned by the source lifecycle.
         // Do not publish a witness which could outlive that evidence in cache.
-        if(shape.evidence().sources().stream().noneMatch(s->s.id().equals("GBIS_WEB") && s.status().equals("AVAILABLE")
-                && s.digest()!=null && !s.digest().isBlank() && s.validUntil()==null))
-            return failed("CURRENT_SOURCE_ROLE_EVIDENCE_UNAVAILABLE");
+        if(!hasCurrentWebRoles(shape))return failed("CURRENT_SOURCE_ROLE_EVIDENCE_UNAVAILABLE");
         var classified=EvidenceRoutePaths.classify(geometry);
-        if(classified.unmatchedPoints()!=0 || classified.classifications().isEmpty()
-                || !(classified.normalization().equals("FULL_POINT_ORDER_V1") || classified.normalization().equals("OFFICIAL_VISIBLE_SUBSEQUENCE_V1")))
+        boolean partialTurn = geometry.hasVerifiedTurn() && classified.unmatchedPoints() > 0
+                && (classified.usesVisibleOrder() || classified.normalization().equals("FULL_POINT_ORDER_V1"));
+        if (classified.classifications().isEmpty() || !(partialTurn || classified.unmatchedPoints() == 0
+                && (classified.normalization().equals("FULL_POINT_ORDER_V1") || classified.normalization().equals("OFFICIAL_VISIBLE_SUBSEQUENCE_V1"))))
             return failed("WHOLE_SOURCE_ROLE_ORDER_UNPROVEN");
-        var rows=rows(geometry,classified.normalization());
+        var rows=rows(geometry,classified);
         if(rows==null)return failed("INDEXED_SOURCE_ROLE_ORDER_UNPROVEN");
         var events=new ArrayList<Event>();
         for(int i=0;i<rows.size();i++) {
@@ -144,7 +189,7 @@ final class SourceStopOccurrenceWitness {
                 boolean lowerInclusive=(lowerAxis!=candidateLo || j==0) && (lowerAxis!=rawLoAxis || rawLo<leg.rawProgress()[0] || ordinal==0),
                         upperInclusive=(upperAxis!=candidateHi || j+1==anchors.size()) && (upperAxis!=rawHiAxis || rawHi>leg.rawProgress()[leg.rawProgress().length-1] || ordinal+1==events.size());
                 var event=events.get(ordinal);boolean endpoint=s==0 || s==leg.chain()[leg.chain().length-1];
-                if(endpoint && !event.shared())continue;
+                if((endpoint || partialTurn) && !event.shared())continue;
                 result.put(stop.stopSequence(),new Witness(stop.stationId(),stop.stopSequence(),direction,event.first(),
                         lowerAxis,upperAxis,connection.segmentIndex()+connection.segmentFraction(),lowerInclusive,upperInclusive,event.shared()?"SHARED_TURN_EVENT":"ORDERED_INTERIOR_EVENT"));
             }
@@ -154,7 +199,7 @@ final class SourceStopOccurrenceWitness {
 
     /** A curve must map its ACTUAL serialized connection back inside the same
      * baseline visit window. Same XY on another lap is insufficient. */
-    static Assessment throughCurve(RouteGeometry geometry,RoutePaths reference,Map<Integer,Connection> before,
+    static Assessment throughCurve(RouteShapeInput geometry,RoutePaths reference,Map<Integer,Connection> before,
             SourceBoundDisplayCurves.Plan plan,Map<Integer,Connection> after) {
         var base=assess(geometry,reference,before);if(!base.reasons().isEmpty())return base;
         if(!plan.continuousControlHullCertified() || !plan.serializedChordCorrespondenceCertified()
@@ -173,9 +218,13 @@ final class SourceStopOccurrenceWitness {
         }
         return new Assessment(result,List.of());
     }
-    private static List<Row> rows(RouteGeometry geometry,String normalization) {
-        var typed=geometry.shape().evidence().webPoints();
-        if(normalization.equals("OFFICIAL_VISIBLE_SUBSEQUENCE_V1"))typed=typed.stream().filter(p->p.type()!=2).toList();
+    private static List<TypedPoint> indexedRoles(RouteGeometry.Shape shape, boolean visible) {
+        var roles = shape.evidence().webPoints();
+        return visible ? roles.stream().filter(role -> role.type() != 2).toList() : roles;
+    }
+
+    private static List<Row> rows(RouteShapeInput geometry,EvidenceRoutePaths.Classification classified) {
+        var typed = indexedRoles(geometry.shape(), classified.usesVisibleOrder());
         boolean down=false;int boundary=-1;
         for(int i=0;i<typed.size();i++) {String d=typed.get(i).direction();if(d.equals("DOWN")){if(!down)boundary=i-1;down=true;}else if(!d.equals("UP") || down)return null;}
         boolean merge=typed.size()==geometry.points().size()+1;
@@ -184,7 +233,11 @@ final class SourceStopOccurrenceWitness {
         if(!merge && typed.size()!=geometry.points().size())return null;
         List<Row> result=new ArrayList<>();
         for(int i=0;i<typed.size();i++) {var role=typed.get(i);var roles=merge && i==boundary?List.of(role,typed.get(++i)):List.of(role);int index=result.size();
-            for(var p:roles)if(RouteStopAlignment.distance(geometry.points().get(index),new Point(p.point().x(),p.point().y()))>4)return null;
+            for (var p : roles) {
+                if (RouteStopAlignment.distance(geometry.points().get(index), new Point(p.point().x(), p.point().y())) <= 4) continue;
+                if (classified.unmatchedPoints() == 0 || index == 0 || index == geometry.points().size() - 1
+                        || (p.type() != 2 && p.type() != 3)) return null;
+            }
             result.add(new Row(index,roles));}
         return result;
     }
@@ -207,7 +260,7 @@ final class SourceStopOccurrenceWitness {
     }
     /** Literal source-vertex terminal cuts need no interpolated support point.
      * Recompute both ordered alignments and the original100m/15m trim policy. */
-    private static int literalTerminalCut(RouteGeometry geometry,String direction,List<Point> original,List<Point> candidate,Map<Integer,Connection> connections) {
+    private static int literalTerminalCut(RouteShapeInput geometry,String direction,List<Point> original,List<Point> candidate,Map<Integer,Connection> connections) {
         boolean start=direction.equals("UP");Point boundary=start?candidate.getFirst():candidate.getLast();
         if(boundary.equals(start?original.getFirst():original.getLast()))return -1;
         int index=original.indexOf(boundary);if(index<0 || original.lastIndexOf(boundary)!=index)return -1;

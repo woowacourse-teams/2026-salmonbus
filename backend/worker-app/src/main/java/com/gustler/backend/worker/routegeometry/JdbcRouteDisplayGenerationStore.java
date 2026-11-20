@@ -1,5 +1,7 @@
 package com.gustler.backend.worker.routegeometry;
 
+import com.gustler.backend.routegeometry.engine.api.AutomaticRouteDisplay;
+import com.gustler.backend.routegeometry.engine.api.RouteDisplayGeneration;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -41,10 +43,14 @@ public class JdbcRouteDisplayGenerationStore {
     }
     public void enqueue(String key,String routeId,String inputDigest,String evidenceRevision,
             String algorithmRevision,String inputJson,String sourceManifestId) {
+        String previousKey = sourceManifestId != null && algorithmRevision.equals(AutomaticRouteDisplay.REVISION)
+                ? RouteDisplayGeneration.key(inputDigest, evidenceRevision, AutomaticRouteDisplay.PREVIOUS_REVISION, sourceManifestId)
+                : null;
         jdbc.sql("""
             INSERT INTO route_display_generation_job
-                (generation_key,route_id,input_digest,evidence_revision,algorithm_revision,input_json,source_manifest_id,attempt_limit)
-            VALUES (?,?,?,?,?,CAST(? AS jsonb),?,?) ON CONFLICT (generation_key) DO UPDATE
+                (generation_key,route_id,input_digest,evidence_revision,algorithm_revision,input_json,source_manifest_id,attempt_limit,previous_display_key)
+            VALUES (?,?,?,?,?,CAST(? AS jsonb),?,?, (SELECT generation_key FROM route_display_automatic_artifact
+                WHERE generation_key=? AND route_id=? AND source_manifest_id IS NOT NULL)) ON CONFLICT (generation_key) DO UPDATE
             SET status=CASE WHEN route_display_generation_job.attempts < route_display_generation_job.attempt_limit
                     THEN 'PENDING' ELSE 'FAILED' END,
                 next_attempt_at=clock_timestamp(),updated_at=clock_timestamp(),
@@ -55,7 +61,20 @@ public class JdbcRouteDisplayGenerationStore {
                 last_failure_at=CASE WHEN route_display_generation_job.attempts >= route_display_generation_job.attempt_limit
                     THEN clock_timestamp() ELSE route_display_generation_job.last_failure_at END
             WHERE route_display_generation_job.status='SUPERSEDED'
-            """).params(key, routeId, inputDigest, evidenceRevision, algorithmRevision, inputJson,sourceManifestId,attemptLimit).update();
+            """).params(key, routeId, inputDigest, evidenceRevision, algorithmRevision, inputJson,sourceManifestId,attemptLimit,previousKey,routeId).update();
+    }
+
+    record PublishedInput(String document, String sha256, String sourceManifest) {}
+
+    Optional<PublishedInput> previousDisplay(Job job) {
+        return jdbc.sql("""
+                SELECT a.document, a.document_sha256, a.source_manifest_id
+                  FROM route_display_generation_job j
+                  JOIN route_display_automatic_artifact a ON a.generation_key=j.previous_display_key
+                 WHERE j.generation_key=? AND a.route_id=j.route_id AND a.input_digest=j.input_digest
+                   AND a.evidence_revision=j.evidence_revision AND a.algorithm_revision=?
+                """).params(job.generationKey(), AutomaticRouteDisplay.PREVIOUS_REVISION)
+                .query((r, n) -> new PublishedInput(r.getString(1), r.getString(2), r.getString(3))).optional();
     }
 
     /** A single UPDATE owns each selected row before returning its fresh fencing token. */
