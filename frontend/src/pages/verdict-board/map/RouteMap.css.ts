@@ -64,10 +64,6 @@ const pathNoticeSurface = style({
   boxShadow: "0 2px 8px #00000015",
   pointerEvents: "none",
 });
-export const pathNotice = style([
-  pathNoticeSurface,
-  { top: "calc(env(safe-area-inset-top, 0px) + 16px)", left: 64, right: 16 },
-]);
 export const geometryToast = style([
   pathNoticeSurface,
   {
@@ -80,7 +76,6 @@ export const geometryToast = style([
     textAlign: "center",
   },
 ]);
-export const withheldToast = style([geometryToast, { letterSpacing: "0.025em" }]);
 export const mapControlPosition = style([mapControls, { bottom: 16, right: 16, zIndex: 30 }]);
 export const locationNotice = style({
   position: "absolute",

@@ -157,6 +157,8 @@ class JdbcRouteDisplayGenerationStoreTest {
             .isInstanceOf(org.springframework.dao.DataAccessException.class);
         assertThatThrownBy(() -> jdbc.sql("UPDATE route_display_generation_job SET evidence_revision='other'").update())
             .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(() -> jdbc.sql("UPDATE route_display_generation_job SET previous_display_key=?")
+            .param("c".repeat(64)).update()).isInstanceOf(org.springframework.dao.DataAccessException.class);
         assertThat(store.claim(LEASE).orElseThrow().inputJson()).contains("1");
     }
 

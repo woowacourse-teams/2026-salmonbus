@@ -24,14 +24,14 @@ final class RoutePathSplitter {
     private RoutePathSplitter() {
     }
 
-    static RoutePaths split(RouteGeometry geometry) {
+    static RoutePaths split(RouteShapeInput geometry) {
         Split result = splitWithBoundary(geometry);
         return result == null ? null : result.paths();
     }
 
     record Split(RoutePaths paths, int sourceSegmentIndex, double sourceFraction) {}
 
-    static Split splitWithBoundary(RouteGeometry geometry) {
+    static Split splitWithBoundary(RouteShapeInput geometry) {
         if (geometry.shape() == null || geometry.turnSequence() == null) {
             return null;
         }
@@ -96,6 +96,12 @@ final class RoutePathSplitter {
         double fraction = forwardRow.fractions()[best];
         RoutePaths paths = cut(points, best, fraction);
         return paths == null ? null : new Split(paths, best, fraction);
+    }
+
+    static Split atSharedVertex(List<Point> points, int index) {
+        if (index <= 0 || index >= points.size() - 1) return null;
+        var paths = cut(points, index - 1, 1);
+        return paths == null ? null : new Split(paths, index - 1, 1);
     }
 
     private static boolean hasInvalidTurnBoundary(int turn, int stopCount) {

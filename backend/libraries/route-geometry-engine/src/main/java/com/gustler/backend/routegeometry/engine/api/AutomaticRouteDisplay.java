@@ -11,7 +11,8 @@ import java.util.*;
 
 /** 자동 후보는 최종 방문·끝점·교차 검사를 거친다. 요청에서 외부 도로 조회나 임의의 핀 이동을 하지 않는다. */
 public final class AutomaticRouteDisplay {
-    public static final String REVISION = "automatic-quality-v9";
+    public static final String REVISION = "automatic-quality-v11";
+    public static final String PREVIOUS_REVISION = "automatic-quality-v9";
 
     private AutomaticRouteDisplay() {}
 
@@ -34,6 +35,63 @@ public final class AutomaticRouteDisplay {
     }
 
     public static BuildDetails buildDetailed(RouteGeometry geometry,String inputDigest) {
+        return buildDetailed(geometry, inputDigest, null);
+    }
+
+    public static BuildDetails buildDetailed(RouteGeometry geometry, String inputDigest, RouteDisplayGeometry prior) {
+        var shared = SourceStopOccurrenceWitness.sharedTurn(geometry);
+        if (shared != null) {
+            var retained = PublishedTurnBoundary.repartition(shared, inputDigest, prior);
+            if (retained != null) {
+                return new BuildDetails(retained, "PUBLISHED_PATH_VERIFIED_TURN", 0, 0, false, false, null, List.of());
+            }
+            var candidate = buildFromSource(shared, inputDigest);
+            if (usableBaseline(candidate.geometry())) return candidate;
+        }
+        return buildPrepared(projected(geometry), inputDigest);
+    }
+
+    private static BuildDetails buildFromSource(RouteShapeInput.Prepared source, String digest) {
+        var paths = source.paths();
+        var evaluated = evaluate(source, paths, paths, false);
+        if (evaluated.blocked()) {
+            return new BuildDetails(result(source, digest, null, Map.of(), QualityStatus.WITHHELD, evaluated.issues()),
+                    "SOURCE_FALLBACK", 0, 0, false, false, null, List.of());
+        }
+        var grade = evaluated.issues().isEmpty() ? QualityStatus.PASSED : QualityStatus.REVIEW_REQUIRED;
+        var base = result(source, digest, paths, evaluated.connections(), grade, evaluated.issues());
+        var best = new BuildDetails(base, "VERIFIED_SOURCE_TURN", 0, 0, false, false, null, List.of());
+        var candidates = SourceBoundDisplayCurves.candidates(source, paths, base.connections());
+        var ids = candidates.ids();
+        if (ids.isEmpty()) return best;
+        var pending = new ArrayDeque<List<SourceBoundDisplayCurves.CornerId>>();
+        pending.add(ids);
+        var accepted = new HashSet<SourceBoundDisplayCurves.CornerId>();
+        for (int attempt = 0; !pending.isEmpty() && attempt < 32; attempt++) {
+            var group = pending.removeFirst();
+            var selected = new HashSet<>(accepted);
+            selected.addAll(group);
+            var plan = candidates.checkedSubset(selected);
+            var candidate = plan.map(p -> checkCurvePlan(source, digest, base, p).geometry());
+            if (candidate.isPresent()) {
+                accepted = selected;
+                var acceptedPlan = plan.orElseThrow();
+                best = new BuildDetails(candidate.get(), "SOURCE_BOUND_CURVE", 0, acceptedPlan.curveCount(),
+                        true, false, acceptedPlan, List.of());
+            } else if (group.size() > 1) {
+                int middle = group.size() / 2;
+                pending.addLast(group.subList(0, middle));
+                pending.addLast(group.subList(middle, group.size()));
+            }
+        }
+        return best;
+    }
+
+    private static RouteShapeInput projected(RouteGeometry geometry) {
+        return new RouteShapeInput.Prepared(geometry, geometry.directionBoundary(), false);
+    }
+
+    private static BuildDetails buildPrepared(RouteShapeInput geometry,String inputDigest) {
         RoutePaths original=geometry.paths(),nodeCandidate=original==null?null:EvidenceRoutePaths.build(geometry);
         RouteDisplayGeometry baseline=buildNodeBaseline(geometry,inputDigest,nodeCandidate);
         if(original!=null) {
@@ -97,7 +155,7 @@ public final class AutomaticRouteDisplay {
 
     /** Each optional layer must preserve the last independently valid whole
      * bundle. An invalid ordinary plan is never promoted merely as a fallback. */
-    static CurveSelection selectCurveFloor(RouteGeometry geometry,String inputDigest,RouteDisplayGeometry baseline,
+    static CurveSelection selectCurveFloor(RouteShapeInput geometry,String inputDigest,RouteDisplayGeometry baseline,
             SourceBoundDisplayCurves.Plan ordinary,SourceBoundDisplayCurves.Plan candidate,boolean anchorsApplied) {
         var checked=checkCurvePlan(geometry,inputDigest,baseline,candidate);
         if(checked.geometry()!=null)return new CurveSelection(checked.geometry(),candidate,List.of());
@@ -115,7 +173,7 @@ public final class AutomaticRouteDisplay {
         return new CurveSelection(null,candidate,checked.rejections());
     }
 
-    private static CurveCheck checkCurvePlan(RouteGeometry geometry,String inputDigest,RouteDisplayGeometry baseline,
+    private static CurveCheck checkCurvePlan(RouteShapeInput geometry,String inputDigest,RouteDisplayGeometry baseline,
             SourceBoundDisplayCurves.Plan curve) {
         RoutePaths original=geometry.paths();
         List<String> rejected=new ArrayList<>();
@@ -126,11 +184,12 @@ public final class AutomaticRouteDisplay {
         if(!RouteDisplayTopology.noNewContacts(baseline.paths(),curve.paths()))rejected.add("CURVE_NEW_NONADJACENT_TOUCH_OR_OVERLAP");
         if(!RouteDisplayTopology.noNewSpike(baseline.paths(),curve.paths()))rejected.add("CURVE_NEW_BACKTRACK_SPIKE");
         List<QualityIssue> qualityWarnings=new ArrayList<>();
-        // Relative visual measurements do not invalidate a usable generated bundle.
         for(String direction:List.of("UP","DOWN")) {
             var metric=curve.curvature().get(direction);
-            if(metric!=null && !metric.noNewFixedFiveMetreRegression())
-                qualityWarnings.add(issue("CURVE_FIXED_FIVE_METRE_REGRESSION",direction,null,null));
+            if (metric != null && !metric.noNewFixedFiveMetreRegression()) {
+                if (geometry.hasVerifiedTurn()) rejected.add("CURVE_FIXED_FIVE_METRE_REGRESSION");
+                else qualityWarnings.add(issue("CURVE_FIXED_FIVE_METRE_REGRESSION", direction, null, null));
+            }
         }
         // Keep validated terminal cuts and transport protected road occurrences
         // through the combined plan. Reprojecting passenger GPS onto a newly
@@ -169,7 +228,7 @@ public final class AutomaticRouteDisplay {
 
     private static int pointCount(RoutePaths paths) {return paths==null?0:paths.up().points().size()+paths.down().points().size();}
 
-    private static RouteDisplayGeometry buildNodeBaseline(RouteGeometry geometry,String inputDigest,RoutePaths nodeCandidate) {
+    private static RouteDisplayGeometry buildNodeBaseline(RouteShapeInput geometry,String inputDigest,RoutePaths nodeCandidate) {
         RoutePaths original = geometry.paths();
         if (original == null) {
             var problems = new ArrayList<QualityIssue>();
@@ -228,7 +287,7 @@ public final class AutomaticRouteDisplay {
                 issues);
     }
 
-    private static List<QualityIssue> connectionGapWarnings(RouteGeometry geometry, RoutePaths original,
+    private static List<QualityIssue> connectionGapWarnings(RouteShapeInput geometry, RoutePaths original,
             Map<Integer, Connection> selectedConnections) {
         Map<Integer, Connection> before = new HashMap<>();
         var up = RouteStopAlignment.align(original.up().points(), stops(geometry, "UP"), true);
@@ -248,9 +307,18 @@ public final class AutomaticRouteDisplay {
 
     /** 원본 경로만 검사한다. 보조 기하를 생성하거나 원본 끝점을 자르지 않는다. */
     public static RouteDisplayGeometry sourceOnly(RouteGeometry geometry, String inputDigest) {
+        var shared = SourceStopOccurrenceWitness.sharedTurn(geometry);
+        if (shared != null) {
+            var candidate = sourceOnlyPrepared(shared, inputDigest);
+            if (candidate.paths() != null) return candidate;
+        }
+        return sourceOnlyPrepared(projected(geometry), inputDigest);
+    }
+
+    private static RouteDisplayGeometry sourceOnlyPrepared(RouteShapeInput geometry, String inputDigest) {
         RoutePaths original = geometry.paths();
         // build의 이 분기는 방향 경계가 없는 원본만 판정하며 후보를 만들지 않는다.
-        if (original == null) return build(geometry, inputDigest);
+        if (original == null) return buildPrepared(geometry, inputDigest).geometry();
         Evaluation source = evaluate(geometry, original, original, false);
         return result(
                 geometry,
@@ -262,19 +330,19 @@ public final class AutomaticRouteDisplay {
     }
 
     private static Evaluation evaluate(
-            RouteGeometry geometry, RoutePaths reference, RoutePaths paths, boolean trim) {
+            RouteShapeInput geometry, RoutePaths reference, RoutePaths paths, boolean trim) {
         return evaluate(geometry,reference,paths,trim,null);
     }
 
     /** A curve may transport validated stop occurrences through its source map.
      * These are still checked against the actual final serialized path. Raw and
      * node-baseline builds continue to use the ordered projection algorithm. */
-    private static Evaluation evaluate(RouteGeometry geometry,RoutePaths reference,RoutePaths paths,
+    private static Evaluation evaluate(RouteShapeInput geometry,RoutePaths reference,RoutePaths paths,
             boolean trim,Map<Integer,Connection> preservedConnections) {
         return evaluate(geometry,reference,paths,trim,preservedConnections,null);
     }
 
-    private static Evaluation evaluate(RouteGeometry geometry,RoutePaths reference,RoutePaths paths,
+    private static Evaluation evaluate(RouteShapeInput geometry,RoutePaths reference,RoutePaths paths,
             boolean trim,Map<Integer,Connection> preservedConnections,SourceStopOccurrenceWitness.Assessment curveWitness) {
         List<QualityIssue> issues = new ArrayList<>();
         Map<Integer, Connection> connections = new HashMap<>();
@@ -440,7 +508,7 @@ public final class AutomaticRouteDisplay {
         return clean.stream().distinct().limit(2).count() < 2 ? null : new RoutePaths.Path(clean);
     }
 
-    private static List<RouteGeometry.Stop> stops(RouteGeometry geometry, String direction) {
+    private static List<RouteGeometry.Stop> stops(RouteShapeInput geometry, String direction) {
         return geometry.busStops().stream()
                 .filter(stop -> stop.direction().equals(direction))
                 .toList();
@@ -481,7 +549,7 @@ public final class AutomaticRouteDisplay {
     }
 
     private static RouteDisplayGeometry result(
-            RouteGeometry geometry,
+            RouteShapeInput geometry,
             String digest,
             RoutePaths paths,
             Map<Integer, Connection> connections,
