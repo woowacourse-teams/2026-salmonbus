@@ -14,7 +14,7 @@ import java.util.Map;
 final class PublishedTurnBoundary {
     private PublishedTurnBoundary() {}
 
-    static RouteDisplayGeometry repartition(RouteShapeInput.Prepared verified, String digest, RouteDisplayGeometry prior) {
+    static RouteDisplayGeometry repartition(RouteShapeInput.Prepared verified, String digest, RouteDisplayGeometry prior, String expectedRevision) {
         var source = verified.source();
         if (prior == null || prior.paths() == null || prior.quality() == null
                 || prior.source() != RouteDisplayGeometry.Source.AUTOMATIC_FALLBACK
@@ -22,7 +22,7 @@ final class PublishedTurnBoundary {
         var grade = prior.quality().status();
         if (grade != QualityStatus.PASSED && grade != QualityStatus.REVIEW_REQUIRED) return null;
         String input = "/" + digest + "/" + source.shape().evidence().revision() + "/";
-        if (!prior.revision().equals(AutomaticRouteDisplay.PREVIOUS_REVISION + input + grade)) return null;
+        if (!prior.revision().equals(expectedRevision + input + grade)) return null;
 
         var projected = source.directionBoundary();
         if (projected == null || !projected.paths().equals(prior.sourcePaths())) return null;

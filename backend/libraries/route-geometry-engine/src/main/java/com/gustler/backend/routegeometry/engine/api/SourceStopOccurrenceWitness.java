@@ -32,9 +32,10 @@ final class SourceStopOccurrenceWitness {
                 || source.turnSequence() >= stops.getLast().stopSequence()) return null;
 
         var classification = EvidenceRoutePaths.classify(source);
-        if (!classification.normalization().equals("FULL_POINT_ORDER_V1")
-                || classification.unmatchedPoints() != 0) return null;
-        var roles = shape.evidence().webPoints();
+        if (classification.classifications().isEmpty()) return null;
+        boolean visible = classification.usesVisibleOrder();
+        if (!visible && !classification.normalization().equals("FULL_POINT_ORDER_V1")) return null;
+        var roles = indexedRoles(shape, visible);
         int index = 0;
         while (index < roles.size() && roles.get(index).direction().equals("UP")) index++;
         if (index == 0 || index >= roles.size() || roles.get(index - 1).type() != 1
@@ -77,10 +78,12 @@ final class SourceStopOccurrenceWitness {
         // Do not publish a witness which could outlive that evidence in cache.
         if(!hasCurrentWebRoles(shape))return failed("CURRENT_SOURCE_ROLE_EVIDENCE_UNAVAILABLE");
         var classified=EvidenceRoutePaths.classify(geometry);
-        if(classified.unmatchedPoints()!=0 || classified.classifications().isEmpty()
-                || !(classified.normalization().equals("FULL_POINT_ORDER_V1") || classified.normalization().equals("OFFICIAL_VISIBLE_SUBSEQUENCE_V1")))
+        boolean partialTurn = geometry.hasVerifiedTurn() && classified.unmatchedPoints() > 0
+                && (classified.usesVisibleOrder() || classified.normalization().equals("FULL_POINT_ORDER_V1"));
+        if (classified.classifications().isEmpty() || !(partialTurn || classified.unmatchedPoints() == 0
+                && (classified.normalization().equals("FULL_POINT_ORDER_V1") || classified.normalization().equals("OFFICIAL_VISIBLE_SUBSEQUENCE_V1"))))
             return failed("WHOLE_SOURCE_ROLE_ORDER_UNPROVEN");
-        var rows=rows(geometry,classified.normalization());
+        var rows=rows(geometry,classified);
         if(rows==null)return failed("INDEXED_SOURCE_ROLE_ORDER_UNPROVEN");
         var events=new ArrayList<Event>();
         for(int i=0;i<rows.size();i++) {
@@ -186,7 +189,7 @@ final class SourceStopOccurrenceWitness {
                 boolean lowerInclusive=(lowerAxis!=candidateLo || j==0) && (lowerAxis!=rawLoAxis || rawLo<leg.rawProgress()[0] || ordinal==0),
                         upperInclusive=(upperAxis!=candidateHi || j+1==anchors.size()) && (upperAxis!=rawHiAxis || rawHi>leg.rawProgress()[leg.rawProgress().length-1] || ordinal+1==events.size());
                 var event=events.get(ordinal);boolean endpoint=s==0 || s==leg.chain()[leg.chain().length-1];
-                if(endpoint && !event.shared())continue;
+                if((endpoint || partialTurn) && !event.shared())continue;
                 result.put(stop.stopSequence(),new Witness(stop.stationId(),stop.stopSequence(),direction,event.first(),
                         lowerAxis,upperAxis,connection.segmentIndex()+connection.segmentFraction(),lowerInclusive,upperInclusive,event.shared()?"SHARED_TURN_EVENT":"ORDERED_INTERIOR_EVENT"));
             }
@@ -215,9 +218,13 @@ final class SourceStopOccurrenceWitness {
         }
         return new Assessment(result,List.of());
     }
-    private static List<Row> rows(RouteShapeInput geometry,String normalization) {
-        var typed=geometry.shape().evidence().webPoints();
-        if(normalization.equals("OFFICIAL_VISIBLE_SUBSEQUENCE_V1"))typed=typed.stream().filter(p->p.type()!=2).toList();
+    private static List<TypedPoint> indexedRoles(RouteGeometry.Shape shape, boolean visible) {
+        var roles = shape.evidence().webPoints();
+        return visible ? roles.stream().filter(role -> role.type() != 2).toList() : roles;
+    }
+
+    private static List<Row> rows(RouteShapeInput geometry,EvidenceRoutePaths.Classification classified) {
+        var typed = indexedRoles(geometry.shape(), classified.usesVisibleOrder());
         boolean down=false;int boundary=-1;
         for(int i=0;i<typed.size();i++) {String d=typed.get(i).direction();if(d.equals("DOWN")){if(!down)boundary=i-1;down=true;}else if(!d.equals("UP") || down)return null;}
         boolean merge=typed.size()==geometry.points().size()+1;
@@ -226,7 +233,11 @@ final class SourceStopOccurrenceWitness {
         if(!merge && typed.size()!=geometry.points().size())return null;
         List<Row> result=new ArrayList<>();
         for(int i=0;i<typed.size();i++) {var role=typed.get(i);var roles=merge && i==boundary?List.of(role,typed.get(++i)):List.of(role);int index=result.size();
-            for(var p:roles)if(RouteStopAlignment.distance(geometry.points().get(index),new Point(p.point().x(),p.point().y()))>4)return null;
+            for (var p : roles) {
+                if (RouteStopAlignment.distance(geometry.points().get(index), new Point(p.point().x(), p.point().y())) <= 4) continue;
+                if (classified.unmatchedPoints() == 0 || index == 0 || index == geometry.points().size() - 1
+                        || (p.type() != 2 && p.type() != 3)) return null;
+            }
             result.add(new Row(index,roles));}
         return result;
     }
