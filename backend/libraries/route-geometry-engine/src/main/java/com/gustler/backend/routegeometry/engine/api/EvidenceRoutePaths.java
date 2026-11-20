@@ -68,6 +68,12 @@ final class EvidenceRoutePaths {
                     && RouteDisplayTopology.noNewContacts(contacts,rendererContacts,proposed)
                     && RouteDisplayTopology.noNewSpike(floor,proposed))candidate=proposed;
         }
+        for (var junction : SharedJunctions.find(geometry, alignment, candidate)) {
+            var separated = junction.separate(candidate);
+            if (separated != null && RouteDisplayTopology.noNewShortcutCrossings(candidate, separated, crossings, renderedCrossings)
+                    && RouteDisplayTopology.noNewContacts(contacts, rendererContacts, separated)
+                    && RouteDisplayTopology.noNewSpike(floor, separated)) candidate = separated;
+        }
         return RouteDisplayTopology.noNewCrossings(floor, candidate)
                         && RouteDisplayTopology.noNewRendererCrossings(floor,candidate)
                         && RouteDisplayTopology.noNewContacts(floor,candidate)
@@ -272,6 +278,10 @@ final class EvidenceRoutePaths {
                 && !(geometry.hasVerifiedTurn() && classified.unmatchedPoints() > 0)) return true;
         var original=geometry.paths();
         if(original==null || candidate==null)return false;
+        var surviving = new java.util.HashSet<>(candidate.up().points());
+        surviving.addAll(candidate.down().points());
+        var junctions = SharedJunctions.find(geometry, classified, original).stream()
+                .filter(junction -> !surviving.contains(junction.center())).toList();
         for(var pair:List.of(Map.entry(original.up(),candidate.up()),Map.entry(original.down(),candidate.down()))) {
             var required=new HashMap<ProtectedEdge,Integer>();
             var points=pair.getKey().points();
@@ -284,6 +294,12 @@ final class EvidenceRoutePaths {
             for(int i=0;i<actual.size()-1;i++) {
                 var edge=new ProtectedEdge(actual.get(i),actual.get(i+1));
                 required.computeIfPresent(edge,(key,count)->count-1);
+            }
+            for (var junction : junctions) {
+                var leg = pair.getKey() == original.up() ? junction.up() : junction.down();
+                if (!leg.hasShortcut(actual)) continue;
+                required.remove(new ProtectedEdge(leg.from(), junction.center()));
+                required.remove(new ProtectedEdge(junction.center(), leg.to()));
             }
             if(required.values().stream().anyMatch(count->count>0))return false;
         }
