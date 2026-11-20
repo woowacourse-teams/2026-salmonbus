@@ -139,6 +139,10 @@ final class EvidenceRoutePaths {
             int matchedPoints,
             int unmatchedPoints,
             boolean sharedBoundaryMerged,String normalization) {
+        boolean usesVisibleOrder() {
+            return normalization.equals("OFFICIAL_VISIBLE_SUBSEQUENCE_V1") || normalization.equals("PARTIAL_VISIBLE_SUBSEQUENCE_V1");
+        }
+
         Classification(Map<Point,List<TypedPoint>> classifications,int matchedPoints,int unmatchedPoints,boolean sharedBoundaryMerged) {
             this(classifications,matchedPoints,unmatchedPoints,sharedBoundaryMerged,"FULL_POINT_ORDER_V1");
         }

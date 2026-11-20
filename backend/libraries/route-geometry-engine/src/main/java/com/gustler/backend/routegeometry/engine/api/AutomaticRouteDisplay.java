@@ -11,7 +11,7 @@ import java.util.*;
 
 /** 자동 후보는 최종 방문·끝점·교차 검사를 거친다. 요청에서 외부 도로 조회나 임의의 핀 이동을 하지 않는다. */
 public final class AutomaticRouteDisplay {
-    public static final String REVISION = "automatic-quality-v11";
+    public static final String REVISION = "automatic-quality-v12";
     public static final String PREVIOUS_REVISION = "automatic-quality-v9";
 
     private AutomaticRouteDisplay() {}
@@ -41,17 +41,30 @@ public final class AutomaticRouteDisplay {
     public static BuildDetails buildDetailed(RouteGeometry geometry, String inputDigest, RouteDisplayGeometry prior) {
         var shared = SourceStopOccurrenceWitness.sharedTurn(geometry);
         if (shared != null) {
-            var retained = PublishedTurnBoundary.repartition(shared, inputDigest, prior);
+            if (EvidenceRoutePaths.classify(shared).usesVisibleOrder()) return buildVisible(shared, inputDigest);
+            var retained = PublishedTurnBoundary.repartition(shared, inputDigest, prior, PREVIOUS_REVISION);
             if (retained != null) {
                 return new BuildDetails(retained, "PUBLISHED_PATH_VERIFIED_TURN", 0, 0, false, false, null, List.of());
             }
-            var candidate = buildFromSource(shared, inputDigest);
+            var candidate = buildFromSource(shared, inputDigest, true);
             if (usableBaseline(candidate.geometry())) return candidate;
         }
         return buildPrepared(projected(geometry), inputDigest);
     }
 
-    private static BuildDetails buildFromSource(RouteShapeInput.Prepared source, String digest) {
+    private static BuildDetails buildVisible(RouteShapeInput.Prepared shared, String digest) {
+        var projected = buildPrepared(projected(shared.source()), digest);
+        if (usableBaseline(projected.geometry())) {
+            var corrected = PublishedTurnBoundary.repartition(shared, digest, projected.geometry(), REVISION);
+            if (corrected == null) return projected;
+            return new BuildDetails(corrected, "VERIFIED_TURN_ON_PROJECTED_PATH", projected.appliedRolePointRemovals(),
+                    projected.appliedCurves(), projected.displayCorrectionApplied(), projected.terminalTrimOnly(), null, List.of());
+        }
+        var candidate = buildFromSource(shared, digest, false);
+        return usableBaseline(candidate.geometry()) ? candidate : projected;
+    }
+
+    private static BuildDetails buildFromSource(RouteShapeInput.Prepared source, String digest, boolean roundCorners) {
         var paths = source.paths();
         var evaluated = evaluate(source, paths, paths, false);
         if (evaluated.blocked()) {
@@ -61,6 +74,7 @@ public final class AutomaticRouteDisplay {
         var grade = evaluated.issues().isEmpty() ? QualityStatus.PASSED : QualityStatus.REVIEW_REQUIRED;
         var base = result(source, digest, paths, evaluated.connections(), grade, evaluated.issues());
         var best = new BuildDetails(base, "VERIFIED_SOURCE_TURN", 0, 0, false, false, null, List.of());
+        if (!roundCorners) return best;
         var candidates = SourceBoundDisplayCurves.candidates(source, paths, base.connections());
         var ids = candidates.ids();
         if (ids.isEmpty()) return best;

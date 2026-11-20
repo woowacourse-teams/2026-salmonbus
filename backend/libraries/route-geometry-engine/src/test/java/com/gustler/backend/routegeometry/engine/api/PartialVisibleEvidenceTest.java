@@ -52,6 +52,38 @@ class PartialVisibleEvidenceTest {
         assertThat(c.normalization()).isEqualTo("OFFICIAL_VISIBLE_SUBSEQUENCE_V1");assertThat(c.unmatchedPoints()).isZero();
         assertThat(AutomaticRouteDisplay.buildDetailed(g,"complete").appliedCurves()).isPositive();
     }
+    @Test void shiftedTurnStopUsesTheSharedVisitOnBothVisibleRepresentations() {
+        for (var shape : List.of(original(), drift(10))) {
+            var stops = new ArrayList<>(shape.busStops());
+            var terminal = stops.get(1);
+            stops.set(1, new Stop(terminal.stationId(), 2, terminal.name(), "UP", true, p(535, -48)));
+            var route = new RouteGeometry(shape.routeId(), 1, "test", "A", "B", 2, stops, shape.shape());
+            var display = AutomaticRouteDisplay.build(route, "test");
+            var turn = route.points().get(24);
+            assertThat(display.paths().up().points().getLast()).isEqualTo(turn);
+            assertThat(display.paths().down().points().getFirst()).isEqualTo(turn);
+            assertThat(display.connections()).hasSize(3);
+            assertThat(display.quality().issues()).anyMatch(issue -> issue.code().equals("STOP_CONNECTION_GAP") && issue.sequence() == 2);
+            var prepared = SourceStopOccurrenceWitness.sharedTurn(route);
+            assertThat(prepared).isNotNull();
+            if (EvidenceRoutePaths.classify(route).unmatchedPoints() > 0) {
+                assertThat(display.paths()).isEqualTo(prepared.paths());
+                var visits = SourceStopOccurrenceWitness.assess(prepared, display.paths(), display.connections()).visits();
+                assertThat(visits.keySet()).containsExactly(terminal.stopSequence());
+            }
+        }
+    }
+
+    @Test void visibleEvidenceCannotVerifyADisplacedOrMissingTurnVisit() {
+        assertThat(SourceStopOccurrenceWitness.sharedTurn(drift(24))).isNull();
+        var g = original();
+        var roles = new ArrayList<>(g.shape().evidence().webPoints());
+        var seam = g.points().get(24);
+        var turn = new RouteDisplayInput.Point(seam.x(), seam.y());
+        roles.removeIf(role -> role.type() == 1 && role.direction().equals("DOWN") && role.point().equals(turn));
+        assertThat(SourceStopOccurrenceWitness.sharedTurn(changed(g, g.points(), roles))).isNull();
+    }
+
     @Test void broadMismatchStillRejectsVisibleRoles(){
         assertThat(EvidenceRoutePaths.classify(drift(8,10,12)).classifications()).isEmpty();
         assertThat(EvidenceRoutePaths.classify(drift(10,11)).unmatchedPoints()).isEqualTo(2);
