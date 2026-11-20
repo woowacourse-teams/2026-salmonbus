@@ -74,6 +74,40 @@ class PartialVisibleEvidenceTest {
         }
     }
 
+    @Test
+    void correctsMatchedSharedNodesWhileKeepingSegmentsAroundAnUnmatchedPoint() {
+        var points = new ArrayList<Point>();
+        for (int i = 0; i < 25; i++) points.add(p(i * 20, 0));
+        points.add(points.getLast());
+        for (int i = 1; i < 25; i++) points.add(p(480 - i * 20, 16));
+        var shared = p(200, 8);
+        points.set(10, shared);
+        points.set(39, shared);
+
+        var roles = new ArrayList<TypedPoint>();
+        for (int i = 0; i < points.size(); i++) {
+            var point = points.get(i);
+            int type = Set.of(0, 24, 25, 49).contains(i) ? 1 : point.equals(shared) ? 2 : 3;
+            roles.add(new TypedPoint(new RouteDisplayInput.Point(point.x(), point.y()), type,
+                    i < 25 ? "UP" : "DOWN", true));
+        }
+        points.set(3, p(60, -18));
+        var turn = points.get(24);
+        var stops = List.of(new Stop("A", 1, "A", "UP", true, points.getFirst()),
+                new Stop("T", 2, "T", "UP", true, p(535, -48)),
+                new Stop("C", 3, "C", "DOWN", true, points.getLast()));
+        var shape = changed(original(), points, roles).shape();
+        var route = new RouteGeometry("123456789", 1, "partial", "A", "C", 2, stops, shape);
+
+        var result = AutomaticRouteDisplay.build(route, RouteDisplayGeneration.input(route).digest());
+
+        assertThat(result.paths().up().points()).containsSequence(points.subList(2, 5)).doesNotContain(shared);
+        assertThat(result.paths().down().points()).doesNotContain(shared);
+        assertThat(result.paths().up().points().getLast()).isEqualTo(turn);
+        assertThat(result.paths().down().points().getFirst()).isEqualTo(turn);
+        assertThat(result.connections()).hasSize(stops.size());
+    }
+
     @Test void fullPointOrderWithChangedInteriorGeometryCanCertifyOnlyTheSharedTurn() {
         var g = drift(10);
         var points = new ArrayList<>(g.points());

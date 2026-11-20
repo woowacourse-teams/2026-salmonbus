@@ -268,7 +268,8 @@ final class EvidenceRoutePaths {
     }
 
     static boolean preservesPartialSegments(RouteShapeInput geometry,RoutePaths candidate,Classification classified) {
-        if(!classified.normalization().equals("PARTIAL_VISIBLE_SUBSEQUENCE_V1"))return true;
+        if (!classified.normalization().equals("PARTIAL_VISIBLE_SUBSEQUENCE_V1")
+                && !(geometry.hasVerifiedTurn() && classified.unmatchedPoints() > 0)) return true;
         var original=geometry.paths();
         if(original==null || candidate==null)return false;
         for(var pair:List.of(Map.entry(original.up(),candidate.up()),Map.entry(original.down(),candidate.down()))) {
