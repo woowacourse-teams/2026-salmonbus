@@ -156,7 +156,10 @@ public class JdbcStationReadRepository implements StationReadRepository {
     @Override
     public List<MapStation> search(StationSearchQuery query, int limit) {
         // 우리 노선 정류장은 좌표가 노선마다 다를 수 있어 노선이 가장 많은 좌표, 같으면 작은 좌표 하나를 고른다.
-        // 노선 목록은 그 정류장을 지나는 모든 노선이다. LIMIT 뒤에 방면·지역 조인을 붙여 최대 limit행만 조인한다.
+        // 노선 목록은 그 정류장을 지나는 모든 노선이며 정류장별 GROUP BY 한 번으로 모은다(행마다 부분 질의를 돌리면 제곱으로 느려진다).
+        // bus_station 쪽 제외는 이미 구한 salmon을 NOT IN으로 걸어 해시로 처리한다. NOT EXISTS는 행마다 중첩 루프를 돌았다.
+        // route_stop.stop_id가 NOT NULL이라 NOT IN이 NULL 때문에 전부 탈락하지 않는다. salmon은 SALMON_STOP_OF_STATION과 같은 조건이다.
+        // LIMIT 뒤에 방면·지역 조인을 붙여 최대 limit행만 조인한다.
         String key = query.key();
         return jdbc.sql(
             """
@@ -165,11 +168,11 @@ public class JdbcStationReadRepository implements StationReadRepository {
                 GROUP BY stop.stop_id, location.x, location.y
             ),
             salmon AS (
-                SELECT DISTINCT ON (g.stop_id) g.stop_id AS station_id, g.name, g.x, g.y,
-                       (SELECT array_agg(DISTINCT route_id ORDER BY route_id)
-                        FROM salmon_group other, unnest(other.route_ids) AS route_id
-                        WHERE other.stop_id = g.stop_id) AS route_ids
+                SELECT DISTINCT ON (g.stop_id) g.stop_id AS station_id, g.name, g.x, g.y, every.route_ids
                 FROM salmon_group g
+                JOIN (SELECT member.stop_id, array_agg(DISTINCT route_id ORDER BY route_id) AS route_ids
+                      FROM salmon_group member, unnest(member.route_ids) AS route_id
+                      GROUP BY member.stop_id) every ON every.stop_id = g.stop_id
                 ORDER BY g.stop_id, cardinality(g.route_ids) DESC, g.x, g.y
             ),
             candidate AS (
@@ -180,8 +183,7 @@ public class JdbcStationReadRepository implements StationReadRepository {
                 SELECT s.station_id, s.name, s.name_key, s.x, s.y, NULL
                 FROM bus_station s
                 WHERE s.active
-                  AND NOT EXISTS (""" + SALMON_STOP_OF_STATION + """
-                  )
+                  AND s.station_id NOT IN (SELECT salmon.station_id FROM salmon)
             ),
             matched AS (
                 SELECT candidate.*,
