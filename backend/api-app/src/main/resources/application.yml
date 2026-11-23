@@ -152,6 +152,11 @@ board:
   read-cache:
     enabled: ${BOARD_READ_CACHE_ENABLED:true}
 
+watch:
+  # 판정보드 화면에 새 관측이 생겼다는 신호를 SSE 로 알린다. 끄면 이 주소는 없는 경로와 같은 404 로 답하고 스레드도 뜨지 않는다.
+  stream:
+    enabled: ${WATCH_STREAM_ENABLED:false}
+
 management:
   endpoints:
     web:
