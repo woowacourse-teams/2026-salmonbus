@@ -122,7 +122,11 @@ public final class JdbcStationSeedImporter implements ImportStationSeed {
 
     private void mergeRows(Timestamp sourceAt) {
         jdbc.sql("""
-            INSERT INTO bus_station AS s SELECT * FROM station_seed_stage
+            INSERT INTO bus_station AS s (station_id, name, x, y, mobile_no, region_name, center_lane, tile_x, tile_y,
+                                          first_seen_at, last_seen_at, baseline_date, verified_at, active)
+            SELECT station_id, name, x, y, mobile_no, region_name, center_lane, tile_x, tile_y,
+                   first_seen_at, last_seen_at, baseline_date, verified_at, active
+            FROM station_seed_stage
             ON CONFLICT(station_id) DO UPDATE SET name = EXCLUDED.name,x = EXCLUDED.x,y = EXCLUDED.y,
                 mobile_no = EXCLUDED.mobile_no,region_name = EXCLUDED.region_name,
                 tile_x = EXCLUDED.tile_x,tile_y = EXCLUDED.tile_y,baseline_date = EXCLUDED.baseline_date,
