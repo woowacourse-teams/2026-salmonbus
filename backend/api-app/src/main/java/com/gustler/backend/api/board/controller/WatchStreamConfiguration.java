@@ -1,5 +1,7 @@
 package com.gustler.backend.api.board.controller;
 
+import com.gustler.backend.api.board.application.BoardQueryService;
+import com.gustler.backend.api.board.application.WatchChangeDetector;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -19,5 +21,11 @@ class WatchStreamConfiguration {
     @Bean(initMethod = "start")
     WatchStreamRegistry watchStreamRegistry(WatchStreamSettings settings, MeterRegistry meters) {
         return new WatchStreamRegistry(settings, meters);
+    }
+
+    @Bean(initMethod = "start")
+    WatchChangeDetector watchChangeDetector(WatchStreamRegistry registry, BoardQueryService boards,
+        WatchStreamSettings settings, MeterRegistry meters) {
+        return new WatchChangeDetector(registry, boards, settings.detectInterval(), settings.readTimeout(), meters);
     }
 }

@@ -12,7 +12,9 @@ import com.gustler.backend.api.board.support.BoardDatabaseFixture;
 import com.gustler.backend.api.board.support.BoardDatabaseFixture.RouteContext;
 import com.gustler.backend.api.support.FixedDaytimeClockConfig;
 import com.gustler.backend.support.PostgresTestContainer;
+import com.gustler.backend.support.TestDatabase;
 import com.zaxxer.hikari.HikariDataSource;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.io.IOException;
@@ -21,6 +23,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -40,6 +46,7 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -54,17 +61,21 @@ import tools.jackson.databind.ObjectMapper;
     "watch.stream.max-connections=4",
     "watch.stream.heartbeat-interval=100ms",
     "watch.stream.timeout=5s",
+    "watch.stream.detect-interval=100ms",
     WatchStreamContractTest.FAIL_FAST_IF_A_STREAM_HOLDS_A_DB_CONNECTION
 })
+@ActiveProfiles("api-docs-local")
 @Import({PostgresTestContainer.class, FixedDaytimeClockConfig.class})
 class WatchStreamContractTest {
     static final String FAIL_FAST_IF_A_STREAM_HOLDS_A_DB_CONNECTION = "spring.datasource.hikari.connection-timeout=2000";
     private static final String ROUTE_ID = "204000057";
-    private static final String STREAM = "/api/v1/routes/" + ROUTE_ID + "/watch/events";
+    private static final String NEVER_SEEDED_ROUTE = "204000099";
+    private static final String STREAM = streamOf(NEVER_SEEDED_ROUTE);
     private static final String STREAM_URI = "/api/v1/routes/{routeId}/watch/events";
     private static final String FIRST_FRAME = "retry:\\d+\\n: connected";
     private static final String PING = "event:ping\ndata:1";
     private static final Duration SETTLE = Duration.ofSeconds(5);
+    private static final Duration FIRST_SIGNAL = Duration.ofSeconds(2);
     private static final List<String> WATCHED_LOGGERS = List.of("com.gustler.backend", "org.springframework.web", "org.apache");
 
     private final HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
@@ -89,6 +100,9 @@ class WatchStreamContractTest {
 
     @Autowired
     private Clock clock;
+
+    @Autowired
+    private TestDatabase database;
 
     @BeforeEach
     void captureLogs() {
@@ -153,7 +167,7 @@ class WatchStreamContractTest {
     @Test
     void 연결_4개가_열려_있어도_watch는_200이고_사용_중인_DB_연결은_0개다() throws Exception {
         // given
-        seedPublishedRoute();
+        seedPublishedRoute(ROUTE_ID);
         List<Long> retries = new ArrayList<>();
         for (int index = 0; index < 4; index++) {
             WatchStreamClient client = open("Cookie: __Host-sb_session=" + staleSessionId());
@@ -214,10 +228,146 @@ class WatchStreamContractTest {
         });
     }
 
+    @Test
+    void 노선의_첫_연결은_다음_확인_뒤에_observation을_하나_받고_그_값은_watch의_observedAt과_글자까지_같다() throws Exception {
+        // given
+        String routeId = "204000061";
+        seedPublishedRoute(routeId);
+        long finishedBefore = finishedStreams();
+
+        // when
+        long connecting = System.nanoTime();
+        WatchStreamClient client = openRoute(routeId);
+        String greeting = client.nextBlock();
+        String signal = client.nextObservation();
+        Duration untilSignal = Duration.ofNanos(System.nanoTime() - connecting);
+        long readChecks = checks("read");
+        List<String> rest = client.blocksThroughPingsAfter(() -> checks("read") >= readChecks + 3, 2);
+        client.close();
+
+        // then
+        String observedAt = observedAtOfWatch(routeId);
+        assertThat(greeting).matches(FIRST_FRAME);
+        assertThat(untilSignal).isLessThan(FIRST_SIGNAL);
+        assertThat(observedAt).endsWith(":00+09:00");
+        assertThat(signal).isEqualTo("{\"observedAt\":\"" + observedAt + "\"}");
+        assertThat(rest).allMatch(PING::equals);
+        assertNoServerWarnings(finishedBefore + 1);
+    }
+
+    @Test
+    void 새_관측이_생기면_그_노선의_연결마다_observation이_하나씩_오고_직후의_watch는_판정보드를_다시_만들지_않고_그_관측을_돌려준다()
+        throws Exception {
+        // given
+        String routeId = "204000062";
+        Seeded seeded = seedPublishedRoute(routeId);
+        WatchStreamClient first = openRoute(routeId);
+        assertThat(first.nextBlock()).matches(FIRST_FRAME);
+        String known = first.nextObservation();
+        WatchStreamClient second = openRoute(routeId);
+        assertThat(second.nextBlock()).matches(FIRST_FRAME);
+        assertThat(second.nextBlock()).isEqualTo("event:observation\ndata:" + known);
+        WatchStreamClient elsewhere = openRoute(NEVER_SEEDED_ROUTE);
+        assertThat(elsewhere.nextBlock()).matches(FIRST_FRAME);
+
+        // when
+        OffsetDateTime newer = seeded.observedAt().plusSeconds(40);
+        long batch = seeded.fixture().insertBatch(seeded.route(), newer, "SUCCESS_EMPTY", 0);
+        seeded.fixture().insertPublication(batch, seeded.model(), newer.plusSeconds(2));
+
+        // then
+        String announced = first.nextObservation();
+        assertThat(second.nextObservation()).isEqualTo(announced);
+        double missesBefore = cacheMisses();
+        String watched = observedAtOfWatch(routeId);
+        String watchedAgain = observedAtOfWatch(routeId);
+        assertThat(announced).isEqualTo("{\"observedAt\":\"" + watched + "\"}");
+        assertThat(watchedAgain).isEqualTo(watched);
+        assertThat(OffsetDateTime.parse(watched)).isEqualTo(newer);
+        assertThat(cacheMisses()).isEqualTo(missesBefore);
+        long readChecks = checks("read");
+        for (WatchStreamClient client : List.of(first, second, elsewhere)) {
+            assertThat(client.blocksThroughPingsAfter(() -> checks("read") >= readChecks + 3, 2)).allMatch(PING::equals);
+        }
+    }
+
+    @Test
+    void 테이블이_잠겨도_확인은_제한_시간에_끝나고_잠금이_풀리면_새_관측을_알린다() throws Exception {
+        // given
+        String routeId = "204000064";
+        Seeded seeded = seedPublishedRoute(routeId);
+        WatchStreamClient client = openRoute(routeId);
+        assertThat(client.nextBlock()).matches(FIRST_FRAME);
+        assertThat(client.nextObservation()).isNotNull();
+
+        // when
+        try (Connection locker = database.connection()) {
+            locker.setAutoCommit(false);
+            try (Statement statement = locker.createStatement()) {
+                statement.execute("LOCK TABLE forecast_run IN ACCESS EXCLUSIVE MODE");
+            }
+            long failedBefore = checks("failed");
+
+            // then
+            await().atMost(SETTLE).until(() -> waitsForForecastRun(locker));
+            await().atMost(SETTLE).until(() -> checks("failed") > failedBefore);
+            locker.rollback();
+        }
+        await().atMost(SETTLE).until(() -> activeDatabaseConnections() == 0);
+        OffsetDateTime newer = seeded.observedAt().plusSeconds(30);
+        long batch = seeded.fixture().insertBatch(seeded.route(), newer, "SUCCESS_EMPTY", 0);
+        seeded.fixture().insertPublication(batch, seeded.model(), newer.plusSeconds(2));
+        assertThat(OffsetDateTime.parse(observedAtIn(client.nextObservation()))).isEqualTo(newer);
+    }
+
+    @Test
+    void 켜면_API_문서에_스트림_주소가_GET_하나로_나오고_200은_text_event_stream이다() throws Exception {
+        // when
+        HttpResponse<String> docs = get("/api/docs/openapi", "application/json");
+
+        // then
+        JsonNode document = objectMapper.readTree(docs.body());
+        JsonNode stream = document.path("paths").path(STREAM_URI);
+        JsonNode ok = stream.path("get").path("responses").path("200");
+        assertSoftly(softly -> {
+            softly.assertThat(docs.statusCode()).isEqualTo(200);
+            softly.assertThat(document.path("paths").size()).isEqualTo(11);
+            softly.assertThat(stream.propertyNames()).containsExactly("get");
+            softly.assertThat(stream.path("get").path("operationId").asString()).isEqualTo("getRouteWatchEvents");
+            softly.assertThat(stream.path("get").path("responses").propertyNames())
+                .containsExactlyInAnyOrder("200", "204", "400");
+            softly.assertThat(ok.path("content").propertyNames()).containsExactly("text/event-stream");
+            softly.assertThat(ok.path("content").path("text/event-stream").path("schema").path("type").asString())
+                .isEqualTo("string");
+            softly.assertThat(ok.path("headers").has("Cache-Control")).isTrue();
+            softly.assertThat(document.path("components").path("schemas").has("SseEmitter")).isFalse();
+        });
+    }
+
     private WatchStreamClient open(String... headers) throws IOException {
         WatchStreamClient client = WatchStreamClient.open(port, STREAM, headers);
         clients.add(client);
         return client;
+    }
+
+    private WatchStreamClient openRoute(String routeId) throws IOException {
+        WatchStreamClient client = WatchStreamClient.open(port, streamOf(routeId));
+        clients.add(client);
+        return client;
+    }
+
+    private static String streamOf(String routeId) {
+        return "/api/v1/routes/" + routeId + "/watch/events";
+    }
+
+    private String observedAtOfWatch(String routeId) throws IOException, InterruptedException {
+        HttpResponse<String> watch = get("/api/v1/routes/" + routeId + "/watch", "application/json");
+        assertThat(watch.statusCode()).isEqualTo(200);
+        return objectMapper.readTree(watch.body()).path("observedAt").asString();
+    }
+
+    private String observedAtIn(String signal) {
+        return objectMapper.readTree(signal).path("observedAt").asString();
     }
 
     private HttpResponse<String> get(String path, String accept) throws IOException, InterruptedException {
@@ -228,17 +378,45 @@ class WatchStreamContractTest {
         return http.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-    private void seedPublishedRoute() {
+    /** 관측 시각은 초가 0 이다. {@code toString()} 과 JSON 의 글자가 달라지는 값이라 일부러 고른다. */
+    private Seeded seedPublishedRoute(String routeId) {
         BoardDatabaseFixture fixture = new BoardDatabaseFixture(jdbcClient);
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
-        RouteContext route = fixture.insertRoute(ROUTE_ID, "3330", "기점", "종점", 2,
+        RouteContext route = fixture.insertRoute(routeId, "3330", "기점", "종점", 2,
             "04:50", "23:30", "05:00", "23:30", now.minusDays(1));
         fixture.insertStop(route, 1, "STOP-1", "기점", "UP", true);
         fixture.insertStop(route, 2, "STOP-2", "회차점", "UP", false);
         fixture.insertStop(route, 3, "STOP-3", "종점", "DOWN", true);
-        long model = fixture.insertModel("model-active", "ACTIVE", now.minusDays(1));
-        long batch = fixture.insertBatch(route, now.minusMinutes(1), "SUCCESS_EMPTY", 0);
-        fixture.insertPublication(batch, model, now.minusSeconds(58));
+        long model = jdbcClient.sql("SELECT id FROM model_deployment WHERE state = 'ACTIVE'")
+            .query(Long.class)
+            .optional()
+            .orElseGet(() -> fixture.insertModel("model-active", "ACTIVE", now.minusDays(1)));
+        OffsetDateTime observedAt = now.minusMinutes(1);
+        long batch = fixture.insertBatch(route, observedAt, "SUCCESS_EMPTY", 0);
+        fixture.insertPublication(batch, model, observedAt.plusSeconds(2));
+        return new Seeded(fixture, route, model, observedAt);
+    }
+
+    private record Seeded(BoardDatabaseFixture fixture, RouteContext route, long model, OffsetDateTime observedAt) {
+    }
+
+    private long checks(String result) {
+        Timer timer = meters.find("salmonbus.watch.stream.check").tag("result", result).timer();
+        return timer == null ? 0 : timer.count();
+    }
+
+    private double cacheMisses() {
+        Counter misses = meters.find("board.read.cache").tag("result", "miss").counter();
+        return misses == null ? 0 : misses.count();
+    }
+
+    private static boolean waitsForForecastRun(Connection locker) throws SQLException {
+        try (Statement statement = locker.createStatement();
+            ResultSet waiters = statement.executeQuery(
+                "SELECT count(*) FROM pg_locks WHERE NOT granted AND relation = 'forecast_run'::regclass")) {
+            waiters.next();
+            return waiters.getInt(1) > 0;
+        }
     }
 
     /** Spring Session 은 쿠키 값이 base64 로 풀릴 때만 그 ID 로 세션을 찾는다. 풀리지 않는 값이면 DB 를 읽지 않는다. */

@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 /**
  * Spring 은 응답에 붙기 전에 쌓인 쓰기를 한 번에 내보내므로, 그사이 쌓인 ping 은 첫 쓰기와 같은 청크로 나갈 수 있다. 그래서 청크
@@ -19,6 +20,7 @@ import java.util.List;
 final class WatchStreamClient implements AutoCloseable {
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
     private static final String BLOCK_END = "\n\n";
+    private static final String OBSERVATION = "event:observation\ndata:";
 
     private final Socket socket;
     private final InputStream input;
@@ -94,6 +96,29 @@ final class WatchStreamClient implements AutoCloseable {
         String block = pending.substring(0, end);
         pending.delete(0, end + BLOCK_END.length());
         return block;
+    }
+
+    String nextObservation() throws IOException {
+        String block;
+        while ((block = nextBlock()) != null) {
+            if (block.startsWith(OBSERVATION)) {
+                return block.substring(OBSERVATION.length());
+            }
+        }
+        return null;
+    }
+
+    List<String> blocksThroughPingsAfter(BooleanSupplier condition, int pings) throws IOException {
+        List<String> blocks = new ArrayList<>();
+        int seen = 0;
+        String block;
+        while (seen < pings && (block = nextBlock()) != null) {
+            blocks.add(block);
+            if (condition.getAsBoolean() && block.startsWith("event:ping")) {
+                seen++;
+            }
+        }
+        return blocks;
     }
 
     boolean ended() {
