@@ -17,7 +17,19 @@ const test = mapTest.extend<{ appCapabilities: readonly string[] | null; mapRequ
 
 test.use({ viewport: { width: 390, height: 844 } });
 
+type StartupMarkWindow = { __startupMarkCalls: string[] };
+
 test.beforeEach(async ({ page, appCapabilities }) => {
+  // page.clock이 바꿔 둔 performance는 mark를 남기지 않고 getEntriesByType이 항상 빈 배열이라, mark 호출을 직접 모은다.
+  await page.addInitScript(() => {
+    const calls: string[] = [];
+    const mark = performance.mark.bind(performance);
+    performance.mark = (name, options) => {
+      calls.push(name);
+      return mark(name, options);
+    };
+    (window as unknown as StartupMarkWindow).__startupMarkCalls = calls;
+  });
   if (appCapabilities === null) return;
   await page.addInitScript((capabilities) => {
     window.__SALMONBUS_APP__ = { appVersion: "1.0.0", capabilities };
@@ -45,10 +57,7 @@ test.beforeEach(async ({ page, appCapabilities }) => {
 
 async function startupMarks(page: Page): Promise<string[]> {
   return page.evaluate(() =>
-    performance
-      .getEntriesByType("mark")
-      .map((entry) => entry.name)
-      .filter((name) => name.startsWith("salmon:")),
+    (window as unknown as StartupMarkWindow).__startupMarkCalls.filter((name) => name.startsWith("salmon:")),
   );
 }
 
