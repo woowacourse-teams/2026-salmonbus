@@ -9,6 +9,7 @@ import com.gustler.backend.api.board.infrastructure.jdbc.JdbcBoardSnapshotReader
 import com.gustler.backend.api.board.infrastructure.jdbc.JdbcForecastRecordReader;
 import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -74,6 +75,15 @@ public class JpaBoardQueryRepository implements BoardQueryRepository {
                 .stream()
                 .map(VehicleObservationJpaEntity::toDomain)
                 .toList();
+        } catch (DataAccessException exception) {
+            throw new ServiceUnavailableException();
+        }
+    }
+
+    @Override
+    public void limitStatementTime(Duration limit) {
+        try {
+            snapshotReader.limitStatementTime(limit);
         } catch (DataAccessException exception) {
             throw new ServiceUnavailableException();
         }

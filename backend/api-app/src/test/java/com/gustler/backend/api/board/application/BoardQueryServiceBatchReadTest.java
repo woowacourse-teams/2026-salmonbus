@@ -2,6 +2,8 @@ package com.gustler.backend.api.board.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.gustler.backend.api.board.ModelOutOfScopeException;
 import com.gustler.backend.api.board.NoRecentObservationException;
@@ -186,6 +188,19 @@ class BoardQueryServiceBatchReadTest {
             .isInstanceOf(ServiceUnavailableException.class);
     }
 
+    @Test
+    void 문장_시간_제한이_1ms보다_짧으면_저장소를_부르지_않고_거절한다() {
+        // given
+        BoardQueryRepository untouched = mock(BoardQueryRepository.class);
+        BoardQueryService boards = new BoardQueryService(untouched, freshness, cachePolicy,
+            new BoardReadCache(false, new SimpleMeterRegistry()));
+
+        // when, then
+        assertThatThrownBy(() -> boards.readBoardsWithStatementLimit(List.of(FIRST), Duration.ofNanos(999_999)))
+            .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(untouched);
+    }
+
     /**
      * 노선 판본마다 회차점이 있는 정류장 3개, 관측 묶음마다 차량 1대를 두는 저장소다. 일괄 조회 호출 순서를 남긴다.
      */
@@ -244,6 +259,10 @@ class BoardQueryServiceBatchReadTest {
                 throw new ServiceUnavailableException();
             }
             return found.stream().findFirst();
+        }
+
+        @Override
+        public void limitStatementTime(Duration limit) {
         }
 
         @Override

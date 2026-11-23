@@ -12,6 +12,7 @@ import com.gustler.backend.api.route.domain.Route;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -94,8 +95,30 @@ public class JdbcBoardSnapshotReader {
         WHERE r.source_route_id = ANY(:routeIds) AND v.valid_to IS NULL
         """;
 
+    private static final String LIMIT_STATEMENT_TIME = """
+        SELECT /* salmonbus:board.statement_limit */
+               set_config('statement_timeout', :limit, true), set_config('lock_timeout', :limit, true)
+        """;
+
     private final JdbcClient jdbcClient;
     private final Clock clock;
+
+    /**
+     * 호출자의 트랜잭션에서 뒤따르는 조회 문장마다 PostgreSQL 이 지킬 시간 제한을 건다.
+     *
+     * <p>{@code statement_timeout} 은 문장 하나가 잠금 대기를 포함해 쓸 수 있는 시간이고, {@code lock_timeout} 은 그 문장이
+     * 잠금 하나를 기다리는 시간이다. 둘 다 문장마다 다시 재고 서버가 끝낸다. 세 번째 인자 {@code true} 는 {@code SET LOCAL} 과
+     * 같아서 트랜잭션이 끝나면 값이 사라지고, 풀로 돌아간 연결에 제한이 남지 않는다.
+     *
+     * <p>호출자는 열린 트랜잭션 안에서 1ms 이상으로 부른다. 트랜잭션 밖에서 부르면 이 문장에만 걸리고, 1ms 보다 짧으면 0 이 되어
+     * PostgreSQL 이 "제한 없음"으로 읽는다.
+     */
+    public void limitStatementTime(Duration limit) {
+        jdbcClient.sql(LIMIT_STATEMENT_TIME)
+            .param("limit", limit.toMillis() + "ms")
+            .query((row, index) -> row.getString(1))
+            .single();
+    }
 
     /**
      * 한 노선의 스냅샷을 읽는다. 실행 줄의 수신 시각은 배치의 응답 수신 시각과 같은 값이다.

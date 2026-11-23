@@ -18,6 +18,7 @@ import com.gustler.backend.api.route.domain.Route;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -114,6 +115,10 @@ final class AsOfBoardQueryRepository implements BoardQueryRepository {
     /** 제품 조회와 같이, 조회 창 시작의 한국 날짜 하루 전부터의 날짜 파티션만 본다. */
     private static LocalDate earliestSourceDate(OffsetDateTime observedSince) {
         return observedSince.atZoneSameInstant(SOURCE_DATE_ZONE).toLocalDate().minusDays(1);
+    }
+
+    @Override
+    public void limitStatementTime(Duration limit) {
     }
 
     @Override

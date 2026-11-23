@@ -3,6 +3,7 @@ package com.gustler.backend.api.board.infrastructure.jpa;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 
 import com.gustler.backend.api.board.application.BoardSnapshot;
@@ -10,6 +11,7 @@ import com.gustler.backend.api.board.infrastructure.jdbc.JdbcBoardSnapshotReader
 import com.gustler.backend.api.board.infrastructure.jdbc.JdbcForecastRecordReader;
 import com.gustler.backend.api.error.ServiceUnavailableException;
 import com.gustler.backend.api.route.RouteId;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.Optional;
@@ -45,6 +47,22 @@ class JpaBoardQueryRepositoryTest {
 
         // when
         Throwable actual = catchThrowable(() -> repository.findSnapshot(routeId));
+
+        // then
+        assertThat(actual)
+            .isInstanceOf(ServiceUnavailableException.class)
+            .hasMessage("일시적인 서버 장애가 발생했습니다.");
+    }
+
+    @Test
+    void 문장_시간_제한을_걸다_난_DB_장애를_서비스_불가로_변환한다() {
+        // given
+        Duration limit = Duration.ofSeconds(1);
+        willThrow(new DataAccessResourceFailureException("database unavailable"))
+            .given(snapshotReader).limitStatementTime(limit);
+
+        // when
+        Throwable actual = catchThrowable(() -> repository.limitStatementTime(limit));
 
         // then
         assertThat(actual)
