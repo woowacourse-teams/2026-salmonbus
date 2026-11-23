@@ -1,0 +1,137 @@
+name: TMP-SAL-451-VERIFY
+
+# SAL-451 확인용 임시 워크플로다. merge 전에 지운다.
+on:
+  pull_request:
+    branches: [dev]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  verify-comment-lookup:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      THIS_PR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run the fixed step text with writes blocked
+        shell: bash
+        run: |
+          gh --version | head -n 1
+          bash --version | head -n 1
+          workflow="$GITHUB_WORKSPACE/.github/workflows/domain-policy-review.yml"
+          tools="$RUNNER_TEMP/sal451-verify"
+          mkdir -p "$tools/bin"
+
+          cat > "$tools/bin/gh" <<'SHIM'
+          #!/bin/bash
+          args=("$@")
+          for a in "${args[@]}"; do
+            case "$a" in
+              PATCH|POST|PUT|DELETE|-f|-F|--field|--raw-field|--input)
+                echo "WRITE BLOCKED (not sent): gh $*" >> "$SHIM_LOG"
+                exit 0
+                ;;
+            esac
+          done
+          if [[ -n "${SHIM_PER_PAGE:-}" ]]; then
+            for i in "${!args[@]}"; do
+              case "${args[$i]}" in
+                repos/*/comments) args[$i]="${args[$i]}?per_page=${SHIM_PER_PAGE}" ;;
+              esac
+            done
+          fi
+          echo "GET passed through: gh ${args[*]}" >> "$SHIM_LOG"
+          exec "$REAL_GH" "${args[@]}"
+          SHIM
+          chmod +x "$tools/bin/gh"
+
+          cat > "$tools/extract.py" <<'PY'
+          import sys
+
+          lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
+          name = next(i for i, line in enumerate(lines) if line.strip() == "- name: Publish or update policy review comment")
+          run = next(i for i in range(name, len(lines)) if lines[i].strip() == "run: |")
+          indent = len(lines[run]) - len(lines[run].lstrip()) + 2
+          body = []
+          for line in lines[run + 1:]:
+              if line.strip() and len(line) - len(line.lstrip()) < indent:
+                  break
+              body.append(line[indent:])
+          sys.stdout.write("\n".join(body).rstrip("\n") + "\n")
+          PY
+
+          cat > "$tools/substitute.py" <<'PY'
+          import os
+          import sys
+
+          path = sys.argv[1]
+          text = open(path, encoding="utf-8").read()
+          text = text.replace("github-actions[bot]", os.environ["LOGIN"])
+          text = text.replace("<!-- salmonbus-policy-issue-review -->", os.environ["MARKER"])
+          open(path, "w", encoding="utf-8").write(text)
+          PY
+
+          export REAL_GH="$(command -v gh)"
+          failed=0
+
+          run_case() {
+            local name="$1" pr="$2" want_exit="$3" want_write="$4" login="${5:-}" marker="${6:-}" per_page="${7:-}"
+            local work got writes
+            work="$(mktemp -d)"
+            mkdir -p "$work/.domain-wiki/output"
+            echo 'dummy body' > "$work/.domain-wiki/output/policy-comment.md"
+            python3 "$tools/extract.py" "$workflow" > "$work/step.sh"
+            if [[ -n "$login" ]]; then
+              LOGIN="$login" MARKER="$marker" python3 "$tools/substitute.py" "$work/step.sh"
+            fi
+            : > "$work/shim.log"
+            set +e
+            (
+              cd "$work"
+              SHIM_LOG="$work/shim.log" SHIM_PER_PAGE="$per_page" PR_NUMBER="$pr" PATH="$tools/bin:$PATH" \
+                bash --noprofile --norc -e -o pipefail step.sh
+            )
+            got=$?
+            set -e
+            writes="$(grep '^WRITE BLOCKED' "$work/shim.log" || true)"
+            echo "=== $name"
+            echo "step exit code: $got (want $want_exit)"
+            cat "$work/shim.log"
+            if [[ "$got" != "$want_exit" ]]; then
+              echo "::error::$name: exit code $got, want $want_exit"
+              failed=1
+            fi
+            if [[ "$want_write" == "NONE" ]]; then
+              if [[ -n "$writes" ]]; then
+                echo "::error::$name: a write was attempted"
+                failed=1
+              fi
+            elif [[ "$writes" != *"$want_write"* ]]; then
+              echo "::error::$name: want write containing: $want_write"
+              failed=1
+            fi
+          }
+
+          echo "--- step text under test"
+          python3 "$tools/extract.py" "$workflow"
+
+          run_case "A. no matching comment on this PR" "$THIS_PR" 0 \
+            "--method POST repos/${REPOSITORY}/issues/${THIS_PR}/comments"
+          run_case "B. matching comment exists (PR 346, CodeRabbit comment)" 346 0 \
+            "--method PATCH repos/${REPOSITORY}/issues/comments/6997872746" \
+            'coderabbitai[bot]' '<!-- coderabbit-ai-generated:v1 -->'
+          run_case "C. three pages, matches on every page (PR 267, 2 per page)" 267 0 \
+            "--method PATCH repos/${REPOSITORY}/issues/comments/6758714542" \
+            'lee-eojin' ' ' 2
+          run_case "D. lookup fails (no such PR)" 99999999 1 NONE
+
+          [[ "$failed" == 0 ]]
