@@ -30,4 +30,13 @@ public final class StationMapApiDocsExamples {
     public static final String INVALID_TILE = """
         {"code":"INVALID_STATION_TILE","message":"정류장 지도 칸 번호가 올바르지 않습니다.","requestId":"example-request"}
         """;
+
+    public static final String SEARCH = """
+        {"stations":[{"stationId":"206000532","name":"예시 정류장","point":{"x":127.1118,"y":37.3918},
+          "mobileNo":"07489","regionName":"성남","direction":"예시 방면","salmonRouteIds":["204000057"]}]}
+        """;
+
+    public static final String INVALID_SEARCH = """
+        {"code":"INVALID_STATION_SEARCH","message":"정류장 검색어는 공백과 기호를 뺀 글자가 1자 이상 40자 이하여야 합니다.","requestId":"example-request"}
+        """;
 }

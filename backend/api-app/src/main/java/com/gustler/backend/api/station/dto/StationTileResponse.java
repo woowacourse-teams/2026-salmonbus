@@ -36,7 +36,7 @@ public record StationTileResponse(
             "WGS84",
             tile.stations()
                 .stream()
-                .map(StationTileResponse::stationOf)
+                .map(Station::from)
                 .toList(),
             tile.baselineDate(),
             tile.verifiedAt()
@@ -48,18 +48,6 @@ public record StationTileResponse(
             return "READY";
         }
         return "PENDING";
-    }
-
-    private static Station stationOf(MapStation station) {
-        return new Station(
-            station.stationId(),
-            station.name(),
-            new Point(station.x(), station.y()),
-            station.mobileNo(),
-            station.regionName(),
-            station.direction(),
-            station.salmonRouteIds()
-        );
     }
 
     public record Tile(int zoom, int x, int y) {
@@ -83,6 +71,18 @@ public record StationTileResponse(
 
         public Station {
             salmonRouteIds = List.copyOf(salmonRouteIds);
+        }
+
+        public static Station from(MapStation station) {
+            return new Station(
+                station.stationId(),
+                station.name(),
+                new Point(station.x(), station.y()),
+                station.mobileNo(),
+                station.regionName(),
+                station.direction(),
+                station.salmonRouteIds()
+            );
         }
     }
 }

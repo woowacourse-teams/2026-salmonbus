@@ -3,6 +3,7 @@ package com.gustler.backend.api.station.infrastructure.jdbc;
 import com.gustler.backend.api.station.application.StationReadRepository;
 import com.gustler.backend.api.station.domain.MapStation;
 import com.gustler.backend.api.station.domain.StationInfo;
+import com.gustler.backend.api.station.domain.StationSearchQuery;
 import com.gustler.backend.api.station.domain.StationTile;
 import com.gustler.backend.station.contract.StationTileId;
 import java.sql.Array;
@@ -150,6 +151,69 @@ public class JdbcStationReadRepository implements StationReadRepository {
             state.baselineDate(),
             state.verifiedAt()
         );
+    }
+
+    @Override
+    public List<MapStation> search(StationSearchQuery query, int limit) {
+        // 우리 노선 정류장은 좌표가 노선마다 다를 수 있어 노선이 가장 많은 좌표, 같으면 작은 좌표 하나를 고른다.
+        // 노선 목록은 그 정류장을 지나는 모든 노선이다. LIMIT 뒤에 방면·지역 조인을 붙여 최대 limit행만 조인한다.
+        String key = query.key();
+        return jdbc.sql(
+            """
+            WITH salmon_group AS (
+            """ + SALMON_STOPS + """
+                GROUP BY stop.stop_id, location.x, location.y
+            ),
+            salmon AS (
+                SELECT DISTINCT ON (g.stop_id) g.stop_id AS station_id, g.name, g.x, g.y,
+                       (SELECT array_agg(DISTINCT route_id ORDER BY route_id)
+                        FROM salmon_group other, unnest(other.route_ids) AS route_id
+                        WHERE other.stop_id = g.stop_id) AS route_ids
+                FROM salmon_group g
+                ORDER BY g.stop_id, cardinality(g.route_ids) DESC, g.x, g.y
+            ),
+            candidate AS (
+                SELECT salmon.station_id, salmon.name, station_search_key(salmon.name) AS key,
+                       salmon.x, salmon.y, salmon.route_ids
+                FROM salmon
+                UNION ALL
+                SELECT s.station_id, s.name, s.name_key, s.x, s.y, NULL
+                FROM bus_station s
+                WHERE s.active
+                  AND NOT EXISTS (""" + SALMON_STOP_OF_STATION + """
+                  )
+            ),
+            matched AS (
+                SELECT candidate.*,
+                       CASE WHEN candidate.key = :key THEN 0 WHEN candidate.key LIKE :prefix THEN 1 ELSE 2 END AS grade
+                FROM candidate
+                WHERE candidate.key LIKE :contains
+                ORDER BY grade, (candidate.route_ids IS NULL), candidate.key COLLATE "C", candidate.station_id
+                LIMIT :limit
+            )
+            SELECT matched.station_id, matched.name, matched.x, matched.y,
+                   info.mobile_no, info.region_name, direction.name AS direction, matched.route_ids
+            FROM matched
+            LEFT JOIN bus_station info ON info.station_id = matched.station_id AND info.active
+            """ + DIRECTION_OF_SALMON_STOP.formatted("CASE WHEN matched.route_ids IS NOT NULL THEN matched.station_id END") + """
+            ORDER BY matched.grade, (matched.route_ids IS NULL), matched.key COLLATE "C", matched.station_id
+            """
+        )
+            .param("key", key)
+            .param("prefix", key + "%")
+            .param("contains", "%" + key + "%")
+            .param("limit", limit)
+            .query((row, index) -> new MapStation(
+                row.getString(1),
+                row.getString(2),
+                row.getDouble(3),
+                row.getDouble(4),
+                row.getString(5),
+                row.getString(6),
+                row.getString(7),
+                routeIdsOf(row.getArray(8))
+            ))
+            .list();
     }
 
     @Override
