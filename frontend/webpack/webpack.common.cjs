@@ -34,7 +34,7 @@ module.exports = {
         type: "asset",
       },
       {
-        test: /\.(woff2?|ttf|otf)$/i,
+        test: /\.(woff2?|ttf|otf|ico)$/i,
         type: "asset/resource",
       },
       {
@@ -84,7 +84,6 @@ module.exports = {
     }),
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "../public/index.html"),
-      favicon: path.resolve(__dirname, "../public/favicon.ico"),
       meta: {
         "app-version": appVersion,
       },
