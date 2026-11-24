@@ -17,6 +17,15 @@ import { SortableList } from "./SortableList";
 import { moveItem } from "@/shared/utils/moveItem";
 import { useFavoriteAction } from "@/shared/hooks/useFavoriteAction";
 import { GroupNameForm } from "./GroupNameForm";
+import {
+  doneLabelOf,
+  groupsWithNewGroup,
+  groupsWithOrderChange,
+  groupsWithoutFavorite,
+  groupsWithoutGroup,
+  orderChangesFrom,
+  type FavoriteOrderChange,
+} from "./favoriteEditorDraft";
 import trashIcon from "@/shared/assets/icons/trash.svg";
 import * as styles from "./FavoriteEditor.css";
 import * as common from "@/shared/styles/form.css";
@@ -26,11 +35,6 @@ interface FavoriteEditorProps {
   onClose: (saved: boolean) => void;
   initialGroupId?: string;
   initialFavorites?: HomeFavorite[];
-}
-
-interface FavoriteOrderChange {
-  groupId: string | null;
-  ids: string[];
 }
 
 interface GroupDrag {
@@ -64,7 +68,6 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   useEffect(() => {
     if (!loadFailed && !renaming) editor.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus();
   }, [group?.id, loadFailed, renaming]);
-  const idsOf = (items: { id: string }[]) => items.map((item) => item.id);
   const labelOf = (favorite: SavedFavorite) => {
     const item = favorites.find((candidate) => candidate.id === favorite.id);
     return `${item?.route.displayName || "노선 정보 없음"} · ${item?.stop.name || "정류장 정보 없음"}`;
@@ -75,8 +78,8 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
     onClose(false);
   };
   function addGroup(created: FavoriteGroup) {
-    setSaved((current) => [...current, created]);
-    setDraft((current) => [...current, created]);
+    setSaved((current) => groupsWithNewGroup(current, created));
+    setDraft((current) => groupsWithNewGroup(current, created));
     select(created.id);
   }
   async function remove() {
@@ -86,12 +89,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
         kind: "deleteFavorite",
       })
     ) {
-      const withoutDeleted = (current: FavoriteGroup[]) =>
-        current.map((candidate) =>
-          candidate.id === group.id
-            ? { ...candidate, favorites: candidate.favorites.filter((favorite) => favorite.id !== deleting.id) }
-            : candidate,
-        );
+      const withoutDeleted = (current: FavoriteGroup[]) => groupsWithoutFavorite(current, group.id, deleting.id);
       setDraft(withoutDeleted);
       setSaved(withoutDeleted);
       setDeleting(null);
@@ -100,23 +98,15 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
   async function removeGroup() {
     if (!deletingGroup || !canDeleteGroup || busy) return;
     if (await run(() => deleteFavoriteGroup(deletingGroup.id), { kind: "deleteGroup" })) {
-      setSaved((current) => current.filter((candidate) => candidate.id !== deletingGroup.id));
-      setDraft((current) => current.filter((candidate) => candidate.id !== deletingGroup.id));
+      setSaved((current) => groupsWithoutGroup(current, deletingGroup.id));
+      setDraft((current) => groupsWithoutGroup(current, deletingGroup.id));
       setDeletingGroup(null);
     } else {
       reload();
     }
   }
   async function save() {
-    const changes: FavoriteOrderChange[] = [];
-    if (JSON.stringify(idsOf(draft)) !== JSON.stringify(idsOf(saved)))
-      changes.push({ groupId: null, ids: idsOf(draft) });
-    for (const group of draft) {
-      const before = saved.find((candidate) => candidate.id === group.id);
-      if (JSON.stringify(group.favorites) !== JSON.stringify(before?.favorites))
-        changes.push({ groupId: group.id, ids: idsOf(group.favorites) });
-    }
-    const [first, ...remaining] = changes;
+    const [first, ...remaining] = orderChangesFrom(saved, draft);
     if (first === undefined) {
       onClose(true);
       return;
@@ -129,20 +119,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
           : saveFavoriteOrder(change.groupId, change.ids));
         if (result.ok) {
           completed += 1;
-          setSaved((current) =>
-            change.groupId === null
-              ? [...current].sort((left, right) => change.ids.indexOf(left.id) - change.ids.indexOf(right.id))
-              : current.map((group) =>
-                  group.id === change.groupId
-                    ? {
-                        ...group,
-                        favorites: [...group.favorites].sort(
-                          (left, right) => change.ids.indexOf(left.id) - change.ids.indexOf(right.id),
-                        ),
-                      }
-                    : group,
-                ),
-          );
+          setSaved((current) => groupsWithOrderChange(current, change));
         } else if (completed > 0) setPartial(true);
         return result;
       };
@@ -159,7 +136,7 @@ export function FavoriteEditor({ onClose, initialGroupId, initialFavorites }: Fa
     });
     if (savedSuccessfully) onClose(true);
   }
-  const doneLabel = busy ? "저장 중…" : failure?.operation === "saveOrder" ? "다시 저장하기" : "완료";
+  const doneLabel = doneLabelOf(busy, failure?.operation);
   return (
     <section
       ref={editor}
