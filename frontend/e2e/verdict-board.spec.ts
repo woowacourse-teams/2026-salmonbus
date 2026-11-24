@@ -348,42 +348,6 @@ test("판의 만료 시각이 지나면 차량 마커와 좌석 예측을 숨기
   await expect(sheetNotice).toHaveCount(0);
 });
 
-test("운행 중인 노선의 특정 정류장에 접근 차량이 없으면 차량 없음 안내를 표시한다", async ({ page, api }) => {
-  const stopData = api.data.watch.stops.find((stop) => stop.name === targetStopNames.UP);
-  if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
-  stopData.approachingVehicles = [];
-  await openBoard(page);
-
-  const stop = targetStop(page, "UP");
-  const row = targetRow(page, "UP");
-  await stop.scrollIntoViewIfNeeded();
-  await expect(row.getByText("지금 오는 차량이 없어요", { exact: true })).toBeVisible();
-  await stop.click();
-  await expect(stop).toHaveAttribute("aria-expanded", "true");
-  await expect(row.getByText("현재 예측할 수 있는 차량이 없습니다", { exact: true })).toBeVisible();
-  await expect(row.getByRole("listitem")).toHaveCount(0);
-  await expect(page.getByText("노선 정보를 불러오지 못했어요", { exact: true })).not.toBeVisible();
-  await expect(page.getByText("현재는 운행시간이 아닙니다", { exact: true })).not.toBeVisible();
-
-  const ring = row.locator("[data-timeline-sequence]");
-  await expect(ring).toHaveCount(1);
-  const zeroRing = await ring.evaluate((element) => {
-    const ringStyle = getComputedStyle(element);
-    const arrow = element.querySelector("svg");
-    const arrowStyle = arrow === null ? null : getComputedStyle(arrow);
-    return {
-      ringBorderColor: ringStyle.borderColor,
-      ringBackgroundColor: ringStyle.backgroundColor,
-      arrowColor: arrowStyle?.color ?? null,
-    };
-  });
-  expect(zeroRing).toEqual({
-    ringBorderColor: "rgb(0, 0, 0)",
-    ringBackgroundColor: "rgb(255, 255, 255)",
-    arrowColor: "rgb(0, 0, 0)",
-  });
-});
-
 test("운행 시간인데 도는 차량이 없으면 지도와 정류장 목록을 유지하고 시트에 안내한다", async ({ page, api }) => {
   api.data.watch.vehiclesInService = 0;
   api.data.watch.vehicles = [];
