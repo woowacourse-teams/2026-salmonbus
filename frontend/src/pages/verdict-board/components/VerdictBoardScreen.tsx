@@ -35,7 +35,15 @@ import { liveMotionDurationOf, useFreshLiveVehicles } from "../hooks/useFreshLiv
 import { createLiveVehicleMotionStore, useLiveVehicleMotion } from "../hooks/useLiveVehicleMotion";
 import { useActionGuidance } from "../hooks/useActionGuidance";
 import { useStationArrivals } from "@/shared/hooks/useStationArrivals";
-import { expandableRowOf, stopSelectionFrom, type StopSelection } from "./stopSelection";
+import {
+  expandableRowOf,
+  isSameStop,
+  nextBoardSelection,
+  stopSelectionFrom,
+  type BoardSelectionEvent,
+  type StopSelection,
+  type VehicleFocusRequest,
+} from "./stopSelection";
 import type { BoardSheetSnap } from "@/shared/bottom-sheet/boardSheetPolicy";
 import { BoardBottomSheet } from "./BoardBottomSheet";
 import { BoardRouteSummary } from "./BoardRouteSummary";
@@ -333,7 +341,7 @@ function OperatingBoard({
   );
   const [selectedFromList, setSelectedFromList] = useState(false);
   const [scrollRequest, setScrollRequest] = useState<StopSelection | null>(selected);
-  const [vehicleFocusRequest, setVehicleFocusRequest] = useState<{ key: string; focusMarker: boolean } | null>(null);
+  const [vehicleFocusRequest, setVehicleFocusRequest] = useState<VehicleFocusRequest | null>(null);
   const selectedVehicleKey = vehicleFocusRequest?.key ?? null;
   const sourceStops = useMemo(() => stopViewsFor(board, direction.id), [board, direction.id]);
   const stops = useMemo(() => displayedStopViewsFor(board, direction.id, freshness), [board, direction.id, freshness]);
@@ -382,12 +390,20 @@ function OperatingBoard({
     );
   }
 
+  function applySelectionEvent(event: BoardSelectionEvent) {
+    const next = nextBoardSelection({ selected, selectedFromList, scrollRequest, vehicleFocusRequest, snap }, event);
+    setSelected(next.selected);
+    setSelectedFromList(next.selectedFromList);
+    setScrollRequest(next.scrollRequest);
+    setVehicleFocusRequest(next.vehicleFocusRequest);
+    setSnap(next.snap);
+    return next;
+  }
+
   function selectFromMap(selection: StopSelection) {
-    const reselected = selected?.direction === selection.direction && selected.sequence === selection.sequence;
-    if (!reselected) setSelectedFromList(false);
-    setSelected(selection);
-    setVehicleFocusRequest(null);
-    scrollToStop(selection);
+    const reselected = isSameStop(selected, selection);
+    applySelectionEvent({ type: "mapStopSelected", stop: selection });
+    onDirectionChange(selection.direction, "map");
     rememberSelection(selection);
     const row = reselected
       ? null
@@ -395,53 +411,36 @@ function OperatingBoard({
     if (row !== null) onStopExpand({ ...row, direction: selection.direction, source: "map" });
   }
 
-  function scrollToStop(selection: StopSelection) {
-    // 같은 위치를 다시 눌러도 목록 이동을 새로 요청한다.
-    setScrollRequest({ ...selection });
-    if (snap === "minimum") setSnap("expanded");
+  function selectVehicleFromMap(selection: StopSelection, key: string) {
+    applySelectionEvent({ type: "mapVehicleSelected", stop: selection, vehicleKey: key });
     onDirectionChange(selection.direction, "map");
   }
 
-  function selectVehicleFromMap(selection: StopSelection, key: string) {
-    setVehicleFocusRequest({ key, focusMarker: false });
-    scrollToStop(selection);
-  }
-
   function clearMapSelection() {
-    setSelected(null);
+    applySelectionEvent({ type: "mapCleared" });
     rememberSelection(null);
-    clearVehicleSelection();
   }
 
   function clearVehicleSelection() {
-    setScrollRequest(null);
-    setVehicleFocusRequest(null);
+    applySelectionEvent({ type: "listCleared" });
   }
 
   function focusVehicleFromList(key: string) {
-    setScrollRequest(null);
-    setVehicleFocusRequest({ key, focusMarker: true });
-    if (snap === "full") setSnap("expanded");
+    applySelectionEvent({ type: "listVehicleSelected", vehicleKey: key });
   }
 
   function toggleFromList(sequence: number) {
-    setVehicleFocusRequest(null);
-    const next =
-      selected?.direction === direction.id && selected.sequence === sequence
-        ? null
-        : { direction: direction.id, sequence };
-    setSelected(next);
-    setSelectedFromList(next !== null);
-    if (next !== null && map.status === "generating" && snap === "full") setSnap("expanded");
-    rememberSelection(next);
-    setScrollRequest(null);
+    const next = applySelectionEvent({
+      type: "listStopToggled",
+      stop: { direction: direction.id, sequence },
+      mapGenerating: map.status === "generating",
+    });
+    rememberSelection(next.selected);
   }
 
   function switchDirection(next: Direction) {
     if (next === direction.id) return;
-    setSelected(null);
-    setScrollRequest(null);
-    setVehicleFocusRequest(null);
+    applySelectionEvent({ type: "directionSwitched" });
     onDirectionChange(next, "tab");
   }
 
