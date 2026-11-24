@@ -58,6 +58,14 @@ describe("앱 안 로그인", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it("auth.signIn을 모르는 옛 앱에서도 서버에 묻지 않고 웹 로그인으로 보낸다", async () => {
+    global.fetch = jest.fn<typeof fetch>();
+    const { bridgeWindow, postMessage } = inApp(() => ({ status: "cancelled" }), ["haptic.impact"]);
+    expect(await signInInApp("KAKAO", bridgeWindow)).toBe("unsupported");
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
   it("서버에 네이티브 로그인 API가 없으면(nonce 404) 앱을 부르지 않고 웹 로그인으로 보낸다", async () => {
     global.fetch = jest.fn<typeof fetch>().mockResolvedValueOnce(notFound());
     const { bridgeWindow, postMessage } = inApp(() => ({ status: "cancelled" }));
