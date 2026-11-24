@@ -1,8 +1,8 @@
 name: DOMAIN-WIKI-UPDATE
 
+# Git Wiki가 준비될 때까지 자동 실행을 끈다. 다시 켜는 작업은 SAL-454다.
 on:
-  push:
-    branches: [dev]
+  workflow_dispatch:
 
 permissions:
   actions: read
