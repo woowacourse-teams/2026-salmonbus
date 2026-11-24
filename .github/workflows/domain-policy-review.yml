@@ -1,9 +1,8 @@
 name: DOMAIN-POLICY-REVIEW
 
+# Git Wiki 정책과 API 비밀값이 준비될 때까지 자동 실행을 끈다. 다시 켜는 작업은 SAL-454다.
 on:
-  pull_request_target:
-    branches: [dev]
-    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 permissions:
   contents: read
