@@ -1345,6 +1345,57 @@ describe("네이버 지도 adapter", () => {
     expect(marker.visible).toBe(true);
     expect(button.attributes.get("aria-pressed")).toBe("true");
   });
+  it("도로가 없는 방향의 정류장은 축소 화면에서도 숨기지 않는다", () => {
+    const preview = loadPreviewRouteMapData(boardMock)!;
+    const { native, adapter } = setup(true, {}, { paths: preview.paths.filter((path) => path.direction === "DOWN") });
+    const markerOf = (sequence: string) =>
+      native.markers.find(
+        (item) => (item.options.icon.content as unknown as ElementStub).dataset.mapStopSequence === sequence,
+      )!;
+    expect(native.map.zoom).toBeLessThan(14);
+
+    expect(markerOf("15").visible).toBe(true);
+    adapter.update(null, "DOWN", []);
+    expect(markerOf("76").visible).toBe(false);
+  });
+  it("정류장 핀의 이름에는 방면을 붙여 같은 이름의 정류장을 구분한다", () => {
+    const { native } = setup();
+    const labelOf = (direction: "UP" | "DOWN") => {
+      const stop = boardMock.stops.find((item) => item.direction === direction)!;
+      const terminal = boardMock.route.directions.find((item) => item.id === direction)!.terminalStopName;
+      const marker = native.markers.find(
+        (item) =>
+          (item.options.icon.content as unknown as ElementStub).dataset.mapStopSequence === String(stop.sequence),
+      )!;
+      return {
+        actual: (marker.options.icon.content as unknown as ElementStub).getAttribute("aria-label"),
+        expected: `${stop.name} ${terminal} 방면 정류장 지도에서 선택`,
+      };
+    };
+
+    expect(labelOf("UP").actual).toBe(labelOf("UP").expected);
+    expect(labelOf("DOWN").actual).toBe(labelOf("DOWN").expected);
+  });
+  it("차량의 좌석 이름표는 줌 14보다 작으면 숨기고 14부터 보인다", () => {
+    const { native, adapter } = setup();
+    const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
+    const zoomChanged = native.events.find((event) => event.name === "zoom_changed")!.listener;
+    native.map.zoom = 13.9;
+    adapter.update(null, "UP", [view]);
+    const bus = native.markers.find(
+      (item) => (item.options.icon.content as unknown as ElementStub).className === "bus",
+    )!;
+    const [count] = (bus.options.icon.content as unknown as ElementStub).children;
+    expect(count!.hidden).toBe(true);
+
+    native.map.zoom = 14;
+    zoomChanged();
+    expect(count!.hidden).toBe(false);
+
+    native.map.zoom = 13.9;
+    zoomChanged();
+    expect(count!.hidden).toBe(true);
+  });
   it("목록과 같은 진행률로 핀을 옮기고 잔여석 0과 모름을 구분한다", () => {
     const { native, data, adapter } = setup();
     const view = liveVehicleViewsFor(routeWatchMock, routeWatchMock.vehicles, "UP")[0]!;
