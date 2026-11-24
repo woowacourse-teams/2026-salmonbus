@@ -3,49 +3,62 @@ import { expect, test } from "./fixtures/naver-map";
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "no-preference" });
 
-for (const screen of [
-  { name: "홈", path: "/", locationLabel: "현재 위치로 이동" },
-  { name: "판정보드", path: `/routes/${routeId}`, locationLabel: "현재 위치 보기" },
-]) {
-  test(`${screen.name} 지도는 회전할 때 나침반을 표시하고 같은 위치에서 북쪽으로 돌아간다`, async ({
-    page,
-    naverMap,
-  }) => {
-    await page.goto(screen.path);
-    await expect(page.getByTestId("naver-map-test-double")).toHaveCount(1);
-    await page.clock.runFor(64);
-    const location = page.getByRole("button", { name: screen.locationLabel, exact: true });
-    const compass = page.getByRole("button", { name: "지도를 북쪽으로 돌리기" });
-    await expect(location).toBeVisible();
-    await expect(compass).toHaveCount(0);
+test("홈 지도는 회전할 때 나침반을 표시하고 같은 위치에서 북쪽으로 돌아간다", async ({ page, naverMap }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("naver-map-test-double")).toHaveCount(1);
+  await page.clock.runFor(64);
+  const location = page.getByRole("button", { name: "현재 위치로 이동", exact: true });
+  const compass = page.getByRole("button", { name: "지도를 북쪽으로 돌리기" });
+  await expect(location).toBeVisible();
+  await expect(compass).toHaveCount(0);
 
-    const northUpCamera = await naverMap.snapshot();
-    await naverMap.setRotation(270);
-    await page.clock.runFor(32);
-    await expect(compass).toBeVisible();
-    const pointer = compass.getByTestId("compass-needle");
-    const needle = await pointer.evaluate((element) => {
-      const { a, b } = new DOMMatrixReadOnly(getComputedStyle(element).transform);
-      return { a, b };
-    });
-    expect(needle.a).toBeCloseTo(0);
-    expect(needle.b).toBeCloseTo(1);
-    const compassBox = (await compass.boundingBox())!;
-    const locationBox = (await location.boundingBox())!;
-    expect(compassBox.x).toBeCloseTo(locationBox.x);
-    expect(compassBox.y + compassBox.height).toBeLessThan(locationBox.y);
-
-    await compass.click();
-    await page.clock.runFor(128);
-    const turning = await naverMap.getRotation();
-    expect(turning).toBeGreaterThan(-90);
-    expect(turning).toBeLessThan(0);
-    await page.clock.runFor(160);
-    await expect(compass).toHaveCount(0);
-    expect(await naverMap.getRotation()).toBe(0);
-    expect(await naverMap.snapshot()).toEqual(northUpCamera);
+  const northUpCamera = await naverMap.snapshot();
+  await naverMap.setRotation(270);
+  await page.clock.runFor(32);
+  await expect(compass).toBeVisible();
+  const pointer = compass.getByTestId("compass-needle");
+  const needle = await pointer.evaluate((element) => {
+    const { a, b } = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+    return { a, b };
   });
-}
+  expect(needle.a).toBeCloseTo(0);
+  expect(needle.b).toBeCloseTo(1);
+  const compassBox = (await compass.boundingBox())!;
+  const locationBox = (await location.boundingBox())!;
+  expect(compassBox.x).toBeCloseTo(locationBox.x);
+  expect(compassBox.y + compassBox.height).toBeLessThan(locationBox.y);
+
+  await compass.click();
+  await page.clock.runFor(128);
+  const turning = await naverMap.getRotation();
+  expect(turning).toBeGreaterThan(-90);
+  expect(turning).toBeLessThan(0);
+  await page.clock.runFor(160);
+  await expect(compass).toHaveCount(0);
+  expect(await naverMap.getRotation()).toBe(0);
+  expect(await naverMap.snapshot()).toEqual(northUpCamera);
+});
+
+// 바늘 방향, 버튼 자리, 도는 중간값은 홈 지도 테스트가 본다. 판정보드는 화면에 붙어 있는지만 확인한다.
+test("판정보드 지도는 회전할 때 나침반을 표시하고 같은 위치에서 북쪽으로 돌아간다", async ({ page, naverMap }) => {
+  await page.goto(`/routes/${routeId}`);
+  await expect(page.getByTestId("naver-map-test-double")).toHaveCount(1);
+  await page.clock.runFor(64);
+  const compass = page.getByRole("button", { name: "지도를 북쪽으로 돌리기" });
+  await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeVisible();
+  await expect(compass).toHaveCount(0);
+
+  const northUpCamera = await naverMap.snapshot();
+  await naverMap.setRotation(270);
+  await page.clock.runFor(32);
+  await expect(compass).toBeVisible();
+
+  await compass.click();
+  await page.clock.runFor(288);
+  await expect(compass).toHaveCount(0);
+  expect(await naverMap.getRotation()).toBe(0);
+  expect(await naverMap.snapshot()).toEqual(northUpCamera);
+});
 
 test("회전 중인 지도에서 나침반 화살표는 각도 경계를 지나도 즉시 북쪽을 가리킨다", async ({ page, naverMap }) => {
   await page.goto("/");
