@@ -22,6 +22,9 @@ export function GroupNameForm({ group, onRenamed, onCancel }: GroupNameFormProps
   const unchanged = name.trim() === group.name;
   useEffect(() => {
     field.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (error !== null) field.current?.focus();
   }, [error]);
   async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();

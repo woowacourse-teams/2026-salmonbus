@@ -580,17 +580,19 @@ test("순서 일부가 저장된 뒤 실패하면 저장된 부분을 유지하�
   expect(favorites.groups[1]!.favorites.map((favorite) => favorite.stopId)).toEqual([second!.stopId, first!.stopId]);
 });
 
-for (const retiredPath of [
-  "/favorites/groups",
-  `/favorites/groups/${defaultGroupId}`,
-  `/mypage/groups/${defaultGroupId}`,
-]) {
-  test(`없어진 그룹 관리 주소 ${retiredPath}로 들어오면 즐겨찾기 탭을 연다`, async ({ page }) => {
-    await page.goto(retiredPath);
-    await expect(page).toHaveURL("/favorites");
-    await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toBeVisible();
-  });
-}
+test("없어진 그룹 관리 주소로 들어오면 즐겨찾기 탭을 연다", async ({ page }) => {
+  for (const retiredPath of [
+    "/favorites/groups",
+    `/favorites/groups/${defaultGroupId}`,
+    `/mypage/groups/${defaultGroupId}`,
+  ]) {
+    await test.step(retiredPath, async () => {
+      await page.goto(retiredPath);
+      await expect(page).toHaveURL("/favorites");
+      await expect(page.getByRole("tab", { name: "즐겨찾기", exact: true })).toBeVisible();
+    });
+  }
+});
 
 test("갱신 실패 중 도착 예정 시간이 지나면 시간을 감추고 좌석 예보와 즐겨찾기를 유지한다", async ({
   page,
