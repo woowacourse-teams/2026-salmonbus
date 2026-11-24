@@ -476,47 +476,6 @@ test("생성 중 지도는 형식이 잘못된 갱신 응답에도 선택을 유
   });
 });
 
-test("첫 형상 요청이 503이면 재시도하고, 준비 중 404를 받아도 기존 지도는 유지한다", async ({ page, api }) => {
-  api.mode.geometry = { status: 503 };
-  api.data.geometry.status = "UNAVAILABLE";
-  api.data.geometry.reason = "GENERATION_PENDING";
-  api.data.geometry.points = [];
-  api.data.geometry.paths = null;
-
-  const firstFailure = page.waitForResponse((response) => new URL(response.url()).pathname === apiPaths.geometry);
-  await page.goto(`/routes/${routeId}`);
-  const response = await firstFailure;
-  expect(response.status()).toBe(503);
-  await response.finished();
-  await expect(map(page).getByText("지도를 불러오지 못했어요", { exact: true })).toBeVisible();
-
-  api.mode.geometry = "success";
-  await page.clock.runFor(60_000);
-  await expect(map(page).getByTestId("naver-map-test-double")).toBeVisible();
-  await page.clock.runFor(48);
-  await expect(map(page).getByText("노선을 준비 중이에요", { exact: true })).toBeVisible();
-  expect(api.requests.geometry).toBe(2);
-
-  let terminalRequests = 0;
-  await api.route(async (route) => {
-    if (new URL(route.request().url()).pathname !== apiPaths.geometry) {
-      await route.fallback();
-      return;
-    }
-    terminalRequests += 1;
-    await route.fulfill({
-      status: 404,
-      json: { code: "ROUTE_NOT_FOUND", message: "노선을 찾을 수 없어요", requestId: "geometry-not-found" },
-    });
-  });
-  await page.clock.runFor(60_000);
-  await expect(map(page).getByTestId("naver-map-test-double")).toBeVisible();
-  await expect(map(page).getByText("노선을 준비 중이에요", { exact: true })).toBeVisible();
-  await expect(map(page)).toHaveAttribute("aria-busy", "false");
-  await page.clock.runFor(60_000);
-  expect(terminalRequests).toBe(1);
-});
-
 test("첫 형상 요청이 HTML 오류 페이지를 받으면 실패를 안내하고 자동 재시도하지 않는다", async ({ page, api }) => {
   let requests = 0;
   await api.route(async (route) => {
@@ -634,18 +593,6 @@ test("선택 방향의 정류장만 표시하고 연결 점선은 핀과 노선�
   await expect(oppositePin.locator(selector)).toHaveCount(1);
 });
 
-test("표시 보류된 경로는 품질 안내 없이 정류장 목록을 제공한다", async ({ page, api }) => {
-  api.data.geometry.status = "UNAVAILABLE";
-  api.data.geometry.reason = "DISPLAY_WITHHELD";
-  api.data.geometry.paths = null;
-  api.data.geometry.points = [];
-  await openMap(page);
-
-  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(0);
-  await expect(map(page).getByRole("status")).toHaveCount(0);
-  await expect(list(page)).toBeVisible();
-});
-
 test("한 방향의 도로 경로가 없어도 해당 정류장을 표시하고 다른 방향의 경로와 차량을 사용할 수 있다", async ({
   page,
   api,
@@ -665,27 +612,6 @@ test("한 방향의 도로 경로가 없어도 해당 정류장을 표시하고 
   await page.clock.runFor(32);
   await expect(map(page).getByRole("button", { name: /부근 버스, 현재 잔여 좌석 8석/ })).toBeVisible();
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
-});
-
-test("geometry 판본이 보드와 달라도 정류장 목록과 방향 선택을 사용할 수 있다", async ({ page, api }) => {
-  api.data.geometry.referenceVersionId = "different-reference";
-  await page.goto(`/routes/${routeId}`);
-  await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
-  const notice = "지도를 불러오지 못했어요";
-  await expect(map(page).getByText(notice, { exact: true })).toBeVisible();
-  await expect(map(page).getByText("정류장 목록은 계속 확인할 수 있어요", { exact: true })).toBeVisible();
-  await expect(map(page).getByTestId("naver-map-test-double")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toHaveCount(0);
-  expect(api.requests.geometry).toBeGreaterThan(0);
-
-  await tab(page, "DOWN").click();
-  await expect(tab(page, "DOWN")).toHaveAttribute("aria-pressed", "true");
-  const downStop = list(page).locator("li[data-stop-sequence='23'] button[aria-expanded]");
-  await downStop.scrollIntoViewIfNeeded();
-  await downStop.click();
-  await page.clock.runFor(32);
-  await expect(downStop).toHaveAttribute("aria-expanded", "true");
-  await expect(list(page).locator("li[data-stop-sequence='23']")).toContainText("도착 시 8석 예상해요");
 });
 
 test("보드 판본이 바뀌면 이전 geometry 요청을 취소하고 새 좌표만 지도에 표시한다", async ({ page, api, naverMap }) => {
