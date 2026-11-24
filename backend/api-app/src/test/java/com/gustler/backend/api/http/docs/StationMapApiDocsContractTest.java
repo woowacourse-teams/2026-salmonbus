@@ -30,6 +30,7 @@ import tools.jackson.databind.ObjectMapper;
 class StationMapApiDocsContractTest {
     private static final String TILES = "/api/v2/stations/tiles/14/13976/6354";
     private static final String TILES_PATTERN = "/api/v2/stations/tiles/{zoom}/{x}/{y}";
+    private static final String SEARCH_PATTERN = "/api/v2/stations/search";
     private static final String DETAIL_PATTERN = "/api/v2/stations/{stationId}";
 
     @Autowired
@@ -66,7 +67,7 @@ class StationMapApiDocsContractTest {
 
         // then
         assertSoftly(softly -> {
-            for (String path : List.of(TILES_PATTERN, DETAIL_PATTERN)) {
+            for (String path : List.of(TILES_PATTERN, SEARCH_PATTERN, DETAIL_PATTERN)) {
                 softly.assertThat(generated.path("paths").path(path))
                     .as(path)
                     .isEqualTo(contract.path("paths").path(path));

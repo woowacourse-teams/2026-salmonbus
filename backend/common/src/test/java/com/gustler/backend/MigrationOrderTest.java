@@ -43,7 +43,7 @@ class MigrationOrderTest {
      * 해당 파일이 실제로 마지막 번호인지는 아래에서 별도로 검증한다.
      *
      */
-    private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS = List.of("pin_route_display_predecessor");
+    private static final List<String> MIGRATIONS_THIS_BRANCH_ADDS = List.of("bus_station_name_key");
 
     private static final String MIGRATION_LOCATION = "db/migration";
     private static final String STAGED_SCHEMA = "staged_deploy";

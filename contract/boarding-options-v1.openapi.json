@@ -503,6 +503,7 @@
               "ROUTE_NOT_FOUND",
               "STATION_NOT_FOUND",
               "INVALID_STATION_TILE",
+              "INVALID_STATION_SEARCH",
               "REFERENCE_VERSION_CONFLICT",
               "STOP_VISIT_AMBIGUOUS",
               "UNSUPPORTED_MODE",
