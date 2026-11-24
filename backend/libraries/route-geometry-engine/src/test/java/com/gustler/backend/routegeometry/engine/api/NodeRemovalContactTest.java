@@ -120,10 +120,41 @@ class NodeRemovalContactTest {
         assertThat(result.down().points()).doesNotContain(p(0,10));
         assertThat(RouteDisplayTopology.noNewContacts(g.paths(),result)).isTrue();
     }
+
+    @Test
+    void removesInteriorSharedNodeOnBothLegsWhenNoPreviousDisplayExists() {
+        var node = p(0, 10);
+        var turn = p(150, 0);
+        var points = List.of(p(-100, 0), node, p(100, 0), turn, turn,
+                p(100, -10), node, p(-100, -10));
+        var stops = List.of(new Stop("A", 1, "A", "UP", true, points.getFirst()),
+                new Stop("B", 2, "B", "UP", true, p(146, 6)),
+                new Stop("C", 3, "C", "DOWN", true, points.getLast()));
+        var roles = new ArrayList<RouteShapeEvidence.TypedPoint>();
+        for (int i = 0; i < points.size(); i++) {
+            var point = points.get(i);
+            int type = point.equals(node) ? 2 : i == 2 || i == 5 ? 3 : 1;
+            roles.add(new RouteShapeEvidence.TypedPoint(new RouteDisplayInput.Point(point.x(), point.y()),
+                    type, i < 4 ? "UP" : "DOWN", true));
+        }
+        var evidence = new RouteShapeEvidence("GBIS_API",
+                List.of(new RouteShapeEvidence.Source("GBIS_WEB", "AVAILABLE", "b".repeat(64))), roles);
+        var route = new RouteGeometry("123456789", 1, "round trip", "A", "B", 2, stops,
+                new Shape(new UUID(0, 1), Instant.EPOCH, points, evidence, "a".repeat(64)));
+
+        var result = AutomaticRouteDisplay.build(route, RouteDisplayGeneration.input(route).digest());
+
+        assertThat(result.paths().up().points()).doesNotContain(node);
+        assertThat(result.paths().down().points()).doesNotContain(node);
+        assertThat(result.paths().up().points().getLast()).isEqualTo(turn);
+        assertThat(result.paths().down().points().getFirst()).isEqualTo(turn);
+        assertThat(RouteStopIntervals.evaluate(stops, result.paths(), result.connections()).usable()).isTrue();
+    }
+
     @Test void changedAlgorithmCannotReuseTheOldGenerationKey() {
         var g=reviewCase(false);String digest=RouteDisplayGeneration.input(g).digest();
         assertThat(RouteDisplayGeneration.key(digest,"evidence",AutomaticRouteDisplay.REVISION))
-                .isNotEqualTo(RouteDisplayGeneration.key(digest,"evidence","automatic-quality-v6"));
+                .isNotEqualTo(RouteDisplayGeneration.key(digest,"evidence","automatic-quality-v12"));
         assertThat(RouteDisplayGeneration.SOURCE_REVISION).startsWith(AutomaticRouteDisplay.REVISION+"/");
     }
 }

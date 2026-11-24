@@ -11,7 +11,7 @@ import java.util.*;
 
 /** 자동 후보는 최종 방문·끝점·교차 검사를 거친다. 요청에서 외부 도로 조회나 임의의 핀 이동을 하지 않는다. */
 public final class AutomaticRouteDisplay {
-    public static final String REVISION = "automatic-quality-v12";
+    public static final String REVISION = "automatic-quality-v14";
     public static final String PREVIOUS_REVISION = "automatic-quality-v9";
 
     private AutomaticRouteDisplay() {}
@@ -40,30 +40,45 @@ public final class AutomaticRouteDisplay {
 
     public static BuildDetails buildDetailed(RouteGeometry geometry, String inputDigest, RouteDisplayGeometry prior) {
         var shared = SourceStopOccurrenceWitness.sharedTurn(geometry);
-        if (shared != null) {
-            var classification = EvidenceRoutePaths.classify(shared);
-            if (classification.usesVisibleOrder() || classification.unmatchedPoints() > 0) {
-                return buildOnVerifiedSource(shared, inputDigest);
-            }
+        if (shared == null) return buildPrepared(projected(geometry), inputDigest);
+
+        var classification = EvidenceRoutePaths.classify(shared);
+        boolean fullOrder = !classification.usesVisibleOrder() && classification.unmatchedPoints() == 0;
+        if (fullOrder) {
             var retained = PublishedTurnBoundary.repartition(shared, inputDigest, prior, PREVIOUS_REVISION);
             if (retained != null) {
+                var junctions = SharedJunctions.find(shared, classification, retained.paths());
+                if (!junctions.isEmpty()) {
+                    var rebuilt = buildOnVerifiedTurn(shared, inputDigest, classification, fullOrder);
+                    var next = rebuilt.geometry().paths();
+                    if (usableBaseline(rebuilt.geometry()) && junctions.stream().anyMatch(j -> j.removedFrom(next))
+                            && RouteDisplayTopology.noNewCrossings(retained.paths(), next)
+                            && RouteDisplayTopology.noNewRendererCrossings(retained.paths(), next)
+                            && RouteDisplayTopology.noNewContacts(retained.paths(), next)
+                            && RouteDisplayTopology.noNewSpike(retained.paths(), next)) return rebuilt;
+                }
                 return new BuildDetails(retained, "PUBLISHED_PATH_VERIFIED_TURN", 0, 0, false, false, null, List.of());
             }
-            var candidate = buildFromSource(shared, inputDigest, true);
-            if (usableBaseline(candidate.geometry())) return candidate;
         }
-        return buildPrepared(projected(geometry), inputDigest);
+        return buildOnVerifiedTurn(shared, inputDigest, classification, fullOrder);
     }
 
-    private static BuildDetails buildOnVerifiedSource(RouteShapeInput.Prepared shared, String digest) {
-        var projected = buildPrepared(projected(shared.source()), digest);
+    private static BuildDetails buildOnVerifiedTurn(RouteShapeInput.Prepared shared, String inputDigest,
+            EvidenceRoutePaths.Classification classification, boolean fullOrder) {
+        var projected = buildPrepared(projected(shared.source()), inputDigest);
         if (usableBaseline(projected.geometry())) {
-            var corrected = PublishedTurnBoundary.repartition(shared, digest, projected.geometry(), REVISION);
-            if (corrected == null) return projected;
-            return new BuildDetails(corrected, "VERIFIED_TURN_ON_PROJECTED_PATH", projected.appliedRolePointRemovals(),
-                    projected.appliedCurves(), projected.displayCorrectionApplied(), projected.terminalTrimOnly(), null, List.of());
+            var corrected = PublishedTurnBoundary.repartition(shared, inputDigest, projected.geometry(), REVISION);
+            if (corrected != null) {
+                return new BuildDetails(corrected, "VERIFIED_TURN_ON_PROJECTED_PATH", projected.appliedRolePointRemovals(),
+                        projected.appliedCurves(), projected.displayCorrectionApplied(), projected.terminalTrimOnly(), null, List.of());
+            }
+            if (!fullOrder) return projected;
         }
-        var candidate = buildFromSource(shared, digest, false);
+        if (!classification.usesVisibleOrder()) {
+            var cleaned = buildPrepared(shared, inputDigest);
+            if (usableBaseline(cleaned.geometry()) && cleaned.appliedRolePointRemovals() > 0) return cleaned;
+        }
+        var candidate = buildFromSource(shared, inputDigest, fullOrder);
         return usableBaseline(candidate.geometry()) ? candidate : projected;
     }
 
