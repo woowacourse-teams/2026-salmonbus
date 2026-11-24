@@ -37,7 +37,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보 단계가 관측 흐름을 한 배치씩 받아 만드는 입력·노선 상태·닫힌 통과를 고정 기대값과 견준다. 기대값은 기준 구현
+ * 예보 단계가 관측 흐름을 한 배치씩 받아 만드는 입력, 노선 상태, 확정된 통과를 고정 기대값과 견준다. 기대값은 기준 구현
  * (dev {@code e98ae3ea}의 입력 조회)이 같은 흐름에 낸 값의 지문이다({@link ForecastInputBaseline}).
  */
 @ForecastingIntegrationTest
@@ -411,7 +411,7 @@ class ForecastEquivalenceTest {
             .isEqualTo("ALIGHTING_AWARE_INCOMPATIBLE_HISTORICAL_ROUTE_VERSION:" + last.routeVersionId());
     }
 
-    /** 이미 확정된 이력을 재생하는 시험에는 현재의 예보 실행 기록도 함께 넣는다. */
+    /** 이미 확정된 이력을 재생하는 시험에는 현재의 예보 실행 기록도 같이 넣는다. */
     private void recordConfirmedRuns(ObservationStreamFixture.Stream stream) {
         jdbc.sql("""
             INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
@@ -471,7 +471,7 @@ class ForecastEquivalenceTest {
             .filter(ForecastBatch::confirmed).reduce((first, second) -> second).orElseThrow();
     }
 
-    /** 예보한 차량이 기대값과 같고 차량마다 기준 관측·정원·운행 시작·입력 벡터의 지문이 같은지 본다. 견준 벡터 수를 돌려준다. */
+    /** 예보한 차량이 기대값과 같고 차량마다 기준 관측, 정원, 운행 시작, 입력 벡터의 지문이 같은지 본다. 견준 벡터 수를 반환한다. */
     private static int assertSameSnapshots(
         final long batchId,
         ForecastInputBaseline.Batch expected,
@@ -516,7 +516,7 @@ class ForecastEquivalenceTest {
                     state.prefix(),
                     state.events()
             ))
-                .as("배치 %d의 보존 관측·누적 상태·통과 사건", batchId).isEqualTo(expected.stateDigest());
+                .as("배치 %d의 보존 관측, 누적 상태, 통과 사건", batchId).isEqualTo(expected.stateDigest());
         });
     }
 

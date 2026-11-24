@@ -28,8 +28,8 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 /**
- * 채점 단계가 {@link ScoringScenario}의 흐름에서 기록해 둔 기대값({@link ScoringScenarioBaseline})과 예측마다 같은 결과를 내는지
- * 확인한다. 기대값은 다시 만들 수 없으므로 흐름을 만드는 순서와 씨앗·배치 수·차량 수를 바꾸지 않는다.
+ * 정산 단계가 {@link ScoringScenario}의 흐름에서 기록해 둔 기대값({@link ScoringScenarioBaseline})과 예측마다 같은 결과를 내는지
+ * 확인한다. 기대값은 다시 만들 수 없으므로 흐름을 만드는 순서와 씨앗, 배치 수, 차량 수를 바꾸지 않는다.
  */
 class ScoringStageBaselineTest {
 
@@ -548,7 +548,7 @@ class ScoringStageBaselineTest {
         };
     }
 
-    /** 그 이름의 기대값과 견준다. 관측 상한이 {@code limit}인 채점 단계에 흐름을 다 흘리고 마감한 결과를 쓴다. */
+    /** 그 이름의 기대값과 견준다. 관측 상한이 {@code limit}인 정산 단계에 흐름을 다 흘리고 마감한 결과를 쓴다. */
     private static ScoringScenarioBaseline.Comparison compare(ScoringScenario scenario, String name, final int limit) {
         ScoringScenarioBaseline baseline = ScoringScenarioBaseline.read("scoring-stage/" + name);
         return baseline.compare(scenario, scenario.scoredToDeadline(limit));
@@ -689,7 +689,7 @@ class ScoringStageBaselineTest {
                 .toList();
         }
 
-        /** 수집 사실을 돌려주지 않는다. 이 저장소로 되감는 흐름에는 수집 구멍이 없고 관측 줄 수가 상한에 못 미친다. */
+        /** 수집 사실을 돌려주지 않는다. 이 저장소로 복구하는 흐름에는 관측 누락이 없고 관측 행 수가 상한에 못 미친다. */
         @Override
         public List<RecordedBatch> findRecordedBatchesBetween(
             final long routeId,
@@ -699,7 +699,7 @@ class ScoringStageBaselineTest {
             return List.of();
         }
 
-        /** 미해결 줄이 저장된 예측을 모르는 저장소를 흉내 낸다. 되감기는 예보 범위의 상한까지 읽는다. */
+        /** 미해결 기록이 저장된 예측을 모르는 저장소를 흉내 낸다. 복구는 예보 범위의 상한까지 읽는다. */
         @Override
         public Optional<Instant> findLastUnresolvedConfirmedAt(
             final long routeId,
@@ -748,7 +748,7 @@ class ScoringStageBaselineTest {
                 .toList();
         }
 
-        /** 정답이 저장된 통과를 모르는 저장소를 흉내 낸다. 되감기는 예보 범위의 상한까지 읽는다. */
+        /** 정답이 저장된 통과를 모르는 저장소를 흉내 낸다. 복구는 예보 범위의 상한까지 읽는다. */
         @Override
         public Optional<Instant> findLastScoredClosedAt(
             final long routeId,

@@ -263,13 +263,13 @@ class CollectionBatchServiceTest {
     }
 
     /**
-     * 호출 예약과 수집 배치는 한 트랜잭션에서 커밋된다. 배치 생성이 실패하면 예약도 함께 롤백되어야 수집 배치 없이 호출 횟수만 증가하는
+     * 호출 예약과 수집 배치는 한 트랜잭션에서 커밋된다. 배치 생성이 실패하면 예약도 같이 롤백되어야 수집 배치 없이 호출 횟수만 증가하는
      * 상태를 막을 수 있다.
      */
     @Test
     void 판을_못_열면_쓴_횟수도_안_오른다() {
         // given
-        // 없는 노선 판본이라 수집 배치를 생성하다 외래 키 제약에 걸린다
+        // 없는 노선 버전이라 수집 배치를 생성하다 외래 키 제약에 걸린다
         CollectionPlan missingRoutePlan = new CollectionPlan(MISSING_ROUTE_VERSION_ID, SCHEDULED_AT, ATTEMPT_KEY);
 
         // when
@@ -835,7 +835,7 @@ class CollectionBatchServiceTest {
             ).update();
     }
 
-    /** 입력 확인 시각이 적힌 배치를 만든다. 예보 실행 기록이 생기기 전에 처리된 배치가 이 열에 착수 시각을 갖고 있다. */
+    /** 입력 확인 시각이 기록된 배치를 만든다. 예보 실행 기록이 생기기 전에 처리된 배치가 이 열에 처리 시작 시각을 갖고 있다. */
     /** 배치 예약 시각의 한국 날짜에서 {@code daysLater}일 뒤 날짜로 예보 실행 기록을 넣는다. */
     private void insertForecastRun(final long batchId, final int daysLater) {
         final long routeId = jdbcClient.sql("SELECT route_id FROM route_version WHERE id=?").param(routeVersionId)

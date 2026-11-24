@@ -4,8 +4,8 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * 원본 판본은 receivedAt에 수신 시각을, 확인 판본은 입력 확인 시각을 보존한다.
- * 확인 판본의 물리적 수신 시각과 노선 버전/방향을 별도로 보존하며 routeVersionId=0은 원본 판본이다.
+ * 원본 버전은 receivedAt에 수신 시각을, 확정 입력 프로필은 입력 확인 시각을 보존한다.
+ * 확정 입력 프로필의 물리적 수신 시각과 노선 버전/방향을 별도로 보존하며 routeVersionId=0은 원본 버전이다.
  */
 public record AlightingAwareObservation(
     long observationId,

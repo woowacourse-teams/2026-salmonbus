@@ -13,10 +13,11 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 하나의 관측 시점의 관측·누적 상태·고정 통계와 차량 정원을 보관한다.
- * 과거 상태를 생략한 단순 시간 창은 받을 수 없으며, 원본 float32 변환 순서를 유지한다.
- * 목표와 무관한 차량 계산은 처음 필요할 때 한 번만 하고, 차량과도 무관한 계산은 {@link AlightingAwareBatchContext}와 공유한다.
- * 내부 메모는 동기화하지 않으므로 한 스레드에서만 쓴다.
+ * 차량 관측 시점의 이력, 누적 상태, 고정 통계와 차량 정원을 보관한다.
+ * 과거 누적 상태 없이 최근 관측만 전달할 수는 없다. 원본의 float32 변환 순서를 유지한다.
+ * 목표 정류장과 무관한 차량 계산은 처음 필요할 때 한 번만 수행하고,
+ * 차량과 무관한 계산은 {@link AlightingAwareBatchContext}에서 공유한다.
+ * 내부 캐시는 동기화하지 않으므로 한 스레드에서만 사용한다.
  */
 public final class AlightingAwareFeatureSnapshot {
 
@@ -541,7 +542,7 @@ public final class AlightingAwareFeatureSnapshot {
         features[49] = features[31] * evening;
     }
 
-    /** 배열 위치는 학습 계약이므로 수식·float 나눗셈의 순서를 바꾸지 않는다. */
+    /** 배열 위치는 학습 계약이므로 수식, float 나눗셈의 순서를 바꾸지 않는다. */
     private double[] extraFeatures(
         final int target,
         ZonedDateTime time,

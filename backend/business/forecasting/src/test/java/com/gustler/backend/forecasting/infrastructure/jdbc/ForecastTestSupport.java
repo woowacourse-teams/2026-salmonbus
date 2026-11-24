@@ -20,7 +20,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 
-/** 예보 경로의 통합 시험이 함께 쓰는 모델·시계 도우미다. */
+/** 예보 경로의 통합 시험이 같이 쓰는 모델, 시계 도우미다. */
 final class ForecastTestSupport {
 
     private ForecastTestSupport() {

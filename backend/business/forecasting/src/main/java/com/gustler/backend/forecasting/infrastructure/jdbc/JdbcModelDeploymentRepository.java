@@ -47,7 +47,7 @@ public class JdbcModelDeploymentRepository implements ModelDeploymentRepository 
      * 바꾸는 것만으로는 부족하다.</b> PostgreSQL은 제약을 위반한 transaction 전체를 사용할 수 없게 만들어
      * 뒤이은 commit도 실패한다. 기동 적재에서도 이 문제가 생겨 앱이 시작되지 않는다.
      *
-     * <p>따라서 예외가 발생하기 전에 대기시킨다. 읽기는 차단하지 않는다. 예보가 활성 배포를 읽는 조회는
+     * <p>따라서 예외가 발생하기 전에 대기하게 한다. 읽기는 차단하지 않는다. 예보가 활성 배포를 읽는 조회는
      * 일반 SELECT이므로 이 잠금과 충돌하지 않는다.
      *
      * <p>이 문장은 transaction 안에서만 실행할 수 있다. 밖에서 호출하면 PostgreSQL이 거절한다.

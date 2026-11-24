@@ -34,9 +34,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보가 착수 시각과 이력의 순서를 지키는지를 실제 DB로 본다.
- * 착수 시각은 메모리의 노선 상태와 다시 뜬 뒤 DB에서 되감은 상태가 같은 값을 써야 하고, 한 노선의 이력에는 배치가 수신 순서대로만
- * 들어가야 한다. 순서는 노선 판본의 처리하지 않은 배치를 수신 순서로 읽어 차례로 처리하는 것으로 지킨다.
+ * 예보가 처리 시작 시각과 이력의 순서를 지키는지를 실제 DB로 본다.
+ * 처리 시작 시각은 메모리의 노선 상태와 재시작한 뒤 DB에서 복구한 상태가 같은 값을 써야 하고, 한 노선의 이력에는 배치가 수신 순서대로만
+ * 들어가야 한다. 순서는 노선 버전의 처리하지 않은 배치를 수신 순서로 읽어 차례로 처리하는 것으로 지킨다.
  */
 @ForecastingIntegrationTest
 @Transactional
@@ -538,7 +538,7 @@ class ForecastOrderTest {
             .findFirst();
     }
 
-    /** 이력에 들어가는 실행 줄을 착수 순서로 놓았을 때 수신 시각이 앞 줄보다 이른 줄의 수다. */
+    /** 이력에 들어가는 실행 기록을 착수 순서로 놓았을 때 수신 시각이 앞 줄보다 이른 줄의 수다. */
     private long inversions(ForecastHarness harness) {
         return jdbc.sql("""
             SELECT count(*) FROM (

@@ -8,14 +8,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 다시 뜰 때 노선 상태를 최근 확정 배치로 되감아 만든다. 예보를 만들지 않고 상태만 전진시킨다.
- * 창의 길이는 생성자가 받으며 worker는 {@link #DEFAULT_WINDOW}를 쓴다. 창 안 어느 배치라도 저장 줄 수와 실제 줄 수가 다르면
- * 그 노선의 되감기를 실패로 돌려 예보하지 않게 한다. 창 안에서 운행 시작이 보이지 않은 차량의 처리는 {@link RouteForecastState}를 따른다.
+ * 재시작할 때 노선 상태를 최근 확정 배치로 복구해 만든다. 예보를 만들지 않고 상태만 갱신한다.
+ * 조회 시간 범위는 생성자가 받으며 worker는 {@link #DEFAULT_WINDOW}를 쓴다. 조회 범위 안 어느 배치라도 저장 행 수와 실제 행 수가 다르면
+ * 그 노선의 복구를 실패로 돌려 예보하지 않게 한다. 조회 범위 안에서 운행 시작이 보이지 않은 차량의 처리는 {@link RouteForecastState}를 따른다.
  *
  * <p>worker는 최근 6시간을 한 번만 복구한다. 범위 안에서 운행 시작을 찾지 못한 차량은 새 운행을 확인할 때까지 제외한다.
  *
- * <p>닫은 통과가 저장되지 않은 배치({@link ReplaySource.Read#unforecastRuns})는 되감으면서 그 배치가 닫은 통과를 함께 판정해
- * 돌려준다. 입력 부족으로 끝난 예보 실행의 배치다. 저장과 전달은 부르는 쪽이 한다.
+ * <p>확정한 통과가 저장되지 않은 배치({@link ReplaySource.Read#unforecastRuns})는 복구하면서 그 배치가 확정한 통과를 같이 판정해
+ * 반환한다. 입력 부족으로 끝난 예보 실행의 배치다. 저장과 전달은 호출자가 한다.
  */
 public final class RouteStateReplayer {
 
@@ -31,14 +31,14 @@ public final class RouteStateReplayer {
      */
     public RouteStateReplayer(ReplaySource source, ForecastStage stage, Duration window) {
         if (window.isNegative() || window.isZero()) {
-            throw new IllegalArgumentException("되감기 창은 양수여야 한다");
+            throw new IllegalArgumentException("복구할 시간 범위는 0보다 커야 한다");
         }
         this.source = source;
         this.stage = stage;
         this.window = window;
     }
 
-    /** (착수 시각, 배치 번호)가 ({@code through}, {@code throughBatchId}) 이하인 확정 배치까지 반영한 상태를 만든다. */
+    /** (처리 시작 시각, 배치 번호)가 ({@code through}, {@code throughBatchId}) 이하인 확정 배치까지 반영한 상태를 만든다. */
     public Result replay(
         AlightingAwareRouteStatistics statistics,
         Instant through,
@@ -95,9 +95,9 @@ public final class RouteStateReplayer {
     }
 
     /**
-     * 되감은 상태와 반영한 배치 수, 또는 실패 사유다. 실패면 상태가 없다.
+     * 복구한 상태와 반영한 배치 수, 또는 실패 사유다. 실패면 상태가 없다.
      *
-     * @param recoveredPasses 닫은 통과가 저장되지 않은 배치가 닫은 통과. 닫힌 순서다. 이미 저장된 것이 섞여 있을 수 있다
+     * @param recoveredPasses 확정한 통과가 저장되지 않은 배치가 확정한 통과. 닫힌 순서다. 이미 저장된 것이 섞여 있을 수 있다
      */
     public record Result(
         RouteForecastState state,
@@ -108,7 +108,7 @@ public final class RouteStateReplayer {
 
         public Result {
             if ((state == null) == (failureReason == null)) {
-                throw new IllegalArgumentException("되감기 결과는 상태와 실패 사유 중 하나만 가진다");
+                throw new IllegalArgumentException("복구 결과에는 노선 상태와 실패 사유 중 하나만 있어야 한다");
             }
             recoveredPasses = List.copyOf(recoveredPasses);
         }

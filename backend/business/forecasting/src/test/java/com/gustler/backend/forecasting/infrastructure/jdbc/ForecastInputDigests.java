@@ -55,7 +55,7 @@ final class ForecastInputDigests {
         }
     }
 
-    /** 순위, 보존 관측(순서대로), 차량별 누적 상태(차량 이름순), 통과 사건(순서대로)을 담는다. */
+    /** 순위, 보존 관측(순서대로), 차량별 누적 상태(차량 이름순), 통과 이벤트(순서대로)을 담는다. */
     String state(
         final long rank,
         List<AlightingAwareObservation> observations,
@@ -78,7 +78,7 @@ final class ForecastInputDigests {
         return Baseline.hex(digest);
     }
 
-    /** 통과 사건의 모음을 순서와 무관하게 담는다. */
+    /** 통과 이벤트의 모음을 순서와 무관하게 담는다. */
     String passes(Collection<AlightingAwarePassEvent> events) {
         MessageDigest digest = Baseline.sha256();
         events.stream()

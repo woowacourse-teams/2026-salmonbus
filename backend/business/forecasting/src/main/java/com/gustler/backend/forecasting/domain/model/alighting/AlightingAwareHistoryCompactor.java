@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
-/** 누적 상태와 시간 창·미완료 통과 구간을 함께 보존해 이전 입력을 정확히 복구한다. */
+/** 오래된 관측을 누적 상태로 압축하되 최근 관측과 미완료 통과 구간은 남겨 예보 입력을 복구한다. */
 public final class AlightingAwareHistoryCompactor {
 
     private static final Duration HISTORY_WINDOW = Duration.ofMinutes(90);
@@ -125,7 +125,7 @@ public final class AlightingAwareHistoryCompactor {
         return tripIds;
     }
 
-    /** 창 안의 통과를 먼저 등록하고, 복구에 필요한 직전 통과가 같은 정류장을 가리키면 그 값으로 덮어쓴다. */
+    /** 조회 범위 안의 통과를 먼저 등록하고, 복구에 필요한 직전 통과가 같은 정류장을 가리키면 그 값으로 덮어쓴다. */
     private static List<AlightingAwarePassEvent> passesForReplay(
         List<AlightingAwarePassEvent> passes,
         Set<Long> replayTripIds,

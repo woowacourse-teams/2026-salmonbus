@@ -11,15 +11,15 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * 노선 하나(같은 표시 이름의 호환 판본 전체)의 예보 이력 상태다. 불변이며, 전진은 {@link ForecastStage}가 새 객체로 돌려준다.
+ * 노선 하나(같은 표시 이름의 호환 버전 전체)의 예보 이력 상태다. 불변이며, 상태 갱신은 {@link ForecastStage}가 새 객체로 반환한다.
  *
- * <p>차량별 누적 상태·보존 창의 관측·보존 창의 통과 사건·마지막으로 반영한 배치를 든다.
+ * <p>차량별 누적 상태, 보관 범위의 관측, 보관 범위의 통과 이벤트, 마지막으로 반영한 배치를 든다.
  * 여기에 차량별 추적({@link VehicleTrack})을 더 든다. 추적은 차량의 마지막 관측, 지금 연결의 시작 관측 번호,
  * 연결 시작과 운행 시작을 실제로 보았는지를 담는다. 연결의 시작은 {@code AlightingAwareHistoryCompactor}와 같은
  * {@link AlightingAwareObservation#startsConfirmedChainAfter} 판정으로 정한다.
  *
- * <p>검증된 출발 지점부터 이어 온 상태는 모든 차량의 운행 시작을 안다. 최근 관측만 되감아 만든 상태는 창 시작 시각을 들고,
- * 창 안에서 운행 시작이 보이지 않은 차량과, 창 밖 관측이 아직 입력에 영향을 줄 수 있는 동안의 배치를 예보에서 뺀다.
+ * <p>검증된 출발 지점부터 이어 온 상태는 모든 차량의 운행 시작을 안다. 최근 관측만 복구해 만든 상태는 조회 시작 시각을 들고,
+ * 조회 범위 안에서 운행 시작이 보이지 않은 차량과, 조회 범위 밖 관측이 아직 입력에 영향을 행 수 있는 동안의 배치를 예보에서 뺀다.
  * 판정 기준은 {@link #tripStartKnown(String)}과 {@link #historyCompleteAt(Instant)}에 적었다.
  */
 public final class RouteForecastState {
@@ -73,7 +73,7 @@ public final class RouteForecastState {
     }
 
     /**
-     * {@code from}부터 확정된 배치만 되감아 만들 빈 상태다. {@code from} 앞의 관측은 없는 것으로 보고,
+     * {@code from}부터 확정된 배치만 복구해 만들 빈 상태다. {@code from} 앞의 관측은 없는 것으로 보고,
      * 그 때문에 입력이 달라질 수 있는 차량과 배치는 예보에서 뺀다.
      */
     public static RouteForecastState replayingFrom(String route, Instant from) {
@@ -99,22 +99,22 @@ public final class RouteForecastState {
         return route;
     }
 
-    /** 되감기 창의 시작 시각이다. 검증된 출발 지점에서 이어 온 상태는 비어 있다. */
+    /** 복구 범위의 시작 시각이다. 검증된 출발 지점에서 이어 온 상태는 비어 있다. */
     public Optional<Instant> replayFrom() {
         return Optional.ofNullable(replayFrom);
     }
 
-    /** 보존 창 밖으로 접은 차량별 누적 상태다. */
+    /** 보관 범위보다 오래된 관측을 압축한 차량별 누적 상태다. */
     public Map<String, AlightingAwareVehiclePrefix> prefix() {
         return prefix;
     }
 
-    /** 보존 창의 관측이다. (확정 시각, 배치 번호, 차량 번호) 순서다. */
+    /** 보관 범위의 관측이다. (확정 시각, 배치 번호, 차량 번호) 순서다. */
     public List<AlightingAwareObservation> observations() {
         return observations;
     }
 
-    /** 보존 창의 통과 사건이다. */
+    /** 보관 범위의 통과 이벤트다. */
     public List<AlightingAwarePassEvent> events() {
         return events;
     }
@@ -137,15 +137,15 @@ public final class RouteForecastState {
         return cursor.rank() + 1;
     }
 
-    /** 차량의 지금 운행이 시작된 관측을 이 상태가 보았는지다. 처음 보는 차량은 거짓이다. */
+    /** 차량의 지금 운행이 시작된 관측을 이 상태가 확인했는지 반환한다. 처음 보는 차량은 거짓이다. */
     public boolean tripStartKnown(String vehicleId) {
         return progress.tripStartKnown(vehicleId);
     }
 
     /**
-     * {@code at} 시각의 예보 입력이 창 밖 관측과 무관한지다. 검증된 출발 지점에서 이어 온 상태는 항상 참이다.
-     * 되감은 상태는 창 시작 뒤 90분이 지났고, 창 시작에 걸친 연결이 놓쳤을 수 있는 통과의 영향이 끝났을 때 참이다.
-     * 그 연결이 다음 실정류장에 닿지 않고 끊겼으면 놓친 통과가 닫히지 않으므로 영향이 없는 것으로 본다.
+     * {@code at} 시각의 예보 입력이 조회 범위 밖 관측과 무관한지다. 검증된 출발 지점에서 이어 온 상태는 항상 참이다.
+     * 복구한 상태는 조회 시작 뒤 90분이 지났고, 조회 시작에 걸친 연결이 놓쳤을 수 있는 통과의 영향이 끝났을 때 참이다.
+     * 그 연결이 다음 실정류장에 닿지 않고 끊겼으면 놓친 통과가 확정되지 않으므로 영향이 없는 것으로 본다.
      * 통과 하나는 닫힌 시각부터 90분(양 끝 포함) 동안 정류장 대기 상태와 최근 한 시간 편차로 다른 차량의 입력에 들어간다.
      */
     public boolean historyCompleteAt(Instant at) {
@@ -254,7 +254,7 @@ public final class RouteForecastState {
     }
 
     /**
-     * 창 앞의 마지막 관측은 창 시작보다 이르므로, 창 시작부터 {@code seconds} 이상 지난 첫 관측은
+     * 조회 범위 이전의 마지막 관측은 조회 시작보다 이르므로, 조회 시작부터 {@code seconds} 이상 지난 첫 관측은
      * 앞 관측과의 확정 시각 간격이 {@code seconds}를 넘어 반드시 새 연결(90초)이나 새 운행(30분)을 시작한다.
      */
     private boolean isAtLeastAfterWindowStart(AlightingAwareObservation observation, final long seconds) {
@@ -265,9 +265,9 @@ public final class RouteForecastState {
     }
 
     /**
-     * 창 시작에 걸친 연결은 창 앞에 도착 전 관측이 있던 통과 하나를 놓칠 수 있다.
+     * 조회 시작에 걸친 연결은 조회 범위 이전에 도착 전 관측이 있던 통과 하나를 놓칠 수 있다.
      * 첫 관측이 실정류장 구간 [목표, 다음 실정류장) 안이면 그 목표가 놓칠 수 있는 통과이고, 다음 실정류장에 닿으면 닫힌다.
-     * 확정 판본은 첫 실정류장을 목표로 쓰지 않고, 마지막 실정류장은 다음이 없어 통과가 생기지 않는다.
+     * 확정 버전은 첫 실정류장을 목표로 쓰지 않고, 마지막 실정류장은 다음이 없어 통과가 생기지 않는다.
      */
     private static Integer truncatedPassClosureStop(final int passedStopOrder, List<Integer> realStopOrders) {
         List<Integer> stops = realStopOrders.stream()
@@ -289,7 +289,7 @@ public final class RouteForecastState {
         return current;
     }
 
-    /** 마지막으로 반영한 확정 배치의 번호·순위·확정 시각·수신 시각이다. */
+    /** 마지막으로 반영한 확정 배치의 번호, 순위, 확정 시각, 수신 시각이다. */
     public record Cursor(
         long observationBatchId,
         long rank,
@@ -301,7 +301,7 @@ public final class RouteForecastState {
 
     /**
      * 차량 하나의 추적이다. 마지막 관측과 지금 연결의 시작 관측 번호, 그리고 연결 시작과 운행 시작을 실제로 보았는지를 담는다.
-     * 연결 시작을 보지 못했으면 시작 관측 번호는 창 안 첫 관측이며 실제 시작이 아닐 수 있다.
+     * 연결 시작을 보지 못했으면 시작 관측 번호는 조회 범위 안 첫 관측이며 실제 시작이 아닐 수 있다.
      */
     public record VehicleTrack(
         AlightingAwareObservation last,
@@ -312,7 +312,7 @@ public final class RouteForecastState {
 
     }
 
-    /** 한 배치를 반영한 차량 추적과 되감기 영향 범위다. 상태를 만들기 전 단계의 값이다. */
+    /** 한 배치를 반영한 차량 추적과 복구 영향 범위다. 상태를 만들기 전 단계의 값이다. */
     static final class Progress {
 
         private final Map<String, VehicleTrack> vehicles;
@@ -349,8 +349,8 @@ public final class RouteForecastState {
         }
 
         /**
-         * 창 시작에 걸친 연결이 놓쳤을 수 있는 통과가 {@code at}에도 닫힐 수 있는지다. 그 차량의 마지막 관측 뒤로 연결
-         * 간격이 지났으면 다음 관측은 새 연결을 시작하므로 그 통과는 닫히지 않고, 다른 차량의 입력에도 들어가지 않는다.
+         * 조회 시작에 걸친 연결이 놓쳤을 수 있는 통과가 {@code at}에도 닫힐 수 있는지 확인한다. 그 차량의 마지막 관측 뒤로 연결
+         * 간격이 지났으면 다음 관측은 새 연결을 시작하므로 그 통과는 확정되지 않고, 다른 차량의 입력에도 들어가지 않는다.
          */
         private boolean hasOpenTruncatedPass(Instant at) {
             return truncatedPasses.keySet().stream()

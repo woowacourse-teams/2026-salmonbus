@@ -39,7 +39,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 수집 응답을 저장했을 때 남는 관측 줄, 배치 결과, 정원 기록, 좌석 품질 훅과 전달 훅의 입력이 고정 기대값과 같은지 확인한다
+ * 수집 응답을 저장했을 때 남는 관측 행, 배치 결과, 정원 기록, 좌석 품질 훅과 전달 훅의 입력이 고정 기대값과 같은지 확인한다
  * ({@link ObservationLoadBaseline}).
  *
  * <p>저장은 롤백하는 트랜잭션으로 돌려 DB 에 남기지 않는다. 좌석 품질 훅은 실제 구성의 것을 쓴다.
@@ -400,7 +400,7 @@ class ObservationStorageBaselineTest {
         });
     }
 
-    /** PostgreSQL 은 jsonb 의 시각을 세션 시간대로 적는다. 이 트랜잭션에서만 UTC 로 맞춰 JVM 시간대와 상관없이 같은 글자를 읽는다. */
+    /** PostgreSQL 은 jsonb 의 시각을 세션 시간대로 기록한다. 이 트랜잭션에서만 UTC 로 맞춰 JVM 시간대와 상관없이 같은 글자를 읽는다. */
     private void readTimesInUtc() {
         jdbc.sql("SET LOCAL TIME ZONE 'UTC'").update();
     }
@@ -500,7 +500,7 @@ class ObservationStorageBaselineTest {
                 .toList();
         }
 
-        /** {@link ObservationLoadBaseline}의 줄 형식과 순서로 적는다. */
+        /** {@link ObservationLoadBaseline}의 줄 형식과 순서로 기록한다. */
         List<String> lines() {
             return Stream.of(
                     observations.stream().map(observation -> "observation " + observation),

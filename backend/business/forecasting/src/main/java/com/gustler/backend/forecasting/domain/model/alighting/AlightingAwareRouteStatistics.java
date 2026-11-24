@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** 노선별 정류장·통계·휴일 정보를 보관하며, 없는 통계 값에는 원본이 정한 기본값만 사용한다. */
+/** 노선별 정류장, 통계, 휴일 정보를 보관하며, 없는 통계 값에는 원본이 정한 기본값만 사용한다. */
 public record AlightingAwareRouteStatistics(
     String route,
     List<Stop> stops,

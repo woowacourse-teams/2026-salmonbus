@@ -13,7 +13,7 @@ public record BoardBatchRead(BoardReading reading, RuntimeException failure) {
 
     public BoardBatchRead {
         if (reading != null && failure != null) {
-            throw new IllegalArgumentException("판정보드와 실패를 함께 담을 수 없습니다.");
+            throw new IllegalArgumentException("판정보드와 실패를 같이 담을 수 없다.");
         }
     }
 

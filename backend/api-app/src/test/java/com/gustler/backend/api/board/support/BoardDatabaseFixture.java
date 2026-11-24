@@ -223,7 +223,7 @@ public class BoardDatabaseFixture {
     }
 
     /**
-     * 관측 묶음의 예보 실행 줄을 예측 0건(EMPTY)으로 넣는다. {@link #insertForecast}로 예측을 더하면 PUBLISHED가 된다.
+     * 관측 묶음의 예보 실행 기록을 예측 0건(EMPTY)으로 넣는다. {@link #insertForecast}로 예측을 더하면 PUBLISHED가 된다.
      */
     public void insertPublication(
         final long batchId,
@@ -234,7 +234,7 @@ public class BoardDatabaseFixture {
     }
 
     /**
-     * 관측 묶음의 예보 실행 줄을 예측 없이 넣는다. 날짜 파티션은 묶음 예약 시각의 한국 날짜다.
+     * 관측 묶음의 예보 실행 기록을 예측 없이 넣는다. 날짜 파티션은 묶음 예약 시각의 한국 날짜다.
      */
     public void insertRun(
         final long batchId,
@@ -319,8 +319,8 @@ public class BoardDatabaseFixture {
     }
 
     /**
-     * 관측 한 줄의 목표 정류장 예측 하나를 예보 기록에 더하고 실행 줄을 PUBLISHED로 바꾼다.
-     * 관측 묶음에 그 모델의 실행 줄이 먼저 있어야 한다. 예보 기록은 차량 번호가 있는 관측에만 있다.
+     * 관측 한 행의 목표 정류장 예측 하나를 예보 기록에 더하고 실행 기록을 PUBLISHED로 바꾼다.
+     * 관측 묶음에 그 모델의 실행 기록이 먼저 있어야 한다. 예보 기록은 차량 번호가 있는 관측에만 있다.
      */
     public void insertForecast(
         final long observationId,

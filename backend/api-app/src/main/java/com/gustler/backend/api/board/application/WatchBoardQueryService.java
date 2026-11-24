@@ -33,7 +33,7 @@ public class WatchBoardQueryService {
     private final Map<String, Long> lastMismatchedBatchByRoute = new ConcurrentHashMap<>();
 
     /**
-     * 승차판에 선택된 관측 묶음의 차량을 함께 조회한다. 두 결과의 관측 기준을 맞추고 만료 시각까지 캐시를 제한한다.
+     * 승차판에 선택된 관측 묶음의 차량을 같이 조회한다. 두 결과의 관측 기준을 맞추고 만료 시각까지 캐시를 제한한다.
      */
     public WatchBoardOverview getWatchBoard(
         RouteId routeId

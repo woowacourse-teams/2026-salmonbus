@@ -6,15 +6,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
- * 예보와 채점의 설정.
+ * 예보와 정산의 설정.
  *
- * <p>기본값은 꺼짐이다. 계수 번들이 없어 활성 배포가 하나도 없는 상태에서 켜면
+ * <p>기본값은 꺼짐이다. 모델 번들이 없어 활성 배포가 하나도 없는 상태에서 켜면
  * 아무 값도 내지 않으면서 몇 초마다 빈 질의만 실행한다. 배포 행이 생성된 뒤에 켠다.
  *
- * @param interval 수집 신호를 놓쳤거나 처리 중에 멈춘 배치를 다시 줍는 주기
- * @param staleness 수신한 지 이보다 오래된 배치는 줍지 않는다
- * @param batchLimit 노선 판본의 처리하지 않은 배치를 한 번에 읽는 수의 상한
- * @param lanes 노선별 실행 줄 수. 같은 노선은 항상 같은 줄에서 순서대로 처리한다
+ * @param interval 수집 신호를 놓쳤거나 처리 중에 멈춘 배치를 다시 조회하는 주기
+ * @param staleness 수신한 지 이보다 오래된 배치는 조회하지 않는다
+ * @param batchLimit 노선 버전의 처리하지 않은 배치를 한 번에 읽는 수의 상한
+ * @param lanes 노선별 실행기 수. 같은 노선은 항상 같은 실행기에서 순서대로 처리한다
  */
 @ConfigurationProperties("forecast")
 public record ForecastProperties(
@@ -26,9 +26,9 @@ public record ForecastProperties(
 ) {
 
     /**
-     * 신선도 창의 상한.
+     * 유효 시간 범위의 상한.
      *
-     * <p>큐가 관측 시각 오름차순이라 창을 넓히면 오래된 관측부터 회차를 채운다. 창이 옮겨 넣은
+     * <p>큐가 관측 시각 오름차순이라 조회 범위를 넓히면 오래된 관측부터 회차를 채운다. 창이 옮겨 넣은
      * 관측의 나이를 넘는 순간 한 회차가 그 관측으로 가득 차서 방금 들어온 관측은 한 개도 포함하지 못하고,
      * 옮겨 온 관측에 예보가 붙어 되돌리기까지 막힌다. 운영에 사용할 값은 몇 분 단위라 한 시간이면 넉넉하다.
      */
@@ -43,13 +43,13 @@ public record ForecastProperties(
 
     private static void requirePositive(String name, final int value) {
         if (value <= 0) {
-            throw new IllegalStateException("%s 는 1 이상이어야 한다: %d".formatted(name, value));
+            throw new IllegalStateException("%s는 1 이상이어야 한다: %d".formatted(name, value));
         }
     }
 
     private static void requirePositive(String name, Duration value) {
         if (!isPositive(value)) {
-            throw new IllegalStateException("%s 는 0보다 길어야 한다: %s".formatted(name, value));
+            throw new IllegalStateException("%s는 0보다 길어야 한다: %s".formatted(name, value));
         }
     }
 
@@ -62,7 +62,7 @@ public record ForecastProperties(
 
     private static void requireAtMost(String name, Duration value, Duration limit) {
         if (value.compareTo(limit) > 0) {
-            throw new IllegalStateException("%s 는 %s 이하여야 한다: %s".formatted(name, limit, value));
+            throw new IllegalStateException("%s는 %s 이하여야 한다: %s".formatted(name, limit, value));
         }
     }
 }

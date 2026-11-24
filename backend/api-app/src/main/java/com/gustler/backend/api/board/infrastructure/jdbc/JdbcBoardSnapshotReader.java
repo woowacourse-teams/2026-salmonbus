@@ -23,11 +23,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * 보드 재사용 판단에 필요한 현재 노선·관측·모델·발행 판본을 같은 SQL에서 읽는다.
+ * 보드 재사용 판단에 필요한 현재 노선, 관측, 모델, 발행 버전을 같은 SQL에서 읽는다.
  *
- * <p>예보 실행 줄({@code forecast_run})이 있는 노선은 실행 줄이 있는 최신 관측을, 없는 노선은 최신 정상 관측을 고른다.
- * 두 분기는 UNION ALL로 나누어 준비된 문장의 일반 실행 계획에서도 실행 줄 전체 해시 생성을 피한다.
- * 실행 줄이 있는 관측의 스냅샷은 그 배치의 날짜 파티션을 함께 실어 예보 기록을 파티션 하나에서 읽게 한다.
+ * <p>예보 실행 기록({@code forecast_run})이 있는 노선은 실행 기록이 있는 최신 관측을, 없는 노선은 최신 정상 관측을 고른다.
+ * 두 분기는 UNION ALL로 나누어 준비된 문장의 일반 실행 계획에서도 실행 기록 전체 해시 생성을 피한다.
+ * 실행 기록이 있는 관측의 스냅샷은 그 배치의 날짜 파티션을 같이 실어 예보 기록을 파티션 하나에서 읽게 한다.
  * 호출자의 반복 읽기 트랜잭션에 참여하며 보드 조립과 오래됨 정책은 바꾸지 않는다.
  */
 @Repository
@@ -37,8 +37,8 @@ public class JdbcBoardSnapshotReader {
     private static final ZoneId SOURCE_DATE_ZONE = ZoneId.of("Asia/Seoul");
 
     /**
-     * {@code revision} 열은 판정보드 캐시가 쓰는 판본 표시로, 실행 줄의 착수 시각·예측 수·모델 배포가 바뀌면 달라진다.
-     * 실행 줄이 없는 관측은 세 칸이 모두 {@code -}다.
+     * {@code revision} 열은 판정보드 캐시가 쓰는 버전 표시로, 실행 기록의 처리 시작 시각, 예측 수, 모델 배포가 바뀌면 달라진다.
+     * 실행 기록이 없는 관측은 세 칸이 모두 {@code -}다.
      */
     private static final String SNAPSHOT_SELECT = """
         SELECT /* salmonbus:board.snapshot */ v.id AS version_id, r.source_route_id, r.display_name,
@@ -98,7 +98,7 @@ public class JdbcBoardSnapshotReader {
     private final Clock clock;
 
     /**
-     * 한 노선의 스냅샷을 읽는다. 실행 줄의 수신 시각은 배치의 응답 수신 시각과 같은 값이다.
+     * 한 노선의 스냅샷을 읽는다. 실행 기록의 수신 시각은 배치의 응답 수신 시각과 같은 값이다.
      */
     public Optional<BoardSnapshot> findSnapshot(RouteId routeId) {
         return query(ONE_ROUTE)
@@ -109,7 +109,7 @@ public class JdbcBoardSnapshotReader {
 
     /**
      * 여러 노선의 스냅샷을 {@link #findSnapshot}과 같은 SQL 조건으로 한 번에 읽는다. 스냅샷이 없는 노선은 결과에 없다.
-     * 한 노선에 행이 여럿이면 모두 돌려주고 실패 판정은 호출하는 쪽이 한다.
+     * 한 노선에 행이 여럿이면 모두 돌려주고 실패 판정은 호출자가 한다.
      */
     public List<BoardSnapshot> findSnapshots(Collection<RouteId> routeIds) {
         if (routeIds.isEmpty()) {
@@ -133,8 +133,8 @@ public class JdbcBoardSnapshotReader {
     }
 
     /**
-     * 조회 창 안에서 수신한 배치가 속할 수 있는 가장 이른 날짜 파티션이다. 파티션 날짜는 배치 예약 시각의 한국 날짜이고
-     * 예약에서 수신까지는 수집 한 번의 시간이므로, 창 시작의 한국 날짜 하루 전이면 빠뜨리지 않는다.
+     * 조회 범위 안에서 수신한 배치가 속할 수 있는 가장 이른 날짜 파티션이다. 파티션 날짜는 배치 예약 시각의 한국 날짜이고
+     * 예약에서 수신까지는 수집 한 번의 시간이므로, 조회 시작의 한국 날짜 하루 전이면 빠뜨리지 않는다.
      */
     private static LocalDate earliestSourceDate(OffsetDateTime observedSince) {
         return observedSince.atZoneSameInstant(SOURCE_DATE_ZONE).toLocalDate().minusDays(1);

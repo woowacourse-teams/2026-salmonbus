@@ -10,12 +10,12 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 /**
  * 예보가 처리하지 않은 배치를 읽는다. 예보는 수집의 신호마다 이 조회를 한 번 한다.
  *
- * <p>배치는 (노선 판본, 수신 시각) 인덱스의 조건으로 찾으므로 테이블을 통째로 읽지 않는다. {@code observation_batch}가 일반
+ * <p>배치는 (노선 버전, 수신 시각) 인덱스의 조건으로 찾으므로 테이블을 통째로 읽지 않는다. {@code observation_batch}가 일반
  * 테이블이면 성공한 배치의 부분 인덱스({@code ix_batch_forecast_candidates})를 정렬 순서대로 읽는다. 날짜 파티션 테이블이면
  * 파티션마다 같은 인덱스 조건으로 읽고 그 결과를 모아 수신 순서로 정렬한다. 일반 테이블에는 파티션 열({@code source_date})이 없어
- * 그 열을 조건에 넣지 않기 때문이다. 정렬 대상은 한 노선 판본의 신선도 창 안 배치뿐이다.
+ * 그 열을 조건에 넣지 않기 때문이다. 정렬 대상은 한 노선 버전의 유효 시간 범위 안 배치뿐이다.
  *
- * <p>예보 실행은 기본 키(나눔 날짜, 배치)로 찾는다. 나눔 날짜는 배치 예약 시각의 한국 날짜다.
+ * <p>예보 실행은 기본 키(파티션 기준 날짜, 배치)로 찾는다. 파티션 기준 날짜는 배치 예약 시각의 한국 날짜다.
  */
 public final class JdbcPendingBatches implements PendingBatches {
 

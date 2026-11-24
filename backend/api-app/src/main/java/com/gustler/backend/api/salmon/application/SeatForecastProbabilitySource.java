@@ -29,10 +29,10 @@ public final class SeatForecastProbabilitySource {
      * 도착 항목에서 값을 만들지 못한 원인이다. 앞의 다섯은 목록 전체에 걸리고, 그 목록의 모든 항목에 같은 원인이 붙는다.
      * <ul>
      *   <li>LIST_WITHOUT_VEHICLE_ID: 목록에 차량 ID가 있는 항목이 하나도 없어 보드를 읽지 않았다.</li>
-     *   <li>BOARD_READ_FAILED: 보드가 읽기를 거부했다. 거부한 오류 코드가 함께 온다.</li>
+     *   <li>BOARD_READ_FAILED: 보드가 읽기를 거부했다. 거부한 오류 코드가 같이 온다.</li>
      *   <li>QUERY_FAILED: 보드나 정류장 방문의 DB 조회가 실패했다.</li>
      *   <li>BOARD_STALE: 판정 시각이 보드 관측의 만료 시각을 지났다.</li>
-     *   <li>VISIT_NOT_MATCHED: 도착 방문을 찾지 못했거나 보드와 노선 판본이 다르다.</li>
+     *   <li>VISIT_NOT_MATCHED: 도착 방문을 찾지 못했거나 보드와 노선 버전이 다르다.</li>
      *   <li>ENTRY_WITHOUT_VEHICLE_ID: 이 항목에 차량 ID가 없다.</li>
      *   <li>VEHICLE_NOT_ON_BOARD: 보드의 그 정류장 방문에 이 차량이 없다.</li>
      *   <li>VEHICLE_AMBIGUOUS: 보드의 그 정류장 방문에 같은 차량 ID가 둘 이상이다.</li>
@@ -113,7 +113,7 @@ public final class SeatForecastProbabilitySource {
         return new Probabilities.ProbabilitySupply(inputs);
     }
 
-    /** 목록의 항목마다 순서대로 값 또는 값을 만들지 못한 원인을 돌려준다. */
+    /** 목록의 항목마다 순서대로 값 또는 값을 만들지 못한 원인을 반환한다. */
     public List<EntryLookup> lookupsFor(
         String routeId,
         String stationId,
@@ -186,7 +186,7 @@ public final class SeatForecastProbabilitySource {
             .toList();
     }
 
-    /** 목표 순번과 도착 방문의 순번은 같은 노선 판본 안에서만 같은 정류장 방문을 가리킨다. */
+    /** 목표 순번과 도착 방문의 순번은 같은 노선 버전 안에서만 같은 정류장 방문을 가리킨다. */
     private boolean sameRouteVersion(
         Board board,
         String routeId,

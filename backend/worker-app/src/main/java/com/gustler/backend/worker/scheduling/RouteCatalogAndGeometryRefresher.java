@@ -32,7 +32,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/** 별도 실행기에서 노선 준비·판본 변경·관측 불일치를 처리한다. 시작/정기 갱신은 프로세스 중단 후에도 준비 기회를 준다. */
+/** 별도 실행기에서 노선 준비, 버전 변경, 관측 불일치를 처리한다. 시작/정기 갱신은 프로세스 중단 후에도 준비 기회를 준다. */
 @Component
 @ConditionalOnExpression("${collection.enabled:false} or ${route-geometry.enabled:false}")
 public class RouteCatalogAndGeometryRefresher {
@@ -193,7 +193,7 @@ public class RouteCatalogAndGeometryRefresher {
         }
     }
 
-    /** 이전 판본의 지연된 관측은 상류를 다시 조회하지 않고 최신 판본의 누락된 형상만 준비한다. */
+    /** 이전 버전의 지연된 관측은 GBIS를 다시 조회하지 않고 최신 버전의 누락된 형상만 준비한다. */
     private void refreshCatalogIfNeeded(
         String sourceRouteId,
         RouteCatalogAndGeometryRefresher.CatalogRefreshRequest request

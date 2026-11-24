@@ -28,9 +28,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 채점 단계가 낸 결과를 새 테이블에 저장한 뒤 예측별 결과 뷰({@code forecast_outcome})가 채점이 짝지은 결과를 그대로 보이는지 본다.
- * 사건과 예보·통과 기록은 모두 저장하고, 채점에는 앞부분만 흘려 아직 대기 중인 예측도 섞는다. 미해결 줄을 저장하지 않은 상태에서도
- * 채점이 짝짓지 않은 예측에 정답이 붙지 않는지 본다.
+ * 정산 단계가 낸 결과를 새 테이블에 저장한 뒤 예측별 결과 뷰({@code forecast_outcome})가 정산이 짝지은 결과를 그대로 보이는지 본다.
+ * 이벤트와 예보, 통과 기록은 모두 저장하고, 정산에는 앞부분만 흘려 아직 대기 중인 예측도 섞는다. 미해결 기록을 저장하지 않은 상태에서도
+ * 정산이 짝짓지 않은 예측에 정답이 붙지 않는지 본다.
  */
 @ForecastingIntegrationTest
 @Transactional
@@ -205,7 +205,7 @@ class ForecastOutcomeViewTest {
         return rows;
     }
 
-    /** 채점 결과에서 예측마다 기대하는 줄을 만든다. 결과가 없는 예측은 채점 전이다. */
+    /** 정산 결과에서 예측마다 기대하는 줄을 만든다. 결과가 없는 예측은 정산 전이다. */
     private static Map<String, Row> expected(
         ScoringScenario scenario,
         ScoringResult result,

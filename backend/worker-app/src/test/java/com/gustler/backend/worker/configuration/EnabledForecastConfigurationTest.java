@@ -222,7 +222,7 @@ class EnabledForecastConfigurationTest {
                 .filteredOn(event -> !event.equals("event_scored"))
                 .containsExactly("running_finished", "pool_closed");
             softly.assertThat(acceptedAfterClose).isFalse();
-            softly.assertThat(eventAccepted).as("채점 줄은 실행 줄이 돌던 일을 끝낼 때까지 사건을 받는다").isTrue();
+            softly.assertThat(eventAccepted).as("정산 큐는 예보 실행기가 현재 작업을 마칠 때까지 이벤트를 받는다").isTrue();
         });
     }
 
@@ -276,8 +276,8 @@ class EnabledForecastConfigurationTest {
     }
 
     /**
-     * 실행 줄이 닫히고 기다리던 일을 모두 버린 것을 본 뒤에도 잠시 더 돈다. 닫는 쪽이 기다리지 않으면 그사이 연결 풀이 먼저 닫힌다.
-     * 실행 줄은 스케줄러가 돌던 회차를 끝낸 뒤에 닫히므로, 회차가 넘긴 일이 이것을 기다리면 회차보다 늦게 끝난다. 컨텍스트는 시험이
+     * 실행기가 종료되고 기다리던 일을 모두 버린 것을 본 뒤에도 잠시 더 돈다. 닫는 쪽이 기다리지 않으면 그사이 연결 풀이 먼저 닫힌다.
+     * 실행기는 스케줄러가 돌던 회차를 끝낸 뒤에 닫히므로, 회차가 넘긴 일이 이것을 기다리면 회차보다 늦게 끝난다. 컨텍스트는 시험이
      * 끝날 때 반드시 닫히므로 한도 없이 기다린다.
      */
     private static void untilClosed(RouteLanes lanes) {
@@ -295,7 +295,7 @@ class EnabledForecastConfigurationTest {
         }
     }
 
-    /** 연결을 맺지 않는 실제 풀이다. 닫힌 시점만 적는다. */
+    /** 연결을 맺지 않는 실제 풀이다. 닫힌 시점만 기록한다. */
     private static final class RecordingPool extends HikariDataSource {
 
         private final List<String> events;

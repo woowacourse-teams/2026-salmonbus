@@ -24,9 +24,9 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * 한 노선의 관측 흐름을 DB에 넣는다. 여러 차량의 여러 운행, 90초·30분을 넘는 공백, 좌석 모름과 범위 밖 좌석,
- * 한 배치의 같은 차량 중복과 차량 번호 없는 줄, 빈 배치·늦게 착수한 배치·정상 수집이 아닌 배치·실패 배치,
- * 노선 판본 전환을 섞는다. 같은 씨앗이면 같은 흐름이다.
+ * 한 노선의 관측 흐름을 DB에 넣는다. 여러 차량의 여러 운행, 90초, 30분을 넘는 공백, 좌석 모름과 범위 밖 좌석,
+ * 한 배치의 같은 차량 중복과 차량 번호 없는 줄, 빈 배치, 늦게 처리를 시작한 배치, 정상 수집이 아닌 배치, 실패 배치,
+ * 노선 버전 전환을 섞는다. 같은 씨앗이면 같은 흐름이다.
  * 수집은 같은 배치에 같은 차량을 두 번 넣지 않지만(고유 색인) 예보 읽기는 그 경우를 따로 거르므로, 그 규칙까지 대조하려고
  * 테스트 트랜잭션 안에서 고유 색인을 지운다. 트랜잭션이 롤백되면 색인도 돌아온다. 색인 이름은 관측 테이블이 날짜 파티션 테이블인지에
  * 따라 다르므로 둘 다 지운다.
@@ -42,7 +42,7 @@ final class ObservationStreamFixture {
     private ObservationStreamFixture() {
     }
 
-    /** 넣은 흐름의 노선 이름, 판본별 정류장, 통계, 배치 번호(처리 순서)다. */
+    /** 넣은 흐름의 노선 이름, 버전별 정류장, 통계, 배치 번호(처리 순서)다. */
     record Stream(
         String route,
         long routeId,
@@ -139,7 +139,7 @@ final class ObservationStreamFixture {
         return displayName;
     }
 
-    /** 판본 전환이 있으면 전환 전·후 두 판본을, 없으면 한 판본을 이 순서로 넣는다. */
+    /** 버전 전환이 있으면 전환 전, 후 두 버전을, 없으면 한 버전을 이 순서로 넣는다. */
     private static Map<Long, RouteStops> insertVersions(
         JdbcClient jdbc,
         final long routeId,
@@ -182,7 +182,7 @@ final class ObservationStreamFixture {
         return versions.getLast();
     }
 
-    /** 배치 하나를 저장된 줄 전부와 함께 읽는다. 줄은 되감기 원본과 같은 순서(차량 번호, 관측 번호)다. */
+    /** 배치 하나를 저장된 모든 행과 같이 읽는다. 줄은 복구 원본과 같은 순서(차량 번호, 관측 번호)다. */
     static ForecastBatch read(JdbcClient jdbc, final long batchId) {
         List<ForecastObservationRow> rows = jdbc.sql("""
             SELECT id,vehicle_id,passed_stop_order,stop_order,running_state,remaining_seats,seat_unknown_reason,crowd_level
@@ -442,7 +442,7 @@ final class ObservationStreamFixture {
         return rows;
     }
 
-    /** 배치 종류를 정한다. 빈 배치와 실패 배치는 {@code rows}를 비운다. 늦게 착수한 배치만 착수 시각 난수를 하나 더 뽑는다. */
+    /** 배치 종류를 정한다. 빈 배치와 실패 배치는 {@code rows}를 비운다. 늦게 처리를 시작한 배치만 처리 시작 시각 난수를 하나 더 뽑는다. */
     private static BatchHeader header(
         Random random,
         List<Object[]> rows,

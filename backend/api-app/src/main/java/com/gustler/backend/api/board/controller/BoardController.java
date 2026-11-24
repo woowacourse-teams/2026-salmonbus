@@ -39,12 +39,12 @@ public class BoardController {
      */
     @GetMapping
     @Operation(summary = "노선별 판정 보드",
-        description = "발행된 예보가 있으면 해당 관측을, 없으면 최신 정상 관측을 기준으로 보드를 구성합니다. "
-            + "신선도는 관측 후 5분, 관측 시각이 01~03시대면 10분입니다. 차량 위치도 함께 필요하면 watch를 사용합니다.")
+        description = "발행된 예보가 있으면 해당 관측을, 없으면 최신 정상 관측을 기준으로 보드를 구성한다. "
+            + "신선도는 관측 후 5분, 관측 시각이 01~03시대면 10분이다. 차량 위치도 같이 필요하면 watch를 사용한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "보드 상태별 정상 응답",
             headers = @Header(name = "Cache-Control",
-                description = "public, max-age는 관측 시각대별 정책값(07~08시·17~22시 15초, 01~03시대 600초, 그 밖의 시간 20초)",
+                description = "public, max-age는 관측 시각대별 정책값(07~08시, 17~22시 15초, 01~03시대 600초, 그 밖의 시간 20초)",
                 schema = @Schema(type = "string")),
             content =
             @Content(mediaType = "application/json", schema = @Schema(implementation = BoardResponse.class),

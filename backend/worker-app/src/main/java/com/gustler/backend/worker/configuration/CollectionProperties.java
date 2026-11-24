@@ -21,7 +21,7 @@ public record CollectionProperties(
         forecastRequiredRouteIds = forecastRequiredRouteIdsOrEmpty(forecastRequiredRouteIds);
 
         if (fixedInterval != null && fixedInterval.compareTo(Duration.ofSeconds(1)) < 0) {
-            throw new IllegalArgumentException("collection.fixed-interval은 1초 이상이어야 합니다.");
+            throw new IllegalArgumentException("collection.fixed-interval은 1초 이상이어야 한다.");
         }
     }
 

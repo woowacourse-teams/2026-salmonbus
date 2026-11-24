@@ -3,10 +3,10 @@ package com.gustler.backend.forecasting.domain.deployment;
 import java.util.Optional;
 
 /**
- * 계수 배포의 조회와 승격을 담당하는 포트다.
+ * 모델 배포의 조회와 승격을 담당하는 포트다.
  *
  * <p>적재와 승격을 두 단계로 나눈다. 먼저 STAGED로 적재 기록을 남기고 계수가 실제로 동작하는지
- * 확인한 다음 ACTIVE로 승격한다. 한 번에 승격하면 검사에서 탈락할 묶음도 잠깐 활성 배포가 된다.
+ * 확인한 다음 ACTIVE로 승격한다. 한 번에 승격하면 검사에서 탈락할 번들도 잠깐 활성 배포가 된다.
  */
 public interface ModelDeploymentRepository {
 

@@ -19,7 +19,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 수집 배치의 저장 값과 시도·종료 상태를 함께 관리한다. */
+/** 수집 배치의 저장 값과 시도 및 종료 상태를 관리한다. */
 @Entity(name = "ObservationBatch")
 @Table(name = "observation_batch")
 @Getter
@@ -90,7 +90,7 @@ public class ObservationBatchJpaEntity {
         prepare(reserved);
     }
 
-    /** 다시 열 수 있는지는 저장소가 확인하며, 지난 관측을 지운 뒤 이 메서드를 부른다. */
+    /** 다시 열 수 있는지는 저장소가 확인하며, 지난 관측을 지운 뒤 이 메서드를 호출한다. */
     void startNextAttempt(final boolean reserved) {
         attemptNumber++;
         prepare(reserved);
@@ -117,7 +117,7 @@ public class ObservationBatchJpaEntity {
         outcome = CollectionBatchStatus.ABANDONED_BEFORE_SEND;
     }
 
-    /** 관측이 있으면 INSERT를 마친 뒤 결과와 건수를 함께 반영한다. */
+    /** 관측이 있으면 INSERT를 마친 뒤 결과와 건수를 같이 반영한다. */
     void conclude(CollectionResult result, OffsetDateTime receivedAt) {
         outcome = result.outcome();
         failureCode = result.failureCode();

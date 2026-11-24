@@ -30,8 +30,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 새로 뜬 worker가 닫은 통과의 정답이 그 전에 닫힌 통과를 직전 통과로 쓰는지를 실제 DB와 채점으로 본다. 흐름의 앞부분을 먼저 처리된
- * 것으로 두고 뒷부분을 새로 뜬 worker(예보와 채점의 메모리가 모두 빈 상태)로 처리한다. 입력 부족으로 끝난 실행 기록도
+ * 새로 뜬 worker가 확정한 통과의 정답이 그 전에 확정된 통과를 직전 통과로 쓰는지를 실제 DB와 정산으로 본다. 흐름의 앞부분을 먼저 처리된
+ * 것으로 두고 뒷부분을 새로 뜬 worker(예보와 정산의 메모리가 모두 빈 상태)로 처리한다. 입력 부족으로 끝난 실행 기록도
  * 통과 복구에 쓰고, 옛 입력 확정 시각만 있는 배치는 복구에 쓰지 않는다. 비교 기준은 같은 흐름을 처음부터 한 worker가 끊지 않고
  * 처리한 결과다. 두 번을 같은 시험 트랜잭션에서 차례로 돌리고, 사이에 예보 기록 테이블의 줄만 지운다.
  */
@@ -87,13 +87,13 @@ class ForecastFirstDeploymentScoringTest {
         Map<String, Outcome> expected = continuous.outcomesOf(after);
         Set<String> settledAfterEarlierPass = settledWithPreviousPassClosedBy(continuous, expected, before);
         assertSoftly(softly -> {
-            softly.assertThat(excluded(harness)).as("되감은 직후라 예보에서 뺀 관측").isZero();
+            softly.assertThat(excluded(harness)).as("복구한 직후라 예보에서 뺀 관측").isZero();
             softly.assertThat(deployed.records).as("배포 뒤 배치의 예측값").isEqualTo(continuous.recordsOf(after));
             softly.assertThat(deployed.passes).as("저장된 통과").isEqualTo(continuous.passes);
             softly.assertThat(settledAfterEarlierPass)
                 .as("연속 실행에서 직전 통과가 배포 전에 닫혔고 정답이 붙은 예측").isNotEmpty();
             softly.assertThat(changes(expected, deployed.outcomes))
-                .as("연속 실행과 채점 결과가 다른 예측 수(연속 실행 -> 처음 뜬 worker)").isEmpty();
+                .as("연속 실행과 정산 결과가 다른 예측 수(연속 실행 -> 처음 기동한 worker)").isEmpty();
             softly.assertThat(deployed.outcomes.keySet()).isEqualTo(expected.keySet());
         });
     }
@@ -121,12 +121,12 @@ class ForecastFirstDeploymentScoringTest {
         Set<String> settledAfterEarlierPass = settledWithPreviousPassClosedBy(continuous,
             continuous.outcomesOf(after), before);
         assertSoftly(softly -> {
-            softly.assertThat(excluded(harness)).as("되감은 직후라 예보에서 뺀 관측").isZero();
+            softly.assertThat(excluded(harness)).as("복구한 직후라 예보에서 뺀 관측").isZero();
             softly.assertThat(restarted.records).isEqualTo(continuous.records);
             softly.assertThat(settledAfterEarlierPass)
                 .as("연속 실행에서 직전 통과가 다시 뜨기 전에 닫혔고 정답이 붙은 예측").isNotEmpty();
             softly.assertThat(changes(continuous.outcomes, restarted.outcomes))
-                .as("연속 실행과 채점 결과가 다른 예측 수(연속 실행 -> 다시 뜬 worker)").isEmpty();
+                .as("연속 실행과 정산 결과가 다른 예측 수(연속 실행 -> 재시작한 worker)").isEmpty();
             softly.assertThat(restarted.outcomes.keySet()).isEqualTo(continuous.outcomes.keySet());
         });
     }
@@ -212,7 +212,7 @@ class ForecastFirstDeploymentScoringTest {
     }
 
     /**
-     * 배치를 이전 배포본이 처리한 것으로 만든다. 이전 배포본은 예보 실행 줄을 쓰지 않고 배치에 입력 확정 시각만 적었다. 현재 worker는 이 시각을
+     * 배치를 이전 배포본이 처리한 것으로 만든다. 이전 배포본은 예보 실행 기록을 저장하지 않고 배치에 입력 확정 시각만 적었다. 현재 worker는 이 시각을
      * 확정 이력의 근거로 사용하지 않는다.
      */
     private void confirmByPreviousRelease(ForecastHarness harness, List<Long> batches) {
@@ -223,7 +223,7 @@ class ForecastFirstDeploymentScoringTest {
     }
 
     /**
-     * 예보와 채점을 새로 띄운다. 둘 다 메모리가 빈 채로 시작하고, 채점은 기동 직후의 되감기를 {@code at} 시각에 돌린다.
+     * 예보와 정산을 새로 띄운다. 둘 다 메모리가 빈 채로 시작하고, 정산은 기동 직후의 복구를 {@code at} 시각에 돌린다.
      */
     private ScoringService startWorker(ForecastHarness harness, Instant at) {
         ScoringService scoring = new ForecastAssembly(
@@ -282,7 +282,7 @@ class ForecastFirstDeploymentScoringTest {
             .collect(Collectors.toSet());
     }
 
-    /** 두 결과에서 채점 결과가 다른 예측을 "기대한 판정 -> 실제 판정"별로 센다. 한쪽에만 있는 예측은 없음으로 적는다. */
+    /** 두 결과에서 정산 결과가 다른 예측을 "기대한 판정 -> 실제 판정"별로 센다. 한쪽에만 있는 예측은 없음으로 기록한다. */
     private static Map<String, Long> changes(
         Map<String, Outcome> expected,
         Map<String, Outcome> actual
@@ -356,11 +356,11 @@ class ForecastFirstDeploymentScoringTest {
     /**
      * 한 번 처리한 결과다.
      *
-     * @param closureBatches 통과를 닫은 관측별 그 통과를 닫은 배치
+     * @param closureBatches 통과를 확정한 관측별 그 통과를 확정한 배치
      * @param passes (닫은 관측, 정류장)별 통과 줄 전체
      * @param recordBatches (배치, 관측)별 배치
-     * @param records (배치, 관측)별 버스별 기록 줄 전체
-     * @param outcomes (관측, 목표)별 채점 결과
+     * @param records (배치, 관측)별 버스별 기록 전체
+     * @param outcomes (관측, 목표)별 정산 결과
      */
     private record Run(
         Map<Long, Long> closureBatches,
@@ -370,7 +370,7 @@ class ForecastFirstDeploymentScoringTest {
         Map<String, Outcome> outcomes
     ) {
 
-        /** 그 배치들이 낸 예측의 채점 결과만 남긴다. */
+        /** 그 배치들이 낸 예측의 정산 결과만 남긴다. */
         Map<String, Outcome> outcomesOf(List<Long> batches) {
             Set<Long> wanted = new HashSet<>(batches);
             Map<String, Outcome> selected = new HashMap<>(outcomes);
@@ -378,7 +378,7 @@ class ForecastFirstDeploymentScoringTest {
             return selected;
         }
 
-        /** 그 배치들의 버스별 기록 줄만 남긴다. */
+        /** 그 배치들의 버스별 기록만 남긴다. */
         Map<String, String> recordsOf(List<Long> batches) {
             Set<Long> wanted = new HashSet<>(batches);
             Map<String, String> selected = new HashMap<>(records);
@@ -388,9 +388,9 @@ class ForecastFirstDeploymentScoringTest {
     }
 
     /**
-     * 예측 하나의 채점 결과다.
+     * 예측 하나의 정산 결과다.
      *
-     * @param closureObservationId 정답을 준 통과를 닫은 관측. 정답이 없으면 비어 있다
+     * @param closureObservationId 정답을 준 통과를 확정한 관측. 정답이 없으면 비어 있다
      */
     private record Outcome(
         long batchId,

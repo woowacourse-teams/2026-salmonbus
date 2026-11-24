@@ -19,7 +19,7 @@ public class BoardCachePolicy {
     private final Clock clock;
 
     /**
-     * 관측 시각을 주입된 시계의 시간대로 해석해 혼잡·심야·일반 시간대별 유효기간을 고른다.
+     * 관측 시각을 주입된 시계의 시간대로 해석해 혼잡, 심야, 일반 시간대별 유효기간을 고른다.
      */
     public Duration maxAgeAt(
         OffsetDateTime observedAt

@@ -45,7 +45,7 @@ public final class AlightingAwareStatisticsReader {
             return true;
         }
         if (!profile.equals("alighting-original-v1")) {
-            throw new IllegalArgumentException("지원하지 않는 예보 입력 판본이다");
+            throw new IllegalArgumentException("지원하지 않는 예보 입력 프로필이다");
         }
         return false;
     }

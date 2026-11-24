@@ -37,7 +37,7 @@ public final class TransferredServingBundle {
 
     public static ModelRelease load(Path directory, byte[] descriptor, JsonNode manifest) throws IOException {
         require(manifest.path("serving_ready").isBoolean() && manifest.path("serving_ready").booleanValue(),
-            "전이 모델이 서빙 준비 상태가 아니다");
+            "전이 모델의 운영 적재 준비가 끝나지 않았다");
         Path base = directory.resolve("base");
         Path next = directory.resolve("candidate");
         VerifiedBase parent = verifiedBase(base, manifest.path("base_sha256").asString(""));
@@ -49,7 +49,7 @@ public final class TransferredServingBundle {
         byte[] bytes = read(directory.resolve("transfer-evidence.json"), 4_194_304);
         require(Sha256.of(bytes).equals(manifest.path("evidence_sha256").asString("")), "전이 모델 검증 파일이 바뀌었다");
         String releaseId = manifest.path("release_id").asString("");
-        require(releaseId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,78}"), "전이 모델 출시 식별자가 잘못됐다");
+        require(releaseId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,78}"), "전이 모델의 릴리스 ID가 올바르지 않다");
         JsonNode evidence = JSON.readTree(bytes);
         TransferReplayEvidence.verify(
                 evidence,
@@ -96,7 +96,7 @@ public final class TransferredServingBundle {
         String expectedDigest
     ) throws IOException {
         AlightingAwareInferenceBundle parent = AlightingAwareInferenceBundle.loadForServing(directory);
-        require(parent.digest().equals(expectedDigest), "기존 서빙 번들의 해시가 다르다");
+        require(parent.digest().equals(expectedDigest), "기존 운영 번들의 해시가 다르다");
         JsonNode hours = parent.extendedHours();
         require(hours != null, "기존 번들에 시간 확장 모델이 없다");
         JsonNode hashes = parent.manifest().path("files");
@@ -133,7 +133,7 @@ public final class TransferredServingBundle {
         JsonNode before = parent.hashes();
         JsonNode after = candidate.manifest().path("files");
         for (String filename : SHARED_FILES) {
-            require(before.has(filename) && before.get(filename).equals(after.path(filename)), "공통 모델 변경: " + filename);
+            require(before.has(filename) && before.get(filename).equals(after.path(filename)), "공통 모델이 변경됐다: " + filename);
         }
         require(parent.holidays().equals(candidate.holidays()), "공휴일 달력이 바뀌었다");
         JsonNode newHours = candidate.extendedHours();
@@ -150,17 +150,17 @@ public final class TransferredServingBundle {
                     newRef,
                     newHours
             ),
-                "기존 노선 참조·가중치 변경: " + route);
+                "기존 노선의 참조 또는 가중치가 변경됐다: " + route);
         }
         JsonNode receipt = checkedJson(next, "transfer-receipt.json", after);
         require(parent.digest().equals(receipt.path("parent_manifest_sha256").asString(""))
             && Set.copyOf(receipt.path("routes").propertyNames()).equals(additions), "전이 출처의 노선 범위가 다르다");
         for (String route : additions) {
             JsonNode donors = receipt.path("routes").path(route).path("donors");
-            require(donors.isArray() && !donors.isEmpty(), "전이 원본 노선 누락");
+            require(donors.isArray() && !donors.isEmpty(), "전이 원본에 노선이 없다");
             Set<String> unique = new HashSet<>();
             for (JsonNode donor : donors) {
-                require(parent.routes().contains(donor.asString("")) && unique.add(donor.asString()), "잘못된 전이 원본 노선");
+                require(parent.routes().contains(donor.asString("")) && unique.add(donor.asString()), "전이 원본의 노선 정보가 올바르지 않다");
             }
         }
         return Set.copyOf(additions);
@@ -169,19 +169,19 @@ public final class TransferredServingBundle {
     private static Map<String, JsonNode> references(Path directory, JsonNode hashes) throws IOException {
         Map<String, JsonNode> result = new HashMap<>();
         for (JsonNode route : checkedJson(directory, "route-reference.json", hashes).path("routes")) {
-            require(result.put(route.path("modelRoute").asString(""), route) == null, "중복 노선 참조");
+            require(result.put(route.path("modelRoute").asString(""), route) == null, "노선 참조가 중복됐다");
         }
         return result;
     }
 
     private static JsonNode checkedJson(Path directory, String name, JsonNode hashes) throws IOException {
         byte[] bytes = read(directory.resolve(name), 32 * 1024 * 1024);
-        require(Sha256.of(bytes).equals(hashes.path(name).asString("")), "모델 파일 해시 불일치: " + name);
+        require(Sha256.of(bytes).equals(hashes.path(name).asString("")), "모델 파일 해시가 일치하지 않는다: " + name);
         return JSON.readTree(bytes);
     }
 
     private static byte[] read(Path file, final int limit) throws IOException {
-        require(Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) && Files.size(file) <= limit, "잘못된 전이 모델 파일");
+        require(Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) && Files.size(file) <= limit, "전이 모델 파일이 올바르지 않다");
         return Files.readAllBytes(file);
     }
 
@@ -191,7 +191,7 @@ public final class TransferredServingBundle {
         }
     }
 
-    /** 기존 노선이 모두 있을 때만 집합에서 제외하고 신규 노선이 남는지 확인한다. */
+    /** 기존 노선이 모두 포함됐는지 확인한 뒤 기존 노선을 제외해 신규 노선이 있는지 검사한다. */
     private static boolean retainAdditionalRoutes(Set<String> additions, VerifiedBase parent) {
         return additions.containsAll(parent.routes()) && additions.removeAll(parent.routes()) && !additions.isEmpty();
     }

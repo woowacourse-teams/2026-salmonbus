@@ -34,9 +34,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
  * 관측 테이블에 날짜 파티션이 하나도 없는 DB에서 수집만 켠 worker를 띄운다. 유지 작업 없이 여러 날 꺼져 있던 worker의 DB가 이런
- * 모양이다. 기동 직후의 첫 수집이 쓴 줄이 기본 파티션이 아니라 그날 파티션에 들어가는지 본다.
+ * 구조다. 기동 직후의 첫 수집이 저장한 행이 기본 파티션이 아니라 그날 파티션에 들어가는지 본다.
  *
- * <p>날짜 파티션은 마이그레이션이 끝난 직후에 지운다. 수집은 상류를 부르지 않고 실제 수집 원장으로 관측 한 줄을 저장한다. worker는
+ * <p>날짜 파티션은 마이그레이션이 끝난 직후에 지운다. 수집은 GBIS를 부르지 않고 실제 수집 원장으로 관측 한 행을 저장한다. worker는
  * 수집 예약을 만드는 즉시 첫 수집을 돌리므로, 시험이 시작하기 전에 첫 줄이 이미 저장돼 있다.
  */
 @SpringBootTest(classes = WorkerApplication.class, properties = {
@@ -133,7 +133,7 @@ class FirstCollectionPartitionIntegrationTest {
                 """).param("version", routeVersionId).update();
         }
 
-        /** 차량 한 대가 첫 정류장을 막 떠난 관측 한 줄을 실제 수집 원장으로 저장하고 커밋한다. */
+        /** 차량 한 대가 첫 정류장을 막 떠난 관측 한 행을 실제 수집 원장으로 저장하고 커밋한다. */
         private static void collect(CollectionBatchService ledger, JdbcClient jdbc, String sourceRouteId) {
             final long routeVersionId = jdbc.sql("""
                 SELECT version.id FROM route_version version JOIN route ON route.id = version.route_id

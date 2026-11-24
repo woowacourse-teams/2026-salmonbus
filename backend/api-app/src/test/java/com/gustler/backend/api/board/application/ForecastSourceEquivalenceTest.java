@@ -28,7 +28,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보 기록에서 읽은 탑승판·스냅샷이 기록해 둔 기대 응답과 필드 하나까지 같은지 확인한다.
+ * 예보 기록에서 읽은 탑승판, 스냅샷이 기록해 둔 기대 응답과 필드 하나까지 같은지 확인한다.
  *
  * <p>기대 응답은 시험 자원 {@code board/forecast-source-equivalence.txt}에 있다. 같은 예측을 이전 저장 테이블에서 읽던 조회와 예보 기록에서 읽는
  * 조회가 같은 응답을 내던 때 기록했고, 비교 방법은 {@link RecordedBoards}가 정한다.

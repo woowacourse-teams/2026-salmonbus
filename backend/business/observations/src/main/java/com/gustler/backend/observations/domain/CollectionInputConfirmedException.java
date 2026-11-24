@@ -2,9 +2,7 @@ package com.gustler.backend.observations.domain;
 
 import java.time.OffsetDateTime;
 
-/**
- * 이미 예보 입력으로 확정된 수집 배치를 다시 시도하려는 상태 충돌을 알린다.
- */
+/** 이미 예보 입력으로 확정된 수집 배치는 재수집할 수 없음을 알린다. */
 public class CollectionInputConfirmedException extends RuntimeException {
 
     public CollectionInputConfirmedException(final long batchId, OffsetDateTime confirmedAt) {

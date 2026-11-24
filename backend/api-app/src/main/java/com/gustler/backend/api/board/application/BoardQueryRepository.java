@@ -10,27 +10,27 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 한 관측 기준의 탑승판에 필요한 노선·정류장·모델·차량·예보를 읽는 경계다.
+ * 한 관측 기준의 탑승판에 필요한 노선, 정류장, 모델, 차량, 예보를 읽는 경계다.
  */
 public interface BoardQueryRepository {
     /**
-     * 화면에 사용할 관측·발행 시점을 읽는다. 사용할 스냅샷이 없으면 빈 값을 반환한다.
+     * 화면에 사용할 관측, 발행 시점을 읽는다. 사용할 스냅샷이 없으면 빈 값을 반환한다.
      */
     Optional<BoardSnapshot> findSnapshot(RouteId routeId);
 
     /**
-     * 지정한 노선 판본의 정류장을 읽는다. 원천 정류장 순번과 예측 대상 순번의 의미를 유지한다.
+     * 지정한 노선 버전의 정류장을 읽는다. 원천 정류장 순번과 예측 대상 순번의 의미를 유지한다.
      */
     List<BoardStop> findStops(long routeVersionId);
 
     /**
-     * 지정한 관측 묶음과 노선 판본에 속하는 차량만 읽는다. 다른 판본의 위치를 섞지 않는다.
+     * 지정한 관측 묶음과 노선 버전에 속하는 차량만 읽는다. 다른 버전의 위치를 섞지 않는다.
      */
     List<BoardVehicleObservation> findObservedVehicles(long observationBatchId, long routeVersionId);
 
     /**
      * 여러 노선의 스냅샷을 {@link #findSnapshot}과 같은 규칙으로 읽는다. 스냅샷이 없는 노선은 결과에 없고,
-     * 한 노선에 행이 여럿이면 모두 돌려준다. 행이 여럿인 노선을 실패로 다루는 일은 호출하는 쪽이 맡는다.
+     * 한 노선에 행이 여럿이면 모두 반환한다. 행이 여럿인 노선을 실패로 관리하는 일은 호출자가 맡는다.
      */
     default List<BoardSnapshot> findSnapshots(Collection<RouteId> routeIds) {
         return routeIds.stream()
@@ -40,8 +40,8 @@ public interface BoardQueryRepository {
     }
 
     /**
-     * 여러 노선 판본의 정류장을 판본별로 읽는다. 판본마다 {@link #findStops(long)}과 같은 순서다.
-     * 정류장이 없는 판본은 결과에 없다.
+     * 여러 노선 버전의 정류장을 버전별로 읽는다. 버전마다 {@link #findStops(long)}과 같은 순서다.
+     * 정류장이 없는 버전은 결과에 없다.
      */
     default Map<Long, List<BoardStop>> findStops(Collection<Long> routeVersionIds) {
         Map<Long, List<BoardStop>> stops = new LinkedHashMap<>();
@@ -55,7 +55,7 @@ public interface BoardQueryRepository {
     }
 
     /**
-     * 예보 기록({@code forecast_run}·{@code forecast_record})에서 지정한 관측 묶음의 저장 예측을 읽는다.
+     * 예보 기록({@code forecast_run}, {@code forecast_record})에서 지정한 관측 묶음의 저장 예측을 읽는다.
      * 버스마다 목표 정류장 배열을 목표 정류장마다 한 예측으로 펼친다. 조회 중 예측을 새로 계산하거나 저장하지 않는다.
      *
      * @param observationBatchId 관측 묶음
@@ -79,7 +79,7 @@ public interface BoardQueryRepository {
     }
 
     /**
-     * 관측 묶음과 노선 판본 짝마다 차량을 읽는다. 키는 관측 묶음, 값은 그 묶음을 읽을 노선 판본이다.
+     * 관측 묶음과 노선 버전 짝마다 차량을 읽는다. 키는 관측 묶음, 값은 그 묶음을 읽을 노선 버전이다.
      * 짝마다 {@link #findObservedVehicles(long, long)}과 같은 행이며 차량이 없는 묶음은 결과에 없다.
      */
     default Map<Long, List<BoardVehicleObservation>> findObservedVehicles(Map<Long, Long> routeVersionIdByBatchId) {

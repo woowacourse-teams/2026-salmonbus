@@ -24,23 +24,23 @@ import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * 되감기 원본이자 배치 하나를 읽는 원본이다.
+ * 복구 원본이자 배치 하나를 읽는 원본이다.
  *
- * <p>예보 실행 기록의 착수 시각으로 확정 관측을 복구한다. 실행 기록이 없는 배치는 아직 처리하지 않은 배치다.
+ * <p>예보 실행 기록의 처리 시작 시각으로 확정 관측을 복구한다. 실행 기록이 없는 배치는 아직 처리하지 않은 배치다.
  *
- * <p>확정 조건은 정상 수집, 줄이 있는 성공, 수신 뒤 90초 안 착수다. 90초를 넘겨 {@code LATE}로 남은 배치는 착수 시각이 90초
+ * <p>확정 조건은 정상 수집, 관측이 있는 성공, 수신 뒤 90초 안 착수다. 90초를 넘겨 {@code LATE}로 남은 배치는 처리 시작 시각이 90초
  * 밖이라 자연히 빠진다. 실행 결과({@code outcome})로 거르지 않는다. 이력은 확정 배치를 결과와 무관하게 모두 담는다.
- * 줄은 거르지 않고 모두 돌려준다(거르기와 줄 수 검사는 예보 단계가 한다). 판본 호환 검사는 창 안에 나온 판본만 본다. 행 잠금을
+ * 줄은 제외하지 않고 모두 반환한다(필터링와 행 수 검사는 예보 단계가 한다). 버전 호환 검사는 조회 범위 안에 나온 버전만 본다. 행 잠금을
  * 잡지 않는다.
  *
- * <p>배치 하나를 읽는 {@link #readBatch}도 같은 열·같은 줄 순서·같은 변환을 쓴다. 이어 온 상태와 되감은 상태가 같은 입력을 받게
- * 하려는 것이다. 읽은 착수 시각이 비어 있으면 아직 처리하지 않은 배치다.
+ * <p>배치 하나를 읽는 {@link #readBatch}도 같은 열, 같은 줄 순서, 같은 변환을 쓴다. 이어 온 상태와 복구한 상태가 같은 입력을 받게
+ * 하려는 것이다. 읽은 처리 시작 시각이 비어 있으면 아직 처리하지 않은 배치다.
  *
- * <p>입력 부족으로 끝난 예보 실행도 확정 관측 이력에 들어간다. 그 배치가 닫은 통과는 복구해 호출자에게 돌려준다.
+ * <p>입력 부족으로 끝난 예보 실행도 확정 관측 이력에 들어간다. 그 배치가 확정한 통과는 복구해 호출자에게 반환한다.
  */
 public final class JdbcReplaySource implements ReplaySource, ObservationBatchReader {
 
-    /** worker가 한 번 되감기에서 읽는 관측 줄의 한도. 넘으면 그 노선의 되감기가 실패한다. */
+    /** worker가 한 번 복구에서 읽는 관측 행의 한도. 넘으면 그 노선의 복구가 실패한다. */
     public static final int DEFAULT_MAXIMUM_ROWS = 250_000;
     static final String ROUTE_HISTORY_MISSING = "ALIGHTING_AWARE_ROUTE_HISTORY_MISSING";
     static final String INCOMPATIBLE_VERSION = "ALIGHTING_AWARE_INCOMPATIBLE_HISTORICAL_ROUTE_VERSION:";
@@ -56,7 +56,7 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
           o.running_state,o.remaining_seats,o.seat_unknown_reason,o.crowd_level,o.source_row_number
         """;
     private static final String RUN_COLUMNS = ",b.run_outcome,b.batch_source_date,b.run_route_id";
-    /** 예보 실행의 나눔 날짜는 배치 예약 시각의 한국 날짜다({@code SourceDates}). 기본 키로 찾으려고 날짜를 같이 준다. */
+    /** 예보 실행의 파티션 기준 날짜는 배치 예약 시각의 한국 날짜다({@code SourceDates}). 기본 키로 찾으려고 날짜를 같이 준다. */
     private static final String RECORDED_BATCHES = """
         (SELECT b.id,b.route_version_id,b.response_received_at,
             r.confirmed_at AS confirmed_at,b.ingestion_origin,b.outcome,
@@ -94,11 +94,11 @@ public final class JdbcReplaySource implements ReplaySource, ObservationBatchRea
     private final int maximumRows;
 
     /**
-     * @param maximumRows 한 번 되감기에서 읽는 관측 줄의 한도
+     * @param maximumRows 한 번 복구에서 읽는 관측 행의 한도
      */
     public JdbcReplaySource(JdbcClient jdbc, final int maximumRows) {
         if (maximumRows < 1) {
-            throw new IllegalArgumentException("되감기 줄 한도는 양수여야 한다");
+            throw new IllegalArgumentException("복구할 관측의 최대 행 수는 양수여야 한다");
         }
         this.jdbc = jdbc;
         this.maximumRows = maximumRows;

@@ -14,7 +14,7 @@ import java.time.ZonedDateTime;
 import java.util.HexFormat;
 import tools.jackson.databind.JsonNode;
 
-/** 확인 시각으로 닫힌 방문과 같은 날 직전 통과를 예보 당시의 차량 정원·계수와 연결해 하차 후 잔여석(정답)을 계산한다. */
+/** 확인 시각으로 닫힌 방문과 같은 날 직전 통과를 예보 당시의 차량 정원, 계수와 연결해 하차 후 잔여석(정답)을 계산한다. */
 final class AlightingAwarePassLabel {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");

@@ -18,9 +18,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 닫힌 통과를 날짜 파티션 테이블 {@code stop_pass}에 저장하고 읽는다.
+ * 확정된 통과를 날짜 파티션 테이블 {@code stop_pass}에 저장하고 읽는다.
  *
- * <p>쓰기는 호출하는 쪽의 트랜잭션에 참여하며, 트랜잭션 없이 부르면 실패한다. 이미 있는 키는 건너뛴다.
+ * <p>쓰기는 호출자의 트랜잭션에 참여하며, 트랜잭션 없이 호출하면 실패한다. 이미 있는 키는 건너뛴다.
  */
 @Repository
 public class JdbcStopPassStore implements StopPassStore {
@@ -124,8 +124,8 @@ public class JdbcStopPassStore implements StopPassStore {
     }
 
     /**
-     * 닫힌 시각이 늦은 통과부터 보며 정답 줄이 있는 첫 통과에서 멈춘다. 통과는 {@code (route_id, closed_at)} 인덱스로, 정답은 기본 키의
-     * 앞 열로 찾는다. 닫힌 시각 하한의 하루 전 날짜부터의 파티션만 읽는다. 나눔 날짜(닫은 배치 예약 시각의 날짜)는 닫힌 시각의 날짜보다
+     * 닫힌 시각이 늦은 통과부터 보며 정답 기록이 있는 첫 통과에서 멈춘다. 통과는 {@code (route_id, closed_at)} 인덱스로, 정답은 기본 키의
+     * 앞 열로 찾는다. 닫힌 시각 하한의 하루 전 날짜부터의 파티션만 읽는다. 파티션 기준 날짜(닫은 배치 예약 시각의 날짜)는 닫힌 시각의 날짜보다
      * 늦지 않다.
      */
     @Override

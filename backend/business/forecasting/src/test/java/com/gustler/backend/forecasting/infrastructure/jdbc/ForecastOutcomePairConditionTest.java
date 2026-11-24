@@ -34,9 +34,9 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 예측별 결과 뷰({@code forecast_outcome})가 미해결 줄에 기대지 않고 채점 단계와 같은 짝짓기 조건으로 정답을 붙이는지 본다.
+ * 예측별 결과 뷰({@code forecast_outcome})가 미해결 기록에 기대지 않고 정산 단계와 같은 짝짓기 조건으로 정답을 붙이는지 본다.
  *
- * <p>채점 단계가 낸 정답 줄만 저장하고 미해결 줄은 저장하지 않아, 채점 결과를 쓰기 전에 프로세스가 끝난 상태를 만든다. 한 통과를
+ * <p>정산 단계가 낸 정답 기록만 저장하고 미해결 기록은 저장하지 않아, 정산 결과를 쓰기 전에 프로세스가 끝난 상태를 만든다. 한 통과를
  * 기다린 예측 가운데 하나는 조건에 맞아 정답을 받고 다른 하나는 맞지 않을 때, 뷰가 맞지 않는 예측에 그 정답을 붙이지 않아야 한다.
  * 정답 계산은 고정 값으로 바꿔 둔다.
  */
@@ -435,7 +435,7 @@ class ForecastOutcomePairConditionTest {
             .collect(Collectors.toSet());
     }
 
-    /** 뷰의 한 줄에서 견주는 열이다. 예측마다 목표 정류장이 하나라 기준 관측 번호로 찾는다. */
+    /** 뷰의 한 행에서 견주는 열이다. 예측마다 목표 정류장이 하나라 기준 관측 번호로 찾는다. */
     private record Row(
         String state,
         String reason,

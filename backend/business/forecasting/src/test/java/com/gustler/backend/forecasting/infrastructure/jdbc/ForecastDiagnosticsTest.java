@@ -35,7 +35,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보가 남기는 진단 로그와 지표, 실행 줄이 닫힐 때의 훑기를 실제 DB로 본다. 흐름에는 정원을 모르는 차량과 정원이 모델 범위보다
+ * 예보가 남기는 진단 로그와 지표, 실행기가 종료될 때의 배치 조회 작업을 실제 DB로 본다. 흐름에는 정원을 모르는 차량과 정원이 모델 범위보다
  * 작은 차량이 하나씩 있다.
  */
 @ForecastingIntegrationTest
@@ -267,7 +267,7 @@ class ForecastDiagnosticsTest {
         });
     }
 
-    /** 예보 사건을 받는 순간 실행 줄을 닫히기 시작한 것으로 바꾸는 뒤 단계다. */
+    /** 예보 이벤트를 받는 순간 실행기를 종료 중인 것으로 바꾸는 뒤 단계다. */
     private record ClosingOnForecast(Runnable close) implements ForecastEvents {
 
         @Override

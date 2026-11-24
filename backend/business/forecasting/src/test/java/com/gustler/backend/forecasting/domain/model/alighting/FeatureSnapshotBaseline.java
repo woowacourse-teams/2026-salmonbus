@@ -19,7 +19,7 @@ import java.util.Set;
 /**
  * 고정 시드 입력에서 차량마다 입력 계산이 내야 하는 결과의 고정 기대값이다({@link Baseline}). 값은 기준 구현(dev
  * {@code e98ae3ea}의 입력 계산)이 같은 입력에 낸 것이다. 그 구현은 저장소에 남아 있지 않아 파일을 다시 만들 수 없으므로, 기대값을
- * 쓰는 테스트가 노선·관측을 만드는 흐름과 난수를 뽑는 순서를 바꾸면 기대값과 견줄 수 없다. 입력 계산은 지수·로그·사인 함수를
+ * 쓰는 테스트가 노선, 관측을 만드는 흐름과 난수를 뽑는 순서를 바꾸면 기대값과 견줄 수 없다. 입력 계산은 지수, 로그, 사인 함수를
  * 거치지 않아 어느 JVM에서나 비트까지 견준다.
  * <ul>
  *   <li>{@code e 번호 예외 메시지…}: 거부 사유. 번호는 한 글자다. {@code NullPointerException}은 JVM이 문구를 만들어 메시지를
@@ -138,7 +138,7 @@ final class FeatureSnapshotBaseline {
     }
 
     /**
-     * 차량 하나의 값을 SHA-256으로 줄인다. 관측 값·정원·기준 관측 번호·기준 관측을 적은 글({@code values})에 이어 목표 순서대로
+     * 차량 하나의 값을 SHA-256으로 줄인다. 관측 값, 정원, 기준 관측 번호, 기준 관측을 적은 글({@code values})에 이어 목표 순서대로
      * 입력 벡터를 넣는다. 벡터가 없는 목표는 없음 표시만 넣는다. 실수는 {@link Double#doubleToLongBits}의 비트로 넣는다.
      */
     static String digest(String values, List<AlightingAwareFeatureVector> vectors) {

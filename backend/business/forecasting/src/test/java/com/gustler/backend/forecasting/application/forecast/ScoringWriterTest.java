@@ -305,7 +305,7 @@ class ScoringWriterTest {
         }
     }
 
-    /** 정답 줄 하나와 미해결 줄 하나, 그 줄로 닫힌 예측을 하나씩 담은 결과다. 사건의 목표 정류장에 줄의 번호를 적는다. */
+    /** 정답 기록 하나와 미해결 기록 하나, 그 줄로 정산을 마친 예측을 하나씩 담은 결과다. 이벤트의 목표 정류장에 줄의 번호를 기록한다. */
     private static ScoringResult closing(PassLabel label, UnresolvedForecast lost) {
         return new ScoringResult(
                 List.of(label),
@@ -363,8 +363,8 @@ class ScoringWriterTest {
     }
 
     /**
-     * 정답 줄 쓰기가 실패하면 그 트랜잭션에서는 아무것도 남기지 않는다. 트랜잭션마다 쓴 줄의 번호를 정답, 미해결 순서로 적어 둔다.
-     * 저장소처럼 이미 있는 번호의 줄은 넣지 않고, 새로 넣은 줄만 받은 객체 그대로 돌려준다.
+     * 정답 기록 쓰기가 실패하면 그 트랜잭션에서는 아무것도 남기지 않는다. 트랜잭션마다 저장한 행의 번호를 정답, 미해결 순서로 기록해 둔다.
+     * 저장소처럼 이미 있는 번호의 줄은 넣지 않고, 새로 넣은 줄만 받은 객체 그대로 반환한다.
      */
     private static final class MemoryStore implements PassLabelStore {
 

@@ -16,7 +16,7 @@ import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
-/** 한 노선의 판본 확인, 한도 확보, HTTP 조회, 결과 저장을 순서대로 진행한다. */
+/** 한 노선의 버전 확인, 한도 확보, HTTP 조회, 결과 저장을 순서대로 진행한다. */
 @Component
 public class ObservationCollector {
 

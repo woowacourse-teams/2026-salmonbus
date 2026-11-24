@@ -4,12 +4,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 채점 단계가 사건 하나를 처리해 낸 결과다. 저장은 호출하는 쪽이 한다.
+ * 정산 단계가 이벤트 하나를 처리해 낸 결과다. 저장은 호출자가 한다.
  *
  * @param labels 새 통과 정답
- * @param unresolved 정답을 받지 못하고 닫힌 예측
+ * @param unresolved 정답을 받지 못하고 정산을 마친 예측
  * @param scored 정답에 짝지어진 예측. 저장하지 않는다
- * @param closed 닫힌 예측마다 하나씩, 그 결과가 담긴 줄과 함께다. 저장하지 않는다. 줄은 {@code labels}나 {@code unresolved}에 든
+ * @param closed 정산을 마친 예측과 저장할 행을 같이 반환한다. 직접 저장하지 않는다. 행은 {@code labels}나 {@code unresolved}에 든
  *     객체다
  */
 public record ScoringResult(
@@ -33,7 +33,7 @@ public record ScoringResult(
         closed = List.copyOf(closed);
     }
 
-    /** 빈 결과를 돌려준다. */
+    /** 빈 결과를 반환한다. */
     public static ScoringResult empty() {
         return EMPTY;
     }

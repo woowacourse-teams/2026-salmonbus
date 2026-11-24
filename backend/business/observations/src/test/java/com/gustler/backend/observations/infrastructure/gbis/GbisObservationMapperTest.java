@@ -107,7 +107,7 @@ class GbisObservationMapperTest {
     void 게이트웨이가_거절한_응답의_실패_사유는_UPSTREAM_ERROR다() {
         // when
         CollectionResult actual = GbisObservationMapper.response(
-            new GatewayRejected("30", "SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "등록되지 않은 키입니다"), RECEIVED_AT);
+            new GatewayRejected("30", "SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "등록되지 않은 키다"), RECEIVED_AT);
 
         // then
         assertThat(actual)

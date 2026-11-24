@@ -15,7 +15,7 @@ class ForecastPropertiesTest {
     private static final Duration LONGEST_ALLOWED_STALENESS = ForecastProperties.MAX_STALENESS;
     private static final Duration TOO_LONG_STALENESS = LONGEST_ALLOWED_STALENESS.plusSeconds(1);
 
-    /** 신선도 창이 넓으면 큐가 오래된 관측으로 차서 방금 들어온 관측이 회차에서 빠질 수 있다. */
+    /** 유효 시간 범위이 넓으면 큐가 오래된 관측으로 차서 방금 들어온 관측이 회차에서 빠질 수 있다. */
     @Test
     void 신선도_창이_한_시간을_넘으면_기동을_막는다() {
         // when

@@ -16,10 +16,10 @@ public record StopState(
     List<ApproachingVehicle> approachingVehicles
 ) {
     public StopState {
-        Objects.requireNonNull(stopId, "stopId는 null일 수 없습니다.");
-        Objects.requireNonNull(name, "name은 null일 수 없습니다.");
-        Objects.requireNonNull(direction, "direction은 null일 수 없습니다.");
-        Objects.requireNonNull(approachingVehicles, "approachingVehicles는 null일 수 없습니다.");
+        Objects.requireNonNull(stopId, "stopId는 null일 수 없다.");
+        Objects.requireNonNull(name, "name은 null일 수 없다.");
+        Objects.requireNonNull(direction, "direction은 null일 수 없다.");
+        Objects.requireNonNull(approachingVehicles, "approachingVehicles는 null일 수 없다.");
         approachingVehicles = List.copyOf(approachingVehicles);
     }
 }

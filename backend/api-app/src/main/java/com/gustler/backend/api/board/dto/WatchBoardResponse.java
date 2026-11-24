@@ -15,7 +15,7 @@ import java.util.List;
  */
 @Schema(requiredProperties = {"route", "observedAt", "staleAt", "model", "vehiclesInService", "stops", "vehicles"})
 public record WatchBoardResponse(
-    @Schema(description = "노선과 현재 판본의 방향 정보")
+    @Schema(description = "노선과 현재 버전의 방향 정보")
     BoardRouteResponse route,
     @Schema(description = "응답 전체가 기준으로 사용한 관측 시각. 정류장 예보와 차량 위치가 모두 이 관측에서 나온다")
     OffsetDateTime observedAt,
@@ -32,7 +32,7 @@ public record WatchBoardResponse(
         + "차량의 예보는 DOWN 정류장에 붙는다")
     List<VehicleResponse> vehicles
 ) {
-    /** 원본 참조와 분리하고 기존 null·원소·순서를 보존한다. */
+    /** 원본 참조와 분리하고 기존 null, 원소, 순서를 보존한다. */
     public WatchBoardResponse {
         if (stops != null) {
             stops = Collections.unmodifiableList(new ArrayList<>(stops));

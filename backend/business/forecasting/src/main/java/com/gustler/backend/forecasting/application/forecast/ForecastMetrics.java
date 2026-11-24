@@ -7,7 +7,7 @@ import java.time.Duration;
 
 /**
  * 예보의 지표다. 이름은 {@code salmonbus.forecast.*}로 모은다.
- * 지표 등록기가 없으면 아무것도 하지 않는다. 줄 길이는 실행하는 앱의 줄이 {@code salmonbus.forecast.queue}로 낸다.
+ * 지표 등록기가 없으면 아무것도 하지 않는다. 큐 길이는 worker의 실행기가 {@code salmonbus.forecast.queue}로 낸다.
  *
  * <ul>
  *   <li>{@code confirmation.lag}: 수신에서 착수까지의 시간(분포)</li>
@@ -15,21 +15,21 @@ import java.time.Duration;
  *   <li>{@code batches{result}}: 결과별 배치 수. 실행 결과({@code published}, {@code empty}, {@code late}, {@code out_of_scope},
  *       {@code input_unavailable})와 저장하지 않은 사유({@code already_processed}, {@code stale}, {@code duplicate},
  *       {@code no_model}, {@code inactive_version}, {@code not_covered}, {@code reference_mismatch},
- *       {@code unsupported_profile}, {@code missing}, {@code not_success}, {@code failed}), 되감기 사유
+ *       {@code unsupported_profile}, {@code missing}, {@code not_success}, {@code failed}), 복구 사유
  *       ({@code replay_deferred}, {@code replay_failed}), 이미 더 늦은 배치가 반영된 사유({@code out_of_order})다.
  *       {@code failed}는 이번 처리에서 예외가 발생한 배치를 센다. 같은 호출 안에서 즉시 재시도하지 않는다.
- *       모델 문맥이 없는 사유({@code no_model}, {@code inactive_version}, {@code not_covered},
- *       {@code reference_mismatch}, {@code unsupported_profile})는 배치를 읽지 않으므로 훑기마다 한 번 센다</li>
- *   <li>{@code replays{result}}: 노선 상태 되감기의 성공·실패 수</li>
- *   <li>{@code excluded{reason}}: 예보에서 뺀 차량 관측 수. 되감은 직후라 뺀 것({@code TRIP_START_UNKNOWN},
+ *       모델 정보가 없는 사유({@code no_model}, {@code inactive_version}, {@code not_covered},
+ *       {@code reference_mismatch}, {@code unsupported_profile})는 배치를 읽지 않으므로 배치 조회마다 한 번 센다</li>
+ *   <li>{@code replays{result}}: 노선 상태 복구의 성공, 실패 수</li>
+ *   <li>{@code excluded{reason}}: 예보에서 뺀 차량 관측 수. 복구한 직후라 뺀 것({@code TRIP_START_UNKNOWN},
  *       {@code REPLAY_HISTORY_INCOMPLETE})과 정원을 모르거나 정원이 모델 범위 밖이라 뺀 것({@code VEHICLE_CAPACITY_UNKNOWN},
  *       {@code VEHICLE_CAPACITY_OUTSIDE_MODEL_SCOPE})이다</li>
  *   <li>{@code passes.unattributed}: 연결 시작을 보지 못한 차량이 닫아 저장하지 않은 통과 수</li>
- *   <li>{@code passes.recovered}: 입력 부족으로 끝난 예보 실행의 배치가 닫은 통과를 되감으면서 찾아
+ *   <li>{@code passes.recovered}: 입력 부족으로 끝난 예보 실행의 배치가 확정한 통과를 복구하면서 찾아
  *       저장한 수</li>
- *   <li>{@code rejected}: 줄이 가득 차 넣지 못한 훑기 수. 다음 신호나 줍기가 다시 넣는다</li>
- *   <li>{@code unrouted}: 노선 열쇠를 아직 몰라 훑기를 넣지 않은 신호 수. 다음 줍기가 넣는다</li>
- *   <li>{@code state.routes}, {@code state.observations}, {@code state.events}: 들고 있는 상태의 크기(게이지)</li>
+ *   <li>{@code rejected}: 큐가 가득 차 넣지 못한 배치 조회 수. 다음 신호나 미처리 배치 조회가 다시 넣는다</li>
+ *   <li>{@code unrouted}: 노선 키를 아직 몰라 배치 조회 작업을 넣지 않은 신호 수. 다음 미처리 배치 조회가 넣는다</li>
+ *   <li>{@code state.routes}, {@code state.observations}, {@code state.events}: 보관 중인 상태의 크기(게이지)</li>
  * </ul>
  */
 final class ForecastMetrics {

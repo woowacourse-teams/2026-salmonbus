@@ -12,11 +12,11 @@ import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * 한 흐름의 예측값, 예보 실행 결과, 닫힌 통과, 입력 확정 시각의 고정 기대값이다({@link Baseline}).
+ * 한 흐름의 예측값, 예보 실행 결과, 확정된 통과, 입력 확정 시각의 고정 기대값이다({@link Baseline}).
  * <ul>
  *   <li>{@code run 배치 결과 예측수}: 배치의 예보 실행 결과와 예측 수. 예측을 내지 않는 배치는 예측 수가 {@code -}다</li>
  *   <li>{@code obs 관측 목표:기대좌석:만석확률 …}: 관측 하나의 목표 정류장별 예측값</li>
- *   <li>{@code pass 운행시작관측 정류장 닫은관측}: 닫힌 통과</li>
+ *   <li>{@code pass 운행시작관측 정류장 닫은관측}: 확정된 통과</li>
  *   <li>{@code confirmed 배치 시각}: 배치에 남은 입력 확정 시각</li>
  * </ul>
  */
@@ -83,7 +83,7 @@ final class ForecastValueBaseline {
         return confirmed;
     }
 
-    /** {@code 운행시작관측 정류장 닫은관측} 모양의 닫힌 통과. */
+    /** {@code 운행시작관측 정류장 닫은관측} 모양의 확정된 통과. */
     Set<String> passes() {
         return passes;
     }

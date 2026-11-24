@@ -5,7 +5,7 @@ import java.util.Map;
 /**
  * 노선 버전에 연결된 GBIS 노선 ID를 모델 계수에서 사용하는 노선 이름으로 변환한다.
  *
- * <p>DB는 노선 버전 ID를 사용하고 모델 계수는 <b>1650</b>·<b>3330</b> 같은 노선 이름을 사용한다.
+ * <p>DB는 노선 버전 ID를 사용하고 모델 계수는 <b>1650</b>, <b>3330</b> 같은 노선 이름을 사용한다.
  * GBIS 노선 ID로 둘을 연결한다. 노선 개편으로 버전이 바뀌어도 GBIS 노선 ID가 같으면
  * 같은 노선의 계수를 찾을 수 있다.
  *
@@ -47,7 +47,7 @@ public final class ModelRoute {
     public static String of(String sourceRouteId) {
         String modelRoute = BY_SOURCE_ROUTE_ID.get(sourceRouteId);
         if (modelRoute == null) {
-            throw new IllegalArgumentException("계수 묶음이 안 담는 GBIS 노선이다: " + sourceRouteId);
+            throw new IllegalArgumentException("모델 번들이 지원하지 않는 GBIS 노선이다: " + sourceRouteId);
         }
         return modelRoute;
     }

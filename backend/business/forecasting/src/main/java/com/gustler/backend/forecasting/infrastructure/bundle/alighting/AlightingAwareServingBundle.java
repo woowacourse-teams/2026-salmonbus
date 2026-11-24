@@ -16,7 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
-/** 검증 영수증과 실제 대조 계산을 통과한 묶음만 기존 활성화 경계에 넘긴다. */
+/** 검증 결과 파일을 확인하고 수치 대조를 통과한 모델 번들만 활성화 단계에 전달한다. */
 public final class AlightingAwareServingBundle {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();

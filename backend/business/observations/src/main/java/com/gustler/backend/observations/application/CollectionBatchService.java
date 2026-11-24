@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 호출 전 준비와 호출 후 관측·품질 저장을 각각 확정한다. 외부 HTTP는 이 경계 밖에서 수행한다. */
+/** HTTP 요청 전의 준비와 응답 후의 관측 저장 및 품질 검사를 각각 트랜잭션으로 확정한다. HTTP 요청은 트랜잭션 밖에서 수행한다. */
 @Service
 public class CollectionBatchService {
 
@@ -118,7 +118,7 @@ public class CollectionBatchService {
     private void logExcludedRows(final long batchId, ObservationRows observationRows) {
         for (VehicleObservationRow row : observationRows.excludedRows()) {
             LOGGER.warn(
-                    "쌓을 수 없는 관측을 뺐다. 묶음={} 상류행={} 운행상태={} 정류소순번={}",
+                    "저장할 수 없는 관측을 제외했다. 묶음={} 상류행={} 운행상태={} 정류소순번={}",
                     batchId,
                     row.sourceRowNumber(),
                     row.observation().runningState(),

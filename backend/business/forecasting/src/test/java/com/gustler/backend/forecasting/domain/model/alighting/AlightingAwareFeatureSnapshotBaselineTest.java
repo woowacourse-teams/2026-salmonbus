@@ -19,8 +19,8 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 /**
- * 배치·차량·목표 세 단으로 나눈 입력 계산이 고정 시드 입력에서 기록해 둔 기대값({@link FeatureSnapshotBaseline})과 비트 단위로 같은
- * 결과와 같은 예외를 내는지 확인한다. 기대값은 다시 만들 수 없으므로 노선·관측을 만드는 흐름과 난수를 뽑는 순서를 바꾸지 않는다.
+ * 배치, 차량, 목표 세 단으로 나눈 입력 계산이 고정 시드 입력에서 기록해 둔 기대값({@link FeatureSnapshotBaseline})과 비트 단위로 같은
+ * 결과와 같은 예외를 내는지 확인한다. 기대값은 다시 만들 수 없으므로 노선, 관측을 만드는 흐름과 난수를 뽑는 순서를 바꾸지 않는다.
  */
 class AlightingAwareFeatureSnapshotBaselineTest {
 
@@ -431,7 +431,7 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         return current.error() == null && expected.tripStart().equals(current.value());
     }
 
-    /** 목표와 무관한 값(관측 값, 정원, 기준 관측 번호, 기준 관측)을 글로 적는다. 값 대신 예외가 나면 그 예외를 적는다. */
+    /** 목표와 무관한 값(관측 값, 정원, 기준 관측 번호, 기준 관측)을 글로 기록한다. 값 대신 예외가 나면 그 예외를 기록한다. */
     private static String values(AlightingAwareFeatureSnapshot snapshot) {
         return String.join(
                 "\n",
@@ -877,7 +877,7 @@ class AlightingAwareFeatureSnapshotBaselineTest {
             return expected.targets().get(targets.indexOf(target));
         }
 
-        /** 같은 목표를 다시 불러 받은 입력 벡터가 처음과 다르면 불일치로 적는다. */
+        /** 같은 목표를 다시 불러 받은 입력 벡터가 처음과 다르면 불일치로 기록한다. */
         private void remember(
             final int target,
             AlightingAwareFeatureVector vector,
@@ -889,7 +889,7 @@ class AlightingAwareFeatureSnapshotBaselineTest {
             }
         }
 
-        /** 다시 읽은 값이 처음과 다르면 불일치로 적는다. */
+        /** 다시 읽은 값이 처음과 다르면 불일치로 기록한다. */
         private void rememberValues(String read, Tally tally) {
             if (values == null) {
                 values = read;

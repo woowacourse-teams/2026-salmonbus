@@ -10,10 +10,7 @@ import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import java.util.Optional;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 기동 시 사용할 모델을 적재해 런타임 조회 경계에 제공한다.
- * 모델 파일 검증 실패를 사용 가능한 모델로 숨기지 않는다.
- */
+/** 기동 시 사용할 모델을 적재하고 런타임 조회에서 사용할 수 있게 등록한다. 검증에 실패한 모델은 등록하지 않는다. */
 public class ModelStartupService implements LoadConfiguredModel {
 
     private final ModelBundleLoader loader;

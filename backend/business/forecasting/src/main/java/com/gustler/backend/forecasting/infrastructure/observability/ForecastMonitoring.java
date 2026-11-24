@@ -32,8 +32,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 수집과 예보의 진단 지표를 낸다. scrape는 메모리만 읽는다. 새로 저장된 채점 결과는 메모리에 모았다가 5분마다
- * {@code event=forecast_accuracy} 로그로 낸다. 다시 뜨면 모아 둔 것은 사라진다.
+ * 수집과 예보 지표를 제공한다. 지표를 조회할 때는 메모리만 읽는다.
+ * 새로 저장한 정산 결과를 메모리에 모아 5분마다 {@code event=forecast_accuracy} 로그로 남긴다.
+ * 프로세스를 재시작하면 아직 로그로 남기지 않은 집계는 사라진다.
  */
 @Component
 @Profile("observability")
@@ -305,8 +306,8 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
     }
 
     /**
-     * 모아 둔 정확도 합계를 꺼내 비우고 열쇠마다 한 줄씩 남긴다. 꺼내는 동안 들어온 결과는 다음 회차에 남는다. 노선·정류장 이름은
-     * 이때 한 번 읽으며, 읽지 못하면 이름 자리에 "정보 없음"을 적는다.
+     * 모아 둔 정확도 합계를 꺼내 비우고 키마다 한 행씩 남긴다. 꺼내는 동안 들어온 결과는 다음 회차에 남는다. 노선, 정류장 이름은
+     * 이때 한 번 읽으며, 읽지 못하면 이름 자리에 "정보 없음"을 기록한다.
      */
     @Scheduled(fixedDelay = 300000, initialDelay = 300000)
     public void flushAccuracy() {
@@ -393,7 +394,7 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
 
     }
 
-    /** 정확도 로그에 적을 이름이다. 읽지 못한 노선과 정류장은 "정보 없음"으로 답한다. */
+    /** 정확도 로그에 사용할 노선과 정류장 이름이다. 조회에 실패하면 "정보 없음"을 사용한다. */
     private record StopCatalog(
         Map<Long, String> routeNames,
         Map<StopKey, StopLabel> stops

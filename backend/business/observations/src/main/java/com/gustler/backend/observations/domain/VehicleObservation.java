@@ -3,8 +3,8 @@ package com.gustler.backend.observations.domain;
 import java.util.Objects;
 
 /**
- * 정규화한 원천 차량 관측이다.
- * 정류장·운행 상태·좌석의 알려진 값과 미제공 의미를 구분한다.
+ * 정규화한 차량 관측이다.
+ * 정류장, 운행 상태, 좌석의 알려진 값과 미제공 의미를 구분한다.
  */
 public record VehicleObservation(
     String vehicleId,
@@ -44,8 +44,8 @@ public record VehicleObservation(
     }
 
     /**
-     * 상류에서 받은 운행 상태가 해석 가능한 값인지 확인한다.
-     * 0 이동 중 · 1 도착 중 · 2 지나감만 해석하며, 그 밖의 값은 상태를 알 수 없다.
+     * GBIS에서 받은 운행 상태가 해석 가능한 값인지 확인한다.
+     * 0 이동 중 ,  1 도착 중 ,  2 지나감만 해석하며, 그 밖의 값은 상태를 알 수 없다.
      */
     public boolean hasKnownRunningState() {
         if (runningState == null) {
@@ -60,7 +60,7 @@ public record VehicleObservation(
      * 필수값이 모두 있어 저장할 수 있는 관측인지 확인한다.
      *
      * <p>필수값이 하나라도 없으면 해당 행의 INSERT가 실패한다. 수집 배치와 관측은 같은 트랜잭션에
-     * 저장되므로 차량 하나의 필수값이 빠져도 같은 배치의 다른 관측과 수집 완료 기록이 함께 롤백된다.
+     * 저장되므로 차량 하나의 필수값이 빠져도 같은 배치의 다른 관측과 수집 완료 기록이 같이 롤백된다.
      */
     public boolean isStorable() {
         return hasKnownStop() && hasKnownRunningState();

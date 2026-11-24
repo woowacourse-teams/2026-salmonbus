@@ -28,7 +28,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.PreparedStatementCreator;
 
-/** JDBC로 전달하는 값만 확인한다. PostgreSQL 제약·트랜잭션 검증은 Repository 통합 테스트가 담당한다. */
+/** JDBC로 전달하는 값만 확인한다. PostgreSQL 제약, 트랜잭션 검증은 Repository 통합 테스트가 담당한다. */
 class VehicleObservationBindingTest {
     @Test
     void 원본_순서와_도착_순번과_좌석_미관측을_JDBC_인자로_보존한다() throws SQLException {

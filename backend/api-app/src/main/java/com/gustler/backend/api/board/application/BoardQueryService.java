@@ -34,8 +34,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 같은 관측 판본의 노선·모델·차량·예보를 조합해 정류장별 탑승판을 만든다.
- * 읽는 동안 판본이 섞이지 않도록 반복 읽기 트랜잭션을 사용한다.
+ * 같은 관측 버전의 노선, 모델, 차량, 예보를 조합해 정류장별 탑승판을 만든다.
+ * 읽는 동안 버전이 섞이지 않도록 반복 읽기 트랜잭션을 사용한다.
  */
 @Service
 @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -92,9 +92,9 @@ public class BoardQueryService {
     /**
      * 여러 노선의 판정보드를 한 반복 읽기 트랜잭션에서 읽는다. 결과 순서는 요청 순서이며 같은 노선은 한 번만 담는다.
      *
-     * <p>노선마다 {@link #readBoard}와 같은 검사·캐시·조립 규칙을 쓴다. 한 노선의 검사·조립 실패는 그 노선의
+     * <p>노선마다 {@link #readBoard}와 같은 검사, 캐시, 조립 규칙을 쓴다. 한 노선의 검사, 조립 실패는 그 노선의
      * {@link BoardBatchRead#failure()}로만 남기고 다른 노선은 계속 읽는다. 스냅샷은 한 번에 읽고, 캐시에 없는 노선의
-     * 정류장·예보·차량도 노선 수와 관계없이 종류마다 한 번씩 읽는다. 저장소 조회가 실패하면 트랜잭션을 더 쓸 수 없으므로
+     * 정류장, 예보, 차량도 노선 수와 관계없이 종류마다 한 번씩 읽는다. 저장소 조회가 실패하면 트랜잭션을 더 쓸 수 없으므로
      * 노선별로 나누지 않고 예외를 그대로 던진다.
      *
      * <p>스냅샷을 읽은 뒤 {@code deadline}이 지났으면 캐시에 없는 노선 가운데 요청 순서로 첫 유효 노선만 조립하고 나머지는

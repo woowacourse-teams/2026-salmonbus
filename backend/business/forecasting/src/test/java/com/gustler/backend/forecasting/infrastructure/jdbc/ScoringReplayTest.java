@@ -25,7 +25,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * 채점 되감기가 예보·통과·수집 사실을 어디서부터 읽는지와, 수집 구멍·관측 상한이 있던 날에 되감아도 연속 실행과 같은 결과를 내는지
+ * 정산 복구가 예보, 통과, 수집 사실을 어디서부터 읽는지와, 관측 누락, 관측 상한이 있던 날에 복구해도 연속 실행과 같은 결과를 내는지
  * 본다.
  */
 class ScoringReplayTest {
@@ -191,7 +191,7 @@ class ScoringReplayTest {
         assertThat(reasons(continuous)).contains(ScoringReasons.OBSERVATION_INPUT_LIMIT);
     }
 
-    /** {@code cut} 앞의 사건을 저장된 것으로 보고 그 자리에서 상태를 버리고 되감은 뒤 나머지 사건을 이어 넣는다. */
+    /** {@code cut} 앞의 이벤트를 저장된 것으로 보고 그 자리에서 상태를 버리고 복구한 뒤 나머지 이벤트를 이어 넣는다. */
     private static Map<String, Object> storedRowsWithReplayAt(
         ScoringScenario scenario,
         List<Object> events,
@@ -247,7 +247,7 @@ class ScoringReplayTest {
         throw new AssertionError("수집 구멍이 없는 시나리오다");
     }
 
-    /** 수집 사건의 줄 수를 더해 가다 하루 상한을 처음 넘는 배치의 수집 사건 자리를 돌려준다. */
+    /** 수집 이벤트의 행 수를 더해 가다 하루 상한을 처음 넘는 배치의 수집 이벤트 자리를 반환한다. */
     private static int overflowIndex(List<Object> events, final int limit) {
         int rows = 0;
         for (int index = 0; index < events.size(); index++) {
@@ -261,7 +261,7 @@ class ScoringReplayTest {
         throw new AssertionError("관측 상한을 넘지 않는 시나리오다");
     }
 
-    /** {@code from}부터 처음 나오는 배치의 첫 사건(수집 사건) 자리를 돌려준다. 저장된 사건이 배치 단위로 끊기게 한다. */
+    /** {@code from}부터 처음 나오는 배치의 첫 이벤트(수집 이벤트) 자리를 반환한다. 저장된 이벤트가 배치 단위로 끊기게 한다. */
     private static int batchStart(List<Object> events, final int from) {
         for (int index = from; index < events.size(); index++) {
             if (events.get(index) instanceof ObservationBatchSeen) {
@@ -290,7 +290,7 @@ class ScoringReplayTest {
         );
     }
 
-    /** 아무 기록도 돌려주지 않고 되감기가 읽은 범위만 적어 둔다. */
+    /** 아무 기록도 돌려주지 않고 복구가 읽은 범위만 기록해 둔다. */
     private static final class RecordingStores implements ForecastRecordStore, StopPassStore {
 
         private final Optional<Instant> lastLabeled;

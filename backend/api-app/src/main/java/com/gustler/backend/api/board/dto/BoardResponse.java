@@ -13,7 +13,7 @@ import java.util.List;
  */
 @Schema(requiredProperties = {"route", "observedAt", "staleAt", "model", "vehiclesInService", "stops"})
 public record BoardResponse(
-    @Schema(description = "노선과 현재 판본의 방향 정보")
+    @Schema(description = "노선과 현재 버전의 방향 정보")
     BoardRouteResponse route,
     @Schema(description = "보드가 기준으로 사용한 관측 시각. ISO-8601 오프셋 포함")
     OffsetDateTime observedAt,
@@ -26,7 +26,7 @@ public record BoardResponse(
     @Schema(description = "노선의 정류장 목록. 접근 차량이 없는 정류장도 포함")
     List<StopStateResponse> stops
 ) {
-    /** 원본 참조와 분리하고 기존 null·원소·순서를 보존한다. */
+    /** 원본 참조와 분리하고 기존 null, 원소, 순서를 보존한다. */
     public BoardResponse {
         if (stops != null) {
             stops = Collections.unmodifiableList(new ArrayList<>(stops));

@@ -19,7 +19,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 /**
- * 계수 번들이 없어 활성 배포가 하나도 없는 동안은 배치를 켤 이유가 없다.
+ * 모델 번들이 없어 활성 배포가 하나도 없는 동안은 배치를 켤 이유가 없다.
  * 기본값이 예고 없이 바뀌면 아무 값도 내지 못하면서 몇 초마다 빈 질의만 실행한다.
  */
 @IntegrationTest

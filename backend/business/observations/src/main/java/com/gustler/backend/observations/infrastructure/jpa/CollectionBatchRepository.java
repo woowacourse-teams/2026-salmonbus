@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 관리 중인 배치 객체를 직접 변경하며 관측과 배치의 저장 순서를 지킨다. */
+/** 조회한 배치 엔티티를 직접 변경하고 관측과 배치를 정해진 순서로 저장한다. */
 @Repository
 @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
 public class CollectionBatchRepository {
@@ -30,7 +30,7 @@ public class CollectionBatchRepository {
         this.observations = observations;
     }
 
-    /** 기존 배치는 예보 확정 여부를 검사하고 지난 관측을 지운 뒤 다음 시도로 연다. */
+    /** 기존 배치는 예보 입력 확정 여부를 확인하고 이전 관측을 삭제한 뒤 다음 수집 시도를 시작한다. */
     public CollectionPreparation.Batch prepare(CollectionPlan plan, final boolean reserved) {
         Optional<ObservationBatchJpaEntity> existing =
             batches.findByRouteVersionIdAndAttemptKey(plan.routeVersionId(), plan.attemptKey());
@@ -63,7 +63,7 @@ public class CollectionBatchRepository {
         }
     }
 
-    /** 관측 INSERT 뒤 배치를 종료한다. 품질 조사와 변경 통지에 필요한 노선 판본 번호를 반환한다. */
+    /** 관측 INSERT를 마친 뒤 배치를 완료 처리한다. 품질 검사와 변경 알림에 사용할 노선 버전 ID를 반환한다. */
     public long conclude(final long batchId, CollectionResult result, OffsetDateTime receivedAt) {
         ObservationBatchJpaEntity batch = batches.findById(batchId).orElseThrow();
         if (result.observations().isPresent()) {

@@ -54,11 +54,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보 경로가 관측 흐름을 처리해 저장한 예측값·실행 결과·닫힌 통과를 실제 DB로 본다. 기대값은 기준 구현(dev {@code e98ae3ea}의
- * 발행)이 같은 흐름에 낸 값이다({@link ForecastValueBaseline}). 착수 시각은 시계에서 찍으므로, 배치마다 흐름이 정한 착수 시각을
+ * 예보 경로가 관측 흐름을 처리해 저장한 예측값, 실행 결과, 확정된 통과를 실제 DB로 본다. 기대값은 기준 구현(dev {@code e98ae3ea}의
+ * 발행)이 같은 흐름에 낸 값이다({@link ForecastValueBaseline}). 처리 시작 시각은 시계에서 찍으므로, 배치마다 흐름이 정한 처리 시작 시각을
  * 시계에 넣어 기대값과 조건을 맞춘다.
  *
- * <p>노선별 실행 줄은 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다. 흐름의 배치는 미리 모두 DB에 있고, 예보는
+ * <p>노선별 실행기는 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다. 흐름의 배치는 미리 모두 DB에 있고, 예보는
  * 수집이 커밋한 것으로 친 배치만 본다({@link CommittedBatches}). 그래서 신호 하나가 그 배치 하나를 그 시각에 처리한다.
  */
 @ForecastingIntegrationTest
@@ -424,7 +424,7 @@ class RunForecastsServiceTest {
         });
     }
 
-    /** 기대값이 예측 수를 적어 둔 배치의 저장된 예측 수다. */
+    /** 기대값이 예측 수를 기록해 둔 배치의 저장된 예측 수다. */
     private Map<Integer, Integer> predictionCounts(
         Harness harness,
         ForecastValueBaseline baseline
@@ -475,8 +475,8 @@ class RunForecastsServiceTest {
         }
 
         /**
-         * @param versionSwitch 노선 판본이 바뀌는 시각. 비어 있으면 한 판본이다
-         * @param extended 시간 확장 모델을 함께 둘지
+         * @param versionSwitch 노선 버전이 바뀌는 시각. 비어 있으면 한 버전이다
+         * @param extended 시간 확장 모델을 같이 둘지
          * @param rushOnly 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를 예보하지 않을지
          */
         private Harness(
@@ -524,7 +524,7 @@ class RunForecastsServiceTest {
             runtime = activate(model);
         }
 
-        /** 예보 경로를 새로 띄운다. 노선 상태와 지표가 빈 채로 시작하므로 첫 배치가 되감는다. */
+        /** 예보 경로를 새로 띄운다. 노선 상태와 지표가 빈 채로 시작하므로 첫 배치가 복구한다. */
         private void start(Duration replayWindow, final int batchLimit) {
             meters = new SimpleMeterRegistry();
             JdbcReplaySource source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
@@ -567,7 +567,7 @@ class RunForecastsServiceTest {
         }
 
         /**
-         * 기대값 파일의 착수 시각을 옛 컬럼에 넣어, 예보 실행 기록만 조회하는지를 검증한다.
+         * 기대값 파일의 처리 시작 시각을 옛 컬럼에 넣어, 예보 실행 기록만 조회하는지를 검증한다.
          */
         private void confirmInputs(ForecastValueBaseline baseline) {
             baseline.confirmed().forEach((ordinal, at) -> jdbc.sql(
@@ -575,7 +575,7 @@ class RunForecastsServiceTest {
                 .params(at.atOffset(ZoneOffset.UTC), keys.batchId(ordinal)).update());
         }
 
-        /** 수집 결과가 성공(줄 있음·빈 응답)인 배치를 처리 순서로. 예보 경로가 처리할 대상이다. */
+        /** 수집 결과가 성공(줄 있음, 빈 응답)인 배치를 처리 순서로. 예보 경로가 처리할 대상이다. */
         private List<Long> batches() {
             return stream.batches().stream().filter(batchId -> !meta.get(batchId).outcome().startsWith("FAILED"))
                 .toList();
@@ -632,7 +632,7 @@ class RunForecastsServiceTest {
             }
         }
 
-        /** 그 배치에서 예보하지 않은, 차량 번호가 있는 관측이다. 되감은 직후 빠진 차량을 관측 단위로 확인하는 데 쓴다. */
+        /** 그 배치에서 예보하지 않은, 차량 번호가 있는 관측이다. 복구한 직후 빠진 차량을 관측 단위로 확인하는 데 쓴다. */
         private List<Long> withheldObservations(final long batchId) {
             return jdbc.sql("""
                 SELECT o.id FROM vehicle_observation o
@@ -641,7 +641,7 @@ class RunForecastsServiceTest {
                 """).param(batchId).query(Long.class).list();
         }
 
-        /** 되감은 직후라 예보에서 뺀 차량 관측 수(두 사유의 합). */
+        /** 복구한 직후라 예보에서 뺀 차량 관측 수(두 사유의 합). */
         private double excluded() {
             return counter("excluded", ForecastStage.TRIP_START_UNKNOWN)
                 + counter("excluded", ForecastStage.REPLAY_HISTORY_INCOMPLETE);

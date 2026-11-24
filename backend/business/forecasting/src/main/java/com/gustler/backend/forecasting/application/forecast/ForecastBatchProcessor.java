@@ -33,34 +33,34 @@ import org.springframework.transaction.support.TransactionOperations;
 /**
  * 관측 배치 하나를 예보하고 저장하는 단계다.
  *
- * <p>수집에 성공한 배치(줄 있음·빈 응답)만 받는다. 한 번의 처리는 다음 순서다. 착수 시각은 부르는 쪽이
+ * <p>수집에 성공한 배치(줄 있음, 빈 응답)만 받는다. 한 번의 처리는 다음 순서다. 처리 시작 시각은 호출자가
  * {@link ObservationBatchRead#batch()}에 넣어 넘긴다.
  * <ol>
- *   <li>확정 조건(정상 수집, 줄이 있는 성공, 수신 뒤 90초 안 착수)을 만족하지 않는 배치는 상태에 넣지 않고 그 사유
- *       ({@code LATE}, {@code EMPTY}, {@code INPUT_UNAVAILABLE})만 실행 줄로 남긴다.</li>
- *   <li>노선 상태가 없으면 이 배치 직전까지 되감아 만든다({@link RouteStateReplayer}). 되감기가 실패하면 그 노선은 착수 시각 기준
- *       {@value #REPLAY_RETRY_MINUTES}분 동안 되감지 않고 예보 없이 {@code INPUT_UNAVAILABLE} 실행 줄만 남긴다.</li>
+ *   <li>확정 조건(정상 수집, 관측이 있는 성공, 수신 뒤 90초 안 착수)을 만족하지 않는 배치는 상태에 넣지 않고 그 사유
+ *       ({@code LATE}, {@code EMPTY}, {@code INPUT_UNAVAILABLE})만 실행 기록으로 남긴다.</li>
+ *   <li>노선 상태가 없으면 이 배치 직전까지 복구해 만든다({@link RouteStateReplayer}). 복구가 실패하면 그 노선은 처리 시작 시각 기준
+ *       {@value #REPLAY_RETRY_MINUTES}분 동안 복구하지 않고 예보 없이 {@code INPUT_UNAVAILABLE} 실행 기록만 남긴다.</li>
  *   <li>상태가 마지막으로 반영한 배치보다 먼저 수신한 배치면 이력에 넣지 않고 아무것도 쓰지 않는다
- *       ({@link Status#OUT_OF_ORDER}). 부르는 쪽은 배치를 수신 순서로 넘기므로, 수집이 먼저 받은 배치를 나중에 커밋했을 때만
+ *       ({@link Status#OUT_OF_ORDER}). 호출자는 배치를 수신 순서로 넘기므로, 수집이 먼저 받은 배치를 나중에 커밋했을 때만
  *       생긴다.</li>
- *   <li>{@link ForecastStage#advance}로 상태를 전진시키고 예측 조립 객체({@link AlightingAwarePredictionAssembler})로 예측을
- *       만든다. 출퇴근 범위 판정의 기준 시각은 이 배치의 착수 시각이다. 이미 반영한 배치면 아무것도 쓰지 않는다.</li>
- *   <li>예보 실행·버스별 기록·닫힌 통과를 한 트랜잭션으로 쓰고, 커밋한 뒤에만 상태를 바꾼다. 같은 배치의 실행 줄이 이미 있으면
- *       저장을 되돌리고 상태를 버린다({@link Status#DUPLICATE}). 실행 줄에는 뒤 단계에 넘기는 것과 같은 수집 사건의 수집 구멍
- *       여부와 관측 줄 수를 함께 적는다. 채점이 다시 뜰 때 이 값으로 그날의 구멍과 줄 수를 되살린다.</li>
- *   <li>사건을 수집 → 통과 → 예보 순서로 {@link ForecastEvents}에 넘긴다.</li>
+ *   <li>{@link ForecastStage#advance}로 상태를 갱신하고 예측 조립 객체({@link AlightingAwarePredictionAssembler})로 예측을
+ *       만든다. 출퇴근 범위 판정의 기준 시각은 이 배치의 처리 시작 시각이다. 이미 반영한 배치면 아무것도 쓰지 않는다.</li>
+ *   <li>예보 실행, 버스별 기록, 확정된 통과를 한 트랜잭션으로 쓰고, 커밋한 뒤에만 상태를 바꾼다. 같은 배치의 실행 기록이 이미 있으면
+ *       저장을 되돌리고 상태를 버린다({@link Status#DUPLICATE}). 실행 기록에는 뒤 단계에 넘기는 것과 같은 수집 이벤트의 관측 누락
+ *       여부와 관측 행 수를 같이 기록한다. 정산이 재시작할 때 이 값으로 그날의 누락과 행 수를 되살린다.</li>
+ *   <li>이벤트를 수집 → 통과 → 예보 순서로 {@link ForecastEvents}에 넘긴다.</li>
  * </ol>
- * 예외는 그대로 던진다. 부르는 쪽이 그 노선의 상태를 버린다. {@code route} 행 잠금을 잡지 않고 {@code observation_batch}에 쓰지
+ * 예외는 그대로 던진다. 호출자가 그 노선의 상태를 버린다. {@code route} 행 잠금을 사용하지 않고 {@code observation_batch}에 쓰지
  * 않는다. 한 노선의 처리는 한 스레드에서만 해야 한다.
  *
- * <p>되감기가 입력 부족으로 끝난 예보 실행의 통과를 찾아 주면
+ * <p>복구가 입력 부족으로 끝난 예보 실행의 통과를 찾아 주면
  * ({@link RouteStateReplayer.Result#recoveredPasses}) 아직 저장되지 않은 것만 이 배치와 같은 트랜잭션으로 저장하고, 이 배치의
- * 사건보다 먼저 통과 사건으로 넘긴다. 그 통과의 닫힌 시각은 이미 넘긴 사건들의 시각보다 이르다. 채점 단계는 통과를 닫힌 시각으로
+ * 이벤트보다 먼저 통과 이벤트로 넘긴다. 그 통과의 닫힌 시각은 이미 넘긴 이벤트들의 시각보다 이르다. 정산 단계는 통과를 확정된 시각으로
  * 정렬해 두고 직전 통과를 찾으므로 같은 직전 통과와 같은 정답을 낸다.
  */
 public final class ForecastBatchProcessor {
 
-    /** 되감기가 실패한 노선을 다시 되감기까지 기다리는 분. 배치의 착수 시각 기준이다. */
+    /** 복구가 실패한 노선을 다시 복구까지 기다리는 분. 배치의 처리 시작 시각 기준이다. */
     public static final long REPLAY_RETRY_MINUTES = 5;
     static final Duration REPLAY_RETRY = Duration.ofMinutes(REPLAY_RETRY_MINUTES);
     private static final Logger LOGGER = LoggerFactory.getLogger(ForecastBatchProcessor.class);
@@ -78,7 +78,7 @@ public final class ForecastBatchProcessor {
 
     /**
      * @param transactions 저장 트랜잭션
-     * @param events 커밋 뒤 사건을 받을 뒤 단계. 던진 예외는 로그로 남기고 삼킨다. 저장은 이미 커밋했으므로 이 배치의 처리를
+     * @param events 커밋 뒤 이벤트를 받을 뒤 단계. 던진 예외는 로그로 남기고 삼킨다. 저장은 이미 커밋했으므로 이 배치의 처리를
      *               실패로 만들지 않는다
      * @param states 노선 상태 등록부. 이 처리기가 상태를 읽고 바꾼다
      * @param rushOnly 참이면 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를 예보하지 않는다
@@ -111,9 +111,9 @@ public final class ForecastBatchProcessor {
     /**
      * 배치 하나를 처리한다.
      *
-     * @param context 노선 판본의 모델 문맥
-     * @param read 배치와 배치 밖 값. 부르는 쪽이 이 처리에서 찍은 착수 시각을 배치에 넣어 넘긴다. 이 시각이 상태와 90초 판정의
-     *     기준이고 실행 줄에 그대로 적힌다. 메모리의 상태가 든 시각과 다시 뜬 뒤 DB에서 읽는 시각이 같도록 저장
+     * @param context 노선 버전의 모델 정보
+     * @param read 배치와 배치 밖 값. 호출자가 이 처리에서 찍은 처리 시작 시각을 배치에 넣어 넘긴다. 이 시각이 상태와 90초 판정의
+     *     기준이고 실행 기록에 그대로 기록된다. 메모리의 상태가 든 시각과 재시작한 뒤 DB에서 읽는 시각이 같도록 저장
      *     자릿수(마이크로초)로 자른 값이어야 한다
      * @return 처리 결과
      */
@@ -257,8 +257,8 @@ public final class ForecastBatchProcessor {
     }
 
     /**
-     * 되감으며 찾은 통과 가운데 아직 저장되지 않은 것만 남긴다. 같은 실행 줄은 다음 되감기 창에도 들어 있어 같은 통과를 다시 찾는다.
-     * 이미 저장된 통과는 채점이 받았거나 채점의 되감기가 읽으므로 다시 넘기지 않는다.
+     * 복구하면서 찾은 통과 가운데 아직 저장되지 않은 것만 남긴다. 같은 실행 기록은 다음 복구 범위에도 들어 있어 같은 통과를 다시 찾는다.
+     * 이미 저장된 통과는 정산이 받았거나 정산의 복구가 읽으므로 다시 넘기지 않는다.
      */
     private List<PassClosed> withoutStored(List<PassClosed> recovered) {
         if (recovered.isEmpty()) {
@@ -394,7 +394,7 @@ public final class ForecastBatchProcessor {
         return ForecastOutcome.PUBLISHED;
     }
 
-    /** 시간 확장 모델이 없을 때 출퇴근 범위 밖인지다. 기준 시각은 이 배치의 착수 시각이다. */
+    /** 시간 확장 모델이 없을 때 출퇴근 범위 밖인지 확인한다. 기준 시각은 이 배치의 처리 시작 시각이다. */
     private boolean outsideScope(RouteContext context, ForecastBatch batch) {
         if (!rushOnly || context.runtime().model().supportsExtendedHours()) {
             return false;
@@ -547,14 +547,14 @@ public final class ForecastBatchProcessor {
     /** 처리 결과의 종류다. */
     public enum Status {
 
-        /** 실행 줄을 저장하고 사건을 넘겼다. */
+        /** 실행 기록을 저장하고 이벤트를 넘겼다. */
         SAVED,
         /** 이미 반영한 배치라 아무것도 쓰지 않았다. */
         STALE,
-        /** 같은 배치의 실행 줄이 이미 있어 저장을 되돌리고 상태를 버렸다. */
+        /** 같은 배치의 실행 기록이 이미 있어 저장을 되돌리고 상태를 버렸다. */
         DUPLICATE,
         /**
-         * 노선 상태가 마지막으로 반영한 배치보다 먼저 수신한 배치라 아무것도 쓰지 않았다. 실행 줄이 없으므로 다음 훑기가 다시
+         * 노선 상태가 마지막으로 반영한 배치보다 먼저 수신한 배치라 아무것도 쓰지 않았다. 실행 기록이 없으므로 다음 배치 조회 작업이 다시
          * 처리하고, 수신 뒤 90초가 지나면 늦음으로 닫힌다.
          */
         OUT_OF_ORDER
@@ -565,14 +565,14 @@ public final class ForecastBatchProcessor {
      *
      * @param status 처리 결과의 종류
      * @param published 저장한(또는 저장하려던) 예보 실행. {@link Status#STALE}과 {@link Status#OUT_OF_ORDER}면 없다
-     * @param closedPasses 저장한 닫힌 통과 수
-     * @param exclusions 되감은 직후라 예보에서 뺀 관측과 사유({@code TRIP_START_UNKNOWN}, {@code REPLAY_HISTORY_INCOMPLETE})
+     * @param closedPasses 저장한 확정된 통과 수
+     * @param exclusions 복구한 직후라 예보에서 뺀 관측과 사유({@code TRIP_START_UNKNOWN}, {@code REPLAY_HISTORY_INCOMPLETE})
      * @param withheld 정원을 모르거나 정원이 모델 범위 밖이라 예보에서 뺀 차량과 사유({@code VEHICLE_CAPACITY_UNKNOWN},
      *     {@code VEHICLE_CAPACITY_OUTSIDE_MODEL_SCOPE}). 출퇴근 범위 밖이라 배치 전체를 예보하지 않았으면 비어 있다
      * @param special 실행 결과와 따로 정해진 배치 분류({@code replay_deferred}, {@code replay_failed}). 없으면 비어 있다
-     * @param replayed 이 처리에서 되감았으면 성공 여부, 되감지 않았으면 비어 있다
+     * @param replayed 이 처리에서 복구했다면 성공 여부, 복구하지 않았으면 비어 있다
      * @param unattributedPasses 이 배치가 닫았지만 연결 시작을 보지 못한 차량이라 저장하지 않은 통과 수
-     * @param recoveredPasses 되감으며 찾아 이 배치와 함께 저장한, 닫은 통과가 저장되지 않은 배치의 통과 수
+     * @param recoveredPasses 복구하면서 찾아 이 배치와 같이 저장한, 확정한 통과가 저장되지 않은 배치의 통과 수
      */
     public record Processed(
         Status status,
@@ -612,7 +612,7 @@ public final class ForecastBatchProcessor {
             );
         }
 
-        /** 되감은 직후라 예보에서 뺀 관측. */
+        /** 복구한 직후라 예보에서 뺀 관측. */
         public Set<Long> excluded() {
             return exclusions.keySet();
         }
@@ -629,7 +629,7 @@ public final class ForecastBatchProcessor {
     /**
      * 배치 하나의 처리 결과다. 다음 상태가 없으면 상태를 바꾸지 않고, {@code dropState}면 상태를 버린다.
      * {@code special}은 실행 결과와 따로 정해진 배치 분류다. {@code unattributed}는 저장하지 않은 통과 수다.
-     * {@code excluded}는 되감은 직후라 뺀 관측이고 {@code withheld}는 정원 때문에 뺀 차량이다.
+     * {@code excluded}는 복구한 직후라 뺀 관측이고 {@code withheld}는 정원 때문에 뺀 차량이다.
      */
     private record Outcome(
         ForecastOutcome outcome,
@@ -684,8 +684,8 @@ public final class ForecastBatchProcessor {
     }
 
     /**
-     * 이 처리에서 한 되감기다. {@code succeeded}는 되감았으면 성공 여부, 되감지 않았으면 비어 있다.
-     * {@code recovered}는 되감으며 찾은, 닫은 통과가 저장되지 않은 배치의 통과다.
+     * 이 처리에서 한 복구다. {@code succeeded}는 복구했다면 성공 여부, 복구하지 않았으면 비어 있다.
+     * {@code recovered}는 복구하면서 찾은, 확정한 통과가 저장되지 않은 배치의 통과다.
      */
     private record Replay(Boolean succeeded, List<PassClosed> recovered) {
 

@@ -13,7 +13,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 /**
- * Worker 기동 시 관측 열과 타입을 검증하기 위한 매핑이다. 실제 저장·삭제는 JDBC 저장소가 수행한다.
+ * Worker 기동 시 관측 열과 타입을 검증하기 위한 매핑이다. 실제 저장, 삭제는 JDBC 저장소가 수행한다.
  * 저장용 임시 객체로 생성하거나 저장 결과를 복사하지 않는다.
  *
  * <p>조회 쪽도 이 표를 매핑한다. 같은 물리 컬럼에 논리명이 둘이면 Hibernate 가

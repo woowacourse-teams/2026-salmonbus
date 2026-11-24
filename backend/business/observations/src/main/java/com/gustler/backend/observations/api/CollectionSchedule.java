@@ -57,7 +57,7 @@ public enum CollectionSchedule {
         return dailyCallsFor(routeCount) <= dailyLimit;
     }
 
-    /** 한국 시각으로 고른다. 서버 타임존이나 세계 표준시 날짜와 다르다. */
+    /** 수집 시간대는 한국 시각으로 정한다. 서버의 기본 시간대나 UTC 날짜를 사용하지 않는다. */
     public static CollectionSchedule at(Instant at) {
         return atHour(at.atZone(KOREA).getHour());
     }
@@ -66,7 +66,7 @@ public enum CollectionSchedule {
         return Arrays.stream(values())
             .filter(phase -> phase.covers(hour))
             .findFirst()
-            .orElseThrow(() -> new IllegalStateException("%d 시를 담는 수집 단계가 없다".formatted(hour)));
+            .orElseThrow(() -> new IllegalStateException("%d시가 포함된 수집 시간대가 없다".formatted(hour)));
     }
 
     public int intervalSeconds() {

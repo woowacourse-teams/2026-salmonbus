@@ -279,7 +279,7 @@ class VehicleObservationRepositoryTest {
     /**
      * 유일성 위반으로 거절된 저장과, 그 저장이 지켰어야 할 파티션 인덱스의 이름이다. 줄은 넣는 날(한국)의 파티션으로 가고 유일성
      * 위반은 그 파티션의 인덱스 이름으로 보고된다. 인덱스 이름은 저장과 같은 트랜잭션에서 읽는다. 트랜잭션 안에서 now() 는 변하지
-     * 않으므로 줄이 기본값으로 받는 source_date 와 같은 날짜의 파티션을 가리킨다.
+     * 않으므로 행이 기본값으로 받는 source_date 와 같은 날짜의 파티션을 가리킨다.
      */
     private Rejection rejectionOf(
         List<VehicleObservationRow> rows,
@@ -347,7 +347,7 @@ class VehicleObservationRepositoryTest {
         return new Batch(batchId, routeVersionId);
     }
 
-    /** 문장 단위 트리거로 관측 INSERT 문장 수를 센다. 트랜잭션과 함께 롤백된다. */
+    /** 문장 단위 트리거로 관측 INSERT 문장 수를 센다. 트랜잭션과 같이 롤백된다. */
     private void countInsertStatements() {
         jdbc.sql("CREATE TABLE test_observation_insert_statement (fired integer NOT NULL)").update();
         jdbc.sql("""

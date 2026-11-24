@@ -23,7 +23,7 @@ public final class Sha256 {
         try {
             return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException error) {
-            throw new IllegalStateException("SHA-256 을 못 찾는다", error);
+            throw new IllegalStateException("SHA-256 해시 함수를 사용할 수 없다", error);
         }
     }
 }

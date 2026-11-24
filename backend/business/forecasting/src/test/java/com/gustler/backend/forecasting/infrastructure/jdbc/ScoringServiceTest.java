@@ -38,9 +38,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
- * 채점이 사건을 버리거나 처리 중 예외가 나거나 다시 떠도, 저장된 기록을 되감아 연속 실행과 같은 결과 집합을 쓰는지 본다.
- * 줄은 넣는 즉시 같은 스레드에서 실행한다. 저장소는 메모리에 두고, 예보 경로처럼 배치의 실행 줄(수집 사실 포함)과 통과를 먼저
- * 저장한 뒤에 그 배치의 사건을 넘긴다.
+ * 정산이 이벤트를 버리거나 처리 중 예외가 나거나 다시 떠도, 저장된 기록을 복구해 연속 실행과 같은 결과 집합을 쓰는지 본다.
+ * 줄은 넣는 즉시 같은 스레드에서 실행한다. 저장소는 메모리에 두고, 예보 경로처럼 배치의 실행 기록(수집 사실 포함)과 통과를 먼저
+ * 저장한 뒤에 그 배치의 이벤트를 넘긴다.
  */
 class ScoringServiceTest {
 
@@ -223,7 +223,7 @@ class ScoringServiceTest {
         ScoringResult all = ScoringScenario.feed(continuous, events).plus(continuous.expire(end(events)));
         assertSoftly(softly -> {
             softly.assertThat(before.closed).as("내려가기 전에 저장한 결과").isNotEmpty();
-            softly.assertThat(reportedAfterReplay).as("쓰지 못한 결과는 되감은 프로세스가 저장하며 알린다").isPositive();
+            softly.assertThat(reportedAfterReplay).as("쓰지 못한 결과는 복구한 프로세스가 저장하며 알린다").isPositive();
             softly.assertThat(after.replays("startup")).isOne();
             softly.assertThat(before.closed.size() + after.closed.size())
                 .as("닫힌 예측을 빠뜨리지도 두 번 알리지도 않는다")
@@ -484,14 +484,14 @@ class ScoringServiceTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(started).isTrue();
-            softly.assertThat(interrupted).as("되감기 도중에 온 중단 요청이 남아 있다").isTrue();
+            softly.assertThat(interrupted).as("복구 도중에 온 중단 요청이 남아 있다").isTrue();
             softly.assertThat(meters.find("salmonbus.scoring.replays").tag("reason", "startup").counters())
                 .extracting(Counter::count).containsExactly(1.0);
         });
     }
 
     /**
-     * 사건 목록 가운데쯤에서, 마지막 주기 쓰기(50번째 사건마다) 뒤에 닫힌 예측이 하나 이상 남는 끊는 자리를 찾는다. 그 자리에서
+     * 이벤트 목록 가운데쯤에서, 마지막 주기 쓰기(50번째 이벤트마다) 뒤에 정산을 마친 예측이 하나 이상 남는 끊는 자리를 찾는다. 그 자리에서
      * 멈추면 쓰지 못한 결과가 남는다.
      */
     private static int cutLeavingUnwrittenResults(ScoringScenario scenario) {
@@ -511,7 +511,7 @@ class ScoringServiceTest {
         throw new AssertionError("쓰지 못한 결과가 남는 자리가 없는 시나리오다");
     }
 
-    /** 주기 쓰기 뒤에 나온 결과를 쓰지 못한 채 멈추고, 그만큼 내려가 있다가 다시 떠서 사건 없이 마감만 닫은 뒤 저장된 줄을 모은다. */
+    /** 주기 쓰기 뒤에 나온 결과를 쓰지 못한 채 멈추고, 그만큼 내려가 있다가 다시 떠서 이벤트 없이 마감만 닫은 뒤 저장된 줄을 모은다. */
     private static Map<String, Object> storedAfterCrashAndDowntime(ScoringScenario scenario, Duration downtime) {
         Harness before = new Harness(scenario, scenario.stage(LIMIT));
         before.deliverUntilCrash(before.events.size());
@@ -522,7 +522,7 @@ class ScoringServiceTest {
     }
 
     /**
-     * 마지막 사건 때까지 닫히지 못한 예측 가운데 가장 오래 기다린 시간이다. 내려가 있던 시간이 짧을 때는 이 시간이 길어야, 되감기가
+     * 마지막 이벤트 때까지 닫히지 못한 예측 가운데 가장 오래 기다린 시간이다. 내려가 있던 시간이 짧을 때는 이 시간이 길어야, 복구가
      * 고정 2시간 10분만 읽던 때와의 차이가 드러난다.
      */
     private static Duration longestWaitAtEnd(ScoringScenario scenario) {
@@ -619,7 +619,7 @@ class ScoringServiceTest {
         };
     }
 
-    /** 배치의 기록을 저장한 뒤 그 배치의 사건을 채점에 넘기는 흉내다. */
+    /** 배치의 기록을 저장한 뒤 그 배치의 이벤트를 정산에 넘기는 흉내다. */
     private static final class Harness {
 
         private final ScoringScenario scenario;
@@ -693,7 +693,7 @@ class ScoringServiceTest {
             });
         }
 
-        /** 같은 저장소를 보는 새 프로세스를 만든다. 정답·미해결 저장은 새로 시작해 이 프로세스가 쓴 줄만 따로 볼 수 있게 한다. */
+        /** 같은 저장소를 보는 새 프로세스를 만든다. 정답, 미해결 저장은 새로 시작해 이 프로세스가 저장한 행만 따로 볼 수 있게 한다. */
         private Harness restarted(ScoringStage fresh) {
             return new Harness(
                     scenario,
@@ -705,7 +705,7 @@ class ScoringServiceTest {
             );
         }
 
-        /** 정답·미해결 저장까지 이어받는 새 프로세스를 만든다. 앞 프로세스가 저장한 줄은 이미 있는 키로 건너뛴다. */
+        /** 정답, 미해결 저장까지 이어받는 새 프로세스를 만든다. 앞 프로세스가 저장한 행은 이미 있는 키로 건너뛴다. */
         private Harness restartedOnSameStore(ScoringStage fresh) {
             return new Harness(
                     scenario,
@@ -779,7 +779,7 @@ class ScoringServiceTest {
         }
 
         /**
-         * 수집 사건으로 시작하는 배치의 사건을 예보 사건까지 한꺼번에 저장하고 시계를 그 배치의 착수 시각 뒤로 옮긴다. 사건은 저장을
+         * 수집 이벤트로 시작하는 배치의 이벤트를 예보 이벤트까지 한꺼번에 저장하고 시계를 그 배치의 처리 시작 시각 뒤로 옮긴다. 이벤트는 저장을
          * 커밋한 뒤에만 넘어가기 때문이다.
          */
         private void saveBatchAt(final int index) {
@@ -794,7 +794,7 @@ class ScoringServiceTest {
             }
         }
 
-        /** 사건이 더 오지 않는 노선의 마감을 벽시계로 닫고 결과를 쓴다. */
+        /** 이벤트가 더 오지 않는 노선의 마감을 현재 시각으로 닫고 결과를 쓴다. */
         private void closeIdle() {
             clock.at = clock.at.plus(Duration.ofHours(3));
             service.tick();
@@ -811,7 +811,7 @@ class ScoringServiceTest {
             }
         }
 
-        /** 지금까지 뜬 모든 프로세스가 저장한 정답 줄과 미해결 줄이다. */
+        /** 지금까지 뜬 모든 프로세스가 저장한 정답 기록과 미해결 기록이다. */
         private List<Object> savedRows() {
             return generations.stream()
                 .flatMap(generation -> generation.rows.values().stream())

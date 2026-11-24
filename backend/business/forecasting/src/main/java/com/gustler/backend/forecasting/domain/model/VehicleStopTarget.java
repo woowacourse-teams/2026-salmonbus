@@ -1,8 +1,6 @@
 package com.gustler.backend.forecasting.domain.model;
 
-/**
- * 현재 관측과 예보 대상 방문을 연결해 정류장 거리와 입력 좌석을 제공한다.
- */
+/** 기준 관측과 목표 정류장으로 정류장 간 거리와 입력 좌석을 구한다. */
 public record VehicleStopTarget(ObservedVehicle observation, RouteStop targetStop) {
 
     public VehicleStopTarget {
@@ -14,7 +12,7 @@ public record VehicleStopTarget(ObservedVehicle observation, RouteStop targetSto
         }
         if (observation.routeVersionId() != targetStop.routeVersionId()) {
             throw new IllegalArgumentException(
-                "관측과 대상 정류장의 노선 판본이 다르다: %d, %d"
+                "관측과 대상 정류장의 노선 버전이 다르다: %d, %d"
                 .formatted(observation.routeVersionId(), targetStop.routeVersionId())
             );
         }

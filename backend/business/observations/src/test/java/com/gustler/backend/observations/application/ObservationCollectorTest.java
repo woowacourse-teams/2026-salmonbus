@@ -51,7 +51,7 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 
 /**
  * 별도로 준비한 노선의 관측 저장과 미준비 노선의 수집 건너뛰기를 확인한다.
- * 상류만 시험용 대역이고 나머지는 실제 배선과 DB 를 그대로 쓴다.
+ * GBIS만 시험용 대역이고 나머지는 실제 배선과 DB 를 그대로 쓴다.
  */
 @ObservationIntegrationTest
 @RecordApplicationEvents
@@ -393,7 +393,7 @@ class ObservationCollectorTest {
     void 노선_행_확보와_판본_열기가_한_트랜잭션에서_끝난다() {
         // given
         clearCatalog();
-        // 정류소 이름이 열 길이를 초과해 판본의 정류소 저장에 실패한다
+        // 정류소 이름이 열 길이를 초과해 버전의 정류소 저장에 실패한다
         given(routeSource.capture(ROUTE_3330))
             .willReturn(normalizedCapture(new RouteSourceResult.Success(routeWithTooLongStopName())));
 
@@ -402,7 +402,7 @@ class ObservationCollectorTest {
             TICK.atZone(ZoneId.of("Asia/Seoul")).toOffsetDateTime())).isInstanceOf(RuntimeException.class);
 
         // then
-        // 노선 행만 남고 판본이 없는 상태가 안 된다
+        // 노선 행만 남고 버전이 없는 상태가 안 된다
         assertThat(routeRowCount()).isZero();
     }
 
@@ -522,7 +522,7 @@ class ObservationCollectorTest {
 
     /**
      * 정류소 이름이 route_stop.name 의 varchar(60) 을 넘는다.
-     * 노선 행을 저장한 뒤 판본의 정류소 저장에 실패하므로 트랜잭션이 적용돼 있으면 노선 행도 함께 롤백된다.
+     * 노선 행을 저장한 뒤 버전의 정류소 저장에 실패하므로 트랜잭션이 적용돼 있으면 노선 행도 같이 롤백된다.
      */
     private static UpstreamRoute routeWithTooLongStopName() {
         return new UpstreamRoute(

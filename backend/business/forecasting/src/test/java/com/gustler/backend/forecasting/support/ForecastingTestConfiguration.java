@@ -29,7 +29,7 @@ class ForecastingTestConfiguration {
         return new ForecastPolicy(staleness, batchLimit);
     }
 
-    /** 실행하는 앱이 등록하는 노선별 실행 줄 대신, 넣은 일을 부른 스레드에서 바로 실행한다. */
+    /** 실행하는 앱이 등록하는 노선별 실행기 대신, 넣은 일을 부른 스레드에서 바로 실행한다. */
     @Bean
     ForecastLanes forecastLanes() {
         return (routeKey, task) -> {
@@ -38,7 +38,7 @@ class ForecastingTestConfiguration {
         };
     }
 
-    /** 실행하는 앱이 등록하는 채점 줄 대신, 넣은 일을 부른 스레드에서 바로 실행한다. */
+    /** 실행하는 앱이 등록하는 정산 큐 대신, 넣은 일을 부른 스레드에서 바로 실행한다. */
     @Bean
     ScoringFeed scoringFeed() {
         return task -> {

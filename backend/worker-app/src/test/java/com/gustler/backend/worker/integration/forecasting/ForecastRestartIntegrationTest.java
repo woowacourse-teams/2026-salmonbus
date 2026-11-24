@@ -53,15 +53,15 @@ import org.springframework.test.context.MergedContextConfiguration;
 import org.springframework.test.context.SmartContextLoader;
 
 /**
- * 예보를 켠 worker를 실제로 띄워, 실행 줄에 일이 쌓인 채로 닫았다가 같은 DB로 다시 띄운다. 닫을 때는 돌던 배치만 DB 연결 풀이 닫히기
- * 전에 끝내고 기다리던 일은 버리는지, 다시 뜬 뒤에는 남은 배치를 줍기가 찾아 처리하고 채점 결과가 끊기지 않는지를 본다. 비교 기준은
+ * 예보를 켠 worker를 실제로 띄워, 실행기 큐에 작업이 남은 상태로 닫았다가 같은 DB로 다시 띄운다. 닫을 때는 돌던 배치만 DB 연결 풀이 닫히기
+ * 전에 끝내고 기다리던 일은 버리는지, 재시작한 뒤에는 남은 배치를 미처리 배치 조회가 찾아 처리하고 정산 결과가 끊기지 않는지를 본다. 비교 기준은
  * 같은 흐름을 한 번도 끊지 않고 처리한 노선이다.
  *
  * <p>닫힌 뒤의 DB를 봐야 하고 같은 DB로 두 번 띄워야 하므로 DB와 컨텍스트를 시험이 직접 만든다. 컨텍스트가 만든 시험 DB는 컨텍스트가
- * 닫힐 때 지워진다. 설정은 다른 통합 시험과 같은 방식으로 읽도록 {@link Worker}에 적는다. 실행 줄을 하나로 두어 붙잡은 일 하나가
+ * 닫힐 때 지워진다. 설정은 다른 통합 시험과 같은 방식으로 읽도록 {@link Worker}에 기록한다. 실행기를 하나로 두어 붙잡은 일 하나가
  * 뒤의 일을 모두 기다리게 한다.
  *
- * <p>두 worker는 시험이 옮기는 시계 하나를 함께 쓴다({@link ManualClock}). 닫았다 다시 띄우는 데 실제로 걸린 시간은 착수 시각에
+ * <p>두 worker는 시험이 옮기는 시계 하나를 같이 쓴다({@link ManualClock}). 닫았다 다시 띄우는 데 실제로 걸린 시간은 처리 시작 시각에
  * 들어가지 않고, 그사이 흐른 것으로 치는 시간({@link #DOWNTIME})은 시험이 정한다.
  */
 @ExtendWith(OutputCaptureExtension.class)
@@ -85,23 +85,23 @@ class ForecastRestartIntegrationTest {
             4,
             5
     );
-    /** 통과가 닫히는 정류장 2~5를 목표로 한 예측 수다. 1~4번 정류장을 떠난 배치가 각각 4·3·2·1개를 낸다. */
+    /** 통과가 확정되는 정류장 2~5를 목표로 한 예측 수다. 1~4번 정류장을 떠난 배치가 각각 4, 3, 2, 1개를 낸다. */
     private static final int CLOSED_FORECASTS = 10;
-    /** 수신 뒤 착수까지 허용하는 90초를 넘긴 시간이다. 줍기가 찾는 신선도 창보다는 짧다. */
+    /** 수신 뒤 착수까지 허용하는 90초를 넘긴 시간이다. 미처리 배치 조회가 찾는 유효 시간 범위보다는 짧다. */
     private static final Duration PAST_CONFIRMATION_LIMIT = Duration.ofMinutes(3);
     /** 수집 한 회차마다 시계를 옮기는 간격이다. */
     private static final Duration ROUND = Duration.ofMillis(100);
     /** 요청부터 응답 수신까지의 시간이다. */
     private static final Duration RESPONSE_TIME = Duration.ofMillis(1);
     /**
-     * 닫았다 다시 띄우는 동안 흐른 것으로 치는 시간이다. 끊긴 노선의 회차를 모두 더해도 채점의 짝짓기 간격
-     * ({@link ScoringStage#MINIMUM_LEAD})에 못 미치게 둔다. 그 간격을 넘기면 닫기 전의 예측이 다시 뜬 뒤에 도달한 통과와 짝이 되어,
-     * 끊지 않고 이어서 처리한 노선과 채점 결과가 달라지는 것이 맞다.
+     * 닫았다 다시 띄우는 동안 흐른 것으로 치는 시간이다. 끊긴 노선의 회차를 모두 더해도 정산의 짝짓기 간격
+     * ({@link ScoringStage#MINIMUM_LEAD})에 못 미치게 둔다. 그 간격을 넘기면 닫기 전의 예측이 재시작한 뒤에 도달한 통과와 짝이 되어,
+     * 끊지 않고 이어서 처리한 노선과 정산 결과가 달라지는 것이 맞다.
      */
     private static final Duration DOWNTIME = ScoringStage.MINIMUM_LEAD.dividedBy(2);
-    /** 실행 줄이 닫힌 뒤에도 돌던 일이 더 도는 시간이다. 닫는 쪽이 기다리지 않으면 그사이 연결 풀이 먼저 닫힌다. */
+    /** 실행기가 종료를 시작한 뒤에도 돌던 일이 더 도는 시간이다. 닫는 쪽이 기다리지 않으면 그사이 연결 풀이 먼저 닫힌다. */
     private static final long RUNNING_AFTER_CLOSE_MILLIS = 500;
-    /** 예보와 채점이 끝나기를 기다리는 한도다. 넘기면 시험이 실패한다. 판정에 드는 시각은 여기서 나오지 않는다. */
+    /** 예보와 정산이 끝나기를 기다리는 한도다. 넘기면 시험이 실패한다. 판정에 드는 시각은 여기서 나오지 않는다. */
     private static final Duration DEADLINE = Duration.ofSeconds(30);
     /** 노선의 배치를 그 노선 안의 순번으로 바꾼다. 배치 번호는 노선마다 달라 노선끼리 견줄 때 쓴다. */
     private static final String ORDINALS = """
@@ -154,7 +154,7 @@ class ForecastRestartIntegrationTest {
                 collect(first, continuous, passedStop);
             }
             assertThat(waitUntil(first, () -> closedForecasts(stored, continuous, "<> 'PENDING'") == CLOSED_FORECASTS))
-                .as("끊지 않는 노선은 닫기 전에 예보와 채점을 모두 마쳤다").isTrue();
+                .as("끊지 않는 노선은 닫기 전에 예보와 정산을 모두 마쳤다").isTrue();
             for (final int passedStop : PASSED_STOPS.subList(0, PROCESSED_BEFORE_CLOSE)) {
                 collect(first, interrupted, passedStop);
             }
@@ -162,7 +162,7 @@ class ForecastRestartIntegrationTest {
             awaitIdle(lanes);
             CountDownLatch held = selected.holdNextSweepUntilClosed(lanes);
             final long runningBatch = collect(first, running, 1);
-            assertThat(held.await(DEADLINE.toSeconds(), TimeUnit.SECONDS)).as("돌던 일이 실행 줄을 붙잡았다").isTrue();
+            assertThat(held.await(DEADLINE.toSeconds(), TimeUnit.SECONDS)).as("현재 작업이 실행기를 점유하고 있다").isTrue();
             List<Long> waitingBatches = new ArrayList<>();
             for (final int passedStop : PASSED_STOPS.subList(PROCESSED_BEFORE_CLOSE, PASSED_STOPS.size())) {
                 waitingBatches.add(collect(first, interrupted, passedStop));
@@ -173,7 +173,7 @@ class ForecastRestartIntegrationTest {
                     1,
                     CLOCK.now().minus(PAST_CONFIRMATION_LIMIT)
             );
-            assertThat(lanes.queued()).as("두 노선의 처리가 실행 줄에서 기다린다").isEqualTo(2);
+            assertThat(lanes.queued()).as("두 노선의 작업이 실행기 큐에서 대기 중이다").isEqualTo(2);
 
             // when
             first.close();
@@ -208,16 +208,16 @@ class ForecastRestartIntegrationTest {
                     .doesNotContain("event=scoring_replay_failed")
                     .doesNotContain("stop_timeout")
                     .doesNotContain("has been closed");
-                softly.assertThat(restarted.settled()).as("다시 뜬 뒤 마감 안에 남은 배치의 예보와 채점이 끝났다").isTrue();
-                softly.assertThat(waitingRuns).as("수신 뒤 90초 안에 다시 뜨면 남은 배치를 예보한다")
+                softly.assertThat(restarted.settled()).as("재시작한 뒤 마감 안에 남은 배치의 예보와 정산이 끝났다").isTrue();
+                softly.assertThat(waitingRuns).as("수신 뒤 90초 안에 재시작하면 남은 배치를 예보한다")
                     .containsExactly("PUBLISHED:true", "PUBLISHED:true", "PUBLISHED:true");
                 softly.assertThat(delayedRun).as("수신 뒤 90초를 넘긴 배치는 늦음으로 닫는다")
                     .containsExactly("LATE:false");
                 softly.assertThat(uninterrupted.runs()).hasSize(PASSED_STOPS.size()).containsOnly("PUBLISHED:true");
                 softly.assertThat(uninterrupted.passes()).containsExactlyElementsOf(CLOSED_STOPS);
                 softly.assertThat(uninterrupted.unresolved().size() + uninterrupted.labels().size())
-                    .as("끊지 않은 노선에 저장된 채점 줄이 있다").isPositive();
-                softly.assertThat(restarted.scored()).as("끊겼다 이어진 노선의 예보와 채점 결과가 끊지 않은 노선과 같다")
+                    .as("끊지 않은 노선에 저장된 정산 기록이 있다").isPositive();
+                softly.assertThat(restarted.scored()).as("끊겼다 이어진 노선의 예보와 정산 결과가 끊지 않은 노선과 같다")
                     .isEqualTo(uninterrupted);
             });
         } finally {
@@ -226,7 +226,7 @@ class ForecastRestartIntegrationTest {
     }
 
     /**
-     * 같은 DB로 worker를 다시 띄우고 기동 직후처럼 줍기를 한 번 돌린 뒤, 끊겼던 노선의 남은 배치와 늦은 배치가 처리되고 채점이
+     * 같은 DB로 worker를 다시 띄우고 기동 직후처럼 미처리 배치 조회를 한 번 돌린 뒤, 끊겼던 노선의 남은 배치와 늦은 배치가 처리되고 정산이
      * 끝나기를 기다린다.
      */
     private static Restarted restart(
@@ -248,7 +248,7 @@ class ForecastRestartIntegrationTest {
         }
     }
 
-    /** {@link Worker}에 적힌 설정으로 컨텍스트를 새로 띄운다. 컨텍스트 캐시에 넣지 않으므로 닫는 것은 부른 쪽이 한다. */
+    /** {@link Worker}에 기록된 설정으로 컨텍스트를 새로 띄운다. 컨텍스트 캐시에 넣지 않으므로 닫는 것은 부른 쪽이 한다. */
     private static ConfigurableApplicationContext startWorker() throws Exception {
         MergedContextConfiguration configuration = BootstrapUtils
             .resolveTestContextBootstrapper(Worker.class)
@@ -257,7 +257,7 @@ class ForecastRestartIntegrationTest {
         return (ConfigurableApplicationContext) loader.loadContext(configuration);
     }
 
-    /** 실행 줄이 받은 일을 모두 끝내기를 기다린다. 줄이 하나라 표시 일이 돌면 그 앞의 일은 모두 끝난 것이다. */
+    /** 실행기에 등록한 작업을 모두 끝내기를 기다린다. 실행기가 하나라 표시 일이 돌면 그 앞의 일은 모두 끝난 것이다. */
     private static void awaitIdle(RouteLanes lanes) throws InterruptedException {
         CountDownLatch idle = new CountDownLatch(1);
         assertThat(lanes.submit("idle", idle::countDown)).isTrue();
@@ -265,9 +265,9 @@ class ForecastRestartIntegrationTest {
     }
 
     /**
-     * 노선과 그 판본·정류장, 차량의 정원을 넣는다.
+     * 노선과 그 버전, 정류장, 차량의 정원을 넣는다.
      *
-     * @param validFrom 판본이 유효해지고 정원을 알게 된 시각. worker의 시계보다 앞이어야 예보가 그 정원을 쓴다
+     * @param validFrom 버전이 유효해지고 정원을 알게 된 시각. worker의 시계보다 앞이어야 예보가 그 정원을 쓴다
      */
     static Route insertRoute(
         JdbcClient stored,
@@ -345,8 +345,8 @@ class ForecastRestartIntegrationTest {
     }
 
     /**
-     * 노선의 차량이 {@code passedStop}을 막 떠난 관측 한 줄을 지금 수집한 것으로 저장한다. worker의 시계를 한 회차 옮긴 시각에
-     * 요청하고, 응답을 받은 시각까지 시계를 옮긴 뒤에 저장한다. 그래서 예보의 착수 시각은 수신 시각보다 이르지 않다.
+     * 노선의 차량이 {@code passedStop}을 막 떠난 관측 한 행을 지금 수집한 것으로 저장한다. worker의 시계를 한 회차 옮긴 시각에
+     * 요청하고, 응답을 받은 시각까지 시계를 옮긴 뒤에 저장한다. 그래서 예보의 처리 시작 시각은 수신 시각보다 이르지 않다.
      */
     static long collect(
         ConfigurableApplicationContext context,
@@ -366,7 +366,7 @@ class ForecastRestartIntegrationTest {
     }
 
     /**
-     * 노선의 차량이 {@code passedStop}을 막 떠난 관측 한 줄을 {@code at}에 요청해 {@link #RESPONSE_TIME} 뒤에 받은 것으로 실제 수집
+     * 노선의 차량이 {@code passedStop}을 막 떠난 관측 한 행을 {@code at}에 요청해 {@link #RESPONSE_TIME} 뒤에 받은 것으로 실제 수집
      * 원장에 저장하고 커밋한다. 시계는 옮기지 않는다.
      */
     private static long store(
@@ -399,7 +399,7 @@ class ForecastRestartIntegrationTest {
         return batchId;
     }
 
-    /** 조건이 참이 되기를 기다린다. 기다리는 동안 채점이 모아 둔 결과를 쓰게 한다. */
+    /** 조건이 참이 되기를 기다린다. 기다리는 동안 정산이 모아 둔 결과를 쓰게 한다. */
     private static boolean waitUntil(
         ConfigurableApplicationContext context,
         BooleanSupplier condition
@@ -418,7 +418,7 @@ class ForecastRestartIntegrationTest {
         return condition.getAsBoolean();
     }
 
-    /** 노선의 예보 실행을 배치 순서로 {@code 결과:예측이 있는지}로 적는다. */
+    /** 노선의 예보 실행을 배치 순서로 {@code 결과:예측이 있는지}로 기록한다. */
     private static List<String> runs(JdbcClient stored, Route route) {
         return stored.sql("""
             SELECT outcome || ':' || (prediction_count > 0)::text FROM forecast_run
@@ -426,7 +426,7 @@ class ForecastRestartIntegrationTest {
             """).param("route", route.routeId()).query(String.class).list();
     }
 
-    /** 배치들의 예보 실행을 배치 순서로 {@code 결과:예측이 있는지}로 적는다. 수신 뒤 90초를 넘겨 착수한 실행은 예측이 없다. */
+    /** 배치들의 예보 실행을 배치 순서로 {@code 결과:예측이 있는지}로 기록한다. 수신 뒤 90초를 넘겨 처리를 시작한 실행은 예측이 없다. */
     static List<String> runsOf(JdbcClient stored, List<Long> batches) {
         return stored.sql("""
             SELECT outcome || ':' || (prediction_count > 0)::text FROM forecast_run
@@ -447,8 +447,8 @@ class ForecastRestartIntegrationTest {
     }
 
     /**
-     * 노선에 저장된 예보와 채점 결과를 노선끼리 견줄 수 있는 모양으로 모은다. 배치와 관측의 번호는 노선마다 다르므로 배치를 그
-     * 노선 안의 순번으로 바꿔 적는다.
+     * 노선에 저장된 예보와 정산 결과를 노선끼리 견줄 수 있는 형식으로 모은다. 배치와 관측의 번호는 노선마다 다르므로 배치를 그
+     * 노선 안의 순번으로 바꿔 기록한다.
      */
     private static Scored scored(
         JdbcClient stored,
@@ -489,8 +489,8 @@ class ForecastRestartIntegrationTest {
     /**
      * 다시 띄운 worker가 내려가기 전의 결과다.
      *
-     * @param settled 마감 안에 남은 배치의 예보와 채점이 끝났는지
-     * @param scored 끊겼던 노선에 저장된 예보와 채점 결과
+     * @param settled 마감 안에 남은 배치의 예보와 정산이 끝났는지
+     * @param scored 끊겼던 노선에 저장된 예보와 정산 결과
      */
     private record Restarted(boolean settled, Scored scored) {
 
@@ -507,13 +507,13 @@ class ForecastRestartIntegrationTest {
     }
 
     /**
-     * 노선 하나에 저장된 예보와 채점 결과다.
+     * 노선 하나에 저장된 예보와 정산 결과다.
      *
      * @param runs 배치 순서의 예보 실행
-     * @param passes 닫힌 통과의 정류장
-     * @param outcomes 예측마다의 채점 상태와 사유
-     * @param unresolved 저장된 미해결 줄
-     * @param labels 저장된 정답 줄
+     * @param passes 확정된 통과의 정류장
+     * @param outcomes 예측마다의 정산 상태와 사유
+     * @param unresolved 저장된 미해결 기록
+     * @param labels 저장된 정답 기록
      */
     private record Scored(
         List<String> runs,
@@ -580,7 +580,7 @@ class ForecastRestartIntegrationTest {
         }
     }
 
-    /** 시험이 고른 모델을 돌려주는 모델 선택이다. 시험이 시키면 모델을 묻는 실행 줄 스레드를 한 번 붙잡는다. */
+    /** 시험이 고른 모델을 돌려주는 모델 선택이다. 시험이 시키면 모델을 묻는 실행기 스레드를 한 번 붙잡는다. */
     static final class SelectedRuntime implements ForecastRuntime {
 
         private volatile RuntimeSnapshot selected;
@@ -591,8 +591,8 @@ class ForecastRestartIntegrationTest {
         }
 
         /**
-         * 다음에 실행 줄 스레드가 모델을 물으면 실행 줄이 닫힐 때까지 그 스레드를 붙잡는다. 훑기는 배치를 읽기 전에 모델을 묻으므로,
-         * 붙잡힌 훑기는 실행 줄이 닫힌 뒤에야 배치를 읽고 저장한다.
+         * 다음에 실행기 스레드가 모델을 물으면 실행기가 종료를 시작할 때까지 그 스레드를 붙잡는다. 배치 조회 작업은 배치를 읽기 전에 모델을 묻으므로,
+         * 붙잡힌 배치 조회 작업은 실행기가 종료를 시작한 뒤에야 배치를 읽고 저장한다.
          *
          * @return 스레드를 붙잡으면 열리는 걸쇠
          */
@@ -617,7 +617,7 @@ class ForecastRestartIntegrationTest {
     private record Hold(RouteLanes lanes, CountDownLatch held) {
 
         /**
-         * 실행 줄이 닫히고 기다리던 일을 모두 버릴 때까지 스레드를 붙잡은 뒤 잠시 더 돈다. 기다리던 일이 버려지기 전에 풀어 주면 그 일이
+         * 실행기가 종료를 시작하고 대기 중인 작업을 모두 버릴 때까지 스레드를 붙잡은 뒤 잠시 더 돈다. 기다리던 일이 버려지기 전에 풀어 주면 그 일이
          * 이어서 돌 수 있다. 시험은 끝날 때 컨텍스트를 반드시 닫으므로 한도 없이 기다린다.
          */
         private void untilClosed() {

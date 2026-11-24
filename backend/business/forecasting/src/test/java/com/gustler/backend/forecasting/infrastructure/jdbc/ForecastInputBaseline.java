@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 한 흐름의 배치별 예보 입력·노선 상태·닫힌 통과의 고정 기대값이다({@link Baseline}). 값은 {@link ForecastInputDigests}의 지문이다.
+ * 한 흐름의 배치별 예보 입력, 노선 상태, 확정된 통과의 고정 기대값이다({@link Baseline}). 값은 {@link ForecastInputDigests}의 지문이다.
  * <ul>
  *   <li>{@code u 배치 사유}: 확정 조건을 만족하지 않아 입력을 만들지 않은 배치</li>
  *   <li>{@code f 배치 사유}: 입력을 만들지 못한 배치</li>
@@ -113,8 +113,8 @@ final class ForecastInputBaseline {
      * @param reason 입력을 만들지 않은 사유
      * @param rank 이 배치까지 반영한 상태의 순위
      * @param stateDigest 이 배치까지 반영한 상태의 지문
-     * @param passCount 이 배치가 닫은 통과 수
-     * @param passDigest 이 배치가 닫은 통과의 지문
+     * @param passCount 이 배치가 확정한 통과 수
+     * @param passDigest 이 배치가 확정한 통과의 지문
      * @param snapshots 예보한 차량의 관측 이름별 입력 지문
      */
     record Batch(

@@ -193,7 +193,7 @@ final class SyntheticWorkerReplay {
     }
 
     /**
-     * 배치 하나의 착수 시각만 수신 뒤 {@code delay}로 늦춰 쓴다. 다음 배치보다 늦게 착수하게 하면 수신 순서와 착수 순서가
+     * 배치 하나의 처리 시작 시각만 수신 뒤 {@code delay}로 늦춰 쓴다. 다음 배치보다 늦게 착수하게 하면 수신 순서와 착수 순서가
      * 뒤집힌 자료가 된다. 사례의 기대값은 고치지 않는다.
      */
     void confirmLate(final int batch, Duration delay) {
@@ -228,7 +228,7 @@ final class SyntheticWorkerReplay {
     }
 
     /**
-     * 비활성 번들을 쓴다. 시간 확장 자료면 시간 확장 모델을 함께 담는다.
+     * 비활성 번들을 쓴다. 시간 확장 자료면 시간 확장 모델을 같이 담는다.
      *
      * @param routes 번들이 담는 노선. 모두 같은 통계를 쓴다
      */
@@ -309,7 +309,7 @@ final class SyntheticWorkerReplay {
         return file;
     }
 
-    /** 장부에는 그날 앞의 배치도 원래 줄 수로 들어 있다. 그 배치의 줄은 자료에 일부만 있다. */
+    /** 장부에는 그날 앞의 배치도 원래 행 수로 들어 있다. 그 배치의 줄은 자료에 일부만 있다. */
     private ArrayNode ledger() {
         ArrayNode ledger = JSON.createArrayNode();
         ledger.add(ledgerRow(FIRST_BATCH, start.minus(Duration.ofHours(10)), 7));
@@ -463,7 +463,7 @@ final class SyntheticWorkerReplay {
         return row;
     }
 
-    /** 뒤차의 통과와 앞차의 직전 통과로 정답과 그 근거의 기대값을 적는다. */
+    /** 뒤차의 통과와 앞차의 직전 통과로 정답과 그 근거의 기대값을 기록한다. */
     private void addSettlement(ObjectNode row, Vehicle vehicle, final int stop) {
         AlightingAwareObservation arrival = observation(vehicle, vehicle.arrivalBatch(stop));
         AlightingAwareObservation last = observation(vehicle, vehicle.lastBatch(stop));
@@ -679,7 +679,7 @@ final class SyntheticWorkerReplay {
             return firstBatch + 2 * stop - 1;
         }
 
-        /** 다음 정류장을 지나 그 정류장의 통과를 닫는 관측의 배치다. */
+        /** 다음 정류장을 지나 그 정류장의 통과를 확정하는 관측의 배치다. */
         private int closureBatch(final int stop) {
             return firstBatch + 2 * stop;
         }

@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
-/** 예보·채점 사건의 시험용 값을 만든다. FK가 없는 테이블이라 노선·관측 행 없이 번호만 맞춘다. */
+/** 예보, 정산 이벤트의 시험용 값을 만든다. FK가 없는 테이블이라 노선, 관측 행 없이 번호만 맞춘다. */
 public final class ForecastSamples {
 
     public static final long ROUTE_ID = 7L;
@@ -82,7 +82,7 @@ public final class ForecastSamples {
     }
 
     /**
-     * 예보 사건과 같은 배치의 수집 사건이다. 저장 줄 수와 실제 줄 수를 0으로 두므로 수집 구멍과 관측 상한 계산에 들어가지 않는다.
+     * 예보 이벤트와 같은 배치의 수집 이벤트다. 저장 행 수와 실제 행 수를 0으로 두므로 관측 누락과 관측 상한 계산에 들어가지 않는다.
      */
     public static ObservationBatchSeen seenWithoutRows(ForecastPublished published) {
         return new ObservationBatchSeen(

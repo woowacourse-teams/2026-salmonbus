@@ -7,7 +7,7 @@ import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
 /**
- * 노선 판본의 방문 순서를 유지해 탑승판 정류장을 읽는 JPA 경계다.
+ * 노선 버전의 방문 순서를 유지해 탑승판 정류장을 읽는 JPA 경계다.
  */
 public interface BoardRouteStopEntityRepository
     extends Repository<RouteStopJpaEntity, RouteStopJpaId> {
@@ -22,7 +22,7 @@ public interface BoardRouteStopEntityRepository
     );
 
     /**
-     * 여러 노선 판본의 정류장을 판본, 방문 순번 순서로 읽는다.
+     * 여러 노선 버전의 정류장을 버전, 방문 순번 순서로 읽는다.
      */
     @Query("""
         SELECT stop

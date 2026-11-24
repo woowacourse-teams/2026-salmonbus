@@ -18,13 +18,13 @@ public record StagedModelDeployment(
 
     public StagedModelDeployment {
         if (deploymentKey == null) {
-            throw new IllegalArgumentException("적재마다 다른 키가 있어야 한다");
+            throw new IllegalArgumentException("모델 적재 ID가 필요하다");
         }
         if (bundleDigest == null || bundleDigest.length() != 64) {
-            throw new IllegalArgumentException("계수 묶음 요약값은 64자리다: " + bundleDigest);
+            throw new IllegalArgumentException("모델 번들 해시는 64자리여야 한다: " + bundleDigest);
         }
         if (dataUntil == null) {
-            throw new IllegalArgumentException("학습 자료가 어디까지인지 있어야 한다");
+            throw new IllegalArgumentException("학습 데이터의 기준 시각이 필요하다");
         }
     }
 }

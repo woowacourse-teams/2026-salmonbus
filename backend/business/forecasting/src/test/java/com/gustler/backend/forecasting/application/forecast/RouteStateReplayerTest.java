@@ -20,7 +20,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
- * 되감기 지정한 범위의 복구와, 예보 단계를 돌리지 못하고 끝난 배치의 통과를 되감으면서 찾는 규칙을 메모리 원본으로 본다.
+ * 복구 지정한 범위의 복구와, 예보 단계를 돌리지 못하고 끝난 배치의 통과를 복구하면서 찾는 규칙을 메모리 원본으로 본다.
  * 배치는 1분 간격이고 차량은 정류장 순번 1~9(상행)만 돈다. 순번이 줄면 새 운행이다.
  */
 class RouteStateReplayerTest {
@@ -329,7 +329,7 @@ class RouteStateReplayerTest {
 
     /**
      * 1분 간격 배치 {@code minutes}개를 만든다. 차량 {@code long}은 {@code longFrom}분부터 {@code longUntil}분 전까지 한 운행을
-     * 끊김 없이 이어 가고(약 64분에 한 정류장), 차량 {@code b}·{@code c}는 90분짜리 운행을 되풀이한다.
+     * 끊김 없이 이어 가고(약 64분에 한 정류장), 차량 {@code b}, {@code c}는 90분짜리 운행을 되풀이한다.
      */
     private List<ForecastBatch> stream(final int minutes, final int longFrom, final int longUntil) {
         List<ForecastBatch> batches = new ArrayList<>();
@@ -460,7 +460,7 @@ class RouteStateReplayerTest {
         );
     }
 
-    /** 실제 되감기 원본과 같은 범위 규칙으로 메모리의 배치를 돌려준다. 읽은 창의 길이를 차례로 적어 둔다. */
+    /** 실제 복구 원본과 같은 범위 규칙으로 메모리의 배치를 반환한다. 읽은 조회 시간 범위를 차례로 기록해 둔다. */
     private static final class MemorySource implements ReplaySource {
 
         private final List<ForecastBatch> batches;

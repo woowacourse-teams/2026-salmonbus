@@ -122,7 +122,7 @@ class AlightingAwareConfirmedServingVerificationTest {
                 oldStatistics
         );
         assertThatThrownBy(() -> AlightingAwareConfirmedServingVerification.verifyContract(contract, files, ROUTES))
-            .hasMessageContaining("통계 입력 판본");
+            .hasMessageContaining("통계 입력 프로필");
     }
 
     @Test
@@ -161,7 +161,7 @@ class AlightingAwareConfirmedServingVerificationTest {
                 evidence,
                 DIGEST,
                 ROUTES
-        )).hasMessage("Worker 예측이 다르다");
+        )).hasMessage("worker 예측값 차이가 허용 범위를 벗어났다");
     }
 
     @Test

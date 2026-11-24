@@ -128,10 +128,10 @@ class PendingBatchQueryTest {
     }
 
     /**
-     * 노선 판본 여럿에 배치를 넣고 최근 것 셋만 처리하지 않은 채로 둔 뒤 통계를 모은다. 줄은 넣는 날의 테이블(날짜 파티션
+     * 노선 버전 여럿에 배치를 넣고 최근 것 셋만 처리하지 않은 채로 둔 뒤 통계를 모은다. 줄은 넣는 날의 테이블(날짜 파티션
      * 테이블이면 그날의 파티션 하나)에 들어간다.
      *
-     * @return 마지막으로 만든 노선 판본
+     * @return 마지막으로 만든 노선 버전
      */
     private long manyBatchesPerRoute() {
         long version = 0;
@@ -170,7 +170,7 @@ class PendingBatchQueryTest {
             .list();
     }
 
-    /** 준비한 줄이 든 관계 이름이다. 일반 테이블이면 그 테이블, 날짜 파티션 테이블이면 줄이 들어간 파티션이다. */
+    /** 준비한 행이 든 관계 이름이다. 일반 테이블이면 그 테이블, 날짜 파티션 테이블이면 줄이 들어간 파티션이다. */
     private List<String> relationsHoldingPreparedRows() {
         return jdbc.sql("""
             SELECT DISTINCT tableoid::regclass::text FROM observation_batch WHERE attempt_key LIKE 'plan-%'
@@ -179,7 +179,7 @@ class PendingBatchQueryTest {
 
     /**
      * 계획이 관계마다 어떻게 읽는지를 모은다. 값은 읽는 노드의 종류이고, 그 노드에 인덱스 조건이 있으면 뒤에 붙인다.
-     * 날짜 파티션 테이블에서는 줄이 없는 파티션을 통째로 읽는 노드와, 파티션들을 모은 위의 정렬이 함께 나온다.
+     * 날짜 파티션 테이블에서는 줄이 없는 파티션을 통째로 읽는 노드와, 파티션들을 모은 위의 정렬이 같이 나온다.
      */
     private static Map<String, String> reads(List<String> plan) {
         Map<String, String> reads = new HashMap<>();
@@ -198,7 +198,7 @@ class PendingBatchQueryTest {
         return reads;
     }
 
-    /** 관계를 인덱스로 읽고 그 인덱스 조건이 노선 판본과 수신 시각 하한을 모두 담는지다. 관계를 통째로 읽으면 거짓이다. */
+    /** 관계를 인덱스로 읽고 그 인덱스 조건이 노선 버전과 수신 시각 하한을 모두 담는지다. 관계를 통째로 읽으면 거짓이다. */
     private static boolean isBoundedByVersionAndReceivedAt(String read) {
         if (read == null || !read.startsWith("Index Scan")) {
             return false;

@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 관측·모델·현재 노선 판본에 연결된 정류장별 탑승판 값이다.
+ * 관측, 모델, 현재 노선 버전에 연결된 정류장별 탑승판 값이다.
  * 좌석 예보 부재와 차량 부재를 구분한다.
  */
 public record Board(
@@ -19,14 +19,14 @@ public record Board(
     List<StopState> stops
 ) {
     public Board {
-        Objects.requireNonNull(route, "route는 null일 수 없습니다.");
-        Objects.requireNonNull(observedAt, "observedAt은 null일 수 없습니다.");
-        Objects.requireNonNull(staleAt, "staleAt은 null일 수 없습니다.");
-        Objects.requireNonNull(model, "model은 null일 수 없습니다.");
-        Objects.requireNonNull(stops, "stops는 null일 수 없습니다.");
+        Objects.requireNonNull(route, "route는 null일 수 없다.");
+        Objects.requireNonNull(observedAt, "observedAt은 null일 수 없다.");
+        Objects.requireNonNull(staleAt, "staleAt은 null일 수 없다.");
+        Objects.requireNonNull(model, "model은 null일 수 없다.");
+        Objects.requireNonNull(stops, "stops는 null일 수 없다.");
         stops = List.copyOf(stops);
         if (route.status() == RouteStatus.PREPARING && hasAvailableForecast(stops)) {
-            throw new IllegalArgumentException("예보를 준비 중인 노선의 보드에는 좌석 예보가 있을 수 없습니다.");
+            throw new IllegalArgumentException("예보를 준비 중인 노선의 보드에는 좌석 예보가 있을 수 없다.");
         }
     }
 

@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * 연어행동 조회를 켠 앱이 예보 기록에서 읽은 출발 만차 확률로 판정까지 가는지 실제 DB로 검증한다.
  *
- * <p>차량 한 대가 마감 안에 닿는 도착정보를 함께 넣는다. 도보 거리는 넣지 않아 이동 후보는 없다.
+ * <p>차량 한 대가 마감 안에 닿는 도착정보를 같이 넣는다. 도보 거리는 넣지 않아 이동 후보는 없다.
  */
 @IntegrationTest
 @Transactional

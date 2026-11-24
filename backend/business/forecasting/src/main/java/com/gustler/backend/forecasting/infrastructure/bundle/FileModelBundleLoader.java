@@ -12,7 +12,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 허용한 파일 경계 안에서 모델 번들 입력을 열고 파일 기반 로더에 전달한다.
+ * 허용한 파일 경계 안에서 모델 번들 파일을 열고 파일 기반 로더에 전달한다.
  */
 public final class FileModelBundleLoader implements ModelBundleLoader {
 
@@ -23,8 +23,8 @@ public final class FileModelBundleLoader implements ModelBundleLoader {
     }
 
     /**
-     * @param allowSyntheticFixture 재생·정산 검증을 실행하지 않았다고 스스로 밝힌 합성 번들을 받을지다. 그런 번들은 실제 관측 없이
-     *     만든 것이라 로컬 개발 적재에서만 켠다. 꺼져 있으면 거절한다
+     * @param allowSyntheticFixture 실제 관측 없이 만든 합성 번들을 허용할지 정한다.
+     *     합성 번들은 재생과 정산 검증을 실행하지 않았으므로 로컬 개발 환경에서만 적재한다
      */
     public FileModelBundleLoader(final boolean allowSyntheticFixture) {
         this.allowSyntheticFixture = allowSyntheticFixture;
@@ -54,7 +54,7 @@ public final class FileModelBundleLoader implements ModelBundleLoader {
                 default -> throw new BundleRejectedException("지원이 종료된 좌석분포 모델 번들이다");
             };
         } catch (IOException | IllegalArgumentException error) {
-            throw new BundleRejectedException("하차 반영 서빙 번들 검증 실패", error);
+            throw new BundleRejectedException("하차 반영 모델의 운영 번들을 검증하지 못했다", error);
         }
     }
 
@@ -66,7 +66,7 @@ public final class FileModelBundleLoader implements ModelBundleLoader {
             }
             return manifest;
         } catch (JacksonException error) {
-            throw new BundleRejectedException("모델 manifest JSON 파싱 실패", error);
+            throw new BundleRejectedException("모델 manifest의 JSON을 읽을 수 없다", error);
         }
     }
 }

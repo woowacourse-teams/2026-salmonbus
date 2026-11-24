@@ -11,14 +11,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
 /**
- * 시험이 옮길 때만 가는 시계다. worker의 {@link Clock} 빈 자리에 넣으면 예보의 착수 시각, 줍기의 신선도 창, 채점의 판정 시각이 모두
+ * 시험이 옮길 때만 가는 시계다. worker의 {@link Clock} 빈 자리에 넣으면 예보의 처리 시작 시각, 미처리 배치 조회의 유효 시간 범위, 정산의 판정 시각이 모두
  * 시험이 정한 시각에서 나온다. 실제로 흐른 시간은 들어가지 않으므로 시험을 돌리는 시각과 기계의 속도가 판정을 바꾸지 못한다.
  *
  * <p>시작 시각은 한국 정오로 고정한다. 시험이 옮기는 시간은 길어야 몇 분이라 도중에 한국 날짜가 바뀌지 않는다. DB의 {@code now()}와는
- * 날짜부터 다르다. 관측 테이블의 나눔 날짜 기본값만 DB의 시각에서 오고, 예보와 채점은 그 열을 읽지 않는다.
+ * 날짜부터 다르다. 관측 테이블의 파티션 기준 날짜 기본값만 DB의 시각에서 오고, 예보와 정산은 그 열을 읽지 않는다.
  *
- * <p>시각은 뒤로 가지 않는다. 채점의 되감기는 되감는 시각보다 앞에 수신하거나 닫힌 기록만 읽으므로, worker를 다시 띄우는 시험은 띄우기
- * 전에 시계를 저장된 기록보다 뒤로 옮겨야 한다. 여러 스레드가 함께 읽어도 된다.
+ * <p>시각은 뒤로 가지 않는다. 정산의 복구는 복구하는 시각보다 앞에 수신하거나 닫힌 기록만 읽으므로, worker를 다시 띄우는 시험은 띄우기
+ * 전에 시계를 저장된 기록보다 뒤로 옮겨야 한다. 여러 스레드가 같이 읽어도 된다.
  */
 final class ManualClock extends Clock {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
@@ -48,7 +48,7 @@ final class ManualClock extends Clock {
         current.accumulateAndGet(target, ManualClock::later);
     }
 
-    /** 지금 시각을 한국 시간대로 돌려준다. */
+    /** 지금 시각을 한국 시간대로 반환한다. */
     OffsetDateTime now() {
         return OffsetDateTime.ofInstant(current.get(), SEOUL);
     }

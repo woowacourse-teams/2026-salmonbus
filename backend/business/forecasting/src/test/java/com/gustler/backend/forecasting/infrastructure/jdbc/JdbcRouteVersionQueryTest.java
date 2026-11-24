@@ -22,7 +22,7 @@ class JdbcRouteVersionQueryTest {
     private static final String ROUTE_204000121 = "204000121";
     private static final String CONTENT_DIGEST = "0".repeat(64);
 
-    /** 노선 개편 전 판본이 열려 있던 기간. ex_route_version_no_overlap 이 개편 뒤와 겹치는 것을 막는다. */
+    /** 노선 개편 전 버전이 열려 있던 기간. ex_route_version_no_overlap 이 개편 뒤와 겹치는 것을 막는다. */
     private static final OffsetDateTime BEFORE_REVISION = OffsetDateTime.parse("2026-08-01T00:00+09:00");
     private static final OffsetDateTime REVISED_AT = OffsetDateTime.parse("2026-08-19T00:00+09:00");
 
@@ -144,7 +144,7 @@ class JdbcRouteVersionQueryTest {
             .single();
     }
 
-    /** valid_to 가 NULL 이면 지금 쓰는 판본이고, 값이 있으면 그 시각에 닫힌 옛 판본이다. */
+    /** valid_to 가 NULL 이면 지금 쓰는 버전이고, 값이 있으면 그 시각에 닫힌 옛 버전이다. */
     private long insertRouteVersion(final long routeId, OffsetDateTime validFrom, OffsetDateTime validTo) {
         return jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from, valid_to)

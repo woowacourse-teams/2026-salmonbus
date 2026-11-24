@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 모델 배포의 정산 근거를 읽는 JDBC 구현이 기준과 같은 근거·같은 계수 해시를 내는지 본다. 기준은 근거를
+ * 모델 배포의 정산 근거를 읽는 JDBC 구현이 기준과 같은 근거, 같은 계수 해시를 내는지 본다. 기준은 근거를
  * {@code (context->'shared') || 예측 근거 || {"alighting":{"stops": context->'stops'->목표}}}의 jsonb 텍스트로 받아 읽은 값이다.
  */
 @ForecastingIntegrationTest
@@ -310,7 +310,7 @@ class JdbcScoringSourcesTest {
         );
     }
 
-    /** 근거가 있는 노선 판본의 근거를 다른 판본 키로 옮겨 적는다. 예보 경로가 근거를 뒤늦게 적는 것을 흉내 낸다. */
+    /** 근거가 있는 노선 버전의 근거를 다른 버전 키로 옮겨 기록한다. 예보 경로가 근거를 뒤늦게 적는 것을 흉내 낸다. */
     private void copyEvidenceTo(final long target) {
         jdbc.sql("""
             UPDATE model_deployment SET settlement_context = settlement_context
@@ -319,7 +319,7 @@ class JdbcScoringSourcesTest {
             """).params(Long.toString(target), Long.toString(version), deployment).update();
     }
 
-    /** 정산 근거가 없고 승차 가능 정류장이 1번부터 이어지는 노선 판본을 만든다. */
+    /** 정산 근거가 없고 승차 가능 정류장이 1번부터 이어지는 노선 버전을 만든다. */
     private long routeVersionWithStops(final int stopCount) {
         final long routeId = jdbc.sql("""
             INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)

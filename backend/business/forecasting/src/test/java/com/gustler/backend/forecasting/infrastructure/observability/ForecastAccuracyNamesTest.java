@@ -18,7 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 정확도 집계 로그에 적는 노선·정류장 이름을 실제 DB에서 읽는지 본다. */
+/** 정확도 집계 로그에 적는 노선, 정류장 이름을 실제 DB에서 읽는지 본다. */
 @ForecastingIntegrationTest
 @Transactional
 class ForecastAccuracyNamesTest {

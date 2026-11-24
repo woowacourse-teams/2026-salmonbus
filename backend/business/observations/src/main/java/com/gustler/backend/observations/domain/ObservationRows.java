@@ -27,7 +27,7 @@ public record ObservationRows(
         return new ObservationRows(rowsByStorable.get(true), rowsByStorable.get(false));
     }
 
-    /** 저장 대상에서 제외한 행을 포함한 상류 응답의 행 수. */
+    /** 저장 대상에서 제외한 행을 포함한 GBIS 응답의 행 수. */
     public int providerRows() {
         return storableRowCount() + excludedRowCount();
     }

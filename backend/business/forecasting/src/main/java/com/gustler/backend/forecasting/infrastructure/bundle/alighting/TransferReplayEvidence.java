@@ -61,7 +61,7 @@ final class TransferReplayEvidence {
         String code
     ) {
         require(cells.isObject() && Set.copyOf(cells.propertyNames()).equals(Set.copyOf(AlightingTimeCell.keys())),
-            "시간대별 발행·정산 검증 누락: " + route);
+            "시간대별 예보 발행 또는 정산 검증이 빠져 있다: " + route);
         Set<String> fixtures = new HashSet<>();
         boolean rushField = false;
         boolean extendedField = false;
@@ -83,11 +83,11 @@ final class TransferReplayEvidence {
                     route,
                     cell,
                     row
-            ), "시간대 발행·정산 수가 다르다");
-            require(cell.isRush() || row.path("restored_targets").asInt() > 0, "시간 확장 예보 복원 누락");
+            ), "시간대 발행, 정산 수가 다르다");
+            require(cell.isRush() || row.path("restored_targets").asInt() > 0, "시간 확장 예보 복구 결과가 없다");
             JsonNode trace = row.path("trace");
             String fixture = trace.path("fixture_sha256").asString("");
-            require(registerUniqueTrace(fixture, fixtures, trace), "재생 입력 식별자 누락 또는 중복");
+            require(registerUniqueTrace(fixture, fixtures, trace), "재생 입력 ID가 없거나 중복됐다");
             if ("field".equals(trace.path("kind").asString(""))) {
                 rushField |= cell.isRush();
                 extendedField |= !cell.isRush();
@@ -99,7 +99,7 @@ final class TransferReplayEvidence {
     }
 
     private static void verifyShift(JsonNode trace, JsonNode cells) {
-        require("clock_replay".equals(trace.path("kind").asString("")), "알 수 없는 재생 근거");
+        require("clock_replay".equals(trace.path("kind").asString("")), "지원하지 않는 재생 검증 근거다");
         JsonNode sourceRows = cells.path(trace.path("source_cell").asString("")).path("routes");
         require(sourceRows.isArray() && sourceRows.size() == 1, "원본 시간대 검증이 없다");
         JsonNode source = sourceRows.get(0).path("trace");
@@ -115,7 +115,7 @@ final class TransferReplayEvidence {
         String check,
         List<String> routes
     ) {
-        require(hasPassedForBundle(report, digest), "후보에 대한 검증이 통과하지 않았다");
+        require(hasPassedForBundle(report, digest), "후보 모델이 검증을 통과하지 못했다");
         AlightingAwareConfirmedServingVerification.verifiedCases(check, report, routes);
     }
 
@@ -137,7 +137,7 @@ final class TransferReplayEvidence {
             && period.path("settled").asInt(-1) == row.path("cases").asInt();
     }
 
-    /** 지문 형식이 맞을 때 중복 확인 집합에 등록한 뒤 운행 기록 지문을 검사한다. */
+    /** 지문 형식을 확인한 뒤 중복 검사 집합에 등록하고 운행 기록의 지문과 대조한다. */
     private static boolean registerUniqueTrace(String fixture, Set<String> fixtures, JsonNode trace) {
         return fixture.matches("[0-9a-f]{64}") && fixtures.add(fixture)
             && trace.path("trajectory_sha256").asString("").matches("[0-9a-f]{64}");

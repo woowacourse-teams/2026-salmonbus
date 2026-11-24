@@ -8,9 +8,9 @@ package com.gustler.backend.forecasting.domain.model;
  */
 public enum SeatUnknownReason {
 
-    /** 상류가 미확인을 보고했거나 수집 단계에서 잔여석 사용을 보류했다. */
+    /** GBIS가 미확인을 보고했거나 수집 단계에서 잔여석 사용을 보류했다. */
     REPORTED_UNKNOWN,
-    /** 상류가 잔여석 값을 제공하지 않았다. */
+    /** GBIS가 잔여석 값을 제공하지 않았다. */
     NOT_REPORTED,
     ;
 }

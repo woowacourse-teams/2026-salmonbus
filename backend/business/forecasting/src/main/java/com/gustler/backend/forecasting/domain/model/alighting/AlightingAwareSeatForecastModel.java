@@ -79,7 +79,7 @@ public final class AlightingAwareSeatForecastModel {
 
     public AlightingAwareRouteStatistics statistics(RouteStops stops) {
         if (!supportsRoute(stops)) {
-            throw new IllegalArgumentException("하차 반영 좌석 번들과 정류장 판본이 다르다");
+            throw new IllegalArgumentException("하차 반영 좌석 번들과 정류장 버전이 다르다");
         }
         return statistics.get(ModelRoute.of(stops.sourceRouteId()));
     }

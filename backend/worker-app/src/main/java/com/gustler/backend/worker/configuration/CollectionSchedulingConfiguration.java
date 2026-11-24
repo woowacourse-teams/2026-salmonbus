@@ -33,7 +33,7 @@ public class CollectionSchedulingConfiguration {
      * collection.enabled 가 참일 때만 이 설정을 활성화하고 빈과 스케줄을 등록한다.
      *
      * <p>기본을 꺼두는 이유는 셋이다. 서비스키가 아직 없어 켜두면 해석되지 않은 자리표시자를 키로
-     * 상류를 호출하고, 통합 테스트에서 컨텍스트가 떠 있는 동안 15초마다 실호출이 나가며,
+     * GBIS를 호출하고, 통합 테스트에서 컨텍스트가 떠 있는 동안 15초마다 실호출이 나가며,
      * 24시간 실행할 서버가 아직 없다.
      */
     @Configuration
@@ -69,7 +69,7 @@ public class CollectionSchedulingConfiguration {
         }
 
         /**
-         * 등록기는 만들어지는 즉시 첫 수집을 예약한다. 첫 관측 줄이 그날 파티션에 들어가도록 날짜 파티션 유지 작업이 첫 유지를 끝낸
+         * 등록기는 만들어지는 즉시 첫 수집을 예약한다. 첫 관측 행이 그날 파티션에 들어가도록 날짜 파티션 유지 작업이 첫 유지를 끝낸
          * 뒤에 만든다.
          */
         @Bean
@@ -97,7 +97,7 @@ public class CollectionSchedulingConfiguration {
             final long estimatedCalls = calculateDailyCallCount(routeCount);
             if (estimatedCalls > dailyLimit) {
                 LOGGER.error(
-                        "이 주기로 {}개 노선을 돌면 하루 {}회라 한도 {}회를 넘는다. 주기표나 노선 수를 고쳐라.",
+                        "현재 주기로 {}개 노선을 수집하면 하루 {}회 호출해 한도 {}회를 초과한다. 수집 주기 또는 노선 수를 조정해야 한다.",
                         routeCount,
                         estimatedCalls,
                         dailyLimit

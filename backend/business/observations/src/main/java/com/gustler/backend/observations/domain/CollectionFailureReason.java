@@ -10,11 +10,11 @@ public enum CollectionFailureReason {
 
     /** 오늘 예약할 호출 한도가 남지 않아 호출을 보내지 않았다. */
     LOCAL_QUOTA_EXHAUSTED,
-    /** 상류가 하루 한도 초과를 응답했다. 내부 호출 집계와 상류의 집계가 다르다. */
+    /** GBIS가 하루 한도 초과를 응답했다. 내부 호출 집계와 GBIS의 집계가 다르다. */
     DAILY_QUOTA_EXCEEDED,
-    /** 상류가 초당 한도를 넘겼다고 답했다. */
+    /** GBIS가 초당 한도를 넘겼다고 답했다. */
     PER_SECOND_QUOTA_EXCEEDED,
-    /** 상류가 그 밖의 오류로 답했다. */
+    /** GBIS가 그 밖의 오류로 답했다. */
     UPSTREAM_ERROR,
     ;
 }

@@ -25,7 +25,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 
-/** 수집을 실행하는 진입점에서 명시적으로 가져오는 구성. 자체적으로 스케줄을 등록하지 않는다. */
+/** 수집 진입점에서 명시적으로 가져오는 설정이다. 이 설정 자체는 스케줄을 등록하지 않는다. */
 @Import({
     RouteCatalogConfiguration.class,
     ObservationStorageConfiguration.class,

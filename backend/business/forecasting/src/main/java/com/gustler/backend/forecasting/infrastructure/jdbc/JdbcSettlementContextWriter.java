@@ -4,7 +4,7 @@ import com.gustler.backend.forecasting.application.forecast.SettlementContextWri
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * 모델 배포의 {@code settlement_context}에 노선 판본 키로 정산 근거를 더한다. 이미 키가 있으면 바꾸지 않고 값이 같은지만 본다.
+ * 모델 배포의 {@code settlement_context}에 노선 버전 키로 정산 근거를 더한다. 이미 키가 있으면 바꾸지 않고 값이 같은지만 본다.
  */
 public final class JdbcSettlementContextWriter implements SettlementContextWriter {
 
@@ -28,7 +28,7 @@ public final class JdbcSettlementContextWriter implements SettlementContextWrite
                     route
             ).update();
         if (inserted == 0 && !hasSameStoredContext(modelDeploymentId, route, context)) {
-            throw new IllegalStateException("같은 모델과 노선 판본의 정산 근거가 변경됐다");
+            throw new IllegalStateException("같은 모델과 노선 버전의 정산 근거가 변경됐다");
         }
     }
 

@@ -14,7 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
-/** GBIS 조회와 응답 해석을 수집 업무의 조회 계약에 연결한다. */
+/** GBIS에서 관측을 조회하고 응답을 수집 결과로 해석한다. */
 public class GbisObservationClient {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GbisObservationClient.class);
@@ -26,11 +26,11 @@ public class GbisObservationClient {
     }
 
     /**
-     * 전송한 뒤 예상하지 못한 예외가 나도 수집 묶음을 열린 상태로 남기지 않는다.
+     * GBIS 요청을 보낸 뒤 예외가 발생해도 수집 배치를 미완료 상태로 남기지 않는다.
      *
-     * <p>GbisLocationSource 가 RestClientException 은 NoResponse 로 변환하지만 그 밖의 예외는 그대로 전파한다.
-     * 그러면 conclude 까지 진행하지 못해 묶음이 DISPATCHING 에 머문다. 전송했고 결과만 모르는 상태이므로
-     * 응답이 오지 않은 경우와 같은 상태(UNKNOWN_AFTER_DISPATCH)로 닫는다.
+     * <p>{@code GbisLocationSource}는 {@code RestClientException}만 {@code NoResponse}로 바꾸고 다른 예외는 전파한다.
+     * 이때는 {@code conclude}를 호출하지 못해 배치가 {@code DISPATCHING}에 남는다.
+     * 요청은 보냈지만 결과를 확인할 수 없으므로 응답 미수신과 같은 {@code UNKNOWN_AFTER_DISPATCH}로 종료한다.
      */
     public ObservationResponse read(String sourceRouteId, String keyAlias) {
         GbisLocationResult upstreamResult;
@@ -38,7 +38,7 @@ public class GbisObservationClient {
             upstreamResult = WorkerOperationLog.measure("collection_upstream", sourceRouteId,
                 () -> locationSource.read(sourceRouteId, keyAlias));
         } catch (RuntimeException transportFailure) {
-            LOGGER.error("상류를 부른 뒤 뜻밖의 예외가 났다. 보낸 것은 맞고 결과만 모른다. 노선={} exceptionType={}",
+            LOGGER.error("GBIS 요청을 보낸 뒤 예외가 발생해 수집 결과를 확인할 수 없다. 노선={} exceptionType={}",
                 sourceRouteId, transportFailure.getClass().getSimpleName());
 
             if (MDC.get("collectionAttemptId") != null) {

@@ -11,23 +11,23 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * {@link ScoringScenario} 하나의 예측별 채점 결과의 고정 기대값이다({@link Baseline}). 값은 기준 구현(dev {@code e98ae3ea}의 테스트가
+ * {@link ScoringScenario} 하나의 예측별 정산 결과의 고정 기대값이다({@link Baseline}). 값은 기준 구현(dev {@code e98ae3ea}의 테스트가
  * 기준으로 삼던, 전체 이력으로 정답을 내는 정산 계산)이 같은 흐름에 낸 것이다. 그 구현은 저장소에 남아 있지 않아 파일을 다시 만들 수
- * 없으므로, {@link ScoringScenario}가 관측·예보를 만드는 순서와 난수를 뽑는 순서를 바꾸면 기대값과 견줄 수 없다.
+ * 없으므로, {@link ScoringScenario}가 관측, 예보를 만드는 순서와 난수를 뽑는 순서를 바꾸면 기대값과 견줄 수 없다.
  *
  * <p>기대값은 그 계산을 배치마다 한 번씩 돌려 얻었다. 예측 기준 시각부터 {@link ScoringStage#MATCH_WINDOW} 안의 평가에서 처음 나온
- * 결과가 그 예측의 결과이고 끝까지 없으면 놓침이다. 평가마다 예측 기준 시각의 한국 날짜 00시부터 평가 시각까지의 관측만 썼다. 채점
+ * 결과가 그 예측의 결과이고 끝까지 없으면 놓침이다. 평가마다 예측 기준 시각의 한국 날짜 00시부터 평가 시각까지의 관측만 썼다. 정산
  * 단계는 날짜를 가리지 않고 통과가 닫힐 때 한 번 계산하므로, 아래 두 경우에는 기대값과 달라도 설명되는 차이로 센다.
  * <ul>
  *   <li>자정 범위: 자정을 넘겨 이어진 운행의 예측이 날짜 경계 없이 본 기대값({@code c} 줄)과 같다</li>
- *   <li>구멍 시점: 기대값의 사유가 수집 구멍이나 관측 상한인데, 채점 단계는 그 전에 통과가 생길 수 없거나 조건이 맞지 않아 닫았다</li>
+ *   <li>구멍 시점: 기대값의 사유가 관측 누락이나 관측 상한인데, 정산 단계는 그 전에 통과가 생길 수 없거나 조건이 맞지 않아 닫았다</li>
  * </ul>
  *
  * <p>줄 형식은 다음과 같다. 관측은 {@link ScoringScenario}가 매긴 번호다.
  * <ul>
  *   <li>{@code hash 번호 계수해시}: 결과 줄이 번호로 가리키는 계수 해시</li>
- *   <li>{@code k 번호 SETTLED 정답값 해시번호 정원 도착전관측 마지막관측 닫은관측 직전마지막관측 직전닫은관측}: 채점된 결과</li>
- *   <li>{@code k 번호 상태 사유}: 채점되지 않고 닫힌 결과</li>
+ *   <li>{@code k 번호 SETTLED 정답값 해시번호 정원 도착전관측 마지막관측 닫은관측 직전마지막관측 직전닫은관측}: 정산된 결과</li>
+ *   <li>{@code k 번호 상태 사유}: 정산되지 않고 닫힌 결과</li>
  *   <li>{@code f 관측 목표:결과번호 …}: 관측 하나의 목표 정류장별 기대 결과</li>
  *   <li>{@code c 관측 목표:결과번호 …}: 자정을 넘겨 이어진 운행의 예측을 날짜 경계 없이 본 기대 결과. {@code f} 줄과 다른 것만 있다</li>
  * </ul>
@@ -36,7 +36,7 @@ final class ScoringScenarioBaseline {
 
     private static final List<String> TAINTS = List.of(ScoringReasons.SOURCE_HISTORY_INCOMPLETE,
         ScoringReasons.OBSERVATION_INPUT_LIMIT);
-    /** 채점 단계가 마감을 기다리지 않고 바로 닫는 사유. 기준 구현은 마감까지 보아서 그 사이에 생긴 수집 구멍·관측 상한이 기대값에만 있다. */
+    /** 정산 단계가 마감을 기다리지 않고 바로 닫는 사유. 기준 구현은 마감까지 보아서 그 사이에 생긴 관측 누락, 관측 상한이 기대값에만 있다. */
     private static final List<String> IMMEDIATE = List.of(ScoringReasons.TARGET_WITHOUT_PASS,
         ScoringReasons.PASS_CONDITION_UNMET);
 
@@ -99,7 +99,7 @@ final class ScoringScenarioBaseline {
     }
 
     /**
-     * 채점 결과를 예측마다 기대값과 견준다. 기대값과 다른 예측은 자정 범위나 구멍 시점으로 설명되지 않으면 설명되지 않는 차이로
+     * 정산 결과를 예측마다 기대값과 견준다. 기대값과 다른 예측은 자정 범위나 구멍 시점으로 설명되지 않으면 설명되지 않는 차이로
      * 모으고, 기대값에 없는 예측도 설명되지 않는 차이다.
      */
     Comparison compare(ScoringScenario scenario, ScoringScenario.Scored scored) {
@@ -204,8 +204,8 @@ final class ScoringScenarioBaseline {
     /**
      * @param key 예측
      * @param expected 기대 결과. 기대값에 없는 예측이면 비어 있다
-     * @param scored 채점 결과. 채점 결과가 없으면 비어 있다
-     * @param reason 채점 단계가 남긴 사유
+     * @param scored 정산 결과. 정산 결과가 없으면 비어 있다
+     * @param reason 정산 단계가 남긴 사유
      */
     record Difference(
         ScoringScenario.Key key,

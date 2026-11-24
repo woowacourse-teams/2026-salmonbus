@@ -38,10 +38,10 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 채점 단계에 흘릴 관측 흐름과 예보를 만들고 채점 결과를 예측 단위로 모은다. 관측에서 {@link AlightingAwarePassEvents#resolve}로
- * 판정한 통과를 사건으로 만든다.
+ * 정산 단계에 흘릴 관측 흐름과 예보를 만들고 정산 결과를 예측 단위로 모은다. 관측에서 {@link AlightingAwarePassEvents#resolve}로
+ * 판정한 통과를 이벤트로 만든다.
  *
- * <p>{@link ScoringScenarioBaseline}의 기대값은 여기서 만드는 흐름에 묶여 있다. 관측·예보를 만드는 순서와
+ * <p>{@link ScoringScenarioBaseline}의 기대값은 여기서 만드는 흐름에 묶여 있다. 관측, 예보를 만드는 순서와
  * {@link #random(long, Instant, int, int, double, boolean)}이 난수를 뽑는 순서를 바꾸면 기대값과 견줄 수 없다.
  */
 final class ScoringScenario {
@@ -92,7 +92,7 @@ final class ScoringScenario {
 
     }
 
-    /** 예측 하나의 채점 결과에서 견주는 열이다. 정답 값은 비트로 담는다. 근거 관측 번호·정원·계수 해시는 채점됨에만 있다. */
+    /** 예측 하나의 정산 결과에서 견주는 열이다. 정답 값은 비트로 담는다. 근거 관측 번호, 정원, 계수 해시는 정산 완료에만 있다. */
     record Verdict(
         String state,
         String reason,
@@ -122,7 +122,7 @@ final class ScoringScenario {
         }
     }
 
-    /** 채점 결과를 예측 단위로 모은 것. */
+    /** 정산 결과를 예측 단위로 모은 것. */
     record Scored(
         Map<Key, Verdict> verdicts,
         Map<Key, String> reasons,
@@ -196,7 +196,7 @@ final class ScoringScenario {
         return passes;
     }
 
-    /** 배치마다 수집 사건, 그 배치가 닫은 통과, 예보 사건 순서로 사건을 만든다. */
+    /** 배치마다 수집 이벤트, 그 배치가 확정한 통과, 예보 이벤트 순서로 이벤트를 만든다. */
     List<Object> events() {
         prepare();
         Map<Long, List<PassClosed>> closedIn = new HashMap<>();
@@ -228,7 +228,7 @@ final class ScoringScenario {
         return CollectionResult.SUCCESS;
     }
 
-    /** 수집 구멍을 흉내 내려고 기록한 저장 줄 수를 실제로 남은 줄 수보다 하나 많게 둔다. */
+    /** 관측 누락을 흉내 내려고 기록한 저장 행 수를 실제로 남은 행 수보다 하나 많게 둔다. */
     private static int storedRows(final int saved, final boolean hole) {
         if (hole) {
             return saved + 1;
@@ -274,7 +274,7 @@ final class ScoringScenario {
         };
     }
 
-    /** 채점 결과를 예측 단위로 바꾼다. 저장소처럼 같은 키는 처음 것만 남긴다. */
+    /** 정산 결과를 예측 단위로 바꾼다. 저장소처럼 같은 키는 처음 것만 남긴다. */
     Scored scored(ScoringResult result) {
         Map<List<Object>, PassLabel> labels = firstLabelsByKey(result);
         Map<List<Object>, PassClosed> passByKey = passesByKey();
@@ -384,7 +384,7 @@ final class ScoringScenario {
         }
     }
 
-    /** 모든 사건을 흘리고 마지막 배치 3시간 뒤에 마감한 채점 결과를 예측 단위로 모은다. 마감 뒤에도 기다리는 예측이 있으면 실패다. */
+    /** 모든 이벤트를 흘리고 마지막 배치 3시간 뒤에 마감한 정산 결과를 예측 단위로 모은다. 마감 뒤에도 기다리는 예측이 있으면 실패다. */
     Scored scoredToDeadline(final int limit) {
         ScoringStage stage = stage(limit);
         ScoringResult result = feed(stage, events())

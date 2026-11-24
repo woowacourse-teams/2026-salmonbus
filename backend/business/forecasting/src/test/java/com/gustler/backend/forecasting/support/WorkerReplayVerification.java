@@ -35,13 +35,13 @@ import tools.jackson.databind.JsonNode;
  *
  * <p>사례마다 다음을 본다.
  * <ul>
- *   <li>입력: 그 배치 직전에 다시 뜬 것처럼 저장된 관측을 되감아 만든 상태로 예보 입력을 다시 만들어 자료의 입력과 견준다.
+ *   <li>입력: 그 배치 직전에 재시작한 것처럼 저장된 관측을 복구해 만든 상태로 예보 입력을 다시 만들어 자료의 입력과 견준다.
  *       차이가 조금이라도 있으면 통과하지 못한다. 그 상태로 낸 예측이 저장된 예측과 비트까지 같은지도 본다.</li>
- *   <li>예측: 예보가 이어 온 상태로 저장한 예측을, 자료의 입력을 모델에 넣은 값(시간 확장 사례는 자료에 적힌 값)과 견준다.</li>
- *   <li>정답: 예측별 결과 뷰({@code forecast_outcome})에서 그 예측의 상태·정답 값과 정답 계산에 쓰인 관측·정원을 읽어 자료의
- *       기대값과 견준다. 정답이 알려진 시각은 통과가 닫힌 시각이다.</li>
+ *   <li>예측: 예보가 이어 온 상태로 저장한 예측을, 자료의 입력을 모델에 넣은 값(시간 확장 사례는 자료에 기록된 값)과 견준다.</li>
+ *   <li>정답: 예측별 결과 뷰({@code forecast_outcome})에서 그 예측의 상태, 정답 값과 정답 계산에 쓰인 관측, 정원을 읽어 자료의
+ *       기대값과 견준다. 정답이 알려진 시각은 통과 확정 시각이다.</li>
  * </ul>
- * 시간 확장 사례가 있으면 가장 먼저 채점된 시간 확장 사례 하나의 정답을, 저장된 예보·통과 기록만으로 채점 상태를 다시 만들어
+ * 시간 확장 사례가 있으면 가장 먼저 정산된 시간 확장 사례 하나의 정답을, 저장된 예보, 통과 기록만으로 정산 상태를 다시 만들어
  * 한 번 더 계산하고 저장된 값과 비트까지 같은지 본다.
  */
 final class WorkerReplayVerification {
@@ -66,7 +66,7 @@ final class WorkerReplayVerification {
     private WorkerReplayRunner.Restarted restarted;
 
     /**
-     * @param runner 이 노선의 배치를 이미 모두 흘린 예보·채점
+     * @param runner 이 노선의 배치를 이미 모두 흘린 예보, 정산
      * @param bundle 재생한 번들
      * @param model 번들에서 읽은 모델
      * @param routeId 자료를 넣은 노선
@@ -98,7 +98,7 @@ final class WorkerReplayVerification {
         return columns;
     }
 
-    /** 모든 사례를 견준 노선 결과를 돌려준다. 보고서의 {@code routes} 한 줄이다. */
+    /** 모든 사례를 견준 노선 결과를 반환한다. 보고서의 {@code routes} 한 행이다. */
     Map<String, Object> result() {
         reportUnappliedBatches();
         List<JsonNode> cases = fixture.cases();
@@ -140,8 +140,8 @@ final class WorkerReplayVerification {
     }
 
     /**
-     * 자료에 적힌 착수 시각의 예보 실행이 남지 않은 배치가 있으면 그날을 자료대로 재생하지 못한 것이다. 수신 순서와 착수 순서가
-     * 뒤집힌 자료의 배치는 예보가 이력에 넣지 않고 나중에 늦음으로 닫으므로 실행의 착수 시각이 자료와 다르다.
+     * 자료에 기록된 처리 시작 시각의 예보 실행이 남지 않은 배치가 있으면 그날을 자료대로 재생하지 못한 것이다. 수신 순서와 착수 순서가
+     * 뒤집힌 자료의 배치는 예보가 이력에 넣지 않고 나중에 늦음으로 닫으므로 실행의 처리 시작 시각이 자료와 다르다.
      */
     private void reportUnappliedBatches() {
         Map<Long, Instant> appliedAt = new HashMap<>();
@@ -207,7 +207,7 @@ final class WorkerReplayVerification {
         ));
     }
 
-    /** 사례는 기준 관측의 착수 시각 순서라 같은 배치가 이어진다. 직전 배치 하나만 들고 있는다. */
+    /** 사례는 기준 관측의 처리 시작 시각 순서라 같은 배치가 이어진다. 직전 배치 하나만 보관한다. */
     private WorkerReplayRunner.Restarted restartedAt(final long batchId) {
         if (restartedBatchId != batchId) {
             restarted = runner.restartedAt(batchId).orElse(null);
@@ -333,7 +333,7 @@ final class WorkerReplayVerification {
         }
     }
 
-    /** 출퇴근 끝에 낸 예측의 통과가 낮 시간에 닫혀도 채점할 수 있게, 정산 근거에 낮 시간 계수가 남아 있어야 한다. */
+    /** 출퇴근 끝에 낸 예측의 통과가 낮 시간에 닫혀도 정산할 수 있게, 정산 근거에 낮 시간 계수가 남아 있어야 한다. */
     private void requireDaytimeSettlement(Map<String, Object> outcome) {
         final boolean kept = jdbc.sql("""
             SELECT (settlement_context -> CAST(? AS text) -> 'shared' -> 'extendedSettlement' -> 'work-day') IS NOT NULL
@@ -382,7 +382,7 @@ final class WorkerReplayVerification {
         return reason.isString() && reason.asString().equals(outcome.get("reason"));
     }
 
-    /** 정답이 알려진 시각이다. 직전 통과는 항상 먼저 닫히므로 정답을 낸 통과가 닫힌 시각과 같다. */
+    /** 정답이 알려진 시각이다. 직전 통과는 항상 먼저 닫히므로 정답을 낸 통과 확정 시각과 같다. */
     private Optional<Instant> closedAt(JsonNode row, Map<String, Object> outcome) {
         List<OffsetDateTime> closed = jdbc.sql("""
             SELECT closed_at FROM stop_pass
@@ -436,7 +436,7 @@ final class WorkerReplayVerification {
     }
 
     /**
-     * 가장 먼저 채점된 시간 확장 사례 하나의 정답을 저장된 기록만으로 다시 계산한다.
+     * 가장 먼저 정산된 시간 확장 사례 하나의 정답을 저장된 기록만으로 다시 계산한다.
      *
      * @return 다시 계산한 정답이 저장된 정답과 같으면 1, 시간 확장 사례가 없거나 다시 계산되지 않았으면 0
      * @throws IllegalStateException 다시 계산한 정답이 저장된 정답과 다르면 던진다
@@ -460,7 +460,7 @@ final class WorkerReplayVerification {
             return 0;
         }
         if (!settled.hasSameLabelAs(label.get())) {
-            throw new IllegalStateException("저장된 기록으로 다시 채점한 정답이 저장된 정답과 다르다: "
+            throw new IllegalStateException("저장된 기록으로 다시 정산한 정답이 저장된 정답과 다르다: "
                 + settled.sourceId() + "/" + settled.target());
         }
         return 1;
@@ -537,7 +537,7 @@ final class WorkerReplayVerification {
     /**
      * 사례 하나의 기대값이다.
      *
-     * @param restarted 되감아 만든 상태로 낸 그 목표의 예측. 그 상태가 이 목표를 예측하지 않았으면 비어 있다
+     * @param restarted 복구해 만든 상태로 낸 그 목표의 예측. 그 상태가 이 목표를 예측하지 않았으면 비어 있다
      */
     private record Expected(Forecast forecast, SeatForecastResult restarted) {
 

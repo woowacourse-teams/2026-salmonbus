@@ -256,7 +256,7 @@ class AlightingAwareBundleLoaderTest {
     @Test
     void 운영_로더는_미검증_번들을_거부한다() throws Exception {
         fixture();
-        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("서빙 검증");
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("serving_ready");
     }
 
     @Test
@@ -315,7 +315,7 @@ class AlightingAwareBundleLoaderTest {
         String manifest = Files.readString(directory.resolve("manifest.json"));
         Files.writeString(directory.resolve("manifest.json"),
             manifest.replace("\"serving_ready\":false", "\"serving_ready\":true"));
-        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("서빙 계약");
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("운영 적재 계약");
     }
 
     @Test
@@ -348,7 +348,7 @@ class AlightingAwareBundleLoaderTest {
         JsonNode manifest = JSON.readTree(Files.readAllBytes(directory.resolve("manifest.json")));
         ((ObjectNode) manifest.get("runtime")).put("data_through", "2026-10-20T00:00:00Z");
         Files.writeString(directory.resolve("manifest.json"), JSON.writeValueAsString(manifest));
-        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("미래 통계");
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("모델 사용 시작 시각보다 나중의 통계");
     }
 
     @Test
@@ -365,7 +365,7 @@ class AlightingAwareBundleLoaderTest {
         // then
         assertThatThrownBy(
             () -> AlightingAwareInferenceBundle.loadForServing(directory)
-        ).hasMessageContaining("출시 식별자");
+        ).hasMessageContaining("릴리스 ID");
 
         // when
         runtime.put("release_id", "a".repeat(80));

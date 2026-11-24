@@ -66,7 +66,7 @@ public class JdbcVehicleCapacityStore {
             .query(this::mapCapacity).list();
     }
 
-    /** 수집 트랜잭션에서 판정, 원값 보존, 정원 갱신을 모두 완료한다. */
+    /** 수집 트랜잭션에서 판정, 원본 값 보존, 정원 갱신을 모두 완료한다. */
     @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public BatchAssessment assessBatch(final long batchId) {
         List<Observation> observations = readObservations(batchId);

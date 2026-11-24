@@ -15,8 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 통과 정답({@code pass_label})과 미해결 예측({@code forecast_unresolved})을 날짜 파티션 테이블에 저장한다.
  *
- * <p>쓰기는 호출하는 쪽의 트랜잭션에 참여하며, 트랜잭션 없이 부르면 실패한다. 이미 있는 키는 건너뛰고, 새로 들어간 줄을 기본 키로
- * 되짚어 돌려준다.
+ * <p>쓰기는 호출자의 트랜잭션에 참여하며, 트랜잭션 없이 호출하면 실패한다. 이미 있는 키는 건너뛰고, 새로 저장한 행을 기본 키로
+ * 되짚어 반환한다.
  */
 @Repository
 public class JdbcPassLabelStore implements PassLabelStore {

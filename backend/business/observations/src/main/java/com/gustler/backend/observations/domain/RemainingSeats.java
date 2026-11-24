@@ -25,7 +25,7 @@ public sealed interface RemainingSeats {
 
         public Known {
             if (seats < 0) {
-                throw new IllegalArgumentException("아는 잔여석은 음수일 수 없다: " + seats);
+                throw new IllegalArgumentException("확인된 잔여석은 음수일 수 없다: " + seats);
             }
         }
     }

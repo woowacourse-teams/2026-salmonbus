@@ -11,7 +11,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
-/** Worker에서 예보와 수요 통계가 함께 사용하는 관측 정원이다. PostgreSQL이 정원의 원본이다. */
+/** worker의 예보와 수요 통계에서 사용하는 차량 정원 캐시다. 정원의 원본은 PostgreSQL에 저장한다. */
 @Component
 public class VehicleCapacityCache {
 

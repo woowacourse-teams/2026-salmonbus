@@ -18,7 +18,7 @@ import java.util.stream.IntStream;
  * 출퇴근 모델과 시간 확장 모델을 모두 넣어 시험을 도는 시각과 무관하게 예측이 나온다.
  *
  * <p>정류장은 {@code s1}부터 {@code s<stopCount>}까지이고, {@code turn} 이하가 상행, 그 뒤가 하행이며 모두 승차할 수 있다.
- * DB의 {@code route_stop}도 같은 규칙으로 넣어야 모델의 노선 지원 판정과 되감기 판본 호환 검사를 통과한다.
+ * DB의 {@code route_stop}도 같은 규칙으로 넣어야 모델의 노선 지원 판정과 복구 버전 호환 검사를 통과한다.
  */
 final class ConfirmedProfileModelFixture {
 

@@ -399,7 +399,7 @@ class ObservationStorageTest {
     ) {
     }
 
-    /** 상류가 정상으로 응답한 수집 배치. 결과는 프로덕션과 같은 경로로 응답에서 얻는다. */
+    /** GBIS가 정상으로 응답한 수집 배치. 결과는 프로덕션과 같은 경로로 응답에서 얻는다. */
     private void loadBuses(List<BusLocationResponse.BusLocation> buses) {
         ledger.conclude(batchId,
             receivedAt -> GbisObservationMapper.response(new GbisLocationResult.Success(QUERY_TIME, buses), receivedAt),

@@ -67,7 +67,7 @@ class ForecastSchedulerTest {
         assertSoftly(softly -> {
             softly.assertThat(forecasts.pickUps).isOne();
             softly.assertThat(scheduled.scheduler()).isEqualTo("forecastTaskScheduler");
-            softly.assertThat(scheduled.initialDelayString()).as("기동 직후의 첫 줍기는 모델을 올린 쪽이 부른다")
+            softly.assertThat(scheduled.initialDelayString()).as("기동 직후의 첫 배치 조회는 모델을 적재한 뒤 호출한다")
                 .isEqualTo("${forecast.interval}");
             softly.assertThat(scheduled.fixedDelayString()).isEqualTo("${forecast.interval}");
         });

@@ -36,19 +36,19 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 실제 관측 하루치를 로컬 PostgreSQL에 넣고 worker의 예보와 채점을 그대로 돌려, 독립 계산한 기대값과 견준다. 운영에 연결하지
+ * 실제 관측 하루치를 로컬 PostgreSQL에 넣고 worker의 예보와 정산을 그대로 돌려, 독립 계산한 기대값과 견준다. 운영에 연결하지
  * 않는다.
  *
  * <p>인자는 재생 자료 폴더, 비활성 번들 폴더, 아직 없는 출력 폴더, 그리고 선택으로 노선 하나다. 재생 자료 폴더의
- * {@code manifest.json}에 적힌 노선 파일마다 다음을 한다.
+ * {@code manifest.json}에 기록된 노선 파일마다 다음을 한다.
  * <ol>
- *   <li>파일의 해시를 확인하고 노선·판본·정류장·그날의 배치와 관측을 DB에 넣는다({@link WorkerReplayLoader}).</li>
- *   <li>그날의 배치를 착수 시각 순서로 예보에 넣는다. 예보가 실행·예측 기록·닫힌 통과를 저장하고, 통과가 닫힐 때 채점이 정답을
+ *   <li>파일의 해시를 확인하고 노선, 버전, 정류장, 그날의 배치와 관측을 DB에 넣는다({@link WorkerReplayLoader}).</li>
+ *   <li>그날의 배치를 처리 시작 시각 순서로 예보에 넣는다. 예보가 실행, 예측 기록, 확정된 통과를 저장하고, 통과가 닫힐 때 정산이 정답을
  *       저장한다({@link WorkerReplayRunner}).</li>
- *   <li>사례마다 입력·예측·정답과 정답의 근거를 기대값과 견준다({@link WorkerReplayVerification}).</li>
+ *   <li>사례마다 입력, 예측, 정답과 정답의 근거를 기대값과 견준다({@link WorkerReplayVerification}).</li>
  * </ol>
  * 출력 폴더에 노선마다 {@code <노선>.json}을, 끝에 {@code report.json}을 쓴다. 번들의 노선이 모두 통과해야 보고서가 통과다. 통과하지
- * 못하면 보고서를 쓴 뒤 예외로 끝낸다. 보고서는 번들의 재생·정산 확인 영수증을 만드는 입력이다.
+ * 못하면 보고서를 쓴 뒤 예외로 끝낸다. 보고서는 번들의 재생, 정산 확인 결과 파일을 만드는 입력이다.
  *
  * <p>확인 범위에는 한계가 있다. 그날 앞의 관측은 재생하지 않으므로 전날부터 이어진 운행의 차량 상태는 그날의 첫 관측에서 다시
  * 시작한다. 그 차이가 입력에 닿는 사례는 입력이 달라 통과하지 못한다. 차량 정원 이력은 자료의 관측으로 흉내 낸 것이고 수집이
@@ -132,7 +132,7 @@ public final class ConfirmedAlightingAwareWorkerReplay {
      * @param onlyRoute 이 노선만 재생한다. 비어 있으면 자료의 노선을 모두 재생한다
      * @param stores 로컬 DB의 저장소
      * @return 통과한 보고서
-     * @throws IllegalArgumentException 출력 폴더가 이미 있거나, 자료의 정원 정책·정답 판이 지금 것과 다르거나, 노선 파일의
+     * @throws IllegalArgumentException 출력 폴더가 이미 있거나, 자료의 정원 정책, 정산 버전이 지금 것과 다르거나, 노선 파일의
      *     해시가 다르면 던진다
      * @throws IllegalStateException 보고서가 통과하지 못하면 보고서를 쓴 뒤 던진다
      */
@@ -173,11 +173,11 @@ public final class ConfirmedAlightingAwareWorkerReplay {
     private static void requireCurrentContract(JsonNode manifest) {
         if (!CAPACITY_POLICY.equals(manifest.path("capacity_policy").asString())
             || !ScoringReasons.LABEL_VERSION.equals(manifest.path("label_version").asString())) {
-            throw new IllegalArgumentException("재생 자료의 정원 정책이나 정답 판이 지금과 다르다. " + "차량 정원 스냅샷 기준으로 독립 정답을 다시 준비해야 한다");
+            throw new IllegalArgumentException("재생 자료의 정원 정책이나 정산 버전이 지금과 다르다. " + "차량 정원 스냅샷 기준으로 독립 정답을 다시 준비해야 한다");
         }
     }
 
-    /** 번들을 로컬 DB의 활성 모델 배포로 올린다. 예보가 예측 기록에 적고 채점이 정산 근거를 읽는 배포다. */
+    /** 번들을 로컬 DB의 활성 모델 배포로 올린다. 예보가 예측 기록에 적고 정산이 정산 근거를 읽는 배포다. */
     private static RuntimeSnapshot activate(
         Stores stores,
         AlightingAwareInferenceBundle bundle,
@@ -287,7 +287,7 @@ public final class ConfirmedAlightingAwareWorkerReplay {
     /**
      * 재생이 쓰는 로컬 DB의 저장소와 트랜잭션이다.
      *
-     * @param records 예보 실행과 예측 기록의 저장소. 채점이 최근 예보가 있던 노선을 찾는 데도 쓴다
+     * @param records 예보 실행과 예측 기록의 저장소. 정산이 최근 예보가 있던 노선을 찾는 데도 쓴다
      */
     record Stores(
         JdbcClient jdbc,

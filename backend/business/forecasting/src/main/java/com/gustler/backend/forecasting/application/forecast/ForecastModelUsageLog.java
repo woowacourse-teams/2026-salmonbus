@@ -11,8 +11,8 @@ import org.slf4j.LoggerFactory;
 /**
  * 노선이 어느 모델 배포로 예보되는지, 모델의 기준 정류장이 맞지 않아 예보하지 못하는지를 상태가 바뀔 때만 로그로 남긴다.
  *
- * <p>노선(GBIS 노선 ID)마다 마지막으로 남긴 상태(노선 판본, 모델 배포, 예보했는지)를 기억하고 같은 상태는 다시 남기지 않는다. 다시
- * 뜨거나 기억하는 노선이 {@value #MAX_ROUTES}개를 넘어 밀려난 뒤에는 다시 남기므로, 로그 수는 배치 수나 건너뛴 횟수가 아니다.
+ * <p>노선(GBIS 노선 ID)마다 마지막으로 남긴 상태(노선 버전, 모델 배포, 예보했는지)를 기억하고 같은 상태는 다시 남기지 않는다. 다시
+ * 뜨거나 보관한 노선이 {@value #MAX_ROUTES}개를 넘어 밀려난 뒤에는 다시 남기므로, 로그 수는 배치 수나 건너뛴 횟수가 아니다.
  */
 final class ForecastModelUsageLog {
 
@@ -44,7 +44,7 @@ final class ForecastModelUsageLog {
         }
     }
 
-    /** 모델의 기준 정류장과 노선 판본의 정류장이 달라 예보하지 못하는 노선을 알린다. */
+    /** 모델의 기준 정류장과 노선 버전의 정류장이 달라 예보하지 못하는 노선을 알린다. */
     synchronized void referenceMismatch(
         String routeId,
         String routeName,

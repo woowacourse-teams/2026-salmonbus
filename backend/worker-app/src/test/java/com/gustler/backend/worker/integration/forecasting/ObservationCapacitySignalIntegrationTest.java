@@ -44,9 +44,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 수집이 커밋한 정원이 예보 신호보다 먼저 worker 메모리에 반영되는지 본다. 활성 모델이 없어 예보는 배치를 줄에 넣지 않는다.
+ * 수집이 커밋한 정원이 예보 신호보다 먼저 worker 메모리에 반영되는지 본다. 활성 모델이 없어 예보는 배치를 큐에 넣지 않는다.
  *
- * <p>worker가 읽지 않는 예보 설정 키를 함께 준다. 서버의 환경 파일에 그런 키가 남아 있어도 기동과 구성이 달라지지 않아야 한다.
+ * <p>worker가 읽지 않는 예보 설정 키를 같이 준다. 서버의 환경 파일에 그런 키가 남아 있어도 기동과 구성이 달라지지 않아야 한다.
  */
 @SpringBootTest(classes = WorkerApplication.class, properties = {
     "forecast.enabled=true",

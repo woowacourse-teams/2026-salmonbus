@@ -34,8 +34,8 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * 실제 관측 없이 만든 합성 번들을 어느 적재에서 받는지 검사한다. 번들은 재생·정산 검증을 실행하지 않았다고 밝히고,
- * 수치 대조와 후보 런타임 검증의 영수증만 싣는다.
+ * 실제 관측 없이 만든 합성 번들을 어느 적재에서 받는지 검사한다. 번들은 재생, 정산 검증을 실행하지 않았다고 밝히고,
+ * 수치 대조와 후보 런타임 검증의 결과 파일만 싣는다.
  */
 class SyntheticFixtureBundleTest {
 
@@ -107,11 +107,11 @@ class SyntheticFixtureBundleTest {
         // then
         assertSoftly(softly -> {
             softly.assertThatThrownBy(() -> new FileModelBundleLoader().filesUnder(directory.toString()).load())
-                .hasRootCauseMessage("합성 번들은 로컬 개발 적재에서만 받는다");
+                .hasRootCauseMessage("합성 번들은 로컬 개발 환경에서만 적재할 수 있다");
             softly.assertThatThrownBy(() -> new FileModelBundleInspector().inspect(directory.toString()))
-                .hasRootCauseMessage("합성 번들은 로컬 개발 적재에서만 받는다");
+                .hasRootCauseMessage("합성 번들은 로컬 개발 환경에서만 적재할 수 있다");
             softly.assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory))
-                .hasMessage("합성 번들은 로컬 개발 적재에서만 받는다");
+                .hasMessage("합성 번들은 로컬 개발 환경에서만 적재할 수 있다");
         });
     }
 
@@ -131,7 +131,7 @@ class SyntheticFixtureBundleTest {
         // then
         runner.run(context -> assertThatThrownBy(() -> context.getBean(ModelBundleLoader.class)
             .filesUnder(directory.toString()).load())
-            .hasRootCauseMessage("합성 번들은 로컬 개발 적재에서만 받는다"));
+            .hasRootCauseMessage("합성 번들은 로컬 개발 환경에서만 적재할 수 있다"));
         runner.withPropertyValues("model.bundle.allow-synthetic-fixture=true")
             .run(context -> assertThat(context.getBean(ModelBundleLoader.class)
                 .filesUnder(directory.toString()).load().releaseId()).isEqualTo("test-synthetic"));
@@ -204,7 +204,7 @@ class SyntheticFixtureBundleTest {
 
         // then
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory, true))
-            .hasMessage("실행하지 않은 검증의 영수증이 있다: historical_replay");
+            .hasMessage("실행하지 않은 검증의 결과 파일이 포함되어 있다: historical_replay");
     }
 
     @Test
@@ -283,10 +283,10 @@ class SyntheticFixtureBundleTest {
     }
 
     /**
-     * 원본 번들, 실행한 검증의 영수증·증거, 서빙 manifest를 차례로 쓴다.
+     * 원본 번들, 실행한 검증의 결과 파일, 증거, 서빙 manifest를 차례로 쓴다.
      *
-     * @param confirmed 확정 입력 계약 필드를 계약·통계·영수증·서빙 계약에 넣을지
-     * @param executed 영수증과 증거를 싣는 검증
+     * @param confirmed 확정 입력 계약 필드를 계약, 통계, 결과 파일, 서빙 계약에 넣을지
+     * @param executed 결과 파일과 증거를 싣는 검증
      * @param unverified 실행하지 않았다고 밝히는 검증
      */
     private void syntheticBundle(

@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 같은 관측 기준의 탑승판·차량 통합 조회를 제공하고 캐시 헤더를 설정한다.
+ * 같은 관측 기준의 탑승판, 차량 통합 조회를 제공하고 캐시 헤더를 설정한다.
  */
 @RestController
 @Tag(name = ApiDocsTags.ROUTES)
@@ -39,12 +39,12 @@ public class WatchBoardController {
      */
     @GetMapping
     @Operation(operationId = "getRouteWatch", summary = "노선별 판정 보드와 차량 위치",
-        description = "발행된 예보가 있으면 해당 관측을, 없으면 최신 정상 관측을 기준으로 보드를 구성하고, 같은 관측의 차량 위치를 "
-            + "함께 반환합니다. 화면이 주기적으로 다시 부르는 폴링용 조회입니다. 200 응답은 전체가 관측 하나에서 나온 것입니다. 신선도는 관측 후 5분, 관측 시각이 01~03시대면 10분입니다.")
+        description = "발행된 예보가 있으면 그 예보의 관측을, 없으면 최신 정상 관측을 기준으로 보드와 차량 위치를 반환한다. "
+            + "화면에서 주기적으로 호출하는 조회 API다. 200 응답의 모든 값은 같은 관측을 기준으로 한다. 관측 후 5분까지 유효하며, 관측 시각이 01~03시대면 10분까지 유효하다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "보드 상태별 정상 응답",
             headers = @Header(name = "Cache-Control",
-                description = "public, max-age는 관측 시각대별 정책값(07~08시·17~22시 15초, 01~03시대 600초, 그 밖의 시간 20초)과 "
+                description = "public, max-age는 관측 시각대별 정책값(07~08시, 17~22시 15초, 01~03시대 600초, 그 밖의 시간 20초)과 "
                     + "staleAt까지 남은 시간 중 작은 값. staleAt을 넘겨 캐시하지 않는다", schema = @Schema(type = "string")),
             content =
             @Content(mediaType = "application/json", schema = @Schema(implementation = WatchBoardResponse.class),

@@ -45,10 +45,10 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보 경로가 낸 사건으로 채점을 돌려 저장된 결과를 실제 DB로 본다. 기대값은 기준 구현(dev {@code e98ae3ea}의 발행·정산)이 같은
+ * 예보 경로가 낸 이벤트로 정산을 돌려 저장된 결과를 실제 DB로 본다. 기대값은 기준 구현(dev {@code e98ae3ea}의 발행, 정산)이 같은
  * 흐름에 낸 예측별 결과다({@link ScoringBaseline}).
  *
- * <p>채점이 읽는 모델 배포의 정산 근거는 예보 경로가 적는다. 노선별 실행 줄과 채점 줄은 넣는 즉시 같은 스레드에서 실행한다.
+ * <p>정산이 읽는 모델 배포의 정산 근거는 예보 경로가 기록한다. 노선별 실행기와 정산 큐는 넣는 즉시 같은 스레드에서 실행한다.
  * 흐름을 다 넣은 뒤 마지막 배치 3시간 뒤의 시계로 주기 작업을 돌려 모든 예측을 마감한다.
  */
 @ForecastingIntegrationTest
@@ -196,7 +196,7 @@ class ScoringFlowTest {
         return evidence;
     }
 
-    /** 흐름 하나와 예보 경로·채점을 묶는다. 모델 배포는 둘을 만들어 두고 처음에는 앞의 것을 쓴다. */
+    /** 흐름 하나와 예보 경로, 정산을 묶는다. 모델 배포는 둘을 만들어 두고 처음에는 앞의 것을 쓴다. */
     private final class Harness {
 
         private final ObservationStreamFixture.Stream stream;
@@ -313,10 +313,10 @@ class ScoringFlowTest {
         }
 
         /**
-         * 흐름을 처리 순서로 넣고 배치마다 채점 줄을 비운 뒤, 마지막 배치 3시간 뒤의 시계로 주기 작업을 돌린다.
+         * 흐름을 처리 순서로 넣고 배치마다 정산 큐를 비운 뒤, 마지막 배치 3시간 뒤의 시계로 주기 작업을 돌린다.
          *
          * @param switchAt 이 배치부터 다음 모델 배포를 쓴다. {@link #NEVER}면 바꾸지 않는다
-         * @param rejectAt 이 배치의 사건은 채점 줄이 받지 않는다. {@link #NEVER}면 모두 받는다
+         * @param rejectAt 이 배치의 이벤트는 정산 큐가 받지 않는다. {@link #NEVER}면 모두 받는다
          */
         private void processAll(final long switchAt, final long rejectAt) {
             rejectBatch = rejectAt;

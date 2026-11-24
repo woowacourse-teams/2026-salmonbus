@@ -1,6 +1,6 @@
 package com.gustler.backend.forecasting.domain.model.alighting;
 
-/** alight_fit.predict의 이항 하차 × 음이항 승차 posterior. 학습과 보정은 하지 않는다. */
+/** alight_fit.predict와 같은 방식으로 이항 하차 분포와 음이항 승차 분포를 결합해 사후분포를 계산한다. 학습이나 보정은 하지 않는다. */
 public final class AlightingPosterior {
 
     private static final double[] GAMMA_COEFFICIENTS = {
@@ -24,7 +24,7 @@ public final class AlightingPosterior {
                     kappa,
                     r
             )) {
-                throw new IllegalArgumentException("하차 posterior 계수가 잘못됐다");
+                throw new IllegalArgumentException("하차 사후분포 계수가 올바르지 않다");
             }
             for (final double rate : lambda) {
                 if (rate <= 0 || !Double.isFinite(rate)) {
@@ -69,7 +69,7 @@ public final class AlightingPosterior {
                 gapMinutes,
                 bin
         )) {
-            throw new IllegalArgumentException("하차 posterior 입력이 잘못됐다");
+            throw new IllegalArgumentException("하차 사후분포 입력값이 올바르지 않다");
         }
         final int onboard = capacity - arrive;
         final double mu = parameters.lambda[bin] * gapMinutes

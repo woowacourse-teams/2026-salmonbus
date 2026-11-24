@@ -1,6 +1,6 @@
 package com.gustler.backend.observations.domain;
 
-/** 한도 예약의 성공 여부와 이번 수집 배치를 함께 반환한다. */
+/** 호출 한도를 예약한 결과와 수집 배치 ID를 반환한다. */
 public record CollectionPreparation(long batchId, boolean reserved, String keyAlias) {
 
     public CollectionPreparation {
@@ -9,7 +9,7 @@ public record CollectionPreparation(long batchId, boolean reserved, String keyAl
         }
     }
 
-    /** 준비한 번호와 기존 배치를 다시 열었는지만 반환한다. 배치의 저장 값은 복사하지 않는다. */
+    /** 배치 ID와 기존 배치의 재시도 여부만 반환한다. 저장된 배치 상태는 복사하지 않는다. */
     public record Batch(long batchId, boolean restarted) {
 
     }

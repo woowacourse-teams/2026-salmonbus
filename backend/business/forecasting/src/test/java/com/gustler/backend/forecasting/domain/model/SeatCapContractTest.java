@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
  * 좌석 상한을 도메인과 품질 view 양쪽에서 같은 수로 고정한다.
  *
  * <p>잔여석이 격자를 벗어난 관측은 예보에 쓰지 않는다. 그 판정이 두 곳에 있다. 계산 경로는
- * {@link SeatGrid#LARGEST_SEATS}를 쓰고, 품질 view 는 SQL 리터럴로 같은 수를 적는다. view 는
+ * {@link SeatGrid#LARGEST_SEATS}를 쓰고, 품질 view 는 SQL 리터럴로 같은 수를 기록한다. view 는
  * 자바 상수를 읽을 수 없으므로 한쪽만 바꾸면 조용히 어긋난다. 상한을 올리면 view 가 거른 관측이
  * 계산으로 들어오고, 내리면 계산이 받아들일 관측을 view 가 미리 지운다.
  *
@@ -36,7 +36,7 @@ class SeatCapContractTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(caps)
-                .as("상한을 적은 곳을 못 찾았다. view 가 바뀌었으면 이 검사도 함께 고친다")
+                .as("상한 정의를 찾을 수 없다. view가 변경됐다면 이 검사도 수정해야 한다")
                 .hasSize(VIEW_OCCURRENCES);
             softly.assertThat(caps)
                 .as("view 의 좌석 상한이 SeatGrid.LARGEST_SEATS 와 달라지면 예보와 품질 판정이 어긋난다")

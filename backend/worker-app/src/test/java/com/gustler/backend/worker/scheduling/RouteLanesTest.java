@@ -340,8 +340,8 @@ class RouteLanesTest {
     }
 
     /**
-     * 실행 줄이 닫히기 시작해 모든 줄이 기다리던 일을 버릴 때까지 기다린 뒤 잠시 더 돈다. 닫는 쪽이 돌던 일을 기다리지 않으면 그사이에
-     * 돌아온다. 붙잡은 일은 줄을 닫아야 풀리므로 한도 없이 기다린다.
+     * 실행기가 종료되기 시작해 모든 실행기가 대기 작업을 버릴 때까지 기다린 뒤 잠시 더 돈다. 닫는 쪽이 돌던 일을 기다리지 않으면 그사이에
+     * 돌아온다. 붙잡은 일은 실행기를 종료해야 풀리므로 한도 없이 기다린다.
      */
     private static void untilWaitingDiscarded(RouteLanes lanes) {
         while (!lanes.closing() || lanes.queued() > 0) {

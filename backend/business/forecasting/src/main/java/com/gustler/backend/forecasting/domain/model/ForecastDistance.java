@@ -12,7 +12,7 @@ public record ForecastDistance(int stopCount) {
     public ForecastDistance {
         if (!covers(stopCount)) {
             throw new IllegalArgumentException(
-                "예보는 %d정류장 앞부터 %d정류장 앞까지만 낸다: %d"
+                "예보 거리는 %d~%d개 정류장 범위여야 한다: %d"
                 .formatted(MINIMUM_STOP_COUNT, MAXIMUM_STOP_COUNT, stopCount)
             );
         }

@@ -105,16 +105,16 @@ class BundleStartupLoaderTest {
     static Stream<Arguments> results() {
         return Stream.of(
                 Arguments.of(new ModelLoadResult.NotConfigured(), Level.INFO,
-                "계수 파일 자리가 안 잡혀 있다. 예보는 계수가 붙을 때까지 batch 를 안 연다"),
-                Arguments.of(new ModelLoadResult.Rejected("symlink 다: /srv/model"), Level.ERROR,
-                "계수 파일을 못 올렸다. 예보는 batch 를 안 연다: symlink 다: /srv/model"),
-                Arguments.of(new ModelLoadResult.Activated(7), Level.INFO, "도는 배포가 없어 계수 파일을 올린다: 배포 7"),
-                Arguments.of(new ModelLoadResult.Reloaded("release-A"), Level.INFO, "도는 배포의 계수를 다시 올렸다: release-A"),
+                "모델 번들 경로가 설정되지 않았다. 모델을 사용할 수 있을 때까지 예보를 실행하지 않는다"),
+                Arguments.of(new ModelLoadResult.Rejected("심볼릭 링크다: /srv/model"), Level.ERROR,
+                "모델 번들을 적재하지 못해 예보를 실행하지 않는다: 심볼릭 링크다: /srv/model"),
+                Arguments.of(new ModelLoadResult.Activated(7), Level.INFO, "활성 모델 배포가 없어 모델 번들을 적재한다: 배포 7"),
+                Arguments.of(new ModelLoadResult.Reloaded("release-A"), Level.INFO, "활성 배포의 모델 번들을 다시 적재했다: release-A"),
                 Arguments.of(new ModelLoadResult.IdentityMismatch("release-A", "release-B"), Level.WARN,
-                    "도는 배포와 계수 파일의 신원이 다르다. model.bundle.promote-on-start 가 꺼져 있어 "
-                    + "안 올린다. 도는 배포 release-A, 파일 release-B"),
+                    "활성 배포와 모델 번들의 식별 정보가 다르다. model.bundle.promote-on-start가 꺼져 있어 "
+                    + "적재하지 않는다. 활성 배포 release-A, 파일 release-B"),
                 Arguments.of(new ModelLoadResult.Promoted("release-A", "release-B", 8), Level.WARN,
-                "사람이 켜 둔 스위치로 계수를 갈아 끼운다. release-A 에서 release-B 로, 배포 8")
+                "model.bundle.promote-on-start 설정에 따라 활성 모델을 전환했다. release-A에서 release-B로, 배포 8")
         );
     }
 }

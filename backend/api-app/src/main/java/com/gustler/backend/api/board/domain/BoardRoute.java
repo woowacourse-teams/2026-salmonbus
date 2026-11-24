@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 현재 노선 판본의 표시명·방문 방향·운행 시간·배차간격을 함께 전달한다.
+ * 현재 노선 버전의 표시명, 방문 방향, 운행 시간, 배차간격을 같이 전달한다.
  */
 public record BoardRoute(
     String id,
@@ -19,14 +19,14 @@ public record BoardRoute(
     RouteHeadways headways
 ) {
     public BoardRoute {
-        Objects.requireNonNull(id, "id는 null일 수 없습니다.");
-        Objects.requireNonNull(displayName, "displayName은 null일 수 없습니다.");
-        Objects.requireNonNull(startStopName, "startStopName은 null일 수 없습니다.");
-        Objects.requireNonNull(endStopName, "endStopName은 null일 수 없습니다.");
-        Objects.requireNonNull(status, "status는 null일 수 없습니다.");
-        Objects.requireNonNull(directions, "directions는 null일 수 없습니다.");
-        Objects.requireNonNull(referenceVersionId, "referenceVersionId는 null일 수 없습니다.");
-        Objects.requireNonNull(headways, "headways는 null일 수 없습니다.");
+        Objects.requireNonNull(id, "id는 null일 수 없다.");
+        Objects.requireNonNull(displayName, "displayName은 null일 수 없다.");
+        Objects.requireNonNull(startStopName, "startStopName은 null일 수 없다.");
+        Objects.requireNonNull(endStopName, "endStopName은 null일 수 없다.");
+        Objects.requireNonNull(status, "status는 null일 수 없다.");
+        Objects.requireNonNull(directions, "directions는 null일 수 없다.");
+        Objects.requireNonNull(referenceVersionId, "referenceVersionId는 null일 수 없다.");
+        Objects.requireNonNull(headways, "headways는 null일 수 없다.");
         directions = List.copyOf(directions);
     }
 }

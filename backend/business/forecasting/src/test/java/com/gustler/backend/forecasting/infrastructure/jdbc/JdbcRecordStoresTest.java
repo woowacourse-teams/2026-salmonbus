@@ -720,7 +720,7 @@ class JdbcRecordStoresTest {
         );
     }
 
-    /** 수집 구멍과 관측 줄 수가 없는 수집 사건과 함께 저장한다. */
+    /** 관측 누락과 관측 행 수가 없는 수집 이벤트와 같이 저장한다. */
     private boolean save(ForecastPublished published) {
         return records.save(published, seenWithoutRows(published));
     }

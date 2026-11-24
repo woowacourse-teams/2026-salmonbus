@@ -5,9 +5,9 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 채점의 사유를 기대값 파일({@link Baseline})에 적힌 사유 이름으로 바꿔 읽는 표다.
+ * 정산의 사유를 기대값 파일({@link Baseline})에 기록된 사유 이름으로 바꿔 읽는 표다.
  *
- * <p>채점은 놓친 예측의 사유를 원인별로 나눠 내는데, 기대값 파일에는 한 이름으로 적혀 있다. 정산 근거가 없거나 계산이 실패한
+ * <p>정산은 놓친 예측의 사유를 원인별로 나눠 내는데, 기대값 파일에는 한 이름으로 적혀 있다. 정산 근거가 없거나 계산이 실패한
  * 사유는 기대값 파일에 없다. 그 밖의 사유는 이름이 같다.
  */
 public final class BaselineReasons {
@@ -34,8 +34,8 @@ public final class BaselineReasons {
     /**
      * 사유를 기대값 파일의 이름으로 바꾼다.
      *
-     * @param reason 채점의 사유
-     * @return 기대값 파일에 적힌 이름. 기대값 파일에 없는 사유면 빈 값
+     * @param reason 정산의 사유
+     * @return 기대값 파일에 기록된 이름. 기대값 파일에 없는 사유면 빈 값
      */
     public static Optional<String> recordedName(String reason) {
         return RECORDED_NAMES.getOrDefault(reason, Optional.ofNullable(reason));
