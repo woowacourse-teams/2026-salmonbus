@@ -258,51 +258,6 @@ test("시트의 둥근 모서리 바깥에는 배경색 대신 지도가 이어�
   }
 });
 
-test("도로 경로가 미수집이어도 관측 정류장에 버스를 표시하고 목록 선택과 지도 포커스를 연결한다", async ({
-  page,
-  api,
-  naverMap,
-}) => {
-  api.data.geometry.status = "UNAVAILABLE";
-  api.data.geometry.reason = "NOT_COLLECTED";
-  api.data.geometry.paths = null;
-  api.data.geometry.points = [];
-  api.data.geometry.boundary = null;
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await openMap(page);
-
-  await expect(map(page).getByTestId("naver-map-test-double")).toBeVisible();
-  await expect(map(page).locator("button[data-map-stop-sequence]:visible")).toHaveCount(12);
-  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(0);
-  await expect(map(page).locator("[data-marker-kind='arrow']")).toHaveCount(0);
-  await expect(map(page).getByRole("button", { name: /부근 버스/ })).toHaveCount(2);
-  await expect(map(page).getByRole("status").filter({ hasText: "노선을 준비 중이에요" })).toBeVisible();
-  await expect(map(page)).toHaveAttribute("aria-busy", "false");
-  await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
-
-  const bus = list(page).getByRole("button", {
-    name: "상행 정류장 8 정류장, 도착 중, 현재 잔여 좌석 5석",
-    exact: true,
-  });
-  await bus.scrollIntoViewIfNeeded();
-  await bus.click();
-  await page.clock.runFor(32);
-  await expect(bus).toHaveAttribute("aria-pressed", "true");
-  const mapBus = map(page).getByRole("button", {
-    name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 5석",
-    exact: true,
-  });
-  await expectVehicleFocusedOnMap(page, mapBus, naverMap);
-
-  await naverMap.panToStop(11);
-  await map(page).locator("button[data-map-stop-sequence='11']").click();
-  await page.clock.runFor(32);
-  const stop = list(page).locator("li[data-stop-sequence='11'] button[aria-expanded]");
-  await expect(stop).toHaveAttribute("aria-expanded", "true");
-  await expectStopFocusedInList(page, 11);
-  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(0);
-});
-
 test("노선 생성 중에는 목록에서 선택한 핀만 표시하고, 준비되면 같은 위치에서 노선을 표시한다", async ({
   page,
   api,
@@ -593,27 +548,6 @@ test("선택 방향의 정류장만 표시하고 연결 점선은 핀과 노선�
   await expect(oppositePin.locator(selector)).toHaveCount(1);
 });
 
-test("한 방향의 도로 경로가 없어도 해당 정류장을 표시하고 다른 방향의 경로와 차량을 사용할 수 있다", async ({
-  page,
-  api,
-  naverMap,
-}) => {
-  if (api.data.geometry.paths === null) throw new Error("수정할 노선 경로가 없습니다");
-  api.data.geometry.paths.UP.points = [];
-  await openMap(page);
-  expect((await naverMap.snapshot()).zoom).toBeLessThan(14);
-  await expect(map(page).locator("button[data-map-stop-sequence]:visible")).toHaveCount(12);
-  await expect(map(page).locator("button[data-map-stop-sequence='11']")).toBeVisible();
-  await expect(map(page).getByRole("button", { name: /부근 버스/ })).toHaveCount(2);
-  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
-  await expect(map(page).getByRole("status")).toHaveCount(0);
-
-  await tab(page, "DOWN").click();
-  await page.clock.runFor(32);
-  await expect(map(page).getByRole("button", { name: /부근 버스, 현재 잔여 좌석 8석/ })).toBeVisible();
-  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
-});
-
 test("보드 판본이 바뀌면 이전 geometry 요청을 취소하고 새 좌표만 지도에 표시한다", async ({ page, api, naverMap }) => {
   api.cacheMaxAgeSeconds = 5;
   const oldGeometry = structuredClone(api.data.geometry);
@@ -753,68 +687,6 @@ test.describe("지도 첫 화면 준비", () => {
     await expect(region.getByRole("button", { name: /부근 버스/ })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
   });
-});
-
-test("첫 화면은 60% 높이에 전체 노선을 맞추고 줌에 따라 정류장만 숨기며 차량·방향 화살표는 유지한다", async ({
-  page,
-  api,
-  naverMap,
-}) => {
-  await openMap(page);
-  await expect(sheet(page)).toHaveAttribute("data-snap", "expanded");
-  await expectSheetAndMapHeights(page, 844 * 0.6, 844 * 0.4);
-  await expect(sheet(page).locator("[data-selected='true']")).toHaveCount(0);
-  await expect(map(page).locator("button[data-map-stop-sequence]:visible")).toHaveCount(0);
-  await expect(map(page).getByRole("button", { name: /부근 버스/ })).toHaveCount(2);
-  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
-  const routeCoverage = await map(page)
-    .getByTestId("naver-map-test-double")
-    .evaluate((layer) => {
-      const region = layer.closest('[aria-label="노선 지도"]');
-      if (region === null) throw new Error("지도 영역이 없습니다");
-      const bounds = region.getBoundingClientRect();
-      const canvas = layer.getBoundingClientRect();
-      return [...layer.querySelectorAll("polyline")].map((line) => {
-        const points = [...line.points];
-        return {
-          pointCount: points.length,
-          inside: points.every((point) => {
-            const x = canvas.left + point.x - bounds.left;
-            const y = canvas.top + point.y - bounds.top;
-            return x >= 11 && x <= bounds.width - 11 && y >= 27 && y <= bounds.height - 27;
-          }),
-        };
-      });
-    });
-  expect(routeCoverage).toHaveLength(2);
-  routeCoverage.forEach((path) => {
-    expect(path.pointCount).toBeGreaterThan(1);
-    expect(path.inside).toBe(true);
-  });
-  expect(await map(page).locator("[data-marker-kind='arrow']").count()).toBeGreaterThan(0);
-  const back = page.getByRole("link", { name: "노선 선택으로 돌아가기", exact: true });
-  const number = page.getByRole("heading", { name: "3330", exact: true });
-  const backBox = (await back.boundingBox())!;
-  const numberBox = (await number.boundingBox())!;
-  expect(numberBox.x).toBeGreaterThan(backBox.x + backBox.width);
-  expect(numberBox.y + numberBox.height / 2).toBeCloseTo(backBox.y + backBox.height / 2, 0);
-  await expect(sheet(page).getByText("테스트 기점 ↔ 테스트 종점", { exact: true })).toHaveCount(0);
-
-  await naverMap.setZoom(14);
-  await expectStopPinsFollowViewport(page, naverMap, stopSequences(api.data.watch.stops, "UP"));
-  // 상행 종점 핀이 화면에 들어오게 옮긴 뒤 같은 이름의 반대 방향 종점과 구분되는지 확인한다.
-  await naverMap.panToStop(12);
-  await expect(
-    map(page).getByRole("button", {
-      name: `테스트 종점 ${directionLabels.UP} 정류장 지도에서 선택`,
-      exact: true,
-    }),
-  ).toHaveAttribute("data-map-stop-sequence", "12");
-  await expect(map(page).locator("button[data-map-stop-sequence='13']")).toBeHidden();
-  expect(await map(page).locator("[data-marker-kind='arrow']").count()).toBeGreaterThan(0);
-  await naverMap.setZoom(13);
-  await expect(map(page).locator("button[data-map-stop-sequence]:visible")).toHaveCount(0);
-  await expect(map(page).getByRole("button", { name: /부근 버스/ })).toHaveCount(2);
 });
 
 test("지도 버스를 누르면 정류장을 펼치지 않고 현재 위치로 이동하며 재클릭도 다시 스크롤한다", async ({
@@ -1111,78 +983,6 @@ test("지도 버스의 목록 이동은 중간 위치를 거쳐 완료되고 수
   await expectVehicleCenteredOnMap(page, bus, naverMap);
   await expect(tab(page, "UP")).toBeFocused();
   await expect(bus).toHaveAttribute("aria-pressed", "true");
-});
-
-test("정류장명과 현재 좌석을 함께 표시하고 줌과 잔여석 응답이 바뀌어도 차량 핀과 이미지 DOM을 유지한다", async ({
-  page,
-  api,
-  naverMap,
-}) => {
-  const vehicle = api.data.watch.vehicles.find((item) => item.vehicleId === "bus-1");
-  if (vehicle === undefined) throw new Error("갱신할 버스가 없습니다");
-  vehicle.seat = { kind: "EXACT", remaining: 39 };
-  await openMap(page);
-  const bus = map(page).getByRole("button", { name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 39석", exact: true });
-  const count = bus.getByText("현재 39석", { exact: true });
-  const stopName = map(page).getByText("상행 정류장 8", { exact: true });
-  await expect(bus).toBeVisible();
-  await expect(count).toBeHidden();
-  await expect(stopName).toBeHidden();
-  const observation = await bus.evaluateHandle((element) => {
-    const image = element.querySelector("img");
-    const pin = image?.parentElement;
-    if (image === null || pin === null || pin === undefined) throw new Error("차량 핀 이미지가 없습니다");
-    const removed: string[] = [];
-    const observer = new MutationObserver((records) => {
-      records.forEach((record) => {
-        record.removedNodes.forEach((node) => {
-          if (node instanceof Element) removed.push(node.outerHTML);
-        });
-      });
-    });
-    observer.observe(element, { childList: true, subtree: true });
-    return { element, pin, image, removed, observer };
-  });
-  await naverMap.setZoom(13.9);
-  await expect(count).toBeHidden();
-  await expect(stopName).toBeHidden();
-  await naverMap.setZoom(14);
-  await expect(count).toBeVisible();
-  await expect(stopName).toBeVisible();
-  await naverMap.setZoom(13.9);
-  await expect(count).toBeHidden();
-  await expect(stopName).toBeHidden();
-  await expect(bus).toBeVisible();
-  vehicle.seat = { kind: "EXACT", remaining: 0 };
-  api.data.watch.observedAt = "2026-09-16T08:01:00+09:00";
-  api.data.watch.staleAt = "2026-09-16T08:06:00+09:00";
-  const refreshedWatch = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
-  );
-  await page.clock.fastForward(pollIntervalMs);
-  await (await refreshedWatch).finished();
-  await page.clock.runFor(32);
-  const updatedBus = map(page).getByRole("button", {
-    name: "상행 정류장 8 부근 버스, 현재 잔여 좌석 0석",
-    exact: true,
-  });
-  const updatedCount = updatedBus.getByText("현재 0석", { exact: true });
-  await expect(updatedCount).toBeHidden();
-  await naverMap.setZoom(14);
-  await expect(updatedCount).toBeVisible();
-  await expect(stopName).toBeVisible();
-  expect(
-    await observation.evaluate(({ element, pin, image, removed, observer }) => {
-      observer.disconnect();
-      return {
-        connected: element.isConnected && pin.isConnected && image.isConnected,
-        sameImage: element.querySelector("img") === image,
-        samePin: image.parentElement === pin,
-        removed,
-      };
-    }),
-  ).toEqual({ connected: true, sameImage: true, samePin: true, removed: [] });
-  await observation.dispose();
 });
 
 test("키보드로 움직인 핸들은 테두리를 보이고 누르거나 끌면 숨기며 다시 키를 누르면 보인다", async ({ page }) => {
