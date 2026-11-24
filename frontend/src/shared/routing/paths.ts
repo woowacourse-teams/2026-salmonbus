@@ -9,17 +9,10 @@ export const paths = {
   login: "/login",
   mypage: "/mypage",
   nickname: "/mypage/nickname",
-  favoriteGroups: "/favorites/groups",
-  favoriteGroup: "/favorites/groups/:groupId",
-  legacyFavoriteGroup: "/mypage/groups/:groupId",
   privacy: "/privacy",
   privacyEdition: "/privacy/:effectiveDate",
   whatsNew: "/mypage/whats-new",
 } as const;
-
-export function favoriteGroupPathFor(groupId: string): string {
-  return `${paths.favoriteGroups}/${encodeURIComponent(groupId)}`;
-}
 
 export function boardPathFor(routeId: string): string {
   return `/routes/${encodeURIComponent(routeId)}`;

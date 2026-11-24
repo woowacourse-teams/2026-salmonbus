@@ -8,11 +8,8 @@ interface SortableItem {
 }
 
 interface SortableListProps<T extends SortableItem> {
-  ariaLabel?: string;
-  itemClassName?: string;
   items: T[];
   horizontal?: boolean;
-  dragFromItem?: boolean;
   disabled: boolean;
   label: (item: T) => string;
   render: (item: T, handle: ReactNode) => ReactNode;
@@ -50,16 +47,12 @@ interface DragState {
 export function SortableList<T extends SortableItem>({
   items,
   horizontal = false,
-  dragFromItem = false,
-  ariaLabel,
-  itemClassName,
   disabled,
   label,
   render,
   onMove,
   dropZone,
 }: SortableListProps<T>) {
-  const dragOnItem = horizontal || dragFromItem;
   const canDrag = !disabled && items.length > 1;
   const list = useRef<HTMLUListElement>(null);
   const labelIdPrefix = useId();
@@ -138,13 +131,10 @@ export function SortableList<T extends SortableItem>({
   function startDrag(event: PointerEvent<HTMLElement>, index: number) {
     const element = list.current;
     if (!canDrag || !event.isPrimary || event.button !== 0 || element === null) return;
-    const button = dragOnItem && event.target instanceof Element ? event.target.closest("button") : null;
-    if (dragFromItem && button && !button.hasAttribute("data-sort-handle")) return;
+    const button = horizontal && event.target instanceof Element ? event.target.closest("button") : null;
     event.preventDefault();
     const capture = button ?? event.currentTarget;
-    const focusTarget =
-      dragFromItem && !button ? capture.querySelector<HTMLButtonElement>("[data-sort-handle]") : capture;
-    focusTarget?.focus();
+    capture.focus();
     suppressClick.current = false;
     rows().forEach((row) => row.getAnimations({ subtree: true }).forEach((animation) => animation.cancel()));
     const boxes = rows().map((row) => {
@@ -211,7 +201,7 @@ export function SortableList<T extends SortableItem>({
       <ul
         ref={list}
         className={horizontal ? styles.groups : styles.cards}
-        aria-label={ariaLabel ?? (horizontal ? "그룹 순서" : "즐겨찾기 순서")}
+        aria-label={horizontal ? "그룹 순서" : "즐겨찾기 순서"}
         data-sorting={drag !== null}
       >
         {items.map((item, index) => {
@@ -226,17 +216,17 @@ export function SortableList<T extends SortableItem>({
           return (
             <li
               key={item.id}
-              className={`${styles.item} ${horizontal ? styles.group : (itemClassName ?? styles.card)}${dragFromItem && canDrag ? ` ${styles.dragSurface}` : ""}`}
+              className={`${styles.item} ${horizontal ? styles.group : styles.card}`}
               data-sort-id={item.id}
               data-dragging={lifted}
               style={{
                 transform: `translate(${horizontal ? offset : crossOffset}px, ${horizontal ? crossOffset : offset}px)${lifted ? " scale(1.025)" : ""}`,
               }}
-              onPointerDown={dragOnItem ? (event) => startDrag(event, index) : undefined}
-              onPointerMove={dragOnItem ? moveDrag : undefined}
-              onPointerUp={dragOnItem ? (event) => finish(true, event) : undefined}
-              onPointerCancel={dragOnItem ? (event) => finish(false, event) : undefined}
-              onLostPointerCapture={dragOnItem ? (event) => finish(false, event) : undefined}
+              onPointerDown={horizontal ? (event) => startDrag(event, index) : undefined}
+              onPointerMove={horizontal ? moveDrag : undefined}
+              onPointerUp={horizontal ? (event) => finish(true, event) : undefined}
+              onPointerCancel={horizontal ? (event) => finish(false, event) : undefined}
+              onLostPointerCapture={horizontal ? (event) => finish(false, event) : undefined}
               onClickCapture={
                 horizontal
                   ? (event) => {
@@ -293,11 +283,11 @@ export function SortableList<T extends SortableItem>({
                     onMove(index, target);
                     announce(`${label(item)}: ${target + 1}번째로 이동했어요.`);
                   }}
-                  onPointerDown={!dragOnItem ? (event) => startDrag(event, index) : undefined}
-                  onPointerMove={!dragOnItem ? moveDrag : undefined}
-                  onPointerUp={!dragOnItem ? (event) => finish(true, event) : undefined}
-                  onPointerCancel={!dragOnItem ? (event) => finish(false, event) : undefined}
-                  onLostPointerCapture={!dragOnItem ? (event) => finish(false, event) : undefined}
+                  onPointerDown={!horizontal ? (event) => startDrag(event, index) : undefined}
+                  onPointerMove={!horizontal ? moveDrag : undefined}
+                  onPointerUp={!horizontal ? (event) => finish(true, event) : undefined}
+                  onPointerCancel={!horizontal ? (event) => finish(false, event) : undefined}
+                  onLostPointerCapture={!horizontal ? (event) => finish(false, event) : undefined}
                 >
                   {/* Session Replay는 속성 값을 가리지 못해서, 그룹 이름은 aria-label 대신 숨긴 글자로 둔다. */}
                   <span id={`${labelIdPrefix}${item.id}`} hidden>

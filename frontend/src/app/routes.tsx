@@ -1,15 +1,14 @@
 import { lazy, Suspense, useEffect } from "react";
-import { matchPath, Navigate, Outlet, Route, Routes, useParams } from "react-router";
+import { matchPath, Navigate, Outlet, Route, Routes } from "react-router";
 import { RouteSearchPage } from "@/pages/route-search";
 import { RouteSelectPage } from "@/pages/route-select";
 import { FavoritesPage } from "@/pages/route-select/FavoritesPage";
 import { RouteNetworkPage } from "@/pages/route-select/RouteNetworkPage";
 import { VerdictBoardPage } from "@/pages/verdict-board";
-import { favoriteGroupPathFor, paths } from "@/shared/routing/paths";
+import { paths } from "@/shared/routing/paths";
 import { FocusKeepingNavigationContext } from "@/shared/routing/focusKeepingNavigation";
 import { LoginPage } from "@/pages/login";
 import { MyPage } from "@/pages/my-page";
-import { FavoriteGroupPage } from "@/pages/favorite-group";
 import { NicknamePage } from "@/pages/nickname";
 import { AccountLayout } from "@/shared/components/AccountLayout";
 import { WhatsNewPage } from "@/pages/whats-new";
@@ -42,16 +41,10 @@ function NavigationLayout() {
   );
 }
 
-function LegacyFavoriteGroupRedirect() {
-  const { groupId } = useParams();
-  return <Navigate to={groupId ? favoriteGroupPathFor(groupId) : paths.favoriteGroups} replace />;
-}
-
 const shellTabs = [
   { path: paths.routeSelect, title: "", element: null },
   { path: paths.routeMap, title: "노선도", element: <RouteNetworkPage /> },
   { path: paths.favorites, title: "즐겨찾기", element: <FavoritesPage /> },
-  { path: paths.favoriteGroups, title: "즐겨찾기 그룹 관리", element: <FavoritesPage /> },
   { path: paths.mypage, title: "마이페이지", element: <MyPage /> },
   { path: paths.routeSearch, title: "노선 검색", element: <RouteSearchPage /> },
   { path: paths.board, title: "노선 판정보드", element: <VerdictBoardPage /> },
@@ -59,14 +52,14 @@ const shellTabs = [
 
 const pagesWithNavigation = [
   { path: paths.nickname, title: "닉네임 수정", element: <NicknamePage /> },
-  { path: paths.favoriteGroup, title: "즐겨찾기 그룹 관리", element: <FavoriteGroupPage /> },
-  { path: paths.legacyFavoriteGroup, title: "즐겨찾기 그룹 관리", element: <LegacyFavoriteGroupRedirect /> },
   { path: paths.privacy, title: "개인정보 처리방침", element: privacyPage },
   { path: paths.privacyEdition, title: "개인정보 처리방침", element: privacyPage },
   { path: paths.whatsNew, title: "새 소식", element: <WhatsNewPage /> },
 ];
 
 const pagesWithoutNavigation = [{ path: paths.login, title: "로그인", element: <LoginPage /> }];
+
+const retiredGroupPaths = ["/favorites/groups", "/favorites/groups/:groupId", "/mypage/groups/:groupId"];
 
 export function AppRoutes() {
   const { shownLocation, navigateKeepingFocus } = useFocusKeepingNavigation();
@@ -94,6 +87,9 @@ export function AppRoutes() {
         </Route>
         {pagesWithoutNavigation.map(({ path, element }) => (
           <Route key={path} path={path} element={element} />
+        ))}
+        {retiredGroupPaths.map((path) => (
+          <Route key={path} path={path} element={<Navigate to={paths.favorites} replace />} />
         ))}
         <Route
           path="*"
