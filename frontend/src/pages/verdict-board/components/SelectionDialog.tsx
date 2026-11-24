@@ -16,6 +16,8 @@ import {
   exceedsFavoriteLimit,
   favoriteCountFor,
   groupNameError,
+  isCreatedGroupPending,
+  isSelectionMissing,
   selectedGroups,
 } from "@/shared/utils/favoritePolicy";
 import plusIcon from "@/shared/assets/icons/favorite-group-plus.svg";
@@ -41,14 +43,10 @@ export function SelectionDialog({ target, onClose, onSaved }: SelectionDialogPro
   const returnToAdd = useRef(false);
   const focusAfterRetry = useRef(false);
   const [name, setName] = useState("");
-  // 생성 후 재조회가 끝나기 전까지는 아직 목록에 없는 새 그룹을 누락으로 처리하지 않는다.
-  const refreshingGroups =
-    createdGroupId !== null &&
-    !groups.some((group) => group.id === createdGroupId) &&
-    (busy || requestState === "loading");
+  const refreshingGroups = isCreatedGroupPending(groups, createdGroupId, busy || requestState === "loading");
   const invalidName = groupNameError(name);
   const full = exceedsFavoriteLimit(groups, target, ids);
-  const missing = !refreshingGroups && ids.some((id) => !groups.some((group) => group.id === id));
+  const missing = isSelectionMissing(groups, ids, refreshingGroups);
   useEffect(() => {
     if (creating && error !== null) nameField.current?.focus();
   }, [creating, error]);
