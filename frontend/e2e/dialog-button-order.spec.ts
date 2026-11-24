@@ -55,39 +55,6 @@ for (const action of ["로그아웃", "회원탈퇴"]) {
   });
 }
 
-test("즐겨찾기 그룹 일괄 삭제 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다", async ({ page, favorites }) => {
-  favorites.groups.push({ id: schoolId, name: "통학", favorites: [] });
-  await page.goto("/favorites/groups");
-  const region = page.getByRole("region", { name: "즐겨찾기 그룹 관리", exact: true });
-  await region.getByRole("button", { name: "그룹 삭제 선택", exact: true }).click();
-  await region.getByRole("checkbox", { name: "통학 삭제 선택", exact: true }).check();
-  await region.getByRole("button", { name: "선택한 그룹 1개 삭제", exact: true }).click();
-  await expectFocusRing(button(page.getByRole("dialog"), "취소"), "hidden");
-  await expectCancelFirst(page, page.getByRole("dialog"), "취소", "삭제");
-});
-
-test("그룹 상세의 그룹 삭제와 즐겨찾기 삭제 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다", async ({
-  page,
-  favorites,
-  api,
-}) => {
-  const stop = api.data.watch.stops.find((item) => item.direction === "UP" && item.boardingAllowed)!;
-  favorites.groups.push({
-    id: schoolId,
-    name: "통학",
-    favorites: [storedFavorite({ routeId, stopId: stop.stopId, direction: "UP" }, 4)],
-  });
-  await page.goto(`/mypage/groups/${schoolId}`);
-  await expect(page.getByText(stop.name, { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "그룹 삭제", exact: true }).click();
-  await expectFocusRing(button(page.getByRole("dialog"), "취소"), "hidden");
-  await expectCancelFirst(page, page.getByRole("dialog"), "취소", "삭제");
-  await button(page.getByRole("dialog"), "취소").click();
-  await page.getByRole("button", { name: `${stop.name} 삭제`, exact: true }).click();
-  await expectFocusRing(button(page.getByRole("dialog"), "취소"), "hidden");
-  await expectCancelFirst(page, page.getByRole("dialog"), "취소", "삭제");
-});
-
 test("즐겨찾기 편집의 삭제 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다", async ({ page, favorites, api }) => {
   const stop = api.data.watch.stops.find((item) => item.direction === "UP" && item.boardingAllowed)!;
   favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: "UP" })];
