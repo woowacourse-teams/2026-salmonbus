@@ -56,16 +56,16 @@ class ScheduledCollectionTest {
             .toList();
 
         // then
-        assertThat(triggers).filteredOn(AdaptiveCollectionTrigger.class::isInstance).hasSize(1);
+        assertThat(triggers).filteredOn(CollectionScheduleTrigger.class::isInstance).hasSize(1);
         var nightly = triggers.stream().filter(CronTrigger.class::isInstance).map(CronTrigger.class::cast).toList();
         assertThat(nightly).hasSize(1);
         assertThat(nightly.getFirst().getExpression()).isEqualTo("0 0 4 * * *");
         assertThat(nightly.getFirst().nextExecution(new SimpleTriggerContext(
             Clock.fixed(Instant.parse("2026-11-04T18:59:59Z"), ZoneOffset.UTC))))
             .isEqualTo(Instant.parse("2026-11-04T19:00:00Z"));
-        verify(collectionScheduler).schedule(any(Runnable.class), any(AdaptiveCollectionTrigger.class));
+        verify(collectionScheduler).schedule(any(Runnable.class), any(CollectionScheduleTrigger.class));
         verify(collectionScheduler).schedule(any(Runnable.class), any(CronTrigger.class));
-        verify(processingScheduler, never()).schedule(any(Runnable.class), any(AdaptiveCollectionTrigger.class));
+        verify(processingScheduler, never()).schedule(any(Runnable.class), any(CollectionScheduleTrigger.class));
         verify(processingScheduler, never()).schedule(any(Runnable.class), any(CronTrigger.class));
     }
 

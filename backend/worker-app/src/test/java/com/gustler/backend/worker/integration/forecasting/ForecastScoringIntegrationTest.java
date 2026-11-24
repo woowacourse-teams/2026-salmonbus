@@ -16,13 +16,13 @@ import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.model.ModelRoute;
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse;
-import com.gustler.backend.observations.application.ObservationBatchLedger;
+import com.gustler.backend.observations.application.CollectionBatchService;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.WorkerApplication;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
-import com.gustler.backend.worker.scheduling.ForecastTrigger;
+import com.gustler.backend.worker.scheduling.ForecastScheduler;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -79,7 +79,12 @@ class ForecastScoringIntegrationTest {
     private static final int STOP_COUNT = 10;
     private static final int TURN = 8;
     private static final int CAPACITY = 45;
-    private static final List<Integer> CLOSED_STOPS = List.of(2, 3, 4, 5);
+    private static final List<Integer> CLOSED_STOPS = List.of(
+            2,
+            3,
+            4,
+            5
+    );
     private static final List<Integer> OPEN_STOPS = List.of(6, 7, 8);
     /** 통과가 닫히는 정류장 2~5를 목표로 한 예측 수다. 1~4번 정류장을 떠난 배치가 각각 4·3·2·1개를 낸다. */
     private static final int CLOSED_FORECASTS = 10;
@@ -87,13 +92,13 @@ class ForecastScoringIntegrationTest {
     private static final Duration DEADLINE = Duration.ofSeconds(20);
 
     @Autowired
-    private ObservationBatchLedger ledger;
+    private CollectionBatchService ledger;
 
     @Autowired
     private JdbcClient jdbc;
 
     @Autowired
-    private ForecastTrigger trigger;
+    private ForecastScheduler trigger;
 
     @Autowired
     private RunForecastsService service;
@@ -102,7 +107,7 @@ class ForecastScoringIntegrationTest {
     private ScoringCycle scoring;
 
     @Autowired
-    private ClosedForecasts closedForecasts;
+    private ForecastScoringIntegrationTest.ClosedForecasts closedForecasts;
 
     @Autowired
     private ManualClock clock;
@@ -141,11 +146,23 @@ class ForecastScoringIntegrationTest {
             VALUES (?, 'forecast-scoring-test', 'seat-full-chance', '1', ?, 'SEAT_FULL_CHANCE_V1', 'CALCULATION_V1',
                 ?, ?, 'ACTIVE')
             RETURNING id
-            """).params(UUID.randomUUID(), "1".repeat(64), "0".repeat(64), validFrom).query(Long.class).single();
+            """).params(
+                    UUID.randomUUID(),
+                    "1".repeat(64),
+                    "0".repeat(64),
+                    validFrom
+            ).query(Long.class).single();
         RuntimeSnapshot runtime = new RuntimeSnapshot(
-            new ActiveModelDeployment(deploymentId, "CALCULATION_V1", "forecast-scoring-test", "1".repeat(64)),
-            new SupportedForecastScope(List.of(modelRoute)),
-            ConfirmedProfileModelFixture.model(modelRoute, STOP_COUNT, TURN), validFrom.toInstant());
+                new ActiveModelDeployment(
+                        deploymentId,
+                        "CALCULATION_V1",
+                        "forecast-scoring-test",
+                        "1".repeat(64)
+                ),
+                new SupportedForecastScope(List.of(modelRoute)),
+                ConfirmedProfileModelFixture.model(modelRoute, STOP_COUNT, TURN),
+                validFrom.toInstant()
+        );
         when(forecastRuntime.resolveActive()).thenReturn(Optional.of(runtime));
         trigger.pickUp();
     }
@@ -183,7 +200,14 @@ class ForecastScoringIntegrationTest {
     void 수집_원장이_커밋한_관측이_신호로_예보와_통과_채점까지_흐른다()
         throws InterruptedException {
         // given
-        List<Integer> passedStops = List.of(1, 2, 3, 4, 5, 6);
+        List<Integer> passedStops = List.of(
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+        );
 
         // when
         List<Long> batches = new ArrayList<>();
@@ -245,10 +269,10 @@ class ForecastScoringIntegrationTest {
             softly.assertThat(labeled).as("마감 안에 뒤 차량의 예측이 정답과 짝지어졌다").isTrue();
             softly.assertThat(reported).as("정답과 짝지어진 예측을 진단 수신자에 한 번씩 알렸다").isTrue();
             softly.assertThat(settledReports()).allSatisfy(closed -> {
-                assertThat(closed.routeVersionId()).isEqualTo(routeVersionId);
-                assertThat(closed.modelDeploymentId()).isEqualTo(deploymentId);
-                assertThat(closed.stopsToTarget()).isIn(1, 2);
-                assertThat(closed.departureSeats()).isNotNull();
+                softly.assertThat(closed.routeVersionId()).isEqualTo(routeVersionId);
+                softly.assertThat(closed.modelDeploymentId()).isEqualTo(deploymentId);
+                softly.assertThat(closed.stopsToTarget()).isIn(1, 2);
+                softly.assertThat(closed.departureSeats()).isNotNull();
             });
             softly.assertThat(jdbc.sql("""
                 SELECT count(*) FROM pass_label
@@ -317,11 +341,22 @@ class ForecastScoringIntegrationTest {
     private long collect(String vehicle, final int passedStop, final int seats) {
         clock.advance(ROUND);
         OffsetDateTime at = clock.now();
-        final long batchId = ledger.reserve(new CollectionPlan(routeVersionId, at, UUID.randomUUID().toString()), at)
+        final long batchId = ledger.prepare(new CollectionPlan(routeVersionId, at, UUID.randomUUID().toString()), at)
             .batchId();
-        ledger.markDispatching(batchId, at, at, "a");
-        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation("경기70아0001", vehicle, 0,
-            SOURCE_ROUTE, 11, "s" + passedStop, passedStop, 2, seats, 1, 1);
+
+        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation(
+                "경기70아0001",
+                vehicle,
+                0,
+                SOURCE_ROUTE,
+                11,
+                "s" + passedStop,
+                passedStop,
+                2,
+                seats,
+                1,
+                1
+        );
         clock.advance(RESPONSE_TIME);
         ledger.conclude(batchId,
             received -> GbisObservationMapper.response(new GbisLocationResult.Success(
@@ -384,8 +419,8 @@ class ForecastScoringIntegrationTest {
     @TestConfiguration(proxyBeanMethods = false)
     static class Diagnostics {
         @Bean
-        ClosedForecasts closedForecasts() {
-            return new ClosedForecasts();
+        ForecastScoringIntegrationTest.ClosedForecasts closedForecasts() {
+            return new ForecastScoringIntegrationTest.ClosedForecasts();
         }
     }
 

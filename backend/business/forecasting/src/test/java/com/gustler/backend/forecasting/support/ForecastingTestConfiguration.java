@@ -5,7 +5,7 @@ import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
 import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
 import com.gustler.backend.forecasting.configuration.ForecastingConfiguration;
-import com.gustler.backend.observations.configuration.ObservationPersistenceConfiguration;
+import com.gustler.backend.observations.configuration.ObservationStorageConfiguration;
 import com.gustler.backend.support.PostgresTestContainer;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Import;
 @Configuration(proxyBeanMethods = false)
 @EnableAutoConfiguration
 @Import({PostgresTestContainer.class, ClockConfig.class, ForecastingConfiguration.class,
-    ObservationPersistenceConfiguration.class})
+    ObservationStorageConfiguration.class})
 class ForecastingTestConfiguration {
     @Bean
     ForecastPolicy forecastPolicy(

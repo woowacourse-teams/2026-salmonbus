@@ -1,12 +1,6 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
-import com.gustler.backend.observations.domain.RemainingSeats;
-import com.gustler.backend.observations.domain.RemainingSeats.Known;
-import com.gustler.backend.observations.domain.RemainingSeats.Unknown;
 import com.gustler.backend.observations.domain.SeatUnknownReason;
-import com.gustler.backend.observations.domain.StoredObservations.Row;
-import com.gustler.backend.observations.domain.UpstreamObservationRow;
-import com.gustler.backend.observations.domain.VehicleObservation;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,11 +10,13 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 조회 쪽도 이 표를 매핑한다. 같은 물리 컬럼에 논리명이 둘이면 Hibernate 가
+ * Worker 기동 시 관측 열과 타입을 검증하기 위한 매핑이다. 실제 저장·삭제는 JDBC 저장소가 수행한다.
+ * 저장용 임시 객체로 생성하거나 저장 결과를 복사하지 않는다.
+ *
+ * <p>조회 쪽도 이 표를 매핑한다. 같은 물리 컬럼에 논리명이 둘이면 Hibernate 가
  * DuplicateMappingException 을 발생시켜 앱이 기동하지 않는다. 따라서 모든 필드에 @Column(name) 을 명시한다.
  *
  * <p>vehicle_trip_key 는 수집 엔티티에 매핑하지 않는다. 이상 차량의 제한된 조사에서만
@@ -28,9 +24,9 @@ import lombok.NoArgsConstructor;
  */
 @Entity(name = "VehicleObservation")
 @Table(name = "vehicle_observation")
-@Getter(AccessLevel.PACKAGE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VehicleObservationJpaEntity {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -81,51 +77,4 @@ public class VehicleObservationJpaEntity {
     @Column(name = "tagless")
     private Integer tagless;
 
-    public VehicleObservationJpaEntity(
-        final long observationBatchId,
-        final long routeVersionId,
-        UpstreamObservationRow row
-    ) {
-        VehicleObservation observation = row.observation();
-        this.observationBatchId = observationBatchId;
-        this.routeVersionId = routeVersionId;
-        this.sourceRowNumber = row.sourceRowNumber();
-        this.vehicleId = observation.vehicleId();
-        this.plateNumber = observation.plateNumber();
-        this.stopOrder = observation.stopSequence();
-        this.stopId = observation.stopId();
-        this.passedStopOrder = observation.passedStopOrder();
-        this.runningState = observation.runningState();
-        this.crowdLevel = observation.crowdLevel();
-        this.vehicleType = observation.vehicleType();
-        this.routeType = observation.routeType();
-        this.tagless = observation.tagless();
-        applySeats(observation.remainingSeats());
-    }
-
-    /** 저장 문장이 돌려준 관측 번호를 붙인다. 이 엔티티는 영속성 컨텍스트에 들어가지 않는다. */
-    void insertedAs(final long observationId) {
-        this.id = observationId;
-    }
-
-    public Row storedRow() {
-        return new Row(id, vehicleId, remainingSeats, passedStopOrder, crowdLevel,
-            stopOrder, runningState);
-    }
-
-    /** 잔여석은 아는 값과 모르는 사유 중 하나만 채우며 DB 도 CHECK 로 같은 규칙을 적용한다. */
-    private void applySeats(
-        RemainingSeats seats
-    ) {
-        switch (seats) {
-            case Known known -> {
-                this.remainingSeats = known.seats();
-                this.seatUnknownReason = null;
-            }
-            case Unknown unknown -> {
-                this.remainingSeats = null;
-                this.seatUnknownReason = unknown.reason();
-            }
-        }
-    }
 }

@@ -28,23 +28,54 @@ import org.springframework.stereotype.Repository;
 
 @AnalyzeClasses(packages = "com.gustler.backend", importOptions = DoNotIncludeTests.class)
 class PackageBoundaryTest {
+
     private static final String PREFIX = "com.gustler.backend.";
     private static final List<String> MODULES =
-        List.of("routecatalog", "observations", "forecasting", "arrivals", "stations", "quota", "gbis");
+        List.of(
+                "routecatalog",
+                "observations",
+                "forecasting",
+                "arrivals",
+                "stations",
+                "quota",
+                "gbis"
+        );
 
     @ArchTest
     static final ArchRule DOMAIN_USES_ONLY_BUSINESS_TYPES = noClasses()
         .that().resideInAPackage("..domain..")
         .should().dependOnClassesThat().resideInAnyPackage(
-            "org.springframework..", "jakarta.persistence..", "java.sql..", "javax.sql..",
-            "java.net.http..", "org.apache.hc..", "okhttp3..",
-            "tools.jackson..", "com.fasterxml.jackson..", "..infrastructure..", "..application..", "..configuration..",
-            PREFIX + "diagnostics..");
+                "org.springframework..",
+                "jakarta.persistence..",
+                "java.sql..",
+                "javax.sql..",
+                "java.net.http..",
+                "org.apache.hc..",
+                "okhttp3..",
+                "tools.jackson..",
+                "com.fasterxml.jackson..",
+                "..infrastructure..",
+                "..application..",
+                "..configuration..",
+                PREFIX + "diagnostics.."
+        );
 
     @ArchTest
-    static final ArchRule APPLICATION_USES_PERSISTENCE_PORTS = noClasses()
+    static final ArchRule APPLICATION_USES_PERSISTENCE_PORTS = classes()
         .that().resideInAPackage("..application..")
-        .should().dependOnClassesThat().resideInAPackage("..infrastructure..");
+        .should(new ArchCondition<>("다른 어댑터에 의존하지 않고 수집의 두 구체 어댑터만 직접 사용한다") {
+            @Override
+            public void check(JavaClass source, ConditionEvents events) {
+                for (Dependency dependency : source.getDirectDependenciesFromSelf()) {
+                    JavaClass target = dependency.getTargetClass();
+                    if (!isInLayer(target, "infrastructure")) {
+                        continue;
+                    }
+                    events.add(new SimpleConditionEvent(dependency,
+                        isCollectionAdapter(source, target), dependency.getDescription()));
+                }
+            }
+        });
 
     @ArchTest
     static final ArchRule BUSINESS_LOGIC_DOES_NOT_USE_PROVIDER_TYPES = noClasses()
@@ -112,10 +143,54 @@ class PackageBoundaryTest {
         });
 
     @ArchTest
-    static final ArchRule WORKER_RUNS_ONLY_PUBLIC_USE_CASES = noClasses()
+    static final ArchRule WORKER_RUNS_ONLY_PUBLIC_USE_CASES = classes()
         .that().resideInAPackage(PREFIX + "worker..")
-        .should().dependOnClassesThat().resideInAnyPackage(
-            "..domain..", "..application..", "..infrastructure..");
+        .should(new ArchCondition<>("공개 계약과 수집의 두 구체 진입점만 사용한다") {
+            @Override
+            public void check(JavaClass source, ConditionEvents events) {
+                for (Dependency dependency : source.getDirectDependenciesFromSelf()) {
+                    JavaClass target = dependency.getTargetClass();
+                    if (!isBusinessImplementation(target)) {
+                        continue;
+                    }
+                    events.add(new SimpleConditionEvent(dependency,
+                        isCollectionWiring(source, target), dependency.getDescription()));
+                }
+            }
+        });
+
+    /** 단일 구현 인터페이스를 없앤 수집만 정확한 호출 쌍으로 허용한다. 다른 업무 모듈은 기존 경계를 유지한다. */
+    private static boolean isCollectionAdapter(JavaClass source, JavaClass target) {
+        if (source.getName().equals(PREFIX + "observations.application.CollectionBatchService")) {
+            return target.getName().equals(PREFIX + "observations.infrastructure.jpa.CollectionBatchRepository");
+        }
+        final boolean collectionFlow = source.getName().equals(PREFIX + "observations.application.ObservationCollector")
+            || source.getName().equals(PREFIX + "observations.application.ObservationCollector$CollectionAttempt");
+        return collectionFlow
+            && target.getName().equals(PREFIX + "observations.infrastructure.gbis.GbisObservationClient");
+    }
+
+    private static boolean isBusinessImplementation(JavaClass target) {
+        return List.of("domain", "application", "infrastructure").stream()
+            .anyMatch(part -> isInLayer(target, part));
+    }
+
+    private static boolean isInLayer(JavaClass target, String layer) {
+        return JavaClass.Predicates.resideInAPackage(".." + layer + "..").test(target);
+    }
+
+    private static boolean isCollectionWiring(JavaClass source, JavaClass target) {
+        final boolean entryPoint = target.getName().equals(PREFIX + "observations.application.ObservationCollector")
+            || target.getName().equals(PREFIX + "observations.application.CollectionBatchService");
+        if (source.getName().equals(PREFIX + "worker.scheduling.CollectionScheduler")) {
+            return entryPoint;
+        }
+        if (source.getName().equals(PREFIX + "worker.configuration.CollectionRuntimeConfiguration")) {
+            return entryPoint
+                || target.getName().equals(PREFIX + "observations.infrastructure.gbis.GbisObservationClient");
+        }
+        return false;
+    }
 
     @ArchTest
     static void workerTestsStayInWorkerPackages(JavaClasses ignored) {
@@ -133,7 +208,13 @@ class PackageBoundaryTest {
                 .as("%s 모듈의 실제 클래스가 검사 대상에 있어야 한다", module)
                 .isTrue();
         }
-        for (String module : List.of("routecatalog", "observations", "forecasting", "arrivals", "quota")) {
+        for (String module : List.of(
+                "routecatalog",
+                "observations",
+                "forecasting",
+                "arrivals",
+                "quota"
+        )) {
             assertThat(classes.stream().anyMatch(type -> type.getPackageName().startsWith(PREFIX + module + ".domain")))
                 .as("%s의 도메인 클래스가 검사 대상에 있어야 한다", module)
                 .isTrue();
@@ -143,17 +224,37 @@ class PackageBoundaryTest {
     @ArchTest
     static void sharedLibrariesHaveNoBusinessOrExecutionDependencies(JavaClasses classes) {
         verifyLibrary(ClockConfig.class, "common", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..",
-            PREFIX + "quota..",
-            PREFIX + "gbis..", PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
+                PREFIX + "routecatalog..",
+                PREFIX + "observations..",
+                PREFIX + "forecasting..",
+                PREFIX + "arrivals..",
+                PREFIX + "quota..",
+                PREFIX + "gbis..",
+                PREFIX + "worker..",
+                PREFIX + "maintenance..",
+                PREFIX + "api.."
+        ));
         verifyLibrary(GbisApiCaller.class, "gbis-client", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..",
-            PREFIX + "quota..",
-            PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
+                PREFIX + "routecatalog..",
+                PREFIX + "observations..",
+                PREFIX + "forecasting..",
+                PREFIX + "arrivals..",
+                PREFIX + "quota..",
+                PREFIX + "worker..",
+                PREFIX + "maintenance..",
+                PREFIX + "api.."
+        ));
         verifyLibrary(WorkerOperationLog.class, "operation-log", List.of(
-            PREFIX + "routecatalog..", PREFIX + "observations..", PREFIX + "forecasting..", PREFIX + "arrivals..",
-            PREFIX + "quota..",
-            PREFIX + "gbis..", PREFIX + "worker..", PREFIX + "maintenance..", PREFIX + "api.."));
+                PREFIX + "routecatalog..",
+                PREFIX + "observations..",
+                PREFIX + "forecasting..",
+                PREFIX + "arrivals..",
+                PREFIX + "quota..",
+                PREFIX + "gbis..",
+                PREFIX + "worker..",
+                PREFIX + "maintenance..",
+                PREFIX + "api.."
+        ));
     }
 
     private static void verifyLibrary(Class<?> entry, String name, List<String> forbiddenPackages) {

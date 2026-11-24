@@ -1,10 +1,12 @@
 package com.gustler.backend.observations.domain;
 
+import com.gustler.backend.observations.api.CollectionSchedule;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 
 /** 한 수집 계획의 현재 시도와 결과를 관리한다. 입력 확인 시각이 적힌 배치는 다시 열지 않는다. */
 public final class CollectionBatch {
+
     private final Long id;
     private final long routeVersionId;
     private final OffsetDateTime scheduledAt;
@@ -14,16 +16,17 @@ public final class CollectionBatch {
     private final OffsetDateTime inputConfirmedAt;
 
     private int attemptNumber;
+    /** 기존 수집 이력을 읽고 재개 시 비운다. 새 수집은 전송시각을 기록하지 않는다. */
     private OffsetDateTime requestedAt;
     private OffsetDateTime responseReceivedAt;
-    private ObservationBatchOutcome outcome;
-    private ObservationBatchFailureCode failureCode;
+    private CollectionBatchStatus outcome;
+    private CollectionFailureReason failureCode;
     private Integer resultCode;
     private Integer providerRows;
     private Integer storedRows;
     private Integer excludedRows;
 
-    private CollectionBatch(State state) {
+    private CollectionBatch(CollectionBatch.State state) {
         id = state.id();
         routeVersionId = state.routeVersionId();
         scheduledAt = Objects.requireNonNull(state.scheduledAt());
@@ -46,39 +49,54 @@ public final class CollectionBatch {
      * 계획된 수집 시각과 시도 키로 아직 전송하지 않은 묶음을 만든다. 예약과 최초 저장의 원자성은 호출 트랜잭션이 보장한다.
      */
     public static CollectionBatch start(CollectionPlan plan, final boolean reserved) {
-        return restore(new State(null, plan.routeVersionId(), plan.scheduledAt(), plan.attemptKey(), 1,
-            null, null, null, reservationOutcome(reserved),
-            reservationFailureCode(reserved), null, null, null, null,
-            CollectedObservations.CURRENT_NORMALIZATION_VERSION, CollectionSchedule.CURRENT_STRATEGY_VERSION));
+        return restore(new CollectionBatch.State(
+                null,
+                plan.routeVersionId(),
+                plan.scheduledAt(),
+                plan.attemptKey(),
+                1,
+                null,
+                null,
+                null,
+                preparationOutcome(reserved),
+                reservationFailureCode(reserved),
+                null,
+                null,
+                null,
+                null,
+                ObservationRows.CURRENT_NORMALIZATION_VERSION,
+                CollectionSchedule.CURRENT_STRATEGY_VERSION
+        ));
     }
 
-    private static ObservationBatchOutcome reservationOutcome(final boolean reserved) {
+    private static CollectionBatchStatus preparationOutcome(final boolean reserved) {
         if (reserved) {
-            return ObservationBatchOutcome.RESERVED;
+            return CollectionBatchStatus.DISPATCHING;
         }
-        return ObservationBatchOutcome.NOT_RESERVED;
+        return CollectionBatchStatus.NOT_RESERVED;
     }
 
-    private static ObservationBatchFailureCode reservationFailureCode(final boolean reserved) {
+    private static CollectionFailureReason reservationFailureCode(final boolean reserved) {
         if (reserved) {
             return null;
         }
-        return ObservationBatchFailureCode.LOCAL_QUOTA_EXHAUSTED;
+        return CollectionFailureReason.LOCAL_QUOTA_EXHAUSTED;
     }
 
-    public static CollectionBatch restore(State state) {
+    public static CollectionBatch restore(CollectionBatch.State state) {
         return new CollectionBatch(state);
     }
 
     /**
-     * 재시도 번호와 전송 전 상태를 갱신한다. 이전 응답의 건수·실패 상태가 새 시도에 남지 않게 초기화한다.
+     * 재시도 번호와 준비 상태를 갱신한다. 이전 응답의 건수·실패 상태가 새 시도에 남지 않게 초기화한다.
      */
     public void startAttempt(final boolean reserved) {
         if (inputConfirmedAt != null) {
-            throw new InputAlreadyConfirmedException(id, inputConfirmedAt);
+            throw new CollectionInputConfirmedException(id, inputConfirmedAt);
         }
+
         attemptNumber = attemptNumber + 1;
-        outcome = reservationOutcome(reserved);
+        outcome = preparationOutcome(reserved);
         failureCode = reservationFailureCode(reserved);
         requestedAt = null;
         responseReceivedAt = null;
@@ -88,26 +106,21 @@ public final class CollectionBatch {
         excludedRows = null;
     }
 
-    public void dispatch(OffsetDateTime sentAt) {
-        outcome = ObservationBatchOutcome.DISPATCHING;
-        requestedAt = sentAt;
-    }
-
     public void abandonBeforeSend() {
-        outcome = ObservationBatchOutcome.ABANDONED_BEFORE_SEND;
+        outcome = CollectionBatchStatus.ABANDONED_BEFORE_SEND;
     }
 
-    public void conclude(ObservationBatchConclusion conclusion, OffsetDateTime receivedAt) {
-        outcome = conclusion.outcome();
-        failureCode = conclusion.failureCode();
-        resultCode = conclusion.upstreamResultCode();
+    public void conclude(CollectionResult collectionResult, OffsetDateTime receivedAt) {
+        outcome = collectionResult.outcome();
+        failureCode = collectionResult.failureCode();
+        resultCode = collectionResult.upstreamResultCode();
         responseReceivedAt = receivedAt;
     }
 
-    public void countRows(CollectedObservations collected) {
-        providerRows = collected.providerRows();
-        storedRows = collected.storableRows().size();
-        excludedRows = collected.excludedRows().size();
+    public void countRows(ObservationRows observationRows) {
+        providerRows = observationRows.providerRows();
+        storedRows = observationRows.storableRowCount();
+        excludedRows = observationRows.excludedRowCount();
     }
 
     public Long id() {
@@ -121,17 +134,45 @@ public final class CollectionBatch {
     /**
      * 현재 수집 생명주기의 저장 가능한 스냅샷을 만든다. 시도·응답 상태와 읽어 온 입력 확인 시각을 하나의 판본으로 전달한다.
      */
-    public State state() {
-        return new State(id, routeVersionId, scheduledAt, attemptKey, attemptNumber, requestedAt,
-            responseReceivedAt, inputConfirmedAt, outcome, failureCode, resultCode, providerRows,
-            storedRows, excludedRows, normalizationVersion, collectionStrategyVersion);
+    public CollectionBatch.State state() {
+        return new CollectionBatch.State(
+                id,
+                routeVersionId,
+                scheduledAt,
+                attemptKey,
+                attemptNumber,
+                requestedAt,
+                responseReceivedAt,
+                inputConfirmedAt,
+                outcome,
+                failureCode,
+                resultCode,
+                providerRows,
+                storedRows,
+                excludedRows,
+                normalizationVersion,
+                collectionStrategyVersion
+        );
     }
 
-    public record State(Long id, long routeVersionId, OffsetDateTime scheduledAt, String attemptKey,
-        int attemptNumber, OffsetDateTime requestedAt, OffsetDateTime responseReceivedAt,
-        OffsetDateTime inputConfirmedAt, ObservationBatchOutcome outcome,
-        ObservationBatchFailureCode failureCode, Integer resultCode, Integer providerRows,
-        Integer storedRows, Integer excludedRows, String normalizationVersion,
-        String collectionStrategyVersion) {
+    public record State(
+        Long id,
+        long routeVersionId,
+        OffsetDateTime scheduledAt,
+        String attemptKey,
+        int attemptNumber,
+        OffsetDateTime requestedAt,
+        OffsetDateTime responseReceivedAt,
+        OffsetDateTime inputConfirmedAt,
+        CollectionBatchStatus outcome,
+        CollectionFailureReason failureCode,
+        Integer resultCode,
+        Integer providerRows,
+        Integer storedRows,
+        Integer excludedRows,
+        String normalizationVersion,
+        String collectionStrategyVersion
+    ) {
+
     }
 }

@@ -2,27 +2,27 @@ package com.gustler.backend.worker.routegeometry;
 
 import static org.assertj.core.api.Assertions.*;
 
-import com.gustler.backend.routegeometry.engine.api.AutomaticRouteDisplay;
-import com.gustler.backend.routegeometry.engine.api.RouteDisplayGeneration;
-import com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry;
-import com.gustler.backend.routegeometry.engine.api.RouteGeometry;
-import com.gustler.backend.routegeometry.api.RouteDisplayDbSamples;
-import com.gustler.backend.routegeometry.api.RouteShapeEvidence;
+import com.gustler.backend.observations.api.ObservationRouteStopMismatchDetected;
 import com.gustler.backend.routecatalog.api.RefreshRouteCatalog;
 import com.gustler.backend.routecatalog.api.RefreshRouteGeometry;
 import com.gustler.backend.routecatalog.api.RouteGeometryInputAvailable;
 import com.gustler.backend.routecatalog.api.RouteReference;
 import com.gustler.backend.routecatalog.api.RouteVersionChanged;
-import com.gustler.backend.observations.api.ObservationRouteMismatchDetected;
+import com.gustler.backend.routegeometry.api.RouteDisplayDbSamples;
+import com.gustler.backend.routegeometry.api.RouteShapeEvidence;
+import com.gustler.backend.routegeometry.engine.api.AutomaticRouteDisplay;
+import com.gustler.backend.routegeometry.engine.api.RouteDisplayGeneration;
+import com.gustler.backend.routegeometry.engine.api.RouteDisplayGeometry;
+import com.gustler.backend.routegeometry.engine.api.RouteGeometry;
+import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.configuration.CollectionProperties;
 import com.gustler.backend.worker.configuration.RouteGeometryProperties;
 import com.gustler.backend.worker.scheduling.JdbcRouteRefreshStateRepository;
-import com.gustler.backend.worker.scheduling.RouteChangeRefreshCoordinator;
-import com.gustler.backend.support.PostgresTestContainer;
+import com.gustler.backend.worker.scheduling.RouteCatalogAndGeometryRefresher;
 import java.time.*;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Optional;
-import java.util.ArrayDeque;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import org.junit.jupiter.api.AfterEach;
@@ -31,10 +31,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -47,7 +47,7 @@ class RouteDisplayGenerationWorkerTest {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
     @Import({PostgresTestContainer.class, JdbcRouteDisplayGenerationStore.class, RouteDisplaySourceReader.class,
-        JdbcRouteRefreshStateRepository.class, RouteChangeRefreshCoordinator.class,
+        JdbcRouteRefreshStateRepository.class, RouteCatalogAndGeometryRefresher.class,
         RouteDisplayGenerationWorker.class, RouteDisplayGenerationWakeup.class})
     static class Config {
         @Bean ObjectMapper mapper() { return new ObjectMapper(); }
@@ -171,7 +171,7 @@ class RouteDisplayGenerationWorkerTest {
         long old=current().referenceVersionId();collectNewGeometryFrom(old);
         org.mockito.Mockito.when(catalogRefresher.refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any()))
             .thenAnswer(call -> Optional.of(new RouteReference(newVersion(false))));
-        events.publishEvent(new ObservationRouteMismatchDetected(ROUTE,old));
+        events.publishEvent(new ObservationRouteStopMismatchDetected(ROUTE,old));
         assertThat(tasks.information).hasSize(1);tasks.drain();
         assertThat(current().referenceVersionId()).isNotEqualTo(old);assertThat(artifactCount()).isEqualTo(2);
         org.mockito.Mockito.verify(catalogRefresher,org.mockito.Mockito.times(1)).refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any());
@@ -182,7 +182,7 @@ class RouteDisplayGenerationWorkerTest {
         long old=current().referenceVersionId();
         org.mockito.Mockito.when(catalogRefresher.refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any()))
             .thenReturn(Optional.of(new RouteReference(old)));
-        events.publishEvent(new ObservationRouteMismatchDetected(ROUTE,old));tasks.drain();
+        events.publishEvent(new ObservationRouteStopMismatchDetected(ROUTE,old));tasks.drain();
         assertThat(current().referenceVersionId()).isEqualTo(old);assertThat(current().shape()).isNotNull();
         assertThat(artifactCount()).isZero();org.mockito.Mockito.verifyNoInteractions(geometryCollector);
     }
@@ -192,7 +192,7 @@ class RouteDisplayGenerationWorkerTest {
         jdbc.sql("UPDATE route SET source_route_id=? WHERE public_route_id=?").params(sourceId,ROUTE).update();
         org.mockito.Mockito.when(catalogRefresher.refresh(org.mockito.ArgumentMatchers.eq(sourceId),org.mockito.ArgumentMatchers.any()))
             .thenReturn(Optional.of(new RouteReference(version)));
-        events.publishEvent(new ObservationRouteMismatchDetected(sourceId,version));tasks.drain();
+        events.publishEvent(new ObservationRouteStopMismatchDetected(sourceId,version));tasks.drain();
         org.mockito.Mockito.verify(catalogRefresher).refresh(org.mockito.ArgumentMatchers.eq(sourceId),org.mockito.ArgumentMatchers.any());
         org.mockito.Mockito.verify(catalogRefresher,org.mockito.Mockito.never()).refresh(org.mockito.ArgumentMatchers.eq(ROUTE),org.mockito.ArgumentMatchers.any());
         org.mockito.Mockito.verifyNoInteractions(geometryCollector);

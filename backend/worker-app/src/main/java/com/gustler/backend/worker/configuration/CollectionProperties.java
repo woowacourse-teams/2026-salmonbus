@@ -14,10 +14,12 @@ public record CollectionProperties(
     Set<String> forecastRequiredRouteIds,
     boolean allowPreforecastObservations
 ) {
+
     @ConstructorBinding
     public CollectionProperties {
         routeIds = routeIdsOrEmpty(routeIds);
-        forecastRequiredRouteIds = forecastRequiredRouteIds == null ? Set.of() : Set.copyOf(forecastRequiredRouteIds);
+        forecastRequiredRouteIds = forecastRequiredRouteIdsOrEmpty(forecastRequiredRouteIds);
+
         if (fixedInterval != null && fixedInterval.compareTo(Duration.ofSeconds(1)) < 0) {
             throw new IllegalArgumentException("collection.fixed-interval은 1초 이상이어야 합니다.");
         }
@@ -28,7 +30,20 @@ public record CollectionProperties(
     }
 
     public CollectionProperties(final boolean enabled, List<String> routeIds, Duration fixedInterval) {
-        this(enabled, routeIds, fixedInterval, Set.of(), false);
+        this(
+                enabled,
+                routeIds,
+                fixedInterval,
+                Set.of(),
+                false
+        );
+    }
+
+    private static Set<String> forecastRequiredRouteIdsOrEmpty(Set<String> routeIds) {
+        if (routeIds == null) {
+            return Set.of();
+        }
+        return Set.copyOf(routeIds);
     }
 
     private static List<String> routeIdsOrEmpty(List<String> routeIds) {

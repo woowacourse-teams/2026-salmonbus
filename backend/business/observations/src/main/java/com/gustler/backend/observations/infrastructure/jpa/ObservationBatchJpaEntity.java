@@ -1,9 +1,8 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
-import com.gustler.backend.observations.domain.CollectionBatch.State;
 import com.gustler.backend.observations.domain.CollectionBatch;
-import com.gustler.backend.observations.domain.ObservationBatchFailureCode;
-import com.gustler.backend.observations.domain.ObservationBatchOutcome;
+import com.gustler.backend.observations.domain.CollectionBatchStatus;
+import com.gustler.backend.observations.domain.CollectionFailureReason;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -23,6 +22,7 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ObservationBatchJpaEntity {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -53,11 +53,11 @@ public class ObservationBatchJpaEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "outcome")
-    private ObservationBatchOutcome outcome;
+    private CollectionBatchStatus outcome;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "failure_code")
-    private ObservationBatchFailureCode failureCode;
+    private CollectionFailureReason failureCode;
 
     @Column(name = "result_code")
     private Integer resultCode;
@@ -82,14 +82,28 @@ public class ObservationBatchJpaEntity {
     }
 
     public CollectionBatch toDomain() {
-        return CollectionBatch.restore(new State(id, routeVersionId, scheduledAt,
-            attemptKey, attemptNumber, requestedAt, responseReceivedAt, inputConfirmedAt, outcome,
-            failureCode, resultCode, providerRows, storedRows, excludedRows, normalizationVersion,
-            collectionStrategyVersion));
+        return CollectionBatch.restore(new CollectionBatch.State(
+                id,
+                routeVersionId,
+                scheduledAt,
+                attemptKey,
+                attemptNumber,
+                requestedAt,
+                responseReceivedAt,
+                inputConfirmedAt,
+                outcome,
+                failureCode,
+                resultCode,
+                providerRows,
+                storedRows,
+                excludedRows,
+                normalizationVersion,
+                collectionStrategyVersion
+        ));
     }
 
     public void apply(CollectionBatch batch) {
-        State state = batch.state();
+        CollectionBatch.State state = batch.state();
         routeVersionId = state.routeVersionId();
         scheduledAt = state.scheduledAt();
         attemptKey = state.attemptKey();

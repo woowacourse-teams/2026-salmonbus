@@ -22,16 +22,15 @@ import java.util.Map;
  *   <li>{@code observation JSON}: 저장된 관측 한 줄의 모든 열. 상류 행 번호 순서다</li>
  *   <li>{@code batch JSON}: 배치 줄의 모든 열</li>
  *   <li>{@code capacity JSON}: 응답에 나온 차량의 정원 기록 한 줄. 차량 순서다</li>
- *   <li>{@code stored 값 …}: 좌석 품질 훅이 받은 입력. 머리 줄(배치, 노선 판본, 관측 시각) 다음에 관측마다 한 줄(관측, 차량, 잔여석)이다</li>
- *   <li>{@code delivered 값 …}: 전달 훅이 받은 입력. 머리 줄(배치, 노선 판본, 시도 번호, 종류, 관측 시각) 다음에 관측마다 한 줄(관측, 차량,
- *       잔여석, 통과 정류소 순번, 혼잡도, 정류소 순번, 운행 상태)이다</li>
+ *   <li>{@code stored 값 …}: 좌석 품질 훅이 받은 입력. 배치, 노선 판본, 저장 가능한 양수 좌석 존재 여부다</li>
+ *   <li>{@code delivered 값 …}: 전달 훅이 받은 입력. 배치, 노선 판본, 변경 종류만 전달한다. 관측 목록은 포함하지 않는다</li>
  * </ul>
  *
  * <p>실행마다 달라지는 값은 이렇게 적는다. JSON 은 PostgreSQL 이 {@code jsonb}를 글자로 바꾼 그대로이고 시각은 UTC 로 읽는다.
  * <ul>
  *   <li>DB 가 매기는 배치 번호와 노선 판본 번호는 이 테스트가 준비한 것과 같으면 {@code "batch"}, {@code "routeVersion"}으로 적는다</li>
  *   <li>DB 가 매기는 관측 번호는 그 관측의 상류 행 번호로 적는다. 관측 줄에서는 {@code id}를 빼고, 정원 기록의 근거 관측은
- *       {@code evidence_source_row}로, 훅 입력의 관측은 첫 칸으로 적는다</li>
+ *       {@code evidence_source_row}로 적는다</li>
  *   <li>DB 시계로 채우는 정원 기록의 {@code updated_at}과, 관측·배치 줄을 넣은 날의 한국 날짜가 들어가는 {@code source_date}는
  *       뺀다</li>
  * </ul>

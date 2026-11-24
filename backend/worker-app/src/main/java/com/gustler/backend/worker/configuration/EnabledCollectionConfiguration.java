@@ -13,4 +13,5 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @Import(CollectionRuntimeConfiguration.class)
 public class EnabledCollectionConfiguration {
+
 }

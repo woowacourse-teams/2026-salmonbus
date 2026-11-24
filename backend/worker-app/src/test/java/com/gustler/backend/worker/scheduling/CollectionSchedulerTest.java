@@ -12,7 +12,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.model.CheckActiveModelCoverage;
-import com.gustler.backend.observations.api.CloseUnfinishedCollections;
+import com.gustler.backend.observations.application.CollectionBatchService;
 import com.gustler.backend.observations.application.ObservationCollector;
 import com.gustler.backend.worker.configuration.CollectionProperties;
 import java.util.List;
@@ -20,14 +20,15 @@ import java.util.Set;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.InOrder;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
 
 @ExtendWith(MockitoExtension.class)
 class CollectionSchedulerTest {
+
     private static final String ROUTE_3330 = "204000057";
     private static final String ROUTE_9100 = "234000016";
 
@@ -38,13 +39,42 @@ class CollectionSchedulerTest {
     private ObservationCollector collector;
 
     @Mock
-    private CloseUnfinishedCollections unfinished;
+    private CollectionBatchService batchService;
 
     @Mock
     private CheckActiveModelCoverage modelCoverage;
 
     @InjectMocks
     private CollectionScheduler scheduler;
+
+    @Test
+    void 예보_준비_전_수집을_허용하면_모델을_확인하지_않는다() {
+        // given
+        given(properties.routeIds()).willReturn(List.of(ROUTE_3330));
+        given(properties.forecastRequiredRouteIds()).willReturn(Set.of(ROUTE_3330));
+        given(properties.allowPreforecastObservations()).willReturn(true);
+
+        // when
+        scheduler.collectAllRoutes();
+
+        // then
+        then(collector).should().collectOnce(ROUTE_3330);
+        then(modelCoverage).shouldHaveNoInteractions();
+    }
+
+    @Test
+    void 예보_필수_노선이_없으면_모델을_확인하지_않는다() {
+        // given
+        given(properties.routeIds()).willReturn(List.of(ROUTE_3330));
+        given(properties.forecastRequiredRouteIds()).willReturn(Set.of());
+
+        // when
+        scheduler.collectAllRoutes();
+
+        // then
+        then(collector).should().collectOnce(ROUTE_3330);
+        then(modelCoverage).shouldHaveNoInteractions();
+    }
 
     @Test
     void 기존_노선은_수집하고_번들이_없으면_새_노선은_기다린다() {
@@ -121,7 +151,11 @@ class CollectionSchedulerTest {
             assertThat(failures).singleElement().satisfies(event -> {
                 try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
                     softly.assertThat(event.getFormattedMessage()).contains(
-                        "event=worker_operation", "status=FAILED", "operation=collection_route", "route=" + ROUTE_3330);
+                            "event=worker_operation",
+                            "status=FAILED",
+                            "operation=collection_route",
+                            "route=" + ROUTE_3330
+                    );
                     softly.assertThat(event.getFormattedMessage()).doesNotContain(
                         "private-upstream-response", "private-request-token");
                     softly.assertThat(event.getThrowableProxy()).isNull();
@@ -137,19 +171,19 @@ class CollectionSchedulerTest {
     @Test
     void 이전_회차_정리를_마친_뒤_첫_노선을_수집한다() {
         given(properties.routeIds()).willReturn(List.of(ROUTE_3330));
-        given(unfinished.closePreviousRound()).willReturn(List.of(1L));
+        given(batchService.closePreviousRound()).willReturn(List.of(1L));
 
         scheduler.collectAllRoutes();
 
-        InOrder order = inOrder(unfinished, collector);
-        order.verify(unfinished).closePreviousRound();
+        InOrder order = inOrder(batchService, collector);
+        order.verify(batchService).closePreviousRound();
         order.verify(collector).collectOnce(ROUTE_3330);
     }
 
     @Test
     void 이전_회차_정리에_실패해도_현재_수집은_계속한다() {
         given(properties.routeIds()).willReturn(List.of(ROUTE_3330));
-        given(unfinished.closePreviousRound()).willThrow(new IllegalStateException("DB unavailable"));
+        given(batchService.closePreviousRound()).willThrow(new IllegalStateException("DB unavailable"));
 
         scheduler.collectAllRoutes();
 
@@ -166,6 +200,6 @@ class CollectionSchedulerTest {
 
         // then
         then(collector).shouldHaveNoInteractions();
-        then(unfinished).shouldHaveNoInteractions();
+        then(batchService).shouldHaveNoInteractions();
     }
 }

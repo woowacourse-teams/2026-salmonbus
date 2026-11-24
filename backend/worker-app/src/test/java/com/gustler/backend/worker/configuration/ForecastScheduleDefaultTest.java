@@ -8,7 +8,7 @@ import com.gustler.backend.forecasting.api.forecast.RunForecasts;
 import com.gustler.backend.forecasting.api.forecast.ScoringCycle;
 import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
 import com.gustler.backend.support.IntegrationTest;
-import com.gustler.backend.worker.scheduling.ForecastTrigger;
+import com.gustler.backend.worker.scheduling.ForecastScheduler;
 import com.gustler.backend.worker.scheduling.PartitionJob;
 import com.gustler.backend.worker.scheduling.ScoringJob;
 import java.util.List;
@@ -32,7 +32,7 @@ class ForecastScheduleDefaultTest {
         // then
         try (AutoCloseableSoftAssertions softly = new AutoCloseableSoftAssertions()) {
             softly.assertThat(applicationContext.getBeanNamesForType(RunForecasts.class)).isEmpty();
-            softly.assertThat(applicationContext.getBeanNamesForType(ForecastTrigger.class)).isEmpty();
+            softly.assertThat(applicationContext.getBeanNamesForType(ForecastScheduler.class)).isEmpty();
             softly.assertThat(applicationContext.getBeanNamesForType(ScoringCycle.class)).isEmpty();
             softly.assertThat(applicationContext.getBeanNamesForType(ScoringJob.class)).isEmpty();
             softly.assertThat(applicationContext.getBeanNamesForType(ForecastLanes.class)).isEmpty();

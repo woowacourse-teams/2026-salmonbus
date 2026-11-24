@@ -8,8 +8,8 @@ import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
 import com.gustler.backend.forecasting.api.forecast.RunForecasts;
 import com.gustler.backend.forecasting.api.forecast.ScoringCycle;
 import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
-import com.gustler.backend.observations.api.ObservationDeliveryHook;
-import com.gustler.backend.worker.scheduling.ForecastTrigger;
+import com.gustler.backend.observations.api.ObservationChangeListener;
+import com.gustler.backend.worker.scheduling.ForecastScheduler;
 import com.gustler.backend.worker.scheduling.RouteLanes;
 import com.gustler.backend.worker.scheduling.ScoringExecutor;
 import com.gustler.backend.worker.scheduling.ScoringJob;
@@ -62,7 +62,7 @@ class EnabledForecastConfigurationTest {
                 assertThat(context).doesNotHaveBean(ForecastProperties.class);
                 assertThat(context).doesNotHaveBean(ForecastPolicy.class);
                 assertThat(context).doesNotHaveBean(ForecastLanes.class);
-                assertThat(context).doesNotHaveBean(ObservationDeliveryHook.class);
+                assertThat(context).doesNotHaveBean(ObservationChangeListener.class);
                 assertThat(context).doesNotHaveBean(ScoringFeed.class);
                 assertThat(context).doesNotHaveBean(ScoringJob.class);
                 assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values())
@@ -94,11 +94,11 @@ class EnabledForecastConfigurationTest {
                     softly.assertThat(context.getBean(ForecastPolicy.class))
                         .isEqualTo(new ForecastPolicy(Duration.ofMinutes(5), 20));
                     softly.assertThat(context.getBean(RouteLanes.class).count()).isEqualTo(3);
-                    softly.assertThat(context.getBean(ObservationDeliveryHook.class))
-                        .isInstanceOf(ForecastTrigger.class);
+                    softly.assertThat(context.getBean(ObservationChangeListener.class))
+                        .isInstanceOf(ForecastScheduler.class);
                     softly.assertThat(context.getBeansOfType(ScoringExecutor.class)).hasSize(1);
                     softly.assertThat(context.getBeansOfType(ScoringJob.class)).hasSize(1);
-                    softly.assertThat(tasks).anyMatch(task -> task.contains("ForecastTrigger.pickUp"))
+                    softly.assertThat(tasks).anyMatch(task -> task.contains("ForecastScheduler.pickUp"))
                         .anyMatch(task -> task.contains("ScoringJob.flush"));
                 });
             });
@@ -138,7 +138,7 @@ class EnabledForecastConfigurationTest {
                 assertThat(context).hasSingleBean(RouteLanes.class);
                 assertThat(context).hasSingleBean(ScoringExecutor.class);
                 assertThat(context).hasSingleBean(ScoringJob.class);
-                assertThat(context).getBean(ObservationDeliveryHook.class).isInstanceOf(ForecastTrigger.class);
+                assertThat(context).getBean(ObservationChangeListener.class).isInstanceOf(ForecastScheduler.class);
             });
     }
 

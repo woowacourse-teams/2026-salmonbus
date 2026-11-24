@@ -9,11 +9,11 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.gustler.backend.gbis.api.GbisLocationResult.Success;
+import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.GbisLocationSource;
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
-import com.gustler.backend.observations.domain.ObservationReply;
-import com.gustler.backend.observations.infrastructure.gbis.GbisObservationSource;
+import com.gustler.backend.gbis.api.dto.BusLocationResponse;
+import com.gustler.backend.observations.domain.ObservationResponse;
+import com.gustler.backend.observations.infrastructure.gbis.GbisObservationClient;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 class CollectionAttemptLogTest {
+
     private final Logger logger = (Logger) LoggerFactory.getLogger(CollectionAttemptLog.class);
     private ListAppender<ILoggingEvent> appender;
 
@@ -46,15 +47,26 @@ class CollectionAttemptLogTest {
     void 원본_노선과_정류장을_연결하고_민감정보를_빼낸다() {
         // when
         GbisLocationSource source = mock(GbisLocationSource.class);
-        when(source.read("234000886", "a")).thenReturn(new Success("time", List.of(
-            new BusLocation("PRIVATE_PLATE", "PRIVATE_VEHICLE", 0, "204000070", 11,
-                "206000564", 57, 2, 10, 1, 0))));
+        when(source.read("234000886", "a")).thenReturn(new GbisLocationResult.Success("time", List.of(
+            new BusLocationResponse.BusLocation(
+                    "PRIVATE_PLATE",
+                    "PRIVATE_VEHICLE",
+                    0,
+                    "204000070",
+                    11,
+                    "206000564",
+                    57,
+                    2,
+                    10,
+                    1,
+                    0
+            ))));
         try (CollectionAttemptLog attempt = new CollectionAttemptLog("234000886")) {
-            attempt.routeVersion(4);
-            attempt.batch(123);
-            ObservationReply reply = new GbisObservationSource(source).read("234000886", "a");
-            attempt.reply(reply);
-            attempt.response(reply.interpret(OffsetDateTime.now()));
+            attempt.recordRouteVersionId(4);
+            attempt.recordBatchId(123);
+            ObservationResponse reply = new GbisObservationClient(source).read("234000886", "a");
+            attempt.recordUpstreamResponse(reply);
+            attempt.recordCollectionResult(reply.interpret(OffsetDateTime.now()));
             attempt.stage("SAVE_AND_COMMIT");
             SQLException sql = new SQLException("SECRET fk_observation_route_stop "
                 + "Key (route_version_id, stop_order, stop_id)=(4, 57, 206000564) is not present", "23503");
@@ -64,10 +76,24 @@ class CollectionAttemptLogTest {
         // then
         assertThat(appender.list).hasSize(1);
         assertThat(appender.list.getFirst().getFormattedMessage()).contains(
-            "stage=SAVE_AND_COMMIT", "reason=DB_REFERENCE_MISMATCH", "routeId=234000886", "batchId=123",
-            "responseRouteId=204000070", "responseStopOrder=57", "responseStopId=206000564",
-            "sourceReference=MATCHED", "responseRouteMismatchRows=1", "providerRows=1", "resultCommitConfirmed=false")
-            .doesNotContain("SECRET", "PRIVATE_PLATE", "PRIVATE_VEHICLE", "serviceKey");
+                "stage=SAVE_AND_COMMIT",
+                "reason=DB_REFERENCE_MISMATCH",
+                "routeId=234000886",
+                "batchId=123",
+                "responseRouteId=204000070",
+                "responseStopOrder=57",
+                "responseStopId=206000564",
+                "sourceReference=MATCHED",
+                "responseRouteMismatchRows=1",
+                "providerRows=1",
+                "resultCommitConfirmed=false"
+        )
+            .doesNotContain(
+                    "SECRET",
+                    "PRIVATE_PLATE",
+                    "PRIVATE_VEHICLE",
+                    "serviceKey"
+            );
         assertThat(appender.list.getFirst().getThrowableProxy()).isNull();
         verify(source).read("234000886", "a");
         verifyNoMoreInteractions(source);
@@ -77,7 +103,7 @@ class CollectionAttemptLogTest {
     void 응답에_없는_저장값은_상류에서_왔다고_단정하지_않는다() {
         // when
         try (CollectionAttemptLog attempt = new CollectionAttemptLog("234000886")) {
-            attempt.reply(at -> null);
+            attempt.recordUpstreamResponse(at -> null);
             attempt.failed(new IllegalStateException(new SQLException(
                 "fk_observation_route_stop Key (route_version_id, stop_order, stop_id)=(4, 57, 206000564)", "23503")));
         }

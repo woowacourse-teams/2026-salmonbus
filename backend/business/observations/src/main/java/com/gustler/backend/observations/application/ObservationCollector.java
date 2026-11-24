@@ -1,240 +1,208 @@
 package com.gustler.backend.observations.application;
 
-import com.gustler.backend.diagnostics.WorkerOperationLog;
-import com.gustler.backend.observations.api.CollectObservations;
-import com.gustler.backend.observations.api.ObservationRouteMismatchDetected;
 import com.gustler.backend.observations.domain.CollectionPlan;
-import com.gustler.backend.observations.domain.ObservationBatchReservation;
-import com.gustler.backend.observations.domain.ObservationReply;
+import com.gustler.backend.observations.domain.CollectionPreparation;
+import com.gustler.backend.observations.domain.CollectionResult;
 import com.gustler.backend.observations.domain.ObservationResponse;
-import com.gustler.backend.observations.domain.ObservationSource;
+import com.gustler.backend.observations.infrastructure.gbis.GbisObservationClient;
 import com.gustler.backend.quota.api.ApiCallQuota;
 import com.gustler.backend.routecatalog.api.CurrentRouteVersion;
 import com.gustler.backend.routecatalog.api.RouteReference;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
-import java.sql.SQLException;
-import java.util.ArrayDeque;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.postgresql.util.PSQLException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.stereotype.Component;
 
-/** 한 노선의 예약, HTTP 호출, 수집 결과 저장을 순서대로 진행한다. */
+/** 한 노선의 판본 확인, 한도 확보, HTTP 조회, 결과 저장을 순서대로 진행한다. */
 @Component
-public class ObservationCollector implements CollectObservations {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ObservationCollector.class);
+public class ObservationCollector {
+
+    private static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 
     private final CurrentRouteVersion currentRouteVersion;
-    private final ObservationBatchLedger batchLedger;
+    private final CollectionBatchService batchService;
     private final ApiCallQuota callQuota;
-    private final ObservationSource observationSource;
+    private final GbisObservationClient observationClient;
     private final Clock clock;
-    private final ApplicationEventPublisher events;
+    private final RouteCatalogRefreshRequests refreshRequests;
 
     public ObservationCollector(
         CurrentRouteVersion currentRouteVersion,
-        ObservationBatchLedger batchLedger,
+        CollectionBatchService batchService,
         ApiCallQuota callQuota,
-        ObservationSource observationSource,
-        Clock clock
+        GbisObservationClient observationClient,
+        Clock clock,
+        ApplicationEventPublisher eventPublisher
     ) {
-        this(currentRouteVersion, batchLedger, callQuota, observationSource, clock, ignored -> {});
-    }
-
-    @Autowired
-    public ObservationCollector(CurrentRouteVersion currentRouteVersion, ObservationBatchLedger batchLedger,
-            ApiCallQuota callQuota, ObservationSource observationSource, Clock clock,
-            ApplicationEventPublisher events) {
         this.currentRouteVersion = currentRouteVersion;
-        this.batchLedger = batchLedger;
+        this.batchService = batchService;
         this.callQuota = callQuota;
-        this.observationSource = observationSource;
+        this.observationClient = observationClient;
         this.clock = clock;
-        this.events = events;
+        this.refreshRequests = new RouteCatalogRefreshRequests(eventPublisher);
     }
 
-    /**
-     * 한 노선의 판본 확인·예약·수집·저장을 조율한다. 처리 중 발생한 RuntimeException은 실패 단계를 기록한 뒤 전파한다.
-     */
-    public void collectOnce(
-        String sourceRouteId
+    /** 미준비 노선은 별도 준비를 요청하고 건너뛴다. 실패한 수집은 기록을 종료한 뒤 원래 예외를 전파한다. */
+    public void collectOnce(String sourceRouteId) {
+        new ObservationCollector.CollectionAttempt(sourceRouteId).run();
+    }
+
+    /** 노선 ID와 진단 상태를 한 호출에 한정한다. 동시에 수집해도 다른 호출의 상태를 공유하지 않는다. */
+    private final class CollectionAttempt {
+
+        private final String sourceRouteId;
+        private final CollectionAttemptLog diagnostics;
+
+        private CollectionAttempt(String sourceRouteId) {
+            this.sourceRouteId = sourceRouteId;
+            this.diagnostics = new CollectionAttemptLog(sourceRouteId);
+        }
+
+        private void run() {
+            try (diagnostics) {
+                OffsetDateTime scheduledAt = now();
+                diagnostics.collectionStarted(scheduledAt);
+
+                try {
+                    collect(scheduledAt).ifPresent(diagnostics::collectionFinished);
+                } catch (RuntimeException collectionFailure) {
+                    diagnostics.failed(collectionFailure);
+                    diagnostics.closeFailedBatch(batchService::closeUnfinished);
+                    throw collectionFailure;
+                }
+            }
+        }
+
+        private Optional<CollectionResult> collect(OffsetDateTime scheduledAt) {
+            Optional<RouteReference> routeVersion = findRouteVersion();
+
+            if (routeVersion.isEmpty()) {
+                return Optional.empty();
+            }
+
+            final long routeVersionId = routeVersion.orElseThrow().routeVersionId();
+            OffsetDateTime preparedAt = now();
+            CollectionPreparation preparation = prepareCollection(routeVersionId, scheduledAt, preparedAt);
+
+            if (!hasReservedQuota(preparation)) {
+                return Optional.empty();
+            }
+
+            OffsetDateTime dispatchAt = now();
+
+            if (!reserveForDispatch(preparation, preparedAt, dispatchAt)) {
+                return Optional.empty();
+            }
+
+            ObservationResponse upstreamResponse = readObservations(preparation.keyAlias());
+            CollectionResult collectionResult = saveResponse(preparation.batchId(), routeVersionId, upstreamResponse);
+
+            excludeRejectedKey(preparation.keyAlias(), collectionResult, dispatchAt);
+            return Optional.of(collectionResult);
+        }
+
+        private Optional<RouteReference> findRouteVersion() {
+            Optional<RouteReference> routeVersion = diagnostics.measureRouteVersion(
+                () -> currentRouteVersion.findCurrentVersion(sourceRouteId));
+
+            if (routeVersion.isEmpty()) {
+                refreshRequests.requestMissingRoute(sourceRouteId);
+                diagnostics.routeVersionMissing();
+                return routeVersion;
+            }
+
+            diagnostics.routeVersionFound(routeVersion.orElseThrow().routeVersionId());
+            return routeVersion;
+        }
+
+        private CollectionPreparation prepareCollection(
+            final long routeVersionId,
+            OffsetDateTime scheduledAt,
+            OffsetDateTime preparedAt
+        ) {
+            return diagnostics.measurePreparation(() -> batchService.prepare(
+                new CollectionPlan(routeVersionId, scheduledAt, attemptKeyOf(sourceRouteId, scheduledAt)), preparedAt));
+        }
+
+        private boolean hasReservedQuota(CollectionPreparation preparation) {
+            if (preparation.reserved()) {
+                return true;
+            }
+
+            diagnostics.quotaUnavailable("DAILY_LIMIT");
+            return false;
+        }
+
+        private boolean reserveForDispatch(
+            CollectionPreparation preparation,
+            OffsetDateTime preparedAt,
+            OffsetDateTime dispatchAt
+        ) {
+            if (!reserveNewDayIfNeeded(preparation, preparedAt, dispatchAt)) {
+                diagnostics.quotaUnavailable("NEXT_DAY_LIMIT");
+                return false;
+            }
+
+            diagnostics.quotaAvailable();
+            return true;
+        }
+
+        private ObservationResponse readObservations(String keyAlias) {
+            return diagnostics.measureUpstream(() -> observationClient.read(sourceRouteId, keyAlias));
+        }
+
+        private CollectionResult saveResponse(
+            final long batchId,
+            final long routeVersionId,
+            ObservationResponse upstreamResponse
+        ) {
+            CollectionResult collectionResult = diagnostics.measureSave(upstreamResponse, responseWithDiagnostics -> {
+                try {
+                    return batchService.conclude(batchId, responseWithDiagnostics, now());
+                } catch (RuntimeException saveFailure) {
+                    if (diagnostics.hasInterpretedResponse()) {
+                        refreshRequests.requestAfterFailedSave(sourceRouteId, routeVersionId, saveFailure);
+                    }
+
+                    throw saveFailure;
+                }
+            });
+
+            diagnostics.observationsCommitted(collectionResult);
+            return collectionResult;
+        }
+
+        private void excludeRejectedKey(String keyAlias, CollectionResult collectionResult, OffsetDateTime dispatchAt) {
+            collectionResult.keyRejectionCode().ifPresent(reasonCode ->
+                callQuota.excludeLocationKey(keyAlias, dispatchAt).ifPresent(reservedCallsBefore ->
+                    diagnostics.keyRejected(keyAlias, reasonCode, reservedCallsBefore)));
+        }
+    }
+
+    /** 평소에는 날짜만 비교한다. 준비 직후 한국 자정을 넘었을 때만 새 날짜의 한도를 확보한다. */
+    private boolean reserveNewDayIfNeeded(
+        CollectionPreparation preparation,
+        OffsetDateTime preparedAt,
+        OffsetDateTime dispatchAt
     ) {
-        try (CollectionAttemptLog attempt = new CollectionAttemptLog(sourceRouteId)) {
-            OffsetDateTime scheduledAt = now();
-            WorkerOperationLog.collectionAttempted(sourceRouteId, scheduledAt.toEpochSecond());
-            try {
-                attempt.stage("ROUTE_VERSION");
-                Optional<RouteReference> reference =
-                    WorkerOperationLog.measure("collection_route_version", sourceRouteId,
-                        () -> currentRouteVersion.currentVersionOf(sourceRouteId, scheduledAt));
-                if (reference.isEmpty()) {
-                    WorkerOperationLog.warn("collection_route_version", sourceRouteId, "NO_ROUTE_VERSION");
-                    attempt.finish("DEFERRED", "NO_ROUTE_VERSION");
-                    return;
-                }
-                WorkerOperationLog.recovered("collection_route_version", sourceRouteId);
-                attempt.routeVersion(reference.orElseThrow().routeVersionId());
-                collectOn(reference.orElseThrow().routeVersionId(), sourceRouteId, scheduledAt, attempt);
-            } catch (RuntimeException failure) {
-                attempt.failed(failure);
-                closeUnfinished(attempt.batchId(), sourceRouteId);
-                throw failure;
-            }
+        if (preparedAt.atZoneSameInstant(KOREA).toLocalDate()
+            .equals(dispatchAt.atZoneSameInstant(KOREA).toLocalDate())) {
+            return true;
         }
-    }
 
-    private void closeUnfinished(final long batchId, String sourceRouteId) {
-        if (batchId < 1) {
-            return;
+        if (callQuota.ensureLocationReservation(preparation.keyAlias(), preparedAt, dispatchAt)) {
+            return true;
         }
-        try {
-            final int closed = WorkerOperationLog.measure("collection_failure_close", sourceRouteId,
-                () -> batchLedger.closeUnfinished(batchId));
-            if (closed > 0) {
-                LOGGER.warn("event=collection_batch_closed reason=COLLECTION_FAILED batchId={} routeId={}",
-                    batchId, sourceRouteId);
-            }
-        } catch (RuntimeException closeFailure) {
-            LOGGER.error("event=collection_batch_close_failed batchId={} routeId={} exceptionType={}",
-                batchId, sourceRouteId, closeFailure.getClass().getSimpleName());
-        }
-    }
 
-    private void collectOn(
-        final long routeVersionId,
-        String sourceRouteId,
-        OffsetDateTime scheduledAt,
-        CollectionAttemptLog attempt
-    ) {
-        attempt.stage("RESERVE");
-        ObservationBatchReservation reservation = WorkerOperationLog.measure("collection_reserve", sourceRouteId,
-            () -> batchLedger.reserve(
-                new CollectionPlan(routeVersionId, scheduledAt, attemptKeyOf(sourceRouteId, scheduledAt)),
-                scheduledAt));
-        attempt.batch(reservation.batchId());
-        if (!reservation.reserved()) {
-            WorkerOperationLog.warn("collection_quota", sourceRouteId, "DAILY_LIMIT");
-            attempt.finish("DEFERRED", "DAILY_LIMIT");
-            return;
-        }
-        OffsetDateTime requestedAt = now();
-        attempt.stage("DISPATCH");
-        if (!WorkerOperationLog.measure("collection_dispatch", sourceRouteId,
-            () ->
-            batchLedger.markDispatching(reservation.batchId(), scheduledAt, requestedAt, reservation.keyAlias()))) {
-            WorkerOperationLog.warn("collection_quota", sourceRouteId, "NEXT_DAY_LIMIT");
-            attempt.finish("DEFERRED", "NEXT_DAY_LIMIT");
-            return;
-        }
-        WorkerOperationLog.recovered("collection_quota", sourceRouteId);
-        attempt.stage("UPSTREAM");
-        attempt.resetUpstream();
-        ObservationReply reply = observationSource.read(sourceRouteId, reservation.keyAlias());
-        attempt.reply(reply);
-        var normalized = new AtomicBoolean();
-        ObservationReply diagnosed = receivedAt -> {
-            attempt.stage("NORMALIZE");
-            ObservationResponse response = reply.interpret(receivedAt);
-            attempt.response(response);
-            normalized.set(true);
-            attempt.stage("SAVE_AND_COMMIT");
-            return response;
-        };
-        attempt.stage("SAVE_AND_COMMIT");
-        ObservationResponse response = WorkerOperationLog.measure("collection_save_and_commit", sourceRouteId, () -> {
-            try {
-                return batchLedger.conclude(reservation.batchId(), diagnosed, now());
-            } catch (RuntimeException failure) {
-                if (normalized.get() && isRouteStopMismatch(failure)) {
-                    mismatchAfterRollback(new ObservationRouteMismatchDetected(sourceRouteId, routeVersionId));
-                }
-                throw failure;
-            }
-        });
-        attempt.committed();
-        response.observations().filter(rows -> rows.providerRows() == 0 || !rows.storableRows().isEmpty())
-            .ifPresent(rows -> WorkerOperationLog.collectionCommitted(sourceRouteId,
-                response.receivedAt().toEpochSecond(), rows.storableRows().size()));
-        attempt.stage("KEY_EXCLUSION");
-        excludeKeyIfRejected(reservation.keyAlias(), response, requestedAt);
-        if (response.observations().isPresent()) {
-            attempt.stage("COMPLETE");
-            attempt.finish("SUCCESS", response.conclusion().outcome().name());
-            return;
-        }
-        attempt.stage("UPSTREAM_RESULT");
-        attempt.finish("FAILED", response.conclusion().outcome().name());
-    }
-
-    private static boolean isRouteStopMismatch(Throwable failure) {
-        var seen = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
-        var remaining = new ArrayDeque<Throwable>();
-        remaining.add(failure);
-        while (!remaining.isEmpty()) {
-            Throwable current = remaining.removeFirst();
-            if (!seen.add(current)) continue;
-            if (current instanceof SQLException sql) {
-                if ("23503".equals(sql.getSQLState()) && sql instanceof PSQLException postgres
-                        && postgres.getServerErrorMessage() != null
-                        && "fk_observation_route_stop".equals(postgres.getServerErrorMessage().getConstraint())) {
-                    return true;
-                }
-                if (sql.getNextException() != null) remaining.addLast(sql.getNextException());
-            }
-            if (current.getCause() != null) remaining.addLast(current.getCause());
-        }
+        batchService.abandonBeforeSend(preparation.batchId());
         return false;
     }
 
-    private void mismatchAfterRollback(ObservationRouteMismatchDetected event) {
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            if (TransactionSynchronizationManager.isSynchronizationActive()) {
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override public void afterCompletion(int status) {
-                        if (status == TransactionSynchronization.STATUS_ROLLED_BACK) publishMismatch(event);
-                    }
-                });
-            }
-            return;
-        }
-        // conclude()'s transaction interceptor has finished its rollback before reaching this catch.
-        publishMismatch(event);
-    }
-
-    private void publishMismatch(ObservationRouteMismatchDetected event) {
-        try { events.publishEvent(event); }
-        catch (RuntimeException notificationFailure) {
-            LOGGER.warn("event=observation_route_mismatch_notification_failed routeId={} routeVersionId={} exceptionType={}",
-                event.sourceRouteId(), event.routeVersionId(), notificationFailure.getClass().getSimpleName());
-        }
-    }
-
-    private void excludeKeyIfRejected(
-        String keyAlias,
-        ObservationResponse response,
-        OffsetDateTime requestedAt
-    ) {
-        response.keyRejectionCode().ifPresent(reasonCode ->
-            callQuota.excludeLocationKey(keyAlias, requestedAt).ifPresent(reservedCallsBefore ->
-                LOGGER.warn("포털이 GBIS 키를 거절해 그 키를 한국 자정까지 쓰지 않는다. 슬롯={} 사유={} 채우기 전 사용량={}",
-                    keyAlias, reasonCode, reservedCallsBefore)));
-    }
-
     /** 같은 초에 계획한 동일 노선의 수집은 같은 배치로 처리한다. */
-    private String attemptKeyOf(
-        String sourceRouteId,
-        OffsetDateTime scheduledAt
-    ) {
+    private String attemptKeyOf(String sourceRouteId, OffsetDateTime scheduledAt) {
         return "%s-%s".formatted(sourceRouteId, scheduledAt.toInstant().truncatedTo(ChronoUnit.SECONDS));
     }
 

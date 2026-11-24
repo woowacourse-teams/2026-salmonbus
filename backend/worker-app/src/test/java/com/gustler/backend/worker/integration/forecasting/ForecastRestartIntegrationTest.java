@@ -12,13 +12,13 @@ import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.model.ModelRoute;
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse;
-import com.gustler.backend.observations.application.ObservationBatchLedger;
+import com.gustler.backend.observations.application.CollectionBatchService;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
 import com.gustler.backend.support.TestDatabase;
 import com.gustler.backend.worker.WorkerApplication;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
-import com.gustler.backend.worker.scheduling.ForecastTrigger;
+import com.gustler.backend.worker.scheduling.ForecastScheduler;
 import com.gustler.backend.worker.scheduling.RouteLanes;
 import com.zaxxer.hikari.HikariDataSource;
 import java.time.Duration;
@@ -69,9 +69,21 @@ class ForecastRestartIntegrationTest {
     private static final int STOP_COUNT = 10;
     private static final int TURN = 8;
     private static final int CAPACITY = 45;
-    private static final List<Integer> PASSED_STOPS = List.of(1, 2, 3, 4, 5, 6);
+    private static final List<Integer> PASSED_STOPS = List.of(
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+    );
     private static final int PROCESSED_BEFORE_CLOSE = 3;
-    private static final List<Integer> CLOSED_STOPS = List.of(2, 3, 4, 5);
+    private static final List<Integer> CLOSED_STOPS = List.of(
+            2,
+            3,
+            4,
+            5
+    );
     /** 통과가 닫히는 정류장 2~5를 목표로 한 예측 수다. 1~4번 정류장을 떠난 배치가 각각 4·3·2·1개를 낸다. */
     private static final int CLOSED_FORECASTS = 10;
     /** 수신 뒤 착수까지 허용하는 90초를 넘긴 시간이다. 줍기가 찾는 신선도 창보다는 짧다. */
@@ -113,26 +125,30 @@ class ForecastRestartIntegrationTest {
     }
 
     @Test
-    void 실행_줄에_일이_쌓인_채로_닫으면_돌던_배치만_끝내고_다시_뜬_뒤_남은_배치를_처리해_끊지_않은_노선과_채점_결과가_같다(
-        CapturedOutput output
-    ) throws Exception {
+    void 실행_줄에_일이_쌓인_채로_닫으면_돌던_배치만_끝내고_다시_뜬_뒤_남은_배치를_처리해_끊지_않은_노선과_채점_결과가_같다(CapturedOutput output) throws Exception {
         // given
         JdbcClient stored = JdbcClient.create(new DriverManagerDataSource(database.jdbcUrl(), database.username(),
             database.password()));
         ConfigurableApplicationContext first = startWorker();
         try {
             HikariDataSource firstPool = first.getBean(DataSource.class).unwrap(HikariDataSource.class);
-            SelectedRuntime selected = first.getBean(SelectedRuntime.class);
+            ForecastRestartIntegrationTest.SelectedRuntime selected =
+                first.getBean(ForecastRestartIntegrationTest.SelectedRuntime.class);
             RouteLanes lanes = first.getBean(RouteLanes.class);
             OffsetDateTime validFrom = CLOCK.now().minusDays(1);
-            Route continuous = insertRoute(stored, "204000057", validFrom);
-            Route interrupted = insertRoute(stored, "234000050", validFrom);
-            Route running = insertRoute(stored, "204000070", validFrom);
-            Route delayed = insertRoute(stored, "234000886", validFrom);
-            RuntimeSnapshot runtime = insertDeployment(stored, List.of(continuous, interrupted, running, delayed),
+            ForecastRestartIntegrationTest.Route continuous = insertRoute(stored, "204000057", validFrom);
+            ForecastRestartIntegrationTest.Route interrupted = insertRoute(stored, "234000050", validFrom);
+            ForecastRestartIntegrationTest.Route running = insertRoute(stored, "204000070", validFrom);
+            ForecastRestartIntegrationTest.Route delayed = insertRoute(stored, "234000886", validFrom);
+            RuntimeSnapshot runtime = insertDeployment(stored, List.of(
+                    continuous,
+                    interrupted,
+                    running,
+                    delayed
+            ),
                 validFrom);
             selected.select(runtime);
-            first.getBean(ForecastTrigger.class).pickUp();
+            first.getBean(ForecastScheduler.class).pickUp();
             for (final int passedStop : PASSED_STOPS) {
                 collect(first, continuous, passedStop);
             }
@@ -150,7 +166,12 @@ class ForecastRestartIntegrationTest {
             for (final int passedStop : PASSED_STOPS.subList(PROCESSED_BEFORE_CLOSE, PASSED_STOPS.size())) {
                 waitingBatches.add(collect(first, interrupted, passedStop));
             }
-            final long delayedBatch = store(first, delayed, 1, CLOCK.now().minus(PAST_CONFIRMATION_LIMIT));
+            final long delayedBatch = store(
+                    first,
+                    delayed,
+                    1,
+                    CLOCK.now().minus(PAST_CONFIRMATION_LIMIT)
+            );
             assertThat(lanes.queued()).as("두 노선의 처리가 실행 줄에서 기다린다").isEqualTo(2);
 
             // when
@@ -160,8 +181,13 @@ class ForecastRestartIntegrationTest {
             List<String> waitingRunsAtClose = runsOf(stored, waitingBatches);
             List<String> delayedRunAtClose = runsOf(stored, List.of(delayedBatch));
             CLOCK.advance(DOWNTIME);
-            Restarted restarted = restart(stored, runtime, interrupted, delayedBatch);
-            Scored uninterrupted = scored(stored, continuous);
+            ForecastRestartIntegrationTest.Restarted restarted = restart(
+                    stored,
+                    runtime,
+                    interrupted,
+                    delayedBatch
+            );
+            ForecastRestartIntegrationTest.Scored uninterrupted = scored(stored, continuous);
             List<String> waitingRuns = runsOf(stored, waitingBatches);
             List<String> delayedRun = runsOf(stored, List.of(delayedBatch));
 
@@ -202,20 +228,20 @@ class ForecastRestartIntegrationTest {
      * 같은 DB로 worker를 다시 띄우고 기동 직후처럼 줍기를 한 번 돌린 뒤, 끊겼던 노선의 남은 배치와 늦은 배치가 처리되고 채점이
      * 끝나기를 기다린다.
      */
-    private static Restarted restart(
+    private static ForecastRestartIntegrationTest.Restarted restart(
         JdbcClient stored,
         RuntimeSnapshot runtime,
-        Route interrupted,
+        ForecastRestartIntegrationTest.Route interrupted,
         final long delayedBatch
     ) throws Exception {
         ConfigurableApplicationContext second = startWorker();
         try {
-            second.getBean(SelectedRuntime.class).select(runtime);
-            second.getBean(ForecastTrigger.class).pickUp();
+            second.getBean(ForecastRestartIntegrationTest.SelectedRuntime.class).select(runtime);
+            second.getBean(ForecastScheduler.class).pickUp();
             final boolean settled = waitUntil(second, () -> runs(stored, interrupted).size() == PASSED_STOPS.size()
                 && !runsOf(stored, List.of(delayedBatch)).isEmpty()
                 && closedForecasts(stored, interrupted, "<> 'PENDING'") == CLOSED_FORECASTS);
-            return new Restarted(settled, scored(stored, interrupted));
+            return new ForecastRestartIntegrationTest.Restarted(settled, scored(stored, interrupted));
         } finally {
             second.close();
         }
@@ -223,7 +249,8 @@ class ForecastRestartIntegrationTest {
 
     /** {@link Worker}에 적힌 설정으로 컨텍스트를 새로 띄운다. 컨텍스트 캐시에 넣지 않으므로 닫는 것은 부른 쪽이 한다. */
     private static ConfigurableApplicationContext startWorker() throws Exception {
-        MergedContextConfiguration configuration = BootstrapUtils.resolveTestContextBootstrapper(Worker.class)
+        MergedContextConfiguration configuration = BootstrapUtils
+            .resolveTestContextBootstrapper(ForecastRestartIntegrationTest.Worker.class)
             .buildMergedContextConfiguration();
         SmartContextLoader loader = (SmartContextLoader) configuration.getContextLoader();
         return (ConfigurableApplicationContext) loader.loadContext(configuration);
@@ -241,7 +268,11 @@ class ForecastRestartIntegrationTest {
      *
      * @param validFrom 판본이 유효해지고 정원을 알게 된 시각. worker의 시계보다 앞이어야 예보가 그 정원을 쓴다
      */
-    static Route insertRoute(JdbcClient stored, String sourceRoute, OffsetDateTime validFrom) {
+    static ForecastRestartIntegrationTest.Route insertRoute(
+        JdbcClient stored,
+        String sourceRoute,
+        OffsetDateTime validFrom
+    ) {
         String vehicle = "restart-" + sourceRoute;
         final long routeId = stored.sql("""
             INSERT INTO route (public_route_id, source_id, source_route_id, display_name, start_stop_name,
@@ -264,7 +295,12 @@ class ForecastRestartIntegrationTest {
             INSERT INTO vehicle_capacity (source_id, vehicle_id, capacity, evidence_at)
             VALUES ('GBIS', :vehicle, :capacity, :at)
             """).param("vehicle", vehicle).param("capacity", CAPACITY).param("at", validFrom).update();
-        return new Route(routeId, routeVersionId, sourceRoute, vehicle);
+        return new ForecastRestartIntegrationTest.Route(
+                routeId,
+                routeVersionId,
+                sourceRoute,
+                vehicle
+        );
     }
 
     private static String direction(final int order) {
@@ -274,31 +310,58 @@ class ForecastRestartIntegrationTest {
         return "UP";
     }
 
-    static RuntimeSnapshot insertDeployment(JdbcClient stored, List<Route> routes, OffsetDateTime validFrom) {
-        List<String> modelRoutes = routes.stream().map(route -> ModelRoute.of(route.sourceRoute())).toList();
+    static RuntimeSnapshot insertDeployment(
+        JdbcClient stored,
+        List<ForecastRestartIntegrationTest.Route> routes,
+        OffsetDateTime validFrom
+    ) {
+        List<String> modelRoutes = routes.stream()
+            .map(route -> ModelRoute.of(route.sourceRoute()))
+            .toList();
         final long deploymentId = stored.sql("""
             INSERT INTO model_deployment (deployment_key, release_id, model_key, model_version, bundle_digest,
                 prediction_target_version, calculation_version, supported_scope_digest, data_until, state)
             VALUES (?, 'forecast-restart-test', 'seat-full-chance', '1', ?, 'SEAT_FULL_CHANCE_V1', 'CALCULATION_V1',
                 ?, ?, 'ACTIVE')
             RETURNING id
-            """).params(UUID.randomUUID(), "1".repeat(64), "0".repeat(64), validFrom).query(Long.class).single();
+            """).params(
+                    UUID.randomUUID(),
+                    "1".repeat(64),
+                    "0".repeat(64),
+                    validFrom
+            ).query(Long.class).single();
         return new RuntimeSnapshot(
-            new ActiveModelDeployment(deploymentId, "CALCULATION_V1", "forecast-restart-test", "1".repeat(64)),
-            new SupportedForecastScope(modelRoutes),
-            ConfirmedProfileModelFixture.model(modelRoutes, STOP_COUNT, TURN), validFrom.toInstant());
+                new ActiveModelDeployment(
+                        deploymentId,
+                        "CALCULATION_V1",
+                        "forecast-restart-test",
+                        "1".repeat(64)
+                ),
+                new SupportedForecastScope(modelRoutes),
+                ConfirmedProfileModelFixture.model(modelRoutes, STOP_COUNT, TURN),
+                validFrom.toInstant()
+        );
     }
 
     /**
      * 노선의 차량이 {@code passedStop}을 막 떠난 관측 한 줄을 지금 수집한 것으로 저장한다. worker의 시계를 한 회차 옮긴 시각에
      * 요청하고, 응답을 받은 시각까지 시계를 옮긴 뒤에 저장한다. 그래서 예보의 착수 시각은 수신 시각보다 이르지 않다.
      */
-    static long collect(ConfigurableApplicationContext context, Route route, final int passedStop) {
+    static long collect(
+        ConfigurableApplicationContext context,
+        ForecastRestartIntegrationTest.Route route,
+        final int passedStop
+    ) {
         ManualClock clock = context.getBean(ManualClock.class);
         clock.advance(ROUND);
         OffsetDateTime at = clock.now();
         clock.advance(RESPONSE_TIME);
-        return store(context, route, passedStop, at);
+        return store(
+                context,
+                route,
+                passedStop,
+                at
+        );
     }
 
     /**
@@ -307,16 +370,27 @@ class ForecastRestartIntegrationTest {
      */
     private static long store(
         ConfigurableApplicationContext context,
-        Route route,
+        ForecastRestartIntegrationTest.Route route,
         final int passedStop,
         OffsetDateTime at
     ) {
-        ObservationBatchLedger ledger = context.getBean(ObservationBatchLedger.class);
-        final long batchId = ledger
-            .reserve(new CollectionPlan(route.routeVersionId(), at, UUID.randomUUID().toString()), at).batchId();
-        ledger.markDispatching(batchId, at, at, "a");
-        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation("경기70아0001", route.vehicle(), 0,
-            route.sourceRoute(), 11, "s" + passedStop, passedStop, 2, 32 - passedStop * 2, 1, 1);
+        CollectionBatchService ledger = context.getBean(CollectionBatchService.class);
+        final long batchId = ledger.prepare(new CollectionPlan(route.routeVersionId(), at,
+            UUID.randomUUID().toString()), at).batchId();
+
+        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation(
+                "경기70아0001",
+                route.vehicle(),
+                0,
+                route.sourceRoute(),
+                11,
+                "s" + passedStop,
+                passedStop,
+                2,
+                32 - passedStop * 2,
+                1,
+                1
+        );
         ledger.conclude(batchId,
             received -> GbisObservationMapper.response(new GbisLocationResult.Success(
                 at.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.S")), List.of(bus)), received),
@@ -341,7 +415,7 @@ class ForecastRestartIntegrationTest {
     }
 
     /** 노선의 예보 실행을 배치 순서로 {@code 결과:예측이 있는지}로 적는다. */
-    private static List<String> runs(JdbcClient stored, Route route) {
+    private static List<String> runs(JdbcClient stored, ForecastRestartIntegrationTest.Route route) {
         return stored.sql("""
             SELECT outcome || ':' || (prediction_count > 0)::text FROM forecast_run
             WHERE route_id = :route ORDER BY observation_batch_id
@@ -356,7 +430,11 @@ class ForecastRestartIntegrationTest {
             """).param("batches", batches).query(String.class).list();
     }
 
-    private static long closedForecasts(JdbcClient stored, Route route, String stateCondition) {
+    private static long closedForecasts(
+        JdbcClient stored,
+        ForecastRestartIntegrationTest.Route route,
+        String stateCondition
+    ) {
         return stored.sql("""
             SELECT count(*) FROM forecast_outcome
             WHERE route_id = :route AND target_stop_order IN (:targets) AND state
@@ -368,7 +446,10 @@ class ForecastRestartIntegrationTest {
      * 노선에 저장된 예보와 채점 결과를 노선끼리 견줄 수 있는 모양으로 모은다. 배치와 관측의 번호는 노선마다 다르므로 배치를 그
      * 노선 안의 순번으로 바꿔 적는다.
      */
-    private static Scored scored(JdbcClient stored, Route route) {
+    private static ForecastRestartIntegrationTest.Scored scored(
+        JdbcClient stored,
+        ForecastRestartIntegrationTest.Route route
+    ) {
         List<Integer> passes = stored.sql("""
             SELECT stop_order FROM stop_pass WHERE route_id = :route ORDER BY stop_order
             """).param("route", route.routeId()).query(Integer.class).list();
@@ -392,7 +473,13 @@ class ForecastRestartIntegrationTest {
             SELECT stop_order || ':' || capacity || ':' || state || ':' || coalesce(reason, '') FROM pass_label
             WHERE route_id = :route ORDER BY stop_order, capacity
             """).param("route", route.routeId()).query(String.class).list();
-        return new Scored(runs(stored, route), passes, outcomes, unresolved, labels);
+        return new ForecastRestartIntegrationTest.Scored(
+                runs(stored, route),
+                passes,
+                outcomes,
+                unresolved,
+                labels
+        );
     }
 
     /**
@@ -401,7 +488,7 @@ class ForecastRestartIntegrationTest {
      * @param settled 마감 안에 남은 배치의 예보와 채점이 끝났는지
      * @param scored 끊겼던 노선에 저장된 예보와 채점 결과
      */
-    private record Restarted(boolean settled, Scored scored) {
+    private record Restarted(boolean settled, ForecastRestartIntegrationTest.Scored scored) {
     }
 
     /** 시험이 넣은 노선 하나다. */
@@ -424,6 +511,13 @@ class ForecastRestartIntegrationTest {
         List<String> unresolved,
         List<String> labels
     ) {
+        private Scored {
+            runs = List.copyOf(runs);
+            passes = List.copyOf(passes);
+            outcomes = List.copyOf(outcomes);
+            unresolved = List.copyOf(unresolved);
+            labels = List.copyOf(labels);
+        }
     }
 
     /** 띄울 worker의 설정이다. 시험 클래스가 아니라 설정을 적어 두는 자리여서 시험 메서드가 없다. */
@@ -432,7 +526,7 @@ class ForecastRestartIntegrationTest {
         "forecast.interval=1h",
         "forecast.lanes=1"
     })
-    @Import({ ExternalDatabase.class, CollectionRuntimeConfiguration.class })
+    @Import({ ForecastRestartIntegrationTest.ExternalDatabase.class, CollectionRuntimeConfiguration.class })
     private static final class Worker {
     }
 
@@ -460,8 +554,8 @@ class ForecastRestartIntegrationTest {
 
         @Bean
         @Primary
-        SelectedRuntime selectedRuntime() {
-            return new SelectedRuntime();
+        ForecastRestartIntegrationTest.SelectedRuntime selectedRuntime() {
+            return new ForecastRestartIntegrationTest.SelectedRuntime();
         }
 
         /** 닫은 worker와 다시 띄운 worker가 같은 시계를 이어 쓴다. */
@@ -475,7 +569,7 @@ class ForecastRestartIntegrationTest {
     /** 시험이 고른 모델을 돌려주는 모델 선택이다. 시험이 시키면 모델을 묻는 실행 줄 스레드를 한 번 붙잡는다. */
     static final class SelectedRuntime implements ForecastRuntime {
         private volatile RuntimeSnapshot selected;
-        private volatile Hold hold;
+        private volatile ForecastRestartIntegrationTest.Hold hold;
 
         void select(RuntimeSnapshot snapshot) {
             selected = snapshot;
@@ -488,14 +582,15 @@ class ForecastRestartIntegrationTest {
          * @return 스레드를 붙잡으면 열리는 걸쇠
          */
         CountDownLatch holdNextSweepUntilClosed(RouteLanes lanes) {
-            Hold next = new Hold(lanes, new CountDownLatch(1));
+            ForecastRestartIntegrationTest.Hold next = new ForecastRestartIntegrationTest.Hold(lanes,
+                new CountDownLatch(1));
             hold = next;
             return next.held();
         }
 
         @Override
         public Optional<RuntimeSnapshot> resolveActive() {
-            Hold current = hold;
+            ForecastRestartIntegrationTest.Hold current = hold;
             if (current != null && Thread.currentThread().getName().startsWith(RouteLanes.THREAD_PREFIX)) {
                 hold = null;
                 current.untilClosed();

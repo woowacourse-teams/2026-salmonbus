@@ -7,8 +7,8 @@ import static org.mockito.Mockito.mock;
 import com.gustler.backend.forecasting.api.model.CheckActiveModelCoverage;
 import com.gustler.backend.gbis.api.GbisClientOptions;
 import com.gustler.backend.gbis.api.GbisKey;
-import com.gustler.backend.observations.api.CloseUnfinishedCollections;
-import com.gustler.backend.observations.api.CollectObservations;
+import com.gustler.backend.observations.application.CollectionBatchService;
+import com.gustler.backend.observations.application.ObservationCollector;
 import com.gustler.backend.quota.api.CallQuota;
 import com.gustler.backend.quota.api.CallQuotaPolicy;
 import com.gustler.backend.worker.scheduling.CollectionScheduler;
@@ -26,15 +26,24 @@ class CollectionRuntimeConfigurationTest {
     void 사전_관측을_켜면_모델이_없어도_신규_노선을_기존과_함께_수집한다() {
         String existing = "204000057";
         String newRoute = "234001476";
-        CollectionProperties properties = new CollectionProperties(true, List.of(existing, newRoute), null,
-            Set.of(newRoute), true);
-        CollectObservations collector = mock(CollectObservations.class);
-        CloseUnfinishedCollections unfinished = List::of;
+        CollectionProperties properties = new CollectionProperties(
+                true,
+                List.of(existing, newRoute),
+                null,
+                Set.of(newRoute),
+                true
+        );
+        ObservationCollector collector = mock(ObservationCollector.class);
+        CollectionBatchService unfinished = mock(CollectionBatchService.class);
         var coverage = new StaticListableBeanFactory().getBeanProvider(CheckActiveModelCoverage.class);
         CollectionRuntimeConfiguration configuration = new CollectionRuntimeConfiguration();
 
         CollectionScheduler scheduler = configuration.collectionScheduler(
-            properties, collector, unfinished, coverage, false
+                properties,
+                collector,
+                unfinished,
+                coverage,
+                false
         );
         scheduler.collectAllRoutes();
 
@@ -45,8 +54,14 @@ class CollectionRuntimeConfigurationTest {
     @Test
     void 호출_한도가_돌려_쓰는_슬롯과_GBIS_클라이언트가_아는_슬롯이_같다() {
         // given
-        GbisProperties properties = new GbisProperties(BASE_URL, "fake-key-a", "fake-key-b", null, "fake-key-d",
-            DAILY_LIMIT);
+        GbisProperties properties = new GbisProperties(
+                BASE_URL,
+                "fake-key-a",
+                "fake-key-b",
+                null,
+                "fake-key-d",
+                DAILY_LIMIT
+        );
         CollectionRuntimeConfiguration configuration = new CollectionRuntimeConfiguration();
 
         // when
@@ -77,9 +92,26 @@ class CollectionRuntimeConfigurationTest {
     @Test
     void 키를_다섯_개_이상_설정하면_호출_한도와_GBIS_클라이언트가_모두_같은_별칭으로_돌려_쓴다() {
         // given
-        GbisProperties properties = new GbisProperties(BASE_URL, "fake-key-a", null, null, null,
-            Map.of("b", "fake-key-b", "c", "fake-key-c", "d", "fake-key-d", "e", "fake-key-e", "f10", "fake-key-f10"),
-            DAILY_LIMIT);
+        GbisProperties properties = new GbisProperties(
+                BASE_URL,
+                "fake-key-a",
+                null,
+                null,
+                null,
+                Map.of(
+                        "b",
+                        "fake-key-b",
+                        "c",
+                        "fake-key-c",
+                        "d",
+                        "fake-key-d",
+                        "e",
+                        "fake-key-e",
+                        "f10",
+                        "fake-key-f10"
+                ),
+                DAILY_LIMIT
+        );
         CollectionRuntimeConfiguration configuration = new CollectionRuntimeConfiguration();
 
         // when
@@ -87,7 +119,14 @@ class CollectionRuntimeConfigurationTest {
         GbisClientOptions client = configuration.gbisClientOptions(properties);
 
         // then
-        assertThat(quotaAliases).containsExactly(GbisKey.PRIMARY, "b", "c", "d", "e", "f10")
+        assertThat(quotaAliases).containsExactly(
+                GbisKey.PRIMARY,
+                "b",
+                "c",
+                "d",
+                "e",
+                "f10"
+        )
             .isEqualTo(client.keys()
                 .stream()
                 .map(GbisKey::alias)
@@ -98,8 +137,16 @@ class CollectionRuntimeConfigurationTest {
     @Test
     void 키별_한도를_주면_호출_한도가_그_키만_그_한도로_센다() {
         // given
-        GbisProperties properties = new GbisProperties(BASE_URL, "fake-key-a", null, null, null,
-            Map.of("e", "fake-key-e"), DAILY_LIMIT, Map.of("e", 1_000));
+        GbisProperties properties = new GbisProperties(
+                BASE_URL,
+                "fake-key-a",
+                null,
+                null,
+                null,
+                Map.of("e", "fake-key-e"),
+                DAILY_LIMIT,
+                Map.of("e", 1_000)
+        );
         CollectionRuntimeConfiguration configuration = new CollectionRuntimeConfiguration();
 
         // when

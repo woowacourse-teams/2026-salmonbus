@@ -1,50 +1,94 @@
 package com.gustler.backend.observations.infrastructure.gbis;
 
 import com.gustler.backend.gbis.api.GbisLocationResult;
-import com.gustler.backend.gbis.api.GbisLocationResult.DailyQuotaExceeded;
-import com.gustler.backend.gbis.api.GbisLocationResult.GatewayRejected;
-import com.gustler.backend.gbis.api.GbisLocationResult.GbisSystemError;
-import com.gustler.backend.gbis.api.GbisLocationResult.MissingRequiredParameter;
-import com.gustler.backend.gbis.api.GbisLocationResult.NoResponse;
-import com.gustler.backend.gbis.api.GbisLocationResult.NoVehicles;
-import com.gustler.backend.gbis.api.GbisLocationResult.PerSecondQuotaExceeded;
-import com.gustler.backend.gbis.api.GbisLocationResult.Success;
-import com.gustler.backend.gbis.api.GbisLocationResult.UnknownGbisResultCode;
-import com.gustler.backend.gbis.api.GbisLocationResult.UnreadableResponse;
 import com.gustler.backend.gbis.api.GbisResultCode;
 import com.gustler.backend.gbis.api.PortalReasonCode;
-import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
-import com.gustler.backend.observations.domain.CollectedObservations;
-import com.gustler.backend.observations.domain.ObservationBatchConclusion;
-import com.gustler.backend.observations.domain.ObservationBatchFailureCode;
-import com.gustler.backend.observations.domain.ObservationBatchOutcome;
-import com.gustler.backend.observations.domain.ObservationResponse;
+import com.gustler.backend.gbis.api.dto.BusLocationResponse;
+import com.gustler.backend.observations.domain.CollectionBatchStatus;
+import com.gustler.backend.observations.domain.CollectionFailureReason;
+import com.gustler.backend.observations.domain.CollectionResult;
+import com.gustler.backend.observations.domain.ObservationRows;
 import com.gustler.backend.observations.domain.RemainingSeats;
 import com.gustler.backend.observations.domain.VehicleObservation;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
-/** GBIS 응답을 수집 업무의 결과와 관측 값으로 변환한다. */
+/** GBIS 응답을 한 번 분류해 수집 결과와 관측 값으로 변환한다. */
 public final class GbisObservationMapper {
+
     private GbisObservationMapper() {
     }
 
-    public static ObservationResponse response(GbisLocationResult result, OffsetDateTime receivedAt) {
-        ObservationBatchConclusion conclusion = from(result);
-        return switch (result) {
-            case Success success -> ObservationResponse.received(conclusion, collect(success.buses()), receivedAt);
-            case NoVehicles ignored -> ObservationResponse.received(conclusion, collect(List.of()), receivedAt);
-            default -> keyRejectionCodeOf(result)
-                .map(code -> ObservationResponse.failedByRejectedKey(conclusion, receivedAt, code))
-                .orElseGet(() -> ObservationResponse.failed(conclusion, receivedAt));
+    /**
+     * 차량 없음은 성공이며 차량이 모두 제외된 응답과 구분한다.
+     * 읽지 못한 본문에는 확인된 기관 결과 코드를 기록하지 않는다.
+     */
+    public static CollectionResult response(GbisLocationResult upstreamResult, OffsetDateTime receivedAt) {
+        return switch (upstreamResult) {
+            case GbisLocationResult.Success success -> CollectionResult.received(
+                    CollectionBatchStatus.forProviderRows(success.buses().size()),
+                    GbisResultCode.SUCCESS.code(),
+                    collect(success.buses()),
+                    receivedAt
+            );
+            case GbisLocationResult.NoVehicles ignored -> CollectionResult.received(
+                    CollectionBatchStatus.SUCCESS_EMPTY,
+                    GbisResultCode.NO_VEHICLES.code(),
+                    collect(List.of()),
+                    receivedAt
+            );
+            case GbisLocationResult.DailyQuotaExceeded ignored -> rejectedBy(
+                    CollectionFailureReason.DAILY_QUOTA_EXCEEDED,
+                    null,
+                    upstreamResult,
+                    receivedAt
+            );
+            case GbisLocationResult.PerSecondQuotaExceeded ignored -> rejectedBy(
+                    CollectionFailureReason.PER_SECOND_QUOTA_EXCEEDED,
+                    null,
+                    upstreamResult,
+                    receivedAt
+            );
+            case GbisLocationResult.GatewayRejected ignored -> rejectedBy(
+                    CollectionFailureReason.UPSTREAM_ERROR,
+                    null,
+                    upstreamResult,
+                    receivedAt
+            );
+            case GbisLocationResult.GbisSystemError ignored -> rejectedBy(
+                    CollectionFailureReason.UPSTREAM_ERROR,
+                    GbisResultCode.SYSTEM_FAILURE.code(),
+                    upstreamResult,
+                    receivedAt
+            );
+            case GbisLocationResult.MissingRequiredParameter ignored -> rejectedBy(
+                    CollectionFailureReason.UPSTREAM_ERROR,
+                    GbisResultCode.PARAMETER_MISSING.code(),
+                    upstreamResult,
+                    receivedAt
+            );
+            case GbisLocationResult.UnknownGbisResultCode unknownResult -> rejectedBy(
+                    CollectionFailureReason.UPSTREAM_ERROR,
+                    unknownResult.resultCode(),
+                    upstreamResult,
+                    receivedAt
+            );
+            case GbisLocationResult.NoResponse ignored -> CollectionResult.unconfirmed(receivedAt);
+            case GbisLocationResult.UnreadableResponse ignored -> CollectionResult.failed(
+                    CollectionBatchStatus.FAILED_UNREADABLE,
+                    null,
+                    null,
+                    receivedAt
+            );
         };
     }
 
-    static Optional<String> keyRejectionCodeOf(GbisLocationResult result) {
-        return switch (result) {
-            case DailyQuotaExceeded ignored -> Optional.of(PortalReasonCode.DAILY_QUOTA_EXCEEDED.code());
-            case GatewayRejected rejected -> switch (PortalReasonCode.from(rejected.reasonCode())) {
+    static Optional<String> keyRejectionCodeOf(GbisLocationResult upstreamResult) {
+        return switch (upstreamResult) {
+            case GbisLocationResult.DailyQuotaExceeded ignored ->
+                Optional.of(PortalReasonCode.DAILY_QUOTA_EXCEEDED.code());
+            case GbisLocationResult.GatewayRejected rejected -> switch (PortalReasonCode.from(rejected.reasonCode())) {
                 case UNREGISTERED_KEY, EXPIRED_KEY -> Optional.of(rejected.reasonCode());
                 default -> Optional.empty();
             };
@@ -52,59 +96,45 @@ public final class GbisObservationMapper {
         };
     }
 
-    public static ObservationBatchConclusion from(
-        GbisLocationResult result
+    private static CollectionResult rejectedBy(
+        CollectionFailureReason failureCode,
+        Integer upstreamResultCode,
+        GbisLocationResult upstreamResult,
+        OffsetDateTime receivedAt
     ) {
-        return switch (result) {
-            case Success success -> succeededWith(success.buses().size());
-            // 호출은 정상인데 그 순간 운행 차량이 없다. 실패가 아니고 운행이 끝났다는 뜻도 아니다.
-            // 실측에서 심야에 이 응답이 되풀이된 뒤 다음 수집에서 차량이 다시 나타났다.
-            case NoVehicles ignored -> new ObservationBatchConclusion(
-                ObservationBatchOutcome.SUCCESS_EMPTY, null, GbisResultCode.NO_VEHICLES.code());
-            case DailyQuotaExceeded ignored ->
-            rejectedBy(ObservationBatchFailureCode.DAILY_QUOTA_EXCEEDED, null);
-            case PerSecondQuotaExceeded ignored ->
-            rejectedBy(ObservationBatchFailureCode.PER_SECOND_QUOTA_EXCEEDED, null);
-            // 게이트웨이가 GBIS 앞에서 막은 것이라 GBIS 결과 코드가 없다.
-            case GatewayRejected ignored ->
-            rejectedBy(ObservationBatchFailureCode.UPSTREAM_ERROR, null);
-            case GbisSystemError ignored ->
-            rejectedBy(ObservationBatchFailureCode.UPSTREAM_ERROR, GbisResultCode.SYSTEM_FAILURE.code());
-            case MissingRequiredParameter ignored ->
-            rejectedBy(ObservationBatchFailureCode.UPSTREAM_ERROR, GbisResultCode.PARAMETER_MISSING.code());
-            case UnknownGbisResultCode unknown ->
-            rejectedBy(ObservationBatchFailureCode.UPSTREAM_ERROR, unknown.resultCode());
-            case NoResponse ignored -> new ObservationBatchConclusion(
-                ObservationBatchOutcome.UNKNOWN_AFTER_DISPATCH, null, null);
-            // 결과 코드가 0 이었는데 본문이 없던 경우도 여기로 온다. 이 결과 유형은 코드를 보관하지 않아 0 이 남지 않는다.
-            case UnreadableResponse ignored -> new ObservationBatchConclusion(
-                ObservationBatchOutcome.FAILED_UNREADABLE, null, null);
-        };
+        return keyRejectionCodeOf(upstreamResult)
+            .map(code -> CollectionResult.failedByRejectedKey(
+                    CollectionBatchStatus.FAILED_UPSTREAM,
+                    failureCode,
+                    upstreamResultCode,
+                    receivedAt,
+                    code
+            ))
+            .orElseGet(() -> CollectionResult.failed(
+                    CollectionBatchStatus.FAILED_UPSTREAM,
+                    failureCode,
+                    upstreamResultCode,
+                    receivedAt
+            ));
     }
 
-    private static ObservationBatchConclusion succeededWith(
-        final int providerRows
-    ) {
-        return new ObservationBatchConclusion(
-            ObservationBatchOutcome.forProviderRows(providerRows), null, GbisResultCode.SUCCESS.code());
+    public static VehicleObservation observation(BusLocationResponse.BusLocation bus) {
+        return new VehicleObservation(
+                bus.vehicleId(),
+                bus.plateNumber(),
+                bus.stopSequence(),
+                bus.stopId(),
+                bus.runningStatus(),
+                RemainingSeats.from(bus.remainingSeatCount()),
+                bus.crowdLevel(),
+                bus.vehicleType(),
+                bus.routeType(),
+                bus.taglessCode()
+        );
     }
 
-    private static ObservationBatchConclusion rejectedBy(
-        ObservationBatchFailureCode failureCode,
-        Integer upstreamResultCode
-    ) {
-        return new ObservationBatchConclusion(
-            ObservationBatchOutcome.FAILED_UPSTREAM, failureCode, upstreamResultCode);
-    }
-
-    public static VehicleObservation observation(BusLocation bus) {
-        return new VehicleObservation(bus.vehicleId(), bus.plateNumber(), bus.stopSequence(), bus.stopId(),
-            bus.runningStatus(), RemainingSeats.from(bus.remainingSeatCount()), bus.crowdLevel(),
-            bus.vehicleType(), bus.routeType(), bus.taglessCode());
-    }
-
-    public static CollectedObservations collect(List<BusLocation> buses) {
-        return CollectedObservations.fromObservations(buses.stream()
+    public static ObservationRows collect(List<BusLocationResponse.BusLocation> buses) {
+        return ObservationRows.fromObservations(buses.stream()
                 .map(GbisObservationMapper::observation)
                 .toList());
     }

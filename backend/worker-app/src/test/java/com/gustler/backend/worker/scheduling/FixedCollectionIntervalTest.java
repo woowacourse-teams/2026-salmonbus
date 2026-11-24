@@ -36,8 +36,8 @@ class FixedCollectionIntervalTest {
         // when
         Instant started = Instant.parse("2026-10-06T16:00:00Z");
         Instant completed = started.plusSeconds(3);
-        AdaptiveCollectionTrigger trigger =
-            new AdaptiveCollectionTrigger(Clock.fixed(started, ZoneOffset.UTC), Duration.ofSeconds(20));
+        CollectionScheduleTrigger trigger =
+            new CollectionScheduleTrigger(Clock.fixed(started, ZoneOffset.UTC), Duration.ofSeconds(20));
 
         // then
         assertThat(trigger.nextExecution(new SimpleTriggerContext(started, started, completed)))
@@ -49,7 +49,7 @@ class FixedCollectionIntervalTest {
     void 주기를_생략하면_야간_적응형_일정을_유지한다() {
         // when
         Instant at = Instant.parse("2026-10-06T16:00:00Z");
-        AdaptiveCollectionTrigger trigger = new AdaptiveCollectionTrigger(Clock.fixed(at, ZoneOffset.UTC));
+        CollectionScheduleTrigger trigger = new CollectionScheduleTrigger(Clock.fixed(at, ZoneOffset.UTC));
 
         // then
         assertThat(trigger.nextExecution(new SimpleTriggerContext(at, at, at))).isEqualTo(at.plusSeconds(600));

@@ -2,7 +2,7 @@ package com.gustler.backend.worker.configuration;
 
 import com.gustler.backend.config.ClockConfig;
 import com.gustler.backend.forecasting.configuration.ForecastingConfiguration;
-import com.gustler.backend.observations.configuration.ObservationPersistenceConfiguration;
+import com.gustler.backend.observations.configuration.ObservationStorageConfiguration;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -13,7 +13,7 @@ import org.springframework.core.env.StandardEnvironment;
  * Worker가 쓰는 업무 모듈의 구성을 가져오고 필수 정책 설정의 출처를 확인한다.
  */
 @Configuration
-@Import({ClockConfig.class, ObservationPersistenceConfiguration.class, ForecastingConfiguration.class})
+@Import({ClockConfig.class, ObservationStorageConfiguration.class, ForecastingConfiguration.class})
 public class BusinessConfiguration {
     private static final String STALENESS = "forecast.staleness";
 

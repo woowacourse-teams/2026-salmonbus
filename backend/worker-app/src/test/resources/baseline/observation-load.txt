@@ -1,85 +1,58 @@
 # 수집 응답 여덟 가지를 저장했을 때 남는 관측 줄, 배치 줄, 정원 기록, 좌석 품질 훅과 전달 훅의 입력. 기준 구현(JPA 가 관측 한 줄마다 INSERT 한 문장을 내던 관측 저장)이 같은 응답에 남긴 값이다. 그 구현은 저장소에 남아 있지 않아 이 파일을 다시 만들 수 없다. 줄 형식은 ObservationLoadBaseline에 적혀 있다.
 # 실행마다 달라지는 값은 바꿔 적었다. 배치 번호는 "batch", 노선 판본 번호는 "routeVersion", 관측 번호는 그 관측의 상류 행 번호다(관측 줄은 id 를 빼고, 정원 기록은 evidence_source_row 로, 훅 입력은 첫 칸으로 적는다). 정원 기록의 updated_at 은 뺐다. 시각은 UTC 다.
+# 1차 축소: stored 훅 입력만 배치·판본·저장 가능한 양수 좌석 여부로 바꿨다. observation/batch/capacity/delivered 기대값은 보존했다.
 scenario 보통 응답
 observation {"stop_id": "205000217", "tagless": 1, "route_type": 11, "stop_order": 1, "vehicle_id": "eq-1", "crowd_level": 3, "plate_number": "경기70아0001", "vehicle_type": 0, "running_state": 2, "remaining_seats": 30, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 1, "source_row_number": 0, "seat_quality_status": null, "seat_unknown_reason": null, "observation_batch_id": "batch", "reported_remaining_seats": null}
 observation {"stop_id": "277103149", "tagless": 1, "route_type": 11, "stop_order": 2, "vehicle_id": "eq-2", "crowd_level": 1, "plate_number": "경기70아0002", "vehicle_type": 1, "running_state": 0, "remaining_seats": 0, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 2, "source_row_number": 1, "seat_quality_status": null, "seat_unknown_reason": null, "observation_batch_id": "batch", "reported_remaining_seats": null}
 observation {"stop_id": "208000069", "tagless": 1, "route_type": 11, "stop_order": 3, "vehicle_id": "eq-3", "crowd_level": 4, "plate_number": "경기70아0003", "vehicle_type": 0, "running_state": 1, "remaining_seats": 12, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 2, "source_row_number": 2, "seat_quality_status": null, "seat_unknown_reason": null, "observation_batch_id": "batch", "reported_remaining_seats": null}
-batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 3, "completed_at": null, "failure_code": null, "requested_at": "2026-08-19T02:14:04.8+00:00", "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 3, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
+batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 3, "completed_at": null, "failure_code": null, "requested_at": null, "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 3, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
 capacity {"capacity": 30, "source_id": "GBIS", "vehicle_id": "eq-1", "evidence_at": "2026-08-19T02:14:04.911+00:00", "evidence_batch_id": "batch", "evidence_source_row": 0, "verified_seat_limit": null}
 capacity {"capacity": 12, "source_id": "GBIS", "vehicle_id": "eq-3", "evidence_at": "2026-08-19T02:14:04.911+00:00", "evidence_batch_id": "batch", "evidence_source_row": 2, "verified_seat_limit": null}
-stored "batch" "routeVersion" 2026-08-19T02:14:04.911Z
-stored 0 "eq-1" 30
-stored 1 "eq-2" 0
-stored 2 "eq-3" 12
-delivered "batch" "routeVersion" 1 STORED 2026-08-19T02:14:04.911Z
-delivered 0 "eq-1" 30 1 3 1 2
-delivered 1 "eq-2" 0 2 1 2 0
-delivered 2 "eq-3" 12 2 4 3 1
+stored "batch" "routeVersion" true
+delivered "batch" "routeVersion" STORED
 scenario 차량 번호 없는 줄
 observation {"stop_id": "277103149", "tagless": 1, "route_type": 11, "stop_order": 2, "vehicle_id": null, "crowd_level": 2, "plate_number": null, "vehicle_type": 0, "running_state": 2, "remaining_seats": 20, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 2, "source_row_number": 0, "seat_quality_status": null, "seat_unknown_reason": null, "observation_batch_id": "batch", "reported_remaining_seats": null}
 observation {"stop_id": "205000217", "tagless": 1, "route_type": 11, "stop_order": 1, "vehicle_id": "eq-1", "crowd_level": 2, "plate_number": "경기70아0001", "vehicle_type": 0, "running_state": 1, "remaining_seats": 25, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 0, "source_row_number": 1, "seat_quality_status": null, "seat_unknown_reason": null, "observation_batch_id": "batch", "reported_remaining_seats": null}
-batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 2, "completed_at": null, "failure_code": null, "requested_at": "2026-08-19T02:14:04.8+00:00", "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 2, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
+batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 2, "completed_at": null, "failure_code": null, "requested_at": null, "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 2, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
 capacity {"capacity": 25, "source_id": "GBIS", "vehicle_id": "eq-1", "evidence_at": "2026-08-19T02:14:04.911+00:00", "evidence_batch_id": "batch", "evidence_source_row": 1, "verified_seat_limit": null}
-stored "batch" "routeVersion" 2026-08-19T02:14:04.911Z
-stored 0 null 20
-stored 1 "eq-1" 25
-delivered "batch" "routeVersion" 1 STORED 2026-08-19T02:14:04.911Z
-delivered 0 null 20 2 2 2 2
-delivered 1 "eq-1" 25 0 2 1 1
+stored "batch" "routeVersion" true
+delivered "batch" "routeVersion" STORED
 scenario 좌석 모름
 observation {"stop_id": "205000217", "tagless": 1, "route_type": 11, "stop_order": 1, "vehicle_id": "eq-1", "crowd_level": 3, "plate_number": "경기70아0001", "vehicle_type": 0, "running_state": 2, "remaining_seats": null, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 1, "source_row_number": 0, "seat_quality_status": null, "seat_unknown_reason": "REPORTED_UNKNOWN", "observation_batch_id": "batch", "reported_remaining_seats": null}
 observation {"stop_id": "277103149", "tagless": 1, "route_type": 11, "stop_order": 2, "vehicle_id": "eq-2", "crowd_level": 3, "plate_number": "경기70아0002", "vehicle_type": 0, "running_state": 2, "remaining_seats": null, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 2, "source_row_number": 1, "seat_quality_status": null, "seat_unknown_reason": "NOT_REPORTED", "observation_batch_id": "batch", "reported_remaining_seats": null}
-batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 2, "completed_at": null, "failure_code": null, "requested_at": "2026-08-19T02:14:04.8+00:00", "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 2, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
-stored "batch" "routeVersion" 2026-08-19T02:14:04.911Z
-stored 0 "eq-1" null
-stored 1 "eq-2" null
-delivered "batch" "routeVersion" 1 STORED 2026-08-19T02:14:04.911Z
-delivered 0 "eq-1" null 1 3 1 2
-delivered 1 "eq-2" null 2 3 2 2
+batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 2, "completed_at": null, "failure_code": null, "requested_at": null, "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 2, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
+stored "batch" "routeVersion" false
+delivered "batch" "routeVersion" STORED
 scenario 혼잡도 없음
 observation {"stop_id": "205000217", "tagless": 1, "route_type": 11, "stop_order": 1, "vehicle_id": "eq-1", "crowd_level": null, "plate_number": "경기70아0001", "vehicle_type": 0, "running_state": 2, "remaining_seats": 30, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 1, "source_row_number": 0, "seat_quality_status": null, "seat_unknown_reason": null, "observation_batch_id": "batch", "reported_remaining_seats": null}
 observation {"stop_id": "277103149", "tagless": 1, "route_type": 11, "stop_order": 2, "vehicle_id": "eq-2", "crowd_level": null, "plate_number": "경기70아0002", "vehicle_type": 0, "running_state": 2, "remaining_seats": 30, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 2, "source_row_number": 1, "seat_quality_status": null, "seat_unknown_reason": null, "observation_batch_id": "batch", "reported_remaining_seats": null}
-batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 2, "completed_at": null, "failure_code": null, "requested_at": "2026-08-19T02:14:04.8+00:00", "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 2, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
+batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 2, "completed_at": null, "failure_code": null, "requested_at": null, "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 2, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
 capacity {"capacity": 30, "source_id": "GBIS", "vehicle_id": "eq-1", "evidence_at": "2026-08-19T02:14:04.911+00:00", "evidence_batch_id": "batch", "evidence_source_row": 0, "verified_seat_limit": null}
 capacity {"capacity": 30, "source_id": "GBIS", "vehicle_id": "eq-2", "evidence_at": "2026-08-19T02:14:04.911+00:00", "evidence_batch_id": "batch", "evidence_source_row": 1, "verified_seat_limit": null}
-stored "batch" "routeVersion" 2026-08-19T02:14:04.911Z
-stored 0 "eq-1" 30
-stored 1 "eq-2" 30
-delivered "batch" "routeVersion" 1 STORED 2026-08-19T02:14:04.911Z
-delivered 0 "eq-1" 30 1 null 1 2
-delivered 1 "eq-2" 30 2 null 2 2
+stored "batch" "routeVersion" true
+delivered "batch" "routeVersion" STORED
 scenario 좌석 품질 훅이 좌석을 가리는 줄
 observation {"stop_id": "205000217", "tagless": 1, "route_type": 11, "stop_order": 1, "vehicle_id": "eq-1", "crowd_level": 3, "plate_number": "경기70아0001", "vehicle_type": 0, "running_state": 2, "remaining_seats": null, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 1, "source_row_number": 0, "seat_quality_status": "REVIEW", "seat_unknown_reason": "REPORTED_UNKNOWN", "observation_batch_id": "batch", "reported_remaining_seats": 71}
 observation {"stop_id": "277103149", "tagless": 1, "route_type": 11, "stop_order": 2, "vehicle_id": "eq-2", "crowd_level": 3, "plate_number": "경기70아0002", "vehicle_type": 0, "running_state": 2, "remaining_seats": 43, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 2, "source_row_number": 1, "seat_quality_status": null, "seat_unknown_reason": null, "observation_batch_id": "batch", "reported_remaining_seats": null}
-batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 2, "completed_at": null, "failure_code": null, "requested_at": "2026-08-19T02:14:04.8+00:00", "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 2, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
+batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 2, "completed_at": null, "failure_code": null, "requested_at": null, "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 2, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
 capacity {"capacity": 43, "source_id": "GBIS", "vehicle_id": "eq-2", "evidence_at": "2026-08-19T02:14:04.911+00:00", "evidence_batch_id": "batch", "evidence_source_row": 1, "verified_seat_limit": null}
-stored "batch" "routeVersion" 2026-08-19T02:14:04.911Z
-stored 0 "eq-1" 71
-stored 1 "eq-2" 43
-delivered "batch" "routeVersion" 1 STORED 2026-08-19T02:14:04.911Z
-delivered 0 "eq-1" null 1 3 1 2
-delivered 1 "eq-2" 43 2 3 2 2
+stored "batch" "routeVersion" true
+delivered "batch" "routeVersion" STORED
 scenario 한 대뿐
 observation {"stop_id": "205000217", "tagless": 1, "route_type": 11, "stop_order": 1, "vehicle_id": "eq-1", "crowd_level": 3, "plate_number": "경기70아0001", "vehicle_type": 0, "running_state": 2, "remaining_seats": 30, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 1, "source_row_number": 0, "seat_quality_status": null, "seat_unknown_reason": null, "observation_batch_id": "batch", "reported_remaining_seats": null}
-batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 1, "completed_at": null, "failure_code": null, "requested_at": "2026-08-19T02:14:04.8+00:00", "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 1, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
+batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 1, "completed_at": null, "failure_code": null, "requested_at": null, "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 1, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
 capacity {"capacity": 30, "source_id": "GBIS", "vehicle_id": "eq-1", "evidence_at": "2026-08-19T02:14:04.911+00:00", "evidence_batch_id": "batch", "evidence_source_row": 0, "verified_seat_limit": null}
-stored "batch" "routeVersion" 2026-08-19T02:14:04.911Z
-stored 0 "eq-1" 30
-delivered "batch" "routeVersion" 1 STORED 2026-08-19T02:14:04.911Z
-delivered 0 "eq-1" 30 1 3 1 2
+stored "batch" "routeVersion" true
+delivered "batch" "routeVersion" STORED
 scenario 0대
-batch {"id": "batch", "outcome": "SUCCESS_EMPTY", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 0, "completed_at": null, "failure_code": null, "requested_at": "2026-08-19T02:14:04.8+00:00", "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 0, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
-stored "batch" "routeVersion" 2026-08-19T02:14:04.911Z
-delivered "batch" "routeVersion" 1 STORED 2026-08-19T02:14:04.911Z
+batch {"id": "batch", "outcome": "SUCCESS_EMPTY", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 0, "completed_at": null, "failure_code": null, "requested_at": null, "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 0, "provider_rows": 0, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
+stored "batch" "routeVersion" false
+delivered "batch" "routeVersion" STORED
 scenario 저장 불가 줄이 섞인 응답
 observation {"stop_id": "205000217", "tagless": 1, "route_type": 11, "stop_order": 1, "vehicle_id": "eq-1", "crowd_level": 3, "plate_number": "경기70아0001", "vehicle_type": 0, "running_state": 2, "remaining_seats": 30, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 1, "source_row_number": 0, "seat_quality_status": null, "seat_unknown_reason": null, "observation_batch_id": "batch", "reported_remaining_seats": null}
 observation {"stop_id": "208000069", "tagless": 1, "route_type": 11, "stop_order": 3, "vehicle_id": "eq-4", "crowd_level": 3, "plate_number": "경기70아0004", "vehicle_type": 0, "running_state": 0, "remaining_seats": 30, "route_version_id": "routeVersion", "vehicle_trip_key": null, "passed_stop_order": 3, "source_row_number": 3, "seat_quality_status": null, "seat_unknown_reason": null, "observation_batch_id": "batch", "reported_remaining_seats": null}
-batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 2, "completed_at": null, "failure_code": null, "requested_at": "2026-08-19T02:14:04.8+00:00", "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 2, "provider_rows": 4, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
+batch {"id": "batch", "outcome": "SUCCESS_ROWS", "attempt_key": "load-baseline", "http_status": null, "result_code": 0, "stored_rows": 2, "completed_at": null, "failure_code": null, "requested_at": null, "scheduled_at": "2026-08-19T02:14:00+00:00", "excluded_rows": 2, "provider_rows": 4, "attempt_number": 1, "ingestion_origin": "LIVE", "route_version_id": "routeVersion", "input_confirmed_at": null, "response_received_at": "2026-08-19T02:14:04.911+00:00", "normalization_version": "normalization-v1.0.0", "collection_strategy_version": "adaptive-kst-v1.0.2"}
 capacity {"capacity": 30, "source_id": "GBIS", "vehicle_id": "eq-1", "evidence_at": "2026-08-19T02:14:04.911+00:00", "evidence_batch_id": "batch", "evidence_source_row": 0, "verified_seat_limit": null}
 capacity {"capacity": 30, "source_id": "GBIS", "vehicle_id": "eq-4", "evidence_at": "2026-08-19T02:14:04.911+00:00", "evidence_batch_id": "batch", "evidence_source_row": 3, "verified_seat_limit": null}
-stored "batch" "routeVersion" 2026-08-19T02:14:04.911Z
-stored 0 "eq-1" 30
-stored 3 "eq-4" 30
-delivered "batch" "routeVersion" 1 STORED 2026-08-19T02:14:04.911Z
-delivered 0 "eq-1" 30 1 3 1 2
-delivered 3 "eq-4" 30 3 3 3 0
+stored "batch" "routeVersion" true
+delivered "batch" "routeVersion" STORED

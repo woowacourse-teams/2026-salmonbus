@@ -3,7 +3,7 @@ package com.gustler.backend.worker.configuration;
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.api.forecast.RunForecasts;
 import com.gustler.backend.forecasting.api.forecast.ScoringCycle;
-import com.gustler.backend.worker.scheduling.ForecastTrigger;
+import com.gustler.backend.worker.scheduling.ForecastScheduler;
 import com.gustler.backend.worker.scheduling.RouteLanes;
 import com.gustler.backend.worker.scheduling.ScoringExecutor;
 import com.gustler.backend.worker.scheduling.ScoringJob;
@@ -42,8 +42,8 @@ public class EnabledForecastConfiguration {
     }
 
     @Bean
-    ForecastTrigger forecastTrigger(RunForecasts forecasts) {
-        return new ForecastTrigger(forecasts);
+    ForecastScheduler forecastTrigger(RunForecasts forecasts) {
+        return new ForecastScheduler(forecasts);
     }
 
     @Bean

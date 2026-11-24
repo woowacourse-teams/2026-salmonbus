@@ -7,9 +7,9 @@ import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
 import com.gustler.backend.forecasting.api.forecast.RunForecasts;
 import com.gustler.backend.forecasting.api.forecast.ScoringCycle;
 import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
-import com.gustler.backend.observations.api.ObservationDeliveryHook;
+import com.gustler.backend.observations.api.ObservationChangeListener;
 import com.gustler.backend.support.IntegrationTest;
-import com.gustler.backend.worker.scheduling.ForecastTrigger;
+import com.gustler.backend.worker.scheduling.ForecastScheduler;
 import com.gustler.backend.worker.scheduling.PartitionJob;
 import com.gustler.backend.worker.scheduling.ScoringJob;
 import java.time.Duration;
@@ -76,9 +76,9 @@ class ForecastScheduleConfigTest {
             .toList();
 
         // then
-        assertThat(registeredTasks).contains(ForecastTrigger.class.getName() + ".pickUp");
-        assertThat(applicationContext.getBeansOfType(ObservationDeliveryHook.class).values())
+        assertThat(registeredTasks).contains(ForecastScheduler.class.getName() + ".pickUp");
+        assertThat(applicationContext.getBeansOfType(ObservationChangeListener.class).values())
             .anySatisfy(hook -> assertThat(AopUtils.getTargetClass(hook))
-                .isEqualTo(ForecastTrigger.class));
+                .isEqualTo(ForecastScheduler.class));
     }
 }

@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>하루 한도는 10,000회이고 두 노선을 90초 간격으로 수집한 실측 호출량은 8,194회다.
  * 한도의 82퍼센트를 사용하므로 호출을 보낸 뒤 집계해서는 초과를 막기 어렵다.
  *
- * <p>기존 트랜잭션이 있으면 참여한다. ObservationBatchLedger가 여는 트랜잭션에서 예약과
+ * <p>기존 트랜잭션이 있으면 참여한다. CollectionBatchService가 여는 트랜잭션에서 예약과
  * batch를 함께 커밋해야 batch INSERT 실패로 예약만 남는 일을 막을 수 있다.
  * 노선 조회처럼 호출자 트랜잭션이 없으면 예약만 짧게 커밋한 뒤 상류를 호출한다.
  *

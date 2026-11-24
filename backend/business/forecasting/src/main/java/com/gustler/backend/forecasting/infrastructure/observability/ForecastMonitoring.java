@@ -4,7 +4,7 @@ import com.gustler.backend.diagnostics.WorkerOperationLog;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
 import com.gustler.backend.forecasting.api.forecast.ForecastClosed;
 import com.gustler.backend.forecasting.application.forecast.RunForecastsService;
-import com.gustler.backend.observations.api.CollectionTiming;
+import com.gustler.backend.observations.api.CollectionSchedule;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -81,7 +81,7 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         catalog = new JdbcTemplate(dataSource);
         catalog.setQueryTimeout(1);
         Gauge.builder("salmonbus.collection.expected.interval.seconds",
-            () -> CollectionTiming.intervalSeconds(clock.instant())).register(registry);
+            () -> CollectionSchedule.intervalSeconds(clock.instant())).register(registry);
         Gauge.builder("salmonbus.monitoring.heartbeat.timestamp", heartbeat, AtomicLong::get).register(registry);
         Gauge.builder("salmonbus.accuracy.dropped.samples", accuracy, ForecastAccuracy::dropped).register(registry);
     }
@@ -160,10 +160,25 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
             return;
         }
         timers.computeIfAbsent(key,
-            ignored -> Timer.builder("salmonbus.worker.operation").tags("operation", operation, "outcome", outcome)
-                .serviceLevelObjectives(Duration.ofMillis(10), Duration.ofMillis(50), Duration.ofMillis(100),
-                    Duration.ofMillis(250), Duration.ofMillis(500), Duration.ofSeconds(1), Duration.ofSeconds(2),
-                    Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(60))
+            ignored -> Timer.builder("salmonbus.worker.operation").tags(
+                    "operation",
+                    operation,
+                    "outcome",
+                    outcome
+            )
+                .serviceLevelObjectives(
+                        Duration.ofMillis(10),
+                        Duration.ofMillis(50),
+                        Duration.ofMillis(100),
+                        Duration.ofMillis(250),
+                        Duration.ofMillis(500),
+                        Duration.ofSeconds(1),
+                        Duration.ofSeconds(2),
+                        Duration.ofSeconds(5),
+                        Duration.ofSeconds(10),
+                        Duration.ofSeconds(30),
+                        Duration.ofSeconds(60)
+                )
                 .register(registry))
             .record(nanos, TimeUnit.NANOSECONDS);
     }
@@ -252,22 +267,63 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
     private RouteState registerRoute(final long id, String name) {
         RouteState state = new RouteState(name);
         state.gauges = List.of(
-            Gauge.builder("salmonbus.collection.first.attempt.timestamp", state, s -> s.firstAttemptAt)
-                .tags("route_id", Long.toString(id), "route_name", name).register(registry),
-            Gauge.builder("salmonbus.collection.last.success.timestamp", state, s -> s.collectionAt)
-                .tags("route_id", Long.toString(id), "route_name", name).register(registry),
-            Gauge.builder("salmonbus.collection.usable.rows", state, s -> s.usableRows)
-                .tags("route_id", Long.toString(id), "route_name", name).register(registry),
-            Gauge.builder("salmonbus.forecast.pending.age.seconds", state, s -> s.pendingAge)
-                .tags("route_id", Long.toString(id), "route_name", name).register(registry),
-            Gauge.builder("salmonbus.forecast.pending.checked.timestamp", state, s -> s.pendingCheckedAt)
-                .tags("route_id", Long.toString(id), "route_name", name).register(registry),
-            Gauge.builder("salmonbus.forecast.last.commit.timestamp", state, s -> s.committedAt)
-                .tags("route_id", Long.toString(id), "route_name", name).register(registry),
-            Gauge.builder("salmonbus.forecast.last.nonempty.timestamp", state, s -> s.nonemptyAt)
-                .tags("route_id", Long.toString(id), "route_name", name).register(registry),
-            Gauge.builder("salmonbus.forecast.last.input.timestamp", state, s -> s.observedAt)
-                .tags("route_id", Long.toString(id), "route_name", name).register(registry));
+                Gauge.builder("salmonbus.collection.first.attempt.timestamp", state, s -> s.firstAttemptAt)
+                    .tags(
+                            "route_id",
+                            Long.toString(id),
+                            "route_name",
+                            name
+                    ).register(registry),
+                Gauge.builder("salmonbus.collection.last.success.timestamp", state, s -> s.collectionAt)
+                    .tags(
+                            "route_id",
+                            Long.toString(id),
+                            "route_name",
+                            name
+                    ).register(registry),
+                Gauge.builder("salmonbus.collection.usable.rows", state, s -> s.usableRows)
+                    .tags(
+                            "route_id",
+                            Long.toString(id),
+                            "route_name",
+                            name
+                    ).register(registry),
+                Gauge.builder("salmonbus.forecast.pending.age.seconds", state, s -> s.pendingAge)
+                    .tags(
+                            "route_id",
+                            Long.toString(id),
+                            "route_name",
+                            name
+                    ).register(registry),
+                Gauge.builder("salmonbus.forecast.pending.checked.timestamp", state, s -> s.pendingCheckedAt)
+                    .tags(
+                            "route_id",
+                            Long.toString(id),
+                            "route_name",
+                            name
+                    ).register(registry),
+                Gauge.builder("salmonbus.forecast.last.commit.timestamp", state, s -> s.committedAt)
+                    .tags(
+                            "route_id",
+                            Long.toString(id),
+                            "route_name",
+                            name
+                    ).register(registry),
+                Gauge.builder("salmonbus.forecast.last.nonempty.timestamp", state, s -> s.nonemptyAt)
+                    .tags(
+                            "route_id",
+                            Long.toString(id),
+                            "route_name",
+                            name
+                    ).register(registry),
+                Gauge.builder("salmonbus.forecast.last.input.timestamp", state, s -> s.observedAt)
+                    .tags(
+                            "route_id",
+                            Long.toString(id),
+                            "route_name",
+                            name
+                    ).register(registry)
+        );
         return state;
     }
 
@@ -284,11 +340,25 @@ public class ForecastMonitoring implements ForecastTelemetry, WorkerOperationLog
         StopCatalog names = stopCatalog(snapshot.keySet());
         snapshot.forEach((key, totals) -> {
             StopLabel stop = names.stop(key.routeVersionId(), key.stopOrder());
-            LOGGER.info(ACCURACY_LOG_FORMAT, key.routeId(), key.routeVersionId(), key.stopOrder(),
-                quote(names.routeName(key.routeVersionId())), quote(stop.name()), quote(stop.stopId()),
-                quote(stop.direction()), key.modelDeploymentId(), key.distance(), totals.completed(),
-                totals.maeCount(), totals.absoluteErrorSum(), totals.probabilityCount(), totals.brierSum(),
-                totals.predictedFullSum(), totals.actualFullCount());
+            LOGGER.info(
+                    ACCURACY_LOG_FORMAT,
+                    key.routeId(),
+                    key.routeVersionId(),
+                    key.stopOrder(),
+                    quote(names.routeName(key.routeVersionId())),
+                    quote(stop.name()),
+                    quote(stop.stopId()),
+                    quote(stop.direction()),
+                    key.modelDeploymentId(),
+                    key.distance(),
+                    totals.completed(),
+                    totals.maeCount(),
+                    totals.absoluteErrorSum(),
+                    totals.probabilityCount(),
+                    totals.brierSum(),
+                    totals.predictedFullSum(),
+                    totals.actualFullCount()
+            );
         });
     }
 

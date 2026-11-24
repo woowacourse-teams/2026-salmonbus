@@ -30,6 +30,7 @@ public record GbisProperties(
     Map<String, Integer> limits,
     Map<String, String> namedKeys
 ) {
+
     private static final String BROKEN_PERCENT =
         "%s 의 퍼센트 인코딩이 깨졌다. 공공데이터포털에서 받은 값을 그대로 넣어라";
 
@@ -40,16 +41,26 @@ public record GbisProperties(
         if (baseUrl == null || baseUrl.isBlank()) {
             throw new IllegalStateException("gbis.base-url must not be blank");
         }
+
         serviceKey = decodedIfPresent("gbis.service-key", serviceKey);
         serviceKeyB = decodedIfPresent("gbis.service-key-b", serviceKeyB);
         serviceKeyC = decodedIfPresent("gbis.service-key-c", serviceKeyC);
         serviceKeyD = decodedIfPresent("gbis.service-key-d", serviceKeyD);
         namedKeys = copyNamedKeys(namedKeys);
-        keys = keysOf(serviceKey, serviceKeyB, serviceKeyC, serviceKeyD, namedKeys, keys);
+        keys = keysOf(
+                serviceKey,
+                serviceKeyB,
+                serviceKeyC,
+                serviceKeyD,
+                namedKeys,
+                keys
+        );
         serviceKey = keys.get(GbisKey.PRIMARY);
+
         if (dailyLimit <= 0) {
             throw new IllegalStateException("gbis.daily-limit must be positive");
         }
+
         limits = limitsOf(keys, limits);
     }
 
@@ -63,7 +74,17 @@ public record GbisProperties(
         final int dailyLimit,
         Map<String, Integer> limits
     ) {
-        this(baseUrl, serviceKey, serviceKeyB, serviceKeyC, serviceKeyD, keys, dailyLimit, limits, Map.of());
+        this(
+                baseUrl,
+                serviceKey,
+                serviceKeyB,
+                serviceKeyC,
+                serviceKeyD,
+                keys,
+                dailyLimit,
+                limits,
+                Map.of()
+        );
     }
 
     public GbisProperties(
@@ -75,7 +96,16 @@ public record GbisProperties(
         Map<String, String> keys,
         final int dailyLimit
     ) {
-        this(baseUrl, serviceKey, serviceKeyB, serviceKeyC, serviceKeyD, keys, dailyLimit, Map.of());
+        this(
+                baseUrl,
+                serviceKey,
+                serviceKeyB,
+                serviceKeyC,
+                serviceKeyD,
+                keys,
+                dailyLimit,
+                Map.of()
+        );
     }
 
     public GbisProperties(
@@ -86,20 +116,32 @@ public record GbisProperties(
         String serviceKeyD,
         final int dailyLimit
     ) {
-        this(baseUrl, serviceKey, serviceKeyB, serviceKeyC, serviceKeyD, Map.of(), dailyLimit, Map.of());
+        this(
+                baseUrl,
+                serviceKey,
+                serviceKeyB,
+                serviceKeyC,
+                serviceKeyD,
+                Map.of(),
+                dailyLimit,
+                Map.of()
+        );
     }
 
-    public GbisProperties(
-        String baseUrl,
-        String serviceKey,
-        final int dailyLimit
-    ) {
-        this(baseUrl, serviceKey, null, null, null, Map.of(), dailyLimit, Map.of());
+    public GbisProperties(String baseUrl, String serviceKey, final int dailyLimit) {
+        this(
+                baseUrl,
+                serviceKey,
+                null,
+                null,
+                null,
+                Map.of(),
+                dailyLimit,
+                Map.of()
+        );
     }
 
-    public int dailyLimitOf(
-        String alias
-    ) {
+    public int dailyLimitOf(String alias) {
         return limits.getOrDefault(alias, dailyLimit);
     }
 
@@ -123,6 +165,7 @@ public record GbisProperties(
         putIfPresent(merged, "b", serviceKeyB);
         putIfPresent(merged, "c", serviceKeyC);
         putIfPresent(merged, "d", serviceKeyD);
+
         new TreeMap<>(named).forEach((alias, value) -> {
             String variable = "GBIS_SERVICE_KEY_" + alias.toUpperCase(Locale.ROOT);
             if (!ALIAS.matcher(alias).matches()) {
@@ -137,6 +180,7 @@ public record GbisProperties(
             }
             merged.put(alias, decodedOnce(variable, value));
         });
+
         Map<String, String> aliased = sortedOrEmpty(declared);
         aliased.forEach((alias, value) -> {
             String property = "gbis.keys." + alias;
@@ -152,21 +196,22 @@ public record GbisProperties(
             }
             merged.put(alias, decodedOnce(property, value));
         });
+
         if (!merged.containsKey(GbisKey.PRIMARY)) {
             throw new IllegalStateException(
             "gbis.service-key must not be blank. Set the GBIS_SERVICE_KEY or GBIS_KEYS_A environment variable");
         }
+
         rejectDuplicateKeys(merged);
+
         Map<String, String> ordered = new LinkedHashMap<>();
         ordered.put(GbisKey.PRIMARY, merged.remove(GbisKey.PRIMARY));
         ordered.putAll(merged);
+
         return Collections.unmodifiableMap(ordered);
     }
 
-    private static Map<String, Integer> limitsOf(
-        Map<String, String> keys,
-        Map<String, Integer> limits
-    ) {
+    private static Map<String, Integer> limitsOf(Map<String, String> keys, Map<String, Integer> limits) {
         Map<String, Integer> declared = sortedOrEmpty(limits);
         declared.forEach((alias, limit) -> {
             if (!keys.containsKey(alias)) {
@@ -179,19 +224,13 @@ public record GbisProperties(
         return Collections.unmodifiableMap(declared);
     }
 
-    private static void putIfPresent(
-        Map<String, String> keys,
-        String alias,
-        String serviceKey
-    ) {
+    private static void putIfPresent(Map<String, String> keys, String alias, String serviceKey) {
         if (serviceKey != null) {
             keys.put(alias, serviceKey);
         }
     }
 
-    private static void rejectDuplicateKeys(
-        Map<String, String> keys
-    ) {
+    private static void rejectDuplicateKeys(Map<String, String> keys) {
         Map<String, List<String>> aliasesByKey = new LinkedHashMap<>();
         keys.forEach((alias, serviceKey) ->
             aliasesByKey.computeIfAbsent(serviceKey, ignored -> new ArrayList<>()).add(alias));
@@ -205,10 +244,7 @@ public record GbisProperties(
             });
     }
 
-    private static String decodedIfPresent(
-        String property,
-        String serviceKey
-    ) {
+    private static String decodedIfPresent(String property, String serviceKey) {
         if (serviceKey == null || serviceKey.isBlank()) {
             return null;
         }
@@ -225,13 +261,10 @@ public record GbisProperties(
      * {@code UriUtils} 의 예외 메시지에는 해석하지 못한 위치부터 끝까지가 들어 있어 인증키 뒷부분이 로그에 노출된다.
      * 그래서 원인 예외를 첨부하지 않고 새 예외를 던진다.
      */
-    private static String decodedOnce(
-        String property,
-        String serviceKey
-    ) {
+    private static String decodedOnce(String property, String serviceKey) {
         try {
             return UriUtils.decode(serviceKey, StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException decodingFailure) {
             throw new IllegalStateException(BROKEN_PERCENT.formatted(property));
         }
     }

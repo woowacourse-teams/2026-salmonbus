@@ -16,7 +16,7 @@ import com.gustler.backend.forecasting.domain.deployment.ForecastRuntime;
 import com.gustler.backend.forecasting.infrastructure.capacity.VehicleCapacityCache;
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse;
-import com.gustler.backend.observations.application.ObservationBatchLedger;
+import com.gustler.backend.observations.application.CollectionBatchService;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
 import com.gustler.backend.support.PostgresTestContainer;
@@ -69,7 +69,7 @@ class ObservationCapacitySignalIntegrationTest {
     private static final List<String> VEHICLES = List.of("capacity-commit-test", "capacity-rollback-test");
 
     @Autowired
-    private ObservationBatchLedger ledger;
+    private CollectionBatchService ledger;
 
     @Autowired
     private JdbcClient jdbc;
@@ -150,8 +150,10 @@ class ObservationCapacitySignalIntegrationTest {
 
         // then
         verify(forecasts, timeout(SIGNAL_DEADLINE.toMillis())).batchStored(batchId, routeVersionId);
-        assertThat(seenAtSignal.get()).isEqualTo(45);
-        assertThat(readCapacity(vehicleId)).contains(45);
+        assertSoftly(checks -> {
+            checks.assertThat(seenAtSignal.get()).isEqualTo(45);
+            checks.assertThat(readCapacity(vehicleId)).contains(45);
+        });
         final long nextBatchId = collectWithSeats(vehicleId, 44);
         assertThat(readCapacity(vehicleId)).contains(45);
         verify(forecasts, timeout(SIGNAL_DEADLINE.toMillis())).batchStored(nextBatchId, routeVersionId);
@@ -170,17 +172,30 @@ class ObservationCapacitySignalIntegrationTest {
         });
 
         // then
-        assertThat(readCapacity(vehicleId)).isEmpty();
-        assertThat(vehicleCapacities.find("GBIS", List.of(vehicleId))).isEmpty();
+        assertSoftly(checks -> {
+            checks.assertThat(readCapacity(vehicleId)).isEmpty();
+            checks.assertThat(vehicleCapacities.find("GBIS", List.of(vehicleId))).isEmpty();
+        });
     }
 
     private long collectWithSeats(String vehicleId, final int seats) {
         OffsetDateTime at = OffsetDateTime.now(SEOUL).truncatedTo(ChronoUnit.MILLIS);
-        final long batchId = ledger.reserve(new CollectionPlan(routeVersionId, at, UUID.randomUUID().toString()), at)
+        final long batchId = ledger.prepare(new CollectionPlan(routeVersionId, at, UUID.randomUUID().toString()), at)
             .batchId();
-        ledger.markDispatching(batchId, at, at, "a");
-        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation("경기70아0001", vehicleId, 0,
-            SOURCE_ROUTE, 11, "stop-one", 1, 2, seats, 3, 1);
+
+        BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation(
+                "경기70아0001",
+                vehicleId,
+                0,
+                SOURCE_ROUTE,
+                11,
+                "stop-one",
+                1,
+                2,
+                seats,
+                3,
+                1
+        );
         ledger.conclude(batchId,
             received -> GbisObservationMapper.response(new GbisLocationResult.Success(
                 at.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.S")), List.of(bus)), received),

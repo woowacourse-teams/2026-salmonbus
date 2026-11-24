@@ -3,13 +3,13 @@ package com.gustler.backend.worker.startup;
 import com.gustler.backend.forecasting.api.forecast.RunForecasts;
 import com.gustler.backend.forecasting.api.model.LoadConfiguredModel;
 import com.gustler.backend.forecasting.api.model.LoadConfiguredModelCommand;
-import com.gustler.backend.forecasting.api.model.ModelLoadResult;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Activated;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.IdentityMismatch;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.NotConfigured;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Promoted;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Rejected;
 import com.gustler.backend.forecasting.api.model.ModelLoadResult.Reloaded;
+import com.gustler.backend.forecasting.api.model.ModelLoadResult;
 import com.gustler.backend.worker.configuration.ModelBundleProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
  * Worker 기동 후 설정된 모델의 적재를 요청하고, 예보가 켜져 있으면 그 뒤에 첫 줍기를 돌린다.
  *
  * <p>줍기는 활성 모델이 있어야 노선 판본과 실행 줄의 짝을 기억하고, 수집 신호는 짝을 아는 판본만 처리한다. 그래서 첫 줍기가 모델보다
- * 먼저 돌면 다음 줍기 주기까지 예보가 나오지 않는다. 줍기의 주기 실행은 한 주기 뒤에 시작한다({@code ForecastTrigger}).
+ * 먼저 돌면 다음 줍기 주기까지 예보가 나오지 않는다. 줍기의 주기 실행은 한 주기 뒤에 시작한다({@code ForecastScheduler}).
  */
 @Component
 public class BundleStartupLoader {
