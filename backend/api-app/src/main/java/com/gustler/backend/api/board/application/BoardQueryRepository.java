@@ -2,6 +2,7 @@ package com.gustler.backend.api.board.application;
 
 import com.gustler.backend.api.board.domain.BoardStop;
 import com.gustler.backend.api.route.RouteId;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -92,4 +93,12 @@ public interface BoardQueryRepository {
         });
         return vehicles;
     }
+
+    /**
+     * 지금 트랜잭션에서 뒤따르는 조회 문장마다 저장소가 지킬 시간 제한을 건다. 문장 하나가 잠금 대기를 포함해 {@code limit}을
+     * 넘으면 그 문장은 다른 조회 실패와 같게 실패한다. 트랜잭션이 끝나면 제한도 사라진다.
+     *
+     * @param limit 1ms 이상
+     */
+    void limitStatementTime(Duration limit);
 }

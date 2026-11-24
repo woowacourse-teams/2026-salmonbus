@@ -16,6 +16,7 @@ import com.gustler.backend.api.route.RouteId;
 import com.gustler.backend.api.route.RouteNotFoundException;
 import com.gustler.backend.api.route.domain.Route;
 import com.gustler.backend.api.route.domain.RouteStatus;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -146,6 +147,28 @@ public class BoardQueryService {
         }
         assembleMissed(missed, results);
         return orderedAs(routeIds, results);
+    }
+
+    /**
+     * 읽기 예산 없이 {@link #readBoards(Collection, BoardReadDeadline)}와 같게 읽되, 조회 문장마다 서버가 지킬 시간 제한을 먼저 건다.
+     *
+     * <p>제한은 이 읽기의 트랜잭션에만 걸리고 트랜잭션이 끝나면 사라진다. 문장 하나가 잠금 대기를 포함해 {@code statementLimit}을
+     * 넘으면 서버가 그 문장을 끝내고, 이 읽기는 다른 저장소 실패와 같은 예외로 끝난다. 읽기 전체의 상한은 아니다.
+     *
+     * <p>이미 열린 트랜잭션 안에서 부르면 안 된다. 그 트랜잭션에 참여해 이 클래스의 읽기 전용·반복 읽기 설정을 잃고, 제한은 그
+     * 트랜잭션이 끝날 때까지 뒤 문장에도 남는다.
+     *
+     * @param statementLimit 1ms 이상. PostgreSQL 은 0 을 "제한 없음"으로 읽는다
+     * @throws IllegalArgumentException {@code statementLimit} 이 1ms 보다 짧을 때. 저장소를 부르기 전에 던진다
+     */
+    public Map<String, BoardBatchRead> readBoardsWithStatementLimit(
+        Collection<String> routeIds, Duration statementLimit) {
+        // 저장소 안에서 거르면 @Repository 의 예외 변환을 거쳐 서비스 불가로 바뀌므로 여기서 거른다.
+        if (statementLimit.toMillis() < 1) {
+            throw new IllegalArgumentException("문장 시간 제한은 1ms 이상이어야 한다");
+        }
+        boardQueryRepository.limitStatementTime(statementLimit);
+        return readBoards(routeIds, BoardReadDeadline.none());
     }
 
     private void assembleMissed(Map<String, BoardSnapshot> missed, Map<String, BoardBatchRead> results) {
