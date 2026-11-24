@@ -34,14 +34,23 @@ public record SeatForecastResult(
         final double afterAlightingSeats,
         final double departureFullProbability
     ) {
-        return new SeatForecastResult(afterAlightingSeats, departureFullProbability, ALIGHTING_AWARE_SEAT_TARGET,
-            ALIGHTING_AWARE_PROBABILITY_TARGET);
+        return new SeatForecastResult(
+                afterAlightingSeats,
+                departureFullProbability,
+                ALIGHTING_AWARE_SEAT_TARGET,
+                ALIGHTING_AWARE_PROBABILITY_TARGET
+        );
     }
 
     private static boolean hasValidNumbers(final double expectedSeats, final double fullChance) {
-        if (!Double.isFinite(expectedSeats) || expectedSeats < 0 || expectedSeats > MAXIMUM_SEATS) {
-            return false;
-        }
+        return hasValidExpectedSeats(expectedSeats) && hasValidFullChance(fullChance);
+    }
+
+    private static boolean hasValidExpectedSeats(final double expectedSeats) {
+        return Double.isFinite(expectedSeats) && expectedSeats >= 0 && expectedSeats <= MAXIMUM_SEATS;
+    }
+
+    private static boolean hasValidFullChance(final double fullChance) {
         return Double.isFinite(fullChance) && fullChance >= 0 && fullChance <= 1;
     }
 }

@@ -19,6 +19,7 @@ public record ForecastBatch(
     Integer storedRows,
     List<ForecastObservationRow> rows
 ) {
+
     /** 수신 뒤 이 시간 안에 착수해야 확정 입력이다. */
     public static final Duration MAX_CONFIRMATION_DELAY = Duration.ofSeconds(90);
 
@@ -51,8 +52,16 @@ public record ForecastBatch(
      * @return 나머지 값이 같은 배치
      */
     public ForecastBatch withConfirmedAt(Instant at) {
-        return new ForecastBatch(observationBatchId, routeVersionId, receivedAt, at, ingestionOrigin, outcome,
-            storedRows, rows);
+        return new ForecastBatch(
+                observationBatchId,
+                routeVersionId,
+                receivedAt,
+                at,
+                ingestionOrigin,
+                outcome,
+                storedRows,
+                rows
+        );
     }
 
     /** 저장 줄 수와 실제로 읽은 줄 수가 같은지다. */

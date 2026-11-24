@@ -38,6 +38,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ObservationIntegrationTest
 @Import(CollectionBatchServiceTest.QualityFailureConfiguration.class)
 class CollectionBatchServiceTest {
+
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
     private static final String CONTENT_DIGEST = "0".repeat(64);
@@ -70,9 +71,10 @@ class CollectionBatchServiceTest {
     private PlatformTransactionManager transactionManager;
 
     @Autowired
-    private CollectionBatchServiceTest.FailingQualityHook failingQualityHook;
+    private FailingQualityHook failingQualityHook;
 
     private long routeVersionId;
+    private boolean recordingWrites;
 
     @BeforeEach
     void 노선과_판본을_먼저_저장한다() {
@@ -81,6 +83,7 @@ class CollectionBatchServiceTest {
 
     @AfterEach
     void 쌓인_것을_비운다() {
+        stopRecordingWrites();
         failingQualityHook.fail = false;
         failingQualityHook.afterCalls = 0;
         jdbcClient.sql("""
@@ -457,12 +460,17 @@ class CollectionBatchServiceTest {
                 3,
                 1
         );
+        recordWrites();
         ledger.conclude(batchId, reply(new GbisLocationResult.Success(QUERY_TIME, List.of(bus))), RESPONSE_RECEIVED_AT);
+
+        assertThat(recordedWrites()).containsExactly("INSERT:DISPATCHING:1", "UPDATE:SUCCESS_ROWS:1");
+        jdbcClient.sql("TRUNCATE test_batch_write_order RESTART IDENTITY").update();
 
         // when
         ledger.prepare(plan(), RESERVED_AT);
 
         // then
+        assertThat(recordedWrites()).containsExactly("DELETE:SUCCESS_ROWS:1", "UPDATE:DISPATCHING:2");
         assertThat(jdbcClient.sql("SELECT count(*) FROM vehicle_observation WHERE observation_batch_id = ?")
             .param(batchId).query(Integer.class).single()).isZero();
     }
@@ -520,6 +528,69 @@ class CollectionBatchServiceTest {
                 "SELECT count(*) FROM information_schema.tables WHERE table_name='trip_quality_rebuild' AND CAST(? AS bigint)>0")
                 .param(routeVersionId).query(Integer.class).single()).isZero();
         });
+    }
+
+    /** 실제 SQL 실행 시점에 보이는 배치 상태를 남긴다. 이 테스트의 격리 DB에서만 생성한다. */
+    private void recordWrites() {
+        recordingWrites = true;
+        jdbcClient.sql("""
+            CREATE TABLE test_batch_write_order (
+                sequence bigint GENERATED ALWAYS AS IDENTITY,
+                operation text,
+                outcome text,
+                attempt_number integer
+            )
+            """).update();
+        jdbcClient.sql("""
+            CREATE FUNCTION test_record_observation_write() RETURNS trigger LANGUAGE plpgsql AS $$
+            DECLARE batch_id bigint;
+            BEGIN
+                IF TG_OP = 'DELETE' THEN
+                    batch_id := OLD.observation_batch_id;
+                ELSE
+                    batch_id := NEW.observation_batch_id;
+                END IF;
+                INSERT INTO test_batch_write_order (operation, outcome, attempt_number)
+                    SELECT TG_OP, outcome, attempt_number FROM observation_batch WHERE id = batch_id;
+                RETURN NULL;
+            END $$
+            """).update();
+        jdbcClient.sql("""
+            CREATE TRIGGER test_record_observation_write AFTER INSERT OR DELETE ON vehicle_observation
+                FOR EACH ROW EXECUTE FUNCTION test_record_observation_write()
+            """).update();
+        jdbcClient.sql("""
+            CREATE FUNCTION test_record_batch_write() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+                INSERT INTO test_batch_write_order (operation, outcome, attempt_number)
+                    VALUES (TG_OP, NEW.outcome, NEW.attempt_number);
+                RETURN NULL;
+            END $$
+            """).update();
+        jdbcClient.sql("""
+            CREATE TRIGGER test_record_batch_write AFTER UPDATE ON observation_batch
+                FOR EACH ROW EXECUTE FUNCTION test_record_batch_write()
+            """).update();
+    }
+
+    private List<String> recordedWrites() {
+        return jdbcClient.sql("""
+            SELECT operation || ':' || outcome || ':' || attempt_number
+            FROM test_batch_write_order ORDER BY sequence
+            """).query(String.class).list();
+    }
+
+    private void stopRecordingWrites() {
+        if (!recordingWrites) {
+            return;
+        }
+
+        jdbcClient.sql("DROP TRIGGER IF EXISTS test_record_observation_write ON vehicle_observation").update();
+        jdbcClient.sql("DROP TRIGGER IF EXISTS test_record_batch_write ON observation_batch").update();
+        jdbcClient.sql("DROP FUNCTION IF EXISTS test_record_observation_write()").update();
+        jdbcClient.sql("DROP FUNCTION IF EXISTS test_record_batch_write()").update();
+        jdbcClient.sql("DROP TABLE IF EXISTS test_batch_write_order").update();
+        recordingWrites = false;
     }
 
     private CollectionPlan plan() {
@@ -715,8 +786,8 @@ class CollectionBatchServiceTest {
     @TestConfiguration(proxyBeanMethods = false)
     static class QualityFailureConfiguration {
         @Bean
-        CollectionBatchServiceTest.FailingQualityHook failingQualityHook() {
-            return new CollectionBatchServiceTest.FailingQualityHook();
+        FailingQualityHook failingQualityHook() {
+            return new FailingQualityHook();
         }
     }
 

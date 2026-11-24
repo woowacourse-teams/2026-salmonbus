@@ -3,10 +3,8 @@ package com.gustler.backend.forecasting.domain.model;
 /**
  * 현재 관측과 예보 대상 방문을 연결해 정류장 거리와 입력 좌석을 제공한다.
  */
-public record VehicleStopTarget(
-    ObservedVehicle observation,
-    RouteStop targetStop
-) {
+public record VehicleStopTarget(ObservedVehicle observation, RouteStop targetStop) {
+
     public VehicleStopTarget {
         if (!observation.hasKnownSeats()) {
             throw new IllegalArgumentException("잔여석을 모르는 관측으로는 예보하지 않는다: " + observation);
@@ -35,10 +33,7 @@ public record VehicleStopTarget(
         return observation.remainingSeats();
     }
 
-    private static ForecastDistance distanceBetween(
-        ObservedVehicle observation,
-        RouteStop targetStop
-    ) {
+    private static ForecastDistance distanceBetween(ObservedVehicle observation, RouteStop targetStop) {
         return new ForecastDistance(targetStop.stopOrder() - observation.passedStopOrder());
     }
 }

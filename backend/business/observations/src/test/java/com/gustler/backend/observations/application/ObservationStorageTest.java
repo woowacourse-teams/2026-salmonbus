@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse;
-import com.gustler.backend.observations.domain.CollectionBatch;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.ObservationRows;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
@@ -27,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ObservationIntegrationTest
 @Transactional
 class ObservationStorageTest {
+
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
 
@@ -93,8 +93,7 @@ class ObservationStorageTest {
                 TIMETABLE_3330,
                 SCHEDULED_AT
         );
-        batchId = batches.save(CollectionBatch.start(
-            new CollectionPlan(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY), true));
+        batchId = batches.prepare(new CollectionPlan(routeVersionId, SCHEDULED_AT, ATTEMPT_KEY), true).batchId();
     }
 
     @Test
@@ -340,7 +339,7 @@ class ObservationStorageTest {
             busWithSeats(SEATS_43)));
 
         // then
-        assertThat(storedSeatsOf(batchId)).isEqualTo(new ObservationStorageTest.StoredSeats(SEATS_43, null));
+        assertThat(storedSeatsOf(batchId)).isEqualTo(new StoredSeats(SEATS_43, null));
     }
 
     @Test
@@ -350,7 +349,7 @@ class ObservationStorageTest {
             busWithSeats(SEATS_REPORTED_UNKNOWN)));
 
         // then
-        assertThat(storedSeatsOf(batchId)).isEqualTo(new ObservationStorageTest.StoredSeats(null, "REPORTED_UNKNOWN"));
+        assertThat(storedSeatsOf(batchId)).isEqualTo(new StoredSeats(null, "REPORTED_UNKNOWN"));
     }
 
     @Test
@@ -360,7 +359,7 @@ class ObservationStorageTest {
             busWithSeats(null)));
 
         // then
-        assertThat(storedSeatsOf(batchId)).isEqualTo(new ObservationStorageTest.StoredSeats(null, "NOT_REPORTED"));
+        assertThat(storedSeatsOf(batchId)).isEqualTo(new StoredSeats(null, "NOT_REPORTED"));
     }
 
     @Test
@@ -559,14 +558,14 @@ class ObservationStorageTest {
             .list();
     }
 
-    private ObservationStorageTest.StoredSeats storedSeatsOf(final long batchId) {
+    private StoredSeats storedSeatsOf(final long batchId) {
         entityManager.flush();
         return jdbcClient.sql("""
                 SELECT remaining_seats, seat_unknown_reason FROM vehicle_observation
                 WHERE observation_batch_id = ?
                 """)
             .param(batchId)
-            .query((rs, rowNumber) -> new ObservationStorageTest.StoredSeats(
+            .query((rs, rowNumber) -> new StoredSeats(
                 rs.getObject("remaining_seats", Integer.class),
                 rs.getString("seat_unknown_reason")))
             .single();

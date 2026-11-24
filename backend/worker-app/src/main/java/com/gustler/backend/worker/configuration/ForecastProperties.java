@@ -24,6 +24,7 @@ public record ForecastProperties(
     int batchLimit,
     @DefaultValue("2") int lanes
 ) {
+
     /**
      * 신선도 창의 상한.
      *
@@ -40,19 +41,13 @@ public record ForecastProperties(
         requirePositive("forecast.lanes", lanes);
     }
 
-    private static void requirePositive(
-        String name,
-        final int value
-    ) {
+    private static void requirePositive(String name, final int value) {
         if (value <= 0) {
             throw new IllegalStateException("%s 는 1 이상이어야 한다: %d".formatted(name, value));
         }
     }
 
-    private static void requirePositive(
-        String name,
-        Duration value
-    ) {
+    private static void requirePositive(String name, Duration value) {
         if (!isPositive(value)) {
             throw new IllegalStateException("%s 는 0보다 길어야 한다: %s".formatted(name, value));
         }
@@ -65,11 +60,7 @@ public record ForecastProperties(
         return !value.isZero();
     }
 
-    private static void requireAtMost(
-        String name,
-        Duration value,
-        Duration limit
-    ) {
+    private static void requireAtMost(String name, Duration value, Duration limit) {
         if (value.compareTo(limit) > 0) {
             throw new IllegalStateException("%s 는 %s 이하여야 한다: %s".formatted(name, limit, value));
         }

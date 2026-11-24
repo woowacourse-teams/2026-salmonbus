@@ -7,6 +7,7 @@ package com.gustler.backend.forecasting.api.forecast;
  * 예외를 던지지 않는다. 여러 번 불러도 배치는 한 번만 처리된다.
  */
 public interface RunForecasts {
+
     /**
      * 수집이 배치를 커밋했다고 알린다. 수집 트랜잭션의 커밋 뒤에 부른다. 예보는 알린 배치 하나가 아니라 그 노선 판본의 처리하지
      * 않은 배치를 수신 순서로 모두 처리한다. 노선 열쇠를 아직 모르는 판본이면 넣지 않고 다음 {@link #pickUp()}에 맡긴다(수집

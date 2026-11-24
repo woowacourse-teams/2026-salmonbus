@@ -52,7 +52,7 @@ class ServingBundleTest(unittest.TestCase):
         for name, expected in release["files"].items():
             self.assertEqual(MODULE.digest((self.output / name).read_bytes()), expected)
 
-    def test_historical_source_keeps_original_bytes_and_new_release_names(self):
+    def test_retired_source_identifier_is_rejected(self):
         original = self.manifest.replace(b'alighting-inference-bundle-v1', b'les-inference-bundle-v1')
         (self.source / 'manifest.json').write_bytes(original)
         for check in MODULE.CHECKS:
@@ -60,12 +60,46 @@ class ServingBundleTest(unittest.TestCase):
             receipt = json.loads(path.read_text())
             receipt['source_manifest_sha256'] = MODULE.digest(original)
             path.write_text(json.dumps(receipt))
-        MODULE.prepare(self.source, self.output, 'alighting-confirmed-test', self.receipts)
-        release = json.loads((self.output / 'manifest.json').read_text())
-        self.assertEqual(release['schema'], 'alighting-inference-bundle-v1')
-        self.assertEqual(release['runtime']['release_id'], 'alighting-confirmed-test')
+        with self.assertRaises(ValueError):
+            MODULE.prepare(self.source, self.output, 'alighting-confirmed-test', self.receipts)
+        self.assertFalse(self.output.exists())
         self.assertEqual((self.source / 'manifest.json').read_bytes(), original)
-        self.assertEqual((self.output / 'verification-source-manifest.json').read_bytes(), original)
+
+    def test_retired_manifest_identifiers_are_rejected(self):
+        for field, value in [('model', 'les-gate-base-and-pool'),
+                             ('input_profile', 'les-confirmed-closure-v2')]:
+            with self.subTest(field=field):
+                source = json.loads(self.manifest)
+                source[field] = value
+                original = json.dumps(source).encode()
+                (self.source / 'manifest.json').write_bytes(original)
+                for check in MODULE.CHECKS:
+                    path = self.receipts / f'verification-{check}.json'
+                    receipt = json.loads(path.read_text())
+                    receipt['source_manifest_sha256'] = MODULE.digest(original)
+                    path.write_text(json.dumps(receipt))
+                output = self.root / f'rejected-{field}'
+                with self.assertRaises(ValueError):
+                    MODULE.prepare(self.source, output, 'alighting-test', self.receipts)
+                self.assertFalse(output.exists())
+
+    def test_original_contract_cannot_hide_retired_statistics_profile(self):
+        path = self.source / 'statistics-3330.json'
+        statistics = json.loads(path.read_text())
+        statistics['input_profile'] = 'les-confirmed-closure-v2'
+        path.write_text(json.dumps(statistics))
+        source = json.loads(self.manifest)
+        source['files'][path.name] = MODULE.digest(path.read_bytes())
+        original = json.dumps(source).encode()
+        (self.source / 'manifest.json').write_bytes(original)
+        for check in MODULE.CHECKS:
+            receipt_path = self.receipts / f'verification-{check}.json'
+            receipt = json.loads(receipt_path.read_text())
+            receipt['source_manifest_sha256'] = MODULE.digest(original)
+            receipt_path.write_text(json.dumps(receipt))
+        with self.assertRaises(ValueError):
+            MODULE.prepare(self.source, self.output, 'alighting-test', self.receipts)
+        self.assertFalse(self.output.exists())
 
     def test_release_id_matches_database_length_limit(self):
         for length in (81, 120):

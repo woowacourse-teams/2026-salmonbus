@@ -2,10 +2,9 @@ package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.api.forecast.ForecastBatchEvents;
 import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
 import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
-import com.gustler.backend.forecasting.api.forecast.ObservationBatchSeen;
-import com.gustler.backend.forecasting.api.forecast.PassClosed;
 import com.gustler.backend.forecasting.application.deployment.ActiveForecastRuntimeResolver;
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
 import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
@@ -64,6 +63,7 @@ import org.springframework.transaction.PlatformTransactionManager;
  * 쓰기가 합류하므로 실패한 저장이 되돌려지지 않기 때문이다.
  */
 final class ForecastHarness {
+
     static final Instant EVENING = Instant.parse("2026-10-14T09:30:00Z");
     static final String REPLAY_FAILURE = "TEST_REPLAY_FAILURE";
     private static final String SOURCE_ROUTE_ID = "234001739";
@@ -102,21 +102,37 @@ final class ForecastHarness {
     ForecastHarness(Beans beans, final long seed, Duration length) {
         this.beans = beans;
         this.jdbc = beans.jdbc();
-        stream = ObservationStreamFixture.insert(jdbc, EVENING, length, Duration.ofSeconds(30), null, seed,
-            MODEL_ROUTE);
+        stream = ObservationStreamFixture.insert(
+                jdbc,
+                EVENING,
+                length,
+                Duration.ofSeconds(30),
+                null,
+                seed,
+                MODEL_ROUTE
+        );
         jdbc.sql("""
             SELECT id,input_confirmed_at,route_version_id,response_received_at,ingestion_origin,outcome
             FROM observation_batch WHERE route_version_id IN (:versions)
             """).param("versions", versions())
             .query(row -> {
                 intendedConfirmation.put(row.getLong(1), row.getObject(2, OffsetDateTime.class).toInstant());
-                meta.put(row.getLong(1), new Meta(row.getLong(3),
-                    row.getObject(4, OffsetDateTime.class).toInstant(), row.getString(5), row.getString(6)));
+                meta.put(row.getLong(1), new Meta(
+                        row.getLong(3),
+                        row.getObject(4, OffsetDateTime.class).toInstant(),
+                        row.getString(5),
+                        row.getString(6)
+                ));
             });
         jdbc.sql("UPDATE observation_batch SET input_confirmed_at=NULL WHERE route_version_id IN (:versions)")
             .param("versions", versions()).update();
         stream.stopsByVersion().forEach((version, stops) -> stopsByVersion.put(version,
-            new RouteStops(version, SOURCE_ROUTE_ID, stops.stops(), stops.routeName())));
+            new RouteStops(
+                    version,
+                    SOURCE_ROUTE_ID,
+                    stops.stops(),
+                    stops.routeName()
+            )));
         model = model(new Random(seed));
         runtime = activate(model);
         source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
@@ -129,10 +145,9 @@ final class ForecastHarness {
      * 예보 서비스를 새로 띄운다. 메모리의 노선 상태·줄에서 기다리던 일·지표가 모두 빈 채로 시작하므로 다시 뜬 것과 같다. 커밋한
      * 것으로 친 배치는 그대로다.
      *
-     * @param extendedWindow 되감은 상태가 모자랄 때 늘려 되감는 창
      * @param events 커밋 뒤 사건을 받을 뒤 단계
      */
-    void start(Duration window, Duration extendedWindow, ForecastEvents events) {
+    void start(Duration window, ForecastEvents events) {
         meters = new SimpleMeterRegistry();
         waitingTasks.clear();
         laneHeld = false;
@@ -142,20 +157,49 @@ final class ForecastHarness {
                 replayFailures--;
                 return ReplaySource.Read.failed(REPLAY_FAILURE);
             }
-            return source.read(statistics, from, through, throughBatchId);
+            return source.read(
+                    statistics,
+                    from,
+                    through,
+                    throughBatchId
+            );
         };
-        ForecastAssembly.Sources sources = new ForecastAssembly.Sources(replays, source, committed,
-            this::activeRuntime, this::versions, stopsByVersion::get);
+        ForecastAssembly.Sources sources = new ForecastAssembly.Sources(
+                replays,
+                source,
+                committed,
+                this::activeRuntime,
+                this::versions,
+                stopsByVersion::get
+        );
         ForecastAssembly.Settings settings = new ForecastAssembly.Settings(
-            new ForecastPolicy(Duration.ofMinutes(10), batchLimit), window, extendedWindow, false);
-        service = new ForecastAssembly(jdbc, beans.transactions(), clock, meters).forecast(new Lanes(), events,
-            sources, capacities, failingRecords(beans.records()), beans.passes(), settings);
+                new ForecastPolicy(Duration.ofMinutes(10), batchLimit),
+                window,
+                false
+        );
+        service = new ForecastAssembly(
+                jdbc,
+                beans.transactions(),
+                clock,
+                meters
+        ).forecast(
+                new Lanes(),
+                events,
+                sources,
+                capacities,
+                failingRecords(beans.records()),
+                beans.passes(),
+                settings
+        );
         clock.at = EVENING.plus(Duration.ofDays(2));
         service.pickUp();
     }
 
     void start() {
-        start(RouteStateReplayer.DEFAULT_WINDOW, RouteStateReplayer.DEFAULT_EXTENDED_WINDOW, new NoEvents());
+        start(
+            RouteStateReplayer.DEFAULT_WINDOW,
+            new NoEvents()
+        );
     }
 
     private boolean submit(String routeKey, Runnable task) {
@@ -209,9 +253,19 @@ final class ForecastHarness {
         stopsByVersion.replaceAll((version, stops) -> {
             List<RouteStop> changed = new ArrayList<>(stops.stops());
             RouteStop first = changed.getFirst();
-            changed.set(0, new RouteStop(first.routeVersionId(), first.stopOrder(), first.stopId() + "-moved",
-                first.boardingAllowed(), first.direction()));
-            return new RouteStops(version, stops.sourceRouteId(), changed, stops.routeName());
+            changed.set(0, new RouteStop(
+                    first.routeVersionId(),
+                    first.stopOrder(),
+                    first.stopId() + "-moved",
+                    first.boardingAllowed(),
+                    first.direction()
+            ));
+            return new RouteStops(
+                    version,
+                    stops.sourceRouteId(),
+                    changed,
+                    stops.routeName()
+            );
         });
     }
 
@@ -411,14 +465,46 @@ final class ForecastHarness {
 
     private AlightingAwareSeatForecastModel model(Random random) {
         AlightingAwareSeatPredictor predictor = new AlightingAwareSeatPredictor(
-            ForecastTestSupport.stumps(88, NumericTreeEnsemble.Kind.REGRESSION, new double[] {10}, random),
-            ForecastTestSupport.stumps(88, NumericTreeEnsemble.Kind.MULTICLASS, new double[] {0, 0, 0}, random),
-            ForecastTestSupport.stumps(80, NumericTreeEnsemble.Kind.BINARY, new double[] {0}, random), 1.3);
+                ForecastTestSupport.stumps(
+                        88,
+                        NumericTreeEnsemble.Kind.REGRESSION,
+                        new double[] {10},
+                        random
+                ),
+                ForecastTestSupport.stumps(
+                        88,
+                        NumericTreeEnsemble.Kind.MULTICLASS,
+                        new double[] {0, 0, 0},
+                        random
+                ),
+                ForecastTestSupport.stumps(
+                        80,
+                        NumericTreeEnsemble.Kind.BINARY,
+                        new double[] {0},
+                        random
+                ),
+                1.3
+        );
         Map<String, ExtendedAlightingPredictor> extension = Map.of(MODEL_ROUTE, new ExtendedAlightingPredictor(
-            ForecastTestSupport.stumps(6, NumericTreeEnsemble.Kind.REGRESSION, new double[] {8}, random),
-            ForecastTestSupport.stumps(6, NumericTreeEnsemble.Kind.BINARY, new double[] {0}, random)));
-        return new AlightingAwareSeatForecastModel(predictor, Map.of(MODEL_ROUTE, stream.statistics()),
-            Map.of(MODEL_ROUTE, evidence(stream.statistics())), ForecastTestSupport.digest(), extension);
+            ForecastTestSupport.stumps(
+                    6,
+                    NumericTreeEnsemble.Kind.REGRESSION,
+                    new double[] {8},
+                    random
+            ),
+            ForecastTestSupport.stumps(
+                    6,
+                    NumericTreeEnsemble.Kind.BINARY,
+                    new double[] {0},
+                    random
+            )));
+        return new AlightingAwareSeatForecastModel(
+                predictor,
+                Map.of(MODEL_ROUTE, stream.statistics()),
+                Map.of(MODEL_ROUTE, evidence(stream.statistics())),
+                ForecastTestSupport.digest(),
+                extension
+        );
     }
 
     /** 정류장마다 정답 계산이 읽는 근거(실정류장, 회차, 휴일, 시간 칸 계수, 정류장 계수)를 만든다. */
@@ -431,16 +517,28 @@ final class ForecastHarness {
             evidence.put(order, """
                 {"turn":%d,"realStopOrders":%s,"holidays":[],"extendedSettlement":{%s},
                  "alighting":{"stops":[{"stop":%d,"band":"morning",%s},{"stop":%d,"band":"evening",%s}]}}
-                """.formatted(statistics.turn(), statistics.realStopOrders(), cells, order, parameters, order,
-                parameters));
+                """.formatted(
+                        statistics.turn(),
+                        statistics.realStopOrders(),
+                        cells,
+                        order,
+                        parameters,
+                        order,
+                        parameters
+                ));
         }
         return evidence;
     }
 
     private RuntimeSnapshot activate(AlightingAwareSeatForecastModel selected) {
         String digest = selected.bundleDigest();
-        ModelRelease release = ModelRelease.alighting("reinforce-" + digest.substring(0, 8), digest,
-            EVENING.minusSeconds(86400).toString(), new SupportedForecastScope(List.of(MODEL_ROUTE)), selected);
+        ModelRelease release = ModelRelease.alighting(
+                "reinforce-" + digest.substring(0, 8),
+                digest,
+                EVENING.minusSeconds(86400).toString(),
+                new SupportedForecastScope(List.of(MODEL_ROUTE)),
+                selected
+        );
         LoadedModelRegistry registry = new LoadedModelRegistry();
         new BundleActivation(beans.deployments(), registry).activate(() -> release);
         return new ActiveForecastRuntimeResolver(beans.deployments(), registry).resolveActive().orElseThrow();
@@ -448,6 +546,7 @@ final class ForecastHarness {
 
     /** 넣은 일을 바로 실행하거나 붙잡아 두는 실행 줄이다. 닫히기 시작했는지는 시험이 정한다. */
     private final class Lanes implements ForecastLanes {
+
         @Override
         public boolean submit(String routeKey, Runnable task) {
             return ForecastHarness.this.submit(routeKey, task);
@@ -467,62 +566,48 @@ final class ForecastHarness {
         ForecastRecordStore records,
         StopPassStore passes
     ) {
+
     }
 
-    private record Meta(long version, Instant receivedAt, String origin, String outcome) {
+    private record Meta(
+        long version,
+        Instant receivedAt,
+        String origin,
+        String outcome
+    ) {
+
     }
 
     /** 사건을 받아 아무것도 하지 않는 뒤 단계다. */
     static final class NoEvents implements ForecastEvents {
-        @Override
-        public void batchSeen(ObservationBatchSeen seen) {
-        }
 
         @Override
-        public void forecastPublished(ForecastPublished published) {
-        }
-
-        @Override
-        public void passesClosed(List<PassClosed> passes) {
+        public void committed(ForecastBatchEvents batch) {
         }
     }
 
     /** 사건마다 두 뒤 단계에 차례로 넘긴다. */
     record BothEvents(ForecastEvents first, ForecastEvents second) implements ForecastEvents {
-        @Override
-        public void batchSeen(ObservationBatchSeen seen) {
-            first.batchSeen(seen);
-            second.batchSeen(seen);
-        }
 
         @Override
-        public void forecastPublished(ForecastPublished published) {
-            first.forecastPublished(published);
-            second.forecastPublished(published);
-        }
-
-        @Override
-        public void passesClosed(List<PassClosed> passes) {
-            first.passesClosed(passes);
-            second.passesClosed(passes);
+        public void committed(ForecastBatchEvents batch) {
+            first.committed(batch);
+            second.committed(batch);
         }
     }
 
     /** 뒤 단계가 받은 통과 사건을 받은 순서대로 적어 둔다. */
     static final class RecordedPasses implements ForecastEvents {
+
         final List<String> keys = new ArrayList<>();
 
         @Override
-        public void batchSeen(ObservationBatchSeen seen) {
-        }
-
-        @Override
-        public void forecastPublished(ForecastPublished published) {
-        }
-
-        @Override
-        public void passesClosed(List<PassClosed> passes) {
-            passes.forEach(pass -> keys.add(pass.tripStartObservationId() + ":" + pass.stopOrder()));
+        public void committed(ForecastBatchEvents batch) {
+            batch.events().stream()
+                .filter(ForecastBatchEvents.ClosedPasses.class::isInstance)
+                .map(ForecastBatchEvents.ClosedPasses.class::cast)
+                .flatMap(closed -> closed.passes().stream())
+                .forEach(pass -> keys.add(pass.tripStartObservationId() + ":" + pass.stopOrder()));
         }
     }
 }

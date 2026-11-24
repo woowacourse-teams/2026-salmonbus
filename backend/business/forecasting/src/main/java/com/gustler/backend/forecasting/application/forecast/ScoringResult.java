@@ -18,7 +18,13 @@ public record ScoringResult(
     List<ScoredForecast> scored,
     List<ClosedForecast> closed
 ) {
-    private static final ScoringResult EMPTY = new ScoringResult(List.of(), List.of(), List.of(), List.of());
+
+    private static final ScoringResult EMPTY = new ScoringResult(
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of()
+    );
 
     public ScoringResult {
         labels = List.copyOf(labels);
@@ -55,7 +61,12 @@ public record ScoringResult(
         mergedScored.addAll(other.scored);
         List<ClosedForecast> mergedClosed = new ArrayList<>(closed);
         mergedClosed.addAll(other.closed);
-        return new ScoringResult(mergedLabels, mergedUnresolved, mergedScored, mergedClosed);
+        return new ScoringResult(
+                mergedLabels,
+                mergedUnresolved,
+                mergedScored,
+                mergedClosed
+        );
     }
 
     private boolean carriesNothing() {

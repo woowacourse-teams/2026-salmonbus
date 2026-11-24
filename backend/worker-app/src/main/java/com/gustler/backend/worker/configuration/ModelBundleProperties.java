@@ -19,8 +19,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param promoteOnStart 활성 배포와 식별 정보가 달라도 기동할 때 적재할지. 켠 채로 두면 재기동마다 적재한다
  */
 @ConfigurationProperties("model.bundle")
-public record ModelBundleProperties(
-    String directory,
-    boolean promoteOnStart
-) {
+public record ModelBundleProperties(String directory, boolean promoteOnStart) {
+
 }

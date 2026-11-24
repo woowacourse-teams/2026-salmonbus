@@ -1,6 +1,6 @@
 package com.gustler.backend.worker.configuration;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
@@ -24,6 +24,7 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
  */
 @IntegrationTest
 class ForecastScheduleDefaultTest {
+
     @Autowired
     private ApplicationContext applicationContext;
 
@@ -68,7 +69,9 @@ class ForecastScheduleDefaultTest {
 
     @Test
     void 폐기한_통계와_당일_보정_스케줄은_등록하지_않는다() {
-        assertThat(applicationContext.containsBean("stopDemandPipelineJob")).isFalse();
-        assertThat(applicationContext.containsBean("sameDayOutcomesInitializationJob")).isFalse();
+        assertSoftly(softly -> {
+            softly.assertThat(applicationContext.containsBean("stopDemandPipelineJob")).isFalse();
+            softly.assertThat(applicationContext.containsBean("sameDayOutcomesInitializationJob")).isFalse();
+        });
     }
 }

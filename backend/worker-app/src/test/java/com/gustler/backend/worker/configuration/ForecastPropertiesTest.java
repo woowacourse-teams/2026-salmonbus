@@ -7,6 +7,7 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class ForecastPropertiesTest {
+
     private static final Duration INTERVAL = Duration.ofSeconds(10);
     private static final int BATCH_LIMIT = 20;
     private static final int LANES = 2;
@@ -14,13 +15,13 @@ class ForecastPropertiesTest {
     private static final Duration LONGEST_ALLOWED_STALENESS = ForecastProperties.MAX_STALENESS;
     private static final Duration TOO_LONG_STALENESS = LONGEST_ALLOWED_STALENESS.plusSeconds(1);
 
+    /** 신선도 창이 넓으면 큐가 오래된 관측으로 차서 방금 들어온 관측이 회차에서 빠질 수 있다. */
     @Test
     void 신선도_창이_한_시간을_넘으면_기동을_막는다() {
         // when
         Throwable caughtFailure = catchThrowable(() -> propertiesWith(TOO_LONG_STALENESS));
 
         // then
-        // 창이 넓어지면 큐가 오래된 관측부터 채워져 방금 들어온 관측이 회차에 포함되지 않는다.
         assertThat(caughtFailure)
             .isNotNull()
             .isInstanceOf(IllegalStateException.class)
@@ -52,7 +53,13 @@ class ForecastPropertiesTest {
     void 노선별_실행_줄_수가_1보다_작으면_기동을_막는다() {
         // when
         Throwable caughtFailure = catchThrowable(
-            () -> new ForecastProperties(true, INTERVAL, LONGEST_ALLOWED_STALENESS, BATCH_LIMIT, 0));
+            () -> new ForecastProperties(
+                    true,
+                    INTERVAL,
+                    LONGEST_ALLOWED_STALENESS,
+                    BATCH_LIMIT,
+                    0
+            ));
 
         // then
         assertThat(caughtFailure)
@@ -60,9 +67,13 @@ class ForecastPropertiesTest {
             .hasMessage("forecast.lanes 는 1 이상이어야 한다: 0");
     }
 
-    private static ForecastProperties propertiesWith(
-        Duration staleness
-    ) {
-        return new ForecastProperties(true, INTERVAL, staleness, BATCH_LIMIT, LANES);
+    private static ForecastProperties propertiesWith(Duration staleness) {
+        return new ForecastProperties(
+                true,
+                INTERVAL,
+                staleness,
+                BATCH_LIMIT,
+                LANES
+        );
     }
 }

@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
  * <ul>
  *   <li>같은 판본의 훑기가 줄에서 이미 기다리고 있으면 겹쳐 넣지 않는다. 기다림 표시는 훑기가 시작할 때 내리고 배치는 그 뒤에
  *       읽으므로, 도는 중에 커밋된 배치는 그 훑기가 읽었거나 새로 넣은 다음 훑기가 읽는다.</li>
- *   <li>예외로 실패한 배치는 그 자리에서 한 번 다시 처리한다. 또 실패하면 그 훑기를 거기서 멈춰 뒤 배치가 앞지르지 않게 한다.
+ *   <li>예외로 실패하면 그 훑기를 거기서 멈춰 뒤 배치가 앞지르지 않게 한다.
  *       실패한 배치는 실행 줄이 없으므로 다음 훑기에서 다시 맨 앞이 된다.</li>
  *   <li>실패한 배치가 수신 뒤 90초를 넘겼으면 건너뛰고 뒤 배치를 처리한다. 그 뒤에 처리되면 {@code LATE}로 닫혀 이력에 들어가지
  *       않으므로 순서가 뒤집히지 않는다. 그래서 한 배치가 계속 실패해도 그 노선은 길어야 90초 밀린다.</li>
@@ -56,7 +56,7 @@ import org.slf4j.LoggerFactory;
  * <p>훑기는 먼저 모델 문맥을 정한다. 활성 모델이 없거나, 활성 판본이 아니거나, 모델이 노선을 지원하지 않거나, 확정 판본 통계가
  * 아니면 배치를 읽지 않고 끝낸다. 배치 하나는 이렇게 처리한다.
  * <ol>
- *   <li>배치를 줄과 함께 읽는다. 착수 시각이 이미 있으면(예보 실행 줄이나 배치의 {@code input_confirmed_at}) 처리한 배치라
+ *   <li>배치를 줄과 함께 읽는다. 예보 실행 기록의 착수 시각이 이미 있으면 처리한 배치라
  *       끝낸다.</li>
  *   <li>착수 시각을 이때 찍는다. 시계 값을 저장 자릿수(마이크로초)로 자른 값이다. 메모리의 노선 상태가 든 시각과 다시 뜬 뒤
  *       DB에서 되감아 읽는 시각이 같아야 하기 때문이다. 이 시각으로 90초 판정을 하고, 실행 줄에 적고, 노선 상태와 되감기의 순서로
@@ -68,7 +68,7 @@ import org.slf4j.LoggerFactory;
  * {@code INPUT_UNAVAILABLE} 실행 줄을 남겨 다시 읽지 않는다.
  *
  * <p>실행 줄이 닫히기 시작하면({@link ForecastLanes#closing()}) 훑기는 처리하던 배치 하나만 끝내고 멈춘다. 배치를 읽기만 하고 아직
- * 하나도 처리하지 않았으면 첫 배치 하나까지만 처리한다. 실패한 배치를 그 자리에서 다시 처리하지도 않는다. 남은 배치는 실행 줄이
+ * 하나도 처리하지 않았으면 첫 배치 하나까지만 처리한다. 남은 배치는 실행 줄이
  * 없으므로 다시 뜬 뒤 줍기가 찾는다.
  *
  * <p>진단 로그를 세 가지 남긴다. 정원을 모르거나 정원이 모델 범위 밖이라 예보에서 뺀 차량은 배치마다
@@ -79,13 +79,13 @@ import org.slf4j.LoggerFactory;
  * 근거({@code model_deployment.settlement_context})는 배치를 착수하기 전에 적는다.
  */
 public final class RunForecastsService implements RunForecasts {
+
     /** 배치 하나의 처리 시간을 남기는 {@link WorkerOperationLog} 작업 이름. */
     public static final String OPERATION = "forecast_batch";
     private static final Logger LOGGER = LoggerFactory.getLogger(RunForecastsService.class);
     private static final Set<String> SUCCESS = Set.of("SUCCESS_ROWS", "SUCCESS_EMPTY");
     private static final String UNSUPPORTED_PROFILE = "unsupported_profile";
     private static final String FAILED = "failed";
-    private static final String RETRIED = "retried";
     /** 실행 줄을 남기지 못한 처리의 결과 분류다. 그런 배치는 처리하지 않은 배치 조회에 다시 나온다. */
     private static final Set<String> LEFT_UNPROCESSED = Set.of(FAILED, "stale", "out_of_order");
 
@@ -150,14 +150,20 @@ public final class RunForecastsService implements RunForecasts {
         return processor.states();
     }
 
+    /** 커밋 후 호출되므로 작업 등록 오류를 수집 저장의 실패로 전파하지 않는다. */
     @Override
     public void batchStored(final long observationBatchId, final long routeVersionId) {
-        String key = laneKeys.get(routeVersionId);
-        if (key == null) {
+        String laneKey = laneKeys.get(routeVersionId);
+        if (laneKey == null) {
             metrics.unrouted();
             return;
         }
-        requestSweep(key, routeVersionId);
+        try {
+            requestSweep(laneKey, routeVersionId);
+        } catch (RuntimeException failure) {
+            LOGGER.warn("event=forecast_signal_failed routeVersionId={} exceptionType={}",
+                routeVersionId, failure.getClass().getSimpleName());
+        }
     }
 
     @Override
@@ -165,8 +171,7 @@ public final class RunForecastsService implements RunForecasts {
         try {
             WorkerOperationLog.run("forecast_pickup", "all", this::pickUpOnce);
         } catch (RuntimeException alreadyLogged) {
-            LOGGER.warn("event=forecast_pickup_failed exceptionType={}",
-                alreadyLogged.getClass().getSimpleName());
+            LOGGER.warn("event=forecast_pickup_failed exceptionType={}", alreadyLogged.getClass().getSimpleName());
         }
     }
 
@@ -192,8 +197,11 @@ public final class RunForecastsService implements RunForecasts {
                     requestSweep(routeStops.sourceRouteId(), routeVersionId);
                 }
             } catch (RuntimeException failure) {
-                LOGGER.warn("event=forecast_pickup_route_failed routeVersionId={} exceptionType={}",
-                    routeVersionId, failure.getClass().getSimpleName(), failure);
+                LOGGER.warn(
+                        "event=forecast_pickup_route_failed routeVersionId={} exceptionType={}",
+                        routeVersionId,
+                        failure.getClass().getSimpleName()
+                );
             }
         }
     }
@@ -225,21 +233,20 @@ public final class RunForecastsService implements RunForecasts {
     }
 
     /** 노선 판본의 훑기를 줄에 넣는다. 그 판본의 훑기가 줄에서 이미 기다리고 있으면 넣지 않는다. */
-    private void requestSweep(String key, final long routeVersionId) {
+    private void requestSweep(String laneKey, final long routeVersionId) {
         if (!sweepsQueued.add(routeVersionId)) {
             return;
         }
-        if (!submitted(key, () -> sweep(key, routeVersionId))) {
-            sweepsQueued.remove(routeVersionId);
-            metrics.rejected();
-        }
-    }
-
-    private boolean submitted(String key, Runnable task) {
+        boolean accepted = false;
         try {
-            return lanes.submit(key, task);
-        } catch (RuntimeException failure) {
-            return false;
+            accepted = lanes.submit(laneKey, () -> sweep(laneKey, routeVersionId));
+        } finally {
+            if (!accepted) {
+                sweepsQueued.remove(routeVersionId);
+            }
+        }
+        if (!accepted) {
+            metrics.rejected();
         }
     }
 
@@ -247,15 +254,19 @@ public final class RunForecastsService implements RunForecasts {
      * 줄에서 꺼낸 훑기를 실행한다. 노선별 실행 줄의 스레드에서만 부른다. 예외를 던지지 않는다.
      * 기다림 표시를 배치를 읽기 전에 내린다. 그래야 읽은 뒤에 커밋된 배치의 신호가 다음 훑기를 넣는다.
      */
-    private void sweep(String key, final long routeVersionId) {
+    private void sweep(String laneKey, final long routeVersionId) {
         sweepsQueued.remove(routeVersionId);
         try {
-            if (sweepOnce(routeVersionId)) {
-                requestSweep(key, routeVersionId);
+            final boolean moreBatchesReady = sweepOnce(routeVersionId);
+            if (moreBatchesReady) {
+                requestSweep(laneKey, routeVersionId);
             }
         } catch (RuntimeException failure) {
-            LOGGER.warn("event=forecast_sweep_failed routeVersionId={} exceptionType={}", routeVersionId,
-                failure.getClass().getSimpleName(), failure);
+            LOGGER.warn(
+                    "event=forecast_sweep_failed routeVersionId={} exceptionType={}",
+                    routeVersionId,
+                    failure.getClass().getSimpleName()
+            );
         }
     }
 
@@ -271,36 +282,30 @@ public final class RunForecastsService implements RunForecasts {
             return false;
         }
         Instant notBefore = clock.instant().minus(policy.staleness());
-        List<PendingBatches.Pending> found = pending.find(routeVersionId, notBefore, policy.batchLimit());
-        int finished = 0;
-        for (int index = 0; index < found.size(); index++) {
+        List<PendingBatches.Pending> pendingBatches = pending.find(routeVersionId, notBefore, policy.batchLimit());
+        boolean anyBatchFinished = false;
+        for (int index = 0; index < pendingBatches.size(); index++) {
             if (index > 0 && lanes.closing()) {
                 return false;
             }
-            PendingBatches.Pending batch = found.get(index);
-            String result = processWithRetry(resolved.context(), batch.observationBatchId());
+            PendingBatches.Pending batch = pendingBatches.get(index);
+            String result = measure(resolved.context(), batch.observationBatchId());
+            metrics.batch(result);
             if (!LEFT_UNPROCESSED.contains(result)) {
-                finished++;
+                anyBatchFinished = true;
                 continue;
             }
             if (FAILED.equals(result) && canStillEnterHistory(batch)) {
-                LOGGER.warn("event=forecast_sweep_blocked routeVersionId={} batchId={} waiting={}",
-                    routeVersionId, batch.observationBatchId(), found.size() - index - 1);
+                LOGGER.warn(
+                        "event=forecast_sweep_blocked routeVersionId={} batchId={} waiting={}",
+                        routeVersionId,
+                        batch.observationBatchId(),
+                        pendingBatches.size() - index - 1
+                );
                 return false;
             }
         }
-        return finished > 0 && found.size() >= policy.batchLimit();
-    }
-
-    /** 배치 하나를 처리하고, 예외로 실패하면 그 자리에서 한 번 다시 처리한다. 마지막 처리의 결과 분류를 돌려준다. */
-    private String processWithRetry(RouteContext context, final long observationBatchId) {
-        String result = measure(context, observationBatchId);
-        if (FAILED.equals(result) && !lanes.closing()) {
-            metrics.batch(RETRIED);
-            result = measure(context, observationBatchId);
-        }
-        metrics.batch(result);
-        return result;
+        return anyBatchFinished && pendingBatches.size() >= policy.batchLimit();
     }
 
     /** 지금 착수해도 수신 뒤 90초 안일 수 있는지다. 거짓이면 처리해도 늦음으로 닫혀 이력에 들어가지 않는다. */
@@ -333,8 +338,12 @@ public final class RunForecastsService implements RunForecasts {
             return process(context, observationBatchId);
         } catch (RuntimeException failure) {
             processor.states().remove(context.route());
-            LOGGER.warn("event=forecast_failed route={} batchId={} exceptionType={}", context.route(),
-                observationBatchId, failure.getClass().getSimpleName(), failure);
+            LOGGER.warn(
+                    "event=forecast_failed route={} batchId={} exceptionType={}",
+                    context.route(),
+                    observationBatchId,
+                    failure.getClass().getSimpleName()
+            );
             return FAILED;
         }
     }
@@ -351,28 +360,36 @@ public final class RunForecastsService implements RunForecasts {
         if (!SUCCESS.contains(read.batch().outcome())) {
             return "not_success";
         }
+
         storeSettlementContext(context);
         Instant confirmedAt = startedAt();
         if (read.batch().receivedAt() != null) {
             metrics.lag(Duration.between(read.batch().receivedAt(), confirmedAt));
         }
         ForecastBatchProcessor.Processed processed = processor.process(context, read.withConfirmedAt(confirmedAt));
-        reportPublished(processed);
-        if (processed.replayed() != null) {
-            metrics.replay(processed.replayed());
-        }
-        metrics.replayExtension(processed.replayExtension());
-        processed.exclusions().values().forEach(metrics::excluded);
-        processed.withheld().forEach(vehicle -> reportWithheld(observationBatchId, vehicle));
-        reportModelUsed(context, processed);
-        metrics.unattributedPasses(processed.unattributedPasses());
-        metrics.recoveredPasses(processed.recoveredPasses());
+        reportBatchResult(context, observationBatchId, processed);
         return switch (processed.status()) {
             case STALE -> "stale";
             case DUPLICATE -> "duplicate";
             case OUT_OF_ORDER -> "out_of_order";
             case SAVED -> savedResult(processed);
         };
+    }
+
+    private void reportBatchResult(
+        RouteContext context,
+        final long observationBatchId,
+        ForecastBatchProcessor.Processed processed
+    ) {
+        reportPublished(processed);
+        if (processed.replayed() != null) {
+            metrics.replay(processed.replayed());
+        }
+        processed.exclusions().values().forEach(metrics::excluded);
+        processed.withheld().forEach(vehicle -> reportWithheld(observationBatchId, vehicle));
+        reportModelUsed(context, processed);
+        metrics.unattributedPasses(processed.unattributedPasses());
+        metrics.recoveredPasses(processed.recoveredPasses());
     }
 
     /**
@@ -388,8 +405,12 @@ public final class RunForecastsService implements RunForecasts {
             return;
         }
         try {
-            telemetry.published(published.routeId(), published.routeVersionId(), published.receivedAt(),
-                published.predictionCount());
+            telemetry.published(
+                    published.routeId(),
+                    published.routeVersionId(),
+                    published.receivedAt(),
+                    published.predictionCount()
+            );
         } catch (RuntimeException failure) {
             LOGGER.warn("event=forecast_telemetry_failed routeVersionId={} exceptionType={}",
                 published.routeVersionId(), failure.getClass().getSimpleName());
@@ -399,8 +420,12 @@ public final class RunForecastsService implements RunForecasts {
     /** 정원 때문에 예보에서 뺀 차량을 배치마다 남긴다. 같은 차량이 다음 배치에서도 빠지면 다시 남긴다. */
     private void reportWithheld(final long observationBatchId, ForecastStageResult.WithheldVehicle vehicle) {
         metrics.excluded(vehicle.reason());
-        LOGGER.info("event=forecast_vehicle_withheld reason={} batchId={} vehicleId={}", vehicle.reason(),
-            observationBatchId, vehicle.vehicleId());
+        LOGGER.info(
+                "event=forecast_vehicle_withheld reason={} batchId={} vehicleId={}",
+                vehicle.reason(),
+                observationBatchId,
+                vehicle.vehicleId()
+        );
     }
 
     /** 예측을 한 건 이상 저장한 배치의 모델 배포를 알린다. 노선의 배포가 바뀔 때만 로그가 남는다. */
@@ -412,8 +437,13 @@ public final class RunForecastsService implements RunForecasts {
         if (published.predictionCount() == 0) {
             return;
         }
-        modelUsage.committed(context.stops().sourceRouteId(), context.stops().routeName(),
-            published.routeVersionId(), published.observationBatchId(), context.runtime());
+        modelUsage.committed(
+                context.stops().sourceRouteId(),
+                context.stops().routeName(),
+                published.routeVersionId(),
+                published.observationBatchId(),
+                context.runtime()
+        );
     }
 
     private static String savedResult(ForecastBatchProcessor.Processed processed) {
@@ -476,8 +506,12 @@ public final class RunForecastsService implements RunForecasts {
             return Resolved.skip("not_covered");
         }
         if (!runtime.model().supportsRoute(routeStops)) {
-            modelUsage.referenceMismatch(routeStops.sourceRouteId(), routeStops.routeName(),
-                routeStops.routeVersionId(), runtime);
+            modelUsage.referenceMismatch(
+                    routeStops.sourceRouteId(),
+                    routeStops.routeName(),
+                    routeStops.routeVersionId(),
+                    runtime
+            );
             return Resolved.skip("reference_mismatch");
         }
         AlightingAwareRouteStatistics statistics = runtime.model().statistics(routeStops);
@@ -489,6 +523,7 @@ public final class RunForecastsService implements RunForecasts {
 
     /** 모델 문맥 또는 처리하지 않는 사유다. */
     private record Resolved(RouteContext context, String skipped) {
+
         static Resolved skip(String reason) {
             return new Resolved(null, reason);
         }

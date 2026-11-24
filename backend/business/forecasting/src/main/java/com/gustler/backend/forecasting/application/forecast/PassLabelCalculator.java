@@ -11,6 +11,7 @@ import tools.jackson.databind.JsonNode;
  * 계산식의 전제를 어기면 {@link IllegalArgumentException}을 던질 수 있다.
  */
 public interface PassLabelCalculator {
+
     /**
      * 정답을 계산한다.
      *
@@ -30,7 +31,13 @@ public interface PassLabelCalculator {
      * @param reason 지원 안 함 사유
      * @param parameterHash 계산에 쓴 계수의 SHA-256 16진수
      */
-    record PassLabelCalculation(boolean settled, Double value, String reason, String parameterHash) {
+    record PassLabelCalculation(
+        boolean settled,
+        Double value,
+        String reason,
+        String parameterHash
+    ) {
+
         public PassLabelCalculation {
             if (settled != (value != null) || settled == (reason != null)) {
                 throw new IllegalArgumentException("채점됨은 값만, 지원 안 함은 사유만 가진다");
@@ -44,7 +51,12 @@ public interface PassLabelCalculator {
          * @return 결과
          */
         public static PassLabelCalculation unsupported(String reason) {
-            return new PassLabelCalculation(false, null, reason, null);
+            return new PassLabelCalculation(
+                    false,
+                    null,
+                    reason,
+                    null
+            );
         }
     }
 }

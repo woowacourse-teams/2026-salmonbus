@@ -13,6 +13,7 @@ import tools.jackson.databind.JsonNode;
  * 돌려준 노드는 읽기만 하며 바꾸지 않는다.
  */
 public interface SettlementContextProvider {
+
     /**
      * 정산 근거를 찾는다.
      *

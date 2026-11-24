@@ -53,7 +53,7 @@ class ObservationQualityIntegrationTest {
     private JdbcClient jdbc;
 
     @Autowired
-    private ObservationQualityIntegrationTest.FailingQualityHook failingQualityHook;
+    private FailingQualityHook failingQualityHook;
 
     private long routeVersionId;
     private long batchId;
@@ -344,8 +344,8 @@ class ObservationQualityIntegrationTest {
     @TestConfiguration(proxyBeanMethods = false)
     static class QualityFailureConfiguration {
         @Bean
-        ObservationQualityIntegrationTest.FailingQualityHook failingQualityHook() {
-            return new ObservationQualityIntegrationTest.FailingQualityHook();
+        FailingQualityHook failingQualityHook() {
+            return new FailingQualityHook();
         }
     }
 

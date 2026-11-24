@@ -303,7 +303,7 @@ class ObservationStorageBaselineTest {
         List<String> expected = ObservationLoadBaseline.read().linesOf(scenario);
 
         // when
-        ObservationStorageBaselineTest.Outcome stored = storeAndRollBack(buses);
+        Outcome stored = storeAndRollBack(buses);
 
         // then
         assertThat(stored.lines()).containsExactlyElementsOf(expected);
@@ -335,7 +335,7 @@ class ObservationStorageBaselineTest {
             ));
 
         // when
-        ObservationStorageBaselineTest.Outcome stored = storeAndRollBack(buses);
+        Outcome stored = storeAndRollBack(buses);
 
         // then
         assertSoftly(softly -> {
@@ -351,7 +351,7 @@ class ObservationStorageBaselineTest {
     @Test
     void 저장한_관측은_호출자의_트랜잭션과_함께_롤백된다() {
         // when
-        ObservationStorageBaselineTest.Outcome stored = storeAndRollBack(List.of(bus(
+        Outcome stored = storeAndRollBack(List.of(bus(
                 "eq-1",
                 "경기70아0001",
                 NORMAL_BUS,
@@ -370,8 +370,8 @@ class ObservationStorageBaselineTest {
         });
     }
 
-    private ObservationStorageBaselineTest.Outcome storeAndRollBack(List<BusLocationResponse.BusLocation> buses) {
-        ObservationStorageBaselineTest.RecordingHooks recording = new ObservationStorageBaselineTest.RecordingHooks();
+    private Outcome storeAndRollBack(List<BusLocationResponse.BusLocation> buses) {
+        RecordingHooks recording = new RecordingHooks();
         List<ObservationSeatQualityChecker> hooks = new ArrayList<>(qualityHooks);
         hooks.add(recording);
         CollectionBatchService storage = new CollectionBatchService(
@@ -388,9 +388,9 @@ class ObservationStorageBaselineTest {
                     receivedAt),
                 RESPONSE_RECEIVED_AT);
             readTimesInUtc();
-            ObservationStorageBaselineTest.StoredIds ids = new ObservationStorageBaselineTest.StoredIds(batchId,
+            StoredIds ids = new StoredIds(batchId,
                 routeVersionId);
-            return new ObservationStorageBaselineTest.Outcome(
+            return new Outcome(
                     observations(),
                     batch(),
                     capacities(),
@@ -515,7 +515,7 @@ class ObservationStorageBaselineTest {
 
         private static String cells(List<Object> values) {
             return values.stream()
-                .map(ObservationStorageBaselineTest.Outcome::cell)
+                .map(Outcome::cell)
                 .collect(Collectors.joining(" "));
         }
 
@@ -560,14 +560,14 @@ class ObservationStorageBaselineTest {
             deliveries.add(batch);
         }
 
-        List<List<Object>> stored(ObservationStorageBaselineTest.StoredIds ids) {
+        List<List<Object>> stored(StoredIds ids) {
             return storedEvents.stream()
                 .map(event -> List.of(ids.batch((Long) event.get(0)),
                     ids.routeVersion((Long) event.get(1)), event.get(2)))
                 .toList();
         }
 
-        List<List<Object>> delivered(ObservationStorageBaselineTest.StoredIds ids) {
+        List<List<Object>> delivered(StoredIds ids) {
             return deliveries.stream()
                 .map(delivery -> Arrays.<Object>asList(ids.batch(delivery.batchId()),
                     ids.routeVersion(delivery.routeVersionId()), delivery.kind()))

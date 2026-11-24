@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
  * 확인한다. 기대값은 다시 만들 수 없으므로 흐름을 만드는 순서와 씨앗·배치 수·차량 수를 바꾸지 않는다.
  */
 class ScoringStageBaselineTest {
+
     private static final Instant START = Instant.parse("2026-01-05T00:00:00Z");
     private static final int LIMIT = 150_000;
 
@@ -40,12 +41,102 @@ class ScoringStageBaselineTest {
         // given
         Drives scenario = new Drives();
         final int last = 5000;
-        drive(scenario, "expire-d", last - 80, 20, List.of(1, 1, 2, 2, 3), List.of(30, 28, 25, 22, 20));
-        drive(scenario, "expire-f", last - 70, 20, List.of(1, 1, 2, 2, 3), List.of(31, 29, 26, 23, 21));
-        drive(scenario, "expire-e", last + 1799, 1, List.of(1, 1), List.of(10, 10));
-        drive(scenario, "expire-d", last + 1800, 20, List.of(3, 3, 4, 4, 5), List.of(20, 18, 16, 14, 12));
-        drive(scenario, "expire-e", last + 1811, 1, List.of(1), List.of(10));
-        drive(scenario, "expire-f", last + 1812, 20, List.of(3, 3, 4, 4, 5), List.of(21, 19, 17, 15, 13));
+        drive(
+                scenario,
+                "expire-d",
+                last - 80,
+                20,
+                List.of(
+                        1,
+                        1,
+                        2,
+                        2,
+                        3
+                ),
+                List.of(
+                        30,
+                        28,
+                        25,
+                        22,
+                        20
+                )
+        );
+        drive(
+                scenario,
+                "expire-f",
+                last - 70,
+                20,
+                List.of(
+                        1,
+                        1,
+                        2,
+                        2,
+                        3
+                ),
+                List.of(
+                        31,
+                        29,
+                        26,
+                        23,
+                        21
+                )
+        );
+        drive(
+                scenario,
+                "expire-e",
+                last + 1799,
+                1,
+                List.of(1, 1),
+                List.of(10, 10)
+        );
+        drive(
+                scenario,
+                "expire-d",
+                last + 1800,
+                20,
+                List.of(
+                        3,
+                        3,
+                        4,
+                        4,
+                        5
+                ),
+                List.of(
+                        20,
+                        18,
+                        16,
+                        14,
+                        12
+                )
+        );
+        drive(
+                scenario,
+                "expire-e",
+                last + 1811,
+                1,
+                List.of(1),
+                List.of(10)
+        );
+        drive(
+                scenario,
+                "expire-f",
+                last + 1812,
+                20,
+                List.of(
+                        3,
+                        3,
+                        4,
+                        4,
+                        5
+                ),
+                List.of(
+                        21,
+                        19,
+                        17,
+                        15,
+                        13
+                )
+        );
 
         // when
         ScoringScenarioBaseline.Comparison comparison = compare(scenario.build(), "expired-gap", LIMIT);
@@ -60,10 +151,62 @@ class ScoringStageBaselineTest {
         // given
         Drives scenario = new Drives();
         final int midnight = 15 * 3600;
-        drive(scenario, "night-g", midnight - 120, 20, List.of(1, 1, 2, 2, 3, 3, 4, 4, 5),
-            List.of(30, 29, 27, 25, 23, 21, 19, 17, 15));
-        drive(scenario, "night-h", midnight - 90, 20, List.of(1, 1, 2, 2, 3, 3, 4, 4, 5),
-            List.of(31, 30, 28, 26, 24, 22, 20, 18, 16));
+        drive(
+                scenario,
+                "night-g",
+                midnight - 120,
+                20,
+                List.of(
+                        1,
+                        1,
+                        2,
+                        2,
+                        3,
+                        3,
+                        4,
+                        4,
+                        5
+                ),
+                List.of(
+                        30,
+                        29,
+                        27,
+                        25,
+                        23,
+                        21,
+                        19,
+                        17,
+                        15
+                )
+        );
+        drive(
+                scenario,
+                "night-h",
+                midnight - 90,
+                20,
+                List.of(
+                        1,
+                        1,
+                        2,
+                        2,
+                        3,
+                        3,
+                        4,
+                        4,
+                        5
+                ),
+                List.of(
+                        31,
+                        30,
+                        28,
+                        26,
+                        24,
+                        22,
+                        20,
+                        18,
+                        16
+                )
+        );
 
         // when
         ScoringScenarioBaseline.Comparison comparison = compare(scenario.build(), "overnight", LIMIT);
@@ -80,13 +223,108 @@ class ScoringStageBaselineTest {
     void 여러_차량과_끊긴_연결이_섞여도_예측마다_기준_기록과_같다() {
         // given
         Drives scenario = new Drives();
-        drive(scenario, "multi-a", 1000, 20, List.of(1, 1, 2, 2, 3, 3), List.of(30, 28, 25, 22, 20, 18));
-        drive(scenario, "multi-c", 1005, 20, List.of(1, 1, 2, 2, 3, 3, 4),
-            Arrays.asList(30, 30, null, null, 20, 20, 15));
-        drive(scenario, "multi-b", 1010, 20, List.of(1, 1, 2), List.of(35, 33, 30));
-        drive(scenario, "multi-b", 1040, 1, List.of(2), List.of(31));
-        drive(scenario, "multi-b", 1070, 20, List.of(2, 3, 3, 4, 4, 5), List.of(29, 27, 26, 24, 23, 21));
-        drive(scenario, "multi-a", 1220, 20, List.of(3, 4, 4, 5), List.of(18, 15, 12, 10));
+        drive(
+                scenario,
+                "multi-a",
+                1000,
+                20,
+                List.of(
+                        1,
+                        1,
+                        2,
+                        2,
+                        3,
+                        3
+                ),
+                List.of(
+                        30,
+                        28,
+                        25,
+                        22,
+                        20,
+                        18
+                )
+        );
+        drive(
+                scenario,
+                "multi-c",
+                1005,
+                20,
+                List.of(
+                        1,
+                        1,
+                        2,
+                        2,
+                        3,
+                        3,
+                        4
+                ),
+                Arrays.asList(
+                        30,
+                        30,
+                        null,
+                        null,
+                        20,
+                        20,
+                        15
+                )
+        );
+        drive(
+                scenario,
+                "multi-b",
+                1010,
+                20,
+                List.of(1, 1, 2),
+                List.of(35, 33, 30)
+        );
+        drive(
+                scenario,
+                "multi-b",
+                1040,
+                1,
+                List.of(2),
+                List.of(31)
+        );
+        drive(
+                scenario,
+                "multi-b",
+                1070,
+                20,
+                List.of(
+                        2,
+                        3,
+                        3,
+                        4,
+                        4,
+                        5
+                ),
+                List.of(
+                        29,
+                        27,
+                        26,
+                        24,
+                        23,
+                        21
+                )
+        );
+        drive(
+                scenario,
+                "multi-a",
+                1220,
+                20,
+                List.of(
+                        3,
+                        4,
+                        4,
+                        5
+                ),
+                List.of(
+                        18,
+                        15,
+                        12,
+                        10
+                )
+        );
 
         // when
         ScoringScenarioBaseline.Comparison comparison = compare(scenario.build(), "broken-chains", LIMIT);
@@ -99,39 +337,69 @@ class ScoringStageBaselineTest {
     @Test
     void 출근_시간_무작위_운행_700배치도_예측마다_기준_기록과_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(11, Instant.parse("2026-01-04T21:00:00Z"), 700, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                11,
+                Instant.parse("2026-01-04T21:00:00Z"),
+                700,
+                7,
+                0,
+                true
+        );
 
         // when
         ScoringScenarioBaseline.Comparison comparison = compare(scenario, "morning-11", LIMIT);
 
         // then
         assertSameAsBaseline(comparison);
-        assertThat(comparison.expectedOutcomes()).containsKeys("SETTLED:null", "LOST:NO_CLOSED_IDENTITY_SAFE_PASS",
-            "UNSUPPORTED:UNSUPPORTED_HEADWAY", "UNSUPPORTED:NO_PREVIOUS_PASS",
-            "UNSUPPORTED:CAPACITY_EVIDENCE_MISMATCH");
+        assertThat(comparison.expectedOutcomes()).containsKeys(
+                "SETTLED:null",
+                "LOST:NO_CLOSED_IDENTITY_SAFE_PASS",
+                "UNSUPPORTED:UNSUPPORTED_HEADWAY",
+                "UNSUPPORTED:NO_PREVIOUS_PASS",
+                "UNSUPPORTED:CAPACITY_EVIDENCE_MISMATCH"
+        );
     }
 
     @Test
     void 낮에서_퇴근_시간으로_넘어가는_무작위_운행도_예측마다_기준_기록과_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(23, Instant.parse("2026-01-05T07:00:00Z"), 700, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                23,
+                Instant.parse("2026-01-05T07:00:00Z"),
+                700,
+                7,
+                0,
+                true
+        );
 
         // when
         ScoringScenarioBaseline.Comparison comparison = compare(scenario, "evening-23", LIMIT);
 
         // then
         assertSameAsBaseline(comparison);
-        assertThat(comparison.expectedOutcomes()).containsKeys("SETTLED:null",
-            "UNSUPPORTED:NO_FITTED_STOP_PARAMETERS");
+        assertThat(comparison.expectedOutcomes()).containsKeys("SETTLED:null", "UNSUPPORTED:NO_FITTED_STOP_PARAMETERS");
     }
 
     @Test
     void 자정을_넘는_무작위_운행도_자정_범위_차이_밖에서는_기준_기록과_같다() {
         // given
-        ScoringScenario withoutExtended = ScoringScenario.random(37, Instant.parse("2026-01-05T14:00:00Z"),
-            600, 6, 0, false);
-        ScoringScenario withExtended = ScoringScenario.random(71, Instant.parse("2026-01-05T14:20:00Z"),
-            600, 8, 0, true, List.of());
+        ScoringScenario withoutExtended = ScoringScenario.random(
+                37,
+                Instant.parse("2026-01-05T14:00:00Z"),
+                600,
+                6,
+                0,
+                false
+        );
+        ScoringScenario withExtended = ScoringScenario.random(
+                71,
+                Instant.parse("2026-01-05T14:20:00Z"),
+                600,
+                8,
+                0,
+                true,
+                List.of()
+        );
 
         // when
         ScoringScenarioBaseline.Comparison outside = compare(withoutExtended, "midnight-37", LIMIT);
@@ -149,8 +417,22 @@ class ScoringStageBaselineTest {
     @Test
     void 수집_구멍과_관측_상한이_있는_무작위_운행은_구멍_시점_차이_밖에서는_기준_기록과_같다() {
         // given
-        ScoringScenario holes = ScoringScenario.random(41, Instant.parse("2026-01-04T21:30:00Z"), 600, 6, 0.004, true);
-        ScoringScenario overflow = ScoringScenario.random(43, Instant.parse("2026-01-04T21:30:00Z"), 600, 6, 0, true);
+        ScoringScenario holes = ScoringScenario.random(
+                41,
+                Instant.parse("2026-01-04T21:30:00Z"),
+                600,
+                6,
+                0.004,
+                true
+        );
+        ScoringScenario overflow = ScoringScenario.random(
+                43,
+                Instant.parse("2026-01-04T21:30:00Z"),
+                600,
+                6,
+                0,
+                true
+        );
 
         // when
         ScoringScenarioBaseline.Comparison withHoles = compare(holes, "holes-41", LIMIT);
@@ -168,8 +450,14 @@ class ScoringStageBaselineTest {
     @Test
     void 같은_사건을_두_번_넣어도_결과_집합이_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(53, Instant.parse("2026-01-04T21:00:00Z"), 400, 6,
-            0.002, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                53,
+                Instant.parse("2026-01-04T21:00:00Z"),
+                400,
+                6,
+                0.002,
+                true
+        );
         List<Object> events = scenario.events();
         List<Object> doubled = new ArrayList<>();
         for (Object event : events) {
@@ -193,10 +481,16 @@ class ScoringStageBaselineTest {
     @Test
     void 중간에_상태를_버리고_되감은_뒤_이어_가도_연속_실행과_결과_집합이_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(61, Instant.parse("2026-01-05T14:30:00Z"), 600, 6, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                61,
+                Instant.parse("2026-01-05T14:30:00Z"),
+                600,
+                6,
+                0,
+                true
+        );
         List<Object> events = scenario.events();
-        ScoringScenario.Scored continuous = scenario.scored(
-            ScoringScenario.feed(scenario.stage(LIMIT), events));
+        ScoringScenario.Scored continuous = scenario.scored(ScoringScenario.feed(scenario.stage(LIMIT), events));
         Map<String, Object> continuousRows = storedRows(ScoringScenario.feed(scenario.stage(LIMIT), events));
 
         for (final int cut : List.of(events.size() / 3, events.size() / 2, events.size() * 4 / 5)) {
@@ -206,8 +500,14 @@ class ScoringStageBaselineTest {
                 .max(Instant::compareTo).orElseThrow().plusMillis(1);
 
             // when
-            ScoringResult replayed = new ScoringReplay(new MemoryForecasts(events.subList(0, cut)),
-                new MemoryPasses(events.subList(0, cut))).replay(stage, ScoringScenario.ROUTE, now);
+            ScoringResult replayed = new ScoringReplay(new MemoryForecasts(events.subList(
+                0,
+                cut
+            )),
+                new MemoryPasses(events.subList(
+                    0,
+                    cut
+                ))).replay(stage, ScoringScenario.ROUTE, now);
             ScoringResult after = ScoringScenario.feed(stage, events.subList(cut, events.size()));
 
             // then
@@ -222,8 +522,15 @@ class ScoringStageBaselineTest {
     private static Map<String, Object> storedRows(ScoringResult result) {
         Map<String, Object> rows = new LinkedHashMap<>();
         for (PassLabel label : result.labels()) {
-            rows.putIfAbsent("label:" + List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
-                label.stopOrder(), label.capacity(), label.labelVersion(), label.modelDeploymentId()), label);
+            rows.putIfAbsent("label:" + List.of(
+                    label.sourceDate(),
+                    label.routeId(),
+                    label.tripStartObservationId(),
+                    label.stopOrder(),
+                    label.capacity(),
+                    label.labelVersion(),
+                    label.modelDeploymentId()
+            ), label);
         }
         for (UnresolvedForecast closed : result.unresolved()) {
             rows.putIfAbsent("unresolved:" + List.of(closed.sourceDate(), closed.vehicleObservationId(),
@@ -248,12 +555,20 @@ class ScoringStageBaselineTest {
     }
 
     private static void assertSameAsBaseline(ScoringScenarioBaseline.Comparison comparison) {
-        System.out.printf("baseline forecasts=%d equal=%d midnight=%d taint=%d unexplained=%d outcomes=%s%n",
-            comparison.forecasts(), comparison.equal(), comparison.midnightScope(), comparison.taintTiming(),
-            comparison.unexplained().size(), comparison.expectedOutcomes());
+        System.out.printf(
+                "baseline forecasts=%d equal=%d midnight=%d taint=%d unexplained=%d outcomes=%s%n",
+                comparison.forecasts(),
+                comparison.equal(),
+                comparison.midnightScope(),
+                comparison.taintTiming(),
+                comparison.unexplained().size(),
+                comparison.expectedOutcomes()
+        );
         assertSoftly(softly -> {
             softly.assertThat(comparison.unexplained())
-                .as("설명되지 않는 차이: %s", comparison.unexplained().stream().limit(10).map(String::valueOf)
+                .as("설명되지 않는 차이: %s", comparison.unexplained().stream()
+                    .limit(10)
+                    .map(String::valueOf)
                     .collect(Collectors.joining("\n")))
                 .isEmpty();
             softly.assertThat(comparison.forecasts()).isPositive();
@@ -270,7 +585,12 @@ class ScoringStageBaselineTest {
         List<Integer> seats
     ) {
         for (int i = 0; i < stops.size(); i++) {
-            drives.observations.add(new Drive(start + i * step, vehicle, stops.get(i), seats.get(i)));
+            drives.observations.add(new Drive(
+                    start + i * step,
+                    vehicle,
+                    stops.get(i),
+                    seats.get(i)
+            ));
         }
     }
 
@@ -280,21 +600,57 @@ class ScoringStageBaselineTest {
         int stop,
         Integer seats
     ) {
+
     }
 
     /** 관측마다 배치 하나이고 좌석이 있는 관측은 모든 목표(1~5)를 정원 40으로 예측한다. */
     private static final class Drives {
+
         private final List<Drive> observations = new ArrayList<>();
 
         private ScoringScenario build() {
-            List<Integer> real = List.of(1, 2, 3, 4, 5);
+            List<Integer> real = List.of(
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+            );
             ScoringScenario scenario = new ScoringScenario(real, 9,
-                ScoringScenario.context(real, 9, List.of(1, 2, 3, 4, 5), true, List.of(), List.of()));
-            observations.stream().sorted(Comparator.comparingInt(Drive::seconds)).forEach(drive -> {
+                ScoringScenario.context(
+                        real,
+                        9,
+                        List.of(
+                                1,
+                                2,
+                                3,
+                                4,
+                                5
+                        ),
+                        true,
+                        List.of(),
+                        List.of()
+                ));
+            observations.stream().sorted(
+                Comparator.comparingInt(Drive::seconds)
+            ).forEach(drive -> {
                 final long batch = scenario.batch(START.plusSeconds(drive.seconds()), false);
-                final long observation = scenario.row(batch, drive.vehicle(), drive.stop(), drive.seats());
+                final long observation = scenario.row(
+                        batch,
+                        drive.vehicle(),
+                        drive.stop(),
+                        drive.seats()
+                );
                 if (drive.seats() != null) {
-                    scenario.forecast(observation, 40, 1, 2, 3, 4, 5);
+                    scenario.forecast(
+                            observation,
+                            40,
+                            1,
+                            2,
+                            3,
+                            4,
+                            5
+                    );
                 }
             });
             return scenario;
@@ -302,10 +658,13 @@ class ScoringStageBaselineTest {
     }
 
     private static final class MemoryForecasts implements ForecastRecordStore {
+
         private final List<ForecastPublished> published;
 
         private MemoryForecasts(List<Object> events) {
-            published = events.stream().filter(ForecastPublished.class::isInstance).map(ForecastPublished.class::cast)
+            published = events.stream()
+                .filter(ForecastPublished.class::isInstance)
+                .map(ForecastPublished.class::cast)
                 .toList();
         }
 
@@ -321,7 +680,12 @@ class ScoringStageBaselineTest {
             Instant toExclusive
         ) {
             return published.stream()
-                .filter(event -> isReceivedBetween(event, routeId, fromInclusive, toExclusive))
+                .filter(event -> isReceivedBetween(
+                        event,
+                        routeId,
+                        fromInclusive,
+                        toExclusive
+                ))
                 .toList();
         }
 
@@ -357,10 +721,14 @@ class ScoringStageBaselineTest {
     }
 
     private static final class MemoryPasses implements StopPassStore {
+
         private final List<PassClosed> passes;
 
         private MemoryPasses(List<Object> events) {
-            passes = events.stream().filter(PassClosed.class::isInstance).map(PassClosed.class::cast).toList();
+            passes = events.stream()
+                .filter(PassClosed.class::isInstance)
+                .map(PassClosed.class::cast)
+                .toList();
         }
 
         @Override
@@ -371,7 +739,12 @@ class ScoringStageBaselineTest {
         @Override
         public List<PassClosed> findClosedBetween(final long routeId, Instant fromInclusive, Instant toExclusive) {
             return passes.stream()
-                .filter(pass -> isClosedBetween(pass, routeId, fromInclusive, toExclusive))
+                .filter(pass -> isClosedBetween(
+                        pass,
+                        routeId,
+                        fromInclusive,
+                        toExclusive
+                ))
                 .toList();
         }
 

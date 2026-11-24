@@ -14,6 +14,7 @@ import java.util.Objects;
  * @param event 줄이 새로 저장되면 넘길 사건
  */
 public record ClosedForecast(PassLabel label, UnresolvedForecast unresolved, ForecastClosed event) {
+
     public ClosedForecast {
         Objects.requireNonNull(event, "사건이 필요하다");
         if ((label == null) == (unresolved == null)) {

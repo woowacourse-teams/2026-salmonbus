@@ -1,8 +1,10 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
-import com.gustler.backend.observations.domain.CollectionBatch;
+import com.gustler.backend.observations.domain.CollectionInputConfirmedException;
 import com.gustler.backend.observations.domain.CollectionPlan;
-import com.gustler.backend.observations.domain.VehicleObservationRow;
+import com.gustler.backend.observations.domain.CollectionPreparation;
+import com.gustler.backend.observations.domain.CollectionResult;
+import com.gustler.backend.observations.domain.ObservationRows;
 import com.gustler.backend.observations.infrastructure.jdbc.VehicleObservationRepository;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -12,10 +14,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 수집 계획의 배치와 정규화된 관측을 저장한다.
- * 같은 계획의 재시도는 기존 배치의 저장 계약을 유지한다.
- */
+/** 관리 중인 배치 객체를 직접 변경하며 관측과 배치의 저장 순서를 지킨다. */
 @Repository
 @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
 public class CollectionBatchRepository {
@@ -31,28 +30,57 @@ public class CollectionBatchRepository {
         this.observations = observations;
     }
 
-    public Optional<CollectionBatch> findByPlan(CollectionPlan plan) {
-        return batches.findByRouteVersionIdAndAttemptKey(plan.routeVersionId(), plan.attemptKey())
-            .map(ObservationBatchJpaEntity::toDomain);
-    }
-
-    public Optional<OffsetDateTime> findForecastStart(final long batchId) {
-        return batches.findForecastStart(batchId).map(start -> start.atOffset(ZoneOffset.UTC));
-    }
-
-    public CollectionBatch getById(final long batchId) {
-        return batches.findById(batchId).orElseThrow().toDomain();
-    }
-
-    public long save(CollectionBatch batch) {
-        if (batch.id() == null) {
-            return batches.save(new ObservationBatchJpaEntity(batch)).getId();
+    /** 기존 배치는 예보 확정 여부를 검사하고 지난 관측을 지운 뒤 다음 시도로 연다. */
+    public CollectionPreparation.Batch prepare(CollectionPlan plan, final boolean reserved) {
+        Optional<ObservationBatchJpaEntity> existing =
+            batches.findByRouteVersionIdAndAttemptKey(plan.routeVersionId(), plan.attemptKey());
+        if (existing.isEmpty()) {
+            ObservationBatchJpaEntity created = batches.save(new ObservationBatchJpaEntity(plan, reserved));
+            return new CollectionPreparation.Batch(created.getId(), false);
         }
 
-        batches.findById(batch.id()).orElseThrow().apply(batch);
-        batches.flush();
+        ObservationBatchJpaEntity batch = existing.orElseThrow();
+        verifyRetryAllowed(batch);
 
-        return batch.id();
+        batches.flush();
+        observations.deleteByObservationBatchId(batch.getId());
+
+        batch.startNextAttempt(reserved);
+        batches.flush();
+        return new CollectionPreparation.Batch(batch.getId(), true);
+    }
+
+    private void verifyRetryAllowed(ObservationBatchJpaEntity batch) {
+        Optional<OffsetDateTime> forecastStartedAt = batches.findForecastStart(batch.getId())
+            .map(start -> start.atOffset(ZoneOffset.UTC));
+        if (forecastStartedAt.isPresent()) {
+            throw new CollectionInputConfirmedException(batch.getId(), forecastStartedAt.orElseThrow());
+        }
+
+        OffsetDateTime inputConfirmedAt = batch.getInputConfirmedAt();
+        if (inputConfirmedAt != null) {
+            throw new CollectionInputConfirmedException(batch.getId(), inputConfirmedAt);
+        }
+    }
+
+    /** 관측 INSERT 뒤 배치를 종료한다. 품질 조사와 변경 통지에 필요한 노선 판본 번호를 반환한다. */
+    public long conclude(final long batchId, CollectionResult result, OffsetDateTime receivedAt) {
+        ObservationBatchJpaEntity batch = batches.findById(batchId).orElseThrow();
+        if (result.observations().isPresent()) {
+            ObservationRows rows = result.observations().orElseThrow();
+            batches.flush();
+            observations.insertAll(batchId, batch.getRouteVersionId(), rows.storableRows());
+        }
+
+        batch.conclude(result, receivedAt);
+        batches.flush();
+        return batch.getRouteVersionId();
+    }
+
+    public void abandonBeforeSend(final long batchId) {
+        ObservationBatchJpaEntity batch = batches.findById(batchId).orElseThrow();
+        batch.abandonBeforeSend();
+        batches.flush();
     }
 
     public int closeUnfinished(final long batchId) {
@@ -61,19 +89,5 @@ public class CollectionBatchRepository {
 
     public List<Long> lockUnfinished(final int limit) {
         return batches.lockUnfinished(limit);
-    }
-
-    public void deleteObservationsOf(final long batchId) {
-        batches.flush();
-        observations.deleteByObservationBatchId(batchId);
-    }
-
-    /**
-     * 관측은 JDBC 로 같은 트랜잭션의 커넥션에 INSERT 한 문장으로 넣는다. 그 전에 영속성 컨텍스트의 대기 변경을 먼저 내보내
-     * 문장이 JPA 로 바꾼 행을 보게 한다. 넣은 관측은 영속성 컨텍스트에 올리지 않는다.
-     */
-    public void saveObservations(CollectionBatch batch, List<VehicleObservationRow> rows) {
-        batches.flush();
-        observations.insertAll(batch.id(), batch.routeVersionId(), rows);
     }
 }

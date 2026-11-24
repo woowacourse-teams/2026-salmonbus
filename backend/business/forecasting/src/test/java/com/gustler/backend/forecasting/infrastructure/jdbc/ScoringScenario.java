@@ -45,6 +45,7 @@ import tools.jackson.databind.json.JsonMapper;
  * {@link #random(long, Instant, int, int, double, boolean)}이 난수를 뽑는 순서를 바꾸면 기대값과 견줄 수 없다.
  */
 final class ScoringScenario {
+
     static final long ROUTE = 7L;
     static final long VERSION = 70L;
     static final long DEPLOYMENT = 3L;
@@ -80,12 +81,15 @@ final class ScoringScenario {
         List<AlightingAwareObservation> rows,
         List<Forecast> forecasts
     ) {
+
     }
 
     record Forecast(long observationId, int capacity, int[] targets) {
+
     }
 
     record Key(long observationId, int target) {
+
     }
 
     /** 예측 하나의 채점 결과에서 견주는 열이다. 정답 값은 비트로 담는다. 근거 관측 번호·정원·계수 해시는 채점됨에만 있다. */
@@ -101,8 +105,20 @@ final class ScoringScenario {
         Long previousLast,
         Long previousClosure
     ) {
+
         static Verdict of(String state, String reason) {
-            return new Verdict(state, reason, null, null, null, null, null, null, null, null);
+            return new Verdict(
+                    state,
+                    reason,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
         }
     }
 
@@ -113,23 +129,49 @@ final class ScoringScenario {
         int labels,
         int unresolved
     ) {
+
     }
 
     long batch(Instant at, final boolean hole) {
         if (!batches.isEmpty() && at.isBefore(batches.getLast().at())) {
             throw new IllegalArgumentException("배치는 시각 순서로 더한다");
         }
-        Batch batch = new Batch(nextBatch++, at, at.minusSeconds(2), hole, new ArrayList<>(), new ArrayList<>());
+        Batch batch = new Batch(
+                nextBatch++,
+                at,
+                at.minusSeconds(2),
+                hole,
+                new ArrayList<>(),
+                new ArrayList<>()
+        );
         batches.add(batch);
         batchById.put(batch.id(), batch);
         return batch.id();
     }
 
-    long row(final long batchId, String vehicle, final int passedStop, Integer seats) {
+    long row(
+        final long batchId,
+        String vehicle,
+        final int passedStop,
+        Integer seats
+    ) {
         Batch batch = batchById.get(batchId);
         final boolean down = isDown(passedStop, 2, turn);
-        AlightingAwareObservation row = new AlightingAwareObservation(nextObservation++, batchId, 0, batch.at(),
-            vehicle, passedStop, passedStop, 2, seats, 0, VERSION, batch.receivedAt(), down);
+        AlightingAwareObservation row = new AlightingAwareObservation(
+                nextObservation++,
+                batchId,
+                0,
+                batch.at(),
+                vehicle,
+                passedStop,
+                passedStop,
+                2,
+                seats,
+                0,
+                VERSION,
+                batch.receivedAt(),
+                down
+        );
         batch.rows().add(row);
         rows.add(row);
         rowById.put(row.observationId(), row);
@@ -164,8 +206,15 @@ final class ScoringScenario {
         List<Object> events = new ArrayList<>();
         for (Batch batch : batches) {
             final int saved = batch.rows().size();
-            events.add(new ObservationBatchSeen(batch.id(), ROUTE, VERSION, batch.receivedAt(),
-                collectionResult(saved, batch.hole()), storedRows(saved, batch.hole()), saved));
+            events.add(new ObservationBatchSeen(
+                    batch.id(),
+                    ROUTE,
+                    VERSION,
+                    batch.receivedAt(),
+                    collectionResult(saved, batch.hole()),
+                    storedRows(saved, batch.hole()),
+                    saved
+            ));
             events.addAll(closedIn.getOrDefault(batch.id(), List.of()));
             events.add(published(batch));
         }
@@ -192,7 +241,13 @@ final class ScoringScenario {
     }
 
     ScoringStage stage(final int limit, PassLabelCalculator calculator) {
-        return new ScoringStage(this::contextFor, version -> realStops, calculator, FIXED, limit);
+        return new ScoringStage(
+                this::contextFor,
+                version -> realStops,
+                calculator,
+                FIXED,
+                limit
+        );
     }
 
     private Optional<JsonNode> contextFor(final long deployment, final long version) {
@@ -233,31 +288,64 @@ final class ScoringScenario {
             reasons.put(key, closed.reason());
         }
         for (ScoredForecast forecast : result.scored()) {
-            Key key = new Key(forecast.vehicleObservationId(), forecast.targetStopOrder());
-            PassLabel label = labels.get(List.of(forecast.passSourceDate(), forecast.routeId(),
-                forecast.tripStartObservationId(), forecast.stopOrder(), forecast.capacity(),
-                ScoringReasons.LABEL_VERSION, forecast.modelDeploymentId()));
-            PassClosed pass = passByKey.get(List.of(forecast.passSourceDate(), forecast.routeId(),
-                forecast.tripStartObservationId(), forecast.stopOrder()));
+            Key key = new Key(
+                forecast.vehicleObservationId(),
+                forecast.targetStopOrder()
+            );
+            PassLabel label = labels.get(List.of(
+                    forecast.passSourceDate(),
+                    forecast.routeId(),
+                    forecast.tripStartObservationId(),
+                    forecast.stopOrder(),
+                    forecast.capacity(),
+                    ScoringReasons.LABEL_VERSION,
+                    forecast.modelDeploymentId()
+            ));
+            PassClosed pass = passByKey.get(List.of(
+                    forecast.passSourceDate(),
+                    forecast.routeId(),
+                    forecast.tripStartObservationId(),
+                    forecast.stopOrder()
+            ));
             if (label.state() == PassLabel.State.SETTLED) {
-                put(verdicts, key, new Verdict("SETTLED", null, Double.doubleToLongBits(label.labelValue()),
-                    label.parameterHash(), label.capacity(), pass.arrivalObservationId(), pass.lastObservationId(),
-                    pass.closureObservationId(), label.previousLastObservationId(),
-                    label.previousClosureObservationId()));
+                put(verdicts, key, new Verdict(
+                        "SETTLED",
+                        null,
+                        Double.doubleToLongBits(label.labelValue()),
+                        label.parameterHash(),
+                        label.capacity(),
+                        pass.arrivalObservationId(),
+                        pass.lastObservationId(),
+                        pass.closureObservationId(),
+                        label.previousLastObservationId(),
+                        label.previousClosureObservationId()
+                ));
                 continue;
             }
             put(verdicts, key, Verdict.of("UNSUPPORTED",
                 BaselineReasons.recordedName(label.reason()).orElse("NONE:" + label.reason())));
             reasons.put(key, label.reason());
         }
-        return new Scored(verdicts, reasons, labels.size(), unresolved.size());
+        return new Scored(
+                verdicts,
+                reasons,
+                labels.size(),
+                unresolved.size()
+        );
     }
 
     private static Map<List<Object>, PassLabel> firstLabelsByKey(ScoringResult result) {
         Map<List<Object>, PassLabel> labels = new LinkedHashMap<>();
         for (PassLabel label : result.labels()) {
-            labels.putIfAbsent(List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
-                label.stopOrder(), label.capacity(), label.labelVersion(), label.modelDeploymentId()), label);
+            labels.putIfAbsent(List.of(
+                    label.sourceDate(),
+                    label.routeId(),
+                    label.tripStartObservationId(),
+                    label.stopOrder(),
+                    label.capacity(),
+                    label.labelVersion(),
+                    label.modelDeploymentId()
+            ), label);
         }
         return labels;
     }
@@ -265,7 +353,12 @@ final class ScoringScenario {
     private Map<List<Object>, PassClosed> passesByKey() {
         Map<List<Object>, PassClosed> passByKey = new HashMap<>();
         for (PassClosed pass : passes()) {
-            passByKey.put(List.of(pass.sourceDate(), pass.routeId(), pass.tripStartObservationId(), pass.stopOrder()),
+            passByKey.put(List.of(
+                    pass.sourceDate(),
+                    pass.routeId(),
+                    pass.tripStartObservationId(),
+                    pass.stopOrder()
+            ),
                 pass);
         }
         return passByKey;
@@ -280,7 +373,11 @@ final class ScoringScenario {
         return unresolved;
     }
 
-    private static void put(Map<Key, Verdict> verdicts, Key key, Verdict verdict) {
+    private static void put(
+        Map<Key, Verdict> verdicts,
+        Key key,
+        Verdict verdict
+    ) {
         Verdict before = verdicts.putIfAbsent(key, verdict);
         if (before != null && !before.equals(verdict)) {
             throw new AssertionError("한 예측에 결과가 둘이다: " + key + " " + before + " " + verdict);
@@ -307,7 +404,12 @@ final class ScoringScenario {
         AlightingAwareObservation source = rowById.get(key.observationId());
         Instant dayStart = source.receivedAt().atZone(SEOUL).toLocalDate().atStartOfDay(SEOUL).toInstant();
         Instant earliest = source.receivedAt().minus(Duration.ofHours(3));
-        return rows.stream().anyMatch(row -> isEarlierSameVehicle(row, source, dayStart, earliest));
+        return rows.stream().anyMatch(row -> isEarlierSameVehicle(
+                row,
+                source,
+                dayStart,
+                earliest
+        ));
     }
 
     private static boolean isEarlierSameVehicle(
@@ -355,13 +457,30 @@ final class ScoringScenario {
             .filter(row -> isSeatObservationAtPass(row, event, chain))
             .map(AlightingAwareObservation::receivedAt).max(Instant::compareTo).orElse(null);
         LocalDate closedDay = event.confirmedAt().atZone(SEOUL).toLocalDate();
-        return new PassClosed(closedDay, ROUTE, event.tripId(), event.stopOrder(), VERSION, event.vehicleId(), chain,
-            event.departure().receivedAt().atZone(SEOUL).toLocalDate(), event.arrival().observationId(),
-            event.arrival().seats(), event.arrival().receivedAt(), event.arrival().sourceReceivedAt(),
-            event.firstDeparture().observationId(), event.firstDeparture().receivedAt(),
-            event.departure().observationId(), event.departure().seats(), event.departure().receivedAt(),
-            event.departure().sourceReceivedAt(), reached, event.confirmation().observationId(),
-            event.confirmation().batchId(), event.confirmedAt());
+        return new PassClosed(
+                closedDay,
+                ROUTE,
+                event.tripId(),
+                event.stopOrder(),
+                VERSION,
+                event.vehicleId(),
+                chain,
+                event.departure().receivedAt().atZone(SEOUL).toLocalDate(),
+                event.arrival().observationId(),
+                event.arrival().seats(),
+                event.arrival().receivedAt(),
+                event.arrival().sourceReceivedAt(),
+                event.firstDeparture().observationId(),
+                event.firstDeparture().receivedAt(),
+                event.departure().observationId(),
+                event.departure().seats(),
+                event.departure().receivedAt(),
+                event.departure().sourceReceivedAt(),
+                reached,
+                event.confirmation().observationId(),
+                event.confirmation().batchId(),
+                event.confirmedAt()
+        );
     }
 
     private boolean isSeatObservationAtPass(
@@ -377,20 +496,49 @@ final class ScoringScenario {
     private ForecastPublished published(Batch batch) {
         LocalDate day = batch.at().minusSeconds(5).atZone(SEOUL).toLocalDate();
         if (batch.forecasts().isEmpty()) {
-            return new ForecastPublished(day, batch.id(), ROUTE, VERSION, batch.receivedAt(), batch.at(), DEPLOYMENT,
-                ForecastOutcome.EMPTY, List.of());
+            return new ForecastPublished(
+                    day,
+                    batch.id(),
+                    ROUTE,
+                    VERSION,
+                    batch.receivedAt(),
+                    batch.at(),
+                    DEPLOYMENT,
+                    ForecastOutcome.EMPTY,
+                    List.of()
+            );
         }
         List<ForecastPublished.VehicleForecast> vehicles = new ArrayList<>();
         int number = 0;
         for (Forecast forecast : batch.forecasts()) {
             AlightingAwareObservation row = rowById.get(forecast.observationId());
             final int size = forecast.targets().length;
-            vehicles.add(new ForecastPublished.VehicleForecast(row.observationId(), number++, row.vehicleId(),
-                row.passedStopOrder(), trips.get(row.observationId()), chains.get(row.observationId()), row.down(),
-                forecast.capacity(), false, forecast.targets(), new double[size], new double[size]));
+            vehicles.add(new ForecastPublished.VehicleForecast(
+                    row.observationId(),
+                    number++,
+                    row.vehicleId(),
+                    row.passedStopOrder(),
+                    trips.get(row.observationId()),
+                    chains.get(row.observationId()),
+                    row.down(),
+                    forecast.capacity(),
+                    false,
+                    forecast.targets(),
+                    new double[size],
+                    new double[size]
+            ));
         }
-        return new ForecastPublished(day, batch.id(), ROUTE, VERSION, batch.receivedAt(), batch.at(), DEPLOYMENT,
-            ForecastOutcome.PUBLISHED, vehicles);
+        return new ForecastPublished(
+                day,
+                batch.id(),
+                ROUTE,
+                VERSION,
+                batch.receivedAt(),
+                batch.at(),
+                DEPLOYMENT,
+                ForecastOutcome.PUBLISHED,
+                vehicles
+        );
     }
 
     static boolean isDown(final int stop, final int state, final int turn) {
@@ -411,7 +559,16 @@ final class ScoringScenario {
     ) {
         Function<Double, String> parameters = rate ->
             ("\"p\":0.12,\"lam\":[%s,%s,%s,%s,%s,%s,%s,%s],\"kappa\":1,\"r\":2")
-            .formatted(rate, rate + .1, rate + .2, rate + .3, rate + .4, rate + .5, rate + .6, rate + .7);
+            .formatted(
+                    rate,
+                    rate + .1,
+                    rate + .2,
+                    rate + .3,
+                    rate + .4,
+                    rate + .5,
+                    rate + .6,
+                    rate + .7
+            );
         List<String> stops = new ArrayList<>();
         for (final int target : targets) {
             List<String> entries = new ArrayList<>();
@@ -425,10 +582,11 @@ final class ScoringScenario {
             stops.add("\"%d\":[%s]".formatted(target, String.join(",", entries)));
         }
         List<String> shared = new ArrayList<>(List.of(
-            "\"capacityPolicy\":\"vehicle-capacity-snapshot-v1\"",
-            "\"inputProfile\":\"" + AlightingAwareRouteStatistics.CONFIRMED_PROFILE + "\"",
-            "\"turn\":" + turn,
-            "\"realStopOrders\":" + realStops));
+                "\"capacityPolicy\":\"vehicle-capacity-snapshot-v1\"",
+                "\"inputProfile\":\"" + AlightingAwareRouteStatistics.CONFIRMED_PROFILE + "\"",
+                "\"turn\":" + turn,
+                "\"realStopOrders\":" + realStops
+        ));
         if (extended) {
             List<String> cells = AlightingTimeCell.extendedKeys().stream()
                 .filter(key -> !missingExtended.contains(key))
@@ -452,7 +610,15 @@ final class ScoringScenario {
         final double holeChance,
         final boolean extended
     ) {
-        return random(seed, start, batchCount, vehicleCount, holeChance, extended, List.of("work-night"));
+        return random(
+                seed,
+                start,
+                batchCount,
+                vehicleCount,
+                holeChance,
+                extended,
+                List.of("work-night")
+        );
     }
 
     /** {@code missingExtended} 칸의 비첨두 계수를 뺀 근거로 {@link #random(long, Instant, int, int, double, boolean)}과 같이 만든다. */
@@ -465,10 +631,35 @@ final class ScoringScenario {
         final boolean extended,
         List<String> missingExtended
     ) {
-        List<Integer> real = List.of(1, 2, 3, 4, 6, 7, 8, 9);
-        List<Integer> targets = List.of(2, 3, 4, 5, 6, 7, 8, 9);
+        List<Integer> real = List.of(
+                1,
+                2,
+                3,
+                4,
+                6,
+                7,
+                8,
+                9
+        );
+        List<Integer> targets = List.of(
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9
+        );
         ScoringScenario scenario = new ScoringScenario(real, 20,
-            context(real, 20, targets, extended, List.of(7), missingExtended));
+            context(
+                    real,
+                    20,
+                    targets,
+                    extended,
+                    List.of(7),
+                    missingExtended
+            ));
         Random random = new Random(seed);
         List<SimulatedVehicle> vehicles = new ArrayList<>();
         for (int i = 0; i < vehicleCount; i++) {
@@ -481,7 +672,12 @@ final class ScoringScenario {
             at = at.plusSeconds(10 + random.nextInt(11));
             final long batch = scenario.batch(at, random.nextDouble() < holeChance);
             for (SimulatedVehicle vehicle : vehicles) {
-                vehicle.step(scenario, batch, at, random);
+                vehicle.step(
+                        scenario,
+                        batch,
+                        at,
+                        random
+                );
             }
         }
         return scenario;
@@ -499,6 +695,7 @@ final class ScoringScenario {
     }
 
     private static final class SimulatedVehicle {
+
         private final String id;
         private int capacity;
         private Instant nextStart;
@@ -515,7 +712,12 @@ final class ScoringScenario {
         }
 
         /** 난수를 뽑는 순서와 횟수가 시나리오를 정하므로, 조건마다 뽑던 자리를 그대로 지킨다. */
-        private void step(ScoringScenario scenario, final long batch, Instant at, Random random) {
+        private void step(
+            ScoringScenario scenario,
+            final long batch,
+            Instant at,
+            Random random
+        ) {
             if (!active) {
                 if (at.isBefore(nextStart)) {
                     return;
@@ -540,7 +742,12 @@ final class ScoringScenario {
                 capacity = otherCapacity(capacity);
             }
             Integer reported = reportedSeats(random);
-            final long observation = scenario.row(batch, id, stop, reported);
+            final long observation = scenario.row(
+                    batch,
+                    id,
+                    stop,
+                    reported
+            );
             if (reported != null && stop < 9) {
                 int[] wanted = IntStream.rangeClosed(stop + 1, Math.min(9, stop + 4)).toArray();
                 scenario.forecast(observation, capacity, wanted);

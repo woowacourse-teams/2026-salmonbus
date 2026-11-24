@@ -11,6 +11,7 @@ import java.util.Optional;
  * <p>쓰기는 호출하는 쪽이 연 트랜잭션 안에서만 하며 이미 있는 키를 건너뛴다. {@code route} 행 잠금을 잡지 않는다.
  */
 public interface StopPassStore {
+
     /**
      * 통과를 여러 줄 한 문장으로 넣는다.
      *

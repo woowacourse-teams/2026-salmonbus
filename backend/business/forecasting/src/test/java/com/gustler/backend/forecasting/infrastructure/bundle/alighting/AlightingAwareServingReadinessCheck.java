@@ -7,8 +7,8 @@ import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
 import com.gustler.backend.forecasting.domain.model.RouteDirection;
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
-import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,6 +22,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** 로컬 모델의 전체 노선과 배포 식별을 검사한다. 운영 DB나 외부 API에 접근하지 않는다. */
 public final class AlightingAwareServingReadinessCheck {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private AlightingAwareServingReadinessCheck() {
@@ -37,16 +38,37 @@ public final class AlightingAwareServingReadinessCheck {
         }
         Path directory = Path.of(args[1]);
         AlightingAwareInferenceBundle bundle = readBundle(directory, serving);
-        ModelRelease release = readRelease(directory, bundle, args[3], serving);
+        ModelRelease release = readRelease(
+                directory,
+                bundle,
+                args[3],
+                serving
+        );
         verifyIdentity(release);
         verifyRoutes(directory, bundle, release);
         Map<String, Object> report = Map.of(
-            "passed", true, "bundle_manifest_sha256", bundle.digest(), "routes", bundle.routes(),
-            "input_profile", com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical(
-                bundle.statistics(bundle.routes().getFirst()).path("input_profile").asText("alighting-original-v1")),
-            "runtime_calculation_version", release.featureContractVersion(), "release_id", release.releaseId(),
-            "data_through", release.dataThrough(), "verified_cases", bundle.routes().size(),
-            "mode", args[0], "scope", "local model, catalog, registry and deployment identity; no production activation");
+                "passed",
+                true,
+                "bundle_manifest_sha256",
+                bundle.digest(),
+                "routes",
+                bundle.routes(),
+                "input_profile",
+                bundle.statistics(bundle.routes().getFirst()).path("input_profile")
+                        .asText("alighting-original-v1"),
+                "runtime_calculation_version",
+                release.featureContractVersion(),
+                "release_id",
+                release.releaseId(),
+                "data_through",
+                release.dataThrough(),
+                "verified_cases",
+                bundle.routes().size(),
+                "mode",
+                args[0],
+                "scope",
+                "local model, catalog, registry and deployment identity; no production activation"
+        );
         Files.writeString(Path.of(args[2]), JSON.writerWithDefaultPrettyPrinter().writeValueAsString(report) + "\n");
         System.out.println(JSON.writeValueAsString(report));
     }
@@ -81,8 +103,13 @@ public final class AlightingAwareServingReadinessCheck {
                 }
             }
         }
-        return ModelRelease.alighting(releaseId, bundle.digest(), through.toString(),
-            new SupportedForecastScope(bundle.routes()), AlightingAwareServingBundle.readModel(bundle));
+        return ModelRelease.alighting(
+                releaseId,
+                bundle.digest(),
+                through.toString(),
+                new SupportedForecastScope(bundle.routes()),
+                AlightingAwareServingBundle.readModel(bundle)
+        );
     }
 
     private static void verifyIdentity(ModelRelease release) {
@@ -90,13 +117,21 @@ public final class AlightingAwareServingReadinessCheck {
         registry.add(release);
         ModelRelease loaded = registry.find(release.bundleDigest()).orElseThrow();
         ActiveModelDeployment deployment = new ActiveModelDeployment(
-            1, release.featureContractVersion(), release.releaseId(), release.bundleDigest());
+                1,
+                release.featureContractVersion(),
+                release.releaseId(),
+                release.bundleDigest()
+        );
         if (!loaded.hasIdentityOf(deployment)) {
             throw new IllegalStateException("Registry/deployment identity mismatch");
         }
     }
 
-    private static void verifyRoutes(Path directory, AlightingAwareInferenceBundle bundle, ModelRelease release) throws Exception {
+    private static void verifyRoutes(
+        Path directory,
+        AlightingAwareInferenceBundle bundle,
+        ModelRelease release
+    ) throws Exception {
         JsonNode references = JSON.readTree(Files.readAllBytes(directory.resolve("route-reference.json")));
         AlightingAwareSeatForecastModel model = (AlightingAwareSeatForecastModel) release.model();
         List<String> verified = new ArrayList<>();
@@ -104,10 +139,20 @@ public final class AlightingAwareServingReadinessCheck {
             String route = reference.path("modelRoute").asText();
             List<RouteStop> stops = new ArrayList<>();
             for (JsonNode stop : reference.path("stops")) {
-                stops.add(new RouteStop(1, stop.path("order").asInt(), stop.path("id").asText(),
-                    stop.path("boardingAllowed").asBoolean(), RouteDirection.valueOf(stop.path("direction").asText())));
+                stops.add(new RouteStop(
+                        1,
+                        stop.path("order").asInt(),
+                        stop.path("id").asText(),
+                        stop.path("boardingAllowed").asBoolean(),
+                        RouteDirection.valueOf(stop.path("direction").asText())
+                ));
             }
-            RouteStops catalog = new RouteStops(1, reference.path("sourceRouteId").asText(), stops, route);
+            RouteStops catalog = new RouteStops(
+                    1,
+                    reference.path("sourceRouteId").asText(),
+                    stops,
+                    route
+            );
             if (!release.scope().coversSourceRoute(catalog.sourceRouteId())) {
                 throw new IllegalStateException("Unsupported source route " + route);
             }

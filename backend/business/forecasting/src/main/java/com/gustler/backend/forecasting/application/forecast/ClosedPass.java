@@ -12,11 +12,8 @@ import java.time.LocalDate;
  * 그 차량의 연결 시작 관측 번호와 "지난 정류장이 목표와 정확히 같고 좌석을 아는 관측 가운데 가장 늦은 것의 확정 시각"을 더한다.
  * 그런 관측이 없으면 마지막 값은 비어 있다. 연결 시작을 실제로 본 차량의 통과만 만든다.
  */
-public record ClosedPass(
-    AlightingAwarePassEvent event,
-    long chainStartObservationId,
-    Instant reachedKnownSeatAt
-) {
+public record ClosedPass(AlightingAwarePassEvent event, long chainStartObservationId, Instant reachedKnownSeatAt) {
+
     /**
      * 저장·전달용 사건으로 바꾼다. 출발 날짜는 마지막 관측 확정 시각의 한국 날짜이고,
      * 노선 판본은 통과를 닫은 관측의 판본이다.
@@ -30,11 +27,29 @@ public record ClosedPass(
         AlightingAwareObservation first = event.firstDeparture();
         AlightingAwareObservation last = event.departure();
         AlightingAwareObservation closure = event.confirmation();
-        return new PassClosed(sourceDate, routeId, event.tripId(), event.stopOrder(), closure.routeVersionId(),
-            event.vehicleId(), chainStartObservationId, last.receivedAt().atZone(SourceDates.KOREA).toLocalDate(),
-            arrival.observationId(), arrival.seats(), arrival.receivedAt(), arrival.sourceReceivedAt(),
-            first.observationId(), first.receivedAt(), last.observationId(), last.seats(), last.receivedAt(),
-            last.sourceReceivedAt(), reachedKnownSeatAt, closure.observationId(), closure.batchId(),
-            event.confirmedAt());
+        return new PassClosed(
+                sourceDate,
+                routeId,
+                event.tripId(),
+                event.stopOrder(),
+                closure.routeVersionId(),
+                event.vehicleId(),
+                chainStartObservationId,
+                last.receivedAt().atZone(SourceDates.KOREA).toLocalDate(),
+                arrival.observationId(),
+                arrival.seats(),
+                arrival.receivedAt(),
+                arrival.sourceReceivedAt(),
+                first.observationId(),
+                first.receivedAt(),
+                last.observationId(),
+                last.seats(),
+                last.receivedAt(),
+                last.sourceReceivedAt(),
+                reachedKnownSeatAt,
+                closure.observationId(),
+                closure.batchId(),
+                event.confirmedAt()
+        );
     }
 }

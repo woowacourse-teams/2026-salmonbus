@@ -9,9 +9,9 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRout
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 확정 판본 하차 모델의 관측 배치 하나를 노선 상태 위에서 처리한다. 상태는 메모리에 있고 파일·DB에 쓰지 않는다.
@@ -24,6 +24,7 @@ import java.util.Map;
  * 단, 돌려준 스냅샷은 한 스레드에서만 쓴다.
  */
 public final class ForecastStage {
+
     public static final String BATCH_NOT_CONFIRMED = "BATCH_NOT_CONFIRMED";
     public static final String BATCH_ALREADY_APPLIED = "BATCH_ALREADY_APPLIED";
     public static final String SOURCE_ROWS_MISSING = "ALIGHTING_AWARE_SOURCE_ROWS_MISSING";
@@ -57,7 +58,13 @@ public final class ForecastStage {
         String capacitySourceId,
         ForecastBatch batch
     ) {
-        return apply(state, statistics, batch, capacitySourceId, Mode.FORECAST);
+        return apply(
+                state,
+                statistics,
+                batch,
+                capacitySourceId,
+                Mode.FORECAST
+        );
     }
 
     /** 예보 없이 상태만 전진시킨다. 되감기가 쓴다. 정원을 조회하지 않고 통과 목록도 만들지 않는다. */
@@ -66,7 +73,13 @@ public final class ForecastStage {
         AlightingAwareRouteStatistics statistics,
         ForecastBatch batch
     ) {
-        return apply(state, statistics, batch, null, Mode.REPLAY);
+        return apply(
+                state,
+                statistics,
+                batch,
+                null,
+                Mode.REPLAY
+        );
     }
 
     /**
@@ -78,7 +91,13 @@ public final class ForecastStage {
         AlightingAwareRouteStatistics statistics,
         ForecastBatch batch
     ) {
-        return apply(state, statistics, batch, null, Mode.REPLAY_CLOSING);
+        return apply(
+                state,
+                statistics,
+                batch,
+                null,
+                Mode.REPLAY_CLOSING
+        );
     }
 
     private ForecastStageResult apply(
@@ -90,45 +109,75 @@ public final class ForecastStage {
     ) {
         requireSameRoute(state, statistics);
         if (!batch.confirmed()) {
-            return ForecastStageResult.unchanged(ForecastStageResult.Status.NOT_CONFIRMED, BATCH_NOT_CONFIRMED, state);
+            return ForecastStageResult.stateOnly(ForecastStageResult.Status.NOT_CONFIRMED, BATCH_NOT_CONFIRMED, state);
         }
         if (!state.precedes(batch)) {
-            return ForecastStageResult.unchanged(ForecastStageResult.Status.STALE, BATCH_ALREADY_APPLIED, state);
+            return ForecastStageResult.stateOnly(ForecastStageResult.Status.STALE, BATCH_ALREADY_APPLIED, state);
         }
         if (!batch.rowsComplete()) {
-            return ForecastStageResult.unchanged(
+            return ForecastStageResult.stateOnly(
                 ForecastStageResult.Status.REPLAY_REQUIRED, SOURCE_ROWS_MISSING, state);
         }
-        RouteForecastState.Cursor cursor = new RouteForecastState.Cursor(batch.observationBatchId(), state.nextRank(),
-            batch.confirmedAt(), batch.receivedAt());
+
+        RouteForecastState.Cursor cursor = new RouteForecastState.Cursor(
+                batch.observationBatchId(),
+                state.nextRank(),
+                batch.confirmedAt(),
+                batch.receivedAt()
+        );
         List<AlightingAwareObservation> arrivals = observations(batch, cursor.rank(), statistics.turn());
         List<AlightingAwareObservation> history = new ArrayList<>(state.observations());
         history.addAll(arrivals);
         RouteForecastState.Progress progress = state.track(arrivals, statistics.realStopOrders());
+
         List<AlightingAwarePassEvent> events;
         try {
-            events = AlightingAwareHistoryCompactor.resolve(
-                new AlightingAwareHistoryCompactor.History(state.prefix(), history, state.events()),
-                statistics.realStopOrders());
+            AlightingAwareHistoryCompactor.History historyWithNewObservations =
+                new AlightingAwareHistoryCompactor.History(state.prefix(), history, state.events());
+            events = AlightingAwareHistoryCompactor.resolve(historyWithNewObservations, statistics.realStopOrders());
         } catch (IllegalArgumentException ambiguous) {
-            RouteForecastState held = state.next(progress, state.prefix(), history, state.events(), cursor);
-            return new ForecastStageResult(ForecastStageResult.Status.INPUT_UNAVAILABLE, AMBIGUOUS_PASS, held,
-                List.of(), List.of(), 0, List.of());
+            RouteForecastState held = state.next(
+                    progress,
+                    state.prefix(),
+                    history,
+                    state.events(),
+                    cursor
+            );
+            return ForecastStageResult.stateOnly(ForecastStageResult.Status.INPUT_UNAVAILABLE, AMBIGUOUS_PASS, held);
         }
+
         List<AlightingAwareFeatureSnapshot> snapshots = new ArrayList<>();
         List<ForecastStageResult.WithheldVehicle> withheld = new ArrayList<>();
         if (mode == Mode.FORECAST) {
-            snapshots(state, statistics, batch, capacitySourceId, progress, history, events, snapshots, withheld);
+            collectForecastInputs(
+                    state,
+                    statistics,
+                    batch,
+                    capacitySourceId,
+                    progress,
+                    history,
+                    events,
+                    snapshots,
+                    withheld
+            );
         }
-        AlightingAwareHistoryCompactor.History compact = AlightingAwareHistoryCompactor.compact(
+
+        AlightingAwareHistoryCompactor.History compactedHistory = AlightingAwareHistoryCompactor.compact(
             new AlightingAwareHistoryCompactor.History(state.prefix(), history, events), batch.confirmedAt());
-        List<AlightingAwareObservation> retained = new ArrayList<>(compact.observations());
-        retained.sort(RETAINED_ORDER);
-        RouteForecastState next = state.next(progress, compact.prefix(), retained, compact.events(), cursor);
+        List<AlightingAwareObservation> observationsInOrder = compactedHistory.observations().stream()
+            .sorted(RETAINED_ORDER)
+            .toList();
+        RouteForecastState next = state.next(
+                progress,
+                compactedHistory.prefix(),
+                observationsInOrder,
+                compactedHistory.events(),
+                cursor
+        );
         if (mode == Mode.REPLAY) {
-            return new ForecastStageResult(ForecastStageResult.Status.FORECAST, null, next, List.of(), List.of(), 0,
-                List.of());
+            return ForecastStageResult.stateOnly(ForecastStageResult.Status.FORECAST, null, next);
         }
+
         List<ClosedPass> closed = new ArrayList<>();
         int unattributed = 0;
         for (AlightingAwarePassEvent event : events) {
@@ -142,8 +191,15 @@ public final class ForecastStage {
             }
             closed.add(new ClosedPass(event, track.chainStartObservationId(), reachedKnownSeatAt(event, history)));
         }
-        return new ForecastStageResult(ForecastStageResult.Status.FORECAST, null, next, snapshots, closed,
-            unattributed, withheld);
+        return new ForecastStageResult(
+                ForecastStageResult.Status.FORECAST,
+                null,
+                next,
+                snapshots,
+                closed,
+                unattributed,
+                withheld
+        );
     }
 
     private static boolean lacksKnownStart(RouteForecastState.VehicleTrack track, Mode mode) {
@@ -153,7 +209,7 @@ public final class ForecastStage {
         return mode == Mode.REPLAY_CLOSING && !track.tripStartKnown();
     }
 
-    private void snapshots(
+    private void collectForecastInputs(
         RouteForecastState state,
         AlightingAwareRouteStatistics statistics,
         ForecastBatch batch,
@@ -164,35 +220,49 @@ public final class ForecastStage {
         List<AlightingAwareFeatureSnapshot> snapshots,
         List<ForecastStageResult.WithheldVehicle> withheld
     ) {
-        List<AlightingAwareObservation> candidates = new ArrayList<>();
-        final boolean complete = progress.historyCompleteAt(batch.confirmedAt());
+        List<AlightingAwareObservation> awaitingCapacity = new ArrayList<>();
+        final boolean historyComplete = progress.historyCompleteAt(batch.confirmedAt());
         for (AlightingAwareObservation source : history) {
             if (!isEligibleSource(source, batch.observationBatchId())) {
                 continue;
             }
-            String historyReason = historyWithholdReason(complete, progress, source);
+            String historyReason = historyWithholdReason(historyComplete, progress, source);
             if (historyReason != null) {
                 withheld.add(withheld(source, historyReason));
                 continue;
             }
-            candidates.add(source);
+            awaitingCapacity.add(source);
         }
-        if (candidates.isEmpty()) {
+        if (awaitingCapacity.isEmpty()) {
             return;
         }
-        Map<String, Integer> known = capacities.knownAt(capacitySourceId,
-            candidates.stream().map(AlightingAwareObservation::vehicleId).toList(), batch.confirmedAt(),
-            batch.observationBatchId());
+
+        Map<String, Integer> capacityByVehicle = capacities.knownAt(
+                capacitySourceId,
+                awaitingCapacity.stream().map(AlightingAwareObservation::vehicleId).toList(),
+                batch.confirmedAt(),
+                batch.observationBatchId()
+        );
         AlightingAwareBatchContext context =
-            new AlightingAwareBatchContext(statistics, history, events, state.prefix());
-        for (AlightingAwareObservation source : candidates) {
-            Integer capacity = known.get(source.vehicleId());
+            new AlightingAwareBatchContext(
+                    statistics,
+                    history,
+                    events,
+                    state.prefix()
+            );
+        for (AlightingAwareObservation source : awaitingCapacity) {
+            Integer capacity = capacityByVehicle.get(source.vehicleId());
             String capacityReason = capacityWithholdReason(capacity);
             if (capacityReason != null) {
                 withheld.add(withheld(source, capacityReason));
                 continue;
             }
-            snapshots.add(new AlightingAwareFeatureSnapshot(batch.routeVersionId(), source, capacity, context));
+            snapshots.add(new AlightingAwareFeatureSnapshot(
+                    batch.routeVersionId(),
+                    source,
+                    capacity,
+                    context
+            ));
         }
     }
 
@@ -226,23 +296,28 @@ public final class ForecastStage {
      * 확정 시각은 착수 시각, 물리 시각은 수신 시각이며 방향은 통계의 회차 지점으로 정한다.
      */
     static List<AlightingAwareObservation> observations(ForecastBatch batch, final long rank, final int turn) {
-        Map<String, Integer> rowsByVehicle = new HashMap<>();
-        for (ForecastObservationRow row : batch.rows()) {
-            if (row.vehicleId() != null) {
-                rowsByVehicle.merge(row.vehicleId(), 1, Integer::sum);
-            }
-        }
-        List<AlightingAwareObservation> observations = new ArrayList<>();
-        for (ForecastObservationRow row : batch.rows()) {
-            if (row.vehicleId() == null || rowsByVehicle.get(row.vehicleId()) != 1) {
-                continue;
-            }
-            observations.add(new AlightingAwareObservation(row.observationId(), batch.observationBatchId(), rank,
-                batch.confirmedAt(), row.vehicleId(), row.passedStopOrder(), row.stopOrder(), row.runningState(),
-                knownSeats(row), row.crowdLevel(), batch.routeVersionId(), batch.receivedAt(),
-                isDown(row.stopOrder(), row.runningState(), turn)));
-        }
-        return observations;
+        Map<String, Integer> rowsByVehicle = batch.rows().stream()
+            .filter(row -> row.vehicleId() != null)
+            .collect(Collectors.toMap(ForecastObservationRow::vehicleId, ignored -> 1, Integer::sum));
+
+        return batch.rows().stream()
+            .filter(row -> row.vehicleId() != null && rowsByVehicle.get(row.vehicleId()) == 1)
+            .map(row -> new AlightingAwareObservation(
+                    row.observationId(),
+                    batch.observationBatchId(),
+                    rank,
+                    batch.confirmedAt(),
+                    row.vehicleId(),
+                    row.passedStopOrder(),
+                    row.stopOrder(),
+                    row.runningState(),
+                    knownSeats(row),
+                    row.crowdLevel(),
+                    batch.routeVersionId(),
+                    batch.receivedAt(),
+                    isDown(row.stopOrder(), row.runningState(), turn)
+            ))
+            .collect(Collectors.toCollection(ArrayList::new));
     }
 
     private static Integer knownSeats(ForecastObservationRow row) {
@@ -271,31 +346,23 @@ public final class ForecastStage {
 
     /**
      * 통과의 도착 전 관측부터 닫는 관측까지 같은 차량의 관측은 한 연결에 속한다.
-     * 그 가운데 지난 정류장이 목표와 같고 좌석을 아는 가장 늦은 관측의 확정 시각이다.
+     * 그 가운데 지난 정류장이 목표와 같고 좌석을 아는 가장 늦은 관측의 수신 시각이다.
      */
     private static Instant reachedKnownSeatAt(AlightingAwarePassEvent event, List<AlightingAwareObservation> history) {
         Instant from = event.arrival().receivedAt();
         Instant until = event.confirmation().receivedAt();
-        Instant latest = null;
-        for (AlightingAwareObservation observation : history) {
-            if (lacksKnownSeatAtStop(observation, event)) {
-                continue;
-            }
-            Instant at = observation.receivedAt();
-            if (at.isBefore(from) || at.isAfter(until)) {
-                continue;
-            }
-            if (latest == null || at.isAfter(latest)) {
-                latest = at;
-            }
-        }
-        return latest;
+        return history.stream()
+            .filter(observation -> hasKnownSeatAtStop(observation, event))
+            .map(AlightingAwareObservation::receivedAt)
+            .filter(at -> !at.isBefore(from) && !at.isAfter(until))
+            .max(Instant::compareTo)
+            .orElse(null);
     }
 
-    private static boolean lacksKnownSeatAtStop(AlightingAwareObservation observation, AlightingAwarePassEvent event) {
-        return !observation.vehicleId().equals(event.vehicleId())
-            || observation.passedStopOrder() != event.stopOrder()
-            || observation.seats() == null;
+    private static boolean hasKnownSeatAtStop(AlightingAwareObservation observation, AlightingAwarePassEvent event) {
+        return observation.vehicleId().equals(event.vehicleId())
+            && observation.passedStopOrder() == event.stopOrder()
+            && observation.seats() != null;
     }
 
     private static void requireSameRoute(RouteForecastState state, AlightingAwareRouteStatistics statistics) {
@@ -309,6 +376,7 @@ public final class ForecastStage {
 
     /** 배치 하나를 반영하면서 무엇까지 만들지다. */
     private enum Mode {
+
         /** 예보 입력과 닫힌 통과를 만든다. */
         FORECAST,
         /** 상태만 전진시킨다. */

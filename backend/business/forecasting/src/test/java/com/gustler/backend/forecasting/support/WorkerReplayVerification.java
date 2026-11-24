@@ -45,6 +45,7 @@ import tools.jackson.databind.JsonNode;
  * 한 번 더 계산하고 저장된 값과 비트까지 같은지 본다.
  */
 final class WorkerReplayVerification {
+
     private static final String CAPACITY_POLICY = "vehicle-capacity-snapshot-v1";
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final double PREDICTION_TOLERANCE = 1e-9;
@@ -194,8 +195,16 @@ final class WorkerReplayVerification {
             tally.failures.add(failure(row, "restart", restart.withheldReason(source.observationId())));
             return Optional.empty();
         }
-        Forecast forecast = expectedForecast(row, restart, snapshot.get(), target);
-        return Optional.of(new Expected(forecast, restartedPrediction(restart, snapshot.get(), target).orElse(null)));
+        Forecast forecast = expectedForecast(
+                row,
+                restart,
+                snapshot.get(),
+                target
+        );
+        return Optional.of(new Expected(
+            forecast,
+            restartedPrediction(restart, snapshot.get(), target).orElse(null)
+        ));
     }
 
     /** 사례는 기준 관측의 착수 시각 순서라 같은 배치가 이어진다. 직전 배치 하나만 들고 있는다. */
@@ -218,19 +227,32 @@ final class WorkerReplayVerification {
             throw new IllegalArgumentException("재생 입력의 실제 시간대가 기대값과 다르다");
         }
         if (row.has("extended_inputs")) {
-            return expectedExtended(row, restart, snapshot, target);
+            return expectedExtended(
+                    row,
+                    restart,
+                    snapshot,
+                    target
+            );
         }
         AlightingAwareFeatureVector actual = snapshot.forTarget(target);
         if (row.path("boundary_probe").asBoolean(false)) {
             AlightingAwareSeatPredictor.Prediction rush = bundle.predictor()
                 .predict(actual.seat88(), actual.probability80());
-            return new Forecast(rush.afterAlightingSeats(), rush.departureFullProbability(), 0);
+            return new Forecast(
+                rush.afterAlightingSeats(),
+                rush.departureFullProbability(),
+                0
+            );
         }
         final double difference = Math.max(difference(row.path("seat88"), actual.seat88()),
             difference(row.path("probability80"), actual.probability80()));
         AlightingAwareSeatPredictor.Prediction expected = bundle.predictor()
             .predict(vector(row.path("seat88")), vector(row.path("probability80")));
-        return new Forecast(expected.afterAlightingSeats(), expected.departureFullProbability(), difference);
+        return new Forecast(
+            expected.afterAlightingSeats(),
+            expected.departureFullProbability(),
+            difference
+        );
     }
 
     private static Forecast expectedExtended(
@@ -247,7 +269,11 @@ final class WorkerReplayVerification {
         final boolean offDay = "off".equals(restart.statistics().dayType(day));
         final double difference = difference(row.path("extended_inputs"),
             ExtendedAlightingPredictor.inputs(snapshot, stop, offDay));
-        return new Forecast(row.path("expected_seats").asDouble(), row.path("expected_full").asDouble(), difference);
+        return new Forecast(
+            row.path("expected_seats").asDouble(),
+            row.path("expected_full").asDouble(),
+            difference
+        );
     }
 
     private Optional<SeatForecastResult> restartedPrediction(
@@ -270,7 +296,12 @@ final class WorkerReplayVerification {
               previous_last_observation_id
             FROM forecast_outcome
             WHERE source_date=? AND vehicle_observation_id=? AND target_stop_order=? AND route_id=?
-            """).params(sourceDate, source.observationId(), target, routeId).query().listOfRows();
+            """).params(
+                    sourceDate,
+                    source.observationId(),
+                    target,
+                    routeId
+            ).query().listOfRows();
     }
 
     private String runOutcome(final long batchId) {
@@ -278,7 +309,11 @@ final class WorkerReplayVerification {
             .query(String.class).optional().orElse("MISSING");
     }
 
-    private void comparePrediction(JsonNode row, Expected expected, Map<String, Object> outcome) {
+    private void comparePrediction(
+        JsonNode row,
+        Expected expected,
+        Map<String, Object> outcome
+    ) {
         final double seats = number(outcome, "expected_seats");
         final double full = number(outcome, "full_probability");
         tally.maximumPrediction = Math.max(tally.maximumPrediction, Math.abs(seats - expected.forecast().seats()));
@@ -330,8 +365,12 @@ final class WorkerReplayVerification {
         tally.settled++;
         countSettled(row);
         if (row.has("extended_inputs") && knownAt != null) {
-            tally.settledExtended.add(new Settled(row.path("source_id").asLong(), row.path("target").asInt(), knownAt,
-                label));
+            tally.settledExtended.add(new Settled(
+                    row.path("source_id").asLong(),
+                    row.path("target").asInt(),
+                    knownAt,
+                    label
+            ));
         }
     }
 
@@ -348,8 +387,12 @@ final class WorkerReplayVerification {
         List<OffsetDateTime> closed = jdbc.sql("""
             SELECT closed_at FROM stop_pass
             WHERE route_id=? AND stop_order=? AND closure_observation_id=? AND last_observation_id=?
-            """).params(routeId, row.path("target").asInt(), outcome.get("closure_observation_id"),
-                outcome.get("last_observation_id"))
+            """).params(
+                    routeId,
+                    row.path("target").asInt(),
+                    outcome.get("closure_observation_id"),
+                    outcome.get("last_observation_id")
+            )
             .query(OffsetDateTime.class).list();
         if (closed.size() != 1) {
             return Optional.empty();
@@ -399,7 +442,9 @@ final class WorkerReplayVerification {
      * @throws IllegalStateException 다시 계산한 정답이 저장된 정답과 다르면 던진다
      */
     private int restoreFirstSettled() {
-        Optional<Settled> first = tally.settledExtended.stream().min(Settled.ORDER);
+        Optional<Settled> first = tally.settledExtended.stream().min(
+            Settled.ORDER
+        );
         if (first.isEmpty()) {
             return 0;
         }
@@ -422,13 +467,27 @@ final class WorkerReplayVerification {
     }
 
     private static List<Object> labelKey(PassLabel label) {
-        return List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(), label.stopOrder(),
-            label.capacity(), label.labelVersion(), label.modelDeploymentId());
+        return List.of(
+                label.sourceDate(),
+                label.routeId(),
+                label.tripStartObservationId(),
+                label.stopOrder(),
+                label.capacity(),
+                label.labelVersion(),
+                label.modelDeploymentId()
+        );
     }
 
     private static List<Object> labelKey(ScoredForecast scored) {
-        return List.of(scored.passSourceDate(), scored.routeId(), scored.tripStartObservationId(), scored.stopOrder(),
-            scored.capacity(), ScoringReasons.LABEL_VERSION, scored.modelDeploymentId());
+        return List.of(
+                scored.passSourceDate(),
+                scored.routeId(),
+                scored.tripStartObservationId(),
+                scored.stopOrder(),
+                scored.capacity(),
+                ScoringReasons.LABEL_VERSION,
+                scored.modelDeploymentId()
+        );
     }
 
     private static Map<String, Object> failure(JsonNode row, String kind, Object detail) {
@@ -472,6 +531,7 @@ final class WorkerReplayVerification {
 
     /** 사례의 기대 예측과, 자료의 입력과 다시 만든 입력의 가장 큰 차이다. */
     private record Forecast(double seats, double full, double featureDifference) {
+
     }
 
     /**
@@ -480,6 +540,7 @@ final class WorkerReplayVerification {
      * @param restarted 되감아 만든 상태로 낸 그 목표의 예측. 그 상태가 이 목표를 예측하지 않았으면 비어 있다
      */
     private record Expected(Forecast forecast, SeatForecastResult restarted) {
+
         private double featureDifference() {
             return forecast.featureDifference();
         }
@@ -494,8 +555,16 @@ final class WorkerReplayVerification {
     }
 
     /** 정답을 받은 시간 확장 사례 하나다. */
-    private record Settled(long sourceId, int target, Instant closedAt, double label) {
-        private static final Comparator<Settled> ORDER = Comparator.comparing(Settled::closedAt)
+    private record Settled(
+        long sourceId,
+        int target,
+        Instant closedAt,
+        double label
+    ) {
+
+        private static final Comparator<Settled> ORDER = Comparator.comparing(
+            Settled::closedAt
+        )
             .thenComparingLong(Settled::sourceId)
             .thenComparingInt(Settled::target);
 
@@ -510,6 +579,7 @@ final class WorkerReplayVerification {
 
     /** 사례를 견주며 쌓는 수와 어긋난 사례 목록이다. */
     private static final class Tally {
+
         private final List<Map<String, Object>> failures = new ArrayList<>();
         private final Map<String, int[]> cells = new LinkedHashMap<>();
         private final Map<String, Integer> settledBoundaries = new LinkedHashMap<>();

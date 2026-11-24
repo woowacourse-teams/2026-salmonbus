@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class ForecastSourceEquivalenceTest {
+
     private static final Map<String, String> RECORDED = RecordedBoards.load("/board/forecast-source-equivalence.txt");
     private static final String ROUTE_ID = "204000057";
     private static final String OTHER_ROUTE_ID = "234000050";
@@ -85,7 +86,12 @@ class ForecastSourceEquivalenceTest {
             softly.assertThat(board.route().status()).isEqualTo(RouteStatus.FORECAST_READY);
             ApproachingVehicle first = vehicleAt(board, 2, "BUS-A");
             softly.assertThat(first.forecast()).isEqualTo(new VehicleForecast.Available(
-                0.9, 18.0, "AFTER_ALIGHTING_ESTIMATE", "DEPARTURE_ZERO", 0.1));
+                    0.9,
+                    18.0,
+                    "AFTER_ALIGHTING_ESTIMATE",
+                    "DEPARTURE_ZERO",
+                    0.1
+            ));
             softly.assertThat(((VehicleForecast.Available) vehicleAt(board, 5, "BUS-A").forecast()).expectedSeats())
                 .isNull();
             softly.assertThat(((VehicleForecast.Available) vehicleAt(board, 6, "BUS-A").forecast()).expectedSeats())
@@ -123,7 +129,12 @@ class ForecastSourceEquivalenceTest {
         Batch older = name(batchWithVehicles(route, now.minusSeconds(30)), "older");
         publish(older, now.minusSeconds(29), model);
         Batch newer = name(batchWithVehicles(route, now), "newer");
-        fixture.insertRun(newer.id(), model, "EMPTY", now);
+        fixture.insertRun(
+                newer.id(),
+                model,
+                "EMPTY",
+                now
+        );
 
         // when
         Board board = boardOf(ROUTE_ID);
@@ -145,14 +156,21 @@ class ForecastSourceEquivalenceTest {
         Batch older = name(batchWithVehicles(route, now.minusSeconds(30)), "older");
         publish(older, now.minusSeconds(29), model);
         Batch newer = name(batchWithVehicles(route, now), "newer");
-        fixture.insertRun(newer.id(), null, "LATE", now);
+        fixture.insertRun(
+                newer.id(),
+                null,
+                "LATE",
+                now
+        );
 
         // when
         Board board = boardOf(ROUTE_ID);
 
         // then
-        assertThat(format.board(board)).isEqualTo(RECORDED.get("lateRun.board"));
-        assertThat(vehicleAt(board, 2, "BUS-A").forecast()).isInstanceOf(VehicleForecast.Unavailable.class);
+        assertSoftly(softly -> {
+            softly.assertThat(format.board(board)).isEqualTo(RECORDED.get("lateRun.board"));
+            softly.assertThat(vehicleAt(board, 2, "BUS-A").forecast()).isInstanceOf(VehicleForecast.Unavailable.class);
+        });
     }
 
     @Test
@@ -162,16 +180,23 @@ class ForecastSourceEquivalenceTest {
         OffsetDateTime old = now.minusMinutes(10).minusSeconds(5);
         Batch stale = name(batchWithVehicles(route, old), "stale");
         publish(stale, old, model);
-        format.batch(fixture.insertBatch(route, now, "SUCCESS_EMPTY", 0), "latest");
+        format.batch(fixture.insertBatch(
+                route,
+                now,
+                "SUCCESS_EMPTY",
+                0
+        ), "latest");
 
         // when
         Throwable actual = catchThrowable(() -> boardOf(ROUTE_ID));
 
         // then
-        assertThat(actual).isInstanceOf(NoRecentObservationException.class);
-        assertThat(RecordedBoards.failure(actual)).isEqualTo(RECORDED.get("stale.failure"));
-        assertThat(snapshotOf(ROUTE_ID).observation()).isEmpty();
-        assertThat(format.snapshot(snapshotOf(ROUTE_ID))).isEqualTo(RECORDED.get("stale.snapshot"));
+        assertSoftly(softly -> {
+            softly.assertThat(actual).isInstanceOf(NoRecentObservationException.class);
+            softly.assertThat(RecordedBoards.failure(actual)).isEqualTo(RECORDED.get("stale.failure"));
+            softly.assertThat(snapshotOf(ROUTE_ID).observation()).isEmpty();
+            softly.assertThat(format.snapshot(snapshotOf(ROUTE_ID))).isEqualTo(RECORDED.get("stale.snapshot"));
+        });
     }
 
     @Test
@@ -207,8 +232,10 @@ class ForecastSourceEquivalenceTest {
         Board board = boardOf(ROUTE_ID);
 
         // then
-        assertThat(format.board(board)).isEqualTo(RECORDED.get("mixedModels.board"));
-        assertThat(board.model().releaseId()).isEqualTo("model-active");
+        assertSoftly(softly -> {
+            softly.assertThat(format.board(board)).isEqualTo(RECORDED.get("mixedModels.board"));
+            softly.assertThat(board.model().releaseId()).isEqualTo("model-active");
+        });
     }
 
     @Test
@@ -224,8 +251,10 @@ class ForecastSourceEquivalenceTest {
         Board board = boardOf(ROUTE_ID);
 
         // then
-        assertThat(format.board(board)).isEqualTo(RECORDED.get("retiredModel.board"));
-        assertThat(board.model().releaseId()).isEqualTo("model-retired");
+        assertSoftly(softly -> {
+            softly.assertThat(format.board(board)).isEqualTo(RECORDED.get("retiredModel.board"));
+            softly.assertThat(board.model().releaseId()).isEqualTo("model-retired");
+        });
     }
 
     @Test
@@ -239,8 +268,10 @@ class ForecastSourceEquivalenceTest {
         Throwable actual = catchThrowable(() -> boardOf(ROUTE_ID));
 
         // then
-        assertThat(actual).isInstanceOf(ServiceUnavailableException.class);
-        assertThat(RecordedBoards.failure(actual)).isEqualTo(RECORDED.get("missingModel.failure"));
+        assertSoftly(softly -> {
+            softly.assertThat(actual).isInstanceOf(ServiceUnavailableException.class);
+            softly.assertThat(RecordedBoards.failure(actual)).isEqualTo(RECORDED.get("missingModel.failure"));
+        });
     }
 
     @Test
@@ -256,12 +287,16 @@ class ForecastSourceEquivalenceTest {
         Map<String, BoardBatchRead> reads = service().readBoards(routeIds, BoardReadDeadline.none());
 
         // then
-        assertThat(reads.keySet()).containsExactlyElementsOf(routeIds);
-        assertThat(format.batchReads(reads)).isEqualTo(RECORDED.get("batchRead.reads"));
+        assertSoftly(softly -> {
+            softly.assertThat(reads.keySet()).containsExactlyElementsOf(routeIds);
+            softly.assertThat(format.batchReads(reads)).isEqualTo(RECORDED.get("batchRead.reads"));
+        });
         for (String routeId : List.of(ROUTE_ID, OTHER_ROUTE_ID)) {
             BoardReading reading = reads.get(routeId).reading();
-            assertThat(reading.board()).isEqualTo(boardOf(routeId));
-            assertThat(reading.cacheMaxAge()).isEqualTo(cachePolicy.maxAgeAt(reading.board().observedAt()));
+            assertSoftly(softly -> {
+                softly.assertThat(reading.board()).isEqualTo(boardOf(routeId));
+                softly.assertThat(reading.cacheMaxAge()).isEqualTo(cachePolicy.maxAgeAt(reading.board().observedAt()));
+            });
         }
     }
 
@@ -270,8 +305,12 @@ class ForecastSourceEquivalenceTest {
         // given
         BoardDatabaseFixture.RouteContext route = route(ROUTE_ID);
         publish(batchWithVehicles(route, now.minusSeconds(20)), now.minusSeconds(20), model);
-        BoardQueryService service = new BoardQueryService(repository, freshnessPolicy, cachePolicy,
-            new BoardReadCache(true, null));
+        BoardQueryService service = new BoardQueryService(
+                repository,
+                freshnessPolicy,
+                cachePolicy,
+                new BoardReadCache(true, null)
+        );
         Board first = service.readBoard(new RouteId(ROUTE_ID)).board();
         String firstRevision = snapshotOf(ROUTE_ID).revision();
         assertThat(service.readBoard(new RouteId(ROUTE_ID)).board()).isSameAs(first);
@@ -281,9 +320,11 @@ class ForecastSourceEquivalenceTest {
         Board second = service.readBoard(new RouteId(ROUTE_ID)).board();
 
         // then
-        assertThat(second.observedAt()).isEqualTo(now);
-        assertThat(second).isNotEqualTo(first);
-        assertThat(snapshotOf(ROUTE_ID).revision()).isNotEqualTo(firstRevision);
+        assertSoftly(softly -> {
+            softly.assertThat(second.observedAt()).isEqualTo(now);
+            softly.assertThat(second).isNotEqualTo(first);
+            softly.assertThat(snapshotOf(ROUTE_ID).revision()).isNotEqualTo(firstRevision);
+        });
     }
 
     @Test
@@ -298,9 +339,12 @@ class ForecastSourceEquivalenceTest {
         BoardSnapshot snapshot = snapshotOf(ROUTE_ID);
 
         // then
-        assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("recordOlder.snapshot"));
-        assertThat(snapshot.observation().orElseThrow().batchId()).isEqualTo(older.id());
-        assertThat(format.board(boardOf(ROUTE_ID))).isEqualTo(RECORDED.get("recordOlder.board"));
+        assertThat(snapshot.observation()).isPresent();
+        assertSoftly(softly -> {
+            softly.assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("recordOlder.snapshot"));
+            softly.assertThat(snapshot.observation().orElseThrow().batchId()).isEqualTo(older.id());
+            softly.assertThat(format.board(boardOf(ROUTE_ID))).isEqualTo(RECORDED.get("recordOlder.board"));
+        });
     }
 
     @Test
@@ -332,8 +376,10 @@ class ForecastSourceEquivalenceTest {
         BoardSnapshot snapshot = snapshotOf(ROUTE_ID);
 
         // then
-        assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("sameBatch.snapshot"));
-        assertThat(format.board(boardOf(ROUTE_ID))).isEqualTo(RECORDED.get("sameBatch.board"));
+        assertSoftly(softly -> {
+            softly.assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("sameBatch.snapshot"));
+            softly.assertThat(format.board(boardOf(ROUTE_ID))).isEqualTo(RECORDED.get("sameBatch.board"));
+        });
     }
 
     @Test
@@ -361,7 +407,10 @@ class ForecastSourceEquivalenceTest {
             List<BoardSnapshot> many = repository.findSnapshots(
                 Stream.of(ROUTE_ID, OTHER_ROUTE_ID).map(RouteId::new).toList());
             softly.assertThat(many).containsExactlyInAnyOrder(recordedSnapshot, observedOnlySnapshot);
-            softly.assertThat(String.join(" || ", many.stream().map(format::snapshot).sorted().toList()))
+            softly.assertThat(String.join(" || ", many.stream()
+                .map(format::snapshot)
+                .sorted()
+                .toList()))
                 .isEqualTo(RECORDED.get("oneSource.many"));
         });
     }
@@ -379,8 +428,11 @@ class ForecastSourceEquivalenceTest {
         BoardSnapshot snapshot = snapshotOf(ROUTE_ID);
 
         // then
-        assertThat(snapshot.observation().orElseThrow().batchId()).isEqualTo(fresh.id());
-        assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("staleObservation.snapshot"));
+        assertThat(snapshot.observation()).isPresent();
+        assertSoftly(softly -> {
+            softly.assertThat(snapshot.observation().orElseThrow().batchId()).isEqualTo(fresh.id());
+            softly.assertThat(format.snapshot(snapshot)).isEqualTo(RECORDED.get("staleObservation.snapshot"));
+        });
     }
 
     @Test
@@ -399,7 +451,12 @@ class ForecastSourceEquivalenceTest {
         BoardSnapshot afterThird = snapshotOf(ROUTE_ID);
         Board boardAfterThird = boardOf(ROUTE_ID);
         Batch late = name(batchWithVehicles(route, now.plusSeconds(30)), "late");
-        fixture.insertRun(late.id(), model, "LATE", now.plusSeconds(121));
+        fixture.insertRun(
+                late.id(),
+                model,
+                "LATE",
+                now.plusSeconds(121)
+        );
         BoardSnapshot afterLateRun = snapshotOf(ROUTE_ID);
 
         // then
@@ -424,7 +481,12 @@ class ForecastSourceEquivalenceTest {
     }
 
     private BoardQueryService service() {
-        return new BoardQueryService(repository, freshnessPolicy, cachePolicy, new BoardReadCache(false, null));
+        return new BoardQueryService(
+                repository,
+                freshnessPolicy,
+                cachePolicy,
+                new BoardReadCache(false, null)
+        );
     }
 
     private BoardSnapshot snapshotOf(String routeId) {
@@ -443,10 +505,27 @@ class ForecastSourceEquivalenceTest {
     }
 
     private BoardDatabaseFixture.RouteContext route(String routeId) {
-        BoardDatabaseFixture.RouteContext route = fixture.insertRoute(routeId, "노선-" + routeId, "기점", "종점", null,
-            "05:00", "23:00", null, null, now.minusDays(1));
+        BoardDatabaseFixture.RouteContext route = fixture.insertRoute(
+                routeId,
+                "노선-" + routeId,
+                "기점",
+                "종점",
+                null,
+                "05:00",
+                "23:00",
+                null,
+                null,
+                now.minusDays(1)
+        );
         for (int sequence = 1; sequence <= STOP_COUNT; sequence++) {
-            fixture.insertStop(route, sequence, "STOP-" + sequence, "정류장-" + sequence, "UP", true);
+            fixture.insertStop(
+                    route,
+                    sequence,
+                    "STOP-" + sequence,
+                    "정류장-" + sequence,
+                    "UP",
+                    true
+            );
         }
         format.version(route.routeVersionId(), routeName(routeId));
         return route;
@@ -467,17 +546,55 @@ class ForecastSourceEquivalenceTest {
     /**
      * 차량 세 대가 있는 배치다. A는 1번에서 목표 12개, B는 2번에서 목표 2개의 예측을 받고, 차량 번호가 없는 C는 예측이 없다.
      */
-    private Batch batchWithVehicles(BoardDatabaseFixture.RouteContext route, OffsetDateTime receivedAt) {
-        final long batch = fixture.insertBatch(route, receivedAt, "SUCCESS_ROWS", 3);
-        final long busA = fixture.insertObservation(route, batch, 1, "BUS-A", 1, "STOP-1", receivedAt);
-        final long busB = fixture.insertObservation(route, batch, 2, "BUS-B", 2, "STOP-2", receivedAt);
-        fixture.insertObservation(route, batch, 3, null, 1, "STOP-1", receivedAt);
+    private Batch batchWithVehicles(
+        BoardDatabaseFixture.RouteContext route,
+        OffsetDateTime receivedAt
+    ) {
+        final long batch = fixture.insertBatch(
+                route,
+                receivedAt,
+                "SUCCESS_ROWS",
+                3
+        );
+        final long busA = fixture.insertObservation(
+                route,
+                batch,
+                1,
+                "BUS-A",
+                1,
+                "STOP-1",
+                receivedAt
+        );
+        final long busB = fixture.insertObservation(
+                route,
+                batch,
+                2,
+                "BUS-B",
+                2,
+                "STOP-2",
+                receivedAt
+        );
+        fixture.insertObservation(
+                route,
+                batch,
+                3,
+                null,
+                1,
+                "STOP-1",
+                receivedAt
+        );
         return new Batch(batch, busA, busB);
     }
 
     /** 목표 5는 비어 있는 원소, 6은 NaN, 7은 무한대다. */
     private void publish(Batch batch, OffsetDateTime at, final long modelId) {
-        insertRun(batch.id(), at, modelId, "PUBLISHED", 14);
+        insertRun(
+                batch.id(),
+                at,
+                modelId,
+                "PUBLISHED",
+                14
+        );
         StringBuilder chances = new StringBuilder();
         StringBuilder seats = new StringBuilder();
         StringBuilder targets = new StringBuilder();
@@ -487,8 +604,18 @@ class ForecastSourceEquivalenceTest {
             chances.append(separator).append(chanceOf(target));
             seats.append(separator).append(seatsOf(target));
         }
-        insertRecord(batch.busA(), "{" + targets + "}", "{" + seats + "}", "{" + chances + "}");
-        insertRecord(batch.busB(), "{3,4}", "{2.5,1.0}", "{0.4,0.6}");
+        insertRecord(
+                batch.busA(),
+                "{" + targets + "}",
+                "{" + seats + "}",
+                "{" + chances + "}"
+        );
+        insertRecord(
+                batch.busB(),
+                "{3,4}",
+                "{2.5,1.0}",
+                "{0.4,0.6}"
+        );
     }
 
     private static String separatorBefore(final int target) {
@@ -536,7 +663,12 @@ class ForecastSourceEquivalenceTest {
             .update();
     }
 
-    private void insertRecord(final long observationId, String targets, String seats, String chances) {
+    private void insertRecord(
+        final long observationId,
+        String targets,
+        String seats,
+        String chances
+    ) {
         jdbc.sql("""
             INSERT INTO forecast_record (source_date, vehicle_observation_id, observation_batch_id, source_row_number,
                 route_id, route_version_id, vehicle_id, passed_stop_order, trip_start_observation_id,
@@ -558,5 +690,6 @@ class ForecastSourceEquivalenceTest {
     }
 
     private record Batch(long id, long busA, long busB) {
+
     }
 }

@@ -33,6 +33,7 @@ import tools.jackson.databind.ObjectMapper;
 @Import(FixedDaytimeClockConfig.class)
 @TestPropertySource(properties = "salmon.action.enabled=true")
 class SalmonActionForecastIntegrationTest {
+
     @Autowired
     private WebApplicationContext applicationContext;
 
@@ -62,7 +63,12 @@ class SalmonActionForecastIntegrationTest {
         BoardDatabaseFixture.RouteContext route = fixture.insertRoute(now.minusDays(1));
         final long modelId = fixture.insertActiveModel(now.minusDays(1));
         ForecastBoardFixture.ObservedVehicle vehicle = fixture.insertApproachingVehicle(route, now.minusMinutes(1));
-        fixture.insertForecast(vehicle, modelId, 0.25, 12.5);
+        fixture.insertForecast(
+                vehicle,
+                modelId,
+                0.25,
+                12.5
+        );
         fixture.insertArrival(now.minusSeconds(10).toInstant(), 300);
 
         // when

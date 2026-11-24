@@ -6,6 +6,7 @@ import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
 import org.junit.jupiter.api.Test;
 
 class BaselineReasonsTest {
+
     @Test
     void 원인별로_나눈_놓침_사유는_기대값_파일의_닫힌_통과_없음으로_읽는다() {
         for (String reason : new String[] {ScoringReasons.TARGET_WITHOUT_PASS, ScoringReasons.PASS_CONDITION_UNMET,

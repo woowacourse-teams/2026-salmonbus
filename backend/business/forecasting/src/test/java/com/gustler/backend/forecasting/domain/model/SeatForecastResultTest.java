@@ -2,12 +2,14 @@ package com.gustler.backend.forecasting.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class SeatForecastResultTest {
+
     @ParameterizedTest
     @ValueSource(doubles = {-0.1, 1.5, Double.NaN, Double.POSITIVE_INFINITY})
     void 만석_확률은_0과_1_사이의_수다(final double notChance) {
@@ -31,13 +33,23 @@ class SeatForecastResultTest {
     @Test
     void 하차_후_좌석과_출발_만석_확률이_아닌_출력은_만들_수_없다() {
         // when
-        Throwable seatTarget = catchThrowable(() -> new SeatForecastResult(3.0, 0.5, "FIRST_POST_STOP_OBSERVATION",
-            SeatForecastResult.ALIGHTING_AWARE_PROBABILITY_TARGET));
-        Throwable probabilityTarget = catchThrowable(() -> new SeatForecastResult(3.0, 0.5,
-            SeatForecastResult.ALIGHTING_AWARE_SEAT_TARGET, "FIRST_POST_STOP_ZERO"));
+        Throwable seatTarget = catchThrowable(() -> new SeatForecastResult(
+                3.0,
+                0.5,
+                "FIRST_POST_STOP_OBSERVATION",
+                SeatForecastResult.ALIGHTING_AWARE_PROBABILITY_TARGET
+        ));
+        Throwable probabilityTarget = catchThrowable(() -> new SeatForecastResult(
+                3.0,
+                0.5,
+                SeatForecastResult.ALIGHTING_AWARE_SEAT_TARGET,
+                "FIRST_POST_STOP_ZERO"
+        ));
 
         // then
-        assertThat(seatTarget).isInstanceOf(IllegalArgumentException.class);
-        assertThat(probabilityTarget).isInstanceOf(IllegalArgumentException.class);
+        assertSoftly(softly -> {
+            softly.assertThat(seatTarget).isInstanceOf(IllegalArgumentException.class);
+            softly.assertThat(probabilityTarget).isInstanceOf(IllegalArgumentException.class);
+        });
     }
 }

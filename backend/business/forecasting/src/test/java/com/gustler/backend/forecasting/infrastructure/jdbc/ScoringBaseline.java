@@ -22,6 +22,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * </ul>
  */
 final class ScoringBaseline {
+
     private static final String READ_OUTCOMES = """
         SELECT vehicle_observation_id, target_stop_order, state, reason, label_value, parameter_hash, capacity,
             arrival_observation_id, last_observation_id, closure_observation_id, previous_last_observation_id,
@@ -57,8 +58,18 @@ final class ScoringBaseline {
         if (!"SETTLED".equals(line[3])) {
             return Verdict.of(line[3], line[4]);
         }
-        return new Verdict(line[3], null, Baseline.value(line[4]), hashes.get(line[5]), Integer.valueOf(line[6]),
-            line[7], line[8], line[9], line[10], line[11]);
+        return new Verdict(
+                line[3],
+                null,
+                Baseline.value(line[4]),
+                hashes.get(line[5]),
+                Integer.valueOf(line[6]),
+                line[7],
+                line[8],
+                line[9],
+                line[10],
+                line[11]
+        );
     }
 
     /**
@@ -89,17 +100,31 @@ final class ScoringBaseline {
             }
             counts[0]++;
         });
-        return new Comparison(counts[0], differences, List.copyOf(unseen), newOnly, counts[1]);
+        return new Comparison(
+                counts[0],
+                differences,
+                List.copyOf(unseen),
+                newOnly,
+                counts[1]
+        );
     }
 
     private static Verdict actual(ResultSet row, StreamKeys keys) throws SQLException {
         String state = row.getString(3);
         String reason = row.getString(4);
         if ("SETTLED".equals(state)) {
-            return new Verdict(state, null, row.getDouble(5), row.getString(6), row.getInt(7),
-                keys.observationOrNone((Long) row.getObject(8)), keys.observationOrNone((Long) row.getObject(9)),
-                keys.observationOrNone((Long) row.getObject(10)), keys.observationOrNone((Long) row.getObject(11)),
-                keys.observationOrNone((Long) row.getObject(12)));
+            return new Verdict(
+                    state,
+                    null,
+                    row.getDouble(5),
+                    row.getString(6),
+                    row.getInt(7),
+                    keys.observationOrNone((Long) row.getObject(8)),
+                    keys.observationOrNone((Long) row.getObject(9)),
+                    keys.observationOrNone((Long) row.getObject(10)),
+                    keys.observationOrNone((Long) row.getObject(11)),
+                    keys.observationOrNone((Long) row.getObject(12))
+            );
         }
         if ("PENDING".equals(state)) {
             return Verdict.of(state, null);
@@ -120,8 +145,20 @@ final class ScoringBaseline {
         String previousLast,
         String previousClosure
     ) {
+
         static Verdict of(String state, String reason) {
-            return new Verdict(state, reason, null, null, null, null, null, null, null, null);
+            return new Verdict(
+                    state,
+                    reason,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
         }
 
         boolean matches(Verdict other, final boolean exactMath) {
@@ -157,5 +194,6 @@ final class ScoringBaseline {
         List<String> newOnly,
         int pending
     ) {
+
     }
 }

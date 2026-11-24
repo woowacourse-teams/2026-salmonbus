@@ -2,11 +2,11 @@ package com.gustler.backend.forecasting.infrastructure.bundle.alighting;
 
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
-import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
-import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareStatisticsReader;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import com.gustler.backend.forecasting.domain.model.alighting.ExtendedAlightingPredictor;
 import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
+import com.gustler.backend.forecasting.infrastructure.alighting.AlightingAwareStatisticsReader;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -18,6 +18,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /** 검증 영수증과 실제 대조 계산을 통과한 묶음만 기존 활성화 경계에 넘긴다. */
 public final class AlightingAwareServingBundle {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private AlightingAwareServingBundle() {
@@ -34,8 +35,13 @@ public final class AlightingAwareServingBundle {
         AlightingAwareInferenceBundle bundle =
             AlightingAwareInferenceBundle.loadForServing(directory, allowSyntheticFixture);
         JsonNode runtime = bundle.manifest().get("runtime");
-        return ModelRelease.alighting(runtime.get("release_id").asString(), bundle.digest(),
-            runtime.get("data_through").asString(), new SupportedForecastScope(bundle.routes()), readModel(bundle));
+        return ModelRelease.alighting(
+                runtime.get("release_id").asString(),
+                bundle.digest(),
+                runtime.get("data_through").asString(),
+                new SupportedForecastScope(bundle.routes()),
+                readModel(bundle)
+        );
     }
 
     /** 해시 검증을 마친 모델을 읽는다. 배포 생성이나 활성화는 수행하지 않는다. */
@@ -63,10 +69,23 @@ public final class AlightingAwareServingBundle {
                     AlightingAwareInferenceBundle.model(extension.get("seats")), full));
                 settlement = extension.get("settlement");
             }
-            Map<Integer, String> targets = targetEvidence(route, digest, bundle, stats, raw, settlement);
+            Map<Integer, String> targets = targetEvidence(
+                    route,
+                    digest,
+                    bundle,
+                    stats,
+                    raw,
+                    settlement
+            );
             evidence.put(route, targets);
         }
-        return new AlightingAwareSeatForecastModel(bundle.predictor(), statistics, evidence, digest, extendedPredictors);
+        return new AlightingAwareSeatForecastModel(
+                bundle.predictor(),
+                statistics,
+                evidence,
+                digest,
+                extendedPredictors
+        );
     }
 
     private static Map<Integer, String> targetEvidence(

@@ -20,6 +20,7 @@ import org.springframework.context.annotation.FilterType;
     @Filter(type = FilterType.CUSTOM, classes = AutoConfigurationExcludeFilter.class)
 })
 public class ForecastingConfiguration {
+
     @Bean
     @DependsOnDatabaseInitialization
     SmartInitializingSingleton vehicleCapacityWarmUp(VehicleCapacityCache capacities) {

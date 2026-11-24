@@ -1,9 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.bundle;
 
-import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
-
 import com.gustler.backend.forecasting.application.deployment.ModelBundleFiles;
 import com.gustler.backend.forecasting.application.deployment.ModelBundleLoader;
+import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.infrastructure.bundle.alighting.AlightingAwareServingBundle;
 import com.gustler.backend.forecasting.infrastructure.bundle.alighting.TransferredServingBundle;
 import java.io.IOException;
@@ -16,6 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
  * 허용한 파일 경계 안에서 모델 번들 입력을 열고 파일 기반 로더에 전달한다.
  */
 public final class FileModelBundleLoader implements ModelBundleLoader {
+
     private final boolean allowSyntheticFixture;
 
     public FileModelBundleLoader() {
@@ -34,20 +34,28 @@ public final class FileModelBundleLoader implements ModelBundleLoader {
     public ModelBundleFiles filesUnder(String directory) {
         Path path = Path.of(directory);
         BundleFiles files = BundleFiles.under(path);
-        return () -> {
-            byte[] bytes = files.readManifest();
-            JsonNode manifest = readManifest(bytes);
-            String schema = canonical(manifest.path("schema").asString(""));
-            try {
-                return switch (schema) {
-                    case "alighting-inference-bundle-v1" -> AlightingAwareServingBundle.load(path, allowSyntheticFixture);
-                    case TransferredServingBundle.SCHEMA -> TransferredServingBundle.load(path, bytes, manifest);
-                    default -> throw new BundleRejectedException("지원이 종료된 좌석분포 모델 번들이다");
-                };
-            } catch (IOException | IllegalArgumentException error) {
-                throw new BundleRejectedException("하차 반영 서빙 번들 검증 실패", error);
-            }
-        };
+        return () -> loadBundle(path, files.readManifest());
+    }
+
+    private ModelRelease loadBundle(Path directory, byte[] manifestBytes) {
+        JsonNode manifest = readManifest(manifestBytes);
+        String schema = manifest.path("schema").asString("");
+        try {
+            return switch (schema) {
+                case "alighting-inference-bundle-v1" -> AlightingAwareServingBundle.load(
+                    directory,
+                    allowSyntheticFixture
+                );
+                case TransferredServingBundle.SCHEMA -> TransferredServingBundle.load(
+                    directory,
+                    manifestBytes,
+                    manifest
+                );
+                default -> throw new BundleRejectedException("지원이 종료된 좌석분포 모델 번들이다");
+            };
+        } catch (IOException | IllegalArgumentException error) {
+            throw new BundleRejectedException("하차 반영 서빙 번들 검증 실패", error);
+        }
     }
 
     private static JsonNode readManifest(byte[] bytes) {
@@ -61,5 +69,4 @@ public final class FileModelBundleLoader implements ModelBundleLoader {
             throw new BundleRejectedException("모델 manifest JSON 파싱 실패", error);
         }
     }
-
 }

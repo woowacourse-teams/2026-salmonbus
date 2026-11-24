@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
-import com.gustler.backend.observations.domain.CollectionBatch;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.domain.RemainingSeats;
 import com.gustler.backend.observations.domain.VehicleObservation;
@@ -32,6 +31,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @ObservationIntegrationTest
 class VehicleObservationRepositoryTest {
+
     private static final String ROUTE_3330 = "204000057";
     private static final String STOP_1 = "205000217";
     private static final String STOP_2 = "277103149";
@@ -41,6 +41,9 @@ class VehicleObservationRepositoryTest {
 
     @Autowired
     private CollectionBatchRepository batches;
+
+    @Autowired
+    private VehicleObservationRepository observations;
 
     @Autowired
     private JdbcClient jdbc;
@@ -59,9 +62,9 @@ class VehicleObservationRepositoryTest {
     void 관측_INSERT_문장을_한_번만_낸다() {
         // when
         final int statements = inRollback(() -> {
-            CollectionBatch batch = openBatch();
+            Batch batch = openBatch();
             countInsertStatements();
-            batches.saveObservations(batch, List.of(row(
+            observations.insertAll(batch.id(), batch.routeVersionId(), List.of(row(
                     0,
                     "v-0",
                     1,
@@ -89,9 +92,9 @@ class VehicleObservationRepositoryTest {
     void 관측이_없으면_문장을_내지_않는다() {
         // when
         final int statements = inRollback(() -> {
-            CollectionBatch batch = openBatch();
+            Batch batch = openBatch();
             countInsertStatements();
-            batches.saveObservations(batch, List.of());
+            observations.insertAll(batch.id(), batch.routeVersionId(), List.of());
             return insertStatementCount();
         });
 
@@ -103,8 +106,8 @@ class VehicleObservationRepositoryTest {
     void 입력_순서대로_관측의_열을_저장한다() {
         // when
         List<List<Object>> stored = inRollback(() -> {
-            CollectionBatch batch = openBatch();
-            batches.saveObservations(batch,
+            Batch batch = openBatch();
+            observations.insertAll(batch.id(), batch.routeVersionId(),
                 List.of(row(
                         4,
                         "v-4",
@@ -167,8 +170,8 @@ class VehicleObservationRepositoryTest {
     void 저장_번호는_입력_순서대로_오른다() {
         // when
         List<Integer> sourceRowsById = inRollback(() -> {
-            CollectionBatch batch = openBatch();
-            batches.saveObservations(batch, List.of(row(
+            Batch batch = openBatch();
+            observations.insertAll(batch.id(), batch.routeVersionId(), List.of(row(
                     4,
                     "v-4",
                     3,
@@ -236,7 +239,8 @@ class VehicleObservationRepositoryTest {
         ));
 
         // when
-        VehicleObservationRepositoryTest.Rejection rejection = rejectionOf(rows, "ux_observation_vehicle_per_batch_date");
+        Rejection rejection =
+            rejectionOf(rows, "ux_observation_vehicle_per_batch_date");
 
         // then
         assertSoftly(softly -> {
@@ -262,7 +266,7 @@ class VehicleObservationRepositoryTest {
         ));
 
         // when
-        VehicleObservationRepositoryTest.Rejection rejection = rejectionOf(rows, "ux_observation_source_row_date");
+        Rejection rejection = rejectionOf(rows, "ux_observation_source_row_date");
 
         // then
         assertSoftly(softly -> {
@@ -277,11 +281,15 @@ class VehicleObservationRepositoryTest {
      * 위반은 그 파티션의 인덱스 이름으로 보고된다. 인덱스 이름은 저장과 같은 트랜잭션에서 읽는다. 트랜잭션 안에서 now() 는 변하지
      * 않으므로 줄이 기본값으로 받는 source_date 와 같은 날짜의 파티션을 가리킨다.
      */
-    private VehicleObservationRepositoryTest.Rejection rejectionOf(List<VehicleObservationRow> rows, String uniqueIndex) {
+    private Rejection rejectionOf(
+        List<VehicleObservationRow> rows,
+        String uniqueIndex
+    ) {
         return inRollback(() -> {
-            CollectionBatch batch = openBatch();
+            Batch batch = openBatch();
             String partitionIndex = partitionIndexOfTransactionDate(uniqueIndex);
-            return new VehicleObservationRepositoryTest.Rejection(catchThrowable(() -> batches.saveObservations(batch, rows)), partitionIndex);
+            Throwable failure = catchThrowable(() -> observations.insertAll(batch.id(), batch.routeVersionId(), rows));
+            return new Rejection(failure, partitionIndex);
         });
     }
 
@@ -300,8 +308,8 @@ class VehicleObservationRepositoryTest {
 
     private Throwable failureOf(List<VehicleObservationRow> rows) {
         return inRollback(() -> {
-            CollectionBatch batch = openBatch();
-            return catchThrowable(() -> batches.saveObservations(batch, rows));
+            Batch batch = openBatch();
+            return catchThrowable(() -> observations.insertAll(batch.id(), batch.routeVersionId(), rows));
         });
     }
 
@@ -312,7 +320,7 @@ class VehicleObservationRepositoryTest {
         });
     }
 
-    private CollectionBatch openBatch() {
+    private Batch openBatch() {
         final long routeId = jdbc.sql("""
             INSERT INTO route (public_route_id, source_id, source_route_id,
                 display_name, start_stop_name, end_stop_name)
@@ -334,9 +342,9 @@ class VehicleObservationRepositoryTest {
                     routeVersionId,
                     STOP_3
             ).update();
-        final long batchId = batches.save(CollectionBatch.start(
-            new CollectionPlan(routeVersionId, SCHEDULED_AT, "bulk-insert"), true));
-        return batches.getById(batchId);
+        final long batchId = batches.prepare(
+            new CollectionPlan(routeVersionId, SCHEDULED_AT, "bulk-insert"), true).batchId();
+        return new Batch(batchId, routeVersionId);
     }
 
     /** 문장 단위 트리거로 관측 INSERT 문장 수를 센다. 트랜잭션과 함께 롤백된다. */
@@ -417,6 +425,10 @@ class VehicleObservationRepositoryTest {
             }
         }
         return null;
+    }
+
+    private record Batch(long id, long routeVersionId) {
+
     }
 
     private record Rejection(Throwable failure, String partitionIndex) {

@@ -1,6 +1,5 @@
 package com.gustler.backend.worker.integration.forecasting;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.Mockito.when;
 
@@ -62,6 +61,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class, ManualClock.Replacement.class,
     ForecastScoringIntegrationTest.Diagnostics.class })
 class ForecastScoringIntegrationTest {
+
     private static final String SOURCE_ROUTE = "204000057";
     private static final String VEHICLE = "forecast-scoring-vehicle";
     private static final String LEAD_VEHICLE = "forecast-scoring-lead";
@@ -107,7 +107,7 @@ class ForecastScoringIntegrationTest {
     private ScoringCycle scoring;
 
     @Autowired
-    private ForecastScoringIntegrationTest.ClosedForecasts closedForecasts;
+    private ClosedForecasts closedForecasts;
 
     @Autowired
     private ManualClock clock;
@@ -418,14 +418,16 @@ class ForecastScoringIntegrationTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class Diagnostics {
+
         @Bean
-        ForecastScoringIntegrationTest.ClosedForecasts closedForecasts() {
-            return new ForecastScoringIntegrationTest.ClosedForecasts();
+        ClosedForecasts closedForecasts() {
+            return new ClosedForecasts();
         }
     }
 
     /** 채점이 닫았다고 알린 예측을 받은 순서대로 적어 두는 진단 수신자다. */
     static final class ClosedForecasts implements ForecastTelemetry {
+
         private final List<ForecastClosed> closed = new CopyOnWriteArrayList<>();
 
         @Override

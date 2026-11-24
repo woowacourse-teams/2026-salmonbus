@@ -35,8 +35,21 @@ public record AlightingAwareObservation(
         Integer seats,
         final int crowd
     ) {
-        this(observationId, batchId, batchRank, receivedAt, vehicleId, passedStopOrder, stopOrder, state, seats,
-            crowd, 0, receivedAt, false);
+        this(
+                observationId,
+                batchId,
+                batchRank,
+                receivedAt,
+                vehicleId,
+                passedStopOrder,
+                stopOrder,
+                state,
+                seats,
+                crowd,
+                0,
+                receivedAt,
+                false
+        );
     }
 
     public boolean confirmedProfile() {
@@ -68,7 +81,7 @@ public record AlightingAwareObservation(
     }
 
     /** samples3의 categorical code -1. 실제 차량 식별자로 사용하지 않는다. */
-    public static final String ANONYMOUS_GROUP = "\uffffles-anonymous-observations";
+    public static final String ANONYMOUS_GROUP = "\uffffanonymous-observations";
 
     public boolean hasVehicleIdentity() {
         return vehicleId != null && !vehicleId.equals(ANONYMOUS_GROUP);

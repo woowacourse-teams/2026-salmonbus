@@ -13,7 +13,14 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class ForecastAccuracyTest {
-    private static final ForecastAccuracy.Key KEY = new ForecastAccuracy.Key(1, 2, 4, 6, "1-3");
+
+    private static final ForecastAccuracy.Key KEY = new ForecastAccuracy.Key(
+            1,
+            2,
+            4,
+            6,
+            "1-3"
+    );
 
     @Test
     void 채점됨으로_닫힌_예측의_좌석_오차와_만석_확률_오차를_모은다() {
@@ -21,11 +28,29 @@ class ForecastAccuracyTest {
         ForecastAccuracy accuracy = new ForecastAccuracy();
 
         // when
-        accuracy.add(List.of(settled(10.0, 0.25, 3.0, 3), settled(1.5, 0.75, 0.0, 0)));
+        accuracy.add(List.of(settled(
+                10.0,
+                0.25,
+                3.0,
+                3
+        ), settled(
+                1.5,
+                0.75,
+                0.0,
+                0
+        )));
 
         // then
         assertThat(accuracy.drain()).containsExactly(Map.entry(KEY,
-            new ForecastAccuracy.Totals(2, 2, 8.5, 2, 0.125, 1.0, 1)));
+            new ForecastAccuracy.Totals(
+                    2,
+                    2,
+                    8.5,
+                    2,
+                    0.125,
+                    1.0,
+                    1
+            )));
     }
 
     @Test
@@ -34,10 +59,24 @@ class ForecastAccuracyTest {
         ForecastAccuracy accuracy = new ForecastAccuracy();
 
         // when
-        accuracy.add(List.of(closed(2, 10.0, 0.25, null, null)));
+        accuracy.add(List.of(closed(
+                2,
+                10.0,
+                0.25,
+                null,
+                null
+        )));
 
         // then
-        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(1, 0, 0, 0, 0, 0, 0));
+        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+        ));
     }
 
     @Test
@@ -46,10 +85,24 @@ class ForecastAccuracyTest {
         ForecastAccuracy accuracy = new ForecastAccuracy();
 
         // when
-        accuracy.add(List.of(closed(2, 10.0, 0.25, null, 0)));
+        accuracy.add(List.of(closed(
+                2,
+                10.0,
+                0.25,
+                null,
+                0
+        )));
 
         // then
-        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(1, 0, 0, 0, 0, 0, 0));
+        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+        ));
     }
 
     @Test
@@ -58,10 +111,23 @@ class ForecastAccuracyTest {
         ForecastAccuracy accuracy = new ForecastAccuracy();
 
         // when
-        accuracy.add(List.of(settled(10.0, 0.25, -1.0, 3)));
+        accuracy.add(List.of(settled(
+                10.0,
+                0.25,
+                -1.0,
+                3
+        )));
 
         // then
-        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(1, 0, 0, 0, 0, 0, 0));
+        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+        ));
     }
 
     @ParameterizedTest
@@ -71,10 +137,23 @@ class ForecastAccuracyTest {
         ForecastAccuracy accuracy = new ForecastAccuracy();
 
         // when
-        accuracy.add(List.of(settled(expectedSeats, 0.25, 3.0, 3)));
+        accuracy.add(List.of(settled(
+                expectedSeats,
+                0.25,
+                3.0,
+                3
+        )));
 
         // then
-        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(1, 0, 0, 1, 0.0625, 0.25, 0));
+        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(
+                1,
+                0,
+                0,
+                1,
+                0.0625,
+                0.25,
+                0
+        ));
     }
 
     @ParameterizedTest
@@ -84,10 +163,23 @@ class ForecastAccuracyTest {
         ForecastAccuracy accuracy = new ForecastAccuracy();
 
         // when
-        accuracy.add(List.of(settled(10.0, fullProbability, 3.0, 3)));
+        accuracy.add(List.of(settled(
+                10.0,
+                fullProbability,
+                3.0,
+                3
+        )));
 
         // then
-        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(1, 1, 7.0, 0, 0, 0, 0));
+        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(
+                1,
+                1,
+                7.0,
+                0,
+                0,
+                0,
+                0
+        ));
     }
 
     @Test
@@ -96,10 +188,28 @@ class ForecastAccuracyTest {
         ForecastAccuracy accuracy = new ForecastAccuracy();
 
         // when
-        accuracy.add(List.of(settled(10.0, 0.0, 3.0, 3), settled(10.0, 1.0, 3.0, 0)));
+        accuracy.add(List.of(settled(
+                10.0,
+                0.0,
+                3.0,
+                3
+        ), settled(
+                10.0,
+                1.0,
+                3.0,
+                0
+        )));
 
         // then
-        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(2, 2, 14.0, 2, 0.0, 1.0, 1));
+        assertThat(accuracy.drain().get(KEY)).isEqualTo(new ForecastAccuracy.Totals(
+                2,
+                2,
+                14.0,
+                2,
+                0.0,
+                1.0,
+                1
+        ));
     }
 
     @ParameterizedTest
@@ -109,10 +219,22 @@ class ForecastAccuracyTest {
         ForecastAccuracy accuracy = new ForecastAccuracy();
 
         // when
-        accuracy.add(List.of(closed(stopsToTarget, 10.0, 0.25, 3.0, 3)));
+        accuracy.add(List.of(closed(
+                stopsToTarget,
+                10.0,
+                0.25,
+                3.0,
+                3
+        )));
 
         // then
-        assertThat(accuracy.drain().keySet()).containsExactly(new ForecastAccuracy.Key(1, 2, 4, 6, distance));
+        assertThat(accuracy.drain().keySet()).containsExactly(new ForecastAccuracy.Key(
+                1,
+                2,
+                4,
+                6,
+                distance
+        ));
     }
 
     @Test
@@ -122,19 +244,101 @@ class ForecastAccuracyTest {
 
         // when
         accuracy.add(List.of(
-            new ForecastClosed(1, 2, 6, 4, 2, 10.0, 0.25, 3.0, 3),
-            new ForecastClosed(1, 3, 6, 4, 2, 10.0, 0.25, 3.0, 3),
-            new ForecastClosed(1, 2, 7, 4, 2, 10.0, 0.25, 3.0, 3),
-            new ForecastClosed(1, 2, 6, 5, 2, 10.0, 0.25, 3.0, 3),
-            new ForecastClosed(1, 2, 6, 4, 5, 10.0, 0.25, 3.0, 3)));
+                new ForecastClosed(
+                        1,
+                        2,
+                        6,
+                        4,
+                        2,
+                        10.0,
+                        0.25,
+                        3.0,
+                        3
+                ),
+                new ForecastClosed(
+                        1,
+                        3,
+                        6,
+                        4,
+                        2,
+                        10.0,
+                        0.25,
+                        3.0,
+                        3
+                ),
+                new ForecastClosed(
+                        1,
+                        2,
+                        7,
+                        4,
+                        2,
+                        10.0,
+                        0.25,
+                        3.0,
+                        3
+                ),
+                new ForecastClosed(
+                        1,
+                        2,
+                        6,
+                        5,
+                        2,
+                        10.0,
+                        0.25,
+                        3.0,
+                        3
+                ),
+                new ForecastClosed(
+                        1,
+                        2,
+                        6,
+                        4,
+                        5,
+                        10.0,
+                        0.25,
+                        3.0,
+                        3
+                )
+        ));
 
         // then
         assertThat(accuracy.drain().keySet()).containsExactly(
-            new ForecastAccuracy.Key(1, 2, 4, 6, "1-3"),
-            new ForecastAccuracy.Key(1, 3, 4, 6, "1-3"),
-            new ForecastAccuracy.Key(1, 2, 4, 7, "1-3"),
-            new ForecastAccuracy.Key(1, 2, 5, 6, "1-3"),
-            new ForecastAccuracy.Key(1, 2, 4, 6, "4-6"));
+                new ForecastAccuracy.Key(
+                        1,
+                        2,
+                        4,
+                        6,
+                        "1-3"
+                ),
+                new ForecastAccuracy.Key(
+                        1,
+                        3,
+                        4,
+                        6,
+                        "1-3"
+                ),
+                new ForecastAccuracy.Key(
+                        1,
+                        2,
+                        4,
+                        7,
+                        "1-3"
+                ),
+                new ForecastAccuracy.Key(
+                        1,
+                        2,
+                        5,
+                        6,
+                        "1-3"
+                ),
+                new ForecastAccuracy.Key(
+                        1,
+                        2,
+                        4,
+                        6,
+                        "4-6"
+                )
+        );
     }
 
     @Test
@@ -143,22 +347,68 @@ class ForecastAccuracyTest {
         ForecastAccuracy accuracy = new ForecastAccuracy();
         List<ForecastClosed> filling = new ArrayList<>();
         for (int stop = 1; stop <= ForecastAccuracy.MAXIMUM_KEYS; stop++) {
-            filling.add(new ForecastClosed(1, 2, 6, stop, 2, 10.0, 0.25, 3.0, 3));
+            filling.add(new ForecastClosed(
+                    1,
+                    2,
+                    6,
+                    stop,
+                    2,
+                    10.0,
+                    0.25,
+                    3.0,
+                    3
+            ));
         }
         accuracy.add(filling);
 
         // when
         accuracy.add(List.of(
-            new ForecastClosed(1, 2, 6, ForecastAccuracy.MAXIMUM_KEYS + 1, 2, 10.0, 0.25, 3.0, 3),
-            new ForecastClosed(1, 2, 6, ForecastAccuracy.MAXIMUM_KEYS + 2, 2, 10.0, 0.25, 3.0, 3),
-            new ForecastClosed(1, 2, 6, 1, 2, 10.0, 0.25, 3.0, 3)));
+            new ForecastClosed(
+                    1,
+                    2,
+                    6,
+                    ForecastAccuracy.MAXIMUM_KEYS + 1,
+                    2,
+                    10.0,
+                    0.25,
+                    3.0,
+                    3
+            ),
+            new ForecastClosed(
+                    1,
+                    2,
+                    6,
+                    ForecastAccuracy.MAXIMUM_KEYS + 2,
+                    2,
+                    10.0,
+                    0.25,
+                    3.0,
+                    3
+            ),
+            new ForecastClosed(
+                    1,
+                    2,
+                    6,
+                    1,
+                    2,
+                    10.0,
+                    0.25,
+                    3.0,
+                    3
+            )));
 
         // then
         Map<ForecastAccuracy.Key, ForecastAccuracy.Totals> drained = accuracy.drain();
         assertSoftly(softly -> {
             softly.assertThat(accuracy.dropped()).isEqualTo(2);
             softly.assertThat(drained).hasSize(ForecastAccuracy.MAXIMUM_KEYS);
-            softly.assertThat(drained.get(new ForecastAccuracy.Key(1, 2, 1, 6, "1-3")).completed()).isEqualTo(2);
+            softly.assertThat(drained.get(new ForecastAccuracy.Key(
+                    1,
+                    2,
+                    1,
+                    6,
+                    "1-3"
+            )).completed()).isEqualTo(2);
         });
     }
 
@@ -168,7 +418,17 @@ class ForecastAccuracyTest {
         ForecastAccuracy accuracy = new ForecastAccuracy();
         List<ForecastClosed> filling = new ArrayList<>();
         for (int stop = 1; stop <= ForecastAccuracy.MAXIMUM_KEYS + 1; stop++) {
-            filling.add(new ForecastClosed(1, 2, 6, stop, 2, 10.0, 0.25, 3.0, 3));
+            filling.add(new ForecastClosed(
+                    1,
+                    2,
+                    6,
+                    stop,
+                    2,
+                    10.0,
+                    0.25,
+                    3.0,
+                    3
+            ));
         }
         accuracy.add(filling);
         accuracy.drain();
@@ -189,7 +449,13 @@ class ForecastAccuracyTest {
         final double labelSeats,
         final int departureSeats
     ) {
-        return closed(2, expectedSeats, fullProbability, labelSeats, departureSeats);
+        return closed(
+                2,
+                expectedSeats,
+                fullProbability,
+                labelSeats,
+                departureSeats
+        );
     }
 
     private static ForecastClosed closed(
@@ -199,7 +465,16 @@ class ForecastAccuracyTest {
         Double labelSeats,
         Integer departureSeats
     ) {
-        return new ForecastClosed(1, 2, 6, 4, stopsToTarget, expectedSeats, fullProbability, labelSeats,
-            departureSeats);
+        return new ForecastClosed(
+                1,
+                2,
+                6,
+                4,
+                stopsToTarget,
+                expectedSeats,
+                fullProbability,
+                labelSeats,
+                departureSeats
+        );
     }
 }

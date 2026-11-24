@@ -10,13 +10,13 @@ public sealed interface RemainingSeats {
 
     static RemainingSeats from(Integer remainingSeatCount) {
         if (remainingSeatCount == null) {
-            return new RemainingSeats.Unknown(SeatUnknownReason.NOT_REPORTED);
+            return new Unknown(SeatUnknownReason.NOT_REPORTED);
         }
 
         if (remainingSeatCount < 0) {
-            return new RemainingSeats.Unknown(SeatUnknownReason.REPORTED_UNKNOWN);
+            return new Unknown(SeatUnknownReason.REPORTED_UNKNOWN);
         }
-        return new RemainingSeats.Known(remainingSeatCount);
+        return new Known(remainingSeatCount);
     }
 
     record Known(

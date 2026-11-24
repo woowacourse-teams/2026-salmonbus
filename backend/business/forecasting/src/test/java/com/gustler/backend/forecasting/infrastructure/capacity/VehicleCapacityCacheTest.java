@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.capacity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -8,9 +9,11 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class VehicleCapacityCacheTest {
+
     private static final String SOURCE = "GBIS";
     private static final Instant EVIDENCE_AT = Instant.parse("2026-11-06T00:00:00Z");
 
@@ -59,18 +62,51 @@ class VehicleCapacityCacheTest {
         // given
         JdbcVehicleCapacityStore store = mock(JdbcVehicleCapacityStore.class);
         VehicleCapacityCache cache = new VehicleCapacityCache(store);
-        var before = new JdbcVehicleCapacityStore.Capacity(SOURCE, "vehicle", 44, EVIDENCE_AT, 10L);
-        var after = new JdbcVehicleCapacityStore.Capacity(SOURCE, "vehicle", 45, EVIDENCE_AT.plusSeconds(60), 20L);
+        JdbcVehicleCapacityStore.Capacity before = new JdbcVehicleCapacityStore.Capacity(
+                SOURCE,
+                "vehicle",
+                44,
+                EVIDENCE_AT,
+                10L
+        );
+        JdbcVehicleCapacityStore.Capacity after = new JdbcVehicleCapacityStore.Capacity(
+                SOURCE,
+                "vehicle",
+                45,
+                EVIDENCE_AT.plusSeconds(60),
+                20L
+        );
         cache.remember(List.of(after));
-        given(store.findKnownAt(SOURCE, List.of("vehicle"), EVIDENCE_AT, 10L)).willReturn(List.of(before));
+        given(store.findKnownAt(
+                SOURCE,
+                List.of("vehicle"),
+                EVIDENCE_AT,
+                10L
+        )).willReturn(List.of(before));
 
-        // when / then
-        assertThat(cache.findKnownAt(SOURCE, List.of("vehicle"), EVIDENCE_AT, 10L))
-            .containsEntry("vehicle", before);
-        assertThat(cache.find(SOURCE, List.of("vehicle"))).containsEntry("vehicle", after);
+        // when
+        Map<String, JdbcVehicleCapacityStore.Capacity> historical = cache.findKnownAt(
+                SOURCE,
+                List.of("vehicle"),
+                EVIDENCE_AT,
+                10L
+        );
+        Map<String, JdbcVehicleCapacityStore.Capacity> current = cache.find(SOURCE, List.of("vehicle"));
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(historical).containsEntry("vehicle", before);
+            softly.assertThat(current).containsEntry("vehicle", after);
+        });
     }
 
     private JdbcVehicleCapacityStore.Capacity capacity(String vehicleId, final int seats) {
-        return new JdbcVehicleCapacityStore.Capacity(SOURCE, vehicleId, seats, EVIDENCE_AT, null);
+        return new JdbcVehicleCapacityStore.Capacity(
+                SOURCE,
+                vehicleId,
+                seats,
+                EVIDENCE_AT,
+                null
+        );
     }
 }

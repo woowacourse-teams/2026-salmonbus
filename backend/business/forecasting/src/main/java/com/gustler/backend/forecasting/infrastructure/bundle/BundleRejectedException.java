@@ -9,16 +9,12 @@ import com.gustler.backend.forecasting.api.model.ModelLoadException;
  * 낫다. 값은 정상처럼 보이지만 의미가 다른 예보를 화면에서 구분할 수 없기 때문이다.
  */
 public class BundleRejectedException extends ModelLoadException {
-    public BundleRejectedException(
-        String message
-    ) {
+
+    public BundleRejectedException(String message) {
         super(message);
     }
 
-    public BundleRejectedException(
-        String message,
-        Throwable cause
-    ) {
+    public BundleRejectedException(String message, Throwable cause) {
         super(message, cause);
     }
 }

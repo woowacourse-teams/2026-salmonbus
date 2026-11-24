@@ -24,6 +24,7 @@ import org.springframework.test.context.TestPropertySource;
 @IntegrationTest
 @TestPropertySource(properties = "forecast.enabled=true")
 class ForecastScheduleConfigTest {
+
     @Autowired
     private ApplicationContext applicationContext;
 
@@ -55,8 +56,7 @@ class ForecastScheduleConfigTest {
         List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class)
             .values()
             .stream()
-            .flatMap(holder -> holder.getScheduledTasks()
-                .stream())
+            .flatMap(holder -> holder.getScheduledTasks().stream())
             .map(scheduled -> scheduled.getTask().toString())
             .toList();
 
@@ -70,15 +70,15 @@ class ForecastScheduleConfigTest {
         List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class)
             .values()
             .stream()
-            .flatMap(holder -> holder.getScheduledTasks()
-                .stream())
+            .flatMap(holder -> holder.getScheduledTasks().stream())
             .map(scheduled -> scheduled.getTask().toString())
             .toList();
 
         // then
-        assertThat(registeredTasks).contains(ForecastScheduler.class.getName() + ".pickUp");
-        assertThat(applicationContext.getBeansOfType(ObservationChangeListener.class).values())
-            .anySatisfy(hook -> assertThat(AopUtils.getTargetClass(hook))
-                .isEqualTo(ForecastScheduler.class));
+        assertSoftly(softly -> {
+            softly.assertThat(registeredTasks).contains(ForecastScheduler.class.getName() + ".pickUp");
+            softly.assertThat(applicationContext.getBeansOfType(ObservationChangeListener.class).values())
+                .anySatisfy(hook -> assertThat(AopUtils.getTargetClass(hook)).isEqualTo(ForecastScheduler.class));
+        });
     }
 }

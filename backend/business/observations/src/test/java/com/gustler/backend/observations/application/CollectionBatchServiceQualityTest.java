@@ -3,14 +3,15 @@ package com.gustler.backend.observations.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.observations.api.ObservationChange;
 import com.gustler.backend.observations.api.ObservationSeatQualityChecker;
-import com.gustler.backend.observations.domain.CollectionBatch;
-import com.gustler.backend.observations.domain.CollectionPlan;
+import com.gustler.backend.observations.domain.CollectionResult;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
 import com.gustler.backend.observations.infrastructure.jpa.CollectionBatchRepository;
 import com.gustler.backend.quota.api.ApiCallQuota;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 /** 서비스의 훅 호출 계약을 확인한다. 실제 DB 롤백은 기존 통합 테스트에서 검증한다. */
 class CollectionBatchServiceQualityTest {
+
     private static final OffsetDateTime RECEIVED_AT = OffsetDateTime.parse("2026-08-19T11:14:04+09:00");
 
     @Test
@@ -73,8 +75,7 @@ class CollectionBatchServiceQualityTest {
 
     private CollectionBatchRepository batches() {
         CollectionBatchRepository batches = mock(CollectionBatchRepository.class);
-        CollectionBatch batch = CollectionBatch.start(new CollectionPlan(7, RECEIVED_AT, "quality"), true);
-        when(batches.getById(10)).thenReturn(batch);
+        when(batches.conclude(eq(10L), any(CollectionResult.class), eq(RECEIVED_AT))).thenReturn(7L);
         return batches;
     }
 }

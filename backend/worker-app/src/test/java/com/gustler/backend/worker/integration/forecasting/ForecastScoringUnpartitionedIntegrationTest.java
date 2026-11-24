@@ -18,6 +18,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 @Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class, UnpartitionedObservationTables.class,
     ManualClock.Replacement.class, ForecastScoringIntegrationTest.Diagnostics.class })
 class ForecastScoringUnpartitionedIntegrationTest extends ForecastScoringIntegrationTest {
+
     @Autowired
     private JdbcClient catalog;
 

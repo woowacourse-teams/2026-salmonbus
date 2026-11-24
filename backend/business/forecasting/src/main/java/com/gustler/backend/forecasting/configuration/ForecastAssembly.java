@@ -45,6 +45,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@value #WRITE_TIMEOUT_SECONDS}초로 제한한다.
  */
 public final class ForecastAssembly {
+
     private static final int WRITE_TIMEOUT_SECONDS = 15;
 
     private final JdbcClient jdbc;
@@ -88,14 +89,27 @@ public final class ForecastAssembly {
         PassLabelStore labels
     ) {
         ScoringReplay replay = new ScoringReplay(forecasts, passes);
-        return new ScoringService(feed, scoringStage(), replay, new ScoringWriter(labels, transactions),
-            recentRoutes, replay.maxForecastWindow(), clock, meters);
+        return new ScoringService(
+                feed,
+                scoringStage(),
+                replay,
+                new ScoringWriter(labels, transactions),
+                recentRoutes,
+                replay.maxForecastWindow(),
+                clock,
+                meters
+        );
     }
 
     /** 저장된 정산 근거와 노선 구조로 판정하는 채점 단계를 만든다. 부를 때마다 상태가 빈 새 단계다. */
     public ScoringStage scoringStage() {
-        return new ScoringStage(new JdbcSettlementContextProvider(jdbc), new JdbcRouteStructureProvider(jdbc),
-            new AlightingAwarePassLabelCalculator(), clock, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
+        return new ScoringStage(
+                new JdbcSettlementContextProvider(jdbc),
+                new JdbcRouteStructureProvider(jdbc),
+                new AlightingAwarePassLabelCalculator(),
+                clock,
+                ScoringStage.DEFAULT_OBSERVATION_LIMIT
+        );
     }
 
     /**
@@ -117,13 +131,34 @@ public final class ForecastAssembly {
         Settings settings
     ) {
         ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(capacities));
-        RouteStateReplayer replayer = new RouteStateReplayer(sources.replays(), stage, settings.replayWindow(),
-            settings.replayExtendedWindow());
-        ForecastBatchProcessor processor = new ForecastBatchProcessor(stage, replayer, records, passes, transactions,
-            events, new RouteStateRegistry(), settings.rushOnly());
-        return new RunForecastsService(lanes, processor, sources.batches(), sources.pending(), sources.runtimes(),
-            sources.versions(), sources.stops(), new JdbcSettlementContextWriter(jdbc), settings.policy(), clock,
-            meters);
+        RouteStateReplayer replayer = new RouteStateReplayer(
+                sources.replays(),
+                stage,
+                settings.replayWindow()
+        );
+        ForecastBatchProcessor processor = new ForecastBatchProcessor(
+                stage,
+                replayer,
+                records,
+                passes,
+                transactions,
+                events,
+                new RouteStateRegistry(),
+                settings.rushOnly()
+        );
+        return new RunForecastsService(
+                lanes,
+                processor,
+                sources.batches(),
+                sources.pending(),
+                sources.runtimes(),
+                sources.versions(),
+                sources.stops(),
+                new JdbcSettlementContextWriter(jdbc),
+                settings.policy(),
+                clock,
+                meters
+        );
     }
 
     /**
@@ -144,26 +179,25 @@ public final class ForecastAssembly {
         RouteVersionQuery versions,
         RouteStopsQuery stops
     ) {
+
     }
 
     /**
      * 예보의 조절값이다.
      *
      * @param policy 신선도 창과 한 번에 읽는 배치 수
-     * @param replayWindow 다시 뜰 때 처음 되감는 관측 범위
-     * @param replayExtendedWindow 되감은 상태가 모자랄 때 한 번 늘려 되감는 범위
+     * @param replayWindow 상태 복구 때 한 번 읽는 관측 범위
      * @param rushOnly 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를 예보하지 않을지
      */
-    public record Settings(
-        ForecastPolicy policy,
-        Duration replayWindow,
-        Duration replayExtendedWindow,
-        boolean rushOnly
-    ) {
-        /** worker가 쓰는 값이다. 되감기 창은 6시간과 12시간이고, 출퇴근 범위 밖은 시간 확장 모델이 있을 때만 예보한다. */
+    public record Settings(ForecastPolicy policy, Duration replayWindow, boolean rushOnly) {
+
+        /** worker가 쓰는 값이다. 되감기 창은 6시간이고, 출퇴근 범위 밖은 시간 확장 모델이 있을 때만 예보한다. */
         public static Settings of(ForecastPolicy policy) {
-            return new Settings(policy, RouteStateReplayer.DEFAULT_WINDOW, RouteStateReplayer.DEFAULT_EXTENDED_WINDOW,
-                true);
+            return new Settings(
+                    policy,
+                    RouteStateReplayer.DEFAULT_WINDOW,
+                    true
+            );
         }
     }
 }

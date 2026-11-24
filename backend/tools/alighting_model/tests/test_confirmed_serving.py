@@ -20,7 +20,7 @@ class ConfirmedVerificationTest(unittest.TestCase):
                  max_feature_difference=0, max_prediction_difference=0, max_label_difference=0)
             for route in self.routes])
 
-    def test_historical_training_contract_is_read_without_rewriting_bytes(self):
+    def test_retired_training_contract_is_not_confirmed(self):
         contract = dict(input_profile='les-confirmed-closure-v2', label_version='les-confirmed-routeband-v2',
                         capacity_policy='observed-vehicle-prefix-max-through-closure-v2')
         contents = {'feature-contract.json': json.dumps(contract).encode(),
@@ -28,7 +28,8 @@ class ConfirmedVerificationTest(unittest.TestCase):
         for route in self.routes:
             contents[f'statistics-{route}.json'] = json.dumps(dict(input_profile=contract['input_profile'])).encode()
         original = dict(contents)
-        self.assertEqual(checked_routes(contents), self.routes)
+        with self.assertRaises(ValueError):
+            checked_routes(contents)
         self.assertEqual(contents, original)
 
     def test_complete_reports_count_both_settlement_targets(self):

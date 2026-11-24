@@ -43,6 +43,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @LoginIntegrationTest
 class FavoriteOverviewForecastIntegrationTest {
+
     private final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
 
     @LocalServerPort
@@ -92,7 +93,12 @@ class FavoriteOverviewForecastIntegrationTest {
         BoardDatabaseFixture.RouteContext route = fixture.insertRoute(now.minusDays(1));
         final long modelId = fixture.insertActiveModel(now.minusDays(1));
         ForecastBoardFixture.ObservedVehicle vehicle = fixture.insertApproachingVehicle(route, now.minusMinutes(1));
-        fixture.insertForecast(vehicle, modelId, 0.25, 12.5);
+        fixture.insertForecast(
+                vehicle,
+                modelId,
+                0.25,
+                12.5
+        );
 
         // when
         HttpResponse<String> actual = getFavorites();

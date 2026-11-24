@@ -24,6 +24,7 @@ public record UnresolvedForecast(
     String reason,
     Instant closedAt
 ) {
+
     public UnresolvedForecast {
         Objects.requireNonNull(sourceDate, "나눔 날짜가 필요하다");
         Objects.requireNonNull(state, "닫힌 상태가 필요하다");
@@ -35,6 +36,7 @@ public record UnresolvedForecast(
 
     /** 닫힌 상태. 이름은 {@code forecast_unresolved.state}에 그대로 저장된다. */
     public enum State {
+
         /** 규칙상 채점할 수 없는 예측이다. */
         UNSUPPORTED,
         /** 기다리는 동안 통과를 받지 못했다. */

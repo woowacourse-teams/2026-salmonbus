@@ -6,6 +6,7 @@ import java.util.List;
 
 /** 서울 시각의 예보 발행 및 통과 정산 구간. 호출자가 해당 관측 시각을 선택한다. */
 public enum AlightingTimeCell {
+
     WORK_MORNING("work-morning", "morning", 360),
     WORK_DAY("work-day", "", 0),
     WORK_EVENING("work-evening", "evening", 1020),
@@ -19,20 +20,26 @@ public enum AlightingTimeCell {
     private final String rushBand;
     private final int binStart;
 
-    AlightingTimeCell(String key, String rushBand, int binStart) {
+    AlightingTimeCell(String key, String rushBand, final int binStart) {
         this.key = key;
         this.rushBand = rushBand;
         this.binStart = binStart;
     }
 
-    public static AlightingTimeCell of(ZonedDateTime seoulTime, boolean holiday) {
-        int minute = minuteOf(seoulTime);
-        boolean daytime = minute >= WORK_MORNING.binStart && minute < 1260;
+    public static AlightingTimeCell of(ZonedDateTime seoulTime, final boolean holiday) {
+        final int minute = minuteOf(seoulTime);
+        final boolean daytime = minute >= WORK_MORNING.binStart && minute < 1260;
         if (holiday) {
-            return daytime ? HOLIDAY_DAY : HOLIDAY_NIGHT;
+            if (daytime) {
+                return HOLIDAY_DAY;
+            }
+            return HOLIDAY_NIGHT;
         }
         if (seoulTime.getDayOfWeek().getValue() >= 6) {
-            return daytime ? WEEKEND_DAY : WEEKEND_NIGHT;
+            if (daytime) {
+                return WEEKEND_DAY;
+            }
+            return WEEKEND_NIGHT;
         }
         if (minute >= WORK_MORNING.binStart && minute < 600) {
             return WORK_MORNING;
@@ -40,7 +47,10 @@ public enum AlightingTimeCell {
         if (minute >= WORK_EVENING.binStart && minute < 1260) {
             return WORK_EVENING;
         }
-        return daytime ? WORK_DAY : WORK_NIGHT;
+        if (daytime) {
+            return WORK_DAY;
+        }
+        return WORK_NIGHT;
     }
 
     public static int minuteOf(ZonedDateTime time) {
@@ -60,7 +70,11 @@ public enum AlightingTimeCell {
     }
 
     public int settlementBin(ZonedDateTime seoulTime) {
-        return (minuteOf(seoulTime) - binStart) / (isRush() ? 30 : 180);
+        final int elapsedMinutes = minuteOf(seoulTime) - binStart;
+        if (isRush()) {
+            return elapsedMinutes / 30;
+        }
+        return elapsedMinutes / 180;
     }
 
     public static List<String> keys() {
@@ -68,6 +82,9 @@ public enum AlightingTimeCell {
     }
 
     public static List<String> extendedKeys() {
-        return Arrays.stream(values()).filter(cell -> !cell.isRush()).map(AlightingTimeCell::key).toList();
+        return Arrays.stream(values())
+            .filter(cell -> !cell.isRush())
+            .map(AlightingTimeCell::key)
+            .toList();
     }
 }

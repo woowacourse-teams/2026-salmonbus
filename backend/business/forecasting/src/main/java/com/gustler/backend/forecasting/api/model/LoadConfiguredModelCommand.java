@@ -5,4 +5,5 @@ package com.gustler.backend.forecasting.api.model;
  * 적재와 활성 배포의 결과는 별도로 확인한다.
  */
 public record LoadConfiguredModelCommand(String directory, boolean promoteOnStart) {
+
 }

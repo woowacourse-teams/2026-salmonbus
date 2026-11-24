@@ -17,6 +17,7 @@ public record ForecastStageResult(
     int unattributedPasses,
     List<WithheldVehicle> withheld
 ) {
+
     public ForecastStageResult {
         Objects.requireNonNull(status);
         Objects.requireNonNull(state);
@@ -25,12 +26,21 @@ public record ForecastStageResult(
         withheld = List.copyOf(withheld);
     }
 
-    static ForecastStageResult unchanged(Status status, String reason, RouteForecastState state) {
-        return new ForecastStageResult(status, reason, state, List.of(), List.of(), 0, List.of());
+    static ForecastStageResult stateOnly(Status status, String reason, RouteForecastState state) {
+        return new ForecastStageResult(
+                status,
+                reason,
+                state,
+                List.of(),
+                List.of(),
+                0,
+                List.of()
+        );
     }
 
     /** 처리 결과의 종류다. */
     public enum Status {
+
         /** 상태를 전진시켰다. 스냅샷은 비어 있을 수 있다. */
         FORECAST,
         /** 확정 조건을 만족하지 않아 상태와 순위를 바꾸지 않았다. */
@@ -45,5 +55,6 @@ public record ForecastStageResult(
 
     /** 예보에서 뺀 차량 관측과 사유다. */
     public record WithheldVehicle(long observationId, String vehicleId, String reason) {
+
     }
 }

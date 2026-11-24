@@ -20,16 +20,43 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Repository
 public class JdbcPassLabelStore implements PassLabelStore {
-    private static final MultiRowInsert LABELS = new MultiRowInsert("pass_label", List.of(
-        "source_date", "route_id", "trip_start_observation_id", "stop_order", "capacity", "label_version",
-        "model_deployment_id", "state", "reason", "label_value", "previous_last_observation_id",
-        "previous_closure_observation_id", "parameter_hash", "computed_at"));
 
-    private static final List<String> LABEL_KEY = List.of("source_date", "route_id", "trip_start_observation_id",
-        "stop_order", "capacity", "label_version", "model_deployment_id");
+    private static final MultiRowInsert LABELS = new MultiRowInsert("pass_label", List.of(
+            "source_date",
+            "route_id",
+            "trip_start_observation_id",
+            "stop_order",
+            "capacity",
+            "label_version",
+            "model_deployment_id",
+            "state",
+            "reason",
+            "label_value",
+            "previous_last_observation_id",
+            "previous_closure_observation_id",
+            "parameter_hash",
+            "computed_at"
+    ));
+
+    private static final List<String> LABEL_KEY = List.of(
+            "source_date",
+            "route_id",
+            "trip_start_observation_id",
+            "stop_order",
+            "capacity",
+            "label_version",
+            "model_deployment_id"
+    );
 
     private static final MultiRowInsert UNRESOLVED = new MultiRowInsert("forecast_unresolved", List.of(
-        "source_date", "vehicle_observation_id", "target_stop_order", "route_id", "state", "reason", "closed_at"));
+            "source_date",
+            "vehicle_observation_id",
+            "target_stop_order",
+            "route_id",
+            "state",
+            "reason",
+            "closed_at"
+    ));
 
     private static final List<String> UNRESOLVED_KEY =
         List.of("source_date", "vehicle_observation_id", "target_stop_order");
@@ -43,18 +70,45 @@ public class JdbcPassLabelStore implements PassLabelStore {
     @Override
     @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public List<PassLabel> saveLabels(List<PassLabel> labels) {
-        return LABELS.insertNew(jdbc, labels, label -> Arrays.asList(label.sourceDate(), label.routeId(),
-            label.tripStartObservationId(), label.stopOrder(), label.capacity(), label.labelVersion(),
-            label.modelDeploymentId(), label.state().name(), label.reason(), label.labelValue(),
-            label.previousLastObservationId(), label.previousClosureObservationId(), label.parameterHash(),
-            timestamp(label.computedAt())), LABEL_KEY);
+        return LABELS.insertNew(
+                jdbc,
+                labels,
+                label -> Arrays.asList(
+                        label.sourceDate(),
+                        label.routeId(),
+                        label.tripStartObservationId(),
+                        label.stopOrder(),
+                        label.capacity(),
+                        label.labelVersion(),
+                        label.modelDeploymentId(),
+                        label.state().name(),
+                        label.reason(),
+                        label.labelValue(),
+                        label.previousLastObservationId(),
+                        label.previousClosureObservationId(),
+                        label.parameterHash(),
+                        timestamp(label.computedAt())
+                ),
+                LABEL_KEY
+        );
     }
 
     @Override
     @Transactional(readOnly = false, propagation = Propagation.MANDATORY)
     public List<UnresolvedForecast> saveUnresolved(List<UnresolvedForecast> unresolved) {
-        return UNRESOLVED.insertNew(jdbc, unresolved, forecast -> Arrays.asList(forecast.sourceDate(),
-            forecast.vehicleObservationId(), forecast.targetStopOrder(), forecast.routeId(), forecast.state().name(),
-            forecast.reason(), timestamp(forecast.closedAt())), UNRESOLVED_KEY);
+        return UNRESOLVED.insertNew(
+                jdbc,
+                unresolved,
+                forecast -> Arrays.asList(
+                        forecast.sourceDate(),
+                        forecast.vehicleObservationId(),
+                        forecast.targetStopOrder(),
+                        forecast.routeId(),
+                        forecast.state().name(),
+                        forecast.reason(),
+                        timestamp(forecast.closedAt())
+                ),
+                UNRESOLVED_KEY
+        );
     }
 }

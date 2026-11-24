@@ -41,6 +41,7 @@ import org.springframework.test.context.SmartContextLoader;
  * <p>worker의 시계는 시험이 옮긴다({@link ManualClock}). 수신 뒤 착수까지의 시간이 실제로 흐른 시간에 기대지 않는다.
  */
 class ForecastStartupIntegrationTest {
+
     /** 예보 실행이 남기를 기다리는 한도다. 넘기면 시험이 실패한다. 판정에 드는 시각은 여기서 나오지 않는다. */
     private static final Duration DEADLINE = Duration.ofSeconds(20);
     private static final ManualClock CLOCK = new ManualClock();
@@ -88,7 +89,9 @@ class ForecastStartupIntegrationTest {
 
     /** {@link Worker}에 적힌 설정으로 컨텍스트를 새로 띄운다. 컨텍스트 캐시에 넣지 않으므로 닫는 것은 부른 쪽이 한다. */
     private static ConfigurableApplicationContext startWorker() throws Exception {
-        MergedContextConfiguration configuration = BootstrapUtils.resolveTestContextBootstrapper(Worker.class)
+        MergedContextConfiguration configuration = BootstrapUtils.resolveTestContextBootstrapper(
+            Worker.class
+        )
             .buildMergedContextConfiguration();
         SmartContextLoader loader = (SmartContextLoader) configuration.getContextLoader();
         return (ConfigurableApplicationContext) loader.loadContext(configuration);
@@ -112,10 +115,12 @@ class ForecastStartupIntegrationTest {
     })
     @Import({ StartupModel.class, CollectionRuntimeConfiguration.class })
     private static final class Worker {
+
     }
 
     @TestConfiguration(proxyBeanMethods = false)
     static class StartupModel {
+
         @Bean
         JdbcConnectionDetails externalConnectionDetails() {
             return new JdbcConnectionDetails() {
@@ -161,6 +166,7 @@ class ForecastStartupIntegrationTest {
 
     /** 모델 적재를 요청받기 전에는 비어 있는 모델 선택이다. */
     static final class LoadedAtStartup implements ForecastRuntime {
+
         private volatile RuntimeSnapshot selected;
 
         @Override

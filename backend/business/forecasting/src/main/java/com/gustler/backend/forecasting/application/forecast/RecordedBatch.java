@@ -24,6 +24,7 @@ public record RecordedBatch(
     boolean incomplete,
     int countedRows
 ) {
+
     public RecordedBatch {
         Objects.requireNonNull(receivedAt, "수신 시각이 필요하다");
         Objects.requireNonNull(confirmedAt, "착수 시각이 필요하다");

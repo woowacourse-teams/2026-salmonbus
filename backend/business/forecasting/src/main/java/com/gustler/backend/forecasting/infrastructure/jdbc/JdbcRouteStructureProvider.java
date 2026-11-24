@@ -1,7 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.forecast.RouteStructureProvider;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -19,6 +18,7 @@ import tools.jackson.databind.json.JsonMapper;
  * 행 잠금을 잡지 않는다.
  */
 public final class JdbcRouteStructureProvider implements RouteStructureProvider {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String READ_CONTEXT = """
         SELECT /* salmonbus:scoring.find_real_stops */
@@ -49,9 +49,7 @@ public final class JdbcRouteStructureProvider implements RouteStructureProvider 
         if (recorded.isPresent()) {
             JsonNode orders = JSON.readTree(recorded.get());
             if (orders.isArray()) {
-                List<Integer> stops = new ArrayList<>();
-                orders.forEach(value -> stops.add(value.asInt()));
-                return List.copyOf(stops);
+                return orders.valueStream().map(JsonNode::asInt).toList();
             }
         }
         return jdbc.sql(READ_STOPS).param("version", routeVersionId).query(Integer.class).list();

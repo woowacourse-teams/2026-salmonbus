@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.application.forecast;
 
 import com.gustler.backend.forecasting.api.forecast.CollectionResult;
+import com.gustler.backend.forecasting.api.forecast.ForecastBatchEvents;
 import com.gustler.backend.forecasting.api.forecast.ForecastOutcome;
 import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
 import com.gustler.backend.forecasting.api.forecast.ObservationBatchSeen;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionOperations;
@@ -51,12 +53,13 @@ import org.springframework.transaction.support.TransactionOperations;
  * 예외는 그대로 던진다. 부르는 쪽이 그 노선의 상태를 버린다. {@code route} 행 잠금을 잡지 않고 {@code observation_batch}에 쓰지
  * 않는다. 한 노선의 처리는 한 스레드에서만 해야 한다.
  *
- * <p>되감기가 닫은 통과가 저장되지 않은 배치(예보 단계를 돌리지 못하고 끝난 배치, 이전 배포본이 처리한 배치)의 통과를 찾아 주면
+ * <p>되감기가 입력 부족으로 끝난 예보 실행의 통과를 찾아 주면
  * ({@link RouteStateReplayer.Result#recoveredPasses}) 아직 저장되지 않은 것만 이 배치와 같은 트랜잭션으로 저장하고, 이 배치의
  * 사건보다 먼저 통과 사건으로 넘긴다. 그 통과의 닫힌 시각은 이미 넘긴 사건들의 시각보다 이르다. 채점 단계는 통과를 닫힌 시각으로
  * 정렬해 두고 직전 통과를 찾으므로 같은 직전 통과와 같은 정답을 낸다.
  */
 public final class ForecastBatchProcessor {
+
     /** 되감기가 실패한 노선을 다시 되감기까지 기다리는 분. 배치의 착수 시각 기준이다. */
     public static final long REPLAY_RETRY_MINUTES = 5;
     static final Duration REPLAY_RETRY = Duration.ofMinutes(REPLAY_RETRY_MINUTES);
@@ -120,17 +123,33 @@ public final class ForecastBatchProcessor {
         Resolution resolution = resolve(context, read);
         Replay replay = resolution.replay();
         if (resolution.skipped() != null) {
-            return Processed.unsaved(resolution.skipped(), null, Map.of(), List.of(), replay);
+            return Processed.unsaved(
+                    resolution.skipped(),
+                    null,
+                    Map.of(),
+                    List.of(),
+                    replay
+            );
         }
+
         Outcome outcome = resolution.outcome();
-        ForecastPublished published = new ForecastPublished(SourceDates.of(read.scheduledAt()),
-            batch.observationBatchId(), read.routeId(), batch.routeVersionId(), batch.receivedAt(),
-            batch.confirmedAt(), context.runtime().deploymentId(), outcome.outcome(), outcome.vehicles());
+        ForecastPublished published = new ForecastPublished(
+                SourceDates.of(read.scheduledAt()),
+                batch.observationBatchId(),
+                read.routeId(),
+                batch.routeVersionId(),
+                batch.receivedAt(),
+                batch.confirmedAt(),
+                context.runtime().deploymentId(),
+                outcome.outcome(),
+                outcome.vehicles()
+        );
         List<PassClosed> closed = outcome.passes().stream()
             .map(pass -> pass.toEvent(published.sourceDate(), read.routeId()))
             .toList();
         List<PassClosed> recovered = withoutStored(replay.recovered());
         ObservationBatchSeen seen = seen(read);
+
         final boolean saved = Boolean.TRUE.equals(transactions.execute(status -> {
             if (!records.save(published, seen)) {
                 status.setRollbackOnly();
@@ -142,24 +161,56 @@ public final class ForecastBatchProcessor {
         }));
         if (!saved) {
             states.remove(statistics.route());
-            return Processed.unsaved(Status.DUPLICATE, published, outcome.excluded(), outcome.withheld(), replay);
+            return Processed.unsaved(
+                    Status.DUPLICATE,
+                    published,
+                    outcome.excluded(),
+                    outcome.withheld(),
+                    replay
+            );
         }
+
         applyState(statistics, outcome);
-        logRecovered(statistics, batch, replay, recovered);
-        publish(seen, published, closed, recovered);
-        return new Processed(Status.SAVED, published, closed.size(), outcome.excluded(), outcome.withheld(),
-            outcome.special(), replay.succeeded(), outcome.unattributed(), recovered.size(), replay.extension());
+        logRecovered(
+                statistics,
+                batch,
+                replay,
+                recovered
+        );
+        publish(
+                seen,
+                published,
+                closed,
+                recovered
+        );
+        return new Processed(
+                Status.SAVED,
+                published,
+                closed.size(),
+                outcome.excluded(),
+                outcome.withheld(),
+                outcome.special(),
+                replay.succeeded(),
+                outcome.unattributed(),
+                recovered.size()
+        );
     }
 
     private Resolution resolve(RouteContext context, ObservationBatchRead read) {
         ForecastBatch batch = read.batch();
         if (!batch.confirmed()) {
-            return Resolution.of(Outcome.withoutState(notConfirmed(batch), null), Replay.NONE);
+            return Resolution.of(
+                Outcome.withoutState(notConfirmed(batch), null),
+                Replay.NONE
+            );
         }
         AlightingAwareRouteStatistics statistics = context.statistics();
         Optional<RouteForecastState> state = states.find(statistics);
         if (state.isEmpty() && states.replayDeferred(statistics.route(), batch.confirmedAt())) {
-            return Resolution.of(Outcome.withoutState(ForecastOutcome.INPUT_UNAVAILABLE, "replay_deferred"),
+            return Resolution.of(Outcome.withoutState(
+                ForecastOutcome.INPUT_UNAVAILABLE,
+                "replay_deferred"
+            ),
                 Replay.NONE);
         }
         Replay replay = Replay.NONE;
@@ -168,10 +219,17 @@ public final class ForecastBatchProcessor {
                 batch.observationBatchId() - 1);
             replay = Replay.of(replayed);
             if (!replayed.succeeded()) {
-                LOGGER.warn("event=forecast_replay_failed route={} batchId={} reason={}", statistics.route(),
-                    batch.observationBatchId(), replayed.failureReason());
+                LOGGER.warn(
+                        "event=forecast_replay_failed route={} batchId={} reason={}",
+                        statistics.route(),
+                        batch.observationBatchId(),
+                        replayed.failureReason()
+                );
                 states.deferReplay(statistics.route(), batch.confirmedAt().plus(REPLAY_RETRY));
-                Outcome failed = Outcome.withoutState(ForecastOutcome.INPUT_UNAVAILABLE, "replay_failed");
+                Outcome failed = Outcome.withoutState(
+                    ForecastOutcome.INPUT_UNAVAILABLE,
+                    "replay_failed"
+                );
                 return Resolution.of(failed, replay);
             }
             state = Optional.of(replayed.state());
@@ -180,7 +238,12 @@ public final class ForecastBatchProcessor {
         if (current.receivedBeforeApplied(batch)) {
             return Resolution.skipped(Status.OUT_OF_ORDER, replay);
         }
-        ForecastStageResult result = stage.advance(current, statistics, read.capacitySourceId(), batch);
+        ForecastStageResult result = stage.advance(
+                current,
+                statistics,
+                read.capacitySourceId(),
+                batch
+        );
         if (result.status() == ForecastStageResult.Status.STALE) {
             return Resolution.skipped(Status.STALE, replay);
         }
@@ -201,22 +264,25 @@ public final class ForecastBatchProcessor {
         if (recovered.isEmpty()) {
             return recovered;
         }
-        Set<PassKey> stored = new HashSet<>();
+        Set<PassKey> storedPassKeys = new HashSet<>();
         for (Map.Entry<Long, List<PassClosed>> route : byRoute(recovered).entrySet()) {
-            Instant from = route.getValue().getFirst().closedAt();
-            Instant until = route.getValue().getLast().closedAt().plus(1, ChronoUnit.MICROS);
-            passes.findClosedBetween(route.getKey(), from, until).forEach(pass -> stored.add(PassKey.of(pass)));
+            List<PassClosed> routePasses = route.getValue();
+            Instant firstClosure = routePasses.getFirst().closedAt();
+            Instant afterLastClosure = routePasses.getLast().closedAt().plus(1, ChronoUnit.MICROS);
+            List<PassClosed> storedPasses = passes.findClosedBetween(route.getKey(), firstClosure, afterLastClosure);
+            for (PassClosed pass : storedPasses) {
+                storedPassKeys.add(PassKey.of(pass));
+            }
         }
-        return recovered.stream().filter(pass -> !stored.contains(PassKey.of(pass))).toList();
+        return recovered.stream()
+            .filter(pass -> !storedPassKeys.contains(PassKey.of(pass)))
+            .toList();
     }
 
     /** 닫힌 순서를 지키면서 노선별로 묶는다. 뒤 단계는 통과를 노선 하나씩 받는다. */
     private static Map<Long, List<PassClosed>> byRoute(List<PassClosed> closed) {
-        Map<Long, List<PassClosed>> byRoute = new LinkedHashMap<>();
-        for (PassClosed pass : closed) {
-            byRoute.computeIfAbsent(pass.routeId(), ignored -> new ArrayList<>()).add(pass);
-        }
-        return byRoute;
+        return closed.stream()
+            .collect(Collectors.groupingBy(PassClosed::routeId, LinkedHashMap::new, Collectors.toList()));
     }
 
     private void logRecovered(
@@ -228,8 +294,13 @@ public final class ForecastBatchProcessor {
         if (replay.recovered().isEmpty()) {
             return;
         }
-        LOGGER.info("event=forecast_passes_recovered route={} batchId={} found={} saved={}",
-            statistics.route(), batch.observationBatchId(), replay.recovered().size(), recovered.size());
+        LOGGER.info(
+                "event=forecast_passes_recovered route={} batchId={} found={} saved={}",
+                statistics.route(),
+                batch.observationBatchId(),
+                replay.recovered().size(),
+                recovered.size()
+        );
     }
 
     private void applyState(AlightingAwareRouteStatistics statistics, Outcome outcome) {
@@ -242,34 +313,78 @@ public final class ForecastBatchProcessor {
         }
     }
 
-    private Outcome advanced(RouteContext context, ObservationBatchRead read, ForecastStageResult result) {
+    private Outcome advanced(
+        RouteContext context,
+        ObservationBatchRead read,
+        ForecastStageResult result
+    ) {
         return switch (result.status()) {
-            case REPLAY_REQUIRED -> new Outcome(ForecastOutcome.INPUT_UNAVAILABLE, List.of(), List.of(), Map.of(),
-                List.of(), null, true, null, 0);
-            case INPUT_UNAVAILABLE -> new Outcome(ForecastOutcome.INPUT_UNAVAILABLE, List.of(), List.of(), Map.of(),
-                List.of(), result.state(), false, null, 0);
+            case REPLAY_REQUIRED -> new Outcome(
+                    ForecastOutcome.INPUT_UNAVAILABLE,
+                    List.of(),
+                    List.of(),
+                    Map.of(),
+                    List.of(),
+                    null,
+                    true,
+                    null,
+                    0
+            );
+            case INPUT_UNAVAILABLE -> new Outcome(
+                    ForecastOutcome.INPUT_UNAVAILABLE,
+                    List.of(),
+                    List.of(),
+                    Map.of(),
+                    List.of(),
+                    result.state(),
+                    false,
+                    null,
+                    0
+            );
             case NOT_CONFIRMED -> Outcome.withoutState(notConfirmed(read.batch()), null);
             case STALE -> throw new IllegalStateException("이미 반영한 배치는 처리 결과를 만들지 않는다");
             case FORECAST -> forecast(context, read, result);
         };
     }
 
-    private Outcome forecast(RouteContext context, ObservationBatchRead read, ForecastStageResult result) {
-        Map<Long, String> excluded = new HashMap<>();
-        result.withheld().stream()
+    private Outcome forecast(
+        RouteContext context,
+        ObservationBatchRead read,
+        ForecastStageResult result
+    ) {
+        Map<Long, String> replayExclusions = result.withheld().stream()
             .filter(vehicle -> REPLAY_EXCLUSIONS.contains(vehicle.reason()))
-            .forEach(vehicle -> excluded.put(vehicle.observationId(), vehicle.reason()));
+            .collect(HashMap::new, (reasons, vehicle) -> reasons.put(vehicle.observationId(), vehicle.reason()),
+                Map::putAll);
         if (outsideScope(context, read.batch())) {
-            return new Outcome(ForecastOutcome.OUT_OF_SCOPE, List.of(), result.closedPasses(), excluded, List.of(),
-                result.state(), false, null, result.unattributedPasses());
+            return new Outcome(
+                    ForecastOutcome.OUT_OF_SCOPE,
+                    List.of(),
+                    result.closedPasses(),
+                    replayExclusions,
+                    List.of(),
+                    result.state(),
+                    false,
+                    null,
+                    result.unattributedPasses()
+            );
         }
-        List<ForecastStageResult.WithheldVehicle> withheld = result.withheld().stream()
+        List<ForecastStageResult.WithheldVehicle> capacityExclusions = result.withheld().stream()
             .filter(vehicle -> !REPLAY_EXCLUSIONS.contains(vehicle.reason()))
             .toList();
         List<ForecastPublished.VehicleForecast> vehicles = vehicles(context, read, result);
         ForecastOutcome outcome = publishedOutcome(vehicles);
-        return new Outcome(outcome, vehicles, result.closedPasses(), excluded, withheld, result.state(), false, null,
-            result.unattributedPasses());
+        return new Outcome(
+                outcome,
+                vehicles,
+                result.closedPasses(),
+                replayExclusions,
+                capacityExclusions,
+                result.state(),
+                false,
+                null,
+                result.unattributedPasses()
+        );
     }
 
     private static ForecastOutcome publishedOutcome(List<ForecastPublished.VehicleForecast> vehicles) {
@@ -294,33 +409,62 @@ public final class ForecastBatchProcessor {
     ) {
         AlightingAwarePredictionAssembler assembler = new AlightingAwarePredictionAssembler(context.runtime().model(),
             context.statistics(), context.stops());
-        List<ForecastPublished.VehicleForecast> vehicles = new ArrayList<>();
-        for (AlightingAwareFeatureSnapshot snapshot : result.snapshots()) {
-            Optional<AlightingAwarePredictionAssembler.VehiclePrediction> prediction = assembler.predict(snapshot);
-            if (prediction.isEmpty() || prediction.get().targets().isEmpty()) {
-                continue;
-            }
-            List<AlightingAwarePredictionAssembler.TargetPrediction> targets = prediction.get().targets();
-            int[] stops = new int[targets.size()];
-            double[] seats = new double[targets.size()];
-            double[] probabilities = new double[targets.size()];
-            for (int index = 0; index < targets.size(); index++) {
-                SeatForecastResult value = targets.get(index).result();
-                stops[index] = targets.get(index).target().stopOrder();
-                seats[index] = value.expectedSeats();
-                probabilities[index] = value.fullChance();
-            }
-            RouteForecastState.VehicleTrack track = result.state().vehicles().get(snapshot.source().vehicleId());
-            Integer rowNumber = read.sourceRowNumbers().get(snapshot.vehicleObservationId());
-            vehicles.add(new ForecastPublished.VehicleForecast(snapshot.vehicleObservationId(),
-                rowNumberOrZero(rowNumber), snapshot.source().vehicleId(), snapshot.source().passedStopOrder(),
-                snapshot.provenance().tripStartObservationId(), track.chainStartObservationId(),
-                snapshot.source().down(), snapshot.capacity(), prediction.get().extended(), stops, seats,
-                probabilities));
+        return result.snapshots().stream()
+            .map(snapshot -> predictVehicle(
+                    assembler,
+                    snapshot,
+                    result.state(),
+                    read
+            ))
+            .flatMap(Optional::stream)
+            .sorted(Comparator.comparingInt(ForecastPublished.VehicleForecast::sourceRowNumber)
+                .thenComparingLong(ForecastPublished.VehicleForecast::vehicleObservationId))
+            .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    private static Optional<ForecastPublished.VehicleForecast> predictVehicle(
+        AlightingAwarePredictionAssembler assembler,
+        AlightingAwareFeatureSnapshot snapshot,
+        RouteForecastState state,
+        ObservationBatchRead read
+    ) {
+        Optional<AlightingAwarePredictionAssembler.VehiclePrediction> prediction = assembler.predict(snapshot);
+        if (prediction.isEmpty()) {
+            return Optional.empty();
         }
-        vehicles.sort(Comparator.comparingInt(ForecastPublished.VehicleForecast::sourceRowNumber)
-            .thenComparingLong(ForecastPublished.VehicleForecast::vehicleObservationId));
-        return vehicles;
+        AlightingAwarePredictionAssembler.VehiclePrediction vehicle = prediction.get();
+        List<AlightingAwarePredictionAssembler.TargetPrediction> targets = vehicle.targets();
+        if (targets.isEmpty()) {
+            return Optional.empty();
+        }
+
+        int[] stops = new int[targets.size()];
+        double[] seats = new double[targets.size()];
+        double[] probabilities = new double[targets.size()];
+        for (int index = 0; index < targets.size(); index++) {
+            AlightingAwarePredictionAssembler.TargetPrediction target = targets.get(index);
+            SeatForecastResult value = target.result();
+            stops[index] = target.target().stopOrder();
+            seats[index] = value.expectedSeats();
+            probabilities[index] = value.fullChance();
+        }
+
+        RouteForecastState.VehicleTrack track = state.vehicles().get(snapshot.source().vehicleId());
+        Integer rowNumber = read.sourceRowNumbers().get(snapshot.vehicleObservationId());
+        return Optional.of(new ForecastPublished.VehicleForecast(
+                snapshot.vehicleObservationId(),
+                rowNumberOrZero(rowNumber),
+                snapshot.source().vehicleId(),
+                snapshot.source().passedStopOrder(),
+                snapshot.provenance().tripStartObservationId(),
+                track.chainStartObservationId(),
+                snapshot.source().down(),
+                snapshot.capacity(),
+                vehicle.extended(),
+                stops,
+                seats,
+                probabilities
+        ));
     }
 
     private static int rowNumberOrZero(Integer rowNumber) {
@@ -356,8 +500,15 @@ public final class ForecastBatchProcessor {
             case "SUCCESS_EMPTY" -> CollectionResult.EMPTY;
             default -> throw new IllegalArgumentException("수집에 성공한 배치만 처리한다: " + batch.outcome());
         };
-        return new ObservationBatchSeen(batch.observationBatchId(), read.routeId(), batch.routeVersionId(),
-            batch.receivedAt(), result, storedRowsOrZero(batch), batch.rows().size());
+        return new ObservationBatchSeen(
+                batch.observationBatchId(),
+                read.routeId(),
+                batch.routeVersionId(),
+                batch.receivedAt(),
+                result,
+                storedRowsOrZero(batch),
+                batch.rows().size()
+        );
     }
 
     private static int storedRowsOrZero(ForecastBatch batch) {
@@ -374,21 +525,28 @@ public final class ForecastBatchProcessor {
         List<PassClosed> recovered
     ) {
         try {
-            byRoute(recovered).values().forEach(events::passesClosed);
-            events.batchSeen(seen);
+            List<ForecastBatchEvents.Event> inputs = byRoute(recovered).values().stream()
+                .<ForecastBatchEvents.Event>map(ForecastBatchEvents.ClosedPasses::new)
+                .collect(Collectors.toCollection(ArrayList::new));
+            inputs.add(seen);
             if (!closed.isEmpty()) {
-                events.passesClosed(closed);
+                inputs.add(new ForecastBatchEvents.ClosedPasses(closed));
             }
-            events.forecastPublished(published);
+            inputs.add(published);
+            events.committed(new ForecastBatchEvents(inputs));
         } catch (RuntimeException failure) {
-            LOGGER.warn("event=forecast_event_listener_failed listener={} batchId={} exceptionType={}",
-                events.getClass().getSimpleName(), published.observationBatchId(),
-                failure.getClass().getSimpleName(), failure);
+            LOGGER.warn(
+                    "event=forecast_event_listener_failed listener={} batchId={} exceptionType={}",
+                    events.getClass().getSimpleName(),
+                    published.observationBatchId(),
+                    failure.getClass().getSimpleName()
+            );
         }
     }
 
     /** 처리 결과의 종류다. */
     public enum Status {
+
         /** 실행 줄을 저장하고 사건을 넘겼다. */
         SAVED,
         /** 이미 반영한 배치라 아무것도 쓰지 않았다. */
@@ -415,7 +573,6 @@ public final class ForecastBatchProcessor {
      * @param replayed 이 처리에서 되감았으면 성공 여부, 되감지 않았으면 비어 있다
      * @param unattributedPasses 이 배치가 닫았지만 연결 시작을 보지 못한 차량이라 저장하지 않은 통과 수
      * @param recoveredPasses 되감으며 찾아 이 배치와 함께 저장한, 닫은 통과가 저장되지 않은 배치의 통과 수
-     * @param replayExtension 이 처리의 되감기가 창을 늘려 다시 되감았는지
      */
     public record Processed(
         Status status,
@@ -426,12 +583,11 @@ public final class ForecastBatchProcessor {
         String special,
         Boolean replayed,
         int unattributedPasses,
-        int recoveredPasses,
-        RouteStateReplayer.Extension replayExtension
+        int recoveredPasses
     ) {
+
         public Processed {
             Objects.requireNonNull(status);
-            Objects.requireNonNull(replayExtension);
             exclusions = Map.copyOf(exclusions);
             withheld = List.copyOf(withheld);
         }
@@ -443,8 +599,17 @@ public final class ForecastBatchProcessor {
             List<ForecastStageResult.WithheldVehicle> withheld,
             Replay replay
         ) {
-            return new Processed(status, published, 0, exclusions, withheld, null, replay.succeeded(), 0, 0,
-                replay.extension());
+            return new Processed(
+                    status,
+                    published,
+                    0,
+                    exclusions,
+                    withheld,
+                    null,
+                    replay.succeeded(),
+                    0,
+                    0
+            );
         }
 
         /** 되감은 직후라 예보에서 뺀 관측. */
@@ -477,8 +642,19 @@ public final class ForecastBatchProcessor {
         String special,
         int unattributed
     ) {
+
         static Outcome withoutState(ForecastOutcome outcome, String special) {
-            return new Outcome(outcome, List.of(), List.of(), Map.of(), List.of(), null, false, special, 0);
+            return new Outcome(
+                    outcome,
+                    List.of(),
+                    List.of(),
+                    Map.of(),
+                    List.of(),
+                    null,
+                    false,
+                    special,
+                    0
+            );
         }
     }
 
@@ -486,12 +662,23 @@ public final class ForecastBatchProcessor {
      * 상태를 쓰기 전까지의 판정이다. {@code skipped}가 있으면 아무것도 쓰지 않는 배치라 결과가 없다
      * ({@link Status#STALE}, {@link Status#OUT_OF_ORDER}).
      */
-    private record Resolution(Outcome outcome, Replay replay, Status skipped) {
-        static Resolution of(Outcome outcome, Replay replay) {
+    private record Resolution(
+        Outcome outcome,
+        Replay replay,
+        Status skipped
+    ) {
+
+        static Resolution of(
+            Outcome outcome,
+            Replay replay
+        ) {
             return new Resolution(outcome, replay, null);
         }
 
-        static Resolution skipped(Status status, Replay replay) {
+        static Resolution skipped(
+            Status status,
+            Replay replay
+        ) {
             return new Resolution(null, replay, status);
         }
     }
@@ -500,18 +687,33 @@ public final class ForecastBatchProcessor {
      * 이 처리에서 한 되감기다. {@code succeeded}는 되감았으면 성공 여부, 되감지 않았으면 비어 있다.
      * {@code recovered}는 되감으며 찾은, 닫은 통과가 저장되지 않은 배치의 통과다.
      */
-    private record Replay(Boolean succeeded, List<PassClosed> recovered, RouteStateReplayer.Extension extension) {
-        static final Replay NONE = new Replay(null, List.of(), RouteStateReplayer.Extension.NONE);
+    private record Replay(Boolean succeeded, List<PassClosed> recovered) {
+
+        static final Replay NONE = new Replay(
+            null,
+            List.of()
+        );
 
         static Replay of(RouteStateReplayer.Result result) {
-            return new Replay(result.succeeded(), result.recoveredPasses(), result.extension());
+            return new Replay(result.succeeded(), result.recoveredPasses());
         }
     }
 
     /** {@code stop_pass}의 기본 키다. */
-    private record PassKey(LocalDate sourceDate, long routeId, long tripStartObservationId, int stopOrder) {
+    private record PassKey(
+        LocalDate sourceDate,
+        long routeId,
+        long tripStartObservationId,
+        int stopOrder
+    ) {
+
         static PassKey of(PassClosed pass) {
-            return new PassKey(pass.sourceDate(), pass.routeId(), pass.tripStartObservationId(), pass.stopOrder());
+            return new PassKey(
+                    pass.sourceDate(),
+                    pass.routeId(),
+                    pass.tripStartObservationId(),
+                    pass.stopOrder()
+            );
         }
     }
 }

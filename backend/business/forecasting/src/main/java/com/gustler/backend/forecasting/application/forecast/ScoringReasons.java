@@ -4,6 +4,7 @@ package com.gustler.backend.forecasting.application.forecast;
  * 채점 단계가 쓰는 정답 판과 사유 이름이다. 놓친 예측의 사유는 원인별로 나눠 저장한다.
  */
 public final class ScoringReasons {
+
     /** 채점이 내는 정답 판({@code label_version}). */
     public static final String LABEL_VERSION = "alighting-confirmed-capacity-snapshot-v3";
 

@@ -21,8 +21,15 @@ import java.util.stream.IntStream;
  * DB의 {@code route_stop}도 같은 규칙으로 넣어야 모델의 노선 지원 판정과 되감기 판본 호환 검사를 통과한다.
  */
 final class ConfirmedProfileModelFixture {
-    private static final List<String> TABLES = List.of("lam", "lam_base", "net_tab", "full_tab", "dep_tab",
-        "stop_net_base");
+
+    private static final List<String> TABLES = List.of(
+            "lam",
+            "lam_base",
+            "net_tab",
+            "full_tab",
+            "dep_tab",
+            "stop_net_base"
+    );
     private static final int TIME_BINS = 48;
     private static final int SEAT_FEATURES = 88;
     private static final int PROBABILITY_FEATURES = 80;
@@ -38,9 +45,11 @@ final class ConfirmedProfileModelFixture {
     /** 노선마다 정류장 구성과 계수가 같은 모델을 만든다. */
     static AlightingAwareSeatForecastModel model(List<String> routes, final int stopCount, final int turn) {
         AlightingAwareSeatPredictor predictor = new AlightingAwareSeatPredictor(
-            ensemble(SEAT_FEATURES, NumericTreeEnsemble.Kind.REGRESSION, new double[] {10}),
-            ensemble(SEAT_FEATURES, NumericTreeEnsemble.Kind.MULTICLASS, new double[] {0, 0, 0}),
-            ensemble(PROBABILITY_FEATURES, NumericTreeEnsemble.Kind.BINARY, new double[] {0}), 1.3);
+                ensemble(SEAT_FEATURES, NumericTreeEnsemble.Kind.REGRESSION, new double[] {10}),
+                ensemble(SEAT_FEATURES, NumericTreeEnsemble.Kind.MULTICLASS, new double[] {0, 0, 0}),
+                ensemble(PROBABILITY_FEATURES, NumericTreeEnsemble.Kind.BINARY, new double[] {0}),
+                1.3
+        );
         Map<String, AlightingAwareRouteStatistics> statistics = new HashMap<>();
         Map<String, Map<Integer, String>> evidence = new HashMap<>();
         Map<String, ExtendedAlightingPredictor> extended = new HashMap<>();
@@ -51,13 +60,25 @@ final class ConfirmedProfileModelFixture {
                 ensemble(EXTENDED_FEATURES, NumericTreeEnsemble.Kind.REGRESSION, new double[] {8}),
                 ensemble(EXTENDED_FEATURES, NumericTreeEnsemble.Kind.BINARY, new double[] {0})));
         }
-        return new AlightingAwareSeatForecastModel(predictor, statistics, evidence, "1".repeat(64), extended);
+        return new AlightingAwareSeatForecastModel(
+                predictor,
+                statistics,
+                evidence,
+                "1".repeat(64),
+                extended
+        );
     }
 
     private static AlightingAwareRouteStatistics statistics(String route, final int stopCount, final int turn) {
         List<AlightingAwareRouteStatistics.Stop> stops = new ArrayList<>();
         for (int order = 1; order <= stopCount; order++) {
-            stops.add(new AlightingAwareRouteStatistics.Stop(order, "s" + order, "정류장" + order, order > turn, true));
+            stops.add(new AlightingAwareRouteStatistics.Stop(
+                    order,
+                    "s" + order,
+                    "정류장" + order,
+                    order > turn,
+                    true
+            ));
         }
         Map<String, Map<String, Double>> tables = new HashMap<>();
         for (String table : TABLES) {
@@ -68,7 +89,15 @@ final class ConfirmedProfileModelFixture {
             bands.put(order + "|morning", List.of(12.0, 0.4, 2.0));
             bands.put(order + "|evening", List.of(9.0, 0.6, 3.0));
         }
-        return new AlightingAwareRouteStatistics(route, stops, 2, tables, bands, Set.of(), true);
+        return new AlightingAwareRouteStatistics(
+                route,
+                stops,
+                2,
+                tables,
+                bands,
+                Set.of(),
+                true
+        );
     }
 
     private static Map<String, Double> cells(final int stopCount) {
@@ -99,7 +128,15 @@ final class ConfirmedProfileModelFixture {
             evidence.put(order, """
                 {"turn":%d,"realStopOrders":%s,"holidays":[],"extendedSettlement":{%s},
                  "alighting":{"stops":[{"stop":%d,"band":"morning",%s},{"stop":%d,"band":"evening",%s}]}}
-                """.formatted(turn, realStops, cells, order, parameters, order, parameters));
+                """.formatted(
+                        turn,
+                        realStops,
+                        cells,
+                        order,
+                        parameters,
+                        order,
+                        parameters
+                ));
         }
         return evidence;
     }
@@ -107,8 +144,21 @@ final class ConfirmedProfileModelFixture {
     private static NumericTreeEnsemble ensemble(final int features, NumericTreeEnsemble.Kind kind, double[] baseline) {
         List<List<NumericTreeEnsemble.Node>> trees = new ArrayList<>();
         for (int tree = 0; tree < baseline.length; tree++) {
-            trees.add(List.of(new NumericTreeEnsemble.Node(0, 0, false, 0, 0, 0.1 * (tree + 1), true)));
+            trees.add(List.of(new NumericTreeEnsemble.Node(
+                    0,
+                    0,
+                    false,
+                    0,
+                    0,
+                    0.1 * (tree + 1),
+                    true
+            )));
         }
-        return new NumericTreeEnsemble(features, kind, baseline, List.of(trees));
+        return new NumericTreeEnsemble(
+                features,
+                kind,
+                baseline,
+                List.of(trees)
+        );
     }
 }

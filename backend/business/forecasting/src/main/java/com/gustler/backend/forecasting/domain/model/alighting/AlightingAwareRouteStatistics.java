@@ -7,31 +7,48 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** 여섯 필드는 한 노선의 고정 통계 계약이며, 없는 셀에는 원본이 정한 기본값만 사용한다. */
+/** 노선별 정류장·통계·휴일 정보를 보관하며, 없는 통계 값에는 원본이 정한 기본값만 사용한다. */
 public record AlightingAwareRouteStatistics(
     String route,
-    List<AlightingAwareRouteStatistics.Stop> stops,
+    List<Stop> stops,
     double minutesPerStop,
     Map<String, Map<String, Double>> tables,
     Map<String, List<Double>> targetBands,
     Set<LocalDate> holidays,
     boolean confirmedProfile
 ) {
+
     public static final String CONFIRMED_PROFILE = "alighting-confirmed-closure-v2";
     public static final String CONFIRMED_LABEL = "alighting-confirmed-routeband-v2";
 
     public AlightingAwareRouteStatistics(
         String route,
-        List<AlightingAwareRouteStatistics.Stop> stops,
+        List<Stop> stops,
         final double minutesPerStop,
         Map<String, Map<String, Double>> tables,
         Map<String, List<Double>> targetBands,
         Set<LocalDate> holidays
     ) {
-        this(route, stops, minutesPerStop, tables, targetBands, holidays, false);
+        this(
+                route,
+                stops,
+                minutesPerStop,
+                tables,
+                targetBands,
+                holidays,
+                false
+        );
     }
+
     /** 다섯 값은 하나의 원본 정류장 메타데이터를 구성한다. */
-    public record Stop(int order, String id, String name, boolean down, boolean boardingAllowed) {
+    public record Stop(
+        int order,
+        String id,
+        String name,
+        boolean down,
+        boolean boardingAllowed
+    ) {
+
         public Stop {
             if (hasInvalidMetadata(order, id, name)) {
                 throw new IllegalArgumentException("Invalid AlightingAware stop metadata");
@@ -55,7 +72,10 @@ public record AlightingAwareRouteStatistics(
             throw new IllegalArgumentException("AlightingAware route is absent");
         }
         stops = List.copyOf(stops);
-        if (stops.stream().map(AlightingAwareRouteStatistics.Stop::order).distinct().count() != stops.size()) {
+        if (stops.stream()
+            .map(Stop::order)
+            .distinct()
+            .count() != stops.size()) {
             throw new IllegalArgumentException("Duplicate AlightingAware stop order");
         }
         tables = tables.entrySet().stream()
@@ -67,7 +87,10 @@ public record AlightingAwareRouteStatistics(
         validateTables(tables);
     }
 
-    private static void validateTravelTime(List<AlightingAwareRouteStatistics.Stop> stops, final double minutesPerStop) {
+    private static void validateTravelTime(
+        List<Stop> stops,
+        final double minutesPerStop
+    ) {
         if (stops.isEmpty() || !Double.isFinite(minutesPerStop)) {
             throw new IllegalArgumentException("AlightingAware route statistics missing stops/travel time");
         }
@@ -77,7 +100,14 @@ public record AlightingAwareRouteStatistics(
     }
 
     private static void validateTables(Map<String, Map<String, Double>> tables) {
-        for (String table : List.of("lam", "lam_base", "net_tab", "full_tab", "dep_tab", "stop_net_base")) {
+        for (String table : List.of(
+                "lam",
+                "lam_base",
+                "net_tab",
+                "full_tab",
+                "dep_tab",
+                "stop_net_base"
+        )) {
             if (!tables.containsKey(table)) {
                 throw new IllegalArgumentException("Missing AlightingAware table: " + table);
             }
@@ -96,18 +126,33 @@ public record AlightingAwareRouteStatistics(
     }
 
     public int largestStopOrder() {
-        return stops.stream().mapToInt(AlightingAwareRouteStatistics.Stop::order).max().orElseThrow();
+        return stops.stream()
+            .mapToInt(Stop::order)
+            .max()
+            .orElseThrow();
     }
 
     public int turn() {
-        return stops.stream().filter(stop -> !stop.down()).mapToInt(AlightingAwareRouteStatistics.Stop::order).max().orElseThrow();
+        return stops.stream()
+            .filter(stop -> !stop.down())
+            .mapToInt(Stop::order)
+            .max()
+            .orElseThrow();
     }
 
     public List<Integer> realStopOrders() {
+        return stops.stream()
+            .filter(this::isRealStop)
+            .map(Stop::order)
+            .sorted()
+            .toList();
+    }
+
+    private boolean isRealStop(Stop stop) {
         if (confirmedProfile) {
-            return stops.stream().filter(Stop::boardingAllowed).map(Stop::order).sorted().toList();
+            return stop.boardingAllowed();
         }
-        return stops.stream().filter(stop -> !stop.via()).map(AlightingAwareRouteStatistics.Stop::order).sorted().toList();
+        return !stop.via();
     }
 
     public Profile profile() {
@@ -120,9 +165,10 @@ public record AlightingAwareRouteStatistics(
     }
 
     public record Profile(String input, String label, String capacity) {
+
     }
 
-    public AlightingAwareRouteStatistics.Stop stop(final int order) {
+    public Stop stop(final int order) {
         return stops.stream().filter(stop -> stop.order() == order).findFirst().orElseThrow();
     }
 

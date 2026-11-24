@@ -14,6 +14,7 @@ import java.util.Set;
  * 쓴다.
  */
 public final class CommittedBatches implements PendingBatches {
+
     private final PendingBatches delegate;
     private final Set<Long> committed = new HashSet<>();
     private Runnable afterNextFind;

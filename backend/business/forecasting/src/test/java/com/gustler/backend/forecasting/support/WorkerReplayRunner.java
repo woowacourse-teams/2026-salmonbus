@@ -45,6 +45,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * 노선 상태는 예보가 스스로 만든다. 그날의 첫 배치에서 저장된 관측을 되감는데, 그 앞의 관측이 DB에 없으므로 빈 상태에서 시작한다.
  */
 final class WorkerReplayRunner {
+
     /** worker 설정 파일의 신선도 창과 한 번에 읽는 배치 수다. */
     private static final ForecastPolicy POLICY = new ForecastPolicy(Duration.ofMinutes(10), 20);
     /** 줄 열쇠를 익히는 줍기에서 어느 배치도 신선도 창에 들지 않게 시계를 마지막 배치 뒤로 보내는 간격. */
@@ -78,23 +79,51 @@ final class WorkerReplayRunner {
         VehicleCapacityCache capacities = new VehicleCapacityCache(new JdbcVehicleCapacityStore(jdbc));
         this.stores = stores;
         this.runtime = runtime;
-        this.assembly = new ForecastAssembly(jdbc, stores.transactions(), clock, null);
+        this.assembly = new ForecastAssembly(
+                jdbc,
+                stores.transactions(),
+                clock,
+                null
+        );
         this.source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
         this.routeStops = new JdbcRouteVersionQuery(jdbc);
         this.stage = new ForecastStage(new CachedVehicleCapacities(capacities));
-        this.replayer = new RouteStateReplayer(source, stage, RouteStateReplayer.DEFAULT_WINDOW,
-            RouteStateReplayer.DEFAULT_EXTENDED_WINDOW);
+        this.replayer = new RouteStateReplayer(
+                source,
+                stage,
+                RouteStateReplayer.DEFAULT_WINDOW
+        );
         this.committed = new CommittedBatches(new JdbcPendingBatches(jdbc));
-        this.scoring = assembly.scoring(task -> {
-            task.run();
-            return true;
-        }, stores.records(), stores.records(), stores.passes(), stores.labels());
-        ForecastAssembly.Sources sources = new ForecastAssembly.Sources(source, source, committed,
-            () -> Optional.of(runtime), () -> versions, routeStops);
-        this.forecasts = assembly.forecast((routeKey, task) -> {
-            task.run();
-            return true;
-        }, scoring, sources, capacities, stores.records(), stores.passes(), ForecastAssembly.Settings.of(POLICY));
+        this.scoring = assembly.scoring(
+                task -> {
+                    task.run();
+                    return true;
+                },
+                stores.records(),
+                stores.records(),
+                stores.passes(),
+                stores.labels()
+        );
+        ForecastAssembly.Sources sources = new ForecastAssembly.Sources(
+                source,
+                source,
+                committed,
+                () -> Optional.of(runtime),
+                () -> versions,
+                routeStops
+        );
+        this.forecasts = assembly.forecast(
+                (routeKey, task) -> {
+                    task.run();
+                    return true;
+                },
+                scoring,
+                sources,
+                capacities,
+                stores.records(),
+                stores.passes(),
+                ForecastAssembly.Settings.of(POLICY)
+        );
     }
 
     /**
@@ -163,7 +192,12 @@ final class WorkerReplayRunner {
             throw new IllegalStateException("저장된 관측을 되감지 못했다: " + batchId + " " + replayed.failureReason());
         }
         return Optional.of(new Restarted(statistics, stops,
-            stage.advance(replayed.state(), statistics, read.capacitySourceId(), read.batch())));
+            stage.advance(
+                    replayed.state(),
+                    statistics,
+                    read.capacitySourceId(),
+                    read.batch()
+            )));
     }
 
     /**
@@ -185,6 +219,7 @@ final class WorkerReplayRunner {
      * @param result 예보 단계의 결과
      */
     record Restarted(AlightingAwareRouteStatistics statistics, RouteStops stops, ForecastStageResult result) {
+
         Optional<AlightingAwareFeatureSnapshot> snapshot(final long observationId) {
             return result.snapshots().stream()
                 .filter(snapshot -> snapshot.vehicleObservationId() == observationId)

@@ -24,23 +24,52 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 class ForecastMonitoringTest {
+
     @Test
     void 수집_실패와_실제_정리_건수만_발생시각에_반영한다() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ForecastMonitoring monitoring = new ForecastMonitoring(registry, mock(DataSource.class),
             Clock.fixed(Instant.ofEpochSecond(1000), ZoneOffset.UTC));
 
-        monitoring.completed("forecast_tick", "all", 1, true);
+        monitoring.completed(
+                "forecast_tick",
+                "all",
+                1,
+                true
+        );
         monitoring.collectionRecovered(0);
-        assertThat(registry.get("salmonbus.collection.failure.last.timestamp").gauge().value()).isZero();
-        assertThat(registry.get("salmonbus.collection.recovery.last.timestamp").gauge().value()).isZero();
+        assertSoftly(softly -> {
+            softly.check(
+                () -> assertThat(registry.get("salmonbus.collection.failure.last.timestamp").gauge().value()).isZero()
+            );
+            softly.check(
+                () -> assertThat(registry.get("salmonbus.collection.recovery.last.timestamp").gauge().value()).isZero()
+            );
+        });
 
-        monitoring.completed("collection_failure_close", "all", 1, true);
+        monitoring.completed(
+                "collection_failure_close",
+                "all",
+                1,
+                true
+        );
         monitoring.collectionRecovered(3);
 
-        assertThat(registry.get("salmonbus.collection.failure.last.timestamp").gauge().value()).isEqualTo(1000);
-        assertThat(registry.get("salmonbus.collection.recovery.last.timestamp").gauge().value()).isEqualTo(1000);
-        assertThat(registry.get("salmonbus.collection.recovered.batches").counter().count()).isEqualTo(3);
+        assertSoftly(softly -> {
+            softly.check(
+                () -> assertThat(
+                    registry.get("salmonbus.collection.failure.last.timestamp").gauge().value()
+                ).isEqualTo(1000)
+            );
+            softly.check(
+                () -> assertThat(
+                    registry.get("salmonbus.collection.recovery.last.timestamp").gauge().value()
+                ).isEqualTo(1000)
+            );
+            softly.check(
+                () -> assertThat(registry.get("salmonbus.collection.recovered.batches").counter().count()).isEqualTo(3)
+            );
+        });
     }
 
     @Test
@@ -55,12 +84,20 @@ class ForecastMonitoringTest {
         monitoring.collectionSeatQuality(1, 1);
 
         // then
-        assertThat(registry.get("salmonbus.collection.seat.quality").tag("decision", "REVIEW").counter().count())
-            .isEqualTo(3);
-        assertThat(registry.get("salmonbus.collection.seat.quality").tag("decision", "OUTLIER").counter().count())
-            .isEqualTo(1);
-        assertThat(registry.get("salmonbus.collection.seat.quality.last.timestamp").gauges())
-            .extracting(gauge -> gauge.value()).containsExactlyInAnyOrder(1000.0, 1000.0);
+        assertSoftly(softly -> {
+            softly.check(() -> assertThat(registry.get("salmonbus.collection.seat.quality").tag(
+                "decision",
+                "REVIEW"
+            ).counter().count())
+                .isEqualTo(3));
+            softly.check(() -> assertThat(registry.get("salmonbus.collection.seat.quality").tag(
+                "decision",
+                "OUTLIER"
+            ).counter().count())
+                .isEqualTo(1));
+            softly.check(() -> assertThat(registry.get("salmonbus.collection.seat.quality.last.timestamp").gauges())
+                .extracting(gauge -> gauge.value()).containsExactlyInAnyOrder(1000.0, 1000.0));
+        });
     }
 
     @Test
@@ -79,9 +116,39 @@ class ForecastMonitoringTest {
         ForecastMonitoring monitoring =
             new ForecastMonitoring(new SimpleMeterRegistry(), mock(DataSource.class), Clock.systemUTC());
         monitoring.closed(List.of(
-            new ForecastClosed(1, 2, 6, 4, 2, 10.0, 0.25, 3.0, 3),
-            new ForecastClosed(1, 2, 6, 4, 2, Double.NaN, 0.25, 3.0, 3),
-            new ForecastClosed(1, 2, 6, 4, 2, 30.0, 0.25, null, null)));
+            new ForecastClosed(
+                    1,
+                    2,
+                    6,
+                    4,
+                    2,
+                    10.0,
+                    0.25,
+                    3.0,
+                    3
+            ),
+            new ForecastClosed(
+                    1,
+                    2,
+                    6,
+                    4,
+                    2,
+                    Double.NaN,
+                    0.25,
+                    3.0,
+                    3
+            ),
+            new ForecastClosed(
+                    1,
+                    2,
+                    6,
+                    4,
+                    2,
+                    30.0,
+                    0.25,
+                    null,
+                    null
+            )));
 
         // when
         List<String> lines = accuracyLines(monitoring::flushAccuracy);
@@ -104,7 +171,17 @@ class ForecastMonitoringTest {
         ForecastMonitoring monitoring = new ForecastMonitoring(registry, mock(DataSource.class), Clock.systemUTC());
         List<ForecastClosed> closed = new ArrayList<>();
         for (int stop = 1; stop <= ForecastAccuracy.MAXIMUM_KEYS + 3; stop++) {
-            closed.add(new ForecastClosed(1, 2, 6, stop, 2, 10.0, 0.25, 3.0, 3));
+            closed.add(new ForecastClosed(
+                    1,
+                    2,
+                    6,
+                    stop,
+                    2,
+                    10.0,
+                    0.25,
+                    3.0,
+                    3
+            ));
         }
 
         // when
@@ -141,12 +218,27 @@ class ForecastMonitoringTest {
         // when
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ForecastMonitoring monitoring = new ForecastMonitoring(registry, mock(DataSource.class), Clock.systemUTC());
-        monitoring.completed("forecast_tick", "all", 5000000, false);
-        monitoring.completed("forecast_tick", 123L, 2000000, false);
+        monitoring.completed(
+                "forecast_tick",
+                "all",
+                5000000,
+                false
+        );
+        monitoring.completed(
+                "forecast_tick",
+                123L,
+                2000000,
+                false
+        );
 
         // then
-        assertThat(registry.get("salmonbus.worker.operation").tag("outcome", "returned").timer().count()).isEqualTo(2);
-        assertThat(registry.find("salmonbus.worker.operation").timers()).hasSize(1);
+        assertSoftly(softly -> {
+            softly.check(() -> assertThat(registry.get("salmonbus.worker.operation").tag(
+                "outcome",
+                "returned"
+            ).timer().count()).isEqualTo(2));
+            softly.check(() -> assertThat(registry.find("salmonbus.worker.operation").timers()).hasSize(1));
+        });
     }
 
     @Test
@@ -183,20 +275,35 @@ class ForecastMonitoringTest {
         monitoring.collectionAttempted("234000886", 910);
         assertThat(registry.get("salmonbus.collection.first.attempt.timestamp").gauge().value()).isEqualTo(900);
         monitoring.collectionCommitted("234000886", 990, 0);
-        assertThat(registry.get("salmonbus.collection.last.success.timestamp").gauge().value()).isEqualTo(990);
-        assertThat(registry.get("salmonbus.collection.usable.rows").gauge().value()).isZero();
+        assertSoftly(softly -> {
+            softly.check(
+                () -> assertThat(
+                    registry.get("salmonbus.collection.last.success.timestamp").gauge().value()
+                ).isEqualTo(990)
+            );
+            softly.check(() -> assertThat(registry.get("salmonbus.collection.usable.rows").gauge().value()).isZero());
+        });
         monitoring.pending(4L, Instant.ofEpochSecond(600));
         assertThat(registry.get("salmonbus.forecast.pending.age.seconds").gauge().value()).isEqualTo(400);
         monitoring.pending(4L, null);
-        assertThat(registry.get("salmonbus.forecast.pending.age.seconds").gauge().value()).isZero();
-        assertThat(monitoring.context("collection_attempt", "234000886")).contains("routeName=\"9300\"");
+        assertSoftly(softly -> {
+            softly.check(
+                () -> assertThat(registry.get("salmonbus.forecast.pending.age.seconds").gauge().value()).isZero()
+            );
+            softly.check(() -> assertThat(monitoring.context(
+                "collection_attempt",
+                "234000886"
+            )).contains("routeName=\"9300\""));
+        });
     }
 
     @Test
     void 예보_커밋은_마지막_커밋_시각을_갱신하고_예측이_있는_커밋만_마지막_예보와_입력_시각을_갱신한다() throws Exception {
         // given
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        SettableClock clock = new SettableClock(Instant.ofEpochSecond(1000));
+        SettableClock clock = new SettableClock(
+            Instant.ofEpochSecond(1000)
+        );
         ForecastMonitoring monitoring = new ForecastMonitoring(registry, mock(DataSource.class), clock);
         Method register = ForecastMonitoring.class.getDeclaredMethod("registerRoute", long.class, String.class);
         register.setAccessible(true);
@@ -206,24 +313,68 @@ class ForecastMonitoringTest {
         ((Map) routes.get(monitoring)).put(1L, state);
 
         // when
-        monitoring.published(1L, 4L, Instant.ofEpochSecond(990), 0);
+        monitoring.published(
+                1L,
+                4L,
+                Instant.ofEpochSecond(990),
+                0
+        );
 
         // then
-        assertThat(registry.get("salmonbus.forecast.last.commit.timestamp").gauge().value()).isEqualTo(1000);
-        assertThat(registry.get("salmonbus.forecast.last.nonempty.timestamp").gauge().value()).isNaN();
-        assertThat(registry.get("salmonbus.forecast.last.input.timestamp").gauge().value()).isNaN();
+        assertSoftly(softly -> {
+            softly.check(
+                () -> assertThat(
+                    registry.get("salmonbus.forecast.last.commit.timestamp").gauge().value()
+                ).isEqualTo(1000)
+            );
+            softly.check(
+                () -> assertThat(registry.get("salmonbus.forecast.last.nonempty.timestamp").gauge().value()).isNaN()
+            );
+            softly.check(
+                () -> assertThat(registry.get("salmonbus.forecast.last.input.timestamp").gauge().value()).isNaN()
+            );
+        });
 
         // when
         clock.now = Instant.ofEpochSecond(1030);
-        monitoring.published(1L, 4L, Instant.ofEpochSecond(1020), 12);
+        monitoring.published(
+                1L,
+                4L,
+                Instant.ofEpochSecond(1020),
+                12
+        );
         clock.now = Instant.ofEpochSecond(1060);
-        monitoring.published(1L, 4L, Instant.ofEpochSecond(1050), 0);
-        monitoring.published(2L, 5L, Instant.ofEpochSecond(1050), 3);
+        monitoring.published(
+                1L,
+                4L,
+                Instant.ofEpochSecond(1050),
+                0
+        );
+        monitoring.published(
+                2L,
+                5L,
+                Instant.ofEpochSecond(1050),
+                3
+        );
 
         // then
-        assertThat(registry.get("salmonbus.forecast.last.commit.timestamp").gauge().value()).isEqualTo(1060);
-        assertThat(registry.get("salmonbus.forecast.last.nonempty.timestamp").gauge().value()).isEqualTo(1030);
-        assertThat(registry.get("salmonbus.forecast.last.input.timestamp").gauge().value()).isEqualTo(1020);
+        assertSoftly(softly -> {
+            softly.check(
+                () -> assertThat(
+                    registry.get("salmonbus.forecast.last.commit.timestamp").gauge().value()
+                ).isEqualTo(1060)
+            );
+            softly.check(
+                () -> assertThat(
+                    registry.get("salmonbus.forecast.last.nonempty.timestamp").gauge().value()
+                ).isEqualTo(1030)
+            );
+            softly.check(
+                () -> assertThat(
+                    registry.get("salmonbus.forecast.last.input.timestamp").gauge().value()
+                ).isEqualTo(1020)
+            );
+        });
     }
 
     /** 일을 하는 동안 남은 정확도 집계 로그를 모은다. 이름을 읽지 못했다는 경고는 뺀다. */
@@ -244,6 +395,7 @@ class ForecastMonitoringTest {
     }
 
     private static final class SettableClock extends Clock {
+
         private Instant now;
 
         private SettableClock(Instant now) {

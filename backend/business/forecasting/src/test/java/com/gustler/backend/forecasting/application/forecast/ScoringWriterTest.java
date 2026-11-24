@@ -19,6 +19,7 @@ import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionOperations;
 
 class ScoringWriterTest {
+
     private static final LocalDate DAY = LocalDate.of(2026, 1, 5);
     private static final Instant AT = Instant.parse("2026-01-05T00:00:00Z");
 
@@ -28,8 +29,18 @@ class ScoringWriterTest {
         MemoryStore store = new MemoryStore();
         CountingTransactions transactions = new CountingTransactions();
         ScoringWriter writer = new ScoringWriter(store, transactions);
-        writer.add(new ScoringResult(List.of(label(1)), List.of(unresolved(10)), List.of(), List.of()));
-        writer.add(new ScoringResult(List.of(label(2)), List.of(), List.of(), List.of()));
+        writer.add(new ScoringResult(
+                List.of(label(1)),
+                List.of(unresolved(10)),
+                List.of(),
+                List.of()
+        ));
+        writer.add(new ScoringResult(
+                List.of(label(2)),
+                List.of(),
+                List.of(),
+                List.of()
+        ));
 
         // when
         ScoringWriter.Flushed flushed = writer.flush();
@@ -65,9 +76,19 @@ class ScoringWriterTest {
         MemoryStore store = new MemoryStore();
         store.failures = 1;
         ScoringWriter writer = new ScoringWriter(store, new CountingTransactions());
-        writer.add(new ScoringResult(List.of(label(1)), List.of(), List.of(), List.of()));
+        writer.add(new ScoringResult(
+                List.of(label(1)),
+                List.of(),
+                List.of(),
+                List.of()
+        ));
         assertThatThrownBy(writer::flush).isInstanceOf(IllegalStateException.class);
-        writer.add(new ScoringResult(List.of(label(2)), List.of(), List.of(), List.of()));
+        writer.add(new ScoringResult(
+                List.of(label(2)),
+                List.of(),
+                List.of(),
+                List.of()
+        ));
 
         // when
         ScoringWriter.Flushed flushed = writer.flush();
@@ -85,11 +106,30 @@ class ScoringWriterTest {
         MemoryStore store = new MemoryStore();
         CountingTransactions transactions = new CountingTransactions(store);
         ScoringWriter writer = new ScoringWriter(store, transactions, 3);
-        writer.add(new ScoringResult(List.of(label(1)), List.of(unresolved(10)), List.of(), List.of()));
-        writer.add(new ScoringResult(List.of(label(2)), List.of(), List.of(), List.of()));
-        writer.add(new ScoringResult(List.of(label(3)), List.of(unresolved(11)), List.of(), List.of()));
-        writer.add(new ScoringResult(List.of(label(4), label(5)), List.of(unresolved(12), unresolved(13)), List.of(),
-            List.of()));
+        writer.add(new ScoringResult(
+                List.of(label(1)),
+                List.of(unresolved(10)),
+                List.of(),
+                List.of()
+        ));
+        writer.add(new ScoringResult(
+                List.of(label(2)),
+                List.of(),
+                List.of(),
+                List.of()
+        ));
+        writer.add(new ScoringResult(
+                List.of(label(3)),
+                List.of(unresolved(11)),
+                List.of(),
+                List.of()
+        ));
+        writer.add(new ScoringResult(
+                List.of(label(4), label(5)),
+                List.of(unresolved(12), unresolved(13)),
+                List.of(),
+                List.of()
+        ));
 
         // when
         ScoringWriter.Flushed flushed = writer.flush();
@@ -98,7 +138,12 @@ class ScoringWriterTest {
         assertSoftly(softly -> {
             softly.assertThat(flushed).isEqualTo(new ScoringWriter.Flushed(5, 4, List.of()));
             softly.assertThat(store.writes).containsExactly(List.of(1L, 2L, 10L), List.of(3L, 11L),
-                List.of(4L, 5L, 12L, 13L));
+                List.of(
+                        4L,
+                        5L,
+                        12L,
+                        13L
+                ));
             softly.assertThat(transactions.calls.get()).isEqualTo(3);
             softly.assertThat(writer.pendingCount()).isZero();
         });
@@ -109,9 +154,24 @@ class ScoringWriterTest {
         // given
         MemoryStore store = new MemoryStore();
         ScoringWriter writer = new ScoringWriter(store, new CountingTransactions(store), 2);
-        writer.add(new ScoringResult(List.of(), List.of(unresolved(10), unresolved(11)), List.of(), List.of()));
-        writer.add(new ScoringResult(List.of(label(1)), List.of(unresolved(12)), List.of(), List.of()));
-        writer.add(new ScoringResult(List.of(label(2)), List.of(unresolved(13)), List.of(), List.of()));
+        writer.add(new ScoringResult(
+                List.of(),
+                List.of(unresolved(10), unresolved(11)),
+                List.of(),
+                List.of()
+        ));
+        writer.add(new ScoringResult(
+                List.of(label(1)),
+                List.of(unresolved(12)),
+                List.of(),
+                List.of()
+        ));
+        writer.add(new ScoringResult(
+                List.of(label(2)),
+                List.of(unresolved(13)),
+                List.of(),
+                List.of()
+        ));
         store.failures = 1;
 
         // when
@@ -140,9 +200,14 @@ class ScoringWriterTest {
         store.saveUnresolved(List.of(storedLost));
         PassLabel fresh = label(2);
         UnresolvedForecast freshLost = unresolved(11);
-        writer.add(new ScoringResult(List.of(label(1), fresh), List.of(unresolved(10), freshLost), List.of(), List.of(
-            ClosedForecast.scored(fresh, event(21)), ClosedForecast.scored(fresh, event(22)),
-            ClosedForecast.unresolved(freshLost, event(23)))));
+        writer.add(new ScoringResult(
+                List.of(label(1), fresh),
+                List.of(unresolved(10), freshLost),
+                List.of(),
+                List.of(
+                    ClosedForecast.scored(fresh, event(21)), ClosedForecast.scored(fresh, event(22)),
+                    ClosedForecast.unresolved(freshLost, event(23)))
+        ));
 
         // when
         ScoringWriter.Flushed flushed = writer.flush();
@@ -177,7 +242,10 @@ class ScoringWriterTest {
     @Test
     void 같은_줄이_쓰기_대기에_둘_있으면_먼저_넣은_쪽의_예측만_돌려준다() {
         // given
-        ScoringWriter writer = new ScoringWriter(new MemoryStore(), new CountingTransactions());
+        ScoringWriter writer = new ScoringWriter(
+            new MemoryStore(),
+            new CountingTransactions()
+        );
         writer.add(closing(label(1), unresolved(10)));
         writer.add(closing(label(1), unresolved(10)));
 
@@ -239,23 +307,59 @@ class ScoringWriterTest {
 
     /** 정답 줄 하나와 미해결 줄 하나, 그 줄로 닫힌 예측을 하나씩 담은 결과다. 사건의 목표 정류장에 줄의 번호를 적는다. */
     private static ScoringResult closing(PassLabel label, UnresolvedForecast lost) {
-        return new ScoringResult(List.of(label), List.of(lost), List.of(), List.of(
-            ClosedForecast.scored(label, event((int) label.tripStartObservationId())),
-            ClosedForecast.unresolved(lost, event((int) lost.vehicleObservationId()))));
+        return new ScoringResult(
+                List.of(label),
+                List.of(lost),
+                List.of(),
+                List.of(
+                    ClosedForecast.scored(label, event((int) label.tripStartObservationId())),
+                    ClosedForecast.unresolved(lost, event((int) lost.vehicleObservationId())))
+        );
     }
 
     private static ForecastClosed event(final int targetStopOrder) {
-        return new ForecastClosed(7, 70, 3, targetStopOrder, 2, 11.5, 0.25, null, null);
+        return new ForecastClosed(
+                7,
+                70,
+                3,
+                targetStopOrder,
+                2,
+                11.5,
+                0.25,
+                null,
+                null
+        );
     }
 
     private static PassLabel label(final long trip) {
-        return new PassLabel(DAY, 7, trip, 3, 40, ScoringReasons.LABEL_VERSION, 3, PassLabel.State.SETTLED, null,
-            12.5, null, null, null, AT);
+        return new PassLabel(
+                DAY,
+                7,
+                trip,
+                3,
+                40,
+                ScoringReasons.LABEL_VERSION,
+                3,
+                PassLabel.State.SETTLED,
+                null,
+                12.5,
+                null,
+                null,
+                null,
+                AT
+        );
     }
 
     private static UnresolvedForecast unresolved(final long observation) {
-        return new UnresolvedForecast(DAY, observation, 3, 7, UnresolvedForecast.State.LOST,
-            ScoringReasons.PASS_NOT_CLOSED, AT);
+        return new UnresolvedForecast(
+                DAY,
+                observation,
+                3,
+                7,
+                UnresolvedForecast.State.LOST,
+                ScoringReasons.PASS_NOT_CLOSED,
+                AT
+        );
     }
 
     /**
@@ -263,6 +367,7 @@ class ScoringWriterTest {
      * 저장소처럼 이미 있는 번호의 줄은 넣지 않고, 새로 넣은 줄만 받은 객체 그대로 돌려준다.
      */
     private static final class MemoryStore implements PassLabelStore {
+
         private final List<PassLabel> labels = new ArrayList<>();
         private final List<UnresolvedForecast> unresolved = new ArrayList<>();
         private final List<List<Long>> writes = new ArrayList<>();
@@ -301,6 +406,7 @@ class ScoringWriterTest {
     }
 
     private static final class CountingTransactions implements TransactionOperations {
+
         private final AtomicInteger calls = new AtomicInteger();
         private final MemoryStore store;
 

@@ -10,6 +10,7 @@ import java.time.ZoneOffset;
  * 착수 시각으로 맞춘다. 한 스레드에서만 쓴다.
  */
 final class WorkerReplayClock extends Clock {
+
     private Instant now = Instant.EPOCH;
 
     void moveTo(Instant instant) {

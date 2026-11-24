@@ -28,4 +28,5 @@ public record ForecastClosed(
     Double labelSeats,
     Integer departureSeats
 ) {
+
 }

@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 되감기가 계속 실패하므로, 배치마다 몇 시간치 관측을 다시 읽지 않게 하려는 것이다.
  */
 public final class RouteStateRegistry {
+
     private final Map<String, Entry> states = new ConcurrentHashMap<>();
     private final Map<String, Instant> replayDeferredUntil = new ConcurrentHashMap<>();
 
@@ -89,5 +90,6 @@ public final class RouteStateRegistry {
     }
 
     private record Entry(AlightingAwareRouteStatistics statistics, RouteForecastState state) {
+
     }
 }

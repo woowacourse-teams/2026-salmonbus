@@ -15,6 +15,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /** 합성 증거로 적재 경계를 검사한다. 실제 모델 PASS 증거로 사용하지 않는다. */
 class AlightingAwareConfirmedServingVerificationTest {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final List<String> ROUTES = List.of("3330", "G8110");
     private static final String DIGEST = "b".repeat(64);
@@ -23,7 +24,12 @@ class AlightingAwareConfirmedServingVerificationTest {
     @ValueSource(booleans = {false, true})
     void 과거와_현재_보고서의_전체_노선과_정산_건수를_검증한다(final boolean afterAlightingOnly) {
         assertThatCode(() -> {
-            for (String check : List.of("feature_parity", "historical_replay", "settlement", "runtime_validation")) {
+            for (String check : List.of(
+                    "feature_parity",
+                    "historical_replay",
+                    "settlement",
+                    "runtime_validation"
+            )) {
                 ObjectNode receipt = receipt(check);
                 ObjectNode evidence = evidence(check);
                 if (afterAlightingOnly && List.of("historical_replay", "settlement").contains(check)) {
@@ -35,7 +41,13 @@ class AlightingAwareConfirmedServingVerificationTest {
                     receipt.put("verified_cases", ROUTES.size());
                     evidence.put("verified_cases", ROUTES.size());
                 }
-                AlightingAwareConfirmedServingVerification.verify(check, receipt, evidence, DIGEST, ROUTES);
+                AlightingAwareConfirmedServingVerification.verify(
+                        check,
+                        receipt,
+                        evidence,
+                        DIGEST,
+                        ROUTES
+                );
             }
         }).doesNotThrowAnyException();
     }
@@ -67,16 +79,33 @@ class AlightingAwareConfirmedServingVerificationTest {
 
         // then
         assertThatThrownBy(() -> AlightingAwareConfirmedServingVerification.verify(
-            "settlement", receipt, evidence, DIGEST, ROUTES)).isInstanceOf(IllegalArgumentException.class);
+                "settlement",
+                receipt,
+                evidence,
+                DIGEST,
+                ROUTES
+        )).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void 원본_수치_대조_실패를_PASS_표시로_숨길_수_없다() {
         ObjectNode evidence = evidence("feature_parity");
         ObjectNode numeric = (ObjectNode) evidence.get("result").get("golden.json");
-        numeric.set("max_absolute_difference", JSON.valueToTree(List.of(0, 0, 0, 0, .1, 0)));
+        numeric.set("max_absolute_difference", JSON.valueToTree(List.of(
+                0,
+                0,
+                0,
+                0,
+                .1,
+                0
+        )));
         assertThatThrownBy(() -> AlightingAwareConfirmedServingVerification.verify(
-            "feature_parity", receipt("feature_parity"), evidence, DIGEST, ROUTES))
+                "feature_parity",
+                receipt("feature_parity"),
+                evidence,
+                DIGEST,
+                ROUTES
+        ))
             .hasMessageContaining("오차");
     }
 
@@ -85,10 +114,72 @@ class AlightingAwareConfirmedServingVerificationTest {
         ObjectNode contract = receipt("runtime_validation");
         ObjectNode oldStatistics = JSON.createObjectNode().put("input_profile", "alighting-original-v1");
         Map<String, JsonNode> files = Map.of(
-            "feature-contract.json", contract, "statistics-3330.json", contract,
-            "statistics-G8110.json", oldStatistics);
+                "feature-contract.json",
+                contract,
+                "statistics-3330.json",
+                contract,
+                "statistics-G8110.json",
+                oldStatistics
+        );
         assertThatThrownBy(() -> AlightingAwareConfirmedServingVerification.verifyContract(contract, files, ROUTES))
             .hasMessageContaining("통계 입력 판본");
+    }
+
+    @Test
+    void 허용_오차의_경계값까지_통과한다() {
+        // given
+        ObjectNode receipt = receipt("settlement");
+        ObjectNode evidence = evidence("settlement");
+        ObjectNode routeResult = (ObjectNode) evidence.path("result").path("routes").get(0);
+        routeResult.put("max_feature_difference", 0);
+        routeResult.put("max_prediction_difference", 1e-9);
+        routeResult.put("max_label_difference", 1e-8);
+
+        // then
+        assertThatCode(() -> AlightingAwareConfirmedServingVerification.verify(
+                "settlement",
+                receipt,
+                evidence,
+                DIGEST,
+                ROUTES
+        )).doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {-1, Double.NaN, Double.POSITIVE_INFINITY})
+    void 음수나_비유한_오차는_통과시키지_않는다(final double difference) {
+        // given
+        ObjectNode receipt = receipt("settlement");
+        ObjectNode evidence = evidence("settlement");
+        ObjectNode routeResult = (ObjectNode) evidence.path("result").path("routes").get(0);
+        routeResult.put("max_prediction_difference", difference);
+
+        // then
+        assertThatThrownBy(() -> AlightingAwareConfirmedServingVerification.verify(
+                "settlement",
+                receipt,
+                evidence,
+                DIGEST,
+                ROUTES
+        )).hasMessage("Worker 예측이 다르다");
+    }
+
+    @Test
+    void 계약과_증거가_모두_잘못되면_계약_실패를_먼저_알린다() {
+        // given
+        ObjectNode receipt = receipt("settlement");
+        receipt.put("label_version", "wrong-label");
+        ObjectNode evidence = evidence("settlement");
+        evidence.put("schema", "wrong-schema");
+
+        // then
+        assertThatThrownBy(() -> AlightingAwareConfirmedServingVerification.verify(
+                "settlement",
+                receipt,
+                evidence,
+                DIGEST,
+                ROUTES
+        )).hasMessage("정산 판본이 다르다");
     }
 
     private ObjectNode receipt(String check) {
@@ -109,10 +200,37 @@ class AlightingAwareConfirmedServingVerificationTest {
         result.put("passed", true);
         result.put("bundle_manifest_sha256", DIGEST);
         result.set("routes", JSON.valueToTree(ROUTES.stream().map(route -> Map.of(
-            "route", route, "passed", true, "cases", 1, "settled_targets", 2, "failures", List.of(),
-            "max_feature_difference", 0, "max_prediction_difference", 0, "max_label_difference", 0)).toList()));
+                "route",
+                route,
+                "passed",
+                true,
+                "cases",
+                1,
+                "settled_targets",
+                2,
+                "failures",
+                List.of(),
+                "max_feature_difference",
+                0,
+                "max_prediction_difference",
+                0,
+                "max_label_difference",
+                0
+        )).toList()));
         if (check.equals("feature_parity")) {
-            Map<String, Object> numeric = Map.of("rows", 1, "max_absolute_difference", List.of(0, 0, 0, 0, 0, 0));
+            Map<String, Object> numeric = Map.of(
+                    "rows",
+                    1,
+                    "max_absolute_difference",
+                    List.of(
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0
+                    )
+            );
             result.set("golden.json", JSON.valueToTree(numeric));
             result.set("boundaries.json", JSON.valueToTree(numeric));
         }

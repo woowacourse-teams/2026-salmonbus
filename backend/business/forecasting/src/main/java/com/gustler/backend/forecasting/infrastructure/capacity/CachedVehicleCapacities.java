@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 
 /** {@link VehicleCapacityCache#findKnownAt}으로 예보 시점에 알려진 정원을 찾는다. */
 public final class CachedVehicleCapacities implements VehicleCapacities {
+
     private final VehicleCapacityCache cache;
 
     public CachedVehicleCapacities(VehicleCapacityCache cache) {
@@ -21,7 +22,12 @@ public final class CachedVehicleCapacities implements VehicleCapacities {
         Instant at,
         final long observationBatchId
     ) {
-        return cache.findKnownAt(sourceId, vehicleIds, at, observationBatchId)
+        return cache.findKnownAt(
+                sourceId,
+                vehicleIds,
+                at,
+                observationBatchId
+        )
             .entrySet()
             .stream()
             .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, entry -> entry.getValue().seats()));

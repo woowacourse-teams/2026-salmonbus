@@ -18,6 +18,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration(proxyBeanMethods = false)
 public class ForecastingModelConfiguration {
+
     @Bean
     public LoadedModelRegistry loadedModelRegistry() {
         return new LoadedModelRegistry();
@@ -47,7 +48,12 @@ public class ForecastingModelConfiguration {
         LoadedModelRegistry bundles,
         BundleActivation activation
     ) {
-        return new ModelStartupService(loader, deployments, bundles, activation);
+        return new ModelStartupService(
+                loader,
+                deployments,
+                bundles,
+                activation
+        );
     }
 
     @Bean
@@ -58,8 +64,10 @@ public class ForecastingModelConfiguration {
     }
 
     @Bean
-    public ActiveForecastRuntimeResolver activeForecastRuntimeResolver(ModelDeploymentRepository deployments,
-        LoadedModelRegistry bundles) {
+    public ActiveForecastRuntimeResolver activeForecastRuntimeResolver(
+        ModelDeploymentRepository deployments,
+        LoadedModelRegistry bundles
+    ) {
         return new ActiveForecastRuntimeResolver(deployments, bundles);
     }
 }

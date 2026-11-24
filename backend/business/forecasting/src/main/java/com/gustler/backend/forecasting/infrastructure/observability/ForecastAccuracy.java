@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * {@value #MAXIMUM_KEYS}개 있으면 새 열쇠의 예측은 세지 않고 버린 수에 더한다. 버린 수는 꺼내도 줄지 않는다.
  */
 public final class ForecastAccuracy {
+
     static final int MAXIMUM_KEYS = 5_000;
 
     private final Map<Key, Sums> sums = new LinkedHashMap<>();
@@ -27,8 +28,13 @@ public final class ForecastAccuracy {
 
     public synchronized void add(List<ForecastClosed> closed) {
         for (ForecastClosed forecast : closed) {
-            Key key = new Key(forecast.routeId(), forecast.routeVersionId(), forecast.targetStopOrder(),
-                forecast.modelDeploymentId(), distance(forecast.stopsToTarget()));
+            Key key = new Key(
+                    forecast.routeId(),
+                    forecast.routeVersionId(),
+                    forecast.targetStopOrder(),
+                    forecast.modelDeploymentId(),
+                    distance(forecast.stopsToTarget())
+            );
             if (!sums.containsKey(key) && sums.size() >= MAXIMUM_KEYS) {
                 dropped.incrementAndGet();
                 continue;
@@ -86,7 +92,14 @@ public final class ForecastAccuracy {
     }
 
     /** 집계 열쇠다. */
-    public record Key(long routeId, long routeVersionId, int stopOrder, long modelDeploymentId, String distance) {
+    public record Key(
+        long routeId,
+        long routeVersionId,
+        int stopOrder,
+        long modelDeploymentId,
+        String distance
+    ) {
+
     }
 
     /**
@@ -109,9 +122,11 @@ public final class ForecastAccuracy {
         double predictedFullSum,
         long actualFullCount
     ) {
+
     }
 
     private static final class Sums {
+
         private long completed;
         private long maeCount;
         private long probabilityCount;
@@ -139,8 +154,15 @@ public final class ForecastAccuracy {
         }
 
         private Totals totals() {
-            return new Totals(completed, maeCount, absoluteErrorSum, probabilityCount, brierSum, predictedFullSum,
-                actualFullCount);
+            return new Totals(
+                    completed,
+                    maeCount,
+                    absoluteErrorSum,
+                    probabilityCount,
+                    brierSum,
+                    predictedFullSum,
+                    actualFullCount
+            );
         }
     }
 }

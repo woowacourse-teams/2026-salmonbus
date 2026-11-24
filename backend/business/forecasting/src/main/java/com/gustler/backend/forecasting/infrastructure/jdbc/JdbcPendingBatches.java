@@ -18,6 +18,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * <p>예보 실행은 기본 키(나눔 날짜, 배치)로 찾는다. 나눔 날짜는 배치 예약 시각의 한국 날짜다.
  */
 public final class JdbcPendingBatches implements PendingBatches {
+
     static final String FIND = """
         SELECT /* salmonbus:forecast.find_unprocessed */ b.id, b.route_version_id, b.response_received_at
         FROM observation_batch b
@@ -25,7 +26,6 @@ public final class JdbcPendingBatches implements PendingBatches {
           AND b.response_received_at IS NOT NULL
           AND b.response_received_at >= :notBefore
           AND b.outcome IN ('SUCCESS_ROWS', 'SUCCESS_EMPTY')
-          AND b.input_confirmed_at IS NULL
           AND NOT EXISTS (SELECT 1 FROM forecast_run r
               WHERE r.source_date = (b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date AND r.observation_batch_id = b.id)
         ORDER BY b.response_received_at, b.id

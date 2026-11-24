@@ -5,7 +5,6 @@ import com.gustler.backend.forecasting.domain.model.SeatForecastResult;
 import com.gustler.backend.forecasting.domain.model.VehicleStopTarget;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -21,6 +20,7 @@ import java.util.Optional;
  * <p>한 배치(같은 모델·통계·정류장)에 하나를 만들어 쓴다. 상태가 없어 스레드 안전하지만, 스냅샷은 만든 스레드에서만 쓴다.
  */
 public final class AlightingAwarePredictionAssembler {
+
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
     private final AlightingAwareSeatForecastModel model;
@@ -43,18 +43,22 @@ public final class AlightingAwarePredictionAssembler {
      * @param snapshot 예측할 차량의 입력
      * @return 모델이 이 차량을 예측하지 않으면(시간 확장 모델 미지원) 빈 값. 목표 정류장이 없으면 목표가 빈 예측
      */
-    public Optional<VehiclePrediction> predict(AlightingAwareFeatureSnapshot snapshot) {
+    public Optional<VehiclePrediction> predict(
+        AlightingAwareFeatureSnapshot snapshot
+    ) {
         final boolean extended = statistics.confirmedProfile() && outsideRush(snapshot);
         if (extended && !model.supportsExtendedHours()) {
             return Optional.empty();
         }
-        List<TargetPrediction> targets = new ArrayList<>();
-        for (VehicleStopTarget target : stops.targetsAheadOf(snapshot.observation())) {
-            if (isOppositeDirection(snapshot, target)) {
-                continue;
-            }
-            targets.add(new TargetPrediction(target, predict(snapshot, target, extended)));
-        }
+
+        List<TargetPrediction> targets = stops.targetsAheadOf(snapshot.observation())
+            .stream()
+            .filter(target -> !isOppositeDirection(snapshot, target))
+            .map(target -> new TargetPrediction(
+                target,
+                predict(snapshot, target, extended)
+            ))
+            .toList();
         return Optional.of(new VehiclePrediction(snapshot, extended, targets));
     }
 
@@ -95,6 +99,7 @@ public final class AlightingAwarePredictionAssembler {
         boolean extended,
         List<TargetPrediction> targets
     ) {
+
         public VehiclePrediction {
             targets = List.copyOf(targets);
         }
@@ -107,5 +112,6 @@ public final class AlightingAwarePredictionAssembler {
      * @param result 모델 출력
      */
     public record TargetPrediction(VehicleStopTarget target, SeatForecastResult result) {
+
     }
 }

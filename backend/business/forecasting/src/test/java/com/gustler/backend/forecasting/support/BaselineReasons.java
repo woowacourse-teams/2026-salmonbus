@@ -11,14 +11,22 @@ import java.util.Optional;
  * 사유는 기대값 파일에 없다. 그 밖의 사유는 이름이 같다.
  */
 public final class BaselineReasons {
+
     private static final String LOST = "NO_CLOSED_IDENTITY_SAFE_PASS";
     private static final Map<String, Optional<String>> RECORDED_NAMES = Map.of(
-        ScoringReasons.TARGET_WITHOUT_PASS, Optional.of(LOST),
-        ScoringReasons.PASS_CONDITION_UNMET, Optional.of(LOST),
-        ScoringReasons.CHAIN_BROKEN, Optional.of(LOST),
-        ScoringReasons.PASS_NOT_CLOSED, Optional.of(LOST),
-        ScoringReasons.SETTLEMENT_EVIDENCE_MISSING, Optional.empty(),
-        ScoringReasons.SETTLEMENT_CALCULATION_FAILED, Optional.empty());
+            ScoringReasons.TARGET_WITHOUT_PASS,
+            Optional.of(LOST),
+            ScoringReasons.PASS_CONDITION_UNMET,
+            Optional.of(LOST),
+            ScoringReasons.CHAIN_BROKEN,
+            Optional.of(LOST),
+            ScoringReasons.PASS_NOT_CLOSED,
+            Optional.of(LOST),
+            ScoringReasons.SETTLEMENT_EVIDENCE_MISSING,
+            Optional.empty(),
+            ScoringReasons.SETTLEMENT_CALCULATION_FAILED,
+            Optional.empty()
+    );
 
     private BaselineReasons() {
     }

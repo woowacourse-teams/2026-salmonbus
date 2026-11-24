@@ -41,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class ForecastOrderTest {
+
     private static final List<String> FORECAST_OUTCOMES = List.of("PUBLISHED", "EMPTY");
 
     @Autowired
@@ -67,8 +68,11 @@ class ForecastOrderTest {
         RouteForecastState.Cursor cursor = atSplit.cursor().orElseThrow();
 
         // when
-        RouteStateReplayer.Result replayed = new RouteStateReplayer(harness.source, harness.stage,
-            Duration.ofHours(6), Duration.ofHours(6))
+        RouteStateReplayer.Result replayed = new RouteStateReplayer(
+                harness.source,
+                harness.stage,
+                Duration.ofHours(6)
+        )
             .replay(harness.statistics(), cursor.confirmedAt(), cursor.observationBatchId());
 
         // then
@@ -91,10 +95,18 @@ class ForecastOrderTest {
         for (final long batchId : batches.subList(split, batches.size())) {
             harness.signal(batchId, withNanos(harness, batchId));
             ForecastBatch batch = harness.source.readBatch(batchId).orElseThrow().batch();
-            ForecastStageResult expected = harness.stage.advance(continuous, statistics,
-                ObservationStreamFixture.SOURCE_ID, batch);
-            ForecastStageResult actual = harness.stage.advance(resumed, statistics,
-                ObservationStreamFixture.SOURCE_ID, batch);
+            ForecastStageResult expected = harness.stage.advance(
+                    continuous,
+                    statistics,
+                    ObservationStreamFixture.SOURCE_ID,
+                    batch
+            );
+            ForecastStageResult actual = harness.stage.advance(
+                    resumed,
+                    statistics,
+                    ObservationStreamFixture.SOURCE_ID,
+                    batch
+            );
             assertThat(inputBits(actual.snapshots(), statistics)).as("배치 %d의 입력", batchId)
                 .isEqualTo(inputBits(expected.snapshots(), statistics));
             Map<String, List<Long>> predicted = predictionBits(assembler, actual.snapshots());
@@ -140,8 +152,8 @@ class ForecastOrderTest {
             softly.assertThat(harness.runConfirmedAt(failing)).isBeforeOrEqualTo(harness.runConfirmedAt(next));
             softly.assertThat(rankOf(state, next)).isEqualTo(OptionalLong.of(rankOf(state, failing).orElseThrow() + 1));
             softly.assertThat(inversions(harness)).isZero();
-            softly.assertThat(harness.counter("batches", "retried")).isOne();
-            softly.assertThat(harness.counter("batches", "failed")).isEqualTo(failures - 1);
+            softly.assertThat(harness.counter("batches", "retried")).isZero();
+            softly.assertThat(harness.counter("batches", "failed")).isEqualTo(failures);
             softly.assertThat(harness.runCount(failing)).isOne();
             softly.assertThat(harness.counter("batches", "already_processed")).isZero();
         });
@@ -169,7 +181,7 @@ class ForecastOrderTest {
             for (final long batchId : run.subList(0, 3)) {
                 softly.assertThat(harness.runOutcome(batchId)).as("배치 %d", batchId).isEmpty();
             }
-            softly.assertThat(harness.counter("batches", "retried")).isEqualTo(3);
+            softly.assertThat(harness.counter("batches", "retried")).isZero();
             softly.assertThat(harness.counter("batches", "failed")).isEqualTo(3);
         });
 
@@ -207,9 +219,7 @@ class ForecastOrderTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void 먼저_받은_배치가_나중에_커밋돼_뒤_배치가_먼저_이력에_들어갔으면_앞_배치는_이력에_넣지_않고_90초_뒤_늦음으로_닫는다(
-        final boolean restarted
-    ) {
+    void 먼저_받은_배치가_나중에_커밋돼_뒤_배치가_먼저_이력에_들어갔으면_앞_배치는_이력에_넣지_않고_90초_뒤_늦음으로_닫는다(final boolean restarted) {
         // given
         ForecastHarness harness = harness(20261304L, Duration.ofMinutes(40));
         harness.start();
@@ -237,8 +247,11 @@ class ForecastOrderTest {
         harness.signal(earlier, harness.receivedAt(earlier).plusSeconds(91));
 
         // then
-        RouteStateReplayer.Result replayed = new RouteStateReplayer(harness.source, harness.stage,
-            Duration.ofHours(6), Duration.ofHours(6))
+        RouteStateReplayer.Result replayed = new RouteStateReplayer(
+                harness.source,
+                harness.stage,
+                Duration.ofHours(6)
+        )
             .replay(harness.statistics(), harness.runConfirmedAt(later), later);
         assertSoftly(softly -> {
             softly.assertThat(harness.runOutcome(earlier)).contains("LATE");
@@ -497,7 +510,13 @@ class ForecastOrderTest {
     }
 
     private ForecastHarness harness(final long seed, Duration length) {
-        return new ForecastHarness(new ForecastHarness.Beans(jdbc, transactions, deployments, records, passes), seed,
+        return new ForecastHarness(new ForecastHarness.Beans(
+                jdbc,
+                transactions,
+                deployments,
+                records,
+                passes
+        ), seed,
             length);
     }
 

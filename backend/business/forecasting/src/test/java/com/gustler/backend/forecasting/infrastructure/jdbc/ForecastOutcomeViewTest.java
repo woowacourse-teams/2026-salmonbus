@@ -35,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class ForecastOutcomeViewTest {
+
     private static final int LIMIT = 150_000;
 
     @Autowired
@@ -49,8 +50,14 @@ class ForecastOutcomeViewTest {
     @Test
     void 채점_도중의_예측별_결과는_채점이_짝지은_것과_같고_아직_기다리는_예측은_채점_전으로_보인다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(83, Instant.parse("2026-01-04T21:00:00Z"), 400, 7,
-            0.002, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                83,
+                Instant.parse("2026-01-04T21:00:00Z"),
+                400,
+                7,
+                0.002,
+                true
+        );
         List<Object> events = scenario.events();
         store(events);
         ScoringStage stage = scenario.stage(LIMIT);
@@ -65,7 +72,12 @@ class ForecastOutcomeViewTest {
         assertSoftly(softly -> {
             softly.assertThat(actual).isEqualTo(expected);
             softly.assertThat(actual.values()).extracting(Row::state)
-                .contains("SETTLED", "UNSUPPORTED", "LOST", "PENDING");
+                .contains(
+                        "SETTLED",
+                        "UNSUPPORTED",
+                        "LOST",
+                        "PENDING"
+                );
             softly.assertThat(actual.values().stream().filter(row -> row.state().equals("PENDING")).count())
                 .isGreaterThanOrEqualTo(stage.waitingCount());
         });
@@ -74,7 +86,14 @@ class ForecastOutcomeViewTest {
     @Test
     void 마감까지_흘린_뒤에는_모든_예측이_채점이_짝지은_결과를_보인다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(89, Instant.parse("2026-01-05T07:30:00Z"), 400, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                89,
+                Instant.parse("2026-01-05T07:30:00Z"),
+                400,
+                7,
+                0,
+                true
+        );
         List<Object> events = scenario.events();
         store(events);
         ScoringStage stage = scenario.stage(LIMIT);
@@ -89,14 +108,23 @@ class ForecastOutcomeViewTest {
         assertSoftly(softly -> {
             softly.assertThat(stage.waitingCount()).isZero();
             softly.assertThat(actual).isEqualTo(expected(scenario, result, actual.keySet()));
-            softly.assertThat(actual.values()).extracting(Row::state).doesNotContain("PENDING").contains("SETTLED");
+            softly.assertThat(actual.values()).extracting(Row::state)
+                .doesNotContain("PENDING")
+                .contains("SETTLED");
         });
     }
 
     @Test
     void 미해결_줄이_하나도_저장되지_않아도_채점이_짝짓지_않은_예측에는_정답이_붙지_않는다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(89, Instant.parse("2026-01-05T07:30:00Z"), 400, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                89,
+                Instant.parse("2026-01-05T07:30:00Z"),
+                400,
+                7,
+                0,
+                true
+        );
         List<Object> events = scenario.events();
         store(events);
         ScoringStage stage = scenario.stage(LIMIT);
@@ -109,7 +137,12 @@ class ForecastOutcomeViewTest {
 
         // then
         Map<String, Row> paired = expected(scenario,
-            new ScoringResult(result.labels(), List.of(), result.scored(), List.of()), actual.keySet());
+            new ScoringResult(
+                    result.labels(),
+                    List.of(),
+                    result.scored(),
+                    List.of()
+            ), actual.keySet());
         Set<String> unmet = result.unresolved().stream()
             .filter(closed -> closed.reason().equals(ScoringReasons.PASS_CONDITION_UNMET))
             .map(closed -> closed.vehicleObservationId() + ":" + closed.targetStopOrder())
@@ -118,8 +151,10 @@ class ForecastOutcomeViewTest {
         assertSoftly(softly -> {
             softly.assertThat(withLabel(actual)).isEqualTo(withLabel(paired));
             softly.assertThat(lost.keySet()).isNotEmpty().isSubsetOf(unmet);
-            softly.assertThat(lost.values()).extracting(Row::reason).containsOnly(ScoringReasons.PASS_CONDITION_UNMET);
-            softly.assertThat(actual.values()).filteredOn(row -> row.closure() == null).extracting(Row::state)
+            softly.assertThat(lost.values()).extracting(Row::reason)
+                .containsOnly(ScoringReasons.PASS_CONDITION_UNMET);
+            softly.assertThat(actual.values()).filteredOn(row -> row.closure() == null)
+                .extracting(Row::state)
                 .containsOnly("PENDING", "LOST");
         });
     }
@@ -153,10 +188,19 @@ class ForecastOutcomeViewTest {
                 previous_last_observation_id, previous_closure_observation_id
             FROM forecast_outcome WHERE route_id = ?
             """).param(ScoringScenario.ROUTE).query(row -> {
-                rows.put(row.getLong(1) + ":" + row.getInt(2), new Row(row.getString(3), row.getString(4),
-                    (Double) row.getObject(5), row.getString(6), row.getInt(7), row.getLong(8),
-                    (Long) row.getObject(9), (Long) row.getObject(10), (Long) row.getObject(11),
-                    (Long) row.getObject(12), (Long) row.getObject(13)));
+                rows.put(row.getLong(1) + ":" + row.getInt(2), new Row(
+                        row.getString(3),
+                        row.getString(4),
+                        (Double) row.getObject(5),
+                        row.getString(6),
+                        row.getInt(7),
+                        row.getLong(8),
+                        (Long) row.getObject(9),
+                        (Long) row.getObject(10),
+                        (Long) row.getObject(11),
+                        (Long) row.getObject(12),
+                        (Long) row.getObject(13)
+                ));
             });
         return rows;
     }
@@ -174,26 +218,72 @@ class ForecastOutcomeViewTest {
             expected.put(prediction, null);
         }
         for (UnresolvedForecast closed : result.unresolved()) {
-            expected.put(closed.vehicleObservationId() + ":" + closed.targetStopOrder(), new Row(closed.state().name(),
-                closed.reason(), null, null, capacity(scenario, closed.vehicleObservationId()),
-                ScoringScenario.DEPLOYMENT, null, null, null, null, null));
+            expected.put(
+                closed.vehicleObservationId() + ":" + closed.targetStopOrder(),
+                new Row(
+                        closed.state().name(),
+                        closed.reason(),
+                        null,
+                        null,
+                        capacity(scenario, closed.vehicleObservationId()),
+                        ScoringScenario.DEPLOYMENT,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                )
+            );
         }
         for (ScoredForecast scored : result.scored()) {
-            PassLabel label = labelByKey.get(List.of(scored.passSourceDate(), scored.routeId(),
-                scored.tripStartObservationId(), scored.stopOrder(), scored.capacity(), ScoringReasons.LABEL_VERSION,
-                scored.modelDeploymentId()));
-            PassClosed pass = passByKey.get(List.of(scored.passSourceDate(), scored.routeId(),
-                scored.tripStartObservationId(), scored.stopOrder()));
-            expected.put(scored.vehicleObservationId() + ":" + scored.targetStopOrder(), new Row(label.state().name(),
-                label.reason(), label.labelValue(), label.parameterHash(), label.capacity(), label.modelDeploymentId(),
-                pass.arrivalObservationId(), pass.lastObservationId(), pass.closureObservationId(),
-                label.previousLastObservationId(), label.previousClosureObservationId()));
+            PassLabel label = labelByKey.get(List.of(
+                    scored.passSourceDate(),
+                    scored.routeId(),
+                    scored.tripStartObservationId(),
+                    scored.stopOrder(),
+                    scored.capacity(),
+                    ScoringReasons.LABEL_VERSION,
+                    scored.modelDeploymentId()
+            ));
+            PassClosed pass = passByKey.get(List.of(
+                    scored.passSourceDate(),
+                    scored.routeId(),
+                    scored.tripStartObservationId(),
+                    scored.stopOrder()
+            ));
+            expected.put(
+                scored.vehicleObservationId() + ":" + scored.targetStopOrder(),
+                new Row(
+                        label.state().name(),
+                        label.reason(),
+                        label.labelValue(),
+                        label.parameterHash(),
+                        label.capacity(),
+                        label.modelDeploymentId(),
+                        pass.arrivalObservationId(),
+                        pass.lastObservationId(),
+                        pass.closureObservationId(),
+                        label.previousLastObservationId(),
+                        label.previousClosureObservationId()
+                )
+            );
         }
         for (Map.Entry<String, Row> entry : expected.entrySet()) {
             if (entry.getValue() == null) {
                 final long observation = Long.parseLong(entry.getKey().split(":")[0]);
-                entry.setValue(new Row("PENDING", null, null, null, capacity(scenario, observation),
-                    ScoringScenario.DEPLOYMENT, null, null, null, null, null));
+                entry.setValue(new Row(
+                        "PENDING",
+                        null,
+                        null,
+                        null,
+                        capacity(scenario, observation),
+                        ScoringScenario.DEPLOYMENT,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                ));
             }
         }
         return expected;
@@ -202,8 +292,15 @@ class ForecastOutcomeViewTest {
     private static Map<List<Object>, PassLabel> labelsByKey(ScoringResult result) {
         Map<List<Object>, PassLabel> labelByKey = new HashMap<>();
         for (PassLabel label : result.labels()) {
-            labelByKey.putIfAbsent(List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
-                label.stopOrder(), label.capacity(), label.labelVersion(), label.modelDeploymentId()), label);
+            labelByKey.putIfAbsent(List.of(
+                    label.sourceDate(),
+                    label.routeId(),
+                    label.tripStartObservationId(),
+                    label.stopOrder(),
+                    label.capacity(),
+                    label.labelVersion(),
+                    label.modelDeploymentId()
+            ), label);
         }
         return labelByKey;
     }
@@ -211,7 +308,12 @@ class ForecastOutcomeViewTest {
     private static Map<List<Object>, PassClosed> passesByKey(ScoringScenario scenario) {
         Map<List<Object>, PassClosed> passByKey = new HashMap<>();
         for (PassClosed pass : scenario.passes()) {
-            passByKey.put(List.of(pass.sourceDate(), pass.routeId(), pass.tripStartObservationId(), pass.stopOrder()),
+            passByKey.put(List.of(
+                    pass.sourceDate(),
+                    pass.routeId(),
+                    pass.tripStartObservationId(),
+                    pass.stopOrder()
+            ),
                 pass);
         }
         return passByKey;
@@ -228,7 +330,10 @@ class ForecastOutcomeViewTest {
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    private static Map<String, Row> withState(Map<String, Row> rows, String state) {
+    private static Map<String, Row> withState(
+        Map<String, Row> rows,
+        String state
+    ) {
         return rows.entrySet().stream()
             .filter(entry -> entry.getValue().state().equals(state))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -247,5 +352,6 @@ class ForecastOutcomeViewTest {
         Long previousLast,
         Long previousClosure
     ) {
+
     }
 }

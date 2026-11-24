@@ -27,6 +27,7 @@ import java.util.function.Supplier;
  * 저장한 뒤에만 사건을 넘기는 것을 흉내 내도록, 목록에 든 수집·통과·예보 사건을 그대로 읽는다. 목록은 시험이 늘려 가도 된다.
  */
 final class RecordedScoringEvents {
+
     private final List<Object> saved;
     private final Supplier<Collection<Object>> rows;
     private final Runnable beforeForecastRead;
@@ -46,11 +47,7 @@ final class RecordedScoringEvents {
      * @param rows 저장된 정답 줄과 미해결 줄
      * @param beforeForecastRead 예보 기록을 읽기 직전에 부른다. 읽기 실패를 흉내 내려면 여기서 예외를 던진다
      */
-    RecordedScoringEvents(
-        List<Object> saved,
-        Supplier<Collection<Object>> rows,
-        Runnable beforeForecastRead
-    ) {
+    RecordedScoringEvents(List<Object> saved, Supplier<Collection<Object>> rows, Runnable beforeForecastRead) {
         this.saved = saved;
         this.rows = rows;
         this.beforeForecastRead = beforeForecastRead;
@@ -78,6 +75,7 @@ final class RecordedScoringEvents {
     }
 
     private final class Forecasts implements ForecastRecordStore {
+
         @Override
         public boolean save(ForecastPublished published, ObservationBatchSeen seen) {
             throw new UnsupportedOperationException();
@@ -118,12 +116,17 @@ final class RecordedScoringEvents {
             for (ForecastPublished published : published(routeId, fromInclusive, toExclusive)) {
                 ObservationBatchSeen seen = seenByBatch.get(published.observationBatchId());
                 if (seen == null) {
-                    throw new IllegalStateException("수집 사건 없이 저장된 예보 사건이다: "
-                        + published.observationBatchId());
+                    throw new IllegalStateException("수집 사건 없이 저장된 예보 사건이다: " + published.observationBatchId());
                 }
-                batches.add(new RecordedBatch(published.observationBatchId(), routeId, published.receivedAt(),
-                    published.confirmedAt(), published.outcome() == ForecastOutcome.LATE, seen.incomplete(),
-                    seen.countedRows()));
+                batches.add(new RecordedBatch(
+                        published.observationBatchId(),
+                        routeId,
+                        published.receivedAt(),
+                        published.confirmedAt(),
+                        published.outcome() == ForecastOutcome.LATE,
+                        seen.incomplete(),
+                        seen.countedRows()
+                ));
             }
             return batches;
         }
@@ -149,6 +152,7 @@ final class RecordedScoringEvents {
     }
 
     private final class Passes implements StopPassStore {
+
         @Override
         public int save(List<PassClosed> passes) {
             throw new UnsupportedOperationException();
@@ -173,13 +177,21 @@ final class RecordedScoringEvents {
             Set<List<Object>> labeled = new HashSet<>();
             for (Object row : rows.get()) {
                 if (row instanceof PassLabel label) {
-                    labeled.add(List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
-                        label.stopOrder()));
+                    labeled.add(List.of(
+                            label.sourceDate(),
+                            label.routeId(),
+                            label.tripStartObservationId(),
+                            label.stopOrder()
+                    ));
                 }
             }
             return findClosedBetween(routeId, fromInclusive, toExclusive).stream()
-                .filter(pass -> labeled.contains(List.of(pass.sourceDate(), pass.routeId(),
-                    pass.tripStartObservationId(), pass.stopOrder())))
+                .filter(pass -> labeled.contains(List.of(
+                        pass.sourceDate(),
+                        pass.routeId(),
+                        pass.tripStartObservationId(),
+                        pass.stopOrder()
+                )))
                 .map(PassClosed::closedAt)
                 .max(Instant::compareTo);
         }

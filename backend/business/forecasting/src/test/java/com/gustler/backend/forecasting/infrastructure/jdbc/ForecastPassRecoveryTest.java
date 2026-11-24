@@ -33,8 +33,14 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class ForecastPassRecoveryTest {
-    private static final List<String> NEW_TABLES = List.of("pass_label", "forecast_unresolved", "stop_pass",
-        "forecast_record", "forecast_run");
+
+    private static final List<String> NEW_TABLES = List.of(
+            "pass_label",
+            "forecast_unresolved",
+            "stop_pass",
+            "forecast_record",
+            "forecast_run"
+    );
     private static final Duration RETRY = Duration.ofMinutes(5);
 
     @Autowired
@@ -54,7 +60,13 @@ class ForecastPassRecoveryTest {
     void 되감기가_실패해_예보하지_못한_배치가_닫은_통과를_다음_되감기에서_저장하고_기다리던_예측에_연속_실행과_같은_정답이_붙는다() {
         // given
         ForecastHarness harness = new ForecastHarness(
-            new ForecastHarness.Beans(jdbc, transactions, deployments, records, passes), 20261310L,
+            new ForecastHarness.Beans(
+                    jdbc,
+                    transactions,
+                    deployments,
+                    records,
+                    passes
+            ), 20261310L,
             Duration.ofMinutes(60));
         Run continuous = run(harness, null);
         final long failing = batchClosingAwaitedPassSoonAfter(harness, continuous);
@@ -101,7 +113,13 @@ class ForecastPassRecoveryTest {
     void 되감은_뒤_연결_시작을_보지_못한_차량이_닫은_통과는_저장하지_않고_그_수를_지표로_낸다() {
         // given
         ForecastHarness harness = new ForecastHarness(
-            new ForecastHarness.Beans(jdbc, transactions, deployments, records, passes), 20261311L,
+            new ForecastHarness.Beans(
+                    jdbc,
+                    transactions,
+                    deployments,
+                    records,
+                    passes
+            ), 20261311L,
             Duration.ofMinutes(60));
         List<Long> batches = harness.batches();
         harness.start();
@@ -119,7 +137,7 @@ class ForecastPassRecoveryTest {
         batches.subList(0, restartAt).forEach(harness::signal);
 
         // when
-        harness.start(shortWindow, shortWindow, new ForecastHarness.NoEvents());
+        harness.start(shortWindow, new ForecastHarness.NoEvents());
         tail.forEach(harness::signal);
 
         // then
@@ -178,8 +196,7 @@ class ForecastPassRecoveryTest {
     private Run run(ForecastHarness harness, Long failing) {
         ForecastHarness.RecordedPasses delivered = new ForecastHarness.RecordedPasses();
         ScoringService scoring = scoring(harness);
-        harness.start(RouteStateReplayer.DEFAULT_WINDOW, RouteStateReplayer.DEFAULT_EXTENDED_WINDOW,
-            new ForecastHarness.BothEvents(scoring, delivered));
+        harness.start(RouteStateReplayer.DEFAULT_WINDOW, new ForecastHarness.BothEvents(scoring, delivered));
         harness.fromVerifiedOrigin();
         List<Long> batches = harness.batches();
         int dropAt = -1;
@@ -205,10 +222,21 @@ class ForecastPassRecoveryTest {
     }
 
     private ScoringService scoring(ForecastHarness harness) {
-        return new ForecastAssembly(jdbc, transactions, harness.clock, new SimpleMeterRegistry()).scoring(task -> {
-            task.run();
-            return true;
-        }, records, records, passes, labels);
+        return new ForecastAssembly(
+                jdbc,
+                transactions,
+                harness.clock,
+                new SimpleMeterRegistry()
+        ).scoring(
+                task -> {
+                    task.run();
+                    return true;
+                },
+                records,
+                records,
+                passes,
+                labels
+        );
     }
 
     /**
@@ -268,10 +296,24 @@ class ForecastPassRecoveryTest {
               previous_closure_observation_id
             FROM forecast_outcome WHERE route_id=?
             """).param(routeId).query(row -> {
-                outcomes.put(row.getString(1), new Outcome(row.getLong(2), row.getString(3), row.getString(4),
-                    row.getString(5), row.getString(6), (Long) row.getObject(7), (Long) row.getObject(8)));
+                outcomes.put(row.getString(1), new Outcome(
+                        row.getLong(2),
+                        row.getString(3),
+                        row.getString(4),
+                        row.getString(5),
+                        row.getString(6),
+                        (Long) row.getObject(7),
+                        (Long) row.getObject(8)
+                ));
             });
-        return new Run(runOutcomes, passRows, closureBatches, recordRows, outcomes, List.copyOf(delivered.keys));
+        return new Run(
+                runOutcomes,
+                passRows,
+                closureBatches,
+                recordRows,
+                outcomes,
+                List.copyOf(delivered.keys)
+        );
     }
 
     /**
@@ -292,6 +334,7 @@ class ForecastPassRecoveryTest {
         Map<String, Outcome> outcomes,
         List<String> delivered
     ) {
+
     }
 
     /** 예측 하나의 채점 결과다. {@code pass}는 정답을 준 통과의 (닫은 관측, 정류장)이고 정답이 없으면 비어 있다. */
@@ -304,5 +347,6 @@ class ForecastPassRecoveryTest {
         Long previousLastObservationId,
         Long previousClosureObservationId
     ) {
+
     }
 }

@@ -24,6 +24,7 @@ import org.springframework.jdbc.support.SqlArrayValue;
  * 작으면 문장 하나다. 바인딩 값은 시각을 UTC {@link OffsetDateTime}으로, 배열을 {@link SqlArrayValue}로 바꿔 넘긴다.
  */
 final class MultiRowInsert {
+
     /** 한 문장에 넣는 최대 줄 수. 열이 가장 많은 {@code stop_pass}(22열)에서도 바인딩 변수가 22,000개다. */
     static final int ROWS_PER_STATEMENT = 1_000;
 

@@ -14,6 +14,7 @@ import tools.jackson.databind.JsonNode;
  * 직전 통과의 마지막 관측 좌석과 확정 시각이다. 옮긴 관측은 확정 판(노선 판본 번호가 양수)으로 표시한다. 스프링 빈이 아니다.
  */
 public final class AlightingAwarePassLabelCalculator implements PassLabelCalculator {
+
     @Override
     public PassLabelCalculation calculate(PassClosed pass, PassClosed previous, JsonNode evidence) {
         return AlightingAwarePassLabel.afterSeats(event(pass), previousEvent(previous), evidence);
@@ -27,16 +28,44 @@ public final class AlightingAwarePassLabelCalculator implements PassLabelCalcula
     }
 
     private static AlightingAwarePassEvent event(PassClosed pass) {
-        AlightingAwareObservation arrival = observation(pass, pass.arrivalObservationId(), pass.arrivalConfirmedAt(),
-            pass.arrivalReceivedAt(), pass.arrivalSeats());
-        AlightingAwareObservation departure = observation(pass, pass.lastObservationId(), pass.lastConfirmedAt(),
-            pass.lastReceivedAt(), pass.lastSeats());
-        AlightingAwareObservation first = observation(pass, pass.firstObservationId(), pass.firstConfirmedAt(),
-            pass.firstConfirmedAt(), null);
-        AlightingAwareObservation confirmation = observation(pass, pass.closureObservationId(), pass.closedAt(),
-            pass.closedAt(), null);
-        return new AlightingAwarePassEvent(pass.vehicleId(), pass.tripStartObservationId(), pass.stopOrder(), arrival,
-            departure, pass.closedAt(), first, confirmation);
+        AlightingAwareObservation arrival = observation(
+                pass,
+                pass.arrivalObservationId(),
+                pass.arrivalConfirmedAt(),
+                pass.arrivalReceivedAt(),
+                pass.arrivalSeats()
+        );
+        AlightingAwareObservation departure = observation(
+                pass,
+                pass.lastObservationId(),
+                pass.lastConfirmedAt(),
+                pass.lastReceivedAt(),
+                pass.lastSeats()
+        );
+        AlightingAwareObservation first = observation(
+                pass,
+                pass.firstObservationId(),
+                pass.firstConfirmedAt(),
+                pass.firstConfirmedAt(),
+                null
+        );
+        AlightingAwareObservation confirmation = observation(
+                pass,
+                pass.closureObservationId(),
+                pass.closedAt(),
+                pass.closedAt(),
+                null
+        );
+        return new AlightingAwarePassEvent(
+                pass.vehicleId(),
+                pass.tripStartObservationId(),
+                pass.stopOrder(),
+                arrival,
+                departure,
+                pass.closedAt(),
+                first,
+                confirmation
+        );
     }
 
     private static AlightingAwareObservation observation(
@@ -46,7 +75,20 @@ public final class AlightingAwarePassLabelCalculator implements PassLabelCalcula
         Instant receivedAt,
         Integer seats
     ) {
-        return new AlightingAwareObservation(id, pass.closureBatchId(), 0, confirmedAt, pass.vehicleId(),
-            pass.stopOrder(), pass.stopOrder(), 0, seats, 0, Math.max(1, pass.routeVersionId()), receivedAt, false);
+        return new AlightingAwareObservation(
+                id,
+                pass.closureBatchId(),
+                0,
+                confirmedAt,
+                pass.vehicleId(),
+                pass.stopOrder(),
+                pass.stopOrder(),
+                0,
+                seats,
+                0,
+                Math.max(1, pass.routeVersionId()),
+                receivedAt,
+                false
+        );
     }
 }

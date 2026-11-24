@@ -19,10 +19,18 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 public final class TransferredServingBundle {
+
     public static final String SCHEMA = "alighting-transfer-serving-v1";
     private static final JsonMapper JSON = JsonMapper.builder().build();
-    private static final List<String> SHARED_FILES = List.of("base.json", "gate.json", "pool.json", "constants.json",
-        "feature-contract.json", "golden.json", "boundaries.json");
+    private static final List<String> SHARED_FILES = List.of(
+            "base.json",
+            "gate.json",
+            "pool.json",
+            "constants.json",
+            "feature-contract.json",
+            "golden.json",
+            "boundaries.json"
+    );
 
     private TransferredServingBundle() {
     }
@@ -43,10 +51,16 @@ public final class TransferredServingBundle {
         String releaseId = manifest.path("release_id").asString("");
         require(releaseId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,78}"), "전이 모델 출시 식별자가 잘못됐다");
         JsonNode evidence = JSON.readTree(bytes);
-        TransferReplayEvidence.verify(evidence, additions, candidate, releaseId);
+        TransferReplayEvidence.verify(
+                evidence,
+                additions,
+                candidate,
+                releaseId
+        );
         Instant through = Instant.parse(manifest.path("data_through").asString(""));
-        require(through.equals(OffsetDateTime.parse(evidence.path("runtime").path("data_through").asString("")).toInstant()),
-            "전이 모델 학습 기준 시각이 런타임 검사와 다르다");
+        Instant runtimeDataThrough =
+            OffsetDateTime.parse(evidence.path("runtime").path("data_through").asString("")).toInstant();
+        require(through.equals(runtimeDataThrough), "전이 모델 학습 기준 시각이 런타임 검사와 다르다");
         for (String route : candidate.routes()) {
             JsonNode stats = candidate.statistics(route);
             for (String key : List.of("events_known_through", "observations_through")) {
@@ -55,17 +69,32 @@ public final class TransferredServingBundle {
             }
         }
         String digest = Sha256.of(descriptor);
-        return ModelRelease.alighting(releaseId, digest, through.toString(), new SupportedForecastScope(candidate.routes()),
-            AlightingAwareServingBundle.readModel(candidate, digest));
+        return ModelRelease.alighting(
+                releaseId,
+                digest,
+                through.toString(),
+                new SupportedForecastScope(candidate.routes()),
+                AlightingAwareServingBundle.readModel(candidate, digest)
+        );
     }
 
     private record VerifiedBase(
-        String digest, List<String> routes, Set<LocalDate> holidays, JsonNode hashes, String full, JsonNode features,
-        Map<String, String> reference, Map<String, String> extension
+        String digest,
+        List<String> routes,
+        Set<LocalDate> holidays,
+        JsonNode hashes,
+        String full,
+        JsonNode features,
+        Map<String, String> reference,
+        Map<String, String> extension
     ) {
+
     }
 
-    private static VerifiedBase verifiedBase(Path directory, String expectedDigest) throws IOException {
+    private static VerifiedBase verifiedBase(
+        Path directory,
+        String expectedDigest
+    ) throws IOException {
         AlightingAwareInferenceBundle parent = AlightingAwareInferenceBundle.loadForServing(directory);
         require(parent.digest().equals(expectedDigest), "기존 서빙 번들의 해시가 다르다");
         JsonNode hours = parent.extendedHours();
@@ -78,8 +107,16 @@ public final class TransferredServingBundle {
             reference.put(route, fingerprint(references.get(route)));
             extension.put(route, fingerprint(hours.path("routes").path(route)));
         }
-        return new VerifiedBase(parent.digest(), parent.routes(), parent.holidays(), hashes, fingerprint(hours.path("full")),
-            hours.path("features"), Map.copyOf(reference), Map.copyOf(extension));
+        return new VerifiedBase(
+                parent.digest(),
+                parent.routes(),
+                parent.holidays(),
+                hashes,
+                fingerprint(hours.path("full")),
+                hours.path("features"),
+                Map.copyOf(reference),
+                Map.copyOf(extension)
+        );
     }
 
     private static String fingerprint(JsonNode value) {
@@ -92,8 +129,7 @@ public final class TransferredServingBundle {
         Path next
     ) throws IOException {
         Set<String> additions = new HashSet<>(candidate.routes());
-        require(additions.containsAll(parent.routes()) && additions.removeAll(parent.routes()) && !additions.isEmpty(),
-            "전이 모델은 기존 노선을 유지하고 새 노선을 추가해야 한다");
+        require(retainAdditionalRoutes(additions, parent), "전이 모델은 기존 노선을 유지하고 새 노선을 추가해야 한다");
         JsonNode before = parent.hashes();
         JsonNode after = candidate.manifest().path("files");
         for (String filename : SHARED_FILES) {
@@ -101,13 +137,19 @@ public final class TransferredServingBundle {
         }
         require(parent.holidays().equals(candidate.holidays()), "공휴일 달력이 바뀌었다");
         JsonNode newHours = candidate.extendedHours();
-        require(newHours != null && parent.full().equals(fingerprint(newHours.path("full")))
-            && parent.features().equals(newHours.path("features")), "공통 시간 확장 모델이 바뀌었다");
+        require(matchesExtendedHours(newHours, parent), "공통 시간 확장 모델이 바뀌었다");
         Map<String, JsonNode> newRef = references(next, after);
         for (String route : parent.routes()) {
             String name = "statistics-" + route + ".json";
-            require(before.get(name).equals(after.path(name)) && parent.reference().get(route).equals(fingerprint(newRef.get(route)))
-                && parent.extension().get(route).equals(fingerprint(newHours.path("routes").path(route))),
+            require(matchesExistingRoute(
+                    name,
+                    route,
+                    parent,
+                    before,
+                    after,
+                    newRef,
+                    newHours
+            ),
                 "기존 노선 참조·가중치 변경: " + route);
         }
         JsonNode receipt = checkedJson(next, "transfer-receipt.json", after);
@@ -147,5 +189,29 @@ public final class TransferredServingBundle {
         if (!valid) {
             throw new IllegalArgumentException(reason);
         }
+    }
+
+    /** 기존 노선이 모두 있을 때만 집합에서 제외하고 신규 노선이 남는지 확인한다. */
+    private static boolean retainAdditionalRoutes(Set<String> additions, VerifiedBase parent) {
+        return additions.containsAll(parent.routes()) && additions.removeAll(parent.routes()) && !additions.isEmpty();
+    }
+
+    private static boolean matchesExtendedHours(JsonNode newHours, VerifiedBase parent) {
+        return newHours != null && parent.full().equals(fingerprint(newHours.path("full")))
+            && parent.features().equals(newHours.path("features"));
+    }
+
+    private static boolean matchesExistingRoute(
+        String name,
+        String route,
+        VerifiedBase parent,
+        JsonNode before,
+        JsonNode after,
+        Map<String, JsonNode> newRef,
+        JsonNode newHours
+    ) {
+        return before.get(name).equals(after.path(name))
+            && parent.reference().get(route).equals(fingerprint(newRef.get(route)))
+            && parent.extension().get(route).equals(fingerprint(newHours.path("routes").path(route)));
     }
 }

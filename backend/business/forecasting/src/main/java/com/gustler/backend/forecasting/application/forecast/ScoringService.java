@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.application.forecast;
 
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.api.forecast.ForecastBatchEvents;
 import com.gustler.backend.forecasting.api.forecast.ForecastClosed;
 import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
 import com.gustler.backend.forecasting.api.forecast.ObservationBatchSeen;
@@ -18,7 +19,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +48,7 @@ import org.slf4j.LoggerFactory;
  * 줄이 이미 있어 들어가지 않으므로 알리지 않는다. 그래서 한 예측은 그 줄을 저장한 프로세스가 한 번만 알린다.
  */
 public final class ScoringService implements ForecastEvents, ScoringCycle {
+
     static final long REPLAY_RETRY_SECONDS = 30;
     private static final Duration REPLAY_RETRY = Duration.ofSeconds(REPLAY_RETRY_SECONDS);
     private static final Logger LOGGER = LoggerFactory.getLogger(ScoringService.class);
@@ -102,33 +103,24 @@ public final class ScoringService implements ForecastEvents, ScoringCycle {
     }
 
     @Override
-    public void batchSeen(ObservationBatchSeen seen) {
-        submit(seen.routeId(), () -> stage.accept(seen));
-    }
-
-    @Override
-    public void forecastPublished(ForecastPublished published) {
-        submit(published.routeId(), () -> stage.accept(published));
-    }
-
-    @Override
-    public void passesClosed(List<PassClosed> passes) {
-        if (passes.isEmpty()) {
+    public void committed(ForecastBatchEvents batch) {
+        final boolean queued = feed.submit(() -> batch.events().forEach(this::scoreEvent));
+        if (queued) {
             return;
         }
-        List<PassClosed> copied = List.copyOf(passes);
-        final long routeId = copied.getFirst().routeId();
-        if (copied.stream().anyMatch(pass -> pass.routeId() != routeId)) {
-            throw new IllegalArgumentException("한 번에 넘기는 통과는 같은 노선이어야 한다");
+        for (ForecastBatchEvents.Event dropped : batch.events()) {
+            stale.add(dropped.routeId());
         }
-        submit(routeId, () -> {
-            ScoringResult result = ScoringResult.empty();
-            for (PassClosed pass : copied) {
-                result = result.plus(stage.accept(pass));
-                metrics.lag(Duration.between(pass.closedAt(), clock.instant()));
-            }
-            return result;
-        });
+        metrics.dropped(batch.events().size());
+    }
+
+    private ScoringResult acceptPasses(List<PassClosed> passes) {
+        ScoringResult result = ScoringResult.empty();
+        for (PassClosed pass : passes) {
+            result = result.plus(stage.accept(pass));
+            metrics.lag(Duration.between(pass.closedAt(), clock.instant()));
+        }
+        return result;
     }
 
     @Override
@@ -165,7 +157,7 @@ public final class ScoringService implements ForecastEvents, ScoringCycle {
             }
             try {
                 ScoringResult result = stage.expire(clock.instant());
-                add(result);
+                bufferResult(result);
             } catch (RuntimeException failure) {
                 LOGGER.warn("event=scoring_expire_failed exceptionType={}", failure.getClass().getSimpleName(),
                     failure);
@@ -189,8 +181,12 @@ public final class ScoringService implements ForecastEvents, ScoringCycle {
             return flushed.labels() + flushed.unresolved();
         } catch (RuntimeException failure) {
             metrics.writeFailure();
-            LOGGER.warn("event=scoring_write_failed pending={} exceptionType={}", writer.pendingCount(),
-                failure.getClass().getSimpleName(), failure);
+            LOGGER.warn(
+                    "event=scoring_write_failed pending={} exceptionType={}",
+                    writer.pendingCount(),
+                    failure.getClass().getSimpleName(),
+                    failure
+            );
             return 0;
         }
     }
@@ -207,26 +203,29 @@ public final class ScoringService implements ForecastEvents, ScoringCycle {
         }
     }
 
-    private void submit(final long routeId, Supplier<ScoringResult> work) {
-        if (!feed.submit(() -> process(routeId, work))) {
-            stale.add(routeId);
-            metrics.dropped();
-        }
-    }
-
-    private void process(final long routeId, Supplier<ScoringResult> work) {
+    private void scoreEvent(ForecastBatchEvents.Event event) {
+        final long routeId = event.routeId();
         try {
             if (!prepare(routeId)) {
                 metrics.skipped();
                 return;
             }
-            add(work.get());
+            ScoringResult result = switch (event) {
+                case ObservationBatchSeen seen -> stage.accept(seen);
+                case ForecastPublished published -> stage.accept(published);
+                case ForecastBatchEvents.ClosedPasses closed -> acceptPasses(closed.passes());
+            };
+            bufferResult(result);
         } catch (RuntimeException failure) {
             stage.discard(routeId);
             ready.remove(routeId);
             metrics.failure();
-            LOGGER.warn("event=scoring_failed route={} exceptionType={}", routeId,
-                failure.getClass().getSimpleName(), failure);
+            LOGGER.warn(
+                    "event=scoring_failed route={} exceptionType={}",
+                    routeId,
+                    failure.getClass().getSimpleName(),
+                    failure
+            );
         } finally {
             metrics.waiting(stage.waitingCount());
         }
@@ -271,13 +270,18 @@ public final class ScoringService implements ForecastEvents, ScoringCycle {
             ready.remove(routeId);
             replayDeferredUntil.put(routeId, clock.instant().plus(REPLAY_RETRY));
             metrics.replay(reason, false);
-            LOGGER.warn("event=scoring_replay_failed route={} reason={} exceptionType={}", routeId, reason,
-                failure.getClass().getSimpleName(), failure);
+            LOGGER.warn(
+                    "event=scoring_replay_failed route={} reason={} exceptionType={}",
+                    routeId,
+                    reason,
+                    failure.getClass().getSimpleName(),
+                    failure
+            );
             return false;
         }
     }
 
-    private void add(ScoringResult result) {
+    private void bufferResult(ScoringResult result) {
         if (result.isEmpty() && result.scored().isEmpty()) {
             return;
         }

@@ -22,15 +22,19 @@ def digest(content: bytes) -> str:
 
 def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None:
     import re
-    from confirmed_serving_verification import canonical_identifier
+    from confirmed_serving_verification import CONTRACT, SUPPORTED_INPUT_PROFILES, checked_routes, verify_extended, verify_receipt
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", release_id):
         raise ValueError("invalid release id")
     if output.exists():
         raise ValueError("output must be a new immutable release directory")
     source_bytes = (source / "manifest.json").read_bytes()
     manifest = json.loads(source_bytes)
-    if canonical_identifier(manifest.get("schema")) != "alighting-inference-bundle-v1" or manifest.get("serving_ready") is not False:
+    if manifest.get("schema") != "alighting-inference-bundle-v1" or manifest.get("serving_ready") is not False:
         raise ValueError("expected offline AlightingAware bundle")
+    if manifest.get("model", "alighting-gate-base-and-pool") != "alighting-gate-base-and-pool":
+        raise ValueError("unsupported model")
+    if manifest.get("input_profile") not in SUPPORTED_INPUT_PROFILES:
+        raise ValueError("unsupported input profile")
     source_digest = digest(source_bytes)
     contents: dict[str, bytes] = {}
     for name, expected in manifest["files"].items():
@@ -40,7 +44,6 @@ def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None
         if digest(content) != expected:
             raise ValueError(f"source digest mismatch: {name}")
         contents[name] = content
-    from confirmed_serving_verification import CONTRACT, checked_routes, verify_extended, verify_receipt
     routes = checked_routes(contents)
     confirmed = routes is not None
     if routes is None:
@@ -76,13 +79,12 @@ def prepare(source: Path, output: Path, release_id: str, receipts: Path) -> None
     dates = []
     for route in routes:
         stats = json.loads(contents[f"statistics-{route}.json"])
+        if stats.get("input_profile") not in SUPPORTED_INPUT_PROFILES:
+            raise ValueError("unsupported statistics input profile")
         dates.extend(datetime.fromisoformat(stats[key]) for key in ("events_known_through", "observations_through"))
     if any(value.tzinfo is None for value in dates):
         raise ValueError("statistics cutoff must include timezone")
     contents["verification-source-manifest.json"] = source_bytes
-    for field in ("schema", "model", "input_profile"):
-        if field in manifest:
-            manifest[field] = canonical_identifier(manifest[field])
     manifest["serving_ready"] = True
     manifest["pending"] = []
     manifest["runtime"] = {

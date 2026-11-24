@@ -28,7 +28,8 @@ public record ObservationBatchSeen(
     CollectionResult result,
     int storedRows,
     int savedRows
-) {
+) implements ForecastBatchEvents.Event {
+
     public ObservationBatchSeen {
         Objects.requireNonNull(receivedAt, "응답 수신 시각이 필요하다");
         Objects.requireNonNull(result, "수집 결과가 필요하다");

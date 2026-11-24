@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JdbcModelDeploymentRepository implements ModelDeploymentRepository {
+
     /**
      * 활성 배포 하나를 조회한다. 상태를 이름 붙인 파라미터로 바인딩하지 않고 'ACTIVE' 를 그대로 쓴다.
      * ux_model_deployment_single_active 의 부분 조건과 문구가 같아야 쿼리 플래너가 해당 인덱스를 선택한다.
@@ -91,9 +92,7 @@ public class JdbcModelDeploymentRepository implements ModelDeploymentRepository 
 
     private final JdbcClient jdbcClient;
 
-    public JdbcModelDeploymentRepository(
-        JdbcClient jdbcClient
-    ) {
+    public JdbcModelDeploymentRepository(JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 
@@ -101,17 +100,16 @@ public class JdbcModelDeploymentRepository implements ModelDeploymentRepository 
     public Optional<ActiveModelDeployment> findActive() {
         return jdbcClient.sql(SELECT_ACTIVE_DEPLOYMENT)
             .query((resultSet, rowNumber) -> new ActiveModelDeployment(
-                resultSet.getLong("id"),
-                resultSet.getString("calculation_version"),
-                resultSet.getString("release_id"),
-                resultSet.getString("bundle_digest")))
+                    resultSet.getLong("id"),
+                    resultSet.getString("calculation_version"),
+                    resultSet.getString("release_id"),
+                    resultSet.getString("bundle_digest")
+            ))
             .optional();
     }
 
     @Override
-    public long stage(
-        StagedModelDeployment staged
-    ) {
+    public long stage(StagedModelDeployment staged) {
         return jdbcClient.sql(INSERT_STAGED_DEPLOYMENT)
             .param("deploymentKey", staged.deploymentKey())
             .param("releaseId", staged.releaseId())
@@ -127,9 +125,7 @@ public class JdbcModelDeploymentRepository implements ModelDeploymentRepository 
     }
 
     @Override
-    public boolean promoteToActive(
-        final long deploymentId
-    ) {
+    public boolean promoteToActive(final long deploymentId) {
         jdbcClient.sql(LOCK_DEPLOYMENTS).update();
         jdbcClient.sql(RETIRE_ACTIVE_DEPLOYMENT).param("deploymentId", deploymentId).update();
         return jdbcClient.sql(ACTIVATE_STAGED_DEPLOYMENT).param("deploymentId", deploymentId).update() == 1;

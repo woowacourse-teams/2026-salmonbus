@@ -6,6 +6,7 @@ package com.gustler.backend.forecasting.application.forecast;
  * <p>이미 같은 값이 있으면 아무것도 하지 않고, 다른 값이 있으면 거절한다. 행 잠금을 잡지 않는다.
  */
 public interface SettlementContextWriter {
+
     /**
      * 정산 근거를 적는다.
      *

@@ -13,6 +13,7 @@ import java.util.Objects;
  * 미해결 기록은 예보의 날짜를 따른다.
  */
 public final class SourceDates {
+
     /** 나눔 기준 날짜의 시간대. */
     public static final ZoneId KOREA = ZoneId.of("Asia/Seoul");
 

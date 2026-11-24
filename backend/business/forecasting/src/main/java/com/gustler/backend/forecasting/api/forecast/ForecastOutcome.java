@@ -4,6 +4,7 @@ package com.gustler.backend.forecasting.api.forecast;
  * 배치 하나를 예보 단계가 처리한 결과다. 값의 이름은 {@code forecast_run.outcome}에 그대로 저장된다.
  */
 public enum ForecastOutcome {
+
     /** 버스 한 대 이상의 예측을 냈다. */
     PUBLISHED,
     /** 처리했지만 예측할 버스가 없었다. */

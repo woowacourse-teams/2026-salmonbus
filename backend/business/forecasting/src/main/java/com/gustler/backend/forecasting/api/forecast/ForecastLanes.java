@@ -8,6 +8,7 @@ package com.gustler.backend.forecasting.api.forecast;
  * 않는다.
  */
 public interface ForecastLanes {
+
     /**
      * 일을 노선 열쇠의 줄에 넣는다.
      *

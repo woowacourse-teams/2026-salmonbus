@@ -23,6 +23,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** 원자료 계산을 비교하며, 실시간 확정 시점 차이는 원본 수치 동등성 검증과 따로 보고한다. */
 public final class AlightingAwareSourceFeatureCheck {
+
     public static void main(String[] args) throws Exception {
         if (args.length != 2) {
             throw new IllegalArgumentException("fixture and new output paths required");
@@ -52,7 +53,9 @@ public final class AlightingAwareSourceFeatureCheck {
         List<Path> failures = new ArrayList<>();
         try (Stream<Path> entries = Files.list(source)) {
             List<Path> fixtures = entries.filter(path -> path.toString().endsWith(".json"))
-                .filter(path -> !path.getFileName().toString().equals("manifest.json")).sorted().toList();
+                .filter(path -> !path.getFileName().toString().equals("manifest.json"))
+                    .sorted()
+                    .toList();
             for (Path fixture : fixtures) {
                 try {
                     main(new String[] { fixture.toString(), output.resolve(fixture.getFileName()).toString() });
@@ -71,7 +74,10 @@ public final class AlightingAwareSourceFeatureCheck {
         for (JsonNode day : root.path("holidays")) {
             holidays.add(LocalDate.parse(day.asText()));
         }
-        AlightingAwareRouteStatistics statistics = AlightingAwareStatisticsReader.read(root.path("statistics"), holidays);
+        AlightingAwareRouteStatistics statistics = AlightingAwareStatisticsReader.read(
+            root.path("statistics"),
+            holidays
+        );
         List<AlightingAwareObservation> observations = observations(root.path("observations"));
         Map<Long, AlightingAwareObservation> byId = new LinkedHashMap<>();
         for (AlightingAwareObservation observation : observations) {
@@ -81,7 +87,14 @@ public final class AlightingAwareSourceFeatureCheck {
         Map<String, AlightingAwareVehiclePrefix> prefix = prefixes(root.path("prefix"));
         List<AlightingAwarePassEvent> causal = AlightingAwareHistoryCompactor.resolve(
             new AlightingAwareHistoryCompactor.History(prefix, observations, List.of()), statistics.realStopOrders());
-        return new Fixture(statistics, observations, byId, research, prefix, causal);
+        return new Fixture(
+                statistics,
+                observations,
+                byId,
+                research,
+                prefix,
+                causal
+        );
     }
 
     private static List<AlightingAwareObservation> observations(JsonNode rows) {
@@ -94,19 +107,34 @@ public final class AlightingAwareSourceFeatureCheck {
 
     private static AlightingAwareObservation observation(JsonNode row) {
         if (row.has("route_version_id")) {
-            return new AlightingAwareObservation(row.path("id").asLong(), row.path("batch_id").asLong(),
-                row.path("batch_rank").asLong(), Instant.parse(row.path("received_at").asText()),
-                row.path("vehicle_id").asText(), row.path("passed_stop_order").asInt(),
-                row.path("stop_order").asInt(), row.path("running_state").asInt(),
-                nullableSeats(row.path("remaining_seats")), row.path("crowd_level").asInt(),
-                row.path("route_version_id").asLong(), Instant.parse(row.path("physical_received_at").asText()),
-                row.path("down").asBoolean());
+            return new AlightingAwareObservation(
+                    row.path("id").asLong(),
+                    row.path("batch_id").asLong(),
+                    row.path("batch_rank").asLong(),
+                    Instant.parse(row.path("received_at").asText()),
+                    row.path("vehicle_id").asText(),
+                    row.path("passed_stop_order").asInt(),
+                    row.path("stop_order").asInt(),
+                    row.path("running_state").asInt(),
+                    nullableSeats(row.path("remaining_seats")),
+                    row.path("crowd_level").asInt(),
+                    row.path("route_version_id").asLong(),
+                    Instant.parse(row.path("physical_received_at").asText()),
+                    row.path("down").asBoolean()
+            );
         }
-        return new AlightingAwareObservation(row.path("id").asLong(), row.path("batch_id").asLong(),
-            row.path("batch_rank").asLong(),
-            Instant.parse(row.path("received_at").asText()), row.path("vehicle_id").asText(),
-            row.path("passed_stop_order").asInt(), row.path("stop_order").asInt(), row.path("running_state").asInt(),
-            nullableSeats(row.path("remaining_seats")), row.path("crowd_level").asInt());
+        return new AlightingAwareObservation(
+                row.path("id").asLong(),
+                row.path("batch_id").asLong(),
+                row.path("batch_rank").asLong(),
+                Instant.parse(row.path("received_at").asText()),
+                row.path("vehicle_id").asText(),
+                row.path("passed_stop_order").asInt(),
+                row.path("stop_order").asInt(),
+                row.path("running_state").asInt(),
+                nullableSeats(row.path("remaining_seats")),
+                row.path("crowd_level").asInt()
+        );
     }
 
     private static Integer nullableSeats(JsonNode value) {
@@ -122,13 +150,38 @@ public final class AlightingAwareSourceFeatureCheck {
         for (JsonNode row : rows) {
             String vehicle = row.path("vehicle_id").asText();
             final int stop = row.path("stop_order").asInt();
-            AlightingAwareObservation arrival = new AlightingAwareObservation(identity--, 0, 0,
-                Instant.parse(row.path("arrive_at").asText()), vehicle, stop - 1, stop, 1, row.path("arrive").asInt(),
-                0);
-            AlightingAwareObservation departure = new AlightingAwareObservation(identity--, 0, 0,
-                Instant.parse(row.path("known_at").asText()), vehicle, stop, stop, 2, row.path("depart").asInt(), 0);
-            research.add(new AlightingAwarePassEvent(vehicle, row.path("trip_id").asLong(), stop, arrival, departure,
-                departure.receivedAt()));
+            AlightingAwareObservation arrival = new AlightingAwareObservation(
+                    identity--,
+                    0,
+                    0,
+                    Instant.parse(row.path("arrive_at").asText()),
+                    vehicle,
+                    stop - 1,
+                    stop,
+                    1,
+                    row.path("arrive").asInt(),
+                    0
+            );
+            AlightingAwareObservation departure = new AlightingAwareObservation(
+                    identity--,
+                    0,
+                    0,
+                    Instant.parse(row.path("known_at").asText()),
+                    vehicle,
+                    stop,
+                    stop,
+                    2,
+                    row.path("depart").asInt(),
+                    0
+            );
+            research.add(new AlightingAwarePassEvent(
+                    vehicle,
+                    row.path("trip_id").asLong(),
+                    stop,
+                    arrival,
+                    departure,
+                    departure.receivedAt()
+            ));
         }
         return research;
     }
@@ -137,9 +190,13 @@ public final class AlightingAwareSourceFeatureCheck {
         Map<String, AlightingAwareVehiclePrefix> prefix = new LinkedHashMap<>();
         for (JsonNode state : states) {
             AlightingAwareObservation previous = observation(state.path("previous"));
-            prefix.put(previous.vehicleId(), new AlightingAwareVehiclePrefix((float) state.path("capacity").asDouble(),
-                state.path("full_streak").asDouble(), previous, Instant.parse(state.path("entry_at").asText()),
-                state.path("trip_id").asLong()));
+            prefix.put(previous.vehicleId(), new AlightingAwareVehiclePrefix(
+                    (float) state.path("capacity").asDouble(),
+                    state.path("full_streak").asDouble(),
+                    previous,
+                    Instant.parse(state.path("entry_at").asText()),
+                    state.path("trip_id").asLong()
+            ));
         }
         return prefix;
     }
@@ -160,8 +217,18 @@ public final class AlightingAwareSourceFeatureCheck {
             }
             final double difference = Math.abs(expectedValue - actualValue);
             maximum = Math.max(maximum, reportableDifference(difference));
-            differences.add(Map.of("row", row, "vector", vector, "column", index,
-                "expected", reportableNumber(expectedValue), "actual", reportableNumber(actualValue)));
+            differences.add(Map.of(
+                    "row",
+                    row,
+                    "vector",
+                    vector,
+                    "column",
+                    index,
+                    "expected",
+                    reportableNumber(expectedValue),
+                    "actual",
+                    reportableNumber(actualValue)
+            ));
         }
         return maximum;
     }
@@ -196,15 +263,24 @@ public final class AlightingAwareSourceFeatureCheck {
         Map<String, AlightingAwareVehiclePrefix> prefix,
         List<AlightingAwarePassEvent> causal
     ) {
+
         private AlightingAwareFeatureVector vector(JsonNode row, List<AlightingAwarePassEvent> events) {
             AlightingAwareObservation source = byId.get(row.path("source_id").asLong());
             final int target = row.path("target").asInt();
             return new AlightingAwareFeatureSnapshot(
-            Math.max(source.routeVersionId(), 1), source, row.path("seat88").get(53).asInt(), statistics, observations, events, prefix).forTarget(target);
+                    Math.max(source.routeVersionId(), 1),
+                    source,
+                    row.path("seat88").get(53).asInt(),
+                    statistics,
+                    observations,
+                    events,
+                    prefix
+            ).forTarget(target);
         }
     }
 
     private static final class Comparison {
+
         private final List<Map<String, Object>> differences = new ArrayList<>();
         private final List<Map<String, Object>> causalDifferences = new ArrayList<>();
         private int cases;
@@ -217,11 +293,35 @@ public final class AlightingAwareSourceFeatureCheck {
             }
             AlightingAwareFeatureVector actual = fixture.vector(row, reference);
             AlightingAwareFeatureVector causal = fixture.vector(row, fixture.causal());
-            maximum = Math.max(maximum, compare(differences, cases, "seat88", row.path("seat88"), actual.seat88()));
+            maximum = Math.max(maximum, compare(
+                    differences,
+                    cases,
+                    "seat88",
+                    row.path("seat88"),
+                    actual.seat88()
+            ));
             maximum = Math.max(maximum,
-                compare(differences, cases, "probability80", row.path("probability80"), actual.probability80()));
-            compare(causalDifferences, cases, "seat88", row.path("seat88"), causal.seat88());
-            compare(causalDifferences, cases, "probability80", row.path("probability80"), causal.probability80());
+                compare(
+                        differences,
+                        cases,
+                        "probability80",
+                        row.path("probability80"),
+                        actual.probability80()
+                ));
+            compare(
+                    causalDifferences,
+                    cases,
+                    "seat88",
+                    row.path("seat88"),
+                    causal.seat88()
+            );
+            compare(
+                    causalDifferences,
+                    cases,
+                    "probability80",
+                    row.path("probability80"),
+                    causal.probability80()
+            );
             cases++;
         }
 

@@ -14,7 +14,8 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class ForecastSchedulerTest {
-    private final ForecastSchedulerTest.RecordingForecasts forecasts = new ForecastSchedulerTest.RecordingForecasts();
+
+    private final RecordingForecasts forecasts = new RecordingForecasts();
     private final ForecastScheduler trigger = new ForecastScheduler(forecasts);
 
     @AfterEach
@@ -77,6 +78,7 @@ class ForecastSchedulerTest {
     }
 
     private static final class RecordingForecasts implements RunForecasts {
+
         private final List<String> stored = new ArrayList<>();
         private int pickUps;
 

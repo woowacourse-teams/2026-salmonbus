@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
  * 본다.
  */
 class ScoringReplayTest {
+
     private static final Instant START = Instant.parse("2026-01-04T21:00:00Z");
     private static final Instant NOW = Instant.parse("2026-01-05T03:00:00Z");
     private static final int LIMIT = 150_000;
@@ -37,7 +38,10 @@ class ScoringReplayTest {
     void 정답이_저장된_마지막_통과가_닫힌_시각에서_2시간_10분_앞의_예보부터_다시_읽는다() {
         // given
         Instant scoredThrough = NOW.minus(Duration.ofHours(3));
-        RecordingStores stores = new RecordingStores(Optional.of(scoredThrough), Optional.empty());
+        RecordingStores stores = new RecordingStores(
+            Optional.of(scoredThrough),
+            Optional.empty()
+        );
         ScoringReplay replay = new ScoringReplay(stores, stores);
 
         // when
@@ -58,7 +62,10 @@ class ScoringReplayTest {
     void 중단_없이_되감으면_예보는_2시간_10분_통과는_26시간_남짓을_읽는다() {
         // given
         Instant scoredThrough = NOW.minusSeconds(5);
-        RecordingStores stores = new RecordingStores(Optional.of(scoredThrough), Optional.empty());
+        RecordingStores stores = new RecordingStores(
+            Optional.of(scoredThrough),
+            Optional.empty()
+        );
         ScoringReplay replay = new ScoringReplay(stores, stores);
 
         // when
@@ -76,7 +83,10 @@ class ScoringReplayTest {
         // given
         Instant lastLabeled = NOW.minus(Duration.ofHours(9));
         Instant lastUnresolved = NOW.minus(Duration.ofHours(4));
-        RecordingStores stores = new RecordingStores(Optional.of(lastLabeled), Optional.of(lastUnresolved));
+        RecordingStores stores = new RecordingStores(
+            Optional.of(lastLabeled),
+            Optional.of(lastUnresolved)
+        );
         ScoringReplay replay = new ScoringReplay(stores, stores);
 
         // when
@@ -89,7 +99,10 @@ class ScoringReplayTest {
     @Test
     void 저장된_정답도_미해결_줄도_없으면_예보를_상한인_26시간_앞부터_읽는다() {
         // given
-        RecordingStores stores = new RecordingStores(Optional.empty(), Optional.empty());
+        RecordingStores stores = new RecordingStores(
+            Optional.empty(),
+            Optional.empty()
+        );
         ScoringReplay replay = new ScoringReplay(stores, stores);
 
         // when
@@ -102,7 +115,10 @@ class ScoringReplayTest {
     @Test
     void 정답이_저장된_마지막_통과가_상한_가까이로_오래됐으면_예보를_상한보다_앞에서는_읽지_않는다() {
         // given
-        RecordingStores stores = new RecordingStores(Optional.of(NOW.minus(Duration.ofHours(25))), Optional.empty());
+        RecordingStores stores = new RecordingStores(
+            Optional.of(NOW.minus(Duration.ofHours(25))),
+            Optional.empty()
+        );
         ScoringReplay replay = new ScoringReplay(stores, stores);
 
         // when
@@ -115,15 +131,27 @@ class ScoringReplayTest {
     @Test
     void 수집_구멍이_있던_날에_상태를_버리고_되감아도_연속_실행과_결과_집합이_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(151, START, 600, 6, 0.004, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                151,
+                START,
+                600,
+                6,
+                0.004,
+                true
+        );
         List<Object> events = scenario.events();
         Map<String, Object> continuous = storedRows(ScoringScenario.feed(scenario.stage(LIMIT), events));
         final int firstHole = firstHoleIndex(events);
 
-        for (int cut : List.of(batchStart(events, firstHole + 1),
+        for (final int cut : List.of(batchStart(events, firstHole + 1),
             batchStart(events, firstHole + (events.size() - firstHole) / 2))) {
             // when
-            Map<String, Object> replayed = storedRowsWithReplayAt(scenario, events, cut, LIMIT);
+            Map<String, Object> replayed = storedRowsWithReplayAt(
+                    scenario,
+                    events,
+                    cut,
+                    LIMIT
+            );
 
             // then
             assertThat(replayed).as("cut=%d", cut).isEqualTo(continuous);
@@ -135,15 +163,27 @@ class ScoringReplayTest {
     void 관측_상한을_넘기_전과_넘은_뒤_어디서_되감아도_연속_실행과_결과_집합이_같다() {
         // given
         final int limit = 500;
-        ScoringScenario scenario = ScoringScenario.random(157, START, 600, 6, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                157,
+                START,
+                600,
+                6,
+                0,
+                true
+        );
         List<Object> events = scenario.events();
         Map<String, Object> continuous = storedRows(ScoringScenario.feed(scenario.stage(limit), events));
         final int overflow = overflowIndex(events, limit);
 
-        for (int cut : List.of(batchStart(events, overflow / 2),
+        for (final int cut : List.of(batchStart(events, overflow / 2),
             batchStart(events, overflow + (events.size() - overflow) / 2))) {
             // when
-            Map<String, Object> replayed = storedRowsWithReplayAt(scenario, events, cut, limit);
+            Map<String, Object> replayed = storedRowsWithReplayAt(
+                    scenario,
+                    events,
+                    cut,
+                    limit
+            );
 
             // then
             assertThat(replayed).as("cut=%d", cut).isEqualTo(continuous);
@@ -162,8 +202,7 @@ class ScoringReplayTest {
         List<Object> saved = events.subList(0, cut);
         ScoringResult before = ScoringScenario.feed(stage, saved);
         Instant now = saved.stream().map(ScoringReplayTest::time).max(Instant::compareTo).orElseThrow().plusMillis(1);
-        RecordedScoringEvents recorded = new RecordedScoringEvents(saved,
-            () -> RecordedScoringEvents.rowsOf(before));
+        RecordedScoringEvents recorded = new RecordedScoringEvents(saved, () -> RecordedScoringEvents.rowsOf(before));
         ScoringResult replayed = new ScoringReplay(recorded.forecasts(), recorded.passes())
             .replay(stage, ScoringScenario.ROUTE, now);
         ScoringResult after = ScoringScenario.feed(stage, events.subList(cut, events.size()));
@@ -173,8 +212,15 @@ class ScoringReplayTest {
     private static Map<String, Object> storedRows(ScoringResult result) {
         Map<String, Object> rows = new HashMap<>();
         for (PassLabel label : result.labels()) {
-            rows.putIfAbsent("label:" + List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
-                label.stopOrder(), label.capacity(), label.labelVersion(), label.modelDeploymentId()), label);
+            rows.putIfAbsent("label:" + List.of(
+                    label.sourceDate(),
+                    label.routeId(),
+                    label.tripStartObservationId(),
+                    label.stopOrder(),
+                    label.capacity(),
+                    label.labelVersion(),
+                    label.modelDeploymentId()
+            ), label);
         }
         for (UnresolvedForecast closed : result.unresolved()) {
             rows.putIfAbsent("unresolved:" + List.of(closed.sourceDate(), closed.vehicleObservationId(),
@@ -235,12 +281,18 @@ class ScoringReplayTest {
     }
 
     private static ScoringStage emptyStage() {
-        return new ScoringStage((deployment, version) -> Optional.empty(), version -> List.of(),
-            new AlightingAwarePassLabelCalculator(), ScoringScenario.FIXED, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
+        return new ScoringStage(
+                (deployment, version) -> Optional.empty(),
+                version -> List.of(),
+                new AlightingAwarePassLabelCalculator(),
+                ScoringScenario.FIXED,
+                ScoringStage.DEFAULT_OBSERVATION_LIMIT
+        );
     }
 
     /** 아무 기록도 돌려주지 않고 되감기가 읽은 범위만 적어 둔다. */
     private static final class RecordingStores implements ForecastRecordStore, StopPassStore {
+
         private final Optional<Instant> lastLabeled;
         private final Optional<Instant> lastUnresolved;
         private final List<Instant> readUntil = new ArrayList<>();

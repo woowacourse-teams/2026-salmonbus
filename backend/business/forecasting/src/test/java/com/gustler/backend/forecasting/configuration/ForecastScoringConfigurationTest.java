@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import static org.mockito.Mockito.mock;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
@@ -28,6 +29,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 
 class ForecastScoringConfigurationTest {
+
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
         .withUserConfiguration(ForecastScoringConfiguration.class)
         .withBean(ForecastLanes.class, () -> (key, task) -> true)
@@ -47,29 +49,43 @@ class ForecastScoringConfigurationTest {
     @Test
     void 예보가_꺼져_있으면_예보와_채점을_만들지_않는다() {
         runner.withPropertyValues("forecast.enabled=false").run(context -> {
-            assertThat(context).doesNotHaveBean(RunForecasts.class);
-            assertThat(context).doesNotHaveBean(ForecastEvents.class);
+            assertSoftly(softly -> {
+                softly.check(() -> assertThat(context).doesNotHaveBean(RunForecasts.class));
+                softly.check(() -> assertThat(context).doesNotHaveBean(ForecastEvents.class));
+            });
         });
         runner.run(context -> {
-            assertThat(context).doesNotHaveBean(RunForecasts.class);
-            assertThat(context).doesNotHaveBean(ForecastEvents.class);
+            assertSoftly(softly -> {
+                softly.check(() -> assertThat(context).doesNotHaveBean(RunForecasts.class));
+                softly.check(() -> assertThat(context).doesNotHaveBean(ForecastEvents.class));
+            });
         });
     }
 
     @Test
     void 예보가_켜져_있으면_예보_서비스와_그_사건을_받는_채점을_함께_등록한다() {
         runner.withPropertyValues("forecast.enabled=true").run(context -> {
-            assertThat(context).getBean(RunForecasts.class).isInstanceOf(RunForecastsService.class);
-            assertThat(context).getBean(ForecastEvents.class).isInstanceOf(ScoringService.class);
-            assertThat(context).getBean(ScoringCycle.class).isInstanceOf(ScoringService.class);
+            assertSoftly(softly -> {
+                softly.check(
+                    () -> assertThat(context).getBean(RunForecasts.class).isInstanceOf(RunForecastsService.class)
+                );
+                softly.check(
+                    () -> assertThat(context).getBean(ForecastEvents.class).isInstanceOf(ScoringService.class)
+                );
+                softly.check(() -> assertThat(context).getBean(ScoringCycle.class).isInstanceOf(ScoringService.class));
+            });
         });
     }
 
     @Test
     void 읽지_않는_설정_키가_남아_있어도_예보가_켜져_있으면_등록한다() {
-        runner.withPropertyValues("forecast.enabled=true", "forecast.compact-settlement-write=true",
-                "forecast.alighting.rush-only=false", "forecast.alighting.maximum-history-rows=0",
-                "forecast.alighting.causal-evaluation.maximum-observation-rows=0")
+        runner.withPropertyValues(
+                "forecast.enabled=true",
+                "forecast.compact-settlement-write=true",
+                "forecast.alighting.rush-only=false",
+                "forecast.alighting.maximum-history-rows=0",
+                "forecast.alighting.causal-evaluation.maximum-observation-rows=0"
+        )
             .run(context -> assertThat(context).hasNotFailed().hasSingleBean(RunForecasts.class)
                 .hasSingleBean(ScoringService.class));
     }

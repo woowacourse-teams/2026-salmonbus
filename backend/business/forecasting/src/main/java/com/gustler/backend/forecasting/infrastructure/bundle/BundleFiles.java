@@ -7,6 +7,7 @@ import java.nio.file.Path;
 
 /** 검증할 설명 파일을 고정된 일반 파일에서 읽는다. */
 record BundleFiles(Path manifest) {
+
     static BundleFiles under(Path directory) {
         if (Files.isSymbolicLink(directory)) {
             throw new BundleRejectedException("번들 디렉터리는 symlink일 수 없다");

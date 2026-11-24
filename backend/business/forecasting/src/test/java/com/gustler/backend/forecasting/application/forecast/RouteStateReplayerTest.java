@@ -20,25 +20,53 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
- * 되감기 창을 늘리는 규칙과, 예보 단계를 돌리지 못하고 끝난 배치의 통과를 되감으면서 찾는 규칙을 메모리 원본으로 본다.
+ * 되감기 지정한 범위의 복구와, 예보 단계를 돌리지 못하고 끝난 배치의 통과를 되감으면서 찾는 규칙을 메모리 원본으로 본다.
  * 배치는 1분 간격이고 차량은 정류장 순번 1~9(상행)만 돈다. 순번이 줄면 새 운행이다.
  */
 class RouteStateReplayerTest {
+
     private static final String ROUTE = "replayer-route";
     private static final long VERSION = 7;
     private static final long ROUTE_ID = 31;
     private static final LocalDate SOURCE_DATE = LocalDate.of(2026, 10, 14);
     private static final Instant T0 = Instant.parse("2026-10-13T20:00:00Z");
     private static final AlightingAwareRouteStatistics STATISTICS = statistics();
+
     private final ForecastStage stage = new ForecastStage((source, vehicles, at, batch) -> capacities(vehicles));
     private long nextObservation = 1000;
 
     @Test
-    void 여섯_시간보다_긴_운행_중에_다시_뜨면_창을_늘려_되감아_그_차량을_빼지_않고_입력이_계속_돈_상태와_같다() {
+    void 운행_시작이_없어도_최근_여섯시간만_한번_복구한다() {
         // given
         List<ForecastBatch> batches = stream(840, 300, 810);
         MemorySource source = new MemorySource(batches);
-        RouteStateReplayer replayer = new RouteStateReplayer(source, stage, Duration.ofHours(6), Duration.ofHours(12));
+        RouteStateReplayer replayer = new RouteStateReplayer(
+                source,
+                stage,
+                Duration.ofHours(6)
+        );
+        ForecastBatch last = batches.get(780);
+
+        // when
+        RouteStateReplayer.Result replayed = replayer.replay(STATISTICS, last.confirmedAt(), last.observationBatchId());
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(source.windows).containsExactly(Duration.ofHours(6));
+            softly.assertThat(replayed.state().tripStartKnown("long")).isFalse();
+        });
+    }
+
+    @Test
+    void 여섯시간_복구에서_긴_운행은_제외하고_나머지_차량의_입력은_연속_실행과_같다() {
+        // given
+        List<ForecastBatch> batches = stream(840, 300, 810);
+        MemorySource source = new MemorySource(batches);
+        RouteStateReplayer replayer = new RouteStateReplayer(
+                source,
+                stage,
+                Duration.ofHours(6)
+        );
         final int split = 780;
         RouteForecastState continuous = continuousThrough(batches, split);
         ForecastBatch last = batches.get(split);
@@ -52,8 +80,18 @@ class RouteStateReplayerTest {
         Set<String> forecast = new HashSet<>();
         Set<String> withheld = new HashSet<>();
         for (int index = split + 1; index < split + 25; index++) {
-            ForecastStageResult expected = stage.advance(continuous, STATISTICS, "GBIS", batches.get(index));
-            ForecastStageResult actual = stage.advance(resumed, STATISTICS, "GBIS", batches.get(index));
+            ForecastStageResult expected = stage.advance(
+                    continuous,
+                    STATISTICS,
+                    "GBIS",
+                    batches.get(index)
+            );
+            ForecastStageResult actual = stage.advance(
+                    resumed,
+                    STATISTICS,
+                    "GBIS",
+                    batches.get(index)
+            );
             Map<Long, List<String>> expectedVectors = vectors(expected.snapshots());
             for (Map.Entry<Long, List<String>> entry : vectors(actual.snapshots()).entrySet()) {
                 assertThat(entry.getValue()).as("배치 %d 관측 %d", index, entry.getKey())
@@ -67,13 +105,13 @@ class RouteStateReplayerTest {
         }
         final int checked = compared;
         assertSoftly(softly -> {
-            softly.assertThat(replayed.extension()).isEqualTo(RouteStateReplayer.Extension.RESOLVED);
-            softly.assertThat(source.windows).containsExactly(Duration.ofHours(6), Duration.ofHours(12));
-            softly.assertThat(replayed.state().replayFrom()).contains(last.confirmedAt().minus(Duration.ofHours(12)));
-            softly.assertThat(replayed.state().tripStartKnown("long")).isTrue();
-            softly.assertThat(forecast).contains("long", "b", "c");
-            softly.assertThat(withheld).isEmpty();
-            softly.assertThat(checked).isGreaterThan(60);
+
+            softly.assertThat(source.windows).containsExactly(Duration.ofHours(6));
+            softly.assertThat(replayed.state().replayFrom()).contains(last.confirmedAt().minus(Duration.ofHours(6)));
+            softly.assertThat(replayed.state().tripStartKnown("long")).isFalse();
+            softly.assertThat(forecast).contains("b", "c").doesNotContain("long");
+            softly.assertThat(withheld).contains("long");
+            softly.assertThat(checked).isGreaterThan(40);
         });
     }
 
@@ -82,16 +120,25 @@ class RouteStateReplayerTest {
         // given
         List<ForecastBatch> batches = stream(840, 300, 810);
         MemorySource source = new MemorySource(batches);
-        RouteStateReplayer replayer = new RouteStateReplayer(source, stage, Duration.ofHours(6), Duration.ofHours(6));
+        RouteStateReplayer replayer = new RouteStateReplayer(
+                source,
+                stage,
+                Duration.ofHours(6)
+        );
         ForecastBatch last = batches.get(780);
 
         // when
         RouteStateReplayer.Result replayed = replayer.replay(STATISTICS, last.confirmedAt(), last.observationBatchId());
-        ForecastStageResult next = stage.advance(replayed.state(), STATISTICS, "GBIS", batches.get(781));
+        ForecastStageResult next = stage.advance(
+                replayed.state(),
+                STATISTICS,
+                "GBIS",
+                batches.get(781)
+        );
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(replayed.extension()).isEqualTo(RouteStateReplayer.Extension.NONE);
+
             softly.assertThat(source.windows).containsExactly(Duration.ofHours(6));
             softly.assertThat(next.withheld()).extracting(ForecastStageResult.WithheldVehicle::vehicleId)
                 .contains("long");
@@ -99,11 +146,15 @@ class RouteStateReplayerTest {
     }
 
     @Test
-    void 여섯_시간으로_충분하면_두_번째_되감기를_돌리지_않는다() {
+    void 여섯시간_안에서_운행_시작을_찾으면_완전한_상태를_복구한다() {
         // given
         List<ForecastBatch> batches = stream(480, 300, 480);
         MemorySource source = new MemorySource(batches);
-        RouteStateReplayer replayer = new RouteStateReplayer(source, stage, Duration.ofHours(6), Duration.ofHours(12));
+        RouteStateReplayer replayer = new RouteStateReplayer(
+                source,
+                stage,
+                Duration.ofHours(6)
+        );
         ForecastBatch last = batches.get(450);
 
         // when
@@ -111,30 +162,39 @@ class RouteStateReplayerTest {
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(replayed.extension()).isEqualTo(RouteStateReplayer.Extension.NONE);
+
             softly.assertThat(source.windows).containsExactly(Duration.ofHours(6));
-            softly.assertThat(replayed.state().replayShortfallAt(last.confirmedAt()).none()).isTrue();
+            softly.assertThat(replayed.state().historyCompleteAt(last.confirmedAt())).isTrue();
             softly.assertThat(replayed.state().replayFrom()).contains(last.confirmedAt().minus(Duration.ofHours(6)));
         });
     }
 
     @Test
-    void 늘린_창으로도_운행_시작이_보이지_않으면_그_차량은_빠진_채로_남는다() {
+    void 지정한_범위에서_운행_시작을_찾지_못한_차량은_제외한다() {
         // given
         List<ForecastBatch> batches = stream(480, 0, 480);
         MemorySource source = new MemorySource(batches);
-        RouteStateReplayer replayer = new RouteStateReplayer(source, stage, Duration.ofHours(3), Duration.ofHours(6));
+        RouteStateReplayer replayer = new RouteStateReplayer(
+                source,
+                stage,
+                Duration.ofHours(3)
+        );
         ForecastBatch last = batches.get(450);
 
         // when
         RouteStateReplayer.Result replayed = replayer.replay(STATISTICS, last.confirmedAt(), last.observationBatchId());
-        ForecastStageResult next = stage.advance(replayed.state(), STATISTICS, "GBIS", batches.get(451));
+        ForecastStageResult next = stage.advance(
+                replayed.state(),
+                STATISTICS,
+                "GBIS",
+                batches.get(451)
+        );
 
         // then
         assertSoftly(softly -> {
             softly.assertThat(replayed.succeeded()).isTrue();
-            softly.assertThat(replayed.extension()).isEqualTo(RouteStateReplayer.Extension.UNRESOLVED);
-            softly.assertThat(source.windows).containsExactly(Duration.ofHours(3), Duration.ofHours(6));
+
+            softly.assertThat(source.windows).containsExactly(Duration.ofHours(3));
             softly.assertThat(replayed.state().tripStartKnown("long")).isFalse();
             softly.assertThat(next.withheld()).extracting(ForecastStageResult.WithheldVehicle::vehicleId)
                 .contains("long");
@@ -142,12 +202,16 @@ class RouteStateReplayerTest {
     }
 
     @Test
-    void 늘린_창을_읽지_못하면_처음_되감은_상태를_쓴다() {
+    void 복구_범위를_읽지_못하면_실패_사유만_반환한다() {
         // given
         List<ForecastBatch> batches = stream(480, 0, 480);
         MemorySource source = new MemorySource(batches);
-        source.failBeyond = Duration.ofHours(3);
-        RouteStateReplayer replayer = new RouteStateReplayer(source, stage, Duration.ofHours(3), Duration.ofHours(6));
+        source.failBeyond = Duration.ofHours(2);
+        RouteStateReplayer replayer = new RouteStateReplayer(
+                source,
+                stage,
+                Duration.ofHours(3)
+        );
         ForecastBatch last = batches.get(450);
 
         // when
@@ -155,11 +219,10 @@ class RouteStateReplayerTest {
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(replayed.succeeded()).isTrue();
-            softly.assertThat(replayed.extension()).isEqualTo(RouteStateReplayer.Extension.FAILED);
-            softly.assertThat(replayed.state().replayFrom()).contains(last.confirmedAt().minus(Duration.ofHours(3)));
-            softly.assertThat(replayed.state().cursor().orElseThrow().observationBatchId())
-                .isEqualTo(last.observationBatchId());
+            softly.assertThat(replayed.succeeded()).isFalse();
+            softly.assertThat(replayed.state()).isNull();
+            softly.assertThat(replayed.failureReason()).isEqualTo("TEST_ROW_LIMIT");
+            softly.assertThat(source.windows).containsExactly(Duration.ofHours(3));
         });
     }
 
@@ -172,7 +235,12 @@ class RouteStateReplayerTest {
         List<PassClosed> expected = new ArrayList<>();
         RouteForecastState continuous = RouteForecastState.fromVerifiedOrigin(ROUTE);
         for (int index = 0; index < holeEnd; index++) {
-            ForecastStageResult result = stage.advance(continuous, STATISTICS, "GBIS", batches.get(index));
+            ForecastStageResult result = stage.advance(
+                    continuous,
+                    STATISTICS,
+                    "GBIS",
+                    batches.get(index)
+            );
             if (index >= holeStart) {
                 result.closedPasses().forEach(pass -> expected.add(pass.toEvent(SOURCE_DATE, ROUTE_ID)));
             }
@@ -183,7 +251,11 @@ class RouteStateReplayerTest {
             source.unforecast.put(batches.get(index).observationBatchId(),
                 new ReplaySource.UnforecastRun(SOURCE_DATE, ROUTE_ID));
         }
-        RouteStateReplayer replayer = new RouteStateReplayer(source, stage, Duration.ofHours(6), Duration.ofHours(12));
+        RouteStateReplayer replayer = new RouteStateReplayer(
+                source,
+                stage,
+                Duration.ofHours(6)
+        );
         ForecastBatch last = batches.get(holeEnd - 1);
 
         // when
@@ -205,7 +277,12 @@ class RouteStateReplayerTest {
         List<PassClosed> continuous = new ArrayList<>();
         RouteForecastState state = RouteForecastState.fromVerifiedOrigin(ROUTE);
         for (int index = 0; index < holeEnd; index++) {
-            ForecastStageResult result = stage.advance(state, STATISTICS, "GBIS", batches.get(index));
+            ForecastStageResult result = stage.advance(
+                    state,
+                    STATISTICS,
+                    "GBIS",
+                    batches.get(index)
+            );
             if (index >= holeStart) {
                 result.closedPasses().forEach(pass -> continuous.add(pass.toEvent(SOURCE_DATE, ROUTE_ID)));
             }
@@ -219,10 +296,16 @@ class RouteStateReplayerTest {
         ForecastBatch last = batches.get(holeEnd - 1);
 
         // when
-        RouteStateReplayer.Result shortWindow = new RouteStateReplayer(source, stage, Duration.ofHours(3),
-            Duration.ofHours(3)).replay(STATISTICS, last.confirmedAt(), last.observationBatchId());
-        RouteStateReplayer.Result longWindow = new RouteStateReplayer(source, stage, Duration.ofHours(6),
-            Duration.ofHours(6)).replay(STATISTICS, last.confirmedAt(), last.observationBatchId());
+        RouteStateReplayer.Result shortWindow = new RouteStateReplayer(
+                source,
+                stage,
+                Duration.ofHours(3)
+        ).replay(STATISTICS, last.confirmedAt(), last.observationBatchId());
+        RouteStateReplayer.Result longWindow = new RouteStateReplayer(
+                source,
+                stage,
+                Duration.ofHours(6)
+        ).replay(STATISTICS, last.confirmedAt(), last.observationBatchId());
 
         // then
         List<PassClosed> withoutBroken = continuous.stream().filter(pass -> !"g".equals(pass.vehicleId())).toList();
@@ -258,8 +341,16 @@ class RouteStateReplayerTest {
                 rows.add(row("long", 1 + (minute - longFrom) / 64, 20));
             }
             Instant receivedAt = T0.plusSeconds(60L * minute);
-            batches.add(new ForecastBatch(minute + 1, VERSION, receivedAt, receivedAt.plusSeconds(2), "LIVE",
-                "SUCCESS_ROWS", rows.size(), rows));
+            batches.add(new ForecastBatch(
+                    minute + 1,
+                    VERSION,
+                    receivedAt,
+                    receivedAt.plusSeconds(2),
+                    "LIVE",
+                    "SUCCESS_ROWS",
+                    rows.size(),
+                    rows
+            ));
         }
         return batches;
     }
@@ -274,18 +365,39 @@ class RouteStateReplayerTest {
             List<ForecastObservationRow> rows = new ArrayList<>();
             rows.add(row("b", 1 + (minute % 90) / 10, 30));
             rows.add(row("c", 1 + ((minute + 45) % 90) / 10, 25));
-            if (minute >= 200 && (minute < 270 || minute > 273)) {
+            if (isVehicleGObserved(minute)) {
                 rows.add(row("g", 1 + (minute - 200) / 40, 20));
             }
             Instant receivedAt = T0.plusSeconds(60L * minute);
-            batches.add(new ForecastBatch(minute + 1, VERSION, receivedAt, receivedAt.plusSeconds(2), "LIVE",
-                "SUCCESS_ROWS", rows.size(), rows));
+            batches.add(new ForecastBatch(
+                    minute + 1,
+                    VERSION,
+                    receivedAt,
+                    receivedAt.plusSeconds(2),
+                    "LIVE",
+                    "SUCCESS_ROWS",
+                    rows.size(),
+                    rows
+            ));
         }
         return batches;
     }
 
+    private boolean isVehicleGObserved(final int minute) {
+        return minute >= 200 && (minute < 270 || minute > 273);
+    }
+
     private ForecastObservationRow row(String vehicle, final int passed, final int seats) {
-        return new ForecastObservationRow(nextObservation++, vehicle, passed, passed + 1, 1, seats, null, 2);
+        return new ForecastObservationRow(
+                nextObservation++,
+                vehicle,
+                passed,
+                passed + 1,
+                1,
+                seats,
+                null,
+                2
+        );
     }
 
     private static Map<Long, List<String>> vectors(List<AlightingAwareFeatureSnapshot> snapshots) {
@@ -318,17 +430,39 @@ class RouteStateReplayerTest {
     private static AlightingAwareRouteStatistics statistics() {
         List<AlightingAwareRouteStatistics.Stop> stops = new ArrayList<>();
         for (int order = 1; order <= 12; order++) {
-            stops.add(new AlightingAwareRouteStatistics.Stop(order, "s" + order, "정류장" + order, order > 10, true));
+            stops.add(new AlightingAwareRouteStatistics.Stop(
+                    order,
+                    "s" + order,
+                    "정류장" + order,
+                    order > 10,
+                    true
+            ));
         }
         Map<String, Map<String, Double>> tables = new HashMap<>();
-        for (String table : List.of("lam", "lam_base", "net_tab", "full_tab", "dep_tab", "stop_net_base")) {
+        for (String table : List.of(
+                "lam",
+                "lam_base",
+                "net_tab",
+                "full_tab",
+                "dep_tab",
+                "stop_net_base"
+        )) {
             tables.put(table, Map.of());
         }
-        return new AlightingAwareRouteStatistics(ROUTE, stops, 2, tables, Map.of(), Set.of(), true);
+        return new AlightingAwareRouteStatistics(
+                ROUTE,
+                stops,
+                2,
+                tables,
+                Map.of(),
+                Set.of(),
+                true
+        );
     }
 
     /** 실제 되감기 원본과 같은 범위 규칙으로 메모리의 배치를 돌려준다. 읽은 창의 길이를 차례로 적어 둔다. */
     private static final class MemorySource implements ReplaySource {
+
         private final List<ForecastBatch> batches;
         private final List<Duration> windows = new ArrayList<>();
         private final Map<Long, ReplaySource.UnforecastRun> unforecast = new HashMap<>();

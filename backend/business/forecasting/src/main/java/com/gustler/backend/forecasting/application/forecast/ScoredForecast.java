@@ -28,6 +28,7 @@ public record ScoredForecast(
     int capacity,
     long modelDeploymentId
 ) {
+
     public ScoredForecast {
         Objects.requireNonNull(passSourceDate, "통과의 나눔 날짜가 필요하다");
     }

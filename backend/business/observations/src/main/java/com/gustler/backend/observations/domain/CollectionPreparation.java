@@ -8,4 +8,9 @@ public record CollectionPreparation(long batchId, boolean reserved, String keyAl
             throw new IllegalArgumentException("예약한 수집에만 호출 키가 있다");
         }
     }
+
+    /** 준비한 번호와 기존 배치를 다시 열었는지만 반환한다. 배치의 저장 값은 복사하지 않는다. */
+    public record Batch(long batchId, boolean restarted) {
+
+    }
 }

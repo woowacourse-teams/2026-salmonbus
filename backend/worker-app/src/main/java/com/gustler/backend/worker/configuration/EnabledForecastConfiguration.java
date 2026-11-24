@@ -29,6 +29,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @EnableConfigurationProperties(ForecastProperties.class)
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class EnabledForecastConfiguration {
+
     @Bean
     ForecastPolicy forecastPolicy(ForecastProperties properties, ConfigurableEnvironment environment) {
         BusinessConfiguration.requireStalenessFromConfigurationFile(environment);
@@ -37,8 +38,12 @@ public class EnabledForecastConfiguration {
 
     @Bean
     RouteLanes forecastRouteLanes(ForecastProperties properties, ObjectProvider<MeterRegistry> meters) {
-        return new RouteLanes(properties.lanes(), RouteLanes.QUEUE_CAPACITY, RouteLanes.STOP_WAIT,
-            meters.getIfAvailable());
+        return new RouteLanes(
+                properties.lanes(),
+                RouteLanes.QUEUE_CAPACITY,
+                RouteLanes.STOP_WAIT,
+                meters.getIfAvailable()
+        );
     }
 
     @Bean

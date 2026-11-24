@@ -8,12 +8,8 @@ import com.gustler.backend.api.board.domain.VehicleForecast;
 import com.gustler.backend.api.error.ApiException;
 import com.gustler.backend.api.error.ErrorCode;
 import com.gustler.backend.api.route.RouteId;
-import com.gustler.backend.api.salmon.domain.Probabilities.ProbabilityInput;
-import com.gustler.backend.api.salmon.domain.Probabilities.ProbabilitySupply;
-import com.gustler.backend.api.salmon.domain.Probabilities.ValueOrigin;
-import com.gustler.backend.api.salmon.domain.Probabilities.ValueTag;
-import com.gustler.backend.api.salmon.domain.StopLists.StopEntry;
-import com.gustler.backend.api.salmon.domain.StopLists.StopList;
+import com.gustler.backend.api.salmon.domain.Probabilities;
+import com.gustler.backend.api.salmon.domain.StopLists;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +24,7 @@ import org.springframework.dao.DataAccessException;
  * 출처를 SEAT_FORECAST로 남긴다. 예보를 찾지 못한 항목에는 입력을 만들지 않는다.
  */
 public final class SeatForecastProbabilitySource {
+
     /**
      * 도착 항목에서 값을 만들지 못한 원인이다. 앞의 다섯은 목록 전체에 걸리고, 그 목록의 모든 항목에 같은 원인이 붙는다.
      * <ul>
@@ -42,19 +39,27 @@ public final class SeatForecastProbabilitySource {
      *   <li>FORECAST_UNAVAILABLE: 보드가 이 차량의 예보를 제공하지 못했다.</li>
      * </ul>
      */
-    public enum Cause { LIST_WITHOUT_VEHICLE_ID, BOARD_READ_FAILED, QUERY_FAILED, BOARD_STALE, VISIT_NOT_MATCHED,
+    public enum Cause {
+
+        LIST_WITHOUT_VEHICLE_ID, BOARD_READ_FAILED, QUERY_FAILED, BOARD_STALE, VISIT_NOT_MATCHED,
         ENTRY_WITHOUT_VEHICLE_ID, VEHICLE_NOT_ON_BOARD, VEHICLE_AMBIGUOUS, FORECAST_UNAVAILABLE }
 
     public sealed interface Lookup permits Found, NotFound {
+
     }
 
     public record Found(double value, String probabilityTarget) implements Lookup {
+
         public Found {
             Objects.requireNonNull(probabilityTarget);
         }
     }
 
-    public record NotFound(Cause cause, Optional<ErrorCode> boardError) implements Lookup {
+    public record NotFound(
+        Cause cause,
+        Optional<ErrorCode> boardError
+    ) implements Lookup {
+
         public NotFound {
             Objects.requireNonNull(cause);
             Objects.requireNonNull(boardError);
@@ -69,6 +74,7 @@ public final class SeatForecastProbabilitySource {
     }
 
     public record EntryLookup(String entryId, Lookup lookup) {
+
     }
 
     private final BoardQueryService boards;
@@ -79,42 +85,97 @@ public final class SeatForecastProbabilitySource {
         this.arrivals = arrivals;
     }
 
-    public ProbabilitySupply probabilitiesFor(String routeId, String stationId, int stopSequence, StopList list,
-                                              Instant decisionAt) {
-        List<ProbabilityInput> inputs = new ArrayList<>();
-        for (EntryLookup entry : lookupsFor(routeId, stationId, stopSequence, list, decisionAt)) {
+    public Probabilities.ProbabilitySupply probabilitiesFor(
+        String routeId,
+        String stationId,
+        final int stopSequence,
+        StopLists.StopList list,
+        Instant decisionAt
+    ) {
+        List<Probabilities.ProbabilityInput> inputs = new ArrayList<>();
+        for (EntryLookup entry : lookupsFor(
+                routeId,
+                stationId,
+                stopSequence,
+                list,
+                decisionAt
+        )) {
             if (entry.lookup() instanceof Found found) {
-                inputs.add(new ProbabilityInput(entry.entryId(), ValueTag.MARG, Optional.empty(), found.value(),
-                    ValueOrigin.SEAT_FORECAST));
+                inputs.add(new Probabilities.ProbabilityInput(
+                        entry.entryId(),
+                        Probabilities.ValueTag.MARG,
+                        Optional.empty(),
+                        found.value(),
+                        Probabilities.ValueOrigin.SEAT_FORECAST
+                ));
             }
         }
-        return new ProbabilitySupply(inputs);
+        return new Probabilities.ProbabilitySupply(inputs);
     }
 
     /** 목록의 항목마다 순서대로 값 또는 값을 만들지 못한 원인을 돌려준다. */
-    public List<EntryLookup> lookupsFor(String routeId, String stationId, int stopSequence, StopList list,
-                                        Instant decisionAt) {
+    public List<EntryLookup> lookupsFor(
+        String routeId,
+        String stationId,
+        final int stopSequence,
+        StopLists.StopList list,
+        Instant decisionAt
+    ) {
         if (list.entries().stream().noneMatch(entry -> entry.vehicleId().isPresent())) {
-            return sameForAll(list, new NotFound(Cause.LIST_WITHOUT_VEHICLE_ID));
+            return sameForAll(
+                list,
+                new NotFound(Cause.LIST_WITHOUT_VEHICLE_ID)
+            );
         }
         try {
-            return lookupsOf(routeId, stationId, stopSequence, list, decisionAt);
+            return lookupsOf(
+                    routeId,
+                    stationId,
+                    stopSequence,
+                    list,
+                    decisionAt
+            );
         } catch (ApiException exception) {
-            return sameForAll(list, new NotFound(Cause.BOARD_READ_FAILED, Optional.of(exception.code())));
+            return sameForAll(
+                list,
+                new NotFound(
+                    Cause.BOARD_READ_FAILED,
+                    Optional.of(exception.code())
+                )
+            );
         } catch (DataAccessException exception) {
-            return sameForAll(list, new NotFound(Cause.QUERY_FAILED));
+            return sameForAll(
+                list,
+                new NotFound(Cause.QUERY_FAILED)
+            );
         }
     }
 
-    private List<EntryLookup> lookupsOf(String routeId, String stationId, int stopSequence, StopList list,
-                                        Instant decisionAt) {
+    /** 조회 뒤 의사 결정 시점에도 같은 만료 시각을 적용해 그동안 낡은 예보를 제외한다. */
+    private List<EntryLookup> lookupsOf(
+        String routeId,
+        String stationId,
+        final int stopSequence,
+        StopLists.StopList list,
+        Instant decisionAt
+    ) {
         Board board = boards.readBoard(new RouteId(routeId)).board();
-        // 보드는 조회 시각 기준으로 낡은 관측을 이미 거부한다. 여기서는 같은 만료 시각을 판정 시각에도 적용한다.
         if (decisionAt.isAfter(board.staleAt().toInstant())) {
-            return sameForAll(list, new NotFound(Cause.BOARD_STALE));
+            return sameForAll(
+                list,
+                new NotFound(Cause.BOARD_STALE)
+            );
         }
-        if (!sameRouteVersion(board, routeId, stationId, stopSequence)) {
-            return sameForAll(list, new NotFound(Cause.VISIT_NOT_MATCHED));
+        if (!sameRouteVersion(
+                board,
+                routeId,
+                stationId,
+                stopSequence
+        )) {
+            return sameForAll(
+                list,
+                new NotFound(Cause.VISIT_NOT_MATCHED)
+            );
         }
         List<ApproachingVehicle> approaching = board.stops().stream()
             .filter(stop -> stop.sequence() == stopSequence)
@@ -125,8 +186,13 @@ public final class SeatForecastProbabilitySource {
             .toList();
     }
 
-    // 좌석 예보의 목표 순번과 도착 방문의 순번은 같은 노선 판본 안에서만 같은 정류장 방문을 가리킨다.
-    private boolean sameRouteVersion(Board board, String routeId, String stationId, int stopSequence) {
+    /** 목표 순번과 도착 방문의 순번은 같은 노선 판본 안에서만 같은 정류장 방문을 가리킨다. */
+    private boolean sameRouteVersion(
+        Board board,
+        String routeId,
+        String stationId,
+        final int stopSequence
+    ) {
         return arrivals.visits(stationId).stream()
             .filter(visit -> visit.routeId().equals(routeId) && visit.stopSequence() == stopSequence)
             .findFirst()
@@ -134,9 +200,14 @@ public final class SeatForecastProbabilitySource {
             .isPresent();
     }
 
-    private static Lookup lookupOf(StopEntry entry, List<ApproachingVehicle> approaching) {
+    private static Lookup lookupOf(
+        StopLists.StopEntry entry,
+        List<ApproachingVehicle> approaching
+    ) {
         if (entry.vehicleId().isEmpty()) {
-            return new NotFound(Cause.ENTRY_WITHOUT_VEHICLE_ID);
+            return new NotFound(
+                Cause.ENTRY_WITHOUT_VEHICLE_ID
+            );
         }
         List<ApproachingVehicle> matched = approaching.stream()
             .filter(vehicle -> entry.vehicleId().get().equals(vehicle.vehicleId()))
@@ -150,10 +221,19 @@ public final class SeatForecastProbabilitySource {
         if (!(matched.get(0).forecast() instanceof VehicleForecast.Available available)) {
             return new NotFound(Cause.FORECAST_UNAVAILABLE);
         }
-        return new Found(available.seatAvailableProbability(), available.probabilityTarget());
+        return new Found(
+            available.seatAvailableProbability(),
+            available.probabilityTarget()
+        );
     }
 
-    private static List<EntryLookup> sameForAll(StopList list, NotFound notFound) {
-        return list.entries().stream().map(entry -> new EntryLookup(entry.id(), notFound)).toList();
+    private static List<EntryLookup> sameForAll(
+        StopLists.StopList list,
+        NotFound notFound
+    ) {
+        return list.entries().stream().map(entry -> new EntryLookup(
+            entry.id(),
+            notFound
+        )).toList();
     }
 }

@@ -9,6 +9,7 @@ import java.util.List;
  * {@code route} 행 잠금을 잡지 않는다.
  */
 public interface PassLabelStore {
+
     /**
      * 통과 정답을 넣는다.
      *

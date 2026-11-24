@@ -13,6 +13,7 @@ import java.util.Optional;
  * {@code route} 행 잠금을 잡지 않는다.
  */
 public interface ForecastRecordStore {
+
     /**
      * 실행 한 줄과 버스별 기록을 한 트랜잭션에서 저장하면서, 같은 배치의 수집 사건이 알려 주는 수집 구멍 여부와 하루 관측 상한에
      * 더할 줄 수를 실행 줄에 함께 적는다. 기록은 여러 줄을 한 문장으로 넣는다. 수집 사건은 저장되지 않으므로 채점 되감기는 이 값으로

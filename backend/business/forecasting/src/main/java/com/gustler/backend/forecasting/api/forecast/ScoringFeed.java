@@ -7,6 +7,7 @@ package com.gustler.backend.forecasting.api.forecast;
  * 순서대로 한 스레드에서 하나씩 실행한다. 일 하나가 예외를 던져도 다음 일을 계속 실행한다.
  */
 public interface ScoringFeed {
+
     /**
      * 일을 줄에 넣는다.
      *

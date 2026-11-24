@@ -66,6 +66,7 @@ import org.springframework.test.context.SmartContextLoader;
  */
 @ExtendWith(OutputCaptureExtension.class)
 class ForecastRestartIntegrationTest {
+
     private static final int STOP_COUNT = 10;
     private static final int TURN = 8;
     private static final int CAPACITY = 45;
@@ -132,14 +133,14 @@ class ForecastRestartIntegrationTest {
         ConfigurableApplicationContext first = startWorker();
         try {
             HikariDataSource firstPool = first.getBean(DataSource.class).unwrap(HikariDataSource.class);
-            ForecastRestartIntegrationTest.SelectedRuntime selected =
-                first.getBean(ForecastRestartIntegrationTest.SelectedRuntime.class);
+            SelectedRuntime selected =
+                first.getBean(SelectedRuntime.class);
             RouteLanes lanes = first.getBean(RouteLanes.class);
             OffsetDateTime validFrom = CLOCK.now().minusDays(1);
-            ForecastRestartIntegrationTest.Route continuous = insertRoute(stored, "204000057", validFrom);
-            ForecastRestartIntegrationTest.Route interrupted = insertRoute(stored, "234000050", validFrom);
-            ForecastRestartIntegrationTest.Route running = insertRoute(stored, "204000070", validFrom);
-            ForecastRestartIntegrationTest.Route delayed = insertRoute(stored, "234000886", validFrom);
+            Route continuous = insertRoute(stored, "204000057", validFrom);
+            Route interrupted = insertRoute(stored, "234000050", validFrom);
+            Route running = insertRoute(stored, "204000070", validFrom);
+            Route delayed = insertRoute(stored, "234000886", validFrom);
             RuntimeSnapshot runtime = insertDeployment(stored, List.of(
                     continuous,
                     interrupted,
@@ -181,13 +182,13 @@ class ForecastRestartIntegrationTest {
             List<String> waitingRunsAtClose = runsOf(stored, waitingBatches);
             List<String> delayedRunAtClose = runsOf(stored, List.of(delayedBatch));
             CLOCK.advance(DOWNTIME);
-            ForecastRestartIntegrationTest.Restarted restarted = restart(
+            Restarted restarted = restart(
                     stored,
                     runtime,
                     interrupted,
                     delayedBatch
             );
-            ForecastRestartIntegrationTest.Scored uninterrupted = scored(stored, continuous);
+            Scored uninterrupted = scored(stored, continuous);
             List<String> waitingRuns = runsOf(stored, waitingBatches);
             List<String> delayedRun = runsOf(stored, List.of(delayedBatch));
 
@@ -228,20 +229,20 @@ class ForecastRestartIntegrationTest {
      * 같은 DB로 worker를 다시 띄우고 기동 직후처럼 줍기를 한 번 돌린 뒤, 끊겼던 노선의 남은 배치와 늦은 배치가 처리되고 채점이
      * 끝나기를 기다린다.
      */
-    private static ForecastRestartIntegrationTest.Restarted restart(
+    private static Restarted restart(
         JdbcClient stored,
         RuntimeSnapshot runtime,
-        ForecastRestartIntegrationTest.Route interrupted,
+        Route interrupted,
         final long delayedBatch
     ) throws Exception {
         ConfigurableApplicationContext second = startWorker();
         try {
-            second.getBean(ForecastRestartIntegrationTest.SelectedRuntime.class).select(runtime);
+            second.getBean(SelectedRuntime.class).select(runtime);
             second.getBean(ForecastScheduler.class).pickUp();
             final boolean settled = waitUntil(second, () -> runs(stored, interrupted).size() == PASSED_STOPS.size()
                 && !runsOf(stored, List.of(delayedBatch)).isEmpty()
                 && closedForecasts(stored, interrupted, "<> 'PENDING'") == CLOSED_FORECASTS);
-            return new ForecastRestartIntegrationTest.Restarted(settled, scored(stored, interrupted));
+            return new Restarted(settled, scored(stored, interrupted));
         } finally {
             second.close();
         }
@@ -250,7 +251,7 @@ class ForecastRestartIntegrationTest {
     /** {@link Worker}에 적힌 설정으로 컨텍스트를 새로 띄운다. 컨텍스트 캐시에 넣지 않으므로 닫는 것은 부른 쪽이 한다. */
     private static ConfigurableApplicationContext startWorker() throws Exception {
         MergedContextConfiguration configuration = BootstrapUtils
-            .resolveTestContextBootstrapper(ForecastRestartIntegrationTest.Worker.class)
+            .resolveTestContextBootstrapper(Worker.class)
             .buildMergedContextConfiguration();
         SmartContextLoader loader = (SmartContextLoader) configuration.getContextLoader();
         return (ConfigurableApplicationContext) loader.loadContext(configuration);
@@ -268,7 +269,7 @@ class ForecastRestartIntegrationTest {
      *
      * @param validFrom 판본이 유효해지고 정원을 알게 된 시각. worker의 시계보다 앞이어야 예보가 그 정원을 쓴다
      */
-    static ForecastRestartIntegrationTest.Route insertRoute(
+    static Route insertRoute(
         JdbcClient stored,
         String sourceRoute,
         OffsetDateTime validFrom
@@ -295,7 +296,7 @@ class ForecastRestartIntegrationTest {
             INSERT INTO vehicle_capacity (source_id, vehicle_id, capacity, evidence_at)
             VALUES ('GBIS', :vehicle, :capacity, :at)
             """).param("vehicle", vehicle).param("capacity", CAPACITY).param("at", validFrom).update();
-        return new ForecastRestartIntegrationTest.Route(
+        return new Route(
                 routeId,
                 routeVersionId,
                 sourceRoute,
@@ -312,7 +313,7 @@ class ForecastRestartIntegrationTest {
 
     static RuntimeSnapshot insertDeployment(
         JdbcClient stored,
-        List<ForecastRestartIntegrationTest.Route> routes,
+        List<Route> routes,
         OffsetDateTime validFrom
     ) {
         List<String> modelRoutes = routes.stream()
@@ -349,7 +350,7 @@ class ForecastRestartIntegrationTest {
      */
     static long collect(
         ConfigurableApplicationContext context,
-        ForecastRestartIntegrationTest.Route route,
+        Route route,
         final int passedStop
     ) {
         ManualClock clock = context.getBean(ManualClock.class);
@@ -370,7 +371,7 @@ class ForecastRestartIntegrationTest {
      */
     private static long store(
         ConfigurableApplicationContext context,
-        ForecastRestartIntegrationTest.Route route,
+        Route route,
         final int passedStop,
         OffsetDateTime at
     ) {
@@ -399,7 +400,10 @@ class ForecastRestartIntegrationTest {
     }
 
     /** 조건이 참이 되기를 기다린다. 기다리는 동안 채점이 모아 둔 결과를 쓰게 한다. */
-    private static boolean waitUntil(ConfigurableApplicationContext context, BooleanSupplier condition)
+    private static boolean waitUntil(
+        ConfigurableApplicationContext context,
+        BooleanSupplier condition
+    )
         throws InterruptedException {
         ScoringCycle scoring = context.getBean(ScoringCycle.class);
         Instant deadline = Instant.now().plus(DEADLINE);
@@ -415,7 +419,7 @@ class ForecastRestartIntegrationTest {
     }
 
     /** 노선의 예보 실행을 배치 순서로 {@code 결과:예측이 있는지}로 적는다. */
-    private static List<String> runs(JdbcClient stored, ForecastRestartIntegrationTest.Route route) {
+    private static List<String> runs(JdbcClient stored, Route route) {
         return stored.sql("""
             SELECT outcome || ':' || (prediction_count > 0)::text FROM forecast_run
             WHERE route_id = :route ORDER BY observation_batch_id
@@ -432,7 +436,7 @@ class ForecastRestartIntegrationTest {
 
     private static long closedForecasts(
         JdbcClient stored,
-        ForecastRestartIntegrationTest.Route route,
+        Route route,
         String stateCondition
     ) {
         return stored.sql("""
@@ -446,9 +450,9 @@ class ForecastRestartIntegrationTest {
      * 노선에 저장된 예보와 채점 결과를 노선끼리 견줄 수 있는 모양으로 모은다. 배치와 관측의 번호는 노선마다 다르므로 배치를 그
      * 노선 안의 순번으로 바꿔 적는다.
      */
-    private static ForecastRestartIntegrationTest.Scored scored(
+    private static Scored scored(
         JdbcClient stored,
-        ForecastRestartIntegrationTest.Route route
+        Route route
     ) {
         List<Integer> passes = stored.sql("""
             SELECT stop_order FROM stop_pass WHERE route_id = :route ORDER BY stop_order
@@ -473,7 +477,7 @@ class ForecastRestartIntegrationTest {
             SELECT stop_order || ':' || capacity || ':' || state || ':' || coalesce(reason, '') FROM pass_label
             WHERE route_id = :route ORDER BY stop_order, capacity
             """).param("route", route.routeId()).query(String.class).list();
-        return new ForecastRestartIntegrationTest.Scored(
+        return new Scored(
                 runs(stored, route),
                 passes,
                 outcomes,
@@ -488,11 +492,18 @@ class ForecastRestartIntegrationTest {
      * @param settled 마감 안에 남은 배치의 예보와 채점이 끝났는지
      * @param scored 끊겼던 노선에 저장된 예보와 채점 결과
      */
-    private record Restarted(boolean settled, ForecastRestartIntegrationTest.Scored scored) {
+    private record Restarted(boolean settled, Scored scored) {
+
     }
 
     /** 시험이 넣은 노선 하나다. */
-    record Route(long routeId, long routeVersionId, String sourceRoute, String vehicle) {
+    record Route(
+        long routeId,
+        long routeVersionId,
+        String sourceRoute,
+        String vehicle
+    ) {
+
     }
 
     /**
@@ -511,6 +522,7 @@ class ForecastRestartIntegrationTest {
         List<String> unresolved,
         List<String> labels
     ) {
+
         private Scored {
             runs = List.copyOf(runs);
             passes = List.copyOf(passes);
@@ -526,12 +538,14 @@ class ForecastRestartIntegrationTest {
         "forecast.interval=1h",
         "forecast.lanes=1"
     })
-    @Import({ ForecastRestartIntegrationTest.ExternalDatabase.class, CollectionRuntimeConfiguration.class })
+    @Import({ ExternalDatabase.class, CollectionRuntimeConfiguration.class })
     private static final class Worker {
+
     }
 
     @TestConfiguration(proxyBeanMethods = false)
     static class ExternalDatabase {
+
         @Bean
         JdbcConnectionDetails externalConnectionDetails() {
             return new JdbcConnectionDetails() {
@@ -554,8 +568,8 @@ class ForecastRestartIntegrationTest {
 
         @Bean
         @Primary
-        ForecastRestartIntegrationTest.SelectedRuntime selectedRuntime() {
-            return new ForecastRestartIntegrationTest.SelectedRuntime();
+        SelectedRuntime selectedRuntime() {
+            return new SelectedRuntime();
         }
 
         /** 닫은 worker와 다시 띄운 worker가 같은 시계를 이어 쓴다. */
@@ -568,8 +582,9 @@ class ForecastRestartIntegrationTest {
 
     /** 시험이 고른 모델을 돌려주는 모델 선택이다. 시험이 시키면 모델을 묻는 실행 줄 스레드를 한 번 붙잡는다. */
     static final class SelectedRuntime implements ForecastRuntime {
+
         private volatile RuntimeSnapshot selected;
-        private volatile ForecastRestartIntegrationTest.Hold hold;
+        private volatile Hold hold;
 
         void select(RuntimeSnapshot snapshot) {
             selected = snapshot;
@@ -582,7 +597,7 @@ class ForecastRestartIntegrationTest {
          * @return 스레드를 붙잡으면 열리는 걸쇠
          */
         CountDownLatch holdNextSweepUntilClosed(RouteLanes lanes) {
-            ForecastRestartIntegrationTest.Hold next = new ForecastRestartIntegrationTest.Hold(lanes,
+            Hold next = new Hold(lanes,
                 new CountDownLatch(1));
             hold = next;
             return next.held();
@@ -590,7 +605,7 @@ class ForecastRestartIntegrationTest {
 
         @Override
         public Optional<RuntimeSnapshot> resolveActive() {
-            ForecastRestartIntegrationTest.Hold current = hold;
+            Hold current = hold;
             if (current != null && Thread.currentThread().getName().startsWith(RouteLanes.THREAD_PREFIX)) {
                 hold = null;
                 current.untilClosed();
@@ -600,6 +615,7 @@ class ForecastRestartIntegrationTest {
     }
 
     private record Hold(RouteLanes lanes, CountDownLatch held) {
+
         /**
          * 실행 줄이 닫히고 기다리던 일을 모두 버릴 때까지 스레드를 붙잡은 뒤 잠시 더 돈다. 기다리던 일이 버려지기 전에 풀어 주면 그 일이
          * 이어서 돌 수 있다. 시험은 끝날 때 컨텍스트를 반드시 닫으므로 한도 없이 기다린다.

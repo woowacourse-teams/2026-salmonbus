@@ -36,6 +36,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastScoringConfiguration {
+
     @Bean
     ScoringService scoringService(
         ScoringFeed feed,
@@ -48,8 +49,19 @@ public class ForecastScoringConfiguration {
         ObjectProvider<ForecastTelemetry> telemetry,
         Clock clock
     ) {
-        ScoringService service = new ForecastAssembly(jdbc, transactionManager, clock, meters.getIfAvailable())
-            .scoring(feed, records, records, passes, labels);
+        ScoringService service = new ForecastAssembly(
+                jdbc,
+                transactionManager,
+                clock,
+                meters.getIfAvailable()
+        )
+            .scoring(
+                    feed,
+                    records,
+                    records,
+                    passes,
+                    labels
+            );
         telemetry.ifAvailable(service::setTelemetry);
         return service;
     }
@@ -72,10 +84,29 @@ public class ForecastScoringConfiguration {
         Clock clock
     ) {
         JdbcReplaySource source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
-        ForecastAssembly.Sources sources = new ForecastAssembly.Sources(source, source,
-            new JdbcPendingBatches(jdbc), runtimes, versions, stops);
-        RunForecastsService service = new ForecastAssembly(jdbc, transactionManager, clock, meters.getIfAvailable())
-            .forecast(lanes, events, sources, capacities, records, passes, ForecastAssembly.Settings.of(policy));
+        ForecastAssembly.Sources sources = new ForecastAssembly.Sources(
+                source,
+                source,
+                new JdbcPendingBatches(jdbc),
+                runtimes,
+                versions,
+                stops
+        );
+        RunForecastsService service = new ForecastAssembly(
+                jdbc,
+                transactionManager,
+                clock,
+                meters.getIfAvailable()
+        )
+            .forecast(
+                    lanes,
+                    events,
+                    sources,
+                    capacities,
+                    records,
+                    passes,
+                    ForecastAssembly.Settings.of(policy)
+            );
         telemetry.ifAvailable(service::setTelemetry);
         return service;
     }

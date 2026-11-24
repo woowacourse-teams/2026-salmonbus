@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcModelDeploymentRepositoryTest {
+
     private static final String STAGED = "STAGED";
     private static final String ACTIVE = "ACTIVE";
     private static final String RETIRED = "RETIRED";
@@ -65,10 +66,10 @@ class JdbcModelDeploymentRepositoryTest {
         assertThat(actual).isEmpty();
     }
 
+    /** 배포 식별 정보는 메모리에 적재된 계수와 활성 배포를 대조할 때 사용한다. */
     @Test
     void 배포에서_계산_규칙_판과_신원을_같이_읽는다() {
         // given
-        // 식별 정보을 같이 안 읽으면 올라온 계수가 이 행의 계수인지 대조할 수 없다
         final long activeDeploymentId = insertDeployment(ACTIVE, CALCULATION_VERSION_IN_USE);
 
         // when
@@ -76,7 +77,11 @@ class JdbcModelDeploymentRepositoryTest {
 
         // then
         assertThat(actual).contains(new ActiveModelDeployment(
-            activeDeploymentId, CALCULATION_VERSION_IN_USE, RELEASE_ID, BUNDLE_DIGEST));
+                activeDeploymentId,
+                CALCULATION_VERSION_IN_USE,
+                RELEASE_ID,
+                BUNDLE_DIGEST
+        ));
     }
 
     @Test
@@ -97,7 +102,11 @@ class JdbcModelDeploymentRepositoryTest {
 
         // then
         assertThat(actual).contains(new ActiveModelDeployment(
-            activeDeploymentId, CALCULATION_VERSION_IN_USE, RELEASE_ID, "A".repeat(64)));
+                activeDeploymentId,
+                CALCULATION_VERSION_IN_USE,
+                RELEASE_ID,
+                "A".repeat(64)
+        ));
     }
 
     @Test
@@ -190,11 +199,9 @@ class JdbcModelDeploymentRepositoryTest {
         repository.promoteToActive(later);
 
         // when
-        // 이미 올라간 것을 한 번 더 올린다
         repository.promoteToActive(later);
 
         // then
-        // 활성 배포는 여전히 하나다
         assertThat(activeCount()).isOne();
     }
 
@@ -212,23 +219,26 @@ class JdbcModelDeploymentRepositoryTest {
 
     private StagedModelDeployment staged() {
         return new StagedModelDeployment(
-            UUID.randomUUID(), RELEASE_ID, MODEL_KEY, MODEL_VERSION, BUNDLE_DIGEST,
-            PREDICTION_TARGET_VERSION, CALCULATION_VERSION_WAITING, SUPPORTED_SCOPE_DIGEST,
-            DATA_UNTIL.toInstant());
+                UUID.randomUUID(),
+                RELEASE_ID,
+                MODEL_KEY,
+                MODEL_VERSION,
+                BUNDLE_DIGEST,
+                PREDICTION_TARGET_VERSION,
+                CALCULATION_VERSION_WAITING,
+                SUPPORTED_SCOPE_DIGEST,
+                DATA_UNTIL.toInstant()
+        );
     }
 
-    private String stateOf(
-        final long deploymentId
-    ) {
+    private String stateOf(final long deploymentId) {
         return jdbcClient.sql("SELECT state FROM model_deployment WHERE id = ?")
             .param(deploymentId)
             .query(String.class)
             .single();
     }
 
-    private long predecessorOf(
-        final long deploymentId
-    ) {
+    private long predecessorOf(final long deploymentId) {
         return jdbcClient.sql("SELECT predecessor_deployment_id FROM model_deployment WHERE id = ?")
             .param(deploymentId)
             .query(Long.class)
@@ -242,10 +252,7 @@ class JdbcModelDeploymentRepositoryTest {
     }
 
     /** 배포 키는 행마다 달라야 한다. ux_model_deployment_key 가 같은 값을 두 번 못 넣게 막는다. */
-    private long insertDeployment(
-        String state,
-        String calculationVersion
-    ) {
+    private long insertDeployment(String state, String calculationVersion) {
         return jdbcClient.sql("""
                 INSERT INTO model_deployment (
                     deployment_key, release_id, model_key, model_version, bundle_digest,
@@ -255,9 +262,16 @@ class JdbcModelDeploymentRepositoryTest {
                 RETURNING id
                 """)
             .params(
-                UUID.randomUUID(), RELEASE_ID, MODEL_KEY, MODEL_VERSION, BUNDLE_DIGEST,
-                PREDICTION_TARGET_VERSION, calculationVersion, SUPPORTED_SCOPE_DIGEST,
-                DATA_UNTIL, state
+                    UUID.randomUUID(),
+                    RELEASE_ID,
+                    MODEL_KEY,
+                    MODEL_VERSION,
+                    BUNDLE_DIGEST,
+                    PREDICTION_TARGET_VERSION,
+                    calculationVersion,
+                    SUPPORTED_SCOPE_DIGEST,
+                    DATA_UNTIL,
+                    state
             )
             .query(Long.class)
             .single();

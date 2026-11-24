@@ -15,6 +15,7 @@ public record RouteStop(
     boolean boardingAllowed,
     RouteDirection direction
 ) {
+
     private static final int FIRST_STOP_ORDER = 1;
 
     public RouteStop(
@@ -23,7 +24,13 @@ public record RouteStop(
         String stopId,
         final boolean boardingAllowed
     ) {
-        this(routeVersionId, stopOrder, stopId, boardingAllowed, RouteDirection.UNKNOWN);
+        this(
+                routeVersionId,
+                stopOrder,
+                stopId,
+                boardingAllowed,
+                RouteDirection.UNKNOWN
+        );
     }
 
     public RouteStop {

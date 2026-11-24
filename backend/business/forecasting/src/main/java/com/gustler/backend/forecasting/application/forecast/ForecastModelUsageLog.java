@@ -15,8 +15,10 @@ import org.slf4j.LoggerFactory;
  * 뜨거나 기억하는 노선이 {@value #MAX_ROUTES}개를 넘어 밀려난 뒤에는 다시 남기므로, 로그 수는 배치 수나 건너뛴 횟수가 아니다.
  */
 final class ForecastModelUsageLog {
+
     private static final Logger LOGGER = LoggerFactory.getLogger(ForecastModelUsageLog.class);
     private static final int MAX_ROUTES = 256;
+
     private final Map<String, State> latest = new LinkedHashMap<>();
 
     /** 예측을 한 건 이상 저장한 배치를 알린다. */
@@ -28,10 +30,17 @@ final class ForecastModelUsageLog {
         RuntimeSnapshot runtime
     ) {
         if (changed(routeId, new State(routeVersionId, runtime.deploymentId(), true))) {
-            LOGGER.info("event=forecast_model_used routeId={} routeName={} routeVersionId={} batchId={} "
-                + "modelDeploymentId={} releaseId={} featureContractVersion={}",
-                quote(routeId), quote(routeName), routeVersionId, batchId, runtime.deploymentId(),
-                quote(runtime.releaseId()), quote(runtime.featureContractVersion()));
+            LOGGER.info(
+                    "event=forecast_model_used routeId={} routeName={} routeVersionId={} batchId={} "
+                        + "modelDeploymentId={} releaseId={} featureContractVersion={}",
+                    quote(routeId),
+                    quote(routeName),
+                    routeVersionId,
+                    batchId,
+                    runtime.deploymentId(),
+                    quote(runtime.releaseId()),
+                    quote(runtime.featureContractVersion())
+            );
         }
     }
 
@@ -43,9 +52,15 @@ final class ForecastModelUsageLog {
         RuntimeSnapshot runtime
     ) {
         if (changed(routeId, new State(routeVersionId, runtime.deploymentId(), false))) {
-            LOGGER.warn("event=forecast_route_skipped reason=ROUTE_REFERENCE_MISMATCH routeId={} routeName={} "
-                + "routeVersionId={} modelDeploymentId={} releaseId={}",
-                quote(routeId), quote(routeName), routeVersionId, runtime.deploymentId(), quote(runtime.releaseId()));
+            LOGGER.warn(
+                    "event=forecast_route_skipped reason=ROUTE_REFERENCE_MISMATCH routeId={} routeName={} "
+                        + "routeVersionId={} modelDeploymentId={} releaseId={}",
+                    quote(routeId),
+                    quote(routeName),
+                    routeVersionId,
+                    runtime.deploymentId(),
+                    quote(runtime.releaseId())
+            );
         }
     }
 
@@ -61,5 +76,6 @@ final class ForecastModelUsageLog {
     }
 
     private record State(long routeVersionId, long deploymentId, boolean committed) {
+
     }
 }

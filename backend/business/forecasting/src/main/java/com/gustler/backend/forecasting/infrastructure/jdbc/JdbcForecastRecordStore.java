@@ -39,15 +39,39 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Repository
 public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForecastRoutes {
+
     private static final MultiRowInsert RUNS = new MultiRowInsert("forecast_run", List.of(
-        "source_date", "observation_batch_id", "route_id", "route_version_id", "received_at", "confirmed_at",
-        "model_deployment_id", "outcome", "prediction_count", "source_incomplete", "counted_rows"));
+            "source_date",
+            "observation_batch_id",
+            "route_id",
+            "route_version_id",
+            "received_at",
+            "confirmed_at",
+            "model_deployment_id",
+            "outcome",
+            "prediction_count",
+            "source_incomplete",
+            "counted_rows"
+    ));
 
     private static final MultiRowInsert RECORDS = new MultiRowInsert("forecast_record", List.of(
-        "source_date", "vehicle_observation_id", "observation_batch_id", "source_row_number", "route_id",
-        "route_version_id", "vehicle_id", "passed_stop_order", "trip_start_observation_id",
-        "chain_start_observation_id", "down", "capacity", "extended", "target_stop_orders", "expected_seats",
-        "full_probabilities"));
+            "source_date",
+            "vehicle_observation_id",
+            "observation_batch_id",
+            "source_row_number",
+            "route_id",
+            "route_version_id",
+            "vehicle_id",
+            "passed_stop_order",
+            "trip_start_observation_id",
+            "chain_start_observation_id",
+            "down",
+            "capacity",
+            "extended",
+            "target_stop_orders",
+            "expected_seats",
+            "full_probabilities"
+    ));
 
     private static final String RECORD_COLUMNS = """
         record.vehicle_observation_id, record.source_row_number, record.vehicle_id, record.passed_stop_order,
@@ -68,16 +92,37 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
             throw new IllegalArgumentException("예보 사건과 수집 사건의 배치가 다르다: %d, %d"
                 .formatted(published.observationBatchId(), seen.observationBatchId()));
         }
-        final int runs = RUNS.insert(jdbc, List.of(published), run -> Arrays.asList(run.sourceDate(),
-            run.observationBatchId(), run.routeId(), run.routeVersionId(), timestamp(run.receivedAt()),
-            timestamp(run.confirmedAt()), run.modelDeploymentId(), run.outcome().name(), run.predictionCount(),
-            seen.incomplete(), seen.countedRows()));
-        RECORDS.insert(jdbc, published.vehicles(), vehicle -> Arrays.asList(published.sourceDate(),
-            vehicle.vehicleObservationId(), published.observationBatchId(), vehicle.sourceRowNumber(),
-            published.routeId(), published.routeVersionId(), vehicle.vehicleId(), vehicle.passedStopOrder(),
-            vehicle.tripStartObservationId(), vehicle.chainStartObservationId(), vehicle.down(), vehicle.capacity(),
-            vehicle.extended(), integers(vehicle.targetStopOrders()), doubles(vehicle.expectedSeats()),
-            doubles(vehicle.fullProbabilities())));
+        final int runs = RUNS.insert(jdbc, List.of(published), run -> Arrays.asList(
+                run.sourceDate(),
+                run.observationBatchId(),
+                run.routeId(),
+                run.routeVersionId(),
+                timestamp(run.receivedAt()),
+                timestamp(run.confirmedAt()),
+                run.modelDeploymentId(),
+                run.outcome().name(),
+                run.predictionCount(),
+                seen.incomplete(),
+                seen.countedRows()
+        ));
+        RECORDS.insert(jdbc, published.vehicles(), vehicle -> Arrays.asList(
+                published.sourceDate(),
+                vehicle.vehicleObservationId(),
+                published.observationBatchId(),
+                vehicle.sourceRowNumber(),
+                published.routeId(),
+                published.routeVersionId(),
+                vehicle.vehicleId(),
+                vehicle.passedStopOrder(),
+                vehicle.tripStartObservationId(),
+                vehicle.chainStartObservationId(),
+                vehicle.down(),
+                vehicle.capacity(),
+                vehicle.extended(),
+                integers(vehicle.targetStopOrders()),
+                doubles(vehicle.expectedSeats()),
+                doubles(vehicle.fullProbabilities())
+        ));
         return runs == 1;
     }
 
@@ -102,7 +147,10 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
             .params(routeId, timestamp(fromInclusive), timestamp(toExclusive))
             .query(row -> {
                 ForecastRun run = run(row);
-                RunRows rows = runs.computeIfAbsent(new RunKey(run.sourceDate(), run.observationBatchId()),
+                RunRows rows = runs.computeIfAbsent(new RunKey(
+                    run.sourceDate(),
+                    run.observationBatchId()
+                ),
                     key -> new RunRows(run, new ArrayList<>()));
                 if (row.getBoolean("has_record")) {
                     rows.vehicles().add(vehicle(row));
@@ -116,8 +164,17 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
 
     private static ForecastPublished published(RunRows rows) {
         ForecastRun run = rows.run();
-        return new ForecastPublished(run.sourceDate(), run.observationBatchId(), run.routeId(), run.routeVersionId(),
-            run.receivedAt(), run.confirmedAt(), run.modelDeploymentId(), run.outcome(), rows.vehicles());
+        return new ForecastPublished(
+                run.sourceDate(),
+                run.observationBatchId(),
+                run.routeId(),
+                run.routeVersionId(),
+                run.receivedAt(),
+                run.confirmedAt(),
+                run.modelDeploymentId(),
+                run.outcome(),
+                rows.vehicles()
+        );
     }
 
     /** 수신 시각 하한의 하루 전 날짜부터의 파티션만 읽는다. */
@@ -134,12 +191,21 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
                 WHERE route_id = ? AND source_date >= ? AND received_at >= ? AND received_at < ?
                 ORDER BY received_at, observation_batch_id
                 """)
-            .params(routeId, SourceDates.of(fromInclusive).minusDays(1), timestamp(fromInclusive),
-                timestamp(toExclusive))
-            .query((row, index) -> new RecordedBatch(row.getLong("observation_batch_id"), row.getLong("route_id"),
-                instant(row, "received_at"), instant(row, "confirmed_at"),
-                ForecastOutcome.valueOf(row.getString("outcome")) == ForecastOutcome.LATE,
-                row.getBoolean("source_incomplete"), row.getInt("counted_rows")))
+            .params(
+                    routeId,
+                    SourceDates.of(fromInclusive).minusDays(1),
+                    timestamp(fromInclusive),
+                    timestamp(toExclusive)
+            )
+            .query((row, index) -> new RecordedBatch(
+                    row.getLong("observation_batch_id"),
+                    row.getLong("route_id"),
+                    instant(row, "received_at"),
+                    instant(row, "confirmed_at"),
+                    ForecastOutcome.valueOf(row.getString("outcome")) == ForecastOutcome.LATE,
+                    row.getBoolean("source_incomplete"),
+                    row.getInt("counted_rows")
+            ))
             .list();
     }
 
@@ -167,8 +233,12 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
                 ORDER BY run.received_at DESC, run.observation_batch_id DESC
                 LIMIT 1
                 """)
-            .params(routeId, SourceDates.of(fromInclusive).minusDays(1), timestamp(fromInclusive),
-                timestamp(toExclusive))
+            .params(
+                    routeId,
+                    SourceDates.of(fromInclusive).minusDays(1),
+                    timestamp(fromInclusive),
+                    timestamp(toExclusive)
+            )
             .query(OffsetDateTime.class)
             .optional()
             .map(OffsetDateTime::toInstant);
@@ -189,23 +259,41 @@ public class JdbcForecastRecordStore implements ForecastRecordStore, RecentForec
     }
 
     private static ForecastRun run(ResultSet row) throws SQLException {
-        return new ForecastRun(row.getObject("source_date", LocalDate.class), row.getLong("observation_batch_id"),
-            row.getLong("route_id"), row.getLong("route_version_id"), instant(row, "received_at"),
-            instant(row, "confirmed_at"), nullableLong(row, "model_deployment_id"),
-            ForecastOutcome.valueOf(row.getString("outcome")), row.getInt("prediction_count"));
+        return new ForecastRun(
+                row.getObject("source_date", LocalDate.class),
+                row.getLong("observation_batch_id"),
+                row.getLong("route_id"),
+                row.getLong("route_version_id"),
+                instant(row, "received_at"),
+                instant(row, "confirmed_at"),
+                nullableLong(row, "model_deployment_id"),
+                ForecastOutcome.valueOf(row.getString("outcome")),
+                row.getInt("prediction_count")
+        );
     }
 
     private static ForecastPublished.VehicleForecast vehicle(ResultSet row) throws SQLException {
-        return new ForecastPublished.VehicleForecast(row.getLong("vehicle_observation_id"),
-            row.getInt("source_row_number"), row.getString("vehicle_id"), row.getInt("passed_stop_order"),
-            row.getLong("trip_start_observation_id"), row.getLong("chain_start_observation_id"),
-            row.getBoolean("down"), row.getInt("capacity"), row.getBoolean("extended"),
-            integers(row, "target_stop_orders"), doubles(row, "expected_seats"), doubles(row, "full_probabilities"));
+        return new ForecastPublished.VehicleForecast(
+                row.getLong("vehicle_observation_id"),
+                row.getInt("source_row_number"),
+                row.getString("vehicle_id"),
+                row.getInt("passed_stop_order"),
+                row.getLong("trip_start_observation_id"),
+                row.getLong("chain_start_observation_id"),
+                row.getBoolean("down"),
+                row.getInt("capacity"),
+                row.getBoolean("extended"),
+                integers(row, "target_stop_orders"),
+                doubles(row, "expected_seats"),
+                doubles(row, "full_probabilities")
+        );
     }
 
     private record RunKey(LocalDate sourceDate, long observationBatchId) {
+
     }
 
     private record RunRows(ForecastRun run, List<ForecastPublished.VehicleForecast> vehicles) {
+
     }
 }

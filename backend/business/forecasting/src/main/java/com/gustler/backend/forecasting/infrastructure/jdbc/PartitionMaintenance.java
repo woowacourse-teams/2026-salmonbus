@@ -44,6 +44,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Component
 public class PartitionMaintenance implements MaintainPartitions {
+
     /**
      * 만든 파티션 수 지표의 이름. Prometheus로는 {@code salmonbus_partition_creations_total}로 나간다. 이름을
      * {@code created}로 끝내면 내보낼 때 예약된 접미사로 보고 떼어 내 {@code salmonbus_partition_total}이 된다.
@@ -51,7 +52,13 @@ public class PartitionMaintenance implements MaintainPartitions {
     static final String CREATIONS_METER = "salmonbus.partition.creations";
     /** 날짜 파티션을 두는 테이블. 기본 파티션은 {@code <table>_default}다. */
     public static final List<String> TABLES =
-        List.of("forecast_run", "forecast_record", "stop_pass", "pass_label", "forecast_unresolved");
+        List.of(
+                "forecast_run",
+                "forecast_record",
+                "stop_pass",
+                "pass_label",
+                "forecast_unresolved"
+        );
 
     /** 파티션 테이블일 때만 다루는 관측 테이블. 기본 파티션은 {@code <table>_default}다. */
     public static final List<String> OBSERVATION_TABLES = List.of("observation_batch", "vehicle_observation");
@@ -123,7 +130,12 @@ public class PartitionMaintenance implements MaintainPartitions {
         LocalDate today = SourceDates.of(clock.instant());
         List<String> created = new ArrayList<>();
         List<String> failed = new ArrayList<>();
-        ensurePartitions(tables, today, created, failed);
+        ensurePartitions(
+                tables,
+                today,
+                created,
+                failed
+        );
         if (!created.isEmpty()) {
             LOGGER.info("event=partitions_created partitions={}", created);
         }
@@ -161,8 +173,7 @@ public class PartitionMaintenance implements MaintainPartitions {
                     LOGGER.warn("event=partition_default_rows table={} rows={}", table, rows);
                 }
             } catch (DataAccessException failure) {
-                LOGGER.warn("event=partition_default_count_failed table={} sqlState={}", table,
-                    sqlState(failure));
+                LOGGER.warn("event=partition_default_count_failed table={} sqlState={}", table, sqlState(failure));
             }
         }
         return defaultRows;
@@ -192,10 +203,20 @@ public class PartitionMaintenance implements MaintainPartitions {
             if (isPartitionOf(partition, table)) {
                 return Outcome.EXISTING;
             }
-            return failed(table, partition, reasonOf(sqlState(failure)), sqlState(failure));
+            return failed(
+                    table,
+                    partition,
+                    reasonOf(sqlState(failure)),
+                    sqlState(failure)
+            );
         }
         if (!isPartitionOf(partition, table)) {
-            return failed(table, partition, "name_taken", null);
+            return failed(
+                    table,
+                    partition,
+                    "name_taken",
+                    null
+            );
         }
         if (meters != null) {
             meters.counter(CREATIONS_METER, "table", table).increment();
@@ -246,11 +267,27 @@ public class PartitionMaintenance implements MaintainPartitions {
             .single();
     }
 
-    private Outcome failed(String table, String partition, String reason, String sqlState) {
-        LOGGER.warn("event=partition_create_failed table={} partition={} reason={} sqlState={}", table,
-            partition, reason, sqlState);
+    private Outcome failed(
+        String table,
+        String partition,
+        String reason,
+        String sqlState
+    ) {
+        LOGGER.warn(
+                "event=partition_create_failed table={} partition={} reason={} sqlState={}",
+                table,
+                partition,
+                reason,
+                sqlState
+        );
         if (meters != null) {
-            meters.counter("salmonbus.partition.failures", "table", table, "reason", reason).increment();
+            meters.counter(
+                    "salmonbus.partition.failures",
+                    "table",
+                    table,
+                    "reason",
+                    reason
+            ).increment();
         }
         return Outcome.FAILED;
     }
@@ -282,6 +319,7 @@ public class PartitionMaintenance implements MaintainPartitions {
 
     /** 파티션 하나를 확인한 결과. */
     public enum Outcome {
+
         /** 이번에 만들었다. */
         CREATED,
         /** 이미 있었다. 다른 인스턴스가 먼저 만든 경우를 포함한다. */

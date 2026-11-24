@@ -31,15 +31,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 새로 뜬 worker가 닫은 통과의 정답이 그 전에 닫힌 통과를 직전 통과로 쓰는지를 실제 DB와 채점으로 본다. 흐름의 앞부분을 먼저 처리된
- * 것으로 두고 뒷부분을 새로 뜬 worker(예보와 채점의 메모리가 모두 빈 상태)로 처리한다. 앞부분을 처리한 쪽은 이전 배포본(예보 기록
- * 테이블이 비어 있고 배치에 입력 확정 시각만 남는다)이거나 새 worker다. 비교 기준은 같은 흐름을 처음부터 한 worker가 끊지 않고
+ * 것으로 두고 뒷부분을 새로 뜬 worker(예보와 채점의 메모리가 모두 빈 상태)로 처리한다. 입력 부족으로 끝난 실행 기록도
+ * 통과 복구에 쓰고, 옛 입력 확정 시각만 있는 배치는 복구에 쓰지 않는다. 비교 기준은 같은 흐름을 처음부터 한 worker가 끊지 않고
  * 처리한 결과다. 두 번을 같은 시험 트랜잭션에서 차례로 돌리고, 사이에 예보 기록 테이블의 줄만 지운다.
  */
 @ForecastingIntegrationTest
 @Transactional
 class ForecastFirstDeploymentScoringTest {
-    private static final List<String> NEW_TABLES = List.of("pass_label", "forecast_unresolved", "stop_pass",
-        "forecast_record", "forecast_run");
+
+    private static final List<String> NEW_TABLES = List.of(
+            "pass_label",
+            "forecast_unresolved",
+            "stop_pass",
+            "forecast_record"
+    );
     private static final Duration LENGTH = Duration.ofHours(2);
     /** 흐름이 시작하는 한국 날짜의 다음 날 00시다. */
     private static final Instant MIDNIGHT = SourceDates.of(ForecastHarness.EVENING).plusDays(1)
@@ -62,15 +67,15 @@ class ForecastFirstDeploymentScoringTest {
     PassLabelStore labels;
 
     @Test
-    void 이전_배포본이_처리한_배치만_있고_예보_기록이_빈_DB에서_처음_떠도_그_뒤의_예측에_연속_실행과_같은_정답이_붙는다() {
+    void 입력_부족으로_끝난_예보_실행_기록을_복구하면_그_뒤의_예측에_연속_실행과_같은_정답이_붙는다() {
         // given
         ForecastHarness harness = harness(20261401L, LENGTH);
         List<Long> batches = harness.batches();
         List<Long> before = batches.subList(0, batches.size() / 2);
         List<Long> after = batches.subList(batches.size() / 2, batches.size());
         Run continuous = continuous(harness);
-        reset(harness);
-        confirmByPreviousRelease(harness, before);
+        reset(harness, before);
+        markInputUnavailable(before);
 
         // when
         ScoringService scoring = startWorker(harness, harness.intended(after.getFirst()));
@@ -101,7 +106,7 @@ class ForecastFirstDeploymentScoringTest {
         List<Long> before = batches.subList(0, batches.size() / 2);
         List<Long> after = batches.subList(batches.size() / 2, batches.size());
         Run continuous = continuous(harness);
-        reset(harness);
+        reset(harness, List.of());
         ScoringService first = startWorker(harness, harness.intended(before.getFirst()));
         harness.fromVerifiedOrigin();
         process(harness, first, before);
@@ -127,7 +132,7 @@ class ForecastFirstDeploymentScoringTest {
     }
 
     @Test
-    void 이전_배포본이_전날_처리한_배치가_닫은_통과는_되찾지_않고_처음_뜬_날의_배치가_닫은_것만_저장한다() {
+    void 옛_입력_확정_시각만_있는_배치가_닫은_통과는_날짜와_관계없이_복구하지_않는다() {
         // given
         ForecastHarness harness = harness(20261402L, OVER_MIDNIGHT);
         Instant deployedAt = MIDNIGHT.plus(Duration.ofMinutes(30));
@@ -153,15 +158,20 @@ class ForecastFirstDeploymentScoringTest {
             .count();
         assertSoftly(softly -> {
             softly.assertThat(beforeMidnight).as("전날 처리한 배치 수").isGreaterThan(500);
-            softly.assertThat(recovered.keySet()).containsExactly(SourceDates.of(deployedAt));
-            softly.assertThat(harness.counter("passes.recovered"))
-                .isEqualTo(recovered.values().stream().mapToLong(Long::longValue).sum());
+            softly.assertThat(recovered).isEmpty();
+            softly.assertThat(harness.counter("passes.recovered")).isZero();
             softly.assertThat(harness.counter("replays", "succeeded")).isOne();
         });
     }
 
     private ForecastHarness harness(final long seed, Duration length) {
-        return new ForecastHarness(new ForecastHarness.Beans(jdbc, transactions, deployments, records, passes), seed,
+        return new ForecastHarness(new ForecastHarness.Beans(
+                jdbc,
+                transactions,
+                deployments,
+                records,
+                passes
+        ), seed,
             length);
     }
 
@@ -175,16 +185,35 @@ class ForecastFirstDeploymentScoringTest {
         return capture(harness);
     }
 
-    /** 예보 기록 테이블의 줄을 지우고 커밋한 것으로 친 배치를 잊는다. 관측은 그대로다. */
-    private void reset(ForecastHarness harness) {
+    /** 예측과 통과를 지우되, 복구할 실행 기록의 시각과 수집 사실은 실제 처리 결과를 보존한다. */
+    private void reset(ForecastHarness harness, List<Long> retainedRuns) {
         NEW_TABLES.forEach(table -> jdbc.sql("DELETE FROM " + table + " WHERE route_id=?")
             .param(harness.stream.routeId()).update());
         harness.rewindCollection();
+
+        if (retainedRuns.isEmpty()) {
+            jdbc.sql("DELETE FROM forecast_run WHERE route_id=?").param(harness.stream.routeId()).update();
+            return;
+        }
+        jdbc.sql("DELETE FROM forecast_run WHERE route_id=:route AND observation_batch_id NOT IN (:retained)")
+            .param("route", harness.stream.routeId()).param("retained", retainedRuns).update();
+    }
+
+    /** 예보를 만들 수 있었던 확정 실행만 입력 부족으로 바꾸며, 늦음과 빈 응답의 의미는 유지한다. */
+    private void markInputUnavailable(List<Long> batches) {
+        jdbc.sql("""
+            UPDATE forecast_run r SET outcome='INPUT_UNAVAILABLE',prediction_count=0,model_deployment_id=NULL
+            FROM observation_batch b
+            WHERE r.observation_batch_id=b.id AND r.observation_batch_id IN (:batches)
+              AND b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS' AND b.stored_rows>0
+              AND r.confirmed_at BETWEEN b.response_received_at AND b.response_received_at+interval '90 seconds'
+              AND r.outcome IN ('PUBLISHED','OUT_OF_SCOPE','EMPTY')
+            """).param("batches", batches).update();
     }
 
     /**
-     * 배치를 이전 배포본이 처리한 것으로 만든다. 이전 배포본은 예보 실행 줄을 쓰지 않고 배치에 입력 확정 시각만 적었다. 그런 배치는
-     * 새 worker가 다시 처리하지 않고 되감기만 읽는다.
+     * 배치를 이전 배포본이 처리한 것으로 만든다. 이전 배포본은 예보 실행 줄을 쓰지 않고 배치에 입력 확정 시각만 적었다. 현재 worker는 이 시각을
+     * 확정 이력의 근거로 사용하지 않는다.
      */
     private void confirmByPreviousRelease(ForecastHarness harness, List<Long> batches) {
         for (final long batchId : batches) {
@@ -197,12 +226,23 @@ class ForecastFirstDeploymentScoringTest {
      * 예보와 채점을 새로 띄운다. 둘 다 메모리가 빈 채로 시작하고, 채점은 기동 직후의 되감기를 {@code at} 시각에 돌린다.
      */
     private ScoringService startWorker(ForecastHarness harness, Instant at) {
-        ScoringService scoring = new ForecastAssembly(jdbc, transactions, harness.clock, new SimpleMeterRegistry())
-            .scoring(task -> {
-                task.run();
-                return true;
-            }, records, records, passes, labels);
-        harness.start(RouteStateReplayer.DEFAULT_WINDOW, RouteStateReplayer.DEFAULT_EXTENDED_WINDOW, scoring);
+        ScoringService scoring = new ForecastAssembly(
+                jdbc,
+                transactions,
+                harness.clock,
+                new SimpleMeterRegistry()
+        )
+            .scoring(
+                    task -> {
+                        task.run();
+                        return true;
+                    },
+                    records,
+                    records,
+                    passes,
+                    labels
+            );
+        harness.start(RouteStateReplayer.DEFAULT_WINDOW, scoring);
         harness.clock.at = at;
         scoring.start();
         return scoring;
@@ -228,19 +268,25 @@ class ForecastFirstDeploymentScoringTest {
     }
 
     /** 정답이 붙었고 그 정답의 직전 통과를 {@code batches} 가운데 하나가 닫은 예측이다. */
-    private Set<String> settledWithPreviousPassClosedBy(Run run, Map<String, Outcome> outcomes, List<Long> batches) {
+    private Set<String> settledWithPreviousPassClosedBy(
+        Run run,
+        Map<String, Outcome> outcomes,
+        List<Long> batches
+    ) {
         Set<Long> closing = new HashSet<>(batches);
         return outcomes.entrySet().stream()
             .filter(entry -> "SETTLED".equals(entry.getValue().state()))
             .filter(entry -> entry.getValue().previousClosureObservationId() != null)
-            .filter(entry -> closing.contains(
-                run.closureBatches.get(entry.getValue().previousClosureObservationId())))
+            .filter(entry -> closing.contains(run.closureBatches.get(entry.getValue().previousClosureObservationId())))
             .map(Map.Entry::getKey)
             .collect(Collectors.toSet());
     }
 
     /** 두 결과에서 채점 결과가 다른 예측을 "기대한 판정 -> 실제 판정"별로 센다. 한쪽에만 있는 예측은 없음으로 적는다. */
-    private static Map<String, Long> changes(Map<String, Outcome> expected, Map<String, Outcome> actual) {
+    private static Map<String, Long> changes(
+        Map<String, Outcome> expected,
+        Map<String, Outcome> actual
+    ) {
         Set<String> keys = new HashSet<>(expected.keySet());
         keys.addAll(actual.keySet());
         Map<String, Long> changes = new TreeMap<>();
@@ -288,10 +334,23 @@ class ForecastFirstDeploymentScoringTest {
               closure_observation_id,previous_last_observation_id,previous_closure_observation_id
             FROM forecast_outcome WHERE route_id=?
             """).param(routeId).query(row -> {
-                outcomes.put(row.getString(1), new Outcome(row.getLong(2), row.getString(3), row.getString(4),
-                    row.getString(5), (Long) row.getObject(6), (Long) row.getObject(7), (Long) row.getObject(8)));
+                outcomes.put(row.getString(1), new Outcome(
+                        row.getLong(2),
+                        row.getString(3),
+                        row.getString(4),
+                        row.getString(5),
+                        (Long) row.getObject(6),
+                        (Long) row.getObject(7),
+                        (Long) row.getObject(8)
+                ));
             });
-        return new Run(closureBatches, passRows, recordBatches, recordRows, outcomes);
+        return new Run(
+                closureBatches,
+                passRows,
+                recordBatches,
+                recordRows,
+                outcomes
+        );
     }
 
     /**
@@ -310,6 +369,7 @@ class ForecastFirstDeploymentScoringTest {
         Map<String, String> records,
         Map<String, Outcome> outcomes
     ) {
+
         /** 그 배치들이 낸 예측의 채점 결과만 남긴다. */
         Map<String, Outcome> outcomesOf(List<Long> batches) {
             Set<Long> wanted = new HashSet<>(batches);
@@ -341,6 +401,7 @@ class ForecastFirstDeploymentScoringTest {
         Long previousLastObservationId,
         Long previousClosureObservationId
     ) {
+
         /** 상태와 사유다. */
         String verdict() {
             if (reason == null) {

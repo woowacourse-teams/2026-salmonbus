@@ -44,6 +44,7 @@ public record PassLabel(
     String parameterHash,
     Instant computedAt
 ) {
+
     public PassLabel {
         Objects.requireNonNull(sourceDate, "나눔 날짜가 필요하다");
         Objects.requireNonNull(state, "정답 상태가 필요하다");
@@ -62,6 +63,7 @@ public record PassLabel(
 
     /** 정답 상태. 이름은 {@code pass_label.state}에 그대로 저장된다. */
     public enum State {
+
         SETTLED,
         UNSUPPORTED
     }

@@ -11,6 +11,7 @@ import java.util.Map;
  * 않고 경고 로그와 지표만 남긴다. 그 날짜의 줄은 기본 파티션으로 들어가므로 쓰기는 멈추지 않는다.
  */
 public interface MaintainPartitions {
+
     /**
      * 한국 날짜 기준 오늘부터 사흘 뒤까지 없는 날짜 파티션을 만든다. 기본 파티션의 줄 수는 세지 않는다. 줄 세기는 기본 파티션에 줄이
      * 쌓여 있으면 오래 걸리므로 기동을 붙잡지 않도록 주기 실행에 맡긴다.
@@ -33,11 +34,8 @@ public interface MaintainPartitions {
      * @param failed 만들지 못한 파티션 이름
      * @param defaultRows 테이블별 기본 파티션의 줄 수. 세지 못한 테이블은 빠진다
      */
-    record Report(
-        List<String> created,
-        List<String> failed,
-        Map<String, Long> defaultRows
-    ) {
+    record Report(List<String> created, List<String> failed, Map<String, Long> defaultRows) {
+
         public Report {
             created = List.copyOf(created);
             failed = List.copyOf(failed);

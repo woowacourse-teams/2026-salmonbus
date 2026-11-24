@@ -19,12 +19,11 @@ import java.util.Optional;
  * 예보를 발행하지 않는 것은 이미 정상 상태이며, 계수 번들이 없는 동안 예보 배치를 실행할 때도 같다.
  */
 public final class ActiveForecastRuntimeResolver implements ForecastRuntime {
+
     private final ModelDeploymentRepository deployments;
     private final LoadedModelRegistry bundles;
 
-    public ActiveForecastRuntimeResolver(
-        ModelDeploymentRepository deployments,
-        LoadedModelRegistry bundles) {
+    public ActiveForecastRuntimeResolver(ModelDeploymentRepository deployments, LoadedModelRegistry bundles) {
         this.deployments = deployments;
         this.bundles = bundles;
     }
@@ -37,27 +36,22 @@ public final class ActiveForecastRuntimeResolver implements ForecastRuntime {
      */
     @Override
     public Optional<RuntimeSnapshot> resolveActive() {
-        Optional<ActiveModelDeployment> deployment = deployments.findActive();
-        if (deployment.isEmpty()) {
+        Optional<ActiveModelDeployment> foundDeployment = deployments.findActive();
+        if (foundDeployment.isEmpty()) {
             return Optional.empty();
         }
-        return bundles.find(deployment.get().bundleDigest())
-            .filter(bundle -> bundle.hasIdentityOf(deployment.get()))
-            .map(bundle -> snapshotOf(deployment.get(), bundle));
+        ActiveModelDeployment activeDeployment = foundDeployment.get();
+        return bundles.find(activeDeployment.bundleDigest())
+            .filter(bundle -> bundle.hasIdentityOf(activeDeployment))
+            .map(bundle -> snapshotOf(activeDeployment, bundle));
     }
 
-    private static RuntimeSnapshot snapshotOf(
-        ActiveModelDeployment deployment,
-        ModelRelease bundle) {
+    private static RuntimeSnapshot snapshotOf(ActiveModelDeployment deployment, ModelRelease bundle) {
         return new RuntimeSnapshot(
-            deployment,
-            bundle.scope(),
-            bundle.model(),
-            dataUntilOf(bundle));
-    }
-
-    private static Instant dataUntilOf(
-        ModelRelease bundle) {
-        return Instant.parse(bundle.dataThrough());
+                deployment,
+                bundle.scope(),
+                bundle.model(),
+                Instant.parse(bundle.dataThrough())
+        );
     }
 }

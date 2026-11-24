@@ -63,6 +63,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 })
 @Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class })
 class ObservationCapacitySignalIntegrationTest {
+
     private static final String SOURCE_ROUTE = "204000057";
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Duration SIGNAL_DEADLINE = Duration.ofSeconds(5);

@@ -10,6 +10,7 @@ import java.util.Optional;
  * 착수 시각이 아직 없으면 비어 있다. 행 잠금을 잡지 않고 배치를 고치지 않는다.
  */
 public interface ObservationBatchReader {
+
     /**
      * 배치를 읽는다.
      *

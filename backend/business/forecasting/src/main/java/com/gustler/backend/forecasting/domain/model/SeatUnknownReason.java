@@ -7,6 +7,7 @@ package com.gustler.backend.forecasting.domain.model;
  * 원본 사유 둘은 V4의 CHECK를 따른다.
  */
 public enum SeatUnknownReason {
+
     /** 상류가 미확인을 보고했거나 수집 단계에서 잔여석 사용을 보류했다. */
     REPORTED_UNKNOWN,
     /** 상류가 잔여석 값을 제공하지 않았다. */

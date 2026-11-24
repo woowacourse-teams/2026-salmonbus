@@ -1,6 +1,7 @@
 package com.gustler.backend.maintenance;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.model.InspectModelBundle;
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class BundleInspectionCommandTest {
+
     @TempDir
     Path directory;
 
@@ -27,11 +29,13 @@ class BundleInspectionCommandTest {
             new AnnotationConfigApplicationContext(BundleInspectionCommandConfiguration.class)) {
 
             // then
-            assertThat(context.getBeansOfType(InspectModelBundle.class)).hasSize(1);
-            assertThat(context.getBeansOfType(DataSource.class)).isEmpty();
-            assertThat(context.getBeansOfType(ModelDeploymentRepository.class)).isEmpty();
-            assertThat(context.getBeansOfType(BundleActivation.class)).isEmpty();
-            assertThat(context.getBeansOfType(LoadedModelRegistry.class)).isEmpty();
+            assertSoftly(softly -> {
+                softly.assertThat(context.getBeansOfType(InspectModelBundle.class)).hasSize(1);
+                softly.assertThat(context.getBeansOfType(DataSource.class)).isEmpty();
+                softly.assertThat(context.getBeansOfType(ModelDeploymentRepository.class)).isEmpty();
+                softly.assertThat(context.getBeansOfType(BundleActivation.class)).isEmpty();
+                softly.assertThat(context.getBeansOfType(LoadedModelRegistry.class)).isEmpty();
+            });
         }
     }
 
@@ -47,14 +51,21 @@ class BundleInspectionCommandTest {
         // then
         assertThat(actual).isInstanceOf(Map.class);
         Map<?, ?> result = (Map<?, ?>) actual;
-        assertThat(result.get("validation")).isEqualTo("PASSED");
-        assertThat(result.get("activated")).isEqualTo(false);
-        assertThat(result.get("accuracyEvaluated")).isEqualTo(false);
-        assertThat(Files.readAllBytes(directory.resolve("manifest.json"))).isEqualTo(manifest);
-        assertThat(Files.readAllBytes(directory.resolve("base.json"))).isEqualTo(weights);
+        assertSoftly(softly -> {
+            softly.assertThat(result.get("validation")).isEqualTo("PASSED");
+            softly.assertThat(result.get("activated")).isEqualTo(false);
+            softly.assertThat(result.get("accuracyEvaluated")).isEqualTo(false);
+            softly.check(() -> assertThat(Files.readAllBytes(directory.resolve("manifest.json"))).isEqualTo(manifest));
+            softly.check(() -> assertThat(Files.readAllBytes(directory.resolve("base.json"))).isEqualTo(weights));
+        });
         try (Stream<Path> files = Files.list(directory)) {
             assertThat(files.map(p -> p.getFileName().toString()).toList())
-                .contains("manifest.json", "base.json", "gate.json", "pool.json");
+                .contains(
+                        "manifest.json",
+                        "base.json",
+                        "gate.json",
+                        "pool.json"
+                );
         }
     }
 }

@@ -12,6 +12,7 @@ public final class AlightingAwareSeatPredictor {
         double afterAlightingSeats,
         double departureFullProbability
     ) {
+
     }
 
     private final NumericTreeEnsemble base;
@@ -71,8 +72,14 @@ public final class AlightingAwareSeatPredictor {
         double[] classProbabilities = gate.predict(rounded);
         final double seats = Math.max(0.0, Math.min(70.0,
             classProbabilities[1] * middle + classProbabilities[2] * point));
-        return new Prediction(point, classProbabilities[0], classProbabilities[1], classProbabilities[2],
-            seats, pool.predict(probabilityFeatures)[1]);
+        return new Prediction(
+                point,
+                classProbabilities[0],
+                classProbabilities[1],
+                classProbabilities[2],
+                seats,
+                pool.predict(probabilityFeatures)[1]
+        );
     }
 
     /** 좌석 입력만 원본 float32로 반올림한다. 확률 입력의 float64 계약은 유지한다. */

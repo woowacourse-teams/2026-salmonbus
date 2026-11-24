@@ -21,6 +21,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * </ul>
  */
 final class ForecastValueBaseline {
+
     private final Map<String, Map<Integer, double[]>> predictions = new HashMap<>();
     private final Map<Integer, Run> runs = new TreeMap<>();
     private final Map<Integer, Instant> confirmed = new TreeMap<>();
@@ -41,7 +42,10 @@ final class ForecastValueBaseline {
     private void accept(String[] line) {
         switch (line[0]) {
             case "math" -> exactMath = Baseline.sameMath(line[1]);
-            case "run" -> runs.put(Integer.parseInt(line[1]), new Run(line[2], countOrNone(line[3])));
+            case "run" -> runs.put(
+                Integer.parseInt(line[1]),
+                new Run(line[2], countOrNone(line[3]))
+            );
             case "obs" -> predictions.put(line[1], targets(line));
             case "pass" -> passes.add(line[1] + " " + line[2] + " " + line[3]);
             case "confirmed" -> confirmed.put(Integer.parseInt(line[1]), Instant.parse(line[2]));
@@ -112,7 +116,12 @@ final class ForecastValueBaseline {
         Set<Long> baselineOnly = unseen.stream()
             .map(key -> keys.observationId(key.substring(0, key.indexOf(':'))))
             .collect(Collectors.toCollection(HashSet::new));
-        return new Comparison(counts[0], counts[1], counts[2], baselineOnly);
+        return new Comparison(
+                counts[0],
+                counts[1],
+                counts[2],
+                baselineOnly
+        );
     }
 
     private int kind(double[] expected, final double seats, final double probability) {
@@ -133,6 +142,7 @@ final class ForecastValueBaseline {
      * @param predictionCount 예측 수. 예측을 내지 않는 배치는 비어 있다
      */
     record Run(String outcome, Integer predictionCount) {
+
     }
 
     /**
@@ -147,5 +157,6 @@ final class ForecastValueBaseline {
         int newOnly,
         Set<Long> baselineOnly
     ) {
+
     }
 }

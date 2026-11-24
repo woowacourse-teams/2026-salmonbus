@@ -47,7 +47,7 @@ public class ObservationCollector {
 
     /** 미준비 노선은 별도 준비를 요청하고 건너뛴다. 실패한 수집은 기록을 종료한 뒤 원래 예외를 전파한다. */
     public void collectOnce(String sourceRouteId) {
-        new ObservationCollector.CollectionAttempt(sourceRouteId).run();
+        new CollectionAttempt(sourceRouteId).run();
     }
 
     /** 노선 ID와 진단 상태를 한 호출에 한정한다. 동시에 수집해도 다른 호출의 상태를 공유하지 않는다. */

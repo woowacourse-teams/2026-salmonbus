@@ -1,7 +1,5 @@
 package com.gustler.backend.forecasting.domain.deployment;
 
-import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
-
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import java.time.Instant;
 import java.util.UUID;
@@ -24,8 +22,15 @@ public record ModelRelease(
         SupportedForecastScope scope,
         AlightingAwareSeatForecastModel model
     ) {
-        return new ModelRelease(releaseId, "alighting-gate-base-and-pool", bundleDigest, "alighting-online-capacity-snapshot-v2",
-            dataThrough, scope, model);
+        return new ModelRelease(
+                releaseId,
+                "alighting-gate-base-and-pool",
+                bundleDigest,
+                "alighting-online-capacity-snapshot-v2",
+                dataThrough,
+                scope,
+                model
+        );
     }
 
     /**
@@ -37,24 +42,23 @@ public record ModelRelease(
      *
      * <p>선택과 재승격에서 같은 기준으로 비교하도록 판단을 이곳에 모은다.
      */
-    public boolean hasIdentityOf(
-        ActiveModelDeployment deployment) {
+    public boolean hasIdentityOf(ActiveModelDeployment deployment) {
         return deployment.bundleDigest().equals(bundleDigest())
             && deployment.releaseId().equals(releaseId())
-            && canonical(deployment.calculationVersion()).equals(featureContractVersion());
+            && deployment.calculationVersion().equals(featureContractVersion());
     }
 
-    public StagedModelDeployment receiptWith(
-        UUID deploymentKey) {
+    public StagedModelDeployment receiptWith(UUID deploymentKey) {
         return new StagedModelDeployment(
-            deploymentKey,
-            releaseId,
-            "alighting-gate-base-and-pool",
-            modelVersion,
-            bundleDigest,
-            "after-alighting-and-departure-zero-v1",
-            featureContractVersion,
-            scope.digest(),
-            Instant.parse(dataThrough));
+                deploymentKey,
+                releaseId,
+                "alighting-gate-base-and-pool",
+                modelVersion,
+                bundleDigest,
+                "after-alighting-and-departure-zero-v1",
+                featureContractVersion,
+                scope.digest(),
+                Instant.parse(dataThrough)
+        );
     }
 }

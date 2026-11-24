@@ -36,7 +36,10 @@ public final class AlightingAwareParityCheck {
         System.out.println(JSON.writeValueAsString(report));
     }
 
-    private static Map<String, Object> compareCases(Path bundle, AlightingAwareSeatPredictor predictor) throws IOException {
+    private static Map<String, Object> compareCases(
+        Path bundle,
+        AlightingAwareSeatPredictor predictor
+    ) throws IOException {
         Map<String, Object> report = new LinkedHashMap<>();
         for (String name : new String[] { "golden.json", "boundaries.json" }) {
             JsonNode cases = JSON.readTree(Files.readAllBytes(bundle.resolve(name)));
@@ -45,7 +48,11 @@ public final class AlightingAwareParityCheck {
         return report;
     }
 
-    private static Map<String, Object> compareCaseFile(String name, JsonNode cases, AlightingAwareSeatPredictor predictor) {
+    private static Map<String, Object> compareCaseFile(
+        String name,
+        JsonNode cases,
+        AlightingAwareSeatPredictor predictor
+    ) {
         double[] maximum = new double[6];
         final int rows = cases.get("seat_inputs").size();
         if (rows == 0) {
@@ -54,9 +61,20 @@ public final class AlightingAwareParityCheck {
         for (int row = 0; row < rows; row++) {
             AlightingAwareSeatPredictor.Prediction prediction = predictor.predict(
                 vector(cases.get("seat_inputs").get(row)), vector(cases.get("probability_inputs").get(row)));
-            compareOutputs(name, row, actualOutputs(prediction), expectedOutputs(cases, row), maximum);
+            compareOutputs(
+                    name,
+                    row,
+                    actualOutputs(prediction),
+                    expectedOutputs(cases, row),
+                    maximum
+            );
         }
-        return Map.of("rows", rows, "max_absolute_difference", maximum);
+        return Map.of(
+                "rows",
+                rows,
+                "max_absolute_difference",
+                maximum
+        );
     }
 
     private static double[] actualOutputs(AlightingAwareSeatPredictor.Prediction prediction) {
@@ -88,7 +106,11 @@ public final class AlightingAwareParityCheck {
         }
     }
 
-    private static void appendReportMetadata(Map<String, Object> report, Path bundle, final long start)
+    private static void appendReportMetadata(
+        Map<String, Object> report,
+        Path bundle,
+        final long start
+    )
         throws IOException, NoSuchAlgorithmException {
         report.put("output_order", new String[] { "base", "gate_zero", "gate_low", "gate_other", "seats", "full" });
         report.put("tolerance", TOLERANCE);

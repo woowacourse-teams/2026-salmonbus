@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class PendingBatchQueryTest {
+
     private static final Instant NOW = Instant.parse("2030-03-01T03:00:00Z");
     private static final Duration WINDOW = Duration.ofMinutes(10);
     private static final int ROUTES = 20;
@@ -57,11 +58,21 @@ class PendingBatchQueryTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(all).extracting(PendingBatches.Pending::observationBatchId)
-                .containsExactly(first, second, third);
+                .containsExactly(
+                        confirmedInput,
+                        first,
+                        second,
+                        third
+                );
             softly.assertThat(all).extracting(PendingBatches.Pending::receivedAt)
-                .containsExactly(NOW.minusSeconds(90), NOW.minusSeconds(60), NOW.minusSeconds(30));
+                .containsExactly(
+                        NOW.minusSeconds(150),
+                        NOW.minusSeconds(90),
+                        NOW.minusSeconds(60),
+                        NOW.minusSeconds(30)
+                );
             softly.assertThat(limited).extracting(PendingBatches.Pending::observationBatchId)
-                .containsExactly(first, second);
+                .containsExactly(confirmedInput, first);
         });
     }
 
@@ -213,9 +224,16 @@ class PendingBatchQueryTest {
                 response_received_at,outcome,failure_code,stored_rows,normalization_version,
                 collection_strategy_version,ingestion_origin)
             VALUES(?,?,1,?,?,?,?,?,?,'normalization-v1.0.0','adaptive-kst-v1.0.1','LIVE') RETURNING id
-            """).params(version, receivedAt.atOffset(ZoneOffset.UTC), UUID.randomUUID().toString(),
-                receivedAt.atOffset(ZoneOffset.UTC), receivedAt.atOffset(ZoneOffset.UTC), outcome,
-                failureCode(outcome), storedRows(outcome))
+            """).params(
+                    version,
+                    receivedAt.atOffset(ZoneOffset.UTC),
+                    UUID.randomUUID().toString(),
+                    receivedAt.atOffset(ZoneOffset.UTC),
+                    receivedAt.atOffset(ZoneOffset.UTC),
+                    outcome,
+                    failureCode(outcome),
+                    storedRows(outcome)
+            )
             .query(Long.class).single();
     }
 
@@ -240,7 +258,12 @@ class PendingBatchQueryTest {
             SELECT (b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date, b.id, v.route_id, b.route_version_id, ?, ?,
                 'EMPTY', 0, false, 0
             FROM observation_batch b JOIN route_version v ON v.id=b.route_version_id WHERE b.id=? AND v.id=?
-            """).params(receivedAt.atOffset(ZoneOffset.UTC), receivedAt.atOffset(ZoneOffset.UTC), batchId, version)
+            """).params(
+                    receivedAt.atOffset(ZoneOffset.UTC),
+                    receivedAt.atOffset(ZoneOffset.UTC),
+                    batchId,
+                    version
+            )
             .update();
     }
 }

@@ -2,7 +2,6 @@ package com.gustler.backend.forecasting.application.forecast;
 
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import tools.jackson.databind.JsonNode;
@@ -16,6 +15,7 @@ import tools.jackson.databind.node.ObjectNode;
  * 순서와 숫자 표기를 바꾸면 해시가 달라지므로 만드는 순서를 바꾸지 않는다.
  */
 public final class SettlementContextDocument {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private SettlementContextDocument() {
@@ -64,9 +64,10 @@ public final class SettlementContextDocument {
             }
         }
         if (source.has("holidays")) {
-            List<String> holidays = new ArrayList<>();
-            source.path("holidays").forEach(day -> holidays.add(day.asString()));
-            holidays.sort(String::compareTo);
+            List<String> holidays = source.path("holidays").valueStream()
+                .map(JsonNode::asString)
+                .sorted()
+                .toList();
             shared.set("holidays", JSON.valueToTree(holidays));
         }
         return shared;

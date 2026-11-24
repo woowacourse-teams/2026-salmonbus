@@ -16,6 +16,7 @@ import java.util.Map;
  * </ul>
  */
 final class ForecastInputBaseline {
+
     private final Map<Integer, Batch> batches = new HashMap<>();
 
     private ForecastInputBaseline() {
@@ -37,11 +38,42 @@ final class ForecastInputBaseline {
 
     private static Batch batch(String[] line) {
         return switch (line[0]) {
-            case "u" -> new Batch(Kind.UNCONFIRMED, line[2], null, null, null, null, new LinkedHashMap<>());
-            case "f" -> new Batch(Kind.FAILED, line[2], null, null, null, null, new LinkedHashMap<>());
-            case "o" -> new Batch(Kind.OUT_OF_SCOPE, null, null, null, null, null, new LinkedHashMap<>());
-            case "b" -> new Batch(Kind.FORECAST, null, longOrNone(line[2]), textOrNone(line[3]), intOrNone(line[4]),
-                textOrNone(line[5]), new LinkedHashMap<>());
+            case "u" -> new Batch(
+                    Kind.UNCONFIRMED,
+                    line[2],
+                    null,
+                    null,
+                    null,
+                    null,
+                    new LinkedHashMap<>()
+            );
+            case "f" -> new Batch(
+                    Kind.FAILED,
+                    line[2],
+                    null,
+                    null,
+                    null,
+                    null,
+                    new LinkedHashMap<>()
+            );
+            case "o" -> new Batch(
+                    Kind.OUT_OF_SCOPE,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    new LinkedHashMap<>()
+            );
+            case "b" -> new Batch(
+                    Kind.FORECAST,
+                    null,
+                    longOrNone(line[2]),
+                    textOrNone(line[3]),
+                    intOrNone(line[4]),
+                    textOrNone(line[5]),
+                    new LinkedHashMap<>()
+            );
             default -> throw new IllegalStateException("모르는 줄: " + line[0]);
         };
     }
@@ -73,6 +105,7 @@ final class ForecastInputBaseline {
     }
 
     enum Kind {
+
         UNCONFIRMED, FAILED, OUT_OF_SCOPE, FORECAST
     }
 
@@ -93,5 +126,6 @@ final class ForecastInputBaseline {
         String passDigest,
         Map<String, String> snapshots
     ) {
+
     }
 }

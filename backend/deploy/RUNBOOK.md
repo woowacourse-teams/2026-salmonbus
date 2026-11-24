@@ -1078,7 +1078,8 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 | 예약 알림 | 좌석 정보 없이 나간다. 나간 알림은 되돌릴 수 없다 |
 
 - 끝나는 조건은 노선마다 따로다. 그 노선의 성공한 수집 배치 하나를 새 worker가 처리해 예보 실행 줄을 쓰면 끝난다. 차량이 없는 빈 응답, 예보 시간 밖, 수신 뒤 90초를 넘긴 배치도 줄을 남긴다. 수집 한도가 소진됐거나 모델이 지원하지 않는 노선은 줄이 생기지 않는다.
-- 새 worker는 기동하면 날짜 파티션을 확인하고, 수집 한 회차를 돌고, 모델을 올린 직후 처리하지 않은 배치를 줍는다. 노선의 첫 배치는 메모리에 상태가 없어 저장된 관측 6시간(모자라면 12시간)을 되감는다. 착수 시각은 `forecast_run.confirmed_at`이 있으면 그것, 없으면 이전 배포본이 찍은 `input_confirmed_at`을 쓴다. 그래서 이전 배포본이 처리한 배치와 이어진다.
+- SAL-434 첫 배포 당시 worker는 기동 후 노선의 첫 예보에서 관측 6시간을 읽고 부족하면 12시간을 읽었다. `forecast_run.confirmed_at`이 없으면 이전 배포본의 `input_confirmed_at`을 사용해 이력을 이었다. 아래는 그 전환 당시 동작이며 현재 worker의 계약은 다음 항목을 따른다.
+- 위 전환 절차의 구버전 착수 시각 호환은 현재 worker에서 제거됐다. 현재 worker는 최근 6시간의 관측을 한 번 읽고 `forecast_run.confirmed_at`만 사용한다. 배포 대상 DB의 복구 범위에 구버전 착수 시각만 있는 자료가 남아 있다면 이 절차를 현재 버전에 그대로 적용하지 않는다.
 - 노선 목록 응답은 `Cache-Control: public, max-age=300`이다. 프론트는 목록을 주기적으로 다시 묻지 않으므로, 예보 실행 줄이 생긴 뒤에도 브라우저에 따라 길면 5분 동안 빈 목록이 다시 쓰일 수 있다. CloudFront는 이 응답을 캐시하지 않는다(2026-11-16 응답 헤더로 확인).
 - 모델 배포의 정산 근거(`model_deployment.settlement_context`)는 새 worker가 (배포, 노선 판본)마다 한 번 적는다. 이미 적힌 값이 다르면 그 노선은 예보 실행 줄을 쓰지 못한다(`event=forecast_failed`). 운영 모델에서는 이전 배포본이 적어 둔 값과 새 배포본이 만든 값이 같은 것을 확인했다(2026-11-16).
 - 이관 앱은 배포 파이프라인 밖이라 이전 배포본 그대로 돈다. 4번에서 사람이 바꾼다. 그때까지 예보 기록 테이블은 내보내지도 지워지지도 않고 쌓인다.
@@ -1099,7 +1100,7 @@ psql -X -v ON_ERROR_STOP=1 -c "SET sal434.confirm_drop = '$(TZ=Asia/Seoul date +
 - `GET /api/v1/routes`의 `status`가 노선마다 `FORECAST_READY`로 바뀐다.
 - worker 지표 `salmonbus_forecast_batches_total{result}`에서 `published`·`empty`가 늘고 `failed`·`unsupported_profile`이 0이다. `salmonbus_forecast_replays_total{result="succeeded"}`가 노선 수만큼 한 번씩 늘고 `failed`가 없다.
 - 노선의 첫 배치 몇 개 가운데 `late`가 얼마나 되는지 본다. 되감기가 길어 앞 노선에 밀리면 수신 뒤 90초를 넘겨 `late`가 된다(줄은 생긴다). 다시 뜬 직후 뒤쪽 노선의 첫 두세 배치가 `late`면 차례를 기다린 것이다. `late`인 배치는 되감기를 하지 않고 닫혀서 그 노선의 되감기가 다음 배치로 미뤄지고, 그래서 한 배치로 끝나지 않을 수 있다. 실행 줄(`FORECAST_LANES`)을 서버의 코어 수보다 늘리면 되감기들이 CPU를 나눠 써서 더 늦어진다. 그 뒤에도 계속 `late`면 `salmonbus_forecast_queue{lane}`과 서버 CPU를 본다.
-- 첫 배포에서는 새 worker가 노선마다 첫 배치를 처리할 때, 이전 배포본이 그날 처리한 배치가 닫은 통과를 관측에서 되찾아 `stop_pass`에 함께 저장한다. 배포 뒤 처음 닫히는 통과의 정답을 내려면 직전 통과가 있어야 하기 때문이다. `salmonbus_forecast_passes_recovered_total`이 한 번 크게 늘고, 채점 지연 지표에 긴 값이 한 번 들어간다. 전날 배치가 닫은 통과는 되찾지 않는다.
+- SAL-434 첫 배포 당시에는 새 worker가 노선마다 첫 배치를 처리할 때, 이전 배포본이 그날 처리한 배치가 닫은 통과를 관측에서 되찾아 `stop_pass`에 함께 저장했다. 배포 뒤 처음 닫히는 통과의 정답을 내려면 직전 통과가 있어야 하기 때문이다. `salmonbus_forecast_passes_recovered_total`이 한 번 크게 늘고, 채점 지연 지표에 긴 값이 한 번 들어간다. 전날 배치가 닫은 통과는 되찾지 않는다.
 - 서버의 가용 메모리가 작고 스왑을 쓴다. 새 worker는 다시 뜬 직후 힙을 한도까지 쓴다. `free -m`으로 스왑이 급히 늘지 않는지, worker 로그에 `OutOfMemoryError`가 없는지 본다.
 - 통과가 닫히기 시작하면 `salmonbus_scoring_written_total{table="pass_label"}`이 는다. `salmonbus_scoring_queue`와 `salmonbus_scoring_pending_rows`가 쌓이지 않는다. `salmonbus_scoring_waiting`은 통과를 기다리는 예측 수라 배포 뒤 한동안 는다. 예측은 늦어도 예보 2시간 뒤에 닫히므로 그 뒤에도 계속 늘면 채점이 밀리는 것이다.
 - 기동 로그에 `event=partition_create_failed`와 `event=partition_maintenance_incomplete`가 없다. 기본 파티션의 줄 수(`salmonbus_partition_default_rows{table}`)는 기동 때 세지 않아 첫 주기 실행(기동 한 시간 뒤)부터 나온다. 0보다 크면 그 날짜의 파티션이 없을 때 들어온 줄이다. 「기본 파티션에 든 줄 옮기기」로 옮긴다. 그 전에는 아래 `sal434-01-precheck.sql`의 7절이 센 값을 본다.
@@ -1222,7 +1223,7 @@ Flyway는 적용 이력과 파일 체크섬만 보므로 이 뒤의 배포에서
 전환이 끝난 뒤 따로 PR을 올려 지운다.
 
 - 수동 SQL(`deploy/sql/sal434-*.sql`)과 그 테스트, 이관 앱의 옛 테이블 내보내기(`ARCHIVE_LEGACY_EXPORT_*`). `move-partition-default-rows.sql`과 `DefaultPartitionRowsSqlTest`는 전환 뒤에도 쓰므로 남긴다. 이 테스트가 `TransitionSqlTest`에서 빌려 쓰는 문장 나누기는 그때 함께 옮긴다
-- `observation_batch.input_confirmed_at`을 읽는 되감기의 대비 경로. 이전 배포본이 처리한 배치가 되감기 창(12시간)을 벗어난 뒤에는 쓰이지 않는다
+- `observation_batch.input_confirmed_at`을 읽던 되감기의 대비 경로는 SAL-457에서 제거했다. 컬럼과 과거 파일·이관 계약은 이 정리에 포함하지 않는다
 - 서버 `worker.env`에 남은 이전 키(`FORECAST_COMPACT_SETTLEMENT_WRITE`, `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`, `FORECAST_ARCHIVE_ENABLED`, `FORECAST_ARCHIVE_DELETE_ENABLED`)와 서버의 체크포인트 폴더. dev 서버는 `worker.env`의 `FORECAST_ALIGHTING_HISTORY_SEED_DIRECTORY`를 지운 뒤 dev 도구가 이 키를 허용하는 부분도 지운다
 - 3번에서 옮겨 둔 파일
 
@@ -1239,11 +1240,13 @@ dev 서버 DB도 줄이 있는 DB다. dev 배포 도구는 자료를 그대로 �
 ### 운영 중 참고
 
 - **설정.** worker의 예보 설정은 `FORECAST_ENABLED`와 `FORECAST_LANES`(노선별 실행 줄 수, 기본 2)뿐이다. 나머지 값은 `application.yml`에 있고 환경변수로 바꾸지 않는다.
-- **순서.** 예보는 노선 판본마다 처리하지 않은 배치를 수신 순서로 읽어 차례로 처리한다. 같은 노선은 항상 같은 실행 줄에서 돈다. 수집이 커밋한 뒤의 신호와 30초마다 도는 줍기가 이 처리를 깨운다. 처리 중 예외가 난 배치는 한 번 다시 하고, 또 실패하면 수신 뒤 90초가 지날 때까지 그 노선의 뒤 배치를 붙잡는다(`event=forecast_sweep_blocked`). 한 배치가 계속 실패하면 그 노선의 예보가 최대 90초쯤 밀린다.
+- **순서.** 예보는 노선 판본마다 처리하지 않은 배치를 수신 순서로 읽어 차례로 처리한다. 같은 노선은 항상 같은 실행 줄에서 돈다. 수집이 커밋한 뒤의 신호와 30초마다 도는 줍기가 이 처리를 깨운다. 처리 중 예외가 난 배치는 같은 호출에서 재시도하지 않는다. 다음 수집 신호나 줍기가 다시 시도하며, 실패가 이어지면 수신 뒤 90초가 지날 때까지 그 노선의 뒤 배치를 붙잡는다(`event=forecast_sweep_blocked`). 한 배치가 계속 실패하면 그 노선의 예보가 최대 90초쯤 밀린다.
 - **기동.** 날짜 파티션 확인 → 수집 시작 → 모델 적재 직후 첫 줍기 순서다. 채점은 노선마다 저장까지 마친 마지막 사건에서 130분 앞부터(길어도 26시간) 예보와 통과를 다시 읽어, 멈춘 동안 닫지 못한 예측을 닫는다. 26시간보다 오래 멈췄다면 그 앞의 예측은 닫히지 않은 채 남는다. 다시 뜬 직후 노선의 첫 배치는 관측을 다시 읽느라 1초를 넘길 수 있고, 그때 `event=worker_operation status=SLOW operation=forecast_batch`가 노선마다 한 번 남는다. 앞 노선의 되감기를 기다리는 동안 뒤 노선의 첫 예보가 늦어진다.
+- **예보 복구.** 메모리 상태가 없을 때 최근 6시간의 확정 관측을 한 번 읽는다. 운행 시작을 찾지 못한 차량은 다음 운행을 확인할 때까지 제외한다. 6시간마다 실행하는 주기 작업이 아니다.
+- **정산 전달.** 커밋한 배치의 입력은 큐에 한 번 등록한다. 복구된 통과 → 수집 사실 → 현재 통과 → 예보 순서와 사건별 저장 버퍼 단위를 유지하며, 정산 결과의 5초 주기 저장은 유지한다.
 - **종료.** 정상 종료(배포, 재시작) 때 실행 줄과 채점 줄은 돌던 일을 끝내고 닫힌다. 줄에서 기다리던 일은 버리고 그 수를 `discarded=`로 남긴다. 다 끝내면 `event=forecast_stopped`·`event=scoring_stopped`, 시한을 넘기면 `event=forecast_stop_timeout`·`event=scoring_stop_timeout`이 남는다. 버렸거나 끝내지 못한 배치는 다시 뜬 뒤 줍기가 잡고, 수신 뒤 90초가 지났으면 `LATE`가 된다. 버린 채점은 기동 때의 되감기가 채운다. 기다리는 시간의 합은 systemd의 `TimeoutStopSec`(45초) 안이다.
-- **로그.** `event=forecast_model_used`(쓴 모델), `forecast_route_skipped`·`forecast_unsupported_profile`(건너뛴 노선), `forecast_vehicle_withheld`(예보에서 뺀 차량과 사유), `forecast_replay_failed`(되감기 실패), `forecast_passes_recovered`(되감기에서 되찾은 통과), `scoring_write_failed`, `partitions_created`·`partition_create_failed`·`partition_default_rows`, `forecast_accuracy`(5분마다 정확도 집계)다.
-- **지표.** 예보는 `salmonbus_forecast_*`(`batches_total{result}`, `confirmation_lag_seconds`, `batch_duration_seconds`, `queue{lane}`, `rejected_total`, `unrouted_total`, `replays_total`, `replay_extensions_total`, `excluded_total{reason}`, `passes_recovered_total`, `passes_unattributed_total`), 채점은 `salmonbus_scoring_*`(`written_total{table}`, `results_total`, `waiting`, `queue`, `pending_rows`, `dropped_total`, `write_failures_total`, `replays_total`), 파티션은 `salmonbus_partition_*`(`creations_total{table}`, `default_rows{table}`, `failures_total`)이다. worker 작업 시간은 `salmonbus_worker_operation_seconds{operation}`의 `forecast_batch`·`forecast_pickup`·`scoring_write`로 본다.
+- **로그.** `event=forecast_model_used`(쓴 모델), `forecast_route_skipped`·`forecast_unsupported_profile`(건너뛴 노선), `forecast_vehicle_withheld`(예보에서 뺀 차량과 사유), `forecast_signal_failed`(커밋 후 예보 등록 오류), `forecast_replay_failed`(되감기 실패), `forecast_passes_recovered`(되감기에서 되찾은 통과), `scoring_write_failed`, `partitions_created`·`partition_create_failed`·`partition_default_rows`, `forecast_accuracy`(5분마다 정확도 집계)다.
+- **지표.** 예보는 `salmonbus_forecast_*`(`batches_total{result}`, `confirmation_lag_seconds`, `batch_duration_seconds`, `queue{lane}`, `rejected_total`, `unrouted_total`, `replays_total`, `excluded_total{reason}`, `passes_recovered_total`, `passes_unattributed_total`), 채점은 `salmonbus_scoring_*`(`written_total{table}`, `results_total`, `waiting`, `queue`, `pending_rows`, `dropped_total`, `write_failures_total`, `replays_total`), 파티션은 `salmonbus_partition_*`(`creations_total{table}`, `default_rows{table}`, `failures_total`)이다. worker 작업 시간은 `salmonbus_worker_operation_seconds{operation}`의 `forecast_batch`·`forecast_pickup`·`scoring_write`로 본다.
 - **DB 연결.** worker의 연결 풀은 5개이고 실행 줄 둘·줍기·수집·채점이 함께 쓴다. `hikaricp_connections_pending`이 자주 0보다 크면 풀 크기를 올린다.
 - **worker는 한 대만 띄운다.** 두 대가 자정에 걸쳐 같은 수집을 하면 날짜가 다른 파티션에 같은 시도 키가 한 줄씩 들어갈 수 있다(유일 제약은 날짜 안에서만 지킨다).
 - **개발 데이터 초기화.** `LocalData --reset-generated`는 관측 테이블, 예보 기록 테이블, 내보내기 장부를 함께 비운다.

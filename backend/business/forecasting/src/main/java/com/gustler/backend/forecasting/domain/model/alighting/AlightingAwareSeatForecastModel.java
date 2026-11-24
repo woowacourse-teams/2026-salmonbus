@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 
 /** 하차 반영의 고정 통계, 트리, 정산 파라미터를 하나의 불변 배포로 선택한다. */
 public final class AlightingAwareSeatForecastModel {
+
     private final AlightingAwareSeatPredictor predictor;
     private final Map<String, AlightingAwareRouteStatistics> statistics;
     private final Map<String, Map<Integer, String>> evidence;
@@ -23,7 +24,13 @@ public final class AlightingAwareSeatForecastModel {
         Map<String, Map<Integer, String>> evidence,
         String bundleDigest
     ) {
-        this(predictor, statistics, evidence, bundleDigest, Map.of());
+        this(
+                predictor,
+                statistics,
+                evidence,
+                bundleDigest,
+                Map.of()
+        );
     }
 
     public AlightingAwareSeatForecastModel(

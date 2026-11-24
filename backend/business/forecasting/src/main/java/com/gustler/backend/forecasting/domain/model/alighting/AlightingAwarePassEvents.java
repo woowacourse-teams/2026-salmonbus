@@ -9,35 +9,56 @@ import java.util.Map;
 
 /** passes3의 30분 편도 / 90초 관측 연결 조건. 미래 관측 없는 열린 구간은 제외한다. */
 public final class AlightingAwarePassEvents {
+
     private AlightingAwarePassEvents() {
     }
 
-    public static List<AlightingAwarePassEvent> resolve(List<AlightingAwareObservation> observations, List<Integer> realStopOrders) {
-        List<Integer> stops = realStopOrders.stream().distinct().sorted().toList();
+    public static List<AlightingAwarePassEvent> resolve(
+        List<AlightingAwareObservation> observations,
+        List<Integer> realStopOrders
+    ) {
+        List<Integer> stops = realStopOrders.stream()
+            .distinct()
+            .sorted()
+            .toList();
         Map<String, AlightingAwarePassEvent> eventsByTripStop = new LinkedHashMap<>();
         List<AlightingAwareObservation> chain = new ArrayList<>();
         AlightingAwareObservation previous = null;
-        long trip = 0;
-        for (AlightingAwareObservation row : orderedIdentifiedObservations(observations)) {
-            Duration gap = observationGap(previous, row);
-            if (startsChain(previous, row, gap)) {
-                addChain(chain, trip, stops, eventsByTripStop);
+        long tripId = 0;
+        for (AlightingAwareObservation observation : orderedIdentifiedObservations(observations)) {
+            Duration gap = observationGap(previous, observation);
+            if (startsChain(previous, observation, gap)) {
+                recordConfirmedPasses(
+                        chain,
+                        tripId,
+                        stops,
+                        eventsByTripStop
+                );
                 chain.clear();
             }
-            if (startsTrip(previous, row, gap)) {
-                trip = row.observationId();
+
+            if (startsTrip(previous, observation, gap)) {
+                tripId = observation.observationId();
             }
-            chain.add(row);
-            previous = row;
+            chain.add(observation);
+            previous = observation;
         }
-        addChain(chain, trip, stops, eventsByTripStop);
+
+        recordConfirmedPasses(
+                chain,
+                tripId,
+                stops,
+                eventsByTripStop
+        );
         return eventsByTripStop.values().stream()
             .sorted(Comparator.comparing(AlightingAwarePassEvent::confirmedAt)
                 .thenComparingLong(event -> event.departure().observationId()))
             .toList();
     }
 
-    private static List<AlightingAwareObservation> orderedIdentifiedObservations(List<AlightingAwareObservation> observations) {
+    private static List<AlightingAwareObservation> orderedIdentifiedObservations(
+        List<AlightingAwareObservation> observations
+    ) {
         return observations.stream()
             .filter(AlightingAwareObservation::hasVehicleIdentity)
             .sorted(Comparator.comparing(AlightingAwareObservation::vehicleId)
@@ -53,7 +74,11 @@ public final class AlightingAwarePassEvents {
         return Duration.between(previous.receivedAt(), current.receivedAt());
     }
 
-    private static boolean startsChain(AlightingAwareObservation previous, AlightingAwareObservation current, Duration gap) {
+    private static boolean startsChain(
+        AlightingAwareObservation previous,
+        AlightingAwareObservation current,
+        Duration gap
+    ) {
         if (current.confirmedProfile()) {
             return current.startsConfirmedChainAfter(previous);
         }
@@ -62,7 +87,11 @@ public final class AlightingAwarePassEvents {
             || movedBackwards(previous, current);
     }
 
-    private static boolean startsTrip(AlightingAwareObservation previous, AlightingAwareObservation current, Duration gap) {
+    private static boolean startsTrip(
+        AlightingAwareObservation previous,
+        AlightingAwareObservation current,
+        Duration gap
+    ) {
         if (current.confirmedProfile()) {
             return current.startsConfirmedTripAfter(previous);
         }
@@ -79,9 +108,9 @@ public final class AlightingAwarePassEvents {
         return previous != null && current.passedStopOrder() < previous.passedStopOrder() - 5;
     }
 
-    private static void addChain(
+    private static void recordConfirmedPasses(
         List<AlightingAwareObservation> chain,
-        final long trip,
+        final long tripId,
         List<Integer> stops,
         Map<String, AlightingAwarePassEvent> eventsByTripStop
     ) {
@@ -94,20 +123,28 @@ public final class AlightingAwarePassEvents {
         }
         for (int index = start; index + 1 < stops.size(); index++) {
             final int target = stops.get(index);
-            final int before = previousStop(stops, index);
-            final int next = stops.get(index + 1);
-            AlightingAwarePassEvent event = resolvePass(chain, trip, target, before, next);
-            if (event != null) {
-                String key = event.vehicleId() + ":" + trip + ":" + target;
-                if (event.arrival().confirmedProfile() && eventsByTripStop.containsKey(key)) {
-                    throw new IllegalArgumentException("Ambiguous confirmed trip/stop visit");
-                }
-                eventsByTripStop.put(key, event);
+            final int previousStop = previousStopOrder(stops, index);
+            final int nextStop = stops.get(index + 1);
+            AlightingAwarePassEvent event = resolvePass(
+                    chain,
+                    tripId,
+                    target,
+                    previousStop,
+                    nextStop
+            );
+            if (event == null) {
+                continue;
             }
+
+            String tripStopKey = event.vehicleId() + ":" + tripId + ":" + target;
+            if (event.arrival().confirmedProfile() && eventsByTripStop.containsKey(tripStopKey)) {
+                throw new IllegalArgumentException("Ambiguous confirmed trip/stop visit");
+            }
+            eventsByTripStop.put(tripStopKey, event);
         }
     }
 
-    private static int previousStop(List<Integer> stops, final int index) {
+    private static int previousStopOrder(List<Integer> stops, final int index) {
         if (index == 0) {
             return 0;
         }
@@ -117,61 +154,79 @@ public final class AlightingAwarePassEvents {
     /** 작은 순번 후퇴는 허용하되, 마지막 도착 전 관측보다 앞선 출발 관측을 연결하지 않는다. */
     private static AlightingAwarePassEvent resolvePass(
         List<AlightingAwareObservation> chain,
-        final long trip,
+        final long tripId,
         final int target,
-        final int before,
-        final int next
+        final int previousStop,
+        final int nextStop
     ) {
         AlightingAwareObservation arrival = null;
-        AlightingAwareObservation first = null;
-        AlightingAwareObservation last = null;
-        for (AlightingAwareObservation row : chain) {
-            if (isBeforeTarget(row, before, target)) {
-                arrival = row;
-                first = null;
-                last = null;
+        AlightingAwareObservation firstDeparture = null;
+        AlightingAwareObservation lastDeparture = null;
+        for (AlightingAwareObservation observation : chain) {
+            if (isBeforeTarget(observation, previousStop, target)) {
+                arrival = observation;
+                firstDeparture = null;
+                lastDeparture = null;
                 continue;
             }
-            if (isAfterTarget(arrival, row, target, next)) {
-                if (first == null) {
-                    first = row;
+            if (arrival != null && isInDepartureRange(observation, target, nextStop)) {
+                if (firstDeparture == null) {
+                    firstDeparture = observation;
                 }
-                last = row;
+                lastDeparture = observation;
                 continue;
             }
-            if (last != null && row.passedStopOrder() >= next) {
-                return confirmedPass(arrival, first, last, row, trip, target);
+            if (lastDeparture != null && observation.passedStopOrder() >= nextStop) {
+                return confirmedPass(
+                        arrival,
+                        firstDeparture,
+                        lastDeparture,
+                        observation,
+                        tripId,
+                        target
+                );
             }
         }
         return null;
     }
 
-    private static boolean isBeforeTarget(AlightingAwareObservation row, final int before, final int target) {
-        return row.passedStopOrder() >= before && row.passedStopOrder() < target;
+    private static boolean isBeforeTarget(
+        AlightingAwareObservation observation,
+        final int previousStop,
+        final int target
+    ) {
+        return observation.passedStopOrder() >= previousStop && observation.passedStopOrder() < target;
     }
 
-    private static boolean isAfterTarget(
-        AlightingAwareObservation arrival,
-        AlightingAwareObservation row,
+    private static boolean isInDepartureRange(
+        AlightingAwareObservation observation,
         final int target,
-        final int next
+        final int nextStop
     ) {
-        return arrival != null && row.passedStopOrder() >= target && row.passedStopOrder() < next;
+        return observation.passedStopOrder() >= target && observation.passedStopOrder() < nextStop;
     }
 
     private static AlightingAwarePassEvent confirmedPass(
         AlightingAwareObservation arrival,
-        AlightingAwareObservation first,
-        AlightingAwareObservation last,
+        AlightingAwareObservation firstDeparture,
+        AlightingAwareObservation lastDeparture,
         AlightingAwareObservation confirmation,
-        final long trip,
+        final long tripId,
         final int target
     ) {
-        if (hasMissingSeats(arrival, last)) {
+        if (hasMissingSeats(arrival, lastDeparture)) {
             return null;
         }
-        return new AlightingAwarePassEvent(arrival.vehicleId(), trip, target, arrival, last,
-            confirmation.receivedAt(), first, confirmation);
+        return new AlightingAwarePassEvent(
+                arrival.vehicleId(),
+                tripId,
+                target,
+                arrival,
+                lastDeparture,
+                confirmation.receivedAt(),
+                firstDeparture,
+                confirmation
+        );
     }
 
     private static boolean hasMissingSeats(AlightingAwareObservation arrival, AlightingAwareObservation departure) {

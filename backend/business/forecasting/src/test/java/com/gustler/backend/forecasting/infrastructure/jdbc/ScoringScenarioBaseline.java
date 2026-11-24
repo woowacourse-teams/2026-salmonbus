@@ -33,6 +33,7 @@ import java.util.TreeMap;
  * </ul>
  */
 final class ScoringScenarioBaseline {
+
     private static final List<String> TAINTS = List.of(ScoringReasons.SOURCE_HISTORY_INCOMPLETE,
         ScoringReasons.OBSERVATION_INPUT_LIMIT);
     /** 채점 단계가 마감을 기다리지 않고 바로 닫는 사유. 기준 구현은 마감까지 보아서 그 사이에 생긴 수집 구멍·관측 상한이 기대값에만 있다. */
@@ -71,9 +72,18 @@ final class ScoringScenarioBaseline {
         if (!"SETTLED".equals(line[2])) {
             return ScoringScenario.Verdict.of(line[2], line[3]);
         }
-        return new ScoringScenario.Verdict(line[2], null, Double.doubleToLongBits(Baseline.value(line[3])),
-            hashes.get(line[4]), Integer.valueOf(line[5]), Long.valueOf(line[6]), Long.valueOf(line[7]),
-            Long.valueOf(line[8]), Long.valueOf(line[9]), Long.valueOf(line[10]));
+        return new ScoringScenario.Verdict(
+                line[2],
+                null,
+                Double.doubleToLongBits(Baseline.value(line[3])),
+                hashes.get(line[4]),
+                Integer.valueOf(line[5]),
+                Long.valueOf(line[6]),
+                Long.valueOf(line[7]),
+                Long.valueOf(line[8]),
+                Long.valueOf(line[9]),
+                Long.valueOf(line[10])
+        );
     }
 
     private void putAll(Map<ScoringScenario.Key, ScoringScenario.Verdict> target, String[] line) {
@@ -116,10 +126,22 @@ final class ScoringScenarioBaseline {
                 taint++;
                 continue;
             }
-            unexplained.add(new Difference(key, expected, actual, reason));
+            unexplained.add(new Difference(
+                    key,
+                    expected,
+                    actual,
+                    reason
+            ));
         }
         addScoredOnly(scored, unexplained);
-        return new Comparison(verdicts.size(), outcomes, equal, midnight, taint, unexplained);
+        return new Comparison(
+                verdicts.size(),
+                outcomes,
+                equal,
+                midnight,
+                taint,
+                unexplained
+        );
     }
 
     /** 자정을 넘겨 이어진 운행의 예측이고 날짜 경계 없이 본 기대값과는 같은지 본다. */
@@ -138,8 +160,12 @@ final class ScoringScenarioBaseline {
     private void addScoredOnly(ScoringScenario.Scored scored, List<Difference> unexplained) {
         for (Map.Entry<ScoringScenario.Key, ScoringScenario.Verdict> entry : scored.verdicts().entrySet()) {
             if (!verdicts.containsKey(entry.getKey())) {
-                unexplained.add(new Difference(entry.getKey(), null, entry.getValue(),
-                    scored.reasons().get(entry.getKey())));
+                unexplained.add(new Difference(
+                        entry.getKey(),
+                        null,
+                        entry.getValue(),
+                        scored.reasons().get(entry.getKey())
+                ));
             }
         }
     }
@@ -161,9 +187,18 @@ final class ScoringScenarioBaseline {
     }
 
     private static ScoringScenario.Verdict withLabel(ScoringScenario.Verdict verdict, ScoringScenario.Verdict label) {
-        return new ScoringScenario.Verdict(verdict.state(), verdict.reason(), label.labelBits(), verdict.hash(),
-            verdict.capacity(), verdict.arrival(), verdict.last(), verdict.closure(), verdict.previousLast(),
-            verdict.previousClosure());
+        return new ScoringScenario.Verdict(
+                verdict.state(),
+                verdict.reason(),
+                label.labelBits(),
+                verdict.hash(),
+                verdict.capacity(),
+                verdict.arrival(),
+                verdict.last(),
+                verdict.closure(),
+                verdict.previousLast(),
+                verdict.previousClosure()
+        );
     }
 
     /**
@@ -178,6 +213,7 @@ final class ScoringScenarioBaseline {
         ScoringScenario.Verdict scored,
         String reason
     ) {
+
     }
 
     /**
@@ -196,5 +232,6 @@ final class ScoringScenarioBaseline {
         int taintTiming,
         List<Difference> unexplained
     ) {
+
     }
 }

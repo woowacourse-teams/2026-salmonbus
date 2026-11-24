@@ -9,6 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RouteStopsTest {
+
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
     /** 혼잡도를 안 준 관측. 이 테스트가 보는 것과 무관하다. */
     private static final Integer CROWD_LEVEL_UNKNOWN = null;
@@ -43,7 +44,19 @@ class RouteStopsTest {
 
         // then
         assertThat(actual).extracting(VehicleStopTarget::stopOrder).containsExactly(
-            11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22);
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                21,
+                22
+        );
     }
 
     @Test
@@ -86,10 +99,11 @@ class RouteStopsTest {
     void 경유_정류장도_지평을_한_칸으로_센다() {
         // given
         RouteStops stops = new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, List.of(
-            boardingStop(1),
-            boardingStop(2),
-            passingStop(3),
-            boardingStop(4)));
+                boardingStop(1),
+                boardingStop(2),
+                passingStop(3),
+                boardingStop(4)
+        ));
 
         // when
         List<VehicleStopTarget> actual = stops.targetsAheadOf(observed(2, SEATS_LEFT));
@@ -141,9 +155,12 @@ class RouteStopsTest {
     void 정류장은_전부_같은_노선_판본의_것이다() {
         // given
         final long otherRouteVersion = 2L;
-        List<RouteStop> mixed = List.of(
-            boardingStop(1),
-            new RouteStop(otherRouteVersion, 2, "20402", true));
+        List<RouteStop> mixed = List.of(boardingStop(1), new RouteStop(
+                otherRouteVersion,
+                2,
+                "20402",
+                true
+        ));
 
         // when
         Throwable caughtFailure = catchThrowable(() -> new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, mixed));
@@ -154,10 +171,10 @@ class RouteStopsTest {
             .isInstanceOf(IllegalArgumentException.class);
     }
 
+    /** 마지막 순번은 정류장 위치를 0에서 1 사이로 정규화하는 분모다. */
     @Test
     void 판본의_마지막_순번은_정류장_중_가장_큰_순번이다() {
         // given
-        // 경유 지점이 마지막 순번을 차지해도 그것까지 센다
         RouteStops stops =
             new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, List.of(boardingStop(1), passingStop(60)));
 
@@ -165,13 +182,10 @@ class RouteStopsTest {
         final int actual = stops.largestStopOrder();
 
         // then
-        // 정류장 위치를 0에서 1 사이로 옮길 때 나누는 수다
         assertThat(actual).isEqualTo(60);
     }
 
-    private RouteStops boardingStopsUpTo(
-        final int lastStopOrder
-    ) {
+    private RouteStops boardingStopsUpTo(final int lastStopOrder) {
         List<RouteStop> stops = new ArrayList<>();
         for (int stopOrder = 1; stopOrder <= lastStopOrder; stopOrder++) {
             stops.add(boardingStop(stopOrder));
@@ -179,23 +193,32 @@ class RouteStopsTest {
         return new RouteStops(ROUTE_VERSION_3330, UPSTREAM_ROUTE_3330, stops);
     }
 
-    private RouteStop boardingStop(
-        final int stopOrder
-    ) {
-        return new RouteStop(ROUTE_VERSION_3330, stopOrder, "20400" + stopOrder, true);
+    private RouteStop boardingStop(final int stopOrder) {
+        return new RouteStop(
+                ROUTE_VERSION_3330,
+                stopOrder,
+                "20400" + stopOrder,
+                true
+        );
     }
 
-    private RouteStop passingStop(
-        final int stopOrder
-    ) {
-        return new RouteStop(ROUTE_VERSION_3330, stopOrder, "27700" + stopOrder, false);
+    private RouteStop passingStop(final int stopOrder) {
+        return new RouteStop(
+                ROUTE_VERSION_3330,
+                stopOrder,
+                "27700" + stopOrder,
+                false
+        );
     }
 
-    private ObservedVehicle observed(
-        final int passedStopOrder,
-        Integer remainingSeats
-    ) {
+    private ObservedVehicle observed(final int passedStopOrder, Integer remainingSeats) {
         return new ObservedVehicle(
-            "204000206", ROUTE_VERSION_3330, passedStopOrder, OBSERVED_AT, remainingSeats, CROWD_LEVEL_UNKNOWN);
+                "204000206",
+                ROUTE_VERSION_3330,
+                passedStopOrder,
+                OBSERVED_AT,
+                remainingSeats,
+                CROWD_LEVEL_UNKNOWN
+        );
     }
 }

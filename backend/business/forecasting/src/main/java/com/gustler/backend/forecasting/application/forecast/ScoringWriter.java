@@ -10,6 +10,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
@@ -36,6 +37,7 @@ import org.springframework.transaction.support.TransactionOperations;
  * 한 번만 나온다. 같은 줄이 쓰기 대기에 둘 있어도 먼저 넣은 쪽의 예측만 나온다.
  */
 public final class ScoringWriter {
+
     /** 한 트랜잭션에 쓰는 줄 수의 기본 상한. */
     public static final int DEFAULT_MAX_ROWS_PER_TRANSACTION = 20_000;
     /** 쓰기 트랜잭션 하나의 시간을 남기는 {@link WorkerOperationLog} 작업 이름. */
@@ -171,15 +173,11 @@ public final class ScoringWriter {
         Set<Object> stored = Collections.newSetFromMap(new IdentityHashMap<>());
         stored.addAll(saved.labels());
         stored.addAll(saved.unresolved());
-        List<ForecastClosed> closed = new ArrayList<>();
-        for (ScoringResult result : taken) {
-            for (ClosedForecast forecast : result.closed()) {
-                if (stored.contains(forecast.row())) {
-                    closed.add(forecast.event());
-                }
-            }
-        }
-        return closed;
+        return taken.stream()
+            .flatMap(result -> result.closed().stream())
+            .filter(forecast -> stored.contains(forecast.row()))
+            .map(ClosedForecast::event)
+            .collect(Collectors.toCollection(ArrayList::new));
     }
 
     private static int rows(ScoringResult result) {
@@ -202,6 +200,7 @@ public final class ScoringWriter {
 
     /** 트랜잭션 하나에서 새로 넣은 줄이다. */
     private record Saved(List<PassLabel> labels, List<UnresolvedForecast> unresolved) {
+
     }
 
     /**
@@ -212,6 +211,7 @@ public final class ScoringWriter {
      * @param closed 새로 넣은 줄로 닫힌 예측의 사건. 정답 줄 하나에 짝지어진 예측이 여럿이면 사건도 여럿이다
      */
     public record Flushed(int labels, int unresolved, List<ForecastClosed> closed) {
+
         private static final Flushed NONE = new Flushed(0, 0, List.of());
 
         public Flushed {

@@ -35,7 +35,8 @@ public record ForecastPublished(
     Long modelDeploymentId,
     ForecastOutcome outcome,
     List<VehicleForecast> vehicles
-) {
+) implements ForecastBatchEvents.Event {
+
     public ForecastPublished {
         Objects.requireNonNull(sourceDate, "배치 날짜가 필요하다");
         Objects.requireNonNull(receivedAt, "수신 시각이 필요하다");
@@ -95,6 +96,7 @@ public record ForecastPublished(
         double[] expectedSeats,
         double[] fullProbabilities
     ) {
+
         public VehicleForecast {
             if (vehicleId == null || vehicleId.isBlank()) {
                 throw new IllegalArgumentException("차량 번호가 필요하다");
@@ -157,8 +159,17 @@ public record ForecastPublished(
 
         @Override
         public int hashCode() {
-            int result = Objects.hash(vehicleObservationId, sourceRowNumber, vehicleId, passedStopOrder,
-                tripStartObservationId, chainStartObservationId, down, capacity, extended);
+            int result = Objects.hash(
+                    vehicleObservationId,
+                    sourceRowNumber,
+                    vehicleId,
+                    passedStopOrder,
+                    tripStartObservationId,
+                    chainStartObservationId,
+                    down,
+                    capacity,
+                    extended
+            );
             result = 31 * result + Arrays.hashCode(targetStopOrders);
             result = 31 * result + Arrays.hashCode(expectedSeats);
             return 31 * result + Arrays.hashCode(fullProbabilities);
@@ -167,9 +178,20 @@ public record ForecastPublished(
         @Override
         public String toString() {
             return "VehicleForecast[vehicleObservationId=%d, sourceRowNumber=%d, vehicleId=%s, passedStopOrder=%d, "
-                .formatted(vehicleObservationId, sourceRowNumber, vehicleId, passedStopOrder)
+                .formatted(
+                        vehicleObservationId,
+                        sourceRowNumber,
+                        vehicleId,
+                        passedStopOrder
+                )
                 + "tripStartObservationId=%d, chainStartObservationId=%d, down=%s, capacity=%d, extended=%s, "
-                    .formatted(tripStartObservationId, chainStartObservationId, down, capacity, extended)
+                    .formatted(
+                            tripStartObservationId,
+                            chainStartObservationId,
+                            down,
+                            capacity,
+                            extended
+                    )
                 + "targetStopOrders=%s, expectedSeats=%s, fullProbabilities=%s]".formatted(
                     Arrays.toString(targetStopOrders), Arrays.toString(expectedSeats),
                     Arrays.toString(fullProbabilities));

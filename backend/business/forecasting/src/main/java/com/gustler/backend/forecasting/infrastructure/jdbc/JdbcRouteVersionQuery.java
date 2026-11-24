@@ -17,6 +17,7 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JdbcRouteVersionQuery implements RouteVersionQuery, RouteStopsQuery {
+
     /**
      * 유효 기간이 종료되지 않은 판본이다. 노선별로 valid_to 가 NULL 인 행이 현재 사용하는 판본이다.
      *
@@ -57,9 +58,7 @@ public class JdbcRouteVersionQuery implements RouteVersionQuery, RouteStopsQuery
 
     private final JdbcClient jdbcClient;
 
-    public JdbcRouteVersionQuery(
-        JdbcClient jdbcClient
-    ) {
+    public JdbcRouteVersionQuery(JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 
@@ -71,22 +70,25 @@ public class JdbcRouteVersionQuery implements RouteVersionQuery, RouteStopsQuery
     }
 
     @Override
-    public RouteStops readStops(
-        final long routeVersionId
-    ) {
+    public RouteStops readStops(final long routeVersionId) {
         List<RouteStop> stops = jdbcClient.sql(SELECT_STOPS_OF_VERSION)
             .param("routeVersionId", routeVersionId)
             .query((resultSet, rowNumber) -> new RouteStop(
-                resultSet.getLong("route_version_id"),
-                resultSet.getInt("stop_order"),
-                resultSet.getString("stop_id"),
-                resultSet.getBoolean("boarding_allowed"),
-                RouteDirection.valueOf(resultSet.getString("direction"))))
+                    resultSet.getLong("route_version_id"),
+                    resultSet.getInt("stop_order"),
+                    resultSet.getString("stop_id"),
+                    resultSet.getBoolean("boarding_allowed"),
+                    RouteDirection.valueOf(resultSet.getString("direction"))
+            ))
             .list();
         return jdbcClient.sql(SELECT_SOURCE_ROUTE_ID)
             .param("routeVersionId", routeVersionId)
-            .query((rs, row) -> new RouteStops(routeVersionId, rs.getString("public_route_id"),
-                stops, rs.getString("display_name")))
+            .query((rs, row) -> new RouteStops(
+                    routeVersionId,
+                    rs.getString("public_route_id"),
+                    stops,
+                    rs.getString("display_name")
+            ))
             .single();
     }
 }

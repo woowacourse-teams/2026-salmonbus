@@ -17,12 +17,15 @@ import java.util.Map;
  * 내부 메모는 동기화하지 않으므로 한 스레드에서 한 배치를 처리하는 동안만 쓴다.
  */
 public final class AlightingAwareBatchContext {
+
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
     private final AlightingAwareRouteStatistics statistics;
     private final List<AlightingAwareObservation> history;
     private final List<AlightingAwarePassEvent> events;
     private final Map<String, AlightingAwareVehiclePrefix> prefix;
-    private final Map<MomentKey, Moment> moments = new HashMap<>();
+    private final Map<MomentKey, Moment> moments =
+        new HashMap<>();
     private Map<String, AlightingAwareVehiclePrefix> copiedPrefix;
 
     /**
@@ -54,13 +57,12 @@ public final class AlightingAwareBatchContext {
 
     /** 같은 수신 시각·배치 번호의 관측이 함께 쓰는 거른 이력과 사건이다. 처음 부를 때 거르기를 한다. */
     Moment momentOf(AlightingAwareObservation source) {
-        MomentKey key = new MomentKey(source.receivedAt(), source.batchId());
-        Moment moment = moments.get(key);
-        if (moment == null) {
-            moment = new Moment(source.receivedAt(), source.batchId());
-            moments.put(key, moment);
-        }
-        return moment;
+        MomentKey key = new MomentKey(
+            source.receivedAt(),
+            source.batchId()
+        );
+        return moments.computeIfAbsent(key, instantAndBatch ->
+            new Moment(instantAndBatch.receivedAt(), instantAndBatch.batchId()));
     }
 
     Instant eventTime(AlightingAwarePassEvent event) {
@@ -71,13 +73,13 @@ public final class AlightingAwareBatchContext {
     }
 
     double deviation(List<AlightingAwarePassEvent> events) {
-        double value = 0;
+        double totalDeviation = 0;
         for (AlightingAwarePassEvent event : events) {
             ZonedDateTime time = eventTime(event).atZone(SEOUL);
-            value += event.arrival().seats() - event.departure().seats()
+            totalDeviation += event.arrival().seats() - event.departure().seats()
                 - statistics.typicalNet(event.stopOrder(), statistics.dayType(time.toLocalDate()), minute(time));
         }
-        return value;
+        return totalDeviation;
     }
 
     private static int minute(ZonedDateTime time) {
@@ -92,10 +94,12 @@ public final class AlightingAwareBatchContext {
     }
 
     private record MomentKey(Instant receivedAt, long batchId) {
+
     }
 
     /** 한 관측 시점에서 볼 수 있는 이력·사건과, 그 시점에서 차량·목표와 무관하게 정해지는 계산 결과다. */
     final class Moment {
+
         private final Instant receivedAt;
         private final long batchId;
         private final List<AlightingAwareObservation> history;
@@ -109,7 +113,9 @@ public final class AlightingAwareBatchContext {
         private Moment(Instant receivedAt, final long batchId) {
             this.receivedAt = receivedAt;
             this.batchId = batchId;
-            this.history = AlightingAwareBatchContext.this.history.stream().filter(this::before).toList();
+            this.history = AlightingAwareBatchContext.this.history.stream()
+                .filter(this::isVisibleAtBatch)
+                .toList();
             this.events = AlightingAwareBatchContext.this.events.stream()
                 .filter(this::isAvailable)
                 .sorted(Comparator.comparing(AlightingAwareBatchContext.this::eventTime))
@@ -117,10 +123,10 @@ public final class AlightingAwareBatchContext {
         }
 
         private boolean isAvailable(AlightingAwarePassEvent event) {
-            return !event.confirmedAt().isAfter(receivedAt) && before(event.confirmation());
+            return !event.confirmedAt().isAfter(receivedAt) && isVisibleAtBatch(event.confirmation());
         }
 
-        private boolean before(AlightingAwareObservation observation) {
+        private boolean isVisibleAtBatch(AlightingAwareObservation observation) {
             if (observation.receivedAt().isBefore(receivedAt)) {
                 return true;
             }
@@ -151,15 +157,20 @@ public final class AlightingAwareBatchContext {
             if (queues != null) {
                 return queues;
             }
-            Map<Integer, QueueState> built = new HashMap<>();
-            LocalDate day = receivedAt.atZone(SEOUL).toLocalDate();
+            LocalDate observationDate = receivedAt.atZone(SEOUL).toLocalDate();
+            Map<Integer, QueueState> queuesByStop = new HashMap<>();
             for (AlightingAwarePassEvent event : events) {
-                if (!eventTime(event).atZone(SEOUL).toLocalDate().equals(day)) {
+                Instant passTime = eventTime(event);
+                if (!passTime.atZone(SEOUL).toLocalDate().equals(observationDate)) {
                     continue;
                 }
-                built.computeIfAbsent(event.stopOrder(), ignored -> new QueueState()).accept(event, eventTime(event));
+                QueueState queue = queuesByStop.computeIfAbsent(
+                    event.stopOrder(),
+                    ignored -> new QueueState()
+                );
+                queue.accept(event, passTime);
             }
-            queues = built;
+            queues = queuesByStop;
             return queues;
         }
 
@@ -205,6 +216,7 @@ public final class AlightingAwareBatchContext {
 
     /** 한 정류장의 마지막 여유 통과 이후 만석 통과 수와 탑승 누계다. */
     static final class QueueState {
+
         private Instant clear;
         private double full;
         private double boarded;

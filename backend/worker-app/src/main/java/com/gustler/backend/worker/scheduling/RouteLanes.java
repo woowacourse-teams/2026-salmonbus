@@ -31,6 +31,7 @@ import org.springframework.scheduling.concurrent.ExecutorConfigurationSupport;
  * 없어 컨텍스트 일시 정지에는 참여하지 않는다.
  */
 public class RouteLanes implements ForecastLanes, SmartLifecycle {
+
     /** 실행 줄 스레드 이름의 앞부분. */
     public static final String THREAD_PREFIX = "forecast-lane-";
     /** worker가 쓰는 줄 하나의 길이. */
@@ -76,12 +77,19 @@ public class RouteLanes implements ForecastLanes, SmartLifecycle {
 
     private static ThreadPoolExecutor createLane(final int index, final int capacity) {
         String prefix = THREAD_PREFIX + index + "-";
-        return new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
-            new ArrayBlockingQueue<>(capacity), runnable -> {
-                Thread thread = new Thread(runnable, prefix + "1");
-                thread.setDaemon(true);
-                return thread;
-            }, new ThreadPoolExecutor.AbortPolicy());
+        return new ThreadPoolExecutor(
+                1,
+                1,
+                0,
+                TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(capacity),
+                runnable -> {
+                    Thread thread = new Thread(runnable, prefix + "1");
+                    thread.setDaemon(true);
+                    return thread;
+                },
+                new ThreadPoolExecutor.AbortPolicy()
+        );
     }
 
     private static void registerQueueGauge(MeterRegistry meters, ThreadPoolExecutor executor, final int index) {
@@ -105,8 +113,11 @@ public class RouteLanes implements ForecastLanes, SmartLifecycle {
         try {
             task.run();
         } catch (RuntimeException failure) {
-            LOGGER.warn("event=forecast_task_failed routeKey={} exceptionType={}", routeKey,
-                failure.getClass().getSimpleName(), failure);
+            LOGGER.warn(
+                    "event=forecast_task_failed routeKey={} exceptionType={}",
+                    routeKey,
+                    failure.getClass().getSimpleName()
+            );
         }
     }
 
@@ -155,8 +166,12 @@ public class RouteLanes implements ForecastLanes, SmartLifecycle {
             }
         }
         if (running > 0) {
-            LOGGER.warn("event=forecast_stop_timeout discarded={} running={} waitMs={}", discarded, running,
-                stopWait.toMillis());
+            LOGGER.warn(
+                    "event=forecast_stop_timeout discarded={} running={} waitMs={}",
+                    discarded,
+                    running,
+                    stopWait.toMillis()
+            );
             return;
         }
         LOGGER.info("event=forecast_stopped discarded={}", discarded);

@@ -26,6 +26,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * 근거에 넣는다. 수집이 걸러 낸 좌석은 알 수 없어 반영하지 못한다.
  */
 final class WorkerReplayLoader {
+
     private static final String SOURCE_ID = "GBIS";
     private static final int ROWS_PER_STATEMENT = 500;
     private static final Comparator<AlightingAwareObservation> EVIDENCE_ORDER = Comparator
@@ -48,7 +49,12 @@ final class WorkerReplayLoader {
         final long routeId = jdbc.sql("""
             INSERT INTO route(public_route_id,source_id,source_route_id,display_name,start_stop_name,end_stop_name)
             VALUES(?,?,?,?,'A','B') RETURNING id
-            """).params(fixture.sourceRouteId(), SOURCE_ID, fixture.sourceRouteId(), fixture.route())
+            """).params(
+                    fixture.sourceRouteId(),
+                    SOURCE_ID,
+                    fixture.sourceRouteId(),
+                    fixture.route()
+            )
             .query(Long.class).single();
         insertVersions(fixture, routeId);
         insertBatches(fixture);
@@ -63,13 +69,25 @@ final class WorkerReplayLoader {
             jdbc.sql("""
                 INSERT INTO route_version(id,route_id,turn_sequence,content_digest,valid_from,valid_to)
                 OVERRIDING SYSTEM VALUE VALUES(?,?,?,?,?,?)
-                """).params(Arrays.asList(version.id(), routeId, version.turnSequence(), version.contentDigest(),
-                    version.validFrom(), version.validTo())).update();
+                """).params(Arrays.asList(
+                        version.id(),
+                        routeId,
+                        version.turnSequence(),
+                        version.contentDigest(),
+                        version.validFrom(),
+                        version.validTo()
+                )).update();
             insert("""
                 INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed) VALUES
                 """, "(?,?,?,?,?,?)", "", stops.stream()
-                .map(stop -> Arrays.<Object>asList(version.id(), stop.order(), stop.id(), stop.name(),
-                    stop.direction(), stop.boardingAllowed()))
+                .map(stop -> Arrays.<Object>asList(
+                        version.id(),
+                        stop.order(),
+                        stop.id(),
+                        stop.name(),
+                        stop.direction(),
+                        stop.boardingAllowed()
+                ))
                 .toList());
         }
     }
@@ -82,8 +100,15 @@ final class WorkerReplayLoader {
             OVERRIDING SYSTEM VALUE VALUES
             """, "(?,?,?,1,?,?,?,'SUCCESS_ROWS',?,'normalization-v1.0.0','adaptive-kst-v1.0.1','LIVE')", "",
             fixture.batches().stream()
-                .map(batch -> Arrays.<Object>asList(batch.id(), batch.routeVersionId(), time(batch.responseAt()),
-                    "replay-" + batch.id(), time(batch.responseAt()), time(batch.responseAt()), batch.storedRows()))
+                .map(batch -> Arrays.<Object>asList(
+                        batch.id(),
+                        batch.routeVersionId(),
+                        time(batch.responseAt()),
+                        "replay-" + batch.id(),
+                        time(batch.responseAt()),
+                        time(batch.responseAt()),
+                        batch.storedRows()
+                ))
                 .toList());
     }
 
@@ -95,14 +120,23 @@ final class WorkerReplayLoader {
         for (AlightingAwareObservation observation : fixture.observations()) {
             String stopId = stopIds.get(observation.stopOrder());
             if (stopId == null) {
-                throw new IllegalArgumentException("재생 자료의 관측이 정류장 목록에 없는 순번을 가리킨다: "
-                    + observation.observationId());
+                throw new IllegalArgumentException("재생 자료의 관측이 정류장 목록에 없는 순번을 가리킨다: " + observation.observationId());
             }
             final int rowNumber = rowNumbers.merge(observation.batchId(), 1, Integer::sum) - 1;
-            rows.add(Arrays.asList(observation.observationId(), observation.batchId(), observation.routeVersionId(),
-                rowNumber, observation.vehicleId(), observation.stopOrder(), stopId, observation.state(),
-                observation.seats(), seatUnknownReason(observation), observation.passedStopOrder(),
-                knownCrowd(observation)));
+            rows.add(Arrays.asList(
+                    observation.observationId(),
+                    observation.batchId(),
+                    observation.routeVersionId(),
+                    rowNumber,
+                    observation.vehicleId(),
+                    observation.stopOrder(),
+                    stopId,
+                    observation.state(),
+                    observation.seats(),
+                    seatUnknownReason(observation),
+                    observation.passedStopOrder(),
+                    knownCrowd(observation)
+            ));
         }
         insert("""
             INSERT INTO vehicle_observation(id,observation_batch_id,route_version_id,source_row_number,vehicle_id,
@@ -139,11 +173,19 @@ final class WorkerReplayLoader {
                 maximum = 0;
             }
             maximum = Math.max(maximum, observation.seats());
-            known.put(new Evidence(vehicle, observation.receivedAt(), observation.batchId()), maximum);
+            known.put(
+                new Evidence(vehicle, observation.receivedAt(), observation.batchId()),
+                maximum
+            );
         }
         List<List<Object>> rows = new ArrayList<>();
-        known.forEach((evidence, capacity) -> rows.add(Arrays.asList(SOURCE_ID, evidence.vehicleId(),
-            time(evidence.at()), evidence.batchId(), capacity)));
+        known.forEach((evidence, capacity) -> rows.add(Arrays.asList(
+                SOURCE_ID,
+                evidence.vehicleId(),
+                time(evidence.at()),
+                evidence.batchId(),
+                capacity
+        )));
         insert("""
             INSERT INTO vehicle_capacity_history(source_id,vehicle_id,evidence_at,evidence_batch_id,capacity) VALUES
             """, "(?,?,?,?,?)", " ON CONFLICT DO NOTHING", rows);
@@ -176,5 +218,6 @@ final class WorkerReplayLoader {
 
     /** 정원 이력 한 줄의 기본 키다. */
     private record Evidence(String vehicleId, Instant at, long batchId) {
+
     }
 }

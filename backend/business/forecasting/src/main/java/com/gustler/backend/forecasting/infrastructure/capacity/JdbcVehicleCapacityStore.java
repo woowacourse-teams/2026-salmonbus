@@ -5,6 +5,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class JdbcVehicleCapacityStore {
+
     private final JdbcClient jdbc;
 
     public JdbcVehicleCapacityStore(JdbcClient jdbc) {
@@ -43,7 +45,12 @@ public class JdbcVehicleCapacityStore {
             .list();
     }
 
-    public List<Capacity> findKnownAt(String sourceId, List<String> vehicleIds, Instant until, final long batchId) {
+    public List<Capacity> findKnownAt(
+        String sourceId,
+        List<String> vehicleIds,
+        Instant until,
+        final long batchId
+    ) {
         if (vehicleIds.isEmpty()) {
             return List.of();
         }
@@ -55,7 +62,7 @@ public class JdbcVehicleCapacityStore {
             ORDER BY vehicle_id, evidence_at DESC, evidence_batch_id DESC
             """)
             .param("sourceId", sourceId).param("vehicleIds", vehicleIds)
-            .param("until", until.atOffset(java.time.ZoneOffset.UTC)).param("batchId", batchId)
+            .param("until", until.atOffset(ZoneOffset.UTC)).param("batchId", batchId)
             .query(this::mapCapacity).list();
     }
 
@@ -94,13 +101,20 @@ public class JdbcVehicleCapacityStore {
             """)
             .param("batchId", batchId)
             .query((row, number) -> new Observation(
-                row.getLong("id"), row.getString("source_id"), row.getInt("remaining_seats"),
-                row.getObject("vehicle_type", Integer.class),
-                row.getObject("verified_seat_limit", Integer.class), row.getInt("saved_capacity")))
+                    row.getLong("id"),
+                    row.getString("source_id"),
+                    row.getInt("remaining_seats"),
+                    row.getObject("vehicle_type", Integer.class),
+                    row.getObject("verified_seat_limit", Integer.class),
+                    row.getInt("saved_capacity")
+            ))
             .list();
     }
 
-    private List<Long> observationIdsWithStatus(List<Observation> observations, String status) {
+    private List<Long> observationIdsWithStatus(
+        List<Observation> observations,
+        String status
+    ) {
         return observations.stream()
             .filter(observation -> status.equals(observation.qualityStatus()))
             .map(Observation::id)
@@ -159,20 +173,30 @@ public class JdbcVehicleCapacityStore {
     }
 
     private record Observation(
-        long id, String sourceId, int seats, Integer vehicleType, Integer verifiedLimit, int savedCapacity
+        long id,
+        String sourceId,
+        int seats,
+        Integer vehicleType,
+        Integer verifiedLimit,
+        int savedCapacity
     ) {
+
         String qualityStatus() {
             if (verifiedLimit != null && seats > verifiedLimit) {
                 return "OUTLIER";
             }
             Integer limit = seatLimit();
-            if (seats > SeatGrid.LARGEST_SEATS || (limit != null && seats > limit)) {
+            if (exceedsSeatLimit(limit)) {
                 return "REVIEW";
             }
             if (limit == null && seats > savedCapacity) {
                 return "REVIEW";
             }
             return null;
+        }
+
+        private boolean exceedsSeatLimit(Integer limit) {
+            return seats > SeatGrid.LARGEST_SEATS || (limit != null && seats > limit);
         }
 
         private Integer seatLimit() {
@@ -195,19 +219,35 @@ public class JdbcVehicleCapacityStore {
         }
     }
 
-    public record BatchAssessment(List<Capacity> raised, Set<Long> withheldObservationIds, int outliers) {
+    public record BatchAssessment(
+        List<Capacity> raised,
+        Set<Long> withheldObservationIds,
+        int outliers
+    ) {
+
     }
 
-    private Capacity mapCapacity(ResultSet resultSet, final int rowNumber) throws SQLException {
+    private Capacity mapCapacity(
+        ResultSet resultSet,
+        final int rowNumber
+    ) throws SQLException {
         return new Capacity(
-            resultSet.getString("source_id"),
-            resultSet.getString("vehicle_id"),
-            resultSet.getInt("capacity"),
-            resultSet.getObject("evidence_at", OffsetDateTime.class).toInstant(),
-            resultSet.getObject("evidence_batch_id", Long.class));
+                resultSet.getString("source_id"),
+                resultSet.getString("vehicle_id"),
+                resultSet.getInt("capacity"),
+                resultSet.getObject("evidence_at", OffsetDateTime.class).toInstant(),
+                resultSet.getObject("evidence_batch_id", Long.class)
+        );
     }
 
-    public record Capacity(String sourceId, String vehicleId, int seats, Instant evidenceAt, Long evidenceBatchId) {
+    public record Capacity(
+        String sourceId,
+        String vehicleId,
+        int seats,
+        Instant evidenceAt,
+        Long evidenceBatchId
+    ) {
+
         public boolean canUseInStatistics(Instant dataUntil) {
             return evidenceBatchId != null || !evidenceAt.isAfter(dataUntil);
         }

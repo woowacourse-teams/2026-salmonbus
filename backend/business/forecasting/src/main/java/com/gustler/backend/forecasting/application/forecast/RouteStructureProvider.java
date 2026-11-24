@@ -9,6 +9,7 @@ import java.util.List;
  * 생기므로 채점 단계는 이 목록으로 통과가 생길 수 없는 목표를 가려낸다.
  */
 public interface RouteStructureProvider {
+
     /**
      * 실정류장 순번을 돌려준다.
      *

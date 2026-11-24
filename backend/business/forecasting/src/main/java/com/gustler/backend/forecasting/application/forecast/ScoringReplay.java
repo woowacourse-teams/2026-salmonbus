@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -45,6 +46,7 @@ import java.util.stream.Stream;
  * 함께 늘린다.
  */
 public final class ScoringReplay {
+
     /** 예보 기록을 되감는 가장 짧은 범위. 마감(착수 시각 + 2시간)에 수신 뒤 착수까지의 지연 여유를 더한 값이다. */
     public static final Duration DEFAULT_FORECAST_WINDOW = ScoringStage.IDLE_EXPIRY;
     /** 중단이 없을 때 통과 기록을 되감는 범위. */
@@ -71,7 +73,13 @@ public final class ScoringReplay {
      * @param passes 통과 기록 저장소
      */
     public ScoringReplay(ForecastRecordStore forecasts, StopPassStore passes) {
-        this(forecasts, passes, DEFAULT_FORECAST_WINDOW, DEFAULT_PASS_WINDOW, DEFAULT_MAX_FORECAST_WINDOW);
+        this(
+                forecasts,
+                passes,
+                DEFAULT_FORECAST_WINDOW,
+                DEFAULT_PASS_WINDOW,
+                DEFAULT_MAX_FORECAST_WINDOW
+        );
     }
 
     /**
@@ -126,20 +134,22 @@ public final class ScoringReplay {
     public ScoringResult replay(ScoringStage stage, final long routeId, Instant now) {
         stage.discard(routeId);
         Instant forecastFrom = forecastFrom(routeId, now);
-        List<Event> events = new ArrayList<>();
-        for (RecordedBatch batch : forecasts.findRecordedBatchesBetween(routeId, intakeFrom(forecastFrom), now)) {
-            events.add(new Event(batch.confirmedAt(), batch.observationBatchId(), 0, batch, null, null));
-        }
-        for (PassClosed pass : passes.findClosedBetween(routeId, forecastFrom.minus(passLead), now)) {
-            events.add(new Event(pass.closedAt(), pass.closureBatchId(), 1, null, pass, null));
-        }
-        for (ForecastPublished published : forecasts.findPublishedBetween(routeId, forecastFrom, now)) {
-            events.add(new Event(published.confirmedAt(), published.observationBatchId(), 2, null, null, published));
-        }
-        events.sort(ORDER);
+        Instant batchFrom = intakeFrom(forecastFrom);
+        List<RecordedBatch> recordedBatches = forecasts.findRecordedBatchesBetween(routeId, batchFrom, now);
+        List<Event> replayOrder = recordedBatches.stream()
+            .map(Event::new)
+            .collect(Collectors.toCollection(ArrayList::new));
+        replayOrder.addAll(passes.findClosedBetween(routeId, forecastFrom.minus(passLead), now).stream()
+            .map(Event::new)
+            .toList());
+        replayOrder.addAll(forecasts.findPublishedBetween(routeId, forecastFrom, now).stream()
+            .map(Event::new)
+            .toList());
+        replayOrder.sort(ORDER);
+
         ScoringResult result = ScoringResult.empty();
-        for (Event event : events) {
-            result = result.plus(accept(stage, event));
+        for (Event event : replayOrder) {
+            result = result.plus(event.applyTo(stage));
         }
         return result;
     }
@@ -165,16 +175,6 @@ public final class ScoringReplay {
         return SourceDates.of(forecastFrom).atStartOfDay(SourceDates.KOREA).toInstant().minus(INTAKE_MARGIN);
     }
 
-    private static ScoringResult accept(ScoringStage stage, Event event) {
-        if (event.batch() != null) {
-            return stage.restore(event.batch());
-        }
-        if (event.pass() != null) {
-            return stage.accept(event.pass());
-        }
-        return stage.accept(event.published());
-    }
-
     private record Event(
         Instant at,
         long batchId,
@@ -183,5 +183,48 @@ public final class ScoringReplay {
         PassClosed pass,
         ForecastPublished published
     ) {
+
+        private Event(RecordedBatch batch) {
+            this(
+                    batch.confirmedAt(),
+                    batch.observationBatchId(),
+                    0,
+                    batch,
+                    null,
+                    null
+            );
+        }
+
+        private Event(PassClosed pass) {
+            this(
+                    pass.closedAt(),
+                    pass.closureBatchId(),
+                    1,
+                    null,
+                    pass,
+                    null
+            );
+        }
+
+        private Event(ForecastPublished published) {
+            this(
+                    published.confirmedAt(),
+                    published.observationBatchId(),
+                    2,
+                    null,
+                    null,
+                    published
+            );
+        }
+
+        private ScoringResult applyTo(ScoringStage stage) {
+            if (batch != null) {
+                return stage.restore(batch);
+            }
+            if (pass != null) {
+                return stage.accept(pass);
+            }
+            return stage.accept(published);
+        }
     }
 }

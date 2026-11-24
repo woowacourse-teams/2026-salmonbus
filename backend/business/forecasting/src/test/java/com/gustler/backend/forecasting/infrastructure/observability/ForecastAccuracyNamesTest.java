@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class ForecastAccuracyNamesTest {
+
     @Autowired
     private JdbcClient jdbc;
 
@@ -48,8 +49,28 @@ class ForecastAccuracyNamesTest {
         ForecastMonitoring monitoring = new ForecastMonitoring(new SimpleMeterRegistry(), dataSource,
             Clock.systemUTC());
         monitoring.closed(List.of(
-            new ForecastClosed(routeId, versionId, 6, 4, 2, 10.0, 0.25, 3.0, 3),
-            new ForecastClosed(routeId, versionId, 6, 9, 5, 10.0, 0.25, null, null)));
+            new ForecastClosed(
+                    routeId,
+                    versionId,
+                    6,
+                    4,
+                    2,
+                    10.0,
+                    0.25,
+                    3.0,
+                    3
+            ),
+            new ForecastClosed(
+                    routeId,
+                    versionId,
+                    6,
+                    9,
+                    5,
+                    10.0,
+                    0.25,
+                    null,
+                    null
+            )));
 
         // when
         List<String> lines = accuracyLines(monitoring::flushAccuracy);

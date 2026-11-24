@@ -11,6 +11,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class TransferReplayEvidenceTest {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String CODE = "1".repeat(40);
     private static final String DIGEST = "2".repeat(64);
@@ -48,7 +49,12 @@ class TransferReplayEvidenceTest {
     }
 
     private static void verify(ObjectNode cells) {
-        TransferReplayEvidence.verifyRoute(ROUTE, cells, DIGEST, CODE);
+        TransferReplayEvidence.verifyRoute(
+                ROUTE,
+                cells,
+                DIGEST,
+                CODE
+        );
     }
 
     private static ObjectNode trace(ObjectNode cells, String name) {

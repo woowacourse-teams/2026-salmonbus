@@ -7,6 +7,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class AlightingAwareConfirmedObservationTest {
+
     @ParameterizedTest
     @CsvSource({
             "1,15,15,1,false,false,false",
@@ -30,16 +31,45 @@ class AlightingAwareConfirmedObservationTest {
     ) {
         // given
         Instant start = Instant.parse("2026-11-04T00:00:00Z");
-        AlightingAwareObservation previous = new AlightingAwareObservation(1, 1, 0, start, "bus", 2, 3, 1, 40, 0,
-            1, start.minusSeconds(30), false);
-        AlightingAwareObservation current = new AlightingAwareObservation(2, 2, 1, start.plusSeconds(confirmedSeconds), "bus",
-            2 + passedDifference, 4, 1, 0, 0, version, previous.sourceReceivedAt().plusSeconds(physicalSeconds), down);
+        AlightingAwareObservation previous = new AlightingAwareObservation(
+                1,
+                1,
+                0,
+                start,
+                "bus",
+                2,
+                3,
+                1,
+                40,
+                0,
+                1,
+                start.minusSeconds(30),
+                false
+        );
+        AlightingAwareObservation current = new AlightingAwareObservation(
+                2,
+                2,
+                1,
+                start.plusSeconds(confirmedSeconds),
+                "bus",
+                2 + passedDifference,
+                4,
+                1,
+                0,
+                0,
+                version,
+                previous.sourceReceivedAt().plusSeconds(physicalSeconds),
+                down
+        );
 
         // then
         assertSoftly(softly -> {
             softly.assertThat(current.startsConfirmedChainAfter(previous)).isEqualTo(chainBreak);
             softly.assertThat(current.startsConfirmedTripAfter(previous)).isEqualTo(tripBreak);
-            AlightingAwareVehiclePrefix state = AlightingAwareHistoryCompactor.advance(AlightingAwareHistoryCompactor.advance(null, previous), current);
+            AlightingAwareVehiclePrefix state = AlightingAwareHistoryCompactor.advance(
+                AlightingAwareHistoryCompactor.advance(null, previous),
+                current
+            );
             softly.assertThat(state.capacity()).isZero();
             softly.assertThat(state.capacityObservation()).isNull();
         });

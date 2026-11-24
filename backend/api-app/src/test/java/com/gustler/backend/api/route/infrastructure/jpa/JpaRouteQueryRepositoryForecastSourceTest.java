@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @IntegrationTest
 @Transactional
 class JpaRouteQueryRepositoryForecastSourceTest {
+
     private static final String NO_FORECAST = "204000057";
     private static final String RECORDED = "234000051";
 
@@ -33,8 +34,18 @@ class JpaRouteQueryRepositoryForecastSourceTest {
         OffsetDateTime now = OffsetDateTime.now(clock).withNano(0);
         route(fixture, NO_FORECAST, now);
         BoardDatabaseFixture.RouteContext recorded = route(fixture, RECORDED, now);
-        final long batch = fixture.insertBatch(recorded, now, "SUCCESS_EMPTY", 0);
-        fixture.insertRun(batch, null, "EMPTY", now);
+        final long batch = fixture.insertBatch(
+                recorded,
+                now,
+                "SUCCESS_EMPTY",
+                0
+        );
+        fixture.insertRun(
+                batch,
+                null,
+                "EMPTY",
+                now
+        );
     }
 
     @Test
@@ -47,7 +58,17 @@ class JpaRouteQueryRepositoryForecastSourceTest {
         String routeId,
         OffsetDateTime now
     ) {
-        return fixture.insertRoute(routeId, "노선-" + routeId, "기점", "종점", null,
-            "05:00", "23:00", null, null, now.minusDays(1));
+        return fixture.insertRoute(
+                routeId,
+                "노선-" + routeId,
+                "기점",
+                "종점",
+                null,
+                "05:00",
+                "23:00",
+                null,
+                null,
+                now.minusDays(1)
+        );
     }
 }

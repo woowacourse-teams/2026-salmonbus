@@ -16,6 +16,7 @@ import tools.jackson.databind.ObjectMapper;
  * 한 정류장 남았다. 예측은 예보 실행 줄({@code forecast_run})과 예보 기록({@code forecast_record})에 넣는다.
  */
 public class ForecastBoardFixture {
+
     public static final String ROUTE_ID = "204000057";
     public static final String ROUTE_NAME = "3330";
     public static final String STOP_ID = "277102323";
@@ -42,19 +43,41 @@ public class ForecastBoardFixture {
      */
     public BoardDatabaseFixture.RouteContext insertRoute(OffsetDateTime validFrom) {
         BoardDatabaseFixture.RouteContext route = board.insertRoute(
-            ROUTE_ID,
-            ROUTE_NAME,
-            "기점",
-            STOP_NAME,
-            TURN_SEQUENCE,
-            "04:50",
-            "23:30",
-            "05:00",
-            "23:30",
-            validFrom);
-        board.insertStop(route, 1, ORIGIN_STOP_ID, "기점", "UP", true);
-        board.insertStop(route, TURN_SEQUENCE, TURN_STOP_ID, "회차점", "UP", false);
-        board.insertStop(route, STOP_SEQUENCE, STOP_ID, STOP_NAME, "DOWN", true);
+                ROUTE_ID,
+                ROUTE_NAME,
+                "기점",
+                STOP_NAME,
+                TURN_SEQUENCE,
+                "04:50",
+                "23:30",
+                "05:00",
+                "23:30",
+                validFrom
+        );
+        board.insertStop(
+                route,
+                1,
+                ORIGIN_STOP_ID,
+                "기점",
+                "UP",
+                true
+        );
+        board.insertStop(
+                route,
+                TURN_SEQUENCE,
+                TURN_STOP_ID,
+                "회차점",
+                "UP",
+                false
+        );
+        board.insertStop(
+                route,
+                STOP_SEQUENCE,
+                STOP_ID,
+                STOP_NAME,
+                "DOWN",
+                true
+        );
         jdbcClient.sql("""
                 INSERT INTO route_stop_location_history (route_version_id, stop_order, stop_id, observed_at, x, y)
                 VALUES (:routeVersionId, :stopOrder, :stopId, :observedAt, 127.11, 37.39)
@@ -78,15 +101,21 @@ public class ForecastBoardFixture {
         BoardDatabaseFixture.RouteContext route,
         OffsetDateTime observedAt
     ) {
-        final long batchId = board.insertBatch(route, observedAt, "SUCCESS_ROWS", 1);
+        final long batchId = board.insertBatch(
+                route,
+                observedAt,
+                "SUCCESS_ROWS",
+                1
+        );
         final long observationId = board.insertObservation(
-            route,
-            batchId,
-            1,
-            VEHICLE_ID,
-            TURN_SEQUENCE,
-            TURN_STOP_ID,
-            observedAt);
+                route,
+                batchId,
+                1,
+                VEHICLE_ID,
+                TURN_SEQUENCE,
+                TURN_STOP_ID,
+                observedAt
+        );
         return new ObservedVehicle(batchId, observationId, observedAt);
     }
 
@@ -100,7 +129,13 @@ public class ForecastBoardFixture {
         final double expectedSeats
     ) {
         board.insertPublication(vehicle.batchId(), modelId, vehicle.observedAt().plusSeconds(2));
-        board.insertForecast(vehicle.observationId(), STOP_SEQUENCE, modelId, seatFullChance, expectedSeats);
+        board.insertForecast(
+                vehicle.observationId(),
+                STOP_SEQUENCE,
+                modelId,
+                seatFullChance,
+                expectedSeats
+        );
     }
 
     /**
@@ -108,8 +143,17 @@ public class ForecastBoardFixture {
      *
      * @param outcome PUBLISHED가 아닌 실행 결과
      */
-    public void insertRunWithoutForecast(ObservedVehicle vehicle, final long modelId, String outcome) {
-        board.insertRun(vehicle.batchId(), modelId, outcome, vehicle.observedAt().plusSeconds(2));
+    public void insertRunWithoutForecast(
+        ObservedVehicle vehicle,
+        final long modelId,
+        String outcome
+    ) {
+        board.insertRun(
+                vehicle.batchId(),
+                modelId,
+                outcome,
+                vehicle.observedAt().plusSeconds(2)
+        );
     }
 
     /**
@@ -118,17 +162,36 @@ public class ForecastBoardFixture {
      */
     public void insertArrival(Instant receivedAt, final int remainingSeconds) {
         ArrivalSnapshot.Prediction prediction = new ArrivalSnapshot.Prediction(
-            VEHICLE_ID, 1, remainingSeconds, null, 1, 10, null, null, null, null);
+                VEHICLE_ID,
+                1,
+                remainingSeconds,
+                null,
+                1,
+                10,
+                null,
+                null,
+                null,
+                null
+        );
         ArrivalSnapshot.RouteArrival arrival = new ArrivalSnapshot.RouteArrival(
-            ROUTE_ID, ROUTE_NAME, STOP_SEQUENCE, null, null, null, null, List.of(prediction));
+                ROUTE_ID,
+                ROUTE_NAME,
+                STOP_SEQUENCE,
+                null,
+                null,
+                null,
+                null,
+                List.of(prediction)
+        );
         ArrivalSnapshot snapshot = new ArrivalSnapshot(
-            UUID.randomUUID(),
-            STOP_ID,
-            receivedAt,
-            receivedAt.plusSeconds(40),
-            receivedAt.plusSeconds(60),
-            null,
-            List.of(arrival));
+                UUID.randomUUID(),
+                STOP_ID,
+                receivedAt,
+                receivedAt.plusSeconds(40),
+                receivedAt.plusSeconds(60),
+                null,
+                List.of(arrival)
+        );
         jdbcClient.sql("""
                 INSERT INTO arrival_snapshot (
                     id, provider, operation, station_id, received_at, refresh_after_at,
@@ -159,10 +222,7 @@ public class ForecastBoardFixture {
             .update();
     }
 
-    public record ObservedVehicle(
-        long batchId,
-        long observationId,
-        OffsetDateTime observedAt
-    ) {
+    public record ObservedVehicle(long batchId, long observationId, OffsetDateTime observedAt) {
+
     }
 }

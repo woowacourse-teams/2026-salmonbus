@@ -28,6 +28,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 @RequiredArgsConstructor
 public class JdbcForecastRecordReader {
+
     /** 예보 쪽 {@code SeatForecastResult.ALIGHTING_AWARE_SEAT_TARGET}과 같은 값이다. */
     static final String SEAT_TARGET = "AFTER_ALIGHTING_ESTIMATE";
     /** 예보 쪽 {@code SeatForecastResult.ALIGHTING_AWARE_PROBABILITY_TARGET}과 같은 값이다. */
@@ -90,15 +91,15 @@ public class JdbcForecastRecordReader {
         final int targetStopOrder = row.getInt("target_stop_order");
         Double fullProbability = row.getObject("full_probability", Double.class);
         return new StoredPrediction(
-            targetStopOrder,
-            row.getString("vehicle_id"),
-            row.getInt("source_row_number"),
-            targetStopOrder - row.getInt("passed_stop_order"),
-            probabilityOrNaN(fullProbability),
-            row.getObject("expected_seats", Double.class),
-            new ForecastModel(modelId, row.getString("release_id"), timeAt(row, "data_until")),
-            SEAT_TARGET,
-            PROBABILITY_TARGET
+                targetStopOrder,
+                row.getString("vehicle_id"),
+                row.getInt("source_row_number"),
+                targetStopOrder - row.getInt("passed_stop_order"),
+                probabilityOrNaN(fullProbability),
+                row.getObject("expected_seats", Double.class),
+                new ForecastModel(modelId, row.getString("release_id"), timeAt(row, "data_until")),
+                SEAT_TARGET,
+                PROBABILITY_TARGET
         );
     }
 

@@ -6,6 +6,7 @@ import java.util.List;
 public final class NumericTreeEnsemble {
 
     public enum Kind {
+
         REGRESSION,
         MULTICLASS,
         BINARY;
@@ -60,7 +61,12 @@ public final class NumericTreeEnsemble {
         double[] baseline,
         List<List<List<Node>>> iterations
     ) {
-        validateDimensions(featureCount, kind, baseline, iterations);
+        validateDimensions(
+                featureCount,
+                kind,
+                baseline,
+                iterations
+        );
         for (final double value : baseline) {
             requireFinite(value);
         }
@@ -78,7 +84,12 @@ public final class NumericTreeEnsemble {
         double[] baseline,
         List<List<List<Node>>> iterations
     ) {
-        if (hasInvalidDimensions(featureCount, kind, baseline, iterations)) {
+        if (hasInvalidDimensions(
+                featureCount,
+                kind,
+                baseline,
+                iterations
+        )) {
             throw new IllegalArgumentException("트리 모델 차원이 잘못됐다");
         }
     }

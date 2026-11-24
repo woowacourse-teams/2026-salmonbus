@@ -25,7 +25,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * </ul>
  */
 final class ScoringMetrics {
+
     private static final String PREFIX = "salmonbus.scoring.";
+
     private final MeterRegistry meters;
     private final AtomicInteger waiting = new AtomicInteger();
     private final Timer lag;
@@ -52,16 +54,28 @@ final class ScoringMetrics {
         }
         Map<List<Object>, PassLabel> labels = new HashMap<>();
         for (PassLabel label : result.labels()) {
-            labels.put(List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(), label.stopOrder(),
-                label.capacity(), label.modelDeploymentId()), label);
+            labels.put(List.of(
+                    label.sourceDate(),
+                    label.routeId(),
+                    label.tripStartObservationId(),
+                    label.stopOrder(),
+                    label.capacity(),
+                    label.modelDeploymentId()
+            ), label);
             count("label", label.state().name(), label.reason());
         }
         for (UnresolvedForecast closed : result.unresolved()) {
             count("unresolved", closed.state().name(), closed.reason());
         }
         for (ScoredForecast scored : result.scored()) {
-            PassLabel label = labels.get(List.of(scored.passSourceDate(), scored.routeId(),
-                scored.tripStartObservationId(), scored.stopOrder(), scored.capacity(), scored.modelDeploymentId()));
+            PassLabel label = labels.get(List.of(
+                    scored.passSourceDate(),
+                    scored.routeId(),
+                    scored.tripStartObservationId(),
+                    scored.stopOrder(),
+                    scored.capacity(),
+                    scored.modelDeploymentId()
+            ));
             count("scored", labelState(label), labelReason(label));
         }
     }
@@ -88,7 +102,13 @@ final class ScoringMetrics {
 
     void replay(String reason, final boolean succeeded) {
         if (meters != null) {
-            meters.counter(PREFIX + "replays", "reason", reason, "result", replayResult(succeeded))
+            meters.counter(
+                    PREFIX + "replays",
+                    "reason",
+                    reason,
+                    "result",
+                    replayResult(succeeded)
+            )
                 .increment();
         }
     }
@@ -100,8 +120,10 @@ final class ScoringMetrics {
         return "failed";
     }
 
-    void dropped() {
-        increment("dropped");
+    void dropped(final int count) {
+        if (meters != null) {
+            meters.counter(PREFIX + "dropped").increment(count);
+        }
     }
 
     void skipped() {
@@ -125,7 +147,15 @@ final class ScoringMetrics {
     }
 
     private void count(String kind, String state, String reason) {
-        meters.counter(PREFIX + "results", "kind", kind, "state", state, "reason", reasonTag(reason))
+        meters.counter(
+                PREFIX + "results",
+                "kind",
+                kind,
+                "state",
+                state,
+                "reason",
+                reasonTag(reason)
+        )
             .increment();
     }
 

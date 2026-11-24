@@ -121,7 +121,7 @@ def main():
     before = obs[obs.ns < retained_from].groupby('vid', observed=True, dropna=False).tail(1)
     def observation(row):
         return dict(id=int(row.fixture_id), batch_id=int(row.batch), batch_rank=int(row.rank),
-            received_at=iso(row.received), vehicle_id='\uffffles-anonymous-observations' if pd.isna(row.vid) else str(row.vid), passed_stop_order=int(row.passed),
+            received_at=iso(row.received), vehicle_id='\uffffanonymous-observations' if pd.isna(row.vid) else str(row.vid), passed_stop_order=int(row.passed),
             stop_order=int(row.stop_order), running_state=int(row.state), remaining_seats=None if pd.isna(row.seats) else int(row.seats),
             crowd_level=0 if pd.isna(row.crowd) else int(row.crowd))
     prefix = [dict(capacity=float(row.cap), full_streak=float(row.full_streak), previous=observation(row),
@@ -131,7 +131,7 @@ def main():
     observations = []
     for row in obs.sort_values(['received', 'batch', 'vid']).itertuples():
         observations.append(dict(id=int(row.fixture_id), batch_id=int(row.batch), batch_rank=int(row.rank),
-            received_at=iso(row.received), vehicle_id='\uffffles-anonymous-observations' if pd.isna(row.vid) else str(row.vid), passed_stop_order=int(row.passed),
+            received_at=iso(row.received), vehicle_id='\uffffanonymous-observations' if pd.isna(row.vid) else str(row.vid), passed_stop_order=int(row.passed),
             stop_order=int(row.stop_order), running_state=int(row.state), remaining_seats=None if pd.isna(row.seats) else int(row.seats),
             crowd_level=0 if pd.isna(row.crowd) else int(row.crowd)))
     events = pd.read_pickle(rebuild / f'events_{key}.pkl')

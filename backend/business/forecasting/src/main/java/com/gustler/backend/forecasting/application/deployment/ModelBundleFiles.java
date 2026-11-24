@@ -7,5 +7,6 @@ import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
  * 파일 검증과 모델 활성화는 별도 단계다.
  */
 public interface ModelBundleFiles {
+
     ModelRelease load();
 }

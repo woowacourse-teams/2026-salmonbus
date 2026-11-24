@@ -11,6 +11,7 @@ import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class VehicleStopTargetTest {
+
     private static final Instant OBSERVED_AT = Instant.parse("2026-08-25T08:30:00Z");
     /** 혼잡도를 안 준 관측. 이 테스트가 보는 것과 무관하다. */
     private static final Integer CROWD_LEVEL_UNKNOWN = null;
@@ -61,7 +62,12 @@ class VehicleStopTargetTest {
     void 관측과_대상_정류장은_같은_노선_판본이다() {
         // given
         final long otherRouteVersion = 2L;
-        RouteStop stopOfOtherVersion = new RouteStop(otherRouteVersion, 49, "20449", true);
+        RouteStop stopOfOtherVersion = new RouteStop(
+                otherRouteVersion,
+                49,
+                "20449",
+                true
+        );
 
         // when
         Throwable caughtFailure = catchThrowable(() -> new VehicleStopTarget(observed(44, 12), stopOfOtherVersion));
@@ -91,7 +97,12 @@ class VehicleStopTargetTest {
     @Test
     void 예보_대상은_승차할_수_있는_정류장이다() {
         // given
-        RouteStop passingStop = new RouteStop(ROUTE_VERSION_3330, 49, "27700049", false);
+        RouteStop passingStop = new RouteStop(
+                ROUTE_VERSION_3330,
+                49,
+                "27700049",
+                false
+        );
 
         // when
         Throwable caughtFailure = catchThrowable(() -> new VehicleStopTarget(observed(44, 12), passingStop));
@@ -114,17 +125,23 @@ class VehicleStopTargetTest {
         assertThat(actual).isEqualTo(12);
     }
 
-    private ObservedVehicle observed(
-        final int passedStopOrder,
-        Integer remainingSeats
-    ) {
+    private ObservedVehicle observed(final int passedStopOrder, Integer remainingSeats) {
         return new ObservedVehicle(
-            "204000206", ROUTE_VERSION_3330, passedStopOrder, OBSERVED_AT, remainingSeats, CROWD_LEVEL_UNKNOWN);
+                "204000206",
+                ROUTE_VERSION_3330,
+                passedStopOrder,
+                OBSERVED_AT,
+                remainingSeats,
+                CROWD_LEVEL_UNKNOWN
+        );
     }
 
-    private RouteStop routeStop(
-        final int stopOrder
-    ) {
-        return new RouteStop(ROUTE_VERSION_3330, stopOrder, "20400" + stopOrder, true);
+    private RouteStop routeStop(final int stopOrder) {
+        return new RouteStop(
+                ROUTE_VERSION_3330,
+                stopOrder,
+                "20400" + stopOrder,
+                true
+        );
     }
 }

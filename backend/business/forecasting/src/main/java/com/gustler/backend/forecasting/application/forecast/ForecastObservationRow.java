@@ -15,4 +15,5 @@ public record ForecastObservationRow(
     String seatUnknownReason,
     int crowdLevel
 ) {
+
 }

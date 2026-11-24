@@ -20,9 +20,11 @@ import org.springframework.scheduling.annotation.Scheduled;
  * 되감기가 다시 만든다.
  */
 public class ScoringJob {
+
     /** 채점 결과를 모았다가 쓰는 간격(초). 같은 간격으로 마감 정리도 한다. */
     static final long FLUSH_INTERVAL_SECONDS = 5;
     private static final Logger LOGGER = LoggerFactory.getLogger(ScoringJob.class);
+
     private final ScoringCycle cycle;
 
     public ScoringJob(ScoringCycle cycle) {

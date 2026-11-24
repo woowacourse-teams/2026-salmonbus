@@ -29,6 +29,7 @@ public record ForecastRun(
     ForecastOutcome outcome,
     int predictionCount
 ) {
+
     public ForecastRun {
         Objects.requireNonNull(sourceDate, "배치 날짜가 필요하다");
         Objects.requireNonNull(receivedAt, "수신 시각이 필요하다");

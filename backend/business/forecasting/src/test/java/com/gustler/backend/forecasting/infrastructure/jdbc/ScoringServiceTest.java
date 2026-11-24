@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.api.forecast.ForecastBatchEvents;
 import com.gustler.backend.forecasting.api.forecast.ForecastClosed;
 import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
 import com.gustler.backend.forecasting.api.forecast.ObservationBatchSeen;
@@ -42,13 +43,75 @@ import org.springframework.transaction.support.TransactionOperations;
  * 저장한 뒤에 그 배치의 사건을 넘긴다.
  */
 class ScoringServiceTest {
+
     private static final int LIMIT = 150_000;
     private static final Instant START = Instant.parse("2026-01-04T21:00:00Z");
 
     @Test
+    void 한_배치의_정산_입력은_큐에_한번만_등록한다() {
+        // given
+        ScoringScenario scenario = ScoringScenario.random(
+                97,
+                START,
+                20,
+                7,
+                0,
+                true
+        );
+        Harness harness = new Harness(scenario, scenario.stage(LIMIT));
+
+        // when
+        harness.deliverFirstBatch();
+
+        // then
+        assertThat(harness.submitted).isOne();
+    }
+
+    @Test
+    void 배치_등록을_거절하면_전체_입력을_누락으로_세고_다음_배치에서_복구한다() {
+        // given
+        ScoringScenario scenario = ScoringScenario.random(
+                97,
+                START,
+                120,
+                7,
+                0,
+                true
+        );
+        Harness harness = new Harness(scenario, scenario.stage(LIMIT));
+        harness.reject = index -> index == 0;
+
+        // when
+        final int next = harness.deliverFirstBatch();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(harness.submitted).isOne();
+            softly.assertThat(harness.counter("dropped")).isEqualTo(2);
+        });
+
+        // when
+        harness.reject = index -> false;
+        harness.deliver(next, harness.events.size());
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(harness.replays("dropped")).isOne();
+            softly.assertThat(harness.stored()).isEqualTo(continuous(scenario)).isNotEmpty();
+        });
+    }
+
+    @Test
     void 줄이_넘쳐_버린_사건이_있어도_그_노선을_되감아_연속_실행과_결과_집합이_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(97, START, 500, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                97,
+                START,
+                500,
+                7,
+                0,
+                true
+        );
         Harness harness = new Harness(scenario, scenario.stage(LIMIT));
         int[] passes = passIndexes(harness.events);
         harness.reject = index -> index == passes[passes.length / 3] || index == passes[passes.length / 2] + 1;
@@ -67,7 +130,14 @@ class ScoringServiceTest {
     @Test
     void 처리_중_예외가_나면_노선_상태를_버리고_다음_사건에서_되감아_연속_실행과_결과_집합이_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(101, START, 500, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                101,
+                START,
+                500,
+                7,
+                0,
+                true
+        );
         AtomicInteger calls = new AtomicInteger();
         PassLabelCalculator real = new AlightingAwarePassLabelCalculator();
         PassLabelCalculator failingOnce = (pass, previous, evidence) -> {
@@ -76,7 +146,10 @@ class ScoringServiceTest {
             }
             return real.calculate(pass, previous, evidence);
         };
-        Harness harness = new Harness(scenario, scenario.stage(LIMIT, failingOnce));
+        Harness harness = new Harness(
+            scenario,
+            scenario.stage(LIMIT, failingOnce)
+        );
 
         // when
         harness.deliverAll();
@@ -92,7 +165,14 @@ class ScoringServiceTest {
     @Test
     void 다시_뜨면_최근_예보가_있는_노선을_되감아_기다리던_예측을_다시_만들고_이어_간다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(103, START, 500, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                103,
+                START,
+                500,
+                7,
+                0,
+                true
+        );
         Harness before = new Harness(scenario, scenario.stage(LIMIT));
         final int cut = before.events.size() / 2;
         before.deliver(0, cut);
@@ -118,7 +198,14 @@ class ScoringServiceTest {
     @Test
     void 쓰지_못한_결과를_남기고_다시_떠서_되감아도_닫힌_예측은_그_줄을_저장한_프로세스가_한_번만_알린다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(149, START, 500, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                149,
+                START,
+                500,
+                7,
+                0,
+                true
+        );
         Harness before = new Harness(scenario, scenario.stage(LIMIT));
         final int cut = cutLeavingUnwrittenResults(scenario);
         before.deliverUntilCrash(cut);
@@ -148,7 +235,14 @@ class ScoringServiceTest {
     @Test
     void 줄이_넘쳐_노선을_다시_되감아도_닫힌_예측은_한_번씩만_알린다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(97, START, 500, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                97,
+                START,
+                500,
+                7,
+                0,
+                true
+        );
         Harness harness = new Harness(scenario, scenario.stage(LIMIT));
         int[] passes = passIndexes(harness.events);
         harness.reject = index -> index == passes[passes.length / 3] || index == passes[passes.length / 2] + 1;
@@ -169,7 +263,14 @@ class ScoringServiceTest {
     @Test
     void 진단_수신자가_실패해도_쓰기는_성공으로_끝난다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(151, START, 200, 6, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                151,
+                START,
+                200,
+                6,
+                0,
+                true
+        );
         Harness harness = new Harness(scenario, scenario.stage(LIMIT));
         harness.service.setTelemetry(new ForecastTelemetry() {
             @Override
@@ -191,7 +292,14 @@ class ScoringServiceTest {
     @Test
     void 되감기가_실패한_노선은_30초_동안_사건을_처리하지_않고_그_뒤에_되감아_결과를_맞춘다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(107, START, 500, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                107,
+                START,
+                500,
+                7,
+                0,
+                true
+        );
         Harness harness = new Harness(scenario, scenario.stage(LIMIT));
         harness.failingReads = 1;
 
@@ -210,7 +318,14 @@ class ScoringServiceTest {
     @Test
     void 쓰지_못한_결과를_남기고_30분_내려가_있다_다시_떠도_그_전에_발행된_예측을_모두_닫고_연속_실행과_결과_집합이_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(127, START, 700, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                127,
+                START,
+                700,
+                7,
+                0,
+                true
+        );
 
         // when
         Map<String, Object> stored = storedAfterCrashAndDowntime(scenario, Duration.ofMinutes(30));
@@ -225,7 +340,14 @@ class ScoringServiceTest {
     @Test
     void 쓰지_못한_결과를_남기고_3시간_내려가_있다_다시_떠도_그_전에_발행된_예측을_모두_닫고_연속_실행과_결과_집합이_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(127, START, 700, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                127,
+                START,
+                700,
+                7,
+                0,
+                true
+        );
 
         // when
         Map<String, Object> stored = storedAfterCrashAndDowntime(scenario, Duration.ofHours(3));
@@ -237,7 +359,14 @@ class ScoringServiceTest {
     @Test
     void 오래_내려가_있다_되감은_직후에_다시_내려가도_닫히지_못한_예측을_다시_읽어_연속_실행과_결과_집합이_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(173, START, 700, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                173,
+                START,
+                700,
+                7,
+                0,
+                true
+        );
         Harness first = new Harness(scenario, scenario.stage(LIMIT));
         first.deliverUntilCrash(first.events.size());
         Harness second = first.restartedAfter(Duration.ofHours(3), scenario.stage(LIMIT));
@@ -259,7 +388,14 @@ class ScoringServiceTest {
     @Test
     void 수집_구멍이_있던_날에_다시_떠도_그_구멍으로_닫혔어야_할_예측을_지원_안_함으로_닫아_연속_실행과_결과_집합이_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(131, START, 600, 7, 0.004, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                131,
+                START,
+                600,
+                7,
+                0.004,
+                true
+        );
         Harness before = new Harness(scenario, scenario.stage(LIMIT));
         final int firstHole = firstHoleIndex(before.events);
         final int cut = firstHole + (before.events.size() - firstHole) / 2;
@@ -286,7 +422,14 @@ class ScoringServiceTest {
     @Test
     void 되감기가_오래_실패하다_성공하면_그사이_닫힌_통과의_정답이_빠지지_않고_연속_실행과_결과_집합이_같다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(137, START, 1300, 7, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                137,
+                START,
+                1300,
+                7,
+                0,
+                true
+        );
         Harness harness = new Harness(scenario, scenario.stage(LIMIT));
         final int failFrom = harness.events.size() * 15 / 100;
         final int failUntil = harness.events.size() * 75 / 100;
@@ -309,16 +452,30 @@ class ScoringServiceTest {
     @Test
     void 채점_스레드에_중단_요청이_오면_기동_직후_되감기를_돌던_노선까지만_하고_멈춘다() {
         // given
-        ScoringScenario scenario = ScoringScenario.random(139, START, 80, 5, 0, true);
+        ScoringScenario scenario = ScoringScenario.random(
+                139,
+                START,
+                80,
+                5,
+                0,
+                true
+        );
         SimpleMeterRegistry meters = new SimpleMeterRegistry();
         RecordedScoringEvents recorded = new RecordedScoringEvents(new ArrayList<>(), List::of,
             () -> Thread.currentThread().interrupt());
-        ScoringService service = new ScoringService(task -> {
-            task.run();
-            return true;
-        }, scenario.stage(LIMIT), new ScoringReplay(recorded.forecasts(), recorded.passes()),
-            new ScoringWriter(new MemoryLabels(), TransactionOperations.withoutTransaction()),
-            from -> List.of(1L, 2L, 3L), ScoringReplay.DEFAULT_MAX_FORECAST_WINDOW, new MutableClock(), meters);
+        ScoringService service = new ScoringService(
+                task -> {
+                    task.run();
+                    return true;
+                },
+                scenario.stage(LIMIT),
+                new ScoringReplay(recorded.forecasts(), recorded.passes()),
+                new ScoringWriter(new MemoryLabels(), TransactionOperations.withoutTransaction()),
+                from -> List.of(1L, 2L, 3L),
+                ScoringReplay.DEFAULT_MAX_FORECAST_WINDOW,
+                new MutableClock(),
+                meters
+        );
 
         // when
         final boolean started = service.start();
@@ -438,8 +595,15 @@ class ScoringServiceTest {
     }
 
     private static String key(PassLabel label) {
-        return "label:" + List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
-            label.stopOrder(), label.capacity(), label.labelVersion(), label.modelDeploymentId());
+        return "label:" + List.of(
+                label.sourceDate(),
+                label.routeId(),
+                label.tripStartObservationId(),
+                label.stopOrder(),
+                label.capacity(),
+                label.labelVersion(),
+                label.modelDeploymentId()
+        );
     }
 
     private static String key(UnresolvedForecast closed) {
@@ -457,6 +621,7 @@ class ScoringServiceTest {
 
     /** 배치의 기록을 저장한 뒤 그 배치의 사건을 채점에 넘기는 흉내다. */
     private static final class Harness {
+
         private final ScoringScenario scenario;
         private final List<Object> events;
         private final ScoringStage stage;
@@ -474,7 +639,14 @@ class ScoringServiceTest {
         private int submitted;
 
         private Harness(ScoringScenario scenario, ScoringStage stage) {
-            this(scenario, stage, new MutableClock(), new ArrayList<>(), new ArrayList<>(), new MemoryLabels());
+            this(
+                    scenario,
+                    stage,
+                    new MutableClock(),
+                    new ArrayList<>(),
+                    new ArrayList<>(),
+                    new MemoryLabels()
+            );
         }
 
         private Harness(
@@ -496,16 +668,23 @@ class ScoringServiceTest {
                 generations.add(labels);
             }
             RecordedScoringEvents recorded = new RecordedScoringEvents(saved, this::savedRows, this::failRead);
-            this.service = new ScoringService(task -> {
-                submitted++;
-                if (reject.test(current)) {
-                    return false;
-                }
-                task.run();
-                return true;
-            }, stage, new ScoringReplay(recorded.forecasts(), recorded.passes()),
-                new ScoringWriter(labels, TransactionOperations.withoutTransaction()),
-                from -> List.of(ScoringScenario.ROUTE), ScoringReplay.DEFAULT_MAX_FORECAST_WINDOW, clock, meters);
+            this.service = new ScoringService(
+                    task -> {
+                        submitted++;
+                        if (reject.test(current)) {
+                            return false;
+                        }
+                        task.run();
+                        return true;
+                    },
+                    stage,
+                    new ScoringReplay(recorded.forecasts(), recorded.passes()),
+                    new ScoringWriter(labels, TransactionOperations.withoutTransaction()),
+                    from -> List.of(ScoringScenario.ROUTE),
+                    ScoringReplay.DEFAULT_MAX_FORECAST_WINDOW,
+                    clock,
+                    meters
+            );
             this.service.setTelemetry(new ForecastTelemetry() {
                 @Override
                 public void closed(List<ForecastClosed> reported) {
@@ -516,12 +695,26 @@ class ScoringServiceTest {
 
         /** 같은 저장소를 보는 새 프로세스를 만든다. 정답·미해결 저장은 새로 시작해 이 프로세스가 쓴 줄만 따로 볼 수 있게 한다. */
         private Harness restarted(ScoringStage fresh) {
-            return new Harness(scenario, fresh, clock, saved, generations, new MemoryLabels());
+            return new Harness(
+                    scenario,
+                    fresh,
+                    clock,
+                    saved,
+                    generations,
+                    new MemoryLabels()
+            );
         }
 
         /** 정답·미해결 저장까지 이어받는 새 프로세스를 만든다. 앞 프로세스가 저장한 줄은 이미 있는 키로 건너뛴다. */
         private Harness restartedOnSameStore(ScoringStage fresh) {
-            return new Harness(scenario, fresh, clock, saved, generations, labels);
+            return new Harness(
+                    scenario,
+                    fresh,
+                    clock,
+                    saved,
+                    generations,
+                    labels
+            );
         }
 
         private Harness restartedAfter(Duration downtime, ScoringStage fresh) {
@@ -531,6 +724,30 @@ class ScoringServiceTest {
 
         private void deliverAll() {
             deliver(0, events.size());
+        }
+
+        private int deliverFirstBatch() {
+            int last = 0;
+            while (!(events.get(last) instanceof ForecastPublished)) {
+                last++;
+            }
+            saveBatchAt(0);
+            List<ForecastBatchEvents.Event> inputs = events.subList(0, last + 1).stream()
+                .map(this::input)
+                .toList();
+            current = 0;
+            service.committed(new ForecastBatchEvents(inputs));
+            current = -1;
+            return last + 1;
+        }
+
+        private ForecastBatchEvents.Event input(Object event) {
+            return switch (event) {
+                case ForecastPublished published -> published;
+                case PassClosed pass -> new ForecastBatchEvents.ClosedPasses(List.of(pass));
+                case ObservationBatchSeen seen -> seen;
+                default -> throw new IllegalArgumentException(String.valueOf(event));
+            };
         }
 
         private void deliver(final int from, final int to) {
@@ -553,12 +770,7 @@ class ScoringServiceTest {
                 if (event instanceof ObservationBatchSeen) {
                     saveBatchAt(index);
                 }
-                switch (event) {
-                    case ForecastPublished published -> service.forecastPublished(published);
-                    case PassClosed pass -> service.passesClosed(List.of(pass));
-                    case ObservationBatchSeen seen -> service.batchSeen(seen);
-                    default -> throw new IllegalArgumentException(String.valueOf(event));
-                }
+                service.committed(new ForecastBatchEvents(List.of(input(event))));
                 if (index % 50 == 0) {
                     service.flush();
                 }
@@ -642,6 +854,7 @@ class ScoringServiceTest {
     }
 
     private static final class MemoryLabels implements PassLabelStore {
+
         private final Map<String, Object> rows = new HashMap<>();
         private boolean failing;
 
@@ -677,6 +890,7 @@ class ScoringServiceTest {
     }
 
     private static final class MutableClock extends Clock {
+
         private Instant at = Instant.EPOCH;
 
         @Override

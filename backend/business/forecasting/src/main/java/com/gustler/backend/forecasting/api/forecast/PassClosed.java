@@ -58,6 +58,7 @@ public record PassClosed(
     long closureBatchId,
     Instant closedAt
 ) {
+
     public PassClosed {
         Objects.requireNonNull(sourceDate, "닫은 배치의 날짜가 필요하다");
         Objects.requireNonNull(departureDate, "출발 날짜가 필요하다");

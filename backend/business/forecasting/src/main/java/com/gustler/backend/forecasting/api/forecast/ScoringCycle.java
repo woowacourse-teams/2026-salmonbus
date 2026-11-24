@@ -6,6 +6,7 @@ package com.gustler.backend.forecasting.api.forecast;
  * <p>모든 메서드는 예외를 던지지 않는다. 실패는 로그와 지표로 남긴다.
  */
 public interface ScoringCycle {
+
     /**
      * 최근 예보가 있는 노선을 모두 한 번 되감는 일을 채점 줄에 넣는다. 기동이 끝난 뒤 한 번 부른다.
      *

@@ -16,6 +16,7 @@ public record ObservedVehicle(
     Integer remainingSeats,
     Integer crowdLevel
 ) {
+
     public static final int LOWEST_CROWD_LEVEL = 1;
     public static final int HIGHEST_CROWD_LEVEL = 4;
 
@@ -27,7 +28,7 @@ public record ObservedVehicle(
         }
     }
 
-    private static boolean isOutsideCrowdLevelRange(int crowdLevel) {
+    private static boolean isOutsideCrowdLevelRange(final int crowdLevel) {
         return crowdLevel < LOWEST_CROWD_LEVEL || crowdLevel > HIGHEST_CROWD_LEVEL;
     }
 

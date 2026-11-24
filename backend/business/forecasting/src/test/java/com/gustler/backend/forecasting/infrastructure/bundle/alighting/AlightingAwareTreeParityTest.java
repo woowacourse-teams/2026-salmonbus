@@ -12,10 +12,23 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
 class AlightingAwareTreeParityTest {
+
     @Test
     void 경곗값과_결측값은_원본과_같은_분기로_이동한다() {
-        NumericTreeEnsemble tree = new NumericTreeEnsemble(1, NumericTreeEnsemble.Kind.REGRESSION, new double[] { 2 },
-            List.of(List.of(List.of(new NumericTreeEnsemble.Node(0, 3, false, 1, 2, 0, false), leaf(4), leaf(9)))));
+        NumericTreeEnsemble tree = new NumericTreeEnsemble(
+                1,
+                NumericTreeEnsemble.Kind.REGRESSION,
+                new double[] { 2 },
+                List.of(List.of(List.of(new NumericTreeEnsemble.Node(
+                        0,
+                        3,
+                        false,
+                        1,
+                        2,
+                        0,
+                        false
+                ), leaf(4), leaf(9))))
+        );
         assertSoftly(softly -> {
             softly.assertThat(tree.predict(new double[] { 3 })).containsExactly(6);
             softly.assertThat(tree.predict(new double[] { Math.nextUp(3.0) })).containsExactly(11);
@@ -25,8 +38,20 @@ class AlightingAwareTreeParityTest {
 
     @Test
     void 결측값은_임계값과_독립적으로_왼쪽으로_이동할_수_있다() {
-        NumericTreeEnsemble tree = new NumericTreeEnsemble(1, NumericTreeEnsemble.Kind.REGRESSION, new double[] { 0 },
-            List.of(List.of(List.of(new NumericTreeEnsemble.Node(0, 3, true, 1, 2, 0, false), leaf(4), leaf(9)))));
+        NumericTreeEnsemble tree = new NumericTreeEnsemble(
+                1,
+                NumericTreeEnsemble.Kind.REGRESSION,
+                new double[] { 0 },
+                List.of(List.of(List.of(new NumericTreeEnsemble.Node(
+                        0,
+                        3,
+                        true,
+                        1,
+                        2,
+                        0,
+                        false
+                ), leaf(4), leaf(9))))
+        );
         assertThat(tree.predict(new double[] { Double.NaN })).containsExactly(4);
     }
 
@@ -34,19 +59,26 @@ class AlightingAwareTreeParityTest {
     void 이진_확률은_임의로_제한하지_않는다() {
         assertSoftly(softly -> {
             softly.assertThat(constant(1, NumericTreeEnsemble.Kind.BINARY, -1000).predict(new double[] { 0 }))
-                .containsExactly(1,
-                    0);
+                .containsExactly(1, 0);
             softly.assertThat(constant(1, NumericTreeEnsemble.Kind.BINARY, 1000).predict(new double[] { 0 }))
-                .containsExactly(0,
-                    1);
+                .containsExactly(0, 1);
         });
     }
 
     @Test
     void 좌석_기본값은_분류_확률과_합치기_전에_상한을_적용하지_않는다() {
-        AlightingAwareSeatPredictor model = new AlightingAwareSeatPredictor(constant(88, NumericTreeEnsemble.Kind.REGRESSION, 100),
-            constant(88, NumericTreeEnsemble.Kind.MULTICLASS, 0, -1000, 0),
-            constant(80, NumericTreeEnsemble.Kind.BINARY, 0), 1.3);
+        AlightingAwareSeatPredictor model = new AlightingAwareSeatPredictor(
+                constant(88, NumericTreeEnsemble.Kind.REGRESSION, 100),
+                constant(
+                        88,
+                        NumericTreeEnsemble.Kind.MULTICLASS,
+                        0,
+                        -1000,
+                        0
+                ),
+                constant(80, NumericTreeEnsemble.Kind.BINARY, 0),
+                1.3
+        );
         AlightingAwareSeatPredictor.Prediction prediction = model.predict(new double[88], new double[80]);
         assertSoftly(softly -> {
             softly.assertThat(prediction.afterAlightingSeats()).isEqualTo(50);
@@ -56,11 +88,32 @@ class AlightingAwareTreeParityTest {
 
     @Test
     void 좌석_입력은_트리_비교_전에_float32로_변환한다() {
-        NumericTreeEnsemble base = new NumericTreeEnsemble(88, NumericTreeEnsemble.Kind.REGRESSION, new double[] { 0 },
-            List.of(List.of(List.of(new NumericTreeEnsemble.Node(0, 1, true, 1, 2, 0, false), leaf(4), leaf(9)))));
-        AlightingAwareSeatPredictor predictor = new AlightingAwareSeatPredictor(base,
-            constant(88, NumericTreeEnsemble.Kind.MULTICLASS, -1000, -1000, 0),
-            constant(80, NumericTreeEnsemble.Kind.BINARY, 0), 1.3);
+        NumericTreeEnsemble base = new NumericTreeEnsemble(
+                88,
+                NumericTreeEnsemble.Kind.REGRESSION,
+                new double[] { 0 },
+                List.of(List.of(List.of(new NumericTreeEnsemble.Node(
+                        0,
+                        1,
+                        true,
+                        1,
+                        2,
+                        0,
+                        false
+                ), leaf(4), leaf(9))))
+        );
+        AlightingAwareSeatPredictor predictor = new AlightingAwareSeatPredictor(
+                base,
+                constant(
+                        88,
+                        NumericTreeEnsemble.Kind.MULTICLASS,
+                        -1000,
+                        -1000,
+                        0
+                ),
+                constant(80, NumericTreeEnsemble.Kind.BINARY, 0),
+                1.3
+        );
         double[] inputs = new double[88];
         inputs[0] = Math.nextUp(1.0);
         assertThat(predictor.predict(inputs, new double[80]).base()).isEqualTo(4);
@@ -72,8 +125,20 @@ class AlightingAwareTreeParityTest {
         assertThatThrownBy(() -> model.predict(new double[2])).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> model.predict(new double[] { Double.POSITIVE_INFINITY }))
             .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new NumericTreeEnsemble(1, NumericTreeEnsemble.Kind.REGRESSION, new double[] { 0 },
-            List.of(List.of(List.of(new NumericTreeEnsemble.Node(0, 1, true, 0, 0, 0, false))))))
+        assertThatThrownBy(() -> new NumericTreeEnsemble(
+                1,
+                NumericTreeEnsemble.Kind.REGRESSION,
+                new double[] { 0 },
+                List.of(List.of(List.of(new NumericTreeEnsemble.Node(
+                        0,
+                        1,
+                        true,
+                        0,
+                        0,
+                        0,
+                        false
+                ))))
+        ))
             .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -94,7 +159,11 @@ class AlightingAwareTreeParityTest {
              "node_fields":["feature","threshold","missing_left","left","right","value","leaf"],
              "trees":[[[[0,0,false,0,0,0,true]]]]}
             """;
-        assertThat(AlightingAwareInferenceBundle.model(JsonMapper.builder().build().readTree(json)).predict(new double[] { 0 }))
+        assertThat(
+            AlightingAwareInferenceBundle.model(JsonMapper.builder().build().readTree(json)).predict(
+                new double[] { 0 }
+            )
+        )
             .containsExactly(0.5, 0.5);
     }
 
@@ -106,17 +175,34 @@ class AlightingAwareTreeParityTest {
              "node_fields":["feature","threshold","missing_left","left","right","value","leaf"],
              "trees":[[[[0,0,false,0,0,0.25,true]]],[[[0,0,false,0,0,-0.1,true]]]]}
             """;
-        assertThat(AlightingAwareInferenceBundle.model(JsonMapper.builder().build().readTree(json)).predict(new double[] { 0 }))
+        assertThat(
+            AlightingAwareInferenceBundle.model(JsonMapper.builder().build().readTree(json)).predict(
+                new double[] { 0 }
+            )
+        )
             .containsExactly(10.15);
     }
 
     private static NumericTreeEnsemble.Node leaf(final double value) {
-        return new NumericTreeEnsemble.Node(0, 0, false, 0, 0, value, true);
+        return new NumericTreeEnsemble.Node(
+                0,
+                0,
+                false,
+                0,
+                0,
+                value,
+                true
+        );
     }
 
     private static NumericTreeEnsemble constant(final int count, NumericTreeEnsemble.Kind kind, double... baseline) {
         List<List<NumericTreeEnsemble.Node>> trees = Arrays.stream(baseline).mapToObj(v -> List.of(leaf(0))).toList();
-        return new NumericTreeEnsemble(count, kind, baseline, List.of(trees));
+        return new NumericTreeEnsemble(
+                count,
+                kind,
+                baseline,
+                List.of(trees)
+        );
     }
 
 }

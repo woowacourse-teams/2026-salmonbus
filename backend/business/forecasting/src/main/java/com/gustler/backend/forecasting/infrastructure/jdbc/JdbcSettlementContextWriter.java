@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * 모델 배포의 {@code settlement_context}에 노선 판본 키로 정산 근거를 더한다. 이미 키가 있으면 바꾸지 않고 값이 같은지만 본다.
  */
 public final class JdbcSettlementContextWriter implements SettlementContextWriter {
+
     private final JdbcClient jdbc;
 
     public JdbcSettlementContextWriter(JdbcClient jdbc) {
@@ -20,7 +21,12 @@ public final class JdbcSettlementContextWriter implements SettlementContextWrite
             UPDATE /* salmonbus:settlement_context.store */ model_deployment
             SET settlement_context = settlement_context || jsonb_build_object(CAST(? AS text), CAST(? AS jsonb))
             WHERE id = ? AND jsonb_exists(settlement_context, ?) = false
-            """).params(route, context, modelDeploymentId, route).update();
+            """).params(
+                    route,
+                    context,
+                    modelDeploymentId,
+                    route
+            ).update();
         if (inserted == 0 && !hasSameStoredContext(modelDeploymentId, route, context)) {
             throw new IllegalStateException("같은 모델과 노선 판본의 정산 근거가 변경됐다");
         }

@@ -22,6 +22,7 @@ import tools.jackson.databind.json.JsonMapper;
  * 부르는 쪽({@code ScoringStage})이 예측의 착수 시각으로 정한다. 행 잠금을 잡지 않는다.
  */
 public final class JdbcSettlementContextProvider implements SettlementContextProvider {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String READ = """
         SELECT /* salmonbus:settlement_context.find */ (settlement_context -> CAST(:version AS text))::text
@@ -37,7 +38,10 @@ public final class JdbcSettlementContextProvider implements SettlementContextPro
 
     @Override
     public Optional<JsonNode> find(final long modelDeploymentId, final long routeVersionId) {
-        Key key = new Key(modelDeploymentId, routeVersionId);
+        Key key = new Key(
+            modelDeploymentId,
+            routeVersionId
+        );
         JsonNode cached = found.get(key);
         if (cached != null) {
             return Optional.of(cached);
@@ -61,5 +65,6 @@ public final class JdbcSettlementContextProvider implements SettlementContextPro
     }
 
     private record Key(long modelDeploymentId, long routeVersionId) {
+
     }
 }

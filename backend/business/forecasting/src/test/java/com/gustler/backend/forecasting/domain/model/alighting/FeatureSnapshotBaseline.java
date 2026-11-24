@@ -31,6 +31,7 @@ import java.util.Set;
  * </ul>
  */
 final class FeatureSnapshotBaseline {
+
     private static final char VECTOR = 'v';
 
     private final Map<String, Rejection> rejections = new HashMap<>();
@@ -51,7 +52,16 @@ final class FeatureSnapshotBaseline {
     private void accept(String[] line) {
         switch (line[0]) {
             case "e" -> rejections.put(line[1], rejection(line));
-            case "x" -> put(line[1], new Expected(rejection(line[2]), null, null, List.of(), null));
+            case "x" -> put(
+                line[1],
+                new Expected(
+                        rejection(line[2]),
+                        null,
+                        null,
+                        List.of(),
+                        null
+                )
+            );
             case "s" -> put(line[1], constructed(line));
             default -> throw new IllegalStateException("모르는 줄: " + line[0]);
         }
@@ -61,7 +71,10 @@ final class FeatureSnapshotBaseline {
         if (line.length == 3) {
             return new Rejection(line[2], null);
         }
-        return new Rejection(line[2], String.join(" ", Arrays.copyOfRange(line, 3, line.length)));
+        return new Rejection(
+            line[2],
+            String.join(" ", Arrays.copyOfRange(line, 3, line.length))
+        );
     }
 
     private Expected constructed(String[] line) {
@@ -70,9 +83,21 @@ final class FeatureSnapshotBaseline {
             targets.add(targetRejection(code));
         }
         if (line[2].startsWith("!")) {
-            return new Expected(null, null, rejection(line[2].substring(1)), unmodifiableList(targets), line[4]);
+            return new Expected(
+                    null,
+                    null,
+                    rejection(line[2].substring(1)),
+                    unmodifiableList(targets),
+                    line[4]
+            );
         }
-        return new Expected(null, Long.valueOf(line[2]), null, unmodifiableList(targets), line[4]);
+        return new Expected(
+                null,
+                Long.valueOf(line[2]),
+                null,
+                unmodifiableList(targets),
+                line[4]
+        );
     }
 
     private Rejection targetRejection(final char code) {
@@ -140,18 +165,34 @@ final class FeatureSnapshotBaseline {
     }
 
     static String text(ObservedVehicle observation) {
-        return String.join("/", observation.vehicleId(), Long.toString(observation.routeVersionId()),
-            Integer.toString(observation.passedStopOrder()), String.valueOf(observation.observedAt()),
-            String.valueOf(observation.remainingSeats()), String.valueOf(observation.crowdLevel()));
+        return String.join(
+                "/",
+                observation.vehicleId(),
+                Long.toString(observation.routeVersionId()),
+                Integer.toString(observation.passedStopOrder()),
+                String.valueOf(observation.observedAt()),
+                String.valueOf(observation.remainingSeats()),
+                String.valueOf(observation.crowdLevel())
+        );
     }
 
     static String text(AlightingAwareObservation observation) {
-        return String.join("/", Long.toString(observation.observationId()), Long.toString(observation.batchId()),
-            Long.toString(observation.batchRank()), String.valueOf(observation.receivedAt()), observation.vehicleId(),
-            Integer.toString(observation.passedStopOrder()), Integer.toString(observation.stopOrder()),
-            Integer.toString(observation.state()), String.valueOf(observation.seats()),
-            Integer.toString(observation.crowd()), Long.toString(observation.routeVersionId()),
-            String.valueOf(observation.sourceReceivedAt()), Boolean.toString(observation.down()));
+        return String.join(
+                "/",
+                Long.toString(observation.observationId()),
+                Long.toString(observation.batchId()),
+                Long.toString(observation.batchRank()),
+                String.valueOf(observation.receivedAt()),
+                observation.vehicleId(),
+                Integer.toString(observation.passedStopOrder()),
+                Integer.toString(observation.stopOrder()),
+                Integer.toString(observation.state()),
+                String.valueOf(observation.seats()),
+                Integer.toString(observation.crowd()),
+                Long.toString(observation.routeVersionId()),
+                String.valueOf(observation.sourceReceivedAt()),
+                Boolean.toString(observation.down())
+        );
     }
 
     /**
@@ -159,6 +200,7 @@ final class FeatureSnapshotBaseline {
      * @param message 예외 메시지. {@code NullPointerException}이면 비어 있고 견주지 않는다
      */
     record Rejection(String type, String message) {
+
         boolean matches(RuntimeException error) {
             if (!error.getClass().getName().equals(type)) {
                 return false;
@@ -181,5 +223,6 @@ final class FeatureSnapshotBaseline {
         List<Rejection> targets,
         String digest
     ) {
+
     }
 }

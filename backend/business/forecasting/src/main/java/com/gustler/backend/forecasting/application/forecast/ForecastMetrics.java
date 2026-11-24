@@ -4,7 +4,6 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
-import java.util.Locale;
 
 /**
  * 예보의 지표다. 이름은 {@code salmonbus.forecast.*}로 모은다.
@@ -17,18 +16,16 @@ import java.util.Locale;
  *       {@code input_unavailable})와 저장하지 않은 사유({@code already_processed}, {@code stale}, {@code duplicate},
  *       {@code no_model}, {@code inactive_version}, {@code not_covered}, {@code reference_mismatch},
  *       {@code unsupported_profile}, {@code missing}, {@code not_success}, {@code failed}), 되감기 사유
- *       ({@code replay_deferred}, {@code replay_failed}), 순서를 지키려고 미룬 사유({@code retried}: 예외로 실패해 그 자리에서
- *       바로 다시 처리함, {@code out_of_order}: 더 늦게 수신한 배치가 이미 이력에 있음). {@code failed}는 다시 처리해도 실패한
- *       것만 센다. 모델 문맥이 없는 사유({@code no_model}, {@code inactive_version}, {@code not_covered},
+ *       ({@code replay_deferred}, {@code replay_failed}), 이미 더 늦은 배치가 반영된 사유({@code out_of_order})다.
+ *       {@code failed}는 이번 처리에서 예외가 발생한 배치를 센다. 같은 호출 안에서 즉시 재시도하지 않는다.
+ *       모델 문맥이 없는 사유({@code no_model}, {@code inactive_version}, {@code not_covered},
  *       {@code reference_mismatch}, {@code unsupported_profile})는 배치를 읽지 않으므로 훑기마다 한 번 센다</li>
  *   <li>{@code replays{result}}: 노선 상태 되감기의 성공·실패 수</li>
- *   <li>{@code replay.extensions{result}}: 되감은 상태가 모자라 창을 늘려 다시 되감은 수({@code resolved},
- *       {@code unresolved}, {@code failed})</li>
  *   <li>{@code excluded{reason}}: 예보에서 뺀 차량 관측 수. 되감은 직후라 뺀 것({@code TRIP_START_UNKNOWN},
  *       {@code REPLAY_HISTORY_INCOMPLETE})과 정원을 모르거나 정원이 모델 범위 밖이라 뺀 것({@code VEHICLE_CAPACITY_UNKNOWN},
  *       {@code VEHICLE_CAPACITY_OUTSIDE_MODEL_SCOPE})이다</li>
  *   <li>{@code passes.unattributed}: 연결 시작을 보지 못한 차량이 닫아 저장하지 않은 통과 수</li>
- *   <li>{@code passes.recovered}: 예보 단계를 돌리지 못하고 끝난 배치나 이전 배포본이 처리한 배치가 닫은 통과를 되감으면서 찾아
+ *   <li>{@code passes.recovered}: 입력 부족으로 끝난 예보 실행의 배치가 닫은 통과를 되감으면서 찾아
  *       저장한 수</li>
  *   <li>{@code rejected}: 줄이 가득 차 넣지 못한 훑기 수. 다음 신호나 줍기가 다시 넣는다</li>
  *   <li>{@code unrouted}: 노선 열쇠를 아직 몰라 훑기를 넣지 않은 신호 수. 다음 줍기가 넣는다</li>
@@ -36,7 +33,9 @@ import java.util.Locale;
  * </ul>
  */
 final class ForecastMetrics {
+
     private static final String PREFIX = "salmonbus.forecast.";
+
     private final MeterRegistry meters;
     private final Timer lag;
     private final Timer duration;
@@ -90,13 +89,6 @@ final class ForecastMetrics {
             return "succeeded";
         }
         return "failed";
-    }
-
-    void replayExtension(RouteStateReplayer.Extension extension) {
-        if (meters != null && extension != RouteStateReplayer.Extension.NONE) {
-            meters.counter(PREFIX + "replay.extensions", "result", extension.name().toLowerCase(Locale.ROOT))
-                .increment();
-        }
     }
 
     void excluded(String reason) {

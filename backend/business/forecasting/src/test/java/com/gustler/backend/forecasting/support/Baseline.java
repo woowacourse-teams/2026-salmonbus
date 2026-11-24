@@ -26,6 +26,7 @@ import java.util.Random;
  * 않는 값(관측 번호, 상태, 사유, 수, 입력 벡터)은 어디서나 그대로 견준다.
  */
 public final class Baseline {
+
     public static final double RELATIVE_TOLERANCE = 1e-9;
     private static final int PROBES = 50_000;
     private static final String CURRENT_MATH = fingerprint();

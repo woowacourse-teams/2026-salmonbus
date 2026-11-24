@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 
 class SourceDatesTest {
+
     @Test
     void 한국_자정_직전의_예약은_그날이다() {
         // when

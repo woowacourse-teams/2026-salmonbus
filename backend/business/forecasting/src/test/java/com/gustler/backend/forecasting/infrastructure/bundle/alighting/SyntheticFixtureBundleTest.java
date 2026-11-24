@@ -38,10 +38,20 @@ import tools.jackson.databind.node.ObjectNode;
  * 수치 대조와 후보 런타임 검증의 영수증만 싣는다.
  */
 class SyntheticFixtureBundleTest {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final List<String> ROUTES = List.of("3330", "1650");
     private static final List<String> ORIGINAL_PROFILE_ROUTES =
-        List.of("3330", "1650", "9007", "9300", "6011", "3000", "5600", "3500");
+        List.of(
+                "3330",
+                "1650",
+                "9007",
+                "9300",
+                "6011",
+                "3000",
+                "5600",
+                "3500"
+        );
     private static final List<String> EXECUTED = List.of("feature_parity", "runtime_validation");
     private static final List<String> NOT_EXECUTED = List.of("historical_replay", "settlement");
     private static final String CAPACITY_POLICY = "observed-vehicle-prefix-max-through-closure-v2";
@@ -52,9 +62,24 @@ class SyntheticFixtureBundleTest {
     @Test
     void 합성_번들을_허용한_적재기는_재생과_정산_영수증이_없는_번들을_확정_프로필로_읽는다() throws Exception {
         // given
-        syntheticBundle(ROUTES, true, EXECUTED, NOT_EXECUTED);
-        RouteStops stops = new RouteStops(1, "204000057",
-            List.of(new RouteStop(1, 1, "s1", true, RouteDirection.UP)), "3330");
+        syntheticBundle(
+                ROUTES,
+                true,
+                EXECUTED,
+                NOT_EXECUTED
+        );
+        RouteStops stops = new RouteStops(
+                1,
+                "204000057",
+                List.of(new RouteStop(
+                        1,
+                        1,
+                        "s1",
+                        true,
+                        RouteDirection.UP
+                )),
+                "3330"
+        );
 
         // when
         ModelRelease release = new FileModelBundleLoader(true).filesUnder(directory.toString()).load();
@@ -72,7 +97,12 @@ class SyntheticFixtureBundleTest {
     @Test
     void 합성_번들을_허용하지_않은_적재기는_합성_번들을_거절한다() throws Exception {
         // given
-        syntheticBundle(ROUTES, true, EXECUTED, NOT_EXECUTED);
+        syntheticBundle(
+                ROUTES,
+                true,
+                EXECUTED,
+                NOT_EXECUTED
+        );
 
         // then
         assertSoftly(softly -> {
@@ -88,7 +118,12 @@ class SyntheticFixtureBundleTest {
     @Test
     void 구성은_설정을_켰을_때만_합성_번들을_받는_적재기를_만든다() throws Exception {
         // given
-        syntheticBundle(ROUTES, true, EXECUTED, NOT_EXECUTED);
+        syntheticBundle(
+                ROUTES,
+                true,
+                EXECUTED,
+                NOT_EXECUTED
+        );
         ApplicationContextRunner runner = new ApplicationContextRunner()
             .withUserConfiguration(ForecastingModelConfiguration.class)
             .withBean(ModelDeploymentRepository.class, () -> mock(ModelDeploymentRepository.class));
@@ -105,7 +140,12 @@ class SyntheticFixtureBundleTest {
     @Test
     void 합성_번들_표시가_없으면_허용한_적재기도_검증_생략을_받지_않는다() throws Exception {
         // given
-        syntheticBundle(ROUTES, true, EXECUTED, NOT_EXECUTED);
+        syntheticBundle(
+                ROUTES,
+                true,
+                EXECUTED,
+                NOT_EXECUTED
+        );
         editManifest(manifest -> manifest.put("synthetic_fixture", false));
 
         // then
@@ -124,10 +164,19 @@ class SyntheticFixtureBundleTest {
     @MethodSource("unacceptableSelections")
     void 재생과_정산이_아닌_검증이나_빈_목록은_생략으로_받지_않는다(List<String> unverified) throws Exception {
         // given
-        List<String> executed = new ArrayList<>(List.of("feature_parity", "historical_replay", "settlement",
-            "runtime_validation"));
+        List<String> executed = new ArrayList<>(List.of(
+                "feature_parity",
+                "historical_replay",
+                "settlement",
+                "runtime_validation"
+        ));
         executed.removeAll(unverified);
-        syntheticBundle(ROUTES, true, executed, unverified);
+        syntheticBundle(
+                ROUTES,
+                true,
+                executed,
+                unverified
+        );
 
         // then
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory, true))
@@ -135,15 +184,23 @@ class SyntheticFixtureBundleTest {
     }
 
     private static Stream<List<String>> unacceptableSelections() {
-        return Stream.of(List.of(), List.of("feature_parity"), List.of("historical_replay", "runtime_validation"),
-            List.of("settlement", "settlement"));
+        return Stream.of(
+                List.of(),
+                List.of("feature_parity"),
+                List.of("historical_replay", "runtime_validation"),
+                List.of("settlement", "settlement")
+        );
     }
 
     @Test
     void 실행하지_않았다고_밝힌_검증의_영수증이_번들에_있으면_거절한다() throws Exception {
         // given
-        syntheticBundle(ROUTES, true, List.of("feature_parity", "runtime_validation", "historical_replay"),
-            NOT_EXECUTED);
+        syntheticBundle(
+                ROUTES,
+                true,
+                List.of("feature_parity", "runtime_validation", "historical_replay"),
+                NOT_EXECUTED
+        );
 
         // then
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory, true))
@@ -153,7 +210,12 @@ class SyntheticFixtureBundleTest {
     @Test
     void 확정_입력_계약이_아닌_번들은_검증_생략을_밝혀도_받지_않는다() throws Exception {
         // given
-        syntheticBundle(ORIGINAL_PROFILE_ROUTES, false, EXECUTED, NOT_EXECUTED);
+        syntheticBundle(
+                ORIGINAL_PROFILE_ROUTES,
+                false,
+                EXECUTED,
+                NOT_EXECUTED
+        );
 
         // then
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory, true))
@@ -163,7 +225,12 @@ class SyntheticFixtureBundleTest {
     @Test
     void 생략하지_않은_검증은_합성_번들에서도_증거_내용까지_검사한다() throws Exception {
         // given
-        syntheticBundle(ROUTES, true, EXECUTED, NOT_EXECUTED);
+        syntheticBundle(
+                ROUTES,
+                true,
+                EXECUTED,
+                NOT_EXECUTED
+        );
         ObjectNode evidence = (ObjectNode) JSON.readTree(Files.readAllBytes(
             directory.resolve("evidence-runtime_validation.json")));
         ((ObjectNode) evidence.get("result")).set("routes", JSON.valueToTree(List.of("3330")));
@@ -171,8 +238,7 @@ class SyntheticFixtureBundleTest {
         ObjectNode receipt = (ObjectNode) JSON.readTree(Files.readAllBytes(
             directory.resolve("verification-runtime_validation.json")));
         receipt.put("evidence_sha256", sha(directory.resolve("evidence-runtime_validation.json")));
-        Files.writeString(directory.resolve("verification-runtime_validation.json"),
-            JSON.writeValueAsString(receipt));
+        Files.writeString(directory.resolve("verification-runtime_validation.json"), JSON.writeValueAsString(receipt));
         editManifest(manifest -> {
             ObjectNode files = (ObjectNode) manifest.get("files");
             files.put("evidence-runtime_validation.json", sha(directory.resolve("evidence-runtime_validation.json")));
@@ -188,7 +254,12 @@ class SyntheticFixtureBundleTest {
     @Test
     void 한쪽_검증만_실행하지_않았다고_밝힌_번들은_다른_쪽_영수증이_있어야_한다() throws Exception {
         // given
-        syntheticBundle(ROUTES, true, EXECUTED, List.of("settlement"));
+        syntheticBundle(
+                ROUTES,
+                true,
+                EXECUTED,
+                List.of("settlement")
+        );
 
         // then
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory, true))
@@ -198,7 +269,12 @@ class SyntheticFixtureBundleTest {
     @Test
     void 합성_번들을_허용해도_검증_생략을_밝히지_않은_번들은_네_영수증을_모두_요구한다() throws Exception {
         // given
-        syntheticBundle(ROUTES, true, EXECUTED, NOT_EXECUTED);
+        syntheticBundle(
+                ROUTES,
+                true,
+                EXECUTED,
+                NOT_EXECUTED
+        );
         editManifest(manifest -> ((ObjectNode) manifest.get("runtime")).remove("unverified_checks"));
 
         // then
@@ -223,7 +299,12 @@ class SyntheticFixtureBundleTest {
         byte[] source = Files.readAllBytes(directory.resolve("manifest.json"));
         String sourceDigest = sha(source);
         for (String check : executed) {
-            writeReceipt(check, sourceDigest, routes, confirmed);
+            writeReceipt(
+                    check,
+                    sourceDigest,
+                    routes,
+                    confirmed
+            );
         }
         Files.write(directory.resolve("verification-source-manifest.json"), source);
         ObjectNode manifest = (ObjectNode) JSON.readTree(source);
@@ -255,21 +336,56 @@ class SyntheticFixtureBundleTest {
         Files.writeString(directory.resolve("feature-contract.json"), JSON.writeValueAsString(contract));
         Files.writeString(directory.resolve("constants.json"),
             "{\"target\":\"after\",\"classes\":[0,1,2],\"middle\":1.3}");
-        writeModel("base", "regression", 88, List.of(), List.of(10));
-        writeModel("gate", "multiclass", 88, List.of(0, 1, 2), List.of(0, 0, 0));
-        writeModel("pool", "binary", 80, List.of(0, 1), List.of(0));
+        writeModel(
+                "base",
+                "regression",
+                88,
+                List.of(),
+                List.of(10)
+        );
+        writeModel(
+                "gate",
+                "multiclass",
+                88,
+                List.of(0, 1, 2),
+                List.of(0, 0, 0)
+        );
+        writeModel(
+                "pool",
+                "binary",
+                80,
+                List.of(0, 1),
+                List.of(0)
+        );
         Files.writeString(directory.resolve("statistics-manifest.json"), JSON.writeValueAsString(
-            Map.of("schema", "alighting-statistics-v1", "routes", routes, "holiday_dates", List.of())));
+            Map.of(
+                    "schema",
+                    "alighting-statistics-v1",
+                    "routes",
+                    routes,
+                    "holiday_dates",
+                    List.of()
+            )));
         Files.writeString(directory.resolve("route-reference.json"), JSON.writeValueAsString(
             Map.of("routes", routes.stream().map(route -> Map.of("modelRoute", route)).toList())));
         for (String route : routes) {
             Files.writeString(directory.resolve("statistics-" + route + ".json"),
                 JSON.writeValueAsString(statistics(route, confirmed)));
         }
-        Map<String, Object> golden = Map.of("seat_inputs", List.of(new double[88]), "probability_inputs",
-            List.of(new double[80]), "expected_base", List.of(10),
-            "expected_gate_probabilities", List.of(List.of(1.0 / 3, 1.0 / 3, 1.0 / 3)),
-            "expected_seats", List.of((1.3 + 10) / 3), "expected_departure_full", List.of(0.5));
+        Map<String, Object> golden = Map.of(
+                "seat_inputs",
+                List.of(new double[88]),
+                "probability_inputs",
+                List.of(new double[80]),
+                "expected_base",
+                List.of(10),
+                "expected_gate_probabilities",
+                List.of(List.of(1.0 / 3, 1.0 / 3, 1.0 / 3)),
+                "expected_seats",
+                List.of((1.3 + 10) / 3),
+                "expected_departure_full",
+                List.of(0.5)
+        );
         Files.writeString(directory.resolve("golden.json"), JSON.writeValueAsString(golden));
         Files.writeString(directory.resolve("boundaries.json"), JSON.writeValueAsString(golden));
         Map<String, Object> manifest = new LinkedHashMap<>();
@@ -286,11 +402,36 @@ class SyntheticFixtureBundleTest {
         Map<String, Object> statistics = new LinkedHashMap<>();
         statistics.put("route", route);
         statistics.put("min_per_stop", 1);
-        statistics.put("tables", Map.of("lam", List.of(), "lam_base", List.of(), "net_tab", List.of(),
-            "full_tab", List.of(), "dep_tab", List.of(), "stop_net_base", List.of(), "target_band", List.of()));
+        statistics.put("tables", Map.of(
+                "lam",
+                List.of(),
+                "lam_base",
+                List.of(),
+                "net_tab",
+                List.of(),
+                "full_tab",
+                List.of(),
+                "dep_tab",
+                List.of(),
+                "stop_net_base",
+                List.of(),
+                "target_band",
+                List.of()
+        ));
         statistics.put("alighting", Map.of("stops", List.of()));
         statistics.put("route_metadata", List.of(
-            Map.of("order", 1, "id", "s1", "name", "정류장1", "direction", "UP", "boardingAllowed", true)));
+            Map.of(
+                    "order",
+                    1,
+                    "id",
+                    "s1",
+                    "name",
+                    "정류장1",
+                    "direction",
+                    "UP",
+                    "boardingAllowed",
+                    true
+            )));
         statistics.put("events_known_through", "2026-10-21T00:00:00Z");
         statistics.put("observations_through", "2026-10-21T00:00:00Z");
         if (confirmed) {
@@ -309,8 +450,15 @@ class SyntheticFixtureBundleTest {
         final int cases = verifiedCases(check, routes);
         Path evidenceFile = directory.resolve("evidence-" + check + ".json");
         Files.writeString(evidenceFile, JSON.writeValueAsString(Map.of(
-            "schema", "alighting-confirmed-serving-evidence-v1", "routes", routes, "verified_cases", cases,
-            "result", result)));
+                "schema",
+                "alighting-confirmed-serving-evidence-v1",
+                "routes",
+                routes,
+                "verified_cases",
+                cases,
+                "result",
+                result
+        )));
         Map<String, Object> receipt = new LinkedHashMap<>();
         receipt.put("schema", "alighting-serving-verification-v1");
         receipt.put("check", check);
@@ -332,7 +480,12 @@ class SyntheticFixtureBundleTest {
         result.put("passed", true);
         result.put("bundle_manifest_sha256", sourceDigest);
         if (check.equals("feature_parity")) {
-            Map<String, Object> comparison = Map.of("rows", 1, "max_absolute_difference", new double[6]);
+            Map<String, Object> comparison = Map.of(
+                    "rows",
+                    1,
+                    "max_absolute_difference",
+                    new double[6]
+            );
             result.put("golden.json", comparison);
             result.put("boundaries.json", comparison);
             return result;
@@ -344,9 +497,24 @@ class SyntheticFixtureBundleTest {
             result.put("verified_cases", routes.size());
             return result;
         }
-        result.put("routes", routes.stream().map(route -> Map.of("route", route, "passed", true, "cases", 1,
-            "settled_targets", 2, "failures", List.of(), "max_feature_difference", 0,
-            "max_prediction_difference", 0, "max_label_difference", 0)).toList());
+        result.put("routes", routes.stream().map(route -> Map.of(
+                "route",
+                route,
+                "passed",
+                true,
+                "cases",
+                1,
+                "settled_targets",
+                2,
+                "failures",
+                List.of(),
+                "max_feature_difference",
+                0,
+                "max_prediction_difference",
+                0,
+                "max_label_difference",
+                0
+        )).toList());
         return result;
     }
 
@@ -382,9 +550,25 @@ class SyntheticFixtureBundleTest {
         value.put("feature_count", size);
         value.put("baseline", baseline);
         value.put("leaf_values_include_learning_rate", true);
-        value.put("node_fields", List.of("feature", "threshold", "missing_left", "left", "right", "value", "leaf"));
+        value.put("node_fields", List.of(
+                "feature",
+                "threshold",
+                "missing_left",
+                "left",
+                "right",
+                "value",
+                "leaf"
+        ));
         value.put("trees", List.of(baseline.stream()
-            .map(ignored -> List.of(List.of(0, 0, false, 0, 0, 0, true)))
+            .map(ignored -> List.of(List.of(
+                    0,
+                    0,
+                    false,
+                    0,
+                    0,
+                    0,
+                    true
+            )))
             .toList()));
         Files.writeString(directory.resolve(name + ".json"), JSON.writeValueAsString(value));
     }
@@ -416,6 +600,7 @@ class SyntheticFixtureBundleTest {
 
     @FunctionalInterface
     private interface ManifestEdit {
+
         void apply(ObjectNode manifest) throws Exception;
     }
 }

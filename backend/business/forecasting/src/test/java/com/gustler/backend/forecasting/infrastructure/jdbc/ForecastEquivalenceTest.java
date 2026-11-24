@@ -43,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class ForecastEquivalenceTest {
+
     private static final Instant EVENING = Instant.parse("2026-10-14T10:00:00Z");
     private static final Set<String> REPLAY_EXCLUSIONS = Set.of(ForecastStage.TRIP_START_UNKNOWN,
         ForecastStage.REPLAY_HISTORY_INCOMPLETE);
@@ -59,8 +60,14 @@ class ForecastEquivalenceTest {
     @Test
     void 연속_실행에서_입력과_통과와_상태가_배치마다_기준_기록과_같다() {
         // given
-        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofHours(6),
-            Duration.ofSeconds(30), EVENING.plus(Duration.ofHours(3)), 20261115L);
+        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(
+                jdbc,
+                EVENING,
+                Duration.ofHours(6),
+                Duration.ofSeconds(30),
+                EVENING.plus(Duration.ofHours(3)),
+                20261115L
+        );
         StreamKeys keys = StreamKeys.of(jdbc, stream);
         ForecastInputDigests digests = new ForecastInputDigests(keys);
         ForecastInputBaseline baseline = ForecastInputBaseline.read("forecast-input/continuous-20261115");
@@ -76,12 +83,20 @@ class ForecastEquivalenceTest {
         for (final long batchId : stream.batches()) {
             ForecastBatch batch = ObservationStreamFixture.read(jdbc, batchId);
             ForecastInputBaseline.Batch expected = baseline.batch(keys.batch(batchId));
-            ForecastStageResult actual = stage.advance(state, statistics, ObservationStreamFixture.SOURCE_ID, batch);
+            ForecastStageResult actual = stage.advance(
+                    state,
+                    statistics,
+                    ObservationStreamFixture.SOURCE_ID,
+                    batch
+            );
             if (!batch.confirmed()) {
-                assertThat(expected.kind()).isEqualTo(ForecastInputBaseline.Kind.UNCONFIRMED);
-                assertThat(expected.reason()).isEqualTo("ALIGHTING_AWARE_SOURCE_BATCH_MISSING");
-                assertThat(actual.status()).isEqualTo(ForecastStageResult.Status.NOT_CONFIRMED);
-                assertThat(actual.state()).isSameAs(state);
+                RouteForecastState previousState = state;
+                assertSoftly(softly -> {
+                    softly.assertThat(expected.kind()).isEqualTo(ForecastInputBaseline.Kind.UNCONFIRMED);
+                    softly.assertThat(expected.reason()).isEqualTo("ALIGHTING_AWARE_SOURCE_BATCH_MISSING");
+                    softly.assertThat(actual.status()).isEqualTo(ForecastStageResult.Status.NOT_CONFIRMED);
+                    softly.assertThat(actual.state()).isSameAs(previousState);
+                });
                 tally.skipped++;
                 continue;
             }
@@ -91,17 +106,39 @@ class ForecastEquivalenceTest {
                 state = actual.state();
                 continue;
             }
-            assertThat(expected.kind()).isEqualTo(ForecastInputBaseline.Kind.FORECAST);
-            assertThat(actual.status()).isEqualTo(ForecastStageResult.Status.FORECAST);
-            tally.vectors += assertSameSnapshots(batchId, expected, actual.snapshots(), statistics, keys, digests);
+            assertSoftly(softly -> {
+                softly.assertThat(expected.kind()).isEqualTo(ForecastInputBaseline.Kind.FORECAST);
+                softly.assertThat(actual.status()).isEqualTo(ForecastStageResult.Status.FORECAST);
+            });
+            tally.vectors += assertSameSnapshots(
+                    batchId,
+                    expected,
+                    actual.snapshots(),
+                    statistics,
+                    keys,
+                    digests
+            );
             tally.batches++;
             tally.snapshots += expected.snapshots().size();
-            assertSameState(batchId, expected, actual.state(), digests);
-            record(actual.state(), batchId, lastByVehicle, chainStartByObservation, sequence);
+            assertSameState(
+                    batchId,
+                    expected,
+                    actual.state(),
+                    digests
+            );
+            record(
+                    actual.state(),
+                    batchId,
+                    lastByVehicle,
+                    chainStartByObservation,
+                    sequence
+            );
             List<AlightingAwarePassEvent> closed = actual.closedPasses().stream().map(ClosedPass::event).toList();
-            assertThat(closed).as("배치 %d가 닫은 통과 수", batchId).hasSize(expected.passCount());
-            assertThat(digests.passes(closed)).as("배치 %d의 닫힌 통과", batchId).isEqualTo(expected.passDigest());
-            assertThat(actual.unattributedPasses()).isZero();
+            assertSoftly(softly -> {
+                softly.assertThat(closed).as("배치 %d가 닫은 통과 수", batchId).hasSize(expected.passCount());
+                softly.assertThat(digests.passes(closed)).as("배치 %d의 닫힌 통과", batchId).isEqualTo(expected.passDigest());
+                softly.assertThat(actual.unattributedPasses()).isZero();
+            });
             for (ClosedPass pass : actual.closedPasses()) {
                 assertClosedPass(pass, chainStartByObservation, sequence);
                 tally.passes++;
@@ -112,7 +149,9 @@ class ForecastEquivalenceTest {
         // then
         Map<String, Long> coverage = coverage(stream);
         assertSoftly(softly -> {
-            softly.assertThat(coverage).allSatisfy((scenario, count) -> assertThat(count).as(scenario).isPositive());
+            softly.assertThat(coverage).allSatisfy(
+                (scenario, count) -> softly.assertThat(count).as(scenario).isPositive()
+            );
             softly.assertThat(tally.batches).isGreaterThan(600);
             softly.assertThat(tally.skipped).isGreaterThan(20);
             softly.assertThat(tally.snapshots).isGreaterThan(2_500);
@@ -126,8 +165,14 @@ class ForecastEquivalenceTest {
     void 출퇴근_범위_밖_배치를_건너뛰어도_범위_안의_입력이_기준_기록과_같다() {
         // given
         Instant dawn = Instant.parse("2026-10-15T20:00:00Z");
-        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, dawn, Duration.ofMinutes(120),
-            Duration.ofSeconds(30), null, 7L);
+        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(
+                jdbc,
+                dawn,
+                Duration.ofMinutes(120),
+                Duration.ofSeconds(30),
+                null,
+                7L
+        );
         StreamKeys keys = StreamKeys.of(jdbc, stream);
         ForecastInputDigests digests = new ForecastInputDigests(keys);
         ForecastInputBaseline baseline = ForecastInputBaseline.read("forecast-input/rush-only-7");
@@ -141,14 +186,25 @@ class ForecastEquivalenceTest {
         for (final long batchId : stream.batches()) {
             ForecastBatch batch = ObservationStreamFixture.read(jdbc, batchId);
             ForecastStageResult actual =
-                stage.advance(state, stream.statistics(), ObservationStreamFixture.SOURCE_ID, batch);
+                stage.advance(
+                        state,
+                        stream.statistics(),
+                        ObservationStreamFixture.SOURCE_ID,
+                        batch
+                );
             if (!batch.confirmed()) {
                 continue;
             }
             ForecastInputBaseline.Batch expected = baseline.batch(keys.batch(batchId));
             if (expected.kind() == ForecastInputBaseline.Kind.FORECAST) {
-                vectors += assertSameSnapshots(batchId, expected, actual.snapshots(), stream.statistics(), keys,
-                    digests);
+                vectors += assertSameSnapshots(
+                        batchId,
+                        expected,
+                        actual.snapshots(),
+                        stream.statistics(),
+                        keys,
+                        digests
+                );
                 compared++;
             }
             if (expected.kind() != ForecastInputBaseline.Kind.FORECAST) {
@@ -172,8 +228,15 @@ class ForecastEquivalenceTest {
     @Test
     void 되감은_뒤_이어_가도_예보한_차량의_입력은_연속_실행과_같고_창이_짧으면_빠지는_차량만_는다() {
         // given
-        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofHours(6),
-            Duration.ofSeconds(30), EVENING.plus(Duration.ofHours(3)), 20261115L);
+        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(
+                jdbc,
+                EVENING,
+                Duration.ofHours(6),
+                Duration.ofSeconds(30),
+                EVENING.plus(Duration.ofHours(3)),
+                20261115L
+        );
+        recordConfirmedRuns(stream);
         ForecastStage stage = new ForecastStage(new CachedVehicleCapacities(cache));
         AlightingAwareRouteStatistics statistics = stream.statistics();
         List<ForecastBatch> batches = stream.batches().stream()
@@ -183,7 +246,12 @@ class ForecastEquivalenceTest {
         List<Map<Long, String>> continuousWithheld = new ArrayList<>();
         RouteForecastState state = RouteForecastState.fromVerifiedOrigin(stream.route());
         for (ForecastBatch batch : batches) {
-            ForecastStageResult result = stage.advance(state, statistics, ObservationStreamFixture.SOURCE_ID, batch);
+            ForecastStageResult result = stage.advance(
+                    state,
+                    statistics,
+                    ObservationStreamFixture.SOURCE_ID,
+                    batch
+            );
             continuous.add(digests(result.snapshots(), statistics));
             continuousWithheld.add(withheld(result));
             state = result.state();
@@ -195,8 +263,14 @@ class ForecastEquivalenceTest {
             }
         }
         JdbcReplaySource source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
-        List<Duration> windows = List.of(Duration.ofHours(6), Duration.ofHours(3), Duration.ofMinutes(140),
-            Duration.ofMinutes(100), Duration.ofMinutes(45), Duration.ofMinutes(15));
+        List<Duration> windows = List.of(
+                Duration.ofHours(6),
+                Duration.ofHours(3),
+                Duration.ofMinutes(140),
+                Duration.ofMinutes(100),
+                Duration.ofMinutes(45),
+                Duration.ofMinutes(15)
+        );
         int compared = 0;
         Map<String, Integer> exclusions = new HashMap<>();
 
@@ -204,7 +278,11 @@ class ForecastEquivalenceTest {
         for (final int split : List.of(confirmed.get(300), confirmed.get(520))) {
             ForecastBatch last = batches.get(split);
             for (Duration window : windows) {
-                RouteStateReplayer.Result replayed = new RouteStateReplayer(source, stage, window, window)
+                RouteStateReplayer.Result replayed = new RouteStateReplayer(
+                        source,
+                        stage,
+                        window
+                )
                     .replay(statistics, last.confirmedAt(), last.observationBatchId());
                 assertThat(replayed.succeeded()).as(replayed.failureReason()).isTrue();
                 assertThat(replayed.state().cursor().orElseThrow().observationBatchId())
@@ -214,13 +292,22 @@ class ForecastEquivalenceTest {
                 int excluded = 0;
                 Map<String, Integer> byReason = new HashMap<>();
                 for (int index = split + 1; index < Math.min(batches.size(), split + 181); index++) {
-                    ForecastStageResult result = stage.advance(resumed, statistics, ObservationStreamFixture.SOURCE_ID,
-                        batches.get(index));
+                    ForecastStageResult result = stage.advance(
+                            resumed,
+                            statistics,
+                            ObservationStreamFixture.SOURCE_ID,
+                            batches.get(index)
+                    );
                     Map<Long, String> actual = digests(result.snapshots(), statistics);
                     Map<Long, String> reasons = withheld(result);
                     for (Map.Entry<Long, String> entry : actual.entrySet()) {
-                        assertThat(entry.getValue()).as("창 %s, 나눈 지점 %d, 배치 %d, 관측 %d", window, split,
-                            batches.get(index).observationBatchId(), entry.getKey())
+                        assertThat(entry.getValue()).as(
+                                "창 %s, 나눈 지점 %d, 배치 %d, 관측 %d",
+                                window,
+                                split,
+                                batches.get(index).observationBatchId(),
+                                entry.getKey()
+                        )
                             .isEqualTo(continuous.get(index).get(entry.getKey()));
                         same++;
                     }
@@ -261,8 +348,15 @@ class ForecastEquivalenceTest {
     @Test
     void 되감기_창에_줄_수가_다른_배치가_있으면_그_노선의_되감기는_실패한다() {
         // given
-        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofMinutes(20),
-            Duration.ofSeconds(30), null, 11L);
+        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(
+                jdbc,
+                EVENING,
+                Duration.ofMinutes(20),
+                Duration.ofSeconds(30),
+                null,
+                11L
+        );
+        recordConfirmedRuns(stream);
         ForecastBatch last = lastConfirmed(stream);
         ForecastBatch broken = stream.batches().stream().map(id -> ObservationStreamFixture.read(jdbc, id))
             .filter(ForecastBatch::confirmed).toList().get(5);
@@ -270,8 +364,10 @@ class ForecastEquivalenceTest {
             .param(broken.observationBatchId())
             .update();
         RouteStateReplayer replayer = new RouteStateReplayer(
-            new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS),
-            new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6), Duration.ofHours(6));
+                new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS),
+                new ForecastStage(new CachedVehicleCapacities(cache)),
+                Duration.ofHours(6)
+        );
 
         // when
         RouteStateReplayer.Result result =
@@ -287,15 +383,24 @@ class ForecastEquivalenceTest {
     @Test
     void 되감기_창의_판본_정류장이_통계와_다르면_실패한다() {
         // given
-        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofMinutes(20),
-            Duration.ofSeconds(30), null, 13L);
+        ObservationStreamFixture.Stream stream = ObservationStreamFixture.insert(
+                jdbc,
+                EVENING,
+                Duration.ofMinutes(20),
+                Duration.ofSeconds(30),
+                null,
+                13L
+        );
+        recordConfirmedRuns(stream);
         ForecastBatch last = lastConfirmed(stream);
         jdbc.sql(
             "UPDATE route_stop SET boarding_allowed=NOT boarding_allowed WHERE route_version_id=? AND stop_order=2")
             .param(last.routeVersionId()).update();
         RouteStateReplayer replayer = new RouteStateReplayer(
-            new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS),
-            new ForecastStage(new CachedVehicleCapacities(cache)), Duration.ofHours(6), Duration.ofHours(6));
+                new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS),
+                new ForecastStage(new CachedVehicleCapacities(cache)),
+                Duration.ofHours(6)
+        );
 
         // when
         RouteStateReplayer.Result result =
@@ -306,6 +411,18 @@ class ForecastEquivalenceTest {
             .isEqualTo("ALIGHTING_AWARE_INCOMPATIBLE_HISTORICAL_ROUTE_VERSION:" + last.routeVersionId());
     }
 
+    /** 이미 확정된 이력을 재생하는 시험에는 현재의 예보 실행 기록도 함께 넣는다. */
+    private void recordConfirmedRuns(ObservationStreamFixture.Stream stream) {
+        jdbc.sql("""
+            INSERT INTO forecast_run(source_date,observation_batch_id,route_id,route_version_id,received_at,
+                confirmed_at,outcome,prediction_count,source_incomplete,counted_rows)
+            SELECT (b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date,b.id,v.route_id,b.route_version_id,
+                b.response_received_at,b.input_confirmed_at,'INPUT_UNAVAILABLE',0,false,0
+            FROM observation_batch b JOIN route_version v ON v.id=b.route_version_id
+            WHERE b.id IN (:batches) AND b.input_confirmed_at IS NOT NULL
+            """).param("batches", stream.batches()).update();
+    }
+
     private Map<String, Long> coverage(ObservationStreamFixture.Stream stream) {
         String confirmed = """
             b.ingestion_origin='LIVE' AND b.outcome='SUCCESS_ROWS' AND b.stored_rows>0
@@ -313,27 +430,36 @@ class ForecastEquivalenceTest {
             """;
         List<Long> versions = List.copyOf(stream.stopsByVersion().keySet());
         Map<String, String> scenarios = Map.of(
-            "같은 배치 같은 차량", "SELECT count(*) FROM (SELECT 1 FROM vehicle_observation o JOIN "
-                + "observation_batch b ON b.id=o.observation_batch_id WHERE b.route_version_id IN "
-                + "(:versions) AND o.vehicle_id IS NOT NULL AND " + confirmed
-                + " GROUP BY b.id,o.vehicle_id HAVING count(*)>1) duplicate",
-            "차량 번호 없는 줄", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b "
-                + "ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND o.vehicle_id "
-                + "IS NULL AND " + confirmed,
-            "좌석 모름", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b "
-                + "ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND "
-                + "o.seat_unknown_reason IS NOT NULL AND " + confirmed,
-            "범위 밖 좌석", "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b "
-                + "ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND "
-                + "o.remaining_seats>70 AND " + confirmed,
-            "90초 넘긴 착수", "SELECT count(*) FROM observation_batch b WHERE b.route_version_id IN "
-                + "(:versions) AND b.input_confirmed_at>b.response_received_at+interval '90 seconds'",
-            "빈 배치", "SELECT count(*) FROM observation_batch b WHERE b.route_version_id IN "
-                + "(:versions) AND b.outcome='SUCCESS_EMPTY'",
-            "판본 전환", "SELECT count(DISTINCT b.route_version_id)-1 FROM observation_batch b "
-                + "WHERE b.route_version_id IN (:versions)",
-            "자정 넘김", "SELECT count(DISTINCT (b.input_confirmed_at AT TIME ZONE "
-                + "'Asia/Seoul')::date)-1 FROM observation_batch b WHERE b.route_version_id IN (:versions)");
+                "같은 배치 같은 차량",
+                "SELECT count(*) FROM (SELECT 1 FROM vehicle_observation o JOIN "
+                    + "observation_batch b ON b.id=o.observation_batch_id WHERE b.route_version_id IN "
+                    + "(:versions) AND o.vehicle_id IS NOT NULL AND " + confirmed
+                    + " GROUP BY b.id,o.vehicle_id HAVING count(*)>1) duplicate",
+                "차량 번호 없는 줄",
+                "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b "
+                    + "ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND o.vehicle_id "
+                    + "IS NULL AND " + confirmed,
+                "좌석 모름",
+                "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b "
+                    + "ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND "
+                    + "o.seat_unknown_reason IS NOT NULL AND " + confirmed,
+                "범위 밖 좌석",
+                "SELECT count(*) FROM vehicle_observation o JOIN observation_batch b "
+                    + "ON b.id=o.observation_batch_id WHERE b.route_version_id IN (:versions) AND "
+                    + "o.remaining_seats>70 AND " + confirmed,
+                "90초 넘긴 착수",
+                "SELECT count(*) FROM observation_batch b WHERE b.route_version_id IN "
+                    + "(:versions) AND b.input_confirmed_at>b.response_received_at+interval '90 seconds'",
+                "빈 배치",
+                "SELECT count(*) FROM observation_batch b WHERE b.route_version_id IN "
+                    + "(:versions) AND b.outcome='SUCCESS_EMPTY'",
+                "판본 전환",
+                "SELECT count(DISTINCT b.route_version_id)-1 FROM observation_batch b "
+                    + "WHERE b.route_version_id IN (:versions)",
+                "자정 넘김",
+                "SELECT count(DISTINCT (b.input_confirmed_at AT TIME ZONE "
+                    + "'Asia/Seoul')::date)-1 FROM observation_batch b WHERE b.route_version_id IN (:versions)"
+        );
         Map<String, Long> counts = new HashMap<>();
         scenarios.forEach((scenario, sql) -> counts.put(scenario,
             jdbc.sql(sql).param("versions", versions).query(Long.class).single()));
@@ -382,9 +508,16 @@ class ForecastEquivalenceTest {
         ForecastInputDigests digests
     ) {
         final long rank = state.cursor().orElseThrow().rank();
-        assertThat(rank).isEqualTo(expected.rank());
-        assertThat(digests.state(rank, state.observations(), state.prefix(), state.events()))
-            .as("배치 %d의 보존 관측·누적 상태·통과 사건", batchId).isEqualTo(expected.stateDigest());
+        assertSoftly(softly -> {
+            softly.assertThat(rank).isEqualTo(expected.rank());
+            softly.assertThat(digests.state(
+                    rank,
+                    state.observations(),
+                    state.prefix(),
+                    state.events()
+            ))
+                .as("배치 %d의 보존 관측·누적 상태·통과 사건", batchId).isEqualTo(expected.stateDigest());
+        });
     }
 
     private static void record(
@@ -486,6 +619,7 @@ class ForecastEquivalenceTest {
     }
 
     private static final class Tally {
+
         private int batches;
         private int skipped;
         private int failed;

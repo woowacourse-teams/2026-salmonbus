@@ -15,6 +15,7 @@ import java.util.Objects;
  * @param runtime 처리에 쓰는 활성 배포와 모델
  */
 public record RouteContext(AlightingAwareRouteStatistics statistics, RouteStops stops, RuntimeSnapshot runtime) {
+
     public RouteContext {
         Objects.requireNonNull(statistics);
         Objects.requireNonNull(stops);

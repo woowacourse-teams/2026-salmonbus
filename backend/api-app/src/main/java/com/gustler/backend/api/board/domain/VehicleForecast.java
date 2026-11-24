@@ -5,6 +5,7 @@ package com.gustler.backend.api.board.domain;
  * 제공 가능한 값과 제공할 수 없는 이유를 별도 결과로 표현한다.
  */
 public sealed interface VehicleForecast {
+
     /**
      * 예보가 낸 값이다.
      *
@@ -19,8 +20,10 @@ public sealed interface VehicleForecast {
         String probabilityTarget,
         double departureFullProbability
     ) implements VehicleForecast {
+
     }
 
     record Unavailable() implements VehicleForecast {
+
     }
 }

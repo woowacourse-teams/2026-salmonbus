@@ -26,6 +26,7 @@ import org.springframework.context.SmartLifecycle;
  * 만든다. 한 번 닫으면 다시 열 수 없어 컨텍스트 일시 정지에는 참여하지 않는다.
  */
 public class ScoringExecutor implements ScoringFeed, SmartLifecycle {
+
     /** 채점 스레드 이름의 앞부분. */
     public static final String THREAD_PREFIX = "forecast-scoring-";
     /** worker가 쓰는 줄 길이. 넘치면 사건을 버리고 그 노선을 다시 되감는다. */
@@ -46,12 +47,19 @@ public class ScoringExecutor implements ScoringFeed, SmartLifecycle {
      */
     public ScoringExecutor(final int capacity, Duration stopWait, MeterRegistry meters) {
         AtomicInteger sequence = new AtomicInteger();
-        this.executor = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(capacity),
-            runnable -> {
-                Thread thread = new Thread(runnable, THREAD_PREFIX + sequence.incrementAndGet());
-                thread.setDaemon(true);
-                return thread;
-            }, new ThreadPoolExecutor.AbortPolicy());
+        this.executor = new ThreadPoolExecutor(
+                1,
+                1,
+                0,
+                TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(capacity),
+                runnable -> {
+                    Thread thread = new Thread(runnable, THREAD_PREFIX + sequence.incrementAndGet());
+                    thread.setDaemon(true);
+                    return thread;
+                },
+                new ThreadPoolExecutor.AbortPolicy()
+        );
         this.stopWait = stopWait;
         if (meters != null) {
             Gauge.builder("salmonbus.scoring.queue", executor, pool -> pool.getQueue().size())
@@ -73,8 +81,7 @@ public class ScoringExecutor implements ScoringFeed, SmartLifecycle {
         try {
             task.run();
         } catch (RuntimeException failure) {
-            LOGGER.warn("event=scoring_task_failed exceptionType={}", failure.getClass().getSimpleName(),
-                failure);
+            LOGGER.warn("event=scoring_task_failed exceptionType={}", failure.getClass().getSimpleName());
         }
     }
 

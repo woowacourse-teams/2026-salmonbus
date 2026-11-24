@@ -22,6 +22,7 @@ import tools.jackson.databind.JsonNode;
  * 그날 관측이 있는 배치뿐이다.
  */
 final class WorkerReplayFixture {
+
     private final JsonNode root;
     private final Map<Long, AlightingAwareObservation> observations;
     private final List<Batch> batches;
@@ -45,7 +46,10 @@ final class WorkerReplayFixture {
         return new WorkerReplayFixture(root, observations, replayedBatches(root, observations.values()));
     }
 
-    private static List<Batch> replayedBatches(JsonNode root, Collection<AlightingAwareObservation> observations) {
+    private static List<Batch> replayedBatches(
+        JsonNode root,
+        Collection<AlightingAwareObservation> observations
+    ) {
         Set<Long> observed = observations.stream()
             .map(AlightingAwareObservation::batchId)
             .collect(Collectors.toSet());
@@ -58,14 +62,21 @@ final class WorkerReplayFixture {
         if (!observed.isEmpty()) {
             throw new IllegalArgumentException("재생 자료의 배치 장부에 그날 관측의 배치가 없다: " + observed.size());
         }
-        batches.sort(Comparator.comparing(Batch::confirmedAt).thenComparingLong(Batch::id));
+        batches.sort(
+            Comparator.comparing(Batch::confirmedAt)
+                .thenComparingLong(Batch::id)
+        );
         return List.copyOf(batches);
     }
 
     private static Batch batch(JsonNode row) {
-        return new Batch(row.path("id").asLong(), row.path("rv").asLong(),
-            Instant.parse(row.path("confirmed_at").asString()), Instant.parse(row.path("response_at").asString()),
-            row.path("stored_rows").asInt());
+        return new Batch(
+                row.path("id").asLong(),
+                row.path("rv").asLong(),
+                Instant.parse(row.path("confirmed_at").asString()),
+                Instant.parse(row.path("response_at").asString()),
+                row.path("stored_rows").asInt()
+        );
     }
 
     /** 모델 계수의 노선 이름이다. 노선의 표시 이름으로 넣는다. */
@@ -81,9 +92,13 @@ final class WorkerReplayFixture {
     List<Version> versions() {
         List<Version> versions = new ArrayList<>();
         for (JsonNode row : root.path("route_versions")) {
-            versions.add(new Version(row.path("id").asLong(), row.path("turn_sequence").asInt(),
-                row.path("content_digest").asString(), time(row.path("valid_from").asString()),
-                nullableTime(row.path("valid_to"))));
+            versions.add(new Version(
+                    row.path("id").asLong(),
+                    row.path("turn_sequence").asInt(),
+                    row.path("content_digest").asString(),
+                    time(row.path("valid_from").asString()),
+                    nullableTime(row.path("valid_to"))
+            ));
         }
         return versions;
     }
@@ -91,8 +106,13 @@ final class WorkerReplayFixture {
     List<Stop> stops() {
         List<Stop> stops = new ArrayList<>();
         for (JsonNode row : root.path("statistics").path("route_metadata")) {
-            stops.add(new Stop(row.path("order").asInt(), row.path("id").asString(), row.path("name").asString(),
-                row.path("direction").asString(), row.path("boardingAllowed").asBoolean()));
+            stops.add(new Stop(
+                    row.path("order").asInt(),
+                    row.path("id").asString(),
+                    row.path("name").asString(),
+                    row.path("direction").asString(),
+                    row.path("boardingAllowed").asBoolean()
+            ));
         }
         return stops;
     }
@@ -138,12 +158,21 @@ final class WorkerReplayFixture {
     }
 
     private static AlightingAwareObservation observation(JsonNode row) {
-        return new AlightingAwareObservation(row.path("id").asLong(), row.path("batch_id").asLong(),
-            row.path("batch_rank").asLong(), Instant.parse(row.path("received_at").asString()),
-            row.path("vehicle_id").asString(), row.path("passed_stop_order").asInt(), row.path("stop_order").asInt(),
-            row.path("running_state").asInt(), seats(row.path("remaining_seats")), row.path("crowd_level").asInt(),
-            row.path("route_version_id").asLong(), Instant.parse(row.path("physical_received_at").asString()),
-            row.path("down").asBoolean());
+        return new AlightingAwareObservation(
+                row.path("id").asLong(),
+                row.path("batch_id").asLong(),
+                row.path("batch_rank").asLong(),
+                Instant.parse(row.path("received_at").asString()),
+                row.path("vehicle_id").asString(),
+                row.path("passed_stop_order").asInt(),
+                row.path("stop_order").asInt(),
+                row.path("running_state").asInt(),
+                seats(row.path("remaining_seats")),
+                row.path("crowd_level").asInt(),
+                row.path("route_version_id").asLong(),
+                Instant.parse(row.path("physical_received_at").asString()),
+                row.path("down").asBoolean()
+        );
     }
 
     private static Integer seats(JsonNode value) {
@@ -177,6 +206,7 @@ final class WorkerReplayFixture {
         OffsetDateTime validFrom,
         OffsetDateTime validTo
     ) {
+
     }
 
     /** 통계에 적힌 정류장 한 줄이다. 판본마다 같은 구성으로 넣는다. */
@@ -187,6 +217,7 @@ final class WorkerReplayFixture {
         String direction,
         boolean boardingAllowed
     ) {
+
     }
 
     /** 재생할 배치 한 줄이다. 수신 시각은 응답 수신 시각이다. */
@@ -197,5 +228,6 @@ final class WorkerReplayFixture {
         Instant responseAt,
         int storedRows
     ) {
+
     }
 }

@@ -15,7 +15,7 @@ public interface ObservationResponse {
     CollectionResult interpret(OffsetDateTime receivedAt);
 
     /** 정규화 전 응답의 공개 노선/정류장 필드만 반환한다. 추가 호출이나 차량 식별자 기록은 하지 않는다. */
-    default Optional<ObservationResponse.SourceStopReference> sourceReference(final int stopOrder, String stopId) {
+    default Optional<SourceStopReference> sourceReference(final int stopOrder, String stopId) {
         return Optional.empty();
     }
 

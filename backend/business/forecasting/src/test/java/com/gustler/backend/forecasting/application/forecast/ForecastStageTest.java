@@ -21,10 +21,12 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 class ForecastStageTest {
+
     private static final String ROUTE = "stage-route";
     private static final long VERSION = 7;
     private static final Instant T0 = Instant.parse("2026-10-14T01:00:00Z");
     private static final AlightingAwareRouteStatistics STATISTICS = statistics();
+
     private final ForecastStage stage = new ForecastStage((source, vehicles, at, batch) -> capacities(vehicles));
     private long nextObservation = 1000;
 
@@ -33,18 +35,81 @@ class ForecastStageTest {
         // given
         RouteForecastState state = RouteForecastState.fromVerifiedOrigin(ROUTE);
         List<ForecastBatch> unconfirmed = List.of(
-            batch(1, T0, T0.plusSeconds(2), "UNVERIFIED", "SUCCESS_ROWS", rows(row("a", 2, 10))),
-            batch(2, T0, T0.plusSeconds(2), "LIVE", "SUCCESS_EMPTY", List.of()),
-            batch(3, T0, T0.plusSeconds(91), "LIVE", "SUCCESS_ROWS", rows(row("a", 2, 10))),
-            batch(4, T0, T0.minusSeconds(1), "LIVE", "SUCCESS_ROWS", rows(row("a", 2, 10))),
-            new ForecastBatch(5, VERSION, T0, T0.plusSeconds(2), "LIVE", "SUCCESS_ROWS", null, List.of()),
-            new ForecastBatch(6, VERSION, T0, null, "LIVE", "SUCCESS_ROWS", 1, rows(row("a", 2, 10))));
+                batch(
+                        1,
+                        T0,
+                        T0.plusSeconds(2),
+                        "UNVERIFIED",
+                        "SUCCESS_ROWS",
+                        rows(row("a", 2, 10))
+                ),
+                batch(
+                        2,
+                        T0,
+                        T0.plusSeconds(2),
+                        "LIVE",
+                        "SUCCESS_EMPTY",
+                        List.of()
+                ),
+                batch(
+                        3,
+                        T0,
+                        T0.plusSeconds(91),
+                        "LIVE",
+                        "SUCCESS_ROWS",
+                        rows(row("a", 2, 10))
+                ),
+                batch(
+                        4,
+                        T0,
+                        T0.minusSeconds(1),
+                        "LIVE",
+                        "SUCCESS_ROWS",
+                        rows(row("a", 2, 10))
+                ),
+                new ForecastBatch(
+                        5,
+                        VERSION,
+                        T0,
+                        T0.plusSeconds(2),
+                        "LIVE",
+                        "SUCCESS_ROWS",
+                        null,
+                        List.of()
+                ),
+                new ForecastBatch(
+                        6,
+                        VERSION,
+                        T0,
+                        null,
+                        "LIVE",
+                        "SUCCESS_ROWS",
+                        1,
+                        rows(row("a", 2, 10))
+                )
+        );
 
         // when
         List<ForecastStageResult> results = unconfirmed.stream()
-            .map(batch -> stage.advance(state, STATISTICS, "GBIS", batch)).toList();
-        ForecastStageResult boundary = stage.advance(state, STATISTICS, "GBIS",
-            batch(7, T0, T0.plusSeconds(90), "LIVE", "SUCCESS_ROWS", rows(row("a", 2, 10))));
+            .map(batch -> stage.advance(
+                    state,
+                    STATISTICS,
+                    "GBIS",
+                    batch
+            )).toList();
+        ForecastStageResult boundary = stage.advance(
+                state,
+                STATISTICS,
+                "GBIS",
+                batch(
+                        7,
+                        T0,
+                        T0.plusSeconds(90),
+                        "LIVE",
+                        "SUCCESS_ROWS",
+                        rows(row("a", 2, 10))
+                )
+        );
 
         // then
         assertSoftly(softly -> {
@@ -62,27 +127,137 @@ class ForecastStageTest {
     void 관측_줄은_차량_없는_줄과_같은_배치_중복_차량을_빼고_좌석은_0에서_70까지만_값으로_읽는다() {
         // given
         List<ForecastObservationRow> rows = List.of(
-            new ForecastObservationRow(1, null, 2, 3, 1, 10, null, 1),
-            new ForecastObservationRow(2, "a", 2, 3, 1, 0, null, 2),
-            new ForecastObservationRow(3, "b", 2, 3, 1, 10, null, 1),
-            new ForecastObservationRow(4, "b", 3, 4, 1, 11, null, 1),
-            new ForecastObservationRow(5, "c", 2, 3, 1, 71, null, 1),
-            new ForecastObservationRow(6, "d", 2, 3, 1, 10, "REPORTED_UNKNOWN", 1),
-            new ForecastObservationRow(7, "e", 2, 3, 1, null, "NOT_REPORTED", 0),
-            new ForecastObservationRow(8, "f", 2, 3, 1, 70, null, 4),
-            new ForecastObservationRow(9, "g", 10, 11, 1, 5, null, 3),
-            new ForecastObservationRow(10, "h", 9, 10, 2, 5, null, 3));
-        ForecastBatch batch = batch(1, T0, T0.plusSeconds(3), "LIVE", "SUCCESS_ROWS", rows);
+                new ForecastObservationRow(
+                        1,
+                        null,
+                        2,
+                        3,
+                        1,
+                        10,
+                        null,
+                        1
+                ),
+                new ForecastObservationRow(
+                        2,
+                        "a",
+                        2,
+                        3,
+                        1,
+                        0,
+                        null,
+                        2
+                ),
+                new ForecastObservationRow(
+                        3,
+                        "b",
+                        2,
+                        3,
+                        1,
+                        10,
+                        null,
+                        1
+                ),
+                new ForecastObservationRow(
+                        4,
+                        "b",
+                        3,
+                        4,
+                        1,
+                        11,
+                        null,
+                        1
+                ),
+                new ForecastObservationRow(
+                        5,
+                        "c",
+                        2,
+                        3,
+                        1,
+                        71,
+                        null,
+                        1
+                ),
+                new ForecastObservationRow(
+                        6,
+                        "d",
+                        2,
+                        3,
+                        1,
+                        10,
+                        "REPORTED_UNKNOWN",
+                        1
+                ),
+                new ForecastObservationRow(
+                        7,
+                        "e",
+                        2,
+                        3,
+                        1,
+                        null,
+                        "NOT_REPORTED",
+                        0
+                ),
+                new ForecastObservationRow(
+                        8,
+                        "f",
+                        2,
+                        3,
+                        1,
+                        70,
+                        null,
+                        4
+                ),
+                new ForecastObservationRow(
+                        9,
+                        "g",
+                        10,
+                        11,
+                        1,
+                        5,
+                        null,
+                        3
+                ),
+                new ForecastObservationRow(
+                        10,
+                        "h",
+                        9,
+                        10,
+                        2,
+                        5,
+                        null,
+                        3
+                )
+        );
+        ForecastBatch batch = batch(
+                1,
+                T0,
+                T0.plusSeconds(3),
+                "LIVE",
+                "SUCCESS_ROWS",
+                rows
+        );
 
         // when
-        List<AlightingAwareObservation> observations = stage.advance(RouteForecastState.fromVerifiedOrigin(ROUTE),
-            STATISTICS, "GBIS", batch).state().observations();
+        List<AlightingAwareObservation> observations = stage.advance(
+                RouteForecastState.fromVerifiedOrigin(ROUTE),
+                STATISTICS,
+                "GBIS",
+                batch
+        ).state().observations();
 
         // then
         Map<Long, AlightingAwareObservation> byId = observations.stream()
             .collect(Collectors.toMap(AlightingAwareObservation::observationId, observation -> observation));
         assertSoftly(softly -> {
-            softly.assertThat(byId.keySet()).containsExactlyInAnyOrder(2L, 5L, 6L, 7L, 8L, 9L, 10L);
+            softly.assertThat(byId.keySet()).containsExactlyInAnyOrder(
+                    2L,
+                    5L,
+                    6L,
+                    7L,
+                    8L,
+                    9L,
+                    10L
+            );
             softly.assertThat(byId.get(2L).seats()).isZero();
             softly.assertThat(byId.get(5L).seats()).isNull();
             softly.assertThat(byId.get(6L).seats()).isNull();
@@ -102,11 +277,24 @@ class ForecastStageTest {
     void 줄_수가_저장_줄_수와_다르면_되감기를_요구하고_상태를_그대로_둔다() {
         // given
         RouteForecastState state = RouteForecastState.fromVerifiedOrigin(ROUTE);
-        ForecastBatch missing = new ForecastBatch(1, VERSION, T0, T0.plusSeconds(2), "LIVE", "SUCCESS_ROWS", 2,
-            rows(row("a", 2, 10)));
+        ForecastBatch missing = new ForecastBatch(
+                1,
+                VERSION,
+                T0,
+                T0.plusSeconds(2),
+                "LIVE",
+                "SUCCESS_ROWS",
+                2,
+                rows(row("a", 2, 10))
+        );
 
         // when
-        ForecastStageResult result = stage.advance(state, STATISTICS, "GBIS", missing);
+        ForecastStageResult result = stage.advance(
+                state,
+                STATISTICS,
+                "GBIS",
+                missing
+        );
 
         // then
         assertSoftly(softly -> {
@@ -120,11 +308,20 @@ class ForecastStageTest {
     void 이미_반영한_배치를_다시_받으면_상태를_바꾸지_않는다() {
         // given
         ForecastBatch batch = confirmed(1, T0, row("a", 2, 10));
-        RouteForecastState state = stage.advance(RouteForecastState.fromVerifiedOrigin(ROUTE), STATISTICS, "GBIS",
-            batch).state();
+        RouteForecastState state = stage.advance(
+                RouteForecastState.fromVerifiedOrigin(ROUTE),
+                STATISTICS,
+                "GBIS",
+                batch
+        ).state();
 
         // when
-        ForecastStageResult again = stage.advance(state, STATISTICS, "GBIS", batch);
+        ForecastStageResult again = stage.advance(
+                state,
+                STATISTICS,
+                "GBIS",
+                batch
+        );
 
         // then
         assertSoftly(softly -> {
@@ -138,8 +335,17 @@ class ForecastStageTest {
         // given
         RouteForecastState state = RouteForecastState.fromVerifiedOrigin(ROUTE);
         for (int index = 0; index < 4; index++) {
-            state = stage.advance(state, STATISTICS, "GBIS", confirmed(index + 1, T0.plusSeconds(30L * index),
-                row("a", 2 + index / 2, 10 + index), row("b", 3, 20))).state();
+            state = stage.advance(
+                    state,
+                    STATISTICS,
+                    "GBIS",
+                    confirmed(
+                            index + 1,
+                            T0.plusSeconds(30L * index),
+                            row("a", 2 + index / 2, 10 + index),
+                            row("b", 3, 20)
+                    )
+            ).state();
         }
         RouteForecastState before = state;
         List<AlightingAwareObservation> observations = List.copyOf(before.observations());
@@ -147,15 +353,35 @@ class ForecastStageTest {
         List<AlightingAwarePassEvent> events = List.copyOf(before.events());
         Map<String, RouteForecastState.VehicleTrack> vehicles = Map.copyOf(before.vehicles());
         RouteForecastState.Cursor cursor = before.cursor().orElseThrow();
-        ForecastBatch next = confirmed(5, T0.plusSeconds(120), row("a", 4, 15), row("b", 3, 20));
+        ForecastBatch next = confirmed(
+                5,
+                T0.plusSeconds(120),
+                row("a", 4, 15),
+                row("b", 3, 20)
+        );
         ForecastStage failing = new ForecastStage((source, ids, at, batch) -> {
             throw new IllegalStateException("capacity store down");
         });
 
         // when
-        Throwable failure = catchThrowable(() -> failing.advance(before, STATISTICS, "GBIS", next));
-        ForecastStageResult retried = stage.advance(before, STATISTICS, "GBIS", next);
-        ForecastStageResult fresh = stage.advance(before, STATISTICS, "GBIS", next);
+        Throwable failure = catchThrowable(() -> failing.advance(
+                before,
+                STATISTICS,
+                "GBIS",
+                next
+        ));
+        ForecastStageResult retried = stage.advance(
+                before,
+                STATISTICS,
+                "GBIS",
+                next
+        );
+        ForecastStageResult fresh = stage.advance(
+                before,
+                STATISTICS,
+                "GBIS",
+                next
+        );
 
         // then
         assertSoftly(softly -> {
@@ -189,8 +415,12 @@ class ForecastStageTest {
             }
             ForecastObservationRow row = row("a", passed[index], 20 - index);
             observations.add(row.observationId());
-            ForecastStageResult result = stage.advance(state, STATISTICS, "GBIS",
-                confirmed(index + 1, T0.plusSeconds(30L * index), row));
+            ForecastStageResult result = stage.advance(
+                    state,
+                    STATISTICS,
+                    "GBIS",
+                    confirmed(index + 1, T0.plusSeconds(30L * index), row)
+            );
             closed.addAll(result.closedPasses());
             state = result.state();
         }
@@ -225,7 +455,12 @@ class ForecastStageTest {
             if (index >= 80) {
                 rows.add(row("b", 2 + (index - 80) / 30, 30));
             }
-            ForecastStageResult result = stage.advance(state, STATISTICS, "GBIS", confirmed(index + 1, at, rows));
+            ForecastStageResult result = stage.advance(
+                    state,
+                    STATISTICS,
+                    "GBIS",
+                    confirmed(index + 1, at, rows)
+            );
             outcomes.put(index, outcome(result));
             state = result.state();
         }
@@ -259,7 +494,12 @@ class ForecastStageTest {
             if (index >= 100) {
                 rows.add(row("b", 2 + (index - 100) / 60, 30));
             }
-            ForecastStageResult result = stage.advance(state, STATISTICS, "GBIS", confirmed(index + 1, at, rows));
+            ForecastStageResult result = stage.advance(
+                    state,
+                    STATISTICS,
+                    "GBIS",
+                    confirmed(index + 1, at, rows)
+            );
             outcomes.put(index, outcome(result));
             state = result.state();
         }
@@ -293,12 +533,22 @@ class ForecastStageTest {
 
         // when
         for (int index = 0; index < batches.size(); index++) {
-            ForecastStageResult expected = stage.advance(continuous, STATISTICS, "GBIS", batches.get(index));
+            ForecastStageResult expected = stage.advance(
+                    continuous,
+                    STATISTICS,
+                    "GBIS",
+                    batches.get(index)
+            );
             continuous = expected.state();
             if (batches.get(index).confirmedAt().isBefore(T0)) {
                 continue;
             }
-            ForecastStageResult actual = stage.advance(replayed, STATISTICS, "GBIS", batches.get(index));
+            ForecastStageResult actual = stage.advance(
+                    replayed,
+                    STATISTICS,
+                    "GBIS",
+                    batches.get(index)
+            );
             replayed = actual.state();
             outcomes.put(index, outcome(actual));
             Map<Long, List<String>> expectedVectors = vectors(expected.snapshots());
@@ -342,12 +592,22 @@ class ForecastStageTest {
 
         // when
         for (int index = 0; index < batches.size(); index++) {
-            ForecastStageResult expected = stage.advance(continuous, STATISTICS, "GBIS", batches.get(index));
+            ForecastStageResult expected = stage.advance(
+                    continuous,
+                    STATISTICS,
+                    "GBIS",
+                    batches.get(index)
+            );
             continuous = expected.state();
             if (batches.get(index).confirmedAt().isBefore(T0)) {
                 continue;
             }
-            ForecastStageResult actual = stage.advance(replayed, STATISTICS, "GBIS", batches.get(index));
+            ForecastStageResult actual = stage.advance(
+                    replayed,
+                    STATISTICS,
+                    "GBIS",
+                    batches.get(index)
+            );
             replayed = actual.state();
             outcomes.put(index, outcome(actual));
             Map<Long, List<String>> expectedVectors = vectors(expected.snapshots());
@@ -421,7 +681,16 @@ class ForecastStageTest {
     }
 
     private ForecastObservationRow row(String vehicle, final int passed, final int seats) {
-        return new ForecastObservationRow(nextObservation++, vehicle, passed, passed + 1, 1, seats, null, 2);
+        return new ForecastObservationRow(
+                nextObservation++,
+                vehicle,
+                passed,
+                passed + 1,
+                1,
+                seats,
+                null,
+                2
+        );
     }
 
     private static List<ForecastObservationRow> rows(ForecastObservationRow... rows) {
@@ -433,7 +702,14 @@ class ForecastStageTest {
     }
 
     private static ForecastBatch confirmed(final long id, Instant receivedAt, List<ForecastObservationRow> rows) {
-        return batch(id, receivedAt, receivedAt.plusSeconds(2), "LIVE", "SUCCESS_ROWS", rows);
+        return batch(
+                id,
+                receivedAt,
+                receivedAt.plusSeconds(2),
+                "LIVE",
+                "SUCCESS_ROWS",
+                rows
+        );
     }
 
     private static ForecastBatch batch(
@@ -444,7 +720,16 @@ class ForecastStageTest {
         String outcome,
         List<ForecastObservationRow> rows
     ) {
-        return new ForecastBatch(id, VERSION, receivedAt, confirmedAt, origin, outcome, rows.size(), rows);
+        return new ForecastBatch(
+                id,
+                VERSION,
+                receivedAt,
+                confirmedAt,
+                origin,
+                outcome,
+                rows.size(),
+                rows
+        );
     }
 
     private static Map<String, Integer> capacities(List<String> vehicles) {
@@ -456,12 +741,33 @@ class ForecastStageTest {
     private static AlightingAwareRouteStatistics statistics() {
         List<AlightingAwareRouteStatistics.Stop> stops = new ArrayList<>();
         for (int order = 1; order <= 12; order++) {
-            stops.add(new AlightingAwareRouteStatistics.Stop(order, "s" + order, "정류장" + order, order > 10, true));
+            stops.add(new AlightingAwareRouteStatistics.Stop(
+                    order,
+                    "s" + order,
+                    "정류장" + order,
+                    order > 10,
+                    true
+            ));
         }
         Map<String, Map<String, Double>> tables = new HashMap<>();
-        for (String table : List.of("lam", "lam_base", "net_tab", "full_tab", "dep_tab", "stop_net_base")) {
+        for (String table : List.of(
+                "lam",
+                "lam_base",
+                "net_tab",
+                "full_tab",
+                "dep_tab",
+                "stop_net_base"
+        )) {
             tables.put(table, Map.of());
         }
-        return new AlightingAwareRouteStatistics(ROUTE, stops, 2, tables, Map.of(), Set.of(), true);
+        return new AlightingAwareRouteStatistics(
+                ROUTE,
+                stops,
+                2,
+                tables,
+                Map.of(),
+                Set.of(),
+                true
+        );
     }
 }

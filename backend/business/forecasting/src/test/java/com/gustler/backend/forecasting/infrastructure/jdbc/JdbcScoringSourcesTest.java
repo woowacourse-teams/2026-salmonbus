@@ -37,6 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcScoringSourcesTest {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2030-01-01T00:00:00Z"), ZoneOffset.UTC);
     private static final Instant MORNING = Instant.parse("2026-01-04T23:00:00Z");
@@ -66,13 +67,24 @@ class JdbcScoringSourcesTest {
               "shared": {"turn": 9, "realStopOrders": [5, 1, 2, 3, 4], "holidays": ["2026-01-01"],
                 "inputProfile": "alighting-confirmed-closure-v2", "capacityPolicy": "vehicle-capacity-snapshot-v1",
                 "extendedSettlement": {%s}}}}
-            """.formatted(version, parameters, parameters, cells);
+            """.formatted(
+                    version,
+                    parameters,
+                    parameters,
+                    cells
+            );
         deployment = jdbc.sql("""
             INSERT INTO model_deployment(deployment_key,release_id,model_key,model_version,bundle_digest,
                 prediction_target_version,calculation_version,supported_scope_digest,data_until,state,settlement_context)
             VALUES(?,'scoring-sources-test','alighting-gate-base-and-pool','v1',?,'after-alighting-and-departure-zero-v1',
                 'alighting-online-capacity-snapshot-v2',?,?,'STAGED',CAST(? AS jsonb)) RETURNING id
-            """).params(UUID.randomUUID(), "c".repeat(64), "c".repeat(64), offset(MORNING.minusSeconds(86400)), context)
+            """).params(
+                    UUID.randomUUID(),
+                    "c".repeat(64),
+                    "c".repeat(64),
+                    offset(MORNING.minusSeconds(86400)),
+                    context
+            )
             .query(Long.class).single();
     }
 
@@ -81,9 +93,27 @@ class JdbcScoringSourcesTest {
         // given
         ScoringStage stage = stage();
         Instant closed = MORNING.plusSeconds(300);
-        PassClosed previous = pass("bus-c", 60, closed.minusSeconds(200), closed.minusSeconds(180), 900);
-        PassClosed current = pass("bus-a", 50, closed.minusSeconds(30), closed, 901);
-        stage.accept(forecast(MORNING, 500, "bus-a", 50, 40));
+        PassClosed previous = pass(
+                "bus-c",
+                60,
+                closed.minusSeconds(200),
+                closed.minusSeconds(180),
+                900
+        );
+        PassClosed current = pass(
+                "bus-a",
+                50,
+                closed.minusSeconds(30),
+                closed,
+                901
+        );
+        stage.accept(forecast(
+                MORNING,
+                500,
+                "bus-a",
+                50,
+                40
+        ));
         stage.accept(previous);
 
         // when
@@ -102,9 +132,27 @@ class JdbcScoringSourcesTest {
         // given
         ScoringStage stage = stage();
         Instant closed = MIDDAY.plusSeconds(300);
-        PassClosed previous = pass("bus-c", 60, closed.minusSeconds(200), closed.minusSeconds(180), 900);
-        PassClosed current = pass("bus-a", 50, closed.minusSeconds(30), closed, 901);
-        stage.accept(forecast(MIDDAY, 500, "bus-a", 50, 45));
+        PassClosed previous = pass(
+                "bus-c",
+                60,
+                closed.minusSeconds(200),
+                closed.minusSeconds(180),
+                900
+        );
+        PassClosed current = pass(
+                "bus-a",
+                50,
+                closed.minusSeconds(30),
+                closed,
+                901
+        );
+        stage.accept(forecast(
+                MIDDAY,
+                500,
+                "bus-a",
+                50,
+                45
+        ));
         stage.accept(previous);
 
         // when
@@ -140,21 +188,51 @@ class JdbcScoringSourcesTest {
         // given
         final long late = routeVersionWithStops(5);
         ForecastTestSupport.MutableClock clock = new ForecastTestSupport.MutableClock();
-        ScoringStage stage = new ScoringStage(new JdbcSettlementContextProvider(jdbc),
-            new JdbcRouteStructureProvider(jdbc), new AlightingAwarePassLabelCalculator(), clock,
-            ScoringStage.DEFAULT_OBSERVATION_LIMIT);
+        ScoringStage stage = new ScoringStage(
+                new JdbcSettlementContextProvider(jdbc),
+                new JdbcRouteStructureProvider(jdbc),
+                new AlightingAwarePassLabelCalculator(),
+                clock,
+                ScoringStage.DEFAULT_OBSERVATION_LIMIT
+        );
         Instant closed = MORNING.plusSeconds(300);
         clock.at = MORNING.plusMillis(5);
-        ScoringResult withoutEvidence = stage.accept(forecast(late, MORNING, 500, "bus-a", 50, 40));
+        ScoringResult withoutEvidence = stage.accept(forecast(
+                late,
+                MORNING,
+                500,
+                "bus-a",
+                50,
+                40
+        ));
         copyEvidenceTo(late);
         clock.at = MORNING.plusSeconds(20).plusMillis(5);
 
         // when
-        ScoringResult afterEvidence = stage.accept(forecast(late, MORNING.plusSeconds(20), 501, "bus-a", 50, 40));
+        ScoringResult afterEvidence = stage.accept(forecast(
+                late,
+                MORNING.plusSeconds(20),
+                501,
+                "bus-a",
+                50,
+                40
+        ));
         final int waiting = stage.waitingCount();
-        stage.accept(pass("bus-c", 60, closed.minusSeconds(200), closed.minusSeconds(180), 900));
+        stage.accept(pass(
+                "bus-c",
+                60,
+                closed.minusSeconds(200),
+                closed.minusSeconds(180),
+                900
+        ));
         clock.at = closed.plusMillis(5);
-        ScoringResult scored = stage.accept(pass("bus-a", 50, closed.minusSeconds(30), closed, 901));
+        ScoringResult scored = stage.accept(pass(
+                "bus-a",
+                50,
+                closed.minusSeconds(30),
+                closed,
+                901
+        ));
 
         // then
         assertSoftly(softly -> {
@@ -181,7 +259,13 @@ class JdbcScoringSourcesTest {
             jdbc.sql("""
                 INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
                 VALUES(?,?,?,?,'UP',?)
-                """).params(bare, order, "s" + order, "정류장" + order, order != 3).update();
+                """).params(
+                        bare,
+                        order,
+                        "s" + order,
+                        "정류장" + order,
+                        order != 3
+                ).update();
         }
         JdbcRouteStructureProvider provider = new JdbcRouteStructureProvider(jdbc);
 
@@ -191,7 +275,13 @@ class JdbcScoringSourcesTest {
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(recorded).containsExactly(5, 1, 2, 3, 4);
+            softly.assertThat(recorded).containsExactly(
+                    5,
+                    1,
+                    2,
+                    3,
+                    4
+            );
             softly.assertThat(fallback).containsExactly(1, 2, 4);
         });
     }
@@ -211,8 +301,13 @@ class JdbcScoringSourcesTest {
     }
 
     private ScoringStage stage() {
-        return new ScoringStage(new JdbcSettlementContextProvider(jdbc), new JdbcRouteStructureProvider(jdbc),
-            new AlightingAwarePassLabelCalculator(), CLOCK, ScoringStage.DEFAULT_OBSERVATION_LIMIT);
+        return new ScoringStage(
+                new JdbcSettlementContextProvider(jdbc),
+                new JdbcRouteStructureProvider(jdbc),
+                new AlightingAwarePassLabelCalculator(),
+                CLOCK,
+                ScoringStage.DEFAULT_OBSERVATION_LIMIT
+        );
     }
 
     /** 근거가 있는 노선 판본의 근거를 다른 판본 키로 옮겨 적는다. 예보 경로가 근거를 뒤늦게 적는 것을 흉내 낸다. */
@@ -237,7 +332,12 @@ class JdbcScoringSourcesTest {
             jdbc.sql("""
                 INSERT INTO route_stop(route_version_id,stop_order,stop_id,name,direction,boarding_allowed)
                 VALUES(?,?,?,?,'UP',true)
-                """).params(created, order, "s" + order, "정류장" + order).update();
+                """).params(
+                        created,
+                        order,
+                        "s" + order,
+                        "정류장" + order
+                ).update();
         }
         return created;
     }
@@ -259,7 +359,14 @@ class JdbcScoringSourcesTest {
         final long chain,
         final int capacity
     ) {
-        return forecast(version, confirmedAt, observation, vehicle, chain, capacity);
+        return forecast(
+                version,
+                confirmedAt,
+                observation,
+                vehicle,
+                chain,
+                capacity
+        );
     }
 
     private ForecastPublished forecast(
@@ -270,10 +377,31 @@ class JdbcScoringSourcesTest {
         final long chain,
         final int capacity
     ) {
-        ForecastPublished.VehicleForecast forecast = new ForecastPublished.VehicleForecast(observation, 0, vehicle, 1,
-            chain, chain, false, capacity, false, new int[] {3}, new double[1], new double[1]);
-        return new ForecastPublished(SourceDates.of(confirmedAt), batches.incrementAndGet(), 7L, routeVersion,
-            confirmedAt.minusSeconds(2), confirmedAt, deployment, ForecastOutcome.PUBLISHED, List.of(forecast));
+        ForecastPublished.VehicleForecast forecast = new ForecastPublished.VehicleForecast(
+                observation,
+                0,
+                vehicle,
+                1,
+                chain,
+                chain,
+                false,
+                capacity,
+                false,
+                new int[] {3},
+                new double[1],
+                new double[1]
+        );
+        return new ForecastPublished(
+                SourceDates.of(confirmedAt),
+                batches.incrementAndGet(),
+                7L,
+                routeVersion,
+                confirmedAt.minusSeconds(2),
+                confirmedAt,
+                deployment,
+                ForecastOutcome.PUBLISHED,
+                List.of(forecast)
+        );
     }
 
     private PassClosed pass(
@@ -283,9 +411,30 @@ class JdbcScoringSourcesTest {
         Instant closedAt,
         final long closure
     ) {
-        return new PassClosed(SourceDates.of(closedAt), 7L, chain, 3, version, vehicle, chain, SourceDates.of(lastAt),
-            closure - 300, 20, lastAt.minusSeconds(40), lastAt.minusSeconds(42), closure - 200, lastAt.minusSeconds(20),
-            closure - 100, 18, lastAt, lastAt.minusSeconds(2), lastAt, closure, batches.incrementAndGet(), closedAt);
+        return new PassClosed(
+                SourceDates.of(closedAt),
+                7L,
+                chain,
+                3,
+                version,
+                vehicle,
+                chain,
+                SourceDates.of(lastAt),
+                closure - 300,
+                20,
+                lastAt.minusSeconds(40),
+                lastAt.minusSeconds(42),
+                closure - 200,
+                lastAt.minusSeconds(20),
+                closure - 100,
+                18,
+                lastAt,
+                lastAt.minusSeconds(2),
+                lastAt,
+                closure,
+                batches.incrementAndGet(),
+                closedAt
+        );
     }
 
     private static OffsetDateTime offset(Instant at) {
