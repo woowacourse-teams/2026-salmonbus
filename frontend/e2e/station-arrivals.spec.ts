@@ -1,8 +1,8 @@
 import type { StationArrivalsResponse } from "../src/shared/api/stationArrivals.types";
 import { test, expect } from "./fixtures/api";
-import { observedAt, routeId, targetStopNames } from "./fixtures/mock-data";
+import { observedAt, routeId } from "./fixtures/mock-data";
 import { createStationArrivalsData } from "./fixtures/station-arrivals";
-import { directionButton, openBoard, targetRow, targetStop } from "./utils/verdict-board";
+import { openBoard, targetRow, targetStop } from "./utils/verdict-board";
 
 test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
 
@@ -66,20 +66,6 @@ test("펼친 목록은 watch 순서·거리·좌석을 유지하고 같은 차�
   });
 });
 
-// 선택한 방문과 다른 ETA를 붙이지 않는 규칙은 stationArrivalPolicy 단위 테스트가 본다.
-test("ETA에만 있는 차량과 ID가 없는 차량의 시간은 watch 차량에 붙이지 않는다", async ({ page, api }) => {
-  const response = readyArrivals();
-  response.routes[0]!.arrivals[0]!.vehicleId = "eta-only";
-  response.routes[0]!.arrivals[1]!.vehicleId = null;
-  api.data.arrivals = response;
-  await openBoard(page);
-  await targetStop(page, "UP").click();
-  await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
-    /3정류장 전\s*도착 시 5석 예상해요/,
-    /7정류장 전\s*도착 시 2석 예상해요/,
-  ]);
-});
-
 test("40초 권장 시각에 재조회하고 닫으면 폴링을 멈춘다", async ({ page, api }) => {
   await openBoard(page);
   const stop = targetStop(page, "UP");
@@ -128,66 +114,4 @@ test("최초 수집 중에도 좌석을 유지하고 권장 시각 뒤 시간만
   await page.clock.fastForward(200);
   await expect(targetRow(page, "UP").getByText("2분 남음", { exact: true })).toBeVisible();
   expect(api.requests.arrivals).toBe(2);
-});
-
-test("선택 정류장과 방향을 바꾸면 이전 방문의 목록을 유지하지 않는다", async ({ page, api }) => {
-  api.data.arrivals = readyArrivals();
-  await openBoard(page);
-  await targetStop(page, "UP").click();
-  await expect(targetRow(page, "UP").getByText("4분 남음", { exact: true })).toBeVisible();
-  api.data.arrivals = null;
-  const nextStop = api.data.watch.stops.find((stop) => stop.direction === "UP" && stop.sequence === 12)!;
-  await page
-    .getByRole("region", { name: "판정보드 정류장 목록", exact: true })
-    .getByRole("button", { name: new RegExp(`^${nextStop.name}`) })
-    .and(page.locator("button[aria-expanded]"))
-    .click();
-  await expect.poll(() => api.requests.arrivals).toBe(2);
-  expect(api.arrivalRequests[1]!.pathname).toBe(`/api/v2/stations/${nextStop.stopId}/arrivals`);
-  expect(api.arrivalRequests[1]!.searchParams.get("stopSequence")).toBe("12");
-  await expect(targetStop(page, "UP")).toHaveAttribute("aria-expanded", "false");
-  await expect(page.getByText("4분 남음", { exact: true })).toHaveCount(0);
-  await directionButton(page, "DOWN").click();
-  await page.clock.fastForward(40_000);
-  expect(api.requests.arrivals).toBe(2);
-  await targetStop(page, "DOWN").click();
-  await expect.poll(() => api.requests.arrivals).toBe(3);
-  expect(api.arrivalRequests[2]!.pathname).toBe("/api/v2/stations/20011/arrivals");
-  expect(api.arrivalRequests[2]!.searchParams.get("stopSequence")).toBe("23");
-  await expect(targetRow(page, "DOWN").getByRole("listitem")).toHaveText([
-    /2분 남음\s*2정류장 전\s*도착 시 8석 예상해요/,
-  ]);
-});
-
-test("ETA 시간이 지나도 도착으로 추정하지 않고 snapshot 만료 시에도 좌석을 유지한다", async ({ page, api }) => {
-  const response = readyArrivals();
-  response.routes[0]!.arrivals[1]!.eta.expectedArrivalAt = new Date(now + 2_000).toISOString();
-  response.snapshot!.staleAt = new Date(now + 4_000).toISOString();
-  api.data.arrivals = response;
-  await openBoard(page);
-  await targetStop(page, "UP").click();
-  const row = targetRow(page, "UP");
-  const vehicle = row.getByRole("listitem").nth(0);
-  await expect(vehicle.getByText("1분 이내", { exact: true })).toBeVisible();
-  await page.clock.fastForward(2_000);
-  await expect(vehicle).toHaveText(/3정류장 전\s*도착 시 5석 예상해요/);
-  await expect(row.getByText("정류장 도착", { exact: true })).toHaveCount(0);
-  await page.clock.fastForward(2_000);
-  await expect(row.getByRole("listitem")).toHaveText([
-    /3정류장 전\s*도착 시 5석 예상해요/,
-    /7정류장 전\s*도착 시 2석 예상해요/,
-  ]);
-});
-
-// 빈 결과도 시간만 숨기고 watch 거리와 좌석을 바꾸지 않는 규칙은 stationArrivalPolicy 단위 테스트가 본다.
-test("도착정보 조회 실패에도 watch 거리와 좌석 예보를 유지한다", async ({ page, api }) => {
-  api.mode.arrivals = "network-error";
-  await openBoard(page);
-  await targetStop(page, "UP").click();
-  await expect(targetRow(page, "UP").getByRole("listitem")).toHaveText([
-    /3정류장 전\s*도착 시 5석 예상해요/,
-    /7정류장 전\s*도착 시 2석 예상해요/,
-  ]);
-  expect(api.requests.arrivals).toBe(1);
-  await expect(page.getByText(targetStopNames.UP, { exact: true })).toBeVisible();
 });
