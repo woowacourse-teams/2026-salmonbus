@@ -45,9 +45,23 @@ test("홈의 + 버튼에서 그룹을 만들고 최대 개수에 도달하면 �
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/favorites");
   const add = page.getByRole("button", { name: "그룹 추가", exact: true });
-  await add.click();
   const dialog = page.getByRole("dialog", { name: "그룹 추가", exact: true });
   const input = dialog.getByRole("textbox", { name: "그룹 이름", exact: true });
+
+  await test.step("취소와 Escape는 저장하지 않고 열었던 버튼으로 돌아간다", async () => {
+    await add.click();
+    await input.fill("취소할 그룹");
+    await dialog.getByRole("button", { name: "취소", exact: true }).click();
+    await expect(add).toBeFocused();
+    await add.press("Enter");
+    await expect(input).toHaveValue("");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(add).toBeFocused();
+    expect(favorites.requests.filter((request) => request.method === "POST")).toHaveLength(0);
+  });
+
+  await add.click();
   await expect(input).toBeFocused();
   await expect(page.getByRole("button", { name: "즐겨찾기 더보기", exact: true })).toHaveCount(0);
   await input.fill("  아침출근즐겨찾기그룹  ");
@@ -98,20 +112,4 @@ test("그룹 추가에서 잘못된 이름과 중복 이름을 안내하고 실�
   await submit.click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "퇴근", exact: true })).toBeVisible();
-});
-
-test("그룹 추가 취소와 Escape는 저장하지 않고 열었던 버튼으로 돌아간다", async ({ page, favorites }) => {
-  await page.goto("/favorites");
-  const add = page.getByRole("button", { name: "그룹 추가", exact: true });
-  await add.click();
-  const dialog = page.getByRole("dialog", { name: "그룹 추가", exact: true });
-  await dialog.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("취소할 그룹");
-  await dialog.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(add).toBeFocused();
-  await add.press("Enter");
-  await expect(dialog.getByRole("textbox", { name: "그룹 이름", exact: true })).toHaveValue("");
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
-  await expect(add).toBeFocused();
-  expect(favorites.requests.filter((request) => request.method === "POST")).toHaveLength(0);
 });

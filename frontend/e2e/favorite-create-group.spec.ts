@@ -33,6 +33,9 @@ test("320px 판정보드 모달에서 새 그룹을 만들고 기존 선택과 �
   await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toBeFocused();
   await expect(dialog.getByRole("checkbox", { name: /🚌 통학/ })).toHaveAccessibleName(/정류장 1개, 최대 2개/);
   await expect(dialog.getByRole("checkbox", { name: /즐겨찾기/ })).toBeChecked();
+  // 세 번째 그룹이라 더 만들 수 없다.
+  await expect(dialog.getByRole("checkbox")).toHaveCount(3);
+  await expect(dialog.getByRole("button", { name: "새 그룹 만들기", exact: true })).toHaveCount(0);
   expect(favorites.requests.find((request) => request.method === "POST")?.body).toEqual({ name: "🚌 통학" });
   expect(favorites.requests.some((request) => request.path === "/api/me/favorite-selections")).toBe(false);
   const save = dialog.getByRole("button", { name: "저장", exact: true });
@@ -114,21 +117,6 @@ test("그룹 생성 취소는 요청하지 않고 생성 후 모달 취소는 �
   expect(favorites.groups.every((group) => group.favorites.length === 0)).toBe(true);
   await star.click();
   await expect(dialog.getByRole("checkbox", { name: /통학/ })).not.toBeChecked();
-});
-
-test("세 번째 그룹을 만들면 추가 버튼을 숨기고 즐겨찾기 저장은 유지한다", async ({ page, favorites, api }) => {
-  favorites.groups.push({ id: "10000000-0000-4000-8000-000000000003", name: "통학", favorites: [] });
-  const stop = api.data.watch.stops.find((item) => item.boardingAllowed)!;
-  await page.goto(`/routes/${routeId}`);
-  await page.getByRole("button", { name: `${stop.name} 즐겨찾기`, exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "저장할 그룹 선택" });
-  await dialog.getByRole("button", { name: "새 그룹 만들기", exact: true }).click();
-  await dialog.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("주말");
-  await dialog.getByRole("button", { name: "만들기", exact: true }).click();
-  await expect(dialog.getByRole("checkbox", { name: /주말/ })).toBeChecked();
-  await expect(dialog.getByRole("checkbox")).toHaveCount(3);
-  await expect(dialog.getByRole("button", { name: "새 그룹 만들기", exact: true })).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "저장", exact: true })).toBeEnabled();
 });
 
 test("그룹 생성 후 목록 갱신이 느려도 누락 오류나 중복 생성을 유도하지 않는다", async ({ page, favorites, api }) => {
