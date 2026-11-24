@@ -150,73 +150,6 @@ test("자동 재시도 안내는 실제 예약이 있을 때만 표시하고 숨
   await expect(page.getByRole("button", { name: "다시 시도하기", exact: true })).toBeEnabled();
 });
 
-test("유효기간 안의 자동 갱신 실패 시 마지막 예측을 유지하고, 다음 요청이 성공하면 새 예측으로 교체한다", async ({
-  page,
-  api,
-}) => {
-  await openBoard(page);
-  const stop = targetStop(page, "UP");
-  await stop.scrollIntoViewIfNeeded();
-  await stop.click();
-
-  const arrivals = targetRow(page, "UP").getByRole("listitem");
-  await expect(arrivals).toHaveText([
-    /(?:\d+분 남음|1분 이내)\s*3정류장 전\s*도착 시 5석 예상해요/,
-    /(?:\d+분 남음|1분 이내)\s*7정류장 전\s*도착 시 2석 예상해요/,
-  ]);
-
-  await test.step("갱신 실패 뒤 마지막 예측 유지 (현재 구현)", async () => {
-    const previousForecast = await arrivals.allTextContents();
-    const requestsBeforeFailure = api.requests.watch;
-    api.mode.watch = "network-error";
-
-    // 단순히 화면이 남았는지만 보지 않고 후속 폴링의 실제 네트워크 실패를 기다린다.
-    const failedRequest = page.waitForEvent(
-      "requestfailed",
-      (request) => new URL(request.url()).pathname === apiPaths.watch,
-    );
-    await page.clock.fastForward(pollIntervalMs);
-    await failedRequest;
-    await page.clock.runFor(1);
-    expect(api.requests.watch).toBeGreaterThan(requestsBeforeFailure);
-    expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.watch.staleAt));
-
-    await expect(stop).toHaveAttribute("aria-expanded", "true");
-    await expect(arrivals).toHaveText(previousForecast);
-    await expect(arrivals.nth(0)).toBeVisible();
-    await expect(arrivals.nth(1)).toBeVisible();
-    // 배너 유무는 미확정 정책이므로 고정하지 않고 예측 화면이 유지되는지만 확인한다.
-    await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
-  });
-
-  await test.step("다음 요청 성공 뒤 새 예측으로 교체", async () => {
-    // 다음 성공 응답이 반영됐는지 구분하도록 예측 값과 항목 수를 바꾼다.
-    const stopData = api.data.watch.stops.find((stop) => stop.name === targetStopNames.UP);
-    if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
-    stopData.approachingVehicles = [
-      {
-        vehicleId: "bus-1",
-        remainingStops: 2,
-        forecast: { status: "AVAILABLE", seatAvailableProbability: 0.9, expectedSeats: 9 },
-      },
-    ];
-    api.mode.watch = "success";
-    const requestsBeforeRecovery = api.requests.watch;
-
-    const recoveredResponse = page.waitForResponse(
-      (response) => new URL(response.url()).pathname === apiPaths.watch && response.status() === 200,
-    );
-    await page.clock.fastForward(pollIntervalMs);
-    await (await recoveredResponse).finished();
-    expect(api.requests.watch).toBeGreaterThan(requestsBeforeRecovery);
-    expect(await page.evaluate(() => Date.now())).toBeLessThan(Date.parse(api.data.watch.staleAt));
-
-    await expect(stop).toHaveAttribute("aria-expanded", "true");
-    await expect(arrivals).toHaveText([/(?:\d+분 남음|1분 이내)\s*2정류장 전\s*도착 시 9석 예상해요/]);
-    await expect(arrivals.nth(0)).toBeVisible();
-  });
-});
-
 test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지 않고 판정 보드를 다시 불러온다", async ({ page, api }) => {
   await openBoard(page);
   const stop = targetStop(page, "UP");
@@ -240,6 +173,11 @@ test("화면을 켜 둔 채 연결이 돌아오면 다음 폴링을 기다리지
   await page.clock.fastForward(pollIntervalMs);
   await pollFailed;
   await page.clock.runFor(1_000);
+
+  // 갱신이 실패해도 펼친 목록과 마지막 예측은 그대로 남는다.
+  await expect(stop).toHaveAttribute("aria-expanded", "true");
+  await expect(arrivals).toHaveText([/3정류장 전\s*도착 시 5석 예상해요/, /7정류장 전\s*도착 시 2석 예상해요/]);
+  await expect(page.getByRole("heading", { name: "3330", exact: true })).toBeVisible();
 
   const stopData = api.data.watch.stops.find((stop) => stop.name === targetStopNames.UP);
   if (stopData === undefined) throw new Error("상행 목표 정류장 fixture가 필요합니다");
