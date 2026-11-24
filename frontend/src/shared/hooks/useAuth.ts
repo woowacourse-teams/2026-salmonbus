@@ -1,13 +1,9 @@
 import { createContext, useContext } from "react";
 import type { ApiResult } from "@/shared/api/client";
 import type { Member } from "@/shared/api/auth.types";
+import type { AuthState } from "@/shared/auth/authStore";
 
-export type AuthState =
-  | { status: "loading" }
-  | { status: "anonymous" }
-  | { status: "authenticated"; member: Member }
-  | { status: "unavailable" }
-  | { status: "error" };
+export type { AuthState };
 
 interface AuthContextValue {
   state: AuthState;
