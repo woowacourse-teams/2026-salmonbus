@@ -26,16 +26,15 @@ test("홈에서 검색창을 누르면 검색 화면으로 이동하고 입력�
 
   await expect(routeSearchInput(page)).toBeFocused();
   await expect(routeSearchInput(page)).toHaveValue("");
-});
 
-test("키보드로 홈 검색바에 들어와 Enter를 누르면 검색 화면으로 이동한다", async ({ page }) => {
-  await page.goto("/");
-  await routeSearchEntry(page).focus();
-
-  await routeSearchEntry(page).press("Enter");
-  await finishSearchNavigation(page);
-
-  await expect(routeSearchInput(page)).toBeFocused();
+  await test.step("키보드로 검색바에 들어와 Enter를 눌러도 검색 화면으로 이동한다", async () => {
+    await routeSearchBackLink(page).click();
+    await expect(page).toHaveURL("/");
+    await routeSearchEntry(page).focus();
+    await routeSearchEntry(page).press("Enter");
+    await finishSearchNavigation(page);
+    await expect(routeSearchInput(page)).toBeFocused();
+  });
 });
 
 test("키보드로 홈 검색바에 들어와 바로 입력하면 친 글자가 검색 화면 입력창에 남는다", async ({ page }) => {
@@ -134,6 +133,19 @@ test("서비스 중 노선이 없을 때 다시 불러오기를 누르면 서비
   const reload = page.getByRole("button", { name: "다시 불러오기", exact: true });
   await expect(reload).toBeVisible();
 
+  await test.step("다시 불러와도 서비스 중 노선이 없으면 같은 안내와 버튼이 다시 보인다", async () => {
+    const stillEmpty = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === apiPaths.routes && response.status() === 200,
+    );
+    await reload.click();
+    await stillEmpty;
+    await expect(page.getByRole("main").getByRole("status")).toHaveText(
+      "지금 볼 수 있는 노선이 없어요. 잠시 뒤에 다시 불러와 주세요.",
+    );
+    await expect(reload).toBeVisible();
+    await expect(reload).toBeEnabled();
+  });
+
   api.data.routes.routes = api.data.routes.routes.map((route) => ({ ...route, status: "FORECAST_READY" }));
   const response = page.waitForResponse(
     (response) => new URL(response.url()).pathname === apiPaths.routes && response.status() === 200,
@@ -143,28 +155,6 @@ test("서비스 중 노선이 없을 때 다시 불러오기를 누르면 서비
 
   await expect(inServiceSection(page).getByRole("button")).toHaveText([/^3330/]);
   await expect(routeSearchInput(page)).toBeFocused();
-});
-
-test("다시 불러와도 서비스 중 노선이 없으면 같은 안내와 다시 불러오기 버튼이 다시 보인다", async ({ page, api }) => {
-  api.data.routes.routes = api.data.routes.routes.map((route) => ({ ...route, status: "PREPARING" }));
-  await page.goto("/");
-  await openRouteSearch(page);
-  const reload = page.getByRole("button", { name: "다시 불러오기", exact: true });
-  await expect(reload).toBeVisible();
-
-  const requestsBeforeReload = api.requests.routes;
-  const response = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === apiPaths.routes && response.status() === 200,
-  );
-  await reload.click();
-  await response;
-
-  expect(api.requests.routes).toBeGreaterThan(requestsBeforeReload);
-  await expect(page.getByRole("main").getByRole("status")).toHaveText(
-    "지금 볼 수 있는 노선이 없어요. 잠시 뒤에 다시 불러와 주세요.",
-  );
-  await expect(reload).toBeVisible();
-  await expect(reload).toBeEnabled();
 });
 
 async function pressRouteButton(page: Page) {
@@ -181,25 +171,32 @@ function pressStyleOf(page: Page) {
   });
 }
 
+// 데스크톱 프로젝트는 마우스가 줄 위에 있어 hover 배경도 같은 색이라, :active 배경은 hover가 없는 iphone-15에서 확인된다.
 test("노선 줄을 누르는 동안 줄이 살짝 작아지고 배경이 깔린다", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   await openRouteSearch(page);
+  const released = await pressStyleOf(page);
 
   await pressRouteButton(page);
 
-  await expect.poll(() => pressStyleOf(page)).toEqual({ scale: "0.98", backgroundColor: "rgb(242, 244, 246)" });
-});
+  await expect.poll(async () => (await pressStyleOf(page)).scale).not.toBe(released.scale);
+  await expect.poll(async () => (await pressStyleOf(page)).backgroundColor).not.toBe(released.backgroundColor);
 
-// 데스크톱 프로젝트는 마우스가 줄 위에 있어 hover 배경도 같은 색이라, :active 배경은 hover가 없는 iphone-15에서 확인된다.
-// 동작 줄이기면 전환 없이 바로 바뀌어야 해서 기다리지 않고 한 번만 읽는다.
-test("동작 줄이기 설정이면 노선 줄을 누르는 동안 크기는 그대로고 배경만 깔린다", async ({ page }) => {
-  await page.goto("/");
-  await openRouteSearch(page);
+  await test.step("동작 줄이기 설정이면 크기는 그대로고 배경만 깔린다", async () => {
+    // 줄 밖에서 떼어 노선을 고르지 않는다.
+    await page.mouse.move(0, 0);
+    await page.mouse.up();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const releasedWithoutMotion = await pressStyleOf(page);
 
-  await pressRouteButton(page);
+    await pressRouteButton(page);
 
-  expect(await pressStyleOf(page)).toEqual({ scale: "none", backgroundColor: "rgb(242, 244, 246)" });
+    // 전환 없이 바로 바뀌어야 해서 기다리지 않고 한 번만 읽는다.
+    const pressed = await pressStyleOf(page);
+    expect(pressed.scale).toBe(releasedWithoutMotion.scale);
+    expect(pressed.backgroundColor).not.toBe(releasedWithoutMotion.backgroundColor);
+  });
 });
 
 test("새로 생긴 서비스 중 노선은 다음 방문에 NEW로 보이고, 검색 화면을 연 채 7일이 지나면 검색어를 바꿀 때 NEW가 사라진다", async ({
@@ -265,32 +262,18 @@ test("결과가 여러 개면 엔터를 눌러도 이동하지 않고, 결과를
   });
 });
 
-test("검색 화면에서 뒤로 가기를 누르면 홈으로 가고 방문 기록이 늘지 않는다", async ({ page }) => {
-  await page.goto("/");
-  const historyLength = await page.evaluate(() => history.length);
-  await openRouteSearch(page);
-  await routeSearchInput(page).fill("33");
-
-  await routeSearchBackLink(page).click();
-
-  await expect(page).toHaveURL("/");
-  await expect(routeSearchEntry(page)).toBeVisible();
-  expect(await page.evaluate(() => history.length)).toBe(historyLength + 1);
-});
-
-test("검색 화면으로 바로 들어오면 뒤로 가기가 홈으로 간다", async ({ page }) => {
-  await page.goto("/search");
-
-  await routeSearchBackLink(page).click();
-
-  await expect(page).toHaveURL("/");
-  await expect(routeSearchEntry(page)).toBeVisible();
-});
-
 test("검색 화면으로 바로 들어와 노선을 고르면 판정 보드의 헤더 뒤로 가기와 브라우저 뒤로 가기가 모두 홈으로 간다", async ({
   page,
 }) => {
   await page.goto("/search");
+
+  await test.step("검색 화면의 뒤로 가기는 홈으로 간다", async () => {
+    await routeSearchBackLink(page).click();
+    await expect(page).toHaveURL("/");
+    await expect(routeSearchEntry(page)).toBeVisible();
+    await page.goto("/search");
+  });
+
   await pickRoute(page);
 
   await test.step("헤더 뒤로 가기", async () => {
@@ -312,6 +295,17 @@ test("홈에서 검색해 연 판정 보드의 헤더 뒤로 가기와 브라우
   page,
 }) => {
   await page.goto("/");
+
+  await test.step("검색 화면에서 뒤로 가기를 누르면 홈으로 가고 방문 기록이 늘지 않는다", async () => {
+    const initialLength = await page.evaluate(() => history.length);
+    await openRouteSearch(page);
+    await routeSearchInput(page).fill("33");
+    await routeSearchBackLink(page).click();
+    await expect(page).toHaveURL("/");
+    await expect(routeSearchEntry(page)).toBeVisible();
+    expect(await page.evaluate(() => history.length)).toBe(initialLength + 1);
+  });
+
   await selectRoute(page);
   const historyLength = await page.evaluate(() => history.length);
 

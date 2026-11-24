@@ -86,37 +86,57 @@ test("모달의 노선 줄을 누르면 그 노선의 판정 보드로 가고, �
   await expectOnlyNextDayRoute(page);
 });
 
-const closeWays = [
-  {
-    way: "닫기 버튼",
-    close: (page: Page) => whatsNewDialog(page).getByRole("button", { name: "닫기", exact: true }).click(),
-  },
-  { way: "Escape", close: (page: Page) => page.keyboard.press("Escape") },
-  // 모달이 가운데에 떠서 왼쪽 위 모서리는 어두운 배경이다.
-  {
-    way: "바깥 누름",
-    close: (page: Page, isMobile: boolean) => (isMobile ? page.touchscreen.tap(5, 5) : page.mouse.click(5, 5)),
-  },
-];
+test("새 노선만 있는 모달은 다시 보지 않기 없이 닫히고, 닫은 노선은 다음 날 보여 주지 않는다: 닫기 버튼", async ({
+  page,
+  api,
+  isMobile,
+}) => {
+  await visitAsWhatsNewDevice(page, [ROUTE_1650, ROUTE_3330]);
+  await page.goto("/");
+  await expect(newRoutesSection(page).getByRole("button", { name: mockRouteLabel, exact: true })).toBeVisible();
+  await expect(whatsNewDialog(page).getByRole("button", { name: "다시 보지 않기" })).toHaveCount(0);
 
-for (const { way, close } of closeWays) {
-  test(`새 노선만 있는 모달은 다시 보지 않기 없이 닫히고, 닫은 노선은 다음 날 보여 주지 않는다: ${way}`, async ({
-    page,
-    api,
-    isMobile,
-  }) => {
-    await visitAsWhatsNewDevice(page, [ROUTE_1650, ROUTE_3330]);
-    await page.goto("/");
-    await expect(newRoutesSection(page).getByRole("button", { name: mockRouteLabel, exact: true })).toBeVisible();
-    await expect(whatsNewDialog(page).getByRole("button", { name: "다시 보지 않기" })).toHaveCount(0);
+  await whatsNewDialog(page).getByRole("button", { name: "닫기", exact: true }).click();
 
-    await close(page, isMobile);
+  await expect(whatsNewDialog(page)).toHaveCount(0);
+  await reopenNextDayWithNewRoute(page, api.data.routes.routes);
+  await expectOnlyNextDayRoute(page);
 
+  await test.step("Escape로 닫은 노선도 다음 날 보여 주지 않는다", async () => {
+    await page.keyboard.press("Escape");
     await expect(whatsNewDialog(page)).toHaveCount(0);
-    await reopenNextDayWithNewRoute(page, api.data.routes.routes);
-    await expectOnlyNextDayRoute(page);
+
+    api.data.routes.routes.push({
+      id: "200000003",
+      displayName: "7007",
+      startStopName: "다른 기점",
+      endStopName: "다른 종점",
+      status: "FORECAST_READY",
+    });
+    await page.clock.setSystemTime(new Date(observedAt).getTime() + 2 * DAY);
+    await page.reload();
+    await expect(newRoutesSection(page).getByRole("button")).toHaveCount(1);
+    await expect(
+      newRoutesSection(page).getByRole("button", {
+        name: "7007번 노선, 새 노선, 다른 기점부터 다른 종점 구간",
+        exact: true,
+      }),
+    ).toBeVisible();
   });
-}
+
+  await test.step("바깥을 눌러 닫은 노선도 다음 날 보여 주지 않는다", async () => {
+    // 모달이 가운데에 떠서 왼쪽 위 모서리는 어두운 배경이다.
+    await (isMobile ? page.touchscreen.tap(5, 5) : page.mouse.click(5, 5));
+    await expect(whatsNewDialog(page)).toHaveCount(0);
+
+    await page.clock.setSystemTime(new Date(observedAt).getTime() + 3 * DAY);
+    const routes = waitForRoutes(page);
+    await page.reload();
+    await (await routes).finished();
+    await page.clock.runFor(100);
+    await expect(whatsNewDialog(page)).toHaveCount(0);
+  });
+});
 
 test("새 노선이 5개보다 많으면 번호 순서로 5개만 보여 주고 남은 개수를 알린다", async ({ page, api }) => {
   api.data.routes.routes.push(
