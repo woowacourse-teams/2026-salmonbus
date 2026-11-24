@@ -3,6 +3,7 @@ import { chipLabel } from "@/shared/components/verdictChipCopy";
 import {
   arrivalSeatLabel,
   boardNoticeLabel,
+  emptyArrivalsLabelOf,
   OUT_OF_SERVICE_NOTICE,
   REFRESH_FAILED_NOTICE,
   STALE_FORECAST_NOTICE,
@@ -50,5 +51,17 @@ describe("boardNoticeLabel", () => {
   it("펼친 패널 만료 안내는 칩과 다른 잠금 문구다", () => {
     expect(STALE_FORECAST_NOTICE).toBe("새 정보가 오면 좌석 예측을 다시 보여드려요");
     expect(STALE_FORECAST_NOTICE).not.toBe(chipLabel("checking"));
+  });
+});
+
+describe("emptyArrivalsLabelOf", () => {
+  const stop = { sequence: 11, stopId: "S11", name: "정류장11", isTurnaround: false };
+
+  it("오는 차량이 없는 정류장을 펼치면 예측할 차량이 없다고 알린다", () => {
+    expect(emptyArrivalsLabelOf({ ...stop, kind: "noVehicle" })).toBe("현재 예측할 수 있는 차량이 없습니다");
+  });
+
+  it("예측이 만료된 정류장을 펼치면 새 정보를 기다린다고 알린다", () => {
+    expect(emptyArrivalsLabelOf({ ...stop, kind: "checking" })).toBe(STALE_FORECAST_NOTICE);
   });
 });

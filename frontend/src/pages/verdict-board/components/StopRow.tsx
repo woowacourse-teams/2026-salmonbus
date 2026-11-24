@@ -1,6 +1,6 @@
 import { useId } from "react";
 import type { ExpandableStopView, StopView } from "./displayPolicy";
-import { NO_VEHICLE_NOTICE, STALE_FORECAST_NOTICE, stopNameLabel, WAYPOINT_CAPTION } from "./verdictCopy";
+import { emptyArrivalsLabelOf, stopNameLabel, WAYPOINT_CAPTION } from "./verdictCopy";
 import { ActionGuidanceNotice } from "./ActionGuidanceNotice";
 import { HIDDEN_GUIDANCE, type ActionGuidanceView } from "./actionGuidance";
 import { ArrivalForecastCard } from "./ArrivalForecastCard";
@@ -53,7 +53,7 @@ export function StopRow({
   }
 
   const tone = stop.kind === "boarding" ? stop.tone : stop.kind;
-  const emptyNotice = stop.kind === "checking" ? STALE_FORECAST_NOTICE : NO_VEHICLE_NOTICE;
+  const emptyNotice = emptyArrivalsLabelOf(stop);
 
   return (
     <li className={styles.stopRow} data-stop-sequence={stop.sequence} data-selected={selected}>

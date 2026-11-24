@@ -1,5 +1,5 @@
 import type { ArrivalView } from "./arrivalPolicy";
-import type { BoardNotice, StopView } from "./displayPolicy";
+import type { BoardNotice, ExpandableStopView, StopView } from "./displayPolicy";
 import { seatLabelOf } from "@/shared/utils/seatLabelOf";
 
 export const NO_INCOMING_VEHICLE_NOTICE = "지금 오는 차량이 없어요";
@@ -35,6 +35,10 @@ export function stopNameLabel(stop: StopView): string {
 // 경유 지점은 이름 끝에 (경유)가 붙어 오는데 행에 같은 뜻의 캡션이 이미 있다.
 function withoutWaypointSuffix(name: string): string {
   return name.endsWith(WAYPOINT_SUFFIX) ? name.slice(0, -WAYPOINT_SUFFIX.length).trimEnd() : name;
+}
+
+export function emptyArrivalsLabelOf(stop: ExpandableStopView): string {
+  return stop.kind === "checking" ? STALE_FORECAST_NOTICE : NO_VEHICLE_NOTICE;
 }
 
 export function arrivalSeatLabel(arrival: ArrivalView): string {
