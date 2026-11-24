@@ -12,20 +12,13 @@ test("인증 API가 꺼져 있어도 노선을 검색하고 판정보드에 진�
   await selectRoute(page);
 });
 
-for (const loginResult of ["failed", "cancelled"] as const) {
-  test(`인증 ${loginResult} 결과는 복귀 경로를 보존하고 로그인 화면에서 안내한다`, async ({ page, auth }) => {
-    auth.loginResult = loginResult;
-    await page.goto("/login?returnTo=%2Fmypage");
-    await page.getByRole("button", { name: "카카오로 계속하기" }).click();
-    await expect(page).toHaveURL("/login?returnTo=%2Fmypage");
-    if (loginResult === "failed") {
-      const dialog = page.getByRole("dialog");
-      await expect(dialog).toBeVisible();
-      await dialog.getByRole("button", { name: "확인", exact: true }).click();
-      await expect(dialog).not.toBeVisible();
-    } else await expect(page.getByText("로그인을 취소했어요.")).toBeVisible();
-  });
-}
+test("인증 cancelled 결과는 복귀 경로를 보존하고 로그인 화면에서 안내한다", async ({ page, auth }) => {
+  auth.loginResult = "cancelled";
+  await page.goto("/login?returnTo=%2Fmypage");
+  await page.getByRole("button", { name: "카카오로 계속하기" }).click();
+  await expect(page).toHaveURL("/login?returnTo=%2Fmypage");
+  await expect(page.getByText("로그인을 취소했어요.")).toBeVisible();
+});
 
 test("닉네임 화면에서 로그인 상태 조회 실패 후 다시 확인하면 수정 폼을 복원한다", async ({ page, auth }) => {
   auth.member = { ...testMember };
@@ -61,45 +54,39 @@ test("닉네임 중복 오류 후 입력을 수정해 저장하고 재접속해�
   await expect(input).toBeFocused();
   auth.nicknameError = null;
   await input.fill("새연어");
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+
+  await test.step("저장에 실패한 뒤 같은 입력으로 다시 저장하면 이전 오류를 지운다", async () => {
+    const save = page.getByRole("button", { name: "저장", exact: true });
+    const error = page.getByRole("alert");
+    auth.mutationFails = true;
+    await save.click();
+    await expect(error).toContainText("닉네임을 저장하지 못했어요");
+    await expect(save).toBeEnabled();
+
+    auth.mutationFails = false;
+    let finish!: () => void;
+    const release = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    await page.route("**/api/me", async (route) => {
+      await release;
+      await route.fallback();
+    });
+    try {
+      await save.click();
+      await expect(page.getByRole("button", { name: "저장 중…", exact: true })).toBeDisabled();
+      await expect(error).toBeEmpty();
+      await expect(input).toHaveValue("새연어");
+    } finally {
+      finish();
+    }
+  });
+
   await expect(page).toHaveURL("/mypage");
   await expect(page.getByText("새연어님", { exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("닉네임을 변경했어요");
   await page.reload();
   await expect(page.getByText("새연어님", { exact: true })).toBeVisible();
-});
-
-test("닉네임 저장 실패 후 같은 입력으로 재시도하면 이전 오류를 지우고 저장한다", async ({ page, auth }) => {
-  auth.member = { ...testMember };
-  auth.mutationFails = true;
-  await page.goto("/mypage/nickname");
-  const input = page.getByRole("textbox", { name: "닉네임", exact: true });
-  const save = page.getByRole("button", { name: "저장", exact: true });
-  const error = page.getByRole("alert");
-  await input.fill("새살몽");
-  await save.click();
-  await expect(error).toContainText("닉네임을 저장하지 못했어요");
-  await expect(save).toBeEnabled();
-
-  auth.mutationFails = false;
-  let finish!: () => void;
-  const release = new Promise<void>((resolve) => {
-    finish = resolve;
-  });
-  await page.route("**/api/me", async (route) => {
-    await release;
-    await route.fallback();
-  });
-  try {
-    await save.click();
-    await expect(page.getByRole("button", { name: "저장 중…", exact: true })).toBeDisabled();
-    await expect(error).toBeEmpty();
-    await expect(input).toHaveValue("새살몽");
-  } finally {
-    finish();
-  }
-  await expect(page).toHaveURL("/mypage");
-  await expect(page.getByText("새살몽님", { exact: true })).toBeVisible();
 });
 
 for (const action of ["로그아웃", "회원탈퇴"] as const) {

@@ -30,21 +30,6 @@ test.beforeEach(async ({ page }) => {
   await page.clock.resume();
 });
 
-test("주소로 바로 들어오거나 새로고침하면 지금 적용 중인 2026년 11월 14일판을 보여 준다", async ({ page }) => {
-  await page.clock.setFixedTime(NEW_EDITION_START);
-  await page.goto("/privacy");
-  await expectEdition(page, "2026년 11월 14일", "2026년 11월 14일부터 적용");
-
-  const otherEditions = page.getByRole("region", { name: "다른 판", exact: true });
-  await expect(otherEditions.getByRole("link", { name: NOVEMBER_4_PERIOD, exact: true })).toHaveAttribute(
-    "href",
-    "/privacy/2026-11-04",
-  );
-
-  await page.reload();
-  await expectEdition(page, "2026년 11월 14일", "2026년 11월 14일부터 적용");
-});
-
 test("시행일 주소는 같은 판을 보여 주고, 그 판의 적용이 끝나면 지금 판으로 가는 링크를 제공한다", async ({ page }) => {
   await page.clock.setFixedTime(BEFORE_NEW_EDITION);
   await page.goto("/privacy/2026-11-04");
@@ -113,6 +98,19 @@ test("마이페이지 아래쪽에서 연 처리방침은 맨 위부터 보여 �
     await backLink(page).click();
     await expect(page).toHaveURL("/mypage");
   }
+
+  await test.step("주소로 바로 들어오거나 새로고침하면 지금 적용 중인 판을 보여 준다", async () => {
+    await page.clock.setFixedTime(NEW_EDITION_START);
+    await page.goto("/privacy");
+    await expectEdition(page, "2026년 11월 14일", "2026년 11월 14일부터 적용");
+    const otherEditions = page.getByRole("region", { name: "다른 판", exact: true });
+    await expect(otherEditions.getByRole("link", { name: NOVEMBER_4_PERIOD, exact: true })).toHaveAttribute(
+      "href",
+      "/privacy/2026-11-04",
+    );
+    await page.reload();
+    await expectEdition(page, "2026년 11월 14일", "2026년 11월 14일부터 적용");
+  });
 });
 
 test("로그인 화면에서 연 처리방침은 돌아가기로 같은 로그인 화면 주소에 돌아간다", async ({ page }) => {
