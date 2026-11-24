@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { RouteSummary } from "@/shared/api/routeForecast.types";
-import { searchViewFor, submitSelectionFor, type RoutesState } from "./displayPolicy";
+import { routesStateCheckedAt, searchViewFor, submitSelectionFor, type RoutesState } from "./displayPolicy";
 import type { FirstSeenTimes } from "@/shared/route-list/newRoutePolicy";
 import type { InServiceRoute } from "@/shared/route-list/routeListPolicy";
 
@@ -188,5 +188,22 @@ describe("submitSelectionFor", () => {
 
   it("일치하는 노선이 없으면 엔터 대상이 없다", () => {
     expect(submitSelectionFor({ kind: "unmatched" })).toBeNull();
+  });
+});
+
+describe("routesStateCheckedAt", () => {
+  it("검색 화면을 연 채 7일이 지난 뒤 다시 확인하면 새 노선 표시가 사라진다", () => {
+    const opened = createReadyState(new Map([["3330", FIRST_SEEN_AT]]), FIRST_SEEN_AT);
+    expect(searchViewFor(opened, "3")).toEqual({ kind: "matched", routes: [{ ...route3330, isNew: true }] });
+
+    const rechecked = routesStateCheckedAt(opened, FIRST_SEEN_AT + NEW_PERIOD_MS);
+
+    expect(searchViewFor(rechecked, "3")).toEqual({ kind: "matched", routes: [{ ...route3330, isNew: false }] });
+    expect(rechecked).toMatchObject({ routes: opened.routes, firstSeenTimes: opened.firstSeenTimes });
+  });
+
+  it("목록을 받는 중이거나 실패했으면 그대로 둔다", () => {
+    expect(routesStateCheckedAt(loading, FIRST_SEEN_AT)).toBe(loading);
+    expect(routesStateCheckedAt(failed, FIRST_SEEN_AT)).toBe(failed);
   });
 });
