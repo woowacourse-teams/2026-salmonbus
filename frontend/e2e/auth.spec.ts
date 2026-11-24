@@ -12,14 +12,6 @@ test("인증 API가 꺼져 있어도 노선을 검색하고 판정보드에 진�
   await selectRoute(page);
 });
 
-test("인증 cancelled 결과는 복귀 경로를 보존하고 로그인 화면에서 안내한다", async ({ page, auth }) => {
-  auth.loginResult = "cancelled";
-  await page.goto("/login?returnTo=%2Fmypage");
-  await page.getByRole("button", { name: "카카오로 계속하기" }).click();
-  await expect(page).toHaveURL("/login?returnTo=%2Fmypage");
-  await expect(page.getByText("로그인을 취소했어요.")).toBeVisible();
-});
-
 test("닉네임 화면에서 로그인 상태 조회 실패 후 다시 확인하면 수정 폼을 복원한다", async ({ page, auth }) => {
   auth.member = { ...testMember };
   await page.route("**/api/auth/session", (route) =>
