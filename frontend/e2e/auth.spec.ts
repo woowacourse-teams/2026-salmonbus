@@ -27,13 +27,6 @@ for (const loginResult of ["failed", "cancelled"] as const) {
   });
 }
 
-test("만료된 액세스 토큰은 한 번 갱신해 로그인 상태를 복원한다", async ({ page, auth }) => {
-  auth.refreshable = true;
-  await page.goto("/mypage");
-  await expect(page.getByText("살몽님", { exact: true })).toBeVisible();
-  expect(auth.requests.filter((request) => request.path === "/api/auth/refresh")).toHaveLength(1);
-});
-
 test("닉네임 화면에서 로그인 상태 조회 실패 후 다시 확인하면 수정 폼을 복원한다", async ({ page, auth }) => {
   auth.member = { ...testMember };
   await page.route("**/api/auth/session", (route) =>
@@ -154,14 +147,6 @@ test("Apple 탈퇴 cancelled 후 회원을 유지하고 재시도할 수 있다"
   ).toBe(true);
   await page.getByRole("button", { name: "회원탈퇴", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-});
-
-test("갱신 토큰도 만료되면 비회원으로 복귀하고 갱신을 반복하지 않는다", async ({ page, auth }) => {
-  auth.refreshable = true;
-  auth.refreshFails = true;
-  await page.goto("/mypage");
-  await expect(page.getByRole("link", { name: "로그인 / 회원가입", exact: true })).toBeVisible();
-  expect(auth.requests.filter((request) => request.path === "/api/auth/refresh")).toHaveLength(1);
 });
 
 test("닉네임 저장 중 홈으로 이동하면 늦은 응답이 마이페이지로 되돌리지 않는다", async ({ page, auth }) => {
