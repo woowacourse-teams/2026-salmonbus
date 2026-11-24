@@ -36,6 +36,7 @@ import * as homeStyles from "./HomeFavorites.css";
 import { RouteBadge } from "@/shared/components/RouteBadge";
 import { visuallyHidden } from "@/shared/styles/accessibility.css";
 import { stopNameLabels } from "./stopNameLabels";
+import { favoriteCardViewFor } from "./favoriteCardView";
 import { favoriteStatusLabelOf } from "./favoriteStatusLabelOf";
 import { FavoriteGroupAddButton } from "@/shared/components/FavoriteGroupAddButton";
 import type { FavoriteGroupContext } from "./RouteSelectScreen";
@@ -383,7 +384,8 @@ function FavoriteCard({
       canTurnOn={false}
     />
   );
-  if (favorite.status === "ERROR") {
+  const card = favoriteCardViewFor(favorite, savedFavorite?.direction ?? null);
+  if (card.kind === "retry") {
     return (
       <li className={homeStyles.unavailable}>
         <p className={homeStyles.notice}>{favoriteStatusLabelOf("ERROR")}</p>
@@ -392,15 +394,13 @@ function FavoriteCard({
       </li>
     );
   }
-  const direction = favorite.stop.direction ?? savedFavorite?.direction ?? null;
-  if (!favorite.route.displayName || !favorite.stop.name) {
+  const { direction } = card;
+  if (card.kind === "notice") {
     return (
       <li className={homeStyles.card}>
         <div className={homeStyles.unavailable}>
-          <p className={homeStyles.notice}>
-            {favoriteStatusLabelOf(favorite.status === "READY" ? "ERROR" : favorite.status)}
-          </p>
-          {favorite.status !== "UNAVAILABLE" && direction && (
+          <p className={homeStyles.notice}>{favoriteStatusLabelOf(card.status)}</p>
+          {direction && (
             <DirectionLabel
               className={homeStyles.direction}
               label={directionLabelOf(favorite.route.terminalStopName, direction)}
@@ -424,17 +424,17 @@ function FavoriteCard({
       >
         <div className={homeStyles.heading}>
           <RouteBadge size="large" className={homeStyles.routeBadge}>
-            {favorite.route.displayName}
+            {card.routeName}
           </RouteBadge>
           <div className={homeStyles.stopNameAndDirection}>
             <span className={homeStyles.stop} data-favorite-name={favorite.id}>
-              {displayStopName !== favorite.stop.name ? (
+              {displayStopName !== card.stopName ? (
                 <>
                   <span aria-hidden="true">{displayStopName}</span>
-                  <span className={visuallyHidden}>{favorite.stop.name}</span>
+                  <span className={visuallyHidden}>{card.stopName}</span>
                 </>
               ) : (
-                favorite.stop.name
+                card.stopName
               )}
             </span>
             {favorite.status !== "UNAVAILABLE" && (
@@ -484,7 +484,7 @@ function FavoriteCard({
         <CardNotification
           key="notification"
           target={savedFavorite}
-          stopLabel={favorite.stop.name}
+          stopLabel={card.stopName}
           notificationSettings={notificationSettings}
           canTurnOn
         />
