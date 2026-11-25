@@ -117,7 +117,7 @@ class ObservationCollectorKeyTest {
         // then
         assertSoftly(checks -> {
             checks.assertThat(messagesAt(Level.WARN)).containsExactly(
-                "포털이 GBIS 키를 거절해 그 키를 한국 자정까지 쓰지 않는다. 슬롯=b 사유=" + reasonCode + " 채우기 전 사용량=764");
+                "GBIS에서 거절한 키는 다음 한국 자정까지 사용하지 않는다. 슬롯=b 사유=" + reasonCode + " 채우기 전 사용량=764");
             checks.assertThat(messagesAt(Level.ERROR)).isEmpty();
         });
     }

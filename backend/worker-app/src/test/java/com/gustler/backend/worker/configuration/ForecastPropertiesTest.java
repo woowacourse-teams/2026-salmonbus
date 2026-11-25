@@ -25,7 +25,7 @@ class ForecastPropertiesTest {
         assertThat(caughtFailure)
             .isNotNull()
             .isInstanceOf(IllegalStateException.class)
-            .hasMessage("forecast.staleness 는 PT1H 이하여야 한다: PT1H1S");
+            .hasMessage("forecast.staleness는 PT1H 이하여야 한다: PT1H1S");
     }
 
     @Test
@@ -46,7 +46,7 @@ class ForecastPropertiesTest {
         assertThat(caughtFailure)
             .isNotNull()
             .isInstanceOf(IllegalStateException.class)
-            .hasMessage("forecast.staleness 는 0보다 길어야 한다: PT0S");
+            .hasMessage("forecast.staleness는 0보다 길어야 한다: PT0S");
     }
 
     @Test
@@ -64,7 +64,7 @@ class ForecastPropertiesTest {
         // then
         assertThat(caughtFailure)
             .isInstanceOf(IllegalStateException.class)
-            .hasMessage("forecast.lanes 는 1 이상이어야 한다: 0");
+            .hasMessage("forecast.lanes는 1 이상이어야 한다: 0");
     }
 
     private static ForecastProperties propertiesWith(Duration staleness) {

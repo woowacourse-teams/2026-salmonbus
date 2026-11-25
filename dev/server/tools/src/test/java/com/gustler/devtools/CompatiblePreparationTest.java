@@ -13,8 +13,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class CompatiblePreparationTest {
+
     @Test
     void 모델_파일_교체는_노선이나_DB_변경으로_취급하지_않는다() {
         assertThat(CompatiblePreparation.permits(revision(CompatiblePreparation.FIXTURE_DIGEST),
@@ -230,11 +233,56 @@ class CompatiblePreparationTest {
 
     @Test
     void 실제_초기화_코드와_후보_번들의_해시가_검토한_전환과_일치한다() throws Exception {
+        assertThat(currentPreparationHash()).isEqualTo(CompatiblePreparation.FEATURE_VECTOR_TEXT_DATA);
+    }
+
+    @Test
+    void 입력_설명만_바꾼_코드로_교체하고_명시적으로_복구할_수_있다() throws Exception {
+        Map<String, String> previous = preparationFiles(CompatiblePreparation.FORECAST_RECORD_DATA);
+        Map<String, String> next = preparationFiles(currentPreparationHash());
+        RevisionStore.Revision before = revisionWithFiles(previous);
+        RevisionStore.Revision after = revisionWithFiles(next);
+
+        assertThatCode(() -> BasisLifecycle.preserveData(before, after)).doesNotThrowAnyException();
+        assertThatCode(() -> BasisLifecycle.preserveData(after, before, true)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> BasisLifecycle.preserveData(after, before))
+            .hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
+        assertThat(CompatiblePreparation.permits(revision(CompatiblePreparation.FIXTURE_DIGEST), after)).isTrue();
+        assertThat(CompatiblePreparation.permits(revision("unknown"), after)).isFalse();
+        assertThat(CompatiblePreparation.permits(after, revision("unknown"))).isFalse();
+        assertThat(CompatiblePreparation.permits(after, after)).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"tools/data/routes.json", "tools/data/catalog-routes.json", "infra/compose.yaml"})
+    void 입력_설명만_바꾼_전환도_데이터와_인프라의_변경이나_누락은_거절한다(String path) throws Exception {
+        Map<String, String> files = preparationFiles(CompatiblePreparation.FORECAST_RECORD_DATA);
+        RevisionStore.Revision previous = revisionWithFiles(files);
+        Map<String, String> changed = preparationFiles(currentPreparationHash());
+        changed.put(path, "changed");
+
+        assertThatThrownBy(() -> BasisLifecycle.preserveData(previous, revisionWithFiles(changed)))
+            .hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
+
+        changed.remove(path);
+
+        assertThatThrownBy(() -> BasisLifecycle.preserveData(previous, revisionWithFiles(changed)))
+            .hasMessage("DEV_DATA_CHANGE_REQUIRES_PLAN");
+    }
+
+    private Map<String, String> preparationFiles(String contract) {
+        Map<String, String> files = new TreeMap<>();
+        files.put("tools/data/routes.json", "unchanged");
+        files.put("tools/data/catalog-routes.json", "unchanged");
+        files.put("infra/compose.yaml", "unchanged");
+        files.put("tools/data-contract.sha256", contract);
+        return files;
+    }
+
+    private String currentPreparationHash() throws Exception {
         Path repo = Path.of("../../..").toAbsolutePath().normalize();
         String contract = new Packager(repo, new Host()).preparationContract();
-        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
             .digest((contract + "\n").getBytes(StandardCharsets.UTF_8)));
-
-        assertThat(hash).isEqualTo(CompatiblePreparation.FORECAST_RECORD_DATA);
     }
 }

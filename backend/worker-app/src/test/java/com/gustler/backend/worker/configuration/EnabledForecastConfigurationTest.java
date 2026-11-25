@@ -163,7 +163,7 @@ class EnabledForecastConfigurationTest {
     void 노선별_실행_줄_수가_1보다_작으면_기동하지_않는다() {
         runner.withPropertyValues("forecast.enabled=true", "forecast.lanes=0")
             .run(context -> assertThat(context).hasFailed().getFailure().rootCause()
-                .hasMessage("forecast.lanes 는 1 이상이어야 한다: 0"));
+                .hasMessage("forecast.lanes는 1 이상이어야 한다: 0"));
     }
 
     @Test
