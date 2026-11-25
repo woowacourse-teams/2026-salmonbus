@@ -79,8 +79,7 @@ public final class ScoringWriter {
     }
 
     /**
-     * 정산 결과를 쓰기 대기에 넣는다. 짝지어진 예측({@link ScoringResult#scored()})과 정산을 마친 예측({@link ScoringResult#closed()})은
-     * 저장하지 않는다.
+     * 정산 결과를 쓰기 대기에 넣는다. 완료 결과({@link ScoringResult#closed()}) 자체는 저장하지 않는다.
      *
      * @param result 정산 결과
      */

@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -54,30 +55,33 @@ final class ScoringMetrics {
         }
         Map<List<Object>, PassLabel> labels = new HashMap<>();
         for (PassLabel label : result.labels()) {
-            labels.put(List.of(
-                    label.sourceDate(),
-                    label.routeId(),
-                    label.tripStartObservationId(),
-                    label.stopOrder(),
-                    label.capacity(),
-                    label.modelDeploymentId()
-            ), label);
+            labels.put(labelKey(label), label);
             count("label", label.state().name(), label.reason());
         }
+
         for (UnresolvedForecast closed : result.unresolved()) {
             count("unresolved", closed.state().name(), closed.reason());
         }
-        for (ScoredForecast scored : result.scored()) {
-            PassLabel label = labels.get(List.of(
-                    scored.passSourceDate(),
-                    scored.routeId(),
-                    scored.tripStartObservationId(),
-                    scored.stopOrder(),
-                    scored.capacity(),
-                    scored.modelDeploymentId()
-            ));
-            count("scored", labelState(label), labelReason(label));
-        }
+
+        result.closed().stream()
+            .map(ClosedForecast::label)
+            .filter(Objects::nonNull)
+            .forEach(label -> {
+                PassLabel counted = labels.get(labelKey(label));
+                count("scored", labelState(counted), labelReason(counted));
+            });
+    }
+
+    /** 같은 키의 마지막 정답으로 지표를 집계한다. 저장에 쓰는 객체 참조는 바꾸지 않는다. */
+    private static List<Object> labelKey(PassLabel label) {
+        return List.of(
+                label.sourceDate(),
+                label.routeId(),
+                label.tripStartObservationId(),
+                label.stopOrder(),
+                label.capacity(),
+                label.modelDeploymentId()
+        );
     }
 
     private static String labelState(PassLabel label) {

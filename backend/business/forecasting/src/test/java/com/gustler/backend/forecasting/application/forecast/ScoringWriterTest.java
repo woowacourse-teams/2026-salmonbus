@@ -32,12 +32,10 @@ class ScoringWriterTest {
         writer.add(new ScoringResult(
                 List.of(label(1)),
                 List.of(unresolved(10)),
-                List.of(),
                 List.of()
         ));
         writer.add(new ScoringResult(
                 List.of(label(2)),
-                List.of(),
                 List.of(),
                 List.of()
         ));
@@ -79,13 +77,11 @@ class ScoringWriterTest {
         writer.add(new ScoringResult(
                 List.of(label(1)),
                 List.of(),
-                List.of(),
                 List.of()
         ));
         assertThatThrownBy(writer::flush).isInstanceOf(IllegalStateException.class);
         writer.add(new ScoringResult(
                 List.of(label(2)),
-                List.of(),
                 List.of(),
                 List.of()
         ));
@@ -109,25 +105,21 @@ class ScoringWriterTest {
         writer.add(new ScoringResult(
                 List.of(label(1)),
                 List.of(unresolved(10)),
-                List.of(),
                 List.of()
         ));
         writer.add(new ScoringResult(
                 List.of(label(2)),
-                List.of(),
                 List.of(),
                 List.of()
         ));
         writer.add(new ScoringResult(
                 List.of(label(3)),
                 List.of(unresolved(11)),
-                List.of(),
                 List.of()
         ));
         writer.add(new ScoringResult(
                 List.of(label(4), label(5)),
                 List.of(unresolved(12), unresolved(13)),
-                List.of(),
                 List.of()
         ));
 
@@ -157,19 +149,16 @@ class ScoringWriterTest {
         writer.add(new ScoringResult(
                 List.of(),
                 List.of(unresolved(10), unresolved(11)),
-                List.of(),
                 List.of()
         ));
         writer.add(new ScoringResult(
                 List.of(label(1)),
                 List.of(unresolved(12)),
-                List.of(),
                 List.of()
         ));
         writer.add(new ScoringResult(
                 List.of(label(2)),
                 List.of(unresolved(13)),
-                List.of(),
                 List.of()
         ));
         store.failures = 1;
@@ -203,9 +192,8 @@ class ScoringWriterTest {
         writer.add(new ScoringResult(
                 List.of(label(1), fresh),
                 List.of(unresolved(10), freshLost),
-                List.of(),
                 List.of(
-                    ClosedForecast.scored(fresh, event(21)), ClosedForecast.scored(fresh, event(22)),
+                    ClosedForecast.scored(21, fresh, event(21)), ClosedForecast.scored(22, fresh, event(22)),
                     ClosedForecast.unresolved(freshLost, event(23)))
         ));
 
@@ -310,9 +298,12 @@ class ScoringWriterTest {
         return new ScoringResult(
                 List.of(label),
                 List.of(lost),
-                List.of(),
                 List.of(
-                    ClosedForecast.scored(label, event((int) label.tripStartObservationId())),
+                    ClosedForecast.scored(
+                            label.tripStartObservationId(),
+                            label,
+                            event((int) label.tripStartObservationId())
+                    ),
                     ClosedForecast.unresolved(lost, event((int) lost.vehicleObservationId())))
         );
     }

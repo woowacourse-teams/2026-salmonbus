@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.support;
 
+import com.gustler.backend.forecasting.application.forecast.ClosedForecast;
 import com.gustler.backend.forecasting.application.forecast.PassLabel;
-import com.gustler.backend.forecasting.application.forecast.ScoredForecast;
 import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
 import com.gustler.backend.forecasting.application.forecast.ScoringResult;
 import com.gustler.backend.forecasting.domain.forecast.SourceDates;
@@ -450,7 +450,8 @@ final class WorkerReplayVerification {
         }
         Settled settled = first.get();
         ScoringResult rescored = runner.rescoredThrough(routeId, settled.closedAt());
-        Optional<PassLabel> label = rescored.scored().stream()
+        Optional<PassLabel> label = rescored.closed().stream()
+            .filter(closed -> closed.label() != null)
             .filter(settled::isForecastOf)
             .findFirst()
             .flatMap(scored -> rescored.labels().stream()
@@ -478,15 +479,15 @@ final class WorkerReplayVerification {
         );
     }
 
-    private static List<Object> labelKey(ScoredForecast scored) {
+    private static List<Object> labelKey(ClosedForecast scored) {
         return List.of(
-                scored.passSourceDate(),
-                scored.routeId(),
-                scored.tripStartObservationId(),
-                scored.stopOrder(),
-                scored.capacity(),
+                scored.label().sourceDate(),
+                scored.label().routeId(),
+                scored.label().tripStartObservationId(),
+                scored.label().stopOrder(),
+                scored.label().capacity(),
                 ScoringReasons.LABEL_VERSION,
-                scored.modelDeploymentId()
+                scored.label().modelDeploymentId()
         );
     }
 
@@ -568,8 +569,8 @@ final class WorkerReplayVerification {
             .thenComparingLong(Settled::sourceId)
             .thenComparingInt(Settled::target);
 
-        private boolean isForecastOf(ScoredForecast scored) {
-            return scored.vehicleObservationId() == sourceId && scored.targetStopOrder() == target;
+        private boolean isForecastOf(ClosedForecast scored) {
+            return scored.vehicleObservationId() == sourceId && scored.event().targetStopOrder() == target;
         }
 
         private boolean hasSameLabelAs(PassLabel rescored) {

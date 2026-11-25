@@ -5,9 +5,9 @@ import com.gustler.backend.forecasting.api.forecast.ForecastOutcome;
 import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
 import com.gustler.backend.forecasting.api.forecast.ObservationBatchSeen;
 import com.gustler.backend.forecasting.api.forecast.PassClosed;
+import com.gustler.backend.forecasting.application.forecast.ClosedForecast;
 import com.gustler.backend.forecasting.application.forecast.PassLabel;
 import com.gustler.backend.forecasting.application.forecast.PassLabelCalculator;
-import com.gustler.backend.forecasting.application.forecast.ScoredForecast;
 import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
 import com.gustler.backend.forecasting.application.forecast.ScoringResult;
 import com.gustler.backend.forecasting.application.forecast.ScoringStage;
@@ -258,11 +258,17 @@ final class ScoringScenario {
     }
 
     static ScoringResult feed(ScoringStage stage, List<Object> events) {
-        ScoringResult result = ScoringResult.empty();
+        List<ScoringResult> results = new ArrayList<>();
         for (Object event : events) {
-            result = result.plus(accept(stage, event));
+            results.add(accept(stage, event));
         }
-        return result;
+        return ScoringResult.combine(results);
+    }
+
+    static List<ClosedForecast> matched(ScoringResult result) {
+        return result.closed().stream()
+            .filter(closed -> closed.label() != null)
+            .toList();
     }
 
     static ScoringResult accept(ScoringStage stage, Object event) {
@@ -287,25 +293,26 @@ final class ScoringScenario {
                 BaselineReasons.recordedName(closed.reason()).orElse("NONE:" + closed.reason())));
             reasons.put(key, closed.reason());
         }
-        for (ScoredForecast forecast : result.scored()) {
+        for (ClosedForecast forecast : matched(result)) {
+            PassLabel matchedLabel = forecast.label();
             Key key = new Key(
                 forecast.vehicleObservationId(),
-                forecast.targetStopOrder()
+                forecast.event().targetStopOrder()
             );
             PassLabel label = labels.get(List.of(
-                    forecast.passSourceDate(),
-                    forecast.routeId(),
-                    forecast.tripStartObservationId(),
-                    forecast.stopOrder(),
-                    forecast.capacity(),
+                    matchedLabel.sourceDate(),
+                    matchedLabel.routeId(),
+                    matchedLabel.tripStartObservationId(),
+                    matchedLabel.stopOrder(),
+                    matchedLabel.capacity(),
                     ScoringReasons.LABEL_VERSION,
-                    forecast.modelDeploymentId()
+                    matchedLabel.modelDeploymentId()
             ));
             PassClosed pass = passByKey.get(List.of(
-                    forecast.passSourceDate(),
-                    forecast.routeId(),
-                    forecast.tripStartObservationId(),
-                    forecast.stopOrder()
+                    matchedLabel.sourceDate(),
+                    matchedLabel.routeId(),
+                    matchedLabel.tripStartObservationId(),
+                    matchedLabel.stopOrder()
             ));
             if (label.state() == PassLabel.State.SETTLED) {
                 put(verdicts, key, new Verdict(

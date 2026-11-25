@@ -115,7 +115,7 @@ class ScoringStageTest {
                 softly.assertThat(label.previousLastObservationId()).isEqualTo(lastObservation(900));
                 softly.assertThat(label.previousClosureObservationId()).isEqualTo(900);
             });
-            softly.assertThat(result.scored()).extracting(ScoredForecast::vehicleObservationId)
+            softly.assertThat(matched(result)).extracting(ClosedForecast::vehicleObservationId)
                 .containsExactlyInAnyOrder(500L, 501L);
         });
     }
@@ -306,7 +306,9 @@ class ScoringStageTest {
             softly.assertThat(result.labels())
                 .allSatisfy(label -> softly.assertThat(label.state()).isEqualTo(PassLabel.State.SETTLED));
             softly.assertThat(result.labels().get(0).labelValue()).isNotEqualTo(result.labels().get(1).labelValue());
-            softly.assertThat(result.scored()).extracting(ScoredForecast::capacity).containsExactly(40, 45);
+            softly.assertThat(matched(result))
+                .extracting(forecast -> forecast.label().capacity())
+                .containsExactly(40, 45);
             softly.assertThat(stage.waitingCount()).isZero();
         });
     }
@@ -344,7 +346,7 @@ class ScoringStageTest {
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(closing.scored()).extracting(ScoredForecast::vehicleObservationId).containsExactly(500L);
+            softly.assertThat(matched(closing)).extracting(ClosedForecast::vehicleObservationId).containsExactly(500L);
             softly.assertThat(closing.unresolved()).singleElement().satisfies(closedForecast -> {
                 softly.assertThat(closedForecast.vehicleObservationId()).isEqualTo(501L);
                 softly.assertThat(closedForecast.state()).isEqualTo(UnresolvedForecast.State.LOST);
@@ -426,12 +428,12 @@ class ScoringStageTest {
 
         // then
         assertSoftly(softly -> {
-            softly.assertThat(onTime.scored()).extracting(ScoredForecast::vehicleObservationId).containsExactly(500L);
+            softly.assertThat(matched(onTime)).extracting(ClosedForecast::vehicleObservationId).containsExactly(500L);
             softly.assertThat(onTime.unresolved()).singleElement().satisfies(closedForecast -> {
                 softly.assertThat(closedForecast.vehicleObservationId()).isEqualTo(499L);
                 softly.assertThat(closedForecast.reason()).isEqualTo(ScoringReasons.PASS_NOT_CLOSED);
             });
-            softly.assertThat(late.scored()).isEmpty();
+            softly.assertThat(matched(late)).isEmpty();
             softly.assertThat(late.labels()).isEmpty();
         });
     }
@@ -574,8 +576,8 @@ class ScoringStageTest {
             softly.assertThat(result.labels().get(0).labelValue()).isNotEqualTo(result.labels().get(1).labelValue());
             softly.assertThat(result.labels().get(0).parameterHash())
                 .isNotEqualTo(result.labels().get(1).parameterHash());
-            softly.assertThat(result.scored())
-                .extracting(ScoredForecast::vehicleObservationId, ScoredForecast::modelDeploymentId)
+            softly.assertThat(matched(result))
+                .extracting(ClosedForecast::vehicleObservationId, forecast -> forecast.label().modelDeploymentId())
                 .containsExactly(tuple(500L, DEPLOYMENT), tuple(501L, OTHER_DEPLOYMENT));
             softly.assertThat(result.unresolved()).isEmpty();
         });
@@ -1454,5 +1456,11 @@ class ScoringStageTest {
         public Instant instant() {
             return at;
         }
+    }
+
+    private static List<ClosedForecast> matched(ScoringResult result) {
+        return result.closed().stream()
+            .filter(closed -> closed.label() != null)
+            .toList();
     }
 }

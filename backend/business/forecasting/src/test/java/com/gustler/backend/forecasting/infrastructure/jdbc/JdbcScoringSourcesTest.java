@@ -5,9 +5,9 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 import com.gustler.backend.forecasting.api.forecast.ForecastOutcome;
 import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
 import com.gustler.backend.forecasting.api.forecast.PassClosed;
+import com.gustler.backend.forecasting.application.forecast.ClosedForecast;
 import com.gustler.backend.forecasting.application.forecast.PassLabel;
 import com.gustler.backend.forecasting.application.forecast.PassLabelCalculator;
-import com.gustler.backend.forecasting.application.forecast.ScoredForecast;
 import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
 import com.gustler.backend.forecasting.application.forecast.ScoringResult;
 import com.gustler.backend.forecasting.application.forecast.ScoringStage;
@@ -241,7 +241,9 @@ class JdbcScoringSourcesTest {
             softly.assertThat(afterEvidence.unresolved()).isEmpty();
             softly.assertThat(waiting).isOne();
             softly.assertThat(scored.labels()).extracting(PassLabel::state).containsExactly(PassLabel.State.SETTLED);
-            softly.assertThat(scored.scored()).extracting(ScoredForecast::vehicleObservationId).containsExactly(501L);
+            softly.assertThat(ScoringScenario.matched(scored))
+                .extracting(ClosedForecast::vehicleObservationId)
+                .containsExactly(501L);
         });
     }
 

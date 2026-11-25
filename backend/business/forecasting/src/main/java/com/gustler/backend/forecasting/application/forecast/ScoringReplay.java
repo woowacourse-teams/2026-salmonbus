@@ -147,11 +147,11 @@ public final class ScoringReplay {
             .toList());
         replayOrder.sort(ORDER);
 
-        ScoringResult result = ScoringResult.empty();
+        List<ScoringResult> results = new ArrayList<>();
         for (Event event : replayOrder) {
-            result = result.plus(event.applyTo(stage));
+            results.add(event.applyTo(stage));
         }
-        return result;
+        return ScoringResult.combine(results);
     }
 
     /** 예보를 다시 읽기 시작할 수신 시각이다. 정산이 저장까지 마친 이벤트 시각에서 가장 짧은 범위만큼 앞이고, 상한보다 이르지 않다. */

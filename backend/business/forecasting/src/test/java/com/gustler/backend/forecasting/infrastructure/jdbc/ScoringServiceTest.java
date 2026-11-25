@@ -227,7 +227,7 @@ class ScoringServiceTest {
             softly.assertThat(after.replays("startup")).isOne();
             softly.assertThat(before.closed.size() + after.closed.size())
                 .as("닫힌 예측을 빠뜨리지도 두 번 알리지도 않는다")
-                .isEqualTo(all.unresolved().size() + all.scored().size());
+                .isEqualTo(all.unresolved().size() + ScoringScenario.matched(all).size());
             softly.assertThat(after.stored()).isEqualTo(continuous(scenario));
         });
     }
@@ -256,7 +256,7 @@ class ScoringServiceTest {
         ScoringResult all = ScoringScenario.feed(continuous, events).plus(continuous.expire(end(events)));
         assertSoftly(softly -> {
             softly.assertThat(harness.replays("dropped")).isEqualTo(2);
-            softly.assertThat(harness.closed).hasSize(all.unresolved().size() + all.scored().size());
+            softly.assertThat(harness.closed).hasSize(all.unresolved().size() + ScoringScenario.matched(all).size());
         });
     }
 

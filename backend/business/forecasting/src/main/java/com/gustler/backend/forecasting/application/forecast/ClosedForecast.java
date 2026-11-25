@@ -10,11 +10,17 @@ import java.util.Objects;
  * 정답이 연결된 예측은 정답 기록을, 나머지는 미해결 기록을 참조한다.
  * 같은 통과에 연결된 예측들은 같은 정답 기록 객체를 참조한다.
  *
+ * @param vehicleObservationId 예측의 기준 관측 ID
  * @param label 연결된 정답 기록. 미해결로 종료했다면 없다
  * @param unresolved 미해결 기록. 정답이 연결됐다면 없다
  * @param event 결과를 새로 저장했을 때 전달할 이벤트
  */
-public record ClosedForecast(PassLabel label, UnresolvedForecast unresolved, ForecastClosed event) {
+public record ClosedForecast(
+    long vehicleObservationId,
+    PassLabel label,
+    UnresolvedForecast unresolved,
+    ForecastClosed event
+) {
 
     public ClosedForecast {
         Objects.requireNonNull(event, "사건이 필요하다");
@@ -23,12 +29,22 @@ public record ClosedForecast(PassLabel label, UnresolvedForecast unresolved, For
         }
     }
 
-    static ClosedForecast scored(PassLabel label, ForecastClosed event) {
-        return new ClosedForecast(label, null, event);
+    static ClosedForecast scored(final long observationId, PassLabel label, ForecastClosed event) {
+        return new ClosedForecast(
+                observationId,
+                label,
+                null,
+                event
+        );
     }
 
     static ClosedForecast unresolved(UnresolvedForecast unresolved, ForecastClosed event) {
-        return new ClosedForecast(null, unresolved, event);
+        return new ClosedForecast(
+                unresolved.vehicleObservationId(),
+                null,
+                unresolved,
+                event
+        );
     }
 
     /** 이 예측의 정산 결과로 저장할 행이다. */

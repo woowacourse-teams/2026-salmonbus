@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -115,12 +116,12 @@ public final class ScoringService implements ForecastEvents, ScoringCycle {
     }
 
     private ScoringResult acceptPasses(List<PassClosed> passes) {
-        ScoringResult result = ScoringResult.empty();
+        List<ScoringResult> results = new ArrayList<>();
         for (PassClosed pass : passes) {
-            result = result.plus(stage.accept(pass));
+            results.add(stage.accept(pass));
             metrics.lag(Duration.between(pass.closedAt(), clock.instant()));
         }
-        return result;
+        return ScoringResult.combine(results);
     }
 
     @Override
@@ -282,7 +283,7 @@ public final class ScoringService implements ForecastEvents, ScoringCycle {
     }
 
     private void bufferResult(ScoringResult result) {
-        if (result.isEmpty() && result.scored().isEmpty()) {
+        if (result.isEmpty() && result.closed().isEmpty()) {
             return;
         }
         writer.add(result);

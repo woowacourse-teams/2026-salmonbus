@@ -6,8 +6,8 @@ import tools.jackson.databind.JsonNode;
 /**
  * 통과 하나의 정답을 계산한다.
  *
- * <p>구현은 확정 입력 기준 정답 계산({@code AlightingAwarePassLabel.afterSeats})을 그대로 불러야 한다. 판정 순서는
- * 시간 칸 계수 없음, 직전 통과 없음, 앞차 간격, 정류장 계수 없음, 정원 근거, 정원 초과 관측, 계수 길이, 정산 완료다. 계수나 관측이
+ * <p>시간대와 앞차 간격은 통과 관측의 확정 시각으로 계산한다. 판정 순서는 시간대 계수 없음, 직전 통과 없음,
+ * 앞차 간격, 정류장 계수 없음, 정원 근거, 정원 초과 관측, 계수 길이, 정산 완료다. 계수나 관측이
  * 계산식의 전제를 어기면 {@link IllegalArgumentException}을 던질 수 있다.
  */
 public interface PassLabelCalculator {

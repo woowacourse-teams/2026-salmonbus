@@ -473,7 +473,8 @@ class ScoringStageBaselineTest {
         assertSoftly(softly -> {
             softly.assertThat(Set.copyOf(twice.labels())).isEqualTo(Set.copyOf(once.labels()));
             softly.assertThat(Set.copyOf(twice.unresolved())).isEqualTo(Set.copyOf(once.unresolved()));
-            softly.assertThat(Set.copyOf(twice.scored())).isEqualTo(Set.copyOf(once.scored()));
+            softly.assertThat(Set.copyOf(ScoringScenario.matched(twice)))
+                .isEqualTo(Set.copyOf(ScoringScenario.matched(once)));
             softly.assertThat(once.labels()).isNotEmpty();
         });
     }

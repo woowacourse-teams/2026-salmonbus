@@ -4,10 +4,10 @@ import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
 import com.gustler.backend.forecasting.api.forecast.PassClosed;
+import com.gustler.backend.forecasting.application.forecast.ClosedForecast;
 import com.gustler.backend.forecasting.application.forecast.ForecastRecordStore;
 import com.gustler.backend.forecasting.application.forecast.PassLabel;
 import com.gustler.backend.forecasting.application.forecast.PassLabelStore;
-import com.gustler.backend.forecasting.application.forecast.ScoredForecast;
 import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
 import com.gustler.backend.forecasting.application.forecast.ScoringResult;
 import com.gustler.backend.forecasting.application.forecast.ScoringStage;
@@ -140,8 +140,7 @@ class ForecastOutcomeViewTest {
             new ScoringResult(
                     result.labels(),
                     List.of(),
-                    result.scored(),
-                    List.of()
+                    ScoringScenario.matched(result)
             ), actual.keySet());
         Set<String> unmet = result.unresolved().stream()
             .filter(closed -> closed.reason().equals(ScoringReasons.PASS_CONDITION_UNMET))
@@ -235,24 +234,25 @@ class ForecastOutcomeViewTest {
                 )
             );
         }
-        for (ScoredForecast scored : result.scored()) {
+        for (ClosedForecast scored : ScoringScenario.matched(result)) {
+            PassLabel matchedLabel = scored.label();
             PassLabel label = labelByKey.get(List.of(
-                    scored.passSourceDate(),
-                    scored.routeId(),
-                    scored.tripStartObservationId(),
-                    scored.stopOrder(),
-                    scored.capacity(),
+                    matchedLabel.sourceDate(),
+                    matchedLabel.routeId(),
+                    matchedLabel.tripStartObservationId(),
+                    matchedLabel.stopOrder(),
+                    matchedLabel.capacity(),
                     ScoringReasons.LABEL_VERSION,
-                    scored.modelDeploymentId()
+                    matchedLabel.modelDeploymentId()
             ));
             PassClosed pass = passByKey.get(List.of(
-                    scored.passSourceDate(),
-                    scored.routeId(),
-                    scored.tripStartObservationId(),
-                    scored.stopOrder()
+                    matchedLabel.sourceDate(),
+                    matchedLabel.routeId(),
+                    matchedLabel.tripStartObservationId(),
+                    matchedLabel.stopOrder()
             ));
             expected.put(
-                scored.vehicleObservationId() + ":" + scored.targetStopOrder(),
+                scored.vehicleObservationId() + ":" + scored.event().targetStopOrder(),
                 new Row(
                         label.state().name(),
                         label.reason(),

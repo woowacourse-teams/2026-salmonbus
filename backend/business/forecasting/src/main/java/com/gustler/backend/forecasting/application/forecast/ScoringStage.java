@@ -373,13 +373,13 @@ public final class ScoringStage {
     public ScoringResult expire(Instant now) {
         Objects.requireNonNull(now, "시각이 필요하다");
         Instant closedAt = clock.instant();
-        ScoringResult result = ScoringResult.empty();
+        List<ScoringResult> results = new ArrayList<>();
         for (RouteState state : routes.values()) {
             if (state.clock != null && state.clock.plus(IDLE_EXPIRY).isBefore(now)) {
-                result = result.plus(expireThrough(state, now, closedAt));
+                results.add(expireThrough(state, now, closedAt));
             }
         }
-        return result;
+        return ScoringResult.combine(results);
     }
 
     /**
@@ -451,7 +451,6 @@ public final class ScoringStage {
         }
 
         List<PassLabel> labels = new ArrayList<>();
-        List<ScoredForecast> scored = new ArrayList<>();
         List<ClosedForecast> closed = new ArrayList<>();
         for (Map.Entry<LabelGroup, List<Waiting>> group : forecastsByLabel.entrySet()) {
             LabelGroup labelGroup = group.getKey();
@@ -481,24 +480,17 @@ public final class ScoringStage {
             );
             labels.add(label);
             for (Waiting waiting : forecasts) {
-                scored.add(new ScoredForecast(
+                closed.add(ClosedForecast.scored(
                         waiting.key.vehicleObservationId(),
-                        waiting.key.targetStopOrder(),
-                        pass.routeId(),
-                        pass.sourceDate(),
-                        pass.tripStartObservationId(),
-                        pass.stopOrder(),
-                        labelGroup.capacity(),
-                        labelGroup.modelDeploymentId()
+                        label,
+                        waiting.closed(calculation.value(), pass.lastSeats())
                 ));
-                closed.add(ClosedForecast.scored(label, waiting.closed(calculation.value(), pass.lastSeats())));
             }
         }
         closed.addAll(withoutLabel.closed);
         return new ScoringResult(
                 labels,
                 withoutLabel.rows,
-                scored,
                 closed
         );
     }
@@ -965,7 +957,6 @@ public final class ScoringStage {
             return new ScoringResult(
                     List.of(),
                     rows,
-                    List.of(),
                     closed
             );
         }
