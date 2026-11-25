@@ -29,11 +29,12 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * 합성 재생 자료({@link SyntheticWorkerReplay})로 재생을 끝까지 돌려 보고서를 본다. 실제 운영 자료로 모델을 확인한 것이 아니다.
  *
- * <p>예보와 채점은 실제 DB에 쓴다. 테스트 트랜잭션 하나에 모든 쓰기가 합류하고 끝나면 되돌린다.
+ * <p>예보와 정산은 실제 DB에 쓴다. 테스트 트랜잭션 하나에 모든 쓰기가 합류하고 끝나면 되돌린다.
  */
 @ForecastingIntegrationTest
 @Transactional
 class ConfirmedAlightingAwareWorkerReplayTest {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     @Autowired
@@ -61,8 +62,13 @@ class ConfirmedAlightingAwareWorkerReplayTest {
         String digest = SyntheticWorkerReplay.bundleDigest(bundle);
 
         // when
-        Map<String, Object> returned = ConfirmedAlightingAwareWorkerReplay.run(fixtures, bundle, output, null,
-            stores());
+        Map<String, Object> returned = ConfirmedAlightingAwareWorkerReplay.run(
+                fixtures,
+                bundle,
+                output,
+                null,
+                stores()
+        );
 
         // then
         JsonNode report = JSON.readTree(Files.readAllBytes(output.resolve("report.json")));
@@ -105,7 +111,13 @@ class ConfirmedAlightingAwareWorkerReplayTest {
         Path bundle = synthetic.writeBundle(directory.resolve("bundle"));
 
         // when
-        ConfirmedAlightingAwareWorkerReplay.run(fixtures, bundle, directory.resolve("output"), null, stores());
+        ConfirmedAlightingAwareWorkerReplay.run(
+                fixtures,
+                bundle,
+                directory.resolve("output"),
+                null,
+                stores()
+        );
 
         // then
         final long routeId = jdbc.sql("SELECT id FROM route WHERE display_name=? AND source_route_id='204000057'")
@@ -138,7 +150,13 @@ class ConfirmedAlightingAwareWorkerReplayTest {
         Path output = directory.resolve("output");
 
         // when
-        ConfirmedAlightingAwareWorkerReplay.run(fixtures, bundle, output, null, stores());
+        ConfirmedAlightingAwareWorkerReplay.run(
+                fixtures,
+                bundle,
+                output,
+                null,
+                stores()
+        );
 
         // then
         JsonNode report = JSON.readTree(Files.readAllBytes(output.resolve("report.json")));
@@ -311,8 +329,13 @@ class ConfirmedAlightingAwareWorkerReplayTest {
         Path output = directory.resolve("output");
 
         // when
-        Throwable thrown = catchThrowable(() -> ConfirmedAlightingAwareWorkerReplay.run(fixtures, bundle, output,
-            null, stores()));
+        Throwable thrown = catchThrowable(() -> ConfirmedAlightingAwareWorkerReplay.run(
+                fixtures,
+                bundle,
+                output,
+                null,
+                stores()
+        ));
 
         // then
         JsonNode report = JSON.readTree(Files.readAllBytes(output.resolve("report.json")));
@@ -332,8 +355,13 @@ class ConfirmedAlightingAwareWorkerReplayTest {
         Path bundle = synthetic.writeBundle(directory.resolve("bundle"), List.of(SyntheticWorkerReplay.ROUTE, "1650"));
 
         // when
-        Map<String, Object> report = ConfirmedAlightingAwareWorkerReplay.run(fixtures, bundle,
-            directory.resolve("output"), SyntheticWorkerReplay.ROUTE, stores());
+        Map<String, Object> report = ConfirmedAlightingAwareWorkerReplay.run(
+                fixtures,
+                bundle,
+                directory.resolve("output"),
+                SyntheticWorkerReplay.ROUTE,
+                stores()
+        );
 
         // then
         assertSoftly(softly -> {
@@ -353,8 +381,13 @@ class ConfirmedAlightingAwareWorkerReplayTest {
         Path output = directory.resolve("output");
 
         // when
-        Throwable thrown = catchThrowable(() -> ConfirmedAlightingAwareWorkerReplay.run(fixtures, bundle, output,
-            null, stores()));
+        Throwable thrown = catchThrowable(() -> ConfirmedAlightingAwareWorkerReplay.run(
+                fixtures,
+                bundle,
+                output,
+                null,
+                stores()
+        ));
 
         // then
         assertSoftly(softly -> {
@@ -376,8 +409,13 @@ class ConfirmedAlightingAwareWorkerReplayTest {
         Path output = directory.resolve("output");
 
         // when
-        Throwable thrown = catchThrowable(() -> ConfirmedAlightingAwareWorkerReplay.run(fixtures, bundle, output,
-            null, stores()));
+        Throwable thrown = catchThrowable(() -> ConfirmedAlightingAwareWorkerReplay.run(
+                fixtures,
+                bundle,
+                output,
+                null,
+                stores()
+        ));
 
         // then
         assertSoftly(softly -> {
@@ -395,8 +433,13 @@ class ConfirmedAlightingAwareWorkerReplayTest {
         Path output = Files.createDirectory(directory.resolve("output"));
 
         // when
-        Throwable thrown = catchThrowable(() -> ConfirmedAlightingAwareWorkerReplay.run(fixtures, bundle, output,
-            null, stores()));
+        Throwable thrown = catchThrowable(() -> ConfirmedAlightingAwareWorkerReplay.run(
+                fixtures,
+                bundle,
+                output,
+                null,
+                stores()
+        ));
 
         // then
         assertSoftly(softly -> {
@@ -405,19 +448,35 @@ class ConfirmedAlightingAwareWorkerReplayTest {
         });
     }
 
-    /** 자료를 쓰고 재생해, 던진 예외와 그래도 남긴 보고서를 돌려준다. */
-    private Rejected replayExpectingRejection(SyntheticWorkerReplay synthetic) throws IOException {
+    /** 자료를 쓰고 재생해, 던진 예외와 그래도 남긴 보고서를 반환한다. */
+    private Rejected replayExpectingRejection(
+        SyntheticWorkerReplay synthetic
+    ) throws IOException {
         Path fixtures = synthetic.writeFixtures(directory.resolve("fixtures"));
         Path bundle = synthetic.writeBundle(directory.resolve("bundle"));
         Path output = directory.resolve("output");
-        Throwable thrown = catchThrowable(() -> ConfirmedAlightingAwareWorkerReplay.run(fixtures, bundle, output,
-            null, stores()));
-        return new Rejected(thrown, JSON.readTree(Files.readAllBytes(output.resolve("report.json"))));
+        Throwable thrown = catchThrowable(() -> ConfirmedAlightingAwareWorkerReplay.run(
+                fixtures,
+                bundle,
+                output,
+                null,
+                stores()
+        ));
+        return new Rejected(
+            thrown,
+            JSON.readTree(Files.readAllBytes(output.resolve("report.json")))
+        );
     }
 
     private ConfirmedAlightingAwareWorkerReplay.Stores stores() {
-        return new ConfirmedAlightingAwareWorkerReplay.Stores(jdbc, transactions, deployments, records, passes,
-            labels);
+        return new ConfirmedAlightingAwareWorkerReplay.Stores(
+                jdbc,
+                transactions,
+                deployments,
+                records,
+                passes,
+                labels
+        );
     }
 
     private long count(String sql, Object parameter) {
@@ -425,6 +484,7 @@ class ConfirmedAlightingAwareWorkerReplayTest {
     }
 
     private record Rejected(Throwable thrown, JsonNode report) {
+
         private JsonNode route() {
             return report.path("routes").path(0);
         }

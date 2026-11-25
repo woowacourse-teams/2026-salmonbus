@@ -187,7 +187,7 @@ class BoardQueryServiceBatchReadTest {
     }
 
     /**
-     * 노선 판본마다 회차점이 있는 정류장 3개, 관측 묶음마다 차량 1대를 두는 저장소다. 일괄 조회 호출 순서를 남긴다.
+     * 노선 버전마다 회차점이 있는 정류장 3개, 관측 묶음마다 차량 1대를 두는 저장소다. 일괄 조회 호출 순서를 남긴다.
      */
     private static final class FakeBoardRepository implements BoardQueryRepository {
         private final Map<String, List<BoardSnapshot>> snapshots = new HashMap<>();

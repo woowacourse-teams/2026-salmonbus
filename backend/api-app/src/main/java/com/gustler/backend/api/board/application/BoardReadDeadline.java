@@ -3,7 +3,7 @@ package com.gustler.backend.api.board.application;
 import java.time.Duration;
 
 /**
- * 여러 노선 판정보드 읽기의 마감 시각이다. {@link #after}를 부른 때부터 재므로, 호출하는 쪽이 트랜잭션과 연결을 얻기 전에
+ * 여러 노선 판정보드 읽기의 마감 시각이다. {@link #after}를 부른 때부터 재므로, 호출자가 트랜잭션과 연결을 얻기 전에
  * 만들면 연결 풀 대기도 예산에 들어간다.
  */
 public final class BoardReadDeadline {

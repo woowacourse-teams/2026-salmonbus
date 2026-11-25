@@ -13,7 +13,7 @@ public record BoardReading(
     Duration cacheMaxAge
 ) {
     public BoardReading {
-        Objects.requireNonNull(board, "board는 null일 수 없습니다.");
-        Objects.requireNonNull(cacheMaxAge, "cacheMaxAge는 null일 수 없습니다.");
+        Objects.requireNonNull(board, "board는 null일 수 없다.");
+        Objects.requireNonNull(cacheMaxAge, "cacheMaxAge는 null일 수 없다.");
     }
 }

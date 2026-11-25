@@ -25,6 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 @Transactional
 @Import(FixedDaytimeClockConfig.class)
 class NotificationMessageForecastIntegrationTest {
+
     private static final FavoriteTarget TARGET = new FavoriteTarget(
         ForecastBoardFixture.ROUTE_ID,
         ForecastBoardFixture.STOP_ID,
@@ -58,16 +59,19 @@ class NotificationMessageForecastIntegrationTest {
         BoardDatabaseFixture.RouteContext route = fixture.insertRoute(now.minusDays(1));
         final long modelId = fixture.insertActiveModel(now.minusDays(1));
         ForecastBoardFixture.ObservedVehicle vehicle = fixture.insertApproachingVehicle(route, now.minusMinutes(1));
-        fixture.insertForecast(vehicle, modelId, 0.25, 12.5);
+        fixture.insertForecast(
+                vehicle,
+                modelId,
+                0.25,
+                12.5
+        );
         fixture.insertArrival(now.minusSeconds(10).toInstant(), 300);
 
         // when
         NotificationMessage actual = resolver.apply(TARGET);
 
         // then
-        assertThat(actual).isEqualTo(new NotificationMessage(
-            TITLE,
-            "약 5분 후 도착 · 탑승확률 높음\n도착 시 빈 좌석 12석 예상"));
+        assertThat(actual).isEqualTo(new NotificationMessage(TITLE, "약 5분 후 도착 · 탑승확률 높음\n도착 시 빈 좌석 12석 예상"));
     }
 
     @Test
@@ -83,9 +87,7 @@ class NotificationMessageForecastIntegrationTest {
         NotificationMessage actual = resolver.apply(TARGET);
 
         // then
-        assertThat(actual).isEqualTo(new NotificationMessage(
-            TITLE,
-            "약 5분 후 도착 · 탑승확률 정보 없음\n예상 빈 좌석 정보 없음"));
+        assertThat(actual).isEqualTo(new NotificationMessage(TITLE, "약 5분 후 도착 · 탑승확률 정보 없음\n예상 빈 좌석 정보 없음"));
     }
 
     @Test
@@ -96,7 +98,12 @@ class NotificationMessageForecastIntegrationTest {
         ForecastBoardFixture.ObservedVehicle vehicle = fixture.insertApproachingVehicle(
             route,
             now.minusMinutes(5).minusSeconds(1));
-        fixture.insertForecast(vehicle, modelId, 0.25, 12.5);
+        fixture.insertForecast(
+                vehicle,
+                modelId,
+                0.25,
+                12.5
+        );
 
         // when
         NotificationMessage actual = resolver.apply(TARGET);

@@ -45,15 +45,16 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보 경로가 낸 사건으로 채점을 돌려 저장된 결과를 실제 DB로 본다. 기대값은 기준 구현(dev {@code e98ae3ea}의 발행·정산)이 같은
+ * 예보 경로가 낸 이벤트로 정산을 돌려 저장된 결과를 실제 DB로 본다. 기대값은 기준 구현(dev {@code e98ae3ea}의 발행, 정산)이 같은
  * 흐름에 낸 예측별 결과다({@link ScoringBaseline}).
  *
- * <p>채점이 읽는 모델 배포의 정산 근거는 예보 경로가 적는다. 노선별 실행 줄과 채점 줄은 넣는 즉시 같은 스레드에서 실행한다.
+ * <p>정산이 읽는 모델 배포의 정산 근거는 예보 경로가 기록한다. 노선별 실행기와 정산 큐는 넣는 즉시 같은 스레드에서 실행한다.
  * 흐름을 다 넣은 뒤 마지막 배치 3시간 뒤의 시계로 주기 작업을 돌려 모든 예측을 마감한다.
  */
 @ForecastingIntegrationTest
 @Transactional
 class ScoringFlowTest {
+
     private static final Instant EVENING = Instant.parse("2026-10-14T09:30:00Z");
     private static final String SOURCE_ROUTE_ID = "234001739";
     private static final String MODEL_ROUTE = "6801";
@@ -152,8 +153,7 @@ class ScoringFlowTest {
     private static void assertSame(ScoringBaseline.Comparison comparison) {
         assertSoftly(softly -> {
             softly.assertThat(comparison.differences())
-                .as("기대값과 다른 예측: %s", comparison.differences().stream().limit(10)
-                    .collect(Collectors.joining("\n")))
+                .as("기대값과 다른 예측: %s", comparison.differences().stream().limit(10).collect(Collectors.joining("\n")))
                 .isEmpty();
             softly.assertThat(comparison.baselineOnly()).isEmpty();
             softly.assertThat(comparison.newOnly()).isEmpty();
@@ -183,14 +183,22 @@ class ScoringFlowTest {
             evidence.put(order, """
                 {"turn":%d,"realStopOrders":%s,"holidays":[],"extendedSettlement":{%s},
                  "alighting":{"stops":[{"stop":%d,"band":"morning",%s},{"stop":%d,"band":"evening",%s}]}}
-                """.formatted(statistics.turn(), statistics.realStopOrders(), cells, order, parameters, order,
-                parameters));
+                """.formatted(
+                        statistics.turn(),
+                        statistics.realStopOrders(),
+                        cells,
+                        order,
+                        parameters,
+                        order,
+                        parameters
+                ));
         }
         return evidence;
     }
 
-    /** 흐름 하나와 예보 경로·채점을 묶는다. 모델 배포는 둘을 만들어 두고 처음에는 앞의 것을 쓴다. */
+    /** 흐름 하나와 예보 경로, 정산을 묶는다. 모델 배포는 둘을 만들어 두고 처음에는 앞의 것을 쓴다. */
     private final class Harness {
+
         private final ObservationStreamFixture.Stream stream;
         private final StreamKeys keys;
         private final Map<Long, Instant> intendedConfirmation = new HashMap<>();
@@ -208,8 +216,15 @@ class ScoringFlowTest {
         private long currentBatch = NEVER;
 
         private Harness(final long seed) {
-            stream = ObservationStreamFixture.insert(jdbc, EVENING, Duration.ofMinutes(90), Duration.ofSeconds(30),
-                null, seed, MODEL_ROUTE);
+            stream = ObservationStreamFixture.insert(
+                    jdbc,
+                    EVENING,
+                    Duration.ofMinutes(90),
+                    Duration.ofSeconds(30),
+                    null,
+                    seed,
+                    MODEL_ROUTE
+            );
             keys = StreamKeys.of(jdbc, stream);
             jdbc.sql("""
                 SELECT id,input_confirmed_at,route_version_id,response_received_at,ingestion_origin,outcome
@@ -217,34 +232,76 @@ class ScoringFlowTest {
                 """).param("versions", versions())
                 .query(row -> {
                     intendedConfirmation.put(row.getLong(1), row.getObject(2, OffsetDateTime.class).toInstant());
-                    meta.put(row.getLong(1), new Meta(row.getLong(3),
-                        row.getObject(4, OffsetDateTime.class).toInstant(), row.getString(5), row.getString(6)));
+                    meta.put(row.getLong(1), new Meta(
+                            row.getLong(3),
+                            row.getObject(4, OffsetDateTime.class).toInstant(),
+                            row.getString(5),
+                            row.getString(6)
+                    ));
                 });
             jdbc.sql("UPDATE observation_batch SET input_confirmed_at=NULL WHERE route_version_id IN (:versions)")
                 .param("versions", versions()).update();
             stream.stopsByVersion().forEach((version, stops) -> stopsByVersion.put(version,
-                new RouteStops(version, SOURCE_ROUTE_ID, stops.stops(), stops.routeName())));
+                new RouteStops(
+                        version,
+                        SOURCE_ROUTE_ID,
+                        stops.stops(),
+                        stops.routeName()
+                )));
             Random random = new Random(seed);
             model = model(random, 0.12);
             nextModel = model(random, 0.3);
             runtime = activate(model);
-            scoring = new ForecastAssembly(jdbc, transactions, clock, scoringMeters).scoring(task -> {
-                if (rejectBatch != NEVER && currentBatch == rejectBatch) {
-                    return false;
-                }
-                task.run();
-                return true;
-            }, records, records, passes, labels);
+            scoring = new ForecastAssembly(
+                    jdbc,
+                    transactions,
+                    clock,
+                    scoringMeters
+            ).scoring(
+                    task -> {
+                        if (rejectBatch != NEVER && currentBatch == rejectBatch) {
+                            return false;
+                        }
+                        task.run();
+                        return true;
+                    },
+                    records,
+                    records,
+                    passes,
+                    labels
+            );
             JdbcReplaySource source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
-            ForecastAssembly.Sources sources = new ForecastAssembly.Sources(source, source, committed,
-                () -> Optional.of(runtime), this::versions, stopsByVersion::get);
+            ForecastAssembly.Sources sources = new ForecastAssembly.Sources(
+                    source,
+                    source,
+                    committed,
+                    () -> Optional.of(runtime),
+                    this::versions,
+                    stopsByVersion::get
+            );
             ForecastAssembly.Settings settings = new ForecastAssembly.Settings(
-                new ForecastPolicy(Duration.ofMinutes(10), 20), Duration.ofHours(6), Duration.ofHours(6), false);
-            service = new ForecastAssembly(jdbc, transactions, clock, new SimpleMeterRegistry())
-                .forecast((key, task) -> {
-                    task.run();
-                    return true;
-                }, scoring, sources, cache, records, passes, settings);
+                    new ForecastPolicy(Duration.ofMinutes(10), 20),
+                    Duration.ofHours(6),
+                    false
+            );
+            service = new ForecastAssembly(
+                    jdbc,
+                    transactions,
+                    clock,
+                    new SimpleMeterRegistry()
+            )
+                .forecast(
+                        (key, task) -> {
+                            task.run();
+                            return true;
+                        },
+                        scoring,
+                        sources,
+                        cache,
+                        records,
+                        passes,
+                        settings
+                );
             clock.at = EVENING.plus(Duration.ofDays(2));
             service.pickUp();
             service.states().put(model.statistics(stopsByVersion.values().iterator().next()),
@@ -256,10 +313,10 @@ class ScoringFlowTest {
         }
 
         /**
-         * 흐름을 처리 순서로 넣고 배치마다 채점 줄을 비운 뒤, 마지막 배치 3시간 뒤의 시계로 주기 작업을 돌린다.
+         * 흐름을 처리 순서로 넣고 배치마다 정산 큐를 비운 뒤, 마지막 배치 3시간 뒤의 시계로 주기 작업을 돌린다.
          *
          * @param switchAt 이 배치부터 다음 모델 배포를 쓴다. {@link #NEVER}면 바꾸지 않는다
-         * @param rejectAt 이 배치의 사건은 채점 줄이 받지 않는다. {@link #NEVER}면 모두 받는다
+         * @param rejectAt 이 배치의 이벤트는 정산 큐가 받지 않는다. {@link #NEVER}면 모두 받는다
          */
         private void processAll(final long switchAt, final long rejectAt) {
             rejectBatch = rejectAt;
@@ -285,21 +342,57 @@ class ScoringFlowTest {
 
         private AlightingAwareSeatForecastModel model(Random random, final double probability) {
             AlightingAwareSeatPredictor predictor = new AlightingAwareSeatPredictor(
-                ForecastTestSupport.stumps(88, NumericTreeEnsemble.Kind.REGRESSION, new double[] {10}, random),
-                ForecastTestSupport.stumps(88, NumericTreeEnsemble.Kind.MULTICLASS, new double[] {0, 0, 0}, random),
-                ForecastTestSupport.stumps(80, NumericTreeEnsemble.Kind.BINARY, new double[] {0}, random), 1.3);
+                    ForecastTestSupport.stumps(
+                            88,
+                            NumericTreeEnsemble.Kind.REGRESSION,
+                            new double[] {10},
+                            random
+                    ),
+                    ForecastTestSupport.stumps(
+                            88,
+                            NumericTreeEnsemble.Kind.MULTICLASS,
+                            new double[] {0, 0, 0},
+                            random
+                    ),
+                    ForecastTestSupport.stumps(
+                            80,
+                            NumericTreeEnsemble.Kind.BINARY,
+                            new double[] {0},
+                            random
+                    ),
+                    1.3
+            );
             Map<String, ExtendedAlightingPredictor> extension = Map.of(MODEL_ROUTE, new ExtendedAlightingPredictor(
-                ForecastTestSupport.stumps(6, NumericTreeEnsemble.Kind.REGRESSION, new double[] {8}, random),
-                ForecastTestSupport.stumps(6, NumericTreeEnsemble.Kind.BINARY, new double[] {0}, random)));
-            return new AlightingAwareSeatForecastModel(predictor, Map.of(MODEL_ROUTE, stream.statistics()),
-                Map.of(MODEL_ROUTE, evidence(stream.statistics(), probability)), ForecastTestSupport.digest(),
-                extension);
+                ForecastTestSupport.stumps(
+                        6,
+                        NumericTreeEnsemble.Kind.REGRESSION,
+                        new double[] {8},
+                        random
+                ),
+                ForecastTestSupport.stumps(
+                        6,
+                        NumericTreeEnsemble.Kind.BINARY,
+                        new double[] {0},
+                        random
+                )));
+            return new AlightingAwareSeatForecastModel(
+                    predictor,
+                    Map.of(MODEL_ROUTE, stream.statistics()),
+                    Map.of(MODEL_ROUTE, evidence(stream.statistics(), probability)),
+                    ForecastTestSupport.digest(),
+                    extension
+            );
         }
 
         private RuntimeSnapshot activate(AlightingAwareSeatForecastModel selected) {
             String digest = selected.bundleDigest();
-            ModelRelease release = ModelRelease.alighting("forecast-scoring-" + digest.substring(0, 8), digest,
-                EVENING.minusSeconds(86400).toString(), new SupportedForecastScope(List.of(MODEL_ROUTE)), selected);
+            ModelRelease release = ModelRelease.alighting(
+                    "forecast-scoring-" + digest.substring(0, 8),
+                    digest,
+                    EVENING.minusSeconds(86400).toString(),
+                    new SupportedForecastScope(List.of(MODEL_ROUTE)),
+                    selected
+            );
             LoadedModelRegistry registry = new LoadedModelRegistry();
             new BundleActivation(deployments, registry).activate(() -> release);
             return new ActiveForecastRuntimeResolver(deployments, registry).resolveActive().orElseThrow();
@@ -312,5 +405,6 @@ class ScoringFlowTest {
         String origin,
         String outcome
     ) {
+
     }
 }

@@ -19,7 +19,7 @@ import java.util.Set;
 /**
  * 고정 시드 입력에서 차량마다 입력 계산이 내야 하는 결과의 고정 기대값이다({@link Baseline}). 값은 기준 구현(dev
  * {@code e98ae3ea}의 입력 계산)이 같은 입력에 낸 것이다. 그 구현은 저장소에 남아 있지 않아 파일을 다시 만들 수 없으므로, 기대값을
- * 쓰는 테스트가 노선·관측을 만드는 흐름과 난수를 뽑는 순서를 바꾸면 기대값과 견줄 수 없다. 입력 계산은 지수·로그·사인 함수를
+ * 쓰는 테스트가 노선, 관측을 만드는 흐름과 난수를 뽑는 순서를 바꾸면 기대값과 견줄 수 없다. 입력 계산은 지수, 로그, 사인 함수를
  * 거치지 않아 어느 JVM에서나 비트까지 견준다.
  * <ul>
  *   <li>{@code e 번호 예외 메시지…}: 거부 사유. 번호는 한 글자다. {@code NullPointerException}은 JVM이 문구를 만들어 메시지를
@@ -31,6 +31,7 @@ import java.util.Set;
  * </ul>
  */
 final class FeatureSnapshotBaseline {
+
     private static final char VECTOR = 'v';
 
     private final Map<String, Rejection> rejections = new HashMap<>();
@@ -51,7 +52,16 @@ final class FeatureSnapshotBaseline {
     private void accept(String[] line) {
         switch (line[0]) {
             case "e" -> rejections.put(line[1], rejection(line));
-            case "x" -> put(line[1], new Expected(rejection(line[2]), null, null, List.of(), null));
+            case "x" -> put(
+                line[1],
+                new Expected(
+                        rejection(line[2]),
+                        null,
+                        null,
+                        List.of(),
+                        null
+                )
+            );
             case "s" -> put(line[1], constructed(line));
             default -> throw new IllegalStateException("모르는 줄: " + line[0]);
         }
@@ -61,7 +71,10 @@ final class FeatureSnapshotBaseline {
         if (line.length == 3) {
             return new Rejection(line[2], null);
         }
-        return new Rejection(line[2], String.join(" ", Arrays.copyOfRange(line, 3, line.length)));
+        return new Rejection(
+            line[2],
+            String.join(" ", Arrays.copyOfRange(line, 3, line.length))
+        );
     }
 
     private Expected constructed(String[] line) {
@@ -70,9 +83,21 @@ final class FeatureSnapshotBaseline {
             targets.add(targetRejection(code));
         }
         if (line[2].startsWith("!")) {
-            return new Expected(null, null, rejection(line[2].substring(1)), unmodifiableList(targets), line[4]);
+            return new Expected(
+                    null,
+                    null,
+                    rejection(line[2].substring(1)),
+                    unmodifiableList(targets),
+                    line[4]
+            );
         }
-        return new Expected(null, Long.valueOf(line[2]), null, unmodifiableList(targets), line[4]);
+        return new Expected(
+                null,
+                Long.valueOf(line[2]),
+                null,
+                unmodifiableList(targets),
+                line[4]
+        );
     }
 
     private Rejection targetRejection(final char code) {
@@ -113,7 +138,7 @@ final class FeatureSnapshotBaseline {
     }
 
     /**
-     * 차량 하나의 값을 SHA-256으로 줄인다. 관측 값·정원·기준 관측 번호·기준 관측을 적은 글({@code values})에 이어 목표 순서대로
+     * 차량 하나의 값을 SHA-256으로 줄인다. 관측 값, 정원, 기준 관측 번호, 기준 관측을 적은 글({@code values})에 이어 목표 순서대로
      * 입력 벡터를 넣는다. 벡터가 없는 목표는 없음 표시만 넣는다. 실수는 {@link Double#doubleToLongBits}의 비트로 넣는다.
      */
     static String digest(String values, List<AlightingAwareFeatureVector> vectors) {
@@ -140,18 +165,34 @@ final class FeatureSnapshotBaseline {
     }
 
     static String text(ObservedVehicle observation) {
-        return String.join("/", observation.vehicleId(), Long.toString(observation.routeVersionId()),
-            Integer.toString(observation.passedStopOrder()), String.valueOf(observation.observedAt()),
-            String.valueOf(observation.remainingSeats()), String.valueOf(observation.crowdLevel()));
+        return String.join(
+                "/",
+                observation.vehicleId(),
+                Long.toString(observation.routeVersionId()),
+                Integer.toString(observation.passedStopOrder()),
+                String.valueOf(observation.observedAt()),
+                String.valueOf(observation.remainingSeats()),
+                String.valueOf(observation.crowdLevel())
+        );
     }
 
     static String text(AlightingAwareObservation observation) {
-        return String.join("/", Long.toString(observation.observationId()), Long.toString(observation.batchId()),
-            Long.toString(observation.batchRank()), String.valueOf(observation.receivedAt()), observation.vehicleId(),
-            Integer.toString(observation.passedStopOrder()), Integer.toString(observation.stopOrder()),
-            Integer.toString(observation.state()), String.valueOf(observation.seats()),
-            Integer.toString(observation.crowd()), Long.toString(observation.routeVersionId()),
-            String.valueOf(observation.sourceReceivedAt()), Boolean.toString(observation.down()));
+        return String.join(
+                "/",
+                Long.toString(observation.observationId()),
+                Long.toString(observation.batchId()),
+                Long.toString(observation.batchRank()),
+                String.valueOf(observation.receivedAt()),
+                observation.vehicleId(),
+                Integer.toString(observation.passedStopOrder()),
+                Integer.toString(observation.stopOrder()),
+                Integer.toString(observation.state()),
+                String.valueOf(observation.seats()),
+                Integer.toString(observation.crowd()),
+                Long.toString(observation.routeVersionId()),
+                String.valueOf(observation.sourceReceivedAt()),
+                Boolean.toString(observation.down())
+        );
     }
 
     /**
@@ -159,6 +200,7 @@ final class FeatureSnapshotBaseline {
      * @param message 예외 메시지. {@code NullPointerException}이면 비어 있고 견주지 않는다
      */
     record Rejection(String type, String message) {
+
         boolean matches(RuntimeException error) {
             if (!error.getClass().getName().equals(type)) {
                 return false;
@@ -181,5 +223,6 @@ final class FeatureSnapshotBaseline {
         List<Rejection> targets,
         String digest
     ) {
+
     }
 }

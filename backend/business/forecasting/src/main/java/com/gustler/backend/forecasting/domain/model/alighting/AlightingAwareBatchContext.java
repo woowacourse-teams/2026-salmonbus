@@ -11,23 +11,28 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 한 관측 배치의 차량 스냅샷이 함께 쓰는 이력·통과 사건·고정 통계·누적 상태와, 차량·목표와 무관한 입력 계산을 보관한다.
- * 이력 거르기, 사건 정렬, 정류장별 대기 상태, 최근 한 시간 사건, 정류장별·방향별 편차, 같은 배치 차량 목록을
- * 관측 시점(수신 시각과 배치 번호)마다 처음 필요할 때 한 번만 계산한다. 계산식과 순회 순서는 차량마다 따로 계산할 때와 같다.
- * 내부 메모는 동기화하지 않으므로 한 스레드에서 한 배치를 처리하는 동안만 쓴다.
+ * 같은 배치의 차량들이 사용하는 이력, 통과 이벤트, 통계와 누적 상태를 보관한다.
+ *
+ * <p>수신 시각과 배치 번호가 같으면 이력 필터링, 이벤트 정렬, 정류장별 대기 상태,
+ * 최근 한 시간 통과 이벤트, 정류장별 편차와 방향별 편차, 배치 차량 목록을 한 번만 계산한다.
+ * 차량마다 계산할 때와 계산식 및 순회 순서는 같다.
+ * 내부 캐시는 동기화하지 않으므로 한 스레드에서 배치 하나를 처리할 때만 사용한다.
  */
 public final class AlightingAwareBatchContext {
+
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
     private final AlightingAwareRouteStatistics statistics;
     private final List<AlightingAwareObservation> history;
     private final List<AlightingAwarePassEvent> events;
     private final Map<String, AlightingAwareVehiclePrefix> prefix;
-    private final Map<MomentKey, Moment> moments = new HashMap<>();
+    private final Map<MomentKey, Moment> moments =
+        new HashMap<>();
     private Map<String, AlightingAwareVehiclePrefix> copiedPrefix;
 
     /**
-     * 인자를 검사하거나 복사하지 않고 보관한다. 거르기·복사와 그 예외는 스냅샷을 만들 때 원래 순서대로 일어난다.
-     * 넘긴 목록과 맵은 이 배치를 처리하는 동안 바꾸지 않아야 한다.
+     * 생성할 때는 인자를 검사하거나 복사하지 않는다. 필터링과 복사는 스냅샷을 만들 때 기존 순서대로 수행한다.
+     * 전달한 목록과 맵은 배치를 처리하는 동안 변경하면 안 된다.
      */
     public AlightingAwareBatchContext(
         AlightingAwareRouteStatistics statistics,
@@ -52,15 +57,14 @@ public final class AlightingAwareBatchContext {
         return copiedPrefix;
     }
 
-    /** 같은 수신 시각·배치 번호의 관측이 함께 쓰는 거른 이력과 사건이다. 처음 부를 때 거르기를 한다. */
+    /** 같은 수신 시각과 배치 번호의 관측에 사용할 이력과 이벤트다. 처음 요청할 때 필터링한다. */
     Moment momentOf(AlightingAwareObservation source) {
-        MomentKey key = new MomentKey(source.receivedAt(), source.batchId());
-        Moment moment = moments.get(key);
-        if (moment == null) {
-            moment = new Moment(source.receivedAt(), source.batchId());
-            moments.put(key, moment);
-        }
-        return moment;
+        MomentKey key = new MomentKey(
+            source.receivedAt(),
+            source.batchId()
+        );
+        return moments.computeIfAbsent(key, instantAndBatch ->
+            new Moment(instantAndBatch.receivedAt(), instantAndBatch.batchId()));
     }
 
     Instant eventTime(AlightingAwarePassEvent event) {
@@ -71,13 +75,13 @@ public final class AlightingAwareBatchContext {
     }
 
     double deviation(List<AlightingAwarePassEvent> events) {
-        double value = 0;
+        double totalDeviation = 0;
         for (AlightingAwarePassEvent event : events) {
             ZonedDateTime time = eventTime(event).atZone(SEOUL);
-            value += event.arrival().seats() - event.departure().seats()
+            totalDeviation += event.arrival().seats() - event.departure().seats()
                 - statistics.typicalNet(event.stopOrder(), statistics.dayType(time.toLocalDate()), minute(time));
         }
-        return value;
+        return totalDeviation;
     }
 
     private static int minute(ZonedDateTime time) {
@@ -92,10 +96,12 @@ public final class AlightingAwareBatchContext {
     }
 
     private record MomentKey(Instant receivedAt, long batchId) {
+
     }
 
-    /** 한 관측 시점에서 볼 수 있는 이력·사건과, 그 시점에서 차량·목표와 무관하게 정해지는 계산 결과다. */
+    /** 관측 시점에 사용할 수 있는 이력과 통과 이벤트, 차량 및 목표 정류장에 관계없이 공유하는 계산 결과다. */
     final class Moment {
+
         private final Instant receivedAt;
         private final long batchId;
         private final List<AlightingAwareObservation> history;
@@ -109,7 +115,9 @@ public final class AlightingAwareBatchContext {
         private Moment(Instant receivedAt, final long batchId) {
             this.receivedAt = receivedAt;
             this.batchId = batchId;
-            this.history = AlightingAwareBatchContext.this.history.stream().filter(this::before).toList();
+            this.history = AlightingAwareBatchContext.this.history.stream()
+                .filter(this::isVisibleAtBatch)
+                .toList();
             this.events = AlightingAwareBatchContext.this.events.stream()
                 .filter(this::isAvailable)
                 .sorted(Comparator.comparing(AlightingAwareBatchContext.this::eventTime))
@@ -117,10 +125,10 @@ public final class AlightingAwareBatchContext {
         }
 
         private boolean isAvailable(AlightingAwarePassEvent event) {
-            return !event.confirmedAt().isAfter(receivedAt) && before(event.confirmation());
+            return !event.confirmedAt().isAfter(receivedAt) && isVisibleAtBatch(event.confirmation());
         }
 
-        private boolean before(AlightingAwareObservation observation) {
+        private boolean isVisibleAtBatch(AlightingAwareObservation observation) {
             if (observation.receivedAt().isBefore(receivedAt)) {
                 return true;
             }
@@ -146,24 +154,29 @@ public final class AlightingAwareBatchContext {
             return members;
         }
 
-        /** 관측 날짜의 사건을 시간 순으로 훑어 만든 정류장별 대기 상태다. 읽기만 한다. */
+        /** 관측 날짜의 통과 이벤트를 시간순으로 반영한 정류장별 대기 상태다. 반환한 값은 읽기만 한다. */
         Map<Integer, QueueState> queues() {
             if (queues != null) {
                 return queues;
             }
-            Map<Integer, QueueState> built = new HashMap<>();
-            LocalDate day = receivedAt.atZone(SEOUL).toLocalDate();
+            LocalDate observationDate = receivedAt.atZone(SEOUL).toLocalDate();
+            Map<Integer, QueueState> queuesByStop = new HashMap<>();
             for (AlightingAwarePassEvent event : events) {
-                if (!eventTime(event).atZone(SEOUL).toLocalDate().equals(day)) {
+                Instant passTime = eventTime(event);
+                if (!passTime.atZone(SEOUL).toLocalDate().equals(observationDate)) {
                     continue;
                 }
-                built.computeIfAbsent(event.stopOrder(), ignored -> new QueueState()).accept(event, eventTime(event));
+                QueueState queue = queuesByStop.computeIfAbsent(
+                    event.stopOrder(),
+                    ignored -> new QueueState()
+                );
+                queue.accept(event, passTime);
             }
-            queues = built;
+            queues = queuesByStop;
             return queues;
         }
 
-        /** 관측 시각 이전 한 시간 안의 사건이다. */
+        /** 관측 시각 이전 한 시간 안의 이벤트다. */
         List<AlightingAwarePassEvent> hourEvents() {
             if (hourEvents == null) {
                 hourEvents = events.stream()
@@ -174,7 +187,7 @@ public final class AlightingAwareBatchContext {
         }
 
         /**
-         * 한 정류장의 최근 한 시간 편차 비율과 사건 수를 {@code [편차 / (수 + 1), 수]}로 돌려준다. 돌려준 배열은 바꾸지 않는다.
+         * 한 정류장의 최근 한 시간 편차 비율과 이벤트 수를 {@code [편차 / (수 + 1), 수]}로 반환한다. 반환한 배열은 바꾸지 않는다.
          */
         double[] stopSurplus(final int stop) {
             double[] cell = surplusByStop.get(stop);
@@ -203,8 +216,9 @@ public final class AlightingAwareBatchContext {
         }
     }
 
-    /** 한 정류장의 마지막 여유 통과 이후 만석 통과 수와 탑승 누계다. */
+    /** 마지막으로 좌석 여유가 있었던 통과 이후의 만석 통과 수와 누적 탑승객 수다. */
     static final class QueueState {
+
         private Instant clear;
         private double full;
         private double boarded;

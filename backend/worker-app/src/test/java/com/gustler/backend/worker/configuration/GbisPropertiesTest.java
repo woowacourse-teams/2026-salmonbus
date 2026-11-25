@@ -696,7 +696,7 @@ class GbisPropertiesTest {
             .withConfiguration(
                 AutoConfigurations.of(
                     ConfigurationPropertiesAutoConfiguration.class))
-            .withUserConfiguration(CollectionConfig.class);
+            .withUserConfiguration(CollectionSchedulingConfiguration.class);
     }
 
     private static List<String> aliasesOf(

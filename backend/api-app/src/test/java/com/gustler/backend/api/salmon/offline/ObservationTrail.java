@@ -16,11 +16,11 @@ import java.util.OptionalInt;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * 판정 시각 뒤의 차량 관측에서 실제 결과를 읽는다. 노선 판본의 관측을 처음 쓸 때 한 번 읽어 차량별로 들고 있는다.
+ * 판정 시각 뒤의 차량 관측에서 실제 결과를 읽는다. 노선 버전의 관측을 처음 쓸 때 한 번 읽어 차량별로 보관한다.
  * 판정 입력을 만들 때는 쓰지 않는다(판정 시각 뒤의 자료다).
  */
 final class ObservationTrail {
-    /** 제품 채점이 예측과 통과를 맞추는 창(ScoringStage.MATCH_WINDOW)과 같다. */
+    /** 제품 정산이 예측과 통과를 맞추는 창(ScoringStage.MATCH_WINDOW)과 같다. */
     private static final Duration LONGEST_WAIT = Duration.ofHours(2);
 
     enum Timeliness { IN_TIME, LATE, UNSURE }

@@ -6,6 +6,7 @@ import java.util.List;
 
 /** 선택적인 관측 수신자. 업무 저장소를 다시 조회하지 않는다. */
 public interface ForecastTelemetry {
+
     ForecastTelemetry NONE = new ForecastTelemetry() {
     };
 
@@ -16,9 +17,9 @@ public interface ForecastTelemetry {
     }
 
     /**
-     * 채점이 예측을 닫고 그 결과 줄을 새로 저장했다고 알린다. 저장을 커밋한 뒤에 부르며 한 예측은 한 번만 알린다.
+     * 정산이 예측을 닫고 그 결과 줄을 새로 저장했다고 알린다. 저장을 커밋한 뒤에 호출하며 한 예측은 한 번만 알린다.
      *
-     * @param closed 새로 저장한 줄로 닫힌 예측
+     * @param closed 새로 저장한 행으로 정산을 마친 예측
      */
     default void closed(List<ForecastClosed> closed) {
     }

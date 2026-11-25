@@ -2,13 +2,12 @@ package com.gustler.backend.worker.integration.observations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse;
-import com.gustler.backend.observations.api.CollectionQualityHook;
-import com.gustler.backend.observations.api.VehicleObservationsStored;
-import com.gustler.backend.observations.application.ObservationBatchLedger;
-import com.gustler.backend.observations.application.ObservationLoader;
+import com.gustler.backend.observations.api.ObservationSeatQualityChecker;
+import com.gustler.backend.observations.application.CollectionBatchService;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
 import com.gustler.backend.quota.api.CallQuota;
@@ -19,7 +18,6 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,10 +47,7 @@ class ObservationQualityIntegrationTest {
     private static final LocalDate KOREA_8_19 = LocalDate.of(2026, 8, 19);
 
     @Autowired
-    private ObservationBatchLedger ledger;
-
-    @Autowired
-    private ObservationLoader loader;
+    private CollectionBatchService ledger;
 
     @Autowired
     private JdbcClient jdbc;
@@ -78,11 +73,17 @@ class ObservationQualityIntegrationTest {
             INSERT INTO route_stop (route_version_id, stop_order, stop_id, name, direction, boarding_allowed)
             VALUES (?, 1, ?, '범계역', 'UP', true), (?, 2, ?, '안양대교(경유)', 'UP', false),
                    (?, 3, '208000069', '안양역', 'DOWN', true)
-            """).params(routeVersionId, STOP_205000217, routeVersionId, STOP_277103149, routeVersionId).update();
+            """).params(
+                    routeVersionId,
+                    STOP_205000217,
+                    routeVersionId,
+                    STOP_277103149,
+                    routeVersionId
+            ).update();
 
-        batchId = ledger.reserve(new CollectionPlan(routeVersionId, SCHEDULED_AT, "quality-integration"), RESERVED_AT)
+        batchId = ledger.prepare(new CollectionPlan(routeVersionId, SCHEDULED_AT, "quality-integration"), RESERVED_AT)
             .batchId();
-        ledger.markDispatching(batchId, RESERVED_AT, REQUESTED_AT, "a");
+
     }
 
     @AfterEach
@@ -99,26 +100,40 @@ class ObservationQualityIntegrationTest {
     @Test
     void 차종_기준을_넘으면_원값을_보존하고_편도_조사를_등록하지_않는다() {
         // given
-        List<BusLocationResponse.BusLocation> buses = List.of(bus(VEHICLE_204000206, 1, STOP_205000217, 2, 71),
-            bus(VEHICLE_204003542, 2, STOP_277103149, 0, 43));
+        List<BusLocationResponse.BusLocation> buses = List.of(bus(
+                VEHICLE_204000206,
+                1,
+                STOP_205000217,
+                2,
+                71
+        ),
+            bus(
+                    VEHICLE_204003542,
+                    2,
+                    STOP_277103149,
+                    0,
+                    43
+            ));
 
         // when
         loadBuses(buses);
 
         // then
-        assertThat(jdbc.sql(
-            "SELECT count(*) FROM information_schema.tables WHERE table_name='trip_quality_rebuild' AND CAST(? AS bigint)>0")
-            .param(routeVersionId).query(Integer.class).single()).isZero();
-        assertThat(jdbc
-            .sql(
-                "SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename='stop_demand_rebuild_request' ")
-            .query(Integer.class).single()).isZero();
-        assertThat(readReportedSeats(VEHICLE_204000206)).containsExactly(71, null, "REVIEW");
-        assertThat(jdbc.sql("""
-            SELECT remaining_seats FROM operational_observation WHERE observation_batch_id = ?
-            ORDER BY source_row_number
-            """).param(batchId).query(Integer.class).list()).containsExactly(null, 43);
-        assertThat(observationCount()).isEqualTo(2);
+        assertSoftly(checks -> {
+            checks.assertThat(jdbc.sql(
+                "SELECT count(*) FROM information_schema.tables WHERE table_name='trip_quality_rebuild' AND CAST(? AS bigint)>0")
+                .param(routeVersionId).query(Integer.class).single()).isZero();
+            checks.assertThat(jdbc
+                .sql(
+                    "SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename='stop_demand_rebuild_request' ")
+                .query(Integer.class).single()).isZero();
+            checks.assertThat(readReportedSeats(VEHICLE_204000206)).containsExactly(71, null, "REVIEW");
+            checks.assertThat(jdbc.sql("""
+                SELECT remaining_seats FROM operational_observation WHERE observation_batch_id = ?
+                ORDER BY source_row_number
+                """).param(batchId).query(Integer.class).list()).containsExactly(null, 43);
+            checks.assertThat(observationCount()).isEqualTo(2);
+        });
     }
 
     @Test
@@ -129,59 +144,93 @@ class ObservationQualityIntegrationTest {
         jdbc.sql("""
             INSERT INTO vehicle_capacity (source_id, vehicle_id, capacity, evidence_at, verified_seat_limit)
             VALUES ('GBIS', ?, 44, ?, 49), ('GBIS', ?, 44, ?, 45)
-            """).params(verified49, SCHEDULED_AT, verified45, SCHEDULED_AT).update();
-        List<BusLocationResponse.BusLocation> buses = List.of(bus(verified49, 1, STOP_205000217, 2, 49),
-            bus(verified45, 2, STOP_277103149, 0, 68));
+            """).params(
+                    verified49,
+                    SCHEDULED_AT,
+                    verified45,
+                    SCHEDULED_AT
+            ).update();
+        List<BusLocationResponse.BusLocation> buses = List.of(bus(
+                verified49,
+                1,
+                STOP_205000217,
+                2,
+                49
+        ),
+            bus(
+                    verified45,
+                    2,
+                    STOP_277103149,
+                    0,
+                    68
+            ));
 
         // when
         loadBuses(buses);
 
         // then
-        assertThat(readReportedSeats(verified49)).containsExactly(null, 49, null);
-        assertThat(readReportedSeats(verified45)).containsExactly(68, null, "OUTLIER");
-        assertThat(jdbc.sql("""
-            SELECT capacity FROM vehicle_capacity WHERE source_id = 'GBIS' AND vehicle_id IN (?, ?)
-            ORDER BY capacity
-            """).params(verified49, verified45).query(Integer.class).list()).containsExactly(44, 49);
+        assertSoftly(checks -> {
+            checks.assertThat(readReportedSeats(verified49)).containsExactly(null, 49, null);
+            checks.assertThat(readReportedSeats(verified45)).containsExactly(68, null, "OUTLIER");
+            checks.assertThat(jdbc.sql("""
+                SELECT capacity FROM vehicle_capacity WHERE source_id = 'GBIS' AND vehicle_id IN (?, ?)
+                ORDER BY capacity
+                """).params(verified49, verified45).query(Integer.class).list()).containsExactly(44, 49);
+        });
     }
 
     @Test
     void 일반형이_연속으로_46석과_68석을_보고해도_정원은_45석에_머문다() {
         // given
         String vehicleId = "ordinary-capacity-test";
-        loadBuses(List.of(bus(vehicleId, 1, STOP_205000217, 2, 45)));
+        loadBuses(List.of(bus(
+                vehicleId,
+                1,
+                STOP_205000217,
+                2,
+                45
+        )));
 
         // when
         saveLaterSeats(vehicleId, 46, 1);
         saveLaterSeats(vehicleId, 68, 2);
 
         // then
-        assertThat(jdbc.sql("""
-            SELECT capacity FROM vehicle_capacity WHERE source_id = 'GBIS' AND vehicle_id = ?
-            """).param(vehicleId).query(Integer.class).single()).isEqualTo(45);
-        assertThat(jdbc.sql("""
-            SELECT reported_remaining_seats FROM vehicle_observation
-            WHERE route_version_id = ? AND vehicle_id = ? AND seat_quality_status = 'REVIEW'
-            ORDER BY observation_batch_id
-            """).params(routeVersionId, vehicleId).query(Integer.class).list()).containsExactly(46, 68);
-        assertThat(jdbc
-            .sql(
-                """
-                    SELECT count(*) FROM information_schema.tables WHERE table_name='trip_quality_rebuild' AND CAST(? AS bigint)>0
-                    """)
-            .param(routeVersionId).query(Integer.class).single()).isZero();
+        assertSoftly(checks -> {
+            checks.assertThat(jdbc.sql("""
+                SELECT capacity FROM vehicle_capacity WHERE source_id = 'GBIS' AND vehicle_id = ?
+                """).param(vehicleId).query(Integer.class).single()).isEqualTo(45);
+            checks.assertThat(jdbc.sql("""
+                SELECT reported_remaining_seats FROM vehicle_observation
+                WHERE route_version_id = ? AND vehicle_id = ? AND seat_quality_status = 'REVIEW'
+                ORDER BY observation_batch_id
+                """).params(routeVersionId, vehicleId).query(Integer.class).list()).containsExactly(46, 68);
+            checks.assertThat(jdbc
+                .sql(
+                    """
+                        SELECT count(*) FROM information_schema.tables WHERE table_name='trip_quality_rebuild' AND CAST(? AS bigint)>0
+                        """)
+                .param(routeVersionId).query(Integer.class).single()).isZero();
+        });
     }
 
     private void saveLaterSeats(String vehicleId, final int seats, final int offsetMinutes) {
         OffsetDateTime scheduledAt = SCHEDULED_AT.plusMinutes(offsetMinutes);
         OffsetDateTime requestedAt = REQUESTED_AT.plusMinutes(offsetMinutes);
-        final long laterBatchId = ledger
-            .reserve(new CollectionPlan(routeVersionId, scheduledAt, "seat-quality-" + offsetMinutes), requestedAt)
+        final long laterBatchId = ledger.prepare(new CollectionPlan(routeVersionId, scheduledAt,
+            "seat-quality-" + offsetMinutes), requestedAt)
             .batchId();
-        ledger.markDispatching(laterBatchId, requestedAt, requestedAt, "a");
-        List<BusLocationResponse.BusLocation> buses = List.of(bus(vehicleId, 1, STOP_205000217, 2, seats));
-        loader.load(laterBatchId, GbisObservationMapper.from(new GbisLocationResult.Success(QUERY_TIME, buses)),
-            GbisObservationMapper.collect(buses), RESPONSE_RECEIVED_AT.plusMinutes(offsetMinutes));
+
+        List<BusLocationResponse.BusLocation> buses = List.of(bus(
+                vehicleId,
+                1,
+                STOP_205000217,
+                2,
+                seats
+        ));
+        ledger.conclude(laterBatchId,
+            receivedAt -> GbisObservationMapper.response(new GbisLocationResult.Success(QUERY_TIME, buses), receivedAt),
+            RESPONSE_RECEIVED_AT.plusMinutes(offsetMinutes));
     }
 
     private List<Object> readReportedSeats(String vehicleId) {
@@ -195,24 +244,38 @@ class ObservationQualityIntegrationTest {
     @Test
     void 정상_관측을_저장하면_편도와_조사_기록을_만들지_않는다() {
         // given
-        List<BusLocationResponse.BusLocation> buses = List.of(bus(VEHICLE_204000206, 1, STOP_205000217, 2, 44));
+        List<BusLocationResponse.BusLocation> buses = List.of(bus(
+                VEHICLE_204000206,
+                1,
+                STOP_205000217,
+                2,
+                44
+        ));
 
         // when
         loadBuses(buses);
 
         // then
-        assertThat(jdbc.sql(
-            "SELECT count(*) FROM information_schema.tables WHERE table_name='trip_quality_rebuild' AND CAST(? AS bigint)>0")
-            .param(routeVersionId).query(Integer.class).single()).isZero();
-        assertThat(jdbc.sql("SELECT vehicle_trip_key FROM vehicle_observation WHERE observation_batch_id=?")
-            .param(batchId).query(String.class).list()).containsExactly((String) null);
+        assertSoftly(checks -> {
+            checks.assertThat(jdbc.sql(
+                "SELECT count(*) FROM information_schema.tables WHERE table_name='trip_quality_rebuild' AND CAST(? AS bigint)>0")
+                .param(routeVersionId).query(Integer.class).single()).isZero();
+            checks.assertThat(jdbc.sql("SELECT vehicle_trip_key FROM vehicle_observation WHERE observation_batch_id=?")
+                .param(batchId).query(String.class).list()).containsExactly((String) null);
+        });
     }
 
     @Test
     void 품질_처리가_실패하면_관측과_완료_상태는_롤백되고_전송_기록은_남는다() {
         // given
         failingQualityHook.fail = true;
-        BusLocationResponse.BusLocation bus = bus(VEHICLE_204000206, 1, STOP_205000217, 2, 71);
+        BusLocationResponse.BusLocation bus = bus(
+                VEHICLE_204000206,
+                1,
+                STOP_205000217,
+                2,
+                71
+        );
 
         // when
         Throwable caughtFailure = catchThrowable(
@@ -222,24 +285,28 @@ class ObservationQualityIntegrationTest {
                 RESPONSE_RECEIVED_AT));
 
         // then
-        assertThat(caughtFailure).isNotNull().isInstanceOf(IllegalStateException.class).hasMessage("품질 처리 실패");
-        assertThat(columnOf("outcome", String.class)).isEqualTo("DISPATCHING");
-        assertThat(columnOf("requested_at", OffsetDateTime.class)).isEqualTo(REQUESTED_AT);
-        assertThat(columnOf("response_received_at", OffsetDateTime.class)).isNull();
-        assertThat(jdbc.sql("""
-            SELECT reserved_calls FROM daily_call_quota
-            WHERE provider = ? AND api_service = ? AND kst_date = ?
-            """).params(CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(), KOREA_8_19)
-            .query(Integer.class).single()).isEqualTo(1);
-        assertThat(observationCount()).isZero();
-        assertThat(jdbc.sql(
-            "SELECT count(*) FROM information_schema.tables WHERE table_name='trip_quality_rebuild' AND CAST(? AS bigint)>0")
-            .param(routeVersionId).query(Integer.class).single()).isZero();
+        assertSoftly(checks -> {
+            checks.assertThat(caughtFailure).isNotNull()
+                .isInstanceOf(IllegalStateException.class).hasMessage("품질 처리 실패");
+            checks.assertThat(columnOf("outcome", String.class)).isEqualTo("DISPATCHING");
+            checks.assertThat(columnOf("requested_at", OffsetDateTime.class)).isNull();
+            checks.assertThat(columnOf("response_received_at", OffsetDateTime.class)).isNull();
+            checks.assertThat(jdbc.sql("""
+                SELECT reserved_calls FROM daily_call_quota
+                WHERE provider = ? AND api_service = ? AND kst_date = ?
+                """).params(CallQuota.BUS_LOCATION.provider(), CallQuota.BUS_LOCATION.apiService(), KOREA_8_19)
+                .query(Integer.class).single()).isEqualTo(1);
+            checks.assertThat(observationCount()).isZero();
+            checks.assertThat(jdbc.sql(
+                "SELECT count(*) FROM information_schema.tables WHERE table_name='trip_quality_rebuild' AND CAST(? AS bigint)>0")
+                .param(routeVersionId).query(Integer.class).single()).isZero();
+        });
     }
 
     private void loadBuses(List<BusLocationResponse.BusLocation> buses) {
-        loader.load(batchId, GbisObservationMapper.from(new GbisLocationResult.Success(QUERY_TIME, buses)),
-            GbisObservationMapper.collect(buses), RESPONSE_RECEIVED_AT);
+        ledger.conclude(batchId,
+            receivedAt -> GbisObservationMapper.response(new GbisLocationResult.Success(QUERY_TIME, buses), receivedAt),
+            RESPONSE_RECEIVED_AT);
     }
 
     private static BusLocationResponse.BusLocation bus(
@@ -249,8 +316,19 @@ class ObservationQualityIntegrationTest {
         final int runningState,
         final int remainingSeats
     ) {
-        return new BusLocationResponse.BusLocation("경기70아0001", vehicleId, 0, ROUTE_3330, 11, stopId, stopOrder,
-            runningState, remainingSeats, 3, 1);
+        return new BusLocationResponse.BusLocation(
+                "경기70아0001",
+                vehicleId,
+                0,
+                ROUTE_3330,
+                11,
+                stopId,
+                stopOrder,
+                runningState,
+                remainingSeats,
+                3,
+                1
+        );
     }
 
     private int observationCount() {
@@ -272,15 +350,14 @@ class ObservationQualityIntegrationTest {
     }
 
     @Order(Ordered.LOWEST_PRECEDENCE)
-    static class FailingQualityHook implements CollectionQualityHook {
+    static class FailingQualityHook implements ObservationSeatQualityChecker {
         private boolean fail;
 
         @Override
-        public Set<Long> observationsStored(VehicleObservationsStored observations) {
+        public void observationsStored(final long batchId, final long routeVersionId, final boolean hasPositiveSeats) {
             if (fail) {
                 throw new IllegalStateException("품질 처리 실패");
             }
-            return Set.of();
         }
     }
 }

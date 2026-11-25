@@ -1,7 +1,5 @@
 package com.gustler.backend.forecasting.application.deployment;
 
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.forecasting.domain.deployment.ActiveModelDeployment;
@@ -9,13 +7,17 @@ import com.gustler.backend.forecasting.domain.deployment.ModelDeploymentReposito
 import com.gustler.backend.forecasting.domain.deployment.ModelRelease;
 import com.gustler.backend.forecasting.domain.deployment.RuntimeSnapshot;
 import com.gustler.backend.forecasting.domain.deployment.StagedModelDeployment;
+import com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope;
+import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
 
 /**
  * 활성 배포와 적재된 계수의 식별 정보가 섞이지 않는지 확인한다.
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.io.TempDir;
  * 계산은 A 계수로 하고 DB에는 B의 예보로 기록하는 상태가 된다.
  */
 class ActiveForecastRuntimeResolverTest {
+
     @TempDir
     Path directory;
 
@@ -68,10 +71,13 @@ class ActiveForecastRuntimeResolverTest {
     @Test
     void 배포_행의_출시_식별자가_올라온_계수와_다르면_아무것도_안_낸다() {
         // given
-        // ACTIVE 행은 B 인데 메모리에는 A 계수가 올라와 있는 상태다
         ModelRelease bundle = loaded();
         ActiveModelDeployment other = new ActiveModelDeployment(
-            7L, bundle.featureContractVersion(), "other-release-0002", bundle.bundleDigest());
+                7L,
+                bundle.featureContractVersion(),
+                "other-release-0002",
+                bundle.bundleDigest()
+        );
 
         // when
         Optional<RuntimeSnapshot> actual = resolver(other, holderOf(bundle)).resolveActive();
@@ -85,7 +91,11 @@ class ActiveForecastRuntimeResolverTest {
         // given
         ModelRelease bundle = loaded();
         ActiveModelDeployment other = new ActiveModelDeployment(
-            7L, bundle.featureContractVersion(), bundle.releaseId(), "a".repeat(64));
+                7L,
+                bundle.featureContractVersion(),
+                bundle.releaseId(),
+                "a".repeat(64)
+        );
 
         // when
         Optional<RuntimeSnapshot> actual = resolver(other, holderOf(bundle)).resolveActive();
@@ -94,13 +104,17 @@ class ActiveForecastRuntimeResolverTest {
         assertThat(actual).isEmpty();
     }
 
+    /** 입력 규칙 버전이 다르면 같은 계수로도 다른 의미의 값을 계산한다. */
     @Test
     void 배포_행의_입력_규칙_버전이_올라온_계수와_다르면_아무것도_안_낸다() {
         // given
-        // 계수는 같은데 입력을 만드는 규칙이 다르면 다른 뜻의 입력에 계수를 끼우게 된다
         ModelRelease bundle = loaded();
         ActiveModelDeployment other = new ActiveModelDeployment(
-            7L, "seat-feature-contract-v9", bundle.releaseId(), bundle.bundleDigest());
+                7L,
+                "seat-feature-contract-v9",
+                bundle.releaseId(),
+                bundle.bundleDigest()
+        );
 
         // when
         Optional<RuntimeSnapshot> actual = resolver(other, holderOf(bundle)).resolveActive();
@@ -118,24 +132,17 @@ class ActiveForecastRuntimeResolverTest {
             resolver(deploymentOf(first), bundles).resolveActive().orElseThrow();
 
         // when
-        // 도중에 다른 계수가 올라온다
         bundles.add(loadedInto(directory.resolve("next")));
 
         // then
-        // 이미 받아 든 것은 안 바뀐다
         assertThat(taken.bundleDigest()).isEqualTo(first.bundleDigest());
     }
 
-    private ActiveForecastRuntimeResolver resolver(
-        ActiveModelDeployment deployment,
-        LoadedModelRegistry bundles
-    ) {
+    private ActiveForecastRuntimeResolver resolver(ActiveModelDeployment deployment, LoadedModelRegistry bundles) {
         return new ActiveForecastRuntimeResolver(repositoryOf(deployment), bundles);
     }
 
-    private static ModelDeploymentRepository repositoryOf(
-        ActiveModelDeployment deployment
-    ) {
+    private static ModelDeploymentRepository repositoryOf(ActiveModelDeployment deployment) {
         return new ModelDeploymentRepository() {
             @Override
             public Optional<ActiveModelDeployment> findActive() {
@@ -143,31 +150,27 @@ class ActiveForecastRuntimeResolverTest {
             }
 
             @Override
-            public long stage(
-                StagedModelDeployment staged
-            ) {
+            public long stage(StagedModelDeployment staged) {
                 throw new UnsupportedOperationException();
             }
 
             @Override
-            public boolean promoteToActive(
-                final long deploymentId
-            ) {
+            public boolean promoteToActive(final long deploymentId) {
                 throw new UnsupportedOperationException();
             }
         };
     }
 
-    private static ActiveModelDeployment deploymentOf(
-        ModelRelease bundle
-    ) {
+    private static ActiveModelDeployment deploymentOf(ModelRelease bundle) {
         return new ActiveModelDeployment(
-            7L, bundle.featureContractVersion(), bundle.releaseId(), bundle.bundleDigest());
+                7L,
+                bundle.featureContractVersion(),
+                bundle.releaseId(),
+                bundle.bundleDigest()
+        );
     }
 
-    private static LoadedModelRegistry holderOf(
-        ModelRelease bundle
-    ) {
+    private static LoadedModelRegistry holderOf(ModelRelease bundle) {
         LoadedModelRegistry bundles = new LoadedModelRegistry();
         bundles.add(bundle);
         return bundles;
@@ -177,16 +180,18 @@ class ActiveForecastRuntimeResolverTest {
         return loadedInto(directory.resolve("current"));
     }
 
-    private static ModelRelease loadedInto(
-        Path directory
-    ) {
+    private static ModelRelease loadedInto(Path directory) {
         try {
             Files.createDirectories(directory);
         } catch (IOException error) {
             throw new UncheckedIOException(error);
         }
-        return ModelRelease.alighting("runtime-test", "b".repeat(64), "2026-10-21T00:00:00Z",
-            new com.gustler.backend.forecasting.domain.deployment.SupportedForecastScope(List.of("3330", "1650")),
-            org.mockito.Mockito.mock(com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatForecastModel.class));
+        return ModelRelease.alighting(
+                "runtime-test",
+                "b".repeat(64),
+                "2026-10-21T00:00:00Z",
+                new SupportedForecastScope(List.of("3330", "1650")),
+                Mockito.mock(AlightingAwareSeatForecastModel.class)
+        );
     }
 }

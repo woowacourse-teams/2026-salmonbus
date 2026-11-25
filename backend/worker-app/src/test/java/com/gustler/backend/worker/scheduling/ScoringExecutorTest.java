@@ -3,6 +3,10 @@ package com.gustler.backend.worker.scheduling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
@@ -13,11 +17,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 
 @ExtendWith(OutputCaptureExtension.class)
 class ScoringExecutorTest {
+
     private static final Duration WAIT = Duration.ofSeconds(10);
 
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
@@ -31,31 +37,66 @@ class ScoringExecutorTest {
     }
 
     @Test
-    void 넣은_순서대로_채점_전용_스레드_하나에서_실행하고_실패한_일_뒤에도_이어_간다() throws InterruptedException {
+    void 넣은_순서대로_채점_전용_스레드_하나에서_실행하고_실패한_일_뒤에도_이어_간다(CapturedOutput output) throws InterruptedException {
         // given
         executor = new ScoringExecutor(10, WAIT, meters);
         List<String> threads = new CopyOnWriteArrayList<>();
         List<Integer> order = new CopyOnWriteArrayList<>();
         CountDownLatch done = new CountDownLatch(4);
 
-        // when
-        for (int index = 1; index <= 5; index++) {
-            final int id = index;
-            executor.submit(() -> {
-                if (id == 3) {
-                    throw new IllegalStateException("실패 흉내");
-                }
-                threads.add(Thread.currentThread().getName());
-                order.add(id);
-                done.countDown();
-            });
-        }
+        Logger logger = (Logger) LoggerFactory.getLogger(ScoringExecutor.class);
+        ListAppender<ILoggingEvent> events = new ListAppender<>();
+        events.start();
+        logger.addAppender(events);
 
-        // then
-        assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
-        assertThat(order).containsExactly(1, 2, 4, 5);
-        assertThat(threads).allSatisfy(name -> assertThat(name).startsWith(ScoringExecutor.THREAD_PREFIX))
-            .containsOnly(threads.getFirst());
+        try {
+            // when
+            for (int index = 1; index <= 5; index++) {
+                final int id = index;
+                executor.submit(() -> {
+                    if (id == 3) {
+                        throw new IllegalStateException(
+                            "private query",
+                            new IllegalArgumentException("private vehicle")
+                        );
+                    }
+                    threads.add(Thread.currentThread().getName());
+                    order.add(id);
+                    done.countDown();
+                });
+            }
+
+            // then
+            assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(threads).isNotEmpty();
+            assertSoftly(softly -> {
+                softly.assertThat(order).containsExactly(
+                        1,
+                        2,
+                        4,
+                        5
+                );
+                softly.assertThat(threads).allSatisfy(
+                    name -> softly.assertThat(name).startsWith(ScoringExecutor.THREAD_PREFIX)
+                )
+                    .containsOnly(threads.getFirst());
+                softly.assertThat(output.getAll())
+                    .contains("event=scoring_task_failed exceptionType=IllegalStateException")
+                    .doesNotContain("private query", "private vehicle");
+                softly.assertThat(events.list).filteredOn(
+                    event -> event.getFormattedMessage().equals(
+                        "event=scoring_task_failed exceptionType=IllegalStateException"
+                    )
+                )
+                    .singleElement().satisfies(event -> {
+                        softly.assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                        softly.assertThat(event.getThrowableProxy()).isNull();
+                    });
+            });
+        } finally {
+            logger.detachAppender(events);
+            events.stop();
+        }
     }
 
     @Test
@@ -156,7 +197,12 @@ class ScoringExecutorTest {
     void 컨텍스트가_닫힐_때_예보_실행_줄_바로_다음에_멈추고_일시_정지에는_참여하지_않는다() {
         // when
         executor = new ScoringExecutor(1, WAIT, null);
-        RouteLanes lanes = new RouteLanes(1, 1, WAIT, null);
+        RouteLanes lanes = new RouteLanes(
+                1,
+                1,
+                WAIT,
+                null
+        );
 
         // then
         assertSoftly(softly -> {

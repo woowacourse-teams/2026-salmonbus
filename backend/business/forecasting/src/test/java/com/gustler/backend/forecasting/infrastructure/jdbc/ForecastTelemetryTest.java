@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class ForecastTelemetryTest {
+
     @Autowired
     JdbcClient jdbc;
     @Autowired
@@ -39,7 +40,13 @@ class ForecastTelemetryTest {
     void 예보_실행을_저장한_배치마다_수신_시각과_예측_수를_한_번씩_알리고_입력_부족으로_끝난_배치는_알리지_않는다() {
         // given
         ForecastHarness harness = new ForecastHarness(
-            new ForecastHarness.Beans(jdbc, transactions, deployments, records, passes), 20261304L,
+            new ForecastHarness.Beans(
+                    jdbc,
+                    transactions,
+                    deployments,
+                    records,
+                    passes
+            ), 20261304L,
             Duration.ofMinutes(60));
         harness.start();
         harness.fromVerifiedOrigin();
@@ -78,15 +85,26 @@ class ForecastTelemetryTest {
             WHERE observation_batch_id IN (:batches) AND outcome
             """ + outcomeCondition + " ORDER BY confirmed_at, observation_batch_id")
             .param("batches", batches)
-            .query((row, index) -> new Published(row.getLong(1), row.getLong(2),
-                row.getObject(3, OffsetDateTime.class).toInstant(), row.getInt(4)))
+            .query((row, index) -> new Published(
+                    row.getLong(1),
+                    row.getLong(2),
+                    row.getObject(3, OffsetDateTime.class).toInstant(),
+                    row.getInt(4)
+            ))
             .list();
     }
 
-    private record Published(long routeId, long routeVersionId, Instant observedAt, int predictions) {
+    private record Published(
+        long routeId,
+        long routeVersionId,
+        Instant observedAt,
+        int predictions
+    ) {
+
     }
 
     private static final class RecordingTelemetry implements ForecastTelemetry {
+
         private final List<Published> published = new ArrayList<>();
 
         @Override
@@ -96,7 +114,12 @@ class ForecastTelemetryTest {
             Instant observedAt,
             final int predictions
         ) {
-            published.add(new Published(routeId, routeVersionId, observedAt, predictions));
+            published.add(new Published(
+                    routeId,
+                    routeVersionId,
+                    observedAt,
+                    predictions
+            ));
         }
     }
 }

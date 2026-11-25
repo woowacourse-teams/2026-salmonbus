@@ -25,4 +25,5 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
     }
 )
 public @interface ForecastingIntegrationTest {
+
 }

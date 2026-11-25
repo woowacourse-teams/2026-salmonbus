@@ -1,18 +1,18 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.api.ForecastPolicy;
+import com.gustler.backend.forecasting.api.forecast.ForecastBatchEvents;
 import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
 import com.gustler.backend.forecasting.api.forecast.ObservationBatchSeen;
-import com.gustler.backend.forecasting.api.forecast.PassClosed;
 import com.gustler.backend.forecasting.application.deployment.ActiveForecastRuntimeResolver;
 import com.gustler.backend.forecasting.application.deployment.BundleActivation;
 import com.gustler.backend.forecasting.application.deployment.LoadedModelRegistry;
 import com.gustler.backend.forecasting.application.forecast.ForecastEvents;
 import com.gustler.backend.forecasting.application.forecast.ForecastRecordStore;
 import com.gustler.backend.forecasting.application.forecast.ForecastStage;
+import com.gustler.backend.forecasting.application.forecast.ObservationBatchRead;
 import com.gustler.backend.forecasting.application.forecast.ReplaySource;
 import com.gustler.backend.forecasting.application.forecast.RouteForecastState;
 import com.gustler.backend.forecasting.application.forecast.RunForecastsService;
@@ -48,24 +48,23 @@ import java.util.Random;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보 경로가 관측 흐름을 처리해 저장한 예측값·실행 결과·닫힌 통과를 실제 DB로 본다. 기대값은 기준 구현(dev {@code e98ae3ea}의
- * 발행)이 같은 흐름에 낸 값이다({@link ForecastValueBaseline}). 착수 시각은 시계에서 찍으므로, 배치마다 흐름이 정한 착수 시각을
+ * 예보 경로가 관측 흐름을 처리해 저장한 예측값, 실행 결과, 확정된 통과를 실제 DB로 본다. 기대값은 기준 구현(dev {@code e98ae3ea}의
+ * 발행)이 같은 흐름에 낸 값이다({@link ForecastValueBaseline}). 처리 시작 시각은 시계에서 찍으므로, 배치마다 흐름이 정한 처리 시작 시각을
  * 시계에 넣어 기대값과 조건을 맞춘다.
  *
- * <p>노선별 실행 줄은 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다. 흐름의 배치는 미리 모두 DB에 있고, 예보는
+ * <p>노선별 실행기는 넣는 즉시 같은 스레드에서 실행해 배치 순서를 시험이 정한다. 흐름의 배치는 미리 모두 DB에 있고, 예보는
  * 수집이 커밋한 것으로 친 배치만 본다({@link CommittedBatches}). 그래서 신호 하나가 그 배치 하나를 그 시각에 처리한다.
  */
 @ForecastingIntegrationTest
 @Transactional
 class RunForecastsServiceTest {
+
     private static final Instant EVENING = Instant.parse("2026-10-14T10:00:00Z");
     private static final Instant DAWN = Instant.parse("2026-10-15T20:00:00Z");
     private static final String SOURCE_ROUTE_ID = "234001739";
@@ -121,20 +120,17 @@ class RunForecastsServiceTest {
         assertRunOutcomes(harness, baseline);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void 입력_확정_시각만_남은_배치와_실행_기록이_있는_배치를_되감기가_이어_그_뒤의_예측값이_기준_기록과_같다(final boolean recorded) {
+    @Test
+    void 예보_실행_기록을_복구한_뒤의_예측값이_연속_실행과_같다() {
         // given
         Harness harness = new Harness(20261202L, Duration.ofHours(3));
         ForecastValueBaseline baseline = ForecastValueBaseline.read("forecast/transition-20261202");
         List<Long> batches = harness.batches();
         List<Long> before = batches.subList(0, batches.size() / 2);
         List<Long> after = batches.subList(batches.size() / 2, batches.size());
-        if (recorded) {
-            harness.start(Duration.ofHours(6), 20);
-            harness.fromVerifiedOrigin();
-            before.forEach(harness::forecast);
-        }
+        harness.start(Duration.ofHours(6), 20);
+        harness.fromVerifiedOrigin();
+        before.forEach(harness::forecast);
         harness.confirmInputs(baseline);
 
         // when
@@ -150,12 +146,38 @@ class RunForecastsServiceTest {
             softly.assertThat(comparison.newOnly()).isZero();
             softly.assertThat(comparison.baselineOnly()).isEmpty();
             softly.assertThat(harness.excluded()).isZero();
-            if (recorded) {
-                softly.assertThat(jdbc.sql("""
+            softly.assertThat(jdbc.sql("""
                     SELECT count(*) FROM forecast_run r JOIN observation_batch b ON b.id=r.observation_batch_id
                     WHERE b.id IN (:batches) AND r.confirmed_at<>b.input_confirmed_at
                     """).param("batches", before).query(Long.class).single()).isZero();
-            }
+        });
+    }
+
+    @Test
+    void 옛_착수시각만_있는_배치는_확정_이력으로_복구하지_않는다() {
+        // given
+        Harness harness = new Harness(20261202L, Duration.ofHours(3));
+        ForecastValueBaseline baseline = ForecastValueBaseline.read("forecast/transition-20261202");
+        List<Long> batches = harness.batches();
+        harness.confirmInputs(baseline);
+        final long first = batches.getFirst();
+        final long last = batches.getLast();
+        JdbcReplaySource source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
+
+        // when
+        ReplaySource.Read recovered = source.read(
+                harness.statistics(),
+                harness.receivedAt(first).minus(Duration.ofHours(6)),
+                harness.receivedAt(last).plusSeconds(90),
+                last
+        );
+        ObservationBatchRead pending = source.readBatch(first).orElseThrow();
+
+        // then
+        assertSoftly(softly -> {
+            softly.assertThat(recovered.batches()).isEmpty();
+            softly.assertThat(recovered.unforecastRuns()).isEmpty();
+            softly.assertThat(pending.batch().confirmedAt()).isNull();
         });
     }
 
@@ -166,7 +188,9 @@ class RunForecastsServiceTest {
         ForecastValueBaseline baseline = ForecastValueBaseline.read("forecast/short-replay-20261205");
         List<Long> batches = harness.batches();
         List<Long> after = batches.subList(batches.size() / 2, batches.size());
-        harness.confirmInputs(baseline);
+        harness.start(Duration.ofHours(6), 20);
+        harness.fromVerifiedOrigin();
+        batches.subList(0, batches.size() / 2).forEach(harness::forecast);
 
         // when
         harness.start(Duration.ofMinutes(45), 20);
@@ -187,8 +211,14 @@ class RunForecastsServiceTest {
     @Test
     void 노선_판본이_바뀌는_흐름에서도_예측값과_실행_결과와_닫힌_통과가_기준_기록과_같다() {
         // given
-        Harness harness = new Harness(EVENING, Duration.ofHours(4), EVENING.plus(Duration.ofHours(2)), 20261115L, true,
-            false);
+        Harness harness = new Harness(
+                EVENING,
+                Duration.ofHours(4),
+                EVENING.plus(Duration.ofHours(2)),
+                20261115L,
+                true,
+                false
+        );
         ForecastValueBaseline baseline = ForecastValueBaseline.read("forecast/version-switch-20261115");
         harness.start(Duration.ofHours(6), 20);
         harness.fromVerifiedOrigin();
@@ -218,7 +248,14 @@ class RunForecastsServiceTest {
     @Test
     void 시간_확장_모델이_없으면_출퇴근_범위_밖_배치는_범위_밖으로_남기고_범위_안_예측값은_기준_기록과_같다() {
         // given
-        Harness harness = new Harness(DAWN, Duration.ofMinutes(120), null, 7L, false, true);
+        Harness harness = new Harness(
+                DAWN,
+                Duration.ofMinutes(120),
+                null,
+                7L,
+                false,
+                true
+        );
         ForecastValueBaseline baseline = ForecastValueBaseline.read("forecast/rush-only-7");
         harness.start(Duration.ofHours(6), 20);
         harness.fromVerifiedOrigin();
@@ -302,8 +339,12 @@ class RunForecastsServiceTest {
                 harness.receivedAt(late).minusSeconds(60), 100))
                 .noneMatch(pending -> pending.observationBatchId() == late);
             ReplaySource.Read replay = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS)
-                .read(harness.statistics(), harness.receivedAt(late).minus(Duration.ofHours(1)),
-                    harness.receivedAt(late).plus(Duration.ofHours(1)), Long.MAX_VALUE);
+                .read(
+                        harness.statistics(),
+                        harness.receivedAt(late).minus(Duration.ofHours(1)),
+                        harness.receivedAt(late).plus(Duration.ofHours(1)),
+                        Long.MAX_VALUE
+                );
             softly.assertThat(replay.batches()).isNotEmpty().noneMatch(batch -> batch.observationBatchId() == late);
         });
     }
@@ -373,16 +414,21 @@ class RunForecastsServiceTest {
                 ForecastValueBaseline.Run expected = baseline.runs().get(harness.keys.batch(row.getLong(1)));
                 outcomes.merge(expected.outcome() + "->" + row.getString(2), 1L, Long::sum);
             });
-        assertThat(outcomes.keySet()).allSatisfy(pair -> {
-            String[] sides = pair.split("->");
-            assertThat(sides[1]).as(pair).isEqualTo(sides[0]);
+        assertSoftly(softly -> {
+            softly.assertThat(outcomes.keySet()).allSatisfy(pair -> {
+                String[] sides = pair.split("->");
+                softly.assertThat(sides[1]).as(pair).isEqualTo(sides[0]);
+            });
+            softly.assertThat(outcomes).containsKeys("EMPTY->EMPTY", "LATE->LATE", "PUBLISHED->PUBLISHED");
+            softly.assertThat(predictionCounts(harness, baseline)).isEqualTo(baseline.predictionCounts());
         });
-        assertThat(outcomes).containsKeys("EMPTY->EMPTY", "LATE->LATE", "PUBLISHED->PUBLISHED");
-        assertThat(predictionCounts(harness, baseline)).isEqualTo(baseline.predictionCounts());
     }
 
-    /** 기대값이 예측 수를 적어 둔 배치의 저장된 예측 수다. */
-    private Map<Integer, Integer> predictionCounts(Harness harness, ForecastValueBaseline baseline) {
+    /** 기대값이 예측 수를 기록해 둔 배치의 저장된 예측 수다. */
+    private Map<Integer, Integer> predictionCounts(
+        Harness harness,
+        ForecastValueBaseline baseline
+    ) {
         Map<Integer, Integer> counts = new HashMap<>();
         jdbc.sql("SELECT observation_batch_id,prediction_count FROM forecast_run WHERE route_id=?")
             .param(harness.stream.routeId())
@@ -397,6 +443,7 @@ class RunForecastsServiceTest {
 
     /** 흐름 하나와 예보 경로를 묶는다. */
     private final class Harness {
+
         private final ObservationStreamFixture.Stream stream;
         private final StreamKeys keys;
         private final Map<Long, Instant> intendedConfirmation = new HashMap<>();
@@ -417,12 +464,19 @@ class RunForecastsServiceTest {
         }
 
         private Harness(final long seed, Duration length) {
-            this(EVENING, length, null, seed, true, false);
+            this(
+                    EVENING,
+                    length,
+                    null,
+                    seed,
+                    true,
+                    false
+            );
         }
 
         /**
-         * @param versionSwitch 노선 판본이 바뀌는 시각. 비어 있으면 한 판본이다
-         * @param extended 시간 확장 모델을 함께 둘지
+         * @param versionSwitch 노선 버전이 바뀌는 시각. 비어 있으면 한 버전이다
+         * @param extended 시간 확장 모델을 같이 둘지
          * @param rushOnly 시간 확장 모델이 없을 때 출퇴근 범위 밖 배치를 예보하지 않을지
          */
         private Harness(
@@ -434,8 +488,15 @@ class RunForecastsServiceTest {
             final boolean rushOnly
         ) {
             this.rushOnly = rushOnly;
-            stream = ObservationStreamFixture.insert(jdbc, start, length, Duration.ofSeconds(30), versionSwitch,
-                seed, MODEL_ROUTE);
+            stream = ObservationStreamFixture.insert(
+                    jdbc,
+                    start,
+                    length,
+                    Duration.ofSeconds(30),
+                    versionSwitch,
+                    seed,
+                    MODEL_ROUTE
+            );
             keys = StreamKeys.of(jdbc, stream);
             jdbc.sql("""
                 SELECT id,input_confirmed_at,route_version_id,response_received_at,ingestion_origin,outcome
@@ -443,29 +504,60 @@ class RunForecastsServiceTest {
                 """).param("versions", versions())
                 .query(row -> {
                     intendedConfirmation.put(row.getLong(1), row.getObject(2, OffsetDateTime.class).toInstant());
-                    meta.put(row.getLong(1), new Meta(row.getLong(3),
-                        row.getObject(4, OffsetDateTime.class).toInstant(), row.getString(5), row.getString(6)));
+                    meta.put(row.getLong(1), new Meta(
+                            row.getLong(3),
+                            row.getObject(4, OffsetDateTime.class).toInstant(),
+                            row.getString(5),
+                            row.getString(6)
+                    ));
                 });
             jdbc.sql("UPDATE observation_batch SET input_confirmed_at=NULL WHERE route_version_id IN (:versions)")
                 .param("versions", versions()).update();
             stream.stopsByVersion().forEach((version, stops) -> stopsByVersion.put(version,
-                new RouteStops(version, SOURCE_ROUTE_ID, stops.stops(), stops.routeName())));
+                new RouteStops(
+                        version,
+                        SOURCE_ROUTE_ID,
+                        stops.stops(),
+                        stops.routeName()
+                )));
             model = model(seed, extended);
             runtime = activate(model);
         }
 
-        /** 예보 경로를 새로 띄운다. 노선 상태와 지표가 빈 채로 시작하므로 첫 배치가 되감는다. */
+        /** 예보 경로를 새로 띄운다. 노선 상태와 지표가 빈 채로 시작하므로 첫 배치가 복구한다. */
         private void start(Duration replayWindow, final int batchLimit) {
             meters = new SimpleMeterRegistry();
             JdbcReplaySource source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
-            ForecastAssembly.Sources sources = new ForecastAssembly.Sources(source, source, committed,
-                () -> Optional.of(runtime), this::versions, stopsByVersion::get);
+            ForecastAssembly.Sources sources = new ForecastAssembly.Sources(
+                    source,
+                    source,
+                    committed,
+                    () -> Optional.of(runtime),
+                    this::versions,
+                    stopsByVersion::get
+            );
             ForecastAssembly.Settings settings = new ForecastAssembly.Settings(
-                new ForecastPolicy(Duration.ofMinutes(10), batchLimit), replayWindow, replayWindow, rushOnly);
-            service = new ForecastAssembly(jdbc, transactions, clock, meters).forecast((key, task) -> {
-                task.run();
-                return true;
-            }, events, sources, cache, records, passes, settings);
+                    new ForecastPolicy(Duration.ofMinutes(10), batchLimit),
+                    replayWindow,
+                    rushOnly
+            );
+            service = new ForecastAssembly(
+                    jdbc,
+                    transactions,
+                    clock,
+                    meters
+            ).forecast(
+                    (key, task) -> {
+                        task.run();
+                        return true;
+                    },
+                    events,
+                    sources,
+                    cache,
+                    records,
+                    passes,
+                    settings
+            );
             clock.at = EVENING.plus(Duration.ofDays(2));
             service.pickUp();
         }
@@ -475,7 +567,7 @@ class RunForecastsServiceTest {
         }
 
         /**
-         * 기대값 파일에 적힌 배치에 입력 확정 시각을 넣는다. 예보 실행 기록이 없는 배치는 되감기가 이 시각을 착수 시각으로 읽는다.
+         * 기대값 파일의 처리 시작 시각을 옛 컬럼에 넣어, 예보 실행 기록만 조회하는지를 검증한다.
          */
         private void confirmInputs(ForecastValueBaseline baseline) {
             baseline.confirmed().forEach((ordinal, at) -> jdbc.sql(
@@ -483,7 +575,7 @@ class RunForecastsServiceTest {
                 .params(at.atOffset(ZoneOffset.UTC), keys.batchId(ordinal)).update());
         }
 
-        /** 수집 결과가 성공(줄 있음·빈 응답)인 배치를 처리 순서로. 예보 경로가 처리할 대상이다. */
+        /** 수집 결과가 성공(줄 있음, 빈 응답)인 배치를 처리 순서로. 예보 경로가 처리할 대상이다. */
         private List<Long> batches() {
             return stream.batches().stream().filter(batchId -> !meta.get(batchId).outcome().startsWith("FAILED"))
                 .toList();
@@ -540,7 +632,7 @@ class RunForecastsServiceTest {
             }
         }
 
-        /** 그 배치에서 예보하지 않은, 차량 번호가 있는 관측이다. 되감은 직후 빠진 차량을 관측 단위로 확인하는 데 쓴다. */
+        /** 그 배치에서 예보하지 않은, 차량 번호가 있는 관측이다. 복구한 직후 빠진 차량을 관측 단위로 확인하는 데 쓴다. */
         private List<Long> withheldObservations(final long batchId) {
             return jdbc.sql("""
                 SELECT o.id FROM vehicle_observation o
@@ -549,7 +641,7 @@ class RunForecastsServiceTest {
                 """).param(batchId).query(Long.class).list();
         }
 
-        /** 되감은 직후라 예보에서 뺀 차량 관측 수(두 사유의 합). */
+        /** 복구한 직후라 예보에서 뺀 차량 관측 수(두 사유의 합). */
         private double excluded() {
             return counter("excluded", ForecastStage.TRIP_START_UNKNOWN)
                 + counter("excluded", ForecastStage.REPLAY_HISTORY_INCOMPLETE);
@@ -578,15 +670,37 @@ class RunForecastsServiceTest {
         private AlightingAwareSeatForecastModel model(final long seed, final boolean extended) {
             Random random = new Random(seed);
             AlightingAwareSeatPredictor predictor = new AlightingAwareSeatPredictor(
-                ForecastTestSupport.stumps(88, NumericTreeEnsemble.Kind.REGRESSION, new double[] {10}, random),
-                ForecastTestSupport.stumps(88, NumericTreeEnsemble.Kind.MULTICLASS, new double[] {0, 0, 0}, random),
-                ForecastTestSupport.stumps(80, NumericTreeEnsemble.Kind.BINARY, new double[] {0}, random), 1.3);
+                    ForecastTestSupport.stumps(
+                            88,
+                            NumericTreeEnsemble.Kind.REGRESSION,
+                            new double[] {10},
+                            random
+                    ),
+                    ForecastTestSupport.stumps(
+                            88,
+                            NumericTreeEnsemble.Kind.MULTICLASS,
+                            new double[] {0, 0, 0},
+                            random
+                    ),
+                    ForecastTestSupport.stumps(
+                            80,
+                            NumericTreeEnsemble.Kind.BINARY,
+                            new double[] {0},
+                            random
+                    ),
+                    1.3
+            );
             Map<Integer, String> evidence = new HashMap<>();
             for (int order = 1; order <= ObservationStreamFixture.STOP_COUNT; order++) {
                 evidence.put(order, "{}");
             }
-            return new AlightingAwareSeatForecastModel(predictor, Map.of(MODEL_ROUTE, stream.statistics()),
-                Map.of(MODEL_ROUTE, evidence), ForecastTestSupport.digest(), extension(extended, random));
+            return new AlightingAwareSeatForecastModel(
+                    predictor,
+                    Map.of(MODEL_ROUTE, stream.statistics()),
+                    Map.of(MODEL_ROUTE, evidence),
+                    ForecastTestSupport.digest(),
+                    extension(extended, random)
+            );
         }
 
         /** 시간 확장 모델을 둘 때만 난수로 트리를 만든다. */
@@ -595,41 +709,65 @@ class RunForecastsServiceTest {
                 return Map.of();
             }
             return Map.of(MODEL_ROUTE, new ExtendedAlightingPredictor(
-                ForecastTestSupport.stumps(6, NumericTreeEnsemble.Kind.REGRESSION, new double[] {8}, random),
-                ForecastTestSupport.stumps(6, NumericTreeEnsemble.Kind.BINARY, new double[] {0}, random)));
+                ForecastTestSupport.stumps(
+                        6,
+                        NumericTreeEnsemble.Kind.REGRESSION,
+                        new double[] {8},
+                        random
+                ),
+                ForecastTestSupport.stumps(
+                        6,
+                        NumericTreeEnsemble.Kind.BINARY,
+                        new double[] {0},
+                        random
+                )));
         }
 
         private RuntimeSnapshot activate(AlightingAwareSeatForecastModel selected) {
             String digest = selected.bundleDigest();
-            ModelRelease release = ModelRelease.alighting("forecast-" + digest.substring(0, 8), digest,
-                EVENING.minusSeconds(86400).toString(), new SupportedForecastScope(List.of(MODEL_ROUTE)), selected);
+            ModelRelease release = ModelRelease.alighting(
+                    "forecast-" + digest.substring(0, 8),
+                    digest,
+                    EVENING.minusSeconds(86400).toString(),
+                    new SupportedForecastScope(List.of(MODEL_ROUTE)),
+                    selected
+            );
             LoadedModelRegistry registry = new LoadedModelRegistry();
             new BundleActivation(deployments, registry).activate(() -> release);
             return new ActiveForecastRuntimeResolver(deployments, registry).resolveActive().orElseThrow();
         }
     }
 
-    private record Meta(long version, Instant receivedAt, String origin, String outcome) {
+    private record Meta(
+        long version,
+        Instant receivedAt,
+        String origin,
+        String outcome
+    ) {
+
     }
 
     private static final class RecordingEvents implements ForecastEvents {
+
         private int seen;
         private int published;
         private int passes;
 
         @Override
-        public void batchSeen(ObservationBatchSeen batch) {
-            seen++;
-        }
-
-        @Override
-        public void forecastPublished(ForecastPublished batch) {
-            published++;
-        }
-
-        @Override
-        public void passesClosed(List<PassClosed> closed) {
-            passes += closed.size();
+        public void committed(ForecastBatchEvents batch) {
+            for (ForecastBatchEvents.Event event : batch.events()) {
+                switch (event) {
+                    case ObservationBatchSeen ignored -> {
+                        seen++;
+                    }
+                    case ForecastPublished ignored -> {
+                        published++;
+                    }
+                    case ForecastBatchEvents.ClosedPasses closed -> {
+                        passes += closed.passes().size();
+                    }
+                }
+            }
         }
     }
 }

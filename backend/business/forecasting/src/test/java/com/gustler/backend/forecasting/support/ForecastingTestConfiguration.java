@@ -5,7 +5,7 @@ import com.gustler.backend.forecasting.api.ForecastPolicy;
 import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
 import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
 import com.gustler.backend.forecasting.configuration.ForecastingConfiguration;
-import com.gustler.backend.observations.configuration.ObservationPersistenceConfiguration;
+import com.gustler.backend.observations.configuration.ObservationStorageConfiguration;
 import com.gustler.backend.support.PostgresTestContainer;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,8 +18,9 @@ import org.springframework.context.annotation.Import;
 @Configuration(proxyBeanMethods = false)
 @EnableAutoConfiguration
 @Import({PostgresTestContainer.class, ClockConfig.class, ForecastingConfiguration.class,
-    ObservationPersistenceConfiguration.class})
+    ObservationStorageConfiguration.class})
 class ForecastingTestConfiguration {
+
     @Bean
     ForecastPolicy forecastPolicy(
         @Value("${forecast.staleness}") Duration staleness,
@@ -28,7 +29,7 @@ class ForecastingTestConfiguration {
         return new ForecastPolicy(staleness, batchLimit);
     }
 
-    /** 실행하는 앱이 등록하는 노선별 실행 줄 대신, 넣은 일을 부른 스레드에서 바로 실행한다. */
+    /** 실행하는 앱이 등록하는 노선별 실행기 대신, 넣은 일을 부른 스레드에서 바로 실행한다. */
     @Bean
     ForecastLanes forecastLanes() {
         return (routeKey, task) -> {
@@ -37,7 +38,7 @@ class ForecastingTestConfiguration {
         };
     }
 
-    /** 실행하는 앱이 등록하는 채점 줄 대신, 넣은 일을 부른 스레드에서 바로 실행한다. */
+    /** 실행하는 앱이 등록하는 정산 큐 대신, 넣은 일을 부른 스레드에서 바로 실행한다. */
     @Bean
     ScoringFeed scoringFeed() {
         return task -> {

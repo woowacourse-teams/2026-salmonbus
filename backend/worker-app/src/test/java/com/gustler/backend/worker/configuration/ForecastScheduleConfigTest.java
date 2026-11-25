@@ -7,9 +7,9 @@ import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
 import com.gustler.backend.forecasting.api.forecast.RunForecasts;
 import com.gustler.backend.forecasting.api.forecast.ScoringCycle;
 import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
-import com.gustler.backend.observations.api.ObservationDeliveryHook;
+import com.gustler.backend.observations.api.ObservationChangeListener;
 import com.gustler.backend.support.IntegrationTest;
-import com.gustler.backend.worker.scheduling.ForecastTrigger;
+import com.gustler.backend.worker.scheduling.ForecastScheduler;
 import com.gustler.backend.worker.scheduling.PartitionJob;
 import com.gustler.backend.worker.scheduling.ScoringJob;
 import java.time.Duration;
@@ -24,6 +24,7 @@ import org.springframework.test.context.TestPropertySource;
 @IntegrationTest
 @TestPropertySource(properties = "forecast.enabled=true")
 class ForecastScheduleConfigTest {
+
     @Autowired
     private ApplicationContext applicationContext;
 
@@ -55,8 +56,7 @@ class ForecastScheduleConfigTest {
         List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class)
             .values()
             .stream()
-            .flatMap(holder -> holder.getScheduledTasks()
-                .stream())
+            .flatMap(holder -> holder.getScheduledTasks().stream())
             .map(scheduled -> scheduled.getTask().toString())
             .toList();
 
@@ -70,15 +70,15 @@ class ForecastScheduleConfigTest {
         List<String> registeredTasks = applicationContext.getBeansOfType(ScheduledTaskHolder.class)
             .values()
             .stream()
-            .flatMap(holder -> holder.getScheduledTasks()
-                .stream())
+            .flatMap(holder -> holder.getScheduledTasks().stream())
             .map(scheduled -> scheduled.getTask().toString())
             .toList();
 
         // then
-        assertThat(registeredTasks).contains(ForecastTrigger.class.getName() + ".pickUp");
-        assertThat(applicationContext.getBeansOfType(ObservationDeliveryHook.class).values())
-            .anySatisfy(hook -> assertThat(AopUtils.getTargetClass(hook))
-                .isEqualTo(ForecastTrigger.class));
+        assertSoftly(softly -> {
+            softly.assertThat(registeredTasks).contains(ForecastScheduler.class.getName() + ".pickUp");
+            softly.assertThat(applicationContext.getBeansOfType(ObservationChangeListener.class).values())
+                .anySatisfy(hook -> assertThat(AopUtils.getTargetClass(hook)).isEqualTo(ForecastScheduler.class));
+        });
     }
 }

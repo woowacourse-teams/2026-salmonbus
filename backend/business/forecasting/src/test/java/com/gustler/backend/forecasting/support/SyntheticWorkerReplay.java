@@ -50,6 +50,7 @@ import tools.jackson.databind.node.ObjectNode;
  * 배치 번호로 고른 뒤 하차 추정식에 넣은 값이다.
  */
 final class SyntheticWorkerReplay {
+
     static final String ROUTE = "3330";
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
@@ -68,13 +69,59 @@ final class SyntheticWorkerReplay {
     private static final int STOPS = 8;
     private static final int CAPACITY = 45;
     private static final int BATCHES = 22;
-    private static final Vehicle LEADER = new Vehicle("replay-veh-a", 0, 30, 2);
-    private static final Vehicle FOLLOWER = new Vehicle("replay-veh-b", 6, 25, 1);
-    private static final Tree BASE = Tree.split("regression", 88, new double[] {10}, 52, 20, -2, 3);
-    private static final Tree GATE = Tree.leaf("multiclass", 88, new double[] {0, 0, 0});
-    private static final Tree POOL = Tree.split("binary", 80, new double[] {0}, 79, 2, -0.4, 0.6);
-    private static final Tree EXTENDED_SEATS = Tree.split("regression", 6, new double[] {12}, 0, 26, -3, 2.5);
-    private static final Tree EXTENDED_FULL = Tree.split("binary", 6, new double[] {0}, 3, 2, -0.3, 0.4);
+    private static final Vehicle LEADER = new Vehicle(
+            "replay-veh-a",
+            0,
+            30,
+            2
+    );
+    private static final Vehicle FOLLOWER = new Vehicle(
+            "replay-veh-b",
+            6,
+            25,
+            1
+    );
+    private static final Tree BASE = Tree.split(
+            "regression",
+            88,
+            new double[] {10},
+            52,
+            20,
+            -2,
+            3
+    );
+    private static final Tree GATE = Tree.leaf(
+        "multiclass",
+        88,
+        new double[] {0, 0, 0}
+    );
+    private static final Tree POOL = Tree.split(
+            "binary",
+            80,
+            new double[] {0},
+            79,
+            2,
+            -0.4,
+            0.6
+    );
+    private static final Tree EXTENDED_SEATS = Tree.split(
+            "regression",
+            6,
+            new double[] {12},
+            0,
+            26,
+            -3,
+            2.5
+    );
+    private static final Tree EXTENDED_FULL = Tree.split(
+            "binary",
+            6,
+            new double[] {0},
+            3,
+            2,
+            -0.3,
+            0.4
+    );
 
     private final Instant start;
     private final boolean extended;
@@ -89,10 +136,28 @@ final class SyntheticWorkerReplay {
         this.start = start;
         this.extended = extended;
         for (Vehicle vehicle : List.of(LEADER, FOLLOWER)) {
-            AlightingAwareObservation capacity = earlier(vehicle, FIRST_BATCH, Duration.ofHours(10), 3, CAPACITY);
-            AlightingAwareObservation previous = earlier(vehicle, FIRST_BATCH + 1, Duration.ofHours(9), STOPS, 20);
-            prefix.put(vehicle.id(), new AlightingAwareVehiclePrefix(CAPACITY, 0, previous, previous.receivedAt(),
-                previous.observationId(), capacity));
+            AlightingAwareObservation capacity = earlier(
+                    vehicle,
+                    FIRST_BATCH,
+                    Duration.ofHours(10),
+                    3,
+                    CAPACITY
+            );
+            AlightingAwareObservation previous = earlier(
+                    vehicle,
+                    FIRST_BATCH + 1,
+                    Duration.ofHours(9),
+                    STOPS,
+                    20
+            );
+            prefix.put(vehicle.id(), new AlightingAwareVehiclePrefix(
+                    CAPACITY,
+                    0,
+                    previous,
+                    previous.receivedAt(),
+                    previous.observationId(),
+                    capacity
+            ));
         }
         for (int batch = 0; batch < BATCHES; batch++) {
             observe(LEADER, batch);
@@ -128,7 +193,7 @@ final class SyntheticWorkerReplay {
     }
 
     /**
-     * 배치 하나의 착수 시각만 수신 뒤 {@code delay}로 늦춰 쓴다. 다음 배치보다 늦게 착수하게 하면 수신 순서와 착수 순서가
+     * 배치 하나의 처리 시작 시각만 수신 뒤 {@code delay}로 늦춰 쓴다. 다음 배치보다 늦게 착수하게 하면 수신 순서와 착수 순서가
      * 뒤집힌 자료가 된다. 사례의 기대값은 고치지 않는다.
      */
     void confirmLate(final int batch, Duration delay) {
@@ -163,7 +228,7 @@ final class SyntheticWorkerReplay {
     }
 
     /**
-     * 비활성 번들을 쓴다. 시간 확장 자료면 시간 확장 모델을 함께 담는다.
+     * 비활성 번들을 쓴다. 시간 확장 자료면 시간 확장 모델을 같이 담는다.
      *
      * @param routes 번들이 담는 노선. 모두 같은 통계를 쓴다
      */
@@ -244,7 +309,7 @@ final class SyntheticWorkerReplay {
         return file;
     }
 
-    /** 장부에는 그날 앞의 배치도 원래 줄 수로 들어 있다. 그 배치의 줄은 자료에 일부만 있다. */
+    /** 장부에는 그날 앞의 배치도 원래 행 수로 들어 있다. 그 배치의 줄은 자료에 일부만 있다. */
     private ArrayNode ledger() {
         ArrayNode ledger = JSON.createArrayNode();
         ledger.add(ledgerRow(FIRST_BATCH, start.minus(Duration.ofHours(10)), 7));
@@ -312,9 +377,21 @@ final class SyntheticWorkerReplay {
             return;
         }
         final int passed = vehicle.passedAt(batch);
-        observations.put(key(vehicle, batch), new AlightingAwareObservation(nextObservationId++, batchId(batch),
-            FIRST_RANK + batch, confirmedAt(batch), vehicle.id(), passed, Math.min(passed + 1, STOPS), 1,
-            vehicle.seatsAt(passed), 0, VERSION, responseAt(batch), false));
+        observations.put(key(vehicle, batch), new AlightingAwareObservation(
+                nextObservationId++,
+                batchId(batch),
+                FIRST_RANK + batch,
+                confirmedAt(batch),
+                vehicle.id(),
+                passed,
+                Math.min(passed + 1, STOPS),
+                1,
+                vehicle.seatsAt(passed),
+                0,
+                VERSION,
+                responseAt(batch),
+                false
+        ));
     }
 
     /** 그날 앞의 관측 하나다. 그날 시작보다 {@code before}만큼 앞에 수신했다. */
@@ -326,9 +403,21 @@ final class SyntheticWorkerReplay {
         final int seats
     ) {
         Instant responseAt = start.minus(before);
-        return new AlightingAwareObservation(nextObservationId++, batchId, FIRST_RANK - before.toHours(),
-            responseAt.plus(CONFIRMATION_DELAY), vehicle.id(), passed, Math.min(passed + 1, STOPS), 1, seats, 0,
-            VERSION, responseAt, false);
+        return new AlightingAwareObservation(
+                nextObservationId++,
+                batchId,
+                FIRST_RANK - before.toHours(),
+                responseAt.plus(CONFIRMATION_DELAY),
+                vehicle.id(),
+                passed,
+                Math.min(passed + 1, STOPS),
+                1,
+                seats,
+                0,
+                VERSION,
+                responseAt,
+                false
+        );
     }
 
     private ObjectNode rushCase(final int sourceBatch, final int target) {
@@ -337,8 +426,15 @@ final class SyntheticWorkerReplay {
         List<AlightingAwarePassEvent> events = AlightingAwareHistoryCompactor.resolve(
             new AlightingAwareHistoryCompactor.History(prefix, history, List.of()), route.realStopOrders());
         AlightingAwareObservation source = observation(FOLLOWER, sourceBatch);
-        AlightingAwareFeatureVector vector = new AlightingAwareFeatureSnapshot(VERSION, source, CAPACITY, route,
-            history, events, prefix).forTarget(target);
+        AlightingAwareFeatureVector vector = new AlightingAwareFeatureSnapshot(
+                VERSION,
+                source,
+                CAPACITY,
+                route,
+                history,
+                events,
+                prefix
+        ).forTarget(target);
         ObjectNode row = JSON.createObjectNode();
         row.put("source_id", source.observationId());
         row.put("cell", "work-morning");
@@ -367,7 +463,7 @@ final class SyntheticWorkerReplay {
         return row;
     }
 
-    /** 뒤차의 통과와 앞차의 직전 통과로 정답과 그 근거의 기대값을 적는다. */
+    /** 뒤차의 통과와 앞차의 직전 통과로 정답과 그 근거의 기대값을 기록한다. */
     private void addSettlement(ObjectNode row, Vehicle vehicle, final int stop) {
         AlightingAwareObservation arrival = observation(vehicle, vehicle.arrivalBatch(stop));
         AlightingAwareObservation last = observation(vehicle, vehicle.lastBatch(stop));
@@ -376,8 +472,15 @@ final class SyntheticWorkerReplay {
         ZonedDateTime local = last.receivedAt().atZone(SEOUL);
         AlightingTimeCell cell = AlightingTimeCell.of(local, false);
         final double gap = Duration.between(previousLast.receivedAt(), last.receivedAt()).toNanos() / 60e9;
-        final double after = AlightingPosterior.afterSeats(fitted(settlementParameters(cell, stop)), arrival.seats(),
-            last.seats(), CAPACITY, gap, previousLast.seats() == 0, cell.settlementBin(local));
+        final double after = AlightingPosterior.afterSeats(
+                fitted(settlementParameters(cell, stop)),
+                arrival.seats(),
+                last.seats(),
+                CAPACITY,
+                gap,
+                previousLast.seats() == 0,
+                cell.settlementBin(local)
+        );
         row.put("expected_pre", arrival.observationId());
         row.put("expected_post", last.observationId());
         row.put("expected_closure", closure.observationId());
@@ -404,8 +507,12 @@ final class SyntheticWorkerReplay {
         for (int index = 0; index < lambda.length; index++) {
             lambda[index] = parameters.path("lam").get(index).asDouble();
         }
-        return new AlightingPosterior.Parameters(lambda, parameters.path("p").asDouble(),
-            parameters.path("kappa").asDouble(), parameters.path("r").asDouble());
+        return new AlightingPosterior.Parameters(
+                lambda,
+                parameters.path("p").asDouble(),
+                parameters.path("kappa").asDouble(),
+                parameters.path("r").asDouble()
+        );
     }
 
     private AlightingAwareObservation observation(Vehicle vehicle, final int batch) {
@@ -434,7 +541,14 @@ final class SyntheticWorkerReplay {
         statistics.put("input_profile", CONFIRMED_PROFILE);
         statistics.put("min_per_stop", 2.0);
         ObjectNode tables = statistics.putObject("tables");
-        for (String table : List.of("lam", "lam_base", "net_tab", "full_tab", "dep_tab", "stop_net_base")) {
+        for (String table : List.of(
+                "lam",
+                "lam_base",
+                "net_tab",
+                "full_tab",
+                "dep_tab",
+                "stop_net_base"
+        )) {
             ArrayNode rows = tables.putArray(table);
             for (int stop = 1; stop <= STOPS; stop++) {
                 ObjectNode cell = rows.addObject();
@@ -490,7 +604,14 @@ final class SyntheticWorkerReplay {
         ObjectNode extendedHours = JSON.createObjectNode();
         extendedHours.put("schema", "alighting-extended-six-v1");
         ArrayNode features = extendedHours.putArray("features");
-        List.of("seats", "capacity", "stop", "horizon", "minute", "off_day").forEach(features::add);
+        List.of(
+                "seats",
+                "capacity",
+                "stop",
+                "horizon",
+                "minute",
+                "off_day"
+        ).forEach(features::add);
         extendedHours.set("full", EXTENDED_FULL.json());
         ObjectNode entries = extendedHours.putObject("routes");
         for (String route : routes) {
@@ -529,7 +650,13 @@ final class SyntheticWorkerReplay {
      * @param startingSeats 좌석의 기준값
      * @param seatsPerStop 정류장 하나를 지날 때마다 줄어드는 좌석
      */
-    private record Vehicle(String id, int firstBatch, int startingSeats, int seatsPerStop) {
+    private record Vehicle(
+        String id,
+        int firstBatch,
+        int startingSeats,
+        int seatsPerStop
+    ) {
+
         private boolean observedAt(final int batch) {
             return batch >= firstBatch && batch < firstBatch + 2 * STOPS;
         }
@@ -552,7 +679,7 @@ final class SyntheticWorkerReplay {
             return firstBatch + 2 * stop - 1;
         }
 
-        /** 다음 정류장을 지나 그 정류장의 통과를 닫는 관측의 배치다. */
+        /** 다음 정류장을 지나 그 정류장의 통과를 확정하는 관측의 배치다. */
         private int closureBatch(final int stop) {
             return firstBatch + 2 * stop;
         }
@@ -564,7 +691,13 @@ final class SyntheticWorkerReplay {
      * @param kind 번들 파일에 적는 트리 종류
      * @param baseline 클래스별 기준값
      */
-    private record Tree(String kind, int featureCount, double[] baseline, List<NumericTreeEnsemble.Node> nodes) {
+    private record Tree(
+        String kind,
+        int featureCount,
+        double[] baseline,
+        List<NumericTreeEnsemble.Node> nodes
+    ) {
+
         /** 입력 하나를 기준값과 견줘 두 잎으로 가르는 트리다. */
         private static Tree split(
             String kind,
@@ -575,15 +708,56 @@ final class SyntheticWorkerReplay {
             final double atMost,
             final double above
         ) {
-            return new Tree(kind, featureCount, baseline, List.of(
-                new NumericTreeEnsemble.Node(feature, threshold, false, 1, 2, 0, false),
-                new NumericTreeEnsemble.Node(0, 0, false, 0, 0, atMost, true),
-                new NumericTreeEnsemble.Node(0, 0, false, 0, 0, above, true)));
+            return new Tree(
+                    kind,
+                    featureCount,
+                    baseline,
+                    List.of(
+                        new NumericTreeEnsemble.Node(
+                                feature,
+                                threshold,
+                                false,
+                                1,
+                                2,
+                                0,
+                                false
+                        ),
+                        new NumericTreeEnsemble.Node(
+                                0,
+                                0,
+                                false,
+                                0,
+                                0,
+                                atMost,
+                                true
+                        ),
+                        new NumericTreeEnsemble.Node(
+                                0,
+                                0,
+                                false,
+                                0,
+                                0,
+                                above,
+                                true
+                        ))
+            );
         }
 
         private static Tree leaf(String kind, final int featureCount, double[] baseline) {
-            return new Tree(kind, featureCount, baseline,
-                List.of(new NumericTreeEnsemble.Node(0, 0, false, 0, 0, 0, true)));
+            return new Tree(
+                    kind,
+                    featureCount,
+                    baseline,
+                    List.of(new NumericTreeEnsemble.Node(
+                            0,
+                            0,
+                            false,
+                            0,
+                            0,
+                            0,
+                            true
+                    ))
+            );
         }
 
         private ObjectNode json() {
@@ -601,7 +775,15 @@ final class SyntheticWorkerReplay {
             }
             model.put("leaf_values_include_learning_rate", true);
             ArrayNode fields = model.putArray("node_fields");
-            List.of("feature", "threshold", "missing_left", "left", "right", "value", "leaf").forEach(fields::add);
+            List.of(
+                    "feature",
+                    "threshold",
+                    "missing_left",
+                    "left",
+                    "right",
+                    "value",
+                    "leaf"
+            ).forEach(fields::add);
             ArrayNode iteration = model.putArray("trees").addArray();
             for (int index = 0; index < baseline.length; index++) {
                 ArrayNode tree = iteration.addArray();
@@ -620,9 +802,12 @@ final class SyntheticWorkerReplay {
         }
 
         private NumericTreeEnsemble ensemble() {
-            return new NumericTreeEnsemble(featureCount,
-                NumericTreeEnsemble.Kind.valueOf(kind.toUpperCase(Locale.ROOT)), baseline,
-                List.of(Collections.nCopies(baseline.length, nodes)));
+            return new NumericTreeEnsemble(
+                    featureCount,
+                    NumericTreeEnsemble.Kind.valueOf(kind.toUpperCase(Locale.ROOT)),
+                    baseline,
+                    List.of(Collections.nCopies(baseline.length, nodes))
+            );
         }
     }
 }

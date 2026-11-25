@@ -25,7 +25,7 @@ class StoredValueContractTest {
         Set<String> allowed = SchemaCheck.allowedValues("V6__call_reservation.sql", "outcome");
 
         // then
-        assertThat(Arrays.stream(ObservationBatchOutcome.values())
+        assertThat(Arrays.stream(CollectionBatchStatus.values())
             .map(Enum::name))
             .containsExactlyInAnyOrderElementsOf(allowed);
     }
@@ -36,7 +36,7 @@ class StoredValueContractTest {
         Set<String> allowed = SchemaCheck.allowedValues("V6__call_reservation.sql", "failure_code");
 
         // then
-        assertThat(Arrays.stream(ObservationBatchFailureCode.values())
+        assertThat(Arrays.stream(CollectionFailureReason.values())
             .map(Enum::name))
             .containsExactlyInAnyOrderElementsOf(allowed);
     }

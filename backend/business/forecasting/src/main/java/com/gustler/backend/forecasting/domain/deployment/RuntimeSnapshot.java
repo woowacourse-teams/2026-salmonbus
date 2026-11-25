@@ -4,8 +4,8 @@ import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeat
 import java.time.Instant;
 
 /**
- * 한 예보 처리에서 사용하는 활성 배포와 모델을 함께 보관한다.
- * 처리 도중 다른 모델이 활성화되어도 이미 선택한 계산 참조는 유지한다.
+ * 한 배치에서 사용할 활성 배포 정보와 모델을 보관한다.
+ * 처리 중 다른 모델이 활성화돼도 선택한 모델을 끝까지 사용한다.
  */
 public record RuntimeSnapshot(
     ActiveModelDeployment deployment,
@@ -13,15 +13,16 @@ public record RuntimeSnapshot(
     AlightingAwareSeatForecastModel model,
     Instant dataUntil
 ) {
+
     public RuntimeSnapshot {
         if (deployment == null) {
-            throw new IllegalArgumentException("도는 배포가 있어야 한다");
+            throw new IllegalArgumentException("활성 모델 배포가 필요하다");
         }
         if (scope == null) {
-            throw new IllegalArgumentException("배포에는 계수 묶음이 담는 예보 범위가 있어야 한다");
+            throw new IllegalArgumentException("모델 배포에는 지원하는 예보 범위가 필요하다");
         }
         if (model == null) {
-            throw new IllegalArgumentException("배포에는 좌석 분포를 낼 모델이 있어야 한다");
+            throw new IllegalArgumentException("모델 배포에는 좌석을 예측할 모델이 필요하다");
         }
     }
 

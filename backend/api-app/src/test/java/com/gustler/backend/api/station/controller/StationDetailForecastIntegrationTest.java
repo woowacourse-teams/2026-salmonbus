@@ -30,6 +30,7 @@ import tools.jackson.databind.ObjectMapper;
 @Transactional
 @Import(FixedDaytimeClockConfig.class)
 class StationDetailForecastIntegrationTest {
+
     private static final String VEHICLE = "$.routes[0].arrivals[0]";
 
     @Autowired
@@ -61,7 +62,12 @@ class StationDetailForecastIntegrationTest {
         BoardDatabaseFixture.RouteContext route = fixture.insertRoute(now.minusDays(1));
         final long modelId = fixture.insertActiveModel(now.minusDays(1));
         ForecastBoardFixture.ObservedVehicle vehicle = fixture.insertApproachingVehicle(route, now.minusMinutes(1));
-        fixture.insertForecast(vehicle, modelId, 0.25, 12.5);
+        fixture.insertForecast(
+                vehicle,
+                modelId,
+                0.25,
+                12.5
+        );
 
         // when
         ResultActions actual = getStationDetail();

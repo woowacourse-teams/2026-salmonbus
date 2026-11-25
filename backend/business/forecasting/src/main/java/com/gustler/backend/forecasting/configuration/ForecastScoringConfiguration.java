@@ -27,15 +27,16 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
- * 예보와 채점을 등록한다. 예보가 켜져 있을 때({@code forecast.enabled=true})만 등록하며 둘은 늘 함께 켜진다.
+ * 예보와 정산을 등록한다. 예보가 켜져 있을 때({@code forecast.enabled=true})만 등록하며 둘은 늘 같이 켜진다.
  *
- * <p>예보는 커밋한 뒤의 사건을 {@link ForecastEvents} 구현인 채점에 넘긴다. 노선별 실행 줄({@link ForecastLanes}), 채점
- * 줄({@link ScoringFeed}), 신호와 주기 호출은 실행하는 앱이 같은 조건으로 등록한다. 묶는 방법과 되감기 창 같은 고정 값은
+ * <p>예보는 커밋한 뒤의 이벤트를 {@link ForecastEvents} 구현인 정산에 넘긴다. 노선별 실행기({@link ForecastLanes}), 정산
+ * 줄({@link ScoringFeed}), 신호와 주기 호출은 실행하는 앱이 같은 조건으로 등록한다. 묶는 방법과 복구 범위 같은 고정 값은
  * {@link ForecastAssembly}에 있다.
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(prefix = "forecast", name = "enabled", havingValue = "true")
 public class ForecastScoringConfiguration {
+
     @Bean
     ScoringService scoringService(
         ScoringFeed feed,
@@ -48,8 +49,19 @@ public class ForecastScoringConfiguration {
         ObjectProvider<ForecastTelemetry> telemetry,
         Clock clock
     ) {
-        ScoringService service = new ForecastAssembly(jdbc, transactionManager, clock, meters.getIfAvailable())
-            .scoring(feed, records, records, passes, labels);
+        ScoringService service = new ForecastAssembly(
+                jdbc,
+                transactionManager,
+                clock,
+                meters.getIfAvailable()
+        )
+            .scoring(
+                    feed,
+                    records,
+                    records,
+                    passes,
+                    labels
+            );
         telemetry.ifAvailable(service::setTelemetry);
         return service;
     }
@@ -72,10 +84,29 @@ public class ForecastScoringConfiguration {
         Clock clock
     ) {
         JdbcReplaySource source = new JdbcReplaySource(jdbc, JdbcReplaySource.DEFAULT_MAXIMUM_ROWS);
-        ForecastAssembly.Sources sources = new ForecastAssembly.Sources(source, source,
-            new JdbcPendingBatches(jdbc), runtimes, versions, stops);
-        RunForecastsService service = new ForecastAssembly(jdbc, transactionManager, clock, meters.getIfAvailable())
-            .forecast(lanes, events, sources, capacities, records, passes, ForecastAssembly.Settings.of(policy));
+        ForecastAssembly.Sources sources = new ForecastAssembly.Sources(
+                source,
+                source,
+                new JdbcPendingBatches(jdbc),
+                runtimes,
+                versions,
+                stops
+        );
+        RunForecastsService service = new ForecastAssembly(
+                jdbc,
+                transactionManager,
+                clock,
+                meters.getIfAvailable()
+        )
+            .forecast(
+                    lanes,
+                    events,
+                    sources,
+                    capacities,
+                    records,
+                    passes,
+                    ForecastAssembly.Settings.of(policy)
+            );
         telemetry.ifAvailable(service::setTelemetry);
         return service;
     }

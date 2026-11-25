@@ -3,7 +3,7 @@ package com.gustler.backend.api.board.domain;
 import java.util.Optional;
 
 /**
- * 원천의 최소·최대 배차간격 범위다.
+ * 원천의 최소, 최대 배차간격 범위다.
  * 단위는 분이며, 읽을 수 없는 원천 값은 제공 가능한 범위와 구분한다.
  */
 public record HeadwayRange(
@@ -15,7 +15,7 @@ public record HeadwayRange(
 
     public HeadwayRange {
         if (!isValid(minMinutes, maxMinutes)) {
-            throw new IllegalArgumentException("배차간격은 %d~%d분이고 최소가 최대보다 클 수 없습니다: %d~%d"
+            throw new IllegalArgumentException("배차간격은 %d~%d분이고 최소가 최대보다 클 수 없다: %d~%d"
                 .formatted(SHORTEST_MINUTES, LONGEST_MINUTES, minMinutes, maxMinutes));
         }
     }

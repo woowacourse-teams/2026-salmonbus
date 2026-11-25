@@ -1,6 +1,7 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
 import com.gustler.backend.forecasting.domain.model.RouteStop;
 import com.gustler.backend.forecasting.domain.model.RouteStops;
@@ -15,12 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class JdbcRouteVersionQueryTest {
+
     private static final String SOURCE_ID = "GBIS";
     private static final String ROUTE_204000057 = "204000057";
     private static final String ROUTE_204000121 = "204000121";
     private static final String CONTENT_DIGEST = "0".repeat(64);
 
-    /** 노선 개편 전 판본이 열려 있던 기간. ex_route_version_no_overlap 이 개편 뒤와 겹치는 것을 막는다. */
+    /** 노선 개편 전 버전이 열려 있던 기간. ex_route_version_no_overlap 이 개편 뒤와 겹치는 것을 막는다. */
     private static final OffsetDateTime BEFORE_REVISION = OffsetDateTime.parse("2026-08-01T00:00+09:00");
     private static final OffsetDateTime REVISED_AT = OffsetDateTime.parse("2026-08-19T00:00+09:00");
 
@@ -60,10 +62,12 @@ class JdbcRouteVersionQueryTest {
         RouteStops actual = repository.readStops(routeVersionId);
 
         // then
-        assertThat(actual.routeName()).isEqualTo("3330");
-        assertThat(actual.stops())
-            .extracting(RouteStop::stopOrder)
-            .containsExactly(STOP_ORDER_1, STOP_ORDER_2, STOP_ORDER_3);
+        assertSoftly(softly -> {
+            softly.assertThat(actual.routeName()).isEqualTo("3330");
+            softly.assertThat(actual.stops())
+                .extracting(RouteStop::stopOrder)
+                .containsExactly(STOP_ORDER_1, STOP_ORDER_2, STOP_ORDER_3);
+        });
     }
 
     @Test
@@ -116,15 +120,11 @@ class JdbcRouteVersionQueryTest {
             .containsExactly("UP", "DOWN");
     }
 
-    private long insertCurrentRouteVersion(
-        String sourceRouteId
-    ) {
+    private long insertCurrentRouteVersion(String sourceRouteId) {
         return insertRouteVersion(insertRoute(sourceRouteId), REVISED_AT, null);
     }
 
-    private long insertRoute(
-        String sourceRouteId
-    ) {
+    private long insertRoute(String sourceRouteId) {
         return jdbcClient.sql("""
                 INSERT INTO route (
                     public_route_id, source_id, source_route_id,
@@ -132,41 +132,53 @@ class JdbcRouteVersionQueryTest {
                 ) VALUES (?, ?, ?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(sourceRouteId, SOURCE_ID, sourceRouteId, "3330", "범계역", "강남역")
+            .params(
+                    sourceRouteId,
+                    SOURCE_ID,
+                    sourceRouteId,
+                    "3330",
+                    "범계역",
+                    "강남역"
+            )
             .query(Long.class)
             .single();
     }
 
-    /** valid_to 가 NULL 이면 지금 쓰는 판본이고, 값이 있으면 그 시각에 닫힌 옛 판본이다. */
-    private long insertRouteVersion(
-        final long routeId,
-        OffsetDateTime validFrom,
-        OffsetDateTime validTo
-    ) {
+    /** valid_to 가 NULL 이면 지금 쓰는 버전이고, 값이 있으면 그 시각에 닫힌 옛 버전이다. */
+    private long insertRouteVersion(final long routeId, OffsetDateTime validFrom, OffsetDateTime validTo) {
         return jdbcClient.sql("""
                 INSERT INTO route_version (route_id, content_digest, valid_from, valid_to)
                 VALUES (?, ?, ?, ?)
                 RETURNING id
                 """)
-            .params(routeId, CONTENT_DIGEST, validFrom, validTo)
+            .params(
+                    routeId,
+                    CONTENT_DIGEST,
+                    validFrom,
+                    validTo
+            )
             .query(Long.class)
             .single();
     }
 
     /** 승객이 탈 수 있는 정류장. */
-    private void insertBoardingStop(
-        final long routeVersionId,
-        final int stopOrder
-    ) {
-        insertRouteStop(routeVersionId, stopOrder, "20500021%d".formatted(stopOrder), true);
+    private void insertBoardingStop(final long routeVersionId, final int stopOrder) {
+        insertRouteStop(
+                routeVersionId,
+                stopOrder,
+                "20500021%d".formatted(stopOrder),
+                true
+        );
     }
 
     /** 아무도 타지 않는 고속 구간의 경유 지점. 정류소 아이디가 277 로 시작하는 자리다. */
-    private void insertPassingPoint(
-        final long routeVersionId,
-        final int stopOrder
-    ) {
-        insertRouteStop(routeVersionId, stopOrder, "27700021%d".formatted(stopOrder), false);
+    private void insertPassingPoint(final long routeVersionId, final int stopOrder) {
+        insertRouteStop(
+                routeVersionId,
+                stopOrder,
+                "27700021%d".formatted(stopOrder),
+                false
+        );
     }
 
     private void insertRouteStop(
@@ -180,7 +192,14 @@ class JdbcRouteVersionQueryTest {
                     route_version_id, stop_order, stop_id, name, direction, boarding_allowed
                 ) VALUES (?, ?, ?, ?, ?, ?)
                 """)
-            .params(routeVersionId, stopOrder, stopId, "범계역", "UP", boardingAllowed)
+            .params(
+                    routeVersionId,
+                    stopOrder,
+                    stopId,
+                    "범계역",
+                    "UP",
+                    boardingAllowed
+            )
             .update();
     }
 }

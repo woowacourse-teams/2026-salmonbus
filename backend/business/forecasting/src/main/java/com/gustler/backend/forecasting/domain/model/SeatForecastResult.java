@@ -22,7 +22,7 @@ public record SeatForecastResult(
 
     public SeatForecastResult {
         if (!hasValidNumbers(expectedSeats, fullChance)) {
-            throw new IllegalArgumentException("좌석은 0 이상 70 이하의 유한한 수, 확률은 0~1이어야 한다");
+            throw new IllegalArgumentException("좌석 예측값은 0~70 사이의 유한한 수여야 하고 확률은 0~1이어야 한다");
         }
         if (!ALIGHTING_AWARE_SEAT_TARGET.equals(seatTarget)
             || !ALIGHTING_AWARE_PROBABILITY_TARGET.equals(probabilityTarget)) {
@@ -34,14 +34,23 @@ public record SeatForecastResult(
         final double afterAlightingSeats,
         final double departureFullProbability
     ) {
-        return new SeatForecastResult(afterAlightingSeats, departureFullProbability, ALIGHTING_AWARE_SEAT_TARGET,
-            ALIGHTING_AWARE_PROBABILITY_TARGET);
+        return new SeatForecastResult(
+                afterAlightingSeats,
+                departureFullProbability,
+                ALIGHTING_AWARE_SEAT_TARGET,
+                ALIGHTING_AWARE_PROBABILITY_TARGET
+        );
     }
 
     private static boolean hasValidNumbers(final double expectedSeats, final double fullChance) {
-        if (!Double.isFinite(expectedSeats) || expectedSeats < 0 || expectedSeats > MAXIMUM_SEATS) {
-            return false;
-        }
+        return hasValidExpectedSeats(expectedSeats) && hasValidFullChance(fullChance);
+    }
+
+    private static boolean hasValidExpectedSeats(final double expectedSeats) {
+        return Double.isFinite(expectedSeats) && expectedSeats >= 0 && expectedSeats <= MAXIMUM_SEATS;
+    }
+
+    private static boolean hasValidFullChance(final double fullChance) {
         return Double.isFinite(fullChance) && fullChance >= 0 && fullChance <= 1;
     }
 }

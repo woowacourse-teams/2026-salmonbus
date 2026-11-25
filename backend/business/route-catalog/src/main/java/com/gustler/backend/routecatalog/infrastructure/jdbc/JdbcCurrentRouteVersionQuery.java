@@ -17,16 +17,14 @@ public class JdbcCurrentRouteVersionQuery implements CurrentRouteVersionQuery {
         SELECT route_version.id
         FROM route_version
         JOIN route ON route.id = route_version.route_id
-        WHERE route.public_route_id = ? AND route_version.valid_to IS NULL
+        WHERE route.source_id = 'GBIS' AND route.source_route_id = ? AND route_version.valid_to IS NULL
         ORDER BY route_version.valid_from DESC, route_version.id DESC
         LIMIT 1
         """;
 
     private final JdbcClient jdbcClient;
 
-    public JdbcCurrentRouteVersionQuery(
-        JdbcClient jdbcClient
-    ) {
+    public JdbcCurrentRouteVersionQuery(JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 
@@ -42,9 +40,7 @@ public class JdbcCurrentRouteVersionQuery implements CurrentRouteVersionQuery {
     }
 
     @Override
-    public OptionalLong findIdOf(
-        String sourceRouteId
-    ) {
+    public OptionalLong findIdOf(String sourceRouteId) {
         Optional<Long> found = jdbcClient.sql(FIND_CURRENT_VERSION)
             .param(sourceRouteId)
             .query(Long.class)

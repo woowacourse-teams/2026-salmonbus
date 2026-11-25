@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JdbcModelDeploymentRepository implements ModelDeploymentRepository {
+
     /**
      * 활성 배포 하나를 조회한다. 상태를 이름 붙인 파라미터로 바인딩하지 않고 'ACTIVE' 를 그대로 쓴다.
      * ux_model_deployment_single_active 의 부분 조건과 문구가 같아야 쿼리 플래너가 해당 인덱스를 선택한다.
@@ -46,7 +47,7 @@ public class JdbcModelDeploymentRepository implements ModelDeploymentRepository 
      * 바꾸는 것만으로는 부족하다.</b> PostgreSQL은 제약을 위반한 transaction 전체를 사용할 수 없게 만들어
      * 뒤이은 commit도 실패한다. 기동 적재에서도 이 문제가 생겨 앱이 시작되지 않는다.
      *
-     * <p>따라서 예외가 발생하기 전에 대기시킨다. 읽기는 차단하지 않는다. 예보가 활성 배포를 읽는 조회는
+     * <p>따라서 예외가 발생하기 전에 대기하게 한다. 읽기는 차단하지 않는다. 예보가 활성 배포를 읽는 조회는
      * 일반 SELECT이므로 이 잠금과 충돌하지 않는다.
      *
      * <p>이 문장은 transaction 안에서만 실행할 수 있다. 밖에서 호출하면 PostgreSQL이 거절한다.
@@ -91,9 +92,7 @@ public class JdbcModelDeploymentRepository implements ModelDeploymentRepository 
 
     private final JdbcClient jdbcClient;
 
-    public JdbcModelDeploymentRepository(
-        JdbcClient jdbcClient
-    ) {
+    public JdbcModelDeploymentRepository(JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 
@@ -101,17 +100,16 @@ public class JdbcModelDeploymentRepository implements ModelDeploymentRepository 
     public Optional<ActiveModelDeployment> findActive() {
         return jdbcClient.sql(SELECT_ACTIVE_DEPLOYMENT)
             .query((resultSet, rowNumber) -> new ActiveModelDeployment(
-                resultSet.getLong("id"),
-                resultSet.getString("calculation_version"),
-                resultSet.getString("release_id"),
-                resultSet.getString("bundle_digest")))
+                    resultSet.getLong("id"),
+                    resultSet.getString("calculation_version"),
+                    resultSet.getString("release_id"),
+                    resultSet.getString("bundle_digest")
+            ))
             .optional();
     }
 
     @Override
-    public long stage(
-        StagedModelDeployment staged
-    ) {
+    public long stage(StagedModelDeployment staged) {
         return jdbcClient.sql(INSERT_STAGED_DEPLOYMENT)
             .param("deploymentKey", staged.deploymentKey())
             .param("releaseId", staged.releaseId())
@@ -127,9 +125,7 @@ public class JdbcModelDeploymentRepository implements ModelDeploymentRepository 
     }
 
     @Override
-    public boolean promoteToActive(
-        final long deploymentId
-    ) {
+    public boolean promoteToActive(final long deploymentId) {
         jdbcClient.sql(LOCK_DEPLOYMENTS).update();
         jdbcClient.sql(RETIRE_ACTIVE_DEPLOYMENT).param("deploymentId", deploymentId).update();
         return jdbcClient.sql(ACTIVATE_STAGED_DEPLOYMENT).param("deploymentId", deploymentId).update() == 1;

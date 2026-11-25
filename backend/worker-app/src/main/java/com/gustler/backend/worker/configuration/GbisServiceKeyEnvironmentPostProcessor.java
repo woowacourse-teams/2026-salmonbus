@@ -46,7 +46,7 @@ public final class GbisServiceKeyEnvironmentPostProcessor implements Environment
             String property = "gbis.named-keys[" + alias.toLowerCase(Locale.ROOT) + "]";
             if (keys.containsKey(property)) {
                 throw new IllegalStateException("GBIS_SERVICE_KEY_ 뒤의 별칭이 대소문자만 다른 변수가 둘 있다: "
-                    + alias.toLowerCase(Locale.ROOT) + ". 하나만 남겨라");
+                    + alias.toLowerCase(Locale.ROOT) + ". 중복 설정은 하나만 남겨야 한다");
             }
             keys.put(property, value);
         }

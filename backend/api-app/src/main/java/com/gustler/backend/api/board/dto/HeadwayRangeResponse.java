@@ -4,7 +4,7 @@ import com.gustler.backend.api.board.domain.HeadwayRange;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * 분 단위의 최소·최대 배차간격을 공개 응답으로 전달한다.
+ * 분 단위의 최소, 최대 배차간격을 공개 응답으로 전달한다.
  * 실제 도착 간격이나 평균값을 뜻하지 않는다.
  */
 @Schema(requiredProperties = {"minMinutes", "maxMinutes"})

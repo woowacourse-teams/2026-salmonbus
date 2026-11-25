@@ -23,17 +23,18 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * 저장된 사건 목록을 채점 되감기가 읽는 저장소처럼 보여 주는 시험용 저장소다. 예보 경로가 배치마다 실행 줄(수집 사실 포함)과 통과를
- * 저장한 뒤에만 사건을 넘기는 것을 흉내 내도록, 목록에 든 수집·통과·예보 사건을 그대로 읽는다. 목록은 시험이 늘려 가도 된다.
+ * 저장된 이벤트 목록을 정산 복구가 읽는 저장소처럼 보여 주는 시험용 저장소다. 예보 경로가 배치마다 실행 기록(수집 사실 포함)과 통과를
+ * 저장한 뒤에만 이벤트를 넘기는 것을 흉내 내도록, 목록에 든 수집, 통과, 예보 이벤트를 그대로 읽는다. 목록은 시험이 늘려 가도 된다.
  */
 final class RecordedScoringEvents {
+
     private final List<Object> saved;
     private final Supplier<Collection<Object>> rows;
     private final Runnable beforeForecastRead;
 
     /**
-     * @param saved 저장된 사건. 배치마다 수집, 통과, 예보 순서다
-     * @param rows 저장된 정답 줄({@link PassLabel})과 미해결 줄({@link UnresolvedForecast}). 채점이 저장까지 마친 사건 시각을 찾는 데
+     * @param saved 저장된 이벤트. 배치마다 수집, 통과, 예보 순서다
+     * @param rows 저장된 정답 기록({@link PassLabel})과 미해결 기록({@link UnresolvedForecast}). 정산이 저장까지 마친 이벤트 시각을 찾는 데
      *     쓴다
      */
     RecordedScoringEvents(List<Object> saved, Supplier<Collection<Object>> rows) {
@@ -42,28 +43,24 @@ final class RecordedScoringEvents {
     }
 
     /**
-     * @param saved 저장된 사건. 배치마다 수집, 통과, 예보 순서다
-     * @param rows 저장된 정답 줄과 미해결 줄
-     * @param beforeForecastRead 예보 기록을 읽기 직전에 부른다. 읽기 실패를 흉내 내려면 여기서 예외를 던진다
+     * @param saved 저장된 이벤트. 배치마다 수집, 통과, 예보 순서다
+     * @param rows 저장된 정답 기록과 미해결 기록
+     * @param beforeForecastRead 예보 기록을 읽기 직전에 호출한다. 읽기 실패를 흉내 내려면 여기서 예외를 던진다
      */
-    RecordedScoringEvents(
-        List<Object> saved,
-        Supplier<Collection<Object>> rows,
-        Runnable beforeForecastRead
-    ) {
+    RecordedScoringEvents(List<Object> saved, Supplier<Collection<Object>> rows, Runnable beforeForecastRead) {
         this.saved = saved;
         this.rows = rows;
         this.beforeForecastRead = beforeForecastRead;
     }
 
-    /** 채점 결과에 담긴 정답 줄과 미해결 줄을 저장된 줄로 본다. */
+    /** 정산 결과에 담긴 정답 기록과 미해결 기록을 저장된 줄로 본다. */
     static Collection<Object> rowsOf(ScoringResult result) {
         List<Object> rows = new ArrayList<>(result.labels());
         rows.addAll(result.unresolved());
         return rows;
     }
 
-    /** 예보 실행 줄을 읽는 저장소. 수집 사실은 같은 배치의 저장된 수집 사건으로 만든다. */
+    /** 예보 실행 기록을 읽는 저장소. 수집 사실은 같은 배치의 저장된 수집 이벤트로 만든다. */
     ForecastRecordStore forecasts() {
         return new Forecasts();
     }
@@ -78,6 +75,7 @@ final class RecordedScoringEvents {
     }
 
     private final class Forecasts implements ForecastRecordStore {
+
         @Override
         public boolean save(ForecastPublished published, ObservationBatchSeen seen) {
             throw new UnsupportedOperationException();
@@ -118,12 +116,17 @@ final class RecordedScoringEvents {
             for (ForecastPublished published : published(routeId, fromInclusive, toExclusive)) {
                 ObservationBatchSeen seen = seenByBatch.get(published.observationBatchId());
                 if (seen == null) {
-                    throw new IllegalStateException("수집 사건 없이 저장된 예보 사건이다: "
-                        + published.observationBatchId());
+                    throw new IllegalStateException("수집 사건 없이 저장된 예보 사건이다: " + published.observationBatchId());
                 }
-                batches.add(new RecordedBatch(published.observationBatchId(), routeId, published.receivedAt(),
-                    published.confirmedAt(), published.outcome() == ForecastOutcome.LATE, seen.incomplete(),
-                    seen.countedRows()));
+                batches.add(new RecordedBatch(
+                        published.observationBatchId(),
+                        routeId,
+                        published.receivedAt(),
+                        published.confirmedAt(),
+                        published.outcome() == ForecastOutcome.LATE,
+                        seen.incomplete(),
+                        seen.countedRows()
+                ));
             }
             return batches;
         }
@@ -149,6 +152,7 @@ final class RecordedScoringEvents {
     }
 
     private final class Passes implements StopPassStore {
+
         @Override
         public int save(List<PassClosed> passes) {
             throw new UnsupportedOperationException();
@@ -173,13 +177,21 @@ final class RecordedScoringEvents {
             Set<List<Object>> labeled = new HashSet<>();
             for (Object row : rows.get()) {
                 if (row instanceof PassLabel label) {
-                    labeled.add(List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(),
-                        label.stopOrder()));
+                    labeled.add(List.of(
+                            label.sourceDate(),
+                            label.routeId(),
+                            label.tripStartObservationId(),
+                            label.stopOrder()
+                    ));
                 }
             }
             return findClosedBetween(routeId, fromInclusive, toExclusive).stream()
-                .filter(pass -> labeled.contains(List.of(pass.sourceDate(), pass.routeId(),
-                    pass.tripStartObservationId(), pass.stopOrder())))
+                .filter(pass -> labeled.contains(List.of(
+                        pass.sourceDate(),
+                        pass.routeId(),
+                        pass.tripStartObservationId(),
+                        pass.stopOrder()
+                )))
                 .map(PassClosed::closedAt)
                 .max(Instant::compareTo);
         }

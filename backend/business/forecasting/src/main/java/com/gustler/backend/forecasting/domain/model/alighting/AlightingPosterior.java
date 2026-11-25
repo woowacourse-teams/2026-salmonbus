@@ -1,7 +1,8 @@
 package com.gustler.backend.forecasting.domain.model.alighting;
 
-/** alight_fit.predict의 이항 하차 × 음이항 승차 posterior. 학습과 보정은 하지 않는다. */
+/** alight_fit.predict와 같은 방식으로 이항 하차 분포와 음이항 승차 분포를 결합해 사후분포를 계산한다. 학습이나 보정은 하지 않는다. */
 public final class AlightingPosterior {
+
     private static final double[] GAMMA_COEFFICIENTS = {
         676.5203681218851, -1259.1392167224028, 771.32342877765313,
         -176.61502916214059, 12.507343278686905, -0.13857109526572012,
@@ -14,10 +15,16 @@ public final class AlightingPosterior {
         double kappa,
         double r
     ) {
+
         public Parameters {
             lambda = lambda.clone();
-            if (hasInvalidParameters(lambda, p, kappa, r)) {
-                throw new IllegalArgumentException("하차 posterior 계수가 잘못됐다");
+            if (hasInvalidParameters(
+                    lambda,
+                    p,
+                    kappa,
+                    r
+            )) {
+                throw new IllegalArgumentException("하차 사후분포 계수가 올바르지 않다");
             }
             for (final double rate : lambda) {
                 if (rate <= 0 || !Double.isFinite(rate)) {
@@ -55,14 +62,30 @@ public final class AlightingPosterior {
         final boolean previousFull,
         final int bin
     ) {
-        if (hasInvalidObservation(arrive, depart, capacity, gapMinutes, bin)) {
-            throw new IllegalArgumentException("하차 posterior 입력이 잘못됐다");
+        if (hasInvalidObservation(
+                arrive,
+                depart,
+                capacity,
+                gapMinutes,
+                bin
+        )) {
+            throw new IllegalArgumentException("하차 사후분포 입력값이 올바르지 않다");
         }
         final int onboard = capacity - arrive;
         final double mu = parameters.lambda[bin] * gapMinutes
             + parameters.kappa * fullIndicator(previousFull) + 1e-3;
-        BoardingProbabilities probabilities = new BoardingProbabilities(mu, parameters.r, capacity + 1);
-        return arrive + expectedAlighting(parameters, probabilities, onboard, arrive, depart);
+        BoardingProbabilities probabilities = new BoardingProbabilities(
+            mu,
+            parameters.r,
+            capacity + 1
+        );
+        return arrive + expectedAlighting(
+                parameters,
+                probabilities,
+                onboard,
+                arrive,
+                depart
+        );
     }
 
     private static boolean hasInvalidObservation(
@@ -119,6 +142,7 @@ public final class AlightingPosterior {
 
     /** gammaln 식, cumsum 순서, 만석의 1-cdf 계산을 원본과 동일하게 유지한다. */
     private static final class BoardingProbabilities {
+
         private final double[] pmf;
         private final double[] cdf;
 

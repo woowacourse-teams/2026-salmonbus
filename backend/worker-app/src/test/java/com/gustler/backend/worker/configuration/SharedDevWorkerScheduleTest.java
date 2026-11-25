@@ -2,14 +2,14 @@ package com.gustler.backend.worker.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gustler.backend.worker.scheduling.AdaptiveCollectionTrigger;
+import com.gustler.backend.worker.scheduling.CollectionScheduleTrigger;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
 import org.assertj.core.api.AutoCloseableSoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -59,8 +59,8 @@ class SharedDevWorkerScheduleTest {
             Instant.parse("2026-10-15T03:00:00Z"), Duration.ofSeconds(30),
             Instant.parse("2026-10-15T17:00:00Z"), Duration.ofMinutes(10)).entrySet()) {
             Instant now = entry.getKey();
-            AdaptiveCollectionTrigger trigger =
-                new AdaptiveCollectionTrigger(Clock.fixed(now, ZoneOffset.UTC), properties.fixedInterval());
+            CollectionScheduleTrigger trigger =
+                new CollectionScheduleTrigger(Clock.fixed(now, ZoneOffset.UTC), properties.fixedInterval());
 
             // when
             Instant nextExecution = trigger.nextExecution(new SimpleTriggerContext(now, now, now));

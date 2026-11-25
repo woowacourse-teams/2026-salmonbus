@@ -12,15 +12,16 @@ import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * 한 흐름의 예측값, 예보 실행 결과, 닫힌 통과, 입력 확정 시각의 고정 기대값이다({@link Baseline}).
+ * 한 흐름의 예측값, 예보 실행 결과, 확정된 통과, 입력 확정 시각의 고정 기대값이다({@link Baseline}).
  * <ul>
  *   <li>{@code run 배치 결과 예측수}: 배치의 예보 실행 결과와 예측 수. 예측을 내지 않는 배치는 예측 수가 {@code -}다</li>
  *   <li>{@code obs 관측 목표:기대좌석:만석확률 …}: 관측 하나의 목표 정류장별 예측값</li>
- *   <li>{@code pass 운행시작관측 정류장 닫은관측}: 닫힌 통과</li>
+ *   <li>{@code pass 운행시작관측 정류장 닫은관측}: 확정된 통과</li>
  *   <li>{@code confirmed 배치 시각}: 배치에 남은 입력 확정 시각</li>
  * </ul>
  */
 final class ForecastValueBaseline {
+
     private final Map<String, Map<Integer, double[]>> predictions = new HashMap<>();
     private final Map<Integer, Run> runs = new TreeMap<>();
     private final Map<Integer, Instant> confirmed = new TreeMap<>();
@@ -41,7 +42,10 @@ final class ForecastValueBaseline {
     private void accept(String[] line) {
         switch (line[0]) {
             case "math" -> exactMath = Baseline.sameMath(line[1]);
-            case "run" -> runs.put(Integer.parseInt(line[1]), new Run(line[2], countOrNone(line[3])));
+            case "run" -> runs.put(
+                Integer.parseInt(line[1]),
+                new Run(line[2], countOrNone(line[3]))
+            );
             case "obs" -> predictions.put(line[1], targets(line));
             case "pass" -> passes.add(line[1] + " " + line[2] + " " + line[3]);
             case "confirmed" -> confirmed.put(Integer.parseInt(line[1]), Instant.parse(line[2]));
@@ -79,7 +83,7 @@ final class ForecastValueBaseline {
         return confirmed;
     }
 
-    /** {@code 운행시작관측 정류장 닫은관측} 모양의 닫힌 통과. */
+    /** {@code 운행시작관측 정류장 닫은관측} 모양의 확정된 통과. */
     Set<String> passes() {
         return passes;
     }
@@ -112,7 +116,12 @@ final class ForecastValueBaseline {
         Set<Long> baselineOnly = unseen.stream()
             .map(key -> keys.observationId(key.substring(0, key.indexOf(':'))))
             .collect(Collectors.toCollection(HashSet::new));
-        return new Comparison(counts[0], counts[1], counts[2], baselineOnly);
+        return new Comparison(
+                counts[0],
+                counts[1],
+                counts[2],
+                baselineOnly
+        );
     }
 
     private int kind(double[] expected, final double seats, final double probability) {
@@ -133,6 +142,7 @@ final class ForecastValueBaseline {
      * @param predictionCount 예측 수. 예측을 내지 않는 배치는 비어 있다
      */
     record Run(String outcome, Integer predictionCount) {
+
     }
 
     /**
@@ -147,5 +157,6 @@ final class ForecastValueBaseline {
         int newOnly,
         Set<Long> baselineOnly
     ) {
+
     }
 }

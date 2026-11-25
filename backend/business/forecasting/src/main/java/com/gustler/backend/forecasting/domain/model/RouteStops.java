@@ -1,14 +1,12 @@
 package com.gustler.backend.forecasting.domain.model;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
- * 한 노선 버전의 전체 정류장. 순번 오름차순으로 정렬한다.
+ * 한 노선 버전의 전체 정류장을 입력 순서대로 보관한다. DB 조회에서 정류장 순번 정렬을 담당한다.
  *
- * <p>Open API 노선 ID를 함께 보관한다. DB의 노선 버전 ID와 모델 계수가 사용하는 노선 이름을
+ * <p>Open API 노선 ID를 같이 보관한다. DB의 노선 버전 ID와 모델 계수가 사용하는 노선 이름을
  * 연결하므로 모델은 DB에 접근하지 않고도 계수를 선택할 수 있다.
  *
  * <p>차량이 앞으로 지날 정류장 중 예보 대상을 선택하며 다음 세 경우를 제외한다.
@@ -26,20 +24,26 @@ public record RouteStops(
     List<RouteStop> stops,
     String routeName
 ) {
+
     public RouteStops(final long routeVersionId, String sourceRouteId, List<RouteStop> stops) {
-        this(routeVersionId, sourceRouteId, stops, "");
+        this(
+                routeVersionId,
+                sourceRouteId,
+                stops,
+                ""
+        );
     }
 
     public RouteStops {
         routeName = Objects.toString(routeName, "");
         if (sourceRouteId == null || sourceRouteId.isBlank()) {
-            throw new IllegalArgumentException("정류장 목록에는 어느 Open API 노선인지가 있어야 한다");
+            throw new IllegalArgumentException("정류장 목록에는 GBIS 노선 ID가 필요하다");
         }
         stops = List.copyOf(stops);
         for (RouteStop stop : stops) {
             if (stop.routeVersionId() != routeVersionId) {
                 throw new IllegalArgumentException(
-                    "다른 노선 판본의 정류장가 섞였다: %d, %d".formatted(routeVersionId, stop.routeVersionId())
+                    "다른 노선 버전의 정류장이 포함되어 있다: %d, %d".formatted(routeVersionId, stop.routeVersionId())
                 );
             }
         }
@@ -56,8 +60,7 @@ public record RouteStops(
         return stops.stream()
             .mapToInt(RouteStop::stopOrder)
             .max()
-            .orElseThrow(() -> new IllegalStateException(
-                "정류장이 하나도 없는 노선 판본에는 마지막 순번이 없다: " + routeVersionId));
+            .orElseThrow(() -> new IllegalStateException("정류장이 하나도 없는 노선 버전에는 마지막 순번이 없다: " + routeVersionId));
     }
 
     /**
@@ -65,23 +68,17 @@ public record RouteStops(
      *
      * <p>잔여석을 모르는 차량은 설계행렬을 채울 수 없어 예보를 생성하지 않고 빈 목록을 반환한다.
      */
-    public List<VehicleStopTarget> targetsAheadOf(
-        ObservedVehicle observation
-    ) {
+    public List<VehicleStopTarget> targetsAheadOf(ObservedVehicle observation) {
         if (!observation.hasKnownSeats()) {
             return List.of();
         }
-        List<VehicleStopTarget> targets = stops.stream()
+        return stops.stream()
             .filter(stop -> isTargetAheadOf(observation, stop))
             .map(stop -> new VehicleStopTarget(observation, stop))
-            .collect(Collectors.toCollection(ArrayList::new));
-        return List.copyOf(targets);
+            .toList();
     }
 
-    private static boolean isTargetAheadOf(
-        ObservedVehicle observation,
-        RouteStop stop
-    ) {
+    private static boolean isTargetAheadOf(ObservedVehicle observation, RouteStop stop) {
         if (!stop.boardingAllowed()) {
             return false;
         }

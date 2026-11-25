@@ -32,15 +32,16 @@ import org.springframework.test.context.MergedContextConfiguration;
 import org.springframework.test.context.SmartContextLoader;
 
 /**
- * 예보를 켠 worker를 실제로 띄워, 기동하며 모델을 올린 뒤에는 첫 수집 배치가 줍기 주기를 기다리지 않고 예보되는지 본다.
+ * 예보를 켠 worker를 실제로 띄워, 기동하며 모델을 올린 뒤에는 첫 수집 배치가 미처리 배치 조회 주기를 기다리지 않고 예보되는지 본다.
  *
- * <p>줍기 주기를 1시간으로 두어 시험 중에는 주기 줍기가 돌지 않는다. 그래서 배치가 예보되려면 기동할 때의 첫 줍기가 모델을 올린 뒤에
- * 돌아 노선 판본과 실행 줄의 짝을 기억해 두어야 한다. 모델은 실제 번들 대신, worker가 기동을 마치며 모델 적재를 요청하는 그 순간에
+ * <p>미처리 배치 조회 주기를 1시간으로 두어 시험 중에는 주기 미처리 배치 조회가 돌지 않는다. 그래서 배치가 예보되려면 기동할 때의 첫 미처리 배치 조회가 모델을 올린 뒤에
+ * 돌아 노선 버전과 실행 기록의 짝을 기억해 두어야 한다. 모델은 실제 번들 대신, worker가 기동을 마치며 모델 적재를 요청하는 그 순간에
  * 활성이 되게 한다. 노선은 기동 전에 있어야 하므로 스키마를 만든 DB에 먼저 넣고 worker를 띄운다.
  *
  * <p>worker의 시계는 시험이 옮긴다({@link ManualClock}). 수신 뒤 착수까지의 시간이 실제로 흐른 시간에 기대지 않는다.
  */
 class ForecastStartupIntegrationTest {
+
     /** 예보 실행이 남기를 기다리는 한도다. 넘기면 시험이 실패한다. 판정에 드는 시각은 여기서 나오지 않는다. */
     private static final Duration DEADLINE = Duration.ofSeconds(20);
     private static final ManualClock CLOCK = new ManualClock();
@@ -86,9 +87,11 @@ class ForecastStartupIntegrationTest {
         }
     }
 
-    /** {@link Worker}에 적힌 설정으로 컨텍스트를 새로 띄운다. 컨텍스트 캐시에 넣지 않으므로 닫는 것은 부른 쪽이 한다. */
+    /** {@link Worker}에 기록된 설정으로 컨텍스트를 새로 띄운다. 컨텍스트 캐시에 넣지 않으므로 닫는 것은 부른 쪽이 한다. */
     private static ConfigurableApplicationContext startWorker() throws Exception {
-        MergedContextConfiguration configuration = BootstrapUtils.resolveTestContextBootstrapper(Worker.class)
+        MergedContextConfiguration configuration = BootstrapUtils.resolveTestContextBootstrapper(
+            Worker.class
+        )
             .buildMergedContextConfiguration();
         SmartContextLoader loader = (SmartContextLoader) configuration.getContextLoader();
         return (ConfigurableApplicationContext) loader.loadContext(configuration);
@@ -112,10 +115,12 @@ class ForecastStartupIntegrationTest {
     })
     @Import({ StartupModel.class, CollectionRuntimeConfiguration.class })
     private static final class Worker {
+
     }
 
     @TestConfiguration(proxyBeanMethods = false)
     static class StartupModel {
+
         @Bean
         JdbcConnectionDetails externalConnectionDetails() {
             return new JdbcConnectionDetails() {
@@ -161,6 +166,7 @@ class ForecastStartupIntegrationTest {
 
     /** 모델 적재를 요청받기 전에는 비어 있는 모델 선택이다. */
     static final class LoadedAtStartup implements ForecastRuntime {
+
         private volatile RuntimeSnapshot selected;
 
         @Override

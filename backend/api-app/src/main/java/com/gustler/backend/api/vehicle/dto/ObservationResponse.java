@@ -19,7 +19,7 @@ public record ObservationResponse(
     OffsetDateTime staleAt
 ) {
     public ObservationResponse {
-        Objects.requireNonNull(state, "state는 null일 수 없습니다.");
+        Objects.requireNonNull(state, "state는 null일 수 없다.");
     }
 
     public static ObservationResponse from(LiveVehicleOverview overview) {

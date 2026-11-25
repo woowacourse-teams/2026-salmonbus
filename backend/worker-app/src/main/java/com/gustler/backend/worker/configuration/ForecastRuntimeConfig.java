@@ -12,4 +12,5 @@ import org.springframework.context.annotation.Import;
 @Import(ForecastingModelConfiguration.class)
 @EnableConfigurationProperties(ModelBundleProperties.class)
 public class ForecastRuntimeConfig {
+
 }

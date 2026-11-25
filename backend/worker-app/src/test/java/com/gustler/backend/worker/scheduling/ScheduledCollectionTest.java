@@ -25,7 +25,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
  * 수집할 노선을 비워둔다. 활성화하면 첫 수집이 바로 실행되지만 노선이 없으면
- * 아무 작업도 하지 않아 상류 호출은 나가지 않는다. 이상 차량 조사 작업은 빈 조사 표를 확인할 수 있다.
+ * 아무 작업도 하지 않아 GBIS 호출은 나가지 않는다. 이상 차량 조사 작업은 빈 조사 표를 확인할 수 있다.
  * 여기서는 수집과 편도 조사의 스케줄 등록을 확인한다.
  */
 @SpringBootTest(properties = {"collection.enabled=true", "forecast.enabled=false", "collection.route-ids="})
@@ -56,16 +56,16 @@ class ScheduledCollectionTest {
             .toList();
 
         // then
-        assertThat(triggers).filteredOn(AdaptiveCollectionTrigger.class::isInstance).hasSize(1);
+        assertThat(triggers).filteredOn(CollectionScheduleTrigger.class::isInstance).hasSize(1);
         var nightly = triggers.stream().filter(CronTrigger.class::isInstance).map(CronTrigger.class::cast).toList();
         assertThat(nightly).hasSize(1);
         assertThat(nightly.getFirst().getExpression()).isEqualTo("0 0 4 * * *");
         assertThat(nightly.getFirst().nextExecution(new SimpleTriggerContext(
             Clock.fixed(Instant.parse("2026-11-04T18:59:59Z"), ZoneOffset.UTC))))
             .isEqualTo(Instant.parse("2026-11-04T19:00:00Z"));
-        verify(collectionScheduler).schedule(any(Runnable.class), any(AdaptiveCollectionTrigger.class));
+        verify(collectionScheduler).schedule(any(Runnable.class), any(CollectionScheduleTrigger.class));
         verify(collectionScheduler).schedule(any(Runnable.class), any(CronTrigger.class));
-        verify(processingScheduler, never()).schedule(any(Runnable.class), any(AdaptiveCollectionTrigger.class));
+        verify(processingScheduler, never()).schedule(any(Runnable.class), any(CollectionScheduleTrigger.class));
         verify(processingScheduler, never()).schedule(any(Runnable.class), any(CronTrigger.class));
     }
 

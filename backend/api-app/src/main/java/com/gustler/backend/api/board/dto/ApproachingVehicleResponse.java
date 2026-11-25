@@ -4,7 +4,7 @@ import com.gustler.backend.api.board.domain.ApproachingVehicle;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * 접근 차량의 식별·남은 정류장 수·좌석 예보를 공개 탑승판 필드로 변환한 값이다.
+ * 접근 차량의 식별, 남은 정류장 수, 좌석 예보를 공개 탑승판 필드로 변환한 값이다.
  */
 @Schema(requiredProperties = {"vehicleId", "remainingStops", "forecast"})
 public record ApproachingVehicleResponse(

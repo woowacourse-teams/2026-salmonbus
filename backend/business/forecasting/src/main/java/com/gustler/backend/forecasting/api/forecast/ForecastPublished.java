@@ -9,18 +9,18 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * 예보 단계가 배치 하나를 처리했다는 사건이다. {@code forecast_run} 한 줄과 {@code forecast_record} 여러 줄로 저장된다.
+ * 예보 단계가 배치 하나를 처리했다는 이벤트다. {@code forecast_run} 한 행과 {@code forecast_record} 여러 행으로 저장된다.
  *
- * <p>예보를 만들지 않은 배치(늦음·범위 밖·입력 부족·빈 발행)도 이 사건을 낸다. 버스별 예측은 {@link ForecastOutcome#PUBLISHED}일
- * 때만 싣고, 그때는 한 대 이상이어야 한다. 착수 시각({@code confirmedAt})은 예보 단계가 한 번 찍은 값이며 뒤 단계와 재처리는
+ * <p>예보를 만들지 않은 배치(늦음, 범위 밖, 입력 부족, 빈 발행)도 이 이벤트를 낸다. 버스별 예측은 {@link ForecastOutcome#PUBLISHED}일
+ * 때만 싣고, 그때는 한 대 이상이어야 한다. 처리 시작 시각({@code confirmedAt})은 예보 단계가 한 번 찍은 값이며 뒤 단계와 재처리는
  * 이 값을 그대로 쓴다. {@code sourceDate}는 배치 예약 시각으로 {@code SourceDates.of}가 정한 날짜여야 한다.
  *
  * @param sourceDate 배치 예약 시각의 한국 날짜
  * @param observationBatchId 처리한 관측 배치
  * @param routeId 노선
- * @param routeVersionId 배치가 속한 노선 판본
+ * @param routeVersionId 배치가 속한 노선 버전
  * @param receivedAt 배치 응답 수신 시각
- * @param confirmedAt 예보 착수 시각
+ * @param confirmedAt 예보 처리 시작 시각
  * @param modelDeploymentId 예측을 낸 모델 배포. 모델을 고르기 전에 끝난 처리면 없다
  * @param outcome 처리 결과
  * @param vehicles 버스별 예측. 배치 안 순서를 유지한다
@@ -35,7 +35,8 @@ public record ForecastPublished(
     Long modelDeploymentId,
     ForecastOutcome outcome,
     List<VehicleForecast> vehicles
-) {
+) implements ForecastBatchEvents.Event {
+
     public ForecastPublished {
         Objects.requireNonNull(sourceDate, "배치 날짜가 필요하다");
         Objects.requireNonNull(receivedAt, "수신 시각이 필요하다");
@@ -43,7 +44,7 @@ public record ForecastPublished(
         Objects.requireNonNull(outcome, "처리 결과가 필요하다");
         vehicles = List.copyOf(Objects.requireNonNull(vehicles, "버스 목록이 필요하다"));
         if (outcome.carriesForecasts() == vehicles.isEmpty()) {
-            throw new IllegalArgumentException("버스별 예측은 발행한 결과에만, 한 대 이상 실어야 한다: " + outcome);
+            throw new IllegalArgumentException("예보 발행 결과에는 차량 한 대 이상의 예측이 있어야 하고, 다른 결과에는 예측이 없어야 한다: " + outcome);
         }
         if (outcome.carriesForecasts() && modelDeploymentId == null) {
             throw new IllegalArgumentException("발행한 예측에는 모델 배포가 필요하다");
@@ -56,7 +57,7 @@ public record ForecastPublished(
         }
     }
 
-    /** 이 사건에 담긴 (관측, 목표 정류장) 예측의 수. {@code forecast_run.prediction_count}에 저장된다. */
+    /** 이 이벤트에 담긴 (관측, 목표 정류장) 예측의 수. {@code forecast_run.prediction_count}에 저장된다. */
     public int predictionCount() {
         return vehicles.stream()
             .mapToInt(VehicleForecast::targetCount)
@@ -64,12 +65,12 @@ public record ForecastPublished(
     }
 
     /**
-     * 버스 한 대의 예측 묶음이다. 목표 정류장·기대 좌석·만석 확률은 같은 순서·같은 길이의 배열이다.
+     * 버스 한 대의 예측 묶음이다. 목표 정류장, 기대 좌석, 만석 확률은 같은 순서, 같은 길이의 배열이다.
      *
      * <p>배열은 만들 때와 읽을 때 복사하므로 바깥에서 바꿀 수 없다. 같음 비교는 배열 내용으로 하며 실수는 비트 단위로 비교한다.
      *
      * @param vehicleObservationId 예측의 기준 관측
-     * @param sourceRowNumber 배치 응답 안의 줄 번호
+     * @param sourceRowNumber 배치 응답 안의 행 번호
      * @param vehicleId 차량
      * @param passedStopOrder 기준 관측에서 지난 정류장 순번
      * @param tripStartObservationId 운행 시작 관측
@@ -95,6 +96,7 @@ public record ForecastPublished(
         double[] expectedSeats,
         double[] fullProbabilities
     ) {
+
         public VehicleForecast {
             if (vehicleId == null || vehicleId.isBlank()) {
                 throw new IllegalArgumentException("차량 번호가 필요하다");
@@ -110,11 +112,11 @@ public record ForecastPublished(
             }
             if (expectedSeats.length != targetStopOrders.length
                 || fullProbabilities.length != targetStopOrders.length) {
-                throw new IllegalArgumentException("목표 정류장·기대 좌석·만석 확률의 길이가 다르다: %d, %d, %d"
+                throw new IllegalArgumentException("목표 정류장, 기대 좌석, 만석 확률의 길이가 다르다: %d, %d, %d"
                     .formatted(targetStopOrders.length, expectedSeats.length, fullProbabilities.length));
             }
             if (Arrays.stream(targetStopOrders).distinct().count() != targetStopOrders.length) {
-                throw new IllegalArgumentException("목표 정류장이 겹친다: " + Arrays.toString(targetStopOrders));
+                throw new IllegalArgumentException("목표 정류장이 중복됐다: " + Arrays.toString(targetStopOrders));
             }
         }
 
@@ -157,8 +159,17 @@ public record ForecastPublished(
 
         @Override
         public int hashCode() {
-            int result = Objects.hash(vehicleObservationId, sourceRowNumber, vehicleId, passedStopOrder,
-                tripStartObservationId, chainStartObservationId, down, capacity, extended);
+            int result = Objects.hash(
+                    vehicleObservationId,
+                    sourceRowNumber,
+                    vehicleId,
+                    passedStopOrder,
+                    tripStartObservationId,
+                    chainStartObservationId,
+                    down,
+                    capacity,
+                    extended
+            );
             result = 31 * result + Arrays.hashCode(targetStopOrders);
             result = 31 * result + Arrays.hashCode(expectedSeats);
             return 31 * result + Arrays.hashCode(fullProbabilities);
@@ -167,9 +178,20 @@ public record ForecastPublished(
         @Override
         public String toString() {
             return "VehicleForecast[vehicleObservationId=%d, sourceRowNumber=%d, vehicleId=%s, passedStopOrder=%d, "
-                .formatted(vehicleObservationId, sourceRowNumber, vehicleId, passedStopOrder)
+                .formatted(
+                        vehicleObservationId,
+                        sourceRowNumber,
+                        vehicleId,
+                        passedStopOrder
+                )
                 + "tripStartObservationId=%d, chainStartObservationId=%d, down=%s, capacity=%d, extended=%s, "
-                    .formatted(tripStartObservationId, chainStartObservationId, down, capacity, extended)
+                    .formatted(
+                            tripStartObservationId,
+                            chainStartObservationId,
+                            down,
+                            capacity,
+                            extended
+                    )
                 + "targetStopOrders=%s, expectedSeats=%s, fullProbabilities=%s]".formatted(
                     Arrays.toString(targetStopOrders), Arrays.toString(expectedSeats),
                     Arrays.toString(fullProbabilities));

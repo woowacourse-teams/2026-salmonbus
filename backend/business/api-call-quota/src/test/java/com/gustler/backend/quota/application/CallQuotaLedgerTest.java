@@ -141,7 +141,7 @@ class CallQuotaLedgerTest {
     /**
      * 트랜잭션 경계는 호출자가 정한다. 여기서 자체 트랜잭션을 열면 예약만 남고
      * 이를 사용할 수집 배치가 생성되지 않는 틈이 생긴다. 이후 실패해도 예약을 보존하는 처리는
-     * ObservationBatchLedger가 보장한다.
+     * CollectionBatchService가 보장한다.
      */
     @Test
     void 예약은_부른_쪽_트랜잭션에_합류한다() {

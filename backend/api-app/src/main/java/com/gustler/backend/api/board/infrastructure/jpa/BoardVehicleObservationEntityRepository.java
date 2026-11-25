@@ -7,7 +7,7 @@ import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
 /**
- * 탑승판의 기준 배치와 노선 판본에 속한 차량 관측을 읽는다.
+ * 탑승판의 기준 배치와 노선 버전에 속한 차량 관측을 읽는다.
  */
 public interface BoardVehicleObservationEntityRepository extends Repository<VehicleObservationJpaEntity, Long> {
     @Query("""
@@ -22,8 +22,8 @@ public interface BoardVehicleObservationEntityRepository extends Repository<Vehi
     );
 
     /**
-     * 여러 관측 묶음과 노선 판본의 차량 관측을 관측 묶음 ID와 함께 읽는다. 각 행은 관측 묶음 ID, 차량 관측 순서다.
-     * 묶음과 판본의 정확한 짝을 고르는 일은 호출하는 쪽이 한다.
+     * 여러 관측 묶음과 노선 버전의 차량 관측을 관측 묶음 ID와 같이 읽는다. 각 행은 관측 묶음 ID, 차량 관측 순서다.
+     * 묶음과 버전의 정확한 짝을 고르는 일은 호출자가 한다.
      */
     @Query("""
         SELECT observation.observationBatch.id, observation

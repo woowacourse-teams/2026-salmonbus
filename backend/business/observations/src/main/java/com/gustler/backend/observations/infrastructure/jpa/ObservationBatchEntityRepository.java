@@ -9,12 +9,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /**
- * 노선 판본과 수집 계획 식별로 같은 관측 배치를 찾는 JPA 경계다.
+ * 노선 버전과 수집 계획 식별로 같은 관측 배치를 찾는 JPA 경계다.
  */
 public interface ObservationBatchEntityRepository extends JpaRepository<ObservationBatchJpaEntity, Long> {
+
     Optional<ObservationBatchJpaEntity> findByRouteVersionIdAndAttemptKey(long routeVersionId, String attemptKey);
 
-    /** 배치의 예보 실행 기록에 적힌 착수 시각이다. 예보 실행은 기본 키(배치 예약 시각의 한국 날짜, 배치)로 찾는다. */
+    /** 배치의 예보 실행 기록에 기록된 처리 시작 시각이다. 예보 실행은 기본 키(배치 예약 시각의 한국 날짜, 배치)로 찾는다. */
     @Query(value = """
         SELECT run.confirmed_at
         FROM observation_batch batch
@@ -26,7 +27,7 @@ public interface ObservationBatchEntityRepository extends JpaRepository<Observat
     Optional<Instant> findForecastStart(@Param("id") long batchId);
 
     /**
-     * 응답·관측·예보 실행 기록이 없는 미완료 배치의 상태만 종료로 바꾼다. 예보 실행은 기본 키(배치 예약 시각의 한국 날짜, 배치)로
+     * 응답, 관측, 예보 실행 기록이 없는 미완료 배치의 상태만 종료로 바꾼다. 예보 실행은 기본 키(배치 예약 시각의 한국 날짜, 배치)로
      * 찾는다.
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)

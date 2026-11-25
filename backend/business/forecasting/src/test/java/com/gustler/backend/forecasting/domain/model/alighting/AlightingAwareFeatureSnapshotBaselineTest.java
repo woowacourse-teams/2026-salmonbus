@@ -19,13 +19,21 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 /**
- * 배치·차량·목표 세 단으로 나눈 입력 계산이 고정 시드 입력에서 기록해 둔 기대값({@link FeatureSnapshotBaseline})과 비트 단위로 같은
- * 결과와 같은 예외를 내는지 확인한다. 기대값은 다시 만들 수 없으므로 노선·관측을 만드는 흐름과 난수를 뽑는 순서를 바꾸지 않는다.
+ * 배치, 차량, 목표 세 단으로 나눈 입력 계산이 고정 시드 입력에서 기록해 둔 기대값({@link FeatureSnapshotBaseline})과 비트 단위로 같은
+ * 결과와 같은 예외를 내는지 확인한다. 기대값은 다시 만들 수 없으므로 노선, 관측을 만드는 흐름과 난수를 뽑는 순서를 바꾸지 않는다.
  */
 class AlightingAwareFeatureSnapshotBaselineTest {
+
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final List<String> TABLES =
-        List.of("lam", "lam_base", "net_tab", "full_tab", "dep_tab", "stop_net_base");
+        List.of(
+                "lam",
+                "lam_base",
+                "net_tab",
+                "full_tab",
+                "dep_tab",
+                "stop_net_base"
+        );
 
     @Test
     void 배치를_공유해도_모든_목표의_입력과_예외가_기준_기록과_같다() {
@@ -40,7 +48,15 @@ class AlightingAwareFeatureSnapshotBaselineTest {
             List<List<AlightingAwareObservation>> batches = simulate(random, route);
             for (int pick = 0; pick < 6; pick++) {
                 final int sourceBatch = batches.size() / 3 + random.nextInt(batches.size() * 2 / 3);
-                compareBatch(random, route, batches, sourceBatch, baseline, scenario + "." + pick, tally);
+                compareBatch(
+                        random,
+                        route,
+                        batches,
+                        sourceBatch,
+                        baseline,
+                        scenario + "." + pick,
+                        tally
+                );
             }
         }
 
@@ -54,9 +70,12 @@ class AlightingAwareFeatureSnapshotBaselineTest {
             softly.assertThat(tally.batchesWithSeveralVehicles).isGreaterThan(tally.batches / 2);
             softly.assertThat(tally.eventsSeen).isGreaterThan(0);
             softly.assertThat(tally.prefixedBatches).isGreaterThan(0);
-            softly.assertThat(tally.failures.keySet()).contains("Unsupported AlightingAware target",
-                "Invalid vehicle capacity snapshot", "Unknown current seats",
-                "Anonymous observation is not a forecast source");
+            softly.assertThat(tally.failures.keySet()).contains(
+                    "Unsupported AlightingAware target",
+                    "Invalid vehicle capacity snapshot",
+                    "Unknown current seats",
+                    "Anonymous observation is not a forecast source"
+            );
         });
     }
 
@@ -66,31 +85,130 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         FeatureSnapshotBaseline baseline = FeatureSnapshotBaseline.read("feature-snapshot/rejections");
         Route route = fixedRoute();
         Instant now = Instant.parse("2026-10-15T23:30:00Z");
-        AlightingAwareObservation earlier = row(route, 1, 0, now.minusSeconds(30), "bus", 3, 20);
-        AlightingAwareObservation source = row(route, 2, 1, now, "bus", 4, 18);
-        AlightingAwareObservation unknownSeats = row(route, 3, 1, now, "other", 4, null);
-        AlightingAwareObservation anonymous = row(route, 4, 1, now, AlightingAwareObservation.ANONYMOUS_GROUP, 4, 10);
-        List<AlightingAwareObservation> history = List.of(earlier, source, unknownSeats, anonymous);
+        AlightingAwareObservation earlier = row(
+                route,
+                1,
+                0,
+                now.minusSeconds(30),
+                "bus",
+                3,
+                20
+        );
+        AlightingAwareObservation source = row(
+                route,
+                2,
+                1,
+                now,
+                "bus",
+                4,
+                18
+        );
+        AlightingAwareObservation unknownSeats = row(
+                route,
+                3,
+                1,
+                now,
+                "other",
+                4,
+                null
+        );
+        AlightingAwareObservation anonymous = row(
+                route,
+                4,
+                1,
+                now,
+                AlightingAwareObservation.ANONYMOUS_GROUP,
+                4,
+                10
+        );
+        List<AlightingAwareObservation> history = List.of(
+                earlier,
+                source,
+                unknownSeats,
+                anonymous
+        );
         List<String> failures = new ArrayList<>();
         Tally tally = new Tally();
 
         // when
-        compareOne(baseline, "capacity-0", route, source, 0, history, List.of(5, 6), tally, failures);
-        compareOne(baseline, "capacity-71", route, source, 71, history, List.of(5), tally, failures);
-        compareOne(baseline, "unsupported-targets", route, source, 40, history,
-            List.of(4, 17, route.statistics.largestStopOrder() + 1), tally, failures);
-        compareOne(baseline, "unknown-seats", route, unknownSeats, 40, history, List.of(5), tally, failures);
-        compareOne(baseline, "anonymous", route, anonymous, 40, history, List.of(5), tally, failures);
-        compareOne(baseline, "missing-source", route, source, 40, List.of(earlier), List.of(5), tally, failures);
+        compareOne(
+                baseline,
+                "capacity-0",
+                route,
+                source,
+                0,
+                history,
+                List.of(5, 6),
+                tally,
+                failures
+        );
+        compareOne(
+                baseline,
+                "capacity-71",
+                route,
+                source,
+                71,
+                history,
+                List.of(5),
+                tally,
+                failures
+        );
+        compareOne(
+                baseline,
+                "unsupported-targets",
+                route,
+                source,
+                40,
+                history,
+                List.of(4, 17, route.statistics.largestStopOrder() + 1),
+                tally,
+                failures
+        );
+        compareOne(
+                baseline,
+                "unknown-seats",
+                route,
+                unknownSeats,
+                40,
+                history,
+                List.of(5),
+                tally,
+                failures
+        );
+        compareOne(
+                baseline,
+                "anonymous",
+                route,
+                anonymous,
+                40,
+                history,
+                List.of(5),
+                tally,
+                failures
+        );
+        compareOne(
+                baseline,
+                "missing-source",
+                route,
+                source,
+                40,
+                List.of(earlier),
+                List.of(5),
+                tally,
+                failures
+        );
 
         // then
         assertSoftly(softly -> {
             softly.assertThat(tally.mismatches).isEmpty();
             softly.assertThat(baseline.unread()).isEmpty();
-            softly.assertThat(failures).contains("Invalid vehicle capacity snapshot",
-                "Unsupported AlightingAware target", "Unknown current seats",
-                "Anonymous observation is not a forecast source",
-                "Source observation missing from AlightingAware history");
+            softly.assertThat(failures).contains(
+                    "Invalid vehicle capacity snapshot",
+                    "Unsupported AlightingAware target",
+                    "Unknown current seats",
+                    "Anonymous observation is not a forecast source",
+                    "Source observation missing from AlightingAware history"
+            );
         });
     }
 
@@ -133,22 +251,41 @@ class AlightingAwareFeatureSnapshotBaselineTest {
             new AlightingAwareHistoryCompactor.History(prefix, history, pastEvents), route.statistics.realStopOrders());
         tally.eventsSeen += events.size();
 
-        AlightingAwareBatchContext context = new AlightingAwareBatchContext(route.statistics, history, events, prefix);
+        AlightingAwareBatchContext context = new AlightingAwareBatchContext(
+                route.statistics,
+                history,
+                events,
+                prefix
+        );
         List<Integer> targets = IntStream.rangeClosed(0, route.statistics.largestStopOrder() + 1).boxed().toList();
         List<Vehicle> vehicles = new ArrayList<>();
         for (AlightingAwareObservation source : batches.get(sourceBatch)) {
             final int capacity = capacity(random);
             String key = name + "." + source.observationId();
             FeatureSnapshotBaseline.Expected expected = baseline.vehicle(key);
-            Outcome current = outcome(() -> new AlightingAwareFeatureSnapshot(route.routeVersionId, source, capacity,
-                context));
-            compare("constructor " + key, expected.rejection(), current, tally);
+            Outcome current = outcome(() -> new AlightingAwareFeatureSnapshot(
+                    route.routeVersionId,
+                    source,
+                    capacity,
+                    context
+            ));
+            compare(
+                    "constructor " + key,
+                    expected.rejection(),
+                    current,
+                    tally
+            );
             if (expected.rejection() != null) {
                 tally.failures.merge(String.valueOf(expected.rejection().message()), 1, Integer::sum);
             }
             if (expected.rejection() == null && current.value() != null) {
-                vehicles.add(new Vehicle(key, expected, (AlightingAwareFeatureSnapshot) current.value(), targets,
-                    random.nextBoolean()));
+                vehicles.add(new Vehicle(
+                        key,
+                        expected,
+                        (AlightingAwareFeatureSnapshot) current.value(),
+                        targets,
+                        random.nextBoolean()
+                ));
             }
         }
         tally.batches++;
@@ -197,9 +334,21 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         List<String> failures
     ) {
         FeatureSnapshotBaseline.Expected expected = baseline.vehicle(name);
-        Outcome current = outcome(() -> new AlightingAwareFeatureSnapshot(route.routeVersionId, source, capacity,
-            route.statistics, history, List.of(), Map.of()));
-        compare("constructor " + name, expected.rejection(), current, tally);
+        Outcome current = outcome(() -> new AlightingAwareFeatureSnapshot(
+                route.routeVersionId,
+                source,
+                capacity,
+                route.statistics,
+                history,
+                List.of(),
+                Map.of()
+        ));
+        compare(
+                "constructor " + name,
+                expected.rejection(),
+                current,
+                tally
+        );
         if (expected.rejection() != null) {
             failures.add(expected.rejection().message());
             return;
@@ -207,7 +356,14 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         if (current.value() == null) {
             return;
         }
-        Vehicle vehicle = new Vehicle(name, expected, (AlightingAwareFeatureSnapshot) current.value(), targets, false);
+        Vehicle vehicle =
+            new Vehicle(
+                    name,
+                    expected,
+                    (AlightingAwareFeatureSnapshot) current.value(),
+                    targets,
+                    false
+            );
         for (final int target : targets) {
             compareTarget(vehicle, target, tally);
             FeatureSnapshotBaseline.Rejection rejection = vehicle.expectedRejection(target);
@@ -219,19 +375,31 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         compareDigest(vehicle, tally);
     }
 
-    private static boolean compareTarget(Vehicle vehicle, final int target, Tally tally) {
+    private static boolean compareTarget(
+        Vehicle vehicle,
+        final int target,
+        Tally tally
+    ) {
         FeatureSnapshotBaseline.Rejection expected = vehicle.expectedRejection(target);
         Outcome current = outcome(() -> vehicle.snapshot.forTarget(target));
         tally.attempts++;
         countTargetOutcome(expected, tally);
-        compare("target " + vehicle.key + "->" + target, expected, current, tally);
+        compare(
+                "target " + vehicle.key + "->" + target,
+                expected,
+                current,
+                tally
+        );
         if (expected == null && current.value() instanceof AlightingAwareFeatureVector vector) {
             vehicle.remember(target, vector, tally);
         }
         return expected == null;
     }
 
-    private static void countTargetOutcome(FeatureSnapshotBaseline.Rejection expected, Tally tally) {
+    private static void countTargetOutcome(
+        FeatureSnapshotBaseline.Rejection expected,
+        Tally tally
+    ) {
         if (expected != null) {
             tally.failures.merge(String.valueOf(expected.message()), 1, Integer::sum);
             return;
@@ -239,8 +407,13 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         tally.vectors++;
     }
 
-    private static void compareAccessors(Vehicle vehicle, Tally tally) {
-        Outcome tripStart = outcome(() -> vehicle.snapshot.provenance().tripStartObservationId());
+    private static void compareAccessors(
+        Vehicle vehicle,
+        Tally tally
+    ) {
+        Outcome tripStart = outcome(
+            () -> vehicle.snapshot.provenance().tripStartObservationId()
+        );
         if (!sameTripStart(vehicle.expected, tripStart)) {
             tally.mismatches.add("accessors " + vehicle.key + " provenance: " + vehicle.expected.tripStart() + " "
                 + vehicle.expected.tripStartRejection() + " / " + tripStart);
@@ -248,20 +421,25 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         vehicle.rememberValues(values(vehicle.snapshot), tally);
     }
 
-    private static boolean sameTripStart(FeatureSnapshotBaseline.Expected expected, Outcome current) {
+    private static boolean sameTripStart(
+        FeatureSnapshotBaseline.Expected expected,
+        Outcome current
+    ) {
         if (expected.tripStartRejection() != null) {
             return sameOutcome(expected.tripStartRejection(), current);
         }
         return current.error() == null && expected.tripStart().equals(current.value());
     }
 
-    /** 목표와 무관한 값(관측 값, 정원, 기준 관측 번호, 기준 관측)을 글로 적는다. 값 대신 예외가 나면 그 예외를 적는다. */
+    /** 목표와 무관한 값(관측 값, 정원, 기준 관측 번호, 기준 관측)을 글로 기록한다. 값 대신 예외가 나면 그 예외를 기록한다. */
     private static String values(AlightingAwareFeatureSnapshot snapshot) {
-        return String.join("\n",
-            "observation=" + text(outcome(() -> FeatureSnapshotBaseline.text(snapshot.observation()))),
-            "capacity=" + text(outcome(() -> snapshot.capacity())),
-            "id=" + text(outcome(() -> snapshot.vehicleObservationId())),
-            "source=" + text(outcome(() -> FeatureSnapshotBaseline.text(snapshot.source()))));
+        return String.join(
+                "\n",
+                "observation=" + text(outcome(() -> FeatureSnapshotBaseline.text(snapshot.observation()))),
+                "capacity=" + text(outcome(() -> snapshot.capacity())),
+                "id=" + text(outcome(() -> snapshot.vehicleObservationId())),
+                "source=" + text(outcome(() -> FeatureSnapshotBaseline.text(snapshot.source())))
+        );
     }
 
     private static String text(Outcome outcome) {
@@ -271,7 +449,10 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         return String.valueOf(outcome.value());
     }
 
-    private static void compareDigest(Vehicle vehicle, Tally tally) {
+    private static void compareDigest(
+        Vehicle vehicle,
+        Tally tally
+    ) {
         String actual = vehicle.digest();
         if (!vehicle.expected.digest().equals(actual)) {
             tally.mismatches.add("values " + vehicle.key + ": " + vehicle.expected.digest() + " / " + actual);
@@ -297,7 +478,10 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         return expected.toString();
     }
 
-    private static boolean sameOutcome(FeatureSnapshotBaseline.Rejection expected, Outcome current) {
+    private static boolean sameOutcome(
+        FeatureSnapshotBaseline.Rejection expected,
+        Outcome current
+    ) {
         if (expected == null) {
             return current.error() == null;
         }
@@ -319,7 +503,12 @@ class AlightingAwareFeatureSnapshotBaselineTest {
 
     private static int capacity(Random random) {
         if (random.nextInt(12) == 0) {
-            return List.of(0, -3, 71, 90).get(random.nextInt(4));
+            return List.of(
+                    0,
+                    -3,
+                    71,
+                    90
+            ).get(random.nextInt(4));
         }
         return 35 + random.nextInt(35);
     }
@@ -332,8 +521,13 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         for (int order = 1; order <= stopCount; order++) {
             final boolean via = isRandomViaStop(random, order, stopCount);
             final boolean boarding = !via && random.nextInt(10) != 0;
-            stops.add(new AlightingAwareRouteStatistics.Stop(order, "s" + order, stopName(order, via), order > turn,
-                boarding));
+            stops.add(new AlightingAwareRouteStatistics.Stop(
+                    order,
+                    "s" + order,
+                    stopName(order, via),
+                    order > turn,
+                    boarding
+            ));
         }
         Map<String, Map<String, Double>> tables = new HashMap<>();
         for (String table : TABLES) {
@@ -367,9 +561,23 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         LocalDate day = LocalDate.of(2026, 10, 1).plusDays(random.nextInt(60));
         Instant start = day.atTime(5 + random.nextInt(17), random.nextInt(60)).atZone(SEOUL).toInstant();
         Set<LocalDate> holidays = holidays(random, day);
-        AlightingAwareRouteStatistics statistics = new AlightingAwareRouteStatistics("r" + scenario, stops,
-            1.5 + random.nextDouble() * 2, tables, bands, holidays, confirmed);
-        return new Route(statistics, routeVersionId(confirmed, scenario), start, turn, confirmed, new long[] { 1 });
+        AlightingAwareRouteStatistics statistics = new AlightingAwareRouteStatistics(
+                "r" + scenario,
+                stops,
+                1.5 + random.nextDouble() * 2,
+                tables,
+                bands,
+                holidays,
+                confirmed
+        );
+        return new Route(
+                statistics,
+                routeVersionId(confirmed, scenario),
+                start,
+                turn,
+                confirmed,
+                new long[] { 1 }
+        );
     }
 
     private static boolean isRandomViaStop(Random random, final int order, final int stopCount) {
@@ -400,16 +608,35 @@ class AlightingAwareFeatureSnapshotBaselineTest {
     private static Route fixedRoute() {
         List<AlightingAwareRouteStatistics.Stop> stops = new ArrayList<>();
         for (int order = 1; order <= 20; order++) {
-            stops.add(new AlightingAwareRouteStatistics.Stop(order, "s" + order, fixedStopName(order), order > 10,
-                order != 6));
+            stops.add(new AlightingAwareRouteStatistics.Stop(
+                    order,
+                    "s" + order,
+                    fixedStopName(order),
+                    order > 10,
+                    order != 6
+            ));
         }
         Map<String, Map<String, Double>> tables = new HashMap<>();
         for (String table : TABLES) {
             tables.put(table, Map.of());
         }
         AlightingAwareRouteStatistics statistics =
-            new AlightingAwareRouteStatistics("fixed", stops, 2, tables, Map.of(), Set.of());
-        return new Route(statistics, 1, Instant.parse("2026-10-15T23:00:00Z"), 10, false, new long[] { 1 });
+            new AlightingAwareRouteStatistics(
+                    "fixed",
+                    stops,
+                    2,
+                    tables,
+                    Map.of(),
+                    Set.of()
+            );
+        return new Route(
+                statistics,
+                1,
+                Instant.parse("2026-10-15T23:00:00Z"),
+                10,
+                false,
+                new long[] { 1 }
+        );
     }
 
     private static String fixedStopName(final int order) {
@@ -428,7 +655,10 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         };
     }
 
-    private static List<List<AlightingAwareObservation>> simulate(Random random, Route route) {
+    private static List<List<AlightingAwareObservation>> simulate(
+        Random random,
+        Route route
+    ) {
         final int vehicles = 2 + random.nextInt(7);
         final int largest = route.statistics.largestStopOrder();
         int[] passed = new int[vehicles];
@@ -453,16 +683,45 @@ class AlightingAwareFeatureSnapshotBaselineTest {
                     pause[vehicle] = 2 + random.nextInt(6);
                     continue;
                 }
-                advance(random, passed, seats, vehicle, largest);
+                advance(
+                        random,
+                        passed,
+                        seats,
+                        vehicle,
+                        largest
+                );
                 Instant at = observedAt(random, time);
-                rows.add(row(route, route.nextId(), batch, at, "v" + vehicle, passed[vehicle], seats[vehicle]));
+                rows.add(row(
+                        route,
+                        route.nextId(),
+                        batch,
+                        at,
+                        "v" + vehicle,
+                        passed[vehicle],
+                        seats[vehicle]
+                ));
             }
             if (random.nextInt(15) == 0) {
-                rows.add(row(route, route.nextId(), batch, time, AlightingAwareObservation.ANONYMOUS_GROUP,
-                    1 + random.nextInt(largest), random.nextInt(30)));
+                rows.add(row(
+                        route,
+                        route.nextId(),
+                        batch,
+                        time,
+                        AlightingAwareObservation.ANONYMOUS_GROUP,
+                        1 + random.nextInt(largest),
+                        random.nextInt(30)
+                ));
             }
             if (rows.isEmpty()) {
-                rows.add(row(route, route.nextId(), batch, time, "v0", passed[0], seats[0]));
+                rows.add(row(
+                        route,
+                        route.nextId(),
+                        batch,
+                        time,
+                        "v0",
+                        passed[0],
+                        seats[0]
+                ));
             }
             batches.add(rows);
         }
@@ -536,12 +795,35 @@ class AlightingAwareFeatureSnapshotBaselineTest {
     ) {
         final int state = (int) (id % 3);
         if (!route.confirmed) {
-            return new AlightingAwareObservation(id, 1000 + rank, rank, at, vehicle, passed, passed + 1, state, seats,
-                (int) (id % 5));
+            return new AlightingAwareObservation(
+                    id,
+                    1000 + rank,
+                    rank,
+                    at,
+                    vehicle,
+                    passed,
+                    passed + 1,
+                    state,
+                    seats,
+                    (int) (id % 5)
+            );
         }
         Instant physical = physicalAt(id, at);
-        return new AlightingAwareObservation(id, 1000 + rank, rank, at, vehicle, passed, passed + 1, state, seats,
-            (int) (id % 5), route.routeVersionId, physical, passed > route.turn);
+        return new AlightingAwareObservation(
+                id,
+                1000 + rank,
+                rank,
+                at,
+                vehicle,
+                passed,
+                passed + 1,
+                state,
+                seats,
+                (int) (id % 5),
+                route.routeVersionId,
+                physical,
+                passed > route.turn
+        );
     }
 
     private static Instant physicalAt(final long id, Instant at) {
@@ -559,6 +841,7 @@ class AlightingAwareFeatureSnapshotBaselineTest {
         boolean confirmed,
         long[] ids
     ) {
+
         private long nextId() {
             return ids[0]++;
         }
@@ -566,6 +849,7 @@ class AlightingAwareFeatureSnapshotBaselineTest {
 
     /** 기대값과 견주는 차량 하나. 목표마다 처음 받은 입력 벡터와 처음 읽은 값을 기억해 두었다가 지문을 만든다. */
     private static final class Vehicle {
+
         private final String key;
         private final FeatureSnapshotBaseline.Expected expected;
         private final AlightingAwareFeatureSnapshot snapshot;
@@ -593,15 +877,19 @@ class AlightingAwareFeatureSnapshotBaselineTest {
             return expected.targets().get(targets.indexOf(target));
         }
 
-        /** 같은 목표를 다시 불러 받은 입력 벡터가 처음과 다르면 불일치로 적는다. */
-        private void remember(final int target, AlightingAwareFeatureVector vector, Tally tally) {
+        /** 같은 목표를 다시 불러 받은 입력 벡터가 처음과 다르면 불일치로 기록한다. */
+        private void remember(
+            final int target,
+            AlightingAwareFeatureVector vector,
+            Tally tally
+        ) {
             AlightingAwareFeatureVector first = vectors.putIfAbsent(target, vector);
             if (first != null && !sameVector(first, vector)) {
                 tally.mismatches.add("repeated target " + key + "->" + target);
             }
         }
 
-        /** 다시 읽은 값이 처음과 다르면 불일치로 적는다. */
+        /** 다시 읽은 값이 처음과 다르면 불일치로 기록한다. */
         private void rememberValues(String read, Tally tally) {
             if (values == null) {
                 values = read;
@@ -622,9 +910,11 @@ class AlightingAwareFeatureSnapshotBaselineTest {
     }
 
     private record Outcome(Object value, RuntimeException error) {
+
     }
 
     private static final class Tally {
+
         private final List<String> mismatches = new ArrayList<>();
         private final Map<String, Integer> failures = new HashMap<>();
         private int batches;

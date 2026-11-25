@@ -14,10 +14,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 모델 파일 검증·활성 배포·런타임 해석을 각각의 협력 객체로 연결한다.
+ * 모델 파일 검증, 활성 배포, 런타임 해석을 각각의 협력 객체로 연결한다.
  */
 @Configuration(proxyBeanMethods = false)
 public class ForecastingModelConfiguration {
+
     @Bean
     public LoadedModelRegistry loadedModelRegistry() {
         return new LoadedModelRegistry();
@@ -47,7 +48,12 @@ public class ForecastingModelConfiguration {
         LoadedModelRegistry bundles,
         BundleActivation activation
     ) {
-        return new ModelStartupService(loader, deployments, bundles, activation);
+        return new ModelStartupService(
+                loader,
+                deployments,
+                bundles,
+                activation
+        );
     }
 
     @Bean
@@ -58,8 +64,10 @@ public class ForecastingModelConfiguration {
     }
 
     @Bean
-    public ActiveForecastRuntimeResolver activeForecastRuntimeResolver(ModelDeploymentRepository deployments,
-        LoadedModelRegistry bundles) {
+    public ActiveForecastRuntimeResolver activeForecastRuntimeResolver(
+        ModelDeploymentRepository deployments,
+        LoadedModelRegistry bundles
+    ) {
         return new ActiveForecastRuntimeResolver(deployments, bundles);
     }
 }

@@ -23,9 +23,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 탑승판·스냅샷·일괄 읽기 결과를 실행마다 같은 글로 바꿔 기록해 둔 기대 응답과 견주게 한다.
+ * 탑승판, 스냅샷, 일괄 읽기 결과를 실행마다 같은 글로 바꿔 기록해 둔 기대 응답과 견주게 한다.
  *
- * <p>DB가 매기는 식별자(노선 판본·관측 묶음·모델 배포)는 시험이 붙인 이름으로, 시각은 시험의 기준 시각에서 떨어진 만큼을
+ * <p>DB가 매기는 식별자(노선 버전, 관측 묶음, 모델 배포)는 시험이 붙인 이름으로, 시각은 시험의 기준 시각에서 떨어진 만큼을
  * 고정 시각에 더한 값으로 바꾼다. 그 밖의 필드는 레코드의 문자열 표현을 그대로 쓰므로 필드 하나라도 다르면 글이 다르다.
  */
 final class RecordedBoards {
@@ -54,12 +54,12 @@ final class RecordedBoards {
     }
 
     /**
-     * 시험 자원의 기대 응답을 읽는다. 한 줄이 이름과 탭과 값이고, {@code #}으로 시작하는 줄과 빈 줄은 건너뛴다.
+     * 시험 자원의 기대 응답을 읽는다. 한 행이 이름과 탭과 값이고, {@code #}으로 시작하는 줄과 빈 줄은 건너뛴다.
      */
     static Map<String, String> load(String resource) {
         try (InputStream input = RecordedBoards.class.getResourceAsStream(resource)) {
             if (input == null) {
-                throw new IllegalStateException("기대 응답 자원이 없습니다: " + resource);
+                throw new IllegalStateException("기대 응답 자원이 없다: " + resource);
             }
             Map<String, String> recorded = new LinkedHashMap<>();
             String text = new String(input.readAllBytes(), StandardCharsets.UTF_8);
@@ -114,7 +114,7 @@ final class RecordedBoards {
     }
 
     /**
-     * 만료 시각을 기록한 때의 조회 창으로 옮겨 적는다. 조회 창은 관측 시각이 심야인지에 따라 달라서 그대로 적으면 시험을 돌리는
+     * 만료 시각을 기록한 때의 조회 창으로 옮겨 기록한다. 조회 범위는 관측 시각이 심야인지에 따라 달라서 그대로 적으면 시험을 돌리는
      * 시간대에 따라 글이 달라진다. 만료 시각이 조회 창 규칙과 어긋난 만큼은 그대로 더해 기대 응답과 달라지게 한다.
      */
     private OffsetDateTime recordedStaleAt(Board board) {

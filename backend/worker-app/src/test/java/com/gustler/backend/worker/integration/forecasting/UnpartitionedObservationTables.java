@@ -10,7 +10,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 /**
  * 관측 두 테이블({@code observation_batch}, {@code vehicle_observation})을 일반 테이블로 둔 DB를 만든다.
  *
- * <p>두 테이블을 날짜 파티션 테이블로 다시 만드는 마이그레이션은 줄이 없을 때만 일한다. 그래서 그 앞 버전까지 올린 뒤 배치 한 줄을 넣고
+ * <p>두 테이블을 날짜 파티션 테이블로 다시 만드는 마이그레이션은 줄이 없을 때만 일한다. 그래서 그 앞 버전까지 올린 뒤 배치 한 행을 넣고
  * 나머지를 올린다. 넣은 줄은 마이그레이션이 끝난 뒤 지워 시험이 빈 테이블에서 시작하게 한다.
  */
 @TestConfiguration(proxyBeanMethods = false)

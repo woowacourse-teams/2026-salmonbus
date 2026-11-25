@@ -1,10 +1,10 @@
 package com.gustler.backend.api.board.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.gustler.backend.api.board.domain.VehicleForecast;
-import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 
 /**
  * 승차 시점 좌석 예보의 제공 가능 상태와 수치를 공개 응답으로 전달한다.
@@ -54,25 +54,40 @@ public record ForecastResponse(
     )
     Double departureFullProbability
 ) {
+
     public ForecastResponse(Status status, Double seatAvailableProbability, Double expectedSeats) {
-        this(status, seatAvailableProbability, expectedSeats, null, null, null, null);
+        this(
+                status,
+                seatAvailableProbability,
+                expectedSeats,
+                null,
+                null,
+                null,
+                null
+        );
     }
 
     public enum Status {
+
         AVAILABLE, UNAVAILABLE
     }
 
     public static ForecastResponse from(VehicleForecast forecast) {
         return switch (forecast) {
         case VehicleForecast.Available available -> new ForecastResponse(
-            Status.AVAILABLE,
-            available.seatAvailableProbability(),
-            available.expectedSeats(),
-            available.seatTarget(),
-            available.probabilityTarget(),
-            available.expectedSeats(),
-            available.departureFullProbability());
-        case VehicleForecast.Unavailable ignored -> new ForecastResponse(Status.UNAVAILABLE, null, null);
+                Status.AVAILABLE,
+                available.seatAvailableProbability(),
+                available.expectedSeats(),
+                available.seatTarget(),
+                available.probabilityTarget(),
+                available.expectedSeats(),
+                available.departureFullProbability()
+        );
+        case VehicleForecast.Unavailable ignored -> new ForecastResponse(
+            Status.UNAVAILABLE,
+            null,
+            null
+        );
         };
     }
 }

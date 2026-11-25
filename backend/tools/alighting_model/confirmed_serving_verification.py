@@ -7,32 +7,31 @@ import math
 import re
 
 PROFILE = 'alighting-confirmed-closure-v2'
+SUPPORTED_INPUT_PROFILES = (None, 'alighting-original-v1', PROFILE)
 LABEL = 'alighting-confirmed-routeband-v2'
 CAPACITY = 'observed-vehicle-prefix-max-through-closure-v2'
 CONTRACT = dict(input_profile=PROFILE, label_version=LABEL, capacity_policy=CAPACITY)
 
 
-
-def canonical_identifier(value):
-    """Interpret historical contract identifiers without altering source bytes."""
-    return 'alighting-' + value[4:] if isinstance(value, str) and value.startswith('les-') else value
-
 def require_profile(value):
-    if any(canonical_identifier(value.get(key)) != expected for key, expected in CONTRACT.items()):
+    if any(value.get(key) != expected for key, expected in CONTRACT.items()):
         raise ValueError('confirmed input/label/capacity contract mismatch')
 
 
 def checked_routes(contents):
     import json
     contract = json.loads(contents.get('feature-contract.json', b'{}'))
-    if canonical_identifier(contract.get('input_profile')) != PROFILE:
+    profile = contract.get('input_profile')
+    if profile not in SUPPORTED_INPUT_PROFILES:
+        raise ValueError('unsupported input profile')
+    if profile != PROFILE:
         return None
     require_profile(contract)
     routes = json.loads(contents['statistics-manifest.json'])['routes']
     if not routes or len(routes) != len(set(routes)):
         raise ValueError('empty or duplicate confirmed routes')
     for route in routes:
-        if canonical_identifier(json.loads(contents[f'statistics-{route}.json']).get('input_profile')) != PROFILE:
+        if json.loads(contents[f'statistics-{route}.json']).get('input_profile') != PROFILE:
             raise ValueError('mixed statistics profile: '+route)
     return routes
 
@@ -92,7 +91,7 @@ def verify_result(check, result, source_digest, routes):
 
 def verify_receipt(check, receipt, evidence, source_digest, routes):
     require_profile(receipt)
-    if canonical_identifier(evidence.get('schema')) != 'alighting-confirmed-serving-evidence-v1':
+    if evidence.get('schema') != 'alighting-confirmed-serving-evidence-v1':
         raise ValueError('wrong evidence schema')
     if receipt.get('routes') != routes or evidence.get('routes') != routes:
         raise ValueError('receipt route coverage mismatch')

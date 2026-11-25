@@ -2,10 +2,9 @@ package com.gustler.backend.forecasting.api;
 
 import java.time.Duration;
 
-/**
- * 예보가 배치를 줍는 신선도 창과 한 번에 줍는 배치 수의 한도를 전달한다.
- */
+/** 예보할 배치의 유효 시간과 한 번에 조회할 최대 배치 수를 정한다. */
 public record ForecastPolicy(Duration staleness, int batchLimit) {
+
     public static final Duration MAX_STALENESS = Duration.ofHours(1);
 
     public ForecastPolicy {

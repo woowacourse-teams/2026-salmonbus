@@ -20,6 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 @IntegrationTest
 @ActiveProfiles("api-docs-local")
 class BoardHeadwaysApiDocsTest {
+
     private static final List<String> DAYS = List.of("weekday", "saturday", "sunday", "holiday");
 
     @Autowired
@@ -48,11 +49,22 @@ class BoardHeadwaysApiDocsTest {
         assertThat(actual.at("/properties/headways/$ref").asText())
             .isEqualTo("#/components/schemas/RouteHeadwaysResponse");
         assertThat(actual.at("/properties/headways/description").asText())
-            .contains("요일별 최소·최대 배차간격(분)", "실제 도착 간격이나 평균이 아니다", "마지막으로 받은 정상 값을 유지한다",
-            "공휴일인지는 판정하지 않는다");
+            .contains(
+                    "요일별 최소, 최대 배차간격(분)",
+                    "실제 도착 간격이나 평균이 아니다",
+                    "마지막으로 받은 정상 값을 유지한다",
+                    "공휴일인지는 판정하지 않는다"
+            );
         assertThat(actual.path("required")).extracting(JsonNode::asText).containsExactlyInAnyOrder(
-            "id", "displayName", "startStopName", "endStopName", "status", "turnSequence", "directions",
-        "referenceVersionId");
+                "id",
+                "displayName",
+                "startStopName",
+                "endStopName",
+                "status",
+                "turnSequence",
+                "directions",
+                "referenceVersionId"
+        );
     }
 
     @Test

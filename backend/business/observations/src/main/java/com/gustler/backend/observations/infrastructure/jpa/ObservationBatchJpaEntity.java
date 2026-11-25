@@ -1,9 +1,11 @@
 package com.gustler.backend.observations.infrastructure.jpa;
 
-import com.gustler.backend.observations.domain.CollectionBatch.State;
-import com.gustler.backend.observations.domain.CollectionBatch;
-import com.gustler.backend.observations.domain.ObservationBatchFailureCode;
-import com.gustler.backend.observations.domain.ObservationBatchOutcome;
+import com.gustler.backend.observations.api.CollectionSchedule;
+import com.gustler.backend.observations.domain.CollectionBatchStatus;
+import com.gustler.backend.observations.domain.CollectionFailureReason;
+import com.gustler.backend.observations.domain.CollectionPlan;
+import com.gustler.backend.observations.domain.CollectionResult;
+import com.gustler.backend.observations.domain.ObservationRows;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,12 +19,13 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 수집 배치의 저장 매핑. 상태 전이 규칙은 CollectionBatch가 관리한다. */
+/** 수집 배치의 저장 값과 시도 및 종료 상태를 관리한다. */
 @Entity(name = "ObservationBatch")
 @Table(name = "observation_batch")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ObservationBatchJpaEntity {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -53,11 +56,11 @@ public class ObservationBatchJpaEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "outcome")
-    private ObservationBatchOutcome outcome;
+    private CollectionBatchStatus outcome;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "failure_code")
-    private ObservationBatchFailureCode failureCode;
+    private CollectionFailureReason failureCode;
 
     @Column(name = "result_code")
     private Integer resultCode;
@@ -77,33 +80,55 @@ public class ObservationBatchJpaEntity {
     @Column(name = "collection_strategy_version")
     private String collectionStrategyVersion;
 
-    public ObservationBatchJpaEntity(CollectionBatch batch) {
-        apply(batch);
+    ObservationBatchJpaEntity(CollectionPlan plan, final boolean reserved) {
+        routeVersionId = plan.routeVersionId();
+        scheduledAt = plan.scheduledAt();
+        attemptKey = plan.attemptKey();
+        attemptNumber = 1;
+        normalizationVersion = ObservationRows.CURRENT_NORMALIZATION_VERSION;
+        collectionStrategyVersion = CollectionSchedule.CURRENT_STRATEGY_VERSION;
+        prepare(reserved);
     }
 
-    public CollectionBatch toDomain() {
-        return CollectionBatch.restore(new State(id, routeVersionId, scheduledAt,
-            attemptKey, attemptNumber, requestedAt, responseReceivedAt, inputConfirmedAt, outcome,
-            failureCode, resultCode, providerRows, storedRows, excludedRows, normalizationVersion,
-            collectionStrategyVersion));
+    /** 다시 열 수 있는지는 저장소가 확인하며, 지난 관측을 지운 뒤 이 메서드를 호출한다. */
+    void startNextAttempt(final boolean reserved) {
+        attemptNumber++;
+        prepare(reserved);
+
+        requestedAt = null;
+        responseReceivedAt = null;
+        resultCode = null;
+        providerRows = null;
+        storedRows = null;
+        excludedRows = null;
     }
 
-    public void apply(CollectionBatch batch) {
-        State state = batch.state();
-        routeVersionId = state.routeVersionId();
-        scheduledAt = state.scheduledAt();
-        attemptKey = state.attemptKey();
-        attemptNumber = state.attemptNumber();
-        requestedAt = state.requestedAt();
-        responseReceivedAt = state.responseReceivedAt();
-        inputConfirmedAt = state.inputConfirmedAt();
-        outcome = state.outcome();
-        failureCode = state.failureCode();
-        resultCode = state.resultCode();
-        providerRows = state.providerRows();
-        storedRows = state.storedRows();
-        excludedRows = state.excludedRows();
-        normalizationVersion = state.normalizationVersion();
-        collectionStrategyVersion = state.collectionStrategyVersion();
+    private void prepare(final boolean reserved) {
+        if (reserved) {
+            outcome = CollectionBatchStatus.DISPATCHING;
+            failureCode = null;
+            return;
+        }
+        outcome = CollectionBatchStatus.NOT_RESERVED;
+        failureCode = CollectionFailureReason.LOCAL_QUOTA_EXHAUSTED;
+    }
+
+    void abandonBeforeSend() {
+        outcome = CollectionBatchStatus.ABANDONED_BEFORE_SEND;
+    }
+
+    /** 관측이 있으면 INSERT를 마친 뒤 결과와 건수를 같이 반영한다. */
+    void conclude(CollectionResult result, OffsetDateTime receivedAt) {
+        outcome = result.outcome();
+        failureCode = result.failureCode();
+        resultCode = result.upstreamResultCode();
+        responseReceivedAt = receivedAt;
+
+        if (result.observations().isPresent()) {
+            ObservationRows rows = result.observations().orElseThrow();
+            providerRows = rows.providerRows();
+            storedRows = rows.storableRowCount();
+            excludedRows = rows.excludedRowCount();
+        }
     }
 }

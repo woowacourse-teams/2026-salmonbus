@@ -19,7 +19,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * </ul>
  * 수집과 예보를 모두 끈 worker는 이 구성이 빈도 스케줄도 더하지 않는다.
  *
- * <p>작업은 빈이 만들어질 때 첫 유지를 끝낸다. 수집 예약({@code CollectionConfig})은 이 빈 뒤에 만들어지고 예보의 줍기와 채점의 쓰기는
+ * <p>작업은 빈이 만들어질 때 첫 유지를 끝낸다. 수집 예약({@code CollectionSchedulingConfiguration})은 이 빈 뒤에 만들어지고 예보의 미처리 배치 조회와 정산의 쓰기는
  * 컨텍스트가 다 뜬 뒤에 시작하므로, 첫 줄을 쓰기 전에 그날 파티션이 있다. DB 마이그레이션이 끝난 뒤에 만들어져야 한다.
  */
 @Configuration(proxyBeanMethods = false)

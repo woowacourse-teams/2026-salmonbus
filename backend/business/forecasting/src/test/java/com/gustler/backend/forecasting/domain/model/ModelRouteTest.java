@@ -8,6 +8,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class ModelRouteTest {
+
     @ParameterizedTest
     @CsvSource({
         "234000050, 1650", "204000057, 3330",
@@ -19,10 +20,7 @@ class ModelRouteTest {
         "234000879, 1101", "228000393, 7007-1", "200000314, 4000",
         "234001476, M2323", "222000209, M2352", "227000016, 9302", "234000079, 500-1", "234000015, 1007"
     })
-    void GBIS_노선_id_를_계수_묶음이_쓰는_노선_이름으로_옮긴다(
-        String sourceRouteId,
-        String expected
-    ) {
+    void GBIS_노선_id_를_계수_묶음이_쓰는_노선_이름으로_옮긴다(String sourceRouteId, String expected) {
         // when
         String actual = ModelRoute.of(sourceRouteId);
 

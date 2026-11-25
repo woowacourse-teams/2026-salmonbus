@@ -14,26 +14,20 @@ import java.util.List;
  * <p>digest는 {@code model_deployment.supported_scope_digest}에 기록되며,
  * 해당 노선 버전을 지원하는 배포인지 확인할 때 사용한다.
  */
-public record SupportedForecastScope(
-    List<String> modelRoutes
-) {
+public record SupportedForecastScope(List<String> modelRoutes) {
+
     public SupportedForecastScope {
         if (modelRoutes == null || modelRoutes.isEmpty()) {
-            throw new IllegalArgumentException("예보할 노선이 하나는 있어야 한다");
+            throw new IllegalArgumentException("예보할 노선이 하나 이상 필요하다");
         }
         modelRoutes = List.copyOf(modelRoutes);
     }
 
-    public boolean covers(
-        String modelRoute,
-        final int stopsAhead
-    ) {
+    public boolean covers(String modelRoute, final int stopsAhead) {
         return modelRoutes.contains(modelRoute) && ForecastDistance.covers(stopsAhead);
     }
 
-    public boolean coversSourceRoute(
-        String sourceRouteId
-    ) {
+    public boolean coversSourceRoute(String sourceRouteId) {
         return ModelRoute.covers(sourceRouteId) && modelRoutes.contains(ModelRoute.of(sourceRouteId));
     }
 

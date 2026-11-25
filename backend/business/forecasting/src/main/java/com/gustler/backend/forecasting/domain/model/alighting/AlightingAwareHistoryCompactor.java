@@ -1,5 +1,11 @@
 package com.gustler.backend.forecasting.domain.model.alighting;
 
+import static java.util.function.Function.identity;
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toCollection;
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toMap;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -10,9 +16,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
-/** 누적 상태와 시간 창·미완료 통과 구간을 함께 보존해 이전 입력을 정확히 복구한다. */
+/** 오래된 관측을 누적 상태로 압축하되 최근 관측과 미완료 통과 구간은 남겨 예보 입력을 복구한다. */
 public final class AlightingAwareHistoryCompactor {
+
+    private static final Duration HISTORY_WINDOW = Duration.ofMinutes(90);
+    private static final int PRECEDING_PASSES_PER_TRIP = 5;
+    private static final Comparator<AlightingAwarePassEvent> BY_DEPARTURE_TIME =
+        Comparator.comparing(event -> event.departure().receivedAt());
+
     private AlightingAwareHistoryCompactor() {
     }
 
@@ -21,6 +34,7 @@ public final class AlightingAwareHistoryCompactor {
         List<AlightingAwareObservation> observations,
         List<AlightingAwarePassEvent> events
     ) {
+
         public History {
             prefix = Map.copyOf(prefix);
             observations = List.copyOf(observations);
@@ -28,38 +42,45 @@ public final class AlightingAwareHistoryCompactor {
         }
     }
 
-    public static History compact(History input, Instant asOf) {
-        Instant cutoff = retainedFrom(input.observations(), asOf.minusSeconds(5400));
-        Map<String, AlightingAwareVehiclePrefix> accumulated = new HashMap<>(input.prefix());
-        List<AlightingAwareObservation> retained = new ArrayList<>();
+    public static History compact(
+        History input,
+        Instant asOf
+    ) {
+        Instant observationWindowStart = retainedFrom(input.observations(), asOf.minus(HISTORY_WINDOW));
+        Map<String, AlightingAwareVehiclePrefix> prefixByVehicle = new HashMap<>(input.prefix());
+        List<AlightingAwareObservation> observationsInWindow = new ArrayList<>();
         for (AlightingAwareObservation observation : input.observations()) {
-            if (observation.receivedAt().isBefore(cutoff)) {
-                accumulated.put(observation.vehicleId(),
-                    advance(accumulated.get(observation.vehicleId()), observation));
+            if (observation.receivedAt().isBefore(observationWindowStart)) {
+                String vehicleId = observation.vehicleId();
+                prefixByVehicle.put(vehicleId, advance(prefixByVehicle.get(vehicleId), observation));
                 continue;
             }
-            retained.add(observation);
+            observationsInWindow.add(observation);
         }
-        Instant eventCutoff = cutoff;
-        if (retained.stream().anyMatch(AlightingAwareObservation::confirmedProfile)) {
-            eventCutoff = cutoff.minusSeconds(5400);
+
+        Instant passWindowStart = observationWindowStart;
+        if (observationsInWindow.stream().anyMatch(AlightingAwareObservation::confirmedProfile)) {
+            passWindowStart = observationWindowStart.minus(HISTORY_WINDOW);
         }
-        return new History(accumulated, retained, retainedEvents(input.events(), accumulated, retained, eventCutoff));
+        Set<Long> replayTripIds = tripIdsForReplay(prefixByVehicle, observationsInWindow);
+        List<AlightingAwarePassEvent> passes = passesForReplay(input.events(), replayTripIds, passWindowStart);
+        return new History(prefixByVehicle, observationsInWindow, passes);
     }
 
     private static Instant retainedFrom(List<AlightingAwareObservation> observations, Instant windowStart) {
-        Map<String, AlightingAwareObservation> previousByVehicle = new HashMap<>();
-        Map<String, Instant> chainStartsByVehicle = new HashMap<>();
+        Map<String, AlightingAwareObservation> lastObservationByVehicle = new HashMap<>();
+        Map<String, Instant> chainStartByVehicle = new HashMap<>();
         for (AlightingAwareObservation observation : observations) {
             if (!observation.hasVehicleIdentity()) {
                 continue;
             }
-            AlightingAwareObservation previous = previousByVehicle.put(observation.vehicleId(), observation);
+            String vehicleId = observation.vehicleId();
+            AlightingAwareObservation previous = lastObservationByVehicle.put(vehicleId, observation);
             if (startsChain(previous, observation)) {
-                chainStartsByVehicle.put(observation.vehicleId(), observation.receivedAt());
+                chainStartByVehicle.put(vehicleId, observation.receivedAt());
             }
         }
-        return earliestActiveChain(previousByVehicle, chainStartsByVehicle, windowStart);
+        return earliestActiveChain(lastObservationByVehicle, chainStartByVehicle, windowStart);
     }
 
     private static boolean startsChain(AlightingAwareObservation previous, AlightingAwareObservation observation) {
@@ -74,81 +95,82 @@ public final class AlightingAwareHistoryCompactor {
 
     /** 90분보다 오래 정차 중인 차도 마지막 도착 근거를 잃지 않도록 열린 구간을 모두 보관한다. */
     private static Instant earliestActiveChain(
-        Map<String, AlightingAwareObservation> previousByVehicle,
-        Map<String, Instant> chainStartsByVehicle,
-        Instant windowStart) {
-        Instant cutoff = windowStart;
-        for (Map.Entry<String, AlightingAwareObservation> entry : previousByVehicle.entrySet()) {
-            if (entry.getValue().receivedAt().isBefore(windowStart)) {
-                continue;
-            }
-            Instant start = chainStartsByVehicle.get(entry.getKey());
-            if (start.isBefore(cutoff)) {
-                cutoff = start;
-            }
-        }
-        return cutoff;
-    }
-
-    private static List<AlightingAwarePassEvent> retainedEvents(
-        List<AlightingAwarePassEvent> sourceEvents,
-        Map<String, AlightingAwareVehiclePrefix> accumulated,
-        List<AlightingAwareObservation> retained,
-        Instant cutoff
+        Map<String, AlightingAwareObservation> lastObservationByVehicle,
+        Map<String, Instant> chainStartByVehicle,
+        Instant windowStart
     ) {
-        Set<Long> neededTrips = neededTrips(accumulated, retained);
-        Map<String, List<AlightingAwarePassEvent>> precedingByTrip = new HashMap<>();
-        for (AlightingAwarePassEvent event : sourceEvents) {
-            if (event.departure().receivedAt().isBefore(cutoff) && neededTrips.contains(event.tripId())) {
-                precedingByTrip.computeIfAbsent(tripKey(event), ignored -> new ArrayList<>()).add(event);
-            }
-        }
-        Map<String, AlightingAwarePassEvent> eventsByKey = new LinkedHashMap<>();
-        for (AlightingAwarePassEvent event : sourceEvents) {
-            if (!event.departure().receivedAt().isBefore(cutoff)) {
-                eventsByKey.put(key(event), event);
-            }
-        }
-        retainFivePrecedingEvents(precedingByTrip, eventsByKey);
-        return orderedEvents(eventsByKey);
+        return lastObservationByVehicle.values().stream()
+            .filter(observation -> !observation.receivedAt().isBefore(windowStart))
+            .map(observation -> chainStartByVehicle.get(observation.vehicleId()))
+            .filter(start -> start.isBefore(windowStart))
+            .min(Comparator.naturalOrder())
+            .orElse(windowStart);
     }
 
-    private static Set<Long> neededTrips(
-        Map<String, AlightingAwareVehiclePrefix> accumulated,
-        List<AlightingAwareObservation> retained) {
-        Set<Long> tripIds = new HashSet<>();
-        for (AlightingAwareVehiclePrefix state : accumulated.values()) {
-            tripIds.add(state.tripId());
-        }
-        Map<String, AlightingAwareVehiclePrefix> states = new HashMap<>(accumulated);
-        for (AlightingAwareObservation observation : retained) {
-            AlightingAwareVehiclePrefix state = advance(states.get(observation.vehicleId()), observation);
-            states.put(observation.vehicleId(), state);
+    private static Set<Long> tripIdsForReplay(
+        Map<String, AlightingAwareVehiclePrefix> prefixByVehicle,
+        List<AlightingAwareObservation> observationsInWindow
+    ) {
+        Set<Long> tripIds = prefixByVehicle.values().stream()
+            .map(AlightingAwareVehiclePrefix::tripId)
+            .collect(toCollection(HashSet::new));
+
+        Map<String, AlightingAwareVehiclePrefix> stateByVehicle = new HashMap<>(prefixByVehicle);
+        for (AlightingAwareObservation observation : observationsInWindow) {
+            String vehicleId = observation.vehicleId();
+            AlightingAwareVehiclePrefix state = advance(stateByVehicle.get(vehicleId), observation);
+            stateByVehicle.put(vehicleId, state);
             tripIds.add(state.tripId());
         }
         return tripIds;
     }
 
-    /** 보존 창 안의 과거 미발행 배치도 복구할 수 있도록 창 직전 사건 다섯 개를 남긴다. */
-    private static void retainFivePrecedingEvents(
-        Map<String, List<AlightingAwarePassEvent>> precedingByTrip,
-        Map<String, AlightingAwarePassEvent> eventsByKey) {
-        for (List<AlightingAwarePassEvent> events : precedingByTrip.values()) {
-            events.sort(Comparator.comparing(event -> event.departure().receivedAt()));
-            for (AlightingAwarePassEvent event : events.subList(Math.max(0, events.size() - 5), events.size())) {
-                eventsByKey.put(key(event), event);
-            }
-        }
+    /** 조회 범위 안의 통과를 먼저 등록하고, 복구에 필요한 직전 통과가 같은 정류장을 가리키면 그 값으로 덮어쓴다. */
+    private static List<AlightingAwarePassEvent> passesForReplay(
+        List<AlightingAwarePassEvent> passes,
+        Set<Long> replayTripIds,
+        Instant windowStart
+    ) {
+        Map<String, List<AlightingAwarePassEvent>> earlierPassesByTrip = passes.stream()
+            .filter(pass -> pass.departure().receivedAt().isBefore(windowStart))
+            .filter(pass -> replayTripIds.contains(pass.tripId()))
+            .collect(groupingBy(AlightingAwareHistoryCompactor::vehicleTripKey, HashMap::new, toList()));
+
+        Stream<AlightingAwarePassEvent> passesInWindow = passes.stream()
+            .filter(pass -> !pass.departure().receivedAt().isBefore(windowStart));
+        Stream<AlightingAwarePassEvent> precedingPasses = earlierPassesByTrip.values().stream()
+            .flatMap(AlightingAwareHistoryCompactor::lastFivePasses);
+        return mergePassesByTripStop(passesInWindow, precedingPasses);
     }
 
-    public static AlightingAwareVehiclePrefix advance(AlightingAwareVehiclePrefix state, AlightingAwareObservation observation) {
+    private static Stream<AlightingAwarePassEvent> lastFivePasses(List<AlightingAwarePassEvent> tripPasses) {
+        final int skipCount = Math.max(0, tripPasses.size() - PRECEDING_PASSES_PER_TRIP);
+        return tripPasses.stream().sorted(BY_DEPARTURE_TIME).skip(skipCount);
+    }
+
+    public static AlightingAwareVehiclePrefix advance(
+        AlightingAwareVehiclePrefix state,
+        AlightingAwareObservation observation
+    ) {
         AlightingAwareObservation previous = previous(state);
         final int difference = passedDifference(previous, observation);
         final boolean linked = isLinked(previous, observation, difference);
-        final double streak = fullStreak(state, observation, linked, difference);
+        final double streak = fullStreak(
+                state,
+                observation,
+                linked,
+                difference
+        );
         Instant entry = entryAt(state, observation, difference);
         final long tripId = tripId(state, observation, difference);
-        return new AlightingAwareVehiclePrefix(0, streak, observation, entry, tripId, null);
+        return new AlightingAwareVehiclePrefix(
+                0,
+                streak,
+                observation,
+                entry,
+                tripId,
+                null
+        );
     }
 
     private static AlightingAwareObservation previous(AlightingAwareVehiclePrefix state) {
@@ -168,7 +190,8 @@ public final class AlightingAwareHistoryCompactor {
     private static boolean isLinked(
         AlightingAwareObservation previous,
         AlightingAwareObservation observation,
-        final int difference) {
+        final int difference
+    ) {
         if (observation.confirmedProfile() && observation.startsConfirmedChainAfter(previous)) {
             return false;
         }
@@ -206,7 +229,8 @@ public final class AlightingAwareHistoryCompactor {
     private static Instant entryAt(
         AlightingAwareVehiclePrefix state,
         AlightingAwareObservation observation,
-        final int difference) {
+        final int difference
+    ) {
         if (observation.confirmedProfile() && observation.startsConfirmedChainAfter(previous(state))) {
             return observation.receivedAt();
         }
@@ -216,7 +240,11 @@ public final class AlightingAwareHistoryCompactor {
         return state.entryAt();
     }
 
-    private static long tripId(AlightingAwareVehiclePrefix state, AlightingAwareObservation observation, final int difference) {
+    private static long tripId(
+        AlightingAwareVehiclePrefix state,
+        AlightingAwareObservation observation,
+        final int difference
+    ) {
         if (observation.confirmedProfile() && observation.startsConfirmedTripAfter(previous(state))) {
             return observation.observationId();
         }
@@ -229,48 +257,57 @@ public final class AlightingAwareHistoryCompactor {
         return state.tripId();
     }
 
-    public static List<AlightingAwarePassEvent> resolve(History history, List<Integer> realStops) {
-        Map<Long, Long> tripsByObservation = tripsByObservation(history);
-        Map<String, AlightingAwarePassEvent> eventsByKey = new LinkedHashMap<>();
-        for (AlightingAwarePassEvent event : history.events()) {
-            eventsByKey.put(key(event), event);
-        }
-        for (AlightingAwarePassEvent event : AlightingAwarePassEvents.resolve(history.observations(), realStops)) {
-            AlightingAwarePassEvent corrected = new AlightingAwarePassEvent(event.vehicleId(),
-                tripsByObservation.get(event.departure().observationId()), event.stopOrder(), event.arrival(),
-                event.departure(), event.confirmedAt(), event.firstDeparture(), event.confirmation());
-            eventsByKey.put(key(corrected), corrected);
-        }
-        return orderedEvents(eventsByKey);
+    public static List<AlightingAwarePassEvent> resolve(
+        History history,
+        List<Integer> realStops
+    ) {
+        Map<Long, Long> tripByObservationId = tripsByObservation(history);
+        List<AlightingAwarePassEvent> newPasses = AlightingAwarePassEvents.resolve(history.observations(), realStops);
+        Stream<AlightingAwarePassEvent> passesWithRestoredTrip = newPasses.stream()
+            .map(pass -> pass.withTripId(tripByObservationId.get(pass.departure().observationId())));
+        return mergePassesByTripStop(history.events().stream(), passesWithRestoredTrip);
     }
 
     private static Map<Long, Long> tripsByObservation(History history) {
-        Map<String, AlightingAwareVehiclePrefix> states = new HashMap<>(history.prefix());
-        Map<Long, Long> trips = new HashMap<>();
+        Map<String, AlightingAwareVehiclePrefix> stateByVehicle = new HashMap<>(history.prefix());
+        Map<Long, Long> tripByObservationId = new HashMap<>();
         for (AlightingAwareObservation observation : history.observations()) {
-            AlightingAwareVehiclePrefix state = advance(states.get(observation.vehicleId()), observation);
-            states.put(observation.vehicleId(), state);
-            trips.put(observation.observationId(), state.tripId());
+            String vehicleId = observation.vehicleId();
+            AlightingAwareVehiclePrefix state = advance(stateByVehicle.get(vehicleId), observation);
+            stateByVehicle.put(vehicleId, state);
+            tripByObservationId.put(observation.observationId(), state.tripId());
         }
-        return trips;
+        return tripByObservationId;
     }
 
-    private static List<AlightingAwarePassEvent> orderedEvents(Map<String, AlightingAwarePassEvent> eventsByKey) {
-        return eventsByKey.values().stream()
-            .sorted(Comparator.comparing(event -> event.departure().receivedAt()))
-            .toList();
+    private static List<AlightingAwarePassEvent> mergePassesByTripStop(
+        Stream<AlightingAwarePassEvent> originalPasses,
+        Stream<AlightingAwarePassEvent> overridingPasses
+    ) {
+        Map<String, AlightingAwarePassEvent> passByTripStop = Stream.concat(originalPasses, overridingPasses)
+            .collect(toMap(
+                    AlightingAwareHistoryCompactor::tripStopKey,
+                    identity(),
+                    (first, last) -> last,
+                    LinkedHashMap::new
+            ));
+        return passByTripStop.values().stream().sorted(BY_DEPARTURE_TIME).toList();
     }
 
-    private static boolean gap(AlightingAwareObservation previous, AlightingAwareObservation observation, final long seconds) {
+    private static boolean gap(
+        AlightingAwareObservation previous,
+        AlightingAwareObservation observation,
+        final long seconds
+    ) {
         return Duration.between(previous.receivedAt(), observation.receivedAt())
             .compareTo(Duration.ofSeconds(seconds)) > 0;
     }
 
-    private static String tripKey(AlightingAwarePassEvent event) {
+    private static String vehicleTripKey(AlightingAwarePassEvent event) {
         return event.vehicleId() + ":" + event.tripId();
     }
 
-    private static String key(AlightingAwarePassEvent event) {
-        return tripKey(event) + ":" + event.stopOrder();
+    private static String tripStopKey(AlightingAwarePassEvent event) {
+        return vehicleTripKey(event) + ":" + event.stopOrder();
     }
 }

@@ -20,7 +20,9 @@ public record ExtendedAlightingPredictor(NumericTreeEnsemble seats, NumericTreeE
     }
 
     public static double[] inputs(
-        AlightingAwareFeatureSnapshot snapshot, VehicleStopTarget target, final boolean offDay
+        AlightingAwareFeatureSnapshot snapshot,
+        VehicleStopTarget target,
+        final boolean offDay
     ) {
         ZonedDateTime local = snapshot.source().receivedAt().atZone(SEOUL);
         final int minute = local.getHour() * 60 + local.getMinute();

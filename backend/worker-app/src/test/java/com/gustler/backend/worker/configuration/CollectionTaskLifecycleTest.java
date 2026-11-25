@@ -9,8 +9,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.gustler.backend.forecasting.api.forecast.MaintainPartitions;
-import com.gustler.backend.worker.configuration.CollectionConfig.ScheduledCollection;
-import com.gustler.backend.worker.scheduling.AdaptiveCollectionTrigger;
+import com.gustler.backend.worker.configuration.CollectionSchedulingConfiguration.ScheduledCollection;
+import com.gustler.backend.worker.scheduling.CollectionScheduleTrigger;
 import com.gustler.backend.worker.scheduling.CollectionScheduler;
 import java.time.Clock;
 import java.util.List;
@@ -29,7 +29,7 @@ class CollectionTaskLifecycleTest {
         // when
         TaskScheduler scheduler = mock(TaskScheduler.class);
         ScheduledFuture<?> future = mock(ScheduledFuture.class);
-        doReturn(future).when(scheduler).schedule(any(Runnable.class), any(AdaptiveCollectionTrigger.class));
+        doReturn(future).when(scheduler).schedule(any(Runnable.class), any(CollectionScheduleTrigger.class));
         try (AnnotationConfigApplicationContext context = collectionContext(scheduler, new CopyOnWriteArrayList<>())) {
             context.refresh();
 
@@ -37,7 +37,7 @@ class CollectionTaskLifecycleTest {
             assertThat(context.getBean("collectionTaskRegistrar", ScheduledTaskRegistrar.class).getScheduledTasks())
                 .hasSize(1);
         }
-        verify(scheduler).schedule(any(Runnable.class), any(AdaptiveCollectionTrigger.class));
+        verify(scheduler).schedule(any(Runnable.class), any(CollectionScheduleTrigger.class));
         verify(future).cancel(anyBoolean());
     }
 
@@ -49,7 +49,7 @@ class CollectionTaskLifecycleTest {
         doAnswer(invocation -> {
             order.add("collection_scheduled");
             return mock(ScheduledFuture.class);
-        }).when(scheduler).schedule(any(Runnable.class), any(AdaptiveCollectionTrigger.class));
+        }).when(scheduler).schedule(any(Runnable.class), any(CollectionScheduleTrigger.class));
 
         // when
         try (AnnotationConfigApplicationContext context = collectionContext(scheduler, order)) {

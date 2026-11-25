@@ -18,10 +18,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 정확도 집계 로그에 적는 노선·정류장 이름을 실제 DB에서 읽는지 본다. */
+/** 정확도 집계 로그에 적는 노선, 정류장 이름을 실제 DB에서 읽는지 본다. */
 @ForecastingIntegrationTest
 @Transactional
 class ForecastAccuracyNamesTest {
+
     @Autowired
     private JdbcClient jdbc;
 
@@ -48,8 +49,28 @@ class ForecastAccuracyNamesTest {
         ForecastMonitoring monitoring = new ForecastMonitoring(new SimpleMeterRegistry(), dataSource,
             Clock.systemUTC());
         monitoring.closed(List.of(
-            new ForecastClosed(routeId, versionId, 6, 4, 2, 10.0, 0.25, 3.0, 3),
-            new ForecastClosed(routeId, versionId, 6, 9, 5, 10.0, 0.25, null, null)));
+            new ForecastClosed(
+                    routeId,
+                    versionId,
+                    6,
+                    4,
+                    2,
+                    10.0,
+                    0.25,
+                    3.0,
+                    3
+            ),
+            new ForecastClosed(
+                    routeId,
+                    versionId,
+                    6,
+                    9,
+                    5,
+                    10.0,
+                    0.25,
+                    null,
+                    null
+            )));
 
         // when
         List<String> lines = accuracyLines(monitoring::flushAccuracy);

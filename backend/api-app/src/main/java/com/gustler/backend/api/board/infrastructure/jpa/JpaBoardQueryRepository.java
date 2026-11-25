@@ -22,7 +22,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Repository;
 
 /**
- * 쓰기 모듈의 엔티티를 참조하지 않고 탑승판에 필요한 노선·모델·관측·예보를 조회한다.
+ * 쓰기 모듈의 엔티티를 참조하지 않고 탑승판에 필요한 노선, 모델, 관측, 예보를 조회한다.
  *
  * <p>스냅샷은 {@link JdbcBoardSnapshotReader}, 예보는 {@link JdbcForecastRecordReader}로 읽는다.
  * DB 조회가 실패하면 예보 없음으로 다루지 않고 서비스 불가로 바꾼다.

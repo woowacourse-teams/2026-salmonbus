@@ -4,8 +4,8 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * 원본 판본은 receivedAt에 수신 시각을, 확인 판본은 입력 확인 시각을 보존한다.
- * 확인 판본의 물리적 수신 시각과 노선 버전/방향을 별도로 보존하며 routeVersionId=0은 원본 판본이다.
+ * 원본 버전은 receivedAt에 수신 시각을, 확정 입력 프로필은 입력 확인 시각을 보존한다.
+ * 확정 입력 프로필의 물리적 수신 시각과 노선 버전/방향을 별도로 보존하며 routeVersionId=0은 원본 버전이다.
  */
 public record AlightingAwareObservation(
     long observationId,
@@ -35,8 +35,21 @@ public record AlightingAwareObservation(
         Integer seats,
         final int crowd
     ) {
-        this(observationId, batchId, batchRank, receivedAt, vehicleId, passedStopOrder, stopOrder, state, seats,
-            crowd, 0, receivedAt, false);
+        this(
+                observationId,
+                batchId,
+                batchRank,
+                receivedAt,
+                vehicleId,
+                passedStopOrder,
+                stopOrder,
+                state,
+                seats,
+                crowd,
+                0,
+                receivedAt,
+                false
+        );
     }
 
     public boolean confirmedProfile() {
@@ -68,7 +81,7 @@ public record AlightingAwareObservation(
     }
 
     /** samples3의 categorical code -1. 실제 차량 식별자로 사용하지 않는다. */
-    public static final String ANONYMOUS_GROUP = "\uffffles-anonymous-observations";
+    public static final String ANONYMOUS_GROUP = "\uffffanonymous-observations";
 
     public boolean hasVehicleIdentity() {
         return vehicleId != null && !vehicleId.equals(ANONYMOUS_GROUP);

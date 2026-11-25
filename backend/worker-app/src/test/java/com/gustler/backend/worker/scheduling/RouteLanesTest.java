@@ -3,6 +3,10 @@ package com.gustler.backend.worker.scheduling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -16,18 +20,25 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @ExtendWith(OutputCaptureExtension.class)
 class RouteLanesTest {
+
     private static final Duration WAIT = Duration.ofSeconds(10);
 
     @Test
     void 같은_노선의_일은_한_줄에서_넣은_순서대로_하나씩_실행한다() throws Exception {
         // given
-        RouteLanes lanes = new RouteLanes(2, 1000, WAIT, null);
+        RouteLanes lanes = new RouteLanes(
+                2,
+                1000,
+                WAIT,
+                null
+        );
         List<Integer> order = Collections.synchronizedList(new ArrayList<>());
         AtomicInteger running = new AtomicInteger();
         AtomicInteger overlapped = new AtomicInteger();
@@ -49,8 +60,10 @@ class RouteLanesTest {
 
             // then
             assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
-            assertThat(overlapped).hasValue(0);
-            assertThat(order).isSorted().hasSize(200);
+            assertSoftly(softly -> {
+                softly.assertThat(overlapped).hasValue(0);
+                softly.assertThat(order).isSorted().hasSize(200);
+            });
         } finally {
             lanes.stop();
         }
@@ -59,7 +72,12 @@ class RouteLanesTest {
     @Test
     void 다른_줄에_배정된_노선은_동시에_실행한다() throws Exception {
         // given
-        RouteLanes lanes = new RouteLanes(2, 10, WAIT, null);
+        RouteLanes lanes = new RouteLanes(
+                2,
+                10,
+                WAIT,
+                null
+        );
         String first = "first";
         String second = keyOnOtherLane(lanes, first);
         CountDownLatch bothRunning = new CountDownLatch(2);
@@ -85,30 +103,58 @@ class RouteLanesTest {
     @Test
     void 줄_수가_1이든_2이든_노선마다_실행_순서가_같다() throws Exception {
         // given
-        List<String> keys = List.of("234001739", "204000057", "234000050", "200000314", "227000038");
+        List<String> keys = List.of(
+                "234001739",
+                "204000057",
+                "234000050",
+                "200000314",
+                "227000038"
+        );
 
         // when
-        Map<String, List<Integer>> one = runAll(new RouteLanes(1, 1000, WAIT, null), keys);
-        Map<String, List<Integer>> two = runAll(new RouteLanes(2, 1000, WAIT, null), keys);
+        Map<String, List<Integer>> one = runAll(new RouteLanes(
+                1,
+                1000,
+                WAIT,
+                null
+        ), keys);
+        Map<String, List<Integer>> two = runAll(new RouteLanes(
+                2,
+                1000,
+                WAIT,
+                null
+        ), keys);
 
         // then
-        assertThat(two).isEqualTo(one);
-        assertThat(one.values()).allSatisfy(order -> assertThat(order).isSorted().hasSize(50));
+        assertSoftly(softly -> {
+            softly.assertThat(two).isEqualTo(one);
+            softly.assertThat(one.values()).allSatisfy(order -> softly.assertThat(order).isSorted().hasSize(50));
+        });
     }
 
     @Test
-    void 줄이_가득_차면_넣지_않고_거짓을_돌려주며_일이_실패해도_다음_일을_실행한다() throws Exception {
+    void 줄이_가득_차면_넣지_않고_거짓을_돌려주며_일이_실패해도_다음_일을_실행한다(CapturedOutput output) throws Exception {
         // given
-        RouteLanes lanes = new RouteLanes(1, 1, WAIT, new SimpleMeterRegistry());
+        RouteLanes lanes = new RouteLanes(
+                1,
+                1,
+                WAIT,
+                new SimpleMeterRegistry()
+        );
         CountDownLatch release = new CountDownLatch(1);
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch after = new CountDownLatch(1);
+
+        Logger logger = (Logger) LoggerFactory.getLogger(RouteLanes.class);
+        ListAppender<ILoggingEvent> events = new ListAppender<>();
+        events.start();
+        logger.addAppender(events);
 
         try {
             lanes.submit("key", () -> {
                 started.countDown();
                 await(release);
-                throw new IllegalStateException("실패 흉내");
+                throw new IllegalStateException("private query", new IllegalArgumentException("private vehicle"));
             });
             assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
             assertThat(lanes.submit("key", after::countDown)).isTrue();
@@ -120,7 +166,23 @@ class RouteLanesTest {
             assertThat(accepted).isFalse();
             release.countDown();
             assertThat(after.await(5, TimeUnit.SECONDS)).isTrue();
+            assertSoftly(softly -> {
+                softly.assertThat(output.getAll())
+                    .contains("event=forecast_task_failed routeKey=key exceptionType=IllegalStateException")
+                    .doesNotContain("private query", "private vehicle");
+                softly.assertThat(events.list).filteredOn(
+                    event -> event.getFormattedMessage().equals(
+                        "event=forecast_task_failed routeKey=key exceptionType=IllegalStateException"
+                    )
+                )
+                    .singleElement().satisfies(event -> {
+                        softly.assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                        softly.assertThat(event.getThrowableProxy()).isNull();
+                    });
+            });
         } finally {
+            logger.detachAppender(events);
+            events.stop();
             release.countDown();
             lanes.stop();
         }
@@ -130,7 +192,12 @@ class RouteLanesTest {
     void 닫으면_새_일을_받지_않고_기다리던_일은_버리며_돌던_일은_중단시키지_않고_끝나기를_기다린다(CapturedOutput output)
         throws Exception {
         // given
-        RouteLanes lanes = new RouteLanes(2, 100, WAIT, null);
+        RouteLanes lanes = new RouteLanes(
+                2,
+                100,
+                WAIT,
+                null
+        );
         String first = "first";
         String second = keyOnOtherLane(lanes, first);
         CountDownLatch started = new CountDownLatch(2);
@@ -184,7 +251,12 @@ class RouteLanesTest {
     @Test
     void 돌던_일이_한도_안에_끝나지_않으면_경고를_남기고_한도까지만_기다린다(CapturedOutput output) throws Exception {
         // given
-        RouteLanes lanes = new RouteLanes(1, 10, Duration.ofMillis(200), null);
+        RouteLanes lanes = new RouteLanes(
+                1,
+                10,
+                Duration.ofMillis(200),
+                null
+        );
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch never = new CountDownLatch(1);
         AtomicInteger later = new AtomicInteger();
@@ -218,7 +290,12 @@ class RouteLanesTest {
     @Test
     void 컨텍스트가_닫힐_때_스케줄러가_돌던_회차를_끝낸_바로_다음에_멈추고_일시_정지에는_참여하지_않는다() {
         // when
-        RouteLanes lanes = new RouteLanes(1, 1, WAIT, null);
+        RouteLanes lanes = new RouteLanes(
+                1,
+                1,
+                WAIT,
+                null
+        );
 
         // then
         assertSoftly(softly -> {
@@ -263,8 +340,8 @@ class RouteLanesTest {
     }
 
     /**
-     * 실행 줄이 닫히기 시작해 모든 줄이 기다리던 일을 버릴 때까지 기다린 뒤 잠시 더 돈다. 닫는 쪽이 돌던 일을 기다리지 않으면 그사이에
-     * 돌아온다. 붙잡은 일은 줄을 닫아야 풀리므로 한도 없이 기다린다.
+     * 실행기가 종료되기 시작해 모든 실행기가 대기 작업을 버릴 때까지 기다린 뒤 잠시 더 돈다. 닫는 쪽이 돌던 일을 기다리지 않으면 그사이에
+     * 돌아온다. 붙잡은 일은 실행기를 종료해야 풀리므로 한도 없이 기다린다.
      */
     private static void untilWaitingDiscarded(RouteLanes lanes) {
         while (!lanes.closing() || lanes.queued() > 0) {

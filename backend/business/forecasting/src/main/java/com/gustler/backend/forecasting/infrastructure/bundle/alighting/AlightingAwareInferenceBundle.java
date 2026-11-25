@@ -1,10 +1,8 @@
 package com.gustler.backend.forecasting.infrastructure.bundle.alighting;
 
-import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
-
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
-import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingTimeCell;
+import com.gustler.backend.forecasting.domain.model.alighting.NumericTreeEnsemble;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,7 +13,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -26,16 +23,30 @@ import java.util.stream.Collectors;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 원본 파일·수치 대조·운영 검증 증거를 검사하는 하차 반영 불변 묶음. */
+/** 원본 파일, 수치 대조 결과와 운영 적재 검증 근거를 검사하는 불변 모델 번들이다. */
 public final class AlightingAwareInferenceBundle {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final List<String> SERVING_ROUTES = List.of(
-        "3330", "1650", "9007", "9300", "6011", "3000", "5600", "3500");
+            "3330",
+            "1650",
+            "9007",
+            "9300",
+            "6011",
+            "3000",
+            "5600",
+            "3500"
+    );
     private static final String SEAT_ORDER = "f4e11ff4c97b5fa88ef22ec37169c2698da0020efb2a746ea35012108dbd7d18";
     private static final String FULL_ORDER = "c00e89b56ec334f88aec52842102d2745097ac18222c06194f2affa9df4e2095";
     private static final List<String> SERVING_CHECKS = List.of(
-        "feature_parity", "historical_replay", "settlement", "runtime_validation");
+            "feature_parity",
+            "historical_replay",
+            "settlement",
+            "runtime_validation"
+    );
     private static final List<String> OBSERVATION_BOUND_CHECKS = List.of("historical_replay", "settlement");
+
     private final AlightingAwareSeatPredictor predictor;
     private final Map<String, JsonNode> statistics;
     private final JsonNode manifest;
@@ -80,7 +91,7 @@ public final class AlightingAwareInferenceBundle {
         return load(directory, false, false);
     }
 
-    /** 고정 통계 준비용. 비활성 번들도 읽되 파일·입력 계약 검증은 그대로 수행한다. */
+    /** 고정 통계를 읽는다. 비활성 번들도 허용하되 파일과 입력 계약은 같은 기준으로 검증한다. */
     public static AlightingAwareInferenceBundle loadForStatistics(Path directory) throws IOException {
         JsonNode manifest = JSON.readTree(readFile(directory.resolve("manifest.json")));
         return load(directory, bool(manifest, "serving_ready"), false);
@@ -91,13 +102,16 @@ public final class AlightingAwareInferenceBundle {
     }
 
     /**
-     * 서빙 번들을 적재한다. 합성 번들은 실제 관측이 없어 재생·정산 검증을 실행할 수 없다. 그런 번들은 실행하지 않은 검증을
-     * {@code runtime.unverified_checks}에 적고 {@code synthetic_fixture}로 표시한다.
+     * 운영 번들을 적재한다. 실제 관측 없이 만든 합성 번들은 재생과 정산을 검증할 수 없다.
+     * 합성 번들은 생략한 검증을 {@code runtime.unverified_checks}에 기록하고 {@code synthetic_fixture}로 표시한다.
      *
-     * @param allowSyntheticFixture 그렇게 표시한 합성 번들을 받을지다. 로컬 개발 적재에서만 켠다. 꺼져 있으면 거절한다.
-     *     켜도 수치 대조와 후보 런타임 검증은 다른 확정 번들과 똑같이 검사한다
+     * @param allowSyntheticFixture 표시된 합성 번들을 허용할지 정한다. 로컬 개발 환경에서만 켠다.
+     *     허용하더라도 수치 대조와 후보 런타임 검증은 다른 확정 번들과 같은 기준으로 수행한다
      */
-    public static AlightingAwareInferenceBundle loadForServing(Path directory, final boolean allowSyntheticFixture)
+    public static AlightingAwareInferenceBundle loadForServing(
+        Path directory,
+        final boolean allowSyntheticFixture
+    )
         throws IOException {
         return load(directory, true, allowSyntheticFixture);
     }
@@ -119,7 +133,7 @@ public final class AlightingAwareInferenceBundle {
             .collect(Collectors.toCollection(HashSet::new));
         JsonNode extension = manifest.get("extended_holiday_dates");
         if (extension != null) {
-            texts(extension).stream().map(LocalDate::parse).forEach(dates::add);
+            dates.addAll(texts(extension).stream().map(LocalDate::parse).toList());
         }
         return Set.copyOf(dates);
     }
@@ -129,28 +143,19 @@ public final class AlightingAwareInferenceBundle {
         final boolean serving,
         final boolean allowSyntheticFixture
     ) throws IOException {
-        require(!Files.isSymbolicLink(directory), "번들 디렉터리는 symlink가 아니어야 한다");
+        require(!Files.isSymbolicLink(directory), "번들 디렉터리는 심볼릭 링크일 수 없다");
         byte[] manifestBytes = readFile(directory.resolve("manifest.json"));
         JsonNode manifest = JSON.readTree(manifestBytes);
         require(text(manifest, "schema").equals("alighting-inference-bundle-v1"), "번들 스키마가 다르다");
         require(text(manifest, "model").equals("alighting-gate-base-and-pool"), "모델 종류가 다르다");
-        require(bool(manifest, "serving_ready") == serving, "서빙 검증을 완료한 묶음만 운영에 적재할 수 있다");
+        AlightingAwareConfirmedServingVerification.verifyInputProfile(manifest);
+        require(bool(manifest, "serving_ready") == serving, "번들의 serving_ready 값이 요청한 적재 방식과 다르다");
         require(texts(manifest.get("output_targets")).equals(List.of("after-alighting-estimated", "departure-zero")),
             "출력 의미가 다르다");
         Map<String, JsonNode> files = readDeclaredFiles(directory, manifest);
         validateFeatureContract(files);
         JsonNode statsManifest = required(files, "statistics-manifest.json");
-        require(text(statsManifest, "schema").equals("alighting-statistics-v1"), "통계 스키마가 다르다");
-        List<String> routes = texts(statsManifest.get("routes"));
-        require(hasValidRoutes(routes), "통계 노선 목록이 비었거나 잘못됐다");
-        JsonNode routeReference = required(files, "route-reference.json");
-        List<String> referencedRoutes = new ArrayList<>();
-        for (JsonNode route : array(routeReference.get("routes"))) {
-            referencedRoutes.add(text(route, "modelRoute"));
-        }
-        for (String route : routes) {
-            require(referencedRoutes.stream().filter(route::equals).count() == 1, "노선 참조가 없거나 중복됐다");
-        }
+        List<String> routes = statisticsRoutes(statsManifest, files);
         Map<String, JsonNode> statistics = readStatistics(files, routes);
         AlightingAwareSeatPredictor predictor = readPredictor(files);
         JsonNode extended = files.get("extended-hours.json");
@@ -163,7 +168,29 @@ public final class AlightingAwareInferenceBundle {
             verifyGolden(predictor, required(files, "golden.json"));
             verifyGolden(predictor, required(files, "boundaries.json"));
         }
-        return new AlightingAwareInferenceBundle(predictor, statistics, manifest, statsManifest, digest(manifestBytes), extended);
+        return new AlightingAwareInferenceBundle(
+                predictor,
+                statistics,
+                manifest,
+                statsManifest,
+                digest(manifestBytes),
+                extended
+        );
+    }
+
+    private static List<String> statisticsRoutes(JsonNode manifest, Map<String, JsonNode> files) {
+        require(text(manifest, "schema").equals("alighting-statistics-v1"), "통계 스키마가 다르다");
+        List<String> routes = texts(manifest.get("routes"));
+        require(hasValidRoutes(routes), "통계 노선 목록이 비었거나 잘못됐다");
+
+        JsonNode routeReference = required(files, "route-reference.json");
+        List<String> referencedRoutes = array(routeReference.get("routes")).valueStream()
+            .map(reference -> text(reference, "modelRoute"))
+            .toList();
+        for (String route : routes) {
+            require(referencedRoutes.stream().filter(route::equals).count() == 1, "노선 참조가 없거나 중복됐다");
+        }
+        return routes;
     }
 
     private static Map<String, JsonNode> readDeclaredFiles(Path directory, JsonNode manifest) throws IOException {
@@ -189,6 +216,7 @@ public final class AlightingAwareInferenceBundle {
         require(text(contract, "probability_dtype").equals("float64 from float32 X_time + int64 h"), "확률 정밀도가 다르다");
         require(text(contract, "seat_target").equals("after-alighting-estimated")
             && text(contract, "probability_target").equals("departure-zero"), "입력 계약의 출력 의미가 다르다");
+        AlightingAwareConfirmedServingVerification.verifyInputProfile(contract);
     }
 
     private static boolean hasValidRoutes(List<String> routes) {
@@ -203,6 +231,7 @@ public final class AlightingAwareInferenceBundle {
             require(text(stats, "route").equals(route), "통계 노선이 다르다");
             require(number(stats.get("min_per_stop")) > 0, "정류장 이동시간이 잘못됐다");
             require(hasRequiredStatistics(stats), "통계 자료가 빠졌다");
+            AlightingAwareConfirmedServingVerification.verifyInputProfile(stats);
             statistics.put(route, stats);
         }
         return statistics;
@@ -212,8 +241,12 @@ public final class AlightingAwareInferenceBundle {
         JsonNode constants = required(files, "constants.json");
         require(text(constants, "target").equals("after"), "좌석 목표가 다르다");
         require(integers(constants.get("classes")).equals(List.of(0, 1, 2)), "gate 클래스 순서가 다르다");
-        return new AlightingAwareSeatPredictor(model(required(files, "base.json")),
-            model(required(files, "gate.json")), model(required(files, "pool.json")), number(constants.get("middle")));
+        return new AlightingAwareSeatPredictor(
+                model(required(files, "base.json")),
+                model(required(files, "gate.json")),
+                model(required(files, "pool.json")),
+                number(constants.get("middle"))
+        );
     }
 
     private static byte[] readFile(Path file) throws IOException {
@@ -225,7 +258,14 @@ public final class AlightingAwareInferenceBundle {
 
     private static void validateExtendedHours(JsonNode extended, List<String> routes) {
         require(text(extended, "schema").equals("alighting-extended-six-v1"), "시간 확장 스키마가 다르다");
-        require(texts(extended.get("features")).equals(List.of("seats", "capacity", "stop", "horizon", "minute", "off_day")),
+        require(texts(extended.get("features")).equals(List.of(
+                "seats",
+                "capacity",
+                "stop",
+                "horizon",
+                "minute",
+                "off_day"
+        )),
             "시간 확장 입력 순서가 다르다");
         JsonNode entries = extended.path("routes");
         require(entries.isObject() && entries.size() == routes.size(), "시간 확장 노선이 다르다");
@@ -239,8 +279,7 @@ public final class AlightingAwareInferenceBundle {
                     require(number(rate) > 0, "시간 확장 승차율이 잘못됐다");
                 }
                 final double probability = number(params.get("p"));
-                require(probability > 0 && probability < 1 && number(params.get("kappa")) > 0
-                    && number(params.get("r")) > 0, "시간 확장 정산 계수가 잘못됐다");
+                require(hasValidSettlementParameters(probability, params), "시간 확장 정산 계수가 잘못됐다");
             }
         }
     }
@@ -251,24 +290,72 @@ public final class AlightingAwareInferenceBundle {
         final boolean allowSyntheticFixture
     ) {
         JsonNode runtime = manifest.get("runtime");
-        require(runtime != null && runtime.isObject(), "서빙 계약이 없다");
-        require(text(runtime, "feature_contract_version").equals("alighting-online-v1"), "서빙 입력 판이 다르다");
-        require(text(runtime, "release_id").matches("[A-Za-z0-9][A-Za-z0-9._-]{0,79}"), "출시 식별자가 잘못됐다");
+        require(runtime != null && runtime.isObject(), "운영 적재 계약이 없다");
+        require(text(runtime, "feature_contract_version").equals("alighting-online-v1"), "운영 입력 프로필이 다르다");
+        require(text(runtime, "release_id").matches("[A-Za-z0-9][A-Za-z0-9._-]{0,79}"), "릴리스 ID가 올바르지 않다");
         List<String> routes = texts(required(files, "statistics-manifest.json").get("routes"));
         final boolean confirmed = AlightingAwareConfirmedServingVerification.isConfirmed(files);
-        verifyServingRoutes(runtime, files, routes, confirmed);
+        verifyServingRoutes(
+                runtime,
+                files,
+                routes,
+                confirmed
+        );
         verifyStatisticsCutoff(runtime, files, routes);
         String expectedScope = "weekday-rush-6-10-17-21-horizon-1-12";
         if (files.containsKey("extended-hours.json")) {
             expectedScope = "all-hours-horizon-1-12";
         }
-        require(text(runtime, "scope").equals(expectedScope), "지원 시각/거리가 다르다");
+        require(text(runtime, "scope").equals(expectedScope), "지원하는 시간대 또는 예보 거리가 다르다");
+        String sourceDigest = verifySourceManifest(
+                manifest,
+                runtime,
+                files,
+                routes
+        );
+        List<String> unverified = unverifiedChecks(
+                manifest,
+                runtime,
+                confirmed,
+                allowSyntheticFixture
+        );
+        for (String check : SERVING_CHECKS) {
+            if (unverified.contains(check)) {
+                require(lacksVerificationFiles(files, check), "실행하지 않은 검증의 결과 파일이 포함되어 있다: " + check);
+                continue;
+            }
+            JsonNode receipt = required(files, "verification-" + check + ".json");
+            require(hasMatchingVerification(
+                    receipt,
+                    check,
+                    sourceDigest,
+                    manifest
+            ), "운영 적재 검증 근거가 다르다: " + check);
+            JsonNode evidence = required(files, "evidence-" + check + ".json");
+            if (confirmed) {
+                AlightingAwareConfirmedServingVerification.verify(
+                        check,
+                        receipt,
+                        evidence,
+                        sourceDigest,
+                        routes
+                );
+            }
+        }
+    }
+
+    private static String verifySourceManifest(
+        JsonNode manifest,
+        JsonNode runtime,
+        Map<String, JsonNode> files,
+        List<String> routes
+    ) {
         String sourceDigest = text(runtime, "source_manifest_sha256");
-        require(sourceDigest.matches("[a-f0-9]{64}"), "원본 묶음 식별자가 없다");
+        require(sourceDigest.matches("[a-f0-9]{64}"), "원본 manifest의 SHA-256 해시가 없거나 형식이 올바르지 않다");
         JsonNode original = required(files, "verification-source-manifest.json");
         require(text(manifest.get("files"), "verification-source-manifest.json").equals(sourceDigest),
             "검증한 원본 manifest와 다르다");
-        require(!bool(original, "serving_ready"), "검증 원본은 비활성 묶음이어야 한다");
+        require(!bool(original, "serving_ready"), "검증 원본 번들은 비활성 상태여야 한다");
         if (files.containsKey("extended-hours.json")) {
             require(original.get("files").has("extended-hours.json"), "검증 원본에 시간 확장 모델이 없다");
             List<String> holidays = texts(original.get("extended_holiday_dates"));
@@ -276,33 +363,26 @@ public final class AlightingAwareInferenceBundle {
                 "검증 원본과 운영 번들의 공휴일 달력이 다르다");
             JsonNode result = required(files, "evidence-runtime_validation.json").path("result");
             List<String> substitutions = holidayWeekendSubstitutions(original);
-            require(substitutions.equals(holidayWeekendSubstitutions(manifest)),
-                "검증 원본과 운영 번들의 공휴일 대체 노선이 다르다");
-            verifyExtended(result, sourceDigest, text(original, "extended_verification_code_sha"), routes, substitutions);
+            require(substitutions.equals(holidayWeekendSubstitutions(manifest)), "검증 원본과 운영 번들의 공휴일 대체 노선이 다르다");
+            verifyExtended(
+                    result,
+                    sourceDigest,
+                    text(original, "extended_verification_code_sha"),
+                    routes,
+                    substitutions
+            );
         }
         for (String name : original.get("files").propertyNames()) {
             require(text(original.get("files"), name).equals(text(manifest.get("files"), name)),
                 "검증 이후 원본 파일이 바뀌었다: " + name);
         }
-        List<String> unverified = unverifiedChecks(manifest, runtime, confirmed, allowSyntheticFixture);
-        for (String check : SERVING_CHECKS) {
-            if (unverified.contains(check)) {
-                require(lacksVerificationFiles(files, check), "실행하지 않은 검증의 영수증이 있다: " + check);
-                continue;
-            }
-            JsonNode receipt = required(files, "verification-" + check + ".json");
-            require(hasMatchingVerification(receipt, check, sourceDigest, manifest),
-                "서빙 검증 증거가 다르다: " + check);
-            JsonNode evidence = required(files, "evidence-" + check + ".json");
-            if (confirmed) {
-                AlightingAwareConfirmedServingVerification.verify(check, receipt, evidence, sourceDigest, routes);
-            }
-        }
+        return sourceDigest;
     }
 
     /**
-     * 합성 번들이 실행하지 않았다고 밝힌 검증이다. 밝히지 않은 번들은 빈 목록이라 모든 검증을 요구한다.
-     * 실제 관측이 있어야 하는 재생·정산 검증만 적을 수 있고, 적은 검증은 영수증과 증거가 번들에 없어야 한다.
+     * 합성 번들에서 생략한 검증 목록이다. 목록이 없으면 모든 검증을 요구한다.
+     * 실제 관측이 필요한 재생과 정산 검증만 생략할 수 있다.
+     * 생략한 검증의 결과 파일과 근거 파일이 번들에 있으면 거절한다.
      */
     private static List<String> unverifiedChecks(
         JsonNode manifest,
@@ -313,7 +393,7 @@ public final class AlightingAwareInferenceBundle {
         if (!runtime.has("unverified_checks")) {
             return List.of();
         }
-        require(allowSyntheticFixture, "합성 번들은 로컬 개발 적재에서만 받는다");
+        require(allowSyntheticFixture, "합성 번들은 로컬 개발 환경에서만 적재할 수 있다");
         require(manifest.has("synthetic_fixture") && bool(manifest, "synthetic_fixture"), "합성 번들 표시가 없다");
         require(confirmed, "합성 번들도 확정 입력 계약을 따라야 한다");
         List<String> checks = texts(runtime.get("unverified_checks"));
@@ -332,12 +412,19 @@ public final class AlightingAwareInferenceBundle {
     }
 
     private static List<String> holidayWeekendSubstitutions(JsonNode node) {
-        return node.has("holiday_weekend_substitution_routes")
-            ? texts(node.get("holiday_weekend_substitution_routes")) : List.of();
+        if (node.has("holiday_weekend_substitution_routes")) {
+            return texts(node.get("holiday_weekend_substitution_routes"));
+        }
+        return List.of();
     }
 
-    static void verifyExtended(JsonNode result, String sourceDigest, String codeSha, List<String> routes,
-                               List<String> substitutions) {
+    static void verifyExtended(
+        JsonNode result,
+        String sourceDigest,
+        String codeSha,
+        List<String> routes,
+        List<String> substitutions
+    ) {
         require(codeSha.matches("[0-9a-f]{40}"), "시간 확장 검증 코드 SHA가 잘못됐다");
         require(text(result, "bundle_manifest_sha256").equals(sourceDigest), "시간 확장 검증 후보가 다르다");
         require(text(result, "verification_code_sha").equals(codeSha), "시간 확장 검증 코드가 다르다");
@@ -353,11 +440,10 @@ public final class AlightingAwareInferenceBundle {
             final int settled = integer(row.get("settled"));
             require(settled > 0 && settled <= published, "시간 확장 발행 또는 정산 근거가 부족하다");
         }
-        require(new HashSet<>(substitutions).size() == substitutions.size() && routes.containsAll(substitutions)
-            && substitutions.equals(holidayWeekendSubstitutions(result)), "공휴일 대체 노선이 잘못됐다");
+        require(hasValidHolidaySubstitutions(substitutions, routes, result), "공휴일 대체 노선이 잘못됐다");
         for (String route : substitutions) {
             require(remaining.get(route).equals(Set.of("holiday-day", "holiday-night")),
-                "공휴일 대체에는 같은 노선의 주말 낮·야간 검증이 필요하다");
+                "공휴일 대체에는 같은 노선의 주말 낮, 야간 검증이 필요하다");
             remaining.get(route).clear();
         }
         require(remaining.values().stream().allMatch(Set::isEmpty), "시간 확장 검증 노선 또는 시간이 빠졌다");
@@ -374,8 +460,8 @@ public final class AlightingAwareInferenceBundle {
             AlightingAwareConfirmedServingVerification.verifyContract(runtime, files, routes);
             return;
         }
-        require(texts(runtime.get("routes")).equals(SERVING_ROUTES), "검증된 8개 노선만 서빙할 수 있다");
-        require(routes.equals(SERVING_ROUTES), "검증된 8개 노선의 통계만 서빙할 수 있다");
+        require(texts(runtime.get("routes")).equals(SERVING_ROUTES), "검증을 마친 8개 노선만 운영에 사용할 수 있다");
+        require(routes.equals(SERVING_ROUTES), "검증을 마친 8개 노선의 통계만 운영에 사용할 수 있다");
     }
 
     private static boolean hasMatchingVerification(
@@ -393,17 +479,13 @@ public final class AlightingAwareInferenceBundle {
             && text(receipt, "evidence_sha256").equals(text(manifest.get("files"), "evidence-" + check + ".json"));
     }
 
-    private static void verifyStatisticsCutoff(
-        JsonNode runtime,
-        Map<String, JsonNode> files,
-        List<String> routes
-    ) {
+    private static void verifyStatisticsCutoff(JsonNode runtime, Map<String, JsonNode> files, List<String> routes) {
         Instant through = Instant.parse(text(runtime, "data_through"));
         for (String route : routes) {
             JsonNode stats = required(files, "statistics-" + route + ".json");
             for (String cutoff : List.of("events_known_through", "observations_through")) {
                 Instant used = OffsetDateTime.parse(text(stats, cutoff).replace(' ', 'T')).toInstant();
-                require(!through.isBefore(used), "서빙 시작 기준보다 미래 통계를 사용했다: " + route);
+                require(!through.isBefore(used), "모델 사용 시작 시각보다 나중의 통계를 사용했다: " + route);
             }
         }
     }
@@ -428,12 +510,7 @@ public final class AlightingAwareInferenceBundle {
     }
 
     private static double[] vector(JsonNode input) {
-        JsonNode values = array(input);
-        double[] result = new double[values.size()];
-        for (int i = 0; i < result.length; i++) {
-            result[i] = nullableNumber(values.get(i));
-        }
-        return result;
+        return array(input).valueStream().mapToDouble(AlightingAwareInferenceBundle::nullableNumber).toArray();
     }
 
     private static double nullableNumber(JsonNode value) {
@@ -461,29 +538,46 @@ public final class AlightingAwareInferenceBundle {
         };
         List<Integer> classes = integers(root.get("classes"));
         require(classes.equals(expectedClasses(kind)), "트리 클래스 순서가 다르다");
-        require(bool(root, "leaf_values_include_learning_rate"), "잎의 학습률 의미가 다르다");
+        require(bool(root, "leaf_values_include_learning_rate"), "리프 값의 학습률 적용 방식이 다르다");
         require(texts(root.get("node_fields"))
-            .equals(List.of("feature", "threshold", "missing_left", "left", "right", "value", "leaf")), "노드 열 순서가 다르다");
-        List<List<List<NumericTreeEnsemble.Node>>> iterations = new ArrayList<>();
-        for (JsonNode step : array(root.get("trees"))) {
-            List<List<NumericTreeEnsemble.Node>> trees = new ArrayList<>();
-            for (JsonNode tree : array(step)) {
-                List<NumericTreeEnsemble.Node> nodes = new ArrayList<>();
-                for (JsonNode n : array(tree)) {
-                    require(n.isArray() && n.size() == 7, "노드 크기가 잘못됐다");
-                    nodes.add(new NumericTreeEnsemble.Node(integer(n.get(0)), number(n.get(1)), booleanValue(n.get(2)),
-                        integer(n.get(3)), integer(n.get(4)), number(n.get(5)), booleanValue(n.get(6))));
-                }
-                trees.add(nodes);
-            }
-            iterations.add(trees);
-        }
-        List<Double> baseline = new ArrayList<>();
-        for (JsonNode value : array(root.get("baseline"))) {
-            baseline.add(number(value));
-        }
-        return new NumericTreeEnsemble(integer(root.get("feature_count")), kind,
-            baseline.stream().mapToDouble(Double::doubleValue).toArray(), iterations);
+            .equals(List.of(
+                    "feature",
+                    "threshold",
+                    "missing_left",
+                    "left",
+                    "right",
+                    "value",
+                    "leaf"
+            )), "노드 열 순서가 다르다");
+        List<List<List<NumericTreeEnsemble.Node>>> iterations = array(root.get("trees")).valueStream()
+            .map(step -> array(step).valueStream().map(AlightingAwareInferenceBundle::readTree).toList())
+            .toList();
+        double[] baseline = array(root.get("baseline")).valueStream()
+            .mapToDouble(AlightingAwareInferenceBundle::number)
+            .toArray();
+        return new NumericTreeEnsemble(
+                integer(root.get("feature_count")),
+                kind,
+                baseline,
+                iterations
+        );
+    }
+
+    private static List<NumericTreeEnsemble.Node> readTree(JsonNode tree) {
+        return array(tree).valueStream()
+            .map(fields -> {
+                require(fields.isArray() && fields.size() == 7, "노드 크기가 잘못됐다");
+                return new NumericTreeEnsemble.Node(
+                        integer(fields.get(0)),
+                        number(fields.get(1)),
+                        booleanValue(fields.get(2)),
+                        integer(fields.get(3)),
+                        integer(fields.get(4)),
+                        number(fields.get(5)),
+                        booleanValue(fields.get(6))
+                );
+            })
+            .toList();
     }
 
     private static boolean hasSafeFileName(String name) {
@@ -517,24 +611,23 @@ public final class AlightingAwareInferenceBundle {
     }
 
     private static List<String> texts(JsonNode node) {
-        List<String> values = new ArrayList<>();
-        for (JsonNode value : array(node)) {
-            require(value.isString(), "문자열 배열이 아니다");
-            values.add(value.asString());
-        }
-        return values;
+        return array(node).valueStream()
+            .map(value -> {
+                require(value.isString(), "문자열 배열이 아니다");
+                return value.asString();
+            })
+            .toList();
     }
 
+    /** scikit-learn이 실수형으로 저장한 클래스 값 0.0과 1.0도 정수로 검증한다. */
     private static List<Integer> integers(JsonNode node) {
-        List<Integer> values = new ArrayList<>();
-        for (JsonNode value : array(node)) {
-            // scikit-learn retains the float64 label dtype for pool_gb classes 0.0/1.0.
-            final double label = number(value);
-            require(isIntegerLabel(label),
-                "클래스 값이 정수가 아니다");
-            values.add((int) label);
-        }
-        return values;
+        return array(node).valueStream()
+            .map(value -> {
+                final double label = number(value);
+                require(isIntegerLabel(label), "클래스 값이 정수가 아니다");
+                return (int) label;
+            })
+            .toList();
     }
 
     private static JsonNode array(JsonNode node) {
@@ -545,17 +638,16 @@ public final class AlightingAwareInferenceBundle {
     private static String text(JsonNode node, String field) {
         JsonNode value = node.get(field);
         require(value != null && value.isString(), "문자열 필드가 아니다: " + field);
-        return List.of("schema", "model", "input_profile", "feature_contract_version", "label_version")
-            .contains(field) ? canonical(value.asString()) : value.asString();
+        return value.asString();
     }
 
     private static int integer(JsonNode value) {
-        require(value != null && value.isIntegralNumber() && value.canConvertToInt(), "정수가 아니다");
+        require(isInteger(value), "정수가 아니다");
         return value.intValue();
     }
 
     private static double number(JsonNode value) {
-        require(value != null && value.isNumber() && Double.isFinite(value.doubleValue()), "유한한 숫자가 아니다");
+        require(isFiniteNumber(value), "유한한 숫자가 아니다");
         return value.doubleValue();
     }
 
@@ -572,5 +664,27 @@ public final class AlightingAwareInferenceBundle {
         if (!valid) {
             throw new IllegalArgumentException(message);
         }
+    }
+
+    private static boolean hasValidSettlementParameters(final double probability, JsonNode params) {
+        return probability > 0 && probability < 1 && number(params.get("kappa")) > 0
+            && number(params.get("r")) > 0;
+    }
+
+    private static boolean hasValidHolidaySubstitutions(
+        List<String> substitutions,
+        List<String> routes,
+        JsonNode result
+    ) {
+        return new HashSet<>(substitutions).size() == substitutions.size() && routes.containsAll(substitutions)
+            && substitutions.equals(holidayWeekendSubstitutions(result));
+    }
+
+    private static boolean isInteger(JsonNode value) {
+        return value != null && value.isIntegralNumber() && value.canConvertToInt();
+    }
+
+    private static boolean isFiniteNumber(JsonNode value) {
+        return value != null && value.isNumber() && Double.isFinite(value.doubleValue());
     }
 }

@@ -1,11 +1,14 @@
 package com.gustler.backend.worker.integration.observations;
 
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 import com.gustler.backend.gbis.api.GbisLocationResult;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse;
-import com.gustler.backend.observations.api.CollectObservations;
-import com.gustler.backend.observations.application.ObservationBatchLedger;
+import com.gustler.backend.observations.application.CollectionBatchService;
+import com.gustler.backend.observations.application.ObservationCollector;
 import com.gustler.backend.observations.domain.CollectionPlan;
 import com.gustler.backend.observations.infrastructure.gbis.GbisObservationMapper;
 import com.gustler.backend.support.PostgresTestContainer;
@@ -31,9 +34,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
  * 관측 테이블에 날짜 파티션이 하나도 없는 DB에서 수집만 켠 worker를 띄운다. 유지 작업 없이 여러 날 꺼져 있던 worker의 DB가 이런
- * 모양이다. 기동 직후의 첫 수집이 쓴 줄이 기본 파티션이 아니라 그날 파티션에 들어가는지 본다.
+ * 구조다. 기동 직후의 첫 수집이 저장한 행이 기본 파티션이 아니라 그날 파티션에 들어가는지 본다.
  *
- * <p>날짜 파티션은 마이그레이션이 끝난 직후에 지운다. 수집은 상류를 부르지 않고 실제 수집 원장으로 관측 한 줄을 저장한다. worker는
+ * <p>날짜 파티션은 마이그레이션이 끝난 직후에 지운다. 수집은 GBIS를 부르지 않고 실제 수집 원장으로 관측 한 행을 저장한다. worker는
  * 수집 예약을 만드는 즉시 첫 수집을 돌리므로, 시험이 시작하기 전에 첫 줄이 이미 저장돼 있다.
  */
 @SpringBootTest(classes = WorkerApplication.class, properties = {
@@ -100,11 +103,14 @@ class FirstCollectionPartitionIntegrationTest {
 
         @Bean
         @Primary
-        CollectObservations storingOneObservation(ObservationBatchLedger ledger, JdbcClient jdbc) {
-            return sourceRouteId -> {
-                collect(ledger, jdbc, sourceRouteId);
+        ObservationCollector storingOneObservation(CollectionBatchService ledger, JdbcClient jdbc) {
+            ObservationCollector collector = mock(ObservationCollector.class);
+            doAnswer(call -> {
+                collect(ledger, jdbc, call.getArgument(0));
                 COLLECTED.countDown();
-            };
+                return null;
+            }).when(collector).collectOnce(anyString());
+            return collector;
         }
 
         private static void insertRoute(JdbcClient admin) {
@@ -127,18 +133,29 @@ class FirstCollectionPartitionIntegrationTest {
                 """).param("version", routeVersionId).update();
         }
 
-        /** 차량 한 대가 첫 정류장을 막 떠난 관측 한 줄을 실제 수집 원장으로 저장하고 커밋한다. */
-        private static void collect(ObservationBatchLedger ledger, JdbcClient jdbc, String sourceRouteId) {
+        /** 차량 한 대가 첫 정류장을 막 떠난 관측 한 행을 실제 수집 원장으로 저장하고 커밋한다. */
+        private static void collect(CollectionBatchService ledger, JdbcClient jdbc, String sourceRouteId) {
             final long routeVersionId = jdbc.sql("""
                 SELECT version.id FROM route_version version JOIN route ON route.id = version.route_id
                 WHERE route.source_route_id = :source
                 """).param("source", sourceRouteId).query(Long.class).single();
             OffsetDateTime at = OffsetDateTime.now(SEOUL).truncatedTo(ChronoUnit.MILLIS);
-            final long batchId = ledger
-                .reserve(new CollectionPlan(routeVersionId, at, UUID.randomUUID().toString()), at).batchId();
-            ledger.markDispatching(batchId, at, at, "a");
-            BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation("경기70아0001",
-                "first-collection-vehicle", 0, sourceRouteId, 11, "stop-one", 1, 2, 30, 3, 1);
+            final long batchId = ledger.prepare(new CollectionPlan(routeVersionId, at, UUID.randomUUID().toString()),
+                at).batchId();
+
+            BusLocationResponse.BusLocation bus = new BusLocationResponse.BusLocation(
+                    "경기70아0001",
+                    "first-collection-vehicle",
+                    0,
+                    sourceRouteId,
+                    11,
+                    "stop-one",
+                    1,
+                    2,
+                    30,
+                    3,
+                    1
+            );
             ledger.conclude(batchId,
                 received -> GbisObservationMapper.response(new GbisLocationResult.Success(
                     at.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.S")), List.of(bus)), received),

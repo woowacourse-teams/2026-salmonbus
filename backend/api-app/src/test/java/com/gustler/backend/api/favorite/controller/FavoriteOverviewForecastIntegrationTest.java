@@ -39,10 +39,11 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * 즐겨찾기 조회가 예보 기록에서 읽은 예측을 접근 차량에 그대로 싣는지 실제 톰캣과 실제 DB로 검증한다.
  *
- * <p>시계가 실제 시각이라 관측 시각을 지금 기준으로 넣는다. 컨텍스트를 함께 쓰고 롤백하지 않으므로 넣은 줄은 시험마다 비운다.
+ * <p>시계가 실제 시각이라 관측 시각을 지금 기준으로 넣는다. 컨텍스트를 같이 쓰고 롤백하지 않으므로 넣은 줄은 시험마다 비운다.
  */
 @LoginIntegrationTest
 class FavoriteOverviewForecastIntegrationTest {
+
     private final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
 
     @LocalServerPort
@@ -92,7 +93,12 @@ class FavoriteOverviewForecastIntegrationTest {
         BoardDatabaseFixture.RouteContext route = fixture.insertRoute(now.minusDays(1));
         final long modelId = fixture.insertActiveModel(now.minusDays(1));
         ForecastBoardFixture.ObservedVehicle vehicle = fixture.insertApproachingVehicle(route, now.minusMinutes(1));
-        fixture.insertForecast(vehicle, modelId, 0.25, 12.5);
+        fixture.insertForecast(
+                vehicle,
+                modelId,
+                0.25,
+                12.5
+        );
 
         // when
         HttpResponse<String> actual = getFavorites();

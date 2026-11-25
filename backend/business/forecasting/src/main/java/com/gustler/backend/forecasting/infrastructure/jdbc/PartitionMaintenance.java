@@ -28,8 +28,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * 날짜 파티션 테이블에 한국 날짜 기준 오늘부터 {@value #DAYS_AHEAD}일 뒤까지 {@code <table>_pYYYYMMDD} 파티션을 만든다.
  *
- * <p>대상은 두 묶음이다. 예보 기록 테이블 다섯 개({@link #TABLES})는 예보가 켜졌을 때만 다룬다({@link #setForecastTables}).
- * 관측 두 테이블({@link #OBSERVATION_TABLES})은 카탈로그에서 파티션 테이블({@code relkind='p'})일 때만 다룬다. 수동 SQL
+ * <p>대상은 두 묶음이다. 예보 기록 테이블 다섯 개({@link #TABLES})는 예보가 켜졌을 때만 관리한다({@link #setForecastTables}).
+ * 관측 두 테이블({@link #OBSERVATION_TABLES})은 카탈로그에서 파티션 테이블({@code relkind='p'})일 때만 관리한다. 수동 SQL
  * ({@code deploy/sql/sal434-04-partition-observation-tables.sql})이 같은 이름 규칙({@code <table>_pYYYYMMDD}, 기본 파티션
  * {@code <table>_default}, 하루 범위 {@code [날짜, 날짜+1)})으로 이 두 테이블을 바꾸기 전에는 일반 테이블이라 카탈로그만 읽고
  * 아무것도 쓰지 않는다.
@@ -37,13 +37,14 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>파티션 하나는 짧은 트랜잭션 하나로 만든다. PostgreSQL은 파티션을 만드는 동안 부모 테이블과 기본 파티션에
  * {@code ACCESS EXCLUSIVE} 잠금을 잡고 기본 파티션을 훑으므로, 잠금 대기를 3초로 묶어 쓰기를 오래 막지 않는다.
  * 여러 인스턴스가 동시에 만들면 한쪽이 "이미 있음"으로 실패할 수 있어, 실패하면 다시 확인하고 있으면 성공으로 본다.
- * 테이블 소유자가 아니라 권한이 없거나, 기본 파티션에 그 날짜의 줄이 이미 있거나, 잠금을 얻지 못하면 예외를 던지지 않고 경고 로그와
- * {@code salmonbus.partition.failures} 지표만 남긴다. 그 날짜의 줄은 기본 파티션으로 들어간다.
+ * 테이블 소유자가 아니라 권한이 없거나, 기본 파티션에 그 날짜의 행이 이미 있거나, 잠금을 얻지 못하면 예외를 던지지 않고 경고 로그와
+ * {@code salmonbus.partition.failures} 지표만 남긴다. 그 날짜의 행은 기본 파티션으로 들어간다.
  *
  * <p>테이블 이름은 고정 목록에서만 오므로 SQL에 그대로 넣는다.
  */
 @Component
 public class PartitionMaintenance implements MaintainPartitions {
+
     /**
      * 만든 파티션 수 지표의 이름. Prometheus로는 {@code salmonbus_partition_creations_total}로 나간다. 이름을
      * {@code created}로 끝내면 내보낼 때 예약된 접미사로 보고 떼어 내 {@code salmonbus_partition_total}이 된다.
@@ -51,9 +52,15 @@ public class PartitionMaintenance implements MaintainPartitions {
     static final String CREATIONS_METER = "salmonbus.partition.creations";
     /** 날짜 파티션을 두는 테이블. 기본 파티션은 {@code <table>_default}다. */
     public static final List<String> TABLES =
-        List.of("forecast_run", "forecast_record", "stop_pass", "pass_label", "forecast_unresolved");
+        List.of(
+                "forecast_run",
+                "forecast_record",
+                "stop_pass",
+                "pass_label",
+                "forecast_unresolved"
+        );
 
-    /** 파티션 테이블일 때만 다루는 관측 테이블. 기본 파티션은 {@code <table>_default}다. */
+    /** 파티션 테이블일 때만 관리하는 관측 테이블. 기본 파티션은 {@code <table>_default}다. */
     public static final List<String> OBSERVATION_TABLES = List.of("observation_batch", "vehicle_observation");
 
     /** 오늘에 더해 미리 만드는 날 수. */
@@ -77,14 +84,14 @@ public class PartitionMaintenance implements MaintainPartitions {
         this.clock = clock;
     }
 
-    /** 실패 수와 기본 파티션 줄 수를 지표로 낸다. 지표 등록기가 없으면 로그만 남긴다. */
+    /** 실패 수와 기본 파티션 행 수를 지표로 낸다. 지표 등록기가 없으면 로그만 남긴다. */
     @Autowired(required = false)
     public void setMeterRegistry(MeterRegistry meters) {
         this.meters = meters;
     }
 
     /**
-     * 예보 기록 테이블 다섯 개를 다룰지 정한다. 예보가 켜졌을 때({@code forecast.enabled=true}) 참이며, 직접 만든 객체는 참이다.
+     * 예보 기록 테이블 다섯 개를 관리할지 정한다. 예보가 켜졌을 때({@code forecast.enabled=true}) 참이며, 직접 만든 객체는 참이다.
      *
      * @param forecastTables 예보 기록 테이블을 다루면 참
      */
@@ -93,7 +100,7 @@ public class PartitionMaintenance implements MaintainPartitions {
         this.forecastTables = forecastTables;
     }
 
-    /** 이번에 다룰 테이블. 예보 기록 테이블(예보가 켜졌을 때)과 파티션 테이블인 관측 테이블이다. */
+    /** 이번에 관리할 테이블. 예보 기록 테이블(예보가 켜졌을 때)과 파티션 테이블인 관측 테이블이다. */
     public List<String> managedTables() {
         List<String> tables = new ArrayList<>();
         if (forecastTables) {
@@ -123,7 +130,12 @@ public class PartitionMaintenance implements MaintainPartitions {
         LocalDate today = SourceDates.of(clock.instant());
         List<String> created = new ArrayList<>();
         List<String> failed = new ArrayList<>();
-        ensurePartitions(tables, today, created, failed);
+        ensurePartitions(
+                tables,
+                today,
+                created,
+                failed
+        );
         if (!created.isEmpty()) {
             LOGGER.info("event=partitions_created partitions={}", created);
         }
@@ -150,7 +162,7 @@ public class PartitionMaintenance implements MaintainPartitions {
         }
     }
 
-    /** 기본 파티션 줄 수를 테이블 순서대로 센다. 세지 못한 테이블은 경고 로그만 남기고 결과에서 뺀다. */
+    /** 기본 파티션 행 수를 테이블 순서대로 센다. 세지 못한 테이블은 경고 로그만 남기고 결과에서 뺀다. */
     private Map<String, Long> defaultRowsOf(List<String> tables) {
         Map<String, Long> defaultRows = new LinkedHashMap<>();
         for (String table : tables) {
@@ -161,8 +173,7 @@ public class PartitionMaintenance implements MaintainPartitions {
                     LOGGER.warn("event=partition_default_rows table={} rows={}", table, rows);
                 }
             } catch (DataAccessException failure) {
-                LOGGER.warn("event=partition_default_count_failed table={} sqlState={}", table,
-                    sqlState(failure));
+                LOGGER.warn("event=partition_default_count_failed table={} sqlState={}", table, sqlState(failure));
             }
         }
         return defaultRows;
@@ -192,10 +203,20 @@ public class PartitionMaintenance implements MaintainPartitions {
             if (isPartitionOf(partition, table)) {
                 return Outcome.EXISTING;
             }
-            return failed(table, partition, reasonOf(sqlState(failure)), sqlState(failure));
+            return failed(
+                    table,
+                    partition,
+                    reasonOf(sqlState(failure)),
+                    sqlState(failure)
+            );
         }
         if (!isPartitionOf(partition, table)) {
-            return failed(table, partition, "name_taken", null);
+            return failed(
+                    table,
+                    partition,
+                    "name_taken",
+                    null
+            );
         }
         if (meters != null) {
             meters.counter(CREATIONS_METER, "table", table).increment();
@@ -204,10 +225,10 @@ public class PartitionMaintenance implements MaintainPartitions {
     }
 
     /**
-     * 테이블의 기본 파티션에 들어 있는 줄 수를 세고 {@code salmonbus.partition.default.rows} 지표에 반영한다.
+     * 테이블의 기본 파티션에 들어 있는 행 수를 세고 {@code salmonbus.partition.default.rows} 지표에 반영한다.
      *
      * @param table {@link #TABLES} 또는 {@link #OBSERVATION_TABLES} 가운데 하나
-     * @return 기본 파티션의 줄 수
+     * @return 기본 파티션의 행 수
      */
     public long countDefaultRows(String table) {
         requireKnown(table);
@@ -246,11 +267,27 @@ public class PartitionMaintenance implements MaintainPartitions {
             .single();
     }
 
-    private Outcome failed(String table, String partition, String reason, String sqlState) {
-        LOGGER.warn("event=partition_create_failed table={} partition={} reason={} sqlState={}", table,
-            partition, reason, sqlState);
+    private Outcome failed(
+        String table,
+        String partition,
+        String reason,
+        String sqlState
+    ) {
+        LOGGER.warn(
+                "event=partition_create_failed table={} partition={} reason={} sqlState={}",
+                table,
+                partition,
+                reason,
+                sqlState
+        );
         if (meters != null) {
-            meters.counter("salmonbus.partition.failures", "table", table, "reason", reason).increment();
+            meters.counter(
+                    "salmonbus.partition.failures",
+                    "table",
+                    table,
+                    "reason",
+                    reason
+            ).increment();
         }
         return Outcome.FAILED;
     }
@@ -282,11 +319,12 @@ public class PartitionMaintenance implements MaintainPartitions {
 
     /** 파티션 하나를 확인한 결과. */
     public enum Outcome {
+
         /** 이번에 만들었다. */
         CREATED,
         /** 이미 있었다. 다른 인스턴스가 먼저 만든 경우를 포함한다. */
         EXISTING,
-        /** 만들지 못했다. 그 날짜의 줄은 기본 파티션으로 들어간다. */
+        /** 만들지 못했다. 그 날짜의 행은 기본 파티션으로 들어간다. */
         FAILED
     }
 }

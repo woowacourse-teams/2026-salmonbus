@@ -8,9 +8,8 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.gustler.backend.forecasting.api.ForecastTelemetry;
+import com.gustler.backend.forecasting.api.forecast.ForecastBatchEvents;
 import com.gustler.backend.forecasting.api.forecast.ForecastPublished;
-import com.gustler.backend.forecasting.api.forecast.ObservationBatchSeen;
-import com.gustler.backend.forecasting.api.forecast.PassClosed;
 import com.gustler.backend.forecasting.application.forecast.ForecastEvents;
 import com.gustler.backend.forecasting.application.forecast.ForecastRecordStore;
 import com.gustler.backend.forecasting.application.forecast.ForecastStage;
@@ -36,12 +35,13 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 예보가 남기는 진단 로그와 지표, 실행 줄이 닫힐 때의 훑기를 실제 DB로 본다. 흐름에는 정원을 모르는 차량과 정원이 모델 범위보다
+ * 예보가 남기는 진단 로그와 지표, 실행기가 종료될 때의 배치 조회 작업을 실제 DB로 본다. 흐름에는 정원을 모르는 차량과 정원이 모델 범위보다
  * 작은 차량이 하나씩 있다.
  */
 @ForecastingIntegrationTest
 @Transactional
 class ForecastDiagnosticsTest {
+
     private static final Pattern WITHHELD = Pattern.compile(
         "event=forecast_vehicle_withheld reason=(\\S+) batchId=(\\d+) vehicleId=(\\S+)");
     private static final String LOGGER_PACKAGE = RunForecastsService.class.getPackageName();
@@ -147,12 +147,15 @@ class ForecastDiagnosticsTest {
         List<ILoggingEvent> skipped = events("event=forecast_route_skipped ");
         assertSoftly(softly -> {
             softly.assertThat(skipped).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage()).isEqualTo(
+                softly.assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                softly.assertThat(event.getFormattedMessage()).isEqualTo(
                     "event=forecast_route_skipped reason=ROUTE_REFERENCE_MISMATCH routeId=\"234001739\" "
                         + "routeName=\"%s\" routeVersionId=%d modelDeploymentId=%d releaseId=\"%s\"".formatted(
-                            harness.stops().routeName(), harness.stops().routeVersionId(),
-                            harness.runtime.deploymentId(), harness.runtime.releaseId()));
+                                harness.stops().routeName(),
+                                harness.stops().routeVersionId(),
+                                harness.runtime.deploymentId(),
+                                harness.runtime.releaseId()
+                        ));
             });
             softly.assertThat(harness.counter("batches", "reference_mismatch")).isOne();
             softly.assertThat(harness.runOutcome(batch)).isEmpty();
@@ -211,8 +214,8 @@ class ForecastDiagnosticsTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(events("event=forecast_telemetry_failed ")).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage()).isEqualTo(
+                softly.assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                softly.assertThat(event.getFormattedMessage()).isEqualTo(
                     "event=forecast_telemetry_failed routeVersionId=%d exceptionType=IllegalStateException"
                         .formatted(harness.stops().routeVersionId()));
             });
@@ -224,8 +227,8 @@ class ForecastDiagnosticsTest {
     void 실행_줄이_닫히기_시작하면_처리하던_배치_하나만_끝내고_남은_배치는_처리하지_않는다() {
         // given
         ForecastHarness harness = harness(20261316L, Duration.ofMinutes(20));
-        harness.start(RouteStateReplayer.DEFAULT_WINDOW, RouteStateReplayer.DEFAULT_EXTENDED_WINDOW,
-            new ClosingOnForecast(harness::closeLanes));
+        harness.start(
+            RouteStateReplayer.DEFAULT_WINDOW, new ClosingOnForecast(harness::closeLanes));
         harness.fromVerifiedOrigin();
         List<Long> waiting = harness.batches().subList(0, 5);
         waiting.subList(0, 4).forEach(harness::commit);
@@ -236,7 +239,10 @@ class ForecastDiagnosticsTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(harness.runCount(waiting.getFirst())).isOne();
-            softly.assertThat(waiting.subList(1, 5)).allSatisfy(batch -> assertThat(harness.runCount(batch)).isZero());
+            softly.assertThat(waiting.subList(
+                1,
+                5
+            )).allSatisfy(batch -> softly.assertThat(harness.runCount(batch)).isZero());
         });
     }
 
@@ -261,24 +267,25 @@ class ForecastDiagnosticsTest {
         });
     }
 
-    /** 예보 사건을 받는 순간 실행 줄을 닫히기 시작한 것으로 바꾸는 뒤 단계다. */
+    /** 예보 이벤트를 받는 순간 실행기를 종료 중인 것으로 바꾸는 뒤 단계다. */
     private record ClosingOnForecast(Runnable close) implements ForecastEvents {
-        @Override
-        public void batchSeen(ObservationBatchSeen seen) {
-        }
 
         @Override
-        public void forecastPublished(ForecastPublished published) {
-            close.run();
-        }
-
-        @Override
-        public void passesClosed(List<PassClosed> passes) {
+        public void committed(ForecastBatchEvents batch) {
+            if (batch.events().stream().anyMatch(ForecastPublished.class::isInstance)) {
+                close.run();
+            }
         }
     }
 
     private ForecastHarness harness(final long seed, Duration length) {
-        return new ForecastHarness(new ForecastHarness.Beans(jdbc, transactions, deployments, records, passes), seed,
+        return new ForecastHarness(new ForecastHarness.Beans(
+                jdbc,
+                transactions,
+                deployments,
+                records,
+                passes
+        ), seed,
             length);
     }
 

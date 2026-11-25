@@ -9,10 +9,11 @@ import java.util.regex.Pattern;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * 한 흐름의 DB 번호를 실행마다 같은 이름으로 바꾼다. 배치는 넣은 순서의 순번, 관측은 {@code 배치 순번.원본 줄 번호},
- * 노선 판본은 넣은 순서의 순번, 차량은 흐름마다 붙는 임의 접두를 뗀 이름이다. 고정 기대값의 키로 쓴다.
+ * 한 흐름의 DB 번호를 실행마다 같은 이름으로 바꾼다. 배치는 넣은 순서의 순번, 관측은 {@code 배치 순번.원본 행 번호},
+ * 노선 버전은 넣은 순서의 순번, 차량은 흐름마다 붙는 임의 접두를 뗀 이름이다. 고정 기대값의 키로 쓴다.
  */
 final class StreamKeys {
+
     private static final Pattern VEHICLE = Pattern.compile("^[0-9a-f]{8}-(.+)$");
 
     private final List<Long> batchIds;
@@ -90,7 +91,7 @@ final class StreamKeys {
     int version(final long routeVersionId) {
         Integer ordinal = versionOrdinals.get(routeVersionId);
         if (ordinal == null) {
-            throw new IllegalArgumentException("흐름에 없는 노선 판본: " + routeVersionId);
+            throw new IllegalArgumentException("흐름에 없는 노선 버전: " + routeVersionId);
         }
         return ordinal;
     }

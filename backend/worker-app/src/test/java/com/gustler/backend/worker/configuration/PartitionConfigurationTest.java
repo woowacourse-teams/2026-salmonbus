@@ -45,7 +45,7 @@ class PartitionConfigurationTest {
             assertSoftly(softly -> {
                 softly.assertThat(context.getBeansOfType(PartitionJob.class)).hasSize(1);
                 softly.assertThat(partitions.prepared).as("주기 실행을 기다리지 않고 이미 한 번 만들었다").hasValue(1);
-                softly.assertThat(partitions.maintained).as("기동 때는 기본 파티션의 줄 수를 세지 않는다").hasValue(0);
+                softly.assertThat(partitions.maintained).as("기동 때는 기본 파티션의 행 수를 세지 않는다").hasValue(0);
                 softly.assertThat(tasks).singleElement().satisfies(task -> {
                     assertThat(task.getInitialDelayDuration()).isEqualTo(Duration.ofHours(1));
                     assertThat(task.getIntervalDuration()).isEqualTo(Duration.ofHours(1));

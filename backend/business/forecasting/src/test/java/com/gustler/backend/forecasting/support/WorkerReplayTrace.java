@@ -11,6 +11,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 final class WorkerReplayTrace {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private WorkerReplayTrace() {
@@ -19,17 +20,32 @@ final class WorkerReplayTrace {
     static JsonNode describe(JsonNode fixture, String fixtureDigest) {
         Instant start = Instant.parse(fixture.path("batches").get(0).path("response_at").asString());
         ObjectNode track = JSON.createObjectNode();
-        for (String name : List.of("route", "source_route_id", "route_versions", "prefix")) {
+        for (String name : List.of(
+                "route",
+                "source_route_id",
+                "route_versions",
+                "prefix"
+        )) {
             track.set(name, fixture.path(name));
         }
         track.set("stops", fixture.path("statistics").path("route_metadata"));
         track.set("batches", relative(fixture.path("batches"), start, List.of("confirmed_at", "response_at")));
-        track.set("observations", relative(fixture.path("observations"), start, List.of("received_at", "physical_received_at")));
+        track.set(
+            "observations",
+            relative(fixture.path("observations"), start, List.of("received_at", "physical_received_at"))
+        );
         ArrayNode cases = track.putArray("cases");
         for (JsonNode item : fixture.path("cases")) {
             ObjectNode ids = cases.addObject();
-            for (String key : List.of("source_id", "target", "expected_pre", "expected_post", "expected_closure",
-                "expected_previous_post", "expected_capacity")) {
+            for (String key : List.of(
+                    "source_id",
+                    "target",
+                    "expected_pre",
+                    "expected_post",
+                    "expected_closure",
+                    "expected_previous_post",
+                    "expected_capacity"
+            )) {
                 ids.set(key, item.path(key));
             }
         }
@@ -55,10 +71,13 @@ final class WorkerReplayTrace {
             ObjectNode copy = JSON.createObjectNode();
             for (Map.Entry<String, JsonNode> item : row.properties()) {
                 if (times.contains(item.getKey())) {
-                    copy.put(item.getKey(), Duration.between(start, Instant.parse(item.getValue().asString())).toNanos());
-                } else {
-                    copy.set(item.getKey(), item.getValue());
+                    copy.put(
+                        item.getKey(),
+                        Duration.between(start, Instant.parse(item.getValue().asString())).toNanos()
+                    );
+                    continue;
                 }
+                copy.set(item.getKey(), item.getValue());
             }
             result.add(copy);
         }

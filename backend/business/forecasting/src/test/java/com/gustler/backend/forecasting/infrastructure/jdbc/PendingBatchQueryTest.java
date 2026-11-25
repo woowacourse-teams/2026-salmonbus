@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ForecastingIntegrationTest
 @Transactional
 class PendingBatchQueryTest {
+
     private static final Instant NOW = Instant.parse("2030-03-01T03:00:00Z");
     private static final Duration WINDOW = Duration.ofMinutes(10);
     private static final int ROUTES = 20;
@@ -57,11 +58,21 @@ class PendingBatchQueryTest {
         // then
         assertSoftly(softly -> {
             softly.assertThat(all).extracting(PendingBatches.Pending::observationBatchId)
-                .containsExactly(first, second, third);
+                .containsExactly(
+                        confirmedInput,
+                        first,
+                        second,
+                        third
+                );
             softly.assertThat(all).extracting(PendingBatches.Pending::receivedAt)
-                .containsExactly(NOW.minusSeconds(90), NOW.minusSeconds(60), NOW.minusSeconds(30));
+                .containsExactly(
+                        NOW.minusSeconds(150),
+                        NOW.minusSeconds(90),
+                        NOW.minusSeconds(60),
+                        NOW.minusSeconds(30)
+                );
             softly.assertThat(limited).extracting(PendingBatches.Pending::observationBatchId)
-                .containsExactly(first, second);
+                .containsExactly(confirmedInput, first);
         });
     }
 
@@ -117,10 +128,10 @@ class PendingBatchQueryTest {
     }
 
     /**
-     * 노선 판본 여럿에 배치를 넣고 최근 것 셋만 처리하지 않은 채로 둔 뒤 통계를 모은다. 줄은 넣는 날의 테이블(날짜 파티션
+     * 노선 버전 여럿에 배치를 넣고 최근 것 셋만 처리하지 않은 채로 둔 뒤 통계를 모은다. 줄은 넣는 날의 테이블(날짜 파티션
      * 테이블이면 그날의 파티션 하나)에 들어간다.
      *
-     * @return 마지막으로 만든 노선 판본
+     * @return 마지막으로 만든 노선 버전
      */
     private long manyBatchesPerRoute() {
         long version = 0;
@@ -159,7 +170,7 @@ class PendingBatchQueryTest {
             .list();
     }
 
-    /** 준비한 줄이 든 관계 이름이다. 일반 테이블이면 그 테이블, 날짜 파티션 테이블이면 줄이 들어간 파티션이다. */
+    /** 준비한 행이 든 관계 이름이다. 일반 테이블이면 그 테이블, 날짜 파티션 테이블이면 줄이 들어간 파티션이다. */
     private List<String> relationsHoldingPreparedRows() {
         return jdbc.sql("""
             SELECT DISTINCT tableoid::regclass::text FROM observation_batch WHERE attempt_key LIKE 'plan-%'
@@ -168,7 +179,7 @@ class PendingBatchQueryTest {
 
     /**
      * 계획이 관계마다 어떻게 읽는지를 모은다. 값은 읽는 노드의 종류이고, 그 노드에 인덱스 조건이 있으면 뒤에 붙인다.
-     * 날짜 파티션 테이블에서는 줄이 없는 파티션을 통째로 읽는 노드와, 파티션들을 모은 위의 정렬이 함께 나온다.
+     * 날짜 파티션 테이블에서는 줄이 없는 파티션을 통째로 읽는 노드와, 파티션들을 모은 위의 정렬이 같이 나온다.
      */
     private static Map<String, String> reads(List<String> plan) {
         Map<String, String> reads = new HashMap<>();
@@ -187,7 +198,7 @@ class PendingBatchQueryTest {
         return reads;
     }
 
-    /** 관계를 인덱스로 읽고 그 인덱스 조건이 노선 판본과 수신 시각 하한을 모두 담는지다. 관계를 통째로 읽으면 거짓이다. */
+    /** 관계를 인덱스로 읽고 그 인덱스 조건이 노선 버전과 수신 시각 하한을 모두 담는지다. 관계를 통째로 읽으면 거짓이다. */
     private static boolean isBoundedByVersionAndReceivedAt(String read) {
         if (read == null || !read.startsWith("Index Scan")) {
             return false;
@@ -213,9 +224,16 @@ class PendingBatchQueryTest {
                 response_received_at,outcome,failure_code,stored_rows,normalization_version,
                 collection_strategy_version,ingestion_origin)
             VALUES(?,?,1,?,?,?,?,?,?,'normalization-v1.0.0','adaptive-kst-v1.0.1','LIVE') RETURNING id
-            """).params(version, receivedAt.atOffset(ZoneOffset.UTC), UUID.randomUUID().toString(),
-                receivedAt.atOffset(ZoneOffset.UTC), receivedAt.atOffset(ZoneOffset.UTC), outcome,
-                failureCode(outcome), storedRows(outcome))
+            """).params(
+                    version,
+                    receivedAt.atOffset(ZoneOffset.UTC),
+                    UUID.randomUUID().toString(),
+                    receivedAt.atOffset(ZoneOffset.UTC),
+                    receivedAt.atOffset(ZoneOffset.UTC),
+                    outcome,
+                    failureCode(outcome),
+                    storedRows(outcome)
+            )
             .query(Long.class).single();
     }
 
@@ -240,7 +258,12 @@ class PendingBatchQueryTest {
             SELECT (b.scheduled_at AT TIME ZONE 'Asia/Seoul')::date, b.id, v.route_id, b.route_version_id, ?, ?,
                 'EMPTY', 0, false, 0
             FROM observation_batch b JOIN route_version v ON v.id=b.route_version_id WHERE b.id=? AND v.id=?
-            """).params(receivedAt.atOffset(ZoneOffset.UTC), receivedAt.atOffset(ZoneOffset.UTC), batchId, version)
+            """).params(
+                    receivedAt.atOffset(ZoneOffset.UTC),
+                    receivedAt.atOffset(ZoneOffset.UTC),
+                    batchId,
+                    version
+            )
             .update();
     }
 }

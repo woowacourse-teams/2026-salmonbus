@@ -1,7 +1,7 @@
 package com.gustler.backend.forecasting.support;
 
+import com.gustler.backend.forecasting.application.forecast.ClosedForecast;
 import com.gustler.backend.forecasting.application.forecast.PassLabel;
-import com.gustler.backend.forecasting.application.forecast.ScoredForecast;
 import com.gustler.backend.forecasting.application.forecast.ScoringReasons;
 import com.gustler.backend.forecasting.application.forecast.ScoringResult;
 import com.gustler.backend.forecasting.domain.forecast.SourceDates;
@@ -35,16 +35,17 @@ import tools.jackson.databind.JsonNode;
  *
  * <p>사례마다 다음을 본다.
  * <ul>
- *   <li>입력: 그 배치 직전에 다시 뜬 것처럼 저장된 관측을 되감아 만든 상태로 예보 입력을 다시 만들어 자료의 입력과 견준다.
+ *   <li>입력: 그 배치 직전에 재시작한 것처럼 저장된 관측을 복구해 만든 상태로 예보 입력을 다시 만들어 자료의 입력과 견준다.
  *       차이가 조금이라도 있으면 통과하지 못한다. 그 상태로 낸 예측이 저장된 예측과 비트까지 같은지도 본다.</li>
- *   <li>예측: 예보가 이어 온 상태로 저장한 예측을, 자료의 입력을 모델에 넣은 값(시간 확장 사례는 자료에 적힌 값)과 견준다.</li>
- *   <li>정답: 예측별 결과 뷰({@code forecast_outcome})에서 그 예측의 상태·정답 값과 정답 계산에 쓰인 관측·정원을 읽어 자료의
- *       기대값과 견준다. 정답이 알려진 시각은 통과가 닫힌 시각이다.</li>
+ *   <li>예측: 예보가 이어 온 상태로 저장한 예측을, 자료의 입력을 모델에 넣은 값(시간 확장 사례는 자료에 기록된 값)과 견준다.</li>
+ *   <li>정답: 예측별 결과 뷰({@code forecast_outcome})에서 그 예측의 상태, 정답 값과 정답 계산에 쓰인 관측, 정원을 읽어 자료의
+ *       기대값과 견준다. 정답이 알려진 시각은 통과 확정 시각이다.</li>
  * </ul>
- * 시간 확장 사례가 있으면 가장 먼저 채점된 시간 확장 사례 하나의 정답을, 저장된 예보·통과 기록만으로 채점 상태를 다시 만들어
+ * 시간 확장 사례가 있으면 가장 먼저 정산된 시간 확장 사례 하나의 정답을, 저장된 예보, 통과 기록만으로 정산 상태를 다시 만들어
  * 한 번 더 계산하고 저장된 값과 비트까지 같은지 본다.
  */
 final class WorkerReplayVerification {
+
     private static final String CAPACITY_POLICY = "vehicle-capacity-snapshot-v1";
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final double PREDICTION_TOLERANCE = 1e-9;
@@ -65,7 +66,7 @@ final class WorkerReplayVerification {
     private WorkerReplayRunner.Restarted restarted;
 
     /**
-     * @param runner 이 노선의 배치를 이미 모두 흘린 예보·채점
+     * @param runner 이 노선의 배치를 이미 모두 흘린 예보, 정산
      * @param bundle 재생한 번들
      * @param model 번들에서 읽은 모델
      * @param routeId 자료를 넣은 노선
@@ -97,7 +98,7 @@ final class WorkerReplayVerification {
         return columns;
     }
 
-    /** 모든 사례를 견준 노선 결과를 돌려준다. 보고서의 {@code routes} 한 줄이다. */
+    /** 모든 사례를 견준 노선 결과를 반환한다. 보고서의 {@code routes} 한 행이다. */
     Map<String, Object> result() {
         reportUnappliedBatches();
         List<JsonNode> cases = fixture.cases();
@@ -139,8 +140,8 @@ final class WorkerReplayVerification {
     }
 
     /**
-     * 자료에 적힌 착수 시각의 예보 실행이 남지 않은 배치가 있으면 그날을 자료대로 재생하지 못한 것이다. 수신 순서와 착수 순서가
-     * 뒤집힌 자료의 배치는 예보가 이력에 넣지 않고 나중에 늦음으로 닫으므로 실행의 착수 시각이 자료와 다르다.
+     * 자료에 기록된 처리 시작 시각의 예보 실행이 남지 않은 배치가 있으면 그날을 자료대로 재생하지 못한 것이다. 수신 순서와 착수 순서가
+     * 뒤집힌 자료의 배치는 예보가 이력에 넣지 않고 나중에 늦음으로 닫으므로 실행의 처리 시작 시각이 자료와 다르다.
      */
     private void reportUnappliedBatches() {
         Map<Long, Instant> appliedAt = new HashMap<>();
@@ -194,11 +195,19 @@ final class WorkerReplayVerification {
             tally.failures.add(failure(row, "restart", restart.withheldReason(source.observationId())));
             return Optional.empty();
         }
-        Forecast forecast = expectedForecast(row, restart, snapshot.get(), target);
-        return Optional.of(new Expected(forecast, restartedPrediction(restart, snapshot.get(), target).orElse(null)));
+        Forecast forecast = expectedForecast(
+                row,
+                restart,
+                snapshot.get(),
+                target
+        );
+        return Optional.of(new Expected(
+            forecast,
+            restartedPrediction(restart, snapshot.get(), target).orElse(null)
+        ));
     }
 
-    /** 사례는 기준 관측의 착수 시각 순서라 같은 배치가 이어진다. 직전 배치 하나만 들고 있는다. */
+    /** 사례는 기준 관측의 처리 시작 시각 순서라 같은 배치가 이어진다. 직전 배치 하나만 보관한다. */
     private WorkerReplayRunner.Restarted restartedAt(final long batchId) {
         if (restartedBatchId != batchId) {
             restarted = runner.restartedAt(batchId).orElse(null);
@@ -218,19 +227,32 @@ final class WorkerReplayVerification {
             throw new IllegalArgumentException("재생 입력의 실제 시간대가 기대값과 다르다");
         }
         if (row.has("extended_inputs")) {
-            return expectedExtended(row, restart, snapshot, target);
+            return expectedExtended(
+                    row,
+                    restart,
+                    snapshot,
+                    target
+            );
         }
         AlightingAwareFeatureVector actual = snapshot.forTarget(target);
         if (row.path("boundary_probe").asBoolean(false)) {
             AlightingAwareSeatPredictor.Prediction rush = bundle.predictor()
                 .predict(actual.seat88(), actual.probability80());
-            return new Forecast(rush.afterAlightingSeats(), rush.departureFullProbability(), 0);
+            return new Forecast(
+                rush.afterAlightingSeats(),
+                rush.departureFullProbability(),
+                0
+            );
         }
         final double difference = Math.max(difference(row.path("seat88"), actual.seat88()),
             difference(row.path("probability80"), actual.probability80()));
         AlightingAwareSeatPredictor.Prediction expected = bundle.predictor()
             .predict(vector(row.path("seat88")), vector(row.path("probability80")));
-        return new Forecast(expected.afterAlightingSeats(), expected.departureFullProbability(), difference);
+        return new Forecast(
+            expected.afterAlightingSeats(),
+            expected.departureFullProbability(),
+            difference
+        );
     }
 
     private static Forecast expectedExtended(
@@ -247,7 +269,11 @@ final class WorkerReplayVerification {
         final boolean offDay = "off".equals(restart.statistics().dayType(day));
         final double difference = difference(row.path("extended_inputs"),
             ExtendedAlightingPredictor.inputs(snapshot, stop, offDay));
-        return new Forecast(row.path("expected_seats").asDouble(), row.path("expected_full").asDouble(), difference);
+        return new Forecast(
+            row.path("expected_seats").asDouble(),
+            row.path("expected_full").asDouble(),
+            difference
+        );
     }
 
     private Optional<SeatForecastResult> restartedPrediction(
@@ -270,7 +296,12 @@ final class WorkerReplayVerification {
               previous_last_observation_id
             FROM forecast_outcome
             WHERE source_date=? AND vehicle_observation_id=? AND target_stop_order=? AND route_id=?
-            """).params(sourceDate, source.observationId(), target, routeId).query().listOfRows();
+            """).params(
+                    sourceDate,
+                    source.observationId(),
+                    target,
+                    routeId
+            ).query().listOfRows();
     }
 
     private String runOutcome(final long batchId) {
@@ -278,7 +309,11 @@ final class WorkerReplayVerification {
             .query(String.class).optional().orElse("MISSING");
     }
 
-    private void comparePrediction(JsonNode row, Expected expected, Map<String, Object> outcome) {
+    private void comparePrediction(
+        JsonNode row,
+        Expected expected,
+        Map<String, Object> outcome
+    ) {
         final double seats = number(outcome, "expected_seats");
         final double full = number(outcome, "full_probability");
         tally.maximumPrediction = Math.max(tally.maximumPrediction, Math.abs(seats - expected.forecast().seats()));
@@ -298,7 +333,7 @@ final class WorkerReplayVerification {
         }
     }
 
-    /** 출퇴근 끝에 낸 예측의 통과가 낮 시간에 닫혀도 채점할 수 있게, 정산 근거에 낮 시간 계수가 남아 있어야 한다. */
+    /** 출퇴근 끝에 낸 예측의 통과가 낮 시간에 닫혀도 정산할 수 있게, 정산 근거에 낮 시간 계수가 남아 있어야 한다. */
     private void requireDaytimeSettlement(Map<String, Object> outcome) {
         final boolean kept = jdbc.sql("""
             SELECT (settlement_context -> CAST(? AS text) -> 'shared' -> 'extendedSettlement' -> 'work-day') IS NOT NULL
@@ -330,8 +365,12 @@ final class WorkerReplayVerification {
         tally.settled++;
         countSettled(row);
         if (row.has("extended_inputs") && knownAt != null) {
-            tally.settledExtended.add(new Settled(row.path("source_id").asLong(), row.path("target").asInt(), knownAt,
-                label));
+            tally.settledExtended.add(new Settled(
+                    row.path("source_id").asLong(),
+                    row.path("target").asInt(),
+                    knownAt,
+                    label
+            ));
         }
     }
 
@@ -343,13 +382,17 @@ final class WorkerReplayVerification {
         return reason.isString() && reason.asString().equals(outcome.get("reason"));
     }
 
-    /** 정답이 알려진 시각이다. 직전 통과는 항상 먼저 닫히므로 정답을 낸 통과가 닫힌 시각과 같다. */
+    /** 정답이 알려진 시각이다. 직전 통과는 항상 먼저 닫히므로 정답을 낸 통과 확정 시각과 같다. */
     private Optional<Instant> closedAt(JsonNode row, Map<String, Object> outcome) {
         List<OffsetDateTime> closed = jdbc.sql("""
             SELECT closed_at FROM stop_pass
             WHERE route_id=? AND stop_order=? AND closure_observation_id=? AND last_observation_id=?
-            """).params(routeId, row.path("target").asInt(), outcome.get("closure_observation_id"),
-                outcome.get("last_observation_id"))
+            """).params(
+                    routeId,
+                    row.path("target").asInt(),
+                    outcome.get("closure_observation_id"),
+                    outcome.get("last_observation_id")
+            )
             .query(OffsetDateTime.class).list();
         if (closed.size() != 1) {
             return Optional.empty();
@@ -393,19 +436,22 @@ final class WorkerReplayVerification {
     }
 
     /**
-     * 가장 먼저 채점된 시간 확장 사례 하나의 정답을 저장된 기록만으로 다시 계산한다.
+     * 가장 먼저 정산된 시간 확장 사례 하나의 정답을 저장된 기록만으로 다시 계산한다.
      *
      * @return 다시 계산한 정답이 저장된 정답과 같으면 1, 시간 확장 사례가 없거나 다시 계산되지 않았으면 0
      * @throws IllegalStateException 다시 계산한 정답이 저장된 정답과 다르면 던진다
      */
     private int restoreFirstSettled() {
-        Optional<Settled> first = tally.settledExtended.stream().min(Settled.ORDER);
+        Optional<Settled> first = tally.settledExtended.stream().min(
+            Settled.ORDER
+        );
         if (first.isEmpty()) {
             return 0;
         }
         Settled settled = first.get();
         ScoringResult rescored = runner.rescoredThrough(routeId, settled.closedAt());
-        Optional<PassLabel> label = rescored.scored().stream()
+        Optional<PassLabel> label = rescored.closed().stream()
+            .filter(closed -> closed.label() != null)
             .filter(settled::isForecastOf)
             .findFirst()
             .flatMap(scored -> rescored.labels().stream()
@@ -415,20 +461,34 @@ final class WorkerReplayVerification {
             return 0;
         }
         if (!settled.hasSameLabelAs(label.get())) {
-            throw new IllegalStateException("저장된 기록으로 다시 채점한 정답이 저장된 정답과 다르다: "
+            throw new IllegalStateException("저장된 기록으로 다시 정산한 정답이 저장된 정답과 다르다: "
                 + settled.sourceId() + "/" + settled.target());
         }
         return 1;
     }
 
     private static List<Object> labelKey(PassLabel label) {
-        return List.of(label.sourceDate(), label.routeId(), label.tripStartObservationId(), label.stopOrder(),
-            label.capacity(), label.labelVersion(), label.modelDeploymentId());
+        return List.of(
+                label.sourceDate(),
+                label.routeId(),
+                label.tripStartObservationId(),
+                label.stopOrder(),
+                label.capacity(),
+                label.labelVersion(),
+                label.modelDeploymentId()
+        );
     }
 
-    private static List<Object> labelKey(ScoredForecast scored) {
-        return List.of(scored.passSourceDate(), scored.routeId(), scored.tripStartObservationId(), scored.stopOrder(),
-            scored.capacity(), ScoringReasons.LABEL_VERSION, scored.modelDeploymentId());
+    private static List<Object> labelKey(ClosedForecast scored) {
+        return List.of(
+                scored.label().sourceDate(),
+                scored.label().routeId(),
+                scored.label().tripStartObservationId(),
+                scored.label().stopOrder(),
+                scored.label().capacity(),
+                ScoringReasons.LABEL_VERSION,
+                scored.label().modelDeploymentId()
+        );
     }
 
     private static Map<String, Object> failure(JsonNode row, String kind, Object detail) {
@@ -472,14 +532,16 @@ final class WorkerReplayVerification {
 
     /** 사례의 기대 예측과, 자료의 입력과 다시 만든 입력의 가장 큰 차이다. */
     private record Forecast(double seats, double full, double featureDifference) {
+
     }
 
     /**
      * 사례 하나의 기대값이다.
      *
-     * @param restarted 되감아 만든 상태로 낸 그 목표의 예측. 그 상태가 이 목표를 예측하지 않았으면 비어 있다
+     * @param restarted 복구해 만든 상태로 낸 그 목표의 예측. 그 상태가 이 목표를 예측하지 않았으면 비어 있다
      */
     private record Expected(Forecast forecast, SeatForecastResult restarted) {
+
         private double featureDifference() {
             return forecast.featureDifference();
         }
@@ -494,13 +556,21 @@ final class WorkerReplayVerification {
     }
 
     /** 정답을 받은 시간 확장 사례 하나다. */
-    private record Settled(long sourceId, int target, Instant closedAt, double label) {
-        private static final Comparator<Settled> ORDER = Comparator.comparing(Settled::closedAt)
+    private record Settled(
+        long sourceId,
+        int target,
+        Instant closedAt,
+        double label
+    ) {
+
+        private static final Comparator<Settled> ORDER = Comparator.comparing(
+            Settled::closedAt
+        )
             .thenComparingLong(Settled::sourceId)
             .thenComparingInt(Settled::target);
 
-        private boolean isForecastOf(ScoredForecast scored) {
-            return scored.vehicleObservationId() == sourceId && scored.targetStopOrder() == target;
+        private boolean isForecastOf(ClosedForecast scored) {
+            return scored.vehicleObservationId() == sourceId && scored.event().targetStopOrder() == target;
         }
 
         private boolean hasSameLabelAs(PassLabel rescored) {
@@ -510,6 +580,7 @@ final class WorkerReplayVerification {
 
     /** 사례를 견주며 쌓는 수와 어긋난 사례 목록이다. */
     private static final class Tally {
+
         private final List<Map<String, Object>> failures = new ArrayList<>();
         private final Map<String, int[]> cells = new LinkedHashMap<>();
         private final Map<String, Integer> settledBoundaries = new LinkedHashMap<>();

@@ -55,7 +55,7 @@ class ReferenceBundleTest {
         Throwable error = catchThrowable(() -> new FileModelBundleLoader().filesUnder(directory.toString()).load());
 
         // then
-        assertThat(error).hasRootCauseMessage("합성 번들은 로컬 개발 적재에서만 받는다");
+        assertThat(error).hasRootCauseMessage("합성 번들은 로컬 개발 환경에서만 적재할 수 있다");
     }
 
     @Test

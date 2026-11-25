@@ -3,8 +3,8 @@ package com.gustler.backend.observations.infrastructure.gbis;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
-import com.gustler.backend.observations.domain.CollectedObservations;
-import com.gustler.backend.observations.domain.UpstreamObservationRow;
+import com.gustler.backend.observations.domain.ObservationRows;
+import com.gustler.backend.observations.domain.VehicleObservationRow;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -37,7 +37,7 @@ class GbisCollectedObservationsMapperTest {
             bus(VEHICLE_204000139, RUNNING_STATE_DEPARTED));
 
         // when
-        CollectedObservations actual = GbisObservationMapper.collect(buses);
+        ObservationRows actual = GbisObservationMapper.collect(buses);
 
         // then
         assertThat(actual.providerRows()).isEqualTo(3);
@@ -52,7 +52,7 @@ class GbisCollectedObservationsMapperTest {
             bus(VEHICLE_204000139, RUNNING_STATE_DEPARTED));
 
         // when
-        CollectedObservations actual = GbisObservationMapper.collect(buses);
+        ObservationRows actual = GbisObservationMapper.collect(buses);
 
         // then
         assertThat(actual.storableRows())
@@ -69,7 +69,7 @@ class GbisCollectedObservationsMapperTest {
             bus(VEHICLE_204000139, null));
 
         // when
-        CollectedObservations actual = GbisObservationMapper.collect(buses);
+        ObservationRows actual = GbisObservationMapper.collect(buses);
 
         // then
         assertThat(actual.excludedRows()).hasSize(2);
@@ -84,11 +84,11 @@ class GbisCollectedObservationsMapperTest {
             bus(VEHICLE_204000139, RUNNING_STATE_DEPARTED));
 
         // when
-        CollectedObservations actual = GbisObservationMapper.collect(buses);
+        ObservationRows actual = GbisObservationMapper.collect(buses);
 
         // then
         assertThat(actual.storableRows())
-            .extracting(UpstreamObservationRow::sourceRowNumber)
+            .extracting(VehicleObservationRow::sourceRowNumber)
             .containsExactly(1, 2);
     }
 
@@ -100,7 +100,7 @@ class GbisCollectedObservationsMapperTest {
             busWithoutStopSequence(VEHICLE_204003542));
 
         // when
-        CollectedObservations actual = GbisObservationMapper.collect(buses);
+        ObservationRows actual = GbisObservationMapper.collect(buses);
 
         // then
         assertThat(actual.storableRows())
@@ -111,7 +111,7 @@ class GbisCollectedObservationsMapperTest {
     @Test
     void 차량이_한_대도_없으면_쌓을_관측도_없다() {
         // when
-        CollectedObservations actual = GbisObservationMapper.collect(List.of());
+        ObservationRows actual = GbisObservationMapper.collect(List.of());
 
         // then
         assertThat(actual.storableRows()).isEmpty();

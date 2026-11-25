@@ -20,6 +20,7 @@ import java.util.TreeMap;
  * 지문에 들어가지 않게 한다. 실수는 {@link Double#doubleToLongBits}의 비트로 넣는다.
  */
 final class ForecastInputDigests {
+
     private final StreamKeys keys;
 
     ForecastInputDigests(StreamKeys keys) {
@@ -54,7 +55,7 @@ final class ForecastInputDigests {
         }
     }
 
-    /** 순위, 보존 관측(순서대로), 차량별 누적 상태(차량 이름순), 통과 사건(순서대로)을 담는다. */
+    /** 순위, 보존 관측(순서대로), 차량별 누적 상태(차량 이름순), 통과 이벤트(순서대로)을 담는다. */
     String state(
         final long rank,
         List<AlightingAwareObservation> observations,
@@ -77,24 +78,40 @@ final class ForecastInputDigests {
         return Baseline.hex(digest);
     }
 
-    /** 통과 사건의 모음을 순서와 무관하게 담는다. */
+    /** 통과 이벤트의 모음을 순서와 무관하게 담는다. */
     String passes(Collection<AlightingAwarePassEvent> events) {
         MessageDigest digest = Baseline.sha256();
-        events.stream().map(this::event).sorted().forEach(line -> text(digest, line + "\n"));
+        events.stream()
+            .map(this::event)
+            .sorted()
+            .forEach(line -> text(digest, line + "\n"));
         return Baseline.hex(digest);
     }
 
     private String prefix(AlightingAwareVehiclePrefix prefix) {
-        return String.join(",", Integer.toHexString(Float.floatToIntBits(prefix.capacity())),
-            Baseline.hex(prefix.fullStreak()), observationOrNone(prefix.previous()), String.valueOf(prefix.entryAt()),
-            keys.observation(prefix.tripId()), observationOrNone(prefix.capacityObservation()));
+        return String.join(
+                ",",
+                Integer.toHexString(Float.floatToIntBits(prefix.capacity())),
+                Baseline.hex(prefix.fullStreak()),
+                observationOrNone(prefix.previous()),
+                String.valueOf(prefix.entryAt()),
+                keys.observation(prefix.tripId()),
+                observationOrNone(prefix.capacityObservation())
+        );
     }
 
     private String event(AlightingAwarePassEvent event) {
-        return String.join(",", StreamKeys.vehicle(event.vehicleId()), keys.observation(event.tripId()),
-            Integer.toString(event.stopOrder()), observation(event.arrival()), observation(event.departure()),
-            String.valueOf(event.confirmedAt()), observation(event.firstDeparture()),
-            observation(event.confirmation()));
+        return String.join(
+                ",",
+                StreamKeys.vehicle(event.vehicleId()),
+                keys.observation(event.tripId()),
+                Integer.toString(event.stopOrder()),
+                observation(event.arrival()),
+                observation(event.departure()),
+                String.valueOf(event.confirmedAt()),
+                observation(event.firstDeparture()),
+                observation(event.confirmation())
+        );
     }
 
     private String observationOrNone(AlightingAwareObservation observation) {
@@ -105,13 +122,22 @@ final class ForecastInputDigests {
     }
 
     private String observation(AlightingAwareObservation observation) {
-        return String.join("/", keys.observation(observation.observationId()),
-            Integer.toString(keys.batch(observation.batchId())), Long.toString(observation.batchRank()),
-            String.valueOf(observation.receivedAt()), StreamKeys.vehicle(observation.vehicleId()),
-            Integer.toString(observation.passedStopOrder()), Integer.toString(observation.stopOrder()),
-            Integer.toString(observation.state()), String.valueOf(observation.seats()),
-            Integer.toString(observation.crowd()), Integer.toString(keys.version(observation.routeVersionId())),
-            String.valueOf(observation.sourceReceivedAt()), Boolean.toString(observation.down()));
+        return String.join(
+                "/",
+                keys.observation(observation.observationId()),
+                Integer.toString(keys.batch(observation.batchId())),
+                Long.toString(observation.batchRank()),
+                String.valueOf(observation.receivedAt()),
+                StreamKeys.vehicle(observation.vehicleId()),
+                Integer.toString(observation.passedStopOrder()),
+                Integer.toString(observation.stopOrder()),
+                Integer.toString(observation.state()),
+                String.valueOf(observation.seats()),
+                Integer.toString(observation.crowd()),
+                Integer.toString(keys.version(observation.routeVersionId())),
+                String.valueOf(observation.sourceReceivedAt()),
+                Boolean.toString(observation.down())
+        );
     }
 
     private static void text(MessageDigest digest, String text) {

@@ -1,45 +1,23 @@
 package com.gustler.backend.observations.domain;
 
 import java.time.OffsetDateTime;
-import java.util.Objects;
 import java.util.Optional;
 
-/** 외부 조회를 분류한 결과와 정규화한 관측. 실패한 조회에는 정상 응답의 행 수를 기록하지 않는다. */
-public record ObservationResponse(ObservationBatchConclusion conclusion,
-    Optional<CollectedObservations> observations, OffsetDateTime receivedAt,
-    Optional<String> keyRejectionCode) {
-    public ObservationResponse {
-        Objects.requireNonNull(conclusion);
-        Objects.requireNonNull(observations);
-        Objects.requireNonNull(keyRejectionCode);
-        Objects.requireNonNull(receivedAt);
-        final boolean successful = conclusion.outcome() == ObservationBatchOutcome.SUCCESS_ROWS
-            || conclusion.outcome() == ObservationBatchOutcome.SUCCESS_EMPTY;
-        if (successful != observations.isPresent()) {
-            throw new IllegalArgumentException("정상 수집 응답에는 정규화한 관측 결과가 필요하다");
-        }
-        if (successful && keyRejectionCode.isPresent()) {
-            throw new IllegalArgumentException("정상 수집 응답에는 키 거절 사유가 없다");
-        }
+/**
+ * GBIS 조회 결과를 저장 기준 시각에 맞춰 해석한다.
+ * 진단에 필요한 응답 행 정보만 제공한다.
+ */
+public interface ObservationResponse {
+
+    /** 조회 결과를 성공, GBIS 오류 응답, 결과를 확인할 수 없는 실패로 구분한다. 좌석을 관측하지 못했다면 0으로 대체하지 않는다. */
+    CollectionResult interpret(OffsetDateTime receivedAt);
+
+    /** 정규화 전 응답의 공개 노선/정류장 필드만 반환한다. 추가 호출이나 차량 식별자 기록은 하지 않는다. */
+    default Optional<SourceStopReference> sourceReference(final int stopOrder, String stopId) {
+        return Optional.empty();
     }
 
-    public static ObservationResponse received(ObservationBatchConclusion conclusion,
-        CollectedObservations observations, OffsetDateTime receivedAt) {
-        return new ObservationResponse(conclusion, Optional.of(observations), receivedAt, Optional.empty());
-    }
+    record SourceStopReference(int sourceRowNumber, String routeId, Integer stopOrder, String stopId) {
 
-    public static ObservationResponse failed(ObservationBatchConclusion conclusion, OffsetDateTime receivedAt) {
-        return new ObservationResponse(conclusion, Optional.empty(), receivedAt, Optional.empty());
-    }
-
-    public static ObservationResponse failedByRejectedKey(ObservationBatchConclusion conclusion,
-        OffsetDateTime receivedAt,
-        String keyRejectionCode) {
-        return new ObservationResponse(conclusion, Optional.empty(), receivedAt, Optional.of(keyRejectionCode));
-    }
-
-    public static ObservationResponse unconfirmed(OffsetDateTime receivedAt) {
-        return failed(new ObservationBatchConclusion(ObservationBatchOutcome.UNKNOWN_AFTER_DISPATCH, null, null),
-            receivedAt);
     }
 }

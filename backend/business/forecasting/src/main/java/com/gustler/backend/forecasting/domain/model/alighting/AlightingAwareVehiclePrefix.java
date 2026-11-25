@@ -11,6 +11,7 @@ public record AlightingAwareVehiclePrefix(
     long tripId,
     AlightingAwareObservation capacityObservation
 ) {
+
     public AlightingAwareVehiclePrefix(
         final float capacity,
         final double fullStreak,
@@ -18,7 +19,14 @@ public record AlightingAwareVehiclePrefix(
         Instant entryAt,
         final long tripId
     ) {
-        this(capacity, fullStreak, previous, entryAt, tripId, null);
+        this(
+                capacity,
+                fullStreak,
+                previous,
+                entryAt,
+                tripId,
+                null
+        );
     }
     public AlightingAwareVehiclePrefix {
         if (hasInvalidCapacity(capacity) || hasInvalidStreak(fullStreak)) {

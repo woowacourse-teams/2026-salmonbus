@@ -10,14 +10,15 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * 관측 두 테이블이 일반 테이블인 DB에서 {@link ForecastScoringIntegrationTest}의 시험을 그대로 다시 돌린다. 줄이 있는 DB는 수동 전환
- * SQL을 실행하기 전까지 이 모양에서 수집 원장 저장, 예보, 채점을 한다.
+ * 관측 두 테이블이 일반 테이블인 DB에서 {@link ForecastScoringIntegrationTest}의 시험을 그대로 다시 돌린다. 관측이 있는 DB는 수동 전환
+ * SQL을 실행하기 전까지 이 모양에서 수집 원장 저장, 예보, 정산을 한다.
  *
- * <p>운영 DB의 두 테이블이 날짜 파티션 테이블로 바뀌면 이 시험과, 두 테이블이 일반 테이블일 때를 받는 코드 갈래를 함께 지운다.
+ * <p>운영 DB의 두 테이블이 날짜 파티션 테이블로 바뀌면 이 시험과, 두 테이블이 일반 테이블일 때를 받는 코드 갈래를 같이 지운다.
  */
 @Import({ PostgresTestContainer.class, CollectionRuntimeConfiguration.class, UnpartitionedObservationTables.class,
     ManualClock.Replacement.class, ForecastScoringIntegrationTest.Diagnostics.class })
 class ForecastScoringUnpartitionedIntegrationTest extends ForecastScoringIntegrationTest {
+
     @Autowired
     private JdbcClient catalog;
 

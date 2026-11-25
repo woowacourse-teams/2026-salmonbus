@@ -9,11 +9,12 @@ import java.util.Set;
 /**
  * 시험이 수집이 커밋했다고 친 배치만 돌려주는 처리하지 않은 배치 조회다.
  *
- * <p>시험은 흐름의 배치를 미리 모두 넣어 두고, 배치마다 시계를 맞춰 하나씩 처리한다. 예보는 노선 판본의 처리하지 않은 배치를 모두
+ * <p>시험은 흐름의 배치를 미리 모두 넣어 두고, 배치마다 시계를 맞춰 하나씩 처리한다. 예보는 노선 버전의 처리하지 않은 배치를 모두
  * 읽으므로, 아직 수집하지 않은 것으로 칠 배치를 가려야 시험이 정한 배치만 그 시각에 처리된다. 조건과 순서는 감싼 조회의 것을 그대로
  * 쓴다.
  */
 public final class CommittedBatches implements PendingBatches {
+
     private final PendingBatches delegate;
     private final Set<Long> committed = new HashSet<>();
     private Runnable afterNextFind;

@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+import com.gustler.backend.forecasting.api.model.InspectModelBundle;
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareSeatPredictor;
+import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleInspector;
+import com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -26,10 +30,32 @@ import tools.jackson.databind.node.ObjectNode;
 
 /** 작은 합성 모델로 파일 손상과 계약 혼용을 검사한다. 실제 모델 대조는 verifyAlightingAwareParity에서 한다. */
 class AlightingAwareBundleLoaderTest {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
-    private static final List<String> ROUTES = List.of("3330", "1650", "9007", "9300", "6011", "3000", "5600", "3500");
+    private static final List<String> ROUTES = List.of(
+            "3330",
+            "1650",
+            "9007",
+            "9300",
+            "6011",
+            "3000",
+            "5600",
+            "3500"
+    );
     private static final List<String> RESEARCH_ROUTES = Stream.concat(ROUTES.stream(), Stream.of(
-        "1101", "1150", "1151", "1500-2", "3100", "4000", "6003", "6801", "7007-1", "8100", "9000", "G8110"))
+            "1101",
+            "1150",
+            "1151",
+            "1500-2",
+            "3100",
+            "4000",
+            "6003",
+            "6801",
+            "7007-1",
+            "8100",
+            "9000",
+            "G8110"
+    ))
         .toList();
 
     @Test
@@ -40,29 +66,74 @@ class AlightingAwareBundleLoaderTest {
         report.put("bundle_manifest_sha256", digest);
         report.put("verification_code_sha", code);
         ArrayNode rows = report.putArray("extended_hours");
-        for (String cell : List.of("work-morning", "work-day", "work-evening", "work-night",
-            "weekend-day", "weekend-night", "holiday-day", "holiday-night")) {
+        for (String cell : List.of(
+                "work-morning",
+                "work-day",
+                "work-evening",
+                "work-night",
+                "weekend-day",
+                "weekend-night",
+                "holiday-day",
+                "holiday-night"
+        )) {
             rows.addObject().put("route", "3330").put("cell", cell).put("published", 2).put("settled", 1);
         }
-        AlightingAwareInferenceBundle.verifyExtended(report, digest, code, List.of("3330"), List.of());
+        AlightingAwareInferenceBundle.verifyExtended(
+                report,
+                digest,
+                code,
+                List.of("3330"),
+                List.of()
+        );
 
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
-            report, "c".repeat(64), code, List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
+                report,
+                "c".repeat(64),
+                code,
+                List.of("3330"),
+                List.of()
+        )).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
-            report, digest, "d".repeat(40), List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
+                report,
+                digest,
+                "d".repeat(40),
+                List.of("3330"),
+                List.of()
+        )).isInstanceOf(IllegalArgumentException.class);
 
         rows.remove(rows.size() - 1);
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
-            report, digest, code, List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
+                report,
+                digest,
+                code,
+                List.of("3330"),
+                List.of()
+        )).isInstanceOf(IllegalArgumentException.class);
 
         rows.remove(rows.size() - 1);
         report.putArray("holiday_weekend_substitution_routes").add("3330");
-        AlightingAwareInferenceBundle.verifyExtended(report, digest, code, List.of("3330"), List.of("3330"));
+        AlightingAwareInferenceBundle.verifyExtended(
+                report,
+                digest,
+                code,
+                List.of("3330"),
+                List.of("3330")
+        );
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
-            report, digest, code, List.of("3330"), List.of())).isInstanceOf(IllegalArgumentException.class);
+                report,
+                digest,
+                code,
+                List.of("3330"),
+                List.of()
+        )).isInstanceOf(IllegalArgumentException.class);
         rows.remove(rows.size() - 1);
         assertThatThrownBy(() -> AlightingAwareInferenceBundle.verifyExtended(
-            report, digest, code, List.of("3330"), List.of("3330"))).isInstanceOf(IllegalArgumentException.class);
+                report,
+                digest,
+                code,
+                List.of("3330"),
+                List.of("3330")
+        )).isInstanceOf(IllegalArgumentException.class);
     }
 
     @TempDir
@@ -72,7 +143,7 @@ class AlightingAwareBundleLoaderTest {
     void 구_좌석분포_번들은_실행_대상으로_적재하지_않는다() throws Exception {
         Files.writeString(directory.resolve("manifest.json"), "{\"bundleSchemaVersion\":\"a18-live-bundle-v2\"}");
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-            new com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleLoader()
+            new FileModelBundleLoader()
                 .filesUnder(directory.toString()).load())
             .hasMessageContaining("지원이 종료된 좌석분포");
     }
@@ -81,14 +152,48 @@ class AlightingAwareBundleLoaderTest {
     void 기동_점검도_새_모델_로더와_같은_번들_신원을_사용한다() throws Exception {
         fixture();
         servingFixture((1.3 + 10) / 3);
-        var inspected = new com.gustler.backend.forecasting.infrastructure.bundle.FileModelBundleInspector()
+        InspectModelBundle.Inspection inspected = new FileModelBundleInspector()
             .inspect(directory.toString());
-        org.assertj.core.api.Assertions.assertThat(inspected.releaseId()).isEqualTo("test-alighting");
-        org.assertj.core.api.Assertions.assertThat(inspected.routes()).containsExactlyElementsOf(ROUTES);
+        assertSoftly(softly -> {
+            softly.assertThat(inspected.releaseId()).isEqualTo("test-alighting");
+            softly.assertThat(inspected.routes()).containsExactlyElementsOf(ROUTES);
+        });
     }
 
     @Test
-    void 이전_이름으로_발행한_번들도_원본_해시를_검증해_읽는다() throws Exception {
+    void 입력_판본이_문자열이_아니면_원본_판본으로_취급하지_않는다() throws Exception {
+        // given
+        fixture();
+        Path path = directory.resolve("manifest.json");
+        ObjectNode manifest = (ObjectNode) JSON.readTree(Files.readAllBytes(path));
+        manifest.putObject("input_profile");
+        Files.writeString(path, JSON.writeValueAsString(manifest));
+
+        // then
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.load(directory))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"manifest.json", "feature-contract.json", "statistics-3330.json"})
+    void 폐기된_입력_판본은_어느_파일에_있어도_거절한다(String file) throws Exception {
+        // given
+        fixture();
+        Path path = directory.resolve(file);
+        ObjectNode document = (ObjectNode) JSON.readTree(Files.readAllBytes(path));
+        document.put("input_profile", "les-confirmed-closure-v2");
+        Files.writeString(path, JSON.writeValueAsString(document));
+        if (!file.equals("manifest.json")) {
+            manifest();
+        }
+
+        // then
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.load(directory))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 폐기된_이름의_번들은_적재하지_않는다() throws Exception {
         fixture();
         try (Stream<Path> paths = Files.list(directory)) {
             for (Path path : paths.filter(p -> !p.getFileName().toString().equals("manifest.json")).toList()) {
@@ -99,12 +204,8 @@ class AlightingAwareBundleLoaderTest {
         Path manifest = directory.resolve("manifest.json");
         Files.writeString(manifest, Files.readString(manifest).replace("\"alighting-", "\"les-"));
 
-        AlightingAwareSeatPredictor.Prediction result = AlightingAwareInferenceBundle.load(directory)
-            .predictor().predict(new double[88], new double[80]);
-
-        assertThat(result.afterAlightingSeats()).isCloseTo((1.3 + 10) / 3,
-            org.assertj.core.data.Offset.offset(1e-14));
-        assertThat(result.departureFullProbability()).isEqualTo(0.5);
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.load(directory))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -112,10 +213,12 @@ class AlightingAwareBundleLoaderTest {
         fixture();
         AlightingAwareInferenceBundle loaded = AlightingAwareInferenceBundle.load(directory);
         AlightingAwareSeatPredictor.Prediction prediction = loaded.predictor().predict(new double[88], new double[80]);
-        assertThat(prediction.afterAlightingSeats()).isCloseTo((1.3 + 10) / 3,
-            org.assertj.core.data.Offset.offset(1e-14));
-        assertThat(prediction.departureFullProbability()).isEqualTo(0.5);
-        assertThat(loaded.statistics("3330").get("min_per_stop").doubleValue()).isEqualTo(1);
+        assertSoftly(softly -> {
+            softly.assertThat(prediction.afterAlightingSeats()).isCloseTo((1.3 + 10) / 3,
+                org.assertj.core.data.Offset.offset(1e-14));
+            softly.assertThat(prediction.departureFullProbability()).isEqualTo(0.5);
+            softly.assertThat(loaded.statistics("3330").get("min_per_stop").doubleValue()).isEqualTo(1);
+        });
     }
 
     @Test
@@ -153,7 +256,7 @@ class AlightingAwareBundleLoaderTest {
     @Test
     void 운영_로더는_미검증_번들을_거부한다() throws Exception {
         fixture();
-        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("서빙 검증");
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("serving_ready");
     }
 
     @Test
@@ -188,7 +291,14 @@ class AlightingAwareBundleLoaderTest {
         // given
         fixture();
         Files.writeString(directory.resolve("statistics-manifest.json"),
-            JSON.writeValueAsString(Map.of("schema", "alighting-statistics-v1", "routes", routes, "holiday_dates", List.of())));
+            JSON.writeValueAsString(Map.of(
+                    "schema",
+                    "alighting-statistics-v1",
+                    "routes",
+                    routes,
+                    "holiday_dates",
+                    List.of()
+            )));
         manifest();
 
         // then
@@ -205,7 +315,7 @@ class AlightingAwareBundleLoaderTest {
         String manifest = Files.readString(directory.resolve("manifest.json"));
         Files.writeString(directory.resolve("manifest.json"),
             manifest.replace("\"serving_ready\":false", "\"serving_ready\":true"));
-        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("서빙 계약");
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("운영 적재 계약");
     }
 
     @Test
@@ -238,7 +348,7 @@ class AlightingAwareBundleLoaderTest {
         JsonNode manifest = JSON.readTree(Files.readAllBytes(directory.resolve("manifest.json")));
         ((ObjectNode) manifest.get("runtime")).put("data_through", "2026-10-20T00:00:00Z");
         Files.writeString(directory.resolve("manifest.json"), JSON.writeValueAsString(manifest));
-        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("미래 통계");
+        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("모델 사용 시작 시각보다 나중의 통계");
     }
 
     @Test
@@ -253,7 +363,9 @@ class AlightingAwareBundleLoaderTest {
         Files.writeString(file, JSON.writeValueAsString(manifest));
 
         // then
-        assertThatThrownBy(() -> AlightingAwareInferenceBundle.loadForServing(directory)).hasMessageContaining("출시 식별자");
+        assertThatThrownBy(
+            () -> AlightingAwareInferenceBundle.loadForServing(directory)
+        ).hasMessageContaining("릴리스 ID");
 
         // when
         runtime.put("release_id", "a".repeat(80));
@@ -264,33 +376,73 @@ class AlightingAwareBundleLoaderTest {
     }
 
     private void servingFixture(final double seats) throws Exception {
-        Map<String, Object> golden = Map.of("seat_inputs", List.of(new double[88]), "probability_inputs",
-            List.of(new double[80]),
-            "expected_base", List.of(10), "expected_gate_probabilities", List.of(List.of(1.0 / 3, 1.0 / 3, 1.0 / 3)),
-            "expected_seats", List.of(seats), "expected_departure_full", List.of(0.5));
+        Map<String, Object> golden = Map.of(
+                "seat_inputs",
+                List.of(new double[88]),
+                "probability_inputs",
+                List.of(new double[80]),
+                "expected_base",
+                List.of(10),
+                "expected_gate_probabilities",
+                List.of(List.of(1.0 / 3, 1.0 / 3, 1.0 / 3)),
+                "expected_seats",
+                List.of(seats),
+                "expected_departure_full",
+                List.of(0.5)
+        );
         Files.writeString(directory.resolve("golden.json"), JSON.writeValueAsString(golden));
         Files.writeString(directory.resolve("boundaries.json"), JSON.writeValueAsString(golden));
         manifest();
         byte[] source = Files.readAllBytes(directory.resolve("manifest.json"));
         String sourceHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source));
         Files.write(directory.resolve("verification-source-manifest.json"), source);
-        for (String check : List.of("feature_parity", "historical_replay", "settlement", "runtime_validation")) {
+        for (String check : List.of(
+                "feature_parity",
+                "historical_replay",
+                "settlement",
+                "runtime_validation"
+        )) {
             String evidence = "{\"syntheticFixture\":true}";
             Files.writeString(directory.resolve("evidence-" + check + ".json"), evidence);
             String hash = HexFormat.of()
                 .formatHex(MessageDigest.getInstance("SHA-256").digest(evidence.getBytes(StandardCharsets.UTF_8)));
             Files.writeString(directory.resolve("verification-" + check + ".json"), JSON.writeValueAsString(Map.of(
-                "schema", "alighting-serving-verification-v1", "check", check, "status", "PASS", "verified_cases", 1,
-                "source_manifest_sha256", sourceHash, "feature_contract_version", "alighting-online-v1",
-                "evidence_file", "evidence-" + check + ".json", "evidence_sha256", hash)));
+                    "schema",
+                    "alighting-serving-verification-v1",
+                    "check",
+                    check,
+                    "status",
+                    "PASS",
+                    "verified_cases",
+                    1,
+                    "source_manifest_sha256",
+                    sourceHash,
+                    "feature_contract_version",
+                    "alighting-online-v1",
+                    "evidence_file",
+                    "evidence-" + check + ".json",
+                    "evidence_sha256",
+                    hash
+            )));
         }
         manifest();
         ObjectNode root = (ObjectNode) JSON.readTree(Files.readAllBytes(directory.resolve("manifest.json")));
         root.put("serving_ready", true);
         root.set("runtime",
-            JSON.valueToTree(Map.of("release_id", "test-alighting", "feature_contract_version", "alighting-online-v1",
-                "data_through", "2026-10-21T00:00:00Z", "source_manifest_sha256", sourceHash, "routes", ROUTES,
-                "scope", "weekday-rush-6-10-17-21-horizon-1-12")));
+            JSON.valueToTree(Map.of(
+                    "release_id",
+                    "test-alighting",
+                    "feature_contract_version",
+                    "alighting-online-v1",
+                    "data_through",
+                    "2026-10-21T00:00:00Z",
+                    "source_manifest_sha256",
+                    sourceHash,
+                    "routes",
+                    ROUTES,
+                    "scope",
+                    "weekday-rush-6-10-17-21-horizon-1-12"
+            )));
         Files.writeString(directory.resolve("manifest.json"), JSON.writeValueAsString(root));
     }
 
@@ -304,20 +456,81 @@ class AlightingAwareBundleLoaderTest {
         }
         Files.writeString(directory.resolve("constants.json"),
             "{\"target\":\"after\",\"classes\":[0,1,2],\"middle\":1.3}");
-        model("base", "regression", 88, List.of(), List.of(10));
-        model("gate", "multiclass", 88, List.of(0, 1, 2), List.of(0, 0, 0));
-        model("pool", "binary", 80, List.of(0, 1), List.of(0));
+        model(
+                "base",
+                "regression",
+                88,
+                List.of(),
+                List.of(10)
+        );
+        model(
+                "gate",
+                "multiclass",
+                88,
+                List.of(0, 1, 2),
+                List.of(0, 0, 0)
+        );
+        model(
+                "pool",
+                "binary",
+                80,
+                List.of(0, 1),
+                List.of(0)
+        );
         Files.writeString(directory.resolve("statistics-manifest.json"),
-            JSON.writeValueAsString(Map.of("schema", "alighting-statistics-v1", "routes", routes, "holiday_dates", List.of())));
+            JSON.writeValueAsString(Map.of(
+                    "schema",
+                    "alighting-statistics-v1",
+                    "routes",
+                    routes,
+                    "holiday_dates",
+                    List.of()
+            )));
         Files.writeString(directory.resolve("route-reference.json"),
             JSON.writeValueAsString(Map.of("routes", routes.stream().map(r -> Map.of("modelRoute", r)).toList())));
         for (String route : routes) {
             Files.writeString(directory.resolve("statistics-" + route + ".json"), JSON.writeValueAsString(Map.of(
-                "route", route, "min_per_stop", 1, "tables", Map.of("lam",List.of(),"lam_base",List.of(),
-                    "net_tab",List.of(),"full_tab",List.of(),"dep_tab",List.of(),"stop_net_base",List.of(),
-                    "target_band",List.of()), "alighting", Map.of("stops",List.of()), "route_metadata",
-                List.of(Map.of("order",1,"id","s1","name","정류장1","direction","UP","boardingAllowed",true)),
-                "events_known_through", "2026-10-21T00:00:00Z", "observations_through", "2026-10-21T00:00:00Z")));
+                    "route",
+                    route,
+                    "min_per_stop",
+                    1,
+                    "tables",
+                    Map.of(
+                            "lam",
+                            List.of(),
+                            "lam_base",
+                            List.of(),
+                            "net_tab",
+                            List.of(),
+                            "full_tab",
+                            List.of(),
+                            "dep_tab",
+                            List.of(),
+                            "stop_net_base",
+                            List.of(),
+                            "target_band",
+                            List.of()
+                    ),
+                    "alighting",
+                    Map.of("stops",List.of()),
+                    "route_metadata",
+                    List.of(Map.of(
+                            "order",
+                            1,
+                            "id",
+                            "s1",
+                            "name",
+                            "정류장1",
+                            "direction",
+                            "UP",
+                            "boardingAllowed",
+                            true
+                    )),
+                    "events_known_through",
+                    "2026-10-21T00:00:00Z",
+                    "observations_through",
+                    "2026-10-21T00:00:00Z"
+            )));
         }
         manifest();
     }
@@ -337,8 +550,24 @@ class AlightingAwareBundleLoaderTest {
         value.put("feature_count", size);
         value.put("baseline", baseline);
         value.put("leaf_values_include_learning_rate", true);
-        value.put("node_fields", List.of("feature", "threshold", "missing_left", "left", "right", "value", "leaf"));
-        value.put("trees", List.of(baseline.stream().map(v -> List.of(List.of(0, 0, false, 0, 0, 0, true))).toList()));
+        value.put("node_fields", List.of(
+                "feature",
+                "threshold",
+                "missing_left",
+                "left",
+                "right",
+                "value",
+                "leaf"
+        ));
+        value.put("trees", List.of(baseline.stream().map(v -> List.of(List.of(
+                0,
+                0,
+                false,
+                0,
+                0,
+                0,
+                true
+        ))).toList()));
         Files.writeString(directory.resolve(name + ".json"), JSON.writeValueAsString(value));
     }
 
@@ -351,8 +580,17 @@ class AlightingAwareBundleLoaderTest {
             }
         }
         Files.writeString(directory.resolve("manifest.json"), JSON.writeValueAsString(Map.of(
-            "schema", "alighting-inference-bundle-v1", "model", "alighting-gate-base-and-pool", "serving_ready", false,
-            "output_targets", List.of("after-alighting-estimated", "departure-zero"), "files", hashes)),
+                "schema",
+                "alighting-inference-bundle-v1",
+                "model",
+                "alighting-gate-base-and-pool",
+                "serving_ready",
+                false,
+                "output_targets",
+                List.of("after-alighting-estimated", "departure-zero"),
+                "files",
+                hashes
+        )),
             StandardCharsets.UTF_8);
     }
 }

@@ -26,13 +26,14 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * 연어행동 조회를 켠 앱이 예보 기록에서 읽은 출발 만차 확률로 판정까지 가는지 실제 DB로 검증한다.
  *
- * <p>차량 한 대가 마감 안에 닿는 도착정보를 함께 넣는다. 도보 거리는 넣지 않아 이동 후보는 없다.
+ * <p>차량 한 대가 마감 안에 닿는 도착정보를 같이 넣는다. 도보 거리는 넣지 않아 이동 후보는 없다.
  */
 @IntegrationTest
 @Transactional
 @Import(FixedDaytimeClockConfig.class)
 @TestPropertySource(properties = "salmon.action.enabled=true")
 class SalmonActionForecastIntegrationTest {
+
     @Autowired
     private WebApplicationContext applicationContext;
 
@@ -62,7 +63,12 @@ class SalmonActionForecastIntegrationTest {
         BoardDatabaseFixture.RouteContext route = fixture.insertRoute(now.minusDays(1));
         final long modelId = fixture.insertActiveModel(now.minusDays(1));
         ForecastBoardFixture.ObservedVehicle vehicle = fixture.insertApproachingVehicle(route, now.minusMinutes(1));
-        fixture.insertForecast(vehicle, modelId, 0.25, 12.5);
+        fixture.insertForecast(
+                vehicle,
+                modelId,
+                0.25,
+                12.5
+        );
         fixture.insertArrival(now.minusSeconds(10).toInstant(), 300);
 
         // when

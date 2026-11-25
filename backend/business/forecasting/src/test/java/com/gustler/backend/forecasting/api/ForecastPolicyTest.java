@@ -7,6 +7,7 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class ForecastPolicyTest {
+
     @Test
     void 기본_5분과_확장한_신선도_창을_모두_허용한다() {
         // when
@@ -23,8 +24,7 @@ class ForecastPolicyTest {
         assertThat(ForecastPolicy.MAX_STALENESS).isEqualTo(Duration.ofHours(1));
 
         // when
-        Throwable phaseFailure1 = catchThrowable(
-            () -> new ForecastPolicy(Duration.ofHours(1).plusSeconds(1), 20));
+        Throwable phaseFailure1 = catchThrowable(() -> new ForecastPolicy(Duration.ofHours(1).plusSeconds(1), 20));
 
         // then
         assertThat(phaseFailure1)

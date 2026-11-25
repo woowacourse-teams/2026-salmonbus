@@ -4,12 +4,14 @@ import com.gustler.backend.quota.api.ApiCallQuota;
 import com.gustler.backend.routecatalog.api.CurrentRouteVersion;
 import com.gustler.backend.routecatalog.api.RefreshRouteCatalog;
 import com.gustler.backend.routecatalog.api.RouteReference;
+import com.gustler.backend.routecatalog.domain.CatalogSourceBinding;
 import com.gustler.backend.routecatalog.domain.CurrentRouteVersionQuery;
 import com.gustler.backend.routecatalog.domain.RouteRegistry;
 import com.gustler.backend.routecatalog.domain.RouteSource;
-import com.gustler.backend.routecatalog.domain.RouteSourceResult.Failed;
-import com.gustler.backend.routecatalog.domain.RouteSourceResult.Success;
+import com.gustler.backend.routecatalog.domain.RouteSourceResult;
 import com.gustler.backend.routecatalog.domain.UpstreamRoute;
+import com.gustler.backend.routecatalog.domain.geometry.RouteSourceArchive;
+import com.gustler.backend.routegeometry.api.RouteSourceReceipt;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,6 +21,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -26,9 +29,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 수집을 시작하려면 노선 버전이 먼저 있어야 한다. observation_batch.route_version_id가 NOT NULL이므로
  * 노선 버전 없이는 수집 배치를 생성할 수 없다.
  *
- * <p>버전이 없을 때만 상류에서 노선정보를 받아 생성한다. 이미 있으면 추가 작업을 하지 않는다.
- * 기존 노선의 변경 확인은 Worker의 별도 일일 작업이 refresh를 호출하여 수행한다.
- * 관측 수집마다 외부 노선정보를 다시 읽지 않는다.
+ * <p>판본 조회는 DB만 읽는다. 노선 준비와 갱신은 Worker의 별도 작업이 refresh를 호출하여 수행한다.
  */
 @Component
 public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCatalog {
@@ -42,8 +43,8 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
     private final RouteRegistry routeRegistry;
     private final RouteVersionLoader routeVersionLoader;
     private final TransactionTemplate transactionTemplate;
-    private final com.gustler.backend.routecatalog.domain.geometry.RouteSourceArchive archive;
-    private final com.gustler.backend.routecatalog.domain.CatalogSourceBinding sourceBinding;
+    private final RouteSourceArchive archive;
+    private final CatalogSourceBinding sourceBinding;
 
     public RouteCatalogLoader(
         CurrentRouteVersionQuery currentRouteVersionQuery,
@@ -53,18 +54,31 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
         RouteVersionLoader routeVersionLoader,
         TransactionTemplate transactionTemplate
     ) {
-        this(currentRouteVersionQuery,apiCallQuota,routeSource,routeRegistry,routeVersionLoader,transactionTemplate,
-            Optional.empty(),Optional.empty());
+        this(
+                currentRouteVersionQuery,
+                apiCallQuota,
+                routeSource,
+                routeRegistry,
+                routeVersionLoader,
+                transactionTemplate,
+                Optional.empty(),
+                Optional.empty()
+        );
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
-    public RouteCatalogLoader(CurrentRouteVersionQuery currentRouteVersionQuery,ApiCallQuota apiCallQuota,
-            RouteSource routeSource,RouteRegistry routeRegistry,RouteVersionLoader routeVersionLoader,
-            TransactionTemplate transactionTemplate,
-            Optional<com.gustler.backend.routecatalog.domain.geometry.RouteSourceArchive> archive,
-            Optional<com.gustler.backend.routecatalog.domain.CatalogSourceBinding> sourceBinding) {
-        this.archive=archive.orElse(com.gustler.backend.routecatalog.domain.geometry.RouteSourceArchive.NONE);
-        this.sourceBinding=sourceBinding.orElse(com.gustler.backend.routecatalog.domain.CatalogSourceBinding.NONE);
+    @Autowired
+    public RouteCatalogLoader(
+        CurrentRouteVersionQuery currentRouteVersionQuery,
+        ApiCallQuota apiCallQuota,
+        RouteSource routeSource,
+        RouteRegistry routeRegistry,
+        RouteVersionLoader routeVersionLoader,
+        TransactionTemplate transactionTemplate,
+        Optional<RouteSourceArchive> archive,
+        Optional<CatalogSourceBinding> sourceBinding
+    ) {
+        this.archive = archive.orElse(RouteSourceArchive.NONE);
+        this.sourceBinding = sourceBinding.orElse(CatalogSourceBinding.NONE);
         this.currentRouteVersionQuery = currentRouteVersionQuery;
         this.apiCallQuota = apiCallQuota;
         this.routeSource = routeSource;
@@ -73,20 +87,13 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
         this.transactionTemplate = transactionTemplate;
     }
 
-    /** 현재 노선 버전을 반환한다. 없으면 상류에서 받아 생성하고, 생성하지 못하면 빈 결과를 반환한다. */
     @Override
-    public Optional<RouteReference> currentVersionOf(
-        String sourceRouteId,
-        OffsetDateTime readAt
-    ) {
+    public Optional<RouteReference> findCurrentVersion(String sourceRouteId) {
         OptionalLong opened = currentRouteVersionQuery.findIdOf(sourceRouteId);
         if (opened.isPresent()) {
             return Optional.of(new RouteReference(opened.getAsLong()));
         }
-        OptionalLong created = openFromUpstream(sourceRouteId, readAt);
-        if (created.isPresent()) {
-            return Optional.of(new RouteReference(created.getAsLong()));
-        }
+
         return Optional.empty();
     }
 
@@ -106,6 +113,7 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
         if (updated.isPresent()) {
             return Optional.of(new RouteReference(updated.getAsLong()));
         }
+
         return Optional.empty();
     }
 
@@ -113,16 +121,14 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
         if (!knownNames.containsKey(route.sourceRouteId()) && knownNames.size() >= 256) {
             knownNames.remove(knownNames.keySet().iterator().next());
         }
+
         knownNames.put(route.sourceRouteId(), Objects.toString(route.displayName(), ""));
     }
 
-    private OptionalLong openFromUpstream(
-        String sourceRouteId,
-        OffsetDateTime readAt
-    ) {
+    private OptionalLong openFromUpstream(String sourceRouteId, OffsetDateTime readAt) {
         if (!apiCallQuota.reserveRouteCatalog(readAt, routeSource.requiredCallsPerRead())) {
-            archive.record("ROUTE_CATALOG_ACQUISITION",List.of(receipt(sourceRouteId,readAt,
-                com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status.NO_QUOTA)),List.of());
+            archive.record("ROUTE_CATALOG_ACQUISITION", List.of(receipt(sourceRouteId, readAt,
+                RouteSourceReceipt.Status.NO_QUOTA)), List.of());
             LOGGER.warn("하루 호출 한도가 남지 않아 노선정보를 갱신하지 못했다. 노선={}",
                 sourceRouteId);
             return OptionalLong.empty();
@@ -130,59 +136,79 @@ public class RouteCatalogLoader implements CurrentRouteVersion, RefreshRouteCata
 
         // 호출 두 번을 먼저 예약한다. 노선정보 조회가 실패해 정류소를 조회하지 않아도 예약은 유지한다.
         // 예약을 취소하려 해도 이미 전송한 호출에 해당하는지 여기서는 확인할 수 없다.
-        // 노선 버전이 없을 때만 실행하므로 자주 발생하지 않는다.
 
-        RouteSource.Capture captured;
-        if(archive==com.gustler.backend.routecatalog.domain.geometry.RouteSourceArchive.NONE) {
-            captured=new RouteSource.Capture(routeSource.read(sourceRouteId),List.of());
-        } else {
-            try { captured=java.util.Objects.requireNonNull(routeSource.capture(sourceRouteId)); }
-            catch(RuntimeException failure) {
-                captured=new RouteSource.Capture(new Failed("CATALOG_CAPTURE_FAILED"),
-                    List.of(receipt(sourceRouteId,readAt,
-                        com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status.TRANSPORT_FAILURE)));
-            }
+        RouteSource.Capture captured = capture(sourceRouteId, readAt);
+        List<RouteSourceReceipt> receipts = captured.receipts();
+        if (receipts.isEmpty()) {
+            receipts = List.of(receipt(sourceRouteId, readAt, RouteSourceReceipt.Status.UNRECORDED_LEGACY));
         }
-        var receipts=captured.receipts().isEmpty()?List.of(receipt(sourceRouteId,readAt,
-            com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status.UNRECORDED_LEGACY)):captured.receipts();
-        String manifest=archive.record("ROUTE_CATALOG_ACQUISITION",receipts,List.of());
+
+        String manifest = archive.record("ROUTE_CATALOG_ACQUISITION", receipts, List.of());
+
         return switch (captured.result()) {
-            case Failed failed -> {
+            case RouteSourceResult.Failed failed -> {
                 LOGGER.warn("노선정보를 읽지 못해 판본을 못 열었다. 노선={} 사유=SOURCE_UNAVAILABLE", sourceRouteId);
                 yield OptionalLong.empty();
             }
-            case Success success -> {
+            case RouteSourceResult.Success success -> {
                 rememberName(success.route());
-                yield OptionalLong.of(open(success.route(), readAt,manifest));
+                yield OptionalLong.of(open(success.route(), readAt, manifest));
             }
         };
     }
 
-    /**
-     * 노선 행 확보와 버전 생성을 한 트랜잭션에서 처리한다.
-     *
-     * <p>@Transactional(readOnly = false)을 사용하지 않는다. 같은 객체의 openFromUpstream에서만 호출하므로
-     * 스프링 프록시를 거치지 않아 애노테이션이 적용되지 않는다.
-     *
-     * <p>currentVersionOf에 애노테이션을 붙이면 상류 HTTP 호출까지 트랜잭션에 포함되어
-     * 응답을 기다리는 동안 커넥션을 점유한다. 이를 피하려고 TransactionTemplate으로
-     * 필요한 코드 블록에만 트랜잭션을 적용한다.
-     */
-    private long open(
-        UpstreamRoute route,
-        OffsetDateTime readAt,
-        String acquisitionManifestId
-    ) {
+    private RouteSource.Capture capture(String sourceRouteId, OffsetDateTime readAt) {
+        if (archive == RouteSourceArchive.NONE) {
+            return new RouteSource.Capture(routeSource.read(sourceRouteId), List.of());
+        }
+
+        try {
+            return Objects.requireNonNull(routeSource.capture(sourceRouteId));
+        } catch (RuntimeException failure) {
+            return new RouteSource.Capture(new RouteSourceResult.Failed("CATALOG_CAPTURE_FAILED"),
+                List.of(receipt(sourceRouteId, readAt, RouteSourceReceipt.Status.TRANSPORT_FAILURE)));
+        }
+    }
+
+    /** HTTP를 기다리는 동안 연결을 점유하지 않도록 노선·판본·원본 연결을 게시하는 부분만 트랜잭션으로 묶는다. */
+    private long open(UpstreamRoute route, OffsetDateTime readAt, String acquisitionManifestId) {
         return transactionTemplate.execute(status -> {
-            long versionId=routeVersionLoader.load(routeRegistry.register(route),route.stops(),route.timetable(),readAt);
-            if(acquisitionManifestId!=null) sourceBinding.bind(versionId,route,acquisitionManifestId,readAt);
+            final long versionId = routeVersionLoader.load(
+                    routeRegistry.register(route),
+                    route.stops(),
+                    route.timetable(),
+                    readAt
+            );
+
+            if (acquisitionManifestId != null) {
+                sourceBinding.bind(
+                        versionId,
+                        route,
+                        acquisitionManifestId,
+                        readAt
+                );
+            }
+
             return versionId;
         });
     }
-    private static com.gustler.backend.routegeometry.api.RouteSourceReceipt receipt(String routeId,OffsetDateTime at,
-            com.gustler.backend.routegeometry.api.RouteSourceReceipt.Status status) {
-        return new com.gustler.backend.routegeometry.api.RouteSourceReceipt("GBIS_API","ROUTE_CATALOG",
-            routeId.matches("[0-9]{1,20}")?routeId:"UNSPECIFIED",status,null,at.toInstant(),"NOT_PROVIDED",
-            com.gustler.backend.routegeometry.api.RouteSourceReceipt.CoordinateSystem.UNKNOWN,null);
+
+    private static RouteSourceReceipt receipt(String routeId, OffsetDateTime at, RouteSourceReceipt.Status status) {
+        String safeRouteId = "UNSPECIFIED";
+        if (routeId.matches("[0-9]{1,20}")) {
+            safeRouteId = routeId;
+        }
+
+        return new RouteSourceReceipt(
+                "GBIS_API",
+                "ROUTE_CATALOG",
+                safeRouteId,
+                status,
+                null,
+                at.toInstant(),
+                "NOT_PROVIDED",
+                RouteSourceReceipt.CoordinateSystem.UNKNOWN,
+                null
+        );
     }
 }

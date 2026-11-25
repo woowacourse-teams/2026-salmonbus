@@ -13,6 +13,7 @@ public record AlightingAwarePassEvent(
     AlightingAwareObservation firstDeparture,
     AlightingAwareObservation confirmation
 ) {
+
     public AlightingAwarePassEvent(
         String vehicleId,
         final long tripId,
@@ -21,6 +22,28 @@ public record AlightingAwarePassEvent(
         AlightingAwareObservation departure,
         Instant confirmedAt
     ) {
-        this(vehicleId, tripId, stopOrder, arrival, departure, confirmedAt, departure, departure);
+        this(
+                vehicleId,
+                tripId,
+                stopOrder,
+                arrival,
+                departure,
+                confirmedAt,
+                departure,
+                departure
+        );
+    }
+
+    AlightingAwarePassEvent withTripId(final long restoredTripId) {
+        return new AlightingAwarePassEvent(
+                vehicleId,
+                restoredTripId,
+                stopOrder,
+                arrival,
+                departure,
+                confirmedAt,
+                firstDeparture,
+                confirmation
+        );
     }
 }

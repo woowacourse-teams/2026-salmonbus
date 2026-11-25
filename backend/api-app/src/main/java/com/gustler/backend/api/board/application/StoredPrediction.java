@@ -18,6 +18,6 @@ public record StoredPrediction(
     String probabilityTarget
 ) {
     public StoredPrediction {
-        Objects.requireNonNull(model, "model은 null일 수 없습니다.");
+        Objects.requireNonNull(model, "model은 null일 수 없다.");
     }
 }

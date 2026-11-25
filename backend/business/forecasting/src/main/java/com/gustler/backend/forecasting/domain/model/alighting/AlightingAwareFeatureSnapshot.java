@@ -6,19 +6,23 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
- * 하나의 관측 시점의 관측·누적 상태·고정 통계와 차량 정원을 보관한다.
- * 과거 상태를 생략한 단순 시간 창은 받을 수 없으며, 원본 float32 변환 순서를 유지한다.
- * 목표와 무관한 차량 계산은 처음 필요할 때 한 번만 하고, 차량과도 무관한 계산은 {@link AlightingAwareBatchContext}와 공유한다.
- * 내부 메모는 동기화하지 않으므로 한 스레드에서만 쓴다.
+ * 차량 관측 시점의 이력, 누적 상태, 고정 통계와 차량 정원을 보관한다.
+ * 과거 누적 상태 없이 최근 관측만 전달할 수는 없다. 원본의 float32 변환 순서를 유지한다.
+ * 목표 정류장과 무관한 차량 계산은 처음 필요할 때 한 번만 수행하고,
+ * 차량과 무관한 계산은 {@link AlightingAwareBatchContext}에서 공유한다.
+ * 내부 캐시는 동기화하지 않으므로 한 스레드에서만 사용한다.
  */
 public final class AlightingAwareFeatureSnapshot {
+
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
     private final long routeVersionId;
     private final int capacity;
     private final AlightingAwareObservation source;
@@ -28,7 +32,7 @@ public final class AlightingAwareFeatureSnapshot {
     private final List<AlightingAwareObservation> history;
     private final List<AlightingAwarePassEvent> events;
     private final Map<String, AlightingAwareVehiclePrefix> prefix;
-    private List<AlightingAwareObservation> ownMemo;
+    private List<AlightingAwareObservation> vehicleHistoryMemo;
     private OriginState originMemo;
     private Preceding precedingMemo;
     private DayFeatures dayMemo;
@@ -43,7 +47,15 @@ public final class AlightingAwareFeatureSnapshot {
         List<AlightingAwareObservation> history,
         List<AlightingAwarePassEvent> events
     ) {
-        this(routeVersionId, source, capacity, statistics, history, events, Map.of());
+        this(
+                routeVersionId,
+                source,
+                capacity,
+                statistics,
+                history,
+                events,
+                Map.of()
+        );
     }
 
     public AlightingAwareFeatureSnapshot(
@@ -55,7 +67,17 @@ public final class AlightingAwareFeatureSnapshot {
         List<AlightingAwarePassEvent> events,
         Map<String, AlightingAwareVehiclePrefix> prefix
     ) {
-        this(routeVersionId, source, capacity, new AlightingAwareBatchContext(statistics, history, events, prefix));
+        this(
+                routeVersionId,
+                source,
+                capacity,
+                new AlightingAwareBatchContext(
+                        statistics,
+                        history,
+                        events,
+                        prefix
+                )
+        );
     }
 
     /**
@@ -104,11 +126,18 @@ public final class AlightingAwareFeatureSnapshot {
     }
 
     public record Provenance(long tripStartObservationId) {
+
     }
 
     public ObservedVehicle observation() {
-        return new ObservedVehicle(source.vehicleId(), routeVersionId, source.passedStopOrder(), source.receivedAt(),
-            source.seats(), knownCrowd());
+        return new ObservedVehicle(
+                source.vehicleId(),
+                routeVersionId,
+                source.passedStopOrder(),
+                source.receivedAt(),
+                source.seats(),
+                knownCrowd()
+        );
     }
 
     private Integer knownCrowd() {
@@ -121,6 +150,7 @@ public final class AlightingAwareFeatureSnapshot {
     public AlightingAwareFeatureVector forTarget(final int target) {
         final int horizon = target - source.passedStopOrder();
         validateTarget(target, horizon);
+
         ZonedDateTime time = source.receivedAt().atZone(SEOUL);
         OriginState origin = origin();
         Preceding preceding = precedingState();
@@ -128,26 +158,52 @@ public final class AlightingAwareFeatureSnapshot {
         Map<Integer, AlightingAwareBatchContext.QueueState> queues = moment.queues();
         PathFeatures path = path(target, time, queues);
         DayFeatures day = dayFeatures();
-        QueueEstimate queue = queueEstimate(target, horizon, time, queues, neighbors.betweenSeats());
+        QueueEstimate queue = queueEstimate(
+                target,
+                horizon,
+                time,
+                queues,
+                neighbors.betweenSeats()
+        );
         final double trend = trendValue();
-        double[] base = baseFeatures(target, time, origin, preceding);
-        double[] extras = extraFeatures(target, time, origin, neighbors, path, day, queue, trend);
-        return vectors(target, time, base, extras);
+
+        double[] base = baseFeatures(
+                target,
+                time,
+                origin,
+                preceding
+        );
+        double[] extras = extraFeatures(
+                target,
+                time,
+                origin,
+                neighbors,
+                path,
+                day,
+                queue,
+                trend
+        );
+        return vectors(
+                target,
+                time,
+                base,
+                extras
+        );
     }
 
-    private List<AlightingAwareObservation> own() {
-        if (ownMemo == null) {
-            ownMemo = history.stream()
+    private List<AlightingAwareObservation> vehicleHistory() {
+        if (vehicleHistoryMemo == null) {
+            vehicleHistoryMemo = history.stream()
                 .filter(observation -> observation.vehicleId().equals(source.vehicleId()))
                 .sorted(Comparator.comparingLong(AlightingAwareObservation::batchRank))
                 .toList();
         }
-        return ownMemo;
+        return vehicleHistoryMemo;
     }
 
     private OriginState origin() {
         if (originMemo == null) {
-            originMemo = originState(own());
+            originMemo = originState(vehicleHistory());
         }
         return originMemo;
     }
@@ -168,7 +224,7 @@ public final class AlightingAwareFeatureSnapshot {
 
     private double trendValue() {
         if (!trendReady) {
-            trendMemo = trend(own(), origin());
+            trendMemo = fiveMinuteSeatTrend(vehicleHistory(), origin());
             trendReady = true;
         }
         return trendMemo;
@@ -193,13 +249,13 @@ public final class AlightingAwareFeatureSnapshot {
         return !statistics.stop(target).boardingAllowed();
     }
 
-    private OriginState originState(List<AlightingAwareObservation> own) {
+    private OriginState originState(List<AlightingAwareObservation> vehicleHistory) {
         AlightingAwareVehiclePrefix state = prefix.get(source.vehicleId());
         double slope = 0;
         boolean slopeKnown = false;
         int segmentStart = 0;
-        for (int index = 0; index < own.size(); index++) {
-            AlightingAwareObservation observation = own.get(index);
+        for (int index = 0; index < vehicleHistory.size(); index++) {
+            AlightingAwareObservation observation = vehicleHistory.get(index);
             AlightingAwareObservation previous = previous(state);
             slopeKnown = hasKnownSlope(previous, observation);
             slope = seatDifference(previous, observation, slopeKnown);
@@ -211,7 +267,13 @@ public final class AlightingAwareFeatureSnapshot {
         if (capacity <= 0 || capacity > 70) {
             throw new IllegalArgumentException("Invalid vehicle capacity snapshot");
         }
-        return new OriginState(state, slope, slopeKnown, segmentStart, capacity);
+        return new OriginState(
+                state,
+                slope,
+                slopeKnown,
+                segmentStart,
+                capacity
+        );
     }
 
     private static AlightingAwareObservation previous(AlightingAwareVehiclePrefix state) {
@@ -238,14 +300,18 @@ public final class AlightingAwareFeatureSnapshot {
     private static double seatDifference(
         AlightingAwareObservation previous,
         AlightingAwareObservation observation,
-        final boolean known) {
+        final boolean known
+    ) {
         if (known) {
             return observation.seats() - previous.seats();
         }
         return 0;
     }
 
-    private static boolean startsTrendSegment(AlightingAwareObservation previous, AlightingAwareObservation observation) {
+    private static boolean startsTrendSegment(
+        AlightingAwareObservation previous,
+        AlightingAwareObservation observation
+    ) {
         if (observation.confirmedProfile()) {
             return observation.startsConfirmedChainAfter(previous);
         }
@@ -268,10 +334,17 @@ public final class AlightingAwareFeatureSnapshot {
         if (!hasUniqueKnownPreceding(entries, candidate)) {
             return Preceding.missing();
         }
-        return new Preceding(0, indicator(candidate.seats() == 0), (float) candidate.seats() / origin.capacity());
+        return new Preceding(
+            0,
+            indicator(candidate.seats() == 0),
+            (float) candidate.seats() / origin.capacity()
+        );
     }
 
-    private boolean hasUniqueKnownPreceding(List<AlightingAwareObservation> entries, AlightingAwareObservation candidate) {
+    private boolean hasUniqueKnownPreceding(
+        List<AlightingAwareObservation> entries,
+        AlightingAwareObservation candidate
+    ) {
         if (candidate.vehicleId().equals(source.vehicleId()) || candidate.seats() == null) {
             return false;
         }
@@ -279,8 +352,9 @@ public final class AlightingAwareFeatureSnapshot {
     }
 
     private List<AlightingAwareObservation> entriesAt(final int passedStop) {
-        Map<String, AlightingAwareObservation> lastByVehicle = new HashMap<>();
-        prefix.forEach((vehicle, state) -> lastByVehicle.put(vehicle, state.previous()));
+        Map<String, AlightingAwareObservation> lastByVehicle = prefix.entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().previous()));
+
         List<AlightingAwareObservation> entries = new ArrayList<>();
         for (AlightingAwareObservation observation : history) {
             AlightingAwareObservation previous = lastByVehicle.put(observation.vehicleId(), observation);
@@ -291,7 +365,11 @@ public final class AlightingAwareFeatureSnapshot {
         return entries;
     }
 
-    private static boolean isNewEntry(AlightingAwareObservation observation, AlightingAwareObservation previous, final int passedStop) {
+    private static boolean isNewEntry(
+        AlightingAwareObservation observation,
+        AlightingAwareObservation previous,
+        final int passedStop
+    ) {
         if (observation.passedStopOrder() != passedStop) {
             return false;
         }
@@ -301,23 +379,27 @@ public final class AlightingAwareFeatureSnapshot {
         return previous == null || previous.passedStopOrder() != passedStop;
     }
 
-    private double trend(List<AlightingAwareObservation> own, OriginState origin) {
-        for (int index = origin.segmentStart(); index < own.size() - 1; index++) {
-            AlightingAwareObservation back = own.get(index);
-            if (back.receivedAt().isBefore(source.receivedAt().minusSeconds(300))) {
+    private double fiveMinuteSeatTrend(
+        List<AlightingAwareObservation> vehicleHistory,
+        OriginState origin
+    ) {
+        for (int index = origin.segmentStart(); index < vehicleHistory.size() - 1; index++) {
+            AlightingAwareObservation earlier = vehicleHistory.get(index);
+            if (earlier.receivedAt().isBefore(source.receivedAt().minusSeconds(300))) {
                 continue;
             }
-            if (back.seats() == null) {
+            if (earlier.seats() == null) {
                 return 0;
             }
-            return (float) (source.seats() - back.seats()) / origin.capacity();
+            return (float) (source.seats() - earlier.seats()) / origin.capacity();
         }
         return 0;
     }
 
     private Neighbors neighbors(final int target, final float capacity) {
         List<AlightingAwareObservation> members = moment.members();
-        NeighborAccumulator neighbors = new NeighborAccumulator(source.passedStopOrder(), target, capacity);
+        NeighborAccumulator neighbors =
+            new NeighborAccumulator(source.passedStopOrder(), target, capacity);
         for (AlightingAwareObservation member : members) {
             neighbors.accept(member);
         }
@@ -337,7 +419,12 @@ public final class AlightingAwareFeatureSnapshot {
         double surplus = 0;
         double seen = 0;
         for (int stop = source.passedStopOrder() + 1; stop <= target; stop++) {
-            net += statistics.cell("net_tab", stop, day, minute);
+            net += statistics.cell(
+                    "net_tab",
+                    stop,
+                    day,
+                    minute
+            );
             AlightingAwareBatchContext.QueueState queue = queues.get(stop);
             if (queue != null && queue.known(source.receivedAt())) {
                 left += queue.left(statistics.rate(stop, day, minute), source.receivedAt());
@@ -347,18 +434,27 @@ public final class AlightingAwareFeatureSnapshot {
             surplus += window[0];
             seen += window[1];
         }
-        return new PathFeatures(net, left, full, surplus, seen);
+        return new PathFeatures(
+                net,
+                left,
+                full,
+                surplus,
+                seen
+        );
     }
 
     private DayFeatures day(final long tripId) {
         final boolean down = isDown();
         final double directionRatio = moment.directionRatio(down);
-        List<AlightingAwarePassEvent> vehicle = events.stream()
-            .filter(event -> event.vehicleId().equals(source.vehicleId()) && event.tripId() == tripId)
+        List<AlightingAwarePassEvent> tripPasses = events.stream()
+            .filter(pass -> pass.vehicleId().equals(source.vehicleId()))
+            .filter(pass -> pass.tripId() == tripId)
             .toList();
-        vehicle = vehicle.subList(Math.max(0, vehicle.size() - 5), vehicle.size());
-        final double vehicleRatio = context.deviation(vehicle) / (vehicle.size() + 1);
-        return new DayFeatures(directionRatio, vehicleRatio, vehicle.size());
+
+        final int firstRecentPass = Math.max(0, tripPasses.size() - 5);
+        List<AlightingAwarePassEvent> lastFivePasses = tripPasses.subList(firstRecentPass, tripPasses.size());
+        final double vehicleRatio = context.deviation(lastFivePasses) / (lastFivePasses.size() + 1);
+        return new DayFeatures(directionRatio, vehicleRatio, lastFivePasses.size());
     }
 
     private boolean isDown() {
@@ -379,17 +475,26 @@ public final class AlightingAwareFeatureSnapshot {
         final float betweenSeats
     ) {
         AlightingAwareBatchContext.QueueState queue = queues.get(target);
-        final boolean known = queue != null && queue.known(source.receivedAt());
-        final double rate = statistics.rate(target, statistics.dayType(time.toLocalDate()), minute(time));
-        if (!known) {
-            final double left = rate * 10;
-            final double leftMine = Math.max(0, left + rate * horizon * statistics.minutesPerStop() - betweenSeats);
-            return new QueueEstimate(0, 90, left, leftMine, false);
+        final boolean hasRecentQueue = queue != null && queue.known(source.receivedAt());
+        final double arrivalsPerMinute = statistics.rate(target, statistics.dayType(time.toLocalDate()), minute(time));
+        double fullPasses = 0;
+        double minutesSinceClear = 90;
+        double waitingNow = arrivalsPerMinute * 10;
+        if (hasRecentQueue) {
+            fullPasses = queue.full();
+            minutesSinceClear = queue.since(source.receivedAt());
+            waitingNow = Math.max(0, arrivalsPerMinute * minutesSinceClear - queue.boarded());
         }
-        final double since = queue.since(source.receivedAt());
-        final double left = Math.max(0, rate * since - queue.boarded());
-        final double leftMine = Math.max(0, left + rate * horizon * statistics.minutesPerStop() - betweenSeats);
-        return new QueueEstimate(queue.full(), since, left, leftMine, true);
+
+        final double waitingAtArrival = Math.max(0,
+            waitingNow + arrivalsPerMinute * horizon * statistics.minutesPerStop() - betweenSeats);
+        return new QueueEstimate(
+                fullPasses,
+                minutesSinceClear,
+                waitingNow,
+                waitingAtArrival,
+                hasRecentQueue
+        );
     }
 
     private double[] baseFeatures(
@@ -409,11 +514,15 @@ public final class AlightingAwareFeatureSnapshot {
             indicator(!origin.slopeKnown()), origin.streak(), preceding.full(), preceding.ratio(), preceding.unknown(),
             0
         };
-        double[] features = new double[50];
-        System.arraycopy(base, 0, features, 0, 19);
+        double[] features = Arrays.copyOf(base, 50);
         features[19] = position;
         features[31] = indicator(statistics.stop(target).down());
-        fillPositionBasis(features, position, morning, evening);
+        fillPositionBasis(
+                features,
+                position,
+                morning,
+                evening
+        );
         return features;
     }
 
@@ -433,7 +542,7 @@ public final class AlightingAwareFeatureSnapshot {
         features[49] = features[31] * evening;
     }
 
-    /** 배열 위치는 학습 계약이므로 수식·float 나눗셈의 순서를 바꾸지 않는다. */
+    /** 배열 위치는 학습 계약이므로 수식, float 나눗셈의 순서를 바꾸지 않는다. */
     private double[] extraFeatures(
         final int target,
         ZonedDateTime time,
@@ -449,13 +558,25 @@ public final class AlightingAwareFeatureSnapshot {
         final int minute = minute(time);
         return new double[] {
             time.getHour(), target - source.passedStopOrder(), source.seats(), capacity,
-            (double) target / statistics.largestStopOrder(), Math.min(queue.full(), 5) / 5, queue.since() / 90,
-            indicator(!queue.known()), queue.left() / capacity, Math.min(neighbors.betweenCount(), 4) / 4.0,
-            Math.min(neighbors.betweenSeats() / capacity, 3), queue.leftMine() / capacity, indicator(queue.full() >= 1),
+            (double) target / statistics.largestStopOrder(), Math.min(queue.full(), 5) / 5,
+            queue.minutesSinceClear() / 90,
+            indicator(!queue.known()), queue.waitingNow() / capacity, Math.min(neighbors.betweenCount(), 4) / 4.0,
+            Math.min(neighbors.betweenSeats() / capacity, 3), queue.waitingAtArrival() / capacity,
+            indicator(queue.full() >= 1),
             path.net() / capacity, path.left() / capacity, path.full(),
-            statistics.cell("full_tab", target, day, minute),
+            statistics.cell(
+                    "full_tab",
+                    target,
+                    day,
+                    minute
+            ),
             neighbors.nearGap() / 30, neighbors.nearSeats(), neighbors.behindGap() / 30, trend,
-            statistics.cell("dep_tab", target, day, minute) / 70, path.seen() / 10, path.surplus() / capacity,
+            statistics.cell(
+                    "dep_tab",
+                    target,
+                    day,
+                    minute
+            ) / 70, path.seen() / 10, path.surplus() / capacity,
             (path.net() + path.surplus()) / capacity, demand.directionRatio(), demand.vehicleRatio(),
             demand.vehicleCount(),
             indicator(day.equals("off")), minute, time.getDayOfWeek().getValue() - 1
@@ -468,17 +589,34 @@ public final class AlightingAwareFeatureSnapshot {
         double[] base,
         double[] extras
     ) {
-        double[] seat = new double[88];
-        System.arraycopy(base, 0, seat, 0, 50);
-        System.arraycopy(extras, 0, seat, 50, 31);
+        double[] seat = Arrays.copyOf(base, 88);
+        System.arraycopy(
+                extras,
+                0,
+                seat,
+                50,
+                31
+        );
         List<Double> means = statistics.targetMeans(target, band(minute(time)));
         for (int index = 0; index < 3; index++) {
             seat[81 + index] = means.get(index);
         }
         double[] entry = AlightingAwareEntryFeatures.calculate(statistics, target, source.passedStopOrder());
-        System.arraycopy(entry, 0, seat, 84, 4);
+        System.arraycopy(
+                entry,
+                0,
+                seat,
+                84,
+                4
+        );
         castFloat32(seat, 88);
-        return new AlightingAwareFeatureVector(seat, probabilityFeatures(target, time, base, extras));
+        double[] probability = probabilityFeatures(
+                target,
+                time,
+                base,
+                extras
+        );
+        return new AlightingAwareFeatureVector(seat, probability);
     }
 
     private double[] probabilityFeatures(
@@ -487,11 +625,10 @@ public final class AlightingAwareFeatureSnapshot {
         double[] base,
         double[] extras
     ) {
-        double[] probability = new double[80];
-        System.arraycopy(base, 0, probability, 0, 50);
-        int[] indices = { 12, 5, 6, 7, 9, 10, 8, 11, 13, 14, 15, 22, 23, 24, 25, 26 };
-        for (int index = 0; index < indices.length; index++) {
-            probability[50 + index] = extras[indices[index]];
+        double[] probability = Arrays.copyOf(base, 80);
+        int[] probabilityExtraColumns = { 12, 5, 6, 7, 9, 10, 8, 11, 13, 14, 15, 22, 23, 24, 25, 26 };
+        for (int index = 0; index < probabilityExtraColumns.length; index++) {
+            probability[50 + index] = extras[probabilityExtraColumns[index]];
         }
         fillTimeFeatures(probability, time);
         castFloat32(probability, 79);
@@ -539,7 +676,13 @@ public final class AlightingAwareFeatureSnapshot {
         return 0;
     }
 
-    private record OriginState(AlightingAwareVehiclePrefix state, double slope, boolean slopeKnown, int segmentStart, float capacity) {
+    private record OriginState(
+        AlightingAwareVehiclePrefix state,
+        double slope,
+        boolean slopeKnown,
+        int segmentStart,
+        float capacity
+    ) {
 
         private double streak() {
             return state.fullStreak();
@@ -555,19 +698,35 @@ public final class AlightingAwareFeatureSnapshot {
     }
 
     private record Preceding(double unknown, double full, double ratio) {
+
         private static Preceding missing() {
             return new Preceding(1, 0, 0);
         }
     }
 
     /** 같은 경로 집계에서 나온 다섯 입력을 원본 계산 순서대로 보관한다. */
-    private record PathFeatures(double net, double left, double full, double surplus, double seen) {
+    private record PathFeatures(
+        double net,
+        double left,
+        double full,
+        double surplus,
+        double seen
+    ) {
+
     }
 
     private record DayFeatures(double directionRatio, double vehicleRatio, int vehicleCount) {
+
     }
 
-    private record QueueEstimate(double full, double since, double left, double leftMine, boolean known) {
+    private record QueueEstimate(
+        double full,
+        double minutesSinceClear,
+        double waitingNow,
+        double waitingAtArrival,
+        boolean known
+    ) {
+
     }
 
     private record Neighbors(
@@ -577,10 +736,12 @@ public final class AlightingAwareFeatureSnapshot {
         int betweenCount,
         float betweenSeats
     ) {
+
     }
 
     /** 같은 배치를 순서대로 읽는 집계 상태다. 같은 거리의 첫 차량을 고르는 순서도 원본 계약이다. */
     private static final class NeighborAccumulator {
+
         private final int origin;
         private final int target;
         private final float capacity;
@@ -635,7 +796,13 @@ public final class AlightingAwareFeatureSnapshot {
         }
 
         private Neighbors result() {
-            return new Neighbors(nearGap, nearSeats, behindGap, betweenCount, betweenSeats);
+            return new Neighbors(
+                    nearGap,
+                    nearSeats,
+                    behindGap,
+                    betweenCount,
+                    betweenSeats
+            );
         }
     }
 }

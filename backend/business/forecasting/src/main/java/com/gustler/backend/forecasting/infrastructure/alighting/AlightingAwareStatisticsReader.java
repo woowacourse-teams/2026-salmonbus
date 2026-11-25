@@ -1,52 +1,70 @@
 package com.gustler.backend.forecasting.infrastructure.alighting;
 
-import static com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareIdentifiers.canonical;
-
 import com.gustler.backend.forecasting.domain.model.alighting.AlightingAwareRouteStatistics;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import tools.jackson.databind.JsonNode;
 
 public final class AlightingAwareStatisticsReader {
+
+    private static final List<String> REQUIRED_TABLES = List.of(
+            "lam",
+            "lam_base",
+            "net_tab",
+            "full_tab",
+            "dep_tab",
+            "stop_net_base"
+    );
+
     private AlightingAwareStatisticsReader() {
     }
 
     public static AlightingAwareRouteStatistics read(JsonNode json, Set<LocalDate> holidays) {
         List<AlightingAwareRouteStatistics.Stop> stops = stops(json.path("route_metadata"));
-        Map<String, Map<String, Double>> tables = tables(json.path("tables"));
-        Map<String, List<Double>> bands = bands(json.path("tables").path("target_band"));
-        return new AlightingAwareRouteStatistics(json.path("route").asText(), stops,
-            json.path("min_per_stop").asDouble(Double.NaN), tables, bands, holidays, confirmedProfile(json));
+        JsonNode tables = json.path("tables");
+        Map<String, Map<String, Double>> valuesByTable = readRequiredTables(tables);
+        Map<String, List<Double>> meansByTargetBand = targetBands(tables.path("target_band"));
+        return new AlightingAwareRouteStatistics(
+                json.path("route").asText(),
+                stops,
+                json.path("min_per_stop").asDouble(Double.NaN),
+                valuesByTable,
+                meansByTargetBand,
+                holidays,
+                confirmedProfile(json)
+        );
     }
 
     private static boolean confirmedProfile(JsonNode json) {
-        String profile = canonical(json.path("input_profile").asText("alighting-original-v1"));
+        String profile = json.path("input_profile").asText("alighting-original-v1");
         if (profile.equals(AlightingAwareRouteStatistics.CONFIRMED_PROFILE)) {
             return true;
         }
         if (!profile.equals("alighting-original-v1")) {
-            throw new IllegalArgumentException("Unknown AlightingAware input profile");
+            throw new IllegalArgumentException("지원하지 않는 예보 입력 프로필이다");
         }
         return false;
     }
 
     private static List<AlightingAwareRouteStatistics.Stop> stops(JsonNode rows) {
-        List<AlightingAwareRouteStatistics.Stop> stops = new ArrayList<>();
-        for (JsonNode row : rows) {
-            stops.add(new AlightingAwareRouteStatistics.Stop(row.path("order").asInt(), row.path("id").asText(),
-                row.path("name").asText(), row.path("direction").asText().equals("DOWN"),
-                row.path("boardingAllowed").asBoolean()));
-        }
-        return stops;
+        return rows.valueStream()
+            .map(row -> new AlightingAwareRouteStatistics.Stop(
+                    row.path("order").asInt(),
+                    row.path("id").asText(),
+                    row.path("name").asText(),
+                    row.path("direction").asText().equals("DOWN"),
+                    row.path("boardingAllowed").asBoolean()
+            ))
+            .toList();
     }
 
-    private static Map<String, Map<String, Double>> tables(JsonNode root) {
+    private static Map<String, Map<String, Double>> readRequiredTables(JsonNode root) {
         Map<String, Map<String, Double>> tables = new HashMap<>();
-        for (String name : List.of("lam", "lam_base", "net_tab", "full_tab", "dep_tab", "stop_net_base")) {
+        for (String name : REQUIRED_TABLES) {
             if (!root.has(name)) {
                 throw new IllegalArgumentException("Missing AlightingAware table " + name);
             }
@@ -58,32 +76,31 @@ public final class AlightingAwareStatisticsReader {
     private static Map<String, Double> table(JsonNode rows) {
         Map<String, Double> values = new HashMap<>();
         for (JsonNode row : rows) {
-            List<String> key = new ArrayList<>();
-            for (JsonNode part : row.path("key")) {
-                key.add(part.asText());
-            }
+            String cellKey = row.path("key").valueStream()
+                .map(JsonNode::asText)
+                .collect(Collectors.joining("|"));
             final double value = row.path("value").asDouble(Double.NaN);
             if (!Double.isFinite(value)) {
                 throw new IllegalArgumentException("Nonfinite AlightingAware table value");
             }
-            if (values.put(String.join("|", key), value) != null) {
+            if (values.put(cellKey, value) != null) {
                 throw new IllegalArgumentException("Duplicate AlightingAware cell");
             }
         }
         return values;
     }
 
-    private static Map<String, List<Double>> bands(JsonNode rows) {
+    private static Map<String, List<Double>> targetBands(JsonNode rows) {
         Map<String, List<Double>> bands = new HashMap<>();
         for (JsonNode row : rows) {
-            List<Double> values = new ArrayList<>();
-            for (JsonNode value : row.path("values")) {
-                values.add(targetMean(value));
-            }
-            if (values.size() != 3) {
+            List<Double> means = row.path("values").valueStream()
+                .map(AlightingAwareStatisticsReader::targetMean)
+                .toList();
+            if (means.size() != 3) {
                 throw new IllegalArgumentException("AlightingAware target means require three columns");
             }
-            bands.put(row.path("stop").asInt() + "|" + row.path("band").asText(), values);
+            String targetBand = row.path("stop").asInt() + "|" + row.path("band").asText();
+            bands.put(targetBand, means);
         }
         return bands;
     }

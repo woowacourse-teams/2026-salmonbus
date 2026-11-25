@@ -2,10 +2,11 @@ package com.gustler.backend.forecasting.domain.model.alighting;
 
 import java.util.List;
 
-/** 하차 반영가 학습한 수치 분기 트리. 잎 값에는 학습률이 이미 반영되어 있다. */
+/** 하차 반영 모델이 학습한 수치 분기 트리다. 리프 값에는 학습률이 이미 반영되어 있다. */
 public final class NumericTreeEnsemble {
 
     public enum Kind {
+
         REGRESSION,
         MULTICLASS,
         BINARY;
@@ -60,7 +61,12 @@ public final class NumericTreeEnsemble {
         double[] baseline,
         List<List<List<Node>>> iterations
     ) {
-        validateDimensions(featureCount, kind, baseline, iterations);
+        validateDimensions(
+                featureCount,
+                kind,
+                baseline,
+                iterations
+        );
         for (final double value : baseline) {
             requireFinite(value);
         }
@@ -78,7 +84,12 @@ public final class NumericTreeEnsemble {
         double[] baseline,
         List<List<List<Node>>> iterations
     ) {
-        if (hasInvalidDimensions(featureCount, kind, baseline, iterations)) {
+        if (hasInvalidDimensions(
+                featureCount,
+                kind,
+                baseline,
+                iterations
+        )) {
             throw new IllegalArgumentException("트리 모델 차원이 잘못됐다");
         }
     }
@@ -171,7 +182,7 @@ public final class NumericTreeEnsemble {
         }
     }
 
-    /** 학습 모델의 반복·클래스 순서대로 더한다. 합산 순서를 바꾸지 않는다. */
+    /** 학습 모델의 반복, 클래스 순서대로 더한다. 합산 순서를 바꾸지 않는다. */
     private double[] calculateRawScores(double[] features) {
         double[] raw = baseline.clone();
         for (List<List<Node>> iteration : iterations) {

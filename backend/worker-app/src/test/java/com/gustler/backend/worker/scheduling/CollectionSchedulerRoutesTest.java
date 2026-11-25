@@ -1,12 +1,14 @@
 package com.gustler.backend.worker.scheduling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 
 import com.gustler.backend.gbis.api.GbisKey;
 import com.gustler.backend.gbis.api.GbisLocationResult.Success;
 import com.gustler.backend.gbis.api.GbisLocationSource;
 import com.gustler.backend.gbis.api.dto.BusLocationResponse.BusLocation;
+import com.gustler.backend.routecatalog.api.RefreshRouteCatalog;
 import com.gustler.backend.routecatalog.domain.RouteHeadways;
 import com.gustler.backend.routecatalog.domain.RouteSource;
 import com.gustler.backend.routecatalog.domain.RouteSourceResult;
@@ -16,6 +18,7 @@ import com.gustler.backend.routecatalog.domain.UpstreamRoute;
 import com.gustler.backend.routecatalog.domain.UpstreamRouteStop;
 import com.gustler.backend.support.PostgresTestContainer;
 import com.gustler.backend.worker.configuration.CollectionRuntimeConfiguration;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +53,9 @@ class CollectionSchedulerRoutesTest {
     private GbisLocationSource locationSource;
 
     @Autowired
+    private RefreshRouteCatalog catalog;
+
+    @Autowired
     private CollectionScheduler scheduler;
 
     @Autowired
@@ -58,11 +64,23 @@ class CollectionSchedulerRoutesTest {
     @BeforeEach
     void 상류_대역을_세운다() {
         given(routeSource.requiredCallsPerRead()).willReturn(2);
-        given(routeSource.capture(org.mockito.ArgumentMatchers.anyString())).willCallRealMethod();
+        given(routeSource.capture(anyString())).willCallRealMethod();
         given(routeSource.read(ROUTE_3330)).willReturn(new RouteSourceResult.Success(upstreamRoute()));
         given(locationSource.read(ROUTE_3330, GbisKey.PRIMARY)).willReturn(new Success(QUERY_TIME, List.of(
-            new BusLocation("경기70아0001", "204000206", 0, ROUTE_3330, 11,
-                STOP_205000217, 1, 2, 43, 3, 1))));
+            new BusLocation(
+                    "경기70아0001",
+                    "204000206",
+                    0,
+                    ROUTE_3330,
+                    11,
+                    STOP_205000217,
+                    1,
+                    2,
+                    43,
+                    3,
+                    1
+            ))));
+        catalog.refresh(ROUTE_3330, OffsetDateTime.parse("2026-08-28T00:00:00Z"));
     }
 
     @AfterEach
@@ -75,7 +93,7 @@ class CollectionSchedulerRoutesTest {
     }
 
     @Test
-    void 설정에_적은_노선의_판본이_한_바퀴_만에_열린다() {
+    void 준비된_노선의_판본은_수집_회차에서_유지된다() {
         // when
         scheduler.collectAllRoutes();
 
@@ -94,12 +112,22 @@ class CollectionSchedulerRoutesTest {
 
     private static UpstreamRoute upstreamRoute() {
         return new UpstreamRoute(
-            ROUTE_3330, "3330", "범계역", "강남역",
-            RouteStops.from(TURN_SEQUENCE, List.of(
-                new UpstreamRouteStop(1, STOP_205000217, "범계역"),
-                new UpstreamRouteStop(2, STOP_277103149, "안양대교(경유)"),
-                new UpstreamRouteStop(3, STOP_208000069, "안양역"))),
-            new RouteTimetable("05:00", "22:35", "05:00", "23:55", RouteHeadways.none()));
+                ROUTE_3330,
+                "3330",
+                "범계역",
+                "강남역",
+                RouteStops.from(TURN_SEQUENCE, List.of(
+                    new UpstreamRouteStop(1, STOP_205000217, "범계역"),
+                    new UpstreamRouteStop(2, STOP_277103149, "안양대교(경유)"),
+                    new UpstreamRouteStop(3, STOP_208000069, "안양역"))),
+                new RouteTimetable(
+                        "05:00",
+                        "22:35",
+                        "05:00",
+                        "23:55",
+                        RouteHeadways.none()
+                )
+        );
     }
 
     private int countOf(

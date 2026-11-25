@@ -1,7 +1,6 @@
 package com.gustler.backend.forecasting.infrastructure.jdbc;
 
 import com.gustler.backend.forecasting.application.forecast.RouteStructureProvider;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -10,15 +9,16 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 노선 판본의 실정류장 순번을 읽는다.
+ * 노선 버전의 실정류장 순번을 읽는다.
  *
- * <p>예보 단계는 모델 통계의 {@code realStopOrders()}(확정 판은 승차 가능 정류장)로 통과를 판정하고, 정산 근거의
- * {@code shared.realStopOrders}는 그 목록을 그대로 옮겨 적은 값이다. 그래서 먼저 그 노선 판본의 정산 근거가 적힌 가장 최근 모델
- * 배포에서 {@code shared.realStopOrders}를 읽는다. 근거가 아직 없으면 {@code route_stop}의 승차 가능 정류장을 돌려준다. 예보 단계는
- * 이 표와 모델 통계의 정류장 구성(순번·정류장·승차 가능·방향)이 같은 판본만 되감으므로 두 출처는 같은 목록이다.
- * 행 잠금을 잡지 않는다.
+ * <p>예보 단계는 모델 통계의 {@code realStopOrders()}(확정 입력 프로필은 승차 가능 정류장)로 통과를 판정하고, 정산 근거의
+ * {@code shared.realStopOrders}는 그 목록을 그대로 옮겨 적은 값이다. 그래서 먼저 그 노선 버전의 정산 근거가 기록된 가장 최근 모델
+ * 배포에서 {@code shared.realStopOrders}를 읽는다. 근거가 아직 없으면 {@code route_stop}의 승차 가능 정류장을 반환한다. 예보 단계는
+ * 이 표와 모델 통계의 정류장 구성(순번, 정류장, 승차 가능, 방향)이 같은 버전만 복구하므로 두 출처는 같은 목록이다.
+ * 행 잠금을 사용하지 않는다.
  */
 public final class JdbcRouteStructureProvider implements RouteStructureProvider {
+
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String READ_CONTEXT = """
         SELECT /* salmonbus:scoring.find_real_stops */
@@ -49,9 +49,7 @@ public final class JdbcRouteStructureProvider implements RouteStructureProvider 
         if (recorded.isPresent()) {
             JsonNode orders = JSON.readTree(recorded.get());
             if (orders.isArray()) {
-                List<Integer> stops = new ArrayList<>();
-                orders.forEach(value -> stops.add(value.asInt()));
-                return List.copyOf(stops);
+                return orders.valueStream().map(JsonNode::asInt).toList();
             }
         }
         return jdbc.sql(READ_STOPS).param("version", routeVersionId).query(Integer.class).list();

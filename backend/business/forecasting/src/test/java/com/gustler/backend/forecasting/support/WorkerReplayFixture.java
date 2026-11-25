@@ -16,12 +16,13 @@ import tools.jackson.databind.JsonNode;
 /**
  * 재생 자료의 노선 파일 하나다.
  *
- * <p>파일은 하루치 관측({@code observations})과 배치 장부({@code batches}), 노선 판본과 정류장, 그날 앞의 차량별 마지막
+ * <p>파일은 하루치 관측({@code observations})과 배치 장부({@code batches}), 노선 버전과 정류장, 그날 앞의 차량별 마지막
  * 관측({@code prefix}), 독립 계산한 기대값을 담은 사례({@code cases})로 이루어진다. 관측의 {@code received_at}은 그 배치의 착수
  * 시각이고 {@code physical_received_at}은 응답 수신 시각이다. 장부에는 그날 앞의 관측이 속한 배치도 들어 있으나, 재생하는 배치는
  * 그날 관측이 있는 배치뿐이다.
  */
 final class WorkerReplayFixture {
+
     private final JsonNode root;
     private final Map<Long, AlightingAwareObservation> observations;
     private final List<Batch> batches;
@@ -45,7 +46,10 @@ final class WorkerReplayFixture {
         return new WorkerReplayFixture(root, observations, replayedBatches(root, observations.values()));
     }
 
-    private static List<Batch> replayedBatches(JsonNode root, Collection<AlightingAwareObservation> observations) {
+    private static List<Batch> replayedBatches(
+        JsonNode root,
+        Collection<AlightingAwareObservation> observations
+    ) {
         Set<Long> observed = observations.stream()
             .map(AlightingAwareObservation::batchId)
             .collect(Collectors.toSet());
@@ -58,14 +62,21 @@ final class WorkerReplayFixture {
         if (!observed.isEmpty()) {
             throw new IllegalArgumentException("재생 자료의 배치 장부에 그날 관측의 배치가 없다: " + observed.size());
         }
-        batches.sort(Comparator.comparing(Batch::confirmedAt).thenComparingLong(Batch::id));
+        batches.sort(
+            Comparator.comparing(Batch::confirmedAt)
+                .thenComparingLong(Batch::id)
+        );
         return List.copyOf(batches);
     }
 
     private static Batch batch(JsonNode row) {
-        return new Batch(row.path("id").asLong(), row.path("rv").asLong(),
-            Instant.parse(row.path("confirmed_at").asString()), Instant.parse(row.path("response_at").asString()),
-            row.path("stored_rows").asInt());
+        return new Batch(
+                row.path("id").asLong(),
+                row.path("rv").asLong(),
+                Instant.parse(row.path("confirmed_at").asString()),
+                Instant.parse(row.path("response_at").asString()),
+                row.path("stored_rows").asInt()
+        );
     }
 
     /** 모델 계수의 노선 이름이다. 노선의 표시 이름으로 넣는다. */
@@ -81,9 +92,13 @@ final class WorkerReplayFixture {
     List<Version> versions() {
         List<Version> versions = new ArrayList<>();
         for (JsonNode row : root.path("route_versions")) {
-            versions.add(new Version(row.path("id").asLong(), row.path("turn_sequence").asInt(),
-                row.path("content_digest").asString(), time(row.path("valid_from").asString()),
-                nullableTime(row.path("valid_to"))));
+            versions.add(new Version(
+                    row.path("id").asLong(),
+                    row.path("turn_sequence").asInt(),
+                    row.path("content_digest").asString(),
+                    time(row.path("valid_from").asString()),
+                    nullableTime(row.path("valid_to"))
+            ));
         }
         return versions;
     }
@@ -91,18 +106,23 @@ final class WorkerReplayFixture {
     List<Stop> stops() {
         List<Stop> stops = new ArrayList<>();
         for (JsonNode row : root.path("statistics").path("route_metadata")) {
-            stops.add(new Stop(row.path("order").asInt(), row.path("id").asString(), row.path("name").asString(),
-                row.path("direction").asString(), row.path("boardingAllowed").asBoolean()));
+            stops.add(new Stop(
+                    row.path("order").asInt(),
+                    row.path("id").asString(),
+                    row.path("name").asString(),
+                    row.path("direction").asString(),
+                    row.path("boardingAllowed").asBoolean()
+            ));
         }
         return stops;
     }
 
-    /** 재생할 배치다. (착수 시각, 배치 번호) 순서다. */
+    /** 재생할 배치다. (처리 시작 시각, 배치 번호) 순서다. */
     List<Batch> batches() {
         return batches;
     }
 
-    /** 그날의 관측이다. 파일에 적힌 순서다. */
+    /** 그날의 관측이다. 파일에 기록된 순서다. */
     Collection<AlightingAwareObservation> observations() {
         return observations.values();
     }
@@ -129,7 +149,7 @@ final class WorkerReplayFixture {
         return List.copyOf(evidence.values());
     }
 
-    /** 사례다. 기준 관측의 착수 시각 순서다. */
+    /** 사례다. 기준 관측의 처리 시작 시각 순서다. */
     List<JsonNode> cases() {
         List<JsonNode> cases = new ArrayList<>();
         root.path("cases").forEach(cases::add);
@@ -138,12 +158,21 @@ final class WorkerReplayFixture {
     }
 
     private static AlightingAwareObservation observation(JsonNode row) {
-        return new AlightingAwareObservation(row.path("id").asLong(), row.path("batch_id").asLong(),
-            row.path("batch_rank").asLong(), Instant.parse(row.path("received_at").asString()),
-            row.path("vehicle_id").asString(), row.path("passed_stop_order").asInt(), row.path("stop_order").asInt(),
-            row.path("running_state").asInt(), seats(row.path("remaining_seats")), row.path("crowd_level").asInt(),
-            row.path("route_version_id").asLong(), Instant.parse(row.path("physical_received_at").asString()),
-            row.path("down").asBoolean());
+        return new AlightingAwareObservation(
+                row.path("id").asLong(),
+                row.path("batch_id").asLong(),
+                row.path("batch_rank").asLong(),
+                Instant.parse(row.path("received_at").asString()),
+                row.path("vehicle_id").asString(),
+                row.path("passed_stop_order").asInt(),
+                row.path("stop_order").asInt(),
+                row.path("running_state").asInt(),
+                seats(row.path("remaining_seats")),
+                row.path("crowd_level").asInt(),
+                row.path("route_version_id").asLong(),
+                Instant.parse(row.path("physical_received_at").asString()),
+                row.path("down").asBoolean()
+        );
     }
 
     private static Integer seats(JsonNode value) {
@@ -169,7 +198,7 @@ final class WorkerReplayFixture {
         return time(value.asString());
     }
 
-    /** 노선 판본 한 줄이다. 유효 기간의 끝은 비어 있을 수 있다. */
+    /** 노선 버전 한 행이다. 유효 기간의 끝은 비어 있을 수 있다. */
     record Version(
         long id,
         int turnSequence,
@@ -177,9 +206,10 @@ final class WorkerReplayFixture {
         OffsetDateTime validFrom,
         OffsetDateTime validTo
     ) {
+
     }
 
-    /** 통계에 적힌 정류장 한 줄이다. 판본마다 같은 구성으로 넣는다. */
+    /** 통계에 기록된 정류장 한 행이다. 버전마다 같은 구성으로 넣는다. */
     record Stop(
         int order,
         String id,
@@ -187,9 +217,10 @@ final class WorkerReplayFixture {
         String direction,
         boolean boardingAllowed
     ) {
+
     }
 
-    /** 재생할 배치 한 줄이다. 수신 시각은 응답 수신 시각이다. */
+    /** 재생할 배치 한 행이다. 수신 시각은 응답 수신 시각이다. */
     record Batch(
         long id,
         long routeVersionId,
@@ -197,5 +228,6 @@ final class WorkerReplayFixture {
         Instant responseAt,
         int storedRows
     ) {
+
     }
 }

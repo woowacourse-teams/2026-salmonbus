@@ -8,8 +8,8 @@ import com.gustler.backend.forecasting.api.forecast.ForecastLanes;
 import com.gustler.backend.forecasting.api.forecast.RunForecasts;
 import com.gustler.backend.forecasting.api.forecast.ScoringCycle;
 import com.gustler.backend.forecasting.api.forecast.ScoringFeed;
-import com.gustler.backend.observations.api.ObservationDeliveryHook;
-import com.gustler.backend.worker.scheduling.ForecastTrigger;
+import com.gustler.backend.observations.api.ObservationChangeListener;
+import com.gustler.backend.worker.scheduling.ForecastScheduler;
 import com.gustler.backend.worker.scheduling.RouteLanes;
 import com.gustler.backend.worker.scheduling.ScoringExecutor;
 import com.gustler.backend.worker.scheduling.ScoringJob;
@@ -34,6 +34,7 @@ import org.springframework.scheduling.config.FixedDelayTask;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 class EnabledForecastConfigurationTest {
+
     private static final String[] VALID_SETTINGS = {
         "forecast.interval=30s",
         "forecast.staleness=5m",
@@ -53,21 +54,27 @@ class EnabledForecastConfigurationTest {
         Set<Thread> threadsBefore = forecastThreads();
 
         // when
-        runner.withPropertyValues("forecast.enabled=false", "forecast.staleness=0s", "forecast.batch-limit=0",
-                "forecast.lanes=0")
+        runner.withPropertyValues(
+                "forecast.enabled=false",
+                "forecast.staleness=0s",
+                "forecast.batch-limit=0",
+                "forecast.lanes=0"
+        )
             .run(context -> {
 
                 // then
                 assertThat(context).hasNotFailed();
-                assertThat(context).doesNotHaveBean(ForecastProperties.class);
-                assertThat(context).doesNotHaveBean(ForecastPolicy.class);
-                assertThat(context).doesNotHaveBean(ForecastLanes.class);
-                assertThat(context).doesNotHaveBean(ObservationDeliveryHook.class);
-                assertThat(context).doesNotHaveBean(ScoringFeed.class);
-                assertThat(context).doesNotHaveBean(ScoringJob.class);
-                assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values())
-                    .allSatisfy(holder -> assertThat(holder.getScheduledTasks()).isEmpty());
-                assertThat(forecastThreads()).as("이 구성이 새로 띄운 스레드가 없다").isSubsetOf(threadsBefore);
+                assertSoftly(softly -> {
+                    softly.check(() -> assertThat(context).doesNotHaveBean(ForecastProperties.class));
+                    softly.check(() -> assertThat(context).doesNotHaveBean(ForecastPolicy.class));
+                    softly.check(() -> assertThat(context).doesNotHaveBean(ForecastLanes.class));
+                    softly.check(() -> assertThat(context).doesNotHaveBean(ObservationChangeListener.class));
+                    softly.check(() -> assertThat(context).doesNotHaveBean(ScoringFeed.class));
+                    softly.check(() -> assertThat(context).doesNotHaveBean(ScoringJob.class));
+                    softly.assertThat(context.getBeansOfType(ScheduledTaskHolder.class).values())
+                        .allSatisfy(holder -> softly.assertThat(holder.getScheduledTasks()).isEmpty());
+                    softly.assertThat(forecastThreads()).as("이 구성이 새로 띄운 스레드가 없다").isSubsetOf(threadsBefore);
+                });
             });
         runner.run(context -> assertThat(context).doesNotHaveBean(ForecastLanes.class)
             .doesNotHaveBean(ScoringFeed.class));
@@ -94,11 +101,11 @@ class EnabledForecastConfigurationTest {
                     softly.assertThat(context.getBean(ForecastPolicy.class))
                         .isEqualTo(new ForecastPolicy(Duration.ofMinutes(5), 20));
                     softly.assertThat(context.getBean(RouteLanes.class).count()).isEqualTo(3);
-                    softly.assertThat(context.getBean(ObservationDeliveryHook.class))
-                        .isInstanceOf(ForecastTrigger.class);
+                    softly.assertThat(context.getBean(ObservationChangeListener.class))
+                        .isInstanceOf(ForecastScheduler.class);
                     softly.assertThat(context.getBeansOfType(ScoringExecutor.class)).hasSize(1);
                     softly.assertThat(context.getBeansOfType(ScoringJob.class)).hasSize(1);
-                    softly.assertThat(tasks).anyMatch(task -> task.contains("ForecastTrigger.pickUp"))
+                    softly.assertThat(tasks).anyMatch(task -> task.contains("ForecastScheduler.pickUp"))
                         .anyMatch(task -> task.contains("ScoringJob.flush"));
                 });
             });
@@ -121,8 +128,8 @@ class EnabledForecastConfigurationTest {
                     softly.assertThat(RouteLanes.QUEUE_CAPACITY).isEqualTo(1_000);
                     softly.assertThat(ScoringExecutor.QUEUE_CAPACITY).isEqualTo(10_000);
                     softly.assertThat(flushes).singleElement().satisfies(flush -> {
-                        assertThat(flush.getIntervalDuration()).isEqualTo(Duration.ofSeconds(5));
-                        assertThat(flush.getInitialDelayDuration()).isEqualTo(Duration.ofSeconds(5));
+                        softly.assertThat(flush.getIntervalDuration()).isEqualTo(Duration.ofSeconds(5));
+                        softly.assertThat(flush.getInitialDelayDuration()).isEqualTo(Duration.ofSeconds(5));
                     });
                 });
             });
@@ -130,15 +137,25 @@ class EnabledForecastConfigurationTest {
 
     @Test
     void 읽지_않는_설정_키가_남아_있어도_예보가_켜져_있으면_등록한다() {
-        runner.withPropertyValues("forecast.enabled=true", "forecast.compact-settlement-write=true",
-                "forecast.settlement-interval=0s", "forecast.settlement-minimum-interval=0s",
-                "forecast.pending-limit=0", "forecast.arrival-limit=0")
+        runner.withPropertyValues(
+                "forecast.enabled=true",
+                "forecast.compact-settlement-write=true",
+                "forecast.settlement-interval=0s",
+                "forecast.settlement-minimum-interval=0s",
+                "forecast.pending-limit=0",
+                "forecast.arrival-limit=0"
+        )
             .run(context -> {
                 assertThat(context).hasNotFailed();
-                assertThat(context).hasSingleBean(RouteLanes.class);
-                assertThat(context).hasSingleBean(ScoringExecutor.class);
-                assertThat(context).hasSingleBean(ScoringJob.class);
-                assertThat(context).getBean(ObservationDeliveryHook.class).isInstanceOf(ForecastTrigger.class);
+                assertSoftly(softly -> {
+                    softly.check(() -> assertThat(context).hasSingleBean(RouteLanes.class));
+                    softly.check(() -> assertThat(context).hasSingleBean(ScoringExecutor.class));
+                    softly.check(() -> assertThat(context).hasSingleBean(ScoringJob.class));
+                    softly.check(
+                        () -> assertThat(context).getBean(ObservationChangeListener.class)
+                            .isInstanceOf(ForecastScheduler.class)
+                    );
+                });
             });
     }
 
@@ -146,7 +163,7 @@ class EnabledForecastConfigurationTest {
     void 노선별_실행_줄_수가_1보다_작으면_기동하지_않는다() {
         runner.withPropertyValues("forecast.enabled=true", "forecast.lanes=0")
             .run(context -> assertThat(context).hasFailed().getFailure().rootCause()
-                .hasMessage("forecast.lanes 는 1 이상이어야 한다: 0"));
+                .hasMessage("forecast.lanes는 1 이상이어야 한다: 0"));
     }
 
     @Test
@@ -178,7 +195,11 @@ class EnabledForecastConfigurationTest {
         AtomicBoolean acceptedAfterClose = new AtomicBoolean(true);
 
         // when
-        runner.withBean("dataSource", HikariDataSource.class, () -> new RecordingPool(events))
+        runner.withBean(
+            "dataSource",
+            HikariDataSource.class,
+            () -> new RecordingPool(events)
+        )
             .withPropertyValues("forecast.enabled=true", "forecast.lanes=1")
             .run(context -> {
                 RouteLanes lanes = context.getBean(RouteLanes.class);
@@ -201,7 +222,7 @@ class EnabledForecastConfigurationTest {
                 .filteredOn(event -> !event.equals("event_scored"))
                 .containsExactly("running_finished", "pool_closed");
             softly.assertThat(acceptedAfterClose).isFalse();
-            softly.assertThat(eventAccepted).as("채점 줄은 실행 줄이 돌던 일을 끝낼 때까지 사건을 받는다").isTrue();
+            softly.assertThat(eventAccepted).as("정산 큐는 예보 실행기가 현재 작업을 마칠 때까지 이벤트를 받는다").isTrue();
         });
     }
 
@@ -212,7 +233,11 @@ class EnabledForecastConfigurationTest {
         AtomicBoolean accepted = new AtomicBoolean();
 
         // when
-        runner.withBean("dataSource", HikariDataSource.class, () -> new RecordingPool(events))
+        runner.withBean(
+            "dataSource",
+            HikariDataSource.class,
+            () -> new RecordingPool(events)
+        )
             .withPropertyValues("forecast.enabled=true", "forecast.lanes=1")
             .run(context -> {
                 RouteLanes lanes = context.getBean(RouteLanes.class);
@@ -251,8 +276,8 @@ class EnabledForecastConfigurationTest {
     }
 
     /**
-     * 실행 줄이 닫히고 기다리던 일을 모두 버린 것을 본 뒤에도 잠시 더 돈다. 닫는 쪽이 기다리지 않으면 그사이 연결 풀이 먼저 닫힌다.
-     * 실행 줄은 스케줄러가 돌던 회차를 끝낸 뒤에 닫히므로, 회차가 넘긴 일이 이것을 기다리면 회차보다 늦게 끝난다. 컨텍스트는 시험이
+     * 실행기가 종료되고 기다리던 일을 모두 버린 것을 본 뒤에도 잠시 더 돈다. 닫는 쪽이 기다리지 않으면 그사이 연결 풀이 먼저 닫힌다.
+     * 실행기는 스케줄러가 돌던 회차를 끝낸 뒤에 닫히므로, 회차가 넘긴 일이 이것을 기다리면 회차보다 늦게 끝난다. 컨텍스트는 시험이
      * 끝날 때 반드시 닫히므로 한도 없이 기다린다.
      */
     private static void untilClosed(RouteLanes lanes) {
@@ -270,8 +295,9 @@ class EnabledForecastConfigurationTest {
         }
     }
 
-    /** 연결을 맺지 않는 실제 풀이다. 닫힌 시점만 적는다. */
+    /** 연결을 맺지 않는 실제 풀이다. 닫힌 시점만 기록한다. */
     private static final class RecordingPool extends HikariDataSource {
+
         private final List<String> events;
 
         private RecordingPool(List<String> events) {
@@ -286,6 +312,7 @@ class EnabledForecastConfigurationTest {
     }
 
     private static final class NoForecasts implements RunForecasts {
+
         @Override
         public void batchStored(final long observationBatchId, final long routeVersionId) {
         }
@@ -296,6 +323,7 @@ class EnabledForecastConfigurationTest {
     }
 
     private static final class NoCycle implements ScoringCycle {
+
         @Override
         public boolean start() {
             return true;

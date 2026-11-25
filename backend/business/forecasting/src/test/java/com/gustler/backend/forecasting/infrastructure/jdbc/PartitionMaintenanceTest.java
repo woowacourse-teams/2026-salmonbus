@@ -36,6 +36,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 @ForecastingIntegrationTest
 class PartitionMaintenanceTest {
+
     /** 한국 시각 2030-01-01 23:59:59. 다른 시험의 날짜와 겹치지 않게 먼 날짜를 쓴다. */
     private static final Instant BEFORE_KOREAN_MIDNIGHT = Instant.parse("2030-01-01T14:59:59Z");
     private static final Instant AT_KOREAN_MIDNIGHT = Instant.parse("2030-01-01T15:00:00Z");
@@ -50,6 +51,7 @@ class PartitionMaintenanceTest {
     @Autowired
     private TestDatabase database;
 
+    /** 마이그레이션에서 만든 관측 파티션을 보존하기 위해 테스트가 만든 2030년 파티션만 정리한다. */
     @AfterEach
     void 만든_날짜_파티션과_기본_파티션의_줄을_지운다() {
         for (String table : PartitionMaintenance.TABLES) {
@@ -62,7 +64,6 @@ class PartitionMaintenanceTest {
             }
             jdbcClient.sql("DELETE FROM " + table + "_default").update();
         }
-        // 관측 테이블에는 마이그레이션이 만든 날짜 파티션이 있다. 시험이 만든 2030년 파티션만 지운다.
         for (String table : PartitionMaintenance.OBSERVATION_TABLES) {
             for (String partition : partitionsOf(table)) {
                 if (partition.startsWith(table + "_p2030")) {
@@ -87,12 +88,20 @@ class PartitionMaintenanceTest {
             softly.assertThat(maintenance.managedTables()).containsExactlyElementsOf(tables);
             softly.assertThat(actual.created()).hasSize(tables.size() * (PartitionMaintenance.DAYS_AHEAD + 1));
             softly.assertThat(actual.failed()).isEmpty();
-            softly.assertThat(partitionsOf("stop_pass")).containsExactly("stop_pass_p20300101", "stop_pass_p20300102",
-                "stop_pass_p20300103", "stop_pass_p20300104");
-            softly.assertThat(partitionsOf("vehicle_observation")).contains("vehicle_observation_p20300101",
-                "vehicle_observation_p20300102", "vehicle_observation_p20300103", "vehicle_observation_p20300104");
+            softly.assertThat(partitionsOf("stop_pass")).containsExactly(
+                    "stop_pass_p20300101",
+                    "stop_pass_p20300102",
+                    "stop_pass_p20300103",
+                    "stop_pass_p20300104"
+            );
+            softly.assertThat(partitionsOf("vehicle_observation")).contains(
+                    "vehicle_observation_p20300101",
+                    "vehicle_observation_p20300102",
+                    "vehicle_observation_p20300103",
+                    "vehicle_observation_p20300104"
+            );
             softly.assertThat(actual.defaultRows()).containsOnlyKeys(tables)
-                .allSatisfy((table, rows) -> assertThat(rows).isZero());
+                .allSatisfy((table, rows) -> softly.assertThat(rows).isZero());
         });
     }
 
@@ -165,10 +174,15 @@ class PartitionMaintenanceTest {
         maintenanceAt(AT_KOREAN_MIDNIGHT).maintain();
 
         // then
-        assertThat(partitionsOf("forecast_record")).containsExactly("forecast_record_p20300102",
-            "forecast_record_p20300103", "forecast_record_p20300104", "forecast_record_p20300105");
+        assertThat(partitionsOf("forecast_record")).containsExactly(
+                "forecast_record_p20300102",
+                "forecast_record_p20300103",
+                "forecast_record_p20300104",
+                "forecast_record_p20300105"
+        );
     }
 
+    /** 나중에 잠금을 얻은 인스턴스는 생성을 건너뛰거나 이미 존재하는 파티션을 다시 확인한다. */
     @Test
     void 두_인스턴스가_같은_파티션을_동시에_만들어도_실패하지_않는다() throws Exception {
         // given
@@ -188,12 +202,13 @@ class PartitionMaintenanceTest {
             actual.addAll(two.get(30, TimeUnit.SECONDS));
 
             // then
-            // 뒤늦게 잠금을 얻은 쪽은 IF NOT EXISTS 로 건너뛰거나 "이미 있음"으로 실패한 뒤 다시 확인한다.
-            // 어느 쪽도 실패가 아니다.
             assertSoftly(softly -> {
                 softly.assertThat(actual).doesNotContain(PartitionMaintenance.Outcome.FAILED);
                 softly.assertThat(PartitionMaintenance.TABLES).allSatisfy(table ->
-                    assertThat(partitionsOf(table)).containsExactly(PartitionMaintenance.partitionName(table, DAY)));
+                    softly.assertThat(partitionsOf(table)).containsExactly(PartitionMaintenance.partitionName(
+                        table,
+                        DAY
+                    )));
             });
         } finally {
             executor.shutdownNow();
@@ -221,8 +236,13 @@ class PartitionMaintenanceTest {
             softly.assertThat(actual.defaultRows()).containsEntry("forecast_unresolved", 1L);
             softly.assertThat(partitionsOf("forecast_unresolved")).containsExactly("forecast_unresolved_p20300102",
                 "forecast_unresolved_p20300103", "forecast_unresolved_p20300104");
-            softly.assertThat(meters.counter("salmonbus.partition.failures", "table", "forecast_unresolved",
-                "reason", "default_rows").count()).isOne();
+            softly.assertThat(meters.counter(
+                    "salmonbus.partition.failures",
+                    "table",
+                    "forecast_unresolved",
+                    "reason",
+                    "default_rows"
+            ).count()).isOne();
             softly.assertThat(meters.get("salmonbus.partition.default.rows")
                 .tag("table", "forecast_unresolved").gauge().value()).isOne();
         });
@@ -253,12 +273,21 @@ class PartitionMaintenanceTest {
             softly.assertThat(actual.defaultRows()).containsEntry("forecast_unresolved", 0L);
             softly.assertThat(maintenance.ensure("forecast_unresolved", DAY))
                 .isEqualTo(PartitionMaintenance.Outcome.EXISTING);
-            softly.assertThat(partitionsOf("forecast_unresolved")).containsExactly("forecast_unresolved_p20300101",
-                "forecast_unresolved_p20300102", "forecast_unresolved_p20300103", "forecast_unresolved_p20300104");
+            softly.assertThat(partitionsOf("forecast_unresolved")).containsExactly(
+                    "forecast_unresolved_p20300101",
+                    "forecast_unresolved_p20300102",
+                    "forecast_unresolved_p20300103",
+                    "forecast_unresolved_p20300104"
+            );
             softly.assertThat(jdbcClient.sql("SELECT count(*) FROM forecast_unresolved_p20300101").query(Long.class)
                 .single()).isOne();
-            softly.assertThat(meters.counter("salmonbus.partition.failures", "table", "forecast_unresolved",
-                "reason", "default_rows").count()).isOne();
+            softly.assertThat(meters.counter(
+                    "salmonbus.partition.failures",
+                    "table",
+                    "forecast_unresolved",
+                    "reason",
+                    "default_rows"
+            ).count()).isOne();
             softly.assertThat(meters.get("salmonbus.partition.default.rows")
                 .tag("table", "forecast_unresolved").gauge().value()).isZero();
         });
@@ -286,8 +315,13 @@ class PartitionMaintenanceTest {
             assertSoftly(softly -> {
                 softly.assertThat(actual).isEqualTo(PartitionMaintenance.Outcome.FAILED);
                 softly.assertThat(partitionsOf("pass_label")).isEmpty();
-                softly.assertThat(meters.counter("salmonbus.partition.failures", "table", "pass_label",
-                    "reason", "permission").count()).isOne();
+                softly.assertThat(meters.counter(
+                        "salmonbus.partition.failures",
+                        "table",
+                        "pass_label",
+                        "reason",
+                        "permission"
+                ).count()).isOne();
             });
         } finally {
             jdbcClient.sql("DROP OWNED BY " + role).update();
@@ -320,7 +354,7 @@ class PartitionMaintenanceTest {
                 softly.assertThat(actual.failed()).isEmpty();
                 softly.assertThat(actual.defaultRows()).isEmpty();
                 softly.assertThat(PartitionMaintenance.TABLES)
-                    .allSatisfy(table -> assertThat(partitionsOf(table)).isEmpty());
+                    .allSatisfy(table -> softly.assertThat(partitionsOf(table)).isEmpty());
                 softly.assertThat(jdbcClient.sql("SELECT count(*) FROM pg_class WHERE relnamespace = ?::regnamespace")
                     .param(schema).query(Long.class).single()).isEqualTo(2);
             });
@@ -356,15 +390,26 @@ class PartitionMaintenanceTest {
             assertSoftly(softly -> {
                 softly.assertThat(maintenance.managedTables())
                     .containsExactlyElementsOf(PartitionMaintenance.OBSERVATION_TABLES);
-                softly.assertThat(actual.created()).containsExactly("observation_batch_p20300101",
-                    "observation_batch_p20300102", "observation_batch_p20300103", "observation_batch_p20300104",
-                    "vehicle_observation_p20300101", "vehicle_observation_p20300102", "vehicle_observation_p20300103",
-                    "vehicle_observation_p20300104");
+                softly.assertThat(actual.created()).containsExactly(
+                        "observation_batch_p20300101",
+                        "observation_batch_p20300102",
+                        "observation_batch_p20300103",
+                        "observation_batch_p20300104",
+                        "vehicle_observation_p20300101",
+                        "vehicle_observation_p20300102",
+                        "vehicle_observation_p20300103",
+                        "vehicle_observation_p20300104"
+                );
                 softly.assertThat(actual.failed()).isEmpty();
                 softly.assertThat(actual.defaultRows()).containsExactlyInAnyOrderEntriesOf(
-                    Map.of("observation_batch", 0L, "vehicle_observation", 1L));
+                    Map.of(
+                            "observation_batch",
+                            0L,
+                            "vehicle_observation",
+                            1L
+                    ));
                 softly.assertThat(PartitionMaintenance.TABLES)
-                    .allSatisfy(table -> assertThat(partitionsOf(table)).isEmpty());
+                    .allSatisfy(table -> softly.assertThat(partitionsOf(table)).isEmpty());
             });
         } finally {
             jdbcClient.sql("DROP SCHEMA " + schema + " CASCADE").update();
