@@ -55,10 +55,7 @@ describe("createPageLoader", () => {
 
   test("미리 받기만 한 load가 실패하면 다음 load가 다시 import한다", async () => {
     const first = deferred<string>();
-    const load = jest
-      .fn<() => Promise<string>>()
-      .mockReturnValueOnce(first.promise)
-      .mockResolvedValueOnce("page");
+    const load = jest.fn<() => Promise<string>>().mockReturnValueOnce(first.promise).mockResolvedValueOnce("page");
     const loader = createPageLoader(load);
 
     loader.preload();
