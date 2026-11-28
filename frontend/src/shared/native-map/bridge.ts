@@ -1,7 +1,6 @@
 import { createBridgeId, isSupportedInApp, sendToApp, subscribeToApp, type BridgeWindow } from "../bridge/bridge";
 import type { AppCommandType, BridgeMessage } from "../bridge/bridge.types";
-import { flushStartupDom, startupMarker } from "../startup/startupMarks";
-import { createNativeMapStageTracker, type NativeMapStageTracker } from "./nativeMapStages";
+import type { NativeMapStageTracker } from "./nativeMapStages";
 import type { NativeMapCommands, NativeMapEvent, NativeMapEvents } from "./protocol";
 
 // NativeMapCommands에 명령이 늘면 여기서 tsc가 막는다. 앱의 app/native-map/nativeMapMessages.ts 목록도 같이 늘린다.
@@ -62,10 +61,7 @@ function observeStage(observe: () => void) {
 
 export function createNativeMapChannel(
   bridgeWindow: BridgeWindow & EventTarget = window,
-  stages: NativeMapStageTracker = createNativeMapStageTracker((name) => {
-    flushStartupDom();
-    startupMarker.mark(name);
-  }),
+  stages?: NativeMapStageTracker,
 ): NativeMapChannel {
   const sessionId = createBridgeId();
   const listeners = new Set<(event: NativeMapEvent) => void>();
@@ -75,7 +71,7 @@ export function createNativeMapChannel(
     if (destroyed) return;
     const event = nativeMapEventFrom(message, sessionId);
     if (event === null) return;
-    observeStage(() => stages.received(event));
+    if (stages !== undefined) observeStage(() => stages.received(event));
     listeners.forEach((listener) => listener(event));
   }, bridgeWindow);
   return {
@@ -85,7 +81,7 @@ export function createNativeMapChannel(
       revision += 1;
       sendToApp(`map.${type}`, { ...payload, sessionId, revision }, bridgeWindow);
       const sent = revision;
-      observeStage(() => stages.sent(type, payload, sent));
+      if (stages !== undefined) observeStage(() => stages.sent(type, payload, sent));
       return revision;
     },
     subscribe(listener) {

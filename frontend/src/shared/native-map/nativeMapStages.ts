@@ -12,32 +12,34 @@ interface SentLayout {
 }
 
 function stopCountOf(type: keyof NativeMapCommands, payload: unknown): number | null {
-  if (type === "mount") return (payload as NativeMapCommands["mount"]).stops.length;
   if (type === "mountHome") return (payload as NativeMapCommands["mountHome"]).content.stations.stops.length;
   if (type === "updateHome") return (payload as NativeMapCommands["updateHome"]).stations?.stops.length ?? null;
   return null;
 }
 
-export function createNativeMapStageTracker(mark: (name: StartupMarkName) => void): NativeMapStageTracker {
+export function createNativeMapStageTracker(mark: (name: StartupMarkName) => boolean): NativeMapStageTracker {
+  let ownsStartupMarks = false;
   let ready = false;
   let stopsSent = false;
   let appliedOpen = false;
   let interactive = false;
   let layouts: SentLayout[] = [];
   const settle = () => {
-    if (interactive || !ready || !stopsSent || !appliedOpen) return;
+    if (!ownsStartupMarks || interactive || !ready || !stopsSent || !appliedOpen) return;
     interactive = true;
     mark(STARTUP_MARKS.mapStopsInteractive);
   };
   return {
     sent(type, payload, revision) {
-      if (type === "mount" || type === "mountHome") {
-        mark(STARTUP_MARKS.mapNativeMount);
+      if (type === "mountHome") {
+        if (!ownsStartupMarks) ownsStartupMarks = mark(STARTUP_MARKS.mapNativeMount);
+        if (!ownsStartupMarks) return;
         ready = false;
         stopsSent = false;
         appliedOpen = false;
         layouts = [];
       }
+      if (!ownsStartupMarks) return;
       if (type === "layout") {
         const layout = payload as NativeMapCommands["layout"];
         layouts.push({ revision, open: !layout.captureAll && !layout.transitioning });
@@ -47,6 +49,7 @@ export function createNativeMapStageTracker(mark: (name: StartupMarkName) => voi
       settle();
     },
     received(event) {
+      if (!ownsStartupMarks) return;
       if (event.type === "ready") {
         mark(STARTUP_MARKS.mapNativeReady);
         ready = true;

@@ -48,7 +48,15 @@ function fakeHtml() {
 
 function recorder() {
   const names: StartupMarkName[] = [];
-  return { names, marker: { mark: (name: StartupMarkName) => void names.push(name) } };
+  return {
+    names,
+    marker: {
+      mark: (name: StartupMarkName) => {
+        names.push(name);
+        return true;
+      },
+    },
+  };
 }
 
 afterEach(() => {
@@ -81,20 +89,20 @@ describe("시작 마커", () => {
   it("이름마다 처음 한 번만 detail 없이 찍는다", () => {
     const mark = jest.fn<(name: string) => void>();
     const marker = createStartupMarker({ mark } as unknown as Pick<Performance, "mark">);
-    marker.mark(STARTUP_MARKS.webEntry);
-    marker.mark(STARTUP_MARKS.webEntry);
-    marker.mark(STARTUP_MARKS.webFirstCommit);
+    expect(marker.mark(STARTUP_MARKS.webEntry)).toBe(true);
+    expect(marker.mark(STARTUP_MARKS.webEntry)).toBe(false);
+    expect(marker.mark(STARTUP_MARKS.webFirstCommit)).toBe(true);
     expect(mark.mock.calls).toEqual([[STARTUP_MARKS.webEntry], [STARTUP_MARKS.webFirstCommit]]);
   });
 
   it("performance가 없거나 mark가 실패해도 예외를 내지 않는다", () => {
-    expect(() => createStartupMarker(undefined).mark(STARTUP_MARKS.webEntry)).not.toThrow();
+    expect(createStartupMarker(undefined).mark(STARTUP_MARKS.webEntry)).toBe(false);
     const failing = createStartupMarker({
       mark: () => {
         throw new Error("mark");
       },
     } as unknown as Pick<Performance, "mark">);
-    expect(() => failing.mark(STARTUP_MARKS.webEntry)).not.toThrow();
+    expect(failing.mark(STARTUP_MARKS.webEntry)).toBe(false);
   });
 });
 
@@ -133,27 +141,36 @@ describe("시작 DOM 관찰", () => {
     expect(FakeObserver.all.some((observer) => observer.target === root)).toBe(false);
   });
 
-  it.each(["data-native-home-map", "data-shared-native-map-ready"])(
-    "html의 %s가 true가 되면 투명화를 한 번 찍는다",
-    (attribute) => {
-      Object.assign(globalThis, { MutationObserver: FakeObserver });
-      const { html, attributes } = fakeHtml();
-      const { names, marker } = recorder();
-      observeStartupDom(fakeRoot().root, html, marker);
-      const htmlObserver = FakeObserver.all.find((observer) => observer.target === html);
-      expect(htmlObserver?.options).toEqual({
-        attributes: true,
-        attributeFilter: ["data-native-home-map", "data-shared-native-map-ready"],
-      });
-      attributes.set(attribute, "false");
-      notify(html);
-      expect(names).toEqual([]);
-      attributes.set(attribute, "true");
-      notify(html);
-      notify(html);
-      expect(names).toEqual([STARTUP_MARKS.mapWebTransparent]);
-    },
-  );
+  it("html의 data-native-home-map이 true가 되면 투명화를 한 번 찍는다", () => {
+    Object.assign(globalThis, { MutationObserver: FakeObserver });
+    const { html, attributes } = fakeHtml();
+    const { names, marker } = recorder();
+    observeStartupDom(fakeRoot().root, html, marker);
+    const htmlObserver = FakeObserver.all.find((observer) => observer.target === html);
+    expect(htmlObserver?.options).toEqual({
+      attributes: true,
+      attributeFilter: ["data-native-home-map"],
+    });
+    attributes.set("data-native-home-map", "false");
+    notify(html);
+    expect(names).toEqual([]);
+    attributes.set("data-native-home-map", "true");
+    notify(html);
+    notify(html);
+    expect(names).toEqual([STARTUP_MARKS.mapWebTransparent]);
+  });
+
+  it("판정보드 지도 속성만 true가 되면 web-transparent를 찍지 않는다", () => {
+    Object.assign(globalThis, { MutationObserver: FakeObserver });
+    const { html, attributes } = fakeHtml();
+    const { names, marker } = recorder();
+    const stop = observeStartupDom(fakeRoot().root, html, marker);
+    attributes.set("data-shared-native-map-ready", "true");
+    notify(html);
+    flushStartupDom();
+    expect(names).toEqual([]);
+    stop();
+  });
 
   it("flushStartupDom은 관찰 콜백을 기다리지 않고 지금 DOM으로 바로 찍는다", () => {
     Object.assign(globalThis, { MutationObserver: FakeObserver });

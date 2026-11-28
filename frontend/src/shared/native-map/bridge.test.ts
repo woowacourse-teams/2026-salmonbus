@@ -135,7 +135,10 @@ describe("native map 채널의 단계 추적", () => {
     const names: StartupMarkName[] = [];
     const channel = createNativeMapChannel(
       bridgeWindow,
-      createNativeMapStageTracker((name) => void names.push(name)),
+      createNativeMapStageTracker((name) => {
+        names.push(name);
+        return true;
+      }),
     );
     const order: string[] = [];
     postMessage.mockImplementation(() => void order.push("post"));
@@ -156,6 +159,22 @@ describe("native map 채널의 단계 추적", () => {
     });
     expect(order).toEqual(["post", "listener", "post", "listener"]);
     channel.destroy();
+  });
+
+  it("추적기 없이 만든 채널은 시작 마커를 찍지 않는다", () => {
+    const { bridgeWindow } = appWindow([...NATIVE_MAP_CAPABILITIES, ...NATIVE_HOME_MAP_CAPABILITIES]);
+    const markSpy = jest.spyOn(performance, "mark");
+    try {
+      const channel = createNativeMapChannel(bridgeWindow);
+      channel.send("mountHome", { content, camera });
+      reply(bridgeWindow, channel.sessionId, "map.ready");
+      const layoutRevision = channel.send("layout", layout);
+      reply(bridgeWindow, channel.sessionId, "map.ack", { appliedRevision: layoutRevision });
+      expect(markSpy).not.toHaveBeenCalled();
+      channel.destroy();
+    } finally {
+      markSpy.mockRestore();
+    }
   });
 
   it("추적기가 실패해도 메시지와 이벤트 전달은 그대로다", () => {

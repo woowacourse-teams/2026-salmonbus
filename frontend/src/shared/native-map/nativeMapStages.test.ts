@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { STARTUP_MARKS, type StartupMarkName } from "../startup/startupMarks";
+import { STARTUP_MARKS, createStartupMarker, type StartupMarkName } from "../startup/startupMarks";
 import { createNativeMapStageTracker } from "./nativeMapStages";
 import type { NativeMapCommands, NativeMapLayout } from "./protocol";
 
@@ -26,7 +26,10 @@ function layout(captureAll: boolean, transitioning = false): NativeMapLayout {
 
 function setup() {
   const names: StartupMarkName[] = [];
-  const tracker = createNativeMapStageTracker((name) => void names.push(name));
+  const tracker = createNativeMapStageTracker((name) => {
+    names.push(name);
+    return true;
+  });
   return { names, tracker };
 }
 
@@ -106,18 +109,30 @@ describe("native 지도 단계 추적", () => {
     expect(names.at(-1)).toBe(STARTUP_MARKS.mapStopsInteractive);
   });
 
-  it("판정보드 mount의 정류장도 센다", () => {
+  it("native-mount를 찍지 못한 추적기는 ready, error, stops-interactive를 찍지 않는다", () => {
+    const names: StartupMarkName[] = [];
+    const marker = createStartupMarker({
+      mark: (name: string) => void names.push(name as StartupMarkName),
+    } as unknown as Pick<Performance, "mark">);
+    const firstTracker = createNativeMapStageTracker(marker.mark);
+    const secondTracker = createNativeMapStageTracker(marker.mark);
+    firstTracker.sent("mountHome", home(1), 1);
+    secondTracker.sent("mountHome", home(1), 1);
+    secondTracker.received(ready);
+    secondTracker.received(error);
+    secondTracker.sent("layout", layout(false), 2);
+    secondTracker.received(ack(2));
+    expect(names).toEqual([STARTUP_MARKS.mapNativeMount]);
+  });
+
+  it("판정보드 mount와 그 뒤 이벤트는 마커를 찍지 않는다", () => {
     const { names, tracker } = setup();
     const scene = { stops: [{}] } as unknown as NativeMapCommands["mount"];
     tracker.sent("mount", scene, 1);
     tracker.received(ready);
     tracker.sent("layout", layout(false), 2);
     tracker.received(ack(2));
-    expect(names).toEqual([
-      STARTUP_MARKS.mapNativeMount,
-      STARTUP_MARKS.mapNativeReady,
-      STARTUP_MARKS.mapStopsInteractive,
-    ]);
+    expect(names).toEqual([]);
   });
 
   it("error 뒤에는 찍지 않고, 다시 mount해 조건이 모이면 한 번만 찍는다", () => {

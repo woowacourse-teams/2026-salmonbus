@@ -62,11 +62,11 @@ Simulator에서는 아래 payload를 파일로 저장하고 `xcrun simctl push b
 | `salmon:web:entry` | 웹 엔트리 실행 |
 | `salmon:web:first-commit` | `#root`에 첫 자식이 생김 |
 | `salmon:web:shell-commit` | `#root` 안에 첫 `<main>`이 생김. 오류 화면의 `<main>`도 포함 |
-| `salmon:map:native-mount` | 지도 채널이 `map.mount` 또는 `map.mountHome`을 처음 보냄 |
-| `salmon:map:native-ready` | `map.ready`를 처음 받음 |
-| `salmon:map:native-error` | `map.error`를 처음 받음 |
-| `salmon:map:web-transparent` | `html`의 `data-native-home-map` 또는 `data-shared-native-map-ready`가 `"true"`가 됨 |
-| `salmon:map:stops-interactive` | native 경로에서 ready를 받았고, 정류장이 1개 이상 실린 `mountHome`·`updateHome`·`mount`를 보냈고, `captureAll`과 `transitioning`이 모두 false인 `map.layout`이 적용됐다는 `map.ack`를 받음 |
+| `salmon:map:native-mount` | 이 문서에서 처음 만든 홈 지도 채널이 `map.mountHome`을 처음 보냄. 판정보드 지도는 찍지 않음 |
+| `salmon:map:native-ready` | `native-mount`를 찍은 홈 지도 채널이 `map.ready`를 처음 받음 |
+| `salmon:map:native-error` | `native-mount`를 찍은 홈 지도 채널이 `map.error`를 처음 받음 |
+| `salmon:map:web-transparent` | `html`의 `data-native-home-map`이 `"true"`가 됨 |
+| `salmon:map:stops-interactive` | `native-mount`를 찍은 홈 지도 채널이 ready를 받았고, 정류장이 1개 이상 실린 `mountHome`, `updateHome`을 보냈고, `captureAll`과 `transitioning`이 모두 false인 `map.layout`이 적용됐다는 `map.ack`를 받음 |
 | `salmon:map:sdk-start`, `sdk-ready`, `create`, `init` | 이름만 정해 둠. 웹 지도 SDK 경로의 호출 지점은 아직 없음 |
 
 `stops-interactive`는 메시지 왕복으로 추정한 값입니다. 실제 핀 탭 가능 시점은 실기기 영상으로 확인합니다. 마커는 Safari Web Inspector나 브라우저 개발자 도구에서 `performance.getEntriesByType("mark")`로 읽습니다.

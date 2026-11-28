@@ -74,15 +74,13 @@ test.describe("브라우저", () => {
 test.describe("판정보드 지도만 지원하는 구버전 앱", () => {
   test.use({ appCapabilities: NATIVE_MAP_CAPABILITIES });
 
-  test("홈은 웹 마커만, 판정보드는 native 지도 마커를 더 찍는다", async ({ page }) => {
+  test("홈과 판정보드 모두 웹 마커만 찍는다", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("main").first()).toBeVisible();
     await expect.poll(() => startupMarks(page)).toEqual(webMarks);
     await page.goto(`/routes/${routeId}`);
     await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
-    await expect
-      .poll(async () => (await startupMarks(page)).slice(0, 5))
-      .toEqual([...webMarks, STARTUP_MARKS.mapNativeMount, STARTUP_MARKS.mapNativeReady]);
+    await expect.poll(() => startupMarks(page)).toEqual(webMarks);
   });
 });
 
@@ -104,10 +102,13 @@ test.describe("홈 지도까지 지원하는 새 iOS 앱", () => {
     await expect(page.locator('script[src*="oapi.map.naver.com"]')).toHaveCount(0);
   });
 
-  test("판정보드 직접 진입에서도 웹 지도 SDK를 요청하지 않는다", async ({ page, mapRequests }) => {
+  test("판정보드 직접 진입에서는 지도 마커를 찍지 않고 웹 지도 SDK도 요청하지 않는다", async ({
+    page,
+    mapRequests,
+  }) => {
     await page.goto(`/routes/${routeId}`);
     await expect(page.getByRole("button", { name: "현재 위치 보기", exact: true })).toBeEnabled();
-    await expect.poll(() => startupMarks(page)).toContain(STARTUP_MARKS.mapNativeReady);
+    await expect.poll(() => startupMarks(page)).toEqual(webMarks);
     expect(mapRequests).toEqual([]);
     await expect(page.locator('script[src*="oapi.map.naver.com"]')).toHaveCount(0);
   });

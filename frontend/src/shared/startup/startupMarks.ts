@@ -16,19 +16,20 @@ export const STARTUP_MARKS = {
 export type StartupMarkName = (typeof STARTUP_MARKS)[keyof typeof STARTUP_MARKS];
 
 export interface StartupMarker {
-  mark: (name: StartupMarkName) => void;
+  mark: (name: StartupMarkName) => boolean;
 }
 
 export function createStartupMarker(clock: Pick<Performance, "mark"> | undefined): StartupMarker {
   const marked = new Set<StartupMarkName>();
   return {
     mark(name) {
-      if (clock === undefined || marked.has(name)) return;
+      if (clock === undefined || marked.has(name)) return false;
       marked.add(name);
       try {
         clock.mark(name);
+        return true;
       } catch {
-        return;
+        return false;
       }
     },
   };
@@ -42,10 +43,10 @@ export function flushStartupDom() {
   pendingDomChecks.forEach((check) => check());
 }
 
-const TRANSPARENT_ATTRIBUTES = ["data-native-home-map", "data-shared-native-map-ready"] as const;
+const HOME_MAP_TRANSPARENT_ATTRIBUTE = "data-native-home-map";
 
 function isTransparent(html: HTMLElement): boolean {
-  return TRANSPARENT_ATTRIBUTES.some((attribute) => html.getAttribute(attribute) === "true");
+  return html.getAttribute(HOME_MAP_TRANSPARENT_ATTRIBUTE) === "true";
 }
 
 export function observeStartupDom(
@@ -89,7 +90,7 @@ export function observeStartupDom(
     pendingDomChecks.add(flushRoot);
   }
   if (!checkHtml()) {
-    htmlObserver.observe(html, { attributes: true, attributeFilter: [...TRANSPARENT_ATTRIBUTES] });
+    htmlObserver.observe(html, { attributes: true, attributeFilter: [HOME_MAP_TRANSPARENT_ATTRIBUTE] });
     pendingDomChecks.add(flushHtml);
   }
   return () => {

@@ -17,7 +17,9 @@ import { isMapRotated } from "@/shared/map/mapRotation";
 import { RetryButton } from "@/shared/components/RetryButton";
 import { recordInputMethod } from "@/shared/input-method/inputMethod";
 import { createNativeMapChannel, type NativeMapChannel } from "@/shared/native-map/bridge";
+import { createNativeMapStageTracker } from "@/shared/native-map/nativeMapStages";
 import { rectFor, startOverlayLayoutBridge } from "@/shared/native-map/overlayLayoutBridge";
+import { flushStartupDom, startupMarker } from "@/shared/startup/startupMarks";
 import type {
   NativeCoordinate,
   NativeHomeMapContent,
@@ -220,7 +222,13 @@ export function NativeHomeMap(props: NativeHomeMapProps) {
     const element = region.current;
     if (paused || element === null) return;
     setStatus("loading");
-    const map = createNativeMapChannel();
+    const map = createNativeMapChannel(
+      window,
+      createNativeMapStageTracker((name) => {
+        flushStartupDom();
+        return startupMarker.mark(name);
+      }),
+    );
     channel.current = map;
     let disposed = false;
     let stopLayout = () => {};
