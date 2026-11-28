@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { ApiResult } from "@/shared/api/client";
 import * as api from "@/shared/api/auth.api";
-import type { AuthSession } from "@/shared/api/auth.types";
+import { nextAuthState } from "@/shared/auth/authStatePolicy";
 import { AuthContext, type AuthState } from "@/shared/hooks/useAuth";
 import {
   allowDeviceRegistration,
@@ -18,13 +17,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const current = ++revision.current;
     const result = await api.fetchSession();
     if (current !== revision.current) return;
-    setState(stateOf(result));
+    setState((previous) => nextAuthState(previous, result));
   }, []);
 
   useEffect(() => {
     const current = ++revision.current;
     void api.fetchSession().then((result) => {
-      if (current === revision.current) setState(stateOf(result));
+      if (current === revision.current) setState((previous) => nextAuthState(previous, result));
     });
     const onFocus = () => {
       void reload();
@@ -79,12 +78,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return <AuthContext value={{ state, reload, changeNickname, signOut, withdraw }}>{children}</AuthContext>;
-}
-
-function stateOf(result: ApiResult<AuthSession>): AuthState {
-  if (result.ok)
-    return result.body.authenticated
-      ? { status: "authenticated", member: result.body.member }
-      : { status: "anonymous" };
-  return { status: "status" in result.failure && result.failure.status === 404 ? "unavailable" : "error" };
 }
