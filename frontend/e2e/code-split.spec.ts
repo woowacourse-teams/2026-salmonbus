@@ -302,19 +302,9 @@ const directEntries: { path: string; url?: string; shows: (page: Page) => Return
     shows: (page) => page.getByRole("heading", { name: "3330", exact: true }),
   },
   { path: "/favorites", shows: (page) => page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true }) },
-  {
-    path: "/favorites/groups",
-    shows: (page) => page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true }),
-  },
   { path: "/mypage", shows: guestLogin },
   { path: "/login", shows: (page) => page.getByRole("button", { name: "카카오로 계속하기", exact: true }) },
   { path: "/mypage/nickname", shows: (page) => page.getByRole("heading", { name: "닉네임 수정", exact: true }) },
-  { path: "/favorites/groups/group-1", shows: (page) => page.getByRole("heading", { name: "그룹 관리", exact: true }) },
-  {
-    path: "/mypage/groups/group-1",
-    url: "/favorites/groups/group-1",
-    shows: (page) => page.getByRole("heading", { name: "그룹 관리", exact: true }),
-  },
   { path: "/mypage/whats-new", shows: (page) => page.getByRole("heading", { name: "새 소식", exact: true }) },
 ];
 

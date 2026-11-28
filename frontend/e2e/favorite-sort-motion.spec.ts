@@ -1,14 +1,12 @@
 import { test, expect, storedFavorite } from "./fixtures/favorites";
 import { routeId } from "./fixtures/mock-data";
 
-// 화면, 방향, 모션 설정의 두 값 짝이 모두 한 번씩 나오는 네 조합만 돌린다.
-for (const { path, direction, reducedMotion } of [
-  { path: "/favorites", direction: "down", reducedMotion: "no-preference" },
-  { path: "/favorites", direction: "up", reducedMotion: "reduce" },
-  { path: "/favorites/groups", direction: "down", reducedMotion: "reduce" },
-  { path: "/favorites/groups", direction: "up", reducedMotion: "no-preference" },
+// 방향과 모션 설정의 값이 모두 한 번씩 나오는 두 조합만 돌린다.
+for (const { direction, reducedMotion } of [
+  { direction: "down", reducedMotion: "no-preference" },
+  { direction: "up", reducedMotion: "reduce" },
 ] as const) {
-  test(`${path} ${direction} ${reducedMotion} 카드 정렬은 놓는 순간 되돌아가지 않는다`, async ({
+  test(`/favorites ${direction} ${reducedMotion} 카드 정렬은 놓는 순간 되돌아가지 않는다`, async ({
     page,
     favorites,
     api,
@@ -21,17 +19,13 @@ for (const { path, direction, reducedMotion } of [
       storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 5),
     ];
     favorites.groups.push({ id: "10000000-0000-4000-8000-000000000003", name: "통학", favorites: [] });
-    await page.goto(path);
+    await page.goto("/favorites");
     await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
-    const favoritesTab = path === "/favorites";
-    const editor = page.getByRole("region", {
-      name: favoritesTab ? "즐겨찾기 편집" : "즐겨찾기 그룹 편집",
-      exact: true,
-    });
-    const list = editor.getByRole("list", { name: favoritesTab ? "즐겨찾기 순서" : "그룹 순서", exact: true });
+    const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
+    const list = editor.getByRole("list", { name: "즐겨찾기 순서", exact: true });
     const cards = list.getByRole("listitem");
     await expect(cards).toHaveCount(2);
-    await expect(cards.first()).toContainText(favoritesTab ? first!.name : "즐겨찾기");
+    await expect(cards.first()).toContainText(first!.name);
     await page.evaluate(() => document.fonts.ready);
     await editor.evaluate((element) =>
       Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
@@ -87,14 +81,9 @@ for (const { path, direction, reducedMotion } of [
     if (reducedMotion === "reduce") {
       expect(await list.evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
     }
-    await expect(cards.first()).toContainText(favoritesTab ? second!.name : "통학");
+    await expect(cards.first()).toContainText(second!.name);
     await editor.getByRole("button", { name: "완료", exact: true }).click();
     await expect(editor).toHaveCount(0);
-    if (favoritesTab)
-      expect(favorites.groups[0]!.favorites.map((favorite) => favorite.stopId)).toEqual([
-        second!.stopId,
-        first!.stopId,
-      ]);
-    else expect(favorites.groups.map((group) => group.name)).toEqual(["통학", "즐겨찾기"]);
+    expect(favorites.groups[0]!.favorites.map((favorite) => favorite.stopId)).toEqual([second!.stopId, first!.stopId]);
   });
 }

@@ -655,6 +655,18 @@ test("미분리된 실제 도로 경로를 그대로 표시하고 방향 화살�
   await expect(map(page).locator("[data-marker-kind='arrow']")).toHaveCount(0);
 });
 
+test("표시 보류된 경로는 품질 안내 없이 정류장 목록을 제공한다", async ({ page, api }) => {
+  api.data.geometry.status = "UNAVAILABLE";
+  api.data.geometry.reason = "DISPLAY_WITHHELD";
+  api.data.geometry.paths = null;
+  api.data.geometry.points = [];
+  await openMap(page);
+
+  await expect(map(page).getByTestId("naver-polyline")).toHaveCount(0);
+  await expect(map(page).getByRole("status")).toHaveCount(0);
+  await expect(list(page)).toBeVisible();
+});
+
 test("한 방향의 도로 경로가 없어도 해당 정류장을 표시하고 다른 방향의 경로와 차량을 사용할 수 있다", async ({
   page,
   api,
@@ -668,14 +680,10 @@ test("한 방향의 도로 경로가 없어도 해당 정류장을 표시하고 
   await expect(map(page).locator("button[data-map-stop-sequence='11']")).toBeVisible();
   await expect(map(page).getByRole("button", { name: /부근 버스/ })).toHaveCount(2);
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
-  const notice = map(page).getByRole("status").filter({
-    hasText: "방향별 경로 정보가 없어 버스는 최근 확인된 정류장에 표시해요",
-  });
-  await expect(notice).toBeVisible();
+  await expect(map(page).getByRole("status")).toHaveCount(0);
 
   await tab(page, "DOWN").click();
   await page.clock.runFor(32);
-  await expect(notice).toHaveCount(0);
   await expect(map(page).getByRole("button", { name: /부근 버스, 현재 잔여 좌석 8석/ })).toBeVisible();
   await expect(map(page).getByTestId("naver-polyline")).toHaveCount(2);
 });

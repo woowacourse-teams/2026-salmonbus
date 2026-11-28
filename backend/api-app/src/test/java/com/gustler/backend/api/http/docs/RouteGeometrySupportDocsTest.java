@@ -49,7 +49,7 @@ class RouteGeometrySupportDocsTest {
         assertThat(operation.path("summary")).isEqualTo(shared.path("summary"));
         assertThat(operation.path("description")).isEqualTo(shared.path("description"));
         assertThat(operation.path("description").asString())
-            .contains("41노선", "3,215건", "35,542개", "정적 재생 자료", "초기 수집", "실시간 최신성");
+            .contains("45노선", "3,445건", "38,295개", "정적 재생 자료", "초기 수집", "실시간 최신성");
         for (String code : List.of("200", "409", "503")) {
             assertThat(operation.path("responses").path(code).path("description"))
                 .as("HTTP " + code).isEqualTo(shared.path("responses").path(code).path("description"));

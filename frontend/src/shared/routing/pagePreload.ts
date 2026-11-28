@@ -1,7 +1,7 @@
 import { matchPath } from "react-router";
 import { afterWindowLoad } from "./windowLoad";
 
-export type LazyPageName = "favorites" | "favorite-group" | "mypage" | "login" | "nickname" | "whats-new";
+export type LazyPageName = "favorites" | "mypage" | "login" | "nickname" | "whats-new";
 
 export interface PagePreloadEntry {
   name: LazyPageName;

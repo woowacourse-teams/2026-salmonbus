@@ -16,13 +16,10 @@ export const shell = style({
   paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
 });
 
-export const tabShell = style([shell, { background: vars.color.surface }]);
-
 export const top = style({
   height: "env(safe-area-inset-top, 0px)",
   background: vars.color.brand,
   flexShrink: 0,
-  selectors: { [`${tabShell} &`]: { background: vars.color.surface } },
 });
 
 export const content = style({ padding: `${tabPageTop} ${tabPageInset}`, flex: 1 });

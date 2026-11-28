@@ -662,7 +662,7 @@ class TransitionSqlTest {
             }
 
             // when
-            flyway(single).load().migrate();
+            flyway(single).target("84").load().migrate();
 
             // then
             try (Connection target = single.connection()) {

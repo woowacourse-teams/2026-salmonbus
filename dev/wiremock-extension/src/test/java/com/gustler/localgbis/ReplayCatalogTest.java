@@ -17,7 +17,7 @@ class ReplayCatalogTest {
         var engine = new ReplayEngine(data, new ReplayEngine.Configuration("local-replay-v1", 30, 60),
             Clock.systemUTC(), time::get, "testrun1");
 
-        assertEquals(41, data.routes().size());
+        assertEquals(45, data.routes().size());
         for (var route : data.routes().stream().filter(route -> !ReplayEngine.REPLAY_ROUTES.contains(route.displayName())).toList()) {
             var info = engine.response("route-info", "normal", route.routeId());
             assertEquals(200, info.status());

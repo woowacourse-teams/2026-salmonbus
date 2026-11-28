@@ -1,18 +1,24 @@
 package com.gustler.backend.worker.configuration;
 
+import com.gustler.backend.forecasting.api.model.CheckActiveModelCoverage;
 import com.gustler.backend.gbis.api.GbisClientOptions;
 import com.gustler.backend.gbis.api.GbisKey;
 import com.gustler.backend.gbis.configuration.GbisConfiguration;
+import com.gustler.backend.observations.api.CloseUnfinishedCollections;
+import com.gustler.backend.observations.api.CollectObservations;
 import com.gustler.backend.observations.configuration.ObservationsConfiguration;
 import com.gustler.backend.quota.api.CallQuotaPolicy;
 import com.gustler.backend.quota.configuration.CallQuotaConfiguration;
 import com.gustler.backend.routecatalog.configuration.RouteCatalogConfiguration;
 import com.gustler.backend.worker.scheduling.CollectionScheduler;
+import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.ThreadPoolExecutor.AbortPolicy;
 import java.util.concurrent.TimeUnit;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -20,9 +26,19 @@ import org.springframework.context.annotation.Primary;
 
 /** 수집을 실행하는 진입점에서 명시적으로 가져오는 구성. 자체적으로 스케줄을 등록하지 않는다. */
 @Import({RouteCatalogConfiguration.class, ObservationsConfiguration.class, CallQuotaConfiguration.class,
-    GbisConfiguration.class, CollectionScheduler.class})
+    GbisConfiguration.class})
 @EnableConfigurationProperties(RouteGeometryProperties.class)
 public class CollectionRuntimeConfiguration {
+    @Bean
+    CollectionScheduler collectionScheduler(CollectionProperties properties, CollectObservations collector,
+            CloseUnfinishedCollections unfinished, ObjectProvider<CheckActiveModelCoverage> coverage,
+            @Value("${forecast.enabled:false}") final boolean forecastEnabled) {
+        CheckActiveModelCoverage check = routeIds -> forecastEnabled && Optional.ofNullable(coverage.getIfAvailable())
+            .map(active -> active.coversAll(routeIds))
+            .orElse(false);
+        return new CollectionScheduler(properties, collector, unfinished, check);
+    }
+
     /** 정적 형상 HTTP 대기가 위치 관측 스케줄을 막지 않게 분리한다. */
     @Bean(destroyMethod = "close")
     ExecutorService routeGeometryExecutor() {

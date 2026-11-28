@@ -32,7 +32,22 @@ class FixtureDigestCompatibilityTest {
         assertDoesNotThrow(() -> BasisLifecycle.preserveData(revision(before), revision(after)));
         assertDoesNotThrow(() -> BasisLifecycle.preserveData(revision(after), revision(before)));
         assertEquals("a7dea7fd5aaccbee29e343b932bc658fb20e4131847fd50370e8f5305492513d", before.get("tools/data/routes.json"));
-        assertEquals("0c1d09aec2660e03475c7a82930fc3632432c177b148c7b7d7689f74ffd3997a", before.get("tools/data/catalog-routes.json"));
+        assertEquals("f8c678bb58bc39f1b8dc5dc01c3c903dfdde63391ad42b3c7fe7c03071abcf4d", before.get("tools/data/catalog-routes.json"));
+    }
+
+    @Test
+    void 잠실_정적_카탈로그만_추가한_basis를_교체하거나_복구한다() throws Exception {
+        var after = files(CompatiblePreparation.FORECAST_RECORD_DATA);
+        var before = new TreeMap<>(after);
+        before.put("tools/data/catalog-routes.json", "0c1d09aec2660e03475c7a82930fc3632432c177b148c7b7d7689f74ffd3997a");
+
+        assertDoesNotThrow(() -> BasisLifecycle.preserveData(revision(before), revision(after)));
+        assertDoesNotThrow(() -> BasisLifecycle.preserveData(revision(after), revision(before), true));
+        assertThrows(IllegalArgumentException.class, () -> BasisLifecycle.preserveData(revision(after), revision(before)));
+        var unrelatedChange = new TreeMap<>(after);
+        unrelatedChange.put("tools/data/routes.json", "changed");
+        assertThrows(IllegalArgumentException.class,
+            () -> BasisLifecycle.preserveData(revision(before), revision(unrelatedChange)));
     }
 
     @Test

@@ -99,8 +99,8 @@ class CollectionRoutesTest(unittest.TestCase):
                 payload = {"routes": [{"id": r["routeId"], "displayName": r["displayName"],
                     "status": "FORECAST_READY" if r["routeId"] in supported else "PREPARING"} for r in routes]}
             else:
-                route_id = url.split("/")[-2]
-                seen.append(route_id)
+                route_id, endpoint = url.split("/")[-2:]
+                seen.append((route_id, endpoint))
                 has_model = route_id in supported
                 forecast = {"status": "AVAILABLE" if has_model and forecasts_available else "UNAVAILABLE"}
                 payload = self.body(route_id, "FORECAST_READY" if has_model else "PREPARING", forecast)
@@ -121,13 +121,14 @@ class CollectionRoutesTest(unittest.TestCase):
             checks.verify("http://127.0.0.1:1", data, query)
         return seen, queries
 
-    def test_실제_노선_파일과_합성_API응답으로_20개_전체를_검사한다(self):
+    def test_노선_파일로_공개_25개_노선의_보드를_검사한다(self):
         for hour, forecasts_available in [(8, True), (22, False)]:
             with self.subTest(hour=hour):
                 observed_at = f"2026-11-10T{hour:02d}:09:01.69585+09:00"
                 seen, queries = self.verify_with(observed_at, f"2026-11-10T{hour:02d}:09:03+09:00",
                                                  forecasts_available)
-                self.assertEqual(len(seen), 20)
+                self.assertEqual(len(seen), 25)
+                self.assertEqual({endpoint for _, endpoint in seen}, {"board"})
                 self.assertEqual(len(queries), 1)
                 self.assertIn(f">= {checks.microseconds(checks.parse_observed_at(observed_at))}", queries[0])
 

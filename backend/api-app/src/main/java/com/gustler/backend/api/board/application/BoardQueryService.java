@@ -109,7 +109,8 @@ public class BoardQueryService {
                 continue;
             }
             try {
-                valid.put(routeId, new RouteId(routeId));
+                RouteId id = new RouteId(routeId);
+                valid.put(routeId, id);
             } catch (RuntimeException invalid) {
                 results.put(routeId, BoardBatchRead.failed(invalid));
             }

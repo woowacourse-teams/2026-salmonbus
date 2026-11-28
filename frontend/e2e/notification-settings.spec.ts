@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { defaultGroupId, storedFavorite } from "./fixtures/favorites";
+import { storedFavorite } from "./fixtures/favorites";
 import { test, expect, storedNotification } from "./fixtures/notifications";
 import { routeId } from "./fixtures/mock-data";
 import { captureEnabled } from "./utils/capture";
@@ -58,7 +58,7 @@ async function openInApp(page: Page, app: SimulatedApp = {}) {
   );
 }
 
-test.describe("그룹 편집 화면의 알림 줄", () => {
+test.describe("즐겨찾기 탭 카드의 알림 줄 (그룹 하나)", () => {
   let stopName: string;
   let target: { routeId: string; stopId: string; direction: "UP" | "DOWN" };
 
@@ -74,7 +74,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
   for (const inputMethod of ["keyboard", "pointer"] as const) {
     test(`${inputMethod}로 연 알림 창 제목은 입력 방식에 맞는 포커스 표시를 보인다`, async ({ page }) => {
       await openInApp(page);
-      await page.goto(`/mypage/groups/${defaultGroupId}`);
+      await page.goto("/favorites");
       const trigger = notificationSwitch(page);
       await expect(trigger).toBeVisible();
       if (inputMethod === "keyboard") {
@@ -98,18 +98,10 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     });
   }
 
-  test("브라우저에서는 알림 줄을 숨기고 설정을 읽지 않는다", async ({ page, notifications }) => {
-    notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
-    await expect(page.getByText(stopName, { exact: true })).toBeVisible();
-    await expect(page.getByRole("switch")).toHaveCount(0);
-    expect(notifications.requests).toEqual([]);
-  });
-
   test("알림 권한 명령을 모르는 옛 앱에서는 알림 줄을 숨긴다", async ({ page, notifications }) => {
     await openInApp(page, { capabilities: ["haptic.success", "settings.open"] });
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
-    await expect(page.getByText(stopName, { exact: true })).toBeVisible();
+    await page.goto("/favorites");
+    await expect(page.getByRole("tabpanel").getByText(stopName, { exact: true })).toBeVisible();
     await expect(page.getByRole("switch")).toHaveCount(0);
     expect(notifications.requests).toEqual([]);
   });
@@ -121,7 +113,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
   }) => {
     auth.member = null;
     await openInApp(page, { permission: "granted" });
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await page.goto("/favorites");
     await expect(page.getByRole("link", { name: "로그인 / 회원가입" })).toBeVisible();
     await expect(page.getByRole("switch")).toHaveCount(0);
     expect(notifications.requests).toEqual([]);
@@ -129,7 +121,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
 
   test("알림 창을 열면 포커스가 창 안에 있지만 입력칸에는 없다", async ({ page }) => {
     await openInApp(page);
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await page.goto("/favorites");
     await expect(notificationSwitch(page)).toBeVisible();
     await page.evaluate(() => {
       const focusedTags: string[] = [];
@@ -156,7 +148,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
   test("키보드로 시각 칸에 들어가면 지금 고르는 칸에 포커스 테두리가 보인다", async ({ page, notifications }) => {
     notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
     await openInApp(page);
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await page.goto("/favorites");
     await page.getByRole("button", { name: "평일 07:40", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
     const hour = sheet.getByRole("combobox", { name: "시", exact: true });
@@ -177,7 +169,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
   }) => {
     notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
     await openInApp(page);
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await page.goto("/favorites");
     await expect(notificationSwitch(page)).toBeChecked();
     await page.getByRole("button", { name: "평일 07:40", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
@@ -207,7 +199,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     notifications.settings = [storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"])];
     notifications.mutationError = { status: 422, code: "NOTIFICATION_TARGET_NOT_FAVORITE" };
     await openInApp(page);
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await page.goto("/favorites");
     await page.getByRole("button", { name: "평일 07:40", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
     await sheet.getByRole("combobox", { name: "시", exact: true }).selectOption("08");
@@ -228,7 +220,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     const setting = storedNotification(target, "07:40", ["MON", "TUE", "WED", "THU", "FRI"]);
     notifications.settings = [setting];
     await openInApp(page);
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await page.goto("/favorites");
     await notificationSwitch(page).click();
     await expect(notificationSwitch(page)).not.toBeChecked();
     await expect(page.getByRole("button", { name: "평일 07:40", exact: true })).toBeHidden();
@@ -243,7 +235,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
     notifications,
   }) => {
     await openInApp(page, { permissionAnswer: "undetermined" });
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await page.goto("/favorites");
     await expect(notificationSwitch(page)).not.toBeChecked();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
 
@@ -266,7 +258,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
 
   test("알림을 켜고 권한을 허용하면 기기를 등록한 뒤 설정을 저장한다", async ({ page, notifications }) => {
     await openInApp(page, { permissionAnswer: "granted" });
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await page.goto("/favorites");
     await notificationSwitch(page).click();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
     await sheet.getByRole("button", { name: "저장", exact: true }).click();
@@ -285,7 +277,7 @@ test.describe("그룹 편집 화면의 알림 줄", () => {
 
   test("알림을 켜고 권한을 거절하면 설정 안내를 보이고 알림 API를 부르지 않는다", async ({ page, notifications }) => {
     await openInApp(page, { permissionAnswer: "denied" });
-    await page.goto(`/mypage/groups/${defaultGroupId}`);
+    await page.goto("/favorites");
     await notificationSwitch(page).click();
     const sheet = page.getByRole("dialog", { name: "출발 알림" });
     await sheet.getByRole("button", { name: "저장", exact: true }).click();

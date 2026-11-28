@@ -174,8 +174,10 @@ public final class ConfirmedAlightingAwareWorkerReplay {
             if (onlyRoute != null && !route.path("route").asString().equals(onlyRoute)) {
                 continue;
             }
-            WorkerReplayFixture fixture = WorkerReplayFixture.of(JSON.readTree(verifiedBytes(fixtures, route)));
-            Map<String, Object> result = replay(fixture);
+            JsonNode source = JSON.readTree(verifiedBytes(fixtures, route));
+            WorkerReplayFixture fixture = WorkerReplayFixture.of(source);
+            Map<String, Object> result = new LinkedHashMap<>(replay(fixture));
+            result.put("trace", WorkerReplayTrace.describe(source, route.path("sha256").asString()));
             results.add(result);
             Files.writeString(output.resolve(fixture.route() + ".json"), JSON.writeValueAsString(result));
             System.out.println(JSON.writeValueAsString(result));

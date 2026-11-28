@@ -5,8 +5,7 @@ import { internalPathnameOf, pageNameFor, type PagePreloadEntry } from "./pagePr
 const noop = () => undefined;
 
 const entries: PagePreloadEntry[] = [
-  { name: "favorites", paths: [paths.favorites, paths.favoriteGroups], preload: noop },
-  { name: "favorite-group", paths: [paths.favoriteGroup, paths.legacyFavoriteGroup], preload: noop },
+  { name: "favorites", paths: [paths.favorites], preload: noop },
   { name: "mypage", paths: [paths.mypage], preload: noop },
   { name: "nickname", paths: [paths.nickname], preload: noop },
 ];
@@ -14,9 +13,6 @@ const entries: PagePreloadEntry[] = [
 describe("pageNameFor", () => {
   test.each([
     ["/favorites", "favorites"],
-    ["/favorites/groups", "favorites"],
-    ["/favorites/groups/g1", "favorite-group"],
-    ["/mypage/groups/g1", "favorite-group"],
     ["/mypage", "mypage"],
     ["/mypage/nickname", "nickname"],
   ])("%s는 %s 페이지로 매칭한다", (pathname, name) => {

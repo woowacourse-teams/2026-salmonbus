@@ -21,10 +21,11 @@ import org.junit.jupiter.api.Test;
 
 class AdditionalRoutesReplayTest {
     private static final List<String> ADDED = List.of("204000081", "234000002", "234000313", "234000878",
-        "234000882", "204000082", "234001739", "233000266", "204000170", "234000879", "228000393", "200000314");
+        "234000882", "204000082", "234001739", "233000266", "204000170", "234000879", "228000393", "200000314",
+        "234001476", "222000209", "227000016", "234000079", "234000015");
 
     @Test
-    void 추가한_12개_노선은_같은_차량이_이동하며_좌석과_관측시각을_갱신한다() throws Exception {
+    void 추가한_17개_노선은_같은_차량이_이동하며_좌석과_관측시각을_갱신한다() throws Exception {
         var dataset = ReplayEngine.readAllRoutes(Path.of(System.getProperty("routes.file")));
         var seconds = new AtomicLong();
         var clock = new Clock() {
@@ -60,7 +61,7 @@ class AdditionalRoutesReplayTest {
     }
 
     @Test
-    void 실제_WireMock_매핑이_20개_노선을_응답하고_한_노선_실패는_다른_노선을_막지_않는다() throws Exception {
+    void 실제_WireMock_매핑이_25개_노선을_응답하고_한_노선_실패는_다른_노선을_막지_않는다() throws Exception {
         var file = Path.of(System.getProperty("routes.file"));
         var dataset = ReplayEngine.readAllRoutes(file);
         var engine = new ReplayEngine(dataset, new ReplayEngine.Configuration("local-replay-v1", 30, 60),
@@ -80,8 +81,8 @@ class AdditionalRoutesReplayTest {
             }
             ScenarioControl.configure(client, server.baseUrl(), Map.of(ADDED.get(0), "upstream-error"));
 
-            assertEquals(20, selected.size());
-            assertEquals(41, dataset.routes().stream().map(ReplayEngine.Route::routeId).distinct().count());
+            assertEquals(25, selected.size());
+            assertEquals(45, dataset.routes().stream().map(ReplayEngine.Route::routeId).distinct().count());
             assertEquals(503, get(client, server.baseUrl(), ADDED.get(0)).statusCode());
             assertEquals(200, get(client, server.baseUrl(), ADDED.get(1)).statusCode());
             assertEquals(200, get(client, server.baseUrl(), "204000057").statusCode());

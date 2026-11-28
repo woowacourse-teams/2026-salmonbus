@@ -1,4 +1,4 @@
-"""로컬 API의 20개 수집 노선과 예보 유무를 확인한다. 운영 부하/정확도 검사가 아니다."""
+"""로컬 API의 25개 수집 노선과 예보 유무를 확인한다. 운영 부하/정확도 검사가 아니다."""
 import json
 import re
 from datetime import datetime, timedelta, timezone
@@ -10,8 +10,8 @@ import urllib.request
 from pathlib import Path
 
 ADDED = {"204000081", "234000002", "234000313", "234000878", "234000882", "204000082",
-         "234001739", "233000266", "204000170", "234000879", "228000393", "200000314"}
-
+         "234001739", "233000266", "204000170", "234000879", "228000393", "200000314",
+         "234001476", "222000209", "227000016", "234000079", "234000015"}
 
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
@@ -103,7 +103,7 @@ def verify(api, data, query):
     status, body = get("/api/v1/routes")
     assert status == 200, f"노선 목록 HTTP {status}"
     listed = {route["id"]: route for route in body["routes"]}
-    assert len(listed) == len(reference) + len(catalog) == 41
+    assert set(listed) == {route["routeId"] for route in reference + catalog}
     failures = []
     boards = {}
     for route in reference + catalog:
@@ -133,7 +133,7 @@ def verify(api, data, query):
         except (AssertionError, KeyError) as error:
             failures.append(f"{route_id}: {error}")
     assert not failures, "\n".join(failures)
-    print(f"20개 수집 노선 조회, 모델 지원 {len(supported_ids)}개와 예보 처리 착수 시각별 예보 응답 확인 완료")
+    print(f"공개 노선 보드와 모델 지원 {len(supported_ids)}개 예보 확인 완료")
 
 
 if __name__ == "__main__":

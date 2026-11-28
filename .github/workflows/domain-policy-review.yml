@@ -1,9 +1,8 @@
 name: DOMAIN-POLICY-REVIEW
 
+# Git Wiki 정책과 API 비밀값이 준비될 때까지 자동 실행을 끈다. 다시 켜는 작업은 SAL-454다.
 on:
-  pull_request_target:
-    branches: [dev]
-    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -194,8 +193,9 @@ jobs:
         run: |
           if [[ -f .domain-wiki/output/policy-comment.md ]]; then
             comment_id="$(
-              gh api --paginate --slurp "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
-                --jq 'add | map(select(.user.login == "github-actions[bot]" and ((.body // "") | contains("<!-- salmonbus-policy-issue-review -->")))) | last | .id // empty'
+              gh api --paginate "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+                --jq '.[] | select(.user.login == "github-actions[bot]" and ((.body // "") | contains("<!-- salmonbus-policy-issue-review -->"))) | .id' \
+                | tail -n 1
             )"
             if [[ -n "$comment_id" ]]; then
               gh api --method PATCH "repos/${REPOSITORY}/issues/comments/${comment_id}" \

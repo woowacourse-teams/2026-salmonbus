@@ -32,7 +32,12 @@ public final class ModelRoute {
         Map.entry("204000170", "3100"),
         Map.entry("234000879", "1101"),
         Map.entry("228000393", "7007-1"),
-        Map.entry("200000314", "4000"));
+        Map.entry("200000314", "4000"),
+        Map.entry("234001476", "M2323"),
+        Map.entry("222000209", "M2352"),
+        Map.entry("227000016", "9302"),
+        Map.entry("234000079", "500-1"),
+        Map.entry("234000015", "1007"));
 
     private ModelRoute() {
     }
