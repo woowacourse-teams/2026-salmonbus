@@ -17,7 +17,6 @@ const failureLabels = {
   deleteFavorite: "즐겨찾기를 삭제하지 못했어요. 다시 시도해 주세요.",
   saveFavorite: "즐겨찾기를 저장하지 못했어요. 다시 시도해 주세요.",
   saveOrder: "순서를 저장하지 못했어요. 다시 시도해 주세요.",
-  saveGroupOrder: "그룹 순서를 저장하지 못했어요. 다시 시도해 주세요.",
 };
 
 export type FavoriteOperation = keyof typeof failureLabels;

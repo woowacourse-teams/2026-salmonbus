@@ -279,26 +279,6 @@ test("즐겨찾기 홈과 저장 창은 320px 화면에 맞고 주요 내용을 
     });
   });
 
-  await test.step("즐겨찾기 그룹 목록", async () => {
-    await page.goto("/favorites/groups");
-    await expect(page.getByRole("region", { name: "즐겨찾기 그룹 관리" }).getByRole("link")).toHaveCount(3);
-    await checkAtBothWidths(page, async (width) => {
-      expect(await fitsWidth()).toBe(true);
-      await capture(width, "groups.png");
-    });
-  });
-
-  await test.step("그룹 상세", async () => {
-    await page.getByRole("link", { name: /즐겨찾기.*2 \/ 2/ }).click();
-    await expect(page.getByRole("heading", { name: "즐겨찾기", exact: true })).toBeVisible();
-    await expect(page.getByText(first!.name, { exact: false })).toBeVisible();
-    await expect(page.getByRole("button", { name: "순서 편집", exact: true })).toHaveCount(0);
-    await checkAtBothWidths(page, async (width) => {
-      expect(await fitsWidth()).toBe(true);
-      await capture(width, "group-detail.png");
-    });
-  });
-
   await test.step("판정보드 저장 창", async () => {
     await page.goto(`/routes/${routeId}`);
     await page.getByRole("button", { name: `${first!.name} 즐겨찾기`, exact: true }).click();

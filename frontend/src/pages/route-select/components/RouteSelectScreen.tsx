@@ -344,7 +344,7 @@ export function RouteSelectScreen({
             contentKey={selectedStop ? `${location.key}:${selectedStop.id}` : location.key}
             station={selectedStop}
             home={isHome}
-            showTabClose={isRouteMap || location.pathname === paths.favoriteGroups}
+            showTabClose={isRouteMap}
             actionTitle={isRouteMap && selectedStop === null && <RouteNetworkTitle />}
           >
             {selectedStop ? (
