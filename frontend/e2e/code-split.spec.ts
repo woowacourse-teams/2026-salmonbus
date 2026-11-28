@@ -147,30 +147,50 @@ function guestLogin(page: Page) {
 
 async function settlePrefetchedHome(page: Page) {
   const initial = await initialScriptsOf(page, "/");
-  const prefetched = new Set<string>();
+  const prefetched = new Map<string, string>();
   page.on("response", async (response) => {
     const url = new URL(response.url());
     if (!isAppAsset(url) || !url.pathname.endsWith(".js")) return;
     const body = await response.text().catch(() => "");
-    for (const marker of [FAVORITES_CHUNK, ACCOUNT_CHUNK]) if (body.includes(marker)) prefetched.add(marker);
+    for (const marker of [FAVORITES_CHUNK, ACCOUNT_CHUNK]) {
+      if (body.includes(marker)) prefetched.set(marker, response.url());
+    }
   });
   await settleHome(page);
   await page.clock.runFor(1_000);
   await expect.poll(() => prefetched.size).toBe(2);
   await page.waitForLoadState("networkidle");
-  return initial;
+  return { initial, prefetchedUrls: [...prefetched.values()] };
 }
 
 test("홈 첫 스크립트에는 다른 화면 코드가 없고, 쉬는 시간에 탭 화면 청크를 미리 받아 탭을 누를 때 다시 받지 않는다", async ({
   page,
 }) => {
   await watchFallback(page);
+  await page.addInitScript(() => {
+    const order: string[] = [];
+    Object.assign(window, { assetOrder: order });
+    window.addEventListener("load", () => order.push("load"));
+    new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (node instanceof HTMLScriptElement && node.src) order.push(node.src);
+        }
+      }
+    }).observe(document, { subtree: true, childList: true });
+  });
   const assets = trackAssets(page);
-  const initial = await settlePrefetchedHome(page);
+  const { initial, prefetchedUrls } = await settlePrefetchedHome(page);
   for (const src of initial) {
     const body = await (await page.request.get(src)).text();
     expect(body).not.toContain(FAVORITES_CHUNK);
     expect(body).not.toContain(ACCOUNT_CHUNK);
+  }
+  const order = await page.evaluate(() => (window as unknown as { assetOrder: string[] }).assetOrder);
+  const loadAt = order.indexOf("load");
+  expect(loadAt).toBeGreaterThanOrEqual(0);
+  for (const chunkUrl of prefetchedUrls) {
+    expect(order.indexOf(chunkUrl)).toBeGreaterThan(loadAt);
   }
   const prefetched = assets.requested.length;
 
@@ -195,11 +215,11 @@ test("쉬는 시간 미리 받기가 한 번 실패해도 즐겨찾기 탭을 �
     await route.fallback();
   });
 
-  await settleHome(page);
   const prefetchFailed = page.waitForEvent(
     "requestfailed",
     (request) => isAppAsset(new URL(request.url())) && new URL(request.url()).pathname.endsWith(".js"),
   );
+  await settleHome(page);
   await page.clock.runFor(1_000);
   await prefetchFailed;
   await page.waitForLoadState("networkidle");
@@ -289,13 +309,21 @@ test("전체 화면 청크가 늦으면 즐겨찾기 화면을 유지하다가 �
 
 test("시트 화면 청크가 실패하면 시트 안에 오류를 보이고 다시 시도하면 화면을 보인다", async ({ page }) => {
   await watchFallback(page);
-  await interceptChunk(page, ACCOUNT_CHUNK, failing(1));
+  let fail = true;
+  await interceptChunk(page, ACCOUNT_CHUNK, async (route) => {
+    if (fail) {
+      await route.abort();
+      return;
+    }
+    await route.fallback();
+  });
   await openHome(page);
 
   await tab(page, "마이페이지").click();
   const sheet = page.getByRole("region", { name: "마이페이지", exact: true });
   await expect(sheet.getByText(LOAD_FAILED, { exact: true })).toBeVisible();
   await expect(homeMap(page)).toBeVisible();
+  fail = false;
   await sheet.getByRole("button", { name: "다시 시도하기", exact: true }).click();
   await expect(guestLogin(page)).toBeVisible();
   await expect(page.getByText(LOAD_FAILED, { exact: true })).toHaveCount(0);
@@ -347,34 +375,31 @@ for (const { path, url, shows } of directEntries) {
   });
 }
 
-const loadOrderEntries = directEntries.filter(({ path }) => ["/favorites", "/mypage", "/login"].includes(path));
+const directLoadEntries = directEntries.filter(({ path }) => ["/favorites", "/login"].includes(path));
 
-for (const { path, shows } of loadOrderEntries) {
-  test(`${path} 직접 진입에서 화면 청크는 window load 뒤에 붙여 load 이벤트를 미루지 않는다`, async ({ page }) => {
-    const initial = await initialScriptsOf(page, path);
-    await page.addInitScript(() => {
-      const order: string[] = [];
-      Object.assign(window, { assetOrder: order });
-      window.addEventListener("load", () => order.push("load"));
-      new MutationObserver((records) => {
-        for (const record of records) {
-          for (const node of record.addedNodes) {
-            if (node instanceof HTMLScriptElement && node.src) order.push(node.src);
-            if (node instanceof HTMLLinkElement && node.rel === "stylesheet") order.push(node.href);
-          }
-        }
-      }).observe(document, { subtree: true, childList: true });
+for (const { path, shows } of directLoadEntries) {
+  test(`${path} 직접 진입은 구글 폰트 응답이 끝나기 전에 화면을 보인다`, async ({ page }) => {
+    let releaseFonts: () => void = () => undefined;
+    const fontsReleased = new Promise<void>((resolve) => {
+      releaseFonts = resolve;
     });
-    await page.goto(path);
+    let markFontRequested: () => void = () => undefined;
+    const fontRequested = new Promise<void>((resolve) => {
+      markFontRequested = resolve;
+    });
+    await page.route("https://fonts.googleapis.com/**", async (route) => {
+      markFontRequested();
+      await fontsReleased;
+      await route.fulfill({ status: 200, contentType: "text/css", body: "" });
+    });
+
+    await page.goto(path, { waitUntil: "domcontentloaded" });
+    await fontRequested;
     await expect(shows(page)).toBeVisible();
-    const order = await page.evaluate(() => (window as unknown as { assetOrder: string[] }).assetOrder);
-    const loadAt = order.indexOf("load");
-    const chunks = order
-      .map((entry, index) => ({ entry, index }))
-      .filter(({ entry }) => entry !== "load" && entry.endsWith(".js") && !initial.includes(entry));
-    expect(loadAt).toBeGreaterThanOrEqual(0);
-    expect(chunks.length).toBeGreaterThan(0);
-    for (const { index } of chunks) expect(index).toBeGreaterThan(loadAt);
+    expect(await page.evaluate(() => document.readyState)).not.toBe("complete");
+
+    releaseFonts();
+    await page.waitForLoadState("load");
   });
 }
 

@@ -1,5 +1,4 @@
 import { matchPath } from "react-router";
-import { afterWindowLoad } from "./windowLoad";
 
 export type LazyPageName = "favorites" | "mypage" | "login" | "nickname" | "whats-new";
 
@@ -58,8 +57,16 @@ function whenIdle(task: () => void): void {
   else window.setTimeout(task, 1);
 }
 
+function whenWindowLoaded(task: () => void): void {
+  if (document.readyState === "complete") {
+    task();
+    return;
+  }
+  window.addEventListener("load", task, { once: true });
+}
+
 export function prefetchWhenIdle(names: readonly LazyPageName[]): void {
-  void afterWindowLoad().then(() => {
+  whenWindowLoaded(() => {
     whenIdle(() => {
       for (const name of names) preloadPage(name);
     });

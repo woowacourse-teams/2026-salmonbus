@@ -1,11 +1,10 @@
 import { createPageLoader } from "@/shared/routing/pageLoader";
 import { paths } from "@/shared/routing/paths";
 import { pageNameFor, type LazyPageName, type PagePreloadEntry } from "@/shared/routing/pagePreload";
-import { afterWindowLoad } from "@/shared/routing/windowLoad";
 import { createLazyPage } from "./lazyPage";
 
-const favoritesGroup = createPageLoader(() => afterWindowLoad().then(() => import("./lazyGroups/favorites")));
-const accountGroup = createPageLoader(() => afterWindowLoad().then(() => import("./lazyGroups/account")));
+const favoritesGroup = createPageLoader(() => import("./lazyGroups/favorites"));
+const accountGroup = createPageLoader(() => import("./lazyGroups/account"));
 
 export const favoritesPage = createLazyPage("favorites", favoritesGroup, (group) => group.FavoritesPage);
 export const myPage = createLazyPage("mypage", accountGroup, (group) => group.MyPage);
