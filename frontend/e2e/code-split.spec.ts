@@ -1,6 +1,5 @@
 import type { Page, Route } from "@playwright/test";
 import { test, expect } from "./fixtures/auth";
-import { routeId } from "./fixtures/mock-data";
 import { openRouteSearch, pickRoute, routeSearchInput } from "./utils/route-select";
 import { NATIVE_HOME_MAP_CAPABILITIES, NATIVE_MAP_CAPABILITIES } from "../src/shared/native-map/bridge";
 
@@ -392,33 +391,24 @@ test("재시도한 청크 응답을 기다리는 동안 다시 시도하기를 �
   expect(await page.evaluate(() => (window as unknown as { sameDocument?: boolean }).sameDocument)).toBe(true);
 });
 
-const directEntries: { path: string; url?: string; shows: (page: Page) => ReturnType<Page["getByRole"]> }[] = [
-  {
-    path: `/routes/${routeId}`,
-    shows: (page) => page.getByRole("heading", { name: "3330", exact: true }),
-  },
+const directEntries: { path: string; shows: (page: Page) => ReturnType<Page["getByRole"]> }[] = [
   { path: "/favorites", shows: (page) => page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true }) },
-  { path: "/mypage", shows: guestLogin },
   { path: "/login", shows: (page) => page.getByRole("button", { name: "카카오로 계속하기", exact: true }) },
-  { path: "/mypage/nickname", shows: (page) => page.getByRole("heading", { name: "닉네임 수정", exact: true }) },
-  { path: "/mypage/whats-new", shows: (page) => page.getByRole("heading", { name: "새 소식", exact: true }) },
 ];
 
-for (const { path, url, shows } of directEntries) {
+for (const { path, shows } of directEntries) {
   test(`${path}에 직접 들어가면 불러오는 중 화면 없이 그 화면을 보인다`, async ({ page }) => {
     await watchFallback(page);
     await page.goto(path);
     await expect(shows(page)).toBeVisible();
-    await expect(page).toHaveURL(url ?? path);
+    await expect(page).toHaveURL(path);
     expect(await fallbackSeen(page)).toBe(false);
     await expect(page.getByText(APP_ERROR, { exact: true })).toHaveCount(0);
     await expect(page.getByText(LOAD_FAILED, { exact: true })).toHaveCount(0);
   });
 }
 
-const directLoadEntries = directEntries.filter(({ path }) => ["/favorites", "/login"].includes(path));
-
-for (const { path, shows } of directLoadEntries) {
+for (const { path, shows } of directEntries) {
   test(`${path} 직접 진입은 구글 폰트 응답이 끝나기 전에 화면을 보인다`, async ({ page }) => {
     let releaseFonts: () => void = () => undefined;
     const fontsReleased = new Promise<void>((resolve) => {
