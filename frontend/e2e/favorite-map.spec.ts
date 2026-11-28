@@ -116,11 +116,17 @@ test("그룹 응답을 기다리는 동안 지도 노선을 유지하고 돌아�
     if (url.pathname === "/api/me/favorites" && url.searchParams.get("groupId") === groupId) await pending;
     await route.fallback();
   });
+  api.cacheMaxAgeSeconds = 5;
   await page.goto("/favorites");
   const panel = page.getByRole("tabpanel");
   const lines = page.getByTestId("naver-map-test-double").getByTestId("naver-polyline");
   await expect(panel.getByText(stop.name, { exact: true })).toBeVisible();
   await expect(lines).toHaveCount(2);
+  await test.step("형상을 받은 뒤에는 유효 시간 5초가 지나도 다시 조회하지 않고 차량 위치도 조회하지 않는다", async () => {
+    await page.clock.runFor(10_000);
+    expect(api.requests.geometry).toBe(1);
+    expect(api.requests.watch).toBe(0);
+  });
   const group = page.getByRole("tab", { name: "통학", exact: true });
   try {
     await group.click();

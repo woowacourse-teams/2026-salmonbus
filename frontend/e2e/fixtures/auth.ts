@@ -18,7 +18,7 @@ export function redirectAuth(route: Route, destination: string, browserName: str
     : route.fulfill({ status: 302, headers: { Location: destination } });
 }
 
-export const NATIVE_NONCE = "e2e-native-nonce-0123456789";
+const NATIVE_NONCE = "e2e-native-nonce-0123456789";
 
 export const testMember = {
   ...memberExample,

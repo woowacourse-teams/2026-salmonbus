@@ -144,7 +144,7 @@ test("비회원은 즐겨찾기를 요청하지 않고 로그인 후 조회를 �
   await expect(page.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toBeVisible();
 });
 
-test("즐겨찾기에서 그룹 조회에 실패하면 320px 화면에 오류 시안을 표시하고 재시도한다", async ({
+test("즐겨찾기에서 그룹 목록이나 선택한 그룹의 조회에 실패하면 320px 화면에 오류 시안을 표시하고 재시도한다", async ({
   page,
   favorites,
   api,

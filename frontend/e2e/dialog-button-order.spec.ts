@@ -42,7 +42,10 @@ test("즐겨찾기 그룹 선택 창은 열릴 때 첫 그룹에 포커스를 �
   await expectCancelFirst(page, dialog, "돌아가기", "만들기");
 });
 
-test("마이페이지 로그아웃 확인 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다", async ({ page, favorites }) => {
+test("마이페이지 로그아웃과 회원탈퇴 확인 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다", async ({
+  page,
+  favorites,
+}) => {
   expect(favorites.groups).toHaveLength(1);
   await page.goto("/mypage");
   const dialog = page.getByRole("dialog");

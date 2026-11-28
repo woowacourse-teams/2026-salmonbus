@@ -86,7 +86,7 @@ test("모달의 노선 줄을 누르면 그 노선의 판정 보드로 가고, �
   await expectOnlyNextDayRoute(page);
 });
 
-test("새 노선만 있는 모달은 다시 보지 않기 없이 닫히고, 닫은 노선은 다음 날 보여 주지 않는다: 닫기 버튼", async ({
+test("새 노선만 있는 모달은 다시 보지 않기 없이 닫히고, 닫은 노선은 다음 날 보여 주지 않는다", async ({
   page,
   api,
   isMobile,

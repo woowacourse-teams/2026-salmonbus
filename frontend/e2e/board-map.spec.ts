@@ -794,6 +794,9 @@ test("지도 버스를 누르면 정류장을 펼치지 않고 현재 위치로 
   });
 
   await test.step("전체 시트의 목록 버스를 누르면 60% 높이로 열고 지도 마커에 포커스", async () => {
+    await list(page).click({ position: await listBackgroundPosition(page) });
+    await expect(bus).toHaveAttribute("aria-pressed", "false");
+    await expect(tracker).toHaveAttribute("aria-pressed", "false");
     await handle(page).press("End");
     await expect(sheet(page)).toHaveAttribute("data-snap", "full");
     await expect(map(page)).toHaveCount(0);
@@ -1341,7 +1344,11 @@ test("현재 위치 성공은 작은 반투명 원과 파란 점을 표시하고
   await expect(deniedNotice).toHaveCount(0);
 });
 
-test("SDK 인증 실패가 늦게 전달돼도 정류장 목록과 방향 선택을 계속 사용할 수 있다", async ({ page, api, naverMap }) => {
+test("지도 SDK가 실패하거나 형상을 조회하지 못해도 정류장 목록과 방향 선택을 계속 사용할 수 있다", async ({
+  page,
+  api,
+  naverMap,
+}) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
