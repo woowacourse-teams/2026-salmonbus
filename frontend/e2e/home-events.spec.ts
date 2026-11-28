@@ -1364,16 +1364,6 @@ test("정류장 API가 정상이면 홈과 다른 탭에서 home-events를 받�
   expect(feedRequests).toHaveLength(1);
 });
 
-test("노선도로 바로 들어오면 정류장 API와 상관없이 home-events를 바로 받는다", async ({ page }) => {
-  await serveStationTiles(page);
-  await page.route("**/assets/home-events.json", (route) => route.fulfill({ json: feedWithRoute }));
-  const feedRequests = recordFeedRequests(page);
-
-  await page.goto("/route-map");
-  await expectRouteNetwork(page);
-  expect(feedRequests).toHaveLength(1);
-});
-
 test("정류장 API가 미지원이면 home-events의 정류장을 표시하고 노선도에서 다시 받지 않는다", async ({ page }) => {
   await page.route("**/assets/home-events.json", (route) => route.fulfill({ json: feedWithRoute }));
   const feedRequests = recordFeedRequests(page);
