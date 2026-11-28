@@ -69,6 +69,41 @@ function geometryWith(overrides: Partial<RouteGeometry> = {}): RouteGeometry {
 }
 
 describe("routeGeometryMapDataFor", () => {
+  it("정류장의 도로 연결점이 그 방향 경로의 구간 위에 있으면 연결점을 정류장과 함께 넘긴다", () => {
+    const geometry = geometryWith();
+    geometry.busStops[0]!.pathConnection = { point: { x: 127.025, y: 37.04 }, segmentIndex: 0, segmentFraction: 0.5 };
+
+    const stop = routeGeometryMapDataFor(geometry, route)!.stops[0]!;
+
+    expect(stop.pathConnection).toEqual({
+      coordinate: { longitude: 127.025, latitude: 37.04 },
+      segmentIndex: 0,
+      segmentFraction: 0.5,
+    });
+  });
+
+  it.each([
+    ["구간 위에 있지 않은 점", { point: { x: 127.03, y: 37.04 }, segmentIndex: 0, segmentFraction: 0.5 }],
+    ["경로에 없는 구간", { point: { x: 127.1, y: 37.1 }, segmentIndex: 2, segmentFraction: 0 }],
+    ["0과 1을 벗어난 비율", { point: { x: 127.075, y: 37.12 }, segmentIndex: 0, segmentFraction: 1.5 }],
+  ])("도로 연결점이 %s이면 연결점을 버리고 정류장은 남긴다", (_case, pathConnection) => {
+    const geometry = geometryWith();
+    geometry.busStops[0]!.pathConnection = pathConnection;
+
+    const stop = routeGeometryMapDataFor(geometry, route)!.stops[0]!;
+
+    expect(stop.coordinate).toEqual({ longitude: 127, latitude: 37 });
+    expect(stop.pathConnection).toBeUndefined();
+  });
+
+  it("그 방향의 경로가 없으면 도로 연결점을 버린다", () => {
+    const geometry = geometryWith();
+    geometry.busStops[0]!.pathConnection = { point: { x: 127.025, y: 37.04 }, segmentIndex: 0, segmentFraction: 0.5 };
+    geometry.paths!.UP.points = [];
+
+    expect(routeGeometryMapDataFor(geometry, route)!.stops[0]!.pathConnection).toBeUndefined();
+  });
+
   it("x를 경도, y를 위도로 바꾸고 상·하행의 서로 다른 도로 형상과 운행 순서를 유지한다", () => {
     const geometry = geometryWith();
     const data = routeGeometryMapDataFor(geometry, route);

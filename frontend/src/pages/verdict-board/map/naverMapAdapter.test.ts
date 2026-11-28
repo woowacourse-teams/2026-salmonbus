@@ -16,6 +16,7 @@ jest.mock("@/shared/map/mapStopPin.css", () => ({
 
 jest.mock("./naverMapAdapter.css", () => ({
   stop: "stop",
+  stopConnector: "stopConnector",
   arrow: "arrow",
   bus: "bus",
   busCount: "busCount",
@@ -51,6 +52,9 @@ class ElementStub {
   }
   append(...children: ElementStub[]) {
     this.children.push(...children);
+  }
+  prepend(...children: ElementStub[]) {
+    this.children.unshift(...children);
   }
   replaceChildren(...children: ElementStub[]) {
     this.children = children;
@@ -340,7 +344,10 @@ function setup(
   };
   Object.defineProperty(globalThis, "document", {
     configurable: true,
-    value: { createElement: (tagName: string) => new ElementStub(tagName) },
+    value: {
+      createElement: (tagName: string) => new ElementStub(tagName),
+      createElementNS: (_namespace: string, tagName: string) => new ElementStub(tagName),
+    },
   });
   const native = createRecordingSdk(glSupported);
   const data: RouteMapData = { ...loadPreviewRouteMapData(boardMock)!, ...dataOverrides };
@@ -1357,6 +1364,61 @@ describe("네이버 지도 adapter", () => {
     expect(markerOf("15").visible).toBe(true);
     adapter.update(null, "DOWN", []);
     expect(markerOf("76").visible).toBe(false);
+  });
+  it("승차 정류장 핀에서 도로 연결점까지 점선을 긋고, 노선을 그리기 전과 정류장을 숨길 때는 점선도 숨긴다", () => {
+    const preview = loadPreviewRouteMapData(boardMock)!;
+    const stops = preview.stops.map((stop) =>
+      stop.direction === "UP" && stop.sequence === 15
+        ? {
+            ...stop,
+            pathConnection: {
+              coordinate: {
+                latitude: stop.coordinate.latitude - 0.002,
+                longitude: stop.coordinate.longitude + 0.003,
+              },
+              segmentIndex: 0,
+              segmentFraction: 0,
+            },
+          }
+        : stop,
+    );
+    const { native, adapter, onReady, flushFrames } = setup(true, {}, { stops });
+    const button = native.markers.find(
+      (item) => (item.options.icon.content as unknown as ElementStub).dataset.mapStopSequence === "15",
+    )!.options.icon.content as unknown as ElementStub;
+    const overlay = button.children[0]!;
+    const connector = overlay.children[0]!;
+    expect(overlay.getAttribute("class")).toBe("stopConnector");
+    expect(connector.getAttribute("stroke-dasharray")).toBe("1 4");
+
+    native.map.zoom = 16;
+    adapter.update(null, "UP", []);
+    expect(connector.getAttribute("visibility")).toBe("hidden");
+
+    native.events.find((event) => event.name === "idle")!.listener();
+    flushFrames();
+    flushFrames();
+    expect(onReady).toHaveBeenCalledTimes(1);
+    adapter.update(null, "UP", []);
+    expect(connector.getAttribute("visibility")).toBe("visible");
+    expect(Number(connector.getAttribute("x2"))).toBeCloseTo(3, 6);
+    expect(Number(connector.getAttribute("y2"))).toBeCloseTo(2, 6);
+
+    native.map.zoom = 13;
+    adapter.update(null, "UP", []);
+    expect(connector.getAttribute("visibility")).toBe("hidden");
+
+    native.map.zoom = 16;
+    adapter.update(null, "DOWN", []);
+    expect(connector.getAttribute("visibility")).toBe("hidden");
+  });
+  it("도로 연결점이 없는 정류장 핀에는 점선을 만들지 않는다", () => {
+    const { native } = setup();
+    const button = native.markers.find(
+      (item) => (item.options.icon.content as unknown as ElementStub).dataset.mapStopSequence === "15",
+    )!.options.icon.content as unknown as ElementStub;
+
+    expect(button.children.some((child) => child.tagName === "SVG")).toBe(false);
   });
   it("정류장 핀의 이름에는 방면을 붙여 같은 이름의 정류장을 구분한다", () => {
     const { native } = setup();
