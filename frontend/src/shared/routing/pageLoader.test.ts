@@ -53,6 +53,39 @@ describe("createPageLoader", () => {
     expect(loader.snapshot()).toMatchObject({ status: "failed", error: failure });
   });
 
+  test("미리 받기만 한 load가 실패하면 다음 load가 다시 import한다", async () => {
+    const first = deferred<string>();
+    const load = jest
+      .fn<() => Promise<string>>()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce("page");
+    const loader = createPageLoader(load);
+
+    loader.preload();
+    first.reject(new Error("chunk"));
+    await first.promise.catch(() => undefined);
+
+    expect(loader.snapshot()).toEqual({ status: "idle" });
+    await expect(loader.load()).resolves.toBe("page");
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  test("미리 받는 중에 화면이 기다리기 시작한 load가 실패하면 reset 전까지 실패가 남는다", async () => {
+    const pending = deferred<string>();
+    const failure = new Error("chunk");
+    const load = jest.fn(() => pending.promise);
+    const loader = createPageLoader(load);
+
+    loader.preload();
+    const awaited = loader.load();
+    pending.reject(failure);
+
+    await expect(awaited).rejects.toBe(failure);
+    await expect(loader.load()).rejects.toBe(failure);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(loader.snapshot()).toMatchObject({ status: "failed", error: failure });
+  });
+
   test("실패 뒤 reset하면 idle로 돌아가고 다음 load가 다시 import한다", async () => {
     const load = jest
       .fn<() => Promise<string>>()

@@ -184,6 +184,33 @@ test("홈 첫 스크립트에는 다른 화면 코드가 없고, 쉬는 시간�
   expect(await fallbackSeen(page)).toBe(false);
 });
 
+test("쉬는 시간 미리 받기가 한 번 실패해도 즐겨찾기 탭을 누르면 다시 받아 화면을 보인다", async ({ page }) => {
+  let attempts = 0;
+  await interceptChunk(page, FAVORITES_CHUNK, async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.abort();
+      return;
+    }
+    await route.fallback();
+  });
+
+  await settleHome(page);
+  const prefetchFailed = page.waitForEvent(
+    "requestfailed",
+    (request) => isAppAsset(new URL(request.url())) && new URL(request.url()).pathname.endsWith(".js"),
+  );
+  await page.clock.runFor(1_000);
+  await prefetchFailed;
+  await page.waitForLoadState("networkidle");
+
+  await tab(page, "즐겨찾기").click();
+  await expect(page).toHaveURL("/favorites");
+  await expect(page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true })).toBeVisible();
+  await expect(page.getByText(LOAD_FAILED, { exact: true })).toHaveCount(0);
+  expect(attempts).toBe(2);
+});
+
 test("검색에서 노선을 고르면 새 청크 없이 판정보드로 바뀌고 홈 지도는 그대로 둔다", async ({ page }) => {
   await watchFallback(page);
   const assets = trackAssets(page);

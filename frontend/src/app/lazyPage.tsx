@@ -35,9 +35,7 @@ export function createLazyPage<M>(
   return {
     name,
     Page,
-    preload: () => {
-      group.load().catch(() => undefined);
-    },
+    preload: group.preload,
     retry: group.reset,
     status: () => group.snapshot().status,
   };

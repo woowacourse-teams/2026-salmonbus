@@ -9,29 +9,43 @@ export type PageLoadStatus = PageLoadSnapshot<unknown>["status"];
 export interface PageLoader<T> {
   snapshot: () => PageLoadSnapshot<T>;
   load: () => Promise<T>;
+  preload: () => void;
   reset: () => void;
 }
 
-export function createPageLoader<T>(load: () => Promise<T>): PageLoader<T> {
-  let state: PageLoadSnapshot<T> = { status: "idle" };
+type PendingState<T> = { status: "pending"; promise: Promise<T>; awaited: boolean };
+type LoaderState<T> = Exclude<PageLoadSnapshot<T>, { status: "pending" }> | PendingState<T>;
 
-  function start(): Promise<T> {
+export function createPageLoader<T>(load: () => Promise<T>): PageLoader<T> {
+  let state: LoaderState<T> = { status: "idle" };
+
+  function start(awaited: boolean): Promise<T> {
     const promise = load();
-    state = { status: "pending", promise };
+    const pending: PendingState<T> = { status: "pending", promise, awaited };
+    state = pending;
     promise.then(
       (value) => {
-        if (state.status === "pending" && state.promise === promise) state = { status: "ready", promise, value };
+        if (state === pending) state = { status: "ready", promise, value };
       },
       (error: unknown) => {
-        if (state.status === "pending" && state.promise === promise) state = { status: "failed", promise, error };
+        if (state === pending) {
+          state = pending.awaited ? { status: "failed", promise, error } : { status: "idle" };
+        }
       },
     );
     return promise;
   }
 
   return {
-    snapshot: () => state,
-    load: () => (state.status === "idle" ? start() : state.promise),
+    snapshot: () => (state.status === "pending" ? { status: "pending", promise: state.promise } : state),
+    load: () => {
+      if (state.status === "idle") return start(true);
+      if (state.status === "pending") state.awaited = true;
+      return state.promise;
+    },
+    preload: () => {
+      if (state.status === "idle") start(false);
+    },
     reset: () => {
       if (state.status === "failed") state = { status: "idle" };
     },
