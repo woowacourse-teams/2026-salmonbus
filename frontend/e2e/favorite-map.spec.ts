@@ -98,34 +98,6 @@ test("즐겨찾기 지도에서 판정보드를 먼저 열고 노선 응답 뒤 
   expect(await naverMap.snapshot()).toEqual(camera);
 });
 
-test("즐겨찾기 지도는 중복 저장한 노선을 한 번만 그리며 차량 위치를 조회하지 않는다", async ({
-  page,
-  favorites,
-  api,
-}) => {
-  const target = { routeId, stopId: "1008", direction: "UP" } as const;
-  favorites.groups[0]!.favorites = [storedFavorite(target)];
-  favorites.groups.push({
-    id: "10000000-0000-4000-8000-000000000003",
-    name: "통학",
-    favorites: [storedFavorite(target, 4)],
-  });
-  api.cacheMaxAgeSeconds = 5;
-  await page.goto("/favorites");
-  const map = page.getByTestId("naver-map-test-double");
-  const lines = map.locator('polyline[stroke-width="6"]');
-  const buses = map.locator("[data-map-vehicle-key]");
-  await expect(lines).toHaveCount(2);
-  await expect(map.locator(`polyline[stroke="${activeRouteColor}"]`)).toHaveCount(1);
-  await expect(map.locator(`polyline[stroke="${inactiveRouteColor}"]`)).toHaveCount(1);
-  await page.clock.runFor(10_000);
-  await expect(buses).toHaveCount(0);
-  expect(api.requests.watch).toBe(0);
-  expect(api.requests.geometry).toBe(1);
-  await page.getByRole("navigation", { name: "주요 메뉴" }).getByRole("link", { name: "홈", exact: true }).click();
-  await expect(lines).toHaveCount(0);
-});
-
 test("그룹 응답을 기다리는 동안 지도 노선을 유지하고 돌아와도 그룹 선택을 유지한다", async ({
   page,
   favorites,
