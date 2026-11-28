@@ -136,16 +136,64 @@ describe("homeMapFeed", () => {
     expect(feed.getSnapshot().data.stops.map((stop) => stop.id)).toEqual(["10001"]);
   });
 
-  it("같은 내용으로 다시 받으면 데이터 참조를 유지한다", async () => {
-    const { feed, setNow } = setup();
+  it("수집 시각만 다른 응답을 다시 받으면 이전 지도 데이터를 그대로 쓴다", async () => {
+    const { feed, fetch, setNow } = setup([
+      async () => Response.json({ generatedAt: "2026-11-28T00:00:00+09:00", ...FEED }),
+      async () => Response.json({ generatedAt: "2026-11-28T06:00:00+09:00", ...FEED }),
+    ]);
     feed.subscribeNeeded(() => {})();
     await flush();
     const loaded = feed.getSnapshot();
+    const listener = jest.fn();
     setNow(300_000);
-    feed.subscribeNeeded(() => {});
+    feed.subscribeNeeded(listener);
     await flush();
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(feed.getSnapshot().data).toBe(loaded.data);
     expect(feed.getSnapshot()).toBe(loaded);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("정류장이나 경로가 달라진 응답을 다시 받으면 새 지도 데이터를 쓴다", async () => {
+    const changedStop = {
+      ...FEED,
+      stops: [{ id: "10001", name: "역 앞", point: [127.1, 37.39], routes: [] }],
+    };
+    const changedRoute = {
+      ...changedStop,
+      routePaths: [
+        [
+          [127.1, 37.39],
+          [127.2, 37.4],
+        ],
+      ],
+    };
+    const { feed, fetch, setNow } = setup([
+      async () => Response.json({ generatedAt: "2026-11-28T00:00:00+09:00", ...FEED }),
+      async () => Response.json({ generatedAt: "2026-11-28T06:00:00+09:00", ...changedStop }),
+      async () => Response.json({ generatedAt: "2026-11-28T12:00:00+09:00", ...changedRoute }),
+    ]);
+    const leave = feed.subscribeNeeded(() => {});
+    await flush();
+    const initial = feed.getSnapshot().data;
+    leave();
+
+    setNow(300_000);
+    const leaveSecond = feed.subscribeNeeded(() => {});
+    await flush();
+    const afterStopChange = feed.getSnapshot().data;
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(afterStopChange).not.toBe(initial);
+    expect(afterStopChange.stops[0]?.name).toBe("역 앞");
+    leaveSecond();
+
+    setNow(600_000);
+    feed.subscribeNeeded(() => {});
+    await flush();
+    const afterRouteChange = feed.getSnapshot().data;
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(afterRouteChange).not.toBe(afterStopChange);
+    expect(afterRouteChange.routePaths).toHaveLength(1);
   });
 
   it.each([

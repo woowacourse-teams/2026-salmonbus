@@ -30,7 +30,7 @@ export function createHomeMapFeed(deps: HomeMapFeedDeps): HomeMapFeed {
   let state: HomeMapFeedState = { status: "idle", data: EMPTY_DATA };
   let inflight: Promise<void> | null = null;
   let loadedAt: number | null = null;
-  let lastText: string | null = null;
+  let lastSerialized: string | null = null;
   let needCount = 0;
   let attempt = 0;
   let retryTimer: number | null = null;
@@ -53,9 +53,10 @@ export function createHomeMapFeed(deps: HomeMapFeedDeps): HomeMapFeed {
     try {
       const response = await deps.fetch(HOME_MAP_FEED_URL, { signal: controller.signal, cache: "no-cache" });
       if (!response.ok) throw new Error("지도 데이터 조회 실패");
-      const text = await response.text();
-      const data = text === lastText ? state.data : homeMapDataFrom(JSON.parse(text));
-      lastText = text;
+      const parsed = homeMapDataFrom(await response.json());
+      const serialized = JSON.stringify(parsed);
+      const data = serialized === lastSerialized ? state.data : parsed;
+      lastSerialized = serialized;
       loadedAt = deps.now();
       attempt = 0;
       setState({ status: "ready", data });
