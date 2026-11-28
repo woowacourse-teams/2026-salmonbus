@@ -340,15 +340,56 @@ test("페이지 화면 청크가 한 번 실패하면 다시 시도로 화면을
   await expect(page.getByRole("button", { name: "카카오로 계속하기", exact: true })).toBeVisible();
 });
 
-test("페이지 화면 청크가 두 번 실패하면 새로고침을 권하고 새로고침하면 화면을 보인다", async ({ page }) => {
+test("페이지 화면 청크가 두 번 실패해도 다시 시도하기로 화면을 보인다", async ({ page }) => {
   await interceptNewScripts(page, await initialScriptsOf(page, "/login"), failing(2));
 
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: LOAD_FAILED, exact: true })).toBeVisible();
+  await page.evaluate(() => Object.assign(window, { sameDocument: true }));
+
+  const secondFailure = page.waitForEvent(
+    "requestfailed",
+    (request) => isAppAsset(new URL(request.url())) && new URL(request.url()).pathname.endsWith(".js"),
+  );
   await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
-  await expect(page.getByRole("button", { name: "새로고침", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "새로고침", exact: true }).click();
+  await secondFailure;
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("button", { name: "다시 시도하기", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
   await expect(page.getByRole("button", { name: "카카오로 계속하기", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { sameDocument?: boolean }).sameDocument)).toBe(true);
+});
+
+test("재시도한 청크 응답을 기다리는 동안 다시 시도하기를 한 번 더 눌러도 문서가 새로 열리지 않고 화면을 보인다", async ({
+  page,
+}) => {
+  const retryChunk = gate();
+  let attempts = 0;
+  let markRetryRequested: () => void = () => undefined;
+  const retryRequested = new Promise<void>((resolve) => {
+    markRetryRequested = resolve;
+  });
+  await interceptNewScripts(page, await initialScriptsOf(page, "/login"), async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.abort();
+      return;
+    }
+    markRetryRequested();
+    await retryChunk.handle(route);
+  });
+
+  await page.goto("/login");
+  await expect(page.getByRole("heading", { name: LOAD_FAILED, exact: true })).toBeVisible();
+  await page.evaluate(() => Object.assign(window, { sameDocument: true }));
+
+  await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
+  await retryRequested;
+  await page.getByRole("button", { name: "다시 시도하기", exact: true }).click();
+
+  retryChunk.release();
+  await expect(page.getByRole("button", { name: "카카오로 계속하기", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { sameDocument?: boolean }).sameDocument)).toBe(true);
 });
 
 const directEntries: { path: string; url?: string; shows: (page: Page) => ReturnType<Page["getByRole"]> }[] = [
