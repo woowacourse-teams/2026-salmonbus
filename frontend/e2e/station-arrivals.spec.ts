@@ -81,6 +81,13 @@ test("40초 권장 시각에 재조회하고 닫으면 폴링을 멈춘다", asy
   await expect(stop).toHaveAttribute("aria-expanded", "false");
   await page.clock.fastForward(40_000);
   expect(api.requests.arrivals).toBe(2);
+
+  await test.step("펼친 상세 영역을 눌러도 접힌다", async () => {
+    await stop.click();
+    await expect(stop).toHaveAttribute("aria-expanded", "true");
+    await targetRow(page, "UP").getByRole("listitem").first().click();
+    await expect(stop).toHaveAttribute("aria-expanded", "false");
+  });
 });
 
 test("최초 수집 중에도 좌석을 유지하고 권장 시각 뒤 시간만 보탠다", async ({ page, api }) => {

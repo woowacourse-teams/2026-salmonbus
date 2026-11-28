@@ -391,12 +391,15 @@ function OperatingBoard({
   }
 
   function applySelectionEvent(event: BoardSelectionEvent) {
-    const next = nextBoardSelection({ selected, selectedFromList, scrollRequest, vehicleFocusRequest, snap }, event);
-    setSelected(next.selected);
-    setSelectedFromList(next.selectedFromList);
-    setScrollRequest(next.scrollRequest);
-    setVehicleFocusRequest(next.vehicleFocusRequest);
-    setSnap(next.snap);
+    const current = { selected, selectedFromList, scrollRequest, vehicleFocusRequest, snap };
+    const next = nextBoardSelection(current, event);
+    // 한 번의 클릭이 핸들러 둘을 부를 수 있다(상세 영역 클릭은 접기와 버스 선택 해제를 함께 부른다).
+    // 이 이벤트가 바꾸지 않은 값까지 쓰면 앞 핸들러의 결과를 이번 렌더의 옛 값으로 덮어쓴다.
+    if (next.selected !== current.selected) setSelected(next.selected);
+    if (next.selectedFromList !== current.selectedFromList) setSelectedFromList(next.selectedFromList);
+    if (next.scrollRequest !== current.scrollRequest) setScrollRequest(next.scrollRequest);
+    if (next.vehicleFocusRequest !== current.vehicleFocusRequest) setVehicleFocusRequest(next.vehicleFocusRequest);
+    if (next.snap !== current.snap) setSnap(next.snap);
     return next;
   }
 
