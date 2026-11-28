@@ -1,45 +1,8 @@
-import {
-  Component,
-  createElement,
-  startTransition,
-  use,
-  type ComponentType,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { Component, startTransition, type ReactElement, type ReactNode } from "react";
 import { ErrorView } from "@/shared/components/ErrorView";
 import { LoadError } from "@/shared/components/LoadError";
 import { RetryButton } from "@/shared/components/RetryButton";
-import type { PageLoader, PageLoadStatus } from "@/shared/routing/pageLoader";
-import type { LazyPageName } from "@/shared/routing/pagePreload";
-
-export interface LazyPage {
-  readonly name: LazyPageName;
-  readonly Page: ComponentType;
-  preload: () => void;
-  retry: () => void;
-  status: () => PageLoadStatus;
-}
-
-export function createLazyPage<M>(
-  name: LazyPageName,
-  group: PageLoader<M>,
-  pick: (module: M) => ComponentType,
-): LazyPage {
-  function Page() {
-    const snapshot = group.snapshot();
-    if (snapshot.status === "failed") throw snapshot.error;
-    const loaded = snapshot.status === "ready" ? snapshot.value : use(group.load());
-    return createElement(pick(loaded));
-  }
-  return {
-    name,
-    Page,
-    preload: group.preload,
-    retry: group.reset,
-    status: () => group.snapshot().status,
-  };
-}
+import type { LazyPage } from "./createLazyPage";
 
 interface RouteErrorBoundaryProps {
   page: LazyPage;

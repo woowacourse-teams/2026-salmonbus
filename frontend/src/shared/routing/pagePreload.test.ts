@@ -3,11 +3,12 @@ import { paths } from "./paths";
 import { internalPathnameOf, pageNameFor, type PagePreloadEntry } from "./pagePreload";
 
 const noop = () => undefined;
+const resolvedLoad = () => Promise.resolve();
 
 const entries: PagePreloadEntry[] = [
-  { name: "favorites", paths: [paths.favorites], preload: noop },
-  { name: "mypage", paths: [paths.mypage], preload: noop },
-  { name: "nickname", paths: [paths.nickname], preload: noop },
+  { name: "favorites", paths: [paths.favorites], preload: noop, load: resolvedLoad },
+  { name: "mypage", paths: [paths.mypage], preload: noop, load: resolvedLoad },
+  { name: "nickname", paths: [paths.nickname], preload: noop, load: resolvedLoad },
 ];
 
 describe("pageNameFor", () => {

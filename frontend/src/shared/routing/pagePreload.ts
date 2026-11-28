@@ -6,6 +6,7 @@ export interface PagePreloadEntry {
   name: LazyPageName;
   paths: readonly string[];
   preload: () => void;
+  load: () => Promise<unknown>;
 }
 
 const registry = new Map<LazyPageName, PagePreloadEntry>();
