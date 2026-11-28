@@ -69,7 +69,7 @@ Simulator에서는 아래 payload를 파일로 저장하고 `xcrun simctl push b
 | `salmon:map:stops-interactive` | `native-mount`를 찍은 홈 지도 채널이 ready를 받았고, 정류장이 1개 이상 실린 `mountHome`, `updateHome`을 보냈고, `captureAll`과 `transitioning`이 모두 false인 `map.layout`이 적용됐다는 `map.ack`를 받음 |
 | `salmon:map:sdk-start`, `sdk-ready`, `create`, `init` | 이름만 정해 둠. 웹 지도 SDK 경로의 호출 지점은 아직 없음 |
 
-`stops-interactive`는 메시지 왕복으로 추정한 값입니다. 실제 핀 탭 가능 시점은 실기기 영상으로 확인합니다. 마커는 Safari Web Inspector나 브라우저 개발자 도구에서 `performance.getEntriesByType("mark")`로 읽습니다.
+`stops-interactive`는 메시지 왕복으로 추정한 값입니다. 실제 핀 탭 가능 시점은 실기기 영상으로 확인합니다. 마커는 브라우저 개발자 도구에서 `performance.getEntriesByType("mark")`로 읽고, 앱에서는 `webviewDebuggingEnabled`를 켠 빌드에서만 Safari Web Inspector가 붙습니다(`react-native-webview`가 iOS 16.4 이상에서 `inspectable`을 이 값으로 넣습니다). 지금 앱은 이 값을 넘기지 않으며, 어느 빌드에서 켤지는 실기기 측정 작업에서 정합니다.
 
 ## 코드 위치
 
