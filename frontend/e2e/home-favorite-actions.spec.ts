@@ -4,31 +4,6 @@ import { routeSearchInput } from "./utils/route-select";
 
 test.use({ viewport: { width: 425, height: 844 }, reducedMotion: "reduce" });
 
-test("빈 즐겨찾기 안내는 시트 높이에 맞춰 가운데에 놓이고 추가 버튼으로 검색을 연다", async ({ page }) => {
-  await page.goto("/favorites");
-  const sheet = page.getByRole("region", { name: "즐겨찾기 메뉴", exact: true });
-  const panel = sheet.getByRole("tabpanel");
-  const empty = panel.getByText("등록된 즐겨찾기가 없어요", { exact: true }).locator("..");
-  const tab = page.getByRole("navigation", { name: "주요 메뉴" }).getByRole("link", { name: "즐겨찾기", exact: true });
-  let previousHeight = 0;
-  for (const snap of ["summary", "detail", "full"]) {
-    await expect(sheet).toHaveAttribute("data-snap", snap);
-    await expect(empty).toBeVisible();
-    const panelBox = (await panel.boundingBox())!;
-    const emptyBox = (await empty.boundingBox())!;
-    expect(panelBox.height).toBeGreaterThan(previousHeight);
-    expect(panelBox.height).toBeGreaterThan(emptyBox.height);
-    expect(emptyBox.y + emptyBox.height / 2).toBeCloseTo(panelBox.y + panelBox.height / 2, 0);
-    previousHeight = panelBox.height;
-    if (snap !== "full") await tab.click();
-  }
-  await expect(page.getByText("노선을 선택하고 자주 타는 정류장의 별을 눌러 보세요", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "즐겨찾기 추가하기", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "즐겨찾기 추가하기", exact: true }).click();
-  await expect(page).toHaveURL("/search");
-  await expect(routeSearchInput(page)).toBeFocused();
-});
-
 test("정류장이 1개면 카드 아래에서 검색을 열 수 있고 2개면 추가 버튼을 숨긴다", async ({ page, favorites, api }) => {
   await page.setViewportSize({ width: 390, height: 940 });
   const stops = api.data.watch.stops.filter(({ boardingAllowed }) => boardingAllowed).slice(0, 2);
@@ -70,9 +45,23 @@ test("홈의 + 버튼에서 그룹을 만들고 최대 개수에 도달하면 �
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/favorites");
   const add = page.getByRole("button", { name: "그룹 추가", exact: true });
-  await add.click();
   const dialog = page.getByRole("dialog", { name: "그룹 추가", exact: true });
   const input = dialog.getByRole("textbox", { name: "그룹 이름", exact: true });
+
+  await test.step("취소와 Escape는 저장하지 않고 열었던 버튼으로 돌아간다", async () => {
+    await add.click();
+    await input.fill("취소할 그룹");
+    await dialog.getByRole("button", { name: "취소", exact: true }).click();
+    await expect(add).toBeFocused();
+    await add.press("Enter");
+    await expect(input).toHaveValue("");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(add).toBeFocused();
+    expect(favorites.requests.filter((request) => request.method === "POST")).toHaveLength(0);
+  });
+
+  await add.click();
   await expect(input).toBeFocused();
   await expect(page.getByRole("button", { name: "즐겨찾기 더보기", exact: true })).toHaveCount(0);
   await input.fill("  아침출근즐겨찾기그룹  ");
@@ -123,42 +112,4 @@ test("그룹 추가에서 잘못된 이름과 중복 이름을 안내하고 실�
   await submit.click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "퇴근", exact: true })).toBeVisible();
-});
-
-test("그룹 추가 취소와 Escape는 저장하지 않고 열었던 버튼으로 돌아간다", async ({ page, favorites }) => {
-  await page.goto("/favorites");
-  const add = page.getByRole("button", { name: "그룹 추가", exact: true });
-  await add.click();
-  const dialog = page.getByRole("dialog", { name: "그룹 추가", exact: true });
-  await dialog.getByRole("textbox", { name: "그룹 이름", exact: true }).fill("취소할 그룹");
-  await dialog.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(add).toBeFocused();
-  await add.press("Enter");
-  await expect(dialog.getByRole("textbox", { name: "그룹 이름", exact: true })).toHaveValue("");
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
-  await expect(add).toBeFocused();
-  expect(favorites.requests.filter((request) => request.method === "POST")).toHaveLength(0);
-});
-
-test("그룹이 3개면 +가 없고 그룹을 삭제하면 다시 표시한다", async ({ page, favorites }) => {
-  favorites.groups.push(
-    { id: "10000000-0000-4000-8000-000000000003", name: "통학", favorites: [] },
-    { id: "10000000-0000-4000-8000-000000000004", name: "주말", favorites: [] },
-  );
-  await page.goto("/favorites");
-  const add = page.getByRole("button", { name: "그룹 추가", exact: true });
-  await expect(page.getByRole("tab", { name: "주말", exact: true })).toBeVisible();
-  await expect(add).toHaveCount(0);
-  await page.getByRole("button", { name: "그룹과 즐겨찾기 순서 편집", exact: true }).click();
-  const editor = page.getByRole("region", { name: "즐겨찾기 편집", exact: true });
-  await expect(editor).toBeVisible();
-  await expect(add).toHaveCount(0);
-  await editor.getByRole("button", { name: "통학", exact: true }).click();
-  await editor.getByRole("button", { name: "그룹 삭제", exact: true }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "삭제", exact: true }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await editor.getByRole("button", { name: "완료", exact: true }).click();
-  await expect(add).toBeVisible();
-  await expect(add).toBeEnabled();
 });

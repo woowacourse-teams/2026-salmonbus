@@ -6,14 +6,13 @@ const settingId = (value: number) => `20000000-0000-4000-8000-${String(value).pa
 
 interface NotificationsMock {
   settings: NotificationSetting[];
-  mutationError: { status: number; code: string } | null;
   requests: { path: string; method: string; body: Record<string, unknown> | null }[];
 }
 
 export const test = favoritesTest.extend<{ notifications: NotificationsMock }>({
   notifications: [
     async ({ auth, api }, use) => {
-      const notifications: NotificationsMock = { settings: [], mutationError: null, requests: [] };
+      const notifications: NotificationsMock = { settings: [], requests: [] };
       let sequence = 100;
       await api.route(async (route) => {
         const request = route.request();
@@ -38,10 +37,6 @@ export const test = favoritesTest.extend<{ notifications: NotificationsMock }>({
         }
         if (method !== "GET" && request.headers()["x-xsrf-token"] !== "e2e-csrf") {
           await error(400, "CSRF_REJECTED");
-          return;
-        }
-        if (method !== "GET" && notifications.mutationError) {
-          await error(notifications.mutationError.status, notifications.mutationError.code);
           return;
         }
         if (

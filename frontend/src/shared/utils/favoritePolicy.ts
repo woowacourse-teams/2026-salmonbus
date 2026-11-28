@@ -40,6 +40,20 @@ export function exceedsFavoriteLimit(groups: FavoriteGroup[], target: FavoriteTa
   return groups.some((group) => favoriteCountFor(group, target, ids) > MAX_FAVORITES_PER_GROUP);
 }
 
+/** 그룹을 만든 직후에는 재조회가 끝나기 전까지 새 그룹이 목록에 없다. */
+export function isCreatedGroupPending(
+  groups: FavoriteGroup[],
+  createdGroupId: string | null,
+  refreshing: boolean,
+): boolean {
+  return createdGroupId !== null && !groups.some((group) => group.id === createdGroupId) && refreshing;
+}
+
+/** 고른 그룹이 목록에서 사라졌는지 본다. 새 그룹을 기다리는 동안은 사라진 것으로 보지 않는다. */
+export function isSelectionMissing(groups: FavoriteGroup[], ids: string[], createdGroupPending: boolean): boolean {
+  return !createdGroupPending && ids.some((id) => !groups.some((group) => group.id === id));
+}
+
 export function groupNameError(name: string): string | null {
   const length = [...new Intl.Segmenter("ko", { granularity: "grapheme" }).segment(name.trim())].length;
   return length < 1 || length > 10 ? "그룹 이름은 앞뒤 공백을 제외한 1~10자로 입력해 주세요." : null;

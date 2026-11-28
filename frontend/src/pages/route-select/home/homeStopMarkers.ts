@@ -1,11 +1,9 @@
 import type { NaverCoordinate, NaverMap, NaverMaps, NaverMarker } from "@/shared/map/naverSdk";
 import type { HomeStop } from "./homeMapData";
-import { MIN_STATION_ZOOM } from "./homeStationTiles";
+import { homeStopPinsFor } from "./homeStopPins";
 import { createMapStopPin } from "@/shared/map/mapStopPin";
 import { stopPinSize } from "@/shared/map/mapStopPin.css";
 
-const MARKER_MARGIN = 16;
-const PIN_SPACING_ZOOM = 15;
 const PIN_CLEARANCE = stopPinSize + 2;
 
 export function mountHomeStops(map: NaverMap, maps: NaverMaps, stops: HomeStop[], onSelect: (id: string) => void) {
@@ -51,37 +49,22 @@ export function mountHomeStops(map: NaverMap, maps: NaverMaps, stops: HomeStop[]
     const center = projection.fromCoordToOffset(map.getCenter());
     const left = center.x - width / 2;
     const top = center.y - height / 2;
-    const kept: { x: number; y: number }[] = [];
     const labels: { button: HTMLButtonElement; label: HTMLSpanElement }[] = [];
 
-    if (zoom >= MIN_STATION_ZOOM) {
-      const spacing = zoom < PIN_SPACING_ZOOM ? 36 : 0;
-      for (const { stop, position } of coordinates) {
-        const { x, y } = projection.fromCoordToOffset(position);
-        if (
-          x < left - MARKER_MARGIN ||
-          y < top - MARKER_MARGIN ||
-          x > left + width + MARKER_MARGIN ||
-          y > top + height + MARKER_MARGIN
-        )
-          continue;
-        if (spacing > 0 && kept.some((point) => Math.hypot(point.x - x, point.y - y) < spacing)) continue;
-
-        const pinX =
-          spacing > 0
-            ? x
-            : ([x, x + PIN_CLEARANCE, x - PIN_CLEARANCE].find(
-                (candidate) =>
-                  !kept.some(
-                    (point) => Math.abs(point.x - candidate) < PIN_CLEARANCE && Math.abs(point.y - y) < PIN_CLEARANCE,
-                  ),
-              ) ?? x);
-        visible.add(stop.id);
-        kept.push({ x: pinX, y });
-        const entry = showStop(stop, position, zoom);
-        entry.button.style.translate = `${pinX - x}px`;
-        if (zoom >= 17) labels.push(entry);
-      }
+    const pins = homeStopPinsFor(
+      coordinates,
+      ({ position }) => projection.fromCoordToOffset(position),
+      { zoom, left, top, width, height },
+      PIN_CLEARANCE,
+    );
+    for (const {
+      stop: { stop, position },
+      shift,
+    } of pins) {
+      visible.add(stop.id);
+      const entry = showStop(stop, position, zoom);
+      entry.button.style.translate = `${shift}px`;
+      if (zoom >= 17) labels.push(entry);
     }
 
     for (const [id, { marker }] of markers) {

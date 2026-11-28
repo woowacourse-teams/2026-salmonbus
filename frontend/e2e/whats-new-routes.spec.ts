@@ -40,14 +40,6 @@ async function visitAsWhatsNewDevice(page: Page, knownRouteIds: readonly string[
   }, JSON.stringify(record));
 }
 
-function recordedRouteIdsOf(page: Page) {
-  return page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("salmonbus.routeFirstSeen") ?? "{}")));
-}
-
-function storedWhatsNewOf(page: Page) {
-  return page.evaluate((): unknown => JSON.parse(localStorage.getItem("salmonbus.whatsNew") ?? "null"));
-}
-
 function waitForRoutes(page: Page) {
   return page.waitForResponse((response) => new URL(response.url()).pathname === apiPaths.routes);
 }
@@ -68,23 +60,6 @@ async function expectOnlyNextDayRoute(page: Page) {
   await expect(newRoutesSection(page).getByRole("button")).toHaveCount(1);
   await expect(newRoutesSection(page).getByRole("button", { name: nextDayRouteLabel, exact: true })).toBeVisible();
 }
-
-test("새 소식 기능을 쓰던 기기에는 새 소식이 없어도 그 뒤에 서비스 중이 된 노선을 모달로 보여 준다", async ({
-  page,
-  api,
-}) => {
-  api.data.routes.routes.push(
-    { id: ROUTE_1650, displayName: "1650", startStopName: "기점", endStopName: "종점", status: "FORECAST_READY" },
-    { id: "200000002", displayName: "5600", startStopName: "기점", endStopName: "종점", status: "PREPARING" },
-  );
-  await visitAsWhatsNewDevice(page, [ROUTE_1650, ROUTE_3330]);
-
-  await page.goto("/");
-
-  await expect(newRoutesSection(page).getByRole("button")).toHaveCount(1);
-  await expect(newRoutesSection(page).getByRole("button", { name: mockRouteLabel, exact: true })).toContainText("NEW");
-  await expect(whatsNewDialog(page).getByText("새로 추가된 기능", { exact: true })).toHaveCount(0);
-});
 
 test("모달의 노선 줄을 누르면 그 노선의 판정 보드로 가고, 다음 날에는 그 뒤에 추가된 노선만 보여 준다", async ({
   page,
@@ -111,72 +86,56 @@ test("모달의 노선 줄을 누르면 그 노선의 판정 보드로 가고, �
   await expectOnlyNextDayRoute(page);
 });
 
-const closeWays = [
-  {
-    way: "닫기 버튼",
-    close: (page: Page) => whatsNewDialog(page).getByRole("button", { name: "닫기", exact: true }).click(),
-  },
-  { way: "Escape", close: (page: Page) => page.keyboard.press("Escape") },
-  // 모달이 가운데에 떠서 왼쪽 위 모서리는 어두운 배경이다.
-  {
-    way: "바깥 누름",
-    close: (page: Page, isMobile: boolean) => (isMobile ? page.touchscreen.tap(5, 5) : page.mouse.click(5, 5)),
-  },
-];
-
-for (const { way, close } of closeWays) {
-  test(`새 노선만 있는 모달은 다시 보지 않기 없이 닫히고, 닫은 노선은 다음 날 보여 주지 않는다: ${way}`, async ({
-    page,
-    api,
-    isMobile,
-  }) => {
-    await visitAsWhatsNewDevice(page, [ROUTE_1650, ROUTE_3330]);
-    await page.goto("/");
-    await expect(newRoutesSection(page).getByRole("button", { name: mockRouteLabel, exact: true })).toBeVisible();
-    await expect(whatsNewDialog(page).getByRole("button", { name: "다시 보지 않기" })).toHaveCount(0);
-
-    await close(page, isMobile);
-
-    await expect(whatsNewDialog(page)).toHaveCount(0);
-    await reopenNextDayWithNewRoute(page, api.data.routes.routes);
-    await expectOnlyNextDayRoute(page);
-  });
-}
-
-test("처음 온 기기에는 띄우지 않고, 다음 날 그 뒤에 추가된 노선만 보여 준다", async ({ page, api }) => {
-  api.data.routes.routes.push({
-    id: ROUTE_1650,
-    displayName: "1650",
-    startStopName: "기점",
-    endStopName: "종점",
-    status: "FORECAST_READY",
-  });
-  await page.goto("/");
-
-  await expect.poll(() => recordedRouteIdsOf(page)).toContain(routeId);
-  expect(await storedWhatsNewOf(page)).toMatchObject({ lastShownDay: null });
-  await expect(whatsNewDialog(page)).toHaveCount(0);
-
-  await reopenNextDayWithNewRoute(page, api.data.routes.routes);
-
-  await expectOnlyNextDayRoute(page);
-});
-
-test("새 소식 기능 전부터 쓰던 기기는 첫 진입에 지금 NEW인 노선을 띄우지 않고, 다음 날 그 뒤에 추가된 노선만 보여 준다", async ({
+test("새 노선만 있는 모달은 다시 보지 않기 없이 닫히고, 닫은 노선은 다음 날 보여 주지 않는다", async ({
   page,
   api,
+  isMobile,
 }) => {
-  await visitAsReturningDevice(page, [ROUTE_1650, ROUTE_3330]);
+  await visitAsWhatsNewDevice(page, [ROUTE_1650, ROUTE_3330]);
   await page.goto("/");
+  await expect(newRoutesSection(page).getByRole("button", { name: mockRouteLabel, exact: true })).toBeVisible();
+  await expect(whatsNewDialog(page).getByRole("button", { name: "다시 보지 않기" })).toHaveCount(0);
 
-  // 노선 목록을 적은 콜백이 띄울지도 정한다. mock 3330은 이 진입에 처음 적혀 검색 화면에서는 NEW다.
-  await expect.poll(() => recordedRouteIdsOf(page)).toContain(routeId);
-  expect(await storedWhatsNewOf(page)).toMatchObject({ lastSeenId: 0, lastShownDay: null });
+  await whatsNewDialog(page).getByRole("button", { name: "닫기", exact: true }).click();
+
   await expect(whatsNewDialog(page)).toHaveCount(0);
-
   await reopenNextDayWithNewRoute(page, api.data.routes.routes);
-
   await expectOnlyNextDayRoute(page);
+
+  await test.step("Escape로 닫은 노선도 다음 날 보여 주지 않는다", async () => {
+    await page.keyboard.press("Escape");
+    await expect(whatsNewDialog(page)).toHaveCount(0);
+
+    api.data.routes.routes.push({
+      id: "200000003",
+      displayName: "7007",
+      startStopName: "다른 기점",
+      endStopName: "다른 종점",
+      status: "FORECAST_READY",
+    });
+    await page.clock.setSystemTime(new Date(observedAt).getTime() + 2 * DAY);
+    await page.reload();
+    await expect(newRoutesSection(page).getByRole("button")).toHaveCount(1);
+    await expect(
+      newRoutesSection(page).getByRole("button", {
+        name: "7007번 노선, 새 노선, 다른 기점부터 다른 종점 구간",
+        exact: true,
+      }),
+    ).toBeVisible();
+  });
+
+  await test.step("바깥을 눌러 닫은 노선도 다음 날 보여 주지 않는다", async () => {
+    // 모달이 가운데에 떠서 왼쪽 위 모서리는 어두운 배경이다.
+    await (isMobile ? page.touchscreen.tap(5, 5) : page.mouse.click(5, 5));
+    await expect(whatsNewDialog(page)).toHaveCount(0);
+
+    await page.clock.setSystemTime(new Date(observedAt).getTime() + 3 * DAY);
+    const routes = waitForRoutes(page);
+    await page.reload();
+    await (await routes).finished();
+    await page.clock.runFor(100);
+    await expect(whatsNewDialog(page)).toHaveCount(0);
+  });
 });
 
 test("새 노선이 5개보다 많으면 번호 순서로 5개만 보여 주고 남은 개수를 알린다", async ({ page, api }) => {

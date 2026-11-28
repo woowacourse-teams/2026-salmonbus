@@ -5,6 +5,8 @@ import {
   favoriteErrorOf,
   favoriteStopLabelOf,
   groupNameError,
+  isCreatedGroupPending,
+  isSelectionMissing,
   selectedGroups,
 } from "./favoritePolicy";
 import type { FavoriteGroup, FavoriteTarget } from "@/shared/api/favorites.types";
@@ -101,5 +103,39 @@ describe("즐겨찾기 정책", () => {
     const unnamed = [{ stop: {} }, { stop: { name: "" } }];
     const labels = unnamed.map((item, index) => favoriteStopLabelOf(item, index));
     expect(new Set(labels).size).toBe(unnamed.length);
+  });
+  it("중복 이름 오류는 이미 쓰는 이름이라고 안내한다", () => {
+    expect(
+      favoriteErrorOf({
+        kind: "contract",
+        status: 409,
+        retryAfterMs: null,
+        error: { code: "FAVORITE_GROUP_NAME_CONFLICT", message: "중복", requestId: "name" },
+      }),
+    ).toBe("이미 사용 중인 그룹 이름이에요.");
+  });
+});
+
+describe("그룹을 만든 뒤의 선택", () => {
+  const created: FavoriteGroup = { id: "g2", name: "통학", favorites: [] };
+
+  it("만든 그룹이 목록에 아직 없고 재조회 중이면 새 그룹을 기다린다", () => {
+    expect(isCreatedGroupPending([group], created.id, true)).toBe(true);
+  });
+
+  it("재조회가 끝났거나 만든 그룹이 목록에 들어왔거나 만든 그룹이 없으면 기다리지 않는다", () => {
+    expect(isCreatedGroupPending([group], created.id, false)).toBe(false);
+    expect(isCreatedGroupPending([group, created], created.id, true)).toBe(false);
+    expect(isCreatedGroupPending([group], null, true)).toBe(false);
+  });
+
+  it("새 그룹을 기다리는 동안에는 목록에 없는 선택을 사라진 것으로 보지 않는다", () => {
+    expect(isSelectionMissing([group], [group.id, created.id], true)).toBe(false);
+  });
+
+  it("기다리는 그룹이 없는데 고른 그룹이 목록에 없으면 사라진 것이다", () => {
+    expect(isSelectionMissing([group], [group.id, created.id], false)).toBe(true);
+    expect(isSelectionMissing([group, created], [group.id, created.id], false)).toBe(false);
+    expect(isSelectionMissing([group], [], false)).toBe(false);
   });
 });

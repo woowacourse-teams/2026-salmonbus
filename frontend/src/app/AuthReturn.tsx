@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import { track, trackAsMember } from "@/shared/analytics/track";
 import { useAuth } from "@/shared/hooks/useAuth";
 import { clearLoginReturn, readLoginReturn } from "@/shared/routing/loginReturn";
+import { loginResultPathFor } from "./loginResultPathFor";
 import { withdrawalNoticeLabelOf } from "./withdrawalNoticeLabelOf";
 
 export function AuthReturn() {
@@ -23,7 +24,7 @@ export function AuthReturn() {
       handledReturnKey.current = location.key;
       track("login_finished", { provider: pending?.provider ?? "unknown", result: login });
       clearLoginReturn();
-      void navigate(`/login?${new URLSearchParams({ returnTo: pending?.returnTo ?? "/", login })}`, { replace: true });
+      void navigate(loginResultPathFor(login, pending?.returnTo), { replace: true });
     } else if (withdrawn || withdrawal === "failed" || withdrawal === "cancelled") {
       handledReturnKey.current = location.key;
       clearLoginReturn();

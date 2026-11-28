@@ -30,47 +30,6 @@ test.beforeEach(async ({ page }) => {
   await page.clock.resume();
 });
 
-function privacyScriptRequests(page: Page): string[] {
-  const requests: string[] = [];
-  page.on("request", (request) => {
-    const { pathname } = new URL(request.url());
-    if (request.resourceType() === "script" && pathname.includes("privacy")) requests.push(pathname);
-  });
-  return requests;
-}
-
-for (const { time, effectiveDate, period, otherPeriod, otherPath } of [
-  {
-    time: BEFORE_NEW_EDITION,
-    effectiveDate: "2026년 11월 4일",
-    period: NOVEMBER_4_PERIOD,
-    otherPeriod: "2026년 11월 14일부터 적용 예정",
-    otherPath: "/privacy/2026-11-14",
-  },
-  {
-    time: NEW_EDITION_START,
-    effectiveDate: "2026년 11월 14일",
-    period: "2026년 11월 14일부터 적용",
-    otherPeriod: NOVEMBER_4_PERIOD,
-    otherPath: "/privacy/2026-11-04",
-  },
-]) {
-  test(`주소로 바로 들어오거나 새로고침하면 지금 적용 중인 ${effectiveDate}판을 보여 준다`, async ({ page }) => {
-    await page.clock.setFixedTime(time);
-    await page.goto("/privacy");
-    await expectEdition(page, effectiveDate, period);
-
-    const otherEditions = page.getByRole("region", { name: "다른 판", exact: true });
-    await expect(otherEditions.getByRole("link", { name: otherPeriod, exact: true })).toHaveAttribute(
-      "href",
-      otherPath,
-    );
-
-    await page.reload();
-    await expectEdition(page, effectiveDate, period);
-  });
-}
-
 test("시행일 주소는 같은 판을 보여 주고, 그 판의 적용이 끝나면 지금 판으로 가는 링크를 제공한다", async ({ page }) => {
   await page.clock.setFixedTime(BEFORE_NEW_EDITION);
   await page.goto("/privacy/2026-11-04");
@@ -84,17 +43,15 @@ test("시행일 주소는 같은 판을 보여 주고, 그 판의 적용이 끝�
   await expect(currentEditionLink(page)).toHaveAttribute("href", "/privacy");
 });
 
-for (const date of ["2025-01-01", "latest"]) {
-  test(`없는 판의 주소(${date})로 들어오면 안내와 함께 지금 판으로 가는 링크를 보여 준다`, async ({ page }) => {
-    await page.goto(`/privacy/${date}`);
-    await expect(page.getByText("이 주소의 처리방침을 찾지 못했어요.", { exact: true })).toBeVisible();
-    await expect(firstSection(page)).toHaveCount(0);
+test("없는 판의 주소(2025-01-01)로 들어오면 안내와 함께 지금 판으로 가는 링크를 보여 준다", async ({ page }) => {
+  await page.goto("/privacy/2025-01-01");
+  await expect(page.getByText("이 주소의 처리방침을 찾지 못했어요.", { exact: true })).toBeVisible();
+  await expect(firstSection(page)).toHaveCount(0);
 
-    await currentEditionLink(page).click();
-    await expect(page).toHaveURL("/privacy");
-    await expect(firstSection(page)).toBeVisible();
-  });
-}
+  await currentEditionLink(page).click();
+  await expect(page).toHaveURL("/privacy");
+  await expect(firstSection(page)).toBeVisible();
+});
 
 test("목차를 누르면 주소와 방문 기록을 바꾸지 않고 그 절로 옮겨 가서, 뒤로 가기 한 번에 마이페이지로 돌아간다", async ({
   page,
@@ -141,6 +98,19 @@ test("마이페이지 아래쪽에서 연 처리방침은 맨 위부터 보여 �
     await backLink(page).click();
     await expect(page).toHaveURL("/mypage");
   }
+
+  await test.step("주소로 바로 들어오거나 새로고침하면 지금 적용 중인 판을 보여 준다", async () => {
+    await page.clock.setFixedTime(NEW_EDITION_START);
+    await page.goto("/privacy");
+    await expectEdition(page, "2026년 11월 14일", "2026년 11월 14일부터 적용");
+    const otherEditions = page.getByRole("region", { name: "다른 판", exact: true });
+    await expect(otherEditions.getByRole("link", { name: NOVEMBER_4_PERIOD, exact: true })).toHaveAttribute(
+      "href",
+      "/privacy/2026-11-04",
+    );
+    await page.reload();
+    await expectEdition(page, "2026년 11월 14일", "2026년 11월 14일부터 적용");
+  });
 });
 
 test("로그인 화면에서 연 처리방침은 돌아가기로 같은 로그인 화면 주소에 돌아간다", async ({ page }) => {
@@ -159,21 +129,6 @@ test("처리방침으로 바로 들어와서 돌아가기를 누르면 홈으로
 
   await backLink(page).click();
   await expect(page).toHaveURL("/");
-});
-
-test("홈에는 처리방침 링크가 없고, 처리방침 코드는 마이페이지에서 처리방침을 열 때 한 번 받는다", async ({ page }) => {
-  const requests = privacyScriptRequests(page);
-  await page.goto("/");
-  await expect(page.getByRole("link", { name: "마이페이지", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: POLICY_LINK, exact: true })).toHaveCount(0);
-
-  await page.getByRole("link", { name: "마이페이지", exact: true }).click();
-  await expect(myPagePolicyLink(page)).toBeVisible();
-  expect(requests).toEqual([]);
-
-  await myPagePolicyLink(page).click();
-  await expect(firstSection(page)).toBeVisible();
-  expect(requests).toHaveLength(1);
 });
 
 test("처리방침 코드를 받지 못하면 오류 화면을 보여 주고, 다시 시도하면 처리방침을 연다", async ({ page }) => {

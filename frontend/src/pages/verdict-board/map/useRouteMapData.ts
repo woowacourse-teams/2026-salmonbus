@@ -1,25 +1,18 @@
 import { useEffect, useEffectEvent, useState } from "react";
 import type { Board } from "@/shared/api/routeForecast.types";
 import { fetchRouteGeometry } from "@/shared/api/routeGeometry.api";
-import { nextPollFrom } from "@/shared/api/pollSchedule";
-import { routeGeometryMapDataFor } from "./routeGeometryMapData";
-import type { RouteMapData } from "./routeMapModel";
+import {
+  failedMapDataFrom,
+  geometryFailureDecisionFor,
+  loadedGeometryFor,
+  loadedMapDataFrom,
+  type LoadedMapData,
+  type RouteMapResource,
+} from "./routeMapResource";
 
-const RETRY_DELAY_MS = 60_000;
-
-type RouteMapResource =
-  | { status: "loading" | "retrying" | "error" | "conflict"; data: null }
-  | { status: "preparing" | "generating" | "withheld"; data: RouteMapData | null }
-  | { status: "ready"; data: RouteMapData };
+const PREPARING_POLL_DELAY_MS = 60_000;
 
 export type RouteMapGeometryStatus = RouteMapResource["status"];
-
-interface LoadedMapData {
-  identity: string;
-  revision: string | null;
-  resource: RouteMapResource;
-  retrying: boolean;
-}
 
 export function useRouteMapData(
   board: Board,
@@ -46,7 +39,7 @@ export function useRouteMapData(
       timer = undefined;
     }
 
-    function schedule(delay = RETRY_DELAY_MS) {
+    function schedule(delay = PREPARING_POLL_DELAY_MS) {
       if (document.visibilityState === "visible") timer = window.setTimeout(load, delay);
     }
 
@@ -58,59 +51,29 @@ export function useRouteMapData(
       requesting = false;
       if (controller.signal.aborted) return;
       if (!result.ok) {
-        const { failure } = result;
-        if (
-          failure.kind === "contract" &&
-          failure.status === 409 &&
-          failure.error.code === "REFERENCE_VERSION_CONFLICT"
-        ) {
-          conflicted = true;
-          setLoaded({ identity, revision: null, resource: { status: "conflict", data: null }, retrying: false });
-          reportConflict();
-        } else if (!hasReadyMap(identity)) {
-          const decision = nextPollFrom(result);
-          if (failure.kind !== "malformed" && decision.kind === "again") {
-            schedule(Math.max(RETRY_DELAY_MS, decision.delayMs));
-            setLoaded((previous) =>
-              previous?.identity === identity &&
-              (previous.resource.status === "withheld" || previous.resource.data !== null)
-                ? { identity, revision: previous.revision, resource: previous.resource, retrying: true }
-                : { identity, revision: null, resource: { status: "retrying", data: null }, retrying: true },
-            );
-          } else {
-            // 자동 재시도를 멈춰도 이전에 검증된 지도 데이터는 계속 사용할 수 있다.
-            setLoaded((previous) =>
-              previous?.identity === identity &&
-              (previous.resource.status === "withheld" || previous.resource.data !== null)
-                ? { identity, revision: previous.revision, resource: previous.resource, retrying: false }
-                : { identity, revision: null, resource: { status: "error", data: null }, retrying: false },
-            );
-          }
+        const decision = geometryFailureDecisionFor(result, hasReadyMap(identity));
+        switch (decision.kind) {
+          case "conflict":
+            conflicted = true;
+            setLoaded({ identity, revision: null, resource: { status: "conflict", data: null }, retrying: false });
+            reportConflict();
+            break;
+          case "keepReadyMap":
+            break;
+          case "retry":
+            schedule(decision.delayMs);
+            setLoaded((previous) => failedMapDataFrom(previous, identity, true));
+            break;
+          case "stop":
+            setLoaded((previous) => failedMapDataFrom(previous, identity, false));
+            break;
         }
         return;
       }
 
-      const geometry = result.body;
-      const revision = typeof geometry.geometryRevision === "string" ? geometry.geometryRevision : null;
-      const data = routeGeometryMapDataFor(geometry, { id: routeId, referenceVersionId });
-      const reason = geometry.status === "UNAVAILABLE" ? geometry.reason : null;
-      const preparing = reason === "NOT_COLLECTED" || reason === "GENERATION_PENDING";
-      const resource: RouteMapResource = preparing
-        ? { status: reason === "GENERATION_PENDING" ? "generating" : "preparing", data }
-        : reason === "DISPLAY_WITHHELD"
-          ? { status: "withheld", data }
-          : data === null
-            ? { status: "error", data: null }
-            : { status: "ready", data };
-      setLoaded((previous) =>
-        revision !== null &&
-        previous?.identity === identity &&
-        previous.revision === revision &&
-        previous.resource.status === resource.status
-          ? { identity, revision, resource: previous.resource, retrying: false }
-          : { identity, revision, resource, retrying: false },
-      );
-      if (preparing) schedule();
+      const geometry = loadedGeometryFor(result.body, { id: routeId, referenceVersionId });
+      setLoaded((previous) => loadedMapDataFrom(previous, identity, geometry));
+      if (geometry.preparing) schedule();
     }
 
     function revalidateWhenVisible() {

@@ -42,18 +42,37 @@ test("즐겨찾기 그룹 선택 창은 열릴 때 첫 그룹에 포커스를 �
   await expectCancelFirst(page, dialog, "돌아가기", "만들기");
 });
 
-for (const action of ["로그아웃", "회원탈퇴"]) {
-  test(`마이페이지 ${action} 확인 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다`, async ({
-    page,
-    favorites,
-  }) => {
-    expect(favorites.groups).toHaveLength(1);
-    await page.goto("/mypage");
-    await page.getByRole("button", { name: new RegExp(`^${action}`) }).click();
-    await expectFocusRing(button(page.getByRole("dialog"), "취소"), "hidden");
-    await expectCancelFirst(page, page.getByRole("dialog"), "취소", action);
+test("마이페이지 로그아웃과 회원탈퇴 확인 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다", async ({
+  page,
+  favorites,
+}) => {
+  expect(favorites.groups).toHaveLength(1);
+  await page.goto("/mypage");
+  const dialog = page.getByRole("dialog");
+
+  // 마우스를 쓰기 전에 본다. Firefox는 마우스로 누른 뒤에는 키보드로 열어도 테두리를 보이지 않는다.
+  await test.step("키보드로 열면 취소에 포커스 테두리를 보인다", async () => {
+    await page.getByRole("button", { name: /^로그아웃/ }).focus();
+    await page.keyboard.press("Enter");
+    await expectFocusRing(button(dialog, "취소"), "shown");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
   });
-}
+
+  await page.getByRole("button", { name: /^로그아웃/ }).click();
+  await expectFocusRing(button(dialog, "취소"), "hidden");
+  await expectCancelFirst(page, dialog, "취소", "로그아웃");
+  await button(dialog, "취소").click();
+  await expect(dialog).toHaveCount(0);
+
+  await test.step("회원탈퇴 확인 창도 취소에 포커스를 주고 취소를 왼쪽에 둔다", async () => {
+    await page.getByRole("button", { name: /^회원탈퇴/ }).click();
+    await expectFocusRing(button(dialog, "취소"), "hidden");
+    await expectCancelFirst(page, dialog, "취소", "회원탈퇴");
+    await button(dialog, "취소").click();
+    await expect(dialog).toHaveCount(0);
+  });
+});
 
 test("즐겨찾기 편집의 삭제 창은 열릴 때 취소에 포커스를 주고 취소를 왼쪽에 둔다", async ({ page, favorites, api }) => {
   const stop = api.data.watch.stops.find((item) => item.direction === "UP" && item.boardingAllowed)!;
@@ -73,13 +92,9 @@ test("로그인에서 돌아와 열린 실패 창은 돌아가기에 테두리 �
   auth.loginResult = "failed";
   await page.goto("/login?returnTo=%2Fmypage");
   await page.getByRole("button", { name: "카카오로 계속하기" }).click();
+  await expect(page).toHaveURL("/login?returnTo=%2Fmypage");
   await expectFocusRing(button(page.getByRole("dialog"), "돌아가기"), "hidden");
   await expectCancelFirst(page, page.getByRole("dialog"), "돌아가기", "확인");
-});
-
-test("키보드로 연 마이페이지 확인 창은 취소에 포커스 테두리를 보인다", async ({ page }) => {
-  await page.goto("/mypage");
-  await page.getByRole("button", { name: /^로그아웃/ }).focus();
-  await page.keyboard.press("Enter");
-  await expectFocusRing(button(page.getByRole("dialog"), "취소"), "shown");
+  await button(page.getByRole("dialog"), "확인").click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
 });

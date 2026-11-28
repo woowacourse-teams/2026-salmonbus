@@ -18,7 +18,7 @@ export function redirectAuth(route: Route, destination: string, browserName: str
     : route.fulfill({ status: 302, headers: { Location: destination } });
 }
 
-export const NATIVE_NONCE = "e2e-native-nonce-0123456789";
+const NATIVE_NONCE = "e2e-native-nonce-0123456789";
 
 export const testMember = {
   ...memberExample,
@@ -29,8 +29,6 @@ export const testMember = {
 interface AuthMock {
   member: typeof testMember | null;
   enabled: boolean;
-  refreshable: boolean;
-  refreshFails: boolean;
   nicknameError: string | null;
   mutationFails: boolean;
   loginResult: "success" | "cancelled" | "failed";
@@ -45,8 +43,6 @@ export const test = apiTest.extend<{ auth: AuthMock }>({
       const auth: AuthMock = {
         member: null,
         enabled: true,
-        refreshable: false,
-        refreshFails: false,
         nicknameError: null,
         mutationFails: false,
         loginResult: "success",
@@ -80,7 +76,7 @@ export const test = apiTest.extend<{ auth: AuthMock }>({
           await route.fulfill({
             json: auth.member
               ? { authenticated: true, refreshable: false, member: auth.member }
-              : { authenticated: false, refreshable: auth.refreshable },
+              : { authenticated: false, refreshable: false },
             headers: { "Cache-Control": "no-store" },
           });
         } else if (/^\/api\/auth\/(kakao|apple)\/start$/.test(path)) {
@@ -101,12 +97,8 @@ export const test = apiTest.extend<{ auth: AuthMock }>({
           auth.member = null;
           await route.fulfill({ status: 204 });
         } else if (path === "/api/auth/refresh") {
-          if (auth.refreshFails) await error(401, "UNAUTHENTICATED");
-          else {
-            auth.member ??= { ...testMember };
-            auth.refreshable = false;
-            await route.fulfill({ status: 204 });
-          }
+          auth.member ??= { ...testMember };
+          await route.fulfill({ status: 204 });
         } else if (path === "/api/me/favorite-groups" && request.method() === "GET") {
           await route.fulfill({
             json: { groups: [{ id: "10000000-0000-4000-8000-000000000001", name: "즐겨찾기", favorites: [] }] },

@@ -28,8 +28,13 @@ async function waitForHopToEnd(page: Page) {
   await expect.poll(() => hoppingBadgesOf(page)).toEqual([]);
 }
 
-test.beforeEach(async ({ api }) => {
+// 전에 다른 노선만 본 기기라서, 이번 방문에 처음 보는 노선이 모두 NEW다. 출시 기간 규칙에 기대지 않는다.
+test.beforeEach(async ({ page, api }) => {
   api.data.routes.routes.push(...newRoutes);
+  await page.addInitScript(() => {
+    if (localStorage.getItem("salmonbus.routeFirstSeen") !== null) return;
+    localStorage.setItem("salmonbus.routeFirstSeen", JSON.stringify({ "234000050": 0 }));
+  });
 });
 
 test("입력 전 목록이 보이고 1초가 지나면 보이는 NEW 배지 가운데 하나만 한 번 뛴다", async ({ page }) => {
@@ -44,50 +49,30 @@ test("입력 전 목록이 보이고 1초가 지나면 보이는 NEW 배지 가�
 
   await page.clock.runFor(200);
   expect(await hoppingBadgesOf(page)).toEqual(["3330번 노선, 새 노선, 테스트 기점부터 테스트 종점 구간"]);
-});
-
-test("번호를 치는 동안에는 뛰지 않고 입력이 1초 멈추면 뛴다", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("/");
-  await openRouteSearch(page);
-  await page.clock.runFor(1_000);
-  expect(await hoppingBadgesOf(page)).toHaveLength(1);
   await waitForHopToEnd(page);
 
-  await routeSearchInput(page).fill("3");
-  await page.clock.runFor(600);
-  await routeSearchInput(page).fill("35");
-  await page.clock.runFor(600);
-  expect(await hoppingBadgesOf(page)).toEqual([]);
+  await test.step("번호를 치는 동안에는 뛰지 않고 입력이 1초 멈추면 뛴다", async () => {
+    await routeSearchInput(page).fill("3");
+    await page.clock.runFor(600);
+    await routeSearchInput(page).fill("35");
+    await page.clock.runFor(600);
+    expect(await hoppingBadgesOf(page)).toEqual([]);
 
-  await page.clock.runFor(400);
-  expect(await hoppingBadgesOf(page)).toEqual(["3500번 노선, 새 노선, 기점부터 종점 구간"]);
-});
+    await page.clock.runFor(400);
+    expect(await hoppingBadgesOf(page)).toEqual(["3500번 노선, 새 노선, 기점부터 종점 구간"]);
+    await waitForHopToEnd(page);
+  });
 
-test("이미 뛴 입력으로 돌아오면 다시 뛰지 않는다", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("/");
-  await openRouteSearch(page);
-  await page.clock.runFor(1_000);
-  expect(await hoppingBadgesOf(page)).toHaveLength(1);
-  await waitForHopToEnd(page);
-  await routeSearchInput(page).fill("3");
-  await page.clock.runFor(1_000);
-  expect(await hoppingBadgesOf(page)).toHaveLength(1);
-  await waitForHopToEnd(page);
+  await test.step("이미 뛴 입력으로 돌아오면 다시 뛰지 않는다", async () => {
+    await routeSearchInput(page).fill("");
+    await page.clock.runFor(1_000);
+    expect(await hoppingBadgesOf(page)).toEqual([]);
+  });
 
-  await routeSearchInput(page).fill("");
-  await page.clock.runFor(1_000);
-
-  expect(await hoppingBadgesOf(page)).toEqual([]);
-});
-
-test("동작 줄이기 설정이면 NEW 배지가 뛰지 않는다", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
-  await openRouteSearch(page);
-
-  await page.clock.runFor(1_000);
-
-  expect(await hoppingBadgesOf(page)).toEqual([]);
+  await test.step("동작 줄이기 설정이면 아직 안 뛴 입력에서도 뛰지 않는다", async () => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await routeSearchInput(page).fill("31");
+    await page.clock.runFor(1_000);
+    expect(await hoppingBadgesOf(page)).toEqual([]);
+  });
 });
