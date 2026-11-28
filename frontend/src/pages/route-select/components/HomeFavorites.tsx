@@ -9,7 +9,7 @@ import { maskedPropsFor } from "@/shared/analytics/maskedProps";
 import { SeatCountBadge } from "@/shared/components/SeatCountBadge";
 import { toSeatEstimate, toSeatLevel } from "@/shared/utils/seatGrade";
 import { seatLabelOf } from "@/shared/utils/seatLabelOf";
-import { remainingTimeFrom } from "@/shared/utils/remainingTime";
+import { remainingTimeAfter } from "@/shared/utils/remainingTime";
 import { remainingTimeLabelOf } from "@/shared/utils/remainingTimeLabelOf";
 import { boardEntryStateFor } from "@/shared/routing/boardEntry";
 import { boardPathFor, favoritePath, paths } from "@/shared/routing/paths";
@@ -449,7 +449,7 @@ function FavoriteCard({
           {favorite.status === "READY" && favorite.approachingVehicles.length > 0 ? (
             <ul className={homeStyles.rows}>
               {favorite.approachingVehicles.map((vehicle, index) => {
-                const time = remainingTimeFrom(
+                const time = remainingTimeAfter(
                   vehicle.eta.status === "AVAILABLE" ? vehicle.eta.remainingSeconds : null,
                   elapsed,
                 );

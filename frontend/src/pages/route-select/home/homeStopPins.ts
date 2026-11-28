@@ -15,21 +15,20 @@ export interface HomeStopScreen {
   top: number;
   width: number;
   height: number;
-  /** 핀 하나가 차지하는 폭과 높이. */
-  pinClearance: number;
 }
 
 /**
  * 화면에 둘 정류장 핀과 옆으로 밀 거리를 고른다.
- * 줌 15보다 작으면 36px 안에 먼저 놓인 핀이 있는 정류장은 뺀다.
- * 줌 15부터는 빼지 않고, 겹치는 핀을 오른쪽이나 왼쪽으로 핀 하나만큼 민다.
+ * 축소한 화면에서는 먼저 놓인 핀과 가까운 정류장을 빼고,
+ * 확대한 화면에서는 빼지 않고 겹치는 핀을 오른쪽이나 왼쪽으로 핀 하나(pinClearance)만큼 민다.
  */
 export function homeStopPinsFor<Stop>(
   stops: readonly Stop[],
   screenPointOf: (stop: Stop) => ScreenPoint,
   screen: HomeStopScreen,
+  pinClearance: number,
 ): { stop: Stop; shift: number }[] {
-  const { zoom, left, top, width, height, pinClearance } = screen;
+  const { zoom, left, top, width, height } = screen;
   if (zoom < MIN_STATION_ZOOM) return [];
 
   const spacing = zoom < PIN_SPACING_ZOOM ? THINNED_PIN_SPACING : 0;

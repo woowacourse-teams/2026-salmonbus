@@ -50,7 +50,7 @@ export function isSameStop(selected: StopSelection | null, stop: StopSelection):
   return selected?.direction === stop.direction && selected.sequence === stop.sequence;
 }
 
-export function nextBoardSelection(current: BoardSelection, event: BoardSelectionEvent): BoardSelection {
+export function nextBoardSelectionFrom(current: BoardSelection, event: BoardSelectionEvent): BoardSelection {
   switch (event.type) {
     case "mapStopSelected":
       return {

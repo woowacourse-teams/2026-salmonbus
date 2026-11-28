@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { remainingTimeFrom, toRemainingTime } from "./remainingTime";
+import { remainingTimeAfter, toRemainingTime } from "./remainingTime";
 
 describe("toRemainingTime", () => {
   it("남은 초가 있으면 그 초를 담는다", () => {
@@ -11,18 +11,18 @@ describe("toRemainingTime", () => {
   });
 });
 
-describe("remainingTimeFrom", () => {
+describe("remainingTimeAfter", () => {
   it("받은 뒤 흐른 초만큼 남은 초를 줄인다", () => {
-    expect(remainingTimeFrom(480, 0)).toEqual({ kind: "known", seconds: 480 });
-    expect(remainingTimeFrom(480, 479)).toEqual({ kind: "known", seconds: 1 });
+    expect(remainingTimeAfter(480, 0)).toEqual({ kind: "known", seconds: 480 });
+    expect(remainingTimeAfter(480, 479)).toEqual({ kind: "known", seconds: 1 });
   });
 
   it.each([480, 481])("남은 초가 480인데 %i초가 흘렀으면 시간 없음으로 본다", (elapsed) => {
-    expect(remainingTimeFrom(480, elapsed)).toEqual({ kind: "unknown" });
+    expect(remainingTimeAfter(480, elapsed)).toEqual({ kind: "unknown" });
   });
 
   it("남은 초를 모르면 흐른 시간과 상관없이 시간 없음이다", () => {
-    expect(remainingTimeFrom(null, 0)).toEqual({ kind: "unknown" });
-    expect(remainingTimeFrom(null, -30)).toEqual({ kind: "unknown" });
+    expect(remainingTimeAfter(null, 0)).toEqual({ kind: "unknown" });
+    expect(remainingTimeAfter(null, -30)).toEqual({ kind: "unknown" });
   });
 });

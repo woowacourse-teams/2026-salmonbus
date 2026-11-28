@@ -8,7 +8,7 @@ export type RoutesState =
   | { status: "ready"; routes: RouteSummary[]; firstSeenTimes: FirstSeenTimes; checkedAt: number };
 
 /** 검색 화면을 연 채 시간이 지나도 NEW를 다시 판단하도록 확인 시각을 옮긴다. */
-export function routesStateCheckedAt(state: RoutesState, checkedAt: number): RoutesState {
+export function routesStateWithCheckedAt(state: RoutesState, checkedAt: number): RoutesState {
   return state.status === "ready"
     ? { status: "ready", routes: state.routes, firstSeenTimes: state.firstSeenTimes, checkedAt }
     : state;

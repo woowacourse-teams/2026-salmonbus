@@ -4,7 +4,7 @@ import { track } from "@/shared/analytics/track";
 import { createLatestRequestGate } from "@/shared/api/latestRequestGate";
 import { fetchRoutes } from "@/shared/api/routeForecast.api";
 import { recordSeenRoutes } from "@/shared/route-list/seenRouteStorage";
-import { routesStateCheckedAt, searchViewFor, type RoutesState } from "./displayPolicy";
+import { routesStateWithCheckedAt, searchViewFor, type RoutesState } from "./displayPolicy";
 
 export function useRouteSearch(initialInput: string) {
   const [input, setInput] = useState(initialInput);
@@ -34,7 +34,7 @@ export function useRouteSearch(initialInput: string) {
   const changeInput = (value: string) => {
     const checkedAt = Date.now();
     setInput(value);
-    setRoutesState((state) => routesStateCheckedAt(state, checkedAt));
+    setRoutesState((state) => routesStateWithCheckedAt(state, checkedAt));
   };
 
   const retry = () => {

@@ -13,11 +13,10 @@ const screenAt = (zoom: number): HomeStopScreen => ({
   top: 0,
   width: 400,
   height: 800,
-  pinClearance: 20,
 });
 
 function pinsFor(stops: Stop[], zoom: number) {
-  return homeStopPinsFor(stops, (stop) => stop, screenAt(zoom)).map(({ stop, shift }) => [stop.id, shift]);
+  return homeStopPinsFor(stops, (stop) => stop, screenAt(zoom), 20).map(({ stop, shift }) => [stop.id, shift]);
 }
 
 describe("homeStopPinsFor", () => {

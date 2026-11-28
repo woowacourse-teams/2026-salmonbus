@@ -51,14 +51,12 @@ export function mountHomeStops(map: NaverMap, maps: NaverMaps, stops: HomeStop[]
     const top = center.y - height / 2;
     const labels: { button: HTMLButtonElement; label: HTMLSpanElement }[] = [];
 
-    const pins = homeStopPinsFor(coordinates, ({ position }) => projection.fromCoordToOffset(position), {
-      zoom,
-      left,
-      top,
-      width,
-      height,
-      pinClearance: PIN_CLEARANCE,
-    });
+    const pins = homeStopPinsFor(
+      coordinates,
+      ({ position }) => projection.fromCoordToOffset(position),
+      { zoom, left, top, width, height },
+      PIN_CLEARANCE,
+    );
     for (const {
       stop: { stop, position },
       shift,
