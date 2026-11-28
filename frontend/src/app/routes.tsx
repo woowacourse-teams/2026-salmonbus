@@ -2,19 +2,17 @@ import { lazy, Suspense, useEffect } from "react";
 import { matchPath, Navigate, Outlet, Route, Routes } from "react-router";
 import { RouteSearchPage } from "@/pages/route-search";
 import { RouteSelectPage } from "@/pages/route-select";
-import { FavoritesPage } from "@/pages/route-select/FavoritesPage";
 import { RouteNetworkPage } from "@/pages/route-select/RouteNetworkPage";
 import { VerdictBoardPage } from "@/pages/verdict-board";
 import { paths } from "@/shared/routing/paths";
 import { FocusKeepingNavigationContext } from "@/shared/routing/focusKeepingNavigation";
-import { LoginPage } from "@/pages/login";
-import { MyPage } from "@/pages/my-page";
-import { NicknamePage } from "@/pages/nickname";
-import { AccountLayout } from "@/shared/components/AccountLayout";
-import { WhatsNewPage } from "@/pages/whats-new";
 import { useFocusKeepingNavigation } from "./useFocusKeepingNavigation";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
 import { ErrorView } from "@/shared/components/ErrorView";
+import { lazyRouteElement } from "./lazyPage";
+import { favoritesPage, loginPage, myPage, nicknamePage, whatsNewPage } from "./lazyPages";
+import { AccountLayout } from "@/shared/components/AccountLayout";
+import { AppRouteFallback } from "./RouteFallback";
 
 const PrivacyPage = lazy(async () => ({
   default: (await import(/* webpackChunkName: "privacy" */ "@/pages/privacy")).PrivacyPage,
@@ -44,20 +42,20 @@ function NavigationLayout() {
 const shellTabs = [
   { path: paths.routeSelect, title: "", element: null },
   { path: paths.routeMap, title: "노선도", element: <RouteNetworkPage /> },
-  { path: paths.favorites, title: "즐겨찾기", element: <FavoritesPage /> },
-  { path: paths.mypage, title: "마이페이지", element: <MyPage /> },
+  { path: paths.favorites, title: "즐겨찾기", element: lazyRouteElement(favoritesPage, "sheet") },
+  { path: paths.mypage, title: "마이페이지", element: lazyRouteElement(myPage, "sheet") },
   { path: paths.routeSearch, title: "노선 검색", element: <RouteSearchPage /> },
   { path: paths.board, title: "노선 판정보드", element: <VerdictBoardPage /> },
 ];
 
 const pagesWithNavigation = [
-  { path: paths.nickname, title: "닉네임 수정", element: <NicknamePage /> },
+  { path: paths.nickname, title: "닉네임 수정", element: lazyRouteElement(nicknamePage, "page") },
   { path: paths.privacy, title: "개인정보 처리방침", element: privacyPage },
   { path: paths.privacyEdition, title: "개인정보 처리방침", element: privacyPage },
-  { path: paths.whatsNew, title: "새 소식", element: <WhatsNewPage /> },
+  { path: paths.whatsNew, title: "새 소식", element: lazyRouteElement(whatsNewPage, "page") },
 ];
 
-const pagesWithoutNavigation = [{ path: paths.login, title: "로그인", element: <LoginPage /> }];
+const pagesWithoutNavigation = [{ path: paths.login, title: "로그인", element: lazyRouteElement(loginPage, "page") }];
 
 const retiredGroupPaths = ["/favorites/groups", "/favorites/groups/:groupId", "/mypage/groups/:groupId"];
 
@@ -74,34 +72,36 @@ export function AppRoutes() {
   // Routes에 location을 늘 넘겨야 미리 그린 화면에서 실제 주소로 바뀔 때 화면이 다시 마운트되지 않는다.
   return (
     <FocusKeepingNavigationContext value={navigateKeepingFocus}>
-      <Routes location={shownLocation}>
-        <Route element={<RouteSelectPage />}>
-          {shellTabs.map(({ path, element }) => (
+      <Suspense fallback={<AppRouteFallback />}>
+        <Routes location={shownLocation}>
+          <Route element={<RouteSelectPage />}>
+            {shellTabs.map(({ path, element }) => (
+              <Route key={path} path={path} element={element} />
+            ))}
+          </Route>
+          <Route element={<NavigationLayout />}>
+            {pagesWithNavigation.map(({ path, element }) => (
+              <Route key={path} path={path} element={element} />
+            ))}
+          </Route>
+          {pagesWithoutNavigation.map(({ path, element }) => (
             <Route key={path} path={path} element={element} />
           ))}
-        </Route>
-        <Route element={<NavigationLayout />}>
-          {pagesWithNavigation.map(({ path, element }) => (
-            <Route key={path} path={path} element={element} />
+          {retiredGroupPaths.map((path) => (
+            <Route key={path} path={path} element={<Navigate to={paths.favorites} replace />} />
           ))}
-        </Route>
-        {pagesWithoutNavigation.map(({ path, element }) => (
-          <Route key={path} path={path} element={element} />
-        ))}
-        {retiredGroupPaths.map((path) => (
-          <Route key={path} path={path} element={<Navigate to={paths.favorites} replace />} />
-        ))}
-        <Route
-          path="*"
-          element={
-            <ErrorView
-              title="페이지를 찾을 수 없어요"
-              caption="주소를 다시 확인해 주세요."
-              actionLink={{ href: paths.routeSelect, label: "홈으로 가기" }}
-            />
-          }
-        />
-      </Routes>
+          <Route
+            path="*"
+            element={
+              <ErrorView
+                title="페이지를 찾을 수 없어요"
+                caption="주소를 다시 확인해 주세요."
+                actionLink={{ href: paths.routeSelect, label: "홈으로 가기" }}
+              />
+            }
+          />
+        </Routes>
+      </Suspense>
     </FocusKeepingNavigationContext>
   );
 }
