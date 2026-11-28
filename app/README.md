@@ -71,14 +71,11 @@ Simulator에서는 아래 payload를 파일로 저장하고 `xcrun simctl push b
 
 `stops-interactive`는 메시지 왕복으로 추정한 값입니다. 실제 핀 탭 가능 시점은 실기기 영상으로 확인합니다. 마커는 Safari Web Inspector나 브라우저 개발자 도구에서 `performance.getEntriesByType("mark")`로 읽습니다.
 
-`startup/startupReadiness.ts`는 위 단계를 이벤트로 받는 순수 상태 머신입니다. `CURRENT_STARTUP_POLICY`는 지금 동작(loadEnd에 스플래시 해제, 탭 보관 중에만 10초 대기)을 그대로 옮긴 값이고, `App.tsx`에는 연결하지 않았습니다. 새 제한시간과 스플래시 해제 조건은 실기기 근거를 모은 뒤 정합니다.
-
 ## 코드 위치
 
 - `bridge/bridge.ts`: 앱 정보(`window.__SALMONBUS_APP__`) 주입과 새 문서 시작 알림, 웹과 주고받는 envelope 검증, 웹으로 이벤트 전달
 - `auth/`: 로그인 메시지 검사(`authMessages.ts`)와 Apple, 카카오 SDK 호출(`signInNatively.ts`)
 - `notification/`: 알림 메시지 검사와 APNs 환경 판단(`notificationMessages.ts`), 권한과 token(`registration.ts`), 알림 탭 칸(`tapInbox.ts`)과 탭 감시(`openedNotifications.ts`)
-- `startup/startupReadiness.ts`: 앱 시작 단계 상태 머신과 지금 정책(`App.tsx`에 미연결)
 - `native-map/NativeRouteMap.tsx`: native view의 TypeScript 계약
 - `native-map/nativeMapMessages.ts`: 앱이 받는 지도 메시지 목록(웹의 `NATIVE_MAP_CAPABILITIES`와 같음)
 - `haptic/playHaptic.ts`: 진동 종류를 iOS 진동에 연결하는 표. 종류 목록은 웹의 `HapticKind`를 import type으로 읽고, 다르면 `pnpm typecheck`가 실패
