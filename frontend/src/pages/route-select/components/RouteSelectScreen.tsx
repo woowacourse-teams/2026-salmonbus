@@ -2,7 +2,6 @@ import { useCallback, useMemo, useReducer, useRef, useState, type MouseEvent } f
 import { matchPath, useLocation, useOutlet } from "react-router";
 import { Brand } from "@/shared/components/Brand";
 import { BottomNavigation } from "@/shared/components/BottomNavigation";
-import type { Direction } from "@/shared/api/routeForecast.types";
 import type { FavoriteGroup, HomeFavorites } from "@/shared/api/favorites.types";
 import type { PolledRequest } from "@/shared/api/usePolledRequest";
 import type { BoardSheetDirection } from "@/shared/bottom-sheet/boardSheetPolicy";
@@ -22,6 +21,7 @@ import { HomeMap } from "../home/HomeMap";
 import { NativeHomeMap } from "../home/NativeHomeMap";
 import { HomeStopRoutes } from "../home/HomeStopRoutes";
 import { HomeOverview } from "../home/HomeOverview";
+import { favoriteMapRoutesOf } from "../home/favoriteMapRoutes";
 import { DEFAULT_LOCATION, distanceMeters, type HomeStop, type Point } from "../home/homeMapData";
 import { useHomeMapData } from "../home/useHomeMapData";
 import { useHomeStations } from "../home/useHomeStations";
@@ -124,15 +124,10 @@ export function RouteSelectScreen({
     summary,
     retrySummary,
   } satisfies FavoriteGroupContext);
-  const favoriteRoutes = useMemo(() => {
-    const directions = new Map<string, Direction>();
-    if (isFavorites && memberId && mapGroup) {
-      for (const { routeId, direction } of mapGroup.favorites) {
-        if (!directions.has(routeId)) directions.set(routeId, direction);
-      }
-    }
-    return directions;
-  }, [mapGroup, isFavorites, memberId]);
+  const favoriteRoutes = useMemo(
+    () => favoriteMapRoutesOf(isFavorites && memberId && mapGroup ? mapGroup.favorites : []),
+    [mapGroup, isFavorites, memberId],
+  );
   const tabSheet = currentSheet?.tab ?? INITIAL_TAB_SHEET;
   const snap = currentSheet?.station?.snap ?? tabSheet.snap;
   const [cameraTarget, setCameraTarget] = useState<Point>(DEFAULT_LOCATION);
