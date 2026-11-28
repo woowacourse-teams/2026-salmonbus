@@ -30,8 +30,10 @@ describe("세션 조회 결과에 따른 로그인 상태", () => {
     ["네트워크가 끊겼을 때", { kind: "network", cause: new TypeError("Load failed") }],
     ["응답이 제한 시간을 넘겼을 때", { kind: "timeout" }],
     ["서버가 503으로 답했을 때", serverError],
+    ["서버가 429로 답했을 때", { kind: "rateLimited", status: 429, retryAfterMs: null, requestId: null }],
+    ["서버가 400으로 답했을 때", { kind: "malformed", status: 400, requestId: null }],
   ])("회원은 %s 회원으로 남는다", (_, failure) => {
-    expect(nextAuthState(signedIn, failedWith(failure))).toBe(signedIn);
+    expect(nextAuthState(signedIn, failedWith(failure))).toEqual(signedIn);
   });
 
   it.each<AuthState>([{ status: "loading" }, { status: "anonymous" }, { status: "error" }])(
@@ -55,7 +57,10 @@ describe("세션 조회 결과에 따른 로그인 상태", () => {
     });
   });
 
-  it("세션 API가 없으면(404) 로그인 기능 없음으로 둔다", () => {
-    expect(nextAuthState({ status: "loading" }, failedWith(notFound))).toEqual({ status: "unavailable" });
-  });
+  it.each<AuthState>([{ status: "loading" }, signedIn])(
+    "세션 API가 없으면(404) $status 상태에서도 로그인 기능 없음으로 둔다",
+    (previous) => {
+      expect(nextAuthState(previous, failedWith(notFound))).toEqual({ status: "unavailable" });
+    },
+  );
 });

@@ -133,12 +133,16 @@ test("비회원은 즐겨찾기를 요청하지 않고 로그인 후 조회를 �
   await expect(page.getByText("등록된 즐겨찾기가 없어요", { exact: true })).toBeVisible();
 });
 
-test("회원이 탭으로 돌아왔을 때 세션 조회가 실패해도 즐겨찾기를 유지한다", async ({ page, favorites, api }) => {
-  const stop = api.data.watch.stops.find((stop) => stop.boardingAllowed)!;
-  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: stop.stopId, direction: stop.direction })];
+test("회원이 탭으로 돌아왔을 때 세션 조회가 실패해도 즐겨찾기를 유지하고 갱신한다", async ({
+  page,
+  favorites,
+  api,
+}) => {
+  const [first, second] = api.data.watch.stops.filter((stop) => stop.direction === "UP" && stop.boardingAllowed);
+  favorites.groups[0]!.favorites = [storedFavorite({ routeId, stopId: first!.stopId, direction: "UP" })];
   await page.goto("/favorites");
-  const forecast = page.getByRole("tabpanel").getByText("도착 시 7석 예상해요", { exact: true });
-  await expect(forecast).toBeVisible();
+  const cards = page.getByRole("tabpanel");
+  await expect(cards.getByText(first!.name, { exact: true })).toBeVisible();
 
   await page.route("**/api/auth/session", (route) =>
     route.fulfill({
@@ -147,19 +151,17 @@ test("회원이 탭으로 돌아왔을 때 세션 조회가 실패해도 즐겨�
       headers: { "Cache-Control": "no-store" },
     }),
   );
-  const comeBackToTab = async () => {
-    const failedSession = page.waitForResponse(
-      (response) => new URL(response.url()).pathname === "/api/auth/session" && response.status() === 503,
-    );
-    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-    await failedSession;
-  };
-  await comeBackToTab();
-  // 한 번 더 돌아와 응답을 받으면 앞선 실패는 이미 화면에 반영돼 있다.
-  await comeBackToTab();
+  const failedSession = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/auth/session" && response.status() === 503,
+  );
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await failedSession;
 
+  // 비회원 화면으로 바뀌면 즐겨찾기를 다시 조회하지 않아서, 새로 저장된 정류장이 보이지 않는다.
+  favorites.groups[0]!.favorites.push(storedFavorite({ routeId, stopId: second!.stopId, direction: "UP" }, 4));
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(cards.getByText(second!.name, { exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "내 정류장을 저장해 보세요", exact: true })).toHaveCount(0);
-  await expect(forecast).toBeVisible();
 });
 
 test("즐겨찾기에서 그룹 조회에 실패하면 320px 화면에 오류 시안을 표시하고 재시도한다", async ({
